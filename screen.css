@@ -5,14 +5,20 @@
 	color: #222;
 }
 
-* a {
-	color: #506471;
-		
+/* unvisited link */
+a:link {
+    color: #506471; text-decoration:none
 }
-* a:hover {
-	text-decoration: none;
+
+/* visited link */
+a:visited {
+    color:#220044; text-decoration:none
 }
-/* @end */
+
+/* mouse over link */
+a:hover {
+    color:#bb0000; background-color:#eeeeee; text-decoration:overline underline
+}
 
 div.name {
 	padding: 10px 0px;
