@@ -19,6 +19,7 @@ body {
 	padding: 2.5% 2.5% 0;
 	background: white;
 	line-height: 1.8;
+	counter-reset: paperCounter teachingCounter otherManuscriptsCounter; /* Set multiple counters named 'paperCounter', 'teachingCounter', etc, and their initial value is 0. */
 }
 
 a {
@@ -141,5 +142,23 @@ head {
 /* Footer styles only */
 footer {
     text-align: center;    
+}
+
+/* Paper counter */
+paper:before {
+	counter-increment: paperCounter; /* Increment the value of paperCounter counter by 1 */
+	content: "[P" counter(paperCounter)"] "; /* Display it in form word '[PpaperCounter] ' */
+}
+
+/* TeachingMaterial counter */
+teaching:before {
+	counter-increment: teachingCounter; /* Increment the value of teachingCounter counter by 1 */ 
+	content: "[T" counter(teachingCounter)"] "; /* Display it in form word '[TteachingCounter] ' */
+}
+
+/* OtherManuscripts counter */
+otherManuscriptsCounter:before {
+	counter-increment: otherManuscriptsCounter; /* Increment the value of otherManuscriptsCounter counter by 1 */ 
+	content: "[M" counter(otherManuscriptsCounter)"] "; /* Display it in form word '[MotherManuscriptsCounter] ' */ 
 }
 
