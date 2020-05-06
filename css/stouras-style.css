@@ -159,6 +159,6 @@ teaching:before {
 /* OtherManuscripts counter */
 otherManuscriptsCounter:before {
 	counter-increment: otherManuscriptsCounter; /* Increment the value of otherManuscriptsCounter counter by 1 */ 
-	content: "[M" counter(otherManuscriptsCounter)"] "; /* Display it in form word '[MotherManuscriptsCounter] ' */ 
+	content: "[M" counter(otherManuscriptsCounter)"] "; /* Display it in form word '[otherManuscriptsCounter] ' */ 
 }
 
