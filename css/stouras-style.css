@@ -19,7 +19,7 @@ body {
 	padding: 2.5% 2.5% 0;
 	background: white;
 	line-height: 1.8;
-	counter-reset: paperCounter teachingCounter otherManuscriptsCounter; /* Set multiple counters named 'paperCounter', 'teachingCounter', etc, and their initial value is 0. */
+	counter-reset: conferenceProceedingsPaperCounter journalPaperCounter workingPaperCounter teachingCounter thesisCounter; /* Set multiple counters named 'paperCounter', 'teachingCounter', etc, and their initial value is 0. */
 }
 
 a {
@@ -144,10 +144,22 @@ footer {
     text-align: center;    
 }
 
-/* Paper counter */
-paper:before {
-	counter-increment: paperCounter; /* Increment the value of paperCounter counter by 1 */
-	content: "[P" counter(paperCounter)"] "; /* Display it in form word '[PpaperCounter] ' */
+/* Working Paper counter */
+conferenceProceedingsPaper:before {
+	counter-increment: conferenceProceedingsPaperCounter; /* Increment the value of conferenceProceedingsPaper counter by 1 */
+	content: "[CP" counter(conferenceProceedingsPaperCounter)"] "; /* Display it in form word '[conferenceProceedingsPaperCounter] ' */
+}
+
+/* Working Paper counter */
+journalPaper:before {
+	counter-increment: journalPaperCounter; /* Increment the value of journalPaper counter by 1 */
+	content: "[J" counter(journalPaperCounter)"] "; /* Display it in form word '[journalPaperCounter] ' */
+}
+
+/* Working Paper counter */
+workingPaper:before {
+	counter-increment: workingPaperCounter; /* Increment the value of workingPaper counter by 1 */
+	content: "[WP" counter(workingPaperCounter)"] "; /* Display it in form word '[WPworkingPaperCounter] ' */
 }
 
 /* TeachingMaterial counter */
@@ -156,9 +168,9 @@ teaching:before {
 	content: "[T" counter(teachingCounter)"] "; /* Display it in form word '[TteachingCounter] ' */
 }
 
-/* OtherManuscripts counter */
-otherManuscriptsCounter:before {
-	counter-increment: otherManuscriptsCounter; /* Increment the value of otherManuscriptsCounter counter by 1 */ 
-	content: "[M" counter(otherManuscriptsCounter)"] "; /* Display it in form word '[otherManuscriptsCounter] ' */ 
+/* Theses counter */
+thesis:before {
+	counter-increment: thesisCounter; /* Increment the value of thesis counter by 1 */ 
+	content: "[Th" counter(thesisCounter)"] "; /* Display it in form word '[thesisCounter] ' */ 
 }
 
