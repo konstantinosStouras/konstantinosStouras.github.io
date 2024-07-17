@@ -981,11 +981,11 @@ footer a#back_to_top i {
 }
 
 .btn-primary.btn-outline:focus {
-  color: #0095eb !important;
+  color: #FFF !important;
 }
 
 .btn-primary.btn-outline:active {
-  color: #FFF !important;
+  color: #0095eb !important;
 }
 
 .btn-light.btn-outline {
