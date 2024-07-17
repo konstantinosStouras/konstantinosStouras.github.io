@@ -915,7 +915,7 @@ footer a#back_to_top i {
 
 .btn-primary {
   border-color: #0A4773 !important;
-  background: #0A4773 !important;
+  /* background: #0A4773 !important; */
 }
 
 .btn-primary:hover,
@@ -976,7 +976,7 @@ footer a#back_to_top i {
 }
 
 .btn-primary.btn-outline {
-  color: #0A4773 !important;
+  color: #FFF !important;
   border-color: #0A4773 !important;
 }
 
