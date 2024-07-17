@@ -1,0 +1,176 @@
+/* Global Styles */
+html {
+    text-align: center;
+    box-sizing: border-box;    
+}
+
+*, *:before, *:after {
+  box-sizing: inherit;
+}
+main {
+    clear: both;
+}
+
+body {
+    width: 80%;
+    margin-top: 0;
+    margin-right: auto;
+	margin-left: auto;
+	padding: 2.5% 2.5% 0;
+	background: white;
+	line-height: 1.8;
+	counter-reset: conferenceProceedingsPaperCounter journalPaperCounter workingPaperCounter teachingCounter thesisCounter; /* Set multiple counters named 'paperCounter', 'teachingCounter', etc, and their initial value is 0. */
+}
+
+a {
+    color: black;
+    text-decoration: none;
+}
+/*
+a:visited{
+    color: gray;
+}
+*/
+a:focus {
+      color: red;
+}
+a{
+    color: #09357b;
+}
+.content-wrap{
+    margin-top: 50px;
+}
+/* This chage the two header of the pages*/
+/*
+.updates h2{
+    border: 2px solid black;
+    color:blue;
+    text-align: center;
+}
+*/
+.updates h2{
+    margin-top: 40px;
+    margin-bottom: 0;
+    text-align: left;
+    color: black;
+    padding: 0;
+}
+a:hover {
+    color:#bb0000;/* 
+    background-color:#eeeeee; */
+    text-decoration:overline underline;
+}
+h2{
+    font-size: 30px;
+}
+h1{
+    font-size: 24px;
+}
+
+/* This gives defauld size for all headers and font*/
+h1, h2, h3 {
+  font-family: 'Trebuchet MS', Verdana, Arial;
+/*  font-size: 1.5em;*/
+    text-align: left;
+}
+
+/*This gives default font size and align for all paragraphs */
+p {  
+    font-family: 'Trebuchet MS', Verdana, Arial;
+    font-size: 20px;
+    text-align:justify;
+    
+}
+
+/* Header Footer links Styles */
+.welcome-note {
+    text-align: left;
+}
+
+.links {
+    font-size: 20px;
+    padding: 7px;
+    margin-right: 40px;
+    margin-bottom: 0;
+    padding-bottom: 0;
+    display: inline;
+    text-align: left;   
+}
+
+.links a {
+    margin: 10px;
+    
+}
+
+#author-img {
+    float: right;
+    min-height: 175px;
+}
+.welcome-note p{ 
+    padding-right: 3%;
+    min-height: 0;
+    overflow : hidden;
+    text-decoration: inherit;
+}
+
+
+h1#header {
+    font-size: 3.5em;
+    margin-bottom: 0;
+    margin-top: 0;
+}
+h1#header a {
+    color: black;
+}
+h1#header a:focus {
+    color: black;
+}
+h1#header a:focus {
+    color: black;
+}
+h1#header a:hover {
+    color:black;
+    background-color:white;
+    text-decoration:none;
+}
+
+/* Header styles only */
+head {
+  text-align: center;
+}
+    
+/* Footer styles only */
+footer {
+    text-align: center;    
+}
+
+/* Working Paper counter */
+conferenceProceedingsPaper:before {
+	counter-increment: conferenceProceedingsPaperCounter; /* Increment the value of conferenceProceedingsPaper counter by 1 */
+	content: "[CP" counter(conferenceProceedingsPaperCounter)"] "; /* Display it in form word '[conferenceProceedingsPaperCounter] ' */
+}
+
+/* Working Paper counter */
+journalPaper:before {
+	counter-increment: journalPaperCounter; /* Increment the value of journalPaper counter by 1 */
+	content: "[J" counter(journalPaperCounter)"] "; /* Display it in form word '[journalPaperCounter] ' */
+}
+
+/* Working Paper counter */
+workingPaper:before {
+	counter-increment: workingPaperCounter; /* Increment the value of workingPaper counter by 1 */
+	content: "[WP" counter(workingPaperCounter)"] "; /* Display it in form word '[WPworkingPaperCounter] ' */
+}
+
+/* TeachingMaterial counter */
+teaching:before {
+	counter-increment: teachingCounter; /* Increment the value of teachingCounter counter by 1 */ 
+	content: "[T" counter(teachingCounter)"] "; /* Display it in form word '[TteachingCounter] ' */
+}
+
+/* Theses counter */
+thesis:before {
+	counter-increment: thesisCounter; /* Increment the value of thesis counter by 1 */ 
+	content: "[Th" counter(thesisCounter)"] "; /* Display it in form word '[thesisCounter] ' */ 
+}
+

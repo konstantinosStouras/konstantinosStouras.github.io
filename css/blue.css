@@ -1,0 +1,191 @@
+/*************************************************
+ *  A custom theme for Hugo Academic
+ *  Set `custom_css = ["blue.css"] in `config.toml`.
+ *  Then save this file as `/static/css/blue.css` relative to your website root (i.e. not in `themes/academic` directory).
+ *  https://github.com/gcushen/hugo-academic
+ **************************************************/
+
+/* from green to blue */
+/*  change all rgb(76,175,80) --> to rgb(127,140,180) */
+/*  change all rgb(0,230,118) --> to rgb(52,60,86) */
+/*  change all rgba(0,230,118,0.6) --> rgba(127,140,180,0.6) */
+/*  change all rgba(0,230,118,1) --> rgba(52,60,86,1) */
+
+/*************************************************
+ *  Core
+ **************************************************/
+
+
+/* Headings */
+
+h32
+{
+    margin-top: 0rem;
+    font-size: 1.15rem;
+    padding-top:0px;
+
+}
+
+a,
+h3.article-title a:hover {
+  color: #0A4773;
+}
+
+
+a:hover,
+a:focus {
+  color: #0A4773;
+}
+
+/*************************************************
+ *  Blog Articles
+ **************************************************/
+
+.article-metadata a:hover {
+  color: #0A4773;
+}
+
+/*************************************************
+ *  Button Primary: Color Override
+ **************************************************/
+
+.btn-primary {
+  border-color: #0A4773;
+  background: #0A4773;
+}
+
+.btn-primary:hover,
+.btn-primary:focus,
+.btn-primary:active,
+.btn-primary.active,
+.open > .dropdown-toggle.btn-primary {
+  background: #0A4773;
+
+}
+
+
+/*************************************************
+ *  Button Outlines
+ **************************************************/
+
+
+.btn-primary.btn-outline {
+  color: #0A4773;
+  border-color: #0A4773;
+}
+
+/*************************************************
+ *  Navigation Bar
+ **************************************************/
+
+.navbar-default .navbar-nav>.active>a,
+.navbar-default .navbar-nav>.active>a:focus,
+.navbar-default .navbar-nav>.active>a:hover {
+  color: #FFF;
+  font-weight: 700;
+  background-color: transparent !important; /* Override Bootstrap. */
+}
+
+.dropdown-menu > .active > a,
+.dropdown-menu > .active > a:focus,
+.dropdown-menu > .active > a:hover {
+  color: #f5f6f7;
+  font-weight: 700;
+  background-color: transparent !important; /* Override Bootstrap. */
+
+}
+
+@media screen and (max-width: 1200px) {
+
+  .navbar-default .navbar-nav .open .dropdown-menu > .active > a,
+  .navbar-default .navbar-nav .open .dropdown-menu > .active > a:focus,
+  .navbar-default .navbar-nav .open .dropdown-menu > .active > a:hover {
+    color: #f5f6f7;
+    background-color: transparent;
+  }
+
+}
+
+/*************************************************
+ *  Toolbar Buttons
+ **************************************************/
+
+
+.btn-toolbar .btn.btn-primary {
+  background: #0A4773;
+}
+
+.btn-toolbar .btn.btn-primary:hover,
+.btn-toolbar .btn.btn-primary:focus {
+/*  background-color: rgba(127,140,180,0.6);*/
+  background-color: rgba(127,140,180,2.6);
+}
+
+.btn-toolbar .btn.btn-primary:active,
+.btn-toolbar .btn.btn-primary.active {
+  background-color: rgba(127,60,86,1);
+}
+
+/*************************************************
+ *  Publications
+ **************************************************/
+
+.pub-icon {
+  color:  #0A4773;
+  font-size: 0.81em;
+  padding-top: 6px;
+}
+
+.pub-list-item .pub-publication {
+  color:  #0A4773;
+/*  color: rgb(132, 214, 211);*/
+  font-size: 1rem;
+}
+
+.teachingMaterials-list-item {
+  color:  #0A4773;
+/*  color: rgb(132, 214, 211);*/
+  font-size: 1rem;
+  teaching::before{
+	counter-increment: teachingCounter; /* Increment the value of teachingCounter counter by 1 */ 
+	content: "[T" counter(teachingCounter)"] "; /* Display it in form word '[TteachingCounter] ' */
+     }
+
+
+/*************************************************
+ *  Fonts (note: update link @ themes/hugo-academic/layouts/partials)
+ **************************************************/
+
+html {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 300;
+  font-size: 16px;
+  color: rgba(0,0,0,0.8);
+  line-height: 1.65;
+}
+
+/*************************************************
+ *  Alerts
+ **************************************************/
+
+
+.alert-note {
+  color: #fff;
+  background-color: #0A4773;
+  border-color: #bce8f1;
+}
+
+.alert-warning {
+  color: #fff;
+  background-color: rgb(238, 88, 99);
+  border-color: #ebccd1;
+}
+
+#profile ul.network-icon {
+  display: inline-flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  list-style: none;
+  padding: 0;
+  margin-top: 5px;
+}
