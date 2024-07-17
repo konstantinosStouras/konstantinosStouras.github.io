@@ -970,7 +970,7 @@ footer a#back_to_top i {
  **************************************************/
 
 .btn-outline {
-  background-color: transparent !important;
+  /* background-color: transparent !important; */
   color: inherit;
   transition: all .5s;
 }
