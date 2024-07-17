@@ -9,14 +9,14 @@
 }
 
 /* Darker background on mouse-over */
-.btn:hover {
+/* .btn:hover {
   background-color: #0A4773;
 }
 
 .btn.focus, .btn:focus, .btn:hover {
   color: DodgerBlue;
   text-decoration: none;
-}
+} */
 
 /* body {
 	counter-reset: conferenceProceedingsPaperCounter journalPaperCounter workingPaperCounter teachingCounter thesisCounter; /* Set multiple counters named 'paperCounter', 'teachingCounter', etc, and their initial value is 0. 
