@@ -923,7 +923,7 @@ footer a#back_to_top i {
 .btn-primary.active,
 .btn-primary:visited,
 .open > .dropdown-toggle.btn-primary {
-  background: #0A4773 !important;
+  background: DodgerBlue !important;
 }
 
 .btn-light {
@@ -985,7 +985,7 @@ footer a#back_to_top i {
 }
 
 .btn-primary.btn-outline:active {
-  color: #0095eb !important;
+  color: #FFF !important;
 }
 
 .btn-light.btn-outline {
