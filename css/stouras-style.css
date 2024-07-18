@@ -29,13 +29,14 @@
 
 /* Darker background on mouse-over */
  .btn:hover {
-  background-color: #0A4773;
+  /* background-color: #0A4773; */
+  border: 1px solid #0A4773;
   color: white;
   /* A nice color is DodgerBlue */
 }
 
 .btn.focus, .btn:focus, .btn:hover {
-  /* color: #fff; */
+  color: #0A4773;
   text-decoration: none;
 } 
 
