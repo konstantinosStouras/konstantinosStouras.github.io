@@ -14,7 +14,8 @@
 
 /* Darker background on mouse-over */
  .btn:hover {
-  background-color: DodgerBlue;
+  background-color: #0A4773;
+  /* A nice color is DodgerBlue */
 }
 
 .btn.focus, .btn:focus, .btn:hover {
