@@ -49,10 +49,10 @@ a:focus {
  *  Button Primary: Color Override
  **************************************************/
 
-.btn-primary {
+/* .btn-primary {
   border-color: #0A4773;
   background: #0A4773;
-}
+} */
 
 .btn-primary:hover,
 .btn-primary:focus,
