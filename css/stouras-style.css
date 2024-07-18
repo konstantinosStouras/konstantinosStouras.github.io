@@ -3,9 +3,14 @@
   background-color: white;
   border: none;
   color: #0A4773;
-  padding: 15rem 10;
+  /* padding: 15rem 10; */
+  padding-top: 5px;
+  padding-right: 0.4rem;
+  padding-bottom: 5px;
+  padding-left: 0.4rem;
   cursor: pointer;  
-  font-size: .975rem;
+  font-size: .6rem/* .975rem */;
+  border-radius: .2rem;
 } 
 
 /* Darker background on mouse-over */
