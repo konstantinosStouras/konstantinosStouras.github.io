@@ -1,8 +1,8 @@
 /* Style buttons */
  .btn {
-  background-color: #0A4773;
+  background-color: white;
   border: none;
-  color: white;
+  color: #0A4773;
   padding: 15rem 10;
   cursor: pointer;  
   font-size: .975rem;
@@ -10,11 +10,11 @@
 
 /* Darker background on mouse-over */
  .btn:hover {
-  background-color: #0A4773;
+  background-color: DodgerBlue;
 }
 
 .btn.focus, .btn:focus, .btn:hover {
-  color: DodgerBlue;
+  color: #fff;
   text-decoration: none;
 } 
 
