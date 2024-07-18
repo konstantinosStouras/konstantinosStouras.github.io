@@ -8,9 +8,9 @@
   display: inline-block;
   font-size: 1rem;
   margin: 4px 2px;
-  padding-top: 0.4rem;
+  padding-top: 0.4ex;
   padding-right: 0.4rem;
-  padding-bottom: 0.4rem;
+  padding-bottom: 0.4ex;
   padding-left: 0.4rem;
   text-align: center;
   text-decoration: none;  
@@ -38,10 +38,10 @@
   display: inline-block;
   font-size: 1rem;
   margin: 4px 2px;
-  padding-top: 0.4px;
+  /* padding-top: 0.4ex;
   padding-right: 0.4rem;
-  padding-bottom: 0.4px;
-  padding-left: 0.4rem;
+  padding-bottom: 0.4ex;
+  padding-left: 0.4rem; */
   text-align: center;
   text-decoration: none;  
   transition-duration: 0.4s;
