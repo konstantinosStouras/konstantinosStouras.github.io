@@ -1,7 +1,7 @@
 /* Style buttons */
  .btn {
   background-color: white;
-  border: none;
+  border: 1px solid transparent;
   color: #0A4773;
   /* padding: 15rem 10; */
   padding-top: 5px;
