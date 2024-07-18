@@ -34,10 +34,9 @@
   /* A nice color is DodgerBlue */
 }
 
-/* .btn.focus, .btn:focus, .btn:hover {
-  color: #fff;
+.btn.focus, .btn:focus, .btn:hover {
   text-decoration: none;
-}  */
+} 
 
 /* body {
 	counter-reset: conferenceProceedingsPaperCounter journalPaperCounter workingPaperCounter teachingCounter thesisCounter; /* Set multiple counters named 'paperCounter', 'teachingCounter', etc, and their initial value is 0. 
