@@ -62,6 +62,12 @@
   color: white;
 }
 
+.button2.focus {
+  background-color: #0A4773;
+  color: white;
+  text-decoration: none;
+}
+
 /* body {
 	counter-reset: conferenceProceedingsPaperCounter journalPaperCounter workingPaperCounter teachingCounter thesisCounter; /* Set multiple counters named 'paperCounter', 'teachingCounter', etc, and their initial value is 0. 
 	
