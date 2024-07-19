@@ -1131,8 +1131,8 @@ nav#navbar-main li {
 .navbar-default .navbar-nav>.open>a:focus,
 .navbar-default .navbar-nav>.open>a:hover,
 .navbar-default .navbar-nav>.open>a:visited {
-  color: #f5f6f7 !important;
-  background-color: #fff !important;
+  color: #0095eb !important;
+  background-color: #0095eb !important;
 }
 
 .navbar-default .navbar-brand {
