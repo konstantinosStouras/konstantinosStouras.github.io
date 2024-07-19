@@ -1054,12 +1054,12 @@ nav#navbar-main li {
 }
 
 .navbar-default .navbar-nav>li>a,
-.navbar-default .navbar-nav>a:focus/* ,
-.navbar-default .navbar-nav>a:hover */ {
+.navbar-default .navbar-nav>a:focus,
+.navbar-default .navbar-nav>a:hover {
   white-space: nowrap;
   -webkit-transition: 0.2s ease;
   transition: 0.2s ease;
-  color: #f5f6f7; /* leyko */
+  color: #f5f6f7; /* skouro mple */
   font-weight: 600;
 }
 
