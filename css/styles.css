@@ -1115,7 +1115,7 @@ nav#navbar-main li {
 .dropdown-menu>li>a:hover {
   color: #0095eb;
   text-decoration: none;
-  background-color: #fff;
+  background-color: #0095eb;
 }
 
 .dropdown-menu > .active > a,
