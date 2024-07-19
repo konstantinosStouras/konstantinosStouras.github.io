@@ -56,7 +56,6 @@ body {
 p {
   margin-top: 0;
   margin-bottom: 1rem;
-  text-align: justify;
 }
 
 /* Lists */
@@ -262,7 +261,7 @@ small,
 }
 
 /*************************************************
- *  Modals
+ *  Modals.
  **************************************************/
 
 .modal-header .close {
@@ -1226,7 +1225,7 @@ nav#navbar-main li {
   .navbar-default .navbar-nav .open .dropdown-menu > li > a {
     padding: 5px 15px 5px 25px;
     line-height: 20px;
-    color: #0095eb;
+    color: #f5f6f7;
   }
 
   .navbar-default .navbar-nav .open .dropdown-menu > li > a:focus,
