@@ -1036,7 +1036,7 @@ footer a#back_to_top i {
 }
 
 .navbar-default {
-  background: #0A4773; /* skouro mple */
+  background: #0A4773;
   box-shadow: 0 0.125rem 0.25rem 0 rgba(0,0,0,.11)
 }
 
@@ -1059,7 +1059,7 @@ nav#navbar-main li {
   white-space: nowrap;
   -webkit-transition: 0.2s ease;
   transition: 0.2s ease;
-  color: #f5f6f7; /* skouro mple */
+  color: #f5f6f7;
   font-weight: 600;
 }
 
