@@ -42,7 +42,7 @@ body {
   margin-top: 71px; /* Offset body content by navbar height. */
   padding-top: 0;
   counter-reset: captions;  
-  text-align: justify;
+  /* text-align: justify; */ /* This causes an issue with alignment of the left column e.g. "Peer-reviewed Conference Proceedings" */
 }
 @media screen and (max-width: 1200px) { /* Match max-width of .nav-bar query. */
   body {
