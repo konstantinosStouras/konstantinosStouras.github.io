@@ -69,44 +69,104 @@ function KnapsackGame() {
     setVisibility(VISIBILITY_MODES[next % VISIBILITY_MODES.length]);
   };
 
-  return React.createElement("div", { style: { padding: "20px", fontFamily: "sans-serif" } },
-    React.createElement("h1", null, "Knapsack Contest Game"),
+  const containerStyle = {
+    padding: "30px",
+    fontFamily: "'Segoe UI', 'Inter', sans-serif",
+    maxWidth: "900px",
+    margin: "auto",
+  };
+
+  const itemStyle = (selected) => ({
+    border: selected ? "2px solid #3b82f6" : "1px solid #ccc",
+    borderRadius: "12px",
+    padding: "10px",
+    cursor: "pointer",
+    textAlign: "center",
+    backgroundColor: selected ? "#e0f2fe" : "#fff",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+    transition: "all 0.2s",
+  });
+
+  const buttonStyle = {
+    padding: "12px 20px",
+    fontSize: "16px",
+    marginRight: "12px",
+    borderRadius: "8px",
+    border: "none",
+    cursor: "pointer",
+    backgroundColor: "#3b82f6",
+    color: "#fff",
+    boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+  };
+
+  return React.createElement("div", { style: containerStyle },
+    React.createElement("h1", { style: { fontSize: "28px", marginBottom: "10px" } }, "🎒 Knapsack Contest Game"),
     React.createElement("p", null, `Round: ${round + 1}`),
     React.createElement("p", null, `Visibility Mode: ${visibility}`),
     React.createElement("p", null, `Infeasibility Risk: ${risk * 100}%`),
-    React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px" } },
+
+    React.createElement("div", {
+      style: {
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+        gap: "15px",
+        marginTop: "20px",
+      }
+    },
       ITEMS.map(item =>
         React.createElement("div", {
           key: item.id,
           onClick: () => handleSelect(item),
-          style: { border: "1px solid gray", padding: "10px", cursor: "pointer", textAlign: "center" }
+          style: itemStyle(selectedItems.includes(item)),
         }, [
-          React.createElement("p", { key: "v" }, `$${item.value}`),
-          React.createElement("p", { key: "w" }, `${item.weight} Kg`)
+          React.createElement("p", { key: "v", style: { margin: 0, fontWeight: "bold" } }, `$${item.value}`),
+          React.createElement("p", { key: "w", style: { margin: 0 } }, `${item.weight} Kg`)
         ])
       )
     ),
-    React.createElement("div", { style: { marginTop: "20px" } },
-      React.createElement("p", null, `Target Value: $${TARGET_VALUE}`),
-      React.createElement("p", null, `Current Value: $${currentValue}`),
-      React.createElement("p", null, `Current Weight: ${currentWeight} Kg`),
-      React.createElement("p", null, `Weight Left: ${weightLeft} Kg`),
-      quit && React.createElement("p", { style: { color: "red" } }, "You quit!")
+
+    React.createElement("div", { style: { marginTop: "30px" } },
+      React.createElement("p", null, `🎯 Target Value: $${TARGET_VALUE}`),
+      React.createElement("p", null, `🧮 Current Value: $${currentValue}`),
+      React.createElement("p", null, `⚖️ Current Weight: ${currentWeight} Kg`),
+      React.createElement("p", null, `➕ Weight Left: ${weightLeft} Kg`),
+      quit && React.createElement("p", { style: { color: "red", fontWeight: "bold" } }, "🚨 You quit!")
     ),
-    visibility !== "Darkness" && showOpponent && React.createElement("div", null,
-      React.createElement("h2", null, "Opponent's Progress"),
-      React.createElement("div", { style: { display: "flex", gap: "8px", marginTop: "10px" } },
+
+    visibility !== "Darkness" && showOpponent && React.createElement("div", { style: { marginTop: "30px" } },
+      React.createElement("h2", null, "👤 Opponent's Progress"),
+      React.createElement("div", {
+        style: {
+          display: "flex",
+          gap: "10px",
+          flexWrap: "wrap",
+          marginTop: "10px",
+        }
+      },
         opponentProgress.map((item, i) =>
           React.createElement("div", {
             key: i,
-            style: { border: "1px solid black", padding: "5px" }
+            style: {
+              border: "1px solid #aaa",
+              padding: "8px",
+              borderRadius: "8px",
+              backgroundColor: "#f3f4f6",
+              fontSize: "14px",
+            }
           }, `$${item.value} / ${item.weight}Kg`)
         )
       )
     ),
-    React.createElement("div", { style: { marginTop: "20px" } },
-      React.createElement("button", { onClick: handleQuit, style: { marginRight: "10px", padding: "10px" } }, "Quit"),
-      React.createElement("button", { onClick: nextRound, style: { padding: "10px" } }, "Next Round")
+
+    React.createElement("div", { style: { marginTop: "30px" } },
+      React.createElement("button", {
+        onClick: handleQuit,
+        style: { ...buttonStyle, backgroundColor: "#ef4444" }
+      }, "❌ Quit"),
+      React.createElement("button", {
+        onClick: nextRound,
+        style: buttonStyle
+      }, "➡️ Next Round")
     )
   );
 }
