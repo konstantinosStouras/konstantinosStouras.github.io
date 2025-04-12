@@ -30,7 +30,7 @@ function KnapsackGame() {
   const [opponentProgress, setOpponentProgress] = React.useState([]);
   const [quit, setQuit] = React.useState(false);
 
-  const SHEET_URL = "https://script.google.com/macros/s/AKfycbwIVDYns-UJs9vZzgPMN0gUbijPS03ljmWdk-0-2yVlEI5zX0gR8OvOSQIKsY0qodNjcQ/exec";
+  const SHEET_URL = "https://script.google.com/macros/s/AKfycbzvuBPfghXCZX35Z2sL-LppCtStCNecQMGHuGckl7AW_YP_LywweZyn3idlp_Uix2wSqA/exec";
 
   const sendToSheet = () => {
     fetch(SHEET_URL, {
