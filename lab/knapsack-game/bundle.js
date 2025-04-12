@@ -1,4 +1,4 @@
-// Knapsack Contest Game with yellow gradient color based on value and Google Sheets data logging
+// Knapsack Contest Game with yellow gradient color based on value and Google Sheets data logging via Vercel proxy
 const ITEMS = [
   { id: 1, value: 2, weight: 3 },
   { id: 2, value: 3, weight: 4 },
@@ -30,7 +30,7 @@ function KnapsackGame() {
   const [opponentProgress, setOpponentProgress] = React.useState([]);
   const [quit, setQuit] = React.useState(false);
 
-  const SHEET_URL = "https://script.google.com/macros/s/AKfycbzvuBPfghXCZX35Z2sL-LppCtStCNecQMGHuGckl7AW_YP_LywweZyn3idlp_Uix2wSqA/exec";
+  const SHEET_URL = "https://knapsack-proxy.vercel.app/submit"; // 🔁 Your deployed Vercel proxy URL
 
   const sendToSheet = () => {
     fetch(SHEET_URL, {
@@ -46,7 +46,10 @@ function KnapsackGame() {
       headers: {
         "Content-Type": "application/json",
       },
-    }).then(res => console.log("Data sent to sheet:", res.status));
+    })
+      .then(res => res.text())
+      .then(text => console.log("📥 Sheet response:", text))
+      .catch(err => console.error("❌ Sheet error:", err));
   };
 
   React.useEffect(() => {
