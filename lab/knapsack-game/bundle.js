@@ -1,4 +1,4 @@
-// Knapsack Contest Game with drag-and-drop support
+// Knapsack Contest Game with yellow gradient color based on value and Google Sheets data logging
 const ITEMS = [
   { id: 1, value: 2, weight: 3 },
   { id: 2, value: 3, weight: 4 },
@@ -29,6 +29,25 @@ function KnapsackGame() {
   const [showOpponent, setShowOpponent] = React.useState(true);
   const [opponentProgress, setOpponentProgress] = React.useState([]);
   const [quit, setQuit] = React.useState(false);
+
+  const SHEET_URL = "https://script.google.com/macros/s/AKfycbzHFXU1xPjqDaXwj8pCthT2Py-2v-eLdeoXn5YWUxgDZSBd758OiM0J_ZhxS_lBonZrBg/exec";
+
+  const sendToSheet = () => {
+    fetch(SHEET_URL, {
+      method: "POST",
+      body: JSON.stringify({
+        round,
+        selectedItems,
+        totalValue: currentValue,
+        totalWeight: currentWeight,
+        risk,
+        visibility
+      }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }).then(res => console.log("Data sent to sheet:", res.status));
+  };
 
   React.useEffect(() => {
     if (visibility === "Daylight") {
@@ -71,16 +90,34 @@ function KnapsackGame() {
     setDraggedItem(null);
   };
 
-  const itemStyle = {
-    border: "1px solid #ccc",
-    borderRadius: "12px",
-    padding: "10px",
-    cursor: "grab",
-    textAlign: "center",
-    backgroundColor: "#fff",
-    boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-    transition: "all 0.2s",
-    minWidth: "100px"
+  const maxWeight = Math.max(...ITEMS.map(i => i.weight));
+  const maxValue = Math.max(...ITEMS.map(i => i.value));
+
+  const getItemStyle = (item) => {
+    const weightRatio = item.weight / maxWeight;
+    const valueRatio = item.value / maxValue;
+    const baseSize = 80;
+    const dynamicSize = 60 * weightRatio;
+    const width = baseSize + dynamicSize;
+    const height = 60 + 20 * weightRatio;
+
+    const lightness = 90 - valueRatio * 40; // 90% (light) to 50% (strong)
+    const color = `hsl(45, 100%, ${lightness}%)`;
+
+    return {
+      borderRadius: "12px",
+      padding: "10px",
+      cursor: "grab",
+      textAlign: "center",
+      boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+      transition: "all 0.2s",
+      minWidth: `${width}px`,
+      height: `${height}px`,
+      backgroundColor: color,
+      display: "flex",
+      flexDirection: "column",
+      justifyContent: "center",
+    };
   };
 
   const buttonStyle = {
@@ -100,7 +137,7 @@ function KnapsackGame() {
       key: item.id,
       draggable: true,
       onDragStart: () => setDraggedItem(item),
-      style: itemStyle
+      style: getItemStyle(item)
     },
       React.createElement("p", { style: { margin: 0, fontWeight: "bold" } }, `$${item.value}`),
       React.createElement("p", { style: { margin: 0 } }, `${item.weight} Kg`)
@@ -116,7 +153,7 @@ function KnapsackGame() {
     React.createElement("div", {
       onDragOver: (e) => e.preventDefault(),
       onDrop: onDropToAvailable,
-      style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "15px", marginTop: "20px" }
+      style: { display: "flex", flexWrap: "wrap", gap: "15px", marginTop: "20px", alignItems: "flex-start" }
     },
       availableItems.map(renderItem)
     ),
@@ -129,7 +166,7 @@ function KnapsackGame() {
       React.createElement("h3", null, "🧺 Items in Knapsack"),
       selectedItems.length === 0
         ? React.createElement("p", null, "No items selected.")
-        : React.createElement("div", { style: { display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "10px" } },
+        : React.createElement("div", { style: { display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "10px", alignItems: "flex-start" } },
             selectedItems.map(renderItem)
           )
     ),
@@ -144,7 +181,7 @@ function KnapsackGame() {
 
     visibility !== "Darkness" && showOpponent && React.createElement("div", { style: { marginTop: "30px" } },
       React.createElement("h2", null, "👤 Opponent's Progress"),
-      React.createElement("div", { style: { display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "10px" } },
+      React.createElement("div", { style: { display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "10px", alignItems: "flex-start" } },
         opponentProgress.map((item, i) =>
           React.createElement("div", { key: i, style: { border: "1px solid #aaa", padding: "8px", borderRadius: "8px", backgroundColor: "#f3f4f6", fontSize: "14px" } },
             `$${item.value} / ${item.weight}Kg`
@@ -154,8 +191,20 @@ function KnapsackGame() {
     ),
 
     React.createElement("div", { style: { marginTop: "30px" } },
-      React.createElement("button", { onClick: () => setQuit(true), style: { ...buttonStyle, backgroundColor: "#ef4444" } }, "❌ Quit"),
-      React.createElement("button", { onClick: () => nextRound(), style: buttonStyle }, "➡️ Next Round")
+      React.createElement("button", {
+        onClick: () => {
+          setQuit(true);
+          sendToSheet();
+        },
+        style: { ...buttonStyle, backgroundColor: "#ef4444" }
+      }, "❌ Quit"),
+      React.createElement("button", {
+        onClick: () => {
+          sendToSheet();
+          setRound(prev => prev + 1);
+        },
+        style: buttonStyle
+      }, "➡️ Next Round")
     )
   );
 }
