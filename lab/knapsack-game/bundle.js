@@ -136,6 +136,7 @@ function KnapsackGame() {
     React.createElement("div", {
       key: item.id,
       draggable: true,
+      onTouchStart: () => setDraggedItem(item),
       onDragStart: () => setDraggedItem(item),
       style: getItemStyle(item)
     },
@@ -153,6 +154,7 @@ function KnapsackGame() {
     React.createElement("div", {
       onDragOver: (e) => e.preventDefault(),
       onDrop: onDropToAvailable,
+      onTouchEnd: onDropToAvailable,
       style: { display: "flex", flexWrap: "wrap", gap: "15px", marginTop: "20px", alignItems: "flex-start" }
     },
       availableItems.map(renderItem)
@@ -161,6 +163,7 @@ function KnapsackGame() {
     React.createElement("div", {
       onDragOver: (e) => e.preventDefault(),
       onDrop: onDropToKnapsack,
+      onTouchEnd: onDropToKnapsack,
       style: { marginTop: "30px", padding: "15px", border: "2px dashed #ccc", borderRadius: "10px", backgroundColor: "#f9fafb" }
     },
       React.createElement("h3", null, "🧺 Items in Knapsack"),
