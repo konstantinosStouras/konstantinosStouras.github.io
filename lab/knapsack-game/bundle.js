@@ -30,7 +30,7 @@ function KnapsackGame() {
   const [opponentProgress, setOpponentProgress] = React.useState([]);
   const [quit, setQuit] = React.useState(false);
 
-  const SHEET_URL = "https://knapsack-proxy.vercel.app/submit"; // 🔁 Your deployed Vercel proxy URL
+  const SHEET_URL = "https://knapsack-proxy.vercel.app/api/submit"; // 🔁 Your deployed Vercel proxy URL
 
   const sendToSheet = () => {
     fetch(SHEET_URL, {
