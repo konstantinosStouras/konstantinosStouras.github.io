@@ -1,4 +1,4 @@
-// Knapsack Contest Game with yellow gradient color based on value and Google Sheets data logging via Vercel proxy
+// Fixed version of bundle.js for the Knapsack Game
 const ITEMS = [
   { id: 1, value: 2, weight: 3 },
   { id: 2, value: 3, weight: 4 },
@@ -19,6 +19,15 @@ const TARGET_VALUE = 22;
 const RISK_LEVELS = [0, 0.2, 0.4];
 const VISIBILITY_MODES = ["Daylight", "Darkness", "Silent"];
 
+function shuffleArray(array) {
+  const newArray = [...array];
+  for (let i = newArray.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+  }
+  return newArray;
+}
+
 function KnapsackGame() {
   const [round, setRound] = React.useState(0);
   const [selectedItems, setSelectedItems] = React.useState([]);
@@ -26,11 +35,9 @@ function KnapsackGame() {
   const [draggedItem, setDraggedItem] = React.useState(null);
   const [visibility, setVisibility] = React.useState(VISIBILITY_MODES[0]);
   const [risk, setRisk] = React.useState(RISK_LEVELS[0]);
-  const [showOpponent, setShowOpponent] = React.useState(true);
-  const [opponentProgress, setOpponentProgress] = React.useState([]); // Opponent logic removed
   const [quit, setQuit] = React.useState(false);
 
-  const SHEET_URL = "https://knapsack-proxy.vercel.app/api/submit"; // 🔁 Your deployed Vercel proxy URL
+  const SHEET_URL = "https://knapsack-proxy.vercel.app/api/submit";
 
   const sendToSheet = () => {
     const sessionId = localStorage.getItem("knapsack_session") || (() => {
@@ -56,27 +63,9 @@ function KnapsackGame() {
     fetch(SHEET_URL, {
       method: "POST",
       body: JSON.stringify(rowData),
-      headers: {
-        "Content-Type": "application/json",
-      },
-    })
-      .then(res => res.text())
-      .then(text => console.log("📥 Sheet response:", text))
-      .catch(err => console.error("❌ Sheet error:", err));
+      headers: { "Content-Type": "application/json" },
+    }).then(res => res.text()).then(console.log).catch(console.error);
   };
-
-    
-
-    
-
-    
-
-    
-
-    
-    
-
-    
 
   React.useEffect(() => {
     setAvailableItems(shuffleArray(ITEMS));
@@ -115,10 +104,8 @@ function KnapsackGame() {
     const dynamicSize = 60 * weightRatio;
     const width = baseSize + dynamicSize;
     const height = 60 + 20 * weightRatio;
-
-    const lightness = 90 - valueRatio * 40; // 90% (light) to 50% (strong)
+    const lightness = 90 - valueRatio * 40;
     const color = `hsl(45, 100%, ${lightness}%)`;
-
     return {
       borderRadius: "12px",
       padding: "10px",
@@ -135,34 +122,13 @@ function KnapsackGame() {
     };
   };
 
-  const buttonStyle = {
-    padding: "12px 20px",
-    fontSize: "16px",
-    marginRight: "12px",
-    borderRadius: "8px",
-    border: "none",
-    cursor: "pointer",
-    backgroundColor: "#3b82f6",
-    color: "#fff",
-    boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
-  };
-
-  function shuffleArray(array) {
-  const newArray = [...array];
-  for (let i = newArray.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
-  }
-  return newArray;
-}
-
-const renderItem = (item) => (
+  const renderItem = (item) => (
     React.createElement("div", {
       key: item.id,
       draggable: true,
-      onTouchStart: () => setDraggedItem(item),
       onDragStart: () => setDraggedItem(item),
-      style: getItemStyle(item)
+      onTouchStart: () => setDraggedItem(item),
+      style: getItemStyle(item),
     },
       React.createElement("p", { style: { margin: 0, fontWeight: "bold" } }, `$${item.value}`),
       React.createElement("p", { style: { margin: 0 } }, `${item.weight} Kg`)
@@ -176,16 +142,14 @@ const renderItem = (item) => (
     React.createElement("p", null, `Infeasibility Risk: ${risk * 100}%`),
 
     React.createElement("div", {
-      onDragOver: (e) => e.preventDefault(),
+      onDragOver: e => e.preventDefault(),
       onDrop: onDropToAvailable,
       onTouchEnd: onDropToAvailable,
       style: { display: "flex", flexWrap: "wrap", gap: "15px", marginTop: "20px", alignItems: "flex-start" }
-    },
-      availableItems.map(renderItem)
-    ),
+    }, availableItems.map(renderItem)),
 
     React.createElement("div", {
-      onDragOver: (e) => e.preventDefault(),
+      onDragOver: e => e.preventDefault(),
       onDrop: onDropToKnapsack,
       onTouchEnd: onDropToKnapsack,
       style: { marginTop: "30px", padding: "15px", border: "2px dashed #ccc", borderRadius: "10px", backgroundColor: "#f9fafb" }
@@ -193,9 +157,7 @@ const renderItem = (item) => (
       React.createElement("h3", null, "🧺 Items in Knapsack"),
       selectedItems.length === 0
         ? React.createElement("p", null, "No items selected.")
-        : React.createElement("div", { style: { display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "10px", alignItems: "flex-start" } },
-            selectedItems.map(renderItem)
-          )
+        : React.createElement("div", { style: { display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "10px", alignItems: "flex-start" } }, selectedItems.map(renderItem))
     ),
 
     React.createElement("div", { style: { marginTop: "30px" } },
@@ -206,16 +168,6 @@ const renderItem = (item) => (
       quit && React.createElement("p", { style: { color: "red", fontWeight: "bold" } }, "🚨 You quit!")
     ),
 
-    
-      React.createElement("div", { style: { display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "10px", alignItems: "flex-start" } },
-        opponentProgress.map((item, i) =>
-          React.createElement("div", { key: i, style: { border: "1px solid #aaa", padding: "8px", borderRadius: "8px", backgroundColor: "#f3f4f6", fontSize: "14px" } },
-            `$${item.value} / ${item.weight}Kg`
-          )
-        )
-      )
-    ),
-
     React.createElement("div", { style: { marginTop: "30px" } },
       React.createElement("button", {
         onClick: () => {
@@ -223,14 +175,14 @@ const renderItem = (item) => (
           sendToSheet();
           alert("✅ Your data was submitted to Google Sheets!");
         },
-        style: { ...buttonStyle, backgroundColor: "#ef4444" }
+        style: { padding: "12px 20px", fontSize: "16px", marginRight: "12px", borderRadius: "8px", border: "none", cursor: "pointer", backgroundColor: "#ef4444", color: "#fff" }
       }, "❌ Quit"),
       React.createElement("button", {
         onClick: () => {
           sendToSheet();
           setRound(prev => prev + 1);
         },
-        style: buttonStyle
+        style: { padding: "12px 20px", fontSize: "16px", borderRadius: "8px", border: "none", cursor: "pointer", backgroundColor: "#3b82f6", color: "#fff" }
       }, "➡️ Next Round")
     )
   );
