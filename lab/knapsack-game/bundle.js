@@ -33,15 +33,22 @@ function KnapsackGame() {
   const SHEET_URL = "https://knapsack-proxy.vercel.app/api/submit"; // 🔁 Your deployed Vercel proxy URL
 
   const sendToSheet = () => {
+    const itemData = {};
+    selectedItems.forEach((item, index) => {
+      itemData[`item_${index + 1}_id`] = item.id;
+      itemData[`item_${index + 1}_value`] = item.value;
+      itemData[`item_${index + 1}_weight`] = item.weight;
+    });
+
     fetch(SHEET_URL, {
       method: "POST",
       body: JSON.stringify({
         round,
-        selectedItems,
         totalValue: currentValue,
         totalWeight: currentWeight,
         risk,
-        visibility
+        visibility,
+        ...itemData
       }),
       headers: {
         "Content-Type": "application/json",
@@ -201,6 +208,7 @@ function KnapsackGame() {
         onClick: () => {
           setQuit(true);
           sendToSheet();
+          alert("✅ Your data was submitted to Google Sheets!");
         },
         style: { ...buttonStyle, backgroundColor: "#ef4444" }
       }, "❌ Quit"),
