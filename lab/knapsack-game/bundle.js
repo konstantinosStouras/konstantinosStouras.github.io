@@ -39,6 +39,9 @@ function KnapsackGame() {
       return id;
     })();
 
+    const currentWeight = selectedItems.reduce((acc, item) => acc + item.weight, 0);
+    const currentValue = selectedItems.reduce((acc, item) => acc + item.value, 0);
+
     const rowData = {
       timestamp: new Date().toISOString(),
       sessionId,
@@ -50,29 +53,11 @@ function KnapsackGame() {
       visibility
     };
 
-    fetch(SHEET_URL, {
-      method: "POST",
-      body: JSON.stringify(rowData),
-      headers: {
-        "Content-Type": "application/json",
-      },
-    })
-      .then(res => res.text())
-      .then(text => console.log("📥 Sheet response:", text))
-      .catch(err => console.error("❌ Sheet error:", err));
-  };
+    
 
-    fetch(SHEET_URL, {
-      method: "POST",
-      body: JSON.stringify(rowData),
-      headers: {
-        "Content-Type": "application/json",
-      },
-    })
-      .then(res => res.text())
-      .then(text => console.log("📥 Sheet response:", text))
-      .catch(err => console.error("❌ Sheet error:", err));
-  };
+    
+
+    
 
     ITEMS.forEach((item, i) => {
       const selected = selectedItems.find(sel => sel.id === item.id);
@@ -81,41 +66,14 @@ function KnapsackGame() {
       rowData[`item_${item.id}_weight`] = item.weight;
     });
 
-    fetch(SHEET_URL, {
-      method: "POST",
-      body: JSON.stringify(rowData),
-      headers: {
-        "Content-Type": "application/json",
-      },
-    })
-      .then(res => res.text())
-      .then(text => console.log("📥 Sheet response:", text))
-      .catch(err => console.error("❌ Sheet error:", err));
-  };
+    
     selectedItems.forEach((item, index) => {
       itemData[`item_${index + 1}_id`] = item.id;
       itemData[`item_${index + 1}_value`] = item.value;
       itemData[`item_${index + 1}_weight`] = item.weight;
     });
 
-    fetch(SHEET_URL, {
-      method: "POST",
-      body: JSON.stringify({
-        round,
-        totalValue: currentValue,
-        totalWeight: currentWeight,
-        risk,
-        visibility,
-        ...itemData
-      }),
-      headers: {
-        "Content-Type": "application/json",
-      },
-    })
-      .then(res => res.text())
-      .then(text => console.log("📥 Sheet response:", text))
-      .catch(err => console.error("❌ Sheet error:", err));
-  };
+    
 
   React.useEffect(() => {
     setAvailableItems(shuffleArray(ITEMS));
