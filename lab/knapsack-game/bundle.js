@@ -1,4 +1,4 @@
-// Fixed version of bundle.js for the Knapsack Game with random infeasibility risk per round
+// Fixed version of bundle.js for the Knapsack Game with mobile drag support and cross-device compatibility
 const ITEMS = [
   { id: 1, value: 2, weight: 3 },
   { id: 2, value: 3, weight: 4 },
@@ -42,6 +42,8 @@ function KnapsackGame() {
   const [quit, setQuit] = React.useState(false);
 
   const SHEET_URL = "https://knapsack-proxy.vercel.app/api/submit";
+  const knapsackRef = React.useRef(null);
+  const availableRef = React.useRef(null);
 
   const sendToSheet = () => {
     const sessionId = localStorage.getItem("knapsack_session") || (() => {
@@ -74,7 +76,7 @@ function KnapsackGame() {
   React.useEffect(() => {
     setAvailableItems(shuffleArray(ITEMS));
     setSelectedItems([]);
-    setRisk(getRandomElement(RISK_LEVELS)); // Assign new risk each round
+    setRisk(getRandomElement(RISK_LEVELS));
   }, [round]);
 
   const currentWeight = selectedItems.reduce((acc, item) => acc + item.weight, 0);
@@ -97,6 +99,19 @@ function KnapsackGame() {
       setSelectedItems(selectedItems.filter(i => i.id !== draggedItem.id));
     }
     setDraggedItem(null);
+  };
+
+  const handleTouchEnd = (e) => {
+    if (!draggedItem) return;
+    const touch = e.changedTouches[0];
+    const element = document.elementFromPoint(touch.clientX, touch.clientY);
+    if (knapsackRef.current && knapsackRef.current.contains(element)) {
+      onDropToKnapsack();
+    } else if (availableRef.current && availableRef.current.contains(element)) {
+      onDropToAvailable();
+    } else {
+      setDraggedItem(null);
+    }
   };
 
   const maxWeight = Math.max(...ITEMS.map(i => i.weight));
@@ -133,6 +148,7 @@ function KnapsackGame() {
       draggable: true,
       onDragStart: () => setDraggedItem(item),
       onTouchStart: () => setDraggedItem(item),
+      onTouchEnd: handleTouchEnd,
       style: getItemStyle(item),
     },
       React.createElement("p", { style: { margin: 0, fontWeight: "bold" } }, `$${item.value}`),
@@ -147,16 +163,16 @@ function KnapsackGame() {
     React.createElement("p", null, `Infeasibility Risk: ${risk * 100}%`),
 
     React.createElement("div", {
+      ref: availableRef,
       onDragOver: e => e.preventDefault(),
       onDrop: onDropToAvailable,
-      onTouchEnd: onDropToAvailable,
       style: { display: "flex", flexWrap: "wrap", gap: "15px", marginTop: "20px", alignItems: "flex-start" }
     }, availableItems.map(renderItem)),
 
     React.createElement("div", {
+      ref: knapsackRef,
       onDragOver: e => e.preventDefault(),
       onDrop: onDropToKnapsack,
-      onTouchEnd: onDropToKnapsack,
       style: { marginTop: "30px", padding: "15px", border: "2px dashed #ccc", borderRadius: "10px", backgroundColor: "#f9fafb" }
     },
       React.createElement("h3", null, "🧺 Items in Knapsack"),
