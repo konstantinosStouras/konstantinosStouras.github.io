@@ -17,7 +17,6 @@ const ITEMS = [
 const MAX_WEIGHT = 14;
 const TARGET_VALUE = 22;
 const RISK_LEVELS = [0, 0.2, 0.8];
-const VISIBILITY_MODES = ["Daylight", "Darkness", "Silent"];
 
 function shuffleArray(array) {
   const newArray = [...array];
@@ -37,7 +36,6 @@ function KnapsackGame() {
   const [selectedItems, setSelectedItems] = React.useState([]);
   const [availableItems, setAvailableItems] = React.useState(shuffleArray(ITEMS));
   const [draggedItem, setDraggedItem] = React.useState(null);
-  const [visibility, setVisibility] = React.useState(VISIBILITY_MODES[0]);
   const [risk, setRisk] = React.useState(getRandomElement(RISK_LEVELS));
   const [quit, setQuit] = React.useState(false);
 
@@ -62,8 +60,7 @@ function KnapsackGame() {
       selectedItems: selectedItems.map(i => `ID:${i.id},V:${i.value},W:${i.weight}`).join(" | "),
       totalValue: currentValue,
       totalWeight: currentWeight,
-      risk,
-      visibility
+      risk
     };
 
     fetch(SHEET_URL, {
@@ -159,7 +156,6 @@ function KnapsackGame() {
   return React.createElement("div", { style: { padding: "30px", fontFamily: "'Segoe UI', 'Inter', sans-serif", maxWidth: "900px", margin: "auto" } },
     React.createElement("h1", { style: { fontSize: "28px", marginBottom: "10px" } }, "🎒 Knapsack Contest Game"),
     React.createElement("p", null, `Round: ${round + 1}`),
-    React.createElement("p", null, `Visibility Mode: ${visibility}`),
     React.createElement("p", null, `Infeasibility Risk: ${risk * 100}%`),
 
     React.createElement("div", {
