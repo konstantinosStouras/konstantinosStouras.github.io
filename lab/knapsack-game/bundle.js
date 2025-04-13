@@ -22,18 +22,76 @@ const VISIBILITY_MODES = ["Daylight", "Darkness", "Silent"];
 function KnapsackGame() {
   const [round, setRound] = React.useState(0);
   const [selectedItems, setSelectedItems] = React.useState([]);
-  const [availableItems, setAvailableItems] = React.useState(ITEMS);
+  const [availableItems, setAvailableItems] = React.useState(shuffleArray(ITEMS));
   const [draggedItem, setDraggedItem] = React.useState(null);
   const [visibility, setVisibility] = React.useState(VISIBILITY_MODES[0]);
   const [risk, setRisk] = React.useState(RISK_LEVELS[0]);
   const [showOpponent, setShowOpponent] = React.useState(true);
-  const [opponentProgress, setOpponentProgress] = React.useState([]);
+  const [opponentProgress, setOpponentProgress] = React.useState([]); // Opponent logic removed
   const [quit, setQuit] = React.useState(false);
 
   const SHEET_URL = "https://knapsack-proxy.vercel.app/api/submit"; // 🔁 Your deployed Vercel proxy URL
 
   const sendToSheet = () => {
-    const itemData = {};
+    const sessionId = localStorage.getItem("knapsack_session") || (() => {
+      const id = crypto.randomUUID();
+      localStorage.setItem("knapsack_session", id);
+      return id;
+    })();
+
+    const rowData = {
+      timestamp: new Date().toISOString(),
+      sessionId,
+      round: round + 1,
+      selectedItems: selectedItems.map(i => `ID:${i.id},V:${i.value},W:${i.weight}`).join(" | "),
+      totalValue: currentValue,
+      totalWeight: currentWeight,
+      risk,
+      visibility
+    };
+
+    fetch(SHEET_URL, {
+      method: "POST",
+      body: JSON.stringify(rowData),
+      headers: {
+        "Content-Type": "application/json",
+      },
+    })
+      .then(res => res.text())
+      .then(text => console.log("📥 Sheet response:", text))
+      .catch(err => console.error("❌ Sheet error:", err));
+  };
+
+    fetch(SHEET_URL, {
+      method: "POST",
+      body: JSON.stringify(rowData),
+      headers: {
+        "Content-Type": "application/json",
+      },
+    })
+      .then(res => res.text())
+      .then(text => console.log("📥 Sheet response:", text))
+      .catch(err => console.error("❌ Sheet error:", err));
+  };
+
+    ITEMS.forEach((item, i) => {
+      const selected = selectedItems.find(sel => sel.id === item.id);
+      rowData[`item_${item.id}_selected`] = selected ? "Yes" : "No";
+      rowData[`item_${item.id}_value`] = item.value;
+      rowData[`item_${item.id}_weight`] = item.weight;
+    });
+
+    fetch(SHEET_URL, {
+      method: "POST",
+      body: JSON.stringify(rowData),
+      headers: {
+        "Content-Type": "application/json",
+      },
+    })
+      .then(res => res.text())
+      .then(text => console.log("📥 Sheet response:", text))
+      .catch(err => console.error("❌ Sheet error:", err));
+  };
     selectedItems.forEach((item, index) => {
       itemData[`item_${index + 1}_id`] = item.id;
       itemData[`item_${index + 1}_value`] = item.value;
@@ -60,23 +118,9 @@ function KnapsackGame() {
   };
 
   React.useEffect(() => {
-    if (visibility === "Daylight") {
-      const interval = setInterval(() => {
-        const randItem = ITEMS[Math.floor(Math.random() * ITEMS.length)];
-        setOpponentProgress((prev) => [...prev, randItem]);
-      }, 1500);
-      return () => clearInterval(interval);
-    } else if (visibility === "Silent") {
-      const timeout = setTimeout(() => {
-        setShowOpponent(true);
-        const progress = Array.from({ length: 4 }, () => ITEMS[Math.floor(Math.random() * ITEMS.length)]);
-        setOpponentProgress(progress);
-      }, 10000);
-      return () => clearTimeout(timeout);
-    } else {
-      setShowOpponent(false);
-    }
-  }, [visibility, round]);
+    setAvailableItems(shuffleArray(ITEMS));
+    setSelectedItems([]);
+  }, [round]);
 
   const currentWeight = selectedItems.reduce((acc, item) => acc + item.weight, 0);
   const currentValue = selectedItems.reduce((acc, item) => acc + item.value, 0);
@@ -142,7 +186,16 @@ function KnapsackGame() {
     boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
   };
 
-  const renderItem = (item) => (
+  function shuffleArray(array) {
+  const newArray = [...array];
+  for (let i = newArray.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+  }
+  return newArray;
+}
+
+const renderItem = (item) => (
     React.createElement("div", {
       key: item.id,
       draggable: true,
@@ -192,8 +245,7 @@ function KnapsackGame() {
       quit && React.createElement("p", { style: { color: "red", fontWeight: "bold" } }, "🚨 You quit!")
     ),
 
-    visibility !== "Darkness" && showOpponent && React.createElement("div", { style: { marginTop: "30px" } },
-      React.createElement("h2", null, "👤 Opponent's Progress"),
+    
       React.createElement("div", { style: { display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "10px", alignItems: "flex-start" } },
         opponentProgress.map((item, i) =>
           React.createElement("div", { key: i, style: { border: "1px solid #aaa", padding: "8px", borderRadius: "8px", backgroundColor: "#f3f4f6", fontSize: "14px" } },
