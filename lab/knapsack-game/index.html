@@ -3,12 +3,25 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="theme-color" content="#ffffff" />
+  <link rel="icon" href="favicon.ico" />
   <title>Knapsack Game</title>
+  <style>
+    body {
+      margin: 0;
+      background-color: #f9fafb;
+      font-family: 'Segoe UI', 'Inter', sans-serif;
+    }
+  </style>
 </head>
 <body>
   <div id="root"></div>
+
+  <!-- Load React and ReactDOM first -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-  <script src="bundle.js"></script>
+
+  <!-- Load your bundled React game logic -->
+  <script src="./bundle.js"></script>
 </body>
 </html>
