@@ -1,4 +1,4 @@
-// Fixed version of bundle.js for the Knapsack Game
+// Fixed version of bundle.js for the Knapsack Game with random infeasibility risk per round
 const ITEMS = [
   { id: 1, value: 2, weight: 3 },
   { id: 2, value: 3, weight: 4 },
@@ -16,7 +16,7 @@ const ITEMS = [
 
 const MAX_WEIGHT = 14;
 const TARGET_VALUE = 22;
-const RISK_LEVELS = [0, 0.2, 0.4];
+const RISK_LEVELS = [0, 0.2, 0.8];
 const VISIBILITY_MODES = ["Daylight", "Darkness", "Silent"];
 
 function shuffleArray(array) {
@@ -28,13 +28,17 @@ function shuffleArray(array) {
   return newArray;
 }
 
+function getRandomElement(array) {
+  return array[Math.floor(Math.random() * array.length)];
+}
+
 function KnapsackGame() {
   const [round, setRound] = React.useState(0);
   const [selectedItems, setSelectedItems] = React.useState([]);
   const [availableItems, setAvailableItems] = React.useState(shuffleArray(ITEMS));
   const [draggedItem, setDraggedItem] = React.useState(null);
   const [visibility, setVisibility] = React.useState(VISIBILITY_MODES[0]);
-  const [risk, setRisk] = React.useState(RISK_LEVELS[0]);
+  const [risk, setRisk] = React.useState(getRandomElement(RISK_LEVELS));
   const [quit, setQuit] = React.useState(false);
 
   const SHEET_URL = "https://knapsack-proxy.vercel.app/api/submit";
@@ -70,6 +74,7 @@ function KnapsackGame() {
   React.useEffect(() => {
     setAvailableItems(shuffleArray(ITEMS));
     setSelectedItems([]);
+    setRisk(getRandomElement(RISK_LEVELS)); // Assign new risk each round
   }, [round]);
 
   const currentWeight = selectedItems.reduce((acc, item) => acc + item.weight, 0);
