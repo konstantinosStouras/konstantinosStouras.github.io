@@ -53,25 +53,28 @@ function KnapsackGame() {
       visibility
     };
 
-    
+    fetch(SHEET_URL, {
+      method: "POST",
+      body: JSON.stringify(rowData),
+      headers: {
+        "Content-Type": "application/json",
+      },
+    })
+      .then(res => res.text())
+      .then(text => console.log("📥 Sheet response:", text))
+      .catch(err => console.error("❌ Sheet error:", err));
+  };
 
     
 
     
 
-    ITEMS.forEach((item, i) => {
-      const selected = selectedItems.find(sel => sel.id === item.id);
-      rowData[`item_${item.id}_selected`] = selected ? "Yes" : "No";
-      rowData[`item_${item.id}_value`] = item.value;
-      rowData[`item_${item.id}_weight`] = item.weight;
-    });
+    
 
     
-    selectedItems.forEach((item, index) => {
-      itemData[`item_${index + 1}_id`] = item.id;
-      itemData[`item_${index + 1}_value`] = item.value;
-      itemData[`item_${index + 1}_weight`] = item.weight;
-    });
+
+    
+    
 
     
 
