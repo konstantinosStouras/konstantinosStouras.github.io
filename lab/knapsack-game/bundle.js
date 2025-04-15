@@ -154,7 +154,7 @@ function KnapsackGame() {
   );
 
   return React.createElement("div", { style: { padding: "30px", fontFamily: "'Segoe UI', 'Inter', sans-serif", maxWidth: "900px", margin: "auto" } },
-    React.createElement("h1", { style: { fontSize: "28px", marginBottom: "10px" } }, "🎒 Knapsack Contest Game"),
+    React.createElement("h1", { style: { fontSize: "28px", marginBottom: "10px" } }, "The Knapsack Game"),
     React.createElement("p", null, `Round: ${round + 1}`),
     React.createElement("p", null, `Infeasibility Risk: ${risk * 100}%`),
 
