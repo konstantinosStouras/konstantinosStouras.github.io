@@ -1,4 +1,4 @@
-// Fixed version of bundle.js for the Knapsack Game with mobile drag support and cross-device compatibility
+// Enhanced version for iPhone drag-and-drop support with robust mobile handling
 const ITEMS = [
   { id: 1, value: 2, weight: 3 },
   { id: 2, value: 3, weight: 4 },
@@ -39,50 +39,12 @@ function KnapsackGame() {
   const [risk, setRisk] = React.useState(getRandomElement(RISK_LEVELS));
   const [quit, setQuit] = React.useState(false);
 
-  const SHEET_URL = "https://knapsack-proxy.vercel.app/api/submit";
   const knapsackRef = React.useRef(null);
   const availableRef = React.useRef(null);
 
-  const sendToSheet = () => {
-    const sessionId = localStorage.getItem("knapsack_session") || (() => {
-      const id = crypto.randomUUID();
-      localStorage.setItem("knapsack_session", id);
-      return id;
-    })();
-
-    const currentWeight = selectedItems.reduce((acc, item) => acc + item.weight, 0);
-    const currentValue = selectedItems.reduce((acc, item) => acc + item.value, 0);
-
-    const rowData = {
-      timestamp: new Date().toISOString(),
-      sessionId,
-      round: round + 1,
-      selectedItems: selectedItems.map(i => `ID:${i.id},V:${i.value},W:${i.weight}`).join(" | "),
-      totalValue: currentValue,
-      totalWeight: currentWeight,
-      risk
-    };
-
-    fetch(SHEET_URL, {
-      method: "POST",
-      body: JSON.stringify(rowData),
-      headers: { "Content-Type": "application/json" },
-    }).then(res => res.text()).then(console.log).catch(console.error);
-  };
-
-  React.useEffect(() => {
-    setAvailableItems(shuffleArray(ITEMS));
-    setSelectedItems([]);
-    setRisk(getRandomElement(RISK_LEVELS));
-  }, [round]);
-
-  const currentWeight = selectedItems.reduce((acc, item) => acc + item.weight, 0);
-  const currentValue = selectedItems.reduce((acc, item) => acc + item.value, 0);
-  const weightLeft = MAX_WEIGHT - currentWeight;
-
   const onDropToKnapsack = () => {
     if (!draggedItem) return;
-    if (!selectedItems.some(i => i.id === draggedItem.id) && currentWeight + draggedItem.weight <= MAX_WEIGHT) {
+    if (!selectedItems.some(i => i.id === draggedItem.id) && getCurrentWeight() + draggedItem.weight <= MAX_WEIGHT) {
       setSelectedItems([...selectedItems, draggedItem]);
       setAvailableItems(availableItems.filter(i => i.id !== draggedItem.id));
     }
@@ -98,18 +60,63 @@ function KnapsackGame() {
     setDraggedItem(null);
   };
 
+  const handleTouchMove = (e) => draggedItem && e.preventDefault();
+  const handleTouchStart = (item) => () => setDraggedItem(item);
   const handleTouchEnd = (e) => {
     if (!draggedItem) return;
     const touch = e.changedTouches[0];
     const element = document.elementFromPoint(touch.clientX, touch.clientY);
-    if (knapsackRef.current && knapsackRef.current.contains(element)) {
+    if (knapsackRef.current.contains(element)) {
       onDropToKnapsack();
-    } else if (availableRef.current && availableRef.current.contains(element)) {
+    } else if (availableRef.current.contains(element)) {
       onDropToAvailable();
     } else {
       setDraggedItem(null);
     }
   };
+
+  const sendToSheet = () => {
+    const sessionId = localStorage.getItem("knapsack_session") || (() => {
+      const id = crypto.randomUUID();
+      localStorage.setItem("knapsack_session", id);
+      return id;
+    })();
+
+    const currentWeight = getCurrentWeight();
+    const currentValue = getCurrentValue();
+
+    const rowData = {
+      timestamp: new Date().toISOString(),
+      sessionId,
+      round: round + 1,
+      selectedItems: selectedItems.map(i => `ID:${i.id},V:${i.value},W:${i.weight}`).join(" | "),
+      totalValue: currentValue,
+      totalWeight: currentWeight,
+      risk
+    };
+
+    fetch("https://knapsack-proxy.vercel.app/api/submit", {
+      method: "POST",
+      body: JSON.stringify(rowData),
+      headers: { "Content-Type": "application/json" },
+    }).then(res => res.text()).then(console.log).catch(console.error);
+  };
+
+  React.useEffect(() => {
+    setAvailableItems(shuffleArray(ITEMS));
+    setSelectedItems([]);
+    setRisk(getRandomElement(RISK_LEVELS));
+  }, [round]);
+
+  React.useEffect(() => {
+    const preventDefault = (e) => e.preventDefault();
+    document.body.addEventListener('touchmove', preventDefault, { passive: false });
+    return () => document.body.removeEventListener('touchmove', preventDefault);
+  }, []);
+
+  const getCurrentWeight = () => selectedItems.reduce((acc, item) => acc + item.weight, 0);
+  const getCurrentValue = () => selectedItems.reduce((acc, item) => acc + item.value, 0);
+  const weightLeft = MAX_WEIGHT - getCurrentWeight();
 
   const maxWeight = Math.max(...ITEMS.map(i => i.weight));
   const maxValue = Math.max(...ITEMS.map(i => i.value));
@@ -136,6 +143,9 @@ function KnapsackGame() {
       display: "flex",
       flexDirection: "column",
       justifyContent: "center",
+      userSelect: "none",
+      WebkitUserSelect: "none",
+      touchAction: "none"
     };
   };
 
@@ -144,12 +154,13 @@ function KnapsackGame() {
       key: item.id,
       draggable: true,
       onDragStart: () => setDraggedItem(item),
-      onTouchStart: () => setDraggedItem(item),
+      onTouchStart: handleTouchStart(item),
+      onTouchMove: handleTouchMove,
       onTouchEnd: handleTouchEnd,
       style: getItemStyle(item),
     },
-      React.createElement("p", { style: { margin: 0, fontWeight: "bold" } }, `$${item.value}`),
-      React.createElement("p", { style: { margin: 0 } }, `${item.weight} Kg`)
+      React.createElement("p", { style: { margin: 0, fontWeight: "bold", userSelect: "none", WebkitUserSelect: "none" } }, `$${item.value}`),
+      React.createElement("p", { style: { margin: 0, userSelect: "none", WebkitUserSelect: "none" } }, `${item.weight} Kg`)
     )
   );
 
@@ -179,8 +190,8 @@ function KnapsackGame() {
 
     React.createElement("div", { style: { marginTop: "30px" } },
       React.createElement("p", null, `🎯 Target Value: $${TARGET_VALUE}`),
-      React.createElement("p", null, `🧮 Current Value: $${currentValue}`),
-      React.createElement("p", null, `⚖️ Current Weight: ${currentWeight} Kg`),
+      React.createElement("p", null, `🧮 Current Value: $${getCurrentValue()}`),
+      React.createElement("p", null, `⚖️ Current Weight: ${getCurrentWeight()} Kg`),
       React.createElement("p", null, `➕ Weight Left: ${weightLeft} Kg`),
       quit && React.createElement("p", { style: { color: "red", fontWeight: "bold" } }, "🚨 You quit!")
     ),
