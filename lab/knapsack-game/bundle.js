@@ -60,8 +60,12 @@ function KnapsackGame() {
     setDraggedItem(null);
   };
 
-  const handleTouchMove = (e) => draggedItem && e.preventDefault();
+  const handleTouchMove = (e) => {
+    if (draggedItem) e.preventDefault();
+  };
+
   const handleTouchStart = (item) => () => setDraggedItem(item);
+
   const handleTouchEnd = (e) => {
     if (!draggedItem) return;
     const touch = e.changedTouches[0];
@@ -109,10 +113,12 @@ function KnapsackGame() {
   }, [round]);
 
   React.useEffect(() => {
-    const preventDefault = (e) => e.preventDefault();
-    document.body.addEventListener('touchmove', preventDefault, { passive: false });
-    return () => document.body.removeEventListener('touchmove', preventDefault);
-  }, []);
+    const preventScrollWhileDragging = (e) => {
+      if (draggedItem) e.preventDefault();
+    };
+    document.body.addEventListener("touchmove", preventScrollWhileDragging, { passive: false });
+    return () => document.body.removeEventListener("touchmove", preventScrollWhileDragging);
+  }, [draggedItem]);
 
   const getCurrentWeight = () => selectedItems.reduce((acc, item) => acc + item.weight, 0);
   const getCurrentValue = () => selectedItems.reduce((acc, item) => acc + item.value, 0);
