@@ -1,4 +1,4 @@
-// Fixed version of bundle.js for the Knapsack Game with enhanced mobile drag support
+// Fixed version of bundle.js for the Knapsack Game with mobile drag support and cross-device compatibility
 const ITEMS = [
   { id: 1, value: 2, weight: 3 },
   { id: 2, value: 3, weight: 4 },
@@ -39,8 +39,42 @@ function KnapsackGame() {
   const [risk, setRisk] = React.useState(getRandomElement(RISK_LEVELS));
   const [quit, setQuit] = React.useState(false);
 
+  const SHEET_URL = "https://knapsack-proxy.vercel.app/api/submit";
   const knapsackRef = React.useRef(null);
   const availableRef = React.useRef(null);
+
+  const sendToSheet = () => {
+    const sessionId = localStorage.getItem("knapsack_session") || (() => {
+      const id = crypto.randomUUID();
+      localStorage.setItem("knapsack_session", id);
+      return id;
+    })();
+
+    const currentWeight = selectedItems.reduce((acc, item) => acc + item.weight, 0);
+    const currentValue = selectedItems.reduce((acc, item) => acc + item.value, 0);
+
+    const rowData = {
+      timestamp: new Date().toISOString(),
+      sessionId,
+      round: round + 1,
+      selectedItems: selectedItems.map(i => `ID:${i.id},V:${i.value},W:${i.weight}`).join(" | "),
+      totalValue: currentValue,
+      totalWeight: currentWeight,
+      risk
+    };
+
+    fetch(SHEET_URL, {
+      method: "POST",
+      body: JSON.stringify(rowData),
+      headers: { "Content-Type": "application/json" },
+    }).then(res => res.text()).then(console.log).catch(console.error);
+  };
+
+  React.useEffect(() => {
+    setAvailableItems(shuffleArray(ITEMS));
+    setSelectedItems([]);
+    setRisk(getRandomElement(RISK_LEVELS));
+  }, [round]);
 
   const currentWeight = selectedItems.reduce((acc, item) => acc + item.weight, 0);
   const currentValue = selectedItems.reduce((acc, item) => acc + item.value, 0);
@@ -64,51 +98,109 @@ function KnapsackGame() {
     setDraggedItem(null);
   };
 
-  const handleTouchMove = (e) => {
-    if (draggedItem) e.preventDefault();
-  };
-
-  const handleTouchStart = (item) => () => {
-    setDraggedItem(item);
-  };
-
   const handleTouchEnd = (e) => {
     if (!draggedItem) return;
     const touch = e.changedTouches[0];
     const element = document.elementFromPoint(touch.clientX, touch.clientY);
-
-    if (knapsackRef.current.contains(element)) {
+    if (knapsackRef.current && knapsackRef.current.contains(element)) {
       onDropToKnapsack();
-    } else if (availableRef.current.contains(element)) {
+    } else if (availableRef.current && availableRef.current.contains(element)) {
       onDropToAvailable();
+    } else {
+      setDraggedItem(null);
     }
-    setDraggedItem(null);
   };
 
-  React.useEffect(() => {
-    const preventDefault = (e) => e.preventDefault();
-    document.body.addEventListener('touchmove', preventDefault, { passive: false });
-    return () => document.body.removeEventListener('touchmove', preventDefault);
-  }, []);
+  const maxWeight = Math.max(...ITEMS.map(i => i.weight));
+  const maxValue = Math.max(...ITEMS.map(i => i.value));
+
+  const getItemStyle = (item) => {
+    const weightRatio = item.weight / maxWeight;
+    const valueRatio = item.value / maxValue;
+    const baseSize = 80;
+    const dynamicSize = 60 * weightRatio;
+    const width = baseSize + dynamicSize;
+    const height = 60 + 20 * weightRatio;
+    const lightness = 90 - valueRatio * 40;
+    const color = `hsl(45, 100%, ${lightness}%)`;
+    return {
+      borderRadius: "12px",
+      padding: "10px",
+      cursor: "grab",
+      textAlign: "center",
+      boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+      transition: "all 0.2s",
+      minWidth: `${width}px`,
+      height: `${height}px`,
+      backgroundColor: color,
+      display: "flex",
+      flexDirection: "column",
+      justifyContent: "center",
+    };
+  };
 
   const renderItem = (item) => (
     React.createElement("div", {
       key: item.id,
       draggable: true,
       onDragStart: () => setDraggedItem(item),
-      onTouchStart: handleTouchStart(item),
-      onTouchMove: handleTouchMove,
+      onTouchStart: () => setDraggedItem(item),
       onTouchEnd: handleTouchEnd,
-      style: { cursor: 'grab', userSelect: 'none' }
-    }, `${item.value}$ - ${item.weight}Kg`)
+      style: getItemStyle(item),
+    },
+      React.createElement("p", { style: { margin: 0, fontWeight: "bold" } }, `$${item.value}`),
+      React.createElement("p", { style: { margin: 0 } }, `${item.weight} Kg`)
+    )
   );
 
-  return React.createElement("div", null,
-    React.createElement("div", { ref: availableRef, onDragOver: e => e.preventDefault(), onDrop: onDropToAvailable },
-      availableItems.map(renderItem)
+  return React.createElement("div", { style: { padding: "30px", fontFamily: "'Segoe UI', 'Inter', sans-serif", maxWidth: "900px", margin: "auto" } },
+    React.createElement("h1", { style: { fontSize: "28px", marginBottom: "10px" } }, "The Knapsack Game"),
+    React.createElement("p", null, `Round: ${round + 1}`),
+    React.createElement("p", null, `Infeasibility Risk: ${risk * 100}%`),
+
+    React.createElement("div", {
+      ref: availableRef,
+      onDragOver: e => e.preventDefault(),
+      onDrop: onDropToAvailable,
+      style: { display: "flex", flexWrap: "wrap", gap: "15px", marginTop: "20px", alignItems: "flex-start" }
+    }, availableItems.map(renderItem)),
+
+    React.createElement("div", {
+      ref: knapsackRef,
+      onDragOver: e => e.preventDefault(),
+      onDrop: onDropToKnapsack,
+      style: { marginTop: "30px", padding: "15px", border: "2px dashed #ccc", borderRadius: "10px", backgroundColor: "#f9fafb" }
+    },
+      React.createElement("h3", null, "🧺 Items in Knapsack"),
+      selectedItems.length === 0
+        ? React.createElement("p", null, "No items selected.")
+        : React.createElement("div", { style: { display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "10px", alignItems: "flex-start" } }, selectedItems.map(renderItem))
     ),
-    React.createElement("div", { ref: knapsackRef, onDragOver: e => e.preventDefault(), onDrop: onDropToKnapsack },
-      selectedItems.map(renderItem)
+
+    React.createElement("div", { style: { marginTop: "30px" } },
+      React.createElement("p", null, `🎯 Target Value: $${TARGET_VALUE}`),
+      React.createElement("p", null, `🧮 Current Value: $${currentValue}`),
+      React.createElement("p", null, `⚖️ Current Weight: ${currentWeight} Kg`),
+      React.createElement("p", null, `➕ Weight Left: ${weightLeft} Kg`),
+      quit && React.createElement("p", { style: { color: "red", fontWeight: "bold" } }, "🚨 You quit!")
+    ),
+
+    React.createElement("div", { style: { marginTop: "30px" } },
+      React.createElement("button", {
+        onClick: () => {
+          setQuit(true);
+          sendToSheet();
+          alert("✅ Your data was submitted to Google Sheets!");
+        },
+        style: { padding: "12px 20px", fontSize: "16px", marginRight: "12px", borderRadius: "8px", border: "none", cursor: "pointer", backgroundColor: "#ef4444", color: "#fff" }
+      }, "❌ Quit"),
+      React.createElement("button", {
+        onClick: () => {
+          sendToSheet();
+          setRound(prev => prev + 1);
+        },
+        style: { padding: "12px 20px", fontSize: "16px", borderRadius: "8px", border: "none", cursor: "pointer", backgroundColor: "#3b82f6", color: "#fff" }
+      }, "➡️ Next Round")
     )
   );
 }
