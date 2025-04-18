@@ -293,8 +293,7 @@ const App = () => {
 	  const ua = navigator.userAgent;
       const match = ua.match(/(Chrome|Firefox|Safari|Edg|OPR|Trident)\/([\d\.]+)/);
       return match ? `${match[1]} ${match[2]}` : ua;
-})()
-
+	  })()
     }))
   })
 }).then(() => setQuit(true)).catch((err) => {
@@ -313,3 +312,11 @@ const App = () => {
 };
 
 export default App;
+
+import { createRoot } from "react-dom/client";
+
+const container = document.getElementById("root");
+if (container) {
+  const root = createRoot(container);
+  root.render(<App />);
+}
