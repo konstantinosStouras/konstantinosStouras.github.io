@@ -1,6 +1,5 @@
 import React, { useState } from "react";
-import { Card, CardContent } from "./components/ui/card";
-import { Button } from "./components/ui/button";
+import 'bootstrap/dist/css/bootstrap.min.css';
 
 const NUM_ITEMS = 6;
 const VECTOR_DIM = 5;
@@ -51,8 +50,8 @@ const generateItemsAndThreshold = () => {
       ? randomVector(baseVector, 1)
       : randomVector(randomVector(), 5);
     return {
-      id: `item-${i}`,
-      name: `Item ${i + 1}`,
+      id: `project-${i}`,
+      name: `Project ${i + 1}`,
       value: Math.floor(Math.random() * 100),
       attributes: isSimilar && i === Math.min(...similarIndices) ? baseVector : vector,
     };
@@ -73,7 +72,7 @@ const findOptimalSubset = (items, threshold) => {
   let best = { value: 0, subset: [] };
   for (const subset of subsets) {
     const sim = averageSimilarity(subset);
-    const value = subset.reduce((sum, item) => sum + item.value, 0);
+    const value = subset.reduce((sum, project) => sum + project.value, 0);
     if (sim >= threshold && value > best.value) {
       best = { value, subset };
     }
@@ -91,32 +90,32 @@ export default function CosineKnapsackGame() {
   const [quit, setQuit] = useState(false);
   const [strategyLog, setStrategyLog] = useState([]);
 
-  const selectedItems = items.filter((item) => selectedIds.includes(item.id));
-  const totalValue = selectedItems.reduce((sum, item) => sum + item.value, 0);
+  const selectedItems = items.filter((project) => selectedIds.includes(project.id));
+  const totalValue = selectedItems.reduce((sum, project) => sum + project.value, 0);
   const similarity = averageSimilarity(selectedItems);
   const success = similarity >= similarityThreshold;
 
   const toggleItem = (id) => {
     setSelectedIds((prev) => {
       const updated = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
-      const item = items.find(it => it.id === id);
-      setStrategyLog(log => [...log, `${item.name} ${prev.includes(id) ? 'removed' : 'selected'}`]);
+      const project = items.find(it => it.id === id);
+      setStrategyLog(log => [...log, `${project.name} ${prev.includes(id) ? 'removed' : 'selected'}`]);
       return updated;
     });
   };
 
-const generateLogData = (round) => {
-  const sessionId = sessionStorage.getItem('sessionId') || crypto.randomUUID();
-  sessionStorage.setItem('sessionId', sessionId);
+  const generateLogData = (round) => {
+    const sessionId = sessionStorage.getItem('sessionId') || crypto.randomUUID();
+    sessionStorage.setItem('sessionId', sessionId);
 
-  return {
-    timestamp: new Date().toISOString(),
-    sessionId,
-    browser: navigator.userAgent || '',
-    device: navigator.platform || '',
-    round,
+    return {
+      timestamp: new Date().toISOString(),
+      sessionId,
+      browser: navigator.userAgent || '',
+      device: navigator.platform || '',
+      round,
+    };
   };
-};
 
   const nextRound = () => {
     const logData = generateLogData(round);
@@ -169,16 +168,16 @@ const generateLogData = (round) => {
     setRound(prev => prev + 1);
   };
 
- const showOptimal = () => {
+  const showOptimal = () => {
     const result = findOptimalSubset(items, similarityThreshold);
-    const ids = result.subset.map((item) => item.id);
+    const ids = result.subset.map((project) => project.id);
     setOptimalIds(ids);
     setSelectedIds(ids);
     const allSubsets = getAllSubsets(items)
       .filter(sub => sub.length >= 2)
       .map(subset => ({
-        names: subset.map(item => item.name).join(', '),
-        value: subset.reduce((sum, item) => sum + item.value, 0),
+        names: subset.map(project => project.name).join(', '),
+        value: subset.reduce((sum, project) => sum + project.value, 0),
         similarity: averageSimilarity(subset),
         valid: averageSimilarity(subset) >= similarityThreshold
       }))
@@ -193,31 +192,34 @@ const generateLogData = (round) => {
   };
 
   if (quit) {
-    const total = history.length;
-    const passed = history.filter(h => h.success).length;
-    const rate = ((passed / total) * 100).toFixed(1);
-    return (
-      <div className="p-6 space-y-4">
-        <h1 className="text-3xl font-bold">Session Summary</h1>
-        <p className="text-lg">You played {total} round(s).</p>
-        <table className="w-full text-sm table-auto border-collapse border border-gray-300">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="border p-2">Round</th>
-              <th className="border p-2">Result</th>
+  const total = history.length;
+  const passed = history.filter(h => h.success).length;
+  const rate = ((passed / total) * 100).toFixed(1);
+
+  return (
+    <div className="container py-4">
+      <h1 className="h3 mb-4">Session Summary</h1>
+      <p className="mb-3">You played {total} round(s).</p>
+      <table className="table table-bordered">
+        <thead className="table-light">
+          <tr>
+            <th>Round</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody>
+          {history.map(({ round, success }, idx) => (
+            <tr key={idx} className={success ? "table-success" : "table-danger"}>
+              <td>{round}</td>
+              <td>{success ? <span className="text-success">✅ Success</span> : <span className="text-danger">❌ Failed</span>}</td>
             </tr>
-          </thead>
-          <tbody>
-            {history.map(({ round, success }, idx) => (
-              <tr key={idx} className={success ? "bg-green-100 font-semibold" : ""}>
-                <td className="border p-2">{round}</td>
-                <td className="border p-2">{success ? "✅ Success" : "❌ Failed"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <p className="text-lg mt-4">Average Success Rate: {rate}%</p>
-        <Button className="mt-4" onClick={() => {
+          ))}
+        </tbody>
+      </table>
+      <p className="mt-3">Average Success Rate: {rate}%</p>
+      <button
+        className="btn btn-dark mt-3"
+        onClick={() => {
           setRound(1);
           setSelectedIds([]);
           setOptimalIds([]);
@@ -225,92 +227,102 @@ const generateLogData = (round) => {
           setHistory([]);
           setRoundData(generateItemsAndThreshold());
           setQuit(false);
-        }}>
-          Play Again
-        </Button>
-      </div>
-    );
-  }
+        }}
+      >
+        Play Again
+      </button>
+    </div>
+  );
+}
 
-  return (
-    <div className="p-6 space-y-6">
-    <h1 className="text-4xl font-bold text-blue-600 text-center">
-      Tailwind is working 🎯
-    </h1>
-      <h1 className="text-3xl font-bold">Knapsack with Dependencies</h1>
-      <h2 className="text-xl font-semibold">Round {round}</h2>
-      <p className="text-md">
-        Select a group of items that maximizes total value,<br />
-        subject to: Average Cosine Similarity ≥ {similarityThreshold} (range: -1 to 1)
+return (
+    <div className="container py-4">
+      <h1 className="text-center h1 text-primary mb-4">Project Selection with Dependencies</h1>
+      <h2 className="h4">Round {round}</h2>
+      <p>
+        Select a portfolio of items that maximizes total value,<br />
+        subject to: Portfolio Compatibility Score ≥ {similarityThreshold} (range: -1 to 1)
       </p>
 
-      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-2 gap-4">
-        {items.map((item) => (
-          <Card
-            key={item.id}
-            onClick={() => toggleItem(item.id)}
-            className={`cursor-pointer transition-all duration-200 border-2 ${
-  selectedIds.includes(item.id) ? "border-blue-500" : "border-transparent"
-}`}
-
-          >
-            <CardContent className="p-4">
-              <div className="font-semibold">{item.name}</div>
-              <div>Value: {item.value}</div>
-            </CardContent>
-          </Card>
+      <div className="row g-3">
+        {items.map((project) => (
+          <div key={project.id} className="col-md-6">
+            <div
+              className={`card p-3 cursor-pointer ${selectedIds.includes(project.id) ? 'border-primary border-2' : ''}`}
+              onClick={() => toggleItem(project.id)}
+            >
+              <div className="card-body">
+                <h5 className="card-title">{project.name}</h5>
+                <p className="card-text">Value: {project.value}</p>
+              </div>
+            </div>
+          </div>
         ))}
       </div>
 
-      <div className="p-4 border rounded-lg space-y-2">
-        <h2 className="text-xl font-semibold mb-2">Stats</h2>
-        <p>Total Value: {selectedItems.reduce((sum, item) => sum + item.value, 0)}</p>
-        <p>Target Cosine Similarity: {similarityThreshold}</p>
-        <p>
-          Avg Cosine Similarity: {similarity.toFixed(3)} (
-          {success ? "✅ Pass" : "❌ Fail"})
-        </p>
-        <div className="flex space-x-4 pt-4">
-          <Button onClick={nextRound}>Next Round</Button>
-          <Button variant="outline" onClick={quitGame}>Quit</Button>
-          <Button variant="secondary" onClick={showOptimal}>Show Optimal</Button>
+      <div className="card mt-4">
+        <div className="card-body">
+          <h2 className="h5 mb-3">Stats</h2>
+          <p><strong>Total Value:</strong> {selectedItems.reduce((sum, project) => sum + project.value, 0)}</p>
+          <p><strong>Target Portfolio Compatibility Score:</strong> {similarityThreshold}</p>
+          <p><strong>Current Portfolio Compatibility Score:</strong> {similarity.toFixed(3)} (
+  {success ? (
+    <span className="text-success fw-semibold">Pass</span>
+  ) : (
+    <span className="text-danger fw-semibold">Fail</span>
+  )})
+</p>
+
+          <div className="d-flex gap-3 pt-3">
+            <button className="btn btn-primary" onClick={nextRound}>Next Round</button>
+            <button className="btn btn-outline-secondary" onClick={quitGame}>Quit</button>
+            <button className="btn btn-info text-white" onClick={showOptimal}>Show Optimal</button>
+          </div>
         </div>
       </div>
-
-      {optimalStats && (
-        <>
-          <div className="p-4 mt-6 border rounded-lg bg-gray-50 space-y-2">
-            <h2 className="text-xl font-semibold mb-2">Optimal Solution</h2>
-            <ul className="list-disc list-inside">
-              {optimalStats.items.map((item) => (
-                <li key={item.id}>
-                  {item.name} (Value: {item.value})<br />
-                  Vector: [{item.attributes.map((v) => v.toFixed(2)).join(", ")}]
-                </li>
-              ))}
-            </ul>
-            <p>Total Optimal Value: {optimalStats.value}</p>
-            <p>Avg Cosine Similarity: {optimalStats.similarity.toFixed(3)}</p>
-          </div>
-
-          <div className="mt-6">
-            <h3 className="text-lg font-semibold mb-2">All Valid Subsets (2+ items)</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {optimalStats.allSubsets.map((sub, idx) => (
-                <div
-  key={idx}
-  className={`p-3 border rounded-lg ${sub.valid ? 'bg-green-50' : 'bg-red-50'}`}
->
-
-                  <div className="font-medium">{sub.names}</div>
-                  <div>Value: {sub.value}</div>
-                  <div>Similarity: {sub.similarity.toFixed(3)} {sub.valid ? '✅' : '❌'}</div>
+      {optimalStats ? (
+  <>
+    <div className="card mt-4">
+      <div className="card-body">
+        <h2 className="h5 mb-3">Optimal Subset</h2>
+        <div className="row g-3">
+          {optimalStats.items.map((project) => (
+            <div key={project.id} className="col-md-6">
+              <div className="card border-success">
+                <div className="card-body">
+                  <h5 className="card-title">{project.name}</h5>
+                  <p className="card-text">Value: {project.value}</p>
+                  <p className="card-text small text-muted">Vector: [{project.attributes.map(v => v.toFixed(2)).join(", ")}]</p>
                 </div>
-              ))}
+              </div>
             </div>
-          </div>
-        </>
-      )}
+          ))}
+        </div>
+        <p className="mt-3">Optimal Subset Value: {optimalStats.value}</p>
+        <p>Optimal Subset Compatibility Score: {optimalStats.similarity.toFixed(3)}</p>
+      </div>
+    </div>
+
+    <div className="card mt-4">
+      <div className="card-body">
+        <h3 className="h6 mb-3">All Valid Subsets (2+ items)</h3>
+        <div className="row g-3">
+          {optimalStats.allSubsets.map((sub, idx) => (
+            <div key={idx} className="col-md-6">
+              <div className={`card ${sub.valid ? 'border-success' : 'border-danger'}`}>
+                <div className="card-body">
+                  <h5 className="card-title">{sub.names}</h5>
+                  <p className="card-text">Value: {sub.value}</p>
+                  <p className="card-text">Compatibility: {sub.similarity.toFixed(3)} {sub.valid ? '✅' : '❌'}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  </>
+) : null}
     </div>
   );
 }
