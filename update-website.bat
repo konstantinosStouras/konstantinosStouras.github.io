@@ -17,9 +17,16 @@ set /p CUSTOM_NOTE=📝 Enter a short note for this website update (optional):
 REM STEP 4: Create the backup folder
 mkdir "%VERSION_PATH%"
 
-REM STEP 5: Copy only updated files (excluding internal folders & scripts)
-echo 🔄 Backing up modified files to: %VERSION_PATH%
-robocopy "%SITE_DIR%" "%VERSION_PATH%" /E /XO /XD ".git" "backups" /XF "*.bat" "website-update-log.txt" "version.txt"
+REM STEP 5: Backup key files only
+echo 🔄 Backing up index.html and Konstantinos_Stouras_CV.pdf...
+
+if exist "%SITE_DIR%index.html" (
+    copy /Y "%SITE_DIR%index.html" "%VERSION_PATH%\index.html"
+)
+
+if exist "%SITE_DIR%Konstantinos_Stouras_CV.pdf" (
+    copy /Y "%SITE_DIR%Konstantinos_Stouras_CV.pdf" "%VERSION_PATH%\Konstantinos_Stouras_CV.pdf"
+)
 
 REM STEP 6: Git commit and push
 cd /d "%SITE_DIR%"
