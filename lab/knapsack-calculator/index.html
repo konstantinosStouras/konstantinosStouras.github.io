@@ -469,13 +469,6 @@
     <div class="container">
         <h1>Knapsack Calculator</h1>
         
-        <div class="input-section">
-            <div class="capacity-input">
-                <label for="capacity">Knapsack Capacity:</label>
-                <input type="number" id="capacity" value="96" min="1" placeholder="Enter capacity">
-            </div>
-        </div>
-
         <div class="items-section">
             <h3>Items</h3>
             <div class="info-box">
@@ -519,6 +512,11 @@
                 </tbody>
             </table>
             <button class="add-item-btn" onclick="addItem()">Add Item</button>
+            
+            <div class="capacity-input" style="margin-top: 15px;">
+                <label for="capacity">Knapsack Capacity:</label>
+                <input type="number" id="capacity" value="96" min="1" placeholder="Enter capacity">
+            </div>
         </div>
 
         <button class="solve-btn" onclick="solveKnapsack()">Solve Knapsack</button>
@@ -551,12 +549,18 @@
     </div>
 
     <script>
+        // Initialize item counter
+        let itemCounter = 3; // Start at 3 since we have Item 1, 2, 3 preloaded
+
         function addItem() {
             const container = document.getElementById('items-container');
             const itemRow = document.createElement('tr');
             itemRow.className = 'item-row';
+            
+            itemCounter++; // Increment counter for new item
+            
             itemRow.innerHTML = `
-                <td><input type="text" placeholder="Item name" class="item-name"></td>
+                <td><input type="text" placeholder="Item name" class="item-name" value="Item ${itemCounter}"></td>
                 <td><input type="number" placeholder="Value" class="item-value" min="0" step="0.1"></td>
                 <td><input type="number" placeholder="Weight" class="item-weight" min="1"></td>
                 <td><input type="number" placeholder="Qty" class="item-quantity quantity-input" min="1" value="1"></td>
@@ -569,7 +573,28 @@
             const itemsContainer = document.getElementById('items-container');
             if (itemsContainer.children.length > 1) {
                 button.closest('tr').remove();
+                // Update counter to reflect the highest numbered item
+                updateItemCounter();
             }
+        }
+
+        function updateItemCounter() {
+            const itemInputs = document.querySelectorAll('.item-name');
+            let maxNumber = 0;
+            
+            itemInputs.forEach(input => {
+                const value = input.value.trim();
+                // Check if the item name follows the "Item X" pattern
+                const match = value.match(/^Item (\d+)$/);
+                if (match) {
+                    const number = parseInt(match[1]);
+                    if (number > maxNumber) {
+                        maxNumber = number;
+                    }
+                }
+            });
+            
+            itemCounter = maxNumber;
         }
 
         function solveKnapsack() {
@@ -591,14 +616,15 @@
                 const quantity = parseInt(itemRow.querySelector('.item-quantity').value) || 1;
 
                 if (name && value > 0 && weight > 0 && quantity > 0) {
-                    // Create individual items for 0-1 knapsack
+                    // Create individual items for 0-1 knapsack with original order tracking
                     for (let i = 0; i < quantity; i++) {
                         items.push({
                             name: name,
                             originalName: name,
                             value: value,
                             weight: weight,
-                            id: `${name}_${i + 1}`
+                            id: `${name}_${i + 1}`,
+                            originalOrder: index // Track the original input order
                         });
                     }
                     hasValidItems = true;
@@ -652,7 +678,8 @@
                         weight: item.weight,
                         quantity: 0,
                         totalValue: 0,
-                        totalWeight: 0
+                        totalWeight: 0,
+                        originalOrder: item.originalOrder // Add original order tracking
                     };
                 }
                 groupedItems[item.originalName].quantity++;
@@ -660,7 +687,8 @@
                 groupedItems[item.originalName].totalWeight += item.weight;
             });
 
-            const result = Object.values(groupedItems);
+            // Convert to array and sort by original input order
+            const result = Object.values(groupedItems).sort((a, b) => a.originalOrder - b.originalOrder);
             const totalWeight = selectedItems.reduce((sum, item) => sum + item.weight, 0);
 
             return {
@@ -725,8 +753,7 @@
             const sampleItems = [
                 { name: 'Item 1', value: 3.5, weight: 1, quantity: 48 },
                 { name: 'Item 2', value: 4.5, weight: 1, quantity: 40 },
-                { name: 'Item 3', value: 3, weight: 1, quantity: 54 },
-                { name: 'Item 4', value: 4, weight: 1, quantity: 45 }
+                { name: 'Item 3', value: 3, weight: 1, quantity: 54 }
             ];
 
             // Set capacity
