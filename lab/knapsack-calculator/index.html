@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Knapsack Calculator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: white;
+            min-height: 100vh;
+            padding: 10px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        h1 {
+            text-align: center;
+            color: #2196F3;
+            margin-bottom: 20px;
+            font-size: clamp(1.8rem, 4vw, 2.5rem);
+            word-break: break-word;
+        }
+
+        .input-section {
+            display: block;
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        .capacity-input {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .capacity-input label {
+            font-size: clamp(1rem, 2.5vw, 1.2rem);
+            font-weight: bold;
+            color: #333;
+        }
+
+        .capacity-input input {
+            padding: 12px 20px;
+            font-size: clamp(1rem, 2.5vw, 1.1rem);
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            width: min(200px, 80vw);
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .capacity-input input:focus {
+            outline: none;
+            border-color: #2196F3;
+            box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+        }
+
+        .items-section {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 15px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .items-section h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: clamp(1.2rem, 3vw, 1.4rem);
+        }
+
+        .info-box {
+            background: #e3f2fd;
+            border: 1px solid #2196F3;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .info-box h4 {
+            color: #2196F3;
+            margin-bottom: 8px;
+            font-size: clamp(1rem, 2.5vw, 1.1rem);
+        }
+
+        .info-box p {
+            font-size: clamp(0.85rem, 2vw, 0.95rem);
+            margin-bottom: 8px;
+        }
+
+        /* Desktop table layout */
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            display: table;
+        }
+
+        .items-table th {
+            background: #2196F3;
+            color: white;
+            padding: 12px 8px;
+            text-align: left;
+            font-weight: bold;
+            font-size: clamp(0.8rem, 2vw, 1rem);
+        }
+
+        .items-table td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #eee;
+            vertical-align: middle;
+        }
+
+        .items-table tr:hover {
+            background: #f9f9f9;
+        }
+
+        .items-table input {
+            width: 100%;
+            padding: 8px 6px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: clamp(0.85rem, 2vw, 0.95rem);
+            transition: border-color 0.3s ease;
+            min-width: 0;
+        }
+
+        .items-table input:focus {
+            outline: none;
+            border-color: #2196F3;
+        }
+
+        .quantity-col {
+            width: 80px;
+            min-width: 80px;
+        }
+
+        .action-col {
+            width: 90px;
+            min-width: 90px;
+        }
+
+        .quantity-input {
+            text-align: center;
+            background: #e3f2fd;
+            border: 2px solid #2196F3 !important;
+        }
+
+        .remove-btn {
+            background: #f44336;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: clamp(0.8rem, 2vw, 0.9rem);
+            transition: background-color 0.3s ease;
+            white-space: nowrap;
+            width: 100%;
+        }
+
+        .remove-btn:hover {
+            background: #d32f2f;
+        }
+
+        .add-item-btn {
+            background: #2ed573;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: clamp(1rem, 2.5vw, 1.1rem);
+            margin-top: 15px;
+            transition: background-color 0.3s ease;
+            width: 100%;
+            max-width: 200px;
+        }
+
+        .add-item-btn:hover {
+            background: #27ae60;
+        }
+
+        .solve-btn {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: clamp(1.1rem, 3vw, 1.3rem);
+            display: block;
+            margin: 20px auto;
+            transition: background-color 0.3s ease;
+            width: 100%;
+            max-width: 300px;
+        }
+
+        .solve-btn:hover {
+            background: #1976D2;
+        }
+
+        .results {
+            margin-top: 20px;
+            padding: 20px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 15px;
+            color: #333;
+            display: none;
+        }
+
+        .results h3 {
+            font-size: clamp(1.3rem, 3.5vw, 1.8rem);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .result-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .stat-box {
+            background: white;
+            border: 2px solid #2196F3;
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .stat-box h4 {
+            font-size: clamp(0.9rem, 2.2vw, 1.1rem);
+            margin-bottom: 8px;
+            opacity: 0.8;
+            color: #333;
+        }
+
+        .stat-box .value {
+            font-size: clamp(1.3rem, 4vw, 2rem);
+            font-weight: bold;
+            color: #333;
+            word-break: break-all;
+        }
+
+        .selected-items {
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+        }
+
+        .selected-items h4 {
+            margin-bottom: 15px;
+            font-size: clamp(1.1rem, 2.8vw, 1.3rem);
+            color: #333;
+        }
+
+        .item-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 15px;
+        }
+
+        .selected-item {
+            background: #f1f8e9;
+            border: 2px solid #4CAF50;
+            padding: 15px;
+            border-radius: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .item-name {
+            font-weight: bold;
+            font-size: clamp(1rem, 2.5vw, 1.1rem);
+            color: #333;
+            word-break: break-word;
+        }
+
+        .item-stats {
+            font-size: clamp(0.8rem, 2vw, 0.9rem);
+            opacity: 0.8;
+            color: #333;
+        }
+
+        /* Mobile-specific styles */
+        @media (max-width: 768px) {
+            body {
+                padding: 5px;
+            }
+
+            .container {
+                padding: 15px;
+                border-radius: 15px;
+            }
+
+            .items-section {
+                padding: 12px;
+            }
+
+            .capacity-input {
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .items-table {
+                font-size: 0.85rem;
+            }
+
+            .items-table th,
+            .items-table td {
+                padding: 8px 4px;
+            }
+
+            .quantity-col {
+                width: 65px;
+                min-width: 65px;
+            }
+
+            .action-col {
+                width: 75px;
+                min-width: 75px;
+            }
+
+            .remove-btn {
+                padding: 6px 8px;
+                font-size: 0.75rem;
+            }
+
+            .result-summary {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 10px;
+            }
+
+            .stat-box {
+                padding: 12px;
+            }
+
+            .item-list {
+                grid-template-columns: 1fr;
+            }
+
+            .selected-item {
+                flex-direction: column;
+                align-items: flex-start;
+                text-align: left;
+            }
+        }
+
+        /* Extra small screens */
+        @media (max-width: 480px) {
+            .container {
+                padding: 10px;
+            }
+
+            .items-table th,
+            .items-table td {
+                padding: 6px 2px;
+            }
+
+            .items-table input {
+                padding: 6px 4px;
+                font-size: 0.8rem;
+            }
+
+            .quantity-col {
+                width: 55px;
+                min-width: 55px;
+            }
+
+            .action-col {
+                width: 65px;
+                min-width: 65px;
+            }
+
+            .remove-btn {
+                padding: 4px 6px;
+                font-size: 0.7rem;
+            }
+
+            .result-summary {
+                grid-template-columns: 1fr;
+            }
+
+            .info-box {
+                padding: 12px;
+            }
+        }
+
+        /* Large screens */
+        @media (min-width: 1200px) {
+            .container {
+                padding: 40px;
+            }
+
+            .items-section {
+                padding: 30px;
+            }
+
+            .capacity-input {
+                flex-direction: row;
+                gap: 15px;
+            }
+
+            .result-summary {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+
+        /* Landscape orientation on mobile */
+        @media (max-width: 768px) and (orientation: landscape) {
+            .result-summary {
+                grid-template-columns: repeat(4, 1fr);
+            }
+            
+            .item-list {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        /* Print styles */
+        @media print {
+            .container {
+                box-shadow: none;
+                padding: 20px;
+            }
+            
+            .add-item-btn,
+            .solve-btn,
+            .remove-btn {
+                display: none;
+            }
+            
+            .items-table input {
+                border: none;
+                background: transparent;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Knapsack Calculator</h1>
+        
+        <div class="items-section">
+            <h3>Items</h3>
+            <div class="info-box">
+                <h4>💡 How to use quantities:</h4>
+                <p><strong>Quantity column:</strong> Set how many copies of each item you want to consider. The algorithm will find the optimal combination using up to the specified quantities for each item.</p>
+                <p><strong>Algorithm:</strong> Uses classic 0-1 knapsack optimization where each item copy is either selected or not selected.</p>
+            </div>
+            
+            <table class="items-table" id="items-table">
+                <thead>
+                    <tr>
+                        <th>Item Name</th>
+                        <th>Value</th>
+                        <th>Weight</th>
+                        <th class="quantity-col">Quantity</th>
+                        <th class="action-col">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="items-container">
+                    <tr class="item-row">
+                        <td><input type="text" placeholder="Item name" class="item-name"></td>
+                        <td><input type="number" placeholder="Value" class="item-value" min="0" step="0.1"></td>
+                        <td><input type="number" placeholder="Weight" class="item-weight" min="1"></td>
+                        <td><input type="number" placeholder="Qty" class="item-quantity quantity-input" min="1" value="1"></td>
+                        <td><button class="remove-btn" onclick="removeItem(this)">Remove</button></td>
+                    </tr>
+                    <tr class="item-row">
+                        <td><input type="text" placeholder="Item name" class="item-name"></td>
+                        <td><input type="number" placeholder="Value" class="item-value" min="0" step="0.1"></td>
+                        <td><input type="number" placeholder="Weight" class="item-weight" min="1"></td>
+                        <td><input type="number" placeholder="Qty" class="item-quantity quantity-input" min="1" value="1"></td>
+                        <td><button class="remove-btn" onclick="removeItem(this)">Remove</button></td>
+                    </tr>
+                    <tr class="item-row">
+                        <td><input type="text" placeholder="Item name" class="item-name"></td>
+                        <td><input type="number" placeholder="Value" class="item-value" min="0" step="0.1"></td>
+                        <td><input type="number" placeholder="Weight" class="item-weight" min="1"></td>
+                        <td><input type="number" placeholder="Qty" class="item-quantity quantity-input" min="1" value="1"></td>
+                        <td><button class="remove-btn" onclick="removeItem(this)">Remove</button></td>
+                    </tr>
+                </tbody>
+            </table>
+            <button class="add-item-btn" onclick="addItem()">Add Item</button>
+            
+            <div class="capacity-input" style="margin-top: 15px;">
+                <label for="capacity">Knapsack Capacity:</label>
+                <input type="number" id="capacity" value="96" min="1" placeholder="Enter capacity">
+            </div>
+        </div>
+
+        <button class="solve-btn" onclick="solveKnapsack()">Solve Knapsack</button>
+
+        <div id="results" class="results">
+            <h3>Optimal Solution</h3>
+            <div class="result-summary">
+                <div class="stat-box">
+                    <h4>Maximum Value</h4>
+                    <div class="value" id="max-value">0</div>
+                </div>
+                <div class="stat-box">
+                    <h4>Total Weight</h4>
+                    <div class="value" id="total-weight">0</div>
+                </div>
+                <div class="stat-box">
+                    <h4>Items Used</h4>
+                    <div class="value" id="items-count">0</div>
+                </div>
+                <div class="stat-box">
+                    <h4>Efficiency</h4>
+                    <div class="value" id="efficiency">0%</div>
+                </div>
+            </div>
+            <div class="selected-items">
+                <h4>Selected Items:</h4>
+                <div id="selected-items-list" class="item-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize item counter
+        let itemCounter = 3; // Start at 3 since we have Item 1, 2, 3 preloaded
+
+        function addItem() {
+            const container = document.getElementById('items-container');
+            const itemRow = document.createElement('tr');
+            itemRow.className = 'item-row';
+            
+            itemCounter++; // Increment counter for new item
+            
+            itemRow.innerHTML = `
+                <td><input type="text" placeholder="Item name" class="item-name" value="Item ${itemCounter}"></td>
+                <td><input type="number" placeholder="Value" class="item-value" min="0" step="0.1"></td>
+                <td><input type="number" placeholder="Weight" class="item-weight" min="1"></td>
+                <td><input type="number" placeholder="Qty" class="item-quantity quantity-input" min="1" value="1"></td>
+                <td><button class="remove-btn" onclick="removeItem(this)">Remove</button></td>
+            `;
+            container.appendChild(itemRow);
+        }
+
+        function removeItem(button) {
+            const itemsContainer = document.getElementById('items-container');
+            if (itemsContainer.children.length > 1) {
+                button.closest('tr').remove();
+                // Update counter to reflect the highest numbered item
+                updateItemCounter();
+            }
+        }
+
+        function updateItemCounter() {
+            const itemInputs = document.querySelectorAll('.item-name');
+            let maxNumber = 0;
+            
+            itemInputs.forEach(input => {
+                const value = input.value.trim();
+                // Check if the item name follows the "Item X" pattern
+                const match = value.match(/^Item (\d+)$/);
+                if (match) {
+                    const number = parseInt(match[1]);
+                    if (number > maxNumber) {
+                        maxNumber = number;
+                    }
+                }
+            });
+            
+            itemCounter = maxNumber;
+        }
+
+        function solveKnapsack() {
+            const capacity = parseInt(document.getElementById('capacity').value);
+            const itemRows = document.querySelectorAll('.item-row');
+            
+            if (!capacity || capacity <= 0) {
+                alert('Please enter a valid capacity');
+                return;
+            }
+
+            const items = [];
+            let hasValidItems = false;
+
+            itemRows.forEach((itemRow, index) => {
+                const name = itemRow.querySelector('.item-name').value.trim();
+                const value = parseFloat(itemRow.querySelector('.item-value').value);
+                const weight = parseInt(itemRow.querySelector('.item-weight').value);
+                const quantity = parseInt(itemRow.querySelector('.item-quantity').value) || 1;
+
+                if (name && value > 0 && weight > 0 && quantity > 0) {
+                    // Create individual items for 0-1 knapsack with original order tracking
+                    for (let i = 0; i < quantity; i++) {
+                        items.push({
+                            name: name,
+                            originalName: name,
+                            value: value,
+                            weight: weight,
+                            id: `${name}_${i + 1}`,
+                            originalOrder: index // Track the original input order
+                        });
+                    }
+                    hasValidItems = true;
+                }
+            });
+
+            if (!hasValidItems) {
+                alert('Please add at least one valid item with name, value, weight, and quantity');
+                return;
+            }
+
+            const solution = knapsack01(items, capacity);
+            displayResults(solution, capacity);
+        }
+
+        function knapsack01(items, capacity) {
+            const n = items.length;
+            const dp = Array(n + 1).fill(0).map(() => Array(capacity + 1).fill(0));
+
+            // Fill the DP table
+            for (let i = 1; i <= n; i++) {
+                for (let w = 0; w <= capacity; w++) {
+                    if (items[i-1].weight <= w) {
+                        dp[i][w] = Math.max(
+                            dp[i-1][w], // Don't take item
+                            dp[i-1][w - items[i-1].weight] + items[i-1].value // Take item
+                        );
+                    } else {
+                        dp[i][w] = dp[i-1][w];
+                    }
+                }
+            }
+
+            // Backtrack to find selected items
+            const selectedItems = [];
+            let w = capacity;
+            for (let i = n; i > 0 && w > 0; i--) {
+                if (dp[i][w] !== dp[i-1][w]) {
+                    selectedItems.push(items[i-1]);
+                    w -= items[i-1].weight;
+                }
+            }
+
+            // Group items by original name and count quantities
+            const groupedItems = {};
+            selectedItems.forEach(item => {
+                if (!groupedItems[item.originalName]) {
+                    groupedItems[item.originalName] = {
+                        name: item.originalName,
+                        value: item.value,
+                        weight: item.weight,
+                        quantity: 0,
+                        totalValue: 0,
+                        totalWeight: 0,
+                        originalOrder: item.originalOrder // Add original order tracking
+                    };
+                }
+                groupedItems[item.originalName].quantity++;
+                groupedItems[item.originalName].totalValue += item.value;
+                groupedItems[item.originalName].totalWeight += item.weight;
+            });
+
+            // Convert to array and sort by original input order
+            const result = Object.values(groupedItems).sort((a, b) => a.originalOrder - b.originalOrder);
+            const totalWeight = selectedItems.reduce((sum, item) => sum + item.weight, 0);
+
+            return {
+                maxValue: dp[n][capacity],
+                selectedItems: result,
+                totalWeight: totalWeight
+            };
+        }
+
+        function displayResults(solution, capacity) {
+            document.getElementById('max-value').textContent = solution.maxValue.toFixed(1);
+            document.getElementById('total-weight').textContent = solution.totalWeight;
+            
+            const totalItems = solution.selectedItems.reduce((sum, item) => sum + (item.quantity || 1), 0);
+            document.getElementById('items-count').textContent = totalItems;
+            
+            const efficiency = capacity > 0 ? Math.round((solution.totalWeight / capacity) * 100) : 0;
+            document.getElementById('efficiency').textContent = efficiency + '%';
+
+            const itemsList = document.getElementById('selected-items-list');
+            itemsList.innerHTML = '';
+
+            if (solution.selectedItems.length === 0) {
+                itemsList.innerHTML = '<div class="selected-item"><span>No items selected</span></div>';
+            } else {
+                solution.selectedItems.forEach(item => {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = 'selected-item';
+                    
+                    if (item.quantity > 1) {
+                        itemDiv.innerHTML = `
+                            <div>
+                                <div class="item-name">${item.name} (×${item.quantity})</div>
+                                <div class="item-stats">Unit: Value ${item.value}, Weight ${item.weight}</div>
+                                <div class="item-stats">Total: Value ${(item.totalValue || item.value).toFixed(1)}, Weight ${item.totalWeight || item.weight}</div>
+                            </div>
+                            <div class="item-stats">Unit Ratio: ${(item.value / item.weight).toFixed(2)}</div>
+                        `;
+                    } else {
+                        itemDiv.innerHTML = `
+                            <div>
+                                <div class="item-name">${item.name}${item.quantity > 1 ? ` (×${item.quantity})` : ''}</div>
+                                <div class="item-stats">Value: ${item.value}, Weight: ${item.weight}</div>
+                            </div>
+                            <div class="item-stats">Ratio: ${(item.value / item.weight).toFixed(2)}</div>
+                        `;
+                    }
+                    itemsList.appendChild(itemDiv);
+                });
+            }
+
+            // Update results title
+            const resultsTitle = document.querySelector('#results h3');
+            resultsTitle.textContent = 'Optimal Solution';
+
+            document.getElementById('results').style.display = 'block';
+            document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        // Add sample data on load
+        window.onload = function() {
+            const sampleItems = [
+                { name: 'Item 1', value: 3.5, weight: 1, quantity: 48 },
+                { name: 'Item 2', value: 4.5, weight: 1, quantity: 40 },
+                { name: 'Item 3', value: 3, weight: 1, quantity: 54 }
+            ];
+
+            // Set capacity
+            document.getElementById('capacity').value = 96;
+
+            const itemRows = document.querySelectorAll('.item-row');
+            sampleItems.forEach((item, index) => {
+                if (itemRows[index]) {
+                    itemRows[index].querySelector('.item-name').value = item.name;
+                    itemRows[index].querySelector('.item-value').value = item.value;
+                    itemRows[index].querySelector('.item-weight').value = item.weight;
+                    itemRows[index].querySelector('.item-quantity').value = item.quantity;
+                }
+            });
+
+            // Automatically solve the problem
+            setTimeout(() => {
+                solveKnapsack();
+            }, 100);
+        };
+    </script>
+</body>
+</html>
