@@ -306,6 +306,20 @@
           <input id="country" name="country" type="text" placeholder="Enter your country" required />
           <div class="error-message" data-err="country">Please enter your country of residence.</div>
         </div>
+
+        <div class="field-group">
+          <label for="education">Education Level *</label>
+          <select id="education" name="education" required>
+            <option value="">Please select...</option>
+            <option>High School</option>
+            <option>Some College</option>
+            <option>Bachelor's Degree</option>
+            <option>Master's Degree</option>
+            <option>PhD/Doctoral</option>
+            <option>Other</option>
+          </select>
+          <div class="error-message" data-err="education">Please select your education level.</div>
+        </div>
       </div>
     </div>
 
@@ -459,20 +473,10 @@
   const MANDATORY_MODE = false;
   const form = document.getElementById('regForm');
   const submitBtn = document.getElementById('submitBtn');
-  const occupation = document.getElementById('occupation');
-  const occupationOtherWrap = document.getElementById('occupationOtherWrap');
-  const study = document.getElementById('study');
-  const studyOtherWrap = document.getElementById('studyOtherWrap');
   const q3specWrap = document.getElementById('q3specWrap');
   const c1 = document.getElementById('c1');
   const c2 = document.getElementById('c2');
 
-  occupation.addEventListener('change', () => {
-    occupationOtherWrap.classList.toggle('hidden', occupation.value !== 'Other (please specify)');
-  });
-  study.addEventListener('change', () => {
-    studyOtherWrap.classList.toggle('hidden', study.value !== 'Other (please specify)');
-  });
   document.querySelectorAll('input[name="q3"]').forEach(r=>{
     r.addEventListener('change', () => {
       q3specWrap.classList.toggle('hidden', r.value !== 'Yes');
@@ -499,7 +503,7 @@
     }
 
     let ok = true;
-    const requiredIds = ['fullName','email','age','nationality','country','occupation','fluency'];
+    const requiredIds = ['fullName','email','age','country','education'];
     requiredIds.forEach(id => {
       const el = document.getElementById(id);
       const valid = el && el.value && (el.type !== 'email' || /\S+@\S+\.\S+/.test(el.value));
