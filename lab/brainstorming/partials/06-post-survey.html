@@ -187,4 +187,87 @@
           <label class="radio"><input type="radio" name="q10" value="6"> 6</label>
           <label class="radio"><input type="radio" name="q10" value="7"> 7</label>
           <label class="radio"><input type="radio" name="q10" value="8"> 8</label>
-          <label class="radio"><inpu
+          <label class="radio"><input type="radio" name="q10" value="9"> 9</label>
+          <label class="radio"><input type="radio" name="q10" value="10"> 10</label>
+        </div>
+        <div class="hint">1 = Poor → 10 = Excellent</div>
+        <div class="danger" data-err="q10">Please select a value.</div>
+      </div>
+
+      <!-- Optional comments -->
+      <div style="margin-top:20px;">
+        <label class="section-label">Additional Comments (Optional)</label>
+        <textarea name="comments" rows="5" placeholder="Share any additional thoughts about your experience..."></textarea>
+      </div>
+    </div>
+
+    <div class="actions" style="margin-top:20px;">
+      <button id="submitBtn" class="btn" type="submit" data-next>Submit Survey</button>
+      <span class="foot">All 1–10 scale questions are required.</span>
+    </div>
+  </form>
+</section>
+
+<script>
+  // === GLOBAL FLAG ===
+  const MANDATORY_MODE = false; // Set to false to make all fields optional
+
+  const form = document.getElementById('postForm');
+  const submitBtn = document.getElementById('submitBtn');
+  const requiredGroups = ['q1','q2','q3','q4','q5','q6','q7','q8','q9','q10'];
+
+  function groupAnswered(name){
+    return [...document.querySelectorAll(`input[name="${name}"]`)].some(r=>r.checked);
+  }
+
+  function validateLive(){
+    if (!MANDATORY_MODE) {
+      // In optional mode, always enable the button and hide all errors
+      submitBtn.disabled = false;
+      requiredGroups.forEach(name => {
+        const err = document.querySelector(`[data-err="${name}"]`);
+        if (err) err.style.display = 'none';
+      });
+      return true;
+    }
+
+    // Strict mode: validate all required questions
+    let ok = true;
+    requiredGroups.forEach(name=>{
+      const answered = groupAnswered(name);
+      const err = document.querySelector(`[data-err="${name}"]`);
+      if (err) err.style.display = answered ? 'none' : 'block';
+      if (!answered) ok = false;
+    });
+    submitBtn.disabled = !ok;
+    return ok;
+  }
+
+  // Add live listeners
+  requiredGroups.forEach(name=>{
+    document.querySelectorAll(`input[name="${name}"]`).forEach(r=>{
+      r.addEventListener('change', validateLive);
+    });
+  });
+
+  // Initial validation state
+  validateLive();
+
+  form.addEventListener('submit', (e)=>{
+    e.preventDefault();
+
+    if (MANDATORY_MODE) {
+      validateLive();
+      if (submitBtn.disabled) {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+    }
+
+    const data = new FormData(form);
+    const payload = Object.fromEntries(data.entries());
+    console.log('Post-survey payload:', payload);
+
+    if (window.__APP__) window.__APP__.next();
+  });
+</script>
