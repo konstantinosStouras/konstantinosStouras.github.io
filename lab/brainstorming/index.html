@@ -83,6 +83,10 @@
     .btn:active{transform:translateY(1px);}
     .btn:disabled{background:#9ca3af;box-shadow:none;cursor:not-allowed;}
     .foot{font-size:12px;color:#6b7280;margin-top:8px;}
+    .noscript{
+      margin-top:12px;color:#b91c1c;background:#fee2e2;border:1px solid #fecaca;
+      padding:10px;border-radius:8px;font-size:14px;
+    }
   </style>
 </head>
 <body>
@@ -116,35 +120,49 @@
           <label for="agree"><strong>I agree to participate</strong></label>
         </div>
         <div class="actions">
-          <button id="continue" class="btn" disabled>Continue →</button>
+          <button id="continue" class="btn" type="button" disabled>Continue →</button>
           <span class="foot">You must agree to participate before continuing.</span>
         </div>
+
+        <noscript>
+          <div class="noscript">JavaScript is required to continue. Please enable JavaScript in your browser.</div>
+        </noscript>
       </section>
     </div>
   </main>
 
-<script>
-  // === Global flag for consistency ===
-  const MANDATORY_MODE = true;
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // === Global flag for consistency (not used here, but kept for parity) ===
+      const MANDATORY_MODE = true;
 
-  const agree = document.getElementById('agree');
-  const btn = document.getElementById('continue');
+      const agree = document.getElementById('agree');
+      const btn = document.getElementById('continue');
 
-  agree.addEventListener('change', () => {
-    btn.disabled = !agree.checked;
-  });
+      if (!agree || !btn) return; // defensive: DOM not as expected
 
-  btn.addEventListener('click', () => {
-    if (!agree.checked) return;
+      // Initialize state (in case the checkbox is pre-checked by the browser)
+      btn.disabled = !agree.checked;
 
-    // === Navigation ===
-    if (window.__APP__ && typeof window.__APP__.next === 'function') {
-      window.__APP__.next(); // SPA mode → internal step
-    } else {
-      // fallback for standalone testing
-      window.location.href = './01-registration.html';
-    }
-  });
-</script>
+      // Toggle button enabled state
+      agree.addEventListener('change', () => {
+        btn.disabled = !agree.checked;
+      });
+
+      // Navigation behavior
+      btn.addEventListener('click', () => {
+        if (!agree.checked) return;
+
+        // SPA shell present → advance internally without URL change
+        if (window.__APP__ && typeof window.__APP__.next === 'function') {
+          window.__APP__.next();
+          return;
+        }
+
+        // Standalone fallback (make sure this filename exists in the same folder)
+        window.location.href = './01-registration.html';
+      });
+    });
+  </script>
 </body>
 </html>
