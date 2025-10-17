@@ -497,11 +497,17 @@
   }
 
   submitBtn.addEventListener('click', () => {
+    // If MANDATORY_MODE is false, all fields are optional - skip validation
     if (!MANDATORY_MODE) {
+      const data = new FormData(form);
+      const payload = Object.fromEntries(data.entries());
+      console.log('Registration payload (optional mode):', payload);
+      
       if (window.__APP__) window.__APP__.next();
       return;
     }
 
+    // MANDATORY_MODE is true - perform full validation
     let ok = true;
     const requiredIds = ['fullName','email','age','country','education'];
     requiredIds.forEach(id => {
