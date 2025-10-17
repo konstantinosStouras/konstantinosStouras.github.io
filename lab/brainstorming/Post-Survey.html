@@ -280,46 +280,96 @@
   </main>
 
   <script>
-    const form = document.getElementById('postForm');
-    const submitBtn = document.getElementById('submitBtn');
+  // If true → all fields must be completed before proceeding
+  // If false → user can skip all and still move to next page
+  const MANDATORY_MODE = false; // toggle to false for demo runs
 
-    // Enable submit when all required scale questions are answered
-    const requiredGroups = ['q1','q2','q3','q4','q5','q6','q7','q8','q9','q10'];
+  const form = document.getElementById('regForm');
+  const submitBtn = document.getElementById('submitBtn');
 
-    function groupAnswered(name){
-      return [...document.querySelectorAll(`input[name="${name}"]`)].some(r=>r.checked);
+  // Show “Other” fields conditionally
+  const occupation = document.getElementById('occupation');
+  const occupationOtherWrap = document.getElementById('occupationOtherWrap');
+  const study = document.getElementById('study');
+  const studyOtherWrap = document.getElementById('studyOtherWrap');
+  const q3specWrap = document.getElementById('q3specWrap');
+
+  occupation.addEventListener('change', () => {
+    occupationOtherWrap.classList.toggle('hidden', occupation.value !== 'Other (please specify)');
+  });
+  study.addEventListener('change', () => {
+    studyOtherWrap.classList.toggle('hidden', study.value !== 'Other (please specify)');
+  });
+  document.querySelectorAll('input[name="q3"]').forEach(r=>{
+    r.addEventListener('change', () => {
+      q3specWrap.classList.toggle('hidden', r.value !== 'Yes');
+    });
+  });
+
+  // Enable submit only if both consent checks are ticked
+  const c1 = document.getElementById('c1');
+  const c2 = document.getElementById('c2');
+  const toggleSubmit = () => { submitBtn.disabled = !(c1.checked && c2.checked); };
+  c1.addEventListener('change', toggleSubmit);
+  c2.addEventListener('change', toggleSubmit);
+
+  // Minimal validation feedback
+  function showError(id, show){
+    const el = document.querySelector(`[data-err="${id}"]`);
+    if (el) el.style.display = show ? 'block' : 'none';
+  }
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+
+    // If in optional mode, skip validation and move on
+    if (!MANDATORY_MODE) {
+      window.location.href = './3-Instruction-Page-Individual.html';
+      return;
     }
 
-    function validateLive(){
-      let ok = true;
-      requiredGroups.forEach(name=>{
-        const answered = groupAnswered(name);
-        const err = document.querySelector(`[data-err="${name}"]`);
-        if (err) err.style.display = answered ? 'none' : 'block';
-        if (!answered) ok = false;
-      });
-      submitBtn.disabled = !ok;
+    // Required text/selects
+    const requiredIds = ['fullName','email','age','nationality','country','occupation','fluency'];
+    let ok = true;
+
+    requiredIds.forEach(id => {
+      const el = document.getElementById(id);
+      const valid = el && el.value && (el.type !== 'email' || /\S+@\S+\.\S+/.test(el.value));
+      showError(id, !valid);
+      if (!valid) ok = false;
+    });
+
+    // Required radios
+    const radios = [
+      {name:'q1', id:'q1'},
+      {name:'q2', id:'q2'},
+      {name:'q3', id:'q3'},
+      {name:'q4', id:'q4'},
+      {name:'q5', id:'q5'},
+    ];
+    radios.forEach(({name,id})=>{
+      const any = [...document.querySelectorAll(`input[name="${name}"]`)].some(r=>r.checked);
+      showError(id, !any);
+      if (!any) ok = false;
+    });
+
+    // Consent
+    if (!(c1.checked && c2.checked)) ok = false;
+
+    if (!ok) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
     }
 
-    requiredGroups.forEach(name=>{
-      document.querySelectorAll(`input[name="${name}"]`).forEach(r=>{
-        r.addEventListener('change', validateLive);
-      });
-    });
+    // Collect data (POST to backend later)
+    const data = new FormData(form);
+    const payload = Object.fromEntries(data.entries());
+    console.log('Registration payload:', payload);
 
-    form.addEventListener('submit', (e)=>{
-      e.preventDefault();
-      validateLive();
-      if (submitBtn.disabled) {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        return;
-      }
-      // Collect responses
-      const data = new FormData(form);
-      const payload = Object.fromEntries(data.entries());
-      console.log('Post-survey payload:', payload);
-      window.location.href = './5-thankYou.html';
-    });
-  </script>
+    // Redirect straight to the next phase (individual instructions)
+    window.location.href = './3-Instruction-Page-Individual.html';
+  });
+</script>
+
 </body>
 </html>
