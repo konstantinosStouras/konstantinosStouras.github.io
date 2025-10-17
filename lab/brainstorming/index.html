@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Welcome • Ideation Challenge</title>
+  <title>Ideation Challenge</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root{
@@ -41,6 +41,12 @@
     }
     .hero-title{margin:12px 0 6px;font-size:clamp(22px,3vw,30px);font-weight:800;letter-spacing:.2px;}
     .hero-sub{margin:0;font-size:clamp(14px,2vw,16px);color:white;font-weight:500;}
+    #phaseBadge{
+      margin-top:12px;
+      font-size:14px;
+      opacity:0.9;
+      font-weight:600;
+    }
     .card{
       background:var(--card);border:1px solid var(--border);
       border-radius:var(--radius);box-shadow:var(--shadow);
@@ -83,10 +89,37 @@
     .btn:active{transform:translateY(1px);}
     .btn:disabled{background:#9ca3af;box-shadow:none;cursor:not-allowed;}
     .foot{font-size:12px;color:#6b7280;margin-top:8px;}
-    .noscript{
-      margin-top:12px;color:#b91c1c;background:#fee2e2;border:1px solid #fecaca;
-      padding:10px;border-radius:8px;font-size:14px;
+    
+    /* Additional styles for dynamic content */
+    .grid{display:grid;gap:14px;grid-template-columns:1fr 1fr;}
+    .grid-1{display:grid;gap:14px;grid-template-columns:1fr;}
+    @media (max-width:860px){.grid{grid-template-columns:1fr;}}
+    label{font-weight:600;display:block;margin-bottom:6px;}
+    .hint{color:var(--muted);font-size:13px;margin-top:4px;}
+    input[type=text],input[type=email],select,textarea{
+      width:100%;padding:10px 12px;border:1px solid var(--border);
+      border-radius:10px;background:#fff;color:var(--ink);
     }
+    textarea{resize:vertical;min-height:90px;}
+    .inline{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+    .scale{
+      display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+      padding:10px;border:1px solid var(--border);border-radius:10px;background:#f8fafc;
+    }
+    .radio{
+      display:inline-flex;align-items:center;gap:8px;
+      padding:6px 10px;border-radius:10px;background:#f3f4f6;border:1px solid var(--border);
+    }
+    .danger{color:#dc2626;font-size:13px;display:none;}
+    .hidden{display:none !important;}
+    .section{margin-top:18px;}
+    .list{margin:10px 0 0;padding-left:18px;}
+    .tip{
+      background:#f8fafc;border:1px dashed var(--border);
+      border-radius:12px;padding:12px;margin-top:14px;color:#0f172a;
+    }
+    .emoji{font-size:28px;margin-left:4px;}
+    .lead{font-size:16px;color:#111827;}
   </style>
 </head>
 <body>
@@ -96,73 +129,20 @@
         <span class="hero-icon">💡</span>
         Ideation Challenge App
       </div>
-      <h1 class="hero-title">Welcome to the Ideation Challenge!</h1>
+      <h1 class="hero-title">Ideation Challenge</h1>
       <p class="hero-sub">Generate, evaluate, and select promising health & wellness product concepts.</p>
+      <div id="phaseBadge">Loading...</div>
     </div>
   </header>
 
   <main>
     <div class="container">
-      <section class="card">
-        <h2>Welcome 👋</h2>
-        <p>You are about to take part in an ideation challenge focused on generating and evaluating new product concepts in the health and wellness market.</p>
-        <p>The goal of this study is to understand how people generate ideas, make evaluations, and reach decisions when developing new products that could succeed in existing or emerging markets. We are interested in the different ways individuals and groups think, communicate, and decide which ideas are most promising from a consumer and market perspective.</p>
-        <div class="phases">
-          <div class="phase"><div class="pill">1</div><div><h3>Individual Ideation</h3><p>Work independently to develop potential product ideas.</p></div></div>
-          <div class="phase"><div class="pill">2</div><div><h3>Group Collaboration</h3><p>Join a small group to share, discuss, and refine ideas together.</p></div></div>
-          <div class="phase"><div class="pill">3</div><div><h3>Final Selection</h3><p>As a group, review all ideas and agree on the five best concepts.</p></div></div>
-        </div>
-        <p>Please follow the instructions carefully and complete each phase within the given time. Your participation will help us gain valuable insights into how people approach creative thinking, judgment, and decision-making in consumer contexts.</p>
-        <p class="muted">Thank you for taking part — your input will contribute to advancing our understanding of innovation and consumer behavior.</p>
-
-        <div class="consent">
-          <input type="checkbox" id="agree" />
-          <label for="agree"><strong>I agree to participate</strong></label>
-        </div>
-        <div class="actions">
-          <button id="continue" class="btn" type="button" disabled>Continue →</button>
-          <span class="foot">You must agree to participate before continuing.</span>
-        </div>
-
-        <noscript>
-          <div class="noscript">JavaScript is required to continue. Please enable JavaScript in your browser.</div>
-        </noscript>
-      </section>
+      <div id="app">
+        <!-- Content loaded here by app.js -->
+      </div>
     </div>
   </main>
 
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      // === Global flag for consistency (not used here, but kept for parity) ===
-      const MANDATORY_MODE = true;
-
-      const agree = document.getElementById('agree');
-      const btn = document.getElementById('continue');
-
-      if (!agree || !btn) return; // defensive: DOM not as expected
-
-      // Initialize state (in case the checkbox is pre-checked by the browser)
-      btn.disabled = !agree.checked;
-
-      // Toggle button enabled state
-      agree.addEventListener('change', () => {
-        btn.disabled = !agree.checked;
-      });
-
-      // Navigation behavior
-      btn.addEventListener('click', () => {
-        if (!agree.checked) return;
-
-        // SPA shell present → advance internally without URL change
-        if (window.__APP__ && typeof window.__APP__.next === 'function') {
-          window.__APP__.next();
-          return;
-        }
-
-        // Standalone fallback (make sure this filename exists in the same folder)
-        window.location.href = './01-registration.html';
-      });
-    });
-  </script>
+  <script src="./app.js"></script>
 </body>
 </html>

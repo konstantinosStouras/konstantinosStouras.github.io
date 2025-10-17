@@ -1,16 +1,20 @@
 <section class="card">
   <h2>Welcome 👋</h2>
   <p>You are about to take part in an ideation challenge focused on generating and evaluating new product concepts in the health and wellness market.</p>
+  <p>The goal of this study is to understand how people generate ideas, make evaluations, and reach decisions when developing new products that could succeed in existing or emerging markets. We are interested in the different ways individuals and groups think, communicate, and decide which ideas are most promising from a consumer and market perspective.</p>
   <div class="phases">
     <div class="phase"><div class="pill">1</div><div><h3>Individual Ideation</h3><p>Work independently to develop potential product ideas.</p></div></div>
-    <div class="phase"><div class="pill">2</div><div><h3>Group Collaboration</h3><p>Share, discuss, and refine ideas together.</p></div></div>
-    <div class="phase"><div class="pill">3</div><div><h3>Final Selection</h3><p>Agree on the five best concepts.</p></div></div>
+    <div class="phase"><div class="pill">2</div><div><h3>Group Collaboration</h3><p>Join a small group to share, discuss, and refine ideas together.</p></div></div>
+    <div class="phase"><div class="pill">3</div><div><h3>Final Selection</h3><p>As a group, review all ideas and agree on the five best concepts.</p></div></div>
   </div>
-  <div class="consent" style="margin-top:12px;background:#f8fafc;border:1px dashed var(--border);padding:12px;border-radius:12px;">
+  <p>Please follow the instructions carefully and complete each phase within the given time. Your participation will help us gain valuable insights into how people approach creative thinking, judgment, and decision-making in consumer contexts.</p>
+  <p class="muted">Thank you for taking part — your input will contribute to advancing our understanding of innovation and consumer behavior.</p>
+
+  <div class="consent">
     <input type="checkbox" id="agree" />
     <label for="agree"><strong>I agree to participate</strong></label>
   </div>
-  <div class="actions" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
+  <div class="actions">
     <button id="continue" class="btn" type="button" disabled>Continue →</button>
     <span class="foot">You must agree to participate before continuing.</span>
   </div>
@@ -24,7 +28,7 @@
   btn.addEventListener('click', () => {
     if (!agree.checked) return;
     if (window.__APP__ && typeof window.__APP__.next === 'function') {
-      window.__APP__.next(); // always SPA-advance
+      window.__APP__.next();
     }
   });
 </script>

@@ -1,200 +1,151 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Individual Ideation • Ideation Challenge</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    :root{
-      --brand:#2563eb; --brand-dark:#1e40af;
-      --bg:#f9fafb; --ink:#111827; --muted:#6b7280;
-      --card:#ffffff; --border:#e5e7eb;
-      --shadow:0 10px 25px rgba(0,0,0,.06),0 2px 6px rgba(0,0,0,.04);
-      --radius:14px;
-    }
-    *{box-sizing:border-box}
-    body{
-      font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";
-      margin:0; background:var(--bg); color:var(--ink);
-    }
-    header{
-      background:linear-gradient(135deg,var(--brand),var(--brand-dark));
-      color:#fff; padding:1rem;
-      display:flex; justify-content:space-between; align-items:center;
-    }
-    header h1{margin:0;font-size:1.25rem;}
-    #timer{
-      font-size:1.1rem;font-weight:600;
-      background:rgba(0,0,0,.15);
-      padding:.4rem .8rem;border-radius:8px;
-    }
-    main{
-      padding:1rem;
-      display:flex;flex-direction:column;gap:1rem;
-      max-width:960px;margin:auto;
-    }
-    section{
-      background:#fff;border:1px solid var(--border);
-      border-radius:var(--radius);padding:1rem;
-      box-shadow:var(--shadow);
-    }
-    section h2{
-      margin-top:0;font-size:1rem;
-      border-bottom:1px solid var(--border);
-      padding-bottom:0.25rem;margin-bottom:0.5rem;
-    }
-    textarea,input[type=text]{
-      width:100%;padding:0.5rem;
-      margin-bottom:0.5rem;border:1px solid #ccc;
-      border-radius:8px;resize:vertical;
-    }
-    button{
-      background:var(--brand);color:white;
-      border:none;padding:0.6rem 1.1rem;
-      border-radius:8px;cursor:pointer;
-      font-weight:600;
-      box-shadow:0 4px 10px rgba(37,99,235,.25);
-      transition:transform .05s ease,filter .15s ease;
-    }
-    button:hover{filter:brightness(1.05);}
-    button:active{transform:translateY(1px);}
-    button:disabled{background:#9ca3af;cursor:not-allowed;}
-    ul{list-style:none;padding:0;margin:0;}
-    li{
-      margin:0.25rem 0;
-      padding:0.5rem;border:1px solid #ddd;
-      border-radius:6px;background:#f9fafb;
-    }
-    .final-box{
-      background:#eef2ff;border:1px solid #c7d2fe;
-      border-radius:8px;padding:.5rem;margin-top:.5rem;
-    }
-    .final-box label{font-weight:600;display:block;margin:.25rem 0;}
-    .hint{color:#6b7280;font-size:.9rem;margin:.25rem 0 .5rem;}
-    .submit-box{
-      background:#f8fafc;border:1px solid #e5e7eb;
-      border-radius:10px;padding:12px;
-    }
-    .submit-box h3{margin:.25rem 0 .5rem;}
-  </style>
-</head>
-<body>
-  <header>
-    <h1>Phase: Individual Ideation (10 min)</h1>
-    <div id="timer">10:00</div>
-  </header>
+<section class="card" style="max-width:100%;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+    <h2 style="margin:0;border:none;padding:0;">Phase: Individual Ideation (10 min)</h2>
+    <div id="timer" style="font-size:1.1rem;font-weight:600;background:#eef2ff;color:#1e40af;padding:8px 14px;border-radius:8px;">10:00</div>
+  </div>
 
-  <main>
-    <section>
-      <h2>Instruction</h2>
-      <p id="instructionText">
-        Brainstorm ideas below. Select your Top 5, then fill the submission box at the bottom with an overall idea title and description.
-      </p>
-    </section>
+  <p id="instructionText">
+    Brainstorm ideas below. Select your Top 5, then fill the submission box at the bottom with an overall idea title and description.
+  </p>
+</section>
 
-    <section class="ideas-box">
-      <h2>Your Ideas</h2>
-      <input type="text" id="ideaTitle" placeholder="Idea title" />
-      <textarea id="ideaDesc" placeholder="Idea description"></textarea>
-      <button id="addIdea">Add Idea</button>
+<section class="card ideas-box" style="max-width:100%;">
+  <h2>Your Ideas</h2>
+  <input type="text" id="ideaTitle" placeholder="Idea title" />
+  <textarea id="ideaDesc" placeholder="Idea description"></textarea>
+  <button id="addIdea" class="btn">Add Idea</button>
 
-      <ul id="ideasList"></ul>
+  <ul id="ideasList" style="list-style:none;padding:0;margin:12px 0 0;"></ul>
 
-      <h3>Select Top 5</h3>
-      <ul id="top5List"></ul>
+  <h2 style="margin-top:20px;">Select Top 5</h2>
+  <ul id="top5List" style="list-style:none;padding:0;"></ul>
 
-      <h3>Selected Top 5 — edit before finalizing</h3>
-      <p class="hint">You can revise each selected idea’s <strong>title</strong> and <strong>description</strong> below.</p>
-      <ul id="finalEditList"></ul>
-    </section>
+  <h2 style="margin-top:20px;">Selected Top 5 — edit before finalizing</h2>
+  <p class="hint">You can revise each selected idea's <strong>title</strong> and <strong>description</strong> below.</p>
+  <ul id="finalEditList" style="list-style:none;padding:0;"></ul>
+</section>
 
-    <section class="submit-box">
-      <h3>Submission Box</h3>
-      <p class="hint">Provide a final overarching title and description for your Top 5 selection.</p>
-      <input type="text" id="submissionTitle" placeholder="Final submission: Idea title" />
-      <textarea id="submissionDesc" rows="3" placeholder="Final submission: Idea description"></textarea>
-      <button id="submitAll">Submit</button>
-    </section>
+<section class="card submit-box" style="max-width:100%;">
+  <h2>Submission Box</h2>
+  <p class="hint">Provide a final overarching title and description for your Top 5 selection.</p>
+  <input type="text" id="submissionTitle" placeholder="Final submission: Idea title" />
+  <textarea id="submissionDesc" rows="3" placeholder="Final submission: Idea description"></textarea>
+  <button id="submitAll" class="btn" data-next>Submit</button>
+</section>
 
-    <section class="notes-box">
-      <h2>Personal Notes</h2>
-      <textarea id="notes" rows="5" placeholder="Write notes here (private)"></textarea>
-    </section>
-  </main>
+<section class="card notes-box" style="max-width:100%;">
+  <h2>Personal Notes</h2>
+  <textarea id="notes" rows="5" placeholder="Write notes here (private)"></textarea>
+</section>
 
-  <script>
-    // === GLOBAL FLAG ===
-    const MANDATORY_MODE = true; // true = strict; false = skip allowed
+<script>
+  const MANDATORY_MODE = true;
+  
+  let time = 600;
+  const timerEl = document.getElementById("timer");
+  function updateTimer(){
+    const m = String(Math.floor(time/60)).padStart(2,"0");
+    const s = String(time%60).padStart(2,"0");
+    timerEl.textContent = `${m}:${s}`;
+    if(time>0) time--; else clearInterval(timerInterval);
+  }
+  const timerInterval = setInterval(updateTimer,1000);
+  updateTimer();
 
-    // === Timer ===
-    let time = 600;
-    const timerEl = document.getElementById("timer");
-    function updateTimer(){
-      const m = String(Math.floor(time/60)).padStart(2,"0");
-      const s = String(time%60).padStart(2,"0");
-      timerEl.textContent = `${m}:${s}`;
-      if(time>0) time--; else clearInterval(timerInterval);
+  const ideas = [];
+  const top5 = new Set();
+
+  const ideaTitleEl = document.getElementById("ideaTitle");
+  const ideaDescEl = document.getElementById("ideaDesc");
+  const addIdeaBtn = document.getElementById("addIdea");
+
+  addIdeaBtn.onclick = ()=>{
+    const title = ideaTitleEl.value.trim();
+    const desc  = ideaDescEl.value.trim();
+    if(!title || !desc){ alert("Please enter both title and description."); return; }
+    const id = ideas.length + 1;
+    ideas.push({ id, title, desc });
+    ideaTitleEl.value = ""; ideaDescEl.value = "";
+    renderIdeas();
+  };
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  function renderIdeas(){
+    const ul = document.getElementById("ideasList");
+    ul.innerHTML = "";
+    ideas.forEach(idea=>{
+      const li = document.createElement("li");
+      li.style.cssText = "margin:8px 0;padding:10px;border:1px solid #ddd;border-radius:6px;background:#f9fafb;";
+      li.innerHTML = `
+        <strong>${escapeHtml(idea.title)}</strong><br>${escapeHtml(idea.desc)}
+        <div style="margin-top:8px;"><label style="cursor:pointer;"><input type="checkbox" onchange="toggleTop5(${idea.id})" ${top5.has(idea.id)?"checked":""}> Mark Top-5</label></div>`;
+      ul.appendChild(li);
+    });
+    renderTop5();
+  }
+
+  window.toggleTop5 = (id)=>{
+    if(top5.has(id)) top5.delete(id);
+    else{
+      if(top5.size>=5){ alert("You can only pick 5 ideas."); return; }
+      top5.add(id);
     }
-    const timerInterval = setInterval(updateTimer,1000);
-    updateTimer();
+    renderTop5();
+  };
 
-    // === Idea management ===
-    const ideas = [];
-    const top5 = new Set();
+  function renderTop5(){
+    const list = document.getElementById("top5List");
+    const editList = document.getElementById("finalEditList");
+    list.innerHTML = ""; editList.innerHTML = "";
+    [...top5].forEach(id=>{
+      const idea = ideas.find(i=>i.id===id);
+      if(!idea) return;
+      const li1 = document.createElement("li");
+      li1.style.cssText = "margin:8px 0;padding:10px;border:1px solid #ddd;border-radius:6px;background:#f9fafb;";
+      li1.innerHTML = `<strong>${escapeHtml(idea.title)}</strong><br>${escapeHtml(idea.desc)}`;
+      list.appendChild(li1);
+      const li2 = document.createElement("li");
+      li2.style.cssText = "margin:8px 0;padding:12px;border:1px solid #c7d2fe;border-radius:8px;background:#eef2ff;";
+      li2.innerHTML = `
+        <label style="font-weight:600;display:block;margin:4px 0;">Idea title</label>
+        <input type="text" data-final-title="${id}" value="${escapeHtml(idea.title)}" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
+        <label style="font-weight:600;display:block;margin:8px 0 4px;">Idea description</label>
+        <textarea data-final-desc="${id}" rows="3" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;resize:vertical;">${escapeHtml(idea.desc)}</textarea>`;
+      editList.appendChild(li2);
+    });
+  }
 
-    const ideaTitleEl = document.getElementById("ideaTitle");
-    const ideaDescEl = document.getElementById("ideaDesc");
-    const addIdeaBtn = document.getElementById("addIdea");
-
-    addIdeaBtn.onclick = ()=>{
-      const title = ideaTitleEl.value.trim();
-      const desc  = ideaDescEl.value.trim();
-      if(!title || !desc){ alert("Please enter both title and description."); return; }
-      const id = ideas.length + 1;
-      ideas.push({ id, title, desc });
-      ideaTitleEl.value = ""; ideaDescEl.value = "";
-      renderIdeas();
-    };
-
-    function renderIdeas(){
-      const ul = document.getElementById("ideasList");
-      ul.innerHTML = "";
-      ideas.forEach(idea=>{
-        const li = document.createElement("li");
-        li.innerHTML = `
-          <strong>${idea.title}</strong><br>${idea.desc}
-          <div><label><input type="checkbox" onchange="toggleTop5(${idea.id})" ${top5.has(idea.id)?"checked":""}> Mark Top-5</label></div>`;
-        ul.appendChild(li);
-      });
-      renderTop5();
+  document.getElementById("submitAll").onclick = ()=>{
+    if(MANDATORY_MODE && top5.size !== 5){
+      alert("Please select exactly 5 ideas.");
+      return;
     }
 
-    window.toggleTop5 = (id)=>{
-      if(top5.has(id)) top5.delete(id);
-      else{
-        if(top5.size>=5){ alert("You can only pick 5 ideas."); return; }
-        top5.add(id);
-      }
-      renderTop5();
-    };
+    const submissionTitle = document.getElementById("submissionTitle").value.trim();
+    const submissionDesc = document.getElementById("submissionDesc").value.trim();
+    
+    if(MANDATORY_MODE && (!submissionTitle || !submissionDesc)){
+      alert("Please complete the submission box.");
+      return;
+    }
 
-    function renderTop5(){
-      const list = document.getElementById("top5List");
-      const editList = document.getElementById("finalEditList");
-      list.innerHTML = ""; editList.innerHTML = "";
-      [...top5].forEach(id=>{
-        const idea = ideas.find(i=>i.id===id);
-        if(!idea) return;
-        const li1 = document.createElement("li");
-        li1.innerHTML = `<strong>${idea.title}</strong><br>${idea.desc}`;
-        list.appendChild(li1);
-        const li2 = document.createElement("li");
-        li2.innerHTML = `
-          <div class="final-box">
-            <label>Idea title</label>
-            <input type="text" data-final-title="${id}" value="${escapeHtml(idea.title)}">
-            <label>Idea description</label>
-            <textarea data-final-desc="${id}" rows="3">${escapeHtml(idea.desc)}</textarea>
-          </div>`;
-        editList.appendChild(li2);
-      });
+    const finalIdeas = [...top5].map(id=>{
+      const titleInput = document.querySelector(`input[data-final-title="${id}"]`);
+      const descInput = document.querySelector(`textarea[data-final-desc="${id}"]`);
+      return {
+        id,
+        title: titleInput ? titleInput.value : '',
+        desc: descInput ? descInput.value : ''
+      };
+    });
+
+    console.log("Phase 1 submission:", { submissionTitle, submissionDesc, finalIdeas });
+    
+    if(window.__APP__) window.__APP__.next();
+  };
+</script>
