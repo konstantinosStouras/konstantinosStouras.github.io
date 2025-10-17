@@ -377,8 +377,9 @@
       const payload = Object.fromEntries(data.entries());
       console.log('Registration payload:', payload);
 
-      alert('Registration submitted! (Connect this to your backend.)');
-      // window.location.href = '/instructions'; // next route
+      // Redirect straight to the next phase (individual instructions)
+	  window.location.href = './3-Instruction-Page-Individual.html';
+
     });
   </script>
 </body>

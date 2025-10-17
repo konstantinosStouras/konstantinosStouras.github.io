@@ -318,7 +318,7 @@
       const data = new FormData(form);
       const payload = Object.fromEntries(data.entries());
       console.log('Post-survey payload:', payload);
-      alert('Thanks! Your survey has been submitted. (Wire this to your backend.)');
+      window.location.href = './5-thankYou.html';
     });
   </script>
 </body>
