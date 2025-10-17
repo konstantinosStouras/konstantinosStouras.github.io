@@ -137,9 +137,25 @@
           Work as one team — great ideas grow through collaboration! <span class="emoji">🌿</span>
         </div>
 
-        <button class="btn" onclick="window.location.href='./Phase2-Group.html'">Start Group Ideation</button>
+        <button id="startGroup" class="btn">Start Group Ideation →</button>
       </section>
     </div>
   </main>
+
+  <script>
+    // === GLOBAL FLAG ===
+    const MANDATORY_MODE = true; // consistent flag with rest of app
+
+    const startBtn = document.getElementById("startGroup");
+    startBtn.addEventListener("click", () => {
+      // In SPA mode: advance internally (no URL change)
+      if (window.__APP__ && typeof window.__APP__.next === "function") {
+        window.__APP__.next();
+      } else {
+        // Fallback if standalone
+        window.location.href = "./Phase2-Group.html";
+      }
+    });
+  </script>
 </body>
 </html>

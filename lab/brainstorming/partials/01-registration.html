@@ -6,52 +6,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root{
-      --brand:#2563eb;
-      --brand-dark:#1e40af;
-      --bg:#f9fafb;
-      --ink:#111827;
-      --muted:#6b7280;
-      --card:#ffffff;
-      --border:#e5e7eb;
+      --brand:#2563eb; --brand-dark:#1e40af;
+      --bg:#f9fafb; --ink:#111827; --muted:#6b7280;
+      --card:#ffffff; --border:#e5e7eb;
       --shadow: 0 10px 25px rgba(0,0,0,.06), 0 2px 6px rgba(0,0,0,.04);
-      --radius:14px;
-      --danger:#dc2626;
+      --radius:14px; --danger:#dc2626;
     }
     *{box-sizing:border-box}
     body{
-      margin:0;
+      margin:0; background:var(--bg); color:var(--ink);
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
-      background: var(--bg);
-      color: var(--ink);
       line-height:1.5;
     }
     header{
       background: linear-gradient(135deg, var(--brand), var(--brand-dark));
-      color:#fff;
-      padding: 32px 20px;
-      text-align:center;
+      color:#fff; padding: 32px 20px; text-align:center;
     }
-    .container{
-      max-width: 960px;
-      margin: 0 auto;
-      padding: 0 12px;
-    }
-    .hero-title{ margin:0 0 6px; font-size: clamp(22px, 3vw, 30px); font-weight: 800; }
-    .hero-sub{ margin:0; font-size: clamp(14px, 2vw, 16px); opacity:.95 }
+    .container{ max-width: 960px; margin: 0 auto; padding: 0 12px; }
+    .hero-title{ margin:0 0 6px; font-size: clamp(22px,3vw,30px); font-weight:800; }
+    .hero-sub{ margin:0; font-size: clamp(14px,2vw,16px); opacity:.95 }
 
     main{ padding: 22px 20px 40px; }
     .card{
-      background: var(--card);
-      border:1px solid var(--border);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      padding: 22px;
+      background: var(--card); border:1px solid var(--border);
+      border-radius: var(--radius); box-shadow: var(--shadow); padding: 22px;
     }
     h2{
-      margin: 0 0 12px;
-      font-size: 18px;
-      border-bottom:1px solid var(--border);
-      padding-bottom:8px;
+      margin: 0 0 12px; font-size: 18px;
+      border-bottom:1px solid var(--border); padding-bottom:8px;
     }
     .section{ margin-top:18px; }
     .grid{ display:grid; gap:14px; grid-template-columns: 1fr 1fr; }
@@ -61,8 +43,7 @@
     label{ font-weight:600; display:block; margin-bottom:6px; }
     .hint{ color:var(--muted); font-size:13px; margin-top:4px; }
     input[type=text], input[type=email], select, textarea{
-      width:100%; padding:10px 12px; border:1px solid var(--border); border-radius:10px;
-      background:#fff; color:var(--ink);
+      width:100%; padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:#fff; color:var(--ink);
     }
     textarea{ resize: vertical; min-height: 90px; }
     .inline{ display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
@@ -70,15 +51,19 @@
       display:flex; gap:10px; align-items:center; flex-wrap:wrap;
       padding:10px; border:1px solid var(--border); border-radius:10px; background:#f8fafc;
     }
-    .radio{ display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:10px; background:#f3f4f6; border:1px solid var(--border); }
-    .danger{ color:var(--danger); font-size:13px; display:none; }
-    .consent{
-      display:flex; flex-direction:column; gap:10px; background:#f8fafc;
-      border:1px dashed var(--border); padding:12px; border-radius:12px;
+    .radio{
+      display:inline-flex; align-items:center; gap:8px;
+      padding:6px 10px; border-radius:10px; background:#f3f4f6; border:1px solid var(--border);
     }
+    .consent{
+      display:flex; flex-direction:column; gap:10px;
+      background:#f8fafc; border:1px dashed var(--border); padding:12px; border-radius:12px;
+    }
+    .danger{ color:var(--danger); font-size:13px; display:none; }
+    .hidden{ display:none !important; }
+
     .btn{
-      background: var(--brand);
-      color:#fff; border:0; border-radius:10px;
+      background: var(--brand); color:#fff; border:0; border-radius:10px;
       padding:12px 18px; cursor:pointer; font-weight:700;
       box-shadow: 0 4px 10px rgba(37, 99, 235, .25);
       transition: transform .05s ease, filter .15s ease;
@@ -87,7 +72,6 @@
     .btn:active{ transform: translateY(1px); }
     .btn:disabled{ background:#9ca3af; box-shadow:none; cursor:not-allowed; }
     .foot{ font-size:12px; color:#6b7280; margin-top:8px; }
-    .hidden{ display:none !important; }
   </style>
 </head>
 <body>
@@ -293,7 +277,7 @@
 
         <!-- ACTIONS -->
         <section class="section">
-          <button id="submitBtn" class="btn" type="submit" disabled>Submit and Start Challenge</button>
+          <button id="submitBtn" class="btn" type="button" data-next>Submit and Start</button>
           <div class="foot">Required fields are marked with *.</div>
         </section>
       </form>
@@ -301,96 +285,88 @@
   </main>
 
   <script>
-  // If true → all fields must be completed before proceeding
-  // If false → user can skip all and still move to next page
-  const MANDATORY_MODE = false; // toggle to false for demo runs
+    // === GLOBAL FLAG ===
+    // true → strict validation; false → demo/skippable
+    const MANDATORY_MODE = true;
 
-  const form = document.getElementById('regForm');
-  const submitBtn = document.getElementById('submitBtn');
+    const form = document.getElementById('regForm');
+    const submitBtn = document.getElementById('submitBtn');
 
-  // Show “Other” fields conditionally
-  const occupation = document.getElementById('occupation');
-  const occupationOtherWrap = document.getElementById('occupationOtherWrap');
-  const study = document.getElementById('study');
-  const studyOtherWrap = document.getElementById('studyOtherWrap');
-  const q3specWrap = document.getElementById('q3specWrap');
+    // Show “Other” fields conditionally
+    const occupation = document.getElementById('occupation');
+    const occupationOtherWrap = document.getElementById('occupationOtherWrap');
+    const study = document.getElementById('study');
+    const studyOtherWrap = document.getElementById('studyOtherWrap');
+    const q3specWrap = document.getElementById('q3specWrap');
 
-  occupation.addEventListener('change', () => {
-    occupationOtherWrap.classList.toggle('hidden', occupation.value !== 'Other (please specify)');
-  });
-  study.addEventListener('change', () => {
-    studyOtherWrap.classList.toggle('hidden', study.value !== 'Other (please specify)');
-  });
-  document.querySelectorAll('input[name="q3"]').forEach(r=>{
-    r.addEventListener('change', () => {
-      q3specWrap.classList.toggle('hidden', r.value !== 'Yes');
+    occupation.addEventListener('change', () => {
+      occupationOtherWrap.classList.toggle('hidden', occupation.value !== 'Other (please specify)');
     });
-  });
+    study.addEventListener('change', () => {
+      studyOtherWrap.classList.toggle('hidden', study.value !== 'Other (please specify)');
+    });
+    document.querySelectorAll('input[name="q3"]').forEach(r=>{
+      r.addEventListener('change', () => {
+        q3specWrap.classList.toggle('hidden', r.value !== 'Yes');
+      });
+    });
 
-  // Enable submit only if both consent checks are ticked
-  const c1 = document.getElementById('c1');
-  const c2 = document.getElementById('c2');
-  const toggleSubmit = () => { submitBtn.disabled = !(c1.checked && c2.checked); };
-  c1.addEventListener('change', toggleSubmit);
-  c2.addEventListener('change', toggleSubmit);
+    // Consent gating in strict mode (otherwise button is enabled)
+    const c1 = document.getElementById('c1');
+    const c2 = document.getElementById('c2');
+    function toggleSubmit(){
+      if (!MANDATORY_MODE) { submitBtn.disabled = false; return; }
+      submitBtn.disabled = !(c1.checked && c2.checked);
+    }
+    c1.addEventListener('change', toggleSubmit);
+    c2.addEventListener('change', toggleSubmit);
+    toggleSubmit();
 
-  // Minimal validation feedback
-  function showError(id, show){
-    const el = document.querySelector(`[data-err="${id}"]`);
-    if (el) el.style.display = show ? 'block' : 'none';
-  }
-
-  form.addEventListener('submit', (e) => {
-    e.preventDefault();
-
-    // If in optional mode, skip validation and move on
-    if (!MANDATORY_MODE) {
-      window.location.href = './3-Instruction-Page-Individual.html';
-      return;
+    // Minimal validation helpers
+    function showError(id, show){
+      const el = document.querySelector(`[data-err="${id}"]`);
+      if (el) el.style.display = show ? 'block' : 'none';
     }
 
-    // Required text/selects
-    const requiredIds = ['fullName','email','age','nationality','country','occupation','fluency'];
-    let ok = true;
+    function validateStrict(){
+      let ok = true;
+      // Required text/selects
+      const requiredIds = ['fullName','email','age','nationality','country','occupation','fluency'];
+      requiredIds.forEach(id => {
+        const el = document.getElementById(id);
+        const valid = el && el.value && (el.type !== 'email' || /\S+@\S+\.\S+/.test(el.value));
+        showError(id, !valid);
+        if (!valid) ok = false;
+      });
+      // Required radios q1..q5
+      ['q1','q2','q3','q4','q5'].forEach(name=>{
+        const any = [...document.querySelectorAll(`input[name="${name}"]`)].some(r=>r.checked);
+        showError(name, !any);
+        if (!any) ok = false;
+      });
+      // Consent
+      if (!(c1.checked && c2.checked)) ok = false;
 
-    requiredIds.forEach(id => {
-      const el = document.getElementById(id);
-      const valid = el && el.value && (el.type !== 'email' || /\S+@\S+\.\S+/.test(el.value));
-      showError(id, !valid);
-      if (!valid) ok = false;
-    });
-
-    // Required radios
-    const radios = [
-      {name:'q1', id:'q1'},
-      {name:'q2', id:'q2'},
-      {name:'q3', id:'q3'},
-      {name:'q4', id:'q4'},
-      {name:'q5', id:'q5'},
-    ];
-    radios.forEach(({name,id})=>{
-      const any = [...document.querySelectorAll(`input[name="${name}"]`)].some(r=>r.checked);
-      showError(id, !any);
-      if (!any) ok = false;
-    });
-
-    // Consent
-    if (!(c1.checked && c2.checked)) ok = false;
-
-    if (!ok) {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
+      if (!ok) window.scrollTo({ top: 0, behavior: 'smooth' });
+      return ok;
     }
 
-    // Collect data (POST to backend later)
-    const data = new FormData(form);
-    const payload = Object.fromEntries(data.entries());
-    console.log('Registration payload:', payload);
+    // Handle Next (works in SPA and standalone)
+    submitBtn.addEventListener('click', () => {
+      if (MANDATORY_MODE && !validateStrict()) return;
 
-    // Redirect straight to the next phase (individual instructions)
-    window.location.href = './Instruction-Page-Individual.html';
-  });
-</script>
+      // Collect data (hook to your logger / Vercel here if desired)
+      const data = new FormData(form);
+      const payload = Object.fromEntries(data.entries());
+      console.log('Registration payload:', payload);
 
+      // SPA advance keeps URL; otherwise fallback to next page file
+      if (window.__APP__ && typeof window.__APP__.next === 'function') {
+        window.__APP__.next();
+      } else {
+        window.location.href = './Instruction-Page-Individual.html';
+      }
+    });
+  </script>
 </body>
 </html>

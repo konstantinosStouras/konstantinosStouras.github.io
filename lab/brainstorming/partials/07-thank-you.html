@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Thank You • Ideation Challenge</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root{
+      --brand:#2563eb;
+      --brand-dark:#1e40af;
+      --bg:#f9fafb;
+      --ink:#111827;
+      --muted:#6b7280;
+      --card:#ffffff;
+      --border:#e5e7eb;
+      --shadow:0 10px 25px rgba(0,0,0,.06),0 2px 6px rgba(0,0,0,.04);
+      --radius:14px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";
+      background:var(--bg);
+      color:var(--ink);
+      line-height:1.5;
+    }
+    header{
+      background:linear-gradient(135deg,var(--brand),var(--brand-dark));
+      color:#fff;
+      padding:40px 20px;
+      text-align:center;
+    }
+    .container{
+      max-width:800px;
+      margin:0 auto;
+      padding:0 12px;
+    }
+    .hero-title{
+      margin:0 0 6px;
+      font-size:clamp(26px,4vw,34px);
+      font-weight:800;
+    }
+    .hero-sub{
+      margin:0;
+      font-size:clamp(15px,2vw,18px);
+      opacity:.95;
+      color:#fff;
+    }
+    main{
+      padding:40px 20px 80px;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      flex-direction:column;
+      text-align:center;
+    }
+    .card{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:40px 30px;
+      max-width:700px;
+    }
+    h2{
+      font-size:22px;
+      margin-bottom:16px;
+      color:var(--brand-dark);
+    }
+    p{
+      font-size:16px;
+      color:var(--ink);
+      margin:10px 0;
+    }
+    .emoji{
+      font-size:48px;
+      margin-bottom:10px;
+    }
+    .btn{
+      margin-top:28px;
+      background:var(--brand);
+      color:#fff;
+      border:0;
+      border-radius:10px;
+      padding:12px 20px;
+      cursor:pointer;
+      font-weight:700;
+      box-shadow:0 4px 10px rgba(37,99,235,.25);
+      transition:transform .05s ease,filter .15s ease;
+    }
+    .btn:hover{filter:brightness(1.05);}
+    .btn:active{transform:translateY(1px);}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1 class="hero-title">Thank You!</h1>
+      <p class="hero-sub">Your participation makes a difference.</p>
+    </div>
+  </header>
+
+  <main>
+    <div class="card">
+      <div class="emoji">💡</div>
+      <h2>Thank you for your contribution!</h2>
+      <p>Your participation helps us better understand how people develop and evaluate new product ideas in the health and wellness market.</p>
+      <p>Innovation starts with insights like yours.</p>
+      <button id="homeBtn" class="btn">Return to Home</button>
+    </div>
+  </main>
+
+  <script>
+    // === SPA compatibility ===
+    const homeBtn = document.getElementById('homeBtn');
+    homeBtn.addEventListener('click', () => {
+      // If SPA shell exists → go to first step (index) internally
+      if (window.__APP__ && typeof window.__APP__.next === 'function') {
+        // In your app.js, calling next() at final step could reset or reload index
+        window.__APP__.next(); 
+      } else {
+        // Standalone fallback
+        window.location.href = './index.html';
+      }
+    });
+  </script>
+</body>
+</html>

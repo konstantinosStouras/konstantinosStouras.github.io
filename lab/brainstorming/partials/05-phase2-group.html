@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Group Ideation • Ideation Challenge</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root{
+      --brand:#2563eb; --brand-dark:#1e40af;
+      --bg:#f9fafb; --ink:#111827; --muted:#6b7280;
+      --card:#ffffff; --border:#e5e7eb;
+      --shadow:0 10px 25px rgba(0,0,0,.06),0 2px 6px rgba(0,0,0,.04);
+      --radius:14px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";
+      background:var(--bg);color:var(--ink);
+    }
+    header{
+      background:linear-gradient(135deg,var(--brand),var(--brand-dark));
+      color:#fff;padding:1rem;
+      display:flex;justify-content:space-between;align-items:center;
+    }
+    header h1{margin:0;font-size:1.25rem;}
+    #timer{
+      font-size:1.1rem;font-weight:600;
+      background:rgba(0,0,0,.15);
+      padding:.4rem .8rem;border-radius:8px;
+    }
+    main{
+      padding:1rem;max-width:960px;margin:auto;
+      display:flex;flex-direction:column;gap:1rem;
+    }
+    section{
+      background:#fff;border:1px solid var(--border);
+      border-radius:var(--radius);padding:1rem;
+      box-shadow:var(--shadow);
+    }
+    h2{
+      margin-top:0;font-size:1rem;
+      border-bottom:1px solid var(--border);
+      padding-bottom:0.25rem;margin-bottom:0.5rem;
+    }
+    input[type=text],textarea{
+      width:100%;padding:.5rem;margin:.25rem 0;
+      border:1px solid #ccc;border-radius:8px;resize:vertical;
+    }
+    ul{list-style:none;padding:0;margin:0;}
+    li{margin:.4rem 0;padding:.5rem;border:1px solid #ddd;
+       border-radius:6px;background:#f9fafb;}
+    .pill{
+      background:#dbeafe;color:#1e40af;
+      font-size:.75rem;padding:2px 8px;
+      border-radius:6px;margin-left:4px;
+    }
+    .final-box{
+      background:#eef2ff;border:1px solid #c7d2fe;
+      border-radius:8px;padding:.5rem;margin-top:.5rem;
+    }
+    button{
+      background:var(--brand);color:#fff;
+      border:none;padding:.6rem 1.1rem;
+      border-radius:8px;cursor:pointer;font-weight:600;
+      box-shadow:0 4px 10px rgba(37,99,235,.25);
+      transition:transform .05s ease,filter .15s ease;
+    }
+    button:hover{filter:brightness(1.05);}
+    button:active{transform:translateY(1px);}
+    button:disabled{background:#9ca3af;cursor:not-allowed;}
+    .actions{margin-top:1rem;text-align:right;}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Phase: Group Ideation (20 min)</h1>
+    <div id="timer">20:00</div>
+  </header>
+
+  <main>
+    <section>
+      <h2>Leader</h2>
+      <p>The designated group leader for this session is: <strong id="leaderName">—</strong></p>
+    </section>
+
+    <section>
+      <h2>Add Group Ideas</h2>
+      <input id="groupIdeaTitle" type="text" placeholder="Idea title" />
+      <textarea id="groupIdeaDesc" placeholder="Idea description"></textarea>
+      <input id="groupIdeaSource" type="text" placeholder="Source (e.g., Member name or 'New')" />
+      <button id="addGroupIdea">Add Idea</button>
+    </section>
+
+    <section>
+      <h2>All Group Ideas</h2>
+      <ul id="groupIdeasList"></ul>
+    </section>
+
+    <section>
+      <h2>Top-5 Final Ideas</h2>
+      <ul id="groupTop5List"></ul>
+      <div class="actions">
+        <button id="submitGroupTop5" disabled>Submit Final Top-5 →</button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // === GLOBAL FLAG ===
+    const MANDATORY_MODE = true; // set false for demo
+
+    // === Timer (20 min) ===
+    let time = 1200;
+    const timerEl = document.getElementById("timer");
+    function updateTimer(){
+      const m = String(Math.floor(time/60)).padStart(2,'0');
+      const s = String(time%60).padStart(2,'0');
+      timerEl.textContent=`${m}:${s}`;
+      if(time>0) time--;
+      else{ clearInterval(timerInterval); alert("Time's up! Please finalize your ideas."); }
+    }
+    const timerInterval = setInterval(updateTimer,1000);
+    updateTimer();
+
+    // === Leader (placeholder) ===
+    const leaderNameEl = document.getElementById('leaderName');
+    leaderNameEl.textContent = "Alice"; // example, can be loaded dynamically
+
+    // === Idea management ===
+    const groupIdeas = [];
+    const groupTop5 = new Set();
+
+    const addBtn = document.getElementById("addGroupIdea");
+    const submitBtn = document.getElementById("submitGroupTop5");
+
+    addBtn.onclick = ()=>{
+      const title=document.getElementById("groupIdeaTitle").value.trim();
+      const desc=document.getElementById("groupIdeaDesc").value.trim();
+      const src=document.getElementById("groupIdeaSource").value.trim()||"New";
+      if(!title||!desc){ alert("Please enter both title and description."); return; }
+      const id=groupIdeas.length+1;
+      groupIdeas.push({id,title,desc,src});
+      renderIdeas();
+      document.getElementById("groupIdeaTitle").value="";
+      document.getElementById("groupIdeaDesc").value="";
+      document.getElementById("groupIdeaSource").value="";
+    };
+
+    function renderIdeas(){
+      const ul=document.getElementById("groupIdeasList");
+      ul.innerHTML="";
+      groupIdeas.forEach(i=>{
+        const li=document.createElement("li");
+        li.innerHTML=`
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+            <div><strong>${i.title}</strong> <span class="pill">${i.src}</span><br>${i.desc}</div>
+            <label><input type="checkbox" onchange="toggleTop5(${i.id})" ${groupTop5.has(i.id)?"checked":""}> Final Top-5</label>
+          </div>`;
+        ul.appendChild(li);
+      });
+      renderTop5();
+    }
+
+    window.toggleTop5 = (id)=>{
+      if(groupTop5.has(id)) groupTop5.delete(id);
+      else{
+        if(groupTop5.size>=5){ alert("You can only select 5 ideas."); return; }
+        groupTop5.add(id);
+      }
+      renderTop5();
+      submitBtn.disabled = groupTop5.size!==5;
+    };
+
+    function renderTop5(){
+      const ul=document.getElementById("groupTop5List");
+      ul.innerHTML="";
+      [...groupTop5].forEach(id=>{
+        const idea=groupIdeas.find(i=>i.id===id);
+        if(idea){
+          const li=document.createElement("li");
+          li.innerHTML=`
+            <strong>${idea.title}</strong> <span class="pill">${idea.src}</span><br>${idea.desc}
+            <div class="final-box">
+              <label><strong>Final Idea Title:</strong></label>
+              <input type="text" value="${idea.title}">
+              <label><strong>Short Final Description:</strong></label>
+              <textarea placeholder="Write the short final description..."></textarea>
+            </div>`;
+          ul.appendChild(li);
+        }
+      });
+    }
+
+    // === Submission ===
+    submitBtn.onclick = () => {
+      if (MANDATORY_MODE && groupTop5.size !== 5) {
+        alert("Please select exactly 5 ideas.");
+        return;
+      }
+
+      const results = [...document.querySelectorAll('#groupTop5List li')].map(li => ({
+        title: li.querySelector('input').value.trim(),
+        desc:  li.querySelector('textarea').value.trim()
+      }));
+      console.log("Submitted Final Top-5:", results);
+
+      // === Navigation ===
+      if (window.__APP__ && typeof window.__APP__.next === 'function') {
+        window.__APP__.next();   // internal SPA step (no URL change)
+      } else {
+        window.location.href = './Post-Survey.html'; // fallback for standalone
+      }
+    };
+  </script>
+</body>
+</html>

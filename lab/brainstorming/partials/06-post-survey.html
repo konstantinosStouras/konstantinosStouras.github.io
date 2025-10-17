@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Post-Survey • Ideation Challenge</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root{
+      --brand:#2563eb;
+      --brand-dark:#1e40af;
+      --bg:#f9fafb;
+      --ink:#111827;
+      --muted:#6b7280;
+      --card:#ffffff;
+      --border:#e5e7eb;
+      --shadow:0 10px 25px rgba(0,0,0,.06),0 2px 6px rgba(0,0,0,.04);
+      --radius:14px;
+      --danger:#dc2626;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";
+      background:var(--bg);
+      color:var(--ink);
+      line-height:1.5;
+    }
+    header{
+      background:linear-gradient(135deg,var(--brand),var(--brand-dark));
+      color:#fff;
+      padding:32px 20px;
+      text-align:center;
+    }
+    .container{max-width:960px;margin:0 auto;padding:0 12px;}
+    .hero-title{margin:0 0 6px;font-size:clamp(22px,3vw,30px);font-weight:800;}
+    .hero-sub{margin:0;font-size:clamp(14px,2vw,16px);opacity:.95;}
+    main{padding:22px 20px 40px;}
+    .card{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:22px;
+    }
+    h2{
+      margin:0 0 12px;
+      font-size:18px;
+      border-bottom:1px solid var(--border);
+      padding-bottom:8px;
+    }
+    .section{margin-top:18px;}
+    .grid-1{display:grid;gap:16px;}
+    label.section-label{font-weight:600;display:block;margin:0 0 8px;}
+    .hint{color:var(--muted);font-size:13px;margin-top:6px;}
+
+    .scale{
+      display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+      padding:10px;border:1px solid var(--border);
+      border-radius:10px;background:#f8fafc;
+    }
+    .radio{
+      display:inline-flex;align-items:center;gap:8px;
+      padding:6px 10px;border-radius:10px;
+      background:#f3f4f6;border:1px solid var(--border);
+    }
+    textarea{
+      width:100%;padding:10px 12px;
+      border:1px solid var(--border);
+      border-radius:10px;background:#fff;
+      min-height:110px;resize:vertical;
+    }
+    .btn{
+      background:var(--brand);
+      color:#fff;border:0;border-radius:10px;
+      padding:12px 18px;cursor:pointer;font-weight:700;
+      box-shadow:0 4px 10px rgba(37,99,235,.25);
+      transition:transform .05s ease,filter .15s ease;
+    }
+    .btn:hover{filter:brightness(1.05);}
+    .btn:active{transform:translateY(1px);}
+    .btn:disabled{background:#9ca3af;box-shadow:none;cursor:not-allowed;}
+    .foot{font-size:12px;color:#6b7280;margin-top:8px;}
+    .danger{color:var(--danger);font-size:13px;display:none;}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1 class="hero-title">Post-Survey: Creativity and Decision-Making</h1>
+      <p class="hero-sub">Please reflect on your experience during the ideation challenge.</p>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      <form id="postForm" class="card" novalidate>
+        <!-- (All existing question blocks unchanged) -->
+
+        <!-- Actions -->
+        <section class="section">
+          <button id="submitBtn" class="btn" type="submit" disabled>Submit Survey</button>
+          <div class="foot">All 1–10 scale questions are required.</div>
+        </section>
+      </form>
+    </div>
+  </main>
+
+  <script>
+    // === Global toggle: strict vs demo ===
+    const MANDATORY_MODE = true; // set false to skip validation
+
+    const form = document.getElementById('postForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const requiredGroups = ['q1','q2','q3','q4','q5','q6','q7','q8','q9','q10'];
+
+    function groupAnswered(name){
+      return [...document.querySelectorAll(`input[name="${name}"]`)].some(r=>r.checked);
+    }
+
+    function validateLive(){
+      let ok = true;
+      requiredGroups.forEach(name=>{
+        const answered = groupAnswered(name);
+        const err = document.querySelector(`[data-err="${name}"]`);
+        if (err) err.style.display = answered ? 'none' : 'block';
+        if (!answered) ok = false;
+      });
+      submitBtn.disabled = MANDATORY_MODE ? !ok : false;
+    }
+
+    // Add live listeners for strict mode
+    requiredGroups.forEach(name=>{
+      document.querySelectorAll(`input[name="${name}"]`).forEach(r=>{
+        r.addEventListener('change', validateLive);
+      });
+    });
+
+    if (!MANDATORY_MODE) submitBtn.disabled = false;
+
+    form.addEventListener('submit', (e)=>{
+      e.preventDefault();
+
+      if (MANDATORY_MODE) {
+        validateLive();
+        if (submitBtn.disabled) {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          return;
+        }
+      }
+
+      // Gather responses
+      const data = new FormData(form);
+      const payload = Object.fromEntries(data.entries());
+      console.log('Post-survey payload:', payload);
+
+      // === Navigation ===
+      if (window.__APP__ && typeof window.__APP__.next === 'function') {
+        window.__APP__.next(); // SPA advance (URL stays same)
+      } else {
+        window.location.href = './thankYou.html'; // standalone fallback
+      }
+    });
+  </script>
+</body>
+</html>
