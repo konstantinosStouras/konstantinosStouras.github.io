@@ -1,110 +1,30 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Welcome • Ideation Challenge</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    :root{
-      --brand:#2563eb;
-      --brand-dark:#1e40af;
-      --bg:#f9fafb;
-      --ink:#111827;
-      --muted:#6b7280;
-      --card:#ffffff;
-      --border:#e5e7eb;
-      --shadow:0 10px 25px rgba(0,0,0,.06),0 2px 6px rgba(0,0,0,.04);
-      --radius:14px;
-    }
-    *{box-sizing:border-box}
-    body{
-      margin:0;
-      font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";
-      background:var(--bg);
-      color:var(--ink);
-      line-height:1.5;
-    }
-    header{
-      background:linear-gradient(135deg,var(--brand),var(--brand-dark));
-      color:#fff;
-      padding:48px 20px;
-      text-align:center;
-    }
-    .container{max-width:960px;margin:0 auto;padding:0 12px;}
-    .hero-title{margin:0 0 6px;font-size:clamp(26px,4vw,34px);font-weight:800;}
-    .hero-sub{margin:0;font-size:clamp(15px,2vw,18px);opacity:.95;}
-    main{
-      padding:40px 20px 80px;
-      display:flex;justify-content:center;align-items:center;
-      flex-direction:column;text-align:center;
-    }
-    .card{
-      background:var(--card);
-      border:1px solid var(--border);
-      border-radius:var(--radius);
-      box-shadow:var(--shadow);
-      padding:40px 30px;
-      max-width:700px;
-    }
-    h2{font-size:22px;margin-bottom:12px;color:var(--brand-dark);}
-    p{font-size:16px;color:var(--ink);margin:10px 0;}
-    ul{list-style:disc;text-align:left;margin:16px auto;padding-left:28px;max-width:600px;}
-    .btn{
-      margin-top:28px;
-      background:var(--brand);
-      color:#fff;
-      border:0;border-radius:10px;
-      padding:12px 20px;
-      cursor:pointer;font-weight:700;
-      box-shadow:0 4px 10px rgba(37,99,235,.25);
-      transition:transform .05s ease,filter .15s ease;
-    }
-    .btn:hover{filter:brightness(1.05);}
-    .btn:active{transform:translateY(1px);}
-    .foot{font-size:13px;color:var(--muted);margin-top:20px;}
-  </style>
-</head>
-<body>
-  <header>
-    <div class="container">
-      <h1 class="hero-title">Welcome to the Ideation Challenge</h1>
-      <p class="hero-sub">An interactive study on creativity and decision-making</p>
-    </div>
-  </header>
+<section class="card">
+  <h2>Welcome 👋</h2>
+  <p>You are about to take part in an ideation challenge focused on generating and evaluating new product concepts in the health and wellness market.</p>
+  <div class="phases">
+    <div class="phase"><div class="pill">1</div><div><h3>Individual Ideation</h3><p>Work independently to develop potential product ideas.</p></div></div>
+    <div class="phase"><div class="pill">2</div><div><h3>Group Collaboration</h3><p>Share, discuss, and refine ideas together.</p></div></div>
+    <div class="phase"><div class="pill">3</div><div><h3>Final Selection</h3><p>Agree on the five best concepts.</p></div></div>
+  </div>
+  <div class="consent" style="margin-top:12px;background:#f8fafc;border:1px dashed var(--border);padding:12px;border-radius:12px;">
+    <input type="checkbox" id="agree" />
+    <label for="agree"><strong>I agree to participate</strong></label>
+  </div>
+  <div class="actions" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
+    <button id="continue" class="btn" type="button" disabled>Continue →</button>
+    <span class="foot">You must agree to participate before continuing.</span>
+  </div>
+</section>
 
-  <main>
-    <div class="card">
-      <h2>About the Experiment</h2>
-      <p>
-        Thank you for taking part in this study on <strong>idea generation and evaluation</strong>
-        within the health and wellness domain. The task is designed to explore how individuals and groups
-        create and select innovative product ideas.
-      </p>
-
-      <ul>
-        <li><strong>Duration:</strong> Approximately 20–30 minutes in total.</li>
-        <li><strong>Structure:</strong> You will go through individual ideation, group ideation, and a brief post-survey.</li>
-        <li><strong>Anonymity:</strong> All responses are confidential and analyzed in aggregate form.</li>
-        <li><strong>Requirements:</strong> Please complete the study in one sitting and avoid refreshing the page mid-session.</li>
-      </ul>
-
-      <p>
-        By proceeding, you confirm that you are at least 18 years old and consent to participate in this research.
-      </p>
-
-      <button id="startBtn" class="btn">Start the Challenge →</button>
-      <div class="foot">You can exit the study at any time by closing your browser window.</div>
-    </div>
-  </main>
-
-  <script>
-    const MANDATORY_MODE = true; // for consistency
-
-    const startBtn = document.getElementById('startBtn');
-    startBtn.addEventListener('click', ()=>{
-      // SPA mode: go internally to registration
-      if (window.__APP__ && typeof window.__APP__.next === 'function') {
-        window.__APP__.next();
-      } else {
-        // Standalone fallback
-        window.location.href =
+<script>
+  const agree = document.getElementById('agree');
+  const btn = document.getElementById('continue');
+  btn.disabled = !agree.checked;
+  agree.addEventListener('change', () => { btn.disabled = !agree.checked; });
+  btn.addEventListener('click', () => {
+    if (!agree.checked) return;
+    if (window.__APP__ && typeof window.__APP__.next === 'function') {
+      window.__APP__.next(); // always SPA-advance
+    }
+  });
+</script>
