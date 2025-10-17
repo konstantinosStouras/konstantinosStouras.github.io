@@ -271,15 +271,23 @@
       });
     }
 
-    submitBtn.onclick=()=>{
-      if(groupTop5.size!==5)return alert("Please select exactly 5 ideas.");
-      const results=[...document.querySelectorAll('#groupTop5List li')].map(li=>({
-        title:li.querySelector('input').value.trim(),
-        desc:li.querySelector('textarea').value.trim()
+    const MANDATORY_MODE = true; // if false, will allow submit without checks
+
+  submitBtn.onclick = () => {
+    if (MANDATORY_MODE) {
+      if (groupTop5.size !== 5) {
+        alert("Please select exactly 5 ideas.");
+        return;
+      }
+      const results = [...document.querySelectorAll('#groupTop5List li')].map(li => ({
+        title: li.querySelector('input').value.trim(),
+        desc:  li.querySelector('textarea').value.trim()
       }));
-      console.log("Submitted Final Top-5:",results);
-      alert("Final Top-5 submitted! (Connect to backend)");
-    };
-  </script>
+      console.log("Submitted Final Top-5:", results);
+    }
+    // → Next page
+    window.location.href = './Post-Survey.html';
+  };
+</script>
 </body>
 </html>
