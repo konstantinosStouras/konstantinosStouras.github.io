@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Ideation Experiment</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0; padding: 0;
+      background: #f9fafb;
+      color: #111;
+    }
+    header {
+      background: #2563eb;
+      color: white;
+      padding: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header h1 { margin: 0; font-size: 1.25rem; }
+    #timer {
+      font-size: 1.2rem;
+      font-weight: bold;
+      background: #1e40af;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+    }
+    main {
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      max-width: 900px;
+      margin: auto;
+    }
+    section {
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 1rem;
+    }
+    section h2 {
+      margin-top: 0;
+      font-size: 1rem;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 0.25rem;
+      margin-bottom: 0.5rem;
+    }
+    textarea, input[type=text] {
+      width: 100%;
+      padding: 0.5rem;
+      margin-bottom: 0.5rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      resize: vertical;
+    }
+    button {
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:disabled { background: #9ca3af; cursor: not-allowed; }
+    ul { list-style: none; padding: 0; }
+    li {
+      margin: 0.25rem 0;
+      padding: 0.5rem;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: #f9fafb;
+    }
+    .final-box{
+      background:#eef2ff;
+      border:1px solid #c7d2fe;
+      border-radius:8px;
+      padding:.5rem;
+      margin-top:.5rem;
+    }
+    .final-box label{ font-weight:600; display:block; margin:.25rem 0; }
+    .hint{ color:#6b7280; font-size:.9rem; margin:.25rem 0 .5rem; }
+    .submit-box{
+      background:#f8fafc;
+      border:1px solid #e5e7eb;
+      border-radius:10px;
+      padding:12px;
+    }
+    .submit-box h3{ margin:.25rem 0 .5rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1 id="instructions">Phase: Individual Ideation (10 min)</h1>
+    <div id="timer">10:00</div>
+  </header>
+
+  <main>
+    <section>
+      <h2>Instruction</h2>
+      <p id="instructionText">
+        Brainstorm ideas below. Select your Top 5, then fill the submission box at the bottom with an overall Idea title and Description.
+      </p>
+    </section>
+
+    <section class="ideas-box">
+      <h2>Your Ideas</h2>
+      <input type="text" id="ideaTitle" placeholder="Idea title">
+      <textarea id="ideaDesc" placeholder="Idea description"></textarea>
+      <button id="addIdea">Add Idea</button>
+      <ul id="ideasList"></ul>
+
+      <h3>Select Top 5</h3>
+      <ul id="top5List"></ul>
+
+      <h3>Selected Top 5 — edit before finalizing</h3>
+      <p class="hint">You can revise each selected idea’s <strong>title</strong> and <strong>description</strong> below.</p>
+      <ul id="finalEditList"></ul>
+    </section>
+
+    <section class="submit-box">
+      <h3>Submission Box</h3>
+      <p class="hint">Provide a final overarching title and description for your Top 5 selection.</p>
+      <input type="text" id="submissionTitle" placeholder="Final submission: Idea title">
+      <textarea id="submissionDesc" rows="3" placeholder="Final submission: Idea description"></textarea>
+      <button id="submitAll">Submit</button>
+    </section>
+
+    <section class="notes-box">
+      <h2>Personal Notes</h2>
+      <textarea id="notes" rows="5" placeholder="Write notes here (private)"></textarea>
+    </section>
+  </main>
+
+  <script>
+    let time = 600;
+    const timerEl = document.getElementById("timer");
+    function updateTimer() {
+      const minutes = String(Math.floor(time / 60)).padStart(2, '0');
+      const seconds = String(time % 60).padStart(2, '0');
+      timerEl.textContent = `${minutes}:${seconds}`;
+      if (time > 0) time--;
+      else clearInterval(timerInterval);
+    }
+    const timerInterval = setInterval(updateTimer, 1000);
+    updateTimer();
+
+    const ideas = [];
+    document.getElementById("addIdea").onclick = () => {
+      const title = document.getElementById("ideaTitle").value.trim();
+      const desc = document.getElementById("ideaDesc").value.trim();
+      if (!title || !desc) return alert("Please enter title and description.");
+      const id = ideas.length + 1;
+      ideas.push({ id, title, desc });
+      renderIdeas();
+      document.getElementById("ideaTitle").value = "";
+      document.getElementById("ideaDesc").value = "";
+    };
+
+    function renderIdeas() {
+      const ul = document.getElementById("ideasList");
+      ul.innerHTML = "";
+      ideas.forEach(idea => {
+        const li = document.createElement("li");
+        li.innerHTML = `
+          <strong>${idea.title}</strong><br>${idea.desc}
+          <div><label><input type="checkbox" onchange="toggleTop5(${idea.id})" ${top5.has(idea.id) ? "checked": ""}> Mark Top-5</label></div>`;
+        ul.appendChild(li);
+      });
+      renderTop5();
+    }
+
+    const top5 = new Set();
+
+    window.toggleTop5 = (id) => {
+      if (top5.has(id)) top5.delete(id);
+      else {
+        if (top5.size >= 5) { alert("You can only pick 5 ideas"); return; }
+        top5.add(id);
+      }
+      renderTop5();
+    };
+
+    function renderTop5() {
+      const chosenUl = document.getElementById("top5List");
+      chosenUl.innerHTML = "";
+      const editUl = document.getElementById("finalEditList");
+      editUl.innerHTML = "";
+
+      [...top5].forEach(id => {
+        const idea = ideas.find(i => i.id === id);
+        if (!idea) return;
+        const li1 = document.createElement("li");
+        li1.innerHTML = `<strong>${idea.title}</strong><br>${idea.desc}`;
+        chosenUl.appendChild(li1);
+
+        const li2 = document.createElement("li");
+        li2.innerHTML = `
+          <div class="final-box">
+            <label>Idea title</label>
+            <input type="text" data-final-title="${idea.id}" value="${escapeHtml(idea.title)}">
+            <label>Idea description</label>
+            <textarea data-final-desc="${idea.id}" rows="3">${escapeHtml(idea.desc)}</textarea>
+          </div>`;
+        editUl.appendChild(li2);
+      });
+    }
+
+    function escapeHtml(str){
+      return str.replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+    }
+
+    document.getElementById("submitAll").onclick = () => {
+      if (top5.size !== 5) {
+        alert("Please select exactly 5 ideas before submitting.");
+        return;
+      }
+
+      const submissionTitle = document.getElementById("submissionTitle").value.trim();
+      const submissionDesc  = document.getElementById("submissionDesc").value.trim();
+      if (!submissionTitle || !submissionDesc) {
+        alert("Please enter both the final submission title and description.");
+        return;
+      }
+
+      const finalIdeas = [...top5].map(id => {
+        const titleEl = document.querySelector(`[data-final-title="${id}"]`);
+        const descEl  = document.querySelector(`[data-final-desc="${id}"]`);
+        return {
+          id,
+          finalTitle: titleEl ? titleEl.value.trim() : "",
+          finalDescription: descEl ? descEl.value.trim() : ""
+        };
+      });
+
+      const payload = {
+        submissionTitle,
+        submissionDesc,
+        top5: finalIdeas
+      };
+
+      console.log("FINAL SUBMISSION PAYLOAD:", payload);
+      alert("Submitted! (Connect this to your backend.)");
+    };
+  </script>
+</body>
+</html>

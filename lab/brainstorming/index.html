@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Welcome • Ideation Challenge</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root{
+      --brand:#2563eb;
+      --brand-dark:#1e40af;
+      --bg:#f9fafb;
+      --ink:#111827;
+      --muted:#6b7280;
+      --card:#ffffff;
+      --border:#e5e7eb;
+      --shadow: 0 10px 25px rgba(0,0,0,.06), 0 2px 6px rgba(0,0,0,.04);
+      --radius:14px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      background: var(--bg);
+      color: var(--ink);
+      line-height:1.5;
+    }
+    header{
+      background: linear-gradient(135deg, var(--brand), var(--brand-dark));
+      color:#fff;
+      padding: 32px 20px;
+      text-align: center;
+    }
+    .container{
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0 12px;
+    }
+    .hero-badge{
+      display:inline-flex; align-items:center; gap:8px;
+      background: rgba(255,255,255,.1);
+      border:1px solid rgba(255,255,255,.25);
+      padding:8px 12px; border-radius:999px; font-size:13px;
+    }
+    .hero-icon{
+      width:36px; height:36px; border-radius:10px;
+      background: rgba(255,255,255,.18);
+      display:grid; place-items:center; font-weight:900;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.25);
+    }
+    .hero-title{ margin:12px 0 6px; font-size: clamp(22px, 3vw, 30px); font-weight: 800; letter-spacing:.2px;}
+    .hero-sub{ margin:0; font-size: clamp(14px, 2vw, 16px); color: white; font-weight: 500;}
+    .card{
+      background: var(--card);
+      border:1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 22px;
+      margin-top: 1.5rem;
+    }
+    h2{
+      margin: 0 0 10px;
+      font-size: 18px;
+      border-bottom:1px solid var(--border);
+      padding-bottom:8px;
+    }
+    p{ margin: 10px 0; color: var(--ink); }
+    .muted{ color: var(--muted); }
+    .phases{
+      display:grid; gap:12px;
+      margin: 12px 0 6px;
+    }
+    .phase{
+      display:flex; gap:12px; align-items:flex-start;
+      background:#f3f4f6;
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:12px;
+    }
+    .pill{
+      min-width:30px; height:30px; border-radius:9px;
+      background:#e5edff; color: var(--brand-dark);
+      display:grid; place-items:center; font-weight:700; font-size:13px;
+      border:1px solid #dbeafe;
+    }
+    .phase h3{ margin:0; font-size:15px }
+    .phase p{ margin:4px 0 0; font-size:14px; color:#374151 }
+    .consent{
+      display:flex; align-items:flex-start; gap:10px; margin-top:12px;
+      background:#f8fafc; border:1px dashed var(--border); padding:12px; border-radius:12px;
+    }
+    .consent input{ margin-top:2px; transform: scale(1.15); }
+    .actions{
+      display:flex; gap:10px; flex-wrap:wrap; margin-top:14px;
+    }
+    .btn{
+      background: var(--brand);
+      color:#fff; border:0; border-radius:10px;
+      padding:10px 16px; cursor:pointer; font-weight:700;
+      box-shadow: 0 4px 10px rgba(37, 99, 235, .25);
+      transition: transform .05s ease, filter .15s ease;
+    }
+    .btn:hover{ filter: brightness(1.05); }
+    .btn:active{ transform: translateY(1px); }
+    .btn:disabled{ background:#9ca3af; box-shadow:none; cursor:not-allowed; }
+    .foot{ font-size:12px; color:#6b7280; margin-top:8px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <div class="hero-badge">
+        <span class="hero-icon">💡</span>
+        Ideation Challenge App
+      </div>
+      <h1 class="hero-title">Welcome to the Ideation Challenge!</h1>
+      <p class="hero-sub">Generate, evaluate, and select promising health & wellness product concepts.</p>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      <section class="card">
+        <h2>Welcome 👋</h2>
+        <p>You are about to take part in an ideation challenge focused on generating and evaluating new product concepts in the health and wellness market.</p>
+        <p>The goal of this study is to understand how people generate ideas, make evaluations, and reach decisions when developing new products that could succeed in existing or emerging markets. We are interested in the different ways individuals and groups think, communicate, and decide which ideas are most promising from a consumer and market perspective.</p>
+        <div class="phases">
+          <div class="phase"><div class="pill">1</div><div><h3>Individual Ideation</h3><p>Work independently to develop potential product ideas.</p></div></div>
+          <div class="phase"><div class="pill">2</div><div><h3>Group Collaboration</h3><p>Join a small group to share, discuss, and refine ideas together.</p></div></div>
+          <div class="phase"><div class="pill">3</div><div><h3>Final Selection</h3><p>As a group, review all ideas and agree on the five best concepts.</p></div></div>
+        </div>
+        <p>Please follow the instructions carefully and complete each phase within the given time. Your participation will help us gain valuable insights into how people approach creative thinking, judgment, and decision-making in consumer contexts.</p>
+        <p class="muted">Thank you for taking part — your input will contribute to advancing our understanding of innovation and consumer behavior.</p>
+
+        <div class="consent">
+          <input type="checkbox" id="agree" />
+          <label for="agree"><strong>I agree to participate</strong></label>
+        </div>
+        <div class="actions">
+          <button id="continue" class="btn" disabled>Continue</button>
+          <span class="foot">You must agree to participate before continuing.</span>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const agree = document.getElementById('agree');
+    const btn = document.getElementById('continue');
+    agree.addEventListener('change', () => { btn.disabled = !agree.checked; });
+    btn.addEventListener('click', () => {
+      alert('Thank you for agreeing. Proceeding to the next step…');
+    });
+  </script>
+</body>
+</html>
