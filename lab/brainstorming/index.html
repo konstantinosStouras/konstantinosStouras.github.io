@@ -143,13 +143,20 @@
     </div>
   </main>
 
-  <script>
-    const agree = document.getElementById('agree');
-    const btn = document.getElementById('continue');
-    agree.addEventListener('change', () => { btn.disabled = !agree.checked; });
-    btn.addEventListener('click', () => {
-      alert('Thank you for agreeing. Proceeding to the next step…');
-    });
-  </script>
+<script>
+  const agree = document.getElementById('agree');
+  const btn = document.getElementById('continue');
+
+  agree.addEventListener('change', () => {
+    btn.disabled = !agree.checked;
+  });
+
+  btn.addEventListener('click', () => {
+    if (!agree.checked) return;
+    // Directly go to registration page, no alert popup
+    window.location.href = './2-registration.html';
+  });
+</script>
+
 </body>
 </html>
