@@ -55,9 +55,9 @@ async function loadPartialInto(el, partialPath){
 
 // Validation registry per step (reuse your existing code inside)
 const validators = {
-  // Registration is now OPTIONAL - always returns true
+  // CRITICAL FIX: Registration is now OPTIONAL - always returns true
   registration: () => {
-    console.log('Registration validator - skipping validation (all fields optional)');
+    console.log('✓ Registration validator - ALL FIELDS OPTIONAL, skipping validation');
     return true;
   },
 
@@ -111,14 +111,14 @@ function next() {
   const stepKey = STEPS[state.stepIndex].key;
   const validate = validators[stepKey] || (() => true);
   
-  console.log(`Attempting to navigate from step: ${stepKey}`);
+  console.log(`📍 Attempting to navigate from step: ${stepKey}`);
   
   if (!validate()) {
-    console.log('Validation failed');
+    console.log('❌ Validation failed');
     return;
   }
 
-  console.log('Validation passed, moving to next step');
+  console.log('✅ Validation passed, moving to next step');
 
   // Example: collect payload here if needed per step
   // state.data[stepKey] = collectPayloadFor(stepKey);
@@ -153,10 +153,11 @@ function exposeAppAPI(){
     setParticipantId: (id) => state.participantId = id,
     setData: (key, value) => { 
       state.data[key] = value; 
-      console.log(`Data stored for ${key}:`, value);
+      console.log(`💾 Data stored for ${key}:`, value);
     },
     isMandatory: () => MANDATORY_MODE
   };
+  console.log('✓ window.__APP__ exposed and ready');
 }
 
 // Boot
