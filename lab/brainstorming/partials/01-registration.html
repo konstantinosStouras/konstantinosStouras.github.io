@@ -468,14 +468,14 @@
     </div>
 
     <div class="submit-area">
-      <button id="submitBtn" class="submit-btn" type="button">Submit and Start</button>
+      <button id="submitBtn" class="submit-btn" type="button" data-next>Submit and Start</button>
       <span class="required-note" id="requiredNote">* Required fields</span>
     </div>
   </form>
 </section>
 
 <script>
-  // Get MANDATORY_MODE from global app or fallback to false
+  // Get MANDATORY_MODE from global app
   const MANDATORY_MODE = (typeof window.__APP__ !== 'undefined' && typeof window.__APP__.isMandatory === 'function') 
     ? window.__APP__.isMandatory() 
     : false;
@@ -495,12 +495,14 @@
     if (requiredNote) requiredNote.style.display = 'none';
   }
 
+  // Show/hide Q3 specification field
   document.querySelectorAll('input[name="q3"]').forEach(r=>{
     r.addEventListener('change', () => {
       q3specWrap.classList.toggle('hidden', r.value !== 'Yes');
     });
   });
 
+  // Enable/disable submit button based on consent checkboxes (only in mandatory mode)
   function toggleSubmit(){
     if (!MANDATORY_MODE) { 
       submitBtn.disabled = false; 
@@ -512,58 +514,4 @@
   c1.addEventListener('change', toggleSubmit);
   c2.addEventListener('change', toggleSubmit);
   toggleSubmit();
-
-  function showError(id, show){
-    const el = document.querySelector(`[data-err="${id}"]`);
-    if (el) el.style.display = show ? 'flex' : 'none';
-  }
-
-  submitBtn.addEventListener('click', () => {
-    console.log('Submit button clicked, MANDATORY_MODE:', MANDATORY_MODE);
-    
-    // If MANDATORY_MODE is false, all fields are optional - skip validation
-    if (!MANDATORY_MODE) {
-      const data = new FormData(form);
-      const payload = Object.fromEntries(data.entries());
-      console.log('Registration payload (optional mode):', payload);
-      
-      // Proceed to next step
-      if (window.__APP__) {
-        console.log('Calling next()...');
-        window.__APP__.next();
-      } else {
-        console.error('window.__APP__ not available');
-      }
-      return;
-    }
-
-    // MANDATORY_MODE is true - perform full validation
-    let ok = true;
-    const requiredIds = ['fullName','email','age','country','education'];
-    requiredIds.forEach(id => {
-      const el = document.getElementById(id);
-      const valid = el && el.value && (el.type !== 'email' || /\S+@\S+\.\S+/.test(el.value));
-      showError(id, !valid);
-      if (!valid) ok = false;
-    });
-
-    ['q1','q2','q3','q4','q5'].forEach(name=>{
-      const any = [...document.querySelectorAll(`input[name="${name}"]`)].some(r=>r.checked);
-      showError(name, !any);
-      if (!any) ok = false;
-    });
-
-    if (!(c1.checked && c2.checked)) ok = false;
-
-    if (!ok) {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
-    }
-
-    const data = new FormData(form);
-    const payload = Object.fromEntries(data.entries());
-    console.log('Registration payload (mandatory mode):', payload);
-
-    if (window.__APP__) window.__APP__.next();
-  });
 </script>
