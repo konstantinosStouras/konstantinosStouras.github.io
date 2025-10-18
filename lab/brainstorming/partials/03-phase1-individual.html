@@ -20,7 +20,7 @@
   <h2 style="margin-top:20px;">Select Top 5</h2>
   <ul id="top5List" style="list-style:none;padding:0;"></ul>
 
-  <h2 style="margin-top:20px;">Selected Top 5 — edit before finalizing</h2>
+  <h2 style="margin-top:20px;">Selected Top 5 – edit before finalizing</h2>
   <p class="hint">You can revise each selected idea's <strong>title</strong> and <strong>description</strong> below.</p>
   <ul id="finalEditList" style="list-style:none;padding:0;"></ul>
 </section>
@@ -39,7 +39,7 @@
 </section>
 
 <script>
-  const MANDATORY_MODE = false;
+  const MANDATORY_MODE = true;
   
   let time = 600;
   const timerEl = document.getElementById("timer");
@@ -55,30 +55,26 @@
   const ideas = [];
   const top5 = new Set();
 
-  const ideaTitleEl = document.getElementById("ideaTitle");
-  const ideaDescEl = document.getElementById("ideaDesc");
-  const addIdeaBtn = document.getElementById("addIdea");
+  function escapeHtml(str){
+    if (!str) return '';
+    return str.replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+  }
 
-  addIdeaBtn.onclick = ()=>{
-    const title = ideaTitleEl.value.trim();
-    const desc  = ideaDescEl.value.trim();
-    if(!title || !desc){ alert("Please enter both title and description."); return; }
+  document.getElementById("addIdea").onclick = () => {
+    const title = document.getElementById("ideaTitle").value.trim();
+    const desc = document.getElementById("ideaDesc").value.trim();
+    if (!title || !desc) return alert("Please enter both title and description.");
     const id = ideas.length + 1;
     ideas.push({ id, title, desc });
-    ideaTitleEl.value = ""; ideaDescEl.value = "";
     renderIdeas();
+    document.getElementById("ideaTitle").value = "";
+    document.getElementById("ideaDesc").value = "";
   };
-
-  function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
 
   function renderIdeas(){
     const ul = document.getElementById("ideasList");
     ul.innerHTML = "";
-    ideas.forEach(idea=>{
+    ideas.forEach(idea => {
       const li = document.createElement("li");
       li.style.cssText = "margin:8px 0;padding:10px;border:1px solid #ddd;border-radius:6px;background:#f9fafb;";
       li.innerHTML = `
@@ -99,30 +95,36 @@
   };
 
   function renderTop5(){
-    const list = document.getElementById("top5List");
-    const editList = document.getElementById("finalEditList");
-    list.innerHTML = ""; editList.innerHTML = "";
-    [...top5].forEach(id=>{
-      const idea = ideas.find(i=>i.id===id);
-      if(!idea) return;
+    const chosenUl = document.getElementById("top5List");
+    chosenUl.innerHTML = "";
+    const editUl = document.getElementById("finalEditList");
+    editUl.innerHTML = "";
+
+    [...top5].forEach(id => {
+      const idea = ideas.find(i => i.id === id);
+      if (!idea) return;
+      
       const li1 = document.createElement("li");
       li1.style.cssText = "margin:8px 0;padding:10px;border:1px solid #ddd;border-radius:6px;background:#f9fafb;";
       li1.innerHTML = `<strong>${escapeHtml(idea.title)}</strong><br>${escapeHtml(idea.desc)}`;
-      list.appendChild(li1);
+      chosenUl.appendChild(li1);
+
       const li2 = document.createElement("li");
-      li2.style.cssText = "margin:8px 0;padding:12px;border:1px solid #c7d2fe;border-radius:8px;background:#eef2ff;";
+      li2.style.cssText = "margin:8px 0;";
       li2.innerHTML = `
-        <label style="font-weight:600;display:block;margin:4px 0;">Idea title</label>
-        <input type="text" data-final-title="${id}" value="${escapeHtml(idea.title)}" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
-        <label style="font-weight:600;display:block;margin:8px 0 4px;">Idea description</label>
-        <textarea data-final-desc="${id}" rows="3" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;resize:vertical;">${escapeHtml(idea.desc)}</textarea>`;
-      editList.appendChild(li2);
+        <div class="final-box" style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:12px;">
+          <label style="font-weight:600;display:block;margin:4px 0;">Idea title</label>
+          <input type="text" data-final-title="${id}" value="${escapeHtml(idea.title)}" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
+          <label style="font-weight:600;display:block;margin:8px 0 4px;">Idea description</label>
+          <textarea data-final-desc="${id}" rows="3" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;resize:vertical;">${escapeHtml(idea.desc)}</textarea>
+        </div>`;
+      editUl.appendChild(li2);
     });
   }
 
-  document.getElementById("submitAll").onclick = ()=>{
+  document.getElementById("submitAll").onclick = () => {
     if(MANDATORY_MODE && top5.size !== 5){
-      alert("Please select exactly 5 ideas.");
+      alert("Please select exactly 5 ideas before submitting.");
       return;
     }
 
@@ -130,21 +132,37 @@
     const submissionDesc = document.getElementById("submissionDesc").value.trim();
     
     if(MANDATORY_MODE && (!submissionTitle || !submissionDesc)){
-      alert("Please complete the submission box.");
+      alert("Please enter both the final submission title and description.");
       return;
     }
 
-    const finalIdeas = [...top5].map(id=>{
-      const titleInput = document.querySelector(`input[data-final-title="${id}"]`);
-      const descInput = document.querySelector(`textarea[data-final-desc="${id}"]`);
+    // Collect finalized ideas
+    const finalIdeas = [...top5].map(id => {
+      const titleEl = document.querySelector(`[data-final-title="${id}"]`);
+      const descEl = document.querySelector(`[data-final-desc="${id}"]`);
       return {
         id,
-        title: titleInput ? titleInput.value : '',
-        desc: descInput ? descInput.value : ''
+        finalTitle: titleEl ? titleEl.value.trim() : '',
+        finalDescription: descEl ? descEl.value.trim() : ''
       };
     });
 
-    console.log("Phase 1 submission:", { submissionTitle, submissionDesc, finalIdeas });
+    // Validate that all top 5 have finalized content
+    if(MANDATORY_MODE){
+      const incomplete = finalIdeas.some(idea => !idea.finalTitle || !idea.finalDescription);
+      if(incomplete){
+        alert("Please ensure all Top 5 ideas have both title and description filled in the edit section.");
+        return;
+      }
+    }
+
+    const payload = {
+      submissionTitle,
+      submissionDesc,
+      top5: finalIdeas
+    };
+
+    console.log("Phase 1 submission:", payload);
     
     if(window.__APP__) window.__APP__.next();
   };
