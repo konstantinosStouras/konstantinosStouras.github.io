@@ -1,183 +1,654 @@
-<section class="card" id="registrationCard">
-  <div class="reg-header">
-    <div class="reg-icon">📋</div>
-    <h1 class="reg-title">Registration</h1>
-    <p class="reg-subtitle">Please provide some basic information about yourself.</p>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Registration - All Fields Optional</title>
+  <style>
+    :root {
+      --brand: #2563eb;
+      --brand-dark: #1d4ed8;
+      --ink: #1f2937;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+    }
+    
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f3f4f6;
+      min-height: 100vh;
+      margin: 0;
+      padding: 0;
+    }
+    
+    .page-header {
+      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+      color: white;
+      padding: 40px 20px;
+      text-align: center;
+    }
+    
+    .page-header h1 {
+      font-size: 32px;
+      font-weight: 800;
+      margin: 0 0 12px;
+    }
+    
+    .page-header p {
+      font-size: 16px;
+      margin: 0 0 16px;
+      opacity: 0.95;
+    }
+    
+    .page-header .step-indicator {
+      font-size: 14px;
+      opacity: 0.9;
+      font-weight: 600;
+    }
+    
+    .card {
+      max-width: 800px;
+      margin: 40px auto;
+      background: white;
+      border-radius: 16px;
+      padding: 40px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+    }
+    
+    .hidden {
+      display: none !important;
+    }
+    
+    input[type="text"],
+    input[type="email"],
+    select,
+    textarea {
+      width: 100%;
+      padding: 10px 14px;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      font-size: 15px;
+      font-family: inherit;
+    }
+    
+    textarea {
+      min-height: 80px;
+      resize: vertical;
+    }
+    
+    .reg-header {
+      text-align: center;
+      margin-bottom: 32px;
+      padding-bottom: 24px;
+      border-bottom: 2px solid var(--border);
+    }
+    
+    .reg-icon {
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 16px;
+      background: linear-gradient(135deg, #e0e7ff 0%, #dbeafe 100%);
+      border-radius: 16px;
+      display: grid;
+      place-items: center;
+      font-size: 32px;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
+    }
+    
+    .reg-title {
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--ink);
+      margin: 0 0 8px;
+    }
+    
+    .reg-subtitle {
+      color: var(--muted);
+      font-size: 15px;
+    }
+    
+    .form-section {
+      margin-bottom: 32px;
+    }
+    
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid var(--border);
+    }
+    
+    .section-icon {
+      width: 32px;
+      height: 32px;
+      background: var(--brand);
+      color: white;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+    
+    .section-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--ink);
+      margin: 0;
+    }
+    
+    .field-group {
+      margin-bottom: 20px;
+    }
+    
+    .field-group label {
+      display: block;
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 8px;
+      color: var(--ink);
+    }
+    
+    .field-group input,
+    .field-group select,
+    .field-group textarea {
+      transition: all 0.2s ease;
+      font-size: 15px;
+    }
+    
+    .field-group input:focus,
+    .field-group select:focus,
+    .field-group textarea:focus {
+      outline: none;
+      border-color: var(--brand);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+    
+    .scale-group {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      padding: 16px;
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      background: linear-gradient(to bottom, #ffffff, #f9fafb);
+    }
+    
+    .scale-option {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .scale-option input[type="radio"] {
+      appearance: none;
+      width: 40px;
+      height: 40px;
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: grid;
+      place-items: center;
+      background: white;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    
+    .scale-option input[type="radio"]:checked {
+      background: var(--brand);
+      border-color: var(--brand);
+      color: white;
+      transform: scale(1.05);
+    }
+    
+    .scale-option input[type="radio"]:hover:not(:checked) {
+      border-color: var(--brand);
+      background: #f0f5ff;
+    }
+    
+    .scale-option input[type="radio"]::after {
+      content: attr(value);
+    }
+    
+    .scale-label {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+    
+    .radio-group {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    
+    .radio-option {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-radius: 10px;
+      background: #f8fafc;
+      border: 2px solid var(--border);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-size: 14px;
+    }
+    
+    .radio-option:has(input:checked) {
+      background: #e0e7ff;
+      border-color: var(--brand);
+      font-weight: 600;
+    }
+    
+    .radio-option input[type="radio"] {
+      width: 18px;
+      height: 18px;
+      margin: 0;
+    }
+    
+    .hint-text {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .hint-text::before {
+      content: "💡";
+      font-size: 14px;
+    }
+    
+    .error-message {
+      color: #dc2626;
+      font-size: 13px;
+      margin-top: 6px;
+      display: none;
+      align-items: center;
+      gap: 6px;
+      font-weight: 500;
+    }
+    
+    .error-message::before {
+      content: "⚠️";
+    }
+    
+    .consent-box {
+      background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+      border: 2px solid #bae6fd;
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 24px;
+    }
+    
+    .consent-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    
+    .consent-item:last-child {
+      margin-bottom: 0;
+    }
+    
+    .consent-item input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      margin-top: 2px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    
+    .consent-item label {
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    
+    .submit-area {
+      margin-top: 32px;
+      padding-top: 24px;
+      border-top: 2px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .submit-btn {
+      background: linear-gradient(135deg, var(--brand), var(--brand-dark));
+      color: white;
+      border: none;
+      border-radius: 12px;
+      padding: 14px 32px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3);
+      transition: all 0.2s ease;
+      min-width: 200px;
+    }
+    
+    .submit-btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+    }
+    
+    .submit-btn:disabled {
+      background: #d1d5db;
+      box-shadow: none;
+      cursor: not-allowed;
+    }
+    
+    .required-note {
+      color: var(--muted);
+      font-size: 13px;
+    }
+    
+    /* Hide asterisks when not mandatory */
+    .optional-mode .required-asterisk {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="page-header">
+    <h1>Ideation Challenge</h1>
+    <p>Generate, evaluate, and select promising health & wellness product concepts.</p>
+    <div class="step-indicator">Step 1 of 8 - Registration</div>
   </div>
-
-  <form id="regForm" novalidate>
-    <!-- Personal Information -->
-    <div class="form-section">
-      <div class="section-header">
-        <div class="section-icon">👤</div>
-        <h2 class="section-title">Personal Information</h2>
-      </div>
-
-      <div class="grid">
-        <div class="field-group">
-          <label for="fullName">Full Name <span class="required-asterisk">*</span></label>
-          <input id="fullName" name="fullName" type="text" placeholder="Enter your full name" />
-          <div class="danger" data-err="fullName">Full name is required.</div>
-        </div>
-
-        <div class="field-group">
-          <label for="email">Email Address <span class="required-asterisk">*</span></label>
-          <input id="email" name="email" type="email" placeholder="you@example.com" />
-          <div class="danger" data-err="email">Valid email is required.</div>
-        </div>
-
-        <div class="field-group">
-          <label for="age">Age <span class="required-asterisk">*</span></label>
-          <select id="age" name="age">
-            <option value="">Select your age range</option>
-            <option>18–24</option>
-            <option>25–34</option>
-            <option>35–44</option>
-            <option>45–54</option>
-            <option>55+</option>
-          </select>
-          <div class="danger" data-err="age">Please select your age range.</div>
-        </div>
-
-        <div class="field-group">
-          <label for="gender">Gender (optional)</label>
-          <select id="gender" name="gender">
-            <option>Prefer not to say</option>
-            <option>Female</option>
-            <option>Male</option>
-            <option>Non-binary</option>
-            <option>Other</option>
-          </select>
-        </div>
-
-        <div class="field-group">
-          <label for="country">Country of Residence <span class="required-asterisk">*</span></label>
-          <input id="country" name="country" type="text" placeholder="Enter your country" />
-          <div class="danger" data-err="country">Please enter your country of residence.</div>
-        </div>
-
-        <div class="field-group">
-          <label for="education">Education Level <span class="required-asterisk">*</span></label>
-          <select id="education" name="education">
-            <option value="">Please select...</option>
-            <option>High School</option>
-            <option>Some College</option>
-            <option>Bachelor's Degree</option>
-            <option>Master's Degree</option>
-            <option>PhD/Doctoral</option>
-            <option>Other</option>
-          </select>
-          <div class="danger" data-err="education">Please select your education level.</div>
-        </div>
-      </div>
+  
+  <section class="card">
+    <div class="reg-header">
+      <div class="reg-icon">📋</div>
+      <h1 class="reg-title">Registration</h1>
+      <p class="reg-subtitle">Please provide some basic information about yourself.</p>
     </div>
 
-    <!-- Screening Questions -->
-    <div class="form-section">
-      <div class="section-header">
-        <div class="section-icon">❓</div>
-        <h2 class="section-title">Screening Questions (Sleep and Wellness Focus)</h2>
-      </div>
-
-      <div class="field-group">
-        <label>1) How important is sleep or wellness in your daily life?</label>
-        <div class="scale-group scale">
-          <label class="radio"><input type="radio" name="q1" value="1"><span>1</span></label>
-          <label class="radio"><input type="radio" name="q1" value="2"><span>2</span></label>
-          <label class="radio"><input type="radio" name="q1" value="3"><span>3</span></label>
-          <label class="radio"><input type="radio" name="q1" value="4"><span>4</span></label>
-          <label class="radio"><input type="radio" name="q1" value="5"><span>5</span></label>
+    <form id="regForm" novalidate>
+      <!-- Personal Information Section -->
+      <div class="form-section">
+        <div class="section-header">
+          <div class="section-icon">👤</div>
+          <h2 class="section-title">Personal Information</h2>
         </div>
-        <div class="hint">1 = Not important at all → 5 = Extremely important</div>
-        <div class="danger" data-err="q1">Please select a value.</div>
-      </div>
 
-      <div class="field-group">
-        <label>2) How often do you engage in wellness-related activities?</label>
-        <p class="hint" style="margin: 4px 0 12px;">e.g., exercise, meditation, sleep tracking, healthy eating</p>
-        <div class="radio-group inline">
-          <label class="radio"><input type="radio" name="q2" value="Daily"><span>Daily</span></label>
-          <label class="radio"><input type="radio" name="q2" value="Several times a week"><span>Several times a week</span></label>
-          <label class="radio"><input type="radio" name="q2" value="Occasionally"><span>Occasionally</span></label>
-          <label class="radio"><input type="radio" name="q2" value="Rarely"><span>Rarely</span></label>
-          <label class="radio"><input type="radio" name="q2" value="Never"><span>Never</span></label>
-        </div>
-        <div class="danger" data-err="q2">Please choose one option.</div>
-      </div>
+        <div class="grid">
+          <div class="field-group">
+            <label for="fullName">Full Name <span class="required-asterisk">*</span></label>
+            <input id="fullName" name="fullName" type="text" placeholder="Enter your full name" />
+            <div class="error-message" data-err="fullName">Full name is required.</div>
+          </div>
 
-      <div class="field-group">
-        <label>3) Have you purchased or used any products related to sleep or wellness in the past six months?</label>
-        <div class="radio-group inline">
-          <label class="radio"><input type="radio" name="q3" value="Yes"><span>Yes</span></label>
-          <label class="radio"><input type="radio" name="q3" value="No"><span>No</span></label>
-        </div>
-        <div id="q3specWrap" class="hidden" style="margin-top:14px;">
-          <label for="q3spec">If yes, please specify briefly</label>
-          <textarea id="q3spec" name="q3spec" placeholder="e.g., sleep tracker, meditation app, weighted blanket" style="margin-top: 8px;"></textarea>
-        </div>
-        <div class="danger" data-err="q3">Please choose Yes or No.</div>
-      </div>
+          <div class="field-group">
+            <label for="email">Email Address <span class="required-asterisk">*</span></label>
+            <input id="email" name="email" type="email" placeholder="you@example.com" />
+            <div class="error-message" data-err="email">Valid email is required.</div>
+          </div>
 
-      <div class="field-group">
-        <label>4) Would you consider yourself interested in trying new products or technologies that promote better sleep or wellness?</label>
-        <div class="scale-group scale">
-          <label class="radio"><input type="radio" name="q4" value="1"><span>1</span></label>
-          <label class="radio"><input type="radio" name="q4" value="2"><span>2</span></label>
-          <label class="radio"><input type="radio" name="q4" value="3"><span>3</span></label>
-          <label class="radio"><input type="radio" name="q4" value="4"><span>4</span></label>
-          <label class="radio"><input type="radio" name="q4" value="5"><span>5</span></label>
-        </div>
-        <div class="hint">1 = Not interested → 5 = Very interested</div>
-        <div class="danger" data-err="q4">Please select a value.</div>
-      </div>
+          <div class="field-group">
+            <label for="age">Age <span class="required-asterisk">*</span></label>
+            <select id="age" name="age">
+              <option value="">Select your age range</option>
+              <option>18–24</option>
+              <option>25–34</option>
+              <option>35–44</option>
+              <option>45–54</option>
+              <option>55+</option>
+            </select>
+            <div class="error-message" data-err="age">Please select your age range.</div>
+          </div>
 
-      <div class="field-group">
-        <label>5) Do you have any prior experience with innovation, marketing, or product development activities?</label>
-        <div class="radio-group inline">
-          <label class="radio"><input type="radio" name="q5" value="Yes"><span>Yes</span></label>
-          <label class="radio"><input type="radio" name="q5" value="No"><span>No</span></label>
-          <label class="radio"><input type="radio" name="q5" value="Unsure"><span>Unsure</span></label>
-        </div>
-        <div class="danger" data-err="q5">Please choose one option.</div>
-      </div>
-    </div>
+          <div class="field-group">
+            <label for="gender">Gender (optional)</label>
+            <select id="gender" name="gender">
+              <option>Prefer not to say</option>
+              <option>Female</option>
+              <option>Male</option>
+              <option>Non-binary</option>
+              <option>Other</option>
+            </select>
+          </div>
 
-    <!-- Consent -->
-    <div class="form-section">
-      <div class="section-header">
-        <div class="section-icon">✓</div>
-        <h2 class="section-title">Consent</h2>
-      </div>
+          <div class="field-group">
+            <label for="country">Country of Residence <span class="required-asterisk">*</span></label>
+            <input id="country" name="country" type="text" placeholder="Enter your country" />
+            <div class="error-message" data-err="country">Please enter your country of residence.</div>
+          </div>
 
-      <div class="consent-box tip">
-        <div class="consent-item">
-          <input type="checkbox" id="c1">
-          <label for="c1">I confirm that I am 18 years or older and consent to participate in this research study.</label>
-        </div>
-        <div class="consent-item">
-          <input type="checkbox" id="c2">
-          <label for="c2">I understand that my responses will be used anonymously for research purposes only.</label>
+          <div class="field-group">
+            <label for="education">Education Level <span class="required-asterisk">*</span></label>
+            <select id="education" name="education">
+              <option value="">Please select...</option>
+              <option>High School</option>
+              <option>Some College</option>
+              <option>Bachelor's Degree</option>
+              <option>Master's Degree</option>
+              <option>PhD/Doctoral</option>
+              <option>Other</option>
+            </select>
+            <div class="error-message" data-err="education">Please select your education level.</div>
+          </div>
         </div>
       </div>
-    </div>
 
-    <div class="submit-area" style="text-align:center">
-      <!-- The data-next attribute lets the SPA router advance -->
-      <button class="btn" data-next type="button" id="submitBtn">Submit and Start</button>
-      <span class="foot" id="requiredNote">* Required fields</span>
-    </div>
-  </form>
-</section>
+      <!-- Screening Questions Section -->
+      <div class="form-section">
+        <div class="section-header">
+          <div class="section-icon">❓</div>
+          <h2 class="section-title">Screening Questions (Sleep and Wellness Focus)</h2>
+        </div>
 
-<script>
-  // Toggle extra textbox for Q3
-  (function () {
-    const wrap = document.getElementById('q3specWrap');
-    if (!wrap) return;
+        <div class="field-group">
+          <label>1) How important is sleep or wellness in your daily life?</label>
+          <div class="scale-group">
+            <div class="scale-option">
+              <input type="radio" name="q1" value="1">
+            </div>
+            <div class="scale-option">
+              <input type="radio" name="q1" value="2">
+            </div>
+            <div class="scale-option">
+              <input type="radio" name="q1" value="3">
+            </div>
+            <div class="scale-option">
+              <input type="radio" name="q1" value="4">
+            </div>
+            <div class="scale-option">
+              <input type="radio" name="q1" value="5">
+            </div>
+          </div>
+          <div class="hint-text">1 = Not important at all → 5 = Extremely important</div>
+          <div class="error-message" data-err="q1">Please select a value.</div>
+        </div>
+
+        <div class="field-group">
+          <label>2) How often do you engage in wellness-related activities?</label>
+          <p style="font-size: 13px; color: var(--muted); margin: 4px 0 12px;">e.g., exercise, meditation, sleep tracking, healthy eating</p>
+          <div class="radio-group">
+            <label class="radio-option">
+              <input type="radio" name="q2" value="Daily">
+              <span>Daily</span>
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="q2" value="Several times a week">
+              <span>Several times a week</span>
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="q2" value="Occasionally">
+              <span>Occasionally</span>
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="q2" value="Rarely">
+              <span>Rarely</span>
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="q2" value="Never">
+              <span>Never</span>
+            </label>
+          </div>
+          <div class="error-message" data-err="q2">Please choose one option.</div>
+        </div>
+
+        <div class="field-group">
+          <label>3) Have you purchased or used any products related to sleep or wellness in the past six months?</label>
+          <div class="radio-group">
+            <label class="radio-option">
+              <input type="radio" name="q3" value="Yes">
+              <span>Yes</span>
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="q3" value="No">
+              <span>No</span>
+            </label>
+          </div>
+          <div id="q3specWrap" class="hidden" style="margin-top:14px;">
+            <label for="q3spec">If yes, please specify briefly</label>
+            <textarea id="q3spec" name="q3spec" placeholder="e.g., sleep tracker, meditation app, weighted blanket" style="margin-top: 8px;"></textarea>
+          </div>
+          <div class="error-message" data-err="q3">Please choose Yes or No.</div>
+        </div>
+
+        <div class="field-group">
+          <label>4) Would you consider yourself interested in trying new products or technologies that promote better sleep or wellness?</label>
+          <div class="scale-group">
+            <div class="scale-option">
+              <input type="radio" name="q4" value="1">
+            </div>
+            <div class="scale-option">
+              <input type="radio" name="q4" value="2">
+            </div>
+            <div class="scale-option">
+              <input type="radio" name="q4" value="3">
+            </div>
+            <div class="scale-option">
+              <input type="radio" name="q4" value="4">
+            </div>
+            <div class="scale-option">
+              <input type="radio" name="q4" value="5">
+            </div>
+          </div>
+          <div class="hint-text">1 = Not interested → 5 = Very interested</div>
+          <div class="error-message" data-err="q4">Please select a value.</div>
+        </div>
+
+        <div class="field-group">
+          <label>5) Do you have any prior experience with innovation, marketing, or product development activities?</label>
+          <div class="radio-group">
+            <label class="radio-option">
+              <input type="radio" name="q5" value="Yes">
+              <span>Yes</span>
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="q5" value="No">
+              <span>No</span>
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="q5" value="Unsure">
+              <span>Unsure</span>
+            </label>
+          </div>
+          <div class="error-message" data-err="q5">Please choose one option.</div>
+        </div>
+      </div>
+
+      <!-- Consent Section -->
+      <div class="form-section">
+        <div class="section-header">
+          <div class="section-icon">✓</div>
+          <h2 class="section-title">Consent</h2>
+        </div>
+        
+        <div class="consent-box">
+          <div class="consent-item">
+            <input type="checkbox" id="c1">
+            <label for="c1">I confirm that I am 18 years or older and consent to participate in this research study.</label>
+          </div>
+          <div class="consent-item">
+            <input type="checkbox" id="c2">
+            <label for="c2">I understand that my responses will be used anonymously for research purposes only.</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="submit-area">
+        <button id="submitBtn" class="submit-btn" type="button">Submit and Start</button>
+        <span class="required-note" id="requiredNote">* Required fields</span>
+      </div>
+    </form>
+  </section>
+
+  <script>
+    // All fields are optional - users can proceed without filling anything
+    const MANDATORY_MODE = false;
+    
+    console.log('Registration page - All fields optional');
+    
+    const form = document.getElementById('regForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const q3specWrap = document.getElementById('q3specWrap');
+    const requiredNote = document.getElementById('requiredNote');
+
+    // Hide asterisks and required note since all fields are optional
+    form.classList.add('optional-mode');
+    if (requiredNote) requiredNote.style.display = 'none';
+
+    // Show/hide Q3 specification field
     document.querySelectorAll('input[name="q3"]').forEach(r => {
       r.addEventListener('change', () => {
-        wrap.classList.toggle('hidden', r.value !== 'Yes');
+        q3specWrap.classList.toggle('hidden', r.value !== 'Yes');
       });
     });
-  })();
-</script>
+
+    // Submit button is always enabled - no validation required
+    submitBtn.disabled = false;
+
+    // Add explicit click handler to ensure navigation works
+    submitBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      console.log('Submit clicked - proceeding to next page');
+      
+      // Collect data before navigating
+      const data = new FormData(form);
+      const payload = Object.fromEntries(data.entries());
+      console.log('Registration data:', payload);
+      
+      // Try to navigate using the app's navigation system
+      if (window.__APP__ && typeof window.__APP__.next === 'function') {
+        console.log('Calling window.__APP__.next()');
+        window.__APP__.next();
+      } else if (window.parent && window.parent.__APP__ && typeof window.parent.__APP__.next === 'function') {
+        // Try parent window if in iframe
+        console.log('Calling window.parent.__APP__.next()');
+        window.parent.__APP__.next();
+      } else {
+        // Fallback: navigate to next page or show success
+        console.log('Navigation system not found - using fallback');
+        // You can replace this with actual navigation URL
+        alert('Registration complete! Navigation system will load the next page.');
+        // window.location.href = 'next-page.html'; // Uncomment and set your next page URL
+      }
+    });
+  </script>
+</body>
+</html>
