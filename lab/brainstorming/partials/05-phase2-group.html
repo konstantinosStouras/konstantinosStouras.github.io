@@ -31,7 +31,7 @@
 </section>
 
 <script>
-  const MANDATORY_MODE = false;
+  const MANDATORY_MODE = true;
   
   let time = 1200;
   const timerEl = document.getElementById("timer");
@@ -126,10 +126,24 @@
       return;
     }
 
-    const results = [...document.querySelectorAll('#groupTop5List li')].map(li => ({
-      title: li.querySelector('input[data-final-title]').value.trim(),
-      desc:  li.querySelector('textarea[data-final-desc]').value.trim()
-    }));
+    const results = [...document.querySelectorAll('#groupTop5List li')].map(li => {
+      const titleInput = li.querySelector('input[data-final-title]');
+      const descInput = li.querySelector('textarea[data-final-desc]');
+      return {
+        title: titleInput ? titleInput.value.trim() : '',
+        desc: descInput ? descInput.value.trim() : ''
+      };
+    });
+
+    // Validate all have content in mandatory mode
+    if(MANDATORY_MODE){
+      const incomplete = results.some(r => !r.title || !r.desc);
+      if(incomplete){
+        alert("Please complete all title and description fields for the Top 5 ideas.");
+        return;
+      }
+    }
+
     console.log("Submitted Final Top-5:", results);
 
     if (window.__APP__) window.__APP__.next();

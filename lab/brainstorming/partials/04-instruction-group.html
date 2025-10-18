@@ -1,37 +1,45 @@
 <section class="card">
-  <h2>Group Ideation Phase <span class="emoji">🤝</span></h2>
+  <h2>Individual Ideation Phase 💤</h2>
+  
   <p class="lead">
-    Welcome to the <strong>Group Phase</strong> of the challenge.
+    Welcome to the <strong>Individual Phase</strong> of the challenge.
   </p>
+  
   <p>
-    In this part, you'll work <strong>together with your group</strong> to share, discuss, and refine ideas for new products in the
-    <strong>health and wellness market</strong>. Each group member brings unique perspectives — use discussion and collaboration to strengthen your concepts.
+    In this part, you'll work <strong>completely on your own</strong> to generate ideas for new products in the
+    <strong>health and wellness market</strong>. Please <strong>do not communicate or collaborate</strong> with others during this phase.
   </p>
+  
   <p>
-    You can build upon ideas from your teammates, combine different suggestions, or develop entirely new ones as a team.
-    Focus on creating ideas that are clear, feasible, and innovative.
+    Focus on creating as many ideas as you can — big or small, practical or experimental. Each idea should aim to
+    offer value, improvement, or innovation in health and wellness.
   </p>
+  
   <p>
-    You'll have a limited amount of time to complete this phase, so communicate efficiently and make sure every voice is heard.
+    You'll have a limited amount of time to complete this phase, so work efficiently and record your ideas clearly.
+    When the timer ends, you'll move on to the next stage.
   </p>
 
-  <h2>Your task</h2>
+  <h2 style="margin-top:24px;">Your Task</h2>
   <ul class="list">
-    <li>Share and discuss individual ideas</li>
-    <li>Combine or improve them collaboratively</li>
-    <li>Record the best group-generated ideas</li>
+    <li>Think independently</li>
+    <li>Develop original product ideas</li>
+    <li>Describe each idea briefly and clearly</li>
   </ul>
 
   <div class="tip">
-    Work as one team — great ideas grow through collaboration! <span class="emoji">🌿</span>
+    Good luck — your creativity starts here! 🌿
   </div>
 
-  <button id="startGroup" class="btn" data-next>Start Group Ideation →</button>
+  <div style="text-align:center;margin-top:20px;">
+    <button id="startBtn" class="btn" data-next>Start Ideation →</button>
+  </div>
 </section>
 
 <script>
-  const startBtn = document.getElementById("startGroup");
-  startBtn.addEventListener("click", () => {
-    if (window.__APP__) window.__APP__.next();
-  });
+  // No additional validation needed for instruction page
+  const startBtn = document.getElementById('startBtn');
+  
+  // Button already has data-next attribute, so it's automatically wired
+  // by the app.js wireNavButtons() function
 </script>
