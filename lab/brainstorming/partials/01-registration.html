@@ -40,172 +40,119 @@
       </div>
 
       <div>
-        <label for="nationality">Nationality *</label>
-        <input id="nationality" name="nationality" type="text" required />
-        <div class="danger" data-err="nationality">Please enter your nationality.</div>
-      </div>
-
-      <div>
         <label for="country">Country of Residence *</label>
         <input id="country" name="country" type="text" required />
         <div class="danger" data-err="country">Please enter your country of residence.</div>
       </div>
 
       <div>
-        <label for="occupation">Occupation *</label>
-        <select id="occupation" name="occupation" required>
+        <label for="education">Education Level *</label>
+        <select id="education" name="education" required>
           <option value="">Select…</option>
-          <option>Student</option>
-          <option>Employed full-time</option>
-          <option>Employed part-time</option>
-          <option>Self-employed</option>
-          <option>Unemployed</option>
-          <option>Other (please specify)</option>
-        </select>
-        <div class="danger" data-err="occupation">Please select your occupation.</div>
-      </div>
-
-      <div id="occupationOtherWrap" class="hidden">
-        <label for="occupationOther">Occupation — Other (please specify)</label>
-        <input id="occupationOther" name="occupationOther" type="text" />
-      </div>
-
-      <div>
-        <label for="study">Level of Study (if applicable)</label>
-        <select id="study" name="study">
-          <option>Not currently studying</option>
-          <option>Undergraduate</option>
+          <option>High School</option>
+          <option>Bachelor's</option>
           <option>Master's</option>
-          <option>Doctoral (PhD)</option>
-          <option>Other (please specify)</option>
+          <option>PhD/Doctoral</option>
+          <option>Other</option>
         </select>
-      </div>
-
-      <div id="studyOtherWrap" class="hidden">
-        <label for="studyOther">Level of Study — Other (please specify)</label>
-        <input id="studyOther" name="studyOther" type="text" />
-      </div>
-
-      <div>
-        <label for="fluency">English Fluency *</label>
-        <select id="fluency" name="fluency" required>
-          <option value="">Select…</option>
-          <option>Native</option>
-          <option>Fluent</option>
-          <option>Intermediate</option>
-          <option>Basic</option>
-        </select>
-        <div class="danger" data-err="fluency">Please select your English fluency.</div>
+        <div class="danger" data-err="education">Please select your education level.</div>
       </div>
     </div>
 
-    <h2 style="margin-top:24px;">Screening Questions (Sleep and Wellness Focus)</h2>
+    <div class="section-header">
+      <span class="badge">5</span>
+      <h2 style="margin:0;border:none;padding:0;">Screening Questions (Sleep and Wellness Focus)</h2>
+    </div>
 
-    <div class="grid-1">
+    <div class="grid-1" style="margin-top:16px;">
       <div>
         <label>1) How important is sleep or wellness in your daily life?</label>
-        <div class="scale" role="group" aria-label="Importance scale">
-          <label class="radio"><input type="radio" name="q1" value="1" required> 1</label>
-          <label class="radio"><input type="radio" name="q1" value="2"> 2</label>
-          <label class="radio"><input type="radio" name="q1" value="3"> 3</label>
-          <label class="radio"><input type="radio" name="q1" value="4"> 4</label>
-          <label class="radio"><input type="radio" name="q1" value="5"> 5</label>
+        <div class="scale-buttons">
+          <label class="scale-btn"><input type="radio" name="q1" value="1" required><span>1</span></label>
+          <label class="scale-btn"><input type="radio" name="q1" value="2"><span>2</span></label>
+          <label class="scale-btn"><input type="radio" name="q1" value="3"><span>3</span></label>
+          <label class="scale-btn"><input type="radio" name="q1" value="4"><span>4</span></label>
+          <label class="scale-btn"><input type="radio" name="q1" value="5"><span>5</span></label>
         </div>
-        <div class="hint">1 = Not important at all → 5 = Extremely important</div>
+        <div class="hint">💡 1 = Not important at all → 5 = Extremely important</div>
         <div class="danger" data-err="q1">Please select a value.</div>
       </div>
 
       <div>
-        <label>2) How often do you engage in wellness-related activities (e.g., exercise, meditation, sleep tracking, healthy eating)?</label>
-        <div class="inline">
-          <label class="radio"><input type="radio" name="q2" value="Daily" required> Daily</label>
-          <label class="radio"><input type="radio" name="q2" value="Several times a week"> Several times a week</label>
-          <label class="radio"><input type="radio" name="q2" value="Occasionally"> Occasionally</label>
-          <label class="radio"><input type="radio" name="q2" value="Rarely"> Rarely</label>
-          <label class="radio"><input type="radio" name="q2" value="Never"> Never</label>
+        <label>2) How often do you engage in wellness-related activities?</label>
+        <div class="hint" style="margin-top:-4px;margin-bottom:8px;">e.g., exercise, meditation, sleep tracking, healthy eating</div>
+        <div class="radio-group">
+          <label class="radio-btn"><input type="radio" name="q2" value="Daily" required><span>Daily</span></label>
+          <label class="radio-btn"><input type="radio" name="q2" value="Several times a week"><span>Several times a week</span></label>
+          <label class="radio-btn"><input type="radio" name="q2" value="Occasionally"><span>Occasionally</span></label>
+          <label class="radio-btn"><input type="radio" name="q2" value="Rarely"><span>Rarely</span></label>
+          <label class="radio-btn"><input type="radio" name="q2" value="Never"><span>Never</span></label>
         </div>
         <div class="danger" data-err="q2">Please choose one option.</div>
       </div>
 
       <div>
         <label>3) Have you purchased or used any products related to sleep or wellness in the past six months?</label>
-        <div class="inline">
-          <label class="radio"><input type="radio" name="q3" value="Yes" required> Yes</label>
-          <label class="radio"><input type="radio" name="q3" value="No"> No</label>
-        </div>
-        <div id="q3specWrap" class="hidden" style="margin-top:10px;">
-          <label for="q3spec" style="font-weight:500;">If yes, please specify briefly</label>
-          <textarea id="q3spec" name="q3spec" placeholder="e.g., sleep tracker, meditation app, weighted blanket"></textarea>
+        <div class="radio-group">
+          <label class="radio-btn"><input type="radio" name="q3" value="Yes" required><span>Yes</span></label>
+          <label class="radio-btn"><input type="radio" name="q3" value="No"><span>No</span></label>
         </div>
         <div class="danger" data-err="q3">Please choose Yes or No.</div>
       </div>
 
       <div>
         <label>4) Would you consider yourself interested in trying new products or technologies that promote better sleep or wellness?</label>
-        <div class="scale" role="group" aria-label="Interest scale">
-          <label class="radio"><input type="radio" name="q4" value="1" required> 1</label>
-          <label class="radio"><input type="radio" name="q4" value="2"> 2</label>
-          <label class="radio"><input type="radio" name="q4" value="3"> 3</label>
-          <label class="radio"><input type="radio" name="q4" value="4"> 4</label>
-          <label class="radio"><input type="radio" name="q4" value="5"> 5</label>
+        <div class="scale-buttons">
+          <label class="scale-btn"><input type="radio" name="q4" value="1" required><span>1</span></label>
+          <label class="scale-btn"><input type="radio" name="q4" value="2"><span>2</span></label>
+          <label class="scale-btn"><input type="radio" name="q4" value="3"><span>3</span></label>
+          <label class="scale-btn"><input type="radio" name="q4" value="4"><span>4</span></label>
+          <label class="scale-btn"><input type="radio" name="q4" value="5"><span>5</span></label>
         </div>
-        <div class="hint">1 = Not interested → 5 = Very interested</div>
+        <div class="hint">💡 1 = Not interested → 5 = Very interested</div>
         <div class="danger" data-err="q4">Please select a value.</div>
       </div>
 
       <div>
         <label>5) Do you have any prior experience with innovation, marketing, or product development activities?</label>
-        <div class="inline">
-          <label class="radio"><input type="radio" name="q5" value="Yes" required> Yes</label>
-          <label class="radio"><input type="radio" name="q5" value="No"> No</label>
-          <label class="radio"><input type="radio" name="q5" value="Unsure"> Unsure</label>
+        <div class="radio-group">
+          <label class="radio-btn"><input type="radio" name="q5" value="Yes" required><span>Yes</span></label>
+          <label class="radio-btn"><input type="radio" name="q5" value="No"><span>No</span></label>
+          <label class="radio-btn"><input type="radio" name="q5" value="Unsure"><span>Unsure</span></label>
         </div>
         <div class="danger" data-err="q5">Please choose one option.</div>
       </div>
     </div>
 
-    <h2 style="margin-top:24px;">Consent</h2>
-    <div class="consent" style="flex-direction:column;">
-      <label class="inline">
+    <div class="section-header" style="margin-top:32px;">
+      <span class="badge">7</span>
+      <h2 style="margin:0;border:none;padding:0;">Consent</h2>
+    </div>
+
+    <div class="consent-box">
+      <label class="consent-item">
         <input type="checkbox" id="c1" required />
         <span>I confirm that I am 18 years or older and consent to participate in this research study.</span>
       </label>
-      <label class="inline">
+      <label class="consent-item">
         <input type="checkbox" id="c2" required />
         <span>I understand that my responses will be used anonymously for research purposes only.</span>
       </label>
     </div>
 
-    <div class="actions" style="margin-top:20px;">
+    <div style="text-align:center;margin-top:24px;">
       <button id="submitBtn" class="btn" type="button" data-next>Submit and Start</button>
-      <span class="foot">Required fields are marked with *.</span>
+      <div class="foot" style="margin-top:12px;color:#6b7280;">* Required fields</div>
     </div>
   </form>
 </section>
 
 <script>
-  const MANDATORY_MODE = false;
+  const MANDATORY_MODE = true;
   const form = document.getElementById('regForm');
   const submitBtn = document.getElementById('submitBtn');
-  const occupation = document.getElementById('occupation');
-  const occupationOtherWrap = document.getElementById('occupationOtherWrap');
-  const study = document.getElementById('study');
-  const studyOtherWrap = document.getElementById('studyOtherWrap');
-  const q3specWrap = document.getElementById('q3specWrap');
   const c1 = document.getElementById('c1');
   const c2 = document.getElementById('c2');
-
-  occupation.addEventListener('change', () => {
-    occupationOtherWrap.classList.toggle('hidden', occupation.value !== 'Other (please specify)');
-  });
-  study.addEventListener('change', () => {
-    studyOtherWrap.classList.toggle('hidden', study.value !== 'Other (please specify)');
-  });
-  document.querySelectorAll('input[name="q3"]').forEach(r=>{
-    r.addEventListener('change', () => {
-      q3specWrap.classList.toggle('hidden', r.value !== 'Yes');
-    });
-  });
 
   function toggleSubmit(){
     if (!MANDATORY_MODE) { submitBtn.disabled = false; return; }
@@ -227,7 +174,7 @@
     }
 
     let ok = true;
-    const requiredIds = ['fullName','email','age','nationality','country','occupation','fluency'];
+    const requiredIds = ['fullName','email','age','country','education'];
     requiredIds.forEach(id => {
       const el = document.getElementById(id);
       const valid = el && el.value && (el.type !== 'email' || /\S+@\S+\.\S+/.test(el.value));
@@ -235,6 +182,7 @@
       if (!valid) ok = false;
     });
 
+    // Validate screening questions
     ['q1','q2','q3','q4','q5'].forEach(name=>{
       const any = [...document.querySelectorAll(`input[name="${name}"]`)].some(r=>r.checked);
       showError(name, !any);

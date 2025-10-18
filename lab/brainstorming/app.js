@@ -55,7 +55,7 @@ async function loadPartialInto(el, partialPath){
 
 // Validation registry per step (reuse your existing code inside)
 const validators = {
-  // Example: registration strict validation (ported from your page)
+  // Updated registration validation to match new form fields
   registration: () => {
     if (!MANDATORY_MODE) return true;
 
@@ -63,7 +63,7 @@ const validators = {
     const form = document.getElementById("regForm");
     if (!form) return true; // nothing to validate
 
-    const requiredIds = ["fullName","email","age","nationality","country","occupation","fluency"];
+    const requiredIds = ["fullName","email","age","country","education"];
     let ok = true;
 
     const showError = (id, show) => {
@@ -78,7 +78,7 @@ const validators = {
       if (!valid) ok = false;
     });
 
-    // radios q1..q5
+    // radios q1..q5 (screening questions)
     ["q1","q2","q3","q4","q5"].forEach(name => {
       const any = [...document.querySelectorAll(`input[name="${name}"]`)].some(r=>r.checked);
       const err = document.querySelector(`[data-err="${name}"]`);
@@ -116,7 +116,7 @@ const validators = {
   phase1_individual: () => true,
   instr_group: () => true,
   phase2_group: () => {
-    // Enforce “exactly 5 selected” in strict mode if your partial exposes it
+    // Enforce "exactly 5 selected" in strict mode if your partial exposes it
     if (!MANDATORY_MODE) return true;
     const list = document.getElementById("groupTop5List");
     if (!list) return true;
@@ -157,14 +157,14 @@ function next() {
 
 function prev() {
   // You can disable prev entirely or allow within-phase back.
-  // Keeping it disabled here to match your “no going back” rule.
+  // Keeping it disabled here to match your "no going back" rule.
   // If you ever want a controlled back: uncomment next two lines.
   // state.stepIndex = Math.max(0, state.stepIndex - 1);
   // render();
 }
 
 function wireNavButtons() {
-  // Standardize “Next” / “Prev” hooks so all partials can just add:
+  // Standardize "Next" / "Prev" hooks so all partials can just add:
   // <button data-next>Next</button>, <button data-prev>Prev</button>
   document.querySelectorAll("[data-next]").forEach(btn => btn.onclick = next);
   document.querySelectorAll("[data-prev]").forEach(btn => btn.onclick = prev);
