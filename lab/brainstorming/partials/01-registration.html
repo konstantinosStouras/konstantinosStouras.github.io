@@ -12,20 +12,18 @@
   <form id="regForm" novalidate>
     <div class="grid">
       <div>
-        <label for="fullName">Full Name *</label>
-        <input id="fullName" name="fullName" type="text" required />
-        <div class="danger" data-err="fullName">Full name is required.</div>
+        <label for="fullName">Full Name</label>
+        <input id="fullName" name="fullName" type="text" />
       </div>
 
       <div>
-        <label for="email">Email Address *</label>
-        <input id="email" name="email" type="email" required />
-        <div class="danger" data-err="email">Valid email is required.</div>
+        <label for="email">Email Address</label>
+        <input id="email" name="email" type="email" />
       </div>
 
       <div>
-        <label for="age">Age *</label>
-        <select id="age" name="age" required>
+        <label for="age">Age</label>
+        <select id="age" name="age">
           <option value="">Select…</option>
           <option>18–24</option>
           <option>25–34</option>
@@ -33,11 +31,10 @@
           <option>45–54</option>
           <option>55+</option>
         </select>
-        <div class="danger" data-err="age">Please select your age range.</div>
       </div>
 
       <div>
-        <label for="gender">Gender (optional)</label>
+        <label for="gender">Gender</label>
         <select id="gender" name="gender">
           <option>Prefer not to say</option>
           <option>Female</option>
@@ -57,59 +54,54 @@
       <div>
         <label>1) How important is sleep or wellness in your daily life?</label>
         <div class="scale-buttons">
-          <label class="scale-btn"><input type="radio" name="q1" value="1" required><span>1</span></label>
+          <label class="scale-btn"><input type="radio" name="q1" value="1"><span>1</span></label>
           <label class="scale-btn"><input type="radio" name="q1" value="2"><span>2</span></label>
           <label class="scale-btn"><input type="radio" name="q1" value="3"><span>3</span></label>
           <label class="scale-btn"><input type="radio" name="q1" value="4"><span>4</span></label>
           <label class="scale-btn"><input type="radio" name="q1" value="5"><span>5</span></label>
         </div>
         <div class="hint">💡 1 = Not important at all → 5 = Extremely important</div>
-        <div class="danger" data-err="q1">Please select a value.</div>
       </div>
 
       <div>
         <label>2) How often do you engage in wellness-related activities?</label>
         <div class="hint" style="margin-top:-4px;margin-bottom:8px;">e.g., exercise, meditation, sleep tracking, healthy eating</div>
         <div class="radio-group">
-          <label class="radio-btn"><input type="radio" name="q2" value="Daily" required><span>Daily</span></label>
+          <label class="radio-btn"><input type="radio" name="q2" value="Daily"><span>Daily</span></label>
           <label class="radio-btn"><input type="radio" name="q2" value="Several times a week"><span>Several times a week</span></label>
           <label class="radio-btn"><input type="radio" name="q2" value="Occasionally"><span>Occasionally</span></label>
           <label class="radio-btn"><input type="radio" name="q2" value="Rarely"><span>Rarely</span></label>
           <label class="radio-btn"><input type="radio" name="q2" value="Never"><span>Never</span></label>
         </div>
-        <div class="danger" data-err="q2">Please choose one option.</div>
       </div>
 
       <div>
         <label>3) Have you purchased or used any products related to sleep or wellness in the past six months?</label>
         <div class="radio-group">
-          <label class="radio-btn"><input type="radio" name="q3" value="Yes" required><span>Yes</span></label>
+          <label class="radio-btn"><input type="radio" name="q3" value="Yes"><span>Yes</span></label>
           <label class="radio-btn"><input type="radio" name="q3" value="No"><span>No</span></label>
         </div>
-        <div class="danger" data-err="q3">Please choose Yes or No.</div>
       </div>
 
       <div>
         <label>4) Would you consider yourself interested in trying new products or technologies that promote better sleep or wellness?</label>
         <div class="scale-buttons">
-          <label class="scale-btn"><input type="radio" name="q4" value="1" required><span>1</span></label>
+          <label class="scale-btn"><input type="radio" name="q4" value="1"><span>1</span></label>
           <label class="scale-btn"><input type="radio" name="q4" value="2"><span>2</span></label>
           <label class="scale-btn"><input type="radio" name="q4" value="3"><span>3</span></label>
           <label class="scale-btn"><input type="radio" name="q4" value="4"><span>4</span></label>
           <label class="scale-btn"><input type="radio" name="q4" value="5"><span>5</span></label>
         </div>
         <div class="hint">💡 1 = Not interested → 5 = Very interested</div>
-        <div class="danger" data-err="q4">Please select a value.</div>
       </div>
 
       <div>
         <label>5) Do you have any prior experience with innovation, marketing, or product development activities?</label>
         <div class="radio-group">
-          <label class="radio-btn"><input type="radio" name="q5" value="Yes" required><span>Yes</span></label>
+          <label class="radio-btn"><input type="radio" name="q5" value="Yes"><span>Yes</span></label>
           <label class="radio-btn"><input type="radio" name="q5" value="No"><span>No</span></label>
           <label class="radio-btn"><input type="radio" name="q5" value="Unsure"><span>Unsure</span></label>
         </div>
-        <div class="danger" data-err="q5">Please choose one option.</div>
       </div>
     </div>
 
@@ -120,71 +112,33 @@
 
     <div class="consent-box">
       <label class="consent-item">
-        <input type="checkbox" id="c1" required />
+        <input type="checkbox" id="c1" />
         <span>I confirm that I am 18 years or older and consent to participate in this research study.</span>
       </label>
       <label class="consent-item">
-        <input type="checkbox" id="c2" required />
+        <input type="checkbox" id="c2" />
         <span>I understand that my responses will be used anonymously for research purposes only.</span>
       </label>
     </div>
 
     <div style="text-align:center;margin-top:24px;">
       <button id="submitBtn" class="btn" type="button" data-next>Submit and Start</button>
-      <div class="foot" style="margin-top:12px;color:#6b7280;">* Required fields</div>
+      <div class="foot" style="margin-top:12px;color:#6b7280;">All fields are optional (testing mode)</div>
     </div>
   </form>
 </section>
 
 <script>
-  const MANDATORY_MODE = true;
+  const MANDATORY_MODE = false; // Testing mode - all fields optional
   const form = document.getElementById('regForm');
   const submitBtn = document.getElementById('submitBtn');
   const c1 = document.getElementById('c1');
   const c2 = document.getElementById('c2');
 
-  function toggleSubmit(){
-    if (!MANDATORY_MODE) { submitBtn.disabled = false; return; }
-    submitBtn.disabled = !(c1.checked && c2.checked);
-  }
-  c1.addEventListener('change', toggleSubmit);
-  c2.addEventListener('change', toggleSubmit);
-  toggleSubmit();
-
-  function showError(id, show){
-    const el = document.querySelector(`[data-err="${id}"]`);
-    if (el) el.style.display = show ? 'block' : 'none';
-  }
+  // In testing mode, button is always enabled
+  submitBtn.disabled = false;
 
   submitBtn.addEventListener('click', () => {
-    if (!MANDATORY_MODE) {
-      if (window.__APP__) window.__APP__.next();
-      return;
-    }
-
-    let ok = true;
-    const requiredIds = ['fullName','email','age'];
-    requiredIds.forEach(id => {
-      const el = document.getElementById(id);
-      const valid = el && el.value && (el.type !== 'email' || /\S+@\S+\.\S+/.test(el.value));
-      showError(id, !valid);
-      if (!valid) ok = false;
-    });
-
-    // Validate screening questions
-    ['q1','q2','q3','q4','q5'].forEach(name=>{
-      const any = [...document.querySelectorAll(`input[name="${name}"]`)].some(r=>r.checked);
-      showError(name, !any);
-      if (!any) ok = false;
-    });
-
-    if (!(c1.checked && c2.checked)) ok = false;
-
-    if (!ok) {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
-    }
-
     const data = new FormData(form);
     const payload = Object.fromEntries(data.entries());
     console.log('Registration payload:', payload);
