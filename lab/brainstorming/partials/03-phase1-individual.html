@@ -1,4 +1,4 @@
-<section class="card" style="max-width:100%;">
+<section class="card" id="phase1Root" style="max-width:100%;">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
     <h2 style="margin:0;border:none;padding:0;">Phase: Individual Ideation (10 min)</h2>
     <div id="timer" style="font-size:1.1rem;font-weight:600;background:#eef2ff;color:#1e40af;padding:8px 14px;border-radius:8px;">10:00</div>
@@ -13,8 +13,9 @@
   <h2>Your Ideas</h2>
   <input type="text" id="ideaTitle" placeholder="Idea title" />
   <textarea id="ideaDesc" placeholder="Idea description"></textarea>
-  <button id="addIdea" class="btn">Add Idea</button>
+  <button id="addIdea" class="btn" type="button">Add Idea</button>
 
+  <!-- Renders like your original: <strong>title</strong><br>desc + checkbox -->
   <ul id="ideasList" style="list-style:none;padding:0;margin:12px 0 0;"></ul>
 
   <h2 style="margin-top:20px;">Select Top 5</h2>
@@ -30,7 +31,7 @@
   <p class="hint">Provide a final overarching title and description for your Top 5 selection.</p>
   <input type="text" id="submissionTitle" placeholder="Final submission: Idea title" />
   <textarea id="submissionDesc" rows="3" placeholder="Final submission: Idea description"></textarea>
-  <button id="submitAll" class="btn" data-next>Submit</button>
+  <button id="submitAll" class="btn" data-next type="button">Submit</button>
 </section>
 
 <section class="card notes-box" style="max-width:100%;">
@@ -39,76 +40,74 @@
 </section>
 
 <script>
-  const MANDATORY_MODE = true;
-  
+(() => {
+  // ---- Scoped helpers (avoid cross-page ID clashes in the SPA) ----
+  const root = document.getElementById('phase1Root').parentElement; // current step container
+  const $  = sel => root.querySelector(sel);
+  const $$ = sel => Array.from(root.querySelectorAll(sel));
+
+  // ---- Timer ----
   let time = 600;
-  const timerEl = document.getElementById("timer");
+  const timerEl = $('#timer');
   function updateTimer(){
     const m = String(Math.floor(time/60)).padStart(2,"0");
     const s = String(time%60).padStart(2,"0");
-    timerEl.textContent = `${m}:${s}`;
+    if (timerEl) timerEl.textContent = `${m}:${s}`;
     if(time>0) time--; else clearInterval(timerInterval);
   }
   const timerInterval = setInterval(updateTimer,1000);
   updateTimer();
 
-  const ideas = [];
-  const top5 = new Set();
+  // ---- State ----
+  const ideas = [];            // [{id,title,desc}]
+  const top5  = new Set();     // store idea ids
 
+  // ---- Utilities ----
   function escapeHtml(str){
     if (!str) return '';
     return str.replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
   }
 
-  document.getElementById("addIdea").onclick = () => {
-    const title = document.getElementById("ideaTitle").value.trim();
-    const desc = document.getElementById("ideaDesc").value.trim();
-    if (!title || !desc) return alert("Please enter both title and description.");
-    const id = ideas.length + 1;
-    ideas.push({ id, title, desc });
-    renderIdeas();
-    document.getElementById("ideaTitle").value = "";
-    document.getElementById("ideaDesc").value = "";
-  };
-
+  // ---- Renderers ----
   function renderIdeas(){
-    const ul = document.getElementById("ideasList");
+    const ul = $('#ideasList');
+    if (!ul) return;
     ul.innerHTML = "";
     ideas.forEach(idea => {
       const li = document.createElement("li");
       li.style.cssText = "margin:8px 0;padding:10px;border:1px solid #ddd;border-radius:6px;background:#f9fafb;";
       li.innerHTML = `
         <strong>${escapeHtml(idea.title)}</strong><br>${escapeHtml(idea.desc)}
-        <div style="margin-top:8px;"><label style="cursor:pointer;"><input type="checkbox" onchange="toggleTop5(${idea.id})" ${top5.has(idea.id)?"checked":""}> Mark Top-5</label></div>`;
+        <div style="margin-top:8px;">
+          <label style="cursor:pointer;">
+            <input type="checkbox" data-top5 data-id="${idea.id}" ${top5.has(idea.id) ? "checked": ""}>
+            Mark Top-5
+          </label>
+        </div>`;
       ul.appendChild(li);
     });
     renderTop5();
   }
 
-  window.toggleTop5 = (id)=>{
-    if(top5.has(id)) top5.delete(id);
-    else{
-      if(top5.size>=5){ alert("You can only pick 5 ideas."); return; }
-      top5.add(id);
-    }
-    renderTop5();
-  };
-
   function renderTop5(){
-    const chosenUl = document.getElementById("top5List");
+    const chosenUl = $('#top5List');
+    const editUl   = $('#finalEditList');
+    if (!chosenUl || !editUl) return;
+
     chosenUl.innerHTML = "";
-    const editUl = document.getElementById("finalEditList");
-    editUl.innerHTML = "";
+    editUl.innerHTML   = "";
 
     [...top5].forEach(id => {
       const idea = ideas.find(i => i.id === id);
       if (!idea) return;
-      
+
+      // mirror original simple list
       const li1 = document.createElement("li");
       li1.style.cssText = "margin:8px 0;padding:10px;border:1px solid #ddd;border-radius:6px;background:#f9fafb;";
       li1.innerHTML = `<strong>${escapeHtml(idea.title)}</strong><br>${escapeHtml(idea.desc)}`;
       chosenUl.appendChild(li1);
 
+      // editable final version
       const li2 = document.createElement("li");
       li2.style.cssText = "margin:8px 0;";
       li2.innerHTML = `
@@ -122,48 +121,4 @@
     });
   }
 
-  document.getElementById("submitAll").onclick = () => {
-    if(MANDATORY_MODE && top5.size !== 5){
-      alert("Please select exactly 5 ideas before submitting.");
-      return;
-    }
-
-    const submissionTitle = document.getElementById("submissionTitle").value.trim();
-    const submissionDesc = document.getElementById("submissionDesc").value.trim();
-    
-    if(MANDATORY_MODE && (!submissionTitle || !submissionDesc)){
-      alert("Please enter both the final submission title and description.");
-      return;
-    }
-
-    // Collect finalized ideas
-    const finalIdeas = [...top5].map(id => {
-      const titleEl = document.querySelector(`[data-final-title="${id}"]`);
-      const descEl = document.querySelector(`[data-final-desc="${id}"]`);
-      return {
-        id,
-        finalTitle: titleEl ? titleEl.value.trim() : '',
-        finalDescription: descEl ? descEl.value.trim() : ''
-      };
-    });
-
-    // Validate that all top 5 have finalized content
-    if(MANDATORY_MODE){
-      const incomplete = finalIdeas.some(idea => !idea.finalTitle || !idea.finalDescription);
-      if(incomplete){
-        alert("Please ensure all Top 5 ideas have both title and description filled in the edit section.");
-        return;
-      }
-    }
-
-    const payload = {
-      submissionTitle,
-      submissionDesc,
-      top5: finalIdeas
-    };
-
-    console.log("Phase 1 submission:", payload);
-    
-    if(window.__APP__) window.__APP__.next();
-  };
-</script>
+  // ---- Events (
