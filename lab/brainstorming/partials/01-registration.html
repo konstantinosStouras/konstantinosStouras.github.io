@@ -468,7 +468,7 @@
     </div>
 
     <div class="submit-area">
-      <button id="submitBtn" class="submit-btn" type="button" data-next>Submit and Start</button>
+      <button id="submitBtn" class="submit-btn" type="button">Submit and Start</button>
       <span class="required-note" id="requiredNote">* Required fields</span>
     </div>
   </form>
@@ -514,4 +514,22 @@
   c1.addEventListener('change', toggleSubmit);
   c2.addEventListener('change', toggleSubmit);
   toggleSubmit();
+
+  // Add explicit click handler to ensure navigation works
+  submitBtn.addEventListener('click', (e) => {
+    console.log('Submit clicked, MANDATORY_MODE:', MANDATORY_MODE);
+    
+    // Collect data before navigating
+    const data = new FormData(form);
+    const payload = Object.fromEntries(data.entries());
+    console.log('Registration data:', payload);
+    
+    // Call next() to proceed - validation will happen in app.js
+    if (window.__APP__ && window.__APP__.next) {
+      console.log('Calling window.__APP__.next()');
+      window.__APP__.next();
+    } else {
+      console.error('window.__APP__.next() not available!');
+    }
+  });
 </script>
