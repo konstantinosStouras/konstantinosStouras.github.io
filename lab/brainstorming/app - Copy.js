@@ -134,6 +134,8 @@ const validators = {
 async function render() {
   const step = STEPS[state.stepIndex];
   const app = document.getElementById("app");
+  const badge = document.getElementById("phaseBadge");
+  badge.textContent = `Step ${state.stepIndex + 1} of ${STEPS.length} • ${step.title}`;
   await loadPartialInto(app, step.file);
   wireNavButtons();
   exposeAppAPI(); // let partials call next/prev if needed
