@@ -55,44 +55,10 @@ async function loadPartialInto(el, partialPath){
 
 // Validation registry per step (reuse your existing code inside)
 const validators = {
-  // Example: registration strict validation (ported from your page)
+  // Registration is now OPTIONAL - always returns true
   registration: () => {
-    if (!MANDATORY_MODE) return true;
-
-    // Expect the partial to include these IDs/classes
-    const form = document.getElementById("regForm");
-    if (!form) return true; // nothing to validate
-
-    const requiredIds = ["fullName","email","age","nationality","country","occupation","fluency"];
-    let ok = true;
-
-    const showError = (id, show) => {
-      const el = document.querySelector(`[data-err="${id}"]`);
-      if (el) el.style.display = show ? "block" : "none";
-    };
-
-    requiredIds.forEach(id => {
-      const el = document.getElementById(id);
-      const valid = el && el.value && (el.type !== "email" || /\S+@\S+\.\S+/.test(el.value));
-      showError(id, !valid);
-      if (!valid) ok = false;
-    });
-
-    // radios q1..q5
-    ["q1","q2","q3","q4","q5"].forEach(name => {
-      const any = [...document.querySelectorAll(`input[name="${name}"]`)].some(r=>r.checked);
-      const err = document.querySelector(`[data-err="${name}"]`);
-      if (err) err.style.display = any ? "none" : "block";
-      if (!any) ok = false;
-    });
-
-    // consent
-    const c1 = document.getElementById("c1");
-    const c2 = document.getElementById("c2");
-    if (!(c1?.checked && c2?.checked)) ok = false;
-
-    if (!ok) window.scrollTo({ top: 0, behavior: "smooth" });
-    return ok;
+    console.log('Registration validator - skipping validation (all fields optional)');
+    return true;
   },
 
   // Example: post-survey strict validation
@@ -116,7 +82,7 @@ const validators = {
   phase1_individual: () => true,
   instr_group: () => true,
   phase2_group: () => {
-    // Enforce “exactly 5 selected” in strict mode if your partial exposes it
+    // Enforce "exactly 5 selected" in strict mode if your partial exposes it
     if (!MANDATORY_MODE) return true;
     const list = document.getElementById("groupTop5List");
     if (!list) return true;
@@ -144,7 +110,15 @@ async function render() {
 function next() {
   const stepKey = STEPS[state.stepIndex].key;
   const validate = validators[stepKey] || (() => true);
-  if (!validate()) return;
+  
+  console.log(`Attempting to navigate from step: ${stepKey}`);
+  
+  if (!validate()) {
+    console.log('Validation failed');
+    return;
+  }
+
+  console.log('Validation passed, moving to next step');
 
   // Example: collect payload here if needed per step
   // state.data[stepKey] = collectPayloadFor(stepKey);
@@ -157,14 +131,14 @@ function next() {
 
 function prev() {
   // You can disable prev entirely or allow within-phase back.
-  // Keeping it disabled here to match your “no going back” rule.
+  // Keeping it disabled here to match your "no going back" rule.
   // If you ever want a controlled back: uncomment next two lines.
   // state.stepIndex = Math.max(0, state.stepIndex - 1);
   // render();
 }
 
 function wireNavButtons() {
-  // Standardize “Next” / “Prev” hooks so all partials can just add:
+  // Standardize "Next" / "Prev" hooks so all partials can just add:
   // <button data-next>Next</button>, <button data-prev>Prev</button>
   document.querySelectorAll("[data-next]").forEach(btn => btn.onclick = next);
   document.querySelectorAll("[data-prev]").forEach(btn => btn.onclick = prev);
@@ -173,10 +147,15 @@ function wireNavButtons() {
 // Optional: expose app controls to page scripts
 function exposeAppAPI(){
   window.__APP__ = {
-    next, prev,
+    next, 
+    prev,
     getState: () => ({ ...state }),
     setParticipantId: (id) => state.participantId = id,
-    setData: (key, value) => { state.data[key] = value; }
+    setData: (key, value) => { 
+      state.data[key] = value; 
+      console.log(`Data stored for ${key}:`, value);
+    },
+    isMandatory: () => MANDATORY_MODE
   };
 }
 
