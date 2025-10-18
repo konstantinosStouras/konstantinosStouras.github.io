@@ -1,3 +1,9 @@
+<section class="card" style="text-align:center;padding:40px 30px 30px;">
+  <div style="font-size:48px;margin-bottom:12px;">📋</div>
+  <h1 style="margin:0 0 12px;font-size:32px;font-weight:800;color:#1e293b;">Registration</h1>
+  <p style="margin:0;font-size:16px;color:#64748b;">Please provide some basic information about yourself.</p>
+</section>
+
 <section class="card">
   <h2>Participant Information</h2>
 
@@ -37,25 +43,6 @@
           <option>Non-binary</option>
           <option>Other</option>
         </select>
-      </div>
-
-      <div>
-        <label for="country">Country of Residence *</label>
-        <input id="country" name="country" type="text" required />
-        <div class="danger" data-err="country">Please enter your country of residence.</div>
-      </div>
-
-      <div>
-        <label for="education">Education Level *</label>
-        <select id="education" name="education" required>
-          <option value="">Select…</option>
-          <option>High School</option>
-          <option>Bachelor's</option>
-          <option>Master's</option>
-          <option>PhD/Doctoral</option>
-          <option>Other</option>
-        </select>
-        <div class="danger" data-err="education">Please select your education level.</div>
       </div>
     </div>
 
@@ -174,7 +161,7 @@
     }
 
     let ok = true;
-    const requiredIds = ['fullName','email','age','country','education'];
+    const requiredIds = ['fullName','email','age'];
     requiredIds.forEach(id => {
       const el = document.getElementById(id);
       const valid = el && el.value && (el.type !== 'email' || /\S+@\S+\.\S+/.test(el.value));
