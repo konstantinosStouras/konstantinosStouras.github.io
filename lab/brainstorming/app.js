@@ -72,7 +72,7 @@ const validators = {
     const form = document.getElementById("regForm");
     if (!form) return true; // nothing to validate
 
-    const requiredIds = ["fullName","email","age"];
+    const requiredIds = ["email","age","gender","education"];
     let ok = true;
 
     const showError = (id, show) => {
