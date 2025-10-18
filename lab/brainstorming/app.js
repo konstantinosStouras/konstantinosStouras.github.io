@@ -1,7 +1,7 @@
 // /lab/brainstorming/app.js
 
 // ===== Global switches =====
-const MANDATORY_MODE = true;       // true = strict; false = demo/skippable
+const MANDATORY_MODE = false;       // true = strict; false = demo/skippable
 const BLOCK_BACK_BUTTON = true;    // keeps URL same & neutralizes back/forward
 
 // ===== Step config (order + files + titles) =====
