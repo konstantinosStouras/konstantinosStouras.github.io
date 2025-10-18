@@ -247,6 +247,11 @@
     color: var(--muted);
     font-size: 13px;
   }
+  
+  /* Hide asterisks when not mandatory */
+  .optional-mode .required-asterisk {
+    display: none;
+  }
 </style>
 
 <section class="card">
@@ -266,20 +271,20 @@
 
       <div class="grid">
         <div class="field-group">
-          <label for="fullName">Full Name *</label>
-          <input id="fullName" name="fullName" type="text" placeholder="Enter your full name" required />
+          <label for="fullName">Full Name <span class="required-asterisk">*</span></label>
+          <input id="fullName" name="fullName" type="text" placeholder="Enter your full name" />
           <div class="error-message" data-err="fullName">Full name is required.</div>
         </div>
 
         <div class="field-group">
-          <label for="email">Email Address *</label>
-          <input id="email" name="email" type="email" placeholder="you@example.com" required />
+          <label for="email">Email Address <span class="required-asterisk">*</span></label>
+          <input id="email" name="email" type="email" placeholder="you@example.com" />
           <div class="error-message" data-err="email">Valid email is required.</div>
         </div>
 
         <div class="field-group">
-          <label for="age">Age *</label>
-          <select id="age" name="age" required>
+          <label for="age">Age <span class="required-asterisk">*</span></label>
+          <select id="age" name="age">
             <option value="">Select your age range</option>
             <option>18–24</option>
             <option>25–34</option>
@@ -302,14 +307,14 @@
         </div>
 
         <div class="field-group">
-          <label for="country">Country of Residence *</label>
-          <input id="country" name="country" type="text" placeholder="Enter your country" required />
+          <label for="country">Country of Residence <span class="required-asterisk">*</span></label>
+          <input id="country" name="country" type="text" placeholder="Enter your country" />
           <div class="error-message" data-err="country">Please enter your country of residence.</div>
         </div>
 
         <div class="field-group">
-          <label for="education">Education Level *</label>
-          <select id="education" name="education" required>
+          <label for="education">Education Level <span class="required-asterisk">*</span></label>
+          <select id="education" name="education">
             <option value="">Please select...</option>
             <option>High School</option>
             <option>Some College</option>
@@ -334,7 +339,7 @@
         <label>1) How important is sleep or wellness in your daily life?</label>
         <div class="scale-group">
           <div class="scale-option">
-            <input type="radio" name="q1" value="1" required>
+            <input type="radio" name="q1" value="1">
           </div>
           <div class="scale-option">
             <input type="radio" name="q1" value="2">
@@ -358,7 +363,7 @@
         <p style="font-size: 13px; color: var(--muted); margin: 4px 0 12px;">e.g., exercise, meditation, sleep tracking, healthy eating</p>
         <div class="radio-group">
           <label class="radio-option">
-            <input type="radio" name="q2" value="Daily" required>
+            <input type="radio" name="q2" value="Daily">
             <span>Daily</span>
           </label>
           <label class="radio-option">
@@ -385,7 +390,7 @@
         <label>3) Have you purchased or used any products related to sleep or wellness in the past six months?</label>
         <div class="radio-group">
           <label class="radio-option">
-            <input type="radio" name="q3" value="Yes" required>
+            <input type="radio" name="q3" value="Yes">
             <span>Yes</span>
           </label>
           <label class="radio-option">
@@ -404,7 +409,7 @@
         <label>4) Would you consider yourself interested in trying new products or technologies that promote better sleep or wellness?</label>
         <div class="scale-group">
           <div class="scale-option">
-            <input type="radio" name="q4" value="1" required>
+            <input type="radio" name="q4" value="1">
           </div>
           <div class="scale-option">
             <input type="radio" name="q4" value="2">
@@ -427,7 +432,7 @@
         <label>5) Do you have any prior experience with innovation, marketing, or product development activities?</label>
         <div class="radio-group">
           <label class="radio-option">
-            <input type="radio" name="q5" value="Yes" required>
+            <input type="radio" name="q5" value="Yes">
             <span>Yes</span>
           </label>
           <label class="radio-option">
@@ -452,11 +457,11 @@
       
       <div class="consent-box">
         <div class="consent-item">
-          <input type="checkbox" id="c1" required>
+          <input type="checkbox" id="c1">
           <label for="c1">I confirm that I am 18 years or older and consent to participate in this research study.</label>
         </div>
         <div class="consent-item">
-          <input type="checkbox" id="c2" required>
+          <input type="checkbox" id="c2">
           <label for="c2">I understand that my responses will be used anonymously for research purposes only.</label>
         </div>
       </div>
@@ -464,18 +469,31 @@
 
     <div class="submit-area">
       <button id="submitBtn" class="submit-btn" type="button">Submit and Start</button>
-      <span class="required-note">* Required fields</span>
+      <span class="required-note" id="requiredNote">* Required fields</span>
     </div>
   </form>
 </section>
 
 <script>
-  const MANDATORY_MODE = false;
+  // Get MANDATORY_MODE from global app or fallback to false
+  const MANDATORY_MODE = (typeof window.__APP__ !== 'undefined' && typeof window.__APP__.isMandatory === 'function') 
+    ? window.__APP__.isMandatory() 
+    : false;
+  
+  console.log('Registration page MANDATORY_MODE:', MANDATORY_MODE);
+  
   const form = document.getElementById('regForm');
   const submitBtn = document.getElementById('submitBtn');
   const q3specWrap = document.getElementById('q3specWrap');
   const c1 = document.getElementById('c1');
   const c2 = document.getElementById('c2');
+  const requiredNote = document.getElementById('requiredNote');
+
+  // If not mandatory, hide asterisks and required note
+  if (!MANDATORY_MODE) {
+    form.classList.add('optional-mode');
+    if (requiredNote) requiredNote.style.display = 'none';
+  }
 
   document.querySelectorAll('input[name="q3"]').forEach(r=>{
     r.addEventListener('change', () => {
@@ -484,9 +502,13 @@
   });
 
   function toggleSubmit(){
-    if (!MANDATORY_MODE) { submitBtn.disabled = false; return; }
+    if (!MANDATORY_MODE) { 
+      submitBtn.disabled = false; 
+      return; 
+    }
     submitBtn.disabled = !(c1.checked && c2.checked);
   }
+  
   c1.addEventListener('change', toggleSubmit);
   c2.addEventListener('change', toggleSubmit);
   toggleSubmit();
@@ -497,13 +519,21 @@
   }
 
   submitBtn.addEventListener('click', () => {
+    console.log('Submit button clicked, MANDATORY_MODE:', MANDATORY_MODE);
+    
     // If MANDATORY_MODE is false, all fields are optional - skip validation
     if (!MANDATORY_MODE) {
       const data = new FormData(form);
       const payload = Object.fromEntries(data.entries());
       console.log('Registration payload (optional mode):', payload);
       
-      if (window.__APP__) window.__APP__.next();
+      // Proceed to next step
+      if (window.__APP__) {
+        console.log('Calling next()...');
+        window.__APP__.next();
+      } else {
+        console.error('window.__APP__ not available');
+      }
       return;
     }
 
@@ -532,7 +562,7 @@
 
     const data = new FormData(form);
     const payload = Object.fromEntries(data.entries());
-    console.log('Registration payload:', payload);
+    console.log('Registration payload (mandatory mode):', payload);
 
     if (window.__APP__) window.__APP__.next();
   });
