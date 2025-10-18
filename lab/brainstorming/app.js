@@ -1,7 +1,9 @@
 // /lab/brainstorming/app.js
 
+console.log("app.js loaded successfully");
+
 // ===== Global switches =====
-const MANDATORY_MODE = true;       // true = strict; false = demo/skippable
+const MANDATORY_MODE = false;      // false = testing mode; true = strict validation
 const BLOCK_BACK_BUTTON = true;    // keeps URL same & neutralizes back/forward
 
 // ===== Step config (order + files + titles) =====
@@ -37,20 +39,27 @@ const state = {
 
 // Helper: load a partial and run any inline <script> it contains
 async function loadPartialInto(el, partialPath){
-  const res = await fetch(`./partials/${partialPath}`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`Failed to load ${partialPath}`);
-  const html = await res.text();
-  el.innerHTML = html;
+  console.log(`Loading partial: ./partials/${partialPath}`);
+  try {
+    const res = await fetch(`./partials/${partialPath}`, { cache: "no-store" });
+    if (!res.ok) throw new Error(`Failed to load ${partialPath} - Status: ${res.status}`);
+    const html = await res.text();
+    el.innerHTML = html;
 
-  // Run inline scripts in the injected HTML (page-specific logic)
-  el.querySelectorAll("script").forEach((oldScript) => {
-    const s = document.createElement("script");
-    if (oldScript.src) { s.src = oldScript.src; }
-    else { s.textContent = oldScript.textContent; }
-    document.body.appendChild(s);
-    // Remove to avoid duplicates on next mounts
-    setTimeout(() => s.remove(), 0);
-  });
+    // Run inline scripts in the injected HTML (page-specific logic)
+    el.querySelectorAll("script").forEach((oldScript) => {
+      const s = document.createElement("script");
+      if (oldScript.src) { s.src = oldScript.src; }
+      else { s.textContent = oldScript.textContent; }
+      document.body.appendChild(s);
+      // Remove to avoid duplicates on next mounts
+      setTimeout(() => s.remove(), 0);
+    });
+    console.log(`Successfully loaded: ${partialPath}`);
+  } catch (error) {
+    console.error(`Error loading ${partialPath}:`, error);
+    el.innerHTML = `<div class="card"><h2>Error</h2><p>Failed to load: ${partialPath}</p><p>${error.message}</p></div>`;
+  }
 }
 
 // Validation registry per step (reuse your existing code inside)
@@ -63,7 +72,7 @@ const validators = {
     const form = document.getElementById("regForm");
     if (!form) return true; // nothing to validate
 
-    const requiredIds = ["fullName","email","age","country","education"];
+    const requiredIds = ["fullName","email","age"];
     let ok = true;
 
     const showError = (id, show) => {
@@ -132,8 +141,16 @@ const validators = {
 
 // Step navigation
 async function render() {
+  console.log(`Rendering step ${state.stepIndex}`);
   const step = STEPS[state.stepIndex];
   const app = document.getElementById("app");
+  
+  if (!app) {
+    console.error("ERROR: Could not find #app element!");
+    return;
+  }
+  
+  console.log(`Loading step: ${step.title}`);
   await loadPartialInto(app, step.file);
   wireNavButtons();
   exposeAppAPI(); // let partials call next/prev if needed
@@ -179,4 +196,5 @@ function exposeAppAPI(){
 }
 
 // Boot
+console.log("Starting app...");
 render();
