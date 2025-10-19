@@ -162,7 +162,6 @@
       const li = document.createElement("li");
       li.style.cssText = "margin:12px 0;padding:14px;border:1px solid #ddd;border-radius:8px;background:#f9fafb;";
       li.innerHTML = `
-        <div style="font-weight:700;color:#1e40af;margin-bottom:8px;">Idea ${index + 1}</div>
         <div style="margin-bottom:6px;"><strong>Title:</strong> ${escapeHtml(idea.title)}</div>
         <div style="margin-bottom:10px;"><strong>Description:</strong> ${escapeHtml(idea.desc)}</div>
         <div><label style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;"><input type="checkbox" data-idea-id="${idea.id}" class="top5-checkbox"> <span>Mark as Top-5</span></label></div>`;
@@ -200,21 +199,13 @@
 
   // Render top 5 section
   function renderTop5(){
-    const chosenUl = document.getElementById("top5List");
     const editUl = document.getElementById("finalEditList");
     
-    chosenUl.innerHTML = "";
     editUl.innerHTML = "";
 
     [...top5].forEach(id => {
       const idea = ideas.find(i => i.id === id);
       if (!idea) return;
-      
-      // Summary list
-      const li1 = document.createElement("li");
-      li1.style.cssText = "margin:8px 0;padding:10px;border:1px solid #ddd;border-radius:6px;background:#f9fafb;";
-      li1.innerHTML = `<strong>${escapeHtml(idea.title)}</strong><br>${escapeHtml(idea.desc)}`;
-      chosenUl.appendChild(li1);
 
       // Edit list
       const li2 = document.createElement("li");
