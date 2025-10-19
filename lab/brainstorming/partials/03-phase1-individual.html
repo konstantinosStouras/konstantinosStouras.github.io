@@ -101,12 +101,14 @@
   function renderIdeas(){
     const ul = document.getElementById("ideasList");
     ul.innerHTML = "";
-    ideas.forEach(idea => {
+    ideas.forEach((idea, index) => {
       const li = document.createElement("li");
-      li.style.cssText = "margin:8px 0;padding:10px;border:1px solid #ddd;border-radius:6px;background:#f9fafb;";
+      li.style.cssText = "margin:12px 0;padding:14px;border:1px solid #ddd;border-radius:8px;background:#f9fafb;";
       li.innerHTML = `
-        <strong>${escapeHtml(idea.title)}</strong><br>${escapeHtml(idea.desc)}
-        <div style="margin-top:8px;"><label style="cursor:pointer;"><input type="checkbox" onchange="toggleTop5(${idea.id})" ${top5.has(idea.id)?"checked":""}> Mark Top-5</label></div>`;
+        <div style="font-weight:700;color:#1e40af;margin-bottom:8px;">Idea ${index + 1}</div>
+        <div style="margin-bottom:6px;"><strong>Title:</strong> ${escapeHtml(idea.title)}</div>
+        <div style="margin-bottom:10px;"><strong>Description:</strong> ${escapeHtml(idea.desc)}</div>
+        <div><label style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;"><input type="checkbox" onchange="toggleTop5(${idea.id})" ${top5.has(idea.id)?"checked":""}> <span>Mark as Top-5</span></label></div>`;
       ul.appendChild(li);
     });
     renderTop5();
