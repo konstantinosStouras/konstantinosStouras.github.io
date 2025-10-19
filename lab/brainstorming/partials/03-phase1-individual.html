@@ -95,7 +95,7 @@
 
   // Data arrays
   const ideas = [];
-  const top5 = new Set();
+  const top5 = []; // Changed from Set to Array to maintain order
 
   // Escape HTML helper
   function escapeHtml(str){
@@ -171,7 +171,7 @@
     // Attach checkbox listeners
     document.querySelectorAll('.top5-checkbox').forEach(checkbox => {
       const ideaId = parseInt(checkbox.getAttribute('data-idea-id'));
-      checkbox.checked = top5.has(ideaId);
+      checkbox.checked = top5.includes(ideaId);
       checkbox.addEventListener('change', () => toggleTop5(ideaId));
     });
     
@@ -182,42 +182,112 @@
   function toggleTop5(id){
     console.log("Toggle top 5 for idea:", id);
     
-    if(top5.has(id)) {
-      top5.delete(id);
+    const index = top5.indexOf(id);
+    if(index > -1) {
+      top5.splice(index, 1);
     } else {
-      if(top5.size >= 5) {
+      if(top5.length >= 5) {
         alert("You can only pick 5 ideas.");
         // Uncheck the checkbox
         const checkbox = document.querySelector(`.top5-checkbox[data-idea-id="${id}"]`);
         if (checkbox) checkbox.checked = false;
         return;
       }
-      top5.add(id);
+      top5.push(id);
     }
     renderTop5();
   }
 
-  // Render top 5 section
+  // Render top 5 section with drag-and-drop
+  let draggedElement = null;
+  let draggedId = null;
+
   function renderTop5(){
     const editUl = document.getElementById("finalEditList");
     
     editUl.innerHTML = "";
 
-    [...top5].forEach(id => {
+    top5.forEach((id, index) => {
       const idea = ideas.find(i => i.id === id);
       if (!idea) return;
 
-      // Edit list
-      const li2 = document.createElement("li");
-      li2.style.cssText = "margin:8px 0;";
-      li2.innerHTML = `
-        <div class="final-box" style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:12px;">
+      // Edit list with drag-and-drop
+      const li = document.createElement("li");
+      li.style.cssText = "margin:8px 0;cursor:move;";
+      li.draggable = true;
+      li.dataset.ideaId = id;
+      
+      li.innerHTML = `
+        <div class="final-box" style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:12px;position:relative;">
+          <div style="position:absolute;top:12px;right:12px;color:#6b7280;font-size:20px;cursor:move;" title="Drag to reorder">⋮⋮</div>
           <label style="font-weight:600;display:block;margin:4px 0;">Idea title</label>
           <input type="text" data-final-title="${id}" value="${escapeHtml(idea.title)}" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
           <label style="font-weight:600;display:block;margin:8px 0 4px;">Idea description</label>
           <textarea data-final-desc="${id}" rows="3" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;resize:vertical;">${escapeHtml(idea.desc)}</textarea>
         </div>`;
-      editUl.appendChild(li2);
+      
+      // Drag event handlers
+      li.addEventListener('dragstart', (e) => {
+        draggedElement = li;
+        draggedId = id;
+        li.style.opacity = '0.5';
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      
+      li.addEventListener('dragend', (e) => {
+        li.style.opacity = '1';
+        draggedElement = null;
+        draggedId = null;
+      });
+      
+      li.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        
+        if (draggedElement && draggedElement !== li) {
+          const rect = li.getBoundingClientRect();
+          const midpoint = rect.top + rect.height / 2;
+          
+          if (e.clientY < midpoint) {
+            li.style.borderTop = '3px solid #2563eb';
+            li.style.borderBottom = '';
+          } else {
+            li.style.borderBottom = '3px solid #2563eb';
+            li.style.borderTop = '';
+          }
+        }
+      });
+      
+      li.addEventListener('dragleave', (e) => {
+        li.style.borderTop = '';
+        li.style.borderBottom = '';
+      });
+      
+      li.addEventListener('drop', (e) => {
+        e.preventDefault();
+        li.style.borderTop = '';
+        li.style.borderBottom = '';
+        
+        if (draggedElement && draggedElement !== li) {
+          const draggedIndex = top5.indexOf(draggedId);
+          const targetId = parseInt(li.dataset.ideaId);
+          const targetIndex = top5.indexOf(targetId);
+          
+          // Remove dragged item
+          top5.splice(draggedIndex, 1);
+          
+          // Insert at new position
+          const rect = li.getBoundingClientRect();
+          const midpoint = rect.top + rect.height / 2;
+          const insertIndex = e.clientY < midpoint ? targetIndex : targetIndex + 1;
+          
+          top5.splice(insertIndex, 0, draggedId);
+          
+          renderTop5();
+        }
+      });
+      
+      editUl.appendChild(li);
     });
   }
 
@@ -225,13 +295,13 @@
   submitBtn.addEventListener('click', () => {
     console.log("Submit clicked");
     
-    if(MANDATORY_MODE && top5.size !== 5){
+    if(MANDATORY_MODE && top5.length !== 5){
       alert("Please select exactly 5 ideas before submitting.");
       return;
     }
 
-    // Collect finalized ideas
-    const finalIdeas = [...top5].map(id => {
+    // Collect finalized ideas in order
+    const finalIdeas = top5.map(id => {
       const titleEl = document.querySelector(`[data-final-title="${id}"]`);
       const descEl = document.querySelector(`[data-final-desc="${id}"]`);
       return {
