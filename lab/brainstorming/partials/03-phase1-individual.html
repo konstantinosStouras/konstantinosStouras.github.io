@@ -39,8 +39,17 @@
 
 <section class="card ideas-box" style="max-width:100%;">
   <h2>Your Ideas</h2>
-  <input type="text" id="ideaTitle" placeholder="Idea title" />
-  <textarea id="ideaDesc" placeholder="Idea description"></textarea>
+  
+  <div style="margin-bottom:16px;">
+    <label for="ideaTitle" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;">Idea title</label>
+    <input type="text" id="ideaTitle" placeholder="Enter your idea title" />
+  </div>
+  
+  <div style="margin-bottom:16px;">
+    <label for="ideaDesc" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;">Idea description</label>
+    <textarea id="ideaDesc" placeholder="Describe your idea in detail"></textarea>
+  </div>
+  
   <button id="addIdea" class="btn">Add Idea</button>
 
   <ul id="ideasList" style="list-style:none;padding:0;margin:20px 0 0;"></ul>
