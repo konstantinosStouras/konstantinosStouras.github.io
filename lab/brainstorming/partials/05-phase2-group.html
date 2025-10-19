@@ -120,31 +120,50 @@
     });
   }
 
-  submitBtn.onclick = () => {
+  submitBtn.onclick = async () => {
     if (MANDATORY_MODE && groupTop5.size !== 5) {
       alert("Please select exactly 5 ideas.");
       return;
     }
 
-    const results = [...document.querySelectorAll('#groupTop5List li')].map(li => {
-      const titleInput = li.querySelector('input[data-final-title]');
-      const descInput = li.querySelector('textarea[data-final-desc]');
+    // Collect the top 5 final ideas with their finalized titles/descriptions
+    const top5Array = [...groupTop5];
+    const results = top5Array.map(id => {
+      const idea = groupIdeas.find(i => i.id === id);
+      const titleInput = document.querySelector(`input[data-final-title="${id}"]`);
+      const descInput = document.querySelector(`textarea[data-final-desc="${id}"]`);
       return {
-        title: titleInput ? titleInput.value.trim() : '',
-        desc: descInput ? descInput.value.trim() : ''
+        id: id,
+        originalTitle: idea ? idea.title : '',
+        originalDesc: idea ? idea.desc : '',
+        originalSource: idea ? idea.src : '',
+        finalTitle: titleInput ? titleInput.value.trim() : '',
+        finalDesc: descInput ? descInput.value.trim() : ''
       };
     });
 
     // Validate all have content in mandatory mode
     if(MANDATORY_MODE){
-      const incomplete = results.some(r => !r.title || !r.desc);
+      const incomplete = results.some(r => !r.finalTitle || !r.finalDesc);
       if(incomplete){
         alert("Please complete all title and description fields for the Top 5 ideas.");
         return;
       }
     }
 
-    console.log("Submitted Final Top-5:", results);
+    console.log("Submitted - All Group Ideas:", groupIdeas);
+    console.log("Submitted - Final Top-5 (ordered):", results);
+
+    // 🔥 LOG TO GOOGLE SHEETS - ALL GROUP IDEAS + TOP 5 IN ORDER
+    if (window.__APP__ && window.__APP__.logData) {
+      await window.__APP__.logData({
+        type: 'phase2_group',
+        participantId: window.__APP__.participantId,
+        allGroupIdeas: groupIdeas,    // ALL group ideas generated
+        finalTop5: results,            // Top 5 in order with final edits
+        groupLeader: leaderNameEl.textContent
+      });
+    }
 
     if (window.__APP__) window.__APP__.next();
   };

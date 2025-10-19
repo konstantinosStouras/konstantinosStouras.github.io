@@ -292,7 +292,7 @@
   }
 
   // Submit handler
-  submitBtn.addEventListener('click', () => {
+  submitBtn.addEventListener('click', async () => {
     console.log("Submit clicked");
     
     if(MANDATORY_MODE && top5.length !== 5){
@@ -321,10 +321,21 @@
     }
 
     const payload = {
-      top5: finalIdeas
+      allIdeas: ideas,  // ALL ideas generated
+      top5: finalIdeas  // Top 5 in order
     };
 
     console.log("Phase 1 submission:", payload);
+    
+    // 🔥 LOG TO GOOGLE SHEETS - ALL IDEAS + TOP 5
+    if (window.__APP__ && window.__APP__.logData) {
+      await window.__APP__.logData({
+        type: 'phase1_individual',
+        participantId: window.__APP__.participantId,
+        allIdeas: ideas,        // All ideas the user generated
+        top5: finalIdeas        // Top 5 in the order they arranged
+      });
+    }
     
     if(window.__APP__) window.__APP__.next();
   });
