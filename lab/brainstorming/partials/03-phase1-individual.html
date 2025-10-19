@@ -30,11 +30,10 @@
       <li>Develop original product ideas</li>
       <li>Describe each idea briefly and clearly</li>
     </ul>
-	
   </div>
 
   <p id="instructionText" style="font-weight:600;color:#1e40af;">
-    Brainstorm ideas below. Select your Top 5, then fill the submission box at the bottom with an overall idea title and description.
+    Brainstorm ideas below and select your Top 5 to finalize.
   </p>
 </section>
 
@@ -49,7 +48,7 @@
 
 <section class="card" style="max-width:100%;">
   <h2 style="margin:0;border:none;padding:0 0 10px 0;border-bottom:1px solid var(--border);">Select Top 5</h2>
-  <ul id="top5List" style="list-style:none;padding:0;"></ul>
+  <ul id="top5List" style="list-style:none;padding:0;margin-top:16px;"></ul>
 
   <h2 style="margin-top:20px;">Selected Top 5 — edit before finalizing</h2>
   <p class="hint">You can revise each selected idea's <strong>title</strong> and <strong>description</strong> below.</p>
@@ -157,14 +156,6 @@
       return;
     }
 
-    const submissionTitle = document.getElementById("submissionTitle").value.trim();
-    const submissionDesc = document.getElementById("submissionDesc").value.trim();
-    
-    if(MANDATORY_MODE && (!submissionTitle || !submissionDesc)){
-      alert("Please enter both the final submission title and description.");
-      return;
-    }
-
     // Collect finalized ideas
     const finalIdeas = [...top5].map(id => {
       const titleEl = document.querySelector(`[data-final-title="${id}"]`);
@@ -186,8 +177,6 @@
     }
 
     const payload = {
-      submissionTitle,
-      submissionDesc,
       top5: finalIdeas
     };
 
