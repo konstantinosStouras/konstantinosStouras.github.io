@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Test Google Sheets Logging</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 600px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .card {
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    button {
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 600;
+      width: 100%;
+      margin-top: 10px;
+    }
+    button:hover {
+      background: #1e40af;
+    }
+    #output {
+      margin-top: 20px;
+      padding: 15px;
+      background: #f8fafc;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+      font-family: monospace;
+      font-size: 13px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    .success { color: #059669; font-weight: bold; }
+    .error { color: #dc2626; font-weight: bold; }
+    .info { color: #2563eb; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🧪 Google Sheets Logging Test</h1>
+    <p>Click the button below to send test data to your Google Sheet.</p>
+    
+    <button onclick="testGoogleSheet()">Send Test Data</button>
+    <button onclick="testWithGet()">Test GET Endpoint</button>
+    
+    <div id="output">Waiting for test...</div>
+  </div>
+
+  <script>
+    const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby6B8UKs8vbnrUMmFWe2OeTvP097NbDfhNxEyQCZaAxjdGSBlDC_5o7rX8GK0mYWE6i/exec';
+    
+    function log(message, type = 'info') {
+      const output = document.getElementById('output');
+      const className = type === 'success' ? 'success' : type === 'error' ? 'error' : 'info';
+      output.innerHTML += `<div class="${className}">${new Date().toLocaleTimeString()}: ${message}</div>`;
+    }
+    
+    async function testWithGet() {
+      log('Testing GET endpoint...', 'info');
+      const output = document.getElementById('output');
+      output.innerHTML = '';
+      
+      try {
+        log('Sending GET request to: ' + GOOGLE_SCRIPT_URL, 'info');
+        
+        const response = await fetch(GOOGLE_SCRIPT_URL, {
+          method: 'GET',
+          cache: 'no-cache'
+        });
+        
+        log('Response received!', 'success');
+        log('Status: ' + response.status, 'info');
+        
+        const text = await response.text();
+        log('Response body: ' + text, 'info');
+        
+        if (response.ok) {
+          log('✅ GET endpoint is working!', 'success');
+        } else {
+          log('❌ GET request failed', 'error');
+        }
+      } catch (error) {
+        log('❌ Error: ' + error.message, 'error');
+        log('This might be a CORS issue, but that\'s OK for POST requests', 'info');
+      }
+    }
+    
+    async function testGoogleSheet() {
+      log('Starting test...', 'info');
+      const output = document.getElementById('output');
+      output.innerHTML = '';
+      
+      const testData = {
+        type: 'registration',
+        participantId: 'TEST_' + Date.now(),
+        email: 'test@example.com',
+        age: '25',
+        gender: 'Test',
+        education: 'Bachelor\'s',
+        screening: {
+          q1: '3',
+          q2: 'Daily',
+          q3: 'Yes',
+          q4: '4',
+          q5: 'No'
+        }
+      };
+      
+      log('Test data prepared:', 'info');
+      log(JSON.stringify(testData, null, 2), 'info');
+      log('---', 'info');
+      log('Sending to: ' + GOOGLE_SCRIPT_URL, 'info');
+      
+      try {
+        const response = await fetch(GOOGLE_SCRIPT_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(testData)
+        });
+        
+        log('✅ Request sent successfully!', 'success');
+        log('Note: Due to no-cors mode, we cannot read the response.', 'info');
+        log('Check your Google Sheet now - you should see a new row!', 'success');
+        log('---', 'info');
+        log('If you don\'t see data in your sheet:', 'info');
+        log('1. Check Google Apps Script is deployed with "Anyone" access', 'info');
+        log('2. Check the Web App URL is correct', 'info');
+        log('3. Check the sheet has the correct headers', 'info');
+        
+      } catch (error) {
+        log('❌ Error sending request:', 'error');
+        log(error.message, 'error');
+        log('---', 'info');
+        log('Possible issues:', 'info');
+        log('- Google Apps Script URL is wrong', 'info');
+        log('- Script is not deployed', 'info');
+        log('- Script access is not set to "Anyone"', 'info');
+      }
+    }
+  </script>
+</body>
+</html>
