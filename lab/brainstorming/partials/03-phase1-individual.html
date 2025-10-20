@@ -96,6 +96,7 @@
   // Data arrays
   const ideas = [];
   const top5 = []; // Changed from Set to Array to maintain order
+  const editedTop5 = {}; // Track edited values for top 5 ideas
 
   // Escape HTML helper
   function escapeHtml(str){
@@ -205,11 +206,27 @@
   function renderTop5(){
     const editUl = document.getElementById("finalEditList");
     
+    // FIRST: Save any existing edits before clearing the DOM
+    top5.forEach(id => {
+      const titleInput = document.querySelector(`input[data-final-title="${id}"]`);
+      const descInput = document.querySelector(`textarea[data-final-desc="${id}"]`);
+      if (titleInput && descInput) {
+        editedTop5[id] = {
+          title: titleInput.value,
+          desc: descInput.value
+        };
+      }
+    });
+    
     editUl.innerHTML = "";
 
     top5.forEach((id, index) => {
       const idea = ideas.find(i => i.id === id);
       if (!idea) return;
+
+      // Use edited values if they exist, otherwise use original values
+      const displayTitle = editedTop5[id]?.title ?? idea.title;
+      const displayDesc = editedTop5[id]?.desc ?? idea.desc;
 
       // Edit list with drag-and-drop
       const li = document.createElement("li");
@@ -221,9 +238,9 @@
         <div class="final-box" style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:12px;position:relative;">
           <div style="position:absolute;top:12px;right:12px;color:#6b7280;font-size:20px;cursor:move;" title="Drag to reorder">⋮⋮</div>
           <label style="font-weight:600;display:block;margin:4px 0;">Idea title</label>
-          <input type="text" data-final-title="${id}" value="${escapeHtml(idea.title)}" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
+          <input type="text" data-final-title="${id}" value="${escapeHtml(displayTitle)}" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
           <label style="font-weight:600;display:block;margin:8px 0 4px;">Idea description</label>
-          <textarea data-final-desc="${id}" rows="3" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;resize:vertical;">${escapeHtml(idea.desc)}</textarea>
+          <textarea data-final-desc="${id}" rows="3" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;resize:vertical;">${escapeHtml(displayDesc)}</textarea>
         </div>`;
       
       // Drag event handlers
@@ -300,14 +317,25 @@
       return;
     }
 
-    // Collect finalized ideas in order
-    const finalIdeas = top5.map(id => {
+    // Save any final edits before collecting
+    top5.forEach(id => {
       const titleEl = document.querySelector(`[data-final-title="${id}"]`);
       const descEl = document.querySelector(`[data-final-desc="${id}"]`);
+      if (titleEl && descEl) {
+        editedTop5[id] = {
+          title: titleEl.value.trim(),
+          desc: descEl.value.trim()
+        };
+      }
+    });
+
+    // Collect finalized ideas in order using saved edits
+    const finalIdeas = top5.map(id => {
+      const edited = editedTop5[id];
       return {
         id,
-        finalTitle: titleEl ? titleEl.value.trim() : '',
-        finalDescription: descEl ? descEl.value.trim() : ''
+        finalTitle: edited?.title || '',
+        finalDescription: edited?.desc || ''
       };
     });
 
