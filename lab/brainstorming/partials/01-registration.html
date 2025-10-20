@@ -1,148 +1,150 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Brainstorming Registration</title>
+<section class="card">
+  <div style="text-align:center;padding:20px 30px 30px;margin:-22px -22px 30px;">
+    <h1 style="margin:0 0 12px;font-size:32px;font-weight:800;color:#1e293b;display:flex;align-items:center;justify-content:center;gap:12px;">
+      <span style="font-size:40px;">📋</span>
+      Registration
+    </h1>
+    <p style="margin:0;font-size:16px;color:#64748b;">Please provide some basic information about yourself.</p>
+  </div>
 
-  <style>
-    body {
-      font-family: system-ui, sans-serif;
-      background: #f7f9fc;
-      color: #222;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-    }
-    form {
-      background: #fff;
-      padding: 2rem;
-      border-radius: 1rem;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-      width: 100%;
-      max-width: 420px;
-    }
-    h1 {
-      text-align: center;
-      font-size: 1.5rem;
-      margin-bottom: 1rem;
-    }
-    label {
-      display: block;
-      margin-top: 1rem;
-      font-weight: 500;
-    }
-    input, select {
-      width: 100%;
-      padding: 0.6rem;
-      margin-top: 0.25rem;
-      border: 1px solid #ccc;
-      border-radius: 0.5rem;
-      font-size: 1rem;
-    }
-    button {
-      margin-top: 1.5rem;
-      width: 100%;
-      padding: 0.75rem;
-      background: #007bff;
-      border: none;
-      border-radius: 0.5rem;
-      color: white;
-      font-size: 1rem;
-      cursor: pointer;
-      transition: background 0.3s;
-    }
-    button:hover {
-      background: #005ec2;
-    }
-    #status {
-      margin-top: 1rem;
-      text-align: center;
-      font-size: 0.9rem;
-      color: #007bff;
-    }
-  </style>
-</head>
-<body>
-  <form id="registrationForm">
-    <h1>Brainstorming Lab Registration</h1>
+  <form id="regForm" novalidate>
+    <div class="grid-1">
+      <div>
+        <label for="email">Personal E-mail</label>
+        <input id="email" name="email" type="email" placeholder="Enter your personal email address" style="background:#f3f4f6;" />
+        <div class="hint">We'll use this to send you study-related updates.</div>
+      </div>
 
-    <label for="participantId">Participant ID</label>
-    <input id="participantId" name="participantId" type="text" autocomplete="off" required />
+      <div>
+        <label for="age">Age</label>
+        <input id="age" name="age" type="text" placeholder="Enter your age" style="background:#f3f4f6;" />
+        <div class="hint">Please enter your age in years.</div>
+      </div>
 
-    <label for="email">Email</label>
-    <input id="email" name="email" type="email" autocomplete="email" required />
+      <div>
+        <label for="gender">Gender</label>
+        <select id="gender" name="gender" style="background:#f3f4f6; font-size:15px; padding:10px 12px; -webkit-appearance:none; appearance:none;">
+          <option value="" style="font-size:15px;">Please select...</option>
+          <option style="font-size:15px;">Female</option>
+          <option style="font-size:15px;">Male</option>
+          <option style="font-size:15px;">Non-binary</option>
+          <option style="font-size:15px;">Other</option>
+          <option style="font-size:15px;">Prefer not to say</option>
+        </select>
+        <div class="hint">Select the option that best describes you.</div>
+      </div>
+	  
 
-    <label for="age">Age</label>
-    <input id="age" name="age" type="number" min="18" max="99" autocomplete="age" required />
+      <div>
+        <label for="education">Education Level</label>
+        <select id="education" name="education" style="background:#f3f4f6; font-size:15px; padding:10px 12px; -webkit-appearance:none; appearance:none;">
+          <option value="" style="font-size:15px;">Please select...</option>
+          <option style="font-size:15px;">High School</option>
+          <option style="font-size:15px;">Bachelor's</option>
+          <option style="font-size:15px;">Master's</option>
+          <option style="font-size:15px;">PhD/Doctoral</option>
+          <option style="font-size:15px;">Other</option>
+        </select>
+        <div class="hint">Select your highest completed education level.</div>
+      </div>
+    </div>
 
-    <label for="gender">Gender</label>
-    <select id="gender" name="gender" autocomplete="sex" required>
-      <option value="">Select...</option>
-      <option value="Female">Female</option>
-      <option value="Male">Male</option>
-      <option value="Other">Other</option>
-      <option value="Prefer not to say">Prefer not to say</option>
-    </select>
+    <div class="section-header">
+      <h2 style="margin:0;border:none;padding:0;">Screening Questions (Sleep and Wellness Focus)</h2>
+    </div>
 
-    <label for="education">Education Level</label>
-    <select id="education" name="education" autocomplete="education" required>
-      <option value="">Select...</option>
-      <option value="High school">High school</option>
-      <option value="Bachelor">Bachelor</option>
-      <option value="Master">Master</option>
-      <option value="PhD">PhD</option>
-    </select>
+    <div class="grid-1" style="margin-top:16px;">
+      <div>
+        <label>1) How important is sleep or wellness in your daily life?</label>
+        <div class="scale-buttons">
+          <label class="scale-btn"><input type="radio" name="q1" value="1"><span>1</span></label>
+          <label class="scale-btn"><input type="radio" name="q1" value="2"><span>2</span></label>
+          <label class="scale-btn"><input type="radio" name="q1" value="3"><span>3</span></label>
+          <label class="scale-btn"><input type="radio" name="q1" value="4"><span>4</span></label>
+          <label class="scale-btn"><input type="radio" name="q1" value="5"><span>5</span></label>
+        </div>
+        <div class="hint">💡 1 = Not important at all → 5 = Extremely important</div>
+      </div>
 
-    <button type="submit">Register</button>
-    <div id="status"></div>
+      <div>
+        <label>2) How often do you engage in wellness-related activities?</label>
+        <div class="hint" style="margin-top:-4px;margin-bottom:8px;">e.g., exercise, meditation, sleep tracking, healthy eating</div>
+        <div class="radio-group">
+          <label class="radio-btn"><input type="radio" name="q2" value="Daily"><span>Daily</span></label>
+          <label class="radio-btn"><input type="radio" name="q2" value="Several times a week"><span>Several times a week</span></label>
+          <label class="radio-btn"><input type="radio" name="q2" value="Occasionally"><span>Occasionally</span></label>
+          <label class="radio-btn"><input type="radio" name="q2" value="Rarely"><span>Rarely</span></label>
+          <label class="radio-btn"><input type="radio" name="q2" value="Never"><span>Never</span></label>
+        </div>
+      </div>
+
+      <div>
+        <label>3) Have you purchased or used any products related to sleep or wellness in the past six months?</label>
+        <div class="radio-group">
+          <label class="radio-btn"><input type="radio" name="q3" value="Yes"><span>Yes</span></label>
+          <label class="radio-btn"><input type="radio" name="q3" value="No"><span>No</span></label>
+        </div>
+      </div>
+
+      <div>
+        <label>4) Would you consider yourself interested in trying new products or technologies that promote better sleep or wellness?</label>
+        <div class="scale-buttons">
+          <label class="scale-btn"><input type="radio" name="q4" value="1"><span>1</span></label>
+          <label class="scale-btn"><input type="radio" name="q4" value="2"><span>2</span></label>
+          <label class="scale-btn"><input type="radio" name="q4" value="3"><span>3</span></label>
+          <label class="scale-btn"><input type="radio" name="q4" value="4"><span>4</span></label>
+          <label class="scale-btn"><input type="radio" name="q4" value="5"><span>5</span></label>
+        </div>
+        <div class="hint">💡 1 = Not interested → 5 = Very interested</div>
+      </div>
+
+      <div>
+        <label>5) Do you have any prior experience with innovation, marketing, or product development activities?</label>
+        <div class="radio-group">
+          <label class="radio-btn"><input type="radio" name="q5" value="Yes"><span>Yes</span></label>
+          <label class="radio-btn"><input type="radio" name="q5" value="No"><span>No</span></label>
+          <label class="radio-btn"><input type="radio" name="q5" value="Unsure"><span>Unsure</span></label>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-header" style="margin-top:32px;">
+      <h2 style="margin:0;border:none;padding:0;">Consent</h2>
+    </div>
+
+    <div class="consent-box">
+      <label class="consent-item">
+        <input type="checkbox" id="c1" />
+        <span>I confirm that I am 18 years or older and consent to participate in this research study.</span>
+      </label>
+      <label class="consent-item">
+        <input type="checkbox" id="c2" />
+        <span>I understand that my responses will be used anonymously for research purposes only.</span>
+      </label>
+    </div>
+
+    <div style="text-align:center;margin-top:24px;">
+      <button id="submitBtn" class="btn" type="button" data-next>Submit and Start</button>
+      <div class="foot" style="margin-top:12px;color:#6b7280;">All fields are optional (testing mode)</div>
+    </div>
   </form>
+</section>
 
-  <script>
-    const GOOGLE_SCRIPT_URL = 
-      'https://script.google.com/macros/s/AKfycby6B8UKs8vbnrUMmFWe2OeTvP097NbDfhNxEyQCZaAxjdGSBlDC_5o7rX8GK0mYWE6i/exec';
+<script>
+  const MANDATORY_MODE = false; // Testing mode - all fields optional
+  const form = document.getElementById('regForm');
+  const submitBtn = document.getElementById('submitBtn');
+  const c1 = document.getElementById('c1');
+  const c2 = document.getElementById('c2');
 
-    const form = document.getElementById('registrationForm');
-    const status = document.getElementById('status');
+  // In testing mode, button is always enabled
+  submitBtn.disabled = false;
 
-    form.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      status.textContent = 'Submitting...';
+  submitBtn.addEventListener('click', () => {
+    const data = new FormData(form);
+    const payload = Object.fromEntries(data.entries());
+    console.log('Registration payload:', payload);
 
-      const data = {
-        type: 'registration',
-        participantId: form.participantId.value.trim(),
-        email: form.email.value.trim(),
-        age: form.age.value.trim(),
-        gender: form.gender.value,
-        education: form.education.value
-      };
-
-      try {
-        // Form-encoded payload (no preflight)
-        const body = new URLSearchParams();
-        body.append('payload', JSON.stringify(data));
-
-        const response = await fetch(GOOGLE_SCRIPT_URL, {
-          method: 'POST',
-          body,
-          mode: 'cors'
-        });
-
-        if (response.ok) {
-          status.textContent = '✅ Registration logged successfully!';
-          form.reset();
-        } else {
-          status.textContent = '⚠️ Could not log data (server error).';
-        }
-      } catch (err) {
-        console.error(err);
-        status.textContent = '❌ Connection error. Check console.';
-      }
-    });
-  </script>
-</body>
-</html>
+    if (window.__APP__) window.__APP__.next();
+  });
+</script>
