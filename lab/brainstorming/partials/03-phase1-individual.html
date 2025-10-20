@@ -15,7 +15,7 @@
     </p>
     
     <p style="margin:0 0 12px;">
-      Focus on creating as many ideas as you can – big or small, practical or experimental. Each idea should aim to 
+      Focus on creating as many ideas as you can — big or small, practical or experimental. Each idea should aim to 
       offer value, improvement, or innovation in health and wellness.
     </p>
     
@@ -62,7 +62,7 @@
   <h2 style="margin:0;border:none;padding:0 0 10px 0;border-bottom:1px solid var(--border);">Select Top 5</h2>
   <ul id="top5List" style="list-style:none;padding:0;margin-top:16px;"></ul>
 
-  <h2 style="margin-top:20px;">Selected Top 5 – edit before finalizing</h2>
+  <h2 style="margin-top:20px;">Selected Top 5 — edit before finalizing</h2>
   <p class="hint">You can revise each selected idea's <strong>title</strong> and <strong>description</strong> below.</p>
   <ul id="finalEditList" style="list-style:none;padding:0;"></ul>
   
@@ -95,7 +95,8 @@
 
   // Data arrays
   const ideas = [];
-  const top5 = []; // Changed from Set to Array to maintain order
+  const top5 = []; // Array to maintain order
+  const editedTop5 = {}; // Store edited title/desc for top 5 ideas
 
   // Escape HTML helper
   function escapeHtml(str){
@@ -185,6 +186,8 @@
     const index = top5.indexOf(id);
     if(index > -1) {
       top5.splice(index, 1);
+      // Remove from edited storage when deselected
+      delete editedTop5[id];
     } else {
       if(top5.length >= 5) {
         alert("You can only pick 5 ideas.");
@@ -205,11 +208,27 @@
   function renderTop5(){
     const editUl = document.getElementById("finalEditList");
     
+    // IMPORTANT: Save current edits before re-rendering
+    top5.forEach(id => {
+      const titleInput = document.querySelector(`[data-final-title="${id}"]`);
+      const descInput = document.querySelector(`[data-final-desc="${id}"]`);
+      if (titleInput || descInput) {
+        editedTop5[id] = {
+          title: titleInput ? titleInput.value : null,
+          desc: descInput ? descInput.value : null
+        };
+      }
+    });
+    
     editUl.innerHTML = "";
 
     top5.forEach((id, index) => {
       const idea = ideas.find(i => i.id === id);
       if (!idea) return;
+
+      // Use edited values if they exist, otherwise use original
+      const displayTitle = editedTop5[id]?.title ?? idea.title;
+      const displayDesc = editedTop5[id]?.desc ?? idea.desc;
 
       // Edit list with drag-and-drop
       const li = document.createElement("li");
@@ -221,9 +240,9 @@
         <div class="final-box" style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:12px;position:relative;">
           <div style="position:absolute;top:12px;right:12px;color:#6b7280;font-size:20px;cursor:move;" title="Drag to reorder">⋮⋮</div>
           <label style="font-weight:600;display:block;margin:4px 0;">Idea title</label>
-          <input type="text" data-final-title="${id}" value="${escapeHtml(idea.title)}" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
+          <input type="text" data-final-title="${id}" value="${escapeHtml(displayTitle)}" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
           <label style="font-weight:600;display:block;margin:8px 0 4px;">Idea description</label>
-          <textarea data-final-desc="${id}" rows="3" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;resize:vertical;">${escapeHtml(idea.desc)}</textarea>
+          <textarea data-final-desc="${id}" rows="3" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;resize:vertical;">${escapeHtml(displayDesc)}</textarea>
         </div>`;
       
       // Drag event handlers
