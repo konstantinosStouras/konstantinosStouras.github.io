@@ -2,44 +2,6 @@
 
 console.log("app.js loaded successfully");
 
-// ===== GOOGLE SHEETS LOGGING =====
-// ✅ CONFIGURED WITH YOUR WEB APP URL
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby6B8UKs8vbnrUMmFWe2OeTvP097NbDfhNxEyQCZaAxjdGSBlDC_5o7rX8GK0mYWE6i/exec';
-
-// Function to log data to Google Sheets
-async function logToGoogleSheets(data) {
-  if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL === 'YOUR_WEB_APP_URL_HERE') {
-    console.warn('❌ Google Sheets URL not configured. Skipping data logging.');
-    return;
-  }
-  
-  try {
-    console.log('📤 Sending data to Google Sheets...');
-    console.log('📊 Data payload:', data);
-    console.log('🔗 URL:', GOOGLE_SCRIPT_URL);
-    
-    const response = await fetch(GOOGLE_SCRIPT_URL, {
-      method: 'POST',
-      mode: 'no-cors', // Important for Google Apps Script
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data)
-    });
-    
-    console.log('✅ Data sent successfully to Google Sheets!');
-    console.log('ℹ️  Check your Google Sheet - new row should appear');
-    console.log('ℹ️  Note: Due to CORS, we cannot verify the response, but data was sent');
-    
-  } catch (error) {
-    console.error('❌ Error logging to Google Sheets:', error);
-    console.error('🔍 Check these things:');
-    console.error('   1. Is the Google Script URL correct?');
-    console.error('   2. Is the script deployed with "Anyone" access?');
-    console.error('   3. Are you connected to the internet?');
-  }
-}
-
 // ===== Global switches =====
 const MANDATORY_MODE = false;      // false = testing mode; true = strict validation
 const BLOCK_BACK_BUTTON = true;    // keeps URL same & neutralizes back/forward
@@ -62,10 +24,6 @@ const state = {
   participantId: null,
   data: {} // accumulate payloads per step if needed
 };
-
-// Generate participant ID on load
-state.participantId = 'P' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-console.log('Participant ID:', state.participantId);
 
 // Prevent URL navigation & neutralize back/forward
 (function setupHistoryLock(){
@@ -230,13 +188,10 @@ function wireNavButtons() {
 // Optional: expose app controls to page scripts
 function exposeAppAPI(){
   window.__APP__ = {
-    next, 
-    prev,
+    next, prev,
     getState: () => ({ ...state }),
     setParticipantId: (id) => state.participantId = id,
-    setData: (key, value) => { state.data[key] = value; },
-    logData: logToGoogleSheets, // Expose logging function
-    participantId: state.participantId // Expose participant ID
+    setData: (key, value) => { state.data[key] = value; }
   };
 }
 

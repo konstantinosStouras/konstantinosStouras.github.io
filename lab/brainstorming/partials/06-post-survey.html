@@ -250,7 +250,7 @@
   // Initial validation state
   validateLive();
 
-  form.addEventListener('submit', async (e)=>{
+  form.addEventListener('submit', (e)=>{
     e.preventDefault();
 
     if (MANDATORY_MODE) {
@@ -264,15 +264,6 @@
     const data = new FormData(form);
     const payload = Object.fromEntries(data.entries());
     console.log('Post-survey payload:', payload);
-
-    // 🔥 LOG TO GOOGLE SHEETS
-    if (window.__APP__ && window.__APP__.logData) {
-      await window.__APP__.logData({
-        type: 'post_survey',
-        participantId: window.__APP__.participantId,
-        responses: payload
-      });
-    }
 
     if (window.__APP__) window.__APP__.next();
   });

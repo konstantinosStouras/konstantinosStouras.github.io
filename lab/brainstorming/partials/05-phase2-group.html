@@ -22,9 +22,13 @@
   <ul id="groupIdeasList" style="list-style:none;padding:0;"></ul>
 </section>
 
-<div style="margin-top:16px;text-align:right;">
-  <button id="submitGroupTop5" class="btn" disabled>Submit Final Top-5 →</button>
-</div>
+<section class="card" style="max-width:100%;">
+  <h2>Top-5 Final Ideas</h2>
+  <ul id="groupTop5List" style="list-style:none;padding:0;"></ul>
+  <div style="margin-top:16px;text-align:right;">
+    <button id="submitGroupTop5" class="btn" disabled data-next>Submit Final Top-5 →</button>
+  </div>
+</section>
 
 <script>
   const MANDATORY_MODE = false; // Testing mode - validation disabled
@@ -116,50 +120,31 @@
     });
   }
 
-  submitBtn.onclick = async () => {
+  submitBtn.onclick = () => {
     if (MANDATORY_MODE && groupTop5.size !== 5) {
       alert("Please select exactly 5 ideas.");
       return;
     }
 
-    // Collect the top 5 final ideas with their finalized titles/descriptions
-    const top5Array = [...groupTop5];
-    const results = top5Array.map(id => {
-      const idea = groupIdeas.find(i => i.id === id);
-      const titleInput = document.querySelector(`input[data-final-title="${id}"]`);
-      const descInput = document.querySelector(`textarea[data-final-desc="${id}"]`);
+    const results = [...document.querySelectorAll('#groupTop5List li')].map(li => {
+      const titleInput = li.querySelector('input[data-final-title]');
+      const descInput = li.querySelector('textarea[data-final-desc]');
       return {
-        id: id,
-        originalTitle: idea ? idea.title : '',
-        originalDesc: idea ? idea.desc : '',
-        originalSource: idea ? idea.src : '',
-        finalTitle: titleInput ? titleInput.value.trim() : '',
-        finalDesc: descInput ? descInput.value.trim() : ''
+        title: titleInput ? titleInput.value.trim() : '',
+        desc: descInput ? descInput.value.trim() : ''
       };
     });
 
     // Validate all have content in mandatory mode
     if(MANDATORY_MODE){
-      const incomplete = results.some(r => !r.finalTitle || !r.finalDesc);
+      const incomplete = results.some(r => !r.title || !r.desc);
       if(incomplete){
         alert("Please complete all title and description fields for the Top 5 ideas.");
         return;
       }
     }
 
-    console.log("Submitted - All Group Ideas:", groupIdeas);
-    console.log("Submitted - Final Top-5 (ordered):", results);
-
-    // 🔥 LOG TO GOOGLE SHEETS - ALL GROUP IDEAS + TOP 5 IN ORDER
-    if (window.__APP__ && window.__APP__.logData) {
-      await window.__APP__.logData({
-        type: 'phase2_group',
-        participantId: window.__APP__.participantId,
-        allGroupIdeas: groupIdeas,    // ALL group ideas generated
-        finalTop5: results,            // Top 5 in order with final edits
-        groupLeader: leaderNameEl.textContent
-      });
-    }
+    console.log("Submitted Final Top-5:", results);
 
     if (window.__APP__) window.__APP__.next();
   };
