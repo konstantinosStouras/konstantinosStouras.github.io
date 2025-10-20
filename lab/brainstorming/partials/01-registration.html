@@ -131,20 +131,43 @@
 </section>
 
 <script>
+(function() {
   const MANDATORY_MODE = false; // Testing mode - all fields optional
   const form = document.getElementById('regForm');
   const submitBtn = document.getElementById('submitBtn');
-  const c1 = document.getElementById('c1');
-  const c2 = document.getElementById('c2');
 
   // In testing mode, button is always enabled
   submitBtn.disabled = false;
 
-  submitBtn.addEventListener('click', () => {
+  submitBtn.addEventListener('click', async () => {
     const data = new FormData(form);
     const payload = Object.fromEntries(data.entries());
+    
+    // Get screening responses
+    const screening = {
+      q1: payload.q1 || '',
+      q2: payload.q2 || '',
+      q3: payload.q3 || '',
+      q4: payload.q4 || '',
+      q5: payload.q5 || ''
+    };
+    
     console.log('Registration payload:', payload);
+
+    // 🔥 LOG TO GOOGLE SHEETS
+    if (window.__APP__ && window.__APP__.logData) {
+      await window.__APP__.logData({
+        type: 'registration',
+        participantId: window.__APP__.participantId,
+        email: payload.email || '',
+        age: payload.age || '',
+        gender: payload.gender || '',
+        education: payload.education || '',
+        screening: screening
+      });
+    }
 
     if (window.__APP__) window.__APP__.next();
   });
+})();
 </script>
