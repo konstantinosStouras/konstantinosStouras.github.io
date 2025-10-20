@@ -26,7 +26,7 @@
   <h2>Top-5 Final Ideas</h2>
   <ul id="groupTop5List" style="list-style:none;padding:0;"></ul>
   <div style="margin-top:16px;text-align:right;">
-    <button id="submitGroupTop5" class="btn" disabled data-next>Submit Final Top-5 →</button>
+    <button id="submitGroupTop5" class="btn" disabled>Submit Final Top-5 →</button>
   </div>
 </section>
 
@@ -120,7 +120,7 @@
     });
   }
 
-  submitBtn.onclick = () => {
+  submitBtn.onclick = async () => {
     if (MANDATORY_MODE && groupTop5.size !== 5) {
       alert("Please select exactly 5 ideas.");
       return;
@@ -144,7 +144,21 @@
       }
     }
 
-    console.log("Submitted Final Top-5:", results);
+    const payload = {
+      type: 'phase2_group',
+      participantId: window.__APP__.getParticipantId(),
+      allGroupIdeas: groupIdeas,
+      finalTop5: results,
+      groupLeader: leaderNameEl.textContent
+    };
+
+    console.log("Submitted Final Top-5:", payload);
+    
+    // Log to Google Sheets
+    await window.__APP__.logToGoogleSheets(payload);
+    
+    // Store in app state
+    window.__APP__.setData('phase2', payload);
 
     if (window.__APP__) window.__APP__.next();
   };

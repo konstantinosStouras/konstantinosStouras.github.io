@@ -33,6 +33,7 @@
         </select>
         <div class="hint">Select the option that best describes you.</div>
       </div>
+	  
 
       <div>
         <label for="education">Education Level</label>
@@ -123,13 +124,14 @@
     </div>
 
     <div style="text-align:center;margin-top:24px;">
-      <button id="submitBtn" class="btn" type="button">Submit and Start</button>
+      <button id="submitBtn" class="btn" type="button" data-next>Submit and Start</button>
       <div class="foot" style="margin-top:12px;color:#6b7280;">All fields are optional (testing mode)</div>
     </div>
   </form>
 </section>
 
 <script>
+(function() {
   const MANDATORY_MODE = false; // Testing mode - all fields optional
   const form = document.getElementById('regForm');
   const submitBtn = document.getElementById('submitBtn');
@@ -139,36 +141,33 @@
 
   submitBtn.addEventListener('click', async () => {
     const data = new FormData(form);
-    const formData = Object.fromEntries(data.entries());
+    const payload = Object.fromEntries(data.entries());
     
-    // Collect screening questions
+    // Get screening responses
     const screening = {
-      q1: formData.q1 || '',
-      q2: formData.q2 || '',
-      q3: formData.q3 || '',
-      q4: formData.q4 || '',
-      q5: formData.q5 || ''
-    };
-    
-    const payload = {
-      type: 'registration',
-      participantId: window.__APP__.getParticipantId(),
-      email: formData.email || '',
-      age: formData.age || '',
-      gender: formData.gender || '',
-      education: formData.education || '',
-      screening: screening
+      q1: payload.q1 || '',
+      q2: payload.q2 || '',
+      q3: payload.q3 || '',
+      q4: payload.q4 || '',
+      q5: payload.q5 || ''
     };
     
     console.log('Registration payload:', payload);
-    
-    // Log to Google Sheets
-    await window.__APP__.logToGoogleSheets(payload);
-    
-    // Store in app state
-    window.__APP__.setData('registration', payload);
-    
-    // Move to next step
+
+    // 🔥 LOG TO GOOGLE SHEETS
+    if (window.__APP__ && window.__APP__.logData) {
+      await window.__APP__.logData({
+        type: 'registration',
+        participantId: window.__APP__.participantId,
+        email: payload.email || '',
+        age: payload.age || '',
+        gender: payload.gender || '',
+        education: payload.education || '',
+        screening: screening
+      });
+    }
+
     if (window.__APP__) window.__APP__.next();
   });
+})();
 </script>

@@ -202,7 +202,7 @@
     </div>
 
     <div style="text-align:center;margin-top:24px;">
-      <button id="submitBtn" class="btn" type="submit" data-next>Submit Survey</button>
+      <button id="submitBtn" class="btn" type="submit">Submit Survey</button>
       <div class="foot" style="margin-top:12px;">All 1–10 scale questions are required.</div>
     </div>
   </form>
@@ -250,7 +250,7 @@
   // Initial validation state
   validateLive();
 
-  form.addEventListener('submit', (e)=>{
+  form.addEventListener('submit', async (e)=>{
     e.preventDefault();
 
     if (MANDATORY_MODE) {
@@ -262,8 +262,21 @@
     }
 
     const data = new FormData(form);
-    const payload = Object.fromEntries(data.entries());
+    const formData = Object.fromEntries(data.entries());
+    
+    const payload = {
+      type: 'post_survey',
+      participantId: window.__APP__.getParticipantId(),
+      responses: formData
+    };
+    
     console.log('Post-survey payload:', payload);
+    
+    // Log to Google Sheets
+    await window.__APP__.logToGoogleSheets(payload);
+    
+    // Store in app state
+    window.__APP__.setData('postSurvey', payload);
 
     if (window.__APP__) window.__APP__.next();
   });

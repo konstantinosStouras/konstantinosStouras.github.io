@@ -311,7 +311,7 @@
   }
 
   // Submit handler
-  submitBtn.addEventListener('click', () => {
+  submitBtn.addEventListener('click', async () => {
     console.log("Submit clicked");
     
     if(MANDATORY_MODE && top5.length !== 5){
@@ -340,10 +340,19 @@
     }
 
     const payload = {
+      type: 'phase1_individual',
+      participantId: window.__APP__.getParticipantId(),
+      allIdeas: ideas,
       top5: finalIdeas
     };
 
     console.log("Phase 1 submission:", payload);
+    
+    // Log to Google Sheets
+    await window.__APP__.logToGoogleSheets(payload);
+    
+    // Store in app state
+    window.__APP__.setData('phase1', payload);
     
     if(window.__APP__) window.__APP__.next();
   });
