@@ -2,6 +2,10 @@
 
 console.log("app.js loaded successfully");
 
+// ===== GOOGLE SHEETS CONFIGURATION =====
+// REPLACE THIS URL WITH YOUR WEB APP URL FROM GOOGLE APPS SCRIPT
+const GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycby6B8UKs8vbnrUMmFWe2OeTvP097NbDfhNxEyQCZaAxjdGSBlDC_5o7rX8GK0mYWE6i/exec';
+
 // ===== Global switches =====
 const MANDATORY_MODE = false;      // false = testing mode; true = strict validation
 const BLOCK_BACK_BUTTON = true;    // keeps URL same & neutralizes back/forward
@@ -21,9 +25,38 @@ const STEPS = [
 // ===== App state (you can persist to localStorage if desired) =====
 const state = {
   stepIndex: 0,
-  participantId: null,
+  participantId: generateParticipantId(),
   data: {} // accumulate payloads per step if needed
 };
+
+// Generate unique participant ID
+function generateParticipantId() {
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).substring(2, 8);
+  return `P${timestamp}-${random}`;
+}
+
+// Send data to Google Sheets
+async function logToGoogleSheets(payload) {
+  try {
+    console.log('Sending to Google Sheets:', payload);
+    
+    const response = await fetch(GOOGLE_SHEET_URL, {
+      method: 'POST',
+      mode: 'no-cors', // Important for Google Apps Script
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload)
+    });
+    
+    console.log('✅ Data sent to Google Sheets');
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Error sending to Google Sheets:', error);
+    return { success: false, error: error.message };
+  }
+}
 
 // Prevent URL navigation & neutralize back/forward
 (function setupHistoryLock(){
@@ -188,13 +221,17 @@ function wireNavButtons() {
 // Optional: expose app controls to page scripts
 function exposeAppAPI(){
   window.__APP__ = {
-    next, prev,
+    next, 
+    prev,
     getState: () => ({ ...state }),
     setParticipantId: (id) => state.participantId = id,
-    setData: (key, value) => { state.data[key] = value; }
+    setData: (key, value) => { state.data[key] = value; },
+    logToGoogleSheets: logToGoogleSheets,
+    getParticipantId: () => state.participantId
   };
 }
 
 // Boot
 console.log("Starting app...");
+console.log("Participant ID:", state.participantId);
 render();
