@@ -4,7 +4,7 @@ console.log("app.js loaded successfully");
 
 // ===== GOOGLE SHEETS CONFIGURATION =====
 // REPLACE THIS URL WITH YOUR WEB APP URL FROM GOOGLE APPS SCRIPT
-const GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycby6B8UKs8vbnrUMmFWe2OeTvP097NbDfhNxEyQCZaAxjdGSBlDC_5o7rX8GK0mYWE6i/exec';
+const GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbw2GCmMY1Aj8UGcEpmDobA2f8Uuy-fjcW2XUQfo1Amyb3UqNMZTdvtsf6vvnGmsS0R-/exec';
 
 // ===== Global switches =====
 const MANDATORY_MODE = false;      // false = testing mode; true = strict validation
