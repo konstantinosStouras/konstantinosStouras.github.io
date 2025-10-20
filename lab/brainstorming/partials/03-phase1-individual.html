@@ -40,17 +40,19 @@
 <section class="card ideas-box" style="max-width:100%;">
   <h2>Your Ideas</h2>
   
-  <div style="margin-bottom:16px;">
-    <label for="ideaTitle" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;">Idea title</label>
-    <input type="text" id="ideaTitle" placeholder="Enter your idea title" />
-  </div>
-  
-  <div style="margin-bottom:16px;">
-    <label for="ideaDesc" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;">Idea description</label>
-    <textarea id="ideaDesc" placeholder="Describe your idea in detail"></textarea>
-  </div>
-  
-  <button id="addIdea" class="btn" type="button">Add Idea</button>
+  <form id="ideaForm" onsubmit="return false;">
+    <div style="margin-bottom:16px;">
+      <label for="ideaTitle" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;">Idea title</label>
+      <input type="text" id="ideaTitle" placeholder="Enter your idea title" />
+    </div>
+    
+    <div style="margin-bottom:16px;">
+      <label for="ideaDesc" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;">Idea description</label>
+      <textarea id="ideaDesc" placeholder="Describe your idea in detail"></textarea>
+    </div>
+    
+    <button id="addIdea" class="btn" type="button">Add Idea</button>
+  </form>
 
   <ul id="ideasList" style="list-style:none;padding:0;margin:20px 0 0;"></ul>
 
@@ -73,7 +75,13 @@
 
 <script>
 (function() {
-  // Wrap everything in an IIFE to avoid global scope pollution
+  // Prevent duplicate execution
+  if (window.__PHASE1_LOADED__) {
+    console.log("Phase 1 script already loaded, skipping duplicate execution");
+    return;
+  }
+  window.__PHASE1_LOADED__ = true;
+
   console.log("Phase 1 script starting...");
   
   const MANDATORY_MODE = false; // Testing mode - validation disabled
@@ -110,6 +118,7 @@
   const ideaDescInput = document.getElementById("ideaDesc");
   const ideasListEl = document.getElementById("ideasList");
   const submitBtn = document.getElementById("submitAll");
+  const ideaForm = document.getElementById("ideaForm");
 
   // Verify elements exist
   if (!addIdeaBtn) {
@@ -123,8 +132,38 @@
 
   console.log("All elements found successfully");
 
+  // Prevent Enter key from doing anything unexpected
+  if (ideaForm) {
+    ideaForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log("Form submit prevented");
+      return false;
+    });
+  }
+
+  // Prevent Enter key in input fields from causing issues
+  ideaTitleInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      ideaDescInput.focus();
+    }
+  });
+
+  ideaDescInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleAddIdea();
+    }
+  });
+
   // Add idea handler
-  function handleAddIdea() {
+  function handleAddIdea(e) {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
     console.log("Add Idea button clicked!");
     
     const title = ideaTitleInput.value.trim();
@@ -147,9 +186,11 @@
     // Clear inputs
     ideaTitleInput.value = "";
     ideaDescInput.value = "";
+    ideaTitleInput.focus();
   }
 
-  // Attach event listener
+  // Attach event listener - remove first if it exists
+  addIdeaBtn.onclick = null;
   addIdeaBtn.addEventListener('click', handleAddIdea);
   console.log("Event listener attached to Add Idea button");
 
@@ -173,7 +214,10 @@
     document.querySelectorAll('.top5-checkbox').forEach(checkbox => {
       const ideaId = parseInt(checkbox.getAttribute('data-idea-id'));
       checkbox.checked = top5.includes(ideaId);
-      checkbox.addEventListener('change', () => toggleTop5(ideaId));
+      checkbox.addEventListener('change', (e) => {
+        e.stopPropagation();
+        toggleTop5(ideaId);
+      });
     });
     
     renderTop5();
@@ -249,16 +293,19 @@
         draggedId = id;
         li.style.opacity = '0.5';
         e.dataTransfer.effectAllowed = 'move';
+        e.stopPropagation();
       });
       
       li.addEventListener('dragend', (e) => {
         li.style.opacity = '1';
         draggedElement = null;
         draggedId = null;
+        e.stopPropagation();
       });
       
       li.addEventListener('dragover', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         e.dataTransfer.dropEffect = 'move';
         
         if (draggedElement && draggedElement !== li) {
@@ -278,10 +325,12 @@
       li.addEventListener('dragleave', (e) => {
         li.style.borderTop = '';
         li.style.borderBottom = '';
+        e.stopPropagation();
       });
       
       li.addEventListener('drop', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         li.style.borderTop = '';
         li.style.borderBottom = '';
         
@@ -308,12 +357,26 @@
     });
   }
 
-  // Submit handler
-  submitBtn.addEventListener('click', async () => {
+  // Submit handler - with protection against duplicate calls
+  let isSubmitting = false;
+  
+  async function handleSubmit(e) {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
+    if (isSubmitting) {
+      console.log("Already submitting, ignoring duplicate call");
+      return;
+    }
+    
+    isSubmitting = true;
     console.log("Submit clicked");
     
     if(MANDATORY_MODE && top5.length !== 5){
       alert("Please select exactly 5 ideas before submitting.");
+      isSubmitting = false;
       return;
     }
 
@@ -344,6 +407,7 @@
       const incomplete = finalIdeas.some(idea => !idea.finalTitle || !idea.finalDescription);
       if(incomplete){
         alert("Please ensure all Top 5 ideas have both title and description filled in the edit section.");
+        isSubmitting = false;
         return;
       }
     }
@@ -365,8 +429,15 @@
       });
     }
     
+    // Clear the loaded flag before navigating
+    window.__PHASE1_LOADED__ = false;
+    
     if(window.__APP__) window.__APP__.next();
-  });
+  }
+
+  // Attach submit handler - remove first if it exists
+  submitBtn.onclick = null;
+  submitBtn.addEventListener('click', handleSubmit);
 
   console.log("Phase 1 script initialization complete");
 })();
