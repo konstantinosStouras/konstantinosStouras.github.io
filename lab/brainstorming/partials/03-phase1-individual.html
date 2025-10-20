@@ -40,19 +40,17 @@
 <section class="card ideas-box" style="max-width:100%;">
   <h2>Your Ideas</h2>
   
-  <form id="ideaForm" onsubmit="return false;">
-    <div style="margin-bottom:16px;">
-      <label for="ideaTitle" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;">Idea title</label>
-      <input type="text" id="ideaTitle" placeholder="Enter your idea title" />
-    </div>
-    
-    <div style="margin-bottom:16px;">
-      <label for="ideaDesc" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;">Idea description</label>
-      <textarea id="ideaDesc" placeholder="Describe your idea in detail"></textarea>
-    </div>
-    
-    <button id="addIdea" class="btn" type="button">Add Idea</button>
-  </form>
+  <div style="margin-bottom:16px;">
+    <label for="ideaTitle" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;">Idea title</label>
+    <input type="text" id="ideaTitle" placeholder="Enter your idea title" />
+  </div>
+  
+  <div style="margin-bottom:16px;">
+    <label for="ideaDesc" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;">Idea description</label>
+    <textarea id="ideaDesc" placeholder="Describe your idea in detail"></textarea>
+  </div>
+  
+  <button id="addIdea" class="btn">Add Idea</button>
 
   <ul id="ideasList" style="list-style:none;padding:0;margin:20px 0 0;"></ul>
 
@@ -69,19 +67,13 @@
   <ul id="finalEditList" style="list-style:none;padding:0;"></ul>
   
   <div style="margin-top:20px;text-align:center;">
-    <button id="submitAll" class="btn" type="button">Submit</button>
+    <button id="submitAll" class="btn" data-next>Submit</button>
   </div>
 </section>
 
 <script>
 (function() {
-  // Prevent duplicate execution
-  if (window.__PHASE1_LOADED__) {
-    console.log("Phase 1 script already loaded, skipping duplicate execution");
-    return;
-  }
-  window.__PHASE1_LOADED__ = true;
-
+  // Wrap everything in an IIFE to avoid global scope pollution
   console.log("Phase 1 script starting...");
   
   const MANDATORY_MODE = false; // Testing mode - validation disabled
@@ -104,7 +96,6 @@
   // Data arrays
   const ideas = [];
   const top5 = []; // Changed from Set to Array to maintain order
-  const editedTop5 = {}; // Track edited values for top 5 ideas
 
   // Escape HTML helper
   function escapeHtml(str){
@@ -118,7 +109,6 @@
   const ideaDescInput = document.getElementById("ideaDesc");
   const ideasListEl = document.getElementById("ideasList");
   const submitBtn = document.getElementById("submitAll");
-  const ideaForm = document.getElementById("ideaForm");
 
   // Verify elements exist
   if (!addIdeaBtn) {
@@ -132,38 +122,8 @@
 
   console.log("All elements found successfully");
 
-  // Prevent Enter key from doing anything unexpected
-  if (ideaForm) {
-    ideaForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      console.log("Form submit prevented");
-      return false;
-    });
-  }
-
-  // Prevent Enter key in input fields from causing issues
-  ideaTitleInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      ideaDescInput.focus();
-    }
-  });
-
-  ideaDescInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleAddIdea();
-    }
-  });
-
   // Add idea handler
-  function handleAddIdea(e) {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-    
+  function handleAddIdea() {
     console.log("Add Idea button clicked!");
     
     const title = ideaTitleInput.value.trim();
@@ -186,11 +146,9 @@
     // Clear inputs
     ideaTitleInput.value = "";
     ideaDescInput.value = "";
-    ideaTitleInput.focus();
   }
 
-  // Attach event listener - remove first if it exists
-  addIdeaBtn.onclick = null;
+  // Attach event listener
   addIdeaBtn.addEventListener('click', handleAddIdea);
   console.log("Event listener attached to Add Idea button");
 
@@ -214,10 +172,7 @@
     document.querySelectorAll('.top5-checkbox').forEach(checkbox => {
       const ideaId = parseInt(checkbox.getAttribute('data-idea-id'));
       checkbox.checked = top5.includes(ideaId);
-      checkbox.addEventListener('change', (e) => {
-        e.stopPropagation();
-        toggleTop5(ideaId);
-      });
+      checkbox.addEventListener('change', () => toggleTop5(ideaId));
     });
     
     renderTop5();
@@ -250,27 +205,11 @@
   function renderTop5(){
     const editUl = document.getElementById("finalEditList");
     
-    // FIRST: Save any existing edits before clearing the DOM
-    top5.forEach(id => {
-      const titleInput = document.querySelector(`input[data-final-title="${id}"]`);
-      const descInput = document.querySelector(`textarea[data-final-desc="${id}"]`);
-      if (titleInput && descInput) {
-        editedTop5[id] = {
-          title: titleInput.value,
-          desc: descInput.value
-        };
-      }
-    });
-    
     editUl.innerHTML = "";
 
     top5.forEach((id, index) => {
       const idea = ideas.find(i => i.id === id);
       if (!idea) return;
-
-      // Use edited values if they exist, otherwise use original values
-      const displayTitle = editedTop5[id]?.title ?? idea.title;
-      const displayDesc = editedTop5[id]?.desc ?? idea.desc;
 
       // Edit list with drag-and-drop
       const li = document.createElement("li");
@@ -282,9 +221,9 @@
         <div class="final-box" style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:12px;position:relative;">
           <div style="position:absolute;top:12px;right:12px;color:#6b7280;font-size:20px;cursor:move;" title="Drag to reorder">⋮⋮</div>
           <label style="font-weight:600;display:block;margin:4px 0;">Idea title</label>
-          <input type="text" data-final-title="${id}" value="${escapeHtml(displayTitle)}" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
+          <input type="text" data-final-title="${id}" value="${escapeHtml(idea.title)}" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
           <label style="font-weight:600;display:block;margin:8px 0 4px;">Idea description</label>
-          <textarea data-final-desc="${id}" rows="3" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;resize:vertical;">${escapeHtml(displayDesc)}</textarea>
+          <textarea data-final-desc="${id}" rows="3" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;resize:vertical;">${escapeHtml(idea.desc)}</textarea>
         </div>`;
       
       // Drag event handlers
@@ -293,19 +232,16 @@
         draggedId = id;
         li.style.opacity = '0.5';
         e.dataTransfer.effectAllowed = 'move';
-        e.stopPropagation();
       });
       
       li.addEventListener('dragend', (e) => {
         li.style.opacity = '1';
         draggedElement = null;
         draggedId = null;
-        e.stopPropagation();
       });
       
       li.addEventListener('dragover', (e) => {
         e.preventDefault();
-        e.stopPropagation();
         e.dataTransfer.dropEffect = 'move';
         
         if (draggedElement && draggedElement !== li) {
@@ -325,12 +261,10 @@
       li.addEventListener('dragleave', (e) => {
         li.style.borderTop = '';
         li.style.borderBottom = '';
-        e.stopPropagation();
       });
       
       li.addEventListener('drop', (e) => {
         e.preventDefault();
-        e.stopPropagation();
         li.style.borderTop = '';
         li.style.borderBottom = '';
         
@@ -357,48 +291,23 @@
     });
   }
 
-  // Submit handler - with protection against duplicate calls
-  let isSubmitting = false;
-  
-  async function handleSubmit(e) {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-    
-    if (isSubmitting) {
-      console.log("Already submitting, ignoring duplicate call");
-      return;
-    }
-    
-    isSubmitting = true;
+  // Submit handler
+  submitBtn.addEventListener('click', () => {
     console.log("Submit clicked");
     
     if(MANDATORY_MODE && top5.length !== 5){
       alert("Please select exactly 5 ideas before submitting.");
-      isSubmitting = false;
       return;
     }
 
-    // Save any final edits before collecting
-    top5.forEach(id => {
+    // Collect finalized ideas in order
+    const finalIdeas = top5.map(id => {
       const titleEl = document.querySelector(`[data-final-title="${id}"]`);
       const descEl = document.querySelector(`[data-final-desc="${id}"]`);
-      if (titleEl && descEl) {
-        editedTop5[id] = {
-          title: titleEl.value.trim(),
-          desc: descEl.value.trim()
-        };
-      }
-    });
-
-    // Collect finalized ideas in order using saved edits
-    const finalIdeas = top5.map(id => {
-      const edited = editedTop5[id];
       return {
         id,
-        finalTitle: edited?.title || '',
-        finalDescription: edited?.desc || ''
+        finalTitle: titleEl ? titleEl.value.trim() : '',
+        finalDescription: descEl ? descEl.value.trim() : ''
       };
     });
 
@@ -407,37 +316,18 @@
       const incomplete = finalIdeas.some(idea => !idea.finalTitle || !idea.finalDescription);
       if(incomplete){
         alert("Please ensure all Top 5 ideas have both title and description filled in the edit section.");
-        isSubmitting = false;
         return;
       }
     }
 
     const payload = {
-      allIdeas: ideas,  // ALL ideas generated
-      top5: finalIdeas  // Top 5 in order
+      top5: finalIdeas
     };
 
     console.log("Phase 1 submission:", payload);
     
-    // 🔥 LOG TO GOOGLE SHEETS - ALL IDEAS + TOP 5
-    if (window.__APP__ && window.__APP__.logData) {
-      await window.__APP__.logData({
-        type: 'phase1_individual',
-        participantId: window.__APP__.participantId,
-        allIdeas: ideas,        // All ideas the user generated
-        top5: finalIdeas        // Top 5 in the order they arranged
-      });
-    }
-    
-    // Clear the loaded flag before navigating
-    window.__PHASE1_LOADED__ = false;
-    
     if(window.__APP__) window.__APP__.next();
-  }
-
-  // Attach submit handler - remove first if it exists
-  submitBtn.onclick = null;
-  submitBtn.addEventListener('click', handleSubmit);
+  });
 
   console.log("Phase 1 script initialization complete");
 })();
