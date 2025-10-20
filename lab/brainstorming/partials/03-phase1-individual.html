@@ -15,7 +15,7 @@
     </p>
     
     <p style="margin:0 0 12px;">
-      Focus on creating as many ideas as you can — big or small, practical or experimental. Each idea should aim to 
+      Focus on creating as many ideas as you can – big or small, practical or experimental. Each idea should aim to 
       offer value, improvement, or innovation in health and wellness.
     </p>
     
@@ -62,12 +62,12 @@
   <h2 style="margin:0;border:none;padding:0 0 10px 0;border-bottom:1px solid var(--border);">Select Top 5</h2>
   <ul id="top5List" style="list-style:none;padding:0;margin-top:16px;"></ul>
 
-  <h2 style="margin-top:20px;">Selected Top 5 — edit before finalizing</h2>
+  <h2 style="margin-top:20px;">Selected Top 5 – edit before finalizing</h2>
   <p class="hint">You can revise each selected idea's <strong>title</strong> and <strong>description</strong> below.</p>
   <ul id="finalEditList" style="list-style:none;padding:0;"></ul>
   
   <div style="margin-top:20px;text-align:center;">
-    <button id="submitAll" class="btn">Submit</button>
+    <button id="submitAll" class="btn" data-next>Submit</button>
   </div>
 </section>
 
@@ -96,7 +96,6 @@
   // Data arrays
   const ideas = [];
   const top5 = []; // Changed from Set to Array to maintain order
-  const editedIdeas = {}; // Store user edits: { id: { title: "", desc: "" } }
 
   // Escape HTML helper
   function escapeHtml(str){
@@ -206,26 +205,11 @@
   function renderTop5(){
     const editUl = document.getElementById("finalEditList");
     
-    // BEFORE clearing, save any current edits from the DOM
-    top5.forEach(id => {
-      const titleEl = document.querySelector(`[data-final-title="${id}"]`);
-      const descEl = document.querySelector(`[data-final-desc="${id}"]`);
-      if (titleEl && descEl) {
-        if (!editedIdeas[id]) editedIdeas[id] = {};
-        editedIdeas[id].title = titleEl.value;
-        editedIdeas[id].desc = descEl.value;
-      }
-    });
-    
     editUl.innerHTML = "";
 
     top5.forEach((id, index) => {
       const idea = ideas.find(i => i.id === id);
       if (!idea) return;
-
-      // Use edited values if they exist, otherwise use original values
-      const currentTitle = editedIdeas[id]?.title ?? idea.title;
-      const currentDesc = editedIdeas[id]?.desc ?? idea.desc;
 
       // Edit list with drag-and-drop
       const li = document.createElement("li");
@@ -237,24 +221,10 @@
         <div class="final-box" style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:12px;position:relative;">
           <div style="position:absolute;top:12px;right:12px;color:#6b7280;font-size:20px;cursor:move;" title="Drag to reorder">⋮⋮</div>
           <label style="font-weight:600;display:block;margin:4px 0;">Idea title</label>
-          <input type="text" data-final-title="${id}" value="${escapeHtml(currentTitle)}" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
+          <input type="text" data-final-title="${id}" value="${escapeHtml(idea.title)}" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
           <label style="font-weight:600;display:block;margin:8px 0 4px;">Idea description</label>
-          <textarea data-final-desc="${id}" rows="3" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;resize:vertical;">${escapeHtml(currentDesc)}</textarea>
+          <textarea data-final-desc="${id}" rows="3" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;resize:vertical;">${escapeHtml(idea.desc)}</textarea>
         </div>`;
-      
-      // Add input listeners to save edits in real-time
-      const titleInput = li.querySelector(`[data-final-title="${id}"]`);
-      const descTextarea = li.querySelector(`[data-final-desc="${id}"]`);
-      
-      titleInput.addEventListener('input', () => {
-        if (!editedIdeas[id]) editedIdeas[id] = {};
-        editedIdeas[id].title = titleInput.value;
-      });
-      
-      descTextarea.addEventListener('input', () => {
-        if (!editedIdeas[id]) editedIdeas[id] = {};
-        editedIdeas[id].desc = descTextarea.value;
-      });
       
       // Drag event handlers
       li.addEventListener('dragstart', (e) => {
@@ -322,7 +292,7 @@
   }
 
   // Submit handler
-  submitBtn.addEventListener('click', () => {
+  submitBtn.addEventListener('click', async () => {
     console.log("Submit clicked");
     
     if(MANDATORY_MODE && top5.length !== 5){
@@ -351,10 +321,21 @@
     }
 
     const payload = {
-      top5: finalIdeas
+      allIdeas: ideas,  // ALL ideas generated
+      top5: finalIdeas  // Top 5 in order
     };
 
     console.log("Phase 1 submission:", payload);
+    
+    // 🔥 LOG TO GOOGLE SHEETS - ALL IDEAS + TOP 5
+    if (window.__APP__ && window.__APP__.logData) {
+      await window.__APP__.logData({
+        type: 'phase1_individual',
+        participantId: window.__APP__.participantId,
+        allIdeas: ideas,        // All ideas the user generated
+        top5: finalIdeas        // Top 5 in the order they arranged
+      });
+    }
     
     if(window.__APP__) window.__APP__.next();
   });
