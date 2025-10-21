@@ -148,9 +148,19 @@
     console.log('✅ Form elements found');
     submitBtn.disabled = false;
     
-    submitBtn.addEventListener('click', async (e) => {
+    submitBtn.addEventListener('click', (e) => {
       e.preventDefault();
+      
+      // Prevent double-clicks
+      if (submitBtn.disabled) return;
+      
       console.log('🖱️ Submit button clicked');
+      
+      // Disable button immediately and show loading state
+      submitBtn.disabled = true;
+      const originalText = submitBtn.textContent;
+      submitBtn.textContent = 'Submitting...';
+      submitBtn.style.opacity = '0.6';
       
       // Get email and age
       const emailEl = document.getElementById('email');
@@ -202,6 +212,9 @@
       if (!window.__APP__) {
         console.error('❌ window.__APP__ not found!');
         alert('Error: App API not available. Please reload the page.');
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
+        submitBtn.style.opacity = '1';
         return;
       }
       
@@ -219,22 +232,23 @@
       };
       
       console.log('📦 Final payload:', payload);
-      console.log('📤 Sending to Google Sheets...');
+      console.log('📤 Sending to Google Sheets (fire-and-forget)...');
       
-      try {
-        await window.__APP__.logToGoogleSheets(payload);
+      // Fire-and-forget: send data but don't wait for response
+      window.__APP__.logToGoogleSheets(payload).then(() => {
         console.log('✅ Data sent successfully!');
-        
-        // Store in app state
-        window.__APP__.setData('registration', payload);
-        
-        // Move to next step
-        console.log('➡️ Moving to next step...');
-        window.__APP__.next();
-      } catch (error) {
+      }).catch((error) => {
         console.error('❌ Error sending data:', error);
-        alert('Error sending data. Check console for details.');
-      }
+      });
+      
+      // Store in app state
+      window.__APP__.setData('registration', payload);
+      
+      // Move to next step immediately (don't wait for Google Sheets)
+      console.log('➡️ Moving to next step...');
+      setTimeout(() => {
+        window.__APP__.next();
+      }, 300); // Small delay for better UX
     });
     
     console.log('✅ Event listener attached to submit button');
