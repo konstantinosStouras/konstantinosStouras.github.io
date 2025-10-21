@@ -23,27 +23,26 @@
 
       <div>
         <label for="gender">Gender</label>
-        <select id="gender" name="gender" style="background:#f3f4f6; font-size:15px; padding:10px 12px; -webkit-appearance:none; appearance:none;">
-          <option value="" style="font-size:15px;">Please select...</option>
-          <option style="font-size:15px;">Female</option>
-          <option style="font-size:15px;">Male</option>
-          <option style="font-size:15px;">Non-binary</option>
-          <option style="font-size:15px;">Other</option>
-          <option style="font-size:15px;">Prefer not to say</option>
+        <select id="gender" name="gender" style="background:#f3f4f6; font-size:15px; padding:10px 12px;">
+          <option value="">Please select...</option>
+          <option value="Female">Female</option>
+          <option value="Male">Male</option>
+          <option value="Non-binary">Non-binary</option>
+          <option value="Other">Other</option>
+          <option value="Prefer not to say">Prefer not to say</option>
         </select>
         <div class="hint">Select the option that best describes you.</div>
       </div>
-	  
 
       <div>
         <label for="education">Education Level</label>
-        <select id="education" name="education" style="background:#f3f4f6; font-size:15px; padding:10px 12px; -webkit-appearance:none; appearance:none;">
-          <option value="" style="font-size:15px;">Please select...</option>
-          <option style="font-size:15px;">High School</option>
-          <option style="font-size:15px;">Bachelor's</option>
-          <option style="font-size:15px;">Master's</option>
-          <option style="font-size:15px;">PhD/Doctoral</option>
-          <option style="font-size:15px;">Other</option>
+        <select id="education" name="education" style="background:#f3f4f6; font-size:15px; padding:10px 12px;">
+          <option value="">Please select...</option>
+          <option value="High School">High School</option>
+          <option value="Bachelor's">Bachelor's</option>
+          <option value="Master's">Master's</option>
+          <option value="PhD/Doctoral">PhD/Doctoral</option>
+          <option value="Other">Other</option>
         </select>
         <div class="hint">Select your highest completed education level.</div>
       </div>
@@ -124,7 +123,7 @@
     </div>
 
     <div style="text-align:center;margin-top:24px;">
-      <button id="submitBtn" class="btn" type="button" data-next>Submit and Start</button>
+      <button id="submitBtn" class="btn" type="button">Submit and Start</button>
       <div class="foot" style="margin-top:12px;color:#6b7280;">All fields are optional (testing mode)</div>
     </div>
   </form>
@@ -132,42 +131,113 @@
 
 <script>
 (function() {
-  const MANDATORY_MODE = false; // Testing mode - all fields optional
-  const form = document.getElementById('regForm');
-  const submitBtn = document.getElementById('submitBtn');
-
-  // In testing mode, button is always enabled
-  submitBtn.disabled = false;
-
-  submitBtn.addEventListener('click', async () => {
-    const data = new FormData(form);
-    const payload = Object.fromEntries(data.entries());
+  console.log('🔄 Registration script loaded - Version 2.0');
+  
+  const MANDATORY_MODE = false;
+  
+  // Wait for DOM to be ready
+  setTimeout(() => {
+    const form = document.getElementById('regForm');
+    const submitBtn = document.getElementById('submitBtn');
     
-    // Get screening responses
-    const screening = {
-      q1: payload.q1 || '',
-      q2: payload.q2 || '',
-      q3: payload.q3 || '',
-      q4: payload.q4 || '',
-      q5: payload.q5 || ''
-    };
-    
-    console.log('Registration payload:', payload);
-
-    // 🔥 LOG TO GOOGLE SHEETS
-    if (window.__APP__ && window.__APP__.logData) {
-      await window.__APP__.logData({
-        type: 'registration',
-        participantId: window.__APP__.participantId,
-        email: payload.email || '',
-        age: payload.age || '',
-        gender: payload.gender || '',
-        education: payload.education || '',
-        screening: screening
-      });
+    if (!form || !submitBtn) {
+      console.error('❌ Form or button not found!');
+      return;
     }
-
-    if (window.__APP__) window.__APP__.next();
-  });
+    
+    console.log('✅ Form elements found');
+    submitBtn.disabled = false;
+    
+    submitBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      console.log('🖱️ Submit button clicked');
+      
+      // Get email and age
+      const emailEl = document.getElementById('email');
+      const ageEl = document.getElementById('age');
+      const genderEl = document.getElementById('gender');
+      const educationEl = document.getElementById('education');
+      
+      console.log('📋 Form elements:', { 
+        emailEl: !!emailEl, 
+        ageEl: !!ageEl,
+        genderEl: !!genderEl,
+        educationEl: !!educationEl
+      });
+      
+      const email = emailEl ? emailEl.value.trim() : '';
+      const age = ageEl ? ageEl.value.trim() : '';
+      const gender = genderEl ? genderEl.value : '';
+      const education = educationEl ? educationEl.value : '';
+      
+      console.log('📝 Basic form values:', { email, age, gender, education });
+      
+      // Get radio values with detailed logging
+      const getRadioValue = (name) => {
+        const radios = document.querySelectorAll(`input[name="${name}"]`);
+        console.log(`  Radio group ${name}: found ${radios.length} buttons`);
+        
+        for (let radio of radios) {
+          if (radio.checked) {
+            console.log(`  ✓ ${name} = ${radio.value}`);
+            return radio.value;
+          }
+        }
+        console.log(`  ✗ ${name} = (none selected)`);
+        return '';
+      };
+      
+      console.log('📊 Collecting screening responses:');
+      const screening = {
+        q1: getRadioValue('q1'),
+        q2: getRadioValue('q2'),
+        q3: getRadioValue('q3'),
+        q4: getRadioValue('q4'),
+        q5: getRadioValue('q5')
+      };
+      
+      console.log('✅ Screening complete:', screening);
+      
+      // Check if window.__APP__ exists
+      if (!window.__APP__) {
+        console.error('❌ window.__APP__ not found!');
+        alert('Error: App API not available. Please reload the page.');
+        return;
+      }
+      
+      const participantId = window.__APP__.getParticipantId();
+      console.log('👤 Participant ID:', participantId);
+      
+      const payload = {
+        type: 'registration',
+        participantId: participantId,
+        email: email,
+        age: age,
+        gender: gender,
+        education: education,
+        screening: screening
+      };
+      
+      console.log('📦 Final payload:', payload);
+      console.log('📤 Sending to Google Sheets...');
+      
+      try {
+        await window.__APP__.logToGoogleSheets(payload);
+        console.log('✅ Data sent successfully!');
+        
+        // Store in app state
+        window.__APP__.setData('registration', payload);
+        
+        // Move to next step
+        console.log('➡️ Moving to next step...');
+        window.__APP__.next();
+      } catch (error) {
+        console.error('❌ Error sending data:', error);
+        alert('Error sending data. Check console for details.');
+      }
+    });
+    
+    console.log('✅ Event listener attached to submit button');
+  }, 100);
 })();
 </script>
