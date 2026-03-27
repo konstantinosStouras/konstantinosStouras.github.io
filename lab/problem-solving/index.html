@@ -371,7 +371,7 @@
 // ============================================================
 // CONFIG: Replace this with your Google Apps Script Web App URL
 // ============================================================
-const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx7J0RlniVjgKeo1iTjqExf-U1kJVo_9b3bn0nS6pp_jRPa8RlhsM-PaEZzwPbSq0f8pw/exec";
+const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzry8-Nht73MyisuHUBsQjG9AJ6_RUHZJ9QwuQswf9M-zgsbbxYWWz_yrAwuEh5UgMSLw/exec";
 
 // State
 let guesses = [];
@@ -507,9 +507,14 @@ function logToSheet(rule, conf, numAttempts) {
   if (submitted) return;
   submitted = true;
 
+  const yeses = guesses.filter(g => g.passes).length;
+  const nos = guesses.filter(g => !g.passes).length;
+
   const payload = {
     timestamp: formatTimestamp(),
     numAttempts: numAttempts,
+    yeses: yeses,
+    nos: nos,
     rule: rule,
     confidence: conf
   };
