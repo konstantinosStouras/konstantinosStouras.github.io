@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>A Quick Puzzle to Test Your Problem Solving</title>
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Georgia, 'Times New Roman', Times, serif;
+      background: #fff;
+      color: #333;
+      min-height: 100vh;
+      padding: 32px 20px 60px;
+      display: flex;
+      justify-content: center;
+    }
+    .container { max-width: 520px; width: 100%; }
+
+    h1.title {
+      font-family: Georgia, 'Times New Roman', Times, serif;
+      font-size: 34px;
+      font-weight: 400;
+      line-height: 1.18;
+      color: #333;
+      margin: 0 0 6px;
+    }
+    .desc {
+      font-size: 15.5px; line-height: 1.5; color: #666; margin-bottom: 18px;
+    }
+    .bold-label {
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 15.5px; font-weight: 700; color: #333; margin-bottom: 4px;
+    }
+    .text {
+      font-size: 15.5px; line-height: 1.55; color: #444; margin-bottom: 12px;
+    }
+    .text strong { color: #333; }
+
+    /* Seed */
+    .seed-row {
+      display: flex; align-items: center; gap: 6px; margin: 12px 0 24px;
+    }
+    .seed-box {
+      width: 76px; height: 38px; background: #bccf31;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Libre Franklin', Arial, sans-serif;
+      font-size: 15px; font-weight: 700; color: #fff;
+    }
+    .seed-tag {
+      font-family: 'Libre Franklin', Arial, sans-serif;
+      font-size: 13px; font-weight: 700; color: #bccf31; margin-left: 12px;
+    }
+
+    /* Guesses */
+    .guesses-label {
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 14px; font-weight: 700; color: #333;
+      margin-bottom: 6px; margin-top: 4px;
+    }
+    .guess-row {
+      display: flex; align-items: center; gap: 6px; margin-bottom: 3px;
+    }
+    .g-box {
+      width: 76px; height: 38px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Libre Franklin', Arial, sans-serif;
+      font-size: 15px; font-weight: 700; color: #fff;
+    }
+    .g-yes { background: #bccf31; }
+    .g-no { background: #e8a0a0; }
+    .g-tag {
+      font-family: 'Libre Franklin', Arial, sans-serif;
+      font-size: 13px; font-weight: 700; margin-left: 12px;
+    }
+    .g-tag-yes { color: #bccf31; }
+    .g-tag-no { color: #d46a6a; }
+
+    /* Inputs */
+    .input-prompt {
+      font-size: 14px; color: #444; margin: 16px 0 8px; font-weight: 700;
+    }
+    .input-row {
+      display: flex; align-items: center; gap: 6px; margin-bottom: 8px;
+    }
+    .num-input {
+      width: 76px; height: 42px;
+      border: 2px solid #ccc; background: #fff;
+      font-family: 'Libre Franklin', Arial, sans-serif;
+      font-size: 15px; font-weight: 600; text-align: center; color: #333;
+      outline: none;
+    }
+    .num-input:focus { border-color: #999; }
+    .check-btn {
+      height: 42px; padding: 0 22px;
+      background: #ccc; border: none;
+      font-family: 'Libre Franklin', Arial, sans-serif;
+      font-size: 13px; font-weight: 700; color: #fff; cursor: pointer;
+    }
+    .check-btn:hover { background: #bbb; }
+    .check-btn.active { background: #999; }
+    .check-btn.active:hover { background: #888; }
+
+    .shake { animation: nshake 0.35s ease; }
+    @keyframes nshake {
+      0%,100%{transform:translateX(0)}
+      20%{transform:translateX(-5px)}
+      40%{transform:translateX(5px)}
+      60%{transform:translateX(-3px)}
+      80%{transform:translateX(3px)}
+    }
+
+    /* Rule input */
+    .rule-section { margin-top: 36px; }
+    .rule-text {
+      font-size: 15px; line-height: 1.55; color: #444; margin-bottom: 10px;
+    }
+    .rule-text strong { color: #333; }
+    .rule-input {
+      display: block; width: 100%; height: 42px;
+      border: 2px solid #ccc; background: #fff;
+      font-family: 'Libre Franklin', Arial, sans-serif;
+      font-size: 14px; color: #333; padding: 0 10px;
+      outline: none; margin-bottom: 14px;
+    }
+    .rule-input:focus { border-color: #999; }
+    .submit-btn-wrap { display: flex; justify-content: flex-end; }
+    .submit-btn {
+      display: inline-block; padding: 10px 22px;
+      background: #2e7d32; border: none; border-radius: 4px;
+      font-family: 'Libre Franklin', Arial, sans-serif;
+      font-size: 13px; font-weight: 800; color: #fff;
+      cursor: pointer; letter-spacing: 0.01em;
+    }
+    .submit-btn:hover { background: #256b29; }
+    .submit-btn:disabled { background: #a5d6a7; cursor: default; }
+
+    /* Confidence scale */
+    .confidence-scale { margin-bottom: 18px; }
+    .confidence-row {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+    }
+    .conf-end {
+      font-family: 'Libre Franklin', Arial, sans-serif;
+      font-size: 11.5px; color: #888; white-space: nowrap;
+    }
+    .confidence-options { display: flex; gap: 20px; }
+    .conf-option {
+      display: flex; flex-direction: column; align-items: center;
+      cursor: pointer; gap: 4px;
+    }
+    .conf-option input[type="radio"] {
+      width: 20px; height: 20px; accent-color: #2e7d32;
+      cursor: pointer; margin: 0;
+    }
+    .conf-num {
+      font-family: 'Libre Franklin', Arial, sans-serif;
+      font-size: 13px; font-weight: 600; color: #555;
+    }
+
+    /* Outcome */
+    .outcome-box {
+      margin-top: 20px; padding: 20px 22px;
+      background: #f7f7f4; border-top: 3px solid #333;
+    }
+    .outcome-title {
+      font-family: Georgia, serif;
+      font-size: 22px; font-weight: 700; margin-bottom: 6px;
+    }
+    .outcome-p {
+      font-size: 15px; line-height: 1.6; color: #555; margin-bottom: 10px;
+    }
+    .outcome-rule {
+      display: inline-block; padding: 6px 14px; background: #e8f5e9;
+      font-family: 'Libre Franklin', Arial, sans-serif;
+      font-size: 14px; font-weight: 700; color: #333; margin: 6px 0 14px;
+    }
+    .reset-btn {
+      display: inline-block; padding: 8px 16px;
+      background: #fff; border: 2px solid #ccc;
+      font-family: 'Libre Franklin', Arial, sans-serif;
+      font-size: 12px; font-weight: 700; color: #666; cursor: pointer;
+    }
+    .reset-btn:hover { border-color: #999; }
+
+    /* Link */
+    .link-btn {
+      font-family: Georgia, serif;
+      font-size: 12.5px; color: #326891; text-decoration: underline;
+      background: none; border: none; cursor: pointer; padding: 0;
+      margin-top: 8px; display: inline-block;
+    }
+    .link-btn:hover { color: #1a4a6e; }
+
+    /* Instructor */
+    .instr-panel {
+      margin-top: 28px; padding: 14px 16px;
+      background: #fffde7; border: 1px solid #e6dfa0;
+    }
+    .instr-label {
+      font-family: 'Libre Franklin', Arial, sans-serif;
+      font-size: 9.5px; text-transform: uppercase;
+      letter-spacing: 0.12em; font-weight: 800;
+      color: #b8860b; margin-bottom: 10px;
+    }
+    .instr-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+    .instr-btn {
+      padding: 6px 14px; background: #fff; border: 1px solid #d4c87a;
+      font-family: 'Libre Franklin', Arial, sans-serif;
+      font-size: 11px; font-weight: 700; color: #8b7500; cursor: pointer;
+    }
+    .instr-btn:hover { background: #faf6e0; }
+    .instr-btn-g { border-color: #6b9e3a; color: #3a6e10; }
+    .instr-btn-g:hover { background: #edf5e4; }
+    .instr-btn-r { border-color: #d88; color: #a03030; }
+    .instr-btn-r:hover { background: #fde8e8; }
+    .instr-hint {
+      font-size: 13px; color: #8b7500; background: #fff;
+      border: 1px solid #e0d8a8; padding: 10px 12px;
+      margin-top: 10px; line-height: 1.5;
+    }
+
+    /* Grading */
+    .grading-panel {
+      margin-top: 14px; padding: 14px 16px;
+      background: #fffde7; border: 1px solid #e6dfa0;
+    }
+    .student-answer {
+      background: #fff; border: 1px solid #ddd;
+      padding: 10px 12px; font-size: 15px;
+      color: #333; font-style: italic; margin-bottom: 12px;
+    }
+    .answer-label {
+      font-family: 'Libre Franklin', Arial, sans-serif;
+      font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.06em; color: #999; margin-bottom: 4px;
+    }
+
+    .hidden { display: none; }
+
+    /* Toast notification */
+    .toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: #333; color: #fff; padding: 10px 20px; border-radius: 6px;
+      font-family: 'Libre Franklin', Arial, sans-serif; font-size: 13px;
+      font-weight: 600; opacity: 0; transition: opacity 0.3s;
+      pointer-events: none; z-index: 999;
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1 class="title">A Quick Puzzle to Test<br>Your Problem Solving</h1>
+  <p class="desc">A short game about the hidden traps in how we test ideas, make decisions, and convince ourselves we're right.</p>
+
+  <p class="bold-label">Here's how it works:</p>
+  <p class="text">There is a secret rule that determines whether a sequence of three numbers is accepted or rejected. <strong>Your goal is to figure out what that rule is.</strong></p>
+  <p class="text">Here is one example of a sequence that <em>obeys</em> the rule:</p>
+
+  <div class="seed-row">
+    <div class="seed-box">2</div>
+    <div class="seed-box">4</div>
+    <div class="seed-box">8</div>
+    <span class="seed-tag">Yes!</span>
+  </div>
+
+  <!-- Guesses list -->
+  <div id="guesses-section" class="hidden">
+    <p class="guesses-label">Your guesses:</p>
+    <div id="guesses-list"></div>
+  </div>
+
+  <!-- Step descriptions -->
+  <div id="step-desc"></div>
+
+  <!-- Input row -->
+  <div id="input-section">
+    <div class="input-row" id="input-row">
+      <input class="num-input" type="text" inputmode="decimal" id="n0">
+      <input class="num-input" type="text" inputmode="decimal" id="n1">
+      <input class="num-input" type="text" inputmode="decimal" id="n2">
+      <button class="check-btn" id="check-btn" onclick="handleCheck()">Check</button>
+    </div>
+  </div>
+
+  <!-- Rule section -->
+  <div id="rule-section" class="hidden">
+    <div class="rule-section">
+      <p class="text" style="margin-bottom:12px">
+        <strong>Step 3:</strong> When you're confident, type your guess of the rule in the text box at the bottom, rate how confident you are, and submit. <strong>You only get one chance</strong>, so make sure you're right before you submit!
+      </p>
+      <p class="bold-label">What's the rule?</p>
+      <p class="rule-text">In your own words, describe what makes a sequence obey the rule.</p>
+      <input class="rule-input" type="text" id="rule-input">
+
+      <p class="rule-text" style="margin-bottom:6px;margin-top:4px">
+        How confident do you feel you have found the correct rule? <span style="color:#b71c1c">*</span>
+      </p>
+      <div class="confidence-scale">
+        <div class="confidence-row">
+          <span class="conf-end">Not confident at all</span>
+          <div class="confidence-options">
+            <label class="conf-option"><span class="conf-num">1</span><input type="radio" name="confidence" value="1" onchange="setConfidence(1)"></label>
+            <label class="conf-option"><span class="conf-num">2</span><input type="radio" name="confidence" value="2" onchange="setConfidence(2)"></label>
+            <label class="conf-option"><span class="conf-num">3</span><input type="radio" name="confidence" value="3" onchange="setConfidence(3)"></label>
+            <label class="conf-option"><span class="conf-num">4</span><input type="radio" name="confidence" value="4" onchange="setConfidence(4)"></label>
+            <label class="conf-option"><span class="conf-num">5</span><input type="radio" name="confidence" value="5" onchange="setConfidence(5)"></label>
+          </div>
+          <span class="conf-end">Very confident</span>
+        </div>
+      </div>
+
+      <div class="submit-btn-wrap">
+        <button class="submit-btn" id="submit-btn" disabled onclick="handleSubmitRule()">Submit my answer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Instructor grading -->
+  <div id="grading-section" class="hidden">
+    <div class="grading-panel">
+      <div class="instr-label">Instructor controls</div>
+      <div class="answer-label">Student's answer:</div>
+      <div class="student-answer" id="grading-answer"></div>
+      <div class="answer-label">Confidence level:</div>
+      <div class="student-answer" id="grading-confidence" style="font-style:normal"></div>
+      <p style="font-size:12.5px;color:#8b7500;margin-bottom:10px;line-height:1.5">
+        The actual rule is: <strong>any three numbers in strictly ascending order</strong>.
+        &nbsp;Is the student's answer correct?
+      </p>
+      <div class="instr-btns">
+        <button class="instr-btn instr-btn-g" onclick="confirmGuess(true)">✓ Correct</button>
+        <button class="instr-btn instr-btn-r" onclick="confirmGuess(false)">✗ Wrong</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Outcome -->
+  <div id="outcome-section" class="hidden"></div>
+
+  <!-- "Just tell me" link -->
+  <div id="tell-me-section">
+    <button class="link-btn" onclick="revealAnswerDirect()">I don't want to play; just tell me the answer.</button>
+  </div>
+
+  <!-- Instructor panel -->
+  <div id="instr-panel" class="instr-panel">
+    <div class="instr-label">Instructor controls</div>
+    <div class="instr-btns">
+      <button class="instr-btn" id="hint-btn" onclick="toggleHint()">Show hint</button>
+      <button class="instr-btn" id="reveal-btn" onclick="toggleReveal()">Reveal answer</button>
+      <button class="instr-btn" onclick="resetGame()">Reset</button>
+    </div>
+    <div id="hint-box" class="hidden">
+      <div class="instr-hint"><strong>Hint:</strong> Try testing sequences you think will <em>fail</em>. What's the simplest possible rule that 2, 4, 8 could follow?</div>
+    </div>
+    <div id="reveal-box" class="hidden">
+      <div class="instr-hint"><strong>The rule is:</strong> any three numbers in strictly ascending order.</div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// CONFIG: Replace this with your Google Apps Script Web App URL
+// ============================================================
+const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx7J0RlniVjgKeo1iTjqExf-U1kJVo_9b3bn0nS6pp_jRPa8RlhsM-PaEZzwPbSq0f8pw/exec";
+
+// State
+let guesses = [];
+let confidence = null;
+let gameState = 'playing'; // playing | guessing | won | lost
+let submitted = false;
+
+const RULE_ANSWER = 'any three numbers in strictly ascending order';
+
+function checkRule(a, b, c) {
+  return a < b && b < c;
+}
+
+function formatTimestamp() {
+  const now = new Date();
+  const day = now.getDate();
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const month = months[now.getMonth()];
+  const year = now.getFullYear();
+  let hours = now.getHours();
+  const mins = String(now.getMinutes()).padStart(2, '0');
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12 || 12;
+  return `${day} ${month} ${year} ${hours}:${mins}${ampm}`;
+}
+
+function showToast(msg, duration) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), duration || 3000);
+}
+
+function updateStepDesc() {
+  const el = document.getElementById('step-desc');
+  if (guesses.length === 0) {
+    el.innerHTML = `
+      <p class="text"><strong>Step 1:</strong> Type any three numbers into the boxes below and click <strong>Check</strong>. We'll tell you whether your sequence obeys the rule (<span style="color:#bccf31;font-weight:700">Yes!</span>) or not (<span style="color:#d46a6a;font-weight:700">No.</span>).</p>
+      <p class="input-prompt">Enter your first sequence here:</p>
+    `;
+  } else {
+    el.innerHTML = `
+      <p class="text" style="margin-top:12px"><strong>Step 2:</strong> Repeat as many times as you like. Try different kinds of sequences to narrow down what the rule could be.</p>
+      <p class="input-prompt">You can test another sequence if you want:</p>
+    `;
+  }
+}
+
+function updateCheckBtn() {
+  const inputs = [document.getElementById('n0'), document.getElementById('n1'), document.getElementById('n2')];
+  const allValid = inputs.every(inp => inp.value !== '' && !isNaN(parseFloat(inp.value)));
+  const btn = document.getElementById('check-btn');
+  if (allValid) btn.classList.add('active');
+  else btn.classList.remove('active');
+}
+
+function updateSubmitBtn() {
+  const rule = document.getElementById('rule-input').value.trim();
+  document.getElementById('submit-btn').disabled = !rule || confidence === null;
+}
+
+function setConfidence(val) {
+  confidence = val;
+  updateSubmitBtn();
+}
+
+function handleCheck() {
+  const vals = [
+    document.getElementById('n0').value,
+    document.getElementById('n1').value,
+    document.getElementById('n2').value
+  ];
+  const nums = vals.map(v => parseFloat(v));
+  if (nums.some(isNaN)) {
+    document.getElementById('input-row').classList.add('shake');
+    setTimeout(() => document.getElementById('input-row').classList.remove('shake'), 400);
+    return;
+  }
+
+  const passes = checkRule(nums[0], nums[1], nums[2]);
+  guesses.push({ nums, passes });
+
+  // Render guess row
+  const list = document.getElementById('guesses-list');
+  const row = document.createElement('div');
+  row.className = 'guess-row';
+  row.innerHTML = `
+    <div class="g-box ${passes ? 'g-yes' : 'g-no'}">${nums[0]}</div>
+    <div class="g-box ${passes ? 'g-yes' : 'g-no'}">${nums[1]}</div>
+    <div class="g-box ${passes ? 'g-yes' : 'g-no'}">${nums[2]}</div>
+    <span class="g-tag ${passes ? 'g-tag-yes' : 'g-tag-no'}">${passes ? 'Yes!' : 'No.'}</span>
+  `;
+  list.appendChild(row);
+  document.getElementById('guesses-section').classList.remove('hidden');
+
+  // Show rule section
+  document.getElementById('rule-section').classList.remove('hidden');
+
+  // Hide "tell me" link
+  document.getElementById('tell-me-section').classList.add('hidden');
+
+  // Clear inputs
+  document.getElementById('n0').value = '';
+  document.getElementById('n1').value = '';
+  document.getElementById('n2').value = '';
+  document.getElementById('n0').focus();
+  updateCheckBtn();
+  updateStepDesc();
+}
+
+function handleSubmitRule() {
+  const rule = document.getElementById('rule-input').value.trim();
+  if (!rule || confidence === null) return;
+
+  gameState = 'guessing';
+
+  // Log to Google Sheets
+  logToSheet(rule, confidence, guesses.length);
+
+  // Hide input & rule sections
+  document.getElementById('input-section').classList.add('hidden');
+  document.getElementById('rule-section').classList.add('hidden');
+  document.getElementById('step-desc').classList.add('hidden');
+  document.getElementById('instr-panel').classList.add('hidden');
+
+  // Show grading panel
+  document.getElementById('grading-answer').textContent = '"' + rule + '"';
+  document.getElementById('grading-confidence').textContent = confidence + ' / 5';
+  document.getElementById('grading-section').classList.remove('hidden');
+}
+
+function logToSheet(rule, conf, numAttempts) {
+  if (submitted) return;
+  submitted = true;
+
+  const payload = {
+    timestamp: formatTimestamp(),
+    numAttempts: numAttempts,
+    rule: rule,
+    confidence: conf
+  };
+
+  fetch(GOOGLE_SCRIPT_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }).then(() => {
+    showToast('Response recorded ✓');
+  }).catch((err) => {
+    console.error('Logging error:', err);
+    showToast('Could not save response — check console');
+  });
+}
+
+function confirmGuess(correct) {
+  gameState = correct ? 'won' : 'lost';
+  document.getElementById('grading-section').classList.add('hidden');
+
+  const el = document.getElementById('outcome-section');
+  el.classList.remove('hidden');
+  el.innerHTML = `
+    <div class="outcome-box">
+      <div class="outcome-title" style="color:${correct ? '#3a6e10' : '#b71c1c'}">
+        ${correct ? 'Correct!' : 'Not quite.'}
+      </div>
+      <p class="outcome-p">
+        ${correct
+          ? "Well done — you correctly identified the rule. Most people guess something more specific (like doubling) and never discover how simple it really is."
+          : "Don't feel bad — most people get this wrong. The natural instinct is to test sequences that confirm your hypothesis rather than ones that might disprove it."}
+      </p>
+      <div class="outcome-rule">The rule: ${RULE_ANSWER}</div>
+      <p class="outcome-p">
+        This puzzle demonstrates <strong>confirmation bias</strong> — our tendency to seek evidence that supports what we already believe, rather than evidence that could prove us wrong.
+      </p>
+      <button class="reset-btn" onclick="resetGame()">Play again</button>
+    </div>
+  `;
+}
+
+function revealAnswerDirect() {
+  document.getElementById('tell-me-section').innerHTML = `
+    <div class="outcome-box" style="margin-top:16px">
+      <div class="outcome-rule">The rule: ${RULE_ANSWER}</div>
+      <p class="outcome-p" style="margin-top:10px">
+        That's it — just three numbers in ascending order. Most people assume a much more specific rule like "each number doubles the previous" because 2, 4, 8 fits that pattern.
+      </p>
+      <button class="reset-btn" onclick="resetGame()">Start fresh</button>
+    </div>
+  `;
+}
+
+function toggleHint() {
+  const box = document.getElementById('hint-box');
+  const btn = document.getElementById('hint-btn');
+  const showing = !box.classList.contains('hidden');
+  box.classList.toggle('hidden');
+  btn.textContent = showing ? 'Show hint' : 'Hide hint';
+}
+
+function toggleReveal() {
+  const box = document.getElementById('reveal-box');
+  const btn = document.getElementById('reveal-btn');
+  const showing = !box.classList.contains('hidden');
+  box.classList.toggle('hidden');
+  btn.textContent = showing ? 'Reveal answer' : 'Hide answer';
+}
+
+function resetGame() {
+  guesses = [];
+  confidence = null;
+  submitted = false;
+  gameState = 'playing';
+
+  document.getElementById('guesses-list').innerHTML = '';
+  document.getElementById('guesses-section').classList.add('hidden');
+  document.getElementById('rule-section').classList.add('hidden');
+  document.getElementById('grading-section').classList.add('hidden');
+  document.getElementById('outcome-section').classList.add('hidden');
+  document.getElementById('outcome-section').innerHTML = '';
+  document.getElementById('input-section').classList.remove('hidden');
+  document.getElementById('step-desc').classList.remove('hidden');
+  document.getElementById('instr-panel').classList.remove('hidden');
+  document.getElementById('tell-me-section').innerHTML =
+    '<button class="link-btn" onclick="revealAnswerDirect()">I don\'t want to play; just tell me the answer.</button>';
+
+  document.getElementById('rule-input').value = '';
+  document.getElementById('n0').value = '';
+  document.getElementById('n1').value = '';
+  document.getElementById('n2').value = '';
+  document.querySelectorAll('input[name="confidence"]').forEach(r => r.checked = false);
+
+  document.getElementById('hint-box').classList.add('hidden');
+  document.getElementById('reveal-box').classList.add('hidden');
+  document.getElementById('hint-btn').textContent = 'Show hint';
+  document.getElementById('reveal-btn').textContent = 'Reveal answer';
+
+  updateStepDesc();
+  updateCheckBtn();
+}
+
+// Init
+document.querySelectorAll('.num-input').forEach((inp, idx) => {
+  inp.addEventListener('input', updateCheckBtn);
+  inp.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      if (idx < 2) document.getElementById('n' + (idx + 1)).focus();
+      else handleCheck();
+    }
+    if (e.key === 'Tab' && !e.shiftKey && idx < 2) {
+      e.preventDefault();
+      document.getElementById('n' + (idx + 1)).focus();
+    }
+  });
+});
+
+document.getElementById('rule-input').addEventListener('input', updateSubmitBtn);
+document.getElementById('rule-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') handleSubmitRule();
+});
+
+updateStepDesc();
+</script>
+
+</body>
+</html>
