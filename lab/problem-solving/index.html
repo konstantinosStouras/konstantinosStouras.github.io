@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>A Quick Puzzle to Test Your Problem Solving</title>
   <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -182,13 +183,30 @@
       font-size: 19px; font-weight: 700; color: #333;
       margin: 20px 0 8px;
     }
-    .reset-btn {
-      display: inline-block; padding: 8px 16px;
-      background: #fff; border: 2px solid #ccc;
-      font-family: 'Libre Franklin', Arial, sans-serif;
-      font-size: 12px; font-weight: 700; color: #666; cursor: pointer;
+
+    /* Answer display in outcome */
+    .student-answer {
+      background: #fff; border: 1px solid #ddd;
+      padding: 10px 12px; font-size: 15px;
+      color: #333; font-style: italic; margin-bottom: 12px;
     }
-    .reset-btn:hover { border-color: #999; }
+    .answer-label {
+      font-family: 'Libre Franklin', Arial, sans-serif;
+      font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.06em; color: #999; margin-bottom: 4px;
+    }
+
+    .hidden { display: none; }
+
+    /* Toast notification */
+    .toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: #333; color: #fff; padding: 10px 20px; border-radius: 6px;
+      font-family: 'Libre Franklin', Arial, sans-serif; font-size: 13px;
+      font-weight: 600; opacity: 0; transition: opacity 0.3s;
+      pointer-events: none; z-index: 999;
+    }
+    .toast.show { opacity: 1; }
 
     /* Link */
     .link-btn {
@@ -217,39 +235,108 @@
       font-size: 11px; font-weight: 700; color: #8b7500; cursor: pointer;
     }
     .instr-btn:hover { background: #faf6e0; }
-    .instr-btn-g { border-color: #6b9e3a; color: #3a6e10; }
-    .instr-btn-g:hover { background: #edf5e4; }
-    .instr-btn-r { border-color: #d88; color: #a03030; }
-    .instr-btn-r:hover { background: #fde8e8; }
     .instr-hint {
       font-size: 13px; color: #8b7500; background: #fff;
       border: 1px solid #e0d8a8; padding: 10px 12px;
       margin-top: 10px; line-height: 1.5;
     }
 
-    /* Answer display in outcome */
-    .student-answer {
-      background: #fff; border: 1px solid #ddd;
-      padding: 10px 12px; font-size: 15px;
-      color: #333; font-style: italic; margin-bottom: 12px;
+    /* ========== CLASS RESULTS SECTION ========== */
+    .class-results {
+      margin-top: 32px;
+      border-top: 2px solid #333;
+      padding-top: 20px;
     }
-    .answer-label {
+    .class-results-title {
+      font-family: Georgia, serif;
+      font-size: 22px; font-weight: 700; color: #333;
+      margin-bottom: 4px;
+    }
+    .class-results-sub {
       font-family: 'Libre Franklin', Arial, sans-serif;
-      font-size: 10px; text-transform: uppercase;
-      letter-spacing: 0.06em; color: #999; margin-bottom: 4px;
+      font-size: 12px; color: #999; margin-bottom: 20px;
+    }
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 24px;
+      margin-bottom: 28px;
+    }
+    .chart-card {
+      background: #fafaf7;
+      border: 1px solid #e8e8e0;
+      padding: 16px;
+    }
+    .chart-card-title {
+      font-family: 'Libre Franklin', Arial, sans-serif;
+      font-size: 11px; font-weight: 800; text-transform: uppercase;
+      letter-spacing: 0.08em; color: #888; margin-bottom: 12px;
+    }
+    .chart-wrap {
+      position: relative;
+      width: 100%;
+    }
+    .chart-wrap canvas {
+      width: 100% !important;
     }
 
-    .hidden { display: none; }
-
-    /* Toast notification */
-    .toast {
-      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-      background: #333; color: #fff; padding: 10px 20px; border-radius: 6px;
-      font-family: 'Libre Franklin', Arial, sans-serif; font-size: 13px;
-      font-weight: 600; opacity: 0; transition: opacity 0.3s;
-      pointer-events: none; z-index: 999;
+    /* Insights table */
+    .insights-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: 'Libre Franklin', Arial, sans-serif;
+      font-size: 13.5px;
+      margin-bottom: 8px;
     }
-    .toast.show { opacity: 1; }
+    .insights-table th {
+      text-align: left; padding: 8px 10px;
+      background: #333; color: #fff;
+      font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .insights-table td {
+      padding: 7px 10px;
+      border-bottom: 1px solid #e8e8e0;
+      color: #444;
+    }
+    .insights-table tr:nth-child(even) td {
+      background: #fafaf7;
+    }
+    .insights-table .val {
+      font-weight: 700; color: #333; text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .loading-results {
+      text-align: center; padding: 40px 0;
+      font-family: 'Libre Franklin', Arial, sans-serif;
+      font-size: 13px; color: #999;
+    }
+    .loading-spinner {
+      width: 28px; height: 28px;
+      border: 3px solid #e8e8e0; border-top-color: #333;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .results-error {
+      text-align: center; padding: 24px;
+      background: #fff8f0; border: 1px solid #f0d8b0;
+      font-size: 13px; color: #a06800; line-height: 1.5;
+    }
+
+    /* You-are-here marker */
+    .you-marker {
+      display: inline-block;
+      background: #2e7d32; color: #fff;
+      font-family: 'Libre Franklin', Arial, sans-serif;
+      font-size: 10px; font-weight: 800;
+      padding: 2px 7px; border-radius: 3px;
+      margin-left: 6px; vertical-align: middle;
+      letter-spacing: 0.04em;
+    }
   </style>
 </head>
 <body>
@@ -324,6 +411,9 @@
   <!-- Outcome -->
   <div id="outcome-section" class="hidden"></div>
 
+  <!-- Class Results (shown after submit) -->
+  <div id="class-results" class="hidden"></div>
+
   <!-- Instructor panel -->
   <div id="instr-panel" class="instr-panel">
     <div class="instr-label">Instructor controls</div>
@@ -344,13 +434,14 @@
 // ============================================================
 // CONFIG: Replace this with your Google Apps Script Web App URL
 // ============================================================
-const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxl4lNpCwwwYerrrl8ntXdbaJPayyWne_BWun4_aXo5xcedE2v22O9hzuMdItxT26jKDQ/exec";
+const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzSLE3jBrKPWYbmGMBZDx3vbWCSI1y1cBkjUEX4b3kr49kY0PYm_GabJ7gOqJ9KjGkSdA/exec";
 
 // State
 let guesses = [];
 let confidence = null;
-let gameState = 'playing'; // playing | guessing | won | lost
+let gameState = 'playing';
 let submitted = false;
+let playerAttempts = 0;
 
 const RULE_ANSWER = 'any three numbers in strictly ascending order';
 
@@ -427,7 +518,6 @@ function handleCheck() {
   const passes = checkRule(nums[0], nums[1], nums[2]);
   guesses.push({ nums, passes });
 
-  // Render guess row
   const list = document.getElementById('guesses-list');
   const row = document.createElement('div');
   row.className = 'guess-row';
@@ -439,11 +529,8 @@ function handleCheck() {
   `;
   list.appendChild(row);
   document.getElementById('guesses-section').classList.remove('hidden');
-
-  // Show rule section
   document.getElementById('rule-section').classList.remove('hidden');
 
-  // Clear inputs
   document.getElementById('n0').value = '';
   document.getElementById('n1').value = '';
   document.getElementById('n2').value = '';
@@ -457,17 +544,15 @@ function handleSubmitRule() {
   if (!rule || confidence === null) return;
 
   gameState = 'done';
+  playerAttempts = guesses.length;
 
-  // Log to Google Sheets
   logToSheet(rule, confidence, guesses.length);
 
-  // Hide input & rule sections
   document.getElementById('input-section').classList.add('hidden');
   document.getElementById('rule-section').classList.add('hidden');
   document.getElementById('step-desc').classList.add('hidden');
   document.getElementById('instr-panel').classList.add('hidden');
 
-  // Show outcome directly with student answer, confidence, rule, and article
   const el = document.getElementById('outcome-section');
   el.classList.remove('hidden');
   el.innerHTML = `
@@ -493,6 +578,213 @@ function handleSubmitRule() {
       <p class="outcome-p">Some businesses have made this approach a formal part of their decision-making: Imagine our strategy has failed; what are the most likely reasons it did? When you seek to disprove your idea, you sometimes end up proving it — and other times you can save yourself from making a big mistake. But you need to start by being willing to hear no. And even if you think that you are right, you need to make sure you're asking questions that might actually produce an answer of no. If you still need to work on this trait, don't worry: You're only human.</p>
     </div>
   `;
+
+  // Fetch and show class results
+  fetchAndShowClassResults();
+}
+
+// ============================================================
+// CLASS RESULTS: Fetch from Google Sheet and render charts
+// ============================================================
+
+function fetchAndShowClassResults() {
+  const container = document.getElementById('class-results');
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <div class="loading-results">
+      <div class="loading-spinner"></div>
+      Loading class results…
+    </div>
+  `;
+
+  // Small delay to let the POST propagate to the sheet
+  setTimeout(() => {
+    const url = GOOGLE_SCRIPT_URL + '?action=getAnalysis&t=' + Date.now();
+    fetch(url)
+      .then(r => r.json())
+      .then(data => renderClassResults(data))
+      .catch(err => {
+        console.error('Failed to fetch class results:', err);
+        container.innerHTML = `
+          <div class="results-error">
+            Could not load class results. Your instructor will share them in class.
+          </div>
+        `;
+      });
+  }, 2000);
+}
+
+function getPlayerBucket(attempts) {
+  if (attempts === 1) return '1 guess';
+  if (attempts === 2) return '2 guesses';
+  if (attempts === 3) return '3 guesses';
+  if (attempts === 4) return '4 guesses';
+  if (attempts >= 5 && attempts <= 10) return '5-10 guesses';
+  return '>10 guesses';
+}
+
+function renderClassResults(data) {
+  const container = document.getElementById('class-results');
+  const { distribution, insights } = data;
+
+  const labels = distribution.map(d => d.bucket);
+  const counts = distribution.map(d => d.students);
+  const pdfVals = distribution.map(d => d.pdf);
+  const cdfVals = distribution.map(d => d.cdf);
+  const avgConf = distribution.map(d => d.avgConfidence);
+  const totalStudents = counts.reduce((a, b) => a + b, 0);
+
+  const playerBucket = getPlayerBucket(playerAttempts);
+
+  container.innerHTML = `
+    <div class="class-results">
+      <h2 class="class-results-title">How your class performed</h2>
+      <p class="class-results-sub">${totalStudents} responses · updated live from class data</p>
+
+      <div class="charts-grid">
+        <div class="chart-card">
+          <div class="chart-card-title">Distribution of attempts (PDF & CDF)</div>
+          <div class="chart-wrap"><canvas id="chart-dist"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-card-title">Average confidence by number of guesses</div>
+          <div class="chart-wrap"><canvas id="chart-conf"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-card-title">Share of students by attempt bucket</div>
+          <div class="chart-wrap"><canvas id="chart-pie"></canvas></div>
+        </div>
+      </div>
+
+      <div class="chart-card" style="margin-bottom:0">
+        <div class="chart-card-title">Key insights</div>
+        <table class="insights-table">
+          <thead>
+            <tr><th>Metric</th><th style="text-align:right">Value</th></tr>
+          </thead>
+          <tbody id="insights-body"></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  // --- Chart 1: Combined bar (PDF) + line (CDF) ---
+  const barColors = labels.map(l => l === playerBucket ? '#2e7d32' : '#bccf31');
+  const barBorders = labels.map(l => l === playerBucket ? '#1b5e20' : '#a0b520');
+
+  new Chart(document.getElementById('chart-dist'), {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: '% of students (PDF)',
+          data: pdfVals.map(v => v * 100),
+          backgroundColor: barColors,
+          borderColor: barBorders,
+          borderWidth: 1,
+          yAxisID: 'y',
+          order: 2
+        },
+        {
+          label: 'Cumulative % (CDF)',
+          data: cdfVals.map(v => v * 100),
+          type: 'line',
+          borderColor: '#333',
+          backgroundColor: 'rgba(51,51,51,0.08)',
+          pointBackgroundColor: '#333',
+          pointRadius: 4,
+          borderWidth: 2,
+          fill: true,
+          tension: 0.25,
+          yAxisID: 'y',
+          order: 1
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { family: "'Libre Franklin', sans-serif", size: 11 } } },
+        tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(1) + '%' } }
+      },
+      scales: {
+        y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%', font: { size: 11 } } },
+        x: { ticks: { font: { size: 11 } } }
+      }
+    }
+  });
+
+  // --- Chart 2: Confidence bar chart ---
+  const confColors = labels.map(l => l === playerBucket ? '#2e7d32' : '#e8a0a0');
+
+  new Chart(document.getElementById('chart-conf'), {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Avg confidence (1-5)',
+        data: avgConf.map(v => v !== null ? v * 5 : null),
+        backgroundColor: confColors,
+        borderColor: confColors.map(c => c === '#2e7d32' ? '#1b5e20' : '#d46a6a'),
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      indexAxis: 'x',
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => 'Avg confidence: ' + (ctx.parsed.y !== null ? ctx.parsed.y.toFixed(1) : 'N/A') } }
+      },
+      scales: {
+        y: { beginAtZero: true, max: 5, ticks: { stepSize: 1, font: { size: 11 } } },
+        x: { ticks: { font: { size: 11 } } }
+      }
+    }
+  });
+
+  // --- Chart 3: Pie chart ---
+  const pieColors = ['#bccf31', '#e8a0a0', '#7cb5e3', '#f5c542', '#a8d8a8', '#d4a0d4'];
+
+  new Chart(document.getElementById('chart-pie'), {
+    type: 'pie',
+    data: {
+      labels: labels,
+      datasets: [{
+        data: counts,
+        backgroundColor: pieColors,
+        borderColor: '#fff',
+        borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { family: "'Libre Franklin', sans-serif", size: 11 }, padding: 12 } },
+        tooltip: { callbacks: { label: ctx => ctx.label + ': ' + ctx.parsed + ' (' + (pdfVals[ctx.dataIndex] * 100).toFixed(1) + '%)' } }
+      }
+    }
+  });
+
+  // --- Insights table ---
+  const tbody = document.getElementById('insights-body');
+  const insightRows = [
+    ['Total responses', totalStudents],
+    ['Average # of attempts', insights.avgAttempts?.toFixed(1) ?? '—'],
+    ['Average confidence', insights.avgConfidence ?? '—'],
+    ['Median attempts', insights.medianAttempts ?? '—'],
+    ['Never heard "No"', insights.neverHeardNo != null ? `${insights.neverHeardNo} (${(insights.neverHeardNoPct * 100).toFixed(0)}%)` : '—'],
+    ['Strong falsifiers (3+ Nos)', insights.strongFalsifiers != null ? `${insights.strongFalsifiers} (${(insights.strongFalsifiersPct * 100).toFixed(0)}%)` : '—'],
+    ['Submitted after just 1 guess', insights.oneGuess != null ? `${insights.oneGuess} (${(insights.oneGuessPct * 100).toFixed(0)}%)` : '—'],
+    ['Avg Nos per player', insights.avgNos?.toFixed(1) ?? '—']
+  ];
+
+  insightRows.forEach(([label, val]) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${label}</td><td class="val">${val}</td>`;
+    tbody.appendChild(tr);
+  });
 }
 
 function logToSheet(rule, conf, numAttempts) {
@@ -501,7 +793,6 @@ function logToSheet(rule, conf, numAttempts) {
 
   const yeses = guesses.filter(g => g.passes).length;
   const nos = guesses.filter(g => !g.passes).length;
-
   const yesSequences = guesses.filter(g => g.passes).map(g => `(${g.nums.join(', ')})`).join('; ');
   const noSequences = guesses.filter(g => !g.passes).map(g => `(${g.nums.join(', ')})`).join('; ');
 
@@ -523,7 +814,7 @@ function logToSheet(rule, conf, numAttempts) {
     body: JSON.stringify(payload)
   }).then(() => {
     showToast('Response recorded ✓');
-  }).catch((err) => {
+  }).catch(err => {
     console.error('Logging error:', err);
     showToast('Could not save response — check console');
   });
@@ -542,12 +833,15 @@ function resetGame() {
   confidence = null;
   submitted = false;
   gameState = 'playing';
+  playerAttempts = 0;
 
   document.getElementById('guesses-list').innerHTML = '';
   document.getElementById('guesses-section').classList.add('hidden');
   document.getElementById('rule-section').classList.add('hidden');
   document.getElementById('outcome-section').classList.add('hidden');
   document.getElementById('outcome-section').innerHTML = '';
+  document.getElementById('class-results').classList.add('hidden');
+  document.getElementById('class-results').innerHTML = '';
   document.getElementById('input-section').classList.remove('hidden');
   document.getElementById('step-desc').classList.remove('hidden');
   document.getElementById('instr-panel').classList.remove('hidden');
