@@ -3,7 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>A Quick Puzzle to Test Your Problem Solving</title>
+  <title>The Problem-Solving Trap</title>
+
+  <!-- Social sharing preview -->
+  <meta property="og:title" content="The Problem-Solving Trap">
+  <meta property="og:description" content="A short game about the hidden traps in how we test ideas, make decisions, and convince ourselves we're right. Can you avoid the trap?">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://www.stouras.com/lab/problem-solving/">
+  <meta property="og:image" content="https://www.stouras.com/lab/problem-solving/preview.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="The Problem-Solving Trap">
+  <meta name="twitter:description" content="A short game about the hidden traps in how we test ideas and convince ourselves we're right.">
   <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -279,7 +291,7 @@
 <body>
 
 <div class="container">
-  <h1 class="title">A Quick Puzzle to Test<br>Your Problem Solving</h1>
+  <h1 class="title">The Problem-Solving Trap</h1>
   <p class="desc">A short game about the hidden traps in how we test ideas, make decisions, and convince ourselves we're right.</p>
 
   <p class="bold-label">Here's how it works:</p>
@@ -501,8 +513,8 @@ function showClassResults() {
 
   container.innerHTML = `
     <div class="class-results">
-      <h2 class="class-results-title">How your class performed</h2>
-      <p class="class-results-sub">Updated live from class data</p>
+      <h2 class="class-results-title">How others performed</h2>
+      <p class="class-results-sub">Updated live from all players</p>
 
       <div class="charts-grid">
         <div class="chart-embed">
@@ -535,7 +547,7 @@ function showClassResults() {
       .catch(err => {
         console.error('Failed to fetch insights:', err);
         document.getElementById('insights-container').innerHTML =
-          '<div class="results-error">Could not load insights. Your instructor will share them in class.</div>';
+          '<div class="results-error">Could not load insights. Please try again later.</div>';
       });
   }, 2500);
 }
