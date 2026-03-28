@@ -219,8 +219,8 @@
 
     /* Instructor */
     .instr-panel {
-      margin-top: 28px; padding: 14px 16px;
-      background: #fffde7; border: 1px solid #e6dfa0;
+      margin-top: 28px; padding: 14px 0;
+      background: none; border: none;
     }
     .instr-label {
       font-family: 'Libre Franklin', Arial, sans-serif;
@@ -414,9 +414,8 @@
   <!-- Class Results (shown after submit) -->
   <div id="class-results" class="hidden"></div>
 
-  <!-- Instructor panel -->
+  <!-- Instructor panel (uncomment to re-enable hint and reset buttons)
   <div id="instr-panel" class="instr-panel">
-    <div class="instr-label">Instructor controls</div>
     <div class="instr-btns">
       <button class="instr-btn" id="hint-btn" onclick="toggleHint()">Show hint</button>
       <button class="instr-btn" onclick="resetGame()">Reset</button>
@@ -425,6 +424,7 @@
       <div class="instr-hint"><strong>Hint:</strong> Try testing sequences you think will <em>fail</em>. What's the simplest possible rule that 2, 4, 8 could follow?</div>
     </div>
   </div>
+  -->
 </div>
 
 <!-- Toast -->
@@ -557,10 +557,10 @@ function handleSubmitRule() {
   el.classList.remove('hidden');
   el.innerHTML = `
     <div class="outcome-box">
-      <div class="answer-label">YOUR ANSWER:</div>
+      <div class="answer-label" style="text-transform:none">What you think the rule is:</div>
       <div class="student-answer">${rule}</div>
-      <div class="answer-label">YOUR CONFIDENCE:</div>
-      <div class="student-answer" style="font-style:normal">${confidence} / 5</div>
+      <div class="answer-label" style="text-transform:none">How confident you are about identifying the rule:</div>
+      <div class="student-answer" style="font-style:normal">${(confidence * 20)}%</div>
       <div class="outcome-rule">The rule: ${RULE_ANSWER}</div>
       <h2 class="outcome-heading">Summary</h2>
       <p class="outcome-p">This puzzle exposes <strong>confirmation bias</strong> in action. We form a theory, then seek evidence that supports it — avoiding the discomfort of being told 'no.' That's why most players never test a sequence that breaks their hypothesis. The same instinct shapes how we evaluate business strategies, hiring decisions, and investment theses: we look for green lights and ignore red ones.</p>
@@ -667,6 +667,9 @@ function renderClassResults(data) {
       </div>
     </div>
   `;
+
+  // --- Fix blurry charts on Retina/high-DPI screens ---
+  Chart.defaults.devicePixelRatio = window.devicePixelRatio || 2;
 
   // --- Chart 1: Combined bar (PDF) + line (CDF) ---
   const barColors = labels.map(l => l === playerBucket ? '#2e7d32' : '#bccf31');
