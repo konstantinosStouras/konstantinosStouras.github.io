@@ -501,8 +501,8 @@ function showClassResults() {
 
   container.innerHTML = `
     <div class="class-results">
-      <h2 class="class-results-title">How your class performed</h2>
-      <p class="class-results-sub">Updated live from class data</p>
+      <h2 class="class-results-title">Performance so far</h2>
+      <p class="class-results-sub">Updated live from past data</p>
 
       <div class="charts-grid">
         <div class="chart-embed">
@@ -535,7 +535,7 @@ function showClassResults() {
       .catch(err => {
         console.error('Failed to fetch insights:', err);
         document.getElementById('insights-container').innerHTML =
-          '<div class="results-error">Could not load insights. Your instructor will share them in class.</div>';
+          '<div class="results-error">Could not load insights.</div>';
       });
   }, 2500);
 }
