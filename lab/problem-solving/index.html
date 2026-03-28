@@ -215,10 +215,10 @@
       gap: 20px;
       margin-bottom: 28px;
     }
-    .chart-embed iframe {
+    .chart-embed img {
       display: block;
       width: 100%;
-      height: 320px;
+      height: auto;
       border: none;
     }
 
@@ -365,10 +365,10 @@
 // ============================================================
 const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzSLE3jBrKPWYbmGMBZDx3vbWCSI1y1cBkjUEX4b3kr49kY0PYm_GabJ7gOqJ9KjGkSdA/exec";
 
-// Published Google Sheets chart embed URLs
-const CHART_ATTEMPTS   = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0QHMMJ_u86xbQuNy1Ui2VgKQToUqgpIlFqAZAe8yOuasSONjE48kIuXzEMIEkaT7HZGiqHZ_h-6GZ/pubchart?oid=440876486&format=interactive";
-const CHART_CONFIDENCE = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0QHMMJ_u86xbQuNy1Ui2VgKQToUqgpIlFqAZAe8yOuasSONjE48kIuXzEMIEkaT7HZGiqHZ_h-6GZ/pubchart?oid=2056147515&format=interactive";
-const CHART_PIE        = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0QHMMJ_u86xbQuNy1Ui2VgKQToUqgpIlFqAZAe8yOuasSONjE48kIuXzEMIEkaT7HZGiqHZ_h-6GZ/pubchart?oid=1286350513&format=interactive";
+// Published Google Sheets chart URLs (format=image for crisp rendering)
+const CHART_ATTEMPTS   = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0QHMMJ_u86xbQuNy1Ui2VgKQToUqgpIlFqAZAe8yOuasSONjE48kIuXzEMIEkaT7HZGiqHZ_h-6GZ/pubchart?oid=440876486&format=image";
+const CHART_CONFIDENCE = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0QHMMJ_u86xbQuNy1Ui2VgKQToUqgpIlFqAZAe8yOuasSONjE48kIuXzEMIEkaT7HZGiqHZ_h-6GZ/pubchart?oid=2056147515&format=image";
+const CHART_PIE        = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0QHMMJ_u86xbQuNy1Ui2VgKQToUqgpIlFqAZAe8yOuasSONjE48kIuXzEMIEkaT7HZGiqHZ_h-6GZ/pubchart?oid=1286350513&format=image";
 
 // State
 let guesses = [];
@@ -501,18 +501,18 @@ function showClassResults() {
 
   container.innerHTML = `
     <div class="class-results">
-      <h2 class="class-results-title">Performance so far</h2>
-      <p class="class-results-sub">Updated live from past data</p>
+      <h2 class="class-results-title">How your class performed</h2>
+      <p class="class-results-sub">Updated live from class data</p>
 
       <div class="charts-grid">
         <div class="chart-embed">
-          <iframe src="${CHART_ATTEMPTS}${cb}" scrolling="no"></iframe>
+          <img src="${CHART_ATTEMPTS}${cb}" alt="Attempts vs #Students">
         </div>
         <div class="chart-embed">
-          <iframe src="${CHART_CONFIDENCE}${cb}" scrolling="no"></iframe>
+          <img src="${CHART_CONFIDENCE}${cb}" alt="Avg confidence by number of guesses">
         </div>
         <div class="chart-embed">
-          <iframe src="${CHART_PIE}${cb}" scrolling="no"></iframe>
+          <img src="${CHART_PIE}${cb}" alt="PDF students pie chart">
         </div>
       </div>
 
@@ -535,7 +535,7 @@ function showClassResults() {
       .catch(err => {
         console.error('Failed to fetch insights:', err);
         document.getElementById('insights-container').innerHTML =
-          '<div class="results-error">Could not load insights.</div>';
+          '<div class="results-error">Could not load insights. Your instructor will share them in class.</div>';
       });
   }, 2500);
 }
