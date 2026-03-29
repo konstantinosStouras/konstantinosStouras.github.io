@@ -488,7 +488,7 @@ function handleSubmitRule() {
       <p class="outcome-p">The answer was extremely basic. The rule was simply: <em>Each number must be larger than the one before it.</em> 5, 10, 20 satisfies the rule, as does 1, 2, 3 and -17, 14.6, 845. Children in kindergarten can understand this rule.</p>
       <p class="outcome-p">But most people start off with the incorrect assumption that if we're asking them to solve a problem, it must be a somewhat tricky problem. They come up with a theory for what the answer is, like: <em>Each number is double the previous number.</em> And then they make a classic psychological mistake.</p>
       <p class="outcome-p">They don't want to hear the answer "no." In fact, it may not occur to them to ask a question that may yield a no.</p>
-      <p class="outcome-p">Remarkably, 77 percent of people who have played this game so far have guessed the answer without first hearing a single no. A mere 9 percent heard at least three nos — even though there is no penalty or cost for being told no, save the small disappointment that every human being feels when hearing "no."</p>
+      <p class="outcome-p">Remarkably, <strong><span id="never-no-pct">many</span></strong> of people who have played this game so far have guessed the answer without first hearing a single no. Only <strong><span id="strong-falsifier-pct">a few</span></strong> heard at least three nos — even though there is no penalty or cost for being told no, save the small disappointment that every human being feels when hearing "no."</p>
       <p class="outcome-p">It's a lot more pleasant to hear "yes." That, in a nutshell, is why so many people struggle with this problem.</p>
       <h2 class="outcome-heading">Confirmation bias</h2>
       <p class="outcome-p">This disappointment is a version of what psychologists and economists call confirmation bias. Not only are people more likely to believe information that fits their pre-existing beliefs, but they're also more likely to go looking for such information.</p>
@@ -572,6 +572,14 @@ function renderInsightsTable(data) {
       <thead><tr><th>Metric</th><th style="text-align:right">Value</th></tr></thead>
       <tbody>${rows.map(([l,v]) => `<tr><td>${l}</td><td class="val">${v}</td></tr>`).join('')}</tbody>
     </table>`;
+
+  // Update the dynamic stats in the outcome text
+  if (insights.neverHeardNoPct != null) {
+    document.getElementById('never-no-pct').textContent = Math.round(insights.neverHeardNoPct * 100) + ' percent';
+  }
+  if (insights.strongFalsifiersPct != null) {
+    document.getElementById('strong-falsifier-pct').textContent = Math.round(insights.strongFalsifiersPct * 100) + ' percent';
+  }
 }
 
 function logToSheet(rule, conf, numAttempts) {
