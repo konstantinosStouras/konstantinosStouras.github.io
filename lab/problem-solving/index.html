@@ -489,6 +489,7 @@ function handleSubmitRule() {
       <p class="outcome-p">But most people start off with the incorrect assumption that if we're asking them to solve a problem, it must be a somewhat tricky problem. They come up with a theory for what the answer is, like: <em>Each number is double the previous number.</em> And then they make a classic psychological mistake.</p>
       <p class="outcome-p">They don't want to hear the answer "no." In fact, it may not occur to them to ask a question that may yield a no.</p>
       <p class="outcome-p">Remarkably, <strong><span id="never-no-pct">many</span></strong> of people who have played this game so far have guessed the answer without first hearing a single no. Only <strong><span id="strong-falsifier-pct">a few</span></strong> heard at least three nos — even though there is no penalty or cost for being told no, save the small disappointment that every human being feels when hearing "no."</p>
+      <p class="outcome-p" id="personal-insight" style="background:#fff;border-left:3px solid #bccf31;padding:12px 16px;margin:16px 0"></p>
       <p class="outcome-p">It's a lot more pleasant to hear "yes." That, in a nutshell, is why so many people struggle with this problem.</p>
       <h2 class="outcome-heading">Confirmation bias</h2>
       <p class="outcome-p">This disappointment is a version of what psychologists and economists call confirmation bias. Not only are people more likely to believe information that fits their pre-existing beliefs, but they're also more likely to go looking for such information.</p>
@@ -557,14 +558,14 @@ function renderInsightsTable(data) {
   const total = distribution.map(d => d.students).reduce((a, b) => a + b, 0);
 
   const rows = [
-    ['Total responses', total],
-    ['Average # of attempts', insights.avgAttempts?.toFixed(1) ?? '—'],
-    ['Average confidence', insights.avgConfidence ?? '—'],
-    ['Median attempts', insights.medianAttempts ?? '—'],
-    ['Never heard "No"', insights.neverHeardNo != null ? `${insights.neverHeardNo} (${(insights.neverHeardNoPct*100).toFixed(0)}%)` : '—'],
-    ['Strong falsifiers (3+ Nos)', insights.strongFalsifiers != null ? `${insights.strongFalsifiers} (${(insights.strongFalsifiersPct*100).toFixed(0)}%)` : '—'],
+    ['Total players', total],
+    ['Avg guesses before submitting', insights.avgAttempts?.toFixed(1) ?? '—'],
+    ['Avg confidence level', insights.avgConfidence ?? '—'],
+    ['Median guesses before submitting', insights.medianAttempts ?? '—'],
+    ['Guessed without hearing a single No', insights.neverHeardNo != null ? `${insights.neverHeardNo} (${(insights.neverHeardNoPct*100).toFixed(0)}%)` : '—'],
+    ['Tested at least 3 wrong sequences', insights.strongFalsifiers != null ? `${insights.strongFalsifiers} (${(insights.strongFalsifiersPct*100).toFixed(0)}%)` : '—'],
     ['Submitted after just 1 guess', insights.oneGuess != null ? `${insights.oneGuess} (${(insights.oneGuessPct*100).toFixed(0)}%)` : '—'],
-    ['Avg Nos per player', insights.avgNos?.toFixed(1) ?? '—']
+    ['Avg "No" responses per player', insights.avgNos?.toFixed(1) ?? '—']
   ];
 
   document.getElementById('insights-container').innerHTML = `
@@ -579,6 +580,23 @@ function renderInsightsTable(data) {
   }
   if (insights.strongFalsifiersPct != null) {
     document.getElementById('strong-falsifier-pct').textContent = Math.round(insights.strongFalsifiersPct * 100) + ' percent';
+  }
+
+  // Personal insight based on the player's own behavior
+  const playerNos = guesses.filter(g => !g.passes).length;
+  const playerYeses = guesses.filter(g => g.passes).length;
+  const pEl = document.getElementById('personal-insight');
+  if (pEl && insights.avgNos != null) {
+    let lines = [];
+    lines.push(`<strong>Your result:</strong> You made ${playerAttempts} guess${playerAttempts !== 1 ? 'es' : ''} (${playerYeses} Yes, ${playerNos} No) before submitting.`);
+    if (playerNos === 0) {
+      lines.push(`You never heard a single "No" — you're in the ${Math.round(insights.neverHeardNoPct * 100)}% of players who submitted without ever testing a sequence that could fail.`);
+    } else if (playerNos >= 3) {
+      lines.push(`You heard ${playerNos} "No" responses — that puts you among the rare ${Math.round(insights.strongFalsifiersPct * 100)}% who actively sought disconfirming evidence. Well done.`);
+    } else {
+      lines.push(`You heard ${playerNos} "No" response${playerNos !== 1 ? 's' : ''}. The average player hears only ${insights.avgNos.toFixed(1)}.`);
+    }
+    pEl.innerHTML = lines.join(' ');
   }
 }
 
