@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <script>
+      var path = window.location.pathname;
+      var search = window.location.search;
+      var hash = window.location.hash;
+      var redirect = path + search + hash;
+      sessionStorage.setItem('redirect', redirect);
+      window.location.replace('/');
+    </script>
+  </head>
+  <body></body>
+</html>
