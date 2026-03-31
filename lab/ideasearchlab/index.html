@@ -1,16 +1,7 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Ideation Challenge</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet" />
-    <script type="module" crossorigin src="/lab/ideasearchlab/assets/index-CTgmnXCI.js"></script>
-    <link rel="stylesheet" crossorigin href="/lab/ideasearchlab/assets/index-CzODn3xG.css">
-  </head>
-  <body>
-    <div id="root"></div>
-  </body>
-</html>
+<script>
+  var redirect = sessionStorage.getItem('spa_redirect');
+  if (redirect) {
+    sessionStorage.removeItem('spa_redirect');
+    window.history.replaceState(null, null, redirect);
+  }
+</script>

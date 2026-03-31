@@ -4,10 +4,11 @@
     <meta charset="utf-8">
     <script>
       var path = window.location.pathname;
-      var search = window.location.search;
-      var hash = window.location.hash;
-      sessionStorage.setItem('redirect', path + search + hash);
-      window.location.replace('/');
+      // Only redirect if we are inside the ideasearchlab app
+      if (path.indexOf('/lab/ideasearchlab') === 0) {
+        sessionStorage.setItem('spa_redirect', path + window.location.search + window.location.hash);
+        window.location.replace('/lab/ideasearchlab/');
+      }
     </script>
   </head>
   <body></body>
