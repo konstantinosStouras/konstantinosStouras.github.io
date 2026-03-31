@@ -1,0 +1,84 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper functions ────────────────────────────────────────────────────
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return request.auth.token.email == 'admin@admin.com';
+    }
+
+    function isSessionInstructor(sessionId) {
+      return get(/databases/$(database)/documents/sessions/$(sessionId)).data.instructorId == request.auth.uid;
+    }
+
+    function isSessionParticipant(sessionId) {
+      return exists(/databases/$(database)/documents/sessions/$(sessionId)/participants/$(request.auth.uid));
+    }
+
+    function isSessionMember(sessionId) {
+      return isSessionInstructor(sessionId) || isSessionParticipant(sessionId);
+    }
+
+    // ── Global Settings ───────────────────────────────────────────────────
+    match /settings/{docId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    match /sessions/{sessionId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.instructorId == request.auth.uid;
+      allow update: if isSessionInstructor(sessionId);
+      allow delete: if isAdmin();
+
+      // ── Participants ──────────────────────────────────────────────────────
+
+      match /participants/{participantId} {
+        allow read: if isSessionInstructor(sessionId)
+          || isSessionParticipant(sessionId)
+          || isOwner(participantId);
+        allow create: if isSignedIn() && isOwner(participantId);
+        allow update: if isSessionInstructor(sessionId)
+          || isOwner(participantId);
+        allow delete: if false;
+      }
+
+      // ── Groups ────────────────────────────────────────────────────────────
+
+      match /groups/{groupId} {
+        allow read: if isSessionMember(sessionId);
+        allow write: if false;
+      }
+
+      // ── Ideas ─────────────────────────────────────────────────────────────
+
+      match /ideas/{ideaId} {
+        allow read: if isSessionMember(sessionId);
+        allow create: if isSessionParticipant(sessionId)
+          && request.resource.data.authorId == request.auth.uid;
+        allow update: if false;
+        allow delete: if false;
+      }
+
+      // ── AI Messages ───────────────────────────────────────────────────────
+
+      match /aiMessages/{messageId} {
+        allow read: if isSessionMember(sessionId);
+        allow create: if isSessionParticipant(sessionId)
+          && request.resource.data.role == 'user'
+          && request.resource.data.authorId == request.auth.uid;
+        allow update, delete: if false;
+      }
+    }
+  }
+}
