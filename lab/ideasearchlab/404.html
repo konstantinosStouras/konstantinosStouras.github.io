@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head><script>(function(){var r=sessionStorage.getItem("spa_redirect");if(r){sessionStorage.removeItem("spa_redirect");window.history.replaceState(null,null,r);}}());</script>
+  <head><script>(function(){var p=new URLSearchParams(window.location.search).get("redirect");if(p){window.history.replaceState(null,null,decodeURIComponent(p));}}());</script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ideation Challenge</title>
