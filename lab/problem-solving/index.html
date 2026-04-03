@@ -17,6 +17,7 @@
   <meta name="twitter:title" content="The Problem-Solving Trap">
   <meta name="twitter:description" content="A short game about the hidden traps in how we test ideas and convince ourselves we're right.">
   <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -224,14 +225,46 @@
     .charts-grid {
       display: grid;
       grid-template-columns: 1fr;
-      gap: 20px;
+      gap: 36px;
       margin-bottom: 28px;
     }
-    .chart-embed img {
-      display: block;
-      width: 100%;
-      height: auto;
-      border: none;
+    .chart-block { }
+    .chart-block-title {
+      font-family: Georgia, serif;
+      font-size: 16px; font-weight: 700; color: #333;
+      margin-bottom: 2px;
+    }
+    .chart-block-subtitle {
+      font-family: 'Libre Franklin', Arial, sans-serif;
+      font-size: 11.5px; color: #999; margin-bottom: 10px;
+    }
+    .chart-canvas-wrap {
+      position: relative;
+      background: #fafaf7;
+      border: 1px solid #e8e8e0;
+      padding: 12px 10px 6px;
+      margin-bottom: 10px;
+    }
+    .chart-canvas-wrap canvas { width: 100% !important; }
+    .chart-read {
+      font-family: 'Libre Franklin', Arial, sans-serif;
+      font-size: 12px; line-height: 1.55; color: #777;
+      margin-bottom: 6px;
+    }
+    .chart-read strong { color: #555; }
+    .chart-insight {
+      background: #fffde7;
+      border-left: 3px solid #c9b834;
+      padding: 10px 14px;
+      font-family: Georgia, serif;
+      font-size: 14px; line-height: 1.55; color: #555;
+    }
+    .chart-insight strong { color: #333; }
+    .chart-insight .insight-icon {
+      font-family: 'Libre Franklin', sans-serif;
+      font-size: 10px; font-weight: 800; text-transform: uppercase;
+      letter-spacing: 0.08em; color: #b0a020; display: block;
+      margin-bottom: 4px;
     }
 
     .insights-card {
@@ -385,10 +418,9 @@
 // ============================================================
 const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzSLE3jBrKPWYbmGMBZDx3vbWCSI1y1cBkjUEX4b3kr49kY0PYm_GabJ7gOqJ9KjGkSdA/exec";
 
-// Published Google Sheets chart URLs (format=image for crisp rendering)
-const CHART_ATTEMPTS   = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0QHMMJ_u86xbQuNy1Ui2VgKQToUqgpIlFqAZAe8yOuasSONjE48kIuXzEMIEkaT7HZGiqHZ_h-6GZ/pubchart?oid=440876486&format=image";
-const CHART_CONFIDENCE = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0QHMMJ_u86xbQuNy1Ui2VgKQToUqgpIlFqAZAe8yOuasSONjE48kIuXzEMIEkaT7HZGiqHZ_h-6GZ/pubchart?oid=2056147515&format=image";
-const CHART_PIE        = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0QHMMJ_u86xbQuNy1Ui2VgKQToUqgpIlFqAZAe8yOuasSONjE48kIuXzEMIEkaT7HZGiqHZ_h-6GZ/pubchart?oid=1286350513&format=image";
+// Published Google Sheet for raw data (CSV export)
+const SHEET_ID = '1Oakp9FKnpKcr6ydQOzumwBG7E2UhQsphy0suHRpA2n0';
+const SHEET_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Responses`;
 
 // State
 let guesses = [];
@@ -517,31 +549,164 @@ function handleSubmitRule() {
 }
 
 // ============================================================
-// CLASS RESULTS: Embedded Google Sheets charts + insights table
+// CLASS RESULTS: Dynamic Chart.js charts with auto-interpretation
 // ============================================================
+
+// --- CSV Parser (handles quoted fields) ---
+function parseCSV(text) {
+  const lines = []; let cur = []; let field = ''; let inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"' && text[i+1] === '"') { field += '"'; i++; }
+      else if (c === '"') inQ = false;
+      else field += c;
+    } else {
+      if (c === '"') inQ = true;
+      else if (c === ',') { cur.push(field.trim()); field = ''; }
+      else if (c === '\n' || (c === '\r' && text[i+1] === '\n')) {
+        cur.push(field.trim()); field = '';
+        if (cur.some(f => f !== '')) lines.push(cur);
+        cur = [];
+        if (c === '\r') i++;
+      } else field += c;
+    }
+  }
+  cur.push(field.trim());
+  if (cur.some(f => f !== '')) lines.push(cur);
+  return lines;
+}
+
+// --- Detect columns by header keywords ---
+function detectColumns(headers) {
+  const h = headers.map(s => s.toLowerCase().replace(/[^a-z0-9]/g, ''));
+  // Try exact match first, then substring
+  const find = (keywords) => {
+    // Exact match
+    let idx = h.findIndex(c => keywords.some(k => c === k));
+    if (idx >= 0) return idx;
+    // Substring match (prefer longer keywords first)
+    const sorted = [...keywords].sort((a,b) => b.length - a.length);
+    idx = h.findIndex(c => sorted.some(k => c.includes(k)));
+    return idx;
+  };
+  return {
+    attempts: find(['numattempts','numberofattempts','attempts','guesses','numguesses']),
+    yeses:    find(['yeses','yescount']),
+    nos:      find(['nos','nocount']),
+    conf:     find(['confidence','conf']),
+    rule:     find(['rule','answer']),
+  };
+}
+
+// --- Compute all analytics from raw rows ---
+function computeAnalytics(rows, cols) {
+  const data = rows.map(r => ({
+    attempts: parseInt(r[cols.attempts]) || 0,
+    yeses:    parseInt(r[cols.yeses]) || 0,
+    nos:      parseInt(r[cols.nos]) || 0,
+    conf:     parseInt(r[cols.conf]) || 0,
+  })).filter(d => d.attempts > 0);
+
+  const n = data.length;
+  if (n === 0) return null;
+
+  // 1. Attempts distribution
+  const attemptCounts = {};
+  data.forEach(d => { attemptCounts[d.attempts] = (attemptCounts[d.attempts] || 0) + 1; });
+  const maxAttempt = Math.max(...Object.keys(attemptCounts).map(Number));
+  const attemptLabels = [];
+  const attemptValues = [];
+  for (let i = 1; i <= Math.min(maxAttempt, 15); i++) {
+    attemptLabels.push(i >= 15 ? '15+' : String(i));
+    if (i < 15) {
+      attemptValues.push(attemptCounts[i] || 0);
+    } else {
+      // bucket 15+
+      let sum = 0;
+      Object.entries(attemptCounts).forEach(([k,v]) => { if (parseInt(k) >= 15) sum += v; });
+      attemptValues.push(sum);
+    }
+  }
+
+  // 2. Confidence by number of guesses (grouped)
+  const confByAttempt = {};
+  data.forEach(d => {
+    const bucket = d.attempts >= 8 ? '8+' : String(d.attempts);
+    if (!confByAttempt[bucket]) confByAttempt[bucket] = [];
+    confByAttempt[bucket].push(d.conf);
+  });
+  const confLabels = [];
+  const confAvgs = [];
+  const confCounts = [];
+  const bucketOrder = ['1','2','3','4','5','6','7','8+'];
+  bucketOrder.forEach(b => {
+    if (confByAttempt[b] && confByAttempt[b].length > 0) {
+      confLabels.push(b === '8+' ? '8+ guesses' : b + (b === '1' ? ' guess' : ' guesses'));
+      const avg = confByAttempt[b].reduce((a,c) => a+c, 0) / confByAttempt[b].length;
+      confAvgs.push(Math.round(avg * 10) / 10);
+      confCounts.push(confByAttempt[b].length);
+    }
+  });
+
+  // 3. Player type breakdown
+  const neverNo = data.filter(d => d.nos === 0).length;
+  const someNo  = data.filter(d => d.nos >= 1 && d.nos < 3).length;
+  const strongF = data.filter(d => d.nos >= 3).length;
+
+  // Aggregate stats
+  const allAttempts = data.map(d => d.attempts).sort((a,b) => a - b);
+  const avgAttempts = allAttempts.reduce((a,b) => a+b, 0) / n;
+  const medAttempts = n % 2 === 0
+    ? (allAttempts[n/2 - 1] + allAttempts[n/2]) / 2
+    : allAttempts[Math.floor(n/2)];
+  const avgConf = data.map(d => d.conf).reduce((a,b) => a+b, 0) / n;
+  const avgNos = data.map(d => d.nos).reduce((a,b) => a+b, 0) / n;
+  const oneGuess = data.filter(d => d.attempts === 1).length;
+  const modeAttempt = Object.entries(attemptCounts).sort((a,b) => b[1] - a[1])[0];
+
+  return {
+    n, data,
+    attemptLabels, attemptValues,
+    confLabels, confAvgs, confCounts,
+    neverNo, someNo, strongF,
+    avgAttempts, medAttempts, avgConf, avgNos, oneGuess,
+    neverNoPct: neverNo / n,
+    strongFPct: strongF / n,
+    oneGuessPct: oneGuess / n,
+    modeAttempt: modeAttempt ? { value: parseInt(modeAttempt[0]), count: modeAttempt[1] } : null,
+  };
+}
+
+// --- Chart.js default styling to match the page ---
+const chartFont = { family: "'Libre Franklin', Arial, sans-serif", size: 12 };
+const chartColors = {
+  green:     '#bccf31',
+  greenDark: '#8fa324',
+  red:       '#e8a0a0',
+  redDark:   '#d46a6a',
+  grey:      '#ccc',
+  bg:        '#fafaf7',
+  text:      '#555',
+  accent:    '#2e7d32',
+};
+
 function showClassResults() {
   const container = document.getElementById('class-results');
   container.classList.remove('hidden');
-
-  // Cache-bust so iframes reload with the freshest sheet data
-  const cb = '&t=' + Date.now();
 
   container.innerHTML = `
     <div class="class-results">
       <h2 class="class-results-title">How others performed</h2>
       <p class="class-results-sub">Updated live from all players</p>
 
-      <div class="charts-grid">
-        <div class="chart-embed">
-          <img src="${CHART_ATTEMPTS}${cb}" alt="Attempts vs #Students">
-        </div>
-        <div class="chart-embed">
-          <img src="${CHART_CONFIDENCE}${cb}" alt="Avg confidence by number of guesses">
-        </div>
-        <div class="chart-embed">
-          <img src="${CHART_PIE}${cb}" alt="PDF students pie chart">
+      <div id="charts-loading">
+        <div class="loading-results">
+          <div class="loading-spinner"></div>
+          Loading results from all players…
         </div>
       </div>
+      <div id="charts-content" class="hidden"></div>
 
       <div class="insights-card">
         <div class="insights-card-title">Key insights</div>
@@ -554,20 +719,349 @@ function showClassResults() {
       </div>
     </div>`;
 
-  // Fetch insights table from Apps Script doGet
-  setTimeout(() => {
-    fetch(GOOGLE_SCRIPT_URL + '?action=getAnalysis&t=' + Date.now())
-      .then(r => r.json())
-      .then(data => renderInsightsTable(data))
-      .catch(err => {
-        console.error('Failed to fetch insights:', err);
-        document.getElementById('insights-container').innerHTML =
-          '<div class="results-error">Could not load insights. Please try again later.</div>';
-      });
-  }, 2500);
+  // Fetch raw CSV data from published Google Sheet
+  fetch(SHEET_CSV_URL + '&t=' + Date.now())
+    .then(r => {
+      if (!r.ok) throw new Error('Sheet not accessible');
+      return r.text();
+    })
+    .then(csv => {
+      const lines = parseCSV(csv);
+      if (lines.length < 2) throw new Error('No data rows');
+      const headers = lines[0];
+      const cols = detectColumns(headers);
+      if (cols.attempts < 0 || cols.conf < 0) throw new Error('Could not detect columns');
+      const rows = lines.slice(1);
+      const analytics = computeAnalytics(rows, cols);
+      if (!analytics) throw new Error('No valid data');
+      renderDynamicCharts(analytics);
+      renderInsightsTable(analytics);
+      updateOutcomeText(analytics);
+    })
+    .catch(err => {
+      console.warn('CSV fetch failed, falling back to Apps Script:', err);
+      // Fallback: use the existing Apps Script endpoint
+      fetch(GOOGLE_SCRIPT_URL + '?action=getAnalysis&t=' + Date.now())
+        .then(r => r.json())
+        .then(data => {
+          renderFallbackCharts(data);
+          renderFallbackInsightsTable(data);
+        })
+        .catch(err2 => {
+          console.error('Both data sources failed:', err2);
+          document.getElementById('charts-loading').innerHTML =
+            '<div class="results-error">Could not load results. Please try again later.</div>';
+          document.getElementById('insights-container').innerHTML =
+            '<div class="results-error">Could not load insights. Please try again later.</div>';
+        });
+    });
 }
 
-function renderInsightsTable(data) {
+// ============================================================
+// DYNAMIC CHARTS (primary path — from raw CSV data)
+// ============================================================
+function renderDynamicCharts(a) {
+  document.getElementById('charts-loading').classList.add('hidden');
+  const wrap = document.getElementById('charts-content');
+  wrap.classList.remove('hidden');
+
+  wrap.innerHTML = `
+    <div class="charts-grid">
+
+      <!-- Chart 1: Distribution of Attempts -->
+      <div class="chart-block">
+        <div class="chart-block-title">How many guesses did players make?</div>
+        <div class="chart-block-subtitle">Number of sequences tested before submitting an answer</div>
+        <div class="chart-canvas-wrap"><canvas id="chart-attempts"></canvas></div>
+        <div class="chart-read" id="read-attempts"></div>
+        <div class="chart-insight" id="insight-attempts"></div>
+      </div>
+
+      <!-- Chart 2: Confidence vs Guesses -->
+      <div class="chart-block">
+        <div class="chart-block-title">Does more testing lead to more confidence?</div>
+        <div class="chart-block-subtitle">Average self-reported confidence (1–5) by number of guesses</div>
+        <div class="chart-canvas-wrap"><canvas id="chart-confidence"></canvas></div>
+        <div class="chart-read" id="read-confidence"></div>
+        <div class="chart-insight" id="insight-confidence"></div>
+      </div>
+
+      <!-- Chart 3: Testing Strategy Pie -->
+      <div class="chart-block">
+        <div class="chart-block-title">Did players seek disconfirming evidence?</div>
+        <div class="chart-block-subtitle">Breakdown by how many "No" responses players received</div>
+        <div class="chart-canvas-wrap"><canvas id="chart-strategy"></canvas></div>
+        <div class="chart-read" id="read-strategy"></div>
+        <div class="chart-insight" id="insight-strategy"></div>
+      </div>
+
+    </div>`;
+
+  buildAttemptsChart(a);
+  buildConfidenceChart(a);
+  buildStrategyChart(a);
+}
+
+function buildAttemptsChart(a) {
+  const ctx = document.getElementById('chart-attempts').getContext('2d');
+  const peakIdx = a.attemptValues.indexOf(Math.max(...a.attemptValues));
+
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: a.attemptLabels,
+      datasets: [{
+        data: a.attemptValues,
+        backgroundColor: a.attemptLabels.map((_,i) => i === peakIdx ? chartColors.green : '#d8dfc0'),
+        borderColor: a.attemptLabels.map((_,i) => i === peakIdx ? chartColors.greenDark : '#b8c0a0'),
+        borderWidth: 1,
+        borderRadius: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: { label: ctx => `${ctx.raw} player${ctx.raw !== 1 ? 's' : ''}` }
+        }
+      },
+      scales: {
+        x: { title: { display: true, text: 'Number of guesses', font: chartFont, color: chartColors.text },
+             ticks: { font: chartFont, color: chartColors.text },
+             grid: { display: false } },
+        y: { title: { display: true, text: 'Players', font: chartFont, color: chartColors.text },
+             ticks: { font: chartFont, color: chartColors.text, stepSize: 1 },
+             beginAtZero: true,
+             grid: { color: '#eee' } }
+      }
+    }
+  });
+
+  // How to read
+  document.getElementById('read-attempts').innerHTML =
+    `<strong>How to read:</strong> Each bar shows how many players tested exactly that many sequences before locking in their answer. A tall bar on the left means most people decided quickly.`;
+
+  // Dynamic insight
+  const pctFew = Math.round(a.attemptValues.slice(0, 3).reduce((s,v) => s+v, 0) / a.n * 100);
+  const mode = a.modeAttempt;
+  let insight = `<span class="insight-icon">Key insight</span>`;
+  if (pctFew >= 60) {
+    insight += `<strong>${pctFew}% of players tested 3 or fewer sequences</strong> before committing to an answer. The most common number of guesses was <strong>${mode.value}</strong> (chosen by ${mode.count} player${mode.count!==1?'s':''}).  Most people felt they had "enough" evidence very quickly — a hallmark of confirmation bias. The rule is simple enough that even a few tests should reveal it, but only if you test <em>the right kind</em> of sequences.`;
+  } else {
+    insight += `Players were fairly spread in how many guesses they tried. The most common was <strong>${mode.value} guesses</strong> (${mode.count} player${mode.count!==1?'s':''}), while the average was <strong>${a.avgAttempts.toFixed(1)}</strong>. More guesses don't help if they all confirm the same hypothesis — what matters is <em>variety</em> in what you test.`;
+  }
+  document.getElementById('insight-attempts').innerHTML = insight;
+}
+
+function buildConfidenceChart(a) {
+  const ctx = document.getElementById('chart-confidence').getContext('2d');
+
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: a.confLabels,
+      datasets: [{
+        label: 'Avg confidence',
+        data: a.confAvgs,
+        backgroundColor: a.confAvgs.map(v => v >= 4 ? '#e8a0a0' : v >= 3 ? '#e8d8a0' : '#c8dfa0'),
+        borderColor: a.confAvgs.map(v => v >= 4 ? chartColors.redDark : v >= 3 ? '#c0a860' : chartColors.greenDark),
+        borderWidth: 1,
+        borderRadius: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `Avg confidence: ${ctx.raw}/5 (n=${a.confCounts[ctx.dataIndex]})`
+          }
+        }
+      },
+      scales: {
+        x: { title: { display: true, text: '', font: chartFont, color: chartColors.text },
+             ticks: { font: { ...chartFont, size: 11 }, color: chartColors.text },
+             grid: { display: false } },
+        y: { title: { display: true, text: 'Average confidence (1–5)', font: chartFont, color: chartColors.text },
+             ticks: { font: chartFont, color: chartColors.text },
+             min: 0, max: 5,
+             grid: { color: '#eee' } }
+      }
+    }
+  });
+
+  // How to read
+  document.getElementById('read-confidence').innerHTML =
+    `<strong>How to read:</strong> Each bar shows the average self-reported confidence level (1 = "not confident," 5 = "very confident") for players who made that many guesses. Bars colored <span style="color:${chartColors.redDark}">pinkish</span> indicate high confidence (≥4), while <span style="color:${chartColors.greenDark}">green</span> bars indicate lower confidence.`;
+
+  // Dynamic insight
+  let insight = `<span class="insight-icon">Key insight</span>`;
+  const fewConf = a.confAvgs.length > 0 ? a.confAvgs[0] : null;
+  const manyConf = a.confAvgs.length > 2 ? a.confAvgs[a.confAvgs.length - 1] : null;
+  const overallAvg = a.avgConf.toFixed(1);
+
+  if (fewConf !== null && manyConf !== null) {
+    if (fewConf >= manyConf - 0.3) {
+      insight += `Players who tested just ${a.confLabels[0]} reported an average confidence of <strong>${fewConf}/5</strong> — barely different from those who tested ${a.confLabels[a.confLabels.length-1]} (<strong>${manyConf}/5</strong>). This is the <strong>illusion of knowledge</strong>: a few confirming examples feel like proof. Across all players, average confidence was <strong>${overallAvg}/5</strong>. People tend to feel sure very quickly, especially when they never hear "no."`;
+    } else {
+      insight += `Interestingly, players who tested more sequences reported <em>higher</em> confidence (${a.confLabels[a.confLabels.length-1]}: <strong>${manyConf}/5</strong>) compared to quick deciders (${a.confLabels[0]}: <strong>${fewConf}/5</strong>). More testing does seem to build genuine understanding — but only when it includes <em>disconfirming</em> tests. The overall average was <strong>${overallAvg}/5</strong>.`;
+    }
+  } else {
+    insight += `Across all ${a.n} players, average confidence was <strong>${overallAvg}/5</strong>. People tend to feel confident regardless of how thoroughly they tested — a signature of confirmation bias.`;
+  }
+  document.getElementById('insight-confidence').innerHTML = insight;
+}
+
+function buildStrategyChart(a) {
+  const ctx = document.getElementById('chart-strategy').getContext('2d');
+
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: [
+        `Never heard "No"  (${a.neverNo})`,
+        `Heard 1–2 "No"s  (${a.someNo})`,
+        `Heard 3+ "No"s  (${a.strongF})`
+      ],
+      datasets: [{
+        data: [a.neverNo, a.someNo, a.strongF],
+        backgroundColor: [chartColors.red, '#e8d8a0', chartColors.green],
+        borderColor: ['#fff','#fff','#fff'],
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      cutout: '45%',
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { font: { ...chartFont, size: 12 }, color: chartColors.text, padding: 14 }
+        },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const pct = Math.round(ctx.raw / a.n * 100);
+              return ` ${ctx.raw} player${ctx.raw !== 1 ? 's' : ''} (${pct}%)`;
+            }
+          }
+        }
+      }
+    }
+  });
+
+  // How to read
+  document.getElementById('read-strategy').innerHTML =
+    `<strong>How to read:</strong> This chart classifies every player by how many "No" responses they received. <span style="color:${chartColors.redDark}">Pink</span> = only tested sequences the rule accepted (confirmation-seeking). <span style="color:#b0a020">Yellow</span> = heard some disconfirming evidence. <span style="color:${chartColors.greenDark}">Green</span> = actively sought out rejection (strong falsifiers).`;
+
+  // Dynamic insight
+  const neverNoPct = Math.round(a.neverNoPct * 100);
+  const strongPct = Math.round(a.strongFPct * 100);
+  let insight = `<span class="insight-icon">Key insight</span>`;
+  if (neverNoPct >= 40) {
+    insight += `<strong>${neverNoPct}% of players never heard a single "No"</strong> — they only tested sequences they expected to pass. Only <strong>${strongPct}%</strong> actively sought disconfirming evidence (3+ "No" responses). There is no penalty for hearing "No" in this game, yet most people instinctively avoid it. This is exactly how confirmation bias operates in business: we pitch ideas to people we think will agree, we test strategies in markets we expect to succeed, and we seek data that validates our decisions.`;
+  } else {
+    insight += `<strong>${neverNoPct}% never heard "No"</strong>, while <strong>${strongPct}% actively tested for failure</strong> (3+ "No"s). Those who deliberately sought rejection were practicing what scientists call <em>falsification</em> — the most reliable path to truth. In business, this maps to practices like pre-mortems, red teams, and devil's advocates: deliberately seeking reasons your plan might fail <em>before</em> committing to it.`;
+  }
+  document.getElementById('insight-strategy').innerHTML = insight;
+}
+
+// ============================================================
+// INSIGHTS TABLE + OUTCOME TEXT UPDATE (primary path)
+// ============================================================
+function renderInsightsTable(a) {
+  const rows = [
+    ['Total players', a.n],
+    ['Avg guesses before submitting', a.avgAttempts.toFixed(1)],
+    ['Avg confidence level', a.avgConf.toFixed(1) + ' / 5'],
+    ['Median guesses before submitting', a.medAttempts],
+    ['Never heard a single "No"', `${a.neverNo} (${Math.round(a.neverNoPct*100)}%)`],
+    ['Tested at least 3 wrong sequences', `${a.strongF} (${Math.round(a.strongFPct*100)}%)`],
+    ['Submitted after just 1 guess', `${a.oneGuess} (${Math.round(a.oneGuessPct*100)}%)`],
+    ['Avg "No" responses per player', a.avgNos.toFixed(1)],
+  ];
+
+  document.getElementById('insights-container').innerHTML = `
+    <table class="insights-table">
+      <thead><tr><th>Metric</th><th style="text-align:right">Value</th></tr></thead>
+      <tbody>${rows.map(([l,v]) => `<tr><td>${l}</td><td class="val">${v}</td></tr>`).join('')}</tbody>
+    </table>`;
+}
+
+function updateOutcomeText(a) {
+  const el1 = document.getElementById('never-no-pct');
+  if (el1) el1.textContent = Math.round(a.neverNoPct * 100) + ' percent';
+  const el2 = document.getElementById('strong-falsifier-pct');
+  if (el2) el2.textContent = Math.round(a.strongFPct * 100) + ' percent';
+
+  // Personal insight
+  const playerNos = guesses.filter(g => !g.passes).length;
+  const playerYeses = guesses.filter(g => g.passes).length;
+  const pEl = document.getElementById('personal-insight');
+  if (pEl) {
+    let lines = [];
+    lines.push(`<strong>Your result:</strong> You made ${playerAttempts} guess${playerAttempts !== 1 ? 'es' : ''} (${playerYeses} Yes, ${playerNos} No) before submitting.`);
+    if (playerNos === 0) {
+      lines.push(`You never heard a single "No" — you're in the ${Math.round(a.neverNoPct * 100)}% of players who submitted without ever testing a sequence that could fail.`);
+    } else if (playerNos >= 3) {
+      lines.push(`You heard ${playerNos} "No" responses — that puts you among the rare ${Math.round(a.strongFPct * 100)}% who actively sought disconfirming evidence. Well done.`);
+    } else {
+      lines.push(`You heard ${playerNos} "No" response${playerNos !== 1 ? 's' : ''}. The average player hears only ${a.avgNos.toFixed(1)}.`);
+    }
+    pEl.innerHTML = lines.join(' ');
+  }
+}
+
+// ============================================================
+// FALLBACK CHARTS (from Apps Script data if CSV fails)
+// ============================================================
+function renderFallbackCharts(data) {
+  const { distribution, insights } = data;
+  const total = distribution.map(d => d.students).reduce((a, b) => a + b, 0);
+
+  document.getElementById('charts-loading').classList.add('hidden');
+  const wrap = document.getElementById('charts-content');
+  wrap.classList.remove('hidden');
+
+  wrap.innerHTML = `
+    <div class="charts-grid">
+      <div class="chart-block">
+        <div class="chart-block-title">How many guesses did players make?</div>
+        <div class="chart-block-subtitle">Number of sequences tested before submitting an answer</div>
+        <div class="chart-canvas-wrap"><canvas id="chart-attempts-fb"></canvas></div>
+        <div class="chart-read"><strong>How to read:</strong> Each bar shows how many players tested that many sequences before submitting.</div>
+        <div class="chart-insight"><span class="insight-icon">Key insight</span>Most players decide quickly. The average was <strong>${insights.avgAttempts?.toFixed(1) ?? '—'}</strong> guesses, with <strong>${insights.oneGuess ?? '—'}</strong> player(s) submitting after just one test — a hallmark of confirmation bias.</div>
+      </div>
+    </div>`;
+
+  const labels = distribution.map(d => d.attempts ?? d.label ?? d.bucket);
+  const values = distribution.map(d => d.students ?? d.count);
+  const peakIdx = values.indexOf(Math.max(...values));
+
+  new Chart(document.getElementById('chart-attempts-fb').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: values.map((_,i) => i === peakIdx ? chartColors.green : '#d8dfc0'),
+        borderRadius: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { title: { display: true, text: 'Number of guesses', font: chartFont }, grid: { display: false } },
+        y: { title: { display: true, text: 'Players', font: chartFont }, beginAtZero: true, grid: { color: '#eee' } }
+      }
+    }
+  });
+}
+
+function renderFallbackInsightsTable(data) {
   const { distribution, insights } = data;
   const total = distribution.map(d => d.students).reduce((a, b) => a + b, 0);
 
@@ -588,15 +1082,15 @@ function renderInsightsTable(data) {
       <tbody>${rows.map(([l,v]) => `<tr><td>${l}</td><td class="val">${v}</td></tr>`).join('')}</tbody>
     </table>`;
 
-  // Update the dynamic stats in the outcome text
   if (insights.neverHeardNoPct != null) {
-    document.getElementById('never-no-pct').textContent = Math.round(insights.neverHeardNoPct * 100) + ' percent';
+    const el = document.getElementById('never-no-pct');
+    if (el) el.textContent = Math.round(insights.neverHeardNoPct * 100) + ' percent';
   }
   if (insights.strongFalsifiersPct != null) {
-    document.getElementById('strong-falsifier-pct').textContent = Math.round(insights.strongFalsifiersPct * 100) + ' percent';
+    const el = document.getElementById('strong-falsifier-pct');
+    if (el) el.textContent = Math.round(insights.strongFalsifiersPct * 100) + ' percent';
   }
 
-  // Personal insight based on the player's own behavior
   const playerNos = guesses.filter(g => !g.passes).length;
   const playerYeses = guesses.filter(g => g.passes).length;
   const pEl = document.getElementById('personal-insight');
