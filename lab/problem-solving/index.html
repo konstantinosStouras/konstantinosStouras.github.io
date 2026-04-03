@@ -598,6 +598,7 @@ function detectColumns(headers) {
     rule:     find(['rule','answer']),
     yesSeq:   find(['yessequences','yesseq']),
     noSeq:    find(['nosequences','noseq']),
+    gotRight: find(['gotitright','correct','right']),
   };
 }
 
@@ -608,6 +609,7 @@ function computeAnalytics(rows, cols) {
     yeses:    parseInt(r[cols.yeses]) || 0,
     nos:      parseInt(r[cols.nos]) || 0,
     conf:     parseInt(r[cols.conf]) || 0,
+    gotRight: cols.gotRight >= 0 ? (r[cols.gotRight] || '').trim().toLowerCase() === 'yes' : null,
   })).filter(d => d.attempts > 0);
 
   const n = data.length;
@@ -624,7 +626,6 @@ function computeAnalytics(rows, cols) {
     if (i < 15) {
       attemptValues.push(attemptCounts[i] || 0);
     } else {
-      // bucket 15+
       let sum = 0;
       Object.entries(attemptCounts).forEach(([k,v]) => { if (parseInt(k) >= 15) sum += v; });
       attemptValues.push(sum);
@@ -655,6 +656,32 @@ function computeAnalytics(rows, cols) {
   const neverNo = data.filter(d => d.nos === 0).length;
   const someNo  = data.filter(d => d.nos >= 1 && d.nos < 3).length;
   const strongF = data.filter(d => d.nos >= 3).length;
+
+  // 4. Yes Ratio (confirmation bias intensity)
+  const yesRatios = data.map(d => d.attempts > 0 ? Math.round(d.yeses / d.attempts * 100) : null).filter(v => v !== null);
+  // Bucket into 10% ranges
+  const ratioLabels = ['0–10%','11–20%','21–30%','31–40%','41–50%','51–60%','61–70%','71–80%','81–90%','91–100%'];
+  const ratioValues = new Array(10).fill(0);
+  yesRatios.forEach(r => {
+    const idx = r === 0 ? 0 : Math.min(Math.ceil(r / 10) - 1, 9);
+    ratioValues[idx]++;
+  });
+  const medianYesRatio = yesRatios.length > 0
+    ? [...yesRatios].sort((a,b) => a - b)[Math.floor(yesRatios.length / 2)]
+    : null;
+  const pct100 = yesRatios.filter(r => r === 100).length;
+
+  // 5. Confidence vs Correctness
+  const correctData = data.filter(d => d.gotRight === true);
+  const wrongData   = data.filter(d => d.gotRight === false);
+  const hasCorrectnessData = correctData.length > 0 || wrongData.length > 0;
+  // Confidence distribution for each group (1–5)
+  const confDistCorrect = [0,0,0,0,0];
+  const confDistWrong   = [0,0,0,0,0];
+  correctData.forEach(d => { if (d.conf >= 1 && d.conf <= 5) confDistCorrect[d.conf - 1]++; });
+  wrongData.forEach(d => { if (d.conf >= 1 && d.conf <= 5) confDistWrong[d.conf - 1]++; });
+  const avgConfCorrect = correctData.length > 0 ? correctData.reduce((s,d) => s + d.conf, 0) / correctData.length : null;
+  const avgConfWrong   = wrongData.length > 0   ? wrongData.reduce((s,d) => s + d.conf, 0) / wrongData.length : null;
 
   // Aggregate stats
   const allAttempts = data.map(d => d.attempts).sort((a,b) => a - b);
@@ -706,6 +733,12 @@ function computeAnalytics(rows, cols) {
     oneGuessPct: oneGuess / n,
     modeAttempt: modeAttempt ? { value: parseInt(modeAttempt[0]), count: modeAttempt[1] } : null,
     yesSeqData, noSeqData,
+    // Yes Ratio
+    ratioLabels, ratioValues, medianYesRatio, pct100, yesRatios,
+    // Confidence vs Correctness
+    hasCorrectnessData, correctData, wrongData,
+    confDistCorrect, confDistWrong,
+    avgConfCorrect, avgConfWrong,
   };
 }
 
@@ -808,13 +841,13 @@ function renderDynamicCharts(a) {
         <div class="chart-insight" id="insight-attempts"></div>
       </div>
 
-      <!-- Chart 2: Confidence vs Guesses -->
+      <!-- Chart 2: Yes Ratio — Confirmation Bias Intensity -->
       <div class="chart-block">
-        <div class="chart-block-title">Does more testing lead to more confidence?</div>
-        <div class="chart-block-subtitle">Average self-reported confidence (1–5) by number of guesses</div>
-        <div class="chart-canvas-wrap"><canvas id="chart-confidence"></canvas></div>
-        <div class="chart-read" id="read-confidence"></div>
-        <div class="chart-insight" id="insight-confidence"></div>
+        <div class="chart-block-title">How one-sided was the evidence?</div>
+        <div class="chart-block-subtitle">Distribution of each player's "Yes" rate (Yeses ÷ Total guesses)</div>
+        <div class="chart-canvas-wrap"><canvas id="chart-yesratio"></canvas></div>
+        <div class="chart-read" id="read-yesratio"></div>
+        <div class="chart-insight" id="insight-yesratio"></div>
       </div>
 
       <!-- Chart 3: Testing Strategy Pie -->
@@ -826,14 +859,34 @@ function renderDynamicCharts(a) {
         <div class="chart-insight" id="insight-strategy"></div>
       </div>
 
+      <!-- Chart 4: Confidence vs Guesses -->
+      <div class="chart-block">
+        <div class="chart-block-title">Does more testing lead to more confidence?</div>
+        <div class="chart-block-subtitle">Average self-reported confidence (1–5) by number of guesses</div>
+        <div class="chart-canvas-wrap"><canvas id="chart-confidence"></canvas></div>
+        <div class="chart-read" id="read-confidence"></div>
+        <div class="chart-insight" id="insight-confidence"></div>
+      </div>
+
+      <!-- Chart 5: Confidence vs Correctness -->
+      <div class="chart-block" id="chart-correctness-block" ${a.hasCorrectnessData ? '' : 'style="display:none"'}>
+        <div class="chart-block-title">Were confident players actually right?</div>
+        <div class="chart-block-subtitle">Confidence distribution split by whether the player identified the correct rule</div>
+        <div class="chart-canvas-wrap"><canvas id="chart-correctness"></canvas></div>
+        <div class="chart-read" id="read-correctness"></div>
+        <div class="chart-insight" id="insight-correctness"></div>
+      </div>
+
       <!-- Sequence Tables -->
       <div class="chart-block" id="seq-tables-block"></div>
 
     </div>`;
 
   buildAttemptsChart(a);
-  buildConfidenceChart(a);
+  buildYesRatioChart(a);
   buildStrategyChart(a);
+  buildConfidenceChart(a);
+  if (a.hasCorrectnessData) buildCorrectnessChart(a);
   buildSequenceTables(a);
 }
 
@@ -1001,6 +1054,151 @@ function buildStrategyChart(a) {
     insight += `<strong>${neverNoPct}% never heard "No"</strong>, while <strong>${strongPct}% actively tested for failure</strong> (3+ "No"s). Those who deliberately sought rejection were practicing what scientists call <em>falsification</em> — the most reliable path to truth. In business, this maps to practices like pre-mortems, red teams, and devil's advocates: deliberately seeking reasons your plan might fail <em>before</em> committing to it.`;
   }
   document.getElementById('insight-strategy').innerHTML = insight;
+}
+
+function buildYesRatioChart(a) {
+  const ctx = document.getElementById('chart-yesratio').getContext('2d');
+
+  // Color gradient: high yes-rate = red (bias), low = green (balanced)
+  const barColors = a.ratioValues.map((_,i) => {
+    if (i <= 2) return '#a8cf6a';       // 0–30%: green (balanced testing)
+    if (i <= 5) return '#d8d880';       // 31–60%: yellow
+    if (i <= 7) return '#e8c0a0';       // 61–80%: orange
+    return '#e8a0a0';                   // 81–100%: red (confirmation-heavy)
+  });
+
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: a.ratioLabels,
+      datasets: [{
+        data: a.ratioValues,
+        backgroundColor: barColors,
+        borderColor: barColors.map(c => c.replace('a0','80').replace('6a','50').replace('80','60')),
+        borderWidth: 1,
+        borderRadius: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: { label: ctx => `${ctx.raw} player${ctx.raw !== 1 ? 's' : ''}` }
+        }
+      },
+      scales: {
+        x: { title: { display: true, text: 'Percentage of guesses that returned "Yes"', font: chartFont, color: chartColors.text },
+             ticks: { font: { ...chartFont, size: 10 }, color: chartColors.text, maxRotation: 45 },
+             grid: { display: false } },
+        y: { title: { display: true, text: 'Players', font: chartFont, color: chartColors.text },
+             ticks: { font: chartFont, color: chartColors.text, stepSize: 1 },
+             beginAtZero: true,
+             grid: { color: '#eee' } }
+      }
+    }
+  });
+
+  // How to read
+  document.getElementById('read-yesratio').innerHTML =
+    `<strong>How to read:</strong> For each player, we compute what fraction of their guesses returned "Yes." A player at 100% only ever tested sequences the rule accepted — they never once tried something that could fail. Bars further right (<span style="color:${chartColors.redDark}">red</span>) indicate more one-sided evidence-gathering; bars further left (<span style="color:#6a9a40">green</span>) indicate more balanced testing.`;
+
+  // Dynamic insight
+  const pct100Ratio = Math.round(a.pct100 / a.n * 100);
+  const pctOver80 = Math.round(a.yesRatios.filter(r => r > 80).length / a.n * 100);
+  let insight = `<span class="insight-icon">Key insight</span>`;
+  insight += `<strong>${pct100Ratio}% of players had a 100% "Yes" rate</strong> — every single sequence they tested was accepted. A total of <strong>${pctOver80}%</strong> heard "Yes" on more than 80% of their guesses. `;
+  insight += `The median player's "Yes" rate was <strong>${a.medianYesRatio}%</strong>. `;
+  if (a.medianYesRatio >= 80) {
+    insight += `This is a direct measurement of confirmation bias: most people constructed tests designed (consciously or not) to confirm their theory rather than challenge it. In a business context, this is like conducting customer surveys that only ask satisfied customers, or running A/B tests in conditions where you expect success.`;
+  } else {
+    insight += `This group was unusually balanced in their testing — most populations skew much more heavily toward confirmation-seeking.`;
+  }
+  document.getElementById('insight-yesratio').innerHTML = insight;
+}
+
+function buildCorrectnessChart(a) {
+  const ctx = document.getElementById('chart-correctness').getContext('2d');
+  const confLabelsCorr = ['1 (Low)', '2', '3', '4', '5 (High)'];
+
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: confLabelsCorr,
+      datasets: [
+        {
+          label: `Got it right (n=${a.correctData.length})`,
+          data: a.confDistCorrect,
+          backgroundColor: 'rgba(188, 207, 49, 0.7)',
+          borderColor: '#8fa324',
+          borderWidth: 1,
+          borderRadius: 2,
+        },
+        {
+          label: `Got it wrong (n=${a.wrongData.length})`,
+          data: a.confDistWrong,
+          backgroundColor: 'rgba(232, 160, 160, 0.7)',
+          borderColor: '#d46a6a',
+          borderWidth: 1,
+          borderRadius: 2,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          position: 'top',
+          labels: { font: { ...chartFont, size: 12 }, color: chartColors.text, padding: 14 }
+        },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const total = ctx.datasetIndex === 0 ? a.correctData.length : a.wrongData.length;
+              const pct = total > 0 ? Math.round(ctx.raw / total * 100) : 0;
+              return ` ${ctx.dataset.label}: ${ctx.raw} (${pct}%)`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { title: { display: true, text: 'Confidence level', font: chartFont, color: chartColors.text },
+             ticks: { font: chartFont, color: chartColors.text },
+             grid: { display: false } },
+        y: { title: { display: true, text: 'Players', font: chartFont, color: chartColors.text },
+             ticks: { font: chartFont, color: chartColors.text, stepSize: 1 },
+             beginAtZero: true,
+             grid: { color: '#eee' } }
+      }
+    }
+  });
+
+  // How to read
+  document.getElementById('read-correctness').innerHTML =
+    `<strong>How to read:</strong> Each pair of bars compares how many players reported that confidence level, split by whether they actually identified the correct rule (<span style="color:#8fa324">green</span>) or not (<span style="color:${chartColors.redDark}">pink</span>). If wrong players cluster at high confidence levels, that's overconfidence.`;
+
+  // Dynamic insight
+  const wrongPct = Math.round(a.wrongData.length / a.n * 100);
+  const rightPct = Math.round(a.correctData.length / a.n * 100);
+  const wrongHigh = a.wrongData.filter(d => d.conf >= 4).length;
+  const wrongHighPct = a.wrongData.length > 0 ? Math.round(wrongHigh / a.wrongData.length * 100) : 0;
+
+  let insight = `<span class="insight-icon">Key insight</span>`;
+  insight += `<strong>${wrongPct}% of players got the rule wrong</strong>, while ${rightPct}% got it right. `;
+
+  if (a.avgConfWrong !== null && a.avgConfCorrect !== null) {
+    const diff = Math.abs(a.avgConfWrong - a.avgConfCorrect);
+    if (a.avgConfWrong >= a.avgConfCorrect - 0.3) {
+      insight += `Those who got it wrong reported an average confidence of <strong>${a.avgConfWrong.toFixed(1)}/5</strong> — ${diff < 0.3 ? 'virtually identical to' : 'even higher than'} the <strong>${a.avgConfCorrect.toFixed(1)}/5</strong> average of those who got it right. `;
+      insight += `<strong>${wrongHighPct}%</strong> of wrong answers came with high confidence (4 or 5). This is the <strong>overconfidence effect</strong> in action: feeling certain doesn't mean being correct. In business, this is why confident presentations can disguise flawed strategies — and why it's critical to test assumptions rather than trust gut feelings.`;
+    } else {
+      insight += `Those who got it right were more confident (avg <strong>${a.avgConfCorrect.toFixed(1)}/5</strong>) than those who got it wrong (<strong>${a.avgConfWrong.toFixed(1)}/5</strong>). `;
+      insight += `Still, <strong>${wrongHighPct}%</strong> of wrong answers came with high confidence (4 or 5) — a reminder that feeling sure is no guarantee of being right.`;
+    }
+  } else {
+    insight += `Confidence was high across the board regardless of correctness — a hallmark of the overconfidence effect.`;
+  }
+  document.getElementById('insight-correctness').innerHTML = insight;
 }
 
 // --- Sequence Frequency Tables ---
