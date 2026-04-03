@@ -286,6 +286,14 @@
       background: #fff8f0; border: 1px solid #f0d8b0;
       font-size: 13px; color: #a06800; line-height: 1.5;
     }
+
+    /* Auto-zoom on larger screens so it doesn't feel tiny */
+    @media (min-width: 768px) {
+      .container { zoom: 1.35; }
+    }
+    @media (min-width: 1200px) {
+      .container { zoom: 1.5; }
+    }
   </style>
 </head>
 <body>
