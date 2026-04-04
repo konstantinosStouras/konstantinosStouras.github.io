@@ -337,16 +337,21 @@
       font-variant-numeric: tabular-nums;
     }
     .pdf-btn-wrap {
-      display: flex; justify-content: flex-end; margin-bottom: 8px;
+      display: flex; justify-content: flex-end;
+      margin-bottom: 16px;
     }
-    .pdf-btn-wrap.bottom { margin-top: 20px; margin-bottom: 0; }
+    .pdf-btn-wrap.bottom {
+      margin-top: 28px; margin-bottom: 0;
+      padding-top: 20px;
+      border-top: 1px solid #e8e8e0;
+    }
     .pdf-btn {
       display: inline-flex; align-items: center; gap: 7px;
-      padding: 10px 20px;
+      padding: 12px 24px;
       background: linear-gradient(135deg, #2e7d32, #43a047);
       border: none; border-radius: 6px;
       font-family: 'Libre Franklin', Arial, sans-serif;
-      font-size: 13px; font-weight: 700; color: #fff;
+      font-size: 14px; font-weight: 700; color: #fff;
       cursor: pointer; letter-spacing: 0.02em;
       box-shadow: 0 2px 8px rgba(46,125,50,0.3);
       transition: all 0.2s ease;
@@ -689,7 +694,7 @@ function handleSubmitRule() {
       <div class="student-answer" style="font-style:normal">${confidence * 20}%</div>
       <div class="outcome-rule">The rule: ${RULE_ANSWER}</div>
       ${buildPersonalScorecard(rule, confidence, guesses)}
-      <div style="display:flex;justify-content:space-between;align-items:center">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:28px 0 16px;padding:16px 0;border-top:1px solid #e0e0d8;border-bottom:1px solid #e0e0d8">
         <h2 class="outcome-heading" style="margin:0">Summary</h2>
         <button class="pdf-btn" onclick="downloadPDF()" style="margin:0">
           <span class="btn-icon">↓</span> Download PDF
