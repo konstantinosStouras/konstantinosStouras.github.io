@@ -966,13 +966,13 @@ const chartColors = {
 
 // Render all charts at 3x resolution so they stay crisp at any zoom
 Chart.defaults.devicePixelRatio = 3;
-// Tooltip triggers on nearest element, no need to hit exact pixels
-Chart.defaults.interaction = { mode: 'nearest', intersect: false, axis: 'x' };
-Chart.defaults.hover = { mode: 'nearest', intersect: false, axis: 'x' };
+// Make hover detection generous — don't require exact pixel hit on the bar
+Chart.defaults.interaction = { mode: 'index', intersect: false };
+Chart.defaults.hover = { mode: 'index', intersect: false };
 // Style all tooltips for readability
 Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(40, 40, 40, 0.95)';
-Chart.defaults.plugins.tooltip.titleFont = { family: "'STIX Two Text', Georgia, serif", size: 13, weight: '700' };
-Chart.defaults.plugins.tooltip.bodyFont = { family: "'STIX Two Text', Georgia, serif", size: 12, weight: '600' };
+Chart.defaults.plugins.tooltip.titleFont = { family: "'Libre Franklin', Arial, sans-serif", size: 13, weight: '700' };
+Chart.defaults.plugins.tooltip.bodyFont = { family: "'Libre Franklin', Arial, sans-serif", size: 12, weight: '600' };
 Chart.defaults.plugins.tooltip.padding = { top: 10, bottom: 10, left: 14, right: 14 };
 Chart.defaults.plugins.tooltip.cornerRadius = 6;
 Chart.defaults.plugins.tooltip.displayColors = true;
@@ -1203,10 +1203,7 @@ function buildAttemptsChart(a) {
       plugins: {
         legend: { display: false },
         tooltip: {
-          callbacks: {
-            title: (items) => items[0].label + (items[0].label === '1' ? ' guess' : ' guesses'),
-            label: (ctx) => `  ${ctx.raw} player${ctx.raw !== 1 ? 's' : ''}`
-          }
+          callbacks: { label: ctx => `${ctx.raw} player${ctx.raw !== 1 ? 's' : ''}` }
         }
       },
       scales: {
@@ -1380,10 +1377,7 @@ function buildYesRatioChart(a) {
       plugins: {
         legend: { display: false },
         tooltip: {
-          callbacks: {
-            title: (items) => 'Yes rate: ' + items[0].label,
-            label: (ctx) => `  ${ctx.raw} player${ctx.raw !== 1 ? 's' : ''}`
-          }
+          callbacks: { label: ctx => `${ctx.raw} player${ctx.raw !== 1 ? 's' : ''}` }
         }
       },
       scales: {
