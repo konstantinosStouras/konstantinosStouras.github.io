@@ -1557,18 +1557,21 @@ async function downloadPDF() {
       return false;
     }
 
-    // Helper: ensure we're on an even-numbered page (for Part starts)
-    function ensureEvenPage() {
+    // Helper: ensure we start on an even-numbered page (for Part starts)
+    function startOnEvenPage() {
+      // First, finish the current page
+      addFooter();
+      pdf.addPage();
+      y = M;
+      
+      // Now check if we're on an even page; if not, add one more
       const currentPage = pdf.internal.getNumberOfPages();
       if (currentPage % 2 !== 0) {
+        // We're on an odd page, add one more to get to even
         addFooter();
         pdf.addPage();
         y = M;
       }
-      // Always start fresh on the even page
-      addFooter();
-      pdf.addPage();
-      y = M;
     }
 
     // Helper: heading with orphan prevention (ensures min content space after)
@@ -1586,7 +1589,7 @@ async function downloadPDF() {
 
     // Helper: Part header (starts on even page, has special styling)
     function partHeader(partNum, title, subtitle) {
-      ensureEvenPage();
+      startOnEvenPage();
       // Part number label
       pdf.setFont('helvetica', 'bold');
       pdf.setFontSize(10);
@@ -1817,9 +1820,10 @@ async function downloadPDF() {
     // Your answer
     heading('Your answer', 12, [51, 51, 51], 4, 5, 25);
     const ruleInput = document.getElementById('rule-input');
+    const confValue = confidence || 0;
     if (ruleInput && ruleInput.value) {
       body('Rule submitted: ' + ruleInput.value, { bold: true, color: [51, 51, 51] });
-      body('Confidence: ' + (confidence * 20) + '%', { color: [80, 80, 80] });
+      body('Confidence: ' + (confValue * 20) + '%', { color: [80, 80, 80] });
     }
     y += 3;
     body('The actual rule: any three numbers in strictly increasing order', { size: 11, bold: true, color: [46, 125, 50] });
@@ -1862,7 +1866,7 @@ async function downloadPDF() {
     if (nos === 0) biasSignals.push('never tested a failing sequence');
     if (yesRate >= 80 && totalGuesses > 1) biasSignals.push('evidence was overwhelmingly one-sided');
     if (totalGuesses <= 2) biasSignals.push('very few sequences tested');
-    if (confidence >= 4 && !gotRight) biasSignals.push('high confidence despite wrong answer');
+    if (confValue >= 4 && !gotRight) biasSignals.push('high confidence despite wrong answer');
 
     // Verdict box
     if (biasSignals.length >= 2) {
@@ -1909,7 +1913,7 @@ async function downloadPDF() {
     ];
     const rightRows = [
       ['"Yes" rate', yesRate + '%'],
-      ['Confidence level', (confidence * 20) + '%'],
+      ['Confidence level', (confValue * 20) + '%'],
       ['Tested a failing sequence', heardNo ? '✓ Yes' : '✗ No'],
       ['Creativity index', creativityLabel]
     ];
