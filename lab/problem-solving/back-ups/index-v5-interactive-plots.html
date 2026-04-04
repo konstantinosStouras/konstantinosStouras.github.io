@@ -300,41 +300,6 @@
       font-size: 11px; font-weight: 800; text-transform: uppercase;
       letter-spacing: 0.08em; color: #888; margin-bottom: 12px;
     }
-    .insights-split {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 14px;
-    }
-    .insights-panel {
-      border-radius: 4px;
-      padding: 0;
-      overflow: hidden;
-    }
-    .insights-panel-header {
-      font-family: 'Libre Franklin', Arial, sans-serif;
-      font-size: 11px; font-weight: 800; text-transform: uppercase;
-      letter-spacing: 0.06em;
-      padding: 8px 10px;
-      display: flex; align-items: center; gap: 6px;
-    }
-    .insights-panel-header .panel-icon {
-      font-size: 13px; line-height: 1;
-    }
-    .panel-good .insights-panel-header {
-      background: #eef5d0; color: #5a7000;
-    }
-    .panel-poor .insights-panel-header {
-      background: #fce8e8; color: #a04040;
-    }
-    .insights-total {
-      font-family: 'Libre Franklin', Arial, sans-serif;
-      font-size: 13px; color: #666;
-      text-align: center; margin-bottom: 12px;
-    }
-    .insights-total strong {
-      font-size: 22px; color: #333; display: block;
-      font-variant-numeric: tabular-nums;
-    }
     .insights-table {
       width: 100%;
       border-collapse: collapse;
@@ -1613,40 +1578,22 @@ function buildSequenceTables(a) {
 // INSIGHTS TABLE + OUTCOME TEXT UPDATE (primary path)
 // ============================================================
 function renderInsightsTable(a) {
-  const goodRows = [
-    ['Tested at least 3 wrong sequences', `${a.strongF} (${Math.round(a.strongFPct*100)}%)`],
-    ['Avg "No" responses per player', a.avgNos.toFixed(1)],
+  const rows = [
+    ['Total players', a.n],
     ['Avg guesses before submitting', a.avgAttempts.toFixed(1)],
-    ['Median guesses before submitting', a.medAttempts],
-  ];
-
-  const poorRows = [
-    ['Never heard a single "No"', `${a.neverNo} (${Math.round(a.neverNoPct*100)}%)`],
-    ['Submitted after just 1 guess', `${a.oneGuess} (${Math.round(a.oneGuessPct*100)}%)`],
     ['Avg confidence level', a.avgConf.toFixed(1) + ' / 5'],
+    ['Median guesses before submitting', a.medAttempts],
+    ['Never heard a single "No"', `${a.neverNo} (${Math.round(a.neverNoPct*100)}%)`],
+    ['Tested at least 3 wrong sequences', `${a.strongF} (${Math.round(a.strongFPct*100)}%)`],
+    ['Submitted after just 1 guess', `${a.oneGuess} (${Math.round(a.oneGuessPct*100)}%)`],
+    ['Avg "No" responses per player', a.avgNos.toFixed(1)],
   ];
 
-  const makeTable = (rows) => `
-    <table class="insights-table" style="margin:0">
+  document.getElementById('insights-container').innerHTML = `
+    <table class="insights-table">
       <thead><tr><th>Metric</th><th style="text-align:right">Value</th></tr></thead>
       <tbody>${rows.map(([l,v]) => `<tr><td>${l}</td><td class="val">${v}</td></tr>`).join('')}</tbody>
     </table>`;
-
-  document.getElementById('insights-container').innerHTML = `
-    <div class="insights-total">
-      <strong>${a.n}</strong>
-      total players
-    </div>
-    <div class="insights-split">
-      <div class="insights-panel panel-good">
-        <div class="insights-panel-header"><span class="panel-icon">✓</span> Signals of good problem-solving</div>
-        ${makeTable(goodRows)}
-      </div>
-      <div class="insights-panel panel-poor">
-        <div class="insights-panel-header"><span class="panel-icon">✗</span> Signals of confirmation bias</div>
-        ${makeTable(poorRows)}
-      </div>
-    </div>`;
 }
 
 function updateOutcomeText(a) {
