@@ -21,13 +21,6 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    img, canvas, video, iframe, svg, table { max-width: 100%; }
-
-    html {
-      overflow-x: hidden;
-      -webkit-text-size-adjust: 100%;
-      text-size-adjust: 100%;
-    }
 
     body {
       font-family: Georgia, 'Times New Roman', Times, serif;
@@ -39,7 +32,6 @@
       justify-content: center;
       align-items: flex-start;
       overflow-x: hidden;
-      width: 100%;
     }
     .container { 
       max-width: 680px; 
@@ -80,14 +72,12 @@
 
     .seed-row {
       display: flex; align-items: center; gap: 8px; margin: 14px 0 28px;
-      flex-wrap: wrap;
     }
     .seed-box {
-      width: 82px; max-width: 22vw; height: 44px; background: #bccf31;
+      width: 82px; height: 44px; background: #bccf31;
       display: flex; align-items: center; justify-content: center;
       font-family: 'Libre Franklin', Arial, sans-serif;
       font-size: 17px; font-weight: 700; color: #fff;
-      flex-shrink: 0;
     }
     .seed-tag {
       font-family: 'Libre Franklin', Arial, sans-serif;
@@ -101,14 +91,12 @@
     }
     .guess-row {
       display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
-      flex-wrap: wrap;
     }
     .g-box {
-      width: 82px; max-width: 22vw; height: 44px;
+      width: 82px; height: 44px;
       display: flex; align-items: center; justify-content: center;
       font-family: 'Libre Franklin', Arial, sans-serif;
       font-size: 17px; font-weight: 700; color: #fff;
-      flex-shrink: 0;
     }
     .g-yes { background: #bccf31; }
     .g-no { background: #e8a0a0; }
@@ -124,15 +112,13 @@
     }
     .input-row {
       display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
-      flex-wrap: wrap;
     }
     .num-input {
-      width: 82px; max-width: 22vw; height: 48px;
+      width: 82px; height: 48px;
       border: 2px solid #ccc; background: #fff;
       font-family: 'Libre Franklin', Arial, sans-serif;
       font-size: 17px; font-weight: 600; text-align: center; color: #333;
       outline: none;
-      flex-shrink: 0;
     }
     .num-input:focus { border-color: #999; }
     .check-btn {
@@ -160,7 +146,7 @@
     }
     .rule-text strong { color: #333; }
     .rule-input {
-      display: block; width: 100%; max-width: 100%; height: 48px;
+      display: block; width: 100%; height: 48px;
       border: 2px solid #ccc; background: #fff;
       font-family: 'Libre Franklin', Arial, sans-serif;
       font-size: 15px; color: #333; padding: 0 12px;
@@ -178,16 +164,15 @@
     .submit-btn:hover { background: #256b29; }
     .submit-btn:disabled { background: #a5d6a7; cursor: default; }
 
-    .confidence-scale { margin-bottom: 20px; max-width: 100%; }
+    .confidence-scale { margin-bottom: 20px; }
     .confidence-row {
       display: flex; align-items: center; justify-content: center; gap: 12px;
-      flex-wrap: wrap;
     }
     .conf-end {
       font-family: 'Libre Franklin', Arial, sans-serif;
       font-size: 12px; color: #888; white-space: nowrap;
     }
-    .confidence-options { display: flex; gap: 22px; flex-shrink: 0; }
+    .confidence-options { display: flex; gap: 22px; }
     .conf-option {
       display: flex; flex-direction: column; align-items: center;
       cursor: pointer; gap: 5px;
@@ -204,7 +189,6 @@
     .outcome-box {
       margin-top: 24px; padding: 24px 26px;
       background: #f7f7f4; border-top: 3px solid #333;
-      max-width: 100%;
     }
     .outcome-p {
       font-size: 16px; line-height: 1.65; color: #555; margin-bottom: 12px;
@@ -213,7 +197,6 @@
       display: inline-block; padding: 12px 20px; background: #e8f5e9;
       font-family: 'Libre Franklin', Arial, sans-serif;
       font-size: 22px; font-weight: 700; color: #333; margin: 8px 0 16px;
-      max-width: 100%; overflow-wrap: break-word;
     }
     .outcome-heading {
       font-family: Georgia, serif;
@@ -279,13 +262,9 @@
       border: 1px solid #e8e8e0;
       padding: 14px 12px 8px;
       margin-bottom: 12px;
-      max-width: 100%;
-      overflow: hidden;
     }
     .chart-canvas-wrap canvas {
       width: 100% !important;
-      max-width: 100%;
-      height: auto !important;
       image-rendering: high-quality;
     }
     .chart-read {
