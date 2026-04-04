@@ -586,6 +586,87 @@ function handleCheck() {
   updateStepDesc();
 }
 
+function buildPersonalScorecard(rule, conf, guesses) {
+  const totalGuesses = guesses.length;
+  const yeses = guesses.filter(g => g.passes).length;
+  const nos = guesses.filter(g => !g.passes).length;
+  const yesRate = totalGuesses > 0 ? Math.round(yeses / totalGuesses * 100) : 0;
+  const heardNo = nos > 0;
+
+  // Simple correctness check (mirrors the sheet formula logic)
+  const rLow = rule.toLowerCase();
+  const hasWrongKeyword = /doubl|multipl|power|fibonacci|arithmetic|even num|twice|2x|times\s*2|by\s*2|triple|consecutiv|geometric|exponen|square|cube|ratio|factor/.test(rLow);
+  const hasRightKeyword = /increas|ascend|larger|bigger|higher|greater|goes?\s*up|grow|any.?order|any.?three|strict/.test(rLow);
+  const gotRight = !hasWrongKeyword && hasRightKeyword;
+
+  // Compute a letter grade
+  let score = 0;
+  if (nos >= 3) score += 3;
+  else if (nos >= 1) score += 1;
+  if (totalGuesses >= 5) score += 2;
+  else if (totalGuesses >= 3) score += 1;
+  if (yesRate <= 60) score += 2;
+  else if (yesRate <= 80) score += 1;
+  if (gotRight) score += 2;
+  // score out of 9
+  let grade, gradeColor, gradeLabel;
+  if (score >= 8) { grade = 'A'; gradeColor = '#2e7d32'; gradeLabel = 'Excellent critical thinker'; }
+  else if (score >= 6) { grade = 'B'; gradeColor = '#558b2f'; gradeLabel = 'Good problem-solver'; }
+  else if (score >= 4) { grade = 'C'; gradeColor = '#c0a020'; gradeLabel = 'Average — some bias detected'; }
+  else if (score >= 2) { grade = 'D'; gradeColor = '#d46a6a'; gradeLabel = 'Confirmation bias detected'; }
+  else { grade = 'F'; gradeColor = '#b71c1c'; gradeLabel = 'Strong confirmation bias'; }
+
+  const goodRows = [
+    ['Total sequences tested', totalGuesses],
+    ['"No" responses heard', nos],
+    ['Got the rule right', gotRight ? '✓ Yes' : '✗ No'],
+  ];
+
+  const poorRows = [
+    ['"Yes" rate', yesRate + '%'],
+    ['Confidence level', (conf * 20) + '%'],
+    ['Tested a failing sequence', heardNo ? '✓ Yes' : '✗ No'],
+  ];
+
+  const makeTable = (rows, type) => {
+    const valColor = type === 'good' ? '#5a7000' : '#a04040';
+    return `<table class="insights-table" style="margin:0;font-size:13px">
+      <thead><tr><th>Metric</th><th style="text-align:right">Value</th></tr></thead>
+      <tbody>${rows.map(([l,v]) => {
+        let color = '';
+        if (type === 'good') {
+          // Green if good, muted if not
+          if (l.includes('No" responses') && v === 0) color = 'color:#d46a6a';
+          else if (l.includes('Got the rule') && String(v).includes('✗')) color = 'color:#d46a6a';
+        } else {
+          if (l.includes('Yes" rate') && parseInt(v) >= 80) color = 'color:#d46a6a;font-weight:700';
+          if (l.includes('Tested a failing') && String(v).includes('✗')) color = 'color:#d46a6a;font-weight:700';
+        }
+        return `<tr><td>${l}</td><td class="val" style="${color}">${v}</td></tr>`;
+      }).join('')}</tbody>
+    </table>`;
+  };
+
+  return `
+    <div style="margin:20px 0 24px">
+      <div class="insights-card-title" style="margin-bottom:8px">Your personal scorecard</div>
+      <div style="text-align:center;margin-bottom:14px">
+        <div style="display:inline-block;width:56px;height:56px;border-radius:50%;background:${gradeColor};color:#fff;font-family:'Libre Franklin',sans-serif;font-size:28px;font-weight:800;line-height:56px;text-align:center">${grade}</div>
+        <div style="font-family:'Libre Franklin',sans-serif;font-size:13px;font-weight:700;color:${gradeColor};margin-top:4px">${gradeLabel}</div>
+      </div>
+      <div class="insights-split">
+        <div class="insights-panel panel-good">
+          <div class="insights-panel-header"><span class="panel-icon">✓</span> Your strengths</div>
+          ${makeTable(goodRows, 'good')}
+        </div>
+        <div class="insights-panel panel-poor">
+          <div class="insights-panel-header"><span class="panel-icon">✗</span> Bias indicators</div>
+          ${makeTable(poorRows, 'poor')}
+        </div>
+      </div>
+    </div>`;
+}
+
 function handleSubmitRule() {
   const rule = document.getElementById('rule-input').value.trim();
   if (!rule || confidence === null) return;
@@ -607,6 +688,7 @@ function handleSubmitRule() {
       <div class="answer-label" style="text-transform:none">How confident you are about identifying the rule:</div>
       <div class="student-answer" style="font-style:normal">${confidence * 20}%</div>
       <div class="outcome-rule">The rule: ${RULE_ANSWER}</div>
+      ${buildPersonalScorecard(rule, confidence, guesses)}
       <div style="display:flex;justify-content:space-between;align-items:center">
         <h2 class="outcome-heading" style="margin:0">Summary</h2>
         <button class="pdf-btn" onclick="downloadPDF()" style="margin:0">
@@ -1984,6 +2066,39 @@ async function downloadPDF() {
     y += 2;
     body('The actual rule: any three numbers in strictly increasing order', { size: 11, bold: true, color: [46,125,50] });
     y += 4;
+
+    // ===================== PERSONAL SCORECARD =====================
+    // Compute the same grade as the UI
+    const pYeses = guesses.filter(g => g.passes).length;
+    const pNos = guesses.filter(g => !g.passes).length;
+    const pYesRate = guesses.length > 0 ? Math.round(pYeses / guesses.length * 100) : 0;
+    const pRule = (ruleInput && ruleInput.value) ? ruleInput.value.toLowerCase() : '';
+    const pHasWrong = /doubl|multipl|power|fibonacci|arithmetic|even num|twice|2x|times\s*2|by\s*2|triple|consecutiv|geometric|exponen|square|cube|ratio|factor/.test(pRule);
+    const pHasRight = /increas|ascend|larger|bigger|higher|greater|goes?\s*up|grow|any.?order|any.?three|strict/.test(pRule);
+    const pGotRight = !pHasWrong && pHasRight;
+    let pScore = 0;
+    if (pNos >= 3) pScore += 3; else if (pNos >= 1) pScore += 1;
+    if (guesses.length >= 5) pScore += 2; else if (guesses.length >= 3) pScore += 1;
+    if (pYesRate <= 60) pScore += 2; else if (pYesRate <= 80) pScore += 1;
+    if (pGotRight) pScore += 2;
+    let pGrade, pGradeLabel;
+    if (pScore >= 8) { pGrade = 'A'; pGradeLabel = 'Excellent critical thinker'; }
+    else if (pScore >= 6) { pGrade = 'B'; pGradeLabel = 'Good problem-solver'; }
+    else if (pScore >= 4) { pGrade = 'C'; pGradeLabel = 'Average — some bias detected'; }
+    else if (pScore >= 2) { pGrade = 'D'; pGradeLabel = 'Confirmation bias detected'; }
+    else { pGrade = 'F'; pGradeLabel = 'Strong confirmation bias'; }
+
+    heading('Your personal scorecard: ' + pGrade + ' — ' + pGradeLabel, 12, [51,51,51], 2, 5);
+    body('Strengths:', { size: 10, bold: true, color: [90,112,0] });
+    body('  Total sequences tested: ' + guesses.length, { size: 10 });
+    body('  "No" responses heard: ' + pNos, { size: 10 });
+    body('  Got the rule right: ' + (pGotRight ? 'Yes' : 'No'), { size: 10 });
+    y += 2;
+    body('Bias indicators:', { size: 10, bold: true, color: [160,64,64] });
+    body('  "Yes" rate: ' + pYesRate + '%', { size: 10 });
+    body('  Confidence level: ' + (confidence * 20) + '%', { size: 10 });
+    body('  Tested a failing sequence: ' + (pNos > 0 ? 'Yes' : 'No'), { size: 10 });
+    y += 5;
 
     // Personal insight
     const pEl = document.getElementById('personal-insight');
