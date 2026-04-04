@@ -591,6 +591,44 @@ function handleCheck() {
   updateStepDesc();
 }
 
+// ============================================================
+// LOCAL CREATIVITY INDEX (mirrors Apps Script algorithm)
+// ============================================================
+function computeLocalCreativity(guesses) {
+  if (guesses.length === 0) return null;
+  const SEED = [2, 4, 8];
+  const sequences = [SEED, ...guesses.map(g => g.nums)];
+
+  function seqFeatures(a, b, c) {
+    const d1 = b - a, d2 = c - b;
+    const mean = (a + b + c) / 3;
+    const spread = Math.max(a,b,c) - Math.min(a,b,c);
+    return [
+      (d1 > 0 && d2 > 0) ? 1 : 0,
+      (d1 < 0 && d2 < 0) ? 1 : 0,
+      (d1 === 0 && d2 === 0) ? 1 : 0,
+      (d1 > 0 !== d2 > 0 && d1 !== 0 && d2 !== 0) ? 1 : 0,
+      (Math.min(a,b,c) < 0) ? 1 : 0,
+      (a === 0 || b === 0 || c === 0) ? 1 : 0,
+      Math.log(1 + spread) / 7,
+      Math.log(1 + Math.abs(mean)) / 7,
+      (Math.abs(d1) + Math.abs(d2)) > 0 ? (d2 / (Math.abs(d1) + Math.abs(d2))) * 0.5 + 0.5 : 0.5,
+      spread > 0 ? (b - Math.min(a,b,c)) / spread : 0.5
+    ];
+  }
+  function eucDist(a, b) {
+    let s = 0; for (let i = 0; i < a.length; i++) { const d = a[i]-b[i]; s += d*d; } return Math.sqrt(s);
+  }
+
+  const features = sequences.map(s => seqFeatures(s[0], s[1], s[2]));
+  const n = features.length;
+  let totalDist = 0, pairs = 0;
+  for (let i = 0; i < n; i++) for (let j = i+1; j < n; j++) { totalDist += eucDist(features[i], features[j]); pairs++; }
+  const avgDist = pairs > 0 ? totalDist / pairs : 0;
+  const volumeWeight = Math.log(n) / Math.LN2;
+  return { rawScore: avgDist * volumeWeight, avgDist, uniquePatterns: n };
+}
+
 function buildPersonalScorecard(rule, conf, guesses) {
   const totalGuesses = guesses.length;
   const yeses = guesses.filter(g => g.passes).length;
@@ -603,6 +641,23 @@ function buildPersonalScorecard(rule, conf, guesses) {
   const hasWrongKeyword = /doubl|multipl|power|fibonacci|arithmetic|even num|twice|2x|times\s*2|by\s*2|triple|consecutiv|geometric|exponen|square|cube|ratio|factor/.test(rLow);
   const hasRightKeyword = /increas|ascend|larger|bigger|higher|greater|goes?\s*up|grow|any.?order|any.?three|strict/.test(rLow);
   const gotRight = !hasWrongKeyword && hasRightKeyword;
+
+  // Compute local creativity
+  const creativity = computeLocalCreativity(guesses);
+  let distinctPatterns = 0;
+  if (guesses.length > 0) {
+    const types = new Set();
+    [[2,4,8], ...guesses.map(g => g.nums)].forEach(([a,b,c]) => {
+      const d1 = b-a, d2 = c-b;
+      if (d1 > 0 && d2 > 0) types.add('increasing');
+      else if (d1 < 0 && d2 < 0) types.add('decreasing');
+      else if (d1 === 0 && d2 === 0) types.add('constant');
+      else types.add('non-monotonic');
+      if (Math.min(a,b,c) < 0) types.add('negatives');
+      if (a === 0 || b === 0 || c === 0) types.add('zero');
+    });
+    distinctPatterns = types.size;
+  }
 
   // Detect confirmation bias signals
   const biasSignals = [];
@@ -629,6 +684,7 @@ function buildPersonalScorecard(rule, conf, guesses) {
   const goodRows = [
     ['Total sequences tested', totalGuesses],
     ['"No" responses heard', nos],
+    ['Distinct patterns explored', distinctPatterns + ' of 6'],
     ['Got the rule right', gotRight ? '✓ Yes' : '✗ No'],
   ];
 
@@ -636,6 +692,7 @@ function buildPersonalScorecard(rule, conf, guesses) {
     ['"Yes" rate', yesRate + '%'],
     ['Confidence level', (conf * 20) + '%'],
     ['Tested a failing sequence', heardNo ? '✓ Yes' : '✗ No'],
+    ['Creativity index', '<span id="personal-creativity-val">...</span>'],
   ];
 
   const makeTable = (rows, type) => {
@@ -647,6 +704,7 @@ function buildPersonalScorecard(rule, conf, guesses) {
         if (type === 'good') {
           if (l.includes('No" responses') && v === 0) color = 'color:#d46a6a';
           else if (l.includes('Got the rule') && String(v).includes('✗')) color = 'color:#d46a6a';
+          else if (l.includes('Distinct patterns') && parseInt(v) <= 1) color = 'color:#d46a6a';
         } else {
           if (l.includes('Yes" rate') && parseInt(v) >= 80) color = 'color:#d46a6a;font-weight:700';
           if (l.includes('Tested a failing') && String(v).includes('✗')) color = 'color:#d46a6a;font-weight:700';
@@ -695,6 +753,17 @@ function handleSubmitRule() {
       <div class="student-answer" style="font-style:normal">${confidence * 20}%</div>
       <div class="outcome-rule">The rule: ${RULE_ANSWER}</div>
       ${buildPersonalScorecard(rule, confidence, guesses)}
+      <div id="class-insights-placeholder" style="margin-bottom:10px">
+        <div class="insights-card">
+          <div class="insights-card-title">Key insights across participants</div>
+          <div id="insights-container">
+            <div class="loading-results">
+              <div class="loading-spinner"></div>
+              Loading insights…
+            </div>
+          </div>
+        </div>
+      </div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin:28px 0 16px;padding:16px 0;border-top:1px solid #e0e0d8;border-bottom:1px solid #e0e0d8">
         <h2 class="outcome-heading" style="margin:0">Summary</h2>
         <button class="pdf-btn" onclick="downloadPDF()" style="margin:0">
@@ -1008,16 +1077,6 @@ function showClassResults() {
       </div>
       <div id="charts-content" class="hidden"></div>
 
-      <div class="insights-card">
-        <div class="insights-card-title">Key insights across participants</div>
-        <div id="insights-container">
-          <div class="loading-results">
-            <div class="loading-spinner"></div>
-            Loading insights…
-          </div>
-        </div>
-      </div>
-
       <div class="pdf-btn-wrap bottom">
         <button class="pdf-btn" onclick="downloadPDF()" id="pdf-btn-bottom">
           <span class="btn-icon">↓</span> Download PDF
@@ -1092,7 +1151,7 @@ function renderDynamicCharts(a) {
 
       <div class="chart-block">
         <div class="chart-block-title">How one-sided was the evidence?</div>
-        <div class="chart-block-subtitle">Distribution of each player's "Yes" rate (Yeses ÷ Total guesses)</div>
+        <div class="chart-block-subtitle">Distribution of each player's "Yes" rate: Yes responses / Total guesses</div>
         <div class="chart-canvas-wrap"><canvas id="chart-yesratio"></canvas></div>
         <div class="chart-read" id="read-yesratio"></div>
         <div class="chart-insight" id="insight-yesratio"></div>
@@ -1118,7 +1177,7 @@ function renderDynamicCharts(a) {
     <div class="charts-grid">
       <div class="chart-block">
         <div class="chart-block-title">Does more testing lead to more confidence?</div>
-        <div class="chart-block-subtitle">Average self-reported confidence (1–5) by number of guesses</div>
+        <div class="chart-block-subtitle">Average self-reported confidence, 1 to 5, by number of guesses</div>
         <div class="chart-canvas-wrap"><canvas id="chart-confidence"></canvas></div>
         <div class="chart-read" id="read-confidence"></div>
         <div class="chart-insight" id="insight-confidence"></div>
@@ -1138,6 +1197,14 @@ function renderDynamicCharts(a) {
       <div class="section-number">Part 3</div>
       <div class="section-title">Exploration creativity</div>
       <div class="section-subtitle">How creative was each player's testing strategy — and did it actually help?</div>
+    </div>
+    <div ${showCreativity ? '' : 'style="display:none"'}>
+      <div class="chart-insight" style="margin-bottom:20px">
+        <span class="insight-icon">How we measure creativity</span>
+        The <strong>creativity index</strong> measures how structurally diverse a player's tested sequences were, relative to the seed example (2, 4, 8). For each sequence, we extract a feature vector capturing its direction (increasing, decreasing, constant, non-monotonic), scale (magnitude and spread of the numbers), boundary exploration (use of negatives or zero), and gap pattern (arithmetic vs geometric spacing). We then compute the <strong>average pairwise Euclidean distance</strong> across all features, weighted by the logarithm of the number of sequences tested. The weighting ensures that testing more sequences is rewarded, but with diminishing returns — quality of exploration matters more than sheer volume. Scores are normalized so the most exploratory player in the group scores 100%.
+        <br><br>
+        <strong>Example:</strong> Suppose Player A tested (2, 4, 8), (3, 6, 12), and (4, 8, 16). All three are increasing sequences with similar geometric spacing — structurally repetitive. Player B tested (2, 4, 8), (5, 3, 1), and (0, 0, 0). These span three fundamentally different patterns: increasing, decreasing, and constant. Player B's sequences produce a much larger average distance in feature space, and thus a higher creativity index — even though both players tested the same number of sequences.
+      </div>
     </div>
     <div class="charts-grid" ${showCreativity ? '' : 'style="display:none"'}>
       <div class="chart-block">
@@ -1267,7 +1334,7 @@ function buildConfidenceChart(a) {
         x: { title: { display: true, text: '', font: chartFont, color: chartColors.text },
              ticks: { font: { ...chartFont, size: 11 }, color: chartColors.text },
              grid: { display: false } },
-        y: { title: { display: true, text: 'Average confidence (1–5)', font: chartFont, color: chartColors.text },
+        y: { title: { display: true, text: 'Average confidence, 1 to 5', font: chartFont, color: chartColors.text },
              ticks: { font: chartFont, color: chartColors.text },
              min: 0, max: 5,
              grid: { color: '#eee' } }
@@ -1781,6 +1848,18 @@ function renderInsightsTable(a) {
     ['Avg confidence level', a.avgConf.toFixed(1) + ' / 5'],
   ];
 
+  // Add creativity rows if data is available
+  if (a.hasCreativityData) {
+    const highCreativity = a.creativityData.filter(d => d.creativity >= 50).length;
+    const highCreativityPct = Math.round(highCreativity / a.n * 100);
+    const lowCreativity = a.creativityData.filter(d => d.creativity < 20).length;
+    const lowCreativityPct = Math.round(lowCreativity / a.n * 100);
+
+    goodRows.push(['Avg creativity index', Math.round(a.avgCreativity) + '%']);
+    goodRows.push(['High creativity (50%+)', `${highCreativity} (${highCreativityPct}%)`]);
+    poorRows.push(['Low creativity (<20%)', `${lowCreativity} (${lowCreativityPct}%)`]);
+  }
+
   const makeTable = (rows) => `
     <table class="insights-table" style="margin:0">
       <thead><tr><th>Metric</th><th style="text-align:right">Value</th></tr></thead>
@@ -1825,6 +1904,22 @@ function updateOutcomeText(a) {
       lines.push(`You heard ${playerNos} "No" response${playerNos !== 1 ? 's' : ''}. The average player hears only ${a.avgNos.toFixed(1)}.`);
     }
     pEl.innerHTML = lines.join(' ');
+  }
+
+  // Fill in creativity index in personal scorecard
+  const cEl = document.getElementById('personal-creativity-val');
+  if (cEl) {
+    const playerCreativity = computeLocalCreativity(guesses);
+    if (playerCreativity) {
+      const val = playerCreativity.avgDist > 0.5 ? 'High' : playerCreativity.avgDist > 0.2 ? 'Medium' : 'Low';
+      const col = val === 'High' ? '#5a7000' : val === 'Medium' ? '#8a6d00' : '#d46a6a';
+      cEl.innerHTML = `<span style="color:${col};font-weight:700">${val}</span>`;
+      if (a.avgCreativity !== null) {
+        cEl.innerHTML += ` <span style="color:#999;font-weight:400;font-size:11px">(class avg: ${Math.round(a.avgCreativity)}%)</span>`;
+      }
+    } else {
+      cEl.textContent = 'N/A';
+    }
   }
 }
 
@@ -2144,12 +2239,32 @@ async function downloadPDF() {
     const scColW = (CW - 6) / 2;
     const scStartY = y;
     const scRowH = 9;
+    // Compute local creativity for PDF
+    const pdfCreativity = computeLocalCreativity(guesses);
+    const pdfCreativityLabel = pdfCreativity
+      ? (pdfCreativity.avgDist > 0.5 ? 'High' : pdfCreativity.avgDist > 0.2 ? 'Medium' : 'Low')
+      : 'N/A';
+    // Count distinct patterns
+    let pdfPatterns = 0;
+    if (guesses.length > 0) {
+      const pts = new Set();
+      [[2,4,8], ...guesses.map(g => g.nums)].forEach(([a,b,c]) => {
+        const d1=b-a, d2=c-b;
+        if (d1>0&&d2>0) pts.add('inc'); else if (d1<0&&d2<0) pts.add('dec');
+        else if (d1===0&&d2===0) pts.add('const'); else pts.add('nonmon');
+        if (Math.min(a,b,c)<0) pts.add('neg');
+        if (a===0||b===0||c===0) pts.add('zero');
+      });
+      pdfPatterns = pts.size;
+    }
+
     const scData = [
       {
         header: 'YOUR STRENGTHS', isGood: true,
         rows: [
           ['Total sequences tested', String(guesses.length)],
           ['"No" responses heard', String(pNos)],
+          ['Distinct patterns explored', pdfPatterns + ' of 6'],
           ['Got the rule right', pGotRight ? 'Yes' : 'No'],
         ]
       },
@@ -2159,6 +2274,7 @@ async function downloadPDF() {
           ['"Yes" rate', pYesRate + '%'],
           ['Confidence level', (confidence * 20) + '%'],
           ['Tested a failing sequence', pNos > 0 ? 'Yes' : 'No'],
+          ['Creativity index', pdfCreativityLabel],
         ]
       }
     ];
@@ -2201,7 +2317,8 @@ async function downloadPDF() {
         y += scRowH;
       });
     }
-    y = scStartY + 9 + 7 + 3 * scRowH + 8;
+    const scMaxRows = Math.max(scData[0].rows.length, scData[1].rows.length);
+    y = scStartY + 9 + 7 + scMaxRows * scRowH + 8;
 
     // Personal insight
     const pEl = document.getElementById('personal-insight');
@@ -2267,6 +2384,9 @@ async function downloadPDF() {
     const scatterCanvas = document.getElementById('chart-scatter');
     if (scatterCanvas) {
       sectionHeader(3, 'Exploration creativity', 'How creative was each player\'s testing strategy?');
+      body('How we measure creativity: The creativity index measures how structurally diverse a player\'s tested sequences were relative to the seed (2, 4, 8). For each sequence, we extract features capturing direction, scale, boundary exploration, and gap pattern. We compute the average pairwise Euclidean distance across features, weighted by log(number of sequences). Scores are normalized so the most exploratory player scores 100%.', { size: 9, color: [100,100,80] });
+      body('Example: Player A tests (2,4,8), (3,6,12), (4,8,16) -- all structurally similar increasing sequences, low creativity. Player B tests (2,4,8), (5,3,1), (0,0,0) -- spanning increasing, decreasing, and constant patterns, high creativity.', { size: 9, color: [100,100,80] });
+      y += 3;
       chartBlock('chart-scatter');
       chartBlock('chart-conf-creativity');
       chartBlock('chart-creativity-correct');
