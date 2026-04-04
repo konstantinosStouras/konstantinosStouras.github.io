@@ -266,26 +266,6 @@
       letter-spacing: 0.08em; color: #b0a020; display: block;
       margin-bottom: 4px;
     }
-    .section-divider {
-      margin: 36px 0 20px;
-      padding: 14px 0 8px;
-      border-top: 2px solid #e0e0d8;
-    }
-    .section-number {
-      font-family: 'Libre Franklin', Arial, sans-serif;
-      font-size: 10px; font-weight: 800; text-transform: uppercase;
-      letter-spacing: 0.1em; color: #bccf31;
-      margin-bottom: 2px;
-    }
-    .section-title {
-      font-family: Georgia, serif;
-      font-size: 19px; font-weight: 700; color: #333;
-      margin-bottom: 3px;
-    }
-    .section-subtitle {
-      font-family: 'Libre Franklin', Arial, sans-serif;
-      font-size: 12px; color: #999; line-height: 1.4;
-    }
 
     .insights-card {
       background: #fafaf7;
@@ -619,7 +599,6 @@ function detectColumns(headers) {
     yesSeq:   find(['yessequences','yesseq']),
     noSeq:    find(['nosequences','noseq']),
     gotRight: find(['gotitright','correct','right']),
-    creativity: find(['creativityindex','creativity','diversity']),
   };
 }
 
@@ -631,7 +610,6 @@ function computeAnalytics(rows, cols) {
     nos:      parseInt(r[cols.nos]) || 0,
     conf:     parseInt(r[cols.conf]) || 0,
     gotRight: cols.gotRight >= 0 ? (r[cols.gotRight] || '').trim().toLowerCase() === 'yes' : null,
-    creativity: cols.creativity >= 0 ? parseInt(r[cols.creativity]) : null,
   })).filter(d => d.attempts > 0);
 
   const n = data.length;
@@ -705,30 +683,6 @@ function computeAnalytics(rows, cols) {
   const avgConfCorrect = correctData.length > 0 ? correctData.reduce((s,d) => s + d.conf, 0) / correctData.length : null;
   const avgConfWrong   = wrongData.length > 0   ? wrongData.reduce((s,d) => s + d.conf, 0) / wrongData.length : null;
 
-  // 6. Creativity analytics
-  const creativityData = data.filter(d => d.creativity !== null && !isNaN(d.creativity));
-  const hasCreativityData = creativityData.length > 0;
-
-  // Creativity by correctness
-  const creativityCorrect = creativityData.filter(d => d.gotRight === true).map(d => d.creativity);
-  const creativityWrong   = creativityData.filter(d => d.gotRight === false).map(d => d.creativity);
-  const avgCreativityCorrect = creativityCorrect.length > 0 ? creativityCorrect.reduce((a,b) => a+b, 0) / creativityCorrect.length : null;
-  const avgCreativityWrong   = creativityWrong.length > 0   ? creativityWrong.reduce((a,b) => a+b, 0) / creativityWrong.length : null;
-
-  // Creativity by confidence (1–5)
-  const creativityByConf = {};
-  for (let c = 1; c <= 5; c++) {
-    const group = creativityData.filter(d => d.conf === c).map(d => d.creativity);
-    if (group.length > 0) {
-      creativityByConf[c] = { avg: group.reduce((a,b) => a+b, 0) / group.length, n: group.length };
-    }
-  }
-
-  // Creativity vs attempts (scatter data)
-  const creativityScatter = creativityData.map(d => ({ x: d.attempts, y: d.creativity, gotRight: d.gotRight }));
-
-  const avgCreativity = creativityData.length > 0 ? creativityData.reduce((s,d) => s + d.creativity, 0) / creativityData.length : null;
-
   // Aggregate stats
   const allAttempts = data.map(d => d.attempts).sort((a,b) => a - b);
   const avgAttempts = allAttempts.reduce((a,b) => a+b, 0) / n;
@@ -785,11 +739,6 @@ function computeAnalytics(rows, cols) {
     hasCorrectnessData, correctData, wrongData,
     confDistCorrect, confDistWrong,
     avgConfCorrect, avgConfWrong,
-    // Creativity
-    hasCreativityData, creativityData,
-    creativityCorrect, creativityWrong,
-    avgCreativityCorrect, avgCreativityWrong,
-    creativityByConf, creativityScatter, avgCreativity,
   };
 }
 
@@ -880,17 +829,10 @@ function renderDynamicCharts(a) {
   const wrap = document.getElementById('charts-content');
   wrap.classList.remove('hidden');
 
-  const showCreativity = a.hasCreativityData;
-
   wrap.innerHTML = `
-
-    <!-- ==================== SECTION 1 ==================== -->
-    <div class="section-divider" style="margin-top:0;border-top:none;padding-top:0">
-      <div class="section-number">Part 1</div>
-      <div class="section-title">Testing behavior</div>
-      <div class="section-subtitle">How did players approach the puzzle? What evidence did they gather?</div>
-    </div>
     <div class="charts-grid">
+
+      <!-- Chart 1: Distribution of Attempts -->
       <div class="chart-block">
         <div class="chart-block-title">How many guesses did players make?</div>
         <div class="chart-block-subtitle">Number of sequences tested before submitting an answer</div>
@@ -899,6 +841,7 @@ function renderDynamicCharts(a) {
         <div class="chart-insight" id="insight-attempts"></div>
       </div>
 
+      <!-- Chart 2: Yes Ratio — Confirmation Bias Intensity -->
       <div class="chart-block">
         <div class="chart-block-title">How one-sided was the evidence?</div>
         <div class="chart-block-subtitle">Distribution of each player's "Yes" rate (Yeses ÷ Total guesses)</div>
@@ -907,6 +850,7 @@ function renderDynamicCharts(a) {
         <div class="chart-insight" id="insight-yesratio"></div>
       </div>
 
+      <!-- Chart 3: Testing Strategy Pie -->
       <div class="chart-block">
         <div class="chart-block-title">Did players seek disconfirming evidence?</div>
         <div class="chart-block-subtitle">Breakdown by how many "No" responses players received</div>
@@ -915,16 +859,7 @@ function renderDynamicCharts(a) {
         <div class="chart-insight" id="insight-strategy"></div>
       </div>
 
-      <div class="chart-block" id="seq-tables-block"></div>
-    </div>
-
-    <!-- ==================== SECTION 2 ==================== -->
-    <div class="section-divider">
-      <div class="section-number">Part 2</div>
-      <div class="section-title">Confidence & accuracy</div>
-      <div class="section-subtitle">What did players believe — and were they right?</div>
-    </div>
-    <div class="charts-grid">
+      <!-- Chart 4: Confidence vs Guesses -->
       <div class="chart-block">
         <div class="chart-block-title">Does more testing lead to more confidence?</div>
         <div class="chart-block-subtitle">Average self-reported confidence (1–5) by number of guesses</div>
@@ -933,6 +868,7 @@ function renderDynamicCharts(a) {
         <div class="chart-insight" id="insight-confidence"></div>
       </div>
 
+      <!-- Chart 5: Confidence vs Correctness -->
       <div class="chart-block" id="chart-correctness-block" ${a.hasCorrectnessData ? '' : 'style="display:none"'}>
         <div class="chart-block-title">Were confident players actually right?</div>
         <div class="chart-block-subtitle">Confidence distribution split by whether the player identified the correct rule</div>
@@ -940,55 +876,18 @@ function renderDynamicCharts(a) {
         <div class="chart-read" id="read-correctness"></div>
         <div class="chart-insight" id="insight-correctness"></div>
       </div>
-    </div>
 
-    <!-- ==================== SECTION 3 ==================== -->
-    <div class="section-divider" ${showCreativity ? '' : 'style="display:none"'}>
-      <div class="section-number">Part 3</div>
-      <div class="section-title">Exploration creativity</div>
-      <div class="section-subtitle">How creative was each player's testing strategy — and did it actually help?</div>
-    </div>
-    <div class="charts-grid" ${showCreativity ? '' : 'style="display:none"'}>
-      <div class="chart-block">
-        <div class="chart-block-title">Quantity vs quality of exploration</div>
-        <div class="chart-block-subtitle">Each dot is a player: number of guesses vs creativity index</div>
-        <div class="chart-canvas-wrap"><canvas id="chart-scatter"></canvas></div>
-        <div class="chart-read" id="read-scatter"></div>
-        <div class="chart-insight" id="insight-scatter"></div>
-      </div>
+      <!-- Sequence Tables -->
+      <div class="chart-block" id="seq-tables-block"></div>
 
-      <div class="chart-block">
-        <div class="chart-block-title">The confidence–creativity paradox</div>
-        <div class="chart-block-subtitle">Average creativity index by self-reported confidence level</div>
-        <div class="chart-canvas-wrap"><canvas id="chart-conf-creativity"></canvas></div>
-        <div class="chart-read" id="read-conf-creativity"></div>
-        <div class="chart-insight" id="insight-conf-creativity"></div>
-      </div>
+    </div>`;
 
-      <div class="chart-block" ${a.hasCorrectnessData ? '' : 'style="display:none"'}>
-        <div class="chart-block-title">Did creative testing actually help?</div>
-        <div class="chart-block-subtitle">Average creativity index for players who got the rule right vs wrong</div>
-        <div class="chart-canvas-wrap"><canvas id="chart-creativity-correct"></canvas></div>
-        <div class="chart-read" id="read-creativity-correct"></div>
-        <div class="chart-insight" id="insight-creativity-correct"></div>
-      </div>
-    </div>
-  `;
-
-  // Section 1
   buildAttemptsChart(a);
   buildYesRatioChart(a);
   buildStrategyChart(a);
-  buildSequenceTables(a);
-  // Section 2
   buildConfidenceChart(a);
   if (a.hasCorrectnessData) buildCorrectnessChart(a);
-  // Section 3
-  if (showCreativity) {
-    buildScatterChart(a);
-    buildConfCreativityChart(a);
-    if (a.hasCorrectnessData) buildCreativityCorrectnessChart(a);
-  }
+  buildSequenceTables(a);
 }
 
 function buildAttemptsChart(a) {
@@ -1300,185 +1199,6 @@ function buildCorrectnessChart(a) {
     insight += `Confidence was high across the board regardless of correctness — a hallmark of the overconfidence effect.`;
   }
   document.getElementById('insight-correctness').innerHTML = insight;
-}
-
-// ============================================================
-// CREATIVITY CHARTS (Section 3)
-// ============================================================
-
-function buildScatterChart(a) {
-  const ctx = document.getElementById('chart-scatter').getContext('2d');
-
-  const rightPts = a.creativityScatter.filter(d => d.gotRight === true);
-  const wrongPts = a.creativityScatter.filter(d => d.gotRight === false);
-  const nullPts  = a.creativityScatter.filter(d => d.gotRight === null);
-
-  const datasets = [];
-  if (rightPts.length) datasets.push({
-    label: 'Got it right',
-    data: rightPts, backgroundColor: 'rgba(188,207,49,0.6)',
-    borderColor: '#8fa324', pointRadius: 5, pointHoverRadius: 7,
-  });
-  if (wrongPts.length) datasets.push({
-    label: 'Got it wrong',
-    data: wrongPts, backgroundColor: 'rgba(232,160,160,0.6)',
-    borderColor: '#d46a6a', pointRadius: 5, pointHoverRadius: 7,
-  });
-  if (nullPts.length) datasets.push({
-    label: 'Players',
-    data: nullPts, backgroundColor: 'rgba(180,180,170,0.5)',
-    borderColor: '#999', pointRadius: 5, pointHoverRadius: 7,
-  });
-
-  new Chart(ctx, {
-    type: 'scatter',
-    data: { datasets },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { position: 'top', labels: { font: { ...chartFont, size: 11 }, color: chartColors.text } },
-        tooltip: { callbacks: { label: (ctx) => `${ctx.raw.x} guesses, ${ctx.raw.y}% creativity` } }
-      },
-      scales: {
-        x: { title: { display: true, text: 'Number of guesses', font: chartFont, color: chartColors.text },
-             ticks: { font: chartFont, color: chartColors.text, stepSize: 1 },
-             beginAtZero: true, grid: { color: '#eee' } },
-        y: { title: { display: true, text: 'Creativity index (%)', font: chartFont, color: chartColors.text },
-             ticks: { font: chartFont, color: chartColors.text },
-             min: 0, max: 100, grid: { color: '#eee' } }
-      }
-    }
-  });
-
-  document.getElementById('read-scatter').innerHTML =
-    `<strong>How to read:</strong> Each dot is one player. Horizontal position = how many sequences they tested. Vertical position = how creatively diverse those sequences were (0% = only tested the seed pattern, 100% = most diverse explorer).` +
-    (a.hasCorrectnessData ? ` <span style="color:#8fa324">Green</span> dots got the rule right; <span style="color:${chartColors.redDark}">pink</span> dots got it wrong.` : '');
-
-  // Insight
-  const highCreativityLowAttempts = a.creativityScatter.filter(d => d.y >= 50 && d.x <= 3).length;
-  const lowCreativityHighAttempts = a.creativityScatter.filter(d => d.y < 30 && d.x >= 5).length;
-  let insight = `<span class="insight-icon">Key insight</span>`;
-  insight += `More guesses don't automatically mean more creative exploration. `;
-  if (lowCreativityHighAttempts > 0) {
-    insight += `<strong>${lowCreativityHighAttempts} player${lowCreativityHighAttempts>1?'s':''}</strong> tested 5+ sequences but scored below 30% creativity — they tested a lot, but kept repeating variations of the same pattern. `;
-  }
-  if (highCreativityLowAttempts > 0) {
-    insight += `Meanwhile, <strong>${highCreativityLowAttempts} player${highCreativityLowAttempts>1?'s':''}</strong> achieved 50%+ creativity in just 3 or fewer guesses — showing that strategic diversity beats brute-force volume. `;
-  }
-  insight += `In business, this is the difference between <em>doing more research</em> and <em>doing different research</em>.`;
-  document.getElementById('insight-scatter').innerHTML = insight;
-}
-
-function buildConfCreativityChart(a) {
-  const ctx = document.getElementById('chart-conf-creativity').getContext('2d');
-  const labels = [];
-  const values = [];
-  const counts = [];
-
-  for (let c = 1; c <= 5; c++) {
-    if (a.creativityByConf[c]) {
-      labels.push(c === 1 ? '1 (Low)' : c === 5 ? '5 (High)' : String(c));
-      values.push(Math.round(a.creativityByConf[c].avg));
-      counts.push(a.creativityByConf[c].n);
-    }
-  }
-
-  new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [{
-        data: values,
-        backgroundColor: values.map(v => v >= 40 ? 'rgba(188,207,49,0.7)' : v >= 20 ? 'rgba(232,216,160,0.7)' : 'rgba(232,160,160,0.7)'),
-        borderColor: values.map(v => v >= 40 ? '#8fa324' : v >= 20 ? '#c0a860' : '#d46a6a'),
-        borderWidth: 1, borderRadius: 2,
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: (ctx) => `Avg creativity: ${ctx.raw}% (n=${counts[ctx.dataIndex]})` } }
-      },
-      scales: {
-        x: { title: { display: true, text: 'Confidence level', font: chartFont, color: chartColors.text },
-             ticks: { font: chartFont, color: chartColors.text }, grid: { display: false } },
-        y: { title: { display: true, text: 'Avg creativity index (%)', font: chartFont, color: chartColors.text },
-             ticks: { font: chartFont, color: chartColors.text },
-             min: 0, max: 100, grid: { color: '#eee' } }
-      }
-    }
-  });
-
-  document.getElementById('read-conf-creativity').innerHTML =
-    `<strong>How to read:</strong> Each bar shows the average creativity index for players who reported that confidence level. <span style="color:#8fa324">Green</span> bars = higher creativity; <span style="color:${chartColors.redDark}">pink</span> bars = lower creativity. If confidence and creativity move in opposite directions, that's the paradox.`;
-
-  const conf1Creativity = a.creativityByConf[1] ? Math.round(a.creativityByConf[1].avg) : null;
-  const conf5Creativity = a.creativityByConf[5] ? Math.round(a.creativityByConf[5].avg) : null;
-  let insight = `<span class="insight-icon">Key insight</span>`;
-  if (conf5Creativity !== null && conf1Creativity !== null && conf5Creativity < conf1Creativity) {
-    insight += `There's a clear paradox: players who reported the <strong>highest confidence (5/5) had an average creativity of just ${conf5Creativity}%</strong>, while less confident players (1/5) averaged <strong>${conf1Creativity}%</strong>. `;
-    insight += `The least creative testers felt the most certain. This is because confirming evidence <em>feels</em> convincing — each "Yes" reinforces your theory. Diverse testing, which produces unsettling "No"s, actually undermines confidence even as it moves you closer to the truth.`;
-  } else if (conf5Creativity !== null && conf1Creativity !== null) {
-    insight += `Players with the highest confidence (5/5) averaged <strong>${conf5Creativity}%</strong> creativity, while the least confident (1/5) averaged <strong>${conf1Creativity}%</strong>. `;
-    insight += `The relationship between exploration and confidence is nuanced. In some cases, thorough testing does build warranted confidence — but only if it includes genuine attempts to <em>disprove</em> your theory.`;
-  } else {
-    insight += `Average creativity across all players was <strong>${Math.round(a.avgCreativity)}%</strong>. The most confident players often explored the least — confirming evidence feels convincing, while diverse testing creates discomfort.`;
-  }
-  document.getElementById('insight-conf-creativity').innerHTML = insight;
-}
-
-function buildCreativityCorrectnessChart(a) {
-  const ctx = document.getElementById('chart-creativity-correct').getContext('2d');
-
-  new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: ['Got it right', 'Got it wrong'],
-      datasets: [{
-        data: [
-          a.avgCreativityCorrect !== null ? Math.round(a.avgCreativityCorrect) : 0,
-          a.avgCreativityWrong !== null ? Math.round(a.avgCreativityWrong) : 0
-        ],
-        backgroundColor: ['rgba(188,207,49,0.7)', 'rgba(232,160,160,0.7)'],
-        borderColor: ['#8fa324', '#d46a6a'],
-        borderWidth: 1, borderRadius: 2,
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: (ctx) => {
-          const n = ctx.dataIndex === 0 ? a.creativityCorrect.length : a.creativityWrong.length;
-          return `Avg creativity: ${ctx.raw}% (n=${n})`;
-        }}}
-      },
-      scales: {
-        x: { ticks: { font: { ...chartFont, size: 13, weight: 'bold' }, color: chartColors.text }, grid: { display: false } },
-        y: { title: { display: true, text: 'Avg creativity index (%)', font: chartFont, color: chartColors.text },
-             ticks: { font: chartFont, color: chartColors.text },
-             min: 0, max: 100, grid: { color: '#eee' } }
-      }
-    }
-  });
-
-  document.getElementById('read-creativity-correct').innerHTML =
-    `<strong>How to read:</strong> The two bars compare the average creativity index of players who correctly identified the rule (<span style="color:#8fa324">green</span>) vs those who got it wrong (<span style="color:${chartColors.redDark}">pink</span>). A large gap means creative exploration was directly linked to finding the correct answer.`;
-
-  const diff = (a.avgCreativityCorrect || 0) - (a.avgCreativityWrong || 0);
-  const rightN = a.creativityCorrect.length;
-  const wrongN = a.creativityWrong.length;
-  let insight = `<span class="insight-icon">Key insight</span>`;
-  if (diff > 5) {
-    insight += `This is the payoff: players who found the correct rule had an average creativity index of <strong>${Math.round(a.avgCreativityCorrect)}%</strong> (n=${rightN}), compared to just <strong>${Math.round(a.avgCreativityWrong)}%</strong> (n=${wrongN}) for those who got it wrong. `;
-    insight += `Creative exploration — testing structurally different sequences rather than variations of the same pattern — was directly linked to success. This is the strongest argument for diverse thinking: <strong>it doesn't just feel more rigorous, it actually produces better outcomes.</strong>`;
-  } else if (diff < -5) {
-    insight += `Surprisingly, players who got it wrong actually explored <em>more</em> creatively (<strong>${Math.round(a.avgCreativityWrong)}%</strong>) than those who got it right (<strong>${Math.round(a.avgCreativityCorrect)}%</strong>). One explanation: some players stumbled onto the correct answer by lucky pattern-matching, while creative testers may have over-complicated their hypotheses.`;
-  } else {
-    insight += `Creativity was similar between correct (avg <strong>${Math.round(a.avgCreativityCorrect || 0)}%</strong>, n=${rightN}) and incorrect (avg <strong>${Math.round(a.avgCreativityWrong || 0)}%</strong>, n=${wrongN}) players. This suggests that while creative exploration helps, other factors — like interpreting the evidence correctly — also play a crucial role.`;
-  }
-  document.getElementById('insight-creativity-correct').innerHTML = insight;
 }
 
 // --- Sequence Frequency Tables ---
