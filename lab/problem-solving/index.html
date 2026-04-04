@@ -604,23 +604,6 @@ function buildPersonalScorecard(rule, conf, guesses) {
   const hasRightKeyword = /increas|ascend|larger|bigger|higher|greater|goes?\s*up|grow|any.?order|any.?three|strict/.test(rLow);
   const gotRight = !hasWrongKeyword && hasRightKeyword;
 
-  // Compute a letter grade
-  let score = 0;
-  if (nos >= 3) score += 3;
-  else if (nos >= 1) score += 1;
-  if (totalGuesses >= 5) score += 2;
-  else if (totalGuesses >= 3) score += 1;
-  if (yesRate <= 60) score += 2;
-  else if (yesRate <= 80) score += 1;
-  if (gotRight) score += 2;
-  // score out of 9
-  let grade, gradeColor, gradeLabel;
-  if (score >= 8) { grade = 'A'; gradeColor = '#2e7d32'; gradeLabel = 'Excellent critical thinker'; }
-  else if (score >= 6) { grade = 'B'; gradeColor = '#558b2f'; gradeLabel = 'Good problem-solver'; }
-  else if (score >= 4) { grade = 'C'; gradeColor = '#c0a020'; gradeLabel = 'Average — some bias detected'; }
-  else if (score >= 2) { grade = 'D'; gradeColor = '#d46a6a'; gradeLabel = 'Confirmation bias detected'; }
-  else { grade = 'F'; gradeColor = '#b71c1c'; gradeLabel = 'Strong confirmation bias'; }
-
   const goodRows = [
     ['Total sequences tested', totalGuesses],
     ['"No" responses heard', nos],
@@ -640,7 +623,6 @@ function buildPersonalScorecard(rule, conf, guesses) {
       <tbody>${rows.map(([l,v]) => {
         let color = '';
         if (type === 'good') {
-          // Green if good, muted if not
           if (l.includes('No" responses') && v === 0) color = 'color:#d46a6a';
           else if (l.includes('Got the rule') && String(v).includes('✗')) color = 'color:#d46a6a';
         } else {
@@ -654,11 +636,7 @@ function buildPersonalScorecard(rule, conf, guesses) {
 
   return `
     <div style="margin:20px 0 24px">
-      <div class="insights-card-title" style="margin-bottom:8px">Your personal scorecard</div>
-      <div style="text-align:center;margin-bottom:14px">
-        <div style="display:inline-block;width:56px;height:56px;border-radius:50%;background:${gradeColor};color:#fff;font-family:'Libre Franklin',sans-serif;font-size:28px;font-weight:800;line-height:56px;text-align:center">${grade}</div>
-        <div style="font-family:'Libre Franklin',sans-serif;font-size:13px;font-weight:700;color:${gradeColor};margin-top:4px">${gradeLabel}</div>
-      </div>
+      <div class="insights-card-title" style="margin-bottom:12px">Your personal scorecard</div>
       <div class="insights-split">
         <div class="insights-panel panel-good">
           <div class="insights-panel-header"><span class="panel-icon">✓</span> Your strengths</div>
@@ -1008,7 +986,7 @@ function showClassResults() {
       <div id="charts-content" class="hidden"></div>
 
       <div class="insights-card">
-        <div class="insights-card-title">Key insights</div>
+        <div class="insights-card-title">Key insights across participants</div>
         <div id="insights-container">
           <div class="loading-results">
             <div class="loading-spinner"></div>
@@ -2095,19 +2073,8 @@ async function downloadPDF() {
     const pHasWrong = /doubl|multipl|power|fibonacci|arithmetic|even num|twice|2x|times\s*2|by\s*2|triple|consecutiv|geometric|exponen|square|cube|ratio|factor/.test(pRule);
     const pHasRight = /increas|ascend|larger|bigger|higher|greater|goes?\s*up|grow|any.?order|any.?three|strict/.test(pRule);
     const pGotRight = !pHasWrong && pHasRight;
-    let pScore = 0;
-    if (pNos >= 3) pScore += 3; else if (pNos >= 1) pScore += 1;
-    if (guesses.length >= 5) pScore += 2; else if (guesses.length >= 3) pScore += 1;
-    if (pYesRate <= 60) pScore += 2; else if (pYesRate <= 80) pScore += 1;
-    if (pGotRight) pScore += 2;
-    let pGrade, pGradeLabel;
-    if (pScore >= 8) { pGrade = 'A'; pGradeLabel = 'Excellent critical thinker'; }
-    else if (pScore >= 6) { pGrade = 'B'; pGradeLabel = 'Good problem-solver'; }
-    else if (pScore >= 4) { pGrade = 'C'; pGradeLabel = 'Average — some bias detected'; }
-    else if (pScore >= 2) { pGrade = 'D'; pGradeLabel = 'Confirmation bias detected'; }
-    else { pGrade = 'F'; pGradeLabel = 'Strong confirmation bias'; }
 
-    heading('Your personal scorecard: ' + pGrade + ' — ' + pGradeLabel, 12, [51,51,51], 2, 5);
+    heading('Your personal scorecard', 12, [51,51,51], 2, 5);
     body('Strengths:', { size: 10, bold: true, color: [90,112,0] });
     body('  Total sequences tested: ' + guesses.length, { size: 10 });
     body('  "No" responses heard: ' + pNos, { size: 10 });
