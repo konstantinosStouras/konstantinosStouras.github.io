@@ -604,6 +604,28 @@ function buildPersonalScorecard(rule, conf, guesses) {
   const hasRightKeyword = /increas|ascend|larger|bigger|higher|greater|goes?\s*up|grow|any.?order|any.?three|strict/.test(rLow);
   const gotRight = !hasWrongKeyword && hasRightKeyword;
 
+  // Detect confirmation bias signals
+  const biasSignals = [];
+  if (nos === 0) biasSignals.push('never tested a failing sequence');
+  if (yesRate >= 80 && totalGuesses > 1) biasSignals.push('evidence was overwhelmingly one-sided');
+  if (totalGuesses <= 2) biasSignals.push('very few sequences tested');
+  if (conf >= 4 && !gotRight) biasSignals.push('high confidence despite wrong answer');
+
+  let verdictHTML = '';
+  if (biasSignals.length >= 2) {
+    verdictHTML = `<div style="text-align:center;margin-bottom:14px;padding:10px 16px;background:#fce8e8;border-radius:4px;font-family:'Libre Franklin',sans-serif;font-size:13px;color:#a04040;line-height:1.5">
+      <strong style="font-size:14px">⚠ Confirmation bias detected</strong><br>${biasSignals.join(', ')}
+    </div>`;
+  } else if (biasSignals.length === 1) {
+    verdictHTML = `<div style="text-align:center;margin-bottom:14px;padding:10px 16px;background:#fff8e1;border-radius:4px;font-family:'Libre Franklin',sans-serif;font-size:13px;color:#8a6d00;line-height:1.5">
+      <strong style="font-size:14px">⚠ Some bias detected</strong><br>${biasSignals[0]}
+    </div>`;
+  } else {
+    verdictHTML = `<div style="text-align:center;margin-bottom:14px;padding:10px 16px;background:#eef5d0;border-radius:4px;font-family:'Libre Franklin',sans-serif;font-size:13px;color:#5a7000;line-height:1.5">
+      <strong style="font-size:14px">✓ Good problem-solving approach</strong><br>You actively sought disconfirming evidence
+    </div>`;
+  }
+
   const goodRows = [
     ['Total sequences tested', totalGuesses],
     ['"No" responses heard', nos],
@@ -637,6 +659,7 @@ function buildPersonalScorecard(rule, conf, guesses) {
   return `
     <div style="margin:20px 0 24px">
       <div class="insights-card-title" style="margin-bottom:12px">Your personal scorecard</div>
+      ${verdictHTML}
       <div class="insights-split">
         <div class="insights-panel panel-good">
           <div class="insights-panel-header"><span class="panel-icon">✓</span> Your strengths</div>
@@ -2065,7 +2088,6 @@ async function downloadPDF() {
     y += 4;
 
     // ===================== PERSONAL SCORECARD =====================
-    // Compute the same grade as the UI
     const pYeses = guesses.filter(g => g.passes).length;
     const pNos = guesses.filter(g => !g.passes).length;
     const pYesRate = guesses.length > 0 ? Math.round(pYeses / guesses.length * 100) : 0;
@@ -2074,7 +2096,22 @@ async function downloadPDF() {
     const pHasRight = /increas|ascend|larger|bigger|higher|greater|goes?\s*up|grow|any.?order|any.?three|strict/.test(pRule);
     const pGotRight = !pHasWrong && pHasRight;
 
+    // Bias detection
+    const pBiasSignals = [];
+    if (pNos === 0) pBiasSignals.push('never tested a failing sequence');
+    if (pYesRate >= 80 && guesses.length > 1) pBiasSignals.push('evidence was overwhelmingly one-sided');
+    if (guesses.length <= 2) pBiasSignals.push('very few sequences tested');
+    if (confidence >= 4 && !pGotRight) pBiasSignals.push('high confidence despite wrong answer');
+
     heading('Your personal scorecard', 12, [51,51,51], 2, 5);
+    if (pBiasSignals.length >= 2) {
+      body('⚠ Confirmation bias detected: ' + pBiasSignals.join(', '), { size: 10, bold: true, color: [160,64,64] });
+    } else if (pBiasSignals.length === 1) {
+      body('⚠ Some bias detected: ' + pBiasSignals[0], { size: 10, bold: true, color: [138,109,0] });
+    } else {
+      body('✓ Good problem-solving approach: you actively sought disconfirming evidence', { size: 10, bold: true, color: [90,112,0] });
+    }
+    y += 2;
     body('Strengths:', { size: 10, bold: true, color: [90,112,0] });
     body('  Total sequences tested: ' + guesses.length, { size: 10 });
     body('  "No" responses heard: ' + pNos, { size: 10 });
