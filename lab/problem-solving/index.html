@@ -2153,6 +2153,9 @@ async function downloadPDF() {
     y += 7;
     pdf.setFontSize(11); pdf.setTextColor(80, 80, 80);
     pdf.text('Prof. Kostas Stouras, UCD Smurfit', M, y);
+    y += 5;
+    pdf.setFontSize(10); pdf.setTextColor(46, 125, 50);
+    pdf.textWithLink('www.stouras.com', M, y, { url: 'https://www.stouras.com' });
     y += 6;
     pdf.setFontSize(10); pdf.setTextColor(150, 150, 150);
     pdf.text(new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }), M, y);
