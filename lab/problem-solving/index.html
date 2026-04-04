@@ -2020,7 +2020,6 @@ async function downloadPDF() {
       y += 7;
     }
     function chartBlock(canvasId) {
-      // Title
       const block = document.getElementById(canvasId)?.closest('.chart-block');
       if (!block || block.style.display === 'none') return;
       const title = block.querySelector('.chart-block-title')?.textContent || '';
@@ -2032,8 +2031,12 @@ async function downloadPDF() {
       addChart(canvasId);
       if (readEl) body(readEl.textContent, { size: 8.5, color: [120,120,120] });
       if (insightEl) {
-        y += 1;
-        body(insightEl.textContent, { size: 9, color: [80,80,60] });
+        y += 2;
+        // "Key insight" as bold label on its own line
+        body('Key insight:', { size: 9.5, bold: true, color: [140,130,20] });
+        // Insight body text — strip the "Key insight" prefix if present
+        const insightText = insightEl.textContent.replace(/^Key insight\s*/i, '').trim();
+        body(insightText, { size: 9, color: [80,80,60] });
       }
       y += 3;
     }
@@ -2104,24 +2107,95 @@ async function downloadPDF() {
     if (confidence >= 4 && !pGotRight) pBiasSignals.push('high confidence despite wrong answer');
 
     heading('Your personal scorecard', 12, [51,51,51], 2, 5);
+
+    // Bias verdict banner
     if (pBiasSignals.length >= 2) {
-      body('⚠ Confirmation bias detected: ' + pBiasSignals.join(', '), { size: 10, bold: true, color: [160,64,64] });
+      checkPage(12);
+      pdf.setFillColor(252,232,232); pdf.rect(M, y, CW, 10, 'F');
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.setTextColor(160,64,64);
+      pdf.text('CONFIRMATION BIAS DETECTED', M + 4, y + 4.5);
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.5); pdf.setTextColor(160,80,80);
+      pdf.text(pBiasSignals.join(', '), M + 4, y + 8.5);
+      y += 14;
     } else if (pBiasSignals.length === 1) {
-      body('⚠ Some bias detected: ' + pBiasSignals[0], { size: 10, bold: true, color: [138,109,0] });
+      checkPage(12);
+      pdf.setFillColor(255,248,225); pdf.rect(M, y, CW, 10, 'F');
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.setTextColor(138,109,0);
+      pdf.text('SOME BIAS DETECTED', M + 4, y + 4.5);
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.5); pdf.setTextColor(138,120,20);
+      pdf.text(pBiasSignals[0], M + 4, y + 8.5);
+      y += 14;
     } else {
-      body('✓ Good problem-solving approach: you actively sought disconfirming evidence', { size: 10, bold: true, color: [90,112,0] });
+      checkPage(10);
+      pdf.setFillColor(238,245,208); pdf.rect(M, y, CW, 8, 'F');
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.setTextColor(90,112,0);
+      pdf.text('GOOD PROBLEM-SOLVING APPROACH', M + 4, y + 5.5);
+      y += 12;
     }
-    y += 2;
-    body('Strengths:', { size: 10, bold: true, color: [90,112,0] });
-    body('  Total sequences tested: ' + guesses.length, { size: 10 });
-    body('  "No" responses heard: ' + pNos, { size: 10 });
-    body('  Got the rule right: ' + (pGotRight ? 'Yes' : 'No'), { size: 10 });
-    y += 2;
-    body('Bias indicators:', { size: 10, bold: true, color: [160,64,64] });
-    body('  "Yes" rate: ' + pYesRate + '%', { size: 10 });
-    body('  Confidence level: ' + (confidence * 20) + '%', { size: 10 });
-    body('  Tested a failing sequence: ' + (pNos > 0 ? 'Yes' : 'No'), { size: 10 });
-    y += 5;
+
+    // Two-column scorecard table
+    checkPage(50);
+    const scColW = (CW - 6) / 2;
+    const scStartY = y;
+    const scRowH = 9;
+    const scData = [
+      {
+        header: 'YOUR STRENGTHS', isGood: true,
+        rows: [
+          ['Total sequences tested', String(guesses.length)],
+          ['"No" responses heard', String(pNos)],
+          ['Got the rule right', pGotRight ? 'Yes' : 'No'],
+        ]
+      },
+      {
+        header: 'BIAS INDICATORS', isGood: false,
+        rows: [
+          ['"Yes" rate', pYesRate + '%'],
+          ['Confidence level', (confidence * 20) + '%'],
+          ['Tested a failing sequence', pNos > 0 ? 'Yes' : 'No'],
+        ]
+      }
+    ];
+
+    for (let col = 0; col < 2; col++) {
+      const sc = scData[col];
+      const x = M + col * (scColW + 6);
+      y = scStartY;
+      // Panel header
+      const hBg = sc.isGood ? [238,245,208] : [252,232,232];
+      const hTx = sc.isGood ? [90,112,0] : [160,64,64];
+      pdf.setFillColor(hBg[0], hBg[1], hBg[2]);
+      pdf.rect(x, y, scColW, 9, 'F');
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8);
+      pdf.setTextColor(hTx[0], hTx[1], hTx[2]);
+      pdf.text(sc.header, x + 4, y + 6);
+      y += 9;
+      // Column headers
+      pdf.setFillColor(51,51,51); pdf.rect(x, y, scColW, 7, 'F');
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(255,255,255);
+      pdf.text('METRIC', x + 4, y + 5);
+      pdf.text('VALUE', x + scColW - 4, y + 5, { align: 'right' });
+      y += 7;
+      // Data rows
+      sc.rows.forEach((row, i) => {
+        if (i % 2 === 0) { pdf.setFillColor(250,250,247); pdf.rect(x, y, scColW, scRowH, 'F'); }
+        pdf.setDrawColor(232,232,224); pdf.setLineWidth(0.2);
+        pdf.line(x, y + scRowH, x + scColW, y + scRowH);
+        // Metric name
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.5); pdf.setTextColor(68,68,68);
+        pdf.text(row[0], x + 4, y + 6);
+        // Value — red for bad indicators
+        const isNeg = (!sc.isGood && row[0].includes('Yes" rate') && parseInt(row[1]) >= 80)
+                   || (!sc.isGood && row[0].includes('Tested') && row[1] === 'No')
+                   || (sc.isGood && row[0].includes('Got the rule') && row[1] === 'No')
+                   || (sc.isGood && row[0].includes('No" responses') && row[1] === '0');
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9);
+        pdf.setTextColor(isNeg ? 212 : 51, isNeg ? 106 : 51, isNeg ? 106 : 51);
+        pdf.text(row[1], x + scColW - 4, y + 6, { align: 'right' });
+        y += scRowH;
+      });
+    }
+    y = scStartY + 9 + 7 + 3 * scRowH + 8;
 
     // Personal insight
     const pEl = document.getElementById('personal-insight');
@@ -2193,24 +2267,96 @@ async function downloadPDF() {
     }
 
     // ===================== INSIGHTS TABLE =====================
-    checkPage(40);
-    heading('Key insights summary', 14, [51,51,51], 8, 6);
+    checkPage(60);
+    heading('Key insights across participants', 14, [51,51,51], 8, 6);
 
-    const panels = document.querySelectorAll('.insights-panel');
+    // Total players
+    const totalEl = document.querySelector('.insights-total strong');
+    if (totalEl) {
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(20);
+      pdf.setTextColor(51,51,51);
+      pdf.text(totalEl.textContent.trim() + ' total players', W / 2, y, { align: 'center' });
+      y += 10;
+    }
+
+    // Draw two-column table
+    const colW = (CW - 6) / 2;  // 6mm gap between columns
+    const panels = document.querySelectorAll('.insights-card .insights-panel');
+    const panelData = [];
     panels.forEach(panel => {
-      const header = panel.querySelector('.insights-panel-header')?.textContent?.trim();
-      if (header) {
-        const isGood = panel.classList.contains('panel-good');
-        body(header, { size: 10, bold: true, color: isGood ? [90,112,0] : [160,64,64] });
-      }
+      const isGood = panel.classList.contains('panel-good');
+      // Strip Unicode symbols that Helvetica can't render
+      const rawHeader = panel.querySelector('.insights-panel-header')?.textContent?.trim() || '';
+      const header = rawHeader.replace(/[✓✗⚠]/g, '').trim().toUpperCase();
+      const rows = [];
       panel.querySelectorAll('.insights-table tbody tr').forEach(tr => {
         const cells = tr.querySelectorAll('td');
         if (cells.length >= 2) {
-          body('  ' + cells[0].textContent.trim() + ':  ' + cells[1].textContent.trim(), { size: 9.5, color: [80,80,80] });
+          rows.push([
+            cells[0].textContent.trim(),
+            cells[1].textContent.trim().replace(/[✓✗]/g, '').trim()
+          ]);
         }
       });
-      y += 3;
+      panelData.push({ isGood, header, rows });
     });
+
+    if (panelData.length >= 2) {
+      const startY = y;
+      const rowH = 9;
+      const headerH = 9;
+      const tableHeaderH = 7;
+
+      for (let col = 0; col < 2; col++) {
+        const p = panelData[col];
+        const x = M + col * (colW + 6);
+        y = startY;
+
+        // Panel header background
+        const hColor = p.isGood ? [238,245,208] : [252,232,232];
+        const hText = p.isGood ? [90,112,0] : [160,64,64];
+        pdf.setFillColor(hColor[0], hColor[1], hColor[2]);
+        pdf.rect(x, y, colW, headerH, 'F');
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8);
+        pdf.setTextColor(hText[0], hText[1], hText[2]);
+        pdf.text(p.header, x + 4, y + 6);
+        y += headerH;
+
+        // Table header
+        pdf.setFillColor(51,51,51);
+        pdf.rect(x, y, colW, tableHeaderH, 'F');
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7);
+        pdf.setTextColor(255,255,255);
+        pdf.text('METRIC', x + 4, y + 5);
+        pdf.text('VALUE', x + colW - 4, y + 5, { align: 'right' });
+        y += tableHeaderH;
+
+        // Data rows
+        p.rows.forEach((row, i) => {
+          if (i % 2 === 0) {
+            pdf.setFillColor(250,250,247);
+            pdf.rect(x, y, colW, rowH, 'F');
+          }
+          pdf.setDrawColor(232,232,224); pdf.setLineWidth(0.2);
+          pdf.line(x, y + rowH, x + colW, y + rowH);
+
+          pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.5);
+          pdf.setTextColor(68,68,68);
+          const metricLines = pdf.splitTextToSize(row[0], colW - 30);
+          pdf.text(metricLines, x + 4, y + 6);
+
+          pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9);
+          pdf.setTextColor(51,51,51);
+          pdf.text(row[1], x + colW - 4, y + 6, { align: 'right' });
+
+          y += rowH;
+        });
+      }
+
+      // Set y to the bottom of the taller column
+      const maxRows = Math.max(panelData[0].rows.length, panelData[1].rows.length);
+      y = startY + headerH + tableHeaderH + maxRows * rowH + 8;
+    }
 
     // Add footer to all pages
     const totalPages = pdf.internal.getNumberOfPages();
