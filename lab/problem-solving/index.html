@@ -21,13 +21,6 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    img, canvas, video, iframe, svg, table { max-width: 100%; }
-
-    html {
-      overflow-x: hidden;
-      -webkit-text-size-adjust: 100%;
-      text-size-adjust: 100%;
-    }
 
     body {
       font-family: Georgia, 'Times New Roman', Times, serif;
@@ -37,107 +30,85 @@
       padding: 32px 20px 60px;
       display: flex;
       justify-content: center;
-      overflow-x: hidden;
     }
-    .container { 
-      max-width: 520px; 
-      width: 100%;
-      margin: 0 auto;
-      overflow-wrap: break-word;
-      word-wrap: break-word;
-    }
+    .container { max-width: 520px; width: 100%; }
 
     h1.title {
       font-family: Georgia, 'Times New Roman', Times, serif;
-      font-size: clamp(28px, 5vw, 38px);
+      font-size: 34px;
       font-weight: 400;
       line-height: 1.18;
       color: #333;
-      margin: 0 0 8px;
+      margin: 0 0 6px;
     }
     .desc {
-      font-size: clamp(15px, 2.5vw, 17px); 
-      line-height: 1.55; 
-      color: #666; 
-      margin-bottom: 22px;
+      font-size: 15.5px; line-height: 1.5; color: #666; margin-bottom: 18px;
     }
     .bold-label {
       font-family: Georgia, 'Times New Roman', serif;
-      font-size: clamp(15px, 2.5vw, 17px); 
-      font-weight: 700; 
-      color: #333; 
-      margin-bottom: 6px;
+      font-size: 15.5px; font-weight: 700; color: #333; margin-bottom: 4px;
     }
     .text {
-      font-size: clamp(15px, 2.5vw, 17px); 
-      line-height: 1.6; 
-      color: #444; 
-      margin-bottom: 14px;
+      font-size: 15.5px; line-height: 1.55; color: #444; margin-bottom: 12px;
     }
     .text strong { color: #333; }
 
     .seed-row {
-      display: flex; align-items: center; gap: 8px; margin: 14px 0 28px;
-      flex-wrap: wrap;
+      display: flex; align-items: center; gap: 6px; margin: 12px 0 24px;
     }
     .seed-box {
-      width: 82px; max-width: 22vw; height: 44px; background: #bccf31;
+      width: 76px; height: 38px; background: #bccf31;
       display: flex; align-items: center; justify-content: center;
       font-family: 'Libre Franklin', Arial, sans-serif;
-      font-size: 17px; font-weight: 700; color: #fff;
-      flex-shrink: 0;
+      font-size: 15px; font-weight: 700; color: #fff;
     }
     .seed-tag {
       font-family: 'Libre Franklin', Arial, sans-serif;
-      font-size: 14px; font-weight: 700; color: #bccf31; margin-left: 14px;
+      font-size: 13px; font-weight: 700; color: #bccf31; margin-left: 12px;
     }
 
     .guesses-label {
       font-family: Georgia, 'Times New Roman', serif;
-      font-size: 15px; font-weight: 700; color: #333;
-      margin-bottom: 8px; margin-top: 6px;
+      font-size: 14px; font-weight: 700; color: #333;
+      margin-bottom: 6px; margin-top: 4px;
     }
     .guess-row {
-      display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
-      flex-wrap: wrap;
+      display: flex; align-items: center; gap: 6px; margin-bottom: 3px;
     }
     .g-box {
-      width: 82px; max-width: 22vw; height: 44px;
+      width: 76px; height: 38px;
       display: flex; align-items: center; justify-content: center;
       font-family: 'Libre Franklin', Arial, sans-serif;
-      font-size: 17px; font-weight: 700; color: #fff;
-      flex-shrink: 0;
+      font-size: 15px; font-weight: 700; color: #fff;
     }
     .g-yes { background: #bccf31; }
     .g-no { background: #e8a0a0; }
     .g-tag {
       font-family: 'Libre Franklin', Arial, sans-serif;
-      font-size: 14px; font-weight: 700; margin-left: 14px;
+      font-size: 13px; font-weight: 700; margin-left: 12px;
     }
     .g-tag-yes { color: #bccf31; }
     .g-tag-no { color: #d46a6a; }
 
     .input-prompt {
-      font-size: 15px; color: #444; margin: 18px 0 10px; font-weight: 700;
+      font-size: 14px; color: #444; margin: 16px 0 8px; font-weight: 700;
     }
     .input-row {
-      display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
-      flex-wrap: wrap;
+      display: flex; align-items: center; gap: 6px; margin-bottom: 8px;
     }
     .num-input {
-      width: 82px; max-width: 22vw; height: 48px;
+      width: 76px; height: 42px;
       border: 2px solid #ccc; background: #fff;
       font-family: 'Libre Franklin', Arial, sans-serif;
-      font-size: 17px; font-weight: 600; text-align: center; color: #333;
+      font-size: 15px; font-weight: 600; text-align: center; color: #333;
       outline: none;
-      flex-shrink: 0;
     }
     .num-input:focus { border-color: #999; }
     .check-btn {
-      height: 48px; padding: 0 26px;
+      height: 42px; padding: 0 22px;
       background: #ccc; border: none;
       font-family: 'Libre Franklin', Arial, sans-serif;
-      font-size: 14px; font-weight: 700; color: #fff; cursor: pointer;
+      font-size: 13px; font-weight: 700; color: #fff; cursor: pointer;
     }
     .check-btn:hover { background: #bbb; }
     .check-btn.active { background: #999; }
@@ -152,89 +123,86 @@
       80%{transform:translateX(3px)}
     }
 
-    .rule-section { margin-top: 40px; }
+    .rule-section { margin-top: 36px; }
     .rule-text {
-      font-size: 16px; line-height: 1.6; color: #444; margin-bottom: 12px;
+      font-size: 15px; line-height: 1.55; color: #444; margin-bottom: 10px;
     }
     .rule-text strong { color: #333; }
     .rule-input {
-      display: block; width: 100%; max-width: 100%; height: 48px;
+      display: block; width: 100%; height: 42px;
       border: 2px solid #ccc; background: #fff;
       font-family: 'Libre Franklin', Arial, sans-serif;
-      font-size: 15px; color: #333; padding: 0 12px;
-      outline: none; margin-bottom: 16px;
+      font-size: 14px; color: #333; padding: 0 10px;
+      outline: none; margin-bottom: 14px;
     }
     .rule-input:focus { border-color: #999; }
     .submit-btn-wrap { display: flex; justify-content: flex-end; }
     .submit-btn {
-      display: inline-block; padding: 12px 26px;
+      display: inline-block; padding: 10px 22px;
       background: #2e7d32; border: none; border-radius: 4px;
       font-family: 'Libre Franklin', Arial, sans-serif;
-      font-size: 14px; font-weight: 800; color: #fff;
+      font-size: 13px; font-weight: 800; color: #fff;
       cursor: pointer; letter-spacing: 0.01em;
     }
     .submit-btn:hover { background: #256b29; }
     .submit-btn:disabled { background: #a5d6a7; cursor: default; }
 
-    .confidence-scale { margin-bottom: 20px; max-width: 100%; }
+    .confidence-scale { margin-bottom: 18px; }
     .confidence-row {
-      display: flex; align-items: center; justify-content: center; gap: 12px;
-      flex-wrap: wrap;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
     }
     .conf-end {
       font-family: 'Libre Franklin', Arial, sans-serif;
-      font-size: 12px; color: #888; white-space: nowrap;
+      font-size: 11.5px; color: #888; white-space: nowrap;
     }
-    .confidence-options { display: flex; gap: 22px; flex-shrink: 0; }
+    .confidence-options { display: flex; gap: 20px; }
     .conf-option {
       display: flex; flex-direction: column; align-items: center;
-      cursor: pointer; gap: 5px;
+      cursor: pointer; gap: 4px;
     }
     .conf-option input[type="radio"] {
-      width: 22px; height: 22px; accent-color: #2e7d32;
+      width: 20px; height: 20px; accent-color: #2e7d32;
       cursor: pointer; margin: 0;
     }
     .conf-num {
       font-family: 'Libre Franklin', Arial, sans-serif;
-      font-size: 14px; font-weight: 600; color: #555;
+      font-size: 13px; font-weight: 600; color: #555;
     }
 
     .outcome-box {
-      margin-top: 24px; padding: 24px 26px;
+      margin-top: 20px; padding: 20px 22px;
       background: #f7f7f4; border-top: 3px solid #333;
-      max-width: 100%;
     }
     .outcome-p {
-      font-size: 16px; line-height: 1.65; color: #555; margin-bottom: 12px;
+      font-size: 15px; line-height: 1.6; color: #555; margin-bottom: 10px;
     }
     .outcome-rule {
-      display: inline-block; padding: 12px 20px; background: #e8f5e9;
+      display: inline-block; padding: 10px 18px; background: #e8f5e9;
       font-family: 'Libre Franklin', Arial, sans-serif;
-      font-size: 22px; font-weight: 700; color: #333; margin: 8px 0 16px;
-      max-width: 100%; overflow-wrap: break-word;
+      font-size: 20px; font-weight: 700; color: #333; margin: 6px 0 14px;
     }
     .outcome-heading {
       font-family: Georgia, serif;
-      font-size: 20px; font-weight: 700; color: #333;
-      margin: 24px 0 10px;
+      font-size: 19px; font-weight: 700; color: #333;
+      margin: 20px 0 8px;
     }
     .student-answer {
       background: #fff; border: 1px solid #ddd;
-      padding: 12px 14px; font-size: 16px;
-      color: #333; font-style: italic; margin-bottom: 14px;
+      padding: 10px 12px; font-size: 15px;
+      color: #333; font-style: italic; margin-bottom: 12px;
     }
     .answer-label {
       font-family: 'Libre Franklin', Arial, sans-serif;
-      font-size: 11px; text-transform: uppercase;
-      letter-spacing: 0.06em; color: #999; margin-bottom: 5px;
+      font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.06em; color: #999; margin-bottom: 4px;
     }
 
     .hidden { display: none; }
 
     .toast {
       position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-      background: #333; color: #fff; padding: 12px 24px; border-radius: 6px;
-      font-family: 'Libre Franklin', Arial, sans-serif; font-size: 14px;
+      background: #333; color: #fff; padding: 10px 20px; border-radius: 6px;
+      font-family: 'Libre Franklin', Arial, sans-serif; font-size: 13px;
       font-weight: 600; opacity: 0; transition: opacity 0.3s;
       pointer-events: none; z-index: 999;
     }
@@ -242,121 +210,116 @@
 
     /* ========== CLASS RESULTS ========== */
     .class-results {
-      margin-top: 36px;
+      margin-top: 32px;
       border-top: 2px solid #333;
-      padding-top: 24px;
+      padding-top: 20px;
     }
     .class-results-title {
       font-family: Georgia, serif;
-      font-size: 24px; font-weight: 700; color: #333;
-      margin-bottom: 5px;
+      font-size: 22px; font-weight: 700; color: #333;
+      margin-bottom: 4px;
     }
     .class-results-sub {
       font-family: 'Libre Franklin', Arial, sans-serif;
-      font-size: 13px; color: #999; margin-bottom: 22px;
+      font-size: 12px; color: #999; margin-bottom: 20px;
     }
     .charts-grid {
       display: grid;
       grid-template-columns: 1fr;
-      gap: 40px;
-      margin-bottom: 32px;
+      gap: 36px;
+      margin-bottom: 28px;
     }
     .chart-block { }
     .chart-block-title {
       font-family: Georgia, serif;
-      font-size: 17px; font-weight: 700; color: #333;
-      margin-bottom: 3px;
+      font-size: 16px; font-weight: 700; color: #333;
+      margin-bottom: 2px;
     }
     .chart-block-subtitle {
       font-family: 'Libre Franklin', Arial, sans-serif;
-      font-size: 12px; color: #999; margin-bottom: 12px;
+      font-size: 11.5px; color: #999; margin-bottom: 10px;
     }
     .chart-canvas-wrap {
       position: relative;
       background: #fafaf7;
       border: 1px solid #e8e8e0;
-      padding: 14px 12px 8px;
-      margin-bottom: 12px;
-      max-width: 100%;
-      overflow: hidden;
+      padding: 12px 10px 6px;
+      margin-bottom: 10px;
     }
     .chart-canvas-wrap canvas {
       width: 100% !important;
-      max-width: 100%;
-      height: auto !important;
       image-rendering: high-quality;
     }
     .chart-read {
       font-family: 'Libre Franklin', Arial, sans-serif;
-      font-size: 13px; line-height: 1.55; color: #777;
-      margin-bottom: 8px;
+      font-size: 12px; line-height: 1.55; color: #777;
+      margin-bottom: 6px;
     }
     .chart-read strong { color: #555; }
     .chart-insight {
       background: #fffde7;
       border-left: 3px solid #c9b834;
-      padding: 12px 16px;
+      padding: 10px 14px;
       font-family: Georgia, serif;
-      font-size: 15px; line-height: 1.6; color: #555;
+      font-size: 14px; line-height: 1.55; color: #555;
     }
     .chart-insight strong { color: #333; }
     .chart-insight .insight-icon {
       font-family: 'Libre Franklin', sans-serif;
       font-size: 10px; font-weight: 800; text-transform: uppercase;
       letter-spacing: 0.08em; color: #b0a020; display: block;
-      margin-bottom: 5px;
+      margin-bottom: 4px;
     }
     .section-divider {
-      margin: 40px 0 24px;
-      padding: 16px 0 10px;
+      margin: 36px 0 20px;
+      padding: 14px 0 8px;
       border-top: 2px solid #e0e0d8;
     }
     .section-number {
       font-family: 'Libre Franklin', Arial, sans-serif;
-      font-size: 11px; font-weight: 800; text-transform: uppercase;
+      font-size: 10px; font-weight: 800; text-transform: uppercase;
       letter-spacing: 0.1em; color: #bccf31;
-      margin-bottom: 3px;
+      margin-bottom: 2px;
     }
     .section-title {
       font-family: Georgia, serif;
-      font-size: 20px; font-weight: 700; color: #333;
-      margin-bottom: 4px;
+      font-size: 19px; font-weight: 700; color: #333;
+      margin-bottom: 3px;
     }
     .section-subtitle {
       font-family: 'Libre Franklin', Arial, sans-serif;
-      font-size: 13px; color: #999; line-height: 1.45;
+      font-size: 12px; color: #999; line-height: 1.4;
     }
 
     .insights-card {
       background: #fafaf7;
       border: 1px solid #e8e8e0;
-      padding: 18px;
+      padding: 16px;
     }
     .insights-card-title {
       font-family: 'Libre Franklin', Arial, sans-serif;
-      font-size: 12px; font-weight: 800; text-transform: uppercase;
-      letter-spacing: 0.08em; color: #888; margin-bottom: 14px;
+      font-size: 11px; font-weight: 800; text-transform: uppercase;
+      letter-spacing: 0.08em; color: #888; margin-bottom: 12px;
     }
     .insights-split {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 16px;
+      gap: 14px;
     }
     .insights-panel {
       border-radius: 4px;
       padding: 0;
       overflow: hidden;
-      min-width: 0;
     }
     .insights-panel-header {
       font-family: 'Libre Franklin', Arial, sans-serif;
       font-size: 11px; font-weight: 800; text-transform: uppercase;
       letter-spacing: 0.06em;
-      padding: 9px 12px;
-      display: flex; align-items: center; gap: 7px;
+      padding: 8px 10px;
+      display: flex; align-items: center; gap: 6px;
     }
     .insights-panel-header .panel-icon {
-      font-size: 14px; line-height: 1;
+      font-size: 13px; line-height: 1;
     }
     .panel-good .insights-panel-header {
       background: #eef5d0; color: #5a7000;
@@ -366,29 +329,29 @@
     }
     .insights-total {
       font-family: 'Libre Franklin', Arial, sans-serif;
-      font-size: 14px; color: #666;
-      text-align: center; margin-bottom: 14px;
+      font-size: 13px; color: #666;
+      text-align: center; margin-bottom: 12px;
     }
     .insights-total strong {
-      font-size: 24px; color: #333; display: block;
+      font-size: 22px; color: #333; display: block;
       font-variant-numeric: tabular-nums;
     }
     .pdf-btn-wrap {
       display: flex; justify-content: flex-end;
-      margin-bottom: 18px;
+      margin-bottom: 16px;
     }
     .pdf-btn-wrap.bottom {
-      margin-top: 32px; margin-bottom: 0;
-      padding-top: 24px;
+      margin-top: 28px; margin-bottom: 0;
+      padding-top: 20px;
       border-top: 1px solid #e8e8e0;
     }
     .pdf-btn {
-      display: inline-flex; align-items: center; gap: 8px;
-      padding: 14px 28px;
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 12px 24px;
       background: linear-gradient(135deg, #2e7d32, #43a047);
       border: none; border-radius: 6px;
       font-family: 'Libre Franklin', Arial, sans-serif;
-      font-size: 15px; font-weight: 700; color: #fff;
+      font-size: 14px; font-weight: 700; color: #fff;
       cursor: pointer; letter-spacing: 0.02em;
       box-shadow: 0 2px 8px rgba(46,125,50,0.3);
       transition: all 0.2s ease;
@@ -399,7 +362,7 @@
       transform: translateY(-1px);
     }
     .pdf-btn:active { transform: translateY(0); }
-    .pdf-btn .btn-icon { font-size: 17px; }
+    .pdf-btn .btn-icon { font-size: 16px; }
     .pdf-btn:disabled {
       background: #a5d6a7; cursor: wait;
       box-shadow: none; transform: none;
@@ -408,21 +371,18 @@
       width: 100%;
       border-collapse: collapse;
       font-family: 'Libre Franklin', Arial, sans-serif;
-      font-size: 14px;
-      table-layout: fixed;
+      font-size: 13.5px;
     }
     .insights-table th {
-      text-align: left; padding: 9px 12px;
+      text-align: left; padding: 8px 10px;
       background: #333; color: #fff;
       font-size: 11px; font-weight: 700;
       text-transform: uppercase; letter-spacing: 0.06em;
     }
     .insights-table td {
-      padding: 8px 12px;
+      padding: 7px 10px;
       border-bottom: 1px solid #e8e8e0;
       color: #444;
-      overflow-wrap: break-word;
-      word-wrap: break-word;
     }
     .insights-table tr:nth-child(even) td {
       background: #fafaf7;
@@ -432,144 +392,22 @@
       font-variant-numeric: tabular-nums;
     }
     .loading-results {
-      text-align: center; padding: 44px 0;
+      text-align: center; padding: 40px 0;
       font-family: 'Libre Franklin', Arial, sans-serif;
-      font-size: 14px; color: #999;
+      font-size: 13px; color: #999;
     }
     .loading-spinner {
-      width: 30px; height: 30px;
+      width: 28px; height: 28px;
       border: 3px solid #e8e8e0; border-top-color: #333;
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
-      margin: 0 auto 14px;
+      margin: 0 auto 12px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
     .results-error {
-      text-align: center; padding: 28px;
+      text-align: center; padding: 24px;
       background: #fff8f0; border: 1px solid #f0d8b0;
-      font-size: 14px; color: #a06800; line-height: 1.5;
-    }
-
-    /* ========== RESPONSIVE BREAKPOINTS ========== */
-
-    /* Sequence tables side-by-side grid (used in JS) */
-    .seq-tables-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 14px;
-      margin: 10px 0 10px;
-    }
-
-    /* Flex row for heading + PDF button */
-    .heading-pdf-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-    }
-
-    /* Class results header row */
-    .class-header-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 12px;
-    }
-
-    @media (max-width: 600px) {
-      body { padding: 20px 14px 48px; }
-      .container { max-width: 100%; }
-
-      h1.title { font-size: 26px; margin-bottom: 6px; }
-      .desc { font-size: 15px; margin-bottom: 16px; }
-      .text { font-size: 15px; }
-      .bold-label { font-size: 15px; }
-
-      /* Seed and guess boxes: shrink to fit */
-      .seed-row { gap: 5px; margin: 10px 0 20px; }
-      .seed-box { width: 60px; height: 36px; font-size: 14px; }
-      .seed-tag { font-size: 13px; margin-left: 8px; }
-      .g-box { width: 60px; height: 36px; font-size: 14px; }
-      .g-tag { font-size: 13px; margin-left: 8px; }
-      .guess-row { gap: 5px; }
-
-      /* Input row: let inputs flex instead of fixed width */
-      .input-row { gap: 5px; }
-      .num-input { width: 60px; height: 42px; font-size: 15px; }
-      .check-btn { height: 42px; padding: 0 14px; font-size: 13px; }
-
-      /* Outcome section */
-      .outcome-box { padding: 16px 14px; }
-      .outcome-rule { font-size: 17px; padding: 10px 14px; }
-      .outcome-heading { font-size: 18px; }
-      .outcome-p { font-size: 15px; line-height: 1.6; }
-      .student-answer { font-size: 15px; padding: 10px 12px; }
-
-      /* Insights split: stack on mobile */
-      .insights-split { grid-template-columns: 1fr; gap: 12px; }
-      .insights-card { padding: 12px; }
-      .insights-panel-header { font-size: 10px; padding: 8px 10px; }
-
-      /* Tables: smaller text, tighter padding, word-wrap */
-      .insights-table { font-size: 12.5px; }
-      .insights-table th { padding: 7px 8px; font-size: 10px; }
-      .insights-table td { padding: 6px 8px; word-break: break-word; }
-
-      /* Sequence tables grid: stack on mobile */
-      .seq-tables-grid { grid-template-columns: 1fr; }
-
-      /* Charts */
-      .chart-block-title { font-size: 15px; }
-      .chart-block-subtitle { font-size: 11px; }
-      .chart-canvas-wrap { padding: 10px 6px 6px; }
-      .chart-read { font-size: 12px; }
-      .chart-insight { padding: 10px 12px; font-size: 14px; }
-
-      /* Section dividers */
-      .section-title { font-size: 18px; }
-      .section-subtitle { font-size: 12px; }
-
-      /* PDF button */
-      .pdf-btn { padding: 12px 18px; font-size: 13px; }
-      .pdf-btn .btn-icon { font-size: 15px; }
-
-      /* Heading + button rows: stack vertically on mobile */
-      .heading-pdf-row {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 10px;
-      }
-      .class-header-row {
-        flex-direction: column;
-        gap: 10px;
-      }
-      .class-results-title { font-size: 20px; }
-      .class-results-sub { font-size: 12px; }
-
-      /* Rule input */
-      .rule-input { font-size: 15px; height: 44px; }
-      .rule-text { font-size: 15px; }
-      .submit-btn { font-size: 13px; padding: 11px 20px; }
-
-      /* Confidence scale */
-      .confidence-options { gap: 14px; }
-      .confidence-row { gap: 8px; flex-wrap: wrap; justify-content: center; }
-      .conf-end { font-size: 11px; }
-    }
-
-    /* Extra-small screens (very narrow phones) */
-    @media (max-width: 380px) {
-      body { padding: 16px 10px 40px; }
-      h1.title { font-size: 22px; }
-      .seed-box, .g-box { width: 52px; height: 34px; font-size: 13px; }
-      .num-input { width: 52px; height: 40px; font-size: 14px; }
-      .check-btn { padding: 0 10px; font-size: 12px; }
-      .outcome-rule { font-size: 15px; }
-      .insights-table { font-size: 11.5px; }
-      .insights-table th { font-size: 9px; padding: 6px 6px; }
-      .insights-table td { padding: 5px 6px; }
-      .chart-insight { font-size: 13px; padding: 8px 10px; }
-      .pdf-btn { padding: 10px 14px; font-size: 12px; }
+      font-size: 13px; color: #a06800; line-height: 1.5;
     }
 
     /* Auto-zoom on larger screens so it doesn't feel tiny */
@@ -577,10 +415,7 @@
       .container { zoom: 1.35; }
     }
     @media (min-width: 1200px) {
-      .container { zoom: 1.6; }
-    }
-    @media (min-width: 1600px) {
-      .container { zoom: 1.9; }
+      .container { zoom: 1.5; }
     }
   </style>
 </head>
@@ -651,6 +486,18 @@
 
   <div id="outcome-section" class="hidden"></div>
   <div id="class-results" class="hidden"></div>
+
+  <!-- Instructor panel (uncomment to re-enable hint and reset buttons)
+  <div id="instr-panel">
+    <div style="display:flex;gap:6px;margin-top:28px">
+      <button onclick="toggleHint()" id="hint-btn" style="padding:6px 14px;background:#fff;border:1px solid #ccc;font-family:'Libre Franklin',sans-serif;font-size:11px;font-weight:700;color:#666;cursor:pointer">Show hint</button>
+      <button onclick="resetGame()" style="padding:6px 14px;background:#fff;border:1px solid #ccc;font-family:'Libre Franklin',sans-serif;font-size:11px;font-weight:700;color:#666;cursor:pointer">Reset</button>
+    </div>
+    <div id="hint-box" class="hidden">
+      <div style="font-size:13px;color:#8b7500;background:#fffde7;border:1px solid #e0d8a8;padding:10px 12px;margin-top:10px;line-height:1.5"><strong>Hint:</strong> Try testing sequences you think will <em>fail</em>. What's the simplest possible rule that 2, 4, 8 could follow?</div>
+    </div>
+  </div>
+  -->
 </div>
 
 <div class="toast" id="toast"></div>
@@ -789,11 +636,13 @@ function buildPersonalScorecard(rule, conf, guesses) {
   const yesRate = totalGuesses > 0 ? Math.round(yeses / totalGuesses * 100) : 0;
   const heardNo = nos > 0;
 
+  // Simple correctness check (mirrors the sheet formula logic)
   const rLow = rule.toLowerCase();
   const hasWrongKeyword = /doubl|multipl|power|fibonacci|arithmetic|even num|twice|2x|times\s*2|by\s*2|triple|consecutiv|geometric|exponen|square|cube|ratio|factor/.test(rLow);
   const hasRightKeyword = /increas|ascend|larger|bigger|higher|greater|goes?\s*up|grow|any.?order|any.?three|strict/.test(rLow);
   const gotRight = !hasWrongKeyword && hasRightKeyword;
 
+  // Compute local creativity
   const creativity = computeLocalCreativity(guesses);
   let distinctPatterns = 0;
   if (guesses.length > 0) {
@@ -810,6 +659,7 @@ function buildPersonalScorecard(rule, conf, guesses) {
     distinctPatterns = types.size;
   }
 
+  // Detect confirmation bias signals
   const biasSignals = [];
   if (nos === 0) biasSignals.push('never tested a failing sequence');
   if (yesRate >= 80 && totalGuesses > 1) biasSignals.push('evidence was overwhelmingly one-sided');
@@ -914,24 +764,24 @@ function handleSubmitRule() {
           </div>
         </div>
       </div>
-      <div class="heading-pdf-row" style="margin:28px 0 16px;padding:16px 0;border-top:1px solid #e0e0d8;border-bottom:1px solid #e0e0d8">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:28px 0 16px;padding:16px 0;border-top:1px solid #e0e0d8;border-bottom:1px solid #e0e0d8">
         <h2 class="outcome-heading" style="margin:0">Summary</h2>
         <button class="pdf-btn" onclick="downloadPDF()" style="margin:0">
           <span class="btn-icon">↓</span> Download PDF
         </button>
       </div>
-      <p class="outcome-p">This challenge exposes <strong>confirmation bias</strong> in action. We form a theory, then seek evidence that supports it, avoiding the discomfort of being told 'no.' That's why most players never test a sequence that breaks their hypothesis. The same instinct shapes how we evaluate business strategies, hiring decisions, and investment theses: we look for green lights and ignore red ones.</p>
+      <p class="outcome-p">This puzzle exposes <strong>confirmation bias</strong> in action. We form a theory, then seek evidence that supports it — avoiding the discomfort of being told 'no.' That's why most players never test a sequence that breaks their hypothesis. The same instinct shapes how we evaluate business strategies, hiring decisions, and investment theses: we look for green lights and ignore red ones.</p>
       <h2 class="outcome-heading">What's going on?</h2>
-      <p class="outcome-p">The answer was extremely basic. The rule was simply: <em>Each number must be larger than the one before it.</em> 5, 10, 20 satisfies the rule, as does 1, 2, 3 and -17, 14.6, 845. </p>
+      <p class="outcome-p">The answer was extremely basic. The rule was simply: <em>Each number must be larger than the one before it.</em> 5, 10, 20 satisfies the rule, as does 1, 2, 3 and -17, 14.6, 845. Children in kindergarten can understand this rule.</p>
       <p class="outcome-p">But most people start off with the incorrect assumption that if we're asking them to solve a problem, it must be a somewhat tricky problem. They come up with a theory for what the answer is, like: <em>Each number is double the previous number.</em> And then they make a classic psychological mistake.</p>
       <p class="outcome-p">They don't want to hear the answer "no." In fact, it may not occur to them to ask a question that may yield a no.</p>
-      <p class="outcome-p">Remarkably, <strong><span id="never-no-pct">many</span></strong> of people who have played this game so far have guessed the answer without first hearing a single no. Only <strong><span id="strong-falsifier-pct">a few</span></strong> heard at least three nos, even though there is no penalty or cost for being told no, save the small disappointment that every human being feels when hearing "no."</p>
+      <p class="outcome-p">Remarkably, <strong><span id="never-no-pct">many</span></strong> of people who have played this game so far have guessed the answer without first hearing a single no. Only <strong><span id="strong-falsifier-pct">a few</span></strong> heard at least three nos — even though there is no penalty or cost for being told no, save the small disappointment that every human being feels when hearing "no."</p>
       <p class="outcome-p" id="personal-insight" style="background:#fff;border-left:3px solid #bccf31;padding:12px 16px;margin:16px 0"></p>
       <p class="outcome-p">It's a lot more pleasant to hear "yes." That, in a nutshell, is why so many people struggle with this problem.</p>
       <h2 class="outcome-heading">Confirmation bias</h2>
-      <p class="outcome-p">This disappointment is a version of what psychologists and economists call <b>confirmation bias</b>. Not only are people more likely to believe information that fits their pre-existing beliefs, but they're also more likely to go looking for such information.</p>
-      <p class="outcome-p">This challenge exposes a particular kind of confirmation bias that bedevils companies, governments and people every day: the internal yes-man (and yes-woman) tendency. We're much more likely to think about positive situations than negative ones, about why something might go right than wrong and about questions to which the answer is yes, not no.</p>
-      <p class="outcome-p">Sometimes, the reluctance to think negatively has nothing to do with political views or with a conscious fear of being told no. Often, people never even think about asking questions that would produce a negative answer when trying to solve a problem, like this one. They instead restrict the universe of possible questions to those that might potentially yield a "yes."</p>
+      <p class="outcome-p">This disappointment is a version of what psychologists and economists call confirmation bias. Not only are people more likely to believe information that fits their pre-existing beliefs, but they're also more likely to go looking for such information.</p>
+      <p class="outcome-p">This puzzle exposes a particular kind of confirmation bias that bedevils companies, governments and people every day: the internal yes-man (and yes-woman) tendency. We're much more likely to think about positive situations than negative ones, about why something might go right than wrong and about questions to which the answer is yes, not no.</p>
+      <p class="outcome-p">Sometimes, the reluctance to think negatively has nothing to do with political views or with a conscious fear of being told no. Often, people never even think about asking questions that would produce a negative answer when trying to solve a problem — like this one. They instead restrict the universe of possible questions to those that might potentially yield a "yes."</p>
       <p class="outcome-p">One of the best-selling business books in history about negotiation strategy is 
 <a href="https://www.amazon.com/gp/product/0143118757/" target="_blank" rel="noopener noreferrer">
   <i>Getting to Yes</i>
@@ -939,7 +789,7 @@ function handleSubmitRule() {
 (<a href="https://www.pon.harvard.edu/daily/negotiation-skills-daily/six-guidelines-for-getting-to-yes/" target="_blank" rel="noopener noreferrer">
   see also
 </a>) But the more important advice for us may instead be to go out of our way to get to no. When you want to test a theory, don't just look for examples that prove it. When you're considering a plan, think in detail about how it might go wrong.</p>
-      <p class="outcome-p">Some businesses have made this approach a formal part of their decision-making: Imagine our strategy has failed; what are the most likely reasons it did? When you seek to disprove your idea, you sometimes end up proving it, and other times you can save yourself from making a big mistake. But you need to start by being willing to hear no. And even if you think that you are right, you need to make sure you're asking questions that might actually produce an answer of no. If you still need to work on this trait, don't worry: You're only human.</p>
+      <p class="outcome-p">Some businesses have made this approach a formal part of their decision-making: Imagine our strategy has failed; what are the most likely reasons it did? When you seek to disprove your idea, you sometimes end up proving it — and other times you can save yourself from making a big mistake. But you need to start by being willing to hear no. And even if you think that you are right, you need to make sure you're asking questions that might actually produce an answer of no. If you still need to work on this trait, don't worry: You're only human.</p>
     </div>`;
 
   showClassResults();
@@ -949,6 +799,7 @@ function handleSubmitRule() {
 // CLASS RESULTS: Dynamic Chart.js charts with auto-interpretation
 // ============================================================
 
+// --- CSV Parser (handles quoted fields) ---
 function parseCSV(text) {
   const lines = []; let cur = []; let field = ''; let inQ = false;
   for (let i = 0; i < text.length; i++) {
@@ -973,11 +824,15 @@ function parseCSV(text) {
   return lines;
 }
 
+// --- Detect columns by header keywords ---
 function detectColumns(headers) {
   const h = headers.map(s => s.toLowerCase().replace(/[^a-z0-9]/g, ''));
+  // Try exact match first, then substring
   const find = (keywords) => {
+    // Exact match
     let idx = h.findIndex(c => keywords.some(k => c === k));
     if (idx >= 0) return idx;
+    // Substring match (prefer longer keywords first)
     const sorted = [...keywords].sort((a,b) => b.length - a.length);
     idx = h.findIndex(c => sorted.some(k => c.includes(k)));
     return idx;
@@ -995,6 +850,7 @@ function detectColumns(headers) {
   };
 }
 
+// --- Compute all analytics from raw rows ---
 function computeAnalytics(rows, cols) {
   const data = rows.map(r => ({
     attempts: parseInt(r[cols.attempts]) || 0,
@@ -1008,6 +864,7 @@ function computeAnalytics(rows, cols) {
   const n = data.length;
   if (n === 0) return null;
 
+  // 1. Attempts distribution
   const attemptCounts = {};
   data.forEach(d => { attemptCounts[d.attempts] = (attemptCounts[d.attempts] || 0) + 1; });
   const maxAttempt = Math.max(...Object.keys(attemptCounts).map(Number));
@@ -1024,6 +881,7 @@ function computeAnalytics(rows, cols) {
     }
   }
 
+  // 2. Confidence by number of guesses (grouped)
   const confByAttempt = {};
   data.forEach(d => {
     const bucket = d.attempts >= 8 ? '8+' : String(d.attempts);
@@ -1043,11 +901,14 @@ function computeAnalytics(rows, cols) {
     }
   });
 
+  // 3. Player type breakdown
   const neverNo = data.filter(d => d.nos === 0).length;
   const someNo  = data.filter(d => d.nos >= 1 && d.nos < 3).length;
   const strongF = data.filter(d => d.nos >= 3).length;
 
+  // 4. Yes Ratio (confirmation bias intensity)
   const yesRatios = data.map(d => d.attempts > 0 ? Math.round(d.yeses / d.attempts * 100) : null).filter(v => v !== null);
+  // Bucket into 10% ranges
   const ratioLabels = ['0–10%','11–20%','21–30%','31–40%','41–50%','51–60%','61–70%','71–80%','81–90%','91–100%'];
   const ratioValues = new Array(10).fill(0);
   yesRatios.forEach(r => {
@@ -1059,9 +920,11 @@ function computeAnalytics(rows, cols) {
     : null;
   const pct100 = yesRatios.filter(r => r === 100).length;
 
+  // 5. Confidence vs Correctness
   const correctData = data.filter(d => d.gotRight === true);
   const wrongData   = data.filter(d => d.gotRight === false);
   const hasCorrectnessData = correctData.length > 0 || wrongData.length > 0;
+  // Confidence distribution for each group (1–5)
   const confDistCorrect = [0,0,0,0,0];
   const confDistWrong   = [0,0,0,0,0];
   correctData.forEach(d => { if (d.conf >= 1 && d.conf <= 5) confDistCorrect[d.conf - 1]++; });
@@ -1069,14 +932,17 @@ function computeAnalytics(rows, cols) {
   const avgConfCorrect = correctData.length > 0 ? correctData.reduce((s,d) => s + d.conf, 0) / correctData.length : null;
   const avgConfWrong   = wrongData.length > 0   ? wrongData.reduce((s,d) => s + d.conf, 0) / wrongData.length : null;
 
+  // 6. Creativity analytics
   const creativityData = data.filter(d => d.creativity !== null && !isNaN(d.creativity));
   const hasCreativityData = creativityData.length > 0;
 
+  // Creativity by correctness
   const creativityCorrect = creativityData.filter(d => d.gotRight === true).map(d => d.creativity);
   const creativityWrong   = creativityData.filter(d => d.gotRight === false).map(d => d.creativity);
   const avgCreativityCorrect = creativityCorrect.length > 0 ? creativityCorrect.reduce((a,b) => a+b, 0) / creativityCorrect.length : null;
   const avgCreativityWrong   = creativityWrong.length > 0   ? creativityWrong.reduce((a,b) => a+b, 0) / creativityWrong.length : null;
 
+  // Creativity by confidence (1–5)
   const creativityByConf = {};
   for (let c = 1; c <= 5; c++) {
     const group = creativityData.filter(d => d.conf === c).map(d => d.creativity);
@@ -1085,10 +951,23 @@ function computeAnalytics(rows, cols) {
     }
   }
 
+  // Creativity vs attempts (scatter data)
   const creativityScatter = creativityData.map(d => ({ x: d.attempts, y: d.creativity, gotRight: d.gotRight }));
 
   const avgCreativity = creativityData.length > 0 ? creativityData.reduce((s,d) => s + d.creativity, 0) / creativityData.length : null;
 
+  // Aggregate stats
+  const allAttempts = data.map(d => d.attempts).sort((a,b) => a - b);
+  const avgAttempts = allAttempts.reduce((a,b) => a+b, 0) / n;
+  const medAttempts = n % 2 === 0
+    ? (allAttempts[n/2 - 1] + allAttempts[n/2]) / 2
+    : allAttempts[Math.floor(n/2)];
+  const avgConf = data.map(d => d.conf).reduce((a,b) => a+b, 0) / n;
+  const avgNos = data.map(d => d.nos).reduce((a,b) => a+b, 0) / n;
+  const oneGuess = data.filter(d => d.attempts === 1).length;
+  const modeAttempt = Object.entries(attemptCounts).sort((a,b) => b[1] - a[1])[0];
+
+  // 4. Sequence frequency analysis
   function parseSequences(rows, colIdx) {
     const freq = {};
     if (colIdx < 0) return { freq, sorted: [], total: 0 };
@@ -1096,9 +975,11 @@ function computeAnalytics(rows, cols) {
     rows.forEach(r => {
       const cell = (r[colIdx] || '').trim();
       if (!cell || cell === '—' || cell === '-') return;
+      // Split by semicolon, each item like "(3, 6, 12)"
       cell.split(';').forEach(s => {
         const seq = s.trim().replace(/\s+/g, ' ');
         if (!seq || seq === '—') return;
+        // Normalize: remove outer parens, split numbers, rebuild consistently
         const nums = seq.replace(/[()]/g, '').split(',').map(x => x.trim()).filter(x => x !== '');
         if (nums.length === 3) {
           const key = `(${nums.join(', ')})`;
@@ -1114,16 +995,6 @@ function computeAnalytics(rows, cols) {
   const yesSeqData = parseSequences(rows, cols.yesSeq);
   const noSeqData  = parseSequences(rows, cols.noSeq);
 
-  const allAttempts = data.map(d => d.attempts).sort((a,b) => a - b);
-  const avgAttempts = allAttempts.reduce((a,b) => a+b, 0) / n;
-  const medAttempts = n % 2 === 0
-    ? (allAttempts[n/2 - 1] + allAttempts[n/2]) / 2
-    : allAttempts[Math.floor(n/2)];
-  const avgConf = data.map(d => d.conf).reduce((a,b) => a+b, 0) / n;
-  const avgNos = data.map(d => d.nos).reduce((a,b) => a+b, 0) / n;
-  const oneGuess = data.filter(d => d.attempts === 1).length;
-  const modeAttempt = Object.entries(attemptCounts).sort((a,b) => b[1] - a[1])[0];
-
   return {
     n, data,
     attemptLabels, attemptValues,
@@ -1135,10 +1006,13 @@ function computeAnalytics(rows, cols) {
     oneGuessPct: oneGuess / n,
     modeAttempt: modeAttempt ? { value: parseInt(modeAttempt[0]), count: modeAttempt[1] } : null,
     yesSeqData, noSeqData,
+    // Yes Ratio
     ratioLabels, ratioValues, medianYesRatio, pct100, yesRatios,
+    // Confidence vs Correctness
     hasCorrectnessData, correctData, wrongData,
     confDistCorrect, confDistWrong,
     avgConfCorrect, avgConfWrong,
+    // Creativity
     hasCreativityData, creativityData,
     creativityCorrect, creativityWrong,
     avgCreativityCorrect, avgCreativityWrong,
@@ -1146,6 +1020,7 @@ function computeAnalytics(rows, cols) {
   };
 }
 
+// --- Chart.js default styling to match the page ---
 const chartFont = { family: "'STIX Two Text', Georgia, 'Times New Roman', serif", size: 12 };
 const chartColors = {
   green:     '#bccf31',
@@ -1158,9 +1033,12 @@ const chartColors = {
   accent:    '#2e7d32',
 };
 
+// Render all charts at 3x resolution so they stay crisp at any zoom
 Chart.defaults.devicePixelRatio = 3;
+// Tooltip triggers on nearest element, no need to hit exact pixels
 Chart.defaults.interaction = { mode: 'nearest', intersect: false, axis: 'x' };
 Chart.defaults.hover = { mode: 'nearest', intersect: false, axis: 'x' };
+// Style all tooltips for readability
 Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(40, 40, 40, 0.95)';
 Chart.defaults.plugins.tooltip.titleFont = { family: "'STIX Two Text', Georgia, serif", size: 13, weight: '700' };
 Chart.defaults.plugins.tooltip.bodyFont = { family: "'STIX Two Text', Georgia, serif", size: 12, weight: '600' };
@@ -1179,7 +1057,7 @@ function showClassResults() {
 
   container.innerHTML = `
     <div class="class-results" id="class-results-content">
-      <div class="class-header-row">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
           <h2 class="class-results-title">How others performed</h2>
           <p class="class-results-sub">Updated live from all players</p>
@@ -1206,6 +1084,7 @@ function showClassResults() {
       </div>
     </div>`;
 
+  // Fetch raw CSV data from published Google Sheet
   fetch(SHEET_CSV_URL + '&t=' + Date.now())
     .then(r => {
       if (!r.ok) throw new Error('Sheet not accessible');
@@ -1226,6 +1105,7 @@ function showClassResults() {
     })
     .catch(err => {
       console.warn('CSV fetch failed, falling back to Apps Script:', err);
+      // Fallback: use the existing Apps Script endpoint
       fetch(GOOGLE_SCRIPT_URL + '?action=getAnalysis&t=' + Date.now())
         .then(r => r.json())
         .then(data => {
@@ -1242,6 +1122,9 @@ function showClassResults() {
     });
 }
 
+// ============================================================
+// DYNAMIC CHARTS (primary path — from raw CSV data)
+// ============================================================
 function renderDynamicCharts(a) {
   document.getElementById('charts-loading').classList.add('hidden');
   const wrap = document.getElementById('charts-content');
@@ -1250,10 +1133,12 @@ function renderDynamicCharts(a) {
   const showCreativity = a.hasCreativityData;
 
   wrap.innerHTML = `
+
+    <!-- ==================== SECTION 1 ==================== -->
     <div class="section-divider" style="margin-top:0;border-top:none;padding-top:0">
       <div class="section-number">Part 1</div>
       <div class="section-title">Testing behavior</div>
-      <div class="section-subtitle">How did players approach the challenge? What evidence did they gather?</div>
+      <div class="section-subtitle">How did players approach the puzzle? What evidence did they gather?</div>
     </div>
     <div class="charts-grid">
       <div class="chart-block">
@@ -1263,6 +1148,7 @@ function renderDynamicCharts(a) {
         <div class="chart-read" id="read-attempts"></div>
         <div class="chart-insight" id="insight-attempts"></div>
       </div>
+
       <div class="chart-block">
         <div class="chart-block-title">How one-sided was the evidence?</div>
         <div class="chart-block-subtitle">Distribution of each player's "Yes" rate: Yes responses / Total guesses</div>
@@ -1270,6 +1156,7 @@ function renderDynamicCharts(a) {
         <div class="chart-read" id="read-yesratio"></div>
         <div class="chart-insight" id="insight-yesratio"></div>
       </div>
+
       <div class="chart-block">
         <div class="chart-block-title">Did players seek disconfirming evidence?</div>
         <div class="chart-block-subtitle">Breakdown by how many "No" responses players received</div>
@@ -1277,12 +1164,15 @@ function renderDynamicCharts(a) {
         <div class="chart-read" id="read-strategy"></div>
         <div class="chart-insight" id="insight-strategy"></div>
       </div>
+
       <div class="chart-block" id="seq-tables-block"></div>
     </div>
+
+    <!-- ==================== SECTION 2 ==================== -->
     <div class="section-divider">
       <div class="section-number">Part 2</div>
       <div class="section-title">Confidence & accuracy</div>
-      <div class="section-subtitle">What did players believe, and were they right?</div>
+      <div class="section-subtitle">What did players believe — and were they right?</div>
     </div>
     <div class="charts-grid">
       <div class="chart-block">
@@ -1292,6 +1182,7 @@ function renderDynamicCharts(a) {
         <div class="chart-read" id="read-confidence"></div>
         <div class="chart-insight" id="insight-confidence"></div>
       </div>
+
       <div class="chart-block" id="chart-correctness-block" ${a.hasCorrectnessData ? '' : 'style="display:none"'}>
         <div class="chart-block-title">Were confident players actually right?</div>
         <div class="chart-block-subtitle">Confidence distribution split by whether the player identified the correct rule</div>
@@ -1300,17 +1191,19 @@ function renderDynamicCharts(a) {
         <div class="chart-insight" id="insight-correctness"></div>
       </div>
     </div>
+
+    <!-- ==================== SECTION 3 ==================== -->
     <div class="section-divider" ${showCreativity ? '' : 'style="display:none"'}>
       <div class="section-number">Part 3</div>
       <div class="section-title">Exploration creativity</div>
-      <div class="section-subtitle">How creative was each player's testing strategy, and did it actually help?</div>
+      <div class="section-subtitle">How creative was each player's testing strategy — and did it actually help?</div>
     </div>
     <div ${showCreativity ? '' : 'style="display:none"'}>
       <div class="chart-insight" style="margin-bottom:20px">
         <span class="insight-icon">How we measure creativity</span>
-        The <strong>creativity index</strong> measures how structurally diverse a player's tested sequences were, relative to the seed example (2, 4, 8). For each sequence, we extract a feature vector capturing its direction (increasing, decreasing, constant, non-monotonic), scale (magnitude and spread of the numbers), boundary exploration (use of negatives or zero), and gap pattern (arithmetic vs geometric spacing). We then compute the <strong>average pairwise Euclidean distance</strong> across all features, weighted by the logarithm of the number of sequences tested. The weighting ensures that testing more sequences is rewarded, but with diminishing returns. Quality of exploration matters more than sheer volume. Scores are normalized so the most exploratory player in the group scores 100%.
+        The <strong>creativity index</strong> measures how structurally diverse a player's tested sequences were, relative to the seed example (2, 4, 8). For each sequence, we extract a feature vector capturing its direction (increasing, decreasing, constant, non-monotonic), scale (magnitude and spread of the numbers), boundary exploration (use of negatives or zero), and gap pattern (arithmetic vs geometric spacing). We then compute the <strong>average pairwise Euclidean distance</strong> across all features, weighted by the logarithm of the number of sequences tested. The weighting ensures that testing more sequences is rewarded, but with diminishing returns — quality of exploration matters more than sheer volume. Scores are normalized so the most exploratory player in the group scores 100%.
         <br><br>
-        <strong>Example:</strong> Suppose Player A tested (2, 4, 8), (3, 6, 12), and (4, 8, 16). All three are increasing sequences with similar geometric spacing: structurally repetitive. Player B tested (2, 4, 8), (5, 3, 1), and (0, 0, 0). These span three fundamentally different patterns: increasing, decreasing, and constant. Player B's sequences produce a much larger average distance in feature space, and thus a higher creativity index, even though both players tested the same number of sequences.
+        <strong>Example:</strong> Suppose Player A tested (2, 4, 8), (3, 6, 12), and (4, 8, 16). All three are increasing sequences with similar geometric spacing — structurally repetitive. Player B tested (2, 4, 8), (5, 3, 1), and (0, 0, 0). These span three fundamentally different patterns: increasing, decreasing, and constant. Player B's sequences produce a much larger average distance in feature space, and thus a higher creativity index — even though both players tested the same number of sequences.
       </div>
     </div>
     <div class="charts-grid" ${showCreativity ? '' : 'style="display:none"'}>
@@ -1321,13 +1214,15 @@ function renderDynamicCharts(a) {
         <div class="chart-read" id="read-scatter"></div>
         <div class="chart-insight" id="insight-scatter"></div>
       </div>
+
       <div class="chart-block">
-        <div class="chart-block-title">The confidence-creativity paradox</div>
+        <div class="chart-block-title">The confidence–creativity paradox</div>
         <div class="chart-block-subtitle">Average creativity index by self-reported confidence level</div>
         <div class="chart-canvas-wrap"><canvas id="chart-conf-creativity"></canvas></div>
         <div class="chart-read" id="read-conf-creativity"></div>
         <div class="chart-insight" id="insight-conf-creativity"></div>
       </div>
+
       <div class="chart-block" ${a.hasCorrectnessData ? '' : 'style="display:none"'}>
         <div class="chart-block-title">Did creative testing actually help?</div>
         <div class="chart-block-subtitle">Average creativity index for players who got the rule right vs wrong</div>
@@ -1338,12 +1233,15 @@ function renderDynamicCharts(a) {
     </div>
   `;
 
+  // Section 1
   buildAttemptsChart(a);
   buildYesRatioChart(a);
   buildStrategyChart(a);
   buildSequenceTables(a);
+  // Section 2
   buildConfidenceChart(a);
   if (a.hasCorrectnessData) buildCorrectnessChart(a);
+  // Section 3
   if (showCreativity) {
     buildScatterChart(a);
     buildConfCreativityChart(a);
@@ -1363,99 +1261,226 @@ function buildAttemptsChart(a) {
         data: a.attemptValues,
         backgroundColor: a.attemptLabels.map((_,i) => i === peakIdx ? chartColors.green : '#d8dfc0'),
         borderColor: a.attemptLabels.map((_,i) => i === peakIdx ? chartColors.greenDark : '#b8c0a0'),
-        borderWidth: 1, borderRadius: 2,
+        borderWidth: 1,
+        borderRadius: 2,
       }]
     },
     options: {
       responsive: true,
-      plugins: { legend: { display: false },
-        tooltip: { callbacks: { title: (items) => items[0].label + (items[0].label === '1' ? ' guess' : ' guesses'), label: (ctx) => `  ${ctx.raw} player${ctx.raw !== 1 ? 's' : ''}` } }
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => items[0].label + (items[0].label === '1' ? ' guess' : ' guesses'),
+            label: (ctx) => `  ${ctx.raw} player${ctx.raw !== 1 ? 's' : ''}`
+          }
+        }
       },
       scales: {
-        x: { title: { display: true, text: 'Number of guesses', font: chartFont, color: chartColors.text }, ticks: { font: chartFont, color: chartColors.text }, grid: { display: false } },
-        y: { title: { display: true, text: 'Players', font: chartFont, color: chartColors.text }, ticks: { font: chartFont, color: chartColors.text, stepSize: 1 }, beginAtZero: true, grid: { color: '#eee' } }
+        x: { title: { display: true, text: 'Number of guesses', font: chartFont, color: chartColors.text },
+             ticks: { font: chartFont, color: chartColors.text },
+             grid: { display: false } },
+        y: { title: { display: true, text: 'Players', font: chartFont, color: chartColors.text },
+             ticks: { font: chartFont, color: chartColors.text, stepSize: 1 },
+             beginAtZero: true,
+             grid: { color: '#eee' } }
       }
     }
   });
 
-  document.getElementById('read-attempts').innerHTML = `<strong>How to read:</strong> Each bar shows how many players tested exactly that many sequences before locking in their answer. A tall bar on the left means most people decided quickly.`;
+  // How to read
+  document.getElementById('read-attempts').innerHTML =
+    `<strong>How to read:</strong> Each bar shows how many players tested exactly that many sequences before locking in their answer. A tall bar on the left means most people decided quickly.`;
 
+  // Dynamic insight
   const pctFew = Math.round(a.attemptValues.slice(0, 3).reduce((s,v) => s+v, 0) / a.n * 100);
   const mode = a.modeAttempt;
   let insight = `<span class="insight-icon">Key insight</span>`;
   if (pctFew >= 60) {
-    insight += `<strong>${pctFew}% of players tested 3 or fewer sequences</strong> before committing to an answer. The most common number of guesses was <strong>${mode.value}</strong> (chosen by ${mode.count} player${mode.count!==1?'s':''}).  Most people felt they had "enough" evidence very quickly, a hallmark of confirmation bias. The rule is simple enough that even a few tests should reveal it, but only if you test <em>the right kind</em> of sequences.`;
+    insight += `<strong>${pctFew}% of players tested 3 or fewer sequences</strong> before committing to an answer. The most common number of guesses was <strong>${mode.value}</strong> (chosen by ${mode.count} player${mode.count!==1?'s':''}).  Most people felt they had "enough" evidence very quickly — a hallmark of confirmation bias. The rule is simple enough that even a few tests should reveal it, but only if you test <em>the right kind</em> of sequences.`;
   } else {
-    insight += `Players were fairly spread in how many guesses they tried. The most common was <strong>${mode.value} guesses</strong> (${mode.count} player${mode.count!==1?'s':''}), while the average was <strong>${a.avgAttempts.toFixed(1)}</strong>. More guesses don't help if they all confirm the same hypothesis. What matters is <em>variety</em> in what you test.`;
+    insight += `Players were fairly spread in how many guesses they tried. The most common was <strong>${mode.value} guesses</strong> (${mode.count} player${mode.count!==1?'s':''}), while the average was <strong>${a.avgAttempts.toFixed(1)}</strong>. More guesses don't help if they all confirm the same hypothesis — what matters is <em>variety</em> in what you test.`;
   }
   document.getElementById('insight-attempts').innerHTML = insight;
 }
 
-function buildYesRatioChart(a) {
-  const ctx = document.getElementById('chart-yesratio').getContext('2d');
-  const barColors = a.ratioValues.map((_,i) => {
-    if (i <= 2) return '#a8cf6a'; if (i <= 5) return '#d8d880'; if (i <= 7) return '#e8c0a0'; return '#e8a0a0';
-  });
+function buildConfidenceChart(a) {
+  const ctx = document.getElementById('chart-confidence').getContext('2d');
 
   new Chart(ctx, {
     type: 'bar',
-    data: { labels: a.ratioLabels, datasets: [{ data: a.ratioValues, backgroundColor: barColors, borderColor: barColors.map(c => c.replace('a0','80').replace('6a','50').replace('80','60')), borderWidth: 1, borderRadius: 2 }] },
+    data: {
+      labels: a.confLabels,
+      datasets: [{
+        label: 'Avg confidence',
+        data: a.confAvgs,
+        backgroundColor: a.confAvgs.map(v => v >= 4 ? '#e8a0a0' : v >= 3 ? '#e8d8a0' : '#c8dfa0'),
+        borderColor: a.confAvgs.map(v => v >= 4 ? chartColors.redDark : v >= 3 ? '#c0a860' : chartColors.greenDark),
+        borderWidth: 1,
+        borderRadius: 2,
+      }]
+    },
     options: {
-      responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { title: (items) => 'Yes rate: ' + items[0].label, label: (ctx) => `  ${ctx.raw} player${ctx.raw !== 1 ? 's' : ''}` } } },
-      scales: { x: { title: { display: true, text: 'Percentage of guesses that returned "Yes"', font: chartFont, color: chartColors.text }, ticks: { font: { ...chartFont, size: 10 }, color: chartColors.text, maxRotation: 45 }, grid: { display: false } }, y: { title: { display: true, text: 'Players', font: chartFont, color: chartColors.text }, ticks: { font: chartFont, color: chartColors.text, stepSize: 1 }, beginAtZero: true, grid: { color: '#eee' } } }
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `Avg confidence: ${ctx.raw}/5 (n=${a.confCounts[ctx.dataIndex]})`
+          }
+        }
+      },
+      scales: {
+        x: { title: { display: true, text: '', font: chartFont, color: chartColors.text },
+             ticks: { font: { ...chartFont, size: 11 }, color: chartColors.text },
+             grid: { display: false } },
+        y: { title: { display: true, text: 'Average confidence, 1 to 5', font: chartFont, color: chartColors.text },
+             ticks: { font: chartFont, color: chartColors.text },
+             min: 0, max: 5,
+             grid: { color: '#eee' } }
+      }
     }
   });
 
-  document.getElementById('read-yesratio').innerHTML = `<strong>How to read:</strong> For each player, we compute what fraction of their guesses returned "Yes." A player at 100% only ever tested sequences the rule accepted. They never once tried something that could fail. Bars further right (<span style="color:${chartColors.redDark}">red</span>) indicate more one-sided evidence-gathering; bars further left (<span style="color:#6a9a40">green</span>) indicate more balanced testing.`;
+  // How to read
+  document.getElementById('read-confidence').innerHTML =
+    `<strong>How to read:</strong> Each bar shows the average self-reported confidence level (1 = "not confident," 5 = "very confident") for players who made that many guesses. Bars colored <span style="color:${chartColors.redDark}">pinkish</span> indicate high confidence (≥4), while <span style="color:${chartColors.greenDark}">green</span> bars indicate lower confidence.`;
 
-  const pct100Ratio = Math.round(a.pct100 / a.n * 100);
-  const pctOver80 = Math.round(a.yesRatios.filter(r => r > 80).length / a.n * 100);
-  let insight = `<span class="insight-icon">Key insight</span>`;
-  insight += `<strong>${pct100Ratio}% of players had a 100% "Yes" rate</strong>: every single sequence they tested was accepted. A total of <strong>${pctOver80}%</strong> heard "Yes" on more than 80% of their guesses. `;
-  insight += `The median player's "Yes" rate was <strong>${a.medianYesRatio}%</strong>. `;
-  if (a.medianYesRatio >= 80) insight += `This is a direct measurement of confirmation bias: most people constructed tests designed (consciously or not) to confirm their theory rather than challenge it. In a business context, this is like conducting customer surveys that only ask satisfied customers, or running A/B tests in conditions where you expect success.`;
-  else insight += `This group was unusually balanced in their testing. Most populations skew much more heavily toward confirmation-seeking.`;
-  document.getElementById('insight-yesratio').innerHTML = insight;
-}
-
-function buildStrategyChart(a) {
-  const ctx = document.getElementById('chart-strategy').getContext('2d');
-  new Chart(ctx, {
-    type: 'doughnut',
-    data: { labels: [`Never heard "No"  (${a.neverNo})`, `Heard 1–2 "No"s  (${a.someNo})`, `Heard 3+ "No"s  (${a.strongF})`], datasets: [{ data: [a.neverNo, a.someNo, a.strongF], backgroundColor: [chartColors.red, '#e8d8a0', chartColors.green], borderColor: ['#fff','#fff','#fff'], borderWidth: 2 }] },
-    options: { responsive: true, cutout: '45%', interaction: { mode: 'nearest', intersect: true }, plugins: { legend: { position: 'bottom', labels: { font: { ...chartFont, size: 12 }, color: chartColors.text, padding: 14 } }, tooltip: { callbacks: { label: (ctx) => { const pct = Math.round(ctx.raw / a.n * 100); return ` ${ctx.raw} player${ctx.raw !== 1 ? 's' : ''} (${pct}%)`; } } } } }
-  });
-
-  document.getElementById('read-strategy').innerHTML = `<strong>How to read:</strong> This chart classifies every player by how many "No" responses they received. <span style="color:${chartColors.redDark}">Pink</span> = only tested sequences the rule accepted (confirmation-seeking). <span style="color:#b0a020">Yellow</span> = heard some disconfirming evidence. <span style="color:${chartColors.greenDark}">Green</span> = actively sought out rejection (strong falsifiers).`;
-
-  const neverNoPct = Math.round(a.neverNoPct * 100);
-  const strongPct = Math.round(a.strongFPct * 100);
-  let insight = `<span class="insight-icon">Key insight</span>`;
-  if (neverNoPct >= 40) insight += `<strong>${neverNoPct}% of players never heard a single "No"</strong>. They only tested sequences they expected to pass. Only <strong>${strongPct}%</strong> actively sought disconfirming evidence (3+ "No" responses). There is no penalty for hearing "No" in this game, yet most people instinctively avoid it. This is exactly how confirmation bias operates in business: we pitch ideas to people we think will agree, we test strategies in markets we expect to succeed, and we seek data that validates our decisions.`;
-  else insight += `<strong>${neverNoPct}% never heard "No"</strong>, while <strong>${strongPct}% actively tested for failure</strong> (3+ "No"s). Those who deliberately sought rejection were practicing what scientists call <em>falsification</em>, the most reliable path to truth. In business, this maps to practices like pre-mortems, red teams, and devil's advocates: deliberately seeking reasons your plan might fail <em>before</em> committing to it.`;
-  document.getElementById('insight-strategy').innerHTML = insight;
-}
-
-function buildConfidenceChart(a) {
-  const ctx = document.getElementById('chart-confidence').getContext('2d');
-  new Chart(ctx, {
-    type: 'bar',
-    data: { labels: a.confLabels, datasets: [{ label: 'Avg confidence', data: a.confAvgs, backgroundColor: a.confAvgs.map(v => v >= 4 ? '#e8a0a0' : v >= 3 ? '#e8d8a0' : '#c8dfa0'), borderColor: a.confAvgs.map(v => v >= 4 ? chartColors.redDark : v >= 3 ? '#c0a860' : chartColors.greenDark), borderWidth: 1, borderRadius: 2 }] },
-    options: { responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => `Avg confidence: ${ctx.raw}/5 (n=${a.confCounts[ctx.dataIndex]})` } } }, scales: { x: { title: { display: true, text: '', font: chartFont, color: chartColors.text }, ticks: { font: { ...chartFont, size: 11 }, color: chartColors.text }, grid: { display: false } }, y: { title: { display: true, text: 'Average confidence, 1 to 5', font: chartFont, color: chartColors.text }, ticks: { font: chartFont, color: chartColors.text }, min: 0, max: 5, grid: { color: '#eee' } } } }
-  });
-
-  document.getElementById('read-confidence').innerHTML = `<strong>How to read:</strong> Each bar shows the average self-reported confidence level (1 = "not confident," 5 = "very confident") for players who made that many guesses. Bars colored <span style="color:${chartColors.redDark}">pinkish</span> indicate high confidence (≥4), while <span style="color:${chartColors.greenDark}">green</span> bars indicate lower confidence.`;
-
+  // Dynamic insight
   let insight = `<span class="insight-icon">Key insight</span>`;
   const fewConf = a.confAvgs.length > 0 ? a.confAvgs[0] : null;
   const manyConf = a.confAvgs.length > 2 ? a.confAvgs[a.confAvgs.length - 1] : null;
   const overallAvg = a.avgConf.toFixed(1);
 
   if (fewConf !== null && manyConf !== null) {
-    if (fewConf >= manyConf - 0.3) insight += `Players who tested just ${a.confLabels[0]} reported an average confidence of <strong>${fewConf}/5</strong>, barely different from those who tested ${a.confLabels[a.confLabels.length-1]} (<strong>${manyConf}/5</strong>). This is the <strong>illusion of knowledge</strong>: a few confirming examples feel like proof. Across all players, average confidence was <strong>${overallAvg}/5</strong>. People tend to feel sure very quickly, especially when they never hear "no."`;
-    else insight += `Interestingly, players who tested more sequences reported <em>higher</em> confidence (${a.confLabels[a.confLabels.length-1]}: <strong>${manyConf}/5</strong>) compared to quick deciders (${a.confLabels[0]}: <strong>${fewConf}/5</strong>). More testing does seem to build genuine understanding, but only when it includes <em>disconfirming</em> tests. The overall average was <strong>${overallAvg}/5</strong>.`;
-  } else insight += `Across all ${a.n} players, average confidence was <strong>${overallAvg}/5</strong>. People tend to feel confident regardless of how thoroughly they tested, a signature of confirmation bias.`;
+    if (fewConf >= manyConf - 0.3) {
+      insight += `Players who tested just ${a.confLabels[0]} reported an average confidence of <strong>${fewConf}/5</strong> — barely different from those who tested ${a.confLabels[a.confLabels.length-1]} (<strong>${manyConf}/5</strong>). This is the <strong>illusion of knowledge</strong>: a few confirming examples feel like proof. Across all players, average confidence was <strong>${overallAvg}/5</strong>. People tend to feel sure very quickly, especially when they never hear "no."`;
+    } else {
+      insight += `Interestingly, players who tested more sequences reported <em>higher</em> confidence (${a.confLabels[a.confLabels.length-1]}: <strong>${manyConf}/5</strong>) compared to quick deciders (${a.confLabels[0]}: <strong>${fewConf}/5</strong>). More testing does seem to build genuine understanding — but only when it includes <em>disconfirming</em> tests. The overall average was <strong>${overallAvg}/5</strong>.`;
+    }
+  } else {
+    insight += `Across all ${a.n} players, average confidence was <strong>${overallAvg}/5</strong>. People tend to feel confident regardless of how thoroughly they tested — a signature of confirmation bias.`;
+  }
   document.getElementById('insight-confidence').innerHTML = insight;
+}
+
+function buildStrategyChart(a) {
+  const ctx = document.getElementById('chart-strategy').getContext('2d');
+
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: [
+        `Never heard "No"  (${a.neverNo})`,
+        `Heard 1–2 "No"s  (${a.someNo})`,
+        `Heard 3+ "No"s  (${a.strongF})`
+      ],
+      datasets: [{
+        data: [a.neverNo, a.someNo, a.strongF],
+        backgroundColor: [chartColors.red, '#e8d8a0', chartColors.green],
+        borderColor: ['#fff','#fff','#fff'],
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      cutout: '45%',
+      interaction: { mode: 'nearest', intersect: true },
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { font: { ...chartFont, size: 12 }, color: chartColors.text, padding: 14 }
+        },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const pct = Math.round(ctx.raw / a.n * 100);
+              return ` ${ctx.raw} player${ctx.raw !== 1 ? 's' : ''} (${pct}%)`;
+            }
+          }
+        }
+      }
+    }
+  });
+
+  // How to read
+  document.getElementById('read-strategy').innerHTML =
+    `<strong>How to read:</strong> This chart classifies every player by how many "No" responses they received. <span style="color:${chartColors.redDark}">Pink</span> = only tested sequences the rule accepted (confirmation-seeking). <span style="color:#b0a020">Yellow</span> = heard some disconfirming evidence. <span style="color:${chartColors.greenDark}">Green</span> = actively sought out rejection (strong falsifiers).`;
+
+  // Dynamic insight
+  const neverNoPct = Math.round(a.neverNoPct * 100);
+  const strongPct = Math.round(a.strongFPct * 100);
+  let insight = `<span class="insight-icon">Key insight</span>`;
+  if (neverNoPct >= 40) {
+    insight += `<strong>${neverNoPct}% of players never heard a single "No"</strong> — they only tested sequences they expected to pass. Only <strong>${strongPct}%</strong> actively sought disconfirming evidence (3+ "No" responses). There is no penalty for hearing "No" in this game, yet most people instinctively avoid it. This is exactly how confirmation bias operates in business: we pitch ideas to people we think will agree, we test strategies in markets we expect to succeed, and we seek data that validates our decisions.`;
+  } else {
+    insight += `<strong>${neverNoPct}% never heard "No"</strong>, while <strong>${strongPct}% actively tested for failure</strong> (3+ "No"s). Those who deliberately sought rejection were practicing what scientists call <em>falsification</em> — the most reliable path to truth. In business, this maps to practices like pre-mortems, red teams, and devil's advocates: deliberately seeking reasons your plan might fail <em>before</em> committing to it.`;
+  }
+  document.getElementById('insight-strategy').innerHTML = insight;
+}
+
+function buildYesRatioChart(a) {
+  const ctx = document.getElementById('chart-yesratio').getContext('2d');
+
+  // Color gradient: high yes-rate = red (bias), low = green (balanced)
+  const barColors = a.ratioValues.map((_,i) => {
+    if (i <= 2) return '#a8cf6a';       // 0–30%: green (balanced testing)
+    if (i <= 5) return '#d8d880';       // 31–60%: yellow
+    if (i <= 7) return '#e8c0a0';       // 61–80%: orange
+    return '#e8a0a0';                   // 81–100%: red (confirmation-heavy)
+  });
+
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: a.ratioLabels,
+      datasets: [{
+        data: a.ratioValues,
+        backgroundColor: barColors,
+        borderColor: barColors.map(c => c.replace('a0','80').replace('6a','50').replace('80','60')),
+        borderWidth: 1,
+        borderRadius: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => 'Yes rate: ' + items[0].label,
+            label: (ctx) => `  ${ctx.raw} player${ctx.raw !== 1 ? 's' : ''}`
+          }
+        }
+      },
+      scales: {
+        x: { title: { display: true, text: 'Percentage of guesses that returned "Yes"', font: chartFont, color: chartColors.text },
+             ticks: { font: { ...chartFont, size: 10 }, color: chartColors.text, maxRotation: 45 },
+             grid: { display: false } },
+        y: { title: { display: true, text: 'Players', font: chartFont, color: chartColors.text },
+             ticks: { font: chartFont, color: chartColors.text, stepSize: 1 },
+             beginAtZero: true,
+             grid: { color: '#eee' } }
+      }
+    }
+  });
+
+  // How to read
+  document.getElementById('read-yesratio').innerHTML =
+    `<strong>How to read:</strong> For each player, we compute what fraction of their guesses returned "Yes." A player at 100% only ever tested sequences the rule accepted — they never once tried something that could fail. Bars further right (<span style="color:${chartColors.redDark}">red</span>) indicate more one-sided evidence-gathering; bars further left (<span style="color:#6a9a40">green</span>) indicate more balanced testing.`;
+
+  // Dynamic insight
+  const pct100Ratio = Math.round(a.pct100 / a.n * 100);
+  const pctOver80 = Math.round(a.yesRatios.filter(r => r > 80).length / a.n * 100);
+  let insight = `<span class="insight-icon">Key insight</span>`;
+  insight += `<strong>${pct100Ratio}% of players had a 100% "Yes" rate</strong> — every single sequence they tested was accepted. A total of <strong>${pctOver80}%</strong> heard "Yes" on more than 80% of their guesses. `;
+  insight += `The median player's "Yes" rate was <strong>${a.medianYesRatio}%</strong>. `;
+  if (a.medianYesRatio >= 80) {
+    insight += `This is a direct measurement of confirmation bias: most people constructed tests designed (consciously or not) to confirm their theory rather than challenge it. In a business context, this is like conducting customer surveys that only ask satisfied customers, or running A/B tests in conditions where you expect success.`;
+  } else {
+    insight += `This group was unusually balanced in their testing — most populations skew much more heavily toward confirmation-seeking.`;
+  }
+  document.getElementById('insight-yesratio').innerHTML = insight;
 }
 
 function buildCorrectnessChart(a) {
@@ -1464,12 +1489,61 @@ function buildCorrectnessChart(a) {
 
   new Chart(ctx, {
     type: 'bar',
-    data: { labels: confLabelsCorr, datasets: [{ label: `Got it right (n=${a.correctData.length})`, data: a.confDistCorrect, backgroundColor: 'rgba(188, 207, 49, 0.7)', borderColor: '#8fa324', borderWidth: 1, borderRadius: 2 }, { label: `Got it wrong (n=${a.wrongData.length})`, data: a.confDistWrong, backgroundColor: 'rgba(232, 160, 160, 0.7)', borderColor: '#d46a6a', borderWidth: 1, borderRadius: 2 }] },
-    options: { responsive: true, plugins: { legend: { position: 'top', labels: { font: { ...chartFont, size: 12 }, color: chartColors.text, padding: 14 } }, tooltip: { callbacks: { label: (ctx) => { const total = ctx.datasetIndex === 0 ? a.correctData.length : a.wrongData.length; const pct = total > 0 ? Math.round(ctx.raw / total * 100) : 0; return ` ${ctx.dataset.label}: ${ctx.raw} (${pct}%)`; } } } }, scales: { x: { title: { display: true, text: 'Confidence level', font: chartFont, color: chartColors.text }, ticks: { font: chartFont, color: chartColors.text }, grid: { display: false } }, y: { title: { display: true, text: 'Players', font: chartFont, color: chartColors.text }, ticks: { font: chartFont, color: chartColors.text, stepSize: 1 }, beginAtZero: true, grid: { color: '#eee' } } } }
+    data: {
+      labels: confLabelsCorr,
+      datasets: [
+        {
+          label: `Got it right (n=${a.correctData.length})`,
+          data: a.confDistCorrect,
+          backgroundColor: 'rgba(188, 207, 49, 0.7)',
+          borderColor: '#8fa324',
+          borderWidth: 1,
+          borderRadius: 2,
+        },
+        {
+          label: `Got it wrong (n=${a.wrongData.length})`,
+          data: a.confDistWrong,
+          backgroundColor: 'rgba(232, 160, 160, 0.7)',
+          borderColor: '#d46a6a',
+          borderWidth: 1,
+          borderRadius: 2,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          position: 'top',
+          labels: { font: { ...chartFont, size: 12 }, color: chartColors.text, padding: 14 }
+        },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const total = ctx.datasetIndex === 0 ? a.correctData.length : a.wrongData.length;
+              const pct = total > 0 ? Math.round(ctx.raw / total * 100) : 0;
+              return ` ${ctx.dataset.label}: ${ctx.raw} (${pct}%)`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { title: { display: true, text: 'Confidence level', font: chartFont, color: chartColors.text },
+             ticks: { font: chartFont, color: chartColors.text },
+             grid: { display: false } },
+        y: { title: { display: true, text: 'Players', font: chartFont, color: chartColors.text },
+             ticks: { font: chartFont, color: chartColors.text, stepSize: 1 },
+             beginAtZero: true,
+             grid: { color: '#eee' } }
+      }
+    }
   });
 
-  document.getElementById('read-correctness').innerHTML = `<strong>How to read:</strong> Each pair of bars compares how many players reported that confidence level, split by whether they actually identified the correct rule (<span style="color:#8fa324">green</span>) or not (<span style="color:${chartColors.redDark}">pink</span>). If wrong players cluster at high confidence levels, that's overconfidence.`;
+  // How to read
+  document.getElementById('read-correctness').innerHTML =
+    `<strong>How to read:</strong> Each pair of bars compares how many players reported that confidence level, split by whether they actually identified the correct rule (<span style="color:#8fa324">green</span>) or not (<span style="color:${chartColors.redDark}">pink</span>). If wrong players cluster at high confidence levels, that's overconfidence.`;
 
+  // Dynamic insight
   const wrongPct = Math.round(a.wrongData.length / a.n * 100);
   const rightPct = Math.round(a.correctData.length / a.n * 100);
   const wrongHigh = a.wrongData.filter(d => d.conf >= 4).length;
@@ -1477,145 +1551,362 @@ function buildCorrectnessChart(a) {
 
   let insight = `<span class="insight-icon">Key insight</span>`;
   insight += `<strong>${wrongPct}% of players got the rule wrong</strong>, while ${rightPct}% got it right. `;
+
   if (a.avgConfWrong !== null && a.avgConfCorrect !== null) {
     const diff = Math.abs(a.avgConfWrong - a.avgConfCorrect);
-    if (a.avgConfWrong >= a.avgConfCorrect - 0.3) insight += `Those who got it wrong reported an average confidence of <strong>${a.avgConfWrong.toFixed(1)}/5</strong>, ${diff < 0.3 ? 'virtually identical to' : 'even higher than'} the <strong>${a.avgConfCorrect.toFixed(1)}/5</strong> average of those who got it right. <strong>${wrongHighPct}%</strong> of wrong answers came with high confidence (4 or 5). This is the <strong>overconfidence effect</strong> in action: feeling certain doesn't mean being correct.`;
-    else insight += `Those who got it right were more confident (avg <strong>${a.avgConfCorrect.toFixed(1)}/5</strong>) than those who got it wrong (<strong>${a.avgConfWrong.toFixed(1)}/5</strong>). Still, <strong>${wrongHighPct}%</strong> of wrong answers came with high confidence (4 or 5), a reminder that feeling sure is no guarantee of being right.`;
-  } else insight += `Confidence was high across the board regardless of correctness, a hallmark of the overconfidence effect.`;
+    if (a.avgConfWrong >= a.avgConfCorrect - 0.3) {
+      insight += `Those who got it wrong reported an average confidence of <strong>${a.avgConfWrong.toFixed(1)}/5</strong> — ${diff < 0.3 ? 'virtually identical to' : 'even higher than'} the <strong>${a.avgConfCorrect.toFixed(1)}/5</strong> average of those who got it right. `;
+      insight += `<strong>${wrongHighPct}%</strong> of wrong answers came with high confidence (4 or 5). This is the <strong>overconfidence effect</strong> in action: feeling certain doesn't mean being correct. In business, this is why confident presentations can disguise flawed strategies — and why it's critical to test assumptions rather than trust gut feelings.`;
+    } else {
+      insight += `Those who got it right were more confident (avg <strong>${a.avgConfCorrect.toFixed(1)}/5</strong>) than those who got it wrong (<strong>${a.avgConfWrong.toFixed(1)}/5</strong>). `;
+      insight += `Still, <strong>${wrongHighPct}%</strong> of wrong answers came with high confidence (4 or 5) — a reminder that feeling sure is no guarantee of being right.`;
+    }
+  } else {
+    insight += `Confidence was high across the board regardless of correctness — a hallmark of the overconfidence effect.`;
+  }
   document.getElementById('insight-correctness').innerHTML = insight;
 }
 
+// ============================================================
+// CREATIVITY CHARTS (Section 3)
+// ============================================================
+
 function buildScatterChart(a) {
   const ctx = document.getElementById('chart-scatter').getContext('2d');
+
   const rightPts = a.creativityScatter.filter(d => d.gotRight === true);
   const wrongPts = a.creativityScatter.filter(d => d.gotRight === false);
   const nullPts  = a.creativityScatter.filter(d => d.gotRight === null);
-  const datasets = [];
-  if (rightPts.length) datasets.push({ label: 'Got it right', data: rightPts, backgroundColor: 'rgba(188,207,49,0.6)', borderColor: '#8fa324', pointRadius: 5, pointHoverRadius: 7 });
-  if (wrongPts.length) datasets.push({ label: 'Got it wrong', data: wrongPts, backgroundColor: 'rgba(232,160,160,0.6)', borderColor: '#d46a6a', pointRadius: 5, pointHoverRadius: 7 });
-  if (nullPts.length) datasets.push({ label: 'Players', data: nullPts, backgroundColor: 'rgba(180,180,170,0.5)', borderColor: '#999', pointRadius: 5, pointHoverRadius: 7 });
 
-  new Chart(ctx, {
-    type: 'scatter', data: { datasets },
-    options: { responsive: true, interaction: { mode: 'nearest', intersect: false, axis: 'xy' }, plugins: { legend: { position: 'top', labels: { font: { ...chartFont, size: 11 }, color: chartColors.text } }, tooltip: { callbacks: { label: (ctx) => `${ctx.raw.x} guesses, ${ctx.raw.y}% creativity` } } }, scales: { x: { title: { display: true, text: 'Number of guesses', font: chartFont, color: chartColors.text }, ticks: { font: chartFont, color: chartColors.text, stepSize: 1 }, beginAtZero: true, grid: { color: '#eee' } }, y: { title: { display: true, text: 'Creativity index (%)', font: chartFont, color: chartColors.text }, ticks: { font: chartFont, color: chartColors.text }, min: 0, max: 100, grid: { color: '#eee' } } } }
+  const datasets = [];
+  if (rightPts.length) datasets.push({
+    label: 'Got it right',
+    data: rightPts, backgroundColor: 'rgba(188,207,49,0.6)',
+    borderColor: '#8fa324', pointRadius: 5, pointHoverRadius: 7,
+  });
+  if (wrongPts.length) datasets.push({
+    label: 'Got it wrong',
+    data: wrongPts, backgroundColor: 'rgba(232,160,160,0.6)',
+    borderColor: '#d46a6a', pointRadius: 5, pointHoverRadius: 7,
+  });
+  if (nullPts.length) datasets.push({
+    label: 'Players',
+    data: nullPts, backgroundColor: 'rgba(180,180,170,0.5)',
+    borderColor: '#999', pointRadius: 5, pointHoverRadius: 7,
   });
 
-  document.getElementById('read-scatter').innerHTML = `<strong>How to read:</strong> Each dot is one player. Horizontal position = how many sequences they tested. Vertical position = how creatively diverse those sequences were (0% = only tested the seed pattern, 100% = most diverse explorer).` + (a.hasCorrectnessData ? ` <span style="color:#8fa324">Green</span> dots got the rule right; <span style="color:${chartColors.redDark}">pink</span> dots got it wrong.` : '');
+  new Chart(ctx, {
+    type: 'scatter',
+    data: { datasets },
+    options: {
+      responsive: true,
+      interaction: { mode: 'nearest', intersect: false, axis: 'xy' },
+      plugins: {
+        legend: { position: 'top', labels: { font: { ...chartFont, size: 11 }, color: chartColors.text } },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.raw.x} guesses, ${ctx.raw.y}% creativity` } }
+      },
+      scales: {
+        x: { title: { display: true, text: 'Number of guesses', font: chartFont, color: chartColors.text },
+             ticks: { font: chartFont, color: chartColors.text, stepSize: 1 },
+             beginAtZero: true, grid: { color: '#eee' } },
+        y: { title: { display: true, text: 'Creativity index (%)', font: chartFont, color: chartColors.text },
+             ticks: { font: chartFont, color: chartColors.text },
+             min: 0, max: 100, grid: { color: '#eee' } }
+      }
+    }
+  });
 
+  document.getElementById('read-scatter').innerHTML =
+    `<strong>How to read:</strong> Each dot is one player. Horizontal position = how many sequences they tested. Vertical position = how creatively diverse those sequences were (0% = only tested the seed pattern, 100% = most diverse explorer).` +
+    (a.hasCorrectnessData ? ` <span style="color:#8fa324">Green</span> dots got the rule right; <span style="color:${chartColors.redDark}">pink</span> dots got it wrong.` : '');
+
+  // Insight
   const highCreativityLowAttempts = a.creativityScatter.filter(d => d.y >= 50 && d.x <= 3).length;
   const lowCreativityHighAttempts = a.creativityScatter.filter(d => d.y < 30 && d.x >= 5).length;
-  let insight = `<span class="insight-icon">Key insight</span>More guesses don't automatically mean more creative exploration. `;
-  if (lowCreativityHighAttempts > 0) insight += `<strong>${lowCreativityHighAttempts} player${lowCreativityHighAttempts>1?'s':''}</strong> tested 5+ sequences but scored below 30% creativity. They tested a lot, but kept repeating variations of the same pattern. `;
-  if (highCreativityLowAttempts > 0) insight += `Meanwhile, <strong>${highCreativityLowAttempts} player${highCreativityLowAttempts>1?'s':''}</strong> achieved 50%+ creativity in just 3 or fewer guesses, showing that strategic diversity beats brute-force volume. `;
+  let insight = `<span class="insight-icon">Key insight</span>`;
+  insight += `More guesses don't automatically mean more creative exploration. `;
+  if (lowCreativityHighAttempts > 0) {
+    insight += `<strong>${lowCreativityHighAttempts} player${lowCreativityHighAttempts>1?'s':''}</strong> tested 5+ sequences but scored below 30% creativity — they tested a lot, but kept repeating variations of the same pattern. `;
+  }
+  if (highCreativityLowAttempts > 0) {
+    insight += `Meanwhile, <strong>${highCreativityLowAttempts} player${highCreativityLowAttempts>1?'s':''}</strong> achieved 50%+ creativity in just 3 or fewer guesses — showing that strategic diversity beats brute-force volume. `;
+  }
   insight += `In business, this is the difference between <em>doing more research</em> and <em>doing different research</em>.`;
   document.getElementById('insight-scatter').innerHTML = insight;
 }
 
 function buildConfCreativityChart(a) {
   const ctx = document.getElementById('chart-conf-creativity').getContext('2d');
-  const labels = [], values = [], counts = [];
+  const labels = [];
+  const values = [];
+  const counts = [];
+
   for (let c = 1; c <= 5; c++) {
-    if (a.creativityByConf[c]) { labels.push(c === 1 ? '1 (Low)' : c === 5 ? '5 (High)' : String(c)); values.push(Math.round(a.creativityByConf[c].avg)); counts.push(a.creativityByConf[c].n); }
+    if (a.creativityByConf[c]) {
+      labels.push(c === 1 ? '1 (Low)' : c === 5 ? '5 (High)' : String(c));
+      values.push(Math.round(a.creativityByConf[c].avg));
+      counts.push(a.creativityByConf[c].n);
+    }
   }
 
-  new Chart(ctx, { type: 'bar', data: { labels, datasets: [{ data: values, backgroundColor: values.map(v => v >= 40 ? 'rgba(188,207,49,0.7)' : v >= 20 ? 'rgba(232,216,160,0.7)' : 'rgba(232,160,160,0.7)'), borderColor: values.map(v => v >= 40 ? '#8fa324' : v >= 20 ? '#c0a860' : '#d46a6a'), borderWidth: 1, borderRadius: 2 }] }, options: { responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => `Avg creativity: ${ctx.raw}% (n=${counts[ctx.dataIndex]})` } } }, scales: { x: { title: { display: true, text: 'Confidence level', font: chartFont, color: chartColors.text }, ticks: { font: chartFont, color: chartColors.text }, grid: { display: false } }, y: { title: { display: true, text: 'Avg creativity index (%)', font: chartFont, color: chartColors.text }, ticks: { font: chartFont, color: chartColors.text }, min: 0, max: 100, grid: { color: '#eee' } } } } });
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: values.map(v => v >= 40 ? 'rgba(188,207,49,0.7)' : v >= 20 ? 'rgba(232,216,160,0.7)' : 'rgba(232,160,160,0.7)'),
+        borderColor: values.map(v => v >= 40 ? '#8fa324' : v >= 20 ? '#c0a860' : '#d46a6a'),
+        borderWidth: 1, borderRadius: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (ctx) => `Avg creativity: ${ctx.raw}% (n=${counts[ctx.dataIndex]})` } }
+      },
+      scales: {
+        x: { title: { display: true, text: 'Confidence level', font: chartFont, color: chartColors.text },
+             ticks: { font: chartFont, color: chartColors.text }, grid: { display: false } },
+        y: { title: { display: true, text: 'Avg creativity index (%)', font: chartFont, color: chartColors.text },
+             ticks: { font: chartFont, color: chartColors.text },
+             min: 0, max: 100, grid: { color: '#eee' } }
+      }
+    }
+  });
 
-  document.getElementById('read-conf-creativity').innerHTML = `<strong>How to read:</strong> Each bar shows the average creativity index for players who reported that confidence level. <span style="color:#8fa324">Green</span> bars = higher creativity; <span style="color:${chartColors.redDark}">pink</span> bars = lower creativity.`;
+  document.getElementById('read-conf-creativity').innerHTML =
+    `<strong>How to read:</strong> Each bar shows the average creativity index for players who reported that confidence level. <span style="color:#8fa324">Green</span> bars = higher creativity; <span style="color:${chartColors.redDark}">pink</span> bars = lower creativity. If confidence and creativity move in opposite directions, that's the paradox.`;
 
   const conf1Creativity = a.creativityByConf[1] ? Math.round(a.creativityByConf[1].avg) : null;
   const conf5Creativity = a.creativityByConf[5] ? Math.round(a.creativityByConf[5].avg) : null;
   let insight = `<span class="insight-icon">Key insight</span>`;
-  if (conf5Creativity !== null && conf1Creativity !== null && conf5Creativity < conf1Creativity) insight += `There's a clear paradox: players who reported the <strong>highest confidence (5/5) had an average creativity of just ${conf5Creativity}%</strong>, while less confident players (1/5) averaged <strong>${conf1Creativity}%</strong>. The least creative testers felt the most certain.`;
-  else if (conf5Creativity !== null && conf1Creativity !== null) insight += `Players with the highest confidence (5/5) averaged <strong>${conf5Creativity}%</strong> creativity, while the least confident (1/5) averaged <strong>${conf1Creativity}%</strong>. The relationship between exploration and confidence is nuanced.`;
-  else insight += `Average creativity across all players was <strong>${Math.round(a.avgCreativity)}%</strong>. The most confident players often explored the least.`;
+  if (conf5Creativity !== null && conf1Creativity !== null && conf5Creativity < conf1Creativity) {
+    insight += `There's a clear paradox: players who reported the <strong>highest confidence (5/5) had an average creativity of just ${conf5Creativity}%</strong>, while less confident players (1/5) averaged <strong>${conf1Creativity}%</strong>. `;
+    insight += `The least creative testers felt the most certain. This is because confirming evidence <em>feels</em> convincing — each "Yes" reinforces your theory. Diverse testing, which produces unsettling "No"s, actually undermines confidence even as it moves you closer to the truth.`;
+  } else if (conf5Creativity !== null && conf1Creativity !== null) {
+    insight += `Players with the highest confidence (5/5) averaged <strong>${conf5Creativity}%</strong> creativity, while the least confident (1/5) averaged <strong>${conf1Creativity}%</strong>. `;
+    insight += `The relationship between exploration and confidence is nuanced. In some cases, thorough testing does build warranted confidence — but only if it includes genuine attempts to <em>disprove</em> your theory.`;
+  } else {
+    insight += `Average creativity across all players was <strong>${Math.round(a.avgCreativity)}%</strong>. The most confident players often explored the least — confirming evidence feels convincing, while diverse testing creates discomfort.`;
+  }
   document.getElementById('insight-conf-creativity').innerHTML = insight;
 }
 
 function buildCreativityCorrectnessChart(a) {
   const ctx = document.getElementById('chart-creativity-correct').getContext('2d');
-  new Chart(ctx, { type: 'bar', data: { labels: ['Got it right', 'Got it wrong'], datasets: [{ data: [a.avgCreativityCorrect !== null ? Math.round(a.avgCreativityCorrect) : 0, a.avgCreativityWrong !== null ? Math.round(a.avgCreativityWrong) : 0], backgroundColor: ['rgba(188,207,49,0.7)', 'rgba(232,160,160,0.7)'], borderColor: ['#8fa324', '#d46a6a'], borderWidth: 1, borderRadius: 2 }] }, options: { responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => { const n = ctx.dataIndex === 0 ? a.creativityCorrect.length : a.creativityWrong.length; return `Avg creativity: ${ctx.raw}% (n=${n})`; }}} }, scales: { x: { ticks: { font: { ...chartFont, size: 13, weight: 'bold' }, color: chartColors.text }, grid: { display: false } }, y: { title: { display: true, text: 'Avg creativity index (%)', font: chartFont, color: chartColors.text }, ticks: { font: chartFont, color: chartColors.text }, min: 0, max: 100, grid: { color: '#eee' } } } } });
 
-  document.getElementById('read-creativity-correct').innerHTML = `<strong>How to read:</strong> The two bars compare the average creativity index of players who correctly identified the rule (<span style="color:#8fa324">green</span>) vs those who got it wrong (<span style="color:${chartColors.redDark}">pink</span>).`;
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['Got it right', 'Got it wrong'],
+      datasets: [{
+        data: [
+          a.avgCreativityCorrect !== null ? Math.round(a.avgCreativityCorrect) : 0,
+          a.avgCreativityWrong !== null ? Math.round(a.avgCreativityWrong) : 0
+        ],
+        backgroundColor: ['rgba(188,207,49,0.7)', 'rgba(232,160,160,0.7)'],
+        borderColor: ['#8fa324', '#d46a6a'],
+        borderWidth: 1, borderRadius: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (ctx) => {
+          const n = ctx.dataIndex === 0 ? a.creativityCorrect.length : a.creativityWrong.length;
+          return `Avg creativity: ${ctx.raw}% (n=${n})`;
+        }}}
+      },
+      scales: {
+        x: { ticks: { font: { ...chartFont, size: 13, weight: 'bold' }, color: chartColors.text }, grid: { display: false } },
+        y: { title: { display: true, text: 'Avg creativity index (%)', font: chartFont, color: chartColors.text },
+             ticks: { font: chartFont, color: chartColors.text },
+             min: 0, max: 100, grid: { color: '#eee' } }
+      }
+    }
+  });
+
+  document.getElementById('read-creativity-correct').innerHTML =
+    `<strong>How to read:</strong> The two bars compare the average creativity index of players who correctly identified the rule (<span style="color:#8fa324">green</span>) vs those who got it wrong (<span style="color:${chartColors.redDark}">pink</span>). A large gap means creative exploration was directly linked to finding the correct answer.`;
 
   const diff = (a.avgCreativityCorrect || 0) - (a.avgCreativityWrong || 0);
-  const rightN = a.creativityCorrect.length, wrongN = a.creativityWrong.length;
+  const rightN = a.creativityCorrect.length;
+  const wrongN = a.creativityWrong.length;
   let insight = `<span class="insight-icon">Key insight</span>`;
-  if (diff > 5) insight += `This is the payoff: players who found the correct rule had an average creativity index of <strong>${Math.round(a.avgCreativityCorrect)}%</strong> (n=${rightN}), compared to just <strong>${Math.round(a.avgCreativityWrong)}%</strong> (n=${wrongN}) for those who got it wrong. Creative exploration was directly linked to success.`;
-  else if (diff < -5) insight += `Surprisingly, players who got it wrong actually explored <em>more</em> creatively (<strong>${Math.round(a.avgCreativityWrong)}%</strong>) than those who got it right (<strong>${Math.round(a.avgCreativityCorrect)}%</strong>).`;
-  else insight += `Creativity was similar between correct (avg <strong>${Math.round(a.avgCreativityCorrect || 0)}%</strong>, n=${rightN}) and incorrect (avg <strong>${Math.round(a.avgCreativityWrong || 0)}%</strong>, n=${wrongN}) players.`;
+  if (diff > 5) {
+    insight += `This is the payoff: players who found the correct rule had an average creativity index of <strong>${Math.round(a.avgCreativityCorrect)}%</strong> (n=${rightN}), compared to just <strong>${Math.round(a.avgCreativityWrong)}%</strong> (n=${wrongN}) for those who got it wrong. `;
+    insight += `Creative exploration — testing structurally different sequences rather than variations of the same pattern — was directly linked to success. This is the strongest argument for diverse thinking: <strong>it doesn't just feel more rigorous, it actually produces better outcomes.</strong>`;
+  } else if (diff < -5) {
+    insight += `Surprisingly, players who got it wrong actually explored <em>more</em> creatively (<strong>${Math.round(a.avgCreativityWrong)}%</strong>) than those who got it right (<strong>${Math.round(a.avgCreativityCorrect)}%</strong>). One explanation: some players stumbled onto the correct answer by lucky pattern-matching, while creative testers may have over-complicated their hypotheses.`;
+  } else {
+    insight += `Creativity was similar between correct (avg <strong>${Math.round(a.avgCreativityCorrect || 0)}%</strong>, n=${rightN}) and incorrect (avg <strong>${Math.round(a.avgCreativityWrong || 0)}%</strong>, n=${wrongN}) players. This suggests that while creative exploration helps, other factors — like interpreting the evidence correctly — also play a crucial role.`;
+  }
   document.getElementById('insight-creativity-correct').innerHTML = insight;
 }
 
+// --- Sequence Frequency Tables ---
 function buildSequenceTables(a) {
   const block = document.getElementById('seq-tables-block');
-  if (!a.yesSeqData.sorted.length && !a.noSeqData.sorted.length) { block.style.display = 'none'; return; }
+  if (!a.yesSeqData.sorted.length && !a.noSeqData.sorted.length) {
+    block.style.display = 'none';
+    return;
+  }
 
   function makeRows(sorted, total, type) {
     if (sorted.length === 0) return '<tr><td colspan="2" style="color:#999;text-align:center">No data</td></tr>';
     const top3 = sorted.slice(0, 3);
+    const bot3Raw = sorted.filter(([_,c]) => c >= 1).slice(-3).reverse();
+    // Avoid duplicates if fewer than 6 unique sequences
     const topKeys = new Set(top3.map(([k]) => k));
-    const bot3 = sorted.filter(([k,c]) => c >= 1 && !topKeys.has(k)).slice(-3).reverse();
+    const bot3 = bot3Raw.filter(([k]) => !topKeys.has(k));
+
     let html = `<tr><td colspan="2" style="background:#f5f5f0;font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.05em;padding:6px 10px">Most common</td></tr>`;
-    top3.forEach(([seq, count]) => { const pct = Math.round(count / a.n * 100); html += `<tr><td><code style="font-size:13px">${seq}</code></td><td class="val">${count} (${pct}%)</td></tr>`; });
+    top3.forEach(([seq, count]) => {
+      const pct = Math.round(count / a.n * 100);
+      html += `<tr><td><code style="font-size:13px">${seq}</code></td><td class="val">${count} (${pct}%)</td></tr>`;
+    });
+
     if (bot3.length > 0) {
       html += `<tr><td colspan="2" style="background:#f5f5f0;font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.05em;padding:6px 10px">Least common</td></tr>`;
-      bot3.forEach(([seq, count]) => { const pct = Math.round(count / a.n * 100); html += `<tr><td><code style="font-size:13px">${seq}</code></td><td class="val">${count} (${pct < 1 ? '<1' : pct}%)</td></tr>`; });
+      bot3.forEach(([seq, count]) => {
+        const pct = Math.round(count / a.n * 100);
+        html += `<tr><td><code style="font-size:13px">${seq}</code></td><td class="val">${count} (${pct < 1 ? '<1' : pct}%)</td></tr>`;
+      });
     }
     return html;
   }
 
-  const yesUnique = a.yesSeqData.sorted.length, noUnique = a.noSeqData.sorted.length;
+  const yesUnique = a.yesSeqData.sorted.length;
+  const noUnique  = a.noSeqData.sorted.length;
+
   block.innerHTML = `
     <div class="chart-block-title">What did players actually test?</div>
     <div class="chart-block-subtitle">Most and least common sequences submitted across all players</div>
-    <div class="seq-tables-grid">
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:10px 0 10px">
       <div>
-        <div style="font-family:'Libre Franklin',sans-serif;font-size:12px;font-weight:800;color:#8fa324;margin-bottom:6px">✓ "Yes" sequences <span style="font-weight:400;color:#999">(${a.yesSeqData.total} total, ${yesUnique} unique)</span></div>
-        <table class="insights-table" style="font-size:12.5px"><thead><tr><th>Sequence</th><th style="text-align:right">Players</th></tr></thead><tbody>${makeRows(a.yesSeqData.sorted, a.yesSeqData.total, 'yes')}</tbody></table>
+        <div style="font-family:'Libre Franklin',sans-serif;font-size:12px;font-weight:800;color:#8fa324;margin-bottom:6px">
+          ✓ "Yes" sequences <span style="font-weight:400;color:#999">(${a.yesSeqData.total} total, ${yesUnique} unique)</span>
+        </div>
+        <table class="insights-table" style="font-size:12.5px">
+          <thead><tr><th>Sequence</th><th style="text-align:right">Players</th></tr></thead>
+          <tbody>${makeRows(a.yesSeqData.sorted, a.yesSeqData.total, 'yes')}</tbody>
+        </table>
       </div>
       <div>
-        <div style="font-family:'Libre Franklin',sans-serif;font-size:12px;font-weight:800;color:#d46a6a;margin-bottom:6px">✗ "No" sequences <span style="font-weight:400;color:#999">(${a.noSeqData.total} total, ${noUnique} unique)</span></div>
-        <table class="insights-table" style="font-size:12.5px"><thead><tr><th>Sequence</th><th style="text-align:right">Players</th></tr></thead><tbody>${makeRows(a.noSeqData.sorted, a.noSeqData.total, 'no')}</tbody></table>
+        <div style="font-family:'Libre Franklin',sans-serif;font-size:12px;font-weight:800;color:#d46a6a;margin-bottom:6px">
+          ✗ "No" sequences <span style="font-weight:400;color:#999">(${a.noSeqData.total} total, ${noUnique} unique)</span>
+        </div>
+        <table class="insights-table" style="font-size:12.5px">
+          <thead><tr><th>Sequence</th><th style="text-align:right">Players</th></tr></thead>
+          <tbody>${makeRows(a.noSeqData.sorted, a.noSeqData.total, 'no')}</tbody>
+        </table>
       </div>
     </div>
-    <div class="chart-read"><strong>How to read:</strong> "Players" shows how many people tested that exact sequence, with the percentage of all players.</div>
+
+    <div class="chart-read"><strong>How to read:</strong> "Players" shows how many people tested that exact sequence, with the percentage of all players. Most common sequences reveal the shared assumptions players brought to the puzzle. Least common ones show the creative outliers.</div>
     <div class="chart-insight" id="insight-sequences"></div>`;
 
-  const topYes = a.yesSeqData.sorted[0], topNo = a.noSeqData.sorted.length > 0 ? a.noSeqData.sorted[0] : null;
+  // Dynamic insight
+  const topYes = a.yesSeqData.sorted[0];
+  const topNo  = a.noSeqData.sorted.length > 0 ? a.noSeqData.sorted[0] : null;
   let insight = `<span class="insight-icon">Key insight</span>`;
-  if (topYes) { const topYesPct = Math.round(topYes[1] / a.n * 100); insight += `The most popular "Yes" sequence was <strong>${topYes[0]}</strong>, tested by <strong>${topYesPct}%</strong> of players. `; }
-  if (topNo) { const topNoPct = Math.round(topNo[1] / a.n * 100); insight += `Among those who tested disconfirming sequences, <strong>${topNo[0]}</strong> was the most common "No" (${topNoPct}%). `; }
-  if (noUnique === 0 || a.noSeqData.total < a.yesSeqData.total * 0.3) insight += `The "No" column is strikingly sparse.`;
+
+  if (topYes) {
+    const topYesPct = Math.round(topYes[1] / a.n * 100);
+    insight += `The most popular "Yes" sequence was <strong>${topYes[0]}</strong>, tested by <strong>${topYesPct}%</strong> of players — revealing the dominant hypothesis most people formed. `;
+  }
+  if (topNo) {
+    const topNoPct = Math.round(topNo[1] / a.n * 100);
+    insight += `Among those who tested disconfirming sequences, <strong>${topNo[0]}</strong> was the most common "No" (${topNoPct}% of players). `;
+  }
+  if (noUnique === 0 || a.noSeqData.total < a.yesSeqData.total * 0.3) {
+    insight += `The "No" column is strikingly sparse — players generated far fewer disconfirming tests, even though these are the sequences that actually help narrow down the rule.`;
+  } else {
+    insight += `Comparing the two columns shows how different the evidence landscape looks once you start actively testing for failure.`;
+  }
   document.getElementById('insight-sequences').innerHTML = insight;
 }
 
+// ============================================================
+// INSIGHTS TABLE + OUTCOME TEXT UPDATE (primary path)
+// ============================================================
 function renderInsightsTable(a) {
-  const goodRows = [['Tested at least 3 wrong sequences', `${a.strongF} (${Math.round(a.strongFPct*100)}%)`], ['Avg "No" responses per player', a.avgNos.toFixed(1)], ['Avg guesses before submitting', a.avgAttempts.toFixed(1)], ['Median guesses before submitting', a.medAttempts]];
-  const poorRows = [['Never heard a single "No"', `${a.neverNo} (${Math.round(a.neverNoPct*100)}%)`], ['Submitted after just 1 guess', `${a.oneGuess} (${Math.round(a.oneGuessPct*100)}%)`], ['Avg confidence level', a.avgConf.toFixed(1) + ' / 5']];
+  const goodRows = [
+    ['Tested at least 3 wrong sequences', `${a.strongF} (${Math.round(a.strongFPct*100)}%)`],
+    ['Avg "No" responses per player', a.avgNos.toFixed(1)],
+    ['Avg guesses before submitting', a.avgAttempts.toFixed(1)],
+    ['Median guesses before submitting', a.medAttempts],
+  ];
+
+  const poorRows = [
+    ['Never heard a single "No"', `${a.neverNo} (${Math.round(a.neverNoPct*100)}%)`],
+    ['Submitted after just 1 guess', `${a.oneGuess} (${Math.round(a.oneGuessPct*100)}%)`],
+    ['Avg confidence level', a.avgConf.toFixed(1) + ' / 5'],
+  ];
+
+  // Add creativity rows if data is available
   if (a.hasCreativityData) {
     const highCreativity = a.creativityData.filter(d => d.creativity >= 50).length;
+    const highCreativityPct = Math.round(highCreativity / a.n * 100);
     const lowCreativity = a.creativityData.filter(d => d.creativity < 20).length;
-    goodRows.push(['Avg creativity index', Math.round(a.avgCreativity) + '%'], ['High creativity (50%+)', `${highCreativity} (${Math.round(highCreativity / a.n * 100)}%)`]);
-    poorRows.push(['Low creativity (<20%)', `${lowCreativity} (${Math.round(lowCreativity / a.n * 100)}%)`]);
+    const lowCreativityPct = Math.round(lowCreativity / a.n * 100);
+
+    goodRows.push(['Avg creativity index', Math.round(a.avgCreativity) + '%']);
+    goodRows.push(['High creativity (50%+)', `${highCreativity} (${highCreativityPct}%)`]);
+    poorRows.push(['Low creativity (<20%)', `${lowCreativity} (${lowCreativityPct}%)`]);
   }
-  const makeTable = (rows) => `<table class="insights-table" style="margin:0"><thead><tr><th>Metric</th><th style="text-align:right">Value</th></tr></thead><tbody>${rows.map(([l,v]) => `<tr><td>${l}</td><td class="val">${v}</td></tr>`).join('')}</tbody></table>`;
-  document.getElementById('insights-container').innerHTML = `<div class="insights-total"><strong>${a.n}</strong>total players</div><div class="insights-split"><div class="insights-panel panel-good"><div class="insights-panel-header"><span class="panel-icon">✓</span> Signals of good problem-solving</div>${makeTable(goodRows)}</div><div class="insights-panel panel-poor"><div class="insights-panel-header"><span class="panel-icon">✗</span> Signals of confirmation bias</div>${makeTable(poorRows)}</div></div>`;
+
+  const makeTable = (rows) => `
+    <table class="insights-table" style="margin:0">
+      <thead><tr><th>Metric</th><th style="text-align:right">Value</th></tr></thead>
+      <tbody>${rows.map(([l,v]) => `<tr><td>${l}</td><td class="val">${v}</td></tr>`).join('')}</tbody>
+    </table>`;
+
+  document.getElementById('insights-container').innerHTML = `
+    <div class="insights-total">
+      <strong>${a.n}</strong>
+      total players
+    </div>
+    <div class="insights-split">
+      <div class="insights-panel panel-good">
+        <div class="insights-panel-header"><span class="panel-icon">✓</span> Signals of good problem-solving</div>
+        ${makeTable(goodRows)}
+      </div>
+      <div class="insights-panel panel-poor">
+        <div class="insights-panel-header"><span class="panel-icon">✗</span> Signals of confirmation bias</div>
+        ${makeTable(poorRows)}
+      </div>
+    </div>`;
 }
 
 function updateOutcomeText(a) {
-  const el1 = document.getElementById('never-no-pct'); if (el1) el1.textContent = Math.round(a.neverNoPct * 100) + ' percent';
-  const el2 = document.getElementById('strong-falsifier-pct'); if (el2) el2.textContent = Math.round(a.strongFPct * 100) + ' percent';
+  const el1 = document.getElementById('never-no-pct');
+  if (el1) el1.textContent = Math.round(a.neverNoPct * 100) + ' percent';
+  const el2 = document.getElementById('strong-falsifier-pct');
+  if (el2) el2.textContent = Math.round(a.strongFPct * 100) + ' percent';
+
+  // Personal insight
   const playerNos = guesses.filter(g => !g.passes).length;
   const playerYeses = guesses.filter(g => g.passes).length;
   const pEl = document.getElementById('personal-insight');
   if (pEl) {
     let lines = [];
     lines.push(`<strong>Your result:</strong> You made ${playerAttempts} guess${playerAttempts !== 1 ? 'es' : ''} (${playerYeses} Yes, ${playerNos} No) before submitting.`);
-    if (playerNos === 0) lines.push(`You never heard a single "No" . You are in the ${Math.round(a.neverNoPct * 100)}% of players who submitted without ever testing a sequence that could fail.`);
-    else if (playerNos >= 3) lines.push(`You heard ${playerNos} "No" responses. That puts you among the rare ${Math.round(a.strongFPct * 100)}% who actively sought disconfirming evidence. Well done.`);
-    else lines.push(`You heard ${playerNos} "No" response${playerNos !== 1 ? 's' : ''}. The average player hears only ${a.avgNos.toFixed(1)}.`);
+    if (playerNos === 0) {
+      lines.push(`You never heard a single "No" — you're in the ${Math.round(a.neverNoPct * 100)}% of players who submitted without ever testing a sequence that could fail.`);
+    } else if (playerNos >= 3) {
+      lines.push(`You heard ${playerNos} "No" responses — that puts you among the rare ${Math.round(a.strongFPct * 100)}% who actively sought disconfirming evidence. Well done.`);
+    } else {
+      lines.push(`You heard ${playerNos} "No" response${playerNos !== 1 ? 's' : ''}. The average player hears only ${a.avgNos.toFixed(1)}.`);
+    }
     pEl.innerHTML = lines.join(' ');
   }
+
+  // Fill in creativity index in personal scorecard
   const cEl = document.getElementById('personal-creativity-val');
   if (cEl) {
     const playerCreativity = computeLocalCreativity(guesses);
@@ -1623,35 +1914,107 @@ function updateOutcomeText(a) {
       const val = playerCreativity.avgDist > 0.5 ? 'High' : playerCreativity.avgDist > 0.2 ? 'Medium' : 'Low';
       const col = val === 'High' ? '#5a7000' : val === 'Medium' ? '#8a6d00' : '#d46a6a';
       cEl.innerHTML = `<span style="color:${col};font-weight:700">${val}</span>`;
-      if (a.avgCreativity !== null) cEl.innerHTML += ` <span style="color:#999;font-weight:400;font-size:11px">(class avg: ${Math.round(a.avgCreativity)}%)</span>`;
-    } else cEl.textContent = 'N/A';
+      if (a.avgCreativity !== null) {
+        cEl.innerHTML += ` <span style="color:#999;font-weight:400;font-size:11px">(class avg: ${Math.round(a.avgCreativity)}%)</span>`;
+      }
+    } else {
+      cEl.textContent = 'N/A';
+    }
   }
 }
 
+// ============================================================
+// FALLBACK CHARTS (from Apps Script data if CSV fails)
+// ============================================================
 function renderFallbackCharts(data) {
   const { distribution, insights } = data;
   const total = distribution.map(d => d.students).reduce((a, b) => a + b, 0);
+
   document.getElementById('charts-loading').classList.add('hidden');
   const wrap = document.getElementById('charts-content');
   wrap.classList.remove('hidden');
-  wrap.innerHTML = `<div class="charts-grid"><div class="chart-block"><div class="chart-block-title">How many guesses did players make?</div><div class="chart-block-subtitle">Number of sequences tested before submitting an answer</div><div class="chart-canvas-wrap"><canvas id="chart-attempts-fb"></canvas></div><div class="chart-read"><strong>How to read:</strong> Each bar shows how many players tested that many sequences before submitting.</div><div class="chart-insight"><span class="insight-icon">Key insight</span>Most players decide quickly. The average was <strong>${insights.avgAttempts?.toFixed(1) ?? '-'}</strong> guesses.</div></div></div>`;
+
+  wrap.innerHTML = `
+    <div class="charts-grid">
+      <div class="chart-block">
+        <div class="chart-block-title">How many guesses did players make?</div>
+        <div class="chart-block-subtitle">Number of sequences tested before submitting an answer</div>
+        <div class="chart-canvas-wrap"><canvas id="chart-attempts-fb"></canvas></div>
+        <div class="chart-read"><strong>How to read:</strong> Each bar shows how many players tested that many sequences before submitting.</div>
+        <div class="chart-insight"><span class="insight-icon">Key insight</span>Most players decide quickly. The average was <strong>${insights.avgAttempts?.toFixed(1) ?? '—'}</strong> guesses, with <strong>${insights.oneGuess ?? '—'}</strong> player(s) submitting after just one test — a hallmark of confirmation bias.</div>
+      </div>
+    </div>`;
+
   const labels = distribution.map(d => d.attempts ?? d.label ?? d.bucket);
   const values = distribution.map(d => d.students ?? d.count);
   const peakIdx = values.indexOf(Math.max(...values));
-  new Chart(document.getElementById('chart-attempts-fb').getContext('2d'), { type: 'bar', data: { labels, datasets: [{ data: values, backgroundColor: values.map((_,i) => i === peakIdx ? chartColors.green : '#d8dfc0'), borderRadius: 2 }] }, options: { responsive: true, plugins: { legend: { display: false } }, scales: { x: { title: { display: true, text: 'Number of guesses', font: chartFont }, grid: { display: false } }, y: { title: { display: true, text: 'Players', font: chartFont }, beginAtZero: true, grid: { color: '#eee' } } } } });
+
+  new Chart(document.getElementById('chart-attempts-fb').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: values.map((_,i) => i === peakIdx ? chartColors.green : '#d8dfc0'),
+        borderRadius: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { title: { display: true, text: 'Number of guesses', font: chartFont }, grid: { display: false } },
+        y: { title: { display: true, text: 'Players', font: chartFont }, beginAtZero: true, grid: { color: '#eee' } }
+      }
+    }
+  });
 }
 
 function renderFallbackInsightsTable(data) {
   const { distribution, insights } = data;
   const total = distribution.map(d => d.students).reduce((a, b) => a + b, 0);
-  const rows = [['Total players', total], ['Avg guesses before submitting', insights.avgAttempts?.toFixed(1) ?? '-'], ['Avg confidence level', insights.avgConfidence ?? '-'], ['Median guesses', insights.medianAttempts ?? '-'], ['Guessed without hearing No', insights.neverHeardNo != null ? `${insights.neverHeardNo} (${(insights.neverHeardNoPct*100).toFixed(0)}%)` : '-'], ['Tested at least 3 wrong sequences', insights.strongFalsifiers != null ? `${insights.strongFalsifiers} (${(insights.strongFalsifiersPct*100).toFixed(0)}%)` : '-'], ['Submitted after just 1 guess', insights.oneGuess != null ? `${insights.oneGuess} (${(insights.oneGuessPct*100).toFixed(0)}%)` : '-'], ['Avg "No" responses per player', insights.avgNos?.toFixed(1) ?? '-']];
-  document.getElementById('insights-container').innerHTML = `<table class="insights-table"><thead><tr><th>Metric</th><th style="text-align:right">Value</th></tr></thead><tbody>${rows.map(([l,v]) => `<tr><td>${l}</td><td class="val">${v}</td></tr>`).join('')}</tbody></table>`;
-  if (insights.neverHeardNoPct != null) { const el = document.getElementById('never-no-pct'); if (el) el.textContent = Math.round(insights.neverHeardNoPct * 100) + ' percent'; }
-  if (insights.strongFalsifiersPct != null) { const el = document.getElementById('strong-falsifier-pct'); if (el) el.textContent = Math.round(insights.strongFalsifiersPct * 100) + ' percent'; }
+
+  const rows = [
+    ['Total players', total],
+    ['Avg guesses before submitting', insights.avgAttempts?.toFixed(1) ?? '—'],
+    ['Avg confidence level', insights.avgConfidence ?? '—'],
+    ['Median guesses before submitting', insights.medianAttempts ?? '—'],
+    ['Guessed without hearing a single No', insights.neverHeardNo != null ? `${insights.neverHeardNo} (${(insights.neverHeardNoPct*100).toFixed(0)}%)` : '—'],
+    ['Tested at least 3 wrong sequences', insights.strongFalsifiers != null ? `${insights.strongFalsifiers} (${(insights.strongFalsifiersPct*100).toFixed(0)}%)` : '—'],
+    ['Submitted after just 1 guess', insights.oneGuess != null ? `${insights.oneGuess} (${(insights.oneGuessPct*100).toFixed(0)}%)` : '—'],
+    ['Avg "No" responses per player', insights.avgNos?.toFixed(1) ?? '—']
+  ];
+
+  document.getElementById('insights-container').innerHTML = `
+    <table class="insights-table">
+      <thead><tr><th>Metric</th><th style="text-align:right">Value</th></tr></thead>
+      <tbody>${rows.map(([l,v]) => `<tr><td>${l}</td><td class="val">${v}</td></tr>`).join('')}</tbody>
+    </table>`;
+
+  if (insights.neverHeardNoPct != null) {
+    const el = document.getElementById('never-no-pct');
+    if (el) el.textContent = Math.round(insights.neverHeardNoPct * 100) + ' percent';
+  }
+  if (insights.strongFalsifiersPct != null) {
+    const el = document.getElementById('strong-falsifier-pct');
+    if (el) el.textContent = Math.round(insights.strongFalsifiersPct * 100) + ' percent';
+  }
+
   const playerNos = guesses.filter(g => !g.passes).length;
   const playerYeses = guesses.filter(g => g.passes).length;
   const pEl = document.getElementById('personal-insight');
-  if (pEl && insights.avgNos != null) { let lines = [`<strong>Your result:</strong> You made ${playerAttempts} guess${playerAttempts !== 1 ? 'es' : ''} (${playerYeses} Yes, ${playerNos} No) before submitting.`]; if (playerNos === 0) lines.push(`You never heard a single "No" . You are in the ${Math.round(insights.neverHeardNoPct * 100)}% of players who submitted without ever testing a sequence that could fail.`); else if (playerNos >= 3) lines.push(`You heard ${playerNos} "No" responses. That puts you among the rare ${Math.round(insights.strongFalsifiersPct * 100)}% who actively sought disconfirming evidence. Well done.`); else lines.push(`You heard ${playerNos} "No" response${playerNos !== 1 ? 's' : ''}. The average player hears only ${insights.avgNos.toFixed(1)}.`); pEl.innerHTML = lines.join(' '); }
+  if (pEl && insights.avgNos != null) {
+    let lines = [];
+    lines.push(`<strong>Your result:</strong> You made ${playerAttempts} guess${playerAttempts !== 1 ? 'es' : ''} (${playerYeses} Yes, ${playerNos} No) before submitting.`);
+    if (playerNos === 0) {
+      lines.push(`You never heard a single "No" — you're in the ${Math.round(insights.neverHeardNoPct * 100)}% of players who submitted without ever testing a sequence that could fail.`);
+    } else if (playerNos >= 3) {
+      lines.push(`You heard ${playerNos} "No" responses — that puts you among the rare ${Math.round(insights.strongFalsifiersPct * 100)}% who actively sought disconfirming evidence. Well done.`);
+    } else {
+      lines.push(`You heard ${playerNos} "No" response${playerNos !== 1 ? 's' : ''}. The average player hears only ${insights.avgNos.toFixed(1)}.`);
+    }
+    pEl.innerHTML = lines.join(' ');
+  }
 }
 
 function logToSheet(rule, conf, numAttempts) {
@@ -1661,708 +2024,512 @@ function logToSheet(rule, conf, numAttempts) {
   const nos = guesses.filter(g => !g.passes).length;
   const yesSeq = guesses.filter(g => g.passes).map(g => `(${g.nums.join(', ')})`).join('; ');
   const noSeq = guesses.filter(g => !g.passes).map(g => `(${g.nums.join(', ')})`).join('; ');
-  fetch(GOOGLE_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ timestamp: formatTimestamp(), numAttempts, yeses, nos, rule, confidence: conf, yesSequences: yesSeq || '-', noSequences: noSeq || '-' }) }).then(() => showToast('Response recorded ✓')).catch(err => { console.error('Logging error:', err); showToast('Could not save response'); });
+
+  fetch(GOOGLE_SCRIPT_URL, {
+    method: 'POST', mode: 'no-cors',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      timestamp: formatTimestamp(), numAttempts, yeses, nos,
+      rule, confidence: conf,
+      yesSequences: yesSeq || '—', noSequences: noSeq || '—'
+    })
+  }).then(() => showToast('Response recorded ✓'))
+    .catch(err => { console.error('Logging error:', err); showToast('Could not save response'); });
 }
 
+// ============================================================
+// PDF DOWNLOAD
+// ============================================================
 async function downloadPDF() {
   const btnTop = document.getElementById('pdf-btn-top');
   const btnBottom = document.getElementById('pdf-btn-bottom');
-  const origText = btnTop ? btnTop.innerHTML : '';
-  [btnTop, btnBottom].filter(Boolean).forEach(b => { b.disabled = true; b.innerHTML = '<span class="btn-icon">⏳</span> Generating PDF…'; });
-  
+  const origText = btnTop.innerHTML;
+
+  [btnTop, btnBottom].forEach(b => {
+    b.disabled = true;
+    b.innerHTML = '<span class="btn-icon">⏳</span> Generating PDF…';
+  });
+
   try {
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const W = pdf.internal.pageSize.getWidth();
     const H = pdf.internal.pageSize.getHeight();
-    const M = 18;
-    const CW = W - M * 2;
+    const M = 18; // margin
+    const CW = W - M * 2; // content width
     let y = M;
 
-    // Helper: add footer to current page
-    function addFooter() {
-      pdf.setFont('times', 'normal');
-      pdf.setFontSize(7.5);
-      pdf.setTextColor(170, 170, 170);
-      pdf.text('The Problem-Solving Trap  |  Prof. Kostas Stouras, UCD Smurfit', M, H - 8);
-    }
-
-    // Helper: check if we need a new page, returns true if page was added
+    // --- Helper functions ---
     function checkPage(need) {
-      if (y + need > H - 14) {
-        addFooter();
-        pdf.addPage();
-        y = M;
-        return true;
-      }
-      return false;
+      if (y + need > H - 14) { addFooter(); pdf.addPage(); y = M; }
     }
-
-    // Helper: ensure we start on an even-numbered page (for Part starts)
-    function startOnEvenPage() {
-      // First, finish the current page
-      addFooter();
-      pdf.addPage();
-      y = M;
-      
-      // Now check if we're on an even page; if not, add one more
-      const currentPage = pdf.internal.getNumberOfPages();
-      if (currentPage % 2 !== 0) {
-        // We're on an odd page, add one more to get to even
-        addFooter();
-        pdf.addPage();
-        y = M;
-      }
+    function addFooter() {
+      pdf.setFont('times', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(170,170,170);
+      pdf.text('The Problem-Solving Trap  \u2022  Prof. Kostas Stouras, UCD Smurfit', M, H - 8);
+      pdf.text('Page ' + pdf.internal.getNumberOfPages(), W - M, H - 8, { align: 'right' });
     }
-
-    // Helper: heading with orphan prevention (ensures min content space after)
-    function heading(text, size, color, spaceBefore, spaceAfter, minContentAfter) {
-      const headingHeight = spaceBefore + size * 0.5 + spaceAfter;
-      const totalNeeded = headingHeight + (minContentAfter || 20);
-      checkPage(totalNeeded);
+    function heading(text, size, color, spaceBefore, spaceAfter) {
+      checkPage(spaceBefore + size * 0.5 + spaceAfter);
       y += spaceBefore;
-      pdf.setFont('times', 'bold');
-      pdf.setFontSize(size);
+      pdf.setFont('times', 'bold'); pdf.setFontSize(size);
       pdf.setTextColor(color[0], color[1], color[2]);
       pdf.text(text, M, y);
       y += spaceAfter;
     }
-
-    // Helper: Part header (starts on even page, has special styling)
-    function partHeader(partNum, title, subtitle) {
-      startOnEvenPage();
-      // Part number label
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(10);
-      pdf.setTextColor(188, 207, 49);
-      pdf.text('PART ' + partNum, M, y);
-      y += 6;
-      // Title
-      pdf.setFont('times', 'bold');
-      pdf.setFontSize(18);
-      pdf.setTextColor(51, 51, 51);
-      pdf.text(title, M, y);
-      y += 7;
-      // Subtitle
-      if (subtitle) {
-        pdf.setFont('times', 'italic');
-        pdf.setFontSize(10);
-        pdf.setTextColor(130, 130, 130);
-        const lines = pdf.splitTextToSize(subtitle, CW);
-        pdf.text(lines, M, y);
-        y += lines.length * 4.5 + 4;
-      }
-      y += 4;
-    }
-
-    // Helper: body text
     function body(text, opts) {
       const size = (opts && opts.size) || 10;
-      const color = (opts && opts.color) || [80, 80, 80];
+      const color = (opts && opts.color) || [80,80,80];
       const bold = (opts && opts.bold) || false;
-      const italic = (opts && opts.italic) || false;
-      pdf.setFont('times', bold ? 'bold' : (italic ? 'italic' : 'normal'));
-      pdf.setFontSize(size);
+      pdf.setFont('times', bold ? 'bold' : 'normal'); pdf.setFontSize(size);
       pdf.setTextColor(color[0], color[1], color[2]);
       const clean = text.replace(/<\/?[^>]+(>|$)/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
       const lines = pdf.splitTextToSize(clean, CW);
       checkPage(lines.length * size * 0.42 + 2);
+      // Justify body text for academic paper look
       pdf.text(lines, M, y, { align: 'justify', maxWidth: CW });
       y += lines.length * size * 0.42 + 2;
     }
-
-    // Helper: add a chart image
-    function addChart(canvasId, maxHeight) {
+    function addChart(canvasId) {
       const canvas = document.getElementById(canvasId);
-      if (!canvas) return false;
-      try {
-        const imgData = canvas.toDataURL('image/png');
-        const ratio = canvas.height / canvas.width;
-        const imgW = CW;
-        const finalH = Math.min(imgW * ratio, maxHeight || 70);
-        const finalW = finalH / ratio < imgW ? finalH / ratio : imgW;
-        checkPage(finalH + 6);
-        pdf.addImage(imgData, 'PNG', M, y, finalW, finalH);
-        y += finalH + 4;
-        return true;
-      } catch (e) {
-        console.warn('Could not add chart:', canvasId, e);
-        return false;
-      }
+      if (!canvas) return;
+      const imgData = canvas.toDataURL('image/png');
+      const ratio = canvas.height / canvas.width;
+      const imgW = CW;
+      const imgH = imgW * ratio;
+      const finalH = Math.min(imgH, 80); // cap height
+      const finalW = finalH / ratio < imgW ? finalH / ratio : imgW;
+      checkPage(finalH + 4);
+      pdf.addImage(imgData, 'PNG', M, y, finalW, finalH);
+      y += finalH + 3;
     }
-
-    // Helper: draw a simple table
-    function drawTable(headers, rows, opts) {
-      const colWidths = opts.colWidths || [CW * 0.7, CW * 0.3];
-      const rowHeight = 7;
-      const headerBg = opts.headerBg || [51, 51, 51];
-      const altRowBg = opts.altRowBg || [250, 250, 247];
-      
-      const totalHeight = (rows.length + 1) * rowHeight + 4;
-      checkPage(totalHeight);
-
-      let xStart = M;
-      
-      // Header row
-      pdf.setFillColor(headerBg[0], headerBg[1], headerBg[2]);
-      pdf.rect(xStart, y, CW, rowHeight, 'F');
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(8);
-      pdf.setTextColor(255, 255, 255);
-      let xPos = xStart + 3;
-      headers.forEach((h, i) => {
-        const align = i === headers.length - 1 ? 'right' : 'left';
-        const textX = align === 'right' ? xStart + colWidths.slice(0, i + 1).reduce((a, b) => a + b, 0) - 3 : xPos;
-        pdf.text(h.toUpperCase(), textX, y + 5, { align });
-        xPos += colWidths[i];
-      });
-      y += rowHeight;
-
-      // Data rows
-      rows.forEach((row, ri) => {
-        if (ri % 2 === 1) {
-          pdf.setFillColor(altRowBg[0], altRowBg[1], altRowBg[2]);
-          pdf.rect(xStart, y, CW, rowHeight, 'F');
-        }
-        pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(9);
-        pdf.setTextColor(70, 70, 70);
-        xPos = xStart + 3;
-        row.forEach((cell, i) => {
-          const align = i === row.length - 1 ? 'right' : 'left';
-          const textX = align === 'right' ? xStart + colWidths.slice(0, i + 1).reduce((a, b) => a + b, 0) - 3 : xPos;
-          const cellText = String(cell).replace(/<\/?[^>]+(>|$)/g, '');
-          pdf.text(cellText, textX, y + 5, { align });
-          xPos += colWidths[i];
-        });
-        y += rowHeight;
-      });
-      y += 4;
-    }
-
-    // Helper: draw side-by-side insight panels
-    function drawInsightPanels(leftTitle, leftIcon, leftRows, rightTitle, rightIcon, rightRows) {
-      const panelW = (CW - 6) / 2;
-      const rowHeight = 6.5;
-      const headerHeight = 7;
-      const maxRows = Math.max(leftRows.length, rightRows.length);
-      const totalHeight = headerHeight + maxRows * rowHeight + 10;
-      
-      checkPage(totalHeight);
-
-      // Left panel
-      let lx = M;
-      // Header
-      pdf.setFillColor(238, 245, 208);
-      pdf.rect(lx, y, panelW, headerHeight, 'F');
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(8);
-      pdf.setTextColor(90, 112, 0);
-      pdf.text(leftIcon + ' ' + leftTitle.toUpperCase(), lx + 3, y + 5);
-      
-      // Right panel header
-      let rx = M + panelW + 6;
-      pdf.setFillColor(252, 232, 232);
-      pdf.rect(rx, y, panelW, headerHeight, 'F');
-      pdf.setTextColor(160, 64, 64);
-      pdf.text(rightIcon + ' ' + rightTitle.toUpperCase(), rx + 3, y + 5);
-      
-      y += headerHeight;
-      
-      // Table headers
-      pdf.setFillColor(51, 51, 51);
-      pdf.rect(lx, y, panelW, 6, 'F');
-      pdf.rect(rx, y, panelW, 6, 'F');
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(7);
-      pdf.setTextColor(255, 255, 255);
-      pdf.text('METRIC', lx + 3, y + 4);
-      pdf.text('VALUE', lx + panelW - 3, y + 4, { align: 'right' });
-      pdf.text('METRIC', rx + 3, y + 4);
-      pdf.text('VALUE', rx + panelW - 3, y + 4, { align: 'right' });
+    function sectionHeader(partNum, title, subtitle) {
+      checkPage(22);
       y += 6;
-
-      // Data rows
-      for (let i = 0; i < maxRows; i++) {
-        if (i % 2 === 1) {
-          pdf.setFillColor(250, 250, 247);
-          pdf.rect(lx, y, panelW, rowHeight, 'F');
-          pdf.rect(rx, y, panelW, rowHeight, 'F');
-        }
-        pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(8);
-        pdf.setTextColor(70, 70, 70);
-        
-        if (leftRows[i]) {
-          pdf.text(String(leftRows[i][0]).substring(0, 35), lx + 3, y + 4.5);
-          pdf.setFont('helvetica', 'bold');
-          pdf.text(String(leftRows[i][1]), lx + panelW - 3, y + 4.5, { align: 'right' });
-        }
-        if (rightRows[i]) {
-          pdf.setFont('helvetica', 'normal');
-          pdf.text(String(rightRows[i][0]).substring(0, 35), rx + 3, y + 4.5);
-          pdf.setFont('helvetica', 'bold');
-          pdf.text(String(rightRows[i][1]), rx + panelW - 3, y + 4.5, { align: 'right' });
-        }
-        y += rowHeight;
-      }
+      pdf.setDrawColor(220,220,210); pdf.setLineWidth(0.4);
+      pdf.line(M, y, W - M, y);
       y += 6;
+      pdf.setFont('times', 'bold'); pdf.setFontSize(8);
+      pdf.setTextColor(188,207,49);
+      pdf.text('PART ' + partNum, M, y);
+      y += 5;
+      pdf.setFontSize(15); pdf.setTextColor(51,51,51);
+      pdf.text(title, M, y);
+      y += 5;
+      pdf.setFont('times', 'normal'); pdf.setFontSize(9);
+      pdf.setTextColor(150,150,150);
+      pdf.text(subtitle, M, y);
+      y += 7;
+    }
+    function chartBlock(canvasId) {
+      const block = document.getElementById(canvasId)?.closest('.chart-block');
+      if (!block || block.style.display === 'none') return;
+      const title = block.querySelector('.chart-block-title')?.textContent || '';
+      const readEl = block.querySelector('.chart-read');
+      const insightEl = block.querySelector('.chart-insight');
+
+      checkPage(12);
+      heading(title, 12, [51,51,51], 4, 4);
+      addChart(canvasId);
+      if (readEl) body(readEl.textContent, { size: 8.5, color: [120,120,120] });
+      if (insightEl) {
+        y += 2;
+        // "Key insight" as bold label on its own line
+        body('Key insight:', { size: 9.5, bold: true, color: [140,130,20] });
+        // Insight body text — strip the "Key insight" prefix if present
+        const insightText = insightEl.textContent.replace(/^Key insight\s*/i, '').trim();
+        body(insightText, { size: 9, color: [80,80,60] });
+      }
+      y += 3;
     }
 
-    // ============================================================
-    // PAGE 1: Title page
-    // ============================================================
-    pdf.setFont('times', 'bold');
-    pdf.setFontSize(28);
+    // ===================== TITLE PAGE =====================
+    pdf.setFont('times', 'bold'); pdf.setFontSize(26);
     pdf.setTextColor(51, 51, 51);
-    pdf.text('The Problem-Solving Trap', M, y + 10);
-    y += 18;
-    
-    pdf.setFont('times', 'normal');
-    pdf.setFontSize(14);
+    pdf.text('The Problem-Solving Trap', M, y + 8);
+    y += 14;
+    pdf.setFont('times', 'normal'); pdf.setFontSize(12);
     pdf.setTextColor(130, 130, 130);
     pdf.text('Results & Insights', M, y);
-    y += 10;
-    
-    pdf.setFontSize(12);
-    pdf.setTextColor(80, 80, 80);
-    const authorText = 'Prof. Kostas Stouras, UCD Smurfit, ';
-    pdf.text(authorText, M, y);
-    const authorW = pdf.getTextWidth(authorText);
-    pdf.setTextColor(46, 125, 50);
-    pdf.textWithLink('www.stouras.com', M + authorW, y, { url: 'https://www.stouras.com' });
-    y += 8;
-    
-    pdf.setFontSize(10);
-    pdf.setTextColor(150, 150, 150);
+    y += 7;
+    pdf.setFontSize(11); pdf.setTextColor(80, 80, 80);
+    pdf.text('Prof. Kostas Stouras, UCD Smurfit', M, y);
+    y += 6;
+    pdf.setFontSize(10); pdf.setTextColor(150, 150, 150);
     pdf.text(new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }), M, y);
-    y += 6;
-    
-    pdf.setDrawColor(188, 207, 49);
-    pdf.setLineWidth(1);
-    pdf.line(M, y, M + 90, y);
-    y += 14;
+    y += 5;
+    // Green accent line
+    pdf.setDrawColor(188, 207, 49); pdf.setLineWidth(0.8);
+    pdf.line(M, y, M + 80, y);
+    y += 10;
 
-    // The challenge
-    heading('The challenge', 14, [51, 51, 51], 2, 6, 30);
-    body('There is a secret rule that determines whether a sequence of three numbers is accepted or rejected. Your goal is to figure out what that rule is.');
+    // ===================== THE CHALLENGE =====================
+    heading('The challenge', 14, [51,51,51], 2, 5);
+    body('There is a secret rule that determines whether a sequence of three numbers is accepted or rejected. Your goal is to figure out what that rule is.', { size: 10 });
     y += 2;
-    body('Example sequence that obeys the rule:  2, 4, 8  ->  Yes', { bold: true, color: [51, 51, 51] });
-    y += 6;
+    body('Example sequence that obeys the rule:  2, 4, 8  →  Yes', { size: 10, bold: true, color: [51,51,51] });
+    y += 4;
 
-    // Your guesses
+    // ===================== PLAYER'S GUESSES =====================
     if (guesses.length > 0) {
-      heading('Your guesses', 12, [51, 51, 51], 4, 5, 20);
+      heading('Your guesses', 12, [51,51,51], 2, 4);
       guesses.forEach((g, i) => {
         const label = g.passes ? 'Yes' : 'No';
-        const color = g.passes ? [90, 112, 0] : [180, 80, 80];
         checkPage(6);
-        body(`${i + 1}.  (${g.nums.join(', ')})  ->  ${label}`, { size: 10, color });
+        body(`  ${i+1}.  (${g.nums.join(', ')})  →  ${label}`, { size: 10, color: g.passes ? [90,112,0] : [180,80,80] });
       });
       y += 4;
     }
 
-    // Your answer
-    heading('Your answer', 12, [51, 51, 51], 4, 5, 25);
+    // ===================== PLAYER'S ANSWER =====================
+    heading('Your answer', 12, [51,51,51], 2, 4);
     const ruleInput = document.getElementById('rule-input');
-    const confValue = confidence || 0;
     if (ruleInput && ruleInput.value) {
-      body('Rule submitted: ' + ruleInput.value, { bold: true, color: [51, 51, 51] });
-      body('Confidence: ' + (confValue * 20) + '%', { color: [80, 80, 80] });
+      body('Rule submitted: ' + ruleInput.value, { size: 10, bold: true, color: [51,51,51] });
+      body('Confidence: ' + (confidence * 20) + '%', { size: 10, color: [80,80,80] });
     }
-    y += 3;
-    body('The actual rule: any three numbers in strictly increasing order', { size: 11, bold: true, color: [46, 125, 50] });
-    y += 8;
-
-    // ============================================================
-    // YOUR PERSONAL SCORECARD
-    // ============================================================
-    heading('Your personal scorecard', 13, [51, 51, 51], 6, 6, 50);
-
-    // Compute personal stats
-    const totalGuesses = guesses.length;
-    const yeses = guesses.filter(g => g.passes).length;
-    const nos = guesses.filter(g => !g.passes).length;
-    const yesRate = totalGuesses > 0 ? Math.round(yeses / totalGuesses * 100) : 0;
-    const heardNo = nos > 0;
-    const rLow = (ruleInput && ruleInput.value) ? ruleInput.value.toLowerCase() : '';
-    const hasWrongKeyword = /doubl|multipl|power|fibonacci|arithmetic|even num|twice|2x|times\s*2|by\s*2|triple|consecutiv|geometric|exponen|square|cube|ratio|factor/.test(rLow);
-    const hasRightKeyword = /increas|ascend|larger|bigger|higher|greater|goes?\s*up|grow|any.?order|any.?three|strict/.test(rLow);
-    const gotRight = !hasWrongKeyword && hasRightKeyword;
-    
-    // Count distinct patterns
-    let distinctPatterns = 0;
-    if (totalGuesses > 0) {
-      const types = new Set();
-      [[2, 4, 8], ...guesses.map(g => g.nums)].forEach(([a, b, c]) => {
-        const d1 = b - a, d2 = c - b;
-        if (d1 > 0 && d2 > 0) types.add('increasing');
-        else if (d1 < 0 && d2 < 0) types.add('decreasing');
-        else if (d1 === 0 && d2 === 0) types.add('constant');
-        else types.add('non-monotonic');
-        if (Math.min(a, b, c) < 0) types.add('negatives');
-        if (a === 0 || b === 0 || c === 0) types.add('zero');
-      });
-      distinctPatterns = types.size;
-    }
-
-    // Bias signals
-    const biasSignals = [];
-    if (nos === 0) biasSignals.push('never tested a failing sequence');
-    if (yesRate >= 80 && totalGuesses > 1) biasSignals.push('evidence was overwhelmingly one-sided');
-    if (totalGuesses <= 2) biasSignals.push('very few sequences tested');
-    if (confValue >= 4 && !gotRight) biasSignals.push('high confidence despite wrong answer');
-
-    // Verdict box
-    if (biasSignals.length >= 2) {
-      pdf.setFillColor(252, 232, 232);
-      pdf.rect(M, y, CW, 14, 'F');
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(10);
-      pdf.setTextColor(160, 64, 64);
-      pdf.text('[!] CONFIRMATION BIAS DETECTED', M + CW / 2, y + 6, { align: 'center' });
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(8);
-      pdf.text(biasSignals.join(', '), M + CW / 2, y + 11, { align: 'center' });
-      y += 18;
-    } else if (biasSignals.length === 1) {
-      pdf.setFillColor(255, 248, 225);
-      pdf.rect(M, y, CW, 14, 'F');
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(10);
-      pdf.setTextColor(138, 109, 0);
-      pdf.text('[!] SOME BIAS DETECTED', M + CW / 2, y + 6, { align: 'center' });
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(8);
-      pdf.text(biasSignals[0], M + CW / 2, y + 11, { align: 'center' });
-      y += 18;
-    } else {
-      pdf.setFillColor(238, 245, 208);
-      pdf.rect(M, y, CW, 12, 'F');
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(10);
-      pdf.setTextColor(90, 112, 0);
-      pdf.text('GOOD PROBLEM-SOLVING APPROACH', M + CW / 2, y + 7.5, { align: 'center' });
-      y += 16;
-    }
-
-    // Personal scorecard panels
-    const creativity = computeLocalCreativity(guesses);
-    const creativityLabel = creativity && creativity.avgDist > 0.5 ? 'High' : (creativity && creativity.avgDist > 0.2 ? 'Medium' : 'Low');
-
-    const leftRows = [
-      ['Total sequences tested', totalGuesses],
-      ['"No" responses heard', nos],
-      ['Distinct patterns explored', distinctPatterns + ' of 6'],
-      ['Got the rule right', gotRight ? 'Yes' : 'No']
-    ];
-    const rightRows = [
-      ['"Yes" rate', yesRate + '%'],
-      ['Confidence level', (confValue * 20) + '%'],
-      ['Tested a failing sequence', heardNo ? 'Yes' : 'No'],
-      ['Creativity index', creativityLabel]
-    ];
-    
-    drawInsightPanels('Your strengths', '[+]', leftRows, 'Bias indicators', '[-]', rightRows);
+    y += 2;
+    body('The actual rule: any three numbers in strictly increasing order', { size: 11, bold: true, color: [46,125,50] });
     y += 4;
 
-    // Personal result text
-    let personalText = `Your result: You made ${totalGuesses} guess${totalGuesses !== 1 ? 'es' : ''} (${yeses} Yes, ${nos} No) before submitting.`;
-    if (nos === 0) {
-      personalText += ' You never heard a single "No". You submitted without ever testing a sequence that could fail.';
-    } else if (nos >= 3) {
-      personalText += ` You heard ${nos} "No" responses. That puts you among the rare players who actively sought disconfirming evidence. Well done.`;
+    // ===================== PERSONAL SCORECARD =====================
+    const pYeses = guesses.filter(g => g.passes).length;
+    const pNos = guesses.filter(g => !g.passes).length;
+    const pYesRate = guesses.length > 0 ? Math.round(pYeses / guesses.length * 100) : 0;
+    const pRule = (ruleInput && ruleInput.value) ? ruleInput.value.toLowerCase() : '';
+    const pHasWrong = /doubl|multipl|power|fibonacci|arithmetic|even num|twice|2x|times\s*2|by\s*2|triple|consecutiv|geometric|exponen|square|cube|ratio|factor/.test(pRule);
+    const pHasRight = /increas|ascend|larger|bigger|higher|greater|goes?\s*up|grow|any.?order|any.?three|strict/.test(pRule);
+    const pGotRight = !pHasWrong && pHasRight;
+
+    // Bias detection
+    const pBiasSignals = [];
+    if (pNos === 0) pBiasSignals.push('never tested a failing sequence');
+    if (pYesRate >= 80 && guesses.length > 1) pBiasSignals.push('evidence was overwhelmingly one-sided');
+    if (guesses.length <= 2) pBiasSignals.push('very few sequences tested');
+    if (confidence >= 4 && !pGotRight) pBiasSignals.push('high confidence despite wrong answer');
+
+    heading('Your personal scorecard', 12, [51,51,51], 2, 5);
+
+    // Bias verdict banner
+    if (pBiasSignals.length >= 2) {
+      checkPage(12);
+      pdf.setFillColor(252,232,232); pdf.rect(M, y, CW, 10, 'F');
+      pdf.setFont('times', 'bold'); pdf.setFontSize(10); pdf.setTextColor(160,64,64);
+      pdf.text('CONFIRMATION BIAS DETECTED', M + 4, y + 4.5);
+      pdf.setFont('times', 'normal'); pdf.setFontSize(8.5); pdf.setTextColor(160,80,80);
+      pdf.text(pBiasSignals.join(', '), M + 4, y + 8.5);
+      y += 14;
+    } else if (pBiasSignals.length === 1) {
+      checkPage(12);
+      pdf.setFillColor(255,248,225); pdf.rect(M, y, CW, 10, 'F');
+      pdf.setFont('times', 'bold'); pdf.setFontSize(10); pdf.setTextColor(138,109,0);
+      pdf.text('SOME BIAS DETECTED', M + 4, y + 4.5);
+      pdf.setFont('times', 'normal'); pdf.setFontSize(8.5); pdf.setTextColor(138,120,20);
+      pdf.text(pBiasSignals[0], M + 4, y + 8.5);
+      y += 14;
     } else {
-      personalText += ` You heard ${nos} "No" response${nos !== 1 ? 's' : ''}.`;
+      checkPage(10);
+      pdf.setFillColor(238,245,208); pdf.rect(M, y, CW, 8, 'F');
+      pdf.setFont('times', 'bold'); pdf.setFontSize(10); pdf.setTextColor(90,112,0);
+      pdf.text('GOOD PROBLEM-SOLVING APPROACH', M + 4, y + 5.5);
+      y += 12;
     }
-    body(personalText, { size: 9, italic: true, color: [80, 80, 80] });
-    y += 8;
 
-    // ============================================================
-    // KEY INSIGHTS ACROSS PARTICIPANTS (moved here, after personal scorecard)
-    // ============================================================
-    heading('Key insights across participants', 13, [51, 51, 51], 8, 6, 60);
+    // Two-column scorecard table
+    checkPage(50);
+    const scColW = (CW - 6) / 2;
+    const scStartY = y;
+    const scRowH = 9;
+    // Compute local creativity for PDF
+    const pdfCreativity = computeLocalCreativity(guesses);
+    const pdfCreativityLabel = pdfCreativity
+      ? (pdfCreativity.avgDist > 0.5 ? 'High' : pdfCreativity.avgDist > 0.2 ? 'Medium' : 'Low')
+      : 'N/A';
+    // Count distinct patterns
+    let pdfPatterns = 0;
+    if (guesses.length > 0) {
+      const pts = new Set();
+      [[2,4,8], ...guesses.map(g => g.nums)].forEach(([a,b,c]) => {
+        const d1=b-a, d2=c-b;
+        if (d1>0&&d2>0) pts.add('inc'); else if (d1<0&&d2<0) pts.add('dec');
+        else if (d1===0&&d2===0) pts.add('const'); else pts.add('nonmon');
+        if (Math.min(a,b,c)<0) pts.add('neg');
+        if (a===0||b===0||c===0) pts.add('zero');
+      });
+      pdfPatterns = pts.size;
+    }
 
-    // Try to get class data from the page
-    const insightsContainer = document.getElementById('insights-container');
-    let classN = 0;
-    let classGoodRows = [];
-    let classPoorRows = [];
-
-    // Parse insights from the rendered HTML
-    if (insightsContainer) {
-      const totalEl = insightsContainer.querySelector('.insights-total strong');
-      if (totalEl) classN = parseInt(totalEl.textContent) || 0;
-      
-      const tables = insightsContainer.querySelectorAll('.insights-table');
-      if (tables.length >= 2) {
-        tables[0].querySelectorAll('tbody tr').forEach(tr => {
-          const cells = tr.querySelectorAll('td');
-          if (cells.length >= 2) {
-            classGoodRows.push([cells[0].textContent.trim(), cells[1].textContent.trim()]);
-          }
-        });
-        tables[1].querySelectorAll('tbody tr').forEach(tr => {
-          const cells = tr.querySelectorAll('td');
-          if (cells.length >= 2) {
-            classPoorRows.push([cells[0].textContent.trim(), cells[1].textContent.trim()]);
-          }
-        });
+    const scData = [
+      {
+        header: 'YOUR STRENGTHS', isGood: true,
+        rows: [
+          ['Total sequences tested', String(guesses.length)],
+          ['"No" responses heard', String(pNos)],
+          ['Distinct patterns explored', pdfPatterns + ' of 6'],
+          ['Got the rule right', pGotRight ? 'Yes' : 'No'],
+        ]
+      },
+      {
+        header: 'BIAS INDICATORS', isGood: false,
+        rows: [
+          ['"Yes" rate', pYesRate + '%'],
+          ['Confidence level', (confidence * 20) + '%'],
+          ['Tested a failing sequence', pNos > 0 ? 'Yes' : 'No'],
+          ['Creativity index', pdfCreativityLabel],
+        ]
       }
-    }
-
-    if (classN > 0) {
-      // Total players header
-      pdf.setFont('times', 'normal');
-      pdf.setFontSize(11);
-      pdf.setTextColor(100, 100, 100);
-      pdf.text(classN + ' total players', M + CW / 2, y, { align: 'center' });
-      y += 8;
-
-      drawInsightPanels('Signals of good problem-solving', '[+]', classGoodRows, 'Signals of confirmation bias', '[-]', classPoorRows);
-    } else {
-      body('Class results not yet available.', { size: 10, italic: true, color: [150, 150, 150] });
-    }
-    y += 6;
-
-    // ============================================================
-    // Helper: extract text from a DOM element (strip HTML tags)
-    // ============================================================
-    function domText(id) {
-      const el = document.getElementById(id);
-      if (!el) return '';
-      return el.textContent.replace(/\s+/g, ' ').trim();
-    }
-
-    // Helper: draw a "How to read" block in the PDF
-    function addReadBlock(id) {
-      const text = domText(id);
-      if (!text) return;
-      const clean = text.replace(/^How to read:\s*/i, '').trim();
-      if (!clean) return;
-      y += 2;
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(8);
-      pdf.setTextColor(100, 100, 100);
-      const readLines = pdf.splitTextToSize('How to read: ' + clean, CW);
-      checkPage(readLines.length * 3.6 + 4);
-      pdf.setFont('times', 'normal');
-      pdf.setFontSize(8.5);
-      pdf.setTextColor(120, 120, 120);
-      // Print "How to read:" in bold, then rest in normal
-      const fullText = 'How to read: ' + clean;
-      const wrappedLines = pdf.splitTextToSize(fullText, CW);
-      pdf.text(wrappedLines, M, y);
-      y += wrappedLines.length * 3.6 + 3;
-    }
-
-    // Helper: draw a "Key insight" box in the PDF (yellow background with left border)
-    function addInsightBox(id) {
-      const text = domText(id);
-      if (!text) return;
-      const clean = text.replace(/^Key insight\s*/i, '').trim();
-      if (!clean) return;
-      y += 2;
-      pdf.setFont('times', 'normal');
-      pdf.setFontSize(9);
-      const insightLines = pdf.splitTextToSize(clean, CW - 12);
-      const boxH = insightLines.length * 3.8 + 12;
-      checkPage(boxH + 4);
-      // Yellow background
-      pdf.setFillColor(255, 253, 231);
-      pdf.rect(M, y, CW, boxH, 'F');
-      // Left border accent
-      pdf.setFillColor(201, 184, 52);
-      pdf.rect(M, y, 1.2, boxH, 'F');
-      // Label
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(7);
-      pdf.setTextColor(176, 160, 32);
-      pdf.text('KEY INSIGHT', M + 5, y + 5);
-      // Body text
-      pdf.setFont('times', 'normal');
-      pdf.setFontSize(9);
-      pdf.setTextColor(85, 85, 85);
-      pdf.text(insightLines, M + 5, y + 10);
-      y += boxH + 4;
-    }
-
-    // ============================================================
-    // SUMMARY ESSAY (shown to user after submit, before charts)
-    // ============================================================
-    heading('Summary', 14, [51, 51, 51], 6, 6, 30);
-
-    const essayParagraphs = [
-      'This challenge exposes confirmation bias in action. We form a theory, then seek evidence that supports it, avoiding the discomfort of being told "no." That is why most players never test a sequence that breaks their hypothesis. The same instinct shapes how we evaluate business strategies, hiring decisions, and investment theses: we look for green lights and ignore red ones.',
-      '',
-      'What is going on?',
-      '',
-      'The answer was extremely basic. The rule was simply: Each number must be larger than the one before it. The sequence 5, 10, 20 satisfies the rule, as does 1, 2, 3 and -17, 14.6, 845.',
-      'But most people start off with the incorrect assumption that if we are asking them to solve a problem, it must be a somewhat tricky problem. They come up with a theory for what the answer is, like: "Each number is double the previous number." And then they make a classic psychological mistake.',
-      'They do not want to hear the answer "no." In fact, it may not occur to them to ask a question that may yield a no.',
-      'It is a lot more pleasant to hear "yes." That, in a nutshell, is why so many people struggle with this problem.',
-      '',
-      'Confirmation bias',
-      '',
-      'This disappointment is a version of what psychologists and economists call confirmation bias. Not only are people more likely to believe information that fits their pre-existing beliefs, but they are also more likely to go looking for such information.',
-      'This challenge exposes a particular kind of confirmation bias that bedevils companies, governments and people every day: the internal yes-man (and yes-woman) tendency. We are much more likely to think about positive situations than negative ones, about why something might go right than wrong and about questions to which the answer is yes, not no.',
-      'Sometimes, the reluctance to think negatively has nothing to do with political views or with a conscious fear of being told no. Often, people never even think about asking questions that would produce a negative answer when trying to solve a problem, like this one. They instead restrict the universe of possible questions to those that might potentially yield a "yes."',
-      'But the more important advice for us may instead be to go out of our way to get to no. When you want to test a theory, do not just look for examples that prove it. When you are considering a plan, think in detail about how it might go wrong.',
-      'Some businesses have made this approach a formal part of their decision-making: Imagine our strategy has failed; what are the most likely reasons it did? When you seek to disprove your idea, you sometimes end up proving it, and other times you can save yourself from making a big mistake. But you need to start by being willing to hear no. And even if you think that you are right, you need to make sure you are asking questions that might actually produce an answer of no. If you still need to work on this trait, do not worry: You are only human.'
     ];
 
-    essayParagraphs.forEach(para => {
-      if (para === '') {
-        y += 2;
-        return;
-      }
-      // Sub-headings
-      if (para === 'What is going on?' || para === 'Confirmation bias') {
-        heading(para, 12, [51, 51, 51], 6, 5, 20);
-        return;
-      }
-      body(para, { size: 9.5, color: [80, 80, 80] });
-      y += 1;
+    for (let col = 0; col < 2; col++) {
+      const sc = scData[col];
+      const x = M + col * (scColW + 6);
+      y = scStartY;
+      // Panel header
+      const hBg = sc.isGood ? [238,245,208] : [252,232,232];
+      const hTx = sc.isGood ? [90,112,0] : [160,64,64];
+      pdf.setFillColor(hBg[0], hBg[1], hBg[2]);
+      pdf.rect(x, y, scColW, 9, 'F');
+      pdf.setFont('times', 'bold'); pdf.setFontSize(8);
+      pdf.setTextColor(hTx[0], hTx[1], hTx[2]);
+      pdf.text(sc.header, x + 4, y + 6);
+      y += 9;
+      // Column headers
+      pdf.setFillColor(51,51,51); pdf.rect(x, y, scColW, 7, 'F');
+      pdf.setFont('times', 'bold'); pdf.setFontSize(7); pdf.setTextColor(255,255,255);
+      pdf.text('METRIC', x + 4, y + 5);
+      pdf.text('VALUE', x + scColW - 4, y + 5, { align: 'right' });
+      y += 7;
+      // Data rows
+      sc.rows.forEach((row, i) => {
+        if (i % 2 === 0) { pdf.setFillColor(250,250,247); pdf.rect(x, y, scColW, scRowH, 'F'); }
+        pdf.setDrawColor(232,232,224); pdf.setLineWidth(0.2);
+        pdf.line(x, y + scRowH, x + scColW, y + scRowH);
+        // Metric name
+        pdf.setFont('times', 'normal'); pdf.setFontSize(8.5); pdf.setTextColor(68,68,68);
+        pdf.text(row[0], x + 4, y + 6);
+        // Value — red for bad indicators
+        const isNeg = (!sc.isGood && row[0].includes('Yes" rate') && parseInt(row[1]) >= 80)
+                   || (!sc.isGood && row[0].includes('Tested') && row[1] === 'No')
+                   || (sc.isGood && row[0].includes('Got the rule') && row[1] === 'No')
+                   || (sc.isGood && row[0].includes('No" responses') && row[1] === '0');
+        pdf.setFont('times', 'bold'); pdf.setFontSize(9);
+        pdf.setTextColor(isNeg ? 212 : 51, isNeg ? 106 : 51, isNeg ? 106 : 51);
+        pdf.text(row[1], x + scColW - 4, y + 6, { align: 'right' });
+        y += scRowH;
+      });
+    }
+    const scMaxRows = Math.max(scData[0].rows.length, scData[1].rows.length);
+    y = scStartY + 9 + 7 + scMaxRows * scRowH + 8;
+
+    // Personal insight
+    const pEl = document.getElementById('personal-insight');
+    if (pEl && pEl.textContent.trim()) {
+      body(pEl.textContent, { size: 10, color: [80,80,80] });
+      y += 4;
+    }
+
+    // ===================== OUTCOME TEXT (from DOM) =====================
+    const outcomeBox = document.querySelector('.outcome-box');
+    if (outcomeBox) {
+      const elements = outcomeBox.querySelectorAll('h2.outcome-heading, p.outcome-p');
+      elements.forEach(el => {
+        if (el.tagName === 'H2') {
+          // Skip "Summary" heading if already covered by personal insight context
+          heading(el.textContent, 12, [51,51,51], 4, 4);
+        } else if (el.id === 'personal-insight') {
+          // Already rendered above
+        } else {
+          body(el.textContent, { size: 10 });
+        }
+      });
+      y += 4;
+    }
+
+    // ===================== SECTION 1 =====================
+    sectionHeader(1, 'Testing behavior', 'How did players approach the puzzle?');
+    chartBlock('chart-attempts');
+    chartBlock('chart-yesratio');
+    chartBlock('chart-strategy');
+
+    // Sequence tables (text-based)
+    const seqBlock = document.getElementById('seq-tables-block');
+    if (seqBlock && seqBlock.offsetHeight > 0) {
+      heading('What did players actually test?', 12, [51,51,51], 4, 4);
+      const tables = seqBlock.querySelectorAll('.insights-table');
+      tables.forEach(table => {
+        const headerLabel = table.closest('div')?.querySelector('div[style*="font-weight"]')?.textContent;
+        if (headerLabel) body(headerLabel, { size: 9, bold: true, color: [80,80,80] });
+        table.querySelectorAll('tbody tr').forEach(tr => {
+          const cells = tr.querySelectorAll('td');
+          if (cells.length >= 2) {
+            const label = cells[0].textContent.trim();
+            const val = cells[1].textContent.trim();
+            if (label && !label.includes('common')) {
+              body('  ' + label + '  —  ' + val, { size: 9, color: [100,100,100] });
+            } else if (label) {
+              y += 1;
+              body(label, { size: 8.5, bold: true, color: [140,140,140] });
+            }
+          }
+        });
+        y += 3;
+      });
+    }
+
+    // ===================== SECTION 2 =====================
+    sectionHeader(2, 'Confidence & accuracy', 'What did players believe — and were they right?');
+    chartBlock('chart-confidence');
+    chartBlock('chart-correctness');
+
+    // ===================== SECTION 3 =====================
+    const scatterCanvas = document.getElementById('chart-scatter');
+    if (scatterCanvas) {
+      sectionHeader(3, 'Exploration creativity', 'How creative was each player\'s testing strategy?');
+      body('How we measure creativity: The creativity index measures how structurally diverse a player\'s tested sequences were relative to the seed (2, 4, 8). For each sequence, we extract features capturing direction, scale, boundary exploration, and gap pattern. We compute the average pairwise Euclidean distance across features, weighted by log(number of sequences). Scores are normalized so the most exploratory player scores 100%.', { size: 9, color: [100,100,80] });
+      body('Example: Player A tests (2,4,8), (3,6,12), (4,8,16) -- all structurally similar increasing sequences, low creativity. Player B tests (2,4,8), (5,3,1), (0,0,0) -- spanning increasing, decreasing, and constant patterns, high creativity.', { size: 9, color: [100,100,80] });
+      y += 3;
+      chartBlock('chart-scatter');
+      chartBlock('chart-conf-creativity');
+      chartBlock('chart-creativity-correct');
+    }
+
+    // ===================== INSIGHTS TABLE =====================
+    checkPage(60);
+    heading('Key insights across participants', 14, [51,51,51], 8, 6);
+
+    // Total players
+    const totalEl = document.querySelector('.insights-total strong');
+    if (totalEl) {
+      pdf.setFont('times', 'bold'); pdf.setFontSize(20);
+      pdf.setTextColor(51,51,51);
+      pdf.text(totalEl.textContent.trim() + ' total players', W / 2, y, { align: 'center' });
+      y += 10;
+    }
+
+    // Draw two-column table
+    const colW = (CW - 6) / 2;  // 6mm gap between columns
+    const panels = document.querySelectorAll('.insights-card .insights-panel');
+    const panelData = [];
+    panels.forEach(panel => {
+      const isGood = panel.classList.contains('panel-good');
+      // Strip Unicode symbols that Helvetica can't render
+      const rawHeader = panel.querySelector('.insights-panel-header')?.textContent?.trim() || '';
+      const header = rawHeader.replace(/[✓✗⚠]/g, '').trim().toUpperCase();
+      const rows = [];
+      panel.querySelectorAll('.insights-table tbody tr').forEach(tr => {
+        const cells = tr.querySelectorAll('td');
+        if (cells.length >= 2) {
+          rows.push([
+            cells[0].textContent.trim(),
+            cells[1].textContent.trim().replace(/[✓✗]/g, '').trim()
+          ]);
+        }
+      });
+      panelData.push({ isGood, header, rows });
     });
-    y += 6;
 
-    // ============================================================
-    // PART 1: Testing behavior (starts on even page)
-    // ============================================================
-    partHeader(1, 'Testing behavior', 'How did players approach the challenge? What evidence did they gather?');
+    if (panelData.length >= 2) {
+      const startY = y;
+      const rowH = 9;
+      const headerH = 9;
+      const tableHeaderH = 7;
 
-    // Chart: How many guesses
-    heading('How many guesses did players make?', 11, [51, 51, 51], 2, 4, 50);
-    body('Number of sequences tested before submitting an answer', { size: 9, italic: true, color: [130, 130, 130] });
-    y += 2;
-    addChart('chart-attempts', 55);
-    addReadBlock('read-attempts');
-    addInsightBox('insight-attempts');
+      for (let col = 0; col < 2; col++) {
+        const p = panelData[col];
+        const x = M + col * (colW + 6);
+        y = startY;
 
-    // Chart: Yes ratio
-    heading('How one-sided was the evidence?', 11, [51, 51, 51], 6, 4, 50);
-    body('Distribution of each player\'s "Yes" rate: Yes responses / Total guesses', { size: 9, italic: true, color: [130, 130, 130] });
-    y += 2;
-    addChart('chart-yesratio', 55);
-    addReadBlock('read-yesratio');
-    addInsightBox('insight-yesratio');
+        // Panel header background
+        const hColor = p.isGood ? [238,245,208] : [252,232,232];
+        const hText = p.isGood ? [90,112,0] : [160,64,64];
+        pdf.setFillColor(hColor[0], hColor[1], hColor[2]);
+        pdf.rect(x, y, colW, headerH, 'F');
+        pdf.setFont('times', 'bold'); pdf.setFontSize(8);
+        pdf.setTextColor(hText[0], hText[1], hText[2]);
+        pdf.text(p.header, x + 4, y + 6);
+        y += headerH;
 
-    // Chart: Strategy
-    heading('Did players seek disconfirming evidence?', 11, [51, 51, 51], 6, 4, 50);
-    body('Breakdown by how many "No" responses players received', { size: 9, italic: true, color: [130, 130, 130] });
-    y += 2;
-    addChart('chart-strategy', 65);
-    addReadBlock('read-strategy');
-    addInsightBox('insight-strategy');
+        // Table header
+        pdf.setFillColor(51,51,51);
+        pdf.rect(x, y, colW, tableHeaderH, 'F');
+        pdf.setFont('times', 'bold'); pdf.setFontSize(7);
+        pdf.setTextColor(255,255,255);
+        pdf.text('METRIC', x + 4, y + 5);
+        pdf.text('VALUE', x + colW - 4, y + 5, { align: 'right' });
+        y += tableHeaderH;
 
-    // ============================================================
-    // PART 2: Confidence & accuracy (starts on even page)
-    // ============================================================
-    partHeader(2, 'Confidence & accuracy', 'What did players believe, and were they right?');
+        // Data rows
+        p.rows.forEach((row, i) => {
+          if (i % 2 === 0) {
+            pdf.setFillColor(250,250,247);
+            pdf.rect(x, y, colW, rowH, 'F');
+          }
+          pdf.setDrawColor(232,232,224); pdf.setLineWidth(0.2);
+          pdf.line(x, y + rowH, x + colW, y + rowH);
 
-    // Chart: Confidence
-    heading('Does more testing lead to more confidence?', 11, [51, 51, 51], 2, 4, 50);
-    body('Average self-reported confidence, 1 to 5, by number of guesses', { size: 9, italic: true, color: [130, 130, 130] });
-    y += 2;
-    addChart('chart-confidence', 55);
-    addReadBlock('read-confidence');
-    addInsightBox('insight-confidence');
+          pdf.setFont('times', 'normal'); pdf.setFontSize(8.5);
+          pdf.setTextColor(68,68,68);
+          const metricLines = pdf.splitTextToSize(row[0], colW - 30);
+          pdf.text(metricLines, x + 4, y + 6);
 
-    // Chart: Correctness (if exists)
-    const correctnessChart = document.getElementById('chart-correctness');
-    if (correctnessChart) {
-      heading('Were confident players actually right?', 11, [51, 51, 51], 6, 4, 50);
-      body('Confidence distribution split by whether the player identified the correct rule', { size: 9, italic: true, color: [130, 130, 130] });
-      y += 2;
-      addChart('chart-correctness', 55);
-      addReadBlock('read-correctness');
-      addInsightBox('insight-correctness');
-    }
+          pdf.setFont('times', 'bold'); pdf.setFontSize(9);
+          pdf.setTextColor(51,51,51);
+          pdf.text(row[1], x + colW - 4, y + 6, { align: 'right' });
 
-    // ============================================================
-    // PART 3: Exploration creativity (starts on even page, if data exists)
-    // ============================================================
-    const scatterChart = document.getElementById('chart-scatter');
-    if (scatterChart) {
-      partHeader(3, 'Exploration creativity', 'How creative was each player\'s testing strategy, and did it actually help?');
-
-      // Methodology box
-      checkPage(40);
-      pdf.setFillColor(255, 253, 231);
-      pdf.setDrawColor(201, 184, 52);
-      pdf.setLineWidth(0.3);
-      const boxY = y;
-      const methodText = 'How we measure creativity: The creativity index measures how structurally diverse a player\'s tested sequences were, relative to the seed example (2, 4, 8). For each sequence, we extract features capturing direction, scale, boundary exploration, and gap pattern. We compute the average pairwise Euclidean distance, weighted by log(number of sequences). Scores are normalized so the most exploratory player scores 100%.';
-      const methodLines = pdf.splitTextToSize(methodText, CW - 8);
-      const boxH = methodLines.length * 3.8 + 8;
-      pdf.rect(M, boxY, CW, boxH, 'FD');
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(7);
-      pdf.setTextColor(176, 160, 32);
-      pdf.text('HOW WE MEASURE CREATIVITY', M + 4, boxY + 5);
-      pdf.setFont('times', 'normal');
-      pdf.setFontSize(9);
-      pdf.setTextColor(85, 85, 85);
-      pdf.text(methodLines, M + 4, boxY + 10);
-      y = boxY + boxH + 8;
-
-      // Chart: Scatter
-      heading('Quantity vs quality of exploration', 11, [51, 51, 51], 4, 4, 50);
-      body('Each dot is a player: number of guesses vs creativity index', { size: 9, italic: true, color: [130, 130, 130] });
-      y += 2;
-      addChart('chart-scatter', 60);
-      addReadBlock('read-scatter');
-      addInsightBox('insight-scatter');
-
-      // Chart: Conf-creativity
-      const confCreativityChart = document.getElementById('chart-conf-creativity');
-      if (confCreativityChart) {
-        heading('The confidence-creativity paradox', 11, [51, 51, 51], 6, 4, 50);
-        body('Average creativity index by self-reported confidence level', { size: 9, italic: true, color: [130, 130, 130] });
-        y += 2;
-        addChart('chart-conf-creativity', 55);
-        addReadBlock('read-conf-creativity');
-        addInsightBox('insight-conf-creativity');
+          y += rowH;
+        });
       }
 
-      // Chart: Creativity vs correctness
-      const creativityCorrectChart = document.getElementById('chart-creativity-correct');
-      if (creativityCorrectChart) {
-        heading('Did creative testing actually help?', 11, [51, 51, 51], 6, 4, 50);
-        body('Average creativity index for players who got the rule right vs wrong', { size: 9, italic: true, color: [130, 130, 130] });
-        y += 2;
-        addChart('chart-creativity-correct', 55);
-        addReadBlock('read-creativity-correct');
-        addInsightBox('insight-creativity-correct');
-      }
+      // Set y to the bottom of the taller column
+      const maxRows = Math.max(panelData[0].rows.length, panelData[1].rows.length);
+      y = startY + headerH + tableHeaderH + maxRows * rowH + 8;
     }
 
-    // ============================================================
-    // Finalize: add page numbers to all pages
-    // ============================================================
+    // Add footer to all pages
     const totalPages = pdf.internal.getNumberOfPages();
     for (let p = 1; p <= totalPages; p++) {
       pdf.setPage(p);
       addFooter();
-      pdf.setFillColor(255, 255, 255);
+      // Update page count
+      pdf.setFont('times', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(170,170,170);
+      // Overwrite with total
+      pdf.setFillColor(255,255,255);
       pdf.rect(W - M - 30, H - 11, 30, 6, 'F');
-      pdf.setFont('times', 'normal');
-      pdf.setFontSize(7.5);
-      pdf.setTextColor(170, 170, 170);
       pdf.text('Page ' + p + ' of ' + totalPages, W - M, H - 8, { align: 'right' });
     }
 
     pdf.save('problem-solving-trap-insights.pdf');
+
   } catch (err) {
     console.error('PDF generation failed:', err);
     alert('Could not generate PDF. Please try again.');
   }
-  
-  [btnTop, btnBottom].filter(Boolean).forEach(b => { b.disabled = false; b.innerHTML = origText; });
+
+  [btnTop, btnBottom].forEach(b => {
+    b.disabled = false;
+    b.innerHTML = origText;
+  });
 }
 
-function toggleHint() { const box = document.getElementById('hint-box'); const btn = document.getElementById('hint-btn'); box.classList.toggle('hidden'); btn.textContent = box.classList.contains('hidden') ? 'Show hint' : 'Hide hint'; }
-function resetGame() { guesses = []; confidence = null; submitted = false; gameState = 'playing'; playerAttempts = 0; document.getElementById('guesses-list').innerHTML = ''; ['guesses-section','rule-section','outcome-section','class-results'].forEach(id => { document.getElementById(id).classList.add('hidden'); if (id === 'outcome-section' || id === 'class-results') document.getElementById(id).innerHTML = ''; }); ['input-section','step-desc'].forEach(id => document.getElementById(id).classList.remove('hidden')); document.getElementById('rule-input').value = ''; ['n0','n1','n2'].forEach(id => document.getElementById(id).value = ''); document.querySelectorAll('input[name="confidence"]').forEach(r => r.checked = false); updateStepDesc(); updateCheckBtn(); }
+function toggleHint() {
+  const box = document.getElementById('hint-box');
+  const btn = document.getElementById('hint-btn');
+  box.classList.toggle('hidden');
+  btn.textContent = box.classList.contains('hidden') ? 'Show hint' : 'Hide hint';
+}
+
+function resetGame() {
+  guesses = []; confidence = null; submitted = false; gameState = 'playing'; playerAttempts = 0;
+  document.getElementById('guesses-list').innerHTML = '';
+  ['guesses-section','rule-section','outcome-section','class-results'].forEach(id => {
+    document.getElementById(id).classList.add('hidden');
+    if (id === 'outcome-section' || id === 'class-results') document.getElementById(id).innerHTML = '';
+  });
+  ['input-section','step-desc'].forEach(id => document.getElementById(id).classList.remove('hidden'));
+  document.getElementById('rule-input').value = '';
+  ['n0','n1','n2'].forEach(id => document.getElementById(id).value = '');
+  document.querySelectorAll('input[name="confidence"]').forEach(r => r.checked = false);
+  updateStepDesc(); updateCheckBtn();
+}
 
 // Init
 document.querySelectorAll('.num-input').forEach((inp, idx) => {
