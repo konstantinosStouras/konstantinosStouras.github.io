@@ -245,7 +245,10 @@
       padding: 12px 10px 6px;
       margin-bottom: 10px;
     }
-    .chart-canvas-wrap canvas { width: 100% !important; }
+    .chart-canvas-wrap canvas {
+      width: 100% !important;
+      image-rendering: high-quality;
+    }
     .chart-read {
       font-family: 'Libre Franklin', Arial, sans-serif;
       font-size: 12px; line-height: 1.55; color: #777;
@@ -805,6 +808,12 @@ const chartColors = {
   text:      '#555',
   accent:    '#2e7d32',
 };
+
+// Render all charts at 3x resolution so they stay crisp at any zoom
+Chart.defaults.devicePixelRatio = 3;
+// Ensure interactive tooltips are responsive on all charts
+Chart.defaults.interaction = { mode: 'nearest', intersect: true };
+Chart.defaults.hover = { mode: 'nearest', intersect: true };
 
 function showClassResults() {
   const container = document.getElementById('class-results');
