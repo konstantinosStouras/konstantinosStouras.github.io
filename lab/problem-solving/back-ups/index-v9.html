@@ -770,17 +770,17 @@ function handleSubmitRule() {
           <span class="btn-icon">↓</span> Download PDF
         </button>
       </div>
-      <p class="outcome-p">This challenge exposes <strong>confirmation bias</strong> in action. We form a theory, then seek evidence that supports it — avoiding the discomfort of being told 'no.' That's why most players never test a sequence that breaks their hypothesis. The same instinct shapes how we evaluate business strategies, hiring decisions, and investment theses: we look for green lights and ignore red ones.</p>
+      <p class="outcome-p">This puzzle exposes <strong>confirmation bias</strong> in action. We form a theory, then seek evidence that supports it — avoiding the discomfort of being told 'no.' That's why most players never test a sequence that breaks their hypothesis. The same instinct shapes how we evaluate business strategies, hiring decisions, and investment theses: we look for green lights and ignore red ones.</p>
       <h2 class="outcome-heading">What's going on?</h2>
-      <p class="outcome-p">The answer was extremely basic. The rule was simply: <em>Each number must be larger than the one before it.</em> 5, 10, 20 satisfies the rule, as does 1, 2, 3 and -17, 14.6, 845. </p>
+      <p class="outcome-p">The answer was extremely basic. The rule was simply: <em>Each number must be larger than the one before it.</em> 5, 10, 20 satisfies the rule, as does 1, 2, 3 and -17, 14.6, 845. Children in kindergarten can understand this rule.</p>
       <p class="outcome-p">But most people start off with the incorrect assumption that if we're asking them to solve a problem, it must be a somewhat tricky problem. They come up with a theory for what the answer is, like: <em>Each number is double the previous number.</em> And then they make a classic psychological mistake.</p>
       <p class="outcome-p">They don't want to hear the answer "no." In fact, it may not occur to them to ask a question that may yield a no.</p>
       <p class="outcome-p">Remarkably, <strong><span id="never-no-pct">many</span></strong> of people who have played this game so far have guessed the answer without first hearing a single no. Only <strong><span id="strong-falsifier-pct">a few</span></strong> heard at least three nos — even though there is no penalty or cost for being told no, save the small disappointment that every human being feels when hearing "no."</p>
       <p class="outcome-p" id="personal-insight" style="background:#fff;border-left:3px solid #bccf31;padding:12px 16px;margin:16px 0"></p>
       <p class="outcome-p">It's a lot more pleasant to hear "yes." That, in a nutshell, is why so many people struggle with this problem.</p>
       <h2 class="outcome-heading">Confirmation bias</h2>
-      <p class="outcome-p">This disappointment is a version of what psychologists and economists call <b>confirmation bias</b>. Not only are people more likely to believe information that fits their pre-existing beliefs, but they're also more likely to go looking for such information.</p>
-      <p class="outcome-p">This challenge exposes a particular kind of confirmation bias that bedevils companies, governments and people every day: the internal yes-man (and yes-woman) tendency. We're much more likely to think about positive situations than negative ones, about why something might go right than wrong and about questions to which the answer is yes, not no.</p>
+      <p class="outcome-p">This disappointment is a version of what psychologists and economists call confirmation bias. Not only are people more likely to believe information that fits their pre-existing beliefs, but they're also more likely to go looking for such information.</p>
+      <p class="outcome-p">This puzzle exposes a particular kind of confirmation bias that bedevils companies, governments and people every day: the internal yes-man (and yes-woman) tendency. We're much more likely to think about positive situations than negative ones, about why something might go right than wrong and about questions to which the answer is yes, not no.</p>
       <p class="outcome-p">Sometimes, the reluctance to think negatively has nothing to do with political views or with a conscious fear of being told no. Often, people never even think about asking questions that would produce a negative answer when trying to solve a problem — like this one. They instead restrict the universe of possible questions to those that might potentially yield a "yes."</p>
       <p class="outcome-p">One of the best-selling business books in history about negotiation strategy is 
 <a href="https://www.amazon.com/gp/product/0143118757/" target="_blank" rel="noopener noreferrer">
@@ -1138,7 +1138,7 @@ function renderDynamicCharts(a) {
     <div class="section-divider" style="margin-top:0;border-top:none;padding-top:0">
       <div class="section-number">Part 1</div>
       <div class="section-title">Testing behavior</div>
-      <div class="section-subtitle">How did players approach the challenge? What evidence did they gather?</div>
+      <div class="section-subtitle">How did players approach the puzzle? What evidence did they gather?</div>
     </div>
     <div class="charts-grid">
       <div class="chart-block">
@@ -1807,7 +1807,7 @@ function buildSequenceTables(a) {
       </div>
     </div>
 
-    <div class="chart-read"><strong>How to read:</strong> "Players" shows how many people tested that exact sequence, with the percentage of all players. Most common sequences reveal the shared assumptions players brought to the challenge. Least common ones show the creative outliers.</div>
+    <div class="chart-read"><strong>How to read:</strong> "Players" shows how many people tested that exact sequence, with the percentage of all players. Most common sequences reveal the shared assumptions players brought to the puzzle. Least common ones show the creative outliers.</div>
     <div class="chart-insight" id="insight-sequences"></div>`;
 
   // Dynamic insight
@@ -2345,7 +2345,7 @@ async function downloadPDF() {
     }
 
     // ===================== SECTION 1 =====================
-    sectionHeader(1, 'Testing behavior', 'How did players approach the challenge?');
+    sectionHeader(1, 'Testing behavior', 'How did players approach the puzzle?');
     chartBlock('chart-attempts');
     chartBlock('chart-yesratio');
     chartBlock('chart-strategy');
