@@ -779,18 +779,18 @@ function handleSubmitRule() {
           <span class="btn-icon">↓</span> Download PDF
         </button>
       </div>
-      <p class="outcome-p">This challenge exposes <strong>confirmation bias</strong> in action. We form a theory, then seek evidence that supports it, avoiding the discomfort of being told 'no.' That's why most players never test a sequence that breaks their hypothesis. The same instinct shapes how we evaluate business strategies, hiring decisions, and investment theses: we look for green lights and ignore red ones.</p>
+      <p class="outcome-p">This challenge exposes <strong>confirmation bias</strong> in action. We form a theory, then seek evidence that supports it — avoiding the discomfort of being told 'no.' That's why most players never test a sequence that breaks their hypothesis. The same instinct shapes how we evaluate business strategies, hiring decisions, and investment theses: we look for green lights and ignore red ones.</p>
       <h2 class="outcome-heading">What's going on?</h2>
       <p class="outcome-p">The answer was extremely basic. The rule was simply: <em>Each number must be larger than the one before it.</em> 5, 10, 20 satisfies the rule, as does 1, 2, 3 and -17, 14.6, 845. </p>
       <p class="outcome-p">But most people start off with the incorrect assumption that if we're asking them to solve a problem, it must be a somewhat tricky problem. They come up with a theory for what the answer is, like: <em>Each number is double the previous number.</em> And then they make a classic psychological mistake.</p>
       <p class="outcome-p">They don't want to hear the answer "no." In fact, it may not occur to them to ask a question that may yield a no.</p>
-      <p class="outcome-p">Remarkably, <strong><span id="never-no-pct">many</span></strong> of people who have played this game so far have guessed the answer without first hearing a single no. Only <strong><span id="strong-falsifier-pct">a few</span></strong> heard at least three nos, even though there is no penalty or cost for being told no, save the small disappointment that every human being feels when hearing "no."</p>
+      <p class="outcome-p">Remarkably, <strong><span id="never-no-pct">many</span></strong> of people who have played this game so far have guessed the answer without first hearing a single no. Only <strong><span id="strong-falsifier-pct">a few</span></strong> heard at least three nos — even though there is no penalty or cost for being told no, save the small disappointment that every human being feels when hearing "no."</p>
       <p class="outcome-p" id="personal-insight" style="background:#fff;border-left:3px solid #bccf31;padding:12px 16px;margin:16px 0"></p>
       <p class="outcome-p">It's a lot more pleasant to hear "yes." That, in a nutshell, is why so many people struggle with this problem.</p>
       <h2 class="outcome-heading">Confirmation bias</h2>
       <p class="outcome-p">This disappointment is a version of what psychologists and economists call <b>confirmation bias</b>. Not only are people more likely to believe information that fits their pre-existing beliefs, but they're also more likely to go looking for such information.</p>
       <p class="outcome-p">This challenge exposes a particular kind of confirmation bias that bedevils companies, governments and people every day: the internal yes-man (and yes-woman) tendency. We're much more likely to think about positive situations than negative ones, about why something might go right than wrong and about questions to which the answer is yes, not no.</p>
-      <p class="outcome-p">Sometimes, the reluctance to think negatively has nothing to do with political views or with a conscious fear of being told no. Often, people never even think about asking questions that would produce a negative answer when trying to solve a problem, like this one. They instead restrict the universe of possible questions to those that might potentially yield a "yes."</p>
+      <p class="outcome-p">Sometimes, the reluctance to think negatively has nothing to do with political views or with a conscious fear of being told no. Often, people never even think about asking questions that would produce a negative answer when trying to solve a problem — like this one. They instead restrict the universe of possible questions to those that might potentially yield a "yes."</p>
       <p class="outcome-p">One of the best-selling business books in history about negotiation strategy is 
 <a href="https://www.amazon.com/gp/product/0143118757/" target="_blank" rel="noopener noreferrer">
   <i>Getting to Yes</i>
@@ -798,7 +798,7 @@ function handleSubmitRule() {
 (<a href="https://www.pon.harvard.edu/daily/negotiation-skills-daily/six-guidelines-for-getting-to-yes/" target="_blank" rel="noopener noreferrer">
   see also
 </a>) But the more important advice for us may instead be to go out of our way to get to no. When you want to test a theory, don't just look for examples that prove it. When you're considering a plan, think in detail about how it might go wrong.</p>
-      <p class="outcome-p">Some businesses have made this approach a formal part of their decision-making: Imagine our strategy has failed; what are the most likely reasons it did? When you seek to disprove your idea, you sometimes end up proving it, and other times you can save yourself from making a big mistake. But you need to start by being willing to hear no. And even if you think that you are right, you need to make sure you're asking questions that might actually produce an answer of no. If you still need to work on this trait, don't worry: You're only human.</p>
+      <p class="outcome-p">Some businesses have made this approach a formal part of their decision-making: Imagine our strategy has failed; what are the most likely reasons it did? When you seek to disprove your idea, you sometimes end up proving it — and other times you can save yourself from making a big mistake. But you need to start by being willing to hear no. And even if you think that you are right, you need to make sure you're asking questions that might actually produce an answer of no. If you still need to work on this trait, don't worry: You're only human.</p>
     </div>`;
 
   showClassResults();
@@ -1141,7 +1141,7 @@ function renderDynamicCharts(a) {
     <div class="section-divider">
       <div class="section-number">Part 2</div>
       <div class="section-title">Confidence & accuracy</div>
-      <div class="section-subtitle">What did players believe, and were they right?</div>
+      <div class="section-subtitle">What did players believe — and were they right?</div>
     </div>
     <div class="charts-grid">
       <div class="chart-block">
@@ -1162,14 +1162,14 @@ function renderDynamicCharts(a) {
     <div class="section-divider" ${showCreativity ? '' : 'style="display:none"'}>
       <div class="section-number">Part 3</div>
       <div class="section-title">Exploration creativity</div>
-      <div class="section-subtitle">How creative was each player's testing strategy, and did it actually help?</div>
+      <div class="section-subtitle">How creative was each player's testing strategy — and did it actually help?</div>
     </div>
     <div ${showCreativity ? '' : 'style="display:none"'}>
       <div class="chart-insight" style="margin-bottom:20px">
         <span class="insight-icon">How we measure creativity</span>
-        The <strong>creativity index</strong> measures how structurally diverse a player's tested sequences were, relative to the seed example (2, 4, 8). For each sequence, we extract a feature vector capturing its direction (increasing, decreasing, constant, non-monotonic), scale (magnitude and spread of the numbers), boundary exploration (use of negatives or zero), and gap pattern (arithmetic vs geometric spacing). We then compute the <strong>average pairwise Euclidean distance</strong> across all features, weighted by the logarithm of the number of sequences tested. The weighting ensures that testing more sequences is rewarded, but with diminishing returns. Quality of exploration matters more than sheer volume. Scores are normalized so the most exploratory player in the group scores 100%.
+        The <strong>creativity index</strong> measures how structurally diverse a player's tested sequences were, relative to the seed example (2, 4, 8). For each sequence, we extract a feature vector capturing its direction (increasing, decreasing, constant, non-monotonic), scale (magnitude and spread of the numbers), boundary exploration (use of negatives or zero), and gap pattern (arithmetic vs geometric spacing). We then compute the <strong>average pairwise Euclidean distance</strong> across all features, weighted by the logarithm of the number of sequences tested. The weighting ensures that testing more sequences is rewarded, but with diminishing returns — quality of exploration matters more than sheer volume. Scores are normalized so the most exploratory player in the group scores 100%.
         <br><br>
-        <strong>Example:</strong> Suppose Player A tested (2, 4, 8), (3, 6, 12), and (4, 8, 16). All three are increasing sequences with similar geometric spacing: structurally repetitive. Player B tested (2, 4, 8), (5, 3, 1), and (0, 0, 0). These span three fundamentally different patterns: increasing, decreasing, and constant. Player B's sequences produce a much larger average distance in feature space, and thus a higher creativity index, even though both players tested the same number of sequences.
+        <strong>Example:</strong> Suppose Player A tested (2, 4, 8), (3, 6, 12), and (4, 8, 16). All three are increasing sequences with similar geometric spacing — structurally repetitive. Player B tested (2, 4, 8), (5, 3, 1), and (0, 0, 0). These span three fundamentally different patterns: increasing, decreasing, and constant. Player B's sequences produce a much larger average distance in feature space, and thus a higher creativity index — even though both players tested the same number of sequences.
       </div>
     </div>
     <div class="charts-grid" ${showCreativity ? '' : 'style="display:none"'}>
@@ -1181,7 +1181,7 @@ function renderDynamicCharts(a) {
         <div class="chart-insight" id="insight-scatter"></div>
       </div>
       <div class="chart-block">
-        <div class="chart-block-title">The confidence-creativity paradox</div>
+        <div class="chart-block-title">The confidence–creativity paradox</div>
         <div class="chart-block-subtitle">Average creativity index by self-reported confidence level</div>
         <div class="chart-canvas-wrap"><canvas id="chart-conf-creativity"></canvas></div>
         <div class="chart-read" id="read-conf-creativity"></div>
@@ -1243,9 +1243,9 @@ function buildAttemptsChart(a) {
   const mode = a.modeAttempt;
   let insight = `<span class="insight-icon">Key insight</span>`;
   if (pctFew >= 60) {
-    insight += `<strong>${pctFew}% of players tested 3 or fewer sequences</strong> before committing to an answer. The most common number of guesses was <strong>${mode.value}</strong> (chosen by ${mode.count} player${mode.count!==1?'s':''}).  Most people felt they had "enough" evidence very quickly, a hallmark of confirmation bias. The rule is simple enough that even a few tests should reveal it, but only if you test <em>the right kind</em> of sequences.`;
+    insight += `<strong>${pctFew}% of players tested 3 or fewer sequences</strong> before committing to an answer. The most common number of guesses was <strong>${mode.value}</strong> (chosen by ${mode.count} player${mode.count!==1?'s':''}).  Most people felt they had "enough" evidence very quickly — a hallmark of confirmation bias. The rule is simple enough that even a few tests should reveal it, but only if you test <em>the right kind</em> of sequences.`;
   } else {
-    insight += `Players were fairly spread in how many guesses they tried. The most common was <strong>${mode.value} guesses</strong> (${mode.count} player${mode.count!==1?'s':''}), while the average was <strong>${a.avgAttempts.toFixed(1)}</strong>. More guesses don't help if they all confirm the same hypothesis. What matters is <em>variety</em> in what you test.`;
+    insight += `Players were fairly spread in how many guesses they tried. The most common was <strong>${mode.value} guesses</strong> (${mode.count} player${mode.count!==1?'s':''}), while the average was <strong>${a.avgAttempts.toFixed(1)}</strong>. More guesses don't help if they all confirm the same hypothesis — what matters is <em>variety</em> in what you test.`;
   }
   document.getElementById('insight-attempts').innerHTML = insight;
 }
@@ -1265,15 +1265,15 @@ function buildYesRatioChart(a) {
     }
   });
 
-  document.getElementById('read-yesratio').innerHTML = `<strong>How to read:</strong> For each player, we compute what fraction of their guesses returned "Yes." A player at 100% only ever tested sequences the rule accepted. They never once tried something that could fail. Bars further right (<span style="color:${chartColors.redDark}">red</span>) indicate more one-sided evidence-gathering; bars further left (<span style="color:#6a9a40">green</span>) indicate more balanced testing.`;
+  document.getElementById('read-yesratio').innerHTML = `<strong>How to read:</strong> For each player, we compute what fraction of their guesses returned "Yes." A player at 100% only ever tested sequences the rule accepted — they never once tried something that could fail. Bars further right (<span style="color:${chartColors.redDark}">red</span>) indicate more one-sided evidence-gathering; bars further left (<span style="color:#6a9a40">green</span>) indicate more balanced testing.`;
 
   const pct100Ratio = Math.round(a.pct100 / a.n * 100);
   const pctOver80 = Math.round(a.yesRatios.filter(r => r > 80).length / a.n * 100);
   let insight = `<span class="insight-icon">Key insight</span>`;
-  insight += `<strong>${pct100Ratio}% of players had a 100% "Yes" rate</strong>: every single sequence they tested was accepted. A total of <strong>${pctOver80}%</strong> heard "Yes" on more than 80% of their guesses. `;
+  insight += `<strong>${pct100Ratio}% of players had a 100% "Yes" rate</strong> — every single sequence they tested was accepted. A total of <strong>${pctOver80}%</strong> heard "Yes" on more than 80% of their guesses. `;
   insight += `The median player's "Yes" rate was <strong>${a.medianYesRatio}%</strong>. `;
   if (a.medianYesRatio >= 80) insight += `This is a direct measurement of confirmation bias: most people constructed tests designed (consciously or not) to confirm their theory rather than challenge it. In a business context, this is like conducting customer surveys that only ask satisfied customers, or running A/B tests in conditions where you expect success.`;
-  else insight += `This group was unusually balanced in their testing. Most populations skew much more heavily toward confirmation-seeking.`;
+  else insight += `This group was unusually balanced in their testing — most populations skew much more heavily toward confirmation-seeking.`;
   document.getElementById('insight-yesratio').innerHTML = insight;
 }
 
@@ -1290,8 +1290,8 @@ function buildStrategyChart(a) {
   const neverNoPct = Math.round(a.neverNoPct * 100);
   const strongPct = Math.round(a.strongFPct * 100);
   let insight = `<span class="insight-icon">Key insight</span>`;
-  if (neverNoPct >= 40) insight += `<strong>${neverNoPct}% of players never heard a single "No"</strong>. They only tested sequences they expected to pass. Only <strong>${strongPct}%</strong> actively sought disconfirming evidence (3+ "No" responses). There is no penalty for hearing "No" in this game, yet most people instinctively avoid it. This is exactly how confirmation bias operates in business: we pitch ideas to people we think will agree, we test strategies in markets we expect to succeed, and we seek data that validates our decisions.`;
-  else insight += `<strong>${neverNoPct}% never heard "No"</strong>, while <strong>${strongPct}% actively tested for failure</strong> (3+ "No"s). Those who deliberately sought rejection were practicing what scientists call <em>falsification</em>, the most reliable path to truth. In business, this maps to practices like pre-mortems, red teams, and devil's advocates: deliberately seeking reasons your plan might fail <em>before</em> committing to it.`;
+  if (neverNoPct >= 40) insight += `<strong>${neverNoPct}% of players never heard a single "No"</strong> — they only tested sequences they expected to pass. Only <strong>${strongPct}%</strong> actively sought disconfirming evidence (3+ "No" responses). There is no penalty for hearing "No" in this game, yet most people instinctively avoid it. This is exactly how confirmation bias operates in business: we pitch ideas to people we think will agree, we test strategies in markets we expect to succeed, and we seek data that validates our decisions.`;
+  else insight += `<strong>${neverNoPct}% never heard "No"</strong>, while <strong>${strongPct}% actively tested for failure</strong> (3+ "No"s). Those who deliberately sought rejection were practicing what scientists call <em>falsification</em> — the most reliable path to truth. In business, this maps to practices like pre-mortems, red teams, and devil's advocates: deliberately seeking reasons your plan might fail <em>before</em> committing to it.`;
   document.getElementById('insight-strategy').innerHTML = insight;
 }
 
@@ -1311,9 +1311,9 @@ function buildConfidenceChart(a) {
   const overallAvg = a.avgConf.toFixed(1);
 
   if (fewConf !== null && manyConf !== null) {
-    if (fewConf >= manyConf - 0.3) insight += `Players who tested just ${a.confLabels[0]} reported an average confidence of <strong>${fewConf}/5</strong>, barely different from those who tested ${a.confLabels[a.confLabels.length-1]} (<strong>${manyConf}/5</strong>). This is the <strong>illusion of knowledge</strong>: a few confirming examples feel like proof. Across all players, average confidence was <strong>${overallAvg}/5</strong>. People tend to feel sure very quickly, especially when they never hear "no."`;
-    else insight += `Interestingly, players who tested more sequences reported <em>higher</em> confidence (${a.confLabels[a.confLabels.length-1]}: <strong>${manyConf}/5</strong>) compared to quick deciders (${a.confLabels[0]}: <strong>${fewConf}/5</strong>). More testing does seem to build genuine understanding, but only when it includes <em>disconfirming</em> tests. The overall average was <strong>${overallAvg}/5</strong>.`;
-  } else insight += `Across all ${a.n} players, average confidence was <strong>${overallAvg}/5</strong>. People tend to feel confident regardless of how thoroughly they tested, a signature of confirmation bias.`;
+    if (fewConf >= manyConf - 0.3) insight += `Players who tested just ${a.confLabels[0]} reported an average confidence of <strong>${fewConf}/5</strong> — barely different from those who tested ${a.confLabels[a.confLabels.length-1]} (<strong>${manyConf}/5</strong>). This is the <strong>illusion of knowledge</strong>: a few confirming examples feel like proof. Across all players, average confidence was <strong>${overallAvg}/5</strong>. People tend to feel sure very quickly, especially when they never hear "no."`;
+    else insight += `Interestingly, players who tested more sequences reported <em>higher</em> confidence (${a.confLabels[a.confLabels.length-1]}: <strong>${manyConf}/5</strong>) compared to quick deciders (${a.confLabels[0]}: <strong>${fewConf}/5</strong>). More testing does seem to build genuine understanding — but only when it includes <em>disconfirming</em> tests. The overall average was <strong>${overallAvg}/5</strong>.`;
+  } else insight += `Across all ${a.n} players, average confidence was <strong>${overallAvg}/5</strong>. People tend to feel confident regardless of how thoroughly they tested — a signature of confirmation bias.`;
   document.getElementById('insight-confidence').innerHTML = insight;
 }
 
@@ -1338,9 +1338,9 @@ function buildCorrectnessChart(a) {
   insight += `<strong>${wrongPct}% of players got the rule wrong</strong>, while ${rightPct}% got it right. `;
   if (a.avgConfWrong !== null && a.avgConfCorrect !== null) {
     const diff = Math.abs(a.avgConfWrong - a.avgConfCorrect);
-    if (a.avgConfWrong >= a.avgConfCorrect - 0.3) insight += `Those who got it wrong reported an average confidence of <strong>${a.avgConfWrong.toFixed(1)}/5</strong>, ${diff < 0.3 ? 'virtually identical to' : 'even higher than'} the <strong>${a.avgConfCorrect.toFixed(1)}/5</strong> average of those who got it right. <strong>${wrongHighPct}%</strong> of wrong answers came with high confidence (4 or 5). This is the <strong>overconfidence effect</strong> in action: feeling certain doesn't mean being correct.`;
-    else insight += `Those who got it right were more confident (avg <strong>${a.avgConfCorrect.toFixed(1)}/5</strong>) than those who got it wrong (<strong>${a.avgConfWrong.toFixed(1)}/5</strong>). Still, <strong>${wrongHighPct}%</strong> of wrong answers came with high confidence (4 or 5), a reminder that feeling sure is no guarantee of being right.`;
-  } else insight += `Confidence was high across the board regardless of correctness, a hallmark of the overconfidence effect.`;
+    if (a.avgConfWrong >= a.avgConfCorrect - 0.3) insight += `Those who got it wrong reported an average confidence of <strong>${a.avgConfWrong.toFixed(1)}/5</strong> — ${diff < 0.3 ? 'virtually identical to' : 'even higher than'} the <strong>${a.avgConfCorrect.toFixed(1)}/5</strong> average of those who got it right. <strong>${wrongHighPct}%</strong> of wrong answers came with high confidence (4 or 5). This is the <strong>overconfidence effect</strong> in action: feeling certain doesn't mean being correct.`;
+    else insight += `Those who got it right were more confident (avg <strong>${a.avgConfCorrect.toFixed(1)}/5</strong>) than those who got it wrong (<strong>${a.avgConfWrong.toFixed(1)}/5</strong>). Still, <strong>${wrongHighPct}%</strong> of wrong answers came with high confidence (4 or 5) — a reminder that feeling sure is no guarantee of being right.`;
+  } else insight += `Confidence was high across the board regardless of correctness — a hallmark of the overconfidence effect.`;
   document.getElementById('insight-correctness').innerHTML = insight;
 }
 
@@ -1364,8 +1364,8 @@ function buildScatterChart(a) {
   const highCreativityLowAttempts = a.creativityScatter.filter(d => d.y >= 50 && d.x <= 3).length;
   const lowCreativityHighAttempts = a.creativityScatter.filter(d => d.y < 30 && d.x >= 5).length;
   let insight = `<span class="insight-icon">Key insight</span>More guesses don't automatically mean more creative exploration. `;
-  if (lowCreativityHighAttempts > 0) insight += `<strong>${lowCreativityHighAttempts} player${lowCreativityHighAttempts>1?'s':''}</strong> tested 5+ sequences but scored below 30% creativity. They tested a lot, but kept repeating variations of the same pattern. `;
-  if (highCreativityLowAttempts > 0) insight += `Meanwhile, <strong>${highCreativityLowAttempts} player${highCreativityLowAttempts>1?'s':''}</strong> achieved 50%+ creativity in just 3 or fewer guesses, showing that strategic diversity beats brute-force volume. `;
+  if (lowCreativityHighAttempts > 0) insight += `<strong>${lowCreativityHighAttempts} player${lowCreativityHighAttempts>1?'s':''}</strong> tested 5+ sequences but scored below 30% creativity — they tested a lot, but kept repeating variations of the same pattern. `;
+  if (highCreativityLowAttempts > 0) insight += `Meanwhile, <strong>${highCreativityLowAttempts} player${highCreativityLowAttempts>1?'s':''}</strong> achieved 50%+ creativity in just 3 or fewer guesses — showing that strategic diversity beats brute-force volume. `;
   insight += `In business, this is the difference between <em>doing more research</em> and <em>doing different research</em>.`;
   document.getElementById('insight-scatter').innerHTML = insight;
 }
@@ -1470,8 +1470,8 @@ function updateOutcomeText(a) {
   if (pEl) {
     let lines = [];
     lines.push(`<strong>Your result:</strong> You made ${playerAttempts} guess${playerAttempts !== 1 ? 'es' : ''} (${playerYeses} Yes, ${playerNos} No) before submitting.`);
-    if (playerNos === 0) lines.push(`You never heard a single "No" . You are in the ${Math.round(a.neverNoPct * 100)}% of players who submitted without ever testing a sequence that could fail.`);
-    else if (playerNos >= 3) lines.push(`You heard ${playerNos} "No" responses. That puts you among the rare ${Math.round(a.strongFPct * 100)}% who actively sought disconfirming evidence. Well done.`);
+    if (playerNos === 0) lines.push(`You never heard a single "No" — you're in the ${Math.round(a.neverNoPct * 100)}% of players who submitted without ever testing a sequence that could fail.`);
+    else if (playerNos >= 3) lines.push(`You heard ${playerNos} "No" responses — that puts you among the rare ${Math.round(a.strongFPct * 100)}% who actively sought disconfirming evidence. Well done.`);
     else lines.push(`You heard ${playerNos} "No" response${playerNos !== 1 ? 's' : ''}. The average player hears only ${a.avgNos.toFixed(1)}.`);
     pEl.innerHTML = lines.join(' ');
   }
@@ -1493,7 +1493,7 @@ function renderFallbackCharts(data) {
   document.getElementById('charts-loading').classList.add('hidden');
   const wrap = document.getElementById('charts-content');
   wrap.classList.remove('hidden');
-  wrap.innerHTML = `<div class="charts-grid"><div class="chart-block"><div class="chart-block-title">How many guesses did players make?</div><div class="chart-block-subtitle">Number of sequences tested before submitting an answer</div><div class="chart-canvas-wrap"><canvas id="chart-attempts-fb"></canvas></div><div class="chart-read"><strong>How to read:</strong> Each bar shows how many players tested that many sequences before submitting.</div><div class="chart-insight"><span class="insight-icon">Key insight</span>Most players decide quickly. The average was <strong>${insights.avgAttempts?.toFixed(1) ?? '-'}</strong> guesses.</div></div></div>`;
+  wrap.innerHTML = `<div class="charts-grid"><div class="chart-block"><div class="chart-block-title">How many guesses did players make?</div><div class="chart-block-subtitle">Number of sequences tested before submitting an answer</div><div class="chart-canvas-wrap"><canvas id="chart-attempts-fb"></canvas></div><div class="chart-read"><strong>How to read:</strong> Each bar shows how many players tested that many sequences before submitting.</div><div class="chart-insight"><span class="insight-icon">Key insight</span>Most players decide quickly. The average was <strong>${insights.avgAttempts?.toFixed(1) ?? '—'}</strong> guesses.</div></div></div>`;
   const labels = distribution.map(d => d.attempts ?? d.label ?? d.bucket);
   const values = distribution.map(d => d.students ?? d.count);
   const peakIdx = values.indexOf(Math.max(...values));
@@ -1503,14 +1503,14 @@ function renderFallbackCharts(data) {
 function renderFallbackInsightsTable(data) {
   const { distribution, insights } = data;
   const total = distribution.map(d => d.students).reduce((a, b) => a + b, 0);
-  const rows = [['Total players', total], ['Avg guesses before submitting', insights.avgAttempts?.toFixed(1) ?? '-'], ['Avg confidence level', insights.avgConfidence ?? '-'], ['Median guesses', insights.medianAttempts ?? '-'], ['Guessed without hearing No', insights.neverHeardNo != null ? `${insights.neverHeardNo} (${(insights.neverHeardNoPct*100).toFixed(0)}%)` : '-'], ['Tested at least 3 wrong sequences', insights.strongFalsifiers != null ? `${insights.strongFalsifiers} (${(insights.strongFalsifiersPct*100).toFixed(0)}%)` : '-'], ['Submitted after just 1 guess', insights.oneGuess != null ? `${insights.oneGuess} (${(insights.oneGuessPct*100).toFixed(0)}%)` : '-'], ['Avg "No" responses per player', insights.avgNos?.toFixed(1) ?? '-']];
+  const rows = [['Total players', total], ['Avg guesses before submitting', insights.avgAttempts?.toFixed(1) ?? '—'], ['Avg confidence level', insights.avgConfidence ?? '—'], ['Median guesses', insights.medianAttempts ?? '—'], ['Guessed without hearing No', insights.neverHeardNo != null ? `${insights.neverHeardNo} (${(insights.neverHeardNoPct*100).toFixed(0)}%)` : '—'], ['Tested at least 3 wrong sequences', insights.strongFalsifiers != null ? `${insights.strongFalsifiers} (${(insights.strongFalsifiersPct*100).toFixed(0)}%)` : '—'], ['Submitted after just 1 guess', insights.oneGuess != null ? `${insights.oneGuess} (${(insights.oneGuessPct*100).toFixed(0)}%)` : '—'], ['Avg "No" responses per player', insights.avgNos?.toFixed(1) ?? '—']];
   document.getElementById('insights-container').innerHTML = `<table class="insights-table"><thead><tr><th>Metric</th><th style="text-align:right">Value</th></tr></thead><tbody>${rows.map(([l,v]) => `<tr><td>${l}</td><td class="val">${v}</td></tr>`).join('')}</tbody></table>`;
   if (insights.neverHeardNoPct != null) { const el = document.getElementById('never-no-pct'); if (el) el.textContent = Math.round(insights.neverHeardNoPct * 100) + ' percent'; }
   if (insights.strongFalsifiersPct != null) { const el = document.getElementById('strong-falsifier-pct'); if (el) el.textContent = Math.round(insights.strongFalsifiersPct * 100) + ' percent'; }
   const playerNos = guesses.filter(g => !g.passes).length;
   const playerYeses = guesses.filter(g => g.passes).length;
   const pEl = document.getElementById('personal-insight');
-  if (pEl && insights.avgNos != null) { let lines = [`<strong>Your result:</strong> You made ${playerAttempts} guess${playerAttempts !== 1 ? 'es' : ''} (${playerYeses} Yes, ${playerNos} No) before submitting.`]; if (playerNos === 0) lines.push(`You never heard a single "No" . You are in the ${Math.round(insights.neverHeardNoPct * 100)}% of players who submitted without ever testing a sequence that could fail.`); else if (playerNos >= 3) lines.push(`You heard ${playerNos} "No" responses. That puts you among the rare ${Math.round(insights.strongFalsifiersPct * 100)}% who actively sought disconfirming evidence. Well done.`); else lines.push(`You heard ${playerNos} "No" response${playerNos !== 1 ? 's' : ''}. The average player hears only ${insights.avgNos.toFixed(1)}.`); pEl.innerHTML = lines.join(' '); }
+  if (pEl && insights.avgNos != null) { let lines = [`<strong>Your result:</strong> You made ${playerAttempts} guess${playerAttempts !== 1 ? 'es' : ''} (${playerYeses} Yes, ${playerNos} No) before submitting.`]; if (playerNos === 0) lines.push(`You never heard a single "No" — you're in the ${Math.round(insights.neverHeardNoPct * 100)}% of players who submitted without ever testing a sequence that could fail.`); else if (playerNos >= 3) lines.push(`You heard ${playerNos} "No" responses — that puts you among the rare ${Math.round(insights.strongFalsifiersPct * 100)}% who actively sought disconfirming evidence. Well done.`); else lines.push(`You heard ${playerNos} "No" response${playerNos !== 1 ? 's' : ''}. The average player hears only ${insights.avgNos.toFixed(1)}.`); pEl.innerHTML = lines.join(' '); }
 }
 
 function logToSheet(rule, conf, numAttempts) {
@@ -1520,7 +1520,7 @@ function logToSheet(rule, conf, numAttempts) {
   const nos = guesses.filter(g => !g.passes).length;
   const yesSeq = guesses.filter(g => g.passes).map(g => `(${g.nums.join(', ')})`).join('; ');
   const noSeq = guesses.filter(g => !g.passes).map(g => `(${g.nums.join(', ')})`).join('; ');
-  fetch(GOOGLE_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ timestamp: formatTimestamp(), numAttempts, yeses, nos, rule, confidence: conf, yesSequences: yesSeq || '-', noSequences: noSeq || '-' }) }).then(() => showToast('Response recorded ✓')).catch(err => { console.error('Logging error:', err); showToast('Could not save response'); });
+  fetch(GOOGLE_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ timestamp: formatTimestamp(), numAttempts, yeses, nos, rule, confidence: conf, yesSequences: yesSeq || '—', noSequences: noSeq || '—' }) }).then(() => showToast('Response recorded ✓')).catch(err => { console.error('Logging error:', err); showToast('Could not save response'); });
 }
 
 async function downloadPDF() {
@@ -1924,9 +1924,9 @@ async function downloadPDF() {
     // Personal result text
     let personalText = `Your result: You made ${totalGuesses} guess${totalGuesses !== 1 ? 'es' : ''} (${yeses} Yes, ${nos} No) before submitting.`;
     if (nos === 0) {
-      personalText += ' You never heard a single "No". You submitted without ever testing a sequence that could fail.';
+      personalText += ' You never heard a single "No" — you submitted without ever testing a sequence that could fail.';
     } else if (nos >= 3) {
-      personalText += ` You heard ${nos} "No" responses. That puts you among the rare players who actively sought disconfirming evidence. Well done.`;
+      personalText += ` You heard ${nos} "No" responses — that puts you among the rare players who actively sought disconfirming evidence. Well done.`;
     } else {
       personalText += ` You heard ${nos} "No" response${nos !== 1 ? 's' : ''}.`;
     }
@@ -1981,107 +1981,6 @@ async function downloadPDF() {
     y += 6;
 
     // ============================================================
-    // Helper: extract text from a DOM element (strip HTML tags)
-    // ============================================================
-    function domText(id) {
-      const el = document.getElementById(id);
-      if (!el) return '';
-      return el.textContent.replace(/\s+/g, ' ').trim();
-    }
-
-    // Helper: draw a "How to read" block in the PDF
-    function addReadBlock(id) {
-      const text = domText(id);
-      if (!text) return;
-      const clean = text.replace(/^How to read:\s*/i, '').trim();
-      if (!clean) return;
-      y += 2;
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(8);
-      pdf.setTextColor(100, 100, 100);
-      const readLines = pdf.splitTextToSize('How to read: ' + clean, CW);
-      checkPage(readLines.length * 3.6 + 4);
-      pdf.setFont('times', 'normal');
-      pdf.setFontSize(8.5);
-      pdf.setTextColor(120, 120, 120);
-      // Print "How to read:" in bold, then rest in normal
-      const fullText = 'How to read: ' + clean;
-      const wrappedLines = pdf.splitTextToSize(fullText, CW);
-      pdf.text(wrappedLines, M, y);
-      y += wrappedLines.length * 3.6 + 3;
-    }
-
-    // Helper: draw a "Key insight" box in the PDF (yellow background with left border)
-    function addInsightBox(id) {
-      const text = domText(id);
-      if (!text) return;
-      const clean = text.replace(/^Key insight\s*/i, '').trim();
-      if (!clean) return;
-      y += 2;
-      pdf.setFont('times', 'normal');
-      pdf.setFontSize(9);
-      const insightLines = pdf.splitTextToSize(clean, CW - 12);
-      const boxH = insightLines.length * 3.8 + 12;
-      checkPage(boxH + 4);
-      // Yellow background
-      pdf.setFillColor(255, 253, 231);
-      pdf.rect(M, y, CW, boxH, 'F');
-      // Left border accent
-      pdf.setFillColor(201, 184, 52);
-      pdf.rect(M, y, 1.2, boxH, 'F');
-      // Label
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(7);
-      pdf.setTextColor(176, 160, 32);
-      pdf.text('KEY INSIGHT', M + 5, y + 5);
-      // Body text
-      pdf.setFont('times', 'normal');
-      pdf.setFontSize(9);
-      pdf.setTextColor(85, 85, 85);
-      pdf.text(insightLines, M + 5, y + 10);
-      y += boxH + 4;
-    }
-
-    // ============================================================
-    // SUMMARY ESSAY (shown to user after submit, before charts)
-    // ============================================================
-    heading('Summary', 14, [51, 51, 51], 6, 6, 30);
-
-    const essayParagraphs = [
-      'This challenge exposes confirmation bias in action. We form a theory, then seek evidence that supports it, avoiding the discomfort of being told "no." That is why most players never test a sequence that breaks their hypothesis. The same instinct shapes how we evaluate business strategies, hiring decisions, and investment theses: we look for green lights and ignore red ones.',
-      '',
-      'What is going on?',
-      '',
-      'The answer was extremely basic. The rule was simply: Each number must be larger than the one before it. The sequence 5, 10, 20 satisfies the rule, as does 1, 2, 3 and -17, 14.6, 845.',
-      'But most people start off with the incorrect assumption that if we are asking them to solve a problem, it must be a somewhat tricky problem. They come up with a theory for what the answer is, like: "Each number is double the previous number." And then they make a classic psychological mistake.',
-      'They do not want to hear the answer "no." In fact, it may not occur to them to ask a question that may yield a no.',
-      'It is a lot more pleasant to hear "yes." That, in a nutshell, is why so many people struggle with this problem.',
-      '',
-      'Confirmation bias',
-      '',
-      'This disappointment is a version of what psychologists and economists call confirmation bias. Not only are people more likely to believe information that fits their pre-existing beliefs, but they are also more likely to go looking for such information.',
-      'This challenge exposes a particular kind of confirmation bias that bedevils companies, governments and people every day: the internal yes-man (and yes-woman) tendency. We are much more likely to think about positive situations than negative ones, about why something might go right than wrong and about questions to which the answer is yes, not no.',
-      'Sometimes, the reluctance to think negatively has nothing to do with political views or with a conscious fear of being told no. Often, people never even think about asking questions that would produce a negative answer when trying to solve a problem, like this one. They instead restrict the universe of possible questions to those that might potentially yield a "yes."',
-      'But the more important advice for us may instead be to go out of our way to get to no. When you want to test a theory, do not just look for examples that prove it. When you are considering a plan, think in detail about how it might go wrong.',
-      'Some businesses have made this approach a formal part of their decision-making: Imagine our strategy has failed; what are the most likely reasons it did? When you seek to disprove your idea, you sometimes end up proving it, and other times you can save yourself from making a big mistake. But you need to start by being willing to hear no. And even if you think that you are right, you need to make sure you are asking questions that might actually produce an answer of no. If you still need to work on this trait, do not worry: You are only human.'
-    ];
-
-    essayParagraphs.forEach(para => {
-      if (para === '') {
-        y += 2;
-        return;
-      }
-      // Sub-headings
-      if (para === 'What is going on?' || para === 'Confirmation bias') {
-        heading(para, 12, [51, 51, 51], 6, 5, 20);
-        return;
-      }
-      body(para, { size: 9.5, color: [80, 80, 80] });
-      y += 1;
-    });
-    y += 6;
-
-    // ============================================================
     // PART 1: Testing behavior (starts on even page)
     // ============================================================
     partHeader(1, 'Testing behavior', 'How did players approach the challenge? What evidence did they gather?');
@@ -2091,37 +1990,29 @@ async function downloadPDF() {
     body('Number of sequences tested before submitting an answer', { size: 9, italic: true, color: [130, 130, 130] });
     y += 2;
     addChart('chart-attempts', 55);
-    addReadBlock('read-attempts');
-    addInsightBox('insight-attempts');
 
     // Chart: Yes ratio
     heading('How one-sided was the evidence?', 11, [51, 51, 51], 6, 4, 50);
     body('Distribution of each player\'s "Yes" rate: Yes responses / Total guesses', { size: 9, italic: true, color: [130, 130, 130] });
     y += 2;
     addChart('chart-yesratio', 55);
-    addReadBlock('read-yesratio');
-    addInsightBox('insight-yesratio');
 
     // Chart: Strategy
     heading('Did players seek disconfirming evidence?', 11, [51, 51, 51], 6, 4, 50);
     body('Breakdown by how many "No" responses players received', { size: 9, italic: true, color: [130, 130, 130] });
     y += 2;
     addChart('chart-strategy', 65);
-    addReadBlock('read-strategy');
-    addInsightBox('insight-strategy');
 
     // ============================================================
     // PART 2: Confidence & accuracy (starts on even page)
     // ============================================================
-    partHeader(2, 'Confidence & accuracy', 'What did players believe, and were they right?');
+    partHeader(2, 'Confidence & accuracy', 'What did players believe — and were they right?');
 
     // Chart: Confidence
     heading('Does more testing lead to more confidence?', 11, [51, 51, 51], 2, 4, 50);
     body('Average self-reported confidence, 1 to 5, by number of guesses', { size: 9, italic: true, color: [130, 130, 130] });
     y += 2;
     addChart('chart-confidence', 55);
-    addReadBlock('read-confidence');
-    addInsightBox('insight-confidence');
 
     // Chart: Correctness (if exists)
     const correctnessChart = document.getElementById('chart-correctness');
@@ -2130,8 +2021,6 @@ async function downloadPDF() {
       body('Confidence distribution split by whether the player identified the correct rule', { size: 9, italic: true, color: [130, 130, 130] });
       y += 2;
       addChart('chart-correctness', 55);
-      addReadBlock('read-correctness');
-      addInsightBox('insight-correctness');
     }
 
     // ============================================================
@@ -2139,7 +2028,7 @@ async function downloadPDF() {
     // ============================================================
     const scatterChart = document.getElementById('chart-scatter');
     if (scatterChart) {
-      partHeader(3, 'Exploration creativity', 'How creative was each player\'s testing strategy, and did it actually help?');
+      partHeader(3, 'Exploration creativity', 'How creative was each player\'s testing strategy — and did it actually help?');
 
       // Methodology box
       checkPage(40);
@@ -2166,18 +2055,14 @@ async function downloadPDF() {
       body('Each dot is a player: number of guesses vs creativity index', { size: 9, italic: true, color: [130, 130, 130] });
       y += 2;
       addChart('chart-scatter', 60);
-      addReadBlock('read-scatter');
-      addInsightBox('insight-scatter');
 
       // Chart: Conf-creativity
       const confCreativityChart = document.getElementById('chart-conf-creativity');
       if (confCreativityChart) {
-        heading('The confidence-creativity paradox', 11, [51, 51, 51], 6, 4, 50);
+        heading('The confidence–creativity paradox', 11, [51, 51, 51], 6, 4, 50);
         body('Average creativity index by self-reported confidence level', { size: 9, italic: true, color: [130, 130, 130] });
         y += 2;
         addChart('chart-conf-creativity', 55);
-        addReadBlock('read-conf-creativity');
-        addInsightBox('insight-conf-creativity');
       }
 
       // Chart: Creativity vs correctness
@@ -2187,8 +2072,6 @@ async function downloadPDF() {
         body('Average creativity index for players who got the rule right vs wrong', { size: 9, italic: true, color: [130, 130, 130] });
         y += 2;
         addChart('chart-creativity-correct', 55);
-        addReadBlock('read-creativity-correct');
-        addInsightBox('insight-creativity-correct');
       }
     }
 
