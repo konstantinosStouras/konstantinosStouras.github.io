@@ -960,9 +960,21 @@ const chartColors = {
 
 // Render all charts at 3x resolution so they stay crisp at any zoom
 Chart.defaults.devicePixelRatio = 3;
-// Ensure interactive tooltips are responsive on all charts
-Chart.defaults.interaction = { mode: 'nearest', intersect: true };
-Chart.defaults.hover = { mode: 'nearest', intersect: true };
+// Make hover detection generous — don't require exact pixel hit on the bar
+Chart.defaults.interaction = { mode: 'index', intersect: false };
+Chart.defaults.hover = { mode: 'index', intersect: false };
+// Style all tooltips for readability
+Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(40, 40, 40, 0.95)';
+Chart.defaults.plugins.tooltip.titleFont = { family: "'Libre Franklin', Arial, sans-serif", size: 13, weight: '700' };
+Chart.defaults.plugins.tooltip.bodyFont = { family: "'Libre Franklin', Arial, sans-serif", size: 12, weight: '600' };
+Chart.defaults.plugins.tooltip.padding = { top: 10, bottom: 10, left: 14, right: 14 };
+Chart.defaults.plugins.tooltip.cornerRadius = 6;
+Chart.defaults.plugins.tooltip.displayColors = true;
+Chart.defaults.plugins.tooltip.boxWidth = 12;
+Chart.defaults.plugins.tooltip.boxHeight = 12;
+Chart.defaults.plugins.tooltip.boxPadding = 6;
+Chart.defaults.plugins.tooltip.caretSize = 7;
+Chart.defaults.plugins.tooltip.caretPadding = 4;
 
 function showClassResults() {
   const container = document.getElementById('class-results');
@@ -1297,6 +1309,7 @@ function buildStrategyChart(a) {
     options: {
       responsive: true,
       cutout: '45%',
+      interaction: { mode: 'nearest', intersect: true },
       plugins: {
         legend: {
           position: 'bottom',
@@ -1508,6 +1521,7 @@ function buildScatterChart(a) {
     data: { datasets },
     options: {
       responsive: true,
+      interaction: { mode: 'nearest', intersect: false, axis: 'xy' },
       plugins: {
         legend: { position: 'top', labels: { font: { ...chartFont, size: 11 }, color: chartColors.text } },
         tooltip: { callbacks: { label: (ctx) => `${ctx.raw.x} guesses, ${ctx.raw.y}% creativity` } }
