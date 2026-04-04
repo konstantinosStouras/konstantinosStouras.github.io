@@ -18,7 +18,6 @@
   <meta name="twitter:description" content="A short game about the hidden traps in how we test ideas and convince ourselves we're right.">
   <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -608,7 +607,12 @@ function handleSubmitRule() {
       <div class="answer-label" style="text-transform:none">How confident you are about identifying the rule:</div>
       <div class="student-answer" style="font-style:normal">${confidence * 20}%</div>
       <div class="outcome-rule">The rule: ${RULE_ANSWER}</div>
-      <h2 class="outcome-heading">Summary</h2>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h2 class="outcome-heading" style="margin:0">Summary</h2>
+        <button class="pdf-btn" onclick="downloadPDF()" style="margin:0">
+          <span class="btn-icon">↓</span> Download PDF
+        </button>
+      </div>
       <p class="outcome-p">This puzzle exposes <strong>confirmation bias</strong> in action. We form a theory, then seek evidence that supports it — avoiding the discomfort of being told 'no.' That's why most players never test a sequence that breaks their hypothesis. The same instinct shapes how we evaluate business strategies, hiring decisions, and investment theses: we look for green lights and ignore red ones.</p>
       <h2 class="outcome-heading">What's going on?</h2>
       <p class="outcome-p">The answer was extremely basic. The rule was simply: <em>Each number must be larger than the one before it.</em> 5, 10, 20 satisfies the rule, as does 1, 2, 3 and -17, 14.6, 845. Children in kindergarten can understand this rule.</p>
@@ -1838,7 +1842,6 @@ async function downloadPDF() {
   const btnBottom = document.getElementById('pdf-btn-bottom');
   const origText = btnTop.innerHTML;
 
-  // Disable buttons and show progress
   [btnTop, btnBottom].forEach(b => {
     b.disabled = true;
     b.innerHTML = '<span class="btn-icon">⏳</span> Generating PDF…';
@@ -1847,104 +1850,241 @@ async function downloadPDF() {
   try {
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const pageW = pdf.internal.pageSize.getWidth();
-    const pageH = pdf.internal.pageSize.getHeight();
-    const margin = 12;
-    const contentW = pageW - margin * 2;
+    const W = pdf.internal.pageSize.getWidth();
+    const H = pdf.internal.pageSize.getHeight();
+    const M = 18; // margin
+    const CW = W - M * 2; // content width
+    let y = M;
 
-    // Collect all sections to capture
-    const sections = [];
+    // --- Helper functions ---
+    function checkPage(need) {
+      if (y + need > H - 14) { addFooter(); pdf.addPage(); y = M; }
+    }
+    function addFooter() {
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(170,170,170);
+      pdf.text('The Problem-Solving Trap  •  Prof. Kostas Stouras, UCD Smurfit', M, H - 8);
+      pdf.text('Page ' + pdf.internal.getNumberOfPages(), W - M, H - 8, { align: 'right' });
+    }
+    function heading(text, size, color, spaceBefore, spaceAfter) {
+      checkPage(spaceBefore + size * 0.5 + spaceAfter);
+      y += spaceBefore;
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(size);
+      pdf.setTextColor(color[0], color[1], color[2]);
+      pdf.text(text, M, y);
+      y += spaceAfter;
+    }
+    function body(text, opts) {
+      const size = (opts && opts.size) || 10;
+      const color = (opts && opts.color) || [80,80,80];
+      const bold = (opts && opts.bold) || false;
+      pdf.setFont('helvetica', bold ? 'bold' : 'normal'); pdf.setFontSize(size);
+      pdf.setTextColor(color[0], color[1], color[2]);
+      // Strip HTML tags for clean text
+      const clean = text.replace(/<\/?[^>]+(>|$)/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+      const lines = pdf.splitTextToSize(clean, CW);
+      checkPage(lines.length * size * 0.42 + 2);
+      pdf.text(lines, M, y);
+      y += lines.length * size * 0.42 + 2;
+    }
+    function addChart(canvasId) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+      const imgData = canvas.toDataURL('image/png');
+      const ratio = canvas.height / canvas.width;
+      const imgW = CW;
+      const imgH = imgW * ratio;
+      const finalH = Math.min(imgH, 80); // cap height
+      const finalW = finalH / ratio < imgW ? finalH / ratio : imgW;
+      checkPage(finalH + 4);
+      pdf.addImage(imgData, 'PNG', M, y, finalW, finalH);
+      y += finalH + 3;
+    }
+    function sectionHeader(partNum, title, subtitle) {
+      checkPage(22);
+      y += 6;
+      pdf.setDrawColor(220,220,210); pdf.setLineWidth(0.4);
+      pdf.line(M, y, W - M, y);
+      y += 6;
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8);
+      pdf.setTextColor(188,207,49);
+      pdf.text('PART ' + partNum, M, y);
+      y += 5;
+      pdf.setFontSize(15); pdf.setTextColor(51,51,51);
+      pdf.text(title, M, y);
+      y += 5;
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9);
+      pdf.setTextColor(150,150,150);
+      pdf.text(subtitle, M, y);
+      y += 7;
+    }
+    function chartBlock(canvasId) {
+      // Title
+      const block = document.getElementById(canvasId)?.closest('.chart-block');
+      if (!block || block.style.display === 'none') return;
+      const title = block.querySelector('.chart-block-title')?.textContent || '';
+      const readEl = block.querySelector('.chart-read');
+      const insightEl = block.querySelector('.chart-insight');
 
-    // Outcome box (the player's answer + summary text)
-    const outcomeEl = document.getElementById('outcome-section');
-    if (outcomeEl && !outcomeEl.classList.contains('hidden')) {
-      sections.push({ el: outcomeEl, label: 'Your result' });
+      checkPage(12);
+      heading(title, 12, [51,51,51], 4, 4);
+      addChart(canvasId);
+      if (readEl) body(readEl.textContent, { size: 8.5, color: [120,120,120] });
+      if (insightEl) {
+        y += 1;
+        body(insightEl.textContent, { size: 9, color: [80,80,60] });
+      }
+      y += 3;
     }
 
-    // Each chart block
-    const chartBlocks = document.querySelectorAll('#charts-content .chart-block, #charts-content .section-divider');
-    chartBlocks.forEach(block => {
-      if (block.style.display !== 'none' && block.offsetHeight > 0) {
-        sections.push({ el: block, label: '' });
+    // ===================== TITLE PAGE =====================
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(26);
+    pdf.setTextColor(51, 51, 51);
+    pdf.text('The Problem-Solving Trap', M, y + 8);
+    y += 14;
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(12);
+    pdf.setTextColor(130, 130, 130);
+    pdf.text('Results & Insights', M, y);
+    y += 7;
+    pdf.setFontSize(11); pdf.setTextColor(80, 80, 80);
+    pdf.text('Prof. Kostas Stouras, UCD Smurfit', M, y);
+    y += 6;
+    pdf.setFontSize(10); pdf.setTextColor(150, 150, 150);
+    pdf.text(new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }), M, y);
+    y += 5;
+    // Green accent line
+    pdf.setDrawColor(188, 207, 49); pdf.setLineWidth(0.8);
+    pdf.line(M, y, M + 80, y);
+    y += 10;
+
+    // ===================== THE CHALLENGE =====================
+    heading('The challenge', 14, [51,51,51], 2, 5);
+    body('There is a secret rule that determines whether a sequence of three numbers is accepted or rejected. Your goal is to figure out what that rule is.', { size: 10 });
+    y += 2;
+    body('Example sequence that obeys the rule:  2, 4, 8  →  Yes', { size: 10, bold: true, color: [51,51,51] });
+    y += 4;
+
+    // ===================== PLAYER'S GUESSES =====================
+    if (guesses.length > 0) {
+      heading('Your guesses', 12, [51,51,51], 2, 4);
+      guesses.forEach((g, i) => {
+        const label = g.passes ? 'Yes' : 'No';
+        checkPage(6);
+        body(`  ${i+1}.  (${g.nums.join(', ')})  →  ${label}`, { size: 10, color: g.passes ? [90,112,0] : [180,80,80] });
+      });
+      y += 4;
+    }
+
+    // ===================== PLAYER'S ANSWER =====================
+    heading('Your answer', 12, [51,51,51], 2, 4);
+    const ruleInput = document.getElementById('rule-input');
+    if (ruleInput && ruleInput.value) {
+      body('Rule submitted: ' + ruleInput.value, { size: 10, bold: true, color: [51,51,51] });
+      body('Confidence: ' + (confidence * 20) + '%', { size: 10, color: [80,80,80] });
+    }
+    y += 2;
+    body('The actual rule: any three numbers in strictly increasing order', { size: 11, bold: true, color: [46,125,50] });
+    y += 4;
+
+    // Personal insight
+    const pEl = document.getElementById('personal-insight');
+    if (pEl && pEl.textContent.trim()) {
+      body(pEl.textContent, { size: 10, color: [80,80,80] });
+      y += 4;
+    }
+
+    // ===================== OUTCOME TEXT (from DOM) =====================
+    const outcomeBox = document.querySelector('.outcome-box');
+    if (outcomeBox) {
+      const elements = outcomeBox.querySelectorAll('h2.outcome-heading, p.outcome-p');
+      elements.forEach(el => {
+        if (el.tagName === 'H2') {
+          // Skip "Summary" heading if already covered by personal insight context
+          heading(el.textContent, 12, [51,51,51], 4, 4);
+        } else if (el.id === 'personal-insight') {
+          // Already rendered above
+        } else {
+          body(el.textContent, { size: 10 });
+        }
+      });
+      y += 4;
+    }
+
+    // ===================== SECTION 1 =====================
+    sectionHeader(1, 'Testing behavior', 'How did players approach the puzzle?');
+    chartBlock('chart-attempts');
+    chartBlock('chart-yesratio');
+    chartBlock('chart-strategy');
+
+    // Sequence tables (text-based)
+    const seqBlock = document.getElementById('seq-tables-block');
+    if (seqBlock && seqBlock.offsetHeight > 0) {
+      heading('What did players actually test?', 12, [51,51,51], 4, 4);
+      const tables = seqBlock.querySelectorAll('.insights-table');
+      tables.forEach(table => {
+        const headerLabel = table.closest('div')?.querySelector('div[style*="font-weight"]')?.textContent;
+        if (headerLabel) body(headerLabel, { size: 9, bold: true, color: [80,80,80] });
+        table.querySelectorAll('tbody tr').forEach(tr => {
+          const cells = tr.querySelectorAll('td');
+          if (cells.length >= 2) {
+            const label = cells[0].textContent.trim();
+            const val = cells[1].textContent.trim();
+            if (label && !label.includes('common')) {
+              body('  ' + label + '  —  ' + val, { size: 9, color: [100,100,100] });
+            } else if (label) {
+              y += 1;
+              body(label, { size: 8.5, bold: true, color: [140,140,140] });
+            }
+          }
+        });
+        y += 3;
+      });
+    }
+
+    // ===================== SECTION 2 =====================
+    sectionHeader(2, 'Confidence & accuracy', 'What did players believe — and were they right?');
+    chartBlock('chart-confidence');
+    chartBlock('chart-correctness');
+
+    // ===================== SECTION 3 =====================
+    const scatterCanvas = document.getElementById('chart-scatter');
+    if (scatterCanvas) {
+      sectionHeader(3, 'Exploration creativity', 'How creative was each player\'s testing strategy?');
+      chartBlock('chart-scatter');
+      chartBlock('chart-conf-creativity');
+      chartBlock('chart-creativity-correct');
+    }
+
+    // ===================== INSIGHTS TABLE =====================
+    checkPage(40);
+    heading('Key insights summary', 14, [51,51,51], 8, 6);
+
+    const panels = document.querySelectorAll('.insights-panel');
+    panels.forEach(panel => {
+      const header = panel.querySelector('.insights-panel-header')?.textContent?.trim();
+      if (header) {
+        const isGood = panel.classList.contains('panel-good');
+        body(header, { size: 10, bold: true, color: isGood ? [90,112,0] : [160,64,64] });
       }
+      panel.querySelectorAll('.insights-table tbody tr').forEach(tr => {
+        const cells = tr.querySelectorAll('td');
+        if (cells.length >= 2) {
+          body('  ' + cells[0].textContent.trim() + ':  ' + cells[1].textContent.trim(), { size: 9.5, color: [80,80,80] });
+        }
+      });
+      y += 3;
     });
 
-    // Insights card
-    const insightsCard = document.querySelector('.insights-card');
-    if (insightsCard) {
-      sections.push({ el: insightsCard, label: 'Key insights' });
-    }
-
-    // Render each section
-    let curY = margin;
-    let pageNum = 1;
-
-    // Title page header
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(20);
-    pdf.setTextColor(51, 51, 51);
-    pdf.text('The Problem-Solving Trap', margin, curY + 6);
-    curY += 10;
-    pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(10);
-    pdf.setTextColor(150, 150, 150);
-    pdf.text('Results & Insights  •  ' + new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }), margin, curY + 4);
-    curY += 12;
-
-    // Draw a green accent line
-    pdf.setDrawColor(188, 207, 49);
-    pdf.setLineWidth(0.8);
-    pdf.line(margin, curY, pageW - margin, curY);
-    curY += 6;
-
-    for (let i = 0; i < sections.length; i++) {
-      const { el } = sections[i];
-
-      // Hide PDF buttons during capture
-      const pdfBtns = el.querySelectorAll('.pdf-btn-wrap');
-      pdfBtns.forEach(b => b.style.visibility = 'hidden');
-
-      const canvas = await html2canvas(el, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-      });
-
-      pdfBtns.forEach(b => b.style.visibility = '');
-
-      const imgData = canvas.toDataURL('image/png');
-      const imgW = contentW;
-      const imgH = (canvas.height / canvas.width) * imgW;
-
-      // Check if we need a new page
-      if (curY + imgH > pageH - margin && curY > margin + 20) {
-        pdf.addPage();
-        pageNum++;
-        curY = margin;
-      }
-
-      // If image is taller than a full page, scale it down
-      let finalH = imgH;
-      let finalW = imgW;
-      if (imgH > pageH - margin * 2) {
-        finalH = pageH - margin * 2;
-        finalW = (canvas.width / canvas.height) * finalH;
-      }
-
-      pdf.addImage(imgData, 'PNG', margin, curY, finalW, finalH, undefined, 'FAST');
-      curY += finalH + 4;
-    }
-
-    // Footer on each page
+    // Add footer to all pages
     const totalPages = pdf.internal.getNumberOfPages();
     for (let p = 1; p <= totalPages; p++) {
       pdf.setPage(p);
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(8);
-      pdf.setTextColor(180, 180, 180);
-      pdf.text('The Problem-Solving Trap  •  stouras.com/lab/problem-solving', margin, pageH - 6);
-      pdf.text(`Page ${p} of ${totalPages}`, pageW - margin - 20, pageH - 6);
+      addFooter();
+      // Update page count
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(170,170,170);
+      // Overwrite with total
+      pdf.setFillColor(255,255,255);
+      pdf.rect(W - M - 30, H - 11, 30, 6, 'F');
+      pdf.text('Page ' + p + ' of ' + totalPages, W - M, H - 8, { align: 'right' });
     }
 
     pdf.save('problem-solving-trap-insights.pdf');
@@ -1954,7 +2094,6 @@ async function downloadPDF() {
     alert('Could not generate PDF. Please try again.');
   }
 
-  // Restore buttons
   [btnTop, btnBottom].forEach(b => {
     b.disabled = false;
     b.innerHTML = origText;
