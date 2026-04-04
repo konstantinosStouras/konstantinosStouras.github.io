@@ -31,14 +31,11 @@
       display: flex;
       justify-content: center;
       align-items: flex-start;
-      overflow-x: hidden;
     }
     .container { 
       max-width: 680px; 
       width: 100%;
       margin: 0 auto;
-      overflow-wrap: break-word;
-      word-wrap: break-word;
     }
 
     h1.title {
@@ -327,7 +324,6 @@
       border-radius: 4px;
       padding: 0;
       overflow: hidden;
-      min-width: 0;
     }
     .insights-panel-header {
       font-family: 'Libre Franklin', Arial, sans-serif;
@@ -390,7 +386,6 @@
       border-collapse: collapse;
       font-family: 'Libre Franklin', Arial, sans-serif;
       font-size: 14px;
-      table-layout: fixed;
     }
     .insights-table th {
       text-align: left; padding: 9px 12px;
@@ -402,8 +397,6 @@
       padding: 8px 12px;
       border-bottom: 1px solid #e8e8e0;
       color: #444;
-      overflow-wrap: break-word;
-      word-wrap: break-word;
     }
     .insights-table tr:nth-child(even) td {
       background: #fafaf7;
@@ -432,127 +425,14 @@
     }
 
     /* ========== RESPONSIVE BREAKPOINTS ========== */
-
-    /* Sequence tables side-by-side grid (used in JS) */
-    .seq-tables-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 14px;
-      margin: 10px 0 10px;
-    }
-
-    /* Flex row for heading + PDF button */
-    .heading-pdf-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-    }
-
-    /* Class results header row */
-    .class-header-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 12px;
-    }
-
     @media (max-width: 600px) {
-      body { padding: 20px 14px 48px; }
+      body { padding: 28px 16px 60px; }
       .container { max-width: 100%; }
-
-      h1.title { font-size: 26px; margin-bottom: 6px; }
-      .desc { font-size: 15px; margin-bottom: 16px; }
-      .text { font-size: 15px; }
-      .bold-label { font-size: 15px; }
-
-      /* Seed and guess boxes: shrink to fit */
-      .seed-row { gap: 5px; margin: 10px 0 20px; }
-      .seed-box { width: 60px; height: 36px; font-size: 14px; }
-      .seed-tag { font-size: 13px; margin-left: 8px; }
-      .g-box { width: 60px; height: 36px; font-size: 14px; }
-      .g-tag { font-size: 13px; margin-left: 8px; }
-      .guess-row { gap: 5px; }
-
-      /* Input row: let inputs flex instead of fixed width */
-      .input-row { gap: 5px; }
-      .num-input { width: 60px; height: 42px; font-size: 15px; }
-      .check-btn { height: 42px; padding: 0 14px; font-size: 13px; }
-
-      /* Outcome section */
-      .outcome-box { padding: 16px 14px; }
-      .outcome-rule { font-size: 17px; padding: 10px 14px; }
-      .outcome-heading { font-size: 18px; }
-      .outcome-p { font-size: 15px; line-height: 1.6; }
-      .student-answer { font-size: 15px; padding: 10px 12px; }
-
-      /* Insights split: stack on mobile */
-      .insights-split { grid-template-columns: 1fr; gap: 12px; }
-      .insights-card { padding: 12px; }
-      .insights-panel-header { font-size: 10px; padding: 8px 10px; }
-
-      /* Tables: smaller text, tighter padding, word-wrap */
-      .insights-table { font-size: 12.5px; }
-      .insights-table th { padding: 7px 8px; font-size: 10px; }
-      .insights-table td { padding: 6px 8px; word-break: break-word; }
-
-      /* Sequence tables grid: stack on mobile */
-      .seq-tables-grid { grid-template-columns: 1fr; }
-
-      /* Charts */
-      .chart-block-title { font-size: 15px; }
-      .chart-block-subtitle { font-size: 11px; }
-      .chart-canvas-wrap { padding: 10px 6px 6px; }
-      .chart-read { font-size: 12px; }
-      .chart-insight { padding: 10px 12px; font-size: 14px; }
-
-      /* Section dividers */
-      .section-title { font-size: 18px; }
-      .section-subtitle { font-size: 12px; }
-
-      /* PDF button */
-      .pdf-btn { padding: 12px 18px; font-size: 13px; }
-      .pdf-btn .btn-icon { font-size: 15px; }
-
-      /* Heading + button rows: stack vertically on mobile */
-      .heading-pdf-row {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 10px;
-      }
-      .class-header-row {
-        flex-direction: column;
-        gap: 10px;
-      }
-      .class-results-title { font-size: 20px; }
-      .class-results-sub { font-size: 12px; }
-
-      /* Rule input */
-      .rule-input { font-size: 15px; height: 44px; }
-      .rule-text { font-size: 15px; }
-      .submit-btn { font-size: 13px; padding: 11px 20px; }
-
-      /* Confidence scale */
-      .confidence-options { gap: 14px; }
-      .confidence-row { gap: 8px; flex-wrap: wrap; justify-content: center; }
-      .conf-end { font-size: 11px; }
+      .seed-box, .g-box { width: 68px; height: 38px; font-size: 15px; }
+      .num-input { width: 68px; height: 42px; font-size: 15px; }
+      .check-btn { height: 42px; padding: 0 18px; font-size: 13px; }
+      .insights-split { grid-template-columns: 1fr; }
     }
-
-    /* Extra-small screens (very narrow phones) */
-    @media (max-width: 380px) {
-      body { padding: 16px 10px 40px; }
-      h1.title { font-size: 22px; }
-      .seed-box, .g-box { width: 52px; height: 34px; font-size: 13px; }
-      .num-input { width: 52px; height: 40px; font-size: 14px; }
-      .check-btn { padding: 0 10px; font-size: 12px; }
-      .outcome-rule { font-size: 15px; }
-      .insights-table { font-size: 11.5px; }
-      .insights-table th { font-size: 9px; padding: 6px 6px; }
-      .insights-table td { padding: 5px 6px; }
-      .chart-insight { font-size: 13px; padding: 8px 10px; }
-      .pdf-btn { padding: 10px 14px; font-size: 12px; }
-    }
-
     @media (min-width: 768px) {
       body { padding: 56px 32px 100px; }
       .container { max-width: 720px; }
@@ -893,7 +773,7 @@ function handleSubmitRule() {
           </div>
         </div>
       </div>
-      <div class="heading-pdf-row" style="margin:28px 0 16px;padding:16px 0;border-top:1px solid #e0e0d8;border-bottom:1px solid #e0e0d8">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:28px 0 16px;padding:16px 0;border-top:1px solid #e0e0d8;border-bottom:1px solid #e0e0d8">
         <h2 class="outcome-heading" style="margin:0">Summary</h2>
         <button class="pdf-btn" onclick="downloadPDF()" style="margin:0">
           <span class="btn-icon">↓</span> Download PDF
@@ -1158,7 +1038,7 @@ function showClassResults() {
 
   container.innerHTML = `
     <div class="class-results" id="class-results-content">
-      <div class="class-header-row">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
           <h2 class="class-results-title">How others performed</h2>
           <p class="class-results-sub">Updated live from all players</p>
@@ -1547,7 +1427,7 @@ function buildSequenceTables(a) {
   block.innerHTML = `
     <div class="chart-block-title">What did players actually test?</div>
     <div class="chart-block-subtitle">Most and least common sequences submitted across all players</div>
-    <div class="seq-tables-grid">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:10px 0 10px">
       <div>
         <div style="font-family:'Libre Franklin',sans-serif;font-size:12px;font-weight:800;color:#8fa324;margin-bottom:6px">✓ "Yes" sequences <span style="font-weight:400;color:#999">(${a.yesSeqData.total} total, ${yesUnique} unique)</span></div>
         <table class="insights-table" style="font-size:12.5px"><thead><tr><th>Sequence</th><th style="text-align:right">Players</th></tr></thead><tbody>${makeRows(a.yesSeqData.sorted, a.yesSeqData.total, 'yes')}</tbody></table>
