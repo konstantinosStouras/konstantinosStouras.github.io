@@ -731,15 +731,28 @@ function buildPersonalScorecard(rule, conf, guesses) {
     </div>`;
 }
 
-function buildOutcomeHTML(rule, conf) {
-  return `
+function handleSubmitRule() {
+  const rule = document.getElementById('rule-input').value.trim();
+  if (!rule || confidence === null) return;
+
+  gameState = 'done';
+  playerAttempts = guesses.length;
+  logToSheet(rule, confidence, guesses.length);
+
+  document.getElementById('input-section').classList.add('hidden');
+  document.getElementById('rule-section').classList.add('hidden');
+  document.getElementById('step-desc').classList.add('hidden');
+
+  const el = document.getElementById('outcome-section');
+  el.classList.remove('hidden');
+  el.innerHTML = `
     <div class="outcome-box">
       <div class="answer-label" style="text-transform:none">What you think the rule is:</div>
       <div class="student-answer">${rule}</div>
       <div class="answer-label" style="text-transform:none">How confident you are about identifying the rule:</div>
-      <div class="student-answer" style="font-style:normal">${conf * 20}%</div>
+      <div class="student-answer" style="font-style:normal">${confidence * 20}%</div>
       <div class="outcome-rule">The rule: ${RULE_ANSWER}</div>
-      ${buildPersonalScorecard(rule, conf, guesses)}
+      ${buildPersonalScorecard(rule, confidence, guesses)}
       <div id="class-insights-placeholder" style="margin-bottom:10px">
         <div class="insights-card">
           <div class="insights-card-title">Key insights across participants</div>
@@ -774,23 +787,6 @@ function buildOutcomeHTML(rule, conf) {
   <i>Getting to Yes</i></a> (<a href="https://www.pon.harvard.edu/daily/negotiation-skills-daily/six-guidelines-for-getting-to-yes/" target="_blank" rel="noopener noreferrer">see also</a>). But the more important advice for us may instead be to go out of our way to get to no. When you want to test a theory, don't just look for examples that prove it. When you're considering a plan, think in detail about how it might go wrong.</p>
       <p class="outcome-p">Some businesses have made this approach a formal part of their decision-making: Imagine our strategy has failed; what are the most likely reasons it did? When you seek to disprove your idea, you sometimes end up proving it — and other times you can save yourself from making a big mistake. But you need to start by being willing to hear no. And even if you think that you are right, you need to make sure you're asking questions that might actually produce an answer of no. If you still need to work on this trait, don't worry: You're only human.</p>
     </div>`;
-}
-
-function handleSubmitRule() {
-  const rule = document.getElementById('rule-input').value.trim();
-  if (!rule || confidence === null) return;
-
-  gameState = 'done';
-  playerAttempts = guesses.length;
-  logToSheet(rule, confidence, guesses.length);
-
-  document.getElementById('input-section').classList.add('hidden');
-  document.getElementById('rule-section').classList.add('hidden');
-  document.getElementById('step-desc').classList.add('hidden');
-
-  const el = document.getElementById('outcome-section');
-  el.classList.remove('hidden');
-  el.innerHTML = buildOutcomeHTML(rule, confidence);
 
   showClassResults();
 }
@@ -2535,82 +2531,16 @@ function resetGame() {
 }
 
 // Init
-const IS_PREVIEW = new URLSearchParams(window.location.search).has('preview');
-
-if (IS_PREVIEW) {
-  // ============================================================
-  // PREVIEW MODE — auto-simulates a completed game, no logging
-  // ============================================================
-  const _origLogToSheet = logToSheet;
-  logToSheet = function() { console.log('[Preview] Logging disabled.'); };
-
-  const demoGuesses = [
-    { nums: [4, 8, 16], passes: true },
-    { nums: [3, 6, 12], passes: true },
-    { nums: [1, 2, 3], passes: true },
-    { nums: [5, 3, 1], passes: false },
-    { nums: [10, 10, 10], passes: false },
-    { nums: [1, 5, 2], passes: false },
-  ];
-  const demoRule = 'test answer';
-  const demoConfidence = 4;
-
-  window.addEventListener('DOMContentLoaded', function() {
-    guesses = demoGuesses;
-    confidence = demoConfidence;
-    gameState = 'done';
-    submitted = true;
-    playerAttempts = guesses.length;
-
-    // Hide game inputs
-    document.getElementById('input-section').classList.add('hidden');
-    document.getElementById('rule-section').classList.add('hidden');
-    document.getElementById('step-desc').classList.add('hidden');
-
-    // Show guesses
-    const list = document.getElementById('guesses-list');
-    guesses.forEach(g => {
-      const row = document.createElement('div');
-      row.className = 'guess-row';
-      row.innerHTML = g.nums.map(n => `<div class="g-box ${g.passes?'g-yes':'g-no'}">${n}</div>`).join('') +
-        `<span class="g-tag ${g.passes?'g-tag-yes':'g-tag-no'}">${g.passes?'Yes!':'No.'}</span>`;
-      list.appendChild(row);
-    });
-    document.getElementById('guesses-section').classList.remove('hidden');
-
-    // Set rule input for PDF
-    document.getElementById('rule-input').value = demoRule;
-
-    // Show outcome using shared template
-    const el = document.getElementById('outcome-section');
-    el.classList.remove('hidden');
-    el.innerHTML = buildOutcomeHTML(demoRule, demoConfidence);
-
-    showClassResults();
-
-    // Preview banner
-    const banner = document.createElement('div');
-    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#333;color:#fff;text-align:center;padding:6px;font-family:"Libre Franklin",sans-serif;font-size:12px;font-weight:700;z-index:9999;letter-spacing:0.05em';
-    banner.textContent = 'PREVIEW MODE — no data is being logged';
-    document.body.prepend(banner);
-    document.body.style.paddingTop = '40px';
+document.querySelectorAll('.num-input').forEach((inp, idx) => {
+  inp.addEventListener('input', updateCheckBtn);
+  inp.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { idx < 2 ? document.getElementById('n'+(idx+1)).focus() : handleCheck(); }
+    if (e.key === 'Tab' && !e.shiftKey && idx < 2) { e.preventDefault(); document.getElementById('n'+(idx+1)).focus(); }
   });
-
-} else {
-  // ============================================================
-  // NORMAL MODE — standard game initialization
-  // ============================================================
-  document.querySelectorAll('.num-input').forEach((inp, idx) => {
-    inp.addEventListener('input', updateCheckBtn);
-    inp.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter') { idx < 2 ? document.getElementById('n'+(idx+1)).focus() : handleCheck(); }
-      if (e.key === 'Tab' && !e.shiftKey && idx < 2) { e.preventDefault(); document.getElementById('n'+(idx+1)).focus(); }
-    });
-  });
-  document.getElementById('rule-input').addEventListener('input', updateSubmitBtn);
-  document.getElementById('rule-input').addEventListener('keydown', e => { if (e.key === 'Enter') handleSubmitRule(); });
-  updateStepDesc();
-}
+});
+document.getElementById('rule-input').addEventListener('input', updateSubmitBtn);
+document.getElementById('rule-input').addEventListener('keydown', e => { if (e.key === 'Enter') handleSubmitRule(); });
+updateStepDesc();
 </script>
 </body>
 </html>
