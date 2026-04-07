@@ -412,10 +412,16 @@
 
     /* Auto-zoom on larger screens so it doesn't feel tiny */
     @media (min-width: 768px) {
-      .container { zoom: 1.35; }
+      .container { zoom: 1.4; }
+      body { padding-top: 20px; }
     }
     @media (min-width: 1200px) {
-      .container { zoom: 1.5; }
+      .container { zoom: 1.7; }
+      body { padding-top: 12px; }
+    }
+    @media (min-width: 1600px) {
+      .container { zoom: 1.9; }
+      body { padding-top: 8px; }
     }
   </style>
 </head>
@@ -2566,6 +2572,16 @@ if (IS_PREVIEW) {
     document.getElementById('input-section').classList.add('hidden');
     document.getElementById('rule-section').classList.add('hidden');
     document.getElementById('step-desc').classList.add('hidden');
+
+    // Hide intro content (title, instructions, seed sequence)
+    document.querySelector('h1.title').style.display = 'none';
+    document.querySelector('.desc').style.display = 'none';
+    document.querySelectorAll('.bold-label, .text').forEach(function(el) {
+      // Only hide the intro ones (before guesses-section)
+      if (el.closest('#outcome-section') || el.closest('#class-results')) return;
+      el.style.display = 'none';
+    });
+    document.querySelector('.seed-row').style.display = 'none';
 
     // Show guesses
     const list = document.getElementById('guesses-list');
