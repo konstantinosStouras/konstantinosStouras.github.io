@@ -20,6 +20,7 @@ A complete pipeline to scrape, store, and browse all Management Science (INFORMS
   - `mnsc_articles_editors` — editor/area data scraped via Python (source for bulk copy)
   - `_Inspect` — utility tab for inspecting raw JSON of a single article
   - `_BatchLog` — auto-batch progress log (timestamp + message per year processed)
+  - `Authors` — pre-computed author stats: Papers (count), Author (name), Areas (comma-separated)
 
 ---
 
@@ -33,6 +34,7 @@ A complete pipeline to scrape, store, and browse all Management Science (INFORMS
 | 2. Copy Crossref_Full → Data tab | `populateDataFromCrossref` | Maps 39-col data into 12-col `Data` tab. Auto-creates tab with headers if missing. Includes Page column. **Deduplicates by DOI** — skips rows already in Data tab. |
 | 3. Fill Editor/Area from INFORMS | `promptEditors` | Scrapes INFORMS article pages for "accepted by [Editor], [Area]" text. Columns K-L. |
 | 4. Copy editors from mnsc_articles_editors | `copyEditorsFromEditorTab` | Bulk copies editor/area data from `mnsc_articles_editors` tab to `Data` tab, matching by DOI. Skips rows that already have an editor. |
+| 5. Build Authors tab | `buildAuthorsTab` | Aggregates unique authors from Data tab with paper counts and areas. Fuzzy-merges rare authors (≤1 paper) into common ones via Levenshtein distance. Writes to `Authors` tab (Papers, Author, Areas). |
 | Quick fetch to Data tab | `promptQuickFetch` | Skips Full tab, writes directly to Data. **Auto-batches** like option 1. |
 | ⏹ Stop auto-batch | `stopAutoBatch` | Cancels a running auto-batch and removes pending triggers. |
 | Inspect one article | `inspectArticle` | Dumps raw Crossref JSON to `_Inspect` tab. |
@@ -168,9 +170,7 @@ Three functions run after CSV loads to clean raw data for display:
 
 **Result**: ~210 raw editor values → ~140 unique names (via explicit aliases + fuzzy matching). ~63 raw area values → ~22 clean categories (via explicit aliases + fuzzy matching).
 
-**`normalizeAuthors(paper)`** — sets `paper._authorsList` (array) from comma-separated Authors field. Normalizes Unicode hyphens and accents.
-
-**`fuzzyMergeAuthors()`** — merges rare authors (≤1 paper) into common authors (>1 paper) using Levenshtein distance. Threshold: ≤1 for short names, ≤2 for names ≥12 chars. Also checks reversed name order and last-name match with close first name. Logs merges to console.
+**`normalizeAuthors`** — removed from client-side. Author normalization and fuzzy merging now runs server-side via GAS menu item "5. Build Authors tab". The web GUI loads pre-computed data from the `Authors` tab CSV.
 
 ### Architecture
 
