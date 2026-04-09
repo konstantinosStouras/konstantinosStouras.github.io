@@ -3,7 +3,33 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Management Science Paper Browser</title>
+<title>Management Science Paper Browser · 2011–present</title>
+
+<!-- SEO -->
+<meta name="description" content="Browse and filter 5,000+ Management Science (INFORMS) articles from 2011–present. Search by editor, area, year, or author. Export BibTeX citations.">
+<meta name="keywords" content="Management Science, INFORMS, academic papers, research browser, BibTeX, journal articles, operations research, finance, marketing, accounting">
+<meta name="author" content="Konstantinos Stouras">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://stouras.com/fun/ms/">
+
+<!-- Open Graph (Facebook, LinkedIn, WhatsApp) -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Management Science — Paper Browser">
+<meta property="og:description" content="Browse and filter 5,000+ Management Science articles from 2011–present. Search by editor, area, year, or author.">
+<meta property="og:url" content="https://stouras.com/fun/ms/">
+<meta property="og:image" content="https://stouras.com/fun/ms/og-image.jpg">
+<meta property="og:image:width" content="840">
+<meta property="og:image:height" content="350">
+<meta property="og:site_name" content="stouras.com">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Management Science — Paper Browser">
+<meta name="twitter:description" content="Browse and filter 5,000+ Management Science articles from 2011–present. Search by editor, area, year, or author.">
+<meta name="twitter:image" content="https://stouras.com/fun/ms/og-image.jpg">
+
+<!-- Favicon (reuse INFORMS-style) -->
+<meta name="theme-color" content="#003087">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -158,6 +184,9 @@
     .summary-list { column-count: 1; }
   }
 </style>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebApplication","name":"Management Science Paper Browser","description":"Browse and filter 5,000+ Management Science (INFORMS) articles from 2011–present.","url":"https://stouras.com/fun/ms/","applicationCategory":"ReferenceApplication","author":{"@type":"Person","name":"Konstantinos Stouras","url":"https://stouras.com"},"provider":{"@type":"Organization","name":"INFORMS","url":"https://pubsonline.informs.org/journal/mnsc"}}
+</script>
 </head>
 <body>
 
@@ -493,10 +522,16 @@ function normalizeArea(raw) {
   // Truncate at HTML tags
   var htmlIdx = s.indexOf('<');
   if (htmlIdx > 0) s = s.substring(0, htmlIdx).trim();
-  // Truncate at ".Conflict" or similar junk
-  s = s.replace(/\.conflict.*/i, '').replace(/\.here.*/i, '').trim();
+  // Truncate at junk suffixes (case-insensitive)
+  s = s.replace(/\.?\s*funding:.*/i, '').trim();
+  s = s.replace(/\.?\s*supplemental material:.*/i, '').trim();
+  s = s.replace(/\.?\s*conflict.*/i, '').trim();
+  s = s.replace(/\.?\s*https?:\/\/.*/i, '').trim();
+  s = s.replace(/\.here.*/i, '').trim();
   // Remove trailing period
   s = s.replace(/\.\s*$/, '').trim();
+  // Fix spacing around colons: " :" → ":"
+  s = s.replace(/\s+:/g, ':');
   var key = s.toLowerCase();
   // Check aliases
   if (AREA_ALIASES[key]) return AREA_ALIASES[key];
