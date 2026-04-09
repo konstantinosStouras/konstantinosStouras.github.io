@@ -149,16 +149,24 @@ Three functions run after CSV loads to clean raw data for display:
 
 **`normalizeArea(raw)` → string**
 - Truncates at HTML tags
-- Looks up in `AREA_ALIASES` (~40 entries): typos (entepreneurship→entrepreneurship), capitalization (Finance→finance), HTML junk removal, consolidation (strategy→business strategy, stochastic models→stochastic models and simulation)
+- Looks up in `AREA_ALIASES` (~40 entries): typos (entepreneurship→entrepreneurship), capitalization (Finance→finance), HTML junk removal, consolidation (strategy→business strategy, stochastic models→stochastic models and simulation, organization→organizations)
 - Extracts area from patterns like "Renee, finance" → "finance"
 - Discards junk via `AREA_JUNK` list
 
-**Result**: ~210 raw editor values → ~140 unique names (via explicit aliases + fuzzy matching). ~63 raw area values → ~24 clean categories.
+**`fuzzyMergeAreas()`** — second-pass auto-merger for areas:
+- Counts papers per area; separates rare (≤3 papers) from common (>3 papers)
+- For each rare area, computes Levenshtein distance against all common areas
+- Also checks singular/plural variants ("organization" ↔ "organizations")
+- Threshold: distance ≤ 2 for areas ≥ 10 chars, ≤ 1 for shorter
+- Merges rare variant → closest common area
+- Logs merges to browser console
+
+**Result**: ~210 raw editor values → ~140 unique names (via explicit aliases + fuzzy matching). ~63 raw area values → ~22 clean categories (via explicit aliases + fuzzy matching).
 
 ### Architecture
 
 - CSS variables for theming (navy `#003087`, accent gold `#c4a052`, green `#2a7d4f`)
-- All JS inline, ~980 lines total
+- All JS inline, ~1030 lines total
 - Custom dropdown component replaces native `<select>` for full font-size control
 - Chip system shared across all 5 filter types (editor, area, year, title, author)
 - 50px fixed height for all filter inputs/buttons for alignment

@@ -319,6 +319,7 @@ async function loadData() {
     allPapers = parseCSV(text);
     allPapers.forEach(normalizeEditors);
     fuzzyMergeEditors();
+    fuzzyMergeAreas();
     buildFilterOptions();
   } catch (e) {
     // Silently retry after 3 seconds
@@ -437,6 +438,7 @@ const AREA_ALIASES = {
   'r&amp;d and product development': 'R&D and product development',
   'r&d and product development': 'R&D and product development',
   'organizations and social networks': 'organizations',
+  'organization': 'organizations',
   'optimization and decision analytics': 'optimization',
   'finance department': 'finance',
   'health': 'healthcare management',
@@ -596,6 +598,56 @@ function fuzzyMergeEditors() {
     console.log('Fuzzy editor merges:', dynamicAliases);
     allPapers.forEach(function(p) {
       p._editors = p._editors.map(function(e) { return dynamicAliases[e] || e; });
+    });
+  }
+}
+
+function fuzzyMergeAreas() {
+  // Count papers per area after first normalization pass
+  var counts = {};
+  allPapers.forEach(function(p) {
+    if (p._area) counts[p._area] = (counts[p._area] || 0) + 1;
+  });
+
+  var rare = [], common = [];
+  Object.keys(counts).forEach(function(name) {
+    if (counts[name] <= 3) rare.push(name);
+    else common.push(name);
+  });
+
+  var dynamicAliases = {};
+  rare.forEach(function(rName) {
+    var rKey = rName.toLowerCase();
+    var bestMatch = null, bestDist = Infinity;
+
+    common.forEach(function(cName) {
+      var cKey = cName.toLowerCase();
+      var dist = levenshtein(rKey, cKey);
+
+      // Also check singular/plural: "organization" ↔ "organizations"
+      if (rKey + 's' === cKey || cKey + 's' === rKey) dist = 0;
+      // Check with trailing 's' removed from both
+      var rTrim = rKey.replace(/s$/, ''), cTrim = cKey.replace(/s$/, '');
+      var distTrim = levenshtein(rTrim, cTrim);
+      dist = Math.min(dist, distTrim);
+
+      // Check if one is a substring of the other (e.g., "behavioral economics" vs "behavioral economics and decision analysis")
+      // Don't merge these — they're genuinely different areas
+
+      if (dist < bestDist) { bestDist = dist; bestMatch = cName; }
+    });
+
+    // Threshold: distance ≤ 2 for areas ≥ 10 chars, ≤ 1 for shorter
+    var threshold = rKey.length >= 10 ? 2 : 1;
+    if (bestMatch && bestDist <= threshold) {
+      dynamicAliases[rName] = bestMatch;
+    }
+  });
+
+  if (Object.keys(dynamicAliases).length > 0) {
+    console.log('Fuzzy area merges:', dynamicAliases);
+    allPapers.forEach(function(p) {
+      if (p._area && dynamicAliases[p._area]) p._area = dynamicAliases[p._area];
     });
   }
 }
