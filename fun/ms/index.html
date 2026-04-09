@@ -101,8 +101,8 @@
   .results-bar { max-width: 1280px; margin: 0 auto; padding: 20px 32px 8px; display: flex; justify-content: space-between; align-items: center; }
   .results-count { font-size: 14px; color: var(--text-muted); }
   .results-count strong { color: var(--navy); font-weight: 600; }
-  .sort-control { font-size: 16px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
-  .sort-control select { border: 1px solid var(--border); padding: 8px 12px; border-radius: 4px; font-family: 'DM Sans', sans-serif; font-size: 16px; color: var(--text); }
+  .sort-control { font-size: 18px; color: var(--text-muted); display: flex; align-items: center; gap: 8px; }
+  .sort-control select { border: 1px solid var(--border); padding: 10px 14px; border-radius: 4px; font-family: 'DM Sans', sans-serif; font-size: 18px; color: var(--text); }
 
   .papers-list { max-width: 1280px; margin: 0 auto; padding: 8px 32px 60px; display: flex; flex-direction: column; }
   .paper-card { background: var(--white); border: 1px solid var(--border); border-bottom: none; padding: 20px 24px; transition: background 0.15s; }
@@ -281,8 +281,10 @@
 -->
 
 <footer class="footer">
-  Data: <a href="https://pubsonline.informs.org/journal/mnsc" target="_blank">Management Science (INFORMS)</a>
-  · <a href="https://stouras.com" target="_blank">stouras.com</a>
+  <div>Built as a personal project to enable filtering of <em>Management Science</em> articles by editorial department.</div>
+  <div>Note that this is only possible for papers published at or after 2011; still, all available metadata from papers published since 1954 are collected and shown for completeness.</div>
+  <div>All metadata are publicly available and were collected via the <a href="https://www.crossref.org/documentation/retrieve-metadata/rest-api/" target="_blank">Crossref API</a> of <a href="https://pubsonline.informs.org/journal/mnsc" target="_blank">Management Science (INFORMS)</a>.</div>
+  <div>Feedback and suggestions are welcome. Any errors are my own. <a href="https://www.stouras.com" target="_blank">Konstantinos I. Stouras</a></div>
 </footer>
 
 <script>
@@ -362,7 +364,7 @@ async function loadData() {
     // Load pre-computed author data from Authors tab
     if (authResp && authResp.ok) {
       var authText = await authResp.text();
-      authorData = parseCSV(authText);
+      authorData = parseCSV(authText, 'Author');
     }
     buildFilterOptions();
     // Update year range in header
@@ -708,7 +710,8 @@ function fuzzyMergeAreas() {
   }
 }
 
-function parseCSV(text) {
+function parseCSV(text, requiredField) {
+  var reqField = requiredField || 'Title';
   const lines = text.split('\n');
   if (lines.length < 2) return [];
   const headers = parseLine(lines[0]);
@@ -719,7 +722,7 @@ function parseCSV(text) {
     const vals = parseLine(line);
     const obj = {};
     headers.forEach((h, idx) => { obj[clean(h)] = clean(vals[idx] || ''); });
-    if (obj['Title']) papers.push(obj);
+    if (obj[reqField]) papers.push(obj);
   }
   return papers;
 }
