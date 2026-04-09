@@ -141,12 +141,8 @@
         <select id="filterYear" onchange="applyFilters()"><option value="">All years</option></select>
       </div>
       <div class="filter-group">
-        <label>Search Title</label>
-        <input id="filterSearch" placeholder="Search by title..." type="search" oninput="debounceSearch()">
-      </div>
-      <div class="filter-group">
-        <label>Search Authors</label>
-        <input id="filterAuthors" placeholder="Search by author..." type="search" oninput="debounceSearch()">
+        <label>Search title / authors</label>
+        <input id="filterSearch" placeholder="Type to search..." type="search" oninput="debounceSearch()">
       </div>
       <div class="filter-actions">
         <button class="btn btn-primary" onclick="applyFilters()">Filter</button>
@@ -251,15 +247,16 @@ function applyFilters() {
   const area = document.getElementById('filterArea').value;
   const year = document.getElementById('filterYear').value;
   const search = document.getElementById('filterSearch').value.trim().toLowerCase();
-  const searchAuth = document.getElementById('filterAuthors').value.trim().toLowerCase();
   const sort = document.getElementById('sortBy').value;
 
   filtered = allPapers.filter(p => {
     if (editor && p['Accepting Editor'] !== editor) return false;
     if (area && p['Area'] !== area) return false;
     if (year && p['Year'] !== year) return false;
-    if (search && !(p['Title']||'').toLowerCase().includes(search)) return false;
-    if (searchAuth && !(p['Authors']||'').toLowerCase().includes(searchAuth)) return false;
+    if (search) {
+      const h = (p['Title'] + ' ' + p['Authors'] + ' ' + (p['Abstract']||'')).toLowerCase();
+      if (!h.includes(search)) return false;
+    }
     return true;
   });
 
@@ -278,7 +275,7 @@ function applyFilters() {
 }
 
 function clearFilters() {
-  ['filterEditor','filterArea','filterYear','filterSearch','filterAuthors'].forEach(id => document.getElementById(id).value = '');
+  ['filterEditor','filterArea','filterYear','filterSearch'].forEach(id => document.getElementById(id).value = '');
   applyFilters();
 }
 
