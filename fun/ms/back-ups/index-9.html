@@ -457,8 +457,7 @@ function renderPage() {
     const doi = p['DOI'] || '';
     const link = doi.startsWith('http') ? doi : doi ? 'https://doi.org/' + doi : '';
     const aid = 'a' + (start + idx);
-    const absClean = cleanAbstract(p['Abstract'] || '');
-    const hasAbs = absClean.length > 10;
+    const hasAbs = p['Abstract'] && p['Abstract'].length > 10;
 
     return `<div class="paper-card">
       <div class="paper-title">${link ? `<a href="${link}" target="_blank">${esc(p['Title'])}</a>` : esc(p['Title'])}</div>
@@ -472,7 +471,7 @@ function renderPage() {
       </div>
       ${hasAbs ? `<span class="paper-abstract-toggle" onclick="togAbs('${aid}',this)">▸ Abstract</span>` : ''}
       <span class="paper-bibtex-toggle" onclick="togBib('bib${start+idx}',this,${start+idx})">▸ BibTeX</span>
-      ${hasAbs ? `<div id="${aid}" class="paper-abstract">${esc(absClean)}</div>` : ''}
+      ${hasAbs ? `<div id="${aid}" class="paper-abstract">${esc(p['Abstract'])}</div>` : ''}
       <div id="bib${start+idx}" class="paper-bibtex"></div>
     </div>`;
   }).join('');
@@ -561,36 +560,6 @@ function goPage(n) { currentPage = n; renderPage(); window.scrollTo({ top: 280, 
 
 function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 function escAttr(s) { return (s||'').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
-
-function cleanAbstract(s) {
-  if (!s) return '';
-  // Remove everything from "This paper was accepted by" onwards
-  var idx = s.indexOf('This paper was accepted');
-  if (idx === -1) idx = s.indexOf('This work was accepted');
-  if (idx > 0) {
-    // Go back to the last period before it
-    var before = s.substring(0, idx).trimEnd();
-    // If it ends with a period, keep it; otherwise find last period
-    if (!before.endsWith('.')) {
-      var lastDot = before.lastIndexOf('.');
-      if (lastDot > 0) before = before.substring(0, lastDot + 1);
-    }
-    s = before;
-  }
-  // Remove other trailing junk patterns
-  var junk = ['Funding:', 'Supplemental Material:', 'Conflict of Interest', 'The online appendix', 'Data and the online appendix', 'History:', 'Disclaimer/Publisher'];
-  for (var i = 0; i < junk.length; i++) {
-    var ji = s.indexOf(junk[i]);
-    if (ji > 0) {
-      var b = s.substring(0, ji).trimEnd();
-      if (!b.endsWith('.')) { var ld = b.lastIndexOf('.'); if (ld > 0) b = b.substring(0, ld + 1); }
-      s = b;
-    }
-  }
-  // Remove trailing DOI URLs
-  s = s.replace(/\s*https?:\/\/doi\.org\/\S+\s*\.?\s*$/, '');
-  return s.trim();
-}
 
 let searchTimer;
 function debounceSearch() {
