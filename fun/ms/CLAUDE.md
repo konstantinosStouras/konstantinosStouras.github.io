@@ -109,13 +109,13 @@ https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Data
 - **Custom dropdowns** — fully styled (not native `<select>`), 18px font, searchable within dropdown, scrollable 350px max-height, click-outside-to-close. Editor and Area dropdowns show paper counts next to each option, e.g., "Amit Seru (54)", "finance (980)".
 - **Multi-select with chips** — Editor, Area, Year filters support multiple selections shown as removable chips; OR logic within same filter type
 - **Text search chips** — Title and Author search fields filter live as you type (150ms debounce); pressing Enter converts text to a chip, allowing multiple search terms with AND logic (e.g., co-author search: "stouras" + "erat")
-- **Clickable tags** — Editor/area tags on paper cards add chips when clicked
+- **Clickable tags** — all metadata on paper cards is interactive: editor/area tags add filter chips; year/volume tag adds year chip; individual author names add author search chips. Enables quick drill-down (e.g., click an author → see all their papers → click a co-author → narrow to co-authored papers).
 - **BibTeX generation** — green "▸ BibTeX" toggle with Copy button; title capitals protected with `{B}races`; author format: `LastName, FirstName and ...`; pages from Page column with `--` separators; omits volume/number/pages for Articles in Advance
 - **Abstract cleaning** — `cleanAbstract()` strips "This paper was accepted by...", "Funding:", "Supplemental Material:", "Conflict of Interest", "The online appendix...", trailing DOI URLs. Affects ~4,699 abstracts.
 - **Articles in Advance** — shows just year tag (no "Vol. ? No. ?"); BibTeX omits missing fields
 - **Pages display** — shows "pp. X-Y" in volume tag when available
 - **Sort** — Year↓, Year↑, Title A-Z, Editor A-Z
-- **Summary tabs** — "Editors" and "Areas" tabs on the main page show all editors/areas sorted by paper count (e.g., "118 papers accepted by Serguei Netessine", "987 papers in finance"). Clicking any item filters the paper list by that editor/area.
+- **Summary tabs** — "Editors" and "Areas" toggle buttons inside the filters bar. Click to expand/collapse a two-column list sorted by paper count (e.g., "179 papers accepted by David Simchi-Levi", "987 papers in finance"). Clicking any item adds it as a filter chip. Clear button collapses tabs.
 - **No pagination** — all matching results shown on one scrollable page (pagination code preserved in comments for re-enabling)
 - **Fonts** — Playfair Display (serif headings), DM Sans (body)
 - **Responsive** — mobile-friendly layout
@@ -144,12 +144,12 @@ Three functions run after CSV loads to clean raw data for display:
 - Extracts area from patterns like "Renee, finance" → "finance"
 - Discards junk via `AREA_JUNK` list
 
-**Result**: ~210 raw editor values → ~120 unique names. ~63 raw area values → ~22 clean categories.
+**Result**: ~210 raw editor values → ~144 unique names. ~63 raw area values → ~24 clean categories.
 
 ### Architecture
 
 - CSS variables for theming (navy `#003087`, accent gold `#c4a052`, green `#2a7d4f`)
-- All JS inline, ~650 lines total
+- All JS inline, ~880 lines total
 - Custom dropdown component replaces native `<select>` for full font-size control
 - Chip system shared across all 5 filter types (editor, area, year, title, author)
 - 50px fixed height for all filter inputs/buttons for alignment
