@@ -78,6 +78,12 @@
 
   .paper-abstract-toggle { margin-top: 8px; font-size: 12px; color: var(--navy); cursor: pointer; font-weight: 500; user-select: none; display: inline-block; }
   .paper-abstract-toggle:hover { text-decoration: underline; }
+  .paper-bibtex-toggle { margin-top: 8px; margin-left: 16px; font-size: 12px; color: var(--green); cursor: pointer; font-weight: 500; user-select: none; display: inline-block; }
+  .paper-bibtex-toggle:hover { text-decoration: underline; }
+  .paper-bibtex { display: none; margin-top: 10px; padding: 14px 16px; background: #f5f7f5; border-radius: 6px; font-size: 12.5px; line-height: 1.5; color: var(--text); border-left: 3px solid var(--green); font-family: 'Courier New', monospace; white-space: pre-wrap; word-break: break-all; position: relative; }
+  .paper-bibtex.open { display: block; }
+  .bibtex-copy { position: absolute; top: 8px; right: 8px; padding: 4px 12px; background: var(--green); color: white; border: none; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; }
+  .bibtex-copy:hover { background: #1f6b3f; }
   .paper-abstract { display: none; margin-top: 10px; padding: 14px 16px; background: #fafbfd; border-radius: 6px; font-size: 13.5px; line-height: 1.65; color: var(--text-muted); border-left: 3px solid var(--navy-light); }
   .paper-abstract.open { display: block; }
 
@@ -135,8 +141,8 @@
         <select id="filterYear" onchange="applyFilters()"><option value="">All years</option></select>
       </div>
       <div class="filter-group">
-        <label>Search title / authors</label>
-        <input id="filterSearch" placeholder="Type to search..." type="search" oninput="debounceSearch()">
+        <label>Search title</label>
+        <input id="filterSearch" placeholder="Search by title..." type="search" oninput="debounceSearch()">
       </div>
       <div class="filter-actions">
         <button class="btn btn-primary" onclick="applyFilters()">Filter</button>
@@ -248,7 +254,7 @@ function applyFilters() {
     if (area && p['Area'] !== area) return false;
     if (year && p['Year'] !== year) return false;
     if (search) {
-      const h = (p['Title'] + ' ' + p['Authors'] + ' ' + (p['Abstract']||'')).toLowerCase();
+      const h = (p['Title'] || '').toLowerCase();
       if (!h.includes(search)) return false;
     }
     return true;
@@ -318,7 +324,10 @@ function renderPage() {
         ${p['Status']==='Other' ? '<span class="tag tag-other">Other</span>' : ''}
         ${p['Status']==='Articles in Advance' ? '<span class="tag tag-aia">Articles in Advance</span>' : ''}
       </div>
-      ${hasAbs ? `<span class="paper-abstract-toggle" onclick="togAbs('${aid}',this)">▸ Abstract</span><div id="${aid}" class="paper-abstract">${esc(p['Abstract'])}</div>` : ''}
+      ${hasAbs ? `<span class="paper-abstract-toggle" onclick="togAbs('${aid}',this)">▸ Abstract</span>` : ''}
+      <span class="paper-bibtex-toggle" onclick="togBib('b${start+idx}',this, ${start+idx})">▸ BibTeX</span>
+      ${hasAbs ? `<div id="${aid}" class="paper-abstract">${esc(p['Abstract'])}</div>` : ''}
+      <div id="b${start+idx}" class="paper-bibtex"></div>
     </div>`;
   }).join('');
 
@@ -330,6 +339,58 @@ function togAbs(id, btn) {
   const el = document.getElementById(id);
   const open = el.classList.toggle('open');
   btn.textContent = open ? '▾ Hide abstract' : '▸ Abstract';
+}
+
+function togBib(id, btn, idx) {
+  const el = document.getElementById(id);
+  const open = el.classList.toggle('open');
+  btn.textContent = open ? '▾ Hide BibTeX' : '▸ BibTeX';
+  if (open && !el.dataset.filled) {
+    const start = (currentPage - 1) * PER_PAGE;
+    const p = filtered[idx];
+    const bib = generateBibtex(p);
+    el.innerHTML = `<button class="bibtex-copy" onclick="copyBib(this, '${id}')">Copy</button>` + esc(bib);
+    el.dataset.filled = '1';
+  }
+}
+
+function generateBibtex(p) {
+  const authors = (p['Authors'] || '').split(',').map(a => a.trim()).filter(Boolean);
+  const lastName = (authors[0] || 'Unknown').split(' ').pop();
+  const year = p['Year'] || '';
+  const titleWords = (p['Title'] || '').split(/\s+/).slice(0, 3).map(w => w.replace(/[^a-zA-Z]/g, '')).filter(Boolean).join('');
+  const key = `${lastName}_${year}_${titleWords}`;
+
+  const pages = extractPages(p).replace('-', '--').replace('–', '--');
+
+  let bib = `@article{${key},\n`;
+  bib += `  title={${p['Title'] || ''}},\n`;
+  bib += `  author={${authors.join(' and ')}},\n`;
+  bib += `  journal={Management Science},\n`;
+  if (p['Volume']) bib += `  volume={${p['Volume']}},\n`;
+  if (p['Issue']) bib += `  number={${p['Issue']}},\n`;
+  if (pages) bib += `  pages={${pages}},\n`;
+  bib += `  year={${year}},\n`;
+  bib += `  publisher={INFORMS}\n`;
+  bib += `}`;
+  return bib;
+}
+
+function extractPages(p) {
+  if (p['Page']) return p['Page'];
+  // Try to extract from Cite As: "... 57(1):1-20."
+  const cite = p['Cite As'] || '';
+  const m = cite.match(/:([^.]+)\./);
+  return m ? m[1].trim() : '';
+}
+
+function copyBib(btn, id) {
+  const el = document.getElementById(id);
+  const text = el.textContent.replace('Copy', '').trim();
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+  });
 }
 
 function renderPag(total) {
