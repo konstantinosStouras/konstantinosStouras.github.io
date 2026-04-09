@@ -266,50 +266,11 @@ async function loadData() {
     const resp = await fetch(CSV_URL);
     const text = await resp.text();
     allPapers = parseCSV(text);
-    allPapers.forEach(normalizeEditors);
     buildFilterOptions();
   } catch (e) {
     // Silently retry after 3 seconds
     setTimeout(loadData, 3000);
   }
-}
-
-// ── Editor cleaning & normalization ──
-const EDITOR_ALIASES = {
-  'renée adams': 'Renee Adams', 'renee adams': 'Renee Adams', 'adams': 'Renee Adams',
-  'gérard p. cachon': 'Gerard P. Cachon', 'gerard p. cachon': 'Gerard P. Cachon', 'gérard cachon': 'Gerard P. Cachon',
-  'jesper sørensen': 'Jesper Sorensen', 'jesper sorensen': 'Jesper Sorensen',
-};
-
-function normalizeEditorName(name) {
-  var t = name.trim();
-  // Normalize accents for lookup
-  var key = t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  if (EDITOR_ALIASES[key]) return EDITOR_ALIASES[key];
-  if (EDITOR_ALIASES[t.toLowerCase()]) return EDITOR_ALIASES[t.toLowerCase()];
-  // Return with accents stripped
-  return t.charAt(0).toUpperCase() + t.slice(1);
-}
-
-function cleanEditorField(raw) {
-  if (!raw) return [];
-  var s = raw;
-  // Fix junk: "...the government. This paper was accepted by Yinyu Ye"
-  var ai = s.indexOf('This paper was accepted by');
-  if (ai === -1) ai = s.indexOf('accepted by');
-  if (ai !== -1) {
-    var after = s.substring(ai);
-    var m = after.match(/accepted by\s+([^.]+)/i);
-    s = m ? m[1].trim() : '';
-  }
-  s = s.replace(/\.\s*$/, '').trim();
-  if (!s) return [];
-  // Split "Editor1 and Editor2"
-  return s.split(/\s+and\s+/i).map(function(e) { return normalizeEditorName(e.trim()); }).filter(Boolean);
-}
-
-function normalizeEditors(p) {
-  p._editors = cleanEditorField(p['Accepting Editor'] || '');
 }
 
 function parseCSV(text) {
@@ -345,7 +306,7 @@ function clean(s) { return (s || '').replace(/^"|"$/g, '').trim(); }
 function buildFilterOptions() {
   const editors = new Set(), areas = new Set(), years = new Set();
   allPapers.forEach(p => {
-    (p._editors || []).forEach(e => editors.add(e));
+    if (p['Accepting Editor']) editors.add(p['Accepting Editor']);
     if (p['Area']) areas.add(p['Area']);
     if (p['Year']) years.add(p['Year']);
   });
@@ -425,7 +386,7 @@ function applyFilters() {
   }
 
   filtered = allPapers.filter(p => {
-    if (sel.editor.size > 0 && !(p._editors || []).some(e => sel.editor.has(e))) return false;
+    if (sel.editor.size > 0 && !sel.editor.has(p['Accepting Editor'])) return false;
     if (sel.area.size > 0 && !sel.area.has(p['Area'])) return false;
     if (sel.year.size > 0 && !sel.year.has(p['Year'])) return false;
 
@@ -504,7 +465,7 @@ function renderPage() {
       <div class="paper-authors">${esc(p['Authors'] || '')}</div>
       <div class="paper-meta">
         ${p['Volume'] && p['Issue'] ? `<span class="tag tag-vol">${esc(p['Year'])} · Vol. ${esc(p['Volume'])} No. ${esc(p['Issue'])}${p['Page'] ? ', pp. '+esc(p['Page']) : ''}</span>` : p['Year'] ? `<span class="tag tag-vol">${esc(p['Year'])}</span>` : ''}
-        ${(p._editors||[]).map(e => `<span class="tag tag-editor" onclick="filterByEditor('${escAttr(e)}')">✎ ${esc(e)}</span>`).join('')}
+        ${p['Accepting Editor'] ? `<span class="tag tag-editor" onclick="filterByEditor('${escAttr(p['Accepting Editor'])}')">✎ ${esc(p['Accepting Editor'])}</span>` : ''}
         ${p['Area'] ? `<span class="tag tag-area" onclick="filterByArea('${escAttr(p['Area'])}')}">${esc(p['Area'])}</span>` : ''}
         ${p['Status']==='Other' ? '<span class="tag tag-other">Other</span>' : ''}
         ${p['Status']==='Articles in Advance' ? '<span class="tag tag-aia">Articles in Advance</span>' : ''}
