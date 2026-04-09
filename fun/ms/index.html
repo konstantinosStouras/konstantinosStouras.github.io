@@ -416,7 +416,9 @@ function escAttr(s) { return (s||'').replace(/'/g, "\\'").replace(/"/g, '&quot;'
 let searchTimer;
 function debounceSearch() {
   clearTimeout(searchTimer);
-  searchTimer = setTimeout(applyFilters, 300);
+  searchTimer = setTimeout(function() {
+    if (allPapers.length > 0) applyFilters();
+  }, 150);
 }
 
 document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') applyFilters(); });
