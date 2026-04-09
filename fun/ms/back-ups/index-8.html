@@ -500,15 +500,7 @@ function togBib(id, btn, idx) {
 
 function makeBib(p) {
   const authors = (p['Authors'] || '').split(',').map(a => a.trim()).filter(Boolean);
-  // Format authors as "LastName, FirstName and ..."
-  const bibAuthors = authors.map(a => {
-    const parts = a.trim().split(/\s+/);
-    if (parts.length < 2) return a;
-    const last = parts.pop();
-    return last + ', ' + parts.join(' ');
-  }).join(' and ');
-
-  const lastName = (authors[0] || 'Unknown').split(/\s+/).pop();
+  const lastName = (authors[0] || 'Unknown').split(' ').pop();
   const year = p['Year'] || '';
   const words = (p['Title'] || '').split(/\s+/).slice(0, 2).map(w => w.replace(/[^a-zA-Z]/g, '')).filter(Boolean).join('');
   const key = lastName + '_' + year + '_' + words;
@@ -517,8 +509,8 @@ function makeBib(p) {
   let pages = (p['Page'] || '').replace(/-/g, '--');
 
   let b = '@article{' + key + ',\n';
-  b += '  title={' + bibTitle(p['Title'] || '') + '},\n';
-  b += '  author={' + bibAuthors + '},\n';
+  b += '  title={' + (p['Title'] || '') + '},\n';
+  b += '  author={' + authors.join(' and ') + '},\n';
   b += '  journal={Management Science},\n';
   if (p['Volume']) b += '  volume={' + p['Volume'] + '},\n';
   if (p['Issue']) b += '  number={' + p['Issue'] + '},\n';
@@ -527,12 +519,6 @@ function makeBib(p) {
   b += '  publisher={INFORMS}\n';
   b += '}';
   return b;
-}
-
-// Protect capital letters in BibTeX title (skip the very first character)
-function bibTitle(t) {
-  if (!t) return '';
-  return t.charAt(0) + t.slice(1).replace(/[A-Z]/g, function(ch) { return '{' + ch + '}'; });
 }
 
 function copyBib(btn, id) {
