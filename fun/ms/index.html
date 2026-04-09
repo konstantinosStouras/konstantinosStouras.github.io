@@ -288,8 +288,10 @@
 <script>
 const SHEET_ID = '11MKt6uzfnxTNTbK4Kb1jwW32cEsKZcBRncubV2omJzQ';
 const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Data`;
+const AUTHORS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Authors`;
 const PER_PAGE = 20;
 let allPapers = [], filtered = [], currentPage = 1;
+let authorData = []; // pre-computed from Authors tab
 
 // Multi-select state
 const sel = { editor: new Set(), area: new Set(), year: new Set(), title: new Set(), author: new Set() };
@@ -348,25 +350,29 @@ function addChipFromCard(type, val) {
 
 async function loadData() {
   try {
-    const resp = await fetch(CSV_URL);
+    const [resp, authResp] = await Promise.all([
+      fetch(CSV_URL),
+      fetch(AUTHORS_CSV_URL).catch(function() { return null; })
+    ]);
     const text = await resp.text();
     allPapers = parseCSV(text);
     allPapers.forEach(normalizeEditors);
-    allPapers.forEach(normalizeAuthors);
     fuzzyMergeEditors();
     fuzzyMergeAreas();
-    fuzzyMergeAuthors();
+    // Load pre-computed author data from Authors tab
+    if (authResp && authResp.ok) {
+      var authText = await authResp.text();
+      authorData = parseCSV(authText);
+    }
     buildFilterOptions();
     // Update year range in header
     var years = allPapers.map(function(p) { return parseInt(p['Year']); }).filter(function(y) { return !isNaN(y); });
     if (years.length > 0) {
       var minY = Math.min.apply(null, years);
-      var maxY = Math.max.apply(null, years);
       var el = document.getElementById('yearRange');
       if (el) el.textContent = minY + '–present';
     }
   } catch (e) {
-    // Silently retry after 3 seconds
     setTimeout(loadData, 3000);
   }
 }
@@ -758,127 +764,43 @@ function buildSummaryTabs(editorCounts, areaCounts) {
     return '<div class="summary-item" onclick="filterByArea(\'' + escAttr(a) + '\')"><span class="summary-count">' + areaCounts[a] + '</span> papers in ' + esc(a) + '</div>';
   }).join('');
 
-  // Authors: count papers and unique areas per normalized author
-  var authorStats = {}; // name → { count, areas: Set }
-  allPapers.forEach(function(p) {
-    (p._authorsList || []).forEach(function(a) {
-      if (!authorStats[a]) authorStats[a] = { count: 0, areas: new Set() };
-      authorStats[a].count++;
-      if (p._area) authorStats[a].areas.add(p._area);
-    });
-  });
-
-  var auSorted = Object.keys(authorStats).sort(function(a,b) { return authorStats[b].count - authorStats[a].count; });
-  document.getElementById('summaryAuthorsList').innerHTML = auSorted.map(function(a) {
-    var s = authorStats[a];
-    var areaCount = s.areas.size;
-    var areaList = Array.from(s.areas);
-    return '<div class="summary-item">' +
-      '<span class="summary-count">' + s.count + '</span> ' +
-      '<span class="summary-author-link" onclick="addAuthorChip(\'' + escAttr(a) + '\')" style="cursor:pointer">' +
-        'papers written by ' + esc(a) +
-      '</span>' +
-      (areaCount > 0 ? ' <span class="summary-area-link" onclick="filterByAuthorAreas(\'' + escAttr(a) + '\')" style="cursor:pointer;color:var(--green);font-style:italic"> across ' + areaCount + ' area' + (areaCount !== 1 ? 's' : '') + '</span>' : '') +
-    '</div>';
-  }).join('');
-
-  // Store for area click lookups
-  window._authorStats = authorStats;
+  // Authors: use pre-computed data from Authors tab
+  var auList = document.getElementById('summaryAuthorsList');
+  if (authorData.length > 0) {
+    // authorData has columns: Papers, Author, Areas
+    // Already sorted by paper count from GAS
+    window._authorAreaLookup = {};
+    auList.innerHTML = authorData.map(function(a) {
+      var count = parseInt(a['Papers']) || 0;
+      var name = a['Author'] || '';
+      var areasStr = a['Areas'] || '';
+      var areaArr = areasStr ? areasStr.split(',').map(function(x) { return x.trim(); }).filter(Boolean) : [];
+      var areaCount = areaArr.length;
+      window._authorAreaLookup[name] = areaArr;
+      return '<div class="summary-item">' +
+        '<span class="summary-count">' + count + '</span> ' +
+        '<span class="summary-author-link" onclick="addAuthorChip(\'' + escAttr(name) + '\')" style="cursor:pointer">' +
+          'papers written by ' + esc(name) +
+        '</span>' +
+        (areaCount > 0 ? ' <span class="summary-area-link" onclick="filterByAuthorAreas(\'' + escAttr(name) + '\')" style="cursor:pointer;color:var(--green);font-style:italic"> across ' + areaCount + ' area' + (areaCount !== 1 ? 's' : '') + '</span>' : '') +
+      '</div>';
+    }).join('');
+  } else {
+    auList.innerHTML = '<div style="padding:12px;color:var(--text-muted)">No Authors tab found. Run "5. Build Authors tab" in the Google Sheet script.</div>';
+  }
 }
 
 function filterByAuthorAreas(authorName) {
-  var stats = window._authorStats && window._authorStats[authorName];
-  if (!stats) return;
-  // Clear existing area chips, then add all this author's areas
+  var areas = window._authorAreaLookup && window._authorAreaLookup[authorName];
+  if (!areas || !areas.length) return;
   sel.area.clear();
-  stats.areas.forEach(function(a) { sel.area.add(a); });
+  areas.forEach(function(a) { sel.area.add(a); });
   renderChips('area');
   applyFilters();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// ── Author normalization & fuzzy merge ──
-
-const AUTHOR_ALIASES = {};
-
-function normalizeAuthorName(name) {
-  var t = name.trim();
-  if (!t) return '';
-  // Normalize Unicode hyphens
-  t = t.replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\uFE58\uFE63\uFF0D]/g, '-');
-  // Normalize accents for lookup
-  var key = t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  if (AUTHOR_ALIASES[key]) return AUTHOR_ALIASES[key];
-  // Re-case: capitalize first letter of each part
-  return t.split(/\s+/).map(function(w) {
-    if (w.length <= 3 && w === w.toUpperCase()) return w; // keep initials like "J." or "D.J."
-    return w;
-  }).join(' ');
-}
-
-function normalizeAuthors(p) {
-  var raw = p['Authors'] || '';
-  if (!raw) { p._authorsList = []; return; }
-  p._authorsList = raw.split(',').map(function(a) {
-    return normalizeAuthorName(a.trim());
-  }).filter(Boolean);
-}
-
-function fuzzyMergeAuthors() {
-  // Count papers per author
-  var counts = {};
-  allPapers.forEach(function(p) {
-    (p._authorsList || []).forEach(function(a) { counts[a] = (counts[a] || 0) + 1; });
-  });
-
-  // Separate rare (≤1 paper) from common (>1 paper) — use higher bar since author count is huge
-  var rare = [], common = [];
-  Object.keys(counts).forEach(function(name) {
-    if (counts[name] <= 1) rare.push(name);
-    else common.push(name);
-  });
-
-  var dynamicAliases = {};
-  var mergeLog = [];
-  rare.forEach(function(rName) {
-    var rKey = stripAccentsLower(rName);
-    var rReversed = stripAccentsLower(reverseName(rName));
-    var bestMatch = null, bestDist = Infinity;
-
-    common.forEach(function(cName) {
-      var cKey = stripAccentsLower(cName);
-      var dist = levenshtein(rKey, cKey);
-      var distRev = levenshtein(rReversed, cKey);
-      var minDist = Math.min(dist, distRev);
-
-      // Last-name match with close first name
-      var rParts = rKey.split(/\s+/), cParts = cKey.split(/\s+/);
-      if (rParts.length >= 2 && cParts.length >= 2) {
-        var rLast = rParts[rParts.length-1], cLast = cParts[cParts.length-1];
-        if (rLast === cLast || levenshtein(rLast, cLast) <= 1) {
-          var firstDist = levenshtein(rParts.slice(0,-1).join(' '), cParts.slice(0,-1).join(' '));
-          if (firstDist <= 2) minDist = Math.min(minDist, firstDist);
-        }
-      }
-
-      if (minDist < bestDist) { bestDist = minDist; bestMatch = cName; }
-    });
-
-    // Strict threshold: ≤ 1 for short names, ≤ 2 for long names
-    var threshold = rKey.length >= 12 ? 2 : 1;
-    if (bestMatch && bestDist <= threshold && bestDist > 0) {
-      dynamicAliases[rName] = bestMatch;
-      mergeLog.push(rName + ' (' + counts[rName] + ') → ' + bestMatch + ' (' + counts[bestMatch] + ')');
-    }
-  });
-
-  if (Object.keys(dynamicAliases).length > 0) {
-    console.log('Fuzzy author merges (' + mergeLog.length + '):', mergeLog);
-    allPapers.forEach(function(p) {
-      p._authorsList = (p._authorsList || []).map(function(a) { return dynamicAliases[a] || a; });
-    });
-  }
-}
+// Author normalization is done server-side in Google Apps Script (menu item 5).
 
 function toggleSummary(tab) {
   var edEl = document.getElementById('summaryEditors');
