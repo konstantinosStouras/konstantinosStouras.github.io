@@ -209,7 +209,9 @@
 <div id="papersList" class="papers-list">
   <div class="empty-state"><h3>Select a filter to get started</h3><p>Filter by editor, area, year, or search by title or author name.</p></div>
 </div>
+<!-- PAGINATION DISABLED — uncomment to re-enable
 <div id="pagination" class="pagination" style="display:none"></div>
+-->
 
 <footer class="footer">
   Data: <a href="https://pubsonline.informs.org/journal/mnsc" target="_blank">Management Science (INFORMS)</a>
@@ -557,7 +559,6 @@ function applyFilters() {
   if (sel.editor.size === 0 && sel.area.size === 0 && sel.year.size === 0 && sel.title.size === 0 && sel.author.size === 0 && !search && !searchAuth) {
     document.getElementById('resultsCount').innerHTML = '';
     document.getElementById('papersList').innerHTML = '<div class="empty-state"><h3>Select a filter to get started</h3><p>Filter by editor, area, year, or search by title or author name.</p></div>';
-    document.getElementById('pagination').style.display = 'none';
     return;
   }
 
@@ -613,9 +614,13 @@ function filterByArea(name) {
 }
 
 function renderPage() {
+  /* PAGINATION DISABLED — showing all results on one page
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const start = (currentPage - 1) * PER_PAGE;
   const page = filtered.slice(start, start + PER_PAGE);
+  */
+  const start = 0;
+  const page = filtered;
 
   const countEl = document.getElementById('resultsCount');
   countEl.innerHTML = filtered.length === allPapers.length
@@ -625,7 +630,6 @@ function renderPage() {
   const list = document.getElementById('papersList');
   if (!page.length) {
     list.innerHTML = '<div class="empty-state"><h3>No papers found</h3><p>Try adjusting your filters.</p></div>';
-    document.getElementById('pagination').style.display = 'none';
     return;
   }
 
@@ -653,8 +657,10 @@ function renderPage() {
     </div>`;
   }).join('');
 
+  /* PAGINATION DISABLED
   document.getElementById('pagination').style.display = totalPages > 1 ? '' : 'none';
   renderPag(totalPages);
+  */
 }
 
 function togAbs(id, btn) {
@@ -721,6 +727,7 @@ function copyBib(btn, id) {
   });
 }
 
+/* PAGINATION DISABLED — uncomment to re-enable
 function renderPag(total) {
   const p = document.getElementById('pagination');
   let h = `<button ${currentPage===1?'disabled':''} onclick="goPage(${currentPage-1})">‹ Prev</button>`;
@@ -734,6 +741,7 @@ function renderPag(total) {
 }
 
 function goPage(n) { currentPage = n; renderPage(); window.scrollTo({ top: 280, behavior: 'smooth' }); }
+*/
 
 function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 function escAttr(s) { return (s||'').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }

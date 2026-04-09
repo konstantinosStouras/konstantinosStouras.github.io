@@ -73,13 +73,22 @@ Reads `mnsc_articles.csv` or `.xlsx`, outputs `mnsc_articles_editors.xlsx`.
 - **Ctrl+C once** (during retries) → skip current row, continue to next
 - **Ctrl+C twice quickly** → stop entire process, save all progress to xlsx
 
+### Modes
+
+On startup, choose:
+1. **Scrape editors (normal)** — scrape INFORMS pages, fall back to Crossref API abstract on 403
+2. **Fix bad entries** — re-parse existing editor/area fields (fixes "Name for the Special Issue..." patterns, strips "Funding:" junk from areas)
+
 ### Behavior
 
 - Prompts for start/end row range on each run
 - Accumulates progress: reads from output file on subsequent runs
-- 10 retries with random 3–15s delays on 403 errors
+- 5 retries on INFORMS 403, then falls back to Crossref API abstract
+- Title-based skip: ~25 patterns auto-skip non-research content (referees, special sections, in memoriam, best AE awards, etc.)
+- `split_editor_area()` handles 3 patterns: "Name, area.", "Name for the Special Issue on...", "Name served as editor"
+- `clean_area()` strips trailing junk (Funding:, Supplemental Material:, DOI URLs)
 - 2-second base delay between requests
-- Extracts "accepted by [Name], [Area]." pattern from INFORMS HTML
+- Extracts "accepted by [Name], [Area]." pattern from INFORMS HTML or Crossref abstract
 
 ---
 
@@ -106,7 +115,7 @@ https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Data
 - **Articles in Advance** — shows just year tag (no "Vol. ? No. ?"); BibTeX omits missing fields
 - **Pages display** — shows "pp. X-Y" in volume tag when available
 - **Sort** — Year↓, Year↑, Title A-Z, Editor A-Z
-- **Pagination** — 20 per page with numbered buttons
+- **No pagination** — all matching results shown on one scrollable page (pagination code preserved in comments for re-enabling)
 - **Fonts** — Playfair Display (serif headings), DM Sans (body)
 - **Responsive** — mobile-friendly layout
 - **No initial content** — blank welcome state until user applies a filter; no paper count shown until first filter
