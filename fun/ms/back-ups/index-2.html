@@ -169,9 +169,8 @@
   </div>
 </div>
 
-<div id="papersList" class="papers-list">
-  <div class="empty-state"><h3>Select a filter to get started</h3><p>Filter by editor, area, year, or search by title or author name.</p></div>
-</div>
+<div id="loading" class="loading"><div class="spinner"></div>Loading papers from Google Sheets...</div>
+<div id="papersList" class="papers-list" style="display:none"></div>
 <div id="pagination" class="pagination" style="display:none"></div>
 
 <footer class="footer">
@@ -191,10 +190,13 @@ async function loadData() {
     const text = await resp.text();
     allPapers = parseCSV(text);
     buildFilterOptions();
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('papersList').style.display = '';
     document.getElementById('resultsCount').innerHTML = '<strong>' + allPapers.length.toLocaleString() + '</strong> papers available — use the filters above to explore';
+    document.getElementById('papersList').innerHTML = '<div class="empty-state"><h3>Select a filter to get started</h3><p>Filter by editor, area, year, or search by title or author name.</p></div>';
   } catch (e) {
-    // Silently retry after 3 seconds
-    setTimeout(loadData, 3000);
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('resultsCount').innerHTML = 'Could not load data — make sure the Google Sheet is shared publicly.';
   }
 }
 
