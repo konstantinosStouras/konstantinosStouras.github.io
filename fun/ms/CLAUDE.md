@@ -2,7 +2,7 @@
 
 ## Overview
 
-A complete pipeline to scrape, store, and browse all Management Science (INFORMS) article metadata from 2011–present. Three components:
+A complete pipeline to scrape, store, and browse all Management Science (INFORMS) article metadata from 1954–present. Three components:
 
 1. **Google Apps Script** (`MNSCScraper_Complete.gs`) — fetches metadata from Crossref API and INFORMS website into Google Sheets
 2. **Python scraper** (`scrape_editors.py`) — scrapes editor/area info from INFORMS article pages (runs locally)
@@ -19,6 +19,7 @@ A complete pipeline to scrape, store, and browse all Management Science (INFORMS
   - `Crossref_Full` — 39 columns with full Crossref metadata (DOI, affiliations, ORCIDs, citation counts, funders, etc.)
   - `mnsc_articles_editors` — editor/area data scraped via Python (source for bulk copy)
   - `_Inspect` — utility tab for inspecting raw JSON of a single article
+  - `_BatchLog` — auto-batch progress log (timestamp + message per year processed)
 
 ---
 
@@ -28,11 +29,12 @@ A complete pipeline to scrape, store, and browse all Management Science (INFORMS
 
 | Menu Item | Function | Description |
 |---|---|---|
-| 1. Extract full Crossref data | `promptFullExtract` | Fetches all articles for a year range from Crossref API → `Crossref_Full` tab (39 cols) |
-| 2. Copy Crossref_Full → Data tab | `populateDataFromCrossref` | Maps 39-col data into 12-col `Data` tab. Auto-creates tab with headers if missing. Includes Page column. |
+| 1. Extract full Crossref data | `promptFullExtract` | Fetches all articles for a year range from Crossref API → `Crossref_Full` tab (39 cols). **Auto-batches** via time triggers: processes ~4 min, pauses 30s, auto-resumes until done. Progress logged to `_BatchLog` tab. |
+| 2. Copy Crossref_Full → Data tab | `populateDataFromCrossref` | Maps 39-col data into 12-col `Data` tab. Auto-creates tab with headers if missing. Includes Page column. **Deduplicates by DOI** — skips rows already in Data tab. |
 | 3. Fill Editor/Area from INFORMS | `promptEditors` | Scrapes INFORMS article pages for "accepted by [Editor], [Area]" text. Columns K-L. |
 | 4. Copy editors from mnsc_articles_editors | `copyEditorsFromEditorTab` | Bulk copies editor/area data from `mnsc_articles_editors` tab to `Data` tab, matching by DOI. Skips rows that already have an editor. |
-| Quick fetch to Data tab | `promptQuickFetch` | Skips Full tab, writes directly to Data. |
+| Quick fetch to Data tab | `promptQuickFetch` | Skips Full tab, writes directly to Data. **Auto-batches** like option 1. |
+| ⏹ Stop auto-batch | `stopAutoBatch` | Cancels a running auto-batch and removes pending triggers. |
 | Inspect one article | `inspectArticle` | Dumps raw Crossref JSON to `_Inspect` tab. |
 | Setup tabs | `setupTabs` | Creates/resets both tabs with headers. |
 
@@ -115,11 +117,12 @@ https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Data
 - **Articles in Advance** — shows just year tag (no "Vol. ? No. ?"); BibTeX omits missing fields
 - **Pages display** — shows "pp. X-Y" in volume tag when available
 - **Sort** — Year↓, Year↑, Title A-Z, Editor A-Z
-- **Summary tabs** — "Editors" and "Areas" toggle buttons inside the filters bar. Click to expand/collapse a two-column list sorted by paper count (e.g., "179 papers accepted by David Simchi-Levi", "987 papers in finance"). Clicking any item adds it as a filter chip. Clear button collapses tabs.
+- **Summary tabs** — "Editors", "Areas", and "Authors" toggle buttons inside the filters bar. Click to expand/collapse a two-column list sorted by paper count (e.g., "179 papers accepted by David Simchi-Levi", "987 papers in finance", "89 papers written by Konstantinos Stouras across 3 areas"). Clicking paper count / author name adds author search chip. Clicking "across N areas" adds those areas as filter chips. Clicking any editor/area item adds it as a filter chip. Clear button collapses tabs.
 - **No pagination** — all matching results shown on one scrollable page (pagination code preserved in comments for re-enabling)
 - **Fonts** — Playfair Display (serif headings), DM Sans (body)
 - **Responsive** — mobile-friendly layout
 - **No initial content** — blank welcome state until user applies a filter; no paper count shown until first filter
+- **Dynamic year range** — header shows actual min year from data (e.g., "1954–present") instead of hardcoded value
 
 ### Data Normalization (client-side, no sheet modifications)
 
@@ -149,6 +152,8 @@ Three functions run after CSV loads to clean raw data for display:
 
 **`normalizeArea(raw)` → string**
 - Truncates at HTML tags
+- Strips trailing junk: Funding:, Supplemental Material:, Conflict of Interest, DOI URLs
+- Fixes colon spacing (" :" → ":")
 - Looks up in `AREA_ALIASES` (~40 entries): typos (entepreneurship→entrepreneurship), capitalization (Finance→finance), HTML junk removal, consolidation (strategy→business strategy, stochastic models→stochastic models and simulation, organization→organizations)
 - Extracts area from patterns like "Renee, finance" → "finance"
 - Discards junk via `AREA_JUNK` list
@@ -163,13 +168,26 @@ Three functions run after CSV loads to clean raw data for display:
 
 **Result**: ~210 raw editor values → ~140 unique names (via explicit aliases + fuzzy matching). ~63 raw area values → ~22 clean categories (via explicit aliases + fuzzy matching).
 
+**`normalizeAuthors(paper)`** — sets `paper._authorsList` (array) from comma-separated Authors field. Normalizes Unicode hyphens and accents.
+
+**`fuzzyMergeAuthors()`** — merges rare authors (≤1 paper) into common authors (>1 paper) using Levenshtein distance. Threshold: ≤1 for short names, ≤2 for names ≥12 chars. Also checks reversed name order and last-name match with close first name. Logs merges to console.
+
 ### Architecture
 
 - CSS variables for theming (navy `#003087`, accent gold `#c4a052`, green `#2a7d4f`)
-- All JS inline, ~1030 lines total
+- All JS inline, ~1200 lines total
 - Custom dropdown component replaces native `<select>` for full font-size control
 - Chip system shared across all 5 filter types (editor, area, year, title, author)
 - 50px fixed height for all filter inputs/buttons for alignment
+
+### SEO & Social Sharing
+
+- Open Graph meta tags (title, description, image, URL) — previews on LinkedIn, WhatsApp, Facebook
+- Twitter Card (`summary_large_image`)
+- JSON-LD structured data (`WebApplication` schema) for Google
+- OG image: `og-image.jpg` (840×350, INFORMS Management Science header) — must be uploaded alongside `index.html`
+- Canonical URL: `https://stouras.com/fun/ms/`
+- Theme color: `#003087`
 
 ---
 
@@ -181,6 +199,13 @@ Three functions run after CSV loads to clean raw data for display:
 
 ---
 
-## ~4,982 articles total (2011–present)
+## ~17,000+ articles total (1954–present)
 
 Abstract cleaning affects ~4,699 abstracts. Editor scraping done in batches of 500 via `scrape_editors.py`, then bulk-copied to Data tab via menu item 4.
+
+### Hosted files at `stouras.com/fun/ms/`
+
+| File | Purpose |
+|------|---------|
+| `index.html` | Single-file web GUI |
+| `og-image.jpg` | Social sharing preview image (840×350) |

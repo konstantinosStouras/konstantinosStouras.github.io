@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Management Science Paper Browser · 2011–present</title>
+<title>Management Science Paper Browser · 1954–present</title>
 
 <!-- SEO -->
-<meta name="description" content="Browse and filter 5,000+ Management Science (INFORMS) articles from 2011–present. Search by editor, area, year, or author. Export BibTeX citations.">
+<meta name="description" content="Browse and filter all Management Science (INFORMS) articles from 1954–present. Search by editor, area, year, or author. Export BibTeX citations.">
 <meta name="keywords" content="Management Science, INFORMS, academic papers, research browser, BibTeX, journal articles, operations research, finance, marketing, accounting">
 <meta name="author" content="Konstantinos Stouras">
 <meta name="robots" content="index, follow">
@@ -15,7 +15,7 @@
 <!-- Open Graph (Facebook, LinkedIn, WhatsApp) -->
 <meta property="og:type" content="website">
 <meta property="og:title" content="Management Science — Paper Browser">
-<meta property="og:description" content="Browse and filter 5,000+ Management Science articles from 2011–present. Search by editor, area, year, or author.">
+<meta property="og:description" content="Browse and filter all Management Science articles from 1954–present. Search by editor, area, year, or author.">
 <meta property="og:url" content="https://stouras.com/fun/ms/">
 <meta property="og:image" content="https://stouras.com/fun/ms/og-image.jpg">
 <meta property="og:image:width" content="840">
@@ -25,7 +25,7 @@
 <!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Management Science — Paper Browser">
-<meta name="twitter:description" content="Browse and filter 5,000+ Management Science articles from 2011–present. Search by editor, area, year, or author.">
+<meta name="twitter:description" content="Browse and filter all Management Science articles from 1954–present. Search by editor, area, year, or author.">
 <meta name="twitter:image" content="https://stouras.com/fun/ms/og-image.jpg">
 
 <!-- Favicon (reuse INFORMS-style) -->
@@ -101,8 +101,8 @@
   .results-bar { max-width: 1280px; margin: 0 auto; padding: 20px 32px 8px; display: flex; justify-content: space-between; align-items: center; }
   .results-count { font-size: 14px; color: var(--text-muted); }
   .results-count strong { color: var(--navy); font-weight: 600; }
-  .sort-control { font-size: 13px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
-  .sort-control select { border: 1px solid var(--border); padding: 4px 8px; border-radius: 4px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--text); }
+  .sort-control { font-size: 16px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+  .sort-control select { border: 1px solid var(--border); padding: 8px 12px; border-radius: 4px; font-family: 'DM Sans', sans-serif; font-size: 16px; color: var(--text); }
 
   .papers-list { max-width: 1280px; margin: 0 auto; padding: 8px 32px 60px; display: flex; flex-direction: column; }
   .paper-card { background: var(--white); border: 1px solid var(--border); border-bottom: none; padding: 20px 24px; transition: background 0.15s; }
@@ -179,13 +179,15 @@
   .summary-item { break-inside: avoid; cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: background 0.1s; }
   .summary-item:hover { background: var(--navy-light); }
   .summary-count { color: var(--text-muted); font-size: 13px; margin-right: 4px; display: inline-block; min-width: 32px; text-align: right; }
+  .summary-author-link:hover { text-decoration: underline; color: var(--navy); }
+  .summary-area-link:hover { text-decoration: underline; }
   @media (max-width: 768px) {
     .summary-tabs { padding-left: 20px; padding-right: 20px; }
     .summary-list { column-count: 1; }
   }
 </style>
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"WebApplication","name":"Management Science Paper Browser","description":"Browse and filter 5,000+ Management Science (INFORMS) articles from 2011–present.","url":"https://stouras.com/fun/ms/","applicationCategory":"ReferenceApplication","author":{"@type":"Person","name":"Konstantinos Stouras","url":"https://stouras.com"},"provider":{"@type":"Organization","name":"INFORMS","url":"https://pubsonline.informs.org/journal/mnsc"}}
+{"@context":"https://schema.org","@type":"WebApplication","name":"Management Science Paper Browser","description":"Browse and filter all Management Science (INFORMS) articles from 1954–present.","url":"https://stouras.com/fun/ms/","applicationCategory":"ReferenceApplication","author":{"@type":"Person","name":"Konstantinos Stouras","url":"https://stouras.com"},"provider":{"@type":"Organization","name":"INFORMS","url":"https://pubsonline.informs.org/journal/mnsc"}}
 </script>
 </head>
 <body>
@@ -193,7 +195,7 @@
 <header class="header">
   <div class="header-inner">
     <h1><em>Management Science</em> — Paper Browser</h1>
-    <div class="header-meta">Data from <strong>INFORMS</strong> via Crossref · 2011–present</div>
+    <div class="header-meta">Data from <strong>INFORMS</strong> via Crossref · <span id="yearRange">1954–present</span></div>
   </div>
 </header>
 
@@ -226,22 +228,22 @@
       </div>
       <div class="filter-group">
         <label>Search Title</label>
-        <input id="filterSearch" placeholder="Search by title..." type="search" oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('title','filterSearch');event.preventDefault();}">
+        <input id="filterSearch" placeholder="Paper title..." type="search" oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('title','filterSearch');event.preventDefault();}">
         <div id="chipsTitle" class="chips"></div>
       </div>
       <div class="filter-group">
         <label>Search Authors</label>
-        <input id="filterAuthors" placeholder="Search by author..." type="search" oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('author','filterAuthors');event.preventDefault();}">
+        <input id="filterAuthors" placeholder="Author..." type="search" oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('author','filterAuthors');event.preventDefault();}">
         <div id="chipsAuthor" class="chips"></div>
       </div>
       <div class="filter-actions">
-        <button class="btn btn-primary" onclick="applyFilters()">Filter</button>
         <button class="btn btn-secondary" onclick="clearFilters()">Clear</button>
       </div>
     </div>
     <div class="summary-tab-btns" style="margin-top:12px;">
       <button class="summary-tab-btn" onclick="toggleSummary('editors')">Editors</button>
       <button class="summary-tab-btn" onclick="toggleSummary('areas')">Areas</button>
+      <button class="summary-tab-btn" onclick="toggleSummary('authors')">Authors</button>
     </div>
   </div>
 </div>
@@ -252,6 +254,9 @@
   </div>
   <div id="summaryAreas" class="summary-content">
     <div id="summaryAreasList" class="summary-list"></div>
+  </div>
+  <div id="summaryAuthors" class="summary-content">
+    <div id="summaryAuthorsList" class="summary-list"></div>
   </div>
 </div>
 
@@ -347,9 +352,19 @@ async function loadData() {
     const text = await resp.text();
     allPapers = parseCSV(text);
     allPapers.forEach(normalizeEditors);
+    allPapers.forEach(normalizeAuthors);
     fuzzyMergeEditors();
     fuzzyMergeAreas();
+    fuzzyMergeAuthors();
     buildFilterOptions();
+    // Update year range in header
+    var years = allPapers.map(function(p) { return parseInt(p['Year']); }).filter(function(y) { return !isNaN(y); });
+    if (years.length > 0) {
+      var minY = Math.min.apply(null, years);
+      var maxY = Math.max.apply(null, years);
+      var el = document.getElementById('yearRange');
+      if (el) el.textContent = minY + '–present';
+    }
   } catch (e) {
     // Silently retry after 3 seconds
     setTimeout(loadData, 3000);
@@ -743,32 +758,148 @@ function buildSummaryTabs(editorCounts, areaCounts) {
     return '<div class="summary-item" onclick="filterByArea(\'' + escAttr(a) + '\')"><span class="summary-count">' + areaCounts[a] + '</span> papers in ' + esc(a) + '</div>';
   }).join('');
 
-  // Tabs are always visible, content populates when data loads
+  // Authors: count papers and unique areas per normalized author
+  var authorStats = {}; // name → { count, areas: Set }
+  allPapers.forEach(function(p) {
+    (p._authorsList || []).forEach(function(a) {
+      if (!authorStats[a]) authorStats[a] = { count: 0, areas: new Set() };
+      authorStats[a].count++;
+      if (p._area) authorStats[a].areas.add(p._area);
+    });
+  });
+
+  var auSorted = Object.keys(authorStats).sort(function(a,b) { return authorStats[b].count - authorStats[a].count; });
+  document.getElementById('summaryAuthorsList').innerHTML = auSorted.map(function(a) {
+    var s = authorStats[a];
+    var areaCount = s.areas.size;
+    var areaList = Array.from(s.areas);
+    return '<div class="summary-item">' +
+      '<span class="summary-count">' + s.count + '</span> ' +
+      '<span class="summary-author-link" onclick="addAuthorChip(\'' + escAttr(a) + '\')" style="cursor:pointer">' +
+        'papers written by ' + esc(a) +
+      '</span>' +
+      (areaCount > 0 ? ' <span class="summary-area-link" onclick="filterByAuthorAreas(\'' + escAttr(a) + '\')" style="cursor:pointer;color:var(--green);font-style:italic"> across ' + areaCount + ' area' + (areaCount !== 1 ? 's' : '') + '</span>' : '') +
+    '</div>';
+  }).join('');
+
+  // Store for area click lookups
+  window._authorStats = authorStats;
+}
+
+function filterByAuthorAreas(authorName) {
+  var stats = window._authorStats && window._authorStats[authorName];
+  if (!stats) return;
+  // Clear existing area chips, then add all this author's areas
+  sel.area.clear();
+  stats.areas.forEach(function(a) { sel.area.add(a); });
+  renderChips('area');
+  applyFilters();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ── Author normalization & fuzzy merge ──
+
+const AUTHOR_ALIASES = {};
+
+function normalizeAuthorName(name) {
+  var t = name.trim();
+  if (!t) return '';
+  // Normalize Unicode hyphens
+  t = t.replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\uFE58\uFE63\uFF0D]/g, '-');
+  // Normalize accents for lookup
+  var key = t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if (AUTHOR_ALIASES[key]) return AUTHOR_ALIASES[key];
+  // Re-case: capitalize first letter of each part
+  return t.split(/\s+/).map(function(w) {
+    if (w.length <= 3 && w === w.toUpperCase()) return w; // keep initials like "J." or "D.J."
+    return w;
+  }).join(' ');
+}
+
+function normalizeAuthors(p) {
+  var raw = p['Authors'] || '';
+  if (!raw) { p._authorsList = []; return; }
+  p._authorsList = raw.split(',').map(function(a) {
+    return normalizeAuthorName(a.trim());
+  }).filter(Boolean);
+}
+
+function fuzzyMergeAuthors() {
+  // Count papers per author
+  var counts = {};
+  allPapers.forEach(function(p) {
+    (p._authorsList || []).forEach(function(a) { counts[a] = (counts[a] || 0) + 1; });
+  });
+
+  // Separate rare (≤1 paper) from common (>1 paper) — use higher bar since author count is huge
+  var rare = [], common = [];
+  Object.keys(counts).forEach(function(name) {
+    if (counts[name] <= 1) rare.push(name);
+    else common.push(name);
+  });
+
+  var dynamicAliases = {};
+  var mergeLog = [];
+  rare.forEach(function(rName) {
+    var rKey = stripAccentsLower(rName);
+    var rReversed = stripAccentsLower(reverseName(rName));
+    var bestMatch = null, bestDist = Infinity;
+
+    common.forEach(function(cName) {
+      var cKey = stripAccentsLower(cName);
+      var dist = levenshtein(rKey, cKey);
+      var distRev = levenshtein(rReversed, cKey);
+      var minDist = Math.min(dist, distRev);
+
+      // Last-name match with close first name
+      var rParts = rKey.split(/\s+/), cParts = cKey.split(/\s+/);
+      if (rParts.length >= 2 && cParts.length >= 2) {
+        var rLast = rParts[rParts.length-1], cLast = cParts[cParts.length-1];
+        if (rLast === cLast || levenshtein(rLast, cLast) <= 1) {
+          var firstDist = levenshtein(rParts.slice(0,-1).join(' '), cParts.slice(0,-1).join(' '));
+          if (firstDist <= 2) minDist = Math.min(minDist, firstDist);
+        }
+      }
+
+      if (minDist < bestDist) { bestDist = minDist; bestMatch = cName; }
+    });
+
+    // Strict threshold: ≤ 1 for short names, ≤ 2 for long names
+    var threshold = rKey.length >= 12 ? 2 : 1;
+    if (bestMatch && bestDist <= threshold && bestDist > 0) {
+      dynamicAliases[rName] = bestMatch;
+      mergeLog.push(rName + ' (' + counts[rName] + ') → ' + bestMatch + ' (' + counts[bestMatch] + ')');
+    }
+  });
+
+  if (Object.keys(dynamicAliases).length > 0) {
+    console.log('Fuzzy author merges (' + mergeLog.length + '):', mergeLog);
+    allPapers.forEach(function(p) {
+      p._authorsList = (p._authorsList || []).map(function(a) { return dynamicAliases[a] || a; });
+    });
+  }
 }
 
 function toggleSummary(tab) {
   var edEl = document.getElementById('summaryEditors');
   var arEl = document.getElementById('summaryAreas');
+  var auEl = document.getElementById('summaryAuthors');
   var btns = document.querySelectorAll('.summary-tab-btn');
-
-  if (tab === 'editors') {
-    var isOpen = edEl.classList.contains('active');
-    edEl.className = 'summary-content' + (isOpen ? '' : ' active');
-    arEl.className = 'summary-content';
-    btns[0].className = 'summary-tab-btn' + (isOpen ? '' : ' active');
-    btns[1].className = 'summary-tab-btn';
-  } else {
-    var isOpen = arEl.classList.contains('active');
-    arEl.className = 'summary-content' + (isOpen ? '' : ' active');
-    edEl.className = 'summary-content';
-    btns[1].className = 'summary-tab-btn' + (isOpen ? '' : ' active');
-    btns[0].className = 'summary-tab-btn';
+  var els = [edEl, arEl, auEl];
+  var idx = tab === 'editors' ? 0 : tab === 'areas' ? 1 : 2;
+  var isOpen = els[idx].classList.contains('active');
+  els.forEach(function(el) { el.className = 'summary-content'; });
+  btns.forEach(function(b) { b.className = 'summary-tab-btn'; });
+  if (!isOpen) {
+    els[idx].className = 'summary-content active';
+    btns[idx].className = 'summary-tab-btn active';
   }
 }
 
 function closeSummaryTabs() {
   document.getElementById('summaryEditors').className = 'summary-content';
   document.getElementById('summaryAreas').className = 'summary-content';
+  document.getElementById('summaryAuthors').className = 'summary-content';
   document.querySelectorAll('.summary-tab-btn').forEach(function(b) { b.className = 'summary-tab-btn'; });
 }
 
