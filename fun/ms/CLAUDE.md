@@ -134,9 +134,18 @@ Three functions run after CSV loads to clean raw data for display:
 
 **`normalizeEditorName(name)` → string**
 - Strips "Prof." / "Professor" prefix
-- Strips Unicode accents (NFD normalization)
-- Looks up in `EDITOR_ALIASES` (~80 entries): typos (Brain→Brian Bushee), accent variants (Renée→Renee Adams), middle initials (Brad M.→Brad Barber), name consolidation (Teck Ho→Teck-Hua Ho, Jay→Jayashankar Swaminathan, D.J./DJ Wu→D.J. Wu)
+- Normalizes Unicode hyphens and accents (NFD normalization)
+- Looks up in `EDITOR_ALIASES` (~90 entries): typos (Brain→Brian Bushee, Kay Gieseke→Kay Giesecke, Manuel→Manel Baucells, Scholtes Stefan→Stefan Scholtes), accent variants (Renée→Renee Adams), middle initials (Brad M.→Brad Barber), name consolidation (Teck Ho→Teck-Hua Ho, Jay→Jayashankar Swaminathan, D.J./DJ Wu→D.J. Wu)
 - Discards junk entries via `EDITOR_JUNK` list
+
+**`fuzzyMergeEditors()`** — second-pass auto-merger that runs after initial normalization:
+- Counts papers per editor; separates rare (≤3 papers) from common (>3 papers)
+- For each rare name, computes Levenshtein distance against all common names
+- Also checks reversed name order ("Scholtes Stefan" ↔ "Stefan Scholtes")
+- Also checks last-name match + close first name separately
+- Threshold: distance ≤ 2 for names ≥ 8 chars, ≤ 1 for shorter
+- Merges rare name → closest common name (e.g., "Carrie Chan" (1) → "Carri Chan" (16))
+- Logs merges to browser console for debugging
 
 **`normalizeArea(raw)` → string**
 - Truncates at HTML tags
@@ -144,12 +153,12 @@ Three functions run after CSV loads to clean raw data for display:
 - Extracts area from patterns like "Renee, finance" → "finance"
 - Discards junk via `AREA_JUNK` list
 
-**Result**: ~210 raw editor values → ~144 unique names. ~63 raw area values → ~24 clean categories.
+**Result**: ~210 raw editor values → ~140 unique names (via explicit aliases + fuzzy matching). ~63 raw area values → ~24 clean categories.
 
 ### Architecture
 
 - CSS variables for theming (navy `#003087`, accent gold `#c4a052`, green `#2a7d4f`)
-- All JS inline, ~880 lines total
+- All JS inline, ~980 lines total
 - Custom dropdown component replaces native `<select>` for full font-size control
 - Chip system shared across all 5 filter types (editor, area, year, title, author)
 - 50px fixed height for all filter inputs/buttons for alignment

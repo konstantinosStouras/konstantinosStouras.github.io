@@ -318,6 +318,7 @@ async function loadData() {
     const text = await resp.text();
     allPapers = parseCSV(text);
     allPapers.forEach(normalizeEditors);
+    fuzzyMergeEditors();
     buildFilterOptions();
   } catch (e) {
     // Silently retry after 3 seconds
@@ -381,6 +382,15 @@ const EDITOR_ALIASES = {
   'dmitry kuksov': 'Dmitri Kuksov', 'dmitri kuksov': 'Dmitri Kuksov',
   'shiva rajagopal': 'Shivaram Rajgopal',
   'nicolas stier': 'Nicolas Stier-Moses', 'nicolas stier-moses': 'Nicolas Stier-Moses',
+  'manuel baucells': 'Manel Baucells',
+  'kay gieseke': 'Kay Giesecke',
+  'suraj srinivisan': 'Suraj Srinivasan', 'suraj srinivassan': 'Suraj Srinivasan',
+  'scholtes stefan': 'Stefan Scholtes', 'stefan sholtes': 'Stefan Scholtes',
+  'lukas schmidt': 'Lukas Schmid',
+  'alfonso gambardello': 'Alfonso Gambardella',
+  'carrie chan': 'Carri Chan',
+  'ranjani ananthakrishnan': 'Ranjani Krishnan',
+  'anita carson': 'Anita McGahan',
   'raphael thomadsen': 'Raphael Thomadsen',
   'ray reagans': 'Ray Reagans',
   'uday rajan': 'Uday Rajan',
@@ -503,6 +513,91 @@ function normalizeArea(raw) {
 function normalizeEditors(p) {
   p._editors = cleanEditorField(p['Accepting Editor'] || '');
   p._area = normalizeArea(p['Area'] || '');
+}
+
+// ── Fuzzy matching: auto-merge rare editor names that are typos of common ones ──
+
+function levenshtein(a, b) {
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  var matrix = [];
+  for (var i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (var j = 0; j <= a.length; j++) matrix[0][j] = j;
+  for (var i = 1; i <= b.length; i++) {
+    for (var j = 1; j <= a.length; j++) {
+      if (b.charAt(i-1) === a.charAt(j-1)) matrix[i][j] = matrix[i-1][j-1];
+      else matrix[i][j] = Math.min(matrix[i-1][j-1]+1, matrix[i][j-1]+1, matrix[i-1][j]+1);
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
+function reverseName(name) {
+  var parts = name.split(/\s+/);
+  if (parts.length < 2) return name;
+  return parts[parts.length-1] + ' ' + parts.slice(0, -1).join(' ');
+}
+
+function stripAccentsLower(s) {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+function fuzzyMergeEditors() {
+  // Count papers per editor after first normalization pass
+  var counts = {};
+  allPapers.forEach(function(p) {
+    (p._editors || []).forEach(function(e) { counts[e] = (counts[e] || 0) + 1; });
+  });
+
+  // Separate rare (≤3 papers) from common (>3 papers) editors
+  var rare = [], common = [];
+  Object.keys(counts).forEach(function(name) {
+    if (counts[name] <= 3) rare.push(name);
+    else common.push(name);
+  });
+
+  // For each rare name, find best match among common names
+  var dynamicAliases = {};
+  rare.forEach(function(rName) {
+    var rKey = stripAccentsLower(rName);
+    var rReversed = stripAccentsLower(reverseName(rName));
+    var bestMatch = null, bestDist = Infinity;
+
+    common.forEach(function(cName) {
+      var cKey = stripAccentsLower(cName);
+      // Direct Levenshtein
+      var dist = levenshtein(rKey, cKey);
+      // Also check reversed name order
+      var distRev = levenshtein(rReversed, cKey);
+      var minDist = Math.min(dist, distRev);
+
+      // Also check last-name match with close first name
+      var rParts = rKey.split(/\s+/), cParts = cKey.split(/\s+/);
+      if (rParts.length >= 2 && cParts.length >= 2) {
+        var rLast = rParts[rParts.length-1], cLast = cParts[cParts.length-1];
+        if (rLast === cLast || levenshtein(rLast, cLast) <= 1) {
+          var firstDist = levenshtein(rParts.slice(0,-1).join(' '), cParts.slice(0,-1).join(' '));
+          if (firstDist <= 2) minDist = Math.min(minDist, firstDist);
+        }
+      }
+
+      if (minDist < bestDist) { bestDist = minDist; bestMatch = cName; }
+    });
+
+    // Threshold: distance ≤ 2 for names ≥ 8 chars, ≤ 1 for shorter
+    var threshold = rKey.length >= 8 ? 2 : 1;
+    if (bestMatch && bestDist <= threshold) {
+      dynamicAliases[rName] = bestMatch;
+    }
+  });
+
+  // Apply dynamic aliases
+  if (Object.keys(dynamicAliases).length > 0) {
+    console.log('Fuzzy editor merges:', dynamicAliases);
+    allPapers.forEach(function(p) {
+      p._editors = p._editors.map(function(e) { return dynamicAliases[e] || e; });
+    });
+  }
 }
 
 function parseCSV(text) {
