@@ -36,22 +36,14 @@
 
   .filters-bar { background: var(--white); border-bottom: 1px solid var(--border); padding: 20px 0; position: sticky; top: 76px; z-index: 90; box-shadow: var(--shadow-sm); }
   .filters-inner { max-width: 1280px; margin: 0 auto; padding: 0 32px; }
-  .filters-row { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+  .filters-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
   .filter-group { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 170px; }
   .filter-group label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); }
-  .filter-group select, .filter-group input { padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 20px; color: var(--text); background: var(--white); transition: border-color 0.2s, box-shadow 0.2s; height: 50px; }
+  .filter-group select, .filter-group input { padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 20px; color: var(--text); background: var(--white); transition: border-color 0.2s, box-shadow 0.2s; }
   .filter-group select option { font-size: 20px; padding: 12px; }
   .filter-group select:focus, .filter-group input:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(0,48,135,0.1); }
-  .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
-  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 6px; font-size: 13px; font-weight: 500; animation: chipIn 0.15s ease-out; }
-  .chip-editor { background: var(--accent-light); color: #8a7032; }
-  .chip-area { background: #e8f5ee; color: var(--green); }
-  .chip-year { background: var(--navy-light); color: var(--navy); }
-  .chip-x { cursor: pointer; font-size: 15px; font-weight: 700; opacity: 0.5; margin-left: 2px; line-height: 1; }
-  .chip-x:hover { opacity: 1; }
-  @keyframes chipIn { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-  .filter-actions { display: flex; gap: 8px; align-items: flex-start; padding-top: 20px; }
-  .btn { padding: 13px 20px; border: none; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; white-space: nowrap; height: 50px; }
+  .filter-actions { display: flex; gap: 8px; align-items: flex-end; padding-bottom: 1px; }
+  .btn { padding: 9px 20px; border: none; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
   .btn-primary { background: var(--navy); color: white; }
   .btn-primary:hover { background: var(--navy-dark); box-shadow: var(--shadow-md); }
   .btn-secondary { background: var(--navy-light); color: var(--navy); }
@@ -138,18 +130,15 @@
     <div class="filters-row">
       <div class="filter-group">
         <label>Accepting Editor</label>
-        <select id="filterEditor" onchange="addChip('editor',this)"><option value="">All editors</option></select>
-        <div id="chipsEditor" class="chips"></div>
+        <select id="filterEditor" onchange="applyFilters()"><option value="">All editors</option></select>
       </div>
       <div class="filter-group">
         <label>Area</label>
-        <select id="filterArea" onchange="addChip('area',this)"><option value="">All areas</option></select>
-        <div id="chipsArea" class="chips"></div>
+        <select id="filterArea" onchange="applyFilters()"><option value="">All areas</option></select>
       </div>
       <div class="filter-group">
         <label>Year</label>
-        <select id="filterYear" onchange="addChip('year',this)"><option value="">All years</option></select>
-        <div id="chipsYear" class="chips"></div>
+        <select id="filterYear" onchange="applyFilters()"><option value="">All years</option></select>
       </div>
       <div class="filter-group">
         <label>Search Title</label>
@@ -195,43 +184,6 @@ const SHEET_ID = '11MKt6uzfnxTNTbK4Kb1jwW32cEsKZcBRncubV2omJzQ';
 const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Data`;
 const PER_PAGE = 20;
 let allPapers = [], filtered = [], currentPage = 1;
-
-// Multi-select state
-const sel = { editor: new Set(), area: new Set(), year: new Set() };
-
-// Chip management
-function addChip(type, selectEl) {
-  const val = selectEl.value;
-  if (!val) return;
-  selectEl.value = '';
-  if (sel[type].has(val)) return;
-  sel[type].add(val);
-  renderChips(type);
-  applyFilters();
-}
-
-function removeChip(type, val) {
-  sel[type].delete(val);
-  renderChips(type);
-  applyFilters();
-}
-
-function renderChips(type) {
-  const id = 'chips' + type.charAt(0).toUpperCase() + type.slice(1);
-  const container = document.getElementById(id);
-  const cssClass = 'chip chip-' + type;
-  container.innerHTML = [...sel[type]].map(v =>
-    `<span class="${cssClass}">${esc(v)} <span class="chip-x" onclick="removeChip('${type}','${escAttr(v)}')">×</span></span>`
-  ).join('');
-}
-
-function addChipFromCard(type, val) {
-  if (sel[type].has(val)) return;
-  sel[type].add(val);
-  renderChips(type);
-  applyFilters();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
 
 async function loadData() {
   try {
@@ -293,12 +245,15 @@ function fillSelect(id, items, def) {
 }
 
 function applyFilters() {
+  const editor = document.getElementById('filterEditor').value;
+  const area = document.getElementById('filterArea').value;
+  const year = document.getElementById('filterYear').value;
   const search = document.getElementById('filterSearch').value.trim().toLowerCase();
   const searchAuth = document.getElementById('filterAuthors').value.trim().toLowerCase();
   const sort = document.getElementById('sortBy').value;
 
   // If no filters active, show welcome state
-  if (sel.editor.size === 0 && sel.area.size === 0 && sel.year.size === 0 && !search && !searchAuth) {
+  if (!editor && !area && !year && !search && !searchAuth) {
     document.getElementById('resultsCount').innerHTML = '';
     document.getElementById('papersList').innerHTML = '<div class="empty-state"><h3>Select a filter to get started</h3><p>Filter by editor, area, year, or search by title or author name.</p></div>';
     document.getElementById('pagination').style.display = 'none';
@@ -306,9 +261,9 @@ function applyFilters() {
   }
 
   filtered = allPapers.filter(p => {
-    if (sel.editor.size > 0 && !sel.editor.has(p['Accepting Editor'])) return false;
-    if (sel.area.size > 0 && !sel.area.has(p['Area'])) return false;
-    if (sel.year.size > 0 && !sel.year.has(p['Year'])) return false;
+    if (editor && p['Accepting Editor'] !== editor) return false;
+    if (area && p['Area'] !== area) return false;
+    if (year && p['Year'] !== year) return false;
     if (search && !(p['Title']||'').toLowerCase().includes(search)) return false;
     if (searchAuth && !(p['Authors']||'').toLowerCase().includes(searchAuth)) return false;
     return true;
@@ -329,20 +284,20 @@ function applyFilters() {
 }
 
 function clearFilters() {
-  sel.editor.clear(); sel.area.clear(); sel.year.clear();
-  document.getElementById('chipsEditor').innerHTML = '';
-  document.getElementById('chipsArea').innerHTML = '';
-  document.getElementById('chipsYear').innerHTML = '';
-  ['filterSearch','filterAuthors'].forEach(id => document.getElementById(id).value = '');
+  ['filterEditor','filterArea','filterYear','filterSearch','filterAuthors'].forEach(id => document.getElementById(id).value = '');
   applyFilters();
 }
 
 function filterByEditor(name) {
-  addChipFromCard('editor', name);
+  document.getElementById('filterEditor').value = name;
+  applyFilters();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function filterByArea(name) {
-  addChipFromCard('area', name);
+  document.getElementById('filterArea').value = name;
+  applyFilters();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function renderPage() {
