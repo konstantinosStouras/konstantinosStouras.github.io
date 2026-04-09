@@ -207,6 +207,19 @@
         <button class="btn btn-secondary" onclick="clearFilters()">Clear</button>
       </div>
     </div>
+    <div class="summary-tab-btns" style="margin-top:12px;">
+      <button class="summary-tab-btn" onclick="toggleSummary('editors')">Editors</button>
+      <button class="summary-tab-btn" onclick="toggleSummary('areas')">Areas</button>
+    </div>
+  </div>
+</div>
+
+<div class="summary-tabs" id="summaryTabs">
+  <div id="summaryEditors" class="summary-content">
+    <div id="summaryEditorsList" class="summary-list"></div>
+  </div>
+  <div id="summaryAreas" class="summary-content">
+    <div id="summaryAreasList" class="summary-list"></div>
   </div>
 </div>
 
@@ -220,19 +233,6 @@
       <option value="title">Title A-Z</option>
       <option value="editor">Editor A-Z</option>
     </select>
-  </div>
-</div>
-
-<div class="summary-tabs" id="summaryTabs" style="display:none;">
-  <div class="summary-tab-btns">
-    <button class="summary-tab-btn active" onclick="showSummary('editors')">Editors</button>
-    <button class="summary-tab-btn" onclick="showSummary('areas')">Areas</button>
-  </div>
-  <div id="summaryEditors" class="summary-content active">
-    <div id="summaryEditorsList" class="summary-list"></div>
-  </div>
-  <div id="summaryAreas" class="summary-content">
-    <div id="summaryAreasList" class="summary-list"></div>
   </div>
 </div>
 
@@ -542,16 +542,33 @@ function buildSummaryTabs(editorCounts, areaCounts) {
     return '<div class="summary-item" onclick="filterByArea(\'' + escAttr(a) + '\')"><span class="summary-count">' + areaCounts[a] + '</span> papers in ' + esc(a) + '</div>';
   }).join('');
 
-  // Show tabs
-  document.getElementById('summaryTabs').style.display = '';
+  // Tabs are always visible, content populates when data loads
 }
 
-function showSummary(tab) {
-  document.getElementById('summaryEditors').className = 'summary-content' + (tab === 'editors' ? ' active' : '');
-  document.getElementById('summaryAreas').className = 'summary-content' + (tab === 'areas' ? ' active' : '');
+function toggleSummary(tab) {
+  var edEl = document.getElementById('summaryEditors');
+  var arEl = document.getElementById('summaryAreas');
   var btns = document.querySelectorAll('.summary-tab-btn');
-  btns[0].className = 'summary-tab-btn' + (tab === 'editors' ? ' active' : '');
-  btns[1].className = 'summary-tab-btn' + (tab === 'areas' ? ' active' : '');
+
+  if (tab === 'editors') {
+    var isOpen = edEl.classList.contains('active');
+    edEl.className = 'summary-content' + (isOpen ? '' : ' active');
+    arEl.className = 'summary-content';
+    btns[0].className = 'summary-tab-btn' + (isOpen ? '' : ' active');
+    btns[1].className = 'summary-tab-btn';
+  } else {
+    var isOpen = arEl.classList.contains('active');
+    arEl.className = 'summary-content' + (isOpen ? '' : ' active');
+    edEl.className = 'summary-content';
+    btns[1].className = 'summary-tab-btn' + (isOpen ? '' : ' active');
+    btns[0].className = 'summary-tab-btn';
+  }
+}
+
+function closeSummaryTabs() {
+  document.getElementById('summaryEditors').className = 'summary-content';
+  document.getElementById('summaryAreas').className = 'summary-content';
+  document.querySelectorAll('.summary-tab-btn').forEach(function(b) { b.className = 'summary-tab-btn'; });
 }
 
 function fillCustomSelect(csId, items, counts) {
@@ -663,6 +680,7 @@ function clearFilters() {
   document.getElementById('chipsTitle').innerHTML = '';
   document.getElementById('chipsAuthor').innerHTML = '';
   ['filterSearch','filterAuthors'].forEach(id => document.getElementById(id).value = '');
+  closeSummaryTabs();
   applyFilters();
 }
 
