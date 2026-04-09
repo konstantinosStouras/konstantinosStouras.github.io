@@ -276,25 +276,136 @@ async function loadData() {
 
 // ── Editor cleaning & normalization ──
 const EDITOR_ALIASES = {
+  // Accent variants
   'renée adams': 'Renee Adams', 'renee adams': 'Renee Adams', 'adams': 'Renee Adams',
-  'gérard p. cachon': 'Gerard P. Cachon', 'gerard p. cachon': 'Gerard P. Cachon', 'gérard cachon': 'Gerard P. Cachon',
-  'jesper sørensen': 'Jesper Sorensen', 'jesper sorensen': 'Jesper Sorensen',
+  'gérard p. cachon': 'Gerard P. Cachon', 'gerard p. cachon': 'Gerard P. Cachon', 'gérard cachon': 'Gerard P. Cachon', 'gerard cachon': 'Gerard P. Cachon',
+  'jesper sørensen': 'Jesper Sorensen', 'jesper sorensen': 'Jesper Sorensen', 'jesper sørensen. organizations': 'Jesper Sorensen',
+  'jérôme detemple': 'Jerome Detemple', 'jerome b. detemple': 'Jerome Detemple', 'jerome detemple': 'Jerome Detemple',
+  'dorothea kübler': 'Dorothea Kubler', 'dorothea kubler': 'Dorothea Kubler',
+  'aurélien baillon': 'Aurelien Baillon',
+  'bariş ata': 'Baris Ata', 'baris ata': 'Baris Ata',
+  // Victor Martinez variants
+  'victor martínez-de-albéniz': 'Victor Martinez-de-Albeniz', 'victor martinez-de-albeniz': 'Victor Martinez-de-Albeniz',
+  'victor martínez de albéniz': 'Victor Martinez-de-Albeniz', 'victor martinez de albeniz': 'Victor Martinez-de-Albeniz',
+  'victor martinez de albéniz': 'Victor Martinez-de-Albeniz', 'víctor martínez-de-albéniz': 'Victor Martinez-de-Albeniz',
+  'martínez-de-albéniz victor': 'Victor Martinez-de-Albeniz',
+  'yuval victor martinez de albeniz': 'Victor Martinez-de-Albeniz',
+  // Typos
+  'brain bushee': 'Brian Bushee', 'duncan semester': 'Duncan Simester',
+  'karl deither': 'Karl Diether', 'manell baucells': 'Manel Baucells',
+  'suraj srinivassan': 'Suraj Srinivasan', 'toby suart': 'Toby Stuart',
+  'tylor shumway': 'Tyler Shumway', 'vishaul gaur': 'Vishal Gaur',
+  'yossiv aviv': 'Yossi Aviv', 'victoria ivanisha': 'Victoria Ivashina',
+  'mathew shum': 'Matthew Shum', 'lucas schmid': 'Lukas Schmid',
+  'loana popescu': 'Ioana Popescu', 'ioana popescu': 'Ioana Popescu',
+  'sameer srivastava': 'Sameer Srivastava',
+  // Middle names / initials → canonical
+  'brad m. barber': 'Brad Barber', 'barrie r. nault': 'Barrie Nault',
+  'carri w. chan': 'Carri Chan', 'charles j. corbett': 'Charles Corbett',
+  'lorin m. hitt': 'Lorin Hitt', 'mary e. barth': 'Mary Barth',
+  'pradeep k. chintagunta': 'Pradeep Chintagunta',
+  'jagmohan s. raju': 'Jagmohan Raju', 'paul h. zipkin': 'Paul Zipkin',
+  'candace a. yano': 'Candace Yano',
+  // Name consolidation
+  'david simchi-levi': 'David Simchi-Levi', 'david simchi levi': 'David Simchi-Levi', 'david simchi\u2010levi': 'David Simchi-Levi', 'david simchi\u2011levi': 'David Simchi-Levi', 'david simchi\u2012levi': 'David Simchi-Levi', 'david simchi\u2013levi': 'David Simchi-Levi',
+  'chung piaw teo': 'Chung-Piaw Teo', 'chung-piaw teo': 'Chung-Piaw Teo',
+  'teck ho': 'Teck-Hua Ho', 'teck-hua ho': 'Teck-Hua Ho',
+  'yinyu-ye': 'Yinyu Ye', 'yinyu ye': 'Yinyu Ye',
+  'd. j. wu': 'D.J. Wu', 'd.j. wu': 'D.J. Wu', 'dj wu': 'D.J. Wu', 'dongjun wu': 'D.J. Wu',
+  'will cong': 'Will Cong', 'william cong': 'Will Cong', 'william lin cong': 'Will Cong', 'lin william cong': 'Will Cong',
+  'shivaram rajgopal': 'Shivaram Rajgopal', 'shiva rajgopal': 'Shivaram Rajgopal', 'rajgopal shiva': 'Shivaram Rajgopal',
+  'jay swaminathan': 'Jayashankar Swaminathan', 'jayashankar swaminathan': 'Jayashankar Swaminathan', 'swaminathan': 'Jayashankar Swaminathan',
+  'matt shum': 'Matthew Shum', 'matthew shum': 'Matthew Shum',
+  'george shanthikumar': 'J. George Shanthikumar', 'george j. shanthikumar': 'J. George Shanthikumar', 'j. george shanthikumar': 'J. George Shanthikumar',
+  'jean-pierre dube': 'Jean-Pierre Dube',
+  'sendil ethiraj': 'Sendil Ethiraj',
+  'sampath rajagopalan': 'Sampath Rajagopalan',
+  'maria claire villeval': 'Marie Claire Villeval', 'marie-claire villeval': 'Marie Claire Villeval', 'marie claire villeval': 'Marie Claire Villeval',
+  'chen yan': 'Yan Chen', 'prof. yan chen': 'Yan Chen', 'yan chen': 'Yan Chen',
+  'prof. ranjani krishnan': 'Ranjani Krishnan', 'ranjani krishnan': 'Ranjani Krishnan',
+  'professor bruno biais': 'Bruno Biais',
+  'erica plambeck': 'Erica Plambeck', 'caroline flammer': 'Caroline Flammer',
+  'giesecke kay': 'Kay Giesecke', 'kay giesecke': 'Kay Giesecke',
+  'yu (jeffrey) hu': 'Jeffrey Hu',
+  'raphael thomadsen': 'Raphael Thomadsen',
+  'ray reagans': 'Ray Reagans',
+  'uday rajan': 'Uday Rajan',
+  'melvyn sim': 'Melvyn Sim', 'michael fu': 'Michael Fu', 'peng sun': 'Peng Sun',
+  'glen dowell': 'Glen Dowell', 'greg shaffer': 'Greg Shaffer',
+  'jan bouwens': 'Jan Bouwens', 'haitao li': 'Haitao Li',
+  'eric bradlow': 'Eric Bradlow',
+  'anita mcgahan': 'Anita McGahan',
 };
+
+// Junk editor values to discard entirely
+const EDITOR_JUNK = ['stakeholders. here', 'stakeholders'];
+
+const AREA_ALIASES = {
+  // Capitalization
+  'finance': 'finance', 'Finance': 'finance',
+  'Behavioral Economics and Decision Analysis': 'behavioral economics and decision analysis',
+  'Optimization <div data-widget-def': 'optimization', 'optimization': 'optimization',
+  // HTML junk
+  'accounting <div data-widget-def="ux': 'accounting',
+  'marketing <div data-widget-def="': 'marketing',
+  'healthcare management.conflict of interest statement: e': 'healthcare management',
+  // Typos
+  'behavioral economics and decisions analysis': 'behavioral economics and decision analysis',
+  'behavioral economics & decision analysis': 'behavioral economics and decision analysis',
+  'behavioral economics &amp; decision analysis': 'behavioral economics and decision analysis',
+  'behavioral economics and data analysis': 'behavioral economics and decision analysis',
+  'behavioral analysis': 'behavioral economics and decision analysis',
+  'behavioral economics and decision analysis–fast track': 'behavioral economics and decision analysis',
+  'entepreneurship and innovation': 'entrepreneurship and innovation',
+  'entrepreneurship': 'entrepreneurship and innovation',
+  // Consolidation
+  'information science': 'information systems', 'information system': 'information systems',
+  'information systems division': 'information systems',
+  'stochastic models': 'stochastic models and simulation',
+  'stochastic models & simulation': 'stochastic models and simulation',
+  'stochastic models &amp; simulation': 'stochastic models and simulation',
+  'stochastic models and systems': 'stochastic models and simulation',
+  'big data and analytics': 'big data analytics',
+  'operations and supply chain management': 'operations management',
+  'strategy': 'business strategy',
+  'revenue management and market analytics department': 'revenue management and market analytics',
+  'revenue management and analytics': 'revenue management and market analytics',
+  'r&amp;d and product development': 'R&D and product development',
+  'r&d and product development': 'R&D and product development',
+  'organizations and social networks': 'organizations',
+  'optimization and decision analytics': 'optimization',
+  'finance department': 'finance',
+  'health': 'healthcare management',
+  'sustainability': 'business strategy',
+  'information science': 'information systems',
+};
+
+// Junk area values to discard
+const AREA_JUNK = [
+  'we report seven sets of studies',
+  'focused issue editor', 'guest department editor', 'guest editor',
+  'special issue editors',
+];
 
 function normalizeEditorName(name) {
   var t = name.trim();
+  if (!t) return '';
+  // Strip "Prof." / "Professor" prefix
+  t = t.replace(/^(prof\.?|professor)\s+/i, '');
   // Normalize accents for lookup
   var key = t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   if (EDITOR_ALIASES[key]) return EDITOR_ALIASES[key];
-  if (EDITOR_ALIASES[t.toLowerCase()]) return EDITOR_ALIASES[t.toLowerCase()];
-  // Return with accents stripped
-  return t.charAt(0).toUpperCase() + t.slice(1);
+  var keyLower = t.toLowerCase();
+  if (EDITOR_ALIASES[keyLower]) return EDITOR_ALIASES[keyLower];
+  // Check junk
+  for (var j = 0; j < EDITOR_JUNK.length; j++) { if (key.indexOf(EDITOR_JUNK[j]) !== -1) return ''; }
+  return t;
 }
 
 function cleanEditorField(raw) {
   if (!raw) return [];
   var s = raw;
-  // Fix junk: "...the government. This paper was accepted by Yinyu Ye"
+  // Fix junk containing "accepted by"
   var ai = s.indexOf('This paper was accepted by');
   if (ai === -1) ai = s.indexOf('accepted by');
   if (ai !== -1) {
@@ -308,8 +419,34 @@ function cleanEditorField(raw) {
   return s.split(/\s+and\s+/i).map(function(e) { return normalizeEditorName(e.trim()); }).filter(Boolean);
 }
 
+function normalizeArea(raw) {
+  if (!raw) return '';
+  var s = raw.trim();
+  // Truncate at HTML tags
+  var htmlIdx = s.indexOf('<');
+  if (htmlIdx > 0) s = s.substring(0, htmlIdx).trim();
+  // Truncate at ".Conflict" or similar junk
+  s = s.replace(/\.conflict.*/i, '').replace(/\.here.*/i, '').trim();
+  // Remove trailing period
+  s = s.replace(/\.\s*$/, '').trim();
+  var key = s.toLowerCase();
+  // Check aliases
+  if (AREA_ALIASES[key]) return AREA_ALIASES[key];
+  if (AREA_ALIASES[s]) return AREA_ALIASES[s];
+  // Check junk
+  for (var j = 0; j < AREA_JUNK.length; j++) { if (key.indexOf(AREA_JUNK[j]) !== -1) return ''; }
+  // Extract area from junk like "Renee, finance" or "Jayashankar, operations management"
+  var commaMatch = key.match(/^[a-z]+,\s*(.+)$/);
+  if (commaMatch) {
+    var extracted = commaMatch[1].trim();
+    return AREA_ALIASES[extracted] || extracted;
+  }
+  return s.toLowerCase();
+}
+
 function normalizeEditors(p) {
   p._editors = cleanEditorField(p['Accepting Editor'] || '');
+  p._area = normalizeArea(p['Area'] || '');
 }
 
 function parseCSV(text) {
@@ -346,7 +483,7 @@ function buildFilterOptions() {
   const editors = new Set(), areas = new Set(), years = new Set();
   allPapers.forEach(p => {
     (p._editors || []).forEach(e => editors.add(e));
-    if (p['Area']) areas.add(p['Area']);
+    if (p._area) areas.add(p._area);
     if (p['Year']) years.add(p['Year']);
   });
   fillCustomSelect('csEditor', [...editors].sort());
@@ -426,7 +563,7 @@ function applyFilters() {
 
   filtered = allPapers.filter(p => {
     if (sel.editor.size > 0 && !(p._editors || []).some(e => sel.editor.has(e))) return false;
-    if (sel.area.size > 0 && !sel.area.has(p['Area'])) return false;
+    if (sel.area.size > 0 && !sel.area.has(p._area)) return false;
     if (sel.year.size > 0 && !sel.year.has(p['Year'])) return false;
 
     // Title: live typed text AND all chips must match (AND logic)
@@ -505,7 +642,7 @@ function renderPage() {
       <div class="paper-meta">
         ${p['Volume'] && p['Issue'] ? `<span class="tag tag-vol">${esc(p['Year'])} · Vol. ${esc(p['Volume'])} No. ${esc(p['Issue'])}${p['Page'] ? ', pp. '+esc(p['Page']) : ''}</span>` : p['Year'] ? `<span class="tag tag-vol">${esc(p['Year'])}</span>` : ''}
         ${(p._editors||[]).map(e => `<span class="tag tag-editor" onclick="filterByEditor('${escAttr(e)}')">✎ ${esc(e)}</span>`).join('')}
-        ${p['Area'] ? `<span class="tag tag-area" onclick="filterByArea('${escAttr(p['Area'])}')}">${esc(p['Area'])}</span>` : ''}
+        ${p._area ? `<span class="tag tag-area" onclick="filterByArea('${escAttr(p._area)}')">${esc(p._area)}</span>` : ''}
         ${p['Status']==='Other' ? '<span class="tag tag-other">Other</span>' : ''}
         ${p['Status']==='Articles in Advance' ? '<span class="tag tag-aia">Articles in Advance</span>' : ''}
       </div>
