@@ -828,49 +828,6 @@ function closeSummaryTabs() {
   document.querySelectorAll('.summary-tab-btn').forEach(function(b) { b.className = 'summary-tab-btn'; });
 }
 
-// Cascading filters: update dropdown options based on cross-filtered results
-function updateDropdownOptions() {
-  // For each dropdown, compute available options from papers filtered by ALL OTHER filters
-  var search = document.getElementById('filterSearch').value.trim().toLowerCase();
-  var searchAuth = document.getElementById('filterAuthors').value.trim().toLowerCase();
-
-  function crossFilter(excludeType) {
-    return allPapers.filter(function(p) {
-      if (excludeType !== 'editor' && sel.editor.size > 0 && !(p._editors || []).some(function(e) { return sel.editor.has(e); })) return false;
-      if (excludeType !== 'area' && sel.area.size > 0 && !sel.area.has(p._area)) return false;
-      if (excludeType !== 'year' && sel.year.size > 0 && !sel.year.has(p['Year'])) return false;
-      var titleText = (p['Title']||'').toLowerCase();
-      if (search && !titleText.includes(search)) return false;
-      for (var t of sel.title) { if (!titleText.includes(t)) return false; }
-      var authText = (p['Authors']||'').toLowerCase();
-      if (searchAuth && !authText.includes(searchAuth)) return false;
-      for (var a of sel.author) { if (!authText.includes(a)) return false; }
-      return true;
-    });
-  }
-
-  // Editor dropdown
-  var edPapers = crossFilter('editor');
-  var edCounts = {};
-  edPapers.forEach(function(p) { (p._editors || []).forEach(function(e) { edCounts[e] = (edCounts[e] || 0) + 1; }); });
-  fillCustomSelect('csEditor', Object.keys(edCounts).sort(), edCounts);
-
-  // Area dropdown
-  var arPapers = crossFilter('area');
-  var arCounts = {};
-  arPapers.forEach(function(p) { if (p._area) arCounts[p._area] = (arCounts[p._area] || 0) + 1; });
-  fillCustomSelect('csArea', Object.keys(arCounts).sort(), arCounts);
-
-  // Year dropdown
-  var yrPapers = crossFilter('year');
-  var yrCounts = {};
-  yrPapers.forEach(function(p) { if (p['Year']) yrCounts[p['Year']] = (yrCounts[p['Year']] || 0) + 1; });
-  fillCustomSelect('csYear', Object.keys(yrCounts).sort().reverse(), yrCounts);
-
-  // Update summary tabs with filtered counts
-  buildSummaryTabs(edCounts, arCounts);
-}
-
 function fillCustomSelect(csId, items, counts) {
   const cs = document.getElementById(csId);
   const container = cs.querySelector('.custom-select-items');
@@ -878,9 +835,6 @@ function fillCustomSelect(csId, items, counts) {
   container.innerHTML = items.map(i =>
     `<div class="custom-select-item" onclick="selectItem('${csId}','${type}','${escAttr(i)}')">${esc(i)}${counts ? ' <span style="opacity:0.45">('+counts[i]+')</span>' : ''}</div>`
   ).join('');
-  // Reapply search filter if dropdown is open
-  var searchInput = cs.querySelector('.custom-select-search');
-  if (searchInput && searchInput.value) filterDrop(csId, searchInput.value);
 }
 
 function toggleDrop(csId) {
@@ -940,7 +894,6 @@ function applyFilters() {
   if (sel.editor.size === 0 && sel.area.size === 0 && sel.year.size === 0 && sel.title.size === 0 && sel.author.size === 0 && !search && !searchAuth) {
     document.getElementById('resultsCount').innerHTML = '';
     document.getElementById('papersList').innerHTML = '<div class="empty-state"><h3>Select a filter to get started</h3><p>Filter by editor, area, year, or search by title or author name.</p></div>';
-    buildFilterOptions();
     return;
   }
 
@@ -974,7 +927,6 @@ function applyFilters() {
 
   currentPage = 1;
   renderPage();
-  updateDropdownOptions();
 }
 
 function clearFilters() {
