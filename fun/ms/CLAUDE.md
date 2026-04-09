@@ -115,6 +115,7 @@ https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Data
 - **Articles in Advance** — shows just year tag (no "Vol. ? No. ?"); BibTeX omits missing fields
 - **Pages display** — shows "pp. X-Y" in volume tag when available
 - **Sort** — Year↓, Year↑, Title A-Z, Editor A-Z
+- **Summary tabs** — "Editors" and "Areas" tabs on the main page show all editors/areas sorted by paper count (e.g., "118 papers accepted by Serguei Netessine", "987 papers in finance"). Clicking any item filters the paper list by that editor/area.
 - **No pagination** — all matching results shown on one scrollable page (pagination code preserved in comments for re-enabling)
 - **Fonts** — Playfair Display (serif headings), DM Sans (body)
 - **Responsive** — mobile-friendly layout

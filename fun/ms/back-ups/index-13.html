@@ -137,23 +137,6 @@
     .paper-title { font-size: 16px; }
     .filters-bar { top: auto; position: relative; }
   }
-
-  /* Summary tabs */
-  .summary-tabs { max-width: 1280px; margin: 0 auto; padding: 0 32px; }
-  .summary-tab-btns { display: flex; gap: 8px; margin-bottom: 12px; }
-  .summary-tab-btn { padding: 8px 18px; border: 1.5px solid var(--border); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; background: var(--white); color: var(--text-muted); transition: all 0.15s; }
-  .summary-tab-btn.active { background: var(--navy); color: white; border-color: var(--navy); }
-  .summary-tab-btn:hover:not(.active) { background: var(--navy-light); color: var(--navy); border-color: var(--navy); }
-  .summary-content { display: none; padding: 16px 0 8px; }
-  .summary-content.active { display: block; }
-  .summary-list { column-count: 2; column-gap: 2rem; font-size: 14px; line-height: 2.1; }
-  .summary-item { break-inside: avoid; cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: background 0.1s; }
-  .summary-item:hover { background: var(--navy-light); }
-  .summary-count { color: var(--text-muted); font-size: 13px; margin-right: 4px; display: inline-block; min-width: 32px; text-align: right; }
-  @media (max-width: 768px) {
-    .summary-tabs { padding-left: 20px; padding-right: 20px; }
-    .summary-list { column-count: 1; }
-  }
 </style>
 </head>
 <body>
@@ -220,19 +203,6 @@
       <option value="title">Title A-Z</option>
       <option value="editor">Editor A-Z</option>
     </select>
-  </div>
-</div>
-
-<div class="summary-tabs" id="summaryTabs" style="display:none;">
-  <div class="summary-tab-btns">
-    <button class="summary-tab-btn active" onclick="showSummary('editors')">Editors</button>
-    <button class="summary-tab-btn" onclick="showSummary('areas')">Areas</button>
-  </div>
-  <div id="summaryEditors" class="summary-content active">
-    <div id="summaryEditorsList" class="summary-list"></div>
-  </div>
-  <div id="summaryAreas" class="summary-content">
-    <div id="summaryAreasList" class="summary-list"></div>
   </div>
 </div>
 
@@ -359,9 +329,6 @@ const EDITOR_ALIASES = {
   'erica plambeck': 'Erica Plambeck', 'caroline flammer': 'Caroline Flammer',
   'giesecke kay': 'Kay Giesecke', 'kay giesecke': 'Kay Giesecke',
   'yu (jeffrey) hu': 'Jeffrey Hu',
-  'dmitry kuksov': 'Dmitri Kuksov', 'dmitri kuksov': 'Dmitri Kuksov',
-  'shiva rajagopal': 'Shivaram Rajgopal',
-  'nicolas stier': 'Nicolas Stier-Moses', 'nicolas stier-moses': 'Nicolas Stier-Moses',
   'raphael thomadsen': 'Raphael Thomadsen',
   'ray reagans': 'Ray Reagans',
   'uday rajan': 'Uday Rajan',
@@ -427,8 +394,6 @@ function normalizeEditorName(name) {
   if (!t) return '';
   // Strip "Prof." / "Professor" prefix
   t = t.replace(/^(prof\.?|professor)\s+/i, '');
-  // Normalize Unicode hyphens to regular hyphen
-  t = t.replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\uFE58\uFE63\uFF0D]/g, '-');
   // Normalize accents for lookup
   var key = t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   if (EDITOR_ALIASES[key]) return EDITOR_ALIASES[key];
@@ -517,41 +482,15 @@ function parseLine(line) {
 function clean(s) { return (s || '').replace(/^"|"$/g, '').trim(); }
 
 function buildFilterOptions() {
-  const editorCounts = {}, areaCounts = {}, yearCounts = {};
+  const editorCounts = {}, areaCounts = {}, years = new Set();
   allPapers.forEach(p => {
     (p._editors || []).forEach(e => { editorCounts[e] = (editorCounts[e] || 0) + 1; });
     if (p._area) { areaCounts[p._area] = (areaCounts[p._area] || 0) + 1; }
-    if (p['Year']) { yearCounts[p['Year']] = (yearCounts[p['Year']] || 0) + 1; }
+    if (p['Year']) years.add(p['Year']);
   });
   fillCustomSelect('csEditor', Object.keys(editorCounts).sort(), editorCounts);
   fillCustomSelect('csArea', Object.keys(areaCounts).sort(), areaCounts);
-  fillCustomSelect('csYear', Object.keys(yearCounts).sort().reverse(), yearCounts);
-  buildSummaryTabs(editorCounts, areaCounts);
-}
-
-function buildSummaryTabs(editorCounts, areaCounts) {
-  // Editors: sorted by count descending
-  var edSorted = Object.keys(editorCounts).sort(function(a,b) { return editorCounts[b] - editorCounts[a]; });
-  document.getElementById('summaryEditorsList').innerHTML = edSorted.map(function(e) {
-    return '<div class="summary-item" onclick="filterByEditor(\'' + escAttr(e) + '\')"><span class="summary-count">' + editorCounts[e] + '</span> papers accepted by ' + esc(e) + '</div>';
-  }).join('');
-
-  // Areas: sorted by count descending
-  var arSorted = Object.keys(areaCounts).sort(function(a,b) { return areaCounts[b] - areaCounts[a]; });
-  document.getElementById('summaryAreasList').innerHTML = arSorted.map(function(a) {
-    return '<div class="summary-item" onclick="filterByArea(\'' + escAttr(a) + '\')"><span class="summary-count">' + areaCounts[a] + '</span> papers in ' + esc(a) + '</div>';
-  }).join('');
-
-  // Show tabs
-  document.getElementById('summaryTabs').style.display = '';
-}
-
-function showSummary(tab) {
-  document.getElementById('summaryEditors').className = 'summary-content' + (tab === 'editors' ? ' active' : '');
-  document.getElementById('summaryAreas').className = 'summary-content' + (tab === 'areas' ? ' active' : '');
-  var btns = document.querySelectorAll('.summary-tab-btn');
-  btns[0].className = 'summary-tab-btn' + (tab === 'editors' ? ' active' : '');
-  btns[1].className = 'summary-tab-btn' + (tab === 'areas' ? ' active' : '');
+  fillCustomSelect('csYear', [...years].sort().reverse());
 }
 
 function fillCustomSelect(csId, items, counts) {
