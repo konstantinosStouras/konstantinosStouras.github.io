@@ -480,23 +480,23 @@ function parseLine(line) {
 function clean(s) { return (s || '').replace(/^"|"$/g, '').trim(); }
 
 function buildFilterOptions() {
-  const editorCounts = {}, areaCounts = {}, years = new Set();
+  const editors = new Set(), areas = new Set(), years = new Set();
   allPapers.forEach(p => {
-    (p._editors || []).forEach(e => { editorCounts[e] = (editorCounts[e] || 0) + 1; });
-    if (p._area) { areaCounts[p._area] = (areaCounts[p._area] || 0) + 1; }
+    (p._editors || []).forEach(e => editors.add(e));
+    if (p._area) areas.add(p._area);
     if (p['Year']) years.add(p['Year']);
   });
-  fillCustomSelect('csEditor', Object.keys(editorCounts).sort(), editorCounts);
-  fillCustomSelect('csArea', Object.keys(areaCounts).sort(), areaCounts);
+  fillCustomSelect('csEditor', [...editors].sort());
+  fillCustomSelect('csArea', [...areas].sort());
   fillCustomSelect('csYear', [...years].sort().reverse());
 }
 
-function fillCustomSelect(csId, items, counts) {
+function fillCustomSelect(csId, items) {
   const cs = document.getElementById(csId);
   const container = cs.querySelector('.custom-select-items');
   const type = cs.dataset.type;
   container.innerHTML = items.map(i =>
-    `<div class="custom-select-item" onclick="selectItem('${csId}','${type}','${escAttr(i)}')">${esc(i)}${counts ? ' <span style="opacity:0.45">('+counts[i]+')</span>' : ''}</div>`
+    `<div class="custom-select-item" onclick="selectItem('${csId}','${type}','${escAttr(i)}')">${esc(i)}</div>`
   ).join('');
 }
 

@@ -17,6 +17,7 @@ A complete pipeline to scrape, store, and browse all Management Science (INFORMS
 - **Tabs**:
   - `Data` — 12 columns: Year, Volume, Issue, Page, Title, Authors, Cite As, DOI, Abstract, Status, Accepting Editor, Area
   - `Crossref_Full` — 39 columns with full Crossref metadata (DOI, affiliations, ORCIDs, citation counts, funders, etc.)
+  - `mnsc_articles_editors` — editor/area data scraped via Python (source for bulk copy)
   - `_Inspect` — utility tab for inspecting raw JSON of a single article
 
 ---
@@ -28,8 +29,9 @@ A complete pipeline to scrape, store, and browse all Management Science (INFORMS
 | Menu Item | Function | Description |
 |---|---|---|
 | 1. Extract full Crossref data | `promptFullExtract` | Fetches all articles for a year range from Crossref API → `Crossref_Full` tab (39 cols) |
-| 2. Copy Crossref_Full → Data tab | `populateDataFromCrossref` | Maps 39-col data into 12-col `Data` tab. Auto-creates tab with headers if missing. |
+| 2. Copy Crossref_Full → Data tab | `populateDataFromCrossref` | Maps 39-col data into 12-col `Data` tab. Auto-creates tab with headers if missing. Includes Page column. |
 | 3. Fill Editor/Area from INFORMS | `promptEditors` | Scrapes INFORMS article pages for "accepted by [Editor], [Area]" text. Columns K-L. |
+| 4. Copy editors from mnsc_articles_editors | `copyEditorsFromEditorTab` | Bulk copies editor/area data from `mnsc_articles_editors` tab to `Data` tab, matching by DOI. Skips rows that already have an editor. |
 | Quick fetch to Data tab | `promptQuickFetch` | Skips Full tab, writes directly to Data. |
 | Inspect one article | `inspectArticle` | Dumps raw Crossref JSON to `_Inspect` tab. |
 | Setup tabs | `setupTabs` | Creates/resets both tabs with headers. |
@@ -94,27 +96,53 @@ https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Data
 
 ### Features
 
-- **Background loading** — page renders instantly with welcome state; data loads silently via `fetch()`; silently retries on failure
-- **Custom dropdowns** — fully styled (not native `<select>`), 18px font, searchable within dropdown, scrollable, click-outside-to-close
+- **Background loading** — page renders instantly with welcome state; data loads silently via `fetch()`; silently retries on failure. No spinner, no loading text — user sees welcome message immediately.
+- **Custom dropdowns** — fully styled (not native `<select>`), 18px font, searchable within dropdown, scrollable 350px max-height, click-outside-to-close. Editor and Area dropdowns show paper counts next to each option, e.g., "Amit Seru (54)", "finance (980)".
 - **Multi-select with chips** — Editor, Area, Year filters support multiple selections shown as removable chips; OR logic within same filter type
-- **Text search chips** — Title and Author search fields filter live as you type; pressing Enter converts text to a chip, allowing multiple search terms with AND logic (e.g., co-author search: "stouras" + "erat")
+- **Text search chips** — Title and Author search fields filter live as you type (150ms debounce); pressing Enter converts text to a chip, allowing multiple search terms with AND logic (e.g., co-author search: "stouras" + "erat")
 - **Clickable tags** — Editor/area tags on paper cards add chips when clicked
 - **BibTeX generation** — green "▸ BibTeX" toggle with Copy button; title capitals protected with `{B}races`; author format: `LastName, FirstName and ...`; pages from Page column with `--` separators; omits volume/number/pages for Articles in Advance
-- **Abstract cleaning** — `cleanAbstract()` strips "This paper was accepted by...", "Funding:", "Supplemental Material:", "Conflict of Interest", trailing DOI URLs
+- **Abstract cleaning** — `cleanAbstract()` strips "This paper was accepted by...", "Funding:", "Supplemental Material:", "Conflict of Interest", "The online appendix...", trailing DOI URLs. Affects ~4,699 abstracts.
 - **Articles in Advance** — shows just year tag (no "Vol. ? No. ?"); BibTeX omits missing fields
 - **Pages display** — shows "pp. X-Y" in volume tag when available
 - **Sort** — Year↓, Year↑, Title A-Z, Editor A-Z
 - **Pagination** — 20 per page with numbered buttons
 - **Fonts** — Playfair Display (serif headings), DM Sans (body)
 - **Responsive** — mobile-friendly layout
-- **No initial content** — blank state until user applies a filter
+- **No initial content** — blank welcome state until user applies a filter; no paper count shown until first filter
+
+### Data Normalization (client-side, no sheet modifications)
+
+Three functions run after CSV loads to clean raw data for display:
+
+**`normalizeEditors(paper)`** — sets `paper._editors` (array) and `paper._area` (string) on each paper.
+
+**`cleanEditorField(raw)` → string[]**
+1. Extracts name from junk text containing "accepted by"
+2. Splits multi-editor fields on " and " (e.g., "Bertsimas and Yinyu Ye" → two entries)
+3. Normalizes each name via `normalizeEditorName()`
+
+**`normalizeEditorName(name)` → string**
+- Strips "Prof." / "Professor" prefix
+- Strips Unicode accents (NFD normalization)
+- Looks up in `EDITOR_ALIASES` (~80 entries): typos (Brain→Brian Bushee), accent variants (Renée→Renee Adams), middle initials (Brad M.→Brad Barber), name consolidation (Teck Ho→Teck-Hua Ho, Jay→Jayashankar Swaminathan, D.J./DJ Wu→D.J. Wu)
+- Discards junk entries via `EDITOR_JUNK` list
+
+**`normalizeArea(raw)` → string**
+- Truncates at HTML tags
+- Looks up in `AREA_ALIASES` (~40 entries): typos (entepreneurship→entrepreneurship), capitalization (Finance→finance), HTML junk removal, consolidation (strategy→business strategy, stochastic models→stochastic models and simulation)
+- Extracts area from patterns like "Renee, finance" → "finance"
+- Discards junk via `AREA_JUNK` list
+
+**Result**: ~210 raw editor values → ~120 unique names. ~63 raw area values → ~22 clean categories.
 
 ### Architecture
 
 - CSS variables for theming (navy `#003087`, accent gold `#c4a052`, green `#2a7d4f`)
-- All JS inline, ~580 lines total
+- All JS inline, ~650 lines total
 - Custom dropdown component replaces native `<select>` for full font-size control
-- Chip system shared across all filter types (categorical + text)
+- Chip system shared across all 5 filter types (editor, area, year, title, author)
+- 50px fixed height for all filter inputs/buttons for alignment
 
 ---
 
@@ -128,4 +156,4 @@ https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Data
 
 ## ~4,982 articles total (2011–present)
 
-Abstract cleaning affects ~4,699 abstracts. Editor scraping done in batches of 500 via `scrape_editors.py`.
+Abstract cleaning affects ~4,699 abstracts. Editor scraping done in batches of 500 via `scrape_editors.py`, then bulk-copied to Data tab via menu item 4.
