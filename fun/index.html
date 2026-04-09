@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Management Science Paper Browser</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #003087;
+    --navy-dark: #001f5c;
+    --navy-light: #e8eef7;
+    --accent: #c4a052;
+    --accent-light: #f5f0e3;
+    --text: #1a1a2e;
+    --text-muted: #5a6070;
+    --bg: #f6f7fb;
+    --white: #ffffff;
+    --border: #dce1ea;
+    --green: #2a7d4f;
+    --red: #b33a3a;
+    --shadow-sm: 0 1px 3px rgba(0,48,135,0.06);
+    --shadow-md: 0 4px 16px rgba(0,48,135,0.08);
+    --shadow-lg: 0 8px 32px rgba(0,48,135,0.12);
+    --radius: 8px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh; }
+
+  .header { background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%); position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow-lg); }
+  .header-inner { max-width: 1280px; margin: 0 auto; padding: 24px 32px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+  .header h1 { font-family: 'Instrument Serif', serif; color: white; font-size: 28px; font-weight: 400; letter-spacing: -0.5px; }
+  .header h1 em { font-style: italic; color: var(--accent); }
+  .header-meta { color: rgba(255,255,255,0.6); font-size: 13px; text-align: right; }
+  .header-meta strong { color: rgba(255,255,255,0.9); font-weight: 500; }
+
+  .filters-bar { background: var(--white); border-bottom: 1px solid var(--border); padding: 20px 0; position: sticky; top: 76px; z-index: 90; box-shadow: var(--shadow-sm); }
+  .filters-inner { max-width: 1280px; margin: 0 auto; padding: 0 32px; }
+  .filters-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+  .filter-group { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 170px; }
+  .filter-group label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); }
+  .filter-group select, .filter-group input { padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--text); background: var(--white); transition: border-color 0.2s, box-shadow 0.2s; }
+  .filter-group select:focus, .filter-group input:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(0,48,135,0.1); }
+  .filter-actions { display: flex; gap: 8px; align-items: flex-end; padding-bottom: 1px; }
+  .btn { padding: 9px 20px; border: none; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+  .btn-primary { background: var(--navy); color: white; }
+  .btn-primary:hover { background: var(--navy-dark); box-shadow: var(--shadow-md); }
+  .btn-secondary { background: var(--navy-light); color: var(--navy); }
+  .btn-secondary:hover { background: #d6dff0; }
+
+  .results-bar { max-width: 1280px; margin: 0 auto; padding: 20px 32px 8px; display: flex; justify-content: space-between; align-items: center; }
+  .results-count { font-size: 14px; color: var(--text-muted); }
+  .results-count strong { color: var(--navy); font-weight: 600; }
+  .sort-control { font-size: 13px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+  .sort-control select { border: 1px solid var(--border); padding: 4px 8px; border-radius: 4px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--text); }
+
+  .papers-list { max-width: 1280px; margin: 0 auto; padding: 8px 32px 60px; display: flex; flex-direction: column; }
+  .paper-card { background: var(--white); border: 1px solid var(--border); border-bottom: none; padding: 20px 24px; transition: background 0.15s; }
+  .paper-card:first-child { border-radius: var(--radius) var(--radius) 0 0; }
+  .paper-card:last-child { border-bottom: 1px solid var(--border); border-radius: 0 0 var(--radius) var(--radius); }
+  .paper-card:only-child { border-bottom: 1px solid var(--border); border-radius: var(--radius); }
+  .paper-card:hover { background: var(--navy-light); }
+
+  .paper-title { font-family: 'Instrument Serif', serif; font-size: 18px; font-weight: 400; color: var(--navy); margin-bottom: 6px; line-height: 1.35; }
+  .paper-title a { color: inherit; text-decoration: none; }
+  .paper-title a:hover { text-decoration: underline; }
+  .paper-authors { font-size: 14px; color: var(--text); margin-bottom: 8px; }
+  .paper-meta { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 12.5px; color: var(--text-muted); }
+  .tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 100px; font-size: 11.5px; font-weight: 500; }
+  .tag-vol { background: var(--navy-light); color: var(--navy); }
+  .tag-editor { background: var(--accent-light); color: #8a7032; cursor: pointer; }
+  .tag-editor:hover { background: #ece5d0; }
+  .tag-area { background: #e8f5ee; color: var(--green); cursor: pointer; }
+  .tag-area:hover { background: #d4edde; }
+  .tag-other { background: #fce8e8; color: var(--red); }
+  .tag-aia { background: #fff3e0; color: #b36b00; }
+
+  .paper-abstract-toggle { margin-top: 8px; font-size: 12px; color: var(--navy); cursor: pointer; font-weight: 500; user-select: none; display: inline-block; }
+  .paper-abstract-toggle:hover { text-decoration: underline; }
+  .paper-abstract { display: none; margin-top: 10px; padding: 14px 16px; background: #fafbfd; border-radius: 6px; font-size: 13.5px; line-height: 1.65; color: var(--text-muted); border-left: 3px solid var(--navy-light); }
+  .paper-abstract.open { display: block; }
+
+  .pagination { max-width: 1280px; margin: 0 auto; padding: 0 32px 60px; display: flex; justify-content: center; align-items: center; gap: 6px; }
+  .pagination button { padding: 8px 14px; border: 1px solid var(--border); background: var(--white); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 13px; cursor: pointer; transition: all 0.15s; color: var(--text); }
+  .pagination button:hover:not(:disabled) { background: var(--navy-light); border-color: var(--navy); color: var(--navy); }
+  .pagination button:disabled { opacity: 0.4; cursor: default; }
+  .pagination button.active { background: var(--navy); color: white; border-color: var(--navy); }
+  .page-info { font-size: 13px; color: var(--text-muted); padding: 0 6px; }
+
+  .loading { text-align: center; padding: 80px 32px; color: var(--text-muted); font-size: 16px; }
+  .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--navy); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .empty-state { text-align: center; padding: 60px 32px; color: var(--text-muted); }
+  .empty-state h3 { font-family: 'Instrument Serif', serif; font-size: 22px; color: var(--text); margin-bottom: 8px; font-weight: 400; }
+
+  .footer { text-align: center; padding: 24px 32px; color: var(--text-muted); font-size: 12px; border-top: 1px solid var(--border); background: var(--white); }
+  .footer a { color: var(--navy); }
+
+  @media (max-width: 768px) {
+    .header-inner { padding: 16px 20px; flex-direction: column; align-items: flex-start; gap: 8px; }
+    .header h1 { font-size: 22px; }
+    .filters-inner { padding: 0 20px; }
+    .filters-row { flex-direction: column; gap: 10px; }
+    .filter-group { min-width: 100%; }
+    .results-bar, .papers-list, .pagination { padding-left: 20px; padding-right: 20px; }
+    .paper-card { padding: 16px 18px; }
+    .paper-title { font-size: 16px; }
+    .filters-bar { top: auto; position: relative; }
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <h1><em>Management Science</em> — Paper Browser</h1>
+    <div class="header-meta">Data from <strong>INFORMS</strong> via Crossref · 2011–present</div>
+  </div>
+</header>
+
+<div class="filters-bar">
+  <div class="filters-inner">
+    <div class="filters-row">
+      <div class="filter-group">
+        <label>Accepting Editor</label>
+        <select id="filterEditor"><option value="">All editors</option></select>
+      </div>
+      <div class="filter-group">
+        <label>Area</label>
+        <select id="filterArea"><option value="">All areas</option></select>
+      </div>
+      <div class="filter-group">
+        <label>Year</label>
+        <select id="filterYear"><option value="">All years</option></select>
+      </div>
+      <div class="filter-group">
+        <label>Search title / authors</label>
+        <input id="filterSearch" placeholder="Type to search..." type="search">
+      </div>
+      <div class="filter-actions">
+        <button class="btn btn-primary" onclick="applyFilters()">Filter</button>
+        <button class="btn btn-secondary" onclick="clearFilters()">Clear</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="results-bar">
+  <div class="results-count" id="resultsCount">Loading...</div>
+  <div class="sort-control">
+    Sort:
+    <select id="sortBy" onchange="applyFilters()">
+      <option value="year-desc">Year ↓</option>
+      <option value="year-asc">Year ↑</option>
+      <option value="title">Title A-Z</option>
+      <option value="editor">Editor A-Z</option>
+    </select>
+  </div>
+</div>
+
+<div id="loading" class="loading"><div class="spinner"></div>Loading papers from Google Sheets...</div>
+<div id="papersList" class="papers-list" style="display:none"></div>
+<div id="pagination" class="pagination" style="display:none"></div>
+
+<footer class="footer">
+  Data: <a href="https://pubsonline.informs.org/journal/mnsc" target="_blank">Management Science (INFORMS)</a>
+  · <a href="https://stouras.com" target="_blank">stouras.com</a>
+</footer>
+
+<script>
+const SHEET_ID = '11MKt6uzfnxTNTbK4Kb1jwW32cEsKZcBRncubV2omJzQ';
+const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Data`;
+const PER_PAGE = 20;
+let allPapers = [], filtered = [], currentPage = 1;
+
+async function loadData() {
+  try {
+    const resp = await fetch(CSV_URL);
+    const text = await resp.text();
+    allPapers = parseCSV(text);
+    buildFilterOptions();
+    applyFilters();
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('papersList').style.display = '';
+    document.getElementById('pagination').style.display = '';
+  } catch (e) {
+    document.getElementById('loading').innerHTML = '<p>Error loading data. Ensure the sheet is shared publicly.</p>';
+  }
+}
+
+function parseCSV(text) {
+  const lines = text.split('\n');
+  if (lines.length < 2) return [];
+  const headers = parseLine(lines[0]);
+  const papers = [];
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const vals = parseLine(line);
+    const obj = {};
+    headers.forEach((h, idx) => { obj[clean(h)] = clean(vals[idx] || ''); });
+    if (obj['Title']) papers.push(obj);
+  }
+  return papers;
+}
+
+function parseLine(line) {
+  const r = []; let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') { if (inQ && line[i+1] === '"') { cur += '"'; i++; } else inQ = !inQ; }
+    else if (c === ',' && !inQ) { r.push(cur); cur = ''; }
+    else cur += c;
+  }
+  r.push(cur);
+  return r;
+}
+
+function clean(s) { return (s || '').replace(/^"|"$/g, '').trim(); }
+
+function buildFilterOptions() {
+  const editors = new Set(), areas = new Set(), years = new Set();
+  allPapers.forEach(p => {
+    if (p['Accepting Editor']) editors.add(p['Accepting Editor']);
+    if (p['Area']) areas.add(p['Area']);
+    if (p['Year']) years.add(p['Year']);
+  });
+  fillSelect('filterEditor', [...editors].sort(), 'All editors');
+  fillSelect('filterArea', [...areas].sort(), 'All areas');
+  fillSelect('filterYear', [...years].sort().reverse(), 'All years');
+}
+
+function fillSelect(id, items, def) {
+  const s = document.getElementById(id);
+  s.innerHTML = `<option value="">${def}</option>` + items.map(i => `<option value="${esc(i)}">${esc(i)}</option>`).join('');
+}
+
+function applyFilters() {
+  const editor = document.getElementById('filterEditor').value;
+  const area = document.getElementById('filterArea').value;
+  const year = document.getElementById('filterYear').value;
+  const search = document.getElementById('filterSearch').value.trim().toLowerCase();
+  const sort = document.getElementById('sortBy').value;
+
+  filtered = allPapers.filter(p => {
+    if (editor && p['Accepting Editor'] !== editor) return false;
+    if (area && p['Area'] !== area) return false;
+    if (year && p['Year'] !== year) return false;
+    if (search) {
+      const h = (p['Title'] + ' ' + p['Authors'] + ' ' + (p['Abstract']||'')).toLowerCase();
+      if (!h.includes(search)) return false;
+    }
+    return true;
+  });
+
+  filtered.sort((a, b) => {
+    switch(sort) {
+      case 'year-desc': return (b['Year']||'').localeCompare(a['Year']||'') || (b['Volume']||'').localeCompare(a['Volume']||'');
+      case 'year-asc': return (a['Year']||'').localeCompare(b['Year']||'');
+      case 'title': return (a['Title']||'').localeCompare(b['Title']||'');
+      case 'editor': return (a['Accepting Editor']||'zzz').localeCompare(b['Accepting Editor']||'zzz');
+    }
+    return 0;
+  });
+
+  currentPage = 1;
+  renderPage();
+}
+
+function clearFilters() {
+  ['filterEditor','filterArea','filterYear','filterSearch'].forEach(id => document.getElementById(id).value = '');
+  applyFilters();
+}
+
+function filterByEditor(name) {
+  document.getElementById('filterEditor').value = name;
+  applyFilters();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function filterByArea(name) {
+  document.getElementById('filterArea').value = name;
+  applyFilters();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function renderPage() {
+  const totalPages = Math.ceil(filtered.length / PER_PAGE);
+  const start = (currentPage - 1) * PER_PAGE;
+  const page = filtered.slice(start, start + PER_PAGE);
+
+  const countEl = document.getElementById('resultsCount');
+  countEl.innerHTML = filtered.length === allPapers.length
+    ? `<strong>${allPapers.length.toLocaleString()}</strong> papers`
+    : `<strong>${filtered.length.toLocaleString()}</strong> of ${allPapers.length.toLocaleString()} papers`;
+
+  const list = document.getElementById('papersList');
+  if (!page.length) {
+    list.innerHTML = '<div class="empty-state"><h3>No papers found</h3><p>Try adjusting your filters.</p></div>';
+    document.getElementById('pagination').style.display = 'none';
+    return;
+  }
+
+  list.innerHTML = page.map((p, idx) => {
+    const doi = p['DOI'] || '';
+    const link = doi.startsWith('http') ? doi : doi ? 'https://doi.org/' + doi : '';
+    const aid = 'a' + (start + idx);
+    const hasAbs = p['Abstract'] && p['Abstract'].length > 10;
+
+    return `<div class="paper-card">
+      <div class="paper-title">${link ? `<a href="${link}" target="_blank">${esc(p['Title'])}</a>` : esc(p['Title'])}</div>
+      <div class="paper-authors">${esc(p['Authors'] || '')}</div>
+      <div class="paper-meta">
+        ${p['Year'] ? `<span class="tag tag-vol">${esc(p['Year'])} · Vol. ${esc(p['Volume']||'?')} No. ${esc(p['Issue']||'?')}</span>` : ''}
+        ${p['Accepting Editor'] ? `<span class="tag tag-editor" onclick="filterByEditor('${escAttr(p['Accepting Editor'])}')">✎ ${esc(p['Accepting Editor'])}</span>` : ''}
+        ${p['Area'] ? `<span class="tag tag-area" onclick="filterByArea('${escAttr(p['Area'])}')}">${esc(p['Area'])}</span>` : ''}
+        ${p['Status']==='Other' ? '<span class="tag tag-other">Other</span>' : ''}
+        ${p['Status']==='Articles in Advance' ? '<span class="tag tag-aia">Articles in Advance</span>' : ''}
+      </div>
+      ${hasAbs ? `<span class="paper-abstract-toggle" onclick="togAbs('${aid}',this)">▸ Abstract</span><div id="${aid}" class="paper-abstract">${esc(p['Abstract'])}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  document.getElementById('pagination').style.display = totalPages > 1 ? '' : 'none';
+  renderPag(totalPages);
+}
+
+function togAbs(id, btn) {
+  const el = document.getElementById(id);
+  const open = el.classList.toggle('open');
+  btn.textContent = open ? '▾ Hide abstract' : '▸ Abstract';
+}
+
+function renderPag(total) {
+  const p = document.getElementById('pagination');
+  let h = `<button ${currentPage===1?'disabled':''} onclick="goPage(${currentPage-1})">‹ Prev</button>`;
+  let s = Math.max(1, currentPage - 3), e = Math.min(total, s + 6);
+  if (e - s < 6) s = Math.max(1, e - 6);
+  if (s > 1) { h += `<button onclick="goPage(1)">1</button>`; if (s > 2) h += `<span class="page-info">…</span>`; }
+  for (let i = s; i <= e; i++) h += `<button class="${i===currentPage?'active':''}" onclick="goPage(${i})">${i}</button>`;
+  if (e < total) { if (e < total-1) h += `<span class="page-info">…</span>`; h += `<button onclick="goPage(${total})">${total}</button>`; }
+  h += `<button ${currentPage===total?'disabled':''} onclick="goPage(${currentPage+1})">Next ›</button>`;
+  p.innerHTML = h;
+}
+
+function goPage(n) { currentPage = n; renderPage(); window.scrollTo({ top: 280, behavior: 'smooth' }); }
+
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function escAttr(s) { return (s||'').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') applyFilters(); });
+
+loadData();
+</script>
+</body>
+</html>
