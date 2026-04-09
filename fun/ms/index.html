@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Management Science Paper Browser</title>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&display=swap" rel="stylesheet">
 <style>
   :root {
     --navy: #003087;
@@ -29,7 +29,7 @@
 
   .header { background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%); position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow-lg); }
   .header-inner { max-width: 1280px; margin: 0 auto; padding: 24px 32px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
-  .header h1 { font-family: 'Instrument Serif', serif; color: white; font-size: 28px; font-weight: 400; letter-spacing: -0.5px; }
+  .header h1 { font-family: 'Playfair Display', serif; color: white; font-size: 28px; font-weight: 400; letter-spacing: -0.5px; }
   .header h1 em { font-style: italic; color: var(--accent); }
   .header-meta { color: rgba(255,255,255,0.6); font-size: 13px; text-align: right; }
   .header-meta strong { color: rgba(255,255,255,0.9); font-weight: 500; }
@@ -62,7 +62,7 @@
   .paper-card:only-child { border-bottom: 1px solid var(--border); border-radius: var(--radius); }
   .paper-card:hover { background: var(--navy-light); }
 
-  .paper-title { font-family: 'Instrument Serif', serif; font-size: 18px; font-weight: 400; color: var(--navy); margin-bottom: 6px; line-height: 1.35; }
+  .paper-title { font-family: 'Playfair Display', serif; font-size: 18px; font-weight: 400; color: var(--navy); margin-bottom: 6px; line-height: 1.35; }
   .paper-title a { color: inherit; text-decoration: none; }
   .paper-title a:hover { text-decoration: underline; }
   .paper-authors { font-size: 14px; color: var(--text); margin-bottom: 8px; }
@@ -98,7 +98,7 @@
   .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--navy); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .empty-state { text-align: center; padding: 60px 32px; color: var(--text-muted); }
-  .empty-state h3 { font-family: 'Instrument Serif', serif; font-size: 22px; color: var(--text); margin-bottom: 8px; font-weight: 400; }
+  .empty-state h3 { font-family: 'Playfair Display', serif; font-size: 22px; color: var(--text); margin-bottom: 8px; font-weight: 400; }
 
   .footer { text-align: center; padding: 24px 32px; color: var(--text-muted); font-size: 12px; border-top: 1px solid var(--border); background: var(--white); }
   .footer a { color: var(--navy); }
@@ -157,7 +157,7 @@
 </div>
 
 <div class="results-bar">
-  <div class="results-count" id="resultsCount">Loading...</div>
+  <div class="results-count" id="resultsCount">Use the filters above to explore</div>
   <div class="sort-control">
     Sort:
     <select id="sortBy" onchange="applyFilters()">
@@ -191,7 +191,6 @@ async function loadData() {
     const text = await resp.text();
     allPapers = parseCSV(text);
     buildFilterOptions();
-    document.getElementById('resultsCount').innerHTML = '<strong>' + allPapers.length.toLocaleString() + '</strong> papers available — use the filters above to explore';
   } catch (e) {
     // Silently retry after 3 seconds
     setTimeout(loadData, 3000);
@@ -255,7 +254,7 @@ function applyFilters() {
 
   // If no filters active, show welcome state
   if (!editor && !area && !year && !search && !searchAuth) {
-    document.getElementById('resultsCount').innerHTML = '<strong>' + allPapers.length.toLocaleString() + '</strong> papers available — use the filters above to explore';
+    document.getElementById('resultsCount').innerHTML = 'Use the filters above to explore';
     document.getElementById('papersList').innerHTML = '<div class="empty-state"><h3>Select a filter to get started</h3><p>Filter by editor, area, year, or search by title or author name.</p></div>';
     document.getElementById('pagination').style.display = 'none';
     return;
