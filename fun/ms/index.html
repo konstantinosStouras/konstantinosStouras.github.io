@@ -436,7 +436,7 @@ function renderPage() {
       <div class="paper-title">${link ? `<a href="${link}" target="_blank">${esc(p['Title'])}</a>` : esc(p['Title'])}</div>
       <div class="paper-authors">${esc(p['Authors'] || '')}</div>
       <div class="paper-meta">
-        ${p['Year'] ? `<span class="tag tag-vol">${esc(p['Year'])} · Vol. ${esc(p['Volume']||'?')} No. ${esc(p['Issue']||'?')}</span>` : ''}
+        ${p['Volume'] && p['Issue'] ? `<span class="tag tag-vol">${esc(p['Year'])} · Vol. ${esc(p['Volume'])} No. ${esc(p['Issue'])}</span>` : p['Year'] ? `<span class="tag tag-vol">${esc(p['Year'])}</span>` : ''}
         ${p['Accepting Editor'] ? `<span class="tag tag-editor" onclick="filterByEditor('${escAttr(p['Accepting Editor'])}')">✎ ${esc(p['Accepting Editor'])}</span>` : ''}
         ${p['Area'] ? `<span class="tag tag-area" onclick="filterByArea('${escAttr(p['Area'])}')}">${esc(p['Area'])}</span>` : ''}
         ${p['Status']==='Other' ? '<span class="tag tag-other">Other</span>' : ''}
@@ -480,7 +480,7 @@ function makeBib(p) {
 
   // Extract pages from Cite As field (format: "... Vol(Iss):pages.")
   let pages = '';
-  const cm = (p['Cite As'] || '').match(/:([^.]+)\./);
+  const cm = (p['Cite As'] || '').match(/\d+\(\d+\):([^.]+)\./);
   if (cm) pages = cm[1].trim().replace(/-/g, '--');
 
   let b = '@article{' + key + ',\n';
