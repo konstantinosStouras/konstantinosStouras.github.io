@@ -40,21 +40,8 @@
   .filter-group { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 170px; }
   .filter-group label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); }
   .filter-group select, .filter-group input { padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 20px; color: var(--text); background: var(--white); transition: border-color 0.2s, box-shadow 0.2s; height: 50px; }
-  .filter-group select { -webkit-appearance: none; -moz-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%235a6070' stroke-width='1.5' fill='none'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; cursor: pointer; display: none; }
+  .filter-group select option { font-size: 20px; padding: 12px; }
   .filter-group select:focus, .filter-group input:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(0,48,135,0.1); }
-
-  /* Custom dropdown */
-  .custom-select { position: relative; }
-  .custom-select-trigger { padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 18px; color: var(--text-muted); background: var(--white); height: 50px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; transition: border-color 0.2s, box-shadow 0.2s; user-select: none; }
-  .custom-select-trigger:hover { border-color: #b0b8c8; }
-  .custom-select-trigger.open { border-color: var(--navy); box-shadow: 0 0 0 3px rgba(0,48,135,0.1); border-radius: 6px 6px 0 0; }
-  .custom-select-trigger::after { content: '▾'; font-size: 14px; color: var(--text-muted); }
-  .custom-select-dropdown { display: none; position: absolute; top: 100%; left: 0; right: 0; background: var(--white); border: 1.5px solid var(--navy); border-top: none; border-radius: 0 0 6px 6px; max-height: 350px; overflow-y: auto; z-index: 200; box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
-  .custom-select-dropdown.open { display: block; }
-  .custom-select-search { width: 100%; padding: 10px 14px; border: none; border-bottom: 1px solid var(--border); font-family: 'DM Sans', sans-serif; font-size: 16px; color: var(--text); outline: none; }
-  .custom-select-item { padding: 12px 14px; font-size: 18px; color: var(--text); cursor: pointer; transition: background 0.1s; }
-  .custom-select-item:hover { background: var(--navy-light); }
-  .custom-select-item.hidden { display: none; }
   .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
   .chip { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 6px; font-size: 13px; font-weight: 500; animation: chipIn 0.15s ease-out; }
   .chip-editor { background: var(--accent-light); color: #8a7032; }
@@ -151,26 +138,17 @@
     <div class="filters-row">
       <div class="filter-group">
         <label>Accepting Editor</label>
-        <div class="custom-select" id="csEditor" data-type="editor">
-          <div class="custom-select-trigger" onclick="toggleDrop('csEditor')">All editors</div>
-          <div class="custom-select-dropdown"><input class="custom-select-search" placeholder="Type to filter..." oninput="filterDrop('csEditor',this.value)"><div class="custom-select-items"></div></div>
-        </div>
+        <select id="filterEditor" onchange="addChip('editor',this)"><option value="">All editors</option></select>
         <div id="chipsEditor" class="chips"></div>
       </div>
       <div class="filter-group">
         <label>Area</label>
-        <div class="custom-select" id="csArea" data-type="area">
-          <div class="custom-select-trigger" onclick="toggleDrop('csArea')">All areas</div>
-          <div class="custom-select-dropdown"><input class="custom-select-search" placeholder="Type to filter..." oninput="filterDrop('csArea',this.value)"><div class="custom-select-items"></div></div>
-        </div>
+        <select id="filterArea" onchange="addChip('area',this)"><option value="">All areas</option></select>
         <div id="chipsArea" class="chips"></div>
       </div>
       <div class="filter-group">
         <label>Year</label>
-        <div class="custom-select" id="csYear" data-type="year">
-          <div class="custom-select-trigger" onclick="toggleDrop('csYear')">All years</div>
-          <div class="custom-select-dropdown"><input class="custom-select-search" placeholder="Type to filter..." oninput="filterDrop('csYear',this.value)"><div class="custom-select-items"></div></div>
-        </div>
+        <select id="filterYear" onchange="addChip('year',this)"><option value="">All years</option></select>
         <div id="chipsYear" class="chips"></div>
       </div>
       <div class="filter-group">
@@ -222,6 +200,16 @@ let allPapers = [], filtered = [], currentPage = 1;
 const sel = { editor: new Set(), area: new Set(), year: new Set() };
 
 // Chip management
+function addChip(type, selectEl) {
+  const val = selectEl.value;
+  if (!val) return;
+  selectEl.value = '';
+  if (sel[type].has(val)) return;
+  sel[type].add(val);
+  renderChips(type);
+  applyFilters();
+}
+
 function removeChip(type, val) {
   sel[type].delete(val);
   renderChips(type);
@@ -294,67 +282,15 @@ function buildFilterOptions() {
     if (p['Area']) areas.add(p['Area']);
     if (p['Year']) years.add(p['Year']);
   });
-  fillCustomSelect('csEditor', [...editors].sort());
-  fillCustomSelect('csArea', [...areas].sort());
-  fillCustomSelect('csYear', [...years].sort().reverse());
+  fillSelect('filterEditor', [...editors].sort(), 'All editors');
+  fillSelect('filterArea', [...areas].sort(), 'All areas');
+  fillSelect('filterYear', [...years].sort().reverse(), 'All years');
 }
 
-function fillCustomSelect(csId, items) {
-  const cs = document.getElementById(csId);
-  const container = cs.querySelector('.custom-select-items');
-  const type = cs.dataset.type;
-  container.innerHTML = items.map(i =>
-    `<div class="custom-select-item" onclick="selectItem('${csId}','${type}','${escAttr(i)}')">${esc(i)}</div>`
-  ).join('');
+function fillSelect(id, items, def) {
+  const s = document.getElementById(id);
+  s.innerHTML = `<option value="">${def}</option>` + items.map(i => `<option value="${esc(i)}">${esc(i)}</option>`).join('');
 }
-
-function toggleDrop(csId) {
-  // Close all others first
-  document.querySelectorAll('.custom-select').forEach(cs => {
-    if (cs.id !== csId) {
-      cs.querySelector('.custom-select-trigger').classList.remove('open');
-      cs.querySelector('.custom-select-dropdown').classList.remove('open');
-    }
-  });
-  const cs = document.getElementById(csId);
-  const trigger = cs.querySelector('.custom-select-trigger');
-  const drop = cs.querySelector('.custom-select-dropdown');
-  const isOpen = trigger.classList.toggle('open');
-  drop.classList.toggle('open');
-  if (isOpen) {
-    const searchInput = cs.querySelector('.custom-select-search');
-    searchInput.value = '';
-    searchInput.focus();
-    filterDrop(csId, '');
-  }
-}
-
-function filterDrop(csId, query) {
-  const cs = document.getElementById(csId);
-  const items = cs.querySelectorAll('.custom-select-item');
-  const q = query.toLowerCase();
-  items.forEach(item => {
-    item.classList.toggle('hidden', q && !item.textContent.toLowerCase().includes(q));
-  });
-}
-
-function selectItem(csId, type, val) {
-  const cs = document.getElementById(csId);
-  cs.querySelector('.custom-select-trigger').classList.remove('open');
-  cs.querySelector('.custom-select-dropdown').classList.remove('open');
-  if (sel[type].has(val)) return;
-  sel[type].add(val);
-  renderChips(type);
-  applyFilters();
-}
-
-// Close dropdowns when clicking outside
-document.addEventListener('click', function(e) {
-  if (!e.target.closest('.custom-select')) {
-    document.querySelectorAll('.custom-select-trigger').forEach(t => t.classList.remove('open'));
-    document.querySelectorAll('.custom-select-dropdown').forEach(d => d.classList.remove('open'));
-  }
-});
 
 function applyFilters() {
   const search = document.getElementById('filterSearch').value.trim().toLowerCase();
