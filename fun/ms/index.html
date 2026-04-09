@@ -190,12 +190,13 @@ async function loadData() {
     const text = await resp.text();
     allPapers = parseCSV(text);
     buildFilterOptions();
-    applyFilters();
     document.getElementById('loading').style.display = 'none';
     document.getElementById('papersList').style.display = '';
-    document.getElementById('pagination').style.display = '';
+    document.getElementById('resultsCount').innerHTML = '<strong>' + allPapers.length.toLocaleString() + '</strong> papers available — use the filters above to explore';
+    document.getElementById('papersList').innerHTML = '<div class="empty-state"><h3>Select a filter to get started</h3><p>Filter by editor, area, year, or search by title or author name.</p></div>';
   } catch (e) {
-    document.getElementById('loading').innerHTML = '<p>Error loading data. Ensure the sheet is shared publicly.</p>';
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('resultsCount').innerHTML = 'Could not load data — make sure the Google Sheet is shared publicly.';
   }
 }
 
@@ -253,6 +254,14 @@ function applyFilters() {
   const search = document.getElementById('filterSearch').value.trim().toLowerCase();
   const searchAuth = document.getElementById('filterAuthors').value.trim().toLowerCase();
   const sort = document.getElementById('sortBy').value;
+
+  // If no filters active, show welcome state
+  if (!editor && !area && !year && !search && !searchAuth) {
+    document.getElementById('resultsCount').innerHTML = '<strong>' + allPapers.length.toLocaleString() + '</strong> papers available — use the filters above to explore';
+    document.getElementById('papersList').innerHTML = '<div class="empty-state"><h3>Select a filter to get started</h3><p>Filter by editor, area, year, or search by title or author name.</p></div>';
+    document.getElementById('pagination').style.display = 'none';
+    return;
+  }
 
   filtered = allPapers.filter(p => {
     if (editor && p['Accepting Editor'] !== editor) return false;
