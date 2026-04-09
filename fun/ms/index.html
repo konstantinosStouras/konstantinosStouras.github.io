@@ -157,7 +157,7 @@
 </div>
 
 <div class="results-bar">
-  <div class="results-count" id="resultsCount">Use the filters above to explore</div>
+  <div class="results-count" id="resultsCount"></div>
   <div class="sort-control">
     Sort:
     <select id="sortBy" onchange="applyFilters()">
@@ -254,7 +254,7 @@ function applyFilters() {
 
   // If no filters active, show welcome state
   if (!editor && !area && !year && !search && !searchAuth) {
-    document.getElementById('resultsCount').innerHTML = 'Use the filters above to explore';
+    document.getElementById('resultsCount').innerHTML = '';
     document.getElementById('papersList').innerHTML = '<div class="empty-state"><h3>Select a filter to get started</h3><p>Filter by editor, area, year, or search by title or author name.</p></div>';
     document.getElementById('pagination').style.display = 'none';
     return;
