@@ -60,8 +60,6 @@
   .chip-editor { background: var(--accent-light); color: #8a7032; }
   .chip-area { background: #e8f5ee; color: var(--green); }
   .chip-year { background: var(--navy-light); color: var(--navy); }
-  .chip-title { background: #f0e8f7; color: #6b3fa0; }
-  .chip-author { background: #e8eef7; color: #2d5f8a; }
   .chip-x { cursor: pointer; font-size: 15px; font-weight: 700; opacity: 0.5; margin-left: 2px; line-height: 1; }
   .chip-x:hover { opacity: 1; }
   @keyframes chipIn { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
@@ -177,13 +175,11 @@
       </div>
       <div class="filter-group">
         <label>Search Title</label>
-        <input id="filterSearch" placeholder="Search by title..." type="search" oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('title','filterSearch');event.preventDefault();}">
-        <div id="chipsTitle" class="chips"></div>
+        <input id="filterSearch" placeholder="Search by title..." type="search" oninput="debounceSearch()">
       </div>
       <div class="filter-group">
         <label>Search Authors</label>
-        <input id="filterAuthors" placeholder="Search by author..." type="search" oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('author','filterAuthors');event.preventDefault();}">
-        <div id="chipsAuthor" class="chips"></div>
+        <input id="filterAuthors" placeholder="Search by author..." type="search" oninput="debounceSearch()">
       </div>
       <div class="filter-actions">
         <button class="btn btn-primary" onclick="applyFilters()">Filter</button>
@@ -223,19 +219,7 @@ const PER_PAGE = 20;
 let allPapers = [], filtered = [], currentPage = 1;
 
 // Multi-select state
-const sel = { editor: new Set(), area: new Set(), year: new Set(), title: new Set(), author: new Set() };
-
-// Text chip management (for title/author search)
-function addTextChip(type, inputId) {
-  const input = document.getElementById(inputId);
-  const val = input.value.trim();
-  if (!val) return;
-  if (sel[type].has(val.toLowerCase())) return;
-  sel[type].add(val.toLowerCase());
-  input.value = '';
-  renderChips(type);
-  applyFilters();
-}
+const sel = { editor: new Set(), area: new Set(), year: new Set() };
 
 // Chip management
 function removeChip(type, val) {
@@ -245,8 +229,8 @@ function removeChip(type, val) {
 }
 
 function renderChips(type) {
-  const idMap = {editor:'chipsEditor', area:'chipsArea', year:'chipsYear', title:'chipsTitle', author:'chipsAuthor'};
-  const container = document.getElementById(idMap[type]);
+  const id = 'chips' + type.charAt(0).toUpperCase() + type.slice(1);
+  const container = document.getElementById(id);
   const cssClass = 'chip chip-' + type;
   container.innerHTML = [...sel[type]].map(v =>
     `<span class="${cssClass}">${esc(v)} <span class="chip-x" onclick="removeChip('${type}','${escAttr(v)}')">×</span></span>`
@@ -378,7 +362,7 @@ function applyFilters() {
   const sort = document.getElementById('sortBy').value;
 
   // If no filters active, show welcome state
-  if (sel.editor.size === 0 && sel.area.size === 0 && sel.year.size === 0 && sel.title.size === 0 && sel.author.size === 0 && !search && !searchAuth) {
+  if (sel.editor.size === 0 && sel.area.size === 0 && sel.year.size === 0 && !search && !searchAuth) {
     document.getElementById('resultsCount').innerHTML = '';
     document.getElementById('papersList').innerHTML = '<div class="empty-state"><h3>Select a filter to get started</h3><p>Filter by editor, area, year, or search by title or author name.</p></div>';
     document.getElementById('pagination').style.display = 'none';
@@ -389,17 +373,8 @@ function applyFilters() {
     if (sel.editor.size > 0 && !sel.editor.has(p['Accepting Editor'])) return false;
     if (sel.area.size > 0 && !sel.area.has(p['Area'])) return false;
     if (sel.year.size > 0 && !sel.year.has(p['Year'])) return false;
-
-    // Title: live typed text AND all chips must match (AND logic)
-    const titleText = (p['Title']||'').toLowerCase();
-    if (search && !titleText.includes(search)) return false;
-    for (const t of sel.title) { if (!titleText.includes(t)) return false; }
-
-    // Authors: live typed text AND all chips must match (AND logic for co-author search)
-    const authText = (p['Authors']||'').toLowerCase();
-    if (searchAuth && !authText.includes(searchAuth)) return false;
-    for (const a of sel.author) { if (!authText.includes(a)) return false; }
-
+    if (search && !(p['Title']||'').toLowerCase().includes(search)) return false;
+    if (searchAuth && !(p['Authors']||'').toLowerCase().includes(searchAuth)) return false;
     return true;
   });
 
@@ -418,12 +393,10 @@ function applyFilters() {
 }
 
 function clearFilters() {
-  sel.editor.clear(); sel.area.clear(); sel.year.clear(); sel.title.clear(); sel.author.clear();
+  sel.editor.clear(); sel.area.clear(); sel.year.clear();
   document.getElementById('chipsEditor').innerHTML = '';
   document.getElementById('chipsArea').innerHTML = '';
   document.getElementById('chipsYear').innerHTML = '';
-  document.getElementById('chipsTitle').innerHTML = '';
-  document.getElementById('chipsAuthor').innerHTML = '';
   ['filterSearch','filterAuthors'].forEach(id => document.getElementById(id).value = '');
   applyFilters();
 }
@@ -554,6 +527,8 @@ function debounceSearch() {
     if (allPapers.length > 0) applyFilters();
   }, 150);
 }
+
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') applyFilters(); });
 
 loadData();
 </script>
