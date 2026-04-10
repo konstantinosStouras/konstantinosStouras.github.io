@@ -63,18 +63,8 @@
       <meta content="stuoras, sturas, storas, stouras, skouras, svouras, souras, constantinos stouras, Konstantinos I. Stouras" name="keywords">
       <title>Konstantinos I. Stouras</title>
 
-      <!-- FIX #3 (portrait img): add inline style to support switching from
-           background-image div to a proper <img> element -->
-      <style>
-        .portrait-img {
-          display: block;
-          width: 200px;
-          height: 200px;
-          border-radius: 50%;
-          object-fit: cover;
-          margin: 0 auto 1rem;
-        }
-      </style>
+      <!-- FIX #3 (portrait accessibility): role/aria-label added to the existing
+           background-image div below; no CSS changes needed -->
    </head>
 
    <!-- FIX #10 (aria-label on nav): added aria-label="Main navigation" -->
@@ -137,16 +127,11 @@
                <div class="col-xs-12 col-md-4">
                   <div id="profile">
 
-                     <!-- FIX #3 (portrait alt text + lazy loading): replaced CSS background-image div
-                          with a proper <img> element for accessibility and better LCP performance -->
-                     <img
-                       src="images/Konstantinos Stouras.jpg"
-                       alt="Konstantinos I. Stouras, Assistant Professor of Management at UCD Michael Smurfit Graduate Business School"
-                       class="portrait-img"
-                       width="200"
-                       height="200"
-                       loading="lazy"
-                     >
+                     <div class="portrait"
+                       role="img"
+                       aria-label="Konstantinos I. Stouras, Assistant Professor of Management at UCD Michael Smurfit Graduate Business School"
+                       style="background-image: url('images/Konstantinos Stouras.jpg');">
+                     </div>
                      <meta itemprop="image" content="images/Konstantinos Stouras.jpg">
 
                      <div class="portrait-title">
