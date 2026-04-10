@@ -244,7 +244,6 @@
       <button class="summary-tab-btn" onclick="toggleSummary('editors')">Editors</button>
       <button class="summary-tab-btn" onclick="toggleSummary('areas')">Areas</button>
       <button class="summary-tab-btn" onclick="toggleSummary('authors')">Authors</button>
-      <button class="summary-tab-btn" onclick="toggleSummary('affiliations')">Affiliations</button>
     </div>
   </div>
 </div>
@@ -258,9 +257,6 @@
   </div>
   <div id="summaryAuthors" class="summary-content">
     <div id="summaryAuthorsList" class="summary-list"></div>
-  </div>
-  <div id="summaryAffiliations" class="summary-content">
-    <div id="summaryAffiliationsList" class="summary-list"></div>
   </div>
 </div>
 
@@ -295,11 +291,9 @@
 const SHEET_ID = '11MKt6uzfnxTNTbK4Kb1jwW32cEsKZcBRncubV2omJzQ';
 const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Data`;
 const AUTHORS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Authors`;
-const AFFILIATIONS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Affiliations`;
 const PER_PAGE = 20;
 let allPapers = [], filtered = [], currentPage = 1;
 let authorData = []; // pre-computed from Authors tab
-let affiliationData = []; // pre-computed from Affiliations tab
 
 // Multi-select state
 const sel = { editor: new Set(), area: new Set(), year: new Set(), title: new Set(), author: new Set() };
@@ -358,10 +352,9 @@ function addChipFromCard(type, val) {
 
 async function loadData() {
   try {
-    const [resp, authResp, affResp] = await Promise.all([
+    const [resp, authResp] = await Promise.all([
       fetch(CSV_URL),
-      fetch(AUTHORS_CSV_URL).catch(function() { return null; }),
-      fetch(AFFILIATIONS_CSV_URL).catch(function() { return null; })
+      fetch(AUTHORS_CSV_URL).catch(function() { return null; })
     ]);
     const text = await resp.text();
     allPapers = parseCSV(text);
@@ -372,11 +365,6 @@ async function loadData() {
     if (authResp && authResp.ok) {
       var authText = await authResp.text();
       authorData = parseCSV(authText, 'Author');
-    }
-    // Load pre-computed affiliation data from Affiliations tab
-    if (affResp && affResp.ok) {
-      var affText = await affResp.text();
-      affiliationData = parseCSV(affText, 'Affiliation');
     }
     buildFilterOptions();
     // Update year range in header
@@ -817,190 +805,19 @@ function filterByAuthorAreas(authorName) {
 
 // Author normalization is done server-side in Google Apps Script (menu item 5).
 
-// ── Affiliation normalization & merging ──
-
-// Known institution aliases: map variant → canonical name
-const AFFILIATION_ALIASES = {
-  'massachusetts institute of technology': 'MIT',
-  'mit': 'MIT',
-  'harvard university': 'Harvard University',
-  'stanford university': 'Stanford University',
-  'columbia university': 'Columbia University',
-  'cornell university': 'Cornell University',
-  'northwestern university': 'Northwestern University',
-  'princeton university': 'Princeton University',
-  'yale university': 'Yale University',
-  'duke university': 'Duke University',
-  'new york university': 'New York University',
-  'university of pennsylvania': 'University of Pennsylvania',
-  'purdue university': 'Purdue University',
-  'university of michigan': 'University of Michigan',
-  'university of chicago': 'University of Chicago',
-  'university of california, berkeley': 'University of California, Berkeley',
-  'university of california at berkeley': 'University of California, Berkeley',
-  'university of california, los angeles': 'University of California, Los Angeles',
-  'university of california at los angeles': 'University of California, Los Angeles',
-};
-
-function normalizeAffiliationKey(raw) {
-  var s = raw.trim();
-  if (!s) return '';
-  // Strip leading "and " / "and, "
-  s = s.replace(/^and\s+/i, '');
-  // Strip trailing period
-  s = s.replace(/\.\s*$/, '');
-  // Remove "The " at start
-  s = s.replace(/^The\s+/i, '');
-  // Remove "The " after commas: ", The University" → ", University"
-  s = s.replace(/,\s*The\s+/gi, ', ');
-  // Remove zip codes: US (5 or 5-4 digits), and generic 3-6 digit postal codes at segment boundaries
-  s = s.replace(/\s+\d{5}(-\d{2,5})?\b/g, '');
-  s = s.replace(/\b\d{4,6}(-\d{2,5})?\b/g, '');
-  // Remove Canadian postal codes (A1A 1A1)
-  s = s.replace(/\b[A-Z]\d[A-Z]\s*\d[A-Z]\d\b/gi, '');
-  // Remove UK postcodes
-  s = s.replace(/\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/gi, '');
-  // Remove PO Box, Room, Suite, Building, Mail Stop, Box, MS references
-  s = s.replace(/\b(P\.?\s*O\.?\s*Box|Room|Suite|Bldg\.?|Building|Mail\s*Stop|MS\s*\d\S*|Box\s+\d\S*|CBA\s+\S+)\s*\S*/gi, '');
-  // Remove street addresses: "number + street-type-word"
-  s = s.replace(/\b\d+[\w.-]*\s+(Street|St\.?|Avenue|Ave\.?|Boulevard|Blvd\.?|Drive|Dr\.?|Road|Rd\.?|Way|Place|Pl\.?|Lane|Ln\.?|Parkway|Pkwy\.?|Circle|Court|Ct\.?|Square|Plaza|Mall|Walk)\b[^,]*/gi, '');
-  // Remove remaining 3+ digit standalone numbers (building/address remnants)
-  s = s.replace(/\b\d{3,}\b/g, '');
-  // Normalize whitespace, collapse multiple/trailing commas
-  s = s.replace(/\s+/g, ' ');
-  s = s.replace(/,\s*,+/g, ',');
-  s = s.replace(/,\s*$/,'').replace(/^\s*,\s*/,'');
-  s = s.trim();
-  return s.toLowerCase();
-}
-
-function mergeAffiliations(rawData) {
-  // rawData: array of {Papers, Affiliation, Areas}
-  // Returns merged array sorted by paper count desc
-  var groups = {}; // key → {count, displayName, displayCount, areas}
-  rawData.forEach(function(row) {
-    var aff = (row['Affiliation'] || '').trim();
-    var count = parseInt(row['Papers']) || 0;
-    var areas = (row['Areas'] || '').trim();
-    if (!aff) return;
-    var key = normalizeAffiliationKey(aff);
-    if (!key) return;
-    if (!groups[key]) {
-      groups[key] = { count: 0, displayName: aff, displayCount: count, allAreas: {} };
-    }
-    groups[key].count += count;
-    // Keep the version with highest individual count as display name
-    if (count > groups[key].displayCount) {
-      groups[key].displayName = aff;
-      groups[key].displayCount = count;
-    }
-    // Merge areas
-    if (areas) {
-      areas.split(',').forEach(function(a) {
-        var t = a.trim();
-        if (t) groups[key].allAreas[t] = true;
-      });
-    }
-  });
-
-  // Second pass: check if bare university names can merge into school-level entries
-  // e.g., "stanford university" key should merge into the largest Stanford entry
-  var keys = Object.keys(groups);
-  var bareUniKeys = keys.filter(function(k) {
-    // Bare = no comma (just a university name, no school/dept)
-    return k.indexOf(',') === -1 && groups[k];
-  });
-  bareUniKeys.forEach(function(bareKey) {
-    // Find the largest group whose key CONTAINS this bare university name after a comma
-    // e.g., bareKey = "stanford university" matches "graduate school of business, stanford university, stanford, california"
-    var bestMatch = null, bestCount = 0;
-    keys.forEach(function(k) {
-      if (k === bareKey || !groups[k]) return;
-      // Check if k contains the bare university name
-      if (k.indexOf(bareKey) !== -1) {
-        if (groups[k].count > bestCount) {
-          bestCount = groups[k].count;
-          bestMatch = k;
-        }
-      }
-    });
-    // Only merge if bare entry exists and a matching school-level entry exists
-    // BUT: bare "Stanford University" has 108 papers across ALL schools, so merging into one school is wrong.
-    // Instead, keep bare entries as-is. They represent papers where affiliation was just the university.
-    // Don't merge bare → school-level.
-  });
-
-  // Third pass: fuzzy Levenshtein merge for remaining near-duplicates
-  var sortedKeys = Object.keys(groups).filter(function(k) { return groups[k]; });
-  sortedKeys.sort(function(a, b) { return groups[b].count - groups[a].count; });
-  var common = sortedKeys.filter(function(k) { return groups[k].count > 5; });
-  var rare = sortedKeys.filter(function(k) { return groups[k].count <= 5; });
-
-  rare.forEach(function(rKey) {
-    if (!groups[rKey]) return;
-    var bestMatch = null, bestDist = Infinity;
-    common.forEach(function(cKey) {
-      if (!groups[cKey]) return;
-      var dist = levenshtein(rKey, cKey);
-      if (dist < bestDist) { bestDist = dist; bestMatch = cKey; }
-    });
-    // Threshold based on key length
-    var threshold = rKey.length >= 30 ? 4 : rKey.length >= 15 ? 3 : 2;
-    if (bestMatch && bestDist <= threshold && bestDist > 0) {
-      // Merge rare into common
-      groups[bestMatch].count += groups[rKey].count;
-      Object.keys(groups[rKey].allAreas).forEach(function(a) { groups[bestMatch].allAreas[a] = true; });
-      delete groups[rKey];
-    }
-  });
-
-  // Build final sorted array
-  var result = [];
-  Object.keys(groups).forEach(function(k) {
-    if (!groups[k]) return;
-    var g = groups[k];
-    var areaList = Object.keys(g.allAreas).sort().join(', ');
-    result.push({ count: g.count, name: g.displayName, areas: areaList, areaCount: Object.keys(g.allAreas).length });
-  });
-  result.sort(function(a, b) { return b.count - a.count; });
-  return result;
-}
-
-function buildAffiliationsSummary() {
-  var affList = document.getElementById('summaryAffiliationsList');
-  if (affiliationData.length === 0) {
-    affList.innerHTML = '<div style="padding:12px;color:var(--text-muted)">No Affiliations tab found. Run "6. Build Affiliations tab" in the Google Sheet script.</div>';
-    return;
-  }
-  var merged = mergeAffiliations(affiliationData);
-  affList.innerHTML = merged.map(function(a) {
-    return '<div class="summary-item">' +
-      '<span class="summary-count">' + a.count + '</span> ' +
-      '<span>papers from ' + esc(a.name) + '</span>' +
-      (a.areaCount > 0 ? ' <span style="color:var(--green);font-style:italic"> across ' + a.areaCount + ' area' + (a.areaCount !== 1 ? 's' : '') + '</span>' : '') +
-    '</div>';
-  }).join('');
-}
-
 function toggleSummary(tab) {
   var edEl = document.getElementById('summaryEditors');
   var arEl = document.getElementById('summaryAreas');
   var auEl = document.getElementById('summaryAuthors');
-  var afEl = document.getElementById('summaryAffiliations');
   var btns = document.querySelectorAll('.summary-tab-btn');
-  var els = [edEl, arEl, auEl, afEl];
-  var idx = tab === 'editors' ? 0 : tab === 'areas' ? 1 : tab === 'authors' ? 2 : 3;
+  var els = [edEl, arEl, auEl];
+  var idx = tab === 'editors' ? 0 : tab === 'areas' ? 1 : 2;
   var isOpen = els[idx].classList.contains('active');
   els.forEach(function(el) { el.className = 'summary-content'; });
   btns.forEach(function(b) { b.className = 'summary-tab-btn'; });
   if (!isOpen) {
     els[idx].className = 'summary-content active';
     btns[idx].className = 'summary-tab-btn active';
-    // Lazy-build affiliations on first open
-    if (tab === 'affiliations' && !window._affBuilt) {
-      buildAffiliationsSummary();
-      window._affBuilt = true;
-    }
   }
 }
 
@@ -1008,7 +825,6 @@ function closeSummaryTabs() {
   document.getElementById('summaryEditors').className = 'summary-content';
   document.getElementById('summaryAreas').className = 'summary-content';
   document.getElementById('summaryAuthors').className = 'summary-content';
-  document.getElementById('summaryAffiliations').className = 'summary-content';
   document.querySelectorAll('.summary-tab-btn').forEach(function(b) { b.className = 'summary-tab-btn'; });
 }
 
