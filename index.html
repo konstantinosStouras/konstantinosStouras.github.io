@@ -63,8 +63,24 @@
       <meta content="stuoras, sturas, storas, stouras, skouras, svouras, souras, constantinos stouras, Konstantinos I. Stouras" name="keywords">
       <title>Konstantinos I. Stouras</title>
 
-      <!-- FIX #3 (portrait accessibility): role/aria-label added to the existing
-           background-image div below; no CSS changes needed -->
+      <!-- FIX #3 (portrait rounded + title centering) -->
+      <style>
+        .portrait {
+          border-radius: 50% !important;
+          overflow: hidden !important;
+        }
+        #profile .portrait-title {
+          text-align: center !important;
+        }
+        #profile .portrait-title h2,
+        #profile .portrait-title h3,
+        #profile .portrait-title p {
+          text-align: center !important;
+        }
+        #profile .network-icon {
+          text-align: center !important;
+        }
+      </style>
    </head>
 
    <!-- FIX #10 (aria-label on nav): added aria-label="Main navigation" -->
