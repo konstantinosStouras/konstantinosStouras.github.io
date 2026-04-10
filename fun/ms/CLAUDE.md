@@ -112,6 +112,7 @@ https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Data
 - **Background loading** — page renders instantly with welcome state; data loads silently via `fetch()`; silently retries on failure. No spinner, no loading text — user sees welcome message immediately.
 - **Custom dropdowns** — fully styled (not native `<select>`), 18px font, searchable within dropdown, scrollable 350px max-height, click-outside-to-close. Editor and Area dropdowns show paper counts next to each option, e.g., "Amit Seru (54)", "finance (980)".
 - **Multi-select with chips** — Editor, Area, Year filters support multiple selections shown as removable chips; OR logic within same filter type
+- **Cascading/dependent filters** — when any filter is active, the other dropdowns dynamically update to show only options that exist in the cross-filtered result set (e.g., selecting year 2026 hides editors and areas with no papers that year). Each dropdown is rebuilt using papers that match all *other* active filters except its own, via `updateDropdownOptions()`. Counts update accordingly. Summary tabs also reflect filtered counts. Dropdowns reset to full options when all filters are cleared.
 - **Text search chips** — Title and Author search fields filter live as you type (150ms debounce); pressing Enter converts text to a chip, allowing multiple search terms with AND logic (e.g., co-author search: "stouras" + "erat")
 - **Clickable tags** — all metadata on paper cards is interactive: editor/area tags add filter chips; year/volume tag adds year chip; individual author names add author search chips. Enables quick drill-down (e.g., click an author → see all their papers → click a co-author → narrow to co-authored papers).
 - **BibTeX generation** — green "▸ BibTeX" toggle with Copy button; title capitals protected with `{B}races`; author format: `LastName, FirstName and ...`; pages from Page column with `--` separators; omits volume/number/pages for Articles in Advance
@@ -175,7 +176,7 @@ Three functions run after CSV loads to clean raw data for display:
 ### Architecture
 
 - CSS variables for theming (navy `#003087`, accent gold `#c4a052`, green `#2a7d4f`)
-- All JS inline, ~1200 lines total
+- All JS inline, ~1250 lines total
 - Custom dropdown component replaces native `<select>` for full font-size control
 - Chip system shared across all 5 filter types (editor, area, year, title, author)
 - 50px fixed height for all filter inputs/buttons for alignment
