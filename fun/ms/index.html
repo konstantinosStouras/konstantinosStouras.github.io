@@ -375,9 +375,13 @@ async function loadData() {
     }
     // Load pre-computed affiliation data from Affiliations tab
     if (affResp && affResp.ok) {
-      var affText = await affResp.text();
-      affiliationData = parseCSV(affText, 'Affiliation');
-    }
+  var affText = await affResp.text();
+  console.log('Affiliations raw response (first 200 chars):', affText.substring(0, 200));
+  affiliationData = parseCSV(affText, 'Affiliation');
+  console.log('Parsed affiliations:', affiliationData.length);
+} else {
+  console.log('Affiliations fetch failed:', affResp ? affResp.status : 'null');
+}
     buildFilterOptions();
     // Update year range in header
     var years = allPapers.map(function(p) { return parseInt(p['Year']); }).filter(function(y) { return !isNaN(y); });
