@@ -2,7 +2,7 @@
 <html lang="en-us">
 
 
-   <head>
+<head>
 <script>
   var redirect = sessionStorage.getItem('redirect');
   if (redirect && redirect !== window.location.pathname) {
@@ -19,6 +19,12 @@
          gtag('js', new Date());
          gtag('config', 'G-RTQ08ER5PM');
       </script>
+
+      <!-- Preconnect to external origins -->
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+      <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+
       <link href="css/stouras-style.css" rel="stylesheet">
       <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha512-6MXa8B6uaO18Hid6blRMetEIoPqHf7Ux1tnyIQdpt9qI5OACx7C+O3IVTr98vwGnlcg0LOLa02i9Y1HpVhlfiw==" crossorigin="anonymous">
       <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/academicons/1.8.1/css/academicons.min.css" integrity="sha512-NThgw3XKQ1absAahW6to7Ey42uycrVvfNfyjqcFNgCmOCQ5AR4AO0SiXrN+8ZtYeappp56lk1WtvjVmEa+VR6A==" crossorigin="anonymous">
@@ -26,6 +32,7 @@
       <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Montserrat:400,700%7cRoboto:400,400italic,700%7cRoboto&#43;Mono&display=swap">
       <link rel="stylesheet" href="css/styles.css">
       <link rel="stylesheet" href="css/blue.css">
+
       <link rel="alternate" href="https://www.stouras.com/index.xml" type="application/rss+xml" title="Konstantinos I. Stouras">
       <link rel="alternate" hreflang="en-us" href="https://www.stouras.com/">
       <link rel="alternate" hreflang="x-default" href="https://www.stouras.com/">
@@ -33,22 +40,37 @@
       <link rel="icon" type="image/png" href="images/KIS_favicon.png">
       <link rel="apple-touch-icon" type="image/png" href="images/KIS_favicon.png">
       <link rel="canonical" href="https://www.stouras.com/">
+
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1">
       <meta name="author" content="Konstantinos I. Stouras - Assistant Professor of Management">
       <meta name="description" content="Konstantinos I. Stouras is Assistant Professor of Management at UCD Michael Smurfit GSB, researching technology management, crowdsourcing platforms, and innovation contests.">
       <meta name="keywords" content="stuoras, sturas, storas, stouras, skouras, svouras, souras, constantinos stouras, Konstantinos I. Stouras">
-      <meta property="twitter:card" content="summary_large_image">
-      <meta property="og:image" content="images/Konstantinos Stouras.jpg">
-      <meta property="og:image:type" content="image/jpeg">
-      <meta property="og:image:width" content="250">
-      <meta property="og:image:height" content="271">
+
+      <!-- Open Graph -->
+      <meta property="og:type" content="profile">
+      <meta property="og:locale" content="en-us">
       <meta property="og:site_name" content="Konstantinos I. Stouras">
       <meta property="og:url" content="https://www.stouras.com/">
       <meta property="og:title" content="Konstantinos I. Stouras">
       <meta property="og:description" content="Assistant Professor of Management at UCD Michael Smurfit GSB. Research in technology management, crowdsourcing platforms, and innovation contests.">
-      <meta property="og:locale" content="en-us">
+      <meta property="og:image" content="https://www.stouras.com/images/Konstantinos%20Stouras.jpg">
+      <meta property="og:image:type" content="image/jpeg">
+      <meta property="og:image:width" content="250">
+      <meta property="og:image:height" content="271">
       <meta property="og:updated_time" content="2026-03-01T00:00:00+00:00">
+      <meta property="profile:first_name" content="Konstantinos">
+      <meta property="profile:last_name" content="Stouras">
+      <meta property="profile:username" content="stourask">
+
+      <!-- Twitter / X card -->
+      <meta name="twitter:card" content="summary_large_image">
+      <meta name="twitter:site" content="@stourask">
+      <meta name="twitter:creator" content="@stourask">
+      <meta name="twitter:title" content="Konstantinos I. Stouras">
+      <meta name="twitter:description" content="Assistant Professor of Management at UCD Michael Smurfit GSB. Research in technology management, crowdsourcing platforms, and innovation contests.">
+      <meta name="twitter:image" content="https://www.stouras.com/images/Konstantinos%20Stouras.jpg">
+
       <title>Konstantinos I. Stouras</title>
 
       <!-- Portrait styling -->
@@ -69,6 +91,37 @@
           text-align: center !important;
         }
       </style>
+
+      <!-- Schema.org structured data -->
+      <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Person",
+        "name": "Konstantinos I. Stouras",
+        "givenName": "Konstantinos",
+        "familyName": "Stouras",
+        "jobTitle": "Assistant Professor of Management",
+        "url": "https://www.stouras.com/",
+        "image": "https://www.stouras.com/images/Konstantinos%20Stouras.jpg",
+        "email": "kostas.stouras@ucd.ie",
+        "worksFor": {
+          "@type": "Organization",
+          "name": "UCD Michael Smurfit Graduate Business School",
+          "url": "https://www.smurfitschool.ie/"
+        },
+        "alumniOf": {
+          "@type": "Organization",
+          "name": "INSEAD",
+          "url": "https://www.insead.edu/"
+        },
+        "knowsAbout": ["Technology Management", "Crowdsourcing", "Innovation Contests", "Operations Management", "Platform Strategy"],
+        "sameAs": [
+          "https://scholar.google.com/citations?user=FzyFf3kAAAAJ",
+          "https://orcid.org/0000-0002-2398-9566",
+          "https://x.com/stourask"
+        ]
+      }
+      </script>
    </head>
    
    
