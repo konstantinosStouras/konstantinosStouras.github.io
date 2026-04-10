@@ -53,6 +53,25 @@
          "Konstantinos Stouras is a researcher in technology management and innovation." name="description">
       <meta content="stuoras, sturas, storas, stouras, skouras, svouras, souras, constantinos stouras, Konstantinos I. Stouras" name="keywords">
       <title>Konstantinos I. Stouras</title>
+	  
+	  <!-- FIX #3 (portrait rounded + title centering) -->
+      <style>
+        .portrait {
+          border-radius: 50% !important;
+          overflow: hidden !important;
+        }
+        #profile .portrait-title {
+          text-align: center !important;
+        }
+        #profile .portrait-title h2,
+        #profile .portrait-title h3,
+        #profile .portrait-title p {
+          text-align: center !important;
+        }
+        #profile .network-icon {
+          text-align: center !important;
+        }
+      </style>
    </head>
    <body id="top" data-spy="scroll" data-target="#navbar-main" data-offset="71" >
       <nav class="navbar navbar-default navbar-fixed-top" id="navbar-main">
@@ -361,7 +380,7 @@ publisher={INFORMS}
       </section>
       <!-- Peer-reviewed Conference Proceedings -->
       <section id="peerReviewedConferenceProceedings" class="home-section">
-         <div class="container";style="margin: 0; display: inline-block;">
+         <div class="container">
             <div class="row">
                <div class="col-xs-12 col-md-4 section-heading">
                   <h1>Peer-reviewed Conference Proceedings</h1>
@@ -376,7 +395,30 @@ publisher={INFORMS}
                      Kenneth C. Lichtendahl Jr.</a>
                      </span><br>
                      <b>Proceedings of The 21st ACM Conference on Economics and Computation (EC'20)</b>, &nbsp;2020
-                     <br>  
+                     <p>
+                        <a href="javascript:;" onmousedown="popUpBox('ec20Abstract');" target="_self" rel="noopener">
+                        <button class="button2">Abstract</button></a>
+                        &nbsp;
+                        <a href="javascript:;" onmousedown="popUpBox('ec20BibTeX');" target="_self" rel="noopener">
+                        <button class="button2">BibTeX</button></a>
+                     <div id="ec20BibTeX" class="pub-abs" style="display: none;">
+                        <font size=2px>
+                        <pre><code>
+@inproceedings{Stouras_EC20,
+  title = {Prizes on Crowdsourcing Platforms: An Equilibrium Analysis of Competing Contests},
+  author = {Stouras, Konstantinos I. and Erat, Sanjiv and Lichtendahl, Kenneth C.},
+  booktitle={Proceedings of the 21st {ACM} Conference on {E}conomics and {C}omputation},
+  pages={875--876},
+  series={{EC} '20},
+year={2020},
+publisher={{ACM}}
+}</code></pre>
+                        </font>
+                     </div>
+                     <div id="ec20Abstract" class="pub-abs" style="display: none;">
+                        <font size=2px> <b>Abstract:</b> On a typical crowdsourcing platform, solvers can self-select which (if any) of the concurrently running contests to participate in. Thus, firms which offer prizes and organize contests on these platforms are competing among themselves (for solver participation and effort). We formalize and model this competition among contests and examine the equilibrium outcomes. Our analysis reveals that, in general, there is a unique dominant strategy for each firm to offer multiple identical prizes. Moreover, when the quality of submitted solutions is sufficiently noise-driven (as opposed to effort-driven), we find that a single winner-take-all reward is the unique equilibrium allocation. Our analytical framework integrates and extends prior results of the monopolistic contest. </font>
+                     </div>
+                     </p>
                   </div>
                   <div class="pub-list-item" style="margin-bottom: 1rem" itemscope itemtype="http://schema.org/CreativeWork">
                      <a href="https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3076067" itemprop="name" target="_blank" rel="noreferrer noopener">Crowdsourcing Contests with Private Types and Evaluation Uncertainty</a><br>
@@ -384,7 +426,27 @@ publisher={INFORMS}
                      solo-authored						   
                      </span><br>
                      <b>Proceedings of The 3rd Cambridge Area Computation and Economics Conference (CAEC'17)</b>, Microsoft Research, New England, 2017
-                     <br>
+                     <p>
+                        <a href="javascript:;" onmousedown="popUpBox('caec17Abstract');" target="_self" rel="noopener">
+                        <button class="button2">Abstract</button></a>
+                        &nbsp;
+                        <a href="javascript:;" onmousedown="popUpBox('caec17BibTeX');" target="_self" rel="noopener">
+                        <button class="button2">BibTeX</button></a>
+                     <div id="caec17BibTeX" class="pub-abs" style="display: none;">
+                        <font size=2px>
+                        <pre><code>@inproceedings{Stouras_CAEC_2017,
+  title={Crowdsourcing Contests with Private Types and Evaluation Uncertainty},
+  author={Stouras, Konstantinos I},
+  booktitle={Proceedings of the 3rd {C}ambridge {A}rea {E}conomics and {C}omputation {C}onference},
+  pages={100--114},
+  year={2017}
+}</code></pre>
+                        </font>
+                     </div>
+                     <div id="caec17Abstract" class="pub-abs" style="display: none;">
+                        <font size=2px> <b>Abstract:</b> We introduce a general model of crowdsourcing contests in which the performance of an agent is driven by his privately known ability type (adverse selection), his costly effort choice and it is further affected by evaluation uncertainty or luck (moral hazard). We show that when the marginal cost of effort is sufficiently large and the solvers' types, as well as, the evaluation uncertainty are independent and identically distributed respectively, there exists a unique Bayes Nash equilibrium effort. This equilibrium effort is in symmetric and pure strategies and involves inactive types. Our model includes as special cases the Tullock contest (Tullock, 1980), the all-pay auction model with private information of Moldovanu et al. (2001), and the symmetric effort with evaluation uncertainty model of Lazear et al. (1981) that have been studied separately thus far. Our results suggest that several comparative statics results of the all-pay auctions with private information are robust in the presence of noisy feedback. </font>
+                     </div>
+                     </p>
                   </div>
                </div>
             </div>
