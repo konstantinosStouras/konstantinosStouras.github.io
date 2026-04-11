@@ -295,7 +295,7 @@
 const SHEET_ID = '11MKt6uzfnxTNTbK4Kb1jwW32cEsKZcBRncubV2omJzQ';
 const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Data`;
 const AUTHORS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Authors`;
-const AFFILIATIONS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Affiliations`;
+const AFFILIATIONS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Affiliations_Merged`;
 const PER_PAGE = 20;
 let allPapers = [], filtered = [], currentPage = 1;
 let authorData = []; // pre-computed from Authors tab
@@ -973,15 +973,17 @@ function mergeAffiliations(rawData) {
 function buildAffiliationsSummary() {
   var affList = document.getElementById('summaryAffiliationsList');
   if (affiliationData.length === 0) {
-    affList.innerHTML = '<div style="padding:12px;color:var(--text-muted)">No Affiliations tab found. Run "6. Build Affiliations tab" in the Google Sheet script.</div>';
+    affList.innerHTML = '<div style="padding:12px;color:var(--text-muted)">No Affiliations_Merged tab found. Run "7. Build Affiliations (merged)" in the Google Sheet script.</div>';
     return;
   }
-  var merged = mergeAffiliations(affiliationData);
-  affList.innerHTML = merged.map(function(a) {
+  affList.innerHTML = affiliationData.map(function(a) {
+    var count = a['Papers'] || '';
+    var name = a['Affiliation'] || '';
+    var areaCount = parseInt(a['Area_Count']) || 0;
     return '<div class="summary-item">' +
-      '<span class="summary-count">' + a.count + '</span> ' +
-      '<span>papers from ' + esc(a.name) + '</span>' +
-      (a.areaCount > 0 ? ' <span style="color:var(--green);font-style:italic"> across ' + a.areaCount + ' area' + (a.areaCount !== 1 ? 's' : '') + '</span>' : '') +
+      '<span class="summary-count">' + esc(count) + '</span> ' +
+      '<span>papers from ' + esc(name) + '</span>' +
+      (areaCount > 0 ? ' <span style="color:var(--green);font-style:italic"> across ' + areaCount + ' area' + (areaCount !== 1 ? 's' : '') + '</span>' : '') +
     '</div>';
   }).join('');
 }
