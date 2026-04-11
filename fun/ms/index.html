@@ -236,6 +236,10 @@
         <input id="filterAuthors" placeholder="Author..." type="search" oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('author','filterAuthors');event.preventDefault();}">
         <div id="chipsAuthor" class="chips"></div>
       </div>
+      <div class="filter-group">
+        <label>Search Affiliations</label>
+        <input id="filterAffiliations" placeholder="Affiliation..." type="search" oninput="debounceAffSearch()">
+      </div>
       <div class="filter-actions">
         <button class="btn btn-secondary" onclick="clearFilters()">Clear</button>
       </div>
@@ -260,7 +264,6 @@
     <div id="summaryAuthorsList" class="summary-list"></div>
   </div>
   <div id="summaryAffiliations" class="summary-content">
-    <input id="affSearch" type="search" placeholder="Search affiliations..." oninput="filterAffiliationsList()" style="width:100%;max-width:500px;padding:10px 14px;border:1.5px solid var(--border);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:15px;margin-bottom:12px;color:var(--text);">
     <div id="summaryAffiliationsList" class="summary-list"></div>
   </div>
 </div>
@@ -864,7 +867,7 @@ function renderAffiliationsList(items) {
 }
 
 function filterAffiliationsList() {
-  var q = (document.getElementById('affSearch').value || '').toLowerCase();
+  var q = (document.getElementById('filterAffiliations').value || '').toLowerCase();
   if (!window._affItems) return;
   if (!q) { renderAffiliationsList(window._affItems); return; }
   var filtered = window._affItems.filter(function(a) {
@@ -1090,7 +1093,7 @@ function clearFilters() {
   document.getElementById('chipsYear').innerHTML = '';
   document.getElementById('chipsTitle').innerHTML = '';
   document.getElementById('chipsAuthor').innerHTML = '';
-  ['filterSearch','filterAuthors'].forEach(id => document.getElementById(id).value = '');
+  ['filterSearch','filterAuthors','filterAffiliations'].forEach(id => document.getElementById(id).value = '');
   closeSummaryTabs();
   applyFilters();
 }
@@ -1271,6 +1274,19 @@ function debounceSearch() {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(function() {
     if (allPapers.length > 0) applyFilters();
+  }, 150);
+}
+
+let affSearchTimer;
+function debounceAffSearch() {
+  clearTimeout(affSearchTimer);
+  affSearchTimer = setTimeout(function() {
+    // Auto-open affiliations tab and build if needed
+    var afEl = document.getElementById('summaryAffiliations');
+    if (!afEl.classList.contains('active')) {
+      toggleSummary('affiliations');
+    }
+    filterAffiliationsList();
   }, 150);
 }
 
