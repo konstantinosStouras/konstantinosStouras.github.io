@@ -300,6 +300,7 @@ const SHEET_ID = '11MKt6uzfnxTNTbK4Kb1jwW32cEsKZcBRncubV2omJzQ';
 const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Data`;
 const AUTHORS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Authors`;
 const AFFILIATIONS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Affiliations_Merged`;
+const AFFILIATIONS_FALLBACK_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Affiliations`;
 const PER_PAGE = 20;
 let allPapers = [], filtered = [], currentPage = 1;
 let authorData = []; // pre-computed from Authors tab
@@ -377,21 +378,19 @@ async function loadData() {
       var authText = await authResp.text();
       authorData = parseCSV(authText, 'Author');
     }
-    // Load pre-computed affiliation data from Affiliations_Merged tab
+    // Load affiliation data (try Affiliations_Merged first, fallback to Affiliations)
     if (affResp && affResp.ok) {
       var affText = await affResp.text();
       affiliationData = parseCSV(affText, 'Affiliation');
-      // Fallback: if Affiliations_Merged returned HTML error or empty, try raw Affiliations sheet
-      if (affiliationData.length === 0) {
-        try {
-          var fallbackUrl = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?tqx=out:csv&sheet=Affiliations';
-          var fbResp = await fetch(fallbackUrl);
-          if (fbResp.ok) {
-            var fbText = await fbResp.text();
-            affiliationData = parseCSV(fbText, 'Affiliation');
-          }
-        } catch(e) {}
-      }
+    }
+    if (affiliationData.length === 0) {
+      try {
+        var fbResp = await fetch(AFFILIATIONS_FALLBACK_URL);
+        if (fbResp && fbResp.ok) {
+          var fbText = await fbResp.text();
+          affiliationData = parseCSV(fbText, 'Affiliation');
+        }
+      } catch(e) {}
     }
     buildFilterOptions();
     // Update year range in header
@@ -837,10 +836,9 @@ function filterByAuthorAreas(authorName) {
 function buildAffiliationsSummary() {
   var affList = document.getElementById('summaryAffiliationsList');
   if (affiliationData.length === 0) {
-    affList.innerHTML = '<div style="padding:12px;color:var(--text-muted)">No Affiliations_Merged tab found. Run "7. Build Affiliations (merged)" in the Google Sheet script.</div>';
+    affList.innerHTML = '<div style="padding:12px;color:var(--text-muted)">No affiliations data found. Run "7. Build Affiliations (merged)" in the Google Sheet script.</div>';
     return;
   }
-  // Data is already merged and sorted by GAS
   window._affItems = affiliationData;
   renderAffiliationsList(affiliationData);
 }
@@ -848,11 +846,10 @@ function buildAffiliationsSummary() {
 function renderAffiliationsList(items) {
   var affList = document.getElementById('summaryAffiliationsList');
   affList.innerHTML = items.map(function(a) {
-    var count = a['Papers'] || a['count'] || '';
-    var name = a['Affiliation'] || a['name'] || '';
+    var count = a['Papers'] || '';
+    var name = a['Affiliation'] || '';
     var areasRaw = a['Areas'] || '';
     var areaCount = parseInt(a['Area_Count']) || 0;
-    // If Area_Count not available, compute from Areas string
     if (!areaCount && areasRaw) {
       areaCount = areasRaw.split(',').filter(function(x) { return x.trim(); }).length;
     }
@@ -871,19 +868,14 @@ function filterAffiliationsList() {
   if (!window._affItems) return;
   if (!q) { renderAffiliationsList(window._affItems); return; }
   var filtered = window._affItems.filter(function(a) {
-    var name = (a['Affiliation'] || a['name'] || '').toLowerCase();
-    return name.indexOf(q) !== -1;
+    return ((a['Affiliation'] || '').toLowerCase()).indexOf(q) !== -1;
   });
   renderAffiliationsList(filtered);
 }
 
 function searchAffiliation(name) {
-  // Search for papers by authors from this affiliation
-  // Use the title search as a proxy — put affiliation name in author search
-  // This is a best-effort since we don't have per-paper affiliation data
-  sel.author.clear();
-  // Extract key institution words for search
   var parts = name.split(',')[0].trim();
+  sel.author.clear();
   sel.author.add(parts.toLowerCase());
   renderChips('author');
   closeSummaryTabs();
@@ -893,7 +885,7 @@ function searchAffiliation(name) {
 
 function showAffAreas(name) {
   var item = (window._affItems || []).find(function(a) {
-    return (a['Affiliation'] || a['name'] || '') === name;
+    return (a['Affiliation'] || '') === name;
   });
   if (!item) return;
   var areasRaw = item['Areas'] || '';
@@ -1277,11 +1269,10 @@ function debounceSearch() {
   }, 150);
 }
 
-let affSearchTimer;
+var affSearchTimer;
 function debounceAffSearch() {
   clearTimeout(affSearchTimer);
   affSearchTimer = setTimeout(function() {
-    // Auto-open affiliations tab and build if needed
     var afEl = document.getElementById('summaryAffiliations');
     if (!afEl.classList.contains('active')) {
       toggleSummary('affiliations');
