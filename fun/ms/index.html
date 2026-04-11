@@ -88,6 +88,7 @@
   .chip-year { background: var(--navy-light); color: var(--navy); }
   .chip-title { background: #f0e8f7; color: #6b3fa0; }
   .chip-author { background: #e8eef7; color: #2d5f8a; }
+  .chip-affiliation { background: #fef3e2; color: #b5651d; }
   .chip-x { cursor: pointer; font-size: 15px; font-weight: 700; opacity: 0.5; margin-left: 2px; line-height: 1; }
   .chip-x:hover { opacity: 1; }
   @keyframes chipIn { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
@@ -238,7 +239,8 @@
       </div>
       <div class="filter-group">
         <label>Search Affiliations</label>
-        <input id="filterAffiliations" placeholder="Affiliation..." type="search" oninput="debounceAffSearch()">
+        <input id="filterAffiliations" placeholder="Affiliation..." type="search" oninput="debounceAffSearch()" onkeydown="if(event.key==='Enter'){addTextChip('affiliation','filterAffiliations');event.preventDefault();}">
+        <div id="chipsAffiliation" class="chips"></div>
       </div>
       <div class="filter-actions">
         <button class="btn btn-secondary" onclick="clearFilters()">Clear</button>
@@ -307,7 +309,7 @@ let authorData = []; // pre-computed from Authors tab
 let affiliationData = []; // pre-computed from Affiliations tab
 
 // Multi-select state
-const sel = { editor: new Set(), area: new Set(), year: new Set(), title: new Set(), author: new Set() };
+const sel = { editor: new Set(), area: new Set(), year: new Set(), title: new Set(), author: new Set(), affiliation: new Set() };
 
 // Text chip management (for title/author search)
 function addTextChip(type, inputId) {
@@ -345,7 +347,7 @@ function removeChip(type, val) {
 }
 
 function renderChips(type) {
-  const idMap = {editor:'chipsEditor', area:'chipsArea', year:'chipsYear', title:'chipsTitle', author:'chipsAuthor'};
+  const idMap = {editor:'chipsEditor', area:'chipsArea', year:'chipsYear', title:'chipsTitle', author:'chipsAuthor', affiliation:'chipsAffiliation'};
   const container = document.getElementById(idMap[type]);
   const cssClass = 'chip chip-' + type;
   container.innerHTML = [...sel[type]].map(v =>
@@ -378,19 +380,21 @@ async function loadData() {
       var authText = await authResp.text();
       authorData = parseCSV(authText, 'Author');
     }
-    // Load affiliation data (try Affiliations_Merged first, fallback to Affiliations)
-    if (affResp && affResp.ok) {
-      var affText = await affResp.text();
-      affiliationData = parseCSV(affText, 'Affiliation');
-    }
-    if (affiliationData.length === 0) {
+    // Load affiliation data — try Affiliations_Merged, fallback to Affiliations
+    async function tryLoadAff(url, label) {
       try {
-        var fbResp = await fetch(AFFILIATIONS_FALLBACK_URL);
-        if (fbResp && fbResp.ok) {
-          var fbText = await fbResp.text();
-          affiliationData = parseCSV(fbText, 'Affiliation');
-        }
-      } catch(e) {}
+        var r = await fetch(url);
+        if (!r || !r.ok) return [];
+        var t = await r.text();
+        if (t.trim().charAt(0) === '<') return []; // got HTML error page, not CSV
+        var parsed = parseCSV(t, 'Affiliation');
+        if (parsed.length > 0) console.log('Loaded ' + parsed.length + ' affiliations from ' + label);
+        return parsed;
+      } catch(e) { return []; }
+    }
+    affiliationData = await tryLoadAff(AFFILIATIONS_CSV_URL, 'Affiliations_Merged');
+    if (affiliationData.length === 0) {
+      affiliationData = await tryLoadAff(AFFILIATIONS_FALLBACK_URL, 'Affiliations');
     }
     buildFilterOptions();
     // Update year range in header
@@ -836,7 +840,7 @@ function filterByAuthorAreas(authorName) {
 function buildAffiliationsSummary() {
   var affList = document.getElementById('summaryAffiliationsList');
   if (affiliationData.length === 0) {
-    affList.innerHTML = '<div style="padding:12px;color:var(--text-muted)">No affiliations data found. Run "7. Build Affiliations (merged)" in the Google Sheet script.</div>';
+    affList.innerHTML = '<div style="padding:12px;color:var(--text-muted);font-style:italic">Under construction.</div>';
     return;
   }
   window._affItems = affiliationData;
@@ -874,10 +878,10 @@ function filterAffiliationsList() {
 }
 
 function searchAffiliation(name) {
-  var parts = name.split(',')[0].trim();
-  sel.author.clear();
-  sel.author.add(parts.toLowerCase());
-  renderChips('author');
+  sel.affiliation.clear();
+  sel.affiliation.add(name.toLowerCase());
+  renderChips('affiliation');
+  document.getElementById('filterAffiliations').value = '';
   closeSummaryTabs();
   applyFilters();
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -934,6 +938,7 @@ function updateDropdownOptions() {
   // For each dropdown, compute available options from papers filtered by ALL OTHER filters
   var search = document.getElementById('filterSearch').value.trim().toLowerCase();
   var searchAuth = document.getElementById('filterAuthors').value.trim().toLowerCase();
+  var searchAff = document.getElementById('filterAffiliations').value.trim().toLowerCase();
 
   function crossFilter(excludeType) {
     return allPapers.filter(function(p) {
@@ -946,6 +951,9 @@ function updateDropdownOptions() {
       var authText = (p['Authors']||'').toLowerCase();
       if (searchAuth && !authText.includes(searchAuth)) return false;
       for (var a of sel.author) { if (!authText.includes(a)) return false; }
+      var affText = (p['Affiliations']||'').toLowerCase();
+      if (searchAff && !affText.includes(searchAff)) return false;
+      for (var af of sel.affiliation) { if (!affText.includes(af)) return false; }
       return true;
     });
   }
@@ -1035,10 +1043,11 @@ document.addEventListener('click', function(e) {
 function applyFilters() {
   const search = document.getElementById('filterSearch').value.trim().toLowerCase();
   const searchAuth = document.getElementById('filterAuthors').value.trim().toLowerCase();
+  const searchAff = document.getElementById('filterAffiliations').value.trim().toLowerCase();
   const sort = document.getElementById('sortBy').value;
 
   // If no filters active, show welcome state
-  if (sel.editor.size === 0 && sel.area.size === 0 && sel.year.size === 0 && sel.title.size === 0 && sel.author.size === 0 && !search && !searchAuth) {
+  if (sel.editor.size === 0 && sel.area.size === 0 && sel.year.size === 0 && sel.title.size === 0 && sel.author.size === 0 && sel.affiliation.size === 0 && !search && !searchAuth && !searchAff) {
     document.getElementById('resultsCount').innerHTML = '';
     document.getElementById('papersList').innerHTML = '<div class="empty-state"><h3>Select a filter to get started</h3><p>Filter by editor, area, year, or search by title or author name.</p></div>';
     buildFilterOptions();
@@ -1060,6 +1069,11 @@ function applyFilters() {
     if (searchAuth && !authText.includes(searchAuth)) return false;
     for (const a of sel.author) { if (!authText.includes(a)) return false; }
 
+    // Affiliations: live typed text AND all chips must match
+    const affText = (p['Affiliations']||'').toLowerCase();
+    if (searchAff && !affText.includes(searchAff)) return false;
+    for (const af of sel.affiliation) { if (!affText.includes(af)) return false; }
+
     return true;
   });
 
@@ -1079,12 +1093,13 @@ function applyFilters() {
 }
 
 function clearFilters() {
-  sel.editor.clear(); sel.area.clear(); sel.year.clear(); sel.title.clear(); sel.author.clear();
+  sel.editor.clear(); sel.area.clear(); sel.year.clear(); sel.title.clear(); sel.author.clear(); sel.affiliation.clear();
   document.getElementById('chipsEditor').innerHTML = '';
   document.getElementById('chipsArea').innerHTML = '';
   document.getElementById('chipsYear').innerHTML = '';
   document.getElementById('chipsTitle').innerHTML = '';
   document.getElementById('chipsAuthor').innerHTML = '';
+  document.getElementById('chipsAffiliation').innerHTML = '';
   ['filterSearch','filterAuthors','filterAffiliations'].forEach(id => document.getElementById(id).value = '');
   closeSummaryTabs();
   applyFilters();
@@ -1273,11 +1288,13 @@ var affSearchTimer;
 function debounceAffSearch() {
   clearTimeout(affSearchTimer);
   affSearchTimer = setTimeout(function() {
+    // Filter the affiliations summary list if open
     var afEl = document.getElementById('summaryAffiliations');
-    if (!afEl.classList.contains('active')) {
-      toggleSummary('affiliations');
+    if (afEl.classList.contains('active')) {
+      filterAffiliationsList();
     }
-    filterAffiliationsList();
+    // Also filter papers live (like author search)
+    if (allPapers.length > 0) applyFilters();
   }, 150);
 }
 
