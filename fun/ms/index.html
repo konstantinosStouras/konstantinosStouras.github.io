@@ -204,6 +204,29 @@
   <div class="filters-inner">
     <div class="filters-row">
       <div class="filter-group">
+        <label title="Some authors may appear under different name variants. ORCID-based disambiguation is not yet available for all authors.">Search Authors &#9432;</label>
+        <input id="filterAuthors" placeholder="Author..." type="search" oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('author','filterAuthors');event.preventDefault();}">
+        <div id="chipsAuthor" class="chips"></div>
+      </div>
+      <div class="filter-group">
+        <label>Search Title</label>
+        <input id="filterSearch" placeholder="Paper title..." type="search" oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('title','filterSearch');event.preventDefault();}">
+        <div id="chipsTitle" class="chips"></div>
+      </div>
+      <div class="filter-group">
+        <label title="Affiliation names are not standardized across papers. Duplicates may exist despite ongoing deduplication efforts.">Search Affiliations &#9432;</label>
+        <input id="filterAffiliations" placeholder="Affiliation..." type="search" oninput="debounceAffSearch()" onkeydown="if(event.key==='Enter'){addTextChip('affiliation','filterAffiliations');event.preventDefault();}">
+        <div id="chipsAffiliation" class="chips"></div>
+      </div>
+      <div class="filter-group">
+        <label>Year</label>
+        <div class="custom-select" id="csYear" data-type="year">
+          <div class="custom-select-trigger" onclick="toggleDrop('csYear')">All years</div>
+          <div class="custom-select-dropdown"><input class="custom-select-search" placeholder="Type to filter..." oninput="filterDrop('csYear',this.value)"><div class="custom-select-items"></div></div>
+        </div>
+        <div id="chipsYear" class="chips"></div>
+      </div>
+      <div class="filter-group">
         <label>Accepting Editor</label>
         <div class="custom-select" id="csEditor" data-type="editor">
           <div class="custom-select-trigger" onclick="toggleDrop('csEditor')">All editors</div>
@@ -218,29 +241,6 @@
           <div class="custom-select-dropdown"><input class="custom-select-search" placeholder="Type to filter..." oninput="filterDrop('csArea',this.value)"><div class="custom-select-items"></div></div>
         </div>
         <div id="chipsArea" class="chips"></div>
-      </div>
-      <div class="filter-group">
-        <label>Year</label>
-        <div class="custom-select" id="csYear" data-type="year">
-          <div class="custom-select-trigger" onclick="toggleDrop('csYear')">All years</div>
-          <div class="custom-select-dropdown"><input class="custom-select-search" placeholder="Type to filter..." oninput="filterDrop('csYear',this.value)"><div class="custom-select-items"></div></div>
-        </div>
-        <div id="chipsYear" class="chips"></div>
-      </div>
-      <div class="filter-group">
-        <label>Search Title</label>
-        <input id="filterSearch" placeholder="Paper title..." type="search" oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('title','filterSearch');event.preventDefault();}">
-        <div id="chipsTitle" class="chips"></div>
-      </div>
-      <div class="filter-group">
-        <label title="Some authors may appear under different name variants. ORCID-based disambiguation is not yet available for all authors.">Search Authors &#9432;</label>
-        <input id="filterAuthors" placeholder="Author..." type="search" oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('author','filterAuthors');event.preventDefault();}">
-        <div id="chipsAuthor" class="chips"></div>
-      </div>
-      <div class="filter-group">
-        <label title="Affiliation names are not standardized across papers. Duplicates may exist despite ongoing deduplication efforts.">Search Affiliations &#9432;</label>
-        <input id="filterAffiliations" placeholder="Affiliation..." type="search" oninput="debounceAffSearch()" onkeydown="if(event.key==='Enter'){addTextChip('affiliation','filterAffiliations');event.preventDefault();}">
-        <div id="chipsAffiliation" class="chips"></div>
       </div>
       <div class="filter-actions">
         <button class="btn btn-secondary" onclick="clearFilters()">Clear</button>
