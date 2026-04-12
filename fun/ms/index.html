@@ -233,12 +233,12 @@
         <div id="chipsTitle" class="chips"></div>
       </div>
       <div class="filter-group">
-        <label>Search Authors</label>
+        <label title="Some authors may appear under different name variants. ORCID-based disambiguation is not yet available for all authors.">Search Authors &#9432;</label>
         <input id="filterAuthors" placeholder="Author..." type="search" oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('author','filterAuthors');event.preventDefault();}">
         <div id="chipsAuthor" class="chips"></div>
       </div>
       <div class="filter-group">
-        <label>Search Affiliations</label>
+        <label title="Affiliation names are not standardized across papers. Duplicates may exist despite ongoing deduplication efforts.">Search Affiliations &#9432;</label>
         <input id="filterAffiliations" placeholder="Affiliation..." type="search" oninput="debounceAffSearch()" onkeydown="if(event.key==='Enter'){addTextChip('affiliation','filterAffiliations');event.preventDefault();}">
         <div id="chipsAffiliation" class="chips"></div>
       </div>
@@ -249,8 +249,8 @@
     <div class="summary-tab-btns" style="margin-top:12px;">
       <button class="summary-tab-btn" onclick="toggleSummary('editors')">Editors</button>
       <button class="summary-tab-btn" onclick="toggleSummary('areas')">Areas</button>
-      <button class="summary-tab-btn" onclick="toggleSummary('authors')">Authors</button>
-      <button class="summary-tab-btn" onclick="toggleSummary('affiliations')">Affiliations</button>
+      <button class="summary-tab-btn" onclick="toggleSummary('authors')" title="Some authors may appear under different name variants. ORCID-based disambiguation is not yet available for all authors.">Authors (beta)</button>
+      <button class="summary-tab-btn" onclick="toggleSummary('affiliations')" title="Affiliation names are not standardized across papers. Duplicates may exist despite ongoing deduplication efforts.">Affiliations (alpha)</button>
     </div>
   </div>
 </div>
