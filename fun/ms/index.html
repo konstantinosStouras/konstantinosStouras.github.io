@@ -197,7 +197,8 @@
   <div class="header-inner">
     <h1><em>Management Science</em> — Paper Browser</h1>
     <div class="header-meta">Data from <strong>INFORMS</strong> via Crossref · <span id="yearRange">1954–present</span></div>
-  </div>
+  </div>  
+<div class="header-meta" id="lastPull" style="opacity:.7;font-size:.85em;margin-top:2px"></div>
 </header>
 
 <div class="filters-bar">
@@ -304,6 +305,14 @@ const AUTHORS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz
 const AFFILIATIONS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Affiliations_Merged`;
 const AFFILIATIONS_FALLBACK_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Affiliations`;
 const PER_PAGE = 20;
+const META_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Meta`;
+fetch(META_CSV_URL).then(r => r.text()).then(txt => {
+  const line = txt.split('\n').find(l => l.includes('Last Publication Data Pull'));
+  if (!line) return;
+  const date = line.split(',').pop().replace(/"/g, '').trim();
+  const el = document.getElementById('lastPull');
+  if (el && date) el.textContent = 'Last publication data pull: ' + date;
+}).catch(() => {});
 let allPapers = [], filtered = [], currentPage = 1;
 let authorData = []; // pre-computed from Authors tab
 let affiliationData = []; // pre-computed from Affiliations tab
