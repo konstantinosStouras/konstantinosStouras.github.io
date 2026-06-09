@@ -1045,11 +1045,9 @@ const chartColors = {
 
 // Render all charts at 3x resolution so they stay crisp at any zoom
 Chart.defaults.devicePixelRatio = 3;
-// Tooltip triggers for the whole column under the cursor (no need to hit the bar exactly).
-// Bar charts use 'index' so hovering anywhere in a column shows its tooltip (and all series
-// at that position for grouped bars). Doughnut and scatter override this locally below.
-Chart.defaults.interaction = { mode: 'index', intersect: false, axis: 'x' };
-Chart.defaults.hover = { mode: 'index', intersect: false, axis: 'x' };
+// Tooltip triggers on nearest element, no need to hit exact pixels
+Chart.defaults.interaction = { mode: 'nearest', intersect: false, axis: 'x' };
+Chart.defaults.hover = { mode: 'nearest', intersect: false, axis: 'x' };
 // Style all tooltips for readability
 Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(40, 40, 40, 0.95)';
 Chart.defaults.plugins.tooltip.titleFont = { family: "'STIX Two Text', Georgia, serif", size: 13, weight: '700' };
