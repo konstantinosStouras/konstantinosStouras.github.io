@@ -287,12 +287,21 @@ A–H populated by the web app's POST. Columns J and K added separately:
   =MAP(E2:E, LAMBDA(cell, IF(cell="","", IF(REGEXMATCH(LOWER(cell), "doubl|multipl|..."), "No", IF(REGEXMATCH(LOWER(cell), "increas|ascend|..."), "Yes", "No")))))
   ```
 
-- **Column K** — "Creativity index (%)" — computed by Apps Script function `computeSequenceDiversity()`, run via the "Creativity" menu or `onFormSubmit` trigger.
+- **Column K** — "Creativity index (%)" — computed by Apps Script function `computeSequenceDiversity()`, called directly from `doPost()` on every submission (also runnable via the "Creativity" menu).
+
+> **Why K is computed inside `doPost`:** the web app adds rows with
+> `sheet.appendRow(...)`. Programmatic appends are **not** Google Form
+> submissions and **not** manual edits, so the `onFormSubmit` / `onEdit`
+> triggers never fire for them — which is why Column K previously stayed
+> blank on every new row and only filled when the "Creativity" menu was run
+> by hand. The fix is for `doPost()` to call `computeSequenceDiversity()`
+> itself right after appending. `onFormSubmit` / `onChangeRecompute` remain
+> as harmless backstops for rows that arrive any other way.
 
 ### Apps Script (`apps-script.js`)
 | Function | Purpose |
 |---|---|
-| `doPost(e)` | Receives game submissions, appends row to Responses sheet |
+| `doPost(e)` | Receives game submissions, appends row, then recomputes Column K |
 | `doGet(e)` | Serves analysis JSON (fallback if CSV fetch fails) |
 | `getAnalysisData()` | Computes distribution buckets + insights from raw data |
 | `computeSequenceDiversity()` | Computes creativity index for all players using feature-based pairwise distance |
@@ -300,7 +309,8 @@ A–H populated by the web app's POST. Columns J and K added separately:
 | `euclidean(a,b)` | Euclidean distance between two feature vectors |
 | `parseSequencesForDiversity()` | Parses "(3, 6, 12); (4, 8, 16)" format from cells |
 | `onOpen()` | Adds "Creativity" menu to the spreadsheet |
-| `onFormSubmit(e)` | Auto-recomputes creativity when new responses arrive |
+| `onFormSubmit(e)` | Backstop: recomputes creativity for Google Form submissions |
+| `onChangeRecompute(e)` | Optional installable "On change" backstop for manual row inserts |
 
 ### Creativity algorithm (Apps Script)
 Same as the client-side `computeLocalCreativity()`:
