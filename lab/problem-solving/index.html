@@ -2101,12 +2101,41 @@ async function downloadPDF() {
       const imgH = imgW * ratio;
       const finalH = Math.min(imgH, 80); // cap height
       const finalW = finalH / ratio < imgW ? finalH / ratio : imgW;
+      const x = M + (CW - finalW) / 2; // center narrower charts (e.g. doughnut)
       checkPage(finalH + 4);
-      pdf.addImage(imgData, 'PNG', M, y, finalW, finalH);
+      pdf.addImage(imgData, 'PNG', x, y, finalW, finalH);
       y += finalH + 3;
     }
-    function sectionHeader(partNum, title, subtitle) {
-      checkPage(22);
+    // Estimate the height a body() call will consume (mirrors body()'s cleaning + layout)
+    function measureBody(text, size) {
+      const clean = text.replace(/<\/?[^>]+(>|$)/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+      const lines = pdf.splitTextToSize(clean, CW);
+      return lines.length * size * 0.42 + 2;
+    }
+    // Total height of a full chart block (title + chart image + "How to read" + "Key insight")
+    function measureChartBlock(canvasId) {
+      const block = document.getElementById(canvasId)?.closest('.chart-block');
+      if (!block || block.style.display === 'none') return 0;
+      let need = 8; // heading spaceBefore + spaceAfter
+      const canvas = document.getElementById(canvasId);
+      if (canvas) {
+        const ratio = canvas.height / canvas.width;
+        const finalH = Math.min(CW * ratio, 80);
+        need += finalH + 3;
+      }
+      const readEl = block.querySelector('.chart-read');
+      const insightEl = block.querySelector('.chart-insight');
+      if (readEl) need += measureBody(readEl.textContent, 8.5);
+      if (insightEl) {
+        const insightText = insightEl.textContent.replace(/^Key insight\s*/i, '').trim();
+        need += 2 + measureBody('Key insight:', 9.5) + measureBody(insightText, 9);
+      }
+      return need + 3;
+    }
+    function sectionHeader(partNum, title, subtitle, firstCanvasId) {
+      // Keep the section header together with its first chart block so the
+      // header never sits alone at the bottom of a page.
+      checkPage(29 + (firstCanvasId ? measureChartBlock(firstCanvasId) : 0));
       y += 6;
       pdf.setDrawColor(220,220,210); pdf.setLineWidth(0.4);
       pdf.line(M, y, W - M, y);
@@ -2130,7 +2159,9 @@ async function downloadPDF() {
       const readEl = block.querySelector('.chart-read');
       const insightEl = block.querySelector('.chart-insight');
 
-      checkPage(12);
+      // Reserve room for the whole block up front so the title, chart and its
+      // captions never get split across a page break.
+      checkPage(measureChartBlock(canvasId));
       heading(title, 12, [51,51,51], 4, 4);
       addChart(canvasId);
       if (readEl) body(readEl.textContent, { size: 8.5, color: [120,120,120] });
@@ -2351,7 +2382,7 @@ async function downloadPDF() {
     }
 
     // ===================== SECTION 1 =====================
-    sectionHeader(1, 'Testing behavior', 'How did players approach the puzzle?');
+    sectionHeader(1, 'Testing behavior', 'How did players approach the puzzle?', 'chart-attempts');
     chartBlock('chart-attempts');
     chartBlock('chart-yesratio');
     chartBlock('chart-strategy');
@@ -2382,7 +2413,7 @@ async function downloadPDF() {
     }
 
     // ===================== SECTION 2 =====================
-    sectionHeader(2, 'Confidence & accuracy', 'What did players believe — and were they right?');
+    sectionHeader(2, 'Confidence & accuracy', 'What did players believe — and were they right?', 'chart-confidence');
     chartBlock('chart-confidence');
     chartBlock('chart-correctness');
 
