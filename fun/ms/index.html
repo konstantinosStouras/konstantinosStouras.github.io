@@ -60,7 +60,27 @@
   .header-meta { color: rgba(255,255,255,0.6); font-size: 13px; text-align: right; }
   .header-meta strong { color: rgba(255,255,255,0.9); font-weight: 500; }
 
-  .filters-bar { background: var(--white); border-bottom: 1px solid var(--border); padding: 20px 0; position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow-sm); }
+  /* Sticky, self-condensing top bar (navy header + filters + tab buttons). */
+  .topbar { position: sticky; top: 0; z-index: 100; }
+  .header-inner { transition: padding 0.2s ease; }
+  .header h1 { transition: font-size 0.2s ease; }
+  .filter-group input, .custom-select-trigger { transition: all 0.18s ease; }
+  body.compact .header-inner { padding-top: 8px; padding-bottom: 8px; }
+  body.compact .header h1 { font-size: 18px; }
+  body.compact .header-meta { display: none; }
+  body.compact .filters-bar { padding: 8px 0; }
+  body.compact .filter-group label { display: none; }
+  body.compact .filter-group input,
+  body.compact .custom-select-trigger,
+  body.compact .filter-group select,
+  body.compact .btn { height: 40px; font-size: 15px; padding-top: 8px; padding-bottom: 8px; }
+  body.compact .filter-actions { padding-top: 0; }
+  body.compact .filters-row { gap: 8px; }
+  body.compact .summary-tab-btns { margin-top: 8px !important; }
+  body.compact .summary-tab-btn { padding: 6px 14px; font-size: 13px; }
+  @media (max-width: 768px) { .topbar { position: static; } }
+
+  .filters-bar { background: var(--white); border-bottom: 1px solid var(--border); padding: 20px 0; box-shadow: var(--shadow-sm); transition: padding 0.2s ease; }
   .filters-inner { max-width: 1280px; margin: 0 auto; padding: 0 32px; }
   .filters-row { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
   .filter-group { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 170px; }
@@ -198,6 +218,7 @@
 </head>
 <body>
 
+<div class="topbar">
 <header class="header">
   <div class="header-inner">
     <h1><em>Management Science</em> — Paper Browser</h1>
@@ -260,6 +281,7 @@
       <button class="summary-tab-btn" onclick="toggleSummary('authors')" title="Authors are resolved by ORCID where available. Authors with at least one paper in a known area are listed.">Authors</button>
     </div>
   </div>
+</div>
 </div>
 
 <div class="summary-tabs" id="summaryTabs">
@@ -1025,6 +1047,9 @@ function toggleSummary(tab) {
       buildAffiliationsSummary();
       window._affBuilt = true;
     }
+    // If the user is scrolled into the paper list, bring the just-opened list
+    // into view (it sits right under the sticky top bar).
+    if (window.scrollY > 200) window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 }
 
@@ -1403,6 +1428,12 @@ function debounceAffSearch() {
     if (allPapers.length > 0) applyFilters();
   }, 150);
 }
+
+// Condense the sticky top bar once the user scrolls, freeing space for papers.
+window.addEventListener('scroll', function() {
+  if (window.scrollY > 40) document.body.classList.add('compact');
+  else document.body.classList.remove('compact');
+}, { passive: true });
 
 loadData();
 loadLastPull();
