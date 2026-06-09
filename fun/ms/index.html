@@ -53,14 +53,14 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh; }
 
-  .header { background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%); position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow-lg); }
+  .header { background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%); z-index: 100; box-shadow: var(--shadow-lg); }
   .header-inner { max-width: 1280px; margin: 0 auto; padding: 24px 32px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
   .header h1 { font-family: 'Playfair Display', serif; color: white; font-size: 28px; font-weight: 400; letter-spacing: -0.5px; }
   .header h1 em { font-style: italic; color: var(--accent); }
   .header-meta { color: rgba(255,255,255,0.6); font-size: 13px; text-align: right; }
   .header-meta strong { color: rgba(255,255,255,0.9); font-weight: 500; }
 
-  .filters-bar { background: var(--white); border-bottom: 1px solid var(--border); padding: 20px 0; position: sticky; top: 76px; z-index: 90; box-shadow: var(--shadow-sm); }
+  .filters-bar { background: var(--white); border-bottom: 1px solid var(--border); padding: 20px 0; position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow-sm); }
   .filters-inner { max-width: 1280px; margin: 0 auto; padding: 0 32px; }
   .filters-row { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
   .filter-group { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 170px; }
@@ -177,6 +177,7 @@
   .summary-content { display: none; padding: 16px 0 8px; }
   .summary-content.active { display: block; }
   .summary-list { column-count: 2; column-gap: 2rem; font-size: 14px; line-height: 2.1; }
+  .summary-list.authors-3col { column-count: 3; }
   .summary-item { break-inside: avoid; cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: background 0.1s; }
   .summary-item:hover { background: var(--navy-light); }
   .summary-count { color: var(--text-muted); font-size: 13px; margin-right: 4px; display: inline-block; min-width: 32px; text-align: right; }
@@ -184,8 +185,12 @@
   .summary-area-link:hover { text-decoration: underline; }
   @media (max-width: 768px) {
     .summary-tabs { padding-left: 20px; padding-right: 20px; }
-    .summary-list { column-count: 1; }
+    .summary-list, .summary-list.authors-3col { column-count: 1; }
   }
+  #authorsPagination button { padding: 8px 14px; border: 1px solid var(--border); background: var(--white); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 13px; cursor: pointer; transition: all 0.15s; color: var(--text); }
+  #authorsPagination button:hover:not(:disabled) { background: var(--navy-light); border-color: var(--navy); color: var(--navy); }
+  #authorsPagination button:disabled { opacity: 0.4; cursor: default; }
+  #authorsPagination button.active { background: var(--navy); color: white; border-color: var(--navy); }
 </style>
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"WebApplication","name":"Management Science Paper Browser","description":"Browse and filter all Management Science (INFORMS) articles from 1954–present.","url":"https://stouras.com/fun/ms/","applicationCategory":"ReferenceApplication","author":{"@type":"Person","name":"Konstantinos Stouras","url":"https://stouras.com"},"provider":{"@type":"Organization","name":"INFORMS","url":"https://pubsonline.informs.org/journal/mnsc"}}
@@ -266,6 +271,7 @@
   </div>
   <div id="summaryAuthors" class="summary-content">
     <div id="summaryAuthorsList" class="summary-list"></div>
+    <div id="authorsPagination" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:14px 0 4px"></div>
   </div>
   <div id="summaryAffiliations" class="summary-content">
     <div id="summaryAffiliationsList" class="summary-list"></div>
@@ -833,6 +839,7 @@ function buildFilterOptions() {
   fillCustomSelect('csArea', Object.keys(areaCounts).sort(), areaCounts);
   fillCustomSelect('csYear', Object.keys(yearCounts).sort().reverse(), yearCounts);
   buildSummaryTabs(editorCounts, areaCounts);
+  renderAuthorsSummary();
 }
 
 function buildSummaryTabs(editorCounts, areaCounts) {
@@ -848,38 +855,77 @@ function buildSummaryTabs(editorCounts, areaCounts) {
     return '<div class="summary-item" onclick="filterByArea(\'' + escAttr(a) + '\')"><span class="summary-count">' + areaCounts[a] + '</span> papers in ' + esc(a) + '</div>';
   }).join('');
 
-  // Authors: ORCID-resolved Authors tab. Show only authors that have at least
-  // one paper in a known area; clicking matches all their name variants.
+  // Authors are built once and paginated separately — see renderAuthorsSummary().
+}
+
+// Authors list: built once from the ORCID-resolved Authors tab (independent of
+// the editor/area/year filters), shown 30 per page in 3 columns.
+const AUTHORS_PER_PAGE = 30;
+
+function renderAuthorsSummary() {
   var auList = document.getElementById('summaryAuthorsList');
-  if (authorData.length > 0) {
-    window._authorAreaLookup = {};
-    window._authorVariants = {};
-    var withAreas = authorData.filter(function(a) {
-      var areasStr = a['Areas'] || '';
-      return areasStr.split(',').filter(function(x) { return x.trim(); }).length > 0;
-    });
-    auList.innerHTML = withAreas.map(function(a) {
-      var count = parseInt(a['Papers']) || 0;
-      var name = a['Author'] || '';
-      var areasStr = a['Areas'] || '';
-      var areaArr = areasStr ? areasStr.split(',').map(function(x) { return x.trim(); }).filter(Boolean) : [];
-      var areaCount = areaArr.length;
-      window._authorAreaLookup[name] = areaArr;
-      var variantsStr = a['Name_Variants'] || name;
-      var variants = variantsStr.split(';').map(function(x) { return x.trim().toLowerCase(); }).filter(Boolean);
-      if (variants.length === 0) variants = [name.toLowerCase()];
-      window._authorVariants[name] = variants;
-      return '<div class="summary-item">' +
-        '<span class="summary-count">' + count + '</span> ' +
-        '<span class="summary-author-link" onclick="addAuthorIdentityChip(\'' + escAttr(name) + '\', window._authorVariants[\'' + escAttr(name) + '\'])" style="cursor:pointer">' +
-          'papers written by ' + esc(name) +
-        '</span>' +
-        (areaCount > 0 ? ' <span class="summary-area-link" onclick="filterByAuthorAreas(\'' + escAttr(name) + '\')" style="cursor:pointer;color:var(--green);font-style:italic"> across ' + areaCount + ' area' + (areaCount !== 1 ? 's' : '') + '</span>' : '') +
-      '</div>';
-    }).join('');
-  } else {
+  var pg = document.getElementById('authorsPagination');
+  if (!auList) return;
+  if (!authorData || authorData.length === 0) {
     auList.innerHTML = '<div style="padding:12px;color:var(--text-muted)">No Authors tab found. Run the Authors rebuild in the pipeline.</div>';
+    if (pg) pg.innerHTML = '';
+    return;
   }
+  // Keep only authors with at least one paper in a known area; build lookups.
+  window._authorAreaLookup = {};
+  window._authorVariants = {};
+  window._authorsList = authorData.filter(function(a) {
+    return (a['Areas'] || '').split(',').filter(function(x) { return x.trim(); }).length > 0;
+  });
+  window._authorsList.forEach(function(a) {
+    var name = a['Author'] || '';
+    var areaArr = (a['Areas'] || '').split(',').map(function(x) { return x.trim(); }).filter(Boolean);
+    window._authorAreaLookup[name] = areaArr;
+    var variants = (a['Name_Variants'] || name).split(';').map(function(x) { return x.trim().toLowerCase(); }).filter(Boolean);
+    window._authorVariants[name] = variants.length ? variants : [name.toLowerCase()];
+  });
+  if (!window._authorsPage) window._authorsPage = 1;
+  renderAuthorsPage(window._authorsPage);
+}
+
+function renderAuthorsPage(page) {
+  var list = window._authorsList || [];
+  var totalPages = Math.max(1, Math.ceil(list.length / AUTHORS_PER_PAGE));
+  page = Math.min(Math.max(1, page), totalPages);
+  window._authorsPage = page;
+  var start = (page - 1) * AUTHORS_PER_PAGE;
+  var pageItems = list.slice(start, start + AUTHORS_PER_PAGE);
+
+  var auList = document.getElementById('summaryAuthorsList');
+  auList.className = 'summary-list authors-3col';
+  auList.innerHTML = pageItems.map(function(a) {
+    var count = parseInt(a['Papers']) || 0;
+    var name = a['Author'] || '';
+    var areaCount = (window._authorAreaLookup[name] || []).length;
+    return '<div class="summary-item">' +
+      '<span class="summary-count">' + count + '</span> ' +
+      '<span class="summary-author-link" onclick="addAuthorIdentityChip(\'' + escAttr(name) + '\', window._authorVariants[\'' + escAttr(name) + '\'])" style="cursor:pointer">' +
+        'papers written by ' + esc(name) +
+      '</span>' +
+      (areaCount > 0 ? ' <span class="summary-area-link" onclick="filterByAuthorAreas(\'' + escAttr(name) + '\')" style="cursor:pointer;color:var(--green);font-style:italic"> across ' + areaCount + ' area' + (areaCount !== 1 ? 's' : '') + '</span>' : '') +
+    '</div>';
+  }).join('');
+
+  renderAuthorsPagination(page, totalPages);
+}
+
+function renderAuthorsPagination(page, total) {
+  var pg = document.getElementById('authorsPagination');
+  if (!pg) return;
+  if (total <= 1) { pg.innerHTML = ''; return; }
+  var h = '<button ' + (page === 1 ? 'disabled' : '') + ' onclick="renderAuthorsPage(' + (page - 1) + ')">‹ Prev</button>';
+  var s = Math.max(1, page - 3), e = Math.min(total, s + 6);
+  if (e - s < 6) s = Math.max(1, e - 6);
+  if (s > 1) { h += '<button onclick="renderAuthorsPage(1)">1</button>'; if (s > 2) h += '<span class="page-info">…</span>'; }
+  for (var i = s; i <= e; i++) h += '<button class="' + (i === page ? 'active' : '') + '" onclick="renderAuthorsPage(' + i + ')">' + i + '</button>';
+  if (e < total) { if (e < total - 1) h += '<span class="page-info">…</span>'; h += '<button onclick="renderAuthorsPage(' + total + ')">' + total + '</button>'; }
+  h += '<button ' + (page === total ? 'disabled' : '') + ' onclick="renderAuthorsPage(' + (page + 1) + ')">Next ›</button>';
+  pg.innerHTML = h;
 }
 
 function filterByAuthorAreas(authorName) {
