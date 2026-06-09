@@ -3,291 +3,406 @@
  * Author: Prof. Kostas Stouras, UCD Smurfit Graduate Business School
  *
  * Paste this into the Responses spreadsheet:  Extensions → Apps Script.
- * Then deploy as a Web app (Execute as: Me, Who has access: Anyone) and put
- * the /exec URL into index.html's GOOGLE_SCRIPT_URL constant.
+ * Then DEPLOY A NEW VERSION:  Deploy → Manage deployments → (edit) →
+ * Version: "New version" → Deploy.  The web app keeps serving the old code
+ * until a new version is published — this is the #1 reason a fix "doesn't
+ * take" in production.
  *
  * ─────────────────────────────────────────────────────────────────────────
- *  WHY COLUMN K USED TO STAY EMPTY ON NEW ROWS
+ *  WHY COLUMN K (Creativity index) WASN'T UPDATING ON NEW ROWS
  * ─────────────────────────────────────────────────────────────────────────
- *  The web app writes each submission with sheet.appendRow(...) inside
- *  doPost(). Rows added that way are NOT a Google Form submission and NOT a
- *  manual edit, so the onFormSubmit / onEdit triggers never fire for them —
- *  Column K (Creativity index) was therefore only filled when someone ran the
- *  "Creativity" menu by hand.
+ *  The score is normalized so the most exploratory player scores 100%
+ *  (K = round(rawScore / maxScore * 100)). The previous version only WROTE K
+ *  for rows whose K cell was still empty and kept every other row frozen.
+ *  As soon as a new submission raised maxScore, all earlier rows became stale
+ *  and were never rewritten — and if the live web app was still serving an
+ *  older deployment (one that predated the computeSequenceDiversity() call in
+ *  doPost), the new row got no K at all.
  *
- *  THE FIX: doPost() now calls computeSequenceDiversity() itself, right after
- *  appending the row, so Column K is recomputed on every single submission.
- *  The onFormSubmit / onChange triggers are kept as a harmless backstop.
+ *  FIX: computeSequenceDiversity() now recomputes AND rewrites the entire K
+ *  column on every call, so a new row both gets its own value and refreshes
+ *  everyone else's normalization. The UI alert was also moved out of the
+ *  shared compute function (it throws in the doPost/trigger context where
+ *  there is no UI) into a separate menu wrapper.
  * ─────────────────────────────────────────────────────────────────────────
  */
 
-// Tab that stores submissions. Change if your sheet uses a different name.
-var RESPONSES_SHEET = 'Responses';
+var SEED_SEQUENCE = [2, 4, 8];
 
-// Seed sequence shown to every player. Prepended to each player's set so the
-// creativity score measures how far they explored away from the example.
-var SEED = [2, 4, 8];
+// ============================================================
+// HELPER — find the actual last row with data in column A
+// ============================================================
+function findLastDataRow(sheet) {
+  var colA = sheet.getRange('A1:A' + sheet.getMaxRows()).getValues();
+  for (var i = colA.length - 1; i >= 0; i--) {
+    if (colA[i][0] !== '' && colA[i][0] != null) {
+      return i + 1;
+    }
+  }
+  return 1;
+}
 
-// Column index of the Creativity index (%). A=1 ... K=11.
-var CREATIVITY_COL = 11;
-
-// First data row (row 1 is the header).
-var FIRST_DATA_ROW = 2;
-
-// Columns that hold the tested sequences "(a, b, c); (d, e, f)".
-var YES_SEQ_COL = 7; // G
-var NO_SEQ_COL  = 8; // H
-
-
-/* ============================================================
- *  WEB APP ENDPOINTS
- * ============================================================ */
-
-/**
- * Receives a game submission from index.html and appends it as a new row,
- * then immediately recomputes Column K for the whole sheet.
- */
+// ============================================================
+// doPost — receives game submissions from the web app
+// ============================================================
 function doPost(e) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+
   try {
-    var data = JSON.parse(e.postData.contents);
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RESPONSES_SHEET);
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Responses");
+    var data  = JSON.parse(e.postData.contents);
 
-    // A–H. Column I (Notes) is left for manual entry; J ("Got it right?") is a
-    // sheet-side MAP formula; K is computed below.
-    sheet.appendRow([
-      data.timestamp || new Date(),  // A  Timestamp
-      data.numAttempts,              // B  Number of attempts
-      data.yeses,                    // C  Yeses
-      data.nos,                      // D  Nos
-      data.rule,                     // E  What's the rule?
-      data.confidence,               // F  Confidence level
-      data.yesSequences || '—',      // G  Yes sequences
-      data.noSequences  || '—'       // H  No sequences
-    ]);
+    var nextRow = findLastDataRow(sheet) + 1;
 
-    // ★ THE FIX ★ — recompute Column K now, because appendRow does not fire
-    // onFormSubmit / onEdit. Wrapped so a calc hiccup never fails the write.
+    sheet.getRange(nextRow, 1, 1, 8).setValues([[
+      data.timestamp,
+      data.numAttempts,
+      data.yeses,
+      data.nos,
+      data.rule,
+      data.confidence,
+      data.yesSequences,
+      data.noSequences
+    ]]);
+
+    SpreadsheetApp.flush();
+
+    // Recompute Column K. appendRow/setValues do NOT fire onFormSubmit or
+    // onEdit, so this must run here for K to update on every submission.
     try {
       computeSequenceDiversity();
-    } catch (calcErr) {
-      console.error('Creativity recompute failed: ' + calcErr);
+    } catch (diversityErr) {
+      Logger.log('Diversity computation failed: ' + diversityErr.toString());
     }
 
     return ContentService
-      .createTextOutput(JSON.stringify({ result: 'success' }))
+      .createTextOutput(JSON.stringify({ status: "success", row: nextRow }))
       .setMimeType(ContentService.MimeType.JSON);
+
   } catch (err) {
+    Logger.log('doPost error: ' + err.toString());
     return ContentService
-      .createTextOutput(JSON.stringify({ result: 'error', error: String(err) }))
+      .createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
       .setMimeType(ContentService.MimeType.JSON);
+
+  } finally {
+    lock.releaseLock();
   }
 }
 
-/**
- * Fallback analysis endpoint (the client prefers the published CSV and only
- * calls this if the CSV fetch fails). Returns lightweight aggregates.
- */
+// ============================================================
+// doGet — serves analysis data to the web app
+// ============================================================
 function doGet(e) {
-  if (e && e.parameter && e.parameter.action === 'getAnalysis') {
-    return ContentService
-      .createTextOutput(JSON.stringify(getAnalysisData()))
-      .setMimeType(ContentService.MimeType.JSON);
+  var action = (e && e.parameter && e.parameter.action) ? e.parameter.action : '';
+
+  if (action === 'getAnalysis') {
+    return getAnalysisData();
   }
-  return ContentService
-    .createTextOutput(JSON.stringify({ result: 'ok' }))
+
+  return ContentService.createTextOutput(JSON.stringify({ error: 'Unknown action' }))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+// ============================================================
+// getAnalysisData — computes distribution + insights JSON
+// ============================================================
+function getAnalysisData() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Responses');
+  var data = sheet.getDataRange().getValues();
 
-/* ============================================================
- *  CREATIVITY INDEX (Column K)
- * ============================================================ */
+  var rows = data.slice(1).filter(function(r) { return r[1] !== '' && r[1] != null; });
 
-/**
- * Computes the creativity index for every player and writes Column K.
- * Score per player = avgPairwiseDistance(features) × log2(numSequences),
- * then normalized so the most exploratory player scores 100%.
- */
-function computeSequenceDiversity() {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RESPONSES_SHEET);
-  var lastRow = sheet.getLastRow();
-  if (lastRow < FIRST_DATA_ROW) return;
+  var totalStudents = rows.length;
+  if (totalStudents === 0) {
+    return ContentService.createTextOutput(JSON.stringify({
+      distribution: [],
+      insights: {}
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
 
-  var numRows = lastRow - FIRST_DATA_ROW + 1;
+  var buckets = [
+    { label: '1 guess',      min: 1,  max: 1 },
+    { label: '2 guesses',    min: 2,  max: 2 },
+    { label: '3 guesses',    min: 3,  max: 3 },
+    { label: '4 guesses',    min: 4,  max: 4 },
+    { label: '5-10 guesses', min: 5,  max: 10 },
+    { label: '>10 guesses',  min: 11, max: 99999 }
+  ];
 
-  // Read sequence columns G and H in one batch.
-  var yesVals = sheet.getRange(FIRST_DATA_ROW, YES_SEQ_COL, numRows, 1).getValues();
-  var noVals  = sheet.getRange(FIRST_DATA_ROW, NO_SEQ_COL,  numRows, 1).getValues();
+  var attempts = rows.map(function(r) { return Number(r[1]); });
+  var nos = rows.map(function(r) { return Number(r[3]); });
+  var confidences = rows.map(function(r) { return Number(r[5]); });
 
-  var rawScores = new Array(numRows);
-  var maxRaw = 0;
+  var distribution = [];
+  var cumCount = 0;
 
-  for (var i = 0; i < numRows; i++) {
-    var seqs = parseSequencesForDiversity(yesVals[i][0])
-                 .concat(parseSequencesForDiversity(noVals[i][0]));
+  for (var i = 0; i < buckets.length; i++) {
+    var b = buckets[i];
+    var bucketRows = [];
 
-    if (seqs.length === 0) {
-      rawScores[i] = null; // nothing tested → leave Column K blank
-      continue;
-    }
-
-    // Prepend the seed so we measure exploration relative to the example.
-    var all = [SEED].concat(seqs);
-    var feats = all.map(function (s) { return sequenceFeatures(s[0], s[1], s[2]); });
-
-    var total = 0, pairs = 0;
-    for (var a = 0; a < feats.length; a++) {
-      for (var b = a + 1; b < feats.length; b++) {
-        total += euclidean(feats[a], feats[b]);
-        pairs++;
+    for (var j = 0; j < rows.length; j++) {
+      if (attempts[j] >= b.min && attempts[j] <= b.max) {
+        bucketRows.push(j);
       }
     }
-    var avgDist = pairs > 0 ? total / pairs : 0;
-    var volumeWeight = Math.log(all.length) / Math.LN2; // log2(n)
-    var raw = avgDist * volumeWeight;
 
-    rawScores[i] = raw;
-    if (raw > maxRaw) maxRaw = raw;
-  }
+    var count = bucketRows.length;
+    cumCount += count;
 
-  // Normalize to 0–100 (best player = 100%) and write Column K in one batch.
-  var out = new Array(numRows);
-  for (var k = 0; k < numRows; k++) {
-    if (rawScores[k] === null) {
-      out[k] = [''];
-    } else if (maxRaw > 0) {
-      out[k] = [Math.round(rawScores[k] / maxRaw * 100)];
-    } else {
-      out[k] = [0];
+    var avgConf = null;
+    if (count > 0) {
+      var confSum = 0;
+      for (var k = 0; k < bucketRows.length; k++) {
+        confSum += confidences[bucketRows[k]];
+      }
+      avgConf = confSum / (count * 5);
     }
+
+    distribution.push({
+      bucket: b.label,
+      students: count,
+      pdf: totalStudents > 0 ? count / totalStudents : 0,
+      cdf: totalStudents > 0 ? cumCount / totalStudents : 0,
+      avgConfidence: avgConf
+    });
   }
-  sheet.getRange(FIRST_DATA_ROW, CREATIVITY_COL, numRows, 1).setValues(out);
+
+  var neverHeardNo = 0;
+  var strongFalsifiers = 0;
+  var oneGuess = 0;
+  var totalNos = 0;
+
+  for (var j = 0; j < rows.length; j++) {
+    if (nos[j] === 0) neverHeardNo++;
+    if (nos[j] >= 3) strongFalsifiers++;
+    if (attempts[j] === 1) oneGuess++;
+    totalNos += nos[j];
+  }
+
+  var sortedAttempts = attempts.slice().sort(function(a, b) { return a - b; });
+  var mid = Math.floor(sortedAttempts.length / 2);
+  var medianAttempts = sortedAttempts.length % 2 !== 0
+    ? sortedAttempts[mid]
+    : (sortedAttempts[mid - 1] + sortedAttempts[mid]) / 2;
+
+  var avgAttempts = attempts.reduce(function(a, b) { return a + b; }, 0) / totalStudents;
+
+  var avgConf = confidences.reduce(function(a, b) { return a + b; }, 0) / totalStudents;
+  var avgConfPct = (avgConf / 5 * 100).toFixed(1) + '%';
+
+  var insights = {
+    avgAttempts: avgAttempts,
+    avgConfidence: avgConfPct,
+    medianAttempts: medianAttempts,
+    neverHeardNo: neverHeardNo,
+    neverHeardNoPct: neverHeardNo / totalStudents,
+    strongFalsifiers: strongFalsifiers,
+    strongFalsifiersPct: strongFalsifiers / totalStudents,
+    oneGuess: oneGuess,
+    oneGuessPct: oneGuess / totalStudents,
+    avgNos: totalNos / totalStudents
+  };
+
+  return ContentService.createTextOutput(JSON.stringify({
+    distribution: distribution,
+    insights: insights
+  })).setMimeType(ContentService.MimeType.JSON);
 }
 
-/**
- * 10-dimensional feature vector for a sequence (a, b, c).
- * Mirrors computeLocalCreativity()'s seqFeatures() in index.html exactly.
- */
+// ============================================================
+// CREATIVITY INDEX (Column K)
+//
+// Recomputes the raw score for every player, normalizes so the
+// most exploratory player = 100%, and REWRITES the whole column
+// on every call. Rewriting all rows is required for correctness:
+// a single new submission can raise maxScore, which changes every
+// other player's normalized percentage.
+//
+// UI-free on purpose — it runs inside doPost (web app) and any
+// trigger, where SpreadsheetApp.getUi() is unavailable. The menu
+// uses recomputeCreativityIndexMenu() for the confirmation alert.
+//
+// Returns { count, average } for optional callers.
+// ============================================================
+function computeSequenceDiversity() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Responses');
+
+  var lastRow = findLastDataRow(sheet);
+  if (lastRow < 2) return { count: 0, average: 0 };
+
+  var numRows = lastRow - 1;
+  var data = sheet.getRange(2, 1, numRows, 11).getValues();
+
+  var YES_IDX = 6;   // G, 0-based
+  var NO_IDX  = 7;   // H
+  var K_IDX   = 10;  // K
+
+  // Raw score per sheet row (aligned with `data`):
+  //   number  -> a computed score
+  //   null    -> row has data but no parseable sequences (K should be blank)
+  //   undefined -> blank sheet row (leave its K untouched)
+  var rawScores = [];
+  var maxScore = 0;
+
+  for (var r = 0; r < data.length; r++) {
+    if (data[r][0] === '' || data[r][0] == null) {
+      rawScores.push(undefined);
+      continue;
+    }
+    var raw = computeRawScore(data[r][YES_IDX], data[r][NO_IDX]);
+    rawScores.push(raw);
+    if (raw !== null && raw > maxScore) maxScore = raw;
+  }
+
+  // Header.
+  sheet.getRange(1, 11).setValue('Creativity index (%)');
+
+  // Build and write the entire K column in one batch.
+  var out = [];
+  var scores = [];
+  for (var r = 0; r < data.length; r++) {
+    var raw = rawScores[r];
+    if (raw === undefined) {
+      out.push([data[r][K_IDX]]); // preserve K on blank sheet rows
+    } else if (raw === null) {
+      out.push(['']);             // tested nothing parseable
+    } else {
+      var pct = maxScore === 0 ? 0 : Math.round(raw / maxScore * 100);
+      out.push([pct]);
+      scores.push(pct);
+    }
+  }
+  sheet.getRange(2, 11, numRows, 1).setValues(out);
+  SpreadsheetApp.flush();
+
+  var avg = scores.length
+    ? Math.round(scores.reduce(function(a, b) { return a + b; }, 0) / scores.length)
+    : 0;
+  Logger.log('Creativity done. players=' + scores.length + ', avg=' + avg + '%');
+
+  return { count: scores.length, average: avg };
+}
+
+// ============================================================
+// Compute raw creativity score for one player's sequences
+// ============================================================
+function computeRawScore(yesCell, noCell) {
+  var yesStr = (yesCell != null) ? yesCell.toString() : '';
+  var noStr  = (noCell != null)  ? noCell.toString() : '';
+
+  var sequences = parseSequencesForDiversity(yesStr, noStr);
+  if (sequences.length === 0) return null;
+
+  sequences.unshift(SEED_SEQUENCE);
+
+  var features = [];
+  for (var i = 0; i < sequences.length; i++) {
+    features.push(sequenceFeatures(sequences[i][0], sequences[i][1], sequences[i][2]));
+  }
+
+  var n = features.length;
+  var totalDist = 0;
+  var pairs = 0;
+  for (var i = 0; i < n; i++) {
+    for (var j = i + 1; j < n; j++) {
+      totalDist += euclidean(features[i], features[j]);
+      pairs++;
+    }
+  }
+  var avgDist = pairs > 0 ? totalDist / pairs : 0;
+  var volumeWeight = Math.log(n) / Math.LN2;
+
+  return avgDist * volumeWeight;
+}
+
+// ============================================================
+// FEATURE VECTOR for a single sequence (a, b, c)
+// ============================================================
 function sequenceFeatures(a, b, c) {
-  var d1 = b - a, d2 = c - b;
+  var d1 = b - a;
+  var d2 = c - b;
   var mean = (a + b + c) / 3;
   var spread = Math.max(a, b, c) - Math.min(a, b, c);
+
   return [
-    (d1 > 0 && d2 > 0) ? 1 : 0,                                   // increasing
-    (d1 < 0 && d2 < 0) ? 1 : 0,                                   // decreasing
-    (d1 === 0 && d2 === 0) ? 1 : 0,                               // constant
-    ((d1 > 0) !== (d2 > 0) && d1 !== 0 && d2 !== 0) ? 1 : 0,      // non-monotonic
-    (Math.min(a, b, c) < 0) ? 1 : 0,                             // uses negatives
-    (a === 0 || b === 0 || c === 0) ? 1 : 0,                     // uses zero
-    Math.log(1 + spread) / 7,                                     // log spread
-    Math.log(1 + Math.abs(mean)) / 7,                             // log magnitude
+    (d1 > 0 && d2 > 0) ? 1 : 0,
+    (d1 < 0 && d2 < 0) ? 1 : 0,
+    (d1 === 0 && d2 === 0) ? 1 : 0,
+    (d1 > 0 !== d2 > 0 && d1 !== 0 && d2 !== 0) ? 1 : 0,
+    (Math.min(a, b, c) < 0) ? 1 : 0,
+    (a === 0 || b === 0 || c === 0) ? 1 : 0,
+    Math.log(1 + spread) / 7,
+    Math.log(1 + Math.abs(mean)) / 7,
     (Math.abs(d1) + Math.abs(d2)) > 0
-      ? (d2 / (Math.abs(d1) + Math.abs(d2))) * 0.5 + 0.5 : 0.5,   // gap ratio
-    spread > 0 ? (b - Math.min(a, b, c)) / spread : 0.5           // asymmetry
+      ? (d2 / (Math.abs(d1) + Math.abs(d2))) * 0.5 + 0.5
+      : 0.5,
+    spread > 0
+      ? (b - Math.min(a, b, c)) / spread
+      : 0.5
   ];
 }
 
-/** Euclidean distance between two equal-length feature vectors. */
-function euclidean(p, q) {
-  var s = 0;
-  for (var i = 0; i < p.length; i++) {
-    var d = p[i] - q[i];
-    s += d * d;
+// ============================================================
+// EUCLIDEAN DISTANCE
+// ============================================================
+function euclidean(a, b) {
+  var sum = 0;
+  for (var i = 0; i < a.length; i++) {
+    var d = a[i] - b[i];
+    sum += d * d;
   }
-  return Math.sqrt(s);
+  return Math.sqrt(sum);
 }
 
-/**
- * Parses a cell like "(3, 6, 12); (4, 8, 16)" into [[3,6,12],[4,8,16]].
- * Ignores blanks / the "—" placeholder and any malformed group.
- */
-function parseSequencesForDiversity(cell) {
-  if (cell === null || cell === undefined) return [];
-  var str = String(cell).trim();
-  if (str === '' || str === '—' || str === '-') return [];
+// ============================================================
+// PARSE SEQUENCES — handles em dash, en dash, "none", etc.
+// ============================================================
+function parseSequencesForDiversity(yesStr, noStr) {
+  var all = [];
+  [yesStr, noStr].forEach(function(str) {
+    if (!str) return;
+    var trimmed = str.trim();
+    if (trimmed === '' ||
+        trimmed === '-' ||
+        trimmed === '—' ||
+        trimmed === '–' ||
+        trimmed === '―' ||
+        trimmed.toLowerCase() === 'none') {
+      return;
+    }
 
-  var out = [];
-  var groups = str.match(/\(([^)]*)\)/g);
-  if (!groups) return [];
+    str.split(';').forEach(function(part) {
+      var cleaned = part.replace(/[()[\]]/g, '').trim();
+      if (cleaned === '' || cleaned === '-' || cleaned === '—') return;
 
-  groups.forEach(function (g) {
-    var nums = g.replace(/[()]/g, '')
-                .split(',')
-                .map(function (x) { return parseFloat(x.trim()); })
-                .filter(function (x) { return !isNaN(x); });
-    if (nums.length === 3) out.push(nums);
+      var nums = cleaned.split(',').map(function(x) { return parseFloat(x.trim()); });
+      if (nums.length === 3 && nums.every(function(v) { return !isNaN(v) && isFinite(v); })) {
+        all.push(nums);
+      }
+    });
   });
-  return out;
+  return all;
 }
 
-
-/* ============================================================
- *  SPREADSHEET MENU + TRIGGER BACKSTOP
- * ============================================================ */
-
-/** Adds a "Creativity" menu so K can also be recomputed manually. */
+// ============================================================
+// MENU
+// ============================================================
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('Creativity')
-    .addItem('Recompute creativity index (Column K)', 'computeSequenceDiversity')
+    .addItem('Recompute creativity index', 'recomputeCreativityIndexMenu')
     .addToUi();
 }
 
-/**
- * Backstop trigger: recompute K if rows ever arrive via a linked Google Form.
- * (Web-app submissions are handled directly inside doPost.)
- */
-function onFormSubmit(e) {
-  computeSequenceDiversity();
-}
-
-/**
- * Optional installable trigger. Install via Triggers → Add Trigger →
- * onChangeRecompute → "On change" to also catch manual row insertions.
- */
-function onChangeRecompute(e) {
-  computeSequenceDiversity();
-}
-
-
-/* ============================================================
- *  FALLBACK ANALYTICS (only used if the published CSV is unreachable)
- * ============================================================ */
-
-function getAnalysisData() {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RESPONSES_SHEET);
-  var lastRow = sheet.getLastRow();
-  if (lastRow < FIRST_DATA_ROW) {
-    return { totalPlayers: 0 };
-  }
-
-  var numRows = lastRow - FIRST_DATA_ROW + 1;
-  var rng = sheet.getRange(FIRST_DATA_ROW, 1, numRows, CREATIVITY_COL).getValues();
-
-  var totalPlayers = 0;
-  var attemptsSum = 0, nosSum = 0, confSum = 0, creativitySum = 0, creativityN = 0;
-  var neverNo = 0;
-
-  rng.forEach(function (r) {
-    var attempts = Number(r[1]); // B
-    if (!attempts) return;       // skip blank rows
-    totalPlayers++;
-    attemptsSum += attempts;
-    var nos = Number(r[3]) || 0; // D
-    nosSum += nos;
-    if (nos === 0) neverNo++;
-    confSum += Number(r[5]) || 0; // F
-    var cr = Number(r[10]);       // K
-    if (!isNaN(cr) && r[10] !== '') { creativitySum += cr; creativityN++; }
-  });
-
-  return {
-    totalPlayers: totalPlayers,
-    avgAttempts: totalPlayers ? attemptsSum / totalPlayers : 0,
-    avgNos: totalPlayers ? nosSum / totalPlayers : 0,
-    avgConfidence: totalPlayers ? confSum / totalPlayers : 0,
-    neverNo: neverNo,
-    avgCreativity: creativityN ? creativitySum / creativityN : 0,
-    hasCreativityData: creativityN > 0
-  };
+// Manual entry point (has UI). Keeps getUi() out of the shared
+// computeSequenceDiversity(), which also runs from doPost.
+function recomputeCreativityIndexMenu() {
+  var res = computeSequenceDiversity();
+  SpreadsheetApp.getUi().alert(
+    'Creativity index computed for ' + res.count + ' players.\n' +
+    'Average: ' + res.average + '%'
+  );
 }

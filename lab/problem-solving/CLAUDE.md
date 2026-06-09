@@ -289,28 +289,42 @@ A–H populated by the web app's POST. Columns J and K added separately:
 
 - **Column K** — "Creativity index (%)" — computed by Apps Script function `computeSequenceDiversity()`, called directly from `doPost()` on every submission (also runnable via the "Creativity" menu).
 
-> **Why K is computed inside `doPost`:** the web app adds rows with
-> `sheet.appendRow(...)`. Programmatic appends are **not** Google Form
-> submissions and **not** manual edits, so the `onFormSubmit` / `onEdit`
-> triggers never fire for them — which is why Column K previously stayed
-> blank on every new row and only filled when the "Creativity" menu was run
-> by hand. The fix is for `doPost()` to call `computeSequenceDiversity()`
-> itself right after appending. `onFormSubmit` / `onChangeRecompute` remain
-> as harmless backstops for rows that arrive any other way.
+> **Why K is computed inside `doPost`:** the web app writes rows with
+> `setValues(...)`, which does **not** fire `onFormSubmit` / `onEdit`, so K
+> must be recomputed from `doPost` itself right after the write.
+>
+> **Normalization requires a full rewrite.** K is normalized so the most
+> exploratory player scores 100% (`round(raw / maxScore * 100)`). A single
+> new submission can raise `maxScore`, which changes *every* other player's
+> percentage. `computeSequenceDiversity()` therefore recomputes and rewrites
+> the **entire** K column on each call. (An earlier "only write empty K
+> cells" optimization left existing rows frozen against a stale `maxScore` —
+> that was the bug behind "Column K doesn't update when a row is added".)
+>
+> **Keep UI out of the compute path.** `computeSequenceDiversity()` runs in
+> the `doPost` web-app context where `SpreadsheetApp.getUi()` is unavailable
+> and throws. The confirmation alert lives only in the menu wrapper
+> `recomputeCreativityIndexMenu()`.
+>
+> **Deploy a new version.** Apps Script keeps serving the previously
+> published web-app version until you publish a new one
+> (Deploy → Manage deployments → edit → Version: *New version*). A code edit
+> alone does not reach production.
 
 ### Apps Script (`apps-script.js`)
 | Function | Purpose |
 |---|---|
-| `doPost(e)` | Receives game submissions, appends row, then recomputes Column K |
+| `doPost(e)` | Receives game submissions (script-locked), writes the row, then recomputes Column K |
 | `doGet(e)` | Serves analysis JSON (fallback if CSV fetch fails) |
 | `getAnalysisData()` | Computes distribution buckets + insights from raw data |
-| `computeSequenceDiversity()` | Computes creativity index for all players using feature-based pairwise distance |
+| `findLastDataRow(sheet)` | Last non-empty row in column A (write position + compute range) |
+| `computeSequenceDiversity()` | Recomputes + rewrites the whole Column K; UI-free; returns `{count, average}` |
+| `computeRawScore(yesCell, noCell)` | Raw (un-normalized) creativity score for one player |
 | `sequenceFeatures(a,b,c)` | Extracts 10-dimensional feature vector per sequence |
 | `euclidean(a,b)` | Euclidean distance between two feature vectors |
-| `parseSequencesForDiversity()` | Parses "(3, 6, 12); (4, 8, 16)" format from cells |
+| `parseSequencesForDiversity(yesStr, noStr)` | Parses "(3, 6, 12); (4, 8, 16)" format from cells |
 | `onOpen()` | Adds "Creativity" menu to the spreadsheet |
-| `onFormSubmit(e)` | Backstop: recomputes creativity for Google Form submissions |
-| `onChangeRecompute(e)` | Optional installable "On change" backstop for manual row inserts |
+| `recomputeCreativityIndexMenu()` | Menu entry point: runs the compute + shows the alert |
 
 ### Creativity algorithm (Apps Script)
 Same as the client-side `computeLocalCreativity()`:
