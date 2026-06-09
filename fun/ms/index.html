@@ -252,7 +252,7 @@
     <div class="summary-tab-btns" style="margin-top:12px;">
       <button class="summary-tab-btn" onclick="toggleSummary('editors')">Editors</button>
       <button class="summary-tab-btn" onclick="toggleSummary('areas')">Areas</button>
-      <button class="summary-tab-btn" onclick="toggleSummary('authors')" title="Some authors may appear under different name variants. ORCID-based disambiguation is not yet available for all authors.">Authors (beta)</button>
+      <button class="summary-tab-btn" onclick="toggleSummary('authors')" title="Authors are resolved by ORCID where available. Authors with at least one paper in a known area are listed.">Authors (beta)</button>
       <button class="summary-tab-btn" onclick="toggleSummary('affiliations')" title="Affiliation names are not standardized across papers. Duplicates may exist despite ongoing deduplication efforts.">Affiliations (alpha)</button>
     </div>
   </div>
@@ -309,11 +309,13 @@ const AFFILIATIONS_FALLBACK_URL = `https://docs.google.com/spreadsheets/d/${SHEE
 const META_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Meta`;
 const PER_PAGE = 20;
 let allPapers = [], filtered = [], currentPage = 1;
-let authorData = []; // pre-computed from Authors tab
+let authorData = []; // pre-computed from Authors tab (ORCID-resolved)
 let affiliationData = []; // pre-computed from Affiliations tab
 
-// Multi-select state
-const sel = { editor: new Set(), area: new Set(), year: new Set(), title: new Set(), author: new Set(), authorExact: new Set(), affiliation: new Set() };
+// Multi-select state. authorIdentity maps a display label -> array of that
+// author's name variants (from the Authors tab Name_Variants column), so a
+// click matches every spelling of one ORCID-resolved person.
+const sel = { editor: new Set(), area: new Set(), year: new Set(), title: new Set(), author: new Set(), authorIdentity: {}, affiliation: new Set() };
 
 // Text chip management (for title/author search)
 function addTextChip(type, inputId) {
@@ -360,18 +362,32 @@ function renderChips(type) {
   ).join('');
 }
 
-// Author chips combine free-text substring chips (sel.author) and exact
-// merged-author chips chosen from the Authors tab (sel.authorExact).
+// Author chips = free-text substring chips (sel.author) + ORCID-identity chips
+// (sel.authorIdentity, which match any of a person's name variants).
 function renderAuthorChips() {
   const container = document.getElementById('chipsAuthor');
   var html = [...sel.author].map(function(v) {
     return '<span class="chip chip-author">' + esc(v) + ' <span class="chip-x" onclick="removeChip(\'author\',\'' + escAttr(v) + '\')">×</span></span>';
   });
-  html = html.concat([...sel.authorExact].map(function(k) {
-    var lbl = (window._authorLabels && window._authorLabels[k]) || k;
-    return '<span class="chip chip-author">' + esc(lbl) + ' <span class="chip-x" onclick="removeAuthorExact(\'' + escAttr(k) + '\')">×</span></span>';
-  }));
+  Object.keys(sel.authorIdentity).forEach(function(label) {
+    html.push('<span class="chip chip-author">' + esc(label) + ' <span class="chip-x" onclick="removeAuthorIdentity(\'' + escAttr(label) + '\')">×</span></span>');
+  });
   container.innerHTML = html.join('');
+}
+
+function addAuthorIdentityChip(label, variants) {
+  if (!label || sel.authorIdentity[label]) return;
+  sel.authorIdentity[label] = (variants && variants.length) ? variants : [label.toLowerCase()];
+  renderAuthorChips();
+  closeSummaryTabs();
+  applyFilters();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function removeAuthorIdentity(label) {
+  delete sel.authorIdentity[label];
+  renderAuthorChips();
+  applyFilters();
 }
 
 function addChipFromCard(type, val) {
@@ -394,7 +410,7 @@ async function loadData() {
     allPapers.forEach(normalizeEditors);
     fuzzyMergeEditors();
     fuzzyMergeAreas();
-    // Load pre-computed author data from Authors tab
+    // Load pre-computed, ORCID-resolved author data from Authors tab
     if (authResp && authResp.ok) {
       var authText = await authResp.text();
       authorData = parseCSV(authText, 'Author');
@@ -415,9 +431,6 @@ async function loadData() {
     if (affiliationData.length === 0) {
       affiliationData = await tryLoadAff(AFFILIATIONS_FALLBACK_URL, 'Affiliations');
     }
-    // Precompute normalized author keys (merge "Christoph H. Loch" === "Christoph Loch")
-    allPapers.forEach(function(p) { p._authorKeys = (p['Authors'] || '').split(',').map(function(s) { return authorKey(s.trim()); }); });
-    computeAuthorsAggregate();
     buildFilterOptions();
     // Update year range in header
     var years = allPapers.map(function(p) { return parseInt(p['Year']); }).filter(function(y) { return !isNaN(y); });
@@ -446,79 +459,6 @@ function loadLastPull() {
       }
     }
   }).catch(function() {});
-}
-
-// ── Author name normalization & aggregation ──
-
-// Normalize an author name to a merge key: strip accents, unify hyphens, drop
-// single-letter middle initials. So "Christoph H. Loch" and "Christoph Loch"
-// collapse to the same key "christoph loch".
-function authorKey(name) {
-  var t = (name || '').replace(/[‐‑‒–—―﹘﹣－]/g, '-');
-  t = t.normalize('NFD').replace(/[̀-ͯ]/g, '');
-  t = t.toLowerCase().replace(/\./g, ' ');
-  var parts = t.split(/\s+/).filter(Boolean);
-  if (parts.length > 2) {
-    parts = parts.filter(function(p, i) { return !(i > 0 && i < parts.length - 1 && p.length === 1); });
-  }
-  return parts.join(' ');
-}
-
-// Build the merged-author list from the loaded papers (uses normalized _area
-// so areas match the cards and the Area filter).
-function computeAuthorsAggregate() {
-  var stats = {};
-  allPapers.forEach(function(p) {
-    var names = (p['Authors'] || '').split(',').map(function(s) { return s.trim(); });
-    var keys = p._authorKeys || [];
-    var seen = {};
-    for (var i = 0; i < keys.length; i++) {
-      var k = keys[i];
-      if (!k) continue;
-      if (!stats[k]) stats[k] = { count: 0, areas: {}, names: {} };
-      if (!seen[k]) { stats[k].count++; seen[k] = 1; }
-      var nm = names[i] || '';
-      if (nm) stats[k].names[nm] = (stats[k].names[nm] || 0) + 1;
-      if (p._area) stats[k].areas[p._area] = true;
-    }
-  });
-  var arr = Object.keys(stats).map(function(k) {
-    var s = stats[k];
-    var display = Object.keys(s.names).sort(function(a, b) { return s.names[b] - s.names[a] || b.length - a.length; })[0] || k;
-    return { key: k, display: display, count: s.count, areas: Object.keys(s.areas).sort() };
-  });
-  arr.sort(function(a, b) { return b.count - a.count; });
-  window._authorsAgg = arr;
-  window._authorAreaByKey = {};
-  arr.forEach(function(a) { window._authorAreaByKey[a.key] = a.areas; });
-}
-
-// Filter to a merged author (matches all of their name variants).
-function addAuthorExactChip(k, label) {
-  if (!k || sel.authorExact.has(k)) return;
-  window._authorLabels = window._authorLabels || {};
-  window._authorLabels[k] = label;
-  sel.authorExact.add(k);
-  renderAuthorChips();
-  closeSummaryTabs();
-  applyFilters();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-function removeAuthorExact(k) {
-  sel.authorExact.delete(k);
-  renderAuthorChips();
-  applyFilters();
-}
-
-function filterByAuthorKeyAreas(k) {
-  var areas = window._authorAreaByKey && window._authorAreaByKey[k];
-  if (!areas || !areas.length) return;
-  sel.area.clear();
-  areas.forEach(function(a) { sel.area.add(a); });
-  renderChips('area');
-  applyFilters();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // ── Editor cleaning & normalization ──
@@ -909,27 +849,49 @@ function buildSummaryTabs(editorCounts, areaCounts) {
     return '<div class="summary-item" onclick="filterByArea(\'' + escAttr(a) + '\')"><span class="summary-count">' + areaCounts[a] + '</span> papers in ' + esc(a) + '</div>';
   }).join('');
 
-  // Authors: merged by normalized key (so "Christoph H. Loch" === "Christoph Loch"),
-  // areas taken from the normalized _area of each paper.
+  // Authors: ORCID-resolved Authors tab. Show only authors that have at least
+  // one paper in a known area; clicking matches all their name variants.
   var auList = document.getElementById('summaryAuthorsList');
-  var agg = window._authorsAgg || [];
-  if (agg.length > 0) {
-    auList.innerHTML = agg.map(function(a) {
-      var areaCount = a.areas.length;
+  if (authorData.length > 0) {
+    window._authorAreaLookup = {};
+    window._authorVariants = {};
+    var withAreas = authorData.filter(function(a) {
+      var areasStr = a['Areas'] || '';
+      return areasStr.split(',').filter(function(x) { return x.trim(); }).length > 0;
+    });
+    auList.innerHTML = withAreas.map(function(a) {
+      var count = parseInt(a['Papers']) || 0;
+      var name = a['Author'] || '';
+      var areasStr = a['Areas'] || '';
+      var areaArr = areasStr ? areasStr.split(',').map(function(x) { return x.trim(); }).filter(Boolean) : [];
+      var areaCount = areaArr.length;
+      window._authorAreaLookup[name] = areaArr;
+      var variantsStr = a['Name_Variants'] || name;
+      var variants = variantsStr.split(';').map(function(x) { return x.trim().toLowerCase(); }).filter(Boolean);
+      if (variants.length === 0) variants = [name.toLowerCase()];
+      window._authorVariants[name] = variants;
       return '<div class="summary-item">' +
-        '<span class="summary-count">' + a.count + '</span> ' +
-        '<span class="summary-author-link" onclick="addAuthorExactChip(\'' + escAttr(a.key) + '\',\'' + escAttr(a.display) + '\')" style="cursor:pointer">' +
-          'papers written by ' + esc(a.display) +
+        '<span class="summary-count">' + count + '</span> ' +
+        '<span class="summary-author-link" onclick="addAuthorIdentityChip(\'' + escAttr(name) + '\', window._authorVariants[\'' + escAttr(name) + '\'])" style="cursor:pointer">' +
+          'papers written by ' + esc(name) +
         '</span>' +
-        (areaCount > 0 ? ' <span class="summary-area-link" onclick="filterByAuthorKeyAreas(\'' + escAttr(a.key) + '\')" style="cursor:pointer;color:var(--green);font-style:italic"> across ' + areaCount + ' area' + (areaCount !== 1 ? 's' : '') + '</span>' : '') +
+        (areaCount > 0 ? ' <span class="summary-area-link" onclick="filterByAuthorAreas(\'' + escAttr(name) + '\')" style="cursor:pointer;color:var(--green);font-style:italic"> across ' + areaCount + ' area' + (areaCount !== 1 ? 's' : '') + '</span>' : '') +
       '</div>';
     }).join('');
   } else {
-    auList.innerHTML = '<div style="padding:12px;color:var(--text-muted)">No author data.</div>';
+    auList.innerHTML = '<div style="padding:12px;color:var(--text-muted)">No Authors tab found. Run the Authors rebuild in the pipeline.</div>';
   }
 }
 
-// Author normalization is done client-side (see authorKey / computeAuthorsAggregate).
+function filterByAuthorAreas(authorName) {
+  var areas = window._authorAreaLookup && window._authorAreaLookup[authorName];
+  if (!areas || !areas.length) return;
+  sel.area.clear();
+  areas.forEach(function(a) { sel.area.add(a); });
+  renderChips('area');
+  applyFilters();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
 
 // ── Affiliation normalization & merging ──
 
@@ -1047,7 +1009,7 @@ function updateDropdownOptions() {
       var authText = (p['Authors']||'').toLowerCase();
       if (searchAuth && !authText.includes(searchAuth)) return false;
       for (var a of sel.author) { if (!authText.includes(a)) return false; }
-      for (var k of sel.authorExact) { if (!(p._authorKeys || []).includes(k)) return false; }
+      for (var lbl in sel.authorIdentity) { var vs = sel.authorIdentity[lbl]; if (!vs.some(function(v){ return authText.includes(v); })) return false; }
       var affText = (p['Affiliations']||'').toLowerCase();
       if (searchAff && !affText.includes(searchAff)) return false;
       for (var af of sel.affiliation) { if (!affText.includes(af)) return false; }
@@ -1144,7 +1106,7 @@ function applyFilters() {
   const sort = document.getElementById('sortBy').value;
 
   // If no filters active, show welcome state
-  if (sel.editor.size === 0 && sel.area.size === 0 && sel.year.size === 0 && sel.title.size === 0 && sel.author.size === 0 && sel.authorExact.size === 0 && sel.affiliation.size === 0 && !search && !searchAuth && !searchAff) {
+  if (sel.editor.size === 0 && sel.area.size === 0 && sel.year.size === 0 && sel.title.size === 0 && sel.author.size === 0 && Object.keys(sel.authorIdentity).length === 0 && sel.affiliation.size === 0 && !search && !searchAuth && !searchAff) {
     document.getElementById('resultsCount').innerHTML = '';
     document.getElementById('papersList').innerHTML = '<div class="empty-state"><h3>Select a filter to get started</h3><p>Filter by editor, area, year, or search by title or author name.</p></div>';
     buildFilterOptions();
@@ -1161,11 +1123,12 @@ function applyFilters() {
     if (search && !titleText.includes(search)) return false;
     for (const t of sel.title) { if (!titleText.includes(t)) return false; }
 
-    // Authors: live typed text AND all chips must match (AND logic for co-author search)
+    // Authors: live typed text, substring chips, and ORCID-identity chips (each
+    // identity matches any of the person's name variants).
     const authText = (p['Authors']||'').toLowerCase();
     if (searchAuth && !authText.includes(searchAuth)) return false;
     for (const a of sel.author) { if (!authText.includes(a)) return false; }
-    for (const k of sel.authorExact) { if (!(p._authorKeys || []).includes(k)) return false; }
+    for (const lbl in sel.authorIdentity) { const vs = sel.authorIdentity[lbl]; if (!vs.some(v => authText.includes(v))) return false; }
 
     // Affiliations: live typed text AND all chips must match
     const affText = (p['Affiliations']||'').toLowerCase();
@@ -1191,7 +1154,7 @@ function applyFilters() {
 }
 
 function clearFilters() {
-  sel.editor.clear(); sel.area.clear(); sel.year.clear(); sel.title.clear(); sel.author.clear(); sel.authorExact.clear(); sel.affiliation.clear();
+  sel.editor.clear(); sel.area.clear(); sel.year.clear(); sel.title.clear(); sel.author.clear(); sel.authorIdentity = {}; sel.affiliation.clear();
   document.getElementById('chipsEditor').innerHTML = '';
   document.getElementById('chipsArea').innerHTML = '';
   document.getElementById('chipsYear').innerHTML = '';
