@@ -241,13 +241,13 @@
     }
     .chart-canvas-wrap {
       position: relative;
+      height: 340px;
       background: #fafaf7;
       border: 1px solid #e8e8e0;
       padding: 12px 10px 6px;
       margin-bottom: 10px;
     }
     .chart-canvas-wrap canvas {
-      width: 100% !important;
       image-rendering: high-quality;
     }
     .chart-read {
@@ -1031,6 +1031,9 @@ const chartColors = {
 
 // Render all charts at 3x resolution so they stay crisp on high-DPI displays and browser zoom
 Chart.defaults.devicePixelRatio = 3;
+// Each chart fills its fixed-height container. maintainAspectRatio:false stops the
+// width->height->scrollbar resize feedback loop that made charts continuously re-zoom.
+Chart.defaults.maintainAspectRatio = false;
 // Tooltip triggers on nearest element, no need to hit exact pixels
 Chart.defaults.interaction = { mode: 'nearest', intersect: false, axis: 'x' };
 Chart.defaults.hover = { mode: 'nearest', intersect: false, axis: 'x' };
