@@ -650,6 +650,10 @@ function buildPersonalScorecard(rule, conf, guesses) {
 
   // Compute local creativity
   const creativity = computeLocalCreativity(guesses);
+  const creativityLabel = creativity
+    ? (creativity.avgDist > 0.5 ? 'High' : creativity.avgDist > 0.2 ? 'Medium' : 'Low')
+    : 'N/A';
+  const creativityColor = creativityLabel === 'High' ? '#5a7000' : creativityLabel === 'Medium' ? '#8a6d00' : '#d46a6a';
   let distinctPatterns = 0;
   if (guesses.length > 0) {
     const types = new Set();
@@ -698,7 +702,7 @@ function buildPersonalScorecard(rule, conf, guesses) {
     ['"Yes" rate', yesRate + '%'],
     ['Confidence level', (conf * 20) + '%'],
     ['Tested a failing sequence', heardNo ? '✓ Yes' : '✗ No'],
-    ['Creativity index', '<span id="personal-creativity-val">...</span>'],
+    ['Creativity index', `<span id="personal-creativity-val"><span style="color:${creativityColor};font-weight:700">${creativityLabel}</span></span>`],
   ];
 
   const makeTable = (rows, type) => {
@@ -1435,6 +1439,13 @@ function buildYesRatioChart(a) {
     if (i <= 7) return '#e8c0a0';       // 61–80%: orange
     return '#e8a0a0';                   // 81–100%: red (confirmation-heavy)
   });
+  // Matching darker borders (one shade down from each fill)
+  const barBorders = a.ratioValues.map((_,i) => {
+    if (i <= 2) return '#8fb050';
+    if (i <= 5) return '#c0c060';
+    if (i <= 7) return '#d0a070';
+    return '#d46a6a';
+  });
 
   new Chart(ctx, {
     type: 'bar',
@@ -1443,7 +1454,7 @@ function buildYesRatioChart(a) {
       datasets: [{
         data: a.ratioValues,
         backgroundColor: barColors,
-        borderColor: barColors.map(c => c.replace('a0','80').replace('6a','50').replace('80','60')),
+        borderColor: barBorders,
         borderWidth: 1,
         borderRadius: 2,
       }]
