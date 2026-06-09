@@ -409,20 +409,6 @@
       background: #fff8f0; border: 1px solid #f0d8b0;
       font-size: 13px; color: #a06800; line-height: 1.5;
     }
-
-    /* Auto-zoom on larger screens so it doesn't feel tiny */
-    @media (min-width: 768px) {
-      .container { zoom: 1.4; }
-      body { padding-top: 20px; }
-    }
-    @media (min-width: 1200px) {
-      .container { zoom: 1.7; }
-      body { padding-top: 12px; }
-    }
-    @media (min-width: 1600px) {
-      .container { zoom: 1.9; }
-      body { padding-top: 8px; }
-    }
   </style>
 </head>
 <body>
@@ -1043,7 +1029,7 @@ const chartColors = {
   accent:    '#2e7d32',
 };
 
-// Render all charts at 3x resolution so they stay crisp at any zoom
+// Render all charts at 3x resolution so they stay crisp on high-DPI displays and browser zoom
 Chart.defaults.devicePixelRatio = 3;
 // Tooltip triggers on nearest element, no need to hit exact pixels
 Chart.defaults.interaction = { mode: 'nearest', intersect: false, axis: 'x' };
