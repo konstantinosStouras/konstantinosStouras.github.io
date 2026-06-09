@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -196,9 +197,11 @@
 <header class="header">
   <div class="header-inner">
     <h1><em>Management Science</em> — Paper Browser</h1>
-    <div class="header-meta">Data from <strong>INFORMS</strong> via Crossref · <span id="yearRange">1954–present</span></div>
-  </div>  
-<div class="header-meta" id="lastPull" style="opacity:.7;font-size:.85em;margin-top:2px"></div>
+    <div style="text-align:right;line-height:1.35">
+      <div class="header-meta">Data from <strong>INFORMS</strong> via Crossref · <span id="yearRange">1954–present</span></div>
+      <div class="header-meta" id="lastPull" style="font-size:12px;opacity:0.75;margin-top:1px"></div>
+    </div>
+  </div>
 </header>
 
 <div class="filters-bar">
@@ -304,15 +307,8 @@ const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=
 const AUTHORS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Authors`;
 const AFFILIATIONS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Affiliations_Merged`;
 const AFFILIATIONS_FALLBACK_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Affiliations`;
-const PER_PAGE = 20;
 const META_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Meta`;
-fetch(META_CSV_URL).then(r => r.text()).then(txt => {
-  const line = txt.split('\n').find(l => l.includes('Last Publication Data Pull'));
-  if (!line) return;
-  const date = line.split(',').pop().replace(/"/g, '').trim();
-  const el = document.getElementById('lastPull');
-  if (el && date) el.textContent = 'Last publication data pull: ' + date;
-}).catch(() => {});
+const PER_PAGE = 20;
 let allPapers = [], filtered = [], currentPage = 1;
 let authorData = []; // pre-computed from Authors tab
 let affiliationData = []; // pre-computed from Affiliations tab
@@ -418,6 +414,23 @@ async function loadData() {
   }
 }
 
+// Show when the pipeline last checked Crossref for new papers (Meta tab).
+function loadLastPull() {
+  fetch(META_CSV_URL).then(function(r) { return r && r.ok ? r.text() : null; }).then(function(txt) {
+    if (!txt || txt.trim().charAt(0) === '<') return; // not CSV (error page)
+    var lines = txt.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      var cols = parseLine(lines[i]);
+      if (cols.length >= 2 && clean(cols[0]) === 'Last Publication Data Pull') {
+        var date = clean(cols[1]);
+        var el = document.getElementById('lastPull');
+        if (el && date) el.textContent = 'Last publication data pull: ' + date;
+        return;
+      }
+    }
+  }).catch(function() {});
+}
+
 // ── Editor cleaning & normalization ──
 const EDITOR_ALIASES = {
   // Accent variants
@@ -451,7 +464,7 @@ const EDITOR_ALIASES = {
   'jagmohan s. raju': 'Jagmohan Raju', 'paul h. zipkin': 'Paul Zipkin',
   'candace a. yano': 'Candace Yano',
   // Name consolidation
-  'david simchi-levi': 'David Simchi-Levi', 'david simchi levi': 'David Simchi-Levi', 'david simchi\u2010levi': 'David Simchi-Levi', 'david simchi\u2011levi': 'David Simchi-Levi', 'david simchi\u2012levi': 'David Simchi-Levi', 'david simchi\u2013levi': 'David Simchi-Levi',
+  'david simchi-levi': 'David Simchi-Levi', 'david simchi levi': 'David Simchi-Levi', 'david simchi‐levi': 'David Simchi-Levi', 'david simchi‑levi': 'David Simchi-Levi', 'david simchi‒levi': 'David Simchi-Levi', 'david simchi–levi': 'David Simchi-Levi',
   'chung piaw teo': 'Chung-Piaw Teo', 'chung-piaw teo': 'Chung-Piaw Teo',
   'teck ho': 'Teck-Hua Ho', 'teck-hua ho': 'Teck-Hua Ho',
   'yinyu-ye': 'Yinyu Ye', 'yinyu ye': 'Yinyu Ye',
@@ -550,9 +563,9 @@ function normalizeEditorName(name) {
   // Strip "Prof." / "Professor" prefix
   t = t.replace(/^(prof\.?|professor)\s+/i, '');
   // Normalize Unicode hyphens to regular hyphen
-  t = t.replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\uFE58\uFE63\uFF0D]/g, '-');
+  t = t.replace(/[‐‑‒–—―﹘﹣－]/g, '-');
   // Normalize accents for lookup
-  var key = t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  var key = t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   if (EDITOR_ALIASES[key]) return EDITOR_ALIASES[key];
   var keyLower = t.toLowerCase();
   if (EDITOR_ALIASES[keyLower]) return EDITOR_ALIASES[keyLower];
@@ -638,7 +651,7 @@ function reverseName(name) {
 }
 
 function stripAccentsLower(s) {
-  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 }
 
 function fuzzyMergeEditors() {
@@ -1308,6 +1321,7 @@ function debounceAffSearch() {
 }
 
 loadData();
+loadLastPull();
 </script>
 </body>
 </html>
