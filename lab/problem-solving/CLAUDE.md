@@ -266,13 +266,14 @@ Each chart includes:
 
 ---
 
-## Auto-zoom
+## Display scaling
 
-CSS `zoom` property on `.container`:
-- **768px+** (tablets/small laptops): `zoom: 1.35`
-- **1200px+** (large screens): `zoom: 1.5`
+The page renders at its natural `.container` size (max-width 520px) on all
+screens. A previous CSS `zoom` on `.container` for larger screens was removed
+because CSS `zoom` offsets Chart.js's cursor hit-testing, making chart
+tooltips fail to trigger over the correct bar.
 
-Charts render at 3× pixel ratio so they remain crisp under zoom.
+Charts still render at 3× pixel ratio so they remain crisp on high-DPI displays.
 
 ---
 
