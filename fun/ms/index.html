@@ -286,10 +286,10 @@
 
 <div class="summary-tabs" id="summaryTabs">
   <div id="summaryEditors" class="summary-content">
-    <div id="summaryEditorsList" class="summary-list"></div>
+    <div id="summaryEditorsList" class="summary-list"><div style="padding:12px;color:var(--text-muted)">Loading editors...</div></div>
   </div>
   <div id="summaryAreas" class="summary-content">
-    <div id="summaryAreasList" class="summary-list"></div>
+    <div id="summaryAreasList" class="summary-list"><div style="padding:12px;color:var(--text-muted)">Loading areas...</div></div>
   </div>
   <div id="summaryAuthors" class="summary-content">
     <div id="summaryAuthorsList" class="summary-list"><div style="padding:12px;color:var(--text-muted)">Loading authors...</div></div>
@@ -331,6 +331,8 @@
 const SHEET_ID = '11MKt6uzfnxTNTbK4Kb1jwW32cEsKZcBRncubV2omJzQ';
 const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Data`;
 const AUTHORS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Authors`;
+const EDITORS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Editors`;
+const AREAS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Areas`;
 const AFFILIATIONS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Affiliations_Merged`;
 const AFFILIATIONS_FALLBACK_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Affiliations`;
 const META_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Meta`;
@@ -449,7 +451,10 @@ async function loadData() {
     if (affiliationData.length === 0) {
       affiliationData = await tryLoadAff(AFFILIATIONS_FALLBACK_URL, 'Affiliations');
     }
-    buildFilterOptions();
+    // Render results for any filters set while loading (e.g. a click on the
+    // pre-computed Editors/Areas lists); with no filters this builds the
+    // dropdowns and shows the welcome state.
+    applyFilters();
     // Update year range in header
     var years = allPapers.map(function(p) { return parseInt(p['Year']); }).filter(function(y) { return !isNaN(y); });
     if (years.length > 0) {
@@ -477,6 +482,41 @@ async function loadAuthors() {
     renderAuthorsSummary();
   } catch (e) {
     setTimeout(loadAuthors, 3000);
+  }
+}
+
+// The Editors and Areas summary lists are pre-computed in the sheet's
+// Editors/Areas tabs by the weekly pipeline (same alias/junk/fuzzy-merge
+// normalization the browser applies). Render them as soon as their small
+// CSVs arrive so the panels work long before the full Data CSV is parsed;
+// once the papers are loaded, buildSummaryTabs() takes over with live
+// (filter-aware) counts.
+async function loadSummaries() {
+  async function tryTab(url, field) {
+    try {
+      var r = await fetch(url);
+      if (!r.ok) return null;
+      var t = await r.text();
+      if (t.trim().charAt(0) === '<') return null; // HTML error page, not CSV
+      var rows = parseCSV(t, field);
+      return rows.length ? rows : null;
+    } catch (e) { return null; }
+  }
+  var results = await Promise.all([
+    tryTab(EDITORS_CSV_URL, 'Editor'),
+    tryTab(AREAS_CSV_URL, 'Area')
+  ]);
+  if (allPapers.length > 0) return; // live data already rendered the real lists
+  var eds = results[0], ars = results[1];
+  if (eds) {
+    document.getElementById('summaryEditorsList').innerHTML = eds.map(function(e) {
+      return '<div class="summary-item" onclick="filterByEditor(\'' + escAttr(e['Editor']) + '\')"><span class="summary-count">' + esc(e['Papers']) + '</span> papers accepted by ' + esc(e['Editor']) + '</div>';
+    }).join('');
+  }
+  if (ars) {
+    document.getElementById('summaryAreasList').innerHTML = ars.map(function(a) {
+      return '<div class="summary-item" onclick="filterByArea(\'' + escAttr(a['Area']) + '\')"><span class="summary-count">' + esc(a['Papers']) + '</span> papers in ' + esc(a['Area']) + '</div>';
+    }).join('');
   }
 }
 
@@ -1445,6 +1485,7 @@ window.addEventListener('scroll', function() {
 
 loadData();
 loadAuthors();
+loadSummaries();
 loadLastPull();
 </script>
 </body>
