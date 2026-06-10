@@ -292,7 +292,7 @@
     <div id="summaryAreasList" class="summary-list"></div>
   </div>
   <div id="summaryAuthors" class="summary-content">
-    <div id="summaryAuthorsList" class="summary-list"></div>
+    <div id="summaryAuthorsList" class="summary-list"><div style="padding:12px;color:var(--text-muted)">Loading authors...</div></div>
     <div id="authorsPagination" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:14px 0 4px"></div>
   </div>
   <div id="summaryAffiliations" class="summary-content">
@@ -427,21 +427,12 @@ function addChipFromCard(type, val) {
 
 async function loadData() {
   try {
-    const [resp, authResp, affResp] = await Promise.all([
-      fetch(CSV_URL),
-      fetch(AUTHORS_CSV_URL).catch(function() { return null; }),
-      fetch(AFFILIATIONS_CSV_URL).catch(function() { return null; })
-    ]);
+    const resp = await fetch(CSV_URL);
     const text = await resp.text();
     allPapers = parseCSV(text);
     allPapers.forEach(normalizeEditors);
     fuzzyMergeEditors();
     fuzzyMergeAreas();
-    // Load pre-computed, ORCID-resolved author data from Authors tab
-    if (authResp && authResp.ok) {
-      var authText = await authResp.text();
-      authorData = parseCSV(authText, 'Author');
-    }
     // Load affiliation data — try Affiliations_Merged, fallback to Affiliations
     async function tryLoadAff(url, label) {
       try {
@@ -468,6 +459,24 @@ async function loadData() {
     }
   } catch (e) {
     setTimeout(loadData, 3000);
+  }
+}
+
+// Authors are pre-computed in the sheet's Authors tab by the weekly pipeline
+// (ORCID-resolved, with paper counts, areas and name variants). Load and
+// render them independently of the much larger Data CSV, so the Authors
+// panel is ready as soon as its own small CSV arrives instead of waiting for
+// every paper + abstract since 1954 to download and parse.
+async function loadAuthors() {
+  try {
+    var r = await fetch(AUTHORS_CSV_URL);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    var t = await r.text();
+    if (t.trim().charAt(0) === '<') throw new Error('not CSV'); // HTML error page
+    authorData = parseCSV(t, 'Author');
+    renderAuthorsSummary();
+  } catch (e) {
+    setTimeout(loadAuthors, 3000);
   }
 }
 
@@ -861,7 +870,6 @@ function buildFilterOptions() {
   fillCustomSelect('csArea', Object.keys(areaCounts).sort(), areaCounts);
   fillCustomSelect('csYear', Object.keys(yearCounts).sort().reverse(), yearCounts);
   buildSummaryTabs(editorCounts, areaCounts);
-  renderAuthorsSummary();
 }
 
 function buildSummaryTabs(editorCounts, areaCounts) {
@@ -1436,6 +1444,7 @@ window.addEventListener('scroll', function() {
 }, { passive: true });
 
 loadData();
+loadAuthors();
 loadLastPull();
 </script>
 </body>
