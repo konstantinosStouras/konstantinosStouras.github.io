@@ -47,9 +47,12 @@ function findLastDataRow(sheet) {
 // ============================================================
 function doPost(e) {
   var lock = LockService.getScriptLock();
-  lock.waitLock(10000);
 
   try {
+    // Inside the try: if the lock times out under a burst of simultaneous
+    // submissions, the client gets a JSON error instead of a dropped row.
+    lock.waitLock(30000);
+
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Responses");
     var data  = JSON.parse(e.postData.contents);
 
@@ -87,7 +90,9 @@ function doPost(e) {
       .setMimeType(ContentService.MimeType.JSON);
 
   } finally {
-    lock.releaseLock();
+    // releaseLock throws if the lock was never acquired (waitLock timeout);
+    // never let cleanup mask the real error.
+    try { lock.releaseLock(); } catch (ignore) {}
   }
 }
 
@@ -331,7 +336,7 @@ function sequenceFeatures(a, b, c) {
     (d1 > 0 && d2 > 0) ? 1 : 0,
     (d1 < 0 && d2 < 0) ? 1 : 0,
     (d1 === 0 && d2 === 0) ? 1 : 0,
-    (d1 > 0 !== d2 > 0 && d1 !== 0 && d2 !== 0) ? 1 : 0,
+    ((d1 > 0) !== (d2 > 0) && d1 !== 0 && d2 !== 0) ? 1 : 0,
     (Math.min(a, b, c) < 0) ? 1 : 0,
     (a === 0 || b === 0 || c === 0) ? 1 : 0,
     Math.log(1 + spread) / 7,
