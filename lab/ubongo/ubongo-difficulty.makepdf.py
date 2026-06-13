@@ -199,16 +199,18 @@ para('Intuitively, it is the fewest decisions one must commit by hand before a m
 
 heading('3.  A Sahni-style difficulty for Ubongo', 13, rule=True)
 heading('3.1  Instance', 11.5, 'HelvB', top=8, bot=2)
-para('An instance is a region R of N cells together with a multiset of polyominoes P = {p_1, ..., p_m} '
-     'whose areas sum to N. A solution (tiling) places every piece - choosing an orientation (rotations '
-     'and reflections allowed) and a translation - so that the placements partition R exactly. Because '
-     'the areas sum to N, every solution uses all m pieces exactly once: this is exact cover.')
-heading('3.2  Canonical greedy H (the analogue of ratio order)', 11.5, 'HelvB', top=8, bot=2)
-para('Place pieces largest-area-first (ties broken by a fixed piece index); for each piece, take the '
-     'first feasible placement under a fixed top-to-bottom, left-to-right cell scan and a fixed '
-     'orientation order. The rule is deterministic and never backtracks. It either tiles R (success) or '
-     'reaches a cell that no remaining piece can legally cover (a dead end) - mirroring knapsack greedy '
-     'producing a feasible but sub-optimal pack.')
+para('An instance is a region R of N cells together with the set of available bricks P = {p_1, ..., p_m} '
+     '(here m = 8 - all bricks are available every round). A solution (tiling) places a SUBSET of the '
+     'bricks - choosing an orientation (rotations and reflections allowed) and a translation for each - '
+     'so that the chosen placements partition R exactly; bricks that are not needed are left unused. '
+     'This is exact cover by a sub-collection, and the player\'s job is to discover which subset fits.')
+heading('3.2  Canonical greedy H (the value-to-cell ratio order)', 11.5, 'HelvB', top=8, bot=2)
+para('Each brick carries a dollar value; its value-per-cell ratio - dollars divided by the number of '
+     'cells it occupies - is the exact analogue of the knapsack value-to-weight ratio. The greedy H '
+     'considers the bricks in non-increasing order of this ratio and places each at its first feasible '
+     'spot (a fixed top-to-bottom, left-to-right cell scan) if it fits, otherwise skips it; it stops '
+     'once the outline is filled. Deterministic and backtrack-free, it either tiles R (success) or jams '
+     '- mirroring knapsack greedy producing a feasible but sub-optimal pack.')
 heading('3.3  Definition', 11.5, 'HelvB', top=8, bot=2)
 para('Let H-completion(S) denote the result of running H after pre-placing a set S of piece-placements. '
      'Write k(R,P) for the difficulty. Then:')
@@ -253,19 +255,24 @@ para('The three agree at the extremes and diverge in the middle - the Ubongo ver
      'pieces interlock (high k), not merely when the board is large.')
 
 heading('5.  Use in the live game', 13, rule=True)
-para('All eight pieces are always shown, but each board is solved with a SUBSET, exactly as on a physical '
-     'Ubongo card: the Easy challenge fills a 14-cell outline (three pieces) and the Hard challenge an '
-     '18-cell outline (four pieces); the remaining pieces are displayed for reference but not used that '
-     'round. The generator picks a random subset whose areas sum to the target and builds the outline '
-     'from a real tiling, so a solution always exists; k and |T| are then computed over that subset and '
-     'shown beneath the board.')
-para('Difficulty rises on two axes - more pieces and a larger region - with k as the geometric '
-     'tie-breaker (Easy returns the first valid board; Hard keeps the first board with k >= 2):')
+para('All eight bricks are available every round; the player must find the combination that fills the '
+     'outline. Each brick has a dollar value, chosen so the eight value-per-cell ratios are all distinct '
+     '(giving the greedy a strict order). The KPIs shown to the player mirror the Tetris app: value '
+     'placed, the best value achievable on the board (the maximum-value exact cover), cells filled, and '
+     'value density ($/cell).')
 table([
- ['Tier','Outline','Pieces used','Typical k'],
- ['Easy','14 cells','3  (1 tetromino + 2 pentominoes)','0 - 1'],
- ['Hard','18 cells','4  (2 tet + 2 pent, or tromino + 3 pent)','2'],
-], [0.13,0.17,0.48,0.22])
+ ['Brick','I3','L','S','T','L5','Y','P','N'],
+ ['Cells','3','4','4','4','5','5','5','5'],
+ ['Value','$5k','$6k','$5k','$7k','$9k','$6k','$8k','$7k'],
+ ['$/cell','1667','1500','1250','1750','1800','1200','1600','1400'],
+], [0.20,0.10,0.10,0.10,0.10,0.10,0.10,0.10,0.10])
+para('Difficulty is the value-ratio Sahni k itself. Because the outline is generated from a real tiling, '
+     'a solution always exists; the game rejection-samples outlines until k matches the tier:')
+table([
+ ['Tier','Outline','Defined by','Meaning'],
+ ['Easy','14 cells','k <= 1','the ratio-greedy almost solves it unaided'],
+ ['Hard','18 cells','k >= 3','the ratio-greedy is badly trapped - real search needed'],
+], [0.12,0.16,0.20,0.52])
 
 heading('References', 13, rule=True)
 para('S. Sahni, "Approximate algorithms for the 0/1 knapsack problem," Journal of the ACM 22(1):115-124, 1975.', 9.5, 'Helv', gap=1, color=(0.3,0.3,0.3))

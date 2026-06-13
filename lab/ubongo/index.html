@@ -92,6 +92,15 @@
     }
     .sand > div { height: 100%; width: 100%; background: linear-gradient(90deg, #2ecc71, #f1c40f); transition: width .35s linear, background .35s; border-radius: 999px; }
 
+    /* KPIs */
+    .kpi-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-bottom: 16px; }
+    .kpi {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+      padding: 8px 18px; box-shadow: var(--shadow); text-align: center; min-width: 116px;
+    }
+    .kpi-label { display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+    .kpi-val { display: block; font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 2px; }
+
     /* Layout */
     .game {
       display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start;
@@ -134,14 +143,12 @@
     .piece.selected { border-color: var(--accent); background: #fff5ea; box-shadow: 0 4px 14px rgba(230,126,34,.25); }
     .piece.used { opacity: .35; filter: grayscale(.4); cursor: default; }
     .piece.used:hover { background: #faf7f0; }
-    .piece.reference { opacity: .3; filter: grayscale(.85); cursor: default; box-shadow: none; }
-    .piece.reference:hover { background: #faf7f0; }
     .tray-note { font-size: 11.5px; color: var(--muted); margin-top: 10px; }
-    .tray-note .dim-word { opacity: .55; }
     .piece-grid { display: grid; gap: 2px; }
     .pc { border-radius: 3px; }
     .pc.on { box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
     .piece .pname { font-size: 11px; color: var(--muted); font-weight: 600; }
+    .piece .pval { font-size: 10.5px; font-weight: 700; color: var(--muted); margin-top: 3px; font-variant-numeric: tabular-nums; }
 
     .piece-actions { display: flex; gap: 8px; margin-bottom: 12px; }
     .piece-actions .btn { flex: 1; text-align: center; }
@@ -218,6 +225,13 @@
       </div>
     </div>
 
+    <div class="kpi-row">
+      <div class="kpi"><span class="kpi-label">Value placed</span><span class="kpi-val" id="kpiValue">$0</span></div>
+      <div class="kpi"><span class="kpi-label">Best possible</span><span class="kpi-val" id="kpiBest">$0</span></div>
+      <div class="kpi"><span class="kpi-label">Cells filled</span><span class="kpi-val" id="kpiCells">0 / 0</span></div>
+      <div class="kpi"><span class="kpi-label">Efficiency</span><span class="kpi-val" id="kpiEff">$0/cell</span></div>
+    </div>
+
     <div class="game">
       <div class="card board-card">
         <h2>Board &mdash; fill every tile</h2>
@@ -235,9 +249,9 @@
             <button class="btn" id="rotateBtn">&#8635; Rotate</button>
             <button class="btn" id="flipBtn">&#8646; Flip</button>
           </div>
-          <h2>Pieces &mdash; fill the board with the bright ones</h2>
+          <h2>Bricks &mdash; all eight are available</h2>
           <div class="tray" id="tray"></div>
-          <p class="tray-note">All eight Ubongo pieces are always shown. Each board uses only the <b>bright</b> subset; the <span class="dim-word">dimmed</span> pieces are not used this round.</p>
+          <p class="tray-note">Every brick can be used, and each shows its dollar value. Work out which combination fills the outline &mdash; only some will fit.</p>
           <div class="hint-row">
             <button class="btn ghost" id="hintBtn">&#128161; Hint</button>
             <button class="btn ghost" id="solveBtn">Show solution</button>
@@ -262,6 +276,7 @@
       <h3 id="modalTitle">Ubongo!</h3>
       <p id="modalSub">You filled the board.</p>
       <div class="stat">Your time: <b id="modalTime">0:00</b></div>
+      <div class="stat">Value captured: <b id="modalValue">$0</b></div>
       <div class="actions">
         <button class="btn" id="modalReplay">Replay</button>
         <button class="btn primary" id="modalNext">Next puzzle</button>
@@ -276,18 +291,21 @@
     // ---------- Piece library (polyominoes) ----------
     // Each piece: name, colour, and base cells [row, col].
     // Fixed set: one tromino, three tetrominoes, four pentominoes.
+    // value = dollar worth of the brick. Values are chosen so the value-per-cell
+    // ratios ($/cell) are all distinct, giving the Sahni greedy a strict order:
+    //   Y 1200 < S 1250 < N 1400 < L 1500 < P 1600 < I3 1667 < T 1750 < L5 1800
     const LIBRARY = [
       // Tromino (3 cells)
-      { name: 'I3', color: '#1abc9c', cells: [[0,0],[1,0],[2,0]] },
+      { name: 'I3', color: '#1abc9c', value: 5000, cells: [[0,0],[1,0],[2,0]] },
       // Tetrominoes (4 cells)
-      { name: 'L',  color: '#c9b458', cells: [[0,0],[1,0],[2,0],[2,1]] },
-      { name: 'S',  color: '#2ecc71', cells: [[0,0],[1,0],[1,1],[2,1]] },
-      { name: 'T',  color: '#3498db', cells: [[0,0],[1,0],[1,1],[2,0]] },
+      { name: 'L',  color: '#c9b458', value: 6000, cells: [[0,0],[1,0],[2,0],[2,1]] },
+      { name: 'S',  color: '#2ecc71', value: 5000, cells: [[0,0],[1,0],[1,1],[2,1]] },
+      { name: 'T',  color: '#3498db', value: 7000, cells: [[0,0],[1,0],[1,1],[2,0]] },
       // Pentominoes (5 cells)
-      { name: 'L5', color: '#e67e22', cells: [[0,0],[1,0],[2,0],[3,0],[3,1]] },
-      { name: 'Y',  color: '#9b59b6', cells: [[0,1],[1,0],[1,1],[2,1],[3,1]] },
-      { name: 'P',  color: '#e74c3c', cells: [[0,0],[0,1],[1,0],[1,1],[2,0]] },
-      { name: 'N',  color: '#f1c40f', cells: [[0,1],[1,1],[2,0],[2,1],[3,0]] }
+      { name: 'L5', color: '#e67e22', value: 9000, cells: [[0,0],[1,0],[2,0],[3,0],[3,1]] },
+      { name: 'Y',  color: '#9b59b6', value: 6000, cells: [[0,1],[1,0],[1,1],[2,1],[3,1]] },
+      { name: 'P',  color: '#e74c3c', value: 8000, cells: [[0,0],[0,1],[1,0],[1,1],[2,0]] },
+      { name: 'N',  color: '#f1c40f', value: 7000, cells: [[0,1],[1,1],[2,0],[2,1],[3,0]] }
     ];
 
     const DIRS = [[-1,0],[1,0],[0,-1],[0,1]];
@@ -397,7 +415,7 @@
 
     function generatePuzzle(target) {
       for (let attempt = 0; attempt < 1500; attempt++) {
-        const chosen = pickSubset(target).map(p => ({ name: p.name, color: p.color, cells: p.cells }));
+        const chosen = pickSubset(target).map(p => ({ name: p.name, color: p.color, value: p.value, cells: p.cells }));
         if (!chosen.length) continue;
         chosen.forEach(p => { p._oris = orientations(p.cells); });
         const filled = new Map();
@@ -423,7 +441,7 @@
             rows: maxR - minR + 1,
             cols: maxC - minC + 1,
             region: region,
-            pieces: chosen.map(p => ({ name: p.name, color: p.color, oris: p._oris })),
+            pieces: chosen.map(p => ({ name: p.name, color: p.color, value: p.value, oris: p._oris })),
             solution: solution
           };
         }
@@ -453,7 +471,7 @@
       const bits = []; for (let b = 0; b < N; b++) bits.push(1n << BigInt(b));
       let full = 0n; for (let b = 0; b < N; b++) full |= bits[b];
       const byCell = Array.from({ length: N }, () => []);
-      const areas = [], sorted = [];
+      const areas = [], sorted = [], values = [], ratios = [];
       pieces.forEach((p, pi) => {
         const placements = [], seen = new Set();
         for (const ori of p.oris) {
@@ -469,36 +487,19 @@
             if (ok && !seen.has(mask)) { seen.add(mask); placements.push({ mask, low, idxs }); }
           }
         }
-        areas.push(p.oris[0].length);
-        // Canonical greedy order: fill the lowest-index (top-left) cell first.
+        const area = p.oris[0].length;
+        areas.push(area); values.push(p.value); ratios.push(p.value / area);
+        // Within a piece, try the lowest-index (top-left) placement first.
         sorted.push(placements.slice().sort((a, b) => a.low - b.low).map(x => x.mask));
         for (const pm of placements)
           for (const idx of pm.idxs) byCell[idx].push({ pi: pi, mask: pm.mask });
       });
-      return { N, full, m, bits, byCell, areas, sorted };
+      return { N, full, m, bits, byCell, areas, values, ratios, sorted };
     }
 
     function firstEmpty(pd, occ) {
       for (let i = 0; i < pd.N; i++) if ((occ & pd.bits[i]) === 0n) return i;
       return -1;
-    }
-
-    // Count exact tilings (each piece used once); capped in solutions and nodes.
-    function countSolutions(pd, cap) {
-      let count = 0, nodes = 0, capped = false; const MAXN = 200000;
-      (function rec(occ, used) {
-        if (count >= cap || capped) return;
-        if (occ === pd.full) { count++; return; }
-        if (++nodes > MAXN) { capped = true; return; }
-        const cell = firstEmpty(pd, occ);
-        for (const pl of pd.byCell[cell]) {
-          if (used & (1 << pl.pi)) continue;
-          if ((pl.mask & occ) !== 0n) continue;
-          rec(occ | pl.mask, used | (1 << pl.pi));
-          if (count >= cap || capped) return;
-        }
-      })(0n, 0);
-      return { count, capped };
     }
 
     function collectSolutions(pd, cap) {
@@ -518,17 +519,46 @@
       return sols;
     }
 
-    // Deterministic greedy H: largest piece first, first feasible (top-left) placement.
+    // Tiling stats over any subset of the bricks: number of tilings (capped) and
+    // the maximum total dollar value achievable while exactly filling the region.
+    function analyze(pd, cap) {
+      let count = 0, nodes = 0, capped = false, best = 0; const MAXN = 200000;
+      (function rec(occ, used, val) {
+        if (count >= cap || capped) return;
+        if (occ === pd.full) { count++; if (val > best) best = val; return; }
+        if (++nodes > MAXN) { capped = true; return; }
+        const cell = firstEmpty(pd, occ);
+        for (const pl of pd.byCell[cell]) {
+          if (used & (1 << pl.pi)) continue;
+          if ((pl.mask & occ) !== 0n) continue;
+          rec(occ | pl.mask, used | (1 << pl.pi), val + pd.values[pl.pi]);
+          if (count >= cap || capped) return;
+        }
+      })(0n, 0, 0);
+      return { count: count, capped: capped, bestValue: best };
+    }
+
+    // The full eight-piece set, with orientations precomputed once.
+    let _ALL = null;
+    function allPieces() {
+      if (!_ALL) _ALL = LIBRARY.map(p => ({
+        name: p.name, color: p.color, value: p.value, cells: p.cells, oris: orientations(p.cells)
+      }));
+      return _ALL;
+    }
+
+    // Deterministic greedy H (knapsack ratio-greedy analogue): consider the
+    // remaining bricks in non-increasing order of value-per-cell ratio ($/cell);
+    // place each at its first feasible (top-left) spot if it fits, else skip it.
+    // Succeeds when the region is fully tiled (unused bricks are simply left out).
     function greedyComplete(pd, occupied, used) {
       const rem = [];
       for (let pi = 0; pi < pd.m; pi++) if (!(used & (1 << pi))) rem.push(pi);
-      rem.sort((a, b) => pd.areas[b] - pd.areas[a] || a - b);
+      rem.sort((a, b) => pd.ratios[b] - pd.ratios[a] || a - b);
       let occ = occupied;
       for (const pi of rem) {
-        let chosen = null;
-        for (const mask of pd.sorted[pi]) { if ((mask & occ) === 0n) { chosen = mask; break; } }
-        if (chosen === null) return false;
-        occ |= chosen;
+        if (occ === pd.full) break;
+        for (const mask of pd.sorted[pi]) { if ((mask & occ) === 0n) { occ |= mask; break; } }
       }
       return occ === pd.full;
     }
@@ -570,28 +600,35 @@
       return Math.max(26, Math.min(46, Math.floor(380 / m)));
     }
 
-    // Easy returns the first valid board (gentle). Hard samples within a small
-    // budget and keeps the most challenging one (highest kappa, fewest tilings).
+    // Difficulty is the value-ratio Sahni kappa over the FULL eight-piece set.
+    // Easy: a small (14-cell) outline the ratio-greedy nearly solves (kappa <= 1).
+    // Hard: a larger (18-cell) outline where the ratio-greedy is badly trapped
+    // (kappa >= 3). All eight bricks are always available either way.
+    const ACCEPT = { easy: k => k <= 1, hard: k => k >= 3 };
+
+    function evaluate(puzzle) {
+      const pd = buildPlacements(puzzle.region, allPieces());
+      const st = analyze(pd, 3000);
+      return {
+        puzzle: puzzle, kappa: sahniDifficulty(pd),
+        tilings: { count: st.count, capped: st.capped }, bestValue: st.bestValue
+      };
+    }
+
     function pickPuzzle(diff) {
       const target = DIFFS[diff].cells;
-      const deadline = Date.now() + (diff === 'hard' ? 220 : 90);
+      const deadline = Date.now() + 220;
       let best = null;
-      for (let t = 0; t < 160; t++) {
+      for (let t = 0; t < 220; t++) {
         const puzzle = generatePuzzle(target);
         if (!puzzle) continue;
-        const pd = buildPlacements(puzzle.region, puzzle.pieces);
-        const kappa = sahniDifficulty(pd);
-        const tilings = countSolutions(pd, 1000);
-        if (diff === 'easy') return { puzzle: puzzle, kappa: kappa, tilings: tilings };
-        if (kappa >= 2) return { puzzle: puzzle, kappa: kappa, tilings: tilings }; // hard: first solid challenge
-        const score = kappa * 10000 - tilings.count; // else keep hardest seen
-        if (!best || score > best.score) best = { puzzle, kappa, tilings, score };
+        const cand = evaluate(puzzle);
+        if (ACCEPT[diff](cand.kappa)) return cand;
+        const score = (diff === 'hard' ? cand.kappa : -cand.kappa); // hard: max kappa; easy: min
+        if (!best || score > best.score) { cand.score = score; best = cand; }
         if (Date.now() > deadline) break;
       }
-      if (best) return { puzzle: best.puzzle, kappa: best.kappa, tilings: best.tilings };
-      const puzzle = generatePuzzle(target);
-      const pd = buildPlacements(puzzle.region, puzzle.pieces);
-      return { puzzle: puzzle, kappa: sahniDifficulty(pd), tilings: countSolutions(pd, 1000) };
+      return best || evaluate(generatePuzzle(target));
     }
 
     function newGame(diff) {
@@ -606,9 +643,11 @@
         solution: puzzle.solution,
         kappa: picked.kappa,
         tilings: picked.tilings,
+        bestValue: picked.bestValue,
         occupied: new Map(),        // "r,c" -> instanceId
-        pieces: puzzle.pieces.map((p, i) => ({
-          id: i, name: p.name, color: p.color,
+        // All eight bricks are available every round; the player finds a fit.
+        pieces: allPieces().map((p, i) => ({
+          id: i, name: p.name, color: p.color, value: p.value,
           oris: p.oris, oriIndex: Math.floor(Math.random() * p.oris.length),
           placed: false, placedCells: null
         })),
@@ -618,7 +657,8 @@
       renderBoard();
       renderTray();
       renderBoardMeta();
-      setStatus('Select a piece, then place it on the board.', '');
+      renderKPIs();
+      setStatus('All eight bricks are available — find the ones that fill the board.', '');
       resetTimer();
       startTimer();
     }
@@ -629,6 +669,21 @@
       $('#boardMeta').innerHTML =
         'Sahni difficulty <b>&kappa; = ' + state.kappa + '</b>' +
         '<span class="sep">&middot;</span>' + tStr + ' tiling' + (n === 1 ? '' : 's');
+    }
+
+    function money(v) { return '$' + Math.round(v).toLocaleString('en-US'); }
+    function placedValue() { return state.pieces.reduce((s, p) => s + (p.placed ? p.value : 0), 0); }
+
+    // KPIs (managerial framing, mirroring the Tetris app): value placed, the best
+    // value achievable on this board, cells filled, and value density ($/cell).
+    function renderKPIs() {
+      const filled = state.occupied.size, total = state.region.size;
+      const val = placedValue();
+      const eff = filled ? Math.round(val / filled) : 0;
+      $('#kpiValue').textContent = money(val);
+      $('#kpiBest').textContent = money(state.bestValue);
+      $('#kpiCells').textContent = filled + ' / ' + total;
+      $('#kpiEff').textContent = money(eff) + '/cell';
     }
 
     function selectedPiece() {
@@ -690,28 +745,25 @@
       return grid;
     }
 
-    // Show ALL eight pieces: the subset this board uses is active/selectable,
-    // the remaining pieces are shown dimmed for reference (not used here).
+    // All eight bricks are available every round; the player must work out which
+    // combination tiles the outline. Each shows its dollar value.
     function renderTray() {
       trayEl.innerHTML = '';
-      const active = {};
-      for (const p of state.pieces) active[p.name] = p;
-      for (const lib of LIBRARY) {
-        const p = active[lib.name];
+      for (const p of state.pieces) {
         const wrap = document.createElement('div');
-        if (p) {
-          wrap.className = 'piece' + (p.placed ? ' used' : '') + (state.selected === p.id ? ' selected' : '');
-          wrap.appendChild(pieceGrid(oriCells(p), p.color));
-          if (!p.placed) {
-            wrap.addEventListener('click', () => {
-              state.selected = (state.selected === p.id) ? null : p.id;
-              renderTray();
-            });
-          }
-        } else {
-          wrap.className = 'piece reference';
-          wrap.title = 'Not part of this board — shown for reference';
-          wrap.appendChild(pieceGrid(normalize(lib.cells), lib.color));
+        wrap.className = 'piece' + (p.placed ? ' used' : '') + (state.selected === p.id ? ' selected' : '');
+        wrap.title = p.name + ' — ' + money(p.value) + ' (' + p.oris[0].length + ' cells, ' +
+          money(Math.round(p.value / p.oris[0].length)) + '/cell)';
+        wrap.appendChild(pieceGrid(oriCells(p), p.color));
+        const tag = document.createElement('div');
+        tag.className = 'pval';
+        tag.textContent = money(p.value);
+        wrap.appendChild(tag);
+        if (!p.placed) {
+          wrap.addEventListener('click', () => {
+            state.selected = (state.selected === p.id) ? null : p.id;
+            renderTray();
+          });
         }
         trayEl.appendChild(wrap);
       }
@@ -769,6 +821,7 @@
       clearPreview();
       renderBoard();
       renderTray();
+      renderKPIs();
       checkWin();
     }
 
@@ -780,7 +833,8 @@
       state.selected = p.id;
       renderBoard();
       renderTray();
-      setStatus('Piece picked up. Place it again or choose another.', '');
+      renderKPIs();
+      setStatus('Brick picked up. Place it again or choose another.', '');
     }
 
     function flashBad() {
@@ -788,17 +842,19 @@
     }
 
     function checkWin() {
+      // The board is won when the outline is completely covered, regardless of
+      // which subset of the eight bricks was used to do it.
       let allFilled = true;
       for (const k of state.region) { if (!state.occupied.has(k)) { allFilled = false; break; } }
-      const allPlaced = state.pieces.every(p => p.placed);
-      if (allFilled && allPlaced) {
+      if (allFilled) {
         stopTimer();
         const t = timer.elapsed;
         const best = saveBest(state.diff, t);
-        setStatus('Ubongo! You solved it in ' + fmt(t) + '.', 'win');
-        showWin(t, best);
+        const val = placedValue();
+        setStatus('Ubongo! Filled in ' + fmt(t) + ' for ' + money(val) + '.', 'win');
+        showWin(t, best, val);
       } else {
-        setStatus('Select a piece, then place it on the board.', '');
+        setStatus('Keep going — find the bricks that fill the rest.', '');
       }
     }
 
@@ -840,8 +896,8 @@
       if (!next) return;
       applySolutionPiece(next);
       state.selected = null;
-      renderBoard(); renderTray();
-      setStatus('Here is one piece in place — keep going!', '');
+      renderBoard(); renderTray(); renderKPIs();
+      setStatus('Here is one brick in place — keep going!', '');
       checkWin();
     }
 
@@ -851,7 +907,7 @@
       for (const sol of state.solution) applySolutionPiece(sol);
       state.selected = null;
       stopTimer();
-      renderBoard(); renderTray();
+      renderBoard(); renderTray(); renderKPIs();
       setStatus('Solution shown. Hit “New puzzle” for another.', '');
       clearPreview();
     }
@@ -914,13 +970,15 @@
     }
 
     // ---------- Win modal ----------
-    function showWin(t, isBest) {
+    function showWin(t, isBest, val) {
+      const optimal = val >= state.bestValue;
       $('#modalTime').textContent = fmt(t);
-      $('#modalEmoji').textContent = isBest ? '🏆' : '🎉';
-      $('#modalTitle').textContent = isBest ? 'New best time!' : 'Ubongo!';
-      $('#modalSub').textContent = isBest
-        ? 'You set a personal record on ' + state.diff + '.'
-        : 'You filled the board perfectly.';
+      $('#modalEmoji').textContent = optimal ? '🏆' : (isBest ? '⏱️' : '🎉');
+      $('#modalTitle').textContent = optimal ? 'Top-value fill!' : 'Ubongo!';
+      $('#modalSub').textContent = optimal
+        ? 'You filled the board with the highest-value bricks possible.'
+        : 'You filled the board. Best-value fill here was ' + money(state.bestValue) + '.';
+      $('#modalValue').textContent = money(val) + ' / ' + money(state.bestValue);
       $('#overlay').classList.add('show');
     }
     function hideWin() { $('#overlay').classList.remove('show'); }
@@ -956,7 +1014,7 @@
       state.occupied.clear();
       state.pieces.forEach(p => { p.placed = false; p.placedCells = null; });
       state.selected = null;
-      renderBoard(); renderTray();
+      renderBoard(); renderTray(); renderKPIs();
       resetTimer(); startTimer();
       setStatus('Board reset. Go again!', '');
     });
