@@ -262,22 +262,19 @@
 
     // ---------- Piece library (polyominoes) ----------
     // Each piece: name, colour, and base cells [row, col].
+    // Fixed set: one tromino, three tetrominoes, four pentominoes.
     const LIBRARY = [
-      { name: 'I3',  color: '#1abc9c', cells: [[0,0],[0,1],[0,2]] },
-      { name: 'V3',  color: '#16a085', cells: [[0,0],[1,0],[1,1]] },
-      { name: 'O',   color: '#f1c40f', cells: [[0,0],[0,1],[1,0],[1,1]] },
-      { name: 'T',   color: '#9b59b6', cells: [[0,0],[0,1],[0,2],[1,1]] },
-      { name: 'L',   color: '#e67e22', cells: [[0,0],[1,0],[2,0],[2,1]] },
-      { name: 'S',   color: '#2ecc71', cells: [[0,1],[0,2],[1,0],[1,1]] },
-      { name: 'I4',  color: '#3498db', cells: [[0,0],[0,1],[0,2],[0,3]] },
-      { name: 'P',   color: '#e74c3c', cells: [[0,0],[0,1],[1,0],[1,1],[2,0]] },
-      { name: 'L5',  color: '#fd79a8', cells: [[0,0],[1,0],[2,0],[3,0],[3,1]] },
-      { name: 'T5',  color: '#6c5ce7', cells: [[0,0],[0,1],[0,2],[1,1],[2,1]] },
-      { name: 'U',   color: '#00b894', cells: [[0,0],[0,2],[1,0],[1,1],[1,2]] },
-      { name: 'Y',   color: '#0984e3', cells: [[0,1],[1,0],[1,1],[2,1],[3,1]] },
-      { name: 'W',   color: '#d35400', cells: [[0,0],[1,0],[1,1],[2,1],[2,2]] },
-      { name: 'Z',   color: '#8e44ad', cells: [[0,0],[0,1],[1,1],[2,1],[2,2]] },
-      { name: '+',   color: '#c0392b', cells: [[0,1],[1,0],[1,1],[1,2],[2,1]] }
+      // Tromino (3 cells)
+      { name: 'I3', color: '#1abc9c', cells: [[0,0],[1,0],[2,0]] },
+      // Tetrominoes (4 cells)
+      { name: 'L',  color: '#c9b458', cells: [[0,0],[1,0],[2,0],[2,1]] },
+      { name: 'S',  color: '#2ecc71', cells: [[0,0],[1,0],[1,1],[2,1]] },
+      { name: 'T',  color: '#3498db', cells: [[0,0],[1,0],[1,1],[2,0]] },
+      // Pentominoes (5 cells)
+      { name: 'L5', color: '#e67e22', cells: [[0,0],[1,0],[2,0],[3,0],[3,1]] },
+      { name: 'Y',  color: '#9b59b6', cells: [[0,1],[1,0],[1,1],[2,1],[3,1]] },
+      { name: 'P',  color: '#e74c3c', cells: [[0,0],[0,1],[1,0],[1,1],[2,0]] },
+      { name: 'N',  color: '#f1c40f', cells: [[0,1],[1,1],[2,0],[2,1],[3,0]] }
     ];
 
     const DIRS = [[-1,0],[1,0],[0,-1],[0,1]];
