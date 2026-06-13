@@ -158,7 +158,7 @@ def spacer(h):
 # ============================ CONTENT ============================
 heading('A Sahni-style Difficulty Measure for PortfolioFit', 18, 'HelvB', top=0, bot=2)
 para('Project portfolio selection as geometric exact cover', 10.5, 'Helv', gap=1, color=(0.3,0.3,0.3))
-para('Technical note  -  stouras.com/lab/ubongo  -  June 2026', 9.5, 'Helv', gap=8, color=(0.45,0.45,0.45))
+para('Technical note  -  stouras.com/lab/portfoliofit  -  June 2026', 9.5, 'Helv', gap=8, color=(0.45,0.45,0.45))
 
 para('PortfolioFit (built on the Ubongo packing mechanic) asks the player to fill a printed outline '
      'exactly, choosing from a set of dollar-valued polyomino "projects", with no gaps and no overlaps. '
