@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Knapsack Calculator: a pack with a value/weight tag -->
+  <rect width="32" height="32" rx="7" fill="#2196F3"/>
+  <!-- knapsack body -->
+  <path fill="#ffffff" d="M9 13c0-2.3 1.6-4 3.7-4.3V7.6a3.3 3.3 0 0 1 6.6 0v1.1C21.4 9 23 10.7 23 13v9.4A2.6 2.6 0 0 1 20.4 25h-8.8A2.6 2.6 0 0 1 9 22.4V13z"/>
+  <!-- carry handle -->
+  <path fill="none" stroke="#2196F3" stroke-width="1.6" d="M13.4 9.2a2.6 2.6 0 0 1 5.2 0"/>
+  <!-- front pocket -->
+  <rect x="12" y="16.5" width="8" height="5.5" rx="1.2" fill="#2196F3"/>
+  <!-- value tag -->
+  <circle cx="20.5" cy="11.5" r="3.2" fill="#2ed573"/>
+  <text x="20.5" y="13.4" font-family="Segoe UI, Arial, sans-serif" font-size="4.6" font-weight="700" text-anchor="middle" fill="#ffffff">$</text>
+</svg>
