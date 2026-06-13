@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ubongo &mdash; The Polyomino Puzzle Race</title>
+  <meta name="description" content="Play the classic Ubongo puzzle game in your browser: race the timer to fill the board outline with a set of colourful polyomino pieces. Rotate, flip and place to win." />
+  <link rel="icon" type="image/png" href="/images/KIS_favicon.png" />
+  <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%23e67e22'/%3E%3Crect%20x='20'%20y='20'%20width='26'%20height='26'%20rx='5'%20fill='%23f1f1f1'/%3E%3Crect%20x='54'%20y='20'%20width='26'%20height='26'%20rx='5'%20fill='%232ecc71'/%3E%3Crect%20x='20'%20y='54'%20width='26'%20height='26'%20rx='5'%20fill='%233498db'/%3E%3Crect%20x='54'%20y='54'%20width='26'%20height='26'%20rx='5'%20fill='%23e74c3c'/%3E%3C/svg%3E" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #f6f3ee;
+      --panel: #ffffff;
+      --ink: #2b2b2b;
+      --muted: #74726c;
+      --line: #e7e2d8;
+      --accent: #e67e22;
+      --accent-dark: #cf6f17;
+      --good: #2ecc71;
+      --bad: #e74c3c;
+      --board-bg: #efe9dd;
+      --void: transparent;
+      --cell: #fbf8f1;
+      --cell-line: #d9d2c4;
+      --shadow: 0 10px 30px rgba(60, 45, 20, 0.10);
+    }
+
+    html, body { height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+        Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      background: radial-gradient(1200px 600px at 50% -10%, #fff7ec 0%, var(--bg) 60%);
+      color: var(--ink);
+      min-height: 100vh;
+      padding: 22px 16px 48px;
+      line-height: 1.5;
+    }
+
+    .container { max-width: 980px; margin: 0 auto; }
+
+    header.app { text-align: center; margin-bottom: 18px; }
+    header.app .badge {
+      display: inline-block; font-size: 12px; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--accent-dark); font-weight: 700;
+      background: #fbe7d2; padding: 4px 10px; border-radius: 999px; margin-bottom: 10px;
+    }
+    header.app h1 {
+      font-size: clamp(1.8rem, 5vw, 2.6rem); font-weight: 800; letter-spacing: -0.5px;
+      margin-bottom: 6px;
+    }
+    header.app h1 .dot { color: var(--accent); }
+    header.app p.sub { color: var(--muted); max-width: 44rem; margin: 0 auto; font-size: 15px; }
+
+    .controls {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+      justify-content: center; margin: 18px 0 14px;
+    }
+    .seg { display: inline-flex; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 4px; box-shadow: var(--shadow); }
+    .seg button {
+      border: none; background: transparent; color: var(--muted); font-weight: 600;
+      font-size: 13px; padding: 8px 12px; border-radius: 9px; cursor: pointer; transition: .15s;
+    }
+    .seg button.active { background: var(--accent); color: #fff; box-shadow: 0 3px 10px rgba(230,126,34,.35); }
+    .seg button:not(.active):hover { color: var(--ink); }
+
+    .btn {
+      border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+      font-weight: 600; font-size: 13px; padding: 9px 14px; border-radius: 11px;
+      cursor: pointer; box-shadow: var(--shadow); transition: .15s; white-space: nowrap;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+    .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent-dark); }
+    .btn.primary:hover { background: var(--accent-dark); }
+    .btn.ghost { background: transparent; box-shadow: none; }
+
+    /* Timer */
+    .timer-wrap { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; margin-bottom: 16px; }
+    .timer-pill {
+      display: inline-flex; align-items: baseline; gap: 8px; background: var(--panel);
+      border: 1px solid var(--line); border-radius: 12px; padding: 8px 14px; box-shadow: var(--shadow);
+      font-variant-numeric: tabular-nums;
+    }
+    .timer-pill .label { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+    .timer-pill .time { font-size: 20px; font-weight: 800; }
+    .sand {
+      flex: 1 1 220px; max-width: 360px; height: 12px; background: #ece6da; border-radius: 999px;
+      overflow: hidden; border: 1px solid var(--line);
+    }
+    .sand > div { height: 100%; width: 100%; background: linear-gradient(90deg, #2ecc71, #f1c40f); transition: width .35s linear, background .35s; border-radius: 999px; }
+
+    /* Layout */
+    .game {
+      display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start;
+    }
+    @media (max-width: 760px) { .game { grid-template-columns: 1fr; } }
+
+    .card {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
+      box-shadow: var(--shadow); padding: 16px;
+    }
+    .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 12px; }
+
+    .board-card { display: flex; flex-direction: column; align-items: center; }
+    .board-stage { background: var(--board-bg); border-radius: 14px; padding: 14px; display: inline-block; max-width: 100%; overflow: auto; }
+    .board { display: grid; gap: 3px; }
+    .cell {
+      border-radius: 5px; position: relative; transition: background .08s, box-shadow .08s;
+    }
+    .cell.void { background: transparent; }
+    .cell.play {
+      background: var(--cell); box-shadow: inset 0 0 0 1px var(--cell-line);
+    }
+    .cell.filled { box-shadow: inset 0 0 0 1px rgba(0,0,0,.12), 0 1px 2px rgba(0,0,0,.18); cursor: pointer; }
+    .cell.filled::after {
+      content: ''; position: absolute; inset: 3px; border-radius: 3px;
+      background: linear-gradient(160deg, rgba(255,255,255,.35), rgba(255,255,255,0) 55%);
+      pointer-events: none;
+    }
+    .cell.preview-ok { box-shadow: inset 0 0 0 2px var(--good); }
+    .cell.preview-bad { box-shadow: inset 0 0 0 2px var(--bad); background: #fbe6e2; }
+    .cell.play { cursor: pointer; }
+
+    /* Tray */
+    .tray { display: flex; flex-wrap: wrap; gap: 12px; }
+    .piece {
+      border: 2px solid transparent; border-radius: 12px; padding: 8px; cursor: pointer;
+      background: #faf7f0; transition: .12s; display: inline-flex; flex-direction: column; align-items: center; gap: 6px;
+    }
+    .piece:hover { background: #f2ede2; }
+    .piece.selected { border-color: var(--accent); background: #fff5ea; box-shadow: 0 4px 14px rgba(230,126,34,.25); }
+    .piece.used { opacity: .35; filter: grayscale(.4); cursor: default; }
+    .piece.used:hover { background: #faf7f0; }
+    .piece-grid { display: grid; gap: 2px; }
+    .pc { border-radius: 3px; }
+    .pc.on { box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
+    .piece .pname { font-size: 11px; color: var(--muted); font-weight: 600; }
+
+    .piece-actions { display: flex; gap: 8px; margin-bottom: 12px; }
+    .piece-actions .btn { flex: 1; text-align: center; }
+    .hint-row { display: flex; gap: 8px; margin-top: 12px; }
+    .hint-row .btn { flex: 1; }
+
+    .help { font-size: 12.5px; color: var(--muted); margin-top: 14px; }
+    .help kbd {
+      background: #efe9dd; border: 1px solid var(--line); border-bottom-width: 2px;
+      border-radius: 5px; padding: 1px 6px; font-family: inherit; font-size: 11px; font-weight: 700; color: var(--ink);
+    }
+
+    .status { text-align: center; min-height: 22px; margin-top: 12px; font-weight: 600; color: var(--muted); }
+    .status.win { color: var(--good); }
+    .status.over { color: var(--bad); }
+
+    footer.app { text-align: center; margin-top: 34px; color: var(--muted); font-size: 13px; }
+    footer.app a { color: var(--accent-dark); text-decoration: none; font-weight: 600; }
+    footer.app a:hover { text-decoration: underline; }
+
+    /* Win modal */
+    .overlay {
+      position: fixed; inset: 0; background: rgba(40, 30, 12, .45); display: none;
+      align-items: center; justify-content: center; padding: 20px; z-index: 50; backdrop-filter: blur(2px);
+    }
+    .overlay.show { display: flex; }
+    .modal {
+      background: var(--panel); border-radius: 20px; padding: 28px 26px; max-width: 380px; width: 100%;
+      text-align: center; box-shadow: 0 24px 60px rgba(0,0,0,.3); animation: pop .25s ease;
+    }
+    @keyframes pop { from { transform: scale(.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .modal .emoji { font-size: 48px; }
+    .modal h3 { font-size: 24px; margin: 6px 0 4px; }
+    .modal p { color: var(--muted); margin-bottom: 18px; }
+    .modal .stat { font-size: 15px; color: var(--ink); margin-bottom: 18px; }
+    .modal .stat b { font-size: 22px; color: var(--accent-dark); }
+    .modal .actions { display: flex; gap: 10px; }
+    .modal .actions .btn { flex: 1; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="app">
+      <div class="badge">stouras.com &middot; lab</div>
+      <h1>Ubongo<span class="dot">.</span></h1>
+      <p class="sub">The classic polyomino puzzle race. Beat the sand timer by fitting <em>all</em> the coloured pieces perfectly into the outlined board. Rotate, flip, and drop them into place.</p>
+    </header>
+
+    <div class="controls">
+      <div class="seg" id="difficulty">
+        <button data-diff="easy" class="active">Easy</button>
+        <button data-diff="medium">Medium</button>
+        <button data-diff="hard">Hard</button>
+        <button data-diff="expert">Expert</button>
+      </div>
+      <button class="btn primary" id="newBtn">New puzzle</button>
+      <button class="btn" id="restartBtn">Restart</button>
+    </div>
+
+    <div class="timer-wrap">
+      <div class="timer-pill">
+        <span class="label">Time</span>
+        <span class="time" id="elapsed">0:00</span>
+      </div>
+      <div class="sand"><div id="sandBar"></div></div>
+      <div class="timer-pill">
+        <span class="label">Best</span>
+        <span class="time" id="best">&mdash;</span>
+      </div>
+    </div>
+
+    <div class="game">
+      <div class="card board-card">
+        <h2>Board &mdash; fill every tile</h2>
+        <div class="board-stage">
+          <div class="board" id="board"></div>
+        </div>
+        <div class="status" id="status">Select a piece, then place it on the board.</div>
+      </div>
+
+      <div>
+        <div class="card">
+          <h2>Selected piece</h2>
+          <div class="piece-actions">
+            <button class="btn" id="rotateBtn">&#8635; Rotate</button>
+            <button class="btn" id="flipBtn">&#8646; Flip</button>
+          </div>
+          <h2>Pieces &mdash; use them all</h2>
+          <div class="tray" id="tray"></div>
+          <div class="hint-row">
+            <button class="btn ghost" id="hintBtn">&#128161; Hint</button>
+            <button class="btn ghost" id="solveBtn">Show solution</button>
+          </div>
+          <p class="help">
+            <b>How to play.</b> Tap a piece to select it, then tap a board tile to drop it.
+            <kbd>R</kbd> rotate &middot; <kbd>F</kbd> flip &middot; tap a placed piece to pick it back up.
+            <br><kbd>N</kbd> new &middot; <kbd>H</kbd> hint &middot; <kbd>Esc</kbd> deselect.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <footer class="app">
+      A little puzzle from the <a href="/lab/">stouras.com lab</a> &middot;
+      inspired by the board game <em>Ubongo</em> &middot;
+      <a href="/lab/tetris/">Tetris for Managers &rarr;</a>
+    </footer>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div class="modal">
+      <div class="emoji" id="modalEmoji">&#127881;</div>
+      <h3 id="modalTitle">Ubongo!</h3>
+      <p id="modalSub">You filled the board.</p>
+      <div class="stat">Your time: <b id="modalTime">0:00</b></div>
+      <div class="actions">
+        <button class="btn" id="modalReplay">Replay</button>
+        <button class="btn primary" id="modalNext">Next puzzle</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    'use strict';
+
+    // ---------- Piece library (polyominoes) ----------
+    // Each piece: name, colour, and base cells [row, col].
+    const LIBRARY = [
+      { name: 'I3',  color: '#1abc9c', cells: [[0,0],[0,1],[0,2]] },
+      { name: 'V3',  color: '#16a085', cells: [[0,0],[1,0],[1,1]] },
+      { name: 'O',   color: '#f1c40f', cells: [[0,0],[0,1],[1,0],[1,1]] },
+      { name: 'T',   color: '#9b59b6', cells: [[0,0],[0,1],[0,2],[1,1]] },
+      { name: 'L',   color: '#e67e22', cells: [[0,0],[1,0],[2,0],[2,1]] },
+      { name: 'S',   color: '#2ecc71', cells: [[0,1],[0,2],[1,0],[1,1]] },
+      { name: 'I4',  color: '#3498db', cells: [[0,0],[0,1],[0,2],[0,3]] },
+      { name: 'P',   color: '#e74c3c', cells: [[0,0],[0,1],[1,0],[1,1],[2,0]] },
+      { name: 'L5',  color: '#fd79a8', cells: [[0,0],[1,0],[2,0],[3,0],[3,1]] },
+      { name: 'T5',  color: '#6c5ce7', cells: [[0,0],[0,1],[0,2],[1,1],[2,1]] },
+      { name: 'U',   color: '#00b894', cells: [[0,0],[0,2],[1,0],[1,1],[1,2]] },
+      { name: 'Y',   color: '#0984e3', cells: [[0,1],[1,0],[1,1],[2,1],[3,1]] },
+      { name: 'W',   color: '#d35400', cells: [[0,0],[1,0],[1,1],[2,1],[2,2]] },
+      { name: 'Z',   color: '#8e44ad', cells: [[0,0],[0,1],[1,1],[2,1],[2,2]] },
+      { name: '+',   color: '#c0392b', cells: [[0,1],[1,0],[1,1],[1,2],[2,1]] }
+    ];
+
+    const DIRS = [[-1,0],[1,0],[0,-1],[0,1]];
+
+    const DIFFS = {
+      easy:   { pieces: 2, maxSize: 4, limit: 120 },
+      medium: { pieces: 3, maxSize: 5, limit: 180 },
+      hard:   { pieces: 4, maxSize: 5, limit: 240 },
+      expert: { pieces: 5, maxSize: 5, limit: 300 }
+    };
+
+    // ---------- Geometry helpers ----------
+    function normalize(cells) {
+      let minR = Infinity, minC = Infinity;
+      for (const [r, c] of cells) { if (r < minR) minR = r; if (c < minC) minC = c; }
+      return cells
+        .map(([r, c]) => [r - minR, c - minC])
+        .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    }
+    function rotate(cells) { return normalize(cells.map(([r, c]) => [c, -r])); }
+    function reflect(cells) { return normalize(cells.map(([r, c]) => [r, -c])); }
+    function key(cells) { return cells.map(c => c[0] + ',' + c[1]).join(' '); }
+
+    function orientations(cells) {
+      const seen = new Map();
+      let cur = normalize(cells);
+      for (let i = 0; i < 4; i++) { seen.set(key(cur), cur); cur = rotate(cur); }
+      cur = reflect(cells);
+      for (let i = 0; i < 4; i++) { seen.set(key(cur), cur); cur = rotate(cur); }
+      return Array.from(seen.values());
+    }
+
+    function shuffle(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    // ---------- Puzzle generation (guaranteed solvable) ----------
+    // Place N distinct pieces, each edge-adjacent to the growing region, with no
+    // overlaps. The union of placed cells becomes the target outline.
+    function pickPieces(n, maxSize) {
+      const pool = LIBRARY.filter(p => p.cells.length <= maxSize);
+      return shuffle(pool.slice()).slice(0, n);
+    }
+
+    function place(chosen, idx, filled, placements) {
+      if (idx === chosen.length) return true;
+      const oris = chosen[idx]._oris;
+      let candidates = [];
+
+      if (filled.size === 0) {
+        const ori = oris[Math.floor(Math.random() * oris.length)];
+        candidates.push(ori.map(([r, c]) => [r + 100, c + 100]));
+      } else {
+        const boundary = new Set();
+        for (const k of filled.keys()) {
+          const [r, c] = k.split(',').map(Number);
+          for (const [dr, dc] of DIRS) {
+            const nk = (r + dr) + ',' + (c + dc);
+            if (!filled.has(nk)) boundary.add(nk);
+          }
+        }
+        const dedupe = new Set();
+        for (const bk of boundary) {
+          const [br, bc] = bk.split(',').map(Number);
+          for (const ori of oris) {
+            for (const cell of ori) {
+              const offR = br - cell[0], offC = bc - cell[1];
+              const placed = ori.map(([r, c]) => [r + offR, c + offC]);
+              if (placed.every(([r, c]) => !filled.has(r + ',' + c))) {
+                const kk = key(placed.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]));
+                if (!dedupe.has(kk)) { dedupe.add(kk); candidates.push(placed); }
+              }
+            }
+          }
+        }
+      }
+
+      shuffle(candidates);
+      for (const placed of candidates.slice(0, 80)) {
+        for (const [r, c] of placed) filled.set(r + ',' + c, idx);
+        placements[idx] = placed;
+        if (place(chosen, idx + 1, filled, placements)) return true;
+        for (const [r, c] of placed) filled.delete(r + ',' + c);
+        placements[idx] = null;
+      }
+      return false;
+    }
+
+    function generatePuzzle(diff) {
+      const cfg = DIFFS[diff];
+      for (let attempt = 0; attempt < 600; attempt++) {
+        const chosen = pickPieces(cfg.pieces, cfg.maxSize);
+        chosen.forEach(p => { p._oris = orientations(p.cells); });
+        const filled = new Map();
+        const placements = new Array(chosen.length).fill(null);
+        if (place(chosen, 0, filled, placements)) {
+          // Normalise region + placements to a tight bounding box.
+          let minR = Infinity, minC = Infinity, maxR = -Infinity, maxC = -Infinity;
+          for (const k of filled.keys()) {
+            const [r, c] = k.split(',').map(Number);
+            if (r < minR) minR = r; if (c < minC) minC = c;
+            if (r > maxR) maxR = r; if (c > maxC) maxC = c;
+          }
+          const region = new Set();
+          for (const k of filled.keys()) {
+            const [r, c] = k.split(',').map(Number);
+            region.add((r - minR) + ',' + (c - minC));
+          }
+          const solution = chosen.map((p, i) => ({
+            name: p.name, color: p.color,
+            cells: placements[i].map(([r, c]) => [r - minR, c - minC])
+          }));
+          return {
+            rows: maxR - minR + 1,
+            cols: maxC - minC + 1,
+            region: region,
+            pieces: chosen.map(p => ({ name: p.name, color: p.color, oris: p._oris })),
+            solution: solution
+          };
+        }
+      }
+      return null; // extremely unlikely
+    }
+
+    // ---------- Game state ----------
+    let state = null;
+    let timer = { start: 0, interval: null, elapsed: 0, running: false };
+
+    const $ = sel => document.querySelector(sel);
+    const boardEl = $('#board');
+    const trayEl = $('#tray');
+    const statusEl = $('#status');
+
+    function cellSize(rows, cols) {
+      const m = Math.max(rows, cols);
+      return Math.max(26, Math.min(46, Math.floor(380 / m)));
+    }
+
+    function newGame(diff) {
+      const puzzle = generatePuzzle(diff);
+      if (!puzzle) return;
+      state = {
+        diff: diff,
+        rows: puzzle.rows,
+        cols: puzzle.cols,
+        region: puzzle.region,
+        solution: puzzle.solution,
+        occupied: new Map(),        // "r,c" -> instanceId
+        pieces: puzzle.pieces.map((p, i) => ({
+          id: i, name: p.name, color: p.color,
+          oris: p.oris, oriIndex: Math.floor(Math.random() * p.oris.length),
+          placed: false, placedCells: null
+        })),
+        selected: null,
+        cs: cellSize(puzzle.rows, puzzle.cols)
+      };
+      renderBoard();
+      renderTray();
+      setStatus('Select a piece, then place it on the board.', '');
+      resetTimer();
+      startTimer();
+    }
+
+    function selectedPiece() {
+      return state.pieces.find(p => p.id === state.selected) || null;
+    }
+    function oriCells(piece) { return piece.oris[piece.oriIndex]; }
+
+    // ---------- Rendering ----------
+    function renderBoard() {
+      const { rows, cols, cs } = state;
+      boardEl.style.gridTemplateColumns = 'repeat(' + cols + ', ' + cs + 'px)';
+      boardEl.style.gridTemplateRows = 'repeat(' + rows + ', ' + cs + 'px)';
+      boardEl.innerHTML = '';
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const k = r + ',' + c;
+          const cell = document.createElement('div');
+          cell.className = 'cell';
+          cell.style.width = cs + 'px';
+          cell.style.height = cs + 'px';
+          cell.dataset.r = r; cell.dataset.c = c;
+          if (state.region.has(k)) {
+            cell.classList.add('play');
+            if (state.occupied.has(k)) {
+              const inst = state.occupied.get(k);
+              const p = state.pieces.find(pp => pp.id === inst);
+              cell.classList.add('filled');
+              cell.style.background = p.color;
+            }
+            cell.addEventListener('click', onCellClick);
+            cell.addEventListener('mouseenter', onCellHover);
+          } else {
+            cell.classList.add('void');
+          }
+          boardEl.appendChild(cell);
+        }
+      }
+      boardEl.addEventListener('mouseleave', clearPreview);
+    }
+
+    function renderTray() {
+      trayEl.innerHTML = '';
+      for (const p of state.pieces) {
+        const wrap = document.createElement('div');
+        wrap.className = 'piece' + (p.placed ? ' used' : '') + (state.selected === p.id ? ' selected' : '');
+        const cells = oriCells(p);
+        let maxR = 0, maxC = 0;
+        for (const [r, c] of cells) { if (r > maxR) maxR = r; if (c > maxC) maxC = c; }
+        const grid = document.createElement('div');
+        grid.className = 'piece-grid';
+        const pcs = 18;
+        grid.style.gridTemplateColumns = 'repeat(' + (maxC + 1) + ', ' + pcs + 'px)';
+        grid.style.gridTemplateRows = 'repeat(' + (maxR + 1) + ', ' + pcs + 'px)';
+        const set = new Set(cells.map(c => c[0] + ',' + c[1]));
+        for (let r = 0; r <= maxR; r++) {
+          for (let c = 0; c <= maxC; c++) {
+            const d = document.createElement('div');
+            d.className = 'pc';
+            d.style.width = pcs + 'px'; d.style.height = pcs + 'px';
+            if (set.has(r + ',' + c)) { d.classList.add('on'); d.style.background = p.color; }
+            grid.appendChild(d);
+          }
+        }
+        wrap.appendChild(grid);
+        if (!p.placed) {
+          wrap.addEventListener('click', () => {
+            state.selected = (state.selected === p.id) ? null : p.id;
+            renderTray();
+          });
+        }
+        trayEl.appendChild(wrap);
+      }
+    }
+
+    // ---------- Placement logic ----------
+    function placementAt(piece, hr, hc) {
+      const cells = oriCells(piece);
+      const a = cells[0]; // top-left-most occupied cell (sorted)
+      return cells.map(([r, c]) => [hr + r - a[0], hc + c - a[1]]);
+    }
+    function isValid(cells) {
+      return cells.every(([r, c]) => {
+        const k = r + ',' + c;
+        return state.region.has(k) && !state.occupied.has(k);
+      });
+    }
+
+    function clearPreview() {
+      boardEl.querySelectorAll('.preview-ok, .preview-bad').forEach(el => {
+        el.classList.remove('preview-ok', 'preview-bad');
+      });
+    }
+
+    function onCellHover(e) {
+      clearPreview();
+      const piece = selectedPiece();
+      if (!piece || piece.placed) return;
+      const hr = +e.currentTarget.dataset.r, hc = +e.currentTarget.dataset.c;
+      const cells = placementAt(piece, hr, hc);
+      const ok = isValid(cells);
+      for (const [r, c] of cells) {
+        const el = boardEl.querySelector('.cell[data-r="' + r + '"][data-c="' + c + '"]');
+        if (el && state.region.has(r + ',' + c)) el.classList.add(ok ? 'preview-ok' : 'preview-bad');
+      }
+    }
+
+    function onCellClick(e) {
+      const r = +e.currentTarget.dataset.r, c = +e.currentTarget.dataset.c;
+      const k = r + ',' + c;
+      // If clicking an occupied cell, pick that piece back up.
+      if (state.occupied.has(k)) {
+        const inst = state.occupied.get(k);
+        removePiece(inst);
+        return;
+      }
+      const piece = selectedPiece();
+      if (!piece || piece.placed) return;
+      const cells = placementAt(piece, r, c);
+      if (!isValid(cells)) { flashBad(); return; }
+      for (const [pr, pc] of cells) state.occupied.set(pr + ',' + pc, piece.id);
+      piece.placed = true;
+      piece.placedCells = cells;
+      state.selected = null;
+      clearPreview();
+      renderBoard();
+      renderTray();
+      checkWin();
+    }
+
+    function removePiece(instId) {
+      const p = state.pieces.find(pp => pp.id === instId);
+      if (!p || !p.placed) return;
+      for (const [r, c] of p.placedCells) state.occupied.delete(r + ',' + c);
+      p.placed = false; p.placedCells = null;
+      state.selected = p.id;
+      renderBoard();
+      renderTray();
+      setStatus('Piece picked up. Place it again or choose another.', '');
+    }
+
+    function flashBad() {
+      setStatus("That piece doesn't fit there — try rotating or flipping.", '');
+    }
+
+    function checkWin() {
+      let allFilled = true;
+      for (const k of state.region) { if (!state.occupied.has(k)) { allFilled = false; break; } }
+      const allPlaced = state.pieces.every(p => p.placed);
+      if (allFilled && allPlaced) {
+        stopTimer();
+        const t = timer.elapsed;
+        const best = saveBest(state.diff, t);
+        setStatus('Ubongo! You solved it in ' + fmt(t) + '.', 'win');
+        showWin(t, best);
+      } else {
+        setStatus('Select a piece, then place it on the board.', '');
+      }
+    }
+
+    // ---------- Hint / solve ----------
+    function applySolutionPiece(sol) {
+      // Find the matching, currently-unplaced piece instance by name+color.
+      const piece = state.pieces.find(p => !p.placed && p.name === sol.name && p.color === sol.color)
+                 || state.pieces.find(p => p.name === sol.name && p.color === sol.color);
+      if (!piece) return;
+      // Clear any pieces overlapping the target cells.
+      for (const [r, c] of sol.cells) {
+        const k = r + ',' + c;
+        if (state.occupied.has(k)) removeInstanceSilent(state.occupied.get(k));
+      }
+      // Set the piece orientation to match the solution shape.
+      const want = key(normalize(sol.cells));
+      const idx = piece.oris.findIndex(o => key(o) === want);
+      if (idx >= 0) piece.oriIndex = idx;
+      for (const [r, c] of sol.cells) state.occupied.set(r + ',' + c, piece.id);
+      piece.placed = true;
+      piece.placedCells = sol.cells.map(c => c.slice());
+    }
+    function removeInstanceSilent(instId) {
+      const p = state.pieces.find(pp => pp.id === instId);
+      if (!p || !p.placed) return;
+      for (const [r, c] of p.placedCells) state.occupied.delete(r + ',' + c);
+      p.placed = false; p.placedCells = null;
+    }
+
+    function hint() {
+      const next = state.solution.find(sol => {
+        return !sol.cells.every(([r, c]) => {
+          const inst = state.occupied.get(r + ',' + c);
+          if (inst === undefined) return false;
+          const p = state.pieces.find(pp => pp.id === inst);
+          return p && p.name === sol.name;
+        });
+      });
+      if (!next) return;
+      applySolutionPiece(next);
+      state.selected = null;
+      renderBoard(); renderTray();
+      setStatus('Here is one piece in place — keep going!', '');
+      checkWin();
+    }
+
+    function solveAll() {
+      state.occupied.clear();
+      state.pieces.forEach(p => { p.placed = false; p.placedCells = null; });
+      for (const sol of state.solution) applySolutionPiece(sol);
+      state.selected = null;
+      stopTimer();
+      renderBoard(); renderTray();
+      setStatus('Solution shown. Hit “New puzzle” for another.', '');
+      clearPreview();
+    }
+
+    // ---------- Timer ----------
+    function resetTimer() {
+      stopTimer();
+      timer.elapsed = 0;
+      timer.running = false;
+      updateTimerUI();
+    }
+    function startTimer() {
+      if (timer.running) return;
+      timer.running = true;
+      timer.start = Date.now();
+      timer.interval = setInterval(() => {
+        timer.elapsed = Math.floor((Date.now() - timer.start) / 1000);
+        updateTimerUI();
+      }, 250);
+    }
+    function stopTimer() {
+      timer.running = false;
+      if (timer.interval) { clearInterval(timer.interval); timer.interval = null; }
+    }
+    function updateTimerUI() {
+      $('#elapsed').textContent = fmt(timer.elapsed);
+      const limit = DIFFS[state ? state.diff : 'easy'].limit;
+      const remaining = Math.max(0, limit - timer.elapsed);
+      const pct = Math.max(0, (remaining / limit) * 100);
+      const bar = $('#sandBar');
+      bar.style.width = pct + '%';
+      if (pct < 20) bar.style.background = 'linear-gradient(90deg,#e74c3c,#e67e22)';
+      else if (pct < 50) bar.style.background = 'linear-gradient(90deg,#f1c40f,#e67e22)';
+      else bar.style.background = 'linear-gradient(90deg,#2ecc71,#f1c40f)';
+    }
+    function fmt(s) {
+      const m = Math.floor(s / 60), sec = s % 60;
+      return m + ':' + (sec < 10 ? '0' : '') + sec;
+    }
+
+    // ---------- Best times ----------
+    function bestKey(diff) { return 'ubongo.best.' + diff; }
+    function loadBest(diff) {
+      const v = localStorage.getItem(bestKey(diff));
+      return v ? parseInt(v, 10) : null;
+    }
+    function saveBest(diff, t) {
+      const cur = loadBest(diff);
+      if (cur === null || t < cur) { localStorage.setItem(bestKey(diff), String(t)); updateBestUI(); return true; }
+      return false;
+    }
+    function updateBestUI() {
+      const b = loadBest(state ? state.diff : 'easy');
+      $('#best').textContent = b === null ? '—' : fmt(b);
+    }
+
+    function setStatus(msg, cls) {
+      statusEl.textContent = msg;
+      statusEl.className = 'status' + (cls ? ' ' + cls : '');
+    }
+
+    // ---------- Win modal ----------
+    function showWin(t, isBest) {
+      $('#modalTime').textContent = fmt(t);
+      $('#modalEmoji').textContent = isBest ? '🏆' : '🎉';
+      $('#modalTitle').textContent = isBest ? 'New best time!' : 'Ubongo!';
+      $('#modalSub').textContent = isBest
+        ? 'You set a personal record on ' + state.diff + '.'
+        : 'You filled the board perfectly.';
+      $('#overlay').classList.add('show');
+    }
+    function hideWin() { $('#overlay').classList.remove('show'); }
+
+    // ---------- Controls wiring ----------
+    function rotateSelected() {
+      const p = selectedPiece();
+      if (!p || p.placed) return;
+      const want = key(rotate(oriCells(p)));
+      const idx = p.oris.findIndex(o => key(o) === want);
+      if (idx >= 0) p.oriIndex = idx;
+      renderTray(); clearPreview();
+    }
+    function flipSelected() {
+      const p = selectedPiece();
+      if (!p || p.placed) return;
+      const want = key(reflect(oriCells(p)));
+      const idx = p.oris.findIndex(o => key(o) === want);
+      if (idx >= 0) p.oriIndex = idx;
+      renderTray(); clearPreview();
+    }
+
+    document.querySelectorAll('#difficulty button').forEach(b => {
+      b.addEventListener('click', () => {
+        document.querySelectorAll('#difficulty button').forEach(x => x.classList.remove('active'));
+        b.classList.add('active');
+        newGame(b.dataset.diff);
+        updateBestUI();
+      });
+    });
+    $('#newBtn').addEventListener('click', () => { hideWin(); newGame(state.diff); });
+    $('#restartBtn').addEventListener('click', () => {
+      state.occupied.clear();
+      state.pieces.forEach(p => { p.placed = false; p.placedCells = null; });
+      state.selected = null;
+      renderBoard(); renderTray();
+      resetTimer(); startTimer();
+      setStatus('Board reset. Go again!', '');
+    });
+    $('#rotateBtn').addEventListener('click', rotateSelected);
+    $('#flipBtn').addEventListener('click', flipSelected);
+    $('#hintBtn').addEventListener('click', hint);
+    $('#solveBtn').addEventListener('click', solveAll);
+    $('#modalReplay').addEventListener('click', () => {
+      hideWin();
+      $('#restartBtn').click();
+    });
+    $('#modalNext').addEventListener('click', () => { hideWin(); newGame(state.diff); });
+    $('#overlay').addEventListener('click', e => { if (e.target === $('#overlay')) hideWin(); });
+
+    document.addEventListener('keydown', e => {
+      if (e.target.tagName === 'INPUT') return;
+      const kk = e.key.toLowerCase();
+      if (kk === 'r') { rotateSelected(); }
+      else if (kk === 'f') { flipSelected(); }
+      else if (kk === 'n') { hideWin(); newGame(state.diff); }
+      else if (kk === 'h') { hint(); }
+      else if (e.key === 'Escape') { state.selected = null; renderTray(); clearPreview(); }
+    });
+
+    // ---------- Boot ----------
+    newGame('easy');
+    updateBestUI();
+  })();
+  </script>
+</body>
+</html>
