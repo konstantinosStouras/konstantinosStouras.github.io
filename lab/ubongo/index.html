@@ -150,7 +150,15 @@
       border-radius: 5px; padding: 1px 6px; font-family: inherit; font-size: 11px; font-weight: 700; color: var(--ink);
     }
 
-    .status { text-align: center; min-height: 22px; margin-top: 12px; font-weight: 600; color: var(--muted); }
+    .board-meta {
+      margin-top: 12px; font-size: 12.5px; color: var(--muted); text-align: center;
+      background: #f3eee3; border: 1px solid var(--line); border-radius: 999px;
+      padding: 5px 14px; cursor: help; font-variant-numeric: tabular-nums;
+    }
+    .board-meta b { color: var(--accent-dark); font-weight: 800; }
+    .board-meta .sep { margin: 0 8px; opacity: .5; }
+
+    .status { text-align: center; min-height: 22px; margin-top: 10px; font-weight: 600; color: var(--muted); }
     .status.win { color: var(--good); }
     .status.over { color: var(--bad); }
 
@@ -214,6 +222,7 @@
         <div class="board-stage">
           <div class="board" id="board"></div>
         </div>
+        <div class="board-meta" id="boardMeta" title="A Sahni-style hardness measure: the fewest correctly-placed pieces (hints) after which a naive greedy fills the rest without getting stuck. See the linked PDF note."></div>
         <div class="status" id="status">Select a piece, then place it on the board.</div>
       </div>
 
@@ -240,6 +249,7 @@
     </div>
 
     <footer class="app">
+      <a href="ubongo-difficulty.pdf" target="_blank" rel="noopener">&#128196; How the Sahni difficulty (&kappa;) is measured &mdash; PDF note</a>
     </footer>
   </div>
 
@@ -279,11 +289,14 @@
 
     const DIRS = [[-1,0],[1,0],[0,-1],[0,1]];
 
+    // Every puzzle uses the full set of pieces (one tromino, three tetrominoes,
+    // four pentominoes = 35 cells); difficulty varies only the board shape and
+    // the timer budget, not which pieces are shown.
     const DIFFS = {
-      easy:   { pieces: 2, maxSize: 4, limit: 120 },
-      medium: { pieces: 3, maxSize: 5, limit: 180 },
-      hard:   { pieces: 4, maxSize: 5, limit: 240 },
-      expert: { pieces: 5, maxSize: 5, limit: 300 }
+      easy:   { limit: 210 },
+      medium: { limit: 270 },
+      hard:   { limit: 330 },
+      expert: { limit: 420 }
     };
 
     // ---------- Geometry helpers ----------
@@ -316,11 +329,11 @@
     }
 
     // ---------- Puzzle generation (guaranteed solvable) ----------
-    // Place N distinct pieces, each edge-adjacent to the growing region, with no
-    // overlaps. The union of placed cells becomes the target outline.
-    function pickPieces(n, maxSize) {
-      const pool = LIBRARY.filter(p => p.cells.length <= maxSize);
-      return shuffle(pool.slice()).slice(0, n);
+    // Place ALL pieces, each edge-adjacent to the growing region, with no
+    // overlaps. The union of placed cells becomes the target outline, so every
+    // board is tiled by the complete piece set (and is solvable by construction).
+    function pickPieces() {
+      return shuffle(LIBRARY.slice());
     }
 
     function place(chosen, idx, filled, placements) {
@@ -357,7 +370,7 @@
       }
 
       shuffle(candidates);
-      for (const placed of candidates.slice(0, 80)) {
+      for (const placed of candidates.slice(0, 140)) {
         for (const [r, c] of placed) filled.set(r + ',' + c, idx);
         placements[idx] = placed;
         if (place(chosen, idx + 1, filled, placements)) return true;
@@ -367,10 +380,9 @@
       return false;
     }
 
-    function generatePuzzle(diff) {
-      const cfg = DIFFS[diff];
-      for (let attempt = 0; attempt < 600; attempt++) {
-        const chosen = pickPieces(cfg.pieces, cfg.maxSize);
+    function generatePuzzle() {
+      for (let attempt = 0; attempt < 1500; attempt++) {
+        const chosen = pickPieces();
         chosen.forEach(p => { p._oris = orientations(p.cells); });
         const filled = new Map();
         const placements = new Array(chosen.length).fill(null);
@@ -403,6 +415,141 @@
       return null; // extremely unlikely
     }
 
+    // ---------- Difficulty measures (exact cover + Sahni-style kappa) ----------
+    // See /lab/ubongo/ubongo-difficulty.pdf for the full write-up.
+    function popcount(x) { let c = 0; while (x) { x &= x - 1; c++; } return c; }
+
+    function combinations(n, k) {
+      const out = [], idx = [];
+      (function rec(start, depth) {
+        if (depth === k) { out.push(idx.slice()); return; }
+        for (let i = start; i <= n - (k - depth); i++) { idx.push(i); rec(i + 1, depth + 1); idx.pop(); }
+      })(0, 0);
+      return out;
+    }
+
+    // Build all legal placements (as BigInt bitmasks over region cells) for each
+    // piece. BigInt is used because the full piece set spans 35 cells (> 31 bits).
+    function buildPlacements(region, pieces) {
+      const cellIndex = new Map(); let i = 0;
+      for (const k of region) cellIndex.set(k, i++);
+      const N = i, m = pieces.length;
+      const bits = []; for (let b = 0; b < N; b++) bits.push(1n << BigInt(b));
+      let full = 0n; for (let b = 0; b < N; b++) full |= bits[b];
+      const byCell = Array.from({ length: N }, () => []);
+      const areas = [], sorted = [];
+      pieces.forEach((p, pi) => {
+        const placements = [], seen = new Set();
+        for (const ori of p.oris) {
+          for (const startKey of region) {
+            const [sr, sc] = startKey.split(',').map(Number);
+            const offR = sr - ori[0][0], offC = sc - ori[0][1];
+            let mask = 0n, ok = true, low = Infinity; const idxs = [];
+            for (const [r, c] of ori) {
+              const idx = cellIndex.get((r + offR) + ',' + (c + offC));
+              if (idx === undefined) { ok = false; break; }
+              mask |= bits[idx]; idxs.push(idx); if (idx < low) low = idx;
+            }
+            if (ok && !seen.has(mask)) { seen.add(mask); placements.push({ mask, low, idxs }); }
+          }
+        }
+        areas.push(p.oris[0].length);
+        // Canonical greedy order: fill the lowest-index (top-left) cell first.
+        sorted.push(placements.slice().sort((a, b) => a.low - b.low).map(x => x.mask));
+        for (const pm of placements)
+          for (const idx of pm.idxs) byCell[idx].push({ pi: pi, mask: pm.mask });
+      });
+      return { N, full, m, bits, byCell, areas, sorted };
+    }
+
+    function firstEmpty(pd, occ) {
+      for (let i = 0; i < pd.N; i++) if ((occ & pd.bits[i]) === 0n) return i;
+      return -1;
+    }
+
+    // Count exact tilings (each piece used once); capped in solutions and nodes.
+    function countSolutions(pd, cap) {
+      let count = 0, nodes = 0, capped = false; const MAXN = 200000;
+      (function rec(occ, used) {
+        if (count >= cap || capped) return;
+        if (occ === pd.full) { count++; return; }
+        if (++nodes > MAXN) { capped = true; return; }
+        const cell = firstEmpty(pd, occ);
+        for (const pl of pd.byCell[cell]) {
+          if (used & (1 << pl.pi)) continue;
+          if ((pl.mask & occ) !== 0n) continue;
+          rec(occ | pl.mask, used | (1 << pl.pi));
+          if (count >= cap || capped) return;
+        }
+      })(0n, 0);
+      return { count, capped };
+    }
+
+    function collectSolutions(pd, cap) {
+      const sols = [], cur = []; let nodes = 0; const MAXN = 120000;
+      (function rec(occ, used) {
+        if (sols.length >= cap || nodes > MAXN) return;
+        if (occ === pd.full) { sols.push(cur.slice()); return; }
+        if (++nodes > MAXN) return;
+        const cell = firstEmpty(pd, occ);
+        for (const pl of pd.byCell[cell]) {
+          if (used & (1 << pl.pi)) continue;
+          if ((pl.mask & occ) !== 0n) continue;
+          cur.push(pl); rec(occ | pl.mask, used | (1 << pl.pi)); cur.pop();
+          if (sols.length >= cap || nodes > MAXN) return;
+        }
+      })(0n, 0);
+      return sols;
+    }
+
+    // Deterministic greedy H: largest piece first, first feasible (top-left) placement.
+    function greedyComplete(pd, occupied, used) {
+      const rem = [];
+      for (let pi = 0; pi < pd.m; pi++) if (!(used & (1 << pi))) rem.push(pi);
+      rem.sort((a, b) => pd.areas[b] - pd.areas[a] || a - b);
+      let occ = occupied;
+      for (const pi of rem) {
+        let chosen = null;
+        for (const mask of pd.sorted[pi]) { if ((mask & occ) === 0n) { chosen = mask; break; } }
+        if (chosen === null) return false;
+        occ |= chosen;
+      }
+      return occ === pd.full;
+    }
+
+    // Sahni-style kappa: fewest pre-placed pieces so greedy completes a full tiling.
+    // Bounded by a greedy-call budget so a single hard board can never stall the UI.
+    function sahniDifficulty(pd) {
+      if (greedyComplete(pd, 0n, 0)) return 0;
+      const sols = collectSolutions(pd, 120);
+      if (!sols.length) return pd.m - 1; // could not enumerate within budget
+      let best = pd.m, calls = 0; const MAXC = 60000;
+      for (const T of sols) {
+        for (let k = 1; k < best; k++) {
+          let found = false;
+          for (const idxs of combinations(T.length, k)) {
+            let occ = 0n, used = 0;
+            for (const j of idxs) { occ |= T[j].mask; used |= (1 << T[j].pi); }
+            if (++calls > MAXC) return best;
+            if (greedyComplete(pd, occ, used)) { found = true; break; }
+          }
+          if (found) { best = k; break; }
+        }
+        if (best === 1) break;
+      }
+      return best;
+    }
+
+    // With the full piece set (35 cells) the measured Sahni difficulty spreads
+    // naturally over kappa = 1..4, giving a reachable, monotone tier ladder.
+    const ACCEPT = {
+      easy:   k => k <= 1,
+      medium: k => k === 2,
+      hard:   k => k === 3,
+      expert: k => k >= 4
+    };
+    const DESIRED = { easy: 1, medium: 2, hard: 3, expert: 4 };
+
     // ---------- Game state ----------
     let state = null;
     let timer = { start: 0, interval: null, elapsed: 0, running: false };
@@ -417,8 +564,34 @@
       return Math.max(26, Math.min(46, Math.floor(380 / m)));
     }
 
+    // Rejection-sample boards: return the first that clears the tier's bar;
+    // otherwise keep the hardest (max-kappa) candidate seen within the budget.
+    function pickPuzzle(diff) {
+      const deadline = Date.now() + 320;
+      let best = null;
+      for (let t = 0; t < 240; t++) {
+        const puzzle = generatePuzzle();
+        if (!puzzle) continue;
+        const pd = buildPlacements(puzzle.region, puzzle.pieces);
+        const kappa = sahniDifficulty(pd);
+        if (ACCEPT[diff](kappa)) {
+          return { puzzle: puzzle, kappa: kappa, tilings: countSolutions(pd, 1000) };
+        }
+        const score = -Math.abs(kappa - DESIRED[diff]);
+        if (!best || score > best.score) best = { puzzle, pd, kappa, score };
+        if (Date.now() > deadline) break;
+      }
+      if (!best) {
+        const puzzle = generatePuzzle();
+        const pd = buildPlacements(puzzle.region, puzzle.pieces);
+        best = { puzzle, pd, kappa: sahniDifficulty(pd) };
+      }
+      return { puzzle: best.puzzle, kappa: best.kappa, tilings: countSolutions(best.pd, 1000) };
+    }
+
     function newGame(diff) {
-      const puzzle = generatePuzzle(diff);
+      const picked = pickPuzzle(diff);
+      const puzzle = picked.puzzle;
       if (!puzzle) return;
       state = {
         diff: diff,
@@ -426,6 +599,8 @@
         cols: puzzle.cols,
         region: puzzle.region,
         solution: puzzle.solution,
+        kappa: picked.kappa,
+        tilings: picked.tilings,
         occupied: new Map(),        // "r,c" -> instanceId
         pieces: puzzle.pieces.map((p, i) => ({
           id: i, name: p.name, color: p.color,
@@ -437,9 +612,18 @@
       };
       renderBoard();
       renderTray();
+      renderBoardMeta();
       setStatus('Select a piece, then place it on the board.', '');
       resetTimer();
       startTimer();
+    }
+
+    function renderBoardMeta() {
+      const t = state.tilings;
+      const n = t.count, tStr = (t.capped || n >= 1000) ? (n + '+') : n;
+      $('#boardMeta').innerHTML =
+        'Sahni difficulty <b>&kappa; = ' + state.kappa + '</b>' +
+        '<span class="sep">&middot;</span>' + tStr + ' tiling' + (n === 1 ? '' : 's');
     }
 
     function selectedPiece() {
