@@ -42,7 +42,7 @@
       line-height: 1.5;
     }
     /* Snappy taps (no 300ms delay), and don't let the OS hijack game gestures. */
-    .btn, .seg button, .piece, .cell.play, .kpi { touch-action: manipulation; }
+    .btn, .seg button, .piece, .cell.play, .kpi-list p, .netcard, .calc-pad button { touch-action: manipulation; }
     .board, .tray, .controls, .seg, .piece-actions, .hint-row { -webkit-user-select: none; user-select: none; }
 
     .container { max-width: 980px; margin: 0 auto; }
@@ -98,14 +98,85 @@
     }
     .sand > div { height: 100%; width: 100%; background: linear-gradient(90deg, #2ecc71, #f1c40f); transition: width .35s linear, background .35s; border-radius: 999px; }
 
-    /* KPIs */
-    .kpi-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-bottom: 16px; }
-    .kpi {
-      background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
-      padding: 8px 18px; box-shadow: var(--shadow); text-align: center; min-width: 116px;
+    /* KPI dashboard (mirrors the Tetris app) */
+    .dash { display: flex; gap: 14px; margin-bottom: 16px; align-items: stretch; }
+    .netcard {
+      flex: 0 0 200px; background: var(--panel); border: 1px solid var(--line);
+      border-left: 5px solid var(--accent); border-radius: 16px; box-shadow: var(--shadow);
+      padding: 14px 18px; display: flex; flex-direction: column; justify-content: center;
+      align-items: center; text-align: center; cursor: help;
     }
-    .kpi-label { display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
-    .kpi-val { display: block; font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 2px; }
+    .netcard-label { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: #2f80ed; font-weight: 700; }
+    .netcard-amount { font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 4px; }
+    .netcard-amount.neg { color: var(--bad); }
+    .netcard-amount.pos { color: var(--good); }
+    .kpi-panel {
+      flex: 1 1 auto; background: var(--panel); border: 1px solid var(--line);
+      border-radius: 16px; box-shadow: var(--shadow); padding: 14px 18px;
+    }
+    .kpi-panel h3 { font-size: 18px; margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
+    .kpi-list { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 22px; }
+    .kpi-list p { margin: 3px 0; font-size: 14px; cursor: help; border-radius: 6px; padding: 2px 4px; }
+    .kpi-list p:hover, .kpi-list p:focus, .netcard:focus { outline: none; background: #faf3e6; }
+    .kpi-list strong { color: var(--ink); }
+    .kpi-list span { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--accent-dark); }
+
+    /* Hover/tap explanation popup */
+    .kpi-tip {
+      position: fixed; z-index: 60; max-width: 280px; background: #2b2b2b; color: #f6f3ee;
+      font-size: 12.5px; line-height: 1.45; padding: 9px 12px; border-radius: 9px;
+      box-shadow: 0 10px 28px rgba(0,0,0,.28); pointer-events: none; opacity: 0;
+      transform: translateY(4px); transition: opacity .12s, transform .12s; visibility: hidden;
+    }
+    .kpi-tip.show { opacity: 1; transform: translateY(0); visibility: visible; }
+
+    /* Tools: calculator + notes */
+    .tools { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+    @media (max-width: 880px) { .tools { grid-template-columns: 1fr; } }
+    .tool-h { font-size: 18px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+    .calc-display {
+      background: #f8f9fa; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px;
+      min-height: 64px; display: flex; flex-direction: column; justify-content: center; align-items: flex-end;
+      font-family: 'SF Mono', Consolas, 'Liberation Mono', monospace; margin-bottom: 10px;
+    }
+    .calc-display.err { border-color: var(--bad); }
+    .calc-expr { font-size: 14px; color: var(--muted); width: 100%; text-align: right; word-break: break-all; min-height: 18px; }
+    .calc-result { font-size: 26px; font-weight: 800; color: var(--ink); width: 100%; text-align: right; word-break: break-all; }
+    .calc-display.err .calc-result { color: var(--bad); }
+    .calc-input {
+      width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
+      font-size: 15px; font-family: inherit; margin-bottom: 10px; box-sizing: border-box;
+    }
+    .calc-input:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+    .calc-pad { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+    .calc-pad button {
+      padding: 11px 0; border: 1px solid var(--line); background: var(--panel); border-radius: 10px;
+      font-size: 15px; font-weight: 700; cursor: pointer; color: var(--ink); transition: .1s;
+    }
+    .calc-pad button:hover { background: #f2ede2; transform: translateY(-1px); }
+    .calc-pad button.op { color: var(--accent-dark); }
+    .calc-pad button.eq { background: var(--accent); color: #fff; border-color: var(--accent-dark); }
+    .calc-pad button.clr { color: var(--bad); }
+    .calc-pad button.wide { grid-column: span 2; }
+    .calc-history { margin-top: 10px; font-size: 12px; color: var(--muted); max-height: 84px; overflow-y: auto; }
+    .calc-history div { padding: 3px 0; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+
+    .notes-list {
+      height: 130px; overflow-y: auto; margin-bottom: 12px; padding: 8px 10px;
+      background: #f8f9fa; border: 1px solid var(--line); border-radius: 10px; scroll-behavior: smooth;
+    }
+    .notes-list:empty::before { content: 'No notes yet — write your strategy below.'; color: var(--muted); font-size: 13px; font-style: italic; }
+    .note-item { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+    .note-item:last-child { margin-bottom: 0; border-bottom: none; }
+    .note-meta { font-size: 11px; color: var(--muted); font-weight: 600; margin-bottom: 3px; display: flex; justify-content: space-between; gap: 8px; }
+    .note-meta button { border: none; background: none; color: var(--bad); cursor: pointer; font-size: 11px; padding: 0; }
+    .note-text { font-size: 13.5px; color: var(--ink); line-height: 1.4; word-break: break-word; white-space: pre-wrap; }
+    .notes-input {
+      width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
+      font-size: 14px; font-family: inherit; resize: vertical; box-sizing: border-box; margin-bottom: 10px;
+    }
+    .notes-input:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+    .notes-add { width: 100%; }
 
     /* Layout — two columns on laptop/large tablet, single column below. */
     .game {
@@ -220,8 +291,9 @@
       .controls .seg { flex: 1 1 100%; justify-content: center; }
       .controls .seg button { flex: 1; }
       .controls .btn { flex: 1 1 calc(50% - 5px); }
-      .kpi { flex: 1 1 calc(50% - 6px); min-width: 0; padding: 8px 10px; }
-      .kpi-val { font-size: 16px; }
+      .dash { flex-direction: column; }
+      .netcard { flex-basis: auto; flex-direction: row; justify-content: space-between; }
+      .netcard-amount { font-size: 28px; }
       .card { padding: 13px; border-radius: 15px; }
       .board-stage { padding: 10px; }
       .timer-pill .time { font-size: 18px; }
@@ -230,7 +302,7 @@
 
     /* ---- Very small phones ---- */
     @media (max-width: 360px) {
-      .kpi { flex-basis: 100%; }
+      .kpi-list { grid-template-columns: 1fr; }
     }
 
     /* ---- Touch devices (phones/tablets): larger, finger-friendly targets ---- */
@@ -275,11 +347,21 @@
       </div>
     </div>
 
-    <div class="kpi-row">
-      <div class="kpi"><span class="kpi-label">Value placed</span><span class="kpi-val" id="kpiValue">$0</span></div>
-      <div class="kpi"><span class="kpi-label">Best possible</span><span class="kpi-val" id="kpiBest">$0</span></div>
-      <div class="kpi"><span class="kpi-label">Cells filled</span><span class="kpi-val" id="kpiCells">0 / 0</span></div>
-      <div class="kpi"><span class="kpi-label">Efficiency</span><span class="kpi-val" id="kpiEff">$0/cell</span></div>
+    <div class="dash">
+      <div class="netcard" data-kpi="net-value" tabindex="0">
+        <div class="netcard-label">Net Value</div>
+        <div class="netcard-amount" id="kpiNet">$0</div>
+      </div>
+      <div class="kpi-panel">
+        <h3><span class="ic">&#128200;</span> KPIs</h3>
+        <div class="kpi-list">
+          <p data-kpi="total-value" tabindex="0"><strong>Total Value:</strong> <span id="kpiValue">$0</span></p>
+          <p data-kpi="resource-cost" tabindex="0"><strong>Resource Cost:</strong> <span id="kpiCost">$0</span></p>
+          <p data-kpi="coverage" tabindex="0"><strong>Coverage:</strong> <span id="kpiCoverage">0%</span></p>
+          <p data-kpi="value-resource" tabindex="0"><strong>Value/Resource:</strong> <span id="kpiEff">$0</span></p>
+          <p data-kpi="portfolio-fitness" tabindex="0"><strong>Portfolio Fitness:</strong> <span id="kpiFitness">N/A</span></p>
+        </div>
+      </div>
     </div>
 
     <div class="game">
@@ -314,10 +396,40 @@
       </div>
     </div>
 
+    <div class="tools">
+      <div class="card tool">
+        <h3 class="tool-h"><span class="ic">&#129518;</span> Calculator</h3>
+        <div class="calc-display">
+          <div class="calc-expr" id="calcExpr">&nbsp;</div>
+          <div class="calc-result" id="calcResult">0</div>
+        </div>
+        <input class="calc-input" id="calcInput" type="text" inputmode="text" autocomplete="off"
+               spellcheck="false" placeholder="Type e.g. 5*3 + 7, then press =" aria-label="Calculator expression" />
+        <div class="calc-pad" id="calcPad">
+          <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button><button data-k="/" class="op">&divide;</button>
+          <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button><button data-k="*" class="op">&times;</button>
+          <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button><button data-k="-" class="op">&minus;</button>
+          <button data-k="0">0</button><button data-k=".">.</button><button data-k="(">(</button><button data-k="+" class="op">+</button>
+          <button data-act="clear" class="wide clr">C</button><button data-k=")">)</button><button data-act="eq" class="eq">=</button>
+        </div>
+        <div class="calc-history" id="calcHistory"></div>
+      </div>
+
+      <div class="card tool">
+        <h3 class="tool-h"><span class="ic">&#128172;</span> My Notes</h3>
+        <div class="notes-list" id="notesList"></div>
+        <textarea class="notes-input" id="notesInput" rows="2"
+                  placeholder="Jot a strategy note&hellip; (Enter to save, Shift+Enter for a new line)"></textarea>
+        <button class="btn primary notes-add" id="notesAdd">Add note</button>
+      </div>
+    </div>
+
     <footer class="app">
       <a href="ubongo-difficulty.pdf" target="_blank" rel="noopener">&#128196; How the Sahni difficulty (&kappa;) is measured &mdash; PDF note</a>
     </footer>
   </div>
+
+  <div class="kpi-tip" id="kpiTip" role="tooltip" aria-hidden="true"></div>
 
   <div class="overlay" id="overlay">
     <div class="modal">
@@ -325,7 +437,7 @@
       <h3 id="modalTitle">Ubongo!</h3>
       <p id="modalSub">You filled the board.</p>
       <div class="stat">Your time: <b id="modalTime">0:00</b></div>
-      <div class="stat">Value captured: <b id="modalValue">$0</b></div>
+      <div class="stat">Net Value: <b id="modalValue">$0</b></div>
       <div class="actions">
         <button class="btn" id="modalReplay">Replay</button>
         <button class="btn primary" id="modalNext">Next puzzle</button>
@@ -342,19 +454,19 @@
     // Fixed set: one tromino, three tetrominoes, four pentominoes.
     // value = dollar worth of the brick. Values are chosen so the value-per-cell
     // ratios ($/cell) are all distinct, giving the Sahni greedy a strict order:
-    //   Y 1200 < S 1250 < N 1400 < L 1500 < P 1600 < I3 1667 < T 1750 < L5 1800
+    //   Y 1.20 < S 1.25 < N 1.40 < L 1.50 < P 1.60 < I3 1.67 < T 1.75 < L5 1.80
     const LIBRARY = [
       // Tromino (3 cells)
-      { name: 'I3', color: '#1abc9c', value: 5000, cells: [[0,0],[1,0],[2,0]] },
+      { name: 'I3', color: '#1abc9c', value: 5, cells: [[0,0],[1,0],[2,0]] },
       // Tetrominoes (4 cells)
-      { name: 'L',  color: '#c9b458', value: 6000, cells: [[0,0],[1,0],[2,0],[2,1]] },
-      { name: 'S',  color: '#2ecc71', value: 5000, cells: [[0,0],[1,0],[1,1],[2,1]] },
-      { name: 'T',  color: '#3498db', value: 7000, cells: [[0,0],[1,0],[1,1],[2,0]] },
+      { name: 'L',  color: '#c9b458', value: 6, cells: [[0,0],[1,0],[2,0],[2,1]] },
+      { name: 'S',  color: '#2ecc71', value: 5, cells: [[0,0],[1,0],[1,1],[2,1]] },
+      { name: 'T',  color: '#3498db', value: 7, cells: [[0,0],[1,0],[1,1],[2,0]] },
       // Pentominoes (5 cells)
-      { name: 'L5', color: '#e67e22', value: 9000, cells: [[0,0],[1,0],[2,0],[3,0],[3,1]] },
-      { name: 'Y',  color: '#9b59b6', value: 6000, cells: [[0,1],[1,0],[1,1],[2,1],[3,1]] },
-      { name: 'P',  color: '#e74c3c', value: 8000, cells: [[0,0],[0,1],[1,0],[1,1],[2,0]] },
-      { name: 'N',  color: '#f1c40f', value: 7000, cells: [[0,1],[1,1],[2,0],[2,1],[3,0]] }
+      { name: 'L5', color: '#e67e22', value: 9, cells: [[0,0],[1,0],[2,0],[3,0],[3,1]] },
+      { name: 'Y',  color: '#9b59b6', value: 6, cells: [[0,1],[1,0],[1,1],[2,1],[3,1]] },
+      { name: 'P',  color: '#e74c3c', value: 8, cells: [[0,0],[0,1],[1,0],[1,1],[2,0]] },
+      { name: 'N',  color: '#f1c40f', value: 7, cells: [[0,1],[1,1],[2,0],[2,1],[3,0]] }
     ];
 
     const DIRS = [[-1,0],[1,0],[0,-1],[0,1]];
@@ -727,19 +839,52 @@
         '<span class="sep">&middot;</span>' + tStr + ' tiling' + (n === 1 ? '' : 's');
     }
 
-    function money(v) { return '$' + Math.round(v).toLocaleString('en-US'); }
+    function money(v) {
+      const n = Math.round(v * 100) / 100;
+      const s = '$' + Math.abs(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
+      return n < 0 ? '-' + s : s;
+    }
     function placedValue() { return state.pieces.reduce((s, p) => s + (p.placed ? p.value : 0), 0); }
 
-    // KPIs (managerial framing, mirroring the Tetris app): value placed, the best
-    // value achievable on this board, cells filled, and value density ($/cell).
+    // Portfolio Fitness = how compactly the placed bricks fill their bounding box
+    // (100% = no gaps), mirroring the Tetris app's fitness metric.
+    function computeFitness() {
+      const keys = [...state.occupied.keys()];
+      if (keys.length === 0) return null;
+      if (keys.length === 1) return 100;
+      let minR = Infinity, maxR = -Infinity, minC = Infinity, maxC = -Infinity;
+      for (const k of keys) {
+        const i = k.indexOf(','), r = +k.slice(0, i), c = +k.slice(i + 1);
+        if (r < minR) minR = r; if (r > maxR) maxR = r;
+        if (c < minC) minC = c; if (c > maxC) maxC = c;
+      }
+      let holes = 0;
+      for (let r = minR; r <= maxR; r++)
+        for (let c = minC; c <= maxC; c++)
+          if (!state.occupied.has(r + ',' + c)) holes++;
+      const bbox = (maxR - minR + 1) * (maxC - minC + 1);
+      return Math.round((1 - holes / bbox) * 100);
+    }
+
+    // KPIs mirroring the Tetris app. Resource Cost = $1 per empty cell;
+    // Net Value = Total Value - Resource Cost (the objective to maximise).
     function renderKPIs() {
-      const filled = state.occupied.size, total = state.region.size;
-      const val = placedValue();
-      const eff = filled ? Math.round(val / filled) : 0;
-      $('#kpiValue').textContent = money(val);
-      $('#kpiBest').textContent = money(state.bestValue);
-      $('#kpiCells').textContent = filled + ' / ' + total;
-      $('#kpiEff').textContent = money(eff) + '/cell';
+      const total = state.region.size, occ = state.occupied.size, empty = total - occ;
+      const value = placedValue();
+      const resourceCost = empty;                 // $1 per empty cell
+      const net = value - resourceCost;
+      const coverage = total ? Math.round(occ / total * 100) : 0;
+      const vpc = occ > 0 ? value / occ : 0;
+      const fit = computeFitness();
+      const netEl = $('#kpiNet');
+      netEl.textContent = money(net);
+      netEl.classList.toggle('neg', net < 0);
+      netEl.classList.toggle('pos', net > 0);
+      $('#kpiValue').textContent = money(value);
+      $('#kpiCost').textContent = money(resourceCost);
+      $('#kpiCoverage').textContent = coverage + '%';
+      $('#kpiEff').textContent = money(vpc);
+      $('#kpiFitness').textContent = fit === null ? 'N/A' : fit + '%';
     }
 
     function selectedPiece() {
@@ -1086,7 +1231,7 @@
     $('#overlay').addEventListener('click', e => { if (e.target === $('#overlay')) hideWin(); });
 
     document.addEventListener('keydown', e => {
-      if (e.target.tagName === 'INPUT') return;
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       const kk = e.key.toLowerCase();
       if (kk === 'r') { rotateSelected(); }
       else if (kk === 'f') { flipSelected(); }
@@ -1108,7 +1253,108 @@
     });
     window.addEventListener('orientationchange', () => setTimeout(refitBoard, 250));
 
+    // ---------- KPI explanation tooltips (hover / focus / tap) ----------
+    const TIPS = {
+      'net-value': 'The main objective. Net Value = Total Value − Resource Cost (the penalty for empty cells). Higher is better!',
+      'total-value': 'Sum of the dollar values of every brick currently placed in the outline. Each brick type is worth a different amount.',
+      'resource-cost': 'Penalty for unused space — $1 for every empty cell still inside the outline.',
+      'coverage': 'Percentage of the outline covered by bricks: occupied cells ÷ total cells × 100.',
+      'value-resource': 'Efficiency — value generated per occupied cell: Total Value ÷ number of occupied cells.',
+      'portfolio-fitness': 'How compactly your bricks sit: 100% means no gaps inside the bricks’ bounding box.'
+    };
+    const tipEl = $('#kpiTip');
+    let tipFor = null;
+    function showTip(target) {
+      const key = target.getAttribute('data-kpi');
+      if (!TIPS[key]) return;
+      tipEl.textContent = TIPS[key];
+      tipEl.classList.add('show');
+      const r = target.getBoundingClientRect();
+      const tw = tipEl.offsetWidth, th = tipEl.offsetHeight;
+      let left = Math.max(8, Math.min(r.left + r.width / 2 - tw / 2, window.innerWidth - tw - 8));
+      let top = r.top - th - 10;
+      if (top < 8) top = r.bottom + 10;
+      tipEl.style.left = left + 'px';
+      tipEl.style.top = top + 'px';
+      tipFor = target;
+    }
+    function hideTip() { tipEl.classList.remove('show'); tipFor = null; }
+    document.querySelectorAll('[data-kpi]').forEach(el => {
+      el.addEventListener('mouseenter', () => showTip(el));
+      el.addEventListener('mouseleave', hideTip);
+      el.addEventListener('focus', () => showTip(el));
+      el.addEventListener('blur', hideTip);
+      el.addEventListener('click', () => { tipFor === el ? hideTip() : showTip(el); });
+    });
+    document.addEventListener('click', e => { if (!e.target.closest('[data-kpi]')) hideTip(); });
+    window.addEventListener('scroll', hideTip, true);
+
+    // ---------- Calculator (managerial scratch maths) ----------
+    const calcInput = $('#calcInput'), calcExpr = $('#calcExpr'),
+          calcResult = $('#calcResult'), calcDisplay = document.querySelector('.calc-display'),
+          calcHistory = $('#calcHistory');
+    function calcShow(expr, res, err) {
+      calcExpr.innerHTML = expr || '&nbsp;';
+      calcResult.textContent = res;
+      calcDisplay.classList.toggle('err', !!err);
+    }
+    function calcEval() {
+      const expr = calcInput.value.trim();
+      if (!expr) return;
+      if (!/^[0-9+\-*/().\s]+$/.test(expr)) { calcShow(expr, 'Error', true); return; }
+      let res;
+      try { res = Function('"use strict"; return (' + expr + ');')(); }
+      catch (e) { calcShow(expr, 'Error', true); return; }
+      if (typeof res !== 'number' || !isFinite(res)) { calcShow(expr, 'Error', true); return; }
+      res = Math.round(res * 1e6) / 1e6;
+      calcShow(expr, String(res), false);
+      const line = document.createElement('div');
+      line.textContent = expr + ' = ' + res;
+      calcHistory.insertBefore(line, calcHistory.firstChild);
+      while (calcHistory.children.length > 30) calcHistory.removeChild(calcHistory.lastChild);
+      calcInput.value = '';
+    }
+    $('#calcPad').addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.act === 'eq') return calcEval();
+      if (b.dataset.act === 'clear') { calcInput.value = ''; calcShow('', '0', false); return; }
+      calcInput.value += b.dataset.k;
+      calcInput.focus();
+    });
+    calcInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); calcEval(); } });
+
+    // ---------- My Notes (persisted in this browser) ----------
+    const notesList = $('#notesList'), notesInput = $('#notesInput');
+    const NOTES_KEY = 'ubongo.notes';
+    function loadNotes() { try { return JSON.parse(localStorage.getItem(NOTES_KEY) || '[]'); } catch (e) { return []; } }
+    function saveNotes(a) { localStorage.setItem(NOTES_KEY, JSON.stringify(a)); }
+    function renderNotes() {
+      notesList.innerHTML = '';
+      for (const n of loadNotes()) {
+        const item = document.createElement('div'); item.className = 'note-item';
+        const meta = document.createElement('div'); meta.className = 'note-meta';
+        const when = document.createElement('span'); when.textContent = n.when;
+        const del = document.createElement('button'); del.textContent = 'delete';
+        del.addEventListener('click', () => { saveNotes(loadNotes().filter(x => x.id !== n.id)); renderNotes(); });
+        meta.appendChild(when); meta.appendChild(del);
+        const txt = document.createElement('div'); txt.className = 'note-text'; txt.textContent = n.text;
+        item.appendChild(meta); item.appendChild(txt);
+        notesList.appendChild(item);
+      }
+      notesList.scrollTop = notesList.scrollHeight;
+    }
+    function addNote() {
+      const text = notesInput.value.trim(); if (!text) return;
+      const notes = loadNotes();
+      notes.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), when: new Date().toLocaleString(), text: text });
+      saveNotes(notes); notesInput.value = ''; renderNotes();
+    }
+    $('#notesAdd').addEventListener('click', addNote);
+    notesInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addNote(); } });
+
     // ---------- Boot ----------
+    renderNotes();
+    calcShow('', '0', false);
     newGame('easy');
     updateBestUI();
   })();

@@ -263,8 +263,8 @@ para('All eight bricks are available every round; the player must find the combi
 table([
  ['Brick','I3','L','S','T','L5','Y','P','N'],
  ['Cells','3','4','4','4','5','5','5','5'],
- ['Value','$5k','$6k','$5k','$7k','$9k','$6k','$8k','$7k'],
- ['$/cell','1667','1500','1250','1750','1800','1200','1600','1400'],
+ ['Value','$5','$6','$5','$7','$9','$6','$8','$7'],
+ ['$/cell','1.67','1.50','1.25','1.75','1.80','1.20','1.60','1.40'],
 ], [0.20,0.10,0.10,0.10,0.10,0.10,0.10,0.10,0.10])
 para('Difficulty is the value-ratio Sahni k itself. Because the outline is generated from a real tiling, '
      'a solution always exists; the game rejection-samples outlines until k matches the tier:')
