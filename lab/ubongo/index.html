@@ -134,6 +134,10 @@
     .piece.selected { border-color: var(--accent); background: #fff5ea; box-shadow: 0 4px 14px rgba(230,126,34,.25); }
     .piece.used { opacity: .35; filter: grayscale(.4); cursor: default; }
     .piece.used:hover { background: #faf7f0; }
+    .piece.reference { opacity: .3; filter: grayscale(.85); cursor: default; box-shadow: none; }
+    .piece.reference:hover { background: #faf7f0; }
+    .tray-note { font-size: 11.5px; color: var(--muted); margin-top: 10px; }
+    .tray-note .dim-word { opacity: .55; }
     .piece-grid { display: grid; gap: 2px; }
     .pc { border-radius: 3px; }
     .pc.on { box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
@@ -190,15 +194,13 @@
   <div class="container">
     <header class="app">
       <h1>Ubongo<span class="dot">.</span></h1>
-      <p class="sub">The classic polyomino puzzle race. Beat the sand timer by fitting <em>all</em> the coloured pieces perfectly into the outlined board. Rotate, flip, and drop them into place.</p>
+      <p class="sub">The classic polyomino puzzle race. Beat the sand timer by fitting the right pieces perfectly into the outlined board. Rotate, flip, and drop them into place.</p>
     </header>
 
     <div class="controls">
       <div class="seg" id="difficulty">
-        <button data-diff="easy" class="active">Easy</button>
-        <button data-diff="medium">Medium</button>
-        <button data-diff="hard">Hard</button>
-        <button data-diff="expert">Expert</button>
+        <button data-diff="easy" class="active">Easy &middot; 14</button>
+        <button data-diff="hard">Hard &middot; 18</button>
       </div>
       <button class="btn primary" id="newBtn">New puzzle</button>
       <button class="btn" id="restartBtn">Restart</button>
@@ -233,8 +235,9 @@
             <button class="btn" id="rotateBtn">&#8635; Rotate</button>
             <button class="btn" id="flipBtn">&#8646; Flip</button>
           </div>
-          <h2>Pieces &mdash; use them all</h2>
+          <h2>Pieces &mdash; fill the board with the bright ones</h2>
           <div class="tray" id="tray"></div>
+          <p class="tray-note">All eight Ubongo pieces are always shown. Each board uses only the <b>bright</b> subset; the <span class="dim-word">dimmed</span> pieces are not used this round.</p>
           <div class="hint-row">
             <button class="btn ghost" id="hintBtn">&#128161; Hint</button>
             <button class="btn ghost" id="solveBtn">Show solution</button>
@@ -289,14 +292,12 @@
 
     const DIRS = [[-1,0],[1,0],[0,-1],[0,1]];
 
-    // Every puzzle uses the full set of pieces (one tromino, three tetrominoes,
-    // four pentominoes = 35 cells); difficulty varies only the board shape and
-    // the timer budget, not which pieces are shown.
+    // All eight pieces are always SHOWN, but each board is solved with a SUBSET:
+    // an Easy challenge fills a 14-cell outline, a Hard challenge an 18-cell one
+    // (authentic Ubongo). cells = target outline area; limit = sand-timer budget.
     const DIFFS = {
-      easy:   { limit: 210 },
-      medium: { limit: 270 },
-      hard:   { limit: 330 },
-      expert: { limit: 420 }
+      easy: { cells: 14, limit: 120 },
+      hard: { cells: 18, limit: 180 }
     };
 
     // ---------- Geometry helpers ----------
@@ -329,11 +330,25 @@
     }
 
     // ---------- Puzzle generation (guaranteed solvable) ----------
-    // Place ALL pieces, each edge-adjacent to the growing region, with no
-    // overlaps. The union of placed cells becomes the target outline, so every
-    // board is tiled by the complete piece set (and is solvable by construction).
-    function pickPieces() {
-      return shuffle(LIBRARY.slice());
+    // Pick a random subset of the library whose areas sum to the target outline
+    // area (14 for Easy, 18 for Hard) via randomized subset-sum backtracking.
+    function pickSubset(target) {
+      const order = shuffle(LIBRARY.map((_, i) => i));
+      const res = [];
+      let found = false;
+      (function rec(i, sum) {
+        if (found) return;
+        if (sum === target) { found = true; return; }
+        if (sum > target || i >= order.length) return;
+        const li = order[i], a = LIBRARY[li].cells.length;
+        const incFirst = Math.random() < 0.5;
+        for (const inc of (incFirst ? [true, false] : [false, true])) {
+          if (found) return;
+          if (inc) { res.push(li); rec(i + 1, sum + a); if (found) return; res.pop(); }
+          else { rec(i + 1, sum); }
+        }
+      })(0, 0);
+      return res.map(i => LIBRARY[i]);
     }
 
     function place(chosen, idx, filled, placements) {
@@ -380,9 +395,10 @@
       return false;
     }
 
-    function generatePuzzle() {
+    function generatePuzzle(target) {
       for (let attempt = 0; attempt < 1500; attempt++) {
-        const chosen = pickPieces();
+        const chosen = pickSubset(target).map(p => ({ name: p.name, color: p.color, cells: p.cells }));
+        if (!chosen.length) continue;
         chosen.forEach(p => { p._oris = orientations(p.cells); });
         const filled = new Map();
         const placements = new Array(chosen.length).fill(null);
@@ -540,16 +556,6 @@
       return best;
     }
 
-    // With the full piece set (35 cells) the measured Sahni difficulty spreads
-    // naturally over kappa = 1..4, giving a reachable, monotone tier ladder.
-    const ACCEPT = {
-      easy:   k => k <= 1,
-      medium: k => k === 2,
-      hard:   k => k === 3,
-      expert: k => k >= 4
-    };
-    const DESIRED = { easy: 1, medium: 2, hard: 3, expert: 4 };
-
     // ---------- Game state ----------
     let state = null;
     let timer = { start: 0, interval: null, elapsed: 0, running: false };
@@ -564,29 +570,28 @@
       return Math.max(26, Math.min(46, Math.floor(380 / m)));
     }
 
-    // Rejection-sample boards: return the first that clears the tier's bar;
-    // otherwise keep the hardest (max-kappa) candidate seen within the budget.
+    // Easy returns the first valid board (gentle). Hard samples within a small
+    // budget and keeps the most challenging one (highest kappa, fewest tilings).
     function pickPuzzle(diff) {
-      const deadline = Date.now() + 320;
+      const target = DIFFS[diff].cells;
+      const deadline = Date.now() + (diff === 'hard' ? 220 : 90);
       let best = null;
-      for (let t = 0; t < 240; t++) {
-        const puzzle = generatePuzzle();
+      for (let t = 0; t < 160; t++) {
+        const puzzle = generatePuzzle(target);
         if (!puzzle) continue;
         const pd = buildPlacements(puzzle.region, puzzle.pieces);
         const kappa = sahniDifficulty(pd);
-        if (ACCEPT[diff](kappa)) {
-          return { puzzle: puzzle, kappa: kappa, tilings: countSolutions(pd, 1000) };
-        }
-        const score = -Math.abs(kappa - DESIRED[diff]);
-        if (!best || score > best.score) best = { puzzle, pd, kappa, score };
+        const tilings = countSolutions(pd, 1000);
+        if (diff === 'easy') return { puzzle: puzzle, kappa: kappa, tilings: tilings };
+        if (kappa >= 2) return { puzzle: puzzle, kappa: kappa, tilings: tilings }; // hard: first solid challenge
+        const score = kappa * 10000 - tilings.count; // else keep hardest seen
+        if (!best || score > best.score) best = { puzzle, kappa, tilings, score };
         if (Date.now() > deadline) break;
       }
-      if (!best) {
-        const puzzle = generatePuzzle();
-        const pd = buildPlacements(puzzle.region, puzzle.pieces);
-        best = { puzzle, pd, kappa: sahniDifficulty(pd) };
-      }
-      return { puzzle: best.puzzle, kappa: best.kappa, tilings: countSolutions(best.pd, 1000) };
+      if (best) return { puzzle: best.puzzle, kappa: best.kappa, tilings: best.tilings };
+      const puzzle = generatePuzzle(target);
+      const pd = buildPlacements(puzzle.region, puzzle.pieces);
+      return { puzzle: puzzle, kappa: sahniDifficulty(pd), tilings: countSolutions(pd, 1000) };
     }
 
     function newGame(diff) {
@@ -664,35 +669,49 @@
       boardEl.addEventListener('mouseleave', clearPreview);
     }
 
+    function pieceGrid(cells, color) {
+      let maxR = 0, maxC = 0;
+      for (const [r, c] of cells) { if (r > maxR) maxR = r; if (c > maxC) maxC = c; }
+      const grid = document.createElement('div');
+      grid.className = 'piece-grid';
+      const pcs = 18;
+      grid.style.gridTemplateColumns = 'repeat(' + (maxC + 1) + ', ' + pcs + 'px)';
+      grid.style.gridTemplateRows = 'repeat(' + (maxR + 1) + ', ' + pcs + 'px)';
+      const set = new Set(cells.map(c => c[0] + ',' + c[1]));
+      for (let r = 0; r <= maxR; r++) {
+        for (let c = 0; c <= maxC; c++) {
+          const d = document.createElement('div');
+          d.className = 'pc';
+          d.style.width = pcs + 'px'; d.style.height = pcs + 'px';
+          if (set.has(r + ',' + c)) { d.classList.add('on'); d.style.background = color; }
+          grid.appendChild(d);
+        }
+      }
+      return grid;
+    }
+
+    // Show ALL eight pieces: the subset this board uses is active/selectable,
+    // the remaining pieces are shown dimmed for reference (not used here).
     function renderTray() {
       trayEl.innerHTML = '';
-      for (const p of state.pieces) {
+      const active = {};
+      for (const p of state.pieces) active[p.name] = p;
+      for (const lib of LIBRARY) {
+        const p = active[lib.name];
         const wrap = document.createElement('div');
-        wrap.className = 'piece' + (p.placed ? ' used' : '') + (state.selected === p.id ? ' selected' : '');
-        const cells = oriCells(p);
-        let maxR = 0, maxC = 0;
-        for (const [r, c] of cells) { if (r > maxR) maxR = r; if (c > maxC) maxC = c; }
-        const grid = document.createElement('div');
-        grid.className = 'piece-grid';
-        const pcs = 18;
-        grid.style.gridTemplateColumns = 'repeat(' + (maxC + 1) + ', ' + pcs + 'px)';
-        grid.style.gridTemplateRows = 'repeat(' + (maxR + 1) + ', ' + pcs + 'px)';
-        const set = new Set(cells.map(c => c[0] + ',' + c[1]));
-        for (let r = 0; r <= maxR; r++) {
-          for (let c = 0; c <= maxC; c++) {
-            const d = document.createElement('div');
-            d.className = 'pc';
-            d.style.width = pcs + 'px'; d.style.height = pcs + 'px';
-            if (set.has(r + ',' + c)) { d.classList.add('on'); d.style.background = p.color; }
-            grid.appendChild(d);
+        if (p) {
+          wrap.className = 'piece' + (p.placed ? ' used' : '') + (state.selected === p.id ? ' selected' : '');
+          wrap.appendChild(pieceGrid(oriCells(p), p.color));
+          if (!p.placed) {
+            wrap.addEventListener('click', () => {
+              state.selected = (state.selected === p.id) ? null : p.id;
+              renderTray();
+            });
           }
-        }
-        wrap.appendChild(grid);
-        if (!p.placed) {
-          wrap.addEventListener('click', () => {
-            state.selected = (state.selected === p.id) ? null : p.id;
-            renderTray();
-          });
+        } else {
+          wrap.className = 'piece reference';
+          wrap.title = 'Not part of this board — shown for reference';
+          wrap.appendChild(pieceGrid(normalize(lib.cells), lib.color));
         }
         trayEl.appendChild(wrap);
       }
