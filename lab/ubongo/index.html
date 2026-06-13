@@ -114,7 +114,7 @@
       flex: 1 1 auto; background: var(--panel); border: 1px solid var(--line);
       border-radius: 16px; box-shadow: var(--shadow); padding: 14px 18px;
     }
-    .kpi-panel h3 { font-size: 16px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+    .kpi-panel h3 { font-size: 17px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; color: var(--ink); }
     .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
     .kstat {
       background: #faf8f3; border: 1px solid var(--line); border-radius: 12px; padding: 10px 13px;
@@ -868,24 +868,14 @@
     }
     function placedValue() { return state.pieces.reduce((s, p) => s + (p.placed ? p.value : 0), 0); }
 
-    // Portfolio Fitness = how compactly the placed bricks fill their bounding box
-    // (100% = no gaps), mirroring the Tetris app's fitness metric.
+    // Portfolio Fitness = how close the current portfolio is to the best possible:
+    // current Net Value as a percentage of the highest Net Value achievable on
+    // this board (the optimal exact-cover fill). 100% = the optimal portfolio.
     function computeFitness() {
-      const keys = [...state.occupied.keys()];
-      if (keys.length === 0) return null;
-      if (keys.length === 1) return 100;
-      let minR = Infinity, maxR = -Infinity, minC = Infinity, maxC = -Infinity;
-      for (const k of keys) {
-        const i = k.indexOf(','), r = +k.slice(0, i), c = +k.slice(i + 1);
-        if (r < minR) minR = r; if (r > maxR) maxR = r;
-        if (c < minC) minC = c; if (c > maxC) maxC = c;
-      }
-      let holes = 0;
-      for (let r = minR; r <= maxR; r++)
-        for (let c = minC; c <= maxC; c++)
-          if (!state.occupied.has(r + ',' + c)) holes++;
-      const bbox = (maxR - minR + 1) * (maxC - minC + 1);
-      return Math.round((1 - holes / bbox) * 100);
+      if (state.occupied.size === 0) return 0;
+      if (!state.bestValue) return null;
+      const net = placedValue() - (state.region.size - state.occupied.size);
+      return Math.max(0, Math.min(100, Math.round(net / state.bestValue * 100)));
     }
 
     // KPIs mirroring the Tetris app. Resource Cost = $1 per empty cell;
@@ -1297,7 +1287,7 @@
       'resource-cost': 'Penalty for unused space — $1 for every empty cell still inside the outline.',
       'coverage': 'Percentage of the outline covered by bricks: occupied cells ÷ total cells × 100.',
       'value-resource': 'Efficiency — value generated per occupied cell: Total Value ÷ number of occupied cells.',
-      'portfolio-fitness': 'How compactly your bricks sit: 100% means no gaps inside the bricks’ bounding box.',
+      'portfolio-fitness': 'How close your portfolio is to the best possible — your Net Value as a percentage of the highest Net Value achievable on this board. 100% means you captured the optimal portfolio.',
       'difficulty': 'Two readouts of how hard this board is. Sahni κ: the fewest correctly-placed bricks after which a simple value-ratio greedy can finish without getting stuck (higher = harder). Distinct solutions: how many different brick combinations fill this exact outline (fewer = harder; 1 means a unique answer).'
     };
     const tipEl = $('#kpiTip');
