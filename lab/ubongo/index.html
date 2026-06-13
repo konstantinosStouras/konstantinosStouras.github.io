@@ -30,14 +30,20 @@
     html, body { height: 100%; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
-        Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+        Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif;
       -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+      -webkit-tap-highlight-color: transparent; /* no blue flash on tap (mobile) */
       background: radial-gradient(1200px 600px at 50% -10%, #fff7ec 0%, var(--bg) 60%);
       color: var(--ink);
       min-height: 100vh;
       padding: 22px 16px 48px;
       line-height: 1.5;
     }
+    /* Snappy taps (no 300ms delay), and don't let the OS hijack game gestures. */
+    .btn, .seg button, .piece, .cell.play, .kpi { touch-action: manipulation; }
+    .board, .tray, .controls, .seg, .piece-actions, .hint-row { -webkit-user-select: none; user-select: none; }
 
     .container { max-width: 980px; margin: 0 auto; }
 
@@ -101,11 +107,11 @@
     .kpi-label { display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
     .kpi-val { display: block; font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 2px; }
 
-    /* Layout */
+    /* Layout — two columns on laptop/large tablet, single column below. */
     .game {
       display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start;
     }
-    @media (max-width: 760px) { .game { grid-template-columns: 1fr; } }
+    @media (max-width: 880px) { .game { grid-template-columns: 1fr; } }
 
     .card {
       background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
@@ -195,6 +201,50 @@
     .modal .stat b { font-size: 22px; color: var(--accent-dark); }
     .modal .actions { display: flex; gap: 10px; }
     .modal .actions .btn { flex: 1; }
+
+    .board-stage { margin: 0 auto; }
+
+    /* ---- Tablet: keep the side panel readable, center the board ---- */
+    @media (max-width: 880px) {
+      .container { max-width: 640px; }
+      .board-card { width: 100%; }
+      .board-card > .board-stage { width: auto; }
+    }
+
+    /* ---- Phones: tighter chrome, full-width controls, comfy spacing ---- */
+    @media (max-width: 560px) {
+      body { padding: 14px 10px 36px; }
+      header.app h1 { margin-bottom: 4px; }
+      header.app p.sub { font-size: 13.5px; }
+      .controls { gap: 8px; }
+      .controls .seg { flex: 1 1 100%; justify-content: center; }
+      .controls .seg button { flex: 1; }
+      .controls .btn { flex: 1 1 calc(50% - 5px); }
+      .kpi { flex: 1 1 calc(50% - 6px); min-width: 0; padding: 8px 10px; }
+      .kpi-val { font-size: 16px; }
+      .card { padding: 13px; border-radius: 15px; }
+      .board-stage { padding: 10px; }
+      .timer-pill .time { font-size: 18px; }
+      .help, .tray-note { font-size: 12px; }
+    }
+
+    /* ---- Very small phones ---- */
+    @media (max-width: 360px) {
+      .kpi { flex-basis: 100%; }
+    }
+
+    /* ---- Touch devices (phones/tablets): larger, finger-friendly targets ---- */
+    @media (pointer: coarse) {
+      .btn, .seg button { padding-top: 12px; padding-bottom: 12px; min-height: 44px; }
+      .piece { padding: 10px; }
+      .piece-actions .btn, .hint-row .btn { min-height: 46px; }
+      .cell.filled { cursor: default; }
+    }
+
+    /* ---- Respect reduced-motion preferences ---- */
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; animation: none !important; }
+    }
   </style>
 </head>
 <body>
@@ -595,9 +645,16 @@
     const trayEl = $('#tray');
     const statusEl = $('#status');
 
+    // Size the board cells to the space actually available, so it fits a phone
+    // without scrolling and grows generously on tablet/laptop.
     function cellSize(rows, cols) {
-      const m = Math.max(rows, cols);
-      return Math.max(26, Math.min(46, Math.floor(380 / m)));
+      const vw = Math.min(window.innerWidth, 1012);
+      const twoCol = window.innerWidth >= 880;
+      const colW = twoCol ? (Math.min(vw, 980) - 32 - 320 - 20)   // side panel + gap
+                          : (Math.min(vw, 640) - 24);              // single column
+      const byWidth = Math.floor((colW - 28 - cols * 3) / cols);   // stage padding + gaps
+      const byHeight = Math.floor((window.innerHeight - 320) / Math.max(rows, 1));
+      return Math.max(22, Math.min(54, byWidth, byHeight, Math.floor(460 / Math.max(rows, cols))));
     }
 
     // Difficulty is the value-ratio Sahni kappa over the FULL eight-piece set.
@@ -1038,6 +1095,19 @@
       else if (kk === 'h') { hint(); }
       else if (e.key === 'Escape') { state.selected = null; renderTray(); clearPreview(); }
     });
+
+    // Re-fit the board when the window resizes or the device rotates.
+    let _resizeT = null;
+    function refitBoard() {
+      if (!state) return;
+      const cs = cellSize(state.rows, state.cols);
+      if (cs !== state.cs) { state.cs = cs; renderBoard(); }
+    }
+    window.addEventListener('resize', () => {
+      clearTimeout(_resizeT);
+      _resizeT = setTimeout(refitBoard, 150);
+    });
+    window.addEventListener('orientationchange', () => setTimeout(refitBoard, 250));
 
     // ---------- Boot ----------
     newGame('easy');
