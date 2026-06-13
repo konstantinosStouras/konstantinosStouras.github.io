@@ -42,7 +42,7 @@
       line-height: 1.5;
     }
     /* Snappy taps (no 300ms delay), and don't let the OS hijack game gestures. */
-    .btn, .seg button, .piece, .cell.play, .kpi-list p, .netcard, .calc-pad button { touch-action: manipulation; }
+    .btn, .seg button, .piece, .cell.play, .kstat, .netcard, .calc-pad button { touch-action: manipulation; }
     .board, .tray, .controls, .seg, .piece-actions, .hint-row { -webkit-user-select: none; user-select: none; }
 
     .container { max-width: 980px; margin: 0 auto; }
@@ -114,12 +114,20 @@
       flex: 1 1 auto; background: var(--panel); border: 1px solid var(--line);
       border-radius: 16px; box-shadow: var(--shadow); padding: 14px 18px;
     }
-    .kpi-panel h3 { font-size: 18px; margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
-    .kpi-list { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 22px; }
-    .kpi-list p { margin: 3px 0; font-size: 14px; cursor: help; border-radius: 6px; padding: 2px 4px; }
-    .kpi-list p:hover, .kpi-list p:focus, .netcard:focus { outline: none; background: #faf3e6; }
-    .kpi-list strong { color: var(--ink); }
-    .kpi-list span { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--accent-dark); }
+    .kpi-panel h3 { font-size: 16px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+    .kstat {
+      background: #faf8f3; border: 1px solid var(--line); border-radius: 12px; padding: 10px 13px;
+      display: flex; flex-direction: column; gap: 4px; cursor: help; transition: .12s; justify-content: flex-start;
+    }
+    .kstat:hover, .kstat:focus { background: #fff5ea; border-color: #f1d8b6; outline: none; transform: translateY(-1px); }
+    .kk { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; }
+    .kv { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--ink); line-height: 1.1; }
+    .kv.pos { color: var(--good); } .kv.neg { color: var(--bad); }
+    .kbar { height: 5px; background: #e9e2d4; border-radius: 999px; overflow: hidden; margin-top: 3px; }
+    .kbar > div { height: 100%; width: 0%; background: linear-gradient(90deg, #3498db, #2ecc71); border-radius: 999px; transition: width .3s; }
+    .netcard.neg { border-left-color: var(--bad); background: #fdeceb; }
+    .netcard.pos { border-left-color: var(--good); background: #eafaf1; }
 
     /* Hover/tap explanation popup */
     .kpi-tip {
@@ -227,6 +235,9 @@
     .piece .pname { font-size: 11px; color: var(--muted); font-weight: 600; }
     .piece .pval { font-size: 10.5px; font-weight: 700; color: var(--muted); margin-top: 3px; font-variant-numeric: tabular-nums; }
 
+    .arrow-hint { font-size: 12.5px; color: var(--muted); margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+    .arrow-hint .keys { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+    .touch-only { display: none; }
     .piece-actions { display: flex; gap: 8px; margin-bottom: 12px; }
     .piece-actions .btn { flex: 1; text-align: center; }
     .hint-row { display: flex; gap: 8px; margin-top: 12px; }
@@ -244,6 +255,8 @@
       padding: 5px 14px; cursor: help; font-variant-numeric: tabular-nums;
     }
     .board-meta b { color: var(--accent-dark); font-weight: 800; }
+    .board-meta:hover, .board-meta:focus { background: #ece5d6; outline: none; }
+    .board-meta .meta-info { color: var(--accent-dark); font-weight: 700; margin-left: 2px; }
     .board-meta .sep { margin: 0 8px; opacity: .5; }
 
     .status { text-align: center; min-height: 22px; margin-top: 10px; font-weight: 600; color: var(--muted); }
@@ -302,7 +315,7 @@
 
     /* ---- Very small phones ---- */
     @media (max-width: 360px) {
-      .kpi-list { grid-template-columns: 1fr; }
+      .kpi-grid { grid-template-columns: 1fr 1fr; }
     }
 
     /* ---- Touch devices (phones/tablets): larger, finger-friendly targets ---- */
@@ -311,6 +324,8 @@
       .piece { padding: 10px; }
       .piece-actions .btn, .hint-row .btn { min-height: 46px; }
       .cell.filled { cursor: default; }
+      .touch-only { display: inline; }
+      .arrow-hint { display: none; } /* arrow keys are irrelevant without a keyboard */
     }
 
     /* ---- Respect reduced-motion preferences ---- */
@@ -354,12 +369,12 @@
       </div>
       <div class="kpi-panel">
         <h3><span class="ic">&#128200;</span> KPIs</h3>
-        <div class="kpi-list">
-          <p data-kpi="total-value" tabindex="0"><strong>Total Value:</strong> <span id="kpiValue">$0</span></p>
-          <p data-kpi="resource-cost" tabindex="0"><strong>Resource Cost:</strong> <span id="kpiCost">$0</span></p>
-          <p data-kpi="coverage" tabindex="0"><strong>Coverage:</strong> <span id="kpiCoverage">0%</span></p>
-          <p data-kpi="value-resource" tabindex="0"><strong>Value/Resource:</strong> <span id="kpiEff">$0</span></p>
-          <p data-kpi="portfolio-fitness" tabindex="0"><strong>Portfolio Fitness:</strong> <span id="kpiFitness">N/A</span></p>
+        <div class="kpi-grid">
+          <div class="kstat" data-kpi="total-value" tabindex="0"><span class="kk">Total Value</span><span class="kv pos" id="kpiValue">$0</span></div>
+          <div class="kstat" data-kpi="resource-cost" tabindex="0"><span class="kk">Resource Cost</span><span class="kv neg" id="kpiCost">$0</span></div>
+          <div class="kstat" data-kpi="value-resource" tabindex="0"><span class="kk">Value / Resource</span><span class="kv" id="kpiEff">$0</span></div>
+          <div class="kstat" data-kpi="coverage" tabindex="0"><span class="kk">Coverage</span><span class="kv" id="kpiCoverage">0%</span><div class="kbar"><div id="kpiCovBar"></div></div></div>
+          <div class="kstat" data-kpi="portfolio-fitness" tabindex="0"><span class="kk">Portfolio Fitness</span><span class="kv" id="kpiFitness">N/A</span></div>
         </div>
       </div>
     </div>
@@ -370,16 +385,21 @@
         <div class="board-stage">
           <div class="board" id="board"></div>
         </div>
-        <div class="board-meta" id="boardMeta" title="A Sahni-style hardness measure: the fewest correctly-placed pieces (hints) after which a naive greedy fills the rest without getting stuck. See the linked PDF note."></div>
+        <div class="board-meta" id="boardMeta" data-kpi="difficulty" tabindex="0"></div>
         <div class="status" id="status">Select a piece, then place it on the board.</div>
       </div>
 
       <div>
         <div class="card">
-          <h2>Selected piece</h2>
+          <h2>Bricks</h2>
+          <p class="arrow-hint">
+            Select a brick, then use the arrow keys:
+            <span class="keys"><kbd>&larr;</kbd><kbd>&rarr;</kbd> rotate</span>
+            <span class="keys"><kbd>&uarr;</kbd><kbd>&darr;</kbd> flip</span>
+          </p>
           <div class="piece-actions">
-            <button class="btn" id="rotateBtn">&#8635; Rotate</button>
-            <button class="btn" id="flipBtn">&#8646; Flip</button>
+            <button class="btn" id="rotateBtn" title="Rotate the selected brick (or use &larr; &rarr;)">&#8635; Rotate</button>
+            <button class="btn" id="flipBtn" title="Flip the selected brick (or use &uarr; &darr;)">&#8646; Flip</button>
           </div>
           <div class="tray" id="tray"></div>
           <p class="tray-note">Every brick can be used, and each shows its dollar value. Work out which combination fills the outline &mdash; only some will fit.</p>
@@ -388,9 +408,10 @@
             <button class="btn ghost" id="solveBtn">Show solution</button>
           </div>
           <p class="help">
-            <b>How to play.</b> Tap a piece to select it, then tap a board tile to drop it.
-            <kbd>R</kbd> rotate &middot; <kbd>F</kbd> flip &middot; tap a placed piece to pick it back up.
+            <b>How to play.</b> Tap a brick to select it, then tap a board tile to drop it.
+            Use <kbd>&larr;</kbd> <kbd>&rarr;</kbd> to <b>rotate</b> and <kbd>&uarr;</kbd> <kbd>&darr;</kbd> to <b>flip</b> the selected brick. Tap a placed brick to pick it back up.
             <br><kbd>N</kbd> new &middot; <kbd>H</kbd> hint &middot; <kbd>Esc</kbd> deselect.
+            <span class="touch-only">(On a touch screen, use the Rotate / Flip buttons above.)</span>
           </p>
         </div>
       </div>
@@ -835,8 +856,9 @@
       const t = state.tilings;
       const n = t.count, tStr = (t.capped || n >= 1000) ? (n + '+') : n;
       $('#boardMeta').innerHTML =
-        'Sahni difficulty <b>&kappa; = ' + state.kappa + '</b>' +
-        '<span class="sep">&middot;</span>' + tStr + ' tiling' + (n === 1 ? '' : 's');
+        'Difficulty <b>(Sahni &kappa;) = ' + state.kappa + '</b>' +
+        '<span class="sep">&middot;</span>' + tStr + ' distinct solution' + (n === 1 ? '' : 's') +
+        ' <span class="meta-info">&#9432;</span>';
     }
 
     function money(v) {
@@ -876,13 +898,16 @@
       const coverage = total ? Math.round(occ / total * 100) : 0;
       const vpc = occ > 0 ? value / occ : 0;
       const fit = computeFitness();
-      const netEl = $('#kpiNet');
+      const netEl = $('#kpiNet'), card = document.querySelector('.netcard');
       netEl.textContent = money(net);
       netEl.classList.toggle('neg', net < 0);
       netEl.classList.toggle('pos', net > 0);
+      card.classList.toggle('neg', net < 0);
+      card.classList.toggle('pos', net > 0);
       $('#kpiValue').textContent = money(value);
       $('#kpiCost').textContent = money(resourceCost);
       $('#kpiCoverage').textContent = coverage + '%';
+      $('#kpiCovBar').style.width = coverage + '%';
       $('#kpiEff').textContent = money(vpc);
       $('#kpiFitness').textContent = fit === null ? 'N/A' : fit + '%';
     }
@@ -1185,22 +1210,23 @@
     function hideWin() { $('#overlay').classList.remove('show'); }
 
     // ---------- Controls wiring ----------
-    function rotateSelected() {
+    // Re-orient the selected brick by applying a geometric transform and snapping
+    // to the matching orientation in its precomputed orbit.
+    function transformSelected(fn) {
       const p = selectedPiece();
       if (!p || p.placed) return;
-      const want = key(rotate(oriCells(p)));
+      const want = key(fn(oriCells(p)));
       const idx = p.oris.findIndex(o => key(o) === want);
       if (idx >= 0) p.oriIndex = idx;
       renderTray(); clearPreview();
     }
-    function flipSelected() {
-      const p = selectedPiece();
-      if (!p || p.placed) return;
-      const want = key(reflect(oriCells(p)));
-      const idx = p.oris.findIndex(o => key(o) === want);
-      if (idx >= 0) p.oriIndex = idx;
-      renderTray(); clearPreview();
-    }
+    const rotateCW = () => transformSelected(cells => rotate(cells));
+    const rotateCCW = () => transformSelected(cells => normalize(cells.map(([r, c]) => [-c, r])));
+    const flipH = () => transformSelected(cells => reflect(cells));               // mirror left↔right
+    const flipV = () => transformSelected(cells => normalize(cells.map(([r, c]) => [-r, c]))); // mirror up↕down
+    // Buttons / R / F keep their original behaviour.
+    const rotateSelected = rotateCW;
+    const flipSelected = flipH;
 
     document.querySelectorAll('#difficulty button').forEach(b => {
       b.addEventListener('click', () => {
@@ -1232,6 +1258,17 @@
 
     document.addEventListener('keydown', e => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      // Arrow keys rotate (←/→) and flip (↑/↓) the selected brick.
+      if (e.key.indexOf('Arrow') === 0) {
+        const p = selectedPiece();
+        if (!p || p.placed) return;            // nothing selected → let the page scroll
+        e.preventDefault();
+        if (e.key === 'ArrowRight') rotateCW();
+        else if (e.key === 'ArrowLeft') rotateCCW();
+        else if (e.key === 'ArrowUp') flipV();
+        else if (e.key === 'ArrowDown') flipH();
+        return;
+      }
       const kk = e.key.toLowerCase();
       if (kk === 'r') { rotateSelected(); }
       else if (kk === 'f') { flipSelected(); }
@@ -1260,7 +1297,8 @@
       'resource-cost': 'Penalty for unused space — $1 for every empty cell still inside the outline.',
       'coverage': 'Percentage of the outline covered by bricks: occupied cells ÷ total cells × 100.',
       'value-resource': 'Efficiency — value generated per occupied cell: Total Value ÷ number of occupied cells.',
-      'portfolio-fitness': 'How compactly your bricks sit: 100% means no gaps inside the bricks’ bounding box.'
+      'portfolio-fitness': 'How compactly your bricks sit: 100% means no gaps inside the bricks’ bounding box.',
+      'difficulty': 'Two readouts of how hard this board is. Sahni κ: the fewest correctly-placed bricks after which a simple value-ratio greedy can finish without getting stuck (higher = harder). Distinct solutions: how many different brick combinations fill this exact outline (fewer = harder; 1 means a unique answer).'
     };
     const tipEl = $('#kpiTip');
     let tipFor = null;
@@ -1323,19 +1361,17 @@
     });
     calcInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); calcEval(); } });
 
-    // ---------- My Notes (persisted in this browser) ----------
+    // ---------- My Notes (this session only — cleared on page refresh) ----------
     const notesList = $('#notesList'), notesInput = $('#notesInput');
-    const NOTES_KEY = 'ubongo.notes';
-    function loadNotes() { try { return JSON.parse(localStorage.getItem(NOTES_KEY) || '[]'); } catch (e) { return []; } }
-    function saveNotes(a) { localStorage.setItem(NOTES_KEY, JSON.stringify(a)); }
+    let notesData = [];
     function renderNotes() {
       notesList.innerHTML = '';
-      for (const n of loadNotes()) {
+      for (const n of notesData) {
         const item = document.createElement('div'); item.className = 'note-item';
         const meta = document.createElement('div'); meta.className = 'note-meta';
         const when = document.createElement('span'); when.textContent = n.when;
         const del = document.createElement('button'); del.textContent = 'delete';
-        del.addEventListener('click', () => { saveNotes(loadNotes().filter(x => x.id !== n.id)); renderNotes(); });
+        del.addEventListener('click', () => { notesData = notesData.filter(x => x.id !== n.id); renderNotes(); });
         meta.appendChild(when); meta.appendChild(del);
         const txt = document.createElement('div'); txt.className = 'note-text'; txt.textContent = n.text;
         item.appendChild(meta); item.appendChild(txt);
@@ -1345,9 +1381,8 @@
     }
     function addNote() {
       const text = notesInput.value.trim(); if (!text) return;
-      const notes = loadNotes();
-      notes.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), when: new Date().toLocaleString(), text: text });
-      saveNotes(notes); notesInput.value = ''; renderNotes();
+      notesData.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), when: new Date().toLocaleString(), text: text });
+      notesInput.value = ''; renderNotes();
     }
     $('#notesAdd').addEventListener('click', addNote);
     notesInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addNote(); } });
