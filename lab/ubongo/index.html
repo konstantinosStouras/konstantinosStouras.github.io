@@ -806,18 +806,30 @@
 
     function pickPuzzle(diff) {
       const target = DIFFS[diff].cells;
-      const deadline = Date.now() + 220;
-      let best = null;
-      for (let t = 0; t < 220; t++) {
+      const deadline = Date.now() + 280;
+      let bestThree = null, bestAny = null;  // bestThree: has >= MIN_SOLUTIONS tilings
+      const MIN_SOLUTIONS = 3;               // every board must be fillable >= 3 ways
+      for (let t = 0; t < 400; t++) {
         const puzzle = generatePuzzle(target);
         if (!puzzle) continue;
         const cand = evaluate(puzzle);
-        if (ACCEPT[diff](cand.kappa)) return cand;
-        const score = (diff === 'hard' ? cand.kappa : -cand.kappa); // hard: max kappa; easy: min
-        if (!best || score > best.score) { cand.score = score; best = cand; }
+        const has3 = cand.tilings.count >= MIN_SOLUTIONS;
+        if (has3 && ACCEPT[diff](cand.kappa)) return cand;   // ideal: right difficulty + enough ways
+        if (has3) {
+          const score = (diff === 'hard' ? cand.kappa : -cand.kappa); // hard: max kappa; easy: min
+          if (!bestThree || score > bestThree.score) { cand.score = score; bestThree = cand; }
+        }
+        if (!bestAny || cand.tilings.count > bestAny.tilings.count) bestAny = cand;
         if (Date.now() > deadline) break;
       }
-      return best || evaluate(generatePuzzle(target));
+      // Guarantee the >= 3 ways requirement even if the difficulty band was never hit.
+      for (let t = 0; t < 400 && !bestThree; t++) {
+        const puzzle = generatePuzzle(target);
+        if (!puzzle) continue;
+        const cand = evaluate(puzzle);
+        if (cand.tilings.count >= MIN_SOLUTIONS) bestThree = cand;
+      }
+      return bestThree || bestAny || evaluate(generatePuzzle(target));
     }
 
     function newGame(diff) {
