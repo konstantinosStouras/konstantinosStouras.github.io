@@ -156,20 +156,21 @@ def spacer(h):
     global y; y -= h
 
 # ============================ CONTENT ============================
-heading('A Sahni-style Difficulty Measure for Ubongo', 18, 'HelvB', top=0, bot=2)
-para('From the 0-1 Knapsack Problem to geometric exact cover', 10.5, 'Helv', gap=1, color=(0.3,0.3,0.3))
+heading('A Sahni-style Difficulty Measure for PortfolioFit', 18, 'HelvB', top=0, bot=2)
+para('Project portfolio selection as geometric exact cover', 10.5, 'Helv', gap=1, color=(0.3,0.3,0.3))
 para('Technical note  -  stouras.com/lab/ubongo  -  June 2026', 9.5, 'Helv', gap=8, color=(0.45,0.45,0.45))
 
-para('The board game Ubongo asks a player to fill a printed outline exactly, using a prescribed '
-     'set of polyomino tiles, with no gaps and no overlaps. Computer scientists classify this as a '
-     'variant of the Exact Cover Problem and a two-dimensional Bin-Packing / Knapsack problem: a '
-     'fixed "capacity" (the outline) must be packed with indivisible items (the pieces). This note '
-     'transfers the Sahni-k difficulty measure, originally defined for the 0-1 knapsack problem, to '
-     'Ubongo, and records two complementary measures used by the live game to grade its puzzles.')
+para('PortfolioFit (built on the Ubongo packing mechanic) asks the player to fill a printed outline '
+     'exactly, choosing from a set of dollar-valued polyomino "projects", with no gaps and no overlaps. '
+     'Computer scientists classify this as a variant of the Exact Cover Problem and a two-dimensional '
+     'Bin-Packing / Knapsack problem: a fixed "capacity" (the outline) must be packed with indivisible '
+     'items (the bricks). This note transfers the Sahni-k difficulty measure, originally defined for the '
+     '0-1 knapsack problem, to PortfolioFit, and records two complementary measures the live game uses '
+     'to grade its puzzles.')
 
-heading('1.  The knapsack / Ubongo correspondence', 13, rule=True)
+heading('1.  The knapsack / PortfolioFit correspondence', 13, rule=True)
 table([
- ['Feature','0-1 Knapsack Problem','Ubongo'],
+ ['Feature','0-1 Knapsack Problem','PortfolioFit'],
  ['Objective','Maximise the value of items packed into a bag without exceeding a weight limit.',
   'Fill a shaded board region exactly with geometric pieces - no overlap, no spill.'],
  ['Capacity','A scalar weight budget (e.g. 15 kg).',
@@ -180,8 +181,8 @@ table([
   'Pieces cannot be cut; each is placed whole, with rotation / reflection.'],
 ], [0.18,0.41,0.41])
 para('The essential difference is dimensionality: knapsack feasibility is governed by a single scalar '
-     '(total weight <= capacity), whereas Ubongo feasibility is governed by 2-D geometry (placements '
-     'must tile a specific shape). Ubongo is therefore most precisely an instance of geometric exact '
+     '(total weight <= capacity), whereas PortfolioFit feasibility is governed by 2-D geometry (placements '
+     'must tile a specific shape). PortfolioFit is therefore most precisely an instance of geometric exact '
      'cover, solvable with Knuth\'s Algorithm X / Dancing Links.')
 
 heading('2.  The Sahni-k difficulty of a knapsack instance', 13, rule=True)
@@ -195,9 +196,9 @@ para('Intuitively, it is the fewest decisions one must commit by hand before a m
      'finishes the job correctly. A value k = 0 means greedy is already optimal (easy); a large k means '
      'greedy is repeatedly led into traps and substantial search is unavoidable (hard). Two ingredients '
      'make the measure work: (i) a canonical greedy rule, and (ii) the notion of "minimum forced '
-     'decisions" to reach the target. Both port to Ubongo.')
+     'decisions" to reach the target. Both port to PortfolioFit.')
 
-heading('3.  A Sahni-style difficulty for Ubongo', 13, rule=True)
+heading('3.  A Sahni-style difficulty for PortfolioFit', 13, rule=True)
 heading('3.1  Instance', 11.5, 'HelvB', top=8, bot=2)
 para('An instance is a region R of N cells together with the set of available bricks P = {p_1, ..., p_m} '
      '(here m = 8 - all bricks are available every round). A solution (tiling) places a SUBSET of the '
@@ -250,7 +251,7 @@ table([
  ['Solution count |T|','Scarcity: a unique tiling is hardest; many tilings are forgiving.','One DLX count.'],
  ['Search nodes / backtracks','Proxy for the effort a backtracking solver (or human) expends.','One solve.'],
 ], [0.27,0.55,0.18])
-para('The three agree at the extremes and diverge in the middle - the Ubongo version of "where are the '
+para('The three agree at the extremes and diverge in the middle - the PortfolioFit version of "where are the '
      'hard knapsack problems": difficulty peaks when the number of tilings is small but positive and the '
      'pieces interlock (high k), not merely when the board is large.')
 
