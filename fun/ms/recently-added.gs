@@ -1,9 +1,17 @@
 /**
  * RecentlyAdded builder for the "ManSci Metadata" spreadsheet.
- * ---------------------------------------------------------------------------
- * Paste this whole file into the bound Apps Script project
- * (in the sheet: Extensions > Apps Script), Save, then run setUp() once and
- * authorise it. After that a daily trigger keeps everything current.
+ * ===========================================================================
+ *  ADD THIS AS A NEW, SEPARATE SCRIPT FILE.  DO NOT PASTE IT OVER YOUR
+ *  EXISTING "MNSC Scraper" CODE — that would delete the whole scraper.
+ *
+ *  In the sheet: Extensions > Apps Script. Next to "Files" click + > Script,
+ *  name it "RecentlyAdded", paste this into that empty file, Save, then run
+ *  setUpRecentlyAdded() once and authorise it.
+ *
+ *  It shares no constant or function names with the MNSC Scraper, so the two
+ *  files run side by side in the same project. It defines no onOpen(), so your
+ *  existing menu is untouched. After setup, a daily trigger keeps it current.
+ * ===========================================================================
  *
  * What it does
  *   1. Keeps a hidden registry that records the FIRST date each paper (by DOI)
@@ -35,14 +43,19 @@ var RECENT_WINDOW_DAYS = 90;               // buffer; the website filters to 4 w
 var BASELINE_PROP = 'recentlyAddedBaselined';
 
 /** Run once: installs the daily trigger and records the baseline. */
-function setUp() {
+function setUpRecentlyAdded() {
   if (!hasTrigger_('updateRecentlyAdded')) {
     ScriptApp.newTrigger('updateRecentlyAdded').timeBased().everyDays(1).atHour(5).create();
   }
   updateRecentlyAdded();
 }
 
-/** Daily entry point. Safe to also call at the end of your scrape run. */
+/**
+ * Daily entry point (called by the trigger). You can also call this at the end
+ * of your existing updateArticlesInAdvance()/monthlyRefresh() so the tab
+ * refreshes the instant new papers land, and/or add a menu item to your onOpen:
+ *   .addItem("Update Recently Added", "updateRecentlyAdded")
+ */
 function updateRecentlyAdded() {
   var data = readData_();
   if (!data) return;
