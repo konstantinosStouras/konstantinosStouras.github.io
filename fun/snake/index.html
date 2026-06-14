@@ -25,7 +25,7 @@
 <meta name="twitter:description" content="Eat fruits to grow longer and faster. Steer with the mouse or the arrow keys.">
 
 <!-- Favicon: inline SVG green snake monogram -->
-<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%230f1f17'/%3E%3Ccircle%20cx='34'%20cy='40'%20r='12'%20fill='%234ade80'/%3E%3Ccircle%20cx='56'%20cy='52'%20r='12'%20fill='%2334d399'/%3E%3Ccircle%20cx='70'%20cy='66'%20r='10'%20fill='%2322c55e'/%3E%3Ccircle%20cx='30'%20cy='36'%20r='2.6'%20fill='%23052e16'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%230f1f17'/%3E%3Ccircle%20cx='34'%20cy='40'%20r='12'%20fill='%23c084fc'/%3E%3Ccircle%20cx='56'%20cy='52'%20r='12'%20fill='%23a855f7'/%3E%3Ccircle%20cx='70'%20cy='66'%20r='10'%20fill='%237c3aed'/%3E%3Ccircle%20cx='30'%20cy='36'%20r='2.6'%20fill='%231a0533'/%3E%3C/svg%3E">
 <meta name="theme-color" content="#0f1f17">
 
 <style>
@@ -229,6 +229,115 @@
     font-family: inherit;
   }
 
+  /* Play area: board + leaderboard side by side, stacking on narrow screens */
+  .play-area {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    justify-content: center;
+    gap: 14px;
+    max-width: 100%;
+  }
+  .leaderboard {
+    width: 240px;
+    flex: 0 0 auto;
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+    padding: 14px 14px 12px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .lb-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .lb-title { font-weight: 800; font-size: 15px; }
+  .lb-scope {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 999px;
+    padding: 2px 8px;
+  }
+  .lb-scope.global { color: var(--accent); border-color: rgba(74,222,128,0.4); }
+  .lb-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .lb-list li {
+    display: grid;
+    grid-template-columns: 22px 1fr auto;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 9px;
+    background: rgba(255,255,255,0.025);
+    font-size: 13px;
+  }
+  .lb-list li.me { background: rgba(74,222,128,0.14); outline: 1px solid rgba(74,222,128,0.3); }
+  .lb-rank { color: var(--muted); font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; }
+  .lb-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .lb-score { font-weight: 800; font-variant-numeric: tabular-nums; color: var(--accent); }
+  .lb-sub { font-size: 10px; color: var(--muted); font-weight: 500; }
+  .lb-list li:nth-child(1) .lb-rank { color: #facc15; }
+  .lb-list li:nth-child(2) .lb-rank { color: #cbd5e1; }
+  .lb-list li:nth-child(3) .lb-rank { color: #d8975a; }
+  .lb-empty {
+    display: block !important;
+    color: var(--muted);
+    font-size: 13px;
+    text-align: center;
+    padding: 18px 6px !important;
+    background: none !important;
+  }
+  .lb-you {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    font-size: 12px;
+    color: var(--muted);
+    min-height: 16px;
+  }
+  .lb-you b { color: var(--text); }
+
+  /* Username join box inside the overlay */
+  .join { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+  .join label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+  .join input {
+    appearance: none;
+    background: var(--panel);
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 10px;
+    color: var(--text);
+    font: inherit;
+    font-size: 16px; /* >=16px stops iOS zoom-on-focus */
+    font-weight: 600;
+    text-align: center;
+    padding: 10px 14px;
+    width: min(240px, 70vw);
+    outline: none;
+  }
+  .join input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(74,222,128,0.18); }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+
+  @media (max-width: 760px) {
+    .play-area { flex-direction: column; align-items: center; }
+    .leaderboard { width: min(440px, 92vw); max-height: 38vh; }
+  }
+
   /* Comfortable tap targets on touch devices */
   @media (pointer: coarse) {
     .btn { padding: 14px 30px; }
@@ -263,14 +372,31 @@
     <div class="stat"><div class="label">Best</div><div class="value" id="best">0</div></div>
   </div>
 
-  <div class="board-shell">
-    <canvas id="game" width="600" height="600"></canvas>
-    <div class="overlay" id="overlay">
-      <h2 id="ov-title">Snake</h2>
-      <p id="ov-text">Guide the snake with your <strong>mouse</strong> or the <strong>arrow keys</strong>. Gobble the fruit — each one makes you longer and a touch faster. Walls are safe (you just bump off them) — only biting your own tail ends the game!</p>
-      <button class="btn" id="startBtn">Play</button>
-      <div class="hint"><kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> or move the mouse · <kbd>Space</kbd> to pause</div>
+  <div class="play-area">
+    <div class="board-shell">
+      <canvas id="game" width="600" height="600"></canvas>
+      <div class="overlay" id="overlay">
+        <h2 id="ov-title">Snake</h2>
+        <p id="ov-text">Guide the snake with your <strong>mouse</strong> or the <strong>arrow keys</strong>. Gobble the fruit — each one makes you longer and a touch faster. Walls are safe (you just bump off them) — only biting your own tail ends the game!</p>
+        <div class="join" id="joinBox">
+          <label for="username">Pick a username to join</label>
+          <input id="username" type="text" maxlength="16" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="e.g. cobra_kai" />
+        </div>
+        <button class="btn" id="startBtn" disabled>Play</button>
+        <div class="hint" id="ov-hint"><kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> or move the mouse · <kbd>Space</kbd> to pause</div>
+      </div>
     </div>
+
+    <aside class="leaderboard" id="leaderboard">
+      <div class="lb-head">
+        <span class="lb-title">🏆 Leaderboard</span>
+        <span class="lb-scope" id="lb-scope">local</span>
+      </div>
+      <ol class="lb-list" id="lb-list">
+        <li class="lb-empty">No scores yet — be the first!</li>
+      </ol>
+      <div class="lb-you" id="lb-you"></div>
+    </aside>
   </div>
 
   <div class="controls">
@@ -286,6 +412,85 @@
     Made for fun · <a href="https://www.stouras.com/">stouras.com</a>
   </footer>
 </div>
+
+<!--
+  ─────────────────────────────────────────────────────────────────────────
+  GLOBAL LEADERBOARD — Firebase Realtime Database
+  ─────────────────────────────────────────────────────────────────────────
+  To turn on the WORLDWIDE leaderboard, paste your Firebase web-app config
+  into FIREBASE_CONFIG below (Firebase console → Project settings → "Your apps"
+  → SDK setup → Config). The web config is meant to be public; security comes
+  from your Database Rules. Recommended rules (Realtime Database → Rules):
+
+    {
+      "rules": {
+        "leaderboard": {
+          ".read": true,
+          ".indexOn": "score",
+          "$user": {
+            // allow create/update; reject absurd scores & bad shapes
+            ".write": "newData.hasChildren(['name','score','length','updated'])",
+            "score":  { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000" },
+            "length": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000" },
+            "name":   { ".validate": "newData.isString() && newData.val().length <= 16" },
+            "updated":{ ".validate": "newData.isNumber()" }
+          }
+        }
+      }
+    }
+
+  Until a real config is filled in, the page automatically falls back to a
+  LOCAL (this-browser-only) leaderboard so everything still works.
+-->
+<script type="module">
+  // 1) Paste your Firebase config here to enable the global leaderboard.
+  const FIREBASE_CONFIG = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
+    projectId: "YOUR_PROJECT",
+    appId: "YOUR_APP_ID"
+  };
+
+  const looksConfigured = FIREBASE_CONFIG.databaseURL &&
+    !/YOUR_PROJECT|YOUR_API_KEY/.test(JSON.stringify(FIREBASE_CONFIG));
+
+  if (looksConfigured) {
+    try {
+      const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+      const { getDatabase, ref, query, orderByChild, limitToLast, onValue, runTransaction } =
+        await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js");
+
+      const app = initializeApp(FIREBASE_CONFIG);
+      const db = getDatabase(app);
+      const sanitizeKey = (n) => n.toLowerCase().replace(/[.#$/\[\]]/g, "_").slice(0, 32) || "anon";
+
+      window.Leaderboard = {
+        scope: "global",
+        // Keep only a player's best score (transaction avoids clobbering a higher one).
+        submit(name, score, length) {
+          const r = ref(db, "leaderboard/" + sanitizeKey(name));
+          return runTransaction(r, (cur) => {
+            if (cur && typeof cur.score === "number" && cur.score >= score) return cur;
+            return { name: String(name).slice(0, 16), score, length, updated: Date.now() };
+          }).catch((e) => console.warn("Leaderboard submit failed:", e));
+        },
+        subscribe(cb) {
+          const q = query(ref(db, "leaderboard"), orderByChild("score"), limitToLast(50));
+          onValue(q, (snap) => {
+            const rows = [];
+            snap.forEach((c) => { const v = c.val(); if (v && typeof v.score === "number") rows.push(v); });
+            rows.sort((a, b) => b.score - a.score || (a.updated || 0) - (b.updated || 0));
+            cb(rows.slice(0, 10));
+          }, (err) => console.warn("Leaderboard read failed:", err));
+        }
+      };
+      window.dispatchEvent(new Event("leaderboard-ready"));
+    } catch (e) {
+      console.warn("Firebase init failed — using local leaderboard.", e);
+    }
+  }
+</script>
 
 <script>
 (function () {
@@ -306,7 +511,7 @@
     { color: "#f97316", glow: "#fb923c", points: 10 }, // orange
     { color: "#ef4444", glow: "#f87171", points: 10 }, // red apple
     { color: "#eab308", glow: "#facc15", points: 15 }, // lemon
-    { color: "#a855f7", glow: "#c084fc", points: 20 }, // grape
+    { color: "#3b82f6", glow: "#60a5fa", points: 20 }, // blueberry
     { color: "#ec4899", glow: "#f472b6", points: 15 }, // berry
   ];
 
@@ -318,7 +523,8 @@
   let cell = 20;
   function fitCanvas() {
     const wrap = document.querySelector(".wrap");
-    const shell = document.querySelector(".board-shell");
+    const playArea = document.querySelector(".play-area");
+    const lb = document.getElementById("leaderboard");
     const cs = getComputedStyle(wrap);
     const gap = parseFloat(cs.rowGap) || 12;
     const padTop = parseFloat(cs.paddingTop) || 0;
@@ -327,15 +533,24 @@
     const padRight = parseFloat(cs.paddingRight) || 0;
     const shellPad = 20; // .board-shell padding (10px * 2)
 
+    // Reserve vertical space for everything in .wrap except the play area
+    // (header, HUD, controls, footer) plus paddings and inter-row gaps.
     let reserved = padTop + padBottom + shellPad + 6 /* safety */;
     const children = Array.from(wrap.children);
     reserved += gap * Math.max(0, children.length - 1);
-    children.forEach(c => { if (c !== shell) reserved += c.offsetHeight; });
+    children.forEach(c => { if (c !== playArea) reserved += c.offsetHeight; });
+
+    // When the leaderboard sits beside the board (wide screens) it eats width;
+    // when stacked below (narrow screens) the board is width-constrained and the
+    // page may scroll a touch to reveal the list — keeping the board large.
+    const sideBySide = window.matchMedia("(min-width: 761px)").matches;
+    const paGap = parseFloat(getComputedStyle(playArea).columnGap) || 14;
 
     const vh = window.innerHeight;
     const vw = window.innerWidth;
     const availH = vh - reserved;
-    const availW = vw - padLeft - padRight - shellPad;
+    let availW = vw - padLeft - padRight - shellPad;
+    if (sideBySide && lb) availW -= lb.offsetWidth + paGap;
 
     let size = Math.min(availW, availH, 640);
     size = Math.max(210, size);                 // never collapse on tiny screens
@@ -369,6 +584,7 @@
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
   };
   let best = Number(store.get("snake_best", 0)) || 0;
+  let username = (store.get("snake_user", "") || "").slice(0, 16);
 
   const el = {
     score: document.getElementById("score"),
@@ -378,9 +594,15 @@
     overlay: document.getElementById("overlay"),
     ovTitle: document.getElementById("ov-title"),
     ovText: document.getElementById("ov-text"),
+    ovHint: document.getElementById("ov-hint"),
     startBtn: document.getElementById("startBtn"),
     pauseBtn: document.getElementById("pauseBtn"),
     restartBtn: document.getElementById("restartBtn"),
+    joinBox: document.getElementById("joinBox"),
+    username: document.getElementById("username"),
+    lbList: document.getElementById("lb-list"),
+    lbScope: document.getElementById("lb-scope"),
+    lbYou: document.getElementById("lb-you"),
   };
   el.best.textContent = best;
 
@@ -558,14 +780,19 @@
   function die() {
     gameOver = true;
     running = false;
-    if (score > best) {
+    const isBest = score > best;
+    if (isBest) {
       best = score;
       store.set("snake_best", String(best));
       el.best.textContent = best;
     }
+    if (username && score > 0) {
+      if (score > myBest) myBest = score;
+      submitScore(username, score, snake.length);
+    }
     el.ovTitle.textContent = "Game Over";
     el.ovText.innerHTML = "You scored <strong>" + score + "</strong> with a snake " +
-      snake.length + " long. " + (score >= best ? "New best! 🏆 " : "") + "Try again?";
+      snake.length + " long. " + (isBest ? "New best! 🏆 " : "") + "Try again?";
     el.startBtn.textContent = "Play again";
     el.overlay.classList.remove("hidden");
     draw();
@@ -631,13 +858,13 @@
       const pad = cell * (0.08 + 0.06 * t);
       const size = cell - pad * 2;
       const radius = size * 0.32;
-      // colour gradient head (bright) to tail (deeper)
-      const r1 = Math.round(74 + (34 - 74) * t);
-      const g1 = Math.round(222 + (130 - 222) * t);
-      const b1 = Math.round(128 + (94 - 128) * t);
+      // purple gradient: bright head (#c084fc) to deeper tail (#6d28d9)
+      const r1 = Math.round(192 + (109 - 192) * t);
+      const g1 = Math.round(132 + (40 - 132) * t);
+      const b1 = Math.round(252 + (217 - 252) * t);
       ctx.fillStyle = `rgb(${r1},${g1},${b1})`;
       if (i === 0) {
-        ctx.shadowColor = "rgba(74,222,128,0.6)";
+        ctx.shadowColor = "rgba(168,85,247,0.65)";
         ctx.shadowBlur = 14;
       }
       roundRect(px + pad, py + pad, size, size, radius);
@@ -655,7 +882,7 @@
       // perpendicular offset for two eyes
       const perpX = ey, perpY = ex;
       const eyeR = cell * 0.09;
-      ctx.fillStyle = "#06281a";
+      ctx.fillStyle = "#1a0533";
       [-1, 1].forEach(sgn => {
         const ox = cx + ex * off + perpX * off * sgn;
         const oy = cy + ey * off + perpY * off * sgn;
@@ -685,6 +912,12 @@
   }
 
   function startGame() {
+    const name = cleanName(el.username.value);
+    if (!name) { el.username.focus(); return; } // username is required to join
+    if (name !== username) { username = name; store.set("snake_user", username); }
+    el.joinBox.style.display = "none";  // joined: don't ask again this session
+    el.startBtn.disabled = false;
+    updateYouLine(currentRows);
     reset();
     started = true;
     running = true;
@@ -758,12 +991,116 @@
     if (hint) hint.innerHTML = "Swipe to turn · tap the board to pause / resume";
   }
 
+  // --- Username & leaderboard ----------------------------------------------
+  let currentRows = [];   // last-rendered top-10
+  let myBest = 0;         // best score seen for the current username
+
+  function cleanName(s) { return (s || "").trim().replace(/\s+/g, " ").slice(0, 16); }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  // Local (this-browser) leaderboard — also the fallback until Firebase is set.
+  const LB_KEY = "snake_lb";
+  function localLoad() { try { return JSON.parse(store.get(LB_KEY, "[]")) || []; } catch (e) { return []; } }
+  function localSubmit(name, score, length) {
+    let arr = localLoad();
+    const key = name.toLowerCase();
+    const cur = arr.find(r => (r.name || "").toLowerCase() === key);
+    if (cur) {
+      if (score > cur.score) { cur.score = score; cur.length = length; cur.updated = Date.now(); }
+    } else {
+      arr.push({ name, score, length, updated: Date.now() });
+    }
+    arr.sort((a, b) => b.score - a.score || (a.updated || 0) - (b.updated || 0));
+    arr = arr.slice(0, 100);
+    store.set(LB_KEY, JSON.stringify(arr));
+    return arr.slice(0, 10);
+  }
+
+  let usingGlobal = false;
+  function submitScore(name, score, length) {
+    if (usingGlobal && window.Leaderboard) {
+      window.Leaderboard.submit(name, score, length); // re-render via subscription
+    } else {
+      renderLeaderboard(localSubmit(name, score, length));
+    }
+  }
+
+  function setScope(scope) {
+    el.lbScope.textContent = scope;
+    el.lbScope.classList.toggle("global", scope === "global");
+  }
+
+  function renderLeaderboard(rows) {
+    currentRows = rows || [];
+    const list = el.lbList;
+    list.innerHTML = "";
+    if (!currentRows.length) {
+      const li = document.createElement("li");
+      li.className = "lb-empty";
+      li.textContent = "No scores yet — be the first!";
+      list.appendChild(li);
+      updateYouLine();
+      return;
+    }
+    currentRows.forEach((r, i) => {
+      const li = document.createElement("li");
+      if (username && (r.name || "").toLowerCase() === username.toLowerCase()) li.classList.add("me");
+      const rank = document.createElement("span");
+      rank.className = "lb-rank"; rank.textContent = i + 1;
+      const name = document.createElement("span");
+      name.className = "lb-name"; name.textContent = r.name || "anon"; // textContent = XSS-safe
+      const score = document.createElement("span");
+      score.className = "lb-score";
+      score.innerHTML = (r.score | 0) + ' <span class="lb-sub">· ' + (r.length | 0) + ' long</span>';
+      li.append(rank, name, score);
+      list.appendChild(li);
+    });
+    updateYouLine();
+  }
+
+  function updateYouLine() {
+    if (!username) { el.lbYou.textContent = ""; return; }
+    const mine = currentRows.find(r => (r.name || "").toLowerCase() === username.toLowerCase());
+    if (mine && mine.score > myBest) myBest = mine.score;
+    const rank = currentRows.findIndex(r => (r.name || "").toLowerCase() === username.toLowerCase());
+    let txt = "You: <b>" + escapeHtml(username) + "</b>";
+    if (myBest > 0) txt += " · best " + myBest;
+    if (rank >= 0) txt += " · #" + (rank + 1);
+    el.lbYou.innerHTML = txt;
+  }
+
+  // Switch to the global (Firebase) leaderboard once it announces itself.
+  function attachGlobal() {
+    if (!window.Leaderboard || window.Leaderboard.scope !== "global" || usingGlobal) return;
+    usingGlobal = true;
+    setScope("global");
+    window.Leaderboard.subscribe(renderLeaderboard);
+  }
+  window.addEventListener("leaderboard-ready", attachGlobal);
+
+  // Username input wiring
+  el.username.value = username;
+  el.startBtn.disabled = cleanName(username).length < 1;
+  el.username.addEventListener("input", () => {
+    el.startBtn.disabled = cleanName(el.username.value).length < 1;
+  });
+  el.username.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !el.startBtn.disabled) { e.preventDefault(); startGame(); }
+  });
+
   // --- Boot ----------------------------------------------------------------
+  setScope("local");
+  renderLeaderboard(localLoad().slice(0, 10));
+  attachGlobal(); // in case Firebase module already loaded
   reset();
   fitCanvas();
   // Re-fit after fonts/layout settle (mobile browsers report sizes late).
   setTimeout(fitCanvas, 60);
   window.addEventListener("load", fitCanvas);
+  if (!username && !isTouch) el.username.focus();
   draw();
 })();
 </script>
