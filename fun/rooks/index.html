@@ -137,19 +137,16 @@
 
   .pieces{position:absolute;inset:0;pointer-events:none;}
   .piece{
-    position:absolute;display:grid;place-items:center;pointer-events:auto;
+    position:absolute;pointer-events:auto;
     transition:left .34s cubic-bezier(.4,0,.1,1), top .34s cubic-bezier(.4,0,.1,1), transform .12s ease;
-    padding:5%;
+    background-repeat:no-repeat;background-position:center;background-size:contain;
+    filter:drop-shadow(0 2px 2px rgba(0,0,0,0.45));
   }
-  .piece svg{width:100%;height:100%;display:block;filter:drop-shadow(0 2px 2.5px rgba(0,0,0,0.5));}
-  .piece.white svg .body{fill:#ffffff;stroke:#1a140d;}
-  .piece.black svg .body{fill:#241e17;stroke:#000000;}
-  .piece svg .body{stroke-width:3.4;stroke-linejoin:round;stroke-linecap:round;}
   .piece.selectable{cursor:pointer;}
   .piece.selectable:hover{transform:scale(1.07);}
   .piece.selected{outline:none;}
   .piece.selected::before{content:'';position:absolute;inset:6%;border-radius:9px;box-shadow:0 0 0 3px var(--gold), 0 0 16px rgba(227,181,58,0.6);}
-  .piece.terminated svg .body{opacity:.85;}
+  .piece.terminated{opacity:.85;}
 
   /* Win / lose overlay */
   .overlay{
@@ -596,6 +593,26 @@
   }
   function pieceSVG(type){ return type===PIECE.QUEEN ? queenSVG() : rookSVG(); }
 
+  // Board pieces are drawn as background images (bulletproof sizing).
+  function rookShape(fill,stroke){
+    return "<path d='M24 23 L32 23 L32 31 L40 31 L40 23 L48 23 L48 31 L52 31 L52 23 L60 23 L60 31 L68 31 L68 23 L76 23 L76 38 L72 42 L70 46 L74 72 L78 72 L78 79 L82 79 L82 88 L18 88 L18 79 L22 79 L22 72 L26 72 L30 46 L28 42 L24 38 Z' fill='"+fill+"' stroke='"+stroke+"' stroke-width='3.4' stroke-linejoin='round' stroke-linecap='round'/>";
+  }
+  function queenShape(fill,stroke){
+    return "<g fill='"+fill+"' stroke='"+stroke+"' stroke-width='3' stroke-linejoin='round'>"
+      + "<path d='M24 82 h52 v9 h-52 z'/>"
+      + "<path d='M29 73 h42 v8 h-42 z'/>"
+      + "<path d='M34 46 h32 l-4 27 h-24 z'/>"
+      + "<path d='M26 47 L22 27 L31 40 L37 24 L43.5 40 L50 22 L56.5 40 L63 24 L69 40 L78 27 L74 47 Z'/>"
+      + "<circle cx='22' cy='26' r='4.2'/><circle cx='37' cy='23.5' r='4.2'/><circle cx='50' cy='21.5' r='4.2'/><circle cx='63' cy='23.5' r='4.2'/><circle cx='78' cy='26' r='4.2'/>"
+      + "</g>";
+  }
+  function pieceDataUri(type, white){
+    var fill = white ? "#ffffff" : "#241e17", stroke = white ? "#1a140d" : "#000000";
+    var inner = type===PIECE.QUEEN ? queenShape(fill,stroke) : rookShape(fill,stroke);
+    var svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>" + inner + "</svg>";
+    return "data:image/svg+xml," + encodeURIComponent(svg);
+  }
+
   // ---------------------------------------------------------------------------
   // Persistence
   // ---------------------------------------------------------------------------
@@ -653,7 +670,7 @@
     for(var i=0;i<pieces.length;i++){
       var pe=document.createElement("div");
       pe.className="piece "+(pieces[i].player==="white"?"white":"black");
-      pe.innerHTML=pieceSVG(G.variant.pieceType);
+      pe.style.backgroundImage="url(\""+pieceDataUri(G.variant.pieceType, pieces[i].player==="white")+"\")";
       pe.style.width=(100/M)+"%";
       pe.style.height=(100/N)+"%";
       (function(idx){ pe.addEventListener("click", function(ev){ onPieceClick(idx, ev); }); })(i);
