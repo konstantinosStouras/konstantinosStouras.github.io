@@ -577,6 +577,7 @@
   let snake, dir, nextDir, fruits, score, eaten, stepMs, accMs, lastTs;
   let running = false, paused = false, gameOver = false, started = false;
   let controlMode = "mouse";
+  let lowFx = false; // skip pricey gl/ shadow effects on touch devices for smoothness
 
   // localStorage can throw (Safari private mode, disabled cookies) — guard it.
   const store = {
@@ -687,38 +688,36 @@
     canvasPointer(e);
   });
 
-  // --- Touch steering: swipe gestures --------------------------------------
-  // Swiping is the natural control on phones/tablets and works no matter which
-  // desktop mode is selected. A short flick in any direction turns the snake;
-  // keeping the finger moving lets you chain turns. A tap starts/unpauses.
-  let touchStart = null;
-  const SWIPE_MIN = 18; // px before a drag counts as a turn
+  // --- Touch steering: tap / drag toward a point ---------------------------
+  // The snake heads toward wherever you touch: tap a spot to turn toward it,
+  // or hold and slide your thumb to steer continuously. This is far more
+  // responsive on phones than discrete swipes — a single tap turns the snake
+  // right away instead of needing a deliberate flick past a threshold.
+  function pointerFromTouch(t) {
+    const rect = canvas.getBoundingClientRect();
+    pointer = {
+      x: (t.clientX - rect.left) / rect.width * GRID,
+      y: (t.clientY - rect.top) / rect.height * GRID,
+    };
+  }
 
   canvas.addEventListener("touchstart", (e) => {
     const t = e.touches[0];
     if (!t) return;
-    touchStart = { x: t.clientX, y: t.clientY };
-    if (gameOver) startGame();
-    else if (started && !running) togglePause(false);
-    else if (!started) startGame();
-  }, { passive: true });
-
-  canvas.addEventListener("touchmove", (e) => {
-    const t = e.touches[0];
-    if (!touchStart || !t) return;
-    const dx = t.clientX - touchStart.x;
-    const dy = t.clientY - touchStart.y;
-    if (Math.abs(dx) < SWIPE_MIN && Math.abs(dy) < SWIPE_MIN) {
-      e.preventDefault();
-      return;
-    }
-    if (Math.abs(dx) > Math.abs(dy)) setDir(dx > 0 ? "right" : "left");
-    else setDir(dy > 0 ? "down" : "up");
-    touchStart = { x: t.clientX, y: t.clientY }; // re-anchor for chained turns
+    if (gameOver || !started) { startGame(); return; }
+    if (!running) { togglePause(false); return; }
+    pointerFromTouch(t);
+    pointerToDir();        // turn this instant, don't wait for the next tick
     e.preventDefault();
   }, { passive: false });
 
-  canvas.addEventListener("touchend", () => { touchStart = null; }, { passive: true });
+  canvas.addEventListener("touchmove", (e) => {
+    const t = e.touches[0];
+    if (!t || !running) return;
+    pointerFromTouch(t);
+    pointerToDir();
+    e.preventDefault();
+  }, { passive: false });
 
   // --- Keyboard ------------------------------------------------------------
   window.addEventListener("keydown", (e) => {
@@ -838,8 +837,10 @@
       const cx = f.x * cell + cell / 2;
       const cy = f.y * cell + cell / 2;
       const r = cell * 0.34;
-      ctx.shadowColor = f.glow;
-      ctx.shadowBlur = 10 + pulse * 8;
+      if (!lowFx) {
+        ctx.shadowColor = f.glow;
+        ctx.shadowBlur = 10 + pulse * 8;
+      }
       ctx.fillStyle = f.color;
       ctx.beginPath();
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
@@ -867,7 +868,7 @@
       const g1 = Math.round(132 + (40 - 132) * t);
       const b1 = Math.round(252 + (217 - 252) * t);
       ctx.fillStyle = `rgb(${r1},${g1},${b1})`;
-      if (i === 0) {
+      if (i === 0 && !lowFx) {
         ctx.shadowColor = "rgba(168,85,247,0.65)";
         ctx.shadowBlur = 14;
       }
@@ -985,14 +986,15 @@
   const isTouch = (window.matchMedia && window.matchMedia("(pointer: coarse)").matches)
     || ("ontouchstart" in window && !window.matchMedia("(pointer: fine)").matches);
   if (isTouch) {
-    setMode("mouse"); // swipe handler is mode-independent; keeps cursor default
+    lowFx = true;     // smoother frame times on phones (skip canvas shadow blur)
+    setMode("mouse"); // touch steering feeds the pointer; keeps cursor default
     const toggle = document.getElementById("modeToggle");
     if (toggle) toggle.style.display = "none";
-    el.ovText.innerHTML = "<strong>Swipe</strong> in any direction to steer the snake. " +
-      "Gobble the fruit — each one makes you longer and a touch faster. Walls are safe " +
-      "(you just bump off them) — only biting your own tail ends the game!";
+    el.ovText.innerHTML = "<strong>Tap or drag</strong> on the board to steer the snake " +
+      "toward your finger. Gobble the fruit — each one makes you longer and a touch faster. " +
+      "Walls are safe (you just bump off them) — only biting your own tail ends the game!";
     const hint = document.querySelector(".hint");
-    if (hint) hint.innerHTML = "Swipe to turn · tap the board to pause / resume";
+    if (hint) hint.innerHTML = "Tap or slide where you want to go · use the buttons to pause";
   }
 
   // --- Username & leaderboard ----------------------------------------------
