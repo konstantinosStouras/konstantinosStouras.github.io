@@ -139,12 +139,12 @@
   .piece{
     position:absolute;display:grid;place-items:center;pointer-events:auto;
     transition:left .34s cubic-bezier(.4,0,.1,1), top .34s cubic-bezier(.4,0,.1,1), transform .12s ease;
-    padding:7%;
+    padding:5%;
   }
-  .piece svg{width:100%;height:100%;display:block;filter:drop-shadow(0 2px 2px rgba(0,0,0,0.28));}
-  .piece.white svg .body{fill:#f6edd6;stroke:#26201a;}
-  .piece.black svg .body{fill:#2a241d;stroke:#0c0a07;}
-  .piece svg .body{stroke-width:2.6;stroke-linejoin:round;stroke-linecap:round;}
+  .piece svg{width:100%;height:100%;display:block;filter:drop-shadow(0 2px 2.5px rgba(0,0,0,0.5));}
+  .piece.white svg .body{fill:#ffffff;stroke:#1a140d;}
+  .piece.black svg .body{fill:#241e17;stroke:#000000;}
+  .piece svg .body{stroke-width:3.4;stroke-linejoin:round;stroke-linecap:round;}
   .piece.selectable{cursor:pointer;}
   .piece.selectable:hover{transform:scale(1.07);}
   .piece.selected{outline:none;}
