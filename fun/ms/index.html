@@ -1099,6 +1099,10 @@ function showAffAreas(name) {
 }
 
 function toggleSummary(tab) {
+  // Opening a summary panel leaves the "Recently added papers" view, so its
+  // button must not stay highlighted and its list must be cleared. applyFilters
+  // resets recentMode + the button and restores the normal papers list.
+  if (recentMode) applyFilters();
   var edEl = document.getElementById('summaryEditors');
   var arEl = document.getElementById('summaryAreas');
   var auEl = document.getElementById('summaryAuthors');
