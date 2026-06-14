@@ -339,8 +339,30 @@
     .modal p { color: var(--muted); margin-bottom: 18px; }
     .modal .stat { font-size: 15px; color: var(--ink); margin-bottom: 18px; }
     .modal .stat b { font-size: 22px; color: var(--accent-dark); }
-    .modal .actions { display: flex; gap: 10px; }
-    .modal .actions .btn { flex: 1; }
+    .modal .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .modal .actions .btn { flex: 1; min-width: 92px; }
+    .result-bar { height: 10px; border-radius: 999px; background: var(--line); overflow: hidden; margin: 2px 0 18px; }
+    .result-fill { height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg,#2ecc71,#f1c40f); transition: width .65s cubic-bezier(.2,.8,.2,1); }
+    .modal .pb { font-size: 12.5px; color: var(--muted); margin: -8px 0 16px; line-height: 1.5; }
+    .modal .pb b { color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+    /* Confetti celebration */
+    .confetti-layer { position: fixed; inset: 0; pointer-events: none; z-index: 60; overflow: hidden; }
+    .confetti-layer i { position: absolute; top: -16px; width: 9px; height: 14px; border-radius: 2px; animation: confetti-fall linear forwards; }
+    @keyframes confetti-fall { to { transform: translateY(110vh) rotate(720deg); opacity: .85; } }
+
+    /* Board completion pulse */
+    .board.pulse { animation: board-pulse .6s ease; }
+    @keyframes board-pulse {
+      0% { box-shadow: 0 0 0 0 rgba(46,204,113,0); }
+      35% { box-shadow: 0 0 0 7px rgba(46,204,113,.4); }
+      100% { box-shadow: 0 0 0 0 rgba(46,204,113,0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .result-fill { transition: none; }
+      .confetti-layer { display: none; }
+      .board.pulse { animation: none; }
+    }
 
     .board-stage { margin: 0 auto; }
 
@@ -526,9 +548,12 @@
       <div class="emoji" id="modalEmoji">&#127881;</div>
       <h3 id="modalTitle">Portfolio packed!</h3>
       <p id="modalSub">You filled the board.</p>
+      <div class="result-bar" aria-hidden="true"><div class="result-fill" id="resultFill"></div></div>
       <div class="stat">Your Net Value: <b id="modalValue">$0</b></div>
       <div class="stat">Best possible here: <b id="modalBest">$0</b></div>
+      <div class="pb" id="modalPB"></div>
       <div class="actions">
+        <button class="btn" id="modalShare">Share</button>
         <button class="btn" id="modalReplay">Replay</button>
         <button class="btn primary" id="modalNext">Next puzzle</button>
       </div>
@@ -900,6 +925,7 @@
     // ---------- Game state ----------
     let state = null;
     let timer = { start: 0, interval: null, elapsed: 0, running: false };
+    let sessionRounds = 0;   // puzzles started this browser session
 
     const $ = sel => document.querySelector(sel);
     const boardEl = $('#board');
@@ -1005,8 +1031,11 @@
         milestones: new Set(),
         timeNudges: new Set(),
         ended: false,
+        wasFull: false,
+        wasOptimal: false,
         cs: cellSize(puzzle.rows, puzzle.cols)
       };
+      sessionRounds++;
       lastAction = Date.now(); lastCheer = 0; lastIdle = 0;
       if (nudgeEl) nudgeEl.className = 'nudge';
       renderBoard();
@@ -1276,7 +1305,11 @@
       for (const k of state.region) { if (!state.occupied.has(k)) { allFilled = false; break; } }
       if (allFilled) {
         const val = placedValue();                 // full board => Net Value = total value
-        if (val >= state.bestValue) {
+        const optimal = val >= state.bestValue;
+        if (!state.wasFull) { boardEl.classList.add('pulse'); setTimeout(() => boardEl.classList.remove('pulse'), 600); }
+        if (optimal && !state.wasOptimal) confetti();
+        state.wasFull = true; state.wasOptimal = optimal;
+        if (optimal) {
           setStatus('Top-value portfolio! Net ' + money(val) + ', the maximum here. Hold it until time runs out.', 'win');
           nudge('🏆 Maximum value reached: Net ' + money(val) + '. Keep it until the buzzer!', 'cheer');
         } else {
@@ -1284,6 +1317,7 @@
           nudge('🎉 Board filled at Net ' + money(val) + '. Can you reach ' + money(state.bestValue) + '? Keep trying!', 'cheer');
         }
       } else {
+        state.wasFull = false; state.wasOptimal = false;
         setStatus('Keep going. Find the bricks that fill the rest.', '');
       }
     }
@@ -1451,19 +1485,71 @@
       showEnd(net, isHigh);
     }
 
+    function confetti(n) {
+      n = n || 90;
+      const colors = ['#e67e22', '#2ecc71', '#3498db', '#e74c3c', '#f1c40f', '#9b59b6'];
+      const layer = document.createElement('div'); layer.className = 'confetti-layer';
+      for (let i = 0; i < n; i++) {
+        const p = document.createElement('i');
+        p.style.left = (Math.random() * 100) + 'vw';
+        p.style.background = colors[i % colors.length];
+        p.style.animationDelay = (Math.random() * 0.4) + 's';
+        p.style.animationDuration = (2.2 + Math.random() * 1.6) + 's';
+        p.style.opacity = (0.7 + Math.random() * 0.3).toFixed(2);
+        layer.appendChild(p);
+      }
+      document.body.appendChild(layer);
+      setTimeout(() => layer.remove(), 4400);
+    }
+
     function showEnd(net, isHigh) {
       const full = state.occupied.size === state.region.size;
       const optimal = full && net >= state.bestValue;
+      state.lastNet = net; state.lastOptimal = optimal;   // for the Share button
       $('#modalEmoji').textContent = optimal ? '🏆' : (full ? '🎉' : '⏱️');
       $('#modalTitle').textContent = optimal ? 'Optimal portfolio!' : "Time's up!";
       $('#modalSub').textContent = optimal
         ? 'You finished with the highest-value portfolio possible here.'
-        : (isHigh ? 'New personal best for this difficulty!' : 'Here is how your portfolio scored.');
+        : (isHigh ? '🌟 New personal best for this difficulty!' : 'Here is how your portfolio scored.');
       $('#modalValue').textContent = money(net);
       $('#modalBest').textContent = money(state.bestValue);
+      // Net-vs-best progress bar (animate from 0).
+      const ratio = state.bestValue > 0 ? Math.max(0, Math.min(1, net / state.bestValue)) : 0;
+      const fill = $('#resultFill');
+      fill.style.background = optimal ? 'linear-gradient(90deg,#2ecc71,#27ae60)'
+        : ratio >= 0.66 ? 'linear-gradient(90deg,#2ecc71,#f1c40f)'
+        : ratio >= 0.33 ? 'linear-gradient(90deg,#f1c40f,#e67e22)'
+        : 'linear-gradient(90deg,#e67e22,#e74c3c)';
+      fill.style.width = '0%';
+      setTimeout(() => { fill.style.width = Math.round(ratio * 100) + '%'; }, 60);
+      // Personal bests + session count.
+      const eb = loadBest('easy'), hb = loadBest('hard');
+      $('#modalPB').innerHTML = 'Personal bests &middot; Easy <b>' + (eb === null ? '–' : money(eb)) +
+        '</b> &middot; Hard <b>' + (hb === null ? '–' : money(hb)) + '</b><br>Puzzle ' + sessionRounds + ' this session';
       $('#overlay').classList.add('show');
+      if (optimal) confetti(130);
     }
     function hideWin() { $('#overlay').classList.remove('show'); }
+
+    function shareResult() {
+      const btn = $('#modalShare');
+      const diffName = state.diff === 'hard' ? 'Hard' : 'Easy';
+      const txt = 'PortfolioFit (' + diffName + '): Net ' + money(state.lastNet) + ' / ' + money(state.bestValue) +
+        (state.lastOptimal ? ' 🏆 optimal!' : '') + ' | https://www.stouras.com/lab/portfoliofit/';
+      const done = () => { const o = btn.dataset.label || 'Share'; btn.textContent = 'Copied!'; setTimeout(() => { btn.textContent = o; }, 1500); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(done).catch(() => fallbackCopy(txt, done));
+      } else { fallbackCopy(txt, done); }
+    }
+    function fallbackCopy(text, cb) {
+      try {
+        const ta = document.createElement('textarea'); ta.value = text;
+        ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta);
+        if (cb) cb();
+      } catch (e) { /* clipboard unavailable */ }
+    }
 
     // ---------- Verification: solutions list + Sahni proof ----------
     function openInfo(title, bodyNode) {
@@ -1648,6 +1734,8 @@
       state.pieces.forEach(p => { p.placed = false; p.placedCells = null; });
       state.selected = null;
       state.ended = false;
+      state.wasFull = false;
+      state.wasOptimal = false;
       state.milestones = new Set();
       state.timeNudges = new Set();
       if (nudgeEl) nudgeEl.className = 'nudge';
@@ -1664,6 +1752,7 @@
       $('#restartBtn').click();
     });
     $('#modalNext').addEventListener('click', () => { hideWin(); newGame(state.diff); });
+    $('#modalShare').addEventListener('click', shareResult);
     $('#overlay').addEventListener('click', e => { if (e.target === $('#overlay')) hideWin(); });
     $('#solBtn').addEventListener('click', showSolutions);
     $('#proofBtn').addEventListener('click', showProof);
