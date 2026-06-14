@@ -356,8 +356,9 @@ let affiliationData = []; // pre-computed from Affiliations tab
 // to the database within RECENT_DAYS, newest addition first, each with its date.
 let recentMode = false;
 const RECENT_DAYS = 28; // last 4 weeks
-// Pre-computed RecentlyAdded tab (small, fast). Loaded lazily on first use; if it
-// is missing/empty we fall back to scanning the full Data set for Date Added.
+// Pre-computed RecentlyAdded tab (small, fast). Pre-fetched at page load so the
+// view opens instantly; if it is missing we fall back to scanning the full Data
+// set for the Date Added column.
 let recentData = null;      // parsed rows from the RecentlyAdded tab (null = absent/failed)
 let recentFetched = false;  // whether we've attempted to load that tab
 let recentLoading = false;  // whether that fetch is currently in flight
@@ -1365,22 +1366,29 @@ function toggleRecent() {
   }
 }
 
-// Load the small pre-computed RecentlyAdded tab so the view is instant and does
-// not depend on the full (large) Data CSV. Falls back silently to scanning the
-// Data set if that tab is absent or empty.
-async function loadRecent() {
+// Pre-fetch the small RecentlyAdded tab at page load (like the Editors/Areas/
+// Authors tabs) so the view opens instantly. A genuinely missing tab falls back
+// to scanning the Data set; a transient network error retries a few times.
+async function loadRecent(attempt) {
   recentFetched = true;
   recentLoading = true;
   try {
     var r = await fetch(RECENT_CSV_URL);
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (!r.ok) throw new Error('HTTP ' + r.status); // transient -> retry below
     var t = await r.text();
-    if (t.trim().charAt(0) === '<') throw new Error('not CSV'); // HTML error page (tab missing)
+    if (t.trim().charAt(0) === '<') { // HTML error page = tab missing -> fall back
+      recentData = null;
+      recentLoading = false;
+      if (recentMode) renderRecent();
+      return;
+    }
     var rows = parseCSV(t, 'Title');
     rows.forEach(normalizeEditors); // populate _editors / _area so the tags render
     recentData = rows; // authoritative once loaded, even if empty
   } catch (e) {
-    recentData = null; // tab missing -> fall back to scanning allPapers
+    attempt = (attempt || 0) + 1;
+    if (attempt <= 4) { setTimeout(function() { loadRecent(attempt); }, 3000); return; }
+    recentData = null; // give up -> fall back to scanning allPapers
   }
   recentLoading = false;
   if (recentMode) renderRecent();
@@ -1648,6 +1656,7 @@ loadData();
 loadAuthors();
 loadSummaries();
 loadLastPull();
+loadRecent(); // pre-fetch the small RecentlyAdded tab so the view opens instantly
 </script>
 </body>
 </html>
