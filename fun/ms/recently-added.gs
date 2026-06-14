@@ -37,6 +37,7 @@
  */
 
 var DATA_SHEET = 'Data';
+var META_SHEET = 'Meta';                    // holds "Last Publication Data Pull"
 var RECENT_SHEET = 'RecentlyAdded';        // read by the website
 var REGISTRY_SHEET = '_DateAddedRegistry'; // hidden: DOI -> first-seen date
 var KEY_HEADER = 'DOI';                     // unique key per paper in Data
@@ -121,13 +122,13 @@ function updateRegistry_(data) {
   var props = PropertiesService.getScriptProperties();
   var baselined = props.getProperty(BASELINE_PROP) === '1';
   var map = readRegistry_();
-  var today = todayStr_();
+  var stamp = lastPullDate_(); // stamp new papers with the data-pull date, not today
   var toAppend = [];
 
   for (var i = 0; i < data.rows.length; i++) {
     var doi = normKey_(data.rows[i][data.keyCol]);
     if (!doi || (doi in map)) continue;
-    var ds = baselined ? today : '';
+    var ds = baselined ? stamp : '';
     map[doi] = ds;
     toAppend.push([doi, ds]);
   }
@@ -154,14 +155,17 @@ function buildRecentlyAddedTab_(data, registry) {
     if (String(data.headers[c]).trim() !== DATE_ADDED_HEADER) keep.push(c);
   }
 
+  var idx = pubIdx_(data);
   var picked = [];
   for (var i = 0; i < data.rows.length; i++) {
     var doi = normKey_(data.rows[i][data.keyCol]);
     if (!doi) continue;
     var d = parseDate_(registry[doi]);
-    if (d && d >= cutoff) picked.push({ d: d, row: data.rows[i] });
+    if (d && d >= cutoff) picked.push({ d: d, row: data.rows[i], rank: pubRank_(data.rows[i], idx) });
   }
-  picked.sort(function(a, b) { return b.d - a.d; });
+  // Newest added first; within the same Date Added, newest published first (so a
+  // batch sharing one pull date still reads Articles-in-Advance -> latest issue).
+  picked.sort(function(a, b) { return (b.d - a.d) || (b.rank - a.rank); });
 
   var header = [];
   for (var h = 0; h < keep.length; h++) header.push(data.headers[keep[h]]);
@@ -185,43 +189,28 @@ function buildRecentlyAddedTab_(data, registry) {
 // The list is empty until new papers are scraped (the sheet never recorded
 // historical add-dates). Run seedRecentlyAddedNow() ONCE to seed it with the
 // most recent SEED_COUNT papers (Articles in Advance first, then latest
-// year/volume/issue), stamped with recent dates so they show immediately.
-// Going forward, genuinely new papers are tracked automatically.
+// year/volume/issue), all stamped with the last data-pull date so the dates
+// match the header. Going forward, genuinely new papers are tracked
+// automatically (also stamped with the data-pull date).
 var SEED_COUNT = 40;
 
 function seedRecentlyAddedNow() {
   var data = readData_();
   if (!data) return;
-  var yI = data.index['Year'], vI = data.index['Volume'], iI = data.index['Issue'];
-  var pI = data.index['Page'], sI = data.index['Status'];
+  var idx = pubIdx_(data);
 
   var list = [];
   for (var r = 0; r < data.rows.length; r++) {
     var doi = normKey_(data.rows[r][data.keyCol]);
     if (!doi) continue;
-    list.push({
-      doi: doi,
-      aia: sI != null && String(data.rows[r][sI]).trim() === 'Articles in Advance',
-      y: parseInt(data.rows[r][yI], 10) || 0,
-      v: parseInt(data.rows[r][vI], 10) || 0,
-      i: parseInt(data.rows[r][iI], 10) || 0,
-      p: parseInt(data.rows[r][pI], 10) || 0
-    });
+    list.push({ doi: doi, rank: pubRank_(data.rows[r], idx) });
   }
-  // Newest first: Articles in Advance, then latest year/volume/issue/page.
-  list.sort(function(a, b) {
-    if (a.aia !== b.aia) return a.aia ? -1 : 1;
-    return b.y - a.y || b.v - a.v || b.i - a.i || b.p - a.p;
-  });
+  list.sort(function(a, b) { return b.rank - a.rank; }); // newest published first
 
+  var stamp = lastPullDate_(); // align "Date Added" with the data-pull date
   var map = readRegistry_();
-  var now = new Date();
   var pick = list.slice(0, SEED_COUNT);
-  for (var k = 0; k < pick.length; k++) {
-    var d = new Date(now.getTime());
-    d.setDate(d.getDate() - Math.floor(k / 3)); // stagger ~3/day so they age out gradually
-    map[pick[k].doi] = Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-  }
+  for (var k = 0; k < pick.length; k++) map[pick[k].doi] = stamp;
   writeRegistry_(map);
   buildRecentlyAddedTab_(data, map);
 }
@@ -260,6 +249,43 @@ function normKey_(v) { return String(v == null ? '' : v).trim().toLowerCase(); }
 
 function todayStr_() {
   return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+
+// Date of the most recent Crossref pull, read from the Meta tab (the same value
+// the website shows as "Last publication data pull"). Used to stamp newly seen
+// papers so "Date Added" matches when the data was actually pulled. Falls back
+// to today if the Meta row is missing/unreadable.
+function lastPullDate_() {
+  var sh = SpreadsheetApp.getActive().getSheetByName(META_SHEET);
+  if (sh) {
+    var vals = sh.getDataRange().getValues();
+    for (var i = 0; i < vals.length; i++) {
+      if (String(vals[i][0]).trim() === 'Last Publication Data Pull') {
+        var d = parseDate_(vals[i][1]);
+        if (d) return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      }
+    }
+  }
+  return todayStr_();
+}
+
+// Column indices used to rank papers by publication recency.
+function pubIdx_(data) {
+  return {
+    y: data.index['Year'], v: data.index['Volume'], i: data.index['Issue'],
+    p: data.index['Page'], s: (data.index['Status'] != null ? data.index['Status'] : -1)
+  };
+}
+
+// A single sortable number where higher = more recent: Articles in Advance
+// rank highest, then by year, volume, issue, page.
+function pubRank_(row, idx) {
+  var aia = (idx.s >= 0 && String(row[idx.s]).trim() === 'Articles in Advance') ? 1 : 0;
+  var y = parseInt(row[idx.y], 10) || 0;
+  var v = parseInt(row[idx.v], 10) || 0;
+  var iss = parseInt(row[idx.i], 10) || 0;
+  var p = parseInt(row[idx.p], 10) || 0;
+  return aia * 1e13 + y * 1e9 + v * 1e6 + Math.min(iss, 999) * 1e3 + Math.min(p, 999);
 }
 
 function dateToStr_(v) {
