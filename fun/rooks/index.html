@@ -47,8 +47,7 @@
   body{
     font-family:'DM Sans',system-ui,sans-serif;
     color:var(--ink);
-    background:var(--cream);
-    background-image:radial-gradient(1100px 520px at 18% -10%, #f7f1e4 0%, var(--cream) 60%);
+    background:#f5f1e8;
     min-height:100%;
     line-height:1.55;
     -webkit-font-smoothing:antialiased;
@@ -104,42 +103,33 @@
 
   /* Board */
   .board-shell{display:flex;justify-content:center;}
+  /* board: classic chess squares on a wood frame, matching the reference */
   .board{
-    position:relative;width:100%;max-width:740px;margin:0 auto;
-    border:9px solid var(--frame);border-radius:8px;overflow:hidden;
-    box-shadow:0 12px 32px rgba(74,52,30,0.22), inset 0 0 0 1px rgba(0,0,0,0.18);
+    position:relative;width:100%;max-width:720px;margin:0 auto;
+    background:#8b7355;padding:10px;border-radius:6px;
+    border-bottom:5px solid #6b5345;border-right:5px solid #6b5345;
+    box-shadow:0 12px 30px rgba(74,52,30,0.20);
     touch-action:manipulation;user-select:none;
   }
-  .slots{position:absolute;inset:0;display:grid;}
-  .slot{position:relative;}
-  .slot.p0{background:var(--board-light);}
-  .slot.p1{background:var(--board-dark);}
+  .play{position:relative;width:100%;}
+  .slots{position:absolute;inset:0;display:grid;gap:3px;}
+  .slot{border-radius:5px;}
+  .slot.p0{background:#f0d9b5;}
+  .slot.p1{background:#b58863;}
   .slot.target{cursor:pointer;}
-  /* full-square move fills */
-  .slot.valid::before,.slot.invalid::before,.slot.winning-move::before,
-  .slot.losing-move::before,.slot.drawing-move::before,.slot.terminated::before{
-    content:'';position:absolute;inset:0;
-  }
-  .slot.valid::before{background:rgba(95,158,79,0.50);}
-  .slot.winning-move::before{background:rgba(95,158,79,0.66);}
-  .slot.losing-move::before{background:rgba(213,106,94,0.55);}
-  .slot.drawing-move::before{background:rgba(224,169,58,0.55);}
-  .slot.invalid::before{background:rgba(214,118,108,0.55);}
-  .slot.terminated::before{background:rgba(206,86,74,0.62);}
-  /* centre dot for clickable destinations */
-  .slot.valid::after,.slot.winning-move::after,.slot.losing-move::after,.slot.drawing-move::after{
-    content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-    width:28%;height:28%;border-radius:50%;background:rgba(38,82,28,0.32);
-  }
-  .slot.losing-move::after{background:rgba(140,38,30,0.40);}
-  .slot.drawing-move::after{background:rgba(140,104,18,0.40);}
-  .slot.invalid{cursor:pointer;}
+  /* move highlights: recolour the square with filters, exactly like the reference */
+  .slot.valid{cursor:pointer;filter:brightness(.82) sepia(.6) hue-rotate(60deg) saturate(1.1);}
+  .slot.winning-move{cursor:pointer;filter:brightness(1.05) sepia(.7) hue-rotate(45deg) saturate(1.6);box-shadow:inset 0 0 14px rgba(255,215,0,.7),0 0 8px rgba(255,215,0,.45);}
+  .slot.drawing-move{cursor:pointer;filter:brightness(.9) sepia(.5) hue-rotate(40deg);}
+  .slot.losing-move{cursor:pointer;filter:brightness(.85) sepia(.7) hue-rotate(20deg) saturate(1.4);}
+  .slot.invalid{cursor:pointer;filter:brightness(.85) sepia(.9) hue-rotate(-28deg) saturate(1.3);}
+  .slot.terminated{filter:brightness(.85) sepia(.9) hue-rotate(-16deg) saturate(1.6);}
 
   .pieces{position:absolute;inset:0;pointer-events:none;}
   .piece{
     position:absolute;display:grid;place-items:center;pointer-events:auto;
     transition:left .34s cubic-bezier(.4,0,.1,1), top .34s cubic-bezier(.4,0,.1,1), transform .12s ease;
-    padding:10%;
+    padding:7%;
   }
   .piece svg{width:100%;height:100%;display:block;filter:drop-shadow(0 2px 2px rgba(0,0,0,0.28));}
   .piece.white svg .body{fill:#f6edd6;stroke:#26201a;}
@@ -227,9 +217,11 @@
 
     <div class="board-shell">
       <div class="board" id="board">
-        <div class="slots" id="slots"></div>
-        <div class="pieces" id="pieces"></div>
-        <div id="overlay-host"></div>
+        <div class="play" id="play">
+          <div class="slots" id="slots"></div>
+          <div class="pieces" id="pieces"></div>
+          <div id="overlay-host"></div>
+        </div>
       </div>
     </div>
 
@@ -572,7 +564,7 @@
   // Piece SVG
   // ---------------------------------------------------------------------------
   function rookSVG(){
-    return '<svg viewBox="0 0 100 100"><path class="body" d="M28 24 H37 V30 H44 V24 H56 V30 H63 V24 H72 V40 L66 46 V74 L72 80 V86 H28 V80 L34 74 V46 L28 40 Z"/></svg>';
+    return '<svg viewBox="0 0 100 100"><path class="body" d="M24 23 L32 23 L32 31 L40 31 L40 23 L48 23 L48 31 L52 31 L52 23 L60 23 L60 31 L68 31 L68 23 L76 23 L76 38 L72 42 L70 46 L74 72 L78 72 L78 79 L82 79 L82 88 L18 88 L18 79 L22 79 L22 72 L26 72 L30 46 L28 42 L24 38 Z"/></svg>';
   }
   function queenSVG(){
     return '<svg viewBox="0 0 100 100"><g class="body">'
@@ -602,7 +594,8 @@
   // ---------------------------------------------------------------------------
   var $=function(id){ return document.getElementById(id); };
   var elTabs=$("tabs"), elTitle=$("g-title"), elDesc=$("g-desc"), elRules=$("g-rules");
-  var elBoard=$("board"), elSlots=$("slots"), elPieces=$("pieces"), elOverlayHost=$("overlay-host");
+  var elBoard=$("board"), elPlay=$("play"), elSlots=$("slots"), elPieces=$("pieces"), elOverlayHost=$("overlay-host");
+  var GAP="3px"; // gap between board squares (matches the reference)
   var elTurn=$("turn"), elTurnText=$("turn-text"), elHints=$("hints");
   var elUndo=$("undo"), elRestart=$("restart");
 
@@ -620,9 +613,10 @@
 
   function buildStructure(){
     var N=G.N, M=G.M;
-    elBoard.style.aspectRatio = M + " / " + N;
+    elPlay.style.aspectRatio = M + " / " + N;
     elSlots.style.gridTemplateColumns = "repeat("+M+",1fr)";
     elSlots.style.gridTemplateRows = "repeat("+N+",1fr)";
+    elSlots.style.gap = GAP;
     elSlots.innerHTML=""; elPieces.innerHTML=""; elOverlayHost.innerHTML="";
     G.slotEls=[];
     for(var r=0;r<N;r++){
@@ -642,8 +636,8 @@
       var pe=document.createElement("div");
       pe.className="piece "+(pieces[i].player==="white"?"white":"black");
       pe.innerHTML=pieceSVG(G.variant.pieceType);
-      pe.style.width=(100/M)+"%";
-      pe.style.height=(100/N)+"%";
+      pe.style.width="calc((100% - "+(M-1)+" * "+GAP+") / "+M+")";
+      pe.style.height="calc((100% - "+(N-1)+" * "+GAP+") / "+N+")";
       (function(idx){ pe.addEventListener("click", function(ev){ onPieceClick(idx, ev); }); })(i);
       elPieces.appendChild(pe);
       G.pieceEls.push(pe);
@@ -705,8 +699,8 @@
       var p=st.pieces[i], pe=G.pieceEls[i];
       var isWhite=(p.player==="white");
       var selectable = isWhite && st.winner===0 && !G.animating;
-      pe.style.left=(p.c*100/M)+"%";
-      pe.style.top=(p.r*100/N)+"%";
+      pe.style.left="calc("+p.c+" * ((100% - "+(M-1)+" * "+GAP+") / "+M+" + "+GAP+"))";
+      pe.style.top="calc("+p.r+" * ((100% - "+(N-1)+" * "+GAP+") / "+N+" + "+GAP+"))";
       pe.style.transitionDelay = (!isWhite && G.staggerBlack) ? "0.34s" : "0s";
       var cls="piece "+(isWhite?"white":"black");
       if(selectable) cls+=" selectable";
