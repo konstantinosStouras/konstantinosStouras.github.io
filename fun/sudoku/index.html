@@ -61,6 +61,13 @@
   .wrap {
     min-height: 100vh;
     min-height: 100dvh;
+    /* Board edge length, shared by the grid, number pad and action row.
+       Capped by width (phones), by leftover height after the chrome
+       (short screens, avoids vertical overflow), and an upper bound
+       (tablets / desktop / Mac). The vh line is a fallback for browsers
+       without dvh support; the dvh line overrides it where available. */
+    --size: min(92vw, calc(100vh - 300px), 560px);
+    --size: min(92vw, calc(100dvh - 300px), 560px);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -154,7 +161,6 @@
     box-shadow: var(--shadow);
   }
   .board {
-    --size: min(92vw, 70vh, 480px);
     width: var(--size);
     height: var(--size);
     display: grid;
@@ -223,7 +229,7 @@
     display: grid;
     grid-template-columns: repeat(9, 1fr);
     gap: 6px;
-    width: min(92vw, 70vh, 480px);
+    width: var(--size);
   }
   .pad button {
     appearance: none;
@@ -256,7 +262,7 @@
     gap: 8px;
     flex-wrap: wrap;
     justify-content: center;
-    width: min(92vw, 70vh, 480px);
+    width: var(--size);
   }
   .actions button {
     appearance: none;
@@ -342,6 +348,45 @@
 
   @media (max-height: 720px) {
     header p { display: none; }
+  }
+
+  /* Fine-tune touch targets on small phones. */
+  @media (max-width: 360px) {
+    .difficulty button { padding: 7px 12px; }
+    .stat { min-width: 74px; padding: 6px 10px; }
+    .actions button { font-size: 12px; padding: 9px 8px; }
+  }
+
+  /* Landscape on short viewports (phones/tablets turned sideways):
+     put the board on the left and stack the controls in a column on the
+     right so everything fits the height without scrolling. */
+  @media (orientation: landscape) and (max-height: 620px) {
+    .wrap {
+      --size: min(86vh, 52vw, 560px);
+      display: grid;
+      grid-template-columns: auto auto;
+      align-items: center;
+      align-content: center;
+      justify-content: center;
+      column-gap: clamp(14px, 3vw, 30px);
+      row-gap: 6px;
+      grid-template-areas:
+        "board header"
+        "board difficulty"
+        "board hud"
+        "board pad"
+        "board actions"
+        "board footer";
+    }
+    header        { grid-area: header; }
+    header p      { display: none; }
+    .difficulty   { grid-area: difficulty; justify-self: center; }
+    .hud          { grid-area: hud; }
+    .board-shell  { grid-area: board; align-self: center; }
+    .pad          { grid-area: pad;     width: min(40vw, 360px); }
+    .actions      { grid-area: actions; width: min(40vw, 360px); }
+    footer        { grid-area: footer; }
+    .pad button { font-size: clamp(14px, 3vw, 20px); }
   }
 </style>
 </head>
