@@ -485,7 +485,7 @@
             <button class="btn" id="flipBtn" title="Flip the selected brick (or use &uarr; &darr;)">&#8646; Flip</button>
           </div>
           <div class="tray" id="tray"></div>
-          <p class="tray-note">Every brick shows its dollar value &mdash; harder-to-place shapes (bigger or stiffer) are worth more. There are many ways to fill the board, but only one reaches the highest Net Value: find the best portfolio, not just any fit.</p>
+          <p class="tray-note">Every brick shows its dollar value, and each has its own value-per-cell (ROI). The tempting high-ROI bricks are often traps &mdash; grabbing them greedily wrecks the fit. There are many ways to fill the board, but only one reaches the highest Net Value: find the best portfolio, not just any fit.</p>
           <div class="hint-row">
             <button class="btn ghost" id="hintBtn">&#128161; Hint</button>
             <button class="btn ghost" id="solveBtn">Show solution</button>
@@ -572,24 +572,25 @@
     // difficulty grows with (a) SIZE (more cells take more room) and
     // (b) STIFFNESS (fewer legal orientations / board placements = less wiggle
     // room). Equally awkward bricks are priced the same, so total value is a
-    // monotone reward for difficulty:
-    //   I3 $4  (3 cells, tromino — smallest)
-    //   L  $5  (4 cells, 8 orientations — most flexible tetromino, easiest to slot)
-    //   S,T $6 (4 cells, 4 orientations — stiffer tetrominoes)
-    //   P  $7  (5 cells, 8 orientations, most board placements — most flexible pentomino)
-    //   N,Y,L5 $8 (5 cells, elongated pentominoes — hardest to pack)
+    // Each brick has a dollar value chosen so the eight value-per-cell ratios
+    // ($/cell) are all DISTINCT and deliberately deceptive: the highest-ROI
+    // bricks are often NOT the ones an optimal portfolio needs, so a greedy
+    // "best value-per-cell first" player is reliably trapped. This is exactly
+    // what gives the boards their Sahni difficulty. Ratios, high to low:
+    //   L5 $16/5 = 3.20   I3 $9/3 = 3.00   T $11/4 = 2.75   L $10/4 = 2.50
+    //   S  $9/4  = 2.25   N $11/5 = 2.20   Y $7/5  = 1.40   P $6/5  = 1.20
     const LIBRARY = [
       // Tromino (3 cells)
-      { name: 'I3', color: '#1abc9c', value: 4, cells: [[0,0],[1,0],[2,0]] },
+      { name: 'I3', color: '#1abc9c', value: 9, cells: [[0,0],[1,0],[2,0]] },
       // Tetrominoes (4 cells)
-      { name: 'L',  color: '#c9b458', value: 5, cells: [[0,0],[1,0],[2,0],[2,1]] },
-      { name: 'S',  color: '#2ecc71', value: 6, cells: [[0,0],[1,0],[1,1],[2,1]] },
-      { name: 'T',  color: '#3498db', value: 6, cells: [[0,0],[1,0],[1,1],[2,0]] },
+      { name: 'L',  color: '#c9b458', value: 10, cells: [[0,0],[1,0],[2,0],[2,1]] },
+      { name: 'S',  color: '#2ecc71', value: 9, cells: [[0,0],[1,0],[1,1],[2,1]] },
+      { name: 'T',  color: '#3498db', value: 11, cells: [[0,0],[1,0],[1,1],[2,0]] },
       // Pentominoes (5 cells)
-      { name: 'L5', color: '#e67e22', value: 8, cells: [[0,0],[1,0],[2,0],[3,0],[3,1]] },
-      { name: 'Y',  color: '#9b59b6', value: 8, cells: [[0,1],[1,0],[1,1],[2,1],[3,1]] },
-      { name: 'P',  color: '#e74c3c', value: 7, cells: [[0,0],[0,1],[1,0],[1,1],[2,0]] },
-      { name: 'N',  color: '#f1c40f', value: 8, cells: [[0,1],[1,1],[2,0],[2,1],[3,0]] }
+      { name: 'L5', color: '#e67e22', value: 16, cells: [[0,0],[1,0],[2,0],[3,0],[3,1]] },
+      { name: 'Y',  color: '#9b59b6', value: 7, cells: [[0,1],[1,0],[1,1],[2,1],[3,1]] },
+      { name: 'P',  color: '#e74c3c', value: 6, cells: [[0,0],[0,1],[1,0],[1,1],[2,0]] },
+      { name: 'N',  color: '#f1c40f', value: 11, cells: [[0,1],[1,1],[2,0],[2,1],[3,0]] }
     ];
 
     const DIRS = [[-1,0],[1,0],[0,-1],[0,1]];
@@ -945,12 +946,14 @@
     }
 
     // Difficulty is the value-ratio Sahni kappa over the FULL eight-piece set.
-    // Easy: a small (14-cell) outline the ratio-greedy nearly solves (kappa <= 1).
-    // Hard: a larger (18-cell) outline where the ratio-greedy is trapped and needs
-    // at least two hand-placed hints (kappa >= 2). All eight bricks are always
-    // available either way; every board has many full covers but a single best one
-    // (highest Net Value) to find (see pickPuzzle).
-    const ACCEPT = { easy: k => k <= 1, hard: k => k >= 2 };
+    // Easy: a small (14-cell) outline where the ratio-greedy needs one or two
+    // hand-placed hints (kappa = 1 or 2).
+    // Hard: a larger (18-cell) outline where the ratio-greedy is badly trapped and
+    // needs at least three hand-placed hints (kappa >= 3) - at the ceiling of what
+    // the deceptive eight-piece set reaches at this size. All eight bricks are
+    // always available either way; every board has many full covers but a single
+    // best one (highest Net Value) to find (see pickPuzzle).
+    const ACCEPT = { easy: k => k >= 1 && k <= 2, hard: k => k >= 3 };
 
     // Enumeration cap: high enough that every accepted board is fully enumerated
     // (so its tiling count and unique-optimum status are exact, not truncated).
@@ -980,16 +983,21 @@
 
     function pickPuzzle(diff) {
       const target = DIFFS[diff].cells;
-      const deadline = Date.now() + 360;
+      // Hard never early-returns (it hunts for the maximum kappa), so give it a
+      // larger time budget to scan more boards; easy early-returns and stays snappy.
+      const deadline = Date.now() + (diff === 'hard' ? 650 : 360);
       let bestOk = null, bestAny = null;  // bestOk: many covers + unique optimum
       for (let t = 0; t < 900; t++) {
         const puzzle = generatePuzzle(target);
         if (!puzzle) continue;
         const cand = evaluate(puzzle);
         const ok = qualifies(cand);
-        if (ok && ACCEPT[diff](cand.kappa)) return cand;   // ideal: many covers, one best, right difficulty
+        if (ok && diff === 'easy' && ACCEPT.easy(cand.kappa)) return cand;  // easy: the first low-kappa board is fine
         if (ok) {
-          // Keep the qualifying board closest to the target band (easy: lowest kappa; hard: highest).
+          // Track the qualifying board closest to the target band (easy: lowest
+          // kappa; hard: highest). For HARD we deliberately never early-return -
+          // we scan the whole budget and ship the HARDEST board found (maximum
+          // Sahni kappa), not merely the first that clears kappa >= 3.
           const score = (diff === 'hard' ? cand.kappa : -cand.kappa);
           if (!bestOk || score > bestOk.score) { cand.score = score; bestOk = cand; }
         }
