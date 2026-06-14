@@ -192,6 +192,7 @@
   .cell.same-num { background: #1b324e; }
   .cell.selected { background: #244468; }
   .cell.conflict { color: var(--bad) !important; }
+  .cell.wrong { color: var(--bad) !important; }
   .cell.error-flash { animation: shake .3s ease; }
   @keyframes shake {
     0%,100% { transform: translateX(0); }
@@ -617,8 +618,8 @@
     if (i < 0 || state.given[i] || state.solved) return;
 
     if (state.noteMode) {
-      pushHistory();
       if (state.values[i] !== 0) return; // can't note a filled cell
+      pushHistory();
       if (state.notes[i].has(n)) state.notes[i].delete(n);
       else state.notes[i].add(n);
       render();
@@ -730,6 +731,8 @@
         if (i === sel) el.classList.add("selected");
       }
       if (isConflict(i)) el.classList.add("conflict");
+      // Flag a filled, non-given cell whose value doesn't match the solution.
+      else if (v !== 0 && !state.given[i] && v !== state.solution[i]) el.classList.add("wrong");
 
       // Content.
       if (v !== 0) {
