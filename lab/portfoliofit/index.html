@@ -217,12 +217,15 @@
     }
     .cell.preview-ok { box-shadow: inset 0 0 0 2px var(--good); }
     .cell.preview-bad { box-shadow: inset 0 0 0 2px var(--bad); background: #fbe6e2; }
-    /* Dollar-value badge on a placed brick (top-left of the brick). */
+    /* Dollar-value badge centered on a placed brick's anchor cell. Scaled to the
+       cell size in JS so it stays readable on laptop, tablet and mobile. */
     .cell-val {
-      position: absolute; top: 1px; left: 1px; z-index: 3; pointer-events: none;
-      font-size: 10px; font-weight: 800; line-height: 1.35; letter-spacing: -.02em;
-      background: #fff; color: #1f1300; padding: 0 3px; border-radius: 4px;
-      box-shadow: 0 1px 2px rgba(0,0,0,.3); font-variant-numeric: tabular-nums;
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      z-index: 3; pointer-events: none; white-space: nowrap;
+      font-weight: 800; line-height: 1.2; letter-spacing: -.02em;
+      background: #fff; color: #14100a; border-radius: 6px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.45), 0 0 0 1px rgba(0,0,0,.08);
+      font-variant-numeric: tabular-nums;
     }
     .cell.play { cursor: pointer; }
 
@@ -1086,6 +1089,9 @@
                 const tag = document.createElement('span');
                 tag.className = 'cell-val';
                 tag.textContent = money(badge.get(k));
+                // Scale the badge to the cell so it stays legible on every device.
+                tag.style.fontSize = Math.max(11, Math.round(cs * 0.4)) + 'px';
+                tag.style.padding = '1px ' + Math.max(3, Math.round(cs * 0.11)) + 'px';
                 cell.appendChild(tag);
               }
             }
@@ -1282,11 +1288,28 @@
     function solveAll() {
       state.occupied.clear();
       state.pieces.forEach(p => { p.placed = false; p.placedCells = null; });
-      for (const sol of state.solution) applySolutionPiece(sol);
+      // Show the full cover with the highest Net Value (a full cover leaves no
+      // empty cells, so Net Value = total value of the bricks used).
+      const pd = state.pd, all = allPieces();
+      const sols = collectSolutions(pd, 3000);
+      let best = null, bestVal = -Infinity;
+      for (const sol of sols) {
+        let v = 0; for (const pl of sol) v += pd.values[pl.pi];
+        if (v > bestVal) { bestVal = v; best = sol; }
+      }
+      if (best) {
+        for (const pl of best) {
+          const brick = all[pl.pi];
+          applySolutionPiece({ name: brick.name, color: brick.color, cells: maskToCells(pd, pl.mask) });
+        }
+      } else {
+        for (const sol of state.solution) applySolutionPiece(sol); // fallback
+        bestVal = state.bestValue;
+      }
       state.selected = null;
       stopTimer();
       renderBoard(); renderTray(); renderKPIs();
-      setStatus('Solution shown. Hit “New puzzle” for another.', '');
+      setStatus('Highest-value solution shown — Net ' + money(bestVal) + '. Hit “New puzzle” for another.', '');
       clearPreview();
     }
 
