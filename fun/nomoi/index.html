@@ -120,6 +120,20 @@
   #map .lbl .lcap{ font-size:5.6px; fill:#9a4d00; font-weight:600; display:none; }
   #map.showcaps .lbl .lcap{ display:block; }
 
+  /* tap popup */
+  .popup{position:absolute; z-index:25; min-width:190px; max-width:240px;
+    background:#fff; border:1px solid var(--line); border-radius:12px; box-shadow:0 14px 36px rgba(20,40,80,.22);
+    padding:12px 14px 12px; animation:popin .12s ease-out;}
+  @keyframes popin{from{opacity:0; transform:translateY(4px) scale(.97);} to{opacity:1; transform:none;}}
+  .popup .pclose{position:absolute; top:5px; right:7px; border:0; background:transparent; cursor:pointer;
+    font-size:1.15rem; line-height:1; color:var(--muted); padding:2px 5px; border-radius:6px;}
+  .popup .pclose:hover{background:#f1f4f9; color:var(--ink);}
+  .popup .ptitle{font-size:1.08rem; font-weight:800; color:var(--blue); margin:0 18px 7px 0;}
+  .popup .prow{display:flex; justify-content:space-between; gap:12px; padding:3px 0; font-size:.9rem;}
+  .popup .prow .pk{color:var(--muted);}
+  .popup .prow .pv{font-weight:700; text-align:right;}
+  .popup .prow .pv.cap{color:#9a4d00;}
+
   .zoomctrls{position:absolute; right:10px; bottom:10px; display:flex; flex-direction:column; gap:6px;}
   .zoomctrls button{
     width:38px; height:38px; border-radius:10px; border:1px solid var(--line); background:rgba(255,255,255,.95);
@@ -292,7 +306,7 @@
   <main>
     <div class="mapcard">
       <div class="promptbar" id="promptbar">
-        <div class="q" id="prompt">Περιήγησε τον χάρτη. Πέρασε τον δείκτη πάνω από έναν νομό ή κάνε κλικ για λεπτομέρειες.</div>
+        <div class="q" id="prompt">Περιήγησε τον χάρτη. Πάτησε σε έναν νομό για να δεις το όνομα και την πρωτεύουσά του.</div>
         <div class="spacer"></div>
         <label class="toggle" id="capToggleWrap"><input type="checkbox" id="capToggle"> Πρωτεύουσες</label>
         <button class="btn" id="nextBtn" style="display:none">Επόμενη ▸</button>
@@ -300,6 +314,7 @@
       </div>
       <div class="mapstage">
         <svg id="map" class="learn" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"></svg>
+        <div class="popup hidden" id="popup"></div>
         <div class="zoomctrls">
           <button id="zin" title="Μεγέθυνση">+</button>
           <button id="zout" title="Σμίκρυνση">−</button>
@@ -451,6 +466,12 @@ function screenToSvg(cx,cy){
   const offx = (r.width - vb.w*sc)/2, offy = (r.height - vb.h*sc)/2;
   return { x: vb.x + (cx - r.left - offx)/sc, y: vb.y + (cy - r.top - offy)/sc };
 }
+function svgToScreen(sx,sy){
+  const r = svg.getBoundingClientRect();
+  const sc = Math.min(r.width/vb.w, r.height/vb.h);
+  const offx = (r.width - vb.w*sc)/2, offy = (r.height - vb.h*sc)/2;
+  return { x: r.left + offx + (sx-vb.x)*sc, y: r.top + offy + (sy-vb.y)*sc };
+}
 function zoomAt(cx,cy,factor){
   const pt = screenToSvg(cx,cy);
   const nw = vb.w*factor, nh = vb.h*factor;
@@ -494,7 +515,19 @@ function endPointer(e){
   if(pointers.size<2) pinchPrev=0;
   if(pointers.size===0) panStart=null;
 }
-svg.addEventListener('pointerup', endPointer);
+svg.addEventListener('pointerup', e=>{
+  // A "tap" is a single-pointer release (panStart set) with no real drag.
+  // We resolve the hit via elementFromPoint instead of the click event,
+  // because setPointerCapture re-targets the synthesized click to the <svg>.
+  const wasTap = pointers.size===1 && panStart && movedDist<=6;
+  endPointer(e);
+  if(wasTap){
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const path = el && el.closest ? el.closest('path.nomos') : null;
+    if(path) onNomosClick(path.dataset.key, e);
+    else hidePopup();        // tapped empty sea -> dismiss any popup
+  }
+});
 svg.addEventListener('pointercancel', endPointer);
 function pinchDist(){ const a=[...pointers.values()]; return Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y); }
 function pinchCenter(){ const a=[...pointers.values()]; return {x:(a[0].x+a[1].x)/2,y:(a[0].y+a[1].y)/2}; }
@@ -503,12 +536,7 @@ document.getElementById('zin').onclick = ()=>{ const r=svg.getBoundingClientRect
 document.getElementById('zout').onclick= ()=>{ const r=svg.getBoundingClientRect(); zoomAt(r.left+r.width/2,r.top+r.height/2,1.25); };
 document.getElementById('zreset').onclick=()=>{ vb={...FULL}; applyVB(); };
 
-// ---------- click handling (tap vs drag) ----------
-landG.addEventListener('click', e=>{
-  const t = e.target.closest('path.nomos'); if(!t) return;
-  if(movedDist>6) return;            // was a drag, ignore
-  onNomosClick(t.dataset.key);
-});
+// ---------- hover handling (taps are handled in pointerup above) ----------
 landG.addEventListener('pointerover', e=>{
   const t=e.target.closest('path.nomos'); if(!t) return;
   if(mode==='learn'||mode==='progress') setHover(t.dataset.key,true);
@@ -554,6 +582,8 @@ document.getElementById('capToggle').onchange=e=>{
 };
 
 function setMode(m){
+  clearTimeout(advanceTimer); advanceTimer=null;
+  hidePopup();
   mode=m; clearClasses(); overlay.classList.add('hidden');
   nextBtn.style.display='none'; skipBtn.style.display='none';
   capToggleWrap.style.display='none';
@@ -566,7 +596,7 @@ function setMode(m){
 // ----- LEARN -----
 function startLearn(){
   colorByRegion();
-  promptEl.innerHTML='Περιήγησε τον χάρτη. Πέρασε τον δείκτη πάνω από έναν νομό ή κάνε κλικ για λεπτομέρειες.';
+  promptEl.innerHTML='Περιήγησε τον χάρτη. Πάτησε σε έναν νομό για να δεις το όνομα και την πρωτεύουσά του.';
   sideTitle.textContent='Νομοί & Πρωτεύουσες';
   sideSmall.textContent= keys.length+' νομοί';
   buildLegend();
@@ -589,34 +619,47 @@ function buildLegend(){
     const k=li.dataset.key;
     li.onmouseenter=()=>setHover(k,true);
     li.onmouseleave=()=>setHover(k,false);
-    li.onclick=()=>showDetail(k);
+    li.onclick=()=>{ showPopup(k); };   // anchored at the region's centroid
   });
 }
-function showDetail(k){
+
+// ---------- tap popup: shows the νομός + its capital ----------
+const popup=document.getElementById('popup');
+function showPopup(k, ev){
   const n=MAP.nomoi[k];
-  sideTitle.textContent='Λεπτομέρειες';
-  sideSmall.textContent='';
-  sideBody.innerHTML=`<div class="detail">
-    <div class="big">Νομός ${n.name}</div>
-    <div class="row"><div class="k">Πρωτεύουσα</div><div class="v">${n.capital}</div></div>
-    <div class="row"><div class="k">Περιφέρεια</div><div class="v">${REGIONS[n.region].name}</div></div>
-    <div class="hint">Ο Νομός ${n.name} έχει πρωτεύουσα ${capAcc(n.capital)}.<br><br>
-      <button class="btn" id="backList">← Πίσω στη λίστα</button></div>
-  </div>`;
-  document.getElementById('backList').onclick=()=>{ sideTitle.textContent='Νομοί & Πρωτεύουσες'; sideSmall.textContent=keys.length+' νομοί'; buildLegend(); };
-  // flash highlight on map
+  popup.innerHTML =
+    `<button class="pclose" aria-label="Κλείσιμο">&times;</button>`+
+    `<div class="ptitle">Νομός ${n.name}</div>`+
+    `<div class="prow"><span class="pk">Πρωτεύουσα</span><span class="pv cap">${n.capital}</span></div>`+
+    `<div class="prow"><span class="pk">Περιφέρεια</span><span class="pv">${REGIONS[n.region].name}</span></div>`;
+  popup.classList.remove('hidden');
+  popup.querySelector('.pclose').onclick=(e)=>{ e.stopPropagation(); hidePopup(); };
+  // highlight the tapped region
   clearClasses(); pathEls[k].classList.add('sel');
-  setTimeout(()=>pathEls[k].classList.remove('sel'),1200);
+  // position the popup near the tap point (or the region centroid for legend clicks)
+  const stage=document.querySelector('.mapstage'); const sr=stage.getBoundingClientRect();
+  let scr;
+  if(ev && ev.clientX!=null){ scr={x:ev.clientX, y:ev.clientY}; }
+  else { scr=svgToScreen(n.cx, n.cy); }
+  const px=scr.x - sr.left, py=scr.y - sr.top;
+  const pw=popup.offsetWidth, ph=popup.offsetHeight;
+  let left=px - pw/2, top=py - ph - 14;
+  if(top<6) top=py + 18;                                   // not enough room above -> below
+  left=Math.max(6, Math.min(left, sr.width - pw - 6));
+  top =Math.max(6, Math.min(top,  sr.height - ph - 6));
+  popup.style.left=left+'px'; popup.style.top=top+'px';
 }
-function capAcc(c){ // rough accusative article for the hint sentence
-  const first=c[0];
-  const vowels='ΑΕΗΙΟΥΩΆΈΉΊΌΎΏ';
-  return (vowels.includes(first)? 'την ':'το ')+c;
-}
+function hidePopup(){ if(popup.classList.contains('hidden')) return; popup.classList.add('hidden'); clearClasses(); }
+// dismiss the popup when tapping anywhere outside it and outside the map
+document.addEventListener('pointerdown', e=>{
+  if(popup.classList.contains('hidden')) return;
+  if(e.target.closest('#popup') || e.target.closest('#map')) return;
+  hidePopup();
+});
 
 // ----- QUIZ -----
 let queue=[], qi=0, score=0, asked=0, streak=0, best=0, answeredLog=[], locked=false;
-let roundAsked={}, roundWrong={};
+let roundAsked={}, roundWrong={}, advanceTimer=null;
 function startQuiz(){
   queue = keys.slice(); shuffle(queue);
   qi=0; score=0; asked=0; streak=0; best=0; answeredLog=[]; locked=false;
@@ -640,8 +683,8 @@ function nextQuestion(first){
     promptEl.innerHTML = `Σε ποιον νομό ανήκει η πρωτεύουσα <b>${n.capital}</b>; Κάνε κλικ στον νομό.`;
   }
 }
-function onNomosClick(k){
-  if(mode!=='quizNomos' && mode!=='quizCapital'){ if(mode==='learn') showDetail(k); return; }
+function onNomosClick(k, ev){
+  if(mode!=='quizNomos' && mode!=='quizCapital'){ showPopup(k, ev); return; }
   if(locked) return;
   const target=curTarget();
   asked++;
@@ -652,7 +695,12 @@ function onNomosClick(k){
     flash('Σωστά! '+sentence(target), true);
     answeredLog.unshift({k:target, ok:true});
     locked=true;
-    setTimeout(()=>{ qi++; nextQuestion(); renderQuizSide(); }, 950);
+    clearTimeout(advanceTimer);
+    advanceTimer=setTimeout(()=>{
+      advanceTimer=null;
+      if(mode!=='quizNomos' && mode!=='quizCapital') return; // tab changed meanwhile
+      qi++; nextQuestion(); renderQuizSide();
+    }, 950);
   } else {
     streak=0;
     roundWrong[target]=(roundWrong[target]||0)+1;
@@ -679,9 +727,16 @@ function flash(msg, ok){
 nextBtn.onclick=()=>{ qi++; nextQuestion(); renderQuizSide(); };
 skipBtn.onclick=()=>{
   if(locked) return;
-  // move current target to the end, count as not asked
-  const k=queue.splice(qi,1)[0]; queue.push(k);
-  nextQuestion();
+  // re-queue the current target among the remaining questions (not immediately repeated)
+  const k=queue.splice(qi,1)[0];
+  const pendingAfter = queue.length - qi;          // pending items still ahead
+  if(pendingAfter>0){
+    const ins = qi + 1 + Math.floor(Math.random()*pendingAfter);
+    queue.splice(Math.min(ins, queue.length), 0, k);
+  } else {
+    queue.push(k);                                  // it was the last one left
+  }
+  nextQuestion(); renderQuizSide();
 };
 
 function renderQuizSide(){
