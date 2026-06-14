@@ -198,11 +198,11 @@
   .summary-tab-btn { padding: 8px 18px; border: 1.5px solid var(--border); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; background: var(--white); color: var(--text-muted); transition: all 0.15s; }
   .summary-tab-btn.active { background: var(--navy); color: white; border-color: var(--navy); }
   .summary-tab-btn:hover:not(.active) { background: var(--navy-light); color: var(--navy); border-color: var(--navy); }
-  /* "Recently added papers" button: styled like the summary tabs but managed
-     independently (it drives the papers list, not a summary panel). */
-  .recent-tab-btn { padding: 8px 18px; border: 1.5px solid var(--accent); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; background: var(--white); color: #8a7032; transition: all 0.15s; }
-  .recent-tab-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
-  .recent-tab-btn:hover:not(.active) { background: var(--accent-light); color: #8a7032; border-color: var(--accent); }
+  /* "Recently added papers" button: same look as the summary tabs, but kept on
+     its own class because it drives the papers list, not a summary panel. */
+  .recent-tab-btn { padding: 8px 18px; border: 1.5px solid var(--border); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; background: var(--white); color: var(--text-muted); transition: all 0.15s; }
+  .recent-tab-btn.active { background: var(--navy); color: white; border-color: var(--navy); }
+  .recent-tab-btn:hover:not(.active) { background: var(--navy-light); color: var(--navy); border-color: var(--navy); }
   .summary-content { display: none; padding: 16px 0 8px; }
   .summary-content.active { display: block; }
   .summary-list { column-count: 2; column-gap: 2rem; font-size: 14px; line-height: 2.1; }
@@ -346,6 +346,7 @@ const AREAS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/t
 const AFFILIATIONS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Affiliations_Merged`;
 const AFFILIATIONS_FALLBACK_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Affiliations`;
 const META_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Meta`;
+const RECENT_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=RecentlyAdded`;
 const PER_PAGE = 20;
 let allPapers = [], filtered = [], currentPage = 1;
 let authorData = []; // pre-computed from Authors tab (ORCID-resolved)
@@ -355,6 +356,11 @@ let affiliationData = []; // pre-computed from Affiliations tab
 // to the database within RECENT_DAYS, newest addition first, each with its date.
 let recentMode = false;
 const RECENT_DAYS = 28; // last 4 weeks
+// Pre-computed RecentlyAdded tab (small, fast). Loaded lazily on first use; if it
+// is missing/empty we fall back to scanning the full Data set for Date Added.
+let recentData = null;      // parsed rows from the RecentlyAdded tab (null = absent/failed)
+let recentFetched = false;  // whether we've attempted to load that tab
+let recentLoading = false;  // whether that fetch is currently in flight
 
 // Multi-select state. authorIdentity maps a display label -> array of that
 // author's name variants (from the Authors tab Name_Variants column), so a
@@ -1347,20 +1353,55 @@ function toggleRecent() {
     // Standalone view: drop any active filters and close summary panels.
     resetFilterState();
     closeSummaryTabs();
-    renderRecent();
+    if (!recentFetched) loadRecent(); // fast pre-computed tab; re-renders when ready
+    renderRecent();                   // immediate (spinner, fallback, or data)
     window.scrollTo({ top: 0, behavior: 'smooth' });
   } else {
     applyFilters();
   }
 }
 
+// Load the small pre-computed RecentlyAdded tab so the view is instant and does
+// not depend on the full (large) Data CSV. Falls back silently to scanning the
+// Data set if that tab is absent or empty.
+async function loadRecent() {
+  recentFetched = true;
+  recentLoading = true;
+  try {
+    var r = await fetch(RECENT_CSV_URL);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    var t = await r.text();
+    if (t.trim().charAt(0) === '<') throw new Error('not CSV'); // HTML error page (tab missing)
+    var rows = parseCSV(t, 'Title');
+    rows.forEach(normalizeEditors); // populate _editors / _area so the tags render
+    recentData = rows; // authoritative once loaded, even if empty
+  } catch (e) {
+    recentData = null; // tab missing -> fall back to scanning allPapers
+  }
+  recentLoading = false;
+  if (recentMode) renderRecent();
+}
+
 function renderRecent() {
   var countEl = document.getElementById('resultsCount');
   var list = document.getElementById('papersList');
 
-  if (!allPapers.length) {
+  // While the fast pre-computed tab is still loading, wait for it.
+  if (recentLoading && recentData === null) {
     countEl.innerHTML = '';
-    list.innerHTML = '<div class="loading"><div class="spinner"></div>Loading papers…</div>';
+    list.innerHTML = '<div class="loading"><div class="spinner"></div>Loading recently added papers…</div>';
+    return;
+  }
+
+  // Prefer the pre-computed tab (authoritative if it loaded); otherwise fall
+  // back to scanning the full Data set for the Date Added column.
+  var usePrecomputed = recentData !== null;
+  var source = usePrecomputed ? recentData : allPapers;
+
+  // No tab and the Data CSV hasn't arrived yet: keep waiting.
+  if (!usePrecomputed && !allPapers.length) {
+    countEl.innerHTML = '';
+    list.innerHTML = '<div class="loading"><div class="spinner"></div>Loading recently added papers…</div>';
     return;
   }
 
@@ -1368,7 +1409,7 @@ function renderRecent() {
   cutoff.setHours(0, 0, 0, 0);
   cutoff.setDate(cutoff.getDate() - RECENT_DAYS);
 
-  var recent = allPapers
+  var recent = source
     .map(function(p) { return { p: p, d: getAddedDate(p) }; })
     .filter(function(x) { return x.d && x.d >= cutoff; })
     .sort(function(a, b) { return b.d - a.d; })
