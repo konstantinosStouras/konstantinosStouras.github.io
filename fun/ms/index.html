@@ -29,7 +29,7 @@
 <meta name="twitter:image" content="https://stouras.com/fun/ms/og-image.jpg">
 
 <!-- Favicon: inline SVG "MS" monogram (navy/gold journal style), no external file needed -->
-<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%23003087'/%3E%3Ctext%20x='50'%20y='68'%20font-family='Georgia,serif'%20font-size='54'%20font-style='italic'%20font-weight='bold'%20fill='%23c4a052'%20text-anchor='middle'%3EMS%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%23003087'/%3E%3Ctext%20x='50'%20y='68'%20font-family='Georgia,serif'%20font-size='54'%20font-style='italic'%20font-weight='bold'%20fill='%23c4a052'%20text-anchor='middle'%3EMS%3C/text%3E%3C/svg%3E">
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%23003087'/%3E%3Ctext%20x='50'%20y='68'%20font-family='Georgia,serif'%20font-size='54'%20font-style='italic'%20font-weight='bold'%20fill='%23c4a052'%20text-anchor='middle'%3EMS%3C/text%3E%3C/svg%3E">
 <meta name="theme-color" content="#003087">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&display=swap" rel="stylesheet">
@@ -79,7 +79,8 @@
   body.compact .filter-actions { padding-top: 0; }
   body.compact .filters-row { gap: 8px; }
   body.compact .summary-tab-btns { margin-top: 8px !important; }
-  body.compact .summary-tab-btn { padding: 6px 14px; font-size: 13px; }
+  body.compact .summary-tab-btn,
+  body.compact .recent-tab-btn { padding: 6px 14px; font-size: 13px; }
   @media (max-width: 768px) { .topbar { position: static; } }
 
   .filters-bar { background: var(--white); border-bottom: 1px solid var(--border); padding: 20px 0; box-shadow: var(--shadow-sm); transition: padding 0.2s ease; }
@@ -150,6 +151,7 @@
   .tag-area:hover { background: #d4edde; }
   .tag-other { background: #fce8e8; color: var(--red); }
   .tag-aia { background: #fff3e0; color: #b36b00; }
+  .tag-added { background: #e0f2f1; color: #00796b; cursor: default; font-weight: 600; }
 
   .paper-abstract-toggle { margin-top: 8px; font-size: 12px; color: var(--navy); cursor: pointer; font-weight: 500; user-select: none; display: inline-block; }
   .paper-abstract-toggle:hover { text-decoration: underline; }
@@ -196,6 +198,11 @@
   .summary-tab-btn { padding: 8px 18px; border: 1.5px solid var(--border); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; background: var(--white); color: var(--text-muted); transition: all 0.15s; }
   .summary-tab-btn.active { background: var(--navy); color: white; border-color: var(--navy); }
   .summary-tab-btn:hover:not(.active) { background: var(--navy-light); color: var(--navy); border-color: var(--navy); }
+  /* "Recently added papers" button: same look as the summary tabs, but kept on
+     its own class because it drives the papers list, not a summary panel. */
+  .recent-tab-btn { padding: 8px 18px; border: 1.5px solid var(--border); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; background: var(--white); color: var(--text-muted); transition: all 0.15s; }
+  .recent-tab-btn.active { background: var(--navy); color: white; border-color: var(--navy); }
+  .recent-tab-btn:hover:not(.active) { background: var(--navy-light); color: var(--navy); border-color: var(--navy); }
   .summary-content { display: none; padding: 16px 0 8px; }
   .summary-content.active { display: block; }
   .summary-list { column-count: 2; column-gap: 2rem; font-size: 14px; line-height: 2.1; }
@@ -281,6 +288,7 @@
       <button class="summary-tab-btn" onclick="toggleSummary('editors')">Editors</button>
       <button class="summary-tab-btn" onclick="toggleSummary('areas')">Areas</button>
       <button class="summary-tab-btn" onclick="toggleSummary('authors')" title="Authors are resolved by ORCID where available. Authors with at least one paper in a known area are listed.">Authors</button>
+      <button class="recent-tab-btn" id="recentBtn" onclick="toggleRecent()" title="Papers added to the database in the last 4 weeks, newest first.">Recently added papers</button>
     </div>
   </div>
 </div>
@@ -338,10 +346,21 @@ const AREAS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/t
 const AFFILIATIONS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Affiliations_Merged`;
 const AFFILIATIONS_FALLBACK_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Affiliations`;
 const META_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Meta`;
+const RECENT_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=RecentlyAdded`;
 const PER_PAGE = 20;
 let allPapers = [], filtered = [], currentPage = 1;
 let authorData = []; // pre-computed from Authors tab (ORCID-resolved)
 let affiliationData = []; // pre-computed from Affiliations tab
+
+// "Recently added papers" view: when on, the papers list shows only papers added
+// to the database within RECENT_DAYS, newest addition first, each with its date.
+let recentMode = false;
+const RECENT_DAYS = 28; // last 4 weeks
+// Pre-computed RecentlyAdded tab (small, fast). Loaded lazily on first use; if it
+// is missing/empty we fall back to scanning the full Data set for Date Added.
+let recentData = null;      // parsed rows from the RecentlyAdded tab (null = absent/failed)
+let recentFetched = false;  // whether we've attempted to load that tab
+let recentLoading = false;  // whether that fetch is currently in flight
 
 // Multi-select state. authorIdentity maps a display label -> array of that
 // author's name variants (from the Authors tab Name_Variants column), so a
@@ -455,8 +474,9 @@ async function loadData() {
     }
     // Render results for any filters set while loading (e.g. a click on the
     // pre-computed Editors/Areas lists); with no filters this builds the
-    // dropdowns and shows the welcome state.
-    applyFilters();
+    // dropdowns and shows the welcome state. If the user opened the "Recently
+    // added papers" view before the data finished loading, fill it in now.
+    if (recentMode) renderRecent(); else applyFilters();
     // Update year range in header
     var years = allPapers.map(function(p) { return parseInt(p['Year']); }).filter(function(y) { return !isNaN(y); });
     if (years.length > 0) {
@@ -1220,6 +1240,8 @@ document.addEventListener('click', function(e) {
 });
 
 function applyFilters() {
+  // Any normal filter interaction exits the "Recently added papers" view.
+  if (recentMode) { recentMode = false; updateRecentButton(); }
   const search = document.getElementById('filterSearch').value.trim().toLowerCase();
   const searchAuth = document.getElementById('filterAuthors').value.trim().toLowerCase();
   const searchAff = document.getElementById('filterAffiliations').value.trim().toLowerCase();
@@ -1273,7 +1295,8 @@ function applyFilters() {
   updateDropdownOptions();
 }
 
-function clearFilters() {
+// Clear all filter selections, chips and search inputs without re-rendering.
+function resetFilterState() {
   sel.editor.clear(); sel.area.clear(); sel.year.clear(); sel.title.clear(); sel.author.clear(); sel.authorIdentity = {}; sel.affiliation.clear();
   document.getElementById('chipsEditor').innerHTML = '';
   document.getElementById('chipsArea').innerHTML = '';
@@ -1282,8 +1305,129 @@ function clearFilters() {
   document.getElementById('chipsAuthor').innerHTML = '';
   document.getElementById('chipsAffiliation').innerHTML = '';
   ['filterSearch','filterAuthors','filterAffiliations'].forEach(id => document.getElementById(id).value = '');
+}
+
+function clearFilters() {
+  resetFilterState();
   closeSummaryTabs();
   applyFilters();
+}
+
+// ── "Recently added papers" view ──
+
+// Parse a "Date Added" cell into a Date. Handles ISO (YYYY-MM-DD[ HH:MM]),
+// US slash (M/D/YYYY) and anything the native Date parser understands. Date-only
+// values are built in local time to avoid timezone off-by-one shifts.
+function parseAddedDate(s) {
+  if (!s) return null;
+  s = String(s).trim();
+  if (!s) return null;
+  var m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+  if (m) return new Date(+m[1], +m[2]-1, +m[3], +(m[4]||0), +(m[5]||0), +(m[6]||0));
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:[ ,]+(\d{1,2}):(\d{1,2}))?/);
+  if (m) { var yr = +m[3]; if (yr < 100) yr += 2000; return new Date(yr, +m[1]-1, +m[2], +(m[4]||0), +(m[5]||0)); }
+  var d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+var ADDED_KEYS = ['Date Added', 'DateAdded', 'Date_Added', 'Added', 'Added On', 'Added Date'];
+function getAddedDate(p) {
+  for (var i = 0; i < ADDED_KEYS.length; i++) { if (p[ADDED_KEYS[i]]) { var d = parseAddedDate(p[ADDED_KEYS[i]]); if (d) return d; } }
+  return null;
+}
+
+var ADD_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function formatAddedDate(d) {
+  return d.getDate() + ' ' + ADD_MONTHS[d.getMonth()] + ' ' + d.getFullYear();
+}
+
+function updateRecentButton() {
+  var btn = document.getElementById('recentBtn');
+  if (btn) btn.className = 'recent-tab-btn' + (recentMode ? ' active' : '');
+}
+
+function toggleRecent() {
+  recentMode = !recentMode;
+  updateRecentButton();
+  if (recentMode) {
+    // Standalone view: drop any active filters and close summary panels.
+    resetFilterState();
+    closeSummaryTabs();
+    if (!recentFetched) loadRecent(); // fast pre-computed tab; re-renders when ready
+    renderRecent();                   // immediate (spinner, fallback, or data)
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } else {
+    applyFilters();
+  }
+}
+
+// Load the small pre-computed RecentlyAdded tab so the view is instant and does
+// not depend on the full (large) Data CSV. Falls back silently to scanning the
+// Data set if that tab is absent or empty.
+async function loadRecent() {
+  recentFetched = true;
+  recentLoading = true;
+  try {
+    var r = await fetch(RECENT_CSV_URL);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    var t = await r.text();
+    if (t.trim().charAt(0) === '<') throw new Error('not CSV'); // HTML error page (tab missing)
+    var rows = parseCSV(t, 'Title');
+    rows.forEach(normalizeEditors); // populate _editors / _area so the tags render
+    recentData = rows; // authoritative once loaded, even if empty
+  } catch (e) {
+    recentData = null; // tab missing -> fall back to scanning allPapers
+  }
+  recentLoading = false;
+  if (recentMode) renderRecent();
+}
+
+function renderRecent() {
+  var countEl = document.getElementById('resultsCount');
+  var list = document.getElementById('papersList');
+
+  // While the fast pre-computed tab is still loading, wait for it.
+  if (recentLoading && recentData === null) {
+    countEl.innerHTML = '';
+    list.innerHTML = '<div class="loading"><div class="spinner"></div>Loading recently added papers…</div>';
+    return;
+  }
+
+  // Prefer the pre-computed tab (authoritative if it loaded); otherwise fall
+  // back to scanning the full Data set for the Date Added column.
+  var usePrecomputed = recentData !== null;
+  var source = usePrecomputed ? recentData : allPapers;
+
+  // No tab and the Data CSV hasn't arrived yet: keep waiting.
+  if (!usePrecomputed && !allPapers.length) {
+    countEl.innerHTML = '';
+    list.innerHTML = '<div class="loading"><div class="spinner"></div>Loading recently added papers…</div>';
+    return;
+  }
+
+  var cutoff = new Date();
+  cutoff.setHours(0, 0, 0, 0);
+  cutoff.setDate(cutoff.getDate() - RECENT_DAYS);
+
+  var recent = source
+    .map(function(p) { return { p: p, d: getAddedDate(p) }; })
+    .filter(function(x) { return x.d && x.d >= cutoff; })
+    .sort(function(a, b) { return b.d - a.d; })
+    .map(function(x) { return x.p; });
+
+  // Set the global `filtered` so the Abstract/BibTeX toggles resolve correctly.
+  filtered = recent;
+  currentPage = 1;
+
+  var weeks = Math.round(RECENT_DAYS / 7);
+  countEl.innerHTML = '<strong>' + recent.length.toLocaleString() + '</strong> paper' + (recent.length === 1 ? '' : 's') + ' added in the last ' + weeks + ' weeks';
+
+  if (!recent.length) {
+    list.innerHTML = '<div class="empty-state"><h3>No recently added papers</h3><p>No papers were added to the database in the last ' + weeks + ' weeks.</p></div>';
+    return;
+  }
+
+  list.innerHTML = recent.map(function(p, idx) { return paperCardHTML(p, idx, true); }).join('');
 }
 
 function filterByEditor(name) {
@@ -1314,34 +1458,45 @@ function renderPage() {
     return;
   }
 
-  list.innerHTML = page.map((p, idx) => {
-    const doi = p['DOI'] || '';
-    const link = doi.startsWith('http') ? doi : doi ? 'https://doi.org/' + doi : '';
-    const aid = 'a' + (start + idx);
-    const absClean = cleanAbstract(p['Abstract'] || '');
-    const hasAbs = absClean.length > 10;
-
-    return `<div class="paper-card">
-      <div class="paper-title">${link ? `<a href="${link}" target="_blank">${esc(p['Title'])}</a>` : esc(p['Title'])}</div>
-      <div class="paper-authors">${(p['Authors']||'').split(',').map(function(a){var t=a.trim();return t?'<span class="paper-author-link" onclick="addAuthorChip(\''+escAttr(t)+'\')">'+esc(t)+'</span>':'';}).filter(Boolean).join(', ')}</div>
-      <div class="paper-meta">
-        ${p['Volume'] && p['Issue'] ? `<span class="tag tag-vol" onclick="addYearChip('${esc(p['Year'])}')">${esc(p['Year'])} · Vol. ${esc(p['Volume'])} No. ${esc(p['Issue'])}${p['Page'] ? ', pp. '+esc(p['Page']) : ''}</span>` : p['Year'] ? `<span class="tag tag-vol" onclick="addYearChip('${esc(p['Year'])}')">${esc(p['Year'])}</span>` : ''}
-        ${(p._editors||[]).map(e => `<span class="tag tag-editor" onclick="filterByEditor('${escAttr(e)}')">✎ ${esc(e)}</span>`).join('')}
-        ${p._area ? `<span class="tag tag-area" onclick="filterByArea('${escAttr(p._area)}')">${esc(p._area)}</span>` : ''}
-        ${p['Status']==='Other' ? '<span class="tag tag-other">Other</span>' : ''}
-        ${p['Status']==='Articles in Advance' ? '<span class="tag tag-aia">Articles in Advance</span>' : ''}
-      </div>
-      ${hasAbs ? `<span class="paper-abstract-toggle" onclick="togAbs('${aid}',this)">▸ Abstract</span>` : ''}
-      <span class="paper-bibtex-toggle" onclick="togBib('bib${start+idx}',this,${start+idx})">▸ BibTeX</span>
-      ${hasAbs ? `<div id="${aid}" class="paper-abstract">${esc(absClean)}</div>` : ''}
-      <div id="bib${start+idx}" class="paper-bibtex"></div>
-    </div>`;
-  }).join('');
+  list.innerHTML = page.map((p, idx) => paperCardHTML(p, start + idx, false)).join('');
 
   /* PAGINATION DISABLED
   document.getElementById('pagination').style.display = totalPages > 1 ? '' : 'none';
   renderPag(totalPages);
   */
+}
+
+// Markup for one paper card. `idx` is the index into the global `filtered`
+// array (so the Abstract/BibTeX toggles resolve to the right paper). When
+// `showAdded` is true, a tag with the paper's database-insertion date is shown.
+function paperCardHTML(p, idx, showAdded) {
+  const doi = p['DOI'] || '';
+  const link = doi.startsWith('http') ? doi : doi ? 'https://doi.org/' + doi : '';
+  const aid = 'a' + idx;
+  const absClean = cleanAbstract(p['Abstract'] || '');
+  const hasAbs = absClean.length > 10;
+  let addedTag = '';
+  if (showAdded) {
+    const added = getAddedDate(p);
+    if (added) addedTag = `<span class="tag tag-added">Added ${esc(formatAddedDate(added))}</span>`;
+  }
+
+  return `<div class="paper-card">
+    <div class="paper-title">${link ? `<a href="${link}" target="_blank">${esc(p['Title'])}</a>` : esc(p['Title'])}</div>
+    <div class="paper-authors">${(p['Authors']||'').split(',').map(function(a){var t=a.trim();return t?'<span class="paper-author-link" onclick="addAuthorChip(\''+escAttr(t)+'\')">'+esc(t)+'</span>':'';}).filter(Boolean).join(', ')}</div>
+    <div class="paper-meta">
+      ${p['Volume'] && p['Issue'] ? `<span class="tag tag-vol" onclick="addYearChip('${esc(p['Year'])}')">${esc(p['Year'])} · Vol. ${esc(p['Volume'])} No. ${esc(p['Issue'])}${p['Page'] ? ', pp. '+esc(p['Page']) : ''}</span>` : p['Year'] ? `<span class="tag tag-vol" onclick="addYearChip('${esc(p['Year'])}')">${esc(p['Year'])}</span>` : ''}
+      ${(p._editors||[]).map(e => `<span class="tag tag-editor" onclick="filterByEditor('${escAttr(e)}')">✎ ${esc(e)}</span>`).join('')}
+      ${p._area ? `<span class="tag tag-area" onclick="filterByArea('${escAttr(p._area)}')">${esc(p._area)}</span>` : ''}
+      ${p['Status']==='Other' ? '<span class="tag tag-other">Other</span>' : ''}
+      ${p['Status']==='Articles in Advance' ? '<span class="tag tag-aia">Articles in Advance</span>' : ''}
+      ${addedTag}
+    </div>
+    ${hasAbs ? `<span class="paper-abstract-toggle" onclick="togAbs('${aid}',this)">▸ Abstract</span>` : ''}
+    <span class="paper-bibtex-toggle" onclick="togBib('bib${idx}',this,${idx})">▸ BibTeX</span>
+    ${hasAbs ? `<div id="${aid}" class="paper-abstract">${esc(absClean)}</div>` : ''}
+    <div id="bib${idx}" class="paper-bibtex"></div>
+  </div>`;
 }
 
 function togAbs(id, btn) {

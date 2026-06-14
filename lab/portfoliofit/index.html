@@ -249,8 +249,9 @@
     .piece-grid { display: grid; gap: 2px; }
     .pc { border-radius: 3px; }
     .pc.on { box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
-    .piece .pname { font-size: 11px; color: var(--muted); font-weight: 600; }
-    .piece .pval { font-family: var(--font-display); font-size: 11px; font-weight: 600; color: var(--muted); margin-top: 3px; font-variant-numeric: tabular-nums; }
+    .piece .plabel { display: flex; flex-direction: column; align-items: center; gap: 1px; line-height: 1.15; }
+    .piece .pname { font-size: 11.5px; color: var(--ink); font-weight: 700; letter-spacing: .02em; }
+    .piece .pval { font-family: var(--font-display); font-size: 11px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
 
     .arrow-hint { font-size: 12.5px; color: var(--muted); margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
     .arrow-hint .keys { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
@@ -339,8 +340,30 @@
     .modal p { color: var(--muted); margin-bottom: 18px; }
     .modal .stat { font-size: 15px; color: var(--ink); margin-bottom: 18px; }
     .modal .stat b { font-size: 22px; color: var(--accent-dark); }
-    .modal .actions { display: flex; gap: 10px; }
-    .modal .actions .btn { flex: 1; }
+    .modal .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .modal .actions .btn { flex: 1; min-width: 92px; }
+    .result-bar { height: 10px; border-radius: 999px; background: var(--line); overflow: hidden; margin: 2px 0 18px; }
+    .result-fill { height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg,#2ecc71,#f1c40f); transition: width .65s cubic-bezier(.2,.8,.2,1); }
+    .modal .pb { font-size: 12.5px; color: var(--muted); margin: -8px 0 16px; line-height: 1.5; }
+    .modal .pb b { color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+    /* Confetti celebration */
+    .confetti-layer { position: fixed; inset: 0; pointer-events: none; z-index: 60; overflow: hidden; }
+    .confetti-layer i { position: absolute; top: -16px; width: 9px; height: 14px; border-radius: 2px; animation: confetti-fall linear forwards; }
+    @keyframes confetti-fall { to { transform: translateY(110vh) rotate(720deg); opacity: .85; } }
+
+    /* Board completion pulse */
+    .board.pulse { animation: board-pulse .6s ease; }
+    @keyframes board-pulse {
+      0% { box-shadow: 0 0 0 0 rgba(46,204,113,0); }
+      35% { box-shadow: 0 0 0 7px rgba(46,204,113,.4); }
+      100% { box-shadow: 0 0 0 0 rgba(46,204,113,0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .result-fill { transition: none; }
+      .confetti-layer { display: none; }
+      .board.pulse { animation: none; }
+    }
 
     .board-stage { margin: 0 auto; }
 
@@ -408,12 +431,12 @@
 
     <div class="timer-wrap">
       <div class="timer-pill">
-        <span class="label">Time</span>
+        <span class="label">Time left</span>
         <span class="time" id="elapsed">0:00</span>
       </div>
       <div class="sand"><div id="sandBar"></div></div>
       <div class="timer-pill">
-        <span class="label">Best</span>
+        <span class="label">Best $</span>
         <span class="time" id="best">&ndash;</span>
       </div>
     </div>
@@ -463,7 +486,7 @@
             <button class="btn" id="flipBtn" title="Flip the selected brick (or use &uarr; &darr;)">&#8646; Flip</button>
           </div>
           <div class="tray" id="tray"></div>
-          <p class="tray-note">Every brick can be used, and each shows its dollar value. Work out which combination fills the board whereas only some will fit.</p>
+          <p class="tray-note">Every brick shows its dollar value, and each has its own value-per-cell (ROI). The tempting high-ROI bricks are often traps &mdash; grabbing them greedily wrecks the fit. There are many ways to fill the board, but only one reaches the highest Net Value: find the best portfolio, not just any fit.</p>
           <div class="hint-row">
             <button class="btn ghost" id="hintBtn">&#128161; Hint</button>
             <button class="btn ghost" id="solveBtn">Show solution</button>
@@ -526,9 +549,12 @@
       <div class="emoji" id="modalEmoji">&#127881;</div>
       <h3 id="modalTitle">Portfolio packed!</h3>
       <p id="modalSub">You filled the board.</p>
-      <div class="stat">Your time: <b id="modalTime">0:00</b></div>
-      <div class="stat">Net Value: <b id="modalValue">$0</b></div>
+      <div class="result-bar" aria-hidden="true"><div class="result-fill" id="resultFill"></div></div>
+      <div class="stat">Your Net Value: <b id="modalValue">$0</b></div>
+      <div class="stat">Best possible here: <b id="modalBest">$0</b></div>
+      <div class="pb" id="modalPB"></div>
       <div class="actions">
+        <button class="btn" id="modalShare">Share</button>
         <button class="btn" id="modalReplay">Replay</button>
         <button class="btn primary" id="modalNext">Next puzzle</button>
       </div>
@@ -542,21 +568,30 @@
     // ---------- Piece library (polyominoes) ----------
     // Each piece: name, colour, and base cells [row, col].
     // Fixed set: one tromino, three tetrominoes, four pentominoes.
-    // value = dollar worth of the brick. Values are chosen so the value-per-cell
-    // ratios ($/cell) are all distinct, giving the Sahni greedy a strict order:
-    //   Y 1.20 < S 1.25 < N 1.40 < L 1.50 < P 1.60 < I3 1.67 < T 1.75 < L5 1.80
+    // value = dollar worth of the brick. PRICING REWARDS PLACEMENT DIFFICULTY:
+    // a brick is worth more the harder it is to fit into the board, where
+    // difficulty grows with (a) SIZE (more cells take more room) and
+    // (b) STIFFNESS (fewer legal orientations / board placements = less wiggle
+    // room). Equally awkward bricks are priced the same, so total value is a
+    // Each brick has a dollar value chosen so the eight value-per-cell ratios
+    // ($/cell) are all DISTINCT and deliberately deceptive: the highest-ROI
+    // bricks are often NOT the ones an optimal portfolio needs, so a greedy
+    // "best value-per-cell first" player is reliably trapped. This is exactly
+    // what gives the boards their Sahni difficulty. Ratios, high to low:
+    //   L5 $16/5 = 3.20   I3 $9/3 = 3.00   T $11/4 = 2.75   L $10/4 = 2.50
+    //   S  $9/4  = 2.25   N $11/5 = 2.20   Y $7/5  = 1.40   P $6/5  = 1.20
     const LIBRARY = [
       // Tromino (3 cells)
-      { name: 'I3', color: '#1abc9c', value: 5, cells: [[0,0],[1,0],[2,0]] },
+      { name: 'I3', color: '#1abc9c', value: 9, cells: [[0,0],[1,0],[2,0]] },
       // Tetrominoes (4 cells)
-      { name: 'L',  color: '#c9b458', value: 6, cells: [[0,0],[1,0],[2,0],[2,1]] },
-      { name: 'S',  color: '#2ecc71', value: 5, cells: [[0,0],[1,0],[1,1],[2,1]] },
-      { name: 'T',  color: '#3498db', value: 7, cells: [[0,0],[1,0],[1,1],[2,0]] },
+      { name: 'L',  color: '#c9b458', value: 10, cells: [[0,0],[1,0],[2,0],[2,1]] },
+      { name: 'S',  color: '#2ecc71', value: 9, cells: [[0,0],[1,0],[1,1],[2,1]] },
+      { name: 'T',  color: '#3498db', value: 11, cells: [[0,0],[1,0],[1,1],[2,0]] },
       // Pentominoes (5 cells)
-      { name: 'L5', color: '#e67e22', value: 9, cells: [[0,0],[1,0],[2,0],[3,0],[3,1]] },
-      { name: 'Y',  color: '#9b59b6', value: 6, cells: [[0,1],[1,0],[1,1],[2,1],[3,1]] },
-      { name: 'P',  color: '#e74c3c', value: 8, cells: [[0,0],[0,1],[1,0],[1,1],[2,0]] },
-      { name: 'N',  color: '#f1c40f', value: 7, cells: [[0,1],[1,1],[2,0],[2,1],[3,0]] }
+      { name: 'L5', color: '#e67e22', value: 16, cells: [[0,0],[1,0],[2,0],[3,0],[3,1]] },
+      { name: 'Y',  color: '#9b59b6', value: 7, cells: [[0,1],[1,0],[1,1],[2,1],[3,1]] },
+      { name: 'P',  color: '#e74c3c', value: 6, cells: [[0,0],[0,1],[1,0],[1,1],[2,0]] },
+      { name: 'N',  color: '#f1c40f', value: 11, cells: [[0,1],[1,1],[2,0],[2,1],[3,0]] }
     ];
 
     const DIRS = [[-1,0],[1,0],[0,-1],[0,1]];
@@ -771,13 +806,20 @@
       return sols;
     }
 
-    // Tiling stats over any subset of the bricks: number of tilings (capped) and
-    // the maximum total dollar value achievable while exactly filling the region.
+    // Tiling stats over any subset of the bricks: number of tilings (capped), the
+    // maximum total dollar value achievable while exactly filling the region, and
+    // how many distinct tilings attain that maximum (bestCount) — used to ensure
+    // exactly one full cover yields the highest Net Value.
     function analyze(pd, cap) {
-      let count = 0, nodes = 0, capped = false, best = 0; const MAXN = 200000;
+      let count = 0, nodes = 0, capped = false, best = 0, bestCount = 0; const MAXN = 200000;
       (function rec(occ, used, val) {
         if (count >= cap || capped) return;
-        if (occ === pd.full) { count++; if (val > best) best = val; return; }
+        if (occ === pd.full) {
+          count++;
+          if (val > best) { best = val; bestCount = 1; }
+          else if (val === best) { bestCount++; }
+          return;
+        }
         if (++nodes > MAXN) { capped = true; return; }
         const cell = firstEmpty(pd, occ);
         for (const pl of pd.byCell[cell]) {
@@ -787,7 +829,7 @@
           if (count >= cap || capped) return;
         }
       })(0n, 0, 0);
-      return { count: count, capped: capped, bestValue: best };
+      return { count: count, capped: capped, bestValue: best, bestCount: bestCount };
     }
 
     // The full eight-piece set, with orientations precomputed once.
@@ -885,6 +927,7 @@
     // ---------- Game state ----------
     let state = null;
     let timer = { start: 0, interval: null, elapsed: 0, running: false };
+    let sessionRounds = 0;   // puzzles started this browser session
 
     const $ = sel => document.querySelector(sel);
     const boardEl = $('#board');
@@ -904,46 +947,72 @@
     }
 
     // Difficulty is the value-ratio Sahni kappa over the FULL eight-piece set.
-    // Easy: a small (14-cell) outline the ratio-greedy nearly solves (kappa <= 1).
-    // Hard: a larger (18-cell) outline where the ratio-greedy is badly trapped
-    // (kappa >= 3). All eight bricks are always available either way.
-    const ACCEPT = { easy: k => k <= 1, hard: k => k >= 3 };
+    // Easy: a small (14-cell) outline where the ratio-greedy needs one or two
+    // hand-placed hints (kappa = 1 or 2).
+    // Hard: a larger (18-cell) outline where the ratio-greedy is badly trapped and
+    // needs at least three hand-placed hints (kappa >= 3) - at the ceiling of what
+    // the deceptive eight-piece set reaches at this size. All eight bricks are
+    // always available either way; every board has many full covers but a single
+    // best one (highest Net Value) to find (see pickPuzzle).
+    const ACCEPT = { easy: k => k >= 1 && k <= 2, hard: k => k >= 3 };
+
+    // Enumeration cap: high enough that every accepted board is fully enumerated
+    // (so its tiling count and unique-optimum status are exact, not truncated).
+    const ENUM_CAP = 5000;
 
     function evaluate(puzzle) {
       const pd = buildPlacements(puzzle.region, allPieces());
-      const st = analyze(pd, 3000);
+      const st = analyze(pd, ENUM_CAP);
+      // "complete" => we enumerated every tiling (neither the node nor the count
+      // budget was hit), so bestCount is the true number of optimum-value covers.
+      const complete = !st.capped && st.count < ENUM_CAP;
       return {
         puzzle: puzzle, kappa: sahniDifficulty(pd),
-        tilings: { count: st.count, capped: st.capped }, bestValue: st.bestValue
+        tilings: { count: st.count, capped: st.capped, complete: complete },
+        bestValue: st.bestValue, bestCount: st.bestCount
       };
+    }
+
+    // Every board must offer MANY full covers but a SINGLE best one: there are
+    // >= MIN_SOLUTIONS distinct ways to tile the outline, yet exactly one of them
+    // attains the highest Net Value (bestCount === 1). The player's job is to find
+    // that uniquely optimal portfolio, not just any cover.
+    const MIN_SOLUTIONS = 3;
+    function qualifies(cand) {
+      return cand.tilings.complete && cand.tilings.count >= MIN_SOLUTIONS && cand.bestCount === 1;
     }
 
     function pickPuzzle(diff) {
       const target = DIFFS[diff].cells;
-      const deadline = Date.now() + 280;
-      let bestThree = null, bestAny = null;  // bestThree: has >= MIN_SOLUTIONS tilings
-      const MIN_SOLUTIONS = 3;               // every board must be fillable >= 3 ways
-      for (let t = 0; t < 400; t++) {
+      // Hard never early-returns (it hunts for the maximum kappa), so give it a
+      // larger time budget to scan more boards; easy early-returns and stays snappy.
+      const deadline = Date.now() + (diff === 'hard' ? 650 : 360);
+      let bestOk = null, bestAny = null;  // bestOk: many covers + unique optimum
+      for (let t = 0; t < 900; t++) {
         const puzzle = generatePuzzle(target);
         if (!puzzle) continue;
         const cand = evaluate(puzzle);
-        const has3 = cand.tilings.count >= MIN_SOLUTIONS;
-        if (has3 && ACCEPT[diff](cand.kappa)) return cand;   // ideal: right difficulty + enough ways
-        if (has3) {
-          const score = (diff === 'hard' ? cand.kappa : -cand.kappa); // hard: max kappa; easy: min
-          if (!bestThree || score > bestThree.score) { cand.score = score; bestThree = cand; }
+        const ok = qualifies(cand);
+        if (ok && diff === 'easy' && ACCEPT.easy(cand.kappa)) return cand;  // easy: the first low-kappa board is fine
+        if (ok) {
+          // Track the qualifying board closest to the target band (easy: lowest
+          // kappa; hard: highest). For HARD we deliberately never early-return -
+          // we scan the whole budget and ship the HARDEST board found (maximum
+          // Sahni kappa), not merely the first that clears kappa >= 3.
+          const score = (diff === 'hard' ? cand.kappa : -cand.kappa);
+          if (!bestOk || score > bestOk.score) { cand.score = score; bestOk = cand; }
         }
-        if (!bestAny || cand.tilings.count > bestAny.tilings.count) bestAny = cand;
-        if (Date.now() > deadline) break;
+        if (!bestAny) bestAny = cand;
+        if (Date.now() > deadline && bestOk) break;
       }
-      // Guarantee the >= 3 ways requirement even if the difficulty band was never hit.
-      for (let t = 0; t < 400 && !bestThree; t++) {
+      // Guarantee the many-covers + unique-optimum requirement even if the band was never hit.
+      for (let t = 0; t < 900 && !bestOk; t++) {
         const puzzle = generatePuzzle(target);
         if (!puzzle) continue;
         const cand = evaluate(puzzle);
-        if (cand.tilings.count >= MIN_SOLUTIONS) bestThree = cand;
+        if (qualifies(cand)) bestOk = cand;
       }
-      return bestThree || bestAny || evaluate(generatePuzzle(target));
+      return bestOk || bestAny || evaluate(generatePuzzle(target));
     }
 
     function newGame(diff) {
@@ -970,8 +1039,12 @@
         selected: null,
         milestones: new Set(),
         timeNudges: new Set(),
+        ended: false,
+        wasFull: false,
+        wasOptimal: false,
         cs: cellSize(puzzle.rows, puzzle.cols)
       };
+      sessionRounds++;
       lastAction = Date.now(); lastCheer = 0; lastIdle = 0;
       if (nudgeEl) nudgeEl.className = 'nudge';
       renderBoard();
@@ -1143,10 +1216,17 @@
         wrap.title = p.name + ': ' + money(p.value) + ' (' + p.oris[0].length + ' cells, ' +
           money(Math.round(p.value / p.oris[0].length)) + '/cell)';
         wrap.appendChild(pieceGrid(oriCells(p), p.color));
+        const label = document.createElement('div');
+        label.className = 'plabel';
+        const nameEl = document.createElement('div');
+        nameEl.className = 'pname';
+        nameEl.textContent = p.name;                 // reference name, e.g. I3, L5 (matches solutions list & note)
         const tag = document.createElement('div');
         tag.className = 'pval';
         tag.textContent = money(p.value);
-        wrap.appendChild(tag);
+        label.appendChild(nameEl);
+        label.appendChild(tag);
+        wrap.appendChild(label);
         if (!p.placed) {
           wrap.addEventListener('click', () => {
             state.selected = (state.selected === p.id) ? null : p.id;
@@ -1190,6 +1270,7 @@
     }
 
     function onCellClick(e) {
+      if (state.ended) return;
       const r = +e.currentTarget.dataset.r, c = +e.currentTarget.dataset.c;
       const k = r + ',' + c;
       // If clicking an occupied cell, pick that piece back up.
@@ -1215,6 +1296,7 @@
     }
 
     function removePiece(instId) {
+      if (state.ended) return;
       lastAction = Date.now();
       const p = state.pieces.find(pp => pp.id === instId);
       if (!p || !p.placed) return;
@@ -1232,18 +1314,26 @@
     }
 
     function checkWin() {
-      // The board is won when the outline is completely covered, regardless of
-      // which subset of the eight bricks was used to do it.
+      // Filling the board no longer ends the round: the deadline does. Each time
+      // the outline is fully covered we celebrate, but the player keeps going and
+      // can rearrange bricks to push their Net Value higher until time runs out.
       let allFilled = true;
       for (const k of state.region) { if (!state.occupied.has(k)) { allFilled = false; break; } }
       if (allFilled) {
-        stopTimer();
-        const t = timer.elapsed;
-        const best = saveBest(state.diff, t);
-        const val = placedValue();
-        setStatus('Portfolio packed in ' + fmt(t) + ' for ' + money(val) + '.', 'win');
-        showWin(t, best, val);
+        const val = placedValue();                 // full board => Net Value = total value
+        const optimal = val >= state.bestValue;
+        if (!state.wasFull) { boardEl.classList.add('pulse'); setTimeout(() => boardEl.classList.remove('pulse'), 600); }
+        if (optimal && !state.wasOptimal) confetti();
+        state.wasFull = true; state.wasOptimal = optimal;
+        if (optimal) {
+          setStatus('Top-value portfolio! Net ' + money(val) + ', the maximum here. Hold it until time runs out.', 'win');
+          nudge('🏆 Maximum value reached: Net ' + money(val) + '. Keep it until the buzzer!', 'cheer');
+        } else {
+          setStatus('Board filled at Net ' + money(val) + '. Best possible here is ' + money(state.bestValue) + '. Rearrange to raise it before time runs out.', 'win');
+          nudge('🎉 Board filled at Net ' + money(val) + '. Can you reach ' + money(state.bestValue) + '? Keep trying!', 'cheer');
+        }
       } else {
+        state.wasFull = false; state.wasOptimal = false;
         setStatus('Keep going. Find the bricks that fill the rest.', '');
       }
     }
@@ -1275,6 +1365,7 @@
     }
 
     function hint() {
+      if (state.ended) return;
       const next = state.solution.find(sol => {
         return !sol.cells.every(([r, c]) => {
           const inst = state.occupied.get(r + ',' + c);
@@ -1313,6 +1404,7 @@
         bestVal = state.bestValue;
       }
       state.selected = null;
+      state.ended = true;
       stopTimer();
       renderBoard(); renderTray(); renderKPIs();
       setStatus('Highest-value solution shown (Net ' + money(bestVal) + '). Hit “New puzzle” for another.', '');
@@ -1340,9 +1432,9 @@
       if (timer.interval) { clearInterval(timer.interval); timer.interval = null; }
     }
     function updateTimerUI() {
-      $('#elapsed').textContent = fmt(timer.elapsed);
       const limit = DIFFS[state ? state.diff : 'easy'].limit;
       const remaining = Math.max(0, limit - timer.elapsed);
+      $('#elapsed').textContent = fmt(remaining);
       const pct = Math.max(0, (remaining / limit) * 100);
       const bar = $('#sandBar');
       bar.style.width = pct + '%';
@@ -1356,9 +1448,9 @@
           const label = remaining >= 60 ? '1 minute' : remaining + ' seconds';
           nudge('⏳ ' + label + ' left to submit your solution!', remaining <= 15 ? 'urgent' : 'time');
         }
-        if (remaining === 0 && !state.timeNudges.has(0)) {
-          state.timeNudges.add(0);
-          nudge('⏳ Time is up! Place what you can and submit your best.', 'urgent');
+        if (remaining === 0 && !state.ended) {
+          endRound();
+          return;
         }
         const now = Date.now();
         if (remaining > 12 && state.occupied.size < state.region.size &&
@@ -1374,19 +1466,20 @@
     }
 
     // ---------- Best times ----------
-    function bestKey(diff) { return 'ubongo.best.' + diff; }
+    // Personal best is now the highest Net Value reached for a difficulty.
+    function bestKey(diff) { return 'portfoliofit.bestnet.' + diff; }
     function loadBest(diff) {
       const v = localStorage.getItem(bestKey(diff));
-      return v ? parseInt(v, 10) : null;
+      return v === null ? null : parseFloat(v);
     }
-    function saveBest(diff, t) {
+    function saveBest(diff, net) {
       const cur = loadBest(diff);
-      if (cur === null || t < cur) { localStorage.setItem(bestKey(diff), String(t)); updateBestUI(); return true; }
+      if (cur === null || net > cur) { localStorage.setItem(bestKey(diff), String(net)); updateBestUI(); return true; }
       return false;
     }
     function updateBestUI() {
       const b = loadBest(state ? state.diff : 'easy');
-      $('#best').textContent = b === null ? '–' : fmt(b);
+      $('#best').textContent = b === null ? '–' : money(b);
     }
 
     function setStatus(msg, cls) {
@@ -1394,19 +1487,85 @@
       statusEl.className = 'status' + (cls ? ' ' + cls : '');
     }
 
-    // ---------- Win modal ----------
-    function showWin(t, isBest, val) {
-      const optimal = val >= state.bestValue;
-      $('#modalTime').textContent = fmt(t);
-      $('#modalEmoji').textContent = optimal ? '🏆' : (isBest ? '⏱️' : '🎉');
-      $('#modalTitle').textContent = optimal ? 'Top-value portfolio!' : 'Portfolio packed!';
+    // ---------- End of round (deadline reached) ----------
+    function currentNet() { return placedValue() - (state.region.size - state.occupied.size); }
+
+    function endRound() {
+      if (state.ended) return;
+      state.ended = true;
+      stopTimer();
+      state.selected = null; clearPreview();
+      renderBoard(); renderTray(); renderKPIs();
+      const net = currentNet();
+      const isHigh = saveBest(state.diff, net);
+      showEnd(net, isHigh);
+    }
+
+    function confetti(n) {
+      n = n || 90;
+      const colors = ['#e67e22', '#2ecc71', '#3498db', '#e74c3c', '#f1c40f', '#9b59b6'];
+      const layer = document.createElement('div'); layer.className = 'confetti-layer';
+      for (let i = 0; i < n; i++) {
+        const p = document.createElement('i');
+        p.style.left = (Math.random() * 100) + 'vw';
+        p.style.background = colors[i % colors.length];
+        p.style.animationDelay = (Math.random() * 0.4) + 's';
+        p.style.animationDuration = (2.2 + Math.random() * 1.6) + 's';
+        p.style.opacity = (0.7 + Math.random() * 0.3).toFixed(2);
+        layer.appendChild(p);
+      }
+      document.body.appendChild(layer);
+      setTimeout(() => layer.remove(), 4400);
+    }
+
+    function showEnd(net, isHigh) {
+      const full = state.occupied.size === state.region.size;
+      const optimal = full && net >= state.bestValue;
+      state.lastNet = net; state.lastOptimal = optimal;   // for the Share button
+      $('#modalEmoji').textContent = optimal ? '🏆' : (full ? '🎉' : '⏱️');
+      $('#modalTitle').textContent = optimal ? 'Optimal portfolio!' : "Time's up!";
       $('#modalSub').textContent = optimal
-        ? 'You filled the board with the highest-value bricks possible.'
-        : 'You filled the board. Best-value fill here was ' + money(state.bestValue) + '.';
-      $('#modalValue').textContent = money(val) + ' / ' + money(state.bestValue);
+        ? 'You finished with the highest-value portfolio possible here.'
+        : (isHigh ? '🌟 New personal best for this difficulty!' : 'Here is how your portfolio scored.');
+      $('#modalValue').textContent = money(net);
+      $('#modalBest').textContent = money(state.bestValue);
+      // Net-vs-best progress bar (animate from 0).
+      const ratio = state.bestValue > 0 ? Math.max(0, Math.min(1, net / state.bestValue)) : 0;
+      const fill = $('#resultFill');
+      fill.style.background = optimal ? 'linear-gradient(90deg,#2ecc71,#27ae60)'
+        : ratio >= 0.66 ? 'linear-gradient(90deg,#2ecc71,#f1c40f)'
+        : ratio >= 0.33 ? 'linear-gradient(90deg,#f1c40f,#e67e22)'
+        : 'linear-gradient(90deg,#e67e22,#e74c3c)';
+      fill.style.width = '0%';
+      setTimeout(() => { fill.style.width = Math.round(ratio * 100) + '%'; }, 60);
+      // Personal bests + session count.
+      const eb = loadBest('easy'), hb = loadBest('hard');
+      $('#modalPB').innerHTML = 'Personal bests &middot; Easy <b>' + (eb === null ? '–' : money(eb)) +
+        '</b> &middot; Hard <b>' + (hb === null ? '–' : money(hb)) + '</b><br>Puzzle ' + sessionRounds + ' this session';
       $('#overlay').classList.add('show');
+      if (optimal) confetti(130);
     }
     function hideWin() { $('#overlay').classList.remove('show'); }
+
+    function shareResult() {
+      const btn = $('#modalShare');
+      const diffName = state.diff === 'hard' ? 'Hard' : 'Easy';
+      const txt = 'PortfolioFit (' + diffName + '): Net ' + money(state.lastNet) + ' / ' + money(state.bestValue) +
+        (state.lastOptimal ? ' 🏆 optimal!' : '') + ' | https://www.stouras.com/lab/portfoliofit/';
+      const done = () => { const o = btn.dataset.label || 'Share'; btn.textContent = 'Copied!'; setTimeout(() => { btn.textContent = o; }, 1500); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(done).catch(() => fallbackCopy(txt, done));
+      } else { fallbackCopy(txt, done); }
+    }
+    function fallbackCopy(text, cb) {
+      try {
+        const ta = document.createElement('textarea'); ta.value = text;
+        ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta);
+        if (cb) cb();
+      } catch (e) { /* clipboard unavailable */ }
+    }
 
     // ---------- Verification: solutions list + Sahni proof ----------
     function openInfo(title, bodyNode) {
@@ -1586,9 +1745,16 @@
     });
     $('#newBtn').addEventListener('click', () => { hideWin(); newGame(state.diff); });
     $('#restartBtn').addEventListener('click', () => {
+      hideWin();
       state.occupied.clear();
       state.pieces.forEach(p => { p.placed = false; p.placedCells = null; });
       state.selected = null;
+      state.ended = false;
+      state.wasFull = false;
+      state.wasOptimal = false;
+      state.milestones = new Set();
+      state.timeNudges = new Set();
+      if (nudgeEl) nudgeEl.className = 'nudge';
       renderBoard(); renderTray(); renderKPIs();
       resetTimer(); startTimer();
       setStatus('Board reset. Go again!', '');
@@ -1602,6 +1768,7 @@
       $('#restartBtn').click();
     });
     $('#modalNext').addEventListener('click', () => { hideWin(); newGame(state.diff); });
+    $('#modalShare').addEventListener('click', shareResult);
     $('#overlay').addEventListener('click', e => { if (e.target === $('#overlay')) hideWin(); });
     $('#solBtn').addEventListener('click', showSolutions);
     $('#proofBtn').addEventListener('click', showProof);
@@ -1653,7 +1820,7 @@
       'coverage': 'Percentage of the outline covered by bricks: occupied cells ÷ total cells × 100.',
       'value-resource': 'Efficiency: value generated per occupied cell (Total Value ÷ number of occupied cells).',
       'portfolio-fitness': 'A geometric compactness score: your bricks as a share of the fillable cells inside their convex hull. A contiguous, gap-free cluster scores 100%; spreading bricks apart or leaving gaps between them lowers it.',
-      'difficulty': 'Two readouts of how hard this board is. Sahni κ: the fewest correctly-placed bricks after which a simple value-ratio greedy can finish without getting stuck (higher = harder). Distinct solutions: how many different brick combinations fill this exact outline (fewer = harder; 1 means a unique answer).'
+      'difficulty': 'Two readouts of how hard this board is. Sahni κ: the fewest correctly-placed bricks after which a simple value-ratio greedy can finish without getting stuck (higher = harder). Distinct solutions: how many different brick combinations fill this exact outline. Every board offers several full covers, but exactly ONE of them reaches the highest Net Value — that unique optimum is what you are hunting for.'
     };
     const tipEl = $('#kpiTip');
     let tipFor = null;

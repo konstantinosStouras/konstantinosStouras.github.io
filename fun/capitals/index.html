@@ -1,0 +1,1495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Capitals · Learn the Capital of Every Country · stouras.com</title>
+
+<!-- SEO -->
+<meta name="description" content="Capitals is a friendly quiz that teaches you the capital city of every country in the world, one country at a time, with graduated hints and a fact card after every answer. Your progress is saved under your nickname.">
+<meta name="keywords" content="world capitals, capital cities quiz, geography game, learn capitals, countries and capitals, stouras">
+<meta name="author" content="Konstantinos Stouras">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://stouras.com/fun/capitals/">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Capitals — Learn the capital of every country">
+<meta property="og:description" content="A friendly quiz that teaches you the capital of every country, with graduated hints, a fact card after each answer, and progress saved under your nickname.">
+<meta property="og:url" content="https://stouras.com/fun/capitals/">
+<meta property="og:site_name" content="stouras.com">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Capitals — Learn the capital of every country">
+<meta name="twitter:description" content="A friendly quiz that teaches you the capital of every country in the world.">
+
+<!-- Favicon: real PNG icons plus a scalable inline SVG globe -->
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%230b1b2b'/%3E%3Ccircle%20cx='50'%20cy='50'%20r='30'%20fill='none'%20stroke='%2338bdf8'%20stroke-width='5'/%3E%3Cellipse%20cx='50'%20cy='50'%20rx='13'%20ry='30'%20fill='none'%20stroke='%2338bdf8'%20stroke-width='4'/%3E%3Cline%20x1='20'%20y1='50'%20x2='80'%20y2='50'%20stroke='%2338bdf8'%20stroke-width='4'/%3E%3Cline%20x1='25'%20y1='34'%20x2='75'%20y2='34'%20stroke='%2338bdf8'%20stroke-width='3'/%3E%3Cline%20x1='25'%20y1='66'%20x2='75'%20y2='66'%20stroke='%2338bdf8'%20stroke-width='3'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#0b1b2b">
+
+<style>
+  :root {
+    --bg: #07131f;
+    --bg-2: #0b1b2b;
+    --panel: #0f2336;
+    --panel-2: #143049;
+    --line: rgba(255,255,255,0.08);
+    --accent: #38bdf8;
+    --accent-2: #22d3ee;
+    --good: #34d399;
+    --good-2: #10b981;
+    --warn: #fbbf24;
+    --bad: #fb7185;
+    --text: #e8f1f8;
+    --muted: #93b0c6;
+    --muted-2: #6f8da3;
+    --tile: #0b2034;
+    --shadow: 0 24px 60px rgba(0,0,0,0.45);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: radial-gradient(1200px 800px at 50% -8%, #11263a 0%, var(--bg) 62%);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    line-height: 1.5;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom));
+  }
+  a { color: var(--accent); }
+
+  .wrap { max-width: 760px; margin: 0 auto; }
+
+  /* ---------- Header ---------- */
+  header.app {
+    display: flex; align-items: center; gap: 12px;
+    flex-wrap: wrap; justify-content: space-between;
+    margin-bottom: 18px;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .brand .logo {
+    width: 42px; height: 42px; border-radius: 12px; flex: none;
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    border: 1px solid var(--line);
+    display: grid; place-items: center; font-size: 22px;
+  }
+  .brand h1 {
+    margin: 0; font-size: clamp(20px, 4.4vw, 28px); line-height: 1.05; font-weight: 800;
+    letter-spacing: 0.3px;
+    background: linear-gradient(90deg, var(--accent), #a5f3fc);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .brand p { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
+  .who { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .who .pill {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+    padding: 6px 12px; font-size: 13px; color: var(--text);
+    display: inline-flex; align-items: center; gap: 7px;
+  }
+  .who .pill b { color: var(--accent); font-weight: 700; }
+
+  /* language flag switcher */
+  .lang-switch { display: inline-flex; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
+  .flag-btn {
+    appearance: none; border: 1px solid transparent; background: transparent; cursor: pointer;
+    font-size: 18px; line-height: 1; padding: 4px 8px; border-radius: 999px;
+    filter: grayscale(0.9) opacity(0.55); transition: filter .15s ease, background .15s ease, border-color .15s ease;
+  }
+  .flag-btn:hover { filter: grayscale(0.2) opacity(0.9); }
+  .flag-btn.active { filter: none; background: var(--panel-2); border-color: var(--accent); }
+
+  button, select, input { font-family: inherit; }
+  .btn {
+    appearance: none; border: 1px solid var(--line); cursor: pointer;
+    background: var(--panel); color: var(--text);
+    padding: 9px 14px; border-radius: 11px; font-size: 14px; font-weight: 600;
+    transition: transform .05s ease, background .15s ease, border-color .15s ease;
+  }
+  .btn:hover { background: var(--panel-2); }
+  .btn:active { transform: translateY(1px); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn.small { padding: 6px 11px; font-size: 13px; border-radius: 9px; }
+  .btn.ghost { background: transparent; }
+  .btn.primary {
+    background: linear-gradient(180deg, var(--accent), #0ea5e9);
+    border-color: transparent; color: #04212f; font-weight: 800;
+  }
+  .btn.primary:hover { filter: brightness(1.05); background: linear-gradient(180deg, var(--accent), #0ea5e9); }
+  .btn.good {
+    background: linear-gradient(180deg, var(--good), var(--good-2));
+    border-color: transparent; color: #042b1f; font-weight: 800;
+  }
+  .btn.good:hover { filter: brightness(1.05); }
+
+  /* ---------- Toolbar ---------- */
+  .toolbar {
+    display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+    margin-bottom: 14px;
+  }
+  .field { display: flex; align-items: center; gap: 7px; }
+  .field label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+  select {
+    background: var(--panel); color: var(--text); border: 1px solid var(--line);
+    border-radius: 10px; padding: 8px 10px; font-size: 14px;
+  }
+  .spacer { flex: 1 1 auto; }
+
+  /* ---------- Card ---------- */
+  .card {
+    background: linear-gradient(180deg, var(--panel), #0c1d2e);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 22px;
+  }
+  .q-flag { font-size: 54px; line-height: 1; }
+  .q-region { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; margin-top: 6px; }
+  .q-text { font-size: clamp(20px, 4.6vw, 27px); font-weight: 800; margin: 8px 0 0; }
+  .q-text .country { color: var(--accent-2); }
+
+  /* answer input */
+  .answer-row { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+  .answer-row input[type=text] {
+    flex: 1 1 220px; min-width: 0;
+    background: var(--tile); color: var(--text);
+    border: 1.5px solid var(--line); border-radius: 12px;
+    padding: 13px 15px; font-size: 18px; font-weight: 600; letter-spacing: .3px;
+    outline: none; transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  .answer-row input[type=text]::placeholder { color: var(--muted); font-weight: 500; }
+  .answer-row input[type=text]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(56,189,248,0.18); }
+  .answer-row input.shake { animation: shake .4s; border-color: var(--bad); }
+  @keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-7px)} 40%{transform:translateX(7px)} 60%{transform:translateX(-5px)} 80%{transform:translateX(5px)} }
+
+  .hint-bar { display: flex; gap: 9px; flex-wrap: wrap; margin-top: 14px; align-items: center; }
+
+  /* feedback */
+  .feedback { margin-top: 14px; min-height: 22px; font-size: 14px; font-weight: 600; }
+  .feedback.ok { color: var(--good); }
+  .feedback.no { color: var(--bad); }
+  .feedback.info { color: var(--muted); }
+
+  /* masked letters */
+  .mask { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 16px; }
+  .mask .word { display: flex; gap: 6px; }
+  .tile {
+    width: 26px; height: 34px; border-radius: 7px;
+    background: var(--tile); border: 1px solid var(--line);
+    display: grid; place-items: center;
+    font-size: 18px; font-weight: 800; text-transform: uppercase;
+    color: var(--accent);
+  }
+  .tile.blank { color: transparent; }
+  .tile.punct { width: 14px; background: transparent; border: none; color: var(--muted); }
+  .mask-note { font-size: 13px; color: var(--muted); margin-top: 10px; }
+
+  /* ---------- Reveal / facts ---------- */
+  .reveal { margin-top: 4px; }
+  .reveal.hidden { display: none; }
+  .answer-banner {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    background: linear-gradient(180deg, rgba(52,211,153,0.16), rgba(16,185,129,0.06));
+    border: 1px solid rgba(52,211,153,0.35);
+    border-radius: 14px; padding: 14px 16px; margin-top: 18px;
+  }
+  .answer-banner.learned {
+    background: linear-gradient(180deg, rgba(251,191,36,0.14), rgba(251,191,36,0.04));
+    border-color: rgba(251,191,36,0.35);
+  }
+  .answer-banner .lbl { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+  .answer-banner .cap { font-size: clamp(22px, 5vw, 30px); font-weight: 800; color: var(--text); }
+  .answer-banner .cap .of { color: var(--muted); font-weight: 600; font-size: 16px; }
+  .award { margin-left: auto; text-align: right; }
+  .award .pts { font-size: 22px; font-weight: 800; color: var(--good); }
+  .award .pts.zero { color: var(--warn); }
+  .award .stars { font-size: 15px; letter-spacing: 2px; }
+
+  .facts { margin-top: 16px; }
+  .facts h3 {
+    font-size: 13px; text-transform: uppercase; letter-spacing: .12em;
+    color: var(--accent); margin: 0 0 8px;
+  }
+  .facts p {
+    margin: 0 0 12px; font-size: 15.5px; color: #d7e6f1;
+    padding-left: 14px; border-left: 2px solid var(--line);
+  }
+  .facts p:last-child { margin-bottom: 0; }
+
+  .next-row { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; align-items: center; }
+  .next-row .seen { font-size: 13px; color: var(--muted); margin-left: auto; }
+
+  /* ---------- Modal ---------- */
+  .overlay {
+    position: fixed; inset: 0; z-index: 50;
+    background: rgba(3,10,18,0.72); backdrop-filter: blur(5px);
+    display: grid; place-items: center; padding: 20px;
+  }
+  .overlay.hidden { display: none; }
+  .modal {
+    width: 100%; max-width: 460px;
+    background: linear-gradient(180deg, var(--panel), #0c1d2e);
+    border: 1px solid var(--line); border-radius: 18px;
+    box-shadow: var(--shadow); padding: 24px;
+  }
+  .modal.wide { max-width: 620px; }
+  .modal h2 { margin: 0 0 4px; font-size: 22px; }
+  .modal .sub { margin: 0 0 18px; color: var(--muted); font-size: 14px; }
+  .modal input[type=text] {
+    width: 100%; background: var(--tile); color: var(--text);
+    border: 1.5px solid var(--line); border-radius: 12px;
+    padding: 13px 15px; font-size: 17px; font-weight: 600; outline: none;
+  }
+  .modal input[type=text]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(56,189,248,0.18); }
+  .modal .row { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+  .modal .err { color: var(--bad); font-size: 13px; margin-top: 8px; min-height: 16px; }
+  .known {
+    margin-top: 16px; border-top: 1px solid var(--line); padding-top: 14px;
+  }
+  .known .lbl { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 8px; }
+  .known .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px;
+    padding: 6px 12px; font-size: 13px; cursor: pointer; color: var(--text);
+  }
+  .chip:hover { border-color: var(--accent); }
+  .modal-close { position: relative; }
+  .x-btn {
+    position: absolute; top: -8px; right: -6px;
+    background: transparent; border: none; color: var(--muted);
+    font-size: 22px; cursor: pointer; line-height: 1;
+  }
+  .x-btn:hover { color: var(--text); }
+
+  /* ---------- Leaderboard ---------- */
+  .board-tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 4px 0 14px; }
+  .board-tools .lbl { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+  .sortbtn { background: var(--tile); border: 1px solid var(--line); color: var(--muted); border-radius: 999px; padding: 5px 11px; font-size: 12.5px; cursor: pointer; font-weight: 600; }
+  .sortbtn.active { background: var(--panel-2); color: var(--accent); border-color: var(--accent); }
+  .board-scroll { max-height: 56vh; overflow-y: auto; margin: 0 -4px; }
+  table.board { width: 100%; border-collapse: collapse; font-size: 14px; }
+  table.board th, table.board td { padding: 9px 8px; text-align: right; white-space: nowrap; }
+  table.board th { position: sticky; top: 0; background: #0c1d2e; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; border-bottom: 1px solid var(--line); z-index: 1; }
+  table.board th.l, table.board td.l { text-align: left; }
+  table.board tbody tr { border-bottom: 1px solid rgba(255,255,255,0.05); }
+  table.board tbody tr.me { background: rgba(56,189,248,0.10); }
+  table.board td.rank { font-variant-numeric: tabular-nums; color: var(--muted); width: 34px; }
+  table.board td.name { font-weight: 700; color: var(--text); max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+  table.board td.name .youtag { font-size: 10px; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 1px 6px; margin-left: 6px; vertical-align: middle; }
+  table.board td.pts { font-weight: 800; color: var(--good); font-variant-numeric: tabular-nums; }
+  table.board td.num { font-variant-numeric: tabular-nums; color: #cfe1ee; }
+  .medal { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 999px; font-size: 11px; font-weight: 800; color: #04212f; }
+  .medal.g { background: linear-gradient(180deg,#fde68a,#f59e0b); }
+  .medal.s { background: linear-gradient(180deg,#e5e7eb,#9ca3af); }
+  .medal.b { background: linear-gradient(180deg,#fcd9b6,#d08a52); }
+  .board-empty { color: var(--muted); font-size: 14px; padding: 18px 4px; text-align: center; }
+  .board-note { font-size: 12px; color: var(--muted); margin-top: 12px; }
+  .board-scope { display: inline-block; font-size: 12px; font-weight: 700; margin: 2px 0 8px;
+    padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: var(--tile); }
+  .board-scope.global { color: var(--good); border-color: rgba(52,211,153,0.4); }
+
+  /* ---------- Stats ---------- */
+  .stat-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 10px; margin: 6px 0 18px;
+  }
+  .stat {
+    background: var(--tile); border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px;
+  }
+  .stat .v { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .stat .v.good { color: var(--good); }
+  .stat .v.accent { color: var(--accent); }
+  .stat .k { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-top: 2px; }
+
+  .chart-h { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin: 4px 0 10px; }
+  .bars { display: flex; align-items: flex-end; gap: 5px; height: 90px; }
+  .bars .col { flex: 1 1 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; height: 100%; }
+  .bars .bar {
+    width: 100%; max-width: 22px; border-radius: 4px 4px 2px 2px;
+    background: linear-gradient(180deg, var(--accent), #0ea5e9); min-height: 2px;
+  }
+  .bars .bar.empty { background: var(--line); }
+  .bars .tip { font-size: 9px; color: var(--muted); }
+  .chart-legend { font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+  .prog-track { height: 10px; background: var(--tile); border: 1px solid var(--line); border-radius: 999px; overflow: hidden; margin-top: 4px; }
+  .prog-fill { height: 100%; background: linear-gradient(90deg, var(--good), var(--accent)); width: 0%; transition: width .4s ease; }
+
+  footer.app {
+    text-align: center; color: var(--muted); font-size: 12px;
+    margin-top: 26px; padding-top: 14px; border-top: 1px solid var(--line);
+  }
+  footer.app a { color: var(--muted); text-decoration: none; }
+  footer.app a:hover { color: var(--accent); }
+
+  @media (max-width: 480px) {
+    .card { padding: 18px; }
+    .tile { width: 22px; height: 30px; font-size: 16px; }
+    .q-flag { font-size: 46px; }
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+
+    <header class="app">
+      <div class="brand">
+        <div class="logo" aria-hidden="true">🌍</div>
+        <div>
+          <h1>Capitals</h1>
+          <p data-i18n="tagline">Learn the capital of every country</p>
+        </div>
+      </div>
+      <div class="who">
+        <span class="lang-switch" role="group" aria-label="Language">
+          <button class="flag-btn" id="langEn" data-lang="en" title="English" aria-label="English">🇬🇧</button>
+          <button class="flag-btn" id="langEl" data-lang="el" title="Ελληνικά" aria-label="Ελληνικά">🇬🇷</button>
+        </span>
+        <span class="pill" id="whoPill" title="Your nickname">👤 <b id="whoName">—</b></span>
+        <button class="btn small ghost" id="statsBtn" data-i18n="myProgress">My progress</button>
+        <button class="btn small ghost" id="boardBtn" data-i18n="leaderboard">Leaderboard</button>
+        <button class="btn small ghost" id="switchBtn" data-i18n="switch">Switch</button>
+      </div>
+    </header>
+
+    <div class="toolbar">
+      <div class="field">
+        <label for="regionSel" data-i18n="region">Region</label>
+        <select id="regionSel"></select>
+      </div>
+      <div class="spacer"></div>
+      <span class="pill" id="streakPill" title="Correct answers in a row" style="background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px;">🔥 <span data-i18n="streak">Streak</span> <b style="color:var(--warn)" id="streakVal">0</b></span>
+    </div>
+
+    <main class="card" id="quizCard">
+      <div class="q-flag" id="qFlag">🏳️</div>
+      <div class="q-region" id="qRegion"></div>
+      <h2 class="q-text" id="qText">What is the capital of <span class="country" id="qCountry">…</span>?</h2>
+
+      <div id="askBlock">
+        <div class="answer-row">
+          <input type="text" id="answerInput" placeholder="Type the capital city…" data-i18n-ph="answerPh" autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="go">
+          <button class="btn primary" id="submitBtn" data-i18n="check">Check</button>
+        </div>
+
+        <div class="hint-bar">
+          <button class="btn" id="hintBtn">Need a hint</button>
+          <button class="btn ghost small" id="revealBtn" data-i18n="showAnswer">Show the answer</button>
+        </div>
+
+        <div class="feedback info" id="feedback"></div>
+
+        <div class="mask" id="mask"></div>
+        <div class="mask-note" id="maskNote"></div>
+      </div>
+
+      <div class="reveal hidden" id="reveal">
+        <div class="answer-banner" id="answerBanner">
+          <div>
+            <div class="lbl" id="bannerLbl">Correct</div>
+            <div class="cap" id="capLine"></div>
+          </div>
+          <div class="award" id="award">
+            <div class="pts" id="awardPts">+0</div>
+            <div class="stars" id="awardStars"></div>
+          </div>
+        </div>
+
+        <div class="facts">
+          <h3 data-i18n="didYouKnow">Did you know?</h3>
+          <p id="fact1"></p>
+          <p id="fact2"></p>
+        </div>
+
+        <div class="next-row">
+          <button class="btn good" id="nextBtn" data-i18n="nextCountry">Next country →</button>
+          <span class="seen" id="seenNote"></span>
+        </div>
+      </div>
+    </main>
+
+    <footer class="app">
+      <span id="footTotal"></span> &middot; <span data-i18n="byline">A fun project by</span>
+      <a href="https://www.stouras.com/" target="_blank" rel="noreferrer noopener">Konstantinos Stouras</a> &middot;
+      <a href="https://www.stouras.com/#funprojects" target="_blank" rel="noreferrer noopener" data-i18n="moreProjects">more fun projects</a>
+    </footer>
+  </div>
+
+  <!-- Nickname overlay -->
+  <div class="overlay" id="nickOverlay">
+    <div class="modal modal-close">
+      <button class="x-btn" id="nickClose" title="Close" style="display:none">×</button>
+      <h2 data-i18n="welcome">Welcome to Capitals</h2>
+      <p class="sub" data-i18n="welcomeSub">Pick a nickname so your progress is saved and tracked over time. Use the same nickname next time to keep building your streak.</p>
+      <input type="text" id="nickInput" placeholder="Your nickname" data-i18n-ph="nickPh" maxlength="24" autocomplete="off" spellcheck="false" enterkeyhint="go">
+      <div class="err" id="nickErr"></div>
+      <div class="row">
+        <button class="btn primary" id="nickStart" style="flex:1" data-i18n="startLearning">Start learning</button>
+      </div>
+      <div class="known hidden" id="knownWrap">
+        <div class="lbl" data-i18n="continueAs">Continue as</div>
+        <div class="chips" id="knownChips"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats overlay -->
+  <div class="overlay hidden" id="statsOverlay">
+    <div class="modal wide modal-close">
+      <button class="x-btn" id="statsClose" title="Close">×</button>
+      <h2><span data-i18n="progressFor">Progress for</span> <span id="statsNick" style="color:var(--accent)"></span></h2>
+      <p class="sub" id="statsSince"></p>
+
+      <div class="stat-grid">
+        <div class="stat"><div class="v accent" id="sAnswered">0</div><div class="k" data-i18n="answered">Answered</div></div>
+        <div class="stat"><div class="v good" id="sAccuracy">0%</div><div class="k" data-i18n="accuracy">Accuracy</div></div>
+        <div class="stat"><div class="v" id="sPoints">0</div><div class="k" data-i18n="points">Points</div></div>
+        <div class="stat"><div class="v" id="sBestStreak">0</div><div class="k" data-i18n="bestStreak">Best streak</div></div>
+        <div class="stat"><div class="v" id="sNoHint">0</div><div class="k" data-i18n="solvedNoHint">Solved no hint</div></div>
+        <div class="stat"><div class="v" id="sReveals">0</div><div class="k" data-i18n="answersShown">Answers shown</div></div>
+      </div>
+
+      <div class="chart-h"><span data-i18n="countriesMastered">Countries mastered</span> <span id="masterCount" style="color:var(--accent)"></span></div>
+      <div class="prog-track"><div class="prog-fill" id="masterFill"></div></div>
+      <div class="chart-legend" data-i18n="masteredLegend">Mastered means you have named its capital at least once with no hints.</div>
+
+      <div style="margin-top:18px">
+        <div class="chart-h" data-i18n="activity14">Activity over the last 14 days</div>
+        <div class="bars" id="bars"></div>
+        <div class="chart-legend" id="barsLegend">Bar height shows how many questions you answered each day.</div>
+      </div>
+
+      <div class="row" style="margin-top:20px">
+        <button class="btn ghost small" id="resetBtn" style="color:var(--bad)" data-i18n="resetProgress">Reset my progress</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaderboard overlay -->
+  <div class="overlay hidden" id="boardOverlay">
+    <div class="modal wide modal-close">
+      <button class="x-btn" id="boardClose" title="Close">×</button>
+      <h2 data-i18n="leaderboard">Leaderboard</h2>
+      <div id="boardScope" class="board-scope"></div>
+      <p class="sub" id="boardSub">Everyone who has played on this device, ranked.</p>
+
+      <div class="board-tools">
+        <span class="lbl" data-i18n="rankBy">Rank by</span>
+        <button class="sortbtn active" data-sort="points" data-i18n="points">Points</button>
+        <button class="sortbtn" data-sort="accuracy" data-i18n="accuracy">Accuracy</button>
+        <button class="sortbtn" data-sort="mastered" data-i18n="masteredShort">Mastered</button>
+        <button class="sortbtn" data-sort="bestStreak" data-i18n="bestStreak">Best streak</button>
+      </div>
+
+      <div class="board-scroll">
+        <table class="board">
+          <thead>
+            <tr>
+              <th class="l">#</th>
+              <th class="l" data-i18n="player">Player</th>
+              <th id="thPoints" data-i18n="points">Points</th>
+              <th data-i18n="accShort">Acc.</th>
+              <th data-i18n="answeredShort">Answered</th>
+              <th data-i18n="masteredShort">Mastered</th>
+              <th data-i18n="streak">Streak</th>
+            </tr>
+          </thead>
+          <tbody id="boardBody"></tbody>
+        </table>
+        <div class="board-empty hidden" id="boardEmpty" data-i18n="boardEmpty">No players yet. Answer a few questions to get on the board.</div>
+      </div>
+      <p class="board-note" id="boardNote">Scores are saved in this browser, so the leaderboard shows every nickname that has played here. Mastered counts the capitals named with no hints.</p>
+    </div>
+  </div>
+
+  <script src="countries.js"></script>
+  <script src="countries.el.js"></script>
+
+  <!--
+    ─────────────────────────────────────────────────────────────────────────
+    GLOBAL LEADERBOARD — Firebase Realtime Database
+    ─────────────────────────────────────────────────────────────────────────
+    Reuses the Snake project (stouras-snake); this app writes to a separate
+    "capitals_leaderboard" node so the two never collide. The web config is
+    meant to be public — security comes from the Database Rules. Add this block
+    in Firebase console (Realtime Database → Rules) to switch the board global:
+
+      "capitals_leaderboard": {
+        ".read": true,
+        ".indexOn": "points",
+        "$user": {
+          ".write": "newData.hasChildren(['name','points','updated'])",
+          "name":     { ".validate": "newData.isString() && newData.val().length <= 24" },
+          "points":   { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000000" },
+          "accuracy": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
+          "answered": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+          "mastered": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000" },
+          "streak":   { ".validate": "newData.isNumber() && newData.val() >= 0" },
+          "updated":  { ".validate": "newData.isNumber()" }
+        }
+      }
+
+    Until the rules allow this node, reads/writes are denied and the page falls
+    back to the LOCAL (this-browser-only) leaderboard automatically.
+  -->
+  <script type="module">
+    const FIREBASE_CONFIG = {
+      apiKey: "AIzaSyB75wGPTvquIGme8XrGeBoQNFo52nquQkE",
+      authDomain: "stouras-snake.firebaseapp.com",
+      databaseURL: "https://stouras-snake-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "stouras-snake",
+      storageBucket: "stouras-snake.firebasestorage.app",
+      messagingSenderId: "678091659383",
+      appId: "1:678091659383:web:7446d607cfa99eae000e72",
+      measurementId: "G-Z3085SMKJ5"
+    };
+    const looksConfigured = FIREBASE_CONFIG.databaseURL &&
+      !/YOUR_PROJECT|YOUR_API_KEY/.test(JSON.stringify(FIREBASE_CONFIG));
+    if (looksConfigured) {
+      try {
+        const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+        const { getDatabase, ref, query, orderByChild, limitToLast, onValue, runTransaction } =
+          await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js");
+
+        const app = initializeApp(FIREBASE_CONFIG);
+        const db = getDatabase(app);
+        const NODE = "capitals_leaderboard";
+        const num = (x) => (Number.isFinite(+x) ? Math.max(0, Math.round(+x)) : 0);
+        const sanitizeKey = (n) => String(n || "").toLowerCase().replace(/[.#$/\[\]]/g, "_").slice(0, 32) || "anon";
+
+        window.CapitalsLeaderboard = {
+          scope: "global",
+          // Keep a player's best result (transaction avoids clobbering a higher score).
+          submit(p) {
+            const r = ref(db, NODE + "/" + sanitizeKey(p.name));
+            return runTransaction(r, (cur) => {
+              const next = {
+                name: String(p.name || "").slice(0, 24),
+                points: num(p.points), accuracy: num(p.accuracy),
+                answered: num(p.answered), mastered: num(p.mastered), streak: num(p.streak),
+                updated: Date.now()
+              };
+              if (cur && typeof cur.points === "number" && cur.points > next.points) return cur;
+              return next;
+            }).catch((e) => console.warn("Capitals leaderboard submit failed:", e));
+          },
+          subscribe(cb) {
+            const q = query(ref(db, NODE), orderByChild("points"), limitToLast(200));
+            onValue(q, (snap) => {
+              const rows = [];
+              snap.forEach((c) => { const v = c.val(); if (v && typeof v.points === "number") { v.key = c.key; rows.push(v); } });
+              cb(rows);
+            }, (err) => console.warn("Capitals leaderboard read failed:", err));
+          }
+        };
+        window.dispatchEvent(new Event("capitals-leaderboard-ready"));
+      } catch (e) {
+        console.warn("Firebase init failed — using local leaderboard.", e);
+      }
+    }
+  </script>
+
+  <script>
+  (function () {
+    "use strict";
+
+    var ALL = (window.COUNTRIES || []).slice();
+    var STORE_KEY = "capitals:v1:profiles";
+    var LAST_KEY  = "capitals:v1:lastNick";
+    var LANG_KEY  = "capitals:v1:lang";
+    var HISTORY_CAP = 600;
+
+    // ---------- merge the Greek layer onto the base dataset ----------
+    var EL_DATA = window.COUNTRIES_EL || {};
+    ALL.forEach(function (e) {
+      var g = EL_DATA[e.c];
+      e.c_el = (g && g.c) || e.c;
+      e.cap_el = (g && g.cap) || e.cap;
+      e.alt_el = (g && g.alt) || [];
+      e.facts_el = (g && g.facts) || e.facts;
+    });
+
+    // ---------- language ----------
+    var lang = "en";
+    try { var sv = localStorage.getItem(LANG_KEY); if (sv === "el" || sv === "en") lang = sv; } catch (e) {}
+    var I18N = {
+      en: {
+        tagline: "Learn the capital of every country",
+        myProgress: "My progress", leaderboard: "Leaderboard", switch: "Switch",
+        region: "Region", allRegions: "All regions", streak: "Streak",
+        answerPh: "Type the capital city…", check: "Check", showAnswer: "Show the answer",
+        hint1: "Hint 1: how many letters", hint2: "Hint 2: reveal some letters", hint3: "Hint 3: show the answer",
+        answerShown: "Answer shown",
+        didYouKnow: "Did you know?", nextCountry: "Next country →",
+        byline: "A fun project by", moreProjects: "more fun projects",
+        welcome: "Welcome to Capitals",
+        welcomeSub: "Pick a nickname so your progress is saved and tracked over time. Use the same nickname next time to keep building your streak.",
+        nickPh: "Your nickname", startLearning: "Start learning", continueAs: "Continue as",
+        progressFor: "Progress for",
+        answered: "Answered", accuracy: "Accuracy", points: "Points", bestStreak: "Best streak",
+        solvedNoHint: "Solved no hint", answersShown: "Answers shown",
+        countriesMastered: "Countries mastered",
+        masteredLegend: "Mastered means you have named its capital at least once with no hints.",
+        activity14: "Activity over the last 14 days",
+        barsHint: "Bar height shows how many questions you answered each day.",
+        resetProgress: "Reset my progress",
+        rankBy: "Rank by", masteredShort: "Mastered", player: "Player",
+        accShort: "Acc.", answeredShort: "Answered",
+        boardEmpty: "No players yet. Answer a few questions to get on the board.",
+        boardNote: "Scores are saved in this browser, so the leaderboard shows every nickname that has played here. Mastered counts the capitals named with no hints.",
+        boardNoteGlobal: "This leaderboard is shared worldwide. Mastered counts the capitals named with no hints.",
+        scopeGlobal: "🌐 Global leaderboard", scopeLocal: "📱 This device only",
+        playersGlobalN: function (n) { return n + " player" + (n === 1 ? "" : "s") + " worldwide."; },
+        you: "you",
+        // dynamic
+        qText: function (c) { return "What is the capital of <span class=\"country\">" + c + "</span>?"; },
+        capLine: function (cap, c) { return "<b>" + cap + "</b> <span class=\"of\">is the capital of " + c + "</span>"; },
+        correctNoHint: "Correct — no hints!", correctOneHint: "Correct — with one hint", correctHints: "Correct — with hints",
+        learned: "Here is the answer — now you know it",
+        fbType: "Type a city name, or use a hint.",
+        fbWrong: "Not quite — try again, or tap a hint.",
+        fbLen: "Hint: the length is shown below.",
+        fbPartial: "Hint: some letters are filled in below.",
+        noCountries: "No countries in this region.",
+        maskLen: function (n, w) { return "The capital has " + n + " letter" + (n === 1 ? "" : "s") + (w > 1 ? " across " + w + " words." : "."); },
+        maskPartial: "Some letters are filled in to help you.",
+        seenN: function (c, n, ok) { return "You have seen " + c + " " + n + " time" + (n === 1 ? "" : "s") + (ok ? ", correct " + ok + "." : "."); },
+        seenFirst: function (c) { return "First time seeing " + c + "."; },
+        since: function (d) { return "Learning since " + d; },
+        playersN: function (n) { return n + (n === 1 ? " player has" : " players have") + " played on this device."; },
+        playersEmpty: "Everyone who plays on this device appears here.",
+        recentN: function (n) { return n + " questions answered in the last 14 days."; },
+        recentNone: "No activity yet in the last 14 days — answer a few to see your chart.",
+        confirmReset: function (nick) { return "Reset all progress for \"" + nick + "\"? This cannot be undone."; },
+        errNick: "Please enter a nickname.", errNickContinue: "Please enter a nickname to continue.",
+        footTotal: function (n) { return "Teaching the capitals of " + n + " countries and territories"; },
+        locale: undefined
+      },
+      el: {
+        tagline: "Μάθε την πρωτεύουσα κάθε χώρας",
+        myProgress: "Η πρόοδός μου", leaderboard: "Κατάταξη", switch: "Αλλαγή",
+        region: "Περιοχή", allRegions: "Όλες οι περιοχές", streak: "Σερί",
+        answerPh: "Γράψε την πρωτεύουσα…", check: "Έλεγχος", showAnswer: "Δείξε την απάντηση",
+        hint1: "Βοήθεια 1: πόσα γράμματα", hint2: "Βοήθεια 2: μερικά γράμματα", hint3: "Βοήθεια 3: δείξε την απάντηση",
+        answerShown: "Η απάντηση φάνηκε",
+        didYouKnow: "Το ήξερες;", nextCountry: "Επόμενη χώρα →",
+        byline: "Ένα διασκεδαστικό έργο του", moreProjects: "περισσότερα έργα",
+        welcome: "Καλώς ήρθες στο Capitals",
+        welcomeSub: "Διάλεξε ένα ψευδώνυμο ώστε να αποθηκεύεται η πρόοδός σου. Χρησιμοποίησε το ίδιο ψευδώνυμο την επόμενη φορά για να συνεχίσεις το σερί σου.",
+        nickPh: "Το ψευδώνυμό σου", startLearning: "Ξεκίνα", continueAs: "Συνέχισε ως",
+        progressFor: "Πρόοδος:",
+        answered: "Απαντήσεις", accuracy: "Ακρίβεια", points: "Πόντοι", bestStreak: "Καλύτερο σερί",
+        solvedNoHint: "Χωρίς βοήθεια", answersShown: "Αποκαλύψεις",
+        countriesMastered: "Χώρες που κατέκτησες",
+        masteredLegend: "Κατάκτηση σημαίνει ότι βρήκες την πρωτεύουσα χωρίς βοήθεια τουλάχιστον μία φορά.",
+        activity14: "Δραστηριότητα τις τελευταίες 14 ημέρες",
+        barsHint: "Το ύψος κάθε μπάρας δείχνει πόσες ερωτήσεις απάντησες κάθε μέρα.",
+        resetProgress: "Μηδενισμός προόδου",
+        rankBy: "Ταξινόμηση κατά", masteredShort: "Κατακτήσεις", player: "Παίκτης",
+        accShort: "Ακρ.", answeredShort: "Απαντ.",
+        boardEmpty: "Κανείς δεν έχει παίξει ακόμη. Απάντησε μερικές ερωτήσεις για να μπεις στην κατάταξη.",
+        boardNote: "Οι βαθμοί αποθηκεύονται σε αυτό το πρόγραμμα περιήγησης, ώστε η κατάταξη δείχνει κάθε ψευδώνυμο που έχει παίξει εδώ.",
+        boardNoteGlobal: "Αυτή η κατάταξη είναι κοινή για όλο τον κόσμο. Οι κατακτήσεις μετρούν τις πρωτεύουσες που βρήκες χωρίς βοήθεια.",
+        scopeGlobal: "🌐 Παγκόσμια κατάταξη", scopeLocal: "📱 Μόνο σε αυτή τη συσκευή",
+        playersGlobalN: function (n) { return n === 1 ? "1 παίκτης παγκοσμίως." : n + " παίκτες παγκοσμίως."; },
+        you: "εσύ",
+        qText: function (c) { return "Ποια είναι η πρωτεύουσα της χώρας <span class=\"country\">" + c + "</span>;"; },
+        capLine: function (cap, c) { return "<b>" + cap + "</b> <span class=\"of\">— η πρωτεύουσα της χώρας " + c + "</span>"; },
+        correctNoHint: "Σωστά — χωρίς βοήθεια!", correctOneHint: "Σωστά — με μία βοήθεια", correctHints: "Σωστά — με βοήθειες",
+        learned: "Να η απάντηση — τώρα τη γνωρίζεις",
+        fbType: "Γράψε μια πόλη ή χρησιμοποίησε βοήθεια.",
+        fbWrong: "Όχι ακριβώς. Δοκίμασε ξανά ή πάρε μια βοήθεια.",
+        fbLen: "Βοήθεια: το μήκος φαίνεται πιο κάτω.",
+        fbPartial: "Βοήθεια: μερικά γράμματα συμπληρώθηκαν πιο κάτω.",
+        noCountries: "Δεν υπάρχουν χώρες σε αυτή την περιοχή.",
+        maskLen: function (n, w) { return "Η πρωτεύουσα έχει " + n + " γράμματα" + (w > 1 ? " σε " + w + " λέξεις." : "."); },
+        maskPartial: "Μερικά γράμματα έχουν συμπληρωθεί για βοήθεια.",
+        seenN: function (c, n, ok) { return "Έχεις δει αυτή τη χώρα " + n + " φορές" + (ok ? ", σωστά " + ok + "." : "."); },
+        seenFirst: function (c) { return "Πρώτη φορά που βλέπεις αυτή τη χώρα."; },
+        since: function (d) { return "Μαθαίνεις από " + d; },
+        playersN: function (n) { return n === 1 ? "1 παίκτης έχει παίξει σε αυτή τη συσκευή." : n + " παίκτες έχουν παίξει σε αυτή τη συσκευή."; },
+        playersEmpty: "Όποιος παίζει σε αυτή τη συσκευή εμφανίζεται εδώ.",
+        recentN: function (n) { return n + " ερωτήσεις τις τελευταίες 14 ημέρες."; },
+        recentNone: "Καμία δραστηριότητα ακόμη — απάντησε μερικές για να δεις το γράφημά σου.",
+        confirmReset: function (nick) { return "Μηδενισμός όλης της προόδου για «" + nick + "»; Αυτό δεν αναιρείται."; },
+        errNick: "Γράψε ένα ψευδώνυμο.", errNickContinue: "Γράψε ένα ψευδώνυμο για να συνεχίσεις.",
+        footTotal: function (n) { return "Διδάσκει τις πρωτεύουσες " + n + " χωρών και περιοχών"; },
+        locale: "el"
+      }
+    };
+    function t(key) { var d = I18N[lang]; var v = (d && d[key] != null) ? d[key] : I18N.en[key]; return v; }
+
+    // ---------- storage helpers ----------
+    function loadProfiles() {
+      try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; }
+      catch (e) { return {}; }
+    }
+    function saveProfiles(p) {
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(p)); } catch (e) {}
+    }
+    function profileKey(nick) { return nick.trim().toLowerCase(); }
+    function newProfile(nick) {
+      return {
+        nick: nick.trim(),
+        createdAt: Date.now(),
+        lastSeen: Date.now(),
+        answered: 0, correct: 0, revealed: 0,
+        noHintCorrect: 0, hintCorrect: 0,
+        wrongGuesses: 0, points: 0,
+        currentStreak: 0, bestStreak: 0,
+        byCountry: {},
+        history: []
+      };
+    }
+
+    var profiles = loadProfiles();
+    var profile = null;     // active profile object
+    var pKey = null;        // active profile key
+
+    function persist() {
+      if (!profile || !pKey) return;
+      profile.lastSeen = Date.now();
+      profiles[pKey] = profile;
+      saveProfiles(profiles);
+    }
+
+    // ---------- text normalisation for answer matching ----------
+    // Handles Latin and Greek: strips accents/tonos, unifies final sigma,
+    // and keeps both Latin (a-z) and Greek (alpha-omega) letters.
+    function norm(s) {
+      return (s || "")
+        .normalize("NFD").replace(/[̀-ͯ]/g, "") // strip Latin and Greek diacritics
+        .toLowerCase()
+        .replace(/['’`ʻ]/g, "")                  // drop apostrophes
+        .replace(/[.·,]/g, "")                        // drop dots and commas
+        .replace(/[-–—]/g, " ")                  // hyphens to spaces
+        .replace(/\bsaint\b/g, "st")                       // saint -> st
+        .replace(/ς/g, "σ")            // final sigma -> sigma
+        .replace(/[^a-z0-9α-ω ]/g, "") // keep Latin + Greek letters
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+    // Accept every known spelling in either language so answers are forgiving
+    // regardless of the interface language.
+    function acceptedForms(entry) {
+      var forms = [entry.cap].concat(entry.alt || [], [entry.cap_el], entry.alt_el || []);
+      var set = {};
+      forms.forEach(function (f) { if (f) set[norm(f)] = true; });
+      return set;
+    }
+
+    // ---------- language-aware display helpers ----------
+    function cName(e) { return lang === "el" ? e.c_el : e.c; }       // country, display
+    function capDisp(e) { return lang === "el" ? e.cap_el : e.cap; } // capital, display
+    function factsOf(e) { return lang === "el" ? e.facts_el : e.facts; }
+
+    // ---------- masked letter reveal ----------
+    // level 0: nothing, 1: length only, 2: partial, 3: full
+    function computeReveal(answer, level) {
+      var chars = answer.split("");
+      var isLetter = function (c) { return /\S/.test(c); };
+      var reveal = chars.map(function (c) { return !isLetter(c); });
+      if (level >= 3) { return chars.map(function () { return true; }); }
+      if (level < 2) { return reveal; } // length only (or nothing)
+      // level 2: first letter of every word + ~40% of the rest, evenly spaced
+      var prevSpace = true, interior = [];
+      chars.forEach(function (c, i) {
+        if (isLetter(c)) {
+          if (prevSpace) { reveal[i] = true; } else { interior.push(i); }
+          prevSpace = false;
+        } else { prevSpace = true; }
+      });
+      var n = Math.ceil(interior.length * 0.4);
+      for (var j = 0; j < n; j++) {
+        var pos = (n <= 1) ? 0 : Math.round(j * (interior.length - 1) / (n - 1));
+        reveal[interior[Math.min(interior.length - 1, pos)]] = true;
+      }
+      return reveal;
+    }
+
+    function letterCount(answer) {
+      var m = answer.match(/\S/g);
+      return m ? m.length : 0;
+    }
+    function wordCount(answer) {
+      var w = answer.trim().split(/\s+/).filter(Boolean);
+      return w.length;
+    }
+
+    // ---------- DOM ----------
+    var $ = function (id) { return document.getElementById(id); };
+    var els = {
+      whoName: $("whoName"), statsBtn: $("statsBtn"), boardBtn: $("boardBtn"), switchBtn: $("switchBtn"),
+      langEn: $("langEn"), langEl: $("langEl"),
+      regionSel: $("regionSel"), streakVal: $("streakVal"),
+      qFlag: $("qFlag"), qRegion: $("qRegion"), qText: $("qText"),
+      askBlock: $("askBlock"), answerInput: $("answerInput"), submitBtn: $("submitBtn"),
+      hintBtn: $("hintBtn"), revealBtn: $("revealBtn"), feedback: $("feedback"),
+      mask: $("mask"), maskNote: $("maskNote"),
+      reveal: $("reveal"), answerBanner: $("answerBanner"), bannerLbl: $("bannerLbl"),
+      capLine: $("capLine"),
+      award: $("award"), awardPts: $("awardPts"), awardStars: $("awardStars"),
+      fact1: $("fact1"), fact2: $("fact2"),
+      nextBtn: $("nextBtn"), seenNote: $("seenNote"), footTotal: $("footTotal"),
+      // nick modal
+      nickOverlay: $("nickOverlay"), nickInput: $("nickInput"), nickErr: $("nickErr"),
+      nickStart: $("nickStart"), nickClose: $("nickClose"),
+      knownWrap: $("knownWrap"), knownChips: $("knownChips"),
+      // stats modal
+      statsOverlay: $("statsOverlay"), statsClose: $("statsClose"),
+      statsNick: $("statsNick"), statsSince: $("statsSince"),
+      sAnswered: $("sAnswered"), sAccuracy: $("sAccuracy"), sPoints: $("sPoints"),
+      sBestStreak: $("sBestStreak"), sNoHint: $("sNoHint"), sReveals: $("sReveals"),
+      masterCount: $("masterCount"), masterFill: $("masterFill"),
+      bars: $("bars"), barsLegend: $("barsLegend"), resetBtn: $("resetBtn"),
+      // leaderboard modal
+      boardOverlay: $("boardOverlay"), boardClose: $("boardClose"), boardSub: $("boardSub"),
+      boardBody: $("boardBody"), boardEmpty: $("boardEmpty"), thPoints: $("thPoints"),
+      boardScope: $("boardScope"), boardNote: $("boardNote")
+    };
+
+    // ---------- region filter ----------
+    function regions() {
+      var seen = {}, out = [];
+      ALL.forEach(function (e) { if (!seen[e.region]) { seen[e.region] = 1; out.push(e.region); } });
+      out.sort();
+      return out;
+    }
+    var REGION_EL = {
+      "Europe": "Ευρώπη", "Asia": "Ασία", "Africa": "Αφρική",
+      "North America": "Βόρεια Αμερική", "South America": "Νότια Αμερική", "Oceania": "Ωκεανία"
+    };
+    function regionLabel(r) { return lang === "el" ? (REGION_EL[r] || r) : r; }
+    function buildRegionSelect() {
+      var prev = els.regionSel.value || "all";
+      var opts = ['<option value="all">' + t("allRegions") + ' (' + ALL.length + ')</option>'];
+      regions().forEach(function (r) {
+        var n = ALL.filter(function (e) { return e.region === r; }).length;
+        opts.push('<option value="' + r + '">' + regionLabel(r) + ' (' + n + ')</option>');
+      });
+      els.regionSel.innerHTML = opts.join("");
+      els.regionSel.value = prev;
+    }
+
+    // ---------- quiz state ----------
+    var current = null;     // current country entry
+    var hintLevel = 0;      // 0..3
+    var solved = false;     // answered correctly or revealed
+    var revCorrect = false; // last reveal was a correct answer (vs given up)
+    var lastCountry = null; // avoid immediate repeat
+
+    function pool() {
+      var r = els.regionSel.value;
+      var list = (r === "all") ? ALL : ALL.filter(function (e) { return e.region === r; });
+      return list;
+    }
+
+    // weighted pick that favours unseen / weak countries
+    function pickNext() {
+      var list = pool();
+      if (list.length === 0) return null;
+      var candidates = list.filter(function (e) { return e.c !== lastCountry; });
+      if (candidates.length === 0) candidates = list;
+      var weights = candidates.map(function (e) {
+        var rec = profile.byCountry[e.c];
+        var correct = rec ? rec.correct : 0;
+        var mastered = rec && rec.bestNoHint ? 1 : 0;
+        // unseen heaviest, then few corrects; mastered get small weight
+        return 1 / (1 + correct * 1.6 + mastered * 4);
+      });
+      var total = weights.reduce(function (a, b) { return a + b; }, 0);
+      var x = Math.random() * total;
+      for (var i = 0; i < candidates.length; i++) {
+        x -= weights[i];
+        if (x <= 0) return candidates[i];
+      }
+      return candidates[candidates.length - 1];
+    }
+
+    var isPunct = function (ch) { return /[^\p{L}\p{N}]/u.test(ch); };
+
+    function renderMask() {
+      var ans = capDisp(current); // mask the capital in the current language
+      els.mask.innerHTML = "";
+      if (hintLevel < 1) { els.maskNote.textContent = ""; return; }
+      var reveal = computeReveal(ans, hintLevel);
+      var wordEl = document.createElement("div");
+      wordEl.className = "word";
+      ans.split("").forEach(function (ch, i) {
+        if (ch === " ") {
+          els.mask.appendChild(wordEl);
+          wordEl = document.createElement("div");
+          wordEl.className = "word";
+          return;
+        }
+        var tile = document.createElement("div");
+        if (isPunct(ch)) {
+          tile.className = "tile punct";
+          tile.textContent = ch;
+        } else if (reveal[i]) {
+          tile.className = "tile";
+          tile.textContent = ch;
+        } else {
+          tile.className = "tile blank";
+          tile.textContent = "·";
+        }
+        wordEl.appendChild(tile);
+      });
+      els.mask.appendChild(wordEl);
+
+      if (hintLevel === 1) {
+        els.maskNote.textContent = t("maskLen")(letterCount(ans), wordCount(ans));
+      } else if (hintLevel === 2) {
+        els.maskNote.textContent = t("maskPartial");
+      } else {
+        els.maskNote.textContent = "";
+      }
+    }
+
+    function updateHintButton() {
+      var labels = [t("hint1"), t("hint2"), t("hint3")];
+      if (hintLevel >= 3) {
+        els.hintBtn.disabled = true;
+        els.hintBtn.textContent = t("answerShown");
+      } else {
+        els.hintBtn.disabled = false;
+        els.hintBtn.textContent = labels[hintLevel];
+      }
+    }
+
+    function newQuestion() {
+      current = pickNext();
+      if (!current) {
+        els.qText.textContent = t("noCountries");
+        els.feedback.textContent = "";
+        return;
+      }
+      lastCountry = current.c;
+      hintLevel = 0;
+      solved = false;
+      els.qFlag.textContent = current.flag || "🏳️";
+      els.qRegion.textContent = regionLabel(current.region);
+      els.qText.innerHTML = t("qText")(cName(current));
+      els.answerInput.value = "";
+      els.answerInput.disabled = false;
+      els.submitBtn.disabled = false;
+      els.revealBtn.disabled = false;
+      els.feedback.textContent = "";
+      els.feedback.className = "feedback info";
+      els.mask.innerHTML = "";
+      els.maskNote.textContent = "";
+      els.reveal.classList.add("hidden");
+      els.askBlock.style.display = "";
+      updateHintButton();
+      refreshSeenNote();
+      els.answerInput.focus();
+    }
+
+    function refreshSeenNote() {
+      var rec = profile.byCountry[current.c];
+      if (rec && rec.seen) {
+        els.seenNote.textContent = t("seenN")(cName(current), rec.seen, rec.correct);
+      } else {
+        els.seenNote.textContent = t("seenFirst")(cName(current));
+      }
+    }
+
+    function pointsForHint(level) {
+      // 0 hints -> 100, length hint -> 60, partial -> 30
+      if (level <= 0) return 100;
+      if (level === 1) return 60;
+      return 30;
+    }
+    function starsForHint(level) {
+      if (level <= 0) return "★★★";
+      if (level === 1) return "★★☆";
+      return "★☆☆";
+    }
+
+    function recordCountry(country) {
+      if (!profile.byCountry[country]) {
+        profile.byCountry[country] = { seen: 0, correct: 0, reveals: 0, bestNoHint: false, lastSeen: 0 };
+      }
+      return profile.byCountry[country];
+    }
+    function pushHistory(country, result, hints) {
+      profile.history.push({ t: Date.now(), c: country, r: result, h: hints });
+      if (profile.history.length > HISTORY_CAP) {
+        profile.history = profile.history.slice(profile.history.length - HISTORY_CAP);
+      }
+    }
+
+    function handleCorrect() {
+      solved = true;
+      var rec = recordCountry(current.c);
+      rec.seen += 1;
+      rec.correct += 1;
+      rec.lastSeen = Date.now();
+      var noHint = (hintLevel <= 0);
+      if (noHint) rec.bestNoHint = true;
+
+      profile.answered += 1;
+      profile.correct += 1;
+      if (noHint) profile.noHintCorrect += 1; else profile.hintCorrect += 1;
+      var pts = pointsForHint(hintLevel);
+      profile.points += pts;
+      profile.currentStreak += 1;
+      if (profile.currentStreak > profile.bestStreak) profile.bestStreak = profile.currentStreak;
+      pushHistory(current.c, "correct", hintLevel);
+      persist();
+      pushGlobal();
+
+      showReveal(true, pts, starsForHint(hintLevel));
+      updateStreakDisplay();
+    }
+
+    function handleReveal() {
+      if (solved) return;
+      solved = true;
+      hintLevel = 3;
+      var rec = recordCountry(current.c);
+      rec.seen += 1;
+      rec.reveals += 1;
+      rec.lastSeen = Date.now();
+
+      profile.answered += 1;
+      profile.revealed += 1;
+      profile.currentStreak = 0;
+      pushHistory(current.c, "revealed", 3);
+      persist();
+      pushGlobal();
+
+      renderMask(); // fully revealed tiles
+      showReveal(false, 0, "—");
+      updateStreakDisplay();
+    }
+
+    function showReveal(correct, pts, stars) {
+      revCorrect = correct;
+      els.askBlock.style.display = "none";
+      els.reveal.classList.remove("hidden");
+      els.capLine.innerHTML = t("capLine")(escapeHtml(capDisp(current)), escapeHtml(cName(current)));
+      var f = factsOf(current);
+      els.fact1.textContent = f[0];
+      els.fact2.textContent = f[1];
+      if (correct) {
+        els.answerBanner.className = "answer-banner";
+        els.bannerLbl.textContent = (hintLevel <= 0) ? t("correctNoHint") :
+          (hintLevel === 1 ? t("correctOneHint") : t("correctHints"));
+        els.awardPts.textContent = "+" + pts;
+        els.awardPts.className = "pts";
+        els.awardStars.textContent = stars;
+        els.award.style.display = "";
+      } else {
+        els.answerBanner.className = "answer-banner learned";
+        els.bannerLbl.textContent = t("learned");
+        els.awardPts.textContent = "+0";
+        els.awardPts.className = "pts zero";
+        els.awardStars.textContent = "";
+      }
+      refreshSeenNote();
+      els.nextBtn.focus();
+    }
+
+    function checkAnswer() {
+      if (solved || !current) return;
+      var raw = els.answerInput.value;
+      if (!norm(raw)) {
+        flashInfo(t("fbType"));
+        return;
+      }
+      var forms = acceptedForms(current);
+      if (forms[norm(raw)]) {
+        handleCorrect();
+      } else {
+        profile.wrongGuesses += 1;
+        recordCountry(current.c); // ensure record exists for seen tracking on first wrong? keep seen on solve only
+        persist();
+        els.answerInput.classList.remove("shake");
+        void els.answerInput.offsetWidth;
+        els.answerInput.classList.add("shake");
+        els.feedback.className = "feedback no";
+        els.feedback.textContent = t("fbWrong");
+        els.answerInput.select();
+      }
+    }
+    function flashInfo(msg) {
+      els.feedback.className = "feedback info";
+      els.feedback.textContent = msg;
+    }
+
+    function advanceHint() {
+      if (solved) return;
+      if (hintLevel >= 2) { handleReveal(); return; } // 3rd hint reveals
+      hintLevel += 1;
+      renderMask();
+      updateHintButton();
+      els.feedback.className = "feedback info";
+      els.feedback.textContent = (hintLevel === 1) ? t("fbLen") : t("fbPartial");
+      els.answerInput.focus();
+    }
+
+    // ---------- displays ----------
+    function updateStreakDisplay() { els.streakVal.textContent = profile.currentStreak; }
+    function updateWho() { els.whoName.textContent = profile.nick; }
+    function updateFooter() {
+      els.footTotal.textContent = t("footTotal")(ALL.length);
+    }
+
+    // ---------- language application ----------
+    function applyStatic() {
+      Array.prototype.forEach.call(document.querySelectorAll("[data-i18n]"), function (el) {
+        var v = t(el.getAttribute("data-i18n"));
+        if (typeof v === "string") el.textContent = v;
+      });
+      Array.prototype.forEach.call(document.querySelectorAll("[data-i18n-ph]"), function (el) {
+        var v = t(el.getAttribute("data-i18n-ph"));
+        if (typeof v === "string") el.setAttribute("placeholder", v);
+      });
+    }
+    function renderQuestionView() {
+      els.qRegion.textContent = regionLabel(current.region);
+      els.qText.innerHTML = t("qText")(escapeHtml(cName(current)));
+      updateHintButton();
+      renderMask();        // reflects current language and hint level
+      refreshSeenNote();
+    }
+    function renderRevealText() {
+      els.capLine.innerHTML = t("capLine")(escapeHtml(capDisp(current)), escapeHtml(cName(current)));
+      var f = factsOf(current);
+      els.fact1.textContent = f[0];
+      els.fact2.textContent = f[1];
+      els.bannerLbl.textContent = revCorrect
+        ? ((hintLevel <= 0) ? t("correctNoHint") : (hintLevel === 1 ? t("correctOneHint") : t("correctHints")))
+        : t("learned");
+      refreshSeenNote();
+    }
+    function applyLang() {
+      document.documentElement.lang = lang;
+      els.langEn.classList.toggle("active", lang === "en");
+      els.langEl.classList.toggle("active", lang === "el");
+      applyStatic();
+      buildRegionSelect();
+      updateFooter();
+      if (current) { if (solved) renderRevealText(); else renderQuestionView(); }
+      if (!els.statsOverlay.classList.contains("hidden")) openStats();
+      if (!els.boardOverlay.classList.contains("hidden")) renderBoard();
+    }
+    function setLang(l) {
+      if (l === lang) return;
+      lang = l;
+      try { localStorage.setItem(LANG_KEY, l); } catch (e) {}
+      applyLang();
+    }
+
+    // ---------- nickname modal ----------
+    function openNick(allowClose) {
+      els.nickErr.textContent = "";
+      els.nickInput.value = "";
+      els.nickClose.style.display = allowClose ? "" : "none";
+      var keys = Object.keys(profiles);
+      if (keys.length) {
+        keys.sort(function (a, b) { return (profiles[b].lastSeen || 0) - (profiles[a].lastSeen || 0); });
+        els.knownChips.innerHTML = "";
+        keys.slice(0, 8).forEach(function (k) {
+          var b = document.createElement("button");
+          b.className = "chip";
+          b.textContent = profiles[k].nick;
+          b.addEventListener("click", function () { activate(profiles[k].nick); });
+          els.knownChips.appendChild(b);
+        });
+        els.knownWrap.classList.remove("hidden");
+      } else {
+        els.knownWrap.classList.add("hidden");
+      }
+      els.nickOverlay.classList.remove("hidden");
+      setTimeout(function () { els.nickInput.focus(); }, 50);
+    }
+    function closeNick() { els.nickOverlay.classList.add("hidden"); }
+
+    function activate(nick) {
+      nick = (nick || "").trim();
+      if (nick.length < 1) { els.nickErr.textContent = t("errNick"); return; }
+      if (nick.length > 24) nick = nick.slice(0, 24);
+      pKey = profileKey(nick);
+      profile = profiles[pKey] || newProfile(nick);
+      profile.nick = nick; // keep latest casing
+      profiles[pKey] = profile;
+      try { localStorage.setItem(LAST_KEY, pKey); } catch (e) {}
+      persist();
+      pushGlobal(); // publish existing stats for returning players
+      closeNick();
+      updateWho();
+      updateStreakDisplay();
+      newQuestion();
+    }
+
+    function tryStart() {
+      var v = els.nickInput.value;
+      if (!v.trim()) { els.nickErr.textContent = t("errNickContinue"); return; }
+      activate(v);
+    }
+
+    // ---------- stats modal ----------
+    function ymd(ts) {
+      var d = new Date(ts);
+      return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
+    }
+    function masteredOf(p) {
+      var bc = p.byCountry || {}, n = 0;
+      Object.keys(bc).forEach(function (k) { if (bc[k] && bc[k].bestNoHint) n += 1; });
+      return n;
+    }
+    function accuracyOf(p) { return p.answered ? Math.round(100 * p.correct / p.answered) : 0; }
+    function openStats() {
+      els.statsNick.textContent = profile.nick;
+      var created = new Date(profile.createdAt);
+      els.statsSince.textContent = t("since")(
+        created.toLocaleDateString(t("locale"), { year: "numeric", month: "long", day: "numeric" }));
+      els.sAnswered.textContent = profile.answered;
+      els.sAccuracy.textContent = accuracyOf(profile) + "%";
+      els.sPoints.textContent = profile.points.toLocaleString();
+      els.sBestStreak.textContent = profile.bestStreak;
+      els.sNoHint.textContent = profile.noHintCorrect;
+      els.sReveals.textContent = profile.revealed;
+
+      // mastered
+      var mastered = masteredOf(profile);
+      els.masterCount.textContent = mastered + " / " + ALL.length;
+      els.masterFill.style.width = (100 * mastered / ALL.length) + "%";
+
+      // activity bars: last 14 days
+      var days = [];
+      var today = new Date(); today.setHours(0, 0, 0, 0);
+      for (var i = 13; i >= 0; i--) {
+        var d = new Date(today.getTime() - i * 86400000);
+        days.push({ key: d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(), label: d.getDate(), count: 0, correct: 0 });
+      }
+      var idx = {};
+      days.forEach(function (d, i2) { idx[d.key] = i2; });
+      profile.history.forEach(function (h) {
+        var k = ymd(h.t);
+        if (k in idx) { days[idx[k]].count += 1; if (h.r === "correct") days[idx[k]].correct += 1; }
+      });
+      var max = days.reduce(function (m, d) { return Math.max(m, d.count); }, 0) || 1;
+      els.bars.innerHTML = "";
+      days.forEach(function (d) {
+        var col = document.createElement("div"); col.className = "col";
+        var bar = document.createElement("div");
+        bar.className = "bar" + (d.count === 0 ? " empty" : "");
+        bar.style.height = (d.count === 0 ? 2 : Math.max(6, Math.round(86 * d.count / max))) + "px";
+        bar.title = d.count + " answered" + (d.count ? ", " + d.correct + " correct" : "");
+        var tip = document.createElement("div"); tip.className = "tip"; tip.textContent = d.label;
+        col.appendChild(bar); col.appendChild(tip);
+        els.bars.appendChild(col);
+      });
+      var totalRecent = days.reduce(function (a, d) { return a + d.count; }, 0);
+      els.barsLegend.textContent = totalRecent ? t("recentN")(totalRecent) : t("recentNone");
+
+      els.statsOverlay.classList.remove("hidden");
+    }
+    function closeStats() { els.statsOverlay.classList.add("hidden"); }
+
+    function resetProgress() {
+      if (!confirm(t("confirmReset")(profile.nick))) return;
+      profiles[pKey] = newProfile(profile.nick);
+      profile = profiles[pKey];
+      persist();
+      updateStreakDisplay();
+      closeStats();
+      newQuestion();
+    }
+
+    // ---------- leaderboard modal ----------
+    var boardSort = "points";
+    var globalRows = null;     // set to an array once the global board is live
+    var globalAttached = false;
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, function (ch) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch];
+      });
+    }
+    function sanitizeNick(n) {
+      return String(n || "").toLowerCase().replace(/[.#$/\[\]]/g, "_").slice(0, 32) || "anon";
+    }
+    // Rows for the board: the global list when available, otherwise the
+    // nicknames stored locally in this browser.
+    function boardRows() {
+      if (globalRows) {
+        return globalRows.map(function (r) {
+          return {
+            key: r.key, nick: r.name || r.key,
+            points: r.points || 0, accuracy: r.accuracy || 0,
+            answered: r.answered || 0, mastered: r.mastered || 0, bestStreak: r.streak || 0
+          };
+        });
+      }
+      return Object.keys(profiles).map(function (k) {
+        var p = profiles[k];
+        return {
+          key: k, nick: p.nick || k,
+          points: p.points || 0, accuracy: accuracyOf(p),
+          answered: p.answered || 0, mastered: masteredOf(p), bestStreak: p.bestStreak || 0
+        };
+      }).filter(function (r) { return r.answered > 0 || r.points > 0; });
+    }
+    function renderBoard() {
+      var isGlobal = (globalRows !== null);
+      var rows = boardRows();
+
+      rows.sort(function (a, b) {
+        if (b[boardSort] !== a[boardSort]) return b[boardSort] - a[boardSort];
+        if (b.points !== a.points) return b.points - a.points;
+        if (b.accuracy !== a.accuracy) return b.accuracy - a.accuracy;
+        return b.answered - a.answered;
+      });
+
+      els.boardScope.textContent = isGlobal ? t("scopeGlobal") : t("scopeLocal");
+      els.boardScope.className = "board-scope" + (isGlobal ? " global" : "");
+      els.boardNote.textContent = isGlobal ? t("boardNoteGlobal") : t("boardNote");
+      els.boardSub.textContent = rows.length
+        ? (isGlobal ? t("playersGlobalN")(rows.length) : t("playersN")(rows.length))
+        : t("playersEmpty");
+
+      // header highlight for active sort
+      Array.prototype.forEach.call(document.querySelectorAll(".sortbtn"), function (b) {
+        b.classList.toggle("active", b.getAttribute("data-sort") === boardSort);
+      });
+
+      if (rows.length === 0) {
+        els.boardBody.innerHTML = "";
+        els.boardEmpty.classList.remove("hidden");
+        return;
+      }
+      els.boardEmpty.classList.add("hidden");
+
+      var meId = isGlobal ? sanitizeNick(profile && profile.nick) : pKey;
+      var medal = ["g", "s", "b"];
+      var html = rows.map(function (r, i) {
+        var rankCell = (i < 3)
+          ? '<span class="medal ' + medal[i] + '">' + (i + 1) + "</span>"
+          : (i + 1);
+        var isMe = (r.key === meId);
+        var you = isMe ? ' <span class="youtag">' + t("you") + '</span>' : "";
+        return '<tr class="' + (isMe ? "me" : "") + '">' +
+          '<td class="l rank">' + rankCell + "</td>" +
+          '<td class="l name">' + escapeHtml(r.nick) + you + "</td>" +
+          '<td class="pts">' + r.points.toLocaleString() + "</td>" +
+          '<td class="num">' + r.accuracy + "%</td>" +
+          '<td class="num">' + r.answered + "</td>" +
+          '<td class="num">' + r.mastered + "</td>" +
+          '<td class="num">' + r.bestStreak + "</td>" +
+          "</tr>";
+      }).join("");
+      els.boardBody.innerHTML = html;
+    }
+    function openBoard() { renderBoard(); els.boardOverlay.classList.remove("hidden"); }
+    function closeBoard() { els.boardOverlay.classList.add("hidden"); }
+
+    // ---------- global leaderboard (Firebase, optional) ----------
+    // Publishes this profile's summary and, when the worldwide board is live,
+    // feeds it into renderBoard(). Falls back silently to the local board.
+    function pushGlobal() {
+      if (!window.CapitalsLeaderboard || !profile || (profile.answered || 0) < 1) return;
+      try {
+        window.CapitalsLeaderboard.submit({
+          name: profile.nick,
+          points: profile.points || 0,
+          accuracy: accuracyOf(profile),
+          answered: profile.answered || 0,
+          mastered: masteredOf(profile),
+          streak: profile.bestStreak || 0
+        });
+      } catch (e) {}
+    }
+    function attachGlobal() {
+      if (globalAttached || !window.CapitalsLeaderboard || window.CapitalsLeaderboard.scope !== "global") return;
+      globalAttached = true;
+      window.CapitalsLeaderboard.subscribe(function (rows) {
+        globalRows = rows || [];
+        if (!els.boardOverlay.classList.contains("hidden")) renderBoard();
+      });
+      pushGlobal();
+    }
+    window.addEventListener("capitals-leaderboard-ready", attachGlobal);
+    if (window.CapitalsLeaderboard) attachGlobal();
+
+    // ---------- events ----------
+    els.submitBtn.addEventListener("click", checkAnswer);
+    els.answerInput.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); checkAnswer(); }
+    });
+    els.hintBtn.addEventListener("click", advanceHint);
+    els.revealBtn.addEventListener("click", handleReveal);
+    els.nextBtn.addEventListener("click", newQuestion);
+    function anyModalOpen() {
+      return !els.statsOverlay.classList.contains("hidden") ||
+             !els.nickOverlay.classList.contains("hidden") ||
+             !els.boardOverlay.classList.contains("hidden");
+    }
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") {
+        if (!els.statsOverlay.classList.contains("hidden")) closeStats();
+        else if (!els.boardOverlay.classList.contains("hidden")) closeBoard();
+        else if (!els.nickOverlay.classList.contains("hidden") && els.nickClose.style.display !== "none") closeNick();
+        return;
+      }
+      if (e.key === "Enter" && solved && !anyModalOpen()) { newQuestion(); }
+    });
+    els.regionSel.addEventListener("change", function () {
+      if (profile) { newQuestion(); }
+    });
+
+    els.statsBtn.addEventListener("click", openStats);
+    els.statsClose.addEventListener("click", closeStats);
+    els.resetBtn.addEventListener("click", resetProgress);
+    els.boardBtn.addEventListener("click", openBoard);
+    els.boardClose.addEventListener("click", closeBoard);
+    els.switchBtn.addEventListener("click", function () { openNick(true); });
+    Array.prototype.forEach.call(document.querySelectorAll(".sortbtn"), function (b) {
+      b.addEventListener("click", function () { boardSort = b.getAttribute("data-sort"); renderBoard(); });
+    });
+
+    els.langEn.addEventListener("click", function () { setLang("en"); });
+    els.langEl.addEventListener("click", function () { setLang("el"); });
+
+    els.nickStart.addEventListener("click", tryStart);
+    els.nickClose.addEventListener("click", closeNick);
+    els.nickInput.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); tryStart(); }
+    });
+    [els.nickOverlay, els.statsOverlay, els.boardOverlay].forEach(function (ov) {
+      ov.addEventListener("click", function (e) {
+        if (e.target === ov) {
+          if (ov === els.statsOverlay) closeStats();
+          else if (ov === els.boardOverlay) closeBoard();
+          else if (els.nickClose.style.display !== "none") closeNick();
+        }
+      });
+    });
+
+    // ---------- boot ----------
+    applyLang(); // sets language flags, static text, region select and footer
+    if (ALL.length === 0) {
+      els.qText.textContent = "(data failed to load)";
+    } else {
+      var lastKey = null;
+      try { lastKey = localStorage.getItem(LAST_KEY); } catch (e) {}
+      if (lastKey && profiles[lastKey]) {
+        activate(profiles[lastKey].nick);
+      } else {
+        openNick(false);
+      }
+    }
+  })();
+  </script>
+</body>
+</html>
