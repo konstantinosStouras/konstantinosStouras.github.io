@@ -2,7 +2,7 @@
 # Minimal dependency-free PDF writer for the Ubongo difficulty note.
 # Uses standard-14 fonts (Helvetica family + Courier); WinAnsi-safe ASCII text.
 
-import zlib, struct
+import zlib, struct, os
 
 # ---- Helvetica AFM widths (units/1000 em) for ASCII 32..126 ----
 HELV = {
@@ -257,23 +257,30 @@ para('The three agree at the extremes and diverge in the middle - the PortfolioF
 
 heading('5.  Use in the live game', 13, rule=True)
 para('All eight bricks are available every round; the player must find the combination that fills the '
-     'outline. Each brick has a dollar value, chosen so the eight value-per-cell ratios are all distinct '
-     '(giving the greedy a strict order). The KPIs shown to the player mirror the Tetris app: value '
-     'placed, the best value achievable on the board (the maximum-value exact cover), cells filled, and '
-     'value density ($/cell).')
+     'outline. Each brick carries a dollar value, chosen so the eight value-per-cell ratios ($/cell) are '
+     'all distinct and deliberately deceptive: the most tempting (highest $/cell) bricks are usually NOT '
+     'the ones the optimal portfolio needs, so a player who greedily chases ROI is reliably trapped - '
+     'which is exactly what manufactures the Sahni difficulty.')
 table([
  ['Brick','I3','L','S','T','L5','Y','P','N'],
  ['Cells','3','4','4','4','5','5','5','5'],
- ['Value','$5','$6','$5','$7','$9','$6','$8','$7'],
- ['$/cell','1.67','1.50','1.25','1.75','1.80','1.20','1.60','1.40'],
+ ['Value','$9','$10','$9','$11','$16','$7','$6','$11'],
+ ['$/cell','3.00','2.50','2.25','2.75','3.20','1.40','1.20','2.20'],
 ], [0.20,0.10,0.10,0.10,0.10,0.10,0.10,0.10,0.10])
+para('The round ends at the buzzer, not when the board is first filled: the player keeps rearranging '
+     'bricks to push the score higher until time runs out. The score is Net Value = Total Value - Resource '
+     'Cost, where Resource Cost is a $1 penalty for every empty cell left inside the outline. A fully '
+     'covered board incurs no penalty, so the optimum is the full cover of maximum total value - the unique '
+     'maximum-value exact cover. The live KPI panel reports Net Value, Total Value, Resource Cost, Value / '
+     'Resource (value per occupied cell), Coverage, and a geometric Portfolio Fitness score.')
 para('Difficulty is the value-ratio Sahni k itself. Because the outline is generated from a real tiling, '
-     'a solution always exists; the game rejection-samples outlines until k matches the tier:')
+     'a solution always exists; the game rejection-samples outlines until k matches the tier, and for Hard '
+     'it scans its whole time budget to ship the hardest (maximum-k) board it can find:')
 table([
  ['Tier','Outline','Defined by','Meaning'],
- ['Easy','14 cells','k <= 1','the ratio-greedy almost solves it unaided'],
- ['Hard','18 cells','k >= 3','the ratio-greedy is badly trapped - real search needed'],
-], [0.12,0.16,0.20,0.52])
+ ['Easy','14 cells','k = 1 or 2','the ratio-greedy needs only a hint or two'],
+ ['Hard','18 cells','k >= 3','greedy is badly trapped - the ceiling for this set; real search needed'],
+], [0.12,0.16,0.22,0.50])
 
 heading('References', 13, rule=True)
 para('S. Sahni, "Approximate algorithms for the 0/1 knapsack problem," Journal of the ACM 22(1):115-124, 1975.', 9.5, 'Helv', gap=1, color=(0.3,0.3,0.3))
@@ -343,5 +350,6 @@ for i in range(1,len(objs)+1):
 out += ('trailer\n<< /Size %d /Root %d 0 R >>\nstartxref\n%d\n%%%%EOF\n'
         %(len(objs)+1, cat, xref_pos)).encode()
 
-open('/tmp/ubongo-note/ubongo-difficulty.pdf','wb').write(out)
-print('wrote PDF:', len(out), 'bytes;', len(pages), 'page(s);', len(objs), 'objects')
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'portfoliofit-difficulty.pdf')
+open(OUT,'wb').write(out)
+print('wrote PDF:', OUT, len(out), 'bytes;', len(pages), 'page(s);', len(objs), 'objects')
