@@ -75,7 +75,8 @@
   .tab:hover{background:var(--cream2);}
   .tab.active{background:#fff;color:var(--ink);border-color:#d9c7a2;box-shadow:var(--shadow);}
   .tab.locked{opacity:.6;cursor:not-allowed;}
-  .tab .ico{width:22px;height:22px;flex:0 0 22px;}
+  .tab .ico{width:22px;height:22px;flex:0 0 22px;overflow:hidden;}
+  .tab .ico svg{width:100%;height:100%;display:block;}
   .tab .badge{font-size:11px;font-weight:700;padding:1px 7px;border-radius:999px;background:#e7f0df;color:var(--green);}
   .tab .badge.lock{background:#efe9df;color:#a99a82;}
 
@@ -123,7 +124,7 @@
   }
   .play{position:relative;width:100%;}
   .slots{position:absolute;inset:0;display:grid;}
-  .slot{border-radius:5px;border:2px solid #8b7355;}
+  .slot{border-radius:5px;border:2px solid #8b7355;transition:transform .12s ease, box-shadow .12s ease;}
   .slot.p0{background:#f0d9b5;}
   .slot.p1{background:#b58863;}
   .slot.target{cursor:pointer;}
@@ -134,6 +135,8 @@
   .slot.losing-move{cursor:pointer;filter:brightness(.85) sepia(.7) hue-rotate(20deg) saturate(1.4);}
   .slot.invalid{cursor:pointer;filter:brightness(.85) sepia(.9) hue-rotate(-28deg) saturate(1.3);}
   .slot.terminated{filter:brightness(.85) sepia(.9) hue-rotate(-16deg) saturate(1.6);}
+  /* enlarge a legitimate (clickable) square on hover */
+  .slot.target:hover{transform:scale(1.18);z-index:4;box-shadow:0 6px 16px rgba(0,0,0,0.28);}
 
   .pieces{position:absolute;inset:0;pointer-events:none;}
   .piece{
@@ -143,7 +146,7 @@
     filter:drop-shadow(0 2px 2px rgba(0,0,0,0.45));
   }
   .piece.selectable{cursor:pointer;}
-  .piece.selectable:hover{transform:scale(1.07);}
+  .piece.selectable:hover{transform:scale(1.1);filter:drop-shadow(0 2px 2px rgba(0,0,0,0.45)) drop-shadow(0 0 7px rgba(107,90,205,0.55));}
   .piece.selected{outline:none;}
   .piece.selected::before{content:'';position:absolute;inset:6%;border-radius:9px;box-shadow:0 0 0 3px var(--gold), 0 0 16px rgba(227,181,58,0.6);}
   .piece.terminated{opacity:.85;}
@@ -595,9 +598,9 @@
 
   // Board pieces are drawn as background images (bulletproof sizing).
   function rookShape(fill,stroke,line){
-    return "<path d='M22 20 L33 20 L33 30 L37 30 L37 20 L48 20 L48 30 L52 30 L52 20 L63 20 L63 30 L67 30 L67 20 L78 20 L78 34 L82 40 L82 45 L66 51 L66 58 L74 76 L78 76 L78 82 L84 82 L84 91 L16 91 L16 82 L22 82 L22 76 L26 76 L34 58 L34 51 L18 45 L18 40 L22 34 Z' fill='"+fill+"' stroke='"+stroke+"' stroke-width='2.6' stroke-linejoin='round'/>"
-      + "<g fill='none' stroke='"+line+"' stroke-width='2.3' stroke-linecap='round'>"
-      + "<path d='M25 35 L75 35'/><path d='M28 73 L72 73'/><path d='M19 83 L81 83'/>"
+    return "<path d='M22 16 L32 16 L32 27 L39 27 L39 16 L47 16 L47 27 L53 27 L53 16 L61 16 L61 27 L68 27 L68 16 L78 16 L78 30 L83 34 L83 40 L69 45 L69 58 L73 66 L77 80 L81 80 L81 85 L85 85 L85 90 L89 90 L89 95 L11 95 L11 90 L15 90 L15 85 L19 85 L19 80 L23 80 L27 66 L31 58 L31 45 L17 40 L17 34 L22 30 Z' fill='"+fill+"' stroke='"+stroke+"' stroke-width='2.4' stroke-linejoin='round'/>"
+      + "<g fill='none' stroke='"+line+"' stroke-width='2.2' stroke-linecap='round'>"
+      + "<path d='M24 30 L76 30'/><path d='M32 58 L68 58'/><path d='M24 80 L76 80'/>"
       + "</g>";
   }
   function queenShape(fill,stroke){
@@ -614,7 +617,8 @@
     var stroke = white ? "#221b12" : "#000000";
     var line = white ? "#221b12" : "#efe9dd";
     var inner = type===PIECE.QUEEN ? queenShape(fill,stroke) : rookShape(fill,stroke,line);
-    var svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='12 14 76 84'>" + inner + "</svg>";
+    var vb = type===PIECE.QUEEN ? "12 14 76 84" : "7 12 86 88";
+    var svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='" + vb + "'>" + inner + "</svg>";
     return "data:image/svg+xml," + encodeURIComponent(svg);
   }
 
