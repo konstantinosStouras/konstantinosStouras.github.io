@@ -195,12 +195,6 @@
   .log li.ok .mk{color:var(--good);} .log li.no .mk{color:var(--bad);}
   .log li:nth-child(odd){background:#f6f9fc;}
 
-  /* end overlay */
-  .overlay{position:absolute; inset:0; background:rgba(255,255,255,.94); display:flex; align-items:center; justify-content:center; z-index:20; padding:20px;}
-  .overlay .card{max-width:380px; text-align:center;}
-  .overlay h2{margin:0 0 6px; color:var(--blue); font-size:1.5rem;}
-  .overlay .score{font-size:2.6rem; font-weight:800; margin:10px 0; color:var(--ink);}
-  .overlay p{color:var(--muted); margin:6px 0 18px;}
   .hidden{display:none !important;}
 
   footer.foot{text-align:center; color:var(--muted); font-size:.8rem; padding:10px 14px 18px;}
@@ -320,14 +314,6 @@
           <button id="zout" title="Σμίκρυνση">−</button>
           <button id="zreset" class="rz" title="Επαναφορά">⟳</button>
         </div>
-        <div class="overlay hidden" id="overlay">
-          <div class="card">
-            <h2 id="ovTitle">Τέλος!</h2>
-            <div class="score" id="ovScore">0 / 0</div>
-            <p id="ovSub"></p>
-            <button class="btn primary" id="ovRestart">Ξεκίνα ξανά</button>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -391,11 +377,37 @@ function loadStore(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)) || {c
 function saveStore(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(store)); }catch(e){} }
 let store=loadStore();
 let user=store.currentUser || null;
-function userData(){ if(!user) return null; if(!store.users[user]) store.users[user]={created:Date.now(),rounds:[],perNomos:{}}; return store.users[user]; }
+// cumulative aggregate for a user record, migrating any legacy round-based data
+function aggOf(u){
+  if(!u) return {answered:0, correct:0, bestStreak:0};
+  if(u.answered!==undefined) return {answered:u.answered||0, correct:u.correct||0, bestStreak:u.bestStreak||0};
+  let a=0,c=0,bs=0;
+  if(Array.isArray(u.rounds)) for(const r of u.rounds){ a+=r.total||0; c+=r.score||0; bs=Math.max(bs, r.best||0); }
+  return {answered:a, correct:c, bestStreak:bs};
+}
+function userData(){
+  if(!user) return null;
+  let u=store.users[user];
+  if(!u){ u=store.users[user]={created:Date.now()}; }
+  if(u.answered===undefined){          // initialise / migrate to cumulative model
+    const g=aggOf(u);
+    u.answered=g.answered; u.correct=g.correct; u.bestStreak=g.bestStreak;
+    if(!u.perMode){
+      u.perMode={quizNomos:{a:0,c:0}, quizCapital:{a:0,c:0}};
+      if(Array.isArray(u.rounds)) for(const r of u.rounds){
+        const m=r.mode==='quizCapital'?'quizCapital':'quizNomos';
+        u.perMode[m].a+=r.total||0; u.perMode[m].c+=r.score||0;
+      }
+    }
+  }
+  if(!u.perNomos) u.perNomos={};
+  if(!u.perMode) u.perMode={quizNomos:{a:0,c:0}, quizCapital:{a:0,c:0}};
+  return u;
+}
 function setUser(name){
   name=(name||'').trim().slice(0,24) || 'Παίκτης';
   user=name; store.currentUser=name;
-  if(!store.users[name]) store.users[name]={created:Date.now(),rounds:[],perNomos:{}};
+  if(!store.users[name]) store.users[name]={created:Date.now(), answered:0, correct:0, bestStreak:0, perNomos:{}, perMode:{quizNomos:{a:0,c:0}, quizCapital:{a:0,c:0}}};
   saveStore(); updateBadge();
 }
 function updateBadge(){ const el=document.getElementById('playerName'); if(el) el.textContent = user || '—'; }
@@ -569,7 +581,6 @@ const sideBody=document.getElementById('sideBody');
 const nextBtn=document.getElementById('nextBtn');
 const skipBtn=document.getElementById('skipBtn');
 const capToggleWrap=document.getElementById('capToggleWrap');
-const overlay=document.getElementById('overlay');
 
 document.querySelectorAll('.tab').forEach(b=>{
   b.onclick=()=>{
@@ -585,7 +596,7 @@ document.getElementById('capToggle').onchange=e=>{
 function setMode(m){
   clearTimeout(advanceTimer); advanceTimer=null;
   hidePopup();
-  mode=m; clearClasses(); overlay.classList.add('hidden');
+  mode=m; clearClasses();
   nextBtn.style.display='none'; skipBtn.style.display='none';
   capToggleWrap.style.display='none';
   if(m==='learn'){ svg.classList.add('learn'); capToggleWrap.style.display='flex'; startLearn(); }
@@ -658,26 +669,23 @@ document.addEventListener('pointerdown', e=>{
   hidePopup();
 });
 
-// ----- QUIZ -----
-let queue=[], qi=0, score=0, asked=0, streak=0, best=0, answeredLog=[], locked=false;
-let roundAsked={}, roundWrong={}, advanceTimer=null;
+// ----- QUIZ (endless: regions are drawn at random, with repeats) -----
+let target=null, prevTarget=null, sessionAsked=0, sessionCorrect=0, streak=0, answeredLog=[], locked=false, advanceTimer=null;
 function startQuiz(){
-  queue = keys.slice(); shuffle(queue);
-  qi=0; score=0; asked=0; streak=0; best=0; answeredLog=[]; locked=false;
-  roundAsked={}; roundWrong={};
+  sessionAsked=0; sessionCorrect=0; streak=0; answeredLog=[]; locked=false; prevTarget=null;
+  clearTimeout(advanceTimer); advanceTimer=null;
   clearFill();
   skipBtn.style.display='inline-block';
   nextBtn.style.display='none';
+  nextQuestion();
   renderQuizSide();
-  nextQuestion(true);
 }
-function shuffle(a){ for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} }
-
-function curTarget(){ return queue[qi]; }
-function nextQuestion(first){
+function nextQuestion(){
   clearClasses(); locked=false; nextBtn.style.display='none';
-  if(qi>=queue.length){ return endRound(); }
-  const k=curTarget(); const n=MAP.nomoi[k];
+  let k;
+  do { k=keys[Math.floor(Math.random()*keys.length)]; } while(keys.length>1 && k===prevTarget);
+  target=k; prevTarget=k;
+  const n=MAP.nomoi[k];
   if(mode==='quizNomos'){
     promptEl.innerHTML = `Βρες στον χάρτη τον <b>Νομό ${n.name}</b> και κάνε κλικ.`;
   } else {
@@ -687,33 +695,56 @@ function nextQuestion(first){
 function onNomosClick(k, ev){
   if(mode!=='quizNomos' && mode!=='quizCapital'){ showPopup(k, ev); return; }
   if(locked) return;
-  const target=curTarget();
-  asked++;
-  roundAsked[target]=(roundAsked[target]||0)+1;
-  if(k===target){
-    score++; streak++; best=Math.max(best,streak);
+  const t=target;
+  sessionAsked++;
+  if(k===t){
+    sessionCorrect++; streak++;
     pathEls[k].classList.add('correct');
-    flash('Σωστά! '+sentence(target), true);
-    answeredLog.unshift({k:target, ok:true});
+    flash('Σωστά! '+sentence(t), true);
+    answeredLog.unshift({k:t, ok:true});
+    recordAnswer(t, true);
     locked=true;
     clearTimeout(advanceTimer);
     advanceTimer=setTimeout(()=>{
       advanceTimer=null;
       if(mode!=='quizNomos' && mode!=='quizCapital') return; // tab changed meanwhile
-      qi++; nextQuestion(); renderQuizSide();
+      nextQuestion(); renderQuizSide();
     }, 950);
   } else {
     streak=0;
-    roundWrong[target]=(roundWrong[target]||0)+1;
     pathEls[k].classList.add('wrong');
-    pathEls[target].classList.add('target');
-    flash('Λάθος. '+wrongSentence(target,k), false);
-    answeredLog.unshift({k:target, ok:false});
+    pathEls[t].classList.add('target');
+    flash('Λάθος. '+wrongSentence(t,k), false);
+    answeredLog.unshift({k:t, ok:false});
+    recordAnswer(t, false);
     locked=true;
     nextBtn.style.display='inline-block';
   }
   renderQuizSide();
 }
+// persist one answer immediately so progress & the leaderboard stay live
+function recordAnswer(targetKey, correct){
+  const ud=userData(); if(!ud) return;
+  ud.answered=(ud.answered||0)+1;
+  if(correct) ud.correct=(ud.correct||0)+1;
+  ud.bestStreak=Math.max(ud.bestStreak||0, streak);
+  if(!ud.perNomos[targetKey]) ud.perNomos[targetKey]={asked:0, wrong:0};
+  ud.perNomos[targetKey].asked++; if(!correct) ud.perNomos[targetKey].wrong++;
+  if(!ud.perMode[mode]) ud.perMode[mode]={a:0,c:0};
+  ud.perMode[mode].a++; if(correct) ud.perMode[mode].c++;
+  saveStore();
+  refreshLiveViews();
+}
+// re-render progress / leaderboard when they are the active view (and across tabs)
+function refreshLiveViews(){
+  if(mode==='leaderboard') renderLeaderboard();
+  else if(mode==='progress') renderProgress();
+}
+window.addEventListener('storage', e=>{
+  if(e.key!==LS_KEY) return;
+  store=loadStore();
+  refreshLiveViews();
+});
 function sentence(k){ const n=MAP.nomoi[k]; return `Νομός ${n.name} — πρωτεύουσα ${n.capital}.`; }
 function wrongSentence(t,c){
   const tn=MAP.nomoi[t], cn=MAP.nomoi[c];
@@ -725,32 +756,19 @@ function wrongSentence(t,c){
 function flash(msg, ok){
   promptEl.innerHTML = `<span class="feedback ${ok?'good':'bad'}">${msg}</span>`;
 }
-nextBtn.onclick=()=>{ qi++; nextQuestion(); renderQuizSide(); };
-skipBtn.onclick=()=>{
-  if(locked) return;
-  // re-queue the current target among the remaining questions (not immediately repeated)
-  const k=queue.splice(qi,1)[0];
-  const pendingAfter = queue.length - qi;          // pending items still ahead
-  if(pendingAfter>0){
-    const ins = qi + 1 + Math.floor(Math.random()*pendingAfter);
-    queue.splice(Math.min(ins, queue.length), 0, k);
-  } else {
-    queue.push(k);                                  // it was the last one left
-  }
-  nextQuestion(); renderQuizSide();
-};
+nextBtn.onclick=()=>{ nextQuestion(); renderQuizSide(); };
+skipBtn.onclick=()=>{ if(locked) return; nextQuestion(); renderQuizSide(); };  // draw another random region
 
 function renderQuizSide(){
   sideTitle.textContent = mode==='quizNomos' ? 'Βρες τον Νομό' : 'Βρες την Πρωτεύουσα';
-  sideSmall.textContent = `Ερώτηση ${Math.min(qi+1,queue.length)} / ${queue.length}`;
-  const pct = Math.round((qi/queue.length)*100);
-  const acc = asked? Math.round(score/asked*100):0;
+  sideSmall.textContent = `${sessionAsked} ${sessionAsked===1?'ερώτηση':'ερωτήσεις'}`;
+  const acc = sessionAsked? Math.round(sessionCorrect/sessionAsked*100):0;
   let html=`<div class="stats">
-      <div class="stat"><div class="n">${score}</div><div class="l">Σωστά</div></div>
+      <div class="stat"><div class="n">${sessionCorrect}</div><div class="l">Σωστά</div></div>
       <div class="stat"><div class="n">${streak}</div><div class="l">Σερί</div></div>
       <div class="stat"><div class="n">${acc}%</div><div class="l">Ακρίβεια</div></div>
     </div>
-    <div class="progress"><span style="width:${pct}%"></span></div>`;
+    <div class="progress"><span style="width:${acc}%"></span></div>`;
   if(answeredLog.length){
     html+='<div class="log"><h4>Ιστορικό</h4><ul>';
     for(const e of answeredLog.slice(0,14)){
@@ -760,34 +778,6 @@ function renderQuizSide(){
     html+='</ul></div>';
   }
   sideBody.innerHTML=html;
-}
-function commitRound(){
-  const ud=userData(); if(!ud) return;
-  const total=queue.length;
-  const acc= total? Math.round(score/total*100):0;
-  ud.rounds.push({mode, score, total, acc, best, date:Date.now()});
-  if(ud.rounds.length>200) ud.rounds=ud.rounds.slice(-200);
-  for(const k in roundAsked){
-    if(!ud.perNomos[k]) ud.perNomos[k]={asked:0,wrong:0};
-    ud.perNomos[k].asked+=roundAsked[k];
-    ud.perNomos[k].wrong+=(roundWrong[k]||0);
-  }
-  saveStore();
-}
-function endRound(){
-  skipBtn.style.display='none'; nextBtn.style.display='none';
-  commitRound();
-  const ud=userData();
-  document.getElementById('ovTitle').textContent = 'Ολοκληρώθηκε!';
-  document.getElementById('ovScore').textContent = `${score} / ${queue.length}`;
-  const pct=Math.round(score/queue.length*100);
-  let msg = pct===100? 'Τέλειο! Τα ξέρεις όλα! 🎉'
-          : pct>=80? 'Πολύ καλά! Λίγο ακόμα για το άριστα.'
-          : pct>=50? 'Καλή προσπάθεια — συνέχισε την εξάσκηση.'
-          : 'Συνέχισε να εξασκείσαι, θα τα καταφέρεις!';
-  const extra = ud ? `  ·  ${user}: ${ud.rounds.length} ${ud.rounds.length===1?'γύρος':'γύροι'}` : '';
-  document.getElementById('ovSub').textContent = `${msg}  (Καλύτερο σερί: ${best})${extra}`;
-  overlay.classList.remove('hidden');
 }
 
 // ----- PROGRESS -----
@@ -811,43 +801,35 @@ function renderProgress(){
     document.getElementById('pgChoose').onclick=openNick; return;
   }
   sideSmall.textContent=user;
-  const rounds=ud.rounds||[];
-  if(!rounds.length){
-    sideBody.innerHTML='<div class="prog"><div class="empty">Δεν έχεις ολοκληρώσει ακόμα κάποιον γύρο.<br><br>Παίξε «Βρες τον Νομό» ή «Βρες την Πρωτεύουσα» και η πρόοδός σου θα εμφανιστεί εδώ.</div></div>';
+  const answered=ud.answered||0;
+  if(!answered){
+    sideBody.innerHTML='<div class="prog"><div class="empty">Δεν έχεις απαντήσει ακόμα σε καμία ερώτηση.<br><br>Παίξε «Βρες τον Νομό» ή «Βρες την Πρωτεύουσα» και η πρόοδός σου θα εμφανιστεί εδώ.</div></div>';
     return;
   }
-  const games=rounds.length;
-  const bestAcc=Math.max(...rounds.map(r=>r.acc));
-  const avgAcc=Math.round(rounds.reduce((s,r)=>s+r.acc,0)/games);
-  const bestStreak=Math.max(...rounds.map(r=>r.best||0));
-  const modeBest=m=>{ const rs=rounds.filter(r=>r.mode===m); return rs.length?Math.max(...rs.map(r=>r.acc)):null; };
+  const correct=ud.correct||0;
+  const acc=Math.round(correct/answered*100);
+  const bestStreak=ud.bestStreak||0;
+  const mAcc=m=>{ const x=ud.perMode[m]; return x&&x.a? Math.round(x.c/x.a*100):null; };
   const weak=Object.keys(ud.perNomos||{}).map(k=>({k,...ud.perNomos[k]}))
       .filter(x=>x.asked>=1 && x.wrong>0).map(x=>({...x, rate:x.wrong/x.asked}))
       .sort((a,b)=> b.rate-a.rate || b.wrong-a.wrong).slice(0,8);
   let html='<div class="prog">';
   html+=`<div class="kpis">
-    <div class="kpi"><div class="n">${games}</div><div class="l">Γύροι</div></div>
-    <div class="kpi"><div class="n">${bestAcc}%</div><div class="l">Καλύτερη ακρίβεια</div></div>
-    <div class="kpi"><div class="n">${avgAcc}%</div><div class="l">Μέση ακρίβεια</div></div>
+    <div class="kpi"><div class="n">${answered}</div><div class="l">Ερωτήσεις</div></div>
+    <div class="kpi"><div class="n">${acc}%</div><div class="l">Ακρίβεια</div></div>
+    <div class="kpi"><div class="n">${correct}</div><div class="l">Σωστά</div></div>
     <div class="kpi"><div class="n">${bestStreak}</div><div class="l">Καλύτερο σερί</div></div>
   </div>`;
-  html+='<h4>Ανά παιχνίδι (καλύτερη ακρίβεια)</h4><div class="modebars">';
-  html+=modebarHtml('Βρες τον Νομό', modeBest('quizNomos'));
-  html+=modebarHtml('Βρες την Πρωτεύουσα', modeBest('quizCapital'));
+  html+='<h4>Ανά παιχνίδι (ακρίβεια)</h4><div class="modebars">';
+  html+=modebarHtml('Βρες τον Νομό', mAcc('quizNomos'));
+  html+=modebarHtml('Βρες την Πρωτεύουσα', mAcc('quizCapital'));
   html+='</div>';
   if(weak.length){
     html+='<h4>Νομοί για επανάληψη</h4><ul class="weak">';
     for(const w of weak){ const n=MAP.nomoi[w.k]; html+=`<li data-key="${w.k}"><span>Νομός ${n.name}</span><span class="pct">${Math.round(w.rate*100)}% λάθος</span></li>`; }
     html+='</ul>';
   }
-  html+='<h4>Πρόσφατοι γύροι</h4><ul class="recent">';
-  for(const r of rounds.slice().reverse().slice(0,10)){
-    const d=new Date(r.date);
-    const ds=d.toLocaleDateString('el-GR',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('el-GR',{hour:'2-digit',minute:'2-digit'});
-    const mlab=r.mode==='quizNomos'?'Νομός':'Πρωτεύουσα';
-    html+=`<li><span class="dt">${ds} <span class="md">· ${mlab}</span></span><span class="sc">${r.score}/${r.total}</span></li>`;
-  }
-  html+='</ul></div>';
+  html+='</div>';
   sideBody.innerHTML=html;
   sideBody.querySelectorAll('.weak li').forEach(li=>{
     const k=li.dataset.key;
@@ -855,17 +837,13 @@ function renderProgress(){
     li.onmouseleave=()=>setHover(k,false);
   });
 }
-document.getElementById('ovRestart').onclick=()=>{ overlay.classList.add('hidden'); startQuiz(); };
 
-// ----- LEADERBOARD -----
-let lbSort='bestAcc';
+// ----- LEADERBOARD (live) -----
+let lbSort='acc';
 function userAgg(name){
-  const u=store.users[name]||{rounds:[],created:0}; const rs=u.rounds||[];
-  const games=rs.length;
-  const bestAcc=games?Math.max(...rs.map(r=>r.acc)):0;
-  const avgAcc=games?Math.round(rs.reduce((s,r)=>s+r.acc,0)/games):0;
-  const bestStreak=games?Math.max(...rs.map(r=>r.best||0)):0;
-  return {name,games,bestAcc,avgAcc,bestStreak};
+  const g=aggOf(store.users[name]);
+  const acc=g.answered?Math.round(g.correct/g.answered*100):0;
+  return {name, answered:g.answered, correct:g.correct, acc, bestStreak:g.bestStreak};
 }
 function startLeaderboard(){
   promptEl.innerHTML='Κατάταξη όλων των παικτών σε αυτή τη συσκευή — δες ποιος ξέρει καλύτερα τους νομούς.';
@@ -873,34 +851,35 @@ function startLeaderboard(){
 }
 function renderLeaderboard(){
   sideTitle.textContent='Κατάταξη';
-  const rows=Object.keys(store.users||{}).map(userAgg).filter(r=>r.games>0);
+  const rows=Object.keys(store.users||{}).map(userAgg).filter(r=>r.answered>0);
   sideSmall.textContent = rows.length ? rows.length+(rows.length===1?' παίκτης':' παίκτες') : '';
   if(!rows.length){
-    sideBody.innerHTML='<div class="lbempty">Δεν υπάρχουν ακόμα καταγραφές.<br><br>Ολοκλήρωσε έναν γύρο σε κάποιο παιχνίδι και θα εμφανιστείς εδώ!</div>';
+    sideBody.innerHTML='<div class="lbempty">Δεν υπάρχουν ακόμα καταγραφές.<br><br>Παίξε ένα παιχνίδι και θα εμφανιστείς εδώ!</div>';
     return;
   }
-  const labels={bestAcc:'Ακρίβεια', games:'Γύροι', bestStreak:'Σερί'};
+  const labels={acc:'Ακρίβεια', answered:'Ερωτήσεις', bestStreak:'Σερί'};
   const cmp={
-    bestAcc:(a,b)=> b.bestAcc-a.bestAcc || b.games-a.games || b.bestStreak-a.bestStreak,
-    games:(a,b)=> b.games-a.games || b.bestAcc-a.bestAcc || b.bestStreak-a.bestStreak,
-    bestStreak:(a,b)=> b.bestStreak-a.bestStreak || b.bestAcc-a.bestAcc || b.games-a.games,
+    acc:(a,b)=> b.acc-a.acc || b.answered-a.answered || b.bestStreak-a.bestStreak,
+    answered:(a,b)=> b.answered-a.answered || b.acc-a.acc || b.bestStreak-a.bestStreak,
+    bestStreak:(a,b)=> b.bestStreak-a.bestStreak || b.acc-a.acc || b.answered-a.answered,
   };
+  if(!cmp[lbSort]) lbSort='acc';
   rows.sort(cmp[lbSort]);
   const medals=['🥇','🥈','🥉'];
   let html='<div class="lbwrap"><div class="lbsort">';
-  for(const key of ['bestAcc','games','bestStreak'])
+  for(const key of ['acc','answered','bestStreak'])
     html+=`<button class="schip ${key===lbSort?'on':''}" data-sort="${key}">${labels[key]}</button>`;
   html+='</div><ol class="lb">';
   rows.forEach((r,i)=>{
     const me=r.name===user;
     const rank = i<3 ? `<span class="rank medal">${medals[i]}</span>` : `<span class="rank">${i+1}</span>`;
     let mv,ml;
-    if(lbSort==='games'){ mv=r.games; ml='Γύροι'; }
+    if(lbSort==='answered'){ mv=r.answered; ml='Ερωτήσεις'; }
     else if(lbSort==='bestStreak'){ mv=r.bestStreak; ml='Σερί'; }
-    else { mv=r.bestAcc+'%'; ml='Ακρίβεια'; }
+    else { mv=r.acc+'%'; ml='Ακρίβεια'; }
     html+=`<li class="${me?'me':''}">${rank}`+
       `<span class="who"><span class="nm">${escapeHtml(r.name)}${me?'<span class="youtag">εσύ</span>':''}</span>`+
-      `<span class="sub">${r.games} ${r.games===1?'γύρος':'γύροι'} · μ.ό. ${r.avgAcc}% · σερί ${r.bestStreak}</span></span>`+
+      `<span class="sub">${r.answered} ${r.answered===1?'ερώτηση':'ερωτήσεις'} · ${r.correct} σωστά · σερί ${r.bestStreak}</span></span>`+
       `<span class="metric"><span class="v">${mv}</span><div class="ml">${ml}</div></span></li>`;
   });
   html+='</ol></div>';
