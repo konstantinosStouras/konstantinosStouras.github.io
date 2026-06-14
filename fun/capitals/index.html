@@ -291,6 +291,9 @@
   .medal.b { background: linear-gradient(180deg,#fcd9b6,#d08a52); }
   .board-empty { color: var(--muted); font-size: 14px; padding: 18px 4px; text-align: center; }
   .board-note { font-size: 12px; color: var(--muted); margin-top: 12px; }
+  .board-scope { display: inline-block; font-size: 12px; font-weight: 700; margin: 2px 0 8px;
+    padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: var(--tile); }
+  .board-scope.global { color: var(--good); border-color: rgba(52,211,153,0.4); }
 
   /* ---------- Stats ---------- */
   .stat-grid {
@@ -475,6 +478,7 @@
     <div class="modal wide modal-close">
       <button class="x-btn" id="boardClose" title="Close">×</button>
       <h2 data-i18n="leaderboard">Leaderboard</h2>
+      <div id="boardScope" class="board-scope"></div>
       <p class="sub" id="boardSub">Everyone who has played on this device, ranked.</p>
 
       <div class="board-tools">
@@ -502,12 +506,97 @@
         </table>
         <div class="board-empty hidden" id="boardEmpty" data-i18n="boardEmpty">No players yet. Answer a few questions to get on the board.</div>
       </div>
-      <p class="board-note" data-i18n="boardNote">Scores are saved in this browser, so the leaderboard shows every nickname that has played here. Mastered counts the capitals named with no hints.</p>
+      <p class="board-note" id="boardNote">Scores are saved in this browser, so the leaderboard shows every nickname that has played here. Mastered counts the capitals named with no hints.</p>
     </div>
   </div>
 
   <script src="countries.js"></script>
   <script src="countries.el.js"></script>
+
+  <!--
+    ─────────────────────────────────────────────────────────────────────────
+    GLOBAL LEADERBOARD — Firebase Realtime Database
+    ─────────────────────────────────────────────────────────────────────────
+    Reuses the Snake project (stouras-snake); this app writes to a separate
+    "capitals_leaderboard" node so the two never collide. The web config is
+    meant to be public — security comes from the Database Rules. Add this block
+    in Firebase console (Realtime Database → Rules) to switch the board global:
+
+      "capitals_leaderboard": {
+        ".read": true,
+        ".indexOn": "points",
+        "$user": {
+          ".write": "newData.hasChildren(['name','points','updated'])",
+          "name":     { ".validate": "newData.isString() && newData.val().length <= 24" },
+          "points":   { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000000" },
+          "accuracy": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
+          "answered": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+          "mastered": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000" },
+          "streak":   { ".validate": "newData.isNumber() && newData.val() >= 0" },
+          "updated":  { ".validate": "newData.isNumber()" }
+        }
+      }
+
+    Until the rules allow this node, reads/writes are denied and the page falls
+    back to the LOCAL (this-browser-only) leaderboard automatically.
+  -->
+  <script type="module">
+    const FIREBASE_CONFIG = {
+      apiKey: "AIzaSyB75wGPTvquIGme8XrGeBoQNFo52nquQkE",
+      authDomain: "stouras-snake.firebaseapp.com",
+      databaseURL: "https://stouras-snake-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "stouras-snake",
+      storageBucket: "stouras-snake.firebasestorage.app",
+      messagingSenderId: "678091659383",
+      appId: "1:678091659383:web:7446d607cfa99eae000e72",
+      measurementId: "G-Z3085SMKJ5"
+    };
+    const looksConfigured = FIREBASE_CONFIG.databaseURL &&
+      !/YOUR_PROJECT|YOUR_API_KEY/.test(JSON.stringify(FIREBASE_CONFIG));
+    if (looksConfigured) {
+      try {
+        const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+        const { getDatabase, ref, query, orderByChild, limitToLast, onValue, runTransaction } =
+          await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js");
+
+        const app = initializeApp(FIREBASE_CONFIG);
+        const db = getDatabase(app);
+        const NODE = "capitals_leaderboard";
+        const num = (x) => (Number.isFinite(+x) ? Math.max(0, Math.round(+x)) : 0);
+        const sanitizeKey = (n) => String(n || "").toLowerCase().replace(/[.#$/\[\]]/g, "_").slice(0, 32) || "anon";
+
+        window.CapitalsLeaderboard = {
+          scope: "global",
+          // Keep a player's best result (transaction avoids clobbering a higher score).
+          submit(p) {
+            const r = ref(db, NODE + "/" + sanitizeKey(p.name));
+            return runTransaction(r, (cur) => {
+              const next = {
+                name: String(p.name || "").slice(0, 24),
+                points: num(p.points), accuracy: num(p.accuracy),
+                answered: num(p.answered), mastered: num(p.mastered), streak: num(p.streak),
+                updated: Date.now()
+              };
+              if (cur && typeof cur.points === "number" && cur.points > next.points) return cur;
+              return next;
+            }).catch((e) => console.warn("Capitals leaderboard submit failed:", e));
+          },
+          subscribe(cb) {
+            const q = query(ref(db, NODE), orderByChild("points"), limitToLast(200));
+            onValue(q, (snap) => {
+              const rows = [];
+              snap.forEach((c) => { const v = c.val(); if (v && typeof v.points === "number") { v.key = c.key; rows.push(v); } });
+              cb(rows);
+            }, (err) => console.warn("Capitals leaderboard read failed:", err));
+          }
+        };
+        window.dispatchEvent(new Event("capitals-leaderboard-ready"));
+      } catch (e) {
+        console.warn("Firebase init failed — using local leaderboard.", e);
+      }
+    }
+  </script>
+
   <script>
   (function () {
     "use strict";
@@ -556,6 +645,9 @@
         accShort: "Acc.", answeredShort: "Answered",
         boardEmpty: "No players yet. Answer a few questions to get on the board.",
         boardNote: "Scores are saved in this browser, so the leaderboard shows every nickname that has played here. Mastered counts the capitals named with no hints.",
+        boardNoteGlobal: "This leaderboard is shared worldwide. Mastered counts the capitals named with no hints.",
+        scopeGlobal: "🌐 Global leaderboard", scopeLocal: "📱 This device only",
+        playersGlobalN: function (n) { return n + " player" + (n === 1 ? "" : "s") + " worldwide."; },
         you: "you",
         // dynamic
         qText: function (c) { return "What is the capital of <span class=\"country\">" + c + "</span>?"; },
@@ -572,7 +664,7 @@
         seenN: function (c, n, ok) { return "You have seen " + c + " " + n + " time" + (n === 1 ? "" : "s") + (ok ? ", correct " + ok + "." : "."); },
         seenFirst: function (c) { return "First time seeing " + c + "."; },
         since: function (d) { return "Learning since " + d; },
-        playersN: function (n) { return n + " player" + (n === 1 ? "" : "s") + " have played on this device."; },
+        playersN: function (n) { return n + (n === 1 ? " player has" : " players have") + " played on this device."; },
         playersEmpty: "Everyone who plays on this device appears here.",
         recentN: function (n) { return n + " questions answered in the last 14 days."; },
         recentNone: "No activity yet in the last 14 days — answer a few to see your chart.",
@@ -605,6 +697,9 @@
         accShort: "Ακρ.", answeredShort: "Απαντ.",
         boardEmpty: "Κανείς δεν έχει παίξει ακόμη. Απάντησε μερικές ερωτήσεις για να μπεις στην κατάταξη.",
         boardNote: "Οι βαθμοί αποθηκεύονται σε αυτό το πρόγραμμα περιήγησης, ώστε η κατάταξη δείχνει κάθε ψευδώνυμο που έχει παίξει εδώ.",
+        boardNoteGlobal: "Αυτή η κατάταξη είναι κοινή για όλο τον κόσμο. Οι κατακτήσεις μετρούν τις πρωτεύουσες που βρήκες χωρίς βοήθεια.",
+        scopeGlobal: "🌐 Παγκόσμια κατάταξη", scopeLocal: "📱 Μόνο σε αυτή τη συσκευή",
+        playersGlobalN: function (n) { return n === 1 ? "1 παίκτης παγκοσμίως." : n + " παίκτες παγκοσμίως."; },
         you: "εσύ",
         qText: function (c) { return "Ποια είναι η πρωτεύουσα της χώρας <span class=\"country\">" + c + "</span>;"; },
         capLine: function (cap, c) { return "<b>" + cap + "</b> <span class=\"of\">— η πρωτεύουσα της χώρας " + c + "</span>"; },
@@ -757,7 +852,8 @@
       bars: $("bars"), barsLegend: $("barsLegend"), resetBtn: $("resetBtn"),
       // leaderboard modal
       boardOverlay: $("boardOverlay"), boardClose: $("boardClose"), boardSub: $("boardSub"),
-      boardBody: $("boardBody"), boardEmpty: $("boardEmpty"), thPoints: $("thPoints")
+      boardBody: $("boardBody"), boardEmpty: $("boardEmpty"), thPoints: $("thPoints"),
+      boardScope: $("boardScope"), boardNote: $("boardNote")
     };
 
     // ---------- region filter ----------
@@ -949,6 +1045,7 @@
       if (profile.currentStreak > profile.bestStreak) profile.bestStreak = profile.currentStreak;
       pushHistory(current.c, "correct", hintLevel);
       persist();
+      pushGlobal();
 
       showReveal(true, pts, starsForHint(hintLevel));
       updateStreakDisplay();
@@ -968,6 +1065,7 @@
       profile.currentStreak = 0;
       pushHistory(current.c, "revealed", 3);
       persist();
+      pushGlobal();
 
       renderMask(); // fully revealed tiles
       showReveal(false, 0, "—");
@@ -1119,7 +1217,7 @@
 
     function activate(nick) {
       nick = (nick || "").trim();
-      if (nick.length < 1) { els.nickErr.textContent = "Please enter a nickname."; return; }
+      if (nick.length < 1) { els.nickErr.textContent = t("errNick"); return; }
       if (nick.length > 24) nick = nick.slice(0, 24);
       pKey = profileKey(nick);
       profile = profiles[pKey] || newProfile(nick);
@@ -1127,6 +1225,7 @@
       profiles[pKey] = profile;
       try { localStorage.setItem(LAST_KEY, pKey); } catch (e) {}
       persist();
+      pushGlobal(); // publish existing stats for returning players
       closeNick();
       updateWho();
       updateStreakDisplay();
@@ -1211,35 +1310,54 @@
 
     // ---------- leaderboard modal ----------
     var boardSort = "points";
+    var globalRows = null;     // set to an array once the global board is live
+    var globalAttached = false;
     function escapeHtml(s) {
       return String(s).replace(/[&<>"']/g, function (ch) {
         return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch];
       });
     }
-    function renderBoard() {
-      // build a fresh list from all stored profiles
-      var rows = Object.keys(profiles).map(function (k) {
+    function sanitizeNick(n) {
+      return String(n || "").toLowerCase().replace(/[.#$/\[\]]/g, "_").slice(0, 32) || "anon";
+    }
+    // Rows for the board: the global list when available, otherwise the
+    // nicknames stored locally in this browser.
+    function boardRows() {
+      if (globalRows) {
+        return globalRows.map(function (r) {
+          return {
+            key: r.key, nick: r.name || r.key,
+            points: r.points || 0, accuracy: r.accuracy || 0,
+            answered: r.answered || 0, mastered: r.mastered || 0, bestStreak: r.streak || 0
+          };
+        });
+      }
+      return Object.keys(profiles).map(function (k) {
         var p = profiles[k];
         return {
-          key: k,
-          nick: p.nick || k,
-          points: p.points || 0,
-          accuracy: accuracyOf(p),
-          answered: p.answered || 0,
-          mastered: masteredOf(p),
-          bestStreak: p.bestStreak || 0
+          key: k, nick: p.nick || k,
+          points: p.points || 0, accuracy: accuracyOf(p),
+          answered: p.answered || 0, mastered: masteredOf(p), bestStreak: p.bestStreak || 0
         };
       }).filter(function (r) { return r.answered > 0 || r.points > 0; });
+    }
+    function renderBoard() {
+      var isGlobal = (globalRows !== null);
+      var rows = boardRows();
 
       rows.sort(function (a, b) {
         if (b[boardSort] !== a[boardSort]) return b[boardSort] - a[boardSort];
-        // tie breakers: points, accuracy, answered
         if (b.points !== a.points) return b.points - a.points;
         if (b.accuracy !== a.accuracy) return b.accuracy - a.accuracy;
         return b.answered - a.answered;
       });
 
-      els.boardSub.textContent = rows.length ? t("playersN")(rows.length) : t("playersEmpty");
+      els.boardScope.textContent = isGlobal ? t("scopeGlobal") : t("scopeLocal");
+      els.boardScope.className = "board-scope" + (isGlobal ? " global" : "");
+      els.boardNote.textContent = isGlobal ? t("boardNoteGlobal") : t("boardNote");
+      els.boardSub.textContent = rows.length
+        ? (isGlobal ? t("playersGlobalN")(rows.length) : t("playersN")(rows.length))
+        : t("playersEmpty");
 
       // header highlight for active sort
       Array.prototype.forEach.call(document.querySelectorAll(".sortbtn"), function (b) {
@@ -1253,12 +1371,13 @@
       }
       els.boardEmpty.classList.add("hidden");
 
+      var meId = isGlobal ? sanitizeNick(profile && profile.nick) : pKey;
       var medal = ["g", "s", "b"];
       var html = rows.map(function (r, i) {
         var rankCell = (i < 3)
           ? '<span class="medal ' + medal[i] + '">' + (i + 1) + "</span>"
           : (i + 1);
-        var isMe = (r.key === pKey);
+        var isMe = (r.key === meId);
         var you = isMe ? ' <span class="youtag">' + t("you") + '</span>' : "";
         return '<tr class="' + (isMe ? "me" : "") + '">' +
           '<td class="l rank">' + rankCell + "</td>" +
@@ -1274,6 +1393,34 @@
     }
     function openBoard() { renderBoard(); els.boardOverlay.classList.remove("hidden"); }
     function closeBoard() { els.boardOverlay.classList.add("hidden"); }
+
+    // ---------- global leaderboard (Firebase, optional) ----------
+    // Publishes this profile's summary and, when the worldwide board is live,
+    // feeds it into renderBoard(). Falls back silently to the local board.
+    function pushGlobal() {
+      if (!window.CapitalsLeaderboard || !profile || (profile.answered || 0) < 1) return;
+      try {
+        window.CapitalsLeaderboard.submit({
+          name: profile.nick,
+          points: profile.points || 0,
+          accuracy: accuracyOf(profile),
+          answered: profile.answered || 0,
+          mastered: masteredOf(profile),
+          streak: profile.bestStreak || 0
+        });
+      } catch (e) {}
+    }
+    function attachGlobal() {
+      if (globalAttached || !window.CapitalsLeaderboard || window.CapitalsLeaderboard.scope !== "global") return;
+      globalAttached = true;
+      window.CapitalsLeaderboard.subscribe(function (rows) {
+        globalRows = rows || [];
+        if (!els.boardOverlay.classList.contains("hidden")) renderBoard();
+      });
+      pushGlobal();
+    }
+    window.addEventListener("capitals-leaderboard-ready", attachGlobal);
+    if (window.CapitalsLeaderboard) attachGlobal();
 
     // ---------- events ----------
     els.submitBtn.addEventListener("click", checkAnswer);
