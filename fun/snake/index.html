@@ -267,7 +267,7 @@
     <canvas id="game" width="600" height="600"></canvas>
     <div class="overlay" id="overlay">
       <h2 id="ov-title">Snake</h2>
-      <p id="ov-text">Guide the snake with your <strong>mouse</strong> or the <strong>arrow keys</strong>. Gobble the fruit — each one makes you longer and a touch faster. Don't bite your own tail!</p>
+      <p id="ov-text">Guide the snake with your <strong>mouse</strong> or the <strong>arrow keys</strong>. Gobble the fruit — each one makes you longer and a touch faster. Walls are safe (you just bump off them) — only biting your own tail ends the game!</p>
       <button class="btn" id="startBtn">Play</button>
       <div class="hint"><kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> or move the mouse · <kbd>Space</kbd> to pause</div>
     </div>
@@ -527,8 +527,9 @@
     const nx = head.x + dir.x;
     const ny = head.y + dir.y;
 
-    // wall collision
-    if (nx < 0 || ny < 0 || nx >= GRID || ny >= GRID) return die();
+    // wall: don't die, just bump. The move into the wall is cancelled, so the
+    // snake stays put this tick and waits for the player to steer elsewhere.
+    if (nx < 0 || ny < 0 || nx >= GRID || ny >= GRID) return;
 
     // self collision (tail tip will move away unless we're growing — check
     // against all but the last cell to be forgiving on the moving tail)
@@ -751,7 +752,8 @@
     const toggle = document.getElementById("modeToggle");
     if (toggle) toggle.style.display = "none";
     el.ovText.innerHTML = "<strong>Swipe</strong> in any direction to steer the snake. " +
-      "Gobble the fruit — each one makes you longer and a touch faster. Don't bite your own tail!";
+      "Gobble the fruit — each one makes you longer and a touch faster. Walls are safe " +
+      "(you just bump off them) — only biting your own tail ends the game!";
     const hint = document.querySelector(".hint");
     if (hint) hint.innerHTML = "Swipe to turn · tap the board to pause / resume";
   }
