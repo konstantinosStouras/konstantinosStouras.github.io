@@ -82,11 +82,12 @@
 
   /* ---------- Header ---------- */
   header.app {
-    display: flex; align-items: center; gap: 12px;
-    flex-wrap: wrap; justify-content: space-between;
+    display: flex; align-items: center; gap: 10px;
+    flex-wrap: wrap;
     margin-bottom: 18px;
   }
-  .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .brand { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 auto; }
+  .brand > div { min-width: 0; }
   .brand .logo {
     width: 42px; height: 42px; border-radius: 12px; flex: none;
     background: linear-gradient(180deg, var(--panel-2), var(--panel));
@@ -96,16 +97,19 @@
   .brand h1 {
     margin: 0; font-family: var(--font-display);
     font-size: clamp(21px, 4.4vw, 29px); line-height: 1.05; font-weight: 800;
-    letter-spacing: -0.2px;
+    letter-spacing: -0.2px; white-space: nowrap;
     background: linear-gradient(95deg, #7dd3fc 0%, #a5f3fc 45%, #a5b4fc 100%);
     -webkit-background-clip: text; background-clip: text; color: transparent;
   }
-  .brand p { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
-  .who { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .brand p { margin: 2px 0 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* Controls hug the right and keep their natural width, so the brand (not the
+     controls) absorbs any width difference between English and Greek — the row
+     count no longer changes when you switch language. */
+  .who { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; flex: 0 0 auto; margin-left: auto; }
   .who .pill {
     background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
-    padding: 6px 12px; font-size: 13px; color: var(--text);
-    display: inline-flex; align-items: center; gap: 7px;
+    padding: 5px 10px; font-size: 12.5px; color: var(--text);
+    display: inline-flex; align-items: center; gap: 6px;
   }
   .who .pill b { color: var(--accent); font-weight: 700; }
 
@@ -113,7 +117,7 @@
   .lang-switch { display: inline-flex; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
   .flag-btn {
     appearance: none; border: 1px solid transparent; background: transparent; cursor: pointer;
-    line-height: 0; padding: 4px; border-radius: 8px;
+    line-height: 0; padding: 5px 7px; border-radius: 8px;
     filter: grayscale(0.85) opacity(0.5);
     transition: filter .15s ease, background .15s ease, border-color .15s ease, transform .05s ease;
   }
@@ -132,7 +136,7 @@
   .btn:hover { background: var(--panel-2); }
   .btn:active { transform: translateY(1px); }
   .btn:disabled { opacity: .45; cursor: not-allowed; }
-  .btn.small { padding: 6px 11px; font-size: 13px; border-radius: 9px; }
+  .btn.small { padding: 5px 9px; font-size: 12.5px; border-radius: 9px; }
   .btn.ghost { background: transparent; }
   .btn.primary {
     background: linear-gradient(180deg, var(--accent), #0ea5e9);
@@ -323,7 +327,7 @@
   .board-tools .lbl { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
   .sortbtn { background: var(--tile); border: 1px solid var(--line); color: var(--muted); border-radius: 999px; padding: 5px 11px; font-size: 12.5px; cursor: pointer; font-weight: 600; }
   .sortbtn.active { background: var(--panel-2); color: var(--accent); border-color: var(--accent); }
-  .board-scroll { max-height: 56vh; overflow-y: auto; margin: 0 -4px; }
+  .board-scroll { max-height: 56vh; overflow-y: auto; overflow-x: auto; margin: 0 -4px; -webkit-overflow-scrolling: touch; }
   table.board { width: 100%; border-collapse: collapse; font-size: 14px; }
   table.board th, table.board td { padding: 9px 8px; text-align: right; white-space: nowrap; }
   table.board th { position: sticky; top: 0; background: #0c1d2e; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; border-bottom: 1px solid var(--line); z-index: 1; }
@@ -380,11 +384,22 @@
   footer.app a { color: var(--muted); text-decoration: none; }
   footer.app a:hover { color: var(--accent); }
 
+  /* Narrow widths (large phones down through smaller tablets): drop the controls
+     onto their own full-width row. Above this the brand + controls always share
+     one row in BOTH languages, so switching language never changes the row count
+     (the earlier bug); below it they consistently stack. */
+  @media (max-width: 720px) {
+    .who { flex: 1 1 100%; margin-left: 0; justify-content: flex-start; }
+    .brand h1 { white-space: normal; }
+  }
   @media (max-width: 480px) {
     .card { padding: 18px; }
     .tile { width: 22px; height: 30px; font-size: 16px; }
     .q-flag { font-size: 46px; }
     .q-flag .flag-img { width: 76px; }
+    .map-box svg { max-height: 60vh; }
+    .board-tools { gap: 6px; }
+    table.board th, table.board td { padding: 8px 6px; }
   }
 </style>
 </head>
@@ -1157,7 +1172,7 @@
           x1 = Math.max(x1, b.x + b.width); y1 = Math.max(y1, b.y + b.height);
         } catch (e) {}
       });
-      if (!isFinite(x0)) return;
+      if (!isFinite(x0)) { els.mapNote.textContent = t("notOnMap"); return; }
       var cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
       var g = document.createElementNS(SVGNS, "g");
       g.setAttribute("class", "map-marker");
@@ -1183,7 +1198,7 @@
       solved = false;
       renderFlag(current.flag);
       els.qRegion.textContent = regionLabel(current.region);
-      els.qText.innerHTML = t("qText")(cName(current));
+      els.qText.innerHTML = t("qText")(escapeHtml(cName(current)));
       els.answerInput.value = "";
       els.answerInput.disabled = false;
       els.submitBtn.disabled = false;
@@ -1323,7 +1338,7 @@
         handleCorrect();
       } else {
         profile.wrongGuesses += 1;
-        recordCountry(current.c); // ensure record exists for seen tracking on first wrong? keep seen on solve only
+        recordCountry(current.c); // ensure a record exists; "seen" is only counted on a correct answer or reveal, not on wrong guesses
         persist();
         els.answerInput.classList.remove("shake");
         void els.answerInput.offsetWidth;
@@ -1382,6 +1397,7 @@
       els.bannerLbl.textContent = revCorrect
         ? ((hintLevel <= 0) ? t("correctNoHint") : (hintLevel === 1 ? t("correctOneHint") : t("correctHints")))
         : t("learned");
+      highlightOnMap(current.flag); // re-run so the locator + any "too small" note follow the language
       refreshSeenNote();
     }
     function applyLang() {
