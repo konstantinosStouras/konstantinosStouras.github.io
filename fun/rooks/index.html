@@ -122,8 +122,8 @@
     touch-action:manipulation;user-select:none;
   }
   .play{position:relative;width:100%;}
-  .slots{position:absolute;inset:0;display:grid;gap:3px;}
-  .slot{border-radius:5px;}
+  .slots{position:absolute;inset:0;display:grid;}
+  .slot{border-radius:5px;border:2px solid #8b7355;}
   .slot.p0{background:#f0d9b5;}
   .slot.p1{background:#b58863;}
   .slot.target{cursor:pointer;}
@@ -635,7 +635,6 @@
     elPlay.style.aspectRatio = M + " / " + N;
     elSlots.style.gridTemplateColumns = "repeat("+M+",1fr)";
     elSlots.style.gridTemplateRows = "repeat("+N+",1fr)";
-    elSlots.style.gap = GAP;
     elSlots.innerHTML=""; elPieces.innerHTML=""; elOverlayHost.innerHTML="";
     G.slotEls=[];
     for(var r=0;r<N;r++){
@@ -655,8 +654,8 @@
       var pe=document.createElement("div");
       pe.className="piece "+(pieces[i].player==="white"?"white":"black");
       pe.innerHTML=pieceSVG(G.variant.pieceType);
-      pe.style.width="calc((100% - "+(M-1)+" * "+GAP+") / "+M+")";
-      pe.style.height="calc((100% - "+(N-1)+" * "+GAP+") / "+N+")";
+      pe.style.width=(100/M)+"%";
+      pe.style.height=(100/N)+"%";
       (function(idx){ pe.addEventListener("click", function(ev){ onPieceClick(idx, ev); }); })(i);
       elPieces.appendChild(pe);
       G.pieceEls.push(pe);
@@ -718,8 +717,8 @@
       var p=st.pieces[i], pe=G.pieceEls[i];
       var isWhite=(p.player==="white");
       var selectable = isWhite && st.winner===0 && !G.animating;
-      pe.style.left="calc("+p.c+" * ((100% - "+(M-1)+" * "+GAP+") / "+M+" + "+GAP+"))";
-      pe.style.top="calc("+p.r+" * ((100% - "+(N-1)+" * "+GAP+") / "+N+" + "+GAP+"))";
+      pe.style.left=(p.c*100/M)+"%";
+      pe.style.top=(p.r*100/N)+"%";
       pe.style.transitionDelay = (!isWhite && G.staggerBlack) ? "0.34s" : "0s";
       var cls="piece "+(isWhite?"white":"black");
       if(selectable) cls+=" selectable";
