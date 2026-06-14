@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Snake · stouras.com</title>
 
 <!-- SEO -->
@@ -41,7 +41,7 @@
     --grid: rgba(255,255,255,0.035);
     --shadow: 0 18px 50px rgba(0,0,0,0.45);
   }
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
     margin: 0;
     height: 100%;
@@ -49,16 +49,23 @@
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
     overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: manipulation;
   }
   .wrap {
     min-height: 100%;
+    /* dvh keeps the layout inside the visible area when the mobile address
+       bar shows/hides; falls back to vh on browsers without dvh support. */
+    min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 16px;
-    gap: 14px;
+    padding: max(12px, env(safe-area-inset-top)) 16px max(12px, env(safe-area-inset-bottom));
+    gap: clamp(8px, 1.6vh, 14px);
   }
   header {
     text-align: center;
@@ -132,6 +139,7 @@
     text-align: center;
     gap: 14px;
     background: rgba(8,15,11,0.78);
+    -webkit-backdrop-filter: blur(3px);
     backdrop-filter: blur(3px);
     padding: 20px;
     transition: opacity 0.2s ease;
@@ -220,6 +228,25 @@
     font-size: 11px;
     font-family: inherit;
   }
+
+  /* Comfortable tap targets on touch devices */
+  @media (pointer: coarse) {
+    .btn { padding: 14px 30px; }
+    .ghost, .toggle button { min-height: 44px; }
+  }
+
+  /* Compact the HUD on short / small screens so the board stays large */
+  @media (max-height: 720px), (max-width: 420px) {
+    .wrap { gap: 8px; }
+    .stat { padding: 6px 12px; min-width: 70px; }
+    .stat .value { font-size: 18px; }
+    header p { font-size: 12px; }
+  }
+  @media (max-height: 600px) {
+    header p { display: none; }
+    footer { display: none; }
+    .stat { padding: 5px 10px; }
+  }
 </style>
 </head>
 <body>
@@ -284,17 +311,41 @@
   ];
 
   // --- Responsive sizing ---------------------------------------------------
-  let cell = canvas.width / GRID;
+  // The board is square and sized to whatever space is left after the header,
+  // HUD, controls and footer. We measure those siblings so it fits without
+  // scrolling on phones, tablets and desktops alike, then snap to a whole
+  // number of cells and scale for the device pixel ratio (retina / hi-DPI).
+  let cell = 20;
   function fitCanvas() {
-    const maxByW = Math.min(window.innerWidth - 40, 600);
-    const maxByH = window.innerHeight - 320;
-    let size = Math.max(280, Math.min(maxByW, maxByH, 600));
-    size = Math.floor(size / GRID) * GRID; // keep cells crisp
-    const dpr = window.devicePixelRatio || 1;
+    const wrap = document.querySelector(".wrap");
+    const shell = document.querySelector(".board-shell");
+    const cs = getComputedStyle(wrap);
+    const gap = parseFloat(cs.rowGap) || 12;
+    const padTop = parseFloat(cs.paddingTop) || 0;
+    const padBottom = parseFloat(cs.paddingBottom) || 0;
+    const padLeft = parseFloat(cs.paddingLeft) || 0;
+    const padRight = parseFloat(cs.paddingRight) || 0;
+    const shellPad = 20; // .board-shell padding (10px * 2)
+
+    let reserved = padTop + padBottom + shellPad + 6 /* safety */;
+    const children = Array.from(wrap.children);
+    reserved += gap * Math.max(0, children.length - 1);
+    children.forEach(c => { if (c !== shell) reserved += c.offsetHeight; });
+
+    const vh = window.innerHeight;
+    const vw = window.innerWidth;
+    const availH = vh - reserved;
+    const availW = vw - padLeft - padRight - shellPad;
+
+    let size = Math.min(availW, availH, 640);
+    size = Math.max(210, size);                 // never collapse on tiny screens
+    size = Math.floor(size / GRID) * GRID;      // whole cells = crisp grid
+
+    const dpr = Math.min(window.devicePixelRatio || 1, 2); // cap DPR for mobile perf
     canvas.style.width = size + "px";
     canvas.style.height = size + "px";
-    canvas.width = size * dpr;
-    canvas.height = size * dpr;
+    canvas.width = Math.round(size * dpr);
+    canvas.height = Math.round(size * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     cell = size / GRID;
     draw();
@@ -311,7 +362,13 @@
   let snake, dir, nextDir, fruits, score, eaten, stepMs, accMs, lastTs;
   let running = false, paused = false, gameOver = false, started = false;
   let controlMode = "mouse";
-  let best = Number(localStorage.getItem("snake_best") || 0);
+
+  // localStorage can throw (Safari private mode, disabled cookies) — guard it.
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+  };
+  let best = Number(store.get("snake_best", 0)) || 0;
 
   const el = {
     score: document.getElementById("score"),
@@ -407,14 +464,39 @@
     if (controlMode !== "mouse") return;
     canvasPointer(e);
   });
-  canvas.addEventListener("touchmove", (e) => {
-    if (controlMode !== "mouse") return;
-    if (e.touches[0]) { canvasPointer(e.touches[0]); e.preventDefault(); }
-  }, { passive: false });
+
+  // --- Touch steering: swipe gestures --------------------------------------
+  // Swiping is the natural control on phones/tablets and works no matter which
+  // desktop mode is selected. A short flick in any direction turns the snake;
+  // keeping the finger moving lets you chain turns. A tap starts/unpauses.
+  let touchStart = null;
+  const SWIPE_MIN = 18; // px before a drag counts as a turn
+
   canvas.addEventListener("touchstart", (e) => {
-    if (controlMode !== "mouse") return;
-    if (e.touches[0]) { canvasPointer(e.touches[0]); }
+    const t = e.touches[0];
+    if (!t) return;
+    touchStart = { x: t.clientX, y: t.clientY };
+    if (gameOver) startGame();
+    else if (started && !running) togglePause(false);
+    else if (!started) startGame();
   }, { passive: true });
+
+  canvas.addEventListener("touchmove", (e) => {
+    const t = e.touches[0];
+    if (!touchStart || !t) return;
+    const dx = t.clientX - touchStart.x;
+    const dy = t.clientY - touchStart.y;
+    if (Math.abs(dx) < SWIPE_MIN && Math.abs(dy) < SWIPE_MIN) {
+      e.preventDefault();
+      return;
+    }
+    if (Math.abs(dx) > Math.abs(dy)) setDir(dx > 0 ? "right" : "left");
+    else setDir(dy > 0 ? "down" : "up");
+    touchStart = { x: t.clientX, y: t.clientY }; // re-anchor for chained turns
+    e.preventDefault();
+  }, { passive: false });
+
+  canvas.addEventListener("touchend", () => { touchStart = null; }, { passive: true });
 
   // --- Keyboard ------------------------------------------------------------
   window.addEventListener("keydown", (e) => {
@@ -477,7 +559,7 @@
     running = false;
     if (score > best) {
       best = score;
-      localStorage.setItem("snake_best", String(best));
+      store.set("snake_best", String(best));
       el.best.textContent = best;
     }
     el.ovTitle.textContent = "Game Over";
@@ -654,10 +736,32 @@
   });
 
   window.addEventListener("resize", fitCanvas);
+  window.addEventListener("orientationchange", () => setTimeout(fitCanvas, 200));
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", fitCanvas);
+  }
+
+  // --- Touch-device adaptations --------------------------------------------
+  // On touch-only devices the mouse/arrows toggle is meaningless, so hide it
+  // and explain the swipe control instead.
+  const isTouch = (window.matchMedia && window.matchMedia("(pointer: coarse)").matches)
+    || ("ontouchstart" in window && !window.matchMedia("(pointer: fine)").matches);
+  if (isTouch) {
+    setMode("mouse"); // swipe handler is mode-independent; keeps cursor default
+    const toggle = document.getElementById("modeToggle");
+    if (toggle) toggle.style.display = "none";
+    el.ovText.innerHTML = "<strong>Swipe</strong> in any direction to steer the snake. " +
+      "Gobble the fruit — each one makes you longer and a touch faster. Don't bite your own tail!";
+    const hint = document.querySelector(".hint");
+    if (hint) hint.innerHTML = "Swipe to turn · tap the board to pause / resume";
+  }
 
   // --- Boot ----------------------------------------------------------------
   reset();
   fitCanvas();
+  // Re-fit after fonts/layout settle (mobile browsers report sizes late).
+  setTimeout(fitCanvas, 60);
+  window.addEventListener("load", fitCanvas);
   draw();
 })();
 </script>
