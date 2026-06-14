@@ -938,7 +938,7 @@
   function startGame() {
     const name = cleanName(el.username.value);
     if (!name) { el.username.focus(); return; } // username is required to join
-    if (name !== username) { username = name; store.set("snake_user", username); }
+    if (name !== username) { username = name; store.set("snake_user", username); myBest = 0; }
     el.joinBox.style.display = "none";  // joined: don't ask again this session
     el.startBtn.disabled = false;
     updateYouLine(currentRows);
