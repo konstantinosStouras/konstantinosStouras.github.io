@@ -19,80 +19,77 @@
 <meta property="og:url" content="https://stouras.com/fun/rooks/" />
 <meta property="og:site_name" content="stouras.com" />
 
-<meta name="theme-color" content="#1c1340" />
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%234b3fa3'/%3E%3Cg fill='%23f4f1ff'%3E%3Cpath d='M28 78h44v9H28z'/%3E%3Cpath d='M33 70h34v8H33z'/%3E%3Cpath d='M36 42h28v28H36z'/%3E%3Cpath d='M32 22h8v7h7v-7h7v7h7v-7h8v18H32z'/%3E%3C/g%3E%3C/svg%3E" />
+<meta name="theme-color" content="#6e4a2c" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%236e4a2c'/%3E%3Cg fill='%23f6edd6'%3E%3Cpath d='M28 78h44v9H28z'/%3E%3Cpath d='M33 70h34v8H33z'/%3E%3Cpath d='M36 42h28v28H36z'/%3E%3Cpath d='M32 22h8v7h7v-7h7v7h7v-7h8v18H32z'/%3E%3C/g%3E%3C/svg%3E" />
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;1,500&family=DM+Sans:opsz,wght@9..40,300..700&display=swap" rel="stylesheet" />
 <style>
   :root{
     --violet:#6b5acd;
-    --violet-deep:#4b3fa3;
-    --ink:#1c1340;
-    --bg:#0f0b22;
-    --bg2:#191234;
-    --panel:#ffffff;
-    --text:#1c1340;
-    --muted:#6a6790;
-    --border:#e3e0f1;
-    --green:#27a567;
-    --green-soft:#d9f3e6;
-    --red:#df4d52;
-    --red-soft:#fbe0e0;
-    --gold:#e3b53a;
-    --light:#eef0fb;
-    --dark:#c3c7e6;
-    --radius:14px;
-    --shadow:0 10px 40px rgba(20,10,60,0.16);
+    --violet-deep:#574bb0;
+    --ink:#3a2e22;
+    --cream:#efe7d6;
+    --cream2:#f6f1e6;
+    --card:#ffffff;
+    --muted:#8a7c69;
+    --line:#e7ddc9;
+    --green:#5f9e4f;
+    --red:#d56a5e;
+    --gold:#e0a93a;
+    --light:#f1ebdd;
+    --board-light:#e9d6af;
+    --board-dark:#bd9068;
+    --frame:#6e4a2c;
+    --radius:16px;
+    --shadow:0 14px 40px rgba(74,52,30,0.14);
   }
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html,body{height:100%;}
   body{
     font-family:'DM Sans',system-ui,sans-serif;
-    color:var(--text);
-    background:radial-gradient(1200px 600px at 20% -10%, #2a1f55 0%, var(--bg) 55%) fixed;
+    color:var(--ink);
+    background:var(--cream);
+    background-image:radial-gradient(1100px 520px at 18% -10%, #f7f1e4 0%, var(--cream) 60%);
     min-height:100%;
     line-height:1.55;
     -webkit-font-smoothing:antialiased;
   }
   a{color:var(--violet);}
-  .wrap{max-width:920px;margin:0 auto;padding:22px 16px 60px;}
+  .wrap{max-width:900px;margin:0 auto;padding:22px 16px 60px;}
 
   /* Header */
   .topbar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:14px;}
-  .brand{display:flex;align-items:center;gap:12px;color:#fff;}
-  .brand .logo{width:42px;height:42px;border-radius:11px;background:linear-gradient(150deg,var(--violet),var(--violet-deep));display:grid;place-items:center;box-shadow:var(--shadow);}
-  .brand .logo svg{width:26px;height:26px;}
-  .brand h1{font-family:'Playfair Display',serif;font-weight:600;font-size:clamp(20px,4.6vw,28px);letter-spacing:-0.4px;line-height:1.05;}
-  .brand p{color:#b9b3e0;font-size:12.5px;}
-  .home-link{color:#cfc9f2;font-size:13px;text-decoration:none;border:1px solid rgba(255,255,255,0.18);padding:8px 13px;border-radius:9px;white-space:nowrap;}
-  .home-link:hover{background:rgba(255,255,255,0.08);}
+  .brand{display:flex;align-items:center;gap:12px;color:var(--ink);}
+  .brand .logo{width:44px;height:44px;border-radius:12px;background:linear-gradient(150deg,#8a5e38,#5e3f24);display:grid;place-items:center;box-shadow:var(--shadow);}
+  .brand .logo svg{width:27px;height:27px;}
+  .brand h1{font-family:'Playfair Display',serif;font-weight:600;font-size:clamp(22px,4.8vw,30px);letter-spacing:-0.4px;line-height:1.05;color:var(--ink);}
+  .brand p{color:var(--muted);font-size:12.5px;}
+  .home-link{color:var(--ink);font-size:13px;text-decoration:none;border:1px solid var(--line);background:#fff;padding:8px 13px;border-radius:9px;white-space:nowrap;box-shadow:0 2px 8px rgba(74,52,30,0.06);}
+  .home-link:hover{background:var(--cream2);}
 
   /* Tabs */
   .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
   .tab{
     flex:1 1 auto;min-width:140px;display:flex;align-items:center;justify-content:center;gap:8px;
-    padding:11px 12px;border-radius:11px;cursor:pointer;user-select:none;border:1px solid transparent;
-    background:rgba(255,255,255,0.06);color:#d8d3f3;font-weight:600;font-size:14px;transition:.16s;
+    padding:11px 12px;border-radius:12px;cursor:pointer;user-select:none;border:1px solid var(--line);
+    background:#fff;color:#6f6353;font-weight:600;font-size:14px;transition:.16s;text-decoration:none;
   }
-  .tab:hover{background:rgba(255,255,255,0.12);}
-  .tab.active{background:#fff;color:var(--ink);box-shadow:var(--shadow);}
-  .tab.locked{opacity:.55;cursor:not-allowed;}
+  .tab:hover{background:var(--cream2);}
+  .tab.active{background:#fff;color:var(--ink);border-color:#d9c7a2;box-shadow:var(--shadow);}
+  .tab.locked{opacity:.6;cursor:not-allowed;}
   .tab .ico{width:22px;height:22px;flex:0 0 22px;}
-  .tab .badge{font-size:11px;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--green-soft);color:var(--green);}
-  .tab.active .badge{background:var(--green-soft);}
+  .tab .badge{font-size:11px;font-weight:700;padding:1px 7px;border-radius:999px;background:#e7f0df;color:var(--green);}
+  .tab .badge.lock{background:#efe9df;color:#a99a82;}
 
   /* Panel */
-  .panel{background:var(--panel);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px clamp(16px,3.5vw,26px);}
-  .panel h2{font-family:'Playfair Display',serif;font-weight:600;font-size:clamp(20px,3.8vw,26px);letter-spacing:-0.4px;}
-  .lead{color:var(--violet-deep);font-style:italic;margin:6px 0 14px;font-size:14.5px;}
-  .desc{color:var(--muted);font-size:14.5px;}
-  details.rules{margin:14px 0 4px;border:1px solid var(--border);border-radius:10px;overflow:hidden;}
-  details.rules summary{cursor:pointer;padding:11px 14px;font-weight:600;font-size:14px;list-style:none;background:var(--light);}
-  details.rules summary::-webkit-details-marker{display:none;}
-  details.rules summary::after{content:'+';float:right;color:var(--violet);font-weight:700;}
-  details.rules[open] summary::after{content:'\2013';}
-  details.rules ul{padding:12px 18px 14px 32px;display:flex;flex-direction:column;gap:7px;}
-  details.rules li{font-size:13.5px;color:#3a3560;}
-  details.rules b{color:var(--ink);}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px clamp(16px,3.6vw,30px);}
+  .panel h2{font-family:'Playfair Display',serif;font-weight:600;font-size:clamp(22px,4vw,28px);letter-spacing:-0.4px;color:var(--ink);}
+  .lead{color:var(--violet);font-style:italic;margin:8px 0 12px;font-size:14.5px;}
+  .desc{color:#5b5040;font-size:15px;}
+  .mechanics{margin:16px 0 4px;}
+  .mechanics h3{font-family:'Playfair Display',serif;font-weight:600;font-size:19px;color:var(--ink);margin-bottom:6px;}
+  .mechanics ul{padding-left:22px;display:flex;flex-direction:column;gap:6px;}
+  .mechanics li{font-size:14px;color:#5b5040;}
+  .mechanics b{color:var(--ink);}
 
   .statusbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:16px 0 12px;flex-wrap:wrap;}
   .turn{display:inline-flex;align-items:center;gap:9px;font-weight:600;font-size:15px;}
@@ -108,29 +105,35 @@
   /* Board */
   .board-shell{display:flex;justify-content:center;}
   .board{
-    position:relative;width:100%;max-width:760px;margin:0 auto;
-    border-radius:12px;overflow:hidden;
-    box-shadow:inset 0 0 0 1px rgba(20,10,60,0.06), 0 8px 26px rgba(20,10,60,0.14);
+    position:relative;width:100%;max-width:740px;margin:0 auto;
+    border:9px solid var(--frame);border-radius:8px;overflow:hidden;
+    box-shadow:0 12px 32px rgba(74,52,30,0.22), inset 0 0 0 1px rgba(0,0,0,0.18);
     touch-action:manipulation;user-select:none;
   }
   .slots{position:absolute;inset:0;display:grid;}
   .slot{position:relative;}
-  .slot.p0{background:var(--light);}
-  .slot.p1{background:var(--dark);}
+  .slot.p0{background:var(--board-light);}
+  .slot.p1{background:var(--board-dark);}
   .slot.target{cursor:pointer;}
-  /* valid move marker */
+  /* full-square move fills */
+  .slot.valid::before,.slot.invalid::before,.slot.winning-move::before,
+  .slot.losing-move::before,.slot.drawing-move::before,.slot.terminated::before{
+    content:'';position:absolute;inset:0;
+  }
+  .slot.valid::before{background:rgba(95,158,79,0.50);}
+  .slot.winning-move::before{background:rgba(95,158,79,0.66);}
+  .slot.losing-move::before{background:rgba(213,106,94,0.55);}
+  .slot.drawing-move::before{background:rgba(224,169,58,0.55);}
+  .slot.invalid::before{background:rgba(214,118,108,0.55);}
+  .slot.terminated::before{background:rgba(206,86,74,0.62);}
+  /* centre dot for clickable destinations */
   .slot.valid::after,.slot.winning-move::after,.slot.losing-move::after,.slot.drawing-move::after{
     content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-    width:34%;height:34%;border-radius:50%;background:rgba(39,165,103,0.55);
-    box-shadow:0 0 0 3px rgba(39,165,103,0.18);
+    width:28%;height:28%;border-radius:50%;background:rgba(38,82,28,0.32);
   }
-  .slot.valid{background:rgba(39,165,103,0.16)!important;}
-  .slot.winning-move::after{background:rgba(39,165,103,0.85);}
-  .slot.losing-move::after{background:rgba(223,77,82,0.7);}
-  .slot.drawing-move::after{background:rgba(227,181,58,0.85);}
-  /* danger squares beyond the crossing line */
-  .slot.invalid{background:repeating-linear-gradient(45deg,rgba(223,77,82,0.10),rgba(223,77,82,0.10) 6px,transparent 6px,transparent 12px)!important;cursor:pointer;}
-  .slot.terminated{background:rgba(223,77,82,0.30)!important;}
+  .slot.losing-move::after{background:rgba(140,38,30,0.40);}
+  .slot.drawing-move::after{background:rgba(140,104,18,0.40);}
+  .slot.invalid{cursor:pointer;}
 
   .pieces{position:absolute;inset:0;pointer-events:none;}
   .piece{
@@ -139,9 +142,9 @@
     padding:10%;
   }
   .piece svg{width:100%;height:100%;display:block;filter:drop-shadow(0 2px 2px rgba(0,0,0,0.28));}
-  .piece.white svg .body{fill:#fbfbff;stroke:#2a2540;}
-  .piece.black svg .body{fill:#2f2a44;stroke:#0c0a18;}
-  .piece svg .body{stroke-width:2.4;stroke-linejoin:round;}
+  .piece.white svg .body{fill:#f6edd6;stroke:#26201a;}
+  .piece.black svg .body{fill:#2a241d;stroke:#0c0a07;}
+  .piece svg .body{stroke-width:2.6;stroke-linejoin:round;stroke-linecap:round;}
   .piece.selectable{cursor:pointer;}
   .piece.selectable:hover{transform:scale(1.07);}
   .piece.selected{outline:none;}
@@ -169,14 +172,14 @@
     appearance:none;border:none;border-radius:10px;padding:12px 20px;font-family:inherit;font-weight:600;font-size:14.5px;
     cursor:pointer;transition:.15s;flex:1 1 auto;min-width:120px;
   }
-  .btn-ghost{background:var(--light);color:var(--ink);}
-  .btn-ghost:hover{background:#e3e6f7;}
+  .btn-ghost{background:var(--cream2);color:var(--ink);border:1px solid var(--line);}
+  .btn-ghost:hover{background:#ece3d2;}
   .btn-primary{background:var(--violet);color:#fff;}
   .btn-primary:hover{background:var(--violet-deep);}
   .btn:disabled{opacity:.45;cursor:default;}
 
-  .footer{color:#a59fce;font-size:12.5px;text-align:center;margin-top:26px;}
-  .footer a{color:#cfc9f2;}
+  .footer{color:#9c8f7b;font-size:12.5px;text-align:center;margin-top:26px;}
+  .footer a{color:var(--violet);}
 
   @media (max-width:560px){
     .wrap{padding:16px 11px 50px;}
@@ -210,10 +213,10 @@
     <p class="lead">Two players move in turn. You are White and move first. Beat the optimal AI to unlock the next puzzle.</p>
     <p class="desc" id="g-desc"></p>
 
-    <details class="rules">
-      <summary>How it works</summary>
+    <div class="mechanics">
+      <h3>Game Mechanics</h3>
       <ul id="g-rules"></ul>
-    </details>
+    </div>
 
     <div class="statusbar">
       <span class="turn" id="turn"><span class="dot"></span><span id="turn-text">White to move</span></span>
@@ -569,12 +572,7 @@
   // Piece SVG
   // ---------------------------------------------------------------------------
   function rookSVG(){
-    return '<svg viewBox="0 0 100 100"><g class="body">'
-      + '<path d="M24 82 h52 v9 h-52 z"/>'
-      + '<path d="M29 73 h42 v8 h-42 z"/>'
-      + '<path d="M33 42 h34 v31 h-34 z"/>'
-      + '<path d="M29 24 h8.5 v7 h8 v-7 h9 v7 h8 v-7 h8.5 v17 h-50 z"/>'
-      + '</g></svg>';
+    return '<svg viewBox="0 0 100 100"><path class="body" d="M28 24 H37 V30 H44 V24 H56 V30 H63 V24 H72 V40 L66 46 V74 L72 80 V86 H28 V80 L34 74 V46 L28 40 Z"/></svg>';
   }
   function queenSVG(){
     return '<svg viewBox="0 0 100 100"><g class="body">'
@@ -924,9 +922,9 @@
       var ico=v.pieceType===PIECE.QUEEN?queenSVG():rookSVG();
       t.innerHTML='<span class="ico">'+ico+'</span><span class="label">'+v.name+'</span>'
         + (solved?'<span class="badge">solved</span>':'')
-        + (!unlocked?'<span class="badge" style="background:#efeef6;color:#9a96bd">locked</span>':'');
-      // tint icon for tabs
-      t.querySelector(".ico .body").setAttribute("fill", active? "#4b3fa3" : "#cdc8ee");
+        + (!unlocked?'<span class="badge lock">locked</span>':'');
+      // tint icon for tabs (warm board palette)
+      t.querySelector(".ico .body").setAttribute("fill", active? "#6e4a2c" : "#c4b596");
       t.querySelector(".ico .body").setAttribute("stroke", "none");
       if(!unlocked){ t.title="Win the previous puzzle to unlock"; }
       elTabs.appendChild(t);
