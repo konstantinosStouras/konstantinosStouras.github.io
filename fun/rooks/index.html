@@ -101,6 +101,16 @@
   .opts label{display:inline-flex;align-items:center;gap:6px;cursor:pointer;}
   .opts input{accent-color:var(--violet);width:16px;height:16px;}
 
+  /* How-to-play callout + colour legend */
+  .howto{background:#f6f2e8;border:1px solid var(--line);border-left:4px solid var(--violet);border-radius:8px;padding:11px 14px;font-size:13.5px;color:#5b5040;margin:0 0 12px;}
+  .howto strong{color:var(--ink);}
+  .legend{display:flex;flex-wrap:wrap;align-items:center;gap:5px 16px;margin-top:8px;font-size:12.5px;color:var(--muted);}
+  .legend span.k{display:inline-flex;align-items:center;gap:6px;}
+  .sw{width:14px;height:14px;border-radius:3px;display:inline-block;box-shadow:inset 0 0 0 1px rgba(0,0,0,0.08);}
+  .sw.safe{background:#8fb56f;}
+  .sw.danger{background:#e3a99a;}
+  .sw.win{background:#e8c44a;}
+
   /* Board */
   .board-shell{display:flex;justify-content:center;}
   /* board: classic chess squares on a wood frame, matching the reference */
@@ -213,6 +223,15 @@
       <span class="opts">
         <label><input type="checkbox" id="hints"> Show move hints</label>
       </span>
+    </div>
+
+    <div class="howto">
+      <strong>How to play:</strong> tap a <b>green</b> square to slide your rook there (always along its current row or column); the AI then replies automatically. <b>Green</b> squares are safe. <b>Red</b> squares lose, because your rook's path would cross the opponent's row or column. You win when the AI is left with no safe square. In <b>Rook Battle x2</b>, first tap one of your rooks to pick it.
+      <div class="legend">
+        <span class="k"><span class="sw safe"></span> safe move</span>
+        <span class="k"><span class="sw danger"></span> loses (path crosses opponent)</span>
+        <span class="k"><span class="sw win"></span> winning move (with hints on)</span>
+      </div>
     </div>
 
     <div class="board-shell">
