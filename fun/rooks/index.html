@@ -594,8 +594,11 @@
   function pieceSVG(type){ return type===PIECE.QUEEN ? queenSVG() : rookSVG(); }
 
   // Board pieces are drawn as background images (bulletproof sizing).
-  function rookShape(fill,stroke){
-    return "<path d='M24 23 L32 23 L32 31 L40 31 L40 23 L48 23 L48 31 L52 31 L52 23 L60 23 L60 31 L68 31 L68 23 L76 23 L76 38 L72 42 L70 46 L74 72 L78 72 L78 79 L82 79 L82 88 L18 88 L18 79 L22 79 L22 72 L26 72 L30 46 L28 42 L24 38 Z' fill='"+fill+"' stroke='"+stroke+"' stroke-width='3.4' stroke-linejoin='round' stroke-linecap='round'/>";
+  function rookShape(fill,stroke,line){
+    return "<path d='M22 20 L33 20 L33 30 L37 30 L37 20 L48 20 L48 30 L52 30 L52 20 L63 20 L63 30 L67 30 L67 20 L78 20 L78 34 L82 40 L82 45 L66 51 L66 58 L74 76 L78 76 L78 82 L84 82 L84 91 L16 91 L16 82 L22 82 L22 76 L26 76 L34 58 L34 51 L18 45 L18 40 L22 34 Z' fill='"+fill+"' stroke='"+stroke+"' stroke-width='2.6' stroke-linejoin='round'/>"
+      + "<g fill='none' stroke='"+line+"' stroke-width='2.3' stroke-linecap='round'>"
+      + "<path d='M25 35 L75 35'/><path d='M28 73 L72 73'/><path d='M19 83 L81 83'/>"
+      + "</g>";
   }
   function queenShape(fill,stroke){
     return "<g fill='"+fill+"' stroke='"+stroke+"' stroke-width='3' stroke-linejoin='round'>"
@@ -607,9 +610,11 @@
       + "</g>";
   }
   function pieceDataUri(type, white){
-    var fill = white ? "#ffffff" : "#241e17", stroke = white ? "#1a140d" : "#000000";
-    var inner = type===PIECE.QUEEN ? queenShape(fill,stroke) : rookShape(fill,stroke);
-    var svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>" + inner + "</svg>";
+    var fill = white ? "#f8f4ec" : "#28231c";
+    var stroke = white ? "#221b12" : "#000000";
+    var line = white ? "#221b12" : "#efe9dd";
+    var inner = type===PIECE.QUEEN ? queenShape(fill,stroke) : rookShape(fill,stroke,line);
+    var svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='12 14 76 84'>" + inner + "</svg>";
     return "data:image/svg+xml," + encodeURIComponent(svg);
   }
 
