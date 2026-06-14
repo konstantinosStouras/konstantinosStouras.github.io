@@ -377,7 +377,7 @@
       <canvas id="game" width="600" height="600"></canvas>
       <div class="overlay" id="overlay">
         <h2 id="ov-title">Snake</h2>
-        <p id="ov-text">Guide the snake with your <strong>mouse</strong> or the <strong>arrow keys</strong>. Gobble the fruit — each one makes you longer and a touch faster. Walls are safe (you just bump off them) — only biting your own tail ends the game!</p>
+        <p id="ov-text">Guide the snake with your <strong>mouse</strong> or the <strong>arrow keys</strong>. Gobble the fruit — each one makes you longer and a touch faster. Walls are safe — you bounce off in a random direction — only biting your own tail ends the game!</p>
         <div class="join" id="joinBox">
           <label for="username">Pick a username to join</label>
           <input id="username" type="text" maxlength="16" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="e.g. cobra_kai" />
@@ -749,12 +749,28 @@
     dir = nextDir;
 
     const head = snake[0];
-    const nx = head.x + dir.x;
-    const ny = head.y + dir.y;
+    let nx = head.x + dir.x;
+    let ny = head.y + dir.y;
 
-    // wall: don't die, just bump. The move into the wall is cancelled, so the
-    // snake stays put this tick and waits for the player to steer elsewhere.
-    if (nx < 0 || ny < 0 || nx >= GRID || ny >= GRID) return;
+    // wall: don't die — bump back in a random valid direction. We pick at
+    // random among the headings that stay on the board, don't reverse into the
+    // neck, and don't run straight into the body. If somehow boxed in, we just
+    // hold position this tick.
+    if (nx < 0 || ny < 0 || nx >= GRID || ny >= GRID) {
+      const opts = Object.values(DIRS).filter(d => {
+        if (d.x === -dir.x && d.y === -dir.y) return false;          // no 180° flip
+        const cx = head.x + d.x, cy = head.y + d.y;
+        if (cx < 0 || cy < 0 || cx >= GRID || cy >= GRID) return false; // still off-board
+        for (let i = 0; i < snake.length - 1; i++) {
+          if (snake[i].x === cx && snake[i].y === cy) return false;   // would hit self
+        }
+        return true;
+      });
+      if (!opts.length) return;                                       // boxed in: just bump
+      dir = nextDir = opts[(Math.random() * opts.length) | 0];
+      nx = head.x + dir.x;
+      ny = head.y + dir.y;
+    }
 
     // self collision (tail tip will move away unless we're growing — check
     // against all but the last cell to be forgiving on the moving tail)
@@ -992,7 +1008,7 @@
     if (toggle) toggle.style.display = "none";
     el.ovText.innerHTML = "<strong>Tap or drag</strong> on the board to steer the snake " +
       "toward your finger. Gobble the fruit — each one makes you longer and a touch faster. " +
-      "Walls are safe (you just bump off them) — only biting your own tail ends the game!";
+      "Walls are safe — you bounce off in a random direction — only biting your own tail ends the game!";
     const hint = document.querySelector(".hint");
     if (hint) hint.innerHTML = "Tap or slide where you want to go · use the buttons to pause";
   }
