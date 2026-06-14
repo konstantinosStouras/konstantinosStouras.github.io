@@ -539,11 +539,12 @@ document.getElementById('zreset').onclick=()=>{ vb={...FULL}; applyVB(); };
 // ---------- hover handling (taps are handled in pointerup above) ----------
 landG.addEventListener('pointerover', e=>{
   const t=e.target.closest('path.nomos'); if(!t) return;
-  if(mode==='learn'||mode==='progress') setHover(t.dataset.key,true);
+  const inQuiz = (mode==='quizNomos'||mode==='quizCapital');
+  if(mode==='learn'||mode==='progress'||(inQuiz && !locked)) setHover(t.dataset.key,true);
 });
 landG.addEventListener('pointerout', e=>{
   const t=e.target.closest('path.nomos'); if(!t) return;
-  if(mode==='learn'||mode==='progress') setHover(t.dataset.key,false);
+  setHover(t.dataset.key,false);   // always safe to clear the highlight
 });
 
 function setHover(k,on){
