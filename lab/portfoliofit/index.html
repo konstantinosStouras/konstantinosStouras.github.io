@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>PortfolioFit: Project Portfolio Selection, the packing game</title>
   <meta name="description" content="PortfolioFit: a management-training game for project portfolio selection. Pick the right projects and pack them into the frame to maximise net value before the timer runs out. A hands-on take on the knapsack problem." />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%23e67e22'/%3E%3Crect%20x='14'%20y='14'%20width='72'%20height='72'%20rx='12'%20fill='%23fff8ee'/%3E%3Crect%20x='26'%20y='26'%20width='48'%20height='48'%20rx='8'%20fill='%232ecc71'/%3E%3Ctext%20x='50'%20y='69'%20font-size='44'%20font-weight='800'%20text-anchor='middle'%20fill='%23ffffff'%20font-family='Arial,Helvetica,sans-serif'%3E%24%3C/text%3E%3C/svg%3E" />
@@ -35,6 +35,7 @@
     }
 
     html, body { height: 100%; }
+    html { overflow-x: hidden; }   /* belt-and-braces: never allow sideways scroll */
     body {
       font-family: var(--font-ui);
       -webkit-font-smoothing: antialiased;
@@ -44,7 +45,9 @@
       background: radial-gradient(1200px 600px at 50% -10%, #fff7ec 0%, var(--bg) 60%);
       color: var(--ink);
       min-height: 100vh;
-      padding: 22px 16px 48px;
+      min-height: 100dvh;            /* track the dynamic viewport (mobile toolbars) */
+      /* Respect notch / home-indicator safe areas on iOS in any orientation. */
+      padding: 22px max(16px, env(safe-area-inset-right)) max(48px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
       line-height: 1.5;
     }
     /* Snappy taps (no 300ms delay), and don't let the OS hijack game gestures. */
@@ -160,7 +163,7 @@
     .calc-display.err .calc-result { color: var(--bad); }
     .calc-input {
       width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
-      font-size: 15px; font-family: inherit; margin-bottom: 10px; box-sizing: border-box;
+      font-size: 16px; font-family: inherit; margin-bottom: 10px; box-sizing: border-box;  /* 16px avoids iOS focus zoom */
     }
     .calc-input:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
     .calc-pad { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
@@ -188,7 +191,7 @@
     .note-text { font-size: 13.5px; color: var(--ink); line-height: 1.4; word-break: break-word; white-space: pre-wrap; }
     .notes-input {
       width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
-      font-size: 14px; font-family: inherit; resize: vertical; box-sizing: border-box; margin-bottom: 10px;
+      font-size: 16px; font-family: inherit; resize: vertical; box-sizing: border-box; margin-bottom: 10px;  /* 16px avoids iOS focus zoom */
     }
     .notes-input:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
     .notes-add { width: 100%; }
@@ -206,7 +209,7 @@
     .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 12px; }
 
     .board-card { display: flex; flex-direction: column; align-items: center; }
-    .board-stage { background: var(--board-bg); border-radius: 14px; padding: 14px; display: inline-block; max-width: 100%; overflow: auto; }
+    .board-stage { background: var(--board-bg); border-radius: 14px; padding: 14px; display: inline-block; max-width: 100%; overflow: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
     .board { display: grid; gap: 3px; }
     .cell {
       border-radius: 5px; position: relative; transition: background .08s, box-shadow .08s;
@@ -294,11 +297,11 @@
     .board-tools .btn { font-size: 12.5px; }
 
     /* Info modal (solutions / proof) */
-    .info-modal { max-width: 640px; width: 100%; text-align: left; position: relative; max-height: 86vh; display: flex; flex-direction: column; }
+    .info-modal { max-width: 640px; width: 100%; text-align: left; position: relative; max-height: 86vh; max-height: 86dvh; display: flex; flex-direction: column; }
     .info-modal h3 { font-size: 20px; margin: 2px 40px 10px 2px; }
     .info-close { position: absolute; top: 10px; right: 12px; border: none; background: none; font-size: 26px; line-height: 1; color: var(--muted); cursor: pointer; }
     .info-close:hover { color: var(--ink); }
-    .info-body { overflow-y: auto; padding-right: 4px; }
+    .info-body { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding-right: 4px; }
     .info-body p { margin: 6px 0; font-size: 14px; color: var(--ink); }
     .info-body .muted { color: var(--muted); font-size: 13px; }
     .info-body h4 { margin: 14px 0 6px; font-size: 14px; }
@@ -333,6 +336,8 @@
     .modal {
       background: var(--panel); border-radius: 20px; padding: 28px 26px; max-width: 380px; width: 100%;
       text-align: center; box-shadow: 0 24px 60px rgba(0,0,0,.3); animation: pop .25s ease;
+      max-height: calc(100vh - 40px); max-height: calc(100dvh - 40px);  /* scroll if the screen is short (landscape phones) */
+      overflow-y: auto; -webkit-overflow-scrolling: touch;
     }
     @keyframes pop { from { transform: scale(.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
     .modal .emoji { font-size: 48px; }
@@ -376,7 +381,7 @@
 
     /* ---- Phones: tighter chrome, full-width controls, comfy spacing ---- */
     @media (max-width: 560px) {
-      body { padding: 14px 10px 36px; }
+      body { padding: 14px max(10px, env(safe-area-inset-right)) max(36px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); }
       header.app h1 { margin-bottom: 4px; }
       header.app p.sub { font-size: 13.5px; }
       .controls { gap: 8px; }
@@ -940,7 +945,7 @@
       const vw = Math.min(window.innerWidth, 1012);
       const twoCol = window.innerWidth >= 880;
       const colW = twoCol ? (Math.min(vw, 980) - 32 - 320 - 20)   // side panel + gap
-                          : (Math.min(vw, 640) - 24);              // single column
+                          : (Math.min(vw, 640) - 46);              // single column (body + card padding)
       const byWidth = Math.floor((colW - 28 - cols * 3) / cols);   // stage padding + gaps
       const byHeight = Math.floor((window.innerHeight - 320) / Math.max(rows, 1));
       return Math.max(22, Math.min(54, byWidth, byHeight, Math.floor(460 / Math.max(rows, cols))));
