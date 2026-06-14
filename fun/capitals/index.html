@@ -96,6 +96,16 @@
   }
   .who .pill b { color: var(--accent); font-weight: 700; }
 
+  /* language flag switcher */
+  .lang-switch { display: inline-flex; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
+  .flag-btn {
+    appearance: none; border: 1px solid transparent; background: transparent; cursor: pointer;
+    font-size: 18px; line-height: 1; padding: 4px 8px; border-radius: 999px;
+    filter: grayscale(0.9) opacity(0.55); transition: filter .15s ease, background .15s ease, border-color .15s ease;
+  }
+  .flag-btn:hover { filter: grayscale(0.2) opacity(0.9); }
+  .flag-btn.active { filter: none; background: var(--panel-2); border-color: var(--accent); }
+
   button, select, input { font-family: inherit; }
   .btn {
     appearance: none; border: 1px solid var(--line); cursor: pointer;
@@ -332,40 +342,44 @@
         <div class="logo" aria-hidden="true">🌍</div>
         <div>
           <h1>Capitals</h1>
-          <p>Learn the capital of every country</p>
+          <p data-i18n="tagline">Learn the capital of every country</p>
         </div>
       </div>
       <div class="who">
+        <span class="lang-switch" role="group" aria-label="Language">
+          <button class="flag-btn" id="langEn" data-lang="en" title="English" aria-label="English">🇬🇧</button>
+          <button class="flag-btn" id="langEl" data-lang="el" title="Ελληνικά" aria-label="Ελληνικά">🇬🇷</button>
+        </span>
         <span class="pill" id="whoPill" title="Your nickname">👤 <b id="whoName">—</b></span>
-        <button class="btn small ghost" id="statsBtn">My progress</button>
-        <button class="btn small ghost" id="boardBtn">Leaderboard</button>
-        <button class="btn small ghost" id="switchBtn">Switch</button>
+        <button class="btn small ghost" id="statsBtn" data-i18n="myProgress">My progress</button>
+        <button class="btn small ghost" id="boardBtn" data-i18n="leaderboard">Leaderboard</button>
+        <button class="btn small ghost" id="switchBtn" data-i18n="switch">Switch</button>
       </div>
     </header>
 
     <div class="toolbar">
       <div class="field">
-        <label for="regionSel">Region</label>
+        <label for="regionSel" data-i18n="region">Region</label>
         <select id="regionSel"></select>
       </div>
       <div class="spacer"></div>
-      <span class="pill" id="streakPill" title="Correct answers in a row" style="background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px;">🔥 Streak <b style="color:var(--warn)" id="streakVal">0</b></span>
+      <span class="pill" id="streakPill" title="Correct answers in a row" style="background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px;">🔥 <span data-i18n="streak">Streak</span> <b style="color:var(--warn)" id="streakVal">0</b></span>
     </div>
 
     <main class="card" id="quizCard">
       <div class="q-flag" id="qFlag">🏳️</div>
       <div class="q-region" id="qRegion"></div>
-      <h2 class="q-text">What is the capital of <span class="country" id="qCountry">…</span>?</h2>
+      <h2 class="q-text" id="qText">What is the capital of <span class="country" id="qCountry">…</span>?</h2>
 
       <div id="askBlock">
         <div class="answer-row">
-          <input type="text" id="answerInput" placeholder="Type the capital city…" autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="go">
-          <button class="btn primary" id="submitBtn">Check</button>
+          <input type="text" id="answerInput" placeholder="Type the capital city…" data-i18n-ph="answerPh" autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="go">
+          <button class="btn primary" id="submitBtn" data-i18n="check">Check</button>
         </div>
 
         <div class="hint-bar">
           <button class="btn" id="hintBtn">Need a hint</button>
-          <button class="btn ghost small" id="revealBtn">Show the answer</button>
+          <button class="btn ghost small" id="revealBtn" data-i18n="showAnswer">Show the answer</button>
         </div>
 
         <div class="feedback info" id="feedback"></div>
@@ -378,7 +392,7 @@
         <div class="answer-banner" id="answerBanner">
           <div>
             <div class="lbl" id="bannerLbl">Correct</div>
-            <div class="cap"><span id="capName"></span> <span class="of">is the capital of <span id="capCountry"></span></span></div>
+            <div class="cap" id="capLine"></div>
           </div>
           <div class="award" id="award">
             <div class="pts" id="awardPts">+0</div>
@@ -387,22 +401,22 @@
         </div>
 
         <div class="facts">
-          <h3>Did you know?</h3>
+          <h3 data-i18n="didYouKnow">Did you know?</h3>
           <p id="fact1"></p>
           <p id="fact2"></p>
         </div>
 
         <div class="next-row">
-          <button class="btn good" id="nextBtn">Next country →</button>
+          <button class="btn good" id="nextBtn" data-i18n="nextCountry">Next country →</button>
           <span class="seen" id="seenNote"></span>
         </div>
       </div>
     </main>
 
     <footer class="app">
-      <span id="footTotal"></span> &middot; A fun project by
+      <span id="footTotal"></span> &middot; <span data-i18n="byline">A fun project by</span>
       <a href="https://www.stouras.com/" target="_blank" rel="noreferrer noopener">Konstantinos Stouras</a> &middot;
-      <a href="https://www.stouras.com/#funprojects" target="_blank" rel="noreferrer noopener">more fun projects</a>
+      <a href="https://www.stouras.com/#funprojects" target="_blank" rel="noreferrer noopener" data-i18n="moreProjects">more fun projects</a>
     </footer>
   </div>
 
@@ -410,15 +424,15 @@
   <div class="overlay" id="nickOverlay">
     <div class="modal modal-close">
       <button class="x-btn" id="nickClose" title="Close" style="display:none">×</button>
-      <h2>Welcome to Capitals</h2>
-      <p class="sub">Pick a nickname so your progress is saved and tracked over time. Use the same nickname next time to keep building your streak.</p>
-      <input type="text" id="nickInput" placeholder="Your nickname" maxlength="24" autocomplete="off" spellcheck="false" enterkeyhint="go">
+      <h2 data-i18n="welcome">Welcome to Capitals</h2>
+      <p class="sub" data-i18n="welcomeSub">Pick a nickname so your progress is saved and tracked over time. Use the same nickname next time to keep building your streak.</p>
+      <input type="text" id="nickInput" placeholder="Your nickname" data-i18n-ph="nickPh" maxlength="24" autocomplete="off" spellcheck="false" enterkeyhint="go">
       <div class="err" id="nickErr"></div>
       <div class="row">
-        <button class="btn primary" id="nickStart" style="flex:1">Start learning</button>
+        <button class="btn primary" id="nickStart" style="flex:1" data-i18n="startLearning">Start learning</button>
       </div>
       <div class="known hidden" id="knownWrap">
-        <div class="lbl">Continue as</div>
+        <div class="lbl" data-i18n="continueAs">Continue as</div>
         <div class="chips" id="knownChips"></div>
       </div>
     </div>
@@ -428,30 +442,30 @@
   <div class="overlay hidden" id="statsOverlay">
     <div class="modal wide modal-close">
       <button class="x-btn" id="statsClose" title="Close">×</button>
-      <h2>Progress for <span id="statsNick" style="color:var(--accent)"></span></h2>
+      <h2><span data-i18n="progressFor">Progress for</span> <span id="statsNick" style="color:var(--accent)"></span></h2>
       <p class="sub" id="statsSince"></p>
 
       <div class="stat-grid">
-        <div class="stat"><div class="v accent" id="sAnswered">0</div><div class="k">Answered</div></div>
-        <div class="stat"><div class="v good" id="sAccuracy">0%</div><div class="k">Accuracy</div></div>
-        <div class="stat"><div class="v" id="sPoints">0</div><div class="k">Points</div></div>
-        <div class="stat"><div class="v" id="sBestStreak">0</div><div class="k">Best streak</div></div>
-        <div class="stat"><div class="v" id="sNoHint">0</div><div class="k">Solved no hint</div></div>
-        <div class="stat"><div class="v" id="sReveals">0</div><div class="k">Answers shown</div></div>
+        <div class="stat"><div class="v accent" id="sAnswered">0</div><div class="k" data-i18n="answered">Answered</div></div>
+        <div class="stat"><div class="v good" id="sAccuracy">0%</div><div class="k" data-i18n="accuracy">Accuracy</div></div>
+        <div class="stat"><div class="v" id="sPoints">0</div><div class="k" data-i18n="points">Points</div></div>
+        <div class="stat"><div class="v" id="sBestStreak">0</div><div class="k" data-i18n="bestStreak">Best streak</div></div>
+        <div class="stat"><div class="v" id="sNoHint">0</div><div class="k" data-i18n="solvedNoHint">Solved no hint</div></div>
+        <div class="stat"><div class="v" id="sReveals">0</div><div class="k" data-i18n="answersShown">Answers shown</div></div>
       </div>
 
-      <div class="chart-h">Countries mastered <span id="masterCount" style="color:var(--accent)"></span></div>
+      <div class="chart-h"><span data-i18n="countriesMastered">Countries mastered</span> <span id="masterCount" style="color:var(--accent)"></span></div>
       <div class="prog-track"><div class="prog-fill" id="masterFill"></div></div>
-      <div class="chart-legend">Mastered means you have named its capital at least once with no hints.</div>
+      <div class="chart-legend" data-i18n="masteredLegend">Mastered means you have named its capital at least once with no hints.</div>
 
       <div style="margin-top:18px">
-        <div class="chart-h">Activity over the last 14 days</div>
+        <div class="chart-h" data-i18n="activity14">Activity over the last 14 days</div>
         <div class="bars" id="bars"></div>
         <div class="chart-legend" id="barsLegend">Bar height shows how many questions you answered each day.</div>
       </div>
 
       <div class="row" style="margin-top:20px">
-        <button class="btn ghost small" id="resetBtn" style="color:var(--bad)">Reset my progress</button>
+        <button class="btn ghost small" id="resetBtn" style="color:var(--bad)" data-i18n="resetProgress">Reset my progress</button>
       </div>
     </div>
   </div>
@@ -460,15 +474,15 @@
   <div class="overlay hidden" id="boardOverlay">
     <div class="modal wide modal-close">
       <button class="x-btn" id="boardClose" title="Close">×</button>
-      <h2>Leaderboard</h2>
+      <h2 data-i18n="leaderboard">Leaderboard</h2>
       <p class="sub" id="boardSub">Everyone who has played on this device, ranked.</p>
 
       <div class="board-tools">
-        <span class="lbl">Rank by</span>
-        <button class="sortbtn active" data-sort="points">Points</button>
-        <button class="sortbtn" data-sort="accuracy">Accuracy</button>
-        <button class="sortbtn" data-sort="mastered">Mastered</button>
-        <button class="sortbtn" data-sort="bestStreak">Best streak</button>
+        <span class="lbl" data-i18n="rankBy">Rank by</span>
+        <button class="sortbtn active" data-sort="points" data-i18n="points">Points</button>
+        <button class="sortbtn" data-sort="accuracy" data-i18n="accuracy">Accuracy</button>
+        <button class="sortbtn" data-sort="mastered" data-i18n="masteredShort">Mastered</button>
+        <button class="sortbtn" data-sort="bestStreak" data-i18n="bestStreak">Best streak</button>
       </div>
 
       <div class="board-scroll">
@@ -476,23 +490,24 @@
           <thead>
             <tr>
               <th class="l">#</th>
-              <th class="l">Player</th>
-              <th id="thPoints">Points</th>
-              <th>Acc.</th>
-              <th>Answered</th>
-              <th>Mastered</th>
-              <th>Streak</th>
+              <th class="l" data-i18n="player">Player</th>
+              <th id="thPoints" data-i18n="points">Points</th>
+              <th data-i18n="accShort">Acc.</th>
+              <th data-i18n="answeredShort">Answered</th>
+              <th data-i18n="masteredShort">Mastered</th>
+              <th data-i18n="streak">Streak</th>
             </tr>
           </thead>
           <tbody id="boardBody"></tbody>
         </table>
-        <div class="board-empty hidden" id="boardEmpty">No players yet. Answer a few questions to get on the board.</div>
+        <div class="board-empty hidden" id="boardEmpty" data-i18n="boardEmpty">No players yet. Answer a few questions to get on the board.</div>
       </div>
-      <p class="board-note">Scores are saved in this browser, so the leaderboard shows every nickname that has played here. Mastered counts the capitals named with no hints.</p>
+      <p class="board-note" data-i18n="boardNote">Scores are saved in this browser, so the leaderboard shows every nickname that has played here. Mastered counts the capitals named with no hints.</p>
     </div>
   </div>
 
   <script src="countries.js"></script>
+  <script src="countries.el.js"></script>
   <script>
   (function () {
     "use strict";
@@ -500,7 +515,122 @@
     var ALL = (window.COUNTRIES || []).slice();
     var STORE_KEY = "capitals:v1:profiles";
     var LAST_KEY  = "capitals:v1:lastNick";
+    var LANG_KEY  = "capitals:v1:lang";
     var HISTORY_CAP = 600;
+
+    // ---------- merge the Greek layer onto the base dataset ----------
+    var EL_DATA = window.COUNTRIES_EL || {};
+    ALL.forEach(function (e) {
+      var g = EL_DATA[e.c];
+      e.c_el = (g && g.c) || e.c;
+      e.cap_el = (g && g.cap) || e.cap;
+      e.alt_el = (g && g.alt) || [];
+      e.facts_el = (g && g.facts) || e.facts;
+    });
+
+    // ---------- language ----------
+    var lang = "en";
+    try { var sv = localStorage.getItem(LANG_KEY); if (sv === "el" || sv === "en") lang = sv; } catch (e) {}
+    var I18N = {
+      en: {
+        tagline: "Learn the capital of every country",
+        myProgress: "My progress", leaderboard: "Leaderboard", switch: "Switch",
+        region: "Region", allRegions: "All regions", streak: "Streak",
+        answerPh: "Type the capital city…", check: "Check", showAnswer: "Show the answer",
+        hint1: "Hint 1: how many letters", hint2: "Hint 2: reveal some letters", hint3: "Hint 3: show the answer",
+        answerShown: "Answer shown",
+        didYouKnow: "Did you know?", nextCountry: "Next country →",
+        byline: "A fun project by", moreProjects: "more fun projects",
+        welcome: "Welcome to Capitals",
+        welcomeSub: "Pick a nickname so your progress is saved and tracked over time. Use the same nickname next time to keep building your streak.",
+        nickPh: "Your nickname", startLearning: "Start learning", continueAs: "Continue as",
+        progressFor: "Progress for",
+        answered: "Answered", accuracy: "Accuracy", points: "Points", bestStreak: "Best streak",
+        solvedNoHint: "Solved no hint", answersShown: "Answers shown",
+        countriesMastered: "Countries mastered",
+        masteredLegend: "Mastered means you have named its capital at least once with no hints.",
+        activity14: "Activity over the last 14 days",
+        barsHint: "Bar height shows how many questions you answered each day.",
+        resetProgress: "Reset my progress",
+        rankBy: "Rank by", masteredShort: "Mastered", player: "Player",
+        accShort: "Acc.", answeredShort: "Answered",
+        boardEmpty: "No players yet. Answer a few questions to get on the board.",
+        boardNote: "Scores are saved in this browser, so the leaderboard shows every nickname that has played here. Mastered counts the capitals named with no hints.",
+        you: "you",
+        // dynamic
+        qText: function (c) { return "What is the capital of <span class=\"country\">" + c + "</span>?"; },
+        capLine: function (cap, c) { return "<b>" + cap + "</b> <span class=\"of\">is the capital of " + c + "</span>"; },
+        correctNoHint: "Correct — no hints!", correctOneHint: "Correct — with one hint", correctHints: "Correct — with hints",
+        learned: "Here is the answer — now you know it",
+        fbType: "Type a city name, or use a hint.",
+        fbWrong: "Not quite — try again, or tap a hint.",
+        fbLen: "Hint: the length is shown below.",
+        fbPartial: "Hint: some letters are filled in below.",
+        noCountries: "No countries in this region.",
+        maskLen: function (n, w) { return "The capital has " + n + " letter" + (n === 1 ? "" : "s") + (w > 1 ? " across " + w + " words." : "."); },
+        maskPartial: "Some letters are filled in to help you.",
+        seenN: function (c, n, ok) { return "You have seen " + c + " " + n + " time" + (n === 1 ? "" : "s") + (ok ? ", correct " + ok + "." : "."); },
+        seenFirst: function (c) { return "First time seeing " + c + "."; },
+        since: function (d) { return "Learning since " + d; },
+        playersN: function (n) { return n + " player" + (n === 1 ? "" : "s") + " have played on this device."; },
+        playersEmpty: "Everyone who plays on this device appears here.",
+        recentN: function (n) { return n + " questions answered in the last 14 days."; },
+        recentNone: "No activity yet in the last 14 days — answer a few to see your chart.",
+        confirmReset: function (nick) { return "Reset all progress for \"" + nick + "\"? This cannot be undone."; },
+        errNick: "Please enter a nickname.", errNickContinue: "Please enter a nickname to continue.",
+        footTotal: function (n) { return "Teaching the capitals of " + n + " countries and territories"; },
+        locale: undefined
+      },
+      el: {
+        tagline: "Μάθε την πρωτεύουσα κάθε χώρας",
+        myProgress: "Η πρόοδός μου", leaderboard: "Κατάταξη", switch: "Αλλαγή",
+        region: "Περιοχή", allRegions: "Όλες οι περιοχές", streak: "Σερί",
+        answerPh: "Γράψε την πρωτεύουσα…", check: "Έλεγχος", showAnswer: "Δείξε την απάντηση",
+        hint1: "Βοήθεια 1: πόσα γράμματα", hint2: "Βοήθεια 2: μερικά γράμματα", hint3: "Βοήθεια 3: δείξε την απάντηση",
+        answerShown: "Η απάντηση φάνηκε",
+        didYouKnow: "Το ήξερες;", nextCountry: "Επόμενη χώρα →",
+        byline: "Ένα διασκεδαστικό έργο του", moreProjects: "περισσότερα έργα",
+        welcome: "Καλώς ήρθες στο Capitals",
+        welcomeSub: "Διάλεξε ένα ψευδώνυμο ώστε να αποθηκεύεται η πρόοδός σου. Χρησιμοποίησε το ίδιο ψευδώνυμο την επόμενη φορά για να συνεχίσεις το σερί σου.",
+        nickPh: "Το ψευδώνυμό σου", startLearning: "Ξεκίνα", continueAs: "Συνέχισε ως",
+        progressFor: "Πρόοδος:",
+        answered: "Απαντήσεις", accuracy: "Ακρίβεια", points: "Πόντοι", bestStreak: "Καλύτερο σερί",
+        solvedNoHint: "Χωρίς βοήθεια", answersShown: "Αποκαλύψεις",
+        countriesMastered: "Χώρες που κατέκτησες",
+        masteredLegend: "Κατάκτηση σημαίνει ότι βρήκες την πρωτεύουσα χωρίς βοήθεια τουλάχιστον μία φορά.",
+        activity14: "Δραστηριότητα τις τελευταίες 14 ημέρες",
+        barsHint: "Το ύψος κάθε μπάρας δείχνει πόσες ερωτήσεις απάντησες κάθε μέρα.",
+        resetProgress: "Μηδενισμός προόδου",
+        rankBy: "Ταξινόμηση κατά", masteredShort: "Κατακτήσεις", player: "Παίκτης",
+        accShort: "Ακρ.", answeredShort: "Απαντ.",
+        boardEmpty: "Κανείς δεν έχει παίξει ακόμη. Απάντησε μερικές ερωτήσεις για να μπεις στην κατάταξη.",
+        boardNote: "Οι βαθμοί αποθηκεύονται σε αυτό το πρόγραμμα περιήγησης, ώστε η κατάταξη δείχνει κάθε ψευδώνυμο που έχει παίξει εδώ.",
+        you: "εσύ",
+        qText: function (c) { return "Ποια είναι η πρωτεύουσα της χώρας <span class=\"country\">" + c + "</span>;"; },
+        capLine: function (cap, c) { return "<b>" + cap + "</b> <span class=\"of\">— η πρωτεύουσα της χώρας " + c + "</span>"; },
+        correctNoHint: "Σωστά — χωρίς βοήθεια!", correctOneHint: "Σωστά — με μία βοήθεια", correctHints: "Σωστά — με βοήθειες",
+        learned: "Να η απάντηση — τώρα τη γνωρίζεις",
+        fbType: "Γράψε μια πόλη ή χρησιμοποίησε βοήθεια.",
+        fbWrong: "Όχι ακριβώς. Δοκίμασε ξανά ή πάρε μια βοήθεια.",
+        fbLen: "Βοήθεια: το μήκος φαίνεται πιο κάτω.",
+        fbPartial: "Βοήθεια: μερικά γράμματα συμπληρώθηκαν πιο κάτω.",
+        noCountries: "Δεν υπάρχουν χώρες σε αυτή την περιοχή.",
+        maskLen: function (n, w) { return "Η πρωτεύουσα έχει " + n + " γράμματα" + (w > 1 ? " σε " + w + " λέξεις." : "."); },
+        maskPartial: "Μερικά γράμματα έχουν συμπληρωθεί για βοήθεια.",
+        seenN: function (c, n, ok) { return "Έχεις δει αυτή τη χώρα " + n + " φορές" + (ok ? ", σωστά " + ok + "." : "."); },
+        seenFirst: function (c) { return "Πρώτη φορά που βλέπεις αυτή τη χώρα."; },
+        since: function (d) { return "Μαθαίνεις από " + d; },
+        playersN: function (n) { return n === 1 ? "1 παίκτης έχει παίξει σε αυτή τη συσκευή." : n + " παίκτες έχουν παίξει σε αυτή τη συσκευή."; },
+        playersEmpty: "Όποιος παίζει σε αυτή τη συσκευή εμφανίζεται εδώ.",
+        recentN: function (n) { return n + " ερωτήσεις τις τελευταίες 14 ημέρες."; },
+        recentNone: "Καμία δραστηριότητα ακόμη — απάντησε μερικές για να δεις το γράφημά σου.",
+        confirmReset: function (nick) { return "Μηδενισμός όλης της προόδου για «" + nick + "»; Αυτό δεν αναιρείται."; },
+        errNick: "Γράψε ένα ψευδώνυμο.", errNickContinue: "Γράψε ένα ψευδώνυμο για να συνεχίσεις.",
+        footTotal: function (n) { return "Διδάσκει τις πρωτεύουσες " + n + " χωρών και περιοχών"; },
+        locale: "el"
+      }
+    };
+    function t(key) { var d = I18N[lang]; var v = (d && d[key] != null) ? d[key] : I18N.en[key]; return v; }
 
     // ---------- storage helpers ----------
     function loadProfiles() {
@@ -537,24 +667,34 @@
     }
 
     // ---------- text normalisation for answer matching ----------
+    // Handles Latin and Greek: strips accents/tonos, unifies final sigma,
+    // and keeps both Latin (a-z) and Greek (alpha-omega) letters.
     function norm(s) {
       return (s || "")
-        .normalize("NFD").replace(/[̀-ͯ]/g, "") // strip accents
+        .normalize("NFD").replace(/[̀-ͯ]/g, "") // strip Latin and Greek diacritics
         .toLowerCase()
         .replace(/['’`ʻ]/g, "")                  // drop apostrophes
         .replace(/[.·,]/g, "")                        // drop dots and commas
         .replace(/[-–—]/g, " ")                  // hyphens to spaces
         .replace(/\bsaint\b/g, "st")                       // saint -> st
-        .replace(/[^a-z0-9 ]/g, "")
+        .replace(/ς/g, "σ")            // final sigma -> sigma
+        .replace(/[^a-z0-9α-ω ]/g, "") // keep Latin + Greek letters
         .replace(/\s+/g, " ")
         .trim();
     }
+    // Accept every known spelling in either language so answers are forgiving
+    // regardless of the interface language.
     function acceptedForms(entry) {
-      var forms = [entry.cap].concat(entry.alt || []);
+      var forms = [entry.cap].concat(entry.alt || [], [entry.cap_el], entry.alt_el || []);
       var set = {};
-      forms.forEach(function (f) { set[norm(f)] = true; });
+      forms.forEach(function (f) { if (f) set[norm(f)] = true; });
       return set;
     }
+
+    // ---------- language-aware display helpers ----------
+    function cName(e) { return lang === "el" ? e.c_el : e.c; }       // country, display
+    function capDisp(e) { return lang === "el" ? e.cap_el : e.cap; } // capital, display
+    function factsOf(e) { return lang === "el" ? e.facts_el : e.facts; }
 
     // ---------- masked letter reveal ----------
     // level 0: nothing, 1: length only, 2: partial, 3: full
@@ -593,13 +733,14 @@
     var $ = function (id) { return document.getElementById(id); };
     var els = {
       whoName: $("whoName"), statsBtn: $("statsBtn"), boardBtn: $("boardBtn"), switchBtn: $("switchBtn"),
+      langEn: $("langEn"), langEl: $("langEl"),
       regionSel: $("regionSel"), streakVal: $("streakVal"),
-      qFlag: $("qFlag"), qRegion: $("qRegion"), qCountry: $("qCountry"),
+      qFlag: $("qFlag"), qRegion: $("qRegion"), qText: $("qText"),
       askBlock: $("askBlock"), answerInput: $("answerInput"), submitBtn: $("submitBtn"),
       hintBtn: $("hintBtn"), revealBtn: $("revealBtn"), feedback: $("feedback"),
       mask: $("mask"), maskNote: $("maskNote"),
       reveal: $("reveal"), answerBanner: $("answerBanner"), bannerLbl: $("bannerLbl"),
-      capName: $("capName"), capCountry: $("capCountry"),
+      capLine: $("capLine"),
       award: $("award"), awardPts: $("awardPts"), awardStars: $("awardStars"),
       fact1: $("fact1"), fact2: $("fact2"),
       nextBtn: $("nextBtn"), seenNote: $("seenNote"), footTotal: $("footTotal"),
@@ -626,19 +767,27 @@
       out.sort();
       return out;
     }
+    var REGION_EL = {
+      "Europe": "Ευρώπη", "Asia": "Ασία", "Africa": "Αφρική",
+      "North America": "Βόρεια Αμερική", "South America": "Νότια Αμερική", "Oceania": "Ωκεανία"
+    };
+    function regionLabel(r) { return lang === "el" ? (REGION_EL[r] || r) : r; }
     function buildRegionSelect() {
-      var opts = ['<option value="all">All regions (' + ALL.length + ')</option>'];
+      var prev = els.regionSel.value || "all";
+      var opts = ['<option value="all">' + t("allRegions") + ' (' + ALL.length + ')</option>'];
       regions().forEach(function (r) {
         var n = ALL.filter(function (e) { return e.region === r; }).length;
-        opts.push('<option value="' + r + '">' + r + ' (' + n + ')</option>');
+        opts.push('<option value="' + r + '">' + regionLabel(r) + ' (' + n + ')</option>');
       });
       els.regionSel.innerHTML = opts.join("");
+      els.regionSel.value = prev;
     }
 
     // ---------- quiz state ----------
     var current = null;     // current country entry
     var hintLevel = 0;      // 0..3
     var solved = false;     // answered correctly or revealed
+    var revCorrect = false; // last reveal was a correct answer (vs given up)
     var lastCountry = null; // avoid immediate repeat
 
     function pool() {
@@ -669,12 +818,13 @@
       return candidates[candidates.length - 1];
     }
 
+    var isPunct = function (ch) { return /[^\p{L}\p{N}]/u.test(ch); };
+
     function renderMask() {
-      var ans = current.cap;
+      var ans = capDisp(current); // mask the capital in the current language
       els.mask.innerHTML = "";
       if (hintLevel < 1) { els.maskNote.textContent = ""; return; }
       var reveal = computeReveal(ans, hintLevel);
-      var words = []; // build grouping
       var wordEl = document.createElement("div");
       wordEl.className = "word";
       ans.split("").forEach(function (ch, i) {
@@ -684,37 +834,35 @@
           wordEl.className = "word";
           return;
         }
-        var t = document.createElement("div");
-        if (/[^A-Za-z0-9À-ɏ]/.test(ch)) {
-          t.className = "tile punct";
-          t.textContent = ch;
+        var tile = document.createElement("div");
+        if (isPunct(ch)) {
+          tile.className = "tile punct";
+          tile.textContent = ch;
         } else if (reveal[i]) {
-          t.className = "tile";
-          t.textContent = ch;
+          tile.className = "tile";
+          tile.textContent = ch;
         } else {
-          t.className = "tile blank";
-          t.textContent = "·";
+          tile.className = "tile blank";
+          tile.textContent = "·";
         }
-        wordEl.appendChild(t);
+        wordEl.appendChild(tile);
       });
       els.mask.appendChild(wordEl);
 
       if (hintLevel === 1) {
-        var lc = letterCount(ans), wc = wordCount(ans);
-        els.maskNote.textContent = "The capital has " + lc + " letter" + (lc === 1 ? "" : "s") +
-          (wc > 1 ? " across " + wc + " words." : ".");
+        els.maskNote.textContent = t("maskLen")(letterCount(ans), wordCount(ans));
       } else if (hintLevel === 2) {
-        els.maskNote.textContent = "Some letters are filled in to help you.";
+        els.maskNote.textContent = t("maskPartial");
       } else {
         els.maskNote.textContent = "";
       }
     }
 
     function updateHintButton() {
-      var labels = ["Hint 1: how many letters", "Hint 2: reveal some letters", "Hint 3: show the answer"];
+      var labels = [t("hint1"), t("hint2"), t("hint3")];
       if (hintLevel >= 3) {
         els.hintBtn.disabled = true;
-        els.hintBtn.textContent = "Answer shown";
+        els.hintBtn.textContent = t("answerShown");
       } else {
         els.hintBtn.disabled = false;
         els.hintBtn.textContent = labels[hintLevel];
@@ -724,16 +872,16 @@
     function newQuestion() {
       current = pickNext();
       if (!current) {
-        els.qCountry.textContent = "—";
-        els.feedback.textContent = "No countries in this region.";
+        els.qText.textContent = t("noCountries");
+        els.feedback.textContent = "";
         return;
       }
       lastCountry = current.c;
       hintLevel = 0;
       solved = false;
       els.qFlag.textContent = current.flag || "🏳️";
-      els.qRegion.textContent = current.region;
-      els.qCountry.textContent = current.c;
+      els.qRegion.textContent = regionLabel(current.region);
+      els.qText.innerHTML = t("qText")(cName(current));
       els.answerInput.value = "";
       els.answerInput.disabled = false;
       els.submitBtn.disabled = false;
@@ -752,11 +900,9 @@
     function refreshSeenNote() {
       var rec = profile.byCountry[current.c];
       if (rec && rec.seen) {
-        els.seenNote.textContent = "You have seen " + current.c + " " + rec.seen +
-          " time" + (rec.seen === 1 ? "" : "s") +
-          (rec.correct ? ", correct " + rec.correct + "." : ".");
+        els.seenNote.textContent = t("seenN")(cName(current), rec.seen, rec.correct);
       } else {
-        els.seenNote.textContent = "First time seeing " + current.c + ".";
+        els.seenNote.textContent = t("seenFirst")(cName(current));
       }
     }
 
@@ -829,23 +975,24 @@
     }
 
     function showReveal(correct, pts, stars) {
+      revCorrect = correct;
       els.askBlock.style.display = "none";
       els.reveal.classList.remove("hidden");
-      els.capName.textContent = current.cap;
-      els.capCountry.textContent = current.c;
-      els.fact1.textContent = current.facts[0];
-      els.fact2.textContent = current.facts[1];
+      els.capLine.innerHTML = t("capLine")(escapeHtml(capDisp(current)), escapeHtml(cName(current)));
+      var f = factsOf(current);
+      els.fact1.textContent = f[0];
+      els.fact2.textContent = f[1];
       if (correct) {
         els.answerBanner.className = "answer-banner";
-        els.bannerLbl.textContent = (hintLevel <= 0) ? "Correct — no hints!" :
-          (hintLevel === 1 ? "Correct — with one hint" : "Correct — with hints");
+        els.bannerLbl.textContent = (hintLevel <= 0) ? t("correctNoHint") :
+          (hintLevel === 1 ? t("correctOneHint") : t("correctHints"));
         els.awardPts.textContent = "+" + pts;
         els.awardPts.className = "pts";
         els.awardStars.textContent = stars;
         els.award.style.display = "";
       } else {
         els.answerBanner.className = "answer-banner learned";
-        els.bannerLbl.textContent = "Here is the answer — now you know it";
+        els.bannerLbl.textContent = t("learned");
         els.awardPts.textContent = "+0";
         els.awardPts.className = "pts zero";
         els.awardStars.textContent = "";
@@ -858,7 +1005,7 @@
       if (solved || !current) return;
       var raw = els.answerInput.value;
       if (!norm(raw)) {
-        flashInfo("Type a city name, or use a hint.");
+        flashInfo(t("fbType"));
         return;
       }
       var forms = acceptedForms(current);
@@ -872,7 +1019,7 @@
         void els.answerInput.offsetWidth;
         els.answerInput.classList.add("shake");
         els.feedback.className = "feedback no";
-        els.feedback.textContent = "Not quite — try again, or tap a hint.";
+        els.feedback.textContent = t("fbWrong");
         els.answerInput.select();
       }
     }
@@ -888,9 +1035,7 @@
       renderMask();
       updateHintButton();
       els.feedback.className = "feedback info";
-      els.feedback.textContent = (hintLevel === 1)
-        ? "Hint: the length is shown below."
-        : "Hint: some letters are filled in below.";
+      els.feedback.textContent = (hintLevel === 1) ? t("fbLen") : t("fbPartial");
       els.answerInput.focus();
     }
 
@@ -898,7 +1043,53 @@
     function updateStreakDisplay() { els.streakVal.textContent = profile.currentStreak; }
     function updateWho() { els.whoName.textContent = profile.nick; }
     function updateFooter() {
-      els.footTotal.textContent = "Teaching the capitals of " + ALL.length + " countries and territories";
+      els.footTotal.textContent = t("footTotal")(ALL.length);
+    }
+
+    // ---------- language application ----------
+    function applyStatic() {
+      Array.prototype.forEach.call(document.querySelectorAll("[data-i18n]"), function (el) {
+        var v = t(el.getAttribute("data-i18n"));
+        if (typeof v === "string") el.textContent = v;
+      });
+      Array.prototype.forEach.call(document.querySelectorAll("[data-i18n-ph]"), function (el) {
+        var v = t(el.getAttribute("data-i18n-ph"));
+        if (typeof v === "string") el.setAttribute("placeholder", v);
+      });
+    }
+    function renderQuestionView() {
+      els.qRegion.textContent = regionLabel(current.region);
+      els.qText.innerHTML = t("qText")(escapeHtml(cName(current)));
+      updateHintButton();
+      renderMask();        // reflects current language and hint level
+      refreshSeenNote();
+    }
+    function renderRevealText() {
+      els.capLine.innerHTML = t("capLine")(escapeHtml(capDisp(current)), escapeHtml(cName(current)));
+      var f = factsOf(current);
+      els.fact1.textContent = f[0];
+      els.fact2.textContent = f[1];
+      els.bannerLbl.textContent = revCorrect
+        ? ((hintLevel <= 0) ? t("correctNoHint") : (hintLevel === 1 ? t("correctOneHint") : t("correctHints")))
+        : t("learned");
+      refreshSeenNote();
+    }
+    function applyLang() {
+      document.documentElement.lang = lang;
+      els.langEn.classList.toggle("active", lang === "en");
+      els.langEl.classList.toggle("active", lang === "el");
+      applyStatic();
+      buildRegionSelect();
+      updateFooter();
+      if (current) { if (solved) renderRevealText(); else renderQuestionView(); }
+      if (!els.statsOverlay.classList.contains("hidden")) openStats();
+      if (!els.boardOverlay.classList.contains("hidden")) renderBoard();
+    }
+    function setLang(l) {
+      if (l === lang) return;
+      lang = l;
+      try { localStorage.setItem(LANG_KEY, l); } catch (e) {}
+      applyLang();
     }
 
     // ---------- nickname modal ----------
@@ -944,7 +1135,7 @@
 
     function tryStart() {
       var v = els.nickInput.value;
-      if (!v.trim()) { els.nickErr.textContent = "Please enter a nickname to continue."; return; }
+      if (!v.trim()) { els.nickErr.textContent = t("errNickContinue"); return; }
       activate(v);
     }
 
@@ -962,8 +1153,8 @@
     function openStats() {
       els.statsNick.textContent = profile.nick;
       var created = new Date(profile.createdAt);
-      els.statsSince.textContent = "Learning since " +
-        created.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+      els.statsSince.textContent = t("since")(
+        created.toLocaleDateString(t("locale"), { year: "numeric", month: "long", day: "numeric" }));
       els.sAnswered.textContent = profile.answered;
       els.sAccuracy.textContent = accuracyOf(profile) + "%";
       els.sPoints.textContent = profile.points.toLocaleString();
@@ -1002,16 +1193,14 @@
         els.bars.appendChild(col);
       });
       var totalRecent = days.reduce(function (a, d) { return a + d.count; }, 0);
-      els.barsLegend.textContent = totalRecent
-        ? totalRecent + " questions answered in the last 14 days."
-        : "No activity yet in the last 14 days — answer a few to see your chart.";
+      els.barsLegend.textContent = totalRecent ? t("recentN")(totalRecent) : t("recentNone");
 
       els.statsOverlay.classList.remove("hidden");
     }
     function closeStats() { els.statsOverlay.classList.add("hidden"); }
 
     function resetProgress() {
-      if (!confirm("Reset all progress for \"" + profile.nick + "\"? This cannot be undone.")) return;
+      if (!confirm(t("confirmReset")(profile.nick))) return;
       profiles[pKey] = newProfile(profile.nick);
       profile = profiles[pKey];
       persist();
@@ -1050,12 +1239,9 @@
         return b.answered - a.answered;
       });
 
-      els.boardSub.textContent = rows.length
-        ? rows.length + " player" + (rows.length === 1 ? "" : "s") + " have played on this device."
-        : "Everyone who plays on this device appears here.";
+      els.boardSub.textContent = rows.length ? t("playersN")(rows.length) : t("playersEmpty");
 
       // header highlight for active sort
-      els.thPoints.textContent = "Points";
       Array.prototype.forEach.call(document.querySelectorAll(".sortbtn"), function (b) {
         b.classList.toggle("active", b.getAttribute("data-sort") === boardSort);
       });
@@ -1073,7 +1259,7 @@
           ? '<span class="medal ' + medal[i] + '">' + (i + 1) + "</span>"
           : (i + 1);
         var isMe = (r.key === pKey);
-        var you = isMe ? ' <span class="youtag">you</span>' : "";
+        var you = isMe ? ' <span class="youtag">' + t("you") + '</span>' : "";
         return '<tr class="' + (isMe ? "me" : "") + '">' +
           '<td class="l rank">' + rankCell + "</td>" +
           '<td class="l name">' + escapeHtml(r.nick) + you + "</td>" +
@@ -1125,6 +1311,9 @@
       b.addEventListener("click", function () { boardSort = b.getAttribute("data-sort"); renderBoard(); });
     });
 
+    els.langEn.addEventListener("click", function () { setLang("en"); });
+    els.langEl.addEventListener("click", function () { setLang("el"); });
+
     els.nickStart.addEventListener("click", tryStart);
     els.nickClose.addEventListener("click", closeNick);
     els.nickInput.addEventListener("keydown", function (e) {
@@ -1141,10 +1330,9 @@
     });
 
     // ---------- boot ----------
-    buildRegionSelect();
-    updateFooter();
+    applyLang(); // sets language flags, static text, region select and footer
     if (ALL.length === 0) {
-      els.qCountry.textContent = "(data failed to load)";
+      els.qText.textContent = "(data failed to load)";
     } else {
       var lastKey = null;
       try { lastKey = localStorage.getItem(LAST_KEY); } catch (e) {}
