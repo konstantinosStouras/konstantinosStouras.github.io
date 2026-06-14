@@ -528,7 +528,7 @@
         "$user": {
           ".write": "newData.hasChildren(['name','points','updated'])",
           "name":     { ".validate": "newData.isString() && newData.val().length <= 24" },
-          "points":   { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000000" },
+          "points":   { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000000 && (!data.exists() || newData.val() >= data.val())" },
           "accuracy": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
           "answered": { ".validate": "newData.isNumber() && newData.val() >= 0" },
           "mastered": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000" },
