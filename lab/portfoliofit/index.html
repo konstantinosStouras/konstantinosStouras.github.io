@@ -408,12 +408,12 @@
 
     <div class="timer-wrap">
       <div class="timer-pill">
-        <span class="label">Time</span>
+        <span class="label">Time left</span>
         <span class="time" id="elapsed">0:00</span>
       </div>
       <div class="sand"><div id="sandBar"></div></div>
       <div class="timer-pill">
-        <span class="label">Best</span>
+        <span class="label">Best $</span>
         <span class="time" id="best">&ndash;</span>
       </div>
     </div>
@@ -526,8 +526,8 @@
       <div class="emoji" id="modalEmoji">&#127881;</div>
       <h3 id="modalTitle">Portfolio packed!</h3>
       <p id="modalSub">You filled the board.</p>
-      <div class="stat">Your time: <b id="modalTime">0:00</b></div>
-      <div class="stat">Net Value: <b id="modalValue">$0</b></div>
+      <div class="stat">Your Net Value: <b id="modalValue">$0</b></div>
+      <div class="stat">Best possible here: <b id="modalBest">$0</b></div>
       <div class="actions">
         <button class="btn" id="modalReplay">Replay</button>
         <button class="btn primary" id="modalNext">Next puzzle</button>
@@ -970,6 +970,7 @@
         selected: null,
         milestones: new Set(),
         timeNudges: new Set(),
+        ended: false,
         cs: cellSize(puzzle.rows, puzzle.cols)
       };
       lastAction = Date.now(); lastCheer = 0; lastIdle = 0;
@@ -1190,6 +1191,7 @@
     }
 
     function onCellClick(e) {
+      if (state.ended) return;
       const r = +e.currentTarget.dataset.r, c = +e.currentTarget.dataset.c;
       const k = r + ',' + c;
       // If clicking an occupied cell, pick that piece back up.
@@ -1215,6 +1217,7 @@
     }
 
     function removePiece(instId) {
+      if (state.ended) return;
       lastAction = Date.now();
       const p = state.pieces.find(pp => pp.id === instId);
       if (!p || !p.placed) return;
@@ -1232,17 +1235,20 @@
     }
 
     function checkWin() {
-      // The board is won when the outline is completely covered, regardless of
-      // which subset of the eight bricks was used to do it.
+      // Filling the board no longer ends the round: the deadline does. Each time
+      // the outline is fully covered we celebrate, but the player keeps going and
+      // can rearrange bricks to push their Net Value higher until time runs out.
       let allFilled = true;
       for (const k of state.region) { if (!state.occupied.has(k)) { allFilled = false; break; } }
       if (allFilled) {
-        stopTimer();
-        const t = timer.elapsed;
-        const best = saveBest(state.diff, t);
-        const val = placedValue();
-        setStatus('Portfolio packed in ' + fmt(t) + ' for ' + money(val) + '.', 'win');
-        showWin(t, best, val);
+        const val = placedValue();                 // full board => Net Value = total value
+        if (val >= state.bestValue) {
+          setStatus('Top-value portfolio! Net ' + money(val) + ', the maximum here. Hold it until time runs out.', 'win');
+          nudge('🏆 Maximum value reached: Net ' + money(val) + '. Keep it until the buzzer!', 'cheer');
+        } else {
+          setStatus('Board filled at Net ' + money(val) + '. Best possible here is ' + money(state.bestValue) + '. Rearrange to raise it before time runs out.', 'win');
+          nudge('🎉 Board filled at Net ' + money(val) + '. Can you reach ' + money(state.bestValue) + '? Keep trying!', 'cheer');
+        }
       } else {
         setStatus('Keep going. Find the bricks that fill the rest.', '');
       }
@@ -1275,6 +1281,7 @@
     }
 
     function hint() {
+      if (state.ended) return;
       const next = state.solution.find(sol => {
         return !sol.cells.every(([r, c]) => {
           const inst = state.occupied.get(r + ',' + c);
@@ -1313,6 +1320,7 @@
         bestVal = state.bestValue;
       }
       state.selected = null;
+      state.ended = true;
       stopTimer();
       renderBoard(); renderTray(); renderKPIs();
       setStatus('Highest-value solution shown (Net ' + money(bestVal) + '). Hit “New puzzle” for another.', '');
@@ -1340,9 +1348,9 @@
       if (timer.interval) { clearInterval(timer.interval); timer.interval = null; }
     }
     function updateTimerUI() {
-      $('#elapsed').textContent = fmt(timer.elapsed);
       const limit = DIFFS[state ? state.diff : 'easy'].limit;
       const remaining = Math.max(0, limit - timer.elapsed);
+      $('#elapsed').textContent = fmt(remaining);
       const pct = Math.max(0, (remaining / limit) * 100);
       const bar = $('#sandBar');
       bar.style.width = pct + '%';
@@ -1356,9 +1364,9 @@
           const label = remaining >= 60 ? '1 minute' : remaining + ' seconds';
           nudge('⏳ ' + label + ' left to submit your solution!', remaining <= 15 ? 'urgent' : 'time');
         }
-        if (remaining === 0 && !state.timeNudges.has(0)) {
-          state.timeNudges.add(0);
-          nudge('⏳ Time is up! Place what you can and submit your best.', 'urgent');
+        if (remaining === 0 && !state.ended) {
+          endRound();
+          return;
         }
         const now = Date.now();
         if (remaining > 12 && state.occupied.size < state.region.size &&
@@ -1374,19 +1382,20 @@
     }
 
     // ---------- Best times ----------
-    function bestKey(diff) { return 'ubongo.best.' + diff; }
+    // Personal best is now the highest Net Value reached for a difficulty.
+    function bestKey(diff) { return 'portfoliofit.bestnet.' + diff; }
     function loadBest(diff) {
       const v = localStorage.getItem(bestKey(diff));
-      return v ? parseInt(v, 10) : null;
+      return v === null ? null : parseFloat(v);
     }
-    function saveBest(diff, t) {
+    function saveBest(diff, net) {
       const cur = loadBest(diff);
-      if (cur === null || t < cur) { localStorage.setItem(bestKey(diff), String(t)); updateBestUI(); return true; }
+      if (cur === null || net > cur) { localStorage.setItem(bestKey(diff), String(net)); updateBestUI(); return true; }
       return false;
     }
     function updateBestUI() {
       const b = loadBest(state ? state.diff : 'easy');
-      $('#best').textContent = b === null ? '–' : fmt(b);
+      $('#best').textContent = b === null ? '–' : money(b);
     }
 
     function setStatus(msg, cls) {
@@ -1394,16 +1403,30 @@
       statusEl.className = 'status' + (cls ? ' ' + cls : '');
     }
 
-    // ---------- Win modal ----------
-    function showWin(t, isBest, val) {
-      const optimal = val >= state.bestValue;
-      $('#modalTime').textContent = fmt(t);
-      $('#modalEmoji').textContent = optimal ? '🏆' : (isBest ? '⏱️' : '🎉');
-      $('#modalTitle').textContent = optimal ? 'Top-value portfolio!' : 'Portfolio packed!';
+    // ---------- End of round (deadline reached) ----------
+    function currentNet() { return placedValue() - (state.region.size - state.occupied.size); }
+
+    function endRound() {
+      if (state.ended) return;
+      state.ended = true;
+      stopTimer();
+      state.selected = null; clearPreview();
+      renderBoard(); renderTray(); renderKPIs();
+      const net = currentNet();
+      const isHigh = saveBest(state.diff, net);
+      showEnd(net, isHigh);
+    }
+
+    function showEnd(net, isHigh) {
+      const full = state.occupied.size === state.region.size;
+      const optimal = full && net >= state.bestValue;
+      $('#modalEmoji').textContent = optimal ? '🏆' : (full ? '🎉' : '⏱️');
+      $('#modalTitle').textContent = optimal ? 'Optimal portfolio!' : "Time's up!";
       $('#modalSub').textContent = optimal
-        ? 'You filled the board with the highest-value bricks possible.'
-        : 'You filled the board. Best-value fill here was ' + money(state.bestValue) + '.';
-      $('#modalValue').textContent = money(val) + ' / ' + money(state.bestValue);
+        ? 'You finished with the highest-value portfolio possible here.'
+        : (isHigh ? 'New personal best for this difficulty!' : 'Here is how your portfolio scored.');
+      $('#modalValue').textContent = money(net);
+      $('#modalBest').textContent = money(state.bestValue);
       $('#overlay').classList.add('show');
     }
     function hideWin() { $('#overlay').classList.remove('show'); }
@@ -1586,9 +1609,14 @@
     });
     $('#newBtn').addEventListener('click', () => { hideWin(); newGame(state.diff); });
     $('#restartBtn').addEventListener('click', () => {
+      hideWin();
       state.occupied.clear();
       state.pieces.forEach(p => { p.placed = false; p.placedCells = null; });
       state.selected = null;
+      state.ended = false;
+      state.milestones = new Set();
+      state.timeNudges = new Set();
+      if (nudgeEl) nudgeEl.className = 'nudge';
       renderBoard(); renderTray(); renderKPIs();
       resetTimer(); startTimer();
       setStatus('Board reset. Go again!', '');
