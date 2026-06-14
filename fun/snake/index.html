@@ -430,7 +430,7 @@
           "$user": {
             // allow create/update; reject absurd scores & bad shapes
             ".write": "newData.hasChildren(['name','score','length','updated'])",
-            "score":  { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000" },
+            "score":  { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000 && (!data.exists() || newData.val() >= data.val())" },
             "length": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000" },
             "name":   { ".validate": "newData.isString() && newData.val().length <= 16" },
             "updated":{ ".validate": "newData.isNumber()" }
