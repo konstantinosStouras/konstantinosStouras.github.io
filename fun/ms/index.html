@@ -198,11 +198,11 @@
   .summary-tab-btn { padding: 8px 18px; border: 1.5px solid var(--border); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; background: var(--white); color: var(--text-muted); transition: all 0.15s; }
   .summary-tab-btn.active { background: var(--navy); color: white; border-color: var(--navy); }
   .summary-tab-btn:hover:not(.active) { background: var(--navy-light); color: var(--navy); border-color: var(--navy); }
-  /* "Recently added papers" button: styled like the summary tabs but managed
-     independently (it drives the papers list, not a summary panel). */
-  .recent-tab-btn { padding: 8px 18px; border: 1.5px solid var(--accent); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; background: var(--white); color: #8a7032; transition: all 0.15s; }
-  .recent-tab-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
-  .recent-tab-btn:hover:not(.active) { background: var(--accent-light); color: #8a7032; border-color: var(--accent); }
+  /* "Recently added papers" button: same look as the summary tabs, but kept on
+     its own class because it drives the papers list, not a summary panel. */
+  .recent-tab-btn { padding: 8px 18px; border: 1.5px solid var(--border); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; background: var(--white); color: var(--text-muted); transition: all 0.15s; }
+  .recent-tab-btn.active { background: var(--navy); color: white; border-color: var(--navy); }
+  .recent-tab-btn:hover:not(.active) { background: var(--navy-light); color: var(--navy); border-color: var(--navy); }
   .summary-content { display: none; padding: 16px 0 8px; }
   .summary-content.active { display: block; }
   .summary-list { column-count: 2; column-gap: 2rem; font-size: 14px; line-height: 2.1; }
