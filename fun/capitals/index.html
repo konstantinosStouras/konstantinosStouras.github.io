@@ -29,34 +29,46 @@
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%230b1b2b'/%3E%3Ccircle%20cx='50'%20cy='50'%20r='30'%20fill='none'%20stroke='%2338bdf8'%20stroke-width='5'/%3E%3Cellipse%20cx='50'%20cy='50'%20rx='13'%20ry='30'%20fill='none'%20stroke='%2338bdf8'%20stroke-width='4'/%3E%3Cline%20x1='20'%20y1='50'%20x2='80'%20y2='50'%20stroke='%2338bdf8'%20stroke-width='4'/%3E%3Cline%20x1='25'%20y1='34'%20x2='75'%20y2='34'%20stroke='%2338bdf8'%20stroke-width='3'/%3E%3Cline%20x1='25'%20y1='66'%20x2='75'%20y2='66'%20stroke='%2338bdf8'%20stroke-width='3'/%3E%3C/svg%3E">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<meta name="theme-color" content="#0b1b2b">
+<meta name="theme-color" content="#060e18">
+
+<!-- Fonts: Inter (body) + Inter Tight (display) — both ship Greek glyphs, so EL stays correct -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@600;700;800&display=swap">
 
 <style>
   :root {
-    --bg: #07131f;
+    --bg: #060e18;
     --bg-2: #0b1b2b;
-    --panel: #0f2336;
-    --panel-2: #143049;
-    --line: rgba(255,255,255,0.08);
+    --panel: #102538;
+    --panel-2: #173651;
+    --line: rgba(148,190,224,0.12);
     --accent: #38bdf8;
     --accent-2: #22d3ee;
+    --accent-3: #818cf8;
     --good: #34d399;
     --good-2: #10b981;
     --warn: #fbbf24;
     --bad: #fb7185;
-    --text: #e8f1f8;
-    --muted: #93b0c6;
+    --text: #eaf2fa;
+    --muted: #9bb6cb;
     --muted-2: #6f8da3;
-    --tile: #0b2034;
-    --shadow: 0 24px 60px rgba(0,0,0,0.45);
+    --tile: #0c2236;
+    --shadow: 0 24px 60px rgba(2,8,18,0.55);
     --radius: 16px;
+    --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-display: "Inter Tight", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; min-height: 100%; }
   body {
-    background: radial-gradient(1200px 800px at 50% -8%, #11263a 0%, var(--bg) 62%);
+    background:
+      radial-gradient(900px 620px at 84% -12%, rgba(129,140,248,0.16), transparent 58%),
+      radial-gradient(1100px 760px at 14% -8%, rgba(56,189,248,0.18), transparent 60%),
+      var(--bg);
+    background-repeat: no-repeat;
     color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: var(--font-body);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     line-height: 1.5;
@@ -82,9 +94,10 @@
     display: grid; place-items: center; font-size: 22px;
   }
   .brand h1 {
-    margin: 0; font-size: clamp(20px, 4.4vw, 28px); line-height: 1.05; font-weight: 800;
-    letter-spacing: 0.3px;
-    background: linear-gradient(90deg, var(--accent), #a5f3fc);
+    margin: 0; font-family: var(--font-display);
+    font-size: clamp(21px, 4.4vw, 29px); line-height: 1.05; font-weight: 800;
+    letter-spacing: -0.2px;
+    background: linear-gradient(95deg, #7dd3fc 0%, #a5f3fc 45%, #a5b4fc 100%);
     -webkit-background-clip: text; background-clip: text; color: transparent;
   }
   .brand p { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
@@ -96,14 +109,17 @@
   }
   .who .pill b { color: var(--accent); font-weight: 700; }
 
-  /* language flag switcher */
+  /* language flag switcher — inline SVG flags so every OS renders them (Windows shows no emoji flags) */
   .lang-switch { display: inline-flex; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
   .flag-btn {
     appearance: none; border: 1px solid transparent; background: transparent; cursor: pointer;
-    font-size: 18px; line-height: 1; padding: 4px 8px; border-radius: 999px;
-    filter: grayscale(0.9) opacity(0.55); transition: filter .15s ease, background .15s ease, border-color .15s ease;
+    line-height: 0; padding: 4px; border-radius: 8px;
+    filter: grayscale(0.85) opacity(0.5);
+    transition: filter .15s ease, background .15s ease, border-color .15s ease, transform .05s ease;
   }
-  .flag-btn:hover { filter: grayscale(0.2) opacity(0.9); }
+  .flag-btn svg { width: 26px; height: 17px; display: block; border-radius: 3px; box-shadow: 0 1px 2px rgba(0,0,0,0.35); }
+  .flag-btn:hover { filter: grayscale(0.12) opacity(0.95); }
+  .flag-btn:active { transform: translateY(1px); }
   .flag-btn.active { filter: none; background: var(--panel-2); border-color: var(--accent); }
 
   button, select, input { font-family: inherit; }
@@ -151,8 +167,12 @@
     padding: 22px;
   }
   .q-flag { font-size: 54px; line-height: 1; }
-  .q-region { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; margin-top: 6px; }
-  .q-text { font-size: clamp(20px, 4.6vw, 27px); font-weight: 800; margin: 8px 0 0; }
+  .q-flag .flag-img {
+    width: 92px; height: auto; display: block; border-radius: 9px;
+    border: 1px solid var(--line); box-shadow: 0 10px 26px rgba(2,8,18,0.55);
+  }
+  .q-region { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; margin-top: 10px; }
+  .q-text { font-family: var(--font-display); font-size: clamp(20px, 4.6vw, 27px); font-weight: 800; letter-spacing: -0.2px; margin: 8px 0 0; }
   .q-text .country { color: var(--accent-2); }
 
   /* answer input */
@@ -205,7 +225,7 @@
     border-color: rgba(251,191,36,0.35);
   }
   .answer-banner .lbl { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
-  .answer-banner .cap { font-size: clamp(22px, 5vw, 30px); font-weight: 800; color: var(--text); }
+  .answer-banner .cap { font-family: var(--font-display); font-size: clamp(22px, 5vw, 30px); font-weight: 800; letter-spacing: -0.3px; color: var(--text); }
   .answer-banner .cap .of { color: var(--muted); font-weight: 600; font-size: 16px; }
   .award { margin-left: auto; text-align: right; }
   .award .pts { font-size: 22px; font-weight: 800; color: var(--good); }
@@ -222,6 +242,36 @@
     padding-left: 14px; border-left: 2px solid var(--line);
   }
   .facts p:last-child { margin-bottom: 0; }
+
+  /* ---------- Locator map ---------- */
+  .locator { margin-top: 18px; }
+  .locator h3 {
+    font-size: 13px; text-transform: uppercase; letter-spacing: .12em;
+    color: var(--accent); margin: 0 0 8px;
+  }
+  .map-box {
+    background: radial-gradient(120% 140% at 50% -20%, #102a40, #081626);
+    border: 1px solid var(--line); border-radius: 14px; padding: 10px; overflow: hidden;
+  }
+  .map-box svg { width: 100%; height: auto; display: block; max-height: 50vh; }
+  .map-box svg path { fill: #21405a; stroke: #0a1c2e; stroke-width: 0.4; vector-effect: non-scaling-stroke; transition: fill .25s ease; }
+  .map-box svg path.hl, .map-box svg .hl path { fill: var(--accent); }
+  .map-box svg .map-dot { fill: #fde68a; stroke: #92400e; stroke-width: 0.5; }
+  .map-box svg .map-pulse {
+    fill: none; stroke: #fbbf24; stroke-width: 1.4; vector-effect: non-scaling-stroke;
+    transform-box: fill-box; transform-origin: center; animation: mapPulse 1.7s ease-out infinite;
+  }
+  @keyframes mapPulse { 0% { transform: scale(.5); opacity: .85; } 100% { transform: scale(3); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .map-box svg .map-pulse { animation: none; opacity: .6; } }
+  .map-note { font-size: 13px; color: var(--muted); margin-top: 8px; }
+  .map-credit { font-size: 10.5px; color: var(--muted-2); margin-top: 6px; opacity: .75; }
+
+  /* correct-answer reward pop */
+  @keyframes bannerPop { 0% { transform: scale(.97); } 55% { transform: scale(1.012); } 100% { transform: scale(1); } }
+  .answer-banner.pop { animation: bannerPop .42s cubic-bezier(.2,.7,.3,1.3); }
+  @keyframes awardPop { 0% { transform: scale(.6); opacity: 0; } 60% { transform: scale(1.18); } 100% { transform: scale(1); opacity: 1; } }
+  .award .pts.bump { animation: awardPop .5s ease-out; }
+  @media (prefers-reduced-motion: reduce) { .answer-banner.pop, .award .pts.bump { animation: none; } }
 
   .next-row { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; align-items: center; }
   .next-row .seen { font-size: 13px; color: var(--muted); margin-left: auto; }
@@ -240,7 +290,7 @@
     box-shadow: var(--shadow); padding: 24px;
   }
   .modal.wide { max-width: 620px; }
-  .modal h2 { margin: 0 0 4px; font-size: 22px; }
+  .modal h2 { margin: 0 0 4px; font-family: var(--font-display); font-size: 23px; font-weight: 800; letter-spacing: -0.2px; }
   .modal .sub { margin: 0 0 18px; color: var(--muted); font-size: 14px; }
   .modal input[type=text] {
     width: 100%; background: var(--tile); color: var(--text);
@@ -304,7 +354,7 @@
     background: var(--tile); border: 1px solid var(--line); border-radius: 12px;
     padding: 12px 14px;
   }
-  .stat .v { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .stat .v { font-family: var(--font-display); font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
   .stat .v.good { color: var(--good); }
   .stat .v.accent { color: var(--accent); }
   .stat .k { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-top: 2px; }
@@ -334,6 +384,7 @@
     .card { padding: 18px; }
     .tile { width: 22px; height: 30px; font-size: 16px; }
     .q-flag { font-size: 46px; }
+    .q-flag .flag-img { width: 76px; }
   }
 </style>
 </head>
@@ -350,8 +401,31 @@
       </div>
       <div class="who">
         <span class="lang-switch" role="group" aria-label="Language">
-          <button class="flag-btn" id="langEn" data-lang="en" title="English" aria-label="English">🇬🇧</button>
-          <button class="flag-btn" id="langEl" data-lang="el" title="Ελληνικά" aria-label="Ελληνικά">🇬🇷</button>
+          <button class="flag-btn" id="langEn" data-lang="en" title="English" aria-label="English">
+            <svg viewBox="0 0 60 30" aria-hidden="true">
+              <clipPath id="ukA"><path d="M0,0 v30 h60 v-30 z"/></clipPath>
+              <clipPath id="ukB"><path d="M30,15 h30 v15 z v15 h-30 z h-30 v-15 z v-15 h30 z"/></clipPath>
+              <g clip-path="url(#ukA)">
+                <path d="M0,0 v30 h60 v-30 z" fill="#012169"/>
+                <path d="M0,0 L60,30 M60,0 L0,30" stroke="#fff" stroke-width="6"/>
+                <path d="M0,0 L60,30 M60,0 L0,30" clip-path="url(#ukB)" stroke="#C8102E" stroke-width="4"/>
+                <path d="M30,0 v30 M0,15 h60" stroke="#fff" stroke-width="10"/>
+                <path d="M30,0 v30 M0,15 h60" stroke="#C8102E" stroke-width="6"/>
+              </g>
+            </svg>
+          </button>
+          <button class="flag-btn" id="langEl" data-lang="el" title="Ελληνικά" aria-label="Ελληνικά">
+            <svg viewBox="0 0 27 18" aria-hidden="true">
+              <rect width="27" height="18" fill="#0d5eaf"/>
+              <g fill="#fff">
+                <rect y="2" width="27" height="2"/><rect y="6" width="27" height="2"/>
+                <rect y="10" width="27" height="2"/><rect y="14" width="27" height="2"/>
+              </g>
+              <rect width="10" height="10" fill="#0d5eaf"/>
+              <rect x="4" width="2" height="10" fill="#fff"/>
+              <rect y="4" width="10" height="2" fill="#fff"/>
+            </svg>
+          </button>
         </span>
         <span class="pill" id="whoPill" title="Your nickname">👤 <b id="whoName">—</b></span>
         <button class="btn small ghost" id="statsBtn" data-i18n="myProgress">My progress</button>
@@ -401,6 +475,13 @@
             <div class="pts" id="awardPts">+0</div>
             <div class="stars" id="awardStars"></div>
           </div>
+        </div>
+
+        <div class="locator" id="locator">
+          <h3 data-i18n="whereIs">Where in the world</h3>
+          <div class="map-box" id="mapBox"></div>
+          <div class="map-note" id="mapNote"></div>
+          <div class="map-credit" data-i18n="mapCredit">Map: Al MacDonald / F. Lekschas · CC BY-SA 3.0</div>
         </div>
 
         <div class="facts">
@@ -629,6 +710,8 @@
         hint1: "Hint 1: how many letters", hint2: "Hint 2: reveal some letters", hint3: "Hint 3: show the answer",
         answerShown: "Answer shown",
         didYouKnow: "Did you know?", nextCountry: "Next country →",
+        whereIs: "Where in the world", notOnMap: "Too small to show on the map.",
+        mapCredit: "Map: Al MacDonald / F. Lekschas · CC BY-SA 3.0",
         byline: "A fun project by", moreProjects: "more fun projects",
         welcome: "Welcome to Capitals",
         welcomeSub: "Pick a nickname so your progress is saved and tracked over time. Use the same nickname next time to keep building your streak.",
@@ -681,6 +764,8 @@
         hint1: "Βοήθεια 1: πόσα γράμματα", hint2: "Βοήθεια 2: μερικά γράμματα", hint3: "Βοήθεια 3: δείξε την απάντηση",
         answerShown: "Η απάντηση φάνηκε",
         didYouKnow: "Το ήξερες;", nextCountry: "Επόμενη χώρα →",
+        whereIs: "Πού βρίσκεται στον κόσμο", notOnMap: "Πολύ μικρή για να φανεί στον χάρτη.",
+        mapCredit: "Χάρτης: Al MacDonald / F. Lekschas · CC BY-SA 3.0",
         byline: "Ένα διασκεδαστικό έργο του", moreProjects: "περισσότερα έργα",
         welcome: "Καλώς ήρθες στο Capitals",
         welcomeSub: "Διάλεξε ένα ψευδώνυμο ώστε να αποθηκεύεται η πρόοδός σου. Χρησιμοποίησε το ίδιο ψευδώνυμο την επόμενη φορά για να συνεχίσεις το σερί σου.",
@@ -762,10 +847,27 @@
     }
 
     // ---------- text normalisation for answer matching ----------
+    // Greek is highly forgiving: vowels and digraphs that sound identical are
+    // folded together, so Λισαβώνα / Λισαβόνα / Λισσαβόνα all match. This only
+    // touches Greek letters, so Latin answers are unaffected.
+    //   /i/  η υ ει οι υι → ι       /o/  ω → ο
+    //   double letters collapse (Λισσαβόνα → Λισαβόνα)
+    //   the diphthongs ου / αυ / ευ keep their own sound
+    function foldGreek(s) {
+      if (!/[α-ω]/.test(s)) return s;
+      // Map homophonous vowels/digraphs to one form. The diphthongs ου/αυ/ευ
+      // are matched as whole units (and kept) so their υ is never turned into ι.
+      s = s.replace(/ου|αυ|ευ|ει|οι|υι|[ηυω]/g, function (m) {
+        if (m === "ου" || m === "αυ" || m === "ευ") return m; // /u/ /av/ /ev/ kept
+        if (m === "ω") return "ο";                            // /o/
+        return "ι";                                           // η υ ει οι υι → /i/
+      });
+      return s.replace(/([α-ω])\1+/g, "$1"); // collapse doubled letters (Λισσαβόνα → Λισαβόνα)
+    }
     // Handles Latin and Greek: strips accents/tonos, unifies final sigma,
     // and keeps both Latin (a-z) and Greek (alpha-omega) letters.
     function norm(s) {
-      return (s || "")
+      var base = (s || "")
         .normalize("NFD").replace(/[̀-ͯ]/g, "") // strip Latin and Greek diacritics
         .toLowerCase()
         .replace(/['’`ʻ]/g, "")                  // drop apostrophes
@@ -776,6 +878,7 @@
         .replace(/[^a-z0-9α-ω ]/g, "") // keep Latin + Greek letters
         .replace(/\s+/g, " ")
         .trim();
+      return foldGreek(base);
     }
     // Accept every known spelling in either language so answers are forgiving
     // regardless of the interface language.
@@ -837,6 +940,7 @@
       reveal: $("reveal"), answerBanner: $("answerBanner"), bannerLbl: $("bannerLbl"),
       capLine: $("capLine"),
       award: $("award"), awardPts: $("awardPts"), awardStars: $("awardStars"),
+      locator: $("locator"), mapBox: $("mapBox"), mapNote: $("mapNote"),
       fact1: $("fact1"), fact2: $("fact2"),
       nextBtn: $("nextBtn"), seenNote: $("seenNote"), footTotal: $("footTotal"),
       // nick modal
@@ -965,6 +1069,108 @@
       }
     }
 
+    // A flag emoji is two regional-indicator code points (🇨 + 🇦). Map them back
+    // to an ISO 3166-1 alpha-2 code so we can show a real flag image — Windows
+    // does not render flag emoji and falls back to the bare letters ("CA").
+    function flagCC(emoji) {
+      if (!emoji) return "";
+      var cps = Array.from(emoji).map(function (ch) { return ch.codePointAt(0); });
+      if (cps.length === 2 &&
+          cps[0] >= 0x1F1E6 && cps[0] <= 0x1F1FF &&
+          cps[1] >= 0x1F1E6 && cps[1] <= 0x1F1FF) {
+        return String.fromCharCode(97 + (cps[0] - 0x1F1E6)) +
+               String.fromCharCode(97 + (cps[1] - 0x1F1E6));
+      }
+      return "";
+    }
+    function renderFlag(emoji) {
+      var cc = flagCC(emoji);
+      els.qFlag.innerHTML = "";
+      if (cc) {
+        var img = document.createElement("img");
+        img.className = "flag-img";
+        img.alt = "";
+        img.loading = "lazy";
+        img.src = "https://flagcdn.com/" + cc + ".svg";
+        img.onerror = function () { els.qFlag.textContent = emoji || "🏳️"; };
+        els.qFlag.appendChild(img);
+      } else {
+        els.qFlag.textContent = emoji || "🏳️";
+      }
+    }
+
+    // ---------- locator map ----------
+    // The world map (worldmap.svg) tags each country path/group with its ISO
+    // alpha-2 id, so we highlight the current country by that code and drop a
+    // pulsing marker at its centre (helps find tiny countries).
+    var mapSvg = null, mapState = "idle"; // idle | loading | ready | failed
+    var mapPending = null;                // latest country code requested
+    var mapWaiters = [];
+    function flushWaiters(svg) { var w = mapWaiters; mapWaiters = []; w.forEach(function (cb) { cb(svg); }); }
+    function ensureMap(cb) {
+      if (mapState === "ready") { cb(mapSvg); return; }
+      if (mapState === "failed") { cb(null); return; }
+      mapWaiters.push(cb);
+      if (mapState === "loading") return;
+      mapState = "loading";
+      fetch("worldmap.svg").then(function (r) {
+        if (!r.ok) throw new Error("map " + r.status);
+        return r.text();
+      }).then(function (txt) {
+        els.mapBox.innerHTML = txt;
+        mapSvg = els.mapBox.querySelector("svg");
+        if (!mapSvg) throw new Error("no svg");
+        mapSvg.removeAttribute("width");
+        mapSvg.removeAttribute("height");
+        mapState = "ready";
+        flushWaiters(mapSvg);
+      }).catch(function () {
+        mapState = "failed";
+        flushWaiters(null);
+      });
+    }
+    function highlightOnMap(emoji) {
+      var cc = flagCC(emoji);
+      if (!cc) { els.locator.style.display = "none"; return; }
+      els.locator.style.display = "";
+      els.mapNote.textContent = "";
+      mapPending = cc;
+      ensureMap(function (svg) {
+        if (!svg) { els.locator.style.display = "none"; return; }
+        if (mapPending !== cc) return;               // a newer question took over
+        paintCountry(svg, cc);
+      });
+    }
+    function paintCountry(svg, cc) {
+      var SVGNS = "http://www.w3.org/2000/svg";
+      Array.prototype.forEach.call(svg.querySelectorAll(".hl"), function (e) { e.classList.remove("hl"); });
+      var old = svg.querySelector(".map-marker"); if (old) old.parentNode.removeChild(old);
+      var nodes = svg.querySelectorAll('[id="' + cc + '"]');
+      if (!nodes.length) { els.mapNote.textContent = t("notOnMap"); return; }
+      els.mapNote.textContent = "";
+      var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      Array.prototype.forEach.call(nodes, function (n) {
+        n.classList.add("hl");
+        try {
+          var b = n.getBBox();
+          x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y);
+          x1 = Math.max(x1, b.x + b.width); y1 = Math.max(y1, b.y + b.height);
+        } catch (e) {}
+      });
+      if (!isFinite(x0)) return;
+      var cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+      var g = document.createElementNS(SVGNS, "g");
+      g.setAttribute("class", "map-marker");
+      var ring = document.createElementNS(SVGNS, "circle");
+      ring.setAttribute("class", "map-pulse");
+      ring.setAttribute("cx", cx); ring.setAttribute("cy", cy); ring.setAttribute("r", 5);
+      var dot = document.createElementNS(SVGNS, "circle");
+      dot.setAttribute("class", "map-dot");
+      dot.setAttribute("cx", cx); dot.setAttribute("cy", cy); dot.setAttribute("r", 2.6);
+      g.appendChild(ring); g.appendChild(dot);
+      svg.appendChild(g);
+    }
+
     function newQuestion() {
       current = pickNext();
       if (!current) {
@@ -975,7 +1181,7 @@
       lastCountry = current.c;
       hintLevel = 0;
       solved = false;
-      els.qFlag.textContent = current.flag || "🏳️";
+      renderFlag(current.flag);
       els.qRegion.textContent = regionLabel(current.region);
       els.qText.innerHTML = t("qText")(cName(current));
       els.answerInput.value = "";
@@ -1088,6 +1294,11 @@
         els.awardPts.className = "pts";
         els.awardStars.textContent = stars;
         els.award.style.display = "";
+        // reward: a quick celebratory pop on the banner and the points
+        void els.answerBanner.offsetWidth;
+        els.answerBanner.classList.add("pop");
+        els.awardPts.classList.remove("bump"); void els.awardPts.offsetWidth;
+        els.awardPts.classList.add("bump");
       } else {
         els.answerBanner.className = "answer-banner learned";
         els.bannerLbl.textContent = t("learned");
@@ -1095,6 +1306,7 @@
         els.awardPts.className = "pts zero";
         els.awardStars.textContent = "";
       }
+      highlightOnMap(current.flag);   // show where this country is, on the world map
       refreshSeenNote();
       els.nextBtn.focus();
     }
