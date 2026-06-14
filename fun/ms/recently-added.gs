@@ -30,8 +30,10 @@
  *   - It does NOT modify the Data tab.
  *   - "Date Added" is the date the paper first appeared to this script, not a
  *     historical insertion date (which the sheet never recorded). The list
- *     therefore starts empty and fills in as new papers arrive. To show some
- *     papers immediately you can seed the registry by hand (see seedRegistry_).
+ *     therefore starts EMPTY after setUpRecentlyAdded() and fills in as new
+ *     papers arrive. To populate it immediately, run seedRecentlyAddedNow()
+ *     once (surfaces the latest papers), or seed specific DOIs via
+ *     seedRegistry_().
  */
 
 var DATA_SHEET = 'Data';
@@ -145,6 +147,13 @@ function buildRecentlyAddedTab_(data, registry) {
   cutoff.setHours(0, 0, 0, 0);
   cutoff.setDate(cutoff.getDate() - RECENT_WINDOW_DAYS);
 
+  // Columns to copy from Data: all except any pre-existing "Date Added" column
+  // (we append our own authoritative one, so the output never duplicates it).
+  var keep = [];
+  for (var c = 0; c < data.headers.length; c++) {
+    if (String(data.headers[c]).trim() !== DATE_ADDED_HEADER) keep.push(c);
+  }
+
   var picked = [];
   for (var i = 0; i < data.rows.length; i++) {
     var doi = normKey_(data.rows[i][data.keyCol]);
@@ -154,15 +163,77 @@ function buildRecentlyAddedTab_(data, registry) {
   }
   picked.sort(function(a, b) { return b.d - a.d; });
 
-  var out = [data.headers.concat([DATE_ADDED_HEADER])];
+  var header = [];
+  for (var h = 0; h < keep.length; h++) header.push(data.headers[keep[h]]);
+  header.push(DATE_ADDED_HEADER);
+
+  var out = [header];
   for (var j = 0; j < picked.length; j++) {
-    out.push(picked[j].row.concat([dateToStr_(picked[j].d)]));
+    var row = [];
+    for (var k = 0; k < keep.length; k++) row.push(picked[j].row[keep[k]]);
+    row.push(dateToStr_(picked[j].d));
+    out.push(row);
   }
 
   var ss = SpreadsheetApp.getActive();
   var rec = ss.getSheetByName(RECENT_SHEET) || ss.insertSheet(RECENT_SHEET);
-  rec.clearContents();
+  rec.clear(); // wipe old contents (incl. any stray extra column) before rewriting
   rec.getRange(1, 1, out.length, out[0].length).setValues(out);
+}
+
+// ── One-time bootstrap: surface the latest papers right away ───────────────
+// The list is empty until new papers are scraped (the sheet never recorded
+// historical add-dates). Run seedRecentlyAddedNow() ONCE to seed it with the
+// most recent SEED_COUNT papers (Articles in Advance first, then latest
+// year/volume/issue), stamped with recent dates so they show immediately.
+// Going forward, genuinely new papers are tracked automatically.
+var SEED_COUNT = 40;
+
+function seedRecentlyAddedNow() {
+  var data = readData_();
+  if (!data) return;
+  var yI = data.index['Year'], vI = data.index['Volume'], iI = data.index['Issue'];
+  var pI = data.index['Page'], sI = data.index['Status'];
+
+  var list = [];
+  for (var r = 0; r < data.rows.length; r++) {
+    var doi = normKey_(data.rows[r][data.keyCol]);
+    if (!doi) continue;
+    list.push({
+      doi: doi,
+      aia: sI != null && String(data.rows[r][sI]).trim() === 'Articles in Advance',
+      y: parseInt(data.rows[r][yI], 10) || 0,
+      v: parseInt(data.rows[r][vI], 10) || 0,
+      i: parseInt(data.rows[r][iI], 10) || 0,
+      p: parseInt(data.rows[r][pI], 10) || 0
+    });
+  }
+  // Newest first: Articles in Advance, then latest year/volume/issue/page.
+  list.sort(function(a, b) {
+    if (a.aia !== b.aia) return a.aia ? -1 : 1;
+    return b.y - a.y || b.v - a.v || b.i - a.i || b.p - a.p;
+  });
+
+  var map = readRegistry_();
+  var now = new Date();
+  var pick = list.slice(0, SEED_COUNT);
+  for (var k = 0; k < pick.length; k++) {
+    var d = new Date(now.getTime());
+    d.setDate(d.getDate() - Math.floor(k / 3)); // stagger ~3/day so they age out gradually
+    map[pick[k].doi] = Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  writeRegistry_(map);
+  buildRecentlyAddedTab_(data, map);
+}
+
+// Rewrite the whole registry sheet from a { doi: dateStr } map.
+function writeRegistry_(map) {
+  var sh = registrySheet_();
+  var keys = Object.keys(map);
+  var out = [['DOI', 'Date Added']];
+  for (var i = 0; i < keys.length; i++) out.push([keys[i], map[keys[i]]]);
+  sh.clearContents();
+  sh.getRange(1, 1, out.length, 2).setValues(out);
 }
 
 // ── Optional: seed specific papers so the list isn't empty at first ─────────
