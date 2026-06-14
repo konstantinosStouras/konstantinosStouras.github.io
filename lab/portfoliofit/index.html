@@ -3,10 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PortfolioFit &mdash; Project Portfolio Selection, the packing game</title>
-  <meta name="description" content="PortfolioFit: a management-training game for project portfolio selection. Pick the right projects and pack them into the frame to maximise net value before the timer runs out — a hands-on take on the knapsack problem." />
+  <title>PortfolioFit: Project Portfolio Selection, the packing game</title>
+  <meta name="description" content="PortfolioFit: a management-training game for project portfolio selection. Pick the right projects and pack them into the frame to maximise net value before the timer runs out. A hands-on take on the knapsack problem." />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%23e67e22'/%3E%3Crect%20x='14'%20y='14'%20width='72'%20height='72'%20rx='12'%20fill='%23fff8ee'/%3E%3Crect%20x='26'%20y='26'%20width='48'%20height='48'%20rx='8'%20fill='%232ecc71'/%3E%3Ctext%20x='50'%20y='69'%20font-size='44'%20font-weight='800'%20text-anchor='middle'%20fill='%23ffffff'%20font-family='Arial,Helvetica,sans-serif'%3E%24%3C/text%3E%3C/svg%3E" />
   <link rel="alternate icon" type="image/png" href="/images/KIS_favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
   <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%23e67e22'/%3E%3Crect%20x='14'%20y='14'%20width='72'%20height='72'%20rx='12'%20fill='%23fff8ee'/%3E%3Crect%20x='26'%20y='26'%20width='48'%20height='48'%20rx='8'%20fill='%232ecc71'/%3E%3Ctext%20x='50'%20y='69'%20font-size='44'%20font-weight='800'%20text-anchor='middle'%20fill='%23ffffff'%20font-family='Arial,Helvetica,sans-serif'%3E%24%3C/text%3E%3C/svg%3E" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -26,12 +29,14 @@
       --cell: #fbf8f1;
       --cell-line: #d9d2c4;
       --shadow: 0 10px 30px rgba(60, 45, 20, 0.10);
+      --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+        'Helvetica Neue', Arial, sans-serif;
+      --font-display: 'Space Grotesk', var(--font-ui);
     }
 
     html, body { height: 100%; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
-        Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif;
+      font-family: var(--font-ui);
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
       text-rendering: optimizeLegibility;
@@ -55,11 +60,12 @@
       background: #fbe7d2; padding: 4px 10px; border-radius: 999px; margin-bottom: 10px;
     }
     header.app h1 {
-      font-size: clamp(1.8rem, 5vw, 2.6rem); font-weight: 800; letter-spacing: -0.5px;
+      font-family: var(--font-display);
+      font-size: clamp(1.85rem, 5vw, 2.7rem); font-weight: 700; letter-spacing: -0.5px;
       margin-bottom: 6px;
     }
     header.app h1 .dot { color: var(--accent); }
-    header.app p.sub { color: var(--muted); max-width: 44rem; margin: 0 auto; font-size: 15px; }
+    header.app p.sub { color: var(--muted); max-width: 44rem; margin: 0 auto; font-size: 15px; line-height: 1.55; }
 
     .controls {
       display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
@@ -92,7 +98,7 @@
       font-variant-numeric: tabular-nums;
     }
     .timer-pill .label { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
-    .timer-pill .time { font-size: 20px; font-weight: 800; }
+    .timer-pill .time { font-family: var(--font-display); font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
     .sand {
       flex: 1 1 220px; max-width: 360px; height: 12px; background: #ece6da; border-radius: 999px;
       overflow: hidden; border: 1px solid var(--line);
@@ -108,7 +114,7 @@
       align-items: center; text-align: center; cursor: help;
     }
     .netcard-label { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: #2f80ed; font-weight: 700; }
-    .netcard-amount { font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 4px; }
+    .netcard-amount { font-family: var(--font-display); font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 4px; letter-spacing: -0.5px; }
     .netcard-amount.neg { color: var(--bad); }
     .netcard-amount.pos { color: var(--good); }
     .kpi-panel {
@@ -123,7 +129,7 @@
     }
     .kstat:hover, .kstat:focus { background: #fff5ea; border-color: #f1d8b6; outline: none; transform: translateY(-1px); }
     .kk { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; }
-    .kv { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--ink); line-height: 1.1; }
+    .kv { font-family: var(--font-display); font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); line-height: 1.1; }
     .kv.pos { color: var(--good); } .kv.neg { color: var(--bad); }
     .kbar { height: 5px; background: #e9e2d4; border-radius: 999px; overflow: hidden; margin-top: 3px; }
     .kbar > div { height: 100%; width: 0%; background: linear-gradient(90deg, #3498db, #2ecc71); border-radius: 999px; transition: width .3s; }
@@ -150,7 +156,7 @@
     }
     .calc-display.err { border-color: var(--bad); }
     .calc-expr { font-size: 14px; color: var(--muted); width: 100%; text-align: right; word-break: break-all; min-height: 18px; }
-    .calc-result { font-size: 26px; font-weight: 800; color: var(--ink); width: 100%; text-align: right; word-break: break-all; }
+    .calc-result { font-family: var(--font-display); font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); width: 100%; text-align: right; word-break: break-all; }
     .calc-display.err .calc-result { color: var(--bad); }
     .calc-input {
       width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
@@ -174,7 +180,7 @@
       height: 130px; overflow-y: auto; margin-bottom: 12px; padding: 8px 10px;
       background: #f8f9fa; border: 1px solid var(--line); border-radius: 10px; scroll-behavior: smooth;
     }
-    .notes-list:empty::before { content: 'No notes yet — write your strategy below.'; color: var(--muted); font-size: 13px; font-style: italic; }
+    .notes-list:empty::before { content: 'No notes yet. Write your strategy below.'; color: var(--muted); font-size: 13px; font-style: italic; }
     .note-item { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
     .note-item:last-child { margin-bottom: 0; border-bottom: none; }
     .note-meta { font-size: 11px; color: var(--muted); font-weight: 600; margin-bottom: 3px; display: flex; justify-content: space-between; gap: 8px; }
@@ -187,7 +193,7 @@
     .notes-input:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
     .notes-add { width: 100%; }
 
-    /* Layout — two columns on laptop/large tablet, single column below. */
+    /* Layout: two columns on laptop/large tablet, single column below. */
     .game {
       display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start;
     }
@@ -222,7 +228,7 @@
     .cell-val {
       position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
       z-index: 3; pointer-events: none; white-space: nowrap;
-      font-weight: 800; line-height: 1.2; letter-spacing: -.02em;
+      font-family: var(--font-display); font-weight: 700; line-height: 1.2; letter-spacing: -.02em;
       background: #fff; color: #14100a; border-radius: 6px;
       box-shadow: 0 1px 3px rgba(0,0,0,.45), 0 0 0 1px rgba(0,0,0,.08);
       font-variant-numeric: tabular-nums;
@@ -244,7 +250,7 @@
     .pc { border-radius: 3px; }
     .pc.on { box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
     .piece .pname { font-size: 11px; color: var(--muted); font-weight: 600; }
-    .piece .pval { font-size: 10.5px; font-weight: 700; color: var(--muted); margin-top: 3px; font-variant-numeric: tabular-nums; }
+    .piece .pval { font-family: var(--font-display); font-size: 11px; font-weight: 600; color: var(--muted); margin-top: 3px; font-variant-numeric: tabular-nums; }
 
     .arrow-hint { font-size: 12.5px; color: var(--muted); margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
     .arrow-hint .keys { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
@@ -388,7 +394,7 @@
   <div class="container">
     <header class="app">
       <h1>PortfolioFit<span class="dot">.</span></h1>
-      <p class="sub">Each brick is a project that earns a dollar value when you place it in the frame. Choose the right projects and pack them in to maximise <strong>net value</strong> &mdash; the total value of placed bricks minus a penalty for unused space &mdash; before the timer runs out.</p>
+      <p class="sub">Each brick is a project that earns a dollar value when you place it in the frame. Choose the right projects and pack them in to maximise <strong>net value</strong> (the total value of placed bricks minus a penalty for unused space) before the timer runs out.</p>
     </header>
 
     <div class="controls">
@@ -408,7 +414,7 @@
       <div class="sand"><div id="sandBar"></div></div>
       <div class="timer-pill">
         <span class="label">Best</span>
-        <span class="time" id="best">&mdash;</span>
+        <span class="time" id="best">&ndash;</span>
       </div>
     </div>
 
@@ -440,7 +446,7 @@
         <div class="status" id="status">Select a piece, then place it on the board.</div>
         <div class="board-tools">
           <button class="btn ghost" id="solBtn">&#128203; Full coverage solutions</button>
-          <button class="btn ghost" id="proofBtn">&#128270; Why &kappa; = ? &mdash; proof</button>
+          <button class="btn ghost" id="proofBtn">&#128270; Why &kappa; = ? (proof)</button>
         </div>
       </div>
 
@@ -501,7 +507,7 @@
     </div>
 
     <footer class="app">
-      <a href="portfoliofit-difficulty.pdf" target="_blank" rel="noopener">&#128196; How the Sahni difficulty (&kappa;) is measured &mdash; PDF note</a>
+      <a href="portfoliofit-difficulty.pdf" target="_blank" rel="noopener">&#128196; How the Sahni difficulty (&kappa;) is measured (PDF note)</a>
     </footer>
   </div>
 
@@ -993,7 +999,7 @@
     }
     function placedValue() { return state.pieces.reduce((s, p) => s + (p.placed ? p.value : 0), 0); }
 
-    // Portfolio Fitness — a GEOMETRIC compactness score: occupied cells as a share
+    // Portfolio Fitness: a GEOMETRIC compactness score, occupied cells as a share
     // of the *fillable* (board) cells that fall inside the convex hull of the placed
     // bricks. Only board cells count (voids outside the outline are ignored), so a
     // complete or contiguous fill scores 100%; spreading bricks apart, or leaving
@@ -1134,7 +1140,7 @@
       for (const p of state.pieces) {
         const wrap = document.createElement('div');
         wrap.className = 'piece' + (p.placed ? ' used' : '') + (state.selected === p.id ? ' selected' : '');
-        wrap.title = p.name + ' — ' + money(p.value) + ' (' + p.oris[0].length + ' cells, ' +
+        wrap.title = p.name + ': ' + money(p.value) + ' (' + p.oris[0].length + ' cells, ' +
           money(Math.round(p.value / p.oris[0].length)) + '/cell)';
         wrap.appendChild(pieceGrid(oriCells(p), p.color));
         const tag = document.createElement('div');
@@ -1222,7 +1228,7 @@
     }
 
     function flashBad() {
-      setStatus("That piece doesn't fit there — try rotating or flipping.", '');
+      setStatus("That piece doesn't fit there. Try rotating or flipping.", '');
     }
 
     function checkWin() {
@@ -1238,7 +1244,7 @@
         setStatus('Portfolio packed in ' + fmt(t) + ' for ' + money(val) + '.', 'win');
         showWin(t, best, val);
       } else {
-        setStatus('Keep going — find the bricks that fill the rest.', '');
+        setStatus('Keep going. Find the bricks that fill the rest.', '');
       }
     }
 
@@ -1281,7 +1287,7 @@
       applySolutionPiece(next);
       state.selected = null;
       renderBoard(); renderTray(); renderKPIs();
-      setStatus('Here is one brick in place — keep going!', '');
+      setStatus('Here is one brick in place. Keep going!', '');
       checkWin();
     }
 
@@ -1309,7 +1315,7 @@
       state.selected = null;
       stopTimer();
       renderBoard(); renderTray(); renderKPIs();
-      setStatus('Highest-value solution shown — Net ' + money(bestVal) + '. Hit “New puzzle” for another.', '');
+      setStatus('Highest-value solution shown (Net ' + money(bestVal) + '). Hit “New puzzle” for another.', '');
       clearPreview();
     }
 
@@ -1352,13 +1358,13 @@
         }
         if (remaining === 0 && !state.timeNudges.has(0)) {
           state.timeNudges.add(0);
-          nudge('⏳ Time is up — place what you can and submit your best!', 'urgent');
+          nudge('⏳ Time is up! Place what you can and submit your best.', 'urgent');
         }
         const now = Date.now();
         if (remaining > 12 && state.occupied.size < state.region.size &&
             now - lastAction > 28000 && now - lastIdle > 28000 && now - lastCheer > 6000) {
           lastIdle = now;
-          nudge('Keep going — every brick counts. You can do this! 💪', 'cheer');
+          nudge('Keep going, every brick counts. You can do this! 💪', 'cheer');
         }
       }
     }
@@ -1380,7 +1386,7 @@
     }
     function updateBestUI() {
       const b = loadBest(state ? state.diff : 'easy');
-      $('#best').textContent = b === null ? '—' : fmt(b);
+      $('#best').textContent = b === null ? '–' : fmt(b);
     }
 
     function setStatus(msg, cls) {
@@ -1497,11 +1503,11 @@
         body.appendChild(wrap);
       } else {
         const p1 = document.createElement('p');
-        p1.innerHTML = '<b>With 0 hints the greedy gets stuck.</b> It places these bricks in order, then jams — ' +
-          'no remaining brick fits the leftover cells (so &kappa; &gt; 0):';
+        p1.innerHTML = '<b>With 0 hints the greedy gets stuck.</b> It places these bricks in order, then jams, ' +
+          'because no remaining brick fits the leftover cells (so &kappa; &gt; 0):';
         body.appendChild(p1);
         const dw = document.createElement('div'); dw.className = 'proof-board';
-        const dcap = document.createElement('div'); dcap.className = 'cap'; dcap.textContent = 'Greedy with 0 hints — jams';
+        const dcap = document.createElement('div'); dcap.className = 'cap'; dcap.textContent = 'Greedy with 0 hints (jams)';
         dw.appendChild(dcap); dw.appendChild(miniBoard(placementsColorMap(w.dead.placed), null, 17));
         body.appendChild(dw);
         if (w.witness) {
@@ -1519,7 +1525,7 @@
           body.appendChild(ww);
         }
         const concl = document.createElement('p'); concl.className = 'muted';
-        concl.textContent = 'Every smaller set of hints (fewer than ' + w.kappa + ') was checked exhaustively and the greedy still jams — so κ is exactly ' + w.kappa + '.';
+        concl.textContent = 'Every smaller set of hints (fewer than ' + w.kappa + ') was checked exhaustively and the greedy still jams, so κ is exactly ' + w.kappa + '.';
         body.appendChild(concl);
       }
       openInfo('Why the Sahni number κ = ' + w.kappa, body);
@@ -1546,8 +1552,8 @@
       lastAction = Date.now();
       const cov = Math.round(state.occupied.size / state.region.size * 100);
       state.milestones = state.milestones || new Set();
-      if (cov >= 75 && !state.milestones.has(75)) { state.milestones.add(75); nudge('Almost there — keep going! 💪', 'cheer'); }
-      else if (cov >= 50 && !state.milestones.has(50)) { state.milestones.add(50); nudge('Halfway there — great work! 🚀', 'cheer'); }
+      if (cov >= 75 && !state.milestones.has(75)) { state.milestones.add(75); nudge('Almost there, keep going! 💪', 'cheer'); }
+      else if (cov >= 50 && !state.milestones.has(50)) { state.milestones.add(50); nudge('Halfway there, great work! 🚀', 'cheer'); }
       else cheer();
     }
 
@@ -1643,9 +1649,9 @@
     const TIPS = {
       'net-value': 'The main objective. Net Value = Total Value − Resource Cost (the penalty for empty cells). Higher is better!',
       'total-value': 'Sum of the dollar values of every brick currently placed in the outline. Each brick type is worth a different amount.',
-      'resource-cost': 'Penalty for unused space — $1 for every empty cell still inside the outline.',
+      'resource-cost': 'Penalty for unused space: $1 for every empty cell still inside the outline.',
       'coverage': 'Percentage of the outline covered by bricks: occupied cells ÷ total cells × 100.',
-      'value-resource': 'Efficiency — value generated per occupied cell: Total Value ÷ number of occupied cells.',
+      'value-resource': 'Efficiency: value generated per occupied cell (Total Value ÷ number of occupied cells).',
       'portfolio-fitness': 'A geometric compactness score: your bricks as a share of the fillable cells inside their convex hull. A contiguous, gap-free cluster scores 100%; spreading bricks apart or leaving gaps between them lowers it.',
       'difficulty': 'Two readouts of how hard this board is. Sahni κ: the fewest correctly-placed bricks after which a simple value-ratio greedy can finish without getting stuck (higher = harder). Distinct solutions: how many different brick combinations fill this exact outline (fewer = harder; 1 means a unique answer).'
     };
@@ -1710,7 +1716,7 @@
     });
     calcInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); calcEval(); } });
 
-    // ---------- My Notes (this session only — cleared on page refresh) ----------
+    // ---------- My Notes (this session only, cleared on page refresh) ----------
     const notesList = $('#notesList'), notesInput = $('#notesInput');
     let notesData = [];
     function renderNotes() {
