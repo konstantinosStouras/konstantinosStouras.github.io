@@ -20,8 +20,12 @@
 <meta property="og:site_name" content="stouras.com">
 <meta name="twitter:card" content="summary">
 
-<!-- Favicon: inline SVG, blue location pin in Greek blue -->
-<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%230d3b8f'/%3E%3Cpath%20d='M50%2022c-12%200-22%2010-22%2022%200%2016%2022%2034%2022%2034s22-18%2022-34c0-12-10-22-22-22z'%20fill='%23fff'/%3E%3Ccircle%20cx='50'%20cy='44'%20r='9'%20fill='%230d3b8f'/%3E%3C/svg%3E">
+<!-- Favicons: scalable SVG for modern browsers + PNG/ICO fallbacks and Apple touch icon -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%230d3b8f'/%3E%3Cpath%20d='M50%2022c-12%200-22%2010-22%2022%200%2016%2022%2034%2022%2034s22-18%2022-34c0-12-10-22-22-22z'%20fill='%23fff'/%3E%3Ccircle%20cx='50'%20cy='44'%20r='9'%20fill='%230d3b8f'/%3E%3C/svg%3E">
+<link rel="icon" type="image/png" sizes="32x32" href="/fun/nomoi/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/fun/nomoi/favicon-16.png">
+<link rel="icon" href="/fun/nomoi/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/fun/nomoi/apple-touch-icon.png">
 <meta name="theme-color" content="#0d3b8f">
 
 <style>
@@ -242,6 +246,28 @@
   .recent li .dt{color:var(--muted);}
   .recent li .sc{font-weight:700;}
   .recent li .md{color:var(--muted); font-size:.78rem;}
+
+  /* leaderboard */
+  .lbwrap{padding:10px 12px 14px;}
+  .lbsort{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;}
+  .lbsort .schip{cursor:pointer; font:inherit; font-size:.78rem; font-weight:600; color:var(--muted);
+    background:#f1f5fa; border:1px solid var(--line); border-radius:999px; padding:5px 11px;}
+  .lbsort .schip.on{color:#fff; background:var(--blue); border-color:var(--blue);}
+  ol.lb{list-style:none; margin:0; padding:0; counter-reset:none;}
+  ol.lb li{display:grid; grid-template-columns:30px 1fr auto; align-items:center; gap:10px;
+    padding:9px 8px; border-radius:10px; border:1px solid transparent;}
+  ol.lb li:nth-child(even){background:#f6f9fc;}
+  ol.lb li.me{background:#eaf2ff; border-color:#cdddfb;}
+  ol.lb .rank{font-weight:800; color:var(--muted); text-align:center; font-size:.95rem;}
+  ol.lb .rank.medal{font-size:1.2rem;}
+  ol.lb .who{min-width:0;}
+  ol.lb .who .nm{font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block;}
+  ol.lb .who .nm .youtag{font-size:.66rem; font-weight:700; color:var(--blue); background:#d9e6ff; border-radius:999px; padding:1px 6px; margin-left:6px; vertical-align:middle;}
+  ol.lb .who .sub{color:var(--muted); font-size:.78rem;}
+  ol.lb .metric{text-align:right;}
+  ol.lb .metric .v{font-weight:800; color:var(--blue); font-size:1.05rem; line-height:1;}
+  ol.lb .metric .ml{color:var(--muted); font-size:.68rem; text-transform:uppercase; letter-spacing:.3px;}
+  .lbempty{color:var(--muted); text-align:center; padding:30px 12px; line-height:1.6;}
 </style>
 </head>
 <body>
@@ -259,6 +285,7 @@
       <button class="tab" data-mode="quizNomos">Βρες τον Νομό</button>
       <button class="tab" data-mode="quizCapital">Βρες την Πρωτεύουσα</button>
       <button class="tab" data-mode="progress">Η Πρόοδός μου</button>
+      <button class="tab" data-mode="leaderboard">Κατάταξη</button>
     </nav>
   </header>
 
@@ -357,6 +384,7 @@ function setUser(name){
   saveStore(); updateBadge();
 }
 function updateBadge(){ const el=document.getElementById('playerName'); if(el) el.textContent = user || '—'; }
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 // nickname modal
 const nickModal=document.getElementById('nickModal');
@@ -368,7 +396,7 @@ function openNick(){
   nickInput.value='';
   if(ex.length){
     box.innerHTML='<div class="lbl">Ή συνέχισε ως</div><div class="chips">'+
-      ex.map(u=>`<button type="button" class="chip" data-u="${u.replace(/"/g,'&quot;')}">${u}</button>`).join('')+'</div>';
+      ex.map(u=>`<button type="button" class="chip" data-u="${escapeHtml(u)}">${escapeHtml(u)}</button>`).join('')+'</div>';
     box.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{ setUser(c.dataset.u); closeNick(); if(mode==='progress') renderProgress(); });
   } else box.innerHTML='';
   nickModal.classList.remove('hidden');
@@ -531,6 +559,7 @@ function setMode(m){
   capToggleWrap.style.display='none';
   if(m==='learn'){ svg.classList.add('learn'); capToggleWrap.style.display='flex'; startLearn(); }
   else if(m==='progress'){ svg.classList.add('learn'); colorByRegion(); startProgress(); }
+  else if(m==='leaderboard'){ svg.classList.add('learn'); colorByRegion(); startLeaderboard(); }
   else { svg.classList.remove('learn'); startQuiz(); }
 }
 
@@ -771,6 +800,57 @@ function renderProgress(){
   });
 }
 document.getElementById('ovRestart').onclick=()=>{ overlay.classList.add('hidden'); startQuiz(); };
+
+// ----- LEADERBOARD -----
+let lbSort='bestAcc';
+function userAgg(name){
+  const u=store.users[name]||{rounds:[],created:0}; const rs=u.rounds||[];
+  const games=rs.length;
+  const bestAcc=games?Math.max(...rs.map(r=>r.acc)):0;
+  const avgAcc=games?Math.round(rs.reduce((s,r)=>s+r.acc,0)/games):0;
+  const bestStreak=games?Math.max(...rs.map(r=>r.best||0)):0;
+  return {name,games,bestAcc,avgAcc,bestStreak};
+}
+function startLeaderboard(){
+  promptEl.innerHTML='Κατάταξη όλων των παικτών σε αυτή τη συσκευή — δες ποιος ξέρει καλύτερα τους νομούς.';
+  renderLeaderboard();
+}
+function renderLeaderboard(){
+  sideTitle.textContent='Κατάταξη';
+  const rows=Object.keys(store.users||{}).map(userAgg).filter(r=>r.games>0);
+  sideSmall.textContent = rows.length ? rows.length+(rows.length===1?' παίκτης':' παίκτες') : '';
+  if(!rows.length){
+    sideBody.innerHTML='<div class="lbempty">Δεν υπάρχουν ακόμα καταγραφές.<br><br>Ολοκλήρωσε έναν γύρο σε κάποιο παιχνίδι και θα εμφανιστείς εδώ!</div>';
+    return;
+  }
+  const labels={bestAcc:'Ακρίβεια', games:'Γύροι', bestStreak:'Σερί'};
+  const cmp={
+    bestAcc:(a,b)=> b.bestAcc-a.bestAcc || b.games-a.games || b.bestStreak-a.bestStreak,
+    games:(a,b)=> b.games-a.games || b.bestAcc-a.bestAcc || b.bestStreak-a.bestStreak,
+    bestStreak:(a,b)=> b.bestStreak-a.bestStreak || b.bestAcc-a.bestAcc || b.games-a.games,
+  };
+  rows.sort(cmp[lbSort]);
+  const medals=['🥇','🥈','🥉'];
+  let html='<div class="lbwrap"><div class="lbsort">';
+  for(const key of ['bestAcc','games','bestStreak'])
+    html+=`<button class="schip ${key===lbSort?'on':''}" data-sort="${key}">${labels[key]}</button>`;
+  html+='</div><ol class="lb">';
+  rows.forEach((r,i)=>{
+    const me=r.name===user;
+    const rank = i<3 ? `<span class="rank medal">${medals[i]}</span>` : `<span class="rank">${i+1}</span>`;
+    let mv,ml;
+    if(lbSort==='games'){ mv=r.games; ml='Γύροι'; }
+    else if(lbSort==='bestStreak'){ mv=r.bestStreak; ml='Σερί'; }
+    else { mv=r.bestAcc+'%'; ml='Ακρίβεια'; }
+    html+=`<li class="${me?'me':''}">${rank}`+
+      `<span class="who"><span class="nm">${escapeHtml(r.name)}${me?'<span class="youtag">εσύ</span>':''}</span>`+
+      `<span class="sub">${r.games} ${r.games===1?'γύρος':'γύροι'} · μ.ό. ${r.avgAcc}% · σερί ${r.bestStreak}</span></span>`+
+      `<span class="metric"><span class="v">${mv}</span><div class="ml">${ml}</div></span></li>`;
+  });
+  html+='</ol></div>';
+  sideBody.innerHTML=html;
+  sideBody.querySelectorAll('.schip').forEach(b=>b.onclick=()=>{ lbSort=b.dataset.sort; renderLeaderboard(); });
+}
 
 // init
 updateBadge();
