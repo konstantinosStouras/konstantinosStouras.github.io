@@ -129,7 +129,7 @@
     var css = ''
       + 'body.pf-exp #difficulty,body.pf-exp #newBtn,body.pf-exp #restartBtn,'
       + 'body.pf-exp #solBtn,body.pf-exp #proofBtn,body.pf-exp #hintBtn,body.pf-exp #solveBtn,'
-      + 'body.pf-exp #boardMeta,body.pf-exp footer.app{display:none !important;}'
+      + 'body.pf-exp #boardMeta,body.pf-exp footer.app,body.pf-exp #acctRoot{display:none !important;}'
       + '.pfx-ov{position:fixed;inset:0;z-index:9000;display:flex;align-items:center;justify-content:center;'
       + 'padding:20px;background:rgba(40,30,15,.45);backdrop-filter:blur(3px);overflow:auto;}'
       + '.pfx-card{background:#fff;border-radius:18px;box-shadow:0 20px 60px rgba(60,45,20,.25);max-width:560px;width:100%;'
@@ -151,6 +151,8 @@
       + '.pfx-topbar b{color:#f1c40f;}.pfx-topbar button{background:transparent;border:1px solid #555;color:#eee;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:12px;}'
       + 'body.pf-exp.pf-hastop{padding-top:42px;}'
       + '.pfx-card.pfx-justify p{text-align:justify;}'
+      + '.pfx-submit{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:8500;display:none;background:#2ecc71;color:#fff;border:none;font-weight:700;font-size:15px;padding:13px 26px;border-radius:14px;box-shadow:0 10px 28px rgba(46,204,113,.4);cursor:pointer;}'
+      + '.pfx-submit:hover{background:#27ae60;}.pfx-submit.show{display:block;}'
       + '.pfx-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;}';
     document.head.appendChild(el('style', { text: css }));
   }
@@ -162,6 +164,33 @@
     closeOverlay();
     curOverlay = el('div', { class: 'pfx-ov' }, [card]);
     document.body.appendChild(curOverlay);
+  }
+
+  // ---- Early-continue button (shown during a timed round) --------------
+  // Lets a participant submit their portfolio before the timer ends; shows a
+  // live countdown of the remaining time, refreshed twice a second.
+  var submitBtn = null, submitTimer = null;
+  function gameSubmitBtn() {
+    if (!submitBtn) {
+      submitBtn = el('button', { class: 'pfx-submit', on: { click: function () { hideGameSubmit(); if (window.PFGame) window.PFGame.endRound(); } } });
+      document.body.appendChild(submitBtn);
+    }
+    return submitBtn;
+  }
+  function paintSubmit(label) {
+    var b = gameSubmitBtn(), rem = 0;
+    try { var m = window.PFGame && window.PFGame.getMetrics(); if (m && m.remaining != null) rem = m.remaining; } catch (e) {}
+    b.innerHTML = esc(label) + '<br><span style="font-weight:600;font-size:13px;opacity:.92;">(or wait ' + fmtTime(rem) + ')</span>';
+  }
+  function showGameSubmit(label) {
+    paintSubmit(label);
+    gameSubmitBtn().classList.add('show');
+    if (submitTimer) clearInterval(submitTimer);
+    submitTimer = setInterval(function () { paintSubmit(label); }, 500);
+  }
+  function hideGameSubmit() {
+    if (submitTimer) { clearInterval(submitTimer); submitTimer = null; }
+    if (submitBtn) submitBtn.classList.remove('show');
   }
 
   // ---- Firebase ---------------------------------------------------------
@@ -305,9 +334,11 @@
     S.currentPuzzleId = 'training';
     window.PFGame._onRoundEnd = onTrainingEnd;
     window.PFGame.newGame(cfg.settings.trainingDifficulty || 'easy');
+    showGameSubmit('Continue to Registration');
   }
   function onTrainingEnd(metrics) {
     window.PFGame._onRoundEnd = null;
+    hideGameSubmit();
     setTimeout(function () { showRegister(metrics); }, 400);
   }
 
@@ -486,9 +517,11 @@
     S.currentPuzzleId = 'main-' + S.roundIndex + '-' + item.diff;
     window.PFGame._onRoundEnd = onMainRoundEnd;
     window.PFGame.newGame(item.diff);
+    showGameSubmit('Submit portfolio & continue');
   }
   function onMainRoundEnd(metrics) {
     window.PFGame._onRoundEnd = null;
+    hideGameSubmit();
     var placements = window.PFGame.getPlacements();
     var rec = Object.assign({ puzzleId: S.currentPuzzleId, index: S.roundIndex }, metrics || {});
     S.rounds.push(rec);
