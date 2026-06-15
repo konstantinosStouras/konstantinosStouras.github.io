@@ -2471,6 +2471,8 @@
   AppStats.addMenuItem({ container:'#acctRoot .acct-menu', before:'[data-act="logout"]', label:'📊 Statistics' });
 })();
 </script>
+<!-- Shared built-in defaults (must load before experiment.js and admin.js). -->
+<script src="pf-defaults.js" defer></script>
 <!-- Research experiment layer — only activates with ?exp=1 (default game unaffected). -->
 <script src="experiment.js" defer></script>
 <!-- Admin panel — only activates with ?admin (requires admin@admin.com). -->
