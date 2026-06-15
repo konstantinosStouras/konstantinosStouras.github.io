@@ -295,9 +295,6 @@
     </div>
   </div>
 
-  <p class="footer">
-    A faithful, original rebuild of the "Rook Battle" combinatorial game. The AI plays an optimal retrograde or Nim strategy. Part of <a href="https://stouras.com/">stouras.com</a>.
-  </p>
 </div>
 
 <script>
@@ -968,7 +965,9 @@
   // ----- load a variant -----
   function loadVariant(key){
     var variant=VARIANTS[key]; if(!variant) variant=VARIANTS.rook;
-    if(!isUnlocked(variant.key, wins)){ variant=VARIANTS.rook; location.hash="#/rooks"; }
+    // A direct URL (e.g. #/rooksx2) loads that puzzle even if it hasn't been
+    // unlocked through play; the tab bar still shows the progression for the
+    // guided flow.
     G.variant=variant;
     G.N=variant.defaultN; G.M=variant.defaultM;
     var initial=variant.getInitialPieces(G.N,G.M);
@@ -1001,9 +1000,9 @@
     elTabs.innerHTML="";
     ORDER.forEach(function(o){
       var v=VARIANTS[o.key];
-      var unlocked=isUnlocked(o.key, wins);
-      var solved=!!wins[o.key];
       var active=G.variant && G.variant.key===o.key;
+      var unlocked=isUnlocked(o.key, wins) || active;  // the open puzzle is always shown as accessible
+      var solved=!!wins[o.key];
       var t=document.createElement(unlocked?"a":"div");
       t.className="tab"+(active?" active":"")+(unlocked?"":" locked");
       if(unlocked) t.href="#/"+o.key;
