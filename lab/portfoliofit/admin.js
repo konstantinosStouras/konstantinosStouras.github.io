@@ -49,7 +49,7 @@
   var QUESTION_TYPES = ['text', 'email', 'password', 'number', 'select', 'radio', 'textarea'];
 
   // ---- state ----
-  var fb = null, XLSX = null, cfg = {}, user = null, tab = 'content';
+  var fb = null, XLSX = null, cfg = {}, user = null, tab = 'content', approvedPuzzles = [];
   var inited = false;
 
   // ---- DOM helpers ----
@@ -72,32 +72,43 @@
 
   function injectStyles() {
     var css = ''
-      + '#pfa-root{position:fixed;inset:0;z-index:10000;background:#f6f3ee;overflow:auto;font-family:Inter,system-ui,sans-serif;color:#2b2b2b;}'
+      + '#acctRoot{display:none !important;}' // hide legacy snake login widget on the admin page
+      + '#pfa-root{--bg:#f6f3ee;--panel:#ffffff;--ink:#2b2b2b;--muted:#74726c;--line:#e7e2d8;--field:#ffffff;--fieldline:#e0dbd0;--accent:#e67e22;--accentd:#cf6f17;--qbg:#fcfbf7;position:fixed;inset:0;z-index:10000;background:var(--bg);overflow:auto;font-family:Inter,system-ui,sans-serif;color:var(--ink);}'
+      + '#pfa-root.dark{--bg:#181818;--panel:#242424;--ink:#ececec;--muted:#9a978f;--line:#383838;--field:#2e2e2e;--fieldline:#474747;--qbg:#202020;}'
       + '#pfa-root *{box-sizing:border-box;}'
       + '.pfa-wrap{max-width:920px;margin:0 auto;padding:24px 18px 80px;}'
-      + '.pfa-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}'
-      + '.pfa-h h1{font-family:"Space Grotesk",Inter,sans-serif;font-size:1.5rem;margin:0;}'
-      + '.pfa-tabs{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid #e7e2d8;margin-bottom:18px;}'
-      + '.pfa-tabs button{border:none;background:transparent;padding:9px 14px;font-weight:600;font-size:14px;color:#74726c;cursor:pointer;border-bottom:2px solid transparent;}'
-      + '.pfa-tabs button.on{color:#e67e22;border-bottom-color:#e67e22;}'
-      + '.pfa-card{background:#fff;border:1px solid #e7e2d8;border-radius:14px;padding:18px;margin-bottom:14px;box-shadow:0 6px 18px rgba(60,45,20,.06);}'
-      + '.pfa-field{margin:10px 0;}.pfa-field label{display:block;font-weight:600;font-size:13px;margin-bottom:4px;}'
-      + '.pfa-field input[type=text],.pfa-field input[type=email],.pfa-field input[type=password],.pfa-field input[type=number],.pfa-field select,.pfa-field textarea{width:100%;padding:9px 11px;border:1px solid #e0dbd0;border-radius:9px;font-size:14px;font-family:inherit;}'
+      + '.pfa-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:10px;}'
+      + '.pfa-h h1{font-family:"Space Grotesk",Inter,sans-serif;font-size:1.5rem;margin:0;color:var(--ink);}'
+      + '.pfa-tabs{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-bottom:18px;}'
+      + '.pfa-tabs button{border:none;background:transparent;padding:9px 14px;font-weight:600;font-size:14px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;}'
+      + '.pfa-tabs button.on{color:var(--accent);border-bottom-color:var(--accent);}'
+      + '.pfa-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:14px;box-shadow:0 6px 18px rgba(0,0,0,.06);color:var(--ink);}'
+      + '.pfa-field{margin:10px 0;}.pfa-field label{display:block;font-weight:600;font-size:13px;margin-bottom:4px;color:var(--ink);}'
+      + '.pfa-field input[type=text],.pfa-field input[type=email],.pfa-field input[type=password],.pfa-field input[type=number],.pfa-field select,.pfa-field textarea{width:100%;padding:9px 11px;border:1px solid var(--fieldline);border-radius:9px;font-size:14px;font-family:inherit;background:var(--field);color:var(--ink);}'
       + '.pfa-field textarea{resize:vertical;}'
-      + '.pfa-btn{border:none;background:#e67e22;color:#fff;font-weight:600;font-size:14px;padding:10px 18px;border-radius:10px;cursor:pointer;}'
-      + '.pfa-btn:hover{background:#cf6f17;}.pfa-btn.sec{background:#fff;color:#2b2b2b;border:1px solid #e0dbd0;}.pfa-btn.sm{padding:5px 10px;font-size:12px;}.pfa-btn.danger{background:#fff;color:#e74c3c;border:1px solid #f0c7c1;}'
-      + '.pfa-q{border:1px solid #ece7dd;border-radius:10px;padding:12px;margin-bottom:10px;background:#fcfbf7;}'
+      + '.pfa-btn{border:none;background:var(--accent);color:#fff;font-weight:600;font-size:14px;padding:10px 18px;border-radius:10px;cursor:pointer;}'
+      + '.pfa-btn:hover{background:var(--accentd);}.pfa-btn.sec{background:var(--panel);color:var(--ink);border:1px solid var(--fieldline);}.pfa-btn.sm{padding:5px 10px;font-size:12px;}.pfa-btn.danger{background:var(--panel);color:#e74c3c;border:1px solid #f0c7c1;}'
+      + '.pfa-q{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--qbg);}'
       + '.pfa-q .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}'
       + '.pfa-q .row > *{flex:0 0 auto;}'
-      + '.pfa-note{color:#8a877f;font-size:13px;}'
-      + '.pfa-msg{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#2b2b2b;color:#fff;padding:10px 18px;border-radius:10px;font-size:14px;z-index:10001;opacity:0;transition:.2s;}'
+      + '.pfa-note{color:var(--muted);font-size:13px;}'
+      + '.pfa-msg{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#000;color:#fff;padding:10px 18px;border-radius:10px;font-size:14px;z-index:10003;opacity:0;transition:.2s;}'
       + '.pfa-msg.show{opacity:1;}'
       + 'table.pfa-tbl{width:100%;border-collapse:collapse;font-size:13px;}'
-      + 'table.pfa-tbl th,table.pfa-tbl td{text-align:left;padding:7px 8px;border-bottom:1px solid #efeae0;}'
-      + 'table.pfa-tbl th{color:#74726c;font-weight:600;}'
+      + 'table.pfa-tbl th,table.pfa-tbl td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);}'
+      + 'table.pfa-tbl th{color:var(--muted);font-weight:600;}'
       + '.pfa-login{max-width:380px;margin:8vh auto 0;}'
       + '.pfa-err{color:#e74c3c;font-size:13px;min-height:18px;margin:6px 0;}';
     document.head.appendChild(el('style', { text: css }));
+  }
+  function currentTheme() { try { return localStorage.getItem('pfa-theme') || 'dark'; } catch (e) { return 'dark'; } }
+  function applyTheme(t) { if (root) root.classList.toggle('dark', t === 'dark'); try { localStorage.setItem('pfa-theme', t); } catch (e) {} }
+  function themeToggle() {
+    var b = el('button', { class: 'pfa-btn sec sm' });
+    function paint() { b.textContent = (root && root.classList.contains('dark')) ? '☀ Light' : '☾ Dark'; }
+    paint();
+    b.addEventListener('click', function () { applyTheme((root && root.classList.contains('dark')) ? 'light' : 'dark'); paint(); });
+    return b;
   }
 
   var msgEl;
@@ -148,7 +159,8 @@
         el('h1', { text: 'PortfolioFit admin' }),
         el('div', { class: 'pfa-field' }, [el('label', { text: 'E-mail' }), email]),
         el('div', { class: 'pfa-field' }, [el('label', { text: 'Password' }), pass]),
-        err, btn
+        err, btn,
+        el('div', { style: 'margin-top:12px;' }, [themeToggle()])
       ])
     ]));
     async function doLogin() {
@@ -168,7 +180,7 @@
 
   function renderShell() {
     clearRoot();
-    var tabs = [['content', 'Content'], ['registration', 'Registration'], ['survey', 'Survey'], ['settings', 'Settings'], ['participants', 'Participants']];
+    var tabs = [['content', 'Content'], ['registration', 'Registration'], ['survey', 'Survey'], ['puzzles', 'Puzzles'], ['settings', 'Settings'], ['participants', 'Participants']];
     var tabBar = el('div', { class: 'pfa-tabs' }, tabs.map(function (t) {
       return el('button', { class: tab === t[0] ? 'on' : '', on: { click: function () { tab = t[0]; renderShell(); } } }, [t[1]]);
     }));
@@ -176,7 +188,8 @@
     var wrap = el('div', { class: 'pfa-wrap' }, [
       el('div', { class: 'pfa-h' }, [
         el('h1', { text: 'PortfolioFit admin' }),
-        el('button', { class: 'pfa-btn sec sm', on: { click: function () { fb.A.signOut(fb.auth); } } }, ['Sign out'])
+        el('div', { style: 'display:flex;gap:8px;align-items:center;' }, [themeToggle(),
+          el('button', { class: 'pfa-btn sec sm', on: { click: function () { fb.A.signOut(fb.auth); } } }, ['Sign out'])])
       ]),
       tabBar, body
     ]);
@@ -184,6 +197,7 @@
     if (tab === 'content') renderContent(body);
     else if (tab === 'registration') renderQuestions(body, 'registrationQuestions', 'Registration questions');
     else if (tab === 'survey') renderQuestions(body, 'surveyQuestions', 'Survey questions');
+    else if (tab === 'puzzles') renderPuzzles(body);
     else if (tab === 'settings') renderSettings(body);
     else if (tab === 'participants') renderParticipants(body);
   }
@@ -271,6 +285,99 @@
       try { await saveConfig(patch); cfg[field] = list; toast('Saved.'); }
       catch (e) { toast('Save failed: ' + ((e && e.code) || 'error')); }
       save.removeAttribute('disabled');
+    }
+  }
+
+  // ---- Puzzles tab ----
+  function puzzleGrid(spec, small) {
+    var cell = small ? 8 : 15;
+    var set = {}; (spec.region || []).forEach(function (k) { set[k] = true; });
+    var grid = el('div', { style: 'display:grid;grid-template-columns:repeat(' + spec.cols + ',' + cell + 'px);gap:1px;margin:6px 0;justify-content:center;' });
+    for (var r = 0; r < spec.rows; r++) for (var c = 0; c < spec.cols; c++) {
+      var on = set[r + ',' + c];
+      grid.appendChild(el('div', { style: 'width:' + cell + 'px;height:' + cell + 'px;border-radius:2px;background:' + (on ? '#e67e22' : 'transparent') + ';' }));
+    }
+    return grid;
+  }
+  function renderPuzzles(body) {
+    var card = el('div', { class: 'pfa-card' });
+    card.appendChild(el('p', { class: 'pfa-note', text: 'Generate puzzles, preview them, approve the ones you want, then freeze them as the active set. Every participant plays the frozen set in randomized order.' }));
+    if (!window.PFGame || !window.PFGame.generatePuzzle) {
+      card.appendChild(el('p', { class: 'pfa-err', text: 'Puzzle generator not available. Open /lab/portfoliofit/?admin (the game must be on the page).' }));
+      body.appendChild(card); return;
+    }
+    card.appendChild(el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;' }, [
+      el('button', { class: 'pfa-btn sec', on: { click: function () { generate('easy'); } } }, ['Generate easy']),
+      el('button', { class: 'pfa-btn sec', on: { click: function () { generate('hard'); } } }, ['Generate hard'])
+    ]));
+    var preview = el('div', {});
+    card.appendChild(preview);
+    body.appendChild(card);
+    var approvedCard = el('div', { class: 'pfa-card' });
+    var activeCard = el('div', { class: 'pfa-card' });
+    body.appendChild(approvedCard); body.appendChild(activeCard);
+    renderApproved(); renderActive();
+
+    function generate(diff) {
+      var spec; try { spec = window.PFGame.generatePuzzle(diff); } catch (e) { spec = null; }
+      preview.innerHTML = '';
+      if (!spec) { preview.appendChild(el('p', { class: 'pfa-err', text: 'Generation failed; try again.' })); return; }
+      preview.appendChild(el('div', { class: 'pfa-q' }, [
+        el('div', { class: 'pfa-note', text: diff.toUpperCase() + ' — ' + spec.region.length + ' cells, Sahni κ=' + spec.kappa + ', best $' + spec.bestValue }),
+        puzzleGrid(spec),
+        el('div', { style: 'display:flex;gap:8px;margin-top:8px;' }, [
+          el('button', { class: 'pfa-btn', on: { click: function () { approvedPuzzles.push(spec); preview.innerHTML = ''; renderApproved(); toast('Added to set.'); } } }, ['Approve & add']),
+          el('button', { class: 'pfa-btn sec', on: { click: function () { generate(diff); } } }, ['Regenerate']),
+          el('button', { class: 'pfa-btn sec', on: { click: function () { preview.innerHTML = ''; } } }, ['Discard'])
+        ])
+      ]));
+    }
+    function renderApproved() {
+      approvedCard.innerHTML = '';
+      approvedCard.appendChild(el('h3', { text: 'Set to freeze (' + approvedPuzzles.length + ')', style: 'margin:0 0 8px;font-size:15px;' }));
+      if (!approvedPuzzles.length) { approvedCard.appendChild(el('p', { class: 'pfa-note', text: 'No puzzles approved yet.' })); return; }
+      var wrap = el('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;' });
+      approvedPuzzles.forEach(function (spec, i) {
+        wrap.appendChild(el('div', { class: 'pfa-q', style: 'flex:0 0 auto;text-align:center;' }, [
+          el('div', { class: 'pfa-note', text: spec.diff + ' · κ=' + spec.kappa + ' · $' + spec.bestValue }),
+          puzzleGrid(spec, true),
+          el('button', { class: 'pfa-btn danger sm', on: { click: function () { approvedPuzzles.splice(i, 1); renderApproved(); } } }, ['remove'])
+        ]));
+      });
+      approvedCard.appendChild(wrap);
+      approvedCard.appendChild(el('button', { class: 'pfa-btn', style: 'margin-top:10px;', on: { click: freeze } }, ['Freeze as active set']));
+    }
+    function renderActive() {
+      activeCard.innerHTML = '';
+      var ids = (cfg.settings && cfg.settings.activePuzzleIds) || [];
+      activeCard.appendChild(el('h3', { text: 'Current active set', style: 'margin:0 0 8px;font-size:15px;' }));
+      if (!ids.length) { activeCard.appendChild(el('p', { class: 'pfa-note', text: 'None. Participants get randomly generated puzzles based on the Settings counts.' })); return; }
+      activeCard.appendChild(el('p', { class: 'pfa-note', text: ids.length + ' frozen puzzle(s) active — participants play these in randomized order.' }));
+      activeCard.appendChild(el('button', { class: 'pfa-btn sec sm', on: { click: clearActive } }, ['Clear active set (use random)']));
+    }
+    async function freeze() {
+      if (!approvedPuzzles.length) return;
+      toast('Freezing...');
+      try {
+        var ids = [];
+        for (var i = 0; i < approvedPuzzles.length; i++) {
+          var spec = approvedPuzzles[i];
+          var ref = await fb.F.addDoc(fb.F.collection(fb.db, 'puzzleSets'), {
+            diff: spec.diff, kappa: spec.kappa, bestValue: spec.bestValue, cells: spec.region.length,
+            specJson: JSON.stringify(spec), active: true, createdAt: fb.F.serverTimestamp()
+          });
+          ids.push(ref.id);
+        }
+        var settings = Object.assign({}, cfg.settings, { activePuzzleIds: ids });
+        await saveConfig({ settings: settings }); cfg.settings = settings;
+        approvedPuzzles = [];
+        renderApproved(); renderActive();
+        toast('Active set frozen (' + ids.length + ' puzzles).');
+      } catch (e) { toast('Freeze failed: ' + ((e && e.code) || 'error')); }
+    }
+    async function clearActive() {
+      try { var s = Object.assign({}, cfg.settings, { activePuzzleIds: [] }); await saveConfig({ settings: s }); cfg.settings = s; renderActive(); toast('Cleared active set.'); }
+      catch (e) { toast('Failed: ' + ((e && e.code) || 'error')); }
     }
   }
 
@@ -381,6 +488,7 @@
     injectStyles();
     root = el('div', { id: 'pfa-root' }, [el('div', { class: 'pfa-wrap' }, [el('div', { class: 'pfa-card' }, [el('p', { text: 'Connecting...' })])])]);
     document.body.appendChild(root);
+    applyTheme(currentTheme());
     try { await initFirebase(); } catch (e) { clearRoot(); root.appendChild(el('div', { class: 'pfa-wrap' }, [el('div', { class: 'pfa-card' }, [el('p', { class: 'pfa-err', text: 'Could not connect: ' + ((e && e.message) || 'error') })])])); return; }
     route();
   }

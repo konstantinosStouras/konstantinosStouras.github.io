@@ -135,7 +135,7 @@
       + '.pfx-card{background:#fff;border-radius:18px;box-shadow:0 20px 60px rgba(60,45,20,.25);max-width:560px;width:100%;'
       + 'padding:28px 30px;margin:auto;font-family:Inter,system-ui,sans-serif;color:#2b2b2b;}'
       + '.pfx-card h2{font-family:"Space Grotesk",Inter,sans-serif;font-size:1.6rem;margin:0 0 6px;}'
-      + '.pfx-card p{color:#4a4843;line-height:1.55;margin:0 0 12px;}'
+      + '.pfx-card p{color:#4a4843;line-height:1.55;margin:0 0 12px;text-align:justify;}'
       + '.pfx-card .muted{color:#8a877f;font-size:13px;}'
       + '.pfx-btn{display:inline-block;border:none;background:#e67e22;color:#fff;font-weight:600;font-size:15px;'
       + 'padding:12px 22px;border-radius:12px;cursor:pointer;transition:.15s;}'
@@ -474,17 +474,30 @@
   // Plays the participant's puzzle queue. Default 2 easy + 2 hard in random
   // order. When the admin freezes a specific set, buildQueue() will instead
   // load those exact puzzles by id (hook noted below).
-  function buildQueue() {
-    var per = (cfg.settings && cfg.settings.puzzlesPerUser) || { easy: 2, hard: 2 };
+  async function buildQueue() {
+    var s = cfg.settings || {};
+    var ids = s.activePuzzleIds || [];
     var q = [];
-    var i;
-    for (i = 0; i < (per.easy || 0); i++) q.push({ diff: 'easy' });
-    for (i = 0; i < (per.hard || 0); i++) q.push({ diff: 'hard' });
-    // TODO(admin): when cfg.settings.activePuzzleIds is set, load those exact
-    // frozen puzzles here instead of generating by difficulty.
-    if (!cfg.settings || cfg.settings.randomizeOrder !== false) shuffle(q);
+    if (ids.length && fb) {
+      // Frozen set: replay the exact puzzles the admin approved.
+      for (var k = 0; k < ids.length; k++) {
+        try {
+          var snap = await fb.F.getDoc(fb.F.doc(fb.db, 'puzzleSets', ids[k]));
+          if (snap.exists()) { var spec = specFromDoc(snap.data()); if (spec) q.push({ id: ids[k], diff: spec.diff, spec: spec }); }
+        } catch (e) { /* skip */ }
+      }
+    }
+    if (!q.length) {
+      // Fallback: generate by difficulty counts.
+      var per = s.puzzlesPerUser || { easy: 2, hard: 2 };
+      var i;
+      for (i = 0; i < (per.easy || 0); i++) q.push({ diff: 'easy' });
+      for (i = 0; i < (per.hard || 0); i++) q.push({ diff: 'hard' });
+    }
+    if (s.randomizeOrder !== false) shuffle(q);
     return q;
   }
+  function specFromDoc(d) { try { return JSON.parse(d.specJson); } catch (e) { return null; } }
   function shuffle(a) {
     for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; }
     return a;
@@ -492,9 +505,12 @@
   function money(v) { v = Math.round(v || 0); return (v < 0 ? '-$' : '$') + Math.abs(v); }
   function fmtTime(s) { s = Math.max(0, Math.round(s || 0)); var m = Math.floor(s / 60), ss = s % 60; return (m < 10 ? '0' : '') + m + ':' + (ss < 10 ? '0' : '') + ss; }
 
-  function startMain() {
+  async function startMain() {
     S.phase = 'main';
-    if (!S.queue || !S.queue.length) { S.queue = buildQueue(); S.mainIndex = 0; S.rounds = []; persistQueue(); }
+    if (!S.queue || !S.queue.length) {
+      showOverlay(card(cfg.texts.mainTitle || 'Game phase', [el('p', { text: 'Preparing puzzles...' })]));
+      S.queue = await buildQueue(); S.mainIndex = 0; S.rounds = []; persistQueue();
+    }
     var n = S.queue.length;
     showOverlay(card(cfg.texts.mainTitle || 'Game phase', [
       el('p', { html: cfg.texts.mainIntro }),
@@ -506,7 +522,7 @@
     if (!fb || !S.user) return;
     try {
       await fb.F.setDoc(fb.F.doc(fb.db, 'participants', S.user.uid),
-        { puzzleOrder: S.queue.map(function (x) { return x.diff; }), status: 'playing', updatedAt: fb.F.serverTimestamp() }, { merge: true });
+        { puzzleOrder: S.queue.map(function (x) { return x.id || x.diff; }), status: 'playing', updatedAt: fb.F.serverTimestamp() }, { merge: true });
     } catch (e) { /* ignore */ }
   }
   function runNextPuzzle() {
@@ -514,9 +530,10 @@
     if (S.mainIndex >= S.queue.length) { showStats(); return; }
     var item = S.queue[S.mainIndex];
     S.roundIndex = S.mainIndex + 1;
-    S.currentPuzzleId = 'main-' + S.roundIndex + '-' + item.diff;
+    S.currentPuzzleId = item.id || ('main-' + S.roundIndex + '-' + item.diff);
     window.PFGame._onRoundEnd = onMainRoundEnd;
-    window.PFGame.newGame(item.diff);
+    if (item.spec) window.PFGame.loadPuzzle(item.spec);
+    else window.PFGame.newGame(item.diff);
     showGameSubmit('Submit portfolio & continue');
   }
   function onMainRoundEnd(metrics) {
