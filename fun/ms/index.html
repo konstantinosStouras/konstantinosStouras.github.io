@@ -549,7 +549,18 @@ async function loadSummaries() {
 }
 
 // Show when the pipeline last checked Crossref for new papers (Meta tab).
+// The value changes only ~weekly, so show the cached value instantly on load
+// (no late pop-in) and refresh it in the background.
+var LAST_PULL_CACHE_KEY = 'ms_lastPull';
+function setLastPullText(date) {
+  var el = document.getElementById('lastPull');
+  if (el && date) el.textContent = 'Last publication data pull: ' + date;
+}
 function loadLastPull() {
+  try {
+    var cached = localStorage.getItem(LAST_PULL_CACHE_KEY);
+    if (cached) setLastPullText(cached);
+  } catch (e) {}
   fetch(META_CSV_URL).then(function(r) { return r && r.ok ? r.text() : null; }).then(function(txt) {
     if (!txt || txt.trim().charAt(0) === '<') return; // not CSV (error page)
     var lines = txt.split('\n');
@@ -557,8 +568,10 @@ function loadLastPull() {
       var cols = parseLine(lines[i]);
       if (cols.length >= 2 && clean(cols[0]) === 'Last Publication Data Pull') {
         var date = clean(cols[1]);
-        var el = document.getElementById('lastPull');
-        if (el && date) el.textContent = 'Last publication data pull: ' + date;
+        if (date) {
+          setLastPullText(date);
+          try { localStorage.setItem(LAST_PULL_CACHE_KEY, date); } catch (e) {}
+        }
         return;
       }
     }
@@ -1657,10 +1670,10 @@ window.addEventListener('scroll', function() {
   else document.body.classList.remove('compact');
 }, { passive: true });
 
+loadLastPull(); // small + cached: render the last-pull date first, before the big Data CSV
 loadData();
 loadAuthors();
 loadSummaries();
-loadLastPull();
 loadRecent(); // pre-fetch the small RecentlyAdded tab so the view opens instantly
 </script>
 </body>
