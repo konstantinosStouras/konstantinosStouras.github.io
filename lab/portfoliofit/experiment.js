@@ -168,7 +168,13 @@
     var appM = await import(FB_BASE + 'firebase-app.js');
     var authM = await import(FB_BASE + 'firebase-auth.js');
     var fsM = await import(FB_BASE + 'firebase-firestore.js');
-    var app = (appM.getApps && appM.getApps().length) ? appM.getApp() : appM.initializeApp(FIREBASE_CONFIG);
+    // Use a NAMED app ('portfoliofit') so the experiment coexists with the page's
+    // existing DEFAULT Firebase app (the snake/Account login) instead of colliding
+    // with it (app/duplicate-app) or accidentally reusing snake's project.
+    var APP_NAME = 'portfoliofit';
+    var app;
+    try { app = appM.getApp(APP_NAME); }
+    catch (e) { app = appM.initializeApp(FIREBASE_CONFIG, APP_NAME); }
     fb = {
       app: app, auth: authM.getAuth(app), db: fsM.getFirestore(app),
       fns: null, A: authM, F: fsM, Fn: null
