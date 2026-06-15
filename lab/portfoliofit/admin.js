@@ -392,11 +392,39 @@
     }
     function renderActive() {
       activeCard.innerHTML = '';
-      var ids = (cfg.settings && cfg.settings.activePuzzleIds) || [];
       activeCard.appendChild(el('h3', { text: 'Current active set', style: 'margin:0 0 8px;font-size:15px;' }));
+      var ids = (cfg.settings && cfg.settings.activePuzzleIds) || [];
       if (!ids.length) { activeCard.appendChild(el('p', { class: 'pfa-note', text: 'None. Participants get randomly generated puzzles based on the Settings counts.' })); return; }
-      activeCard.appendChild(el('p', { class: 'pfa-note', text: ids.length + ' frozen puzzle(s) active — participants play these in randomized order.' }));
+      activeCard.appendChild(el('p', { class: 'pfa-note', text: ids.length + ' frozen puzzle(s) active. These are the exact puzzles every participant plays — each participant sees them in a randomized order.' }));
+      var wrap = el('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;margin:8px 0;' });
+      activeCard.appendChild(wrap);
       activeCard.appendChild(el('button', { class: 'pfa-btn sec sm', on: { click: clearActive } }, ['Clear active set (use random)']));
+      var cells = ids.map(function (id, i) {
+        var c = el('div', { class: 'pfa-q', style: 'flex:0 0 auto;text-align:center;min-width:120px;' }, [el('div', { class: 'pfa-note', text: '#' + (i + 1) + ' loading…' })]);
+        wrap.appendChild(c); return c;
+      });
+      ids.forEach(function (id, idx) {
+        fb.F.getDoc(fb.F.doc(fb.db, 'puzzleSets', id)).then(function (snap) {
+          var cell = cells[idx]; cell.innerHTML = '';
+          if (!snap.exists()) { cell.appendChild(el('div', { class: 'pfa-note', text: '#' + (idx + 1) + ' (missing)' })); return; }
+          var d = snap.data(); var spec = null; try { spec = JSON.parse(d.specJson); } catch (e) {}
+          if (!spec) { cell.appendChild(el('div', { class: 'pfa-note', text: '#' + (idx + 1) + ' (unreadable)' })); return; }
+          var solCount = (spec.tilings && spec.tilings.count != null) ? spec.tilings.count : null;
+          cell.appendChild(el('div', { class: 'pfa-note', text: '#' + (idx + 1) + ' · ' + spec.diff + ' · κ=' + spec.kappa + (solCount != null ? ' · ' + solCount + ' sol.' : '') + ' · $' + spec.bestValue }));
+          cell.appendChild(puzzleGrid(spec, true));
+          cell.appendChild(el('div', { style: 'display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:4px;' }, [
+            el('button', { class: 'pfa-btn sec sm', on: { click: function () { try { window.PFGame.previewPuzzle(spec); window.PFGame.showSolutions(); } catch (e) {} } } }, ['Solutions']),
+            el('button', { class: 'pfa-btn sec sm', on: { click: function () { try { window.PFGame.previewPuzzle(spec); window.PFGame.showProof(); } catch (e) {} } } }, ['κ proof']),
+            el('button', { class: 'pfa-btn danger sm', on: { click: function () { removeFromActive(id); } } }, ['remove'])
+          ]));
+        }).catch(function () { var cell = cells[idx]; cell.innerHTML = ''; cell.appendChild(el('div', { class: 'pfa-note', text: '#' + (idx + 1) + ' (error)' })); });
+      });
+    }
+    async function removeFromActive(id) {
+      var ids = ((cfg.settings && cfg.settings.activePuzzleIds) || []).filter(function (x) { return x !== id; });
+      var s = Object.assign({}, cfg.settings, { activePuzzleIds: ids });
+      try { await saveConfig({ settings: s }); cfg.settings = s; renderActive(); toast('Removed from active set.'); }
+      catch (e) { toast('Failed: ' + ((e && e.code) || 'error')); }
     }
     async function freeze() {
       if (!approvedPuzzles.length) return;
