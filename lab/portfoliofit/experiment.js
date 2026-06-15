@@ -332,8 +332,9 @@
     S.phase = 'training';
     S.roundIndex = 0;
     S.currentPuzzleId = 'training';
+    var tdiff = (cfg.settings && cfg.settings.trainingDifficulty) || 'easy';
     window.PFGame._onRoundEnd = onTrainingEnd;
-    window.PFGame.newGame(cfg.settings.trainingDifficulty || 'easy');
+    window.PFGame.newGame(tdiff, limitFor(tdiff));
     showGameSubmit('Continue to Registration');
   }
   function onTrainingEnd(metrics) {
@@ -439,7 +440,7 @@
       try {
         await fb.A.signInWithEmailAndPassword(fb.auth, email.value.trim(), pass.value);
         // onAuthChanged handles admin; for participants, resume into main.
-        if (email.value.trim() !== ADMIN_EMAIL) { closeOverlay(); await loadParticipant(); startMain(); }
+        if (email.value.trim() !== ADMIN_EMAIL) { closeOverlay(); await loadParticipant(); resumeFlow(); }
       } catch (e) {
         btn.removeAttribute('disabled'); btn.textContent = 'Log in';
         err.textContent = friendlyAuthError(e);
@@ -507,6 +508,11 @@
     for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; }
     return a;
   }
+  // Per-puzzle time budget (seconds): admin-configured if present, else built-in.
+  function limitFor(diff) {
+    var tl = (cfg.settings && cfg.settings.timeLimits) || (window.PF_DEFAULTS && window.PF_DEFAULTS.settings && window.PF_DEFAULTS.settings.timeLimits) || { easy: 120, hard: 180 };
+    return (tl[diff] != null) ? tl[diff] : (diff === 'hard' ? 180 : 120);
+  }
   function money(v) { v = Math.round(v || 0); return (v < 0 ? '-$' : '$') + Math.abs(v); }
   function fmtTime(s) { s = Math.max(0, Math.round(s || 0)); var m = Math.floor(s / 60), ss = s % 60; return (m < 10 ? '0' : '') + m + ':' + (ss < 10 ? '0' : '') + ss; }
 
@@ -520,15 +526,46 @@
     showOverlay(card(cfg.texts.mainTitle || 'Game phase', [
       el('p', { html: cfg.texts.mainIntro }),
       el('p', { class: 'muted', html: 'You will play <b>' + n + '</b> puzzle' + (n === 1 ? '' : 's') + '. Maximise your net value in each before the timer ends.' }),
-      el('div', { class: 'pfx-row' }, [el('button', { class: 'pfx-btn', on: { click: runNextPuzzle } }, ['Start puzzle 1 of ' + n])])
+      el('div', { class: 'pfx-row' }, [el('button', { class: 'pfx-btn', on: { click: runNextPuzzle } }, [(S.mainIndex >= n) ? 'See your results' : ('Start puzzle ' + (S.mainIndex + 1) + ' of ' + n)])])
     ]));
   }
   async function persistQueue() {
     if (!fb || !S.user) return;
     try {
       await fb.F.setDoc(fb.F.doc(fb.db, 'participants', S.user.uid),
-        { puzzleOrder: S.queue.map(function (x) { return x.id || x.diff; }), status: 'playing', updatedAt: fb.F.serverTimestamp() }, { merge: true });
+        { puzzleOrder: S.queue.map(function (x) { return { id: x.id || null, diff: x.diff }; }), mainIndex: S.mainIndex, status: 'playing', updatedAt: fb.F.serverTimestamp() }, { merge: true });
     } catch (e) { /* ignore */ }
+  }
+  async function persistProgress() {
+    if (!fb || !S.user) return;
+    try { await fb.F.setDoc(fb.F.doc(fb.db, 'participants', S.user.uid), { mainIndex: S.mainIndex, updatedAt: fb.F.serverTimestamp() }, { merge: true }); } catch (e) {}
+  }
+  // Rebuild the same queue a returning participant left off in (so a mid-game
+  // reload continues rather than restarting puzzle 1 with a fresh random set).
+  async function restoreQueue() {
+    var order = (S.participant && S.participant.puzzleOrder) || [];
+    if (!order.length) return false;
+    var q = [];
+    for (var i = 0; i < order.length; i++) {
+      var o = order[i] || {};
+      var id = o.id || null, diff = o.diff || 'easy', pushed = false;
+      if (id && id.indexOf('default-') === 0) {
+        var idx = parseInt(id.slice('default-'.length), 10);
+        var dp = (window.PF_DEFAULTS && window.PF_DEFAULTS.defaultPuzzles) || [];
+        if (dp[idx]) { q.push({ id: id, diff: dp[idx].diff, spec: dp[idx] }); pushed = true; }
+      } else if (id) {
+        try {
+          var snap = await fb.F.getDoc(fb.F.doc(fb.db, 'puzzleSets', id));
+          if (snap.exists()) { var spec = specFromDoc(snap.data()); if (spec) { q.push({ id: id, diff: spec.diff, spec: spec }); pushed = true; } }
+        } catch (e) {}
+      }
+      if (!pushed) q.push({ diff: diff });
+    }
+    S.queue = q;
+    S.mainIndex = (S.participant.mainIndex != null) ? S.participant.mainIndex : 0;
+    if (S.mainIndex > S.queue.length) S.mainIndex = S.queue.length;
+    S.rounds = [];
+    return true;
   }
   function runNextPuzzle() {
     closeOverlay();
@@ -537,8 +574,9 @@
     S.roundIndex = S.mainIndex + 1;
     S.currentPuzzleId = item.id || ('main-' + S.roundIndex + '-' + item.diff);
     window.PFGame._onRoundEnd = onMainRoundEnd;
-    if (item.spec) window.PFGame.loadPuzzle(item.spec);
-    else window.PFGame.newGame(item.diff);
+    var lim = limitFor(item.diff);
+    if (item.spec) window.PFGame.loadPuzzle(item.spec, lim);
+    else window.PFGame.newGame(item.diff, lim);
     showGameSubmit('Submit portfolio & continue');
   }
   function onMainRoundEnd(metrics) {
@@ -549,6 +587,7 @@
     S.rounds.push(rec);
     writeRound(rec, placements);
     S.mainIndex += 1;
+    persistProgress();
     var remaining = S.queue.length - S.mainIndex;
     setTimeout(function () { if (remaining <= 0) showStats(); else showInterstitial(remaining); }, 350);
   }
@@ -683,10 +722,11 @@
   }
 
   // Resume a returning participant at the right phase.
-  function resumeFlow() {
+  async function resumeFlow() {
     var st = S.participant && S.participant.status;
     if (st === 'done') return showThankYou();
     if (st === 'survey') return showSurvey();
+    if (st === 'playing') { try { await restoreQueue(); } catch (e) {} }
     startMain();
   }
 

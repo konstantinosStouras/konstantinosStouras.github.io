@@ -30,7 +30,8 @@ window.PF_DEFAULTS = {
     trainingDifficulty: 'easy',
     puzzlesPerUser: { easy: 2, hard: 2 },
     randomizeOrder: true,
-    activePuzzleIds: []
+    activePuzzleIds: [],
+    timeLimits: { easy: 120, hard: 180 }
   },
   registrationQuestions: [
     { id: 'participantId', label: 'Participant ID', type: 'text', required: true, system: 'participantId' },

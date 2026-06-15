@@ -268,7 +268,7 @@
     async function restoreBuiltin() {
       var D = (window.PF_DEFAULTS && window.PF_DEFAULTS.texts) || {};
       var merged = Object.assign({}, cfg.texts);
-      g.fields.forEach(function (key) { merged[key] = D[key]; });
+      g.fields.forEach(function (key) { if (D[key] !== undefined) merged[key] = D[key]; else delete merged[key]; });
       try { await saveConfig({ texts: merged }); cfg.texts = merged; build(); toast(g.label + ' restored to built-in default.'); }
       catch (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); }
     }
@@ -490,20 +490,29 @@
   function renderSettings(body) {
     var s = cfg.settings || {};
     var per = s.puzzlesPerUser || { easy: 2, hard: 2 };
+    var tl = s.timeLimits || { easy: 120, hard: 180 };
     var easy = el('input', { type: 'number', value: String(per.easy != null ? per.easy : 2), style: 'max-width:120px;' });
     var hard = el('input', { type: 'number', value: String(per.hard != null ? per.hard : 2), style: 'max-width:120px;' });
+    var teasy = el('input', { type: 'number', value: String(tl.easy != null ? tl.easy : 120), style: 'max-width:120px;' });
+    var thard = el('input', { type: 'number', value: String(tl.hard != null ? tl.hard : 180), style: 'max-width:120px;' });
     var rnd = el('input', { type: 'checkbox' }); if (s.randomizeOrder !== false) rnd.setAttribute('checked', 'checked');
     var save = el('button', { class: 'pfa-btn', on: { click: doSave } }, ['Save settings']);
     body.appendChild(el('div', { class: 'pfa-card' }, [
       el('div', { class: 'pfa-field' }, [el('label', { text: 'Easy puzzles per participant' }), easy]),
       el('div', { class: 'pfa-field' }, [el('label', { text: 'Hard puzzles per participant' }), hard]),
+      el('div', { class: 'pfa-field' }, [el('label', { text: 'Easy time limit (seconds per puzzle)' }), teasy]),
+      el('div', { class: 'pfa-field' }, [el('label', { text: 'Hard time limit (seconds per puzzle)' }), thard]),
       el('div', { class: 'pfa-field' }, [el('label', { style: 'display:flex;align-items:center;gap:8px;' }, [rnd, document.createTextNode('Randomize puzzle order per participant')])]),
-      el('p', { class: 'pfa-note', text: 'Generating and freezing specific puzzles is coming in the next update; for now these counts drive the (randomly generated) easy/hard mix.' }),
+      el('p', { class: 'pfa-note', text: 'Puzzle counts apply only when no custom set is frozen (see the Puzzles tab). Time limits apply to every puzzle of that difficulty, in training and the main game.' }),
       save
     ]));
     async function doSave() {
       save.setAttribute('disabled', 'true');
-      var settings = Object.assign({}, s, { puzzlesPerUser: { easy: parseInt(easy.value, 10) || 0, hard: parseInt(hard.value, 10) || 0 }, randomizeOrder: rnd.checked });
+      var settings = Object.assign({}, s, {
+        puzzlesPerUser: { easy: parseInt(easy.value, 10) || 0, hard: parseInt(hard.value, 10) || 0 },
+        timeLimits: { easy: parseInt(teasy.value, 10) || 120, hard: parseInt(thard.value, 10) || 180 },
+        randomizeOrder: rnd.checked
+      });
       try { await saveConfig({ settings: settings }); cfg.settings = settings; toast('Settings saved.'); }
       catch (e) { toast('Save failed: ' + ((e && e.code) || 'error')); }
       save.removeAttribute('disabled');
