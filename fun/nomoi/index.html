@@ -66,11 +66,36 @@
     background:linear-gradient(135deg,var(--blue) 0%,#0a2e72 100%);
     color:#fff; padding:14px 18px 0;
   }
-  .top .titlerow{display:flex; align-items:center; gap:12px; max-width:1180px; margin:0 auto;}
+  .top .titlerow{display:flex; align-items:center; gap:12px 10px; flex-wrap:wrap; max-width:1180px; margin:0 auto;}
   .top h1{font-size:1.22rem; margin:0; font-weight:700; letter-spacing:.2px;}
   .top h1 span{opacity:.7; font-weight:500;}
-  .top .home{margin-left:auto; color:#cfe0ff; text-decoration:none; font-size:.85rem; white-space:nowrap;}
+  .top .home{margin-left:8px; color:#cfe0ff; text-decoration:none; font-size:.85rem; white-space:nowrap;}
   .top .home:hover{color:#fff;}
+  /* account controls (Firebase Login / Register) */
+  .acctctrls{margin-left:auto; display:flex; align-items:center; gap:8px;}
+  .abtn{
+    appearance:none; cursor:pointer; font:inherit; font-weight:700; font-size:.82rem;
+    border-radius:999px; padding:7px 14px; border:1px solid rgba(255,255,255,.28);
+    background:rgba(255,255,255,.10); color:#eaf1ff; white-space:nowrap; transition:background .15s, filter .15s;
+  }
+  .abtn:hover{background:rgba(255,255,255,.22);}
+  .abtn.primary{background:#fff; color:var(--blue,#0d3b8f); border-color:#fff;}
+  .abtn.primary:hover{filter:brightness(.95);}
+  .acctwho{position:relative; display:inline-flex;}
+  .acctpop{
+    position:absolute; top:calc(100% + 8px); right:0; min-width:180px; z-index:50;
+    background:#fff; color:#1f2937; border-radius:12px; padding:8px;
+    box-shadow:0 14px 40px rgba(0,0,0,.3); border:1px solid rgba(0,0,0,.08);
+  }
+  .acctpop.hidden{display:none;}
+  .acctpop-head{font-size:.72rem; color:#6b7280; padding:6px 9px 8px; border-bottom:1px solid #eef0f3; margin-bottom:5px; line-height:1.5;}
+  .acctpop-head b{color:#111827; word-break:break-all;}
+  .acctpop button{
+    appearance:none; border:0; background:none; width:100%; text-align:left; cursor:pointer;
+    font:inherit; font-weight:600; font-size:.85rem; color:#dc2626; padding:9px; border-radius:8px;
+  }
+  .acctpop button:hover{background:#fef2f2;}
+  @media (max-width:560px){ .abtn{padding:6px 11px; font-size:.78rem;} }
   .sub{max-width:1180px; margin:4px auto 0; color:#c4d6f7; font-size:.84rem;}
 
   /* single-row tab strip; scrolls horizontally when it does not fit (phones) */
@@ -90,7 +115,9 @@
   @media (max-width:560px){
     header.top{padding:10px 14px 0;}
     .top .titlerow{gap:8px;}
-    .top h1{font-size:1.02rem;}
+    .top h1{font-size:1.02rem; flex:1 1 auto;}
+    .top h1 span{display:none;}            /* hide subtitle on phones to keep the header on one line */
+    .acctctrls{gap:6px;}
     .sub{font-size:.76rem; margin-top:3px;}
     .tabs{margin-top:10px;}
     .tab{padding:8px 12px; font-size:.85rem;}
@@ -311,9 +338,19 @@
   <header class="top">
     <div class="titlerow">
       <h1>Οι Νομοί της Ελλάδας <span>· μάθε τους παίζοντας</span></h1>
-      <button class="player" id="playerBadge" title="Άλλαξε παίκτη">
-        <span class="pi">👤</span><span id="playerName">—</span><span class="chg">αλλαγή</span>
-      </button>
+      <div class="acctctrls" id="acctctrls">
+        <button class="abtn" id="nomoiLogin" type="button">Σύνδεση</button>
+        <button class="abtn primary" id="nomoiRegister" type="button">Εγγραφή</button>
+        <div class="acctwho" id="acctwho" hidden>
+          <button class="player" id="playerBadge" type="button" title="Λογαριασμός">
+            <span class="pi">👤</span><span id="playerName">—</span><span class="chg">▾</span>
+          </button>
+          <div class="acctpop hidden" id="acctpop" role="menu">
+            <div class="acctpop-head">Σύνδεση ως <b id="acctEmailN"></b></div>
+            <button id="nomoiLogout" type="button">Αποσύνδεση</button>
+          </div>
+        </div>
+      </div>
       <a class="home" href="/fun/">← Fun Projects</a>
     </div>
     <div class="sub">Οι 51 ιστορικοί νομοί της Ελλάδας και οι πρωτεύουσές τους — π.χ. ο Νομός Αιτωλοακαρνανίας έχει πρωτεύουσα το Μεσολόγγι.</div>
@@ -479,7 +516,44 @@ function switchUser(name){ setUser(name); closeNick(); setMode(mode); }
 document.getElementById('nickForm').addEventListener('submit', e=>{
   e.preventDefault(); switchUser(nickInput.value);
 });
-document.getElementById('playerBadge').onclick=openNick;
+
+// ---------- account (Firebase Login / Register) ----------
+// Identity comes from the shared Account widget. Signed-in players are ranked
+// under their account nickname; guests play immediately but stay unranked.
+(function(){
+  const ctrlLogin = document.getElementById('nomoiLogin');
+  const ctrlReg   = document.getElementById('nomoiRegister');
+  const who       = document.getElementById('acctwho');
+  const badge     = document.getElementById('playerBadge');
+  const pop       = document.getElementById('acctpop');
+  const emailEl   = document.getElementById('acctEmailN');
+  const logoutBtn = document.getElementById('nomoiLogout');
+  let signedIn = false;
+
+  function closePop(){ if(pop) pop.classList.add('hidden'); }
+  function renderAccount(u){
+    if(ctrlLogin) ctrlLogin.hidden = !!u;
+    if(ctrlReg)   ctrlReg.hidden   = !!u;
+    if(who)       who.hidden       = !u;
+    if(u && emailEl) emailEl.textContent = u.email || '';
+    if(!u) closePop();
+    updateBadge();
+  }
+  function applyAccount(u){
+    if(u){ signedIn = true; switchUser(u.nickname); }
+    else if(signedIn){ signedIn = false; switchUser(GUEST); }
+    renderAccount(u);
+  }
+  if(ctrlLogin)  ctrlLogin.onclick  = function(){ if(window.Account) window.Account.openLogin(); };
+  if(ctrlReg)    ctrlReg.onclick    = function(){ if(window.Account) window.Account.openRegister(); };
+  if(logoutBtn)  logoutBtn.onclick  = function(){ closePop(); if(window.Account) window.Account.logout(); };
+  if(badge)      badge.onclick      = function(e){ e.stopPropagation(); if(pop) pop.classList.toggle('hidden'); };
+  document.addEventListener('click', function(e){ if(who && !who.contains(e.target)) closePop(); });
+
+  renderAccount(null);
+  // Account widget is a deferred module (loads after this script): react to its event.
+  window.addEventListener('account-changed', function(e){ applyAccount(e.detail); });
+})();
 
 // ---------- build SVG ----------
 const landG = document.createElementNS('http://www.w3.org/2000/svg','g');
@@ -937,7 +1011,283 @@ function renderLeaderboard(){
 // init
 updateBadge();
 setMode('learn');
-if(!user){ openNick(); }
+// New visitors start playing immediately as Guest — no welcome wall.
+// Returning local players resume their session; signed-in users are picked up
+// by the Account widget (account-changed) once Firebase resolves.
+if(!user){ setUser(GUEST); updateBadge(); }
 </script>
+<script>window.AUTHCORE_NO_BAR=true;</script>
+<!-- ============================================================
+     Account widget — Firebase email/password Login / Register
+     Shared across stouras.com /fun/ apps. Backend project: stouras-snake.
+     Exposes window.Account { user, isGuest(), onChange(cb),
+     openLogin(), openRegister(), logout() } and dispatches the
+     'account-changed' event. Set window.AUTHCORE_NO_BAR = true before
+     this block to suppress the built-in fixed top-right bar (apps that
+     place their own Login/Register trigger in their header).
+     ============================================================ -->
+<style>
+  :root{ --acct-accent:#2563eb; --acct-accent-ink:#fff; }
+  #acctRoot, #acctRoot *{ box-sizing:border-box; }
+  /* fixed top-right bar */
+  .acct-bar{
+    position:fixed; z-index:2147483000;
+    top:max(8px, env(safe-area-inset-top)); right:max(8px, env(safe-area-inset-right));
+    display:flex; gap:8px; align-items:center;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  .acct-chip{
+    appearance:none; cursor:pointer; border:0; border-radius:999px;
+    font:600 14px/1 inherit; padding:10px 16px; min-height:40px;
+    display:inline-flex; align-items:center; gap:6px;
+    box-shadow:0 2px 10px rgba(0,0,0,.18); transition:transform .06s ease, filter .15s ease, background .15s ease;
+    white-space:nowrap; -webkit-tap-highlight-color:transparent; touch-action:manipulation;
+  }
+  .acct-chip:active{ transform:translateY(1px); }
+  .acct-ghost{ background:#fff; color:#1f2937; border:1px solid rgba(0,0,0,.12); }
+  .acct-ghost:hover{ background:#f3f4f6; }
+  .acct-solid{ background:var(--acct-accent); color:var(--acct-accent-ink); }
+  .acct-solid:hover{ filter:brightness(1.05); }
+  .acct-acc{ position:relative; }
+  .acct-pill .acct-av{ font-size:15px; }
+  .acct-pill .acct-name{ max-width:34vw; overflow:hidden; text-overflow:ellipsis; }
+  .acct-car{ opacity:.55; font-size:11px; }
+  .acct-menu{
+    position:absolute; top:calc(100% + 8px); right:0; min-width:200px;
+    background:#fff; color:#1f2937; border-radius:14px; padding:8px;
+    box-shadow:0 14px 40px rgba(0,0,0,.28); border:1px solid rgba(0,0,0,.08);
+  }
+  .acct-menu-head{ font-size:12px; color:#6b7280; padding:8px 10px 10px; border-bottom:1px solid #eef0f3; margin-bottom:6px; line-height:1.5; }
+  .acct-menu-head b{ color:#111827; word-break:break-all; }
+  .acct-menu-item{
+    display:block; width:100%; text-align:left; appearance:none; border:0; background:none;
+    cursor:pointer; font:600 14px/1 inherit; color:#dc2626; padding:11px 10px; border-radius:9px; min-height:44px;
+  }
+  .acct-menu-item:hover{ background:#fef2f2; }
+  /* modal */
+  .acct-modal{ position:fixed; inset:0; z-index:2147483600; display:flex; align-items:center; justify-content:center; padding:16px; }
+  .acct-modal[hidden]{ display:none; }
+  .acct-backdrop{ position:absolute; inset:0; background:rgba(15,23,42,.55); backdrop-filter:blur(2px); }
+  .acct-card{
+    position:relative; width:100%; max-width:400px; max-height:calc(100dvh - 32px); overflow:auto;
+    background:#fff; color:#111827; border-radius:18px; padding:26px 22px 22px;
+    box-shadow:0 30px 80px rgba(0,0,0,.45);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    animation:acctIn .16s ease-out;
+  }
+  @keyframes acctIn{ from{ transform:translateY(8px) scale(.99); opacity:0 } to{ transform:none; opacity:1 } }
+  .acct-x{ position:absolute; top:10px; right:12px; appearance:none; border:0; background:none; font-size:26px; line-height:1; color:#9ca3af; cursor:pointer; width:40px; height:40px; border-radius:10px; }
+  .acct-x:hover{ background:#f3f4f6; color:#111827; }
+  .acct-title{ font-size:22px; margin:2px 0 4px; }
+  .acct-sub{ font-size:13.5px; color:#6b7280; margin:0 0 16px; line-height:1.5; }
+  .acct-form{ display:flex; flex-direction:column; gap:12px; }
+  .acct-lbl{ display:flex; flex-direction:column; gap:6px; font-size:12.5px; font-weight:600; color:#374151; }
+  .acct-lbl input{
+    font:400 16px/1.3 inherit; padding:12px 13px; border:1px solid #d1d5db; border-radius:11px; outline:none;
+    color:#111827; background:#fff; width:100%; min-height:46px;
+  }
+  .acct-lbl input:focus{ border-color:var(--acct-accent); box-shadow:0 0 0 3px rgba(37,99,235,.16); }
+  .acct-err{ margin:2px 0 0; font-size:13px; color:#dc2626; background:#fef2f2; border:1px solid #fde2e2; padding:9px 11px; border-radius:9px; }
+  .acct-submit{
+    margin-top:4px; appearance:none; border:0; cursor:pointer; border-radius:12px; min-height:48px;
+    background:var(--acct-accent); color:var(--acct-accent-ink); font:700 15px/1 inherit; padding:14px;
+    transition:filter .15s ease;
+  }
+  .acct-submit:hover{ filter:brightness(1.05); }
+  .acct-submit:disabled{ opacity:.6; cursor:default; }
+  .acct-switch{ margin:16px 0 0; font-size:13.5px; color:#6b7280; text-align:center; }
+  .acct-switch a{ color:var(--acct-accent); font-weight:600; cursor:pointer; text-decoration:none; }
+  .acct-switch a:hover{ text-decoration:underline; }
+  /* phones */
+  @media (max-width:520px){
+    .acct-chip{ padding:9px 14px; font-size:13.5px; }
+    .acct-pill .acct-name{ max-width:26vw; }
+    .acct-card{ border-radius:16px 16px 0 0; max-width:none; align-self:flex-end; padding-bottom:max(22px, env(safe-area-inset-bottom)); animation:acctUp .18s ease-out; }
+    .acct-modal{ padding:0; align-items:flex-end; }
+    @keyframes acctUp{ from{ transform:translateY(100%) } to{ transform:none } }
+  }
+</style>
+<script type="module">
+(function(){
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyB75wGPTvquIGme8XrGeBoQNFo52nquQkE",
+    authDomain: "stouras-snake.firebaseapp.com",
+    databaseURL: "https://stouras-snake-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "stouras-snake",
+    storageBucket: "stouras-snake.firebasestorage.app",
+    messagingSenderId: "678091659383",
+    appId: "1:678091659383:web:7446d607cfa99eae000e72",
+    measurementId: "G-Z3085SMKJ5"
+  };
+
+  const listeners = [];
+  let ready = false, auth = null, fns = null, mode = "login";
+
+  const Account = window.Account = {
+    user: null, ready: false,
+    isGuest(){ return !this.user; },
+    onChange(cb){ listeners.push(cb); if(ready){ try{ cb(this.user); }catch(e){} } },
+    openLogin(){ openModal("login"); },
+    openRegister(){ openModal("register"); },
+    async logout(){ if(auth && fns){ try{ await fns.signOut(auth); }catch(e){} } closeMenu(); }
+  };
+  function emit(u){
+    Account.user = u; ready = true; Account.ready = true;
+    listeners.forEach(cb=>{ try{ cb(u); }catch(e){} });
+    try{ window.dispatchEvent(new CustomEvent("account-changed",{detail:u})); }catch(e){}
+    renderBar();
+  }
+
+  // ---------- DOM ----------
+  const root = document.createElement("div"); root.id = "acctRoot";
+  const showBar = !window.AUTHCORE_NO_BAR;
+  root.innerHTML =
+    (showBar ? '<div class="acct-bar" data-bar>'
+      + '<button class="acct-chip acct-ghost" data-act="login">Log in</button>'
+      + '<button class="acct-chip acct-solid" data-act="register">Register</button>'
+      + '<div class="acct-acc" data-acc hidden>'
+        + '<button class="acct-chip acct-ghost acct-pill" data-act="menu"><span class="acct-av">👤</span><b class="acct-name">You</b><span class="acct-car">▾</span></button>'
+        + '<div class="acct-menu" data-menu hidden>'
+          + '<div class="acct-menu-head">Signed in as<br><b class="acct-email"></b></div>'
+          + '<button class="acct-menu-item" data-act="logout">Log out</button>'
+        + '</div>'
+      + '</div></div>' : '')
+    + '<div class="acct-modal" data-modal hidden>'
+      + '<div class="acct-backdrop" data-act="close"></div>'
+      + '<div class="acct-card" role="dialog" aria-modal="true">'
+        + '<button class="acct-x" data-act="close" aria-label="Close">×</button>'
+        + '<h2 class="acct-title"></h2><p class="acct-sub"></p>'
+        + '<form class="acct-form" novalidate>'
+          + '<label class="acct-lbl acct-nick-field" hidden><span>Nickname</span>'
+            + '<input class="f-nick" type="text" maxlength="16" autocomplete="nickname" placeholder="Shown on the leaderboard"></label>'
+          + '<label class="acct-lbl"><span>Email</span>'
+            + '<input class="f-email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com"></label>'
+          + '<label class="acct-lbl"><span>Password</span>'
+            + '<input class="f-pass" type="password" autocomplete="current-password" placeholder="At least 6 characters"></label>'
+          + '<p class="acct-err" hidden></p>'
+          + '<button class="acct-submit" type="submit"></button>'
+        + '</form>'
+        + '<p class="acct-switch"></p>'
+      + '</div></div>';
+  document.body.appendChild(root);
+
+  const $ = (s)=>root.querySelector(s);
+  const bar = $("[data-bar]"), accBox = $("[data-acc]"), menu = $("[data-menu]");
+  const modal = $("[data-modal]"), form = $(".acct-form");
+  const elTitle=$(".acct-title"), elSub=$(".acct-sub"), elSwitch=$(".acct-switch"),
+        elErr=$(".acct-err"), elSubmit=$(".acct-submit"), nickField=$(".acct-nick-field"),
+        inNick=$(".f-nick"), inEmail=$(".f-email"), inPass=$(".f-pass");
+
+  function renderBar(){
+    if(!bar) return;
+    const u = Account.user;
+    bar.querySelector('[data-act="login"]').hidden = !!u;
+    bar.querySelector('[data-act="register"]').hidden = !!u;
+    accBox.hidden = !u;
+    if(u){
+      accBox.querySelector(".acct-name").textContent = u.nickname || "You";
+      accBox.querySelector(".acct-email").textContent = u.email || "";
+    }
+  }
+  function openMenu(){ if(menu){ menu.hidden=false; } }
+  function closeMenu(){ if(menu){ menu.hidden=true; } }
+
+  function openModal(which){
+    mode = which;
+    const reg = which==="register";
+    elTitle.textContent = reg ? "Create an account" : "Log in";
+    elSub.textContent = reg
+      ? "Register to appear on the leaderboard and keep your progress."
+      : "Log in to track your scores on the leaderboard.";
+    elSubmit.textContent = reg ? "Create account" : "Log in";
+    nickField.hidden = !reg;
+    inPass.setAttribute("autocomplete", reg ? "new-password" : "current-password");
+    elErr.hidden = true; elErr.textContent = "";
+    elSwitch.innerHTML = reg
+      ? 'Already have an account? <a data-act="to-login">Log in</a>'
+      : 'New here? <a data-act="to-register">Register</a>';
+    modal.hidden = false;
+    setTimeout(()=>{ (reg?inNick:inEmail).focus(); }, 60);
+  }
+  function closeModal(){ modal.hidden = true; }
+
+  function friendly(code, msg){
+    const m = {
+      "auth/invalid-email":"That email address looks invalid.",
+      "auth/missing-password":"Please enter a password.",
+      "auth/weak-password":"Password must be at least 6 characters.",
+      "auth/email-already-in-use":"That email is already registered — try logging in instead.",
+      "auth/invalid-credential":"Wrong email or password.",
+      "auth/wrong-password":"Wrong email or password.",
+      "auth/user-not-found":"No account found for that email.",
+      "auth/too-many-requests":"Too many attempts. Please wait a moment and try again.",
+      "auth/network-request-failed":"Network error — check your connection and try again.",
+      "auth/operation-not-allowed":"Email/password sign-in isn’t enabled for this site yet."
+    };
+    return m[code] || msg || "Something went wrong. Please try again.";
+  }
+  function showErr(t){ elErr.textContent = t; elErr.hidden = false; }
+
+  // delegated clicks
+  root.addEventListener("click", (e)=>{
+    const act = e.target.closest("[data-act]")?.getAttribute("data-act");
+    if(!act) return;
+    if(act==="login") openModal("login");
+    else if(act==="register") openModal("register");
+    else if(act==="close") closeModal();
+    else if(act==="to-login") openModal("login");
+    else if(act==="to-register") openModal("register");
+    else if(act==="menu"){ e.stopPropagation(); menu.hidden ? openMenu() : closeMenu(); }
+    else if(act==="logout") Account.logout();
+  });
+  document.addEventListener("click", (e)=>{ if(accBox && !accBox.contains(e.target)) closeMenu(); });
+  document.addEventListener("keydown", (e)=>{ if(e.key==="Escape"){ closeModal(); closeMenu(); } });
+
+  form.addEventListener("submit", async (e)=>{
+    e.preventDefault();
+    if(!auth || !fns){ showErr(friendly("auth/operation-not-allowed")); return; }
+    const email = inEmail.value.trim(), pass = inPass.value;
+    const nick = (inNick.value.trim() || email.split("@")[0] || "Player").slice(0,16);
+    if(!email){ showErr("Please enter your email."); return; }
+    if(pass.length < 6){ showErr("Password must be at least 6 characters."); return; }
+    elErr.hidden = true; elSubmit.disabled = true;
+    const original = elSubmit.textContent; elSubmit.textContent = "Please wait…";
+    try{
+      if(mode==="register"){
+        const cred = await fns.createUserWithEmailAndPassword(auth, email, pass);
+        try{ await fns.updateProfile(cred.user, { displayName: nick }); }catch(_){}
+      } else {
+        await fns.signInWithEmailAndPassword(auth, email, pass);
+      }
+      closeModal();
+      form.reset(); nickField.hidden = true;
+    }catch(err){
+      showErr(friendly(err && err.code, err && err.message));
+    }finally{
+      elSubmit.disabled = false; elSubmit.textContent = original;
+    }
+  });
+
+  // ---------- Firebase ----------
+  (async function init(){
+    try{
+      const appMod = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+      const authMod = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
+      const app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(FIREBASE_CONFIG);
+      auth = authMod.getAuth(app);
+      fns = authMod;
+      authMod.onAuthStateChanged(auth, (u)=>{
+        if(u){
+          emit({ uid:u.uid, email:u.email || "", nickname:(u.displayName || (u.email||"").split("@")[0] || "Player") });
+        } else { emit(null); }
+      });
+    }catch(e){
+      console.warn("Account auth init failed:", e);
+      emit(null); // fall back to guest
+    }
+  })();
+})();
+</script>
+<!-- ===== end Account widget ===== -->
 </body>
 </html>
