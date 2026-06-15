@@ -1050,17 +1050,22 @@
 
     function newGame(diff) {
       const picked = pickPuzzle(diff);
-      const puzzle = picked.puzzle;
-      if (!puzzle) return;
+      if (!picked || !picked.puzzle) return;
+      startRound(diff, picked.puzzle, picked.kappa, picked.tilings, picked.bestValue);
+    }
+
+    // Build and start a round from an explicit puzzle. Used by random
+    // generation (newGame) and by admin-frozen puzzles (loadPuzzleSpec).
+    function startRound(diff, puzzle, kappa, tilings, bestValue) {
       state = {
         diff: diff,
         rows: puzzle.rows,
         cols: puzzle.cols,
         region: puzzle.region,
         solution: puzzle.solution,
-        kappa: picked.kappa,
-        tilings: picked.tilings,
-        bestValue: picked.bestValue,
+        kappa: kappa,
+        tilings: tilings,
+        bestValue: bestValue,
         pd: buildPlacements(puzzle.region, allPieces()),
         occupied: new Map(),        // "r,c" -> instanceId
         // All eight bricks are available every round; the player finds a fit.
@@ -1088,6 +1093,24 @@
       resetTimer();
       startTimer();
       pfEmit('round_start', { diff: diff, kappa: state.kappa, bestValue: state.bestValue, round: sessionRounds });
+    }
+
+    // Serialize a freshly generated puzzle so the admin can preview / freeze it.
+    function generatePuzzleSpec(diff) {
+      const picked = pickPuzzle(diff);
+      if (!picked || !picked.puzzle) return null;
+      const p = picked.puzzle;
+      return {
+        diff: diff, rows: p.rows, cols: p.cols,
+        region: Array.from(p.region), solution: p.solution,
+        kappa: picked.kappa, tilings: picked.tilings, bestValue: picked.bestValue
+      };
+    }
+    // Start a round from a frozen puzzle spec (region stored as an array).
+    function loadPuzzleSpec(spec) {
+      if (!spec) return;
+      const puzzle = { rows: spec.rows, cols: spec.cols, region: new Set(spec.region), solution: spec.solution || [] };
+      startRound(spec.diff, puzzle, spec.kappa, spec.tilings, spec.bestValue);
     }
 
     function renderBoardMeta() {
@@ -1988,6 +2011,8 @@
       getPlacements: pfPlacements,
       hideWin: function () { hideWin(); },
       isExperiment: function () { return !!window.PF_EXPERIMENT; },
+      generatePuzzle: function (diff) { return generatePuzzleSpec(diff || 'easy'); },
+      loadPuzzle: function (spec) { loadPuzzleSpec(spec); },
       _onRoundEnd: null
     };
 
