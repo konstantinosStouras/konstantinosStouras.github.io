@@ -243,6 +243,10 @@
   .chip{cursor:pointer; font:inherit; font-size:.85rem; font-weight:600; color:var(--blue);
     background:#eef4fb; border:1px solid #dbe7f6; border-radius:999px; padding:5px 12px;}
   .chip:hover{background:#e2edfa;}
+  .guestrow{margin-top:16px; padding-top:14px; border-top:1px dashed var(--line);}
+  .chip.guest{display:inline-block; background:#fff; border:1px solid var(--blue); color:var(--blue); padding:8px 16px; font-size:.9rem;}
+  .chip.guest:hover{background:#eef4fb;}
+  .ghint{font-size:.74rem; color:var(--muted); margin-top:8px; line-height:1.45;}
 
   /* progress view */
   .prog{padding:12px;}
@@ -390,6 +394,9 @@ function loadStore(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)) || {c
 function saveStore(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(store)); }catch(e){} }
 let store=loadStore();
 let user=store.currentUser || null;
+const GUEST='__guest__';                                   // reserved key for the guest player
+function isGuest(n){ return n===GUEST; }
+function displayName(n){ return n===GUEST ? 'Επισκέπτης' : n; }
 // cumulative aggregate for a user record, migrating any legacy round-based data
 function aggOf(u){
   if(!u) return {answered:0, correct:0, bestStreak:0};
@@ -419,26 +426,37 @@ function userData(){
 }
 function setUser(name){
   name=(name||'').trim().slice(0,24) || 'Παίκτης';
+  if(name===GUEST || name.toLowerCase()==='επισκέπτης') name=GUEST;   // typing the guest name plays as guest
   user=name; store.currentUser=name;
-  if(!store.users[name]) store.users[name]={created:Date.now(), answered:0, correct:0, bestStreak:0, perNomos:{}, perMode:{quizNomos:{a:0,c:0}, quizCapital:{a:0,c:0}}};
+  if(!store.users[name]){
+    store.users[name]={created:Date.now(), answered:0, correct:0, bestStreak:0, perNomos:{}, perMode:{quizNomos:{a:0,c:0}, quizCapital:{a:0,c:0}}};
+    if(name===GUEST) store.users[name].guest=true;
+  }
   saveStore(); updateBadge();
 }
-function updateBadge(){ const el=document.getElementById('playerName'); if(el) el.textContent = user || '—'; }
+function updateBadge(){ const el=document.getElementById('playerName'); if(el) el.textContent = user ? displayName(user) : '—'; }
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 // nickname modal
 const nickModal=document.getElementById('nickModal');
 const nickInput=document.getElementById('nickInput');
 function openNick(){
-  const ex=Object.keys(store.users||{});
+  const ex=Object.keys(store.users||{}).filter(u=>u!==GUEST);   // named players only (guest shown separately)
   const box=document.getElementById('nickExisting');
   document.getElementById('nickTitle').textContent = user ? 'Άλλαξε παίκτη' : 'Καλώς όρισες!';
   nickInput.value='';
+  let html='';
   if(ex.length){
-    box.innerHTML='<div class="lbl">Ή συνέχισε ως</div><div class="chips">'+
+    html+='<div class="lbl">Ή συνέχισε ως</div><div class="chips">'+
       ex.map(u=>`<button type="button" class="chip" data-u="${escapeHtml(u)}">${escapeHtml(u)}</button>`).join('')+'</div>';
-    box.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{ switchUser(c.dataset.u); });
-  } else box.innerHTML='';
+  }
+  const guestHas = store.users[GUEST] && (store.users[GUEST].answered||0)>0;
+  html+='<div class="guestrow">'+
+    `<button type="button" class="chip guest" id="guestBtn">${guestHas?'Συνέχισε ως επισκέπτης':'Παίξε ως επισκέπτης'}</button>`+
+    '<div class="ghint">Ως επισκέπτης μπορείς να παίξεις χωρίς ψευδώνυμο. Τα δεδομένα σου δεν εμφανίζονται στην κατάταξη.</div></div>';
+  box.innerHTML=html;
+  box.querySelectorAll('.chip[data-u]').forEach(c=>c.onclick=()=>{ switchUser(c.dataset.u); });
+  document.getElementById('guestBtn').onclick=()=>{ switchUser(GUEST); };
   nickModal.classList.remove('hidden');
   setTimeout(()=>nickInput.focus(),60);
 }
@@ -800,7 +818,7 @@ function renderQuizSide(){
 // ----- PROGRESS -----
 function startProgress(){
   promptEl.innerHTML = user
-    ? `Η πρόοδος του παίκτη <b>${user}</b> — δες πού τα πας καλά και τι χρειάζεται επανάληψη.`
+    ? `Η πρόοδος του παίκτη <b>${escapeHtml(displayName(user))}</b> — δες πού τα πας καλά και τι χρειάζεται επανάληψη.`
     : 'Διάλεξε ένα ψευδώνυμο για να καταγράφεται η πρόοδός σου.';
   renderProgress();
 }
@@ -817,7 +835,7 @@ function renderProgress(){
     sideBody.innerHTML='<div class="prog"><div class="empty">Δεν έχει επιλεγεί παίκτης.<br><br><button class="btn primary" id="pgChoose">Διάλεξε ψευδώνυμο</button></div></div>';
     document.getElementById('pgChoose').onclick=openNick; return;
   }
-  sideSmall.textContent=user;
+  sideSmall.textContent=displayName(user);
   const answered=ud.answered||0;
   if(!answered){
     sideBody.innerHTML='<div class="prog"><div class="empty">Δεν έχεις απαντήσει ακόμα σε καμία ερώτηση.<br><br>Παίξε «Βρες τον Νομό» ή «Βρες την Πρωτεύουσα» και η πρόοδός σου θα εμφανιστεί εδώ.</div></div>';
@@ -868,7 +886,7 @@ function startLeaderboard(){
 }
 function renderLeaderboard(){
   sideTitle.textContent='Κατάταξη';
-  const rows=Object.keys(store.users||{}).map(userAgg).filter(r=>r.answered>0);
+  const rows=Object.keys(store.users||{}).filter(n=>n!==GUEST).map(userAgg).filter(r=>r.answered>0);  // guest excluded
   sideSmall.textContent = rows.length ? rows.length+(rows.length===1?' παίκτης':' παίκτες') : '';
   if(!rows.length){
     sideBody.innerHTML='<div class="lbempty">Δεν υπάρχουν ακόμα καταγραφές.<br><br>Παίξε ένα παιχνίδι και θα εμφανιστείς εδώ!</div>';
