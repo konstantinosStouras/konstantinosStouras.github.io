@@ -112,6 +112,7 @@
     display: inline-flex; align-items: center; gap: 6px;
   }
   .who .pill b { color: var(--accent); font-weight: 700; }
+  .who .pill.guest b { color: var(--muted); }
 
   /* language flag switcher — inline SVG flags so every OS renders them (Windows shows no emoji flags) */
   .lang-switch { display: inline-flex; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
@@ -304,6 +305,7 @@
   .modal input[type=text]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(56,189,248,0.18); }
   .modal .row { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
   .modal .err { color: var(--bad); font-size: 13px; margin-top: 8px; min-height: 16px; }
+  .guest-note { margin: 12px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--muted-2); }
   .known {
     margin-top: 16px; border-top: 1px solid var(--line); padding-top: 14px;
   }
@@ -529,7 +531,9 @@
       <div class="err" id="nickErr"></div>
       <div class="row">
         <button class="btn primary" id="nickStart" style="flex:1" data-i18n="startLearning">Start learning</button>
+        <button class="btn ghost" id="nickGuest" data-i18n="playGuest">Continue as Guest</button>
       </div>
+      <p class="guest-note" data-i18n="guestNote">Guest progress is saved on this device only — it never appears on the leaderboard.</p>
       <div class="known hidden" id="knownWrap">
         <div class="lbl" data-i18n="continueAs">Continue as</div>
         <div class="chips" id="knownChips"></div>
@@ -701,6 +705,7 @@
     var STORE_KEY = "capitals:v1:profiles";
     var LAST_KEY  = "capitals:v1:lastNick";
     var LANG_KEY  = "capitals:v1:lang";
+    var GUEST_KEY = "__guest__";   // reserved profile key — never ranked
     var HISTORY_CAP = 600;
 
     // ---------- merge the Greek layer onto the base dataset ----------
@@ -731,6 +736,8 @@
         welcome: "Welcome to Capitals",
         welcomeSub: "Pick a nickname so your progress is saved and tracked over time. Use the same nickname next time to keep building your streak.",
         nickPh: "Your nickname", startLearning: "Start learning", continueAs: "Continue as",
+        playGuest: "Continue as Guest", guest: "Guest",
+        guestNote: "Guest progress is saved on this device only — it never appears on the leaderboard.",
         progressFor: "Progress for",
         answered: "Answered", accuracy: "Accuracy", points: "Points", bestStreak: "Best streak",
         solvedNoHint: "Solved no hint", answersShown: "Answers shown",
@@ -785,6 +792,8 @@
         welcome: "Καλώς ήρθες στο Capitals",
         welcomeSub: "Διάλεξε ένα ψευδώνυμο ώστε να αποθηκεύεται η πρόοδός σου. Χρησιμοποίησε το ίδιο ψευδώνυμο την επόμενη φορά για να συνεχίσεις το σερί σου.",
         nickPh: "Το ψευδώνυμό σου", startLearning: "Ξεκίνα", continueAs: "Συνέχισε ως",
+        playGuest: "Συνέχισε ως Επισκέπτης", guest: "Επισκέπτης",
+        guestNote: "Η πρόοδος ως επισκέπτης αποθηκεύεται μόνο σε αυτή τη συσκευή — δεν εμφανίζεται ποτέ στην κατάταξη.",
         progressFor: "Πρόοδος:",
         answered: "Απαντήσεις", accuracy: "Ακρίβεια", points: "Πόντοι", bestStreak: "Καλύτερο σερί",
         solvedNoHint: "Χωρίς βοήθεια", answersShown: "Αποκαλύψεις",
@@ -839,6 +848,7 @@
     function newProfile(nick) {
       return {
         nick: nick.trim(),
+        guest: false,
         createdAt: Date.now(),
         lastSeen: Date.now(),
         answered: 0, correct: 0, revealed: 0,
@@ -945,7 +955,7 @@
     // ---------- DOM ----------
     var $ = function (id) { return document.getElementById(id); };
     var els = {
-      whoName: $("whoName"), statsBtn: $("statsBtn"), boardBtn: $("boardBtn"), switchBtn: $("switchBtn"),
+      whoName: $("whoName"), whoPill: $("whoPill"), statsBtn: $("statsBtn"), boardBtn: $("boardBtn"), switchBtn: $("switchBtn"),
       langEn: $("langEn"), langEl: $("langEl"),
       regionSel: $("regionSel"), streakVal: $("streakVal"),
       qFlag: $("qFlag"), qRegion: $("qRegion"), qText: $("qText"),
@@ -960,7 +970,7 @@
       nextBtn: $("nextBtn"), seenNote: $("seenNote"), footTotal: $("footTotal"),
       // nick modal
       nickOverlay: $("nickOverlay"), nickInput: $("nickInput"), nickErr: $("nickErr"),
-      nickStart: $("nickStart"), nickClose: $("nickClose"),
+      nickStart: $("nickStart"), nickGuest: $("nickGuest"), nickClose: $("nickClose"),
       knownWrap: $("knownWrap"), knownChips: $("knownChips"),
       // stats modal
       statsOverlay: $("statsOverlay"), statsClose: $("statsClose"),
@@ -1366,7 +1376,11 @@
 
     // ---------- displays ----------
     function updateStreakDisplay() { els.streakVal.textContent = profile.currentStreak; }
-    function updateWho() { els.whoName.textContent = profile.nick; }
+    function updateWho() {
+      if (!profile) return;
+      els.whoName.textContent = profile.guest ? t("guest") : profile.nick;
+      els.whoPill.classList.toggle("guest", !!profile.guest);
+    }
     function updateFooter() {
       els.footTotal.textContent = t("footTotal")(ALL.length);
     }
@@ -1407,6 +1421,7 @@
       applyStatic();
       buildRegionSelect();
       updateFooter();
+      updateWho(); // keep the "Guest" label in the right language
       if (current) { if (solved) renderRevealText(); else renderQuestionView(); }
       if (!els.statsOverlay.classList.contains("hidden")) openStats();
       if (!els.boardOverlay.classList.contains("hidden")) renderBoard();
@@ -1423,7 +1438,7 @@
       els.nickErr.textContent = "";
       els.nickInput.value = "";
       els.nickClose.style.display = allowClose ? "" : "none";
-      var keys = Object.keys(profiles);
+      var keys = Object.keys(profiles).filter(function (k) { return k !== GUEST_KEY && !profiles[k].guest; });
       if (keys.length) {
         keys.sort(function (a, b) { return (profiles[b].lastSeen || 0) - (profiles[a].lastSeen || 0); });
         els.knownChips.innerHTML = "";
@@ -1465,6 +1480,20 @@
       if (!v.trim()) { els.nickErr.textContent = t("errNickContinue"); return; }
       activate(v);
     }
+    // Guests can play and keep local progress, but are never published to the
+    // global board nor listed on the local one (see pushGlobal / boardRows).
+    function activateGuest() {
+      pKey = GUEST_KEY;
+      profile = profiles[GUEST_KEY] || newProfile(t("guest"));
+      profile.guest = true;
+      profiles[GUEST_KEY] = profile;
+      try { localStorage.setItem(LAST_KEY, GUEST_KEY); } catch (e) {}
+      persist();           // note: no pushGlobal — guests stay off the leaderboard
+      closeNick();
+      updateWho();
+      updateStreakDisplay();
+      newQuestion();
+    }
 
     // ---------- stats modal ----------
     function ymd(ts) {
@@ -1478,7 +1507,7 @@
     }
     function accuracyOf(p) { return p.answered ? Math.round(100 * p.correct / p.answered) : 0; }
     function openStats() {
-      els.statsNick.textContent = profile.nick;
+      els.statsNick.textContent = profile.guest ? t("guest") : profile.nick;
       var created = new Date(profile.createdAt);
       els.statsSince.textContent = t("since")(
         created.toLocaleDateString(t("locale"), { year: "numeric", month: "long", day: "numeric" }));
@@ -1527,11 +1556,14 @@
     function closeStats() { els.statsOverlay.classList.add("hidden"); }
 
     function resetProgress() {
-      if (!confirm(t("confirmReset")(profile.nick))) return;
+      var wasGuest = !!(profile && profile.guest);
+      if (!confirm(t("confirmReset")(wasGuest ? t("guest") : profile.nick))) return;
       profiles[pKey] = newProfile(profile.nick);
+      profiles[pKey].guest = wasGuest;   // a reset guest stays a guest (still unranked)
       profile = profiles[pKey];
       persist();
       updateStreakDisplay();
+      updateWho();
       closeStats();
       newQuestion();
     }
@@ -1560,7 +1592,9 @@
           };
         });
       }
-      return Object.keys(profiles).map(function (k) {
+      return Object.keys(profiles).filter(function (k) {
+        return profiles[k] && !profiles[k].guest;   // guests are never listed
+      }).map(function (k) {
         var p = profiles[k];
         return {
           key: k, nick: p.nick || k,
@@ -1626,7 +1660,7 @@
     // Publishes this profile's summary and, when the worldwide board is live,
     // feeds it into renderBoard(). Falls back silently to the local board.
     function pushGlobal() {
-      if (!window.CapitalsLeaderboard || !profile || (profile.answered || 0) < 1) return;
+      if (!window.CapitalsLeaderboard || !profile || profile.guest || (profile.answered || 0) < 1) return;
       try {
         window.CapitalsLeaderboard.submit({
           name: profile.nick,
@@ -1690,6 +1724,7 @@
     els.langEl.addEventListener("click", function () { setLang("el"); });
 
     els.nickStart.addEventListener("click", tryStart);
+    els.nickGuest.addEventListener("click", activateGuest);
     els.nickClose.addEventListener("click", closeNick);
     els.nickInput.addEventListener("keydown", function (e) {
       if (e.key === "Enter") { e.preventDefault(); tryStart(); }
@@ -1711,7 +1746,9 @@
     } else {
       var lastKey = null;
       try { lastKey = localStorage.getItem(LAST_KEY); } catch (e) {}
-      if (lastKey && profiles[lastKey]) {
+      if (lastKey === GUEST_KEY && profiles[GUEST_KEY]) {
+        activateGuest();
+      } else if (lastKey && profiles[lastKey]) {
         activate(profiles[lastKey].nick);
       } else {
         openNick(false);
