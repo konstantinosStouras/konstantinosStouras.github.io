@@ -217,7 +217,7 @@
   // ---- Content tab (collapsible pages, each with default controls) ----
   function renderContent(body) {
     body.appendChild(el('div', { class: 'pfa-card' }, [
-      el('p', { class: 'pfa-note', html: 'Edit the wording participants see on each page. Leave a field blank to fall back to the built-in default. <b>Make this the default</b> saves the page so participants see it. <b>Reset this page to defaults</b> reloads the last saved values (discards unsaved edits). <b>Restore built-in default</b> reverts the page to the original wording.' })
+      el('p', { class: 'pfa-note', html: 'Edit the wording participants see on each page. Each field is pre-filled with the current text (the built-in default unless you have saved a change). <b>Make this the default</b> saves the page so participants see it. <b>Reset this page to defaults</b> reloads the saved/current values (discards unsaved edits). <b>Restore built-in default</b> reverts the page to the original wording.' })
     ]));
     PAGE_GROUPS.forEach(function (g) { body.appendChild(renderPageSection(g)); });
   }
@@ -235,7 +235,11 @@
       bodyDiv.innerHTML = ''; inputs = {};
       g.fields.forEach(function (key) {
         var meta = TEXT_FIELD_META[key]; if (!meta) return;
-        var val = cfg.texts[key];
+        // Show the current effective text: the saved override if present,
+        // otherwise the built-in default (so fields are never blank).
+        var dflt = (window.PF_DEFAULTS && window.PF_DEFAULTS.texts) ? window.PF_DEFAULTS.texts[key] : undefined;
+        var saved = cfg.texts[key];
+        var val = (saved == null || saved === '' || (Array.isArray(saved) && !saved.length)) ? dflt : saved;
         if (meta.kind === 'paras') val = Array.isArray(val) ? val.join('\n') : (val || '');
         var input = (meta.kind === 'line') ? el('input', { type: 'text', value: val || '' }) : el('textarea', { rows: meta.kind === 'paras' ? '5' : '3', value: val || '' });
         inputs[key] = { input: input, kind: meta.kind };
