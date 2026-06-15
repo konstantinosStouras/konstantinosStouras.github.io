@@ -488,6 +488,11 @@
       }
     }
     if (!q.length) {
+      // Built-in default set (baked specs) when no custom set is frozen.
+      var def = (window.PF_DEFAULTS && window.PF_DEFAULTS.defaultPuzzles) || [];
+      for (var di = 0; di < def.length; di++) q.push({ id: 'default-' + di, diff: def[di].diff, spec: def[di] });
+    }
+    if (!q.length) {
       // Fallback: generate by difficulty counts.
       var per = s.puzzlesPerUser || { easy: 2, hard: 2 };
       var i;
