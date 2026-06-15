@@ -32,7 +32,7 @@
   var ADMIN_EMAIL = 'admin@admin.com';
 
   // ---- Editable content defaults (admin can override via config/app) ----
-  var DEFAULTS = {
+  var DEFAULTS = window.PF_DEFAULTS || {
     texts: {
       welcomeTitle: 'PortfolioFit',
       welcomeIntro: 'Welcome to <i>PortfolioFit</i>, a strategic project portfolio selection game.',

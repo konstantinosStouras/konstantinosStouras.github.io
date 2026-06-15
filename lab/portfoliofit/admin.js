@@ -47,6 +47,17 @@
     ['thankyouBody', 'Thank-you — body', 'area']
   ];
   var QUESTION_TYPES = ['text', 'email', 'password', 'number', 'select', 'radio', 'textarea'];
+  // Group the text fields into collapsible "pages" for the Content tab.
+  var PAGE_GROUPS = [
+    { key: 'welcome', label: 'Welcome page', fields: ['welcomeTitle', 'welcomeIntro', 'welcomeBody', 'welcomeButton'] },
+    { key: 'training', label: 'Training phase', fields: ['trainingTitle', 'trainingBody', 'trainingButton'] },
+    { key: 'registration', label: 'Registration page', fields: ['registerTitle', 'registerIntro'] },
+    { key: 'main', label: 'Game phase', fields: ['mainTitle', 'mainIntro'] },
+    { key: 'stats', label: 'Stats page', fields: ['statsTitle'] },
+    { key: 'survey', label: 'Survey page', fields: ['surveyTitle', 'surveyIntro'] },
+    { key: 'thankyou', label: 'Thank-you page', fields: ['thankyouTitle', 'thankyouBody'] }
+  ];
+  var TEXT_FIELD_META = {}; TEXT_FIELDS.forEach(function (f) { TEXT_FIELD_META[f[0]] = { label: f[1], kind: f[2] }; });
 
   // ---- state ----
   var fb = null, XLSX = null, cfg = {}, user = null, tab = 'content', approvedPuzzles = [];
@@ -202,36 +213,61 @@
     else if (tab === 'participants') renderParticipants(body);
   }
 
-  // ---- Content tab ----
+  // ---- Content tab (collapsible pages, each with default controls) ----
   function renderContent(body) {
-    var inputs = {};
-    var card = el('div', { class: 'pfa-card' });
-    card.appendChild(el('p', { class: 'pfa-note', text: 'Edit the text shown to participants in each phase. Leave a field blank to use the built-in default.' }));
-    TEXT_FIELDS.forEach(function (f) {
-      var key = f[0], label = f[1], kind = f[2];
-      var val = cfg.texts[key];
-      if (kind === 'paras') val = Array.isArray(val) ? val.join('\n') : (val || '');
-      var input = (kind === 'line')
-        ? el('input', { type: 'text', value: val || '' })
-        : el('textarea', { rows: kind === 'paras' ? '5' : '3', value: val || '' });
-      inputs[key] = { input: input, kind: kind };
-      card.appendChild(el('div', { class: 'pfa-field' }, [el('label', { text: label }), input]));
-    });
-    var save = el('button', { class: 'pfa-btn', on: { click: doSave } }, ['Save content']);
-    card.appendChild(save);
-    body.appendChild(card);
-    async function doSave() {
+    body.appendChild(el('div', { class: 'pfa-card' }, [
+      el('p', { class: 'pfa-note', html: 'Edit the wording participants see on each page. Leave a field blank to fall back to the built-in default. <b>Make this the default</b> saves the page so participants see it. <b>Reset this page to defaults</b> reloads the last saved values (discards unsaved edits). <b>Restore built-in default</b> reverts the page to the original wording.' })
+    ]));
+    PAGE_GROUPS.forEach(function (g) { body.appendChild(renderPageSection(g)); });
+  }
+  function renderPageSection(g) {
+    var section = el('div', { class: 'pfa-card', style: 'padding:0;overflow:hidden;' });
+    var caret = el('span', { text: '▾', style: 'color:var(--muted);' });
+    var bodyDiv = el('div', { style: 'display:none;padding:0 18px 16px;' });
+    var open = false, inputs = {};
+    var header = el('div', { style: 'display:flex;justify-content:space-between;align-items:center;padding:14px 18px;cursor:pointer;', on: { click: toggle } }, [
+      el('b', { text: g.label, style: 'font-size:15px;' }), caret
+    ]);
+    section.appendChild(header); section.appendChild(bodyDiv);
+
+    function build() {
+      bodyDiv.innerHTML = ''; inputs = {};
+      g.fields.forEach(function (key) {
+        var meta = TEXT_FIELD_META[key]; if (!meta) return;
+        var val = cfg.texts[key];
+        if (meta.kind === 'paras') val = Array.isArray(val) ? val.join('\n') : (val || '');
+        var input = (meta.kind === 'line') ? el('input', { type: 'text', value: val || '' }) : el('textarea', { rows: meta.kind === 'paras' ? '5' : '3', value: val || '' });
+        inputs[key] = { input: input, kind: meta.kind };
+        bodyDiv.appendChild(el('div', { class: 'pfa-field' }, [el('label', { text: meta.label }), input]));
+      });
+      bodyDiv.appendChild(el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;' }, [
+        el('button', { class: 'pfa-btn', on: { click: makeDefault } }, ['Make this the default']),
+        el('button', { class: 'pfa-btn sec', on: { click: function () { build(); toast('Reloaded saved values.'); } } }, ['Reset this page to defaults']),
+        el('button', { class: 'pfa-btn sec', on: { click: restoreBuiltin } }, ['Restore built-in default'])
+      ]));
+    }
+    function toggle() { open = !open; bodyDiv.style.display = open ? 'block' : 'none'; caret.textContent = open ? '▴' : '▾'; if (open) build(); }
+    function collect() {
       var texts = {};
       Object.keys(inputs).forEach(function (key) {
         var v = inputs[key].input.value;
-        if (inputs[key].kind === 'paras') texts[key] = v.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
-        else texts[key] = v;
+        texts[key] = inputs[key].kind === 'paras' ? v.split('\n').map(function (s) { return s.trim(); }).filter(Boolean) : v;
       });
-      save.setAttribute('disabled', 'true');
-      try { await saveConfig({ texts: texts }); cfg.texts = texts; toast('Content saved.'); }
-      catch (e) { toast('Save failed: ' + ((e && e.code) || 'error')); }
-      save.removeAttribute('disabled');
+      return texts;
     }
+    async function makeDefault() {
+      var merged = Object.assign({}, cfg.texts, collect());
+      try { await saveConfig({ texts: merged }); cfg.texts = merged; toast(g.label + ' saved.'); }
+      catch (e) { toast('Save failed: ' + ((e && e.code) || 'error')); }
+    }
+    async function restoreBuiltin() {
+      var D = (window.PF_DEFAULTS && window.PF_DEFAULTS.texts) || {};
+      var merged = Object.assign({}, cfg.texts);
+      g.fields.forEach(function (key) { merged[key] = D[key]; });
+      try { await saveConfig({ texts: merged }); cfg.texts = merged; build(); toast(g.label + ' restored to built-in default.'); }
+      catch (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); }
+    }
+    return section;
   }
 
   // ---- Registration / Survey question editor ----
