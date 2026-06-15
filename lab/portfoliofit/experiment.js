@@ -34,8 +34,8 @@
   // ---- Editable content defaults (admin can override via config/app) ----
   var DEFAULTS = {
     texts: {
-      welcomeTitle: 'PortfolioFit for Managers',
-      welcomeIntro: 'Welcome to <b>PortfolioFit for Managers</b>, a strategic project portfolio selection game.',
+      welcomeTitle: 'PortfolioFit',
+      welcomeIntro: 'Welcome to <i>PortfolioFit</i>, a strategic project portfolio selection game.',
       welcomeBody: [
         'In this game, you drag and drop project <b>bricks</b> of different shapes into a frame. Each brick carries a <b>dollar value</b>, representing its potential contribution to your portfolio.',
         'Your challenge is to <b>build smart</b>: bricks must fit entirely <b>within the frame</b> and <b>cannot overlap</b>. The strategic element: every <b>empty cell</b> left in the frame carries a <b>$1 penalty</b>. Maximise your <b>net value</b> (total value of placed bricks minus the penalty for empty cells).',
