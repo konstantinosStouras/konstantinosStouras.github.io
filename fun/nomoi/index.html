@@ -74,14 +74,18 @@
   /* account controls (Firebase Login / Register) */
   .acctctrls{margin-left:auto; display:flex; align-items:center; gap:8px;}
   .abtn{
-    appearance:none; cursor:pointer; font:inherit; font-weight:700; font-size:.82rem;
-    border-radius:999px; padding:7px 14px; border:1px solid rgba(255,255,255,.28);
-    background:rgba(255,255,255,.10); color:#eaf1ff; white-space:nowrap; transition:background .15s, filter .15s;
+    appearance:none; cursor:pointer; font:inherit; font-weight:700; font-size:.82rem; letter-spacing:.2px;
+    border-radius:999px; padding:8px 15px; border:1px solid rgba(255,255,255,.30);
+    background:rgba(255,255,255,.12); color:#eaf1ff; white-space:nowrap;
+    transition:transform .14s ease, background .18s ease, border-color .18s ease, filter .18s ease, box-shadow .18s ease;
   }
-  .abtn:hover{background:rgba(255,255,255,.22);}
-  .abtn.primary{background:#fff; color:var(--blue,#0d3b8f); border-color:#fff;}
-  .abtn.primary:hover{filter:brightness(.95);}
+  .abtn:hover{background:rgba(255,255,255,.22); border-color:rgba(255,255,255,.5); transform:translateY(-1px);}
+  .abtn:active{transform:translateY(0) scale(.97);}
+  .abtn:focus-visible{outline:2px solid rgba(255,255,255,.85); outline-offset:2px;}
+  .abtn.primary{background:#fff; color:var(--blue,#0d3b8f); border-color:#fff; box-shadow:0 4px 14px rgba(0,0,0,.18);}
+  .abtn.primary:hover{filter:brightness(.96); box-shadow:0 8px 20px rgba(0,0,0,.22);}
   .acctwho{position:relative; display:inline-flex;}
+  .acctwho[hidden]{display:none;}   /* the [hidden] attr alone is overridden by display:inline-flex */
   .acctpop{
     position:absolute; top:calc(100% + 8px); right:0; min-width:180px; z-index:50;
     background:#fff; color:#1f2937; border-radius:12px; padding:8px;
