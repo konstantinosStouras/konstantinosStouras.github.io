@@ -588,6 +588,12 @@
   </div>
 
   <script>
+  // Experiment mode flag — the research flow (welcome -> training -> registration
+  // -> main -> stats -> survey -> thank-you) only activates with ?exp=1, so the
+  // default game at /lab/portfoliofit/ stays unchanged until we switch it on.
+  window.PF_EXPERIMENT = /[?&]exp(=1)?(&|$)/.test(location.search);
+  </script>
+  <script>
   (function () {
     'use strict';
 
@@ -1080,6 +1086,7 @@
       setStatus('', '');
       resetTimer();
       startTimer();
+      pfEmit('round_start', { diff: diff, kappa: state.kappa, bestValue: state.bestValue, round: sessionRounds });
     }
 
     function renderBoardMeta() {
@@ -1312,6 +1319,7 @@
       for (const [pr, pc] of cells) state.occupied.set(pr + ',' + pc, piece.id);
       piece.placed = true;
       piece.placedCells = cells;
+      pfEmit('place', { pieceId: piece.id, name: piece.name, value: piece.value, cells: cells, metrics: pfMetrics() });
       state.selected = null;
       clearPreview();
       renderBoard();
@@ -1326,8 +1334,10 @@
       lastAction = Date.now();
       const p = state.pieces.find(pp => pp.id === instId);
       if (!p || !p.placed) return;
+      const formerCells = p.placedCells;
       for (const [r, c] of p.placedCells) state.occupied.delete(r + ',' + c);
       p.placed = false; p.placedCells = null;
+      pfEmit('remove', { pieceId: p.id, name: p.name, cells: formerCells, metrics: pfMetrics() });
       state.selected = p.id;
       renderBoard();
       renderTray();
@@ -1525,6 +1535,8 @@
       const net = currentNet();
       const isHigh = saveBest(state.diff, net);
       showEnd(net, isHigh);
+      pfEmit('round_end', { diff: state.diff, net: net, full: state.occupied.size === state.region.size, metrics: pfMetrics(), placements: pfPlacements() });
+      if (window.PFGame && typeof window.PFGame._onRoundEnd === 'function') { try { window.PFGame._onRoundEnd(pfMetrics()); } catch (e) {} }
     }
 
     function confetti(n) {
@@ -1570,7 +1582,7 @@
       const eb = loadBest('easy'), hb = loadBest('hard');
       $('#modalPB').innerHTML = 'Personal bests &middot; Easy <b>' + (eb === null ? '–' : money(eb)) +
         '</b> &middot; Hard <b>' + (hb === null ? '–' : money(hb)) + '</b><br>Puzzle ' + sessionRounds + ' this session';
-      $('#overlay').classList.add('show');
+      if (!window.PF_EXPERIMENT) $('#overlay').classList.add('show');
       if (optimal) confetti(130);
     }
     function hideWin() { $('#overlay').classList.remove('show'); }
@@ -1747,18 +1759,18 @@
     // ---------- Controls wiring ----------
     // Re-orient the selected brick by applying a geometric transform and snapping
     // to the matching orientation in its precomputed orbit.
-    function transformSelected(fn) {
+    function transformSelected(fn, action) {
       const p = selectedPiece();
       if (!p || p.placed) return;
       const want = key(fn(oriCells(p)));
       const idx = p.oris.findIndex(o => key(o) === want);
-      if (idx >= 0) p.oriIndex = idx;
+      if (idx >= 0) { p.oriIndex = idx; pfEmit('orient', { pieceId: p.id, oriIndex: p.oriIndex, action: action || 'orient' }); }
       renderTray(); clearPreview();
     }
-    const rotateCW = () => transformSelected(cells => rotate(cells));
-    const rotateCCW = () => transformSelected(cells => normalize(cells.map(([r, c]) => [-c, r])));
-    const flipH = () => transformSelected(cells => reflect(cells));               // mirror left↔right
-    const flipV = () => transformSelected(cells => normalize(cells.map(([r, c]) => [-r, c]))); // mirror up↕down
+    const rotateCW = () => transformSelected(cells => rotate(cells), 'rotateCW');
+    const rotateCCW = () => transformSelected(cells => normalize(cells.map(([r, c]) => [-c, r])), 'rotateCCW');
+    const flipH = () => transformSelected(cells => reflect(cells), 'flipH');               // mirror left↔right
+    const flipV = () => transformSelected(cells => normalize(cells.map(([r, c]) => [-r, c])), 'flipV'); // mirror up↕down
     // Buttons / R / F keep their original behaviour.
     const rotateSelected = rotateCW;
     const flipSelected = flipH;
@@ -1901,6 +1913,7 @@
       calcHistory.insertBefore(line, calcHistory.firstChild);
       while (calcHistory.children.length > 30) calcHistory.removeChild(calcHistory.lastChild);
       calcInput.value = '';
+      pfEmit('calc', { expr: expr, result: res });
     }
     $('#calcPad').addEventListener('click', e => {
       const b = e.target.closest('button'); if (!b) return;
@@ -1932,15 +1945,53 @@
     function addNote() {
       const text = notesInput.value.trim(); if (!text) return;
       notesData.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), when: new Date().toLocaleString(), text: text });
+      pfEmit('note', { text: text });
       notesInput.value = ''; renderNotes();
     }
     $('#notesAdd').addEventListener('click', addNote);
     notesInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addNote(); } });
 
+    // ---------- Experiment integration (event hooks + game API) ----------
+    // These helpers are no-ops unless the experiment layer (experiment.js) is
+    // active. pfEmit forwards every gameplay action to the logger; the default
+    // game (no ?exp) simply never has a listener attached.
+    function pfEmit(type, payload) {
+      try { if (window.PF && typeof window.PF.onGameEvent === 'function') window.PF.onGameEvent(type, payload || {}); }
+      catch (e) { /* logging must never break gameplay */ }
+    }
+    function pfMetrics() {
+      if (!state) return null;
+      const total = state.region.size, occ = state.occupied.size, empty = total - occ;
+      const value = placedValue();
+      return {
+        diff: state.diff, net: currentNet(), value: value, cost: empty,
+        coverage: total ? Math.round(occ / total * 100) : 0,
+        fitness: computeFitness(), bestValue: state.bestValue,
+        placed: occ, total: total, kappa: state.kappa,
+        ended: !!state.ended, time: timer ? timer.elapsed : 0
+      };
+    }
+    function pfPlacements() {
+      const out = [];
+      const ps = state ? state.pieces : [];
+      for (const p of ps) if (p.placed) out.push({ id: p.id, name: p.name, value: p.value, cells: p.placedCells });
+      return out;
+    }
+    window.PFGame = {
+      newGame: function (diff) { newGame(diff || 'easy'); },
+      restart: function () { var b = $('#restartBtn'); if (b) b.click(); },
+      endRound: function () { endRound(); },
+      getMetrics: pfMetrics,
+      getPlacements: pfPlacements,
+      hideWin: function () { hideWin(); },
+      isExperiment: function () { return !!window.PF_EXPERIMENT; },
+      _onRoundEnd: null
+    };
+
     // ---------- Boot ----------
     renderNotes();
     calcShow('', '0', false);
-    newGame('easy');
+    if (!window.PF_EXPERIMENT) newGame('easy');   // in experiment mode the game starts via PFGame
     updateBestUI();
   })();
   </script>
@@ -2392,5 +2443,7 @@
   AppStats.addMenuItem({ container:'#acctRoot .acct-menu', before:'[data-act="logout"]', label:'📊 Statistics' });
 })();
 </script>
+<!-- Research experiment layer — only activates with ?exp=1 (default game unaffected). -->
+<script src="experiment.js" defer></script>
 </body>
 </html>

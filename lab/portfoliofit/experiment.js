@@ -1,0 +1,449 @@
+/* =====================================================================
+   PortfolioFit for Managers — experiment layer
+   ---------------------------------------------------------------------
+   Turns the PortfolioFit game into a research experiment:
+     welcome  ->  training  ->  registration / login  ->  main phase
+                ->  stats  ->  survey  ->  thank-you
+   plus per-action logging to a dedicated Firebase project.
+
+   This layer ONLY activates with ?exp=1 on the URL, so the default game
+   at /lab/portfoliofit/ is completely unaffected until we switch it on.
+
+   Status: foundation increment — welcome, training, auth (register/login)
+   and Firestore event logging are live. Main-phase sequencing (fixed
+   2 easy + 2 hard, random order), stats, survey and the admin panel are
+   built in following increments and are stubbed/marked below.
+   ===================================================================== */
+(function () {
+  'use strict';
+  if (!window.PF_EXPERIMENT) return;            // default game: do nothing
+
+  // ---- Firebase web config (public by design; safe to commit) ----------
+  var FIREBASE_CONFIG = {
+    apiKey: 'AIzaSyBn8PhDyVhWvfiJVCpC1eW6q1LBfwpMu38',
+    authDomain: 'stouras-portfoliofit.firebaseapp.com',
+    projectId: 'stouras-portfoliofit',
+    storageBucket: 'stouras-portfoliofit.firebasestorage.app',
+    messagingSenderId: '1031513619365',
+    appId: '1:1031513619365:web:dc3195fab2eaf04f6bc64c',
+    measurementId: 'G-HKBTJVBS79'
+  };
+  var SDK = '10.12.2';
+  var ADMIN_EMAIL = 'admin@admin.com';
+
+  // ---- Editable content defaults (admin can override via config/app) ----
+  var DEFAULTS = {
+    texts: {
+      welcomeTitle: 'PortfolioFit for Managers',
+      welcomeIntro: 'Welcome to <b>PortfolioFit for Managers</b>, a strategic project portfolio selection game.',
+      welcomeBody: [
+        'In this game, you drag and drop project <b>bricks</b> of different shapes into a frame. Each brick carries a <b>dollar value</b>, representing its potential contribution to your portfolio.',
+        'Your challenge is to <b>build smart</b>: bricks must fit entirely <b>within the frame</b> and <b>cannot overlap</b>. The strategic element: every <b>empty cell</b> left in the frame carries a <b>$1 penalty</b>. Maximise your <b>net value</b> (total value of placed bricks minus the penalty for empty cells).',
+        'This game has four phases: a <b>training phase</b>, a <b>registration phase</b>, a <b>game phase</b>, and a <b>post-play survey</b>.'
+      ],
+      welcomeButton: 'Start training',
+      trainingTitle: 'Training phase',
+      trainingBody: 'Take a moment to get familiar with the controls on a simpler puzzle. Select a brick, place it on the board, and use rotate/flip to fit it. When the timer ends (or you fill the board) you will move on to registration.',
+      trainingButton: 'Begin training',
+      registerTitle: 'Registration',
+      registerIntro: 'Please provide some basic information about yourself.',
+      mainIntro: 'You will now play a series of timed puzzles. Maximise the net value of each portfolio before the timer runs out.',
+      thankyouTitle: 'Thank you for playing!',
+      thankyouBody: 'Your responses have been recorded. You may now close this tab.'
+    },
+    settings: {
+      trainingDifficulty: 'easy',
+      puzzlesPerUser: { easy: 2, hard: 2 },
+      randomizeOrder: true,
+      activePuzzleIds: []
+    },
+    // Registration questions (matches the prototype form; admin-editable later).
+    registrationQuestions: [
+      { id: 'participantId', label: 'Participant ID', type: 'text', required: true, system: 'participantId' },
+      { id: 'email', label: 'Personal E-mail', type: 'email', required: true, system: 'email' },
+      { id: 'password', label: 'Password', type: 'password', required: true, system: 'password' },
+      { id: 'mentalCalc', label: 'Mental Calculations', type: 'select', required: true,
+        help: 'On a scale from 1 to 10, how good are you at mental calculations compared to the general population of this country? (1 very poor, 5 average, 10 very strong)',
+        options: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'] },
+      { id: 'mathsAtSchool', label: 'Mathematics at School', type: 'radio', required: true,
+        help: 'Was maths among the five subjects you liked most at school?', options: ['Yes', 'No'] },
+      { id: 'age', label: 'Age', type: 'number', required: true },
+      { id: 'gender', label: 'Gender', type: 'select', required: true,
+        options: ['Female', 'Male', 'Non-binary', 'Prefer not to say'] },
+      { id: 'education', label: 'Education Level', type: 'select', required: true,
+        options: ['High school', 'Bachelor', 'Master', 'PhD', 'Other'] },
+      { id: 'workExp', label: 'Years of Work Experience', type: 'select', required: true,
+        options: ['0', '1-3', '4-6', '7-10', '11-20', '20+'] },
+      { id: 'mgmtExp', label: 'Years of Management Experience', type: 'select', required: true,
+        options: ['0', '1-3', '4-6', '7-10', '11-20', '20+'] },
+      { id: 'gamingExp', label: 'Gaming Experience', type: 'select', required: true,
+        options: ['None', 'Beginner', 'Intermediate', 'Advanced', 'Expert'] },
+      { id: 'tetrisExp', label: 'Tetris Experience', type: 'select', required: true,
+        options: ['None', 'Beginner', 'Intermediate', 'Advanced', 'Expert'] }
+    ]
+  };
+
+  // ---- Runtime state ----------------------------------------------------
+  var fb = null;                                  // Firebase handles once loaded
+  var cfg = DEFAULTS;                             // merged config
+  var S = {
+    phase: 'boot', user: null, participant: null,
+    seq: 0, buffer: [], roundIndex: 0, currentPuzzleId: null, flushing: false
+  };
+  var inited = false;
+
+  // ---- Tiny DOM helpers -------------------------------------------------
+  function el(tag, attrs, kids) {
+    var n = document.createElement(tag);
+    if (attrs) Object.keys(attrs).forEach(function (k) {
+      if (k === 'html') n.innerHTML = attrs[k];
+      else if (k === 'text') n.textContent = attrs[k];
+      else if (k === 'on') Object.keys(attrs.on).forEach(function (ev) { n.addEventListener(ev, attrs.on[ev]); });
+      else if (k === 'style') n.setAttribute('style', attrs[k]);
+      else n.setAttribute(k, attrs[k]);
+    });
+    (kids || []).forEach(function (c) { if (c) n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
+    return n;
+  }
+  function $(s) { return document.querySelector(s); }
+
+  // ---- Styles + control hiding -----------------------------------------
+  function injectStyles() {
+    document.body.classList.add('pf-exp');
+    var css = ''
+      + 'body.pf-exp #difficulty,body.pf-exp #newBtn,body.pf-exp #restartBtn,'
+      + 'body.pf-exp #solBtn,body.pf-exp #proofBtn,body.pf-exp #hintBtn,body.pf-exp #solveBtn{display:none !important;}'
+      + '.pfx-ov{position:fixed;inset:0;z-index:9000;display:flex;align-items:center;justify-content:center;'
+      + 'padding:20px;background:rgba(40,30,15,.45);backdrop-filter:blur(3px);overflow:auto;}'
+      + '.pfx-card{background:#fff;border-radius:18px;box-shadow:0 20px 60px rgba(60,45,20,.25);max-width:560px;width:100%;'
+      + 'padding:28px 30px;margin:auto;font-family:Inter,system-ui,sans-serif;color:#2b2b2b;}'
+      + '.pfx-card h2{font-family:"Space Grotesk",Inter,sans-serif;font-size:1.6rem;margin:0 0 6px;}'
+      + '.pfx-card p{color:#4a4843;line-height:1.55;margin:0 0 12px;}'
+      + '.pfx-card .muted{color:#8a877f;font-size:13px;}'
+      + '.pfx-btn{display:inline-block;border:none;background:#e67e22;color:#fff;font-weight:600;font-size:15px;'
+      + 'padding:12px 22px;border-radius:12px;cursor:pointer;transition:.15s;}'
+      + '.pfx-btn:hover{background:#cf6f17;}.pfx-btn.sec{background:#fff;color:#2b2b2b;border:1px solid #e0dbd0;}'
+      + '.pfx-btn[disabled]{opacity:.5;cursor:default;}'
+      + '.pfx-field{margin:12px 0;}.pfx-field label{display:block;font-weight:600;font-size:14px;margin-bottom:4px;}'
+      + '.pfx-field .help{font-weight:400;color:#8a877f;font-size:12px;margin:2px 0 6px;}'
+      + '.pfx-field input,.pfx-field select{width:100%;padding:10px 12px;border:1px solid #e0dbd0;border-radius:10px;font-size:14px;font-family:inherit;}'
+      + '.pfx-field .radio{display:flex;gap:18px;}.pfx-field .radio label{font-weight:500;display:flex;align-items:center;gap:6px;}'
+      + '.pfx-err{color:#e74c3c;font-size:13px;margin:6px 0;min-height:18px;}'
+      + '.pfx-topbar{position:fixed;top:0;left:0;right:0;z-index:8000;display:flex;justify-content:space-between;align-items:center;'
+      + 'gap:10px;padding:6px 14px;background:#2b2b2b;color:#fff;font-family:Inter,sans-serif;font-size:13px;}'
+      + '.pfx-topbar b{color:#f1c40f;}.pfx-topbar button{background:transparent;border:1px solid #555;color:#eee;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:12px;}'
+      + 'body.pf-exp.pf-hastop{padding-top:42px;}'
+      + '.pfx-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;}';
+    document.head.appendChild(el('style', { text: css }));
+  }
+
+  // ---- Overlay management ----------------------------------------------
+  var curOverlay = null;
+  function closeOverlay() { if (curOverlay) { curOverlay.remove(); curOverlay = null; } }
+  function showOverlay(card) {
+    closeOverlay();
+    curOverlay = el('div', { class: 'pfx-ov' }, [card]);
+    document.body.appendChild(curOverlay);
+  }
+
+  // ---- Firebase ---------------------------------------------------------
+  async function initFirebase() {
+    var base = 'https://www.gstatic.com/firebasejs/' + SDK + '/';
+    var appM = await import(base + 'firebase-app.js');
+    var authM = await import(base + 'firebase-auth.js');
+    var fsM = await import(base + 'firebase-firestore.js');
+    var fnM = await import(base + 'firebase-functions.js');
+    var app = appM.initializeApp(FIREBASE_CONFIG);
+    fb = {
+      app: app, auth: authM.getAuth(app), db: fsM.getFirestore(app),
+      fns: fnM.getFunctions(app, 'europe-west1'), A: authM, F: fsM, Fn: fnM
+    };
+    authM.onAuthStateChanged(fb.auth, onAuthChanged);
+  }
+
+  async function loadConfig() {
+    if (!fb) return;
+    try {
+      var snap = await fb.F.getDoc(fb.F.doc(fb.db, 'config', 'app'));
+      if (snap.exists()) {
+        var d = snap.data();
+        cfg = {
+          texts: Object.assign({}, DEFAULTS.texts, d.texts || {}),
+          settings: Object.assign({}, DEFAULTS.settings, d.settings || {}),
+          registrationQuestions: (d.registrationQuestions && d.registrationQuestions.length) ? d.registrationQuestions : DEFAULTS.registrationQuestions,
+          surveyQuestions: d.surveyQuestions || []
+        };
+      }
+    } catch (e) { /* fall back to defaults */ }
+  }
+
+  function onAuthChanged(user) {
+    if (user && user.email === ADMIN_EMAIL) {
+      // Admin panel is a later increment; for now, just note it.
+      S.user = user;
+      showOverlay(card('Admin', [
+        el('p', { html: 'Signed in as <b>admin@admin.com</b>. The admin panel is being built in the next increment.' }),
+        el('div', { class: 'pfx-row' }, [el('button', { class: 'pfx-btn sec', on: { click: doLogout } }, ['Log out'])])
+      ]));
+      return;
+    }
+    S.user = user || null;
+    if (S.user) { renderTopbar(); flush(); }
+  }
+
+  // ---- Event logging ----------------------------------------------------
+  function logEvent(type, payload) {
+    var ev = {
+      seq: S.seq++, t: Date.now(), clientTime: new Date().toISOString(),
+      phase: S.phase, round: S.roundIndex, puzzleId: S.currentPuzzleId || null,
+      type: type, dataJson: safeJson(payload || {})
+    };
+    if (payload && payload.metrics) { ev.net = payload.metrics.net; ev.coverage = payload.metrics.coverage; }
+    S.buffer.push(ev);
+    flush();
+  }
+  function safeJson(o) { try { return JSON.stringify(o); } catch (e) { return '{}'; } }
+
+  async function flush() {
+    if (!fb || !S.user || S.flushing) return;
+    S.flushing = true;
+    try {
+      while (S.buffer.length) {
+        var ev = S.buffer[0];
+        await fb.F.addDoc(
+          fb.F.collection(fb.db, 'participants', S.user.uid, 'events'),
+          Object.assign({ serverTime: fb.F.serverTimestamp() }, ev)
+        );
+        S.buffer.shift();
+      }
+    } catch (e) {
+      console.warn('[PFX] event flush failed; will retry', e);
+    } finally {
+      S.flushing = false;
+    }
+  }
+  // Game forwards every action here.
+  window.PF = { onGameEvent: logEvent };
+
+  // ---- Top bar ----------------------------------------------------------
+  function renderTopbar() {
+    var existing = $('.pfx-topbar'); if (existing) existing.remove();
+    if (!S.user) return;
+    document.body.classList.add('pf-hastop');
+    var label = (S.participant && S.participant.anonymousLabel) || (S.participant && S.participant.participantId) || S.user.email || '';
+    var bar = el('div', { class: 'pfx-topbar' }, [
+      el('span', { html: 'PortfolioFit for Managers &middot; <b>' + esc(label) + '</b>' }),
+      el('button', { on: { click: doLogout } }, ['Log out'])
+    ]);
+    document.body.appendChild(bar);
+  }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
+
+  // ---- Screen helpers ---------------------------------------------------
+  function card(title, kids) {
+    return el('div', { class: 'pfx-card' }, [el('h2', { text: title })].concat(kids || []));
+  }
+
+  // ---- Phase: welcome ---------------------------------------------------
+  function showWelcome() {
+    S.phase = 'welcome';
+    var body = [el('p', { html: cfg.texts.welcomeIntro })];
+    (cfg.texts.welcomeBody || []).forEach(function (p) { body.push(el('p', { html: p })); });
+    body.push(el('div', { class: 'pfx-row' }, [
+      el('button', { class: 'pfx-btn', on: { click: startTraining } }, [cfg.texts.welcomeButton || 'Start training']),
+      el('button', { class: 'pfx-btn sec', on: { click: showLogin } }, ['I already have an account'])
+    ]));
+    showOverlay(card(cfg.texts.welcomeTitle, body));
+  }
+
+  // ---- Phase: training --------------------------------------------------
+  function startTraining() {
+    showOverlay(card(cfg.texts.trainingTitle, [
+      el('p', { html: cfg.texts.trainingBody }),
+      el('div', { class: 'pfx-row' }, [el('button', { class: 'pfx-btn', on: { click: runTraining } }, [cfg.texts.trainingButton || 'Begin training'])])
+    ]));
+  }
+  function runTraining() {
+    closeOverlay();
+    S.phase = 'training';
+    S.roundIndex = 0;
+    S.currentPuzzleId = 'training';
+    window.PFGame._onRoundEnd = onTrainingEnd;
+    window.PFGame.newGame(cfg.settings.trainingDifficulty || 'easy');
+  }
+  function onTrainingEnd(metrics) {
+    window.PFGame._onRoundEnd = null;
+    setTimeout(function () { showRegister(metrics); }, 400);
+  }
+
+  // ---- Phase: registration ---------------------------------------------
+  function showRegister(trainingMetrics) {
+    S.phase = 'register';
+    var form = el('div', {});
+    var inputs = {};
+    cfg.registrationQuestions.forEach(function (q) {
+      var field = el('div', { class: 'pfx-field' });
+      field.appendChild(el('label', { text: q.label + (q.required ? ' *' : '') }));
+      if (q.help) field.appendChild(el('div', { class: 'help', text: q.help }));
+      var input;
+      if (q.type === 'select') {
+        input = el('select', {}, [el('option', { value: '' }, ['Please select...'])].concat(
+          (q.options || []).map(function (o) { return el('option', { value: o }, [o]); })));
+      } else if (q.type === 'radio') {
+        input = el('div', { class: 'radio' });
+        (q.options || []).forEach(function (o) {
+          var id = 'r_' + q.id + '_' + o;
+          input.appendChild(el('label', {}, [el('input', { type: 'radio', name: q.id, value: o, id: id }), o]));
+        });
+      } else {
+        input = el('input', { type: q.type || 'text', autocomplete: 'off' });
+      }
+      inputs[q.id] = { q: q, node: input };
+      field.appendChild(input);
+      form.appendChild(field);
+    });
+    var err = el('div', { class: 'pfx-err' });
+    var submit = el('button', { class: 'pfx-btn', on: { click: doRegister } }, ['Register & start']);
+    form.appendChild(err);
+    form.appendChild(el('div', { class: 'pfx-row' }, [submit,
+      el('button', { class: 'pfx-btn sec', on: { click: showLogin } }, ['I already have an account'])]));
+
+    var c = card(cfg.texts.registerTitle, [el('p', { text: cfg.texts.registerIntro }), form]);
+    showOverlay(c);
+
+    function readVal(entry) {
+      if (entry.q.type === 'radio') { var sel = entry.node.querySelector('input:checked'); return sel ? sel.value : ''; }
+      return entry.node.value.trim();
+    }
+    async function doRegister() {
+      err.textContent = '';
+      var answers = {}, email = '', password = '', participantId = '';
+      for (var id in inputs) {
+        var entry = inputs[id], v = readVal(entry);
+        if (entry.q.required && !v) { err.textContent = 'Please complete: ' + entry.q.label; return; }
+        if (entry.q.system === 'email') email = v;
+        else if (entry.q.system === 'password') password = v;
+        else if (entry.q.system === 'participantId') participantId = v;
+        else answers[id] = v;
+      }
+      if (password.length < 6) { err.textContent = 'Password must be at least 6 characters.'; return; }
+      submit.setAttribute('disabled', 'true'); submit.textContent = 'Creating account...';
+      try {
+        var cred = await fb.A.createUserWithEmailAndPassword(fb.auth, email, password);
+        var uid = cred.user.uid;
+        // Try the Cloud Function (atomic label); fall back to a direct write.
+        try {
+          var fn = fb.Fn.httpsCallable(fb.fns, 'registerParticipant');
+          var res = await fn({ participantId: participantId, answers: answers });
+          S.participant = { participantId: participantId, anonymousLabel: res.data && res.data.anonymousLabel };
+        } catch (fnErr) {
+          await fb.F.setDoc(fb.F.doc(fb.db, 'participants', uid), {
+            uid: uid, participantId: participantId, email: email, registration: answers,
+            status: 'registered', anonymousLabel: null,
+            createdAt: fb.F.serverTimestamp(), updatedAt: fb.F.serverTimestamp()
+          });
+          S.participant = { participantId: participantId, anonymousLabel: null };
+        }
+        logEvent('register', { participantId: participantId, trainingMetrics: trainingMetrics || null });
+        closeOverlay(); renderTopbar(); startMain();
+      } catch (e) {
+        submit.removeAttribute('disabled'); submit.textContent = 'Register & start';
+        err.textContent = friendlyAuthError(e);
+      }
+    }
+  }
+
+  // ---- Login ------------------------------------------------------------
+  function showLogin() {
+    S.phase = 'login';
+    var email = el('input', { type: 'email', placeholder: 'you@example.com', autocomplete: 'username' });
+    var pass = el('input', { type: 'password', placeholder: 'Password', autocomplete: 'current-password' });
+    var err = el('div', { class: 'pfx-err' });
+    var btn = el('button', { class: 'pfx-btn', on: { click: doLogin } }, ['Log in']);
+    showOverlay(card('Log in', [
+      el('div', { class: 'pfx-field' }, [el('label', { text: 'E-mail' }), email]),
+      el('div', { class: 'pfx-field' }, [el('label', { text: 'Password' }), pass]),
+      err,
+      el('div', { class: 'pfx-row' }, [btn, el('button', { class: 'pfx-btn sec', on: { click: showWelcome } }, ['Back'])])
+    ]));
+    async function doLogin() {
+      err.textContent = '';
+      btn.setAttribute('disabled', 'true'); btn.textContent = 'Logging in...';
+      try {
+        await fb.A.signInWithEmailAndPassword(fb.auth, email.value.trim(), pass.value);
+        // onAuthChanged handles admin; for participants, resume into main.
+        if (email.value.trim() !== ADMIN_EMAIL) { closeOverlay(); await loadParticipant(); startMain(); }
+      } catch (e) {
+        btn.removeAttribute('disabled'); btn.textContent = 'Log in';
+        err.textContent = friendlyAuthError(e);
+      }
+    }
+  }
+
+  async function loadParticipant() {
+    if (!fb || !S.user) return;
+    try {
+      var snap = await fb.F.getDoc(fb.F.doc(fb.db, 'participants', S.user.uid));
+      if (snap.exists()) { S.participant = snap.data(); renderTopbar(); }
+    } catch (e) { /* ignore */ }
+  }
+
+  async function doLogout() {
+    try { await fb.A.signOut(fb.auth); } catch (e) {}
+    location.reload();
+  }
+
+  function friendlyAuthError(e) {
+    var c = (e && e.code) || '';
+    if (c.indexOf('email-already-in-use') >= 0) return 'That e-mail already has an account. Use "I already have an account".';
+    if (c.indexOf('invalid-email') >= 0) return 'Please enter a valid e-mail address.';
+    if (c.indexOf('wrong-password') >= 0 || c.indexOf('invalid-credential') >= 0) return 'Incorrect e-mail or password.';
+    if (c.indexOf('user-not-found') >= 0) return 'No account found for that e-mail.';
+    if (c.indexOf('weak-password') >= 0) return 'Password must be at least 6 characters.';
+    return (e && e.message) || 'Something went wrong. Please try again.';
+  }
+
+  // ---- Phase: main (foundation stub) -----------------------------------
+  // Full sequencing (fixed 2 easy + 2 hard in random order, per-puzzle
+  // advance, then stats + survey) lands in the next increment. For now this
+  // starts a real round so logging and the flow can be tested end-to-end.
+  function startMain() {
+    S.phase = 'main';
+    showOverlay(card('Game phase', [
+      el('p', { html: cfg.texts.mainIntro }),
+      el('p', { class: 'muted', html: 'You are registered as <b>' + esc((S.participant && S.participant.anonymousLabel) || (S.participant && S.participant.participantId) || '') + '</b>. (Full multi-puzzle sequencing, stats and the survey are being added next.)' }),
+      el('div', { class: 'pfx-row' }, [el('button', { class: 'pfx-btn', on: { click: runMainRound } }, ['Start puzzle'])])
+    ]));
+  }
+  function runMainRound() {
+    closeOverlay();
+    S.roundIndex += 1;
+    S.currentPuzzleId = 'main-' + S.roundIndex;
+    window.PFGame._onRoundEnd = function (m) {
+      window.PFGame._onRoundEnd = null;
+      setTimeout(function () { startMain(); }, 400);
+    };
+    window.PFGame.newGame('easy');
+  }
+
+  // ---- Bootstrap --------------------------------------------------------
+  async function init() {
+    if (inited) return; inited = true;
+    injectStyles();
+    showOverlay(card('Loading...', [el('p', { text: 'Connecting...' })]));
+    try {
+      await initFirebase();
+      await loadConfig();
+    } catch (e) {
+      showOverlay(card('Connection problem', [el('p', { text: 'Could not connect to the server. Please refresh and try again.' })]));
+      console.error('[PFX] init failed', e);
+      return;
+    }
+    // If already signed in (returning user), resume; else show welcome.
+    if (fb.auth.currentUser) { S.user = fb.auth.currentUser; await loadParticipant(); startMain(); }
+    else showWelcome();
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
