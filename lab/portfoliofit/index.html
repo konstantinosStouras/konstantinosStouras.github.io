@@ -1969,7 +1969,9 @@
         coverage: total ? Math.round(occ / total * 100) : 0,
         fitness: computeFitness(), bestValue: state.bestValue,
         placed: occ, total: total, kappa: state.kappa,
-        ended: !!state.ended, time: timer ? timer.elapsed : 0
+        ended: !!state.ended, time: timer ? timer.elapsed : 0,
+        limit: (DIFFS[state.diff] ? DIFFS[state.diff].limit : 0),
+        remaining: Math.max(0, (DIFFS[state.diff] ? DIFFS[state.diff].limit : 0) - (timer ? timer.elapsed : 0))
       };
     }
     function pfPlacements() {
