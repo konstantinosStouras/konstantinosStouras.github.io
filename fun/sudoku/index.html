@@ -385,6 +385,20 @@
   footer a { color: var(--accent); text-decoration: none; }
   footer a:hover { text-decoration: underline; }
 
+  /* How-to-play guide */
+  .how {
+    width: var(--size); max-width: 100%;
+    text-align: left; color: var(--muted); font-size: 13px; line-height: 1.55;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 14px; padding: 14px 16px;
+  }
+  .how h2 { margin: 0 0 6px; font-size: 15px; color: var(--text); }
+  .how p { margin: 0 0 8px; }
+  .how p:last-child { margin-bottom: 0; }
+  .how ul { margin: 0 0 8px; padding-left: 20px; }
+  .how li { margin: 3px 0; }
+  .how li b { color: var(--text); font-weight: 700; }
+
   /* Win overlay */
   .overlay {
     position: fixed;
@@ -474,6 +488,7 @@
     .actions      { grid-area: actions; width: min(40vw, 360px); }
     footer        { grid-area: footer; }
     .pad button { font-size: clamp(14px, 3vw, 20px); }
+    .how { display: none; }   /* no room for the guide in short landscape */
   }
 </style>
 </head>
@@ -541,6 +556,13 @@
       <button id="btn-pause"><span class="ico">⏸</span><span data-i18n="pause">Pause</span></button>
       <button id="btn-new"><span class="ico">＋</span><span data-i18n="newGame">New</span></button>
     </div>
+
+    <section class="how" id="how">
+      <h2 id="how-title">How to play</h2>
+      <p id="how-intro"></p>
+      <ul id="how-list"></ul>
+      <p id="how-outro"></p>
+    </section>
 
     <footer>
       <span data-i18n="madeForFun">Made for fun</span> · <a href="https://www.stouras.com/">stouras.com</a>
@@ -671,6 +693,10 @@
   const winLineEl = document.getElementById("win-line");
   const winTimeEl = document.getElementById("win-time");
   const winBestEl = document.getElementById("win-best");
+  const howTitleEl = document.getElementById("how-title");
+  const howIntroEl = document.getElementById("how-intro");
+  const howListEl = document.getElementById("how-list");
+  const howOutroEl = document.getElementById("how-outro");
 
   // ---------- i18n (English / Greek) ----------
   const LANG_KEY = "sudoku.lang";
@@ -686,7 +712,16 @@
       madeForFun: "Made for fun", solved: "Solved! 🎉", newPuzzle: "New puzzle",
       winLine: function (d) { return "You completed the " + d + " puzzle in"; },
       newBest: "🏆 New best time!", bestLine: function (tm) { return "Best: " + tm; },
-      diffName: { easy: "easy", medium: "medium", hard: "hard" }
+      diffName: { easy: "easy", medium: "medium", hard: "hard" },
+      helpTitle: "How to play",
+      helpIntro: "Fill the 9×9 grid so that every row, every column and every 3×3 box contains the digits 1–9 with no repeats. Tap a cell, then tap a number (or type 1–9). The small number under each digit on the pad shows how many of it are still left to place.",
+      descUndo: "step back your last move.",
+      descErase: "clear the selected cell.",
+      descNotes: "toggle pencil-mark mode — jot the candidate numbers for a cell instead of a final answer.",
+      descHint: "fill in the correct number for the selected cell (or the first unsolved one).",
+      descPause: "hide the board and pause the timer; press it again to resume.",
+      descNew: "start a fresh puzzle at the selected difficulty.",
+      helpOutro: "Wrong entries turn red and add to your Mistakes count, your best time per difficulty is saved, and your game is kept automatically if you leave and come back. Use the ☀/🌙 button for a light or dark board and the flags to switch between English and Greek."
     },
     el: {
       tagline: "Συμπλήρωσε κάθε γραμμή, στήλη και τετράγωνο 3×3 με τα ψηφία 1–9.",
@@ -697,7 +732,16 @@
       madeForFun: "Φτιαγμένο για διασκέδαση", solved: "Λύθηκε! 🎉", newPuzzle: "Νέο παζλ",
       winLine: function (d) { return "Έλυσες το " + d + " παζλ σε"; },
       newBest: "🏆 Νέο ρεκόρ!", bestLine: function (tm) { return "Ρεκόρ: " + tm; },
-      diffName: { easy: "εύκολο", medium: "μεσαίο", hard: "δύσκολο" }
+      diffName: { easy: "εύκολο", medium: "μεσαίο", hard: "δύσκολο" },
+      helpTitle: "Πώς παίζεται",
+      helpIntro: "Συμπλήρωσε το πλέγμα 9×9 ώστε κάθε γραμμή, κάθε στήλη και κάθε τετράγωνο 3×3 να περιέχει τα ψηφία 1–9 χωρίς επαναλήψεις. Πάτησε ένα κελί και μετά έναν αριθμό (ή πληκτρολόγησε 1–9). Ο μικρός αριθμός κάτω από κάθε ψηφίο δείχνει πόσα από αυτό μένουν ακόμη να τοποθετηθούν.",
+      descUndo: "αναιρεί την τελευταία σου κίνηση.",
+      descErase: "καθαρίζει το επιλεγμένο κελί.",
+      descNotes: "ενεργοποιεί τις σημειώσεις — σημείωσε τους πιθανούς αριθμούς ενός κελιού αντί για οριστική απάντηση.",
+      descHint: "συμπληρώνει τον σωστό αριθμό στο επιλεγμένο κελί (ή στο πρώτο άλυτο).",
+      descPause: "κρύβει το ταμπλό και σταματά το χρονόμετρο· πάτησέ το ξανά για συνέχεια.",
+      descNew: "ξεκινά νέο παζλ στο επιλεγμένο επίπεδο δυσκολίας.",
+      helpOutro: "Οι λανθασμένες καταχωρήσεις γίνονται κόκκινες και προσμετρώνται στα «Λάθη», ο καλύτερος χρόνος ανά δυσκολία αποθηκεύεται και το παιχνίδι σου διατηρείται αυτόματα αν φύγεις και επιστρέψεις. Χρησιμοποίησε το κουμπί ☀/🌙 για φωτεινό ή σκούρο ταμπλό και τις σημαίες για εναλλαγή Αγγλικών/Ελληνικών."
     }
   };
   function t(key) { const d = I18N[lang] || I18N.en; return d[key] != null ? d[key] : I18N.en[key]; }
@@ -710,6 +754,22 @@
     });
     langEnBtn.classList.toggle("active", lang === "en");
     langElBtn.classList.toggle("active", lang === "el");
+    renderHelp();
+  }
+  // The how-to-play guide is built from the dictionary so each bullet's button
+  // name matches the real button label, and it re-renders on language switch.
+  function renderHelp() {
+    howTitleEl.textContent = t("helpTitle");
+    howIntroEl.textContent = t("helpIntro");
+    howOutroEl.textContent = t("helpOutro");
+    const items = [
+      [t("undo"), t("descUndo")], [t("erase"), t("descErase")],
+      [t("notes"), t("descNotes")], [t("hint"), t("descHint")],
+      [t("pause"), t("descPause")], [t("newGame"), t("descNew")]
+    ];
+    howListEl.innerHTML = items.map(function (it) {
+      return "<li><b>" + it[0] + "</b> — " + it[1] + "</li>";
+    }).join("");
   }
   function setLang(l) {
     if (l === lang) return;
