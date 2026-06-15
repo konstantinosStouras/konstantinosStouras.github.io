@@ -823,6 +823,7 @@
     if (timerId) clearInterval(timerId);
 
     const time = state.elapsed;
+    if (window.AppStats) AppStats.record({ diff: state.diff, secs: Math.round(time / 1000) });
     const key = bestKey(state.diff);
     const prev = localStorage.getItem(key);
     let isBest = false;
@@ -1174,5 +1175,162 @@
 </script>
 <!-- ===== end Account widget ===== -->
 <style>:root{--acct-accent:#2563eb;}</style>
+<!-- ============================================================
+     StatsCore — per-app, per-user play statistics.
+     Stored in localStorage, namespaced by app + signed-in Firebase uid
+     (stats.v1.<app>.<uid>), so every app keeps its own stats even though
+     the login is shared. Exposes window.AppStats:
+       .setApp(config)          configure metrics + recent table
+       .record({...})           append a play (no-op unless signed in)
+       .open()                  show the profile modal
+       .addMenuItem({...})      inject a "Statistics" item into a menu
+     ============================================================ -->
+<style>
+  .pfs-modal{ position:fixed; inset:0; z-index:2147483600; display:flex; align-items:center; justify-content:center; padding:16px;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  .pfs-modal[hidden]{ display:none; }
+  .pfs-backdrop{ position:absolute; inset:0; background:rgba(15,23,42,.55); -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px); }
+  .pfs-card{ position:relative; width:100%; max-width:560px; max-height:calc(100dvh - 32px); overflow:auto;
+    background:#fff; color:#111827; border-radius:18px; padding:24px 22px 22px; box-shadow:0 30px 80px rgba(0,0,0,.45);
+    animation:pfsIn .16s ease-out; }
+  @keyframes pfsIn{ from{ transform:translateY(8px); opacity:0 } to{ transform:none; opacity:1 } }
+  .pfs-x{ position:absolute; top:10px; right:12px; appearance:none; border:0; background:none; font-size:26px; line-height:1;
+    color:#9ca3af; cursor:pointer; width:40px; height:40px; border-radius:10px; }
+  .pfs-x:hover{ background:#f3f4f6; color:#111827; }
+  .pfs-head{ display:flex; align-items:center; gap:12px; }
+  .pfs-av{ width:44px; height:44px; border-radius:50%; background:var(--pfs-accent,#2563eb); color:#fff;
+    display:flex; align-items:center; justify-content:center; font-size:21px; flex:none; }
+  .pfs-who b{ font-size:16px; }
+  .pfs-who small{ display:block; color:#6b7280; font-size:12.5px; word-break:break-all; }
+  .pfs-title{ font-size:12px; font-weight:700; color:var(--pfs-accent,#2563eb); text-transform:uppercase; letter-spacing:.08em; margin:18px 0 10px; }
+  .pfs-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(118px,1fr)); gap:10px; }
+  .pfs-stat{ background:#f8fafc; border:1px solid #eef0f3; border-radius:12px; padding:12px 14px; }
+  .pfs-stat .k{ font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; }
+  .pfs-stat .v{ font-size:21px; font-weight:800; margin-top:3px; font-variant-numeric:tabular-nums; color:#111827; }
+  .pfs-recent{ margin-top:6px; width:100%; border-collapse:collapse; font-size:13.5px; }
+  .pfs-recent th{ text-align:left; color:#6b7280; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em; padding:6px 8px; border-bottom:1px solid #eef0f3; }
+  .pfs-recent td{ padding:8px; border-bottom:1px solid #f3f4f6; color:#1f2937; }
+  .pfs-empty{ background:#f8fafc; border:1px dashed #d1d5db; border-radius:12px; padding:22px; text-align:center; color:#6b7280; font-size:14px; }
+  .pfs-foot{ margin-top:14px; font-size:11.5px; color:#9ca3af; text-align:center; }
+  /* injected "Statistics" menu item — self-contained so it sits cleanly in any host menu */
+  .pfs-mi{ display:block; width:100%; text-align:left; appearance:none; border:0; background:none; cursor:pointer;
+    font:600 14px/1 inherit; color:inherit; padding:11px 10px; border-radius:9px; min-height:44px; }
+  .pfs-mi:hover{ background:rgba(125,125,125,.16); }
+  @media (max-width:560px){ .pfs-card{ border-radius:16px 16px 0 0; align-self:flex-end; max-width:none; padding-bottom:max(22px, env(safe-area-inset-bottom)); } .pfs-modal{ padding:0; align-items:flex-end; } }
+</style>
+<script>
+(function(){
+  var AppStats = window.AppStats = {
+    config:null, app:null, _uid:null,
+    setApp:function(cfg){ this.config=cfg; this.app=cfg.app; },
+    _key:function(){ return 'stats.v1.'+this.app+'.'+(this._uid||'guest'); },
+    plays:function(){ try{ return JSON.parse(localStorage.getItem(this._key()))||[]; }catch(e){ return []; } },
+    record:function(data){
+      if(!this._uid || !this.app) return;            // only signed-in users are tracked
+      var a=this.plays(); a.push(Object.assign({ts:Date.now()}, data||{}));
+      if(a.length>500) a=a.slice(-500);
+      try{ localStorage.setItem(this._key(), JSON.stringify(a)); }catch(e){}
+    },
+    open:function(){ render(); },
+    fmtDate:function(ts){ try{ var d=new Date(ts);
+      return d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' '+d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
+    }catch(e){ return ''; } },
+    addMenuItem:function(opts){
+      var tries=0;
+      (function attempt(){
+        var menu=document.querySelector(opts.container);
+        if(!menu){ if(tries++<60) setTimeout(attempt,150); return; }
+        if(menu.querySelector('.pfs-mi')) return;
+        var before = opts.before ? menu.querySelector(opts.before) : null;
+        var b=document.createElement('button');
+        b.type='button'; b.className='pfs-mi';
+        b.textContent=opts.label||'📊 Statistics';
+        b.addEventListener('click', function(ev){
+          ev.stopPropagation();
+          try{ menu.hidden=true; }catch(e){}
+          menu.classList.add('hidden');
+          if(typeof opts.onClick==='function') opts.onClick(); else AppStats.open();
+        });
+        menu.insertBefore(b, before);
+      })();
+    }
+  };
+
+  var overlay=null;
+  function build(){
+    overlay=document.createElement('div'); overlay.className='pfs-modal'; overlay.hidden=true;
+    overlay.innerHTML='<div class="pfs-backdrop" data-close></div>'
+      +'<div class="pfs-card" role="dialog" aria-modal="true">'
+      +'<button class="pfs-x" data-close aria-label="Close">×</button>'
+      +'<div class="pfs-head"><div class="pfs-av" data-av>👤</div>'
+      +'<div class="pfs-who"><b data-nick>You</b><small data-email></small></div></div>'
+      +'<div data-body></div><div class="pfs-foot" data-foot></div></div>';
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', function(e){ if(e.target.hasAttribute('data-close')) close(); });
+    document.addEventListener('keydown', function(e){ if(e.key==='Escape' && overlay && !overlay.hidden) close(); });
+  }
+  function close(){ if(overlay) overlay.hidden=true; }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function render(){
+    var cfg=AppStats.config; if(!cfg) return;
+    if(!overlay) build();
+    var u=(window.Account&&window.Account.user)||null;
+    overlay.querySelector('[data-nick]').textContent=(u&&u.nickname)||'You';
+    overlay.querySelector('[data-email]').textContent=(u&&u.email)||'';
+    overlay.querySelector('.pfs-card').style.setProperty('--pfs-accent', cfg.accent||'#2563eb');
+    var plays=AppStats.plays();
+    var html='<div class="pfs-title">'+esc(cfg.title||'Your stats')+'</div>';
+    if(!plays.length){
+      html+='<div class="pfs-empty">'+esc(cfg.emptyText||'No plays recorded yet — play a round to start your stats.')+'</div>';
+    } else {
+      html+='<div class="pfs-grid">';
+      (cfg.metrics||[]).forEach(function(m){ var v; try{ v=m.value(plays); }catch(e){ v='—'; }
+        html+='<div class="pfs-stat"><div class="k">'+esc(m.label)+'</div><div class="v">'+esc(v)+'</div></div>'; });
+      html+='</div>';
+      if(cfg.recent && cfg.recent.columns){
+        var rows=plays.slice().reverse().slice(0, cfg.recent.limit||8);
+        html+='<div class="pfs-title">Recent rounds</div><table class="pfs-recent"><thead><tr>';
+        cfg.recent.columns.forEach(function(c){ html+='<th>'+esc(c.label)+'</th>'; });
+        html+='</tr></thead><tbody>';
+        rows.forEach(function(p){ html+='<tr>';
+          cfg.recent.columns.forEach(function(c){ var cv; try{ cv=c.value(p); }catch(e){ cv=''; } html+='<td>'+esc(cv)+'</td>'; });
+          html+='</tr>'; });
+        html+='</tbody></table>';
+      }
+    }
+    overlay.querySelector('[data-body]').innerHTML=html;
+    overlay.querySelector('[data-foot]').textContent='Saved on this device for '+((u&&u.email)||'your account')+'.';
+    overlay.hidden=false;
+  }
+
+  function setUid(u){ AppStats._uid = u ? u.uid : null; }
+  if(window.Account && window.Account.ready) setUid(window.Account.user);
+  window.addEventListener('account-changed', function(e){ setUid(e.detail); });
+})();
+</script>
+<!-- ===== end StatsCore ===== -->
+<script>
+(function(){
+  function fmt(s){ s=Math.round(s); var m=Math.floor(s/60), x=s%60; return m+':'+(x<10?'0':'')+x; }
+  function bestT(p,d){ var e=p.filter(function(x){return x.diff===d;}); if(!e.length) return '—'; return fmt(Math.min.apply(null,e.map(function(x){return x.secs||0;}))); }
+  AppStats.setApp({
+    app:'sudoku', title:'Your Sudoku stats', accent:'#2563eb',
+    emptyText:'Solve a puzzle to start building your stats.',
+    metrics:[
+      {label:'Solved', value:function(p){ return p.length; }},
+      {label:'Best · Easy', value:function(p){ return bestT(p,'easy'); }},
+      {label:'Best · Medium', value:function(p){ return bestT(p,'medium'); }},
+      {label:'Best · Hard', value:function(p){ return bestT(p,'hard'); }},
+      {label:'Avg time', value:function(p){ return fmt(p.reduce(function(s,x){return s+(x.secs||0);},0)/p.length); }}
+    ],
+    recent:{ limit:8, columns:[
+      {label:'When', value:function(p){ return AppStats.fmtDate(p.ts); }},
+      {label:'Difficulty', value:function(p){ return p.diff||'—'; }},
+      {label:'Time', value:function(p){ return fmt(p.secs||0); }}
+    ]}
+  });
+  AppStats.addMenuItem({ container:'#acctRoot .acct-menu', before:'[data-act="logout"]', label:'📊 Statistics' });
+})();
+</script>
 </body>
 </html>
