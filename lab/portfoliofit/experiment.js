@@ -34,8 +34,8 @@
   // ---- Editable content defaults (admin can override via config/app) ----
   var DEFAULTS = {
     texts: {
-      welcomeTitle: 'PortfolioFit for Managers',
-      welcomeIntro: 'Welcome to <b>PortfolioFit for Managers</b>, a strategic project portfolio selection game.',
+      welcomeTitle: 'PortfolioFit',
+      welcomeIntro: 'Welcome to <i>PortfolioFit</i>, a strategic project portfolio selection game.',
       welcomeBody: [
         'In this game, you drag and drop project <b>bricks</b> of different shapes into a frame. Each brick carries a <b>dollar value</b>, representing its potential contribution to your portfolio.',
         'Your challenge is to <b>build smart</b>: bricks must fit entirely <b>within the frame</b> and <b>cannot overlap</b>. The strategic element: every <b>empty cell</b> left in the frame carries a <b>$1 penalty</b>. Maximise your <b>net value</b> (total value of placed bricks minus the penalty for empty cells).',
@@ -150,6 +150,7 @@
       + 'gap:10px;padding:6px 14px;background:#2b2b2b;color:#fff;font-family:Inter,sans-serif;font-size:13px;}'
       + '.pfx-topbar b{color:#f1c40f;}.pfx-topbar button{background:transparent;border:1px solid #555;color:#eee;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:12px;}'
       + 'body.pf-exp.pf-hastop{padding-top:42px;}'
+      + '.pfx-card.pfx-justify p{text-align:justify;}'
       + '.pfx-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;}';
     document.head.appendChild(el('style', { text: css }));
   }
@@ -286,7 +287,8 @@
       el('button', { class: 'pfx-btn', on: { click: startTraining } }, [cfg.texts.welcomeButton || 'Start training']),
       el('button', { class: 'pfx-btn sec', on: { click: showLogin } }, ['I already have an account'])
     ]));
-    showOverlay(card(cfg.texts.welcomeTitle, body));
+    var wc = card(cfg.texts.welcomeTitle, body); wc.classList.add('pfx-justify');
+    showOverlay(wc);
   }
 
   // ---- Phase: training --------------------------------------------------
