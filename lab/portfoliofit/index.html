@@ -1112,6 +1112,21 @@
       const puzzle = { rows: spec.rows, cols: spec.cols, region: new Set(spec.region), solution: spec.solution || [] };
       startRound(spec.diff, puzzle, spec.kappa, spec.tilings, spec.bestValue);
     }
+    // Load a puzzle for admin EVALUATION only — builds state and renders, but
+    // never starts the timer. Lets the admin open the solutions / kappa proof.
+    function loadPuzzleSpecPreview(spec) {
+      if (!spec) return;
+      const region = new Set(spec.region);
+      state = {
+        diff: spec.diff, rows: spec.rows, cols: spec.cols, region: region, solution: spec.solution || [],
+        kappa: spec.kappa, tilings: spec.tilings, bestValue: spec.bestValue,
+        pd: buildPlacements(region, allPieces()), occupied: new Map(),
+        pieces: allPieces().map((p, i) => ({ id: i, name: p.name, color: p.color, value: p.value, oris: p.oris, oriIndex: 0, placed: false, placedCells: null })),
+        selected: null, milestones: new Set(), timeNudges: new Set(), ended: true, wasFull: false, wasOptimal: false,
+        cs: cellSize(spec.rows, spec.cols)
+      };
+      renderBoard(); renderTray(); renderBoardMeta(); renderKPIs();
+    }
 
     function renderBoardMeta() {
       const t = state.tilings;
@@ -2013,6 +2028,9 @@
       isExperiment: function () { return !!window.PF_EXPERIMENT; },
       generatePuzzle: function (diff) { return generatePuzzleSpec(diff || 'easy'); },
       loadPuzzle: function (spec) { loadPuzzleSpec(spec); },
+      previewPuzzle: function (spec) { loadPuzzleSpecPreview(spec); },
+      showSolutions: function () { showSolutions(); },
+      showProof: function () { showProof(); },
       _onRoundEnd: null
     };
 

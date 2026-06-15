@@ -84,6 +84,7 @@
   function injectStyles() {
     var css = ''
       + '#acctRoot{display:none !important;}' // hide legacy snake login widget on the admin page
+      + '#infoOverlay{z-index:10050 !important;}' // game solutions/proof modal shows above the admin panel
       + '#pfa-root{--bg:#f6f3ee;--panel:#ffffff;--ink:#2b2b2b;--muted:#74726c;--line:#e7e2d8;--field:#ffffff;--fieldline:#e0dbd0;--accent:#e67e22;--accentd:#cf6f17;--qbg:#fcfbf7;position:fixed;inset:0;z-index:10000;background:var(--bg);overflow:auto;font-family:Inter,system-ui,sans-serif;color:var(--ink);}'
       + '#pfa-root.dark{--bg:#181818;--panel:#242424;--ink:#ececec;--muted:#9a978f;--line:#383838;--field:#2e2e2e;--fieldline:#474747;--qbg:#202020;}'
       + '#pfa-root *{box-sizing:border-box;}'
@@ -338,6 +339,7 @@
   function renderPuzzles(body) {
     var card = el('div', { class: 'pfa-card' });
     card.appendChild(el('p', { class: 'pfa-note', text: 'Generate puzzles, preview them, approve the ones you want, then freeze them as the active set. Every participant plays the frozen set in randomized order.' }));
+    card.appendChild(el('p', { class: 'pfa-note', html: '📄 <a href="https://www.stouras.com/lab/portfoliofit-testing/portfoliofit-difficulty.pdf" target="_blank" rel="noopener" style="color:var(--accent);">How the Sahni difficulty (κ) is measured (PDF note)</a>' }));
     if (!window.PFGame || !window.PFGame.generatePuzzle) {
       card.appendChild(el('p', { class: 'pfa-err', text: 'Puzzle generator not available. Open /lab/portfoliofit/?admin (the game must be on the page).' }));
       body.appendChild(card); return;
@@ -358,10 +360,15 @@
       var spec; try { spec = window.PFGame.generatePuzzle(diff); } catch (e) { spec = null; }
       preview.innerHTML = '';
       if (!spec) { preview.appendChild(el('p', { class: 'pfa-err', text: 'Generation failed; try again.' })); return; }
+      var solCount = (spec.tilings && spec.tilings.count != null) ? spec.tilings.count : null;
       preview.appendChild(el('div', { class: 'pfa-q' }, [
-        el('div', { class: 'pfa-note', text: diff.toUpperCase() + ' — ' + spec.region.length + ' cells, Sahni κ=' + spec.kappa + ', best $' + spec.bestValue }),
+        el('div', { class: 'pfa-note', text: diff.toUpperCase() + ' — ' + spec.region.length + ' cells, Sahni κ=' + spec.kappa + (solCount != null ? ' · ' + solCount + ' distinct solution' + (solCount === 1 ? '' : 's') : '') + ' · best $' + spec.bestValue }),
         puzzleGrid(spec),
-        el('div', { style: 'display:flex;gap:8px;margin-top:8px;' }, [
+        el('div', { style: 'display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;' }, [
+          el('button', { class: 'pfa-btn sec', on: { click: function () { try { window.PFGame.previewPuzzle(spec); window.PFGame.showSolutions(); } catch (e) {} } } }, ['📋 Full coverage solutions']),
+          el('button', { class: 'pfa-btn sec', on: { click: function () { try { window.PFGame.previewPuzzle(spec); window.PFGame.showProof(); } catch (e) {} } } }, ['🔍 Why κ = ? (proof)'])
+        ]),
+        el('div', { style: 'display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;' }, [
           el('button', { class: 'pfa-btn', on: { click: function () { approvedPuzzles.push(spec); preview.innerHTML = ''; renderApproved(); toast('Added to set.'); } } }, ['Approve & add']),
           el('button', { class: 'pfa-btn sec', on: { click: function () { generate(diff); } } }, ['Regenerate']),
           el('button', { class: 'pfa-btn sec', on: { click: function () { preview.innerHTML = ''; } } }, ['Discard'])
