@@ -151,14 +151,14 @@
   /* board: classic chess squares on a wood frame, matching the reference */
   .board{
     position:relative;width:100%;max-width:720px;margin:0 auto;
-    background:#8b7355;padding:10px;border-radius:6px;
-    border-bottom:5px solid #6b5345;border-right:5px solid #6b5345;
+    background:#8b7355;padding:6px;border-radius:6px;
+    border-bottom:4px solid #6b5345;border-right:4px solid #6b5345;
     box-shadow:0 12px 30px rgba(74,52,30,0.20);
     touch-action:manipulation;user-select:none;
   }
   .play{position:relative;width:100%;}
   .slots{position:absolute;inset:0;display:grid;}
-  .slot{border-radius:5px;border:2px solid #8b7355;transition:transform .12s ease, box-shadow .12s ease;}
+  .slot{border-radius:0;border:0;transition:transform .12s ease, box-shadow .12s ease;}
   .slot.p0{background:#f0d9b5;}
   .slot.p1{background:#b58863;}
   .slot.target{cursor:pointer;}
