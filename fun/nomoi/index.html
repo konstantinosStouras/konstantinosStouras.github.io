@@ -437,14 +437,17 @@ function openNick(){
   if(ex.length){
     box.innerHTML='<div class="lbl">Ή συνέχισε ως</div><div class="chips">'+
       ex.map(u=>`<button type="button" class="chip" data-u="${escapeHtml(u)}">${escapeHtml(u)}</button>`).join('')+'</div>';
-    box.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{ setUser(c.dataset.u); closeNick(); if(mode==='progress') renderProgress(); });
+    box.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{ switchUser(c.dataset.u); });
   } else box.innerHTML='';
   nickModal.classList.remove('hidden');
   setTimeout(()=>nickInput.focus(),60);
 }
 function closeNick(){ nickModal.classList.add('hidden'); }
+// switching player must start the new player from a clean slate: their own
+// data only, and a fresh quiz session (no carried-over streak/score/history)
+function switchUser(name){ setUser(name); closeNick(); setMode(mode); }
 document.getElementById('nickForm').addEventListener('submit', e=>{
-  e.preventDefault(); setUser(nickInput.value); closeNick(); if(mode==='progress') renderProgress();
+  e.preventDefault(); switchUser(nickInput.value);
 });
 document.getElementById('playerBadge').onclick=openNick;
 
