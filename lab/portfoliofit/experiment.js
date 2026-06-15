@@ -332,8 +332,9 @@
     S.phase = 'training';
     S.roundIndex = 0;
     S.currentPuzzleId = 'training';
+    var tdiff = (cfg.settings && cfg.settings.trainingDifficulty) || 'easy';
     window.PFGame._onRoundEnd = onTrainingEnd;
-    window.PFGame.newGame(cfg.settings.trainingDifficulty || 'easy');
+    window.PFGame.newGame(tdiff, limitFor(tdiff));
     showGameSubmit('Continue to Registration');
   }
   function onTrainingEnd(metrics) {
@@ -507,6 +508,11 @@
     for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; }
     return a;
   }
+  // Per-puzzle time budget (seconds): admin-configured if present, else built-in.
+  function limitFor(diff) {
+    var tl = (cfg.settings && cfg.settings.timeLimits) || (window.PF_DEFAULTS && window.PF_DEFAULTS.settings && window.PF_DEFAULTS.settings.timeLimits) || { easy: 120, hard: 180 };
+    return (tl[diff] != null) ? tl[diff] : (diff === 'hard' ? 180 : 120);
+  }
   function money(v) { v = Math.round(v || 0); return (v < 0 ? '-$' : '$') + Math.abs(v); }
   function fmtTime(s) { s = Math.max(0, Math.round(s || 0)); var m = Math.floor(s / 60), ss = s % 60; return (m < 10 ? '0' : '') + m + ':' + (ss < 10 ? '0' : '') + ss; }
 
@@ -537,8 +543,9 @@
     S.roundIndex = S.mainIndex + 1;
     S.currentPuzzleId = item.id || ('main-' + S.roundIndex + '-' + item.diff);
     window.PFGame._onRoundEnd = onMainRoundEnd;
-    if (item.spec) window.PFGame.loadPuzzle(item.spec);
-    else window.PFGame.newGame(item.diff);
+    var lim = limitFor(item.diff);
+    if (item.spec) window.PFGame.loadPuzzle(item.spec, lim);
+    else window.PFGame.newGame(item.diff, lim);
     showGameSubmit('Submit portfolio & continue');
   }
   function onMainRoundEnd(metrics) {

@@ -1048,17 +1048,24 @@
       return bestOk || bestAny || evaluate(generatePuzzle(target));
     }
 
-    function newGame(diff) {
+    function newGame(diff, limit) {
       const picked = pickPuzzle(diff);
       if (!picked || !picked.puzzle) return;
-      startRound(diff, picked.puzzle, picked.kappa, picked.tilings, picked.bestValue);
+      startRound(diff, picked.puzzle, picked.kappa, picked.tilings, picked.bestValue, limit);
+    }
+    // Per-round time budget: an explicit override (admin-set) if provided,
+    // otherwise the built-in DIFFS limit for the difficulty.
+    function roundLimit() {
+      if (state && state.limitOverride != null) return state.limitOverride;
+      return DIFFS[state ? state.diff : 'easy'].limit;
     }
 
     // Build and start a round from an explicit puzzle. Used by random
     // generation (newGame) and by admin-frozen puzzles (loadPuzzleSpec).
-    function startRound(diff, puzzle, kappa, tilings, bestValue) {
+    function startRound(diff, puzzle, kappa, tilings, bestValue, limit) {
       state = {
         diff: diff,
+        limitOverride: (limit != null ? limit : null),
         rows: puzzle.rows,
         cols: puzzle.cols,
         region: puzzle.region,
@@ -1107,10 +1114,10 @@
       };
     }
     // Start a round from a frozen puzzle spec (region stored as an array).
-    function loadPuzzleSpec(spec) {
+    function loadPuzzleSpec(spec, limit) {
       if (!spec) return;
       const puzzle = { rows: spec.rows, cols: spec.cols, region: new Set(spec.region), solution: spec.solution || [] };
-      startRound(spec.diff, puzzle, spec.kappa, spec.tilings, spec.bestValue);
+      startRound(spec.diff, puzzle, spec.kappa, spec.tilings, spec.bestValue, limit);
     }
     // Load a puzzle for admin EVALUATION only — builds state and renders, but
     // never starts the timer. Lets the admin open the solutions / kappa proof.
@@ -1507,7 +1514,7 @@
       if (timer.interval) { clearInterval(timer.interval); timer.interval = null; }
     }
     function updateTimerUI() {
-      const limit = DIFFS[state ? state.diff : 'easy'].limit;
+      const limit = roundLimit();
       const remaining = Math.max(0, limit - timer.elapsed);
       $('#elapsed').textContent = fmt(remaining);
       const pct = Math.max(0, (remaining / limit) * 100);
@@ -2015,8 +2022,8 @@
         fitness: computeFitness(), bestValue: state.bestValue,
         placed: occ, total: total, kappa: state.kappa,
         ended: !!state.ended, time: timer ? timer.elapsed : 0,
-        limit: (DIFFS[state.diff] ? DIFFS[state.diff].limit : 0),
-        remaining: Math.max(0, (DIFFS[state.diff] ? DIFFS[state.diff].limit : 0) - (timer ? timer.elapsed : 0))
+        limit: roundLimit(),
+        remaining: Math.max(0, roundLimit() - (timer ? timer.elapsed : 0))
       };
     }
     function pfPlacements() {
@@ -2026,7 +2033,7 @@
       return out;
     }
     window.PFGame = {
-      newGame: function (diff) { newGame(diff || 'easy'); },
+      newGame: function (diff, limit) { newGame(diff || 'easy', limit); },
       restart: function () { var b = $('#restartBtn'); if (b) b.click(); },
       endRound: function () { endRound(); },
       getMetrics: pfMetrics,
@@ -2034,7 +2041,7 @@
       hideWin: function () { hideWin(); },
       isExperiment: function () { return !!window.PF_EXPERIMENT; },
       generatePuzzle: function (diff) { return generatePuzzleSpec(diff || 'easy'); },
-      loadPuzzle: function (spec) { loadPuzzleSpec(spec); },
+      loadPuzzle: function (spec, limit) { loadPuzzleSpec(spec, limit); },
       previewPuzzle: function (spec) { loadPuzzleSpecPreview(spec); },
       showSolutions: function () { showSolutions(); },
       showProof: function () { showProof(); },
