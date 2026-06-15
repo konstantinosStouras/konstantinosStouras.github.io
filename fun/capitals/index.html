@@ -126,9 +126,14 @@
   .account .pill { appearance: none; cursor: pointer; font-family: inherit; line-height: 1.4; transition: background .15s ease, border-color .15s ease; }
   .account .pill:hover { background: var(--panel-2); border-color: #2b4a63; }
   .account .pill .caret { color: var(--muted); font-size: 10px; }
-  .account .loginpill { cursor: pointer; font-weight: 600; }
-  .account .loginpill.primary { background: linear-gradient(180deg, var(--accent), #0ea5e9); border-color: transparent; color: #04222e; }
-  .account .loginpill.primary:hover { filter: brightness(1.05); border-color: transparent; }
+  .account .loginpill { cursor: pointer; font-weight: 700; letter-spacing: .2px; transition: transform .14s ease, background .18s ease, border-color .18s ease, filter .18s ease, box-shadow .18s ease; }
+  .account .loginpill:hover { transform: translateY(-1px); }
+  .account .loginpill:active { transform: translateY(0) scale(.97); }
+  #capLogin { background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.26); color: #fff; }
+  #capLogin:hover { background: rgba(255,255,255,.2); border-color: rgba(255,255,255,.42); }
+  .account .loginpill.primary { background: #fff; border-color: #fff; color: #0e7490; box-shadow: 0 4px 14px rgba(0,0,0,.28); }
+  .account .loginpill.primary:hover { filter: brightness(.96); border-color: #fff; }
+  .account .loginpill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .account-menu {
     position: absolute; right: 0; top: calc(100% + 6px); z-index: 60;
     min-width: 190px; max-width: calc(100vw - 24px); padding: 6px;
@@ -537,7 +542,8 @@
           <h3 data-i18n="whereIs">Where in the world</h3>
           <div class="map-box" id="mapBox"></div>
           <div class="map-note" id="mapNote"></div>
-          <div class="map-credit" data-i18n="mapCredit">Map: Al MacDonald / F. Lekschas · CC BY-SA 3.0</div>
+          <!-- Map attribution (hidden from the page at the owner's request).
+               World map by Al MacDonald / F. Lekschas, licensed CC BY-SA 3.0. -->
         </div>
 
         <div class="facts">
@@ -1218,17 +1224,28 @@
       var nodes = svg.querySelectorAll('[id="' + cc + '"]');
       if (!nodes.length) { els.mapNote.textContent = t("notOnMap"); return; }
       els.mapNote.textContent = "";
-      var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      // Highlight the matched country (and only it).
+      Array.prototype.forEach.call(nodes, function (n) { n.classList.add("hl"); });
+      // Drop the locator on the country's MAIN landmass — the single largest
+      // sub-path by bounding-box area. Many countries are a <g> of scattered
+      // pieces (e.g. France + its overseas territories); using the union centre
+      // would float the marker into the ocean/another continent.
+      var leaves = [];
       Array.prototype.forEach.call(nodes, function (n) {
-        n.classList.add("hl");
+        var tag = (n.tagName || "").toLowerCase();
+        if (tag === "path") leaves.push(n);
+        if (n.querySelectorAll) Array.prototype.forEach.call(n.querySelectorAll("path"), function (p) { leaves.push(p); });
+      });
+      if (!leaves.length) leaves = Array.prototype.slice.call(nodes);
+      var cx, cy, bestArea = -1;
+      leaves.forEach(function (p) {
         try {
-          var b = n.getBBox();
-          x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y);
-          x1 = Math.max(x1, b.x + b.width); y1 = Math.max(y1, b.y + b.height);
+          var b = p.getBBox();
+          var area = b.width * b.height;
+          if (area > bestArea) { bestArea = area; cx = b.x + b.width / 2; cy = b.y + b.height / 2; }
         } catch (e) {}
       });
-      if (!isFinite(x0)) { els.mapNote.textContent = t("notOnMap"); return; }
-      var cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+      if (bestArea < 0) { els.mapNote.textContent = t("notOnMap"); return; }
       var g = document.createElementNS(SVGNS, "g");
       g.setAttribute("class", "map-marker");
       var ring = document.createElementNS(SVGNS, "circle");
@@ -1491,7 +1508,13 @@
       buildRegionSelect();
       updateFooter();
       updateWho(); // keep the "Guest" label in the right language
-      if (current) { if (solved) renderRevealText(); else renderQuestionView(); }
+      if (current) {
+        // Always re-translate the question header (region + country) so it never
+        // stays in the previous language — including while an answer is revealed.
+        els.qRegion.textContent = regionLabel(current.region);
+        els.qText.innerHTML = t("qText")(escapeHtml(cName(current)));
+        if (solved) renderRevealText(); else renderQuestionView();
+      }
       if (!els.statsOverlay.classList.contains("hidden")) openStats();
       if (!els.boardOverlay.classList.contains("hidden")) renderBoard();
     }

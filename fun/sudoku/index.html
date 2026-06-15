@@ -920,16 +920,18 @@
   }
   .acct-chip{
     appearance:none; cursor:pointer; border:0; border-radius:999px;
-    font:600 14px/1 inherit; padding:10px 16px; min-height:40px;
-    display:inline-flex; align-items:center; gap:6px;
-    box-shadow:0 2px 10px rgba(0,0,0,.18); transition:transform .06s ease, filter .15s ease, background .15s ease;
-    white-space:nowrap; -webkit-tap-highlight-color:transparent; touch-action:manipulation;
+    font:700 13.5px/1 inherit; letter-spacing:.2px; padding:0 16px; height:40px;
+    display:inline-flex; align-items:center; gap:7px; white-space:nowrap;
+    -webkit-tap-highlight-color:transparent; touch-action:manipulation;
+    transition:transform .14s ease, box-shadow .18s ease, background .18s ease, border-color .18s ease, filter .18s ease;
   }
-  .acct-chip:active{ transform:translateY(1px); }
-  .acct-ghost{ background:#fff; color:#1f2937; border:1px solid rgba(0,0,0,.12); }
-  .acct-ghost:hover{ background:#f3f4f6; }
-  .acct-solid{ background:var(--acct-accent); color:var(--acct-accent-ink); }
-  .acct-solid:hover{ filter:brightness(1.05); }
+  .acct-chip:hover{ transform:translateY(-1px); }
+  .acct-chip:active{ transform:translateY(0) scale(.97); }
+  .acct-chip:focus-visible{ outline:2px solid rgba(255,255,255,.85); outline-offset:2px; }
+  .acct-ghost{ background:rgba(255,255,255,.12); color:#fff; border:1px solid rgba(255,255,255,.30); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); box-shadow:0 2px 10px rgba(0,0,0,.22); }
+  .acct-ghost:hover{ background:rgba(255,255,255,.22); border-color:rgba(255,255,255,.5); }
+  .acct-solid{ background:#fff; color:var(--acct-accent); border:1px solid #fff; box-shadow:0 4px 14px rgba(0,0,0,.25); }
+  .acct-solid:hover{ filter:brightness(.97); box-shadow:0 8px 20px rgba(0,0,0,.3); }
   .acct-acc{ position:relative; }
   .acct-pill .acct-av{ font-size:15px; }
   .acct-pill .acct-name{ max-width:34vw; overflow:hidden; text-overflow:ellipsis; }
@@ -982,7 +984,7 @@
   .acct-switch a:hover{ text-decoration:underline; }
   /* phones */
   @media (max-width:520px){
-    .acct-chip{ padding:9px 14px; font-size:13.5px; }
+    .acct-chip{ height:36px; padding:0 13px; font-size:13px; gap:6px; }
     .acct-pill .acct-name{ max-width:26vw; }
     .acct-card{ border-radius:16px 16px 0 0; max-width:none; align-self:flex-end; padding-bottom:max(22px, env(safe-area-inset-bottom)); animation:acctUp .18s ease-out; }
     .acct-modal{ padding:0; align-items:flex-end; }
@@ -1171,6 +1173,6 @@
 })();
 </script>
 <!-- ===== end Account widget ===== -->
-<style>:root{--acct-accent:#3b82f6;}</style>
+<style>:root{--acct-accent:#2563eb;}</style>
 </body>
 </html>
