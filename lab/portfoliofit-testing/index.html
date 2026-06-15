@@ -1,0 +1,2396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>PortfolioFit: Project Portfolio Selection, the packing game</title>
+  <meta name="description" content="PortfolioFit: a management-training game for project portfolio selection. Pick the right projects and pack them into the frame to maximise net value before the timer runs out. A hands-on take on the knapsack problem." />
+  <link rel="canonical" href="https://www.stouras.com/lab/portfoliofit-testing/" />
+
+  <!-- Open Graph: link previews on Messenger, WhatsApp, Viber, Facebook, LinkedIn, etc. -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="stouras.com" />
+  <meta property="og:title" content="PortfolioFit — the project portfolio packing game" />
+  <meta property="og:description" content="Pick the right projects and pack them to maximise net value before the timer runs out — a hands-on take on the knapsack problem." />
+  <meta property="og:url" content="https://www.stouras.com/lab/portfoliofit-testing/" />
+  <meta property="og:image" content="https://www.stouras.com/lab/portfoliofit-testing/og-image.jpg" />
+  <meta property="og:image:secure_url" content="https://www.stouras.com/lab/portfoliofit-testing/og-image.jpg" />
+  <meta property="og:image:type" content="image/jpeg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="PortfolioFit — project portfolio selection, the packing game." />
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="PortfolioFit — the project portfolio packing game" />
+  <meta name="twitter:description" content="Pick the right projects and pack them to maximise net value before the timer runs out." />
+  <meta name="twitter:image" content="https://www.stouras.com/lab/portfoliofit-testing/og-image.jpg" />
+
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%23e67e22'/%3E%3Crect%20x='14'%20y='14'%20width='72'%20height='72'%20rx='12'%20fill='%23fff8ee'/%3E%3Crect%20x='26'%20y='26'%20width='48'%20height='48'%20rx='8'%20fill='%232ecc71'/%3E%3Ctext%20x='50'%20y='69'%20font-size='44'%20font-weight='800'%20text-anchor='middle'%20fill='%23ffffff'%20font-family='Arial,Helvetica,sans-serif'%3E%24%3C/text%3E%3C/svg%3E" />
+  <link rel="alternate icon" type="image/png" href="/images/KIS_favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%23e67e22'/%3E%3Crect%20x='14'%20y='14'%20width='72'%20height='72'%20rx='12'%20fill='%23fff8ee'/%3E%3Crect%20x='26'%20y='26'%20width='48'%20height='48'%20rx='8'%20fill='%232ecc71'/%3E%3Ctext%20x='50'%20y='69'%20font-size='44'%20font-weight='800'%20text-anchor='middle'%20fill='%23ffffff'%20font-family='Arial,Helvetica,sans-serif'%3E%24%3C/text%3E%3C/svg%3E" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #f6f3ee;
+      --panel: #ffffff;
+      --ink: #2b2b2b;
+      --muted: #74726c;
+      --line: #e7e2d8;
+      --accent: #e67e22;
+      --accent-dark: #cf6f17;
+      --good: #2ecc71;
+      --bad: #e74c3c;
+      --board-bg: #efe9dd;
+      --void: transparent;
+      --cell: #fbf8f1;
+      --cell-line: #d9d2c4;
+      --shadow: 0 10px 30px rgba(60, 45, 20, 0.10);
+      --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+        'Helvetica Neue', Arial, sans-serif;
+      --font-display: 'Space Grotesk', var(--font-ui);
+    }
+
+    html, body { height: 100%; }
+    html { overflow-x: hidden; }   /* belt-and-braces: never allow sideways scroll */
+    body {
+      font-family: var(--font-ui);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+      -webkit-tap-highlight-color: transparent; /* no blue flash on tap (mobile) */
+      background: radial-gradient(1200px 600px at 50% -10%, #fff7ec 0%, var(--bg) 60%);
+      color: var(--ink);
+      min-height: 100vh;
+      min-height: 100dvh;            /* track the dynamic viewport (mobile toolbars) */
+      /* Respect notch / home-indicator safe areas on iOS in any orientation. */
+      padding: 22px max(16px, env(safe-area-inset-right)) max(48px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+      line-height: 1.5;
+    }
+    /* Snappy taps (no 300ms delay), and don't let the OS hijack game gestures. */
+    .btn, .seg button, .piece, .cell.play, .kstat, .netcard, .calc-pad button { touch-action: manipulation; }
+    .board, .tray, .controls, .seg, .piece-actions, .hint-row { -webkit-user-select: none; user-select: none; }
+
+    .container { max-width: 980px; margin: 0 auto; }
+
+    header.app { text-align: center; margin-bottom: 18px; }
+    header.app .badge {
+      display: inline-block; font-size: 12px; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--accent-dark); font-weight: 700;
+      background: #fbe7d2; padding: 4px 10px; border-radius: 999px; margin-bottom: 10px;
+    }
+    header.app h1 {
+      font-family: var(--font-display);
+      font-size: clamp(1.85rem, 5vw, 2.7rem); font-weight: 700; letter-spacing: -0.5px;
+      margin-bottom: 6px;
+    }
+    header.app h1 .dot { color: var(--accent); }
+    header.app p.sub { color: var(--muted); max-width: 44rem; margin: 0 auto; font-size: 15px; line-height: 1.55; }
+
+    .controls {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+      justify-content: center; margin: 18px 0 14px;
+    }
+    .seg { display: inline-flex; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 4px; box-shadow: var(--shadow); }
+    .seg button {
+      border: none; background: transparent; color: var(--muted); font-weight: 600;
+      font-size: 13px; padding: 8px 12px; border-radius: 9px; cursor: pointer; transition: .15s;
+    }
+    .seg button.active { background: var(--accent); color: #fff; box-shadow: 0 3px 10px rgba(230,126,34,.35); }
+    .seg button:not(.active):hover { color: var(--ink); }
+
+    .btn {
+      border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+      font-weight: 600; font-size: 13px; padding: 9px 14px; border-radius: 11px;
+      cursor: pointer; box-shadow: var(--shadow); transition: .15s; white-space: nowrap;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+    .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent-dark); }
+    .btn.primary:hover { background: var(--accent-dark); }
+    .btn.ghost { background: transparent; box-shadow: none; }
+
+    /* Timer */
+    .timer-wrap { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; margin-bottom: 16px; }
+    .timer-pill {
+      display: inline-flex; align-items: baseline; gap: 8px; background: var(--panel);
+      border: 1px solid var(--line); border-radius: 12px; padding: 8px 14px; box-shadow: var(--shadow);
+      font-variant-numeric: tabular-nums;
+    }
+    .timer-pill .label { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+    .timer-pill .time { font-family: var(--font-display); font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .sand {
+      flex: 1 1 220px; max-width: 360px; height: 12px; background: #ece6da; border-radius: 999px;
+      overflow: hidden; border: 1px solid var(--line);
+    }
+    .sand > div { height: 100%; width: 100%; background: linear-gradient(90deg, #2ecc71, #f1c40f); transition: width .35s linear, background .35s; border-radius: 999px; }
+
+    /* KPI dashboard (mirrors the Tetris app) */
+    .dash { display: flex; gap: 14px; margin-bottom: 16px; align-items: stretch; }
+    .netcard {
+      flex: 0 0 200px; background: var(--panel); border: 1px solid var(--line);
+      border-left: 5px solid var(--accent); border-radius: 16px; box-shadow: var(--shadow);
+      padding: 14px 18px; display: flex; flex-direction: column; justify-content: center;
+      align-items: center; text-align: center; cursor: help;
+    }
+    .netcard-label { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: #2f80ed; font-weight: 700; }
+    .netcard-amount { font-family: var(--font-display); font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 4px; letter-spacing: -0.5px; }
+    .netcard-amount.neg { color: var(--bad); }
+    .netcard-amount.pos { color: var(--good); }
+    .kpi-panel {
+      flex: 1 1 auto; background: var(--panel); border: 1px solid var(--line);
+      border-radius: 16px; box-shadow: var(--shadow); padding: 14px 18px;
+    }
+    .kpi-panel h3 { font-size: 17px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; color: var(--ink); }
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+    .kstat {
+      background: #faf8f3; border: 1px solid var(--line); border-radius: 12px; padding: 10px 13px;
+      display: flex; flex-direction: column; gap: 4px; cursor: help; transition: .12s; justify-content: flex-start;
+    }
+    .kstat:hover, .kstat:focus { background: #fff5ea; border-color: #f1d8b6; outline: none; transform: translateY(-1px); }
+    .kk { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; }
+    .kv { font-family: var(--font-display); font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); line-height: 1.1; }
+    .kv.pos { color: var(--good); } .kv.neg { color: var(--bad); }
+    .kbar { height: 5px; background: #e9e2d4; border-radius: 999px; overflow: hidden; margin-top: 3px; }
+    .kbar > div { height: 100%; width: 0%; background: linear-gradient(90deg, #3498db, #2ecc71); border-radius: 999px; transition: width .3s; }
+    .netcard.neg { border-left-color: var(--bad); background: #fdeceb; }
+    .netcard.pos { border-left-color: var(--good); background: #eafaf1; }
+
+    /* Hover/tap explanation popup */
+    .kpi-tip {
+      position: fixed; z-index: 60; max-width: 280px; background: #2b2b2b; color: #f6f3ee;
+      font-size: 12.5px; line-height: 1.45; padding: 9px 12px; border-radius: 9px;
+      box-shadow: 0 10px 28px rgba(0,0,0,.28); pointer-events: none; opacity: 0;
+      transform: translateY(4px); transition: opacity .12s, transform .12s; visibility: hidden;
+    }
+    .kpi-tip.show { opacity: 1; transform: translateY(0); visibility: visible; }
+
+    /* Tools: calculator + notes */
+    .tools { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+    @media (max-width: 880px) { .tools { grid-template-columns: 1fr; } }
+    .tool-h { font-size: 18px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+    .calc-display {
+      background: #f8f9fa; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px;
+      min-height: 64px; display: flex; flex-direction: column; justify-content: center; align-items: flex-end;
+      font-family: 'SF Mono', Consolas, 'Liberation Mono', monospace; margin-bottom: 10px;
+    }
+    .calc-display.err { border-color: var(--bad); }
+    .calc-expr { font-size: 14px; color: var(--muted); width: 100%; text-align: right; word-break: break-all; min-height: 18px; }
+    .calc-result { font-family: var(--font-display); font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); width: 100%; text-align: right; word-break: break-all; }
+    .calc-display.err .calc-result { color: var(--bad); }
+    .calc-input {
+      width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
+      font-size: 16px; font-family: inherit; margin-bottom: 10px; box-sizing: border-box;  /* 16px avoids iOS focus zoom */
+    }
+    .calc-input:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+    .calc-pad { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+    .calc-pad button {
+      padding: 11px 0; border: 1px solid var(--line); background: var(--panel); border-radius: 10px;
+      font-size: 15px; font-weight: 700; cursor: pointer; color: var(--ink); transition: .1s;
+    }
+    .calc-pad button:hover { background: #f2ede2; transform: translateY(-1px); }
+    .calc-pad button.op { color: var(--accent-dark); }
+    .calc-pad button.eq { background: var(--accent); color: #fff; border-color: var(--accent-dark); }
+    .calc-pad button.clr { color: var(--bad); }
+    .calc-pad button.wide { grid-column: span 2; }
+    .calc-history { margin-top: 10px; font-size: 12px; color: var(--muted); max-height: 84px; overflow-y: auto; }
+    .calc-history div { padding: 3px 0; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+
+    .notes-list {
+      height: 130px; overflow-y: auto; margin-bottom: 12px; padding: 8px 10px;
+      background: #f8f9fa; border: 1px solid var(--line); border-radius: 10px; scroll-behavior: smooth;
+    }
+    .notes-list:empty::before { content: 'No notes yet. Write your strategy below.'; color: var(--muted); font-size: 13px; font-style: italic; }
+    .note-item { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+    .note-item:last-child { margin-bottom: 0; border-bottom: none; }
+    .note-meta { font-size: 11px; color: var(--muted); font-weight: 600; margin-bottom: 3px; display: flex; justify-content: space-between; gap: 8px; }
+    .note-meta button { border: none; background: none; color: var(--bad); cursor: pointer; font-size: 11px; padding: 0; }
+    .note-text { font-size: 13.5px; color: var(--ink); line-height: 1.4; word-break: break-word; white-space: pre-wrap; }
+    .notes-input {
+      width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
+      font-size: 16px; font-family: inherit; resize: vertical; box-sizing: border-box; margin-bottom: 10px;  /* 16px avoids iOS focus zoom */
+    }
+    .notes-input:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+    .notes-add { width: 100%; }
+
+    /* Layout: two columns on laptop/large tablet, single column below. */
+    .game {
+      display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start;
+    }
+    @media (max-width: 880px) { .game { grid-template-columns: 1fr; } }
+
+    .card {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
+      box-shadow: var(--shadow); padding: 16px;
+    }
+    .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 12px; }
+
+    .board-card { display: flex; flex-direction: column; align-items: center; }
+    .board-stage { background: var(--board-bg); border-radius: 14px; padding: 14px; display: inline-block; max-width: 100%; overflow: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+    .board { display: grid; gap: 3px; }
+    .cell {
+      border-radius: 5px; position: relative; transition: background .08s, box-shadow .08s;
+    }
+    .cell.void { background: transparent; }
+    .cell.play {
+      background: var(--cell); box-shadow: inset 0 0 0 1px var(--cell-line);
+    }
+    .cell.filled { box-shadow: inset 0 0 0 1px rgba(0,0,0,.12), 0 1px 2px rgba(0,0,0,.18); cursor: pointer; }
+    .cell.filled::after {
+      content: ''; position: absolute; inset: 3px; border-radius: 3px;
+      background: linear-gradient(160deg, rgba(255,255,255,.35), rgba(255,255,255,0) 55%);
+      pointer-events: none;
+    }
+    .cell.preview-ok { box-shadow: inset 0 0 0 2px var(--good); }
+    .cell.preview-bad { box-shadow: inset 0 0 0 2px var(--bad); background: #fbe6e2; }
+    /* Dollar-value badge centered on a placed brick's anchor cell. Scaled to the
+       cell size in JS so it stays readable on laptop, tablet and mobile. */
+    .cell-val {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      z-index: 3; pointer-events: none; white-space: nowrap;
+      font-family: var(--font-display); font-weight: 700; line-height: 1.2; letter-spacing: -.02em;
+      background: #fff; color: #14100a; border-radius: 6px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.45), 0 0 0 1px rgba(0,0,0,.08);
+      font-variant-numeric: tabular-nums;
+    }
+    .cell.play { cursor: pointer; }
+
+    /* Tray */
+    .tray { display: flex; flex-wrap: wrap; gap: 12px; }
+    .piece {
+      border: 2px solid transparent; border-radius: 12px; padding: 8px; cursor: pointer;
+      background: #faf7f0; transition: .12s; display: inline-flex; flex-direction: column; align-items: center; gap: 6px;
+    }
+    .piece:hover { background: #f2ede2; }
+    .piece.selected { border-color: var(--accent); background: #fff5ea; box-shadow: 0 4px 14px rgba(230,126,34,.25); }
+    .piece.used { opacity: .35; filter: grayscale(.4); cursor: default; }
+    .piece.used:hover { background: #faf7f0; }
+    .tray-note { font-size: 11.5px; color: var(--muted); margin-top: 10px; }
+    .piece-grid { display: grid; gap: 2px; }
+    .pc { border-radius: 3px; }
+    .pc.on { box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
+    .piece .plabel { display: flex; flex-direction: column; align-items: center; gap: 1px; line-height: 1.15; }
+    .piece .pname { font-size: 11.5px; color: var(--ink); font-weight: 700; letter-spacing: .02em; }
+    .piece .pval { font-family: var(--font-display); font-size: 11px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+    .arrow-hint { font-size: 12.5px; color: var(--muted); margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+    .arrow-hint .keys { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+    .touch-only { display: none; }
+    .piece-actions { display: flex; gap: 8px; margin-bottom: 12px; }
+    .piece-actions .btn { flex: 1; text-align: center; }
+    .hint-row { display: flex; gap: 8px; margin-top: 12px; }
+    .hint-row .btn { flex: 1; }
+
+    .help { font-size: 12.5px; color: var(--muted); margin-top: 14px; }
+    .help kbd {
+      background: #efe9dd; border: 1px solid var(--line); border-bottom-width: 2px;
+      border-radius: 5px; padding: 1px 6px; font-family: inherit; font-size: 11px; font-weight: 700; color: var(--ink);
+    }
+
+    .board-meta {
+      margin-top: 12px; font-size: 12.5px; color: var(--muted); text-align: center;
+      background: #f3eee3; border: 1px solid var(--line); border-radius: 999px;
+      padding: 5px 14px; cursor: help; font-variant-numeric: tabular-nums;
+    }
+    .board-meta b { color: var(--accent-dark); font-weight: 800; }
+    .board-meta:hover, .board-meta:focus { background: #ece5d6; outline: none; }
+    .board-meta .meta-info { color: var(--accent-dark); font-weight: 700; margin-left: 2px; }
+    .board-meta .sep { margin: 0 8px; opacity: .5; }
+
+    .status { text-align: center; min-height: 22px; margin-top: 10px; font-weight: 600; color: var(--muted); }
+
+    /* Encouragement / time nudges */
+    .nudge {
+      text-align: center; margin-top: 12px; font-weight: 700; font-size: 14px;
+      min-height: 0; max-height: 0; overflow: hidden; opacity: 0; padding: 0 14px;
+      border-radius: 999px; transition: max-height .25s, opacity .25s, padding .25s, margin .25s;
+    }
+    .nudge.show { max-height: 60px; opacity: 1; padding: 8px 14px; }
+    .nudge.cheer { background: #eafaf1; color: #1e8e54; border: 1px solid #bdebd0; }
+    .nudge.time { background: #fff4e5; color: var(--accent-dark); border: 1px solid #f3d9b3; }
+    .nudge.urgent { background: #fdeceb; color: var(--bad); border: 1px solid #f6c9c4; }
+
+    .board-tools { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 14px; }
+    .board-tools .btn { font-size: 12.5px; }
+
+    /* Info modal (solutions / proof) */
+    .info-modal { max-width: 640px; width: 100%; text-align: left; position: relative; max-height: 86vh; max-height: 86dvh; display: flex; flex-direction: column; }
+    .info-modal h3 { font-size: 20px; margin: 2px 40px 10px 2px; }
+    .info-close { position: absolute; top: 10px; right: 12px; border: none; background: none; font-size: 26px; line-height: 1; color: var(--muted); cursor: pointer; }
+    .info-close:hover { color: var(--ink); }
+    .info-body { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding-right: 4px; }
+    .info-body p { margin: 6px 0; font-size: 14px; color: var(--ink); }
+    .info-body .muted { color: var(--muted); font-size: 13px; }
+    .info-body h4 { margin: 14px 0 6px; font-size: 14px; }
+    .order-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+    .order-chip { font-size: 12px; background: #faf7f0; border: 1px solid var(--line); border-radius: 999px; padding: 3px 9px; font-variant-numeric: tabular-nums; }
+    .order-chip i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; vertical-align: -1px; margin-right: 5px; }
+    .sol-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 8px; }
+    .sol-item { border: 1px solid var(--line); border-radius: 12px; padding: 10px; background: #faf8f3; }
+    .sol-item .sol-meta { font-size: 12px; margin-top: 7px; line-height: 1.35; }
+    .sol-item .sol-net { font-weight: 800; color: var(--accent-dark); }
+    .proof-boards { display: flex; gap: 18px; flex-wrap: wrap; margin: 8px 0; }
+    .proof-board { }
+    .proof-board .cap { font-size: 12px; color: var(--muted); margin-bottom: 6px; font-weight: 600; }
+    .mini-board { display: inline-grid; gap: 2px; background: var(--board-bg); padding: 6px; border-radius: 8px; }
+    .mini-board .mc { border-radius: 2px; }
+    .mini-board .mc.void { background: transparent; }
+    .mini-board .mc.empty { background: var(--cell); box-shadow: inset 0 0 0 1px var(--cell-line); }
+    .mini-board .mc.hint { box-shadow: inset 0 0 0 2px #2b2b2b; }
+    .status.win { color: var(--good); }
+    .status.over { color: var(--bad); }
+
+    footer.app { text-align: center; margin-top: 34px; color: var(--muted); font-size: 13px; }
+    footer.app a { color: var(--accent-dark); text-decoration: none; font-weight: 600; }
+    footer.app a:hover { text-decoration: underline; }
+
+    /* Win modal */
+    .overlay {
+      position: fixed; inset: 0; background: rgba(40, 30, 12, .45); display: none;
+      align-items: center; justify-content: center; padding: 20px; z-index: 50; backdrop-filter: blur(2px);
+    }
+    .overlay.show { display: flex; }
+    .modal {
+      background: var(--panel); border-radius: 20px; padding: 28px 26px; max-width: 380px; width: 100%;
+      text-align: center; box-shadow: 0 24px 60px rgba(0,0,0,.3); animation: pop .25s ease;
+      max-height: calc(100vh - 40px); max-height: calc(100dvh - 40px);  /* scroll if the screen is short (landscape phones) */
+      overflow-y: auto; -webkit-overflow-scrolling: touch;
+    }
+    @keyframes pop { from { transform: scale(.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .modal .emoji { font-size: 48px; }
+    .modal h3 { font-size: 24px; margin: 6px 0 4px; }
+    .modal p { color: var(--muted); margin-bottom: 18px; }
+    .modal .stat { font-size: 15px; color: var(--ink); margin-bottom: 18px; }
+    .modal .stat b { font-size: 22px; color: var(--accent-dark); }
+    .modal .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .modal .actions .btn { flex: 1; min-width: 92px; }
+    .result-bar { height: 10px; border-radius: 999px; background: var(--line); overflow: hidden; margin: 2px 0 18px; }
+    .result-fill { height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg,#2ecc71,#f1c40f); transition: width .65s cubic-bezier(.2,.8,.2,1); }
+    .modal .pb { font-size: 12.5px; color: var(--muted); margin: -8px 0 16px; line-height: 1.5; }
+    .modal .pb b { color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+    /* Confetti celebration */
+    .confetti-layer { position: fixed; inset: 0; pointer-events: none; z-index: 60; overflow: hidden; }
+    .confetti-layer i { position: absolute; top: -16px; width: 9px; height: 14px; border-radius: 2px; animation: confetti-fall linear forwards; }
+    @keyframes confetti-fall { to { transform: translateY(110vh) rotate(720deg); opacity: .85; } }
+
+    /* Board completion pulse */
+    .board.pulse { animation: board-pulse .6s ease; }
+    @keyframes board-pulse {
+      0% { box-shadow: 0 0 0 0 rgba(46,204,113,0); }
+      35% { box-shadow: 0 0 0 7px rgba(46,204,113,.4); }
+      100% { box-shadow: 0 0 0 0 rgba(46,204,113,0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .result-fill { transition: none; }
+      .confetti-layer { display: none; }
+      .board.pulse { animation: none; }
+    }
+
+    .board-stage { margin: 0 auto; }
+
+    /* ---- Tablet: keep the side panel readable, center the board ---- */
+    @media (max-width: 880px) {
+      .container { max-width: 640px; }
+      .board-card { width: 100%; }
+      .board-card > .board-stage { width: auto; }
+    }
+
+    /* ---- Phones: tighter chrome, full-width controls, comfy spacing ---- */
+    @media (max-width: 560px) {
+      body { padding: 14px max(10px, env(safe-area-inset-right)) max(36px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); }
+      header.app h1 { margin-bottom: 4px; }
+      header.app p.sub { font-size: 13.5px; }
+      .controls { gap: 8px; }
+      .controls .seg { flex: 1 1 100%; justify-content: center; }
+      .controls .seg button { flex: 1; }
+      .controls .btn { flex: 1 1 calc(50% - 5px); }
+      .dash { flex-direction: column; }
+      .netcard { flex-basis: auto; flex-direction: row; justify-content: space-between; }
+      .netcard-amount { font-size: 28px; }
+      .card { padding: 13px; border-radius: 15px; }
+      .board-stage { padding: 10px; }
+      .timer-pill .time { font-size: 18px; }
+      .help, .tray-note { font-size: 12px; }
+    }
+
+    /* ---- Very small phones ---- */
+    @media (max-width: 360px) {
+      .kpi-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    /* ---- Touch devices (phones/tablets): larger, finger-friendly targets ---- */
+    @media (pointer: coarse) {
+      .btn, .seg button { padding-top: 12px; padding-bottom: 12px; min-height: 44px; }
+      .piece { padding: 10px; }
+      .piece-actions .btn, .hint-row .btn { min-height: 46px; }
+      .cell.filled { cursor: default; }
+      .touch-only { display: inline; }
+      .arrow-hint { display: none; } /* arrow keys are irrelevant without a keyboard */
+    }
+
+    /* ---- Respect reduced-motion preferences ---- */
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; animation: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="app">
+      <h1>PortfolioFit<span class="dot">.</span></h1>
+      <p class="sub">Each brick is a project that earns a dollar value when you place it in the frame. Choose the right projects and pack them in to maximise <strong>net value</strong> (the total value of placed bricks minus a penalty for unused space) before the timer runs out.</p>
+    </header>
+
+    <div class="controls">
+      <div class="seg" id="difficulty">
+        <button data-diff="easy" class="active">Easy &middot; 14</button>
+        <button data-diff="hard">Hard &middot; 18</button>
+      </div>
+      <button class="btn primary" id="newBtn">New puzzle</button>
+      <button class="btn" id="restartBtn">Restart</button>
+    </div>
+
+    <div class="timer-wrap">
+      <div class="timer-pill">
+        <span class="label">Time left</span>
+        <span class="time" id="elapsed">0:00</span>
+      </div>
+      <div class="sand"><div id="sandBar"></div></div>
+      <div class="timer-pill">
+        <span class="label">Best $</span>
+        <span class="time" id="best">&ndash;</span>
+      </div>
+    </div>
+
+    <div class="dash">
+      <div class="netcard" data-kpi="net-value" tabindex="0">
+        <div class="netcard-label">Net Value</div>
+        <div class="netcard-amount" id="kpiNet">$0</div>
+      </div>
+      <div class="kpi-panel">
+        <h3><span class="ic">&#128200;</span> KPIs</h3>
+        <div class="kpi-grid">
+          <div class="kstat" data-kpi="total-value" tabindex="0"><span class="kk">Total Value</span><span class="kv pos" id="kpiValue">$0</span></div>
+          <div class="kstat" data-kpi="resource-cost" tabindex="0"><span class="kk">Resource Cost</span><span class="kv neg" id="kpiCost">$0</span></div>
+          <div class="kstat" data-kpi="value-resource" tabindex="0"><span class="kk">Value / Resource</span><span class="kv" id="kpiEff">$0</span></div>
+          <div class="kstat" data-kpi="coverage" tabindex="0"><span class="kk">Coverage</span><span class="kv" id="kpiCoverage">0%</span><div class="kbar"><div id="kpiCovBar"></div></div></div>
+          <div class="kstat" data-kpi="portfolio-fitness" tabindex="0"><span class="kk">Portfolio Fitness</span><span class="kv" id="kpiFitness">N/A</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="game">
+      <div class="card board-card">
+        <h2>Board</h2>
+        <div class="board-stage">
+          <div class="board" id="board"></div>
+        </div>
+        <div class="board-meta" id="boardMeta" data-kpi="difficulty" tabindex="0"></div>
+        <div class="nudge" id="nudge"></div>
+        <div class="status" id="status">Select a piece, then place it on the board.</div>
+        <div class="board-tools">
+          <button class="btn ghost" id="solBtn">&#128203; Full coverage solutions</button>
+          <button class="btn ghost" id="proofBtn">&#128270; Why &kappa; = ? (proof)</button>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <h2>Bricks</h2>
+          <p class="arrow-hint">
+            Select a brick, then use the arrow keys:
+            <span class="keys"><kbd>&larr;</kbd><kbd>&rarr;</kbd> rotate</span>
+            <span class="keys"><kbd>&uarr;</kbd><kbd>&darr;</kbd> flip</span>
+          </p>
+          <div class="piece-actions">
+            <button class="btn" id="rotateBtn" title="Rotate the selected brick (or use &larr; &rarr;)">&#8635; Rotate</button>
+            <button class="btn" id="flipBtn" title="Flip the selected brick (or use &uarr; &darr;)">&#8646; Flip</button>
+          </div>
+          <div class="tray" id="tray"></div>
+          <p class="tray-note">Every brick shows its dollar value, and each has its own value-per-cell (ROI). The tempting high-ROI bricks are often traps &mdash; grabbing them greedily wrecks the fit. There are many ways to fill the board, but only one reaches the highest Net Value: find the best portfolio, not just any fit.</p>
+          <div class="hint-row">
+            <button class="btn ghost" id="hintBtn">&#128161; Hint</button>
+            <button class="btn ghost" id="solveBtn">Show solution</button>
+          </div>
+          <p class="help">
+            <b>How to play.</b> Tap a brick to select it, then tap a board tile to drop it.
+            Use <kbd>&larr;</kbd> <kbd>&rarr;</kbd> to <b>rotate</b> and <kbd>&uarr;</kbd> <kbd>&darr;</kbd> to <b>flip</b> the selected brick. Tap a placed brick to pick it back up.
+            <br><kbd>N</kbd> new &middot; <kbd>H</kbd> hint &middot; <kbd>Esc</kbd> deselect.
+            <span class="touch-only">(On a touch screen, use the Rotate / Flip buttons above.)</span>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="tools">
+      <div class="card tool">
+        <h3 class="tool-h"><span class="ic">&#129518;</span> Calculator</h3>
+        <div class="calc-display">
+          <div class="calc-expr" id="calcExpr">&nbsp;</div>
+          <div class="calc-result" id="calcResult">0</div>
+        </div>
+        <input class="calc-input" id="calcInput" type="text" inputmode="text" autocomplete="off"
+               spellcheck="false" placeholder="Type e.g. 5*3 + 7, then press =" aria-label="Calculator expression" />
+        <div class="calc-pad" id="calcPad">
+          <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button><button data-k="/" class="op">&divide;</button>
+          <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button><button data-k="*" class="op">&times;</button>
+          <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button><button data-k="-" class="op">&minus;</button>
+          <button data-k="0">0</button><button data-k=".">.</button><button data-k="(">(</button><button data-k="+" class="op">+</button>
+          <button data-act="clear" class="wide clr">C</button><button data-k=")">)</button><button data-act="eq" class="eq">=</button>
+        </div>
+        <div class="calc-history" id="calcHistory"></div>
+      </div>
+
+      <div class="card tool">
+        <h3 class="tool-h"><span class="ic">&#128172;</span> My Notes</h3>
+        <div class="notes-list" id="notesList"></div>
+        <textarea class="notes-input" id="notesInput" rows="2"
+                  placeholder="Jot a strategy note&hellip; (Enter to save, Shift+Enter for a new line)"></textarea>
+        <button class="btn primary notes-add" id="notesAdd">Add note</button>
+      </div>
+    </div>
+
+    <footer class="app">
+      <a href="portfoliofit-difficulty.pdf" target="_blank" rel="noopener">&#128196; How the Sahni difficulty (&kappa;) is measured (PDF note)</a>
+    </footer>
+  </div>
+
+  <div class="kpi-tip" id="kpiTip" role="tooltip" aria-hidden="true"></div>
+
+  <div class="overlay" id="infoOverlay">
+    <div class="modal info-modal">
+      <button class="info-close" id="infoClose" aria-label="Close">&times;</button>
+      <h3 id="infoTitle"></h3>
+      <div class="info-body" id="infoBody"></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div class="modal">
+      <div class="emoji" id="modalEmoji">&#127881;</div>
+      <h3 id="modalTitle">Portfolio packed!</h3>
+      <p id="modalSub">You filled the board.</p>
+      <div class="result-bar" aria-hidden="true"><div class="result-fill" id="resultFill"></div></div>
+      <div class="stat">Your Net Value: <b id="modalValue">$0</b></div>
+      <div class="stat">Best possible here: <b id="modalBest">$0</b></div>
+      <div class="pb" id="modalPB"></div>
+      <div class="actions">
+        <button class="btn" id="modalShare">Share</button>
+        <button class="btn" id="modalReplay">Replay</button>
+        <button class="btn primary" id="modalNext">Next puzzle</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    'use strict';
+
+    // ---------- Piece library (polyominoes) ----------
+    // Each piece: name, colour, and base cells [row, col].
+    // Fixed set: one tromino, three tetrominoes, four pentominoes.
+    // value = dollar worth of the brick. PRICING REWARDS PLACEMENT DIFFICULTY:
+    // a brick is worth more the harder it is to fit into the board, where
+    // difficulty grows with (a) SIZE (more cells take more room) and
+    // (b) STIFFNESS (fewer legal orientations / board placements = less wiggle
+    // room). Equally awkward bricks are priced the same, so total value is a
+    // Each brick has a dollar value chosen so the eight value-per-cell ratios
+    // ($/cell) are all DISTINCT and deliberately deceptive: the highest-ROI
+    // bricks are often NOT the ones an optimal portfolio needs, so a greedy
+    // "best value-per-cell first" player is reliably trapped. This is exactly
+    // what gives the boards their Sahni difficulty. Ratios, high to low:
+    //   L5 $16/5 = 3.20   I3 $9/3 = 3.00   T $11/4 = 2.75   L $10/4 = 2.50
+    //   S  $9/4  = 2.25   N $11/5 = 2.20   Y $7/5  = 1.40   P $6/5  = 1.20
+    const LIBRARY = [
+      // Tromino (3 cells)
+      { name: 'I3', color: '#1abc9c', value: 9, cells: [[0,0],[1,0],[2,0]] },
+      // Tetrominoes (4 cells)
+      { name: 'L',  color: '#c9b458', value: 10, cells: [[0,0],[1,0],[2,0],[2,1]] },
+      { name: 'S',  color: '#2ecc71', value: 9, cells: [[0,0],[1,0],[1,1],[2,1]] },
+      { name: 'T',  color: '#3498db', value: 11, cells: [[0,0],[1,0],[1,1],[2,0]] },
+      // Pentominoes (5 cells)
+      { name: 'L5', color: '#e67e22', value: 16, cells: [[0,0],[1,0],[2,0],[3,0],[3,1]] },
+      { name: 'Y',  color: '#9b59b6', value: 7, cells: [[0,1],[1,0],[1,1],[2,1],[3,1]] },
+      { name: 'P',  color: '#e74c3c', value: 6, cells: [[0,0],[0,1],[1,0],[1,1],[2,0]] },
+      { name: 'N',  color: '#f1c40f', value: 11, cells: [[0,1],[1,1],[2,0],[2,1],[3,0]] }
+    ];
+
+    const DIRS = [[-1,0],[1,0],[0,-1],[0,1]];
+
+    // All eight pieces are always SHOWN, but each board is solved with a SUBSET:
+    // an Easy challenge fills a 14-cell outline, a Hard challenge an 18-cell one
+    // (authentic Ubongo). cells = target outline area; limit = sand-timer budget.
+    const DIFFS = {
+      easy: { cells: 14, limit: 120 },
+      hard: { cells: 18, limit: 180 }
+    };
+
+    // ---------- Geometry helpers ----------
+    function normalize(cells) {
+      let minR = Infinity, minC = Infinity;
+      for (const [r, c] of cells) { if (r < minR) minR = r; if (c < minC) minC = c; }
+      return cells
+        .map(([r, c]) => [r - minR, c - minC])
+        .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    }
+    function rotate(cells) { return normalize(cells.map(([r, c]) => [c, -r])); }
+    function reflect(cells) { return normalize(cells.map(([r, c]) => [r, -c])); }
+    function key(cells) { return cells.map(c => c[0] + ',' + c[1]).join(' '); }
+
+    function orientations(cells) {
+      const seen = new Map();
+      let cur = normalize(cells);
+      for (let i = 0; i < 4; i++) { seen.set(key(cur), cur); cur = rotate(cur); }
+      cur = reflect(cells);
+      for (let i = 0; i < 4; i++) { seen.set(key(cur), cur); cur = rotate(cur); }
+      return Array.from(seen.values());
+    }
+
+    function shuffle(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    // ---------- Puzzle generation (guaranteed solvable) ----------
+    // Pick a random subset of the library whose areas sum to the target outline
+    // area (14 for Easy, 18 for Hard) via randomized subset-sum backtracking.
+    function pickSubset(target) {
+      const order = shuffle(LIBRARY.map((_, i) => i));
+      const res = [];
+      let found = false;
+      (function rec(i, sum) {
+        if (found) return;
+        if (sum === target) { found = true; return; }
+        if (sum > target || i >= order.length) return;
+        const li = order[i], a = LIBRARY[li].cells.length;
+        const incFirst = Math.random() < 0.5;
+        for (const inc of (incFirst ? [true, false] : [false, true])) {
+          if (found) return;
+          if (inc) { res.push(li); rec(i + 1, sum + a); if (found) return; res.pop(); }
+          else { rec(i + 1, sum); }
+        }
+      })(0, 0);
+      return res.map(i => LIBRARY[i]);
+    }
+
+    function place(chosen, idx, filled, placements) {
+      if (idx === chosen.length) return true;
+      const oris = chosen[idx]._oris;
+      let candidates = [];
+
+      if (filled.size === 0) {
+        const ori = oris[Math.floor(Math.random() * oris.length)];
+        candidates.push(ori.map(([r, c]) => [r + 100, c + 100]));
+      } else {
+        const boundary = new Set();
+        for (const k of filled.keys()) {
+          const [r, c] = k.split(',').map(Number);
+          for (const [dr, dc] of DIRS) {
+            const nk = (r + dr) + ',' + (c + dc);
+            if (!filled.has(nk)) boundary.add(nk);
+          }
+        }
+        const dedupe = new Set();
+        for (const bk of boundary) {
+          const [br, bc] = bk.split(',').map(Number);
+          for (const ori of oris) {
+            for (const cell of ori) {
+              const offR = br - cell[0], offC = bc - cell[1];
+              const placed = ori.map(([r, c]) => [r + offR, c + offC]);
+              if (placed.every(([r, c]) => !filled.has(r + ',' + c))) {
+                const kk = key(placed.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]));
+                if (!dedupe.has(kk)) { dedupe.add(kk); candidates.push(placed); }
+              }
+            }
+          }
+        }
+      }
+
+      shuffle(candidates);
+      for (const placed of candidates.slice(0, 140)) {
+        for (const [r, c] of placed) filled.set(r + ',' + c, idx);
+        placements[idx] = placed;
+        if (place(chosen, idx + 1, filled, placements)) return true;
+        for (const [r, c] of placed) filled.delete(r + ',' + c);
+        placements[idx] = null;
+      }
+      return false;
+    }
+
+    function generatePuzzle(target) {
+      for (let attempt = 0; attempt < 1500; attempt++) {
+        const chosen = pickSubset(target).map(p => ({ name: p.name, color: p.color, value: p.value, cells: p.cells }));
+        if (!chosen.length) continue;
+        chosen.forEach(p => { p._oris = orientations(p.cells); });
+        const filled = new Map();
+        const placements = new Array(chosen.length).fill(null);
+        if (place(chosen, 0, filled, placements)) {
+          // Normalise region + placements to a tight bounding box.
+          let minR = Infinity, minC = Infinity, maxR = -Infinity, maxC = -Infinity;
+          for (const k of filled.keys()) {
+            const [r, c] = k.split(',').map(Number);
+            if (r < minR) minR = r; if (c < minC) minC = c;
+            if (r > maxR) maxR = r; if (c > maxC) maxC = c;
+          }
+          const region = new Set();
+          for (const k of filled.keys()) {
+            const [r, c] = k.split(',').map(Number);
+            region.add((r - minR) + ',' + (c - minC));
+          }
+          const solution = chosen.map((p, i) => ({
+            name: p.name, color: p.color,
+            cells: placements[i].map(([r, c]) => [r - minR, c - minC])
+          }));
+          return {
+            rows: maxR - minR + 1,
+            cols: maxC - minC + 1,
+            region: region,
+            pieces: chosen.map(p => ({ name: p.name, color: p.color, value: p.value, oris: p._oris })),
+            solution: solution
+          };
+        }
+      }
+      return null; // extremely unlikely
+    }
+
+    // ---------- Difficulty measures (exact cover + Sahni-style kappa) ----------
+    // See /lab/portfoliofit-testing/portfoliofit-difficulty.pdf for the full write-up.
+    function popcount(x) { let c = 0; while (x) { x &= x - 1; c++; } return c; }
+
+    function combinations(n, k) {
+      const out = [], idx = [];
+      (function rec(start, depth) {
+        if (depth === k) { out.push(idx.slice()); return; }
+        for (let i = start; i <= n - (k - depth); i++) { idx.push(i); rec(i + 1, depth + 1); idx.pop(); }
+      })(0, 0);
+      return out;
+    }
+
+    // Build all legal placements (as BigInt bitmasks over region cells) for each
+    // piece. BigInt is used because the full piece set spans 35 cells (> 31 bits).
+    function buildPlacements(region, pieces) {
+      const cellIndex = new Map(); let i = 0;
+      const cellsByIndex = [];
+      for (const k of region) { cellIndex.set(k, i); const j = k.indexOf(','); cellsByIndex.push([+k.slice(0, j), +k.slice(j + 1)]); i++; }
+      const N = i, m = pieces.length;
+      const bits = []; for (let b = 0; b < N; b++) bits.push(1n << BigInt(b));
+      let full = 0n; for (let b = 0; b < N; b++) full |= bits[b];
+      const byCell = Array.from({ length: N }, () => []);
+      const areas = [], sorted = [], values = [], ratios = [];
+      pieces.forEach((p, pi) => {
+        const placements = [], seen = new Set();
+        for (const ori of p.oris) {
+          for (const startKey of region) {
+            const [sr, sc] = startKey.split(',').map(Number);
+            const offR = sr - ori[0][0], offC = sc - ori[0][1];
+            let mask = 0n, ok = true, low = Infinity; const idxs = [];
+            for (const [r, c] of ori) {
+              const idx = cellIndex.get((r + offR) + ',' + (c + offC));
+              if (idx === undefined) { ok = false; break; }
+              mask |= bits[idx]; idxs.push(idx); if (idx < low) low = idx;
+            }
+            if (ok && !seen.has(mask)) { seen.add(mask); placements.push({ mask, low, idxs }); }
+          }
+        }
+        const area = p.oris[0].length;
+        areas.push(area); values.push(p.value); ratios.push(p.value / area);
+        // Within a piece, try the lowest-index (top-left) placement first.
+        sorted.push(placements.slice().sort((a, b) => a.low - b.low).map(x => x.mask));
+        for (const pm of placements)
+          for (const idx of pm.idxs) byCell[idx].push({ pi: pi, mask: pm.mask });
+      });
+      return { N, full, m, bits, byCell, areas, values, ratios, sorted, cellsByIndex };
+    }
+
+    function firstEmpty(pd, occ) {
+      for (let i = 0; i < pd.N; i++) if ((occ & pd.bits[i]) === 0n) return i;
+      return -1;
+    }
+
+    function collectSolutions(pd, cap) {
+      const sols = [], cur = []; let nodes = 0; const MAXN = 120000;
+      (function rec(occ, used) {
+        if (sols.length >= cap || nodes > MAXN) return;
+        if (occ === pd.full) { sols.push(cur.slice()); return; }
+        if (++nodes > MAXN) return;
+        const cell = firstEmpty(pd, occ);
+        for (const pl of pd.byCell[cell]) {
+          if (used & (1 << pl.pi)) continue;
+          if ((pl.mask & occ) !== 0n) continue;
+          cur.push(pl); rec(occ | pl.mask, used | (1 << pl.pi)); cur.pop();
+          if (sols.length >= cap || nodes > MAXN) return;
+        }
+      })(0n, 0);
+      return sols;
+    }
+
+    // Tiling stats over any subset of the bricks: number of tilings (capped), the
+    // maximum total dollar value achievable while exactly filling the region, and
+    // how many distinct tilings attain that maximum (bestCount) — used to ensure
+    // exactly one full cover yields the highest Net Value.
+    function analyze(pd, cap) {
+      let count = 0, nodes = 0, capped = false, best = 0, bestCount = 0; const MAXN = 200000;
+      (function rec(occ, used, val) {
+        if (count >= cap || capped) return;
+        if (occ === pd.full) {
+          count++;
+          if (val > best) { best = val; bestCount = 1; }
+          else if (val === best) { bestCount++; }
+          return;
+        }
+        if (++nodes > MAXN) { capped = true; return; }
+        const cell = firstEmpty(pd, occ);
+        for (const pl of pd.byCell[cell]) {
+          if (used & (1 << pl.pi)) continue;
+          if ((pl.mask & occ) !== 0n) continue;
+          rec(occ | pl.mask, used | (1 << pl.pi), val + pd.values[pl.pi]);
+          if (count >= cap || capped) return;
+        }
+      })(0n, 0, 0);
+      return { count: count, capped: capped, bestValue: best, bestCount: bestCount };
+    }
+
+    // The full eight-piece set, with orientations precomputed once.
+    let _ALL = null;
+    function allPieces() {
+      if (!_ALL) _ALL = LIBRARY.map(p => ({
+        name: p.name, color: p.color, value: p.value, cells: p.cells, oris: orientations(p.cells)
+      }));
+      return _ALL;
+    }
+
+    // Deterministic greedy H (knapsack ratio-greedy analogue): consider the
+    // remaining bricks in non-increasing order of value-per-cell ratio ($/cell);
+    // place each at its first feasible (top-left) spot if it fits, else skip it.
+    // Succeeds when the region is fully tiled (unused bricks are simply left out).
+    function greedyComplete(pd, occupied, used) {
+      const rem = [];
+      for (let pi = 0; pi < pd.m; pi++) if (!(used & (1 << pi))) rem.push(pi);
+      rem.sort((a, b) => pd.ratios[b] - pd.ratios[a] || a - b);
+      let occ = occupied;
+      for (const pi of rem) {
+        if (occ === pd.full) break;
+        for (const mask of pd.sorted[pi]) { if ((mask & occ) === 0n) { occ |= mask; break; } }
+      }
+      return occ === pd.full;
+    }
+
+    // Sahni-style kappa: fewest pre-placed pieces so greedy completes a full tiling.
+    // Bounded by a greedy-call budget so a single hard board can never stall the UI.
+    function sahniDifficulty(pd) {
+      if (greedyComplete(pd, 0n, 0)) return 0;
+      const sols = collectSolutions(pd, 120);
+      if (!sols.length) return pd.m - 1; // could not enumerate within budget
+      let best = pd.m, calls = 0; const MAXC = 60000;
+      for (const T of sols) {
+        for (let k = 1; k < best; k++) {
+          let found = false;
+          for (const idxs of combinations(T.length, k)) {
+            let occ = 0n, used = 0;
+            for (const j of idxs) { occ |= T[j].mask; used |= (1 << T[j].pi); }
+            if (++calls > MAXC) return best;
+            if (greedyComplete(pd, occ, used)) { found = true; break; }
+          }
+          if (found) { best = k; break; }
+        }
+        if (best === 1) break;
+      }
+      return best;
+    }
+
+    // Like greedyComplete, but records which placement filled what (for proofs).
+    function greedyTrace(pd, occupied, used) {
+      const rem = [];
+      for (let pi = 0; pi < pd.m; pi++) if (!(used & (1 << pi))) rem.push(pi);
+      rem.sort((a, b) => pd.ratios[b] - pd.ratios[a] || a - b);
+      let occ = occupied; const placed = [];
+      for (const pi of rem) {
+        if (occ === pd.full) break;
+        for (const mask of pd.sorted[pi]) { if ((mask & occ) === 0n) { occ |= mask; placed.push({ pi: pi, mask: mask }); break; } }
+      }
+      return { success: occ === pd.full, occ: occ, placed: placed };
+    }
+
+    // A constructive certificate for the Sahni number: the greedy's empty-handed
+    // dead end, and the smallest set of pre-placed bricks ("hints") that lets the
+    // greedy finish (a witness that kappa is achievable; smaller sets are checked
+    // exhaustively and all fail, so kappa is exactly this).
+    function sahniWitness(pd) {
+      const dead = greedyTrace(pd, 0n, 0);
+      if (dead.success) return { kappa: 0, dead: dead, witness: null };
+      const sols = collectSolutions(pd, 120);
+      let best = pd.m, witness = null;
+      for (const T of sols) {
+        for (let k = 1; k < best; k++) {
+          let found = false;
+          for (const idxs of combinations(T.length, k)) {
+            let occ = 0n, used = 0; const pinned = [];
+            for (const j of idxs) { occ |= T[j].mask; used |= (1 << T[j].pi); pinned.push(T[j]); }
+            const tr = greedyTrace(pd, occ, used);
+            if (tr.success) { found = true; best = k; witness = { pinned: pinned, completion: tr }; break; }
+          }
+          if (found) break;
+        }
+        if (best === 1) break;
+      }
+      return { kappa: best, dead: dead, witness: witness };
+    }
+
+    function maskToCells(pd, mask) {
+      const out = [];
+      for (let b = 0; b < pd.N; b++) if (mask & pd.bits[b]) out.push(pd.cellsByIndex[b]);
+      return out;
+    }
+
+    // ---------- Game state ----------
+    let state = null;
+    let timer = { start: 0, interval: null, elapsed: 0, running: false };
+    let sessionRounds = 0;   // puzzles started this browser session
+
+    const $ = sel => document.querySelector(sel);
+    const boardEl = $('#board');
+    const trayEl = $('#tray');
+    const statusEl = $('#status');
+
+    // Size the board cells to the space actually available, so it fits a phone
+    // without scrolling and grows generously on tablet/laptop.
+    function cellSize(rows, cols) {
+      const vw = Math.min(window.innerWidth, 1012);
+      const twoCol = window.innerWidth >= 880;
+      const colW = twoCol ? (Math.min(vw, 980) - 32 - 320 - 20)   // side panel + gap
+                          : (Math.min(vw, 640) - 46);              // single column (body + card padding)
+      const byWidth = Math.floor((colW - 28 - cols * 3) / cols);   // stage padding + gaps
+      const byHeight = Math.floor((window.innerHeight - 320) / Math.max(rows, 1));
+      return Math.max(22, Math.min(54, byWidth, byHeight, Math.floor(460 / Math.max(rows, cols))));
+    }
+
+    // Difficulty is the value-ratio Sahni kappa over the FULL eight-piece set.
+    // Easy: a small (14-cell) outline where the ratio-greedy needs one or two
+    // hand-placed hints (kappa = 1 or 2).
+    // Hard: a larger (18-cell) outline where the ratio-greedy is badly trapped and
+    // needs at least three hand-placed hints (kappa >= 3) - at the ceiling of what
+    // the deceptive eight-piece set reaches at this size. All eight bricks are
+    // always available either way; every board has many full covers but a single
+    // best one (highest Net Value) to find (see pickPuzzle).
+    const ACCEPT = { easy: k => k >= 1 && k <= 2, hard: k => k >= 3 };
+
+    // Enumeration cap: high enough that every accepted board is fully enumerated
+    // (so its tiling count and unique-optimum status are exact, not truncated).
+    const ENUM_CAP = 5000;
+
+    function evaluate(puzzle) {
+      const pd = buildPlacements(puzzle.region, allPieces());
+      const st = analyze(pd, ENUM_CAP);
+      // "complete" => we enumerated every tiling (neither the node nor the count
+      // budget was hit), so bestCount is the true number of optimum-value covers.
+      const complete = !st.capped && st.count < ENUM_CAP;
+      return {
+        puzzle: puzzle, kappa: sahniDifficulty(pd),
+        tilings: { count: st.count, capped: st.capped, complete: complete },
+        bestValue: st.bestValue, bestCount: st.bestCount
+      };
+    }
+
+    // Every board must offer MANY full covers but a SINGLE best one: there are
+    // >= MIN_SOLUTIONS distinct ways to tile the outline, yet exactly one of them
+    // attains the highest Net Value (bestCount === 1). The player's job is to find
+    // that uniquely optimal portfolio, not just any cover.
+    const MIN_SOLUTIONS = 3;
+    function qualifies(cand) {
+      return cand.tilings.complete && cand.tilings.count >= MIN_SOLUTIONS && cand.bestCount === 1;
+    }
+
+    function pickPuzzle(diff) {
+      const target = DIFFS[diff].cells;
+      // Hard never early-returns (it hunts for the maximum kappa), so give it a
+      // larger time budget to scan more boards; easy early-returns and stays snappy.
+      const deadline = Date.now() + (diff === 'hard' ? 650 : 360);
+      let bestOk = null, bestAny = null;  // bestOk: many covers + unique optimum
+      for (let t = 0; t < 900; t++) {
+        const puzzle = generatePuzzle(target);
+        if (!puzzle) continue;
+        const cand = evaluate(puzzle);
+        const ok = qualifies(cand);
+        if (ok && diff === 'easy' && ACCEPT.easy(cand.kappa)) return cand;  // easy: the first low-kappa board is fine
+        if (ok) {
+          // Track the qualifying board closest to the target band (easy: lowest
+          // kappa; hard: highest). For HARD we deliberately never early-return -
+          // we scan the whole budget and ship the HARDEST board found (maximum
+          // Sahni kappa), not merely the first that clears kappa >= 3.
+          const score = (diff === 'hard' ? cand.kappa : -cand.kappa);
+          if (!bestOk || score > bestOk.score) { cand.score = score; bestOk = cand; }
+        }
+        if (!bestAny) bestAny = cand;
+        if (Date.now() > deadline && bestOk) break;
+      }
+      // Guarantee the many-covers + unique-optimum requirement even if the band was never hit.
+      for (let t = 0; t < 900 && !bestOk; t++) {
+        const puzzle = generatePuzzle(target);
+        if (!puzzle) continue;
+        const cand = evaluate(puzzle);
+        if (qualifies(cand)) bestOk = cand;
+      }
+      return bestOk || bestAny || evaluate(generatePuzzle(target));
+    }
+
+    function newGame(diff) {
+      const picked = pickPuzzle(diff);
+      const puzzle = picked.puzzle;
+      if (!puzzle) return;
+      state = {
+        diff: diff,
+        rows: puzzle.rows,
+        cols: puzzle.cols,
+        region: puzzle.region,
+        solution: puzzle.solution,
+        kappa: picked.kappa,
+        tilings: picked.tilings,
+        bestValue: picked.bestValue,
+        pd: buildPlacements(puzzle.region, allPieces()),
+        occupied: new Map(),        // "r,c" -> instanceId
+        // All eight bricks are available every round; the player finds a fit.
+        pieces: allPieces().map((p, i) => ({
+          id: i, name: p.name, color: p.color, value: p.value,
+          oris: p.oris, oriIndex: Math.floor(Math.random() * p.oris.length),
+          placed: false, placedCells: null
+        })),
+        selected: null,
+        milestones: new Set(),
+        timeNudges: new Set(),
+        ended: false,
+        wasFull: false,
+        wasOptimal: false,
+        cs: cellSize(puzzle.rows, puzzle.cols)
+      };
+      sessionRounds++;
+      lastAction = Date.now(); lastCheer = 0; lastIdle = 0;
+      if (nudgeEl) nudgeEl.className = 'nudge';
+      renderBoard();
+      renderTray();
+      renderBoardMeta();
+      renderKPIs();
+      setStatus('', '');
+      resetTimer();
+      startTimer();
+    }
+
+    function renderBoardMeta() {
+      const t = state.tilings;
+      const n = t.count, tStr = (t.capped || n >= 1000) ? (n + '+') : n;
+      $('#boardMeta').innerHTML =
+        'Difficulty <b>(Sahni &kappa;) = ' + state.kappa + '</b>' +
+        '<span class="sep">&middot;</span>' + tStr + ' distinct solution' + (n === 1 ? '' : 's') +
+        ' <span class="meta-info">&#9432;</span>';
+    }
+
+    function money(v) {
+      const n = Math.round(v * 100) / 100;
+      const s = '$' + Math.abs(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
+      return n < 0 ? '-' + s : s;
+    }
+    function placedValue() { return state.pieces.reduce((s, p) => s + (p.placed ? p.value : 0), 0); }
+
+    // Portfolio Fitness: a GEOMETRIC compactness score, occupied cells as a share
+    // of the *fillable* (board) cells that fall inside the convex hull of the placed
+    // bricks. Only board cells count (voids outside the outline are ignored), so a
+    // complete or contiguous fill scores 100%; spreading bricks apart, or leaving
+    // gaps between them, pulls empty board cells into the hull and lowers the score.
+    function computeFitness() {
+      const occ = state.occupied.size;
+      if (occ === 0) return null;
+      if (occ <= 2) return 100;
+      const pts = [];
+      for (const k of state.occupied.keys()) { const i = k.indexOf(','); pts.push([+k.slice(i + 1), +k.slice(0, i)]); } // [x=c, y=r]
+      const P = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+      const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+      const lo = []; for (const p of P) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+      const up = []; for (let i = P.length - 1; i >= 0; i--) { const p = P[i]; while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+      const hull = lo.slice(0, -1).concat(up.slice(0, -1));
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (const [x, y] of P) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
+      const inHull = (x, y) => {
+        if (hull.length < 3) return true; // collinear: fall back to the bounding strip
+        for (let i = 0; i < hull.length; i++) {
+          const u = hull[i], v = hull[(i + 1) % hull.length];
+          if ((v[0] - u[0]) * (y - u[1]) - (v[1] - u[1]) * (x - u[0]) < 0) return false;
+        }
+        return true;
+      };
+      let fillable = 0; // board cells inside the hull (occupied + reachable holes)
+      for (let x = minX; x <= maxX; x++) for (let y = minY; y <= maxY; y++) {
+        if (inHull(x, y) && state.region.has(y + ',' + x)) fillable++;
+      }
+      if (fillable < occ) fillable = occ;
+      return Math.max(0, Math.min(100, Math.round(occ / fillable * 100)));
+    }
+
+    // KPIs mirroring the Tetris app. Resource Cost = $1 per empty cell;
+    // Net Value = Total Value - Resource Cost (the objective to maximise).
+    function renderKPIs() {
+      const total = state.region.size, occ = state.occupied.size, empty = total - occ;
+      const value = placedValue();
+      const resourceCost = empty;                 // $1 per empty cell
+      const net = value - resourceCost;
+      const coverage = total ? Math.round(occ / total * 100) : 0;
+      const vpc = occ > 0 ? value / occ : 0;
+      const fit = computeFitness();
+      const netEl = $('#kpiNet'), card = document.querySelector('.netcard');
+      netEl.textContent = money(net);
+      netEl.classList.toggle('neg', net < 0);
+      netEl.classList.toggle('pos', net > 0);
+      card.classList.toggle('neg', net < 0);
+      card.classList.toggle('pos', net > 0);
+      $('#kpiValue').textContent = money(value);
+      $('#kpiCost').textContent = money(resourceCost);
+      $('#kpiCoverage').textContent = coverage + '%';
+      $('#kpiCovBar').style.width = coverage + '%';
+      $('#kpiEff').textContent = money(vpc);
+      $('#kpiFitness').textContent = fit === null ? 'N/A' : fit + '%';
+    }
+
+    function selectedPiece() {
+      return state.pieces.find(p => p.id === state.selected) || null;
+    }
+    function oriCells(piece) { return piece.oris[piece.oriIndex]; }
+
+    // ---------- Rendering ----------
+    function renderBoard() {
+      const { rows, cols, cs } = state;
+      boardEl.style.gridTemplateColumns = 'repeat(' + cols + ', ' + cs + 'px)';
+      boardEl.style.gridTemplateRows = 'repeat(' + rows + ', ' + cs + 'px)';
+      boardEl.innerHTML = '';
+      // One $-value badge per placed brick, anchored at its top-left cell.
+      const badge = new Map();
+      for (const p of state.pieces) {
+        if (!p.placed || !p.placedCells) continue;
+        let a = p.placedCells[0];
+        for (const cell of p.placedCells) if (cell[0] < a[0] || (cell[0] === a[0] && cell[1] < a[1])) a = cell;
+        badge.set(a[0] + ',' + a[1], p.value);
+      }
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const k = r + ',' + c;
+          const cell = document.createElement('div');
+          cell.className = 'cell';
+          cell.style.width = cs + 'px';
+          cell.style.height = cs + 'px';
+          cell.dataset.r = r; cell.dataset.c = c;
+          if (state.region.has(k)) {
+            cell.classList.add('play');
+            if (state.occupied.has(k)) {
+              const inst = state.occupied.get(k);
+              const p = state.pieces.find(pp => pp.id === inst);
+              cell.classList.add('filled');
+              cell.style.background = p.color;
+              if (badge.has(k)) {
+                const tag = document.createElement('span');
+                tag.className = 'cell-val';
+                tag.textContent = money(badge.get(k));
+                // Scale the badge to the cell so it stays legible on every device.
+                tag.style.fontSize = Math.max(11, Math.round(cs * 0.4)) + 'px';
+                tag.style.padding = '1px ' + Math.max(3, Math.round(cs * 0.11)) + 'px';
+                cell.appendChild(tag);
+              }
+            }
+            cell.addEventListener('click', onCellClick);
+            cell.addEventListener('mouseenter', onCellHover);
+          } else {
+            cell.classList.add('void');
+          }
+          boardEl.appendChild(cell);
+        }
+      }
+      boardEl.addEventListener('mouseleave', clearPreview);
+    }
+
+    function pieceGrid(cells, color) {
+      let maxR = 0, maxC = 0;
+      for (const [r, c] of cells) { if (r > maxR) maxR = r; if (c > maxC) maxC = c; }
+      const grid = document.createElement('div');
+      grid.className = 'piece-grid';
+      const pcs = 18;
+      grid.style.gridTemplateColumns = 'repeat(' + (maxC + 1) + ', ' + pcs + 'px)';
+      grid.style.gridTemplateRows = 'repeat(' + (maxR + 1) + ', ' + pcs + 'px)';
+      const set = new Set(cells.map(c => c[0] + ',' + c[1]));
+      for (let r = 0; r <= maxR; r++) {
+        for (let c = 0; c <= maxC; c++) {
+          const d = document.createElement('div');
+          d.className = 'pc';
+          d.style.width = pcs + 'px'; d.style.height = pcs + 'px';
+          if (set.has(r + ',' + c)) { d.classList.add('on'); d.style.background = color; }
+          grid.appendChild(d);
+        }
+      }
+      return grid;
+    }
+
+    // All eight bricks are available every round; the player must work out which
+    // combination tiles the outline. Each shows its dollar value.
+    function renderTray() {
+      trayEl.innerHTML = '';
+      for (const p of state.pieces) {
+        const wrap = document.createElement('div');
+        wrap.className = 'piece' + (p.placed ? ' used' : '') + (state.selected === p.id ? ' selected' : '');
+        wrap.title = p.name + ': ' + money(p.value) + ' (' + p.oris[0].length + ' cells, ' +
+          money(Math.round(p.value / p.oris[0].length)) + '/cell)';
+        wrap.appendChild(pieceGrid(oriCells(p), p.color));
+        const label = document.createElement('div');
+        label.className = 'plabel';
+        const nameEl = document.createElement('div');
+        nameEl.className = 'pname';
+        nameEl.textContent = p.name;                 // reference name, e.g. I3, L5 (matches solutions list & note)
+        const tag = document.createElement('div');
+        tag.className = 'pval';
+        tag.textContent = money(p.value);
+        label.appendChild(nameEl);
+        label.appendChild(tag);
+        wrap.appendChild(label);
+        if (!p.placed) {
+          wrap.addEventListener('click', () => {
+            state.selected = (state.selected === p.id) ? null : p.id;
+            renderTray();
+          });
+        }
+        trayEl.appendChild(wrap);
+      }
+    }
+
+    // ---------- Placement logic ----------
+    function placementAt(piece, hr, hc) {
+      const cells = oriCells(piece);
+      const a = cells[0]; // top-left-most occupied cell (sorted)
+      return cells.map(([r, c]) => [hr + r - a[0], hc + c - a[1]]);
+    }
+    function isValid(cells) {
+      return cells.every(([r, c]) => {
+        const k = r + ',' + c;
+        return state.region.has(k) && !state.occupied.has(k);
+      });
+    }
+
+    function clearPreview() {
+      boardEl.querySelectorAll('.preview-ok, .preview-bad').forEach(el => {
+        el.classList.remove('preview-ok', 'preview-bad');
+      });
+    }
+
+    function onCellHover(e) {
+      clearPreview();
+      const piece = selectedPiece();
+      if (!piece || piece.placed) return;
+      const hr = +e.currentTarget.dataset.r, hc = +e.currentTarget.dataset.c;
+      const cells = placementAt(piece, hr, hc);
+      const ok = isValid(cells);
+      for (const [r, c] of cells) {
+        const el = boardEl.querySelector('.cell[data-r="' + r + '"][data-c="' + c + '"]');
+        if (el && state.region.has(r + ',' + c)) el.classList.add(ok ? 'preview-ok' : 'preview-bad');
+      }
+    }
+
+    function onCellClick(e) {
+      if (state.ended) return;
+      const r = +e.currentTarget.dataset.r, c = +e.currentTarget.dataset.c;
+      const k = r + ',' + c;
+      // If clicking an occupied cell, pick that piece back up.
+      if (state.occupied.has(k)) {
+        const inst = state.occupied.get(k);
+        removePiece(inst);
+        return;
+      }
+      const piece = selectedPiece();
+      if (!piece || piece.placed) return;
+      const cells = placementAt(piece, r, c);
+      if (!isValid(cells)) { flashBad(); return; }
+      for (const [pr, pc] of cells) state.occupied.set(pr + ',' + pc, piece.id);
+      piece.placed = true;
+      piece.placedCells = cells;
+      state.selected = null;
+      clearPreview();
+      renderBoard();
+      renderTray();
+      renderKPIs();
+      onProgress();
+      checkWin();
+    }
+
+    function removePiece(instId) {
+      if (state.ended) return;
+      lastAction = Date.now();
+      const p = state.pieces.find(pp => pp.id === instId);
+      if (!p || !p.placed) return;
+      for (const [r, c] of p.placedCells) state.occupied.delete(r + ',' + c);
+      p.placed = false; p.placedCells = null;
+      state.selected = p.id;
+      renderBoard();
+      renderTray();
+      renderKPIs();
+      setStatus('Brick picked up. Place it again or choose another.', '');
+    }
+
+    function flashBad() {
+      setStatus("That piece doesn't fit there. Try rotating or flipping.", '');
+    }
+
+    function checkWin() {
+      // Filling the board no longer ends the round: the deadline does. Each time
+      // the outline is fully covered we celebrate, but the player keeps going and
+      // can rearrange bricks to push their Net Value higher until time runs out.
+      let allFilled = true;
+      for (const k of state.region) { if (!state.occupied.has(k)) { allFilled = false; break; } }
+      if (allFilled) {
+        const val = placedValue();                 // full board => Net Value = total value
+        const optimal = val >= state.bestValue;
+        if (!state.wasFull) { boardEl.classList.add('pulse'); setTimeout(() => boardEl.classList.remove('pulse'), 600); }
+        if (optimal && !state.wasOptimal) confetti();
+        state.wasFull = true; state.wasOptimal = optimal;
+        if (optimal) {
+          setStatus('Top-value portfolio! Net ' + money(val) + ', the maximum here. Hold it until time runs out.', 'win');
+          nudge('🏆 Maximum value reached: Net ' + money(val) + '. Keep it until the buzzer!', 'cheer');
+        } else {
+          setStatus('Board filled at Net ' + money(val) + '. Best possible here is ' + money(state.bestValue) + '. Rearrange to raise it before time runs out.', 'win');
+          nudge('🎉 Board filled at Net ' + money(val) + '. Can you reach ' + money(state.bestValue) + '? Keep trying!', 'cheer');
+        }
+      } else {
+        state.wasFull = false; state.wasOptimal = false;
+        setStatus('Keep going. Find the bricks that fill the rest.', '');
+      }
+    }
+
+    // ---------- Hint / solve ----------
+    function applySolutionPiece(sol) {
+      // Find the matching, currently-unplaced piece instance by name+color.
+      const piece = state.pieces.find(p => !p.placed && p.name === sol.name && p.color === sol.color)
+                 || state.pieces.find(p => p.name === sol.name && p.color === sol.color);
+      if (!piece) return;
+      // Clear any pieces overlapping the target cells.
+      for (const [r, c] of sol.cells) {
+        const k = r + ',' + c;
+        if (state.occupied.has(k)) removeInstanceSilent(state.occupied.get(k));
+      }
+      // Set the piece orientation to match the solution shape.
+      const want = key(normalize(sol.cells));
+      const idx = piece.oris.findIndex(o => key(o) === want);
+      if (idx >= 0) piece.oriIndex = idx;
+      for (const [r, c] of sol.cells) state.occupied.set(r + ',' + c, piece.id);
+      piece.placed = true;
+      piece.placedCells = sol.cells.map(c => c.slice());
+    }
+    function removeInstanceSilent(instId) {
+      const p = state.pieces.find(pp => pp.id === instId);
+      if (!p || !p.placed) return;
+      for (const [r, c] of p.placedCells) state.occupied.delete(r + ',' + c);
+      p.placed = false; p.placedCells = null;
+    }
+
+    function hint() {
+      if (state.ended) return;
+      const next = state.solution.find(sol => {
+        return !sol.cells.every(([r, c]) => {
+          const inst = state.occupied.get(r + ',' + c);
+          if (inst === undefined) return false;
+          const p = state.pieces.find(pp => pp.id === inst);
+          return p && p.name === sol.name;
+        });
+      });
+      if (!next) return;
+      applySolutionPiece(next);
+      state.selected = null;
+      renderBoard(); renderTray(); renderKPIs();
+      setStatus('Here is one brick in place. Keep going!', '');
+      checkWin();
+    }
+
+    function solveAll() {
+      state.occupied.clear();
+      state.pieces.forEach(p => { p.placed = false; p.placedCells = null; });
+      // Show the full cover with the highest Net Value (a full cover leaves no
+      // empty cells, so Net Value = total value of the bricks used).
+      const pd = state.pd, all = allPieces();
+      const sols = collectSolutions(pd, 3000);
+      let best = null, bestVal = -Infinity;
+      for (const sol of sols) {
+        let v = 0; for (const pl of sol) v += pd.values[pl.pi];
+        if (v > bestVal) { bestVal = v; best = sol; }
+      }
+      if (best) {
+        for (const pl of best) {
+          const brick = all[pl.pi];
+          applySolutionPiece({ name: brick.name, color: brick.color, cells: maskToCells(pd, pl.mask) });
+        }
+      } else {
+        for (const sol of state.solution) applySolutionPiece(sol); // fallback
+        bestVal = state.bestValue;
+      }
+      state.selected = null;
+      state.ended = true;
+      stopTimer();
+      renderBoard(); renderTray(); renderKPIs();
+      setStatus('Highest-value solution shown (Net ' + money(bestVal) + '). Hit “New puzzle” for another.', '');
+      clearPreview();
+    }
+
+    // ---------- Timer ----------
+    function resetTimer() {
+      stopTimer();
+      timer.elapsed = 0;
+      timer.running = false;
+      updateTimerUI();
+    }
+    function startTimer() {
+      if (timer.running) return;
+      timer.running = true;
+      timer.start = Date.now();
+      timer.interval = setInterval(() => {
+        timer.elapsed = Math.floor((Date.now() - timer.start) / 1000);
+        updateTimerUI();
+      }, 250);
+    }
+    function stopTimer() {
+      timer.running = false;
+      if (timer.interval) { clearInterval(timer.interval); timer.interval = null; }
+    }
+    function updateTimerUI() {
+      const limit = DIFFS[state ? state.diff : 'easy'].limit;
+      const remaining = Math.max(0, limit - timer.elapsed);
+      $('#elapsed').textContent = fmt(remaining);
+      const pct = Math.max(0, (remaining / limit) * 100);
+      const bar = $('#sandBar');
+      bar.style.width = pct + '%';
+      if (pct < 20) bar.style.background = 'linear-gradient(90deg,#e74c3c,#e67e22)';
+      else if (pct < 50) bar.style.background = 'linear-gradient(90deg,#f1c40f,#e67e22)';
+      else bar.style.background = 'linear-gradient(90deg,#2ecc71,#f1c40f)';
+      // Time-left reminders + gentle idle encouragement.
+      if (state && timer.running) {
+        if (remaining > 0 && [60, 30, 15, 10].indexOf(remaining) !== -1 && !state.timeNudges.has(remaining)) {
+          state.timeNudges.add(remaining);
+          const label = remaining >= 60 ? '1 minute' : remaining + ' seconds';
+          nudge('⏳ ' + label + ' left to submit your solution!', remaining <= 15 ? 'urgent' : 'time');
+        }
+        if (remaining === 0 && !state.ended) {
+          endRound();
+          return;
+        }
+        const now = Date.now();
+        if (remaining > 12 && state.occupied.size < state.region.size &&
+            now - lastAction > 28000 && now - lastIdle > 28000 && now - lastCheer > 6000) {
+          lastIdle = now;
+          nudge('Keep going, every brick counts. You can do this! 💪', 'cheer');
+        }
+      }
+    }
+    function fmt(s) {
+      const m = Math.floor(s / 60), sec = s % 60;
+      return m + ':' + (sec < 10 ? '0' : '') + sec;
+    }
+
+    // ---------- Best times ----------
+    // Personal best is now the highest Net Value reached for a difficulty.
+    function bestKey(diff) { return 'portfoliofit-testing.bestnet.' + diff; }
+    function loadBest(diff) {
+      const v = localStorage.getItem(bestKey(diff));
+      return v === null ? null : parseFloat(v);
+    }
+    function saveBest(diff, net) {
+      const cur = loadBest(diff);
+      if (cur === null || net > cur) { localStorage.setItem(bestKey(diff), String(net)); updateBestUI(); return true; }
+      return false;
+    }
+    function updateBestUI() {
+      const b = loadBest(state ? state.diff : 'easy');
+      $('#best').textContent = b === null ? '–' : money(b);
+    }
+
+    function setStatus(msg, cls) {
+      statusEl.textContent = msg;
+      statusEl.className = 'status' + (cls ? ' ' + cls : '');
+    }
+
+    // ---------- End of round (deadline reached) ----------
+    function currentNet() { return placedValue() - (state.region.size - state.occupied.size); }
+
+    function endRound() {
+      if (state.ended) return;
+      state.ended = true;
+      stopTimer();
+      state.selected = null; clearPreview();
+      renderBoard(); renderTray(); renderKPIs();
+      const net = currentNet();
+      const isHigh = saveBest(state.diff, net);
+      showEnd(net, isHigh);
+    }
+
+    function confetti(n) {
+      n = n || 90;
+      const colors = ['#e67e22', '#2ecc71', '#3498db', '#e74c3c', '#f1c40f', '#9b59b6'];
+      const layer = document.createElement('div'); layer.className = 'confetti-layer';
+      for (let i = 0; i < n; i++) {
+        const p = document.createElement('i');
+        p.style.left = (Math.random() * 100) + 'vw';
+        p.style.background = colors[i % colors.length];
+        p.style.animationDelay = (Math.random() * 0.4) + 's';
+        p.style.animationDuration = (2.2 + Math.random() * 1.6) + 's';
+        p.style.opacity = (0.7 + Math.random() * 0.3).toFixed(2);
+        layer.appendChild(p);
+      }
+      document.body.appendChild(layer);
+      setTimeout(() => layer.remove(), 4400);
+    }
+
+    function showEnd(net, isHigh) {
+      const full = state.occupied.size === state.region.size;
+      const optimal = full && net >= state.bestValue;
+      state.lastNet = net; state.lastOptimal = optimal;   // for the Share button
+      if (window.AppStats) AppStats.record({ net: net, diff: state.diff,
+        coverage: Math.round(state.occupied.size / state.region.size * 100), optimal: optimal });
+      $('#modalEmoji').textContent = optimal ? '🏆' : (full ? '🎉' : '⏱️');
+      $('#modalTitle').textContent = optimal ? 'Optimal portfolio!' : "Time's up!";
+      $('#modalSub').textContent = optimal
+        ? 'You finished with the highest-value portfolio possible here.'
+        : (isHigh ? '🌟 New personal best for this difficulty!' : 'Here is how your portfolio scored.');
+      $('#modalValue').textContent = money(net);
+      $('#modalBest').textContent = money(state.bestValue);
+      // Net-vs-best progress bar (animate from 0).
+      const ratio = state.bestValue > 0 ? Math.max(0, Math.min(1, net / state.bestValue)) : 0;
+      const fill = $('#resultFill');
+      fill.style.background = optimal ? 'linear-gradient(90deg,#2ecc71,#27ae60)'
+        : ratio >= 0.66 ? 'linear-gradient(90deg,#2ecc71,#f1c40f)'
+        : ratio >= 0.33 ? 'linear-gradient(90deg,#f1c40f,#e67e22)'
+        : 'linear-gradient(90deg,#e67e22,#e74c3c)';
+      fill.style.width = '0%';
+      setTimeout(() => { fill.style.width = Math.round(ratio * 100) + '%'; }, 60);
+      // Personal bests + session count.
+      const eb = loadBest('easy'), hb = loadBest('hard');
+      $('#modalPB').innerHTML = 'Personal bests &middot; Easy <b>' + (eb === null ? '–' : money(eb)) +
+        '</b> &middot; Hard <b>' + (hb === null ? '–' : money(hb)) + '</b><br>Puzzle ' + sessionRounds + ' this session';
+      $('#overlay').classList.add('show');
+      if (optimal) confetti(130);
+    }
+    function hideWin() { $('#overlay').classList.remove('show'); }
+
+    function shareResult() {
+      const btn = $('#modalShare');
+      const diffName = state.diff === 'hard' ? 'Hard' : 'Easy';
+      const txt = 'PortfolioFit (' + diffName + '): Net ' + money(state.lastNet) + ' / ' + money(state.bestValue) +
+        (state.lastOptimal ? ' 🏆 optimal!' : '') + ' | https://www.stouras.com/lab/portfoliofit-testing/';
+      const done = () => { const o = btn.dataset.label || 'Share'; btn.textContent = 'Copied!'; setTimeout(() => { btn.textContent = o; }, 1500); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(done).catch(() => fallbackCopy(txt, done));
+      } else { fallbackCopy(txt, done); }
+    }
+    function fallbackCopy(text, cb) {
+      try {
+        const ta = document.createElement('textarea'); ta.value = text;
+        ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta);
+        if (cb) cb();
+      } catch (e) { /* clipboard unavailable */ }
+    }
+
+    // ---------- Verification: solutions list + Sahni proof ----------
+    function openInfo(title, bodyNode) {
+      $('#infoTitle').textContent = title;
+      const b = $('#infoBody'); b.innerHTML = ''; b.appendChild(bodyNode);
+      $('#infoOverlay').classList.add('show');
+    }
+    function closeInfo() { $('#infoOverlay').classList.remove('show'); }
+
+    function miniBoard(colorMap, hintSet, cs) {
+      cs = cs || 15;
+      const g = document.createElement('div'); g.className = 'mini-board';
+      g.style.gridTemplateColumns = 'repeat(' + state.cols + ', ' + cs + 'px)';
+      for (let r = 0; r < state.rows; r++) for (let c = 0; c < state.cols; c++) {
+        const k = r + ',' + c, d = document.createElement('div');
+        d.className = 'mc'; d.style.width = cs + 'px'; d.style.height = cs + 'px';
+        if (!state.region.has(k)) d.classList.add('void');
+        else {
+          const col = colorMap && colorMap.get(k);
+          if (col) d.style.background = col; else d.classList.add('empty');
+          if (hintSet && hintSet.has(k)) d.classList.add('hint');
+        }
+        g.appendChild(d);
+      }
+      return g;
+    }
+    function placementsColorMap(placements) {
+      const cm = new Map(), all = allPieces();
+      for (const pl of placements)
+        for (const cell of maskToCells(state.pd, pl.mask)) cm.set(cell[0] + ',' + cell[1], all[pl.pi].color);
+      return cm;
+    }
+
+    function showSolutions() {
+      const pd = state.pd, all = allPieces();
+      const sols = collectSolutions(pd, 200);
+      const entries = sols.map(sol => {
+        const cm = new Map(); const names = []; let value = 0;
+        for (const pl of sol) {
+          const brick = all[pl.pi]; value += brick.value; names.push(brick.name);
+          for (const cell of maskToCells(pd, pl.mask)) cm.set(cell[0] + ',' + cell[1], brick.color);
+        }
+        return { cm: cm, names: names.sort(), value: value };
+      });
+      entries.sort((a, b) => b.value - a.value);
+      const body = document.createElement('div');
+      const intro = document.createElement('p');
+      intro.innerHTML = 'There ' + (entries.length === 1 ? 'is' : 'are') + ' <b>' + entries.length +
+        (sols.length >= 200 ? '+' : '') + '</b> distinct way' + (entries.length === 1 ? '' : 's') +
+        ' to fully cover this board with the available bricks. A full cover leaves no empty cells, so ' +
+        '<b>Net Value = total value of the bricks used</b>. Sorted by Net Value:';
+      body.appendChild(intro);
+      const grid = document.createElement('div'); grid.className = 'sol-list';
+      entries.slice(0, 60).forEach(e => {
+        const item = document.createElement('div'); item.className = 'sol-item';
+        item.appendChild(miniBoard(e.cm, null, 14));
+        const meta = document.createElement('div'); meta.className = 'sol-meta';
+        meta.innerHTML = '<span class="sol-net">Net ' + money(e.value) + '</span><br>' + e.names.join(' + ');
+        item.appendChild(meta); grid.appendChild(item);
+      });
+      body.appendChild(grid);
+      if (entries.length > 60) {
+        const m = document.createElement('p'); m.className = 'muted';
+        m.textContent = '(Showing the 60 highest-value of ' + entries.length + '.)'; body.appendChild(m);
+      }
+      openInfo('Full coverage solutions', body);
+    }
+
+    function showProof() {
+      const pd = state.pd, all = allPieces();
+      const w = sahniWitness(pd);
+      const body = document.createElement('div');
+      const intro = document.createElement('p');
+      intro.innerHTML = 'The Sahni number <b>&kappa;</b> is the fewest bricks you must place by hand (&ldquo;hints&rdquo;) ' +
+        'before a fixed <b>greedy</b> rule can finish the board on its own. The greedy always takes the highest ' +
+        'value-per-cell brick that still fits and drops it into the first free (top-left) spot. Greedy order:';
+      body.appendChild(intro);
+      const order = []; for (let pi = 0; pi < pd.m; pi++) order.push(pi);
+      order.sort((a, b) => pd.ratios[b] - pd.ratios[a] || a - b);
+      const ol = document.createElement('div'); ol.className = 'order-list';
+      order.forEach(pi => {
+        const b = all[pi], chip = document.createElement('span'); chip.className = 'order-chip';
+        chip.innerHTML = '<i style="background:' + b.color + '"></i>' + b.name + ' (' + pd.ratios[pi].toFixed(2) + '/cell)';
+        ol.appendChild(chip);
+      });
+      body.appendChild(ol);
+
+      if (w.kappa === 0) {
+        const p = document.createElement('p');
+        p.innerHTML = '<b>&kappa; = 0.</b> The greedy fills this board with no hints at all:';
+        body.appendChild(p);
+        const wrap = document.createElement('div'); wrap.className = 'proof-board';
+        wrap.appendChild(miniBoard(placementsColorMap(w.dead.placed), null, 17));
+        body.appendChild(wrap);
+      } else {
+        const p1 = document.createElement('p');
+        p1.innerHTML = '<b>With 0 hints the greedy gets stuck.</b> It places these bricks in order, then jams, ' +
+          'because no remaining brick fits the leftover cells (so &kappa; &gt; 0):';
+        body.appendChild(p1);
+        const dw = document.createElement('div'); dw.className = 'proof-board';
+        const dcap = document.createElement('div'); dcap.className = 'cap'; dcap.textContent = 'Greedy with 0 hints (jams)';
+        dw.appendChild(dcap); dw.appendChild(miniBoard(placementsColorMap(w.dead.placed), null, 17));
+        body.appendChild(dw);
+        if (w.witness) {
+          const pinnedSet = new Set(), cm = placementsColorMap(w.witness.completion.placed);
+          for (const pl of w.witness.pinned)
+            for (const cell of maskToCells(pd, pl.mask)) { const k = cell[0] + ',' + cell[1]; pinnedSet.add(k); cm.set(k, all[pl.pi].color); }
+          const names = w.witness.pinned.map(pl => all[pl.pi].name);
+          const p2 = document.createElement('p');
+          p2.innerHTML = '<b>With ' + w.kappa + ' hint' + (w.kappa > 1 ? 's' : '') + ' the greedy finishes.</b> Pre-place <b>' +
+            names.join(' + ') + '</b> (outlined), and the greedy completes the rest:';
+          body.appendChild(p2);
+          const ww = document.createElement('div'); ww.className = 'proof-board';
+          const wcap = document.createElement('div'); wcap.className = 'cap'; wcap.textContent = w.kappa + ' hint(s) → greedy completes it';
+          ww.appendChild(wcap); ww.appendChild(miniBoard(cm, pinnedSet, 17));
+          body.appendChild(ww);
+        }
+        const concl = document.createElement('p'); concl.className = 'muted';
+        concl.textContent = 'Every smaller set of hints (fewer than ' + w.kappa + ') was checked exhaustively and the greedy still jams, so κ is exactly ' + w.kappa + '.';
+        body.appendChild(concl);
+      }
+      openInfo('Why the Sahni number κ = ' + w.kappa, body);
+    }
+
+    // ---------- Encouragement & time nudges ----------
+    const nudgeEl = $('#nudge');
+    let nudgeHide = null, lastCheer = 0, lastAction = Date.now(), lastIdle = 0;
+    const CHEERS = ['You are doing great!', 'Keep it up!', 'Great progress!', 'Smart placement!',
+      'Looking good!', 'On a roll!', 'Nice work!', 'That fits beautifully!'];
+    function nudge(msg, type) {
+      nudgeEl.textContent = msg;
+      nudgeEl.className = 'nudge show ' + (type || 'cheer');
+      clearTimeout(nudgeHide);
+      nudgeHide = setTimeout(() => { nudgeEl.className = 'nudge'; }, 4200);
+    }
+    function cheer() {
+      const now = Date.now();
+      if (now - lastCheer < 2500) return;
+      lastCheer = now;
+      nudge(CHEERS[Math.floor(Math.random() * CHEERS.length)] + ' 👏', 'cheer');
+    }
+    function onProgress() {
+      lastAction = Date.now();
+      const cov = Math.round(state.occupied.size / state.region.size * 100);
+      state.milestones = state.milestones || new Set();
+      if (cov >= 75 && !state.milestones.has(75)) { state.milestones.add(75); nudge('Almost there, keep going! 💪', 'cheer'); }
+      else if (cov >= 50 && !state.milestones.has(50)) { state.milestones.add(50); nudge('Halfway there, great work! 🚀', 'cheer'); }
+      else cheer();
+    }
+
+    // ---------- Controls wiring ----------
+    // Re-orient the selected brick by applying a geometric transform and snapping
+    // to the matching orientation in its precomputed orbit.
+    function transformSelected(fn) {
+      const p = selectedPiece();
+      if (!p || p.placed) return;
+      const want = key(fn(oriCells(p)));
+      const idx = p.oris.findIndex(o => key(o) === want);
+      if (idx >= 0) p.oriIndex = idx;
+      renderTray(); clearPreview();
+    }
+    const rotateCW = () => transformSelected(cells => rotate(cells));
+    const rotateCCW = () => transformSelected(cells => normalize(cells.map(([r, c]) => [-c, r])));
+    const flipH = () => transformSelected(cells => reflect(cells));               // mirror left↔right
+    const flipV = () => transformSelected(cells => normalize(cells.map(([r, c]) => [-r, c]))); // mirror up↕down
+    // Buttons / R / F keep their original behaviour.
+    const rotateSelected = rotateCW;
+    const flipSelected = flipH;
+
+    document.querySelectorAll('#difficulty button').forEach(b => {
+      b.addEventListener('click', () => {
+        document.querySelectorAll('#difficulty button').forEach(x => x.classList.remove('active'));
+        b.classList.add('active');
+        newGame(b.dataset.diff);
+        updateBestUI();
+      });
+    });
+    $('#newBtn').addEventListener('click', () => { hideWin(); newGame(state.diff); });
+    $('#restartBtn').addEventListener('click', () => {
+      hideWin();
+      state.occupied.clear();
+      state.pieces.forEach(p => { p.placed = false; p.placedCells = null; });
+      state.selected = null;
+      state.ended = false;
+      state.wasFull = false;
+      state.wasOptimal = false;
+      state.milestones = new Set();
+      state.timeNudges = new Set();
+      if (nudgeEl) nudgeEl.className = 'nudge';
+      renderBoard(); renderTray(); renderKPIs();
+      resetTimer(); startTimer();
+      setStatus('Board reset. Go again!', '');
+    });
+    $('#rotateBtn').addEventListener('click', rotateSelected);
+    $('#flipBtn').addEventListener('click', flipSelected);
+    $('#hintBtn').addEventListener('click', hint);
+    $('#solveBtn').addEventListener('click', solveAll);
+    $('#modalReplay').addEventListener('click', () => {
+      hideWin();
+      $('#restartBtn').click();
+    });
+    $('#modalNext').addEventListener('click', () => { hideWin(); newGame(state.diff); });
+    $('#modalShare').addEventListener('click', shareResult);
+    $('#overlay').addEventListener('click', e => { if (e.target === $('#overlay')) hideWin(); });
+    $('#solBtn').addEventListener('click', showSolutions);
+    $('#proofBtn').addEventListener('click', showProof);
+    $('#infoClose').addEventListener('click', closeInfo);
+    $('#infoOverlay').addEventListener('click', e => { if (e.target === $('#infoOverlay')) closeInfo(); });
+
+    document.addEventListener('keydown', e => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      // Arrow keys rotate (←/→) and flip (↑/↓) the selected brick.
+      if (e.key.indexOf('Arrow') === 0) {
+        const p = selectedPiece();
+        if (!p || p.placed) return;            // nothing selected → let the page scroll
+        e.preventDefault();
+        if (e.key === 'ArrowRight') rotateCW();
+        else if (e.key === 'ArrowLeft') rotateCCW();
+        else if (e.key === 'ArrowUp') flipV();
+        else if (e.key === 'ArrowDown') flipH();
+        return;
+      }
+      const kk = e.key.toLowerCase();
+      if (kk === 'r') { rotateSelected(); }
+      else if (kk === 'f') { flipSelected(); }
+      else if (kk === 'n') { hideWin(); newGame(state.diff); }
+      else if (kk === 'h') { hint(); }
+      else if (e.key === 'Escape') {
+        if ($('#infoOverlay').classList.contains('show')) { closeInfo(); }
+        else { state.selected = null; renderTray(); clearPreview(); }
+      }
+    });
+
+    // Re-fit the board when the window resizes or the device rotates.
+    let _resizeT = null;
+    function refitBoard() {
+      if (!state) return;
+      const cs = cellSize(state.rows, state.cols);
+      if (cs !== state.cs) { state.cs = cs; renderBoard(); }
+    }
+    window.addEventListener('resize', () => {
+      clearTimeout(_resizeT);
+      _resizeT = setTimeout(refitBoard, 150);
+    });
+    window.addEventListener('orientationchange', () => setTimeout(refitBoard, 250));
+
+    // ---------- KPI explanation tooltips (hover / focus / tap) ----------
+    const TIPS = {
+      'net-value': 'The main objective. Net Value = Total Value − Resource Cost (the penalty for empty cells). Higher is better!',
+      'total-value': 'Sum of the dollar values of every brick currently placed in the outline. Each brick type is worth a different amount.',
+      'resource-cost': 'Penalty for unused space: $1 for every empty cell still inside the outline.',
+      'coverage': 'Percentage of the outline covered by bricks: occupied cells ÷ total cells × 100.',
+      'value-resource': 'Efficiency: value generated per occupied cell (Total Value ÷ number of occupied cells).',
+      'portfolio-fitness': 'A geometric compactness score: your bricks as a share of the fillable cells inside their convex hull. A contiguous, gap-free cluster scores 100%; spreading bricks apart or leaving gaps between them lowers it.',
+      'difficulty': 'Two readouts of how hard this board is. Sahni κ: the fewest correctly-placed bricks after which a simple value-ratio greedy can finish without getting stuck (higher = harder). Distinct solutions: how many different brick combinations fill this exact outline. Every board offers several full covers, but exactly ONE of them reaches the highest Net Value — that unique optimum is what you are hunting for.'
+    };
+    const tipEl = $('#kpiTip');
+    let tipFor = null;
+    function showTip(target) {
+      const key = target.getAttribute('data-kpi');
+      if (!TIPS[key]) return;
+      tipEl.textContent = TIPS[key];
+      tipEl.classList.add('show');
+      const r = target.getBoundingClientRect();
+      const tw = tipEl.offsetWidth, th = tipEl.offsetHeight;
+      let left = Math.max(8, Math.min(r.left + r.width / 2 - tw / 2, window.innerWidth - tw - 8));
+      let top = r.top - th - 10;
+      if (top < 8) top = r.bottom + 10;
+      tipEl.style.left = left + 'px';
+      tipEl.style.top = top + 'px';
+      tipFor = target;
+    }
+    function hideTip() { tipEl.classList.remove('show'); tipFor = null; }
+    document.querySelectorAll('[data-kpi]').forEach(el => {
+      el.addEventListener('mouseenter', () => showTip(el));
+      el.addEventListener('mouseleave', hideTip);
+      el.addEventListener('focus', () => showTip(el));
+      el.addEventListener('blur', hideTip);
+      el.addEventListener('click', () => { tipFor === el ? hideTip() : showTip(el); });
+    });
+    document.addEventListener('click', e => { if (!e.target.closest('[data-kpi]')) hideTip(); });
+    window.addEventListener('scroll', hideTip, true);
+
+    // ---------- Calculator (managerial scratch maths) ----------
+    const calcInput = $('#calcInput'), calcExpr = $('#calcExpr'),
+          calcResult = $('#calcResult'), calcDisplay = document.querySelector('.calc-display'),
+          calcHistory = $('#calcHistory');
+    function calcShow(expr, res, err) {
+      calcExpr.innerHTML = expr || '&nbsp;';
+      calcResult.textContent = res;
+      calcDisplay.classList.toggle('err', !!err);
+    }
+    function calcEval() {
+      const expr = calcInput.value.trim();
+      if (!expr) return;
+      if (!/^[0-9+\-*/().\s]+$/.test(expr)) { calcShow(expr, 'Error', true); return; }
+      let res;
+      try { res = Function('"use strict"; return (' + expr + ');')(); }
+      catch (e) { calcShow(expr, 'Error', true); return; }
+      if (typeof res !== 'number' || !isFinite(res)) { calcShow(expr, 'Error', true); return; }
+      res = Math.round(res * 1e6) / 1e6;
+      calcShow(expr, String(res), false);
+      const line = document.createElement('div');
+      line.textContent = expr + ' = ' + res;
+      calcHistory.insertBefore(line, calcHistory.firstChild);
+      while (calcHistory.children.length > 30) calcHistory.removeChild(calcHistory.lastChild);
+      calcInput.value = '';
+    }
+    $('#calcPad').addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.act === 'eq') return calcEval();
+      if (b.dataset.act === 'clear') { calcInput.value = ''; calcShow('', '0', false); return; }
+      calcInput.value += b.dataset.k;
+      calcInput.focus();
+    });
+    calcInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); calcEval(); } });
+
+    // ---------- My Notes (this session only, cleared on page refresh) ----------
+    const notesList = $('#notesList'), notesInput = $('#notesInput');
+    let notesData = [];
+    function renderNotes() {
+      notesList.innerHTML = '';
+      for (const n of notesData) {
+        const item = document.createElement('div'); item.className = 'note-item';
+        const meta = document.createElement('div'); meta.className = 'note-meta';
+        const when = document.createElement('span'); when.textContent = n.when;
+        const del = document.createElement('button'); del.textContent = 'delete';
+        del.addEventListener('click', () => { notesData = notesData.filter(x => x.id !== n.id); renderNotes(); });
+        meta.appendChild(when); meta.appendChild(del);
+        const txt = document.createElement('div'); txt.className = 'note-text'; txt.textContent = n.text;
+        item.appendChild(meta); item.appendChild(txt);
+        notesList.appendChild(item);
+      }
+      notesList.scrollTop = notesList.scrollHeight;
+    }
+    function addNote() {
+      const text = notesInput.value.trim(); if (!text) return;
+      notesData.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), when: new Date().toLocaleString(), text: text });
+      notesInput.value = ''; renderNotes();
+    }
+    $('#notesAdd').addEventListener('click', addNote);
+    notesInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addNote(); } });
+
+    // ---------- Boot ----------
+    renderNotes();
+    calcShow('', '0', false);
+    newGame('easy');
+    updateBestUI();
+  })();
+  </script>
+<!-- ============================================================
+     Account widget — Firebase email/password Login / Register
+     Shared across stouras.com /fun/ apps. Backend project: stouras-snake.
+     Exposes window.Account { user, isGuest(), onChange(cb),
+     openLogin(), openRegister(), logout() } and dispatches the
+     'account-changed' event. Set window.AUTHCORE_NO_BAR = true before
+     this block to suppress the built-in fixed top-right bar (apps that
+     place their own Login/Register trigger in their header).
+     ============================================================ -->
+<style>
+  :root{ --acct-accent:#2563eb; --acct-accent-ink:#fff; }
+  #acctRoot, #acctRoot *{ box-sizing:border-box; }
+  /* fixed top-right bar */
+  .acct-bar{
+    position:fixed; z-index:2147483000;
+    top:max(8px, env(safe-area-inset-top)); right:max(8px, env(safe-area-inset-right));
+    display:flex; gap:8px; align-items:center;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  .acct-chip{
+    appearance:none; cursor:pointer; border:0; border-radius:999px;
+    font:600 14px/1 inherit; padding:10px 16px; min-height:40px;
+    display:inline-flex; align-items:center; gap:6px;
+    box-shadow:0 2px 10px rgba(0,0,0,.18); transition:transform .06s ease, filter .15s ease, background .15s ease;
+    white-space:nowrap; -webkit-tap-highlight-color:transparent; touch-action:manipulation;
+  }
+  .acct-chip:active{ transform:translateY(1px); }
+  .acct-ghost{ background:#fff; color:#1f2937; border:1px solid rgba(0,0,0,.12); }
+  .acct-ghost:hover{ background:#f3f4f6; }
+  .acct-solid{ background:var(--acct-accent); color:var(--acct-accent-ink); }
+  .acct-solid:hover{ filter:brightness(1.05); }
+  .acct-acc{ position:relative; }
+  .acct-pill .acct-av{ font-size:15px; }
+  .acct-pill .acct-name{ max-width:34vw; overflow:hidden; text-overflow:ellipsis; }
+  .acct-car{ opacity:.55; font-size:11px; }
+  .acct-menu{
+    position:absolute; top:calc(100% + 8px); right:0; min-width:200px;
+    background:#fff; color:#1f2937; border-radius:14px; padding:8px;
+    box-shadow:0 14px 40px rgba(0,0,0,.28); border:1px solid rgba(0,0,0,.08);
+  }
+  .acct-menu-head{ font-size:12px; color:#6b7280; padding:8px 10px 10px; border-bottom:1px solid #eef0f3; margin-bottom:6px; line-height:1.5; }
+  .acct-menu-head b{ color:#111827; word-break:break-all; }
+  .acct-menu-item{
+    display:block; width:100%; text-align:left; appearance:none; border:0; background:none;
+    cursor:pointer; font:600 14px/1 inherit; color:#dc2626; padding:11px 10px; border-radius:9px; min-height:44px;
+  }
+  .acct-menu-item:hover{ background:#fef2f2; }
+  /* modal */
+  .acct-modal{ position:fixed; inset:0; z-index:2147483600; display:flex; align-items:center; justify-content:center; padding:16px; }
+  .acct-modal[hidden]{ display:none; }
+  .acct-backdrop{ position:absolute; inset:0; background:rgba(15,23,42,.55); backdrop-filter:blur(2px); }
+  .acct-card{
+    position:relative; width:100%; max-width:400px; max-height:calc(100dvh - 32px); overflow:auto;
+    background:#fff; color:#111827; border-radius:18px; padding:26px 22px 22px;
+    box-shadow:0 30px 80px rgba(0,0,0,.45);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    animation:acctIn .16s ease-out;
+  }
+  @keyframes acctIn{ from{ transform:translateY(8px) scale(.99); opacity:0 } to{ transform:none; opacity:1 } }
+  .acct-x{ position:absolute; top:10px; right:12px; appearance:none; border:0; background:none; font-size:26px; line-height:1; color:#9ca3af; cursor:pointer; width:40px; height:40px; border-radius:10px; }
+  .acct-x:hover{ background:#f3f4f6; color:#111827; }
+  .acct-title{ font-size:22px; margin:2px 0 4px; }
+  .acct-sub{ font-size:13.5px; color:#6b7280; margin:0 0 16px; line-height:1.5; }
+  .acct-form{ display:flex; flex-direction:column; gap:12px; }
+  .acct-lbl{ display:flex; flex-direction:column; gap:6px; font-size:12.5px; font-weight:600; color:#374151; }
+  .acct-lbl input{
+    font:400 16px/1.3 inherit; padding:12px 13px; border:1px solid #d1d5db; border-radius:11px; outline:none;
+    color:#111827; background:#fff; width:100%; min-height:46px;
+  }
+  .acct-lbl input:focus{ border-color:var(--acct-accent); box-shadow:0 0 0 3px rgba(37,99,235,.16); }
+  .acct-err{ margin:2px 0 0; font-size:13px; color:#dc2626; background:#fef2f2; border:1px solid #fde2e2; padding:9px 11px; border-radius:9px; }
+  .acct-submit{
+    margin-top:4px; appearance:none; border:0; cursor:pointer; border-radius:12px; min-height:48px;
+    background:var(--acct-accent); color:var(--acct-accent-ink); font:700 15px/1 inherit; padding:14px;
+    transition:filter .15s ease;
+  }
+  .acct-submit:hover{ filter:brightness(1.05); }
+  .acct-submit:disabled{ opacity:.6; cursor:default; }
+  .acct-switch{ margin:16px 0 0; font-size:13.5px; color:#6b7280; text-align:center; }
+  .acct-switch a{ color:var(--acct-accent); font-weight:600; cursor:pointer; text-decoration:none; }
+  .acct-switch a:hover{ text-decoration:underline; }
+  /* phones */
+  @media (max-width:520px){
+    .acct-chip{ padding:9px 14px; font-size:13.5px; }
+    .acct-pill .acct-name{ max-width:26vw; }
+    .acct-card{ border-radius:16px 16px 0 0; max-width:none; align-self:flex-end; padding-bottom:max(22px, env(safe-area-inset-bottom)); animation:acctUp .18s ease-out; }
+    .acct-modal{ padding:0; align-items:flex-end; }
+    @keyframes acctUp{ from{ transform:translateY(100%) } to{ transform:none } }
+  }
+</style>
+<script type="module">
+(function(){
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyB75wGPTvquIGme8XrGeBoQNFo52nquQkE",
+    authDomain: "stouras-snake.firebaseapp.com",
+    databaseURL: "https://stouras-snake-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "stouras-snake",
+    storageBucket: "stouras-snake.firebasestorage.app",
+    messagingSenderId: "678091659383",
+    appId: "1:678091659383:web:7446d607cfa99eae000e72",
+    measurementId: "G-Z3085SMKJ5"
+  };
+
+  const listeners = [];
+  let ready = false, auth = null, fns = null, mode = "login";
+
+  const Account = window.Account = {
+    user: null, ready: false,
+    isGuest(){ return !this.user; },
+    onChange(cb){ listeners.push(cb); if(ready){ try{ cb(this.user); }catch(e){} } },
+    openLogin(){ openModal("login"); },
+    openRegister(){ openModal("register"); },
+    async logout(){ if(auth && fns){ try{ await fns.signOut(auth); }catch(e){} } closeMenu(); }
+  };
+  function emit(u){
+    Account.user = u; ready = true; Account.ready = true;
+    listeners.forEach(cb=>{ try{ cb(u); }catch(e){} });
+    try{ window.dispatchEvent(new CustomEvent("account-changed",{detail:u})); }catch(e){}
+    renderBar();
+  }
+
+  // ---------- DOM ----------
+  const root = document.createElement("div"); root.id = "acctRoot";
+  const showBar = !window.AUTHCORE_NO_BAR;
+  root.innerHTML =
+    (showBar ? '<div class="acct-bar" data-bar>'
+      + '<button class="acct-chip acct-ghost" data-act="login">Log in</button>'
+      + '<button class="acct-chip acct-solid" data-act="register">Register</button>'
+      + '<div class="acct-acc" data-acc hidden>'
+        + '<button class="acct-chip acct-ghost acct-pill" data-act="menu"><span class="acct-av">👤</span><b class="acct-name">You</b><span class="acct-car">▾</span></button>'
+        + '<div class="acct-menu" data-menu hidden>'
+          + '<div class="acct-menu-head">Signed in as<br><b class="acct-email"></b></div>'
+          + '<button class="acct-menu-item" data-act="logout">Log out</button>'
+        + '</div>'
+      + '</div></div>' : '')
+    + '<div class="acct-modal" data-modal hidden>'
+      + '<div class="acct-backdrop" data-act="close"></div>'
+      + '<div class="acct-card" role="dialog" aria-modal="true">'
+        + '<button class="acct-x" data-act="close" aria-label="Close">×</button>'
+        + '<h2 class="acct-title"></h2><p class="acct-sub"></p>'
+        + '<form class="acct-form" novalidate>'
+          + '<label class="acct-lbl acct-nick-field" hidden><span>Nickname</span>'
+            + '<input class="f-nick" type="text" maxlength="16" autocomplete="nickname" placeholder="Shown on the leaderboard"></label>'
+          + '<label class="acct-lbl"><span>Email</span>'
+            + '<input class="f-email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com"></label>'
+          + '<label class="acct-lbl"><span>Password</span>'
+            + '<input class="f-pass" type="password" autocomplete="current-password" placeholder="At least 6 characters"></label>'
+          + '<p class="acct-err" hidden></p>'
+          + '<button class="acct-submit" type="submit"></button>'
+        + '</form>'
+        + '<p class="acct-switch"></p>'
+      + '</div></div>';
+  document.body.appendChild(root);
+
+  const $ = (s)=>root.querySelector(s);
+  const bar = $("[data-bar]"), accBox = $("[data-acc]"), menu = $("[data-menu]");
+  const modal = $("[data-modal]"), form = $(".acct-form");
+  const elTitle=$(".acct-title"), elSub=$(".acct-sub"), elSwitch=$(".acct-switch"),
+        elErr=$(".acct-err"), elSubmit=$(".acct-submit"), nickField=$(".acct-nick-field"),
+        inNick=$(".f-nick"), inEmail=$(".f-email"), inPass=$(".f-pass");
+
+  function renderBar(){
+    if(!bar) return;
+    const u = Account.user;
+    bar.querySelector('[data-act="login"]').hidden = !!u;
+    bar.querySelector('[data-act="register"]').hidden = !!u;
+    accBox.hidden = !u;
+    if(u){
+      accBox.querySelector(".acct-name").textContent = u.nickname || "You";
+      accBox.querySelector(".acct-email").textContent = u.email || "";
+    }
+  }
+  function openMenu(){ if(menu){ menu.hidden=false; } }
+  function closeMenu(){ if(menu){ menu.hidden=true; } }
+
+  function openModal(which){
+    mode = which;
+    const reg = which==="register";
+    elTitle.textContent = reg ? "Create an account" : "Log in";
+    elSub.textContent = reg
+      ? "Register to appear on the leaderboard and keep your progress."
+      : "Log in to track your scores on the leaderboard.";
+    elSubmit.textContent = reg ? "Create account" : "Log in";
+    nickField.hidden = !reg;
+    inPass.setAttribute("autocomplete", reg ? "new-password" : "current-password");
+    elErr.hidden = true; elErr.textContent = "";
+    elSwitch.innerHTML = reg
+      ? 'Already have an account? <a data-act="to-login">Log in</a>'
+      : 'New here? <a data-act="to-register">Register</a>';
+    modal.hidden = false;
+    setTimeout(()=>{ (reg?inNick:inEmail).focus(); }, 60);
+  }
+  function closeModal(){ modal.hidden = true; }
+
+  function friendly(code, msg){
+    const m = {
+      "auth/invalid-email":"That email address looks invalid.",
+      "auth/missing-password":"Please enter a password.",
+      "auth/weak-password":"Password must be at least 6 characters.",
+      "auth/email-already-in-use":"That email is already registered — try logging in instead.",
+      "auth/invalid-credential":"Wrong email or password.",
+      "auth/wrong-password":"Wrong email or password.",
+      "auth/user-not-found":"No account found for that email.",
+      "auth/too-many-requests":"Too many attempts. Please wait a moment and try again.",
+      "auth/network-request-failed":"Network error — check your connection and try again.",
+      "auth/operation-not-allowed":"Email/password sign-in isn’t enabled for this site yet."
+    };
+    return m[code] || msg || "Something went wrong. Please try again.";
+  }
+  function showErr(t){ elErr.textContent = t; elErr.hidden = false; }
+
+  // delegated clicks
+  root.addEventListener("click", (e)=>{
+    const act = e.target.closest("[data-act]")?.getAttribute("data-act");
+    if(!act) return;
+    if(act==="login") openModal("login");
+    else if(act==="register") openModal("register");
+    else if(act==="close") closeModal();
+    else if(act==="to-login") openModal("login");
+    else if(act==="to-register") openModal("register");
+    else if(act==="menu"){ e.stopPropagation(); menu.hidden ? openMenu() : closeMenu(); }
+    else if(act==="logout") Account.logout();
+  });
+  document.addEventListener("click", (e)=>{ if(accBox && !accBox.contains(e.target)) closeMenu(); });
+  document.addEventListener("keydown", (e)=>{ if(e.key==="Escape"){ closeModal(); closeMenu(); } });
+
+  form.addEventListener("submit", async (e)=>{
+    e.preventDefault();
+    if(!auth || !fns){ showErr(friendly("auth/operation-not-allowed")); return; }
+    const email = inEmail.value.trim(), pass = inPass.value;
+    const nick = (inNick.value.trim() || email.split("@")[0] || "Player").slice(0,16);
+    if(!email){ showErr("Please enter your email."); return; }
+    if(pass.length < 6){ showErr("Password must be at least 6 characters."); return; }
+    elErr.hidden = true; elSubmit.disabled = true;
+    const original = elSubmit.textContent; elSubmit.textContent = "Please wait…";
+    try{
+      if(mode==="register"){
+        const cred = await fns.createUserWithEmailAndPassword(auth, email, pass);
+        try{ await fns.updateProfile(cred.user, { displayName: nick }); }catch(_){}
+      } else {
+        await fns.signInWithEmailAndPassword(auth, email, pass);
+      }
+      closeModal();
+      form.reset(); nickField.hidden = true;
+    }catch(err){
+      showErr(friendly(err && err.code, err && err.message));
+    }finally{
+      elSubmit.disabled = false; elSubmit.textContent = original;
+    }
+  });
+
+  // ---------- Firebase ----------
+  (async function init(){
+    try{
+      const appMod = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+      const authMod = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
+      const app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(FIREBASE_CONFIG);
+      auth = authMod.getAuth(app);
+      fns = authMod;
+      authMod.onAuthStateChanged(auth, (u)=>{
+        if(u){
+          emit({ uid:u.uid, email:u.email || "", nickname:(u.displayName || (u.email||"").split("@")[0] || "Player") });
+        } else { emit(null); }
+      });
+    }catch(e){
+      console.warn("Account auth init failed:", e);
+      emit(null); // fall back to guest
+    }
+  })();
+})();
+</script>
+<!-- ===== end Account widget ===== -->
+<style>
+  /* PortfolioFit is a light theme — restyle the account bar so the buttons read
+     well on the cream background (white "Log in" + orange "Register"). */
+  :root{ --acct-accent:#e67e22; }
+  .acct-chip{
+    font:700 13.5px/1 inherit; letter-spacing:.2px; padding:0 16px; height:40px; gap:7px;
+    transition:transform .14s ease, box-shadow .18s ease, background .18s ease, border-color .18s ease, filter .18s ease;
+  }
+  .acct-chip:hover{ transform:translateY(-1px); }
+  .acct-chip:active{ transform:translateY(0) scale(.97); }
+  .acct-chip:focus-visible{ outline:2px solid var(--acct-accent); outline-offset:2px; }
+  .acct-ghost{ background:#fff; color:#2b2b2b; border:1px solid #e0d8c8; box-shadow:0 2px 10px rgba(74,52,30,.14); }
+  .acct-ghost:hover{ background:#f6f3ee; border-color:#d2c6b0; }
+  .acct-solid{ background:var(--acct-accent); color:#fff; border:1px solid var(--acct-accent); box-shadow:0 6px 16px rgba(230,126,34,.32); }
+  .acct-solid:hover{ filter:brightness(1.04); box-shadow:0 9px 22px rgba(230,126,34,.40); }
+  @media (max-width:520px){ .acct-chip{ height:36px; padding:0 13px; font-size:13px; gap:6px; } }
+</style>
+<!-- ============================================================
+     StatsCore — per-app, per-user play statistics.
+     Stored in localStorage, namespaced by app + signed-in Firebase uid
+     (stats.v1.<app>.<uid>), so every app keeps its own stats even though
+     the login is shared. Exposes window.AppStats:
+       .setApp(config)          configure metrics + recent table
+       .record({...})           append a play (no-op unless signed in)
+       .open()                  show the profile modal
+       .addMenuItem({...})      inject a "Statistics" item into a menu
+     ============================================================ -->
+<style>
+  .pfs-modal{ position:fixed; inset:0; z-index:2147483600; display:flex; align-items:center; justify-content:center; padding:16px;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  .pfs-modal[hidden]{ display:none; }
+  .pfs-backdrop{ position:absolute; inset:0; background:rgba(15,23,42,.55); -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px); }
+  .pfs-card{ position:relative; width:100%; max-width:560px; max-height:calc(100dvh - 32px); overflow:auto;
+    background:#fff; color:#111827; border-radius:18px; padding:24px 22px 22px; box-shadow:0 30px 80px rgba(0,0,0,.45);
+    animation:pfsIn .16s ease-out; }
+  @keyframes pfsIn{ from{ transform:translateY(8px); opacity:0 } to{ transform:none; opacity:1 } }
+  .pfs-x{ position:absolute; top:10px; right:12px; appearance:none; border:0; background:none; font-size:26px; line-height:1;
+    color:#9ca3af; cursor:pointer; width:40px; height:40px; border-radius:10px; }
+  .pfs-x:hover{ background:#f3f4f6; color:#111827; }
+  .pfs-head{ display:flex; align-items:center; gap:12px; }
+  .pfs-av{ width:44px; height:44px; border-radius:50%; background:var(--pfs-accent,#2563eb); color:#fff;
+    display:flex; align-items:center; justify-content:center; font-size:21px; flex:none; }
+  .pfs-who b{ font-size:16px; }
+  .pfs-who small{ display:block; color:#6b7280; font-size:12.5px; word-break:break-all; }
+  .pfs-title{ font-size:12px; font-weight:700; color:var(--pfs-accent,#2563eb); text-transform:uppercase; letter-spacing:.08em; margin:18px 0 10px; }
+  .pfs-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(118px,1fr)); gap:10px; }
+  .pfs-stat{ background:#f8fafc; border:1px solid #eef0f3; border-radius:12px; padding:12px 14px; }
+  .pfs-stat .k{ font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:#6b7280; }
+  .pfs-stat .v{ font-size:21px; font-weight:800; margin-top:3px; font-variant-numeric:tabular-nums; color:#111827; }
+  .pfs-recent{ margin-top:6px; width:100%; border-collapse:collapse; font-size:13.5px; }
+  .pfs-recent th{ text-align:left; color:#6b7280; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em; padding:6px 8px; border-bottom:1px solid #eef0f3; }
+  .pfs-recent td{ padding:8px; border-bottom:1px solid #f3f4f6; color:#1f2937; }
+  .pfs-empty{ background:#f8fafc; border:1px dashed #d1d5db; border-radius:12px; padding:22px; text-align:center; color:#6b7280; font-size:14px; }
+  .pfs-foot{ margin-top:14px; font-size:11.5px; color:#9ca3af; text-align:center; }
+  /* injected "Statistics" menu item — self-contained so it sits cleanly in any host menu */
+  .pfs-mi{ display:block; width:100%; text-align:left; appearance:none; border:0; background:none; cursor:pointer;
+    font:600 14px/1 inherit; color:inherit; padding:11px 10px; border-radius:9px; min-height:44px; }
+  .pfs-mi:hover{ background:rgba(125,125,125,.16); }
+  @media (max-width:560px){ .pfs-card{ border-radius:16px 16px 0 0; align-self:flex-end; max-width:none; padding-bottom:max(22px, env(safe-area-inset-bottom)); } .pfs-modal{ padding:0; align-items:flex-end; } }
+</style>
+<script>
+(function(){
+  var AppStats = window.AppStats = {
+    config:null, app:null, _uid:null,
+    setApp:function(cfg){ this.config=cfg; this.app=cfg.app; },
+    _key:function(){ return 'stats.v1.'+this.app+'.'+(this._uid||'guest'); },
+    plays:function(){ try{ return JSON.parse(localStorage.getItem(this._key()))||[]; }catch(e){ return []; } },
+    record:function(data){
+      if(!this._uid || !this.app) return;            // only signed-in users are tracked
+      var a=this.plays(); a.push(Object.assign({ts:Date.now()}, data||{}));
+      if(a.length>500) a=a.slice(-500);
+      try{ localStorage.setItem(this._key(), JSON.stringify(a)); }catch(e){}
+    },
+    open:function(){ render(); },
+    fmtDate:function(ts){ try{ var d=new Date(ts);
+      return d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' '+d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
+    }catch(e){ return ''; } },
+    addMenuItem:function(opts){
+      var tries=0;
+      (function attempt(){
+        var menu=document.querySelector(opts.container);
+        if(!menu){ if(tries++<60) setTimeout(attempt,150); return; }
+        if(menu.querySelector('.pfs-mi')) return;
+        var before = opts.before ? menu.querySelector(opts.before) : null;
+        var b=document.createElement('button');
+        b.type='button'; b.className='pfs-mi';
+        b.textContent=opts.label||'📊 Statistics';
+        b.addEventListener('click', function(ev){
+          ev.stopPropagation();
+          try{ menu.hidden=true; }catch(e){}
+          menu.classList.add('hidden');
+          if(typeof opts.onClick==='function') opts.onClick(); else AppStats.open();
+        });
+        menu.insertBefore(b, before);
+      })();
+    }
+  };
+
+  var overlay=null;
+  function build(){
+    overlay=document.createElement('div'); overlay.className='pfs-modal'; overlay.hidden=true;
+    overlay.innerHTML='<div class="pfs-backdrop" data-close></div>'
+      +'<div class="pfs-card" role="dialog" aria-modal="true">'
+      +'<button class="pfs-x" data-close aria-label="Close">×</button>'
+      +'<div class="pfs-head"><div class="pfs-av" data-av>👤</div>'
+      +'<div class="pfs-who"><b data-nick>You</b><small data-email></small></div></div>'
+      +'<div data-body></div><div class="pfs-foot" data-foot></div></div>';
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', function(e){ if(e.target.hasAttribute('data-close')) close(); });
+    document.addEventListener('keydown', function(e){ if(e.key==='Escape' && overlay && !overlay.hidden) close(); });
+  }
+  function close(){ if(overlay) overlay.hidden=true; }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function render(){
+    var cfg=AppStats.config; if(!cfg) return;
+    if(!overlay) build();
+    var u=(window.Account&&window.Account.user)||null;
+    overlay.querySelector('[data-nick]').textContent=(u&&u.nickname)||'You';
+    overlay.querySelector('[data-email]').textContent=(u&&u.email)||'';
+    overlay.querySelector('.pfs-card').style.setProperty('--pfs-accent', cfg.accent||'#2563eb');
+    var plays=AppStats.plays();
+    var html='<div class="pfs-title">'+esc(cfg.title||'Your stats')+'</div>';
+    if(!plays.length){
+      html+='<div class="pfs-empty">'+esc(cfg.emptyText||'No plays recorded yet — play a round to start your stats.')+'</div>';
+    } else {
+      html+='<div class="pfs-grid">';
+      (cfg.metrics||[]).forEach(function(m){ var v; try{ v=m.value(plays); }catch(e){ v='—'; }
+        html+='<div class="pfs-stat"><div class="k">'+esc(m.label)+'</div><div class="v">'+esc(v)+'</div></div>'; });
+      html+='</div>';
+      if(cfg.recent && cfg.recent.columns){
+        var rows=plays.slice().reverse().slice(0, cfg.recent.limit||8);
+        html+='<div class="pfs-title">Recent rounds</div><table class="pfs-recent"><thead><tr>';
+        cfg.recent.columns.forEach(function(c){ html+='<th>'+esc(c.label)+'</th>'; });
+        html+='</tr></thead><tbody>';
+        rows.forEach(function(p){ html+='<tr>';
+          cfg.recent.columns.forEach(function(c){ var cv; try{ cv=c.value(p); }catch(e){ cv=''; } html+='<td>'+esc(cv)+'</td>'; });
+          html+='</tr>'; });
+        html+='</tbody></table>';
+      }
+    }
+    overlay.querySelector('[data-body]').innerHTML=html;
+    overlay.querySelector('[data-foot]').textContent='Saved on this device for '+((u&&u.email)||'your account')+'.';
+    overlay.hidden=false;
+  }
+
+  function setUid(u){ AppStats._uid = u ? u.uid : null; }
+  if(window.Account && window.Account.ready) setUid(window.Account.user);
+  window.addEventListener('account-changed', function(e){ setUid(e.detail); });
+})();
+</script>
+<!-- ===== end StatsCore ===== -->
+<script>
+(function(){
+  function money(v){ v=Math.round(v); return (v<0?'-$':'$')+Math.abs(v); }
+  function maxNet(p){ return Math.max.apply(null, p.map(function(x){return x.net||0;})); }
+  AppStats.setApp({
+    app:'portfoliofit-testing', title:'Your PortfolioFit stats', accent:'#e67e22',
+    emptyText:'Finish a timed round to start building your stats.',
+    metrics:[
+      {label:'Rounds', value:function(p){ return p.length; }},
+      {label:'Best net', value:function(p){ return money(maxNet(p)); }},
+      {label:'Avg net', value:function(p){ return money(p.reduce(function(s,x){return s+(x.net||0);},0)/p.length); }},
+      {label:'Best · Easy', value:function(p){ var e=p.filter(function(x){return x.diff==='easy';}); return e.length?money(maxNet(e)):'—'; }},
+      {label:'Best · Hard', value:function(p){ var e=p.filter(function(x){return x.diff==='hard';}); return e.length?money(maxNet(e)):'—'; }},
+      {label:'Optimal finishes', value:function(p){ return p.filter(function(x){return x.optimal;}).length; }}
+    ],
+    recent:{ limit:8, columns:[
+      {label:'When', value:function(p){ return AppStats.fmtDate(p.ts); }},
+      {label:'Difficulty', value:function(p){ return p.diff||'—'; }},
+      {label:'Net value', value:function(p){ return money(p.net||0); }},
+      {label:'Coverage', value:function(p){ return p.coverage!=null?p.coverage+'%':'—'; }}
+    ]}
+  });
+  AppStats.addMenuItem({ container:'#acctRoot .acct-menu', before:'[data-act="logout"]', label:'📊 Statistics' });
+})();
+</script>
+</body>
+</html>
