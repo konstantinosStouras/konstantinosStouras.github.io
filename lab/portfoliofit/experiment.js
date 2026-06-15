@@ -150,6 +150,7 @@
       + 'gap:10px;padding:6px 14px;background:#2b2b2b;color:#fff;font-family:Inter,sans-serif;font-size:13px;}'
       + '.pfx-topbar b{color:#f1c40f;}.pfx-topbar button{background:transparent;border:1px solid #555;color:#eee;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:12px;}'
       + 'body.pf-exp.pf-hastop{padding-top:42px;}'
+      + '.pfx-card.pfx-justify p{text-align:justify;}'
       + '.pfx-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;}';
     document.head.appendChild(el('style', { text: css }));
   }
@@ -286,7 +287,8 @@
       el('button', { class: 'pfx-btn', on: { click: startTraining } }, [cfg.texts.welcomeButton || 'Start training']),
       el('button', { class: 'pfx-btn sec', on: { click: showLogin } }, ['I already have an account'])
     ]));
-    showOverlay(card(cfg.texts.welcomeTitle, body));
+    var wc = card(cfg.texts.welcomeTitle, body); wc.classList.add('pfx-justify');
+    showOverlay(wc);
   }
 
   // ---- Phase: training --------------------------------------------------
