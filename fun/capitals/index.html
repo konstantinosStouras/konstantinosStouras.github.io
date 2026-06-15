@@ -1839,6 +1839,19 @@
       updateAccountUI(null);
       // Account widget is a deferred module (loads after this script): react to its event.
       window.addEventListener("account-changed", function (e) { applyAccount(e.detail); });
+      // "Statistics" account-menu item → opens the existing My-progress stats for this account.
+      (function () {
+        var menu = document.getElementById("accountMenu");
+        var logout = document.getElementById("logoutBtn");
+        if (menu && !menu.querySelector(".pfs-menu-stats")) {
+          var b = document.createElement("button");
+          b.type = "button"; b.className = "menu-item pfs-menu-stats";
+          b.setAttribute("data-i18n", "myProgress");
+          b.textContent = t("myProgress");
+          b.addEventListener("click", function () { closeAccountMenu(); openStats(); });
+          menu.insertBefore(b, logout);
+        }
+      })();
     })();
     Array.prototype.forEach.call(document.querySelectorAll(".sortbtn"), function (b) {
       b.addEventListener("click", function () { boardSort = b.getAttribute("data-sort"); renderBoard(); });

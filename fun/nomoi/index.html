@@ -557,6 +557,16 @@ document.getElementById('nickForm').addEventListener('submit', e=>{
   renderAccount(null);
   // Account widget is a deferred module (loads after this script): react to its event.
   window.addEventListener('account-changed', function(e){ applyAccount(e.detail); });
+  // "Στατιστικά" menu item → opens the existing progress view for this account.
+  if(pop && logoutBtn && !pop.querySelector('.pfs-menu-stats')){
+    var sb=document.createElement('button');
+    sb.type='button'; sb.className='pfs-menu-stats'; sb.textContent='Στατιστικά';
+    sb.style.cssText='appearance:none;border:0;background:none;width:100%;text-align:left;cursor:pointer;font:inherit;font-weight:600;font-size:.85rem;color:#1f2937;padding:9px;border-radius:8px;';
+    sb.onmouseover=function(){ sb.style.background='#f1f5f9'; };
+    sb.onmouseout=function(){ sb.style.background='transparent'; };
+    sb.onclick=function(){ closePop(); setMode('progress'); };
+    pop.insertBefore(sb, logoutBtn);
+  }
 })();
 
 // ---------- build SVG ----------
