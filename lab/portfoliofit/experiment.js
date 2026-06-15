@@ -163,18 +163,28 @@
   }
 
   // ---- Firebase ---------------------------------------------------------
+  var FB_BASE = 'https://www.gstatic.com/firebasejs/' + SDK + '/';
   async function initFirebase() {
-    var base = 'https://www.gstatic.com/firebasejs/' + SDK + '/';
-    var appM = await import(base + 'firebase-app.js');
-    var authM = await import(base + 'firebase-auth.js');
-    var fsM = await import(base + 'firebase-firestore.js');
-    var fnM = await import(base + 'firebase-functions.js');
-    var app = appM.initializeApp(FIREBASE_CONFIG);
+    var appM = await import(FB_BASE + 'firebase-app.js');
+    var authM = await import(FB_BASE + 'firebase-auth.js');
+    var fsM = await import(FB_BASE + 'firebase-firestore.js');
+    var app = (appM.getApps && appM.getApps().length) ? appM.getApp() : appM.initializeApp(FIREBASE_CONFIG);
     fb = {
       app: app, auth: authM.getAuth(app), db: fsM.getFirestore(app),
-      fns: fnM.getFunctions(app, 'europe-west1'), A: authM, F: fsM, Fn: fnM
+      fns: null, A: authM, F: fsM, Fn: null
     };
     authM.onAuthStateChanged(fb.auth, onAuthChanged);
+  }
+  // Cloud Functions are optional: loaded on demand and non-fatal. If the module
+  // fails to load, registration/survey fall back to direct Firestore writes, so
+  // a functions hiccup never blocks the app from starting.
+  async function ensureFunctions() {
+    if (fb.Fn && fb.fns) return true;
+    try {
+      var fnM = await import(FB_BASE + 'firebase-functions.js');
+      fb.Fn = fnM; fb.fns = fnM.getFunctions(fb.app, 'europe-west1');
+      return true;
+    } catch (e) { console.warn('[PFX] Cloud Functions unavailable; using direct writes', e); return false; }
   }
 
   async function loadConfig() {
@@ -349,6 +359,7 @@
         var uid = cred.user.uid;
         // Try the Cloud Function (atomic label); fall back to a direct write.
         try {
+          if (!(await ensureFunctions())) throw new Error('functions unavailable');
           var fn = fb.Fn.httpsCallable(fb.fns, 'registerParticipant');
           var res = await fn({ participantId: participantId, answers: answers });
           S.participant = { participantId: participantId, anonymousLabel: res.data && res.data.anonymousLabel };
@@ -580,6 +591,7 @@
       submit.setAttribute('disabled', 'true'); submit.textContent = 'Submitting...';
       try {
         try {
+          if (!(await ensureFunctions())) throw new Error('functions unavailable');
           var fn = fb.Fn.httpsCallable(fb.fns, 'submitSurvey');
           await fn({ answers: answers });
         } catch (fnErr) {
