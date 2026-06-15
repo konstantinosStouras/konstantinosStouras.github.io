@@ -676,19 +676,27 @@
   }
 
   // --- Mouse / touch steering ---------------------------------------------
-  // The snake heads toward the pointer: we pick whichever axis the pointer
-  // is farther away on, then commit to a cardinal direction.
+  // The snake heads toward the pointer in straight cardinal runs: it keeps
+  // going along its current axis until it lines up with the pointer on that
+  // axis, then turns onto the other axis (an L-shaped path). Re-picking the
+  // dominant axis every tick made it zig-zag, which looked like diagonal
+  // movement — the snake never moves diagonally.
   let pointer = null;
   function pointerToDir() {
     if (!pointer) return;
     const head = snake[0];
     const dx = pointer.x - (head.x + 0.5);
     const dy = pointer.y - (head.y + 0.5);
-    if (Math.abs(dx) < 0.4 && Math.abs(dy) < 0.4) return;
-    if (Math.abs(dx) > Math.abs(dy)) {
-      setDir(dx > 0 ? "right" : "left");
-    } else {
-      setDir(dy > 0 ? "down" : "up");
+    const adx = Math.abs(dx), ady = Math.abs(dy);
+    if (adx < 0.5 && ady < 0.5) return;          // pointer is on the head — keep going
+    if (dir.y === 0) {                           // currently moving left/right
+      if (adx >= 0.5 && (dx > 0) === (dir.x > 0)) return;  // pointer still ahead → keep straight
+      if (ady >= 0.5) setDir(dy > 0 ? "down" : "up");      // lined up (or pointer behind) → turn vertically
+      else setDir(dx > 0 ? "right" : "left");
+    } else {                                     // currently moving up/down
+      if (ady >= 0.5 && (dy > 0) === (dir.y > 0)) return;  // pointer still ahead → keep straight
+      if (adx >= 0.5) setDir(dx > 0 ? "right" : "left");   // lined up (or pointer behind) → turn horizontally
+      else setDir(dy > 0 ? "down" : "up");
     }
   }
 
