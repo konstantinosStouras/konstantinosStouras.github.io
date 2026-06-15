@@ -268,7 +268,7 @@
     async function restoreBuiltin() {
       var D = (window.PF_DEFAULTS && window.PF_DEFAULTS.texts) || {};
       var merged = Object.assign({}, cfg.texts);
-      g.fields.forEach(function (key) { merged[key] = D[key]; });
+      g.fields.forEach(function (key) { if (D[key] !== undefined) merged[key] = D[key]; else delete merged[key]; });
       try { await saveConfig({ texts: merged }); cfg.texts = merged; build(); toast(g.label + ' restored to built-in default.'); }
       catch (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); }
     }
