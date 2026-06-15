@@ -114,6 +114,27 @@
   .who .pill b { color: var(--accent); font-weight: 700; }
   .who .pill.guest b { color: var(--muted); }
 
+  /* account button + dropdown (far-right user menu with Log out) */
+  .account { position: relative; margin-left: auto; }
+  .account .pill { appearance: none; cursor: pointer; font-family: inherit; line-height: 1.4; transition: background .15s ease, border-color .15s ease; }
+  .account .pill:hover { background: var(--panel-2); border-color: #2b4a63; }
+  .account .pill .caret { color: var(--muted); font-size: 10px; }
+  .account-menu {
+    position: absolute; right: 0; top: calc(100% + 6px); z-index: 60;
+    min-width: 190px; max-width: calc(100vw - 24px); padding: 6px;
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow);
+  }
+  .account-menu.hidden { display: none; }
+  .account-menu .menu-head { font-size: 12px; color: var(--muted); padding: 6px 10px 8px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+  .account-menu .menu-head b { color: var(--text); }
+  .account-menu .menu-item {
+    appearance: none; display: block; width: 100%; text-align: left; cursor: pointer;
+    background: transparent; border: 0; color: var(--text);
+    padding: 9px 10px; border-radius: 8px; font-size: 13.5px; font-family: inherit;
+  }
+  .account-menu .menu-item:hover { background: var(--panel); }
+  .account-menu .menu-item.danger { color: var(--bad); }
+
   /* language flag switcher — inline SVG flags so every OS renders them (Windows shows no emoji flags) */
   .lang-switch { display: inline-flex; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
   .flag-btn {
@@ -444,10 +465,16 @@
             </svg>
           </button>
         </span>
-        <span class="pill" id="whoPill" title="Your nickname">👤 <b id="whoName">—</b></span>
         <button class="btn small ghost" id="statsBtn" data-i18n="myProgress">My progress</button>
         <button class="btn small ghost" id="boardBtn" data-i18n="leaderboard">Leaderboard</button>
-        <button class="btn small ghost" id="switchBtn" data-i18n="switch">Switch</button>
+        <div class="account" id="account">
+          <button class="pill" id="whoPill" aria-haspopup="true" aria-expanded="false" title="Account">👤 <b id="whoName">—</b> <span class="caret" aria-hidden="true">▾</span></button>
+          <div class="account-menu hidden" id="accountMenu" role="menu">
+            <div class="menu-head"><span id="menuHeadLabel" data-i18n="signedInAs">Signed in as</span> <b id="menuNick">—</b></div>
+            <button class="menu-item" id="menuSwitch" role="menuitem" data-i18n="switchUser">Switch user</button>
+            <button class="menu-item danger" id="logoutBtn" role="menuitem" data-i18n="logOut">Log out</button>
+          </div>
+        </div>
       </div>
     </header>
 
@@ -738,6 +765,7 @@
         nickPh: "Your nickname", startLearning: "Start learning", continueAs: "Continue as",
         playGuest: "Continue as Guest", guest: "Guest",
         guestNote: "Guest progress is saved on this device only — it never appears on the leaderboard.",
+        signedInAs: "Signed in as", playingAs: "Playing as", switchUser: "Switch user", logOut: "Log out",
         progressFor: "Progress for",
         answered: "Answered", accuracy: "Accuracy", points: "Points", bestStreak: "Best streak",
         solvedNoHint: "Solved no hint", answersShown: "Answers shown",
@@ -794,6 +822,7 @@
         nickPh: "Το ψευδώνυμό σου", startLearning: "Ξεκίνα", continueAs: "Συνέχισε ως",
         playGuest: "Συνέχισε ως Επισκέπτης", guest: "Επισκέπτης",
         guestNote: "Η πρόοδος ως επισκέπτης αποθηκεύεται μόνο σε αυτή τη συσκευή — δεν εμφανίζεται ποτέ στην κατάταξη.",
+        signedInAs: "Συνδεδεμένος ως", playingAs: "Παίζεις ως", switchUser: "Αλλαγή χρήστη", logOut: "Αποσύνδεση",
         progressFor: "Πρόοδος:",
         answered: "Απαντήσεις", accuracy: "Ακρίβεια", points: "Πόντοι", bestStreak: "Καλύτερο σερί",
         solvedNoHint: "Χωρίς βοήθεια", answersShown: "Αποκαλύψεις",
@@ -955,7 +984,9 @@
     // ---------- DOM ----------
     var $ = function (id) { return document.getElementById(id); };
     var els = {
-      whoName: $("whoName"), whoPill: $("whoPill"), statsBtn: $("statsBtn"), boardBtn: $("boardBtn"), switchBtn: $("switchBtn"),
+      whoName: $("whoName"), whoPill: $("whoPill"), statsBtn: $("statsBtn"), boardBtn: $("boardBtn"),
+      account: $("account"), accountMenu: $("accountMenu"), menuSwitch: $("menuSwitch"),
+      logoutBtn: $("logoutBtn"), menuNick: $("menuNick"), menuHeadLabel: $("menuHeadLabel"),
       langEn: $("langEn"), langEl: $("langEl"),
       regionSel: $("regionSel"), streakVal: $("streakVal"),
       qFlag: $("qFlag"), qRegion: $("qRegion"), qText: $("qText"),
@@ -1378,8 +1409,32 @@
     function updateStreakDisplay() { els.streakVal.textContent = profile.currentStreak; }
     function updateWho() {
       if (!profile) return;
-      els.whoName.textContent = profile.guest ? t("guest") : profile.nick;
+      var name = profile.guest ? t("guest") : profile.nick;
+      els.whoName.textContent = name;
       els.whoPill.classList.toggle("guest", !!profile.guest);
+      els.menuNick.textContent = name;
+      els.menuHeadLabel.textContent = profile.guest ? t("playingAs") : t("signedInAs");
+    }
+    // ---------- account menu (far-right user button) ----------
+    function closeAccountMenu() {
+      els.accountMenu.classList.add("hidden");
+      els.whoPill.setAttribute("aria-expanded", "false");
+    }
+    function toggleAccountMenu() {
+      if (els.accountMenu.classList.contains("hidden")) {
+        updateWho();
+        els.accountMenu.classList.remove("hidden");
+        els.whoPill.setAttribute("aria-expanded", "true");
+      } else {
+        closeAccountMenu();
+      }
+    }
+    // Log out: end the session and return to the main welcome screen, where the
+    // player can sign in with a nickname or continue as Guest (unranked).
+    function logout() {
+      closeAccountMenu();
+      try { localStorage.removeItem(LAST_KEY); } catch (e) {}
+      openNick(false);
     }
     function updateFooter() {
       els.footTotal.textContent = t("footTotal")(ALL.length);
@@ -1699,7 +1754,8 @@
     }
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape") {
-        if (!els.statsOverlay.classList.contains("hidden")) closeStats();
+        if (!els.accountMenu.classList.contains("hidden")) closeAccountMenu();
+        else if (!els.statsOverlay.classList.contains("hidden")) closeStats();
         else if (!els.boardOverlay.classList.contains("hidden")) closeBoard();
         else if (!els.nickOverlay.classList.contains("hidden") && els.nickClose.style.display !== "none") closeNick();
         return;
@@ -1715,7 +1771,12 @@
     els.resetBtn.addEventListener("click", resetProgress);
     els.boardBtn.addEventListener("click", openBoard);
     els.boardClose.addEventListener("click", closeBoard);
-    els.switchBtn.addEventListener("click", function () { openNick(true); });
+    els.whoPill.addEventListener("click", function (e) { e.stopPropagation(); toggleAccountMenu(); });
+    els.menuSwitch.addEventListener("click", function () { closeAccountMenu(); openNick(true); });
+    els.logoutBtn.addEventListener("click", logout);
+    document.addEventListener("click", function (e) {
+      if (!els.account.contains(e.target)) closeAccountMenu();
+    });
     Array.prototype.forEach.call(document.querySelectorAll(".sortbtn"), function (b) {
       b.addEventListener("click", function () { boardSort = b.getAttribute("data-sort"); renderBoard(); });
     });
