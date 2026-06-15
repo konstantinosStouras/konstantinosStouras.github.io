@@ -49,7 +49,8 @@ service cloud.firestore {
       match /events/{eventId} {
         allow read:   if isOwner(uid) || isAdmin();
         allow create: if isOwner(uid);
-        allow update, delete: if false;
+        allow update: if false;
+        allow delete: if isAdmin();
       }
 
       // Per-round summaries.
@@ -63,7 +64,7 @@ service cloud.firestore {
       match /survey/{docId} {
         allow read:          if isOwner(uid) || isAdmin();
         allow create, update: if isOwner(uid);
-        allow delete:        if false;
+        allow delete:        if isAdmin();
       }
     }
   }

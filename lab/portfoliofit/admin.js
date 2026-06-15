@@ -277,17 +277,28 @@
 
   // ---- Registration / Survey question editor ----
   function renderQuestions(body, field, title) {
-    var list = (cfg[field] || []).map(function (q) { return Object.assign({}, q); });
+    var list = ((cfg[field] && cfg[field].length) ? cfg[field] : ((window.PF_DEFAULTS && window.PF_DEFAULTS[field]) || [])).map(function (q) { return Object.assign({}, q); });
     var card = el('div', { class: 'pfa-card' });
     var listWrap = el('div', {});
     card.appendChild(el('p', { class: 'pfa-note', text: title + '. Drag order with the up/down buttons. System fields (Participant ID, e-mail, password) are required by the app.' }));
     card.appendChild(listWrap);
     var addBtn = el('button', { class: 'pfa-btn sec sm', on: { click: function () { list.push({ id: 'q_' + Date.now().toString(36), label: 'New question', type: 'text', required: true }); render(); } } }, ['+ Add question']);
-    var save = el('button', { class: 'pfa-btn', on: { click: doSave } }, ['Save ' + title.toLowerCase()]);
     card.appendChild(el('div', { class: 'pfa-field' }, [addBtn]));
-    card.appendChild(save);
+    card.appendChild(el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;' }, [
+      el('button', { class: 'pfa-btn', on: { click: doSave } }, ['Make this the default']),
+      el('button', { class: 'pfa-btn sec', on: { click: function () { list = builtinOrSaved(); render(); toast('Reloaded saved values.'); } } }, ['Reset this page to defaults']),
+      el('button', { class: 'pfa-btn sec', on: { click: restoreBuiltin } }, ['Restore built-in default'])
+    ]));
     body.appendChild(card);
     render();
+
+    function builtinOrSaved() { return ((cfg[field] && cfg[field].length) ? cfg[field] : ((window.PF_DEFAULTS && window.PF_DEFAULTS[field]) || [])).map(function (q) { return Object.assign({}, q); }); }
+    async function restoreBuiltin() {
+      list = ((window.PF_DEFAULTS && window.PF_DEFAULTS[field]) || []).map(function (q) { return Object.assign({}, q); });
+      var patch = {}; patch[field] = list;
+      try { await saveConfig(patch); cfg[field] = list.map(function (q) { return Object.assign({}, q); }); render(); toast('Restored built-in default.'); }
+      catch (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); }
+    }
 
     function render() {
       listWrap.innerHTML = '';
@@ -321,11 +332,9 @@
       });
     }
     async function doSave() {
-      save.setAttribute('disabled', 'true');
       var patch = {}; patch[field] = list;
-      try { await saveConfig(patch); cfg[field] = list; toast('Saved.'); }
+      try { await saveConfig(patch); cfg[field] = list.map(function (q) { return Object.assign({}, q); }); toast(title + ' saved.'); }
       catch (e) { toast('Save failed: ' + ((e && e.code) || 'error')); }
-      save.removeAttribute('disabled');
     }
   }
 
@@ -398,7 +407,28 @@
       activeCard.innerHTML = '';
       activeCard.appendChild(el('h3', { text: 'Current active set', style: 'margin:0 0 8px;font-size:15px;' }));
       var ids = (cfg.settings && cfg.settings.activePuzzleIds) || [];
-      if (!ids.length) { activeCard.appendChild(el('p', { class: 'pfa-note', text: 'None. Participants get randomly generated puzzles based on the Settings counts.' })); return; }
+      if (!ids.length) {
+        var def = (window.PF_DEFAULTS && window.PF_DEFAULTS.defaultPuzzles) || [];
+        if (def.length) {
+          activeCard.appendChild(el('p', { class: 'pfa-note', text: 'Built-in default set of ' + def.length + ' puzzles (no custom set frozen). Each participant sees them in a randomized order.' }));
+          var dwrap = el('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;margin:8px 0;' });
+          activeCard.appendChild(dwrap);
+          def.forEach(function (spec, i) {
+            var sc = (spec.tilings && spec.tilings.count != null) ? spec.tilings.count : null;
+            dwrap.appendChild(el('div', { class: 'pfa-q', style: 'flex:0 0 auto;text-align:center;min-width:120px;' }, [
+              el('div', { class: 'pfa-note', text: '#' + (i + 1) + ' · ' + spec.diff + ' · κ=' + spec.kappa + (sc != null ? ' · ' + sc + ' sol.' : '') + ' · $' + spec.bestValue }),
+              puzzleGrid(spec, true),
+              el('div', { style: 'display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:4px;' }, [
+                el('button', { class: 'pfa-btn sec sm', on: { click: function () { try { window.PFGame.previewPuzzle(spec); window.PFGame.showSolutions(); } catch (e) {} } } }, ['Solutions']),
+                el('button', { class: 'pfa-btn sec sm', on: { click: function () { try { window.PFGame.previewPuzzle(spec); window.PFGame.showProof(); } catch (e) {} } } }, ['κ proof'])
+              ])
+            ]));
+          });
+        } else {
+          activeCard.appendChild(el('p', { class: 'pfa-note', text: 'None. Participants get randomly generated puzzles based on the Settings counts.' }));
+        }
+        return;
+      }
       activeCard.appendChild(el('p', { class: 'pfa-note', text: ids.length + ' frozen puzzle(s) active. These are the exact puzzles every participant plays — each participant sees them in a randomized order.' }));
       var wrap = el('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;margin:8px 0;' });
       activeCard.appendChild(wrap);
@@ -497,17 +527,35 @@
     ]);
     var rows = parts.map(function (p) {
       return el('tr', {}, [
-        el('td', { text: p.anonymousLabel || '' }),
         el('td', { text: p.participantId || '' }),
         el('td', { text: p.email || '' }),
         el('td', { text: p.status || '' }),
-        el('td', { text: fmtTs(p.createdAt) })
+        el('td', { text: fmtTs(p.createdAt) }),
+        el('td', {}, [el('button', { class: 'pfa-btn danger sm', on: { click: function () { deleteParticipant(p._id, p.participantId || p.email || p._id); } } }, ['delete'])])
       ]);
     });
     var table = el('table', { class: 'pfa-tbl' });
-    table.appendChild(el('thead', {}, [el('tr', {}, ['Label', 'Participant ID', 'E-mail', 'Status', 'Registered'].map(function (h) { return el('th', { text: h }); }))]));
+    table.appendChild(el('thead', {}, [el('tr', {}, ['Participant ID', 'E-mail', 'Status', 'Registered', ''].map(function (h) { return el('th', { text: h }); }))]));
     table.appendChild(el('tbody', {}, rows.length ? rows : [el('tr', {}, [el('td', { colspan: '5', text: 'No participants yet.' })])]));
     body.appendChild(el('div', { class: 'pfa-card' }, [head, table]));
+
+    async function deleteParticipant(uid, who) {
+      if (!window.confirm('Delete participant "' + who + '" and all their data? This cannot be undone.')) return;
+      toast('Deleting…');
+      try {
+        var names = ['events', 'rounds'];
+        for (var n = 0; n < names.length; n++) {
+          try {
+            var sn = await fb.F.getDocs(fb.F.collection(fb.db, 'participants', uid, names[n]));
+            for (var j = 0; j < sn.docs.length; j++) { try { await fb.F.deleteDoc(sn.docs[j].ref); } catch (e) {} }
+          } catch (e) {}
+        }
+        try { await fb.F.deleteDoc(fb.F.doc(fb.db, 'participants', uid, 'survey', 'answers')); } catch (e) {}
+        await fb.F.deleteDoc(fb.F.doc(fb.db, 'participants', uid));
+        toast('Participant deleted.');
+        renderParticipants(body);
+      } catch (e) { toast('Delete failed: ' + ((e && e.code) || 'error')); }
+    }
   }
 
   function tsMs(ts) { if (!ts) return 0; if (typeof ts.toMillis === 'function') return ts.toMillis(); if (ts.seconds) return ts.seconds * 1000; return 0; }
@@ -526,23 +574,23 @@
       var pRows = [], eRows = [], rRows = [], sRows = [];
       for (var i = 0; i < parts.length; i++) {
         var p = parts[i], uid = p._id;
-        var base = { label: p.anonymousLabel || '', participantId: p.participantId || '', email: p.email || '', status: p.status || '', registered: fmtTs(p.createdAt) };
+        var base = { participantId: p.participantId || '', email: p.email || '', status: p.status || '', registered: fmtTs(p.createdAt) };
         var reg = p.registration || {};
         pRows.push(Object.assign({}, base, flatten(reg)));
         // events
         try {
           var es = await fb.F.getDocs(fb.F.collection(fb.db, 'participants', uid, 'events'));
-          es.forEach(function (d) { var v = d.data(); eRows.push({ label: base.label, participantId: base.participantId, seq: v.seq, type: v.type, phase: v.phase, round: v.round, puzzleId: v.puzzleId, net: v.net, coverage: v.coverage, clientTime: v.clientTime, data: v.dataJson }); });
+          es.forEach(function (d) { var v = d.data(); eRows.push({ participantId: base.participantId, seq: v.seq, type: v.type, phase: v.phase, round: v.round, puzzleId: v.puzzleId, net: v.net, coverage: v.coverage, clientTime: v.clientTime, data: v.dataJson }); });
         } catch (e) {}
         // rounds
         try {
           var rs = await fb.F.getDocs(fb.F.collection(fb.db, 'participants', uid, 'rounds'));
-          rs.forEach(function (d) { var v = d.data(); rRows.push({ label: base.label, participantId: base.participantId, puzzleId: v.puzzleId, index: v.index, diff: v.diff, net: v.net, value: v.value, cost: v.cost, coverage: v.coverage, fitness: v.fitness, placed: v.placed, total: v.total, time: v.time, placements: v.placementsJson }); });
+          rs.forEach(function (d) { var v = d.data(); rRows.push({ participantId: base.participantId, puzzleId: v.puzzleId, index: v.index, diff: v.diff, net: v.net, value: v.value, cost: v.cost, coverage: v.coverage, fitness: v.fitness, placed: v.placed, total: v.total, time: v.time, placements: v.placementsJson }); });
         } catch (e) {}
         // survey
         try {
           var sd = await fb.F.getDoc(fb.F.doc(fb.db, 'participants', uid, 'survey', 'answers'));
-          if (sd.exists()) { var sv = sd.data(); sRows.push(Object.assign({ label: base.label, participantId: base.participantId, completedAt: fmtTs(sv.completedAt) }, flatten(sv.answers || {}))); }
+          if (sd.exists()) { var sv = sd.data(); sRows.push(Object.assign({ participantId: base.participantId, completedAt: fmtTs(sv.completedAt) }, flatten(sv.answers || {}))); }
         } catch (e) {}
       }
       var wb = X.utils.book_new();
