@@ -48,6 +48,10 @@
       registerTitle: 'Registration',
       registerIntro: 'Please provide some basic information about yourself.',
       mainIntro: 'You will now play a series of timed puzzles. Maximise the net value of each portfolio before the timer runs out.',
+      mainTitle: 'Game phase',
+      statsTitle: 'Thank you for playing!',
+      surveyTitle: 'Post-Game Survey',
+      surveyIntro: 'Please share your thoughts about the experience (all fields are required).',
       thankyouTitle: 'Thank you for playing!',
       thankyouBody: 'Your responses have been recorded. You may now close this tab.'
     },
@@ -80,6 +84,17 @@
         options: ['None', 'Beginner', 'Intermediate', 'Advanced', 'Expert'] },
       { id: 'tetrisExp', label: 'Tetris Experience', type: 'select', required: true,
         options: ['None', 'Beginner', 'Intermediate', 'Advanced', 'Expert'] }
+    ],
+    surveyQuestions: [
+      { id: 's_satisfaction', label: 'How satisfied are you with your performance in the game?', type: 'select', required: true, options: ['Very dissatisfied', 'Dissatisfied', 'Neutral', 'Satisfied', 'Very satisfied'] },
+      { id: 's_difficulty', label: 'How would you rate the difficulty of the game?', type: 'select', required: true, options: ['Very easy', 'Easy', 'Moderate', 'Hard', 'Very hard'] },
+      { id: 's_clarity', label: 'How clear were the game instructions and objectives?', type: 'select', required: true, options: ['Very unclear', 'Unclear', 'Neutral', 'Clear', 'Very clear'] },
+      { id: 's_timeAdequate', label: 'Was the time limit adequate for completing the game?', type: 'select', required: true, options: ['Far too little', 'Too little', 'About right', 'Too much', 'Far too much'] },
+      { id: 's_strategy', label: 'What strategy did you use to maximize your net value?', type: 'textarea', required: true },
+      { id: 's_challenge', label: 'What was the most challenging aspect of the game?', type: 'textarea', required: true },
+      { id: 's_improve', label: 'What improvements would you suggest for this game?', type: 'textarea', required: true },
+      { id: 's_overall', label: 'Overall, how would you rate your experience?', type: 'select', required: true, options: ['Very poor', 'Poor', 'Average', 'Good', 'Excellent'] },
+      { id: 's_comments', label: 'Any additional comments or feedback?', type: 'textarea', required: true }
     ]
   };
 
@@ -88,7 +103,8 @@
   var cfg = DEFAULTS;                             // merged config
   var S = {
     phase: 'boot', user: null, participant: null,
-    seq: 0, buffer: [], roundIndex: 0, currentPuzzleId: null, flushing: false
+    seq: 0, buffer: [], roundIndex: 0, currentPuzzleId: null, flushing: false,
+    queue: [], mainIndex: 0, rounds: []
   };
   var inited = false;
 
@@ -147,18 +163,28 @@
   }
 
   // ---- Firebase ---------------------------------------------------------
+  var FB_BASE = 'https://www.gstatic.com/firebasejs/' + SDK + '/';
   async function initFirebase() {
-    var base = 'https://www.gstatic.com/firebasejs/' + SDK + '/';
-    var appM = await import(base + 'firebase-app.js');
-    var authM = await import(base + 'firebase-auth.js');
-    var fsM = await import(base + 'firebase-firestore.js');
-    var fnM = await import(base + 'firebase-functions.js');
-    var app = appM.initializeApp(FIREBASE_CONFIG);
+    var appM = await import(FB_BASE + 'firebase-app.js');
+    var authM = await import(FB_BASE + 'firebase-auth.js');
+    var fsM = await import(FB_BASE + 'firebase-firestore.js');
+    var app = (appM.getApps && appM.getApps().length) ? appM.getApp() : appM.initializeApp(FIREBASE_CONFIG);
     fb = {
       app: app, auth: authM.getAuth(app), db: fsM.getFirestore(app),
-      fns: fnM.getFunctions(app, 'europe-west1'), A: authM, F: fsM, Fn: fnM
+      fns: null, A: authM, F: fsM, Fn: null
     };
     authM.onAuthStateChanged(fb.auth, onAuthChanged);
+  }
+  // Cloud Functions are optional: loaded on demand and non-fatal. If the module
+  // fails to load, registration/survey fall back to direct Firestore writes, so
+  // a functions hiccup never blocks the app from starting.
+  async function ensureFunctions() {
+    if (fb.Fn && fb.fns) return true;
+    try {
+      var fnM = await import(FB_BASE + 'firebase-functions.js');
+      fb.Fn = fnM; fb.fns = fnM.getFunctions(fb.app, 'europe-west1');
+      return true;
+    } catch (e) { console.warn('[PFX] Cloud Functions unavailable; using direct writes', e); return false; }
   }
 
   async function loadConfig() {
@@ -333,6 +359,7 @@
         var uid = cred.user.uid;
         // Try the Cloud Function (atomic label); fall back to a direct write.
         try {
+          if (!(await ensureFunctions())) throw new Error('functions unavailable');
           var fn = fb.Fn.httpsCallable(fb.fns, 'registerParticipant');
           var res = await fn({ participantId: participantId, answers: answers });
           S.participant = { participantId: participantId, anonymousLabel: res.data && res.data.anonymousLabel };
@@ -403,27 +430,200 @@
     return (e && e.message) || 'Something went wrong. Please try again.';
   }
 
-  // ---- Phase: main (foundation stub) -----------------------------------
-  // Full sequencing (fixed 2 easy + 2 hard in random order, per-puzzle
-  // advance, then stats + survey) lands in the next increment. For now this
-  // starts a real round so logging and the flow can be tested end-to-end.
+  // ---- Phase: main (sequenced puzzles) ---------------------------------
+  // Plays the participant's puzzle queue. Default 2 easy + 2 hard in random
+  // order. When the admin freezes a specific set, buildQueue() will instead
+  // load those exact puzzles by id (hook noted below).
+  function buildQueue() {
+    var per = (cfg.settings && cfg.settings.puzzlesPerUser) || { easy: 2, hard: 2 };
+    var q = [];
+    var i;
+    for (i = 0; i < (per.easy || 0); i++) q.push({ diff: 'easy' });
+    for (i = 0; i < (per.hard || 0); i++) q.push({ diff: 'hard' });
+    // TODO(admin): when cfg.settings.activePuzzleIds is set, load those exact
+    // frozen puzzles here instead of generating by difficulty.
+    if (!cfg.settings || cfg.settings.randomizeOrder !== false) shuffle(q);
+    return q;
+  }
+  function shuffle(a) {
+    for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; }
+    return a;
+  }
+  function money(v) { v = Math.round(v || 0); return (v < 0 ? '-$' : '$') + Math.abs(v); }
+  function fmtTime(s) { s = Math.max(0, Math.round(s || 0)); var m = Math.floor(s / 60), ss = s % 60; return (m < 10 ? '0' : '') + m + ':' + (ss < 10 ? '0' : '') + ss; }
+
   function startMain() {
     S.phase = 'main';
-    showOverlay(card('Game phase', [
+    if (!S.queue || !S.queue.length) { S.queue = buildQueue(); S.mainIndex = 0; S.rounds = []; persistQueue(); }
+    var n = S.queue.length;
+    showOverlay(card(cfg.texts.mainTitle || 'Game phase', [
       el('p', { html: cfg.texts.mainIntro }),
-      el('p', { class: 'muted', html: 'You are registered as <b>' + esc((S.participant && S.participant.anonymousLabel) || (S.participant && S.participant.participantId) || '') + '</b>. (Full multi-puzzle sequencing, stats and the survey are being added next.)' }),
-      el('div', { class: 'pfx-row' }, [el('button', { class: 'pfx-btn', on: { click: runMainRound } }, ['Start puzzle'])])
+      el('p', { class: 'muted', html: 'You will play <b>' + n + '</b> puzzle' + (n === 1 ? '' : 's') + '. Maximise your net value in each before the timer ends.' }),
+      el('div', { class: 'pfx-row' }, [el('button', { class: 'pfx-btn', on: { click: runNextPuzzle } }, ['Start puzzle 1 of ' + n])])
     ]));
   }
-  function runMainRound() {
+  async function persistQueue() {
+    if (!fb || !S.user) return;
+    try {
+      await fb.F.setDoc(fb.F.doc(fb.db, 'participants', S.user.uid),
+        { puzzleOrder: S.queue.map(function (x) { return x.diff; }), status: 'playing', updatedAt: fb.F.serverTimestamp() }, { merge: true });
+    } catch (e) { /* ignore */ }
+  }
+  function runNextPuzzle() {
     closeOverlay();
-    S.roundIndex += 1;
-    S.currentPuzzleId = 'main-' + S.roundIndex;
-    window.PFGame._onRoundEnd = function (m) {
-      window.PFGame._onRoundEnd = null;
-      setTimeout(function () { startMain(); }, 400);
+    if (S.mainIndex >= S.queue.length) { showStats(); return; }
+    var item = S.queue[S.mainIndex];
+    S.roundIndex = S.mainIndex + 1;
+    S.currentPuzzleId = 'main-' + S.roundIndex + '-' + item.diff;
+    window.PFGame._onRoundEnd = onMainRoundEnd;
+    window.PFGame.newGame(item.diff);
+  }
+  function onMainRoundEnd(metrics) {
+    window.PFGame._onRoundEnd = null;
+    var placements = window.PFGame.getPlacements();
+    var rec = Object.assign({ puzzleId: S.currentPuzzleId, index: S.roundIndex }, metrics || {});
+    S.rounds.push(rec);
+    writeRound(rec, placements);
+    S.mainIndex += 1;
+    var remaining = S.queue.length - S.mainIndex;
+    setTimeout(function () { if (remaining <= 0) showStats(); else showInterstitial(remaining); }, 350);
+  }
+  function showInterstitial(remaining) {
+    var doneN = S.mainIndex, total = S.queue.length, last = S.rounds[S.rounds.length - 1];
+    showOverlay(card('Puzzle ' + doneN + ' complete', [
+      el('p', { html: 'Net value this puzzle: <b>' + money(last && last.net) + '</b>.' }),
+      el('p', { class: 'muted', text: remaining + ' puzzle' + (remaining === 1 ? '' : 's') + ' remaining.' }),
+      el('div', { class: 'pfx-row' }, [el('button', { class: 'pfx-btn', on: { click: runNextPuzzle } }, ['Next puzzle (' + (doneN + 1) + ' of ' + total + ')'])])
+    ]));
+  }
+  async function writeRound(rec, placements) {
+    if (!fb || !S.user) return;
+    try {
+      await fb.F.addDoc(fb.F.collection(fb.db, 'participants', S.user.uid, 'rounds'),
+        Object.assign({}, rec, { placementsJson: safeJson(placements || []), endedAt: fb.F.serverTimestamp() }));
+    } catch (e) { console.warn('[PFX] round write failed', e); }
+  }
+
+  // ---- Phase: stats -----------------------------------------------------
+  function showStats() {
+    S.phase = 'stats';
+    var rounds = S.rounds || [];
+    var sum = function (f) { return rounds.reduce(function (a, r) { return a + (f(r) || 0); }, 0); };
+    var totalValue = sum(function (r) { return r.value; });
+    var totalCost = sum(function (r) { return r.cost; });
+    var totalNet = sum(function (r) { return r.net; });
+    var totalPlaced = sum(function (r) { return r.placed; });
+    var totalCells = sum(function (r) { return r.total; });
+    var coverage = totalCells ? Math.round(totalPlaced / totalCells * 100) : 0;
+    var vpr = totalCost > 0 ? (totalValue / totalCost) : null;
+    var fitVals = rounds.map(function (r) { return r.fitness; }).filter(function (x) { return x != null; });
+    var fitness = fitVals.length ? Math.round(fitVals.reduce(function (a, b) { return a + b; }, 0) / fitVals.length) : null;
+    var totalTime = sum(function (r) { return r.time; });
+
+    var rows = [
+      ['Total Value', money(totalValue)],
+      ['Resource Cost', money(totalCost)],
+      ['Net Value', money(totalNet)],
+      ['Bricks Placed', String(totalPlaced)],
+      ['Coverage', coverage + '%'],
+      ['Value/Resource', vpr == null ? '—' : '$' + vpr.toFixed(2)],
+      ['Portfolio Fitness', fitness == null ? 'N/A' : fitness + '%'],
+      ['Total Time', fmtTime(totalTime)]
+    ];
+    var grid = el('div', { style: 'margin:14px 0;' }, rows.map(function (r) {
+      return el('div', { style: 'display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0ece3;' },
+        [el('span', { class: 'muted', text: r[0] }), el('b', { text: r[1] })]);
+    }));
+    showOverlay(card(cfg.texts.statsTitle || 'Thank you for playing!', [
+      grid,
+      el('p', { class: 'muted', text: 'Please complete a short survey about your experience.' }),
+      el('div', { class: 'pfx-row' }, [el('button', { class: 'pfx-btn', on: { click: showSurvey } }, ['Continue to Survey'])])
+    ]));
+    if (fb && S.user) {
+      try { fb.F.setDoc(fb.F.doc(fb.db, 'participants', S.user.uid), { status: 'survey', stats: { totalNet: totalNet, coverage: coverage, totalTime: totalTime }, updatedAt: fb.F.serverTimestamp() }, { merge: true }); } catch (e) {}
+    }
+    logEvent('stats_shown', { totalNet: totalNet, coverage: coverage, totalTime: totalTime });
+  }
+
+  // ---- Phase: survey ----------------------------------------------------
+  function buildField(q) {
+    var field = el('div', { class: 'pfx-field' });
+    field.appendChild(el('label', { text: q.label + (q.required ? ' *' : '') }));
+    if (q.help) field.appendChild(el('div', { class: 'help', text: q.help }));
+    var input;
+    if (q.type === 'select') {
+      input = el('select', {}, [el('option', { value: '' }, ['Please select...'])].concat(
+        (q.options || []).map(function (o) { return el('option', { value: o }, [o]); })));
+    } else if (q.type === 'radio') {
+      input = el('div', { class: 'radio' });
+      (q.options || []).forEach(function (o) { input.appendChild(el('label', {}, [el('input', { type: 'radio', name: q.id, value: o }), o])); });
+    } else if (q.type === 'textarea') {
+      input = el('textarea', { rows: '3', style: 'width:100%;padding:10px 12px;border:1px solid #e0dbd0;border-radius:10px;font-size:14px;font-family:inherit;resize:vertical;' });
+    } else {
+      input = el('input', { type: q.type || 'text', autocomplete: 'off' });
+    }
+    field.appendChild(input);
+    return {
+      field: field, q: q,
+      read: function () { if (q.type === 'radio') { var s = input.querySelector('input:checked'); return s ? s.value : ''; } return input.value.trim(); }
     };
-    window.PFGame.newGame('easy');
+  }
+  function showSurvey() {
+    S.phase = 'survey';
+    var questions = (cfg.surveyQuestions && cfg.surveyQuestions.length) ? cfg.surveyQuestions : DEFAULTS.surveyQuestions;
+    var form = el('div', {});
+    var fields = questions.map(function (q) { var f = buildField(q); form.appendChild(f.field); return f; });
+    var err = el('div', { class: 'pfx-err' });
+    var submit = el('button', { class: 'pfx-btn', on: { click: doSubmit } }, ['Submit Survey']);
+    form.appendChild(err);
+    form.appendChild(el('div', { class: 'pfx-row' }, [submit]));
+    showOverlay(card(cfg.texts.surveyTitle || 'Post-Game Survey', [
+      el('p', { text: cfg.texts.surveyIntro || 'Please share your thoughts (all fields are required).' }), form
+    ]));
+    async function doSubmit() {
+      err.textContent = '';
+      var answers = {};
+      for (var i = 0; i < fields.length; i++) {
+        var f = fields[i], v = f.read();
+        if (f.q.required && !v) { err.textContent = 'Please complete: ' + f.q.label; return; }
+        answers[f.q.id] = v;
+      }
+      submit.setAttribute('disabled', 'true'); submit.textContent = 'Submitting...';
+      try {
+        try {
+          if (!(await ensureFunctions())) throw new Error('functions unavailable');
+          var fn = fb.Fn.httpsCallable(fb.fns, 'submitSurvey');
+          await fn({ answers: answers });
+        } catch (fnErr) {
+          await fb.F.setDoc(fb.F.doc(fb.db, 'participants', S.user.uid, 'survey', 'answers'),
+            { answers: answers, completedAt: fb.F.serverTimestamp() }, { merge: true });
+          await fb.F.setDoc(fb.F.doc(fb.db, 'participants', S.user.uid), { status: 'done', updatedAt: fb.F.serverTimestamp() }, { merge: true });
+        }
+        logEvent('survey_submit', { count: Object.keys(answers).length });
+        showThankYou();
+      } catch (e) {
+        submit.removeAttribute('disabled'); submit.textContent = 'Submit Survey';
+        err.textContent = 'Could not submit. Please try again.';
+      }
+    }
+  }
+
+  // ---- Phase: thank-you -------------------------------------------------
+  function showThankYou() {
+    S.phase = 'thankyou';
+    var tb = document.querySelector('.pfx-topbar'); if (tb) tb.remove();
+    document.body.classList.remove('pf-hastop');
+    showOverlay(card(cfg.texts.thankyouTitle || 'Thank you!', [
+      el('p', { text: cfg.texts.thankyouBody || 'Your responses have been recorded. You may now close this tab.' })
+    ]));
+  }
+
+  // Resume a returning participant at the right phase.
+  function resumeFlow() {
+    var st = S.participant && S.participant.status;
+    if (st === 'done') return showThankYou();
+    if (st === 'survey') return showSurvey();
+    startMain();
   }
 
   // ---- Bootstrap --------------------------------------------------------
@@ -440,7 +640,7 @@
       return;
     }
     // If already signed in (returning user), resume; else show welcome.
-    if (fb.auth.currentUser) { S.user = fb.auth.currentUser; await loadParticipant(); startMain(); }
+    if (fb.auth.currentUser) { S.user = fb.auth.currentUser; await loadParticipant(); resumeFlow(); }
     else showWelcome();
   }
 
