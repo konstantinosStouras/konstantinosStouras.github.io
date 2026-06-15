@@ -594,7 +594,7 @@
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
   };
   let best = Number(store.get("snake_best", 0)) || 0;
-  let username = (store.get("snake_user", "") || "").slice(0, 16);
+  let username = "";  // set from the Account widget (Login/Register, top-right); "" = Guest (unranked)
 
   const el = {
     score: document.getElementById("score"),
@@ -942,12 +942,10 @@
   }
 
   function startGame() {
-    const name = cleanName(el.username.value);
-    if (!name) { el.username.focus(); return; } // username is required to join
-    if (name !== username) { username = name; store.set("snake_user", username); myBest = 0; }
-    el.joinBox.style.display = "none";  // joined: don't ask again this session
+    // No username gate: anyone can play immediately as Guest. Identity (and
+    // whether scores are ranked) comes from the Account widget — see setIdentity().
     el.startBtn.disabled = false;
-    updateYouLine(currentRows);
+    updateYouLine();
     reset();
     started = true;
     running = true;
@@ -1112,15 +1110,25 @@
   }
   window.addEventListener("leaderboard-ready", attachGlobal);
 
-  // Username input wiring
-  el.username.value = username;
-  el.startBtn.disabled = cleanName(username).length < 1;
-  el.username.addEventListener("input", () => {
-    el.startBtn.disabled = cleanName(el.username.value).length < 1;
-  });
-  el.username.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !el.startBtn.disabled) { e.preventDefault(); startGame(); }
-  });
+  // Identity comes from the Account widget (Log in / Register, top-right).
+  // Guests can play immediately; their scores are simply not ranked.
+  el.startBtn.disabled = false;
+  function setIdentity(u) {
+    username = u ? String(u.nickname || "").slice(0, 16) : "";
+    myBest = 0;
+    el.startBtn.disabled = false;
+    if (el.joinBox) {
+      el.joinBox.innerHTML = u
+        ? 'Playing as <strong>' + escapeHtml(username) + '</strong> — your scores count on the leaderboard.'
+        : 'Playing as <strong>Guest</strong> — tap <strong>Log in</strong> (top-right) to save your score.';
+    }
+    if (currentRows && currentRows.length) renderLeaderboard(currentRows);
+    updateYouLine();
+  }
+  setIdentity(null);  // start as Guest immediately
+  // The Account widget loads as a deferred module (after this script); listen for
+  // its event so we pick up the signed-in user as soon as Firebase resolves.
+  window.addEventListener("account-changed", function (e) { setIdentity(e.detail); });
 
   // --- Boot ----------------------------------------------------------------
   setScope("local");
@@ -1131,9 +1139,280 @@
   // Re-fit after fonts/layout settle (mobile browsers report sizes late).
   setTimeout(fitCanvas, 60);
   window.addEventListener("load", fitCanvas);
-  if (!username && !isTouch) el.username.focus();
   draw();
 })();
 </script>
+<!-- ============================================================
+     Account widget — Firebase email/password Login / Register
+     Shared across stouras.com /fun/ apps. Backend project: stouras-snake.
+     Exposes window.Account { user, isGuest(), onChange(cb),
+     openLogin(), openRegister(), logout() } and dispatches the
+     'account-changed' event. Set window.AUTHCORE_NO_BAR = true before
+     this block to suppress the built-in fixed top-right bar (apps that
+     place their own Login/Register trigger in their header).
+     ============================================================ -->
+<style>
+  :root{ --acct-accent:#2563eb; --acct-accent-ink:#fff; }
+  #acctRoot, #acctRoot *{ box-sizing:border-box; }
+  /* fixed top-right bar */
+  .acct-bar{
+    position:fixed; z-index:2147483000;
+    top:max(8px, env(safe-area-inset-top)); right:max(8px, env(safe-area-inset-right));
+    display:flex; gap:8px; align-items:center;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  .acct-chip{
+    appearance:none; cursor:pointer; border:0; border-radius:999px;
+    font:600 14px/1 inherit; padding:10px 16px; min-height:40px;
+    display:inline-flex; align-items:center; gap:6px;
+    box-shadow:0 2px 10px rgba(0,0,0,.18); transition:transform .06s ease, filter .15s ease, background .15s ease;
+    white-space:nowrap; -webkit-tap-highlight-color:transparent; touch-action:manipulation;
+  }
+  .acct-chip:active{ transform:translateY(1px); }
+  .acct-ghost{ background:#fff; color:#1f2937; border:1px solid rgba(0,0,0,.12); }
+  .acct-ghost:hover{ background:#f3f4f6; }
+  .acct-solid{ background:var(--acct-accent); color:var(--acct-accent-ink); }
+  .acct-solid:hover{ filter:brightness(1.05); }
+  .acct-acc{ position:relative; }
+  .acct-pill .acct-av{ font-size:15px; }
+  .acct-pill .acct-name{ max-width:34vw; overflow:hidden; text-overflow:ellipsis; }
+  .acct-car{ opacity:.55; font-size:11px; }
+  .acct-menu{
+    position:absolute; top:calc(100% + 8px); right:0; min-width:200px;
+    background:#fff; color:#1f2937; border-radius:14px; padding:8px;
+    box-shadow:0 14px 40px rgba(0,0,0,.28); border:1px solid rgba(0,0,0,.08);
+  }
+  .acct-menu-head{ font-size:12px; color:#6b7280; padding:8px 10px 10px; border-bottom:1px solid #eef0f3; margin-bottom:6px; line-height:1.5; }
+  .acct-menu-head b{ color:#111827; word-break:break-all; }
+  .acct-menu-item{
+    display:block; width:100%; text-align:left; appearance:none; border:0; background:none;
+    cursor:pointer; font:600 14px/1 inherit; color:#dc2626; padding:11px 10px; border-radius:9px; min-height:44px;
+  }
+  .acct-menu-item:hover{ background:#fef2f2; }
+  /* modal */
+  .acct-modal{ position:fixed; inset:0; z-index:2147483600; display:flex; align-items:center; justify-content:center; padding:16px; }
+  .acct-modal[hidden]{ display:none; }
+  .acct-backdrop{ position:absolute; inset:0; background:rgba(15,23,42,.55); backdrop-filter:blur(2px); }
+  .acct-card{
+    position:relative; width:100%; max-width:400px; max-height:calc(100dvh - 32px); overflow:auto;
+    background:#fff; color:#111827; border-radius:18px; padding:26px 22px 22px;
+    box-shadow:0 30px 80px rgba(0,0,0,.45);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    animation:acctIn .16s ease-out;
+  }
+  @keyframes acctIn{ from{ transform:translateY(8px) scale(.99); opacity:0 } to{ transform:none; opacity:1 } }
+  .acct-x{ position:absolute; top:10px; right:12px; appearance:none; border:0; background:none; font-size:26px; line-height:1; color:#9ca3af; cursor:pointer; width:40px; height:40px; border-radius:10px; }
+  .acct-x:hover{ background:#f3f4f6; color:#111827; }
+  .acct-title{ font-size:22px; margin:2px 0 4px; }
+  .acct-sub{ font-size:13.5px; color:#6b7280; margin:0 0 16px; line-height:1.5; }
+  .acct-form{ display:flex; flex-direction:column; gap:12px; }
+  .acct-lbl{ display:flex; flex-direction:column; gap:6px; font-size:12.5px; font-weight:600; color:#374151; }
+  .acct-lbl input{
+    font:400 16px/1.3 inherit; padding:12px 13px; border:1px solid #d1d5db; border-radius:11px; outline:none;
+    color:#111827; background:#fff; width:100%; min-height:46px;
+  }
+  .acct-lbl input:focus{ border-color:var(--acct-accent); box-shadow:0 0 0 3px rgba(37,99,235,.16); }
+  .acct-err{ margin:2px 0 0; font-size:13px; color:#dc2626; background:#fef2f2; border:1px solid #fde2e2; padding:9px 11px; border-radius:9px; }
+  .acct-submit{
+    margin-top:4px; appearance:none; border:0; cursor:pointer; border-radius:12px; min-height:48px;
+    background:var(--acct-accent); color:var(--acct-accent-ink); font:700 15px/1 inherit; padding:14px;
+    transition:filter .15s ease;
+  }
+  .acct-submit:hover{ filter:brightness(1.05); }
+  .acct-submit:disabled{ opacity:.6; cursor:default; }
+  .acct-switch{ margin:16px 0 0; font-size:13.5px; color:#6b7280; text-align:center; }
+  .acct-switch a{ color:var(--acct-accent); font-weight:600; cursor:pointer; text-decoration:none; }
+  .acct-switch a:hover{ text-decoration:underline; }
+  /* phones */
+  @media (max-width:520px){
+    .acct-chip{ padding:9px 14px; font-size:13.5px; }
+    .acct-pill .acct-name{ max-width:26vw; }
+    .acct-card{ border-radius:16px 16px 0 0; max-width:none; align-self:flex-end; padding-bottom:max(22px, env(safe-area-inset-bottom)); animation:acctUp .18s ease-out; }
+    .acct-modal{ padding:0; align-items:flex-end; }
+    @keyframes acctUp{ from{ transform:translateY(100%) } to{ transform:none } }
+  }
+</style>
+<script type="module">
+(function(){
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyB75wGPTvquIGme8XrGeBoQNFo52nquQkE",
+    authDomain: "stouras-snake.firebaseapp.com",
+    databaseURL: "https://stouras-snake-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "stouras-snake",
+    storageBucket: "stouras-snake.firebasestorage.app",
+    messagingSenderId: "678091659383",
+    appId: "1:678091659383:web:7446d607cfa99eae000e72",
+    measurementId: "G-Z3085SMKJ5"
+  };
+
+  const listeners = [];
+  let ready = false, auth = null, fns = null, mode = "login";
+
+  const Account = window.Account = {
+    user: null, ready: false,
+    isGuest(){ return !this.user; },
+    onChange(cb){ listeners.push(cb); if(ready){ try{ cb(this.user); }catch(e){} } },
+    openLogin(){ openModal("login"); },
+    openRegister(){ openModal("register"); },
+    async logout(){ if(auth && fns){ try{ await fns.signOut(auth); }catch(e){} } closeMenu(); }
+  };
+  function emit(u){
+    Account.user = u; ready = true; Account.ready = true;
+    listeners.forEach(cb=>{ try{ cb(u); }catch(e){} });
+    try{ window.dispatchEvent(new CustomEvent("account-changed",{detail:u})); }catch(e){}
+    renderBar();
+  }
+
+  // ---------- DOM ----------
+  const root = document.createElement("div"); root.id = "acctRoot";
+  const showBar = !window.AUTHCORE_NO_BAR;
+  root.innerHTML =
+    (showBar ? '<div class="acct-bar" data-bar>'
+      + '<button class="acct-chip acct-ghost" data-act="login">Log in</button>'
+      + '<button class="acct-chip acct-solid" data-act="register">Register</button>'
+      + '<div class="acct-acc" data-acc hidden>'
+        + '<button class="acct-chip acct-ghost acct-pill" data-act="menu"><span class="acct-av">👤</span><b class="acct-name">You</b><span class="acct-car">▾</span></button>'
+        + '<div class="acct-menu" data-menu hidden>'
+          + '<div class="acct-menu-head">Signed in as<br><b class="acct-email"></b></div>'
+          + '<button class="acct-menu-item" data-act="logout">Log out</button>'
+        + '</div>'
+      + '</div></div>' : '')
+    + '<div class="acct-modal" data-modal hidden>'
+      + '<div class="acct-backdrop" data-act="close"></div>'
+      + '<div class="acct-card" role="dialog" aria-modal="true">'
+        + '<button class="acct-x" data-act="close" aria-label="Close">×</button>'
+        + '<h2 class="acct-title"></h2><p class="acct-sub"></p>'
+        + '<form class="acct-form" novalidate>'
+          + '<label class="acct-lbl acct-nick-field" hidden><span>Nickname</span>'
+            + '<input class="f-nick" type="text" maxlength="16" autocomplete="nickname" placeholder="Shown on the leaderboard"></label>'
+          + '<label class="acct-lbl"><span>Email</span>'
+            + '<input class="f-email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com"></label>'
+          + '<label class="acct-lbl"><span>Password</span>'
+            + '<input class="f-pass" type="password" autocomplete="current-password" placeholder="At least 6 characters"></label>'
+          + '<p class="acct-err" hidden></p>'
+          + '<button class="acct-submit" type="submit"></button>'
+        + '</form>'
+        + '<p class="acct-switch"></p>'
+      + '</div></div>';
+  document.body.appendChild(root);
+
+  const $ = (s)=>root.querySelector(s);
+  const bar = $("[data-bar]"), accBox = $("[data-acc]"), menu = $("[data-menu]");
+  const modal = $("[data-modal]"), form = $(".acct-form");
+  const elTitle=$(".acct-title"), elSub=$(".acct-sub"), elSwitch=$(".acct-switch"),
+        elErr=$(".acct-err"), elSubmit=$(".acct-submit"), nickField=$(".acct-nick-field"),
+        inNick=$(".f-nick"), inEmail=$(".f-email"), inPass=$(".f-pass");
+
+  function renderBar(){
+    if(!bar) return;
+    const u = Account.user;
+    bar.querySelector('[data-act="login"]').hidden = !!u;
+    bar.querySelector('[data-act="register"]').hidden = !!u;
+    accBox.hidden = !u;
+    if(u){
+      accBox.querySelector(".acct-name").textContent = u.nickname || "You";
+      accBox.querySelector(".acct-email").textContent = u.email || "";
+    }
+  }
+  function openMenu(){ if(menu){ menu.hidden=false; } }
+  function closeMenu(){ if(menu){ menu.hidden=true; } }
+
+  function openModal(which){
+    mode = which;
+    const reg = which==="register";
+    elTitle.textContent = reg ? "Create an account" : "Log in";
+    elSub.textContent = reg
+      ? "Register to appear on the leaderboard and keep your progress."
+      : "Log in to track your scores on the leaderboard.";
+    elSubmit.textContent = reg ? "Create account" : "Log in";
+    nickField.hidden = !reg;
+    inPass.setAttribute("autocomplete", reg ? "new-password" : "current-password");
+    elErr.hidden = true; elErr.textContent = "";
+    elSwitch.innerHTML = reg
+      ? 'Already have an account? <a data-act="to-login">Log in</a>'
+      : 'New here? <a data-act="to-register">Register</a>';
+    modal.hidden = false;
+    setTimeout(()=>{ (reg?inNick:inEmail).focus(); }, 60);
+  }
+  function closeModal(){ modal.hidden = true; }
+
+  function friendly(code, msg){
+    const m = {
+      "auth/invalid-email":"That email address looks invalid.",
+      "auth/missing-password":"Please enter a password.",
+      "auth/weak-password":"Password must be at least 6 characters.",
+      "auth/email-already-in-use":"That email is already registered — try logging in instead.",
+      "auth/invalid-credential":"Wrong email or password.",
+      "auth/wrong-password":"Wrong email or password.",
+      "auth/user-not-found":"No account found for that email.",
+      "auth/too-many-requests":"Too many attempts. Please wait a moment and try again.",
+      "auth/network-request-failed":"Network error — check your connection and try again.",
+      "auth/operation-not-allowed":"Email/password sign-in isn’t enabled for this site yet."
+    };
+    return m[code] || msg || "Something went wrong. Please try again.";
+  }
+  function showErr(t){ elErr.textContent = t; elErr.hidden = false; }
+
+  // delegated clicks
+  root.addEventListener("click", (e)=>{
+    const act = e.target.closest("[data-act]")?.getAttribute("data-act");
+    if(!act) return;
+    if(act==="login") openModal("login");
+    else if(act==="register") openModal("register");
+    else if(act==="close") closeModal();
+    else if(act==="to-login") openModal("login");
+    else if(act==="to-register") openModal("register");
+    else if(act==="menu"){ e.stopPropagation(); menu.hidden ? openMenu() : closeMenu(); }
+    else if(act==="logout") Account.logout();
+  });
+  document.addEventListener("click", (e)=>{ if(accBox && !accBox.contains(e.target)) closeMenu(); });
+  document.addEventListener("keydown", (e)=>{ if(e.key==="Escape"){ closeModal(); closeMenu(); } });
+
+  form.addEventListener("submit", async (e)=>{
+    e.preventDefault();
+    if(!auth || !fns){ showErr(friendly("auth/operation-not-allowed")); return; }
+    const email = inEmail.value.trim(), pass = inPass.value;
+    const nick = (inNick.value.trim() || email.split("@")[0] || "Player").slice(0,16);
+    if(!email){ showErr("Please enter your email."); return; }
+    if(pass.length < 6){ showErr("Password must be at least 6 characters."); return; }
+    elErr.hidden = true; elSubmit.disabled = true;
+    const original = elSubmit.textContent; elSubmit.textContent = "Please wait…";
+    try{
+      if(mode==="register"){
+        const cred = await fns.createUserWithEmailAndPassword(auth, email, pass);
+        try{ await fns.updateProfile(cred.user, { displayName: nick }); }catch(_){}
+      } else {
+        await fns.signInWithEmailAndPassword(auth, email, pass);
+      }
+      closeModal();
+      form.reset(); nickField.hidden = true;
+    }catch(err){
+      showErr(friendly(err && err.code, err && err.message));
+    }finally{
+      elSubmit.disabled = false; elSubmit.textContent = original;
+    }
+  });
+
+  // ---------- Firebase ----------
+  (async function init(){
+    try{
+      const appMod = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+      const authMod = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
+      const app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(FIREBASE_CONFIG);
+      auth = authMod.getAuth(app);
+      fns = authMod;
+      authMod.onAuthStateChanged(auth, (u)=>{
+        if(u){
+          emit({ uid:u.uid, email:u.email || "", nickname:(u.displayName || (u.email||"").split("@")[0] || "Player") });
+        } else { emit(null); }
+      });
+    }catch(e){
+      console.warn("Account auth init failed:", e);
+      emit(null); // fall back to guest
+    }
+  })();
+})();
+</script>
+<!-- ===== end Account widget ===== -->
 </body>
 </html>
