@@ -1528,10 +1528,10 @@
           return;
         }
         const now = Date.now();
-        if (remaining > 12 && state.occupied.size < state.region.size &&
-            now - lastAction > 28000 && now - lastIdle > 28000 && now - lastCheer > 6000) {
+        if (remaining > 8 && state.occupied.size < state.region.size &&
+            now - lastAction > 15000 && now - lastIdle > 15000 && now - lastCheer > 5000) {
           lastIdle = now;
-          nudge('Keep going, every brick counts. You can do this! 💪', 'cheer');
+          nudge(IDLE_NUDGES[Math.floor(Math.random() * IDLE_NUDGES.length)], 'cheer');
         }
       }
     }
@@ -1772,6 +1772,13 @@
     // ---------- Encouragement & time nudges ----------
     const nudgeEl = $('#nudge');
     let nudgeHide = null, lastCheer = 0, lastAction = Date.now(), lastIdle = 0;
+    const IDLE_NUDGES = [
+      'Keep going, every brick counts. You can do this! 💪',
+      'Don’t stop now — try fitting another brick! 🧩',
+      'Keep packing the frame to boost your net value! 📈',
+      'You still have time — place another project! ⏱️',
+      'Every empty cell costs you $1 — fill more of the board! 💡'
+    ];
     const CHEERS = ['You are doing great!', 'Keep it up!', 'Great progress!', 'Smart placement!',
       'Looking good!', 'On a roll!', 'Nice work!', 'That fits beautifully!'];
     function nudge(msg, type) {
