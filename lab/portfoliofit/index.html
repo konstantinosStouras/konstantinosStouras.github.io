@@ -592,6 +592,7 @@
   // -> main -> stats -> survey -> thank-you) only activates with ?exp=1, so the
   // default game at /lab/portfoliofit/ stays unchanged until we switch it on.
   window.PF_EXPERIMENT = /[?&]exp(=1)?(&|$)/.test(location.search);
+  window.PF_ADMIN = /[?&]admin(=1)?(&|$)/.test(location.search);
   </script>
   <script>
   (function () {
@@ -1991,7 +1992,7 @@
     // ---------- Boot ----------
     renderNotes();
     calcShow('', '0', false);
-    if (!window.PF_EXPERIMENT) newGame('easy');   // in experiment mode the game starts via PFGame
+    if (!window.PF_EXPERIMENT && !window.PF_ADMIN) newGame('easy');   // experiment/admin manage startup
     updateBestUI();
   })();
   </script>
@@ -2445,5 +2446,7 @@
 </script>
 <!-- Research experiment layer — only activates with ?exp=1 (default game unaffected). -->
 <script src="experiment.js" defer></script>
+<!-- Admin panel — only activates with ?admin (requires admin@admin.com). -->
+<script src="admin.js" defer></script>
 </body>
 </html>
