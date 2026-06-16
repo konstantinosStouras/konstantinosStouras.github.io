@@ -260,8 +260,14 @@
   function assignCondition() {
     var tt = (S.session && S.session.condition) || cfg.settings.twoByTwo || {};
     if (!tt.enabled) return { enabled: false, transparency: 'abstract', incentive: 'firm' };
-    // Random between-subjects assignment to one of the four cells (invisible to the participant).
-    return { enabled: true, transparency: Math.random() < 0.5 ? 'abstract' : 'translated', incentive: Math.random() < 0.5 ? 'firm' : 'personal' };
+    var f = tt.factors || { transparency: true, incentive: true };
+    // Random between-subjects assignment (invisible to the participant). A factor
+    // that is switched off is fixed at its baseline level.
+    return {
+      enabled: true,
+      transparency: (f.transparency !== false) ? (Math.random() < 0.5 ? 'abstract' : 'translated') : 'abstract',
+      incentive: (f.incentive !== false) ? (Math.random() < 0.5 ? 'firm' : 'personal') : 'firm'
+    };
   }
   // NB: the assigned 2x2 cell is recorded silently and is NEVER shown to the
   // participant. The design is blinded - subjects must not learn their
