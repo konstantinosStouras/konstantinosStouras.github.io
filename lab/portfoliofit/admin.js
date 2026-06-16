@@ -60,7 +60,7 @@
   var TEXT_FIELD_META = {}; TEXT_FIELDS.forEach(function (f) { TEXT_FIELD_META[f[0]] = { label: f[1], kind: f[2] }; });
 
   // ---- state ----
-  var fb = null, XLSX = null, cfg = {}, user = null, tab = 'content', approvedPuzzles = [];
+  var fb = null, XLSX = null, cfg = { texts: {}, settings: {}, registrationQuestions: [], surveyQuestions: [] }, user = null, tab = 'content', approvedPuzzles = [];
   var inited = false;
 
   // ---- DOM helpers ----
@@ -94,7 +94,8 @@
       + '.pfa-tabs{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-bottom:18px;}'
       + '.pfa-tabs button{border:none;background:transparent;padding:9px 14px;font-weight:600;font-size:14px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;}'
       + '.pfa-tabs button.on{color:var(--accent);border-bottom-color:var(--accent);}'
-      + '.pfa-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:14px;box-shadow:0 6px 18px rgba(0,0,0,.06);color:var(--ink);}'
+      + '.pfa-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:16px;box-shadow:0 6px 18px rgba(0,0,0,.06);color:var(--ink);}'
+      + '.pfa-card > * + *{margin-top:14px;}'
       + '.pfa-field{margin:10px 0;}.pfa-field label{display:block;font-weight:600;font-size:13px;margin-bottom:4px;color:var(--ink);}'
       + '.pfa-field input[type=text],.pfa-field input[type=email],.pfa-field input[type=password],.pfa-field input[type=number],.pfa-field select,.pfa-field textarea{width:100%;padding:9px 11px;border:1px solid var(--fieldline);border-radius:9px;font-size:14px;font-family:inherit;background:var(--field);color:var(--ink);}'
       + '.pfa-field textarea{resize:vertical;}'
@@ -105,7 +106,7 @@
       + '.pfa-q .row > *{flex:0 0 auto;}'
       + '.pfa-q .row input[type=text],.pfa-q .row select{padding:7px 9px;}'
       + '#pfa-root input:not([type=checkbox]):not([type=radio]),#pfa-root select,#pfa-root textarea{background:var(--field);color:var(--ink);border:1px solid var(--fieldline);border-radius:8px;font-size:14px;font-family:inherit;}'
-      + '.pfa-note{color:var(--muted);font-size:13px;}'
+      + '.pfa-note{color:var(--muted);font-size:13px;line-height:1.6;}'
       + '.pfa-msg{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#000;color:#fff;padding:10px 18px;border-radius:10px;font-size:14px;z-index:10003;opacity:0;transition:.2s;}'
       + '.pfa-msg.show{opacity:1;}'
       + 'table.pfa-tbl{width:100%;border-collapse:collapse;font-size:13px;}'
@@ -156,9 +157,11 @@
   }
 
   // ---- Routing ----
+  function cachedAdmin() { try { return localStorage.getItem('pfa-admin') === '1'; } catch (e) { return false; } }
   function route() {
-    if (!user) return renderLogin();
-    if (user.email !== ADMIN_EMAIL) return renderNotAuthorized();
+    if (!user) { try { localStorage.removeItem('pfa-admin'); } catch (e) {} return renderLogin(); }
+    if (user.email !== ADMIN_EMAIL) { try { localStorage.removeItem('pfa-admin'); } catch (e) {} return renderNotAuthorized(); }
+    try { localStorage.setItem('pfa-admin', '1'); } catch (e) {}
     loadConfig().then(renderShell);
   }
 
@@ -188,7 +191,7 @@
     root.appendChild(el('div', { class: 'pfa-wrap' }, [el('div', { class: 'pfa-card pfa-login' }, [
       el('h1', { text: 'Not authorized' }),
       el('p', { class: 'pfa-note', html: 'Signed in as ' + esc(user.email) + ', which is not the admin account.' }),
-      el('button', { class: 'pfa-btn sec', on: { click: function () { fb.A.signOut(fb.auth); } } }, ['Sign out'])
+      el('button', { class: 'pfa-btn sec', on: { click: function () { if (fb) fb.A.signOut(fb.auth); } } }, ['Sign out'])
     ])]));
   }
 
@@ -203,7 +206,7 @@
       el('div', { class: 'pfa-h' }, [
         el('h1', { text: 'PortfolioFit admin' }),
         el('div', { style: 'display:flex;gap:8px;align-items:center;' }, [themeToggle(),
-          el('button', { class: 'pfa-btn sec sm', on: { click: function () { fb.A.signOut(fb.auth); } } }, ['Sign out'])])
+          el('button', { class: 'pfa-btn sec sm', on: { click: function () { if (fb) fb.A.signOut(fb.auth); } } }, ['Sign out'])])
       ]),
       tabBar, body
     ]);
@@ -642,6 +645,10 @@
     root = el('div', { id: 'pfa-root' }, [el('div', { class: 'pfa-wrap' }, [el('div', { class: 'pfa-card' }, [el('p', { text: 'Connecting...' })])])]);
     document.body.appendChild(root);
     applyTheme(currentTheme());
+    // Returning admin on this device: render the panel immediately (no
+    // 'Connecting' flash). onAuthStateChanged then confirms the session, or
+    // routes to login if it has expired.
+    if (cachedAdmin()) { try { renderShell(); } catch (e) {} }
     try { await initFirebase(); } catch (e) { clearRoot(); root.appendChild(el('div', { class: 'pfa-wrap' }, [el('div', { class: 'pfa-card' }, [el('p', { class: 'pfa-err', text: 'Could not connect: ' + ((e && e.message) || 'error') })])])); return; }
     // Routing is driven solely by onAuthStateChanged (registered in initFirebase),
     // which fires once after the session is restored. This avoids briefly showing
