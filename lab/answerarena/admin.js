@@ -221,18 +221,30 @@
     var countSpan = el('span', { class: 'aa-count' });
     card.appendChild(el('div', { class: 'aa-h', style: 'margin-bottom:4px;' }, [el('h3', { text: 'Active sessions' }), countSpan]));
     card.appendChild(el('p', { class: 'aa-note', text: 'Open a session to copy its join link or change its status. Every session uses the design parameters and content set on the left.' }));
-    var nameI = el('input', { type: 'text', placeholder: 'New session name', style: 'flex:1 1 160px;min-width:120px;' });
+    var nameI = el('input', { type: 'text', placeholder: 'New session name (optional)', style: 'flex:1 1 160px;min-width:120px;' });
     var statusI = el('select', { style: 'max-width:110px;' }, ['open', 'waiting', 'closed'].map(function (s) { return el('option', { value: s }, [s]); }));
-    card.appendChild(el('div', { class: 'aa-row', style: 'margin:8px 0 12px;' }, [nameI, statusI, el('button', { class: 'aa-btn sm', on: { click: create } }, ['+ Create'])]));
+    var createBtn = el('button', { class: 'aa-btn sm', on: { click: create } }, ['+ Create']);
+    card.appendChild(el('div', { class: 'aa-row', style: 'margin:8px 0 4px;' }, [nameI, statusI, createBtn]));
+    var createErr = el('div', { class: 'aa-err' });
+    card.appendChild(createErr);
     var listWrap = el('div', {}, [el('p', { class: 'aa-note', text: 'Loading...' })]);
     card.appendChild(listWrap);
     card.appendChild(el('p', { class: 'aa-note', style: 'margin-top:12px;border-top:1px solid var(--line);padding-top:10px;', text: 'Participants join with the session code on the welcome screen, or by opening the share link.' }));
+    nameI.addEventListener('keydown', function (e) { if (e.key === 'Enter') create(); });
 
     function create() {
-      if (!nameI.value.trim()) { toast('Name the session.'); return; }
-      Store.createSession({ name: nameI.value.trim(), status: statusI.value, condition: null, taskSetId: cfg.activeTaskSetId || null })
-        .then(function (s) { toast('Session created: ' + s.code); nameI.value = ''; refresh(); })
-        .catch(function (e) { toast('Create failed: ' + ((e && e.code) || 'error')); });
+      createErr.textContent = '';
+      // Name is optional - auto-name a blank one so the button always works.
+      var nm = nameI.value.trim() || ('Session ' + new Date().toLocaleString());
+      createBtn.setAttribute('disabled', 'true'); createBtn.textContent = 'Creating...';
+      Store.createSession({ name: nm, status: statusI.value, condition: null, taskSetId: cfg.activeTaskSetId || null })
+        .then(function (s) { toast('Session created: ' + s.code); nameI.value = ''; createBtn.removeAttribute('disabled'); createBtn.textContent = '+ Create'; refresh(); })
+        .catch(function (e) {
+          createBtn.removeAttribute('disabled'); createBtn.textContent = '+ Create';
+          var msg = (e && (e.code || e.message)) || 'error';
+          createErr.textContent = 'Could not create the session: ' + msg + (/(permission|insufficient)/i.test(msg) ? ' - the Firestore rules may need (re)deploying.' : '');
+          if (window.console) console.error('[Arena] createSession failed', e);
+        });
     }
     function refresh() {
       Promise.all([Store.listSessions(), Store.listParticipants().catch(function () { return []; })]).then(function (res) {
