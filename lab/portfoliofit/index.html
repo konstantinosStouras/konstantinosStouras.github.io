@@ -1407,7 +1407,16 @@
         if (!state.wasFull) { boardEl.classList.add('pulse'); setTimeout(() => boardEl.classList.remove('pulse'), 600); }
         if (optimal && !state.wasOptimal) confetti();
         state.wasFull = true; state.wasOptimal = optimal;
-        if (optimal) {
+        if (window.PF_EXPERIMENT) {
+          // Never reveal the maximum/optimal net value to participants.
+          if (optimal) {
+            setStatus('Board filled — strong portfolio! Net ' + money(val) + '. Hold it, or keep trying to improve before time runs out.', 'win');
+            nudge('🎉 Board filled at Net ' + money(val) + '. Can you do even better? Keep going!', 'cheer');
+          } else {
+            setStatus('Board filled at Net ' + money(val) + '. Rearrange your bricks to try to raise it before time runs out.', 'win');
+            nudge('🎉 Board filled at Net ' + money(val) + '. Can you push it higher? Keep trying!', 'cheer');
+          }
+        } else if (optimal) {
           setStatus('Top-value portfolio! Net ' + money(val) + ', the maximum here. Hold it until time runs out.', 'win');
           nudge('🏆 Maximum value reached: Net ' + money(val) + '. Keep it until the buzzer!', 'cheer');
         } else {
