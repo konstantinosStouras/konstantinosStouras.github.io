@@ -259,14 +259,14 @@
   /* ===================== 2x2 CONDITION ===================== */
   function assignCondition() {
     var tt = (S.session && S.session.condition) || cfg.settings.twoByTwo || {};
-    if (!tt.enabled) return { enabled: false, transparency: 'abstract', incentive: 'firm' };
-    var f = tt.factors || { transparency: true, incentive: true };
-    // Random between-subjects assignment (invisible to the participant). A factor
-    // that is switched off is fixed at its baseline level.
+    var f = tt.factors || { transparency: false, incentive: false };
+    // Each switched-on condition is randomly varied (between-subjects, invisible
+    // to the participant); a condition that is off is fixed at its baseline level.
+    // both on = 4 groups, one on = 2 groups, none = a single baseline group.
     return {
-      enabled: true,
-      transparency: (f.transparency !== false) ? (Math.random() < 0.5 ? 'abstract' : 'translated') : 'abstract',
-      incentive: (f.incentive !== false) ? (Math.random() < 0.5 ? 'firm' : 'personal') : 'firm'
+      enabled: !!(f.transparency || f.incentive),
+      transparency: f.transparency ? (Math.random() < 0.5 ? 'abstract' : 'translated') : 'abstract',
+      incentive: f.incentive ? (Math.random() < 0.5 ? 'firm' : 'personal') : 'firm'
     };
   }
   // NB: the assigned 2x2 cell is recorded silently and is NEVER shown to the
