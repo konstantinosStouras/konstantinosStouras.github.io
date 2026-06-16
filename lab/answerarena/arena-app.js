@@ -241,6 +241,8 @@
       err.textContent = ''; btn.setAttribute('disabled', 'true'); btn.textContent = 'Logging in...';
       Store.login(email.value.trim(), pass.value).then(function (user) {
         S.user = user;
+        // The admin account belongs in the admin panel, not the participant flow.
+        if (Store.isAdminEmail(user.email)) { location.search = '?admin'; return; }
         return Store.getParticipant(user.uid).then(function (p) { S.p = p; topbar(); resumeFlow(); });
       }).catch(function (e) { btn.removeAttribute('disabled'); btn.textContent = 'Log in'; err.textContent = authError(e); });
     }
