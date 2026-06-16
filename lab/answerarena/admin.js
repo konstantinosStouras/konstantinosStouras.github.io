@@ -102,7 +102,7 @@
       + '.aa-q{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--qbg);}'
       + '.aa-q .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}'
       + '.aa-badge{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 8px;border-radius:99px;}'
-      + '.aa-badge.waiting{color:#7bd88f;background:rgba(123,216,143,.14);}.aa-badge.open{color:#e6a417;background:rgba(230,164,23,.14);}.aa-badge.closed{color:#9a978f;background:rgba(154,151,143,.14);}'
+      + '.aa-badge.open{color:#7bd88f;background:rgba(123,216,143,.14);}.aa-badge.waiting{color:#e6a417;background:rgba(230,164,23,.14);}.aa-badge.closed{color:#9a978f;background:rgba(154,151,143,.14);}'
       + 'table.aa-tbl{width:100%;border-collapse:collapse;font-size:13px;}table.aa-tbl th,table.aa-tbl td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);}table.aa-tbl th{color:var(--muted);font-weight:600;}'
       + '.aa-login{max-width:380px;margin:8vh auto 0;}'
       + '.aa-err{color:#e06b5a;font-size:13px;min-height:18px;margin:6px 0;}'
@@ -158,13 +158,13 @@
 
   function renderShell() {
     clearRoot();
-    var tabs = [['sessions', 'Sessions'], ['tasks', 'Tasks'], ['content', 'Content'], ['registration', 'Registration'], ['survey', 'Survey'], ['settings', '2x2 & Settings'], ['participants', 'Participants']];
+    var tabs = [['sessions', 'Sessions and Design'], ['tasks', 'Tasks'], ['content', 'Content'], ['registration', 'Registration'], ['survey', 'Survey'], ['settings', 'Settings'], ['participants', 'Participants']];
     var tabBar = el('div', { class: 'aa-tabs' }, tabs.map(function (tt) { return el('button', { class: tab === tt[0] ? 'on' : '', on: { click: function () { tab = tt[0]; renderShell(); } } }, [tt[1]]); }));
     var body = el('div', {});
     root.appendChild(el('div', { class: 'aa-wrap' }, [
       el('div', { class: 'aa-h' }, [
         el('h1', { text: 'Answer Arena admin' }),
-        el('div', { class: 'aa-row' }, [el('span', { class: 'aa-mode', text: Store.mode === 'firebase' ? 'Firebase' : 'Local test mode' }), themeToggle(), el('button', { class: 'aa-btn sec sm', on: { click: function () { Store.logout().then(function () { user = null; route(); }); } } }, ['Sign out'])])
+        el('div', { class: 'aa-row' }, [themeToggle(), el('button', { class: 'aa-btn sec sm', on: { click: function () { Store.logout().then(function () { user = null; route(); }); } } }, ['Sign out'])])
       ]),
       tabBar, body
     ]));
@@ -179,44 +179,28 @@
 
   /* ============================ SESSIONS ============================ */
   function renderSessions(body) {
-    // Create
+    // Create new session
     var createCard = el('div', { class: 'aa-card' });
     var name = el('input', { type: 'text', placeholder: 'e.g. UCD class - June 16' });
-    var statusSel = el('select', {}, ['waiting', 'open', 'closed'].map(function (s) { return el('option', { value: s }, [s]); }));
-    var ttSel = el('select', {}, [['global', 'Use global 2x2 setting'], ['off', 'No 2x2 (single group)'], ['random', '2x2, random assignment'], ['fixed', '2x2, fixed cell']].map(function (o) { return el('option', { value: o[0] }, [o[1]]); }));
-    var transSel = el('select', {}, [['abstract', 'Abstract tokens'], ['translated', 'Translated cost']].map(function (o) { return el('option', { value: o[0] }, [o[1]]); }));
-    var incSel = el('select', {}, [['firm', 'Firm pays'], ['personal', 'Personal budget']].map(function (o) { return el('option', { value: o[0] }, [o[1]]); }));
-    var fixedWrap = el('div', { class: 'aa-row', style: 'display:none;' }, [
-      el('div', { class: 'aa-field', style: 'flex:1;min-width:160px;' }, [el('label', { text: 'Transparency' }), transSel]),
-      el('div', { class: 'aa-field', style: 'flex:1;min-width:160px;' }, [el('label', { text: 'Incentive' }), incSel])
-    ]);
-    ttSel.addEventListener('change', function () { fixedWrap.style.display = ttSel.value === 'fixed' ? 'flex' : 'none'; });
+    var statusSel = el('select', {}, ['open', 'waiting', 'closed'].map(function (s) { return el('option', { value: s }, [s]); }));
     createCard.appendChild(el('h3', { text: 'Create new session' }));
-    createCard.appendChild(el('p', { class: 'aa-note', text: 'Each session gets a short join code. Participants enter it on the welcome screen (or open the share link). A session can pin its own 2x2 condition, overriding the global setting.' }));
+    createCard.appendChild(el('p', { class: 'aa-note', text: 'Each session gets a short join code. Participants enter it on the welcome screen (or open the share link). Status: "open" lets people in; "waiting" and "closed" do not.' }));
     createCard.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: 'Session name' }), name]));
-    createCard.appendChild(el('div', { class: 'aa-row' }, [
-      el('div', { class: 'aa-field', style: 'flex:1;min-width:160px;' }, [el('label', { text: 'Status' }), statusSel]),
-      el('div', { class: 'aa-field', style: 'flex:1;min-width:200px;' }, [el('label', { text: '2x2 design' }), ttSel])
-    ]));
-    createCard.appendChild(fixedWrap);
+    createCard.appendChild(el('div', { class: 'aa-field', style: 'max-width:240px;' }, [el('label', { text: 'Status' }), statusSel]));
     createCard.appendChild(el('div', { class: 'aa-row' }, [el('button', { class: 'aa-btn', on: { click: create } }, ['Create session'])]));
     body.appendChild(createCard);
 
-    // List
+    // The 2x2 design (global)
+    body.appendChild(build2x2Card());
+
+    // Active sessions list
     var listCard = el('div', { class: 'aa-card' }, [el('h3', { text: 'Active sessions' }), el('p', { class: 'aa-note', text: 'Loading...' })]);
     body.appendChild(listCard);
     refresh();
 
-    function condFromForm() {
-      var v = ttSel.value;
-      if (v === 'global') return null;
-      if (v === 'off') return { enabled: false };
-      if (v === 'random') return { enabled: true, assignment: 'random' };
-      return { enabled: true, assignment: 'fixed', fixedCell: { transparency: transSel.value, incentive: incSel.value } };
-    }
     function create() {
       if (!name.value.trim()) { toast('Give the session a name.'); return; }
-      var data = { name: name.value.trim(), status: statusSel.value, condition: condFromForm(), taskSetId: cfg.activeTaskSetId || null };
+      var data = { name: name.value.trim(), status: statusSel.value, condition: null, taskSetId: cfg.activeTaskSetId || null };
       Store.createSession(data).then(function (s) { toast('Session created: ' + s.code); name.value = ''; refresh(); }).catch(function (e) { toast('Create failed: ' + ((e && e.code) || 'error')); });
     }
     function refresh() {
@@ -231,9 +215,8 @@
         list.forEach(function (s) {
           var liveCount = counts[s.id] != null ? counts[s.id] : (s.count || 0);
           var joinUrl = location.origin + location.pathname + '?s=' + s.code;
-          var st = s.status || 'waiting';
-          var ctext = !s.condition ? 'global 2x2' : (s.condition.enabled ? ('2x2 ' + (s.condition.assignment || 'random') + (s.condition.fixedCell ? ' (' + s.condition.fixedCell.transparency + '/' + s.condition.fixedCell.incentive + ')' : '')) : 'no 2x2');
-          var statusSel2 = el('select', { style: 'max-width:140px;' }, ['waiting', 'open', 'closed'].map(function (x) { return el('option', { value: x }, [x]); }));
+          var st = s.status || 'open';
+          var statusSel2 = el('select', { style: 'max-width:140px;' }, ['open', 'waiting', 'closed'].map(function (x) { return el('option', { value: x }, [x]); }));
           statusSel2.value = st;
           statusSel2.addEventListener('change', function () { Store.updateSession(s.id, { status: statusSel2.value }).then(function () { toast('Status updated.'); refresh(); }); });
           listCard.appendChild(el('div', { class: 'aa-q' }, [
@@ -241,7 +224,7 @@
               el('div', {}, [el('b', { text: s.code, style: 'font-size:18px;letter-spacing:.1em;' }), ' ', el('span', { class: 'aa-badge ' + st, text: st })]),
               el('div', { class: 'aa-note', text: liveCount + ' participant' + (liveCount === 1 ? '' : 's') })
             ]),
-            el('div', { class: 'aa-note', style: 'margin-top:4px;', text: (s.name || '(unnamed)') + ' · ' + ctext }),
+            el('div', { class: 'aa-note', style: 'margin-top:4px;', text: (s.name || '(unnamed)') }),
             el('div', { class: 'aa-row', style: 'margin-top:8px;' }, [
               statusSel2,
               el('button', { class: 'aa-btn sec sm', on: { click: function () { copy(joinUrl); } } }, ['Copy join link']),
@@ -455,33 +438,37 @@
   }
 
   /* ===================== 2x2 & SETTINGS ===================== */
+  // The 2x2 design card (global). Lives on the "Sessions and Design" tab.
+  function build2x2Card() {
+    var tt = Object.assign({}, (D.settings || {}).twoByTwo, (cfg.settings || {}).twoByTwo);
+    var enabled = el('input', { type: 'checkbox' }); if (tt.enabled) enabled.setAttribute('checked', 'checked');
+    function save() {
+      var settings = Object.assign({}, cfg.settings, { twoByTwo: { enabled: enabled.checked } });
+      saveConfig({ settings: settings }).then(function () { cfg.settings = settings; toast(enabled.checked ? '2x2 design enabled.' : '2x2 design disabled.'); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); });
+    }
+    function restore() {
+      var settings = Object.assign({}, cfg.settings, { twoByTwo: { enabled: false } });
+      saveConfig({ settings: settings }).then(function () { cfg.settings = settings; enabled.checked = false; toast('2x2 design reset (off).'); }).catch(function (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); });
+    }
+    return el('div', { class: 'aa-card' }, [
+      el('h3', { text: 'The 2x2 design' }),
+      el('p', { class: 'aa-note', html: 'A between-subjects 2x2: <b>Transparency</b> (abstract tokens vs translated cost) x <b>Incentive</b> (firm pays vs personal budget). When enabled, every participant is <b>randomly and invisibly</b> assigned to one of the four cells - the cell is recorded with their responses but is <b>never shown to them</b>, and they are not told conditions exist. When disabled, everyone is in a single baseline condition.' }),
+      el('div', { class: 'aa-field' }, [el('label', { class: 'aa-toggle' }, [enabled, document.createTextNode('Enable the 2x2 design (random assignment to 4 conditions)')])]),
+      el('div', { class: 'aa-row' }, [
+        el('button', { class: 'aa-btn', on: { click: save } }, ['Make this the default']),
+        el('button', { class: 'aa-btn sec', on: { click: restore } }, ['Restore built-in default'])
+      ])
+    ]);
+  }
+
   function renderSettings(body) {
     var s = cfg.settings || {};
-    var tt = Object.assign({}, (D.settings || {}).twoByTwo, s.twoByTwo);
-    var enabled = el('input', { type: 'checkbox' }); if (tt.enabled) enabled.setAttribute('checked', 'checked');
-    var assign = el('select', {}, [['random', 'Random (between-subjects)'], ['fixed', 'Fixed cell (everyone the same)']].map(function (o) { return el('option', { value: o[0] }, [o[1]]); }));
-    assign.value = tt.assignment || 'random';
-    var fixedCell = tt.fixedCell || { transparency: 'abstract', incentive: 'firm' };
-    var transSel = el('select', {}, [['abstract', 'Abstract tokens'], ['translated', 'Translated cost']].map(function (o) { return el('option', { value: o[0] }, [o[1]]); })); transSel.value = fixedCell.transparency;
-    var incSel = el('select', {}, [['firm', 'Firm pays'], ['personal', 'Personal budget']].map(function (o) { return el('option', { value: o[0] }, [o[1]]); })); incSel.value = fixedCell.incentive;
-
     var randomize = el('input', { type: 'checkbox' }); if (s.randomizeOrder !== false) randomize.setAttribute('checked', 'checked');
     var perUser = el('input', { type: 'number', value: String(s.comparisonsPerUser != null ? s.comparisonsPerUser : 0), style: 'max-width:140px;' });
     var reqCode = el('input', { type: 'checkbox' }); if (s.requireSessionCode) reqCode.setAttribute('checked', 'checked');
-
-    body.appendChild(el('div', { class: 'aa-card' }, [
-      el('h3', { text: 'The 2x2 design' }),
-      el('p', { class: 'aa-note', html: 'Between-subjects 2x2: <b>Transparency</b> (abstract tokens vs translated cost) x <b>Incentive</b> (firm pays vs personal budget). When enabled, each participant is assigned a cell and it is recorded with their responses; a short banner can be shown per cell (edit the banners in arena-data.js). When disabled, everyone is in the baseline cell (abstract tokens, firm pays) and no banner shows. A session can override this globally.' }),
-      el('div', { class: 'aa-field' }, [el('label', { class: 'aa-toggle' }, [enabled, document.createTextNode('Enable the 2x2 design')])]),
-      el('div', { class: 'aa-field' }, [el('label', { text: 'Assignment' }), assign]),
-      el('div', { class: 'aa-row' }, [
-        el('div', { class: 'aa-field', style: 'flex:1;min-width:170px;' }, [el('label', { text: 'Fixed cell - Transparency' }), transSel]),
-        el('div', { class: 'aa-field', style: 'flex:1;min-width:170px;' }, [el('label', { text: 'Fixed cell - Incentive' }), incSel])
-      ]),
-      el('p', { class: 'aa-note', text: '("Fixed cell" is used only when Assignment is "Fixed cell".)' })
-    ]));
     body.appendChild(el('div', { class: 'aa-card' }, [
       el('h3', { text: 'Comparison flow' }),
+      el('p', { class: 'aa-note', text: 'Each participant is shown a number of task pairs in a random sequence. Set how many, and whether the order is randomized.' }),
       el('div', { class: 'aa-field' }, [el('label', { class: 'aa-toggle' }, [randomize, document.createTextNode('Show comparisons in random order per participant')])]),
       el('div', { class: 'aa-field' }, [el('label', { text: 'Comparisons per participant (0 = use the whole active set)' }), perUser]),
       el('div', { class: 'aa-field' }, [el('label', { class: 'aa-toggle' }, [reqCode, document.createTextNode('Require a session code to start')])]),
@@ -494,7 +481,6 @@
     function clear(b) { b.innerHTML = ''; return b; }
     function doSave() {
       var settings = Object.assign({}, s, {
-        twoByTwo: Object.assign({}, tt, { enabled: enabled.checked, assignment: assign.value, fixedCell: { transparency: transSel.value, incentive: incSel.value } }),
         randomizeOrder: randomize.checked,
         comparisonsPerUser: parseInt(perUser.value, 10) || 0,
         requireSessionCode: reqCode.checked
@@ -502,7 +488,12 @@
       saveConfig({ settings: settings }).then(function () { cfg.settings = settings; toast('Settings saved.'); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); });
     }
     function restoreDefaults() {
-      var settings = Object.assign({}, JSON.parse(JSON.stringify(D.settings || {})));
+      var Ds = D.settings || {};
+      var settings = Object.assign({}, cfg.settings, {
+        randomizeOrder: Ds.randomizeOrder !== false,
+        comparisonsPerUser: Ds.comparisonsPerUser || 0,
+        requireSessionCode: !!Ds.requireSessionCode
+      });
       saveConfig({ settings: settings }).then(function () { cfg.settings = settings; renderSettings(clear(body)); toast('Restored built-in default.'); }).catch(function (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); });
     }
   }

@@ -140,7 +140,7 @@
      FIREBASE backend
      ================================================================ */
   function FirebaseBackend() {
-    var fb = null, authCb = null;
+    var fb = null, authCb = null, lastUser = null, gotState = false;
     var APP_NAME = 'answerarena';
 
     this.mode = 'firebase';
@@ -153,12 +153,19 @@
         var appM = mods[0], authM = mods[1], fsM = mods[2], app;
         try { app = appM.getApp(APP_NAME); } catch (e) { app = appM.initializeApp(window.ARENA_FIREBASE, APP_NAME); }
         fb = { app: app, auth: authM.getAuth(app), db: fsM.getFirestore(app), A: authM, F: fsM };
-        authM.onAuthStateChanged(fb.auth, function (u) { if (authCb) authCb(u ? { uid: u.uid, email: u.email } : null); });
+        authM.onAuthStateChanged(fb.auth, function (u) {
+          lastUser = u ? { uid: u.uid, email: u.email } : null; gotState = true;
+          if (authCb) authCb(lastUser);
+        });
         return { mode: 'firebase' };
       });
     };
 
-    this.onAuth = function (cb) { authCb = cb; if (fb && fb.auth.currentUser) cb({ uid: fb.auth.currentUser.uid, email: fb.auth.currentUser.email }); };
+    // Replay the latest known auth state when a listener registers. Firebase's
+    // initial onAuthStateChanged event can fire BEFORE onAuth() is called (e.g.
+    // while loadConfig() is in flight); without this replay a logged-out visitor
+    // never gets routed and the app hangs on the loading screen.
+    this.onAuth = function (cb) { authCb = cb; if (gotState) cb(lastUser); };
     this.currentUser = function () { var u = fb && fb.auth.currentUser; return u ? { uid: u.uid, email: u.email } : null; };
     this.register = function (email, password) { return fb.A.createUserWithEmailAndPassword(fb.auth, email, password).then(function (c) { return { uid: c.user.uid, email: c.user.email }; }); };
     this.login = function (email, password) { return fb.A.signInWithEmailAndPassword(fb.auth, email, password).then(function (c) { return { uid: c.user.uid, email: c.user.email }; }); };

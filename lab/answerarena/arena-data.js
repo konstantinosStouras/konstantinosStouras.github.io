@@ -84,32 +84,7 @@ window.ARENA_DEFAULTS = {
     "comparisonsPerUser": 0,
     "requireSessionCode": false,
     "twoByTwo": {
-      "enabled": false,
-      "assignment": "random",
-      "fixedCell": {
-        "transparency": "abstract",
-        "incentive": "firm"
-      },
-      "labels": {
-        "transparency": {
-          "abstract": "Abstract tokens",
-          "translated": "Translated cost (money, energy, water)"
-        },
-        "incentive": {
-          "firm": "Firm pays (unlimited use)",
-          "personal": "Personal budget (keep what you save)"
-        }
-      },
-      "banners": {
-        "transparency": {
-          "abstract": "",
-          "translated": "Heads-up: in this study we translate usage into real cost - money, watt-hours, CO2 and water."
-        },
-        "incentive": {
-          "firm": "",
-          "personal": "You have a personal budget for this study and keep whatever you do not spend as a bonus."
-        }
-      }
+      "enabled": false
     }
   },
   "registrationQuestions": [
