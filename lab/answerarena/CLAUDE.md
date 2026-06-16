@@ -1,14 +1,14 @@
-# CLAUDE.md - Answer Arena (lab root app)
+# CLAUDE.md - Answer Arena
 
 Context file for an LLM. This explains how the **Answer Arena** app at
-`stouras.com/lab/` is built, so it can be extended without re-reading
-everything. It follows the same philosophy as the sibling `portfoliofit`
-research app and the `ideasearchlab` admin.
+`stouras.com/lab/answerarena/` is built, so it can be extended without
+re-reading everything. It follows the same philosophy as the sibling
+`portfoliofit` research app and the `ideasearchlab` admin.
 
-- **Live (participant):** https://www.stouras.com/lab/
-- **Live (admin):** https://www.stouras.com/lab/?admin
-- **Join a session:** https://www.stouras.com/lab/?s=CODE
-- **Repo:** `lab/` (front end) + `_lab-arena-firebase/` (backend, not web-served)
+- **Live (participant):** https://www.stouras.com/lab/answerarena/
+- **Live (admin):** https://www.stouras.com/lab/answerarena/?admin
+- **Join a session:** https://www.stouras.com/lab/answerarena/?s=CODE
+- **Repo:** `lab/answerarena/` (front end) + `_lab-arena-firebase/` (backend, not web-served)
 
 ## 1. What it is
 
@@ -45,7 +45,7 @@ Model identities are **never** shown to participants.
 
 ## 3. Files
 
-Served (`lab/`):
+Served (`lab/answerarena/`):
 
 | File | Role |
 | --- | --- |

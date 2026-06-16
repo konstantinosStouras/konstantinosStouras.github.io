@@ -1,7 +1,7 @@
 # Answer Arena - Firebase backend
 
 This folder is the deployable Firebase project for the study at
-`stouras.com/lab/`. It is **not** served by the website (the leading
+`stouras.com/lab/answerarena/`. It is **not** served by the website (the leading
 underscore keeps Jekyll/GitHub Pages from publishing it); it lives in the repo
 only so the backend is versioned next to the app.
 
@@ -11,7 +11,7 @@ only so the backend is versioned next to the app.
 - **Admin account:** `admin@admin.com`
 
 The web app talks to Firebase from the browser. Until you finish the steps
-below and paste the web config into `lab/arena-config.js`, the app runs in
+below and paste the web config into `lab/answerarena/arena-config.js`, the app runs in
 **local test mode** (everything in the browser's localStorage) so you can click
 through it offline.
 
@@ -41,7 +41,7 @@ through it offline.
    - Nickname e.g. `answerarena-web`; you do **not** need Firebase Hosting.
    - Copy the `firebaseConfig` object it shows you.
 7. **Paste the config into the app:**
-   - Open `lab/arena-config.js` and replace every `REPLACE_ME...` with the
+   - Open `lab/answerarena/arena-config.js` and replace every `REPLACE_ME...` with the
      matching value from `firebaseConfig` (`apiKey`, `authDomain`, `projectId`,
      `storageBucket`, `messagingSenderId`, `appId`).
    - Commit. The app now uses Firebase instead of local test mode.

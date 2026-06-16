@@ -4,7 +4,7 @@
    One async API used by BOTH the participant app (arena-app.js) and the
    admin panel (admin.js), with two interchangeable implementations:
 
-     * Firebase  — used when lab/arena-config.js holds a real config.
+     * Firebase  — used when lab/answerarena/arena-config.js holds a real config.
                    Named Firebase app 'answerarena' (so it never collides
                    with the page's other Firebase apps), Auth + Firestore.
      * Local     — localStorage fallback used until Firebase is configured,
