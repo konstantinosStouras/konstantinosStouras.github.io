@@ -367,6 +367,14 @@
     var approvedCard = el('div', { class: 'pfa-card' });
     var activeCard = el('div', { class: 'pfa-card' });
     body.appendChild(approvedCard); body.appendChild(activeCard);
+    body.appendChild(el('div', { class: 'pfa-card' }, [
+      el('p', { class: 'pfa-note', text: '“Make this the default” freezes your approved set for all participants. “Reset this page to defaults” clears the set you are building. “Restore built-in default” reverts to the built-in default puzzles.' }),
+      el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;' }, [
+        el('button', { class: 'pfa-btn', on: { click: function () { if (!approvedPuzzles.length) { toast('Approve some puzzles first.'); return; } freeze(); } } }, ['Make this the default']),
+        el('button', { class: 'pfa-btn sec', on: { click: function () { approvedPuzzles = []; renderApproved(); toast('Cleared approved set.'); } } }, ['Reset this page to defaults']),
+        el('button', { class: 'pfa-btn sec', on: { click: clearActive } }, ['Restore built-in default'])
+      ])
+    ]));
     renderApproved(); renderActive();
 
     function generate(diff) {
@@ -401,7 +409,6 @@
         ]));
       });
       approvedCard.appendChild(wrap);
-      approvedCard.appendChild(el('button', { class: 'pfa-btn', style: 'margin-top:10px;', on: { click: freeze } }, ['Freeze as active set']));
     }
     function renderActive() {
       activeCard.innerHTML = '';
@@ -432,7 +439,6 @@
       activeCard.appendChild(el('p', { class: 'pfa-note', text: ids.length + ' frozen puzzle(s) active. These are the exact puzzles every participant plays — each participant sees them in a randomized order.' }));
       var wrap = el('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;margin:8px 0;' });
       activeCard.appendChild(wrap);
-      activeCard.appendChild(el('button', { class: 'pfa-btn sec sm', on: { click: clearActive } }, ['Clear active set (use random)']));
       var cells = ids.map(function (id, i) {
         var c = el('div', { class: 'pfa-q', style: 'flex:0 0 auto;text-align:center;min-width:120px;' }, [el('div', { class: 'pfa-note', text: '#' + (i + 1) + ' loading…' })]);
         wrap.appendChild(c); return c;
@@ -481,13 +487,14 @@
       } catch (e) { toast('Freeze failed: ' + ((e && e.code) || 'error')); }
     }
     async function clearActive() {
-      try { var s = Object.assign({}, cfg.settings, { activePuzzleIds: [] }); await saveConfig({ settings: s }); cfg.settings = s; renderActive(); toast('Cleared active set.'); }
+      try { var s = Object.assign({}, cfg.settings, { activePuzzleIds: [] }); await saveConfig({ settings: s }); cfg.settings = s; renderActive(); toast('Reverted to built-in default set.'); }
       catch (e) { toast('Failed: ' + ((e && e.code) || 'error')); }
     }
   }
 
   // ---- Settings tab ----
   function renderSettings(body) {
+    body.innerHTML = '';
     var s = cfg.settings || {};
     var per = s.puzzlesPerUser || { easy: 2, hard: 2 };
     var tl = s.timeLimits || { easy: 120, hard: 180 };
@@ -496,7 +503,6 @@
     var teasy = el('input', { type: 'number', value: String(tl.easy != null ? tl.easy : 120), style: 'max-width:120px;' });
     var thard = el('input', { type: 'number', value: String(tl.hard != null ? tl.hard : 180), style: 'max-width:120px;' });
     var rnd = el('input', { type: 'checkbox' }); if (s.randomizeOrder !== false) rnd.setAttribute('checked', 'checked');
-    var save = el('button', { class: 'pfa-btn', on: { click: doSave } }, ['Save settings']);
     body.appendChild(el('div', { class: 'pfa-card' }, [
       el('div', { class: 'pfa-field' }, [el('label', { text: 'Easy puzzles per participant' }), easy]),
       el('div', { class: 'pfa-field' }, [el('label', { text: 'Hard puzzles per participant' }), hard]),
@@ -504,10 +510,13 @@
       el('div', { class: 'pfa-field' }, [el('label', { text: 'Hard time limit (seconds per puzzle)' }), thard]),
       el('div', { class: 'pfa-field' }, [el('label', { style: 'display:flex;align-items:center;gap:8px;' }, [rnd, document.createTextNode('Randomize puzzle order per participant')])]),
       el('p', { class: 'pfa-note', text: 'Puzzle counts apply only when no custom set is frozen (see the Puzzles tab). Time limits apply to every puzzle of that difficulty, in training and the main game.' }),
-      save
+      el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;' }, [
+        el('button', { class: 'pfa-btn', on: { click: doSave } }, ['Make this the default']),
+        el('button', { class: 'pfa-btn sec', on: { click: function () { renderSettings(body); toast('Reloaded saved values.'); } } }, ['Reset this page to defaults']),
+        el('button', { class: 'pfa-btn sec', on: { click: restoreDefaults } }, ['Restore built-in default'])
+      ])
     ]));
     async function doSave() {
-      save.setAttribute('disabled', 'true');
       var settings = Object.assign({}, s, {
         puzzlesPerUser: { easy: parseInt(easy.value, 10) || 0, hard: parseInt(hard.value, 10) || 0 },
         timeLimits: { easy: parseInt(teasy.value, 10) || 120, hard: parseInt(thard.value, 10) || 180 },
@@ -515,7 +524,17 @@
       });
       try { await saveConfig({ settings: settings }); cfg.settings = settings; toast('Settings saved.'); }
       catch (e) { toast('Save failed: ' + ((e && e.code) || 'error')); }
-      save.removeAttribute('disabled');
+    }
+    async function restoreDefaults() {
+      var D = (window.PF_DEFAULTS && window.PF_DEFAULTS.settings) || {};
+      var settings = Object.assign({}, cfg.settings, {
+        puzzlesPerUser: D.puzzlesPerUser || { easy: 2, hard: 2 },
+        timeLimits: D.timeLimits || { easy: 120, hard: 180 },
+        randomizeOrder: D.randomizeOrder !== false,
+        trainingDifficulty: D.trainingDifficulty || 'easy'
+      });
+      try { await saveConfig({ settings: settings }); cfg.settings = settings; renderSettings(body); toast('Restored built-in default.'); }
+      catch (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); }
     }
   }
 
