@@ -154,6 +154,15 @@
       + '.pfx-submit{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:8500;display:none;background:#2ecc71;color:#fff;border:2px solid #fff;font-weight:800;font-size:18px;letter-spacing:.2px;padding:16px 40px;border-radius:16px;box-shadow:0 14px 38px rgba(46,204,113,.6);cursor:pointer;text-align:center;}'
       + '.pfx-submit:hover{background:#27ae60;animation:none;}.pfx-submit.show{display:block;animation:pfxpulse 1.7s ease-in-out infinite;}'
       + '@keyframes pfxpulse{0%,100%{transform:translateX(-50%) scale(1);box-shadow:0 14px 34px rgba(46,204,113,.5);}50%{transform:translateX(-50%) scale(1.05);box-shadow:0 16px 50px rgba(46,204,113,.9);}}'
+      + '.pfx-tour{position:fixed;inset:0;z-index:9000;pointer-events:none;}'
+      + '.pfx-spot{position:absolute;border-radius:14px;box-shadow:0 0 0 9999px rgba(20,15,8,.74);transition:left .25s,top .25s,width .25s,height .25s;pointer-events:none;}'
+      + '.pfx-tip{position:absolute;max-width:340px;width:calc(100vw - 24px);background:#fff;color:#2b2b2b;border-radius:14px;padding:16px 18px;box-shadow:0 18px 46px rgba(0,0,0,.35);pointer-events:auto;box-sizing:border-box;}'
+      + '.pfx-tip h3{font-size:16px;margin:4px 0 6px;font-family:"Space Grotesk",Inter,sans-serif;text-align:left;}'
+      + '.pfx-tip p{font-size:14px;line-height:1.55;margin:0 0 12px;color:#4a4843;text-align:left;}'
+      + '.pfx-tip .pfx-step{font-size:11px;color:#8a877f;font-weight:700;text-transform:uppercase;letter-spacing:.06em;}'
+      + '.pfx-tip .pfx-tiprow{display:flex;justify-content:space-between;align-items:center;gap:8px;}'
+      + '.pfx-tip button{border:none;border-radius:9px;padding:8px 15px;font-weight:600;font-size:13px;cursor:pointer;}'
+      + '.pfx-tip .pfx-next{background:#e67e22;color:#fff;}.pfx-tip .pfx-back{background:#f1ece3;color:#2b2b2b;}.pfx-tip .pfx-skip{background:transparent;color:#8a877f;padding-left:0;}'
       + '.pfx-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;}';
     document.head.appendChild(el('style', { text: css }));
   }
@@ -336,7 +345,73 @@
     var tdiff = (cfg.settings && cfg.settings.trainingDifficulty) || 'easy';
     window.PFGame._onRoundEnd = onTrainingEnd;
     window.PFGame.newGame(tdiff, limitFor(tdiff));
-    showGameSubmit('Continue to Registration');
+    // Pause the clock and run the onboarding tour over the live board first.
+    if (window.PFGame.pauseTimer) window.PFGame.pauseTimer();
+    runTour(function () {
+      if (window.PFGame.resumeTimer) window.PFGame.resumeTimer();
+      showGameSubmit('Continue to Registration');
+    });
+  }
+
+  // ---- Onboarding spotlight tour (before the first training round) -------
+  function runTour(onDone) {
+    var STEPS = [
+      { center: true, title: 'How PortfolioFit works', text: 'Each brick is a project worth a dollar value. Pack the right projects into the frame to maximise your net value — the total value of placed bricks minus a $1 penalty for every empty cell. Time is limited, so plan well.' },
+      { sel: '.board-card', title: 'The board', text: 'This is your frame. Drop project bricks here to fill it. Every empty cell left over costs you $1.' },
+      { sel: '#tray', title: 'Your project bricks', text: 'Tap a brick to select it, then tap a board tile to drop it. Use the arrow keys (or the Rotate / Flip buttons) to turn it; tap a placed brick to pick it back up.' },
+      { sel: '.netcard', title: 'Net value', text: 'Your score: the total value of placed bricks minus the empty-cell penalty. The tempting high-ROI bricks are often traps — aim for the best portfolio, not just any fit.' },
+      { sel: '.kpi-panel', title: 'KPIs', text: 'Track total value, resource cost, coverage and portfolio fitness as you build.' },
+      { sel: '.tools .tool:nth-of-type(1)', title: 'Calculator', text: 'Use this calculator to work out values and returns while you plan your portfolio.' },
+      { sel: '.tools .tool:nth-of-type(2)', title: 'My notes', text: 'Jot down your strategy here as you play.' },
+      { sel: '.timer-wrap', title: 'The clock', text: 'Each puzzle is timed. When the time runs out — or when you submit — you move on to the next step.' }
+    ];
+    var i = 0;
+    var tour = el('div', { class: 'pfx-tour' });
+    var spot = el('div', { class: 'pfx-spot' });
+    var tip = el('div', { class: 'pfx-tip' });
+    tour.appendChild(spot); tour.appendChild(tip);
+    document.body.appendChild(tour);
+    window.addEventListener('resize', position);
+    show();
+
+    function finish() { window.removeEventListener('resize', position); tour.remove(); if (onDone) onDone(); }
+    function show() {
+      var s = STEPS[i], last = (i === STEPS.length - 1);
+      tip.innerHTML = '';
+      tip.appendChild(el('div', { class: 'pfx-step', text: 'Step ' + (i + 1) + ' of ' + STEPS.length }));
+      tip.appendChild(el('h3', { text: s.title }));
+      tip.appendChild(el('p', { text: s.text }));
+      var skip = el('button', { class: 'pfx-skip', on: { click: finish } }, ['Skip']);
+      var right = el('div', { style: 'display:flex;gap:8px;' }, [
+        (i > 0 ? el('button', { class: 'pfx-back', on: { click: function () { i--; show(); } } }, ['Back']) : el('span', {})),
+        el('button', { class: 'pfx-next', on: { click: function () { if (last) finish(); else { i++; show(); } } } }, [last ? 'Start training' : 'Next'])
+      ]);
+      tip.appendChild(el('div', { class: 'pfx-tiprow' }, [skip, right]));
+      position();
+    }
+    function position() {
+      var s = STEPS[i];
+      var target = s.center ? null : (s.sel ? document.querySelector(s.sel) : null);
+      if (!target) {
+        spot.style.width = '0px'; spot.style.height = '0px'; spot.style.left = '50vw'; spot.style.top = '50vh';
+        tip.style.transform = 'translate(-50%,-50%)'; tip.style.left = '50%'; tip.style.top = '50%';
+        return;
+      }
+      try { target.scrollIntoView({ block: 'center', inline: 'nearest' }); } catch (e) {}
+      requestAnimationFrame(function () {
+        var r = target.getBoundingClientRect(), pad = 8;
+        spot.style.left = (r.left - pad) + 'px'; spot.style.top = (r.top - pad) + 'px';
+        spot.style.width = (r.width + pad * 2) + 'px'; spot.style.height = (r.height + pad * 2) + 'px';
+        tip.style.transform = 'none';
+        var tipW = Math.min(340, window.innerWidth - 24), tipH = tip.offsetHeight || 170;
+        var left = Math.min(Math.max(12, r.left), window.innerWidth - tipW - 12);
+        var top;
+        if (r.bottom + 14 + tipH < window.innerHeight) top = r.bottom + 14;
+        else if (r.top - 14 - tipH > 12) top = r.top - 14 - tipH;
+        else top = Math.max(12, (window.innerHeight - tipH) / 2);
+        tip.style.left = left + 'px'; tip.style.top = top + 'px';
+      });
+    }
   }
   function onTrainingEnd(metrics) {
     window.PFGame._onRoundEnd = null;
