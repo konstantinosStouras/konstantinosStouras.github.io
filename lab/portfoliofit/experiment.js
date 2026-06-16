@@ -838,7 +838,7 @@
     if (cur.w) cardEl.style.width = cur.w + 'px';
     if (cur.h) { cardEl.style.height = cur.h + 'px'; cardEl.style.overflow = 'auto'; }
 
-    var EDGE = 9, MINW = 150, MINH = 90, ds = null, rs = null;
+    var EDGE = 9, CORNER = 26, MINW = 150, MINH = 90, ds = null, rs = null;
     function playing() { return document.body.classList.contains('pf-playing'); }
     function persist() { var m = loadLayout(); m[key] = { x: cur.x || 0, y: cur.y || 0, w: cur.w || null, h: cur.h || null }; saveLayout(m); }
     function front() { cardEl.style.zIndex = String(++_zTop); }
@@ -846,8 +846,11 @@
     function isInteractive(t) { return !!(t && t.closest && t.closest('button,input,textarea,select,a,label,kbd,.cell,.piece')); }
     function edgeAt(e, rect) {
       var x = e.clientX - rect.left, y = e.clientY - rect.top, w = rect.width, h = rect.height;
+      // Wide corner zones (easy to grab) take priority over the thin edge bands.
+      var cL = x <= CORNER, cR = x >= w - CORNER, cT = y <= CORNER, cB = y >= h - CORNER;
+      if (cT && cL) return 'nw'; if (cT && cR) return 'ne'; if (cB && cL) return 'sw'; if (cB && cR) return 'se';
       var l = x <= EDGE, r = x >= w - EDGE, t = y <= EDGE, b = y >= h - EDGE;
-      return (t && l) ? 'nw' : (t && r) ? 'ne' : (b && l) ? 'sw' : (b && r) ? 'se' : t ? 'n' : b ? 's' : l ? 'w' : r ? 'e' : null;
+      return t ? 'n' : b ? 's' : l ? 'w' : r ? 'e' : null;
     }
     function cursorFor(edge) { return { n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize', ne: 'nesw-resize', sw: 'nesw-resize', nw: 'nwse-resize', se: 'nwse-resize' }[edge] || ''; }
     function overlaps(aL, aT, aR, aB) {
