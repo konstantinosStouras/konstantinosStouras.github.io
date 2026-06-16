@@ -1503,7 +1503,7 @@
     function startTimer() {
       if (timer.running) return;
       timer.running = true;
-      timer.start = Date.now();
+      timer.start = Date.now() - (timer.elapsed || 0) * 1000;   // resume from elapsed (pause/resume safe; identical for a fresh round)
       timer.interval = setInterval(() => {
         timer.elapsed = Math.floor((Date.now() - timer.start) / 1000);
         updateTimerUI();
@@ -2036,6 +2036,8 @@
       newGame: function (diff, limit) { newGame(diff || 'easy', limit); },
       restart: function () { var b = $('#restartBtn'); if (b) b.click(); },
       endRound: function () { endRound(); },
+      pauseTimer: function () { stopTimer(); },
+      resumeTimer: function () { startTimer(); },
       getMetrics: pfMetrics,
       getPlacements: pfPlacements,
       hideWin: function () { hideWin(); },
