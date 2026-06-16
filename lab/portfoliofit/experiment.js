@@ -163,6 +163,12 @@
       + '.pfx-tip .pfx-tiprow{display:flex;justify-content:space-between;align-items:center;gap:8px;}'
       + '.pfx-tip button{border:none;border-radius:9px;padding:8px 15px;font-weight:600;font-size:13px;cursor:pointer;}'
       + '.pfx-tip .pfx-next{background:#e67e22;color:#fff;}.pfx-tip .pfx-back{background:#f1ece3;color:#2b2b2b;}.pfx-tip .pfx-skip{background:transparent;color:#8a877f;padding-left:0;}'
+      + '.pfx-grip{position:absolute;top:7px;right:7px;width:24px;height:24px;display:none;align-items:center;justify-content:center;background:rgba(230,126,34,.16);color:#cf6f17;border-radius:7px;cursor:grab;font-size:13px;line-height:1;z-index:6;touch-action:none;user-select:none;}'
+      + '.pfx-grip:active{cursor:grabbing;}'
+      + '.pfx-rsz{position:absolute;right:2px;bottom:2px;width:18px;height:18px;display:none;cursor:nwse-resize;z-index:6;touch-action:none;background:linear-gradient(135deg,transparent 45%,#cf6f17 45%,#cf6f17 55%,transparent 55%);opacity:.6;border-radius:0 0 8px 0;}'
+      + 'body.pf-playing .pfx-grip{display:flex;}body.pf-playing .pfx-rsz{display:block;}'
+      + '.pfx-reset{display:none;position:fixed;left:14px;bottom:14px;z-index:8400;background:#fff;border:1px solid #e0dbd0;border-radius:10px;padding:9px 13px;font-size:12px;font-weight:700;color:#2b2b2b;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,.16);}'
+      + '.pfx-reset:hover{background:#f6f3ee;}body.pf-playing .pfx-reset{display:block;}'
       + '.pfx-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;}';
     document.head.appendChild(el('style', { text: css }));
   }
@@ -174,6 +180,7 @@
     closeOverlay();
     curOverlay = el('div', { class: 'pfx-ov' }, [card]);
     document.body.appendChild(curOverlay);
+    document.body.classList.remove('pf-playing');
   }
 
   // ---- Early-continue button (shown during a timed round) --------------
@@ -339,6 +346,7 @@
   }
   function runTraining() {
     closeOverlay();
+    document.body.classList.add('pf-playing');
     S.phase = 'training';
     S.roundIndex = 0;
     S.currentPuzzleId = 'training';
@@ -645,6 +653,7 @@
   }
   function runNextPuzzle() {
     closeOverlay();
+    document.body.classList.add('pf-playing');
     if (S.mainIndex >= S.queue.length) { showStats(); return; }
     var item = S.queue[S.mainIndex];
     S.roundIndex = S.mainIndex + 1;
@@ -806,6 +815,48 @@
     startMain();
   }
 
+  // ---- Movable / resizable boxes (experiment mode) ----------------------
+  // Each main box gets a drag grip (top-right) and a resize handle (bottom-right);
+  // positions/sizes persist in localStorage. A Reset-layout button restores the
+  // default. Grips/handles only show during play (body.pf-playing).
+  function loadLayout() { try { return JSON.parse(localStorage.getItem('pfx-layout')) || {}; } catch (e) { return {}; } }
+  function saveLayout(m) { try { localStorage.setItem('pfx-layout', JSON.stringify(m)); } catch (e) {} }
+  var _zTop = 5;
+  function enableLayoutCustomize() {
+    var defs = [
+      ['netcard', '.netcard'], ['kpis', '.kpi-panel'], ['board', '.board-card'],
+      ['bricks', '.game > div > .card'], ['calc', '.tools .tool:nth-of-type(1)'], ['notes', '.tools .tool:nth-of-type(2)']
+    ];
+    var saved = loadLayout(), any = false;
+    defs.forEach(function (d) { var node = document.querySelector(d[1]); if (node) { setupMovable(d[0], node, saved[d[0]]); any = true; } });
+    if (any && !document.querySelector('.pfx-reset')) {
+      document.body.appendChild(el('button', { class: 'pfx-reset', title: 'Restore the default layout', on: { click: function () { try { localStorage.removeItem('pfx-layout'); } catch (e) {} location.reload(); } } }, ['↺ Reset layout']));
+    }
+  }
+  function setupMovable(key, cardEl, st) {
+    if (cardEl.dataset.pfxMove) return; cardEl.dataset.pfxMove = '1';
+    if (getComputedStyle(cardEl).position === 'static') cardEl.style.position = 'relative';
+    var cur = { x: (st && st.x) || 0, y: (st && st.y) || 0, w: (st && st.w) || null, h: (st && st.h) || null };
+    if (cur.x || cur.y) cardEl.style.transform = 'translate(' + cur.x + 'px,' + cur.y + 'px)';
+    if (cur.w) cardEl.style.width = cur.w + 'px';
+    if (cur.h) { cardEl.style.height = cur.h + 'px'; cardEl.style.overflow = 'auto'; }
+    var grip = el('div', { class: 'pfx-grip', title: 'Drag to move this box' }, ['⠿']);
+    var rsz = el('div', { class: 'pfx-rsz', title: 'Drag to resize this box' });
+    cardEl.appendChild(grip); cardEl.appendChild(rsz);
+    function persist() { var m = loadLayout(); m[key] = { x: cur.x || 0, y: cur.y || 0, w: cur.w || null, h: cur.h || null }; saveLayout(m); }
+    function front() { cardEl.style.zIndex = String(++_zTop); }
+    var ds = null;
+    grip.addEventListener('pointerdown', function (e) { e.preventDefault(); try { grip.setPointerCapture(e.pointerId); } catch (x) {} front(); ds = { px: e.clientX, py: e.clientY, x: cur.x, y: cur.y }; });
+    grip.addEventListener('pointermove', function (e) { if (!ds) return; cur.x = ds.x + (e.clientX - ds.px); cur.y = ds.y + (e.clientY - ds.py); cardEl.style.transform = 'translate(' + cur.x + 'px,' + cur.y + 'px)'; });
+    function endDrag() { if (ds) { ds = null; persist(); } }
+    grip.addEventListener('pointerup', endDrag); grip.addEventListener('pointercancel', endDrag);
+    var rs = null;
+    rsz.addEventListener('pointerdown', function (e) { e.preventDefault(); e.stopPropagation(); try { rsz.setPointerCapture(e.pointerId); } catch (x) {} front(); rs = { px: e.clientX, py: e.clientY, w: cardEl.offsetWidth, h: cardEl.offsetHeight }; });
+    rsz.addEventListener('pointermove', function (e) { if (!rs) return; cur.w = Math.max(140, rs.w + (e.clientX - rs.px)); cur.h = Math.max(90, rs.h + (e.clientY - rs.py)); cardEl.style.width = cur.w + 'px'; cardEl.style.height = cur.h + 'px'; cardEl.style.overflow = 'auto'; });
+    function endRsz() { if (rs) { rs = null; persist(); } }
+    rsz.addEventListener('pointerup', endRsz); rsz.addEventListener('pointercancel', endRsz);
+  }
+
   // ---- Bootstrap --------------------------------------------------------
   async function init() {
     if (inited) return; inited = true;
@@ -820,6 +871,7 @@
       return;
     }
     // If already signed in (returning user), resume; else show welcome.
+    enableLayoutCustomize();
     if (fb.auth.currentUser) { S.user = fb.auth.currentUser; await loadParticipant(); resumeFlow(); }
     else showWelcome();
   }
