@@ -252,7 +252,23 @@
       }).catch(function (e) { listCard.innerHTML = ''; listCard.appendChild(el('p', { class: 'aa-err', text: 'Could not load sessions: ' + ((e && e.code) || 'error') })); });
     }
   }
-  function copy(txt) { try { navigator.clipboard.writeText(txt); toast('Copied: ' + txt); } catch (e) { window.prompt('Copy this link', txt); } }
+  function copy(txt) {
+    function fallback() {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = txt; ta.setAttribute('readonly', '');
+        ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;';
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        ta.setSelectionRange(0, txt.length);
+        var ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        if (ok) toast('Copied: ' + txt); else window.prompt('Copy this link:', txt);
+      } catch (e) { window.prompt('Copy this link:', txt); }
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(function () { toast('Copied: ' + txt); }, fallback);
+    } else { fallback(); }
+  }
 
   /* ============================ TASKS (Excel) ====================== */
   function renderTasks(body) {
