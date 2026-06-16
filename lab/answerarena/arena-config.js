@@ -18,12 +18,13 @@
    browser's localStorage only) so the whole flow is clickable offline.
    ===================================================================== */
 window.ARENA_FIREBASE = {
-  apiKey: 'REPLACE_ME_apiKey',
-  authDomain: 'REPLACE_ME.firebaseapp.com',
-  projectId: 'REPLACE_ME',
-  storageBucket: 'REPLACE_ME.firebasestorage.app',
-  messagingSenderId: 'REPLACE_ME',
-  appId: 'REPLACE_ME'
+  apiKey: 'AIzaSyAbi8PVaGcGpMq_dt7KqYBWgz7iAGda_Mg',
+  authDomain: 'stouras-answerarena.firebaseapp.com',
+  projectId: 'stouras-answerarena',
+  storageBucket: 'stouras-answerarena.firebasestorage.app',
+  messagingSenderId: '575267196372',
+  appId: '1:575267196372:web:fa6268734c61e045b65a41',
+  measurementId: 'G-MGBVNVRD75'
 };
 
 // Firebase JS SDK version loaded from gstatic (kept in one place).
