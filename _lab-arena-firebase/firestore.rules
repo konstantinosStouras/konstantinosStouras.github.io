@@ -4,7 +4,7 @@ rules_version = '2';
 //
 // Model:
 //   config/app             editable content + registration/survey questions + settings + activeTaskSetId
-//                          (admin write, signed-in read)
+//                          (admin write, PUBLIC read - needed pre-signup)
 //   taskSets/{id}          uploaded comparison sets (task, outputA, outputB)   (admin write, signed-in read)
 //   sessions/{id}          join codes + status + 2x2 condition                 (admin write, PUBLIC read*)
 //   participants/{uid}     one doc per participant (created by the owner)
@@ -26,8 +26,11 @@ service cloud.firestore {
     function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
 
     // ---- App content / configuration (admin-managed CMS) ----
+    // PUBLIC read: participants need the texts, registration/survey questions
+    // and 2x2 setting BEFORE they sign up (the welcome/tour/registration screens
+    // run pre-auth). config holds no secrets.
     match /config/{docId} {
-      allow read:  if signedIn();
+      allow read:  if true;
       allow write: if isAdmin();
     }
 

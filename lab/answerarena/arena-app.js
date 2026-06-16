@@ -97,7 +97,8 @@
       if (!c) { startTour(); return; }
       Store.getSessionByCode(c).then(function (sess) {
         if (!sess) { err.textContent = 'That session code was not found.'; return; }
-        if (sess.status === 'closed') { err.textContent = 'That session is closed.'; return; }
+        if (sess.status === 'closed') { err.textContent = 'That session has closed.'; return; }
+        if (sess.status === 'waiting') { err.textContent = 'That session has not opened yet. Please check back soon.'; return; }
         S.session = sess; startTour();
       }).catch(function () { err.textContent = 'Could not check the code. Please try again.'; });
     }
@@ -259,18 +260,12 @@
   function assignCondition() {
     var tt = (S.session && S.session.condition) || cfg.settings.twoByTwo || {};
     if (!tt.enabled) return { enabled: false, transparency: 'abstract', incentive: 'firm' };
-    if (tt.assignment === 'fixed' && tt.fixedCell) return { enabled: true, transparency: tt.fixedCell.transparency, incentive: tt.fixedCell.incentive };
+    // Random between-subjects assignment to one of the four cells (invisible to the participant).
     return { enabled: true, transparency: Math.random() < 0.5 ? 'abstract' : 'translated', incentive: Math.random() < 0.5 ? 'firm' : 'personal' };
   }
-  function conditionBanners() {
-    var c = S.condition || (S.p && S.p.condition); if (!c || !c.enabled) return [];
-    var b = (cfg.settings.twoByTwo && cfg.settings.twoByTwo.banners) || {}, out = [];
-    [['transparency', c.transparency], ['incentive', c.incentive]].forEach(function (pair) {
-      var txt = b[pair[0]] && b[pair[0]][pair[1]];
-      if (txt) out.push(el('div', { class: 'a-banner', text: txt }));
-    });
-    return out;
-  }
+  // NB: the assigned 2x2 cell is recorded silently and is NEVER shown to the
+  // participant. The design is blinded - subjects must not learn their
+  // condition, or that multiple conditions exist.
 
   /* ============================ TRAINING ========================= */
   function startTraining() {
@@ -318,12 +313,11 @@
     nextBtn.setAttribute('data-tour', 'next');
     nextBtn.setAttribute('disabled', 'true');
     comp.onChoose = function (choice) { S.choice = choice; nextBtn.removeAttribute('disabled'); };
-    var banners = conditionBanners();
-    var wrap = el('div', { class: 'a-wrap a-wide' }, banners.concat([
+    var wrap = el('div', { class: 'a-wrap a-wide' }, [
       el('p', { class: 'a-maininfo', html: t('mainIntro') }),
       comp.node,
       el('div', { class: 'a-row a-center' }, [nextBtn])
-    ]));
+    ]);
     setScreen(wrap);
 
     // keyboard: 1/a left, 2/b right, 0/= tie, enter next
@@ -463,8 +457,12 @@
           return;
         }
         S.user = user || null;
-        if (S.user) { Store.getParticipant(S.user.uid).then(function (p) { S.p = p; topbar(); if (S.phase === 'boot') resumeFlow(); }); }
-        else { topbar(); if (S.phase === 'boot') showWelcome(); }
+        // Only the INITIAL auth state drives routing here. The register/login
+        // flows handle their own routing, so later auth events must not re-route
+        // (or clobber S.p while a participant doc is still being written).
+        if (S.phase !== 'boot') { topbar(); return; }
+        if (S.user) { Store.getParticipant(S.user.uid).then(function (p) { S.p = p; topbar(); resumeFlow(); }); }
+        else { topbar(); showWelcome(); }
       });
     }).catch(function (e) {
       setScreen(overlayWrap(card('Connection problem', [el('p', { text: 'Could not start. Please refresh and try again.' })])));
