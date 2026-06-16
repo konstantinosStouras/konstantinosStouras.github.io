@@ -130,6 +130,7 @@
       + 'body.pf-exp #difficulty,body.pf-exp #newBtn,body.pf-exp #restartBtn,'
       + 'body.pf-exp #solBtn,body.pf-exp #proofBtn,body.pf-exp #hintBtn,body.pf-exp #solveBtn,'
       + 'body.pf-exp #boardMeta,body.pf-exp footer.app,body.pf-exp #acctRoot{display:none !important;}'
+      + 'body.pf-exp .timer-wrap .timer-pill:last-child{display:none !important;}'
       + '.pfx-ov{position:fixed;inset:0;z-index:9000;display:flex;align-items:center;justify-content:center;'
       + 'padding:20px;background:rgba(40,30,15,.45);backdrop-filter:blur(3px);overflow:auto;}'
       + '.pfx-card{background:#fff;border-radius:18px;box-shadow:0 20px 60px rgba(60,45,20,.25);max-width:560px;width:100%;'
