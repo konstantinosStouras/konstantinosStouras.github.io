@@ -150,6 +150,7 @@
       + 'gap:10px;padding:6px 14px;background:#2b2b2b;color:#fff;font-family:Inter,sans-serif;font-size:13px;}'
       + '.pfx-topbar b{color:#f1c40f;}.pfx-topbar button{background:transparent;border:1px solid #555;color:#eee;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:12px;}'
       + 'body.pf-exp.pf-hastop{padding-top:42px;}'
+      + 'body.pf-exp{padding-bottom:170px;}'
       + '.pfx-card.pfx-justify p{text-align:justify;}'
       + '.pfx-submit{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:8500;display:none;background:#2ecc71;color:#fff;border:2px solid #fff;font-weight:800;font-size:18px;letter-spacing:.2px;padding:16px 40px;border-radius:16px;box-shadow:0 14px 38px rgba(46,204,113,.6);cursor:pointer;text-align:center;}'
       + '.pfx-submit:hover{background:#27ae60;animation:none;}.pfx-submit.show{display:block;animation:pfxpulse 1.7s ease-in-out infinite;}'
@@ -846,8 +847,18 @@
     function persist() { var m = loadLayout(); m[key] = { x: cur.x || 0, y: cur.y || 0, w: cur.w || null, h: cur.h || null }; saveLayout(m); }
     function front() { cardEl.style.zIndex = String(++_zTop); }
     var ds = null;
-    grip.addEventListener('pointerdown', function (e) { e.preventDefault(); try { grip.setPointerCapture(e.pointerId); } catch (x) {} front(); ds = { px: e.clientX, py: e.clientY, x: cur.x, y: cur.y }; });
-    grip.addEventListener('pointermove', function (e) { if (!ds) return; cur.x = ds.x + (e.clientX - ds.px); cur.y = ds.y + (e.clientY - ds.py); cardEl.style.transform = 'translate(' + cur.x + 'px,' + cur.y + 'px)'; });
+    // True if this box, translated to (x,y), would overlap any other box.
+    function collides(x, y) {
+      var aL = ds.baseL + x, aT = ds.baseT + y, aR = aL + ds.w, aB = aT + ds.h, others = document.querySelectorAll('[data-pfx-move="1"]');
+      for (var k = 0; k < others.length; k++) {
+        if (others[k] === cardEl) continue;
+        var b = others[k].getBoundingClientRect();
+        if (aL < b.right && aR > b.left && aT < b.bottom && aB > b.top) return true;
+      }
+      return false;
+    }
+    grip.addEventListener('pointerdown', function (e) { e.preventDefault(); try { grip.setPointerCapture(e.pointerId); } catch (x) {} front(); var r = cardEl.getBoundingClientRect(); ds = { px: e.clientX, py: e.clientY, x: cur.x, y: cur.y, baseL: r.left - cur.x, baseT: r.top - cur.y, w: r.width, h: r.height }; });
+    grip.addEventListener('pointermove', function (e) { if (!ds) return; var tx = ds.x + (e.clientX - ds.px), ty = ds.y + (e.clientY - ds.py); if (!collides(tx, cur.y)) cur.x = tx; if (!collides(cur.x, ty)) cur.y = ty; cardEl.style.transform = 'translate(' + cur.x + 'px,' + cur.y + 'px)'; });
     function endDrag() { if (ds) { ds = null; persist(); } }
     grip.addEventListener('pointerup', endDrag); grip.addEventListener('pointercancel', endDrag);
     var rs = null;
