@@ -103,6 +103,8 @@
       + '.pfa-q{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--qbg);}'
       + '.pfa-q .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}'
       + '.pfa-q .row > *{flex:0 0 auto;}'
+      + '.pfa-q .row input[type=text],.pfa-q .row select{padding:7px 9px;}'
+      + '#pfa-root input:not([type=checkbox]):not([type=radio]),#pfa-root select,#pfa-root textarea{background:var(--field);color:var(--ink);border:1px solid var(--fieldline);border-radius:8px;font-size:14px;font-family:inherit;}'
       + '.pfa-note{color:var(--muted);font-size:13px;}'
       + '.pfa-msg{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#000;color:#fff;padding:10px 18px;border-radius:10px;font-size:14px;z-index:10003;opacity:0;transition:.2s;}'
       + '.pfa-msg.show{opacity:1;}'
