@@ -352,6 +352,7 @@
     window.PFGame.newGame(tdiff, limitFor(tdiff));
     // Pause the clock and run the onboarding tour over the live board first.
     if (window.PFGame.pauseTimer) window.PFGame.pauseTimer();
+    showGameSubmit('Continue to Registration');   // visible so the tour can highlight it
     runTour(function () {
       if (window.PFGame.resumeTimer) window.PFGame.resumeTimer();
       showGameSubmit('Continue to Registration');
@@ -361,14 +362,17 @@
   // ---- Onboarding spotlight tour (before the first training round) -------
   function runTour(onDone) {
     var STEPS = [
-      { center: true, title: 'How PortfolioFit works', text: 'Each brick is a project worth a dollar value. Pack the right projects into the frame to maximise your net value — the total value of placed bricks minus a $1 penalty for every empty cell. Time is limited, so plan well.' },
+      { center: true, title: 'How PortfolioFit works', text: 'Each brick is a project worth a dollar value. Pack the right projects into the frame to maximise your <b>net value</b> — the total value of placed bricks minus a $1 penalty for every empty cell. Time is limited, so plan well. Let’s take a quick tour.' },
       { sel: '.board-card', title: 'The board', text: 'This is your frame. Drop project bricks here to fill it. Every empty cell left over costs you $1.' },
-      { sel: '#tray', title: 'Your project bricks', text: 'Tap a brick to select it, then tap a board tile to drop it. Use the arrow keys (or the Rotate / Flip buttons) to turn it; tap a placed brick to pick it back up.' },
+      { sel: '#tray', title: 'Your project bricks', text: 'Tap a brick to select it, then tap a board tile to drop it. Use the arrow keys (or the Rotate / Flip buttons) to turn or flip it; tap a placed brick to pick it back up.' },
+      { full: true, demo: true, title: 'See a move in action', text: 'Watch how placing bricks works…' },
       { sel: '.netcard', title: 'Net value', text: 'Your score: the total value of placed bricks minus the empty-cell penalty. The tempting high-ROI bricks are often traps — aim for the best portfolio, not just any fit.' },
-      { sel: '.kpi-panel', title: 'KPIs', text: 'Track total value, resource cost, coverage and portfolio fitness as you build.' },
-      { sel: '.tools .tool:nth-of-type(1)', title: 'Calculator', text: 'Use this calculator to work out values and returns while you plan your portfolio.' },
-      { sel: '.tools .tool:nth-of-type(2)', title: 'My notes', text: 'Jot down your strategy here as you play.' },
-      { sel: '.timer-wrap', title: 'The clock', text: 'Each puzzle is timed. When the time runs out — or when you submit — you move on to the next step.' }
+      { sel: '.kpi-panel', title: 'Your KPIs', text: 'These update live as you build:<br><b>Total Value</b> — dollars of placed bricks.<br><b>Resource Cost</b> — the empty-cell penalty ($1 each).<br><b>Value / Resource</b> — your value-per-cell (ROI).<br><b>Coverage</b> — how much of the frame is filled.<br><b>Portfolio Fitness</b> — how close you are to the best possible net value.<br><i>Hover over any KPI to see a short explanation of what it means.</i>' },
+      { sel: '.tools .tool:nth-of-type(1)', title: 'Calculator', text: 'Use the calculator to work out the value of each brick, its value-per-cell, or any other calculation you like while you plan your portfolio.' },
+      { sel: '.tools .tool:nth-of-type(2)', title: 'My notes', text: 'Writing down your strategy really matters. Note the <b>heuristic</b> you follow (for example, do you grab the highest value-per-cell bricks first, or plan the whole fit?), what you are trying to <b>maximise</b> (your net value), and the reasoning behind each move. It helps you think clearly now and remember your approach later.' },
+      { sel: '#status', title: 'Helpful nudges', text: 'Keep an eye just below the board: encouraging messages and reminders pop up here to help you keep going and reach your best net value.' },
+      { center: true, title: 'Make it yours', text: 'Every box on this screen is yours to arrange. <b>Drag a box by its body to move it</b>, or <b>drag any edge or corner to resize it</b>, so the layout suits you. A “Reset layout” button (bottom-left) restores the default at any time.' },
+      { sel: '.pfx-submit', title: 'When you are ready', text: 'When you are happy with your portfolio (or the time runs out) this green button takes you forward — during training, on to registration.' }
     ];
     var i = 0;
     var tour = el('div', { class: 'pfx-tour' });
@@ -376,33 +380,63 @@
     var tip = el('div', { class: 'pfx-tip' });
     tour.appendChild(spot); tour.appendChild(tip);
     document.body.appendChild(tour);
-    window.addEventListener('resize', position);
+    var reposition = function () { position(); };
+    window.addEventListener('resize', reposition);
+    window.addEventListener('scroll', reposition, true);
     show();
 
-    function finish() { window.removeEventListener('resize', position); tour.remove(); if (onDone) onDone(); }
+    function finish() {
+      window.removeEventListener('resize', reposition);
+      window.removeEventListener('scroll', reposition, true);
+      try { if (window.PFGame.demoClear) window.PFGame.demoClear(); } catch (e) {}
+      tour.remove();
+      if (onDone) onDone();
+    }
+    function navRow() {
+      var last = (i === STEPS.length - 1);
+      var back = (i > 0) ? el('button', { class: 'pfx-back', on: { click: function () { i--; show(); } } }, ['Back']) : el('span', {});
+      var next = el('button', { class: 'pfx-next', on: { click: function () { if (last) finish(); else { i++; show(); } } } }, [last ? 'Start training' : 'Next']);
+      return el('div', { class: 'pfx-tiprow' }, [el('button', { class: 'pfx-skip', on: { click: finish } }, ['Skip tour']), el('div', { style: 'display:flex;gap:8px;' }, [back, next])]);
+    }
     function show() {
-      var s = STEPS[i], last = (i === STEPS.length - 1);
+      var s = STEPS[i];
       tip.innerHTML = '';
       tip.appendChild(el('div', { class: 'pfx-step', text: 'Step ' + (i + 1) + ' of ' + STEPS.length }));
       tip.appendChild(el('h3', { text: s.title }));
-      tip.appendChild(el('p', { text: s.text }));
-      var skip = el('button', { class: 'pfx-skip', on: { click: finish } }, ['Skip']);
-      var right = el('div', { style: 'display:flex;gap:8px;' }, [
-        (i > 0 ? el('button', { class: 'pfx-back', on: { click: function () { i--; show(); } } }, ['Back']) : el('span', {})),
-        el('button', { class: 'pfx-next', on: { click: function () { if (last) finish(); else { i++; show(); } } } }, [last ? 'Start training' : 'Next'])
-      ]);
-      tip.appendChild(el('div', { class: 'pfx-tiprow' }, [skip, right]));
+      var body = el('p', { html: s.text });
+      tip.appendChild(body);
+      scrollStep();
       position();
+      if (s.demo) {
+        var row = el('div', { class: 'pfx-tiprow' }, []);
+        var stopFn = null;
+        var doneDemo = function () { stopFn = null; if (row.parentNode) row.remove(); tip.appendChild(navRow()); position(); };
+        row.appendChild(el('button', { class: 'pfx-skip', on: { click: function () { if (stopFn) stopFn(); doneDemo(); } } }, ['Skip demo']));
+        tip.appendChild(row);
+        stopFn = runDemo(function (t) { body.innerHTML = t; }, doneDemo);
+        return;
+      }
+      tip.appendChild(navRow());
+    }
+    function scrollStep() {
+      var s = STEPS[i];
+      var t = s.full ? document.querySelector('.board-card') : (s.center ? null : (s.sel ? document.querySelector(s.sel) : null));
+      if (t) { try { t.scrollIntoView({ block: 'center', inline: 'nearest' }); } catch (e) {} }
     }
     function position() {
       var s = STEPS[i];
+      if (s.full) {
+        spot.style.left = '0px'; spot.style.top = '0px'; spot.style.width = window.innerWidth + 'px'; spot.style.height = window.innerHeight + 'px';
+        tip.style.transform = 'translateX(-50%)'; tip.style.left = '50%'; tip.style.top = ''; tip.style.bottom = '16px';
+        return;
+      }
+      tip.style.bottom = '';
       var target = s.center ? null : (s.sel ? document.querySelector(s.sel) : null);
       if (!target) {
         spot.style.width = '0px'; spot.style.height = '0px'; spot.style.left = '50vw'; spot.style.top = '50vh';
         tip.style.transform = 'translate(-50%,-50%)'; tip.style.left = '50%'; tip.style.top = '50%';
         return;
       }
-      try { target.scrollIntoView({ block: 'center', inline: 'nearest' }); } catch (e) {}
       requestAnimationFrame(function () {
         var r = target.getBoundingClientRect(), pad = 8;
         spot.style.left = (r.left - pad) + 'px'; spot.style.top = (r.top - pad) + 'px';
@@ -416,6 +450,22 @@
         else top = Math.max(12, (window.innerHeight - tipH) / 2);
         tip.style.left = left + 'px'; tip.style.top = top + 'px';
       });
+    }
+    function wait(ms, cb) { setTimeout(cb, ms); }
+    function runDemo(setText, onComplete) {
+      var seq = [
+        function (cb) { setText('First, select a brick from your tray…'); try { window.PFGame.demoSelectSolution(0); } catch (e) {} wait(900, cb); },
+        function (cb) { setText('…rotate or flip it to fit…'); try { window.PFGame.demoCycleOri(); } catch (e) {} wait(650, function () { try { window.PFGame.demoCycleOri(); } catch (e) {} wait(650, cb); }); },
+        function (cb) { setText('…then place it on the board. Watch every KPI update at once.'); try { window.PFGame.demoPlaceSolution(0); } catch (e) {} wait(1500, cb); },
+        function (cb) { setText('Add a second brick — the KPIs change again.'); try { window.PFGame.demoPlaceSolution(1); } catch (e) {} wait(1500, cb); },
+        function (cb) { setText('You can remove a brick if you change your mind…'); try { window.PFGame.demoRemoveSolution(1); } catch (e) {} wait(1200, cb); },
+        function (cb) { setText('…and try a different one. The KPIs always reflect your current portfolio.'); try { window.PFGame.demoPlaceSolution(2); } catch (e) {} wait(1600, cb); },
+        function (cb) { setText('That’s the idea — arrange bricks to maximise your net value. The board is cleared so you can start fresh.'); try { window.PFGame.demoClear(); } catch (e) {} wait(1100, cb); }
+      ];
+      var idx = 0, stopped = false;
+      function step() { if (stopped) return; if (idx >= seq.length) { onComplete(); return; } seq[idx++](step); }
+      step();
+      return function () { stopped = true; try { window.PFGame.demoClear(); } catch (e) {} };
     }
   }
   function onTrainingEnd(metrics) {

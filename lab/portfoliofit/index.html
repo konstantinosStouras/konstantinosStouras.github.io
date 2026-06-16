@@ -2047,6 +2047,11 @@
       previewPuzzle: function (spec) { loadPuzzleSpecPreview(spec); },
       showSolutions: function () { showSolutions(); },
       showProof: function () { showProof(); },
+      demoSelectSolution: function (i) { if (state && state.solution && state.solution[i]) { var s = state.solution[i]; var p = state.pieces.find(function (x) { return x.name === s.name && !x.placed; }); if (p) { state.selected = p.id; renderTray(); } } },
+      demoCycleOri: function () { var p = state && state.pieces.find(function (x) { return x.id === state.selected; }); if (p && p.oris && p.oris.length) { p.oriIndex = (p.oriIndex + 1) % p.oris.length; renderTray(); } },
+      demoPlaceSolution: function (i) { if (!state || !state.solution || !state.solution[i]) return; var s = state.solution[i]; var p = state.pieces.find(function (x) { return x.name === s.name; }); if (!p || p.placed) return; var cells = s.cells.map(function (c) { return [c[0], c[1]]; }); cells.forEach(function (c) { state.occupied.set(c[0] + ',' + c[1], p.id); }); p.placed = true; p.placedCells = cells; state.selected = null; renderBoard(); renderTray(); renderKPIs(); },
+      demoRemoveSolution: function (i) { if (!state || !state.solution || !state.solution[i]) return; var s = state.solution[i]; var p = state.pieces.find(function (x) { return x.name === s.name; }); if (p && p.placed) { (p.placedCells || []).forEach(function (c) { state.occupied.delete(c[0] + ',' + c[1]); }); p.placed = false; p.placedCells = null; state.selected = null; renderBoard(); renderTray(); renderKPIs(); } },
+      demoClear: function () { if (!state) return; state.occupied = new Map(); state.pieces.forEach(function (p) { p.placed = false; p.placedCells = null; }); state.selected = null; renderBoard(); renderTray(); renderKPIs(); },
       _onRoundEnd: null
     };
 
