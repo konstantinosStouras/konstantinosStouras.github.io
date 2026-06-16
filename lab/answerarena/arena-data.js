@@ -84,10 +84,9 @@ window.ARENA_DEFAULTS = {
     "comparisonsPerUser": 0,
     "requireSessionCode": false,
     "twoByTwo": {
-      "enabled": false,
       "factors": {
-        "transparency": true,
-        "incentive": true
+        "transparency": false,
+        "incentive": false
       }
     }
   },
@@ -118,7 +117,7 @@ window.ARENA_DEFAULTS = {
     },
     {
       "id": "consent",
-      "label": "I agree to take part in this short research study and to have my anonymous responses recorded.",
+      "label": "I agree to take part in this short study and to have my anonymous responses recorded.",
       "type": "radio",
       "required": true,
       "options": [

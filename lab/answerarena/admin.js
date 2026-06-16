@@ -87,6 +87,8 @@
       + '.aa-card h3{margin:0 0 6px;font-size:16px;}'
       + '.aa-field{margin:10px 0;}.aa-field label{display:block;font-weight:600;font-size:13px;margin-bottom:4px;}'
       + '#aa-root input:not([type=checkbox]):not([type=radio]):not([type=file]),#aa-root select,#aa-root textarea{width:100%;padding:9px 11px;border:1px solid var(--fieldline);border-radius:9px;font-size:14px;font-family:inherit;background:var(--field);color:var(--ink);}'
+      + '#aa-root input::placeholder,#aa-root textarea::placeholder{color:var(--muted);}'
+      + '#aa-root input:-webkit-autofill,#aa-root input:-webkit-autofill:hover,#aa-root input:-webkit-autofill:focus,#aa-root input:-webkit-autofill:active{-webkit-text-fill-color:var(--ink);-webkit-box-shadow:0 0 0 1000px var(--field) inset;box-shadow:0 0 0 1000px var(--field) inset;caret-color:var(--ink);transition:background-color 9999s ease-in-out 0s;}'
       + '#aa-root textarea{resize:vertical;}'
       + '.aa-btn{border:none;background:var(--accent);color:#fff;font-weight:600;font-size:14px;line-height:1.4;white-space:nowrap;padding:10px 16px;border-radius:10px;cursor:pointer;}'
       + '.aa-btn:hover{background:var(--accentd);}.aa-btn.sec{background:var(--panel);color:var(--ink);border:1px solid var(--fieldline);}.aa-btn.sm{padding:7px 11px;font-size:12px;}.aa-btn.danger{background:transparent;color:#e06b5a;border:1px solid #6d3b34;}'
@@ -106,7 +108,17 @@
       + '.aa-grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:18px;align-items:start;}'
       + '@media (max-width:900px){.aa-grid{grid-template-columns:1fr;}}'
       + '.aa-col{min-width:0;}'
-      + '.aa-sub{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:20px 2px 4px;}';
+      + '.aa-sub{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:20px 2px 4px;}'
+      + '.aa-switches{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px;}'
+      + '@media (max-width:560px){.aa-switches{grid-template-columns:1fr;}}'
+      + '.aa-switchbox{display:flex;justify-content:space-between;align-items:center;gap:10px;border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--qbg);}'
+      + '.aa-switchbox b{font-size:14px;}'
+      + '.aa-switch{position:relative;display:inline-block;width:44px;height:24px;flex:0 0 auto;}'
+      + '.aa-switch input{opacity:0;width:0;height:0;position:absolute;}'
+      + '.aa-slider{position:absolute;inset:0;background:#5a5a5a;border-radius:99px;transition:.18s;cursor:pointer;}'
+      + '.aa-slider:before{content:"";position:absolute;height:18px;width:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.18s;}'
+      + '.aa-switch input:checked + .aa-slider{background:var(--accent);}'
+      + '.aa-switch input:checked + .aa-slider:before{transform:translateX(20px);}';
     document.head.appendChild(el('style', { text: css }));
   }
   function currentTheme() { try { return localStorage.getItem('aa-theme') || 'dark'; } catch (e) { return 'dark'; } }
@@ -136,12 +148,14 @@
     var pass = el('input', { type: 'password', placeholder: 'Password' });
     var err = el('div', { class: 'aa-err' });
     var btn = el('button', { class: 'aa-btn', on: { click: doLogin } }, ['Log in']);
-    root.appendChild(el('div', { class: 'aa-wrap' }, [el('div', { class: 'aa-card aa-login' }, [
+    root.appendChild(el('div', { class: 'aa-wrap' }, [
+      el('div', { style: 'display:flex;justify-content:flex-end;margin-bottom:6px;' }, [themeToggle()]),
+      el('div', { class: 'aa-card aa-login' }, [
       el('h1', { text: 'Answer Arena admin' }),
       (Store.mode === 'local') ? el('p', { class: 'aa-note', html: 'Local test mode (Firebase not configured). Log in as <b>' + esc(Store.ADMIN_EMAIL) + '</b> with any password.' }) : null,
       el('div', { class: 'aa-field' }, [el('label', { text: 'E-mail' }), email]),
       el('div', { class: 'aa-field' }, [el('label', { text: 'Password' }), pass]),
-      err, btn, el('div', { style: 'margin-top:12px;' }, [themeToggle()])
+      err, btn
     ])]));
     function doLogin() { err.textContent = ''; btn.setAttribute('disabled', 'true'); Store.login(email.value.trim(), pass.value).then(function (u) { user = u; route(); }).catch(function (e) { btn.removeAttribute('disabled'); err.textContent = 'Login failed: ' + ((e && e.code) || 'error'); }); }
   }
@@ -156,6 +170,8 @@
 
   /* ---- small helpers ---- */
   function checkbox(on) { var c = el('input', { type: 'checkbox' }); if (on) c.setAttribute('checked', 'checked'); return c; }
+  // iOS-style toggle switch; returns { input, node }.
+  function switchEl(on) { var input = el('input', { type: 'checkbox' }); if (on) input.setAttribute('checked', 'checked'); var node = el('label', { class: 'aa-switch' }, [input, el('span', { class: 'aa-slider' })]); return { input: input, node: node }; }
   function collapsible(label, buildInto) {
     var section = el('div', { class: 'aa-card', style: 'padding:0;overflow:hidden;' });
     var caret = el('span', { text: '▾', style: 'color:var(--muted);' });
@@ -170,7 +186,6 @@
   /* ---- main shell: ideasearchlab-style two-column layout ----
      LEFT: create session + design parameters + page text + forms.
      RIGHT: active sessions, then registered users. */
-  var sessionsApi = null;
   function renderShell() {
     clearRoot();
     var header = el('div', { class: 'aa-h' }, [
@@ -180,13 +195,12 @@
     var left = el('div', { class: 'aa-col' });
     var right = el('div', { class: 'aa-col' });
 
-    // RIGHT first, so "Create session" can refresh the list.
-    sessionsApi = buildSessionsCard();
-    right.appendChild(sessionsApi.node);
+    // RIGHT: active sessions (with inline creator) + registered users.
+    right.appendChild(buildSessionsCard().node);
     right.appendChild(buildUsersCard());
 
-    // LEFT
-    left.appendChild(buildCreateCard(function () { if (sessionsApi) sessionsApi.refresh(); }));
+    // LEFT: design parameters (2x2 conditions, comparison flow, task set),
+    // then page text, then forms.
     left.appendChild(el('div', { class: 'aa-sub', text: 'Design parameters' }));
     left.appendChild(build2x2Card());
     left.appendChild(buildFlowCard());
@@ -200,31 +214,22 @@
     root.appendChild(el('div', { class: 'aa-wrap aa-wrap2' }, [header, el('div', { class: 'aa-grid' }, [left, right])]));
   }
 
-  /* ---- LEFT: create session ---- */
-  function buildCreateCard(onCreated) {
-    var card = el('div', { class: 'aa-card' });
-    var name = el('input', { type: 'text', placeholder: 'e.g. UCD class - June 16' });
-    var statusSel = el('select', {}, ['open', 'waiting', 'closed'].map(function (s) { return el('option', { value: s }, [s]); }));
-    card.appendChild(el('h3', { text: 'Create new session' }));
-    card.appendChild(el('p', { class: 'aa-note', text: 'Each session gets a short join code. Participants enter it on the welcome screen (or open the share link). Status: "open" admits participants; "waiting" and "closed" do not. Every session uses the design parameters and content set below.' }));
-    card.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: 'Session name' }), name]));
-    card.appendChild(el('div', { class: 'aa-field', style: 'max-width:200px;' }, [el('label', { text: 'Status' }), statusSel]));
-    card.appendChild(el('div', { class: 'aa-row' }, [el('button', { class: 'aa-btn', on: { click: create } }, ['Create session'])]));
-    return card;
-    function create() {
-      if (!name.value.trim()) { toast('Give the session a name.'); return; }
-      Store.createSession({ name: name.value.trim(), status: statusSel.value, condition: null, taskSetId: cfg.activeTaskSetId || null })
-        .then(function (s) { toast('Session created: ' + s.code); name.value = ''; if (onCreated) onCreated(); })
-        .catch(function (e) { toast('Create failed: ' + ((e && e.code) || 'error')); });
-    }
-  }
-
-  /* ---- RIGHT: active sessions ---- */
+  /* ---- RIGHT: active sessions (with a compact creator) ---- */
   function buildSessionsCard() {
     var card = el('div', { class: 'aa-card' });
     card.appendChild(el('h3', { text: 'Active sessions' }));
+    card.appendChild(el('p', { class: 'aa-note', text: 'Each session has a short join code. "open" admits participants; "waiting"/"closed" do not. All sessions share the design parameters and content set on the left.' }));
+    var nameI = el('input', { type: 'text', placeholder: 'New session name', style: 'flex:1 1 160px;min-width:120px;' });
+    var statusI = el('select', { style: 'max-width:110px;' }, ['open', 'waiting', 'closed'].map(function (s) { return el('option', { value: s }, [s]); }));
+    card.appendChild(el('div', { class: 'aa-row', style: 'margin-bottom:10px;' }, [nameI, statusI, el('button', { class: 'aa-btn sm', on: { click: create } }, ['+ Create'])]));
     var listWrap = el('div', {}, [el('p', { class: 'aa-note', text: 'Loading...' })]);
     card.appendChild(listWrap);
+    function create() {
+      if (!nameI.value.trim()) { toast('Name the session.'); return; }
+      Store.createSession({ name: nameI.value.trim(), status: statusI.value, condition: null, taskSetId: cfg.activeTaskSetId || null })
+        .then(function (s) { toast('Session created: ' + s.code); nameI.value = ''; refresh(); })
+        .catch(function (e) { toast('Create failed: ' + ((e && e.code) || 'error')); });
+    }
     function refresh() {
       Promise.all([Store.listSessions(), Store.listParticipants().catch(function () { return []; })]).then(function (res) {
         var list = res[0], parts = res[1] || [];
@@ -491,33 +496,38 @@
   }
 
   /* ===================== 2x2 & SETTINGS ===================== */
-  // The 2x2 design card (global). Two condition toggles + a master enable.
+  // The 2x2 conditions card: two toggle switches (one per factor). The two
+  // switches define the design - both on = 4 groups, one on = 2, none = 1.
+  // Saves immediately on toggle (like the ideasearchlab AI toggles).
   function build2x2Card() {
-    var dflt = { enabled: false, factors: { transparency: true, incentive: true } };
+    var dflt = { factors: { transparency: false, incentive: false } };
     var tt = Object.assign({}, dflt, (D.settings || {}).twoByTwo, (cfg.settings || {}).twoByTwo);
     var f = tt.factors || dflt.factors;
-    var trans = checkbox(f.transparency !== false);
-    var inc = checkbox(f.incentive !== false);
-    var enabled = checkbox(tt.enabled);
+    var trans = switchEl(!!f.transparency);
+    var inc = switchEl(!!f.incentive);
+    var summary = el('div', { class: 'aa-note', style: 'margin-top:10px;' });
+    function paint() {
+      var n = (trans.input.checked ? 1 : 0) + (inc.input.checked ? 1 : 0);
+      summary.textContent = n === 0
+        ? 'No conditions varied - everyone is in a single baseline group.'
+        : Math.pow(2, n) + ' groups (' + n + ' condition' + (n === 1 ? '' : 's') + ' varied). Participants are randomly and invisibly assigned.';
+    }
     function save() {
-      var settings = Object.assign({}, cfg.settings, { twoByTwo: { enabled: enabled.checked, factors: { transparency: trans.checked, incentive: inc.checked } } });
-      saveConfig({ settings: settings }).then(function () { cfg.settings = settings; toast(enabled.checked ? '2x2 design enabled.' : '2x2 design disabled.'); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); });
+      var settings = Object.assign({}, cfg.settings, { twoByTwo: { factors: { transparency: trans.input.checked, incentive: inc.input.checked } } });
+      paint();
+      saveConfig({ settings: settings }).then(function () { cfg.settings = settings; }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); });
     }
-    function restore() {
-      var settings = Object.assign({}, cfg.settings, { twoByTwo: { enabled: false, factors: { transparency: true, incentive: true } } });
-      saveConfig({ settings: settings }).then(function () { cfg.settings = settings; enabled.checked = false; trans.checked = true; inc.checked = true; toast('2x2 design reset (off).'); }).catch(function (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); });
-    }
+    trans.input.addEventListener('change', save);
+    inc.input.addEventListener('change', save);
+    paint();
     return el('div', { class: 'aa-card' }, [
-      el('h3', { text: 'The 2x2 design' }),
-      el('p', { class: 'aa-note', html: 'A between-subjects 2x2 with two conditions. Choose which conditions to vary, then enable the design. When enabled, every participant is <b>randomly and invisibly</b> assigned a cell - it is recorded with their responses but <b>never shown to them</b>, and they are not told conditions exist.' }),
-      el('div', { class: 'aa-field' }, [el('label', { text: 'Conditions' })]),
-      el('div', { class: 'aa-field' }, [el('label', { class: 'aa-toggle' }, [trans, document.createTextNode('Transparency - abstract tokens vs translated cost')])]),
-      el('div', { class: 'aa-field' }, [el('label', { class: 'aa-toggle' }, [inc, document.createTextNode('Incentive - firm pays vs personal budget')])]),
-      el('div', { class: 'aa-field', style: 'border-top:1px solid var(--line);padding-top:10px;' }, [el('label', { class: 'aa-toggle' }, [enabled, document.createTextNode('Enable the 2x2 design')])]),
-      el('div', { class: 'aa-row' }, [
-        el('button', { class: 'aa-btn', on: { click: save } }, ['Make this the default']),
-        el('button', { class: 'aa-btn sec', on: { click: restore } }, ['Restore built-in default'])
-      ])
+      el('h3', { text: '2x2 conditions' }),
+      el('p', { class: 'aa-note', text: 'Turn on each condition you want to vary. Participants are randomly and invisibly assigned a group and are never shown their condition (or told that conditions exist). Both on = 4 groups; one on = 2 groups; none = a single baseline group.' }),
+      el('div', { class: 'aa-switches' }, [
+        el('div', { class: 'aa-switchbox' }, [el('b', { text: 'Transparency' }), trans.node]),
+        el('div', { class: 'aa-switchbox' }, [el('b', { text: 'Incentive' }), inc.node])
+      ]),
+      summary
     ]);
   }
 
