@@ -888,7 +888,7 @@
     if (cur.w) cardEl.style.width = cur.w + 'px';
     if (cur.h) { cardEl.style.height = cur.h + 'px'; cardEl.style.overflow = 'auto'; }
 
-    var EDGE = 9, CORNER = 26, MINW = 150, MINH = 90, ds = null, rs = null;
+    var EDGE = 16, CORNER = 30, MINW = 150, MINH = 90, ds = null, rs = null;
     function playing() { return document.body.classList.contains('pf-playing'); }
     function persist() { var m = loadLayout(); m[key] = { x: cur.x || 0, y: cur.y || 0, w: cur.w || null, h: cur.h || null }; saveLayout(m); }
     function front() { cardEl.style.zIndex = String(++_zTop); }
