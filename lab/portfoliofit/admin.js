@@ -643,7 +643,10 @@
     document.body.appendChild(root);
     applyTheme(currentTheme());
     try { await initFirebase(); } catch (e) { clearRoot(); root.appendChild(el('div', { class: 'pfa-wrap' }, [el('div', { class: 'pfa-card' }, [el('p', { class: 'pfa-err', text: 'Could not connect: ' + ((e && e.message) || 'error') })])])); return; }
-    route();
+    // Routing is driven solely by onAuthStateChanged (registered in initFirebase),
+    // which fires once after the session is restored. This avoids briefly showing
+    // the login screen (and the browser autofilling it) before a logged-in admin
+    // is recognised.
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
