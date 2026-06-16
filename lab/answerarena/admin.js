@@ -2,17 +2,10 @@
    Answer Arena — admin panel
    ---------------------------------------------------------------------
    Activates only with ?admin. Requires the admin account (admin@admin.com).
-   Mirrors the look/behaviour of the sibling ideasearchlab admin (dark
-   theme, collapsible page-text editors, the restore-default trio).
-
-   Tabs:
-     Sessions      create/list/delete sessions (join codes, participant counts)
-     Tasks         upload an Excel (task, outputA, outputB) -> active task set
-     Content       edit every participant-facing text (per-page, restore trio)
-     Registration  add/edit/reorder registration questions
-     Survey        add/edit/reorder survey questions
-     2x2 & Settings  enable/disable the 2x2 design, order/limit, session code
-     Participants  table of participants + Export to Excel (multi-sheet)
+   Mirrors the ideasearchlab admin: a single two-column page (no tabs).
+     LEFT  - create a session; design parameters (2x2 + comparison flow +
+             task set); page-text editors; registration/survey question editors.
+     RIGHT - active sessions (join codes, counts); registered users (+ Excel).
 
    All persistence goes through window.ArenaStore (Firebase when configured,
    else localStorage), so the admin works online and offline for testing.
@@ -25,7 +18,7 @@
   var Store = window.ArenaStore;
   var XLSX = null;
   var cfg = { texts: {}, settings: {}, registrationQuestions: [], surveyQuestions: [], activeTaskSetId: null };
-  var user = null, tab = 'sessions', root, XlsxBusy = false;
+  var user = null, root;
 
   /* ---- text fields grouped into collapsible "pages" ---- */
   var TEXT_FIELD_META = {
@@ -108,7 +101,12 @@
       + '.aa-err{color:#e06b5a;font-size:13px;min-height:18px;margin:6px 0;}'
       + '.aa-msg{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#000;color:#fff;padding:10px 18px;border-radius:10px;font-size:14px;z-index:10010;opacity:0;transition:.2s;}.aa-msg.show{opacity:1;}'
       + '.aa-toggle{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px;}'
-      + '.aa-mode{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:8px;padding:3px 8px;}';
+      + '.aa-mode{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:8px;padding:3px 8px;}'
+      + '.aa-wrap2{max-width:1180px;}'
+      + '.aa-grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:18px;align-items:start;}'
+      + '@media (max-width:900px){.aa-grid{grid-template-columns:1fr;}}'
+      + '.aa-col{min-width:0;}'
+      + '.aa-sub{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:20px 2px 4px;}';
     document.head.appendChild(el('style', { text: css }));
   }
   function currentTheme() { try { return localStorage.getItem('aa-theme') || 'dark'; } catch (e) { return 'dark'; } }
@@ -156,75 +154,98 @@
     ])]));
   }
 
-  function renderShell() {
-    clearRoot();
-    var tabs = [['sessions', 'Sessions and Design'], ['tasks', 'Tasks'], ['content', 'Content'], ['registration', 'Registration'], ['survey', 'Survey'], ['settings', 'Settings'], ['participants', 'Participants']];
-    var tabBar = el('div', { class: 'aa-tabs' }, tabs.map(function (tt) { return el('button', { class: tab === tt[0] ? 'on' : '', on: { click: function () { tab = tt[0]; renderShell(); } } }, [tt[1]]); }));
-    var body = el('div', {});
-    root.appendChild(el('div', { class: 'aa-wrap' }, [
-      el('div', { class: 'aa-h' }, [
-        el('h1', { text: 'Answer Arena admin' }),
-        el('div', { class: 'aa-row' }, [themeToggle(), el('button', { class: 'aa-btn sec sm', on: { click: function () { Store.logout().then(function () { user = null; route(); }); } } }, ['Sign out'])])
-      ]),
-      tabBar, body
-    ]));
-    if (tab === 'sessions') renderSessions(body);
-    else if (tab === 'tasks') renderTasks(body);
-    else if (tab === 'content') renderContent(body);
-    else if (tab === 'registration') renderQuestions(body, 'registrationQuestions', 'Registration questions');
-    else if (tab === 'survey') renderQuestions(body, 'surveyQuestions', 'Survey questions');
-    else if (tab === 'settings') renderSettings(body);
-    else if (tab === 'participants') renderParticipants(body);
+  /* ---- small helpers ---- */
+  function checkbox(on) { var c = el('input', { type: 'checkbox' }); if (on) c.setAttribute('checked', 'checked'); return c; }
+  function collapsible(label, buildInto) {
+    var section = el('div', { class: 'aa-card', style: 'padding:0;overflow:hidden;' });
+    var caret = el('span', { text: '▾', style: 'color:var(--muted);' });
+    var bodyDiv = el('div', { style: 'display:none;padding:0 18px 16px;' });
+    var open = false, built = false;
+    section.appendChild(el('div', { style: 'display:flex;justify-content:space-between;align-items:center;padding:14px 18px;cursor:pointer;', on: { click: toggle } }, [el('b', { text: label, style: 'font-size:15px;' }), caret]));
+    section.appendChild(bodyDiv);
+    function toggle() { open = !open; bodyDiv.style.display = open ? 'block' : 'none'; caret.textContent = open ? '▴' : '▾'; if (open && !built) { built = true; buildInto(bodyDiv); } }
+    return section;
   }
 
-  /* ============================ SESSIONS ============================ */
-  function renderSessions(body) {
-    // Create new session
-    var createCard = el('div', { class: 'aa-card' });
+  /* ---- main shell: ideasearchlab-style two-column layout ----
+     LEFT: create session + design parameters + page text + forms.
+     RIGHT: active sessions, then registered users. */
+  var sessionsApi = null;
+  function renderShell() {
+    clearRoot();
+    var header = el('div', { class: 'aa-h' }, [
+      el('h1', { text: 'Answer Arena admin' }),
+      el('div', { class: 'aa-row' }, [themeToggle(), el('button', { class: 'aa-btn sec sm', on: { click: function () { Store.logout().then(function () { user = null; route(); }); } } }, ['Sign out'])])
+    ]);
+    var left = el('div', { class: 'aa-col' });
+    var right = el('div', { class: 'aa-col' });
+
+    // RIGHT first, so "Create session" can refresh the list.
+    sessionsApi = buildSessionsCard();
+    right.appendChild(sessionsApi.node);
+    right.appendChild(buildUsersCard());
+
+    // LEFT
+    left.appendChild(buildCreateCard(function () { if (sessionsApi) sessionsApi.refresh(); }));
+    left.appendChild(el('div', { class: 'aa-sub', text: 'Design parameters' }));
+    left.appendChild(build2x2Card());
+    left.appendChild(buildFlowCard());
+    left.appendChild(buildTaskCard());
+    left.appendChild(el('div', { class: 'aa-sub', text: 'Page text & content' }));
+    PAGE_GROUPS.forEach(function (g) { left.appendChild(renderPageSection(g)); });
+    left.appendChild(el('div', { class: 'aa-sub', text: 'Forms' }));
+    left.appendChild(collapsible('Edit registration questions', function (c) { renderQuestions(c, 'registrationQuestions', 'Registration questions'); }));
+    left.appendChild(collapsible('Edit survey questions', function (c) { renderQuestions(c, 'surveyQuestions', 'Survey questions'); }));
+
+    root.appendChild(el('div', { class: 'aa-wrap aa-wrap2' }, [header, el('div', { class: 'aa-grid' }, [left, right])]));
+  }
+
+  /* ---- LEFT: create session ---- */
+  function buildCreateCard(onCreated) {
+    var card = el('div', { class: 'aa-card' });
     var name = el('input', { type: 'text', placeholder: 'e.g. UCD class - June 16' });
     var statusSel = el('select', {}, ['open', 'waiting', 'closed'].map(function (s) { return el('option', { value: s }, [s]); }));
-    createCard.appendChild(el('h3', { text: 'Create new session' }));
-    createCard.appendChild(el('p', { class: 'aa-note', text: 'Each session gets a short join code. Participants enter it on the welcome screen (or open the share link). Status: "open" lets people in; "waiting" and "closed" do not.' }));
-    createCard.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: 'Session name' }), name]));
-    createCard.appendChild(el('div', { class: 'aa-field', style: 'max-width:240px;' }, [el('label', { text: 'Status' }), statusSel]));
-    createCard.appendChild(el('div', { class: 'aa-row' }, [el('button', { class: 'aa-btn', on: { click: create } }, ['Create session'])]));
-    body.appendChild(createCard);
-
-    // The 2x2 design (global)
-    body.appendChild(build2x2Card());
-
-    // Active sessions list
-    var listCard = el('div', { class: 'aa-card' }, [el('h3', { text: 'Active sessions' }), el('p', { class: 'aa-note', text: 'Loading...' })]);
-    body.appendChild(listCard);
-    refresh();
-
+    card.appendChild(el('h3', { text: 'Create new session' }));
+    card.appendChild(el('p', { class: 'aa-note', text: 'Each session gets a short join code. Participants enter it on the welcome screen (or open the share link). Status: "open" admits participants; "waiting" and "closed" do not. Every session uses the design parameters and content set below.' }));
+    card.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: 'Session name' }), name]));
+    card.appendChild(el('div', { class: 'aa-field', style: 'max-width:200px;' }, [el('label', { text: 'Status' }), statusSel]));
+    card.appendChild(el('div', { class: 'aa-row' }, [el('button', { class: 'aa-btn', on: { click: create } }, ['Create session'])]));
+    return card;
     function create() {
       if (!name.value.trim()) { toast('Give the session a name.'); return; }
-      var data = { name: name.value.trim(), status: statusSel.value, condition: null, taskSetId: cfg.activeTaskSetId || null };
-      Store.createSession(data).then(function (s) { toast('Session created: ' + s.code); name.value = ''; refresh(); }).catch(function (e) { toast('Create failed: ' + ((e && e.code) || 'error')); });
+      Store.createSession({ name: name.value.trim(), status: statusSel.value, condition: null, taskSetId: cfg.activeTaskSetId || null })
+        .then(function (s) { toast('Session created: ' + s.code); name.value = ''; if (onCreated) onCreated(); })
+        .catch(function (e) { toast('Create failed: ' + ((e && e.code) || 'error')); });
     }
+  }
+
+  /* ---- RIGHT: active sessions ---- */
+  function buildSessionsCard() {
+    var card = el('div', { class: 'aa-card' });
+    card.appendChild(el('h3', { text: 'Active sessions' }));
+    var listWrap = el('div', {}, [el('p', { class: 'aa-note', text: 'Loading...' })]);
+    card.appendChild(listWrap);
     function refresh() {
       Promise.all([Store.listSessions(), Store.listParticipants().catch(function () { return []; })]).then(function (res) {
-        var list = res[0], parts = res[1] || {};
-        var counts = {};
-        (parts.length ? parts : []).forEach(function (p) { if (p.sessionId) counts[p.sessionId] = (counts[p.sessionId] || 0) + 1; });
-        listCard.innerHTML = '';
-        listCard.appendChild(el('h3', { text: 'Active sessions (' + list.length + ')' }));
-        if (!list.length) { listCard.appendChild(el('p', { class: 'aa-note', text: 'No sessions yet.' })); return; }
+        var list = res[0], parts = res[1] || [];
+        var counts = {}; parts.forEach(function (p) { if (p.sessionId) counts[p.sessionId] = (counts[p.sessionId] || 0) + 1; });
+        listWrap.innerHTML = '';
+        listWrap.appendChild(el('p', { class: 'aa-note', text: list.length + ' session' + (list.length === 1 ? '' : 's') }));
+        if (!list.length) { return; }
         list.sort(function (a, b) { return tsMs(b.createdAt) - tsMs(a.createdAt); });
         list.forEach(function (s) {
           var liveCount = counts[s.id] != null ? counts[s.id] : (s.count || 0);
           var joinUrl = location.origin + location.pathname + '?s=' + s.code;
           var st = s.status || 'open';
-          var statusSel2 = el('select', { style: 'max-width:140px;' }, ['open', 'waiting', 'closed'].map(function (x) { return el('option', { value: x }, [x]); }));
+          var statusSel2 = el('select', { style: 'max-width:130px;' }, ['open', 'waiting', 'closed'].map(function (x) { return el('option', { value: x }, [x]); }));
           statusSel2.value = st;
           statusSel2.addEventListener('change', function () { Store.updateSession(s.id, { status: statusSel2.value }).then(function () { toast('Status updated.'); refresh(); }); });
-          listCard.appendChild(el('div', { class: 'aa-q' }, [
+          listWrap.appendChild(el('div', { class: 'aa-q' }, [
             el('div', { class: 'row', style: 'justify-content:space-between;' }, [
-              el('div', {}, [el('b', { text: s.code, style: 'font-size:18px;letter-spacing:.1em;' }), ' ', el('span', { class: 'aa-badge ' + st, text: st })]),
+              el('div', {}, [el('b', { text: s.code, style: 'font-size:17px;letter-spacing:.1em;' }), ' ', el('span', { class: 'aa-badge ' + st, text: st })]),
               el('div', { class: 'aa-note', text: liveCount + ' participant' + (liveCount === 1 ? '' : 's') })
             ]),
-            el('div', { class: 'aa-note', style: 'margin-top:4px;', text: (s.name || '(unnamed)') }),
+            el('div', { class: 'aa-note', style: 'margin-top:4px;', text: s.name || '(unnamed)' }),
             el('div', { class: 'aa-row', style: 'margin-top:8px;' }, [
               statusSel2,
               el('button', { class: 'aa-btn sec sm', on: { click: function () { copy(joinUrl); } } }, ['Copy join link']),
@@ -232,8 +253,44 @@
             ])
           ]));
         });
-      }).catch(function (e) { listCard.innerHTML = ''; listCard.appendChild(el('p', { class: 'aa-err', text: 'Could not load sessions: ' + ((e && e.code) || 'error') })); });
+      }).catch(function (e) { listWrap.innerHTML = ''; listWrap.appendChild(el('p', { class: 'aa-err', text: 'Could not load sessions: ' + ((e && e.code) || 'error') })); });
     }
+    refresh();
+    return { node: card, refresh: refresh };
+  }
+
+  /* ---- RIGHT: registered users ---- */
+  function buildUsersCard() {
+    var card = el('div', { class: 'aa-card' });
+    var all = [];
+    card.appendChild(el('div', { class: 'aa-h', style: 'margin-bottom:8px;' }, [el('h3', { text: 'Registered users' }), el('button', { class: 'aa-btn sm', on: { click: function () { if (all.length) exportExcel(all); else toast('No users yet.'); } } }, ['Export to Excel'])]));
+    var search = el('input', { type: 'text', placeholder: 'Search by e-mail or ID...' });
+    card.appendChild(el('div', { class: 'aa-field' }, [search]));
+    var listWrap = el('div', {}, [el('p', { class: 'aa-note', text: 'Loading...' })]);
+    card.appendChild(listWrap);
+    search.addEventListener('input', render);
+    function render() {
+      var q = search.value.trim().toLowerCase();
+      var rows = all.filter(function (p) { return !q || (p.email || '').toLowerCase().indexOf(q) >= 0 || (p.participantId || '').toLowerCase().indexOf(q) >= 0; });
+      listWrap.innerHTML = '';
+      listWrap.appendChild(el('p', { class: 'aa-note', text: rows.length + ' of ' + all.length + ' user' + (all.length === 1 ? '' : 's') }));
+      rows.forEach(function (p) {
+        var c = p.condition || {};
+        listWrap.appendChild(el('div', { class: 'aa-q' }, [
+          el('div', { class: 'row', style: 'justify-content:space-between;' }, [
+            el('b', { text: p.email || p.participantId || p._id }),
+            el('span', { class: 'aa-note', text: p.status || '' })
+          ]),
+          el('div', { class: 'aa-note', style: 'margin-top:4px;', text: (p.participantId ? 'ID ' + p.participantId + '  ·  ' : '') + 'registered ' + fmtTs(p.createdAt) + (c.enabled ? '  ·  cell ' + c.transparency + '/' + c.incentive : '') }),
+          el('div', { class: 'aa-row', style: 'margin-top:6px;' }, [
+            el('button', { class: 'aa-btn danger sm', on: { click: function () { if (window.confirm('Delete "' + (p.email || p._id) + '" and all their data?')) Store.deleteParticipant(p._id).then(function () { toast('Deleted.'); load(); }); } } }, ['Delete'])
+          ])
+        ]));
+      });
+    }
+    function load() { Store.listParticipants().then(function (p) { all = p.sort(function (a, b) { return tsMs(a.createdAt) - tsMs(b.createdAt); }); render(); }).catch(function (e) { listWrap.innerHTML = ''; listWrap.appendChild(el('p', { class: 'aa-err', text: 'Could not load users: ' + ((e && e.code) || 'error') })); }); }
+    load();
+    return card;
   }
   function copy(txt) {
     function fallback() {
@@ -254,9 +311,9 @@
   }
 
   /* ============================ TASKS (Excel) ====================== */
-  function renderTasks(body) {
+  function buildTaskCard() {
     var card = el('div', { class: 'aa-card' });
-    card.appendChild(el('h3', { text: 'Upload comparisons (Excel)' }));
+    card.appendChild(el('h3', { text: 'Comparisons (task set)' }));
     card.appendChild(el('p', { class: 'aa-note', html: 'Upload an .xlsx / .csv with <b>three columns</b>: <b>task</b>, <b>outputA</b>, <b>outputB</b> (one row per comparison). The first row should be the headers. Column names are matched loosely (e.g. "Task", "Output A", "Answer 1" all work); otherwise the first three columns are used. Participants see the two outputs in a randomized left/right order, and never learn which model produced which.' }));
     var file = el('input', { type: 'file', accept: '.xlsx,.xls,.csv' });
     var setName = el('input', { type: 'text', placeholder: 'Name for this set (optional)' });
@@ -264,10 +321,9 @@
     card.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: 'Set name' }), setName]));
     var preview = el('div', {});
     card.appendChild(preview);
-    body.appendChild(card);
 
-    var active = el('div', { class: 'aa-card' }, [el('p', { class: 'aa-note', text: 'Loading current set...' })]);
-    body.appendChild(active);
+    var active = el('div', { style: 'margin-top:12px;border-top:1px solid var(--line);padding-top:12px;' }, [el('p', { class: 'aa-note', text: 'Loading current set...' })]);
+    card.appendChild(active);
     refreshActive();
 
     var parsed = null;
@@ -318,6 +374,7 @@
         ]));
       });
     }
+    return card;
   }
   function rowsToTasks(rows) {
     if (!rows || !rows.length) return [];
@@ -352,10 +409,6 @@
   function clip(s) { s = String(s || ''); return s.length > 90 ? s.slice(0, 90) + '…' : s; }
 
   /* ============================ CONTENT ============================ */
-  function renderContent(body) {
-    body.appendChild(el('div', { class: 'aa-card' }, [el('p', { class: 'aa-note', html: 'Edit the wording participants see. Each field is pre-filled with the current text (built-in default unless you saved a change). <b>Make this the default</b> saves it. <b>Reset this page to defaults</b> discards unsaved edits. <b>Restore built-in default</b> reverts to the original wording.' })]));
-    PAGE_GROUPS.forEach(function (g) { body.appendChild(renderPageSection(g)); });
-  }
   function renderPageSection(g) {
     var section = el('div', { class: 'aa-card', style: 'padding:0;overflow:hidden;' });
     var caret = el('span', { text: '▾', style: 'color:var(--muted);' });
@@ -438,22 +491,29 @@
   }
 
   /* ===================== 2x2 & SETTINGS ===================== */
-  // The 2x2 design card (global). Lives on the "Sessions and Design" tab.
+  // The 2x2 design card (global). Two condition toggles + a master enable.
   function build2x2Card() {
-    var tt = Object.assign({}, (D.settings || {}).twoByTwo, (cfg.settings || {}).twoByTwo);
-    var enabled = el('input', { type: 'checkbox' }); if (tt.enabled) enabled.setAttribute('checked', 'checked');
+    var dflt = { enabled: false, factors: { transparency: true, incentive: true } };
+    var tt = Object.assign({}, dflt, (D.settings || {}).twoByTwo, (cfg.settings || {}).twoByTwo);
+    var f = tt.factors || dflt.factors;
+    var trans = checkbox(f.transparency !== false);
+    var inc = checkbox(f.incentive !== false);
+    var enabled = checkbox(tt.enabled);
     function save() {
-      var settings = Object.assign({}, cfg.settings, { twoByTwo: { enabled: enabled.checked } });
+      var settings = Object.assign({}, cfg.settings, { twoByTwo: { enabled: enabled.checked, factors: { transparency: trans.checked, incentive: inc.checked } } });
       saveConfig({ settings: settings }).then(function () { cfg.settings = settings; toast(enabled.checked ? '2x2 design enabled.' : '2x2 design disabled.'); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); });
     }
     function restore() {
-      var settings = Object.assign({}, cfg.settings, { twoByTwo: { enabled: false } });
-      saveConfig({ settings: settings }).then(function () { cfg.settings = settings; enabled.checked = false; toast('2x2 design reset (off).'); }).catch(function (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); });
+      var settings = Object.assign({}, cfg.settings, { twoByTwo: { enabled: false, factors: { transparency: true, incentive: true } } });
+      saveConfig({ settings: settings }).then(function () { cfg.settings = settings; enabled.checked = false; trans.checked = true; inc.checked = true; toast('2x2 design reset (off).'); }).catch(function (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); });
     }
     return el('div', { class: 'aa-card' }, [
       el('h3', { text: 'The 2x2 design' }),
-      el('p', { class: 'aa-note', html: 'A between-subjects 2x2: <b>Transparency</b> (abstract tokens vs translated cost) x <b>Incentive</b> (firm pays vs personal budget). When enabled, every participant is <b>randomly and invisibly</b> assigned to one of the four cells - the cell is recorded with their responses but is <b>never shown to them</b>, and they are not told conditions exist. When disabled, everyone is in a single baseline condition.' }),
-      el('div', { class: 'aa-field' }, [el('label', { class: 'aa-toggle' }, [enabled, document.createTextNode('Enable the 2x2 design (random assignment to 4 conditions)')])]),
+      el('p', { class: 'aa-note', html: 'A between-subjects 2x2 with two conditions. Choose which conditions to vary, then enable the design. When enabled, every participant is <b>randomly and invisibly</b> assigned a cell - it is recorded with their responses but <b>never shown to them</b>, and they are not told conditions exist.' }),
+      el('div', { class: 'aa-field' }, [el('label', { text: 'Conditions' })]),
+      el('div', { class: 'aa-field' }, [el('label', { class: 'aa-toggle' }, [trans, document.createTextNode('Transparency - abstract tokens vs translated cost')])]),
+      el('div', { class: 'aa-field' }, [el('label', { class: 'aa-toggle' }, [inc, document.createTextNode('Incentive - firm pays vs personal budget')])]),
+      el('div', { class: 'aa-field', style: 'border-top:1px solid var(--line);padding-top:10px;' }, [el('label', { class: 'aa-toggle' }, [enabled, document.createTextNode('Enable the 2x2 design')])]),
       el('div', { class: 'aa-row' }, [
         el('button', { class: 'aa-btn', on: { click: save } }, ['Make this the default']),
         el('button', { class: 'aa-btn sec', on: { click: restore } }, ['Restore built-in default'])
@@ -461,31 +521,18 @@
     ]);
   }
 
-  function renderSettings(body) {
+  function buildFlowCard() {
     var s = cfg.settings || {};
-    var randomize = el('input', { type: 'checkbox' }); if (s.randomizeOrder !== false) randomize.setAttribute('checked', 'checked');
+    var randomize = checkbox(s.randomizeOrder !== false);
     var perUser = el('input', { type: 'number', value: String(s.comparisonsPerUser != null ? s.comparisonsPerUser : 0), style: 'max-width:140px;' });
-    var reqCode = el('input', { type: 'checkbox' }); if (s.requireSessionCode) reqCode.setAttribute('checked', 'checked');
-    body.appendChild(el('div', { class: 'aa-card' }, [
-      el('h3', { text: 'Comparison flow' }),
-      el('p', { class: 'aa-note', text: 'Each participant is shown a number of task pairs in a random sequence. Set how many, and whether the order is randomized.' }),
-      el('div', { class: 'aa-field' }, [el('label', { class: 'aa-toggle' }, [randomize, document.createTextNode('Show comparisons in random order per participant')])]),
-      el('div', { class: 'aa-field' }, [el('label', { text: 'Comparisons per participant (0 = use the whole active set)' }), perUser]),
-      el('div', { class: 'aa-field' }, [el('label', { class: 'aa-toggle' }, [reqCode, document.createTextNode('Require a session code to start')])]),
-      el('div', { class: 'aa-row', style: 'margin-top:8px;' }, [
-        el('button', { class: 'aa-btn', on: { click: doSave } }, ['Make this the default']),
-        el('button', { class: 'aa-btn sec', on: { click: function () { renderSettings(clear(body)); toast('Reloaded saved values.'); } } }, ['Reset this page to defaults']),
-        el('button', { class: 'aa-btn sec', on: { click: restoreDefaults } }, ['Restore built-in default'])
-      ])
-    ]));
-    function clear(b) { b.innerHTML = ''; return b; }
+    var reqCode = checkbox(s.requireSessionCode);
     function doSave() {
-      var settings = Object.assign({}, s, {
+      var settings = Object.assign({}, cfg.settings, {
         randomizeOrder: randomize.checked,
         comparisonsPerUser: parseInt(perUser.value, 10) || 0,
         requireSessionCode: reqCode.checked
       });
-      saveConfig({ settings: settings }).then(function () { cfg.settings = settings; toast('Settings saved.'); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); });
+      saveConfig({ settings: settings }).then(function () { cfg.settings = settings; toast('Comparison flow saved.'); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); });
     }
     function restoreDefaults() {
       var Ds = D.settings || {};
@@ -494,36 +541,22 @@
         comparisonsPerUser: Ds.comparisonsPerUser || 0,
         requireSessionCode: !!Ds.requireSessionCode
       });
-      saveConfig({ settings: settings }).then(function () { cfg.settings = settings; renderSettings(clear(body)); toast('Restored built-in default.'); }).catch(function (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); });
+      saveConfig({ settings: settings }).then(function () { cfg.settings = settings; randomize.checked = settings.randomizeOrder; perUser.value = String(settings.comparisonsPerUser); reqCode.checked = settings.requireSessionCode; toast('Restored built-in default.'); }).catch(function (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); });
     }
+    return el('div', { class: 'aa-card' }, [
+      el('h3', { text: 'Comparison flow' }),
+      el('p', { class: 'aa-note', text: 'Each participant is shown a number of task pairs in a random sequence. Set how many, and whether the order is randomized.' }),
+      el('div', { class: 'aa-field' }, [el('label', { class: 'aa-toggle' }, [randomize, document.createTextNode('Show comparisons in random order per participant')])]),
+      el('div', { class: 'aa-field' }, [el('label', { text: 'Comparisons per participant (0 = use the whole active set)' }), perUser]),
+      el('div', { class: 'aa-field' }, [el('label', { class: 'aa-toggle' }, [reqCode, document.createTextNode('Require a session code to start')])]),
+      el('div', { class: 'aa-row', style: 'margin-top:8px;' }, [
+        el('button', { class: 'aa-btn', on: { click: doSave } }, ['Make this the default']),
+        el('button', { class: 'aa-btn sec', on: { click: restoreDefaults } }, ['Restore built-in default'])
+      ])
+    ]);
   }
 
-  /* ===================== PARTICIPANTS + EXPORT ===================== */
-  function renderParticipants(body) {
-    body.appendChild(el('div', { class: 'aa-card' }, [el('p', { class: 'aa-note', text: 'Loading participants...' })]));
-    Store.listParticipants().then(function (parts) {
-      parts.sort(function (a, b) { return tsMs(a.createdAt) - tsMs(b.createdAt); });
-      body.innerHTML = '';
-      var head = el('div', { class: 'aa-h' }, [el('div', { class: 'aa-note', text: parts.length + ' participant' + (parts.length === 1 ? '' : 's') }), el('button', { class: 'aa-btn', on: { click: function () { exportExcel(parts); } } }, ['Export to Excel'])]);
-      var rows = parts.map(function (p) {
-        var c = p.condition || {};
-        return el('tr', {}, [
-          el('td', { text: p.participantId || '' }),
-          el('td', { text: p.email || '' }),
-          el('td', { text: p.status || '' }),
-          el('td', { text: c.enabled ? (c.transparency + '/' + c.incentive) : '-' }),
-          el('td', { text: fmtTs(p.createdAt) }),
-          el('td', {}, [el('button', { class: 'aa-btn danger sm', on: { click: function () { delPart(p._id, p.participantId || p.email || p._id); } } }, ['delete'])])
-        ]);
-      });
-      var table = el('table', { class: 'aa-tbl' });
-      table.appendChild(el('thead', {}, [el('tr', {}, ['Participant ID', 'E-mail', 'Status', '2x2 cell', 'Registered', ''].map(function (h) { return el('th', { text: h }); }))]));
-      table.appendChild(el('tbody', {}, rows.length ? rows : [el('tr', {}, [el('td', { colspan: '6', text: 'No participants yet.' })])]));
-      body.appendChild(el('div', { class: 'aa-card' }, [head, table]));
-      function delPart(uid, who) { if (!window.confirm('Delete "' + who + '" and all their data?')) return; Store.deleteParticipant(uid).then(function () { toast('Deleted.'); renderParticipants(body); }); }
-    }).catch(function (e) { body.innerHTML = ''; body.appendChild(el('div', { class: 'aa-card' }, [el('p', { class: 'aa-err', text: 'Could not load participants: ' + ((e && e.code) || 'error') })])); });
-  }
-
+  /* ===================== EXPORT ===================== */
   function exportExcel(parts) {
     toast('Building export...');
     ensureXLSX().then(function (X) {

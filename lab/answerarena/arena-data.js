@@ -84,7 +84,11 @@ window.ARENA_DEFAULTS = {
     "comparisonsPerUser": 0,
     "requireSessionCode": false,
     "twoByTwo": {
-      "enabled": false
+      "enabled": false,
+      "factors": {
+        "transparency": true,
+        "incentive": true
+      }
     }
   },
   "registrationQuestions": [
