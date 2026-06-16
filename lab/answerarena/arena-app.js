@@ -61,7 +61,7 @@
     bar.innerHTML = '';
     if (!S.user) { bar.style.display = 'none'; return; }
     bar.style.display = 'flex';
-    var who = (S.p && S.p.anonymousLabel) || (S.p && S.p.participantId) || (S.user.email) || '';
+    var who = (S.p && S.p.participantId) || (S.user && S.user.email) || '';
     bar.appendChild(el('span', { class: 'a-brand', html: esc((D.app && D.app.name) || 'Answer Arena') + ' &middot; <b>' + esc(who) + '</b>' }));
     bar.appendChild(el('button', { class: 'a-btn a-ghost a-sm', on: { click: logout } }, ['Log out']));
   }
@@ -209,15 +209,11 @@
         var cond = assignCondition();
         var pdoc = {
           uid: user.uid, participantId: participantId || null, email: email,
-          registration: answers, status: 'registered', anonymousLabel: null,
+          registration: answers, status: 'registered',
           sessionId: (S.session && S.session.id) || null, condition: cond,
           createdAt: nowStamp(), updatedAt: nowStamp()
         };
         return Store.setParticipant(user.uid, pdoc, false).then(function () {
-          return Store.nextAnonLabel().then(function (label) {
-            if (label) { pdoc.anonymousLabel = label; return Store.setParticipant(user.uid, { anonymousLabel: label }, true); }
-          }).catch(function () {});
-        }).then(function () {
           S.p = pdoc; S.condition = cond;
           topbar(); startTraining();
         });

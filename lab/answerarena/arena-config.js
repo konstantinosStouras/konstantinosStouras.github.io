@@ -34,9 +34,6 @@ window.ARENA_FB_SDK = '10.12.2';
 // and sessions (enforced by Firestore rules in _lab-arena-firebase/).
 window.ARENA_ADMIN_EMAIL = 'admin@admin.com';
 
-// Cloud Functions region (matches _lab-arena-firebase/functions).
-window.ARENA_FB_REGION = 'europe-west1';
-
 // True once a real config has been pasted in above (i.e. we are not on the
 // REPLACE_ME placeholder). Both arena-store.js backends read this flag.
 window.ARENA_FB_READY = !!(window.ARENA_FIREBASE &&

@@ -6,7 +6,6 @@ rules_version = '2';
 //   config/app             editable content + registration/survey questions + settings + activeTaskSetId
 //                          (admin write, signed-in read)
 //   taskSets/{id}          uploaded comparison sets (task, outputA, outputB)   (admin write, signed-in read)
-//   counters/{id}          sequential anonymous-label counter (Cloud Functions only)
 //   sessions/{id}          join codes + status + 2x2 condition                 (admin write, PUBLIC read*)
 //   participants/{uid}     one doc per participant (created by the owner)
 //     responses/{id}       one doc per comparison answered
@@ -36,12 +35,6 @@ service cloud.firestore {
     match /taskSets/{setId} {
       allow read:  if signedIn();
       allow write: if isAdmin();
-    }
-
-    // ---- Sequential-label counter: only Cloud Functions (admin SDK) ----
-    match /counters/{counterId} {
-      allow read:  if isAdmin();
-      allow write: if false;
     }
 
     // ---- Sessions (join by code, validated pre-auth) ----

@@ -501,18 +501,17 @@
       var rows = parts.map(function (p) {
         var c = p.condition || {};
         return el('tr', {}, [
-          el('td', { text: p.anonymousLabel || '' }),
           el('td', { text: p.participantId || '' }),
           el('td', { text: p.email || '' }),
           el('td', { text: p.status || '' }),
           el('td', { text: c.enabled ? (c.transparency + '/' + c.incentive) : '-' }),
           el('td', { text: fmtTs(p.createdAt) }),
-          el('td', {}, [el('button', { class: 'aa-btn danger sm', on: { click: function () { delPart(p._id, p.anonymousLabel || p.email || p._id); } } }, ['delete'])])
+          el('td', {}, [el('button', { class: 'aa-btn danger sm', on: { click: function () { delPart(p._id, p.participantId || p.email || p._id); } } }, ['delete'])])
         ]);
       });
       var table = el('table', { class: 'aa-tbl' });
-      table.appendChild(el('thead', {}, [el('tr', {}, ['Label', 'Participant ID', 'E-mail', 'Status', '2x2 cell', 'Registered', ''].map(function (h) { return el('th', { text: h }); }))]));
-      table.appendChild(el('tbody', {}, rows.length ? rows : [el('tr', {}, [el('td', { colspan: '7', text: 'No participants yet.' })])]));
+      table.appendChild(el('thead', {}, [el('tr', {}, ['Participant ID', 'E-mail', 'Status', '2x2 cell', 'Registered', ''].map(function (h) { return el('th', { text: h }); }))]));
+      table.appendChild(el('tbody', {}, rows.length ? rows : [el('tr', {}, [el('td', { colspan: '6', text: 'No participants yet.' })])]));
       body.appendChild(el('div', { class: 'aa-card' }, [head, table]));
       function delPart(uid, who) { if (!window.confirm('Delete "' + who + '" and all their data?')) return; Store.deleteParticipant(uid).then(function () { toast('Deleted.'); renderParticipants(body); }); }
     }).catch(function (e) { body.innerHTML = ''; body.appendChild(el('div', { class: 'aa-card' }, [el('p', { class: 'aa-err', text: 'Could not load participants: ' + ((e && e.code) || 'error') })])); });
@@ -525,14 +524,14 @@
       var chain = Promise.resolve();
       parts.forEach(function (p) {
         var uid = p._id, c = p.condition || {};
-        var base = { label: p.anonymousLabel || '', participantId: p.participantId || '', email: p.email || '', status: p.status || '', sessionId: p.sessionId || '', transparency: c.transparency || '', incentive: c.incentive || '', registered: fmtTs(p.createdAt) };
+        var base = { participantId: p.participantId || '', email: p.email || '', status: p.status || '', sessionId: p.sessionId || '', transparency: c.transparency || '', incentive: c.incentive || '', registered: fmtTs(p.createdAt) };
         pRows.push(Object.assign({}, base, flatten('reg_', p.registration || {})));
         chain = chain.then(function () {
           return Store.listResponses(uid).then(function (rs) {
-            rs.forEach(function (v) { rRows.push({ label: base.label, taskId: v.taskId, idx: v.idx, choice: v.choice, chosenOutput: v.chosenOutput, leftOutput: v.leftOutput, rightOutput: v.rightOutput, responseMs: v.responseMs, transparency: base.transparency, incentive: base.incentive }); });
+            rs.forEach(function (v) { rRows.push({ participantId: base.participantId, email: base.email, taskId: v.taskId, idx: v.idx, choice: v.choice, chosenOutput: v.chosenOutput, leftOutput: v.leftOutput, rightOutput: v.rightOutput, responseMs: v.responseMs, transparency: base.transparency, incentive: base.incentive }); });
           }).catch(function () {});
         }).then(function () {
-          return Store.getSurvey(uid).then(function (sv) { if (sv) sRows.push(Object.assign({ label: base.label, completedAt: fmtTs(sv.completedAt) }, flatten('s_', sv.answers || {}))); }).catch(function () {});
+          return Store.getSurvey(uid).then(function (sv) { if (sv) sRows.push(Object.assign({ participantId: base.participantId, email: base.email, completedAt: fmtTs(sv.completedAt) }, flatten('s_', sv.answers || {}))); }).catch(function () {});
         });
       });
       chain.then(function () {

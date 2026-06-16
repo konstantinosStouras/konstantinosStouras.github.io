@@ -40,8 +40,9 @@ Model identities are **never** shown to participants.
 4. **Admin behind a flag.** `?admin` loads the admin panel (`admin.js`); the
    plain URL is the participant app (`arena-app.js`). Each ignores the other's
    view.
-5. **Research integrity.** Participants get an anonymous label (p1, p2, ...),
-   never see which model wrote which answer, and left/right is randomized.
+5. **Research integrity.** Participants never see which model wrote which
+   answer, and the left/right order is randomized per participant. (The app is
+   single-player; there are no p1/p2 anonymous labels.)
 
 ## 3. Files
 
@@ -58,8 +59,8 @@ Served (`lab/answerarena/`):
 | `CLAUDE.md` | This file. |
 
 Backend (`_lab-arena-firebase/`, underscore-prefixed so it is not published):
-`firestore.rules`, `firestore.indexes.json`, `functions/` (`nextLabel`),
-`firebase.json`, `.firebaserc`, `README.md` (full setup steps).
+`firestore.rules`, `firestore.indexes.json`, `firebase.json`, `.firebaserc`,
+`README.md` (full setup steps). No Cloud Functions (Spark plan is enough).
 
 ## 4. The comparison data shape
 
