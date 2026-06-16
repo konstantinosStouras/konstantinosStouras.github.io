@@ -1,0 +1,84 @@
+rules_version = '2';
+
+// Answer Arena - Firestore security rules.
+//
+// Model:
+//   config/app             editable content + registration/survey questions + settings + activeTaskSetId
+//                          (admin write, signed-in read)
+//   taskSets/{id}          uploaded comparison sets (task, outputA, outputB)   (admin write, signed-in read)
+//   counters/{id}          sequential anonymous-label counter (Cloud Functions only)
+//   sessions/{id}          join codes + status + 2x2 condition                 (admin write, PUBLIC read*)
+//   participants/{uid}     one doc per participant (created by the owner)
+//     responses/{id}       one doc per comparison answered
+//     events/{id}          optional action log
+//     survey/{id}          survey answers
+//
+// * sessions are publicly readable so a participant can validate a join code
+//   BEFORE they sign in. They contain no personal data (code, name, status,
+//   condition, taskSetId).
+//
+// Admin is identified solely by the signed-in e-mail admin@admin.com.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn()   { return request.auth != null; }
+    function isAdmin()    { return signedIn() && request.auth.token.email == 'admin@admin.com'; }
+    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+
+    // ---- App content / configuration (admin-managed CMS) ----
+    match /config/{docId} {
+      allow read:  if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // ---- Uploaded comparison sets ----
+    match /taskSets/{setId} {
+      allow read:  if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // ---- Sequential-label counter: only Cloud Functions (admin SDK) ----
+    match /counters/{counterId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    // ---- Sessions (join by code, validated pre-auth) ----
+    match /sessions/{sessionId} {
+      allow read:  if true;
+      allow write: if isAdmin();
+    }
+
+    // ---- Participants ----
+    match /participants/{uid} {
+      allow read:   if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid);
+      allow update: if isOwner(uid) || isAdmin();
+      allow delete: if isAdmin();
+
+      // One document per comparison answered. Append-only for participants.
+      match /responses/{responseId} {
+        allow read:   if isOwner(uid) || isAdmin();
+        allow create: if isOwner(uid);
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
+
+      // Optional per-action event log.
+      match /events/{eventId} {
+        allow read:   if isOwner(uid) || isAdmin();
+        allow create: if isOwner(uid);
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
+
+      // Survey answers.
+      match /survey/{docId} {
+        allow read:           if isOwner(uid) || isAdmin();
+        allow create, update: if isOwner(uid);
+        allow delete:         if isAdmin();
+      }
+    }
+  }
+}
