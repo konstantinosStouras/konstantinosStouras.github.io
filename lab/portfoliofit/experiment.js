@@ -164,10 +164,6 @@
       + '.pfx-tip .pfx-tiprow{display:flex;justify-content:space-between;align-items:center;gap:8px;}'
       + '.pfx-tip button{border:none;border-radius:9px;padding:8px 15px;font-weight:600;font-size:13px;cursor:pointer;}'
       + '.pfx-tip .pfx-next{background:#e67e22;color:#fff;}.pfx-tip .pfx-back{background:#f1ece3;color:#2b2b2b;}.pfx-tip .pfx-skip{background:transparent;color:#8a877f;padding-left:0;}'
-      + '.pfx-grip{position:absolute;top:7px;right:7px;width:24px;height:24px;display:none;align-items:center;justify-content:center;background:rgba(230,126,34,.16);color:#cf6f17;border-radius:7px;cursor:grab;font-size:13px;line-height:1;z-index:6;touch-action:none;user-select:none;}'
-      + '.pfx-grip:active{cursor:grabbing;}'
-      + '.pfx-rsz{position:absolute;right:2px;bottom:2px;width:18px;height:18px;display:none;cursor:nwse-resize;z-index:6;touch-action:none;background:linear-gradient(135deg,transparent 45%,#cf6f17 45%,#cf6f17 55%,transparent 55%);opacity:.6;border-radius:0 0 8px 0;}'
-      + 'body.pf-playing .pfx-grip{display:flex;}body.pf-playing .pfx-rsz{display:block;}'
       + '.pfx-reset{display:none;position:fixed;left:14px;bottom:14px;z-index:8400;background:#fff;border:1px solid #e0dbd0;border-radius:10px;padding:9px 13px;font-size:12px;font-weight:700;color:#2b2b2b;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,.16);}'
       + '.pfx-reset:hover{background:#f6f3ee;}body.pf-playing .pfx-reset{display:block;}'
       + '.pfx-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;}';
@@ -841,15 +837,21 @@
     if (cur.x || cur.y) cardEl.style.transform = 'translate(' + cur.x + 'px,' + cur.y + 'px)';
     if (cur.w) cardEl.style.width = cur.w + 'px';
     if (cur.h) { cardEl.style.height = cur.h + 'px'; cardEl.style.overflow = 'auto'; }
-    var grip = el('div', { class: 'pfx-grip', title: 'Drag to move this box' }, ['⠿']);
-    var rsz = el('div', { class: 'pfx-rsz', title: 'Drag to resize this box' });
-    cardEl.appendChild(grip); cardEl.appendChild(rsz);
+
+    var EDGE = 9, MINW = 150, MINH = 90, ds = null, rs = null;
+    function playing() { return document.body.classList.contains('pf-playing'); }
     function persist() { var m = loadLayout(); m[key] = { x: cur.x || 0, y: cur.y || 0, w: cur.w || null, h: cur.h || null }; saveLayout(m); }
     function front() { cardEl.style.zIndex = String(++_zTop); }
-    var ds = null;
-    // True if this box, translated to (x,y), would overlap any other box.
-    function collides(x, y) {
-      var aL = ds.baseL + x, aT = ds.baseT + y, aR = aL + ds.w, aB = aT + ds.h, others = document.querySelectorAll('[data-pfx-move="1"]');
+    // Drag only from non-interactive parts so clicks on buttons/cells/inputs still work.
+    function isInteractive(t) { return !!(t && t.closest && t.closest('button,input,textarea,select,a,label,kbd,.cell,.piece')); }
+    function edgeAt(e, rect) {
+      var x = e.clientX - rect.left, y = e.clientY - rect.top, w = rect.width, h = rect.height;
+      var l = x <= EDGE, r = x >= w - EDGE, t = y <= EDGE, b = y >= h - EDGE;
+      return (t && l) ? 'nw' : (t && r) ? 'ne' : (b && l) ? 'sw' : (b && r) ? 'se' : t ? 'n' : b ? 's' : l ? 'w' : r ? 'e' : null;
+    }
+    function cursorFor(edge) { return { n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize', ne: 'nesw-resize', sw: 'nesw-resize', nw: 'nwse-resize', se: 'nwse-resize' }[edge] || ''; }
+    function overlaps(aL, aT, aR, aB) {
+      var others = document.querySelectorAll('[data-pfx-move="1"]');
       for (var k = 0; k < others.length; k++) {
         if (others[k] === cardEl) continue;
         var b = others[k].getBoundingClientRect();
@@ -857,15 +859,51 @@
       }
       return false;
     }
-    grip.addEventListener('pointerdown', function (e) { e.preventDefault(); try { grip.setPointerCapture(e.pointerId); } catch (x) {} front(); var r = cardEl.getBoundingClientRect(); ds = { px: e.clientX, py: e.clientY, x: cur.x, y: cur.y, baseL: r.left - cur.x, baseT: r.top - cur.y, w: r.width, h: r.height }; });
-    grip.addEventListener('pointermove', function (e) { if (!ds) return; var tx = ds.x + (e.clientX - ds.px), ty = ds.y + (e.clientY - ds.py); if (!collides(tx, cur.y)) cur.x = tx; if (!collides(cur.x, ty)) cur.y = ty; cardEl.style.transform = 'translate(' + cur.x + 'px,' + cur.y + 'px)'; });
-    function endDrag() { if (ds) { ds = null; persist(); } }
-    grip.addEventListener('pointerup', endDrag); grip.addEventListener('pointercancel', endDrag);
-    var rs = null;
-    rsz.addEventListener('pointerdown', function (e) { e.preventDefault(); e.stopPropagation(); try { rsz.setPointerCapture(e.pointerId); } catch (x) {} front(); rs = { px: e.clientX, py: e.clientY, w: cardEl.offsetWidth, h: cardEl.offsetHeight }; });
-    rsz.addEventListener('pointermove', function (e) { if (!rs) return; cur.w = Math.max(140, rs.w + (e.clientX - rs.px)); cur.h = Math.max(90, rs.h + (e.clientY - rs.py)); cardEl.style.width = cur.w + 'px'; cardEl.style.height = cur.h + 'px'; cardEl.style.overflow = 'auto'; });
-    function endRsz() { if (rs) { rs = null; persist(); } }
-    rsz.addEventListener('pointerup', endRsz); rsz.addEventListener('pointercancel', endRsz);
+
+    cardEl.addEventListener('pointerdown', function (e) {
+      if (!playing() || e.button > 0) return;
+      var rect = cardEl.getBoundingClientRect(), edge = edgeAt(e, rect);
+      if (edge) {
+        e.preventDefault(); try { cardEl.setPointerCapture(e.pointerId); } catch (x) {} front();
+        rs = { edge: edge, px: e.clientX, py: e.clientY, w: cardEl.offsetWidth, h: cardEl.offsetHeight, x: cur.x, y: cur.y, L: rect.left, T: rect.top };
+        cardEl.style.overflow = 'auto';
+        return;
+      }
+      if (isInteractive(e.target)) return; // let the click happen
+      e.preventDefault(); try { cardEl.setPointerCapture(e.pointerId); } catch (x) {} front();
+      ds = { px: e.clientX, py: e.clientY, x: cur.x, y: cur.y, baseL: rect.left - cur.x, baseT: rect.top - cur.y, w: rect.width, h: rect.height };
+    });
+
+    cardEl.addEventListener('pointermove', function (e) {
+      if (ds) {
+        var tx = ds.x + (e.clientX - ds.px), ty = ds.y + (e.clientY - ds.py);
+        if (!overlaps(ds.baseL + tx, ds.baseT + ty, ds.baseL + tx + ds.w, ds.baseT + ty + ds.h)) { cur.x = tx; cur.y = ty; }
+        else {
+          if (!overlaps(ds.baseL + tx, ds.baseT + cur.y, ds.baseL + tx + ds.w, ds.baseT + cur.y + ds.h)) cur.x = tx;
+          if (!overlaps(ds.baseL + cur.x, ds.baseT + ty, ds.baseL + cur.x + ds.w, ds.baseT + ty + ds.h)) cur.y = ty;
+        }
+        cardEl.style.transform = 'translate(' + cur.x + 'px,' + cur.y + 'px)';
+        return;
+      }
+      if (rs) {
+        var dx = e.clientX - rs.px, dy = e.clientY - rs.py, nw = rs.w, nh = rs.h, nx = rs.x, ny = rs.y, ed = rs.edge;
+        if (ed.indexOf('e') >= 0) nw = Math.max(MINW, rs.w + dx);
+        if (ed.indexOf('s') >= 0) nh = Math.max(MINH, rs.h + dy);
+        if (ed.indexOf('w') >= 0) { nw = Math.max(MINW, rs.w - dx); nx = rs.x + rs.w - nw; }
+        if (ed.indexOf('n') >= 0) { nh = Math.max(MINH, rs.h - dy); ny = rs.y + rs.h - nh; }
+        var aL = rs.L + (nx - rs.x), aT = rs.T + (ny - rs.y);
+        if (!overlaps(aL, aT, aL + nw, aT + nh)) { cur.w = nw; cur.h = nh; cur.x = nx; cur.y = ny; cardEl.style.width = nw + 'px'; cardEl.style.height = nh + 'px'; cardEl.style.transform = 'translate(' + nx + 'px,' + ny + 'px)'; }
+        return;
+      }
+      // idle: signal what a drag here would do via the cursor
+      if (!playing()) { cardEl.style.cursor = ''; return; }
+      var rect = cardEl.getBoundingClientRect(), edge = edgeAt(e, rect);
+      cardEl.style.cursor = edge ? cursorFor(edge) : (isInteractive(e.target) ? '' : 'move');
+    });
+
+    function endOp() { if (ds || rs) { ds = null; rs = null; persist(); } }
+    cardEl.addEventListener('pointerup', endOp);
+    cardEl.addEventListener('pointercancel', endOp);
   }
 
   // ---- Bootstrap --------------------------------------------------------
