@@ -108,6 +108,7 @@
       + '.aa-grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:18px;align-items:start;}'
       + '@media (max-width:900px){.aa-grid{grid-template-columns:1fr;}}'
       + '.aa-col{min-width:0;}'
+      + '.aa-count{font-size:13px;color:var(--muted);font-weight:600;}'
       + '.aa-sub{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:20px 2px 4px;}'
       + '.aa-switches{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px;}'
       + '@media (max-width:560px){.aa-switches{grid-template-columns:1fr;}}'
@@ -214,16 +215,19 @@
     root.appendChild(el('div', { class: 'aa-wrap aa-wrap2' }, [header, el('div', { class: 'aa-grid' }, [left, right])]));
   }
 
-  /* ---- RIGHT: active sessions (with a compact creator) ---- */
+  /* ---- RIGHT: active sessions (ideasearchlab-style cards) ---- */
   function buildSessionsCard() {
     var card = el('div', { class: 'aa-card' });
-    card.appendChild(el('h3', { text: 'Active sessions' }));
-    card.appendChild(el('p', { class: 'aa-note', text: 'Each session has a short join code. "open" admits participants; "waiting"/"closed" do not. All sessions share the design parameters and content set on the left.' }));
+    var countSpan = el('span', { class: 'aa-count' });
+    card.appendChild(el('div', { class: 'aa-h', style: 'margin-bottom:4px;' }, [el('h3', { text: 'Active sessions' }), countSpan]));
+    card.appendChild(el('p', { class: 'aa-note', text: 'Open a session to copy its join link or change its status. Every session uses the design parameters and content set on the left.' }));
     var nameI = el('input', { type: 'text', placeholder: 'New session name', style: 'flex:1 1 160px;min-width:120px;' });
     var statusI = el('select', { style: 'max-width:110px;' }, ['open', 'waiting', 'closed'].map(function (s) { return el('option', { value: s }, [s]); }));
-    card.appendChild(el('div', { class: 'aa-row', style: 'margin-bottom:10px;' }, [nameI, statusI, el('button', { class: 'aa-btn sm', on: { click: create } }, ['+ Create'])]));
+    card.appendChild(el('div', { class: 'aa-row', style: 'margin:8px 0 12px;' }, [nameI, statusI, el('button', { class: 'aa-btn sm', on: { click: create } }, ['+ Create'])]));
     var listWrap = el('div', {}, [el('p', { class: 'aa-note', text: 'Loading...' })]);
     card.appendChild(listWrap);
+    card.appendChild(el('p', { class: 'aa-note', style: 'margin-top:12px;border-top:1px solid var(--line);padding-top:10px;', text: 'Participants join with the session code on the welcome screen, or by opening the share link.' }));
+
     function create() {
       if (!nameI.value.trim()) { toast('Name the session.'); return; }
       Store.createSession({ name: nameI.value.trim(), status: statusI.value, condition: null, taskSetId: cfg.activeTaskSetId || null })
@@ -234,34 +238,48 @@
       Promise.all([Store.listSessions(), Store.listParticipants().catch(function () { return []; })]).then(function (res) {
         var list = res[0], parts = res[1] || [];
         var counts = {}; parts.forEach(function (p) { if (p.sessionId) counts[p.sessionId] = (counts[p.sessionId] || 0) + 1; });
+        countSpan.textContent = list.length + ' active';
         listWrap.innerHTML = '';
-        listWrap.appendChild(el('p', { class: 'aa-note', text: list.length + ' session' + (list.length === 1 ? '' : 's') }));
-        if (!list.length) { return; }
+        if (!list.length) { listWrap.appendChild(el('p', { class: 'aa-note', text: 'No sessions yet.' })); return; }
         list.sort(function (a, b) { return tsMs(b.createdAt) - tsMs(a.createdAt); });
-        list.forEach(function (s) {
-          var liveCount = counts[s.id] != null ? counts[s.id] : (s.count || 0);
-          var joinUrl = location.origin + location.pathname + '?s=' + s.code;
-          var st = s.status || 'open';
-          var statusSel2 = el('select', { style: 'max-width:130px;' }, ['open', 'waiting', 'closed'].map(function (x) { return el('option', { value: x }, [x]); }));
-          statusSel2.value = st;
-          statusSel2.addEventListener('change', function () { Store.updateSession(s.id, { status: statusSel2.value }).then(function () { toast('Status updated.'); refresh(); }); });
-          listWrap.appendChild(el('div', { class: 'aa-q' }, [
-            el('div', { class: 'row', style: 'justify-content:space-between;' }, [
-              el('div', {}, [el('b', { text: s.code, style: 'font-size:17px;letter-spacing:.1em;' }), ' ', el('span', { class: 'aa-badge ' + st, text: st })]),
-              el('div', { class: 'aa-note', text: liveCount + ' participant' + (liveCount === 1 ? '' : 's') })
-            ]),
-            el('div', { class: 'aa-note', style: 'margin-top:4px;', text: s.name || '(unnamed)' }),
-            el('div', { class: 'aa-row', style: 'margin-top:8px;' }, [
-              statusSel2,
-              el('button', { class: 'aa-btn sec sm', on: { click: function () { copy(joinUrl); } } }, ['Copy join link']),
-              el('button', { class: 'aa-btn danger sm', on: { click: function () { if (window.confirm('Delete session ' + s.code + '?')) Store.deleteSession(s.id).then(function () { toast('Deleted.'); refresh(); }); } } }, ['Delete'])
-            ])
-          ]));
-        });
+        list.forEach(function (s) { listWrap.appendChild(sessionCard(s, counts, refresh)); });
       }).catch(function (e) { listWrap.innerHTML = ''; listWrap.appendChild(el('p', { class: 'aa-err', text: 'Could not load sessions: ' + ((e && e.code) || 'error') })); });
     }
     refresh();
     return { node: card, refresh: refresh };
+  }
+  function sessionCard(s, counts, refresh) {
+    var liveCount = counts[s.id] != null ? counts[s.id] : (s.count || 0);
+    var joinUrl = location.origin + location.pathname + '?s=' + s.code;
+    var st = s.status || 'open';
+    var box = el('div', { class: 'aa-q' });
+    box.appendChild(el('div', { class: 'row', style: 'justify-content:space-between;align-items:flex-start;' }, [
+      el('div', {}, [el('b', { text: s.code, style: 'font-size:18px;letter-spacing:.1em;' }), ' ', el('span', { class: 'aa-badge ' + st, text: st })]),
+      el('div', { style: 'text-align:right;' }, [
+        el('div', { style: 'font-weight:700;font-size:14px;', text: liveCount + ' participant' + (liveCount === 1 ? '' : 's') }),
+        el('div', { class: 'aa-note', text: s.name || '(unnamed)' })
+      ])
+    ]));
+    box.appendChild(el('div', { class: 'aa-note', style: 'margin-top:4px;', text: 'Created ' + (fmtTs(s.createdAt) || 'just now') }));
+    box.appendChild(el('div', { class: 'aa-row', style: 'margin-top:8px;' }, [
+      el('button', { class: 'aa-btn sm', on: { click: function () { window.open(joinUrl, '_blank'); } } }, ['Open']),
+      el('button', { class: 'aa-btn sec sm', on: { click: function () { copy(joinUrl); } } }, ['Copy link']),
+      el('button', { class: 'aa-btn sec sm', on: { click: editMode } }, ['Edit']),
+      el('button', { class: 'aa-btn danger sm', on: { click: function () { if (window.confirm('Delete session ' + s.code + '?')) Store.deleteSession(s.id).then(function () { toast('Deleted.'); refresh(); }); } } }, ['Delete'])
+    ]));
+    function editMode() {
+      box.innerHTML = '';
+      var ename = el('input', { type: 'text', value: s.name || '' });
+      var estatus = el('select', { style: 'max-width:130px;' }, ['open', 'waiting', 'closed'].map(function (x) { return el('option', { value: x }, [x]); }));
+      estatus.value = st;
+      box.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: 'Name (' + s.code + ')' }), ename]));
+      box.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: 'Status' }), estatus]));
+      box.appendChild(el('div', { class: 'aa-row' }, [
+        el('button', { class: 'aa-btn sm', on: { click: function () { Store.updateSession(s.id, { name: ename.value.trim() || s.name, status: estatus.value }).then(function () { toast('Saved.'); refresh(); }); } } }, ['Save']),
+        el('button', { class: 'aa-btn sec sm', on: { click: refresh } }, ['Cancel'])
+      ]));
+    }
+    return box;
   }
 
   /* ---- RIGHT: registered users ---- */

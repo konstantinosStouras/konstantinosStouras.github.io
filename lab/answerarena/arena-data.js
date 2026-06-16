@@ -3,13 +3,12 @@
  *
  * Exposed as window.ARENA_DEFAULTS and consumed by arena-app.js (participant
  * flow), arena-store.js (local fallback seed) and admin.js ("Restore built-in
- * default" buttons). Editing a value here changes the built-in default that
- * the admin panel can always revert to.
+ * default" buttons).
  *
- * PLACEHOLDERS: defaultTasks below are 20 real everyday task PROMPTS, but each
- * task's outputA/outputB are PLACEHOLDER answers, written only to exercise the
- * UI. Replace them with the real two-model outputs (here, or by uploading an
- * Excel with columns: task, outputA, outputB in the admin Tasks tab). Model
+ * PLACEHOLDERS: the 20 defaultTasks below are random, self-contained sample
+ * tasks with two made-up answers each, only so the app has realistic content
+ * to show. Replace them with the real tasks + two-model outputs (edit here, or
+ * upload an Excel with columns task, outputA, outputB in the admin). Model
  * identities are intentionally omitted and must never be shown to participants.
  */
 window.ARENA_DEFAULTS = {
@@ -300,184 +299,184 @@ window.ARENA_DEFAULTS = {
   },
   "defaultTasks": [
     {
-      "id": "T001",
+      "id": "T01",
       "domain": "Writing",
       "complexity": "Simple",
-      "title": "Polish a blunt internal message for tone",
-      "task": "Rewrite this message so it declines the suggestion clearly but stays respectful and keeps the supervisor motivated to raise ideas again. Add a brief reason and a constructive next step, and keep it to a few sentences. Message: 'No, we can't move the cycle counts to mornings, that won't work, we already tried it.'",
-      "outputA": "Here is a direct, no-frills attempt to polish a blunt internal message for tone.\n\nI kept it short: the core ask is handled in a few clear lines, with plain language and no padding. It is easy to scan and ready to use as-is for a writing task of this kind.\n\n(Placeholder output - style: concise & direct. Replace with a real model output.)",
-      "outputB": "Let me work through how to polish a blunt internal message for tone more thoroughly.\n\n- First, I restate the goal and the key constraints so nothing is missed.\n- Then I lay out the response step by step, with a little reasoning for each choice.\n- Finally, I add a short note on edge cases and what I would double-check.\n\nThis version trades brevity for completeness and structure, which can help on a more involved writing task.\n\n(Placeholder output - style: detailed & structured. Replace with a real model output.)"
+      "title": "Decline a meeting politely",
+      "task": "Reply to this meeting invite, declining because of a scheduling conflict but keeping the door open. Invite: “Can you join the planning sync Thursday at 3pm?”",
+      "outputA": "Thanks for the invite! I have a conflict at 3pm Thursday, so I won’t be able to join. Could you share the notes afterward, or would another time this week work? Happy to contribute async in the meantime.",
+      "outputB": "No, I can’t make Thursday at 3."
     },
     {
-      "id": "T013",
+      "id": "T02",
       "domain": "Summarization",
       "complexity": "Simple",
-      "title": "Summarize a meeting transcript into decisions and actions",
-      "task": "Read this transcript and produce two sections, Decisions and Action items (owner and due date where stated), keeping only what was decided or assigned and dropping small talk. Transcript: 'Maria: Did everyone see the demand forecast? Tom: Up 9 percent but the supplier in Vietnam is behind. Maria: Are we agreed we shift 20 percent of the order to the backup supplier? Tom: Yes if quality passes. Priya: QC can clear the backup samples by the 10th. Maria: Then we shift today. Priya, own the QC sign-off? Priya: Yes, by the 10th. Tom: We still have not set the safety-stock level for the new SKU.…",
-      "outputA": "Here is a direct, no-frills attempt to summarize a meeting transcript into decisions and actions.\n\nI kept it short: the core ask is handled in a few clear lines, with plain language and no padding. It is easy to scan and ready to use as-is for a summarization task of this kind.\n\n(Placeholder output - style: concise & direct. Replace with a real model output.)",
-      "outputB": "Let me work through how to summarize a meeting transcript into decisions and actions more thoroughly.\n\n- First, I restate the goal and the key constraints so nothing is missed.\n- Then I lay out the response step by step, with a little reasoning for each choice.\n- Finally, I add a short note on edge cases and what I would double-check.\n\nThis version trades brevity for completeness and structure, which can help on a more involved summarization task.\n\n(Placeholder output - style: detailed & structured. Replace with a real model output.)"
+      "title": "Summarize in one sentence",
+      "task": "Summarize this in one sentence: “The committee reviewed three proposals, rejected the first for budget reasons, tabled the second pending legal review, and approved the third with minor timeline changes.”",
+      "outputA": "The committee approved the third proposal with small timeline changes, tabled the second for legal review, and rejected the first over budget.",
+      "outputB": "They looked at some proposals and made decisions about them."
     },
     {
-      "id": "T022",
-      "domain": "Knowledge Q&A",
-      "complexity": "Simple",
-      "title": "Answer a question from a long internal document",
-      "task": "Using only this policy, answer the question. Policy: 'Goods may be returned within 30 days of receipt for full credit if unused and in original packaging. Custom or made-to-order items are non-returnable. Damaged or defective goods must be reported within 5 business days of receipt with photos of the damage and the packing slip; the supplier covers return freight and either replaces the goods or issues full credit, buyer's choice. For standard returns, the buyer pays return freight unless the error was the supplier's. Credits are issued 7 to 10 business days after returned goods are received…",
-      "outputA": "Here is a direct, no-frills attempt to answer a question from a long internal document.\n\nI kept it short: the core ask is handled in a few clear lines, with plain language and no padding. It is easy to scan and ready to use as-is for a knowledge q&a task of this kind.\n\n(Placeholder output - style: concise & direct. Replace with a real model output.)",
-      "outputB": "Let me work through how to answer a question from a long internal document more thoroughly.\n\n- First, I restate the goal and the key constraints so nothing is missed.\n- Then I lay out the response step by step, with a little reasoning for each choice.\n- Finally, I add a short note on edge cases and what I would double-check.\n\nThis version trades brevity for completeness and structure, which can help on a more involved knowledge q&a task.\n\n(Placeholder output - style: detailed & structured. Replace with a real model output.)"
-    },
-    {
-      "id": "T042",
-      "domain": "Math & Reasoning",
-      "complexity": "Simple",
-      "title": "Solve everyday business arithmetic",
-      "task": "Solve and show the arithmetic: a buyer orders 7 pallets of stock at 320 dollars each against a budget line of 2,500 dollars. Give the total cost, how much of the budget is left, and the cost per pallet. State each number clearly.",
-      "outputA": "Here is a direct, no-frills attempt to solve everyday business arithmetic.\n\nI kept it short: the core ask is handled in a few clear lines, with plain language and no padding. It is easy to scan and ready to use as-is for a math & reasoning task of this kind.\n\n(Placeholder output - style: concise & direct. Replace with a real model output.)",
-      "outputB": "Let me work through how to solve everyday business arithmetic more thoroughly.\n\n- First, I restate the goal and the key constraints so nothing is missed.\n- Then I lay out the response step by step, with a little reasoning for each choice.\n- Finally, I add a short note on edge cases and what I would double-check.\n\nThis version trades brevity for completeness and structure, which can help on a more involved math & reasoning task.\n\n(Placeholder output - style: detailed & structured. Replace with a real model output.)"
-    },
-    {
-      "id": "T031",
+      "id": "T03",
       "domain": "Coding",
       "complexity": "Simple",
-      "title": "Write a simple, self-contained function",
-      "task": "Write a Python function is_valid_sku(s) that returns True if s is a valid SKU in the format two uppercase letters, a hyphen, then six digits (for example 'AB-123456') and False otherwise. Include a docstring and three example calls. Standard library only.",
-      "outputA": "Here is a direct, no-frills attempt to write a simple, self-contained function.\n\nI kept it short: the core ask is handled in a few clear lines, with plain language and no padding. It is easy to scan and ready to use as-is for a coding task of this kind.\n\n(Placeholder output - style: concise & direct. Replace with a real model output.)",
-      "outputB": "Let me work through how to write a simple, self-contained function more thoroughly.\n\n- First, I restate the goal and the key constraints so nothing is missed.\n- Then I lay out the response step by step, with a little reasoning for each choice.\n- Finally, I add a short note on edge cases and what I would double-check.\n\nThis version trades brevity for completeness and structure, which can help on a more involved coding task.\n\n(Placeholder output - style: detailed & structured. Replace with a real model output.)"
+      "title": "Reverse a string",
+      "task": "Write a Python function that returns a string reversed.",
+      "outputA": "def reverse(s):\n    return s[::-1]",
+      "outputB": "def reverse(s):\n    result = ''\n    for ch in s:\n        result = ch + result\n    return result"
     },
     {
-      "id": "T050",
-      "domain": "Data Analysis",
+      "id": "T04",
+      "domain": "Math & Reasoning",
       "complexity": "Simple",
-      "title": "Compute a basic statistic from numbers",
-      "task": "From these daily units shipped for a week, 1200, 1350, 1000, 1450, 1300, 1500, 1100, calculate the average daily units shipped and name the highest day's figure. Show the sum and division. Keep it short for a non-technical reader.",
-      "outputA": "Here is a direct, no-frills attempt to compute a basic statistic from numbers.\n\nI kept it short: the core ask is handled in a few clear lines, with plain language and no padding. It is easy to scan and ready to use as-is for a data analysis task of this kind.\n\n(Placeholder output - style: concise & direct. Replace with a real model output.)",
-      "outputB": "Let me work through how to compute a basic statistic from numbers more thoroughly.\n\n- First, I restate the goal and the key constraints so nothing is missed.\n- Then I lay out the response step by step, with a little reasoning for each choice.\n- Finally, I add a short note on edge cases and what I would double-check.\n\nThis version trades brevity for completeness and structure, which can help on a more involved data analysis task.\n\n(Placeholder output - style: detailed & structured. Replace with a real model output.)"
+      "title": "Split a bill with tip",
+      "task": "A dinner bill is $87.50. Split it evenly among 5 people and add an 18% tip. How much does each person pay?",
+      "outputA": "Bill with 18% tip: 87.50 × 1.18 = $103.25. Divided by 5 = $20.65 each.",
+      "outputB": "Each person pays about $17.50 plus tip, so roughly $20."
     },
     {
-      "id": "T058",
-      "domain": "Extraction & Classification",
-      "complexity": "Simple",
-      "title": "Extract structured fields from messy text",
-      "task": "From these notes, pull out each shipment's carrier, tracking number, origin, and promised delivery date, as a clean table with one shipment per row, only those four fields. Notes: 'Spoke to FastFreight, tracking FF889201, leaving Chicago, promised the 14th. Then RoadRunner, RR-55120, out of Dallas, says the 16th. Last was BlueLine, BL7741, from Atlanta, committed to the 13th.'",
-      "outputA": "Here is a direct, no-frills attempt to extract structured fields from messy text.\n\nI kept it short: the core ask is handled in a few clear lines, with plain language and no padding. It is easy to scan and ready to use as-is for a extraction & classification task of this kind.\n\n(Placeholder output - style: concise & direct. Replace with a real model output.)",
-      "outputB": "Let me work through how to extract structured fields from messy text more thoroughly.\n\n- First, I restate the goal and the key constraints so nothing is missed.\n- Then I lay out the response step by step, with a little reasoning for each choice.\n- Finally, I add a short note on edge cases and what I would double-check.\n\nThis version trades brevity for completeness and structure, which can help on a more involved extraction & classification task.\n\n(Placeholder output - style: detailed & structured. Replace with a real model output.)"
-    },
-    {
-      "id": "T089",
+      "id": "T05",
       "domain": "Translation",
       "complexity": "Simple",
-      "title": "Translate short everyday phrases",
-      "task": "Translate these into natural, friendly Spanish for a customer-support chat, each on its own line in order: 'Hello, how can I help you today? I am sorry for the trouble. Let me check your order. Your refund has been processed. Thank you for your patience.'",
-      "outputA": "Here is a direct, no-frills attempt to translate short everyday phrases.\n\nI kept it short: the core ask is handled in a few clear lines, with plain language and no padding. It is easy to scan and ready to use as-is for a translation task of this kind.\n\n(Placeholder output - style: concise & direct. Replace with a real model output.)",
-      "outputB": "Let me work through how to translate short everyday phrases more thoroughly.\n\n- First, I restate the goal and the key constraints so nothing is missed.\n- Then I lay out the response step by step, with a little reasoning for each choice.\n- Finally, I add a short note on edge cases and what I would double-check.\n\nThis version trades brevity for completeness and structure, which can help on a more involved translation task.\n\n(Placeholder output - style: detailed & structured. Replace with a real model output.)"
+      "title": "Translate a request to French",
+      "task": "Translate to French: “Could you send me the report by Friday, please?”",
+      "outputA": "Pourriez-vous m’envoyer le rapport d’ici vendredi, s’il vous plaît ?",
+      "outputB": "Peux-tu m’envoyer le rapport avant vendredi ?"
     },
     {
-      "id": "T075",
+      "id": "T06",
       "domain": "Creative & Marketing",
       "complexity": "Simple",
-      "title": "Generate slogans or taglines",
-      "task": "Write three short, catchy taglines for a reusable stainless-steel water-bottle brand aimed at active, eco-conscious people. Each under ten words, upbeat, easy to remember, suitable for packaging and social. Number them.",
-      "outputA": "Here is a direct, no-frills attempt to generate slogans or taglines.\n\nI kept it short: the core ask is handled in a few clear lines, with plain language and no padding. It is easy to scan and ready to use as-is for a creative & marketing task of this kind.\n\n(Placeholder output - style: concise & direct. Replace with a real model output.)",
-      "outputB": "Let me work through how to generate slogans or taglines more thoroughly.\n\n- First, I restate the goal and the key constraints so nothing is missed.\n- Then I lay out the response step by step, with a little reasoning for each choice.\n- Finally, I add a short note on edge cases and what I would double-check.\n\nThis version trades brevity for completeness and structure, which can help on a more involved creative & marketing task.\n\n(Placeholder output - style: detailed & structured. Replace with a real model output.)"
+      "title": "Coffee-shop tagline",
+      "task": "Write a short tagline for a neighbourhood coffee shop called “Morning Loop”.",
+      "outputA": "Morning Loop — your daily orbit starts here.",
+      "outputB": "Good coffee, every morning."
     },
     {
-      "id": "T083",
-      "domain": "Customer Support",
+      "id": "T07",
+      "domain": "Writing",
       "complexity": "Simple",
-      "title": "Draft a routine support reply",
-      "task": "Write a clear, friendly support reply answering how to reset a password: from the login page, click Forgot Password, enter the account email, follow the link sent, and set a new one. Add what to do if the email does not arrive. Keep it short and numbered.",
-      "outputA": "Here is a direct, no-frills attempt to draft a routine support reply.\n\nI kept it short: the core ask is handled in a few clear lines, with plain language and no padding. It is easy to scan and ready to use as-is for a customer support task of this kind.\n\n(Placeholder output - style: concise & direct. Replace with a real model output.)",
-      "outputB": "Let me work through how to draft a routine support reply more thoroughly.\n\n- First, I restate the goal and the key constraints so nothing is missed.\n- Then I lay out the response step by step, with a little reasoning for each choice.\n- Finally, I add a short note on edge cases and what I would double-check.\n\nThis version trades brevity for completeness and structure, which can help on a more involved customer support task.\n\n(Placeholder output - style: detailed & structured. Replace with a real model output.)"
+      "title": "Newsletter subject line",
+      "task": "Write an email subject line for a newsletter announcing a 20% summer sale that ends Sunday.",
+      "outputA": "20% off ends Sunday — grab your summer pick",
+      "outputB": "Newsletter: Summer Sale Information Inside"
     },
     {
-      "id": "T067",
-      "domain": "Planning & Strategy",
+      "id": "T08",
+      "domain": "Knowledge Q&A",
       "complexity": "Simple",
-      "title": "Create a simple ordered checklist",
-      "task": "Create a simple ordered checklist for running a weekly cycle count in a warehouse. Cover selecting which SKUs to count, freezing movement in the count zone, counting and recording, reconciling any differences against the system, and reporting the results. Keep each step short and practical, as a numbered list.",
-      "outputA": "Here is a direct, no-frills attempt to create a simple ordered checklist.\n\nI kept it short: the core ask is handled in a few clear lines, with plain language and no padding. It is easy to scan and ready to use as-is for a planning & strategy task of this kind.\n\n(Placeholder output - style: concise & direct. Replace with a real model output.)",
-      "outputB": "Let me work through how to create a simple ordered checklist more thoroughly.\n\n- First, I restate the goal and the key constraints so nothing is missed.\n- Then I lay out the response step by step, with a little reasoning for each choice.\n- Finally, I add a short note on edge cases and what I would double-check.\n\nThis version trades brevity for completeness and structure, which can help on a more involved planning & strategy task.\n\n(Placeholder output - style: detailed & structured. Replace with a real model output.)"
+      "title": "Explain an API simply",
+      "task": "Explain what an API is to someone non-technical, in two sentences.",
+      "outputA": "An API is like a waiter at a restaurant: you ask for what you want, the kitchen (another program) prepares it, and the waiter brings it back. It lets two pieces of software talk to each other without either needing to know how the other works inside.",
+      "outputB": "An API is an Application Programming Interface that exposes endpoints over HTTP using methods like GET and POST to transfer JSON payloads between systems."
     },
     {
-      "id": "T099",
+      "id": "T09",
       "domain": "Review & QA",
       "complexity": "Simple",
-      "title": "Review for consistency with a style guide",
-      "task": "Check this label text against these format rules and list every violation with a fix. Rules: dates in YYYY-MM-DD, weights in kg with one decimal, no exclamation marks, use 'Ship to' not 'Sending to'. Label: 'Sending to: Acme Warehouse. Ship date 3/7/25. Weight: 12 kg. Handle with care!'",
-      "outputA": "Here is a direct, no-frills attempt to review for consistency with a style guide.\n\nI kept it short: the core ask is handled in a few clear lines, with plain language and no padding. It is easy to scan and ready to use as-is for a review & qa task of this kind.\n\n(Placeholder output - style: concise & direct. Replace with a real model output.)",
-      "outputB": "Let me work through how to review for consistency with a style guide more thoroughly.\n\n- First, I restate the goal and the key constraints so nothing is missed.\n- Then I lay out the response step by step, with a little reasoning for each choice.\n- Finally, I add a short note on edge cases and what I would double-check.\n\nThis version trades brevity for completeness and structure, which can help on a more involved review & qa task.\n\n(Placeholder output - style: detailed & structured. Replace with a real model output.)"
+      "title": "Fix the grammar",
+      "task": "Fix the grammar: “Me and him was going to the store but we forgot it’s address.”",
+      "outputA": "He and I were going to the store, but we forgot its address.",
+      "outputB": "Me and him were going to the store, but we forgot it’s address."
     },
     {
-      "id": "T002",
-      "domain": "Writing",
-      "complexity": "Complex",
-      "title": "Draft a high-stakes external message",
-      "task": "Write an email telling a freight carrier we have used for four years that we will not renew our transportation contract when it ends next quarter. Be clear and final, thank them sincerely for the service and reliability, avoid blame, and leave the door open to work together again during peak season. Keep a calm, professional tone.",
-      "outputA": "Here is a direct, no-frills attempt to draft a high-stakes external message.\n\nI kept it short: the core ask is handled in a few clear lines, with plain language and no padding. It is easy to scan and ready to use as-is for a writing task of this kind.\n\n(Placeholder output - style: concise & direct. Replace with a real model output.)",
-      "outputB": "Let me work through how to draft a high-stakes external message more thoroughly.\n\n- First, I restate the goal and the key constraints so nothing is missed.\n- Then I lay out the response step by step, with a little reasoning for each choice.\n- Finally, I add a short note on edge cases and what I would double-check.\n\nThis version trades brevity for completeness and structure, which can help on a more involved writing task.\n\n(Placeholder output - style: detailed & structured. Replace with a real model output.)"
+      "id": "T10",
+      "domain": "Planning & Strategy",
+      "complexity": "Simple",
+      "title": "Dinner from ingredients",
+      "task": "Suggest a simple dinner using eggs, spinach, onion, and bread.",
+      "outputA": "Make a spinach and onion frittata: sauté a diced onion and a handful of spinach, pour over 4 beaten eggs, cook until set, and serve with toasted bread. About 15 minutes.",
+      "outputB": "You could cook the eggs and eat them with the bread and vegetables."
     },
     {
-      "id": "T018",
-      "domain": "Summarization",
-      "complexity": "Complex",
-      "title": "Synthesize conflicting sources into a view",
-      "task": "Three reports disagree on a supplier. Report A: on-time delivery improved to 95 percent last quarter. Report B: on-time was flat, but defect rates fell. Report C: the on-time figure is inflated because late shipments were re-dated on receipt. Write a one-paragraph executive summary that reconciles these, explicitly flags the contradiction and its likely cause, and states what a decision-maker should reasonably conclude and verify next.",
-      "outputA": "Here is a direct, no-frills attempt to synthesize conflicting sources into a view.\n\nI kept it short: the core ask is handled in a few clear lines, with plain language and no padding. It is easy to scan and ready to use as-is for a summarization task of this kind.\n\n(Placeholder output - style: concise & direct. Replace with a real model output.)",
-      "outputB": "Let me work through how to synthesize conflicting sources into a view more thoroughly.\n\n- First, I restate the goal and the key constraints so nothing is missed.\n- Then I lay out the response step by step, with a little reasoning for each choice.\n- Finally, I add a short note on edge cases and what I would double-check.\n\nThis version trades brevity for completeness and structure, which can help on a more involved summarization task.\n\n(Placeholder output - style: detailed & structured. Replace with a real model output.)"
+      "id": "T11",
+      "domain": "Creative & Marketing",
+      "complexity": "Simple",
+      "title": "Product description",
+      "task": "Write a one-line product description for a stainless steel water bottle that keeps drinks cold for 24 hours.",
+      "outputA": "Ice-cold for 24 hours — a durable stainless steel bottle that keeps every sip refreshing, from morning runs to all-day desk life.",
+      "outputB": "A water bottle made of stainless steel that holds liquid."
     },
     {
-      "id": "T026",
-      "domain": "Knowledge Q&A",
-      "complexity": "Complex",
-      "title": "Correct a common misconception with evidence",
-      "task": "Many managers assume that if two metrics move together, one causes the other. Explain why that is wrong using a concrete business example, name the most likely alternative explanation, and address two reasonable follow-up objections a skeptical manager would raise.",
-      "outputA": "Here is a direct, no-frills attempt to correct a common misconception with evidence.\n\nI kept it short: the core ask is handled in a few clear lines, with plain language and no padding. It is easy to scan and ready to use as-is for a knowledge q&a task of this kind.\n\n(Placeholder output - style: concise & direct. Replace with a real model output.)",
-      "outputB": "Let me work through how to correct a common misconception with evidence more thoroughly.\n\n- First, I restate the goal and the key constraints so nothing is missed.\n- Then I lay out the response step by step, with a little reasoning for each choice.\n- Finally, I add a short note on edge cases and what I would double-check.\n\nThis version trades brevity for completeness and structure, which can help on a more involved knowledge q&a task.\n\n(Placeholder output - style: detailed & structured. Replace with a real model output.)"
-    },
-    {
-      "id": "T044",
+      "id": "T12",
       "domain": "Math & Reasoning",
-      "complexity": "Complex",
-      "title": "Solve a unit-economics problem with a twist",
-      "task": "A subscription charges 40 dollars per customer per month, costs 120 dollars to acquire each customer and 8 dollars per month to serve, average stay 14 months. Find lifetime profit per customer after both costs, and the payback period in months. Then, if raising price to 45 also raises serving cost to 9 and shortens average stay to 12 months, decide whether lifetime profit per customer goes up or down versus the original. Show each step.",
-      "outputA": "Here is a direct, no-frills attempt to solve a unit-economics problem with a twist.\n\nI kept it short: the core ask is handled in a few clear lines, with plain language and no padding. It is easy to scan and ready to use as-is for a math & reasoning task of this kind.\n\n(Placeholder output - style: concise & direct. Replace with a real model output.)",
-      "outputB": "Let me work through how to solve a unit-economics problem with a twist more thoroughly.\n\n- First, I restate the goal and the key constraints so nothing is missed.\n- Then I lay out the response step by step, with a little reasoning for each choice.\n- Finally, I add a short note on edge cases and what I would double-check.\n\nThis version trades brevity for completeness and structure, which can help on a more involved math & reasoning task.\n\n(Placeholder output - style: detailed & structured. Replace with a real model output.)"
+      "complexity": "Simple",
+      "title": "Convert ml to ounces",
+      "task": "A recipe needs 250 ml of milk but your measuring cup is in fluid ounces. About how many fluid ounces is that?",
+      "outputA": "250 ml is about 8.5 US fluid ounces (1 fl oz ≈ 29.6 ml).",
+      "outputB": "250 ml is roughly 12 fluid ounces."
     },
     {
-      "id": "T033",
+      "id": "T13",
+      "domain": "Customer Support",
+      "complexity": "Simple",
+      "title": "Ask for a deadline extension",
+      "task": "Write a short Slack message to your manager asking for a two-day extension on a report because a data source was delayed.",
+      "outputA": "Hi [name] — quick heads-up: the vendor data I need came in late, so I’d like to move the report deadline from Wednesday to Friday to keep the quality up. Does that work? Happy to share a draft of what’s done so far.",
+      "outputB": "I need more time on the report. Can I have two more days?"
+    },
+    {
+      "id": "T14",
+      "domain": "Creative & Marketing",
+      "complexity": "Simple",
+      "title": "Name a subscription box",
+      "task": "Brainstorm three name ideas for a houseplant subscription box.",
+      "outputA": "1) Leaf It To Us\n2) The Monthly Sprout\n3) Potted & Posted",
+      "outputB": "Plant Box, Green Box, Plant Subscription"
+    },
+    {
+      "id": "T15",
+      "domain": "Summarization",
+      "complexity": "Simple",
+      "title": "Pros and cons of remote work",
+      "task": "List two pros and two cons of remote work, briefly.",
+      "outputA": "Pros: no commute (saves time and money) and flexible scheduling. Cons: harder to separate work from home, and fewer spontaneous team interactions.",
+      "outputB": "Remote work has good things and bad things depending on the person."
+    },
+    {
+      "id": "T16",
       "domain": "Coding",
-      "complexity": "Complex",
-      "title": "Write a query needing a window function",
-      "task": "Write a SQL query for stock_counts(count_id, sku, count_date, quantity) that returns, for each SKU, the row for its single most recent count. Use a window function and break ties on date by keeping the highest count_id. Keep it standard SQL.",
-      "outputA": "Here is a direct, no-frills attempt to write a query needing a window function.\n\nI kept it short: the core ask is handled in a few clear lines, with plain language and no padding. It is easy to scan and ready to use as-is for a coding task of this kind.\n\n(Placeholder output - style: concise & direct. Replace with a real model output.)",
-      "outputB": "Let me work through how to write a query needing a window function more thoroughly.\n\n- First, I restate the goal and the key constraints so nothing is missed.\n- Then I lay out the response step by step, with a little reasoning for each choice.\n- Finally, I add a short note on edge cases and what I would double-check.\n\nThis version trades brevity for completeness and structure, which can help on a more involved coding task.\n\n(Placeholder output - style: detailed & structured. Replace with a real model output.)"
+      "complexity": "Simple",
+      "title": "Basic email regex",
+      "task": "Write a simple regex that matches a basic email address like name@example.com.",
+      "outputA": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
+      "outputB": "Just check that the text contains an @ symbol: /@/"
     },
     {
-      "id": "T053",
-      "domain": "Data Analysis",
-      "complexity": "Complex",
-      "title": "Spot a confound or causation pitfall",
-      "task": "A manager notices that months with higher shipping volume also have more damaged-goods claims and concludes the carrier is getting careless. Explain why this reasoning is flawed, identify the most likely confounding variable, describe what additional data and analysis would test a real relationship, and outline how to present the corrected interpretation to the manager convincingly.",
-      "outputA": "Here is a direct, no-frills attempt to spot a confound or causation pitfall.\n\nI kept it short: the core ask is handled in a few clear lines, with plain language and no padding. It is easy to scan and ready to use as-is for a data analysis task of this kind.\n\n(Placeholder output - style: concise & direct. Replace with a real model output.)",
-      "outputB": "Let me work through how to spot a confound or causation pitfall more thoroughly.\n\n- First, I restate the goal and the key constraints so nothing is missed.\n- Then I lay out the response step by step, with a little reasoning for each choice.\n- Finally, I add a short note on edge cases and what I would double-check.\n\nThis version trades brevity for completeness and structure, which can help on a more involved data analysis task.\n\n(Placeholder output - style: detailed & structured. Replace with a real model output.)"
+      "id": "T17",
+      "domain": "Writing",
+      "complexity": "Simple",
+      "title": "Invoice payment reminder",
+      "task": "Write a polite reminder that invoice #1043 for $1,200 was due last week.",
+      "outputA": "Hi [name], a friendly reminder that invoice #1043 for $1,200 was due on [date] and is now a little overdue. Could you let me know when we can expect payment? Happy to resend the invoice if that helps — thank you!",
+      "outputB": "Your invoice #1043 is late. Please pay $1,200 immediately."
     },
     {
-      "id": "T065",
-      "domain": "Extraction & Classification",
-      "complexity": "Complex",
-      "title": "Deduplicate records despite variation",
-      "task": "Identify which of these supplier entries likely refer to the same vendor despite differences, group them, and explain each match. Entries: (1) Apex Components, ap@apex.com, 555-0101. (2) Apex Components Inc, ap@apex.com. (3) APEX Comp., orders@apexparts.com, 555-0101. (4) Apollo Components, info@apollo.com.",
-      "outputA": "Here is a direct, no-frills attempt to deduplicate records despite variation.\n\nI kept it short: the core ask is handled in a few clear lines, with plain language and no padding. It is easy to scan and ready to use as-is for a extraction & classification task of this kind.\n\n(Placeholder output - style: concise & direct. Replace with a real model output.)",
-      "outputB": "Let me work through how to deduplicate records despite variation more thoroughly.\n\n- First, I restate the goal and the key constraints so nothing is missed.\n- Then I lay out the response step by step, with a little reasoning for each choice.\n- Finally, I add a short note on edge cases and what I would double-check.\n\nThis version trades brevity for completeness and structure, which can help on a more involved extraction & classification task.\n\n(Placeholder output - style: detailed & structured. Replace with a real model output.)"
+      "id": "T18",
+      "domain": "Creative & Marketing",
+      "complexity": "Simple",
+      "title": "Haiku about autumn",
+      "task": "Write a haiku about autumn (5-7-5 syllables).",
+      "outputA": "Crisp leaves let go now —\nthe maple counts its red coins\ninto quiet wind.",
+      "outputB": "Autumn is here now\nThe leaves are falling from trees\nIt is getting cold"
     },
     {
-      "id": "T090",
-      "domain": "Translation",
-      "complexity": "Complex",
-      "title": "Translate a workplace message with tone",
-      "task": "Translate this workplace message into French, keeping the warm, slightly informal tone and making the idioms sound native rather than literal. Message: 'Thanks so much for stepping in at the last minute. You really saved the day, and the whole team noticed. Let me know if I can ever return the favor, drinks are on me next time.'",
-      "outputA": "Here is a direct, no-frills attempt to translate a workplace message with tone.\n\nI kept it short: the core ask is handled in a few clear lines, with plain language and no padding. It is easy to scan and ready to use as-is for a translation task of this kind.\n\n(Placeholder output - style: concise & direct. Replace with a real model output.)",
-      "outputB": "Let me work through how to translate a workplace message with tone more thoroughly.\n\n- First, I restate the goal and the key constraints so nothing is missed.\n- Then I lay out the response step by step, with a little reasoning for each choice.\n- Finally, I add a short note on edge cases and what I would double-check.\n\nThis version trades brevity for completeness and structure, which can help on a more involved translation task.\n\n(Placeholder output - style: detailed & structured. Replace with a real model output.)"
+      "id": "T19",
+      "domain": "Knowledge Q&A",
+      "complexity": "Simple",
+      "title": "HTTP vs HTTPS",
+      "task": "In one or two sentences, what is the difference between HTTP and HTTPS?",
+      "outputA": "HTTPS is HTTP with encryption (TLS): the data sent between your browser and the website is scrambled so others can’t read or tamper with it. Plain HTTP sends everything in the clear.",
+      "outputB": "HTTPS has an S at the end and HTTP does not. They are both used for websites."
+    },
+    {
+      "id": "T20",
+      "domain": "Planning & Strategy",
+      "complexity": "Simple",
+      "title": "Make a 3-item to-do",
+      "task": "Turn this into a clear 3-item to-do list: “I need to reply to the client, prep slides for the 11am, and book a dentist appointment.”",
+      "outputA": "1) Reply to the client (first — time-sensitive)\n2) Prep slides for the 11am meeting\n3) Book a dentist appointment (when free)",
+      "outputB": "- reply client\n- slides\n- dentist"
     }
   ]
 };
