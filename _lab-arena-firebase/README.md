@@ -6,8 +6,8 @@ underscore keeps Jekyll/GitHub Pages from publishing it); it lives in the repo
 only so the backend is versioned next to the app.
 
 - **Firebase project (suggested id):** `stouras-answerarena`
-- **Region:** `europe-west1`
-- **Products:** Firestore, Authentication (Email/Password), Cloud Functions
+- **Products:** Firestore, Authentication (Email/Password). No Cloud Functions
+  needed, so the free **Spark** plan is enough.
 - **Admin account:** `admin@admin.com`
 
 The web app talks to Firebase from the browser. Until you finish the steps
@@ -33,8 +33,7 @@ through it offline.
 5. **Create the Firestore database:**
    - Build -> **Firestore Database -> Create database**.
    - Start in **production mode** (we ship real rules below).
-   - Location: choose **europe-west1** (or the closest region; keep it
-     consistent with the Functions region).
+   - Location: choose the region closest to your participants.
 6. **Register a Web app and copy its config:**
    - Project **Settings** (gear icon) -> **General** -> scroll to **Your apps**
      -> click the **</>** (Web) icon.
@@ -50,9 +49,8 @@ through it offline.
 
 After step 7 the app already has working **login/registration, content,
 sessions, task-set uploads, responses and survey** - because those run under
-the security rules. The rules and the optional Cloud Function still need to be
-deployed (steps below) so that writes are actually allowed in production and the
-anonymous labels (p1, p2, ...) are handed out.
+the security rules. You just need to deploy the rules (next) so that writes
+are actually allowed in production.
 
 ---
 
@@ -66,7 +64,7 @@ firebase login
 
 ---
 
-## C. Deploy the rules (required)
+## C. Deploy the rules (required, and the only deploy step)
 
 From **this** folder (`_lab-arena-firebase/`):
 
@@ -76,25 +74,8 @@ firebase deploy --only firestore:rules,firestore:indexes
 ```
 
 Without this, every write is blocked by Firestore's default-deny rules and the
-app will silently fail to save - so do this step.
-
-## D. Deploy the Cloud Function (optional but recommended)
-
-The `nextLabel` function hands out sequential anonymous labels atomically. It
-needs the **Blaze** (pay-as-you-go) plan, which Cloud Functions requires.
-
-```
-# Upgrade the project to Blaze in the console first (Settings -> Usage and billing).
-cd functions && npm install && cd ..
-firebase deploy --only functions
-```
-
-If you skip this, the app still works; participants just get a `null`
-`anonymousLabel` (the client handles that).
-
-> First-time Functions deploys sometimes need the default compute service
-> account to have the **Cloud Build**, **Artifact Registry** and **Storage
-> Object Viewer** roles. The console will prompt/link you if so.
+app will silently fail to save - so do this step. There are no Cloud Functions,
+so nothing else to deploy.
 
 ---
 
@@ -105,10 +86,9 @@ config/app                         texts, settings (twoByTwo, randomizeOrder,
                                    comparisonsPerUser, requireSessionCode),
                                    registrationQuestions, surveyQuestions, activeTaskSetId
 taskSets/{id}                      { name, source, count, tasks:[{id,task,outputA,outputB}] }
-counters/participants              { count }  sequential-label source (Functions only)
 sessions/{id}                      { code, name, status, taskSetId, condition, count }
 participants/{uid}
-  participantId, email, anonymousLabel (p1, p2, ...),
+  participantId, email,
   registration:{ <questionId>: answer }, status, sessionId,
   condition:{ enabled, transparency, incentive }, order:[...], flips:[...], idx
   responses/{autoId}               { taskId, idx, choice('A'|'B'|'tie' as left/right/tie),

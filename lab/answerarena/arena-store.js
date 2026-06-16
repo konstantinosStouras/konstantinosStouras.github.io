@@ -13,9 +13,8 @@
    Firestore data model (see _lab-arena-firebase/README.md):
      config/app                  texts, settings, registration/survey Qs, activeTaskSetId
      taskSets/{id}               { name, source, tasks:[{id,task,outputA,outputB,...}] }
-     counters/participants       { count }            (Cloud Function only)
      sessions/{id}               { code, name, status, taskSetId, condition, count }
-     participants/{uid}          participantId, email, anonymousLabel, registration{},
+     participants/{uid}          participantId, email, registration{},
                                  status, sessionId, condition{}, order[], idx
        responses/{autoId}        one doc per comparison
        events/{autoId}           optional action log
@@ -28,7 +27,6 @@
   var ADMIN_EMAIL = window.ARENA_ADMIN_EMAIL || 'admin@admin.com';
   var SDK = window.ARENA_FB_SDK || '10.12.2';
   var FB_BASE = 'https://www.gstatic.com/firebasejs/' + SDK + '/';
-  var REGION = window.ARENA_FB_REGION || 'europe-west1';
 
   function uid() { return 'x' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4); }
   function clone(o) { return JSON.parse(JSON.stringify(o || null)); }
@@ -56,7 +54,6 @@
       d.taskSets = d.taskSets || {};      // id -> set
       d.sessions = d.sessions || {};      // id -> session
       d.participants = d.participants || {}; // uid -> doc (with .responses/.events/.survey inline)
-      d.counter = d.counter || 0;
       return d;
     }
     function sessionUid() { try { return localStorage.getItem('arena:uid') || null; } catch (e) { return null; } }
@@ -129,7 +126,6 @@
       var d = db(); d.participants[u] = merge ? Object.assign({}, d.participants[u], data) : data; write(d); return Promise.resolve();
     };
     this.listParticipants = function () { var d = db(); return Promise.resolve(Object.keys(d.participants).map(function (k) { return Object.assign({ _id: k }, clone(d.participants[k])); })); };
-    this.nextAnonLabel = function () { var d = db(); d.counter = (d.counter || 0) + 1; write(d); return Promise.resolve('p' + d.counter); };
 
     this.addResponse = function (u, resp) { var d = db(); var p = d.participants[u] = d.participants[u] || {}; (p.responses = p.responses || []).push(resp); write(d); return Promise.resolve(); };
     this.listResponses = function (u) { var d = db(); return Promise.resolve(clone((d.participants[u] || {}).responses || [])); };
@@ -144,7 +140,7 @@
      FIREBASE backend
      ================================================================ */
   function FirebaseBackend() {
-    var fb = null, Fn = null, fns = null, authCb = null;
+    var fb = null, authCb = null;
     var APP_NAME = 'answerarena';
 
     this.mode = 'firebase';
@@ -161,10 +157,6 @@
         return { mode: 'firebase' };
       });
     };
-    function ensureFns() {
-      if (Fn && fns) return Promise.resolve(true);
-      return import(FB_BASE + 'firebase-functions.js').then(function (m) { Fn = m; fns = m.getFunctions(fb.app, REGION); return true; }).catch(function () { return false; });
-    }
 
     this.onAuth = function (cb) { authCb = cb; if (fb && fb.auth.currentUser) cb({ uid: fb.auth.currentUser.uid, email: fb.auth.currentUser.email }); };
     this.currentUser = function () { var u = fb && fb.auth.currentUser; return u ? { uid: u.uid, email: u.email } : null; };
@@ -220,14 +212,6 @@
     this.getParticipant = function (u) { return F().getDoc(F().doc(D(), 'participants', u)).then(function (s) { return s.exists() ? s.data() : null; }); };
     this.setParticipant = function (u, data, merge) { return F().setDoc(F().doc(D(), 'participants', u), data, { merge: !!merge }); };
     this.listParticipants = function () { return F().getDocs(F().collection(D(), 'participants')).then(function (sn) { var a = []; sn.forEach(function (d) { a.push(Object.assign({ _id: d.id }, d.data())); }); return a; }); };
-    this.nextAnonLabel = function () {
-      // Try the Cloud Function for an atomic sequential label; fall back to null.
-      return ensureFns().then(function (ok) {
-        if (!ok) return null;
-        try { return Fn.httpsCallable(fns, 'nextLabel')().then(function (r) { return r.data && r.data.label; }).catch(function () { return null; }); }
-        catch (e) { return null; }
-      });
-    };
 
     this.addResponse = function (u, resp) { return F().addDoc(F().collection(D(), 'participants', u, 'responses'), Object.assign({ serverTime: F().serverTimestamp() }, resp)); };
     this.listResponses = function (u) { return F().getDocs(F().collection(D(), 'participants', u, 'responses')).then(function (sn) { var a = []; sn.forEach(function (d) { a.push(d.data()); }); return a; }); };
