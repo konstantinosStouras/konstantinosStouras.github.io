@@ -89,8 +89,9 @@ After picking a preference (or a tie) the participant must rate how satisfied
 they are with each answer (1-5) and give a short reason; **Next stays disabled
 until all three are supplied**. These columns ride along in the admin Excel
 export (Responses sheet). `settings.comparisonsPerUser` (0 = whole set) caps how
-many comparisons each participant sees and is enforced even when an in-progress
-order was built before the cap was set.
+many comparisons each participant sees. The comparison set is rebuilt fresh on
+every entry into the comparisons phase - past progress is **not** resumed, so each
+play starts at comparison 1 (within a single page load the order stays stable).
 
 **Excel upload** (admin Tasks tab) expects three columns: `task`, `outputA`,
 `outputB` (header names matched loosely; otherwise the first three columns).

@@ -83,7 +83,7 @@
     }
     var err = el('div', { class: 'a-err' });
     body.push(err);
-    body.push(el('p', { class: 'a-meta', text: 'About 5-10 minutes - your place is saved as you go.' }));
+    body.push(el('p', { class: 'a-meta', text: 'About 5-10 minutes - please complete it in one sitting.' }));
     body.push(el('div', { class: 'a-row' }, [
       el('button', { class: 'a-btn', on: { click: go } }, [t('welcomeButton', 'Take a quick tour')]),
       el('button', { class: 'a-btn a-ghost', on: { click: showLogin } }, [t('loginLink', 'I already have an account')])
@@ -281,7 +281,7 @@
     var demo = D.practiceTask;
     var intro = el('div', { class: 'a-card a-intro' }, [el('h2', { text: t('trainingTitle', "Let's practice") }), el('p', { html: t('trainingBody') })]);
     var comp = buildComparison(demo, 1, 1, false, { practice: true });
-    var startBtn = el('button', { class: 'a-btn a-go', on: { click: function () { startMain(); } } }, [t('trainingButton', "I'm ready - start")]);
+    var startBtn = el('button', { class: 'a-btn a-go', on: { click: function () { startBtn.setAttribute('disabled', 'true'); startMain(); } } }, [t('trainingButton', "I'm ready - start")]);
     startBtn.setAttribute('disabled', 'true');
     comp.onChoose = function () { startBtn.removeAttribute('disabled'); };
     var wrap = el('div', { class: 'a-wrap a-wide' }, [intro, comp.node, el('div', { class: 'a-row a-center' }, [startBtn])]);
@@ -295,26 +295,17 @@
     setScreen(overlayWrap(card(t('mainTitle', 'Your comparisons'), [el('p', { text: 'Preparing your comparisons...' })])));
     Store.loadActiveTasks().then(function (set) {
       S.tasks = (set && set.tasks) || [];
-      var lim = cfg.settings.comparisonsPerUser || 0;   // 0 = use the whole active set
-      // Restore an in-progress order if the participant has one; else build it.
-      if (S.p && S.p.order && S.p.order.length && S.p.order.length <= S.tasks.length) {
-        S.order = S.p.order.slice(); S.flips = (S.p.flips || []).slice(); S.idx = S.p.idx || 0;
-        // Honour a comparisons-per-participant limit that was set (or lowered)
-        // after this participant's order was built, so they are never shown more
-        // than the configured number of comparisons.
-        if (lim > 0 && S.order.length > lim) {
-          S.order = S.order.slice(0, lim); S.flips = S.flips.slice(0, lim);
-          if (S.idx > S.order.length) S.idx = S.order.length;
-          persist({ order: S.order, flips: S.flips, idx: S.idx });
-        }
-      } else {
-        var n = S.tasks.length;
-        var idxs = []; for (var i = 0; i < n; i++) idxs.push(i);
-        if (cfg.settings.randomizeOrder !== false) shuffle(idxs);
-        if (lim > 0 && lim < idxs.length) idxs = idxs.slice(0, lim);
-        S.order = idxs; S.flips = idxs.map(function () { return Math.random() < 0.5; }); S.idx = 0;
-        persist({ order: S.order, flips: S.flips, idx: 0, status: 'playing' });
-      }
+      // Build a fresh, freshly-shuffled set every time the participant enters the
+      // comparisons. Past progress is intentionally NOT resumed - each play
+      // starts at comparison 1, no matter what was done in a previous play.
+      // (Within a single page load the order is kept stable by the early return
+      // at the top of startMain.)
+      var n = S.tasks.length, lim = cfg.settings.comparisonsPerUser || 0;   // 0 = whole set
+      var idxs = []; for (var i = 0; i < n; i++) idxs.push(i);
+      if (cfg.settings.randomizeOrder !== false) shuffle(idxs);
+      if (lim > 0 && lim < idxs.length) idxs = idxs.slice(0, lim);
+      S.order = idxs; S.flips = idxs.map(function () { return Math.random() < 0.5; }); S.idx = 0;
+      persist({ order: S.order, flips: S.flips, idx: 0, status: 'playing' });
       if (!S.order.length) { showThankYou(); return; }
       renderComparison();
     }).catch(function () { setScreen(overlayWrap(card('Problem', [el('p', { text: 'Could not load the comparisons. Please refresh.' })]))); });
@@ -358,9 +349,12 @@
       else if (k === 'enter') next();
     };
 
+    var submitted = false;   // guard so a double Next/Enter cannot advance twice
     function next() {
+      if (submitted) return;
       var d = comp.getData();
       if (!d.complete) return;
+      submitted = true;
       document.onkeydown = null;
       var leftId = flip ? 'o2' : 'o1', rightId = flip ? 'o1' : 'o2';
       var chosenOutput = d.choice === 'tie' ? 'tie' : (d.choice === 'left' ? leftId : rightId);
@@ -410,10 +404,10 @@
     var showFollow = !opts.demo;   // the tour demo stays a simple preview
 
     var progress = el('div', { class: 'a-progress', 'data-tour': 'progress' }, [
-      el('div', { class: 'a-progbar' }, [el('div', { class: 'a-progfill', style: 'width:' + Math.round((pos - (opts.practice || opts.demo ? 1 : 1)) / total * 0) + '%' })]),
+      el('div', { class: 'a-progbar' }, [el('div', { class: 'a-progfill' })]),
       el('div', { class: 'a-progtext', text: (opts.practice ? 'Practice' : (opts.demo ? 'Example' : 'Comparison ' + pos + ' of ' + total)) })
     ]);
-    // fill = completed before this one
+    // fill = the comparisons completed before this one
     progress.querySelector('.a-progfill').style.width = Math.round((pos - 1) / total * 100) + '%';
 
     var taskCard = el('div', { class: 'a-taskcard', 'data-tour': 'task' }, [
@@ -518,7 +512,7 @@
     var st = S.p && S.p.status;
     if (st === 'done') return showThankYou();
     if (st === 'survey') return showSurvey();
-    // resume mid-comparisons (or start them)
+    // (re)start the comparisons from the beginning (progress is not resumed)
     startMain();
   }
 
