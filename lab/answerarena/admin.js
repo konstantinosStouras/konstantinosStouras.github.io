@@ -86,7 +86,7 @@
       + '.aa-card > * + *{margin-top:12px;}'
       + '.aa-card h3{margin:0 0 6px;font-size:16px;}'
       + '.aa-field{margin:10px 0;}.aa-field label{display:block;font-weight:600;font-size:13px;margin-bottom:4px;}'
-      + '#aa-root input:not([type=checkbox]):not([type=radio]):not([type=file]),#aa-root select,#aa-root textarea{width:100%;padding:9px 11px;border:1px solid var(--fieldline);border-radius:9px;font-size:14px;font-family:inherit;background:var(--field);color:var(--ink);}'
+      + '#aa-root input:not([type=checkbox]):not([type=radio]):not([type=file]),#aa-root select,#aa-root textarea{width:100%;padding:9px 11px;border:1px solid var(--fieldline);border-radius:9px;font-size:16px;font-family:inherit;background:var(--field);color:var(--ink);}'
       + '#aa-root input::placeholder,#aa-root textarea::placeholder{color:var(--muted);}'
       + '#aa-root input:-webkit-autofill,#aa-root input:-webkit-autofill:hover,#aa-root input:-webkit-autofill:focus,#aa-root input:-webkit-autofill:active{-webkit-text-fill-color:var(--ink);-webkit-box-shadow:0 0 0 1000px var(--field) inset;box-shadow:0 0 0 1000px var(--field) inset;caret-color:var(--ink);transition:background-color 9999s ease-in-out 0s;}'
       + '#aa-root textarea{resize:vertical;}'
@@ -94,7 +94,8 @@
       + '.aa-btn:hover{background:var(--accentd);}.aa-btn.sec{background:var(--panel);color:var(--ink);border:1px solid var(--fieldline);}.aa-btn.sm{padding:7px 11px;font-size:12px;}.aa-btn.danger{background:transparent;color:#e06b5a;border:1px solid #6d3b34;}'
       + '.aa-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}'
       + '.aa-note{color:var(--muted);font-size:13px;line-height:1.6;}'
-      + '.aa-q{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--qbg);}'
+      + '.aa-q{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--qbg);overflow-wrap:break-word;}'
+      + '.aa-q b{min-width:0;overflow-wrap:anywhere;}'
       + '.aa-q .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}'
       + '.aa-badge{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 8px;border-radius:99px;}'
       + '.aa-badge.open{color:#7bd88f;background:rgba(123,216,143,.14);}.aa-badge.waiting{color:#e6a417;background:rgba(230,164,23,.14);}.aa-badge.closed{color:#9a978f;background:rgba(154,151,143,.14);}'
@@ -284,9 +285,19 @@
     box.appendChild(el('div', { class: 'aa-row', style: 'margin-top:8px;' }, [
       el('button', { class: 'aa-btn sm', on: { click: function () { window.open(joinUrl, '_blank'); } } }, ['Open']),
       el('button', { class: 'aa-btn sec sm', on: { click: function () { copy(joinUrl); } } }, ['Copy link']),
+      el('button', { class: 'aa-btn sec sm', on: { click: exportSession } }, ['Export data']),
       el('button', { class: 'aa-btn sec sm', on: { click: editMode } }, ['Edit']),
       el('button', { class: 'aa-btn danger sm', on: { click: function () { if (window.confirm('Delete session ' + s.code + '?')) Store.deleteSession(s.id).then(function () { toast('Deleted.'); refresh(); }); } } }, ['Delete'])
     ]));
+    // Download only the data for the users who played THIS session (each user can
+    // play a session once; this shows what each of them submitted for it).
+    function exportSession() {
+      Store.listParticipants().then(function (all) {
+        var parts = all.filter(function (p) { return p.sessionId === s.id || (p.completedSessions && p.completedSessions[s.id]); });
+        if (!parts.length) { toast('No participants in this session yet.'); return; }
+        exportExcel(parts, { sessionId: s.id, sessionCode: s.code });
+      }).catch(function (e) { toast('Export failed: ' + ((e && e.code) || 'error')); });
+    }
     function editMode() {
       box.innerHTML = '';
       var ename = el('input', { type: 'text', value: s.name || '' });
@@ -425,7 +436,7 @@
       var tb = el('tbody', {});
       parsed.slice(0, 5).forEach(function (r, i) { tb.appendChild(el('tr', {}, [el('td', { text: String(i + 1) }), el('td', { text: clip(r.task) }), el('td', { text: clip(r.outputA) }), el('td', { text: clip(r.outputB) })])); });
       tbl.appendChild(tb);
-      preview.appendChild(tbl);
+      preview.appendChild(el('div', { style: 'overflow-x:auto;-webkit-overflow-scrolling:touch;' }, [tbl]));
       preview.appendChild(el('div', { class: 'aa-row', style: 'margin-top:10px;' }, [
         el('button', { class: 'aa-btn', on: { click: makeActive } }, ['Make this the active set']),
         el('button', { class: 'aa-btn sec', on: { click: function () { parsed = null; file.value = ''; preview.innerHTML = ''; } } }, ['Discard'])
@@ -608,18 +619,18 @@
     var s = cfg.settings || {};
     var randomize = checkbox(s.randomizeOrder !== false);
     var perUser = el('input', { type: 'number', min: '0', step: '1', value: String(s.comparisonsPerUser != null ? s.comparisonsPerUser : 0), style: 'max-width:140px;' });
-    var reqCode = checkbox(s.requireSessionCode);
     // Answer Arena keeps a single live configuration that every session reads, so
     // "Save" and "Make this the default" both persist it (Save = the everyday
     // action; "Make this the default" = the explicit commit); a session created
     // afterwards uses these values. "Restore built-in default" reverts to the
-    // values shipped in arena-data.js.
+    // values shipped in arena-data.js. (A session code is always required to
+    // play, so there is no toggle for it.)
     function persist(msg) {
       var n = parseInt(perUser.value, 10);
       var settings = Object.assign({}, cfg.settings, {
         randomizeOrder: randomize.checked,
         comparisonsPerUser: (isNaN(n) || n < 0) ? 0 : n,
-        requireSessionCode: reqCode.checked
+        requireSessionCode: true
       });
       perUser.value = String(settings.comparisonsPerUser);
       return saveConfig({ settings: settings }).then(function () { cfg.settings = settings; toast(msg); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); });
@@ -631,16 +642,15 @@
       var settings = Object.assign({}, cfg.settings, {
         randomizeOrder: Ds.randomizeOrder !== false,
         comparisonsPerUser: Ds.comparisonsPerUser || 0,
-        requireSessionCode: !!Ds.requireSessionCode
+        requireSessionCode: true
       });
-      saveConfig({ settings: settings }).then(function () { cfg.settings = settings; randomize.checked = settings.randomizeOrder; perUser.value = String(settings.comparisonsPerUser); reqCode.checked = settings.requireSessionCode; toast('Restored built-in default.'); }).catch(function (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); });
+      saveConfig({ settings: settings }).then(function () { cfg.settings = settings; randomize.checked = settings.randomizeOrder; perUser.value = String(settings.comparisonsPerUser); toast('Restored built-in default.'); }).catch(function (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); });
     }
     return el('div', { class: 'aa-card' }, [
       el('h3', { text: 'Comparison flow' }),
-      el('p', { class: 'aa-note', text: 'Each participant is shown a number of task pairs in a random sequence. Set how many, and whether the order is randomized.' }),
+      el('p', { class: 'aa-note', text: 'Each participant is shown a number of task pairs in a random sequence. Set how many, and whether the order is randomized. A session code is always required to take part.' }),
       el('div', { class: 'aa-field' }, [el('label', { class: 'aa-toggle' }, [randomize, document.createTextNode('Show comparisons in random order per participant')])]),
       el('div', { class: 'aa-field' }, [el('label', { text: 'Comparisons per participant (0 = use the whole active set)' }), perUser]),
-      el('div', { class: 'aa-field' }, [el('label', { class: 'aa-toggle' }, [reqCode, document.createTextNode('Require a session code to start')])]),
       el('div', { class: 'aa-row', style: 'margin-top:8px;' }, [
         el('button', { class: 'aa-btn', on: { click: save } }, ['Save']),
         el('button', { class: 'aa-btn sec', on: { click: makeDefault } }, ['Make this the default']),
@@ -653,7 +663,12 @@
   // Downloads everything collected for every user: their profile + registration,
   // every response (with the decision time), every logged decision/change event
   // (with its timestamp), and one survey per session taken.
-  function exportExcel(parts) {
+  // opts.sessionId (optional) restricts the export to one session: only the
+  // users who played it, and only their data for that session.
+  function exportExcel(parts, opts) {
+    opts = opts || {};
+    var only = opts.sessionId || null;
+    var keep = function (sid) { return !only || (sid || '') === only; };
     toast('Building export...');
     ensureXLSX().then(function (X) {
       var pRows = [], rRows = [], eRows = [], sRows = [];
@@ -662,23 +677,24 @@
         var uid = p._id, c = p.condition || {};
         var completed = Object.keys(p.completedSessions || {});
         var base = { participantId: p.participantId || '', email: p.email || '', status: p.status || '', currentSessionId: p.sessionId || '', completedSessions: completed.join(', '), transparency: c.transparency || '', incentive: c.incentive || '', registered: fmtTs(p.createdAt) };
+        if (only) base.completedThisSession = (p.completedSessions && p.completedSessions[only]) ? fmtTs(p.completedSessions[only]) : 'no';
         pRows.push(Object.assign({}, base, flatten('reg_', p.registration || {})));
         chain = chain.then(function () {
           return Store.listResponses(uid).then(function (rs) {
-            rs.forEach(function (v) { rRows.push({ participantId: base.participantId, email: base.email, sessionId: v.sessionId || '', taskId: v.taskId, idx: v.idx, submitted: 'yes', choice: v.choice, chosenOutput: v.chosenOutput, leftOutput: v.leftOutput, rightOutput: v.rightOutput, satisfactionA: v.satisfA != null ? v.satisfA : '', satisfactionB: v.satisfB != null ? v.satisfB : '', satisfactionO1: v.satisfO1 != null ? v.satisfO1 : '', satisfactionO2: v.satisfO2 != null ? v.satisfO2 : '', reason: v.reason || '', responseMs: v.responseMs, decidedAt: fmtTs(v.ts), ts: v.ts || '', transparency: base.transparency, incentive: base.incentive }); });
+            rs.forEach(function (v) { if (keep(v.sessionId)) rRows.push(respRow(base, v, 'yes', v.responseMs, v.ts)); });
             // Include the in-progress answer the participant had entered but not
             // yet submitted (saved if they closed the tab mid-comparison).
             var dr = p.draftResponse;
-            if (dr) rRows.push({ participantId: base.participantId, email: base.email, sessionId: dr.sessionId || '', taskId: dr.taskId, idx: dr.idx, submitted: 'no (draft)', choice: dr.choice || '', chosenOutput: dr.chosenOutput || '', leftOutput: dr.leftOutput || '', rightOutput: dr.rightOutput || '', satisfactionA: dr.satisfA != null ? dr.satisfA : '', satisfactionB: dr.satisfB != null ? dr.satisfB : '', satisfactionO1: dr.satisfO1 != null ? dr.satisfO1 : '', satisfactionO2: dr.satisfO2 != null ? dr.satisfO2 : '', reason: dr.reason || '', responseMs: '', decidedAt: fmtTs(dr.updatedAt), ts: dr.updatedAt || '', transparency: base.transparency, incentive: base.incentive });
+            if (dr && keep(dr.sessionId)) rRows.push(respRow(base, dr, 'no (draft)', '', dr.updatedAt));
           }).catch(function () {});
         }).then(function () {
           return Store.listEvents(uid).then(function (evs) {
             evs.sort(function (a, b) { return tsMs(a.ts) - tsMs(b.ts); });
-            evs.forEach(function (v) { eRows.push({ participantId: base.participantId, email: base.email, sessionId: v.sessionId || '', taskId: v.taskId || '', idx: v.idx != null ? v.idx : '', type: v.type || '', value: v.value != null ? v.value : '', at: fmtTs(v.ts), ts: v.ts || '' }); });
+            evs.forEach(function (v) { if (keep(v.sessionId)) eRows.push({ participantId: base.participantId, email: base.email, sessionId: v.sessionId || '', taskId: v.taskId || '', idx: v.idx != null ? v.idx : '', type: v.type || '', value: v.value != null ? v.value : '', model: modelName(v.model), at: fmtTs(v.ts), ts: v.ts || '' }); });
           }).catch(function () {});
         }).then(function () {
           return Store.listSurveys(uid).then(function (svs) {
-            (svs || []).forEach(function (sv) { if (sv) sRows.push(Object.assign({ participantId: base.participantId, email: base.email, sessionId: sv.sessionId || sv.id || '', completedAt: fmtTs(sv.completedAt) }, flatten('s_', sv.answers || {}))); });
+            (svs || []).forEach(function (sv) { if (sv && keep(sv.sessionId || sv.id)) sRows.push(Object.assign({ participantId: base.participantId, email: base.email, sessionId: sv.sessionId || sv.id || '', completedAt: fmtTs(sv.completedAt) }, flatten('s_', sv.answers || {}))); });
           }).catch(function () {});
         });
       });
@@ -689,10 +705,24 @@
         X.utils.book_append_sheet(wb, X.utils.json_to_sheet(eRows.length ? eRows : [{}]), 'Events');
         X.utils.book_append_sheet(wb, X.utils.json_to_sheet(sRows.length ? sRows : [{}]), 'Survey');
         var stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-        X.writeFile(wb, 'answerarena-data-' + stamp + '.xlsx');
+        var fname = only ? ('answerarena-session-' + (opts.sessionCode || only) + '-' + stamp + '.xlsx') : ('answerarena-data-' + stamp + '.xlsx');
+        X.writeFile(wb, fname);
         toast('Export ready.');
       });
     }).catch(function (e) { toast('Export failed: ' + ((e && e.message) || 'error')); });
+  }
+  // o1/o2 are the underlying models: o1 = outputA = baseline, o2 = outputB = frontier.
+  function modelName(id) { return id === 'o1' ? 'baseline' : (id === 'o2' ? 'frontier' : (id || '')); }
+  // One Responses row (shared by submitted answers and the saved draft).
+  function respRow(base, v, submitted, responseMs, ts) {
+    return {
+      participantId: base.participantId, email: base.email, sessionId: v.sessionId || '', taskId: v.taskId, idx: v.idx, submitted: submitted,
+      choice: v.choice || '', chosenModel: modelName(v.chosenOutput), leftModel: modelName(v.leftOutput), rightModel: modelName(v.rightOutput),
+      satisfactionA: v.satisfA != null ? v.satisfA : '', satisfactionB: v.satisfB != null ? v.satisfB : '',
+      satisfaction_baseline: v.satisfO1 != null ? v.satisfO1 : '', satisfaction_frontier: v.satisfO2 != null ? v.satisfO2 : '',
+      reason: v.reason || '', responseMs: responseMs, decidedAt: fmtTs(ts), ts: ts || '',
+      transparency: base.transparency, incentive: base.incentive
+    };
   }
   function flatten(prefix, obj) { var o = {}; Object.keys(obj || {}).forEach(function (k) { var v = obj[k]; o[prefix + k] = (v && typeof v === 'object') ? JSON.stringify(v) : v; }); return o; }
 

@@ -72,7 +72,11 @@ Every task (built-in or uploaded) is:
 
 `outputA`/`outputB` are the two models' outputs; the app picks a per-task
 `flip` so each participant sees them in a randomized left/right order, and
-records which underlying output (`o1`/`o2`) was chosen.
+records which underlying output (`o1`/`o2`) was chosen. **o1 = outputA = the
+baseline model; o2 = outputB = the frontier model.** The Excel export renames
+them to `baseline`/`frontier` everywhere (chosen/left/right model columns,
+`satisfaction_baseline`/`satisfaction_frontier`, and the Events `model` column);
+`satisfactionA`/`satisfactionB` stay as the displayed Answer A/B (left/right).
 
 Each submitted comparison writes a **response** doc:
 
@@ -113,9 +117,16 @@ session currently uses the global setting.
 
 ## 6. Sessions
 
-Admin creates sessions with a short join **code**. Participants enter it on the
-welcome screen (or open `?s=CODE`). Sessions are publicly readable so the code
-can be validated before sign-in; they hold no personal data.
+Admin creates sessions with a short join **code**. **A session code is always
+required to take part** (welcome, login and the "enter your session code"
+screen all require it; there is no toggle). A shared link (`?s=CODE`) lands a
+signed-out visitor on the **login** panel with the code prefilled (email +
+password + session code); "New here? Create an account" goes to the welcome/
+register flow. Sessions are publicly readable so the code can be validated
+before sign-in; they hold no personal data. The admin can **export one
+session's data** (the "Export data" button on a session card) - just the users
+who played it and only their data for that session - in addition to the
+all-users export in the Registered users card.
 
 **One account, many sessions, each once.** A participant (one Firebase account)
 can take part in several sessions, but each session **only once**. The
