@@ -496,7 +496,7 @@
   function buildTaskCard() {
     var card = el('div', { class: 'aa-card' });
     card.appendChild(el('h3', { text: 'Comparisons (task set)' }));
-    card.appendChild(el('p', { class: 'aa-note', html: 'Feed the <b>"Summarized"</b> sheet - either an <b>Excel/CSV file</b> or a <b>public Google Sheet link</b> of the same layout (first row = headers, matched loosely). It uses these columns: <b>Prompt</b> -> the task shown, <b>Output of Haiku 4.5 ...</b> -> Answer A, <b>Output of Opus 4.8 ...</b> -> Answer B, the two <b>Total Cost ($)</b> columns -> the per-answer US$ cost (for the "cost transparency" condition), and <b>Task ID</b> / <b>Complexity</b> / <b>Domain</b> / <b>General task</b> for labels and analysis. The other columns (Specific description, Notes, token counts, thinking cost) are ignored. A simple <b>task / outputA / outputB</b> file (with optional cost columns) still works too. Participants see the two outputs in a randomized left/right order and never learn which produced which.' }));
+    card.appendChild(el('p', { class: 'aa-note', html: 'Feed the <b>"Summarized"</b> sheet - either an <b>Excel/CSV file</b> or a <b>public Google Sheet link</b> of the same layout (first row = headers, matched loosely). It uses just these columns: <b>Specific description</b> -> the problem shown to participants, <b>Output of Haiku 4.5 ...</b> -> Answer A, <b>Output of Opus 4.8 ...</b> -> Answer B, and the two <b>Total Cost ($)</b> columns -> the per-answer US$ cost (used only when the "cost transparency" condition is active). All other columns are ignored. A simple <b>task / outputA / outputB</b> file (with optional cost columns) still works too. Participants see the two answers in a randomized left/right order and never learn which produced which.' }));
     var file = el('input', { type: 'file', accept: '.xlsx,.xls,.csv' });
     card.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: 'Upload an Excel / CSV file' }), file]));
     var gsUrl = el('input', { type: 'text', placeholder: 'https://docs.google.com/spreadsheets/d/.../edit#gid=0' });
@@ -567,9 +567,7 @@
       var has = function (k) { return parsed.some(function (r) { return r[k] != null && r[k] !== ''; }); };
       // Only show optional columns that the upload actually carried.
       var cols = [{ h: '#', f: function (r, i) { return String(i + 1); } }, { h: 'Task ID', f: function (r) { return r.id; } }];
-      if (has('domain')) cols.push({ h: 'Domain', f: function (r) { return r.domain; } });
-      if (has('title')) cols.push({ h: 'Title', f: function (r) { return clip(r.title); } });
-      cols.push({ h: 'Task', f: function (r) { return clip(r.task); } });
+      cols.push({ h: 'Problem (shown)', f: function (r) { return clip(r.task); } });
       cols.push({ h: 'Output A', f: function (r) { return clip(r.outputA); } });
       cols.push({ h: 'Output B', f: function (r) { return clip(r.outputB); } });
       if (has('costA') || has('costB')) {
@@ -614,9 +612,11 @@
     return card;
   }
   // Parse a grid (Excel upload or Google Sheet CSV) into task objects. Built for
-  // the "Summarized" layout (Task ID, Complexity, Domain, General task, Specific
-  // description, Prompt, Notes, then per-model Output / token / cost columns), but
-  // backward-compatible with a simple task / outputA / outputB[/ costA / costB] file.
+  // the "Summarized" layout, but only the columns the app actually uses are read:
+  // Specific description -> the problem shown, Output of Haiku/Opus -> the two
+  // answers, and the two Total Cost ($) columns -> the cost-transparency meter
+  // (Task ID is kept as the internal id). Everything else is ignored. A simple
+  // task / outputA / outputB[/ costA / costB] file is still supported.
   function rowsToTasks(rows) {
     if (!rows || !rows.length) return [];
     var header = rows[0].map(function (h) { return String(h || '').toLowerCase().replace(/[^a-z0-9]/g, ''); });
@@ -632,13 +632,10 @@
     // All columns (in sheet order) whose normalized header satisfies a predicate.
     function findAll(pred) { var a = []; for (var i = 0; i < header.length; i++) if (pred(header[i])) a.push(i); return a; }
 
-    var idi = find(['taskid', 'id']);                                  // A  Task ID
-    var cxi = find(['complexity', 'difficulty']);                      // B  Complexity
-    var dmi = find(['domain', 'category']);                            // C  Domain
-    var tti = find(['generaltask', 'title', 'tasktitle']);            // D  General task -> title
-    // Body shown to participants: the Prompt the models actually answered, else a
-    // description / task / question column.
-    var ti = find(['prompt', 'specificdescription', 'description', 'task', 'question']); // F  Prompt
+    var idi = find(['taskid', 'id']);                                  // A  Task ID (internal id)
+    // Problem shown to participants: the Specific description (the user need),
+    // else another description / task / question / prompt column.
+    var ti = find(['specificdescription', 'description', 'task', 'question', 'prompt']); // E
     // The two model outputs: text columns with "output"/"answer" but NOT the token
     // or cost columns. First = Output A (baseline), second = Output B (frontier).
     var outCols = findAll(function (h) { return /output|answer/.test(h) && !/token|cost/.test(h); });
@@ -675,9 +672,6 @@
       var task = str(row, TI), oa = str(row, AI), ob = str(row, BI);
       if (!task && !oa && !ob) continue;
       var t = { id: str(row, idi) || ('T' + (out.length + 1)), task: task, outputA: oa, outputB: ob };
-      var cx = str(row, cxi); if (cx) t.complexity = cx;   // shown in export / analysis
-      var dm = str(row, dmi); if (dm) t.domain = dm;       // shown in the TASK label
-      var tt = str(row, tti); if (tt) t.title = tt;        // shown as the task title
       var ca = money(row[cai]); if (ca != null) t.costA = ca;
       var cb = money(row[cbi]); if (cb != null) t.costB = cb;
       out.push(t);
@@ -866,11 +860,6 @@
     var keep = function (sid) { return !only || (sid || '') === only; };
     toast('Building export...');
     ensureXLSX().then(function (X) {
-     return Store.loadActiveTasks().catch(function () { return null; }).then(function (taskSet) {
-      // Join responses to the active task set so each row can carry the task's
-      // complexity/domain (the columns the study analyses).
-      var taskMeta = {};
-      (taskSet && taskSet.tasks || []).forEach(function (t) { if (t && t.id != null) taskMeta[String(t.id)] = t; });
       var pRows = [], rRows = [], eRows = [], sRows = [];
       var chain = Promise.resolve();
       parts.forEach(function (p) {
@@ -889,11 +878,11 @@
         pRows.push(Object.assign({}, base, flatten('reg_', p.registration || {})));
         chain = chain.then(function () {
           return Store.listResponses(uid).then(function (rs) {
-            rs.forEach(function (v) { if (keep(v.sessionId)) rRows.push(respRow(base, v, 'yes', v.responseMs, v.ts, taskMeta)); });
+            rs.forEach(function (v) { if (keep(v.sessionId)) rRows.push(respRow(base, v, 'yes', v.responseMs, v.ts)); });
             // Include the in-progress answer the participant had entered but not
             // yet submitted (saved if they closed the tab mid-comparison).
             var dr = p.draftResponse;
-            if (dr && keep(dr.sessionId)) rRows.push(respRow(base, dr, 'no (draft)', '', dr.updatedAt, taskMeta));
+            if (dr && keep(dr.sessionId)) rRows.push(respRow(base, dr, 'no (draft)', '', dr.updatedAt));
           }).catch(function () {});
         }).then(function () {
           return Store.listEvents(uid).then(function (evs) {
@@ -910,7 +899,7 @@
           }).catch(function () {});
         });
       });
-      return chain.then(function () {
+      chain.then(function () {
         var wb = X.utils.book_new();
         X.utils.book_append_sheet(wb, X.utils.json_to_sheet(buildConventions(only)), 'Conventions');
         X.utils.book_append_sheet(wb, X.utils.json_to_sheet(pRows.length ? pRows : [{}]), 'Participants');
@@ -922,18 +911,15 @@
         X.writeFile(wb, fname);
         toast('Export ready.');
       });
-     });
     }).catch(function (e) { toast('Export failed: ' + ((e && e.message) || 'error')); });
   }
   // o1/o2 are the underlying models: o1 = outputA = baseline, o2 = outputB = frontier.
   function modelName(id) { return id === 'o1' ? 'baseline' : (id === 'o2' ? 'frontier' : (id || '')); }
   // One Responses row (shared by submitted answers and the saved draft).
-  function respRow(base, v, submitted, responseMs, ts, taskMeta) {
-    var meta = (taskMeta && taskMeta[v.taskId]) || {};
+  function respRow(base, v, submitted, responseMs, ts) {
     return {
       participant_id: base.participant_id, email: base.email, session_id: v.sessionId || '',
-      shown_order: v.idx != null ? v.idx + 1 : '', task_id: v.taskId,
-      task_complexity: meta.complexity || '', task_domain: meta.domain || '', submitted: submitted,
+      shown_order: v.idx != null ? v.idx + 1 : '', task_id: v.taskId, submitted: submitted,
       choice: v.choice || '', chosen_model: modelName(v.chosenOutput),
       left_model: modelName(v.leftOutput), right_model: modelName(v.rightOutput),
       satisfaction_answer_A: v.satisfA != null ? v.satisfA : '', satisfaction_answer_B: v.satisfB != null ? v.satisfB : '',
@@ -966,8 +952,6 @@
     add('Responses', 'session_id', 'Internal ID of the session this comparison belongs to.');
     add('Responses', 'shown_order', "Position of this comparison in the participant's randomised sequence (1 = first shown).");
     add('Responses', 'task_id', 'ID of the task pair shown (e.g. T18); the Task ID column of the uploaded set.');
-    add('Responses', 'task_complexity', 'Complexity of the task (from the uploaded set, e.g. Simple/Complex); blank if the set has no Complexity column.');
-    add('Responses', 'task_domain', 'Domain/category of the task (from the uploaded set, e.g. Writing); blank if the set has no Domain column.');
     add('Responses', 'submitted', '"yes" for a submitted answer; "no (draft)" for an in-progress answer saved if the participant left before pressing Next.');
     add('Responses', 'choice', 'Which side the participant preferred: left, right, or tie (equally good).');
     add('Responses', 'chosen_model', 'Which underlying model the participant preferred: baseline, frontier, or tie.');
