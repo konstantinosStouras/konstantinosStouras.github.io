@@ -99,13 +99,17 @@ It writes a `taskSets/{id}` doc and points `config.activeTaskSetId` at it.
 
 ## 5. The 2x2 design
 
-`settings.twoByTwo` = `{ enabled, assignment('random'|'fixed'), fixedCell,
-labels, banners }`. When enabled, each participant is assigned a cell of
-**Transparency** (abstract tokens vs translated cost) x **Incentive** (firm pays
-vs personal budget); the cell is stored on the participant doc and on every
-response, and an optional per-cell banner is shown. A **session** can override
-the global setting (off / random / fixed). When disabled, everyone is in the
-baseline cell and no banner shows.
+`settings.twoByTwo` = `{ factors: { transparency, incentive } }` (two booleans).
+Each factor that is switched **on** is varied between-subjects: every participant
+is randomly and invisibly assigned one of its two levels - **Transparency**
+(`abstract`/`translated`) and/or **Incentive** (`firm`/`personal`). A factor that
+is off is fixed at its baseline level. So both on = 4 groups, one on = 2, none =
+1 baseline group. The assigned cell (`{ enabled, transparency, incentive }`) is
+stored on the participant doc and on every response, and is **never shown** to
+the participant. This setting is **global** (set in the admin "2x2 conditions"
+card). `assignCondition()` will also honour a per-session override if a session
+doc ever carries a `condition`, but the admin does not expose that yet, so every
+session currently uses the global setting.
 
 ## 6. Sessions
 
