@@ -665,7 +665,11 @@
         pRows.push(Object.assign({}, base, flatten('reg_', p.registration || {})));
         chain = chain.then(function () {
           return Store.listResponses(uid).then(function (rs) {
-            rs.forEach(function (v) { rRows.push({ participantId: base.participantId, email: base.email, sessionId: v.sessionId || '', taskId: v.taskId, idx: v.idx, choice: v.choice, chosenOutput: v.chosenOutput, leftOutput: v.leftOutput, rightOutput: v.rightOutput, satisfactionA: v.satisfA != null ? v.satisfA : '', satisfactionB: v.satisfB != null ? v.satisfB : '', satisfactionO1: v.satisfO1 != null ? v.satisfO1 : '', satisfactionO2: v.satisfO2 != null ? v.satisfO2 : '', reason: v.reason || '', responseMs: v.responseMs, decidedAt: fmtTs(v.ts), ts: v.ts || '', transparency: base.transparency, incentive: base.incentive }); });
+            rs.forEach(function (v) { rRows.push({ participantId: base.participantId, email: base.email, sessionId: v.sessionId || '', taskId: v.taskId, idx: v.idx, submitted: 'yes', choice: v.choice, chosenOutput: v.chosenOutput, leftOutput: v.leftOutput, rightOutput: v.rightOutput, satisfactionA: v.satisfA != null ? v.satisfA : '', satisfactionB: v.satisfB != null ? v.satisfB : '', satisfactionO1: v.satisfO1 != null ? v.satisfO1 : '', satisfactionO2: v.satisfO2 != null ? v.satisfO2 : '', reason: v.reason || '', responseMs: v.responseMs, decidedAt: fmtTs(v.ts), ts: v.ts || '', transparency: base.transparency, incentive: base.incentive }); });
+            // Include the in-progress answer the participant had entered but not
+            // yet submitted (saved if they closed the tab mid-comparison).
+            var dr = p.draftResponse;
+            if (dr) rRows.push({ participantId: base.participantId, email: base.email, sessionId: dr.sessionId || '', taskId: dr.taskId, idx: dr.idx, submitted: 'no (draft)', choice: dr.choice || '', chosenOutput: dr.chosenOutput || '', leftOutput: dr.leftOutput || '', rightOutput: dr.rightOutput || '', satisfactionA: dr.satisfA != null ? dr.satisfA : '', satisfactionB: dr.satisfB != null ? dr.satisfB : '', satisfactionO1: dr.satisfO1 != null ? dr.satisfO1 : '', satisfactionO2: dr.satisfO2 != null ? dr.satisfO2 : '', reason: dr.reason || '', responseMs: '', decidedAt: fmtTs(dr.updatedAt), ts: dr.updatedAt || '', transparency: base.transparency, incentive: base.incentive });
           }).catch(function () {});
         }).then(function () {
           return Store.listEvents(uid).then(function (evs) {

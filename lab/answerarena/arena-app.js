@@ -19,7 +19,7 @@
   var D = window.ARENA_DEFAULTS || {};
   var Store = window.ArenaStore;
   var cfg = mergeCfg({});                                // effective config (defaults + saved)
-  var S = { phase: 'boot', user: null, p: null, tasks: [], order: [], flips: [], idx: 0, choice: null, session: null, condition: null, shownAt: 0 };
+  var S = { phase: 'boot', user: null, p: null, tasks: [], order: [], flips: [], idx: 0, choice: null, session: null, condition: null, shownAt: 0, draft: null };
 
   /* ---- DOM helpers ---- */
   function el(tag, attrs, kids) {
@@ -320,7 +320,8 @@
     if (S.idx >= S.order.length) { showSurvey(); return; }
     var task = S.tasks[S.order[S.idx]];
     var flip = !!S.flips[S.idx];
-    S.choice = null; S.shownAt = Date.now();
+    var leftId = flip ? 'o2' : 'o1', rightId = flip ? 'o1' : 'o2';
+    S.choice = null; S.shownAt = Date.now(); S.draft = null;
     var comp = buildComparison(task, S.idx + 1, S.order.length, flip, {});
     var nextBtn = el('button', { class: 'a-btn a-go', on: { click: next } }, [(S.idx === S.order.length - 1) ? 'Finish' : 'Next']);
     nextBtn.setAttribute('data-tour', 'next');
@@ -329,10 +330,24 @@
     // The follow-up (per-answer satisfaction + reason) must be completed before
     // Next becomes available, so every response carries a choice, two ratings
     // and a reason.
+    var draftTimer = null;
     comp.onChange = function (d) {
       S.choice = d.choice;
       if (d.complete) { nextBtn.removeAttribute('disabled'); hint.textContent = ''; }
       else { nextBtn.setAttribute('disabled', 'true'); hint.textContent = d.choice ? 'Rate each answer and add a short reason to continue.' : ''; }
+      // Keep a saved draft of the in-progress answer (incl. the typed reason) so
+      // nothing is lost if the window is closed before Next is pressed.
+      if (d.choice == null && d.satisfA == null && d.satisfB == null && !d.reason) return;
+      S.draft = {
+        taskId: task.id, idx: S.idx, sessionId: curSid(), leftOutput: leftId, rightOutput: rightId,
+        choice: d.choice, chosenOutput: d.choice === 'tie' ? 'tie' : (d.choice === 'left' ? leftId : d.choice === 'right' ? rightId : null),
+        satisfA: d.satisfA, satisfB: d.satisfB,
+        satisfO1: leftId === 'o1' ? d.satisfA : d.satisfB, satisfO2: leftId === 'o2' ? d.satisfA : d.satisfB,
+        reason: d.reason || '', condition: S.condition || (S.p && S.p.condition) || null,
+        complete: !!d.complete, updatedAt: Date.now()
+      };
+      if (draftTimer) clearTimeout(draftTimer);
+      draftTimer = setTimeout(function () { draftTimer = null; persist({ draftResponse: S.draft }); }, 500);
     };
     // Log every decision and every change to a new option, with its timestamp.
     comp.onEvent = function (e) {
@@ -366,7 +381,7 @@
       if (!d.complete) return;
       submitted = true;
       document.onkeydown = null;
-      var leftId = flip ? 'o2' : 'o1', rightId = flip ? 'o1' : 'o2';
+      if (draftTimer) { clearTimeout(draftTimer); draftTimer = null; }
       var chosenOutput = d.choice === 'tie' ? 'tie' : (d.choice === 'left' ? leftId : rightId);
       var resp = {
         taskId: task.id, idx: S.idx, sessionId: curSid(), leftOutput: leftId, rightOutput: rightId,
@@ -378,8 +393,9 @@
         condition: S.condition || (S.p && S.p.condition) || null, ts: Date.now()
       };
       if (S.user) Store.addResponse(S.user.uid, resp).catch(function () {});
+      S.draft = null;
       S.idx += 1;
-      persist({ idx: S.idx });
+      persist({ idx: S.idx, draftResponse: null });   // submitted answer is saved; clear the draft
       if (S.idx >= S.order.length) showSurvey(); else renderComparison();
     }
   }
@@ -598,9 +614,19 @@
     persist({ status: 'done', completedSessions: cs });
   }
 
+  // Best-effort save of the in-progress answer when the tab is hidden or closed,
+  // so the current (not-yet-submitted) comparison is not lost. Completed
+  // comparisons are already saved one-by-one as each Next is pressed.
+  function flushDraftNow() {
+    if (S.draft && S.user) Store.setParticipant(S.user.uid, { draftResponse: S.draft, updatedAt: nowStamp() }, true).catch(function () {});
+  }
+
   /* ============================ BOOT ============================= */
   function boot() {
     if (!Store) { setScreen(overlayWrap(card('Setup needed', [el('p', { text: 'arena-store.js failed to load.' })]))); return; }
+    // Save the in-progress answer if the participant leaves or closes the tab.
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') flushDraftNow(); });
+    window.addEventListener('pagehide', flushDraftNow);
     Store.init().then(function () {
       return Store.loadConfig().then(function (saved) { cfg = mergeCfg(saved || {}); });
     }).then(function () {
