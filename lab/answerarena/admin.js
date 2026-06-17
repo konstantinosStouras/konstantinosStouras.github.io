@@ -521,7 +521,7 @@
             var ws = wb.Sheets[wb.SheetNames[0]];
             var rows = X.utils.sheet_to_json(ws, { header: 1, defval: '' });
             parsed = rowsToTasks(rows);
-            showPreview();
+            applyParsed();
           } catch (err) { preview.innerHTML = ''; preview.appendChild(el('p', { class: 'aa-err', text: 'Could not read the file: ' + (err.message || err) })); }
         };
         reader.readAsArrayBuffer(f);
@@ -543,7 +543,7 @@
           var ws = wb.Sheets[wb.SheetNames[0]];
           var rows = X.utils.sheet_to_json(ws, { header: 1, defval: '' });
           parsed = rowsToTasks(rows);
-          showPreview();
+          applyParsed();
         });
       }).catch(function (e) {
         preview.innerHTML = '';
@@ -551,10 +551,16 @@
       });
     }
 
+    // An upload/import is parsed, previewed, and saved as the active set right
+    // away (the Save button is then just an explicit re-save).
+    function applyParsed() {
+      showPreview();
+      if (parsed && parsed.length) activate('Saved as the active set (' + parsed.length + ' comparison' + (parsed.length === 1 ? '' : 's') + ').');
+    }
     function showPreview() {
       preview.innerHTML = '';
       if (!parsed || !parsed.length) { preview.appendChild(el('p', { class: 'aa-err', text: 'No rows found. Check the file has a header row and at least one data row.' })); return; }
-      preview.appendChild(el('p', { class: 'aa-note', text: 'Parsed ' + parsed.length + ' comparison' + (parsed.length === 1 ? '' : 's') + '. Preview of the first few:' }));
+      preview.appendChild(el('p', { class: 'aa-note', text: parsed.length + ' comparison' + (parsed.length === 1 ? '' : 's') + ' loaded and saved as the active set. Preview of the first few:' }));
       var tbl = el('table', { class: 'aa-tbl' });
       tbl.appendChild(el('thead', {}, [el('tr', {}, ['#', 'Task', 'Output A', 'Output B'].map(function (h) { return el('th', { text: h }); }))]));
       var tb = el('tbody', {});
@@ -569,11 +575,13 @@
       ]));
     }
     function discard() { parsed = null; file.value = ''; preview.innerHTML = ''; }
-    // Save the parsed upload as the active comparison set. ("Save" and "Make this
-    // the default" both do this - the active set is the one participants get.)
+    // Save the parsed upload as the active comparison set, keeping the preview
+    // visible. ("Save" and "Make this the default" both do this - the active set
+    // is the one participants get.)
     function activate(msg) {
+      if (!parsed || !parsed.length) return;
       var set = { name: 'Uploaded ' + new Date().toLocaleString(), source: 'excel', tasks: parsed, count: parsed.length };
-      Store.saveTaskSet(set).then(function (id) { cfg.activeTaskSetId = id; toast(msg); discard(); refreshActive(); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); });
+      Store.saveTaskSet(set).then(function (id) { cfg.activeTaskSetId = id; toast(msg); refreshActive(); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); });
     }
     function restoreBuiltin() {
       saveConfig({ activeTaskSetId: null }).then(function () { cfg.activeTaskSetId = null; toast('Restored built-in default.'); discard(); refreshActive(); }).catch(function (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); });
