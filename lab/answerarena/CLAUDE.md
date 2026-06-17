@@ -100,18 +100,19 @@ play starts at comparison 1 (within a single page load the order stays stable).
 **Task input** (admin Tasks tab) takes either an **Excel/CSV upload** or a
 **public Google Sheet link** (gviz CSV; the `#gid=` selects the tab) — both flow
 through the same `rowsToTasks()` parser. It is built for the **"Summarized"**
-layout produced by the Model-Task-Matching workbook and maps, by loose header
-match: `Prompt` -> `task` (the body shown), `Output of Haiku 4.5 …` -> `outputA`,
-`Output of Opus 4.8 …` -> `outputB`, the two `Total Cost ($)` columns ->
-`costA`/`costB` (US$, for cost transparency), and `Task ID` -> `id`,
-`Complexity` -> `complexity`, `Domain` -> `domain`, `General task` -> `title`.
-Output columns are the text columns containing "output"/"answer" (not the
-token/cost ones); cost columns prefer "total cost" over the "thinking cost".
-Money parsing tolerates `$`, commas and scientific notation (`8.29E-4`, which the
-CSV path delivers as a string). A simple `task` / `outputA` / `outputB`
-(+ optional cost) file still works. It writes a `taskSets/{id}` doc and points
-`config.activeTaskSetId` at it. `complexity`/`domain` are also joined into the
-Responses export (`task_complexity`/`task_domain`). An
+layout produced by the Model-Task-Matching workbook but reads **only the columns
+the app uses**, by loose header match: `Specific description` -> `task` (the
+problem shown to participants), `Output of Haiku 4.5 …` -> `outputA`,
+`Output of Opus 4.8 …` -> `outputB`, and the two `Total Cost ($)` columns ->
+`costA`/`costB` (US$, used only when cost transparency is active). `Task ID` is
+kept as the internal `id`; everything else (Complexity, Domain, General task,
+Prompt, Notes, token counts, thinking cost) is ignored. Output columns are the
+text columns containing "output"/"answer" (not the token/cost ones); cost
+columns prefer "total cost" over the "thinking cost". Money parsing tolerates
+`$`, commas and scientific notation (`8.29E-4`, which the CSV path delivers as a
+string). A simple `task` / `outputA` / `outputB` (+ optional cost) file still
+works. It writes a `taskSets/{id}` doc and points `config.activeTaskSetId` at
+it. An
 upload / Google-Sheet import is parsed, previewed and **made the active set
 immediately**; the Save / Make this the default buttons are then an explicit
 re-save, Discard hides the preview, and Restore built-in default reverts to the
