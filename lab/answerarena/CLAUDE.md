@@ -93,7 +93,11 @@ After picking a preference (or a tie) the participant must rate how satisfied
 they are with each answer (1-5) and give a short reason; **Next stays disabled
 until all three are supplied**. These columns ride along in the admin Excel
 export (Responses sheet). `settings.comparisonsPerUser` (0 = whole set) caps how
-many comparisons each participant sees. The comparison set is rebuilt fresh on
+many comparisons each participant sees: when it is below the active-set size the
+participant gets that many **randomly chosen** task pairs. The admin **Setup
+summary** shows this as e.g. "2 of 100 (random subset)" and auto-refreshes when
+the Comparison-flow or 2x2 cards are saved (via the `summaryRefresh` hook). The
+comparison set is rebuilt fresh on
 every entry into the comparisons phase - past progress is **not** resumed, so each
 play starts at comparison 1 (within a single page load the order stays stable).
 
