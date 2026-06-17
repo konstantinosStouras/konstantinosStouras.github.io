@@ -108,7 +108,7 @@
   .custom-select-item:hover { background: var(--navy-light); }
   .custom-select-item.hidden { display: none; }
   .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
-  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 6px; font-size: 13px; font-weight: 500; animation: chipIn 0.15s ease-out; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 6px; font-size: 13px; font-weight: 500; animation: chipIn 0.15s ease-out; max-width: 100%; overflow-wrap: anywhere; }
   .chip-editor { background: var(--accent-light); color: #8a7032; }
   .chip-area { background: #e8f5ee; color: var(--green); }
   .chip-year { background: var(--navy-light); color: var(--navy); }
@@ -138,14 +138,14 @@
   .paper-card:only-child { border-bottom: 1px solid var(--border); border-radius: var(--radius); }
   .paper-card:hover { background: var(--navy-light); }
 
-  .paper-title { font-family: 'Playfair Display', serif; font-size: 18px; font-weight: 400; color: var(--navy); margin-bottom: 6px; line-height: 1.35; }
+  .paper-title { font-family: 'Playfair Display', serif; font-size: 18px; font-weight: 400; color: var(--navy); margin-bottom: 6px; line-height: 1.35; overflow-wrap: anywhere; }
   .paper-title a { color: inherit; text-decoration: none; }
   .paper-title a:hover { text-decoration: underline; }
   .paper-authors { font-size: 14px; color: var(--text); margin-bottom: 8px; }
   .paper-author-link { cursor: pointer; transition: color 0.1s; }
   .paper-author-link:hover { color: var(--navy); text-decoration: underline; }
   .paper-meta { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 12.5px; color: var(--text-muted); }
-  .tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 100px; font-size: 11.5px; font-weight: 500; }
+  .tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 100px; font-size: 11.5px; font-weight: 500; max-width: 100%; overflow-wrap: anywhere; }
   .tag-vol { background: var(--navy-light); color: var(--navy); cursor: pointer; }
   .tag-vol:hover { background: #d0d9ec; }
   .tag-editor { background: var(--accent-light); color: #8a7032; cursor: pointer; }
@@ -214,7 +214,7 @@
   .summary-content.active { display: block; }
   .summary-list { column-count: 2; column-gap: 2rem; font-size: 14px; line-height: 2.1; }
   .summary-list.authors-3col { column-count: 3; }
-  .summary-item { break-inside: avoid; cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: background 0.1s; }
+  .summary-item { break-inside: avoid; cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: background 0.1s; overflow-wrap: anywhere; }
   .summary-item:hover { background: var(--navy-light); }
   .summary-count { color: var(--text-muted); font-size: 13px; margin-right: 4px; display: inline-block; min-width: 32px; text-align: right; }
   .summary-author-link:hover { text-decoration: underline; color: var(--navy); }
@@ -227,6 +227,46 @@
   #authorsPagination button:hover:not(:disabled) { background: var(--navy-light); border-color: var(--navy); color: var(--navy); }
   #authorsPagination button:disabled { opacity: 0.4; cursor: default; }
   #authorsPagination button.active { background: var(--navy); color: white; border-color: var(--navy); }
+
+  /* ── Responsive refinements: tablet + small-phone tuning ─────────────────────
+     The layout already has a 768px phone breakpoint above; these add a tablet
+     range, a small-phone range, and a couple of cross-device safety rules so the
+     UI re-adjusts smoothly from a wide monitor down to a narrow phone. */
+
+  /* Tablets / small laptops (iPad landscape, etc.): trim the generous desktop
+     gutters and the large control fonts so nothing feels cramped or oversized. */
+  @media (min-width: 769px) and (max-width: 1024px) {
+    .header-inner, .filters-inner, .summary-tabs,
+    .results-bar, .papers-list, .pagination { padding-left: 24px; padding-right: 24px; }
+    .header h1 { font-size: 25px; }
+    .filter-group input, .custom-select-trigger { font-size: 17px; }
+    .custom-select-item { font-size: 16px; }
+    .sort-control, .sort-control select { font-size: 16px; }
+  }
+
+  /* Phones: keep inputs at >=16px so iOS does not zoom on focus — including when
+     the sticky bar condenses on scroll (the .compact rules above drop to 15px). */
+  @media (max-width: 768px) {
+    .filter-group input, .custom-select-trigger { font-size: 16px; height: 48px; }
+    .custom-select-item, .custom-select-search { font-size: 16px; }
+    body.compact .filter-group input,
+    body.compact .custom-select-trigger,
+    body.compact .filter-group select,
+    body.compact .btn { font-size: 16px; height: 44px; }
+    .summary-list { column-gap: 1.25rem; }
+    .results-bar { gap: 6px 12px; }
+  }
+
+  /* Small phones: tighter gutters, smaller heading and tab buttons. */
+  @media (max-width: 480px) {
+    .header-inner { padding: 14px 16px; }
+    .header h1 { font-size: 19px; line-height: 1.25; }
+    .filters-inner { padding: 0 16px; }
+    .results-bar, .papers-list, .pagination, .summary-tabs { padding-left: 16px; padding-right: 16px; }
+    .paper-card { padding: 14px 15px; }
+    .paper-title { font-size: 15.5px; }
+    .summary-tab-btn, .recent-tab-btn { padding: 7px 12px; font-size: 12.5px; }
+  }
 </style>
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"WebApplication","name":"Management Science Paper Browser","description":"Browse and filter all Management Science (INFORMS) articles from 1954–present.","url":"https://stouras.com/fun/ms/","applicationCategory":"ReferenceApplication","author":{"@type":"Person","name":"Konstantinos Stouras","url":"https://stouras.com"},"provider":{"@type":"Organization","name":"INFORMS","url":"https://pubsonline.informs.org/journal/mnsc"}}
