@@ -204,7 +204,8 @@ export ("Export data" on a session card) produce a workbook with sheets:
 **Conventions** (documents every column), **Participants**, **Responses**,
 **Events**, **Survey**. Columns use self-explanatory snake_case names
 (`participant_id`, `shown_order`, `left_model`/`right_model`,
-`satisfaction_answer_A/B`, `group_cost_transparency`, `group_firm_pay`, ...);
+`satisfaction_answer_A/B`, `cost_transparency`/`firm_pay` (per-participant 2x2
+group as 1/0 via `condBit()`; blank if that factor was not varied), ...);
 the Conventions sheet (built by `buildConventions()`, including each
 registration/survey question label) is the source of truth - keep it in sync
 when columns change.

@@ -958,7 +958,10 @@
           played_session_ids: Object.keys(p.playedSessions || {}).join(', '),
           completed_session_ids: completed.join(', '),
           completed_this_session_at: only ? ((p.completedSessions && p.completedSessions[only]) ? fmtTs(p.completedSessions[only]) : 'no') : undefined,
-          group_cost_transparency: c.transparency || '', group_firm_pay: c.incentive || '',
+          // Per-participant 2x2 group as 1/0 (1 = treatment, 0 = control), blank if
+          // the factor was not varied for this participant's session.
+          cost_transparency: condBit(c.transparency, c.transparencyOn, 'translated'),
+          firm_pay: condBit(c.incentive, c.incentiveOn, 'firm'),
           registered_at: fmtTs(p.createdAt)
         };
         if (!only) delete base.completed_this_session_at;
@@ -1023,8 +1026,16 @@
       cost_baseline_usd: v.costBaseline != null ? v.costBaseline : '', cost_frontier_usd: v.costFrontier != null ? v.costFrontier : '',
       chosen_cost_usd: v.answerCost != null ? v.answerCost : '', running_cost_usd: v.runningCost != null ? v.runningCost : '',
       reason: v.reason || '', response_ms: responseMs, decided_at: fmtTs(ts), decided_ts: ts || '',
-      group_cost_transparency: base.group_cost_transparency, group_firm_pay: base.group_firm_pay
+      cost_transparency: base.cost_transparency, firm_pay: base.firm_pay
     };
+  }
+  // Encode one 2x2 factor as a per-participant bit: 1 = treatment level, 0 =
+  // control, '' when the factor was not varied (onFlag === false). Legacy data
+  // without the onFlag falls back to a 1/0 from the stored level.
+  function condBit(level, onFlag, treatmentLevel) {
+    if (onFlag === false) return '';
+    if (level == null || level === '') return '';
+    return level === treatmentLevel ? 1 : 0;
   }
   // The "Conventions" sheet: documents every column used in the export.
   function buildConventions(only) {
@@ -1038,8 +1049,8 @@
     add('Participants', 'played_session_ids', 'Internal IDs of every session the participant has started (comma-separated).');
     add('Participants', 'completed_session_ids', 'Internal IDs of every session the participant has finished (comma-separated).');
     if (only) add('Participants', 'completed_this_session_at', 'When the participant finished THIS session, or "no" if not finished.');
-    add('Participants', 'group_cost_transparency', 'Assigned level of the cost-transparency condition (abstract or translated); blank if this condition was not varied.');
-    add('Participants', 'group_firm_pay', 'Assigned level of the firm-pay condition (firm = company pays, personal = the user bears the cost); blank if not varied.');
+    add('Participants', 'cost_transparency', 'Cost-transparency group: 1 = cost was shown to this participant (treatment), 0 = hidden (control); blank if this factor was not varied for their session.');
+    add('Participants', 'firm_pay', 'Firm-pay group: 1 = the company pays (treatment), 0 = the user bears the cost (control); blank if this factor was not varied for their session.');
     add('Participants', 'registered_at', 'When the participant registered.');
     var regQs = (cfg.registrationQuestions && cfg.registrationQuestions.length) ? cfg.registrationQuestions : (D.registrationQuestions || []);
     regQs.forEach(function (q) { if (!q.system) add('Participants', 'reg_' + q.id, 'Registration answer: ' + (q.label || q.id)); });
@@ -1065,8 +1076,8 @@
     add('Responses', 'response_ms', 'Time in milliseconds from seeing the pair to pressing Next.');
     add('Responses', 'decided_at', 'Local date/time when the comparison was decided.');
     add('Responses', 'decided_ts', 'Decision time as epoch milliseconds (useful for sorting).');
-    add('Responses', 'group_cost_transparency', "The participant's cost-transparency level (see Participants).");
-    add('Responses', 'group_firm_pay', "The participant's firm-pay level (see Participants).");
+    add('Responses', 'cost_transparency', "The participant's cost-transparency group, 1/0 (see Participants).");
+    add('Responses', 'firm_pay', "The participant's firm-pay group, 1/0 (see Participants).");
     add('Events', 'participant_id', "The participant's ID.");
     add('Events', 'email', "The participant's e-mail.");
     add('Events', 'session_id', 'Internal ID of the session.');
