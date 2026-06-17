@@ -314,7 +314,9 @@
     return {
       enabled: !!(f.transparency || f.incentive),
       transparency: f.transparency ? (Math.random() < 0.5 ? 'abstract' : 'translated') : 'abstract',
-      incentive: f.incentive ? (Math.random() < 0.5 ? 'firm' : 'personal') : 'firm'
+      incentive: f.incentive ? (Math.random() < 0.5 ? 'firm' : 'personal') : 'firm',
+      transparencyOn: !!f.transparency,   // whether each factor was actually varied
+      incentiveOn: !!f.incentive          // (lets the export show 1/0 vs blank)
     };
   }
   // NB: the assigned 2x2 cell is recorded silently and is NEVER shown to the
