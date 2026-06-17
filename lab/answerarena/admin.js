@@ -422,11 +422,14 @@
       rows.forEach(function (p) {
         var c = p.condition || {};
         listWrap.appendChild(el('div', { class: 'aa-q' }, [
-          el('div', { class: 'row', style: 'justify-content:space-between;' }, [
-            el('b', { text: p.email || p.participantId || p._id }),
+          el('div', { class: 'row', style: 'justify-content:space-between;align-items:flex-start;' }, [
+            el('div', { style: 'min-width:0;' }, [
+              el('b', { text: p.participantId || '(no participant ID)' }),
+              el('div', { class: 'aa-note', style: 'margin-top:2px;', text: p.email || '(no e-mail)' })
+            ]),
             el('span', { class: 'aa-note', text: p.status || '' })
           ]),
-          el('div', { class: 'aa-note', style: 'margin-top:4px;', text: (p.participantId ? 'ID ' + p.participantId + '  ·  ' : '') + 'registered ' + fmtTs(p.createdAt) + '  ·  ' + Object.keys(p.completedSessions || {}).length + ' session(s) completed' + (c.enabled ? '  ·  cell ' + c.transparency + '/' + c.incentive : '') }),
+          el('div', { class: 'aa-note', style: 'margin-top:4px;', text: 'registered ' + fmtTs(p.createdAt) + '  ·  ' + Object.keys(p.completedSessions || {}).length + ' session(s) completed' + (c.enabled ? '  ·  cell ' + c.transparency + '/' + c.incentive : '') }),
           el('div', { class: 'aa-row', style: 'margin-top:6px;' }, [
             el('button', { class: 'aa-btn danger sm', on: { click: function () { if (window.confirm('Delete "' + (p.email || p._id) + '" and all their data?')) Store.deleteParticipant(p._id).then(function () { toast('Deleted.'); load(); }); } } }, ['Delete'])
           ])
