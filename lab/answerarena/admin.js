@@ -496,7 +496,7 @@
   function buildTaskCard() {
     var card = el('div', { class: 'aa-card' });
     card.appendChild(el('h3', { text: 'Comparisons (task set)' }));
-    card.appendChild(el('p', { class: 'aa-note', html: 'Load comparisons with <b>three columns</b> - <b>task</b>, <b>outputA</b>, <b>outputB</b> (one row each; first row = headers). Headers are matched loosely: <b>Specific description</b> -> task, <b>Output of Haiku 4.5 ...</b> -> outputA, <b>Output of Opus 4.8 ...</b> -> outputB (also "Task"/"Prompt", "Output A"/"Answer 1", etc.). Participants see the two outputs in a randomized left/right order and never learn which produced which.' }));
+    card.appendChild(el('p', { class: 'aa-note', html: 'Load comparisons with <b>task</b>, <b>outputA</b>, <b>outputB</b> in columns A-C (one row each; first row = headers). Headers are matched loosely: <b>Specific description</b> -> task, <b>Output of Haiku 4.5 ...</b> -> outputA, <b>Output of Opus 4.8 ...</b> -> outputB (also "Task"/"Prompt", "Output A"/"Answer 1", etc.). <b>Optional columns D and E</b> hold the <b>US$ cost</b> of Output A and Output B respectively - used by the "cost transparency" condition. Participants see the two outputs in a randomized left/right order and never learn which produced which.' }));
     var file = el('input', { type: 'file', accept: '.xlsx,.xls,.csv' });
     card.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: 'Upload an Excel / CSV file' }), file]));
     var gsUrl = el('input', { type: 'text', placeholder: 'https://docs.google.com/spreadsheets/d/.../edit#gid=0' });
@@ -564,9 +564,11 @@
       if (!parsed || !parsed.length) { preview.appendChild(el('p', { class: 'aa-err', text: 'No rows found. Check the file has a header row and at least one data row.' })); return; }
       preview.appendChild(el('p', { class: 'aa-note', text: parsed.length + ' comparison' + (parsed.length === 1 ? '' : 's') + ' loaded and saved as the active set. Preview of the first few:' }));
       var tbl = el('table', { class: 'aa-tbl' });
-      tbl.appendChild(el('thead', {}, [el('tr', {}, ['#', 'Task', 'Output A', 'Output B'].map(function (h) { return el('th', { text: h }); }))]));
+      var hasCost = parsed.some(function (r) { return r.costA != null || r.costB != null; });
+      var heads = ['#', 'Task', 'Output A', 'Output B'].concat(hasCost ? ['Cost A ($)', 'Cost B ($)'] : []);
+      tbl.appendChild(el('thead', {}, [el('tr', {}, heads.map(function (h) { return el('th', { text: h }); }))]));
       var tb = el('tbody', {});
-      parsed.slice(0, 5).forEach(function (r, i) { tb.appendChild(el('tr', {}, [el('td', { text: String(i + 1) }), el('td', { text: clip(r.task) }), el('td', { text: clip(r.outputA) }), el('td', { text: clip(r.outputB) })])); });
+      parsed.slice(0, 5).forEach(function (r, i) { tb.appendChild(el('tr', {}, [el('td', { text: String(i + 1) }), el('td', { text: clip(r.task) }), el('td', { text: clip(r.outputA) }), el('td', { text: clip(r.outputB) })].concat(hasCost ? [el('td', { text: r.costA != null ? String(r.costA) : '' }), el('td', { text: r.costB != null ? String(r.costB) : '' })] : []))); });
       tbl.appendChild(tb);
       preview.appendChild(el('div', { style: 'overflow-x:auto;-webkit-overflow-scrolling:touch;' }, [tbl]));
       preview.appendChild(el('div', { class: 'aa-row', style: 'margin-top:10px;' }, [
@@ -617,6 +619,13 @@
     var ti = find(['specificdescription', 'description', 'task', 'prompt', 'question']);
     var ai = find(['outputa', 'answera', 'haiku', 'output1', 'answer1', 'modela', 'a']);
     var bi = find(['outputb', 'answerb', 'opus', 'output2', 'answer2', 'modelb', 'b']);
+    // Per-answer US$ cost columns (D and E, i.e. the cost of Output A and Output B).
+    // Prefer headers containing cost/price/usd/dollar; else fall back to columns D/E.
+    var costCols = [];
+    for (var ci = 0; ci < header.length; ci++) if (/cost|price|usd|dollar/.test(header[ci])) costCols.push(ci);
+    var cai = costCols.length ? costCols[0] : 3;
+    var cbi = costCols.length > 1 ? costCols[1] : 4;
+    function money(v) { var n = parseFloat(String(v == null ? '' : v).replace(/[^0-9.\-]/g, '')); return isFinite(n) ? n : null; }
     // Treat row 1 as a header only if at least two of the three columns were
     // recognized; otherwise assume no header and use the first three columns.
     var found = (ti >= 0 ? 1 : 0) + (ai >= 0 ? 1 : 0) + (bi >= 0 ? 1 : 0);
@@ -629,7 +638,11 @@
       var oa = String(row[ai] == null ? '' : row[ai]).trim();
       var ob = String(row[bi] == null ? '' : row[bi]).trim();
       if (!task && !oa && !ob) continue;
-      out.push({ id: 'T' + (out.length + 1), task: task, outputA: oa, outputB: ob });
+      var t = { id: 'T' + (out.length + 1), task: task, outputA: oa, outputB: ob };
+      var ca = money(row[cai]), cb = money(row[cbi]);
+      if (ca != null) t.costA = ca;
+      if (cb != null) t.costB = cb;
+      out.push(t);
     }
     return out;
   }
@@ -879,6 +892,8 @@
       left_model: modelName(v.leftOutput), right_model: modelName(v.rightOutput),
       satisfaction_answer_A: v.satisfA != null ? v.satisfA : '', satisfaction_answer_B: v.satisfB != null ? v.satisfB : '',
       satisfaction_baseline: v.satisfO1 != null ? v.satisfO1 : '', satisfaction_frontier: v.satisfO2 != null ? v.satisfO2 : '',
+      cost_baseline_usd: v.costBaseline != null ? v.costBaseline : '', cost_frontier_usd: v.costFrontier != null ? v.costFrontier : '',
+      chosen_cost_usd: v.answerCost != null ? v.answerCost : '', running_cost_usd: v.runningCost != null ? v.runningCost : '',
       reason: v.reason || '', response_ms: responseMs, decided_at: fmtTs(ts), decided_ts: ts || '',
       group_cost_transparency: base.group_cost_transparency, group_firm_pay: base.group_firm_pay
     };
@@ -914,6 +929,10 @@
     add('Responses', 'satisfaction_answer_B', "Participant's 1-5 satisfaction rating for the answer shown on the right (Answer B).");
     add('Responses', 'satisfaction_baseline', 'The 1-5 satisfaction rating that applied to the baseline model (mapped from left/right).');
     add('Responses', 'satisfaction_frontier', 'The 1-5 satisfaction rating that applied to the frontier model.');
+    add('Responses', 'cost_baseline_usd', 'US$ cost of the baseline model\'s answer for this task (from the uploaded file); blank if no cost was provided.');
+    add('Responses', 'cost_frontier_usd', 'US$ cost of the frontier model\'s answer for this task; blank if no cost was provided.');
+    add('Responses', 'chosen_cost_usd', 'US$ cost charged for this comparison: the chosen answer\'s cost, or the average of the two for a tie.');
+    add('Responses', 'running_cost_usd', "Cumulative US$ cost of the participant's choices up to and including this comparison (shown live to the 'translated' cost-transparency group).");
     add('Responses', 'reason', 'Free-text reason the participant gave for the choice.');
     add('Responses', 'response_ms', 'Time in milliseconds from seeing the pair to pressing Next.');
     add('Responses', 'decided_at', 'Local date/time when the comparison was decided.');

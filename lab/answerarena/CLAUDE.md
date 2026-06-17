@@ -97,9 +97,12 @@ many comparisons each participant sees. The comparison set is rebuilt fresh on
 every entry into the comparisons phase - past progress is **not** resumed, so each
 play starts at comparison 1 (within a single page load the order stays stable).
 
-**Excel upload** (admin Tasks tab) expects three columns: `task`, `outputA`,
-`outputB` (header names matched loosely; otherwise the first three columns).
-It writes a `taskSets/{id}` doc and points `config.activeTaskSetId` at it. An
+**Excel upload** (admin Tasks tab) expects `task`, `outputA`, `outputB` in
+columns A-C (header names matched loosely; otherwise the first three columns),
+plus **optional columns D and E** = the **US$ cost** of Output A / Output B
+(`costA`/`costB` on each task; matched by a cost/price/usd/dollar header, else
+columns D/E). It writes a `taskSets/{id}` doc and points
+`config.activeTaskSetId` at it. An
 upload / Google-Sheet import is parsed, previewed and **made the active set
 immediately**; the Save / Make this the default buttons are then an explicit
 re-save, Discard hides the preview, and Restore built-in default reverts to the
@@ -122,6 +125,16 @@ the participant. The 2x2 is configured **globally** (the admin "2x2 conditions" 
 (`{ factors:{transparency,incentive} }`). `assignCondition()` uses that snapshot,
 so a session keeps the conditions it was created with even if the global setting
 changes later; each session card shows its conditions on the right.
+
+**Cost-transparency manipulation.** When a participant's cost-transparency level
+is `translated` (and the active set has per-answer costs in columns D/E), the
+top bar shows a live **"Spent so far: $X"** meter. Each comparison adds the US$
+cost of the chosen answer (`costOf()`; a tie adds the average of the two). The
+running total is the cost of the participant's own choices, making "my choices ->
+this cost" salient. The cost is recorded on every response for **all**
+participants (`costBaseline`/`costFrontier`/`answerCost`/`runningCost`, exported
+as `cost_*_usd`/`chosen_cost_usd`/`running_cost_usd`) so the control group's
+hypothetical cost is analysable too; only the `translated` group sees the meter.
 
 ## 6. Sessions
 

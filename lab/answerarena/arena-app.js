@@ -19,7 +19,7 @@
   var D = window.ARENA_DEFAULTS || {};
   var Store = window.ArenaStore;
   var cfg = mergeCfg({});                                // effective config (defaults + saved)
-  var S = { phase: 'boot', user: null, p: null, tasks: [], order: [], flips: [], idx: 0, choice: null, session: null, condition: null, shownAt: 0, draft: null };
+  var S = { phase: 'boot', user: null, p: null, tasks: [], order: [], flips: [], idx: 0, choice: null, session: null, condition: null, shownAt: 0, draft: null, spent: 0, showCost: false, costEl: null };
 
   /* ---- DOM helpers ---- */
   function el(tag, attrs, kids) {
@@ -63,7 +63,19 @@
     bar.style.display = 'flex';
     var who = (S.p && S.p.participantId) || (S.user && S.user.email) || '';
     bar.appendChild(el('span', { class: 'a-brand', html: esc((D.app && D.app.name) || 'Answer Arena') + ' &middot; <b>' + esc(who) + '</b>' }));
-    bar.appendChild(el('button', { class: 'a-btn a-ghost a-sm', on: { click: logout } }, ['Log out']));
+    var right = el('div', { class: 'a-topright' });
+    if (S.showCost) { S.costEl = el('span', { class: 'a-cost' }); right.appendChild(S.costEl); updateCostMeter(); }
+    else { S.costEl = null; }
+    right.appendChild(el('button', { class: 'a-btn a-ghost a-sm', on: { click: logout } }, ['Log out']));
+    bar.appendChild(right);
+  }
+  // Cost-transparency meter: total US$ the participant's choices have cost so far.
+  function fmtUSD(n) { n = Number(n) || 0; return '$' + (n < 1 ? n.toFixed(4) : n.toFixed(2)); }
+  function updateCostMeter() { if (S.costEl) S.costEl.innerHTML = 'Spent so far: <b>' + esc(fmtUSD(S.spent)) + '</b>'; }
+  // US$ cost of a given underlying output for a task (o1=Output A, o2=Output B).
+  function costOf(task, outputId) {
+    var a = Number(task.costA) || 0, b = Number(task.costB) || 0;
+    return outputId === 'o1' ? a : outputId === 'o2' ? b : (a + b) / 2;   // tie = average
   }
   function card(title, kids, cls) { return el('div', { class: 'a-card ' + (cls || '') }, [title ? el('h2', { text: title }) : null].concat(kids || [])); }
   function overlayWrap(node) { return el('div', { class: 'a-wrap' }, [node]); }
@@ -318,6 +330,14 @@
       if (cfg.settings.randomizeOrder !== false) shuffle(idxs);
       if (lim > 0 && lim < idxs.length) idxs = idxs.slice(0, lim);
       S.order = idxs; S.flips = idxs.map(function () { return Math.random() < 0.5; }); S.idx = 0;
+      // Cost transparency: the running US$ cost is reset for this play, and the
+      // top-bar "Spent so far" meter is shown only to participants in the
+      // transparent group (condition.transparency === 'translated') when the
+      // active set actually carries per-answer costs.
+      S.spent = 0;
+      var hasCosts = S.tasks.some(function (t) { return (Number(t.costA) || 0) > 0 || (Number(t.costB) || 0) > 0; });
+      S.showCost = !!(S.condition && S.condition.transparency === 'translated' && hasCosts);
+      topbar();
       // Record this session as one the participant has played (so the admin's
       // per-session participant count includes anyone who started it, not only
       // those still on it or who finished it).
@@ -402,6 +422,13 @@
       document.onkeydown = null;
       if (draftTimer) { clearTimeout(draftTimer); draftTimer = null; }
       var chosenOutput = d.choice === 'tie' ? 'tie' : (d.choice === 'left' ? leftId : rightId);
+      // Cost of the chosen answer (tie = average of the two); accumulate the
+      // running total and update the meter. Recorded for everyone so the cost is
+      // analysable even for the control group; only displayed to the transparent.
+      var costA = Number(task.costA) || 0, costB = Number(task.costB) || 0;
+      var answerCost = costOf(task, chosenOutput);
+      S.spent += answerCost;
+      updateCostMeter();
       var resp = {
         taskId: task.id, idx: S.idx, sessionId: curSid(), leftOutput: leftId, rightOutput: rightId,
         choice: d.choice, chosenOutput: chosenOutput, responseMs: Date.now() - S.shownAt,
@@ -409,6 +436,7 @@
         satisfA: d.satisfA, satisfB: d.satisfB,                              // displayed Answer A / B
         satisfO1: leftId === 'o1' ? d.satisfA : d.satisfB,                   // mapped back to the model
         satisfO2: leftId === 'o2' ? d.satisfA : d.satisfB,
+        costBaseline: costA, costFrontier: costB, answerCost: answerCost, runningCost: S.spent,
         condition: S.condition || (S.p && S.p.condition) || null, ts: Date.now()
       };
       if (S.user) Store.addResponse(S.user.uid, resp).catch(function () {});
