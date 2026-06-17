@@ -51,6 +51,15 @@ def should_skip_title(title):
     return False
 
 
+def editor_looks_truncated(editor):
+    """True when a stored Accepting Editor is only initials with no surname,
+    e.g. "D. J" — the signature of the old abstract parser truncating
+    "D. J. Wu, information systems." Such rows are re-scraped so the
+    multi-initial fix self-heals values already saved to the CSV."""
+    tokens = [t for t in re.split(r"\s+", (editor or "").replace(".", " ")) if t]
+    return bool(tokens) and all(len(t) == 1 for t in tokens)
+
+
 def extract_editor(html):
     """Extract editor and area from HTML page text."""
     match = re.search(r"accepted by\s+(.{5,300})", html, re.IGNORECASE | re.DOTALL)
@@ -326,8 +335,13 @@ def main():
             existing_editor = row.get("Accepting Editor", "").strip()
             title = row.get("Title", "").strip()
 
-            # Skip if already filled, no DOI, or status is Other
-            if existing_editor or not doi or status == "Other":
+            # Skip if no DOI or status is Other. Rows already filled are skipped
+            # too, unless the editor is a truncated initials-only fragment
+            # ("D. J") from the old parser, which gets re-scraped to self-heal.
+            if not doi or status == "Other":
+                skipped += 1
+                continue
+            if existing_editor and not editor_looks_truncated(existing_editor):
                 skipped += 1
                 continue
 

@@ -731,8 +731,11 @@ function cleanEditorField(raw) {
   if (ai === -1) ai = s.indexOf('accepted by');
   if (ai !== -1) {
     var after = s.substring(ai);
-    var m = after.match(/accepted by\s+([^.]+)/i);
-    s = m ? m[1].trim() : '';
+    // Capture the full acceptance sentence (allowing multi-initial names like
+    // "D. J. Wu"), then keep the editor name part before the area comma.
+    var m = after.match(/accepted by\s+([^.]+(?:\.[^.]{0,5})*[^.]*)\./i);
+    var rest = m ? m[1] : after.replace(/^.*?accepted by\s+/i, '');
+    s = rest.split(',')[0].trim();
   }
   s = s.replace(/\.\s*$/, '').trim();
   if (!s) return [];
