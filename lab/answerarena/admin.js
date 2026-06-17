@@ -235,11 +235,15 @@
 
   /* ---- RIGHT: active + closed session cards (created from the left column) ---- */
   function buildSessionsCard() {
+    var lastOpen = [], lastClosed = [], counts = {};
+
     // Active sessions.
     var activeCard = el('div', { class: 'aa-card' });
     var activeCount = el('span', { class: 'aa-count' });
     activeCard.appendChild(el('div', { class: 'aa-h', style: 'margin-bottom:4px;' }, [el('h3', { text: 'Active sessions' }), activeCount]));
     activeCard.appendChild(el('p', { class: 'aa-note', text: 'Every session is created open. Copy its join link to invite participants, export its data, or close it to stop new joins. Create sessions from the left column.' }));
+    var activeSearch = el('input', { type: 'text', placeholder: 'Search by session ID, name or date...' });
+    activeCard.appendChild(el('div', { class: 'aa-field' }, [activeSearch]));
     var activeList = el('div', {}, [el('p', { class: 'aa-note', text: 'Loading...' })]);
     activeCard.appendChild(activeList);
     activeCard.appendChild(el('p', { class: 'aa-note', style: 'margin-top:12px;border-top:1px solid var(--line);padding-top:10px;', text: 'Participants join with the session code on the welcome/login screen, or by opening the share link.' }));
@@ -250,17 +254,47 @@
     var closedCount = el('span', { class: 'aa-count' });
     closedCard.appendChild(el('div', { class: 'aa-h', style: 'margin-bottom:4px;' }, [el('h3', { text: 'Closed sessions' }), closedCount]));
     closedCard.appendChild(el('p', { class: 'aa-note', text: 'These no longer accept participants. Export their data to review, reopen them, or delete if no longer needed.' }));
+    var closedSearch = el('input', { type: 'text', placeholder: 'Search by session ID, name or date...' });
+    closedCard.appendChild(el('div', { class: 'aa-field' }, [closedSearch]));
     var closedList = el('div', {});
     closedCard.appendChild(closedList);
 
     var wrap = el('div', {}, [activeCard, closedCard]);
+    activeSearch.addEventListener('input', renderActive);
+    closedSearch.addEventListener('input', renderClosed);
 
+    // Match a session by its code (session ID), name, or created date string.
+    function matches(s, q) {
+      if (!q) return true;
+      return (s.code || '').toLowerCase().indexOf(q) >= 0
+        || (s.name || '').toLowerCase().indexOf(q) >= 0
+        || (fmtTs(s.createdAt) || '').toLowerCase().indexOf(q) >= 0;
+    }
+    function renderActive() {
+      var q = activeSearch.value.trim().toLowerCase();
+      activeCount.textContent = lastOpen.length + ' active';
+      activeList.innerHTML = '';
+      if (!lastOpen.length) { activeList.appendChild(el('p', { class: 'aa-note', text: 'No active sessions - create one from the left column.' })); return; }
+      var rows = lastOpen.filter(function (s) { return matches(s, q); });
+      if (!rows.length) { activeList.appendChild(el('p', { class: 'aa-note', text: 'No sessions match your search.' })); return; }
+      rows.forEach(function (s) { activeList.appendChild(sessionCard(s, counts, refresh)); });
+    }
+    function renderClosed() {
+      var q = closedSearch.value.trim().toLowerCase();
+      closedCount.textContent = lastClosed.length + (lastClosed.length === 1 ? ' session' : ' sessions');
+      closedCard.style.display = lastClosed.length ? 'block' : 'none';
+      closedList.innerHTML = '';
+      if (!lastClosed.length) return;
+      var rows = lastClosed.filter(function (s) { return matches(s, q); });
+      if (!rows.length) { closedList.appendChild(el('p', { class: 'aa-note', text: 'No sessions match your search.' })); return; }
+      rows.forEach(function (s) { closedList.appendChild(sessionCard(s, counts, refresh)); });
+    }
     function refresh() {
       Promise.all([Store.listSessions(), Store.listParticipants().catch(function () { return []; })]).then(function (res) {
         var list = res[0], parts = res[1] || [];
         // A participant counts for a session they have played - started it
         // (playedSessions), are currently in it (sessionId), or completed it.
-        var counts = {};
+        counts = {};
         parts.forEach(function (p) {
           var seen = {};
           if (p.sessionId) seen[p.sessionId] = true;
@@ -269,16 +303,9 @@
           Object.keys(seen).forEach(function (sid) { counts[sid] = (counts[sid] || 0) + 1; });
         });
         list.sort(function (a, b) { return tsMs(b.createdAt) - tsMs(a.createdAt); });
-        var openOnes = list.filter(function (x) { return (x.status || 'open') !== 'closed'; });
-        var closedOnes = list.filter(function (x) { return (x.status || 'open') === 'closed'; });
-        activeCount.textContent = openOnes.length + ' active';
-        closedCount.textContent = closedOnes.length + (closedOnes.length === 1 ? ' session' : ' sessions');
-        activeList.innerHTML = '';
-        if (!openOnes.length) activeList.appendChild(el('p', { class: 'aa-note', text: 'No active sessions - create one from the left column.' }));
-        else openOnes.forEach(function (s) { activeList.appendChild(sessionCard(s, counts, refresh)); });
-        closedList.innerHTML = '';
-        closedCard.style.display = closedOnes.length ? 'block' : 'none';
-        closedOnes.forEach(function (s) { closedList.appendChild(sessionCard(s, counts, refresh)); });
+        lastOpen = list.filter(function (x) { return (x.status || 'open') !== 'closed'; });
+        lastClosed = list.filter(function (x) { return (x.status || 'open') === 'closed'; });
+        renderActive(); renderClosed();
       }).catch(function (e) { activeList.innerHTML = ''; activeList.appendChild(el('p', { class: 'aa-err', text: 'Could not load sessions: ' + ((e && e.code) || 'error') })); });
     }
     refresh();
@@ -409,14 +436,19 @@
     var card = el('div', { class: 'aa-card' });
     var all = [];
     card.appendChild(el('div', { class: 'aa-h', style: 'margin-bottom:8px;' }, [el('h3', { text: 'Registered users' }), el('button', { class: 'aa-btn green sm', on: { click: function () { if (all.length) exportExcel(all); else toast('No users yet.'); } } }, ['Export to Excel'])]));
-    var search = el('input', { type: 'text', placeholder: 'Search by e-mail or ID...' });
+    var search = el('input', { type: 'text', placeholder: 'Search by Participant ID, e-mail or account ID...' });
     card.appendChild(el('div', { class: 'aa-field' }, [search]));
     var listWrap = el('div', {}, [el('p', { class: 'aa-note', text: 'Loading...' })]);
     card.appendChild(listWrap);
     search.addEventListener('input', render);
     function render() {
       var q = search.value.trim().toLowerCase();
-      var rows = all.filter(function (p) { return !q || (p.email || '').toLowerCase().indexOf(q) >= 0 || (p.participantId || '').toLowerCase().indexOf(q) >= 0; });
+      var rows = all.filter(function (p) {
+        if (!q) return true;
+        return (p.participantId || '').toLowerCase().indexOf(q) >= 0
+          || (p.email || '').toLowerCase().indexOf(q) >= 0
+          || (p._id || '').toLowerCase().indexOf(q) >= 0;
+      });
       listWrap.innerHTML = '';
       listWrap.appendChild(el('p', { class: 'aa-note', text: rows.length + ' of ' + all.length + ' user' + (all.length === 1 ? '' : 's') }));
       rows.forEach(function (p) {
@@ -692,9 +724,11 @@
     var summary = el('div', { class: 'aa-note', style: 'margin-top:10px;' });
     function paint() {
       var n = (trans.input.checked ? 1 : 0) + (inc.input.checked ? 1 : 0);
-      summary.textContent = n === 0
-        ? 'No conditions varied - everyone is in a single baseline group.'
-        : Math.pow(2, n) + ' groups (' + n + ' condition' + (n === 1 ? '' : 's') + ' varied). Participants are randomly and invisibly assigned.';
+      summary.textContent = n === 2
+        ? '4 groups - the full 2x2 = 4 design. Each participant belongs to exactly one of the four groups (randomly and invisibly assigned).'
+        : n === 1
+          ? '2 groups (one of the two conditions varied). Each participant belongs to one group (randomly and invisibly assigned).'
+          : 'No conditions varied - everyone is in a single baseline group.';
     }
     function save() {
       var settings = Object.assign({}, cfg.settings, { twoByTwo: { factors: { transparency: trans.input.checked, incentive: inc.input.checked } } });
@@ -706,7 +740,7 @@
     paint();
     return el('div', { class: 'aa-card' }, [
       el('h3', { text: '2x2 conditions' }),
-      el('p', { class: 'aa-note', text: 'Turn on each condition you want to vary. Participants are randomly and invisibly assigned a group and are never shown their condition (or told that conditions exist). Both on = 4 groups; one on = 2 groups; none = a single baseline group.' }),
+      el('p', { class: 'aa-note', text: 'This is a 2x2 = 4 design. Turn on each condition you want to vary; with both on there are 2 x 2 = 4 groups, and each participant simply belongs to one of them - randomly and invisibly assigned (they are never shown their group, or told that groups exist). One condition on = 2 groups; none = a single baseline group.' }),
       el('div', { class: 'aa-switches' }, [
         el('div', { class: 'aa-switchbox' }, [el('b', { text: 'Transparency' }), trans.node]),
         el('div', { class: 'aa-switchbox' }, [el('b', { text: 'Incentive' }), inc.node])
