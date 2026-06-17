@@ -211,8 +211,10 @@
     var left = el('div', { class: 'aa-col' });
     var right = el('div', { class: 'aa-col' });
 
-    // RIGHT: active sessions (list only) + registered users.
+    // RIGHT: active sessions (list only) + registered users. The sub-heading
+    // keeps the first card aligned with the left column's first card.
     var sessions = buildSessionsCard();
+    right.appendChild(el('div', { class: 'aa-sub', text: 'Sessions & participants' }));
     right.appendChild(sessions.node);
     right.appendChild(buildUsersCard());
 
@@ -832,7 +834,7 @@
         }).then(function () {
           return Store.listEvents(uid).then(function (evs) {
             evs.sort(function (a, b) { return tsMs(a.ts) - tsMs(b.ts); });
-            evs.forEach(function (v) { if (keep(v.sessionId)) eRows.push({ participantId: base.participantId, email: base.email, sessionId: v.sessionId || '', taskId: v.taskId || '', idx: v.idx != null ? v.idx : '', type: v.type || '', value: v.value != null ? v.value : '', model: modelName(v.model), at: fmtTs(v.ts), ts: v.ts || '' }); });
+            evs.forEach(function (v) { if (keep(v.sessionId)) eRows.push({ participantId: base.participantId, email: base.email, sessionId: v.sessionId || '', order: v.idx != null ? v.idx + 1 : '', idx: v.idx != null ? v.idx : '', taskId: v.taskId || '', type: v.type || '', value: v.value != null ? v.value : '', model: modelName(v.model), at: fmtTs(v.ts), ts: v.ts || '' }); });
           }).catch(function () {});
         }).then(function () {
           return Store.listSurveys(uid).then(function (svs) {
@@ -858,8 +860,14 @@
   // One Responses row (shared by submitted answers and the saved draft).
   function respRow(base, v, submitted, responseMs, ts) {
     return {
-      participantId: base.participantId, email: base.email, sessionId: v.sessionId || '', taskId: v.taskId, idx: v.idx, submitted: submitted,
-      choice: v.choice || '', chosenModel: modelName(v.chosenOutput), leftModel: modelName(v.leftOutput), rightModel: modelName(v.rightOutput),
+      participantId: base.participantId, email: base.email, sessionId: v.sessionId || '',
+      // order = where this comparison appeared in the participant's randomized
+      // sequence (1 = first shown); taskId = which task pair it was.
+      order: v.idx != null ? v.idx + 1 : '', idx: v.idx, taskId: v.taskId, submitted: submitted,
+      choice: v.choice || '', chosenModel: modelName(v.chosenOutput),
+      // leftModel/rightModel = which underlying model was shown on the left
+      // (Answer A) / right (Answer B) for this participant (randomized per pair).
+      leftModel: modelName(v.leftOutput), rightModel: modelName(v.rightOutput),
       satisfactionA: v.satisfA != null ? v.satisfA : '', satisfactionB: v.satisfB != null ? v.satisfB : '',
       satisfaction_baseline: v.satisfO1 != null ? v.satisfO1 : '', satisfaction_frontier: v.satisfO2 != null ? v.satisfO2 : '',
       reason: v.reason || '', responseMs: responseMs, decidedAt: fmtTs(ts), ts: ts || '',
