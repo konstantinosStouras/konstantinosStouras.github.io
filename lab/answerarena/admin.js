@@ -616,6 +616,9 @@
         active.appendChild(el('div', { class: 'aa-row' }, [
           el('button', { class: 'aa-btn sec', on: { click: function () { saveConfig({ activeTaskSetId: null }).then(function () { cfg.activeTaskSetId = null; toast('Reverted to built-in default set.'); refreshActive(); }); } } }, ['Restore built-in default'])
         ]));
+        // The active task set appears in the Setup summary too - keep it in sync
+        // whenever it changes (upload / import / restore).
+        if (summaryRefresh) summaryRefresh();
       });
     }
     return card;
