@@ -716,8 +716,12 @@
     // cost column that is not the "thinking" cost, else columns D/E (old layout).
     var costCols = findAll(function (h) { return h.indexOf('totalcost') >= 0; });             // M, S
     if (costCols.length < 2) costCols = findAll(function (h) { return h.indexOf('cost') >= 0 && h.indexOf('thinking') < 0; });
-    var cai = costCols.length ? costCols[0] : 3;
-    var cbi = costCols.length > 1 ? costCols[1] : 4;
+    // Two cost columns -> use them; exactly one -> only costA (no guessing a second);
+    // none -> the old layout's columns D/E.
+    var cai, cbi;
+    if (costCols.length >= 2) { cai = costCols[0]; cbi = costCols[1]; }
+    else if (costCols.length === 1) { cai = costCols[0]; cbi = -1; }
+    else { cai = 3; cbi = 4; }
     var found = (ti >= 0 ? 1 : 0) + (ai >= 0 ? 1 : 0) + (bi >= 0 ? 1 : 0);
     // Confidence score for choosing among workbook tabs: rewards a real task
     // column plus actual TEXT output columns (and the cost pair). Unlike `found`,

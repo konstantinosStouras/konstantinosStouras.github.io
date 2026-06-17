@@ -553,14 +553,15 @@
     var tieBtn = el('button', { class: 'a-tie', 'data-tour': 'tie', on: { click: function () { pick('tie'); } } }, ["They're equally good"]);
 
     // Post-choice follow-up: a per-answer satisfaction rating and a free-text
-    // reason, revealed only after a preference (or tie) is chosen.
+    // reason, revealed only after a preference (or tie) is chosen. The tour demo
+    // shows it expanded as a static preview so the walkthrough can point it out.
     var satisfA = null, satisfB = null, reasonInput = null, rateA = null, rateB = null, follow = null;
-    if (showFollow) {
+    if (showFollow || opts.demo) {
       rateA = ratingWidget('How satisfied are you with Answer A?', function (v) { satisfA = v; emit({ type: 'satisfA', value: v }); change(); });
       rateB = ratingWidget('How satisfied are you with Answer B?', function (v) { satisfB = v; emit({ type: 'satisfB', value: v }); change(); });
       reasonInput = el('textarea', { rows: '3', placeholder: 'In a sentence or two, what made the difference?' });
       reasonInput.addEventListener('input', change);
-      follow = el('div', { class: 'a-follow', 'data-tour': 'follow', style: 'display:none;' }, [
+      follow = el('div', { class: 'a-follow', 'data-tour': 'follow', style: opts.demo ? '' : 'display:none;' }, [
         el('div', { class: 'a-followhead', text: 'Tell us a little more' }),
         el('div', { class: 'a-rates' }, [rateA.node, rateB.node]),
         el('div', { class: 'a-field' }, [el('label', { text: 'Why did you make this choice?' }), reasonInput])

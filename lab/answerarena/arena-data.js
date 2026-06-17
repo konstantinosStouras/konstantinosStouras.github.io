@@ -44,23 +44,23 @@ window.ARENA_DEFAULTS = {
   "tourSteps": [
     {
       "target": "task",
-      "title": "The task",
-      "body": "Each round starts with a single task, shown here as a card. Read what is being asked."
+      "title": "The problem",
+      "body": "Each round starts with a short problem - a real situation or need someone has. Read it here first."
     },
     {
       "target": "answerLeft",
       "title": "Answer A",
-      "body": "This is one answer to the task. Two different systems wrote the two answers - we do not tell you which is which."
+      "body": "This is one answer to the problem. Two different systems wrote the two answers - we never tell you which is which."
     },
     {
       "target": "answerRight",
       "title": "Answer B",
-      "body": "This is the other answer to the same task. Compare it with Answer A."
+      "body": "This is the other answer to the same problem. Compare it with Answer A."
     },
     {
       "target": "answerLeft",
-      "title": "Tap to choose",
-      "body": "Tap the answer card you prefer. It gets highlighted so you can see your pick. You can change it before moving on."
+      "title": "Tap the better answer",
+      "body": "Tap the answer card you prefer. It gets highlighted so you can see your pick, and you can change it before moving on."
     },
     {
       "target": "tie",
@@ -68,14 +68,19 @@ window.ARENA_DEFAULTS = {
       "body": "If the two answers are equally good (or equally bad), tap “They're equally good”."
     },
     {
+      "target": "follow",
+      "title": "Rate each answer and say why",
+      "body": "After you choose, rate how satisfied you are with <b>each</b> answer (1-5) and add a short reason. All three are required before you can continue."
+    },
+    {
       "target": "progress",
       "title": "Track your progress",
-      "body": "This bar shows how far along you are through the set of comparisons."
+      "body": "This bar shows how far along you are through your set of comparisons."
     },
     {
       "target": "next",
       "title": "Move on",
-      "body": "Once you have made a choice, tap Next to lock it in and see the following task. That's it - you're ready!"
+      "body": "Once you have chosen, rated both answers and written a reason, tap Next to lock it in and see the next problem. That's it - you're ready!"
     }
   ],
   "settings": {
