@@ -965,11 +965,20 @@
         pRows.push(Object.assign({}, base, orderedAnswers('reg_', p.registration || {}, activeQuestions('registrationQuestions'), false)));
         chain = chain.then(function () {
           return Store.listResponses(uid).then(function (rs) {
-            rs.forEach(function (v) { if (keep(v.sessionId)) rRows.push(respRow(base, v, 'yes', v.responseMs, v.ts)); });
-            // Include the in-progress answer the participant had entered but not
-            // yet submitted (saved if they closed the tab mid-comparison).
+            // One ordered list per participant: the submitted answers plus the
+            // in-progress draft, sorted by session then shown_order (idx) so the
+            // Responses sheet reads 1, 2, 3, ... as the participant saw them.
+            var items = [];
+            rs.forEach(function (v) { if (keep(v.sessionId)) items.push({ v: v, sub: 'yes', ms: v.responseMs, ts: v.ts }); });
             var dr = p.draftResponse;
-            if (dr && keep(dr.sessionId)) rRows.push(respRow(base, dr, 'no (draft)', '', dr.updatedAt));
+            if (dr && keep(dr.sessionId)) items.push({ v: dr, sub: 'no (draft)', ms: '', ts: dr.updatedAt });
+            var ord = function (x) { return (x == null || x === '' || !isFinite(Number(x))) ? 1e9 : Number(x); };
+            items.sort(function (a, b) {
+              var sa = a.v.sessionId || '', sb = b.v.sessionId || '';
+              if (sa !== sb) return sa < sb ? -1 : 1;
+              return ord(a.v.idx) - ord(b.v.idx);
+            });
+            items.forEach(function (it) { rRows.push(respRow(base, it.v, it.sub, it.ms, it.ts)); });
           }).catch(function () {});
         }).then(function () {
           return Store.listEvents(uid).then(function (evs) {
