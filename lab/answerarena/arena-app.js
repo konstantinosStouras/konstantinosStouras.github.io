@@ -384,7 +384,9 @@
         btns.push(b); row.appendChild(b);
       })(v);
     }
-    function setVal(val) { current = val; btns.forEach(function (b, i) { b.classList.toggle('on', (i + 1) <= val); }); if (onPick) onPick(val); }
+    // Single-select: only the chosen level is highlighted; clicking another
+    // level just moves the selection (participants can change it freely).
+    function setVal(val) { current = val; btns.forEach(function (b, i) { b.classList.toggle('on', (i + 1) === val); }); if (onPick) onPick(val); }
     var node = el('div', { class: 'a-ratewrap' }, [
       el('div', { class: 'a-ratelabel', text: label }),
       row,
