@@ -324,6 +324,13 @@
     if (f.incentive) on.push('Firm-pay');
     return on.length ? on.join(' + ') : 'Baseline (no conditions)';
   }
+  // How many comparisons this session gives each participant (snapshotted at
+  // creation). Older sessions without the snapshot use the live global setting.
+  function sessionFlowLabel(s) {
+    if (s.comparisonsPerUser == null) return 'Comparisons/participant: live setting';
+    var n = Number(s.comparisonsPerUser) || 0;
+    return 'Comparisons/participant: ' + (n > 0 ? n : 'whole active set');
+  }
   function sessionCard(s, counts, refresh) {
     var liveCount = counts[s.id] != null ? counts[s.id] : (s.count || 0);
     var joinUrl = location.origin + location.pathname + '?s=' + s.code;
@@ -339,7 +346,8 @@
         el('div', { class: 'aa-note', text: condLabel(s.condition) })
       ])
     ]));
-    box.appendChild(el('div', { class: 'aa-note', style: 'margin-top:4px;', text: 'Created ' + (fmtTs(s.createdAt) || 'just now') }));
+    box.appendChild(el('div', { class: 'aa-note', style: 'margin-top:4px;', text: sessionFlowLabel(s) }));
+    box.appendChild(el('div', { class: 'aa-note', style: 'margin-top:2px;', text: 'Created ' + (fmtTs(s.createdAt) || 'just now') }));
     var actions = [];
     if (st === 'closed') {
       // Closed: review (export), reopen, or remove. Joining is disabled, so no
@@ -397,8 +405,13 @@
       err.textContent = '';
       var f = factors();
       var cond = { factors: { transparency: !!f.transparency, incentive: !!f.incentive } };  // snapshot the 2x2 onto the session
+      var sct = cfg.settings || {};
+      // Snapshot the comparison-flow settings too, so the session keeps the count
+      // it was built with regardless of later global changes (matches "I built
+      // THIS session with N comparisons").
+      var flow = { comparisonsPerUser: sct.comparisonsPerUser || 0, randomizeOrder: sct.randomizeOrder !== false };
       btn.setAttribute('disabled', 'true'); btn.textContent = 'Creating...';
-      Store.createSession({ name: nameI.value.trim(), status: 'open', condition: cond, taskSetId: cfg.activeTaskSetId || null })
+      Store.createSession({ name: nameI.value.trim(), status: 'open', condition: cond, taskSetId: cfg.activeTaskSetId || null, comparisonsPerUser: flow.comparisonsPerUser, randomizeOrder: flow.randomizeOrder })
         .then(function (s) { toast('Session created: ' + s.code); nameI.value = ''; btn.removeAttribute('disabled'); btn.textContent = 'Create Session'; if (sessionsRefresh) sessionsRefresh(); })
         .catch(function (e) {
           btn.removeAttribute('disabled'); btn.textContent = 'Create Session';

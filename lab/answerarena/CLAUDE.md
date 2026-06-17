@@ -94,8 +94,13 @@ they are with each answer (1-5) and give a short reason; **Next stays disabled
 until all three are supplied**. These columns ride along in the admin Excel
 export (Responses sheet). `settings.comparisonsPerUser` (0 = whole set) caps how
 many comparisons each participant sees: when it is below the active-set size the
-participant gets that many **randomly chosen** task pairs. The admin **Setup
-summary** shows this as e.g. "2 of 100 (random subset)" and auto-refreshes (via
+participant gets that many **randomly chosen** task pairs. **Each session
+snapshots `comparisonsPerUser` and `randomizeOrder` at creation** (alongside the
+2x2 `condition`), and `startMain` prefers the session's snapshot over the live
+global settings (older sessions with no snapshot fall back to global) - so a
+session keeps the count it was built with even if the global setting changes
+later. The admin **Setup summary** shows this as e.g. "2 of 100 (random subset)"
+and auto-refreshes (via
 the `summaryRefresh` hook) whenever a card that feeds it is saved - the
 Comparison-flow, 2x2 and Long-list cards (in each `saveConfig().then` **after**
 `cfg` is updated, so it never reads stale values) and the Task card (inside

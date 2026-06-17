@@ -348,9 +348,15 @@
       // starts at comparison 1, no matter what was done in a previous play.
       // (Within a single page load the order is kept stable by the early return
       // at the top of startMain.)
-      var n = S.tasks.length, lim = cfg.settings.comparisonsPerUser || 0;   // 0 = whole set
+      // How many comparisons, and whether to shuffle: prefer the values the
+      // session was created with (snapshot), falling back to the live global
+      // settings for older sessions that have no snapshot.
+      var sess = S.session || {};
+      var lim = (sess.comparisonsPerUser != null ? Number(sess.comparisonsPerUser) : (cfg.settings.comparisonsPerUser || 0)) || 0;
+      var rnd = (sess.randomizeOrder != null) ? (sess.randomizeOrder !== false) : (cfg.settings.randomizeOrder !== false);
+      var n = S.tasks.length;
       var idxs = []; for (var i = 0; i < n; i++) idxs.push(i);
-      if (cfg.settings.randomizeOrder !== false) shuffle(idxs);
+      if (rnd) shuffle(idxs);
       if (lim > 0 && lim < idxs.length) idxs = idxs.slice(0, lim);
       S.order = idxs; S.flips = idxs.map(function () { return Math.random() < 0.5; }); S.idx = 0;
       // Cost transparency: the running US$ cost is reset for this play, and the
