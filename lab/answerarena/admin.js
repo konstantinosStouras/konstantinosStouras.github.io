@@ -495,14 +495,18 @@
         bodyDiv.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: meta.label }), input]));
       });
       bodyDiv.appendChild(el('div', { class: 'aa-row', style: 'margin-top:8px;' }, [
-        el('button', { class: 'aa-btn', on: { click: makeDefault } }, ['Make this the default']),
-        el('button', { class: 'aa-btn sec', on: { click: function () { build(); toast('Reloaded saved values.'); } } }, ['Reset this page to defaults']),
+        el('button', { class: 'aa-btn', on: { click: save } }, ['Save']),
+        el('button', { class: 'aa-btn sec', on: { click: makeDefault } }, ['Make this the default']),
         el('button', { class: 'aa-btn sec', on: { click: restoreBuiltin } }, ['Restore built-in default'])
       ]));
     }
     function toggle() { open = !open; bodyDiv.style.display = open ? 'block' : 'none'; caret.textContent = open ? '▴' : '▾'; if (open) build(); }
     function collect() { var texts = {}; Object.keys(inputs).forEach(function (key) { var v = inputs[key].input.value; texts[key] = inputs[key].kind === 'paras' ? v.split('\n').map(function (s) { return s.trim(); }).filter(Boolean) : v; }); return texts; }
-    function makeDefault() { var merged = Object.assign({}, cfg.texts, collect()); saveConfig({ texts: merged }).then(function () { cfg.texts = merged; toast(g.label + ' saved.'); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); }); }
+    // One live config, so "Save" and "Make this the default" both persist this
+    // page's text; "Restore built-in default" reverts to the arena-data.js text.
+    function persist(msg) { var merged = Object.assign({}, cfg.texts, collect()); return saveConfig({ texts: merged }).then(function () { cfg.texts = merged; toast(msg); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); }); }
+    function save() { persist(g.label + ' saved.'); }
+    function makeDefault() { persist(g.label + ' saved as the default.'); }
     function restoreBuiltin() { var Dt = D.texts || {}, merged = Object.assign({}, cfg.texts); g.fields.forEach(function (key) { if (Dt[key] !== undefined) merged[key] = Dt[key]; else delete merged[key]; }); saveConfig({ texts: merged }).then(function () { cfg.texts = merged; build(); toast(g.label + ' restored to built-in default.'); }).catch(function (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); }); }
     return section;
   }
@@ -595,16 +599,25 @@
   function buildFlowCard() {
     var s = cfg.settings || {};
     var randomize = checkbox(s.randomizeOrder !== false);
-    var perUser = el('input', { type: 'number', value: String(s.comparisonsPerUser != null ? s.comparisonsPerUser : 0), style: 'max-width:140px;' });
+    var perUser = el('input', { type: 'number', min: '0', step: '1', value: String(s.comparisonsPerUser != null ? s.comparisonsPerUser : 0), style: 'max-width:140px;' });
     var reqCode = checkbox(s.requireSessionCode);
-    function doSave() {
+    // Answer Arena keeps a single live configuration that every session reads, so
+    // "Save" and "Make this the default" both persist it (Save = the everyday
+    // action; "Make this the default" = the explicit commit); a session created
+    // afterwards uses these values. "Restore built-in default" reverts to the
+    // values shipped in arena-data.js.
+    function persist(msg) {
+      var n = parseInt(perUser.value, 10);
       var settings = Object.assign({}, cfg.settings, {
         randomizeOrder: randomize.checked,
-        comparisonsPerUser: parseInt(perUser.value, 10) || 0,
+        comparisonsPerUser: (isNaN(n) || n < 0) ? 0 : n,
         requireSessionCode: reqCode.checked
       });
-      saveConfig({ settings: settings }).then(function () { cfg.settings = settings; toast('Comparison flow saved.'); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); });
+      perUser.value = String(settings.comparisonsPerUser);
+      return saveConfig({ settings: settings }).then(function () { cfg.settings = settings; toast(msg); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); });
     }
+    function save() { persist('Comparison flow saved.'); }
+    function makeDefault() { persist('Comparison flow saved as the default.'); }
     function restoreDefaults() {
       var Ds = D.settings || {};
       var settings = Object.assign({}, cfg.settings, {
@@ -621,7 +634,8 @@
       el('div', { class: 'aa-field' }, [el('label', { text: 'Comparisons per participant (0 = use the whole active set)' }), perUser]),
       el('div', { class: 'aa-field' }, [el('label', { class: 'aa-toggle' }, [reqCode, document.createTextNode('Require a session code to start')])]),
       el('div', { class: 'aa-row', style: 'margin-top:8px;' }, [
-        el('button', { class: 'aa-btn', on: { click: doSave } }, ['Make this the default']),
+        el('button', { class: 'aa-btn', on: { click: save } }, ['Save']),
+        el('button', { class: 'aa-btn sec', on: { click: makeDefault } }, ['Make this the default']),
         el('button', { class: 'aa-btn sec', on: { click: restoreDefaults } }, ['Restore built-in default'])
       ])
     ]);
@@ -639,7 +653,7 @@
         pRows.push(Object.assign({}, base, flatten('reg_', p.registration || {})));
         chain = chain.then(function () {
           return Store.listResponses(uid).then(function (rs) {
-            rs.forEach(function (v) { rRows.push({ participantId: base.participantId, email: base.email, taskId: v.taskId, idx: v.idx, choice: v.choice, chosenOutput: v.chosenOutput, leftOutput: v.leftOutput, rightOutput: v.rightOutput, responseMs: v.responseMs, transparency: base.transparency, incentive: base.incentive }); });
+            rs.forEach(function (v) { rRows.push({ participantId: base.participantId, email: base.email, taskId: v.taskId, idx: v.idx, choice: v.choice, chosenOutput: v.chosenOutput, leftOutput: v.leftOutput, rightOutput: v.rightOutput, satisfactionA: v.satisfA != null ? v.satisfA : '', satisfactionB: v.satisfB != null ? v.satisfB : '', satisfactionO1: v.satisfO1 != null ? v.satisfO1 : '', satisfactionO2: v.satisfO2 != null ? v.satisfO2 : '', reason: v.reason || '', responseMs: v.responseMs, transparency: base.transparency, incentive: base.incentive }); });
           }).catch(function () {});
         }).then(function () {
           return Store.getSurvey(uid).then(function (sv) { if (sv) sRows.push(Object.assign({ participantId: base.participantId, email: base.email, completedAt: fmtTs(sv.completedAt) }, flatten('s_', sv.answers || {}))); }).catch(function () {});

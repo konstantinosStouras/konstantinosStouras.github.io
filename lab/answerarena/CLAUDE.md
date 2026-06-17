@@ -74,6 +74,24 @@ Every task (built-in or uploaded) is:
 `flip` so each participant sees them in a randomized left/right order, and
 records which underlying output (`o1`/`o2`) was chosen.
 
+Each submitted comparison writes a **response** doc:
+
+```js
+{ taskId, idx, choice('left'|'right'|'tie'), chosenOutput('o1'|'o2'|'tie'),
+  leftOutput, rightOutput,
+  satisfA, satisfB,        // 1-5 satisfaction with the displayed Answer A / B
+  satisfO1, satisfO2,      // the same, mapped back to the underlying models
+  reason,                  // short free-text "why did you choose this?"
+  responseMs, condition, ts }
+```
+
+After picking a preference (or a tie) the participant must rate how satisfied
+they are with each answer (1-5) and give a short reason; **Next stays disabled
+until all three are supplied**. These columns ride along in the admin Excel
+export (Responses sheet). `settings.comparisonsPerUser` (0 = whole set) caps how
+many comparisons each participant sees and is enforced even when an in-progress
+order was built before the cap was set.
+
 **Excel upload** (admin Tasks tab) expects three columns: `task`, `outputA`,
 `outputB` (header names matched loosely; otherwise the first three columns).
 It writes a `taskSets/{id}` doc and points `config.activeTaskSetId` at it.

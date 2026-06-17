@@ -295,11 +295,20 @@
     setScreen(overlayWrap(card(t('mainTitle', 'Your comparisons'), [el('p', { text: 'Preparing your comparisons...' })])));
     Store.loadActiveTasks().then(function (set) {
       S.tasks = (set && set.tasks) || [];
+      var lim = cfg.settings.comparisonsPerUser || 0;   // 0 = use the whole active set
       // Restore an in-progress order if the participant has one; else build it.
       if (S.p && S.p.order && S.p.order.length && S.p.order.length <= S.tasks.length) {
         S.order = S.p.order.slice(); S.flips = (S.p.flips || []).slice(); S.idx = S.p.idx || 0;
+        // Honour a comparisons-per-participant limit that was set (or lowered)
+        // after this participant's order was built, so they are never shown more
+        // than the configured number of comparisons.
+        if (lim > 0 && S.order.length > lim) {
+          S.order = S.order.slice(0, lim); S.flips = S.flips.slice(0, lim);
+          if (S.idx > S.order.length) S.idx = S.order.length;
+          persist({ order: S.order, flips: S.flips, idx: S.idx });
+        }
       } else {
-        var n = S.tasks.length, lim = cfg.settings.comparisonsPerUser || 0;
+        var n = S.tasks.length;
         var idxs = []; for (var i = 0; i < n; i++) idxs.push(i);
         if (cfg.settings.randomizeOrder !== false) shuffle(idxs);
         if (lim > 0 && lim < idxs.length) idxs = idxs.slice(0, lim);
@@ -320,32 +329,48 @@
     var nextBtn = el('button', { class: 'a-btn a-go', on: { click: next } }, [(S.idx === S.order.length - 1) ? 'Finish' : 'Next']);
     nextBtn.setAttribute('data-tour', 'next');
     nextBtn.setAttribute('disabled', 'true');
-    comp.onChoose = function (choice) { S.choice = choice; nextBtn.removeAttribute('disabled'); };
+    var hint = el('p', { class: 'a-maininfo', style: 'margin-top:10px;min-height:18px;', text: '' });
+    // The follow-up (per-answer satisfaction + reason) must be completed before
+    // Next becomes available, so every response carries a choice, two ratings
+    // and a reason.
+    comp.onChange = function (d) {
+      S.choice = d.choice;
+      if (d.complete) { nextBtn.removeAttribute('disabled'); hint.textContent = ''; }
+      else { nextBtn.setAttribute('disabled', 'true'); hint.textContent = d.choice ? 'Rate each answer and add a short reason to continue.' : ''; }
+    };
     var wrap = el('div', { class: 'a-wrap a-wide' }, [
       el('p', { class: 'a-maininfo', html: t('mainIntro') }),
       comp.node,
-      el('div', { class: 'a-row a-center' }, [nextBtn])
+      el('div', { class: 'a-row a-center' }, [nextBtn]),
+      hint
     ]);
     setScreen(wrap);
 
-    // keyboard: 1/a left, 2/b right, 0/= tie, enter next
+    // keyboard: 1/a left, 2/b right, 0/= tie, enter next (ignored while typing
+    // the reason so letters/digits there are not read as answer shortcuts).
     document.onkeydown = function (e) {
       if (S.phase !== 'main') return;
+      if (/^(input|textarea|select)$/i.test((e.target && e.target.tagName) || '')) return;
       var k = e.key.toLowerCase();
       if (k === '1' || k === 'a') comp.pick('left');
       else if (k === '2' || k === 'b') comp.pick('right');
       else if (k === '0' || k === '=' || k === 't') comp.pick('tie');
-      else if (k === 'enter' && S.choice) next();
+      else if (k === 'enter') next();
     };
 
     function next() {
-      if (!S.choice) return;
+      var d = comp.getData();
+      if (!d.complete) return;
       document.onkeydown = null;
       var leftId = flip ? 'o2' : 'o1', rightId = flip ? 'o1' : 'o2';
-      var chosenOutput = S.choice === 'tie' ? 'tie' : (S.choice === 'left' ? leftId : rightId);
+      var chosenOutput = d.choice === 'tie' ? 'tie' : (d.choice === 'left' ? leftId : rightId);
       var resp = {
         taskId: task.id, idx: S.idx, leftOutput: leftId, rightOutput: rightId,
-        choice: S.choice, chosenOutput: chosenOutput, responseMs: Date.now() - S.shownAt,
+        choice: d.choice, chosenOutput: chosenOutput, responseMs: Date.now() - S.shownAt,
+        reason: d.reason || '',
+        satisfA: d.satisfA, satisfB: d.satisfB,                              // displayed Answer A / B
+        satisfO1: leftId === 'o1' ? d.satisfA : d.satisfB,                   // mapped back to the model
+        satisfO2: leftId === 'o2' ? d.satisfA : d.satisfB,
         condition: S.condition || (S.p && S.p.condition) || null, ts: Date.now()
       };
       if (S.user) Store.addResponse(S.user.uid, resp).catch(function () {});
@@ -355,13 +380,34 @@
     }
   }
 
-  // Builds a task + two-answer comparison. Returns { node, pick(side), onChoose }.
+  // A 1-5 satisfaction meter. Returns { node, get() }.
+  function ratingWidget(label, onPick) {
+    var current = null, btns = [];
+    var row = el('div', { class: 'a-rate' });
+    for (var v = 1; v <= 5; v++) {
+      (function (val) {
+        var b = el('button', { type: 'button', class: 'a-ratebtn', text: String(val), on: { click: function () { setVal(val); } } });
+        btns.push(b); row.appendChild(b);
+      })(v);
+    }
+    function setVal(val) { current = val; btns.forEach(function (b, i) { b.classList.toggle('on', (i + 1) <= val); }); if (onPick) onPick(val); }
+    var node = el('div', { class: 'a-ratewrap' }, [
+      el('div', { class: 'a-ratelabel', text: label }),
+      row,
+      el('div', { class: 'a-ratescale' }, [el('span', { text: '1 - Not at all' }), el('span', { text: '5 - Very' })])
+    ]);
+    return { node: node, get: function () { return current; }, setVal: setVal };
+  }
+
+  // Builds a task + two-answer comparison.
+  // Returns { node, pick(side), getData(), onChoose, onChange }.
   function buildComparison(task, pos, total, flip, opts) {
     opts = opts || {};
     var leftText = flip ? task.outputB : task.outputA;
     var rightText = flip ? task.outputA : task.outputB;
-    var api = { onChoose: null };
+    var api = { onChoose: null, onChange: null };
     var selected = null;
+    var showFollow = !opts.demo;   // the tour demo stays a simple preview
 
     var progress = el('div', { class: 'a-progress', 'data-tour': 'progress' }, [
       el('div', { class: 'a-progbar' }, [el('div', { class: 'a-progfill', style: 'width:' + Math.round((pos - (opts.practice || opts.demo ? 1 : 1)) / total * 0) + '%' })]),
@@ -388,18 +434,46 @@
     var rightCard = answerCard('right', rightText, 'B', 'answerRight');
     var tieBtn = el('button', { class: 'a-tie', 'data-tour': 'tie', on: { click: function () { pick('tie'); } } }, ["They're equally good"]);
 
+    // Post-choice follow-up: a per-answer satisfaction rating and a free-text
+    // reason, revealed only after a preference (or tie) is chosen.
+    var satisfA = null, satisfB = null, reasonInput = null, rateA = null, rateB = null, follow = null;
+    if (showFollow) {
+      rateA = ratingWidget('How satisfied are you with Answer A?', function (v) { satisfA = v; change(); });
+      rateB = ratingWidget('How satisfied are you with Answer B?', function (v) { satisfB = v; change(); });
+      reasonInput = el('textarea', { rows: '3', placeholder: 'In a sentence or two, what made the difference?' });
+      reasonInput.addEventListener('input', change);
+      follow = el('div', { class: 'a-follow', 'data-tour': 'follow', style: 'display:none;' }, [
+        el('div', { class: 'a-followhead', text: 'Tell us a little more' }),
+        el('div', { class: 'a-rates' }, [rateA.node, rateB.node]),
+        el('div', { class: 'a-field' }, [el('label', { text: 'Why did you make this choice?' }), reasonInput])
+      ]);
+    }
+
     function pick(side) {
       selected = side;
       leftCard.classList.toggle('sel', side === 'left');
       rightCard.classList.toggle('sel', side === 'right');
       tieBtn.classList.toggle('sel', side === 'tie');
+      if (follow && follow.style.display === 'none') follow.style.display = 'block';
       if (api.onChoose) api.onChoose(side);
+      change();
     }
     api.pick = pick;
 
+    function data() {
+      var reason = reasonInput ? reasonInput.value.trim() : '';
+      var complete = selected != null && (!showFollow || (satisfA != null && satisfB != null && reason.length > 0));
+      return { choice: selected, reason: reason, satisfA: satisfA, satisfB: satisfB, complete: complete };
+    }
+    function change() { if (api.onChange) api.onChange(data()); }
+
     var grid = el('div', { class: 'a-versus' }, [leftCard, el('div', { class: 'a-vs', text: 'vs' }), rightCard]);
-    var node = el('div', { class: 'a-comp' + (opts.practice ? ' a-practice' : '') }, [progress, taskCard, grid, el('div', { class: 'a-tierow' }, [tieBtn])]);
-    return { node: node, pick: pick, get onChoose() { return api.onChoose; }, set onChoose(v) { api.onChoose = v; } };
+    var node = el('div', { class: 'a-comp' + (opts.practice ? ' a-practice' : '') }, [progress, taskCard, grid, el('div', { class: 'a-tierow' }, [tieBtn]), follow]);
+    return {
+      node: node, pick: pick, getData: data,
+      get onChoose() { return api.onChoose; }, set onChoose(v) { api.onChoose = v; },
+      get onChange() { return api.onChange; }, set onChange(v) { api.onChange = v; }
+    };
   }
 
   /* ============================ SURVEY =========================== */
