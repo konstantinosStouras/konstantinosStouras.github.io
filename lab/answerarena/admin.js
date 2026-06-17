@@ -92,6 +92,7 @@
       + '#aa-root textarea{resize:vertical;}'
       + '.aa-btn{border:none;background:var(--accent);color:#fff;font-weight:600;font-size:14px;line-height:1.4;white-space:nowrap;padding:10px 16px;border-radius:10px;cursor:pointer;}'
       + '.aa-btn:hover{background:var(--accentd);}.aa-btn.sec{background:var(--panel);color:var(--ink);border:1px solid var(--fieldline);}.aa-btn.sm{padding:7px 11px;font-size:12px;}.aa-btn.danger{background:transparent;color:#e06b5a;border:1px solid #6d3b34;}'
+      + '.aa-btn.green{background:#2faa5e;color:#fff;border:none;box-shadow:0 4px 12px rgba(47,170,94,.30);}.aa-btn.green:hover{background:#268a4c;box-shadow:0 7px 18px rgba(47,170,94,.38);}'
       + '#aa-root input[type=file]{font-size:14px;color:var(--muted);}'
       + '#aa-root input[type=file]::file-selector-button{border:none;background:var(--accent);color:#fff;font-weight:600;font-size:14px;padding:10px 16px;border-radius:10px;cursor:pointer;margin-right:10px;}'
       + '#aa-root input[type=file]::-webkit-file-upload-button{border:none;background:var(--accent);color:#fff;font-weight:600;font-size:14px;padding:10px 16px;border-radius:10px;cursor:pointer;margin-right:10px;}'
@@ -294,7 +295,7 @@
     var actions = [
       el('button', { class: 'aa-btn sm', on: { click: function () { window.open(joinUrl, '_blank'); } } }, ['Open']),
       el('button', { class: 'aa-btn sec sm', on: { click: function () { copy(joinUrl); } } }, ['Copy link']),
-      el('button', { class: 'aa-btn sec sm', on: { click: exportSession } }, ['Export data']),
+      el('button', { class: 'aa-btn green sm', on: { click: exportSession } }, ['Export data']),
       el('button', { class: 'aa-btn sec sm', on: { click: editMode } }, ['Edit name'])
     ];
     if (st === 'closed') {
@@ -388,7 +389,7 @@
   function buildUsersCard() {
     var card = el('div', { class: 'aa-card' });
     var all = [];
-    card.appendChild(el('div', { class: 'aa-h', style: 'margin-bottom:8px;' }, [el('h3', { text: 'Registered users' }), el('button', { class: 'aa-btn sm', on: { click: function () { if (all.length) exportExcel(all); else toast('No users yet.'); } } }, ['Export to Excel'])]));
+    card.appendChild(el('div', { class: 'aa-h', style: 'margin-bottom:8px;' }, [el('h3', { text: 'Registered users' }), el('button', { class: 'aa-btn green sm', on: { click: function () { if (all.length) exportExcel(all); else toast('No users yet.'); } } }, ['Export to Excel'])]));
     var search = el('input', { type: 'text', placeholder: 'Search by e-mail or ID...' });
     card.appendChild(el('div', { class: 'aa-field' }, [search]));
     var listWrap = el('div', {}, [el('p', { class: 'aa-note', text: 'Loading...' })]);
