@@ -92,6 +92,15 @@
       + '#aa-root textarea{resize:vertical;}'
       + '.aa-btn{border:none;background:var(--accent);color:#fff;font-weight:600;font-size:14px;line-height:1.4;white-space:nowrap;padding:10px 16px;border-radius:10px;cursor:pointer;}'
       + '.aa-btn:hover{background:var(--accentd);}.aa-btn.sec{background:var(--panel);color:var(--ink);border:1px solid var(--fieldline);}.aa-btn.sm{padding:7px 11px;font-size:12px;}.aa-btn.danger{background:transparent;color:#e06b5a;border:1px solid #6d3b34;}'
+      + '#aa-root input[type=file]{font-size:14px;color:var(--muted);}'
+      + '#aa-root input[type=file]::file-selector-button{border:none;background:var(--accent);color:#fff;font-weight:600;font-size:14px;padding:10px 16px;border-radius:10px;cursor:pointer;margin-right:10px;}'
+      + '#aa-root input[type=file]::-webkit-file-upload-button{border:none;background:var(--accent);color:#fff;font-weight:600;font-size:14px;padding:10px 16px;border-radius:10px;cursor:pointer;margin-right:10px;}'
+      + '#aa-root input[type=file]::file-selector-button:hover,#aa-root input[type=file]::-webkit-file-upload-button:hover{background:var(--accentd);}'
+      + '.aa-sumtbl{border:1px solid var(--line);border-radius:10px;padding:2px 14px;background:var(--qbg);}'
+      + '.aa-sumrow{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);}'
+      + '.aa-sumrow:last-child{border-bottom:none;}'
+      + '.aa-sumk{color:var(--muted);font-size:13px;}'
+      + '.aa-sumv{font-weight:700;font-size:13px;text-align:right;min-width:0;overflow-wrap:anywhere;}'
       + '.aa-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}'
       + '.aa-note{color:var(--muted);font-size:13px;line-height:1.6;}'
       + '.aa-q{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--qbg);overflow-wrap:break-word;}'
@@ -197,12 +206,13 @@
     var left = el('div', { class: 'aa-col' });
     var right = el('div', { class: 'aa-col' });
 
-    // RIGHT: active sessions (with inline creator) + registered users.
-    right.appendChild(buildSessionsCard().node);
+    // RIGHT: active sessions (list only) + registered users.
+    var sessions = buildSessionsCard();
+    right.appendChild(sessions.node);
     right.appendChild(buildUsersCard());
 
     // LEFT: design parameters (2x2 conditions, comparison flow, task set),
-    // then page text, then forms.
+    // then page text, then forms, then the Create Session action + summary.
     left.appendChild(el('div', { class: 'aa-sub', text: 'Design parameters' }));
     left.appendChild(build2x2Card());
     left.appendChild(buildFlowCard());
@@ -212,56 +222,39 @@
     left.appendChild(el('div', { class: 'aa-sub', text: 'Forms' }));
     left.appendChild(collapsible('Edit registration questions', function (c) { renderQuestions(c, 'registrationQuestions', 'Registration questions'); }));
     left.appendChild(collapsible('Edit survey questions', function (c) { renderQuestions(c, 'surveyQuestions', 'Survey questions'); }));
+    left.appendChild(el('div', { class: 'aa-sub', text: 'Launch' }));
+    left.appendChild(buildCreateCard(sessions.refresh));
 
     root.appendChild(el('div', { class: 'aa-wrap aa-wrap2' }, [header, el('div', { class: 'aa-grid' }, [left, right])]));
   }
 
-  /* ---- RIGHT: active sessions (ideasearchlab-style cards) ---- */
+  /* ---- RIGHT: active sessions (list only; created from the left column) ---- */
   function buildSessionsCard() {
     var card = el('div', { class: 'aa-card' });
     var countSpan = el('span', { class: 'aa-count' });
     card.appendChild(el('div', { class: 'aa-h', style: 'margin-bottom:4px;' }, [el('h3', { text: 'Active sessions' }), countSpan]));
-    card.appendChild(el('p', { class: 'aa-note', text: 'Open a session to copy its join link or change its status. Every session uses the design parameters and content set on the left.' }));
-    var nameI = el('input', { type: 'text', placeholder: 'New session name (optional)', style: 'flex:1 1 160px;min-width:120px;' });
-    var statusI = el('select', { style: 'max-width:110px;' }, ['open', 'waiting', 'closed'].map(function (s) { return el('option', { value: s }, [s]); }));
-    var createBtn = el('button', { class: 'aa-btn sm', on: { click: create } }, ['+ Create']);
-    card.appendChild(el('div', { class: 'aa-row', style: 'margin:8px 0 4px;' }, [nameI, statusI, createBtn]));
-    var createErr = el('div', { class: 'aa-err' });
-    card.appendChild(createErr);
+    card.appendChild(el('p', { class: 'aa-note', text: 'Every session is created open. Copy its join link to invite participants, export its data, or close it to stop new joins. Create sessions from the left column.' }));
     var listWrap = el('div', {}, [el('p', { class: 'aa-note', text: 'Loading...' })]);
     card.appendChild(listWrap);
-    card.appendChild(el('p', { class: 'aa-note', style: 'margin-top:12px;border-top:1px solid var(--line);padding-top:10px;', text: 'Participants join with the session code on the welcome screen, or by opening the share link.' }));
-    nameI.addEventListener('keydown', function (e) { if (e.key === 'Enter') create(); });
+    card.appendChild(el('p', { class: 'aa-note', style: 'margin-top:12px;border-top:1px solid var(--line);padding-top:10px;', text: 'Participants join with the session code on the welcome/login screen, or by opening the share link.' }));
 
-    function create() {
-      createErr.textContent = '';
-      // Name is optional - auto-name a blank one so the button always works.
-      var nm = nameI.value.trim() || ('Session ' + new Date().toLocaleString());
-      createBtn.setAttribute('disabled', 'true'); createBtn.textContent = 'Creating...';
-      Store.createSession({ name: nm, status: statusI.value, condition: null, taskSetId: cfg.activeTaskSetId || null })
-        .then(function (s) { toast('Session created: ' + s.code); nameI.value = ''; createBtn.removeAttribute('disabled'); createBtn.textContent = '+ Create'; refresh(); })
-        .catch(function (e) {
-          createBtn.removeAttribute('disabled'); createBtn.textContent = '+ Create';
-          var msg = (e && (e.code || e.message)) || 'error';
-          createErr.textContent = 'Could not create the session: ' + msg + (/(permission|insufficient)/i.test(msg) ? ' - the Firestore rules may need (re)deploying.' : '');
-          if (window.console) console.error('[Arena] createSession failed', e);
-        });
-    }
     function refresh() {
       Promise.all([Store.listSessions(), Store.listParticipants().catch(function () { return []; })]).then(function (res) {
         var list = res[0], parts = res[1] || [];
-        // A participant counts towards a session if they are currently in it or
-        // have completed it (a user can take part in several sessions).
+        // A participant counts for a session they have played - started it
+        // (playedSessions), are currently in it (sessionId), or completed it.
         var counts = {};
         parts.forEach(function (p) {
           var seen = {};
           if (p.sessionId) seen[p.sessionId] = true;
+          Object.keys(p.playedSessions || {}).forEach(function (sid) { seen[sid] = true; });
           Object.keys(p.completedSessions || {}).forEach(function (sid) { seen[sid] = true; });
           Object.keys(seen).forEach(function (sid) { counts[sid] = (counts[sid] || 0) + 1; });
         });
-        countSpan.textContent = list.length + ' active';
+        var openN = list.filter(function (x) { return (x.status || 'open') !== 'closed'; }).length;
+        countSpan.textContent = openN + ' active';
         listWrap.innerHTML = '';
-        if (!list.length) { listWrap.appendChild(el('p', { class: 'aa-note', text: 'No sessions yet.' })); return; }
+        if (!list.length) { listWrap.appendChild(el('p', { class: 'aa-note', text: 'No sessions yet - create one from the left column.' })); return; }
         list.sort(function (a, b) { return tsMs(b.createdAt) - tsMs(a.createdAt); });
         list.forEach(function (s) { listWrap.appendChild(sessionCard(s, counts, refresh)); });
       }).catch(function (e) { listWrap.innerHTML = ''; listWrap.appendChild(el('p', { class: 'aa-err', text: 'Could not load sessions: ' + ((e && e.code) || 'error') })); });
@@ -269,31 +262,49 @@
     refresh();
     return { node: card, refresh: refresh };
   }
+  // The 2x2 conditions a session runs (snapshotted at creation; falls back to
+  // the current global setting for older sessions).
+  function condLabel(cond) {
+    var f = (cond && cond.factors) || ((cfg.settings && cfg.settings.twoByTwo && cfg.settings.twoByTwo.factors) || {});
+    var on = [];
+    if (f.transparency) on.push('Transparency');
+    if (f.incentive) on.push('Incentive');
+    return on.length ? on.join(' + ') : 'Baseline (no conditions)';
+  }
   function sessionCard(s, counts, refresh) {
     var liveCount = counts[s.id] != null ? counts[s.id] : (s.count || 0);
     var joinUrl = location.origin + location.pathname + '?s=' + s.code;
     var st = s.status || 'open';
     var box = el('div', { class: 'aa-q' });
     box.appendChild(el('div', { class: 'row', style: 'justify-content:space-between;align-items:flex-start;' }, [
-      el('div', {}, [el('b', { text: s.code, style: 'font-size:18px;letter-spacing:.1em;' }), ' ', el('span', { class: 'aa-badge ' + st, text: st })]),
-      el('div', { style: 'text-align:right;' }, [
+      el('div', { style: 'min-width:0;' }, [
+        el('b', { text: s.code, style: 'font-size:18px;letter-spacing:.1em;' }), ' ', el('span', { class: 'aa-badge ' + st, text: st }),
+        s.name ? el('div', { class: 'aa-note', style: 'margin-top:2px;' }, [s.name]) : null
+      ]),
+      el('div', { style: 'text-align:right;min-width:0;' }, [
         el('div', { style: 'font-weight:700;font-size:14px;', text: liveCount + ' participant' + (liveCount === 1 ? '' : 's') }),
-        el('div', { class: 'aa-note', text: s.name || '(unnamed)' })
+        el('div', { class: 'aa-note', text: condLabel(s.condition) })
       ])
     ]));
     box.appendChild(el('div', { class: 'aa-note', style: 'margin-top:4px;', text: 'Created ' + (fmtTs(s.createdAt) || 'just now') }));
-    box.appendChild(el('div', { class: 'aa-row', style: 'margin-top:8px;' }, [
+    var actions = [
       el('button', { class: 'aa-btn sm', on: { click: function () { window.open(joinUrl, '_blank'); } } }, ['Open']),
       el('button', { class: 'aa-btn sec sm', on: { click: function () { copy(joinUrl); } } }, ['Copy link']),
       el('button', { class: 'aa-btn sec sm', on: { click: exportSession } }, ['Export data']),
-      el('button', { class: 'aa-btn sec sm', on: { click: editMode } }, ['Edit']),
-      el('button', { class: 'aa-btn danger sm', on: { click: function () { if (window.confirm('Delete session ' + s.code + '?')) Store.deleteSession(s.id).then(function () { toast('Deleted.'); refresh(); }); } } }, ['Delete'])
-    ]));
-    // Download only the data for the users who played THIS session (each user can
-    // play a session once; this shows what each of them submitted for it).
+      el('button', { class: 'aa-btn sec sm', on: { click: editMode } }, ['Edit name'])
+    ];
+    if (st === 'closed') {
+      actions.push(el('button', { class: 'aa-btn sec sm', on: { click: function () { Store.updateSession(s.id, { status: 'open' }).then(function () { toast('Reopened.'); refresh(); }); } } }, ['Reopen']));
+      actions.push(el('button', { class: 'aa-btn danger sm', on: { click: function () { if (window.confirm('Permanently delete session ' + s.code + '? (Participant data is kept.)')) Store.deleteSession(s.id).then(function () { toast('Deleted.'); refresh(); }); } } }, ['Delete']));
+    } else {
+      // "Delete" a running session = close it (participants can no longer join).
+      actions.push(el('button', { class: 'aa-btn danger sm', on: { click: function () { if (window.confirm('Close session ' + s.code + '? Participants will no longer be able to join.')) Store.updateSession(s.id, { status: 'closed' }).then(function () { toast('Closed.'); refresh(); }); } } }, ['Close']));
+    }
+    box.appendChild(el('div', { class: 'aa-row', style: 'margin-top:8px;' }, actions));
+    // Download only the data for the users who played THIS session.
     function exportSession() {
       Store.listParticipants().then(function (all) {
-        var parts = all.filter(function (p) { return p.sessionId === s.id || (p.completedSessions && p.completedSessions[s.id]); });
+        var parts = all.filter(function (p) { return p.sessionId === s.id || (p.playedSessions && p.playedSessions[s.id]) || (p.completedSessions && p.completedSessions[s.id]); });
         if (!parts.length) { toast('No participants in this session yet.'); return; }
         exportExcel(parts, { sessionId: s.id, sessionCode: s.code });
       }).catch(function (e) { toast('Export failed: ' + ((e && e.code) || 'error')); });
@@ -301,16 +312,72 @@
     function editMode() {
       box.innerHTML = '';
       var ename = el('input', { type: 'text', value: s.name || '' });
-      var estatus = el('select', { style: 'max-width:130px;' }, ['open', 'waiting', 'closed'].map(function (x) { return el('option', { value: x }, [x]); }));
-      estatus.value = st;
       box.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: 'Name (' + s.code + ')' }), ename]));
-      box.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: 'Status' }), estatus]));
       box.appendChild(el('div', { class: 'aa-row' }, [
-        el('button', { class: 'aa-btn sm', on: { click: function () { Store.updateSession(s.id, { name: ename.value.trim() || s.name, status: estatus.value }).then(function () { toast('Saved.'); refresh(); }); } } }, ['Save']),
+        el('button', { class: 'aa-btn sm', on: { click: function () { Store.updateSession(s.id, { name: ename.value.trim() }).then(function () { toast('Saved.'); refresh(); }); } } }, ['Save']),
         el('button', { class: 'aa-btn sec sm', on: { click: refresh } }, ['Cancel'])
       ]));
     }
     return box;
+  }
+
+  /* ---- LEFT (bottom): create a session + setup summary ---- */
+  function buildCreateCard(sessionsRefresh) {
+    var card = el('div', { class: 'aa-card' });
+    card.appendChild(el('h3', { text: 'Create a session' }));
+    card.appendChild(el('p', { class: 'aa-note', text: 'Creates an open session using the parameters and content above. Share its join link with participants; close it later (from the right) to stop new joins.' }));
+    var nameI = el('input', { type: 'text', placeholder: 'Optional label, e.g. "Pilot group A"' });
+    card.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: 'Session name (optional)' }), nameI]));
+    var err = el('div', { class: 'aa-err' });
+    var btn = el('button', { class: 'aa-btn', on: { click: create } }, ['Create Session']);
+    card.appendChild(el('div', { class: 'aa-row' }, [btn]));
+    card.appendChild(err);
+    var summary = el('div', { style: 'margin-top:16px;' });
+    card.appendChild(summary);
+    nameI.addEventListener('keydown', function (e) { if (e.key === 'Enter') create(); });
+    renderSummary();
+
+    function factors() { return (cfg.settings && cfg.settings.twoByTwo && cfg.settings.twoByTwo.factors) || {}; }
+    function create() {
+      err.textContent = '';
+      var f = factors();
+      var cond = { factors: { transparency: !!f.transparency, incentive: !!f.incentive } };  // snapshot the 2x2 onto the session
+      btn.setAttribute('disabled', 'true'); btn.textContent = 'Creating...';
+      Store.createSession({ name: nameI.value.trim(), status: 'open', condition: cond, taskSetId: cfg.activeTaskSetId || null })
+        .then(function (s) { toast('Session created: ' + s.code); nameI.value = ''; btn.removeAttribute('disabled'); btn.textContent = 'Create Session'; if (sessionsRefresh) sessionsRefresh(); })
+        .catch(function (e) {
+          btn.removeAttribute('disabled'); btn.textContent = 'Create Session';
+          var msg = (e && (e.code || e.message)) || 'error';
+          err.textContent = 'Could not create the session: ' + msg + (/(permission|insufficient)/i.test(msg) ? ' - the Firestore rules may need (re)deploying.' : '');
+          if (window.console) console.error('[Arena] createSession failed', e);
+        });
+    }
+    function renderSummary() {
+      var s = cfg.settings || {}, f = factors();
+      var on = []; if (f.transparency) on.push('Transparency'); if (f.incentive) on.push('Incentive');
+      var groups = (on.length === 0) ? 'single baseline group' : (Math.pow(2, on.length) + ' groups (' + on.join(' × ') + ')');
+      var lim = s.comparisonsPerUser || 0;
+      var rows = [
+        ['Comparisons / participant', lim > 0 ? String(lim) : 'whole active set'],
+        ['Order', (s.randomizeOrder !== false) ? 'randomized per participant' : 'fixed order'],
+        ['Per comparison', 'pick or tie + 1-5 satisfaction for each answer + reason'],
+        ['Session code', 'required to take part'],
+        ['2x2 conditions', groups],
+        ['Active task set', 'loading...']
+      ];
+      summary.innerHTML = '';
+      summary.appendChild(el('div', { class: 'aa-sub', style: 'margin:0 0 4px;', text: 'Setup summary' }));
+      summary.appendChild(el('p', { class: 'aa-note', style: 'margin:0 0 8px;', text: 'A snapshot of the saved settings a new session will use. Save changes above, then Refresh.' }));
+      var tbl = el('div', { class: 'aa-sumtbl' });
+      rows.forEach(function (r) { tbl.appendChild(el('div', { class: 'aa-sumrow' }, [el('span', { class: 'aa-sumk', text: r[0] }), el('span', { class: 'aa-sumv', text: r[1] })])); });
+      summary.appendChild(tbl);
+      summary.appendChild(el('div', { class: 'aa-row', style: 'margin-top:8px;' }, [el('button', { class: 'aa-btn sec sm', on: { click: renderSummary } }, ['↻ Refresh summary'])]));
+      Store.loadActiveTasks().then(function (set) {
+        var vEls = tbl.querySelectorAll('.aa-sumv');
+        if (vEls.length) vEls[vEls.length - 1].textContent = (set && set.tasks ? set.tasks.length : 0) + ' comparisons' + (set && set.name ? ' (' + set.name + ')' : '');
+      }).catch(function () {});
+    }
+    return card;
   }
 
   /* ---- RIGHT: registered users ---- */
@@ -369,8 +436,6 @@
     var card = el('div', { class: 'aa-card' });
     card.appendChild(el('h3', { text: 'Comparisons (task set)' }));
     card.appendChild(el('p', { class: 'aa-note', html: 'Load comparisons with <b>three columns</b> - <b>task</b>, <b>outputA</b>, <b>outputB</b> (one row each; first row = headers). Headers are matched loosely: <b>Specific description</b> -> task, <b>Output of Haiku 4.5 ...</b> -> outputA, <b>Output of Opus 4.8 ...</b> -> outputB (also "Task"/"Prompt", "Output A"/"Answer 1", etc.). Participants see the two outputs in a randomized left/right order and never learn which produced which.' }));
-    var setName = el('input', { type: 'text', placeholder: 'Name for this set (optional)' });
-    card.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: 'Set name' }), setName]));
     var file = el('input', { type: 'file', accept: '.xlsx,.xls,.csv' });
     card.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: 'Upload an Excel / CSV file' }), file]));
     var gsUrl = el('input', { type: 'text', placeholder: 'https://docs.google.com/spreadsheets/d/.../edit#gid=0' });
@@ -378,7 +443,7 @@
       el('label', { text: 'Or import from a Google Sheet link' }), gsUrl,
       el('div', { class: 'aa-note', style: 'margin-top:4px;', html: 'The sheet must be shared <b>Anyone with the link - Viewer</b> (or File -> Share -> Publish to web). Use the link of the single tab that holds the three columns - the <code>#gid=</code> in the URL selects the tab.' })
     ]));
-    card.appendChild(el('div', { class: 'aa-row' }, [el('button', { class: 'aa-btn sm', on: { click: importGoogle } }, ['Import from Google Sheet'])]));
+    card.appendChild(el('div', { class: 'aa-row' }, [el('button', { class: 'aa-btn', on: { click: importGoogle } }, ['Import from Google Sheet'])]));
     var preview = el('div', { style: 'margin-top:8px;' });
     card.appendChild(preview);
 
@@ -438,13 +503,21 @@
       tbl.appendChild(tb);
       preview.appendChild(el('div', { style: 'overflow-x:auto;-webkit-overflow-scrolling:touch;' }, [tbl]));
       preview.appendChild(el('div', { class: 'aa-row', style: 'margin-top:10px;' }, [
-        el('button', { class: 'aa-btn', on: { click: makeActive } }, ['Make this the active set']),
-        el('button', { class: 'aa-btn sec', on: { click: function () { parsed = null; file.value = ''; preview.innerHTML = ''; } } }, ['Discard'])
+        el('button', { class: 'aa-btn', on: { click: function () { activate('Comparisons saved (' + parsed.length + ').'); } } }, ['Save']),
+        el('button', { class: 'aa-btn sec', on: { click: function () { activate('Comparisons saved as the default (' + parsed.length + ').'); } } }, ['Make this the default']),
+        el('button', { class: 'aa-btn sec', on: { click: restoreBuiltin } }, ['Restore built-in default']),
+        el('button', { class: 'aa-btn sec', on: { click: discard } }, ['Discard'])
       ]));
     }
-    function makeActive() {
-      var set = { name: setName.value.trim() || ('Uploaded ' + new Date().toLocaleString()), source: 'excel', tasks: parsed, count: parsed.length };
-      Store.saveTaskSet(set).then(function (id) { cfg.activeTaskSetId = id; toast('Active set updated (' + parsed.length + ' comparisons).'); parsed = null; file.value = ''; preview.innerHTML = ''; refreshActive(); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); });
+    function discard() { parsed = null; file.value = ''; preview.innerHTML = ''; }
+    // Save the parsed upload as the active comparison set. ("Save" and "Make this
+    // the default" both do this - the active set is the one participants get.)
+    function activate(msg) {
+      var set = { name: 'Uploaded ' + new Date().toLocaleString(), source: 'excel', tasks: parsed, count: parsed.length };
+      Store.saveTaskSet(set).then(function (id) { cfg.activeTaskSetId = id; toast(msg); discard(); refreshActive(); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); });
+    }
+    function restoreBuiltin() {
+      saveConfig({ activeTaskSetId: null }).then(function () { cfg.activeTaskSetId = null; toast('Restored built-in default.'); discard(); refreshActive(); }).catch(function (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); });
     }
     function refreshActive() {
       Store.loadActiveTasks().then(function (s) {
@@ -676,7 +749,7 @@
       parts.forEach(function (p) {
         var uid = p._id, c = p.condition || {};
         var completed = Object.keys(p.completedSessions || {});
-        var base = { participantId: p.participantId || '', email: p.email || '', status: p.status || '', currentSessionId: p.sessionId || '', completedSessions: completed.join(', '), transparency: c.transparency || '', incentive: c.incentive || '', registered: fmtTs(p.createdAt) };
+        var base = { participantId: p.participantId || '', email: p.email || '', status: p.status || '', currentSessionId: p.sessionId || '', playedSessions: Object.keys(p.playedSessions || {}).join(', '), completedSessions: completed.join(', '), transparency: c.transparency || '', incentive: c.incentive || '', registered: fmtTs(p.createdAt) };
         if (only) base.completedThisSession = (p.completedSessions && p.completedSessions[only]) ? fmtTs(p.completedSessions[only]) : 'no';
         pRows.push(Object.assign({}, base, flatten('reg_', p.registration || {})));
         chain = chain.then(function () {

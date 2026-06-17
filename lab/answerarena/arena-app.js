@@ -318,7 +318,12 @@
       if (cfg.settings.randomizeOrder !== false) shuffle(idxs);
       if (lim > 0 && lim < idxs.length) idxs = idxs.slice(0, lim);
       S.order = idxs; S.flips = idxs.map(function () { return Math.random() < 0.5; }); S.idx = 0;
-      persist({ order: S.order, flips: S.flips, idx: 0, status: 'playing' });
+      // Record this session as one the participant has played (so the admin's
+      // per-session participant count includes anyone who started it, not only
+      // those still on it or who finished it).
+      var played = Object.assign({}, (S.p && S.p.playedSessions) || {});
+      if (!played[curSid()]) played[curSid()] = nowStamp();
+      persist({ order: S.order, flips: S.flips, idx: 0, status: 'playing', playedSessions: played });
       if (!S.order.length) { showThankYou(); return; }
       renderComparison();
     }).catch(function () { setScreen(overlayWrap(card('Problem', [el('p', { text: 'Could not load the comparisons. Please refresh.' })]))); });

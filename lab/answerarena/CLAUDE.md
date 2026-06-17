@@ -110,20 +110,30 @@ is randomly and invisibly assigned one of its two levels - **Transparency**
 is off is fixed at its baseline level. So both on = 4 groups, one on = 2, none =
 1 baseline group. The assigned cell (`{ enabled, transparency, incentive }`) is
 stored on the participant doc and on every response, and is **never shown** to
-the participant. This setting is **global** (set in the admin "2x2 conditions"
-card). `assignCondition()` will also honour a per-session override if a session
-doc ever carries a `condition`, but the admin does not expose that yet, so every
-session currently uses the global setting.
+the participant. The 2x2 is configured **globally** (the admin "2x2 conditions" card), and
+**each session snapshots it at creation** into the session's `condition`
+(`{ factors:{transparency,incentive} }`). `assignCondition()` uses that snapshot,
+so a session keeps the conditions it was created with even if the global setting
+changes later; each session card shows its conditions on the right.
 
 ## 6. Sessions
 
-Admin creates sessions with a short join **code**. **A session code is always
-required to take part** (welcome, login and the "enter your session code"
-screen all require it; there is no toggle). A shared link (`?s=CODE`) lands a
-signed-out visitor on the **login** panel with the code prefilled (email +
-password + session code); "New here? Create an account" goes to the welcome/
-register flow. Sessions are publicly readable so the code can be validated
-before sign-in; they hold no personal data. The admin can **export one
+Admin creates sessions from the **"Create a session"** card at the bottom of the
+left column (a "Create Session" button + a **setup summary** of the saved
+parameters a new session will use). Every session is **created open**; there is
+no status picker. On the right, **Active sessions** lists each session showing
+its code + status, participant count + **2x2 conditions** (right), and created
+date (left); a running session can be **Closed** (participants can no longer
+join) and a closed one **Reopened** or permanently **Deleted**. Per-session
+participant counts include anyone who **played** it - started (`playedSessions`),
+is on it (`sessionId`), or completed it (`completedSessions`).
+
+**A session code is always required to take part** (welcome, login and the
+"enter your session code" screen all require it; there is no toggle). A shared
+link (`?s=CODE`) lands a signed-out visitor on the **login** panel with the code
+prefilled (email + password + session code); "New here? Create an account" goes
+to the register flow. Sessions are publicly readable so the code can be
+validated before sign-in; they hold no personal data. The admin can **export one
 session's data** (the "Export data" button on a session card) - just the users
 who played it and only their data for that session - in addition to the
 all-users export in the Registered users card.
