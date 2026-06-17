@@ -51,13 +51,22 @@ def should_skip_title(title):
     return False
 
 
-def editor_looks_truncated(editor):
-    """True when a stored Accepting Editor is only initials with no surname,
-    e.g. "D. J" — the signature of the old abstract parser truncating
-    "D. J. Wu, information systems." Such rows are re-scraped so the
-    multi-initial fix self-heals values already saved to the CSV."""
-    tokens = [t for t in re.split(r"\s+", (editor or "").replace(".", " ")) if t]
-    return bool(tokens) and all(len(t) == 1 for t in tokens)
+def editor_needs_rescrape(editor):
+    """True when a stored Accepting Editor is clearly malformed, so the row is
+    re-scraped and parser fixes self-heal values already saved to the CSV:
+      (a) only initials with no surname ("D. J") — the old multi-initial
+          truncation bug; or
+      (b) the special-issue area text leaked into the name, e.g.
+          "Kay Giesecke for the Virtual Special Issue on Digital Finance"."""
+    e = (editor or "").strip()
+    if not e:
+        return False
+    tokens = [t for t in re.split(r"\s+", e.replace(".", " ")) if t]
+    if tokens and all(len(t) == 1 for t in tokens):
+        return True
+    if re.search(r"\bfor the\b.*\bspecial (?:issue|section)\b", e, re.IGNORECASE):
+        return True
+    return False
 
 
 def extract_editor(html):
@@ -85,7 +94,7 @@ def extract_editor_from_abstract(abstract_text):
     # Capture up to the sentence-ending period, treating any period followed by
     # <=5 chars as an abbreviation/initial so multi-initial names like
     # "D. J. Wu" are kept whole (the `*` allows more than one such initial).
-    match = re.search(r"(?:This paper|This work) was accepted by\s+([^.]+(?:\.[^.]{0,5})*[^.]*)\.", abstract_text, re.IGNORECASE)
+    match = re.search(r"(?:This paper|This work) (?:was|has been) accepted by\s+([^.]+(?:\.[^.]{0,5})*[^.]*)\.", abstract_text, re.IGNORECASE)
     if not match:
         match = re.search(r"accepted by\s+([^.]+(?:\.[^.]{0,5})*[^.]*)\.", abstract_text, re.IGNORECASE)
     if not match:
@@ -101,8 +110,11 @@ def extract_editor_from_abstract(abstract_text):
 
 def split_editor_area(raw):
     """Split a raw 'editor, area' or 'editor for the Special Issue...' string."""
-    # Pattern 1: "Name for the Special Issue/Section on/of ..."
-    for_match = re.match(r"(.+?)\s+for the\s+(Special (?:Issue|Section).+)", raw, re.IGNORECASE)
+    # Pattern 1: "Name for the [Virtual/Focused/...] Special Issue/Section ..."
+    # Allow optional qualifier words between "the" and "Special" so the whole
+    # special-issue title becomes the area, not part of the editor name.
+    for_match = re.match(
+        r"(.+?)\s+for the\s+((?:\w+\s+)*?Special (?:Issue|Section).+)", raw, re.IGNORECASE)
     if for_match:
         editor = for_match.group(1).strip().rstrip(",")
         area = for_match.group(2).strip().rstrip(",").rstrip(".")
@@ -336,12 +348,13 @@ def main():
             title = row.get("Title", "").strip()
 
             # Skip if no DOI or status is Other. Rows already filled are skipped
-            # too, unless the editor is a truncated initials-only fragment
-            # ("D. J") from the old parser, which gets re-scraped to self-heal.
+            # too, unless the editor is a malformed fragment (initials-only
+            # "D. J", or a name with the special-issue area text leaked in),
+            # which gets re-scraped to self-heal.
             if not doi or status == "Other":
                 skipped += 1
                 continue
-            if existing_editor and not editor_looks_truncated(existing_editor):
+            if existing_editor and not editor_needs_rescrape(existing_editor):
                 skipped += 1
                 continue
 
