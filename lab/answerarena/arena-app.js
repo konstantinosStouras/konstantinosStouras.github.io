@@ -86,7 +86,7 @@
     body.push(el('p', { class: 'a-meta', text: 'About 5-10 minutes - please complete it in one sitting.' }));
     body.push(el('div', { class: 'a-row' }, [
       el('button', { class: 'a-btn', on: { click: go } }, [t('welcomeButton', 'Take a quick tour')]),
-      el('button', { class: 'a-btn a-ghost', on: { click: showLogin } }, [t('loginLink', 'I already have an account')])
+      el('button', { class: 'a-btn a-ghost', on: { click: function () { S.pendingCode = codeField ? codeField.value.trim() : ''; showLogin(); } } }, [t('loginLink', 'I already have an account')])
     ]));
     setScreen(overlayWrap(card(t('welcomeTitle', 'Welcome'), body, 'a-welcome')));
 
@@ -211,7 +211,7 @@
         var pdoc = {
           uid: user.uid, participantId: participantId || null, email: email,
           registration: answers, status: 'registered',
-          sessionId: (S.session && S.session.id) || null, condition: cond,
+          sessionId: curSid(), condition: cond, completedSessions: {},
           createdAt: nowStamp(), updatedAt: nowStamp()
         };
         return Store.setParticipant(user.uid, pdoc, false).then(function () {
@@ -231,6 +231,8 @@
     var pass = el('input', { type: 'password', placeholder: 'Password', autocomplete: 'current-password' });
     var err = el('div', { class: 'a-err' });
     var btn = el('button', { class: 'a-btn', on: { click: doLogin } }, ['Log in']);
+    // Pressing Enter in either field submits the form, like clicking "Log in".
+    [email, pass].forEach(function (inp) { inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); doLogin(); } }); });
     setScreen(overlayWrap(card(t('loginTitle', 'Log in'), [
       el('div', { class: 'a-field' }, [el('label', { text: 'E-mail' }), email]),
       el('div', { class: 'a-field' }, [el('label', { text: 'Password' }), pass]),
@@ -238,12 +240,15 @@
       el('div', { class: 'a-row' }, [btn, el('button', { class: 'a-btn a-ghost', on: { click: showWelcome } }, ['Back'])])
     ])));
     function doLogin() {
+      if (btn.hasAttribute('disabled')) return;
       err.textContent = ''; btn.setAttribute('disabled', 'true'); btn.textContent = 'Logging in...';
       Store.login(email.value.trim(), pass.value).then(function (user) {
         S.user = user;
         // The admin account belongs in the admin panel, not the participant flow.
         if (Store.isAdminEmail(user.email)) { location.search = '?admin'; return; }
-        return Store.getParticipant(user.uid).then(function (p) { S.p = p; topbar(); resumeFlow(); });
+        return Promise.all([Store.getParticipant(user.uid), resolveTargetSession()]).then(function (res) {
+          S.p = res[0]; topbar(); routeParticipant();
+        });
       }).catch(function (e) { btn.removeAttribute('disabled'); btn.textContent = 'Log in'; err.textContent = authError(e); });
     }
   }
@@ -329,6 +334,11 @@
       if (d.complete) { nextBtn.removeAttribute('disabled'); hint.textContent = ''; }
       else { nextBtn.setAttribute('disabled', 'true'); hint.textContent = d.choice ? 'Rate each answer and add a short reason to continue.' : ''; }
     };
+    // Log every decision and every change to a new option, with its timestamp.
+    comp.onEvent = function (e) {
+      if (!S.user) return;
+      Store.addEvent(S.user.uid, { type: e.type, value: e.value, taskId: task.id, idx: S.idx, sessionId: curSid(), ts: Date.now() }).catch(function () {});
+    };
     var wrap = el('div', { class: 'a-wrap a-wide' }, [
       el('p', { class: 'a-maininfo', html: t('mainIntro') }),
       comp.node,
@@ -359,7 +369,7 @@
       var leftId = flip ? 'o2' : 'o1', rightId = flip ? 'o1' : 'o2';
       var chosenOutput = d.choice === 'tie' ? 'tie' : (d.choice === 'left' ? leftId : rightId);
       var resp = {
-        taskId: task.id, idx: S.idx, leftOutput: leftId, rightOutput: rightId,
+        taskId: task.id, idx: S.idx, sessionId: curSid(), leftOutput: leftId, rightOutput: rightId,
         choice: d.choice, chosenOutput: chosenOutput, responseMs: Date.now() - S.shownAt,
         reason: d.reason || '',
         satisfA: d.satisfA, satisfB: d.satisfB,                              // displayed Answer A / B
@@ -401,7 +411,7 @@
     opts = opts || {};
     var leftText = flip ? task.outputB : task.outputA;
     var rightText = flip ? task.outputA : task.outputB;
-    var api = { onChoose: null, onChange: null };
+    var api = { onChoose: null, onChange: null, onEvent: null };
     var selected = null;
     var showFollow = !opts.demo;   // the tour demo stays a simple preview
 
@@ -434,8 +444,8 @@
     // reason, revealed only after a preference (or tie) is chosen.
     var satisfA = null, satisfB = null, reasonInput = null, rateA = null, rateB = null, follow = null;
     if (showFollow) {
-      rateA = ratingWidget('How satisfied are you with Answer A?', function (v) { satisfA = v; change(); });
-      rateB = ratingWidget('How satisfied are you with Answer B?', function (v) { satisfB = v; change(); });
+      rateA = ratingWidget('How satisfied are you with Answer A?', function (v) { satisfA = v; emit({ type: 'satisfA', value: v }); change(); });
+      rateB = ratingWidget('How satisfied are you with Answer B?', function (v) { satisfB = v; emit({ type: 'satisfB', value: v }); change(); });
       reasonInput = el('textarea', { rows: '3', placeholder: 'In a sentence or two, what made the difference?' });
       reasonInput.addEventListener('input', change);
       follow = el('div', { class: 'a-follow', 'data-tour': 'follow', style: 'display:none;' }, [
@@ -451,6 +461,7 @@
       rightCard.classList.toggle('sel', side === 'right');
       tieBtn.classList.toggle('sel', side === 'tie');
       if (follow && follow.style.display === 'none') follow.style.display = 'block';
+      emit({ type: 'choice', value: side });
       if (api.onChoose) api.onChoose(side);
       change();
     }
@@ -462,13 +473,17 @@
       return { choice: selected, reason: reason, satisfA: satisfA, satisfB: satisfB, complete: complete };
     }
     function change() { if (api.onChange) api.onChange(data()); }
+    // Fires on every pick/rating change so the time of each decision - and of
+    // each change to a new option - can be logged.
+    function emit(e) { if (api.onEvent) api.onEvent(e); }
 
     var grid = el('div', { class: 'a-versus' }, [leftCard, el('div', { class: 'a-vs', text: 'vs' }), rightCard]);
     var node = el('div', { class: 'a-comp' + (opts.practice ? ' a-practice' : '') }, [progress, taskCard, grid, el('div', { class: 'a-tierow' }, [tieBtn]), follow]);
     return {
       node: node, pick: pick, getData: data,
       get onChoose() { return api.onChoose; }, set onChoose(v) { api.onChoose = v; },
-      get onChange() { return api.onChange; }, set onChange(v) { api.onChange = v; }
+      get onChange() { return api.onChange; }, set onChange(v) { api.onChange = v; },
+      get onEvent() { return api.onEvent; }, set onEvent(v) { api.onEvent = v; }
     };
   }
 
@@ -490,7 +505,7 @@
       // Show the final page immediately and save in the background. The Firestore
       // client keeps the write locally and retries, so the participant is not
       // held on the network round-trip after their last click.
-      if (S.user) Store.saveSurvey(S.user.uid, answers).catch(function () {});
+      if (S.user) Store.saveSurvey(S.user.uid, curSid(), answers).catch(function () {});
       showThankYou();
     }
   }
@@ -498,9 +513,40 @@
   /* ========================== THANK YOU ========================== */
   function showThankYou() {
     S.phase = 'done';
-    persist({ status: 'done' });
+    markCompleted();   // record this session as completed (cannot be retaken)
     setScreen(overlayWrap(card(t('thankyouTitle', 'Thank you!'), [
       el('p', { html: t('thankyouBody') }),
+      el('div', { class: 'a-row' }, [el('button', { class: 'a-btn a-ghost', on: { click: logout } }, ['Log out'])])
+    ], 'a-done')));
+  }
+
+  // Shown when a signed-in participant opens a session that is closed or not yet
+  // open (the welcome flow shows the same for not-signed-in visitors).
+  function showSessionUnavailable(status) {
+    S.phase = 'welcome';
+    setScreen(overlayWrap(card('Session unavailable', [
+      el('p', { text: status === 'waiting' ? 'This session has not opened yet. Please check back soon.' : 'This session has closed.' }),
+      el('div', { class: 'a-row' }, [el('button', { class: 'a-btn a-ghost', on: { click: logout } }, ['Log out'])])
+    ])));
+  }
+
+  // Shown to a signed-in participant who arrived without a session code while a
+  // code is required (so the requirement is not bypassed).
+  function showNeedSession() {
+    S.phase = 'welcome';
+    setScreen(overlayWrap(card('Session needed', [
+      el('p', { text: 'Please open the session link you were given to take part.' }),
+      el('div', { class: 'a-row' }, [el('button', { class: 'a-btn a-ghost', on: { click: logout } }, ['Log out'])])
+    ])));
+  }
+
+  // Shown when a participant opens a session they have already finished. A user
+  // can take part in many sessions, but each session only once.
+  function showAlreadyDone() {
+    S.phase = 'done';
+    setScreen(overlayWrap(card('Already completed', [
+      el('p', { html: 'You have already completed this session, so it cannot be taken again. Thank you for taking part!' }),
+      el('p', { class: 'a-meta', text: 'If you were given a link to a different session, open that link to take part in it.' }),
       el('div', { class: 'a-row' }, [el('button', { class: 'a-btn a-ghost', on: { click: logout } }, ['Log out'])])
     ], 'a-done')));
   }
@@ -510,13 +556,46 @@
   function nowStamp() { return Date.now(); }
   function logout() { Store.logout().then(function () { location.href = location.pathname; }); }
 
-  function resumeFlow() {
-    S.condition = (S.p && S.p.condition) || null;
-    var st = S.p && S.p.status;
-    if (st === 'done') return showThankYou();
-    if (st === 'survey') return showSurvey();
-    // (re)start the comparisons from the beginning (progress is not resumed)
+  // The id of the session being played right now ('_none' for a no-code/direct
+  // play). Used to key per-session progress, completion and recorded data.
+  function curSid() { return (S.session && S.session.id) || '_none'; }
+
+  // Resolve which session this visit is for, from (in priority) an already
+  // chosen session, a code typed on the welcome screen, or ?s=CODE in the URL.
+  // A closed/waiting/unknown code resolves to no session.
+  function resolveTargetSession() {
+    if (S.session) return Promise.resolve(S.session);
+    var c = S.pendingCode || (location.search.match(/[?&]s=([A-Za-z0-9]+)/) || [])[1] || '';
+    if (!c) return Promise.resolve(null);
+    return Store.getSessionByCode(String(c).toUpperCase()).then(function (sess) {
+      if (sess) S.session = sess;   // status is checked in routeParticipant
+      return S.session || null;
+    }).catch(function () { return null; });
+  }
+
+  // Route a signed-in participant for the resolved target session: block one
+  // they already completed, resume an in-progress survey, else (re)start the
+  // comparisons. A user may take part in many sessions, but each only once.
+  function routeParticipant() {
+    if (!S.p) S.p = { uid: S.user.uid, email: S.user.email, status: 'registered', completedSessions: {} };
+    if (S.session && (S.session.status === 'closed' || S.session.status === 'waiting')) { showSessionUnavailable(S.session.status); return; }
+    var sid = curSid();
+    if (sid === '_none' && cfg.settings.requireSessionCode) { showNeedSession(); return; }
+    if (S.p.completedSessions && S.p.completedSessions[sid]) { showAlreadyDone(); return; }
+    var sameSession = S.p.sessionId === sid;
+    if (sameSession && S.p.status === 'survey') { S.condition = S.p.condition || null; showSurvey(); return; }
+    S.condition = (sameSession && S.p.condition) ? S.p.condition : assignCondition();
+    persist({ sessionId: sid, status: 'playing', condition: S.condition });
     startMain();
+  }
+
+  // Record the current session as completed so it cannot be retaken. Merges into
+  // any existing completedSessions map (works on both the local and Firebase
+  // backends, whose merge semantics differ).
+  function markCompleted() {
+    var cs = Object.assign({}, (S.p && S.p.completedSessions) || {});
+    cs[curSid()] = nowStamp();
+    persist({ status: 'done', completedSessions: cs });
   }
 
   /* ============================ BOOT ============================= */
@@ -540,7 +619,11 @@
         // flows handle their own routing, so later auth events must not re-route
         // (or clobber S.p while a participant doc is still being written).
         if (S.phase !== 'boot') { topbar(); return; }
-        if (S.user) { Store.getParticipant(S.user.uid).then(function (p) { S.p = p; topbar(); resumeFlow(); }); }
+        if (S.user) {
+          Promise.all([Store.getParticipant(S.user.uid), resolveTargetSession()]).then(function (res) {
+            S.p = res[0]; topbar(); routeParticipant();
+          });
+        }
         else { topbar(); showWelcome(); }
       });
     }).catch(function (e) {

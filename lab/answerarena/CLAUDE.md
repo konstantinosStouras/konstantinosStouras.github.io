@@ -77,7 +77,7 @@ records which underlying output (`o1`/`o2`) was chosen.
 Each submitted comparison writes a **response** doc:
 
 ```js
-{ taskId, idx, choice('left'|'right'|'tie'), chosenOutput('o1'|'o2'|'tie'),
+{ taskId, idx, sessionId, choice('left'|'right'|'tie'), chosenOutput('o1'|'o2'|'tie'),
   leftOutput, rightOutput,
   satisfA, satisfB,        // 1-5 satisfaction with the displayed Answer A / B
   satisfO1, satisfO2,      // the same, mapped back to the underlying models
@@ -115,8 +115,28 @@ session currently uses the global setting.
 
 Admin creates sessions with a short join **code**. Participants enter it on the
 welcome screen (or open `?s=CODE`). Sessions are publicly readable so the code
-can be validated before sign-in; they hold no personal data. Participant counts
-are computed from `participants.sessionId` (not stored on the session).
+can be validated before sign-in; they hold no personal data.
+
+**One account, many sessions, each once.** A participant (one Firebase account)
+can take part in several sessions, but each session **only once**. The
+participant doc carries `completedSessions` (a `{ sid: completedAtMs }` map);
+`sid` = the session id, or `'_none'` for a code-less/direct play. On entry
+(`routeParticipant`), the app resolves the target session (from a chosen
+session, a code typed on welcome, or `?s=CODE`) and: blocks a session already in
+`completedSessions` (`showAlreadyDone`), resumes an in-progress survey for the
+same session, or else (re)starts the comparisons for that session. `sessionId`
+on the participant doc is the **current** session; per-session completion lives
+in `completedSessions`. `markCompleted()` adds the current sid on the thank-you
+screen. Responses, events and survey docs are all tagged/keyed by `sid`, and the
+survey is stored per session (`survey/{sid}`). Admin session counts include any
+participant currently in or having completed that session.
+
+**Decision log.** Every pick and every satisfaction-rating change emits an
+**event** (`participants/{uid}/events`: `{ type, value, taskId, idx, sessionId,
+ts }`), so the time of each decision - and of each change to a new option - is
+recorded. The admin "Export to Excel" downloads everything per user across all
+sessions: Participants (profile + registration + completedSessions), Responses
+(with `decidedAt`), Events (with timestamps), and Survey (one row per session).
 
 ## 7. Gotchas to carry forward
 

@@ -249,7 +249,15 @@
     function refresh() {
       Promise.all([Store.listSessions(), Store.listParticipants().catch(function () { return []; })]).then(function (res) {
         var list = res[0], parts = res[1] || [];
-        var counts = {}; parts.forEach(function (p) { if (p.sessionId) counts[p.sessionId] = (counts[p.sessionId] || 0) + 1; });
+        // A participant counts towards a session if they are currently in it or
+        // have completed it (a user can take part in several sessions).
+        var counts = {};
+        parts.forEach(function (p) {
+          var seen = {};
+          if (p.sessionId) seen[p.sessionId] = true;
+          Object.keys(p.completedSessions || {}).forEach(function (sid) { seen[sid] = true; });
+          Object.keys(seen).forEach(function (sid) { counts[sid] = (counts[sid] || 0) + 1; });
+        });
         countSpan.textContent = list.length + ' active';
         listWrap.innerHTML = '';
         if (!list.length) { listWrap.appendChild(el('p', { class: 'aa-note', text: 'No sessions yet.' })); return; }
@@ -316,7 +324,7 @@
             el('b', { text: p.email || p.participantId || p._id }),
             el('span', { class: 'aa-note', text: p.status || '' })
           ]),
-          el('div', { class: 'aa-note', style: 'margin-top:4px;', text: (p.participantId ? 'ID ' + p.participantId + '  ·  ' : '') + 'registered ' + fmtTs(p.createdAt) + (c.enabled ? '  ·  cell ' + c.transparency + '/' + c.incentive : '') }),
+          el('div', { class: 'aa-note', style: 'margin-top:4px;', text: (p.participantId ? 'ID ' + p.participantId + '  ·  ' : '') + 'registered ' + fmtTs(p.createdAt) + '  ·  ' + Object.keys(p.completedSessions || {}).length + ' session(s) completed' + (c.enabled ? '  ·  cell ' + c.transparency + '/' + c.incentive : '') }),
           el('div', { class: 'aa-row', style: 'margin-top:6px;' }, [
             el('button', { class: 'aa-btn danger sm', on: { click: function () { if (window.confirm('Delete "' + (p.email || p._id) + '" and all their data?')) Store.deleteParticipant(p._id).then(function () { toast('Deleted.'); load(); }); } } }, ['Delete'])
           ])
@@ -642,27 +650,39 @@
   }
 
   /* ===================== EXPORT ===================== */
+  // Downloads everything collected for every user: their profile + registration,
+  // every response (with the decision time), every logged decision/change event
+  // (with its timestamp), and one survey per session taken.
   function exportExcel(parts) {
     toast('Building export...');
     ensureXLSX().then(function (X) {
-      var pRows = [], rRows = [], sRows = [];
+      var pRows = [], rRows = [], eRows = [], sRows = [];
       var chain = Promise.resolve();
       parts.forEach(function (p) {
         var uid = p._id, c = p.condition || {};
-        var base = { participantId: p.participantId || '', email: p.email || '', status: p.status || '', sessionId: p.sessionId || '', transparency: c.transparency || '', incentive: c.incentive || '', registered: fmtTs(p.createdAt) };
+        var completed = Object.keys(p.completedSessions || {});
+        var base = { participantId: p.participantId || '', email: p.email || '', status: p.status || '', currentSessionId: p.sessionId || '', completedSessions: completed.join(', '), transparency: c.transparency || '', incentive: c.incentive || '', registered: fmtTs(p.createdAt) };
         pRows.push(Object.assign({}, base, flatten('reg_', p.registration || {})));
         chain = chain.then(function () {
           return Store.listResponses(uid).then(function (rs) {
-            rs.forEach(function (v) { rRows.push({ participantId: base.participantId, email: base.email, taskId: v.taskId, idx: v.idx, choice: v.choice, chosenOutput: v.chosenOutput, leftOutput: v.leftOutput, rightOutput: v.rightOutput, satisfactionA: v.satisfA != null ? v.satisfA : '', satisfactionB: v.satisfB != null ? v.satisfB : '', satisfactionO1: v.satisfO1 != null ? v.satisfO1 : '', satisfactionO2: v.satisfO2 != null ? v.satisfO2 : '', reason: v.reason || '', responseMs: v.responseMs, transparency: base.transparency, incentive: base.incentive }); });
+            rs.forEach(function (v) { rRows.push({ participantId: base.participantId, email: base.email, sessionId: v.sessionId || '', taskId: v.taskId, idx: v.idx, choice: v.choice, chosenOutput: v.chosenOutput, leftOutput: v.leftOutput, rightOutput: v.rightOutput, satisfactionA: v.satisfA != null ? v.satisfA : '', satisfactionB: v.satisfB != null ? v.satisfB : '', satisfactionO1: v.satisfO1 != null ? v.satisfO1 : '', satisfactionO2: v.satisfO2 != null ? v.satisfO2 : '', reason: v.reason || '', responseMs: v.responseMs, decidedAt: fmtTs(v.ts), ts: v.ts || '', transparency: base.transparency, incentive: base.incentive }); });
           }).catch(function () {});
         }).then(function () {
-          return Store.getSurvey(uid).then(function (sv) { if (sv) sRows.push(Object.assign({ participantId: base.participantId, email: base.email, completedAt: fmtTs(sv.completedAt) }, flatten('s_', sv.answers || {}))); }).catch(function () {});
+          return Store.listEvents(uid).then(function (evs) {
+            evs.sort(function (a, b) { return tsMs(a.ts) - tsMs(b.ts); });
+            evs.forEach(function (v) { eRows.push({ participantId: base.participantId, email: base.email, sessionId: v.sessionId || '', taskId: v.taskId || '', idx: v.idx != null ? v.idx : '', type: v.type || '', value: v.value != null ? v.value : '', at: fmtTs(v.ts), ts: v.ts || '' }); });
+          }).catch(function () {});
+        }).then(function () {
+          return Store.listSurveys(uid).then(function (svs) {
+            (svs || []).forEach(function (sv) { if (sv) sRows.push(Object.assign({ participantId: base.participantId, email: base.email, sessionId: sv.sessionId || sv.id || '', completedAt: fmtTs(sv.completedAt) }, flatten('s_', sv.answers || {}))); });
+          }).catch(function () {});
         });
       });
       chain.then(function () {
         var wb = X.utils.book_new();
         X.utils.book_append_sheet(wb, X.utils.json_to_sheet(pRows.length ? pRows : [{}]), 'Participants');
         X.utils.book_append_sheet(wb, X.utils.json_to_sheet(rRows.length ? rRows : [{}]), 'Responses');
+        X.utils.book_append_sheet(wb, X.utils.json_to_sheet(eRows.length ? eRows : [{}]), 'Events');
         X.utils.book_append_sheet(wb, X.utils.json_to_sheet(sRows.length ? sRows : [{}]), 'Survey');
         var stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
         X.writeFile(wb, 'answerarena-data-' + stamp + '.xlsx');
