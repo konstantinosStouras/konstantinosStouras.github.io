@@ -349,12 +349,18 @@
   function buildTaskCard() {
     var card = el('div', { class: 'aa-card' });
     card.appendChild(el('h3', { text: 'Comparisons (task set)' }));
-    card.appendChild(el('p', { class: 'aa-note', html: 'Upload an .xlsx / .csv with <b>three columns</b>: <b>task</b>, <b>outputA</b>, <b>outputB</b> (one row per comparison). The first row should be the headers. Column names are matched loosely (e.g. "Task", "Output A", "Answer 1" all work); otherwise the first three columns are used. Participants see the two outputs in a randomized left/right order, and never learn which model produced which.' }));
-    var file = el('input', { type: 'file', accept: '.xlsx,.xls,.csv' });
+    card.appendChild(el('p', { class: 'aa-note', html: 'Load comparisons with <b>three columns</b> - <b>task</b>, <b>outputA</b>, <b>outputB</b> (one row each; first row = headers). Headers are matched loosely: <b>Specific description</b> -> task, <b>Output of Haiku 4.5 ...</b> -> outputA, <b>Output of Opus 4.8 ...</b> -> outputB (also "Task"/"Prompt", "Output A"/"Answer 1", etc.). Participants see the two outputs in a randomized left/right order and never learn which produced which.' }));
     var setName = el('input', { type: 'text', placeholder: 'Name for this set (optional)' });
-    card.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: 'Excel / CSV file' }), file]));
     card.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: 'Set name' }), setName]));
-    var preview = el('div', {});
+    var file = el('input', { type: 'file', accept: '.xlsx,.xls,.csv' });
+    card.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: 'Upload an Excel / CSV file' }), file]));
+    var gsUrl = el('input', { type: 'text', placeholder: 'https://docs.google.com/spreadsheets/d/.../edit#gid=0' });
+    card.appendChild(el('div', { class: 'aa-field' }, [
+      el('label', { text: 'Or import from a Google Sheet link' }), gsUrl,
+      el('div', { class: 'aa-note', style: 'margin-top:4px;', html: 'The sheet must be shared <b>Anyone with the link - Viewer</b> (or File -> Share -> Publish to web). Use the link of the single tab that holds the three columns - the <code>#gid=</code> in the URL selects the tab.' })
+    ]));
+    card.appendChild(el('div', { class: 'aa-row' }, [el('button', { class: 'aa-btn sm', on: { click: importGoogle } }, ['Import from Google Sheet'])]));
+    var preview = el('div', { style: 'margin-top:8px;' });
     card.appendChild(preview);
 
     var active = el('div', { style: 'margin-top:12px;border-top:1px solid var(--line);padding-top:12px;' }, [el('p', { class: 'aa-note', text: 'Loading current set...' })]);
@@ -378,6 +384,29 @@
         reader.readAsArrayBuffer(f);
       }).catch(function () { preview.innerHTML = ''; preview.appendChild(el('p', { class: 'aa-err', text: 'Could not load the Excel reader (offline?).' })); });
     });
+
+    function importGoogle() {
+      var url = gsUrl.value.trim();
+      if (!url) { toast('Paste a Google Sheet link first.'); return; }
+      var id = (url.match(/\/d\/([a-zA-Z0-9-_]+)/) || [])[1] || (/^[a-zA-Z0-9-_]{20,}$/.test(url) ? url : '');
+      if (!id) { preview.innerHTML = ''; preview.appendChild(el('p', { class: 'aa-err', text: 'That does not look like a Google Sheet link.' })); return; }
+      var gid = (url.match(/[#?&]gid=([0-9]+)/) || [])[1];
+      var csvUrl = 'https://docs.google.com/spreadsheets/d/' + id + '/gviz/tq?tqx=out:csv' + (gid ? '&gid=' + gid : '');
+      preview.innerHTML = ''; preview.appendChild(el('p', { class: 'aa-note', text: 'Fetching the sheet...' }));
+      ensureXLSX().then(function (X) {
+        return fetch(csvUrl).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); }).then(function (text) {
+          if (/<html|<!doctype/i.test(text.slice(0, 200))) throw new Error('the sheet is not publicly readable');
+          var wb = X.read(text, { type: 'string' });
+          var ws = wb.Sheets[wb.SheetNames[0]];
+          var rows = X.utils.sheet_to_json(ws, { header: 1, defval: '' });
+          parsed = rowsToTasks(rows);
+          showPreview();
+        });
+      }).catch(function (e) {
+        preview.innerHTML = '';
+        preview.appendChild(el('p', { class: 'aa-err', html: 'Could not import: ' + esc((e && e.message) || 'error') + '. Make sure the sheet is shared <b>Anyone with the link - Viewer</b> (private sheets cannot be read by the browser), and that the link points at the tab with the three columns.' }));
+      });
+    }
 
     function showPreview() {
       preview.innerHTML = '';
@@ -414,17 +443,19 @@
   function rowsToTasks(rows) {
     if (!rows || !rows.length) return [];
     var header = rows[0].map(function (h) { return String(h || '').toLowerCase().replace(/[^a-z0-9]/g, ''); });
-    // Exact match first (so short codes like "a"/"b" don't match "t-a-sk"); then
-    // substrings, but only for tokens long enough to be unambiguous.
+    // Match by candidate PRIORITY (outer loop = candidates): exact match first
+    // (so short codes like "a"/"b" don't match "t-a-sk"), then substring for
+    // tokens >= 3 chars. Priority order means e.g. "Specific description" wins
+    // over "Prompt" for the task column when both are present.
     function find(cands) {
       var i, j;
-      for (i = 0; i < header.length; i++) for (j = 0; j < cands.length; j++) if (header[i] === cands[j]) return i;
-      for (i = 0; i < header.length; i++) for (j = 0; j < cands.length; j++) if (cands[j].length >= 3 && header[i].indexOf(cands[j]) >= 0) return i;
+      for (j = 0; j < cands.length; j++) for (i = 0; i < header.length; i++) if (header[i] === cands[j]) return i;
+      for (j = 0; j < cands.length; j++) for (i = 0; i < header.length; i++) if (cands[j].length >= 3 && header[i].indexOf(cands[j]) >= 0) return i;
       return -1;
     }
-    var ti = find(['task', 'prompt', 'question']);
-    var ai = find(['outputa', 'answera', 'output1', 'answer1', 'modela', 'a']);
-    var bi = find(['outputb', 'answerb', 'output2', 'answer2', 'modelb', 'b']);
+    var ti = find(['specificdescription', 'description', 'task', 'prompt', 'question']);
+    var ai = find(['outputa', 'answera', 'haiku', 'output1', 'answer1', 'modela', 'a']);
+    var bi = find(['outputb', 'answerb', 'opus', 'output2', 'answer2', 'modelb', 'b']);
     // Treat row 1 as a header only if at least two of the three columns were
     // recognized; otherwise assume no header and use the first three columns.
     var found = (ti >= 0 ? 1 : 0) + (ai >= 0 ? 1 : 0) + (bi >= 0 ? 1 : 0);
