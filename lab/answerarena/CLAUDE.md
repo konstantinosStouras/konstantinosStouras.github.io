@@ -138,6 +138,12 @@ recorded. The admin "Export to Excel" downloads everything per user across all
 sessions: Participants (profile + registration + completedSessions), Responses
 (with `decidedAt`), Events (with timestamps), and Survey (one row per session).
 
+**Nothing is lost on an abrupt close.** Each comparison is written one-by-one as
+its **Next** is pressed, and the in-progress (not-yet-submitted) answer is saved
+continuously as a `draftResponse` on the participant doc (debounced on change,
+and flushed on `visibilitychange`/`pagehide`). The export adds the draft as a
+Responses row with `submitted = no (draft)`.
+
 ## 7. Gotchas to carry forward
 
 - Keep model identities out of anything the participant sees.
