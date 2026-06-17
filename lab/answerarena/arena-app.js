@@ -487,10 +487,11 @@
       err.textContent = '';
       var answers = {};
       for (var i = 0; i < fields.length; i++) { var f = fields[i], v = f.read(); if (f.q.required && !v) { err.textContent = 'Please complete: ' + f.q.label; return; } answers[f.q.id] = v; }
-      submit.setAttribute('disabled', 'true'); submit.textContent = 'Submitting...';
-      var done = function () { showThankYou(); };
-      if (S.user) Store.saveSurvey(S.user.uid, answers).then(done).catch(function () { submit.removeAttribute('disabled'); submit.textContent = 'Submit'; err.textContent = 'Could not submit. Please try again.'; });
-      else done();
+      // Show the final page immediately and save in the background. The Firestore
+      // client keeps the write locally and retries, so the participant is not
+      // held on the network round-trip after their last click.
+      if (S.user) Store.saveSurvey(S.user.uid, answers).catch(function () {});
+      showThankYou();
     }
   }
 
