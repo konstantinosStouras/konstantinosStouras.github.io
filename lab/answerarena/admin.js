@@ -958,7 +958,7 @@
           registered_at: fmtTs(p.createdAt)
         };
         if (!only) delete base.completed_this_session_at;
-        pRows.push(Object.assign({}, base, flatten('reg_', p.registration || {})));
+        pRows.push(Object.assign({}, base, orderedAnswers('reg_', p.registration || {}, activeQuestions('registrationQuestions'), false)));
         chain = chain.then(function () {
           return Store.listResponses(uid).then(function (rs) {
             rs.forEach(function (v) { if (keep(v.sessionId)) rRows.push(respRow(base, v, 'yes', v.responseMs, v.ts)); });
@@ -978,7 +978,7 @@
           }).catch(function () {});
         }).then(function () {
           return Store.listSurveys(uid).then(function (svs) {
-            (svs || []).forEach(function (sv) { if (sv && keep(sv.sessionId || sv.id)) sRows.push(Object.assign({ participant_id: base.participant_id, email: base.email, session_id: sv.sessionId || sv.id || '', completed_at: fmtTs(sv.completedAt) }, flatten('', sv.answers || {}))); });
+            (svs || []).forEach(function (sv) { if (sv && keep(sv.sessionId || sv.id)) sRows.push(Object.assign({ participant_id: base.participant_id, email: base.email, session_id: sv.sessionId || sv.id || '', completed_at: fmtTs(sv.completedAt) }, orderedAnswers('', sv.answers || {}, activeQuestions('surveyQuestions'), true))); });
           }).catch(function () {});
         });
       });
@@ -1073,6 +1073,24 @@
     return rows;
   }
   function flatten(prefix, obj) { var o = {}; Object.keys(obj || {}).forEach(function (k) { var v = obj[k]; o[prefix + k] = (v && typeof v === 'object') ? JSON.stringify(v) : v; }); return o; }
+  // Order a flattened answers object by the question-definition order, so export
+  // columns follow the order participants saw the questions. System fields (e.g.
+  // password) are skipped; unknown keys (renamed/removed questions) are appended
+  // at the end so nothing is lost. fillMissing adds defined-but-blank questions as
+  // empty columns, keeping the column set stable across rows (used for the survey).
+  function orderedAnswers(prefix, answers, questions, fillMissing) {
+    var flat = flatten(prefix, answers), out = {}, skip = {};
+    (questions || []).forEach(function (q) {
+      if (!q || !q.id) return;
+      var k = prefix + q.id;
+      if (q.system) { skip[k] = 1; return; }   // never export system fields (e.g. password)
+      if (k in flat) out[k] = flat[k];
+      else if (fillMissing) out[k] = '';
+    });
+    Object.keys(flat).forEach(function (k) { if (!(k in out) && !skip[k]) out[k] = flat[k]; });
+    return out;
+  }
+  function activeQuestions(field) { return (cfg[field] && cfg[field].length) ? cfg[field] : (D[field] || []); }
 
   /* ---- misc ---- */
   function tsMs(ts) { if (!ts) return 0; if (typeof ts === 'number') return ts; if (typeof ts.toMillis === 'function') return ts.toMillis(); if (ts.seconds) return ts.seconds * 1000; return 0; }
