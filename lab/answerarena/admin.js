@@ -233,15 +233,27 @@
     root.appendChild(el('div', { class: 'aa-wrap aa-wrap2' }, [header, el('div', { class: 'aa-grid' }, [left, right])]));
   }
 
-  /* ---- RIGHT: active sessions (list only; created from the left column) ---- */
+  /* ---- RIGHT: active + closed session cards (created from the left column) ---- */
   function buildSessionsCard() {
-    var card = el('div', { class: 'aa-card' });
-    var countSpan = el('span', { class: 'aa-count' });
-    card.appendChild(el('div', { class: 'aa-h', style: 'margin-bottom:4px;' }, [el('h3', { text: 'Active sessions' }), countSpan]));
-    card.appendChild(el('p', { class: 'aa-note', text: 'Every session is created open. Copy its join link to invite participants, export its data, or close it to stop new joins. Create sessions from the left column.' }));
-    var listWrap = el('div', {}, [el('p', { class: 'aa-note', text: 'Loading...' })]);
-    card.appendChild(listWrap);
-    card.appendChild(el('p', { class: 'aa-note', style: 'margin-top:12px;border-top:1px solid var(--line);padding-top:10px;', text: 'Participants join with the session code on the welcome/login screen, or by opening the share link.' }));
+    // Active sessions.
+    var activeCard = el('div', { class: 'aa-card' });
+    var activeCount = el('span', { class: 'aa-count' });
+    activeCard.appendChild(el('div', { class: 'aa-h', style: 'margin-bottom:4px;' }, [el('h3', { text: 'Active sessions' }), activeCount]));
+    activeCard.appendChild(el('p', { class: 'aa-note', text: 'Every session is created open. Copy its join link to invite participants, export its data, or close it to stop new joins. Create sessions from the left column.' }));
+    var activeList = el('div', {}, [el('p', { class: 'aa-note', text: 'Loading...' })]);
+    activeCard.appendChild(activeList);
+    activeCard.appendChild(el('p', { class: 'aa-note', style: 'margin-top:12px;border-top:1px solid var(--line);padding-top:10px;', text: 'Participants join with the session code on the welcome/login screen, or by opening the share link.' }));
+
+    // Closed sessions (hidden until there are any). A closed session no longer
+    // lets participants join; its data is kept for review/export.
+    var closedCard = el('div', { class: 'aa-card', style: 'display:none;' });
+    var closedCount = el('span', { class: 'aa-count' });
+    closedCard.appendChild(el('div', { class: 'aa-h', style: 'margin-bottom:4px;' }, [el('h3', { text: 'Closed sessions' }), closedCount]));
+    closedCard.appendChild(el('p', { class: 'aa-note', text: 'These no longer accept participants. Export their data to review, reopen them, or delete if no longer needed.' }));
+    var closedList = el('div', {});
+    closedCard.appendChild(closedList);
+
+    var wrap = el('div', {}, [activeCard, closedCard]);
 
     function refresh() {
       Promise.all([Store.listSessions(), Store.listParticipants().catch(function () { return []; })]).then(function (res) {
@@ -256,16 +268,21 @@
           Object.keys(p.completedSessions || {}).forEach(function (sid) { seen[sid] = true; });
           Object.keys(seen).forEach(function (sid) { counts[sid] = (counts[sid] || 0) + 1; });
         });
-        var openN = list.filter(function (x) { return (x.status || 'open') !== 'closed'; }).length;
-        countSpan.textContent = openN + ' active';
-        listWrap.innerHTML = '';
-        if (!list.length) { listWrap.appendChild(el('p', { class: 'aa-note', text: 'No sessions yet - create one from the left column.' })); return; }
         list.sort(function (a, b) { return tsMs(b.createdAt) - tsMs(a.createdAt); });
-        list.forEach(function (s) { listWrap.appendChild(sessionCard(s, counts, refresh)); });
-      }).catch(function (e) { listWrap.innerHTML = ''; listWrap.appendChild(el('p', { class: 'aa-err', text: 'Could not load sessions: ' + ((e && e.code) || 'error') })); });
+        var openOnes = list.filter(function (x) { return (x.status || 'open') !== 'closed'; });
+        var closedOnes = list.filter(function (x) { return (x.status || 'open') === 'closed'; });
+        activeCount.textContent = openOnes.length + ' active';
+        closedCount.textContent = closedOnes.length + (closedOnes.length === 1 ? ' session' : ' sessions');
+        activeList.innerHTML = '';
+        if (!openOnes.length) activeList.appendChild(el('p', { class: 'aa-note', text: 'No active sessions - create one from the left column.' }));
+        else openOnes.forEach(function (s) { activeList.appendChild(sessionCard(s, counts, refresh)); });
+        closedList.innerHTML = '';
+        closedCard.style.display = closedOnes.length ? 'block' : 'none';
+        closedOnes.forEach(function (s) { closedList.appendChild(sessionCard(s, counts, refresh)); });
+      }).catch(function (e) { activeList.innerHTML = ''; activeList.appendChild(el('p', { class: 'aa-err', text: 'Could not load sessions: ' + ((e && e.code) || 'error') })); });
     }
     refresh();
-    return { node: card, refresh: refresh };
+    return { node: wrap, refresh: refresh };
   }
   // The 2x2 conditions a session runs (snapshotted at creation; falls back to
   // the current global setting for older sessions).
@@ -292,16 +309,18 @@
       ])
     ]));
     box.appendChild(el('div', { class: 'aa-note', style: 'margin-top:4px;', text: 'Created ' + (fmtTs(s.createdAt) || 'just now') }));
-    var actions = [
-      el('button', { class: 'aa-btn sm', on: { click: function () { window.open(joinUrl, '_blank'); } } }, ['Open']),
-      el('button', { class: 'aa-btn sec sm', on: { click: function () { copy(joinUrl); } } }, ['Copy link']),
-      el('button', { class: 'aa-btn green sm', on: { click: exportSession } }, ['Export data']),
-      el('button', { class: 'aa-btn sec sm', on: { click: editMode } }, ['Edit name'])
-    ];
+    var actions = [];
     if (st === 'closed') {
+      // Closed: review (export), reopen, or remove. Joining is disabled, so no
+      // Open/Copy.
+      actions.push(el('button', { class: 'aa-btn green sm', on: { click: exportSession } }, ['Export data']));
       actions.push(el('button', { class: 'aa-btn sec sm', on: { click: function () { Store.updateSession(s.id, { status: 'open' }).then(function () { toast('Reopened.'); refresh(); }); } } }, ['Reopen']));
       actions.push(el('button', { class: 'aa-btn danger sm', on: { click: function () { if (window.confirm('Permanently delete session ' + s.code + '? (Participant data is kept.)')) Store.deleteSession(s.id).then(function () { toast('Deleted.'); refresh(); }); } } }, ['Delete']));
     } else {
+      actions.push(el('button', { class: 'aa-btn sm', on: { click: function () { window.open(joinUrl, '_blank'); } } }, ['Open']));
+      actions.push(el('button', { class: 'aa-btn sec sm', on: { click: function () { copy(joinUrl); } } }, ['Copy link']));
+      actions.push(el('button', { class: 'aa-btn green sm', on: { click: exportSession } }, ['Export data']));
+      actions.push(el('button', { class: 'aa-btn sec sm', on: { click: editMode } }, ['Edit name']));
       // "Delete" a running session = close it (participants can no longer join).
       actions.push(el('button', { class: 'aa-btn danger sm', on: { click: function () { if (window.confirm('Close session ' + s.code + '? Participants will no longer be able to join.')) Store.updateSession(s.id, { status: 'closed' }).then(function () { toast('Closed.'); refresh(); }); } } }, ['Close']));
     }

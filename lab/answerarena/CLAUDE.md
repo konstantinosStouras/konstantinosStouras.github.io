@@ -121,10 +121,12 @@ changes later; each session card shows its conditions on the right.
 Admin creates sessions from the **"Create a session"** card at the bottom of the
 left column (a "Create Session" button + a **setup summary** of the saved
 parameters a new session will use). Every session is **created open**; there is
-no status picker. On the right, **Active sessions** lists each session showing
-its code + status, participant count + **2x2 conditions** (right), and created
-date (left); a running session can be **Closed** (participants can no longer
-join) and a closed one **Reopened** or permanently **Deleted**. Per-session
+no status picker. The right column has two cards: **Active sessions** and a
+separate **Closed sessions** card (shown only when there are closed ones). Each
+card shows a session's code + status, participant count + **2x2 conditions**
+(right) and created date (left). A running session offers Open / Copy link /
+Export data / Edit name / **Close**; a closed session (no joins) offers Export
+data / **Reopen** / permanently **Delete**. Per-session
 participant counts include anyone who **played** it - started (`playedSessions`),
 is on it (`sessionId`), or completed it (`completedSessions`).
 
