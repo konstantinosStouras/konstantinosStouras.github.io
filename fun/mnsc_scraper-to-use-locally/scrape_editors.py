@@ -73,9 +73,12 @@ def extract_editor_from_abstract(abstract_text):
     """Extract editor and area from Crossref abstract text."""
     if not abstract_text:
         return "", ""
-    match = re.search(r"(?:This paper|This work) was accepted by\s+([^.]+(?:\.[^.]{0,5})?[^.]*)\.", abstract_text, re.IGNORECASE)
+    # Capture up to the sentence-ending period, treating any period followed by
+    # <=5 chars as an abbreviation/initial so multi-initial names like
+    # "D. J. Wu" are kept whole (the `*` allows more than one such initial).
+    match = re.search(r"(?:This paper|This work) was accepted by\s+([^.]+(?:\.[^.]{0,5})*[^.]*)\.", abstract_text, re.IGNORECASE)
     if not match:
-        match = re.search(r"accepted by\s+([^.]+(?:\.[^.]{0,5})?[^.]*)\.", abstract_text, re.IGNORECASE)
+        match = re.search(r"accepted by\s+([^.]+(?:\.[^.]{0,5})*[^.]*)\.", abstract_text, re.IGNORECASE)
     if not match:
         # "served as the editor" pattern
         match2 = re.search(r"(\w[\w\s.]+?)\s+served as (?:the )?editor", abstract_text, re.IGNORECASE)
