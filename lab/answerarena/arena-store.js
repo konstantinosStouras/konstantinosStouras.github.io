@@ -225,8 +225,12 @@
     this.addEvent = function (u, ev) { return F().addDoc(F().collection(D(), 'participants', u, 'events'), Object.assign({ serverTime: F().serverTimestamp() }, ev)); };
     this.listEvents = function (u) { return F().getDocs(F().collection(D(), 'participants', u, 'events')).then(function (sn) { var a = []; sn.forEach(function (d) { a.push(d.data()); }); return a; }); };
     this.saveSurvey = function (u, answers) {
-      return F().setDoc(F().doc(D(), 'participants', u, 'survey', 'answers'), { answers: answers, completedAt: F().serverTimestamp() }, { merge: true })
-        .then(function () { return F().setDoc(F().doc(D(), 'participants', u), { status: 'done', updatedAt: F().serverTimestamp() }, { merge: true }); });
+      // The two writes are independent, so run them in parallel (one round-trip
+      // instead of two) rather than chaining them.
+      return Promise.all([
+        F().setDoc(F().doc(D(), 'participants', u, 'survey', 'answers'), { answers: answers, completedAt: F().serverTimestamp() }, { merge: true }),
+        F().setDoc(F().doc(D(), 'participants', u), { status: 'done', updatedAt: F().serverTimestamp() }, { merge: true })
+      ]);
     };
     this.getSurvey = function (u) { return F().getDoc(F().doc(D(), 'participants', u, 'survey', 'answers')).then(function (s) { return s.exists() ? s.data() : null; }); };
     this.deleteParticipant = function (u) {
