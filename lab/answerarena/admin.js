@@ -19,6 +19,7 @@
   var XLSX = null;
   var cfg = { texts: {}, settings: {}, registrationQuestions: [], surveyQuestions: [], activeTaskSetId: null };
   var user = null, root;
+  var summaryRefresh = null;   // set by the Setup summary; lets other cards refresh it after a save
 
   /* ---- text fields grouped into collapsible "pages" ---- */
   var TEXT_FIELD_META = {
@@ -385,9 +386,9 @@
     var btn = el('button', { class: 'aa-btn', on: { click: create } }, ['Create Session']);
     card.appendChild(el('div', { class: 'aa-row' }, [btn]));
     card.appendChild(err);
-    var summary = el('div', { style: 'margin-top:16px;' });
-    card.appendChild(summary);
+    var summary = el('div', { style: 'margin-top:16px;' });    card.appendChild(summary);
     nameI.addEventListener('keydown', function (e) { if (e.key === 'Enter') create(); });
+    summaryRefresh = renderSummary;   // let the flow / 2x2 cards refresh this after a save
     renderSummary();
 
     function factors() { return (cfg.settings && cfg.settings.twoByTwo && cfg.settings.twoByTwo.factors) || {}; }
@@ -426,8 +427,14 @@
       summary.appendChild(tbl);
       summary.appendChild(el('div', { class: 'aa-row', style: 'margin-top:8px;' }, [el('button', { class: 'aa-btn sec sm', on: { click: renderSummary } }, ['↻ Refresh summary'])]));
       Store.loadActiveTasks().then(function (set) {
+        var total = (set && set.tasks) ? set.tasks.length : 0;
         var vEls = tbl.querySelectorAll('.aa-sumv');
-        if (vEls.length) vEls[vEls.length - 1].textContent = (set && set.tasks ? set.tasks.length : 0) + ' comparisons' + (set && set.name ? ' (' + set.name + ')' : '');
+        if (!vEls.length) return;
+        // Comparisons / participant -> "2 of 100 (random subset)" once we know the size.
+        vEls[0].textContent = lim > 0
+          ? (lim + (total ? ' of ' + total + (lim < total ? ' (random subset)' : '') : ''))
+          : (total ? 'whole active set (' + total + ')' : 'whole active set');
+        vEls[vEls.length - 1].textContent = total + ' comparisons' + (set && set.name ? ' (' + set.name + ')' : '');
       }).catch(function () {});
     }
     return card;
@@ -788,7 +795,7 @@
     function save() {
       var settings = Object.assign({}, cfg.settings, { twoByTwo: { factors: { transparency: trans.input.checked, incentive: inc.input.checked } } });
       paint();
-      saveConfig({ settings: settings }).then(function () { cfg.settings = settings; }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); });
+      saveConfig({ settings: settings }).then(function () { cfg.settings = settings; if (summaryRefresh) summaryRefresh(); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); });
     }
     trans.input.addEventListener('change', save);
     inc.input.addEventListener('change', save);
@@ -822,7 +829,7 @@
         requireSessionCode: true
       });
       perUser.value = String(settings.comparisonsPerUser);
-      return saveConfig({ settings: settings }).then(function () { cfg.settings = settings; toast(msg); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); });
+      return saveConfig({ settings: settings }).then(function () { cfg.settings = settings; if (summaryRefresh) summaryRefresh(); toast(msg); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); });
     }
     function save() { persist('Comparison flow saved.'); }
     function makeDefault() { persist('Comparison flow saved as the default.'); }
@@ -833,7 +840,7 @@
         comparisonsPerUser: Ds.comparisonsPerUser || 0,
         requireSessionCode: true
       });
-      saveConfig({ settings: settings }).then(function () { cfg.settings = settings; randomize.checked = settings.randomizeOrder; perUser.value = String(settings.comparisonsPerUser); toast('Restored built-in default.'); }).catch(function (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); });
+      saveConfig({ settings: settings }).then(function () { cfg.settings = settings; randomize.checked = settings.randomizeOrder; perUser.value = String(settings.comparisonsPerUser); if (summaryRefresh) summaryRefresh(); toast('Restored built-in default.'); }).catch(function (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); });
     }
     return el('div', { class: 'aa-card' }, [
       el('h3', { text: 'Comparison flow' }),
