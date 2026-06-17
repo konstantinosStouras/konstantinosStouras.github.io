@@ -95,8 +95,11 @@ until all three are supplied**. These columns ride along in the admin Excel
 export (Responses sheet). `settings.comparisonsPerUser` (0 = whole set) caps how
 many comparisons each participant sees: when it is below the active-set size the
 participant gets that many **randomly chosen** task pairs. The admin **Setup
-summary** shows this as e.g. "2 of 100 (random subset)" and auto-refreshes when
-the Comparison-flow or 2x2 cards are saved (via the `summaryRefresh` hook). The
+summary** shows this as e.g. "2 of 100 (random subset)" and auto-refreshes (via
+the `summaryRefresh` hook) whenever a card that feeds it is saved - the
+Comparison-flow, 2x2 and Long-list cards (in each `saveConfig().then` **after**
+`cfg` is updated, so it never reads stale values) and the Task card (inside
+`refreshActive`, after upload / import / restore changes the active set). The
 comparison set is rebuilt fresh on
 every entry into the comparisons phase - past progress is **not** resumed, so each
 play starts at comparison 1 (within a single page load the order stays stable).
