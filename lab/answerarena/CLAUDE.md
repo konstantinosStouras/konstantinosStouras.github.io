@@ -99,7 +99,11 @@ play starts at comparison 1 (within a single page load the order stays stable).
 
 **Excel upload** (admin Tasks tab) expects three columns: `task`, `outputA`,
 `outputB` (header names matched loosely; otherwise the first three columns).
-It writes a `taskSets/{id}` doc and points `config.activeTaskSetId` at it.
+It writes a `taskSets/{id}` doc and points `config.activeTaskSetId` at it. An
+upload / Google-Sheet import is parsed, previewed and **made the active set
+immediately**; the Save / Make this the default buttons are then an explicit
+re-save, Discard hides the preview, and Restore built-in default reverts to the
+placeholders.
 
 ## 5. The 2x2 design
 
