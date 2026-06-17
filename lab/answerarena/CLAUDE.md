@@ -102,8 +102,13 @@ every entry into the comparisons phase - past progress is **not** resumed, so ea
 play starts at comparison 1 (within a single page load the order stays stable).
 
 **Task input** (admin Tasks tab) takes either an **Excel/CSV upload** or a
-**public Google Sheet link** (gviz CSV; the `#gid=` selects the tab) — both flow
-through the same `rowsToTasks()` parser. It is built for the **"Summarized"**
+**public Google Sheet link** — both flow through the same `rowsToTasks()` parser
+(column detection is shared via `detectCols()`). The Google import reads the
+**whole workbook** (`export?format=xlsx`) and `tasksFromWorkbook()` auto-picks the
+tab whose header best matches (most of task/outputA/outputB recognized), so a
+multi-tab sheet imports by just pasting any link to it; it falls back to the
+single-tab **gviz CSV** (`#gid=`) if the workbook export is blocked. It is built
+for the **"Summarized"**
 layout produced by the Model-Task-Matching workbook but reads **only the columns
 the app uses**, by loose header match: `Specific description` -> `task` (the
 problem shown to participants), `Output of Haiku 4.5 …` -> `outputA`,

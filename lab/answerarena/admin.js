@@ -511,7 +511,7 @@
     var gsUrl = el('input', { type: 'text', placeholder: 'https://docs.google.com/spreadsheets/d/.../edit#gid=0' });
     card.appendChild(el('div', { class: 'aa-field' }, [
       el('label', { text: 'Or import from a Google Sheet link' }), gsUrl,
-      el('div', { class: 'aa-note', style: 'margin-top:4px;', html: 'The sheet must be shared <b>Anyone with the link - Viewer</b> (or File -> Share -> Publish to web). Open the <b>"Summarized"</b> tab and copy its link - the <code>#gid=</code> in the URL selects that tab, so the workbook can have other tabs and only "Summarized" is read.' })
+      el('div', { class: 'aa-note', style: 'margin-top:4px;', html: 'The sheet must be shared <b>Anyone with the link - Viewer</b> (or File -> Share -> Publish to web) - a private sheet cannot be read from the browser. Paste any link to the workbook: <b>every tab is scanned</b> and the one with these columns (the <b>"Summarized"</b> tab) is used automatically, so you do not need to open a specific tab first.' })
     ]));
     card.appendChild(el('div', { class: 'aa-row' }, [el('button', { class: 'aa-btn aa-importbtn', html: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg><span>Import from Google Sheet</span>', on: { click: importGoogle } })]));
     var preview = el('div', { style: 'margin-top:8px;' });
@@ -521,7 +521,7 @@
     card.appendChild(active);
     refreshActive();
 
-    var parsed = null;
+    var parsed = null, parsedFrom = '';
     file.addEventListener('change', function () {
       var f = file.files && file.files[0]; if (!f) return;
       ensureXLSX().then(function (X) {
@@ -531,7 +531,7 @@
             var wb = X.read(new Uint8Array(e.target.result), { type: 'array' });
             var ws = wb.Sheets[wb.SheetNames[0]];
             var rows = X.utils.sheet_to_json(ws, { header: 1, defval: '' });
-            parsed = rowsToTasks(rows);
+            parsed = rowsToTasks(rows); parsedFrom = '';
             applyParsed();
           } catch (err) { preview.innerHTML = ''; preview.appendChild(el('p', { class: 'aa-err', text: 'Could not read the file: ' + (err.message || err) })); }
         };
@@ -545,20 +545,45 @@
       var id = (url.match(/\/d\/([a-zA-Z0-9-_]+)/) || [])[1] || (/^[a-zA-Z0-9-_]{20,}$/.test(url) ? url : '');
       if (!id) { preview.innerHTML = ''; preview.appendChild(el('p', { class: 'aa-err', text: 'That does not look like a Google Sheet link.' })); return; }
       var gid = (url.match(/[#?&]gid=([0-9]+)/) || [])[1];
-      var csvUrl = 'https://docs.google.com/spreadsheets/d/' + id + '/gviz/tq?tqx=out:csv' + (gid ? '&gid=' + gid : '');
       preview.innerHTML = ''; preview.appendChild(el('p', { class: 'aa-note', text: 'Fetching the sheet...' }));
       ensureXLSX().then(function (X) {
-        return fetch(csvUrl).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); }).then(function (text) {
-          if (/<html|<!doctype/i.test(text.slice(0, 200))) throw new Error('the sheet is not publicly readable');
-          var wb = X.read(text, { type: 'string' });
-          var ws = wb.Sheets[wb.SheetNames[0]];
-          var rows = X.utils.sheet_to_json(ws, { header: 1, defval: '' });
-          parsed = rowsToTasks(rows);
-          applyParsed();
-        });
+        // Read the whole workbook first so every tab is visible and the one with
+        // the right columns ("Summarized") is picked automatically; if that
+        // request is blocked, fall back to the single tab the link's #gid= names.
+        return fetchAllTabs(X, id).catch(function () { return fetchOneTab(X, id, gid); });
+      }).then(function (res) {
+        parsed = res.tasks; parsedFrom = res.name || '';
+        applyParsed();
       }).catch(function (e) {
         preview.innerHTML = '';
-        preview.appendChild(el('p', { class: 'aa-err', html: 'Could not import: ' + esc((e && e.message) || 'error') + '. Make sure the sheet is shared <b>Anyone with the link - Viewer</b> (private sheets cannot be read by the browser), and that the link points at the <b>"Summarized"</b> tab.' }));
+        preview.appendChild(el('p', { class: 'aa-err', html: 'Could not import: ' + esc((e && e.message) || 'error') + '. Make sure the sheet is shared <b>Anyone with the link - Viewer</b> (a private sheet cannot be read from the browser). The "Summarized" tab is detected automatically once the sheet is shared.' }));
+      });
+    }
+    // Whole-workbook path: read every tab and keep the one that best matches the
+    // columns the app uses (task / the two model outputs).
+    function fetchAllTabs(X, id) {
+      var xlsxUrl = 'https://docs.google.com/spreadsheets/d/' + id + '/export?format=xlsx';
+      return fetch(xlsxUrl).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); }).then(function (buf) {
+        var bytes = new Uint8Array(buf);
+        // A real .xlsx is a zip starting with "PK"; anything else (an HTML login
+        // or error page) means the export was not returned, so fall back.
+        if (bytes.length < 4 || bytes[0] !== 0x50 || bytes[1] !== 0x4B) throw new Error('not a workbook');
+        var best = tasksFromWorkbook(X, X.read(bytes, { type: 'array' }));
+        // Only trust the auto-pick when a tab clearly has a task + two text
+        // output columns; otherwise defer to the single tab the link points at.
+        if (best.score < 3 || !best.tasks.length) throw new Error('no tab with the expected columns');
+        return best;
+      });
+    }
+    // Single-tab fallback: the gviz CSV endpoint (more permissive than export)
+    // returns just the tab named by #gid= (or the first tab if none).
+    function fetchOneTab(X, id, gid) {
+      var csvUrl = 'https://docs.google.com/spreadsheets/d/' + id + '/gviz/tq?tqx=out:csv' + (gid ? '&gid=' + gid : '');
+      return fetch(csvUrl).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); }).then(function (text) {
+        if (/<html|<!doctype/i.test(text.slice(0, 200))) throw new Error('the sheet is not publicly readable');
+        var wb = X.read(text, { type: 'string' });
+        var rows = X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' });
+        return { tasks: rowsToTasks(rows), name: '' };
       });
     }
 
@@ -571,7 +596,7 @@
     function showPreview() {
       preview.innerHTML = '';
       if (!parsed || !parsed.length) { preview.appendChild(el('p', { class: 'aa-err', text: 'No rows found. Check the file has a header row and at least one data row.' })); return; }
-      preview.appendChild(el('p', { class: 'aa-note', text: parsed.length + ' comparison' + (parsed.length === 1 ? '' : 's') + ' loaded and saved as the active set. Preview of the first few:' }));
+      preview.appendChild(el('p', { class: 'aa-note', text: parsed.length + ' comparison' + (parsed.length === 1 ? '' : 's') + (parsedFrom ? ' from tab "' + parsedFrom + '"' : '') + ' loaded and saved as the active set. Preview of the first few:' }));
       var tbl = el('table', { class: 'aa-tbl' });
       var has = function (k) { return parsed.some(function (r) { return r[k] != null && r[k] !== ''; }); };
       // Only show optional columns that the upload actually carried.
@@ -595,7 +620,7 @@
         el('button', { class: 'aa-btn sec', on: { click: discard } }, ['Discard'])
       ]));
     }
-    function discard() { parsed = null; file.value = ''; preview.innerHTML = ''; }
+    function discard() { parsed = null; parsedFrom = ''; file.value = ''; preview.innerHTML = ''; }
     // Save the parsed upload as the active comparison set, keeping the preview
     // visible. ("Save" and "Make this the default" both do this - the active set
     // is the one participants get.)
@@ -628,7 +653,39 @@
   // task / outputA / outputB[/ costA / costB] file is still supported.
   function rowsToTasks(rows) {
     if (!rows || !rows.length) return [];
-    var header = rows[0].map(function (h) { return String(h || '').toLowerCase().replace(/[^a-z0-9]/g, ''); });
+    var c = detectCols(rows[0]);
+    // Parse a money value: numbers pass through; strings may carry $/commas/spaces
+    // and (from CSV imports) scientific notation like "8.29E-4", which must survive.
+    function money(v) {
+      if (typeof v === 'number') return isFinite(v) ? v : null;
+      var s = String(v == null ? '' : v).replace(/[^0-9eE.+\-]/g, '');
+      if (!s) return null;
+      var n = parseFloat(s);
+      return isFinite(n) ? n : null;
+    }
+    function str(row, i) { return i >= 0 ? String(row[i] == null ? '' : row[i]).trim() : ''; }
+
+    // Treat row 1 as a header only if at least two of task/outputA/outputB were
+    // recognized; otherwise assume no header and use the first three columns.
+    var hasHeader = c.found >= 2;
+    var TI = c.ti < 0 ? 0 : c.ti, AI = c.ai < 0 ? 1 : c.ai, BI = c.bi < 0 ? 2 : c.bi;
+    var out = [], start = hasHeader ? 1 : 0;
+    for (var r = start; r < rows.length; r++) {
+      var row = rows[r] || [];
+      var task = str(row, TI), oa = str(row, AI), ob = str(row, BI);
+      if (!task && !oa && !ob) continue;
+      var t = { id: str(row, c.idi) || ('T' + (out.length + 1)), task: task, outputA: oa, outputB: ob };
+      var ca = money(row[c.cai]); if (ca != null) t.costA = ca;
+      var cb = money(row[c.cbi]); if (cb != null) t.costB = cb;
+      out.push(t);
+    }
+    return out;
+  }
+  // Locate the columns the app uses in a header row, returning their indices plus
+  // how many of task/outputA/outputB were recognized (`found`). Shared by
+  // rowsToTasks and the multi-tab picker so both agree on what a "good" tab is.
+  function detectCols(headerRow) {
+    var header = (headerRow || []).map(function (h) { return String(h || '').toLowerCase().replace(/[^a-z0-9]/g, ''); });
     // Match by candidate PRIORITY (outer loop = candidates): exact match first
     // (so short codes like "a"/"b" don't match "t-a-sk"), then substring for
     // tokens >= 3 chars.
@@ -658,34 +715,26 @@
     if (costCols.length < 2) costCols = findAll(function (h) { return h.indexOf('cost') >= 0 && h.indexOf('thinking') < 0; });
     var cai = costCols.length ? costCols[0] : 3;
     var cbi = costCols.length > 1 ? costCols[1] : 4;
-
-    // Parse a money value: numbers pass through; strings may carry $/commas/spaces
-    // and (from CSV imports) scientific notation like "8.29E-4", which must survive.
-    function money(v) {
-      if (typeof v === 'number') return isFinite(v) ? v : null;
-      var s = String(v == null ? '' : v).replace(/[^0-9eE.+\-]/g, '');
-      if (!s) return null;
-      var n = parseFloat(s);
-      return isFinite(n) ? n : null;
-    }
-    function str(row, i) { return i >= 0 ? String(row[i] == null ? '' : row[i]).trim() : ''; }
-
-    // Treat row 1 as a header only if at least two of task/outputA/outputB were
-    // recognized; otherwise assume no header and use the first three columns.
     var found = (ti >= 0 ? 1 : 0) + (ai >= 0 ? 1 : 0) + (bi >= 0 ? 1 : 0);
-    var hasHeader = found >= 2;
-    var TI = ti < 0 ? 0 : ti, AI = ai < 0 ? 1 : ai, BI = bi < 0 ? 2 : bi;
-    var out = [], start = hasHeader ? 1 : 0;
-    for (var r = start; r < rows.length; r++) {
-      var row = rows[r] || [];
-      var task = str(row, TI), oa = str(row, AI), ob = str(row, BI);
-      if (!task && !oa && !ob) continue;
-      var t = { id: str(row, idi) || ('T' + (out.length + 1)), task: task, outputA: oa, outputB: ob };
-      var ca = money(row[cai]); if (ca != null) t.costA = ca;
-      var cb = money(row[cbi]); if (cb != null) t.costB = cb;
-      out.push(t);
-    }
-    return out;
+    // Confidence score for choosing among workbook tabs: rewards a real task
+    // column plus actual TEXT output columns (and the cost pair). Unlike `found`,
+    // it isn't fooled by a details tab whose model name only appears on a
+    // token/cost column, so the real "Summarized" tab wins.
+    var score = (ti >= 0 ? 1 : 0) + Math.min(outCols.length, 2) + (costCols.length >= 2 ? 1 : 0);
+    return { idi: idi, ti: ti, ai: ai, bi: bi, cai: cai, cbi: cbi, found: found, score: score };
+  }
+  // Pick the workbook tab whose header best matches the columns the app needs
+  // (best confidence score; ties break on row count), so a multi-tab sheet
+  // imports by just pasting any link to it instead of the exact tab.
+  function tasksFromWorkbook(X, wb) {
+    var best = { name: '', score: -1, n: 0, tasks: [] };
+    (wb.SheetNames || []).forEach(function (name) {
+      var rows = X.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: '' });
+      if (!rows || !rows.length) return;
+      var score = detectCols(rows[0]).score, tasks = rowsToTasks(rows);
+      if (score > best.score || (score === best.score && tasks.length > best.n)) best = { name: name, score: score, n: tasks.length, tasks: tasks };
+    });
+    return best;
   }
   function clip(s) { s = String(s || ''); return s.length > 90 ? s.slice(0, 90) + '…' : s; }
 
