@@ -23,7 +23,7 @@ window.ARENA_DEFAULTS = {
     "welcomeBody": [
       "You will be shown a sequence of everyday work tasks. For each task you will see <b>two different answers</b>, side by side, written by two different systems.",
       "Your job is simple: tap the answer you <b>prefer</b> - or mark them <b>equally good</b> if you cannot separate them. There are no right or wrong choices; we just want your honest judgement.",
-      "It takes about 5-10 minutes. Your place is saved as you go, so you can pause and come back."
+      "It takes about 5-10 minutes - please set aside enough time to finish it in one sitting."
     ],
     "welcomeButton": "Take a quick tour",
     "loginLink": "I already have an account",
@@ -70,7 +70,7 @@ window.ARENA_DEFAULTS = {
     {
       "target": "progress",
       "title": "Track your progress",
-      "body": "This bar shows how far along you are. You can leave and come back - your place is saved."
+      "body": "This bar shows how far along you are through the set of comparisons."
     },
     {
       "target": "next",
@@ -104,7 +104,7 @@ window.ARENA_DEFAULTS = {
       "type": "email",
       "required": true,
       "system": "email",
-      "help": "Used only so you can log back in and resume."
+      "help": "Used only so you can log back in."
     },
     {
       "id": "password",

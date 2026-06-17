@@ -89,8 +89,9 @@ After picking a preference (or a tie) the participant must rate how satisfied
 they are with each answer (1-5) and give a short reason; **Next stays disabled
 until all three are supplied**. These columns ride along in the admin Excel
 export (Responses sheet). `settings.comparisonsPerUser` (0 = whole set) caps how
-many comparisons each participant sees and is enforced even when an in-progress
-order was built before the cap was set.
+many comparisons each participant sees. The comparison set is rebuilt fresh on
+every entry into the comparisons phase - past progress is **not** resumed, so each
+play starts at comparison 1 (within a single page load the order stays stable).
 
 **Excel upload** (admin Tasks tab) expects three columns: `task`, `outputA`,
 `outputB` (header names matched loosely; otherwise the first three columns).
@@ -98,13 +99,17 @@ It writes a `taskSets/{id}` doc and points `config.activeTaskSetId` at it.
 
 ## 5. The 2x2 design
 
-`settings.twoByTwo` = `{ enabled, assignment('random'|'fixed'), fixedCell,
-labels, banners }`. When enabled, each participant is assigned a cell of
-**Transparency** (abstract tokens vs translated cost) x **Incentive** (firm pays
-vs personal budget); the cell is stored on the participant doc and on every
-response, and an optional per-cell banner is shown. A **session** can override
-the global setting (off / random / fixed). When disabled, everyone is in the
-baseline cell and no banner shows.
+`settings.twoByTwo` = `{ factors: { transparency, incentive } }` (two booleans).
+Each factor that is switched **on** is varied between-subjects: every participant
+is randomly and invisibly assigned one of its two levels - **Transparency**
+(`abstract`/`translated`) and/or **Incentive** (`firm`/`personal`). A factor that
+is off is fixed at its baseline level. So both on = 4 groups, one on = 2, none =
+1 baseline group. The assigned cell (`{ enabled, transparency, incentive }`) is
+stored on the participant doc and on every response, and is **never shown** to
+the participant. This setting is **global** (set in the admin "2x2 conditions"
+card). `assignCondition()` will also honour a per-session override if a session
+doc ever carries a `condition`, but the admin does not expose that yet, so every
+session currently uses the global setting.
 
 ## 6. Sessions
 
