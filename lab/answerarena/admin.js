@@ -92,10 +92,15 @@
       + '#aa-root textarea{resize:vertical;}'
       + '.aa-btn{border:none;background:var(--accent);color:#fff;font-weight:600;font-size:14px;line-height:1.4;white-space:nowrap;padding:10px 16px;border-radius:10px;cursor:pointer;}'
       + '.aa-btn:hover{background:var(--accentd);}.aa-btn.sec{background:var(--panel);color:var(--ink);border:1px solid var(--fieldline);}.aa-btn.sm{padding:7px 11px;font-size:12px;}.aa-btn.danger{background:transparent;color:#e06b5a;border:1px solid #6d3b34;}'
+      + '.aa-btn.green{background:#2faa5e;color:#fff;border:none;box-shadow:0 4px 12px rgba(47,170,94,.30);}.aa-btn.green:hover{background:#268a4c;box-shadow:0 7px 18px rgba(47,170,94,.38);}'
       + '#aa-root input[type=file]{font-size:14px;color:var(--muted);}'
       + '#aa-root input[type=file]::file-selector-button{border:none;background:var(--accent);color:#fff;font-weight:600;font-size:14px;padding:10px 16px;border-radius:10px;cursor:pointer;margin-right:10px;}'
       + '#aa-root input[type=file]::-webkit-file-upload-button{border:none;background:var(--accent);color:#fff;font-weight:600;font-size:14px;padding:10px 16px;border-radius:10px;cursor:pointer;margin-right:10px;}'
       + '#aa-root input[type=file]::file-selector-button:hover,#aa-root input[type=file]::-webkit-file-upload-button:hover{background:var(--accentd);}'
+      + '.aa-importbtn{display:inline-flex;align-items:center;gap:9px;padding:11px 20px;border-radius:11px;box-shadow:0 6px 16px rgba(230,126,34,.30);transition:transform .12s,box-shadow .12s,background .15s;}'
+      + '.aa-importbtn:hover{transform:translateY(-1px);box-shadow:0 9px 22px rgba(230,126,34,.38);}'
+      + '.aa-importbtn:active{transform:translateY(0);box-shadow:0 4px 12px rgba(230,126,34,.30);}'
+      + '.aa-importbtn svg{flex:0 0 auto;opacity:.95;}'
       + '.aa-sumtbl{border:1px solid var(--line);border-radius:10px;padding:2px 14px;background:var(--qbg);}'
       + '.aa-sumrow{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);}'
       + '.aa-sumrow:last-child{border-bottom:none;}'
@@ -290,7 +295,7 @@
     var actions = [
       el('button', { class: 'aa-btn sm', on: { click: function () { window.open(joinUrl, '_blank'); } } }, ['Open']),
       el('button', { class: 'aa-btn sec sm', on: { click: function () { copy(joinUrl); } } }, ['Copy link']),
-      el('button', { class: 'aa-btn sec sm', on: { click: exportSession } }, ['Export data']),
+      el('button', { class: 'aa-btn green sm', on: { click: exportSession } }, ['Export data']),
       el('button', { class: 'aa-btn sec sm', on: { click: editMode } }, ['Edit name'])
     ];
     if (st === 'closed') {
@@ -384,7 +389,7 @@
   function buildUsersCard() {
     var card = el('div', { class: 'aa-card' });
     var all = [];
-    card.appendChild(el('div', { class: 'aa-h', style: 'margin-bottom:8px;' }, [el('h3', { text: 'Registered users' }), el('button', { class: 'aa-btn sm', on: { click: function () { if (all.length) exportExcel(all); else toast('No users yet.'); } } }, ['Export to Excel'])]));
+    card.appendChild(el('div', { class: 'aa-h', style: 'margin-bottom:8px;' }, [el('h3', { text: 'Registered users' }), el('button', { class: 'aa-btn green sm', on: { click: function () { if (all.length) exportExcel(all); else toast('No users yet.'); } } }, ['Export to Excel'])]));
     var search = el('input', { type: 'text', placeholder: 'Search by e-mail or ID...' });
     card.appendChild(el('div', { class: 'aa-field' }, [search]));
     var listWrap = el('div', {}, [el('p', { class: 'aa-note', text: 'Loading...' })]);
@@ -443,7 +448,7 @@
       el('label', { text: 'Or import from a Google Sheet link' }), gsUrl,
       el('div', { class: 'aa-note', style: 'margin-top:4px;', html: 'The sheet must be shared <b>Anyone with the link - Viewer</b> (or File -> Share -> Publish to web). Use the link of the single tab that holds the three columns - the <code>#gid=</code> in the URL selects the tab.' })
     ]));
-    card.appendChild(el('div', { class: 'aa-row' }, [el('button', { class: 'aa-btn', on: { click: importGoogle } }, ['Import from Google Sheet'])]));
+    card.appendChild(el('div', { class: 'aa-row' }, [el('button', { class: 'aa-btn aa-importbtn', html: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg><span>Import from Google Sheet</span>', on: { click: importGoogle } })]));
     var preview = el('div', { style: 'margin-top:8px;' });
     card.appendChild(preview);
 
