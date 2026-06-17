@@ -14,11 +14,12 @@
      config/app                  texts, settings, registration/survey Qs, activeTaskSetId
      taskSets/{id}               { name, source, tasks:[{id,task,outputA,outputB,...}] }
      sessions/{id}               { code, name, status, taskSetId, condition, count }
-     participants/{uid}          participantId, email, registration{},
-                                 status, sessionId, condition{}, order[], idx
-       responses/{autoId}        one doc per comparison
-       events/{autoId}           optional action log
-       survey/answers            { answers, completedAt }
+     participants/{uid}          participantId, email, registration{}, status,
+                                 sessionId(current), condition{}, completedSessions{},
+                                 order[], flips[], idx
+       responses/{autoId}        one doc per comparison (tagged with sessionId)
+       events/{autoId}           one doc per decision/change (type,value,...,ts)
+       survey/{sessionId}        { sessionId, answers, completedAt }
    ===================================================================== */
 (function () {
   'use strict';
@@ -131,8 +132,10 @@
     this.listResponses = function (u) { var d = db(); return Promise.resolve(clone((d.participants[u] || {}).responses || [])); };
     this.addEvent = function (u, ev) { var d = db(); var p = d.participants[u] = d.participants[u] || {}; (p.events = p.events || []).push(ev); write(d); return Promise.resolve(); };
     this.listEvents = function (u) { var d = db(); return Promise.resolve(clone((d.participants[u] || {}).events || [])); };
-    this.saveSurvey = function (u, answers) { var d = db(); var p = d.participants[u] = d.participants[u] || {}; p.survey = { answers: answers, completedAt: Date.now() }; write(d); return Promise.resolve(); };
-    this.getSurvey = function (u) { var d = db(); return Promise.resolve(clone((d.participants[u] || {}).survey || null)); };
+    // One survey per session the participant takes part in (keyed by sessionId).
+    this.saveSurvey = function (u, sid, answers) { var d = db(); var p = d.participants[u] = d.participants[u] || {}; p.surveys = p.surveys || {}; p.surveys[sid || '_none'] = { sessionId: sid || '_none', answers: answers, completedAt: Date.now() }; write(d); return Promise.resolve(); };
+    this.getSurvey = function (u, sid) { var d = db(); var p = d.participants[u] || {}; return Promise.resolve(clone((p.surveys && p.surveys[sid || '_none']) || (sid == null ? p.survey : null) || null)); };
+    this.listSurveys = function (u) { var d = db(); var p = d.participants[u] || {}; var out = []; if (p.surveys) Object.keys(p.surveys).forEach(function (k) { out.push(clone(p.surveys[k])); }); if (p.survey) out.push(Object.assign({ sessionId: '_legacy' }, clone(p.survey))); return Promise.resolve(out); };
     this.deleteParticipant = function (u) { var d = db(); delete d.participants[u]; write(d); return Promise.resolve(); };
   }
 
@@ -224,21 +227,22 @@
     this.listResponses = function (u) { return F().getDocs(F().collection(D(), 'participants', u, 'responses')).then(function (sn) { var a = []; sn.forEach(function (d) { a.push(d.data()); }); return a; }); };
     this.addEvent = function (u, ev) { return F().addDoc(F().collection(D(), 'participants', u, 'events'), Object.assign({ serverTime: F().serverTimestamp() }, ev)); };
     this.listEvents = function (u) { return F().getDocs(F().collection(D(), 'participants', u, 'events')).then(function (sn) { var a = []; sn.forEach(function (d) { a.push(d.data()); }); return a; }); };
-    this.saveSurvey = function (u, answers) {
-      // The two writes are independent, so run them in parallel (one round-trip
-      // instead of two) rather than chaining them.
+    this.saveSurvey = function (u, sid, answers) {
+      sid = sid || '_none';
+      // One survey doc per session (keyed by sessionId). The two writes are
+      // independent, so run them in parallel (one round-trip instead of two).
       return Promise.all([
-        F().setDoc(F().doc(D(), 'participants', u, 'survey', 'answers'), { answers: answers, completedAt: F().serverTimestamp() }, { merge: true }),
+        F().setDoc(F().doc(D(), 'participants', u, 'survey', sid), { sessionId: sid, answers: answers, completedAt: F().serverTimestamp() }, { merge: true }),
         F().setDoc(F().doc(D(), 'participants', u), { status: 'done', updatedAt: F().serverTimestamp() }, { merge: true })
       ]);
     };
-    this.getSurvey = function (u) { return F().getDoc(F().doc(D(), 'participants', u, 'survey', 'answers')).then(function (s) { return s.exists() ? s.data() : null; }); };
+    this.getSurvey = function (u, sid) { return F().getDoc(F().doc(D(), 'participants', u, 'survey', sid || '_none')).then(function (s) { return s.exists() ? s.data() : null; }); };
+    this.listSurveys = function (u) { return F().getDocs(F().collection(D(), 'participants', u, 'survey')).then(function (sn) { var a = []; sn.forEach(function (d) { a.push(Object.assign({ id: d.id }, d.data())); }); return a; }); };
     this.deleteParticipant = function (u) {
-      var self = this, names = ['responses', 'events'];
+      var names = ['responses', 'events', 'survey'];
       return Promise.all(names.map(function (n) {
         return F().getDocs(F().collection(D(), 'participants', u, n)).then(function (sn) { return Promise.all(sn.docs.map(function (d) { return F().deleteDoc(d.ref); })); }).catch(function () {});
-      })).then(function () { return F().deleteDoc(F().doc(D(), 'participants', u, 'survey', 'answers')).catch(function () {}); })
-        .then(function () { return F().deleteDoc(F().doc(D(), 'participants', u)); });
+      })).then(function () { return F().deleteDoc(F().doc(D(), 'participants', u)); });
     };
   }
 
