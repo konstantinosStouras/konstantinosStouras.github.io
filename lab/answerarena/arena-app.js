@@ -74,13 +74,11 @@
     var body = [el('p', { class: 'a-lead', html: t('welcomeIntro') })];
     (cfg.texts.welcomeBody || []).forEach(function (p) { body.push(el('p', { html: p })); });
 
-    // Optional session code field (shown if required, or if one is in the URL).
-    var codeField = null, urlCode = (location.search.match(/[?&]s=([A-Za-z0-9]+)/) || [])[1] || '';
-    if (cfg.settings.requireSessionCode || urlCode) {
-      var ci = el('input', { type: 'text', placeholder: 'Session code', value: urlCode, style: 'text-transform:uppercase;letter-spacing:.12em;' });
-      codeField = ci;
-      body.push(el('div', { class: 'a-field' }, [el('label', { text: 'Session code' + (cfg.settings.requireSessionCode ? ' *' : ' (optional)') }), ci]));
-    }
+    // A session code is required to take part (prefilled from a typed code or
+    // the ?s=CODE link if present).
+    var urlCode = S.pendingCode || (location.search.match(/[?&]s=([A-Za-z0-9]+)/) || [])[1] || '';
+    var codeField = el('input', { type: 'text', placeholder: 'Session code', value: urlCode, style: 'text-transform:uppercase;letter-spacing:.12em;' });
+    body.push(el('div', { class: 'a-field' }, [el('label', { text: 'Session code *' }), codeField]));
     var err = el('div', { class: 'a-err' });
     body.push(err);
     body.push(el('p', { class: 'a-meta', text: 'About 5-10 minutes - please complete it in one sitting.' }));
@@ -92,9 +90,8 @@
 
     function go() {
       err.textContent = '';
-      var c = codeField ? codeField.value.trim().toUpperCase() : '';
-      if (cfg.settings.requireSessionCode && !c) { err.textContent = 'Please enter the session code you were given.'; return; }
-      if (!c) { startTour(); return; }
+      var c = codeField.value.trim().toUpperCase();
+      if (!c) { err.textContent = 'Please enter the session code you were given.'; return; }
       Store.getSessionByCode(c).then(function (sess) {
         if (!sess) { err.textContent = 'That session code was not found.'; return; }
         if (sess.status === 'closed') { err.textContent = 'That session has closed.'; return; }
@@ -227,29 +224,40 @@
 
   function showLogin() {
     S.phase = 'login';
+    var prefill = S.pendingCode || (location.search.match(/[?&]s=([A-Za-z0-9]+)/) || [])[1] || '';
     var email = el('input', { type: 'email', placeholder: 'you@example.com', autocomplete: 'username' });
     var pass = el('input', { type: 'password', placeholder: 'Password', autocomplete: 'current-password' });
+    var codeI = el('input', { type: 'text', placeholder: 'Session code', value: prefill, style: 'text-transform:uppercase;letter-spacing:.12em;' });
     var err = el('div', { class: 'a-err' });
     var btn = el('button', { class: 'a-btn', on: { click: doLogin } }, ['Log in']);
-    // Pressing Enter in either field submits the form, like clicking "Log in".
-    [email, pass].forEach(function (inp) { inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); doLogin(); } }); });
+    // Pressing Enter in any field submits the form, like clicking "Log in".
+    [email, pass, codeI].forEach(function (inp) { inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); doLogin(); } }); });
     setScreen(overlayWrap(card(t('loginTitle', 'Log in'), [
       el('div', { class: 'a-field' }, [el('label', { text: 'E-mail' }), email]),
       el('div', { class: 'a-field' }, [el('label', { text: 'Password' }), pass]),
+      el('div', { class: 'a-field' }, [el('label', { text: 'Session code *' }), codeI]),
       err,
-      el('div', { class: 'a-row' }, [btn, el('button', { class: 'a-btn a-ghost', on: { click: showWelcome } }, ['Back'])])
+      el('div', { class: 'a-row' }, [btn, el('button', { class: 'a-btn a-ghost', on: { click: function () { S.pendingCode = codeI.value.trim(); showWelcome(); } } }, ['New here? Create an account'])])
     ])));
+    function fail(msg) { btn.removeAttribute('disabled'); btn.textContent = 'Log in'; err.textContent = msg; }
     function doLogin() {
       if (btn.hasAttribute('disabled')) return;
       err.textContent = ''; btn.setAttribute('disabled', 'true'); btn.textContent = 'Logging in...';
       Store.login(email.value.trim(), pass.value).then(function (user) {
         S.user = user;
-        // The admin account belongs in the admin panel, not the participant flow.
+        // The admin account belongs in the admin panel, not the participant flow
+        // (and does not need a session code).
         if (Store.isAdminEmail(user.email)) { location.search = '?admin'; return; }
-        return Promise.all([Store.getParticipant(user.uid), resolveTargetSession()]).then(function (res) {
-          S.p = res[0]; topbar(); routeParticipant();
+        var code = codeI.value.trim().toUpperCase();
+        if (!code) return fail('Please enter the session code you were given.');
+        return Store.getSessionByCode(code).then(function (sess) {
+          if (!sess) return fail('That session code was not found.');
+          if (sess.status === 'closed') return fail('That session has closed.');
+          if (sess.status === 'waiting') return fail('That session has not opened yet. Please check back soon.');
+          S.session = sess;
+          return Store.getParticipant(user.uid).then(function (p) { S.p = p; topbar(); routeParticipant(); });
         });
-      }).catch(function (e) { btn.removeAttribute('disabled'); btn.textContent = 'Log in'; err.textContent = authError(e); });
+      }).catch(function (e) { fail(authError(e)); });
     }
   }
 
@@ -350,9 +358,15 @@
       draftTimer = setTimeout(function () { draftTimer = null; persist({ draftResponse: S.draft }); }, 500);
     };
     // Log every decision and every change to a new option, with its timestamp.
+    // Also record which underlying model the event refers to (leftId/rightId map
+    // the displayed side back to o1/o2), so the export can name them.
     comp.onEvent = function (e) {
       if (!S.user) return;
-      Store.addEvent(S.user.uid, { type: e.type, value: e.value, taskId: task.id, idx: S.idx, sessionId: curSid(), ts: Date.now() }).catch(function () {});
+      var model = '';
+      if (e.type === 'choice') model = e.value === 'tie' ? 'tie' : (e.value === 'left' ? leftId : rightId);
+      else if (e.type === 'satisfA') model = leftId;
+      else if (e.type === 'satisfB') model = rightId;
+      Store.addEvent(S.user.uid, { type: e.type, value: e.value, model: model, taskId: task.id, idx: S.idx, sessionId: curSid(), ts: Date.now() }).catch(function () {});
     };
     var wrap = el('div', { class: 'a-wrap a-wide' }, [
       el('p', { class: 'a-maininfo', html: t('mainIntro') }),
@@ -546,14 +560,33 @@
     ])));
   }
 
-  // Shown to a signed-in participant who arrived without a session code while a
-  // code is required (so the requirement is not bypassed).
+  // Shown to a signed-in participant who has no session yet: a session code is
+  // always required to play, so let them enter it (or open their session link).
   function showNeedSession() {
     S.phase = 'welcome';
-    setScreen(overlayWrap(card('Session needed', [
-      el('p', { text: 'Please open the session link you were given to take part.' }),
-      el('div', { class: 'a-row' }, [el('button', { class: 'a-btn a-ghost', on: { click: logout } }, ['Log out'])])
+    var codeI = el('input', { type: 'text', placeholder: 'Session code', style: 'text-transform:uppercase;letter-spacing:.12em;' });
+    var err = el('div', { class: 'a-err' });
+    var btn = el('button', { class: 'a-btn', on: { click: go } }, ['Continue']);
+    codeI.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); go(); } });
+    setScreen(overlayWrap(card('Enter your session code', [
+      el('p', { text: 'A session code is required to take part. Enter the code you were given (or open your session link).' }),
+      el('div', { class: 'a-field' }, [el('label', { text: 'Session code *' }), codeI]),
+      err,
+      el('div', { class: 'a-row' }, [btn, el('button', { class: 'a-btn a-ghost', on: { click: logout } }, ['Log out'])])
     ])));
+    function go() {
+      err.textContent = '';
+      var c = codeI.value.trim().toUpperCase();
+      if (!c) { err.textContent = 'Please enter the session code you were given.'; return; }
+      btn.setAttribute('disabled', 'true');
+      Store.getSessionByCode(c).then(function (sess) {
+        btn.removeAttribute('disabled');
+        if (!sess) { err.textContent = 'That session code was not found.'; return; }
+        if (sess.status === 'closed') { err.textContent = 'That session has closed.'; return; }
+        if (sess.status === 'waiting') { err.textContent = 'That session has not opened yet. Please check back soon.'; return; }
+        S.session = sess; routeParticipant();
+      }).catch(function () { btn.removeAttribute('disabled'); err.textContent = 'Could not check the code. Please try again.'; });
+    }
   }
 
   // Shown when a participant opens a session they have already finished. A user
@@ -596,7 +629,7 @@
     if (!S.p) S.p = { uid: S.user.uid, email: S.user.email, status: 'registered', completedSessions: {} };
     if (S.session && (S.session.status === 'closed' || S.session.status === 'waiting')) { showSessionUnavailable(S.session.status); return; }
     var sid = curSid();
-    if (sid === '_none' && cfg.settings.requireSessionCode) { showNeedSession(); return; }
+    if (sid === '_none') { showNeedSession(); return; }   // a session code is always required
     if (S.p.completedSessions && S.p.completedSessions[sid]) { showAlreadyDone(); return; }
     var sameSession = S.p.sessionId === sid;
     if (sameSession && S.p.status === 'survey') { S.condition = S.p.condition || null; showSurvey(); return; }
@@ -650,7 +683,13 @@
             S.p = res[0]; topbar(); routeParticipant();
           });
         }
-        else { topbar(); showWelcome(); }
+        else {
+          topbar();
+          // A shared session link (?s=CODE) lands on the login panel with the
+          // code prefilled; otherwise start on the welcome screen.
+          var urlCode = (location.search.match(/[?&]s=([A-Za-z0-9]+)/) || [])[1] || '';
+          if (urlCode) showLogin(); else showWelcome();
+        }
       });
     }).catch(function (e) {
       setScreen(overlayWrap(card('Connection problem', [el('p', { text: 'Could not start. Please refresh and try again.' })])));
