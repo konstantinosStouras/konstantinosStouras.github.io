@@ -79,6 +79,27 @@
   }
   function card(title, kids, cls) { return el('div', { class: 'a-card ' + (cls || '') }, [title ? el('h2', { text: title }) : null].concat(kids || [])); }
   function overlayWrap(node) { return el('div', { class: 'a-wrap' }, [node]); }
+  // A centered confirm dialog over a dimmed backdrop. opts: { title, body, agree,
+  // cancel, onAgree }. While it is open the comparison's keyboard shortcuts are
+  // suspended so Enter cannot advance the screen behind it.
+  function showModal(opts) {
+    opts = opts || {};
+    var prevKey = document.onkeydown; document.onkeydown = null;
+    function close() { if (bd.parentNode) bd.parentNode.removeChild(bd); document.removeEventListener('keydown', onKey, true); document.onkeydown = prevKey; }
+    function onKey(e) { if (e.key === 'Escape') { e.preventDefault(); close(); } }
+    var modal = el('div', { class: 'a-modal' }, [
+      el('h3', { text: opts.title || 'Are you sure?' }),
+      opts.body ? el('p', { text: opts.body }) : null,
+      el('div', { class: 'a-row a-modalbtns' }, [
+        el('button', { class: 'a-btn a-ghost', on: { click: close } }, [opts.cancel || 'Cancel']),
+        el('button', { class: 'a-btn a-go', on: { click: function () { close(); if (opts.onAgree) opts.onAgree(); } } }, [opts.agree || 'OK'])
+      ])
+    ]);
+    var bd = el('div', { class: 'a-modalbd', on: { click: function (e) { if (e.target === bd) close(); } } }, [modal]);
+    document.addEventListener('keydown', onKey, true);
+    document.body.appendChild(bd);
+    return { close: close };
+  }
 
   /* ============================ WELCOME ============================ */
   function showWelcome() {
@@ -359,6 +380,14 @@
     var nextBtn = el('button', { class: 'a-btn a-go', on: { click: next } }, [(S.idx === S.order.length - 1) ? 'Finish' : 'Next']);
     nextBtn.setAttribute('data-tour', 'next');
     nextBtn.setAttribute('disabled', 'true');
+    // Long-list mode: an extra button lets the participant stop and go to the
+    // survey once they've answered the current comparison.
+    var longList = !!(cfg.settings && cfg.settings.longList);
+    var proceedBtn = null;
+    if (longList) {
+      proceedBtn = el('button', { class: 'a-btn a-ghost', on: { click: askProceed } }, [t('proceedBtn', 'Proceed to Survey')]);
+      proceedBtn.setAttribute('disabled', 'true');
+    }
     var hint = el('p', { class: 'a-maininfo', style: 'margin-top:10px;min-height:18px;', text: '' });
     // The follow-up (per-answer satisfaction + reason) must be completed before
     // Next becomes available, so every response carries a choice, two ratings
@@ -366,8 +395,8 @@
     var draftTimer = null;
     comp.onChange = function (d) {
       S.choice = d.choice;
-      if (d.complete) { nextBtn.removeAttribute('disabled'); hint.textContent = ''; }
-      else { nextBtn.setAttribute('disabled', 'true'); hint.textContent = d.choice ? 'Rate each answer and add a short reason to continue.' : ''; }
+      if (d.complete) { nextBtn.removeAttribute('disabled'); if (proceedBtn) proceedBtn.removeAttribute('disabled'); hint.textContent = ''; }
+      else { nextBtn.setAttribute('disabled', 'true'); if (proceedBtn) proceedBtn.setAttribute('disabled', 'true'); hint.textContent = d.choice ? 'Rate each answer and add a short reason to continue.' : ''; }
       // Keep a saved draft of the in-progress answer (incl. the typed reason) so
       // nothing is lost if the window is closed before Next is pressed.
       if (d.choice == null && d.satisfA == null && d.satisfB == null && !d.reason) return;
@@ -396,7 +425,7 @@
     var wrap = el('div', { class: 'a-wrap a-wide' }, [
       el('p', { class: 'a-maininfo', html: t('mainIntro') }),
       comp.node,
-      el('div', { class: 'a-row a-center' }, [nextBtn]),
+      el('div', { class: 'a-row a-center' }, [nextBtn].concat(proceedBtn ? [proceedBtn] : [])),
       hint
     ]);
     setScreen(wrap);
@@ -414,10 +443,13 @@
     };
 
     var submitted = false;   // guard so a double Next/Enter cannot advance twice
-    function next() {
-      if (submitted) return;
+    // Save the current (complete) answer, exactly as Next does, and advance the
+    // index. Returns false (and does nothing) if the comparison is unfinished or
+    // already submitted, so Next and "Proceed to Survey" can share it safely.
+    function commitCurrent() {
+      if (submitted) return false;
       var d = comp.getData();
-      if (!d.complete) return;
+      if (!d.complete) return false;
       submitted = true;
       document.onkeydown = null;
       if (draftTimer) { clearTimeout(draftTimer); draftTimer = null; }
@@ -443,7 +475,24 @@
       S.draft = null;
       S.idx += 1;
       persist({ idx: S.idx, draftResponse: null });   // submitted answer is saved; clear the draft
+      return true;
+    }
+    function next() {
+      if (!commitCurrent()) return;
       if (S.idx >= S.order.length) showSurvey(); else renderComparison();
+    }
+    // Long-list mode: once the current comparison is answered, the participant may
+    // stop and jump to the survey. Confirm first; on Agree the current answer is
+    // saved (like Next) and we go straight to the survey - no more comparisons.
+    function askProceed() {
+      if (submitted || !comp.getData().complete) return;
+      showModal({
+        title: t('proceedTitle', 'Proceed to the survey?'),
+        body: t('proceedBody', "You'll move on to the final survey now and won't be able to do any more comparisons. Your answer to this comparison will be saved."),
+        agree: t('proceedAgree', 'Agree, go to survey'),
+        cancel: t('proceedDiscard', 'Discard, keep comparing'),
+        onAgree: function () { if (commitCurrent()) showSurvey(); }
+      });
     }
   }
 

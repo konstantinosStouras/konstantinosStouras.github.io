@@ -81,6 +81,7 @@ window.ARENA_DEFAULTS = {
   "settings": {
     "randomizeOrder": true,
     "comparisonsPerUser": 0,
+    "longList": false,
     "requireSessionCode": true,
     "twoByTwo": {
       "factors": {

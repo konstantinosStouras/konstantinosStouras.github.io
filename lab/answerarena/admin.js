@@ -225,6 +225,7 @@
     left.appendChild(build2x2Card());
     left.appendChild(buildFlowCard());
     left.appendChild(buildTaskCard());
+    left.appendChild(buildLongListCard());
     left.appendChild(el('div', { class: 'aa-sub', text: 'Page text & content' }));
     PAGE_GROUPS.forEach(function (g) { left.appendChild(renderPageSection(g)); });
     left.appendChild(el('div', { class: 'aa-sub', text: 'Forms' }));
@@ -414,6 +415,7 @@
       var rows = [
         ['Comparisons / participant', lim > 0 ? String(lim) : 'whole active set'],
         ['Order', (s.randomizeOrder !== false) ? 'randomized per participant' : 'fixed order'],
+        ['Long list', s.longList ? 'on - participants may proceed to the survey early' : 'off'],
         ['Per comparison', 'pick or tie + 1-5 satisfaction for each answer + reason'],
         ['Session code', 'required to take part'],
         ['2x2 conditions', groups],
@@ -851,6 +853,28 @@
         el('button', { class: 'aa-btn', on: { click: save } }, ['Save']),
         el('button', { class: 'aa-btn sec', on: { click: makeDefault } }, ['Make this the default']),
         el('button', { class: 'aa-btn sec', on: { click: restoreDefaults } }, ['Restore built-in default'])
+      ])
+    ]);
+  }
+
+  // "Long list of comparisons": an on/off mode. When on, each comparison shows a
+  // "Proceed to Survey" button so a participant working through a long set can stop
+  // and go to the survey whenever they like.
+  function buildLongListCard() {
+    var on = checkbox(!!(cfg.settings && cfg.settings.longList));
+    function persist(msg, val) {
+      on.checked = val;
+      var settings = Object.assign({}, cfg.settings, { longList: !!val });
+      return saveConfig({ settings: settings }).then(function () { cfg.settings = settings; if (summaryRefresh) summaryRefresh(); toast(msg); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); });
+    }
+    return el('div', { class: 'aa-card' }, [
+      el('h3', { text: 'Long list of comparisons' }),
+      el('p', { class: 'aa-note', html: 'For a long task set. When <b>on</b>, every comparison shows a <b>"Proceed to Survey"</b> button (active once the participant has answered the current pair). Pressing it asks for confirmation: on <b>Agree</b> the participant jumps to the survey and does no more comparisons; on <b>Discard</b> they keep going - and the button stays available on later pairs. When <b>off</b>, participants go through their whole assigned set before the survey.' }),
+      el('div', { class: 'aa-field' }, [el('label', { class: 'aa-toggle' }, [on, document.createTextNode('Show a "Proceed to Survey" button on every comparison')])]),
+      el('div', { class: 'aa-row', style: 'margin-top:8px;' }, [
+        el('button', { class: 'aa-btn', on: { click: function () { persist('Long-list setting saved.', on.checked); } } }, ['Save']),
+        el('button', { class: 'aa-btn sec', on: { click: function () { persist('Long-list setting saved as the default.', on.checked); } } }, ['Make this the default']),
+        el('button', { class: 'aa-btn sec', on: { click: function () { persist('Restored built-in default.', !!((D.settings || {}).longList)); } } }, ['Restore built-in default'])
       ])
     ]);
   }

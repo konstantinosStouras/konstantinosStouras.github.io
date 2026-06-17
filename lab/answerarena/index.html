@@ -87,6 +87,15 @@
   .a-btn.a-go:hover{background:#178a4c;}
   .a-btn[disabled]{opacity:.45;cursor:default;}
 
+  /* centered confirm dialog (e.g. "Proceed to Survey?") */
+  .a-modalbd{position:fixed;inset:0;z-index:1000;background:rgba(12,24,48,.55);
+    display:flex;align-items:center;justify-content:center;padding:20px;}
+  .a-modal{background:var(--panel);border:1px solid var(--line);border-radius:16px;
+    box-shadow:var(--shadow);max-width:440px;width:100%;padding:24px 26px;}
+  .a-modal h3{margin:0 0 10px;font-size:1.25rem;color:var(--blue);}
+  .a-modal p{line-height:1.6;margin:0 0 4px;color:var(--ink);}
+  .a-modal .a-modalbtns{justify-content:flex-end;}
+
   /* fields */
   .a-field{margin:13px 0;}
   .a-field label{display:block;font-weight:600;font-size:14px;margin-bottom:5px;}
