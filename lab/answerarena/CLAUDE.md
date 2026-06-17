@@ -107,12 +107,15 @@ placeholders.
 
 ## 5. The 2x2 design
 
-`settings.twoByTwo` = `{ factors: { transparency, incentive } }` (two booleans).
-Each factor that is switched **on** is varied between-subjects: every participant
-is randomly and invisibly assigned one of its two levels - **Transparency**
-(`abstract`/`translated`) and/or **Incentive** (`firm`/`personal`). A factor that
-is off is fixed at its baseline level. So both on = 4 groups, one on = 2, none =
-1 baseline group. The assigned cell (`{ enabled, transparency, incentive }`) is
+`settings.twoByTwo` = `{ factors: { transparency, incentive } }` (two booleans;
+`incentive` is the internal key for the **Firm-pay** factor - kept for stored-data
+compatibility, but shown everywhere in the UI/exports as "Firm-pay"). Each factor
+that is switched **on** is varied between-subjects: every participant is randomly
+and invisibly assigned one of its two levels - **Cost transparency**
+(`abstract`/`translated`) and/or **Firm-pay** (`firm` = company pays / `personal`
+= user bears the cost). A factor that is off is fixed at its baseline level. So
+both on = 4 groups, one on = 2, none = 1 baseline group. The assigned cell
+(`{ enabled, transparency, incentive }`) is
 stored on the participant doc and on every response, and is **never shown** to
 the participant. The 2x2 is configured **globally** (the admin "2x2 conditions" card), and
 **each session snapshots it at creation** into the session's `condition`
@@ -161,9 +164,15 @@ participant currently in or having completed that session.
 **Decision log.** Every pick and every satisfaction-rating change emits an
 **event** (`participants/{uid}/events`: `{ type, value, taskId, idx, sessionId,
 ts }`), so the time of each decision - and of each change to a new option - is
-recorded. The admin "Export to Excel" downloads everything per user across all
-sessions: Participants (profile + registration + completedSessions), Responses
-(with `decidedAt`), Events (with timestamps), and Survey (one row per session).
+recorded. Both the all-users export ("Export to Excel") and the per-session
+export ("Export data" on a session card) produce a workbook with sheets:
+**Conventions** (documents every column), **Participants**, **Responses**,
+**Events**, **Survey**. Columns use self-explanatory snake_case names
+(`participant_id`, `shown_order`, `left_model`/`right_model`,
+`satisfaction_answer_A/B`, `group_cost_transparency`, `group_firm_pay`, ...);
+the Conventions sheet (built by `buildConventions()`, including each
+registration/survey question label) is the source of truth - keep it in sync
+when columns change.
 
 **Nothing is lost on an abrupt close.** Each comparison is written one-by-one as
 its **Next** is pressed, and the in-progress (not-yet-submitted) answer is saved

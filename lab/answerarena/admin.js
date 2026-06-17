@@ -318,8 +318,8 @@
   function condLabel(cond) {
     var f = (cond && cond.factors) || ((cfg.settings && cfg.settings.twoByTwo && cfg.settings.twoByTwo.factors) || {});
     var on = [];
-    if (f.transparency) on.push('Transparency');
-    if (f.incentive) on.push('Incentive');
+    if (f.transparency) on.push('Cost transparency');
+    if (f.incentive) on.push('Firm-pay');
     return on.length ? on.join(' + ') : 'Baseline (no conditions)';
   }
   function sessionCard(s, counts, refresh) {
@@ -407,7 +407,7 @@
     }
     function renderSummary() {
       var s = cfg.settings || {}, f = factors();
-      var on = []; if (f.transparency) on.push('Transparency'); if (f.incentive) on.push('Incentive');
+      var on = []; if (f.transparency) on.push('Cost transparency'); if (f.incentive) on.push('Firm-pay');
       var groups = (on.length === 0) ? 'single baseline group' : (Math.pow(2, on.length) + ' groups (' + on.join(' × ') + ')');
       var lim = s.comparisonsPerUser || 0;
       var rows = [
@@ -750,10 +750,10 @@
     paint();
     return el('div', { class: 'aa-card' }, [
       el('h3', { text: '2x2 conditions' }),
-      el('p', { class: 'aa-note', text: 'This is a 2x2 = 4 design. Turn on each condition you want to vary; with both on there are 2 x 2 = 4 groups, and each participant simply belongs to one of them - randomly and invisibly assigned (they are never shown their group, or told that groups exist). One condition on = 2 groups; none = a single baseline group.' }),
+      el('p', { class: 'aa-note', text: 'This is a 2x2 design by varying "cost transparency" and "firm-pay" i.e. whether company pays or the user bears the cost of the model output. Turn on each condition you want to vary; with both on there are 2 x 2 = 4 groups, and each participant simply belongs to one of them - randomly and invisibly assigned (they are never shown their group, or told that groups exist). One condition on = 2 groups; none = a single baseline group.' }),
       el('div', { class: 'aa-switches' }, [
-        el('div', { class: 'aa-switchbox' }, [el('b', { text: 'Transparency' }), trans.node]),
-        el('div', { class: 'aa-switchbox' }, [el('b', { text: 'Incentive' }), inc.node])
+        el('div', { class: 'aa-switchbox' }, [el('b', { text: 'Cost transparency' }), trans.node]),
+        el('div', { class: 'aa-switchbox' }, [el('b', { text: 'Firm-pay' }), inc.node])
       ]),
       summary
     ]);
@@ -820,8 +820,16 @@
       parts.forEach(function (p) {
         var uid = p._id, c = p.condition || {};
         var completed = Object.keys(p.completedSessions || {});
-        var base = { participantId: p.participantId || '', email: p.email || '', status: p.status || '', currentSessionId: p.sessionId || '', playedSessions: Object.keys(p.playedSessions || {}).join(', '), completedSessions: completed.join(', '), transparency: c.transparency || '', incentive: c.incentive || '', registered: fmtTs(p.createdAt) };
-        if (only) base.completedThisSession = (p.completedSessions && p.completedSessions[only]) ? fmtTs(p.completedSessions[only]) : 'no';
+        var base = {
+          participant_id: p.participantId || '', email: p.email || '', account_id: uid,
+          status: p.status || '', current_session_id: p.sessionId || '',
+          played_session_ids: Object.keys(p.playedSessions || {}).join(', '),
+          completed_session_ids: completed.join(', '),
+          completed_this_session_at: only ? ((p.completedSessions && p.completedSessions[only]) ? fmtTs(p.completedSessions[only]) : 'no') : undefined,
+          group_cost_transparency: c.transparency || '', group_firm_pay: c.incentive || '',
+          registered_at: fmtTs(p.createdAt)
+        };
+        if (!only) delete base.completed_this_session_at;
         pRows.push(Object.assign({}, base, flatten('reg_', p.registration || {})));
         chain = chain.then(function () {
           return Store.listResponses(uid).then(function (rs) {
@@ -834,16 +842,21 @@
         }).then(function () {
           return Store.listEvents(uid).then(function (evs) {
             evs.sort(function (a, b) { return tsMs(a.ts) - tsMs(b.ts); });
-            evs.forEach(function (v) { if (keep(v.sessionId)) eRows.push({ participantId: base.participantId, email: base.email, sessionId: v.sessionId || '', order: v.idx != null ? v.idx + 1 : '', idx: v.idx != null ? v.idx : '', taskId: v.taskId || '', type: v.type || '', value: v.value != null ? v.value : '', model: modelName(v.model), at: fmtTs(v.ts), ts: v.ts || '' }); });
+            evs.forEach(function (v) {
+              if (!keep(v.sessionId)) return;
+              var et = v.type === 'choice' ? 'preference' : v.type === 'satisfA' ? 'satisfaction_answer_A' : v.type === 'satisfB' ? 'satisfaction_answer_B' : (v.type || '');
+              eRows.push({ participant_id: base.participant_id, email: base.email, session_id: v.sessionId || '', shown_order: v.idx != null ? v.idx + 1 : '', task_id: v.taskId || '', event_type: et, event_value: v.value != null ? v.value : '', model: modelName(v.model), event_at: fmtTs(v.ts), event_ts: v.ts || '' });
+            });
           }).catch(function () {});
         }).then(function () {
           return Store.listSurveys(uid).then(function (svs) {
-            (svs || []).forEach(function (sv) { if (sv && keep(sv.sessionId || sv.id)) sRows.push(Object.assign({ participantId: base.participantId, email: base.email, sessionId: sv.sessionId || sv.id || '', completedAt: fmtTs(sv.completedAt) }, flatten('s_', sv.answers || {}))); });
+            (svs || []).forEach(function (sv) { if (sv && keep(sv.sessionId || sv.id)) sRows.push(Object.assign({ participant_id: base.participant_id, email: base.email, session_id: sv.sessionId || sv.id || '', completed_at: fmtTs(sv.completedAt) }, flatten('', sv.answers || {}))); });
           }).catch(function () {});
         });
       });
       chain.then(function () {
         var wb = X.utils.book_new();
+        X.utils.book_append_sheet(wb, X.utils.json_to_sheet(buildConventions(only)), 'Conventions');
         X.utils.book_append_sheet(wb, X.utils.json_to_sheet(pRows.length ? pRows : [{}]), 'Participants');
         X.utils.book_append_sheet(wb, X.utils.json_to_sheet(rRows.length ? rRows : [{}]), 'Responses');
         X.utils.book_append_sheet(wb, X.utils.json_to_sheet(eRows.length ? eRows : [{}]), 'Events');
@@ -860,19 +873,70 @@
   // One Responses row (shared by submitted answers and the saved draft).
   function respRow(base, v, submitted, responseMs, ts) {
     return {
-      participantId: base.participantId, email: base.email, sessionId: v.sessionId || '',
-      // order = where this comparison appeared in the participant's randomized
-      // sequence (1 = first shown); taskId = which task pair it was.
-      order: v.idx != null ? v.idx + 1 : '', idx: v.idx, taskId: v.taskId, submitted: submitted,
-      choice: v.choice || '', chosenModel: modelName(v.chosenOutput),
-      // leftModel/rightModel = which underlying model was shown on the left
-      // (Answer A) / right (Answer B) for this participant (randomized per pair).
-      leftModel: modelName(v.leftOutput), rightModel: modelName(v.rightOutput),
-      satisfactionA: v.satisfA != null ? v.satisfA : '', satisfactionB: v.satisfB != null ? v.satisfB : '',
+      participant_id: base.participant_id, email: base.email, session_id: v.sessionId || '',
+      shown_order: v.idx != null ? v.idx + 1 : '', task_id: v.taskId, submitted: submitted,
+      choice: v.choice || '', chosen_model: modelName(v.chosenOutput),
+      left_model: modelName(v.leftOutput), right_model: modelName(v.rightOutput),
+      satisfaction_answer_A: v.satisfA != null ? v.satisfA : '', satisfaction_answer_B: v.satisfB != null ? v.satisfB : '',
       satisfaction_baseline: v.satisfO1 != null ? v.satisfO1 : '', satisfaction_frontier: v.satisfO2 != null ? v.satisfO2 : '',
-      reason: v.reason || '', responseMs: responseMs, decidedAt: fmtTs(ts), ts: ts || '',
-      transparency: base.transparency, incentive: base.incentive
+      reason: v.reason || '', response_ms: responseMs, decided_at: fmtTs(ts), decided_ts: ts || '',
+      group_cost_transparency: base.group_cost_transparency, group_firm_pay: base.group_firm_pay
     };
+  }
+  // The "Conventions" sheet: documents every column used in the export.
+  function buildConventions(only) {
+    var rows = [];
+    function add(sheet, col, desc) { rows.push({ sheet: sheet, column: col, description: desc }); }
+    add('Participants', 'participant_id', "The participant's own ID (e.g. a Prolific ID) if they entered one; blank otherwise.");
+    add('Participants', 'email', "The participant's e-mail address (used to log in).");
+    add('Participants', 'account_id', 'Internal unique account ID (Firebase UID) for this participant.');
+    add('Participants', 'status', 'Where the participant is in the flow: registered, playing, survey, or done.');
+    add('Participants', 'current_session_id', 'Internal ID of the session the participant is currently in.');
+    add('Participants', 'played_session_ids', 'Internal IDs of every session the participant has started (comma-separated).');
+    add('Participants', 'completed_session_ids', 'Internal IDs of every session the participant has finished (comma-separated).');
+    if (only) add('Participants', 'completed_this_session_at', 'When the participant finished THIS session, or "no" if not finished.');
+    add('Participants', 'group_cost_transparency', 'Assigned level of the cost-transparency condition (abstract or translated); blank if this condition was not varied.');
+    add('Participants', 'group_firm_pay', 'Assigned level of the firm-pay condition (firm = company pays, personal = the user bears the cost); blank if not varied.');
+    add('Participants', 'registered_at', 'When the participant registered.');
+    var regQs = (cfg.registrationQuestions && cfg.registrationQuestions.length) ? cfg.registrationQuestions : (D.registrationQuestions || []);
+    regQs.forEach(function (q) { if (!q.system) add('Participants', 'reg_' + q.id, 'Registration answer: ' + (q.label || q.id)); });
+    add('Responses', 'participant_id', "The participant's ID (see Participants).");
+    add('Responses', 'email', "The participant's e-mail.");
+    add('Responses', 'session_id', 'Internal ID of the session this comparison belongs to.');
+    add('Responses', 'shown_order', "Position of this comparison in the participant's randomised sequence (1 = first shown).");
+    add('Responses', 'task_id', 'ID of the task pair shown (e.g. T18).');
+    add('Responses', 'submitted', '"yes" for a submitted answer; "no (draft)" for an in-progress answer saved if the participant left before pressing Next.');
+    add('Responses', 'choice', 'Which side the participant preferred: left, right, or tie (equally good).');
+    add('Responses', 'chosen_model', 'Which underlying model the participant preferred: baseline, frontier, or tie.');
+    add('Responses', 'left_model', "Which underlying model was shown on the LEFT (as 'Answer A') for this participant - left/right is randomised per pair.");
+    add('Responses', 'right_model', "Which underlying model was shown on the RIGHT (as 'Answer B').");
+    add('Responses', 'satisfaction_answer_A', "Participant's 1-5 satisfaction rating for the answer shown on the left (Answer A).");
+    add('Responses', 'satisfaction_answer_B', "Participant's 1-5 satisfaction rating for the answer shown on the right (Answer B).");
+    add('Responses', 'satisfaction_baseline', 'The 1-5 satisfaction rating that applied to the baseline model (mapped from left/right).');
+    add('Responses', 'satisfaction_frontier', 'The 1-5 satisfaction rating that applied to the frontier model.');
+    add('Responses', 'reason', 'Free-text reason the participant gave for the choice.');
+    add('Responses', 'response_ms', 'Time in milliseconds from seeing the pair to pressing Next.');
+    add('Responses', 'decided_at', 'Local date/time when the comparison was decided.');
+    add('Responses', 'decided_ts', 'Decision time as epoch milliseconds (useful for sorting).');
+    add('Responses', 'group_cost_transparency', "The participant's cost-transparency level (see Participants).");
+    add('Responses', 'group_firm_pay', "The participant's firm-pay level (see Participants).");
+    add('Events', 'participant_id', "The participant's ID.");
+    add('Events', 'email', "The participant's e-mail.");
+    add('Events', 'session_id', 'Internal ID of the session.');
+    add('Events', 'shown_order', 'Position of the comparison this event refers to (1 = first shown).');
+    add('Events', 'task_id', 'ID of the task pair.');
+    add('Events', 'event_type', 'What the participant did: preference (chose a side or tie), satisfaction_answer_A, or satisfaction_answer_B.');
+    add('Events', 'event_value', 'The new value set: left/right/tie for a preference, or 1-5 for a satisfaction rating.');
+    add('Events', 'model', 'Which underlying model the event refers to: baseline, frontier, or tie.');
+    add('Events', 'event_at', 'Local date/time of the event.');
+    add('Events', 'event_ts', 'Event time as epoch milliseconds. Every change is logged, so re-selections appear as multiple rows; the last per comparison is the final value.');
+    add('Survey', 'participant_id', "The participant's ID.");
+    add('Survey', 'email', "The participant's e-mail.");
+    add('Survey', 'session_id', 'Internal ID of the session the survey was taken for.');
+    add('Survey', 'completed_at', 'When the participant submitted the survey for this session.');
+    var surQs = (cfg.surveyQuestions && cfg.surveyQuestions.length) ? cfg.surveyQuestions : (D.surveyQuestions || []);
+    surQs.forEach(function (q) { add('Survey', q.id, 'Survey answer: ' + (q.label || q.id)); });
+    return rows;
   }
   function flatten(prefix, obj) { var o = {}; Object.keys(obj || {}).forEach(function (k) { var v = obj[k]; o[prefix + k] = (v && typeof v === 'object') ? JSON.stringify(v) : v; }); return o; }
 
