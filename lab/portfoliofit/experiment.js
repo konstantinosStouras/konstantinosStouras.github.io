@@ -607,26 +607,30 @@
     var ids = s.activePuzzleIds || [];
     var q = [];
     if (ids.length && fb) {
-      // Frozen set: replay the exact puzzles the admin approved.
+      // Frozen set: replay the exact puzzles the admin approved (Settings counts ignored).
       for (var k = 0; k < ids.length; k++) {
         try {
           var snap = await fb.F.getDoc(fb.F.doc(fb.db, 'puzzleSets', ids[k]));
           if (snap.exists()) { var spec = specFromDoc(snap.data()); if (spec) q.push({ id: ids[k], diff: spec.diff, spec: spec }); }
         } catch (e) { /* skip */ }
       }
+      if (q.length) { if (s.randomizeOrder !== false) shuffle(q); return q; }
     }
-    if (!q.length) {
-      // Built-in default set (baked specs) when no custom set is frozen.
-      var def = (window.PF_DEFAULTS && window.PF_DEFAULTS.defaultPuzzles) || [];
-      for (var di = 0; di < def.length; di++) q.push({ id: 'default-' + di, diff: def[di].diff, spec: def[di] });
-    }
-    if (!q.length) {
-      // Fallback: generate by difficulty counts.
-      var per = s.puzzlesPerUser || { easy: 2, hard: 2 };
-      var i;
-      for (i = 0; i < (per.easy || 0); i++) q.push({ diff: 'easy' });
-      for (i = 0; i < (per.hard || 0); i++) q.push({ diff: 'hard' });
-    }
+    // No frozen set: honour the Settings per-participant counts, drawing vetted
+    // puzzles from the built-in pool (by difficulty) and generating any shortfall
+    // at runtime. This is what makes "1 easy / 0 hard" actually serve 1 easy puzzle.
+    var per = s.puzzlesPerUser || { easy: 2, hard: 2 };
+    var def = (window.PF_DEFAULTS && window.PF_DEFAULTS.defaultPuzzles) || [];
+    var pool = { easy: [], hard: [] };
+    def.forEach(function (spec, idx) { var d = (spec.diff === 'hard') ? 'hard' : 'easy'; pool[d].push({ id: 'default-' + idx, diff: d, spec: spec }); });
+    ['easy', 'hard'].forEach(function (diff) {
+      var need = Math.max(0, per[diff] | 0);
+      var avail = pool[diff].slice(); shuffle(avail);
+      for (var i = 0; i < need; i++) {
+        if (i < avail.length) q.push(avail[i]);
+        else q.push({ diff: diff });   // pool exhausted -> generate one at runtime
+      }
+    });
     if (s.randomizeOrder !== false) shuffle(q);
     return q;
   }
