@@ -379,15 +379,18 @@
   }
   function renderPuzzles(body) {
     var card = el('div', { class: 'pfa-card' });
-    card.appendChild(el('p', { class: 'pfa-note', text: 'Generate puzzles, preview them, approve the ones you want, then freeze them as the active set. Every participant plays the frozen set in randomized order.' }));
+    card.appendChild(el('p', { class: 'pfa-note', html: 'Build the exact set every participant plays: <b>Generate set to match Settings</b> creates puzzles to match your easy/hard counts; review each (Solutions / κ proof), regenerate any you dislike, then <b>Save</b> to freeze. Every participant then plays that same frozen set in randomized order. (You can also add puzzles one at a time.)' }));
     card.appendChild(el('p', { class: 'pfa-note', html: '📄 <a href="https://www.stouras.com/lab/portfoliofit-testing/portfoliofit-difficulty.pdf" target="_blank" rel="noopener" style="color:var(--accent);">How the Sahni difficulty (κ) is measured (PDF note)</a>' }));
     if (!window.PFGame || !window.PFGame.generatePuzzle) {
       card.appendChild(el('p', { class: 'pfa-err', text: 'Puzzle generator not available. Open /lab/portfoliofit/?admin (the game must be on the page).' }));
       body.appendChild(card); return;
     }
-    card.appendChild(el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;' }, [
-      el('button', { class: 'pfa-btn sec', on: { click: function () { generate('easy'); } } }, ['Generate easy']),
-      el('button', { class: 'pfa-btn sec', on: { click: function () { generate('hard'); } } }, ['Generate hard'])
+    var per0 = (cfg.settings && cfg.settings.puzzlesPerUser) || { easy: 2, hard: 2 };
+    var needE0 = Math.max(0, per0.easy | 0), needH0 = Math.max(0, per0.hard | 0);
+    card.appendChild(el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;align-items:center;' }, [
+      el('button', { class: 'pfa-btn', on: { click: function () { generateSetForReview(); } } }, ['✨ Generate set to match Settings (' + needE0 + ' easy + ' + needH0 + ' hard)']),
+      el('button', { class: 'pfa-btn sec', on: { click: function () { generate('easy'); } } }, ['+ Generate easy']),
+      el('button', { class: 'pfa-btn sec', on: { click: function () { generate('hard'); } } }, ['+ Generate hard'])
     ]));
     var preview = el('div', {});
     card.appendChild(preview);
@@ -424,19 +427,48 @@
         ])
       ]));
     }
+    // Generate a reviewable set sized to the Settings counts: reuse the vetted
+    // built-in puzzles first, then generate the shortfall. Admin reviews/regenerates
+    // and then Saves (freezes) so every participant plays this exact set.
+    function generateSetForReview() {
+      var per = (cfg.settings && cfg.settings.puzzlesPerUser) || { easy: 2, hard: 2 };
+      var needE = Math.max(0, per.easy | 0), needH = Math.max(0, per.hard | 0);
+      if (!needE && !needH) { toast('Set the puzzle counts in the Settings tab first.'); return; }
+      var def = (window.PF_DEFAULTS && window.PF_DEFAULTS.defaultPuzzles) || [];
+      var poolE = def.filter(function (s) { return s.diff !== 'hard'; });
+      var poolH = def.filter(function (s) { return s.diff === 'hard'; });
+      var set = [], failed = 0;
+      [['easy', poolE, needE], ['hard', poolH, needH]].forEach(function (g) {
+        var diff = g[0], pool = g[1], need = g[2];
+        for (var i = 0; i < need; i++) {
+          if (i < pool.length) { set.push(JSON.parse(JSON.stringify(pool[i]))); }
+          else { var spec = null; try { spec = window.PFGame.generatePuzzle(diff); } catch (e) {} if (spec) set.push(spec); else failed++; }
+        }
+      });
+      approvedPuzzles = set;
+      preview.innerHTML = '';
+      renderApproved(); renderActive();
+      toast('Built ' + set.length + ' puzzle' + (set.length === 1 ? '' : 's') + ' for review' + (failed ? ' (' + failed + ' generation(s) failed — retry)' : '') + '. Review them, then Save to lock the set.');
+    }
     function renderApproved() {
       approvedCard.innerHTML = '';
       approvedCard.appendChild(el('div', { style: 'display:flex;justify-content:space-between;align-items:center;gap:8px;margin:0 0 8px;' }, [
         el('h3', { text: 'Set to freeze (' + approvedPuzzles.length + ')', style: 'margin:0;font-size:15px;' }),
         approvedPuzzles.length ? el('button', { class: 'pfa-btn sec sm', on: { click: function () { approvedPuzzles = []; renderApproved(); toast('Cleared approved set.'); } } }, ['Clear set']) : null
       ]));
-      if (!approvedPuzzles.length) { approvedCard.appendChild(el('p', { class: 'pfa-note', text: 'No puzzles approved yet.' })); return; }
+      if (!approvedPuzzles.length) { approvedCard.appendChild(el('p', { class: 'pfa-note', text: 'No puzzles approved yet. Use “Generate set to match Settings” above, then review and Save.' })); return; }
       var wrap = el('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;' });
       approvedPuzzles.forEach(function (spec, i) {
-        wrap.appendChild(el('div', { class: 'pfa-q', style: 'flex:0 0 auto;text-align:center;' }, [
-          el('div', { class: 'pfa-note', text: spec.diff + ' · κ=' + spec.kappa + ' · $' + spec.bestValue }),
+        var sc = (spec.tilings && spec.tilings.count != null) ? spec.tilings.count : null;
+        wrap.appendChild(el('div', { class: 'pfa-q', style: 'flex:0 0 auto;text-align:center;min-width:120px;' }, [
+          el('div', { class: 'pfa-note', text: '#' + (i + 1) + ' · ' + spec.diff + ' · κ=' + spec.kappa + (sc != null ? ' · ' + sc + ' sol.' : '') + ' · $' + spec.bestValue }),
           puzzleGrid(spec, true),
-          el('button', { class: 'pfa-btn danger sm', on: { click: function () { approvedPuzzles.splice(i, 1); renderApproved(); } } }, ['remove'])
+          el('div', { style: 'display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:4px;' }, [
+            el('button', { class: 'pfa-btn sec sm', on: { click: function () { try { window.PFGame.previewPuzzle(spec); window.PFGame.showSolutions(); } catch (e) {} } } }, ['Solutions']),
+            el('button', { class: 'pfa-btn sec sm', on: { click: function () { try { window.PFGame.previewPuzzle(spec); window.PFGame.showProof(); } catch (e) {} } } }, ['κ proof']),
+            el('button', { class: 'pfa-btn sec sm', on: { click: function () { var ns = null; try { ns = window.PFGame.generatePuzzle(spec.diff); } catch (e) {} if (ns) { approvedPuzzles[i] = ns; renderApproved(); toast('Regenerated #' + (i + 1) + '.'); } else { toast('Generation failed; try again.'); } } } }, ['↻ regenerate']),
+            el('button', { class: 'pfa-btn danger sm', on: { click: function () { approvedPuzzles.splice(i, 1); renderApproved(); } } }, ['remove'])
+          ])
         ]));
       });
       approvedCard.appendChild(wrap);
@@ -451,27 +483,23 @@
         var poolE = def.filter(function (sp) { return sp.diff !== 'hard'; });
         var poolH = def.filter(function (sp) { return sp.diff === 'hard'; });
         var needE = Math.max(0, per.easy | 0), needH = Math.max(0, per.hard | 0);
-        var total = needE + needH;
-        var genE = Math.max(0, needE - poolE.length), genH = Math.max(0, needH - poolH.length);
-        if (!total) {
+        if (!needE && !needH) {
           activeCard.appendChild(el('p', { class: 'pfa-note', text: 'No custom set frozen, and the Settings counts are 0 easy / 0 hard — participants would get no puzzles. Set the counts in the Settings tab.' }));
           return;
         }
-        activeCard.appendChild(el('p', { class: 'pfa-note', html: 'No custom set frozen. Each participant plays <b>' + needE + ' easy + ' + needH + ' hard</b> puzzle' + (total === 1 ? '' : 's') + ', in randomized order — drawn at random from the built-in pool (' + poolE.length + ' easy / ' + poolH.length + ' hard) and, where the pool runs short, generated fresh per participant. Change these counts in the <b>Settings</b> tab.' }));
-        if (genE || genH) activeCard.appendChild(el('p', { class: 'pfa-note', style: 'color:#e6a23c;', text: '⚠ The built-in pool has only ' + poolE.length + ' easy / ' + poolH.length + ' hard, so ' + (genE ? genE + ' easy ' : '') + (genH ? genH + ' hard ' : '') + 'puzzle(s) per participant are randomly generated (the “generated” slots below).' }));
-        // One slot per puzzle each participant plays: real pool puzzles first, then
-        // "generated" placeholders, so the number of slots always matches Settings.
-        var slots = [];
-        [['easy', poolE, needE], ['hard', poolH, needH]].forEach(function (g) {
-          var diff = g[0], pool = g[1], need = g[2];
-          for (var k2 = 0; k2 < need; k2++) slots.push({ diff: diff, spec: k2 < pool.length ? pool[k2] : null });
-        });
-        activeCard.appendChild(el('p', { class: 'pfa-note', style: 'font-style:italic;', text: 'The ' + slots.length + ' puzzle' + (slots.length === 1 ? '' : 's') + ' each participant plays (pool puzzles are shown; “generated” slots are produced fresh and randomized per participant):' }));
-        var dwrap = el('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;margin:8px 0;' });
-        activeCard.appendChild(dwrap);
-        slots.forEach(function (slot, i) {
-          if (slot.spec) {
-            var spec = slot.spec;
+        var serve = poolE.slice(0, needE).concat(poolH.slice(0, needH));
+        var shortE = Math.max(0, needE - poolE.length), shortH = Math.max(0, needH - poolH.length);
+        activeCard.appendChild(el('p', { class: 'pfa-note', html: 'No custom set frozen. Every participant plays the same <b>' + serve.length + '</b> built-in puzzle' + (serve.length === 1 ? '' : 's') + ' below (' + poolE.slice(0, needE).length + ' easy / ' + poolH.slice(0, needH).length + ' hard), in randomized order. Change the counts in the <b>Settings</b> tab.' }));
+        if (shortE || shortH) {
+          activeCard.appendChild(el('p', { class: 'pfa-note', style: 'color:#e6a23c;', html: '⚠ You asked for <b>' + needE + ' easy + ' + needH + ' hard</b>, but the built-in pool only has ' + poolE.length + ' easy / ' + poolH.length + ' hard, so only the ' + serve.length + ' above are used. Generate the rest for review and <b>freeze</b> them so every participant gets the full, vetted set:' }));
+          activeCard.appendChild(el('div', { style: 'margin:0 0 8px;' }, [
+            el('button', { class: 'pfa-btn', on: { click: function () { generateSetForReview(); } } }, ['✨ Generate ' + needE + ' easy + ' + needH + ' hard for review'])
+          ]));
+        }
+        if (serve.length) {
+          var dwrap = el('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;margin:8px 0;' });
+          activeCard.appendChild(dwrap);
+          serve.forEach(function (spec, i) {
             var sc = (spec.tilings && spec.tilings.count != null) ? spec.tilings.count : null;
             dwrap.appendChild(el('div', { class: 'pfa-q', style: 'flex:0 0 auto;text-align:center;min-width:120px;' }, [
               el('div', { class: 'pfa-note', text: '#' + (i + 1) + ' · ' + spec.diff + ' · κ=' + spec.kappa + (sc != null ? ' · ' + sc + ' sol.' : '') + ' · $' + spec.bestValue }),
@@ -481,14 +509,8 @@
                 el('button', { class: 'pfa-btn sec sm', on: { click: function () { try { window.PFGame.previewPuzzle(spec); window.PFGame.showProof(); } catch (e) {} } } }, ['κ proof'])
               ])
             ]));
-          } else {
-            dwrap.appendChild(el('div', { class: 'pfa-q', style: 'flex:0 0 auto;text-align:center;min-width:120px;border-style:dashed;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;' }, [
-              el('div', { class: 'pfa-note', text: '#' + (i + 1) + ' · ' + slot.diff + ' · generated' }),
-              el('div', { style: 'font-size:30px;line-height:1;opacity:.7;', text: '🎲' }),
-              el('div', { class: 'pfa-note', style: 'font-size:11px;', text: 'made fresh per participant' })
-            ]));
-          }
-        });
+          });
+        }
         return;
       }
       activeCard.appendChild(el('p', { class: 'pfa-note', text: ids.length + ' frozen puzzle(s) active. These are the exact puzzles every participant plays — each participant sees them in a randomized order.' }));

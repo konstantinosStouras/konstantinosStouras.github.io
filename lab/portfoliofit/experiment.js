@@ -607,7 +607,7 @@
     var ids = s.activePuzzleIds || [];
     var q = [];
     if (ids.length && fb) {
-      // Frozen set: replay the exact puzzles the admin approved (Settings counts ignored).
+      // Frozen set: replay the exact puzzles the admin reviewed & froze.
       for (var k = 0; k < ids.length; k++) {
         try {
           var snap = await fb.F.getDoc(fb.F.doc(fb.db, 'puzzleSets', ids[k]));
@@ -616,21 +616,15 @@
       }
       if (q.length) { if (s.randomizeOrder !== false) shuffle(q); return q; }
     }
-    // No frozen set: honour the Settings per-participant counts, drawing vetted
-    // puzzles from the built-in pool (by difficulty) and generating any shortfall
-    // at runtime. This is what makes "1 easy / 0 hard" actually serve 1 easy puzzle.
+    // No frozen set: play the built-in pool limited to the Settings counts — the
+    // SAME reviewed set for every participant (only the order is randomized).
+    // Nothing is generated invisibly per player; to serve more puzzles than the
+    // built-in pool, the admin generates & freezes a reviewed set in the Puzzles tab.
     var per = s.puzzlesPerUser || { easy: 2, hard: 2 };
     var def = (window.PF_DEFAULTS && window.PF_DEFAULTS.defaultPuzzles) || [];
-    var pool = { easy: [], hard: [] };
-    def.forEach(function (spec, idx) { var d = (spec.diff === 'hard') ? 'hard' : 'easy'; pool[d].push({ id: 'default-' + idx, diff: d, spec: spec }); });
-    ['easy', 'hard'].forEach(function (diff) {
-      var need = Math.max(0, per[diff] | 0);
-      var avail = pool[diff].slice(); shuffle(avail);
-      for (var i = 0; i < need; i++) {
-        if (i < avail.length) q.push(avail[i]);
-        else q.push({ diff: diff });   // pool exhausted -> generate one at runtime
-      }
-    });
+    var poolE = [], poolH = [];
+    def.forEach(function (spec, idx) { (spec.diff === 'hard' ? poolH : poolE).push({ id: 'default-' + idx, diff: (spec.diff === 'hard' ? 'hard' : 'easy'), spec: spec }); });
+    q = poolE.slice(0, Math.max(0, per.easy | 0)).concat(poolH.slice(0, Math.max(0, per.hard | 0)));
     if (s.randomizeOrder !== false) shuffle(q);
     return q;
   }
