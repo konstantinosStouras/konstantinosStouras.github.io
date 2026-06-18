@@ -202,6 +202,18 @@
         return F().getDoc(F().doc(D(), 'taskSets', id)).then(function (s) {
           if (!s.exists()) return builtin;
           var d = s.data();
+          // Large sets keep their tasks in sibling chunk docs (taskSets/{id}__chunk_N)
+          // to stay under Firestore's 1 MiB per-document limit; older sets store the
+          // tasks inline. Reassemble either shape into one ordered tasks array.
+          if (d.chunkCount) {
+            var reads = [];
+            for (var i = 0; i < d.chunkCount; i++) reads.push(F().getDoc(F().doc(D(), 'taskSets', id + '__chunk_' + i)));
+            return Promise.all(reads).then(function (snaps) {
+              var tasks = [];
+              snaps.forEach(function (cs) { if (cs.exists()) (cs.data().tasks || []).forEach(function (t) { tasks.push(t); }); });
+              return { id: id, name: d.name || 'Task set', tasks: tasks };
+            });
+          }
           return { id: id, name: d.name || 'Task set', tasks: (d.tasks || []) };
         }).catch(function (e) {
           // A configured task set that cannot be read (e.g. a dangling
@@ -216,12 +228,35 @@
     };
     this.saveTaskSet = function (set) {
       var self = this;
-      return F().addDoc(F().collection(D(), 'taskSets'), Object.assign({ createdAt: F().serverTimestamp() }, set)).then(function (ref) {
-        return self.saveConfig({ activeTaskSetId: ref.id }).then(function () { return ref.id; });
+      var tasks = (set && set.tasks) || [];
+      var meta = Object.assign({}, set); delete meta.tasks;
+      // Store the tasks in size-bounded sibling chunk docs (taskSets/{id}__chunk_N)
+      // instead of one big document, so a large set (e.g. 100+ comparisons of full
+      // model outputs) never hits Firestore's 1 MiB per-document limit - which used
+      // to make the Save silently fail. The chunk docs live in the SAME taskSets
+      // collection, so the existing signed-in-read / admin-write rules cover them
+      // with no rules change. The metadata doc carries chunkCount + count.
+      var chunks = [], cur = [], curBytes = 0, LIMIT = 600000;
+      tasks.forEach(function (t) {
+        var b; try { b = JSON.stringify(t).length; } catch (e) { b = 4000; }
+        if (cur.length && curBytes + b > LIMIT) { chunks.push(cur); cur = []; curBytes = 0; }
+        cur.push(t); curBytes += b;
       });
+      if (cur.length) chunks.push(cur);
+      return F().addDoc(F().collection(D(), 'taskSets'),
+        Object.assign({ createdAt: F().serverTimestamp(), count: tasks.length, chunkCount: chunks.length }, meta))
+        .then(function (ref) {
+          var id = ref.id;
+          return Promise.all(chunks.map(function (c, i) {
+            return F().setDoc(F().doc(D(), 'taskSets', id + '__chunk_' + i), { ofSet: id, idx: i, isChunk: true, tasks: c });
+          })).then(function () {
+            return self.saveConfig({ activeTaskSetId: id }).then(function () { return id; });
+          });
+        });
     };
     this.listTaskSets = function () {
-      return F().getDocs(F().collection(D(), 'taskSets')).then(function (sn) { var a = []; sn.forEach(function (d) { a.push(Object.assign({ id: d.id }, d.data())); }); return a; });
+      // Skip the sibling chunk docs - only the metadata docs are real sets.
+      return F().getDocs(F().collection(D(), 'taskSets')).then(function (sn) { var a = []; sn.forEach(function (d) { if (d.data().isChunk) return; a.push(Object.assign({ id: d.id }, d.data())); }); return a; });
     };
 
     this.listSessions = function () {
