@@ -68,6 +68,25 @@
     return n;
   }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
+  // Wrap a click handler so the button itself confirms the action: it presses,
+  // shows "Saving…" while the handler's promise runs, then flashes green "✓ Saved"
+  // before restoring its label. fn should return a promise (a save); a non-promise
+  // resolves immediately. On failure the label restores (the handler toasts the error).
+  function withFeedback(fn, okLabel) {
+    return function (e) {
+      var b = e && e.currentTarget;
+      if (!b) { return fn(); }
+      if (b._busy) return;
+      b._busy = true;
+      if (b._label == null) b._label = b.textContent;
+      var orig = b._label;
+      b.classList.remove('is-ok'); b.classList.add('is-busy'); b.setAttribute('disabled', 'true'); b.textContent = 'Saving…';
+      var restore = function () { b.classList.remove('is-busy', 'is-ok'); b.textContent = orig; b.removeAttribute('disabled'); b._busy = false; };
+      var ok = function () { b.classList.remove('is-busy'); b.classList.add('is-ok'); b.textContent = okLabel || '✓ Saved'; setTimeout(restore, 1100); };
+      var r; try { r = fn(); } catch (err) { restore(); throw err; }
+      Promise.resolve(r).then(ok, restore);
+    };
+  }
   function clearRoot() { root.innerHTML = ''; }
   var msgEl;
   function toast(t) { if (!msgEl) { msgEl = el('div', { class: 'aa-msg' }); document.body.appendChild(msgEl); } msgEl.textContent = t; msgEl.classList.add('show'); setTimeout(function () { msgEl.classList.remove('show'); }, 1900); }
@@ -91,7 +110,10 @@
       + '#aa-root input::placeholder,#aa-root textarea::placeholder{color:var(--muted);}'
       + '#aa-root input:-webkit-autofill,#aa-root input:-webkit-autofill:hover,#aa-root input:-webkit-autofill:focus,#aa-root input:-webkit-autofill:active{-webkit-text-fill-color:var(--ink);-webkit-box-shadow:0 0 0 1000px var(--field) inset;box-shadow:0 0 0 1000px var(--field) inset;caret-color:var(--ink);transition:background-color 9999s ease-in-out 0s;}'
       + '#aa-root textarea{resize:vertical;}'
-      + '.aa-btn{border:none;background:var(--accent);color:#fff;font-weight:600;font-size:14px;line-height:1.4;white-space:nowrap;padding:10px 16px;border-radius:10px;cursor:pointer;}'
+      + '.aa-btn{border:none;background:var(--accent);color:#fff;font-weight:600;font-size:14px;line-height:1.4;white-space:nowrap;padding:10px 16px;border-radius:10px;cursor:pointer;transition:transform .06s ease,background .15s ease,opacity .15s ease,box-shadow .15s ease;}'
+      + '.aa-btn:active{transform:translateY(1px) scale(.97);}'
+      + '.aa-btn.is-busy{opacity:.6;cursor:progress;}'
+      + '.aa-btn.is-ok{background:#2faa5e !important;color:#fff !important;border-color:#2faa5e !important;box-shadow:0 4px 12px rgba(47,170,94,.35);}'
       + '.aa-btn:hover{background:var(--accentd);}.aa-btn.sec{background:var(--panel);color:var(--ink);border:1px solid var(--fieldline);}.aa-btn.sm{padding:7px 11px;font-size:12px;}.aa-btn.danger{background:transparent;color:#e06b5a;border:1px solid #6d3b34;}'
       + '.aa-btn.green{background:#2faa5e;color:#fff;border:none;box-shadow:0 4px 12px rgba(47,170,94,.30);}.aa-btn.green:hover{background:#268a4c;box-shadow:0 7px 18px rgba(47,170,94,.38);}'
       + '#aa-root input[type=file]{font-size:14px;color:var(--muted);}'
@@ -627,9 +649,9 @@
       tbl.appendChild(tb);
       preview.appendChild(el('div', { style: 'overflow-x:auto;-webkit-overflow-scrolling:touch;' }, [tbl]));
       preview.appendChild(el('div', { class: 'aa-row', style: 'margin-top:10px;' }, [
-        el('button', { class: 'aa-btn', on: { click: function () { activate('Comparisons saved (' + parsed.length + ').'); } } }, ['Save']),
-        el('button', { class: 'aa-btn sec', on: { click: function () { activate('Comparisons saved as the default (' + parsed.length + ').'); } } }, ['Make this the default']),
-        el('button', { class: 'aa-btn sec', on: { click: restoreBuiltin } }, ['Restore built-in default']),
+        el('button', { class: 'aa-btn', on: { click: withFeedback(function () { return activate('Comparisons saved (' + parsed.length + ').'); }) } }, ['Save']),
+        el('button', { class: 'aa-btn sec', on: { click: withFeedback(function () { return activate('Comparisons saved as the default (' + parsed.length + ').'); }) } }, ['Make this the default']),
+        el('button', { class: 'aa-btn sec', on: { click: withFeedback(restoreBuiltin, '✓ Restored') } }, ['Restore built-in default']),
         el('button', { class: 'aa-btn sec', on: { click: discard } }, ['Discard'])
       ]));
     }
@@ -638,12 +660,12 @@
     // visible. ("Save" and "Make this the default" both do this - the active set
     // is the one participants get.)
     function activate(msg) {
-      if (!parsed || !parsed.length) return;
+      if (!parsed || !parsed.length) return Promise.reject();
       var set = { name: 'Uploaded ' + new Date().toLocaleString(), source: 'excel', tasks: parsed, count: parsed.length };
-      Store.saveTaskSet(set).then(function (id) { cfg.activeTaskSetId = id; toast(msg); refreshActive(); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); });
+      return Store.saveTaskSet(set).then(function (id) { cfg.activeTaskSetId = id; toast(msg); refreshActive(); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); throw e; });
     }
     function restoreBuiltin() {
-      saveConfig({ activeTaskSetId: null }).then(function () { cfg.activeTaskSetId = null; toast('Restored built-in default.'); discard(); refreshActive(); }).catch(function (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); });
+      return saveConfig({ activeTaskSetId: null }).then(function () { cfg.activeTaskSetId = null; toast('Restored built-in default.'); discard(); refreshActive(); }).catch(function (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); throw e; });
     }
     function refreshActive() {
       Store.loadActiveTasks().then(function (s) {
@@ -652,7 +674,7 @@
         var isBuiltin = !cfg.activeTaskSetId || s.id === 'builtin';
         active.appendChild(el('p', { class: 'aa-note', html: '<b>' + esc(s.name || 'Built-in default') + '</b> · ' + (s.tasks ? s.tasks.length : 0) + ' comparisons' + (isBuiltin ? ' (built-in placeholders)' : '') }));
         active.appendChild(el('div', { class: 'aa-row' }, [
-          el('button', { class: 'aa-btn sec', on: { click: function () { saveConfig({ activeTaskSetId: null }).then(function () { cfg.activeTaskSetId = null; toast('Reverted to built-in default set.'); refreshActive(); }); } } }, ['Restore built-in default'])
+          el('button', { class: 'aa-btn sec', on: { click: withFeedback(function () { return saveConfig({ activeTaskSetId: null }).then(function () { cfg.activeTaskSetId = null; toast('Reverted to built-in default set.'); refreshActive(); }); }, '✓ Restored') } }, ['Restore built-in default'])
         ]));
         // The active task set appears in the Setup summary too - keep it in sync
         // whenever it changes (upload / import / restore).
@@ -779,9 +801,9 @@
         bodyDiv.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: meta.label }), input]));
       });
       bodyDiv.appendChild(el('div', { class: 'aa-row', style: 'margin-top:8px;' }, [
-        el('button', { class: 'aa-btn', on: { click: save } }, ['Save']),
-        el('button', { class: 'aa-btn sec', on: { click: makeDefault } }, ['Make this the default']),
-        el('button', { class: 'aa-btn sec', on: { click: restoreBuiltin } }, ['Restore built-in default'])
+        el('button', { class: 'aa-btn', on: { click: withFeedback(save) } }, ['Save']),
+        el('button', { class: 'aa-btn sec', on: { click: withFeedback(makeDefault) } }, ['Make this the default']),
+        el('button', { class: 'aa-btn sec', on: { click: withFeedback(restoreBuiltin, '✓ Restored') } }, ['Restore built-in default'])
       ]));
     }
     function toggle() { open = !open; bodyDiv.style.display = open ? 'block' : 'none'; caret.textContent = open ? '▴' : '▾'; if (open) build(); }
@@ -789,9 +811,9 @@
     // One live config, so "Save" and "Make this the default" both persist this
     // page's text; "Restore built-in default" reverts to the arena-data.js text.
     function persist(msg) { var merged = Object.assign({}, cfg.texts, collect()); return saveConfig({ texts: merged }).then(function () { cfg.texts = merged; toast(msg); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); }); }
-    function save() { persist(g.label + ' saved.'); }
-    function makeDefault() { persist(g.label + ' saved as the default.'); }
-    function restoreBuiltin() { var Dt = D.texts || {}, merged = Object.assign({}, cfg.texts); g.fields.forEach(function (key) { if (Dt[key] !== undefined) merged[key] = Dt[key]; else delete merged[key]; }); saveConfig({ texts: merged }).then(function () { cfg.texts = merged; build(); toast(g.label + ' restored to built-in default.'); }).catch(function (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); }); }
+    function save() { return persist(g.label + ' saved.'); }
+    function makeDefault() { return persist(g.label + ' saved as the default.'); }
+    function restoreBuiltin() { var Dt = D.texts || {}, merged = Object.assign({}, cfg.texts); g.fields.forEach(function (key) { if (Dt[key] !== undefined) merged[key] = Dt[key]; else delete merged[key]; }); return saveConfig({ texts: merged }).then(function () { cfg.texts = merged; build(); toast(g.label + ' restored to built-in default.'); }).catch(function (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); }); }
     return section;
   }
 
@@ -804,14 +826,14 @@
     card.appendChild(listWrap);
     card.appendChild(el('div', { class: 'aa-field' }, [el('button', { class: 'aa-btn sec sm', on: { click: function () { list.push({ id: 'q_' + Date.now().toString(36), label: 'New question', type: 'text', required: true }); render(); } } }, ['+ Add question'])]));
     card.appendChild(el('div', { class: 'aa-row', style: 'margin-top:8px;' }, [
-      el('button', { class: 'aa-btn', on: { click: doSave } }, ['Make this the default']),
+      el('button', { class: 'aa-btn', on: { click: withFeedback(doSave) } }, ['Make this the default']),
       el('button', { class: 'aa-btn sec', on: { click: function () { list = builtinOrSaved(); render(); toast('Reloaded saved values.'); } } }, ['Reset this page to defaults']),
-      el('button', { class: 'aa-btn sec', on: { click: restoreBuiltin } }, ['Restore built-in default'])
+      el('button', { class: 'aa-btn sec', on: { click: withFeedback(restoreBuiltin, '✓ Restored') } }, ['Restore built-in default'])
     ]));
     body.appendChild(card);
     render();
     function builtinOrSaved() { return ((cfg[field] && cfg[field].length) ? cfg[field] : (D[field] || [])).map(function (q) { return Object.assign({}, q); }); }
-    function restoreBuiltin() { list = (D[field] || []).map(function (q) { return Object.assign({}, q); }); var patch = {}; patch[field] = list; saveConfig(patch).then(function () { cfg[field] = list.map(function (q) { return Object.assign({}, q); }); render(); toast('Restored built-in default.'); }).catch(function (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); }); }
+    function restoreBuiltin() { list = (D[field] || []).map(function (q) { return Object.assign({}, q); }); var patch = {}; patch[field] = list; return saveConfig(patch).then(function () { cfg[field] = list.map(function (q) { return Object.assign({}, q); }); render(); toast('Restored built-in default.'); }).catch(function (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); }); }
     function render() {
       listWrap.innerHTML = '';
       list.forEach(function (q, i) {
@@ -841,7 +863,7 @@
         listWrap.appendChild(qb);
       });
     }
-    function doSave() { var patch = {}; patch[field] = list; saveConfig(patch).then(function () { cfg[field] = list.map(function (q) { return Object.assign({}, q); }); toast(title + ' saved.'); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); }); }
+    function doSave() { var patch = {}; patch[field] = list; return saveConfig(patch).then(function () { cfg[field] = list.map(function (q) { return Object.assign({}, q); }); toast(title + ' saved.'); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); }); }
   }
 
   /* ===================== 2x2 & SETTINGS ===================== */
@@ -902,8 +924,8 @@
       perUser.value = String(settings.comparisonsPerUser);
       return saveConfig({ settings: settings }).then(function () { cfg.settings = settings; if (summaryRefresh) summaryRefresh(); toast(msg); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); });
     }
-    function save() { persist('Comparison flow saved.'); }
-    function makeDefault() { persist('Comparison flow saved as the default.'); }
+    function save() { return persist('Comparison flow saved.'); }
+    function makeDefault() { return persist('Comparison flow saved as the default.'); }
     function restoreDefaults() {
       var Ds = D.settings || {};
       var settings = Object.assign({}, cfg.settings, {
@@ -911,7 +933,7 @@
         comparisonsPerUser: Ds.comparisonsPerUser || 0,
         requireSessionCode: true
       });
-      saveConfig({ settings: settings }).then(function () { cfg.settings = settings; randomize.checked = settings.randomizeOrder; perUser.value = String(settings.comparisonsPerUser); if (summaryRefresh) summaryRefresh(); toast('Restored built-in default.'); }).catch(function (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); });
+      return saveConfig({ settings: settings }).then(function () { cfg.settings = settings; randomize.checked = settings.randomizeOrder; perUser.value = String(settings.comparisonsPerUser); if (summaryRefresh) summaryRefresh(); toast('Restored built-in default.'); }).catch(function (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); });
     }
     return el('div', { class: 'aa-card' }, [
       el('h3', { text: 'Comparison flow' }),
@@ -919,9 +941,9 @@
       el('div', { class: 'aa-field' }, [el('label', { class: 'aa-toggle' }, [randomize, document.createTextNode('Show comparisons in random order per participant')])]),
       el('div', { class: 'aa-field' }, [el('label', { text: 'Comparisons per participant (0 = use the whole active set)' }), perUser]),
       el('div', { class: 'aa-row', style: 'margin-top:8px;' }, [
-        el('button', { class: 'aa-btn', on: { click: save } }, ['Save']),
-        el('button', { class: 'aa-btn sec', on: { click: makeDefault } }, ['Make this the default']),
-        el('button', { class: 'aa-btn sec', on: { click: restoreDefaults } }, ['Restore built-in default'])
+        el('button', { class: 'aa-btn', on: { click: withFeedback(save) } }, ['Save']),
+        el('button', { class: 'aa-btn sec', on: { click: withFeedback(makeDefault) } }, ['Make this the default']),
+        el('button', { class: 'aa-btn sec', on: { click: withFeedback(restoreDefaults, '✓ Restored') } }, ['Restore built-in default'])
       ])
     ]);
   }
@@ -941,9 +963,9 @@
       el('p', { class: 'aa-note', html: 'For a long task set. When <b>on</b>, every comparison shows a <b>"Proceed to Survey"</b> button (active once the participant has answered the current pair). Pressing it asks for confirmation: on <b>Agree</b> the participant jumps to the survey and does no more comparisons; on <b>Discard</b> they keep going - and the button stays available on later pairs. When <b>off</b>, participants go through their whole assigned set before the survey.' }),
       el('div', { class: 'aa-field' }, [el('label', { class: 'aa-toggle' }, [on, document.createTextNode('Show a "Proceed to Survey" button on every comparison')])]),
       el('div', { class: 'aa-row', style: 'margin-top:8px;' }, [
-        el('button', { class: 'aa-btn', on: { click: function () { persist('Long-list setting saved.', on.checked); } } }, ['Save']),
-        el('button', { class: 'aa-btn sec', on: { click: function () { persist('Long-list setting saved as the default.', on.checked); } } }, ['Make this the default']),
-        el('button', { class: 'aa-btn sec', on: { click: function () { persist('Restored built-in default.', !!((D.settings || {}).longList)); } } }, ['Restore built-in default'])
+        el('button', { class: 'aa-btn', on: { click: withFeedback(function () { return persist('Long-list setting saved.', on.checked); }) } }, ['Save']),
+        el('button', { class: 'aa-btn sec', on: { click: withFeedback(function () { return persist('Long-list setting saved as the default.', on.checked); }) } }, ['Make this the default']),
+        el('button', { class: 'aa-btn sec', on: { click: withFeedback(function () { return persist('Restored built-in default.', !!((D.settings || {}).longList)); }, '✓ Restored') } }, ['Restore built-in default'])
       ])
     ]);
   }
