@@ -1,17 +1,20 @@
 rules_version = '2';
 
-// PortfolioFit for Managers — Firestore security rules (LAB / new project).
+// PortfolioFit for Managers — Firestore security rules (LAB / dev project).
 //
-// Backend for the evolving lab build at stouras.com/lab/portfoliofit/, which uses
-// ANONYMOUS participant sign-in gated by an admin-issued Session ID. The admin is
-// still the signed-in admin@admin.com account (Email/Password).
+// Backend for the lab build at stouras.com/lab/portfoliofit/. It now uses the
+// SAME fully anonymous flow as fun/portfoliofitgame/: anyone can play with NO
+// sign-up (Firebase Anonymous Auth) and may OPTIONALLY enter a session code to
+// join an admin-created configuration snapshot. There is no e-mail/password
+// registration and joining is NOT gated on a session. The admin is the
+// signed-in admin@admin.com account (Email/Password).
 //
 // Model:
-//   config/app            editable content + questions + settings     (admin write, signed-in read)
-//   puzzleSets/{id}        approved puzzle library                     (admin write, signed-in read)
-//   sessions/{id}          named access sessions { name, active, ... }  (admin write, signed-in read)
+//   config/app            editable content + questions + settings      (admin write, signed-in read)
+//   sessions/{code}        admin-created config snapshots, joined by code (admin write, signed-in read)
+//   puzzleSets/{id}        approved puzzle library                       (admin write, signed-in read)
 //   counters/{id}          sequential label counter (Cloud Functions only)
-//   participants/{uid}     one doc per participant (anonymous uid)
+//   participants/{uid}     one doc per player (anonymous uid; player creates their own)
 //     events / rounds / survey   subcollections
 
 service cloud.firestore {
@@ -20,12 +23,6 @@ service cloud.firestore {
     function signedIn()   { return request.auth != null; }
     function isAdmin()    { return signedIn() && request.auth.token.email == 'admin@admin.com'; }
     function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
-    // A session exists and has not been closed (active != false).
-    function sessionOpen(id) {
-      return id is string
-        && exists(/databases/$(database)/documents/sessions/$(id))
-        && get(/databases/$(database)/documents/sessions/$(id)).data().active != false;
-    }
 
     // ---- App content / configuration (admin-managed CMS) ----
     match /config/{docId} {
@@ -33,16 +30,16 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // ---- Approved puzzle library ----
-    match /puzzleSets/{puzzleId} {
+    // ---- Player sessions (admin-created config snapshots, joined by code) ----
+    // Any signed-in user (incl. anonymous) may read a session to join by code;
+    // only the admin can create / open / close / delete sessions.
+    match /sessions/{sessionId} {
       allow read:  if signedIn();
       allow write: if isAdmin();
     }
 
-    // ---- Named access sessions ----
-    // Any signed-in user (incl. anonymous) may read a session to validate their
-    // code; only the admin can create / open / close / delete sessions.
-    match /sessions/{sessionId} {
+    // ---- Approved puzzle library ----
+    match /puzzleSets/{puzzleId} {
       allow read:  if signedIn();
       allow write: if isAdmin();
     }
@@ -56,9 +53,7 @@ service cloud.firestore {
     // ---- Participants ----
     match /participants/{uid} {
       allow read:   if isOwner(uid) || isAdmin();
-      // Primary path is the registerParticipant function (admin SDK). The client
-      // fallback may create its own doc only with a valid, open session.
-      allow create: if isOwner(uid) && sessionOpen(request.resource.data.sessionId);
+      allow create: if isOwner(uid);                 // anonymous players create their own doc client-side
       allow update: if isOwner(uid) || isAdmin();
       allow delete: if isAdmin();
 

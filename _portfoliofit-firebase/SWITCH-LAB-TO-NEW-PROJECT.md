@@ -15,13 +15,14 @@ After this change:
 > so committing it to the repo is expected and safe — access is controlled by
 > the Firestore security rules, not by hiding the config.
 
-> **The lab build now uses anonymous + Session-ID login.** Participants sign in
-> **anonymously** and join with a **Session ID** the admin creates (Sessions tab),
-> instead of registering with e-mail/password. The admin still signs in as
-> `admin@admin.com`. Because of this, the new project's backend (rules + the
-> `registerParticipant` function) differs from production and lives in its own
-> folder, **`_portfoliofit-lab-firebase/`** — deploy *that* to the new project,
-> not this one (`_portfoliofit-firebase/` stays for `fun/portfoliofitgame/`).
+> **The lab build runs the same fully anonymous flow as production.** Players sign
+> in **anonymously** (no sign-up, no e-mail/password) and may **optionally** enter
+> a session code to join an admin-created configuration snapshot — joining is **not**
+> gated on a session. The admin still signs in as `admin@admin.com`. The new
+> project's backend lives in its own folder, **`_portfoliofit-lab-firebase/`** —
+> deploy *that* to the new project, not this one (`_portfoliofit-firebase/` stays
+> for `fun/portfoliofitgame/`). Both backends now implement the same anonymous
+> model; they are separated only so test data never touches production.
 
 ---
 
@@ -92,9 +93,10 @@ firebase deploy --only firestore:rules,firestore:indexes,functions --project <ne
 ```
 
 That folder's `firestore.rules` add the `sessions` collection (signed-in read,
-admin write) and gate participant creation on a valid, open session; its
-`registerParticipant` validates the Session ID and stores it. Both callables are
-v1 in `europe-west1`.
+admin write) and let any anonymous owner create their own `participants/{uid}`
+doc (joining is not gated on a session). The `submitSurvey` / `registerParticipant`
+callables are v1 in `europe-west1` (the anonymous flow uses `submitSurvey`; the
+client writes the participant doc directly).
 
 > **Avoid deploying to the wrong project.** `.firebaserc` currently defaults to
 > `stouras-portfoliofit` (production). Either keep that default and always pass
@@ -114,12 +116,13 @@ project first if you need history.
 ### 9. Verify the split
 - `lab/portfoliofit/?admin` → sign in as `admin@admin.com` → panel loads against
   the **new** (empty) project → **Sessions** tab → create a session and copy its ID.
-- `lab/portfoliofit/?exp=1` (incognito) → training → enter the **Session ID +
-  Participant ID + demographics** → a `participants/{uid}` doc (with `sessionId`)
-  + `events` appear in the **new** project's Firestore, and **nothing new**
-  appears in `stouras-portfoliofit`.
-- `fun/portfoliofitgame/?admin` and `?exp=1` → still the **original e-mail**
-  flow, still read/write the original `stouras-portfoliofit` project, untouched.
+- `lab/portfoliofit/` (incognito, bare URL) → press **Start** with **no** code →
+  the game is immediately playable with **no** login/registration prompt → a
+  `participants/{uid}` doc (anonymous) + `events` appear in the **new** project's
+  Firestore, and **nothing new** appears in `stouras-portfoliofit`. Repeat with
+  the session code entered to confirm the participant doc is tagged with `sessionId`.
+- `fun/portfoliofitgame/` and `?admin` → still the same anonymous flow, still
+  read/write the original `stouras-portfoliofit` project, untouched.
 
 ---
 
