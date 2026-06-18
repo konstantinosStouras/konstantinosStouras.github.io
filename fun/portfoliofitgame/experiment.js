@@ -259,9 +259,9 @@
           registrationQuestions: DEFAULTS.registrationQuestions,
           surveyQuestions: (d.surveyQuestions && d.surveyQuestions.length) ? d.surveyQuestions : DEFAULTS.surveyQuestions
         };
-      } else {
-        cfg = DEFAULTS;
+        return { ok: true, status: d.status || 'open' };
       }
+      cfg = DEFAULTS;
       return { ok: true };
     } catch (e) { return { ok: false, error: e }; }
   }
@@ -361,9 +361,11 @@
       var res = await beginSession(sid);
       if (!res.ok) {
         startBtn.removeAttribute('disabled'); startBtn.textContent = cfg.texts.welcomeButton || 'Start';
-        err.textContent = res.notFound
-          ? ('No session found for code “' + sid + '”. Check the code and try again, or clear it to play the default game.')
-          : 'Could not start just now. Please check your connection and try again.';
+        err.textContent = res.closed
+          ? ('Session “' + sid + '” is closed and is no longer accepting new players.')
+          : (res.notFound
+            ? ('No session found for code “' + sid + '”. Check the code and try again, or clear it to play the default game.')
+            : 'Could not start just now. Please check your connection and try again.');
         return;
       }
       startTraining();
@@ -387,6 +389,7 @@
     if (sid) {
       var r = await loadConfig(sid);
       if (!r.ok) return { ok: false, notFound: !!r.notFound };
+      if (r.status === 'closed') return { ok: false, closed: true };
       S.sessionId = sid;
     } else {
       await loadConfig(null);
@@ -589,16 +592,19 @@
       }
     }
     if (!q.length) {
-      // Built-in default set (baked specs) when no custom set is frozen.
+      // No frozen set: honor the per-participant counts from Settings, drawing
+      // from the built-in pool first and generating any extra on the fly. (This
+      // makes the admin's Easy/Hard counts actually govern what each player gets,
+      // and lets the Puzzles tab reflect those choices.)
       var def = (window.PF_DEFAULTS && window.PF_DEFAULTS.defaultPuzzles) || [];
-      for (var di = 0; di < def.length; di++) q.push({ id: 'default-' + di, diff: def[di].diff, spec: def[di] });
-    }
-    if (!q.length) {
-      // Fallback: generate by difficulty counts.
       var per = s.puzzlesPerUser || { easy: 2, hard: 2 };
-      var i;
-      for (i = 0; i < (per.easy || 0); i++) q.push({ diff: 'easy' });
-      for (i = 0; i < (per.hard || 0); i++) q.push({ diff: 'hard' });
+      ['easy', 'hard'].forEach(function (diff) {
+        var pool = [];
+        for (var di = 0; di < def.length; di++) if (def[di].diff === diff) pool.push({ id: 'default-' + di, diff: diff, spec: def[di] });
+        shuffle(pool);
+        var want = per[diff] || 0;
+        for (var n = 0; n < want; n++) q.push(n < pool.length ? pool[n] : { diff: diff });
+      });
     }
     if (s.randomizeOrder !== false) shuffle(q);
     return q;
