@@ -78,6 +78,25 @@
     return n;
   }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
+  // Wrap a click handler so the button itself confirms the action: it presses,
+  // shows "Saving…" while the handler's promise runs, then flashes green "✓ Saved"
+  // before restoring its label. fn should return a promise; on failure (a rejected
+  // promise) the label restores without the green flash (the handler toasts why).
+  function withFeedback(fn, okLabel) {
+    return function (e) {
+      var b = e && e.currentTarget;
+      if (!b) { return fn(); }
+      if (b._busy) return;
+      b._busy = true;
+      if (b._label == null) b._label = b.textContent;
+      var orig = b._label;
+      b.classList.remove('is-ok'); b.classList.add('is-busy'); b.setAttribute('disabled', 'true'); b.textContent = 'Saving…';
+      var restore = function () { b.classList.remove('is-busy', 'is-ok'); b.textContent = orig; b.removeAttribute('disabled'); b._busy = false; };
+      var ok = function () { b.classList.remove('is-busy'); b.classList.add('is-ok'); b.textContent = okLabel || '✓ Saved'; setTimeout(restore, 1100); };
+      var r; try { r = fn(); } catch (err) { restore(); return; }
+      Promise.resolve(r).then(ok, restore);
+    };
+  }
   var root;
   function clearRoot() { root.innerHTML = ''; }
 
@@ -99,7 +118,10 @@
       + '.pfa-field{margin:10px 0;}.pfa-field label{display:block;font-weight:600;font-size:13px;margin-bottom:4px;color:var(--ink);}'
       + '.pfa-field input[type=text],.pfa-field input[type=email],.pfa-field input[type=password],.pfa-field input[type=number],.pfa-field select,.pfa-field textarea{width:100%;padding:9px 11px;border:1px solid var(--fieldline);border-radius:9px;font-size:14px;font-family:inherit;background:var(--field);color:var(--ink);}'
       + '.pfa-field textarea{resize:vertical;}'
-      + '.pfa-btn{border:none;background:var(--accent);color:#fff;font-weight:600;font-size:14px;line-height:1.4;white-space:nowrap;padding:10px 18px;border-radius:10px;cursor:pointer;}'
+      + '.pfa-btn{border:none;background:var(--accent);color:#fff;font-weight:600;font-size:14px;line-height:1.4;white-space:nowrap;padding:10px 18px;border-radius:10px;cursor:pointer;transition:transform .06s ease,background .15s ease,opacity .15s ease,box-shadow .15s ease;}'
+      + '.pfa-btn:active{transform:translateY(1px) scale(.97);}'
+      + '.pfa-btn.is-busy{opacity:.6;cursor:progress;}'
+      + '.pfa-btn.is-ok{background:#2faa5e !important;color:#fff !important;border-color:#2faa5e !important;box-shadow:0 4px 12px rgba(47,170,94,.35);}'
       + '.pfa-btn:hover{background:var(--accentd);}.pfa-btn.sec{background:var(--panel);color:var(--ink);border:1px solid var(--fieldline);}.pfa-btn.sm{padding:7px 12px;font-size:12px;}.pfa-btn.danger{background:var(--panel);color:#e74c3c;border:1px solid #f0c7c1;}'
       + '.pfa-q{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--qbg);}'
       + '.pfa-q .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}'
@@ -223,7 +245,7 @@
   // ---- Content tab (collapsible pages, each with default controls) ----
   function renderContent(body) {
     body.appendChild(el('div', { class: 'pfa-card' }, [
-      el('p', { class: 'pfa-note', html: 'Edit the wording participants see on each page. Each field is pre-filled with the current text (the built-in default unless you have saved a change). <b>Make this the default</b> saves the page so participants see it. <b>Reset this page to defaults</b> reloads the saved/current values (discards unsaved edits). <b>Restore built-in default</b> reverts the page to the original wording.' })
+      el('p', { class: 'pfa-note', html: 'Edit the wording players see on each page. Each field is pre-filled with the current text (the built-in default unless you have saved a change). <b>Save</b> (or <b>Make this the default</b>) saves the page so players see it. <b>Restore built-in default</b> reverts the page to the original wording.' })
     ]));
     PAGE_GROUPS.forEach(function (g) { body.appendChild(renderPageSection(g)); });
   }
@@ -252,9 +274,9 @@
         bodyDiv.appendChild(el('div', { class: 'pfa-field' }, [el('label', { text: meta.label }), input]));
       });
       bodyDiv.appendChild(el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;' }, [
-        el('button', { class: 'pfa-btn', on: { click: makeDefault } }, ['Make this the default']),
-        el('button', { class: 'pfa-btn sec', on: { click: function () { build(); toast('Reloaded saved values.'); } } }, ['Reset this page to defaults']),
-        el('button', { class: 'pfa-btn sec', on: { click: restoreBuiltin } }, ['Restore built-in default'])
+        el('button', { class: 'pfa-btn', on: { click: withFeedback(save) } }, ['Save']),
+        el('button', { class: 'pfa-btn sec', on: { click: withFeedback(makeDefault) } }, ['Make this the default']),
+        el('button', { class: 'pfa-btn sec', on: { click: withFeedback(restoreBuiltin, '✓ Restored') } }, ['Restore built-in default'])
       ]));
     }
     function toggle() { open = !open; bodyDiv.style.display = open ? 'block' : 'none'; caret.textContent = open ? '▴' : '▾'; if (open) build(); }
@@ -266,17 +288,19 @@
       });
       return texts;
     }
-    async function makeDefault() {
+    // One live config, so "Save" and "Make this the default" both persist this
+    // page's text (just different confirmation wording).
+    function persist(msg) {
       var merged = Object.assign({}, cfg.texts, collect());
-      try { await saveConfig({ texts: merged }); cfg.texts = merged; toast(g.label + ' saved.'); }
-      catch (e) { toast('Save failed: ' + ((e && e.code) || 'error')); }
+      return saveConfig({ texts: merged }).then(function () { cfg.texts = merged; toast(msg); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); throw e; });
     }
-    async function restoreBuiltin() {
+    function save() { return persist(g.label + ' saved.'); }
+    function makeDefault() { return persist(g.label + ' saved as the default.'); }
+    function restoreBuiltin() {
       var D = (window.PF_DEFAULTS && window.PF_DEFAULTS.texts) || {};
       var merged = Object.assign({}, cfg.texts);
       g.fields.forEach(function (key) { if (D[key] !== undefined) merged[key] = D[key]; else delete merged[key]; });
-      try { await saveConfig({ texts: merged }); cfg.texts = merged; build(); toast(g.label + ' restored to built-in default.'); }
-      catch (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); }
+      return saveConfig({ texts: merged }).then(function () { cfg.texts = merged; build(); toast(g.label + ' restored to built-in default.'); }).catch(function (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); throw e; });
     }
     return section;
   }
@@ -291,19 +315,18 @@
     var addBtn = el('button', { class: 'pfa-btn sec sm', on: { click: function () { list.push({ id: 'q_' + Date.now().toString(36), label: 'New question', type: 'text', required: true }); render(); } } }, ['+ Add question']);
     card.appendChild(el('div', { class: 'pfa-field' }, [addBtn]));
     card.appendChild(el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;' }, [
-      el('button', { class: 'pfa-btn', on: { click: doSave } }, ['Make this the default']),
-      el('button', { class: 'pfa-btn sec', on: { click: function () { list = builtinOrSaved(); render(); toast('Reloaded saved values.'); } } }, ['Reset this page to defaults']),
-      el('button', { class: 'pfa-btn sec', on: { click: restoreBuiltin } }, ['Restore built-in default'])
+      el('button', { class: 'pfa-btn', on: { click: withFeedback(save) } }, ['Save']),
+      el('button', { class: 'pfa-btn sec', on: { click: withFeedback(makeDefault) } }, ['Make this the default']),
+      el('button', { class: 'pfa-btn sec', on: { click: withFeedback(restoreBuiltin, '✓ Restored') } }, ['Restore built-in default'])
     ]));
     body.appendChild(card);
     render();
 
     function builtinOrSaved() { return ((cfg[field] && cfg[field].length) ? cfg[field] : ((window.PF_DEFAULTS && window.PF_DEFAULTS[field]) || [])).map(function (q) { return Object.assign({}, q); }); }
-    async function restoreBuiltin() {
+    function restoreBuiltin() {
       list = ((window.PF_DEFAULTS && window.PF_DEFAULTS[field]) || []).map(function (q) { return Object.assign({}, q); });
       var patch = {}; patch[field] = list;
-      try { await saveConfig(patch); cfg[field] = list.map(function (q) { return Object.assign({}, q); }); render(); toast('Restored built-in default.'); }
-      catch (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); }
+      return saveConfig(patch).then(function () { cfg[field] = list.map(function (q) { return Object.assign({}, q); }); render(); toast('Restored built-in default.'); }).catch(function (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); throw e; });
     }
 
     function render() {
@@ -337,11 +360,12 @@
         listWrap.appendChild(qb);
       });
     }
-    async function doSave() {
+    function persist(msg) {
       var patch = {}; patch[field] = list;
-      try { await saveConfig(patch); cfg[field] = list.map(function (q) { return Object.assign({}, q); }); toast(title + ' saved.'); }
-      catch (e) { toast('Save failed: ' + ((e && e.code) || 'error')); }
+      return saveConfig(patch).then(function () { cfg[field] = list.map(function (q) { return Object.assign({}, q); }); toast(msg); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); throw e; });
     }
+    function save() { return persist(title + ' saved.'); }
+    function makeDefault() { return persist(title + ' saved as the default.'); }
   }
 
   // ---- Puzzles tab ----
@@ -374,14 +398,20 @@
     var activeCard = el('div', { class: 'pfa-card' });
     body.appendChild(approvedCard); body.appendChild(activeCard);
     body.appendChild(el('div', { class: 'pfa-card' }, [
-      el('p', { class: 'pfa-note', text: '“Make this the default” freezes your approved set for all participants. “Reset this page to defaults” clears the set you are building. “Restore built-in default” reverts to the built-in default puzzles.' }),
+      el('p', { class: 'pfa-note', text: '“Save” (or “Make this the default”) freezes your approved set as the active set for all participants. “Restore built-in default” reverts to the built-in default puzzles. (Use “Clear set” above to empty the set you are building.)' }),
       el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;' }, [
-        el('button', { class: 'pfa-btn', on: { click: function () { if (!approvedPuzzles.length) { toast('Approve some puzzles first.'); return; } freeze(); } } }, ['Make this the default']),
-        el('button', { class: 'pfa-btn sec', on: { click: function () { approvedPuzzles = []; renderApproved(); toast('Cleared approved set.'); } } }, ['Reset this page to defaults']),
-        el('button', { class: 'pfa-btn sec', on: { click: clearActive } }, ['Restore built-in default'])
+        el('button', { class: 'pfa-btn', on: { click: withFeedback(saveFrozen) } }, ['Save']),
+        el('button', { class: 'pfa-btn sec', on: { click: withFeedback(saveFrozen) } }, ['Make this the default']),
+        el('button', { class: 'pfa-btn sec', on: { click: withFeedback(clearActive, '✓ Restored') } }, ['Restore built-in default'])
       ])
     ]));
     renderApproved(); renderActive();
+
+    // "Save" and "Make this the default" both freeze the approved set.
+    function saveFrozen() {
+      if (!approvedPuzzles.length) { toast('Approve some puzzles first.'); return Promise.reject(new Error('none')); }
+      return freeze();
+    }
 
     function generate(diff) {
       var spec; try { spec = window.PFGame.generatePuzzle(diff); } catch (e) { spec = null; }
@@ -404,7 +434,11 @@
     }
     function renderApproved() {
       approvedCard.innerHTML = '';
-      approvedCard.appendChild(el('h3', { text: 'Set to freeze (' + approvedPuzzles.length + ')', style: 'margin:0 0 8px;font-size:15px;' }));
+      var head = el('div', { style: 'display:flex;justify-content:space-between;align-items:center;gap:10px;margin:0 0 8px;' }, [
+        el('h3', { text: 'Set to freeze (' + approvedPuzzles.length + ')', style: 'margin:0;font-size:15px;' })
+      ]);
+      if (approvedPuzzles.length) head.appendChild(el('button', { class: 'pfa-btn sec sm', on: { click: function () { approvedPuzzles = []; renderApproved(); toast('Cleared the set you were building.'); } } }, ['Clear set']));
+      approvedCard.appendChild(head);
       if (!approvedPuzzles.length) { approvedCard.appendChild(el('p', { class: 'pfa-note', text: 'No puzzles approved yet.' })); return; }
       var wrap = el('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;' });
       approvedPuzzles.forEach(function (spec, i) {
@@ -416,30 +450,45 @@
       });
       approvedCard.appendChild(wrap);
     }
+    // One built-in puzzle card with its Solutions / κ-proof buttons.
+    function activePuzzleCard(spec, idx) {
+      var sc = (spec.tilings && spec.tilings.count != null) ? spec.tilings.count : null;
+      return el('div', { class: 'pfa-q', style: 'flex:0 0 auto;text-align:center;min-width:120px;' }, [
+        el('div', { class: 'pfa-note', text: (idx != null ? '#' + idx + ' · ' : '') + spec.diff + ' · κ=' + spec.kappa + (sc != null ? ' · ' + sc + ' sol.' : '') + ' · $' + spec.bestValue }),
+        puzzleGrid(spec, true),
+        el('div', { style: 'display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:4px;' }, [
+          el('button', { class: 'pfa-btn sec sm', on: { click: function () { try { window.PFGame.previewPuzzle(spec); window.PFGame.showSolutions(); } catch (e) {} } } }, ['Solutions']),
+          el('button', { class: 'pfa-btn sec sm', on: { click: function () { try { window.PFGame.previewPuzzle(spec); window.PFGame.showProof(); } catch (e) {} } } }, ['κ proof'])
+        ])
+      ]);
+    }
     function renderActive() {
       activeCard.innerHTML = '';
       activeCard.appendChild(el('h3', { text: 'Current active set', style: 'margin:0 0 8px;font-size:15px;' }));
       var ids = (cfg.settings && cfg.settings.activePuzzleIds) || [];
       if (!ids.length) {
+        // No frozen set: reflect the per-participant counts from the Settings tab,
+        // drawing from the built-in pool (extra ones are generated fresh).
         var def = (window.PF_DEFAULTS && window.PF_DEFAULTS.defaultPuzzles) || [];
-        if (def.length) {
-          activeCard.appendChild(el('p', { class: 'pfa-note', text: 'Built-in default set of ' + def.length + ' puzzles (no custom set frozen). Each participant sees them in a randomized order.' }));
+        var per = (cfg.settings && cfg.settings.puzzlesPerUser) || { easy: 2, hard: 2 };
+        var ne = per.easy || 0, nh = per.hard || 0, total = ne + nh;
+        if (!total) {
+          activeCard.appendChild(el('p', { class: 'pfa-err', text: 'No puzzles per participant (Easy 0, Hard 0 on the Settings tab). Set a count there, or freeze a custom set above.' }));
+          return;
+        }
+        var randomized = !(cfg.settings && cfg.settings.randomizeOrder === false);
+        activeCard.appendChild(el('p', { class: 'pfa-note', html: 'No custom set frozen. Each participant plays <b>' + ne + ' easy</b> + <b>' + nh + ' hard</b> puzzle' + (total === 1 ? '' : 's') + ' (counts from the <b>Settings</b> tab)' + (randomized ? ', in randomized order' : '') + ', drawn from the built-in pool below.' }));
+        ['easy', 'hard'].forEach(function (diff) {
+          var want = (diff === 'easy') ? ne : nh;
+          if (!want) return;
+          var pool = def.filter(function (d) { return d.diff === diff; });
+          var extra = Math.max(0, want - pool.length);
+          activeCard.appendChild(el('p', { class: 'pfa-note', style: 'margin-top:10px;', html: '<b>' + diff.charAt(0).toUpperCase() + diff.slice(1) + '</b> — ' + want + ' per participant' + (pool.length ? (', chosen from ' + pool.length + ' built-in') : '') + (extra ? (' (' + extra + ' generated fresh each time)') : '') + ':' }));
+          if (!pool.length) { activeCard.appendChild(el('p', { class: 'pfa-note', text: 'No built-in ' + diff + ' puzzles — generated fresh per participant.' })); return; }
           var dwrap = el('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;margin:8px 0;' });
           activeCard.appendChild(dwrap);
-          def.forEach(function (spec, i) {
-            var sc = (spec.tilings && spec.tilings.count != null) ? spec.tilings.count : null;
-            dwrap.appendChild(el('div', { class: 'pfa-q', style: 'flex:0 0 auto;text-align:center;min-width:120px;' }, [
-              el('div', { class: 'pfa-note', text: '#' + (i + 1) + ' · ' + spec.diff + ' · κ=' + spec.kappa + (sc != null ? ' · ' + sc + ' sol.' : '') + ' · $' + spec.bestValue }),
-              puzzleGrid(spec, true),
-              el('div', { style: 'display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:4px;' }, [
-                el('button', { class: 'pfa-btn sec sm', on: { click: function () { try { window.PFGame.previewPuzzle(spec); window.PFGame.showSolutions(); } catch (e) {} } } }, ['Solutions']),
-                el('button', { class: 'pfa-btn sec sm', on: { click: function () { try { window.PFGame.previewPuzzle(spec); window.PFGame.showProof(); } catch (e) {} } } }, ['κ proof'])
-              ])
-            ]));
-          });
-        } else {
-          activeCard.appendChild(el('p', { class: 'pfa-note', text: 'None. Participants get randomly generated puzzles based on the Settings counts.' }));
-        }
+          pool.forEach(function (spec) { dwrap.appendChild(activePuzzleCard(spec)); });
+        });
         return;
       }
       activeCard.appendChild(el('p', { class: 'pfa-note', text: ids.length + ' frozen puzzle(s) active. These are the exact puzzles every participant plays — each participant sees them in a randomized order.' }));
@@ -490,11 +539,11 @@
         approvedPuzzles = [];
         renderApproved(); renderActive();
         toast('Active set frozen (' + ids.length + ' puzzles).');
-      } catch (e) { toast('Freeze failed: ' + ((e && e.code) || 'error')); }
+      } catch (e) { toast('Freeze failed: ' + ((e && e.code) || 'error')); throw e; }
     }
     async function clearActive() {
       try { var s = Object.assign({}, cfg.settings, { activePuzzleIds: [] }); await saveConfig({ settings: s }); cfg.settings = s; renderActive(); toast('Reverted to built-in default set.'); }
-      catch (e) { toast('Failed: ' + ((e && e.code) || 'error')); }
+      catch (e) { toast('Failed: ' + ((e && e.code) || 'error')); throw e; }
     }
   }
 
@@ -517,21 +566,22 @@
       el('div', { class: 'pfa-field' }, [el('label', { style: 'display:flex;align-items:center;gap:8px;' }, [rnd, document.createTextNode('Randomize puzzle order per participant')])]),
       el('p', { class: 'pfa-note', text: 'Puzzle counts apply only when no custom set is frozen (see the Puzzles tab). Time limits apply to every puzzle of that difficulty, in training and the main game.' }),
       el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;' }, [
-        el('button', { class: 'pfa-btn', on: { click: doSave } }, ['Make this the default']),
-        el('button', { class: 'pfa-btn sec', on: { click: function () { renderSettings(body); toast('Reloaded saved values.'); } } }, ['Reset this page to defaults']),
-        el('button', { class: 'pfa-btn sec', on: { click: restoreDefaults } }, ['Restore built-in default'])
+        el('button', { class: 'pfa-btn', on: { click: withFeedback(save) } }, ['Save']),
+        el('button', { class: 'pfa-btn sec', on: { click: withFeedback(makeDefault) } }, ['Make this the default']),
+        el('button', { class: 'pfa-btn sec', on: { click: withFeedback(restoreDefaults, '✓ Restored') } }, ['Restore built-in default'])
       ])
     ]));
-    async function doSave() {
+    function persist(msg) {
       var settings = Object.assign({}, s, {
         puzzlesPerUser: { easy: parseInt(easy.value, 10) || 0, hard: parseInt(hard.value, 10) || 0 },
         timeLimits: { easy: parseInt(teasy.value, 10) || 120, hard: parseInt(thard.value, 10) || 180 },
         randomizeOrder: rnd.checked
       });
-      try { await saveConfig({ settings: settings }); cfg.settings = settings; toast('Settings saved.'); }
-      catch (e) { toast('Save failed: ' + ((e && e.code) || 'error')); }
+      return saveConfig({ settings: settings }).then(function () { cfg.settings = settings; toast(msg); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); throw e; });
     }
-    async function restoreDefaults() {
+    function save() { return persist('Settings saved.'); }
+    function makeDefault() { return persist('Settings saved as the default.'); }
+    function restoreDefaults() {
       var D = (window.PF_DEFAULTS && window.PF_DEFAULTS.settings) || {};
       var settings = Object.assign({}, cfg.settings, {
         puzzlesPerUser: D.puzzlesPerUser || { easy: 2, hard: 2 },
@@ -539,8 +589,7 @@
         randomizeOrder: D.randomizeOrder !== false,
         trainingDifficulty: D.trainingDifficulty || 'easy'
       });
-      try { await saveConfig({ settings: settings }); cfg.settings = settings; renderSettings(body); toast('Restored built-in default.'); }
-      catch (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); }
+      return saveConfig({ settings: settings }).then(function () { cfg.settings = settings; renderSettings(body); toast('Restored built-in default.'); }).catch(function (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); throw e; });
     }
   }
 
@@ -551,84 +600,104 @@
   function renderSessions(body) {
     body.innerHTML = '';
     body.appendChild(el('div', { class: 'pfa-card' }, [
-      el('h3', { text: 'Player sessions', style: 'margin:0 0 8px;font-size:15px;' }),
-      el('p', { class: 'pfa-note', html: 'A <b>session</b> is a saved snapshot of the current configuration — the Content text, the Registration/Survey questions, the Settings, and the active puzzle set. Share its <b>session code</b> with players: anyone who enters that code on the welcome screen (or opens a <code>?session=CODE</code> link) plays this exact configuration, and their data is tagged with it. Players who do not enter a code get the default configuration (the one shown on the other tabs). Set up the other tabs first, then snapshot them into a session here.' })
+      el('p', { class: 'pfa-note', html: 'Create a <b>session</b>, then share its <b>Session ID</b> (or a <code>?session=CODE</code> link) with players — they enter it on the welcome screen to join. A session snapshots the <b>current configuration</b> (Content, questions, Settings and the active puzzle set); players with no code get the default configuration. <b>Close</b> a session to block new joins; data already collected is unaffected.' })
     ]));
 
-    var codeIn = el('input', { type: 'text', placeholder: 'optional, e.g. SPRING25', style: 'max-width:220px;text-transform:uppercase;' });
-    var labelIn = el('input', { type: 'text', placeholder: 'e.g. Spring 2025 MBA cohort', style: 'max-width:340px;' });
-    var msg = el('div', { class: 'pfa-note' });
-    var createBtn = el('button', { class: 'pfa-btn', on: { click: doCreate } }, ['Create session from current configuration']);
+    var nameIn = el('input', { type: 'text', placeholder: 'e.g. Spring MBA 2026', style: 'max-width:340px;' });
+    var codeIn = el('input', { type: 'text', placeholder: '(optional) custom code', style: 'max-width:240px;text-transform:uppercase;' });
+    var msg = el('div', { class: 'pfa-err' });
+    var createBtn = el('button', { class: 'pfa-btn', on: { click: withFeedback(doCreate, '✓ Created') } }, ['Create session']);
     body.appendChild(el('div', { class: 'pfa-card' }, [
-      el('div', { class: 'pfa-field' }, [el('label', { text: 'Session code (optional — leave blank to auto-generate)' }), codeIn]),
-      el('div', { class: 'pfa-field' }, [el('label', { text: 'Label (optional, for your reference)' }), labelIn]),
-      createBtn, msg
+      el('div', { class: 'pfa-field' }, [el('label', { text: 'Session name' }), nameIn]),
+      el('div', { class: 'pfa-field' }, [el('label', { text: 'Session ID' }), codeIn,
+        el('div', { class: 'pfa-note', style: 'margin-top:4px;', text: 'Leave blank to auto-generate a short code. Letters, digits and dashes only (3–40 chars).' })]),
+      msg,
+      el('div', {}, [createBtn])
     ]));
 
     var listCard = el('div', { class: 'pfa-card' }, [el('p', { class: 'pfa-note', text: 'Loading sessions…' })]);
     body.appendChild(listCard);
     loadList();
 
-    async function doCreate() {
-      msg.textContent = ''; msg.className = 'pfa-note';
-      var code = sanitizeCode(codeIn.value) || genCode();
-      createBtn.setAttribute('disabled', 'true');
-      try {
-        var ref = fb.F.doc(fb.db, 'sessions', code);
-        var existing = await fb.F.getDoc(ref);
-        if (existing.exists() && !window.confirm('A session with code "' + code + '" already exists. Overwrite it with the current configuration?')) { createBtn.removeAttribute('disabled'); return; }
+    function doCreate() {
+      msg.textContent = '';
+      var name = nameIn.value.trim();
+      var typed = codeIn.value.trim();
+      var code = sanitizeCode(typed);
+      if (typed && code.length < 3) { msg.textContent = 'Session ID must be 3–40 letters, digits or dashes.'; return Promise.reject(new Error('bad-code')); }
+      if (!code) code = genCode();
+      var ref = fb.F.doc(fb.db, 'sessions', code);
+      return fb.F.getDoc(ref).then(function (existing) {
+        if (existing.exists() && !window.confirm('A session with ID "' + code + '" already exists. Overwrite it with the current configuration?')) return Promise.reject(new Error('cancel'));
         var payload = {
-          label: labelIn.value.trim() || '',
+          name: name, label: name, status: 'open',
           texts: cfg.texts || {}, settings: cfg.settings || {},
           registrationQuestions: cfg.registrationQuestions || [],
           surveyQuestions: cfg.surveyQuestions || [],
           updatedAt: fb.F.serverTimestamp()
         };
         if (!existing.exists()) payload.createdAt = fb.F.serverTimestamp();
-        await fb.F.setDoc(ref, payload, { merge: true });
-        codeIn.value = ''; labelIn.value = '';
-        toast('Session "' + code + '" saved.');
-        loadList();
-      } catch (e) { msg.className = 'pfa-err'; msg.textContent = 'Could not save: ' + ((e && e.code) || 'error'); }
-      createBtn.removeAttribute('disabled');
-    }
-
-    async function loadList() {
-      listCard.innerHTML = '';
-      listCard.appendChild(el('h3', { text: 'Existing sessions', style: 'margin:0 0 8px;font-size:15px;' }));
-      var docs = [];
-      try { var snap = await fb.F.getDocs(fb.F.collection(fb.db, 'sessions')); snap.forEach(function (d) { docs.push(Object.assign({ _id: d.id }, d.data())); }); }
-      catch (e) { listCard.appendChild(el('p', { class: 'pfa-err', text: 'Could not load sessions: ' + ((e && e.code) || 'error') })); return; }
-      docs.sort(function (a, b) { return tsMs(b.createdAt) - tsMs(a.createdAt); });
-      if (!docs.length) { listCard.appendChild(el('p', { class: 'pfa-note', text: 'No sessions yet. Create one above.' })); return; }
-      var table = el('table', { class: 'pfa-tbl' });
-      table.appendChild(el('thead', {}, [el('tr', {}, ['Code', 'Label', 'Puzzles', 'Created', 'Play link', ''].map(function (h) { return el('th', { text: h }); }))]));
-      var tb = el('tbody', {});
-      docs.forEach(function (s) {
-        var n = (s.settings && s.settings.activePuzzleIds && s.settings.activePuzzleIds.length) || 0;
-        var link = location.origin + location.pathname + '?session=' + encodeURIComponent(s._id);
-        tb.appendChild(el('tr', {}, [
-          el('td', {}, [el('b', { text: s._id })]),
-          el('td', { text: s.label || '' }),
-          el('td', { text: n ? (n + ' frozen') : 'default set' }),
-          el('td', { text: fmtTs(s.createdAt) }),
-          el('td', {}, [el('button', { class: 'pfa-btn sec sm', on: { click: function () { copyText(link); } } }, ['Copy link'])]),
-          el('td', {}, [el('button', { class: 'pfa-btn danger sm', on: { click: function () { delSession(s._id); } } }, ['delete'])])
-        ]));
+        return fb.F.setDoc(ref, payload, { merge: true }).then(function () {
+          nameIn.value = ''; codeIn.value = '';
+          toast('Session "' + code + '" created.');
+          loadList();
+        });
+      }).catch(function (e) {
+        if (e && (e.message === 'cancel' || e.message === 'bad-code')) throw e;
+        msg.textContent = 'Could not save: ' + ((e && e.code) || 'error'); throw e;
       });
-      table.appendChild(tb);
-      listCard.appendChild(table);
     }
 
-    async function delSession(code) {
+    function loadList() {
+      listCard.innerHTML = '';
+      listCard.appendChild(el('h3', { id: 'pfa-sess-h', text: 'Sessions', style: 'margin:0 0 8px;font-size:15px;' }));
+      var hint = el('div', {}); listCard.appendChild(hint);
+      Promise.all([
+        fb.F.getDocs(fb.F.collection(fb.db, 'sessions')),
+        fb.F.getDocs(fb.F.collection(fb.db, 'participants'))
+      ]).then(function (res) {
+        var docs = []; res[0].forEach(function (d) { docs.push(Object.assign({ _id: d.id }, d.data())); });
+        var counts = {}; res[1].forEach(function (d) { var sid = (d.data() || {}).sessionId; if (sid) counts[sid] = (counts[sid] || 0) + 1; });
+        docs.sort(function (a, b) { return tsMs(b.createdAt) - tsMs(a.createdAt); });
+        var h = listCard.querySelector('#pfa-sess-h'); if (h) h.textContent = docs.length + ' session' + (docs.length === 1 ? '' : 's');
+        if (!docs.length) { hint.appendChild(el('p', { class: 'pfa-note', text: 'No sessions yet. Create one above.' })); return; }
+        var table = el('table', { class: 'pfa-tbl' });
+        table.appendChild(el('thead', {}, [el('tr', {}, ['Session ID', 'Name', 'Status', 'Participants', 'Created', ''].map(function (th) { return el('th', { text: th }); }))]));
+        var tb = el('tbody', {});
+        docs.forEach(function (s) {
+          var closed = s.status === 'closed';
+          var actions = [el('button', { class: 'pfa-btn sec sm', on: { click: function () { copyText(s._id, 'Session ID copied.'); } } }, ['copy ID'])];
+          if (closed) actions.push(el('button', { class: 'pfa-btn sec sm', on: { click: function () { setStatus(s._id, 'open'); } } }, ['reopen']));
+          else actions.push(el('button', { class: 'pfa-btn sec sm', on: { click: function () { setStatus(s._id, 'closed'); } } }, ['close']));
+          actions.push(el('button', { class: 'pfa-btn danger sm', on: { click: function () { delSession(s._id); } } }, ['delete']));
+          tb.appendChild(el('tr', {}, [
+            el('td', {}, [el('b', { text: s._id })]),
+            el('td', { text: s.name || s.label || '' }),
+            el('td', { text: closed ? 'Closed' : 'Open' }),
+            el('td', { text: String(counts[s._id] || 0) }),
+            el('td', { text: fmtTs(s.createdAt) }),
+            el('td', {}, [el('div', { style: 'display:flex;gap:6px;flex-wrap:wrap;' }, actions)])
+          ]));
+        });
+        table.appendChild(tb);
+        hint.appendChild(table);
+      }).catch(function (e) { hint.appendChild(el('p', { class: 'pfa-err', text: 'Could not load sessions: ' + ((e && e.code) || 'error') })); });
+    }
+
+    function setStatus(code, status) {
+      fb.F.setDoc(fb.F.doc(fb.db, 'sessions', code), { status: status, updatedAt: fb.F.serverTimestamp() }, { merge: true })
+        .then(function () { toast(status === 'closed' ? 'Session closed to new joins.' : 'Session reopened.'); loadList(); })
+        .catch(function (e) { toast('Failed: ' + ((e && e.code) || 'error')); });
+    }
+    function delSession(code) {
       if (!window.confirm('Delete session "' + code + '"? Players can no longer join with this code. (Already-collected player data is not affected.)')) return;
-      try { await fb.F.deleteDoc(fb.F.doc(fb.db, 'sessions', code)); toast('Session deleted.'); loadList(); }
-      catch (e) { toast('Delete failed: ' + ((e && e.code) || 'error')); }
+      fb.F.deleteDoc(fb.F.doc(fb.db, 'sessions', code)).then(function () { toast('Session deleted.'); loadList(); })
+        .catch(function (e) { toast('Delete failed: ' + ((e && e.code) || 'error')); });
     }
   }
   function genCode() { var a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', s = ''; for (var i = 0; i < 6; i++) s += a.charAt(Math.floor(Math.random() * a.length)); return s; }
-  function sanitizeCode(v) { return String(v || '').toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 24); }
-  function copyText(t) { try { navigator.clipboard.writeText(t); toast('Link copied to clipboard.'); } catch (e) { window.prompt('Copy this link:', t); } }
+  function sanitizeCode(v) { return String(v || '').toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 40); }
+  function copyText(t, okMsg) { try { navigator.clipboard.writeText(t); toast(okMsg || 'Copied to clipboard.'); } catch (e) { window.prompt('Copy:', t); } }
 
   // ---- Participants tab ----
   async function renderParticipants(body) {
