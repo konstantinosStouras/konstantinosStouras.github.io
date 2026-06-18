@@ -31,8 +31,8 @@ window.ARENA_DEFAULTS = {
     "trainingTitle": "Let's practice",
     "trainingBody": "Here is one practice comparison. Try tapping the answer you prefer, or mark them equal. <b>Nothing here is recorded</b> - it is just to get the feel of it. When you are ready, start the real comparisons.",
     "trainingButton": "I'm ready - start",
-    "registerTitle": "Create your account",
-    "registerIntro": "A few quick details before you begin. Your e-mail is used only to let you log back in.",
+    "registerTitle": "A few quick details",
+    "registerIntro": "You take part <b>anonymously</b> - we never ask for your name, e-mail or password. Just a few quick questions before you begin.",
     "loginTitle": "Log in",
     "mainTitle": "Your comparisons",
     "mainIntro": "Read the task, tap the answer you prefer (or mark them equally good), then set how much better it is on the scale and press Next.",
@@ -87,7 +87,7 @@ window.ARENA_DEFAULTS = {
     "randomizeOrder": true,
     "comparisonsPerUser": 0,
     "longList": false,
-    "requireSessionCode": true,
+    "requireSessionCode": false,
     "twoByTwo": {
       "factors": {
         "transparency": false,
@@ -103,22 +103,6 @@ window.ARENA_DEFAULTS = {
       "required": false,
       "system": "participantId",
       "help": "If you were given an ID (e.g. a Prolific ID), enter it here. Otherwise leave blank."
-    },
-    {
-      "id": "email",
-      "label": "E-mail",
-      "type": "email",
-      "required": true,
-      "system": "email",
-      "help": "Used only so you can log back in."
-    },
-    {
-      "id": "password",
-      "label": "Password",
-      "type": "password",
-      "required": true,
-      "system": "password",
-      "help": "At least 6 characters."
     },
     {
       "id": "consent",

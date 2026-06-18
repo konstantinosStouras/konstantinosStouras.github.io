@@ -272,7 +272,7 @@
     activeCard.appendChild(el('div', { class: 'aa-field' }, [activeSearch]));
     var activeList = el('div', {}, [el('p', { class: 'aa-note', text: 'Loading...' })]);
     activeCard.appendChild(activeList);
-    activeCard.appendChild(el('p', { class: 'aa-note', style: 'margin-top:12px;border-top:1px solid var(--line);padding-top:10px;', text: 'Participants join with the session code on the welcome/login screen, or by opening the share link.' }));
+    activeCard.appendChild(el('p', { class: 'aa-note', style: 'margin-top:12px;border-top:1px solid var(--line);padding-top:10px;', text: 'Participants play anonymously (no account). Share a session code, or the share link, to route them to a specific session; with no code they play the default configuration.' }));
 
     // Closed sessions (hidden until there are any). A closed session no longer
     // lets participants join; its data is kept for review/export.
@@ -822,7 +822,7 @@
     var list = ((cfg[field] && cfg[field].length) ? cfg[field] : (D[field] || [])).map(function (q) { return Object.assign({}, q); });
     var card = el('div', { class: 'aa-card' });
     var listWrap = el('div', {});
-    card.appendChild(el('p', { class: 'aa-note', text: title + '. Reorder with the up/down buttons. System fields (e-mail, password, participant ID) are used by the app for login.' }));
+    card.appendChild(el('p', { class: 'aa-note', text: title + '. Reorder with the up/down buttons. Players take part anonymously, so e-mail/password questions are ignored by the app; only the participant-ID system field is still used.' }));
     card.appendChild(listWrap);
     card.appendChild(el('div', { class: 'aa-field' }, [el('button', { class: 'aa-btn sec sm', on: { click: function () { list.push({ id: 'q_' + Date.now().toString(36), label: 'New question', type: 'text', required: true }); render(); } } }, ['+ Add question'])]));
     card.appendChild(el('div', { class: 'aa-row', style: 'margin-top:8px;' }, [
@@ -1078,8 +1078,8 @@
     var rows = [];
     function add(sheet, col, desc) { rows.push({ sheet: sheet, column: col, description: desc }); }
     add('Participants', 'participant_id', "The participant's own ID (e.g. a Prolific ID) if they entered one; blank otherwise.");
-    add('Participants', 'email', "The participant's e-mail address (used to log in).");
-    add('Participants', 'account_id', 'Internal unique account ID (Firebase UID) for this participant.');
+    add('Participants', 'email', "Legacy column - players take part anonymously, so this is blank (kept for older accounts).");
+    add('Participants', 'account_id', 'Internal unique account ID (Firebase anonymous UID) for this participant.');
     add('Participants', 'status', 'Where the participant is in the flow: registered, playing, survey, or done.');
     add('Participants', 'current_session_id', 'Internal ID of the session the participant is currently in.');
     add('Participants', 'played_session_ids', 'Internal IDs of every session the participant has started (comma-separated).');

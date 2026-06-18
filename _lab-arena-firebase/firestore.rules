@@ -16,7 +16,14 @@ rules_version = '2';
 //   BEFORE they sign in. They contain no personal data (code, name, status,
 //   condition, taskSetId).
 //
-// Admin is identified solely by the signed-in e-mail admin@admin.com.
+// Participants take part ANONYMOUSLY via Firebase Anonymous Auth (enable the
+// Anonymous sign-in provider in the console). An anonymous user still has a
+// request.auth.uid, so the owner-based rules below apply unchanged - no rule
+// edits are needed to support anonymous play. A session code is optional.
+//
+// Admin is identified solely by the signed-in e-mail admin@admin.com. The
+// Email/Password provider exists only for the admin; anonymous users carry no
+// email token, so isAdmin() is always false for them.
 
 service cloud.firestore {
   match /databases/{database}/documents {

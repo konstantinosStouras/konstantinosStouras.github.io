@@ -15,9 +15,20 @@ re-reading everything. It follows the same philosophy as the sibling
 A pairwise **preference study**. Each participant goes through:
 
 ```
-welcome -> tour -> register/login -> training (practice) -> N comparisons
-          (random order) -> survey -> thank-you
+welcome (optional session code) -> tour -> intake (anonymous: short
+          demographics + consent, NO account) -> training (practice) ->
+          N comparisons (random order) -> survey -> thank-you
 ```
+
+Play is **fully anonymous**: there is no e-mail/password and no login. The
+participant signs in with a throwaway **Firebase anonymous account** when they
+submit the intake form (`Store.signInAnonymously()`); each play still gets its
+own `request.auth.uid`, so the owner-based Firestore rules apply unchanged. A
+**session code is optional** - with one you join a specific admin-created
+session, without one you play the default configuration (`sessionId = '_none'`).
+The Anonymous sign-in provider must be enabled in the Firebase console (see
+`_lab-arena-firebase/README.md`); if it is off the intake shows "Anonymous play
+is not enabled yet." The admin still logs in with Email/Password at `?admin`.
 
 Each **comparison** shows one task card and two answer cards (outputs from two
 unnamed systems; left/right randomized per participant). The participant taps
@@ -181,23 +192,25 @@ data / **Reopen** / permanently **Delete**. Per-session
 participant counts include anyone who **played** it - started (`playedSessions`),
 is on it (`sessionId`), or completed it (`completedSessions`).
 
-**A session code is always required to take part** (welcome, login and the
-"enter your session code" screen all require it; there is no toggle). A shared
-link (`?s=CODE`) lands a signed-out visitor on the **login** panel with the code
-prefilled (email + password + session code); "New here? Create an account" goes
-to the register flow. Sessions are publicly readable so the code can be
+**A session code is optional.** The welcome screen has an optional code field:
+enter a code to join that specific admin-created session, or just continue to
+play the default configuration anonymously (`sessionId = '_none'`). A shared
+link (`?s=CODE`) simply prefills that optional field on the **welcome** screen
+(no login panel any more). Sessions are publicly readable so the code can be
 validated before sign-in; they hold no personal data. The admin can **export one
 session's data** (the "Export data" button on a session card) - just the users
 who played it and only their data for that session - in addition to the
 all-users export in the Registered users card.
 
-**One account, many sessions, each once.** A participant (one Firebase account)
-can take part in several sessions, but each session **only once**. The
-participant doc carries `completedSessions` (a `{ sid: completedAtMs }` map);
-`sid` = the session id, or `'_none'` for a code-less/direct play. On entry
-(`routeParticipant`), the app resolves the target session (from a chosen
+**One anonymous identity, many sessions, each once.** Each browser gets a
+persistent Firebase **anonymous** identity (anonymous auth persists across
+reloads). It can take part in several sessions, but each session **only once**.
+The participant doc carries `completedSessions` (a `{ sid: completedAtMs }`
+map); `sid` = the session id, or `'_none'` for the default code-less play. On
+entry (`routeParticipant`), the app resolves the target session (from a chosen
 session, a code typed on welcome, or `?s=CODE`) and: blocks a session already in
-`completedSessions` (`showAlreadyDone`), resumes an in-progress survey for the
+`completedSessions` - **including `'_none'`** - (`showAlreadyDone`, whose "Start
+over" mints a fresh anonymous identity), resumes an in-progress survey for the
 same session, or else (re)starts the comparisons for that session. `sessionId`
 on the participant doc is the **current** session; per-session completion lives
 in `completedSessions`. `markCompleted()` adds the current sid on the thank-you
@@ -228,6 +241,10 @@ Responses row with `submitted = no (draft)`.
 ## 7. Gotchas to carry forward
 
 - Keep model identities out of anything the participant sees.
+- Anonymous play needs the **Anonymous** sign-in provider enabled in the
+  Firebase console; otherwise `Store.signInAnonymously()` fails
+  (`auth/operation-not-allowed`) and the intake shows "Anonymous play is not
+  enabled yet." **Email/Password** must stay enabled for the admin login.
 - `arena-config.js` placeholders => local mode; real config => Firebase. The
   switch is automatic (`ARENA_FB_READY`).
 - Firestore **rejects nested arrays**; the response docs avoid them. If you add
