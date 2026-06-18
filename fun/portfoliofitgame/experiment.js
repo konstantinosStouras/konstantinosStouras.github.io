@@ -887,6 +887,12 @@
 
     cardEl.addEventListener('pointerdown', function (e) {
       if (!playing() || e.button > 0) return;
+      // Never hijack a press on a control (button/input/cell/piece…), even when it
+      // sits inside an edge/corner resize band — otherwise the click is eaten and
+      // the control looks dead (e.g. the calculator "=" in a corner, or the full-
+      // width "Add note" button on the bottom edge). Resize from any non-control
+      // part of the edge instead.
+      if (isInteractive(e.target)) return; // let the click happen
       var rect = cardEl.getBoundingClientRect(), edge = edgeAt(e, rect);
       if (edge) {
         e.preventDefault(); try { cardEl.setPointerCapture(e.pointerId); } catch (x) {} front();
@@ -894,7 +900,6 @@
         cardEl.style.overflow = 'auto';
         return;
       }
-      if (isInteractive(e.target)) return; // let the click happen
       e.preventDefault(); try { cardEl.setPointerCapture(e.pointerId); } catch (x) {} front();
       ds = { px: e.clientX, py: e.clientY, x: cur.x, y: cur.y, baseL: rect.left - cur.x, baseT: rect.top - cur.y, w: rect.width, h: rect.height };
     });
@@ -922,8 +927,9 @@
       }
       // idle: signal what a drag here would do via the cursor
       if (!playing()) { cardEl.style.cursor = ''; return; }
+      if (isInteractive(e.target)) { cardEl.style.cursor = ''; return; }  // controls stay clickable, even near an edge
       var rect = cardEl.getBoundingClientRect(), edge = edgeAt(e, rect);
-      cardEl.style.cursor = edge ? cursorFor(edge) : (isInteractive(e.target) ? '' : 'move');
+      cardEl.style.cursor = edge ? cursorFor(edge) : 'move';
     });
 
     function endOp() { if (ds || rs) { ds = null; rs = null; persist(); } }
