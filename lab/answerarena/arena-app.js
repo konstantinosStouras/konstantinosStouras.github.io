@@ -273,10 +273,22 @@
 
   function authError(e) {
     var c = (e && e.code) || '';
+    var msg = (e && e.message) || '';
     if (c.indexOf('operation-not-allowed') >= 0 || c.indexOf('admin-restricted-operation') >= 0)
       return 'Anonymous play is not enabled yet. Please contact the study organiser.';
     if (c.indexOf('network-request-failed') >= 0) return 'Network problem. Please check your connection and try again.';
-    return (e && e.message) || 'Something went wrong. Please try again.';
+    // Firestore default-deny: the participant signed in anonymously fine, but the
+    // write to their participant doc was refused because the security rules have
+    // not been deployed (or the database is still locked). Nothing the participant
+    // typed is at fault - the session code and Participant ID are both optional. So
+    // don't surface the raw "Missing or insufficient permissions." string (which
+    // reads like a form error); show a clear message and log a precise fix hint for
+    // the organiser instead.
+    if (c.indexOf('permission-denied') >= 0 || /insufficient permissions/i.test(msg)) {
+      if (window.console) console.error('[Arena] Firestore write denied (permission-denied). Deploy the security rules: from _lab-arena-firebase/ run `firebase deploy --only firestore:rules` (and make sure the Anonymous sign-in provider is enabled). See _lab-arena-firebase/README.md section C.');
+      return "We couldn't start your session - the study isn't accepting responses just yet. This is a setup issue on our side, not anything you entered (the session code and Participant ID are both optional). Please let the study organiser know, or try again a little later.";
+    }
+    return msg || 'Something went wrong. Please try again.';
   }
 
   /* ===================== 2x2 CONDITION ===================== */
