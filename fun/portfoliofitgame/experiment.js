@@ -578,34 +578,35 @@
   // Plays the participant's puzzle queue. Default 2 easy + 2 hard in random
   // order. When the admin freezes a specific set, buildQueue() will instead
   // load those exact puzzles by id (hook noted below).
+  // Build the participant's queue. The Settings counts (puzzlesPerUser) always
+  // decide HOW MANY easy/hard puzzles each participant plays. They are drawn from
+  // the active POOL — the admin's frozen set if one exists, otherwise the built-in
+  // defaults — shuffled per participant, generating extra on the fly if a count
+  // exceeds the pool for that difficulty.
   async function buildQueue() {
     var s = cfg.settings || {};
+    var per = s.puzzlesPerUser || { easy: 2, hard: 2 };
     var ids = s.activePuzzleIds || [];
-    var q = [];
+    var pool = { easy: [], hard: [] };
     if (ids.length && fb) {
-      // Frozen set: replay the exact puzzles the admin approved.
+      // Frozen set is the pool.
       for (var k = 0; k < ids.length; k++) {
         try {
           var snap = await fb.F.getDoc(fb.F.doc(fb.db, 'puzzleSets', ids[k]));
-          if (snap.exists()) { var spec = specFromDoc(snap.data()); if (spec) q.push({ id: ids[k], diff: spec.diff, spec: spec }); }
+          if (snap.exists()) { var spec = specFromDoc(snap.data()); if (spec && pool[spec.diff]) pool[spec.diff].push({ id: ids[k], diff: spec.diff, spec: spec }); }
         } catch (e) { /* skip */ }
       }
-    }
-    if (!q.length) {
-      // No frozen set: honor the per-participant counts from Settings, drawing
-      // from the built-in pool first and generating any extra on the fly. (This
-      // makes the admin's Easy/Hard counts actually govern what each player gets,
-      // and lets the Puzzles tab reflect those choices.)
+    } else {
+      // Built-in defaults are the pool.
       var def = (window.PF_DEFAULTS && window.PF_DEFAULTS.defaultPuzzles) || [];
-      var per = s.puzzlesPerUser || { easy: 2, hard: 2 };
-      ['easy', 'hard'].forEach(function (diff) {
-        var pool = [];
-        for (var di = 0; di < def.length; di++) if (def[di].diff === diff) pool.push({ id: 'default-' + di, diff: diff, spec: def[di] });
-        shuffle(pool);
-        var want = per[diff] || 0;
-        for (var n = 0; n < want; n++) q.push(n < pool.length ? pool[n] : { diff: diff });
-      });
+      for (var di = 0; di < def.length; di++) if (pool[def[di].diff]) pool[def[di].diff].push({ id: 'default-' + di, diff: def[di].diff, spec: def[di] });
     }
+    var q = [];
+    ['easy', 'hard'].forEach(function (diff) {
+      var avail = pool[diff].slice(); shuffle(avail);
+      var want = per[diff] || 0;
+      for (var n = 0; n < want; n++) q.push(n < avail.length ? avail[n] : { diff: diff });
+    });
     if (s.randomizeOrder !== false) shuffle(q);
     return q;
   }

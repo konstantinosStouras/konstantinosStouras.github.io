@@ -155,15 +155,17 @@ publish it; versioned in the repo, deployed manually):
   config is used. Each player gets a `participants/{uid}` doc (created
   client-side) tagged with `sessionId` and a short `anonymousLabel`. Returning
   players resume via their persisted anonymous identity.
-- **Main phase puzzle source:** an admin-frozen set
-  (`config.settings.activePuzzleIds` → `puzzleSets`) is replayed exactly. With
-  **no** frozen set, the `puzzlesPerUser` counts (default 2 easy + 2 hard) govern
-  what each player gets: that many easy/hard puzzles are drawn from the built-in
-  `defaultPuzzles` pool, generating extra on the fly if a count exceeds the pool
-  (so the admin's Easy/Hard counts actually control the queue, and the Puzzles
-  tab's "Current active set" reflects them). Order is shuffled per participant and
-  persisted (`puzzleOrder` + `mainIndex`) so a mid-session reload resumes the same
-  queue.
+- **Main phase puzzle source:** the `puzzlesPerUser` counts (default 2 easy + 2
+  hard) **always** decide how many easy/hard puzzles each player gets. They are
+  drawn from the active **pool** — the admin-frozen set
+  (`config.settings.activePuzzleIds` → `puzzleSets`) if one exists, otherwise the
+  built-in `defaultPuzzles` — shuffled per participant, generating extra on the
+  fly if a count exceeds the pool for that difficulty. Freezing a set defaults the
+  counts to its composition (so "freeze N → play exactly those N"), but the admin
+  can then change the counts (a count below the pool plays a random subset; above
+  it tops up with generated puzzles). The Puzzles tab's "Current active set"
+  mirrors this exactly. Order is shuffled per participant and persisted
+  (`puzzleOrder` + `mainIndex`) so a mid-session reload resumes the same queue.
 - **Event logging:** one buffered, retry-on-failure writer appends a doc per
   action to `participants/{uid}/events` (place/move/rotate/flip/remove/calc/note/
   round-start/round-end/stats/survey). Nested arrays (cells/placements) are
