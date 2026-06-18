@@ -381,7 +381,7 @@
   }
   function renderPuzzles(body) {
     var card = el('div', { class: 'pfa-card' });
-    card.appendChild(el('p', { class: 'pfa-note', text: 'Generate puzzles, preview them, approve the ones you want, then freeze them as the active set. Every participant plays the frozen set in randomized order.' }));
+    card.appendChild(el('p', { class: 'pfa-note', text: 'Generate puzzles, preview them, approve the ones you want, then freeze them as the active pool. Each participant plays the Easy/Hard counts from the Settings tab, drawn from this pool (extra are generated fresh if a count exceeds it).' }));
     card.appendChild(el('p', { class: 'pfa-note', html: '📄 <a href="https://www.stouras.com/lab/portfoliofit-testing/portfoliofit-difficulty.pdf" target="_blank" rel="noopener" style="color:var(--accent);">How the Sahni difficulty (κ) is measured (PDF note)</a>' }));
     if (!window.PFGame || !window.PFGame.generatePuzzle) {
       card.appendChild(el('p', { class: 'pfa-err', text: 'Puzzle generator not available. Open /lab/portfoliofit/?admin (the game must be on the page).' }));
@@ -398,7 +398,7 @@
     var activeCard = el('div', { class: 'pfa-card' });
     body.appendChild(approvedCard); body.appendChild(activeCard);
     body.appendChild(el('div', { class: 'pfa-card' }, [
-      el('p', { class: 'pfa-note', text: '“Save” (or “Make this the default”) freezes your approved set as the active set for all participants. “Restore built-in default” reverts to the built-in default puzzles. (Use “Clear set” above to empty the set you are building.)' }),
+      el('p', { class: 'pfa-note', text: '“Save” (or “Make this the default”) freezes your approved set as the active pool for all participants (the Settings counts then decide how many each plays). “Restore built-in default” reverts to the built-in default puzzles. (Use “Clear set” above to empty the set you are building.)' }),
       el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;' }, [
         el('button', { class: 'pfa-btn', on: { click: withFeedback(saveFrozen) } }, ['Save']),
         el('button', { class: 'pfa-btn sec', on: { click: withFeedback(saveFrozen) } }, ['Make this the default']),
@@ -450,70 +450,96 @@
       });
       approvedCard.appendChild(wrap);
     }
-    // One built-in puzzle card with its Solutions / κ-proof buttons.
-    function activePuzzleCard(spec, idx) {
+    function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+    // One concrete puzzle card with its Solutions / κ-proof buttons (and a remove
+    // button when it belongs to a frozen pool, identified by removeId).
+    function activePuzzleCard(spec, removeId) {
       var sc = (spec.tilings && spec.tilings.count != null) ? spec.tilings.count : null;
+      var btns = [
+        el('button', { class: 'pfa-btn sec sm', on: { click: function () { try { window.PFGame.previewPuzzle(spec); window.PFGame.showSolutions(); } catch (e) {} } } }, ['Solutions']),
+        el('button', { class: 'pfa-btn sec sm', on: { click: function () { try { window.PFGame.previewPuzzle(spec); window.PFGame.showProof(); } catch (e) {} } } }, ['κ proof'])
+      ];
+      if (removeId) btns.push(el('button', { class: 'pfa-btn danger sm', on: { click: function () { removeFromActive(removeId); } } }, ['remove']));
       return el('div', { class: 'pfa-q', style: 'flex:0 0 auto;text-align:center;min-width:120px;' }, [
-        el('div', { class: 'pfa-note', text: (idx != null ? '#' + idx + ' · ' : '') + spec.diff + ' · κ=' + spec.kappa + (sc != null ? ' · ' + sc + ' sol.' : '') + ' · $' + spec.bestValue }),
+        el('div', { class: 'pfa-note', text: spec.diff + ' · κ=' + spec.kappa + (sc != null ? ' · ' + sc + ' sol.' : '') + ' · $' + spec.bestValue }),
         puzzleGrid(spec, true),
-        el('div', { style: 'display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:4px;' }, [
-          el('button', { class: 'pfa-btn sec sm', on: { click: function () { try { window.PFGame.previewPuzzle(spec); window.PFGame.showSolutions(); } catch (e) {} } } }, ['Solutions']),
-          el('button', { class: 'pfa-btn sec sm', on: { click: function () { try { window.PFGame.previewPuzzle(spec); window.PFGame.showProof(); } catch (e) {} } } }, ['κ proof'])
-        ])
+        el('div', { style: 'display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:4px;' }, btns)
       ]);
     }
-    function renderActive() {
+    // Placeholder for a puzzle that will be generated fresh for each participant
+    // (when a difficulty's count exceeds the pool).
+    function genCard(diff) {
+      return el('div', { class: 'pfa-q', style: 'flex:0 0 auto;text-align:center;min-width:120px;display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:.7;border-style:dashed;' }, [
+        el('div', { style: 'font-size:22px;line-height:1.2;' }, ['🎲']),
+        el('div', { class: 'pfa-note', text: 'Generated fresh' }),
+        el('div', { class: 'pfa-note', text: '(new ' + diff + ' puzzle each play)' })
+      ]);
+    }
+    // The active set shown here always reflects the per-participant Easy/Hard
+    // counts from the Settings tab, drawn from the pool (frozen set if any, else
+    // built-in). Each difficulty shows exactly its count of cards: concrete pool
+    // puzzles first, then "generated fresh" placeholders to reach the count.
+    async function renderActive() {
       activeCard.innerHTML = '';
       activeCard.appendChild(el('h3', { text: 'Current active set', style: 'margin:0 0 8px;font-size:15px;' }));
-      var ids = (cfg.settings && cfg.settings.activePuzzleIds) || [];
-      if (!ids.length) {
-        // No frozen set: reflect the per-participant counts from the Settings tab,
-        // drawing from the built-in pool (extra ones are generated fresh).
-        var def = (window.PF_DEFAULTS && window.PF_DEFAULTS.defaultPuzzles) || [];
-        var per = (cfg.settings && cfg.settings.puzzlesPerUser) || { easy: 2, hard: 2 };
-        var ne = per.easy || 0, nh = per.hard || 0, total = ne + nh;
-        if (!total) {
-          activeCard.appendChild(el('p', { class: 'pfa-err', text: 'No puzzles per participant (Easy 0, Hard 0 on the Settings tab). Set a count there, or freeze a custom set above.' }));
-          return;
+      var settings = cfg.settings || {};
+      var per = settings.puzzlesPerUser || { easy: 2, hard: 2 };
+      var ne = per.easy || 0, nh = per.hard || 0, total = ne + nh;
+      var ids = settings.activePuzzleIds || [];
+      var frozen = !!(ids.length && fb);
+
+      // Build the pool per difficulty.
+      var pool = { easy: [], hard: [] };
+      if (frozen) {
+        var loading = el('p', { class: 'pfa-note', text: 'Loading frozen set…' });
+        activeCard.appendChild(loading);
+        for (var i = 0; i < ids.length; i++) {
+          try {
+            var snap = await fb.F.getDoc(fb.F.doc(fb.db, 'puzzleSets', ids[i]));
+            if (snap.exists()) { var spec = null; try { spec = JSON.parse(snap.data().specJson); } catch (e) {} if (spec && pool[spec.diff]) pool[spec.diff].push({ id: ids[i], spec: spec }); }
+          } catch (e) { /* skip */ }
         }
-        var randomized = !(cfg.settings && cfg.settings.randomizeOrder === false);
-        activeCard.appendChild(el('p', { class: 'pfa-note', html: 'No custom set frozen. Each participant plays <b>' + ne + ' easy</b> + <b>' + nh + ' hard</b> puzzle' + (total === 1 ? '' : 's') + ' (counts from the <b>Settings</b> tab)' + (randomized ? ', in randomized order' : '') + ', drawn from the built-in pool below.' }));
+        loading.remove();
+      } else {
+        var def = (window.PF_DEFAULTS && window.PF_DEFAULTS.defaultPuzzles) || [];
+        def.forEach(function (sp, ix) { if (pool[sp.diff]) pool[sp.diff].push({ id: 'default-' + ix, spec: sp }); });
+      }
+
+      if (!total) {
+        activeCard.appendChild(el('p', { class: 'pfa-err', html: 'Each participant plays <b>0</b> puzzles — set the Easy/Hard counts on the <b>Settings</b> tab.' }));
+      } else {
+        var randomized = !(settings.randomizeOrder === false);
+        var shortfall = Math.max(0, ne - pool.easy.length) + Math.max(0, nh - pool.hard.length);
+        activeCard.appendChild(el('p', { class: 'pfa-note', html: 'Each participant plays <b>' + ne + ' easy</b> + <b>' + nh + ' hard</b> puzzle' + (total === 1 ? '' : 's') + (randomized ? ', in randomized order' : '') + ' — drawn from the ' + (frozen ? 'frozen set' : 'built-in pool') + ' below' + (shortfall ? '; any shortfall is generated fresh each play' : '') + '. Change the counts on the <b>Settings</b> tab.' }));
         ['easy', 'hard'].forEach(function (diff) {
           var want = (diff === 'easy') ? ne : nh;
           if (!want) return;
-          var pool = def.filter(function (d) { return d.diff === diff; });
-          var extra = Math.max(0, want - pool.length);
-          activeCard.appendChild(el('p', { class: 'pfa-note', style: 'margin-top:10px;', html: '<b>' + diff.charAt(0).toUpperCase() + diff.slice(1) + '</b> — ' + want + ' per participant' + (pool.length ? (', chosen from ' + pool.length + ' built-in') : '') + (extra ? (' (' + extra + ' generated fresh each time)') : '') + ':' }));
-          if (!pool.length) { activeCard.appendChild(el('p', { class: 'pfa-note', text: 'No built-in ' + diff + ' puzzles — generated fresh per participant.' })); return; }
-          var dwrap = el('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;margin:8px 0;' });
-          activeCard.appendChild(dwrap);
-          pool.forEach(function (spec) { dwrap.appendChild(activePuzzleCard(spec)); });
+          var avail = pool[diff];
+          var realN = Math.min(want, avail.length), genN = want - realN;
+          var srcNote = avail.length
+            ? (want < avail.length ? (' — a random ' + want + ' of ' + avail.length + (frozen ? ' frozen' : ' built-in')) : (' — from ' + avail.length + (frozen ? ' frozen' : ' built-in')))
+            : '';
+          activeCard.appendChild(el('p', { class: 'pfa-note', style: 'margin-top:10px;', html: '<b>' + cap(diff) + ': ' + want + ' per participant</b>' + srcNote + (genN ? (' · ' + genN + ' generated fresh') : '') }));
+          var wrap = el('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;margin:8px 0;' });
+          for (var r = 0; r < realN; r++) wrap.appendChild(activePuzzleCard(avail[r].spec, frozen ? avail[r].id : null));
+          for (var g = 0; g < genN; g++) wrap.appendChild(genCard(diff));
+          activeCard.appendChild(wrap);
         });
-        return;
       }
-      activeCard.appendChild(el('p', { class: 'pfa-note', text: ids.length + ' frozen puzzle(s) active. These are the exact puzzles every participant plays — each participant sees them in a randomized order.' }));
-      var wrap = el('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;margin:8px 0;' });
-      activeCard.appendChild(wrap);
-      var cells = ids.map(function (id, i) {
-        var c = el('div', { class: 'pfa-q', style: 'flex:0 0 auto;text-align:center;min-width:120px;' }, [el('div', { class: 'pfa-note', text: '#' + (i + 1) + ' loading…' })]);
-        wrap.appendChild(c); return c;
-      });
-      ids.forEach(function (id, idx) {
-        fb.F.getDoc(fb.F.doc(fb.db, 'puzzleSets', id)).then(function (snap) {
-          var cell = cells[idx]; cell.innerHTML = '';
-          if (!snap.exists()) { cell.appendChild(el('div', { class: 'pfa-note', text: '#' + (idx + 1) + ' (missing)' })); return; }
-          var d = snap.data(); var spec = null; try { spec = JSON.parse(d.specJson); } catch (e) {}
-          if (!spec) { cell.appendChild(el('div', { class: 'pfa-note', text: '#' + (idx + 1) + ' (unreadable)' })); return; }
-          var solCount = (spec.tilings && spec.tilings.count != null) ? spec.tilings.count : null;
-          cell.appendChild(el('div', { class: 'pfa-note', text: '#' + (idx + 1) + ' · ' + spec.diff + ' · κ=' + spec.kappa + (solCount != null ? ' · ' + solCount + ' sol.' : '') + ' · $' + spec.bestValue }));
-          cell.appendChild(puzzleGrid(spec, true));
-          cell.appendChild(el('div', { style: 'display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:4px;' }, [
-            el('button', { class: 'pfa-btn sec sm', on: { click: function () { try { window.PFGame.previewPuzzle(spec); window.PFGame.showSolutions(); } catch (e) {} } } }, ['Solutions']),
-            el('button', { class: 'pfa-btn sec sm', on: { click: function () { try { window.PFGame.previewPuzzle(spec); window.PFGame.showProof(); } catch (e) {} } } }, ['κ proof']),
-            el('button', { class: 'pfa-btn danger sm', on: { click: function () { removeFromActive(id); } } }, ['remove'])
-          ]));
-        }).catch(function () { var cell = cells[idx]; cell.innerHTML = ''; cell.appendChild(el('div', { class: 'pfa-note', text: '#' + (idx + 1) + ' (error)' })); });
-      });
+
+      // Keep any frozen puzzles that the current counts do not play visible and
+      // removable (e.g. a difficulty whose count is 0, or pool beyond the count).
+      if (frozen) {
+        ['easy', 'hard'].forEach(function (diff) {
+          var want = (diff === 'easy') ? ne : nh;
+          var leftover = pool[diff].slice(Math.min(want, pool[diff].length));
+          if (!leftover.length) return;
+          activeCard.appendChild(el('p', { class: 'pfa-note', style: 'margin-top:10px;opacity:.75;', html: '<b>' + cap(diff) + '</b> — ' + leftover.length + ' frozen puzzle' + (leftover.length === 1 ? '' : 's') + ' not played at the current count (still in your frozen pool):' }));
+          var wrap = el('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;margin:8px 0;opacity:.75;' });
+          leftover.forEach(function (p) { wrap.appendChild(activePuzzleCard(p.spec, p.id)); });
+          activeCard.appendChild(wrap);
+        });
+      }
     }
     async function removeFromActive(id) {
       var ids = ((cfg.settings && cfg.settings.activePuzzleIds) || []).filter(function (x) { return x !== id; });
@@ -534,7 +560,12 @@
           });
           ids.push(ref.id);
         }
-        var settings = Object.assign({}, cfg.settings, { activePuzzleIds: ids });
+        // Default the per-participant counts to the frozen set's composition, so
+        // "freeze N puzzles" means each participant plays exactly those N (the
+        // admin can still change the counts on the Settings tab afterwards).
+        var fe = approvedPuzzles.filter(function (p) { return p.diff === 'easy'; }).length;
+        var fh = approvedPuzzles.filter(function (p) { return p.diff === 'hard'; }).length;
+        var settings = Object.assign({}, cfg.settings, { activePuzzleIds: ids, puzzlesPerUser: { easy: fe, hard: fh } });
         await saveConfig({ settings: settings }); cfg.settings = settings;
         approvedPuzzles = [];
         renderApproved(); renderActive();
@@ -564,7 +595,7 @@
       el('div', { class: 'pfa-field' }, [el('label', { text: 'Easy time limit (seconds per puzzle)' }), teasy]),
       el('div', { class: 'pfa-field' }, [el('label', { text: 'Hard time limit (seconds per puzzle)' }), thard]),
       el('div', { class: 'pfa-field' }, [el('label', { style: 'display:flex;align-items:center;gap:8px;' }, [rnd, document.createTextNode('Randomize puzzle order per participant')])]),
-      el('p', { class: 'pfa-note', text: 'Puzzle counts apply only when no custom set is frozen (see the Puzzles tab). Time limits apply to every puzzle of that difficulty, in training and the main game.' }),
+      el('p', { class: 'pfa-note', text: 'Puzzle counts set how many easy/hard puzzles each participant plays, drawn from the active set (a frozen set if you froze one on the Puzzles tab, otherwise the built-in pool); if a count exceeds the pool, the extra are generated fresh. Time limits apply to every puzzle of that difficulty, in training and the main game.' }),
       el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;' }, [
         el('button', { class: 'pfa-btn', on: { click: withFeedback(save) } }, ['Save']),
         el('button', { class: 'pfa-btn sec', on: { click: withFeedback(makeDefault) } }, ['Make this the default']),
