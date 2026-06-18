@@ -362,7 +362,14 @@
       persist({ order: S.order, flips: S.flips, idx: 0, status: 'playing', playedSessions: played });
       if (!S.order.length) { showThankYou(); return; }
       renderComparison();
-    }).catch(function () { setScreen(overlayWrap(card('Problem', [el('p', { text: 'Could not load the comparisons. Please refresh.' })]))); });
+    }).catch(function (e) {
+      // loadActiveTasks now degrades to the built-in set rather than rejecting, so
+      // reaching here means a genuine problem (e.g. a render error). Log the real
+      // cause - the bare catch used to hide it, which made a stuck task set look
+      // like a vague "comparisons" failure.
+      if (window.console) console.error('[Arena] Could not prepare the comparisons', e);
+      setScreen(overlayWrap(card('Problem', [el('p', { text: 'Could not load the comparisons. Please refresh.' })])));
+    });
   }
 
   function renderComparison() {

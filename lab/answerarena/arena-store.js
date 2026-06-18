@@ -196,12 +196,21 @@
 
     this.loadActiveTasks = function () {
       return this.loadConfig().then(function (cfg) {
+        var builtin = { id: 'builtin', name: 'Built-in default', tasks: (DEFAULTS.defaultTasks || []) };
         var id = cfg.activeTaskSetId;
-        if (!id) return { id: 'builtin', name: 'Built-in default', tasks: (DEFAULTS.defaultTasks || []) };
+        if (!id) return builtin;
         return F().getDoc(F().doc(D(), 'taskSets', id)).then(function (s) {
-          if (!s.exists()) return { id: 'builtin', name: 'Built-in default', tasks: (DEFAULTS.defaultTasks || []) };
+          if (!s.exists()) return builtin;
           var d = s.data();
           return { id: id, name: d.name || 'Task set', tasks: (d.tasks || []) };
+        }).catch(function (e) {
+          // A configured task set that cannot be read (e.g. a dangling
+          // activeTaskSetId left over from before the rules were deployed, a
+          // permission error, or a transient network failure) must NOT dead-end
+          // the participant or hang the admin's "current set" card. Fall back to
+          // the built-in default and log the real cause so it stays diagnosable.
+          if (window.console) console.error('[Arena] Could not read the active task set "' + id + '" (' + ((e && e.code) || (e && e.message) || 'error') + '); falling back to the built-in default. If you uploaded a set, check the Firestore rules are deployed (see _lab-arena-firebase/README.md C) and re-save it, or use "Restore built-in default".', e);
+          return builtin;
         });
       });
     };
