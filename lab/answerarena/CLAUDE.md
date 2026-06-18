@@ -252,6 +252,14 @@ Responses row with `submitted = no (draft)`.
 - Sessions are public-read on purpose (pre-auth code check). Don't put anything
   sensitive on a session doc.
 - After changing `firestore.rules`, redeploy or writes silently fail.
+- **Task sets are stored chunked.** `saveTaskSet()` writes a `taskSets/{id}`
+  metadata doc (`name, source, count, chunkCount`) plus sibling `taskSets/{id}__chunk_N`
+  docs holding the tasks in ~600 KB slices, so a large set (100+ comparisons of full
+  model outputs) never hits Firestore's 1 MiB per-document limit - which used to make
+  the admin Save silently fail (no green "✓ Saved"). `loadActiveTasks()` reassembles
+  the chunks (and still reads older inline `tasks` sets). Chunk docs share the
+  `taskSets` collection, so the existing rules cover them - no rules change - and
+  `listTaskSets()` skips them (`isChunk`).
 - **A configured `activeTaskSetId` whose `taskSets/{id}` read fails no longer
   dead-ends anyone.** `Store.loadActiveTasks()` catches that read and falls back
   to the built-in default (logging the cause), so the admin "current set" card

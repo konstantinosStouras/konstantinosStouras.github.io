@@ -662,7 +662,16 @@
     function activate(msg) {
       if (!parsed || !parsed.length) return Promise.reject();
       var set = { name: 'Uploaded ' + new Date().toLocaleString(), source: 'excel', tasks: parsed, count: parsed.length };
-      return Store.saveTaskSet(set).then(function (id) { cfg.activeTaskSetId = id; toast(msg); refreshActive(); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); throw e; });
+      return Store.saveTaskSet(set).then(function (id) { cfg.activeTaskSetId = id; toast(msg); refreshActive(); }).catch(function (e) {
+        // Make a failed save legible: a fleeting toast alone made the Save button
+        // look like it "did nothing". Log it and leave a persistent error so the
+        // cause (and that nothing was stored) is visible.
+        var code = (e && e.code) || (e && e.message) || 'error';
+        if (window.console) console.error('[Arena admin] saveTaskSet failed', e);
+        toast('Save failed: ' + code);
+        try { preview.appendChild(el('p', { class: 'aa-err', text: 'Save failed (' + code + '). The set was not stored - please retry. If it persists, check the Firestore rules are deployed and you are signed in as the admin.' })); } catch (_) {}
+        throw e;
+      });
     }
     function restoreBuiltin() {
       return saveConfig({ activeTaskSetId: null }).then(function () { cfg.activeTaskSetId = null; toast('Restored built-in default.'); discard(); refreshActive(); }).catch(function (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); throw e; });
