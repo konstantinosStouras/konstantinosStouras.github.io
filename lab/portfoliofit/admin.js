@@ -453,18 +453,25 @@
         var needE = Math.max(0, per.easy | 0), needH = Math.max(0, per.hard | 0);
         var total = needE + needH;
         var genE = Math.max(0, needE - poolE.length), genH = Math.max(0, needH - poolH.length);
-        if (total) {
-          activeCard.appendChild(el('p', { class: 'pfa-note', html: 'No custom set frozen. Each participant plays <b>' + needE + ' easy + ' + needH + ' hard</b> puzzle' + (total === 1 ? '' : 's') + ', drawn at random per participant from the built-in pool (' + poolE.length + ' easy / ' + poolH.length + ' hard), in randomized order. Change these counts in the <b>Settings</b> tab.' }));
-        } else {
+        if (!total) {
           activeCard.appendChild(el('p', { class: 'pfa-note', text: 'No custom set frozen, and the Settings counts are 0 easy / 0 hard — participants would get no puzzles. Set the counts in the Settings tab.' }));
+          return;
         }
-        if (genE || genH) activeCard.appendChild(el('p', { class: 'pfa-note', style: 'color:#e6a23c;', text: '⚠ The built-in pool has fewer puzzles than requested, so ' + (genE ? genE + ' easy ' : '') + (genH ? genH + ' hard ' : '') + 'puzzle(s) will be randomly generated per participant.' }));
-        var display = poolE.slice(0, needE).concat(poolH.slice(0, needH));
-        if (display.length) {
-          activeCard.appendChild(el('p', { class: 'pfa-note', style: 'font-style:italic;', text: 'Example selection (the actual puzzles are drawn at random per participant):' }));
-          var dwrap = el('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;margin:8px 0;' });
-          activeCard.appendChild(dwrap);
-          display.forEach(function (spec, i) {
+        activeCard.appendChild(el('p', { class: 'pfa-note', html: 'No custom set frozen. Each participant plays <b>' + needE + ' easy + ' + needH + ' hard</b> puzzle' + (total === 1 ? '' : 's') + ', in randomized order — drawn at random from the built-in pool (' + poolE.length + ' easy / ' + poolH.length + ' hard) and, where the pool runs short, generated fresh per participant. Change these counts in the <b>Settings</b> tab.' }));
+        if (genE || genH) activeCard.appendChild(el('p', { class: 'pfa-note', style: 'color:#e6a23c;', text: '⚠ The built-in pool has only ' + poolE.length + ' easy / ' + poolH.length + ' hard, so ' + (genE ? genE + ' easy ' : '') + (genH ? genH + ' hard ' : '') + 'puzzle(s) per participant are randomly generated (the “generated” slots below).' }));
+        // One slot per puzzle each participant plays: real pool puzzles first, then
+        // "generated" placeholders, so the number of slots always matches Settings.
+        var slots = [];
+        [['easy', poolE, needE], ['hard', poolH, needH]].forEach(function (g) {
+          var diff = g[0], pool = g[1], need = g[2];
+          for (var k2 = 0; k2 < need; k2++) slots.push({ diff: diff, spec: k2 < pool.length ? pool[k2] : null });
+        });
+        activeCard.appendChild(el('p', { class: 'pfa-note', style: 'font-style:italic;', text: 'The ' + slots.length + ' puzzle' + (slots.length === 1 ? '' : 's') + ' each participant plays (pool puzzles are shown; “generated” slots are produced fresh and randomized per participant):' }));
+        var dwrap = el('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;margin:8px 0;' });
+        activeCard.appendChild(dwrap);
+        slots.forEach(function (slot, i) {
+          if (slot.spec) {
+            var spec = slot.spec;
             var sc = (spec.tilings && spec.tilings.count != null) ? spec.tilings.count : null;
             dwrap.appendChild(el('div', { class: 'pfa-q', style: 'flex:0 0 auto;text-align:center;min-width:120px;' }, [
               el('div', { class: 'pfa-note', text: '#' + (i + 1) + ' · ' + spec.diff + ' · κ=' + spec.kappa + (sc != null ? ' · ' + sc + ' sol.' : '') + ' · $' + spec.bestValue }),
@@ -474,8 +481,14 @@
                 el('button', { class: 'pfa-btn sec sm', on: { click: function () { try { window.PFGame.previewPuzzle(spec); window.PFGame.showProof(); } catch (e) {} } } }, ['κ proof'])
               ])
             ]));
-          });
-        }
+          } else {
+            dwrap.appendChild(el('div', { class: 'pfa-q', style: 'flex:0 0 auto;text-align:center;min-width:120px;border-style:dashed;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;' }, [
+              el('div', { class: 'pfa-note', text: '#' + (i + 1) + ' · ' + slot.diff + ' · generated' }),
+              el('div', { style: 'font-size:30px;line-height:1;opacity:.7;', text: '🎲' }),
+              el('div', { class: 'pfa-note', style: 'font-size:11px;', text: 'made fresh per participant' })
+            ]));
+          }
+        });
         return;
       }
       activeCard.appendChild(el('p', { class: 'pfa-note', text: ids.length + ' frozen puzzle(s) active. These are the exact puzzles every participant plays — each participant sees them in a randomized order.' }));
