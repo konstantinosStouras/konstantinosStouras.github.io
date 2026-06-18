@@ -679,12 +679,19 @@
       listCard.innerHTML = '';
       listCard.appendChild(el('h3', { id: 'pfa-sess-h', text: 'Sessions', style: 'margin:0 0 8px;font-size:15px;' }));
       var hint = el('div', {}); listCard.appendChild(hint);
-      Promise.all([
-        fb.F.getDocs(fb.F.collection(fb.db, 'sessions')),
-        fb.F.getDocs(fb.F.collection(fb.db, 'participants'))
-      ]).then(function (res) {
-        var docs = []; res[0].forEach(function (d) { docs.push(Object.assign({ _id: d.id }, d.data())); });
-        var counts = {}; res[1].forEach(function (d) { var sid = (d.data() || {}).sessionId; if (sid) counts[sid] = (counts[sid] || 0) + 1; });
+      // Read the sessions list first; participant counts are a best-effort second
+      // read so a failure there cannot blank the list. A permission-denied on the
+      // sessions read almost always means this project's Firestore rules predate
+      // the sessions collection and need (re)deploying — say so, don't just print
+      // the bare error code.
+      fb.F.getDocs(fb.F.collection(fb.db, 'sessions')).then(function (sessSnap) {
+        var docs = []; sessSnap.forEach(function (d) { docs.push(Object.assign({ _id: d.id }, d.data())); });
+        return fb.F.getDocs(fb.F.collection(fb.db, 'participants')).then(
+          function (pSnap) { var counts = {}; pSnap.forEach(function (d) { var sid = (d.data() || {}).sessionId; if (sid) counts[sid] = (counts[sid] || 0) + 1; }); return { docs: docs, counts: counts }; },
+          function () { return { docs: docs, counts: null }; }   // counts unavailable: still show the list
+        );
+      }).then(function (data) {
+        var docs = data.docs, counts = data.counts;
         docs.sort(function (a, b) { return tsMs(b.createdAt) - tsMs(a.createdAt); });
         var h = listCard.querySelector('#pfa-sess-h'); if (h) h.textContent = docs.length + ' session' + (docs.length === 1 ? '' : 's');
         if (!docs.length) { hint.appendChild(el('p', { class: 'pfa-note', text: 'No sessions yet. Create one above.' })); return; }
@@ -701,14 +708,20 @@
             el('td', {}, [el('b', { text: s._id })]),
             el('td', { text: s.name || s.label || '' }),
             el('td', { text: closed ? 'Closed' : 'Open' }),
-            el('td', { text: String(counts[s._id] || 0) }),
+            el('td', { text: counts ? String(counts[s._id] || 0) : '—' }),
             el('td', { text: fmtTs(s.createdAt) }),
             el('td', {}, [el('div', { style: 'display:flex;gap:6px;flex-wrap:wrap;' }, actions)])
           ]));
         });
         table.appendChild(tb);
         hint.appendChild(table);
-      }).catch(function (e) { hint.appendChild(el('p', { class: 'pfa-err', text: 'Could not load sessions: ' + ((e && e.code) || 'error') })); });
+      }).catch(function (e) {
+        var code = (e && e.code) || 'error';
+        hint.appendChild(el('p', { class: 'pfa-err', text: 'Could not load sessions: ' + code + '.' }));
+        if (String(code).indexOf('permission-denied') >= 0) {
+          hint.appendChild(el('p', { class: 'pfa-note', text: 'This usually means this project’s Firestore security rules have not been deployed since the Sessions feature was added. Deploy the rules from the backend folder (firebase deploy --only firestore:rules), then reload this page.' }));
+        }
+      });
     }
 
     function setStatus(code, status) {
