@@ -155,16 +155,19 @@ publish it; versioned in the repo, deployed manually):
   config is used. Each player gets a `participants/{uid}` doc (created
   client-side) tagged with `sessionId` and a short `anonymousLabel`. Returning
   players resume via their persisted anonymous identity.
-- **Main phase puzzle source:** the `puzzlesPerUser` counts (default 2 easy + 2
-  hard) **always** decide how many easy/hard puzzles each player gets. They are
-  drawn from the active **pool** — the admin-frozen set
-  (`config.settings.activePuzzleIds` → `puzzleSets`) if one exists, otherwise the
-  built-in `defaultPuzzles` — shuffled per participant, generating extra on the
-  fly if a count exceeds the pool for that difficulty. Freezing a set defaults the
-  counts to its composition (so "freeze N → play exactly those N"), but the admin
-  can then change the counts (a count below the pool plays a random subset; above
-  it tops up with generated puzzles). The Puzzles tab's "Current active set"
-  mirrors this exactly. Order is shuffled per participant and persisted
+- **Main phase puzzle source:** if the admin has **frozen** a set
+  (`config.settings.activePuzzleIds` → `puzzleSets`), every player plays **exactly
+  those** puzzles — the same reviewed, vetted set for everyone, with only the order
+  shuffled per participant; nothing is generated invisibly per player and the
+  `puzzlesPerUser` counts are not consulted. If **no** set is frozen, each player
+  plays the built-in `defaultPuzzles` limited to the `puzzlesPerUser` counts
+  (default 2 easy + 2 hard) — again identical for everyone, only the order
+  randomized; if a count exceeds the built-in pool the admin is prompted to
+  generate & freeze a fuller reviewed set (so extras are never created silently per
+  player). To serve more than the built-in defaults, the admin builds a frozen set
+  on the Puzzles tab (generate → review/regenerate → freeze), with "Generate set to
+  match Settings" sizing it to the counts. The Puzzles tab's "Current active set"
+  mirrors what each player will see. Order is shuffled per participant and persisted
   (`puzzleOrder` + `mainIndex`) so a mid-session reload resumes the same queue.
 - **Event logging:** one buffered, retry-on-failure writer appends a doc per
   action to `participants/{uid}/events` (place/move/rotate/flip/remove/calc/note/
@@ -189,10 +192,15 @@ publish it; versioned in the repo, deployed manually):
   - **Content** — collapsible per-page text editors (welcome/training/registration/
     game/stats/survey/thank-you), each pre-filled with the current effective text.
   - **Registration** / **Survey** — add/edit/reorder/delete questions.
-  - **Puzzles** — generate easy/hard via `PFGame.generatePuzzle`, preview the
-    region grid + κ analysis (`PFGame.previewPuzzle`+`showSolutions`/`showProof`),
-    approve, and **freeze** an active set (writes `puzzleSets` + sets
-    `config.settings.activePuzzleIds`); also shows the current/built-in active set.
+  - **Puzzles** — build the exact set every participant plays: **Generate set to
+    match Settings** creates puzzles sized to the easy/hard counts (reusing vetted
+    built-ins first, generating the shortfall), or generate one at a time via
+    `PFGame.generatePuzzle`; review each (κ analysis via
+    `PFGame.previewPuzzle`+`showSolutions`/`showProof`), **regenerate** any you
+    dislike, then **freeze** (writes `puzzleSets` + sets
+    `config.settings.activePuzzleIds`) so every participant replays that frozen set.
+    "Current active set" shows the frozen puzzles (or, if none frozen, the built-in
+    set sized to the counts).
   - **Settings** — easy/hard puzzle counts, per-puzzle time limits, randomize-order.
   - **Sessions** — create a **session** (a snapshot of the *current*
     configuration: texts, questions, settings, active puzzle set) under a
