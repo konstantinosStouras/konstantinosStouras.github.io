@@ -27,5 +27,5 @@ The homepage's "Fun Projects" section (in the root site) may also link apps —
 keep that in mind if a change there is warranted.
 
 ## Current /fun/ apps
-`capitals` · `nomoi` · `rooks` · `sudoku` · `snake` · `ms` ·
+`portfoliofitgame` · `capitals` · `nomoi` · `rooks` · `sudoku` · `snake` · `ms` ·
 `mnsc_scraper-to-use-locally`
