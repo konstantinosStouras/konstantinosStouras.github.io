@@ -15,12 +15,12 @@
   if (!window.PF_ADMIN) return;
 
   var FIREBASE_CONFIG = {
-    apiKey: 'AIzaSyBn8PhDyVhWvfiJVCpC1eW6q1LBfwpMu38',
-    authDomain: 'stouras-portfoliofit.firebaseapp.com',
-    projectId: 'stouras-portfoliofit',
-    storageBucket: 'stouras-portfoliofit.firebasestorage.app',
-    messagingSenderId: '1031513619365',
-    appId: '1:1031513619365:web:dc3195fab2eaf04f6bc64c'
+    apiKey: 'AIzaSyDO0KqhebMC2xsijmibhL_52wGfioMb0HQ',
+    authDomain: 'stouras-portfoliofit-86127.firebaseapp.com',
+    projectId: 'stouras-portfoliofit-86127',
+    storageBucket: 'stouras-portfoliofit-86127.firebasestorage.app',
+    messagingSenderId: '346443957980',
+    appId: '1:346443957980:web:d5987b2a470a401e7d5619'
   };
   var SDK = '10.12.2';
   var FB_BASE = 'https://www.gstatic.com/firebasejs/' + SDK + '/';
