@@ -37,6 +37,14 @@ a:focus {
   color: #0A4773;
 }
 
+/* Remove the focus outline ("black box") that Bootstrap draws on links
+   when they are clicked, while keeping it for keyboard navigation so the
+   site stays accessible. */
+a:focus:not(:focus-visible),
+.navbar-default .navbar-nav > li > a:focus:not(:focus-visible) {
+  outline: none;
+}
+
 /*************************************************
  *  Blog Articles
  **************************************************/
