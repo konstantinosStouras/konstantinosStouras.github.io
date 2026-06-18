@@ -1,22 +1,25 @@
 /* =====================================================================
-   PortfolioFit for Managers — experiment layer
+   PortfolioFit for Managers — anonymous play layer
    ---------------------------------------------------------------------
-   Turns the PortfolioFit game into a research experiment:
-     welcome  ->  training  ->  registration / login  ->  main phase
-                ->  stats  ->  survey  ->  thank-you
+   Turns the PortfolioFit game into a fully anonymous, session-aware flow:
+     welcome  ->  training  ->  main phase  ->  stats  ->  survey  ->  thank-you
    plus per-action logging to a dedicated Firebase project.
 
-   This layer ONLY activates with ?exp=1 on the URL, so the default game
-   at /lab/portfoliofit/ is completely unaffected until we switch it on.
+   Anyone can play with NO sign-up: on the welcome screen a visitor is signed
+   in anonymously (Firebase Anonymous Auth) and may optionally enter a session
+   code to join a specific admin-created session (config stored at
+   sessions/{code}). With no code, the default configuration (config/app, or
+   the built-in defaults) is used. There is no e-mail/password registration.
 
-   Status: foundation increment — welcome, training, auth (register/login)
-   and Firestore event logging are live. Main-phase sequencing (fixed
-   2 easy + 2 hard, random order), stats, survey and the admin panel are
-   built in following increments and are stubbed/marked below.
+   This layer is the DEFAULT experience at the bare URL (see the PF_EXPERIMENT
+   flag in index.html). ?classic shows the original plain game; ?admin opens the
+   CMS. If Firebase is unreachable or Anonymous Auth is not enabled, the layer
+   falls back to OFFLINE mode: the default game is still playable, just without
+   saving or session lookups.
    ===================================================================== */
 (function () {
   'use strict';
-  if (!window.PF_EXPERIMENT) return;            // default game: do nothing
+  if (!window.PF_EXPERIMENT) return;            // classic game / admin: do nothing
 
   // ---- Firebase web config (public by design; safe to commit) ----------
   var FIREBASE_CONFIG = {
@@ -39,11 +42,11 @@
       welcomeBody: [
         'In this game, you drag and drop project <b>bricks</b> of different shapes into a frame. Each brick carries a <b>dollar value</b>, representing its potential contribution to your portfolio.',
         'Your challenge is to <b>build smart</b>: bricks must fit entirely <b>within the frame</b> and <b>cannot overlap</b>. The strategic element: every <b>empty cell</b> left in the frame carries a <b>$1 penalty</b>. Maximise your <b>net value</b> (total value of placed bricks minus the penalty for empty cells).',
-        'This game has four phases: a <b>training phase</b>, a <b>registration phase</b>, a <b>game phase</b>, and a <b>post-play survey</b>.'
+        'This game has three phases: a <b>training phase</b>, a <b>game phase</b>, and a short <b>post-play survey</b>. You can play completely anonymously — no sign-up needed.'
       ],
-      welcomeButton: 'Start training',
+      welcomeButton: 'Start',
       trainingTitle: 'Training phase',
-      trainingBody: 'Each brick is a project that earns a dollar value when you place it in the frame. Choose the right projects and pack them in to maximise <b>net value</b> (the total value of placed bricks minus a $1 penalty for each unused cell) before the timer runs out.<br><br>How to play: tap a brick to select it, then tap a board tile to drop it. Use the arrow keys (or the Rotate / Flip buttons) to rotate and flip the selected brick; tap a placed brick to pick it back up.<br><br>This is a practice round. When the timer ends, or once you are comfortable, you will move on to registration.',
+      trainingBody: 'Each brick is a project that earns a dollar value when you place it in the frame. Choose the right projects and pack them in to maximise <b>net value</b> (the total value of placed bricks minus a $1 penalty for each unused cell) before the timer runs out.<br><br>How to play: tap a brick to select it, then tap a board tile to drop it. Use the arrow keys (or the Rotate / Flip buttons) to rotate and flip the selected brick; tap a placed brick to pick it back up.<br><br>This is a practice round. When the timer ends, or once you are comfortable, you will move on to the main game.',
       trainingButton: 'Begin training',
       registerTitle: 'Registration',
       registerIntro: 'Please provide some basic information about yourself.',
@@ -102,7 +105,7 @@
   var fb = null;                                  // Firebase handles once loaded
   var cfg = DEFAULTS;                             // merged config
   var S = {
-    phase: 'boot', user: null, participant: null,
+    phase: 'boot', user: null, participant: null, sessionId: null, offline: false,
     seq: 0, buffer: [], roundIndex: 0, currentPuzzleId: null, flushing: false,
     queue: [], mainIndex: 0, rounds: []
   };
@@ -239,38 +242,40 @@
     } catch (e) { console.warn('[PFX] Cloud Functions unavailable; using direct writes', e); return false; }
   }
 
-  async function loadConfig() {
-    if (!fb) return;
+  // Load the effective configuration. With a session code, read sessions/{code}
+  // (an admin-frozen snapshot); otherwise read the default config/app document.
+  // Returns { ok, notFound } so the welcome screen can flag an unknown code.
+  async function loadConfig(sessionId) {
+    if (!fb || S.offline) { cfg = DEFAULTS; return { ok: false }; }
     try {
-      var snap = await fb.F.getDoc(fb.F.doc(fb.db, 'config', 'app'));
+      var ref = sessionId ? fb.F.doc(fb.db, 'sessions', String(sessionId)) : fb.F.doc(fb.db, 'config', 'app');
+      var snap = await fb.F.getDoc(ref);
+      if (sessionId && !snap.exists()) return { ok: false, notFound: true };
       if (snap.exists()) {
         var d = snap.data();
         cfg = {
           texts: Object.assign({}, DEFAULTS.texts, d.texts || {}),
           settings: Object.assign({}, DEFAULTS.settings, d.settings || {}),
-          registrationQuestions: (d.registrationQuestions && d.registrationQuestions.length) ? d.registrationQuestions : DEFAULTS.registrationQuestions,
-          surveyQuestions: d.surveyQuestions || []
+          registrationQuestions: DEFAULTS.registrationQuestions,
+          surveyQuestions: (d.surveyQuestions && d.surveyQuestions.length) ? d.surveyQuestions : DEFAULTS.surveyQuestions
         };
+      } else {
+        cfg = DEFAULTS;
       }
-    } catch (e) { /* fall back to defaults */ }
+      return { ok: true };
+    } catch (e) { return { ok: false, error: e }; }
   }
 
+  // Auth state changes only keep S.user fresh and drain the event buffer; routing
+  // is driven explicitly by init() so anonymous sign-in cannot double-route.
   function onAuthChanged(user) {
-    if (user && user.email === ADMIN_EMAIL) {
-      // Admin panel is a later increment; for now, just note it.
-      S.user = user;
-      showOverlay(card('Admin', [
-        el('p', { html: 'Signed in as <b>admin@admin.com</b>. The admin panel is being built in the next increment.' }),
-        el('div', { class: 'pfx-row' }, [el('button', { class: 'pfx-btn sec', on: { click: doLogout } }, ['Log out'])])
-      ]));
-      return;
-    }
     S.user = user || null;
-    if (S.user) { renderTopbar(); flush(); }
+    if (S.user) flush();
   }
 
   // ---- Event logging ----------------------------------------------------
   function logEvent(type, payload) {
+    if (S.offline) return;                        // nothing to write to
     var ev = {
       seq: S.seq++, t: Date.now(), clientTime: new Date().toISOString(),
       phase: S.phase, round: S.roundIndex, puzzleId: S.currentPuzzleId || null,
@@ -306,12 +311,12 @@
   // ---- Top bar ----------------------------------------------------------
   function renderTopbar() {
     var existing = $('.pfx-topbar'); if (existing) existing.remove();
-    if (!S.user) return;
+    if (!S.user && !S.offline) return;
     document.body.classList.add('pf-hastop');
-    var label = (S.participant && S.participant.anonymousLabel) || (S.participant && S.participant.participantId) || S.user.email || '';
+    var label = S.sessionId ? ('Session ' + S.sessionId) : 'Playing anonymously';
     var bar = el('div', { class: 'pfx-topbar' }, [
       el('span', { html: 'PortfolioFit for Managers &middot; <b>' + esc(label) + '</b>' }),
-      el('button', { on: { click: doLogout } }, ['Log out'])
+      el('button', { title: 'Start over with a fresh anonymous session', on: { click: doRestart } }, ['Restart'])
     ]);
     document.body.appendChild(bar);
   }
@@ -323,16 +328,88 @@
   }
 
   // ---- Phase: welcome ---------------------------------------------------
+  // Anonymous entry point. A visitor may optionally type a session code (or one
+  // can arrive prefilled via ?session=CODE); with no code the default config is
+  // used. "Start" signs the player in anonymously and loads the right config.
   function showWelcome() {
     S.phase = 'welcome';
     var body = [el('p', { html: cfg.texts.welcomeIntro })];
     (cfg.texts.welcomeBody || []).forEach(function (p) { body.push(el('p', { html: p })); });
-    body.push(el('div', { class: 'pfx-row' }, [
-      el('button', { class: 'pfx-btn', on: { click: startTraining } }, [cfg.texts.welcomeButton || 'Start training']),
-      el('button', { class: 'pfx-btn sec', on: { click: showLogin } }, ['I already have an account'])
-    ]));
+
+    var err = el('div', { class: 'pfx-err' });
+    var sessInput = null;
+    if (S.offline) {
+      body.push(el('p', { class: 'muted', text: 'You appear to be offline, so your game will not be saved and session codes are unavailable. You can still play the default game.' }));
+    } else {
+      sessInput = el('input', { type: 'text', placeholder: 'e.g. SPRING25 (optional)', autocomplete: 'off', spellcheck: 'false', value: urlSession() || '' });
+      body.push(el('div', { class: 'pfx-field' }, [
+        el('label', { text: 'Session code (optional)' }),
+        el('div', { class: 'help', text: 'Have a code from the organiser? Enter it to join that specific session. Otherwise just press Start to play the default game.' }),
+        sessInput
+      ]));
+    }
+
+    var startBtn = el('button', { class: 'pfx-btn', on: { click: onStart } }, [cfg.texts.welcomeButton || 'Start']);
+    body.push(err, el('div', { class: 'pfx-row' }, [startBtn]));
     var wc = card(cfg.texts.welcomeTitle, body); wc.classList.add('pfx-justify');
     showOverlay(wc);
+
+    async function onStart() {
+      err.textContent = '';
+      var sid = sessInput ? (sessInput.value || '').trim() : '';
+      startBtn.setAttribute('disabled', 'true'); startBtn.textContent = 'Starting…';
+      var res = await beginSession(sid);
+      if (!res.ok) {
+        startBtn.removeAttribute('disabled'); startBtn.textContent = cfg.texts.welcomeButton || 'Start';
+        err.textContent = res.notFound
+          ? ('No session found for code “' + sid + '”. Check the code and try again, or clear it to play the default game.')
+          : 'Could not start just now. Please check your connection and try again.';
+        return;
+      }
+      startTraining();
+    }
+  }
+
+  // Read a session code from the URL (?session=CODE or ?s=CODE), if present.
+  function urlSession() {
+    var m = /[?&](?:session|s)=([^&]+)/.exec(location.search);
+    try { return m ? decodeURIComponent(m[1]).trim() : ''; } catch (e) { return m ? m[1] : ''; }
+  }
+
+  // Sign in anonymously (if needed), load the chosen configuration, and create
+  // the anonymous participant record. Returns { ok, notFound } for the welcome UI.
+  async function beginSession(sid) {
+    if (S.offline || !fb) { S.sessionId = null; cfg = DEFAULTS; return { ok: true }; }
+    if (!S.user) {
+      try { S.user = (await fb.A.signInAnonymously(fb.auth)).user; }
+      catch (e) { console.warn('[PFX] anonymous sign-in failed', e); S.offline = true; cfg = DEFAULTS; return { ok: true }; }
+    }
+    if (sid) {
+      var r = await loadConfig(sid);
+      if (!r.ok) return { ok: false, notFound: !!r.notFound };
+      S.sessionId = sid;
+    } else {
+      await loadConfig(null);
+      S.sessionId = null;
+    }
+    await createParticipant();
+    return { ok: true };
+  }
+
+  // Create (or refresh) this anonymous player's participant document, tagged with
+  // the session code so the admin can group exported data by session.
+  async function createParticipant() {
+    if (!fb || !S.user || S.offline) return;
+    var label = 'anon-' + S.user.uid.slice(0, 6);
+    try {
+      await fb.F.setDoc(fb.F.doc(fb.db, 'participants', S.user.uid), {
+        uid: S.user.uid, anonymous: true, sessionId: S.sessionId || null,
+        anonymousLabel: label, status: 'playing',
+        createdAt: fb.F.serverTimestamp(), updatedAt: fb.F.serverTimestamp()
+      }, { merge: true });
+      S.participant = { anonymousLabel: label, sessionId: S.sessionId || null, status: 'playing' };
+      renderTopbar();
+    } catch (e) { console.warn('[PFX] participant create failed', e); }
   }
 
   // ---- Phase: training --------------------------------------------------
@@ -353,10 +430,10 @@
     window.PFGame.newGame(tdiff, limitFor(tdiff));
     // Pause the clock and run the onboarding tour over the live board first.
     if (window.PFGame.pauseTimer) window.PFGame.pauseTimer();
-    showGameSubmit('Continue to Registration');   // visible so the tour can highlight it
+    showGameSubmit('Continue to the game');   // visible so the tour can highlight it
     runTour(function () {
       if (window.PFGame.resumeTimer) window.PFGame.resumeTimer();
-      showGameSubmit('Continue to Registration');
+      showGameSubmit('Continue to the game');
     });
   }
 
@@ -373,7 +450,7 @@
       { sel: '.tools .tool:nth-of-type(2)', title: 'My notes', text: 'Writing down your strategy really matters. Note the <b>heuristic</b> you follow (for example, do you grab the highest value-per-cell bricks first, or plan the whole fit?), what you are trying to <b>maximise</b> (your net value), and the reasoning behind each move. It helps you think clearly now and remember your approach later.' },
       { sel: '#status', title: 'Helpful nudges', text: 'Keep an eye just below the board: encouraging messages and reminders pop up here to help you keep going and reach your best net value.' },
       { center: true, title: 'Make it yours', text: 'Every box on this screen is yours to arrange. <b>Drag a box by its body to move it</b>, or <b>drag any edge or corner to resize it</b>, so the layout suits you. A “Reset layout” button (bottom-left) restores the default at any time.' },
-      { sel: '.pfx-submit', title: 'When you are ready', text: 'When you are happy with your portfolio (or the time runs out) this green button takes you forward — during training, on to registration.' }
+      { sel: '.pfx-submit', title: 'When you are ready', text: 'When you are happy with your portfolio (or the time runs out) this green button takes you forward — during training, on to the main game.' }
     ];
     var i = 0;
     var tour = el('div', { class: 'pfx-tour' });
@@ -472,114 +549,12 @@
   function onTrainingEnd(metrics) {
     window.PFGame._onRoundEnd = null;
     hideGameSubmit();
-    setTimeout(function () { showRegister(metrics); }, 400);
+    logEvent('training_end', { trainingMetrics: metrics || null });
+    setTimeout(function () { startMain(); }, 400);
   }
 
-  // ---- Phase: registration ---------------------------------------------
-  function showRegister(trainingMetrics) {
-    S.phase = 'register';
-    var form = el('div', {});
-    var inputs = {};
-    cfg.registrationQuestions.forEach(function (q) {
-      var field = el('div', { class: 'pfx-field' });
-      field.appendChild(el('label', { text: q.label + (q.required ? ' *' : '') }));
-      if (q.help) field.appendChild(el('div', { class: 'help', text: q.help }));
-      var input;
-      if (q.type === 'select') {
-        input = el('select', {}, [el('option', { value: '' }, ['Please select...'])].concat(
-          (q.options || []).map(function (o) { return el('option', { value: o }, [o]); })));
-      } else if (q.type === 'radio') {
-        input = el('div', { class: 'radio' });
-        (q.options || []).forEach(function (o) {
-          var id = 'r_' + q.id + '_' + o;
-          input.appendChild(el('label', {}, [el('input', { type: 'radio', name: q.id, value: o, id: id }), o]));
-        });
-      } else {
-        input = el('input', { type: q.type || 'text', autocomplete: 'off' });
-      }
-      inputs[q.id] = { q: q, node: input };
-      field.appendChild(input);
-      form.appendChild(field);
-    });
-    var err = el('div', { class: 'pfx-err' });
-    var submit = el('button', { class: 'pfx-btn', on: { click: doRegister } }, ['Register & start']);
-    form.appendChild(err);
-    form.appendChild(el('div', { class: 'pfx-row' }, [submit,
-      el('button', { class: 'pfx-btn sec', on: { click: showLogin } }, ['I already have an account'])]));
-
-    var c = card(cfg.texts.registerTitle, [el('p', { text: cfg.texts.registerIntro }), form]);
-    showOverlay(c);
-
-    function readVal(entry) {
-      if (entry.q.type === 'radio') { var sel = entry.node.querySelector('input:checked'); return sel ? sel.value : ''; }
-      return entry.node.value.trim();
-    }
-    async function doRegister() {
-      err.textContent = '';
-      var answers = {}, email = '', password = '', participantId = '';
-      for (var id in inputs) {
-        var entry = inputs[id], v = readVal(entry);
-        if (entry.q.required && !v) { err.textContent = 'Please complete: ' + entry.q.label; return; }
-        if (entry.q.system === 'email') email = v;
-        else if (entry.q.system === 'password') password = v;
-        else if (entry.q.system === 'participantId') participantId = v;
-        else answers[id] = v;
-      }
-      if (password.length < 6) { err.textContent = 'Password must be at least 6 characters.'; return; }
-      submit.setAttribute('disabled', 'true'); submit.textContent = 'Creating account...';
-      try {
-        var cred = await fb.A.createUserWithEmailAndPassword(fb.auth, email, password);
-        var uid = cred.user.uid;
-        // Try the Cloud Function (atomic label); fall back to a direct write.
-        try {
-          if (!(await ensureFunctions())) throw new Error('functions unavailable');
-          var fn = fb.Fn.httpsCallable(fb.fns, 'registerParticipant');
-          var res = await fn({ participantId: participantId, answers: answers });
-          S.participant = { participantId: participantId, anonymousLabel: res.data && res.data.anonymousLabel };
-        } catch (fnErr) {
-          await fb.F.setDoc(fb.F.doc(fb.db, 'participants', uid), {
-            uid: uid, participantId: participantId, email: email, registration: answers,
-            status: 'registered', anonymousLabel: null,
-            createdAt: fb.F.serverTimestamp(), updatedAt: fb.F.serverTimestamp()
-          });
-          S.participant = { participantId: participantId, anonymousLabel: null };
-        }
-        logEvent('register', { participantId: participantId, trainingMetrics: trainingMetrics || null });
-        closeOverlay(); renderTopbar(); startMain();
-      } catch (e) {
-        submit.removeAttribute('disabled'); submit.textContent = 'Register & start';
-        err.textContent = friendlyAuthError(e);
-      }
-    }
-  }
-
-  // ---- Login ------------------------------------------------------------
-  function showLogin() {
-    S.phase = 'login';
-    var email = el('input', { type: 'email', placeholder: 'you@example.com', autocomplete: 'username' });
-    var pass = el('input', { type: 'password', placeholder: 'Password', autocomplete: 'current-password' });
-    var err = el('div', { class: 'pfx-err' });
-    var btn = el('button', { class: 'pfx-btn', on: { click: doLogin } }, ['Log in']);
-    showOverlay(card('Log in', [
-      el('div', { class: 'pfx-field' }, [el('label', { text: 'E-mail' }), email]),
-      el('div', { class: 'pfx-field' }, [el('label', { text: 'Password' }), pass]),
-      err,
-      el('div', { class: 'pfx-row' }, [btn, el('button', { class: 'pfx-btn sec', on: { click: showWelcome } }, ['Back'])])
-    ]));
-    async function doLogin() {
-      err.textContent = '';
-      btn.setAttribute('disabled', 'true'); btn.textContent = 'Logging in...';
-      try {
-        await fb.A.signInWithEmailAndPassword(fb.auth, email.value.trim(), pass.value);
-        // onAuthChanged handles admin; for participants, resume into main.
-        if (email.value.trim() !== ADMIN_EMAIL) { closeOverlay(); await loadParticipant(); resumeFlow(); }
-      } catch (e) {
-        btn.removeAttribute('disabled'); btn.textContent = 'Log in';
-        err.textContent = friendlyAuthError(e);
-      }
-    }
-  }
-
+  // Load this anonymous player's existing participant record (used on reload to
+  // resume them where they left off).
   async function loadParticipant() {
     if (!fb || !S.user) return;
     try {
@@ -588,19 +563,12 @@
     } catch (e) { /* ignore */ }
   }
 
-  async function doLogout() {
-    try { await fb.A.signOut(fb.auth); } catch (e) {}
+  // "Restart" — drop the current anonymous identity and reload to a fresh
+  // welcome screen (a brand-new anonymous session is created on next start).
+  async function doRestart() {
+    if (!window.confirm('Start over with a fresh anonymous session? Your current progress will be left as-is.')) return;
+    try { if (fb && fb.auth) await fb.A.signOut(fb.auth); } catch (e) {}
     location.reload();
-  }
-
-  function friendlyAuthError(e) {
-    var c = (e && e.code) || '';
-    if (c.indexOf('email-already-in-use') >= 0) return 'That e-mail already has an account. Use "I already have an account".';
-    if (c.indexOf('invalid-email') >= 0) return 'Please enter a valid e-mail address.';
-    if (c.indexOf('wrong-password') >= 0 || c.indexOf('invalid-credential') >= 0) return 'Incorrect e-mail or password.';
-    if (c.indexOf('user-not-found') >= 0) return 'No account found for that e-mail.';
-    if (c.indexOf('weak-password') >= 0) return 'Password must be at least 6 characters.';
-    return (e && e.message) || 'Something went wrong. Please try again.';
   }
 
   // ---- Phase: main (sequenced puzzles) ---------------------------------
@@ -825,6 +793,8 @@
         answers[f.q.id] = v;
       }
       submit.setAttribute('disabled', 'true'); submit.textContent = 'Submitting...';
+      // Offline: nothing to save — just acknowledge and finish.
+      if (S.offline || !fb || !S.user) { showThankYou(); return; }
       try {
         try {
           if (!(await ensureFunctions())) throw new Error('functions unavailable');
@@ -960,23 +930,55 @@
     cardEl.addEventListener('pointercancel', endOp);
   }
 
+  // Resolve the initial Firebase auth state once (restores a returning anonymous
+  // player from a prior visit, or yields null for a brand-new visitor).
+  function waitForAuth() {
+    return new Promise(function (resolve) {
+      var unsub = fb.A.onAuthStateChanged(fb.auth, function (u) { try { unsub(); } catch (e) {} resolve(u || null); });
+    });
+  }
+
+  // Offline fallback: Firebase is unreachable or Anonymous Auth is disabled. The
+  // default game stays fully playable; nothing is saved and codes are ignored.
+  function startOffline() {
+    S.offline = true; S.user = null; cfg = DEFAULTS;
+    enableLayoutCustomize();
+    showWelcome();
+  }
+
   // ---- Bootstrap --------------------------------------------------------
   async function init() {
     if (inited) return; inited = true;
     injectStyles();
-    showOverlay(card('Loading...', [el('p', { text: 'Connecting...' })]));
-    try {
-      await initFirebase();
-      await loadConfig();
-    } catch (e) {
-      showOverlay(card('Connection problem', [el('p', { text: 'Could not connect to the server. Please refresh and try again.' })]));
-      console.error('[PFX] init failed', e);
-      return;
+    showOverlay(card('Loading…', [el('p', { text: 'Connecting…' })]));
+
+    try { await initFirebase(); }
+    catch (e) { console.warn('[PFX] Firebase init failed; offline', e); return startOffline(); }
+
+    // Determine who (if anyone) is already signed in on this device.
+    var u = await waitForAuth();
+    // An admin signed in on this device should not hijack the public flow.
+    if (u && u.email === ADMIN_EMAIL) { try { await fb.A.signOut(fb.auth); } catch (e) {} u = null; }
+    // No persisted user → sign in anonymously so config/sessions are readable.
+    if (!u) {
+      try { u = (await fb.A.signInAnonymously(fb.auth)).user; }
+      catch (e) { console.warn('[PFX] anonymous sign-in unavailable; offline', e); return startOffline(); }
     }
-    // If already signed in (returning user), resume; else show welcome.
+    S.user = u;
     enableLayoutCustomize();
-    if (fb.auth.currentUser) { S.user = fb.auth.currentUser; await loadParticipant(); resumeFlow(); }
-    else showWelcome();
+
+    // Returning player with progress → reload their session config and resume.
+    await loadParticipant();
+    if (S.participant && S.participant.status) {
+      S.sessionId = S.participant.sessionId || null;
+      await loadConfig(S.sessionId);
+      renderTopbar();
+      return resumeFlow();
+    }
+
+    // Fresh visitor: load the default config (for the welcome copy) and greet.
+    await loadConfig(null);
+    showWelcome();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
