@@ -90,6 +90,14 @@
       if (authCb) authCb(cur);
       return Promise.resolve(cur);
     };
+    // Anonymous play: mint a throwaway local uid (no e-mail / password). Mirrors
+    // Firebase anonymous auth so the offline test flow matches production.
+    this.signInAnonymously = function () {
+      var u = 'anon-' + uid();
+      setSessionUid(u); cur = { uid: u, email: null };
+      if (authCb) authCb(cur);
+      return Promise.resolve(cur);
+    };
     this.logout = function () { setSessionUid(null); cur = null; if (authCb) authCb(null); return Promise.resolve(); };
 
     this.loadConfig = function () { return Promise.resolve(clone(db().config) || {}); };
@@ -172,6 +180,10 @@
     this.currentUser = function () { var u = fb && fb.auth.currentUser; return u ? { uid: u.uid, email: u.email } : null; };
     this.register = function (email, password) { return fb.A.createUserWithEmailAndPassword(fb.auth, email, password).then(function (c) { return { uid: c.user.uid, email: c.user.email }; }); };
     this.login = function (email, password) { return fb.A.signInWithEmailAndPassword(fb.auth, email, password).then(function (c) { return { uid: c.user.uid, email: c.user.email }; }); };
+    // Anonymous play: a real Firebase anonymous account (request.auth.uid set,
+    // no e-mail). Requires the Anonymous sign-in provider to be enabled in the
+    // Firebase console; the existing owner-based security rules cover it as-is.
+    this.signInAnonymously = function () { return fb.A.signInAnonymously(fb.auth).then(function (c) { return { uid: c.user.uid, email: c.user.email || null }; }); };
     this.logout = function () { return fb.A.signOut(fb.auth); };
 
     var F = function () { return fb.F; }, D = function () { return fb.db; };

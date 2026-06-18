@@ -6,9 +6,14 @@ underscore keeps Jekyll/GitHub Pages from publishing it); it lives in the repo
 only so the backend is versioned next to the app.
 
 - **Firebase project (suggested id):** `stouras-answerarena`
-- **Products:** Firestore, Authentication (Email/Password). No Cloud Functions
-  needed, so the free **Spark** plan is enough.
+- **Products:** Firestore, Authentication (**Anonymous** for participants +
+  **Email/Password** for the admin). No Cloud Functions needed, so the free
+  **Spark** plan is enough.
 - **Admin account:** `admin@admin.com`
+- **Participants:** take part **anonymously** - no e-mail, password or login.
+  They sign in with a throwaway Firebase anonymous account, so each play still
+  has its own `request.auth.uid` and the owner-based security rules apply
+  unchanged. A session code is optional.
 
 The web app talks to Firebase from the browser. Until you finish the steps
 below and paste the web config into `lab/answerarena/arena-config.js`, the app runs in
@@ -23,9 +28,13 @@ through it offline.
    (use the Google account that should own this study's data).
 2. **Add a project** -> name it e.g. `stouras-answerarena`. You can disable
    Google Analytics (not needed). Wait for it to finish provisioning.
-3. **Enable Authentication:**
+3. **Enable Authentication** (two providers):
    - Left menu -> **Build -> Authentication -> Get started**.
-   - **Sign-in method** tab -> enable **Email/Password** -> Save.
+   - **Sign-in method** tab -> enable **Anonymous** -> Save. *(This is what lets
+     participants play without an account. If it is off, the app shows
+     "Anonymous play is not enabled yet.")*
+   - On the same tab -> enable **Email/Password** -> Save. *(Used only for the
+     admin account.)*
 4. **Create the admin user:**
    - Authentication -> **Users** tab -> **Add user**.
    - E-mail `admin@admin.com`, pick a strong password -> Add user.
@@ -47,7 +56,7 @@ through it offline.
    - (The web config is **public by design** - it is safe to commit. Access is
      controlled by the security rules and Auth, not by hiding these values.)
 
-After step 7 the app already has working **login/registration, content,
+After step 7 the app already has working **anonymous participation, content,
 sessions, task-set uploads, responses and survey** - because those run under
 the security rules. You just need to deploy the rules (next) so that writes
 are actually allowed in production.
@@ -87,8 +96,8 @@ config/app                         texts, settings (twoByTwo, randomizeOrder,
                                    registrationQuestions, surveyQuestions, activeTaskSetId
 taskSets/{id}                      { name, source, count, tasks:[{id,task,outputA,outputB}] }
 sessions/{id}                      { code, name, status, taskSetId, condition, count }
-participants/{uid}
-  participantId, email,
+participants/{uid}                 uid = Firebase anonymous UID
+  participantId, email(null - anonymous), anonymous:true,
   registration:{ <questionId>: answer }, status, sessionId,
   condition:{ enabled, transparency, incentive }, order:[...], flips:[...], idx
   responses/{autoId}               { taskId, idx, choice('A'|'B'|'tie' as left/right/tie),

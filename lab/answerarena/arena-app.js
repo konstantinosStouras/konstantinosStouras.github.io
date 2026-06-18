@@ -2,8 +2,14 @@
    Answer Arena — participant app
    ---------------------------------------------------------------------
    Phase flow (mirrors the PortfolioFit research structure):
-     welcome -> tour -> register/login -> training -> main (N comparisons,
-     random order) -> survey -> thank-you
+     welcome -> tour -> intake (anonymous: short demographics + consent, no
+     account) -> training -> main (N comparisons, random order) -> survey ->
+     thank-you
+
+   Play is fully ANONYMOUS: there is no e-mail/password and no login. The
+   participant signs in with a throwaway Firebase anonymous account when they
+   submit the intake form. A session code is OPTIONAL - with one you join a
+   specific admin-created session, without one you play the default config.
 
    Each comparison shows one task card and two answer cards (from two
    unnamed systems, left/right randomized per participant). The participant
@@ -61,12 +67,12 @@
     bar.innerHTML = '';
     if (!S.user) { bar.style.display = 'none'; return; }
     bar.style.display = 'flex';
-    var who = (S.p && S.p.participantId) || (S.user && S.user.email) || '';
+    var who = (S.p && S.p.participantId) || (S.user && S.user.email) || 'Guest';
     bar.appendChild(el('span', { class: 'a-brand', html: esc((D.app && D.app.name) || 'Answer Arena') + ' &middot; <b>' + esc(who) + '</b>' }));
     var right = el('div', { class: 'a-topright' });
     if (S.showCost) { S.costEl = el('span', { class: 'a-cost' }); right.appendChild(S.costEl); updateCostMeter(); }
     else { S.costEl = null; }
-    right.appendChild(el('button', { class: 'a-btn a-ghost a-sm', on: { click: logout } }, ['Log out']));
+    right.appendChild(el('button', { class: 'a-btn a-ghost a-sm', on: { click: logout } }, ['Exit']));
     bar.appendChild(right);
   }
   // Cost-transparency meter: total US$ the participant's choices have cost so far.
@@ -107,24 +113,31 @@
     var body = [el('p', { class: 'a-lead', html: t('welcomeIntro') })];
     (cfg.texts.welcomeBody || []).forEach(function (p) { body.push(el('p', { html: p })); });
 
-    // A session code is required to take part (prefilled from a typed code or
-    // the ?s=CODE link if present).
+    // A session code is OPTIONAL. With a code you join that specific session
+    // (created by the admin); without one you play the default configuration.
+    // The field is prefilled from a typed code or the ?s=CODE link if present.
     var urlCode = S.pendingCode || (location.search.match(/[?&]s=([A-Za-z0-9]+)/) || [])[1] || '';
-    var codeField = el('input', { type: 'text', placeholder: 'Session code', value: urlCode, style: 'text-transform:uppercase;letter-spacing:.12em;' });
-    body.push(el('div', { class: 'a-field' }, [el('label', { text: 'Session code *' }), codeField]));
+    var codeField = el('input', { type: 'text', placeholder: 'Session code (optional)', value: urlCode, style: 'text-transform:uppercase;letter-spacing:.12em;' });
+    body.push(el('div', { class: 'a-field' }, [
+      el('label', { text: 'Session code (optional)' }),
+      el('div', { class: 'a-help', text: 'Have a code from the organiser? Enter it to join that session. Otherwise just continue.' }),
+      codeField
+    ]));
     var err = el('div', { class: 'a-err' });
     body.push(err);
-    body.push(el('p', { class: 'a-meta', text: 'About 5-10 minutes - please complete it in one sitting.' }));
+    body.push(el('p', { class: 'a-meta', text: 'No sign-up needed - you take part anonymously. About 5-10 minutes; please complete it in one sitting.' }));
     body.push(el('div', { class: 'a-row' }, [
-      el('button', { class: 'a-btn', on: { click: go } }, [t('welcomeButton', 'Take a quick tour')]),
-      el('button', { class: 'a-btn a-ghost', on: { click: function () { S.pendingCode = codeField ? codeField.value.trim() : ''; showLogin(); } } }, [t('loginLink', 'I already have an account')])
+      el('button', { class: 'a-btn', on: { click: go } }, [t('welcomeButton', 'Take a quick tour')])
     ]));
     setScreen(overlayWrap(card(t('welcomeTitle', 'Welcome'), body, 'a-welcome')));
 
     function go() {
       err.textContent = '';
       var c = codeField.value.trim().toUpperCase();
-      if (!c) { err.textContent = 'Please enter the session code you were given.'; return; }
+      S.pendingCode = c;
+      // No code -> play the default configuration anonymously.
+      if (!c) { S.session = null; startTour(); return; }
+      // A code was given -> it must resolve to an open session.
       Store.getSessionByCode(c).then(function (sess) {
         if (!sess) { err.textContent = 'That session code was not found.'; return; }
         if (sess.status === 'closed') { err.textContent = 'That session has closed.'; return; }
@@ -214,32 +227,35 @@
   function showRegister() {
     S.phase = 'register';
     var form = el('div', {});
-    var fields = (cfg.registrationQuestions || []).map(function (q) { var f = buildField(q); form.appendChild(f.node.closest ? f.node.parentNode : f.node); return f; });
+    // Anonymous play: never ask for credentials. Drop any e-mail/password
+    // questions even if an older saved config still lists them.
+    var qs = (cfg.registrationQuestions || []).filter(function (q) { return q.system !== 'email' && q.system !== 'password'; });
+    var fields = qs.map(function (q) { var f = buildField(q); form.appendChild(f.node.closest ? f.node.parentNode : f.node); return f; });
     var err = el('div', { class: 'a-err' });
-    var submit = el('button', { class: 'a-btn', on: { click: doRegister } }, ['Create account & start']);
+    var submit = el('button', { class: 'a-btn', on: { click: doRegister } }, ['Start']);
     form.appendChild(err);
-    form.appendChild(el('div', { class: 'a-row' }, [submit, el('button', { class: 'a-btn a-ghost', on: { click: showLogin } }, [t('loginLink', 'I already have an account')])]));
-    setScreen(overlayWrap(card(t('registerTitle', 'Create your account'), [el('p', { html: t('registerIntro') }), form])));
+    form.appendChild(el('div', { class: 'a-row' }, [submit]));
+    setScreen(overlayWrap(card(t('registerTitle', 'A few quick details'), [el('p', { html: t('registerIntro') }), form])));
 
     function doRegister() {
       err.textContent = '';
-      var answers = {}, email = '', password = '', participantId = '';
+      var answers = {}, participantId = '';
       for (var i = 0; i < fields.length; i++) {
         var f = fields[i], v = f.read();
         if (f.q.required && !v) { err.textContent = 'Please complete: ' + f.q.label; return; }
-        if (f.q.system === 'email') email = v;
-        else if (f.q.system === 'password') password = v;
-        else if (f.q.system === 'participantId') participantId = v;
+        if (f.q.system === 'participantId') participantId = v;
         else answers[f.q.id] = v;
       }
-      if (!email) { err.textContent = 'Please enter your e-mail.'; return; }
-      if (password.length < 6) { err.textContent = 'Password must be at least 6 characters.'; return; }
-      submit.setAttribute('disabled', 'true'); submit.textContent = 'Creating account...';
-      Store.register(email, password).then(function (user) {
+      submit.setAttribute('disabled', 'true'); submit.textContent = 'Starting...';
+      // Reuse an anonymous identity if one already exists (e.g. on a resumed
+      // visit), else mint a fresh anonymous account.
+      var existing = Store.currentUser();
+      var signIn = existing ? Promise.resolve(existing) : Store.signInAnonymously();
+      signIn.then(function (user) {
         S.user = user;
         var cond = assignCondition();
         var pdoc = {
-          uid: user.uid, participantId: participantId || null, email: email,
+          uid: user.uid, participantId: participantId || null, email: null, anonymous: true,
           registration: answers, status: 'registered',
           sessionId: curSid(), condition: cond, completedSessions: {},
           createdAt: nowStamp(), updatedAt: nowStamp()
@@ -249,58 +265,17 @@
           topbar(); startTraining();
         });
       }).catch(function (e) {
-        submit.removeAttribute('disabled'); submit.textContent = 'Create account & start';
+        submit.removeAttribute('disabled'); submit.textContent = 'Start';
         err.textContent = authError(e);
       });
     }
   }
 
-  function showLogin() {
-    S.phase = 'login';
-    var prefill = S.pendingCode || (location.search.match(/[?&]s=([A-Za-z0-9]+)/) || [])[1] || '';
-    var email = el('input', { type: 'email', placeholder: 'you@example.com', autocomplete: 'username' });
-    var pass = el('input', { type: 'password', placeholder: 'Password', autocomplete: 'current-password' });
-    var codeI = el('input', { type: 'text', placeholder: 'Session code', value: prefill, style: 'text-transform:uppercase;letter-spacing:.12em;' });
-    var err = el('div', { class: 'a-err' });
-    var btn = el('button', { class: 'a-btn', on: { click: doLogin } }, ['Log in']);
-    // Pressing Enter in any field submits the form, like clicking "Log in".
-    [email, pass, codeI].forEach(function (inp) { inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); doLogin(); } }); });
-    setScreen(overlayWrap(card(t('loginTitle', 'Log in'), [
-      el('div', { class: 'a-field' }, [el('label', { text: 'E-mail' }), email]),
-      el('div', { class: 'a-field' }, [el('label', { text: 'Password' }), pass]),
-      el('div', { class: 'a-field' }, [el('label', { text: 'Session code *' }), codeI]),
-      err,
-      el('div', { class: 'a-row' }, [btn, el('button', { class: 'a-btn a-ghost', on: { click: function () { S.pendingCode = codeI.value.trim(); showWelcome(); } } }, ['New here? Create an account'])])
-    ])));
-    function fail(msg) { btn.removeAttribute('disabled'); btn.textContent = 'Log in'; err.textContent = msg; }
-    function doLogin() {
-      if (btn.hasAttribute('disabled')) return;
-      err.textContent = ''; btn.setAttribute('disabled', 'true'); btn.textContent = 'Logging in...';
-      Store.login(email.value.trim(), pass.value).then(function (user) {
-        S.user = user;
-        // The admin account belongs in the admin panel, not the participant flow
-        // (and does not need a session code).
-        if (Store.isAdminEmail(user.email)) { location.search = '?admin'; return; }
-        var code = codeI.value.trim().toUpperCase();
-        if (!code) return fail('Please enter the session code you were given.');
-        return Store.getSessionByCode(code).then(function (sess) {
-          if (!sess) return fail('That session code was not found.');
-          if (sess.status === 'closed') return fail('That session has closed.');
-          if (sess.status === 'waiting') return fail('That session has not opened yet. Please check back soon.');
-          S.session = sess;
-          return Store.getParticipant(user.uid).then(function (p) { S.p = p; topbar(); routeParticipant(); });
-        });
-      }).catch(function (e) { fail(authError(e)); });
-    }
-  }
-
   function authError(e) {
     var c = (e && e.code) || '';
-    if (c.indexOf('email-already-in-use') >= 0) return 'That e-mail already has an account. Use "I already have an account".';
-    if (c.indexOf('invalid-email') >= 0) return 'Please enter a valid e-mail address.';
-    if (c.indexOf('wrong-password') >= 0 || c.indexOf('invalid-credential') >= 0) return 'Incorrect e-mail or password.';
-    if (c.indexOf('user-not-found') >= 0) return 'No account found for that e-mail.';
-    if (c.indexOf('weak-password') >= 0) return 'Password must be at least 6 characters.';
+    if (c.indexOf('operation-not-allowed') >= 0 || c.indexOf('admin-restricted-operation') >= 0)
+      return 'Anonymous play is not enabled yet. Please contact the study organiser.';
+    if (c.indexOf('network-request-failed') >= 0) return 'Network problem. Please check your connection and try again.';
     return (e && e.message) || 'Something went wrong. Please try again.';
   }
 
@@ -630,7 +605,7 @@
     markCompleted();   // record this session as completed (cannot be retaken)
     setScreen(overlayWrap(card(t('thankyouTitle', 'Thank you!'), [
       el('p', { html: t('thankyouBody') }),
-      el('div', { class: 'a-row' }, [el('button', { class: 'a-btn a-ghost', on: { click: logout } }, ['Log out'])])
+      el('div', { class: 'a-row' }, [el('button', { class: 'a-btn a-ghost', on: { click: logout } }, ['Start over'])])
     ], 'a-done')));
   }
 
@@ -640,37 +615,8 @@
     S.phase = 'welcome';
     setScreen(overlayWrap(card('Session unavailable', [
       el('p', { text: status === 'waiting' ? 'This session has not opened yet. Please check back soon.' : 'This session has closed.' }),
-      el('div', { class: 'a-row' }, [el('button', { class: 'a-btn a-ghost', on: { click: logout } }, ['Log out'])])
+      el('div', { class: 'a-row' }, [el('button', { class: 'a-btn a-ghost', on: { click: logout } }, ['Start over'])])
     ])));
-  }
-
-  // Shown to a signed-in participant who has no session yet: a session code is
-  // always required to play, so let them enter it (or open their session link).
-  function showNeedSession() {
-    S.phase = 'welcome';
-    var codeI = el('input', { type: 'text', placeholder: 'Session code', style: 'text-transform:uppercase;letter-spacing:.12em;' });
-    var err = el('div', { class: 'a-err' });
-    var btn = el('button', { class: 'a-btn', on: { click: go } }, ['Continue']);
-    codeI.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); go(); } });
-    setScreen(overlayWrap(card('Enter your session code', [
-      el('p', { text: 'A session code is required to take part. Enter the code you were given (or open your session link).' }),
-      el('div', { class: 'a-field' }, [el('label', { text: 'Session code *' }), codeI]),
-      err,
-      el('div', { class: 'a-row' }, [btn, el('button', { class: 'a-btn a-ghost', on: { click: logout } }, ['Log out'])])
-    ])));
-    function go() {
-      err.textContent = '';
-      var c = codeI.value.trim().toUpperCase();
-      if (!c) { err.textContent = 'Please enter the session code you were given.'; return; }
-      btn.setAttribute('disabled', 'true');
-      Store.getSessionByCode(c).then(function (sess) {
-        btn.removeAttribute('disabled');
-        if (!sess) { err.textContent = 'That session code was not found.'; return; }
-        if (sess.status === 'closed') { err.textContent = 'That session has closed.'; return; }
-        if (sess.status === 'waiting') { err.textContent = 'That session has not opened yet. Please check back soon.'; return; }
-        S.session = sess; routeParticipant();
-      }).catch(function () { btn.removeAttribute('disabled'); err.textContent = 'Could not check the code. Please try again.'; });
-    }
   }
 
   // Shown when a participant opens a session they have already finished. A user
@@ -679,8 +625,8 @@
     S.phase = 'done';
     setScreen(overlayWrap(card('Already completed', [
       el('p', { html: 'You have already completed this session, so it cannot be taken again. Thank you for taking part!' }),
-      el('p', { class: 'a-meta', text: 'If you were given a link to a different session, open that link to take part in it.' }),
-      el('div', { class: 'a-row' }, [el('button', { class: 'a-btn a-ghost', on: { click: logout } }, ['Log out'])])
+      el('p', { class: 'a-meta', text: 'Want to go again, or join a different session? Choose "Start over".' }),
+      el('div', { class: 'a-row' }, [el('button', { class: 'a-btn a-ghost', on: { click: logout } }, ['Start over'])])
     ], 'a-done')));
   }
 
@@ -710,10 +656,11 @@
   // they already completed, resume an in-progress survey, else (re)start the
   // comparisons. A user may take part in many sessions, but each only once.
   function routeParticipant() {
-    if (!S.p) S.p = { uid: S.user.uid, email: S.user.email, status: 'registered', completedSessions: {} };
+    if (!S.p) S.p = { uid: S.user.uid, email: (S.user && S.user.email) || null, status: 'registered', completedSessions: {} };
     if (S.session && (S.session.status === 'closed' || S.session.status === 'waiting')) { showSessionUnavailable(S.session.status); return; }
     var sid = curSid();
-    if (sid === '_none') { showNeedSession(); return; }   // a session code is always required
+    // Each session - including the default no-code play (keyed '_none') - can be
+    // taken only once per anonymous identity; "Start over" mints a fresh one.
     if (S.p.completedSessions && S.p.completedSessions[sid]) { showAlreadyDone(); return; }
     var sameSession = S.p.sessionId === sid;
     if (sameSession && S.p.status === 'survey') { S.condition = S.p.condition || null; showSurvey(); return; }
@@ -758,21 +705,26 @@
           return;
         }
         S.user = user || null;
-        // Only the INITIAL auth state drives routing here. The register/login
-        // flows handle their own routing, so later auth events must not re-route
-        // (or clobber S.p while a participant doc is still being written).
+        // Only the INITIAL auth state drives routing here. The register flow
+        // handles its own routing, so later auth events (e.g. the anonymous
+        // sign-in it triggers) must not re-route or clobber S.p while the
+        // participant doc is still being written.
         if (S.phase !== 'boot') { topbar(); return; }
         if (S.user) {
+          // A returning anonymous visitor (anonymous auth persists across reloads).
           Promise.all([Store.getParticipant(S.user.uid), resolveTargetSession()]).then(function (res) {
-            S.p = res[0]; topbar(); routeParticipant();
+            S.p = res[0]; topbar();
+            // Signed in but never finished the short intake: capture it (reusing
+            // this identity) before playing.
+            if (!S.p) { showRegister(); return; }
+            routeParticipant();
           });
         }
         else {
           topbar();
-          // A shared session link (?s=CODE) lands on the login panel with the
-          // code prefilled; otherwise start on the welcome screen.
-          var urlCode = (location.search.match(/[?&]s=([A-Za-z0-9]+)/) || [])[1] || '';
-          if (urlCode) showLogin(); else showWelcome();
+          // No account needed - everyone starts on the welcome screen. A shared
+          // link (?s=CODE) just prefills the optional session code there.
+          showWelcome();
         }
       });
     }).catch(function (e) {
