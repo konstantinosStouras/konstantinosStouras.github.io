@@ -15,6 +15,14 @@ After this change:
 > so committing it to the repo is expected and safe — access is controlled by
 > the Firestore security rules, not by hiding the config.
 
+> **The lab build now uses anonymous + Session-ID login.** Participants sign in
+> **anonymously** and join with a **Session ID** the admin creates (Sessions tab),
+> instead of registering with e-mail/password. The admin still signs in as
+> `admin@admin.com`. Because of this, the new project's backend (rules + the
+> `registerParticipant` function) differs from production and lives in its own
+> folder, **`_portfoliofit-lab-firebase/`** — deploy *that* to the new project,
+> not this one (`_portfoliofit-firebase/` stays for `fun/portfoliofitgame/`).
+
 ---
 
 ## What actually has to change in the code
@@ -47,7 +55,8 @@ The named Firebase app stays `'portfoliofit'`; only the config object changes.
   location in the **`eur3` / europe-west** family (the callable functions run in
   `europe-west1`).
 - **Authentication** → *Get started* → *Sign-in method* → enable
-  **Email/Password**.
+  **Anonymous** *and* **Email/Password** (participants sign in anonymously; the
+  admin uses Email/Password).
 - Cloud Functions are created on first deploy (step 6).
 
 ### 3. Create the admin user
@@ -72,18 +81,20 @@ Replace the `FIREBASE_CONFIG = { … }` object in **both**
 from step 4. Commit. (GitHub Pages deploys on push — no build step.)
 
 ### 7. Deploy rules / indexes / functions to the new project
-From **this** folder (`_portfoliofit-firebase/`):
+From the **lab backend** folder (`_portfoliofit-lab-firebase/`, *not* this one):
 
 ```bash
+cd ../_portfoliofit-lab-firebase
 firebase login                 # the account that owns the new project
-firebase use --add             # select the new project; give it an alias, e.g. "dev"
+firebase use --add             # select the new project; give it an alias, e.g. "lab"
 cd functions && npm install && cd ..
 firebase deploy --only firestore:rules,firestore:indexes,functions --project <new-project-id>
 ```
 
-The existing `firestore.rules` (admin = `admin@admin.com`),
-`firestore.indexes.json`, and the two v1 callables (`registerParticipant`,
-`submitSurvey`, `europe-west1`) apply unchanged.
+That folder's `firestore.rules` add the `sessions` collection (signed-in read,
+admin write) and gate participant creation on a valid, open session; its
+`registerParticipant` validates the Session ID and stores it. Both callables are
+v1 in `europe-west1`.
 
 > **Avoid deploying to the wrong project.** `.firebaserc` currently defaults to
 > `stouras-portfoliofit` (production). Either keep that default and always pass
@@ -102,12 +113,13 @@ project first if you need history.
 
 ### 9. Verify the split
 - `lab/portfoliofit/?admin` → sign in as `admin@admin.com` → panel loads against
-  the **new** (empty) project.
-- `lab/portfoliofit/?exp=1` → register a test participant → a
-  `participants/{uid}` doc + `events` appear in the **new** project's Firestore,
-  and **nothing new** appears in `stouras-portfoliofit`.
-- `fun/portfoliofitgame/?admin` and `?exp=1` → still read/write the original
-  `stouras-portfoliofit` project, untouched.
+  the **new** (empty) project → **Sessions** tab → create a session and copy its ID.
+- `lab/portfoliofit/?exp=1` (incognito) → training → enter the **Session ID +
+  Participant ID + demographics** → a `participants/{uid}` doc (with `sessionId`)
+  + `events` appear in the **new** project's Firestore, and **nothing new**
+  appears in `stouras-portfoliofit`.
+- `fun/portfoliofitgame/?admin` and `?exp=1` → still the **original e-mail**
+  flow, still read/write the original `stouras-portfoliofit` project, untouched.
 
 ---
 

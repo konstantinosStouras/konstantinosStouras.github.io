@@ -8,7 +8,16 @@ built. It explains the *philosophy* and the *structure*, not just the code.
 - **Live (experiment):** https://www.stouras.com/lab/portfoliofit/?exp=1
 - **Live (admin):** https://www.stouras.com/lab/portfoliofit/?admin
 - **Repo:** github.com/konstantinosStouras/konstantinosStouras.github.io → `lab/portfoliofit/`
-- **Backend (not web-served):** repo root `_portfoliofit-firebase/`
+- **Backend (not web-served):** repo root `_portfoliofit-lab-firebase/`
+
+> **Lab build: anonymous + Session-ID login.** This (evolving) lab copy now signs
+> participants in **anonymously** and gates entry on an admin-issued **Session ID**
+> (admin **Sessions** tab) instead of e-mail/password registration. The admin still
+> signs in as `admin@admin.com`. Its backend therefore differs from the frozen
+> e-mail-based copy at `fun/portfoliofitgame/` (which keeps `_portfoliofit-firebase/`
+> and the `stouras-portfoliofit` project). Point this app at its **own** Firebase
+> project with **Anonymous + Email/Password** enabled; deploy `_portfoliofit-lab-firebase/`.
+> See `_portfoliofit-firebase/SWITCH-LAB-TO-NEW-PROJECT.md`.
 
 ---
 
