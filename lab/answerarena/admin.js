@@ -451,7 +451,7 @@
         ['Comparisons / participant', lim > 0 ? String(lim) : 'whole active set'],
         ['Order', (s.randomizeOrder !== false) ? 'randomized per participant' : 'fixed order'],
         ['Long list', s.longList ? 'on - participants may proceed to the survey early' : 'off'],
-        ['Per comparison', 'pick or tie + 1-5 satisfaction for each answer + reason'],
+        ['Per comparison', 'pick a side (or tie), then a 7-point preference: A much better … Equal … B much better'],
         ['Session code', 'required to take part'],
         ['2x2 conditions', groups],
         ['Active task set', 'loading...']
@@ -1023,7 +1023,7 @@
             evs.sort(function (a, b) { return tsMs(a.ts) - tsMs(b.ts); });
             evs.forEach(function (v) {
               if (!keep(v.sessionId)) return;
-              var et = v.type === 'choice' ? 'preference' : v.type === 'satisfA' ? 'satisfaction_answer_A' : v.type === 'satisfB' ? 'satisfaction_answer_B' : (v.type || '');
+              var et = v.type === 'choice' ? 'side_choice' : v.type === 'preference' ? 'preference' : v.type === 'satisfA' ? 'satisfaction_answer_A' : v.type === 'satisfB' ? 'satisfaction_answer_B' : (v.type || '');
               eRows.push({ participant_id: base.participant_id, email: base.email, session_id: v.sessionId || '', shown_order: v.idx != null ? v.idx + 1 : '', task_id: v.taskId || '', event_type: et, event_value: v.value != null ? v.value : '', model: modelName(v.model), event_at: fmtTs(v.ts), event_ts: v.ts || '' });
             });
           }).catch(function () {});
@@ -1056,11 +1056,12 @@
       shown_order: v.idx != null ? v.idx + 1 : '', task_id: v.taskId, submitted: submitted,
       choice: v.choice || '', chosen_model: modelName(v.chosenOutput),
       left_model: modelName(v.leftOutput), right_model: modelName(v.rightOutput),
-      satisfaction_answer_A: v.satisfA != null ? v.satisfA : '', satisfaction_answer_B: v.satisfB != null ? v.satisfB : '',
-      satisfaction_baseline: v.satisfO1 != null ? v.satisfO1 : '', satisfaction_frontier: v.satisfO2 != null ? v.satisfO2 : '',
+      preference: v.prefLabel || '',
+      preference_AB: v.prefValue != null ? v.prefValue : '',
+      preference_model: v.prefModelValue != null ? v.prefModelValue : '',
       cost_baseline_usd: v.costBaseline != null ? v.costBaseline : '', cost_frontier_usd: v.costFrontier != null ? v.costFrontier : '',
       chosen_cost_usd: v.answerCost != null ? v.answerCost : '', running_cost_usd: v.runningCost != null ? v.runningCost : '',
-      reason: v.reason || '', response_ms: responseMs, decided_at: fmtTs(ts), decided_ts: ts || '',
+      response_ms: responseMs, decided_at: fmtTs(ts), decided_ts: ts || '',
       cost_transparency: base.cost_transparency, firm_pay: base.firm_pay
     };
   }
@@ -1099,15 +1100,13 @@
     add('Responses', 'chosen_model', 'Which underlying model the participant preferred: baseline, frontier, or tie.');
     add('Responses', 'left_model', "Which underlying model was shown on the LEFT (as 'Answer A') for this participant - left/right is randomised per pair.");
     add('Responses', 'right_model', "Which underlying model was shown on the RIGHT (as 'Answer B').");
-    add('Responses', 'satisfaction_answer_A', "Participant's 1-5 satisfaction rating for the answer shown on the left (Answer A).");
-    add('Responses', 'satisfaction_answer_B', "Participant's 1-5 satisfaction rating for the answer shown on the right (Answer B).");
-    add('Responses', 'satisfaction_baseline', 'The 1-5 satisfaction rating that applied to the baseline model (mapped from left/right).');
-    add('Responses', 'satisfaction_frontier', 'The 1-5 satisfaction rating that applied to the frontier model.');
+    add('Responses', 'preference', 'The 7-point preference the participant set on the bar: "A much better" / "A better" / "A slightly better" / "Equal" / "B slightly better" / "B better" / "B much better" (A = Answer A on the left, B = Answer B on the right).');
+    add('Responses', 'preference_AB', 'The preference as a number in the displayed frame: -3 = A much better … 0 = Equal … +3 = B much better (A = left, B = right).');
+    add('Responses', 'preference_model', 'The preference mapped to the models: negative = baseline better, 0 = equal, positive = frontier better (-3..+3). The analysis-ready column.');
     add('Responses', 'cost_baseline_usd', 'US$ cost of the baseline model\'s answer for this task (from the uploaded file); blank if no cost was provided.');
     add('Responses', 'cost_frontier_usd', 'US$ cost of the frontier model\'s answer for this task; blank if no cost was provided.');
     add('Responses', 'chosen_cost_usd', 'US$ cost charged for this comparison: the chosen answer\'s cost, or the average of the two for a tie.');
     add('Responses', 'running_cost_usd', "Cumulative US$ cost of the participant's choices up to and including this comparison (shown live to the 'translated' cost-transparency group).");
-    add('Responses', 'reason', 'Free-text reason the participant gave for the choice.');
     add('Responses', 'response_ms', 'Time in milliseconds from seeing the pair to pressing Next.');
     add('Responses', 'decided_at', 'Local date/time when the comparison was decided.');
     add('Responses', 'decided_ts', 'Decision time as epoch milliseconds (useful for sorting).');
@@ -1118,8 +1117,8 @@
     add('Events', 'session_id', 'Internal ID of the session.');
     add('Events', 'shown_order', 'Position of the comparison this event refers to (1 = first shown).');
     add('Events', 'task_id', 'ID of the task pair.');
-    add('Events', 'event_type', 'What the participant did: preference (chose a side or tie), satisfaction_answer_A, or satisfaction_answer_B.');
-    add('Events', 'event_value', 'The new value set: left/right/tie for a preference, or 1-5 for a satisfaction rating.');
+    add('Events', 'event_type', 'What the participant did: side_choice (tapped an answer or "equally good") or preference (moved the 7-point bar; event_value is -3..+3). Older data may also have satisfaction_answer_A/B.');
+    add('Events', 'event_value', 'The value set: left/right/tie for a side_choice, -3..+3 for a preference (older data: 1-5 for a satisfaction rating).');
     add('Events', 'model', 'Which underlying model the event refers to: baseline, frontier, or tie.');
     add('Events', 'event_at', 'Local date/time of the event.');
     add('Events', 'event_ts', 'Event time as epoch milliseconds. Every change is logged, so re-selections appear as multiple rows; the last per comparison is the final value.');

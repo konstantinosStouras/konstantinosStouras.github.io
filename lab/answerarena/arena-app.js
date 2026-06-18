@@ -397,37 +397,35 @@
       proceedBtn.setAttribute('disabled', 'true');
     }
     var hint = el('p', { class: 'a-maininfo', style: 'margin-top:10px;min-height:18px;', text: '' });
-    // The follow-up (per-answer satisfaction + reason) must be completed before
-    // Next becomes available, so every response carries a choice, two ratings
-    // and a reason.
+    // Next/Proceed unlock once a choice is made (which reveals the preference bar);
+    // every response carries the chosen side and the 7-point preference value.
     var draftTimer = null;
+    // The model-framed preference: negative = baseline (o1) better, positive =
+    // frontier (o2) better (the displayed A/B value re-framed to the models).
+    function modelPref(v) { if (v == null) return null; var m = leftId === 'o1' ? v : -v; return m === 0 ? 0 : m; }
     comp.onChange = function (d) {
       S.choice = d.choice;
       if (d.complete) { nextBtn.removeAttribute('disabled'); if (proceedBtn) proceedBtn.removeAttribute('disabled'); hint.textContent = ''; }
-      else { nextBtn.setAttribute('disabled', 'true'); if (proceedBtn) proceedBtn.setAttribute('disabled', 'true'); hint.textContent = d.choice ? 'Rate each answer and add a short reason to continue.' : ''; }
-      // Keep a saved draft of the in-progress answer (incl. the typed reason) so
-      // nothing is lost if the window is closed before Next is pressed.
-      if (d.choice == null && d.satisfA == null && d.satisfB == null && !d.reason) return;
+      else { nextBtn.setAttribute('disabled', 'true'); if (proceedBtn) proceedBtn.setAttribute('disabled', 'true'); hint.textContent = ''; }
+      // Keep a saved draft of the in-progress answer so nothing is lost if the
+      // window is closed before Next is pressed.
+      if (d.choice == null) return;
       S.draft = {
         taskId: task.id, idx: S.idx, sessionId: curSid(), leftOutput: leftId, rightOutput: rightId,
-        choice: d.choice, chosenOutput: d.choice === 'tie' ? 'tie' : (d.choice === 'left' ? leftId : d.choice === 'right' ? rightId : null),
-        satisfA: d.satisfA, satisfB: d.satisfB,
-        satisfO1: leftId === 'o1' ? d.satisfA : d.satisfB, satisfO2: leftId === 'o2' ? d.satisfA : d.satisfB,
-        reason: d.reason || '', condition: S.condition || (S.p && S.p.condition) || null,
+        choice: d.choice, chosenOutput: d.choice === 'tie' ? 'tie' : (d.choice === 'left' ? leftId : rightId),
+        prefValue: d.prefValue, prefLabel: d.prefLabel, prefModelValue: modelPref(d.prefValue),
+        condition: S.condition || (S.p && S.p.condition) || null,
         complete: !!d.complete, updatedAt: Date.now()
       };
       if (draftTimer) clearTimeout(draftTimer);
       draftTimer = setTimeout(function () { draftTimer = null; persist({ draftResponse: S.draft }); }, 500);
     };
-    // Log every decision and every change to a new option, with its timestamp.
-    // Also record which underlying model the event refers to (leftId/rightId map
-    // the displayed side back to o1/o2), so the export can name them.
+    // Log every decision and every move of the preference bar, with its timestamp.
+    // For a side choice, record which underlying model it refers to (leftId/rightId
+    // map the displayed side back to o1/o2) so the export can name them.
     comp.onEvent = function (e) {
       if (!S.user) return;
-      var model = '';
-      if (e.type === 'choice') model = e.value === 'tie' ? 'tie' : (e.value === 'left' ? leftId : rightId);
-      else if (e.type === 'satisfA') model = leftId;
-      else if (e.type === 'satisfB') model = rightId;
+      var model = e.type === 'choice' ? (e.value === 'tie' ? 'tie' : (e.value === 'left' ? leftId : rightId)) : '';
       Store.addEvent(S.user.uid, { type: e.type, value: e.value, model: model, taskId: task.id, idx: S.idx, sessionId: curSid(), ts: Date.now() }).catch(function () {});
     };
     var wrap = el('div', { class: 'a-wrap a-wide' }, [
@@ -438,8 +436,8 @@
     ]);
     setScreen(wrap);
 
-    // keyboard: 1/a left, 2/b right, 0/= tie, enter next (ignored while typing
-    // the reason so letters/digits there are not read as answer shortcuts).
+    // keyboard: 1/a left, 2/b right, 0/= tie, enter next (ignored while typing in
+    // any input so letters/digits there are not read as answer shortcuts).
     document.onkeydown = function (e) {
       if (S.phase !== 'main') return;
       if (/^(input|textarea|select)$/i.test((e.target && e.target.tagName) || '')) return;
@@ -472,10 +470,7 @@
       var resp = {
         taskId: task.id, idx: S.idx, sessionId: curSid(), leftOutput: leftId, rightOutput: rightId,
         choice: d.choice, chosenOutput: chosenOutput, responseMs: Date.now() - S.shownAt,
-        reason: d.reason || '',
-        satisfA: d.satisfA, satisfB: d.satisfB,                              // displayed Answer A / B
-        satisfO1: leftId === 'o1' ? d.satisfA : d.satisfB,                   // mapped back to the model
-        satisfO2: leftId === 'o2' ? d.satisfA : d.satisfB,
+        prefValue: d.prefValue, prefLabel: d.prefLabel, prefModelValue: modelPref(d.prefValue),
         costBaseline: costA, costFrontier: costB, answerCost: answerCost, runningCost: S.spent,
         condition: S.condition || (S.p && S.p.condition) || null, ts: Date.now()
       };
@@ -504,27 +499,6 @@
     }
   }
 
-  // A 1-5 satisfaction meter. Returns { node, get() }.
-  function ratingWidget(label, onPick) {
-    var current = null, btns = [];
-    var row = el('div', { class: 'a-rate' });
-    for (var v = 1; v <= 5; v++) {
-      (function (val) {
-        var b = el('button', { type: 'button', class: 'a-ratebtn', text: String(val), on: { click: function () { setVal(val); } } });
-        btns.push(b); row.appendChild(b);
-      })(v);
-    }
-    // Single-select: only the chosen level is highlighted; clicking another
-    // level just moves the selection (participants can change it freely).
-    function setVal(val) { current = val; btns.forEach(function (b, i) { b.classList.toggle('on', (i + 1) === val); }); if (onPick) onPick(val); }
-    var node = el('div', { class: 'a-ratewrap' }, [
-      el('div', { class: 'a-ratelabel', text: label }),
-      row,
-      el('div', { class: 'a-ratescale' }, [el('span', { text: '1 - Not at all' }), el('span', { text: '5 - Very' })])
-    ]);
-    return { node: node, get: function () { return current; }, setVal: setVal };
-  }
-
   // Builds a task + two-answer comparison.
   // Returns { node, pick(side), getData(), onChoose, onChange }.
   function buildComparison(task, pos, total, flip, opts) {
@@ -532,7 +506,6 @@
     var leftText = flip ? task.outputB : task.outputA;
     var rightText = flip ? task.outputA : task.outputB;
     var api = { onChoose: null, onChange: null, onEvent: null };
-    var selected = null;
     var showFollow = !opts.demo;   // the tour demo stays a simple preview
 
     var progress = el('div', { class: 'a-progress', 'data-tour': 'progress' }, [
@@ -560,28 +533,48 @@
     var rightCard = answerCard('right', rightText, 'B', 'answerRight');
     var tieBtn = el('button', { class: 'a-tie', 'data-tour': 'tie', on: { click: function () { pick('tie'); } } }, ["They're equally good"]);
 
-    // Post-choice follow-up: a per-answer satisfaction rating and a free-text
-    // reason, revealed only after a preference (or tie) is chosen. The tour demo
-    // shows it expanded as a static preview so the walkthrough can point it out.
-    var satisfA = null, satisfB = null, reasonInput = null, rateA = null, rateB = null, follow = null;
+    // Post-choice follow-up: a 7-point preference bar that sits centered below the
+    // "They're equally good" button, revealed only after a choice is made. A =
+    // Answer A (left), B = Answer B (right). The tour demo shows it expanded so the
+    // walkthrough can point it out.
+    var STEPS = [
+      { v: -3, label: 'A much better' }, { v: -2, label: 'A better' }, { v: -1, label: 'A slightly better' },
+      { v: 0, label: 'Equal' },
+      { v: 1, label: 'B slightly better' }, { v: 2, label: 'B better' }, { v: 3, label: 'B much better' }
+    ];
+    var pref = null;             // -3..3 in the displayed A/B frame; null until chosen
+    var segBtns = [], follow = null;
     if (showFollow || opts.demo) {
-      rateA = ratingWidget('How satisfied are you with Answer A?', function (v) { satisfA = v; emit({ type: 'satisfA', value: v }); change(); });
-      rateB = ratingWidget('How satisfied are you with Answer B?', function (v) { satisfB = v; emit({ type: 'satisfB', value: v }); change(); });
-      reasonInput = el('textarea', { rows: '3', placeholder: 'In a sentence or two, what made the difference?' });
-      reasonInput.addEventListener('input', change);
-      follow = el('div', { class: 'a-follow', 'data-tour': 'follow', style: opts.demo ? '' : 'display:none;' }, [
-        el('div', { class: 'a-followhead', text: 'Tell us a little more' }),
-        el('div', { class: 'a-rates' }, [rateA.node, rateB.node]),
-        el('div', { class: 'a-field' }, [el('label', { text: 'Why did you make this choice?' }), reasonInput])
+      var seg = el('div', { class: 'a-prefseg' });
+      STEPS.forEach(function (s) {
+        var b = el('button', { type: 'button', class: 'a-prefbtn ' + (s.v < 0 ? 'a-prefa' : s.v > 0 ? 'a-prefb' : 'a-prefmid'), on: { click: function () { setPref(s.v); } } }, [s.label]);
+        segBtns.push(b); seg.appendChild(b);
+      });
+      follow = el('div', { class: 'a-follow a-preffollow', 'data-tour': 'follow', style: opts.demo ? '' : 'display:none;' }, [
+        el('div', { class: 'a-prefhead', text: 'How do the two answers compare?' }),
+        el('div', { class: 'a-prefends' }, [el('span', { class: 'a-prefend', text: 'Answer A' }), el('span', { class: 'a-prefend', text: 'Answer B' })]),
+        seg
       ]);
     }
-
-    function pick(side) {
-      selected = side;
+    // Reflect the current preference on the cards, the tie button and the bar.
+    function renderSel() {
+      var side = pref == null ? null : (pref < 0 ? 'left' : pref > 0 ? 'right' : 'tie');
       leftCard.classList.toggle('sel', side === 'left');
       rightCard.classList.toggle('sel', side === 'right');
       tieBtn.classList.toggle('sel', side === 'tie');
-      if (follow && follow.style.display === 'none') follow.style.display = 'block';
+      segBtns.forEach(function (b, i) { b.classList.toggle('on', pref != null && STEPS[i].v === pref); });
+    }
+    function revealBar() { if (follow && follow.style.display === 'none') follow.style.display = 'block'; }
+    // Exact 7-point preference (a bar segment click).
+    function setPref(v) { pref = v; revealBar(); renderSel(); emit({ type: 'preference', value: v }); change(); }
+
+    function pick(side) {
+      // Tapping a card / tie picks a side and reveals the bar, seeded at a sensible
+      // degree; the bar then lets them refine how much better. Re-tapping the same
+      // side keeps the degree they already set.
+      var seed = side === 'left' ? -2 : side === 'right' ? 2 : 0;
+      if (pref != null && ((side === 'left' && pref < 0) || (side === 'right' && pref > 0) || (side === 'tie' && pref === 0))) seed = pref;
+      pref = seed; revealBar(); renderSel();
       emit({ type: 'choice', value: side });
       if (api.onChoose) api.onChoose(side);
       change();
@@ -589,9 +582,9 @@
     api.pick = pick;
 
     function data() {
-      var reason = reasonInput ? reasonInput.value.trim() : '';
-      var complete = selected != null && (!showFollow || (satisfA != null && satisfB != null && reason.length > 0));
-      return { choice: selected, reason: reason, satisfA: satisfA, satisfB: satisfB, complete: complete };
+      var side = pref == null ? null : (pref < 0 ? 'left' : pref > 0 ? 'right' : 'tie');
+      var step = null; for (var i = 0; i < STEPS.length; i++) if (STEPS[i].v === pref) step = STEPS[i];
+      return { choice: side, prefValue: pref, prefLabel: step ? step.label : '', complete: pref != null };
     }
     function change() { if (api.onChange) api.onChange(data()); }
     // Fires on every pick/rating change so the time of each decision - and of
