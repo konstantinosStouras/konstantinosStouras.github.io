@@ -223,10 +223,10 @@
     .summary-tabs { padding-left: 20px; padding-right: 20px; }
     .summary-list, .summary-list.authors-3col { column-count: 1; }
   }
-  #authorsPagination button { padding: 8px 14px; border: 1px solid var(--border); background: var(--white); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 13px; cursor: pointer; transition: all 0.15s; color: var(--text); }
-  #authorsPagination button:hover:not(:disabled) { background: var(--navy-light); border-color: var(--navy); color: var(--navy); }
-  #authorsPagination button:disabled { opacity: 0.4; cursor: default; }
-  #authorsPagination button.active { background: var(--navy); color: white; border-color: var(--navy); }
+  #authorsPagination button, #editorsPagination button { padding: 8px 14px; border: 1px solid var(--border); background: var(--white); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 13px; cursor: pointer; transition: all 0.15s; color: var(--text); }
+  #authorsPagination button:hover:not(:disabled), #editorsPagination button:hover:not(:disabled) { background: var(--navy-light); border-color: var(--navy); color: var(--navy); }
+  #authorsPagination button:disabled, #editorsPagination button:disabled { opacity: 0.4; cursor: default; }
+  #authorsPagination button.active, #editorsPagination button.active { background: var(--navy); color: white; border-color: var(--navy); }
 
   /* ── Responsive refinements: tablet + small-phone tuning ─────────────────────
      The layout already has a 768px phone breakpoint above; these add a tablet
@@ -344,6 +344,7 @@
 <div class="summary-tabs" id="summaryTabs">
   <div id="summaryEditors" class="summary-content">
     <div id="summaryEditorsList" class="summary-list"><div style="padding:12px;color:var(--text-muted)">Loading editors...</div></div>
+    <div id="editorsPagination" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:14px 0 4px"></div>
   </div>
   <div id="summaryAreas" class="summary-content">
     <div id="summaryAreasList" class="summary-list"><div style="padding:12px;color:var(--text-muted)">Loading areas...</div></div>
@@ -579,9 +580,8 @@ async function loadSummaries() {
   if (allPapers.length > 0) return; // live data already rendered the real lists
   var eds = results[0], ars = results[1];
   if (eds) {
-    document.getElementById('summaryEditorsList').innerHTML = eds.map(function(e) {
-      return '<div class="summary-item" onclick="filterByEditor(\'' + escAttr(e['Editor']) + '\')"><span class="summary-count">' + esc(e['Papers']) + '</span> papers accepted by ' + esc(e['Editor']) + '</div>';
-    }).join('');
+    // Pipeline emits the Editors tab already sorted by paper count descending.
+    renderEditorsSummary(eds.map(function(e) { return { label: e['Editor'], count: e['Papers'] }; }));
   }
   if (ars) {
     document.getElementById('summaryAreasList').innerHTML = ars.map(function(a) {
@@ -999,11 +999,9 @@ function buildFilterOptions() {
 }
 
 function buildSummaryTabs(editorCounts, areaCounts) {
-  // Editors: sorted by count descending
+  // Editors: sorted by count descending, then paginated (the list is long).
   var edSorted = Object.keys(editorCounts).sort(function(a,b) { return editorCounts[b] - editorCounts[a]; });
-  document.getElementById('summaryEditorsList').innerHTML = edSorted.map(function(e) {
-    return '<div class="summary-item" onclick="filterByEditor(\'' + escAttr(e) + '\')"><span class="summary-count">' + editorCounts[e] + '</span> papers accepted by ' + esc(e) + '</div>';
-  }).join('');
+  renderEditorsSummary(edSorted.map(function(e) { return { label: e, count: editorCounts[e] }; }));
 
   // Areas: sorted by count descending
   var arSorted = Object.keys(areaCounts).sort(function(a,b) { return areaCounts[b] - areaCounts[a]; });
@@ -1012,6 +1010,51 @@ function buildSummaryTabs(editorCounts, areaCounts) {
   }).join('');
 
   // Authors are built once and paginated separately — see renderAuthorsSummary().
+}
+
+// Editors list: long (150+ entries), so paginate it like the Authors panel
+// instead of dumping every editor at once. Built either from live filter-aware
+// counts (buildSummaryTabs) or, before the Data CSV loads, from the Editors tab.
+const EDITORS_PER_PAGE = 30;
+
+function renderEditorsSummary(list) {
+  // `list`: [{ label, count }, ...] already sorted by count descending.
+  window._editorsList = list || [];
+  if (!window._editorsPage) window._editorsPage = 1;
+  renderEditorsPage(window._editorsPage);
+}
+
+function renderEditorsPage(page) {
+  var list = window._editorsList || [];
+  var totalPages = Math.max(1, Math.ceil(list.length / EDITORS_PER_PAGE));
+  page = Math.min(Math.max(1, page), totalPages);
+  window._editorsPage = page;
+  var start = (page - 1) * EDITORS_PER_PAGE;
+  var pageItems = list.slice(start, start + EDITORS_PER_PAGE);
+
+  var el = document.getElementById('summaryEditorsList');
+  if (!el) return;
+  el.innerHTML = pageItems.map(function(e) {
+    return '<div class="summary-item" onclick="filterByEditor(\'' + escAttr(e.label) + '\')">' +
+      '<span class="summary-count">' + esc(String(e.count)) + '</span> papers accepted by ' + esc(e.label) +
+    '</div>';
+  }).join('');
+
+  renderEditorsPagination(page, totalPages);
+}
+
+function renderEditorsPagination(page, total) {
+  var pg = document.getElementById('editorsPagination');
+  if (!pg) return;
+  if (total <= 1) { pg.innerHTML = ''; return; }
+  var h = '<button ' + (page === 1 ? 'disabled' : '') + ' onclick="renderEditorsPage(' + (page - 1) + ')">‹ Prev</button>';
+  var s = Math.max(1, page - 3), e = Math.min(total, s + 6);
+  if (e - s < 6) s = Math.max(1, e - 6);
+  if (s > 1) { h += '<button onclick="renderEditorsPage(1)">1</button>'; if (s > 2) h += '<span class="page-info">…</span>'; }
+  for (var i = s; i <= e; i++) h += '<button class="' + (i === page ? 'active' : '') + '" onclick="renderEditorsPage(' + i + ')">' + i + '</button>';
+  if (e < total) { if (e < total - 1) h += '<span class="page-info">…</span>'; h += '<button onclick="renderEditorsPage(' + total + ')">' + total + '</button>'; }
+  h += '<button ' + (page === total ? 'disabled' : '') + ' onclick="renderEditorsPage(' + (page + 1) + ')">Next ›</button>';
+  pg.innerHTML = h;
 }
 
 // Authors list: built once from the ORCID-resolved Authors tab (independent of
