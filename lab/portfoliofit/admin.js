@@ -447,11 +447,24 @@
       var ids = (cfg.settings && cfg.settings.activePuzzleIds) || [];
       if (!ids.length) {
         var def = (window.PF_DEFAULTS && window.PF_DEFAULTS.defaultPuzzles) || [];
-        if (def.length) {
-          activeCard.appendChild(el('p', { class: 'pfa-note', text: 'Built-in default set of ' + def.length + ' puzzles (no custom set frozen). Each participant sees them in a randomized order.' }));
+        var per = (cfg.settings && cfg.settings.puzzlesPerUser) || { easy: 2, hard: 2 };
+        var poolE = def.filter(function (sp) { return sp.diff !== 'hard'; });
+        var poolH = def.filter(function (sp) { return sp.diff === 'hard'; });
+        var needE = Math.max(0, per.easy | 0), needH = Math.max(0, per.hard | 0);
+        var total = needE + needH;
+        var genE = Math.max(0, needE - poolE.length), genH = Math.max(0, needH - poolH.length);
+        if (total) {
+          activeCard.appendChild(el('p', { class: 'pfa-note', html: 'No custom set frozen. Each participant plays <b>' + needE + ' easy + ' + needH + ' hard</b> puzzle' + (total === 1 ? '' : 's') + ', drawn at random per participant from the built-in pool (' + poolE.length + ' easy / ' + poolH.length + ' hard), in randomized order. Change these counts in the <b>Settings</b> tab.' }));
+        } else {
+          activeCard.appendChild(el('p', { class: 'pfa-note', text: 'No custom set frozen, and the Settings counts are 0 easy / 0 hard — participants would get no puzzles. Set the counts in the Settings tab.' }));
+        }
+        if (genE || genH) activeCard.appendChild(el('p', { class: 'pfa-note', style: 'color:#e6a23c;', text: '⚠ The built-in pool has fewer puzzles than requested, so ' + (genE ? genE + ' easy ' : '') + (genH ? genH + ' hard ' : '') + 'puzzle(s) will be randomly generated per participant.' }));
+        var display = poolE.slice(0, needE).concat(poolH.slice(0, needH));
+        if (display.length) {
+          activeCard.appendChild(el('p', { class: 'pfa-note', style: 'font-style:italic;', text: 'Example selection (the actual puzzles are drawn at random per participant):' }));
           var dwrap = el('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;margin:8px 0;' });
           activeCard.appendChild(dwrap);
-          def.forEach(function (spec, i) {
+          display.forEach(function (spec, i) {
             var sc = (spec.tilings && spec.tilings.count != null) ? spec.tilings.count : null;
             dwrap.appendChild(el('div', { class: 'pfa-q', style: 'flex:0 0 auto;text-align:center;min-width:120px;' }, [
               el('div', { class: 'pfa-note', text: '#' + (i + 1) + ' · ' + spec.diff + ' · κ=' + spec.kappa + (sc != null ? ' · ' + sc + ' sol.' : '') + ' · $' + spec.bestValue }),
@@ -462,8 +475,6 @@
               ])
             ]));
           });
-        } else {
-          activeCard.appendChild(el('p', { class: 'pfa-note', text: 'None. Participants get randomly generated puzzles based on the Settings counts.' }));
         }
         return;
       }
@@ -543,7 +554,7 @@
       el('div', { class: 'pfa-field' }, [el('label', { text: 'Easy time limit (seconds per puzzle)' }), teasy]),
       el('div', { class: 'pfa-field' }, [el('label', { text: 'Hard time limit (seconds per puzzle)' }), thard]),
       el('div', { class: 'pfa-field' }, [el('label', { style: 'display:flex;align-items:center;gap:8px;' }, [rnd, document.createTextNode('Randomize puzzle order per participant')])]),
-      el('p', { class: 'pfa-note', text: 'Puzzle counts apply only when no custom set is frozen (see the Puzzles tab). Time limits apply to every puzzle of that difficulty, in training and the main game.' }),
+      el('p', { class: 'pfa-note', text: 'Puzzle counts apply when no custom set is frozen (see the Puzzles tab): each participant gets that many easy/hard puzzles, drawn at random from the built-in pool (extra puzzles are generated if the pool runs short). Time limits apply to every puzzle of that difficulty, in training and the main game.' }),
       el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;' }, [
         el('button', { class: 'pfa-btn', on: { click: withFeedback(function () { return persist('Settings saved.'); }) } }, ['Save']),
         el('button', { class: 'pfa-btn sec', on: { click: withFeedback(function () { return persist('Settings saved as the default.'); }) } }, ['Make this the default']),
