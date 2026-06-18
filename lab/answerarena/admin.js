@@ -668,6 +668,8 @@
       return saveConfig({ activeTaskSetId: null }).then(function () { cfg.activeTaskSetId = null; toast('Restored built-in default.'); discard(); refreshActive(); }).catch(function (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); throw e; });
     }
     function refreshActive() {
+      active.innerHTML = '';
+      active.appendChild(el('p', { class: 'aa-note', text: 'Loading current set...' }));
       Store.loadActiveTasks().then(function (s) {
         active.innerHTML = '';
         active.appendChild(el('h3', { text: 'Current active set' }));
@@ -679,6 +681,18 @@
         // The active task set appears in the Setup summary too - keep it in sync
         // whenever it changes (upload / import / restore).
         if (summaryRefresh) summaryRefresh();
+      }).catch(function (e) {
+        // Never leave the card stuck on "Loading current set..." - surface the
+        // error and offer a one-click reset to the built-in default (which clears
+        // a bad activeTaskSetId) plus a retry.
+        if (window.console) console.error('[Arena admin] Could not load the current task set', e);
+        active.innerHTML = '';
+        active.appendChild(el('h3', { text: 'Current active set' }));
+        active.appendChild(el('p', { class: 'aa-err', text: 'Could not load the current set (' + ((e && e.code) || (e && e.message) || 'error') + '). It may point at a set that was removed, or the Firestore rules may not be deployed yet.' }));
+        active.appendChild(el('div', { class: 'aa-row' }, [
+          el('button', { class: 'aa-btn sec', on: { click: withFeedback(function () { return saveConfig({ activeTaskSetId: null }).then(function () { cfg.activeTaskSetId = null; toast('Reset to the built-in default set.'); refreshActive(); }); }, '✓ Reset') } }, ['Reset to built-in default']),
+          el('button', { class: 'aa-btn sec', on: { click: refreshActive } }, ['Retry'])
+        ]));
       });
     }
     return card;

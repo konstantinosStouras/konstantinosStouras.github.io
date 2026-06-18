@@ -252,6 +252,13 @@ Responses row with `submitted = no (draft)`.
 - Sessions are public-read on purpose (pre-auth code check). Don't put anything
   sensitive on a session doc.
 - After changing `firestore.rules`, redeploy or writes silently fail.
+- **A configured `activeTaskSetId` whose `taskSets/{id}` read fails no longer
+  dead-ends anyone.** `Store.loadActiveTasks()` catches that read and falls back
+  to the built-in default (logging the cause), so the admin "current set" card
+  and the participant comparisons never hang/Problem on a dangling id, a denied
+  read or a network blip. The admin card also shows an error + "Reset to built-in
+  default" / "Retry" if even that fails. Use "Restore built-in default" to clear a
+  bad id for good.
 - **"Missing or insufficient permissions" when a participant taps Start on the
   intake** = the Firestore rules were never deployed (the DB is on default-deny),
   *not* a required-field problem - the session code and Participant ID are both
