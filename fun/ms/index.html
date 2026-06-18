@@ -213,7 +213,7 @@
   .summary-content { display: none; padding: 16px 0 8px; }
   .summary-content.active { display: block; }
   .summary-list { column-count: 2; column-gap: 2rem; font-size: 14px; line-height: 2.1; }
-  .summary-list.authors-3col { column-count: 3; }
+  .summary-list.cols-3 { column-count: 3; }
   .summary-item { break-inside: avoid; cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: background 0.1s; overflow-wrap: anywhere; }
   .summary-item:hover { background: var(--navy-light); }
   .summary-count { color: var(--text-muted); font-size: 13px; margin-right: 4px; display: inline-block; min-width: 32px; text-align: right; }
@@ -221,7 +221,7 @@
   .summary-area-link:hover { text-decoration: underline; }
   @media (max-width: 768px) {
     .summary-tabs { padding-left: 20px; padding-right: 20px; }
-    .summary-list, .summary-list.authors-3col { column-count: 1; }
+    .summary-list, .summary-list.cols-3 { column-count: 1; }
   }
   #authorsPagination button, #editorsPagination button { padding: 8px 14px; border: 1px solid var(--border); background: var(--white); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 13px; cursor: pointer; transition: all 0.15s; color: var(--text); }
   #authorsPagination button:hover:not(:disabled), #editorsPagination button:hover:not(:disabled) { background: var(--navy-light); border-color: var(--navy); color: var(--navy); }
@@ -544,47 +544,63 @@ async function loadData() {
 // panel is ready as soon as its own small CSV arrives instead of waiting for
 // every paper + abstract since 1954 to download and parse.
 async function loadAuthors() {
+  // Paint instantly from the previous visit's cached CSV, then refresh.
+  var cached = lsGet('ms_csv_authors');
+  if (cached) { try { authorData = parseCSV(cached, 'Author'); if (authorData.length) renderAuthorsSummary(); } catch (e) {} }
   try {
     var r = await fetch(AUTHORS_CSV_URL);
     if (!r.ok) throw new Error('HTTP ' + r.status);
     var t = await r.text();
     if (t.trim().charAt(0) === '<') throw new Error('not CSV'); // HTML error page
+    lsSet('ms_csv_authors', t);
     authorData = parseCSV(t, 'Author');
     renderAuthorsSummary();
   } catch (e) {
-    setTimeout(loadAuthors, 3000);
+    if (!authorData.length) setTimeout(loadAuthors, 3000);
   }
 }
 
+// localStorage helpers (guarded: private mode / quota can throw).
+function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
 // The Editors and Areas summary lists are pre-computed in the sheet's
 // Editors/Areas tabs by the weekly pipeline (same alias/junk/fuzzy-merge
-// normalization the browser applies). Render them as soon as their small
-// CSVs arrive so the panels work long before the full Data CSV is parsed;
-// once the papers are loaded, buildSummaryTabs() takes over with live
-// (filter-aware) counts.
+// normalization the browser applies). They change only ~weekly, so cache the
+// raw CSV in localStorage and paint the panels instantly from the last visit,
+// then refresh from the network (stale-while-revalidate). Once the full Data
+// CSV is parsed, buildSummaryTabs() takes over with live (filter-aware) counts.
 async function loadSummaries() {
-  async function tryTab(url, field) {
+  renderSummaryCSVs(lsGet('ms_csv_editors'), lsGet('ms_csv_areas'));
+  async function tryTab(url, cacheKey) {
     try {
       var r = await fetch(url);
       if (!r.ok) return null;
       var t = await r.text();
       if (t.trim().charAt(0) === '<') return null; // HTML error page, not CSV
-      var rows = parseCSV(t, field);
-      return rows.length ? rows : null;
+      lsSet(cacheKey, t);
+      return t;
     } catch (e) { return null; }
   }
   var results = await Promise.all([
-    tryTab(EDITORS_CSV_URL, 'Editor'),
-    tryTab(AREAS_CSV_URL, 'Area')
+    tryTab(EDITORS_CSV_URL, 'ms_csv_editors'),
+    tryTab(AREAS_CSV_URL, 'ms_csv_areas')
   ]);
-  if (allPapers.length > 0) return; // live data already rendered the real lists
-  var eds = results[0], ars = results[1];
-  if (eds) {
+  renderSummaryCSVs(results[0], results[1]);
+}
+
+// Render the Editors/Areas panels from raw CSV text (cached or freshly fetched).
+// No-op once the Data CSV has loaded — buildSummaryTabs() then owns these lists.
+function renderSummaryCSVs(edText, arText) {
+  if (allPapers.length > 0) return;
+  if (edText) {
+    var eds = parseCSV(edText, 'Editor');
     // Pipeline emits the Editors tab already sorted by paper count descending.
-    renderEditorsSummary(eds.map(function(e) { return { label: e['Editor'], count: e['Papers'] }; }));
+    if (eds.length) renderEditorsSummary(eds.map(function(e) { return { label: e['Editor'], count: e['Papers'] }; }));
   }
-  if (ars) {
-    document.getElementById('summaryAreasList').innerHTML = ars.map(function(a) {
+  if (arText) {
+    var ars = parseCSV(arText, 'Area');
+    if (ars.length) document.getElementById('summaryAreasList').innerHTML = ars.map(function(a) {
       return '<div class="summary-item" onclick="filterByArea(\'' + escAttr(a['Area']) + '\')"><span class="summary-count">' + esc(a['Papers']) + '</span> papers in ' + esc(a['Area']) + '</div>';
     }).join('');
   }
@@ -1034,6 +1050,7 @@ function renderEditorsPage(page) {
 
   var el = document.getElementById('summaryEditorsList');
   if (!el) return;
+  el.className = 'summary-list cols-3';   // 3 columns × 10 rows per page, like Authors
   el.innerHTML = pageItems.map(function(e) {
     return '<div class="summary-item" onclick="filterByEditor(\'' + escAttr(e.label) + '\')">' +
       '<span class="summary-count">' + esc(String(e.count)) + '</span> papers accepted by ' + esc(e.label) +
@@ -1096,7 +1113,7 @@ function renderAuthorsPage(page) {
   var pageItems = list.slice(start, start + AUTHORS_PER_PAGE);
 
   var auList = document.getElementById('summaryAuthorsList');
-  auList.className = 'summary-list authors-3col';
+  auList.className = 'summary-list cols-3';
   auList.innerHTML = pageItems.map(function(a) {
     var count = parseInt(a['Papers']) || 0;
     var name = a['Author'] || '';
