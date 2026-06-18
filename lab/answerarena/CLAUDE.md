@@ -252,3 +252,10 @@ Responses row with `submitted = no (draft)`.
 - Sessions are public-read on purpose (pre-auth code check). Don't put anything
   sensitive on a session doc.
 - After changing `firestore.rules`, redeploy or writes silently fail.
+- **"Missing or insufficient permissions" when a participant taps Start on the
+  intake** = the Firestore rules were never deployed (the DB is on default-deny),
+  *not* a required-field problem - the session code and Participant ID are both
+  optional. Fix it on the backend: from `_lab-arena-firebase/` run
+  `firebase deploy --only firestore:rules` (and enable the Anonymous sign-in
+  provider). `authError()` now shows a clear message + logs this hint instead of
+  the raw Firebase string.
