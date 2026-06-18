@@ -1,18 +1,19 @@
 /**
- * PortfolioFit for Managers — Cloud Functions (LAB build, Firebase Functions v1, europe-west1).
+ * PortfolioFit for Managers — Cloud Functions (LAB / dev project, Firebase Functions v1, europe-west1).
  *
- * Lab build = ANONYMOUS participant sign-in gated by an admin-issued Session ID.
+ * The lab build uses the SAME fully anonymous flow as fun/portfoliofitgame/:
+ * players sign in anonymously (no sign-up) and may optionally join a session by
+ * code; joining is NOT gated on a session.
  *
  * Two participant-facing callables:
- *   registerParticipant  validates the Session ID, atomically creates the
- *                         participant doc, assigns a sequential anonymous label
- *                         (p1, p2, ...) via a counter transaction, stores the
- *                         registration answers, and bumps the session's count.
+ *   registerParticipant  atomically creates the participant doc, assigns a
+ *                         sequential anonymous label (p1, p2, ...) via a counter
+ *                         transaction, and stores the registration answers.
  *   submitSurvey          stores survey answers once (idempotent) and marks the
  *                         participant as done.
  *
- * All other reads/writes (events, rounds, config, puzzle library, sessions)
- * happen client-side, guarded by firestore.rules. Admin is the signed-in
+ * All other reads/writes (events, rounds, config, puzzle library) happen
+ * client-side, guarded by firestore.rules. Admin is the signed-in
  * admin@admin.com account.
  */
 
@@ -32,29 +33,18 @@ function requireAuth(context) {
 }
 
 /**
- * registerParticipant({ sessionId, participantId, answers })
+ * registerParticipant({ participantId, answers })
  * Returns { ok, anonymousLabel, resumed }.
  */
 exports.registerParticipant = functions.https.onCall(async (data, context) => {
   const auth = requireAuth(context);
   const uid = auth.uid;
-  const email = (auth.token && auth.token.email) || '';   // empty for anonymous users
+  const email = (auth.token && auth.token.email) || '';
 
   const participantId = (data && data.participantId ? String(data.participantId) : '').trim();
-  const sessionId = (data && data.sessionId ? String(data.sessionId) : '').trim();
   const answers = (data && data.answers && typeof data.answers === 'object') ? data.answers : {};
   if (!participantId) {
     throw new functions.https.HttpsError('invalid-argument', 'A Participant ID is required.');
-  }
-  if (!sessionId) {
-    throw new functions.https.HttpsError('invalid-argument', 'A Session ID is required.');
-  }
-
-  // The session must exist and be open.
-  const sRef = db.collection('sessions').doc(sessionId);
-  const sSnap = await sRef.get();
-  if (!sSnap.exists || sSnap.data().active === false) {
-    throw new functions.https.HttpsError('failed-precondition', 'That Session ID is not valid or has been closed.');
   }
 
   const pRef = db.collection('participants').doc(uid);
@@ -64,7 +54,6 @@ exports.registerParticipant = functions.https.onCall(async (data, context) => {
     // Resume: refresh registration answers but never re-roll the label or status.
     await pRef.set({
       participantId,
-      sessionId,
       email,
       registration: answers,
       updatedAt: FieldValue.serverTimestamp(),
@@ -85,7 +74,6 @@ exports.registerParticipant = functions.https.onCall(async (data, context) => {
   await pRef.set({
     uid,
     participantId,
-    sessionId,
     email,
     anonymousLabel,
     registration: answers,
@@ -93,9 +81,6 @@ exports.registerParticipant = functions.https.onCall(async (data, context) => {
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   });
-
-  // Best-effort: bump the session's participant count for the admin view.
-  try { await sRef.set({ participantCount: FieldValue.increment(1) }, { merge: true }); } catch (e) { /* non-fatal */ }
 
   return { ok: true, anonymousLabel, resumed: false };
 });

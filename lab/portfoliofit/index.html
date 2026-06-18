@@ -588,11 +588,16 @@
   </div>
 
   <script>
-  // Experiment mode flag — the research flow (welcome -> training -> registration
-  // -> main -> stats -> survey -> thank-you) only activates with ?exp=1, so the
-  // default game at /lab/portfoliofit/ stays unchanged until we switch it on.
-  window.PF_EXPERIMENT = /[?&]exp(=1)?(&|$)/.test(location.search);
+  // Mode flags. The anonymous play flow (welcome -> training -> main -> stats ->
+  // survey -> thank-you) is now the DEFAULT experience at the bare URL: anyone can
+  // play anonymously, optionally entering a session code to join a specific
+  // admin-created session, otherwise the default configuration is used.
+  //   ?admin    opens the CMS (and turns the participant flow off).
+  //   ?classic  shows the original plain game with no experiment layer.
+  //   ?exp=1    legacy alias; the flow is on by default now, so this is redundant.
   window.PF_ADMIN = /[?&]admin(=1)?(&|$)/.test(location.search);
+  window.PF_CLASSIC = /[?&]classic(=1)?(&|$)/.test(location.search);
+  window.PF_EXPERIMENT = !window.PF_ADMIN && !window.PF_CLASSIC;
   </script>
   <script>
   (function () {
@@ -2521,7 +2526,7 @@
 </script>
 <!-- Shared built-in defaults (must load before experiment.js and admin.js). -->
 <script src="pf-defaults.js" defer></script>
-<!-- Research experiment layer — only activates with ?exp=1 (default game unaffected). -->
+<!-- Anonymous play layer — the DEFAULT experience; off only for ?admin / ?classic. -->
 <script src="experiment.js" defer></script>
 <!-- Admin panel — only activates with ?admin (requires admin@admin.com). -->
 <script src="admin.js" defer></script>

@@ -1,14 +1,16 @@
 # PortfolioFit for Managers — Firebase backend (LAB / new project)
 
-This folder is the deployable Firebase project for the **evolving lab build** at
+This folder is the deployable Firebase project for the **lab / dev build** at
 `stouras.com/lab/portfoliofit/`. It is **separate** from `_portfoliofit-firebase/`
-(which backs the frozen copy at `stouras.com/fun/portfoliofitgame/`). It is not
+(which backs the production copy at `stouras.com/fun/portfoliofitgame/`). It is not
 served by the website (the leading underscore keeps Jekyll from publishing it).
 
-**What's different from `_portfoliofit-firebase/`:** participants sign in
-**anonymously** and are gated by an admin-issued **Session ID** instead of
-registering with e-mail/password. The admin still signs in as `admin@admin.com`
-(Email/Password).
+**Same flow as production, different project.** The lab build runs the **same
+fully anonymous flow** as `fun/portfoliofitgame/`: players sign in **anonymously**
+(no sign-up, no e-mail/password) and may **optionally** enter a session code to
+join an admin-created configuration snapshot — joining is **not** gated on a
+session. The only reason this is a separate project is so test data never touches
+production. The admin still signs in as `admin@admin.com` (Email/Password).
 
 - **Firebase project:** the new project you created (set its ID below)
 - **Region:** `europe-west1`
@@ -45,24 +47,28 @@ only what changed, e.g. `firebase deploy --only firestore:rules --project <new-p
 ```
 config/app                         editable content + registration/survey questions + settings + active puzzle ids
 puzzleSets/{id}                    approved puzzle library (admin generates + freezes)
-sessions/{id}                      named access session { name, active, participantCount, createdAt }  ← admin-managed
-counters/participants              { count }  sequential label source (functions only)
+sessions/{code}                    admin config snapshot players join by code { name, label, status, texts, settings, questions }
+counters/participants              { count }  legacy label source (unused in the anonymous flow)
 participants/{uid}                 (uid = anonymous user)
-  participantId, sessionId, anonymousLabel (p1, p2, ...),
-  registration: { <questionId>: answer }, status, puzzleOrder: [id, ...]
+  anonymous: true, anonymousLabel, sessionId (or null), status, puzzleOrder: [id, ...], mainIndex
   events/{autoId}                  one doc per action (place/move/rotate/flip/remove/calc/note/round-start/round-end)
   rounds/{roundId}                 per-round summary (net, coverage, fitness, time, placements)
   survey/answers                   { answers, completedAt }
 ```
 
-## Participant flow
+## Player flow
 
-`welcome → training → enter Session ID + Participant ID + demographics → main → stats → survey → thank-you`
+`welcome (play anonymously; optional session code) → training → main → stats → survey → thank-you`
 
-The admin creates/opens/closes sessions in the **Sessions** tab of
-`lab/portfoliofit/?admin` and shares the Session ID with participants. The
-anonymous credential persists in the browser, so a reload on the same device
-resumes a participant's progress (there is no cross-device login by design).
+Anyone can play with **no sign-up**: the welcome screen signs the visitor in
+anonymously and they may optionally type a session code (or arrive via
+`?session=CODE`) to join a specific admin-created configuration; with no code the
+default configuration (`config/app`, or the built-in defaults) is used. The admin
+creates/opens/closes sessions in the **Sessions** tab of `lab/portfoliofit/?admin`.
+The anonymous credential persists in the browser, so a reload on the same device
+resumes a player's progress (there is no cross-device login by design). If
+Anonymous Auth is disabled or Firebase is unreachable, the app falls back to
+OFFLINE mode — the default game still plays, just unsaved.
 
 ## Local emulators (optional)
 

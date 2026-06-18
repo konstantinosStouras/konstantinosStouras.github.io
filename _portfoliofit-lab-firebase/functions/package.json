@@ -1,6 +1,6 @@
 {
   "name": "portfoliofit-lab-functions",
-  "description": "Cloud Functions for PortfolioFit for Managers (lab build: anonymous + session ID)",
+  "description": "Cloud Functions for PortfolioFit for Managers (lab / dev project: fully anonymous flow)",
   "scripts": {
     "serve": "firebase emulators:start --only functions",
     "deploy": "firebase deploy --only functions",

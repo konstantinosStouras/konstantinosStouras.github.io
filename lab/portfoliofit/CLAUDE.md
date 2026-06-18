@@ -4,20 +4,20 @@ Context file for an LLM. Paste/point an assistant at this to understand how the
 **PortfolioFit** research-experiment app is designed, so a similar app can be
 built. It explains the *philosophy* and the *structure*, not just the code.
 
-- **Live (public game):** https://www.stouras.com/lab/portfoliofit/
-- **Live (experiment):** https://www.stouras.com/lab/portfoliofit/?exp=1
+- **Live (public, anonymous flow — now the default):** https://www.stouras.com/lab/portfoliofit/
+- **Live (join a session):** https://www.stouras.com/lab/portfoliofit/?session=CODE
+- **Live (original plain game):** https://www.stouras.com/lab/portfoliofit/?classic
 - **Live (admin):** https://www.stouras.com/lab/portfoliofit/?admin
 - **Repo:** github.com/konstantinosStouras/konstantinosStouras.github.io → `lab/portfoliofit/`
 - **Backend (not web-served):** repo root `_portfoliofit-lab-firebase/`
 
-> **Lab build: anonymous + Session-ID login.** This (evolving) lab copy now signs
-> participants in **anonymously** and gates entry on an admin-issued **Session ID**
-> (admin **Sessions** tab) instead of e-mail/password registration. The admin still
-> signs in as `admin@admin.com`. Its backend therefore differs from the frozen
-> e-mail-based copy at `fun/portfoliofitgame/` (which keeps `_portfoliofit-firebase/`
-> and the `stouras-portfoliofit` project). Point this app at its **own** Firebase
-> project with **Anonymous + Email/Password** enabled; deploy `_portfoliofit-lab-firebase/`.
-> See `_portfoliofit-firebase/SWITCH-LAB-TO-NEW-PROJECT.md`.
+> **This is the DEV copy, on its own Firebase project.** It is kept **in sync** with
+> the production copy at `fun/portfoliofitgame/` and runs the **same fully anonymous
+> flow** (no sign-up; optional session code). The only differences are this copy's
+> own `stouras-portfoliofit-86127` Firebase project (so test data never touches
+> production) and the `lab/portfoliofit/` canonical / Open-Graph / share URLs. The
+> production copy at `fun/portfoliofitgame/` talks to `stouras-portfoliofit` and
+> **must not be repointed** — see `_portfoliofit-firebase/SWITCH-LAB-TO-NEW-PROJECT.md`.
 
 ---
 
@@ -31,8 +31,10 @@ are traps, so a greedy player is reliably sub-optimal (this is measured as a
 "Sahni number" κ — the fewest hand-placed hints a ratio-greedy needs to finish).
 
 On top of this single-player game sits a **research-experiment platform**: a
-multi-phase flow (welcome → training → registration → main → stats → survey →
-thank-you), backed by Firebase, with detailed per-action logging and an admin CMS.
+multi-phase flow (welcome → training → main → stats → survey → thank-you),
+backed by Firebase, with detailed per-action logging and an admin CMS. Players
+are **fully anonymous** (Firebase Anonymous Auth, no sign-up) and may optionally
+enter a **session code** to join a specific admin-created configuration.
 
 ## 2. Design philosophy (the important part)
 
@@ -49,11 +51,12 @@ thank-you), backed by Firebase, with detailed per-action logging and an admin CM
    bridge; they never reach into game internals. The game emits user actions
    through a single hook, `window.PF.onGameEvent(type, payload)`.
 
-3. **Feature-flag the new flow so production never breaks.** The experiment runs
-   only with `?exp=1` (`window.PF_EXPERIMENT`); the admin only with `?admin`
-   (`window.PF_ADMIN`). Plain `/lab/portfoliofit/` stays the unchanged game.
-   Every change could be merged to production safely and previewed live before
-   "flipping" the default.
+3. **Feature-flag the new flow, then flip the default.** The anonymous research
+   flow is now the **default** at the bare URL (`window.PF_EXPERIMENT`, true
+   unless `?admin` or `?classic`). `?classic` shows the original plain game and
+   `?admin` opens the CMS. If Firebase is unreachable or Anonymous Auth is
+   disabled, the layer degrades to OFFLINE mode (the default game still plays,
+   just unsaved), so production never hard-fails.
 
 4. **One source of truth for content.** `pf-defaults.js` defines all built-in
    text, settings, registration/survey questions, and the default puzzle set on
@@ -89,8 +92,8 @@ Served app (`lab/portfoliofit/`):
 | `404.html` | Redirects to `/`. |
 | `og-image.jpg`, `portfoliofit-difficulty.pdf`, `portfoliofit-difficulty.makepdf.py` | Social card + the κ methodology note (PDF + its generator). |
 
-Backend (`_portfoliofit-firebase/`, underscore-prefixed so Jekyll does **not**
-publish it; versioned in the repo, deployed manually):
+Backend (`_portfoliofit-lab-firebase/`, underscore-prefixed so Jekyll does **not**
+publish it; versioned in the repo, deployed manually to the lab project):
 
 | File | Role |
 | --- | --- |
@@ -131,11 +134,13 @@ publish it; versioned in the repo, deployed manually):
 
 ## 5. The experiment layer (`experiment.js`)
 
-- **Activation:** returns immediately unless `window.PF_EXPERIMENT`. Adds class
-  `pf-exp` to `<body>` and hides research artifacts via CSS (the κ "difficulty"
-  badge, the PDF-note footer, the legacy account widget, and the "Best $" pill).
-- **Phase machine:** `welcome → training → register/login → main → stats →
-  survey → thankyou`. Each screen is an overlay card; `S` holds the live state.
+- **Activation:** returns immediately unless `window.PF_EXPERIMENT` (now the
+  default; off only for `?admin`/`?classic`). Adds class `pf-exp` to `<body>`
+  and hides research artifacts via CSS (the κ "difficulty" badge, the PDF-note
+  footer, the legacy account widget, and the "Best $" pill).
+- **Phase machine:** `welcome → training → main → stats → survey → thankyou`
+  (no registration phase). Each screen is an overlay card; `S` holds the live
+  state (including `S.sessionId` and `S.offline`).
 - **Onboarding tour (before training):** an iPhone-style spotlight tour over the
   live board (intro → board → bricks → a **scripted gameplay demo** that places/
   rotates/removes solution bricks while KPIs update → net value → KPIs (with each
@@ -143,14 +148,24 @@ publish it; versioned in the repo, deployed manually):
   → the green submit button). The clock is paused during the tour. Repositions on
   scroll/resize for mobile.
 - **Auth:** a **named** Firebase app `'portfoliofit'` (so it coexists with the
-  page's default `stouras-snake` app instead of colliding). Email/password;
-  registration captures Participant ID + e-mail + password + demographic
-  questions (from config, default from `PF_DEFAULTS`).
-- **Main phase puzzle source (priority):** admin-frozen set
-  (`config.settings.activePuzzleIds` → `puzzleSets`) → built-in `defaultPuzzles`
-  → randomly generated by `puzzlesPerUser` counts (default 2 easy + 2 hard).
-  Order is shuffled per participant and persisted (`puzzleOrder` + `mainIndex`)
-  so a mid-session reload resumes the same queue.
+  page's default `stouras-snake` app instead of colliding). Players sign in with
+  **Anonymous Auth** on the welcome screen — **no** e-mail/password/registration.
+  On the welcome screen they may type an optional **session code** (or arrive via
+  `?session=CODE`); a valid code loads `sessions/{code}`, otherwise the default
+  config is used. Each player gets a `participants/{uid}` doc (created
+  client-side) tagged with `sessionId` and a short `anonymousLabel`. Returning
+  players resume via their persisted anonymous identity.
+- **Main phase puzzle source:** the `puzzlesPerUser` counts (default 2 easy + 2
+  hard) **always** decide how many easy/hard puzzles each player gets. They are
+  drawn from the active **pool** — the admin-frozen set
+  (`config.settings.activePuzzleIds` → `puzzleSets`) if one exists, otherwise the
+  built-in `defaultPuzzles` — shuffled per participant, generating extra on the
+  fly if a count exceeds the pool for that difficulty. Freezing a set defaults the
+  counts to its composition (so "freeze N → play exactly those N"), but the admin
+  can then change the counts (a count below the pool plays a random subset; above
+  it tops up with generated puzzles). The Puzzles tab's "Current active set"
+  mirrors this exactly. Order is shuffled per participant and persisted
+  (`puzzleOrder` + `mainIndex`) so a mid-session reload resumes the same queue.
 - **Event logging:** one buffered, retry-on-failure writer appends a doc per
   action to `participants/{uid}/events` (place/move/rotate/flip/remove/calc/note/
   round-start/round-end/stats/survey). Nested arrays (cells/placements) are
@@ -179,28 +194,45 @@ publish it; versioned in the repo, deployed manually):
     approve, and **freeze** an active set (writes `puzzleSets` + sets
     `config.settings.activePuzzleIds`); also shows the current/built-in active set.
   - **Settings** — easy/hard puzzle counts, per-puzzle time limits, randomize-order.
-  - **Participants** — table of all participants, per-row **delete** (doc +
-    subcollections), and **Export to Excel** (SheetJS via CDN; sheets:
-    Participants / Events / Rounds / Survey).
-- Every editable tab carries the same three controls: **Make this the default**
-  (save), **Reset this page to defaults** (reload saved), **Restore built-in
-  default** (revert to `PF_DEFAULTS`).
+  - **Sessions** — create a **session** (a snapshot of the *current*
+    configuration: texts, questions, settings, active puzzle set) under a
+    **Session name** + optional **Session ID** (typed or auto-generated 3–40
+    char code), written to `sessions/{code}` with `status:'open'`. Lists sessions
+    (Session ID / Name / Status / **Participants** count / Created) with **copy
+    ID**, **close**/**reopen** (`status` toggles; closing blocks *new* joins —
+    enforced in `experiment.js` `beginSession`), and **delete**. Players join by
+    code; data is tagged with `sessionId`.
+  - **Participants** — table of all players (Player / Session / Status / Started),
+    per-row **delete** (doc + subcollections), and **Export to Excel** (SheetJS
+    via CDN; sheets: Participants / Events / Rounds / Survey, each carrying
+    `player` + `session` + `uid`).
+- Every editable tab carries the same three controls: **Save** and **Make this
+  the default** (both persist this page to `config/app`; one live config, so they
+  do the same write with different wording) and **Restore built-in default**
+  (revert to `PF_DEFAULTS`). Each uses `withFeedback` so the button itself
+  confirms — it presses, shows "Saving…", then flashes green "✓ Saved".
 
 ## 7. Firebase backend
 
-- **Project:** `stouras-portfoliofit`, region `europe-west1`, **separate** from
-  the shared `stouras-snake` account. **Blaze** plan (Cloud Functions). Admin
-  account `admin@admin.com`. The web config is public (ships in the client JS).
+- **Project:** `stouras-portfoliofit-86127` (the lab / dev project, **separate**
+  from production's `stouras-portfoliofit` and from the shared `stouras-snake`
+  account), region `europe-west1`. **Blaze** plan (Cloud Functions). Admin
+  account `admin@admin.com`; players use **Anonymous Auth** (enable it in the
+  console — see the backend README). The web config is public (ships in the
+  client JS).
 - **Firestore data model:**
   ```
   config/app                      texts, settings (timeLimits, puzzlesPerUser,
                                   randomizeOrder, activePuzzleIds),
                                   registrationQuestions, surveyQuestions
+  sessions/{code}                 admin config snapshot players join by code
+                                  (label, texts, settings, questions)
   puzzleSets/{id}                 frozen approved puzzles (diff, kappa, bestValue,
                                   cells, specJson)            ← admin-managed library
-  counters/participants           { count }  sequential anonymous-label source
-  participants/{uid}              participantId, email, anonymousLabel (p1,p2…),
-                                  registration{}, status, puzzleOrder[], mainIndex
+  counters/participants           { count }  legacy label source (unused anon flow)
+  participants/{uid}              uid = anonymous-auth uid; anonymous:true,
+                                  anonymousLabel, sessionId, status,
+                                  puzzleOrder[], mainIndex
     events/{autoId}               one doc per action (type + dataJson + context)
     rounds/{autoId}               per-round summary (net/coverage/fitness/time…)
     survey/answers                { answers, completedAt }
@@ -210,19 +242,19 @@ publish it; versioned in the repo, deployed manually):
   `counters/participants` transaction; idempotent on rejoin) and `submitSurvey`
   (idempotent, stamps `status:'done'`).
 - **Security rules:** admin = `request.auth.token.email == 'admin@admin.com'`.
-  `config` + `puzzleSets`: signed-in read, admin write. `counters`: functions
-  only. `participants` + subcollections: owner or admin read; owner creates own
-  events/rounds/survey; admin can delete.
+  `config` + `sessions` + `puzzleSets`: signed-in read (anonymous players count
+  as signed-in), admin write. `counters`: functions only. `participants` +
+  subcollections: owner or admin read; the (anonymous) owner creates their own
+  participant doc + events/rounds/survey; admin can delete.
 
 ## 8. Deployment
 
 - **Front end:** pure static files on GitHub Pages from `master`. **No build
   step** — commit and it's live at `stouras.com/lab/portfoliofit/`.
-- **Backend:** from `_portfoliofit-firebase/`:
+- **Backend:** from `_portfoliofit-lab-firebase/` (deploy to the **lab** project,
+  not production):
   ```
-  firebase use stouras-portfoliofit
-  cd functions && npm install && cd ..
-  firebase deploy --only firestore:rules,firestore:indexes,functions
+  firebase deploy --only firestore:rules,firestore:indexes,functions --project stouras-portfoliofit-86127
   ```
   (Functions need Blaze; the default compute service account needs the Cloud
   Build / Storage Object Viewer / Artifact Registry roles for the first deploy.)
