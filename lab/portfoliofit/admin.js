@@ -197,7 +197,7 @@
 
   function renderShell() {
     clearRoot();
-    var tabs = [['content', 'Content'], ['registration', 'Registration'], ['survey', 'Survey'], ['puzzles', 'Puzzles'], ['settings', 'Settings'], ['participants', 'Participants']];
+    var tabs = [['content', 'Content'], ['registration', 'Registration'], ['survey', 'Survey'], ['puzzles', 'Puzzles'], ['settings', 'Settings'], ['sessions', 'Sessions'], ['participants', 'Participants']];
     var tabBar = el('div', { class: 'pfa-tabs' }, tabs.map(function (t) {
       return el('button', { class: tab === t[0] ? 'on' : '', on: { click: function () { tab = t[0]; renderShell(); } } }, [t[1]]);
     }));
@@ -216,6 +216,7 @@
     else if (tab === 'survey') renderQuestions(body, 'surveyQuestions', 'Survey questions');
     else if (tab === 'puzzles') renderPuzzles(body);
     else if (tab === 'settings') renderSettings(body);
+    else if (tab === 'sessions') renderSessions(body);
     else if (tab === 'participants') renderParticipants(body);
   }
 
@@ -543,6 +544,91 @@
     }
   }
 
+  // ---- Sessions tab ----
+  // Named access sessions. Participants enter a session's ID on the ?exp=1
+  // registration screen to join. Closing a session blocks new joins without
+  // touching data already collected.
+  async function renderSessions(body) {
+    body.innerHTML = '';
+    var nameInput = el('input', { type: 'text', placeholder: 'e.g. Spring MBA 2026', style: 'max-width:280px;' });
+    var idInput = el('input', { type: 'text', placeholder: '(optional) custom code', style: 'max-width:220px;' });
+    var createErr = el('div', { class: 'pfa-err' });
+    body.appendChild(el('div', { class: 'pfa-card' }, [
+      el('p', { class: 'pfa-note', html: 'Create a <b>session</b>, then share its <b>Session ID</b> with participants — they enter it on the registration screen at <code>?exp=1</code> to join. <b>Close</b> a session to block new joins; data already collected is unaffected.' }),
+      el('div', { class: 'pfa-field' }, [el('label', { text: 'Session name' }), nameInput]),
+      el('div', { class: 'pfa-field' }, [el('label', { text: 'Session ID' }), idInput, el('div', { class: 'pfa-note', text: 'Leave blank to auto-generate a short code. Letters, digits and dashes only (3–40 chars).' })]),
+      createErr,
+      el('div', {}, [el('button', { class: 'pfa-btn', on: { click: doCreate } }, ['Create session'])])
+    ]));
+
+    var listCard = el('div', { class: 'pfa-card' }, [el('p', { class: 'pfa-note', text: 'Loading sessions…' })]);
+    body.appendChild(listCard);
+    await refresh();
+
+    async function refresh() {
+      var sessions = [];
+      try {
+        var snap = await fb.F.getDocs(fb.F.collection(fb.db, 'sessions'));
+        snap.forEach(function (d) { sessions.push(Object.assign({ _id: d.id }, d.data())); });
+      } catch (e) { listCard.innerHTML = ''; listCard.appendChild(el('p', { class: 'pfa-err', text: 'Could not load sessions: ' + ((e && e.code) || 'error') })); return; }
+      sessions.sort(function (a, b) { return tsMs(b.createdAt) - tsMs(a.createdAt); });
+      listCard.innerHTML = '';
+      listCard.appendChild(el('div', { class: 'pfa-note', text: sessions.length + ' session' + (sessions.length === 1 ? '' : 's') }));
+      var table = el('table', { class: 'pfa-tbl' });
+      table.appendChild(el('thead', {}, [el('tr', {}, ['Session ID', 'Name', 'Status', 'Participants', 'Created', ''].map(function (h) { return el('th', { text: h }); }))]));
+      var rows = sessions.map(function (s) {
+        var active = s.active !== false;
+        return el('tr', {}, [
+          el('td', {}, [el('code', { text: s._id })]),
+          el('td', { text: s.name || '' }),
+          el('td', { text: active ? 'Open' : 'Closed' }),
+          el('td', { text: String(s.participantCount || 0) }),
+          el('td', { text: fmtTs(s.createdAt) }),
+          el('td', {}, [
+            el('button', { class: 'pfa-btn sec sm', on: { click: function () { copyId(s._id); } } }, ['copy ID']),
+            el('button', { class: 'pfa-btn sec sm', style: 'margin-left:6px;', on: { click: function () { toggle(s._id, !active); } } }, [active ? 'close' : 'open']),
+            el('button', { class: 'pfa-btn danger sm', style: 'margin-left:6px;', on: { click: function () { remove(s._id, s.name || s._id); } } }, ['delete'])
+          ])
+        ]);
+      });
+      table.appendChild(el('tbody', {}, rows.length ? rows : [el('tr', {}, [el('td', { colspan: '6', text: 'No sessions yet.' })])]));
+      listCard.appendChild(table);
+    }
+
+    function genCode() {
+      var a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', s = '';
+      for (var i = 0; i < 6; i++) s += a.charAt(Math.floor(Math.random() * a.length));
+      return s;
+    }
+    function copyId(id) {
+      try { if (navigator.clipboard) navigator.clipboard.writeText(id); toast('Session ID copied: ' + id); }
+      catch (e) { toast(id); }
+    }
+    async function doCreate() {
+      createErr.textContent = '';
+      var name = nameInput.value.trim();
+      var id = idInput.value.trim() || genCode();
+      if (!/^[A-Za-z0-9-]{3,40}$/.test(id)) { createErr.textContent = 'Session ID must be 3–40 letters, digits or dashes.'; return; }
+      try {
+        var ref = fb.F.doc(fb.db, 'sessions', id);
+        if ((await fb.F.getDoc(ref)).exists()) { createErr.textContent = 'A session with that ID already exists. Choose another.'; return; }
+        await fb.F.setDoc(ref, { name: name || id, active: true, participantCount: 0, createdAt: fb.F.serverTimestamp() });
+        nameInput.value = ''; idInput.value = '';
+        toast('Session "' + id + '" created.');
+        await refresh();
+      } catch (e) { createErr.textContent = 'Create failed: ' + ((e && e.code) || 'error'); }
+    }
+    async function toggle(id, makeActive) {
+      try { await fb.F.setDoc(fb.F.doc(fb.db, 'sessions', id), { active: makeActive }, { merge: true }); toast(makeActive ? 'Session opened.' : 'Session closed.'); await refresh(); }
+      catch (e) { toast('Update failed: ' + ((e && e.code) || 'error')); }
+    }
+    async function remove(id, who) {
+      if (!window.confirm('Delete session "' + who + '"? Participants already registered under it keep their data, but the ID will stop working. This cannot be undone.')) return;
+      try { await fb.F.deleteDoc(fb.F.doc(fb.db, 'sessions', id)); toast('Session deleted.'); await refresh(); }
+      catch (e) { toast('Delete failed: ' + ((e && e.code) || 'error')); }
+    }
+  }
+
   // ---- Participants tab ----
   async function renderParticipants(body) {
     body.appendChild(el('div', { class: 'pfa-card' }, [el('p', { class: 'pfa-note', text: 'Loading participants...' })]));
@@ -561,14 +647,14 @@
     var rows = parts.map(function (p) {
       return el('tr', {}, [
         el('td', { text: p.participantId || '' }),
-        el('td', { text: p.email || '' }),
+        el('td', { text: p.sessionId || '' }),
         el('td', { text: p.status || '' }),
         el('td', { text: fmtTs(p.createdAt) }),
-        el('td', {}, [el('button', { class: 'pfa-btn danger sm', on: { click: function () { deleteParticipant(p._id, p.participantId || p.email || p._id); } } }, ['delete'])])
+        el('td', {}, [el('button', { class: 'pfa-btn danger sm', on: { click: function () { deleteParticipant(p._id, p.participantId || p._id); } } }, ['delete'])])
       ]);
     });
     var table = el('table', { class: 'pfa-tbl' });
-    table.appendChild(el('thead', {}, [el('tr', {}, ['Participant ID', 'E-mail', 'Status', 'Registered', ''].map(function (h) { return el('th', { text: h }); }))]));
+    table.appendChild(el('thead', {}, [el('tr', {}, ['Participant ID', 'Session', 'Status', 'Registered', ''].map(function (h) { return el('th', { text: h }); }))]));
     table.appendChild(el('tbody', {}, rows.length ? rows : [el('tr', {}, [el('td', { colspan: '5', text: 'No participants yet.' })])]));
     body.appendChild(el('div', { class: 'pfa-card' }, [head, table]));
 
@@ -607,23 +693,23 @@
       var pRows = [], eRows = [], rRows = [], sRows = [];
       for (var i = 0; i < parts.length; i++) {
         var p = parts[i], uid = p._id;
-        var base = { participantId: p.participantId || '', email: p.email || '', status: p.status || '', registered: fmtTs(p.createdAt) };
+        var base = { participantId: p.participantId || '', sessionId: p.sessionId || '', email: p.email || '', status: p.status || '', registered: fmtTs(p.createdAt) };
         var reg = p.registration || {};
         pRows.push(Object.assign({}, base, flatten(reg)));
         // events
         try {
           var es = await fb.F.getDocs(fb.F.collection(fb.db, 'participants', uid, 'events'));
-          es.forEach(function (d) { var v = d.data(); eRows.push({ participantId: base.participantId, seq: v.seq, type: v.type, phase: v.phase, round: v.round, puzzleId: v.puzzleId, net: v.net, coverage: v.coverage, clientTime: v.clientTime, data: v.dataJson }); });
+          es.forEach(function (d) { var v = d.data(); eRows.push({ participantId: base.participantId, sessionId: base.sessionId, seq: v.seq, type: v.type, phase: v.phase, round: v.round, puzzleId: v.puzzleId, net: v.net, coverage: v.coverage, clientTime: v.clientTime, data: v.dataJson }); });
         } catch (e) {}
         // rounds
         try {
           var rs = await fb.F.getDocs(fb.F.collection(fb.db, 'participants', uid, 'rounds'));
-          rs.forEach(function (d) { var v = d.data(); rRows.push({ participantId: base.participantId, puzzleId: v.puzzleId, index: v.index, diff: v.diff, net: v.net, value: v.value, cost: v.cost, coverage: v.coverage, fitness: v.fitness, placed: v.placed, total: v.total, time: v.time, placements: v.placementsJson }); });
+          rs.forEach(function (d) { var v = d.data(); rRows.push({ participantId: base.participantId, sessionId: base.sessionId, puzzleId: v.puzzleId, index: v.index, diff: v.diff, net: v.net, value: v.value, cost: v.cost, coverage: v.coverage, fitness: v.fitness, placed: v.placed, total: v.total, time: v.time, placements: v.placementsJson }); });
         } catch (e) {}
         // survey
         try {
           var sd = await fb.F.getDoc(fb.F.doc(fb.db, 'participants', uid, 'survey', 'answers'));
-          if (sd.exists()) { var sv = sd.data(); sRows.push(Object.assign({ participantId: base.participantId, completedAt: fmtTs(sv.completedAt) }, flatten(sv.answers || {}))); }
+          if (sd.exists()) { var sv = sd.data(); sRows.push(Object.assign({ participantId: base.participantId, sessionId: base.sessionId, completedAt: fmtTs(sv.completedAt) }, flatten(sv.answers || {}))); }
         } catch (e) {}
       }
       var wb = X.utils.book_new();

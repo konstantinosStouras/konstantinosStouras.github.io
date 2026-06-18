@@ -46,7 +46,7 @@
       trainingBody: 'Each brick is a project that earns a dollar value when you place it in the frame. Choose the right projects and pack them in to maximise <b>net value</b> (the total value of placed bricks minus a $1 penalty for each unused cell) before the timer runs out.<br><br>How to play: tap a brick to select it, then tap a board tile to drop it. Use the arrow keys (or the Rotate / Flip buttons) to rotate and flip the selected brick; tap a placed brick to pick it back up.<br><br>This is a practice round. When the timer ends, or once you are comfortable, you will move on to registration.',
       trainingButton: 'Begin training',
       registerTitle: 'Registration',
-      registerIntro: 'Please provide some basic information about yourself.',
+      registerIntro: 'Enter the Session ID your administrator gave you, then provide some basic information about yourself.',
       mainIntro: 'Each brick is a project that earns a dollar value when you place it in the frame. Pack the right projects to maximise <b>net value</b> (the total value of placed bricks minus a $1 penalty for each unused cell) before the timer runs out.<br><br>Every brick shows its dollar value and its value-per-cell (ROI). The tempting high-ROI bricks are often traps: there are many ways to fill the board, but only one reaches the highest Net Value. You will play a series of timed puzzles; do your best on each one.',
       mainTitle: 'Game phase',
       statsTitle: 'Thank you for playing!',
@@ -63,9 +63,9 @@
     },
     // Registration questions (matches the prototype form; admin-editable later).
     registrationQuestions: [
+      { id: 'sessionId', label: 'Session ID', type: 'text', required: true, system: 'sessionId',
+        help: 'Enter the Session ID your administrator gave you.' },
       { id: 'participantId', label: 'Participant ID', type: 'text', required: true, system: 'participantId' },
-      { id: 'email', label: 'Personal E-mail', type: 'email', required: true, system: 'email' },
-      { id: 'password', label: 'Password', type: 'password', required: true, system: 'password' },
       { id: 'mentalCalc', label: 'Mental Calculations', type: 'select', required: true,
         help: 'On a scale from 1 to 10, how good are you at mental calculations compared to the general population of this country? (1 very poor, 5 average, 10 very strong)',
         options: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'] },
@@ -266,7 +266,7 @@
       return;
     }
     S.user = user || null;
-    if (S.user) { renderTopbar(); flush(); }
+    if (S.user) { if (S.participant) renderTopbar(); flush(); }
   }
 
   // ---- Event logging ----------------------------------------------------
@@ -328,8 +328,7 @@
     var body = [el('p', { html: cfg.texts.welcomeIntro })];
     (cfg.texts.welcomeBody || []).forEach(function (p) { body.push(el('p', { html: p })); });
     body.push(el('div', { class: 'pfx-row' }, [
-      el('button', { class: 'pfx-btn', on: { click: startTraining } }, [cfg.texts.welcomeButton || 'Start training']),
-      el('button', { class: 'pfx-btn sec', on: { click: showLogin } }, ['I already have an account'])
+      el('button', { class: 'pfx-btn', on: { click: startTraining } }, [cfg.texts.welcomeButton || 'Start training'])
     ]));
     var wc = card(cfg.texts.welcomeTitle, body); wc.classList.add('pfx-justify');
     showOverlay(wc);
@@ -504,8 +503,7 @@
     var err = el('div', { class: 'pfx-err' });
     var submit = el('button', { class: 'pfx-btn', on: { click: doRegister } }, ['Register & start']);
     form.appendChild(err);
-    form.appendChild(el('div', { class: 'pfx-row' }, [submit,
-      el('button', { class: 'pfx-btn sec', on: { click: showLogin } }, ['I already have an account'])]));
+    form.appendChild(el('div', { class: 'pfx-row' }, [submit]));
 
     var c = card(cfg.texts.registerTitle, [el('p', { text: cfg.texts.registerIntro }), form]);
     showOverlay(c);
@@ -516,35 +514,39 @@
     }
     async function doRegister() {
       err.textContent = '';
-      var answers = {}, email = '', password = '', participantId = '';
+      var answers = {}, participantId = '', sessionId = '';
       for (var id in inputs) {
         var entry = inputs[id], v = readVal(entry);
         if (entry.q.required && !v) { err.textContent = 'Please complete: ' + entry.q.label; return; }
-        if (entry.q.system === 'email') email = v;
-        else if (entry.q.system === 'password') password = v;
+        if (entry.q.system === 'sessionId') sessionId = v;
         else if (entry.q.system === 'participantId') participantId = v;
+        else if (entry.q.system === 'email' || entry.q.system === 'password') { /* legacy fields ignored in the anonymous flow */ }
         else answers[id] = v;
       }
-      if (password.length < 6) { err.textContent = 'Password must be at least 6 characters.'; return; }
-      submit.setAttribute('disabled', 'true'); submit.textContent = 'Creating account...';
+      submit.setAttribute('disabled', 'true'); submit.textContent = 'Joining…';
       try {
-        var cred = await fb.A.createUserWithEmailAndPassword(fb.auth, email, password);
-        var uid = cred.user.uid;
-        // Try the Cloud Function (atomic label); fall back to a direct write.
+        await ensureAnon();                          // anonymous sign-in (no email / password)
+        var uid = fb.auth.currentUser.uid;
+        if (!(await validateSession(sessionId))) {   // gate on a valid, open session
+          submit.removeAttribute('disabled'); submit.textContent = 'Register & start';
+          err.textContent = 'That Session ID is not valid or has been closed. Please check with your administrator.';
+          return;
+        }
+        // Try the Cloud Function (atomic label + server-side session check); fall back to a direct write.
         try {
           if (!(await ensureFunctions())) throw new Error('functions unavailable');
           var fn = fb.Fn.httpsCallable(fb.fns, 'registerParticipant');
-          var res = await fn({ participantId: participantId, answers: answers });
-          S.participant = { participantId: participantId, anonymousLabel: res.data && res.data.anonymousLabel };
+          var res = await fn({ sessionId: sessionId, participantId: participantId, answers: answers });
+          S.participant = { participantId: participantId, sessionId: sessionId, anonymousLabel: res.data && res.data.anonymousLabel, status: 'registered' };
         } catch (fnErr) {
           await fb.F.setDoc(fb.F.doc(fb.db, 'participants', uid), {
-            uid: uid, participantId: participantId, email: email, registration: answers,
+            uid: uid, participantId: participantId, sessionId: sessionId, registration: answers,
             status: 'registered', anonymousLabel: null,
             createdAt: fb.F.serverTimestamp(), updatedAt: fb.F.serverTimestamp()
           });
-          S.participant = { participantId: participantId, anonymousLabel: null };
+          S.participant = { participantId: participantId, sessionId: sessionId, anonymousLabel: null, status: 'registered' };
         }
-        logEvent('register', { participantId: participantId, trainingMetrics: trainingMetrics || null });
+        logEvent('register', { participantId: participantId, sessionId: sessionId, trainingMetrics: trainingMetrics || null });
         closeOverlay(); renderTopbar(); startMain();
       } catch (e) {
         submit.removeAttribute('disabled'); submit.textContent = 'Register & start';
@@ -553,31 +555,22 @@
     }
   }
 
-  // ---- Login ------------------------------------------------------------
-  function showLogin() {
-    S.phase = 'login';
-    var email = el('input', { type: 'email', placeholder: 'you@example.com', autocomplete: 'username' });
-    var pass = el('input', { type: 'password', placeholder: 'Password', autocomplete: 'current-password' });
-    var err = el('div', { class: 'pfx-err' });
-    var btn = el('button', { class: 'pfx-btn', on: { click: doLogin } }, ['Log in']);
-    showOverlay(card('Log in', [
-      el('div', { class: 'pfx-field' }, [el('label', { text: 'E-mail' }), email]),
-      el('div', { class: 'pfx-field' }, [el('label', { text: 'Password' }), pass]),
-      err,
-      el('div', { class: 'pfx-row' }, [btn, el('button', { class: 'pfx-btn sec', on: { click: showWelcome } }, ['Back'])])
-    ]));
-    async function doLogin() {
-      err.textContent = '';
-      btn.setAttribute('disabled', 'true'); btn.textContent = 'Logging in...';
-      try {
-        await fb.A.signInWithEmailAndPassword(fb.auth, email.value.trim(), pass.value);
-        // onAuthChanged handles admin; for participants, resume into main.
-        if (email.value.trim() !== ADMIN_EMAIL) { closeOverlay(); await loadParticipant(); resumeFlow(); }
-      } catch (e) {
-        btn.removeAttribute('disabled'); btn.textContent = 'Log in';
-        err.textContent = friendlyAuthError(e);
-      }
-    }
+  // ---- Anonymous sign-in + session validation ---------------------------
+  // Participants do not create accounts: they sign in anonymously and are
+  // gated by a Session ID the admin shares. The anonymous credential persists
+  // in the browser, so a reload on the same device resumes their progress.
+  async function ensureAnon() {
+    if (fb.auth.currentUser) return fb.auth.currentUser;
+    var cred = await fb.A.signInAnonymously(fb.auth);
+    return cred.user;
+  }
+  // True only if the session exists and has not been closed (active !== false).
+  async function validateSession(sessionId) {
+    if (!sessionId) return false;
+    try {
+      var snap = await fb.F.getDoc(fb.F.doc(fb.db, 'sessions', String(sessionId).trim()));
+      return snap.exists() && snap.data().active !== false;
+    } catch (e) { return false; }
   }
 
   async function loadParticipant() {
@@ -595,6 +588,8 @@
 
   function friendlyAuthError(e) {
     var c = (e && e.code) || '';
+    if (c.indexOf('operation-not-allowed') >= 0 || c.indexOf('admin-restricted-operation') >= 0) return 'Anonymous sign-in is not enabled for this project. Please contact the administrator.';
+    if (c.indexOf('network-request-failed') >= 0) return 'Network error. Please check your connection and try again.';
     if (c.indexOf('email-already-in-use') >= 0) return 'That e-mail already has an account. Use "I already have an account".';
     if (c.indexOf('invalid-email') >= 0) return 'Please enter a valid e-mail address.';
     if (c.indexOf('wrong-password') >= 0 || c.indexOf('invalid-credential') >= 0) return 'Incorrect e-mail or password.';
@@ -973,10 +968,16 @@
       console.error('[PFX] init failed', e);
       return;
     }
-    // If already signed in (returning user), resume; else show welcome.
+    // A returning, already-registered participant (the anonymous credential
+    // persists on this device) resumes where they left off; anyone else —
+    // including an anonymous user who has not registered yet — starts at welcome.
     enableLayoutCustomize();
-    if (fb.auth.currentUser) { S.user = fb.auth.currentUser; await loadParticipant(); resumeFlow(); }
-    else showWelcome();
+    if (fb.auth.currentUser) {
+      S.user = fb.auth.currentUser;
+      await loadParticipant();
+      if (S.participant) { resumeFlow(); return; }
+    }
+    showWelcome();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

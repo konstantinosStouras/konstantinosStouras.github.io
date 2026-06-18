@@ -17,7 +17,7 @@ window.PF_DEFAULTS = {
     trainingBody: 'Each brick is a project that earns a dollar value when you place it in the frame. Choose the right projects and pack them in to maximise <b>net value</b> (the total value of placed bricks minus a $1 penalty for each unused cell) before the timer runs out.<br><br>How to play: tap a brick to select it, then tap a board tile to drop it. Use the arrow keys (or the Rotate / Flip buttons) to rotate and flip the selected brick; tap a placed brick to pick it back up.<br><br>This is a practice round. When the timer ends, or once you are comfortable, you will move on to registration.',
     trainingButton: 'Begin training',
     registerTitle: 'Registration',
-    registerIntro: 'Please provide some basic information about yourself.',
+    registerIntro: 'Enter the Session ID your administrator gave you, then provide some basic information about yourself.',
     mainTitle: 'Game phase',
     mainIntro: 'Each brick is a project that earns a dollar value when you place it in the frame. Pack the right projects to maximise <b>net value</b> (the total value of placed bricks minus a $1 penalty for each unused cell) before the timer runs out.<br><br>Every brick shows its dollar value and its value-per-cell (ROI). The tempting high-ROI bricks are often traps: there are many ways to fill the board, but only one reaches the highest Net Value. You will play a series of timed puzzles; do your best on each one.',
     statsTitle: 'Thank you for playing!',
@@ -34,9 +34,9 @@ window.PF_DEFAULTS = {
     timeLimits: { easy: 120, hard: 180 }
   },
   registrationQuestions: [
+    { id: 'sessionId', label: 'Session ID', type: 'text', required: true, system: 'sessionId',
+      help: 'Enter the Session ID your administrator gave you.' },
     { id: 'participantId', label: 'Participant ID', type: 'text', required: true, system: 'participantId' },
-    { id: 'email', label: 'Personal E-mail', type: 'email', required: true, system: 'email' },
-    { id: 'password', label: 'Password', type: 'password', required: true, system: 'password' },
     { id: 'mentalCalc', label: 'Mental Calculations', type: 'select', required: true,
       help: 'On a scale from 1 to 10, how good are you at mental calculations compared to the general population of this country? (1 very poor, 5 average, 10 very strong)',
       options: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'] },
