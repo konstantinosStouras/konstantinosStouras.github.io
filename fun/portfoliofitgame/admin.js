@@ -197,7 +197,7 @@
 
   function renderShell() {
     clearRoot();
-    var tabs = [['content', 'Content'], ['registration', 'Registration'], ['survey', 'Survey'], ['puzzles', 'Puzzles'], ['settings', 'Settings'], ['participants', 'Participants']];
+    var tabs = [['content', 'Content'], ['registration', 'Registration'], ['survey', 'Survey'], ['puzzles', 'Puzzles'], ['settings', 'Settings'], ['sessions', 'Sessions'], ['participants', 'Participants']];
     var tabBar = el('div', { class: 'pfa-tabs' }, tabs.map(function (t) {
       return el('button', { class: tab === t[0] ? 'on' : '', on: { click: function () { tab = t[0]; renderShell(); } } }, [t[1]]);
     }));
@@ -216,6 +216,7 @@
     else if (tab === 'survey') renderQuestions(body, 'surveyQuestions', 'Survey questions');
     else if (tab === 'puzzles') renderPuzzles(body);
     else if (tab === 'settings') renderSettings(body);
+    else if (tab === 'sessions') renderSessions(body);
     else if (tab === 'participants') renderParticipants(body);
   }
 
@@ -543,6 +544,92 @@
     }
   }
 
+  // ---- Sessions tab ----
+  // A session is a named snapshot of the current configuration, addressable by a
+  // short code. Players enter the code on the welcome screen to join that exact
+  // configuration; players with no code get the default config (the other tabs).
+  function renderSessions(body) {
+    body.innerHTML = '';
+    body.appendChild(el('div', { class: 'pfa-card' }, [
+      el('h3', { text: 'Player sessions', style: 'margin:0 0 8px;font-size:15px;' }),
+      el('p', { class: 'pfa-note', html: 'A <b>session</b> is a saved snapshot of the current configuration — the Content text, the Registration/Survey questions, the Settings, and the active puzzle set. Share its <b>session code</b> with players: anyone who enters that code on the welcome screen (or opens a <code>?session=CODE</code> link) plays this exact configuration, and their data is tagged with it. Players who do not enter a code get the default configuration (the one shown on the other tabs). Set up the other tabs first, then snapshot them into a session here.' })
+    ]));
+
+    var codeIn = el('input', { type: 'text', placeholder: 'optional, e.g. SPRING25', style: 'max-width:220px;text-transform:uppercase;' });
+    var labelIn = el('input', { type: 'text', placeholder: 'e.g. Spring 2025 MBA cohort', style: 'max-width:340px;' });
+    var msg = el('div', { class: 'pfa-note' });
+    var createBtn = el('button', { class: 'pfa-btn', on: { click: doCreate } }, ['Create session from current configuration']);
+    body.appendChild(el('div', { class: 'pfa-card' }, [
+      el('div', { class: 'pfa-field' }, [el('label', { text: 'Session code (optional — leave blank to auto-generate)' }), codeIn]),
+      el('div', { class: 'pfa-field' }, [el('label', { text: 'Label (optional, for your reference)' }), labelIn]),
+      createBtn, msg
+    ]));
+
+    var listCard = el('div', { class: 'pfa-card' }, [el('p', { class: 'pfa-note', text: 'Loading sessions…' })]);
+    body.appendChild(listCard);
+    loadList();
+
+    async function doCreate() {
+      msg.textContent = ''; msg.className = 'pfa-note';
+      var code = sanitizeCode(codeIn.value) || genCode();
+      createBtn.setAttribute('disabled', 'true');
+      try {
+        var ref = fb.F.doc(fb.db, 'sessions', code);
+        var existing = await fb.F.getDoc(ref);
+        if (existing.exists() && !window.confirm('A session with code "' + code + '" already exists. Overwrite it with the current configuration?')) { createBtn.removeAttribute('disabled'); return; }
+        var payload = {
+          label: labelIn.value.trim() || '',
+          texts: cfg.texts || {}, settings: cfg.settings || {},
+          registrationQuestions: cfg.registrationQuestions || [],
+          surveyQuestions: cfg.surveyQuestions || [],
+          updatedAt: fb.F.serverTimestamp()
+        };
+        if (!existing.exists()) payload.createdAt = fb.F.serverTimestamp();
+        await fb.F.setDoc(ref, payload, { merge: true });
+        codeIn.value = ''; labelIn.value = '';
+        toast('Session "' + code + '" saved.');
+        loadList();
+      } catch (e) { msg.className = 'pfa-err'; msg.textContent = 'Could not save: ' + ((e && e.code) || 'error'); }
+      createBtn.removeAttribute('disabled');
+    }
+
+    async function loadList() {
+      listCard.innerHTML = '';
+      listCard.appendChild(el('h3', { text: 'Existing sessions', style: 'margin:0 0 8px;font-size:15px;' }));
+      var docs = [];
+      try { var snap = await fb.F.getDocs(fb.F.collection(fb.db, 'sessions')); snap.forEach(function (d) { docs.push(Object.assign({ _id: d.id }, d.data())); }); }
+      catch (e) { listCard.appendChild(el('p', { class: 'pfa-err', text: 'Could not load sessions: ' + ((e && e.code) || 'error') })); return; }
+      docs.sort(function (a, b) { return tsMs(b.createdAt) - tsMs(a.createdAt); });
+      if (!docs.length) { listCard.appendChild(el('p', { class: 'pfa-note', text: 'No sessions yet. Create one above.' })); return; }
+      var table = el('table', { class: 'pfa-tbl' });
+      table.appendChild(el('thead', {}, [el('tr', {}, ['Code', 'Label', 'Puzzles', 'Created', 'Play link', ''].map(function (h) { return el('th', { text: h }); }))]));
+      var tb = el('tbody', {});
+      docs.forEach(function (s) {
+        var n = (s.settings && s.settings.activePuzzleIds && s.settings.activePuzzleIds.length) || 0;
+        var link = location.origin + location.pathname + '?session=' + encodeURIComponent(s._id);
+        tb.appendChild(el('tr', {}, [
+          el('td', {}, [el('b', { text: s._id })]),
+          el('td', { text: s.label || '' }),
+          el('td', { text: n ? (n + ' frozen') : 'default set' }),
+          el('td', { text: fmtTs(s.createdAt) }),
+          el('td', {}, [el('button', { class: 'pfa-btn sec sm', on: { click: function () { copyText(link); } } }, ['Copy link'])]),
+          el('td', {}, [el('button', { class: 'pfa-btn danger sm', on: { click: function () { delSession(s._id); } } }, ['delete'])])
+        ]));
+      });
+      table.appendChild(tb);
+      listCard.appendChild(table);
+    }
+
+    async function delSession(code) {
+      if (!window.confirm('Delete session "' + code + '"? Players can no longer join with this code. (Already-collected player data is not affected.)')) return;
+      try { await fb.F.deleteDoc(fb.F.doc(fb.db, 'sessions', code)); toast('Session deleted.'); loadList(); }
+      catch (e) { toast('Delete failed: ' + ((e && e.code) || 'error')); }
+    }
+  }
+  function genCode() { var a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', s = ''; for (var i = 0; i < 6; i++) s += a.charAt(Math.floor(Math.random() * a.length)); return s; }
+  function sanitizeCode(v) { return String(v || '').toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 24); }
+  function copyText(t) { try { navigator.clipboard.writeText(t); toast('Link copied to clipboard.'); } catch (e) { window.prompt('Copy this link:', t); } }
+
   // ---- Participants tab ----
   async function renderParticipants(body) {
     body.appendChild(el('div', { class: 'pfa-card' }, [el('p', { class: 'pfa-note', text: 'Loading participants...' })]));
@@ -559,17 +646,18 @@
       el('button', { class: 'pfa-btn', on: { click: function () { exportExcel(parts); } } }, ['Export to Excel'])
     ]);
     var rows = parts.map(function (p) {
+      var who = p.anonymousLabel || p.participantId || p.email || p._id;
       return el('tr', {}, [
-        el('td', { text: p.participantId || '' }),
-        el('td', { text: p.email || '' }),
+        el('td', { text: who }),
+        el('td', { text: p.sessionId || '—' }),
         el('td', { text: p.status || '' }),
         el('td', { text: fmtTs(p.createdAt) }),
-        el('td', {}, [el('button', { class: 'pfa-btn danger sm', on: { click: function () { deleteParticipant(p._id, p.participantId || p.email || p._id); } } }, ['delete'])])
+        el('td', {}, [el('button', { class: 'pfa-btn danger sm', on: { click: function () { deleteParticipant(p._id, who); } } }, ['delete'])])
       ]);
     });
     var table = el('table', { class: 'pfa-tbl' });
-    table.appendChild(el('thead', {}, [el('tr', {}, ['Participant ID', 'E-mail', 'Status', 'Registered', ''].map(function (h) { return el('th', { text: h }); }))]));
-    table.appendChild(el('tbody', {}, rows.length ? rows : [el('tr', {}, [el('td', { colspan: '5', text: 'No participants yet.' })])]));
+    table.appendChild(el('thead', {}, [el('tr', {}, ['Player', 'Session', 'Status', 'Started', ''].map(function (h) { return el('th', { text: h }); }))]));
+    table.appendChild(el('tbody', {}, rows.length ? rows : [el('tr', {}, [el('td', { colspan: '5', text: 'No players yet.' })])]));
     body.appendChild(el('div', { class: 'pfa-card' }, [head, table]));
 
     async function deleteParticipant(uid, who) {
@@ -607,23 +695,23 @@
       var pRows = [], eRows = [], rRows = [], sRows = [];
       for (var i = 0; i < parts.length; i++) {
         var p = parts[i], uid = p._id;
-        var base = { participantId: p.participantId || '', email: p.email || '', status: p.status || '', registered: fmtTs(p.createdAt) };
+        var base = { player: p.anonymousLabel || p.participantId || '', session: p.sessionId || '', email: p.email || '', status: p.status || '', started: fmtTs(p.createdAt), uid: uid };
         var reg = p.registration || {};
         pRows.push(Object.assign({}, base, flatten(reg)));
         // events
         try {
           var es = await fb.F.getDocs(fb.F.collection(fb.db, 'participants', uid, 'events'));
-          es.forEach(function (d) { var v = d.data(); eRows.push({ participantId: base.participantId, seq: v.seq, type: v.type, phase: v.phase, round: v.round, puzzleId: v.puzzleId, net: v.net, coverage: v.coverage, clientTime: v.clientTime, data: v.dataJson }); });
+          es.forEach(function (d) { var v = d.data(); eRows.push({ player: base.player, session: base.session, uid: uid, seq: v.seq, type: v.type, phase: v.phase, round: v.round, puzzleId: v.puzzleId, net: v.net, coverage: v.coverage, clientTime: v.clientTime, data: v.dataJson }); });
         } catch (e) {}
         // rounds
         try {
           var rs = await fb.F.getDocs(fb.F.collection(fb.db, 'participants', uid, 'rounds'));
-          rs.forEach(function (d) { var v = d.data(); rRows.push({ participantId: base.participantId, puzzleId: v.puzzleId, index: v.index, diff: v.diff, net: v.net, value: v.value, cost: v.cost, coverage: v.coverage, fitness: v.fitness, placed: v.placed, total: v.total, time: v.time, placements: v.placementsJson }); });
+          rs.forEach(function (d) { var v = d.data(); rRows.push({ player: base.player, session: base.session, uid: uid, puzzleId: v.puzzleId, index: v.index, diff: v.diff, net: v.net, value: v.value, cost: v.cost, coverage: v.coverage, fitness: v.fitness, placed: v.placed, total: v.total, time: v.time, placements: v.placementsJson }); });
         } catch (e) {}
         // survey
         try {
           var sd = await fb.F.getDoc(fb.F.doc(fb.db, 'participants', uid, 'survey', 'answers'));
-          if (sd.exists()) { var sv = sd.data(); sRows.push(Object.assign({ participantId: base.participantId, completedAt: fmtTs(sv.completedAt) }, flatten(sv.answers || {}))); }
+          if (sd.exists()) { var sv = sd.data(); sRows.push(Object.assign({ player: base.player, session: base.session, uid: uid, completedAt: fmtTs(sv.completedAt) }, flatten(sv.answers || {}))); }
         } catch (e) {}
       }
       var wb = X.utils.book_new();
