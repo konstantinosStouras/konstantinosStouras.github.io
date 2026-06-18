@@ -35,7 +35,7 @@ window.ARENA_DEFAULTS = {
     "registerIntro": "A few quick details before you begin. Your e-mail is used only to let you log back in.",
     "loginTitle": "Log in",
     "mainTitle": "Your comparisons",
-    "mainIntro": "Read the task, then tap the answer you prefer - or mark them equally good - and press Next.",
+    "mainIntro": "Read the task, tap the answer you prefer (or mark them equally good), then set how much better it is on the scale and press Next.",
     "surveyTitle": "One last thing",
     "surveyIntro": "A few short questions about your experience (all fields are required).",
     "thankyouTitle": "All done - thank you!",
@@ -69,8 +69,8 @@ window.ARENA_DEFAULTS = {
     },
     {
       "target": "follow",
-      "title": "Rate each answer and say why",
-      "body": "After you choose, rate how satisfied you are with <b>each</b> answer (1-5) and add a short reason. All three are required before you can continue."
+      "title": "Say how much better",
+      "body": "After you choose, a scale appears here: set <b>how much</b> better one answer is, from “A much better” through “Equal” to “B much better”. <b>A</b> is the answer on the left, <b>B</b> the one on the right."
     },
     {
       "target": "progress",
@@ -80,7 +80,7 @@ window.ARENA_DEFAULTS = {
     {
       "target": "next",
       "title": "Move on",
-      "body": "Once you have chosen, rated both answers and written a reason, tap Next to lock it in and see the next problem. That's it - you're ready!"
+      "body": "Once you have chosen and set the scale, tap Next to lock it in and see the next problem. That's it - you're ready!"
     }
   ],
   "settings": {

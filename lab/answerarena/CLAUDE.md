@@ -74,25 +74,29 @@ Every task (built-in or uploaded) is:
 `flip` so each participant sees them in a randomized left/right order, and
 records which underlying output (`o1`/`o2`) was chosen. **o1 = outputA = the
 baseline model; o2 = outputB = the frontier model.** The Excel export renames
-them to `baseline`/`frontier` everywhere (chosen/left/right model columns,
-`satisfaction_baseline`/`satisfaction_frontier`, and the Events `model` column);
-`satisfactionA`/`satisfactionB` stay as the displayed Answer A/B (left/right).
+them to `baseline`/`frontier` everywhere (chosen/left/right model columns and the
+Events `model` column).
 
 Each submitted comparison writes a **response** doc:
 
 ```js
 { taskId, idx, sessionId, choice('left'|'right'|'tie'), chosenOutput('o1'|'o2'|'tie'),
   leftOutput, rightOutput,
-  satisfA, satisfB,        // 1-5 satisfaction with the displayed Answer A / B
-  satisfO1, satisfO2,      // the same, mapped back to the underlying models
-  reason,                  // short free-text "why did you choose this?"
+  prefValue,        // 7-point preference in the DISPLAYED frame: -3 (A much better)
+                    //   .. 0 (Equal) .. +3 (B much better); A = left, B = right
+  prefLabel,        // the matching text label
+  prefModelValue,   // re-framed to the models: neg = baseline better, pos = frontier better
   responseMs, condition, ts }
 ```
 
-After picking a preference (or a tie) the participant must rate how satisfied
-they are with each answer (1-5) and give a short reason; **Next stays disabled
-until all three are supplied**. These columns ride along in the admin Excel
-export (Responses sheet). `settings.comparisonsPerUser` (0 = whole set) caps how
+The comparison UI: the participant taps an answer (or "They're equally good"),
+which reveals a **7-point preference bar** centered below the tie button (`A much
+better · A better · A slightly better · Equal · B slightly better · B better · B
+much better`); the bar is the response. **Next stays disabled until a choice is
+made.** (There are no longer per-answer 1-5 satisfaction ratings or a free-text
+reason - removed in favour of the single graded preference.) These columns ride
+along in the admin Excel export (Responses sheet: `preference`, `preference_AB`,
+`preference_model`). `settings.comparisonsPerUser` (0 = whole set) caps how
 many comparisons each participant sees: when it is below the active-set size the
 participant gets that many **randomly chosen** task pairs. **Each session
 snapshots `comparisonsPerUser` and `randomizeOrder` at creation** (alongside the
