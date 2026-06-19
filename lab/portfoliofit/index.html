@@ -933,14 +933,47 @@
     // board's full tiling list is always enumerated exactly (never truncated).
     const ENUM_CAP = 5000;
 
-    // The board's GEOMETRY (legal placements + every exact cover) does not depend
-    // on the brick values, so compute it ONCE and reuse it to score each candidate
-    // value vector cheaply (no re-enumeration per candidate).
+    // Can this exact set of bricks be placed on the board at once without overlap?
+    // (A packing, not necessarily covering every cell.) Geometry only — used to
+    // enumerate which brick-SETS are even feasible, independent of their values.
+    function canPlaceSet(pd, pis) {
+      const order = pis.slice().sort((a, b) => pd.sorted[a].length - pd.sorted[b].length);
+      let ok = false;
+      (function rec(i, occ) {
+        if (ok) return;
+        if (i === order.length) { ok = true; return; }
+        const masks = pd.sorted[order[i]];
+        for (let j = 0; j < masks.length; j++) { if ((masks[j] & occ) === 0n) { rec(i + 1, occ | masks[j]); if (ok) return; } }
+      })(0, 0n);
+      return ok;
+    }
+
+    // The board's GEOMETRY (legal placements, every exact cover, and every feasible
+    // brick-SET) does not depend on the brick values, so compute it ONCE and reuse
+    // it to score each candidate value vector cheaply (no re-enumeration).
     let _GEOM = null;
     function fixedGeom() {
       if (!_GEOM) {
         const pd = buildPlacements(fixedRegion(), allPieces());
-        _GEOM = { pd: pd, tilings: collectSolutions(pd, ENUM_CAP), names: allPieces().map(p => p.name) };
+        const tilings = collectSolutions(pd, ENUM_CAP);
+        // A full cover leaves no empty cells, so several rotations/rearrangements
+        // share the same brick-set; keep one witness tiling per full-cover set.
+        const fullByMask = new Map();
+        for (const T of tilings) {
+          let used = 0; for (const pl of T) used |= (1 << pl.pi);
+          if (!fullByMask.has(used)) fullByMask.set(used, T);
+        }
+        // Every brick-SET that fits on the board at once (full covers AND partials
+        // that leave some cells empty). Net Value depends only on which bricks are
+        // placed, so these are exactly the candidate "solutions" to compare.
+        const subsets = [];
+        for (let s = 1; s < (1 << pd.m); s++) {
+          const pis = []; let area = 0;
+          for (let pi = 0; pi < pd.m; pi++) if (s & (1 << pi)) { pis.push(pi); area += pd.areas[pi]; }
+          if (area > pd.N) continue;
+          if (canPlaceSet(pd, pis)) subsets.push({ mask: s, area: area, pis: pis });
+        }
+        _GEOM = { pd: pd, tilings: tilings, names: allPieces().map(p => p.name), fullByMask: fullByMask, subsets: subsets };
       }
       return _GEOM;
     }
@@ -966,61 +999,68 @@
       return best;
     }
 
-    // Highest Net Value over all covers, and how many DISTINCT brick-sets attain
-    // it. On a square the rotations/reflections of one cover all use the same
-    // bricks (so the same value), so uniqueness is judged by the SET of bricks
-    // used — Net Value depends only on which bricks are placed, not how.
-    function bestFor(geom, values) {
-      let best = -Infinity; const sets = new Set(); let bestT = null;
-      for (const T of geom.tilings) {
-        let v = 0, used = 0;
-        for (const pl of T) { v += values[geom.names[pl.pi]]; used |= (1 << pl.pi); }
-        if (v > best) { best = v; sets.clear(); sets.add(used); bestT = T; }
-        else if (v === best) sets.add(used);
+    // The TRUE highest Net Value, over EVERY feasible brick-set (full covers and
+    // partials alike): Net = (value of placed bricks) − ($1 × empty cells). Because
+    // a partial set leaves empty cells that cost $1 each, a high-value partial can
+    // beat a full cover, so all sets must be compared — not just full covers. We
+    // also report how many sets tie for that maximum and whether the winner is a
+    // full cover (so the generator can demand a single, board-filling optimum).
+    function globalBest(geom, values) {
+      const empties = geom.pd.N;
+      let best = -Infinity, count = 0, argMask = -1, argArea = 0;
+      for (const sub of geom.subsets) {
+        let v = 0; for (const pi of sub.pis) v += values[geom.names[pi]];
+        const net = v - (empties - sub.area);          // empty cells = N − area
+        if (net > best) { best = net; count = 1; argMask = sub.mask; argArea = sub.area; }
+        else if (net === best) count++;
       }
-      return { bestValue: best, bestSetCount: sets.size, bestTiling: bestT };
+      return { bestValue: best, count: count, argMask: argMask, argArea: argArea };
     }
 
     // Assemble a full puzzle object on the fixed board for a chosen value vector.
-    // solution = one arrangement of the uniquely best brick-set (used by hints,
-    // the scripted tour, and Solve).
-    function buildPuzzleFrom(values, kappa, bi) {
+    // The optimum is guaranteed (by the generator) to be a single full-cover set,
+    // so solution = one arrangement of that set (used by hints, the tour, Solve).
+    function buildPuzzleFrom(values, kappa, gb) {
       const geom = fixedGeom(), pd = geom.pd, all = allPieces();
-      const solution = bi.bestTiling.map(pl => ({
+      const T = geom.fullByMask.get(gb.argMask) || [];
+      const solution = T.map(pl => ({
         name: geom.names[pl.pi], color: all[pl.pi].color, cells: maskToCells(pd, pl.mask)
       }));
       return {
         rows: BOARD.rows, cols: BOARD.cols, region: fixedRegion(),
         values: values, solution: solution, kappa: kappa,
         tilings: { count: geom.tilings.length, capped: false, complete: true },
-        bestValue: bi.bestValue
+        bestValue: gb.bestValue
       };
     }
 
     // Generate a puzzle by searching VALUE assignments (never the board): draw
-    // random brick values until one lands in the difficulty band AND leaves a
-    // single best brick-set. Easy returns the first qualifying board; Hard scans
-    // for the hardest (highest kappa) and stops once it hits the ceiling.
+    // random brick values until one lands in the difficulty band AND has a unique
+    // Net-Value optimum that fills the whole board (so exactly one full-cover
+    // portfolio is best, and no partial placement ties or beats it). Easy returns
+    // the first qualifying board; Hard scans for the hardest and stops at the ceiling.
     function generatePuzzle(diff) {
-      const geom = fixedGeom(), names = geom.names, areas = geom.pd.areas;
+      const geom = fixedGeom(), names = geom.names, areas = geom.pd.areas, N = geom.pd.N;
       const accept = ACCEPT[diff] || ACCEPT.easy;
-      const deadline = Date.now() + (diff === 'hard' ? 700 : 300);
+      const deadline = Date.now() + (diff === 'hard' ? 1500 : 400);
       let best = null, bestScore = -Infinity;
-      for (let t = 0; t < 6000; t++) {
+      for (let t = 0; t < 20000; t++) {
         const values = randomValues();
         const ratios = names.map((nm, i) => values[nm] / areas[i]);
         const k = kappaFor(geom, ratios);
         if (!accept(k)) continue;
-        const bi = bestFor(geom, values);
-        if (bi.bestSetCount !== 1) continue;          // require a single best brick-set
+        const gb = globalBest(geom, values);
+        // Require a SINGLE best portfolio, and that it fills the board completely
+        // (a full cover) — no partial placement may tie or beat it.
+        if (gb.count !== 1 || gb.argArea !== N) continue;
         const score = (diff === 'hard') ? k : -k;     // easy prefers low kappa, hard high
-        if (!best || score > bestScore) { bestScore = score; best = { values, k, bi }; }
+        if (!best || score > bestScore) { bestScore = score; best = { values, k, gb }; }
         if (diff === 'easy') break;                   // easy: first qualifying board is fine
         if (k >= HARD_CEILING) break;                 // hard: can't get harder, ship it
         if (Date.now() > deadline) break;
       }
       if (!best) return null;
-      return buildPuzzleFrom(best.values, best.k, best.bi);
+      return buildPuzzleFrom(best.values, best.k, best.gb);
     }
 
     function newGame(diff, limit) {
