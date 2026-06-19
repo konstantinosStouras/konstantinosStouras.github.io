@@ -318,12 +318,14 @@
     .board-tools { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 14px; }
     .board-tools .btn { font-size: 12.5px; }
 
-    /* Info modal (solutions / proof) */
-    .info-modal { max-width: 640px; width: 100%; text-align: left; position: relative; max-height: 86vh; max-height: 86dvh; display: flex; flex-direction: column; }
-    .info-modal h3 { font-size: 20px; margin: 2px 40px 10px 2px; }
-    .info-close { position: absolute; top: 10px; right: 12px; border: none; background: none; font-size: 26px; line-height: 1; color: var(--muted); cursor: pointer; }
+    /* Info modal (solutions / proof) — wider by default and user-resizable from any
+       edge or corner (see enableInfoResize). */
+    .info-modal { width: 820px; max-width: 94vw; min-width: 300px; min-height: 200px; text-align: left; position: relative; max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column; overflow: hidden; }
+    .info-modal.resizing { user-select: none; }
+    .info-modal h3 { font-size: 20px; margin: 2px 40px 10px 2px; flex: 0 0 auto; }
+    .info-close { position: absolute; top: 10px; right: 12px; border: none; background: none; font-size: 26px; line-height: 1; color: var(--muted); cursor: pointer; z-index: 2; }
     .info-close:hover { color: var(--ink); }
-    .info-body { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding-right: 4px; }
+    .info-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding-right: 4px; }
     .info-body p { margin: 6px 0; font-size: 14px; color: var(--ink); }
     .info-body .muted { color: var(--muted); font-size: 13px; }
     .info-body h4 { margin: 14px 0 6px; font-size: 14px; }
@@ -1746,9 +1748,70 @@
     function openInfo(title, bodyNode) {
       $('#infoTitle').textContent = title;
       const b = $('#infoBody'); b.innerHTML = ''; b.appendChild(bodyNode);
+      const m = $('#infoOverlay .info-modal');
+      if (m && m._resetSize) m._resetSize();   // re-center at the default size each open
       $('#infoOverlay').classList.add('show');
     }
     function closeInfo() { $('#infoOverlay').classList.remove('show'); }
+
+    // Let the admin resize the Solutions / kappa-proof popup by dragging ANY edge or
+    // corner. The modal is normally centred; the first drag pins it to explicit
+    // geometry so the dragged edge tracks the pointer. _resetSize() (called on open)
+    // returns it to the centred default.
+    function enableInfoResize() {
+      const modal = $('#infoOverlay .info-modal'); if (!modal) return;
+      const EDGE = 12, MINW = 300, MINH = 180; let drag = null;
+      function edgesAt(e) {
+        const r = modal.getBoundingClientRect();
+        const x = e.clientX - r.left, y = e.clientY - r.top;
+        return { L: x <= EDGE, R: x >= r.width - EDGE, T: y <= EDGE, B: y >= r.height - EDGE, r: r };
+      }
+      function cursorFor(ed) {
+        if ((ed.L && ed.T) || (ed.R && ed.B)) return 'nwse-resize';
+        if ((ed.R && ed.T) || (ed.L && ed.B)) return 'nesw-resize';
+        if (ed.L || ed.R) return 'ew-resize';
+        if (ed.T || ed.B) return 'ns-resize';
+        return '';
+      }
+      modal.addEventListener('mousemove', e => {
+        if (drag || (e.target && e.target.closest('.info-close'))) return;
+        const ed = edgesAt(e);
+        modal.style.cursor = (ed.L || ed.R || ed.T || ed.B) ? cursorFor(ed) : '';
+      });
+      modal.addEventListener('pointerdown', e => {
+        if (e.target && e.target.closest('.info-close')) return;
+        const ed = edgesAt(e);
+        if (!(ed.L || ed.R || ed.T || ed.B)) return;     // only start from a border zone
+        e.preventDefault();
+        const r = ed.r;
+        modal.style.position = 'fixed'; modal.style.margin = '0';
+        modal.style.left = r.left + 'px'; modal.style.top = r.top + 'px';
+        modal.style.width = r.width + 'px'; modal.style.height = r.height + 'px';
+        modal.style.maxWidth = 'none'; modal.style.maxHeight = 'none';
+        modal.classList.add('resizing');
+        drag = { ed: ed, sx: e.clientX, sy: e.clientY, L: r.left, T: r.top, W: r.width, H: r.height };
+        try { modal.setPointerCapture(e.pointerId); } catch (_) {}
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+      });
+      function onMove(e) {
+        if (!drag) return;
+        const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy, pad = 4;
+        const vw = window.innerWidth, vh = window.innerHeight;
+        let left = drag.L, top = drag.T, w = drag.W, h = drag.H;
+        if (drag.ed.R) w = Math.min(vw - pad - left, Math.max(MINW, drag.W + dx));
+        if (drag.ed.B) h = Math.min(vh - pad - top, Math.max(MINH, drag.H + dy));
+        if (drag.ed.L) { const nl = Math.min(drag.L + drag.W - MINW, Math.max(pad, drag.L + dx)); w = drag.W + (drag.L - nl); left = nl; }
+        if (drag.ed.T) { const nt = Math.min(drag.T + drag.H - MINH, Math.max(pad, drag.T + dy)); h = drag.H + (drag.T - nt); top = nt; }
+        modal.style.left = left + 'px'; modal.style.top = top + 'px';
+        modal.style.width = w + 'px'; modal.style.height = h + 'px';
+      }
+      function onUp() { drag = null; modal.classList.remove('resizing'); window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); }
+      modal._resetSize = function () {
+        ['position', 'margin', 'left', 'top', 'width', 'height', 'maxWidth', 'maxHeight', 'cursor'].forEach(p => { modal.style[p] = ''; });
+      };
+    }
+    enableInfoResize();
 
     function miniBoard(colorMap, hintSet, cs) {
       cs = cs || 15;
