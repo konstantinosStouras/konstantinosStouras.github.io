@@ -381,7 +381,7 @@
   }
   function renderPuzzles(body) {
     var card = el('div', { class: 'pfa-card' });
-    card.appendChild(el('p', { class: 'pfa-note', html: 'Build the exact set every participant plays: <b>Generate set to match Settings</b> creates puzzles to match your easy/hard counts; review each (Solutions / κ proof), regenerate any you dislike, then <b>Save</b> to freeze. Every participant then plays that same frozen set in randomized order. (You can also add puzzles one at a time.)' }));
+    card.appendChild(el('p', { class: 'pfa-note', html: 'Every board is the <b>same fixed 4×4 square</b> — difficulty comes only from the per-puzzle <b>brick values</b> (Easy = Sahni κ&nbsp;1, Hard = κ&nbsp;2), never from the board\'s shape or size. Build the exact set every participant plays: <b>Generate set to match Settings</b> creates puzzles to match your easy/hard counts; review each (Solutions / κ proof), regenerate any you dislike, then <b>Save</b> to freeze. Every participant then plays that same frozen set in randomized order. (You can also add puzzles one at a time.)' }));
     card.appendChild(el('p', { class: 'pfa-note', html: '📄 <a href="https://www.stouras.com/lab/portfoliofit-testing/portfoliofit-difficulty.pdf" target="_blank" rel="noopener" style="color:var(--accent);">How the Sahni difficulty (κ) is measured (PDF note)</a>' }));
     if (!window.PFGame || !window.PFGame.generatePuzzle) {
       card.appendChild(el('p', { class: 'pfa-err', text: 'Puzzle generator not available. Open /lab/portfoliofit/?admin (the game must be on the page).' }));
@@ -416,7 +416,7 @@
       if (!spec) { preview.appendChild(el('p', { class: 'pfa-err', text: 'Generation failed; try again.' })); return; }
       var solCount = (spec.tilings && spec.tilings.count != null) ? spec.tilings.count : null;
       preview.appendChild(el('div', { class: 'pfa-q' }, [
-        el('div', { class: 'pfa-note', text: diff.toUpperCase() + ' — ' + spec.region.length + ' cells, Sahni κ=' + spec.kappa + (solCount != null ? ' · ' + solCount + ' distinct solution' + (solCount === 1 ? '' : 's') : '') + ' · best $' + spec.bestValue }),
+        el('div', { class: 'pfa-note', text: diff.toUpperCase() + ' — ' + spec.rows + '×' + spec.cols + ' board, Sahni κ=' + spec.kappa + (solCount != null ? ' · ' + solCount + ' distinct solution' + (solCount === 1 ? '' : 's') : '') + ' · best $' + spec.bestValue }),
         puzzleGrid(spec),
         el('div', { style: 'display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;' }, [
           el('button', { class: 'pfa-btn sec', on: { click: function () { try { window.PFGame.previewPuzzle(spec); window.PFGame.showSolutions(); } catch (e) {} } } }, ['📋 Full coverage solutions']),

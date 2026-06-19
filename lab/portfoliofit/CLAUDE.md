@@ -105,15 +105,22 @@ publish it; versioned in the repo, deployed manually to the lab project):
 ## 4. The game engine (`index.html` IIFE) — what to reproduce
 
 - **Pieces:** a fixed library of 8 polyominoes (one tromino, three tetrominoes,
-  four pentominoes), each with a dollar value tuned so the eight value-per-cell
-  ratios are distinct and deceptive.
-- **Puzzle generation:** pick a random subset whose areas sum to the target
-  outline (14 cells "easy", 18 "hard") and place them by randomized
-  backtracking → a guaranteed-solvable outline (`region`). Then **evaluate**:
-  enumerate all exact-cover tilings (bitmask DLX-style), compute the max-value
-  cover (`bestValue`), how many covers attain it (must be unique), and the
-  Sahni κ via a ratio-greedy completion test. Accept "easy" when κ∈{1,2},
-  "hard" when κ≥3, with ≥3 distinct covers and a unique optimum.
+  four pentominoes). The library carries each brick's **shape and colour**; the
+  **dollar value is assigned per puzzle**, not fixed (see generation).
+- **The board never changes:** every puzzle — Easy or Hard — is the **same fixed
+  4×4 square** (16 cells), tiled by a 4-brick subset (tromino + two tetrominoes +
+  one pentomino, areas 3+4+4+5). All eight bricks are always shown.
+- **Puzzle generation — difficulty comes from VALUES, not the board.** Because the
+  board's geometry never changes, its legal placements and all ~88 exact-cover
+  tilings are enumerated **once** and cached. To make a puzzle, draw random whole-
+  dollar brick **values** (ratios kept distinct) and score them against the cached
+  tilings: the max-value cover (`bestValue`), how many distinct **brick-sets**
+  attain it (must be unique — a square's rotations/reflections rule out a unique
+  *placement*, so uniqueness is by the set of bricks used, since Net Value depends
+  only on which bricks are placed), and the Sahni κ via a ratio-greedy completion
+  test. Accept **Easy** when κ = 1 (one hint), **Hard** when κ ≥ 2 (the ceiling
+  the deceptive eight-piece set reaches on this square). Easy returns the first
+  qualifying board; Hard scans for the hardest and stops at the ceiling.
 - **KPIs (live):** Net Value, Total Value, Resource Cost (empty-cell penalty),
   Value/Resource (ROI), Coverage %, Portfolio Fitness (net ÷ best). Hover
   tooltips explain each.
@@ -130,7 +137,10 @@ publish it; versioned in the repo, deployed manually to the lab project):
   `showSolutions()/showProof()`, `demoSelectSolution/demoCycleOri/demoPlaceSolution/
   demoRemoveSolution/demoClear` (for the scripted tour), and a writable
   `_onRoundEnd` callback. A puzzle **spec** = `{diff, rows, cols, region:["r,c",…],
-  solution:[{name,color,cells:[[r,c]…]}], kappa, tilings:{count}, bestValue}`.
+  values:{brickName:dollars,…}, solution:[{name,color,cells:[[r,c]…]}], kappa,
+  tilings:{count}, bestValue}`. `values` is the per-puzzle brick pricing that *is*
+  the difficulty; it round-trips through freeze/load (stored in `specJson`). Specs
+  saved before this change have no `values` and fall back to the library defaults.
 
 ## 5. The experiment layer (`experiment.js`)
 
