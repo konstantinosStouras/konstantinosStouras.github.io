@@ -62,7 +62,7 @@ const DEFAULT_CONFIG = {
 // surveyQuestions builder defaults.
 function freshConfig(customDefaults) {
   return {
-    phaseConfig: { ...DEFAULT_CONFIG.phaseConfig, ...(customDefaults?.ideaParameters || {}) },
+    phaseConfig: { ...DEFAULT_CONFIG.phaseConfig, ...(customDefaults?.ideaParameters || {}), ...(customDefaults?.phaseTimers || {}) },
     aiConfig: { ...DEFAULT_CONFIG.aiConfig },
     contentConfig: getEffectiveDefaults(customDefaults),
     registrationConfig: customDefaults?.registrationForm
@@ -126,8 +126,8 @@ export default function Admin() {
           if (data && !editingRef.current) {
             setConfig(c => ({
               ...c,
-              phaseConfig: data.ideaParameters
-                ? { ...c.phaseConfig, ...data.ideaParameters }
+              phaseConfig: (data.ideaParameters || data.phaseTimers)
+                ? { ...c.phaseConfig, ...(data.ideaParameters || {}), ...(data.phaseTimers || {}) }
                 : c.phaseConfig,
               contentConfig: getEffectiveDefaults(data),
               registrationConfig: data.registrationForm
@@ -374,6 +374,68 @@ export default function Admin() {
     }
   }
 
+  // ── Phase Timers: Save / Make this the default / Restore built-in ──
+  // "Save" commits the current timer durations. When editing a session it writes
+  // them to that session immediately; in create mode the values are already
+  // captured and will be used when the session is created.
+  async function savePhaseTimers() {
+    try {
+      if (editingSession) {
+        await updateDoc(doc(db, 'sessions', editingSession.id), {
+          phaseConfig: config.phaseConfig,
+        })
+      }
+      flashDefaultFeedback('phaseTimers', editingSession
+        ? 'Saved to this session.'
+        : 'Saved — used when you create the session.')
+    } catch (err) {
+      console.error('Could not save phase timers:', err)
+      flashDefaultFeedback('phaseTimers', 'Could not save (check Firestore rules).')
+      throw err
+    }
+  }
+
+  // Persist the current phase timers as the default for every new session.
+  async function savePhaseTimersAsDefault() {
+    const { individualPhaseDuration, groupPhaseDuration } = config.phaseConfig
+    try {
+      await setDoc(
+        doc(db, 'settings', 'contentDefaults'),
+        { phaseTimers: { individualPhaseDuration, groupPhaseDuration } },
+        { merge: true }
+      )
+      flashDefaultFeedback('phaseTimers', 'Saved — new sessions will start with these.')
+    } catch (err) {
+      console.error('Could not save phase timers default:', err)
+      flashDefaultFeedback('phaseTimers', 'Could not save (check Firestore rules).')
+      throw err
+    }
+  }
+
+  // Delete the saved phase-timers default and restore the built-in values.
+  async function restorePhaseTimersBuiltin() {
+    try {
+      await setDoc(
+        doc(db, 'settings', 'contentDefaults'),
+        { phaseTimers: deleteField() },
+        { merge: true }
+      )
+      setConfig(c => ({
+        ...c,
+        phaseConfig: {
+          ...c.phaseConfig,
+          individualPhaseDuration: DEFAULT_CONFIG.phaseConfig.individualPhaseDuration,
+          groupPhaseDuration: DEFAULT_CONFIG.phaseConfig.groupPhaseDuration,
+        },
+      }))
+      flashDefaultFeedback('phaseTimers', 'Built-in defaults restored.')
+    } catch (err) {
+      console.error('Could not restore phase timers:', err)
+      flashDefaultFeedback('phaseTimers', 'Could not restore (check Firestore rules).')
+      throw err
+    }
+  }
+
   async function createSession() {
     setCreating(true)
     setLastCreatedCode(null)
@@ -574,6 +636,15 @@ export default function Admin() {
                   : 'Configure the session structure, timers, and AI assistance before launching.'}
               </p>
 
+              <div className={`${styles.section} ${styles.aiBox}`}>
+                <h3 className={styles.subTitle}>AI Assistant</h3>
+                <p className={styles.sectionHint}>Enable AI assistance per phase. Provider and model are configured globally in AI Settings.</p>
+                <div className={styles.grid2}>
+                  <Toggle label="AI in Individual Phase" checked={ac.individualAI} onChange={v => setAI('individualAI', v)} disabled={!pc.individualPhaseActive} />
+                  <Toggle label="AI in Group Phase" checked={ac.groupAI} onChange={v => setAI('groupAI', v)} disabled={!pc.groupPhaseActive} />
+                </div>
+              </div>
+
               <div className={styles.section}>
                 <h3 className={styles.subTitle}>Phases</h3>
                 <p className={styles.sectionHint}>Select which phases to include and the order participants will move through them.</p>
@@ -642,14 +713,34 @@ export default function Admin() {
                   <DurationField label="Individual" seconds={pc.individualPhaseDuration} onChange={v => setPhase('individualPhaseDuration', v)} disabled={!pc.individualPhaseActive} />
                   <DurationField label="Group (ideation + voting)" seconds={pc.groupPhaseDuration} onChange={v => setPhase('groupPhaseDuration', v)} disabled={!pc.groupPhaseActive} />
                 </div>
-              </div>
-
-              <div className={styles.section}>
-                <h3 className={styles.subTitle}>AI Assistant</h3>
-                <p className={styles.sectionHint}>Enable AI assistance per phase. Provider and model are configured globally in AI Settings.</p>
-                <div className={styles.grid2}>
-                  <Toggle label="AI in Individual Phase" checked={ac.individualAI} onChange={v => setAI('individualAI', v)} disabled={!pc.individualPhaseActive} />
-                  <Toggle label="AI in Group Phase" checked={ac.groupAI} onChange={v => setAI('groupAI', v)} disabled={!pc.groupPhaseActive} />
+                <div className={styles.contentBtnRow} style={{ marginTop: 16 }}>
+                  <ConfirmButton
+                    className={styles.contentDefaultBtn}
+                    onClick={savePhaseTimers}
+                    confirmedLabel="Saved ✓"
+                    title="Save these phase timers (applies to the session you are editing)"
+                  >
+                    Save
+                  </ConfirmButton>
+                  <ConfirmButton
+                    className={styles.contentDefaultBtn}
+                    onClick={savePhaseTimersAsDefault}
+                    confirmedLabel="Default set ✓"
+                    title="Make these phase timers the default for every new session"
+                  >
+                    Make this the default
+                  </ConfirmButton>
+                  <ConfirmButton
+                    className={styles.contentResetBtn}
+                    onClick={restorePhaseTimersBuiltin}
+                    confirmedLabel="Restored ✓"
+                    title="Delete the saved default and restore the built-in phase timers"
+                  >
+                    Restore built-in default
+                  </ConfirmButton>
+                  {defaultFeedback?.key === 'phaseTimers' && (
+                    <span className={styles.contentSavedNote}>{defaultFeedback.text}</span>
+                  )}
                 </div>
               </div>
 
