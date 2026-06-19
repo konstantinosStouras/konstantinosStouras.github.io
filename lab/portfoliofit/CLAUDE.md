@@ -112,15 +112,23 @@ publish it; versioned in the repo, deployed manually to the lab project):
   one pentomino, areas 3+4+4+5). All eight bricks are always shown.
 - **Puzzle generation — difficulty comes from VALUES, not the board.** Because the
   board's geometry never changes, its legal placements and all ~88 exact-cover
-  tilings are enumerated **once** and cached. To make a puzzle, draw random whole-
-  dollar brick **values** (ratios kept distinct) and score them against the cached
-  tilings: the max-value cover (`bestValue`), how many distinct **brick-sets**
-  attain it (must be unique — a square's rotations/reflections rule out a unique
-  *placement*, so uniqueness is by the set of bricks used, since Net Value depends
-  only on which bricks are placed), and the Sahni κ via a ratio-greedy completion
-  test. Accept **Easy** when κ = 1 (one hint), **Hard** when κ ≥ 2 (the ceiling
-  the deceptive eight-piece set reaches on this square). Easy returns the first
-  qualifying board; Hard scans for the hardest and stops at the ceiling.
+  tilings are enumerated **once** and cached, along with **every feasible brick-set**
+  (all ~97 subsets of the 8 bricks that fit on the board at once — 7 full covers +
+  90 partials). To make a puzzle, draw random whole-dollar brick **values** (ratios
+  kept distinct) and evaluate them against the cached sets:
+  - **Unique, board-filling optimum (`globalBest`).** Net Value = (value of placed
+    bricks) − ($1 × empty cells), so it depends only on *which* bricks are placed.
+    Crucially a high-value **partial** placement can beat a full cover, so the
+    generator scores **all** feasible sets — not just full covers — and accepts a
+    value vector only when the maximum Net Value is attained by **exactly one** set
+    *and that set is a full cover*. So every puzzle has a single best portfolio that
+    fills the whole board, which no other full or partial placement ties or beats.
+    (`bestValue` = that optimum; the square's symmetry means several arrangements of
+    the winning set exist, but they're the same portfolio, hence the same value.)
+  - **Difficulty (Sahni κ)** via a ratio-greedy completion test. Accept **Easy**
+    when κ = 1 (one hint), **Hard** when κ ≥ 2 (the ceiling the deceptive eight-piece
+    set reaches on this square). Easy returns the first qualifying board; Hard scans
+    for the hardest and stops at the ceiling.
 - **KPIs (live):** Net Value, Total Value, Resource Cost (empty-cell penalty),
   Value/Resource (ROI), Coverage %, Portfolio Fitness (net ÷ best). Hover
   tooltips explain each.
