@@ -1011,7 +1011,10 @@
           if (area > pd.N) continue;
           if (canPlaceSet(pd, pis)) subsets.push({ mask: s, area: area, pis: pis });
         }
-        _GEOM = { pd: pd, tilings: tilings, names: allPieces().map(p => p.name), sym: sym, fullByMask: fullByMask, orbitByMask: orbitByMask, subsets: subsets };
+        // Distinct full covers up to the board's symmetry (what the Solutions
+        // panel shows), so every chip reports the same number, not raw layouts.
+        const distinctCovers = Array.from(orbitByMask.values()).reduce((a, b) => a + b, 0);
+        _GEOM = { pd: pd, tilings: tilings, names: allPieces().map(p => p.name), sym: sym, fullByMask: fullByMask, orbitByMask: orbitByMask, subsets: subsets, distinctCovers: distinctCovers };
       }
       return _GEOM;
     }
@@ -1067,7 +1070,9 @@
       return {
         rows: BOARD.rows, cols: BOARD.cols, region: fixedRegion(),
         values: values, solution: solution, kappa: kappa,
-        tilings: { count: geom.tilings.length, capped: false, complete: true },
+        // count = distinct full covers up to symmetry (matches the Solutions
+        // panel and the board chip); arrangements = raw layouts incl. twins.
+        tilings: { count: geom.distinctCovers, arrangements: geom.tilings.length, capped: false, complete: true },
         bestValue: gb.bestValue
       };
     }
@@ -1207,11 +1212,15 @@
     }
 
     function renderBoardMeta() {
-      const t = state.tilings;
-      const n = t.count, tStr = (t.capped || n >= 1000) ? (n + '+') : n;
+      // Count distinct full covers UP TO SYMMETRY (rotations/reflections folded),
+      // so this chip agrees with the Solutions panel rather than reporting the raw
+      // ~88 layouts. Recomputed from the board so it is right even for older specs.
+      const pd = state.pd, sym = boardSymmetries(pd), canon = new Set();
+      for (const T of collectSolutions(pd, ENUM_CAP)) canon.add(canonOfCover(pd, sym, T));
+      const n = canon.size;
       $('#boardMeta').innerHTML =
         'Difficulty <b>(Sahni &kappa;) = ' + state.kappa + '</b>' +
-        '<span class="sep">&middot;</span>' + tStr + ' distinct solution' + (n === 1 ? '' : 's') +
+        '<span class="sep">&middot;</span>' + n + ' distinct solution' + (n === 1 ? '' : 's') +
         ' <span class="meta-info">&#9432;</span>';
     }
 
@@ -2035,7 +2044,7 @@
       'coverage': 'Percentage of the outline covered by bricks: occupied cells ÷ total cells × 100.',
       'value-resource': 'Efficiency: value generated per occupied cell (Total Value ÷ number of occupied cells).',
       'portfolio-fitness': 'A geometric compactness score: your bricks as a share of the fillable cells inside their convex hull. A contiguous, gap-free cluster scores 100%; spreading bricks apart or leaving gaps between them lowers it.',
-      'difficulty': 'Two readouts of how hard this board is. Sahni κ: the fewest correctly-placed bricks after which a simple value-ratio greedy can finish without getting stuck (higher = harder). Distinct solutions: how many different brick combinations fill this exact outline. Every board offers several full covers, but exactly ONE of them reaches the highest Net Value — that unique optimum is what you are hunting for.'
+      'difficulty': 'Two readouts of how hard this board is. Sahni κ: the fewest correctly-placed bricks after which a simple value-ratio greedy can finish without getting stuck (higher = harder). Distinct solutions: how many genuinely different full covers exist after folding the board\'s rotations and reflections (so symmetric copies of the same layout count once). Exactly ONE of them reaches the highest Net Value — that unique optimum is what you are hunting for.'
     };
     const tipEl = $('#kpiTip');
     let tipFor = null;
