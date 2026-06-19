@@ -821,8 +821,22 @@
     var tb = document.querySelector('.pfx-topbar'); if (tb) tb.remove();
     document.body.classList.remove('pf-hastop');
     showOverlay(card(cfg.texts.thankyouTitle || 'Thank you!', [
-      el('p', { text: cfg.texts.thankyouBody || 'Your responses have been recorded. You may now close this tab.' })
+      el('p', { text: cfg.texts.thankyouBody || 'Your responses have been recorded. You may now close this tab.' }),
+      el('div', { class: 'pfx-row' }, [
+        el('button', { class: 'pfx-btn', on: { click: playAgain } }, [cfg.texts.playAgainButton || 'Play again'])
+      ])
     ]));
+  }
+
+  // Restart the whole experience for this (anonymous) player: clear the in-memory
+  // progress and return to the welcome screen. Pressing Start there re-creates the
+  // participant with status 'playing', so a later reload resumes the new run
+  // rather than bouncing straight back here. Previously recorded data is left
+  // untouched (a fresh run simply appends new rounds under the same player).
+  function playAgain() {
+    S.rounds = []; S.queue = []; S.mainIndex = 0; S.roundIndex = 0; S.currentPuzzleId = null;
+    document.body.classList.remove('pf-playing');
+    showWelcome();
   }
 
   // Resume a returning participant at the right phase.
