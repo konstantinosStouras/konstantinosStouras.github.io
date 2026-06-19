@@ -582,14 +582,35 @@
     var tl = s.timeLimits || { easy: 120, hard: 180 };
     var easy = el('input', { type: 'number', value: String(per.easy != null ? per.easy : 2), style: 'max-width:120px;' });
     var hard = el('input', { type: 'number', value: String(per.hard != null ? per.hard : 2), style: 'max-width:120px;' });
-    var teasy = el('input', { type: 'number', value: String(tl.easy != null ? tl.easy : 120), style: 'max-width:120px;' });
-    var thard = el('input', { type: 'number', value: String(tl.hard != null ? tl.hard : 180), style: 'max-width:120px;' });
+    // Time limits are stored as total seconds, but edited as minutes + seconds.
+    function splitTime(total) { total = Math.max(0, parseInt(total, 10) || 0); return { m: Math.floor(total / 60), s: total % 60 }; }
+    var teE = splitTime(tl.easy != null ? tl.easy : 120), teH = splitTime(tl.hard != null ? tl.hard : 180);
+    var teasyMin = el('input', { type: 'number', min: '0', value: String(teE.m), style: 'max-width:90px;' });
+    var teasySec = el('input', { type: 'number', min: '0', max: '59', value: String(teE.s), style: 'max-width:90px;' });
+    var thardMin = el('input', { type: 'number', min: '0', value: String(teH.m), style: 'max-width:90px;' });
+    var thardSec = el('input', { type: 'number', min: '0', max: '59', value: String(teH.s), style: 'max-width:90px;' });
+    // Combine a minutes + seconds pair into total seconds (seconds clamped 0-59).
+    function combineTime(minInput, secInput, fallback) {
+      var m = Math.max(0, parseInt(minInput.value, 10) || 0);
+      var sec = Math.min(59, Math.max(0, parseInt(secInput.value, 10) || 0));
+      var total = m * 60 + sec;
+      return total > 0 ? total : fallback;
+    }
+    function timeField(labelText, minInput, secInput) {
+      return el('div', { class: 'pfa-field' }, [
+        el('label', { text: labelText }),
+        el('div', { style: 'display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;' }, [
+          el('div', { style: 'display:flex;flex-direction:column;gap:3px;' }, [el('span', { class: 'pfa-note', text: 'Minutes', style: 'margin:0;' }), minInput]),
+          el('div', { style: 'display:flex;flex-direction:column;gap:3px;' }, [el('span', { class: 'pfa-note', text: 'Seconds (0–59)', style: 'margin:0;' }), secInput])
+        ])
+      ]);
+    }
     var rnd = el('input', { type: 'checkbox' }); if (s.randomizeOrder !== false) rnd.setAttribute('checked', 'checked');
     body.appendChild(el('div', { class: 'pfa-card' }, [
       el('div', { class: 'pfa-field' }, [el('label', { text: 'Easy puzzles per participant' }), easy]),
       el('div', { class: 'pfa-field' }, [el('label', { text: 'Hard puzzles per participant' }), hard]),
-      el('div', { class: 'pfa-field' }, [el('label', { text: 'Easy time limit (seconds per puzzle)' }), teasy]),
-      el('div', { class: 'pfa-field' }, [el('label', { text: 'Hard time limit (seconds per puzzle)' }), thard]),
+      timeField('Easy time limit per puzzle', teasyMin, teasySec),
+      timeField('Hard time limit per puzzle', thardMin, thardSec),
       el('div', { class: 'pfa-field' }, [el('label', { style: 'display:flex;align-items:center;gap:8px;' }, [rnd, document.createTextNode('Randomize puzzle order per participant')])]),
       el('p', { class: 'pfa-note', text: 'Puzzle counts apply when no custom set is frozen (see the Puzzles tab): each participant gets that many easy/hard puzzles, drawn at random from the built-in pool (extra puzzles are generated if the pool runs short). Time limits apply to every puzzle of that difficulty, in training and the main game.' }),
       el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;' }, [
@@ -601,7 +622,7 @@
     function persist(msg) {
       var settings = Object.assign({}, s, {
         puzzlesPerUser: { easy: parseInt(easy.value, 10) || 0, hard: parseInt(hard.value, 10) || 0 },
-        timeLimits: { easy: parseInt(teasy.value, 10) || 120, hard: parseInt(thard.value, 10) || 180 },
+        timeLimits: { easy: combineTime(teasyMin, teasySec, 120), hard: combineTime(thardMin, thardSec, 180) },
         randomizeOrder: rnd.checked
       });
       return saveConfig({ settings: settings }).then(function () { cfg.settings = settings; toast(msg); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); throw e; });
