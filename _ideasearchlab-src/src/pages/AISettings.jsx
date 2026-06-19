@@ -64,32 +64,45 @@ const PROVIDERS = [
   },
 ]
 
-// The same three default-management buttons used across the admin panel
-// (Content editor, Registration/Survey builders).
-function DefaultActions({ onSave, onReset, onRestore, hasCustom, feedback }) {
+// The same three default-management buttons used across the admin panel,
+// shown under every section. In this app the global `settings/ai` document IS
+// the configuration applied to every session, so "Save" and "Make this the
+// default" both persist this section to that document (they differ only in the
+// confirmation they show). "Restore built-in default" clears the section back
+// to the hardcoded fallback in functions/ai.js and is disabled while the
+// section already uses that built-in default (nothing saved to restore from).
+function DefaultActions({ onSave, onMakeDefault, onRestore, hasCustom, feedback }) {
   return (
     <div className={styles.btnRow}>
       <button
         type="button"
-        className={styles.defaultBtn}
+        className={styles.saveSectionBtn}
         onClick={onSave}
-        title="Save this section's current values as the default used from now on"
+        title="Save this section's current values"
+      >
+        Save
+      </button>
+      <button
+        type="button"
+        className={styles.defaultBtn}
+        onClick={onMakeDefault}
+        title="Save these values as the default applied to every session"
       >
         Make this the default
       </button>
-      <button type="button" className={styles.resetBtn} onClick={onReset}>
-        Reset this page to defaults
+      <button
+        type="button"
+        className={styles.resetBtn}
+        onClick={onRestore}
+        disabled={!hasCustom}
+        title={
+          hasCustom
+            ? 'Discard the saved value and go back to the built-in default'
+            : 'Already using the built-in default'
+        }
+      >
+        Restore built-in default
       </button>
-      {hasCustom && (
-        <button
-          type="button"
-          className={styles.resetBtn}
-          onClick={onRestore}
-          title="Discard the saved value and go back to the built-in default"
-        >
-          Restore built-in default
-        </button>
-      )}
       {feedback && <span className={styles.savedNote}>{feedback}</span>}
     </div>
   )
@@ -130,11 +143,13 @@ export default function AISettings() {
   }
 
   // Save a partial update to settings/ai (the doc is merged server-side;
-  // null clears a field back to its built-in default).
-  async function saveSection(key, values) {
+  // null clears a field back to its built-in default). The message lets each
+  // button (Save / Make this the default / Restore built-in default) show its
+  // own confirmation while sharing one code path.
+  async function saveSection(key, values, message = 'Saved.') {
     try {
       await httpsCallable(functions, 'saveAISettings')(values)
-      flashSection(key, 'Saved — this is now the default.')
+      flashSection(key, message)
     } catch (err) {
       flashSection(key, err.message || 'Could not save.')
     }
@@ -226,6 +241,13 @@ export default function AISettings() {
               </div>
             ))}
           </div>
+          <DefaultActions
+            onSave={() => saveSection('provider', { provider }, 'Saved.')}
+            onMakeDefault={() => saveSection('provider', { provider }, 'Saved — this is now the default for all sessions.')}
+            onRestore={() => { setProvider('claude'); setModel(''); saveSection('provider', { provider: 'claude' }, 'Restored the built-in default (Claude).') }}
+            hasCustom={current?.provider != null && current.provider !== 'claude'}
+            feedback={sectionFeedback?.key === 'provider' ? sectionFeedback.text : null}
+          />
         </div>
 
         {/* API Keys - one field per provider */}
@@ -233,8 +255,9 @@ export default function AISettings() {
           <h2 className={styles.sectionTitle}>API Keys</h2>
           <p className={styles.hint}>
             You can store keys for multiple providers. Only the active provider's key is used.
-            Keys are saved when you click Save Settings and load back automatically every time
-            you open this page — only the administrator account can read or change them.
+            Keys are saved when you click Save below (or Save Settings at the bottom) and load
+            back automatically every time you open this page — only the administrator account
+            can read or change them.
           </p>
           {PROVIDERS.map(p => (
             <div key={p.id} className={styles.field}>
@@ -257,6 +280,18 @@ export default function AISettings() {
               />
             </div>
           ))}
+          <DefaultActions
+            onSave={() => saveSection('keys', { apiKeys }, 'Keys saved.')}
+            onMakeDefault={() => saveSection('keys', { apiKeys }, 'Keys saved — now the default for all sessions.')}
+            onRestore={() => {
+              if (!window.confirm('Remove all saved API keys and go back to no keys (the built-in default)?')) return
+              const cleared = { claude: '', openai: '', gemini: '' }
+              setApiKeys(cleared)
+              saveSection('keys', { apiKeys: cleared }, 'Removed saved API keys.')
+            }}
+            hasCustom={!!(current?.apiKeys && Object.values(current.apiKeys).some(Boolean))}
+            feedback={sectionFeedback?.key === 'keys' ? sectionFeedback.text : null}
+          />
         </div>
 
         {/* Model */}
@@ -280,9 +315,9 @@ export default function AISettings() {
             </p>
           </div>
           <DefaultActions
-            onSave={() => saveSection('model', { model: model || null })}
-            onReset={() => setModel(current?.model || '')}
-            onRestore={() => { setModel(''); saveSection('model', { model: null }) }}
+            onSave={() => saveSection('model', { model: model || null }, 'Saved.')}
+            onMakeDefault={() => saveSection('model', { model: model || null }, 'Saved — this is now the default for all sessions.')}
+            onRestore={() => { setModel(''); saveSection('model', { model: null }, 'Restored the built-in default.') }}
             hasCustom={!!current?.model}
             feedback={sectionFeedback?.key === 'model' ? sectionFeedback.text : null}
           />
@@ -314,15 +349,12 @@ export default function AISettings() {
             </div>
           </div>
           <DefaultActions
-            onSave={() => saveSection('params', { temperature, maxTokens })}
-            onReset={() => {
-              setTemperature(current?.temperature ?? 1.0)
-              setMaxTokens(current?.maxTokens ?? 1000)
-            }}
+            onSave={() => saveSection('params', { temperature, maxTokens }, 'Saved.')}
+            onMakeDefault={() => saveSection('params', { temperature, maxTokens }, 'Saved — this is now the default for all sessions.')}
             onRestore={() => {
               setTemperature(1.0)
               setMaxTokens(1000)
-              saveSection('params', { temperature: 1.0, maxTokens: 1000 })
+              saveSection('params', { temperature: 1.0, maxTokens: 1000 }, 'Restored the built-in default.')
             }}
             hasCustom={current?.temperature != null || current?.maxTokens != null}
             feedback={sectionFeedback?.key === 'params' ? sectionFeedback.text : null}
@@ -356,9 +388,9 @@ export default function AISettings() {
             rows={6}
           />
           <DefaultActions
-            onSave={() => saveSection('prompt', { systemPrompt: systemPrompt || null })}
-            onReset={() => setSystemPrompt(current?.systemPrompt || '')}
-            onRestore={() => { setSystemPrompt(''); saveSection('prompt', { systemPrompt: null }) }}
+            onSave={() => saveSection('prompt', { systemPrompt: systemPrompt || null }, 'Saved.')}
+            onMakeDefault={() => saveSection('prompt', { systemPrompt: systemPrompt || null }, 'Saved — this is now the default for all sessions.')}
+            onRestore={() => { setSystemPrompt(''); saveSection('prompt', { systemPrompt: null }, 'Restored the built-in default.') }}
             hasCustom={!!current?.systemPrompt}
             feedback={sectionFeedback?.key === 'prompt' ? sectionFeedback.text : null}
           />

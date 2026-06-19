@@ -192,6 +192,27 @@
   transition: border-color 0.15s, color 0.15s;
 }
 .resetBtn:hover { border-color: var(--accent); color: var(--accent); }
+.resetBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+  border-color: var(--border);
+  color: var(--muted);
+}
+.resetBtn:disabled:hover { border-color: var(--border); color: var(--muted); }
+/* Primary per-section Save button (solid accent, matches .btn-primary). */
+.saveSectionBtn {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+.saveSectionBtn:hover { background: var(--accent-light); border-color: var(--accent-light); }
+.saveSectionBtn:active { transform: scale(0.98); }
 .defaultBtn {
   background: rgba(200,86,42,0.06);
   border: 1px solid rgba(200,86,42,0.35);
