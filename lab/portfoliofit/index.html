@@ -448,8 +448,8 @@
 
     <div class="controls">
       <div class="seg" id="difficulty">
-        <button data-diff="easy" class="active">Easy &middot; 14</button>
-        <button data-diff="hard">Hard &middot; 18</button>
+        <button data-diff="easy" class="active">Easy</button>
+        <button data-diff="hard">Hard</button>
       </div>
       <button class="btn primary" id="newBtn">New puzzle</button>
       <button class="btn" id="restartBtn">Restart</button>
@@ -634,13 +634,21 @@
 
     const DIRS = [[-1,0],[1,0],[0,-1],[0,1]];
 
-    // All eight pieces are always SHOWN, but each board is solved with a SUBSET:
-    // an Easy challenge fills a 14-cell outline, a Hard challenge an 18-cell one
-    // (authentic Ubongo). cells = target outline area; limit = sand-timer budget.
+    // The board NEVER changes shape or size: every puzzle (Easy or Hard) is the
+    // SAME fixed square. All eight pieces are always SHOWN, but the square is
+    // tiled by a 4-brick subset (the tromino + two tetrominoes + one pentomino,
+    // areas 3+4+4+5 = 16). Difficulty is set ONLY by the brick VALUES (see
+    // generatePuzzle): a value assignment is chosen so the value-ratio greedy
+    // needs few hints (Easy) or more (Hard). limit = sand-timer budget.
+    const BOARD = { rows: 4, cols: 4 };          // the one square every puzzle uses
     const DIFFS = {
-      easy: { cells: 14, limit: 120 },
-      hard: { cells: 18, limit: 180 }
+      easy: { limit: 120 },
+      hard: { limit: 180 }
     };
+    // Brick values are drawn as whole dollars in this range, then accepted only
+    // if their $/cell ratios are all distinct (deterministic greedy) and the
+    // board has a single best brick-set (see generatePuzzle).
+    const VALUE_MIN = 3, VALUE_MAX = 19;
 
     // ---------- Geometry helpers ----------
     function normalize(cells) {
@@ -671,106 +679,54 @@
       return arr;
     }
 
-    // ---------- Puzzle generation (guaranteed solvable) ----------
-    // Pick a random subset of the library whose areas sum to the target outline
-    // area (14 for Easy, 18 for Hard) via randomized subset-sum backtracking.
-    function pickSubset(target) {
-      const order = shuffle(LIBRARY.map((_, i) => i));
-      const res = [];
-      let found = false;
-      (function rec(i, sum) {
-        if (found) return;
-        if (sum === target) { found = true; return; }
-        if (sum > target || i >= order.length) return;
-        const li = order[i], a = LIBRARY[li].cells.length;
-        const incFirst = Math.random() < 0.5;
-        for (const inc of (incFirst ? [true, false] : [false, true])) {
-          if (found) return;
-          if (inc) { res.push(li); rec(i + 1, sum + a); if (found) return; res.pop(); }
-          else { rec(i + 1, sum); }
+    // ---------- The fixed board ----------
+    // Every puzzle uses the SAME square region; only the brick values change. A
+    // fresh Set is returned each call so callers can own/mutate it.
+    let _REGION = null;
+    function fixedRegion() {
+      if (!_REGION) {
+        _REGION = [];
+        for (let r = 0; r < BOARD.rows; r++) for (let c = 0; c < BOARD.cols; c++) _REGION.push(r + ',' + c);
+      }
+      return new Set(_REGION);
+    }
+    // The library's built-in values, used by the classic game and as a fallback
+    // for any (older) saved spec that predates per-puzzle values.
+    function defaultValueMap() { const m = {}; for (const p of LIBRARY) m[p.name] = p.value; return m; }
+
+    // ---------- Per-puzzle brick values ----------
+    // A puzzle's difficulty comes entirely from the dollar values assigned to the
+    // eight bricks. Draw a fresh value per brick and require all $/cell ratios to
+    // be DISTINCT, so the value-ratio greedy is deterministic (no ties) and the
+    // traps it falls into are unambiguous. Returns a { name -> value } map.
+    function randomValues() {
+      const all = allPieces();
+      for (let attempt = 0; attempt < 300; attempt++) {
+        const v = {}, seen = new Set(); let ok = true;
+        for (const p of all) {
+          const val = VALUE_MIN + Math.floor(Math.random() * (VALUE_MAX - VALUE_MIN + 1));
+          const ratio = (val / p.oris[0].length).toFixed(4);
+          if (seen.has(ratio)) { ok = false; break; }
+          seen.add(ratio); v[p.name] = val;
         }
-      })(0, 0);
-      return res.map(i => LIBRARY[i]);
+        if (ok) return v;
+      }
+      return defaultValueMap();
     }
 
-    function place(chosen, idx, filled, placements) {
-      if (idx === chosen.length) return true;
-      const oris = chosen[idx]._oris;
-      let candidates = [];
-
-      if (filled.size === 0) {
-        const ori = oris[Math.floor(Math.random() * oris.length)];
-        candidates.push(ori.map(([r, c]) => [r + 100, c + 100]));
-      } else {
-        const boundary = new Set();
-        for (const k of filled.keys()) {
-          const [r, c] = k.split(',').map(Number);
-          for (const [dr, dc] of DIRS) {
-            const nk = (r + dr) + ',' + (c + dc);
-            if (!filled.has(nk)) boundary.add(nk);
-          }
-        }
-        const dedupe = new Set();
-        for (const bk of boundary) {
-          const [br, bc] = bk.split(',').map(Number);
-          for (const ori of oris) {
-            for (const cell of ori) {
-              const offR = br - cell[0], offC = bc - cell[1];
-              const placed = ori.map(([r, c]) => [r + offR, c + offC]);
-              if (placed.every(([r, c]) => !filled.has(r + ',' + c))) {
-                const kk = key(placed.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]));
-                if (!dedupe.has(kk)) { dedupe.add(kk); candidates.push(placed); }
-              }
-            }
-          }
-        }
+    // Greedy completion driven by an EXTERNAL ratio array (the generator path):
+    // same rule as greedyComplete, but reads a candidate value vector's ratios
+    // instead of pd.ratios, so many value vectors can be scored against one pd.
+    function greedyRatio(pd, ratios, occupied, used) {
+      const rem = [];
+      for (let pi = 0; pi < pd.m; pi++) if (!(used & (1 << pi))) rem.push(pi);
+      rem.sort((a, b) => ratios[b] - ratios[a] || a - b);
+      let occ = occupied;
+      for (const pi of rem) {
+        if (occ === pd.full) break;
+        for (const mask of pd.sorted[pi]) { if ((mask & occ) === 0n) { occ |= mask; break; } }
       }
-
-      shuffle(candidates);
-      for (const placed of candidates.slice(0, 140)) {
-        for (const [r, c] of placed) filled.set(r + ',' + c, idx);
-        placements[idx] = placed;
-        if (place(chosen, idx + 1, filled, placements)) return true;
-        for (const [r, c] of placed) filled.delete(r + ',' + c);
-        placements[idx] = null;
-      }
-      return false;
-    }
-
-    function generatePuzzle(target) {
-      for (let attempt = 0; attempt < 1500; attempt++) {
-        const chosen = pickSubset(target).map(p => ({ name: p.name, color: p.color, value: p.value, cells: p.cells }));
-        if (!chosen.length) continue;
-        chosen.forEach(p => { p._oris = orientations(p.cells); });
-        const filled = new Map();
-        const placements = new Array(chosen.length).fill(null);
-        if (place(chosen, 0, filled, placements)) {
-          // Normalise region + placements to a tight bounding box.
-          let minR = Infinity, minC = Infinity, maxR = -Infinity, maxC = -Infinity;
-          for (const k of filled.keys()) {
-            const [r, c] = k.split(',').map(Number);
-            if (r < minR) minR = r; if (c < minC) minC = c;
-            if (r > maxR) maxR = r; if (c > maxC) maxC = c;
-          }
-          const region = new Set();
-          for (const k of filled.keys()) {
-            const [r, c] = k.split(',').map(Number);
-            region.add((r - minR) + ',' + (c - minC));
-          }
-          const solution = chosen.map((p, i) => ({
-            name: p.name, color: p.color,
-            cells: placements[i].map(([r, c]) => [r - minR, c - minC])
-          }));
-          return {
-            rows: maxR - minR + 1,
-            cols: maxC - minC + 1,
-            region: region,
-            pieces: chosen.map(p => ({ name: p.name, color: p.color, value: p.value, oris: p._oris })),
-            solution: solution
-          };
-        }
-      }
-      return null; // extremely unlikely
+      return occ === pd.full;
     }
 
     // ---------- Difficulty measures (exact cover + Sahni-style kappa) ----------
@@ -842,32 +798,6 @@
         }
       })(0n, 0);
       return sols;
-    }
-
-    // Tiling stats over any subset of the bricks: number of tilings (capped), the
-    // maximum total dollar value achievable while exactly filling the region, and
-    // how many distinct tilings attain that maximum (bestCount) — used to ensure
-    // exactly one full cover yields the highest Net Value.
-    function analyze(pd, cap) {
-      let count = 0, nodes = 0, capped = false, best = 0, bestCount = 0; const MAXN = 200000;
-      (function rec(occ, used, val) {
-        if (count >= cap || capped) return;
-        if (occ === pd.full) {
-          count++;
-          if (val > best) { best = val; bestCount = 1; }
-          else if (val === best) { bestCount++; }
-          return;
-        }
-        if (++nodes > MAXN) { capped = true; return; }
-        const cell = firstEmpty(pd, occ);
-        for (const pl of pd.byCell[cell]) {
-          if (used & (1 << pl.pi)) continue;
-          if ((pl.mask & occ) !== 0n) continue;
-          rec(occ | pl.mask, used | (1 << pl.pi), val + pd.values[pl.pi]);
-          if (count >= cap || capped) return;
-        }
-      })(0n, 0, 0);
-      return { count: count, capped: capped, bestValue: best, bestCount: bestCount };
     }
 
     // The full eight-piece set, with orientations precomputed once.
@@ -984,79 +914,118 @@
       return Math.max(22, Math.min(54, byWidth, byHeight, Math.floor(460 / Math.max(rows, cols))));
     }
 
-    // Difficulty is the value-ratio Sahni kappa over the FULL eight-piece set.
-    // Easy: a small (14-cell) outline where the ratio-greedy needs one or two
-    // hand-placed hints (kappa = 1 or 2).
-    // Hard: a larger (18-cell) outline where the ratio-greedy is badly trapped and
-    // needs at least three hand-placed hints (kappa >= 3) - at the ceiling of what
-    // the deceptive eight-piece set reaches at this size. All eight bricks are
-    // always available either way; every board has many full covers but a single
-    // best one (highest Net Value) to find (see pickPuzzle).
-    const ACCEPT = { easy: k => k >= 1 && k <= 2, hard: k => k >= 3 };
+    // Difficulty is the value-ratio Sahni kappa over the FULL eight-piece set, on
+    // the FIXED square board. The board never changes — only the brick values do —
+    // so a value assignment is chosen to land kappa in the wanted band:
+    //   Easy: the ratio-greedy needs exactly ONE hand-placed hint (kappa = 1) — a
+    //         mild trap, never a board the greedy just solves outright.
+    //   Hard: the greedy is trapped and needs TWO hints (kappa >= 2) — the ceiling
+    //         the deceptive eight-piece set reaches on this square.
+    // All eight bricks are always available; every board has many full covers but
+    // a single best brick-set (highest Net Value) to find (see generatePuzzle).
+    const ACCEPT = { easy: k => k === 1, hard: k => k >= 2 };
+    // The greatest kappa reachable on this square (confirmed empirically), so the
+    // hard search can stop as soon as it finds a board at the ceiling.
+    const HARD_CEILING = 2;
 
-    // Enumeration cap: high enough that every accepted board is fully enumerated
-    // (so its tiling count and unique-optimum status are exact, not truncated).
+    // Enumeration cap: comfortably above the ~88 exact covers of the 4x4, so the
+    // board's full tiling list is always enumerated exactly (never truncated).
     const ENUM_CAP = 5000;
 
-    function evaluate(puzzle) {
-      const pd = buildPlacements(puzzle.region, allPieces());
-      const st = analyze(pd, ENUM_CAP);
-      // "complete" => we enumerated every tiling (neither the node nor the count
-      // budget was hit), so bestCount is the true number of optimum-value covers.
-      const complete = !st.capped && st.count < ENUM_CAP;
+    // The board's GEOMETRY (legal placements + every exact cover) does not depend
+    // on the brick values, so compute it ONCE and reuse it to score each candidate
+    // value vector cheaply (no re-enumeration per candidate).
+    let _GEOM = null;
+    function fixedGeom() {
+      if (!_GEOM) {
+        const pd = buildPlacements(fixedRegion(), allPieces());
+        _GEOM = { pd: pd, tilings: collectSolutions(pd, ENUM_CAP), names: allPieces().map(p => p.name) };
+      }
+      return _GEOM;
+    }
+
+    // Sahni kappa for one value vector (its $/cell ratios), reusing the cached
+    // tiling list: the fewest pre-placed bricks so the value-greedy can finish.
+    function kappaFor(geom, ratios) {
+      const pd = geom.pd;
+      if (greedyRatio(pd, ratios, 0n, 0)) return 0;
+      let best = pd.m;
+      for (const T of geom.tilings) {
+        for (let k = 1; k < best; k++) {
+          let found = false;
+          for (const idxs of combinations(T.length, k)) {
+            let occ = 0n, used = 0;
+            for (const j of idxs) { occ |= T[j].mask; used |= (1 << T[j].pi); }
+            if (greedyRatio(pd, ratios, occ, used)) { found = true; break; }
+          }
+          if (found) { best = k; break; }
+        }
+        if (best === 1) break;
+      }
+      return best;
+    }
+
+    // Highest Net Value over all covers, and how many DISTINCT brick-sets attain
+    // it. On a square the rotations/reflections of one cover all use the same
+    // bricks (so the same value), so uniqueness is judged by the SET of bricks
+    // used — Net Value depends only on which bricks are placed, not how.
+    function bestFor(geom, values) {
+      let best = -Infinity; const sets = new Set(); let bestT = null;
+      for (const T of geom.tilings) {
+        let v = 0, used = 0;
+        for (const pl of T) { v += values[geom.names[pl.pi]]; used |= (1 << pl.pi); }
+        if (v > best) { best = v; sets.clear(); sets.add(used); bestT = T; }
+        else if (v === best) sets.add(used);
+      }
+      return { bestValue: best, bestSetCount: sets.size, bestTiling: bestT };
+    }
+
+    // Assemble a full puzzle object on the fixed board for a chosen value vector.
+    // solution = one arrangement of the uniquely best brick-set (used by hints,
+    // the scripted tour, and Solve).
+    function buildPuzzleFrom(values, kappa, bi) {
+      const geom = fixedGeom(), pd = geom.pd, all = allPieces();
+      const solution = bi.bestTiling.map(pl => ({
+        name: geom.names[pl.pi], color: all[pl.pi].color, cells: maskToCells(pd, pl.mask)
+      }));
       return {
-        puzzle: puzzle, kappa: sahniDifficulty(pd),
-        tilings: { count: st.count, capped: st.capped, complete: complete },
-        bestValue: st.bestValue, bestCount: st.bestCount
+        rows: BOARD.rows, cols: BOARD.cols, region: fixedRegion(),
+        values: values, solution: solution, kappa: kappa,
+        tilings: { count: geom.tilings.length, capped: false, complete: true },
+        bestValue: bi.bestValue
       };
     }
 
-    // Every board must offer MANY full covers but a SINGLE best one: there are
-    // >= MIN_SOLUTIONS distinct ways to tile the outline, yet exactly one of them
-    // attains the highest Net Value (bestCount === 1). The player's job is to find
-    // that uniquely optimal portfolio, not just any cover.
-    const MIN_SOLUTIONS = 3;
-    function qualifies(cand) {
-      return cand.tilings.complete && cand.tilings.count >= MIN_SOLUTIONS && cand.bestCount === 1;
-    }
-
-    function pickPuzzle(diff) {
-      const target = DIFFS[diff].cells;
-      // Hard never early-returns (it hunts for the maximum kappa), so give it a
-      // larger time budget to scan more boards; easy early-returns and stays snappy.
-      const deadline = Date.now() + (diff === 'hard' ? 650 : 360);
-      let bestOk = null, bestAny = null;  // bestOk: many covers + unique optimum
-      for (let t = 0; t < 900; t++) {
-        const puzzle = generatePuzzle(target);
-        if (!puzzle) continue;
-        const cand = evaluate(puzzle);
-        const ok = qualifies(cand);
-        if (ok && diff === 'easy' && ACCEPT.easy(cand.kappa)) return cand;  // easy: the first low-kappa board is fine
-        if (ok) {
-          // Track the qualifying board closest to the target band (easy: lowest
-          // kappa; hard: highest). For HARD we deliberately never early-return -
-          // we scan the whole budget and ship the HARDEST board found (maximum
-          // Sahni kappa), not merely the first that clears kappa >= 3.
-          const score = (diff === 'hard' ? cand.kappa : -cand.kappa);
-          if (!bestOk || score > bestOk.score) { cand.score = score; bestOk = cand; }
-        }
-        if (!bestAny) bestAny = cand;
-        if (Date.now() > deadline && bestOk) break;
+    // Generate a puzzle by searching VALUE assignments (never the board): draw
+    // random brick values until one lands in the difficulty band AND leaves a
+    // single best brick-set. Easy returns the first qualifying board; Hard scans
+    // for the hardest (highest kappa) and stops once it hits the ceiling.
+    function generatePuzzle(diff) {
+      const geom = fixedGeom(), names = geom.names, areas = geom.pd.areas;
+      const accept = ACCEPT[diff] || ACCEPT.easy;
+      const deadline = Date.now() + (diff === 'hard' ? 700 : 300);
+      let best = null, bestScore = -Infinity;
+      for (let t = 0; t < 6000; t++) {
+        const values = randomValues();
+        const ratios = names.map((nm, i) => values[nm] / areas[i]);
+        const k = kappaFor(geom, ratios);
+        if (!accept(k)) continue;
+        const bi = bestFor(geom, values);
+        if (bi.bestSetCount !== 1) continue;          // require a single best brick-set
+        const score = (diff === 'hard') ? k : -k;     // easy prefers low kappa, hard high
+        if (!best || score > bestScore) { bestScore = score; best = { values, k, bi }; }
+        if (diff === 'easy') break;                   // easy: first qualifying board is fine
+        if (k >= HARD_CEILING) break;                 // hard: can't get harder, ship it
+        if (Date.now() > deadline) break;
       }
-      // Guarantee the many-covers + unique-optimum requirement even if the band was never hit.
-      for (let t = 0; t < 900 && !bestOk; t++) {
-        const puzzle = generatePuzzle(target);
-        if (!puzzle) continue;
-        const cand = evaluate(puzzle);
-        if (qualifies(cand)) bestOk = cand;
-      }
-      return bestOk || bestAny || evaluate(generatePuzzle(target));
+      if (!best) return null;
+      return buildPuzzleFrom(best.values, best.k, best.bi);
     }
 
     function newGame(diff, limit) {
-      const picked = pickPuzzle(diff);
-      if (!picked || !picked.puzzle) return;
-      startRound(diff, picked.puzzle, picked.kappa, picked.tilings, picked.bestValue, limit);
+      const puzzle = generatePuzzle(diff);
+      if (!puzzle) return;
+      startRound(diff, puzzle, puzzle.kappa, puzzle.tilings, puzzle.bestValue, limit);
     }
     // Per-round time budget: an explicit override (admin-set) if provided,
     // otherwise the built-in DIFFS limit for the difficulty.
@@ -1068,6 +1037,16 @@
     // Build and start a round from an explicit puzzle. Used by random
     // generation (newGame) and by admin-frozen puzzles (loadPuzzleSpec).
     function startRound(diff, puzzle, kappa, tilings, bestValue, limit) {
+      // Each brick takes this puzzle's value (older specs without per-puzzle
+      // values fall back to the library defaults). The placement data (pd) is
+      // built from these values so kappa / ratios / Net Value all match.
+      const vals = puzzle.values || defaultValueMap();
+      const pcs = allPieces().map((p, i) => ({
+        id: i, name: p.name, color: p.color,
+        value: (vals[p.name] != null ? vals[p.name] : p.value),
+        oris: p.oris, oriIndex: Math.floor(Math.random() * p.oris.length),
+        placed: false, placedCells: null
+      }));
       state = {
         diff: diff,
         limitOverride: (limit != null ? limit : null),
@@ -1078,14 +1057,11 @@
         kappa: kappa,
         tilings: tilings,
         bestValue: bestValue,
-        pd: buildPlacements(puzzle.region, allPieces()),
+        values: vals,
+        pd: buildPlacements(puzzle.region, pcs),
         occupied: new Map(),        // "r,c" -> instanceId
         // All eight bricks are available every round; the player finds a fit.
-        pieces: allPieces().map((p, i) => ({
-          id: i, name: p.name, color: p.color, value: p.value,
-          oris: p.oris, oriIndex: Math.floor(Math.random() * p.oris.length),
-          placed: false, placedCells: null
-        })),
+        pieces: pcs,
         selected: null,
         milestones: new Set(),
         timeNudges: new Set(),
@@ -1108,20 +1084,20 @@
     }
 
     // Serialize a freshly generated puzzle so the admin can preview / freeze it.
+    // The per-puzzle brick values travel with the spec (that IS the difficulty).
     function generatePuzzleSpec(diff) {
-      const picked = pickPuzzle(diff);
-      if (!picked || !picked.puzzle) return null;
-      const p = picked.puzzle;
+      const p = generatePuzzle(diff);
+      if (!p) return null;
       return {
         diff: diff, rows: p.rows, cols: p.cols,
-        region: Array.from(p.region), solution: p.solution,
-        kappa: picked.kappa, tilings: picked.tilings, bestValue: picked.bestValue
+        region: Array.from(p.region), values: p.values, solution: p.solution,
+        kappa: p.kappa, tilings: p.tilings, bestValue: p.bestValue
       };
     }
     // Start a round from a frozen puzzle spec (region stored as an array).
     function loadPuzzleSpec(spec, limit) {
       if (!spec) return;
-      const puzzle = { rows: spec.rows, cols: spec.cols, region: new Set(spec.region), solution: spec.solution || [] };
+      const puzzle = { rows: spec.rows, cols: spec.cols, region: new Set(spec.region), values: spec.values, solution: spec.solution || [] };
       startRound(spec.diff, puzzle, spec.kappa, spec.tilings, spec.bestValue, limit);
     }
     // Load a puzzle for admin EVALUATION only — builds state and renders, but
@@ -1129,11 +1105,17 @@
     function loadPuzzleSpecPreview(spec) {
       if (!spec) return;
       const region = new Set(spec.region);
+      const vals = spec.values || defaultValueMap();
+      const pcs = allPieces().map((p, i) => ({
+        id: i, name: p.name, color: p.color,
+        value: (vals[p.name] != null ? vals[p.name] : p.value),
+        oris: p.oris, oriIndex: 0, placed: false, placedCells: null
+      }));
       state = {
         diff: spec.diff, rows: spec.rows, cols: spec.cols, region: region, solution: spec.solution || [],
-        kappa: spec.kappa, tilings: spec.tilings, bestValue: spec.bestValue,
-        pd: buildPlacements(region, allPieces()), occupied: new Map(),
-        pieces: allPieces().map((p, i) => ({ id: i, name: p.name, color: p.color, value: p.value, oris: p.oris, oriIndex: 0, placed: false, placedCells: null })),
+        kappa: spec.kappa, tilings: spec.tilings, bestValue: spec.bestValue, values: vals,
+        pd: buildPlacements(region, pcs), occupied: new Map(),
+        pieces: pcs,
         selected: null, milestones: new Set(), timeNudges: new Set(), ended: true, wasFull: false, wasOptimal: false,
         cs: cellSize(spec.rows, spec.cols)
       };
