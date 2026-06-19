@@ -5,8 +5,11 @@
 Structured group ideation research app for academic sessions. Participants brainstorm individually, collaborate in groups, vote, and complete a post-session survey, with optional AI assistance at configurable phases.
 
 **Live URL:** stouras.com/lab/ideasearchlab  
-**Repo:** github.com/konstantinosStouras/ideasearchlab  
-**Local path:** C:\Users\User\Documents\GitHub\ideasearchlab
+**Source (self-contained):** `_ideasearchlab-src/` at the repo root (this same
+`konstantinosStouras.github.io` repo). The app no longer depends on the separate
+`github.com/konstantinosStouras/ideasearchlab` repo — that one is now redundant
+and should be archived. Build/deploy with `ideasearchlab-deploy-update.bat`; see
+`_ideasearchlab-src/README-SELF-CONTAINED.md`.
 
 ## Stack
 
