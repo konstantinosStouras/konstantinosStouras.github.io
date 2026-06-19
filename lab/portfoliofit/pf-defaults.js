@@ -24,7 +24,8 @@ window.PF_DEFAULTS = {
     surveyTitle: 'Post-Game Survey',
     surveyIntro: 'Please share your thoughts about the experience (all fields are required).',
     thankyouTitle: 'Thank you for playing!',
-    thankyouBody: 'Your responses have been recorded. You may now close this tab.'
+    thankyouBody: 'Your responses have been recorded. You may now close this tab.',
+    playAgainButton: 'Play again'
   },
   settings: {
     trainingDifficulty: 'easy',
