@@ -29,3 +29,20 @@ keep that in mind if a change there is warranted.
 ## Current /fun/ apps
 `portfoliofitgame` · `capitals` · `nomoi` · `rooks` · `sudoku` · `snake` · `ms` ·
 `mnsc_scraper-to-use-locally`
+
+## `/lab/ideasearchlab` — self-contained, built from this repo
+
+The Ideation Challenge app at `stouras.com/lab/ideasearchlab/` is a React/Vite +
+Firebase app whose **complete source is vendored in `_ideasearchlab-src/`** (the
+leading `_` keeps Jekyll from publishing it). The served bundle lives in
+`lab/ideasearchlab/`. There is **no dependency on any external repo** — to update
+the app, edit `_ideasearchlab-src/`, then run `ideasearchlab-deploy-update.bat`
+(or `cd _ideasearchlab-src && npm install && npm run build` and copy `dist/*` into
+`lab/ideasearchlab/`), commit, and push. Cloud Functions deploy separately with
+`firebase deploy --only functions` from `_ideasearchlab-src/`. See
+`_ideasearchlab-src/README-SELF-CONTAINED.md`. The old standalone
+`github.com/konstantinosStouras/ideasearchlab` repo is retired and safe to delete.
+
+The retired static prototype `lab/brainstorming/` (an older Google-Sheets-backed
+version of the same Ideation Challenge, superseded by `lab/ideasearchlab/`) was
+removed.

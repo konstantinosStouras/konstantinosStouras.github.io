@@ -48,8 +48,23 @@ cd _ideasearchlab-src
 firebase deploy --only functions
 ```
 
-## Note on the old repo
+## Note on the old repo (safe to delete)
 
-The standalone `github.com/konstantinosStouras/ideasearchlab` repo is now
-redundant. To avoid its GitHub Action overwriting `lab/ideasearchlab/` from stale
-source, **archive that repo or delete its `.github/workflows/deploy.yml`**.
+The standalone `github.com/konstantinosStouras/ideasearchlab` repo is **redundant
+and safe to delete**. This vendored copy is the authoritative source — it is
+newer than that repo ever was, and a clean `npm run build` here reproduces the
+live `lab/ideasearchlab/` bundle byte-for-byte. The only thing unique to the old
+repo is its `.github/workflows/deploy.yml` (the CI we no longer use), so deleting
+the repo loses nothing of value.
+
+Until it is deleted, that dormant GitHub Action is a landmine: any push to the old
+repo's `main` would rebuild from its **stale** source and overwrite
+`lab/ideasearchlab/`. To remove it:
+
+1. GitHub → the `ideasearchlab` repo → **Settings → Danger Zone → Delete this
+   repository** (or **Archive** if you'd rather keep a read-only copy).
+2. Nothing else references it — no app in this repo depends on it.
+
+The Firebase project (`ideasearchlab`) and its Cloud Functions are unaffected;
+the functions source lives here in `functions/` and deploys with
+`firebase deploy --only functions`.

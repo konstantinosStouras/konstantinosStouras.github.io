@@ -5,10 +5,10 @@ to give Claude full context about this project instantly.
 ## Project Notes: Ideation Challenge App
 **What it is:** A research app for structured group ideation sessions with individual and group phases, optional AI assistance, and post-session surveys. Built for Kostas Stouras (researcher/instructor at ideasearchlab).
 **Live URL:** https://www.stouras.com/lab/ideasearchlab/
-**Source code repo:** github.com/konstantinosStouras/ideasearchlab
+**Source code (authoritative):** vendored in the main site repo at `konstantinosStouras.github.io/_ideasearchlab-src/`. This is the single source of truth — the app is self-contained inside the main repo. The old standalone `github.com/konstantinosStouras/ideasearchlab` repo is RETIRED/redundant (its source was 3+ days behind this copy) and can be deleted.
 **Main site repo:** github.com/konstantinosStouras/konstantinosStouras.github.io
-**Local source code path:** C:\Users\User\Documents\GitHub\ideasearchlab
-**Deployment:** GitHub Actions workflow builds the React app and pushes dist/ into konstantinosStouras.github.io/lab/ideasearchlab/. Triggered automatically on every push to main. The workflow does git pull --rebase before copying files to avoid push rejection.
+**Local source code path:** `<main-repo>/_ideasearchlab-src` (the folder name starts with `_` so GitHub Pages/Jekyll never publishes it).
+**Deployment:** No external repo and no CI needed. Run `ideasearchlab-deploy-update.bat` from the main repo root (or, by hand, `cd _ideasearchlab-src && npm install && npm run build`, then copy `dist/*` into `../lab/ideasearchlab/`), commit, and push to master. A `spaFallback` plugin in `vite.config.js` injects the GitHub Pages SPA redirect into `index.html` and writes `404.html` at build time, so there is no post-build sed/CI step. Verified: a clean `npm run build` from this folder reproduces the live `lab/ideasearchlab/` bundle byte-for-byte.
 **Firebase project:** ideasearchlab (region: europe-west1)
 **Firebase services used:** Firestore, Authentication (Email/Password), Cloud Functions (Node 20, europe-west1)
 **Frontend:** React + Vite, React Router with basename="/lab/ideasearchlab"
