@@ -120,11 +120,15 @@ publish it; versioned in the repo, deployed manually to the lab project):
     bricks) − ($1 × empty cells), so it depends only on *which* bricks are placed.
     Crucially a high-value **partial** placement can beat a full cover, so the
     generator scores **all** feasible sets — not just full covers — and accepts a
-    value vector only when the maximum Net Value is attained by **exactly one** set
-    *and that set is a full cover*. So every puzzle has a single best portfolio that
-    fills the whole board, which no other full or partial placement ties or beats.
-    (`bestValue` = that optimum; the square's symmetry means several arrangements of
-    the winning set exist, but they're the same portfolio, hence the same value.)
+    value vector only when the maximum Net Value is attained by **exactly one** set,
+    *that set is a full cover*, **and** that set tiles the board a **single way up to
+    the square's symmetry** (`orbitByMask[set] === 1`). So every puzzle has one best
+    portfolio that fills the whole board, no partial ties/beats it, and it isn't a
+    family of equal-value arrangements — there is exactly **one** best solution (the
+    8 board rotations/reflections of it count as the same). The `Solutions` panel and
+    `κ proof` both value covers with the **per-puzzle** values (not the library
+    defaults), fold symmetric copies together, and surface that single optimum, so
+    they agree with each other and with `bestValue`.
   - **Difficulty (Sahni κ)** via a ratio-greedy completion test. Accept **Easy**
     when κ = 1 (one hint), **Hard** when κ ≥ 2 (the ceiling the deceptive eight-piece
     set reaches on this square). Easy returns the first qualifying board; Hard scans

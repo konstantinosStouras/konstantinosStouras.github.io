@@ -334,6 +334,9 @@
     .sol-item { border: 1px solid var(--line); border-radius: 12px; padding: 10px; background: #faf8f3; }
     .sol-item .sol-meta { font-size: 12px; margin-top: 7px; line-height: 1.35; }
     .sol-item .sol-net { font-weight: 800; color: var(--accent-dark); }
+    .sol-item.sol-best { border-color: var(--accent); background: #fff5ea; box-shadow: 0 2px 10px rgba(230,126,34,.18); }
+    .sol-unique { font-size: 13px; font-weight: 700; color: #1e7a46; background: #e9f7ef; border: 1px solid #bfe6cf; border-radius: 10px; padding: 8px 12px; margin: 4px 0 2px; }
+    .sol-warn { font-size: 13px; font-weight: 700; color: #b23b2e; background: #fdecea; border: 1px solid #f5c6c0; border-radius: 10px; padding: 8px 12px; margin: 4px 0 2px; }
     .proof-boards { display: flex; gap: 18px; flex-wrap: wrap; margin: 8px 0; }
     .proof-board { }
     .proof-board .cap { font-size: 12px; color: var(--muted); margin-bottom: 6px; font-weight: 600; }
@@ -948,21 +951,56 @@
       return ok;
     }
 
-    // The board's GEOMETRY (legal placements, every exact cover, and every feasible
-    // brick-SET) does not depend on the brick values, so compute it ONCE and reuse
+    // The 8 symmetries of the square board (4 rotations × 2 reflections), each a
+    // permutation of cell indices. The board is blank, so a solution and its
+    // rotations/reflections are the SAME arrangement turned — we treat them as one.
+    function boardSymmetries(pd) {
+      const R = BOARD.rows, C = BOARD.cols;
+      const ops = R === C ? [
+        (r, c) => [r, c], (r, c) => [c, R - 1 - r], (r, c) => [R - 1 - r, C - 1 - c], (r, c) => [C - 1 - c, r],
+        (r, c) => [r, C - 1 - c], (r, c) => [R - 1 - r, c], (r, c) => [c, r], (r, c) => [C - 1 - c, R - 1 - r]
+      ] : [ (r, c) => [r, c], (r, c) => [R - 1 - r, C - 1 - c], (r, c) => [r, C - 1 - c], (r, c) => [R - 1 - r, c] ];
+      const idxOf = new Map(); pd.cellsByIndex.forEach((rc, i) => idxOf.set(rc[0] + ',' + rc[1], i));
+      const out = [];
+      for (const op of ops) {
+        const perm = new Array(pd.N); let ok = true;
+        for (let i = 0; i < pd.N; i++) { const rc = pd.cellsByIndex[i]; const t = op(rc[0], rc[1]); const j = idxOf.get(t[0] + ',' + t[1]); if (j === undefined) { ok = false; break; } perm[i] = j; }
+        if (ok) out.push(perm);
+      }
+      return out;
+    }
+    // A canonical key for a full cover, identifying it with all its symmetric images
+    // (so two covers that are rotations/reflections of each other share a key).
+    function canonOfCover(pd, sym, sol) {
+      const col = new Array(pd.N).fill(-1);
+      for (const pl of sol) for (let i = 0; i < pd.N; i++) if ((pl.mask & pd.bits[i]) !== 0n) col[i] = pl.pi;
+      let best = null;
+      for (const p of sym) { const b = new Array(pd.N); for (let i = 0; i < pd.N; i++) b[p[i]] = col[i]; const s = b.join(','); if (best === null || s < best) best = s; }
+      return best;
+    }
+
+    // The board's GEOMETRY (legal placements, every exact cover, every feasible
+    // brick-SET, and how many ways each full-cover SET tiles the board up to
+    // symmetry) does not depend on the brick values, so compute it ONCE and reuse
     // it to score each candidate value vector cheaply (no re-enumeration).
     let _GEOM = null;
     function fixedGeom() {
       if (!_GEOM) {
         const pd = buildPlacements(fixedRegion(), allPieces());
         const tilings = collectSolutions(pd, ENUM_CAP);
+        const sym = boardSymmetries(pd);
         // A full cover leaves no empty cells, so several rotations/rearrangements
-        // share the same brick-set; keep one witness tiling per full-cover set.
-        const fullByMask = new Map();
+        // share the same brick-set; keep one witness tiling per full-cover set, and
+        // count how many DISTINCT tilings (up to symmetry) each set has.
+        const fullByMask = new Map(); const orbitsByMask = new Map();
         for (const T of tilings) {
           let used = 0; for (const pl of T) used |= (1 << pl.pi);
           if (!fullByMask.has(used)) fullByMask.set(used, T);
+          if (!orbitsByMask.has(used)) orbitsByMask.set(used, new Set());
+          orbitsByMask.get(used).add(canonOfCover(pd, sym, T));
         }
+        const orbitByMask = new Map();
+        for (const [u, set] of orbitsByMask) orbitByMask.set(u, set.size);
         // Every brick-SET that fits on the board at once (full covers AND partials
         // that leave some cells empty). Net Value depends only on which bricks are
         // placed, so these are exactly the candidate "solutions" to compare.
@@ -973,7 +1011,7 @@
           if (area > pd.N) continue;
           if (canPlaceSet(pd, pis)) subsets.push({ mask: s, area: area, pis: pis });
         }
-        _GEOM = { pd: pd, tilings: tilings, names: allPieces().map(p => p.name), fullByMask: fullByMask, subsets: subsets };
+        _GEOM = { pd: pd, tilings: tilings, names: allPieces().map(p => p.name), sym: sym, fullByMask: fullByMask, orbitByMask: orbitByMask, subsets: subsets };
       }
       return _GEOM;
     }
@@ -1037,22 +1075,27 @@
     // Generate a puzzle by searching VALUE assignments (never the board): draw
     // random brick values until one lands in the difficulty band AND has a unique
     // Net-Value optimum that fills the whole board (so exactly one full-cover
-    // portfolio is best, and no partial placement ties or beats it). Easy returns
-    // the first qualifying board; Hard scans for the hardest and stops at the ceiling.
+    // portfolio is best, and no partial placement ties or beats it) AND that
+    // winning portfolio tiles the board in a single way up to rotation/reflection
+    // (so there is exactly ONE best solution, not several board-rotations or a
+    // second distinct arrangement at the same value). Easy returns the first
+    // qualifying board; Hard scans for the hardest and stops at the ceiling.
     function generatePuzzle(diff) {
       const geom = fixedGeom(), names = geom.names, areas = geom.pd.areas, N = geom.pd.N;
       const accept = ACCEPT[diff] || ACCEPT.easy;
-      const deadline = Date.now() + (diff === 'hard' ? 1500 : 400);
+      const deadline = Date.now() + (diff === 'hard' ? 2000 : 500);
       let best = null, bestScore = -Infinity;
-      for (let t = 0; t < 20000; t++) {
+      for (let t = 0; t < 40000; t++) {
         const values = randomValues();
         const ratios = names.map((nm, i) => values[nm] / areas[i]);
         const k = kappaFor(geom, ratios);
         if (!accept(k)) continue;
         const gb = globalBest(geom, values);
-        // Require a SINGLE best portfolio, and that it fills the board completely
-        // (a full cover) — no partial placement may tie or beat it.
+        // Require a SINGLE best portfolio, that it fills the board completely
+        // (a full cover, so no partial ties/beats it), and that this portfolio
+        // tiles the board uniquely up to symmetry (one solution, not a family).
         if (gb.count !== 1 || gb.argArea !== N) continue;
+        if (geom.orbitByMask.get(gb.argMask) !== 1) continue;
         const score = (diff === 'hard') ? k : -k;     // easy prefers low kappa, hard high
         if (!best || score > bestScore) { bestScore = score; best = { values, k, gb }; }
         if (diff === 'easy') break;                   // easy: first qualifying board is fine
@@ -1724,29 +1767,42 @@
 
     function showSolutions() {
       const pd = state.pd, all = allPieces();
-      const sols = collectSolutions(pd, 200);
-      const entries = sols.map(sol => {
+      const sym = boardSymmetries(pd);
+      const sols = collectSolutions(pd, ENUM_CAP);
+      // Value each cover with THIS puzzle's brick values, and fold together covers
+      // that are rotations/reflections of one another (same board, just turned).
+      const byCanon = new Map();
+      for (const sol of sols) {
         const cm = new Map(); const names = []; let value = 0;
         for (const pl of sol) {
-          const brick = all[pl.pi]; value += brick.value; names.push(brick.name);
-          for (const cell of maskToCells(pd, pl.mask)) cm.set(cell[0] + ',' + cell[1], brick.color);
+          value += pd.values[pl.pi]; names.push(all[pl.pi].name);
+          for (const cell of maskToCells(pd, pl.mask)) cm.set(cell[0] + ',' + cell[1], all[pl.pi].color);
         }
-        return { cm: cm, names: names.sort(), value: value };
-      });
-      entries.sort((a, b) => b.value - a.value);
+        const key = canonOfCover(pd, sym, sol);
+        if (!byCanon.has(key)) byCanon.set(key, { cm: cm, names: names.sort(), value: value });
+      }
+      const entries = Array.from(byCanon.values()).sort((a, b) => b.value - a.value);
+      const maxV = entries.length ? entries[0].value : 0;
+      const nMax = entries.filter(e => e.value === maxV).length;
       const body = document.createElement('div');
       const intro = document.createElement('p');
       intro.innerHTML = 'There ' + (entries.length === 1 ? 'is' : 'are') + ' <b>' + entries.length +
-        (sols.length >= 200 ? '+' : '') + '</b> distinct way' + (entries.length === 1 ? '' : 's') +
-        ' to fully cover this board with the available bricks. A full cover leaves no empty cells, so ' +
-        '<b>Net Value = total value of the bricks used</b>. Sorted by Net Value:';
+        '</b> distinct way' + (entries.length === 1 ? '' : 's') + ' to fully cover this board ' +
+        '(rotations and reflections of the whole board count as the same solution). A full cover ' +
+        'leaves no empty cells, so <b>Net Value = total value of the bricks used</b>. Sorted by Net Value:';
       body.appendChild(intro);
+      const uniq = document.createElement('p');
+      uniq.className = nMax === 1 ? 'sol-unique' : 'sol-warn';
+      uniq.innerHTML = nMax === 1
+        ? '✓ Exactly <b>one</b> solution reaches the highest Net Value, <b>' + money(maxV) + '</b> — the unique best portfolio (' + entries[0].names.join(' + ') + ').'
+        : '⚠ <b>' + nMax + '</b> different solutions tie at the highest Net Value (' + money(maxV) + ') — the optimum is NOT unique.';
+      body.appendChild(uniq);
       const grid = document.createElement('div'); grid.className = 'sol-list';
-      entries.slice(0, 60).forEach(e => {
-        const item = document.createElement('div'); item.className = 'sol-item';
+      entries.slice(0, 60).forEach((e, i) => {
+        const item = document.createElement('div'); item.className = 'sol-item' + (e.value === maxV ? ' sol-best' : '');
         item.appendChild(miniBoard(e.cm, null, 14));
         const meta = document.createElement('div'); meta.className = 'sol-meta';
-        meta.innerHTML = '<span class="sol-net">Net ' + money(e.value) + '</span><br>' + e.names.join(' + ');
+        meta.innerHTML = '<span class="sol-net">Net ' + money(e.value) + (i === 0 ? ' ★' : '') + '</span><br>' + e.names.join(' + ');
         item.appendChild(meta); grid.appendChild(item);
       });
       body.appendChild(grid);
@@ -1810,7 +1866,36 @@
         concl.textContent = 'Every smaller set of hints (fewer than ' + w.kappa + ') was checked exhaustively and the greedy still jams, so κ is exactly ' + w.kappa + '.';
         body.appendChild(concl);
       }
+      appendOptimum(pd, all, body);
       openInfo('Why the Sahni number κ = ' + w.kappa, body);
+    }
+
+    // Show the puzzle's unique highest-Net-Value solution, valued with THIS puzzle's
+    // brick values, so the κ proof agrees with the stated optimum and the Solutions
+    // panel. (κ measures greedy difficulty, which is separate from value-optimality;
+    // this makes the single best portfolio explicit either way.)
+    function appendOptimum(pd, all, body) {
+      const sym = boardSymmetries(pd);
+      const sols = collectSolutions(pd, ENUM_CAP);
+      const byCanon = new Map();
+      for (const sol of sols) {
+        let value = 0; for (const pl of sol) value += pd.values[pl.pi];
+        const key = canonOfCover(pd, sym, sol);
+        if (!byCanon.has(key)) byCanon.set(key, { sol: sol, value: value });
+      }
+      const arr = Array.from(byCanon.values()).sort((a, b) => b.value - a.value);
+      if (!arr.length) return;
+      const maxV = arr[0].value, nMax = arr.filter(e => e.value === maxV).length, top = arr[0];
+      const cm = new Map(); const names = [];
+      for (const pl of top.sol) { names.push(all[pl.pi].name); for (const cell of maskToCells(pd, pl.mask)) cm.set(cell[0] + ',' + cell[1], all[pl.pi].color); }
+      const hr = document.createElement('p'); hr.className = nMax === 1 ? 'sol-unique' : 'sol-warn';
+      hr.innerHTML = nMax === 1
+        ? 'Highest Net Value (separate from κ): a <b>unique</b> best portfolio, <b>' + money(maxV) + '</b> — ' + names.sort().join(' + ') + ':'
+        : '⚠ ' + nMax + ' solutions tie at the highest Net Value (' + money(maxV) + ') — not unique.';
+      body.appendChild(hr);
+      const ow = document.createElement('div'); ow.className = 'proof-board';
+      ow.appendChild(miniBoard(cm, null, 17));
+      body.appendChild(ow);
     }
 
     // ---------- Encouragement & time nudges ----------
