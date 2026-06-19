@@ -1,0 +1,235 @@
+.pageWrap {
+  min-height: 100vh;
+  background: var(--paper);
+}
+
+/* Top navigation bar (same as the Admin page) */
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 40px;
+  border-bottom: 1px solid var(--border);
+  background: var(--white);
+}
+.wordmark {
+  font-family: var(--font-display);
+  font-size: 18px;
+}
+.topBarRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.role {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 3px 8px;
+  border-radius: 3px;
+}
+.themeBtn {
+  background: none;
+  border: 1.5px solid var(--border);
+  color: var(--ink);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 40px 24px;
+}
+
+.header {
+  margin-bottom: 36px;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 32px;
+  margin-bottom: 10px;
+}
+
+.sub {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.6;
+  max-width: 560px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 24px;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.sectionTitle {
+  font-family: var(--font-display);
+  font-size: 18px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.hint {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* Provider cards */
+.providerGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.providerCard {
+  padding: 16px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color 0.15s;
+}
+
+.providerCard:hover {
+  border-color: var(--muted);
+}
+
+.providerActive {
+  border-color: var(--accent);
+  background: rgba(200,86,42,0.03);
+}
+
+.providerName {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.keySet {
+  font-size: 11px;
+  color: #2e7d32;
+  background: #e8f5e9;
+  padding: 2px 6px;
+  border-radius: 3px;
+  align-self: flex-start;
+}
+
+.keyMissing {
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--paper);
+  padding: 2px 6px;
+  border-radius: 3px;
+  align-self: flex-start;
+}
+
+/* Fields */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 13px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.labelLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.keyLink {
+  font-size: 12px;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+/* Default-management buttons (same look as the admin Content editor) */
+.btnRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.resetBtn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.resetBtn:hover { border-color: var(--accent); color: var(--accent); }
+.defaultBtn {
+  background: rgba(200,86,42,0.06);
+  border: 1px solid rgba(200,86,42,0.35);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.defaultBtn:hover { background: rgba(200,86,42,0.12); border-color: var(--accent); }
+.savedNote { font-size: 11.5px; color: var(--accent); }
+
+.keyLink:hover {
+  text-decoration: underline;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.promptArea {
+  resize: vertical;
+  min-height: 120px;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+.saveBtn {
+  align-self: flex-start;
+  padding: 12px 36px;
+  font-size: 15px;
+}
+
+@media (max-width: 600px) {
+  .providerGrid { grid-template-columns: 1fr; }
+  .grid2 { grid-template-columns: 1fr; }
+}

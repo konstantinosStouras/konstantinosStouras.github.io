@@ -1,0 +1,100 @@
+.wrap {
+  position: relative;
+}
+
+.trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px 5px 6px;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  font-family: var(--font-body);
+}
+.trigger:hover { border-color: var(--accent); }
+
+.avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.triggerName {
+  font-size: 13px;
+  color: var(--ink);
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.caret { font-size: 10px; color: var(--muted); }
+
+.menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 240px;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 6px;
+  z-index: 50;
+  animation: pmFade 0.12s ease;
+}
+
+@keyframes pmFade {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.menuHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+.menuName { font-size: 13px; font-weight: 600; color: var(--ink); }
+.menuEmail {
+  font-size: 12px; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.menuItem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 9px 12px;
+  background: none;
+  border: none;
+  border-radius: var(--radius);
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.menuItem:hover { background: var(--paper-dark); }
+
+.menuDivider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+.menuItemDanger { color: #c0392b; }
+.menuItemDanger:hover { background: #fce4ec; }
