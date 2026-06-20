@@ -42,3 +42,25 @@ export function useSessionEnded() {
   const { session, loading } = useContext(SessionContext)
   return !loading && (!session || session.status === 'done')
 }
+
+// Friendly name of the AI model currently configured in the admin AI panel,
+// read from the non-secret settings/aiPublic mirror (written by the
+// saveAISettings Cloud Function). Falls back to the app's default model name
+// when the doc is missing or unreadable (e.g. before the rules/functions are
+// deployed), so the AI note is never blank or wrong.
+const DEFAULT_AI_MODEL_LABEL = "Anthropic's Claude Sonnet 4.6"
+export function useAIModelLabel() {
+  const [label, setLabel] = useState(DEFAULT_AI_MODEL_LABEL)
+  useEffect(() => {
+    const unsub = onSnapshot(
+      doc(db, 'settings', 'aiPublic'),
+      snap => {
+        const l = snap.exists() && snap.data().modelLabel
+        if (l) setLabel(l)
+      },
+      () => {} // read denied / offline: keep the default label
+    )
+    return unsub
+  }, [])
+  return label
+}

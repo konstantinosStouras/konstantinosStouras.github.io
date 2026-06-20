@@ -22,6 +22,41 @@ const PROVIDER_DEFAULTS = {
   gemini: { model: 'gemini-3.5-flash' },
 }
 
+// Human-friendly names for the AI note shown to participants. Mirrored to the
+// public settings/aiPublic doc so the app can say which model is in use without
+// exposing keys. Unknown ids fall back to the provider brand.
+const MODEL_LABELS = {
+  'claude-opus-4-8': "Anthropic's Claude Opus 4.8",
+  'claude-fable-5': "Anthropic's Claude Fable 5",
+  'claude-opus-4-7': "Anthropic's Claude Opus 4.7",
+  'claude-opus-4-6': "Anthropic's Claude Opus 4.6",
+  'claude-sonnet-4-6': "Anthropic's Claude Sonnet 4.6",
+  'claude-haiku-4-5': "Anthropic's Claude Haiku 4.5",
+  'claude-opus-4-5': "Anthropic's Claude Opus 4.5",
+  'claude-sonnet-4-5': "Anthropic's Claude Sonnet 4.5",
+  'gpt-5.5': "OpenAI's GPT-5.5",
+  'gpt-5.4-mini': "OpenAI's GPT-5.4 mini",
+  'gpt-5.4-nano': "OpenAI's GPT-5.4 nano",
+  'gpt-5.2': "OpenAI's GPT-5.2",
+  'gpt-5.1': "OpenAI's GPT-5.1",
+  'gpt-4.1': "OpenAI's GPT-4.1",
+  'gpt-4o': "OpenAI's GPT-4o",
+  'gemini-3.5-flash': "Google's Gemini 3.5 Flash",
+  'gemini-3.1-pro-preview': "Google's Gemini 3.1 Pro",
+  'gemini-3-flash': "Google's Gemini 3 Flash",
+  'gemini-2.5-pro': "Google's Gemini 2.5 Pro",
+  'gemini-2.5-flash': "Google's Gemini 2.5 Flash",
+  'gemini-2.5-flash-lite': "Google's Gemini 2.5 Flash-Lite",
+}
+const PROVIDER_BRANDS = {
+  claude: "Anthropic's Claude",
+  openai: "OpenAI's GPT",
+  gemini: "Google's Gemini",
+}
+function modelLabel(provider, model) {
+  return MODEL_LABELS[model] || PROVIDER_BRANDS[provider] || model || 'an advanced AI model'
+}
+
 const SYSTEM_PROMPTS = {
   individual: `You are an enthusiastic, knowledgeable ideation partner helping a participant brainstorm, develop, select, and evaluate ideas during a creative session.
 
@@ -284,6 +319,25 @@ exports.saveAISettings = functions.https.onCall(async (data, context) => {
   update.updatedBy = context.auth.uid
 
   await db.collection('settings').doc('ai').set(update, { merge: true })
+
+  // Mirror only the non-secret display info (provider + model) to a
+  // participant-readable doc, so the app can name the AI in use without ever
+  // exposing API keys. Re-read the merged doc so a partial update still yields
+  // the full effective provider/model.
+  try {
+    const merged = (await db.collection('settings').doc('ai').get()).data() || {}
+    const prov = merged.provider || DEFAULTS.provider
+    const mdl = merged.model || (PROVIDER_DEFAULTS[prov] || PROVIDER_DEFAULTS.claude).model
+    await db.collection('settings').doc('aiPublic').set({
+      provider: prov,
+      model: mdl,
+      modelLabel: modelLabel(prov, mdl),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true })
+  } catch (err) {
+    console.error('Failed to mirror settings/aiPublic:', err)
+  }
+
   return { success: true }
 })
 

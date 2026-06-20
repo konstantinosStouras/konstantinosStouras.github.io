@@ -6,7 +6,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
-import { useSession, useSessionEnded } from '../context/SessionContext'
+import { useSession, useSessionEnded, useAIModelLabel } from '../context/SessionContext'
 import SplitLayout from '../components/SplitLayout'
 import AIChat from '../components/AIChat'
 import PhaseTimer from '../components/PhaseTimer'
@@ -133,6 +133,7 @@ export default function GroupPhase() {
   const { user } = useAuth()
   const { session } = useSession()
   const ended = useSessionEnded()
+  const aiModel = useAIModelLabel()
   const navigate = useNavigate()
   const [groupId, setGroupId] = useState(null)
   const [memberLabels, setMemberLabels] = useState({})
@@ -170,7 +171,7 @@ export default function GroupPhase() {
     ? Math.round(pc.groupPhaseDuration / 60)
     : 15
   const c = getContent(session).group
-  const contentVars = { minutes: durationMinutes, votes: MAX_VOTES }
+  const contentVars = { minutes: durationMinutes, votes: MAX_VOTES, aiModel }
 
   const isVoting = subPhase === 'voting'
 

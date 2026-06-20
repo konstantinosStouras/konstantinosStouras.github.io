@@ -6,7 +6,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
-import { useSession, useSessionEnded } from '../context/SessionContext'
+import { useSession, useSessionEnded, useAIModelLabel } from '../context/SessionContext'
 import SplitLayout from '../components/SplitLayout'
 import AIChat from '../components/AIChat'
 import PhaseTimer from '../components/PhaseTimer'
@@ -33,6 +33,7 @@ export default function IndividualPhase() {
   const { user } = useAuth()
   const { session } = useSession()
   const ended = useSessionEnded()
+  const aiModel = useAIModelLabel()
 
   const [ideas, setIdeas] = useState([])
   const [title, setTitle] = useState('')
@@ -59,7 +60,7 @@ export default function IndividualPhase() {
   const c = getContent(session).individual
   // Shared placeholder values so {minutes}, {maxIdeas} and {ideasCarried} all
   // resolve on both the instructions screen and the workspace task brief.
-  const contentVars = { minutes: durationMinutes, maxIdeas, ideasCarried }
+  const contentVars = { minutes: durationMinutes, maxIdeas, ideasCarried, aiModel }
 
   useEffect(() => {
     if (!sessionId || !user) return
@@ -264,7 +265,7 @@ export default function IndividualPhase() {
           <NudgeBanner sessionId={sessionId} autoMessage={autoNudgeMessage} />
           <div className={styles.instrCard}>
             <div className={styles.instrBody}>
-              <RichText html={c.instructions} vars={{ minutes: durationMinutes }} aiOn={!!aiEnabled} />
+              <RichText html={c.instructions} vars={contentVars} aiOn={!!aiEnabled} />
             </div>
             <button className={`btn-primary ${styles.startBtn}`} onClick={() => setStarted(true)}>
               Start
@@ -435,7 +436,7 @@ export default function IndividualPhase() {
                 onError={e => { e.target.style.display = 'none' }}
               />
             </div>
-            <RichText html={c.brief} vars={{ maxIdeas, ideasCarried }} aiOn={!!aiEnabled} />
+            <RichText html={c.brief} vars={contentVars} aiOn={!!aiEnabled} />
           </div>
         )}
       </div>
