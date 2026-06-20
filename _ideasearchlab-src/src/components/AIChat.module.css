@@ -145,15 +145,22 @@
 
 .input {
   flex: 1;
+  min-width: 0;
   background: rgba(255,255,255,0.06);
   border: 1px solid rgba(255,255,255,0.1);
   border-radius: var(--radius);
   color: var(--paper);
   font-size: 13.5px;
   padding: 10px 12px;
+  /* Auto-grows with content (height set in JS from scrollHeight). Caps at
+     max-height and scrolls beyond, so a long message stays fully visible. */
   resize: none;
+  min-height: 52px;
+  max-height: 240px;
+  overflow-y: auto;
   outline: none;
   line-height: 1.5;
+  box-sizing: border-box;
   transition: border-color 0.15s;
 }
 

@@ -40,6 +40,7 @@ export default function IndividualPhase() {
   const [groupMembers, setGroupMembers] = useState([])
   const [groupId, setGroupId] = useState(null)
   const [started, setStarted] = useState(false)
+  const [individualStartedAt, setIndividualStartedAt] = useState(null)
   const [briefOpen, setBriefOpen] = useState(true)
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [editingId, setEditingId] = useState(null)
@@ -82,6 +83,11 @@ export default function IndividualPhase() {
         if (!snap.exists()) return
         const data = snap.data()
         setGroupId(data.groupId)
+        setIndividualStartedAt(data.individualStartedAt || null)
+        // Resume the workspace (skip the instructions screen) if this
+        // participant already pressed Start in an earlier visit, so a reload
+        // doesn't reset their place or restart their timer.
+        if (data.individualStartedAt) setStarted(true)
         const status = data.status
         if (status === 'group') navigate(`/session/${sessionId}/group`)
         else if (status === 'survey') navigate(`/session/${sessionId}/survey`)
@@ -233,9 +239,27 @@ export default function IndividualPhase() {
       ? 'everyone else in your group has submitted their ideas. Please wrap up and click Finish & Submit.'
       : null
 
+  // Begin the individual phase for THIS participant. The countdown is
+  // per-participant: it starts now (individualStartedAt), not when the shared
+  // phase began — so everyone gets the full duration from when they actually
+  // start. Written once; a rejoin/reload restores the workspace via the
+  // participant snapshot above instead of restarting the timer.
+  async function handleStart() {
+    setStarted(true)
+    if (individualStartedAt) return
+    try {
+      await updateDoc(
+        doc(db, 'sessions', sessionId, 'participants', user.uid),
+        { individualStartedAt: serverTimestamp() }
+      )
+    } catch (err) {
+      console.warn('Could not record individual start time:', err.message)
+    }
+  }
+
   // ─── Instructions view ───
-  // The timer runs here too: a participant who never clicks Start still gets
-  // auto-submitted on expiry instead of stalling their group.
+  // The timer is shown in a non-ticking preview here (full duration). It only
+  // starts counting once the participant presses Start (see handleStart).
   if (!started) {
     return (
       <div className={styles.instrPage}>
@@ -243,9 +267,8 @@ export default function IndividualPhase() {
           <span className={styles.wordmark}>Ideation Challenge</span>
           <div className={styles.instrTimer}>
             <PhaseTimer
-              phaseStartedAt={session?.phaseStartedAt}
               durationSeconds={pc.individualPhaseDuration}
-              onExpire={done ? undefined : autoFinish}
+              preview
             />
           </div>
         </header>
@@ -255,7 +278,7 @@ export default function IndividualPhase() {
             <div className={styles.instrBody}>
               <RichText html={c.instructions} vars={{ minutes: durationMinutes }} aiOn={!!aiEnabled} />
             </div>
-            <button className={`btn-primary ${styles.startBtn}`} onClick={() => setStarted(true)}>
+            <button className={`btn-primary ${styles.startBtn}`} onClick={handleStart}>
               Start
             </button>
           </div>
@@ -283,7 +306,7 @@ export default function IndividualPhase() {
           <span className={styles.wordmark}>Ideation Challenge</span>
           <div className={styles.instrTimer}>
             <PhaseTimer
-              phaseStartedAt={session?.phaseStartedAt}
+              phaseStartedAt={individualStartedAt}
               durationSeconds={pc.individualPhaseDuration}
             />
           </div>
@@ -345,7 +368,7 @@ export default function IndividualPhase() {
         </div>
         <div className={styles.topRight}>
           <PhaseTimer
-            phaseStartedAt={session?.phaseStartedAt}
+            phaseStartedAt={individualStartedAt}
             durationSeconds={pc.individualPhaseDuration}
             onExpire={done ? undefined : autoFinish}
           />
