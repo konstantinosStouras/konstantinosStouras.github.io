@@ -565,7 +565,8 @@ export default function IndividualPhase() {
               className={styles.addDescInput}
               value={description}
               onChange={e => setDescription(e.target.value)}
-              placeholder="Description"
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitIdea(e) } }}
+              placeholder="Description (Enter to add, Shift+Enter for a new line)"
               rows={2}
               disabled={submitting || done}
             />

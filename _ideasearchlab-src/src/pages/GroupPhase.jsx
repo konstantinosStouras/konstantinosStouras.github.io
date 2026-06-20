@@ -589,7 +589,8 @@ export default function GroupPhase() {
           className={styles.addDescInput}
           value={newDesc}
           onChange={e => setNewDesc(e.target.value)}
-          placeholder="Description"
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitGroupIdea(e) } }}
+          placeholder="Description (Enter to add, Shift+Enter for a new line)"
           rows={2}
           disabled={submitting}
         />

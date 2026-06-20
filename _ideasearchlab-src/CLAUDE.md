@@ -63,7 +63,7 @@ Note: vote counts are NOT stored on idea documents. They are derived client-side
 - **Two-view structure**: Instructions view (shown first with "Start" button), then workspace view.
 - **Instructions page**: Full-page card with study instructions, dynamic duration from `individualPhaseDuration`, task checklist, group-phase warning (conditional).
 - **Collapsible Task Brief**: Shown in workspace, contains the sleep wellness product design prompt, example product with image (`public/images/sleep-mask-example.png`), evaluation criteria (Novelty, Feasibility, Financial Value, Overall Quality), AI note (conditional), and selection instructions.
-- **Structured idea submission**: Two fields, "Idea title" and "Description", rendered in pill-shaped cards (border-radius: 20px) with bold title, gradient separator line, and smaller description text.
+- **Structured idea submission**: Two fields, "Idea title" and "Description", rendered in pill-shaped cards (border-radius: 20px) with bold title, gradient separator line, and smaller description text. Pressing **Enter** in either field submits the idea (the same as clicking Add); **Shift+Enter** in the Description inserts a newline. Same behaviour in the GroupPhase "Group Ideas" add form.
 - **Inline editing**: Pencil icon appears on hover, click enters edit mode with editable fields + Save/Cancel.
 - **Delete**: Trash bin icon appears on hover (red on hover), calls `deleteDoc`.
 - **Double-click selection**: Double-click toggles idea selection for group carry-over. Selected cards get accent border, glow, and "Selected" badge. Selection bar shows count ("Selected ideas: 2 / 3"). Maximum controlled by `ideasCarriedToGroup`.
