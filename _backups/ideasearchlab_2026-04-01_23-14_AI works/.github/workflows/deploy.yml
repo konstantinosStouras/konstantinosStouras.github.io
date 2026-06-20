@@ -1,0 +1,52 @@
+name: Build Ideation App
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout ideation app source
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Inject SPA redirect script into index.html
+        run: |
+          sed -i 's|<head>|<head><script>(function(){var p=new URLSearchParams(window.location.search).get("redirect");if(p){window.history.replaceState(null,null,decodeURIComponent(p));}}());</script>|' dist/index.html
+
+      - name: Add 404.html for React Router
+        run: cp dist/index.html dist/404.html
+
+      - name: Checkout main site repo
+        uses: actions/checkout@v4
+        with:
+          repository: konstantinosStouras/konstantinosStouras.github.io
+          token: ${{ secrets.SITE_DEPLOY_TOKEN }}
+          path: site
+
+      - name: Commit and push to site repo
+        run: |
+          cd site
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git pull --rebase origin master
+          mkdir -p lab/ideasearchlab
+          cp -r ../dist/. lab/ideasearchlab/
+          git add lab/ideasearchlab/
+          git commit -m "Deploy ideation app to lab/ideasearchlab" || echo "Nothing to commit"
+          git push origin master
