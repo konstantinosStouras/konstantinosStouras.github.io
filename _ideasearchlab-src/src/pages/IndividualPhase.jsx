@@ -57,6 +57,9 @@ export default function IndividualPhase() {
   const ideasCarried = pc.ideasCarriedToGroup || 3
   const groupPhaseActive = pc.groupPhaseActive !== false
   const c = getContent(session).individual
+  // Shared placeholder values so {minutes}, {maxIdeas} and {ideasCarried} all
+  // resolve on both the instructions screen and the workspace task brief.
+  const contentVars = { minutes: durationMinutes, maxIdeas, ideasCarried }
 
   useEffect(() => {
     if (!sessionId || !user) return
