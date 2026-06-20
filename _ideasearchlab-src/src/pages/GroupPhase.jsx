@@ -13,6 +13,7 @@ import AIChat from '../components/AIChat'
 import PhaseTimer from '../components/PhaseTimer'
 import NudgeBanner from '../components/NudgeBanner'
 import { getContent } from '../data/defaultContent'
+import { getNextPhase } from '../utils/phaseSequence'
 import RichText from '../components/RichText'
 import { Done } from './Survey'
 import styles from './GroupPhase.module.css'
@@ -150,6 +151,9 @@ export default function GroupPhase() {
   const [briefOpen, setBriefOpen] = useState(true)
   const [briefHintDismissed, setBriefHintDismissed] = useState(false)
   const [showConsensus, setShowConsensus] = useState(false)
+  // 'intro' = the reminder shown when voting opens; 'warn' = re-shown on submit
+  // when the group's votes are spread across different ideas (no consensus).
+  const [consensusMode, setConsensusMode] = useState('intro')
   const consensusSeen = useRef(false)
 
   // User-resizable workspace regions (drag the dividers). Percentages are of
@@ -185,6 +189,10 @@ export default function GroupPhase() {
   const contentVars = { minutes: durationMinutes, votes: MAX_VOTES, aiModel }
 
   const isVoting = subPhase === 'voting'
+  // The session status that follows the group phase ('survey' for individual-
+  // first / group-only sessions, 'individual' for group-first). Used to jump
+  // ahead the instant this participant's vote completes the group's voting.
+  const nextAfterGroup = getNextPhase('group', session?.phaseConfig)
 
   // ── Derive voting data from members ──────────────────
   const myVotes = (members.find(m => m.id === user?.uid)?.votedFor) || []
@@ -203,6 +211,17 @@ export default function GroupPhase() {
       voteCounts[id] = (voteCounts[id] || 0) + 1
     })
   })
+
+  // Consensus signal: the group agrees when at least one idea is voted for by
+  // two or more members. If every voted idea has just a single vote, members
+  // each chose different ideas — no consensus. Only meaningful once at least two
+  // members of a 2+ person group have actually cast votes (otherwise we can't
+  // tell agreement from "others haven't voted yet").
+  const agreementCounts = Object.values(voteCounts)
+  const maxAgreement = agreementCounts.length ? Math.max(...agreementCounts) : 0
+  const votersCount = members.filter(m => (m.votedFor || []).length > 0).length
+  const consensusMeasurable = members.length >= 2 && votersCount >= 2
+  const consensusReached = maxAgreement >= 2
 
   // ── Get groupId and react to status changes ─────────
   useEffect(() => {
@@ -315,6 +334,7 @@ export default function GroupPhase() {
   useEffect(() => {
     if (isVoting && !votesLocked && !consensusSeen.current) {
       consensusSeen.current = true
+      setConsensusMode('intro')
       setShowConsensus(true)
     }
   }, [isVoting, votesLocked])
@@ -353,14 +373,33 @@ export default function GroupPhase() {
   }
 
   // ── Submit / lock votes ─────────────────────────────
-  async function submitVotes() {
+  async function submitVotes(force = false) {
     if (myVoteCount < requiredVotes || votesLocked || !sessionId || !user) return
+    // Re-show the consensus reminder if the group's votes are diverging — unless
+    // the participant chose to submit anyway from that reminder.
+    if (!force && consensusMeasurable && !consensusReached) {
+      setConsensusMode('warn')
+      setShowConsensus(true)
+      return
+    }
     try {
       await updateDoc(
         doc(db, 'sessions', sessionId, 'participants', user.uid),
         { votesSubmitted: true, votedAt: serverTimestamp() }
       )
       setVotesLocked(true)
+      // If this submission completes the group's voting, the backend tally
+      // trigger (fired by this very write) will flip everyone to the next phase
+      // — jump there now instead of sitting on a "votes submitted" screen while
+      // that round-trip happens. Only when the survey/end follows the group
+      // phase (the group-first 'individual' page redirects by status). Safe: no
+      // one can finish the survey in the moment before the trigger commits.
+      const everyoneElseSubmitted = members
+        .filter(m => m.id !== user.uid)
+        .every(m => m.votesSubmitted)
+      if (everyoneElseSubmitted && (nextAfterGroup === 'survey' || nextAfterGroup === 'done')) {
+        navigate(`/session/${sessionId}/${nextAfterGroup}`)
+      }
     } catch (err) {
       console.error('Submit votes error:', err)
     }
@@ -569,7 +608,14 @@ export default function GroupPhase() {
   /** Collapsible task brief (shown in both sub-phases) */
   const taskBrief = (
     <div className={styles.brief}>
-      <button className={styles.briefToggle} onClick={() => setBriefOpen(o => !o)} type="button">
+      <button
+        className={styles.briefToggle}
+        onClick={() => setBriefOpen(o => !o)}
+        type="button"
+        title={briefOpen
+          ? 'Click here to minimize the Task Brief and see the ideas and workspace more clearly.'
+          : 'Click here to expand the Task Brief.'}
+      >
         <span>Task Brief</span>
         <span className={styles.briefChevron}>{briefOpen ? '▲' : '▼'}</span>
       </button>
@@ -585,22 +631,55 @@ export default function GroupPhase() {
   const consensusModal = showConsensus ? (
     <div className={styles.modalOverlay} onClick={() => setShowConsensus(false)}>
       <div className={styles.consensusModal} onClick={e => e.stopPropagation()}>
-        <h3 className={styles.consensusTitle}>Reach consensus on your group&rsquo;s ideas</h3>
-        <p className={styles.consensusBody}>
-          Discuss with your group and try to agree on the {requiredVotes} idea
-          {requiredVotes === 1 ? '' : 's'} that best represent your work, then cast your votes.
-        </p>
-        <p className={styles.consensusBody}>
-          If your group does not reach consensus, the system will select ideas at
-          random on your behalf, and this can lower your performance score.
-        </p>
-        <button
-          className={`btn-primary ${styles.consensusBtn}`}
-          onClick={() => setShowConsensus(false)}
-          type="button"
-        >
-          Got it
-        </button>
+        {consensusMode === 'warn' ? (
+          <>
+            <h3 className={styles.consensusTitle}>Your group hasn&rsquo;t agreed yet</h3>
+            <p className={styles.consensusBody}>
+              Your votes are spread across different ideas — your group hasn&rsquo;t
+              converged on the same {requiredVotes} idea{requiredVotes === 1 ? '' : 's'}.
+              Try discussing in the group chat and aligning on a shared set before you submit.
+            </p>
+            <p className={styles.consensusBody}>
+              If your group does not reach consensus, the system will select ideas at
+              random on your behalf, and this can lower your performance score.
+            </p>
+            <div className={styles.consensusActions}>
+              <button
+                className="btn-ghost"
+                type="button"
+                onClick={() => setShowConsensus(false)}
+              >
+                Keep discussing
+              </button>
+              <button
+                className={`btn-primary ${styles.consensusBtn}`}
+                type="button"
+                onClick={() => { setShowConsensus(false); submitVotes(true) }}
+              >
+                Submit anyway
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <h3 className={styles.consensusTitle}>Reach consensus on your group&rsquo;s ideas</h3>
+            <p className={styles.consensusBody}>
+              Discuss with your group and try to agree on the {requiredVotes} idea
+              {requiredVotes === 1 ? '' : 's'} that best represent your work, then cast your votes.
+            </p>
+            <p className={styles.consensusBody}>
+              If your group does not reach consensus, the system will select ideas at
+              random on your behalf, and this can lower your performance score.
+            </p>
+            <button
+              className={`btn-primary ${styles.consensusBtn}`}
+              onClick={() => setShowConsensus(false)}
+              type="button"
+            >
+              Got it
+            </button>
+          </>
+        )}
       </div>
     </div>
   ) : null
@@ -722,7 +801,7 @@ export default function GroupPhase() {
             ) : (
               <button
                 className={styles.proceedBtn}
-                onClick={submitVotes}
+                onClick={() => submitVotes()}
                 disabled={myVoteCount < requiredVotes}
               >
                 Submit Votes
