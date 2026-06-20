@@ -5,8 +5,13 @@
     <script>
       var path = window.location.pathname;
       if (path.indexOf('/lab/ideasearchlab') === 0) {
+        // Append a cache-buster so the SPA entry (index.html) is always fetched
+        // fresh. Without it, the redirect URL is identical for a given deep link
+        // (e.g. /lab/ideasearchlab/admin), so a browser/CDN can serve a cached
+        // index.html from an earlier deploy that points at a since-removed
+        // hashed bundle -> blank page. The app reads only the "redirect" param.
         window.location.replace(
-          '/lab/ideasearchlab/?redirect=' + encodeURIComponent(path + window.location.search + window.location.hash)
+          '/lab/ideasearchlab/?redirect=' + encodeURIComponent(path + window.location.search + window.location.hash) + '&_=' + Date.now()
         );
       }
     </script>
