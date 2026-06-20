@@ -1,0 +1,39 @@
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 16px;
+  background: rgba(200,86,42,0.08);
+  border: 1px solid rgba(200,86,42,0.35);
+  border-radius: var(--radius);
+  flex-shrink: 0;
+  animation: nudgeIn 0.25s ease;
+}
+
+.text {
+  font-size: 13px;
+  color: var(--ink);
+  line-height: 1.5;
+}
+.text strong { color: var(--accent); }
+
+.dismissBtn {
+  border: 1px solid rgba(200,86,42,0.4);
+  background: var(--white);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 14px;
+  border-radius: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.dismissBtn:hover { background: rgba(200,86,42,0.1); }
+
+@keyframes nudgeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}

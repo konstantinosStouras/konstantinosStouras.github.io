@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Fun Projects · stouras.com</title>
+
+<!-- SEO -->
+<meta name="description" content="Fun projects, games and interactive tools by Konstantinos Stouras: PortfolioFit, a project-portfolio packing game (the knapsack problem), a world capitals quiz, a Greek prefectures learning map, strategy puzzles, Sudoku, Snake, and a Management Science paper browser.">
+<meta name="keywords" content="fun projects, browser games, interactive tools, PortfolioFit, project portfolio game, knapsack problem, world capitals quiz, geography game, Sudoku, Snake, strategy puzzles, Greece prefectures, Management Science, stouras">
+<meta name="author" content="Konstantinos Stouras">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://stouras.com/fun/">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Fun Projects — games & interactive tools">
+<meta property="og:description" content="A small collection of games and interactive tools I have been building for fun.">
+<meta property="og:url" content="https://www.stouras.com/fun/">
+<meta property="og:site_name" content="stouras.com">
+<meta property="og:image" content="https://www.stouras.com/fun/og-image.jpg">
+<meta property="og:image:secure_url" content="https://www.stouras.com/fun/og-image.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Fun Projects — games and interactive tools by Konstantinos Stouras">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Fun Projects — games & interactive tools">
+<meta name="twitter:description" content="A small collection of games and interactive tools I have been building for fun.">
+<meta name="twitter:image" content="https://www.stouras.com/fun/og-image.jpg">
+
+<!-- Favicons: scalable SVG for modern browsers + PNG/ICO fallbacks and Apple touch icon -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%230d3b8f'/%3E%3Ccircle%20cx='32'%20cy='32'%20r='10'%20fill='%23fff'/%3E%3Ccircle%20cx='68'%20cy='32'%20r='10'%20fill='%23fff'/%3E%3Ccircle%20cx='32'%20cy='68'%20r='10'%20fill='%23fff'/%3E%3Ccircle%20cx='68'%20cy='68'%20r='10'%20fill='%23fff'/%3E%3Ccircle%20cx='50'%20cy='50'%20r='10'%20fill='%23ffd54f'/%3E%3C/svg%3E">
+<link rel="icon" type="image/png" sizes="32x32" href="/fun/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/fun/favicon-16.png">
+<link rel="icon" href="/fun/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/fun/apple-touch-icon.png">
+<meta name="theme-color" content="#0d3b8f">
+
+<style>
+  :root{
+    --blue:#0d3b8f; --blue-2:#1456c8; --ink:#16233a; --muted:#5c6b85;
+    --bg:#eef3f9; --panel:#fff; --line:#dde6f1; --accent:#ffb300;
+    --shadow:0 10px 30px rgba(20,40,80,.10);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  body{
+    background:var(--bg); color:var(--ink); min-height:100vh;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  }
+  a{color:var(--blue-2); text-decoration:none;}
+
+  header.top{ background:linear-gradient(135deg,var(--blue) 0%,#0a2e72 100%); color:#fff; padding:30px 20px 34px; }
+  .wrap{max-width:880px; margin:0 auto;}
+  .top .home{color:#cfe0ff; font-size:.86rem;}
+  .top .home:hover{color:#fff;}
+  .top h1{margin:14px 0 6px; font-size:2rem; letter-spacing:.3px;}
+  .top p{margin:0; color:#c4d6f7; font-size:1rem; max-width:620px; line-height:1.5;}
+
+  main{padding:26px 20px 50px;}
+  ul.apps{list-style:none; margin:0; padding:0; display:grid; gap:14px;}
+  li.app{
+    background:var(--panel); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow);
+    padding:16px 18px 16px 54px; position:relative; transition:transform .12s, box-shadow .12s, border-color .12s;
+  }
+  li.app:hover{ transform:translateY(-2px); box-shadow:0 14px 34px rgba(20,40,80,.14); border-color:#c6d4e8; }
+  li.app::before{
+    content:""; position:absolute; left:20px; top:22px; width:11px; height:11px; border-radius:3px;
+    background:var(--accent); box-shadow:0 0 0 4px rgba(255,179,0,.16);
+  }
+  li.app a.title{ font-size:1.16rem; font-weight:700; color:var(--blue); }
+  li.app a.title:hover{ color:var(--blue-2); text-decoration:underline; }
+  li.app .tag{
+    display:inline-block; margin-left:9px; font-size:.68rem; font-weight:700; letter-spacing:.5px; text-transform:uppercase;
+    color:#0a7d4b; background:#daf4e6; padding:2px 8px; border-radius:99px; vertical-align:middle;
+  }
+  li.app .tag.gr{ color:#0d3b8f; background:#dde9ff; }
+  li.app p{ margin:6px 0 0; color:var(--muted); font-size:.95rem; line-height:1.5; }
+
+  footer{ text-align:center; color:var(--muted); font-size:.82rem; padding:0 20px 36px; }
+  footer a{color:var(--muted);}
+</style>
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <a class="home" href="https://www.stouras.com/">← stouras.com</a>
+      <h1>Fun Projects</h1>
+      <p>A small collection of games and interactive tools I have been building for fun. Pick one and dive in.</p>
+    </div>
+  </header>
+
+  <main>
+    <div class="wrap">
+      <ul class="apps">
+
+        <li class="app">
+          <a class="title" href="/fun/portfoliofitgame/">PortfolioFit</a>
+          <span class="tag">New</span>
+          <p>A strategic project-portfolio packing game: drag project “bricks”, each worth a dollar value, into a frame to maximise net value (minus a $1 penalty per empty cell) before the timer runs out — a hands-on take on the knapsack problem. The tempting high-ROI bricks are often traps.</p>
+        </li>
+
+        <li class="app">
+          <a class="title" href="/fun/capitals/">Capitals</a>
+          <span class="tag">New</span>
+          <p>Learn the capital of every country in the world, one at a time, with graduated hints, a fact card and a world map locating each country after you answer. Plays in English or Greek, with progress, streaks and a leaderboard saved under your nickname.</p>
+        </li>
+
+        <li class="app">
+          <a class="title" href="/fun/nomoi/">Οι Νομοί της Ελλάδας</a>
+          <span class="tag gr">Νέο · στα Ελληνικά</span>
+          <p>Learn all 51 historical prefectures (νομοί) of Greece and their capitals on an interactive map, then test yourself with two click-the-map quizzes: find a prefecture, and find a prefecture by its capital.</p>
+        </li>
+
+        <li class="app">
+          <a class="title" href="/fun/rooks/">Rook Battle</a>
+          <p>Three two-player strategy puzzles of perfect information — Rook Battle, Queen Battle and Rook Battle x2. Outwit the optimal AI on a grid. Plays on mobile, tablet and desktop.</p>
+        </li>
+
+        <li class="app">
+          <a class="title" href="/fun/sudoku/">Sudoku</a>
+          <p>A clean, modern Sudoku with Easy, Medium and Hard puzzles, each with a unique solution. Light or dark theme, English or Greek, per-number remaining counts, notes, hints, pause, a timer, and your game saved automatically.</p>
+        </li>
+
+        <li class="app">
+          <a class="title" href="/fun/snake/">Snake</a>
+          <p>A modern take on Snake: one snake, many fruits. Eat to grow longer and faster, steering with the mouse or the arrow keys.</p>
+        </li>
+
+        <li class="app">
+          <a class="title" href="/fun/ms/"><i>Management Science</i> — Paper Browser</a>
+          <p>Browse and filter every <i>Management Science</i> (INFORMS) article from 1954 to today. Search by accepting editor, area, year, author or affiliation, and export BibTeX citations.</p>
+        </li>
+
+      </ul>
+    </div>
+  </main>
+
+  <footer>
+    &copy; 2011–<span id="yr"></span> <a href="https://www.stouras.com/">Konstantinos I. Stouras</a>
+  </footer>
+  <script>document.getElementById('yr').textContent=new Date().getFullYear();</script>
+</body>
+</html>

@@ -1,0 +1,83 @@
+rules_version = '2';
+
+// PortfolioFit for Managers — Firestore security rules (LAB / dev project).
+//
+// Backend for the lab build at stouras.com/lab/portfoliofit/. It now uses the
+// SAME fully anonymous flow as fun/portfoliofitgame/: anyone can play with NO
+// sign-up (Firebase Anonymous Auth) and may OPTIONALLY enter a session code to
+// join an admin-created configuration snapshot. There is no e-mail/password
+// registration and joining is NOT gated on a session. The admin is the
+// signed-in admin@admin.com account (Email/Password).
+//
+// Model:
+//   config/app            editable content + questions + settings      (admin write, signed-in read)
+//   sessions/{code}        admin-created config snapshots, joined by code (admin write, signed-in read)
+//   puzzleSets/{id}        approved puzzle library                       (admin write, signed-in read)
+//   counters/{id}          sequential label counter (Cloud Functions only)
+//   participants/{uid}     one doc per player (anonymous uid; player creates their own)
+//     events / rounds / survey   subcollections
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn()   { return request.auth != null; }
+    function isAdmin()    { return signedIn() && request.auth.token.email == 'admin@admin.com'; }
+    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+
+    // ---- App content / configuration (admin-managed CMS) ----
+    match /config/{docId} {
+      allow read:  if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // ---- Player sessions (admin-created config snapshots, joined by code) ----
+    // Any signed-in user (incl. anonymous) may read a session to join by code;
+    // only the admin can create / open / close / delete sessions.
+    match /sessions/{sessionId} {
+      allow read:  if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // ---- Approved puzzle library ----
+    match /puzzleSets/{puzzleId} {
+      allow read:  if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // ---- Sequential-label counter: only Cloud Functions (admin SDK) may write ----
+    match /counters/{counterId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    // ---- Participants ----
+    match /participants/{uid} {
+      allow read:   if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid);                 // anonymous players create their own doc client-side
+      allow update: if isOwner(uid) || isAdmin();
+      allow delete: if isAdmin();
+
+      // One document per logged gameplay action. Append-only for participants.
+      match /events/{eventId} {
+        allow read:   if isOwner(uid) || isAdmin();
+        allow create: if isOwner(uid);
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
+
+      // Per-round summaries.
+      match /rounds/{roundId} {
+        allow read:           if isOwner(uid) || isAdmin();
+        allow create, update: if isOwner(uid);
+        allow delete:         if isAdmin();
+      }
+
+      // Survey answers (also written by the submitSurvey function, which bypasses rules).
+      match /survey/{docId} {
+        allow read:           if isOwner(uid) || isAdmin();
+        allow create, update: if isOwner(uid);
+        allow delete:         if isAdmin();
+      }
+    }
+  }
+}

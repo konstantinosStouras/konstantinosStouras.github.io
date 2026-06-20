@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Idea lamp: warm bulb with accent rays and base (app palette) -->
+  <g stroke="#c8562a" stroke-width="2.4" stroke-linecap="round">
+    <path d="M16 1.6v2.8M5.8 5.2l2 2M26.2 5.2l-2 2M2.6 14h2.8M26.6 14h2.8"/>
+  </g>
+  <circle cx="16" cy="14" r="9" fill="#f6b73c"/>
+  <path fill="#f6b73c" d="M12.4 21h7.2v4h-7.2z"/>
+  <rect x="12" y="24.6" width="8" height="2.4" rx="1.2" fill="#c8562a"/>
+  <rect x="13.2" y="28" width="5.6" height="2.2" rx="1.1" fill="#c8562a"/>
+</svg>

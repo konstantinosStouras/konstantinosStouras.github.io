@@ -1,0 +1,87 @@
+rules_version = '2';
+
+// Answer Arena - Firestore security rules.
+//
+// Model:
+//   config/app             editable content + registration/survey questions + settings + activeTaskSetId
+//                          (admin write, PUBLIC read - needed pre-signup)
+//   taskSets/{id}          uploaded comparison sets (task, outputA, outputB)   (admin write, signed-in read)
+//   sessions/{id}          join codes + status + 2x2 condition                 (admin write, PUBLIC read*)
+//   participants/{uid}     one doc per participant (created by the owner)
+//     responses/{id}       one doc per comparison answered
+//     events/{id}          optional action log
+//     survey/{id}          survey answers
+//
+// * sessions are publicly readable so a participant can validate a join code
+//   BEFORE they sign in. They contain no personal data (code, name, status,
+//   condition, taskSetId).
+//
+// Participants take part ANONYMOUSLY via Firebase Anonymous Auth (enable the
+// Anonymous sign-in provider in the console). An anonymous user still has a
+// request.auth.uid, so the owner-based rules below apply unchanged - no rule
+// edits are needed to support anonymous play. A session code is optional.
+//
+// Admin is identified solely by the signed-in e-mail admin@admin.com. The
+// Email/Password provider exists only for the admin; anonymous users carry no
+// email token, so isAdmin() is always false for them.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn()   { return request.auth != null; }
+    function isAdmin()    { return signedIn() && request.auth.token.email == 'admin@admin.com'; }
+    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+
+    // ---- App content / configuration (admin-managed CMS) ----
+    // PUBLIC read: participants need the texts, registration/survey questions
+    // and 2x2 setting BEFORE they sign up (the welcome/tour/registration screens
+    // run pre-auth). config holds no secrets.
+    match /config/{docId} {
+      allow read:  if true;
+      allow write: if isAdmin();
+    }
+
+    // ---- Uploaded comparison sets ----
+    match /taskSets/{setId} {
+      allow read:  if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // ---- Sessions (join by code, validated pre-auth) ----
+    match /sessions/{sessionId} {
+      allow read:  if true;
+      allow write: if isAdmin();
+    }
+
+    // ---- Participants ----
+    match /participants/{uid} {
+      allow read:   if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid);
+      allow update: if isOwner(uid) || isAdmin();
+      allow delete: if isAdmin();
+
+      // One document per comparison answered. Append-only for participants.
+      match /responses/{responseId} {
+        allow read:   if isOwner(uid) || isAdmin();
+        allow create: if isOwner(uid);
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
+
+      // Optional per-action event log.
+      match /events/{eventId} {
+        allow read:   if isOwner(uid) || isAdmin();
+        allow create: if isOwner(uid);
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
+
+      // Survey answers.
+      match /survey/{docId} {
+        allow read:           if isOwner(uid) || isAdmin();
+        allow create, update: if isOwner(uid);
+        allow delete:         if isAdmin();
+      }
+    }
+  }
+}

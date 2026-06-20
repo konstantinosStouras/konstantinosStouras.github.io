@@ -1,0 +1,99 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper functions ────────────────────────────────────────────────────
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return request.auth.token.email == 'admin@admin.com';
+    }
+
+    function isSessionInstructor(sessionId) {
+      return get(/databases/$(database)/documents/sessions/$(sessionId)).data.instructorId == request.auth.uid;
+    }
+
+    function isSessionParticipant(sessionId) {
+      return exists(/databases/$(database)/documents/sessions/$(sessionId)/participants/$(request.auth.uid));
+    }
+
+    function isSessionMember(sessionId) {
+      return isSessionInstructor(sessionId) || isSessionParticipant(sessionId);
+    }
+
+    // ── Global Settings ───────────────────────────────────────────────────
+    // Admin-only: settings/ai holds provider API keys. Participants never
+    // read settings client-side; Cloud Functions use the Admin SDK (which
+    // bypasses these rules), so restricting read to the admin is safe.
+    match /settings/{docId} {
+      allow read: if isAdmin();
+      // Only the admin can save page-content defaults from the admin panel.
+      // All other settings docs (e.g. AI keys) are written via Cloud
+      // Functions only.
+      allow write: if isAdmin() && docId == 'contentDefaults';
+    }
+
+    match /sessions/{sessionId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.instructorId == request.auth.uid;
+      allow update: if isSessionInstructor(sessionId);
+      allow delete: if isAdmin();
+
+      // ── Participants ──────────────────────────────────────────────────────
+
+      match /participants/{participantId} {
+        allow read: if isSessionInstructor(sessionId)
+          || isSessionParticipant(sessionId)
+          || isOwner(participantId);
+        allow create: if isSignedIn() && isOwner(participantId);
+        allow update: if isSessionInstructor(sessionId)
+          || isOwner(participantId);
+        allow delete: if false;
+      }
+
+      // ── Groups ────────────────────────────────────────────────────────────
+
+      match /groups/{groupId} {
+        allow read: if isSessionMember(sessionId);
+        allow write: if false;
+
+        // Group chat: members can read and post, never edit or delete.
+        match /messages/{messageId} {
+          allow read: if isSessionMember(sessionId);
+          allow create: if isSessionParticipant(sessionId)
+            && request.resource.data.authorId == request.auth.uid;
+          allow update, delete: if false;
+        }
+      }
+
+      // ── Ideas ─────────────────────────────────────────────────────────────
+
+      match /ideas/{ideaId} {
+        allow read: if isSessionMember(sessionId);
+        allow create: if isSessionParticipant(sessionId)
+          && request.resource.data.authorId == request.auth.uid;
+        // Authors can edit their own ideas (title, description, selected flag).
+        allow update: if request.auth.uid == resource.data.authorId;
+        allow delete: if request.auth.uid == resource.data.authorId;
+      }
+
+      // ── AI Messages ───────────────────────────────────────────────────────
+
+      match /aiMessages/{messageId} {
+        allow read: if isSessionMember(sessionId);
+        allow create: if isSessionParticipant(sessionId)
+          && request.resource.data.role == 'user'
+          && request.resource.data.authorId == request.auth.uid;
+        allow update, delete: if false;
+      }
+    }
+  }
+}

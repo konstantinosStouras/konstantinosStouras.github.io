@@ -1,0 +1,80 @@
+rules_version = '2';
+
+// PortfolioFit for Managers — Firestore security rules.
+//
+// Model:
+//   config/app            editable content + registration/survey questions + settings   (admin write, signed-in read)
+//   sessions/{code}        admin-created config snapshots players join by code           (admin write, signed-in read)
+//   puzzleSets/{id}        approved puzzle library                                        (admin write, signed-in read)
+//   counters/{id}          sequential label counter, only Cloud Functions touch it
+//   participants/{uid}     one doc per player (anonymous players create their own;
+//                          uid comes from Firebase Anonymous Auth)
+//     events/{id}          one doc per logged action (place/move/rotate/remove/calc/note/...)
+//     rounds/{id}          per-round summary
+//     survey/{id}          survey answers
+//
+// Players sign in anonymously (no e-mail/password); they read config/sessions and
+// own their participants/{uid} subtree. Admin is the signed-in admin@admin.com.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn()      { return request.auth != null; }
+    function isAdmin()       { return signedIn() && request.auth.token.email == 'admin@admin.com'; }
+    function isOwner(uid)    { return signedIn() && request.auth.uid == uid; }
+
+    // ---- App content / configuration (admin-managed CMS) ----
+    match /config/{docId} {
+      allow read:  if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // ---- Player sessions (admin-created config snapshots, joined by code) ----
+    match /sessions/{sessionId} {
+      allow read:  if signedIn();                  // any signed-in (incl. anonymous) player may join
+      allow write: if isAdmin();
+    }
+
+    // ---- Approved puzzle library ----
+    match /puzzleSets/{puzzleId} {
+      allow read:  if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // ---- Sequential-label counter: only Cloud Functions (admin SDK) may write ----
+    match /counters/{counterId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    // ---- Participants ----
+    match /participants/{uid} {
+      allow read:   if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid);                 // anonymous players create their own doc client-side
+      allow update: if isOwner(uid) || isAdmin();
+      allow delete: if isAdmin();
+
+      // One document per logged gameplay action. Append-only for participants.
+      match /events/{eventId} {
+        allow read:   if isOwner(uid) || isAdmin();
+        allow create: if isOwner(uid);
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
+
+      // Per-round summaries.
+      match /rounds/{roundId} {
+        allow read:          if isOwner(uid) || isAdmin();
+        allow create, update: if isOwner(uid);
+        allow delete:        if isAdmin();
+      }
+
+      // Survey answers (also written by the submitSurvey function, which bypasses rules).
+      match /survey/{docId} {
+        allow read:          if isOwner(uid) || isAdmin();
+        allow create, update: if isOwner(uid);
+        allow delete:        if isAdmin();
+      }
+    }
+  }
+}

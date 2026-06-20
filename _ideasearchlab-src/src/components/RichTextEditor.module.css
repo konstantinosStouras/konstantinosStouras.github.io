@@ -1,0 +1,150 @@
+.wrap {
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--white);
+  overflow: hidden;
+}
+.wrap:focus-within { border-color: var(--accent); }
+
+/* Block (multi-line) mode: the whole editor window (toolbar + text area) is a
+   resizable box — drag the corner handle to enlarge it to the right and/or
+   down, like a textarea. min-width keeps it at least as wide as its column,
+   so it can only grow outward. Resizing is done by the component's own corner
+   handle (not native CSS resize, whose grip renders inconsistently). */
+.wrapBlock {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 340px;
+  min-height: 180px;
+  min-width: 100%;
+}
+.wrapBlock .editable {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  /* keep text clear of the corner handle's hit area */
+  padding-bottom: 18px;
+}
+
+.resizeHandle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 3px;
+  color: var(--muted);
+  cursor: nwse-resize;
+  touch-action: none;
+  user-select: none;
+  border-top-left-radius: 6px;
+}
+.resizeHandle:hover { color: var(--accent); background: rgba(200,86,42,0.07); }
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 6px;
+  background: var(--paper-dark);
+  border-bottom: 1px solid var(--border);
+}
+
+.toolBtn {
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.toolBtn:hover { background: var(--white); border-color: var(--border); }
+
+.sep {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
+.toolSelect {
+  height: 26px;
+  max-width: 130px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  /* Custom small chevron: the native select arrow renders oversized at some
+     zoom levels / platforms, so it's suppressed and drawn at a fixed size. */
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: var(--white);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M2 3.5 5 6.5 8 3.5' fill='none' stroke='%23999999' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 5px center;
+  background-size: 9px 9px;
+  color: var(--ink);
+  font-size: 12px;
+  padding: 0 19px 0 6px;
+  cursor: pointer;
+}
+.sizeSelect { max-width: 64px; }
+.toolSelect:hover { border-color: var(--accent); }
+
+.colorBtn {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+}
+.colorBtn:hover { background: var(--white); }
+.colorGlyph {
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 2px;
+  padding: 0 3px;
+  pointer-events: none;
+}
+.colorBtn input[type="color"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+}
+
+.editable {
+  min-height: 140px;
+  max-height: 460px;
+  overflow-y: auto;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--ink);
+  outline: none;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.editableInline { min-height: 0; }
+
+.editable:empty::before {
+  content: attr(data-placeholder);
+  color: var(--muted);
+  pointer-events: none;
+}

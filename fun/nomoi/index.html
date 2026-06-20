@@ -1,0 +1,1307 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Οι Νομοί της Ελλάδας · stouras.com</title>
+
+<!-- SEO -->
+<meta name="description" content="Διαδραστική εφαρμογή για να μάθεις τους 51 νομούς της Ελλάδας και τις πρωτεύουσές τους: χάρτης, παιχνίδι εύρεσης νομού και παιχνίδι εύρεσης πρωτεύουσας.">
+<meta name="keywords" content="νομοί Ελλάδας, πρωτεύουσες νομών, χάρτης Ελλάδας, γεωγραφία, εκπαιδευτικό παιχνίδι, Greece prefectures, nomoi, stouras">
+<meta name="author" content="Konstantinos Stouras">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://stouras.com/fun/nomoi/">
+
+<!-- Open Graph (link previews on Messenger, WhatsApp, Viber, Facebook, etc.) -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Οι Νομοί της Ελλάδας — μάθε τους παίζοντας">
+<meta property="og:description" content="Χάρτης των 51 νομών και των πρωτευουσών τους, με δύο παιχνίδια εξάσκησης πάνω στον χάρτη.">
+<meta property="og:url" content="https://www.stouras.com/fun/nomoi/">
+<meta property="og:site_name" content="stouras.com">
+<meta property="og:locale" content="el_GR">
+<meta property="og:image" content="https://www.stouras.com/fun/nomoi/og-image.jpg">
+<meta property="og:image:secure_url" content="https://www.stouras.com/fun/nomoi/og-image.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Χάρτης των 51 νομών της Ελλάδας, χρωματισμένος ανά περιφέρεια.">
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Οι Νομοί της Ελλάδας — μάθε τους παίζοντας">
+<meta name="twitter:description" content="Χάρτης των 51 νομών και των πρωτευουσών τους, με δύο παιχνίδια εξάσκησης πάνω στον χάρτη.">
+<meta name="twitter:image" content="https://www.stouras.com/fun/nomoi/og-image.jpg">
+
+<!-- Favicons: scalable SVG for modern browsers + PNG/ICO fallbacks and Apple touch icon -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%230d3b8f'/%3E%3Cpath%20d='M50%2022c-12%200-22%2010-22%2022%200%2016%2022%2034%2022%2034s22-18%2022-34c0-12-10-22-22-22z'%20fill='%23fff'/%3E%3Ccircle%20cx='50'%20cy='44'%20r='9'%20fill='%230d3b8f'/%3E%3C/svg%3E">
+<link rel="icon" type="image/png" sizes="32x32" href="/fun/nomoi/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/fun/nomoi/favicon-16.png">
+<link rel="icon" href="/fun/nomoi/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/fun/nomoi/apple-touch-icon.png">
+<meta name="theme-color" content="#0d3b8f">
+
+<style>
+  :root{
+    --blue:#0d3b8f; --blue-2:#1456c8; --sea:#dcebf2 ;
+    --sea:#d9ebf6; --sea-2:#cbe3f3;
+    --ink:#16233a; --muted:#5c6b85; --line:#d7e0ec;
+    --panel:#ffffff; --bg:#eef3f9;
+    --land:#cfd9e6; --land-hi:#ffd54f; --land-sel:#ffb300;
+    --good:#2e9e5b; --good-bg:#d8f3e2; --bad:#d24545; --bad-bg:#fbe1e1;
+    --shadow:0 10px 30px rgba(20,40,80,.10);
+    --r:14px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+    display:flex; flex-direction:column; height:100vh; height:100dvh; overflow:hidden;
+  }
+  @media (max-width:860px){ body{height:auto; min-height:100vh; min-height:100dvh; overflow:visible;} }
+  a{color:var(--blue-2);}
+
+  header.top{
+    background:linear-gradient(135deg,var(--blue) 0%,#0a2e72 100%);
+    color:#fff; padding:14px 18px 0;
+  }
+  .top .titlerow{display:flex; align-items:center; gap:12px 10px; flex-wrap:wrap; max-width:1180px; margin:0 auto;}
+  .top h1{font-size:1.22rem; margin:0; font-weight:700; letter-spacing:.2px;}
+  .top h1 span{opacity:.7; font-weight:500;}
+  .top .home{margin-left:8px; color:#cfe0ff; text-decoration:none; font-size:.85rem; white-space:nowrap;}
+  .top .home:hover{color:#fff;}
+  /* account controls (Firebase Login / Register) */
+  .acctctrls{margin-left:auto; display:flex; align-items:center; gap:8px;}
+  .abtn{
+    appearance:none; cursor:pointer; font:inherit; font-weight:700; font-size:.82rem; letter-spacing:.2px;
+    border-radius:999px; padding:8px 15px; border:1px solid rgba(255,255,255,.30);
+    background:rgba(255,255,255,.12); color:#eaf1ff; white-space:nowrap;
+    transition:transform .14s ease, background .18s ease, border-color .18s ease, filter .18s ease, box-shadow .18s ease;
+  }
+  .abtn:hover{background:rgba(255,255,255,.22); border-color:rgba(255,255,255,.5); transform:translateY(-1px);}
+  .abtn:active{transform:translateY(0) scale(.97);}
+  .abtn:focus-visible{outline:2px solid rgba(255,255,255,.85); outline-offset:2px;}
+  .abtn.primary{background:#fff; color:var(--blue,#0d3b8f); border-color:#fff; box-shadow:0 4px 14px rgba(0,0,0,.18);}
+  .abtn.primary:hover{filter:brightness(.96); box-shadow:0 8px 20px rgba(0,0,0,.22);}
+  .acctwho{position:relative; display:inline-flex;}
+  .acctwho[hidden]{display:none;}   /* the [hidden] attr alone is overridden by display:inline-flex */
+  .acctpop{
+    position:absolute; top:calc(100% + 8px); right:0; min-width:180px; z-index:50;
+    background:#fff; color:#1f2937; border-radius:12px; padding:8px;
+    box-shadow:0 14px 40px rgba(0,0,0,.3); border:1px solid rgba(0,0,0,.08);
+  }
+  .acctpop.hidden{display:none;}
+  .acctpop-head{font-size:.72rem; color:#6b7280; padding:6px 9px 8px; border-bottom:1px solid #eef0f3; margin-bottom:5px; line-height:1.5;}
+  .acctpop-head b{color:#111827; word-break:break-all;}
+  .acctpop button{
+    appearance:none; border:0; background:none; width:100%; text-align:left; cursor:pointer;
+    font:inherit; font-weight:600; font-size:.85rem; color:#dc2626; padding:9px; border-radius:8px;
+  }
+  .acctpop button:hover{background:#fef2f2;}
+  @media (max-width:560px){ .abtn{padding:6px 11px; font-size:.78rem;} }
+  .sub{max-width:1180px; margin:4px auto 0; color:#c4d6f7; font-size:.84rem;}
+
+  /* single-row tab strip; scrolls horizontally when it does not fit (phones) */
+  .tabs{display:flex; gap:6px; max-width:1180px; margin:12px auto 0; flex-wrap:nowrap;
+    overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none;}
+  .tabs::-webkit-scrollbar{display:none;}
+  .tab{
+    appearance:none; border:0; cursor:pointer; font:inherit; flex:0 0 auto; white-space:nowrap;
+    background:rgba(255,255,255,.12); color:#dbe7ff;
+    padding:9px 14px; border-radius:10px 10px 0 0; font-weight:600; font-size:.92rem;
+    transition:background .15s,color .15s;
+  }
+  .tab:hover{background:rgba(255,255,255,.2);}
+  .tab.active{background:var(--bg); color:var(--blue);}
+
+  /* compact header + tabs on small phones */
+  @media (max-width:560px){
+    header.top{padding:10px 14px 0;}
+    .top .titlerow{gap:8px;}
+    .top h1{font-size:1.02rem; flex:1 1 auto;}
+    .top h1 span{display:none;}            /* hide subtitle on phones to keep the header on one line */
+    .acctctrls{gap:6px;}
+    .sub{font-size:.76rem; margin-top:3px;}
+    .tabs{margin-top:10px;}
+    .tab{padding:8px 12px; font-size:.85rem;}
+  }
+
+  main{flex:1 1 auto; min-height:0; width:100%; max-width:1180px; margin:0 auto; padding:14px; display:flex; gap:14px; align-items:stretch;}
+  @media (max-width:860px){ main{flex-direction:column; min-height:0;} }
+
+  .mapcard{
+    position:relative; background:var(--panel); border-radius:var(--r); box-shadow:var(--shadow);
+    flex:1 1 auto; min-height:0; display:flex; flex-direction:column; overflow:hidden;
+  }
+  @media (max-width:860px){ .mapcard{min-height:58vh; min-height:58dvh;} }
+  .promptbar{
+    padding:12px 14px; border-bottom:1px solid var(--line); min-height:56px;
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  }
+  .promptbar .q{font-size:1.02rem; line-height:1.3;}
+  .promptbar .q b{color:var(--blue);}
+  .promptbar .feedback{font-weight:600;}
+  .feedback.good{color:var(--good);} .feedback.bad{color:var(--bad);}
+  .promptbar .spacer{flex:1;}
+  .btn{
+    appearance:none; border:1px solid var(--line); background:#fff; color:var(--ink);
+    font:inherit; font-weight:600; font-size:.9rem; padding:8px 13px; border-radius:9px; cursor:pointer;
+    transition:background .15s,border-color .15s,transform .05s;
+  }
+  .btn:hover{background:#f4f7fb; border-color:#c2cfe0;}
+  .btn:active{transform:translateY(1px);}
+  .btn.primary{background:var(--blue); border-color:var(--blue); color:#fff;}
+  .btn.primary:hover{background:var(--blue-2);}
+  .btn:disabled{opacity:.45; cursor:default;}
+
+  .mapstage{position:relative; flex:1; min-height:0; background:
+      radial-gradient(120% 120% at 30% 0%, var(--sea) 0%, var(--sea-2) 100%);}
+  svg#map{position:absolute; inset:0; width:100%; height:100%; touch-action:none; display:block;}
+  #map path.nomos{
+    fill:var(--land); stroke:#fff; stroke-width:.6; stroke-linejoin:round;
+    cursor:pointer; transition:fill .12s;
+  }
+  #map.learn path.nomos{ cursor:pointer; }
+  #map path.nomos.hover{ fill:var(--land-hi) !important; }
+  #map path.nomos.sel{ fill:var(--land-sel) !important; }
+  #map path.nomos.correct{ fill:#43c476 !important; }
+  #map path.nomos.wrong{ fill:#e06464 !important; }
+  #map path.nomos.target{ fill:#43c476 !important; }
+  #map .labels{ display:none; pointer-events:none; }
+  #map.learn .labels{ display:block; }
+  #map .lbl text{ paint-order:stroke; stroke:#fff; stroke-width:2.1px; stroke-linejoin:round;
+                  fill:#26344c; font-weight:700; }
+  #map .lbl .lname{ font-size:6.6px; }
+  #map .lbl .lcap{ font-size:5.6px; fill:#9a4d00; font-weight:600; display:none; }
+  #map.showcaps .lbl .lcap{ display:block; }
+
+  /* tap popup */
+  .popup{position:absolute; z-index:25; min-width:190px; max-width:240px;
+    background:#fff; border:1px solid var(--line); border-radius:12px; box-shadow:0 14px 36px rgba(20,40,80,.22);
+    padding:12px 14px 12px; animation:popin .12s ease-out;}
+  @keyframes popin{from{opacity:0; transform:translateY(4px) scale(.97);} to{opacity:1; transform:none;}}
+  .popup .pclose{position:absolute; top:5px; right:7px; border:0; background:transparent; cursor:pointer;
+    font-size:1.15rem; line-height:1; color:var(--muted); padding:2px 5px; border-radius:6px;}
+  .popup .pclose:hover{background:#f1f4f9; color:var(--ink);}
+  .popup .ptitle{font-size:1.08rem; font-weight:800; color:var(--blue); margin:0 18px 7px 0;}
+  .popup .prow{display:flex; justify-content:space-between; gap:12px; padding:3px 0; font-size:.9rem;}
+  .popup .prow .pk{color:var(--muted);}
+  .popup .prow .pv{font-weight:700; text-align:right;}
+  .popup .prow .pv.cap{color:#9a4d00;}
+
+  .zoomctrls{position:absolute; right:10px; bottom:10px; display:flex; flex-direction:column; gap:6px;}
+  .zoomctrls button{
+    width:38px; height:38px; border-radius:10px; border:1px solid var(--line); background:rgba(255,255,255,.95);
+    font-size:1.2rem; font-weight:700; color:var(--ink); cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.08);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .zoomctrls button:hover{background:#fff;}
+  .zoomctrls .rz{font-size:.95rem;}
+
+  /* side panel */
+  aside.side{
+    flex:0 0 330px; max-width:330px; background:var(--panel); border-radius:var(--r); box-shadow:var(--shadow);
+    display:flex; flex-direction:column; overflow:hidden; min-height:200px;
+  }
+  @media (max-width:860px){ aside.side{flex:1 1 auto; max-width:none;} }
+  .side .head{padding:12px 14px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:10px;}
+  .side .head h2{margin:0; font-size:1rem;}
+  .side .head .small{color:var(--muted); font-size:.8rem;}
+  .side .body{overflow:auto; padding:8px 10px; flex:1;}
+
+  /* learn legend */
+  .toggle{display:flex; align-items:center; gap:7px; font-size:.84rem; color:var(--muted); margin-left:auto; cursor:pointer; user-select:none;}
+  .toggle input{width:16px; height:16px;}
+  .reggroup{margin:4px 2px 12px;}
+  .reggroup h3{
+    display:flex; align-items:center; gap:8px; margin:0 0 4px; font-size:.82rem; letter-spacing:.3px;
+    text-transform:uppercase; color:var(--muted);
+  }
+  .reggroup h3 .dot{width:12px; height:12px; border-radius:4px; flex:0 0 auto;}
+  .nlist{list-style:none; margin:0; padding:0;}
+  .nlist li{
+    display:flex; justify-content:space-between; gap:10px; padding:5px 8px; border-radius:8px; cursor:pointer;
+    font-size:.92rem; align-items:baseline;
+  }
+  .nlist li:hover, .nlist li.hover{background:#eef4fb;}
+  .nlist li .nm{font-weight:600;}
+  .nlist li .cap{color:var(--muted); font-size:.85rem; text-align:right;}
+
+  /* detail card */
+  .detail{padding:14px;}
+  .detail .big{font-size:1.25rem; font-weight:700; color:var(--blue);}
+  .detail .row{margin-top:8px; display:flex; gap:8px; align-items:baseline;}
+  .detail .k{color:var(--muted); font-size:.82rem; width:92px; flex:0 0 auto;}
+  .detail .v{font-weight:600;}
+  .detail .hint{color:var(--muted); font-size:.86rem; margin-top:14px; line-height:1.45;}
+
+  /* quiz stats */
+  .stats{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; padding:12px;}
+  .stat{background:#f4f7fb; border-radius:10px; padding:10px; text-align:center;}
+  .stat .n{font-size:1.4rem; font-weight:800; color:var(--blue); line-height:1;}
+  .stat .l{font-size:.72rem; color:var(--muted); margin-top:4px; text-transform:uppercase; letter-spacing:.4px;}
+  .progress{height:8px; background:#e7eef7; border-radius:99px; margin:2px 12px 10px; overflow:hidden;}
+  .progress > span{display:block; height:100%; width:0; background:linear-gradient(90deg,var(--blue),var(--blue-2)); transition:width .25s;}
+  .log{padding:2px 12px 12px;}
+  .log h4{margin:6px 2px; font-size:.78rem; text-transform:uppercase; letter-spacing:.4px; color:var(--muted);}
+  .log ul{list-style:none; margin:0; padding:0;}
+  .log li{display:flex; justify-content:space-between; gap:8px; padding:4px 8px; border-radius:7px; font-size:.86rem;}
+  .log li .mk{font-weight:800;}
+  .log li.ok .mk{color:var(--good);} .log li.no .mk{color:var(--bad);}
+  .log li:nth-child(odd){background:#f6f9fc;}
+
+  .hidden{display:none !important;}
+
+  footer.foot{text-align:center; color:var(--muted); font-size:.8rem; padding:10px 14px 18px;}
+  footer.foot a{color:var(--muted);}
+
+  /* player badge */
+  .player{
+    appearance:none; cursor:pointer; font:inherit; color:#dbe7ff;
+    background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.18);
+    border-radius:999px; padding:5px 11px; display:inline-flex; align-items:center; gap:7px; font-size:.82rem; font-weight:600;
+    transition:background .15s; max-width:46vw;
+  }
+  .player:hover{background:rgba(255,255,255,.22);}
+  .player .pi{font-size:.95rem;}
+  .player #playerName{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .player .chg{opacity:.6; font-weight:500; font-size:.72rem; border-left:1px solid rgba(255,255,255,.3); padding-left:7px;}
+  @media (max-width:560px){ .player .chg{display:none;} }
+
+  /* nickname modal */
+  .modal{position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center;
+    background:rgba(12,25,55,.55); backdrop-filter:blur(3px); padding:20px;}
+  .modalcard{background:#fff; border-radius:18px; box-shadow:0 30px 80px rgba(0,0,0,.35); padding:26px 24px 22px;
+    max-width:380px; width:100%; text-align:center;}
+  .modalcard .emoji{font-size:2.4rem; line-height:1;}
+  .modalcard h2{margin:10px 0 6px; color:var(--blue); font-size:1.4rem;}
+  .modalcard p{margin:0 0 16px; color:var(--muted); font-size:.92rem; line-height:1.5;}
+  #nickForm{display:flex; gap:8px;}
+  #nickInput{flex:1; font:inherit; font-size:1rem; padding:11px 13px; border:1px solid var(--line); border-radius:10px; outline:none;}
+  #nickInput:focus{border-color:var(--blue-2); box-shadow:0 0 0 3px rgba(20,86,200,.15);}
+  .existing{margin-top:14px; text-align:left;}
+  .existing .lbl{font-size:.76rem; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); margin-bottom:7px;}
+  .chips{display:flex; flex-wrap:wrap; gap:7px;}
+  .chip{cursor:pointer; font:inherit; font-size:.85rem; font-weight:600; color:var(--blue);
+    background:#eef4fb; border:1px solid #dbe7f6; border-radius:999px; padding:5px 12px;}
+  .chip:hover{background:#e2edfa;}
+  .guestrow{margin-top:16px; padding-top:14px; border-top:1px dashed var(--line);}
+  .chip.guest{display:inline-block; background:#fff; border:1px solid var(--blue); color:var(--blue); padding:8px 16px; font-size:.9rem;}
+  .chip.guest:hover{background:#eef4fb;}
+  .ghint{font-size:.74rem; color:var(--muted); margin-top:8px; line-height:1.45;}
+
+  /* progress view */
+  .prog{padding:12px;}
+  .prog .empty{color:var(--muted); text-align:center; padding:30px 12px; line-height:1.6;}
+  .prog .kpis{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;}
+  .kpi{background:#f4f7fb; border-radius:10px; padding:11px;}
+  .kpi .n{font-size:1.35rem; font-weight:800; color:var(--blue); line-height:1;}
+  .kpi .l{font-size:.72rem; color:var(--muted); margin-top:4px; text-transform:uppercase; letter-spacing:.3px;}
+  .prog h4{margin:14px 2px 7px; font-size:.78rem; text-transform:uppercase; letter-spacing:.4px; color:var(--muted);}
+  .modebars{display:flex; flex-direction:column; gap:8px;}
+  .modebar{font-size:.85rem;}
+  .modebar .top{display:flex; justify-content:space-between; margin-bottom:3px;}
+  .modebar .track{height:9px; background:#e7eef7; border-radius:99px; overflow:hidden;}
+  .modebar .track > span{display:block; height:100%; background:linear-gradient(90deg,var(--blue),var(--blue-2));}
+  .weak{list-style:none; margin:0; padding:0;}
+  .weak li{display:flex; justify-content:space-between; gap:8px; padding:5px 8px; border-radius:7px; cursor:pointer; font-size:.9rem;}
+  .weak li:hover, .weak li.hover{background:#fdeeee;}
+  .weak li .pct{color:var(--bad); font-weight:700; font-size:.85rem;}
+  .recent{list-style:none; margin:0; padding:0;}
+  .recent li{display:flex; justify-content:space-between; gap:8px; padding:5px 8px; border-radius:7px; font-size:.85rem;}
+  .recent li:nth-child(odd){background:#f6f9fc;}
+  .recent li .dt{color:var(--muted);}
+  .recent li .sc{font-weight:700;}
+  .recent li .md{color:var(--muted); font-size:.78rem;}
+
+  /* leaderboard */
+  .lbwrap{padding:10px 12px 14px;}
+  .lbsort{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;}
+  .lbsort .schip{cursor:pointer; font:inherit; font-size:.78rem; font-weight:600; color:var(--muted);
+    background:#f1f5fa; border:1px solid var(--line); border-radius:999px; padding:5px 11px;}
+  .lbsort .schip.on{color:#fff; background:var(--blue); border-color:var(--blue);}
+  ol.lb{list-style:none; margin:0; padding:0; counter-reset:none;}
+  ol.lb li{display:grid; grid-template-columns:30px 1fr auto; align-items:center; gap:10px;
+    padding:9px 8px; border-radius:10px; border:1px solid transparent;}
+  ol.lb li:nth-child(even){background:#f6f9fc;}
+  ol.lb li.me{background:#eaf2ff; border-color:#cdddfb;}
+  ol.lb .rank{font-weight:800; color:var(--muted); text-align:center; font-size:.95rem;}
+  ol.lb .rank.medal{font-size:1.2rem;}
+  ol.lb .who{min-width:0;}
+  ol.lb .who .nm{font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block;}
+  ol.lb .who .nm .youtag{font-size:.66rem; font-weight:700; color:var(--blue); background:#d9e6ff; border-radius:999px; padding:1px 6px; margin-left:6px; vertical-align:middle;}
+  ol.lb .who .sub{color:var(--muted); font-size:.78rem;}
+  ol.lb .metric{text-align:right;}
+  ol.lb .metric .v{font-weight:800; color:var(--blue); font-size:1.05rem; line-height:1;}
+  ol.lb .metric .ml{color:var(--muted); font-size:.68rem; text-transform:uppercase; letter-spacing:.3px;}
+  .lbempty{color:var(--muted); text-align:center; padding:30px 12px; line-height:1.6;}
+</style>
+</head>
+<body>
+  <header class="top">
+    <div class="titlerow">
+      <h1>Οι Νομοί της Ελλάδας <span>· μάθε τους παίζοντας</span></h1>
+      <div class="acctctrls" id="acctctrls">
+        <button class="abtn" id="nomoiLogin" type="button">Σύνδεση</button>
+        <button class="abtn primary" id="nomoiRegister" type="button">Εγγραφή</button>
+        <div class="acctwho" id="acctwho" hidden>
+          <button class="player" id="playerBadge" type="button" title="Λογαριασμός">
+            <span class="pi">👤</span><span id="playerName">—</span><span class="chg">▾</span>
+          </button>
+          <div class="acctpop hidden" id="acctpop" role="menu">
+            <div class="acctpop-head">Σύνδεση ως <b id="acctEmailN"></b></div>
+            <button id="nomoiLogout" type="button">Αποσύνδεση</button>
+          </div>
+        </div>
+      </div>
+      <a class="home" href="/fun/">← Fun Projects</a>
+    </div>
+    <div class="sub">Οι 51 ιστορικοί νομοί της Ελλάδας και οι πρωτεύουσές τους — π.χ. ο Νομός Αιτωλοακαρνανίας έχει πρωτεύουσα το Μεσολόγγι.</div>
+    <nav class="tabs">
+      <button class="tab active" data-mode="learn">Χάρτης</button>
+      <button class="tab" data-mode="quizNomos">Βρες τον Νομό</button>
+      <button class="tab" data-mode="quizCapital">Βρες την Πρωτεύουσα</button>
+      <button class="tab" data-mode="progress">Η Πρόοδός μου</button>
+      <button class="tab" data-mode="leaderboard">Κατάταξη</button>
+    </nav>
+  </header>
+
+  <main>
+    <div class="mapcard">
+      <div class="promptbar" id="promptbar">
+        <div class="q" id="prompt">Περιήγησε τον χάρτη. Πάτησε σε έναν νομό για να δεις το όνομα και την πρωτεύουσά του.</div>
+        <div class="spacer"></div>
+        <label class="toggle" id="capToggleWrap"><input type="checkbox" id="capToggle"> Πρωτεύουσες</label>
+        <button class="btn" id="nextBtn" style="display:none">Επόμενη ▸</button>
+        <button class="btn" id="skipBtn" style="display:none">Παράλειψη</button>
+      </div>
+      <div class="mapstage">
+        <svg id="map" class="learn" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"></svg>
+        <div class="popup hidden" id="popup"></div>
+        <div class="zoomctrls">
+          <button id="zin" title="Μεγέθυνση">+</button>
+          <button id="zout" title="Σμίκρυνση">−</button>
+          <button id="zreset" class="rz" title="Επαναφορά">⟳</button>
+        </div>
+      </div>
+    </div>
+
+    <aside class="side">
+      <div class="head" id="sideHead">
+        <h2 id="sideTitle">Νομοί &amp; Πρωτεύουσες</h2>
+        <span class="small" id="sideSmall">51 νομοί</span>
+      </div>
+      <div class="body" id="sideBody"></div>
+    </aside>
+  </main>
+
+  <footer class="foot">
+    Φτιαγμένο με ❤ για τη γεωγραφία της Ελλάδας · <a href="https://www.stouras.com/">stouras.com</a>
+  </footer>
+
+  <div class="modal hidden" id="nickModal">
+    <div class="modalcard">
+      <div class="emoji">🗺️</div>
+      <h2 id="nickTitle">Καλώς όρισες!</h2>
+      <p>Διάλεξε ένα ψευδώνυμο. Έτσι θα αποθηκεύεται η πρόοδός σου σε αυτή τη συσκευή κάθε φορά που παίζεις με το ίδιο όνομα.</p>
+      <form id="nickForm" autocomplete="off">
+        <input id="nickInput" type="text" maxlength="24" placeholder="π.χ. Κώστας" aria-label="Ψευδώνυμο">
+        <button class="btn primary" type="submit" id="nickStart">Ξεκίνα</button>
+      </form>
+      <div id="nickExisting" class="existing"></div>
+    </div>
+  </div>
+
+<script>
+const MAP = {"viewBox":"0 0 1000 865.3","nomoi":{"drama":{"name":"Δράμας","capital":"Δράμα","region":"makedonia_thraki","d":"M526.2,59.1 522.6,56.6 521,52.3 516.3,51.3 514.4,52.3 514.1,50.1 509.4,50.8 508.3,46.4 506.1,45.1 504.8,41.9 505.2,40.2 503.6,37.4 504.2,35.9 502.5,35.4 502.5,34.3 497.6,35.2 494.4,39.5 491.1,38.6 490.2,37.3 488.1,37.9 486.7,40 483.8,38.9 480.7,40.8 479.8,39.1 480.4,37.5 476.5,33.2 473.6,36.4 471.5,36.2 469,40.5 466.6,37.6 464.3,38.1 461.5,36.1 459.1,37.2 457.4,39.6 458.6,46.4 456,48 454,47.6 453.3,46.2 448.8,49.6 443.4,44.5 442.8,47.3 441.5,48.1 432.9,49.7 429.7,54.7 420.7,53.2 418.5,54.8 417.7,57 415.9,57.2 415.9,59.9 416.7,63.7 424.4,65.4 425.2,68 423.7,69 422.9,72.4 424.2,73.9 423.6,75.4 425.9,76.4 425.1,79.3 427.9,79.4 432.7,85.4 438.4,87 446,92.5 450.9,89.1 451.7,90.7 454.8,92 455.1,96.7 460.8,101 464.2,102.7 467.5,102.1 470.2,104 470.6,103.1 473.5,104 474.9,105.1 474.5,106.4 475.7,106.6 477.6,101.8 474.8,101.4 474.5,100.2 477.3,98.9 477.2,97.4 480.4,95 483.5,96.1 487.3,91.9 492.3,89.5 495.8,85.8 498,86.2 498.7,85 497.5,82.2 498.5,81.1 498.6,78.3 495.5,74.5 499.9,75.6 500,71.1 500.9,70.6 504.2,71.1 506.7,73.6 509.5,70.1 508.4,68.9 508.7,65.4 510.9,64.7 512.9,65.5 515.4,63.2 517.4,64.4 519,59.3 521.8,61.7 526.2,59.1Z","cx":469.2,"cy":66.4},"evrou":{"name":"Έβρου","capital":"Αλεξανδρούπολη","region":"makedonia_thraki","d":"M601,162.2 593.8,163.9 591.4,166.6 589.4,166.6 590.3,168.4 601.3,176.3 612.9,172.8 613.2,167.5 611.5,166 609.1,164.1 601,162.2ZM606.8,119.4 616.2,121.5 624.2,120.9 636.8,121.9 641,124.5 641.6,127.7 643.6,127.4 644.9,129 645,135.5 648.7,135.7 653.5,133.8 653.9,130.3 656.5,126.1 660,123.8 660.9,124.4 660.9,123.4 662.6,122.6 661,121 662.1,120.5 661.2,119.1 663,118.9 663.1,116 663.4,117.1 665.5,117 666.7,113.1 667.9,115.5 669.8,115.5 670.4,114.3 669.1,111.1 670.6,111.5 672.7,109.6 675.8,109.2 672.7,104.8 675.5,102.9 676.5,100.4 672.8,97.6 671.3,93.8 673.4,89.5 670.7,89.1 673.6,85.5 671.2,83.3 671,81.4 672.7,80 672.2,77.8 673.2,75.7 671.9,73.7 672.7,72 679.8,72.2 683.4,68.7 685.6,68.4 686.1,66.2 688.2,65.5 689,63 691.7,61.4 694.9,61.6 695.7,63.3 698,64 701.6,60.3 701.6,52.5 700,51.3 699.9,46.6 698.7,44.6 698.1,38.4 699.1,36.5 698.1,35 699.1,30.4 698.2,28.9 692,27.4 688.1,23.4 689.1,22.6 688.4,21.3 686.7,21.6 684,19.7 678.2,18.4 676.5,16.7 668.4,16.5 665.3,15.1 663.9,12 662.1,14 657.9,12.1 653.4,14.3 652.4,16.3 649.9,15.9 648.4,16.7 647.5,19.3 648.3,23.8 650.3,24.9 650.8,26.8 654.9,26.1 654.8,28.3 656.3,29.4 655.7,35.4 658.7,35.6 659.5,39.8 656.4,44.5 660.8,49.6 658.3,50.2 656.9,51.8 656.9,55.3 654.8,57.3 654.2,59.8 644.8,60.4 642.5,61.3 641.5,63.2 635.8,63.8 632.9,65.5 634.7,69.1 632.5,74.9 633.5,76.3 631.7,79.2 634.3,83.7 634.2,86.2 638.2,89.7 630.5,90 628.3,98.2 624.5,99.6 625,103 620.7,103.6 619.5,102.7 616.1,105.2 611.6,105.3 611.1,106.1 613.3,108.1 612,109.2 608.7,106.6 605.7,107.1 606.8,119.4Z","cx":658.9,"cy":74.1},"kavalas":{"name":"Καβάλας","capital":"Καβάλα","region":"makedonia_thraki","d":"M513.9,127.1 508.3,129.9 507,131.9 505.1,131.5 500.3,143.5 500.4,146.7 501.6,146.9 501.8,148.6 507.6,148.4 509.3,150.1 509,151.9 512.5,153.3 513,155 515.3,154.1 517.5,151.4 519.7,151.8 520.3,150.6 521.9,151.2 524,149 525.2,150.5 526.1,148.1 525,147.6 524.2,142.1 526.1,140.8 526,138.5 523.7,137.2 524.2,135.2 526,135.4 525.9,134.1 523.1,133.4 520,128.9 517.7,129.8 515.1,128.8 513.9,127.1ZM529,119.9 521.3,100.5 525.2,91.9 517.8,88.6 517.3,84.9 515.3,83.6 518.1,81.7 517.7,78.3 511.9,78.1 506.3,79.8 505.1,78.4 500.9,79.2 498.6,78.3 498.5,81.1 497.5,82.2 498.9,84.6 498,86.2 495.8,85.8 492.3,89.5 487.3,91.9 483.5,96.1 480.4,95 477.2,97.4 477.3,98.9 474.6,100 474.8,101.4 477.6,101.8 475.7,106.6 474.5,106.4 474.9,105.1 473.5,104 462.9,102 461.3,105.7 462.5,107.9 460.4,110.4 461,112.9 458.8,112 457,112.7 458,115.3 454.3,115.8 447.9,123.1 444.6,124.9 441.3,125.1 438.4,127.3 439.7,128.8 439.1,129.5 448.6,134.4 456.1,136.9 460.1,136.4 465.5,134.3 478.5,125.8 484,123.9 480.8,123.6 481.1,121.2 483.1,121.6 483.7,119.8 481.7,118.7 481.8,117.5 484.3,114.8 487.5,113.8 489.2,110.8 490.6,110.4 491.1,111.3 492.5,109.5 495.8,109.7 500,107.8 504.1,108.5 511.3,119.8 515.1,118.1 517.8,119 518.4,120.1 516.9,120.1 518.8,120.8 524.4,119.7 527.6,121.4 529,119.9Z","cx":488.4,"cy":108.2},"xanthis":{"name":"Ξάνθης","capital":"Ξάνθη","region":"makedonia_thraki","d":"M568,70.7 566.6,67.4 559.3,63.5 558.6,61.2 554.8,61.8 552,58.5 544.6,57.3 537.5,53.4 534.1,55.5 529.6,54.3 529.2,59.9 528.2,60.9 526.2,59.1 521.7,61.7 519,59.3 517.4,64.4 515.4,63.2 512.9,65.5 510.9,64.7 508.7,65.4 508.4,68.9 509.5,70.1 506.7,73.6 504.2,71.1 500.9,70.6 500,71.1 499.9,75.6 495.5,74.7 497.5,77.5 500.9,79.2 503.4,78.1 505.3,78.4 506,79.8 511.9,78.1 517.7,78.3 518.1,81.7 515.3,83.6 517.3,84.9 517.8,88.6 525.2,91.9 521.3,100.5 529,119.9 536.7,112.8 543.2,110.8 545.6,111.1 546.5,107.7 553.2,102.2 557.3,102 560,103.8 561.6,102.7 561.4,101 558,97.2 556.7,92.7 552.3,89.5 551.3,84.3 556.2,80.8 555.7,78.8 558.3,77.4 557.4,75.8 558.1,72.6 559.9,72.2 561.1,74.9 562.5,74.9 562.3,77.3 563.6,73.9 568,70.7Z","cx":536.0,"cy":82.0},"rodopis":{"name":"Ροδόπης","capital":"Κομοτηνή","region":"makedonia_thraki","d":"M632.9,65.5 630.4,65.7 629.3,64.7 629.6,63 628,63.1 625,60.7 620.9,63.8 615.5,64 614.4,67.3 609.3,64.6 605.2,65.9 600.1,64.1 598.5,65.1 597.1,69 591.8,67.8 587.8,69.4 587.3,70.7 581.7,71.2 578.7,73.4 574.8,73 573.9,74.1 569.4,73.1 568,70.7 563.6,73.9 562.3,77.3 562.5,74.9 561.1,74.9 559.9,72.2 558.1,72.6 557.4,75.8 558.3,77.4 555.7,78.8 556.2,80.8 552.2,83.4 551.1,86.1 552.3,89.5 556.7,92.7 558.2,97.5 561.6,101.4 558.5,107.5 563.2,110.1 570.6,110.5 571.9,112.1 574.7,109.8 577.5,109.4 581.1,110.6 582.8,113.7 589.9,115.1 599.2,119.8 602.9,118.7 606.8,119.4 605.7,107.1 608.7,106.6 612,109.2 613.3,108.1 611.1,106.1 611.6,105.3 616.1,105.2 619.5,102.7 620.7,103.6 625,103 624.5,99.6 628.3,98.2 630.5,90 638.2,89.7 634.2,86.2 634.3,83.7 631.7,79.2 633.5,76.3 632.5,74.9 634.7,69.1 632.9,65.5Z","cx":595.2,"cy":89.0},"imathias":{"name":"Ημαθίας","capital":"Βέροια","region":"kentriki_makedonia","d":"M308.3,137.7 307.5,136.8 306,137.7 302.7,141.3 299.4,140.5 298.4,137.6 291.2,146.3 287,143.3 284.9,140 272.8,138.2 269.2,134.9 267.5,135 266.9,135.8 268.4,137.9 260.3,140.3 258.5,139.7 256.6,141.8 252.7,141.2 252.3,144.7 250.8,145.8 250.3,148.2 250.7,151.7 253.5,154.2 251.3,156.4 251.5,157.8 254.5,161.2 255.2,165 260.2,165.9 264.4,169.6 263.4,170.2 263.9,171 268,170.3 271.6,171.6 270.6,178.1 273.5,180.5 276.3,180.7 273.7,184.4 276.8,187.3 280.7,187.2 283.5,182.2 285.4,182.7 288.7,180.5 289.5,183.2 289.1,179.9 294.9,173.9 297.3,173 299.8,168.9 301.2,168.7 302.6,166.1 301.6,164.6 303.1,162.2 302.9,159.7 306.9,160.3 310.7,157.3 313.4,158.4 316,157.7 318.6,158.8 321.4,163.9 324.5,164.1 323.6,161.2 326.4,159.5 325.2,157.2 322,155.2 320.6,149.5 313.9,142.2 308.8,141.5 308.3,137.7Z","cx":283.8,"cy":157.1},"thessalonikis":{"name":"Θεσσαλονίκης","capital":"Θεσσαλονίκη","region":"kentriki_makedonia","d":"M429.4,132 426.6,129.2 422.2,128.8 419.9,130.2 416,128.3 410.1,127.9 407.4,125.6 406.8,123 404.4,121.7 398.4,123.4 398.9,119.5 392.4,120.6 391.1,118.9 390.5,113.5 388.4,112.4 388.4,109.6 387.5,110.1 385,108.5 382.8,109.4 381.1,103.3 379.5,102 373.9,104.8 371.6,108.2 367.1,109 365.2,106.4 364.2,108.3 357.4,110.3 357.8,117.6 352.3,120.7 352.9,123.8 350.3,124.1 350.7,125.3 343.5,124.2 342.8,125.9 339.5,124.1 334.3,124.3 334.2,126.7 332,126.6 331.7,128 327.6,127.2 326.8,119.7 321.9,119.7 322.8,125.1 320,124.9 318.5,126.4 316.7,125.8 313.1,121.6 315.5,126 311,126.5 309.2,124.9 308.7,127.2 312.3,128.2 315.7,134.1 315,136 310.4,135.5 308.3,137.7 308.1,139.9 309,141.6 313.9,142.2 318.1,146.5 320.6,149.5 322,155.2 325.2,157.2 326.5,159.9 327.7,159.7 327.1,160.8 328.4,160.8 329.9,163.2 330.8,162.2 330,161.1 331.3,162.5 331.6,160.4 333.1,161.2 331.3,158.8 332.2,158.4 332.1,156.1 335.4,154.9 337.1,155.6 342.9,152.2 342.6,149.3 343.6,148.6 342.6,147.2 347.8,145.9 351.6,147.9 352,151.6 350.5,153.2 354.7,156.9 354.5,158.6 348.2,162.6 339.8,162.5 339,165.9 343.4,168.1 343.9,171.4 347.4,175.8 346,178.6 351.8,177.8 357.2,181.4 359.2,180.4 360.5,181.1 359.3,176.1 361.2,175.5 362.6,173.1 362.2,171.5 364.5,172.3 363.3,172.7 364.9,177.1 366.6,176.8 368.1,179.4 371.7,173.3 373.4,172.7 371.6,169.3 371.8,165.6 373.7,166.1 373.9,164.2 379.7,162.8 385.4,164.9 386.7,163.4 386,158.9 389.8,157.9 390.9,159.9 392.4,158.5 393.8,159.1 395.2,156.6 395.4,152.7 402.8,153 405,155 408.3,152.4 408.2,150.5 414.4,151.4 417.7,150.5 418.2,147.5 420.2,146.1 421.4,147.7 424.2,146.7 427.8,147.6 428.5,146.9 427.2,144.4 422.9,143.2 422.7,140.8 426.4,132.9 429.4,132Z","cx":367.8,"cy":140.3},"kilkis":{"name":"Κιλκίς","capital":"Κιλκίς","region":"kentriki_makedonia","d":"M345.1,61.6 339.7,62.3 338.6,61.3 334.1,64 332.7,82.5 331,85.1 328.9,85.4 324.9,80 323.3,80.7 320,86.7 317.6,88.3 314.9,86.7 305.9,88.5 301.3,88.3 299.9,86.1 293.2,87.3 293.1,92.7 291.9,95.4 293.1,97.1 290.8,100.7 286.7,100.7 285.6,101.6 286.3,107.7 289.8,106.4 294.8,108.5 296.2,114.1 303.4,120.2 306.3,116.9 320.8,122.3 322.4,122 322.1,119.6 326.8,119.7 326.6,122.9 328.1,127.6 331.7,128 332,126.6 334.2,126.7 334.3,124.3 339.5,124.1 342.8,125.9 343.5,124.2 350.7,125.3 350.3,124.1 352.8,123.9 352.3,120.7 357.8,117.6 357.4,110.3 364.2,108.3 365.2,106.4 367.1,109 371.6,108.2 373.9,104.8 379.3,102.6 380.6,100.3 378.7,99.2 378,96.7 374.3,97.2 377.1,90.4 374.3,89.6 373.8,88.2 370,88.3 365.5,84.9 361.8,84.4 360.4,81.4 356.2,78.9 356.1,75.5 350,79.4 345.2,78.2 344.2,73.7 346.3,71.4 345.4,69.9 345.1,61.6Z","cx":333.8,"cy":99.5},"pellas":{"name":"Πέλλας","capital":"Έδεσσα","region":"kentriki_makedonia","d":"M293.2,88.1 292.3,84.4 290.7,85.1 286.4,82.7 282.1,82.1 278.1,83.6 275.8,87.1 273.8,87.8 269.8,86.2 267.5,83.2 264.2,86.6 259.2,87 253.1,91.5 252.5,94.4 253.4,96.6 250.4,97.8 250.6,99.3 247.7,101 246.9,103.2 242.6,105.8 242.9,109.5 241.4,111.1 243.2,113.8 245.5,114.9 236.3,120.4 236.1,118.7 233.5,119.2 237,124.7 236.1,128.6 237.8,130 242.1,130.2 240.6,133.8 243.6,135.8 244.2,139.2 245.7,139.4 247,138.1 249.9,140.5 256.6,141.8 258.5,139.7 260.3,140.3 268.4,137.9 267,135.6 269.2,134.9 272.8,138.2 284.9,140 287,143.3 291.2,146.3 298.4,137.6 299.4,140.5 302.7,141.3 306,137.7 307.5,136.8 308.3,137.7 310.9,135.3 315,136 315.7,133.9 312.3,128.2 308.7,127.2 308.7,125.9 309.2,124.9 311,126.5 315.5,126 313.1,121.6 317.4,126.2 320,124.9 322.7,125.2 322.4,122 320.5,122.2 306.3,116.9 304.2,118.6 304.3,120 302.7,119.9 296.2,114.1 294.8,108.5 289.8,106.4 288.5,106.3 287.1,107.9 286.1,107.2 285.6,101.6 286.7,100.7 290.8,100.7 293.1,97.1 291.9,95.4 293.1,92.7 293.2,88.1Z","cx":273.9,"cy":116.6},"pierias":{"name":"Πιερίας","capital":"Κατερίνη","region":"kentriki_makedonia","d":"M324.5,164.1 321.4,163.9 318.6,158.8 316,157.7 313.4,158.4 310.7,157.3 306.9,160.3 302.9,159.7 303.1,162.2 301.6,164.6 302.6,166.1 301.2,168.7 299.8,168.9 297.3,173 294.9,173.9 289.1,179.9 289.5,183.2 288.7,180.5 285.4,182.7 283.4,182.3 281,187.1 279.1,187.2 280.2,189.1 277.6,195.4 271.5,199.2 272.6,200.8 279,200 281.5,200.7 282.7,202.5 280.8,203.2 279.7,205.5 281.5,205.7 282,211.5 284.7,210.2 287.1,204.5 292,201.7 295.2,204.9 294.6,208.2 295.4,206.9 296.9,206.9 296.3,211.8 294.5,215.5 295.9,215.9 297.6,219.1 299.6,217.9 300.6,219.6 302.6,218.9 305.7,221.7 308.1,222.2 309,227.7 312.1,230.3 318.2,229.3 320.8,227.2 324,228.4 324.7,230.4 326.1,229.2 325.2,227.2 318,222.2 315.8,217 315.6,212 313.7,206.1 315.1,201.8 318,198.4 317.3,195.8 318.9,190.2 324.5,180.2 321,178.2 319.3,170.4 317.3,167.7 320.6,165.6 321.4,166.8 323,167 323,166.2 324.6,166.9 323.4,165.8 325.8,164.8 324.5,164.1Z","cx":303.7,"cy":192.2},"serron":{"name":"Σερρών","capital":"Σέρρες","region":"kentriki_makedonia","d":"M415.9,57.2 413.4,57.1 411.8,55.7 408.9,56 406.6,53.8 402.5,54.5 398.4,53.5 394.8,54.1 389,58.6 387.3,54.3 384.9,54.1 378.7,57.4 378,62.1 373.8,64.2 366.2,64.4 359.3,62.4 345.1,61.6 345.4,69.9 346.3,71.4 344.2,73.5 344.5,76 345.9,78.7 349.6,79.5 356.1,75.5 356.2,78.9 360.4,81.4 361.8,84.4 365.5,84.9 370,88.3 373.8,88.2 374.3,89.6 377.1,90.4 374.3,97.2 378.4,97 378.7,99.2 380.6,100.2 379.5,102 381.1,103.3 382.8,109.4 385,108.5 387.5,110.1 388.4,109.6 388.4,112.4 390.5,113.5 391.1,118.9 392.4,120.6 398.9,119.5 398.4,123.4 404.4,121.7 406.8,123 407.4,125.6 410.1,127.9 416,128.3 419.9,130.2 422.2,128.8 426.6,129.2 429.4,132 435.8,128.9 439.1,129.5 438.5,127.1 441.8,125 445.4,124.6 450.6,120.8 454.1,116 458,115.3 457,112.7 458.8,112 461,112.9 460.4,110.4 462.5,107.9 461.3,105.7 462.9,102 455.1,96.7 454.8,92 451.7,90.7 450.9,89.1 448.9,89.8 447.2,92.4 444.6,92.2 443.1,89.7 441.5,89.7 438.4,87 432.7,85.4 427.9,79.4 425.3,79.5 425.9,76.4 423.6,75.4 424.2,73.9 422.9,72.4 423.7,69 425.2,68 424.8,66.1 423.7,64.8 418.6,64.7 416.7,63.7 415.9,57.2Z","cx":406.8,"cy":91.6},"chalkidikis":{"name":"Χαλκιδικής","capital":"Πολύγυρος","region":"kentriki_makedonia","d":"M388.3,200 387.2,200.1 387.3,208.3 385.5,211.8 386.3,214.2 388.7,215.5 392.8,223 390.4,229.3 400.8,227.5 413,233.4 421.6,233.8 424.7,235 427.9,234 427.4,231.8 422.5,231.9 421.2,227.1 419.9,225.9 412.9,224.2 403.5,219.7 399.6,215.1 396.2,208.4 391.1,206.1 388.3,200ZM430.8,196.1 431.1,197.2 429.9,196.7 429.9,198.9 432.3,199.5 430.8,196.1ZM443.8,182.5 440.7,184.1 446.7,186.4 444.3,185 443.8,182.5ZM428.5,146.9 427.1,148 424.2,146.7 421.4,147.7 420.2,146.1 418.2,147.5 417.7,150.5 414.4,151.4 408.2,150.5 408.3,152.4 405,155 402.8,153 395.4,152.7 395.2,156.6 393.8,159.1 392.4,158.5 390.9,159.9 389.8,157.9 386,158.9 386.7,163.4 385.4,164.9 379.7,162.8 373.9,164.2 373.7,166.1 371.8,165.6 371.6,169.3 373.4,172.7 371.7,173.3 368.1,179.4 366.6,176.8 364.9,177.1 363.3,172.7 364.5,172.3 362.2,171.5 362.6,173.1 361.2,175.5 359.3,176.1 360.5,181.1 359.2,180.4 357.2,181.4 358.5,184.5 367.5,188.2 370.1,190.5 385,195.6 387.3,200 388.2,199.8 389.9,194.7 394.8,190 403.7,192.5 408,195.5 418.7,196.7 425,202.9 426.3,206.6 430.1,209.7 430.1,212.2 431.9,213 431.3,215.7 433.9,218.7 434.3,222.5 435.1,223.2 435.9,220.9 438.3,222.2 439.6,224.4 442.3,225.5 442.3,228.6 443.8,228.4 443.8,227.3 444.4,227.9 443.7,228.9 443.8,230.1 445.4,230.4 444.8,231.4 446.7,231.3 447.9,230.1 450.8,230.1 451.1,229.1 448.4,228.3 451.6,227.4 450.4,225.5 453.7,222.7 453.3,219.4 450.3,218.8 452.4,217.4 449.7,213.8 449.9,211.5 451.3,210.6 449.5,208.6 445.4,207.1 443.6,204.7 435,201.9 433,200.2 432.7,201 430.5,200.7 428.9,198.2 428.8,195.7 428.5,196.6 427.8,195.1 426.8,196 424,192.4 422.7,187 423.7,183.6 425.7,183.5 426.5,181 431,183 437.7,179 445.2,180.1 452.2,185.7 453.2,183.5 452.2,180.5 452.8,176.8 449,178.1 445.1,177.7 441.2,176 438.4,173.2 435.3,168.1 434.9,162.4 436,161 441.6,160.9 444.1,159.2 440.5,156 440.4,156.9 435.8,156.3 434.5,153.5 431.2,152.1 430.8,149.2 428.5,146.9Z","cx":410.1,"cy":180.2},"grevenon":{"name":"Γρεβενών","capital":"Γρεβενά","region":"dytiki_makedonia","d":"M248.5,228.8 247.8,227.6 245.9,229 242.1,228.6 240.3,225.6 242.5,225 244,222.1 241.6,217.9 241.4,212.4 242.7,212.1 239.2,210.7 236.5,212.8 234.6,210.6 232.4,210.2 233.5,209.1 233.7,205.2 228.4,200.6 223.3,205.1 220.9,205.6 220.7,204.2 217.9,201.9 217.7,199.5 216.8,200.3 217.3,198.5 216,198 216.3,196.9 214,196.3 213.7,195.2 213.3,196.2 212.5,195.1 209,195.5 206.4,193.7 206.1,195.5 202.5,196.2 201,195.6 201,196.6 198.7,198.2 196.3,196.5 194.9,200.9 192.7,200.6 191.7,203 189.9,202.6 188.9,204.7 185.6,204.4 184.7,202.6 181.3,206.3 176.8,205.5 173.2,201.5 170.6,203.1 172,204.1 170.9,206.1 169.2,206.5 166.9,205.2 162.4,207.6 165.4,211.4 165.4,213.5 167.5,217.1 171.7,215.8 174.7,217.2 174.5,221.8 173.1,224 171.9,224.7 169.9,223.6 168.9,224.6 173.9,230.1 175.6,238.4 178.9,240.2 182.3,240.9 183.7,238.5 188.6,237.2 191.1,238.8 192.3,238.5 194.6,241.1 196.9,239.7 198.7,244.3 200.9,243.3 202.4,244.2 206.5,241.9 206.8,239.3 205.5,239 207.4,236.5 211.6,235.9 212.6,237.3 216.4,235.9 219.5,237.5 222.1,236.7 225.7,239.7 228.6,238.6 230.6,241.3 233.1,241.2 234.8,239.1 236.7,239.8 237.4,241.4 241.5,242.5 245.7,240.5 253.2,242.4 253.5,238.6 252.1,235.5 253.1,233.3 248.5,228.8Z","cx":207.7,"cy":220.8},"kastorias":{"name":"Καστοριάς","capital":"Καστοριά","region":"dytiki_makedonia","d":"M215,160.2 213.5,159.9 213.6,155 211.5,155.3 210,154 209.2,150.7 206,150.4 205.5,152.5 203.8,152.1 202.8,150.5 202.9,143.1 197.3,138.4 197.1,141 194.7,140.7 193,138 194.8,136.4 190,132.7 184.7,145.3 181.6,145.9 176.8,150 172.8,150.6 171.9,149.1 170.8,149.5 170.5,156.2 167.1,157 166.5,159.2 163.7,160.9 163.5,164.7 162.2,167 159.8,167.8 157.5,166.1 151.3,166 149.6,170.5 146.3,172 146.6,179.7 145.3,181.3 149.1,183.1 151.6,182.4 152.9,178.4 154.1,178.2 154.7,183.3 159,187.9 163.5,196.5 165.8,198.8 164.8,200.4 166.4,200.7 167.1,205.8 170.6,206.2 172,204.1 170.6,203.1 173.2,201.9 174.6,198.6 172.7,191.7 175,183.5 177.9,183.2 182.5,180.5 187.8,182.2 188.5,178.6 187.2,178.1 189.2,175.6 189.8,177 191.5,177.2 191.2,179.5 193,180.2 196.9,176.4 197.5,173.4 198.4,174.5 198.8,173.2 200.8,174.5 201.3,176.2 200.4,176.5 201.9,178.3 200.8,178.7 204.5,179.2 206.4,175.7 207.6,176.3 210.3,174.3 211.8,168.8 211.3,167 215.6,162.1 215,160.2Z","cx":181.5,"cy":167.6},"kozanis":{"name":"Κοζάνης","capital":"Κοζάνη","region":"dytiki_makedonia","d":"M252.7,141.2 249,140.2 246.8,138.1 242.9,140 241.4,144 242.5,146.2 240,150.4 236.5,151.4 235.4,150.6 234.1,152.5 227.6,151.8 227.5,152.9 222.6,153.1 219.9,154.6 217.1,156.8 217,159.4 215,160.2 215.6,162.1 211.3,167 211.8,168.8 210.3,174.3 207.6,176.3 206.4,175.7 204.5,179.2 200.8,178.7 201.9,178.3 200.4,176.5 201.3,176.2 200.8,174.5 198.8,173.2 198.4,174.5 197.5,173.4 196.9,176.4 193,180.2 191.2,179.5 191.5,177.2 189.8,177 189.2,175.6 187.2,178.1 188.5,178.6 187.8,182.2 182.5,180.5 177.9,183.2 175,183.5 173.5,186.4 172.7,192.1 174.6,196.8 174.4,199.8 173.1,201.3 175.5,204.5 181.3,206.3 184.7,202.6 185.6,204.4 188.9,204.7 189.9,202.6 191.7,203 192.7,200.6 194.9,200.9 196.3,196.5 198.7,198.2 201,196.6 201,195.6 202.5,196.2 206.1,195.5 206.4,193.7 209,195.5 212.5,195.1 213.3,196.2 213.7,195.2 214,196.3 216.3,196.9 216,198 217.3,198.5 216.8,200.3 217.7,199.5 217.9,201.9 220.7,204.2 220.9,205.6 223.3,205.1 228.4,200.6 233.7,205.2 233.5,209.1 232.4,210.2 234.6,210.6 236.5,212.8 239.2,210.7 242.7,212.1 241.4,212.4 241.6,217.9 244,222.1 242.5,225 240.3,225.6 242.1,228.6 245.9,229 247.8,227.6 250.2,229.4 252.5,227.9 253.2,225.9 256.1,225.4 258,220.3 261.1,218.7 261,216.6 263.7,216.2 263.8,214.6 271.3,206.3 269.9,204.1 270.4,203.1 271.4,202.2 273.3,204 271.5,199.2 277.6,195.4 280.2,188.5 279.1,187.2 276.8,187.3 273.7,184.4 276.3,180.7 273.5,180.5 270.6,178.1 271.6,171.6 268,170.3 263.9,171 263.4,170.2 264.4,169.6 260.2,165.9 254.8,164.7 254.5,161.2 251.3,156.4 253.5,154.2 250.7,151.7 250.3,148.2 250.8,145.8 252.3,144.7 252.7,141.2Z","cx":233.5,"cy":185.6},"florinas":{"name":"Φλώρινας","capital":"Φλώρινα","region":"dytiki_makedonia","d":"M241.4,111.1 238.4,111.8 233.9,109.6 231.8,109.8 229.9,112.7 230.2,114.9 227.2,114.9 222.9,118.8 220.5,118.7 216.5,113.6 210.6,114 206.3,112.6 201,117.3 196.3,118.7 191.2,119.6 186.3,116.7 180.1,120.2 165,120.2 165,127.9 162.4,130.6 164.8,131.7 165.1,134.6 168.9,138 171.9,142.9 171.4,147 172.8,150.6 176.8,150 181.6,145.9 184.7,145.3 190.2,132.7 194.8,136.4 193,138 194.7,140.7 197.1,141 197.3,138.4 202.9,143.1 202.8,150.5 203.8,152.1 205.5,152.5 206,150.4 209.2,150.7 210,154 211.5,155.3 213.6,155 213.6,160.3 215.7,160.4 217.4,158.7 217.1,156.8 221.5,153.6 227.5,152.9 227.6,151.8 234.8,152.4 235.2,150.7 236.5,151.4 239.6,150.6 241.6,148.5 242.5,146 241.4,144 243,140 244.7,139.5 243.9,136.4 240.6,133.8 242.1,130.2 237.8,130 236.1,128.6 237,124.7 233.5,119.2 236.1,118.7 236.3,120.4 245.5,114.9 243.2,113.8 241.4,111.1Z","cx":207.7,"cy":132.9},"artas":{"name":"Άρτας","capital":"Άρτα","region":"ipeiros","d":"M145.6,339.4 146.5,335.8 148.7,335.7 144.9,334.8 146.6,333.9 144.9,332.4 146.9,333.3 146.9,331.7 147.6,332.6 148.8,332.2 147.3,331.4 144,332.7 145.6,339.4ZM183.8,284.2 180.5,279.6 179.1,280.6 179.8,282.4 176.3,285.2 171.9,280.4 172.2,283.8 168.7,291.6 168.8,294.7 165.9,297.2 163.8,301.3 163.8,303 165.7,302.9 163.1,306.3 162.5,309.1 157,313.6 155.8,314.3 154.2,313.4 153.1,315 156.9,320.4 156.3,325.2 155,324.2 150.8,329.2 149.1,327.8 147.8,330.8 148.5,331.9 149.5,331.1 151.5,333.7 150.3,335.5 148.7,335.8 149.7,336.8 151.2,335.6 151.7,337.8 151.7,336.4 152.2,337.5 153.6,337.3 152.8,339.4 153.5,341 154.7,340.6 153.5,339.7 153.8,338.2 154.9,337.3 156.4,338 156.3,335.6 158.2,337.5 161.5,336.7 160.1,338.1 160.8,337.9 161,341.5 163.4,340.5 163.7,342 166.6,343.3 165.1,343.7 165.3,344.4 166.6,343.5 172.3,344.6 169.7,342.6 172.9,344.1 173.8,343.2 170.6,342.1 172.3,341 171.7,340.3 173,340.7 173.1,339.9 173.7,342 174.2,338.5 176.9,339.3 174.9,335.1 176.8,334.5 175.5,332.8 178.5,329.9 183.2,329.7 184.7,328.5 186.3,330.1 188.7,329 192.3,330.7 197.3,327.3 197.3,325.4 202,323.8 199.8,319.6 206.9,310.9 207.3,309.3 205.7,308.1 205.6,305.3 203.6,302 196.4,301.8 192.5,299.2 192,294.6 188.2,292.1 185,287.4 187,286.7 187.1,284.5 183.8,284.2Z","cx":177.6,"cy":314.1},"thesprotias":{"name":"Θεσπρωτίας","capital":"Ηγουμενίτσα","region":"ipeiros","d":"M108.6,249.4 107.1,249.8 100.5,246.1 99,247.5 100.7,250.4 99.3,252.6 101.9,256.7 96.8,260.7 96.6,263.6 93.5,262 92.3,264.2 92.9,266.4 83.7,265.4 80,262.2 75.1,261.1 74.6,260 72.4,261.1 73.8,262.8 77.3,262.2 77.7,263.4 81.2,264.7 79.9,264.6 81.2,266.2 82.3,265.1 84.7,267.7 86.9,267.6 89.1,269.2 88.9,272.1 87.4,273.6 86.2,273.4 88.1,274.4 86.9,278 85.7,277.3 84.5,281.1 87.4,280 90.6,282 86.5,281.5 87.8,282.7 90.8,282.3 92.7,283.7 91.6,282.5 93.8,282 96.5,283.3 96,286.4 93.1,284.9 91.7,285.4 94,288.1 97.8,290.1 97.6,291 91.7,291 94.2,295.4 93.4,296.3 96.5,297 98.2,299 97.7,300.6 98.9,301.6 98.6,304.6 99.8,306.5 103,303.2 106.3,301.7 111,307 113.7,307.3 115.6,311.9 119.8,310.2 121.1,308.1 123.8,309.4 123.3,307.6 124.2,306.8 126.7,308.2 129.3,305.4 132.2,304.5 136.2,310 136.3,305 135,303.7 134.5,297.9 131.6,290.2 132.4,288.8 130.9,287.9 129.9,285.1 130.5,279.1 127.2,280.4 123.3,279.5 121.7,276.8 118.8,276.8 120,274.1 118.8,267.5 119.8,265.8 120.2,266.6 121.8,265.7 121,265.1 121.9,263.7 119.8,261.3 119.1,257.5 116.9,256.9 118.2,253.2 113.3,252.2 111.8,250 108.6,249.4Z","cx":110.1,"cy":281.5},"ioanninon":{"name":"Ιωαννίνων","capital":"Ιωάννινα","region":"ipeiros","d":"M166.9,205.2 166.4,200.7 164.8,200.4 165.8,198.8 163.5,196.5 159,187.9 154.7,183.3 154.1,178.2 152.9,178.4 151.6,182.4 149.1,183.1 145.5,181.6 144.3,182.3 143.4,183.7 144.1,185 141.7,186.1 139.4,189.5 138.8,191.7 140,193.1 140.4,196.6 138.7,199.6 136,200.8 135.6,203.6 137.5,205.4 135.7,208.6 136,212.1 130.6,212.9 128.5,215.2 125.3,215.9 123.8,216.1 120.1,213.8 117.9,216.1 114.5,214.8 110.5,217.7 108.8,224.3 106.9,225.2 101.3,225 104.3,230.3 103.6,233 108.1,237.3 108.4,239.7 111.1,243.1 110.8,246.4 108.6,249.4 111.8,250 113.7,252.3 117.9,252.7 116.9,256.9 119.1,257.5 119.8,261.3 121.9,263.7 121,265.1 121.8,265.7 120.2,266.6 119.8,265.8 118.8,267.5 120,274.1 118.8,276.8 121.7,276.8 123.3,279.5 127.2,280.4 130.5,279.1 129.9,285.1 130.9,287.9 132.4,288.8 131.6,290.2 134.5,297.9 136.7,310.8 138.4,308.3 138.6,304.4 139.6,304.3 141.7,299 146.6,299.7 147.9,302.5 149.1,302.8 151.6,302.2 153.6,300.2 155.4,300.6 157.9,299.3 158.3,297.2 160.6,297 161.2,298.3 164.3,295.7 166.4,297.1 168.8,294.7 168.7,291.6 172.2,283.8 171.9,280.4 175.8,285.2 179.8,282.4 179.1,280.6 180.5,279.6 183.8,284.2 185.9,281.8 183.9,270.5 181,270 181.3,266.5 178,262.6 181.7,260 182.2,258.1 185.6,258.1 189.3,260.8 190.4,260.4 190.1,257.3 188,256.3 188.8,253.6 188,247.6 190.5,247.2 191.5,241.6 194.6,241.1 192.3,238.5 191.1,238.8 188.6,237.2 183.7,238.5 182.3,240.9 175.6,238.4 173.9,230.1 168.9,224.5 169.9,223.6 171.9,224.7 173.1,224 174.5,221.8 174.7,217.2 171.7,215.8 167.5,217.1 165.4,213.5 165.4,211.4 162.4,207.8 166.9,205.2Z","cx":148.3,"cy":246.6},"prevezas":{"name":"Πρέβεζας","capital":"Πρέβεζα","region":"ipeiros","d":"M115.6,311.9 113.7,307.3 110,306.2 106.7,301.8 103,303.2 100.1,306.7 103.9,310.5 108.3,311.3 108.8,310.4 112.7,311.8 113.3,310.8 115.6,311.9ZM165.9,297.2 164.3,295.7 161.2,298.3 160.6,297 158.3,297.2 157.9,299.3 155.4,300.6 153.6,300.2 151.6,302.2 149.1,302.8 147.9,302.5 146.6,299.7 142.1,298.8 139.6,304.3 138.6,304.4 138.4,308.3 136.7,310.8 132.2,304.5 129.3,305.4 126.5,308.3 124.2,306.8 123.3,307.6 123.4,309.7 121.1,308.1 116.2,313 117.2,316.1 116.6,318.6 121.9,321.9 129,331 134,334 138.6,339.2 139.5,343.3 138.1,345.4 141.7,351.7 143.5,350.9 143.6,347.1 143.6,348.4 146.3,348.3 149.4,350.4 150.5,349.8 150.3,348.7 142.1,343.9 141.8,342.6 143.3,343.3 144,340.7 145.6,339.4 144,332.7 148.1,330.5 149.1,327.8 150.8,329.2 155,324.2 156.3,325.2 156.9,320.4 153.1,315 154.2,313.4 155.8,314.3 157,313.6 162.5,309.1 163.1,306.3 165.6,303.3 163.8,303 163.8,302 165.9,297.2Z","cx":141.1,"cy":318.3},"karditsas":{"name":"Καρδίτσας","capital":"Καρδίτσα","region":"thessalia","d":"M278.5,278.2 274.9,279 270.2,277.5 266.3,280.5 263.1,277.9 261.2,277.7 255.8,281.2 254,280.7 255.3,285 252.5,285.1 251.2,282 250,283.5 246.5,282.8 242.6,289 237.9,290.4 238.5,287.3 237.3,286.4 233.3,290.9 229.2,290.8 226.7,293 223.2,289.7 222.4,291 223.2,292.6 220.8,293.1 219.8,295.6 215.5,299.4 212,296.4 206.9,294.8 202.3,299.5 207.1,310.3 205.7,313.2 200.1,318.8 200.2,321.9 202.7,324.7 204.2,325 209.1,322 208.8,320.1 210.4,320.5 214.7,316.4 218.5,318.7 222,315.6 224.5,315.6 226.9,313.9 227.8,315.2 231.8,314.5 232.4,316.8 233.6,317.2 232,318.4 232.9,322.7 237.2,323.4 235.3,326.8 236.1,331.2 239.4,331.2 239.8,332.6 243.4,330.6 243.8,328.3 246,326.2 248,326.5 249.6,330 251.8,330.1 252.2,332 255,332.6 257.1,341.9 260.6,340.4 262.4,341.4 263.7,339.4 267.6,338.6 266.4,337.8 265.8,334.8 267.9,334.5 269,331.8 270.5,333.8 277.5,329.7 276.1,325.5 279,323.8 286.1,312 282.9,309.6 281.7,306.9 281.8,304.5 284.1,304 282.9,300.6 286.7,299.3 284.1,296.6 286.3,293.9 282.6,293.5 282.7,289.4 285,286.3 284,282.2 281.8,283.8 279.4,283.4 278.5,278.2Z","cx":250.2,"cy":307.0},"larisas":{"name":"Λάρισας","capital":"Λάρισα","region":"thessalia","d":"M324.6,226.8 326.1,229.2 324.9,230.4 324,228.4 321.1,227.2 317,229.6 312.1,230.3 309.8,229 308.1,222.2 305.7,221.7 302.6,218.9 300.6,219.6 299.6,217.9 297.6,219.1 295.9,215.9 294.5,215.5 296.9,207.5 295.4,206.9 294.6,208.2 295.2,205.1 294.1,203.5 292,201.7 289,202.7 287.1,204.5 284.7,210.2 282,211.5 281.5,205.7 280,206 279.7,205 280.8,203.2 282.7,202.5 281.4,200.6 279,200 272.6,200.8 273.3,204 271.4,202.2 270.4,203.1 269.9,204.1 271.3,206.3 263.8,214.6 263.7,216.2 261,216.6 261.1,218.7 258,220.3 256.6,224.8 255,226.1 252.9,226.1 250.9,229.1 248.5,228.8 253.1,233.3 252.1,235.5 253.8,241.7 260.4,242.4 264.2,244.4 258.4,244.4 254.2,250.4 256.3,253 255.9,254.5 257.9,258.9 259.6,260.4 263.2,256.2 264.5,256.2 269.1,266 272.3,264.6 274.5,265.3 275.4,270 276.5,271 280.6,268.6 282.9,271.2 282,274 279.6,275 278.2,280.2 280,283.8 284,282.2 285,286.4 282.7,289.4 282.6,293.5 286.3,293.9 284.1,296.6 286.7,299.3 282.9,300.6 284.1,304 281.8,304.5 282.9,309.6 285.5,312 287,311.9 288.9,316.2 298.9,317.3 300.3,318.6 300.5,320.9 303.6,322.4 304.5,324.5 303.9,327.8 304.9,328.5 307.1,327.6 309.7,329.1 313.9,327.1 314.4,325.2 313.4,322.6 314.9,321 312.1,313.8 314.8,312.3 318.7,312.6 319.2,310.6 323.6,308.6 323.4,304.8 325.2,301.9 321,301 319.3,296.5 325.2,294 325.8,297.8 327.1,294.9 330.3,293.9 328.1,290.7 330.2,287.1 333.3,285.3 333.7,281.2 337.6,282.9 337.8,280.7 341.2,278.4 341.9,276.6 348.6,271.9 344.1,257 342.6,248 331.6,239.7 329.1,234.1 329.9,231.4 329.1,229.7 324.6,226.8Z","cx":299.3,"cy":259.6},"magnisias":{"name":"Μαγνησίας","capital":"Βόλος","region":"thessalia","d":"M363.9,324.5 363,326.5 365.2,325.8 365.6,324.7 363.9,324.5ZM358.5,344.3 359.2,343.1 362,343 363,340.2 359.8,340.4 353,344.1 353,340.9 356.3,340.5 355.5,338.3 356.5,336.6 354.4,334.2 355,333 353.3,330.4 351.5,330.4 350.4,328.9 351.1,331.1 349.3,331.2 348.2,325.5 347.3,324.2 346,324.4 346.2,322 344.3,322.4 345.3,324.3 343.8,326.3 342.4,326.2 339.6,319.2 339.7,311.3 351.5,308.6 349.5,306.1 351.3,303.4 350,302.9 350,301.4 353.8,302.8 355.9,302.4 357.7,303.9 358.6,306.6 368.2,308 372.2,311.9 373.9,314.8 373.5,317.3 374.7,319.8 377.7,322.9 377,327 376,327.7 374.8,326.9 375,325.5 374.1,326.4 373.9,325.6 373.5,329.5 370.8,329 371.5,330.5 370.2,330.2 367.1,332.8 365.5,333.3 368.1,328.7 367.1,328.4 366.8,325.6 365.6,327.7 364.3,327.1 361.5,332.8 363.6,334.7 368.2,334.8 369.5,333.4 371.8,333.9 374.6,332.3 376,333.3 378.1,331.5 376.2,330.7 376.5,329.7 377.7,328.9 380.2,329.6 382.5,327.9 385.8,327.8 388.5,325.5 390,322.2 386.8,315.2 383.7,312 382.5,306.2 376.3,300.7 375,297.1 368,289.5 365.8,284.4 361.2,280.9 358.6,280.9 357,278.2 355.1,278.3 354.2,276.9 350.5,275.5 348.6,271.9 341.9,276.6 341.2,278.4 337.8,280.7 337.6,282.9 333.7,281.2 333.3,285.3 330.2,287.1 328.1,290.7 330.3,293.9 327.1,294.9 325.8,297.8 325.2,294 319.3,296.5 321,301 325.2,301.9 323.4,304.8 323.8,308.1 319.2,310.6 318.7,312.6 314.8,312.3 312.1,313.8 314.9,321 313.3,322.8 314.4,325.2 313.9,327.1 312.1,327.2 308.2,330.9 309.5,336.1 308.4,339.2 316,340.5 324.8,338.3 327,339.2 326.6,340.5 328.4,342.5 331.1,343.4 332.5,342.7 333.7,345 344,344.4 345.6,347.3 350.1,348.6 353.7,347.8 356.6,344.6 358.5,344.3ZM462.9,332.4 461.2,333.8 462.5,337 461.2,338.3 463.8,337 462.6,335.8 462.9,332.4ZM414.1,319.5 412.8,321.2 416.2,327.3 417.8,328.3 418.5,331.2 419.6,331.3 418.8,334.6 422.8,334.1 424.2,334.8 423.7,335.9 425.5,336.4 429.5,334.2 432,330 428.4,329 426,330.4 425.1,327 419.5,325 414.1,319.5ZM400.6,319.7 398.7,320.9 398.9,322.9 393.8,325.3 393.8,327.8 395.2,326.9 397.3,328.4 399,327.8 400.4,329.5 400.2,327.9 401.9,325.5 404.3,324.4 404.4,326 405,325.6 405.4,322.4 400.6,319.7ZM449.2,316.1 448,318.4 449.6,321.3 445.8,323 447.5,325 448.7,324 448.7,325 450.1,324.7 449.6,321.8 450.9,319.2 449.8,319.6 449.2,316.1ZM447.3,309.7 443.9,314.1 443.3,316.8 440.6,318.1 439.1,320.3 440.2,323.5 435.6,326.3 435.5,328 436.3,327.5 438,328.8 440.4,326.8 440.7,325.3 442.8,325.2 442.1,324.3 444,323.7 445.1,320 450.1,312.8 447.7,311.6 446.3,312.1 447.6,310.9 447.3,309.7ZM458.6,300.4 456.6,302.3 455.5,305.7 458,306.6 456.3,308.1 458.1,309.4 460.9,307 461.1,302.6 459.2,301.9 459.2,303.4 457.8,303.3 458.6,300.4ZM483.1,300.2 482.1,300.6 481.3,304.1 482.6,304.8 483.1,300.2ZM468.5,293.3 466.4,296.7 466.6,298.4 464.7,300.1 466.5,300.2 466.6,301.2 469.3,297.1 468.5,293.3Z","cx":345.3,"cy":312.4},"trikalon":{"name":"Τρικάλων","capital":"Τρίκαλα","region":"thessalia","d":"M253.8,241.7 253.2,242.4 245.7,240.5 241.5,242.5 237.4,241.4 236.7,239.8 234.8,239.1 233.1,241.2 231.5,241.4 229,240.1 228.6,238.6 226.3,239.7 224.1,239.1 222.1,236.7 219.5,237.5 216.4,235.9 212.6,237.3 211.6,235.9 207.1,236.7 205.5,239 206.8,239.3 206.5,241.9 203.8,242.8 203.1,244.1 200.9,243.3 198.7,244.3 196.9,239.7 194.2,241.7 191.5,241.6 190.5,247.2 188,247.6 188.8,253.6 188,256.3 190.1,257.3 190.4,260.4 189.3,260.8 185.6,258.1 182.2,258.1 181.7,260 178,262.7 181.3,266.5 181,270 184.1,271.1 185.9,281.8 183.8,284.5 187.1,284.5 187,286.7 185,287.4 188.2,292.1 192,294.6 192.5,299.2 196.4,301.8 202.8,301.8 202.8,298.4 207.9,294.6 215.5,299.4 219.8,295.6 220.8,293.1 223.2,292.6 222.4,291 223.2,289.7 226.7,293 229.2,290.8 233.3,290.9 237.3,286.4 238.5,287.3 237.9,290.4 242.6,289 246.5,282.8 250,283.5 251.2,282 252.5,285.1 255.3,285 254,280.7 255.8,281.2 261.2,277.7 263.1,277.9 266.3,280.5 270.2,277.5 274.9,279 278.6,278.1 279.9,274.6 282.6,273.1 282.3,269.7 280.2,268.7 277,271.3 275.4,270 274.5,265.3 272.3,264.6 269.1,266 264.5,256.2 263.2,256.2 259.6,260.4 258.1,259.1 255.9,254.5 256.3,253 254.2,250.4 258.4,244.4 264.2,244.4 260.4,242.4 253.8,241.7Z","cx":223.5,"cy":267.2},"zakynthou":{"name":"Ζακύνθου","capital":"Ζάκυνθος","region":"ionia_nisia","d":"M138.4,474.9 137.9,474.1 133.2,477.8 130.6,482.1 131,483.1 130.3,482.7 131.4,488.6 133.5,491 136,491.5 135.5,494.2 137.8,495 137.3,497.1 139.1,499.2 143.6,501.4 144.7,504.2 150.4,509.1 153.1,507.6 150.9,504.3 153.4,500.1 155.4,498.6 158.9,498 165.5,502.5 165.6,498.9 157,493.2 157.5,489.7 149.8,485.7 144,484.8 139.5,479.4 138.4,474.9Z","cx":145.1,"cy":492.0},"kerkyras":{"name":"Κέρκυρας","capital":"Κέρκυρα","region":"ionia_nisia","d":"M93,326 91.7,327 92.4,328.1 96.2,329 93,326ZM83.8,315.3 83.2,318 84.9,319.6 84.5,320.6 86.8,321.7 86.9,322.9 91.4,323.7 87,316.9 83.8,315.3ZM26,250.6 24.8,250 25.9,252.6 27.4,253 26,250.6ZM57,245.4 52,249.3 50.4,248.2 44.5,249.2 40.6,248.2 37.5,253.4 36.3,253.8 38.6,255.8 38.7,258.9 39.6,257.5 41.3,258.4 40.4,262.5 43,263.9 45.8,263.3 45,265.7 47,269.4 50.3,270.8 50.1,272.1 55.4,275.4 57.2,278.9 56.6,281 59.1,289.7 63.1,292.8 67.9,293.7 71.4,296.6 82.1,301.3 83.1,299 78.4,289.1 77.1,291.1 73.2,292.5 71.7,289.6 65.7,287.9 64.8,286.2 62.9,276.2 63.4,273.8 62.1,272.3 62.6,271.4 63.3,273.3 64.6,272.8 64,270.3 65.1,269.4 59,267.6 58,265.5 57.2,266.6 56.4,265.1 58.3,264.3 56.5,263.1 57.1,261.7 56.1,260.7 60.1,257.5 64.6,256.3 67.4,251 65.9,249.4 65.7,250.6 64.2,248.8 63.2,249.5 60.9,248.4 59.5,246.1 57.3,246.6 58.3,245.9 57,245.4ZM13,239.8 12.2,242.9 13.7,243.7 15.5,243.3 17.6,240.4 14.6,240.8 13,239.8ZM31,235.8 31.3,238.9 32.7,238.7 32.9,236.6 31,235.8Z","cx":57.2,"cy":268.4},"kefallinias":{"name":"Κεφαλληνίας","capital":"Αργοστόλι","region":"ionia_nisia","d":"M177.2,427.5 176.7,429.3 175.4,429.8 175.9,431.7 177.9,429 177.2,427.5ZM149.3,405.2 147.4,408.4 149.7,408.1 149.3,405.2ZM133.2,405.1 132.9,409.4 130.8,407.9 130,409.7 131.4,412.6 132.5,412.7 134.8,422.1 136.7,423.7 137.6,427.7 140.3,429.6 140.2,428.8 144.5,427.4 141.7,424.9 142.7,423.1 141.5,421.8 143.5,421.9 141.4,419.2 139.5,418.5 140.2,419.5 138.2,419.9 139.9,421.8 138.3,420.7 135.6,421.7 139,413.3 137.2,411.7 137.3,410.2 136.7,411 134.6,410.4 136,406.8 133.2,405.1ZM139.2,397.3 138,399.9 139.5,400.8 140.1,398 139.2,397.3ZM174.5,413.2 174.5,416.2 176,418.4 176.7,415.3 174.5,413.2ZM125.1,408.5 122.5,409.1 122.3,413.8 123.7,419.2 122.7,420.3 121.5,419.1 123.6,422.2 122.2,423.4 122.2,424.7 116.9,428.5 116.1,426.5 113.9,426.3 113.5,422.8 111.6,423.4 110.5,425.4 109.4,423.1 108.4,432.8 107.1,434.6 105.5,434.3 105.6,438.7 104.7,441.3 103.6,441.8 103.9,444.4 107.3,446.1 108.3,448.1 113.4,446.4 113.3,438.8 111.6,433.7 113.7,432 117.1,441.3 120,445.6 119.1,446 116.9,442.7 116.1,443 117.3,445.2 116.5,446.8 118.7,449.8 117.8,451.3 120.3,453.8 122.2,453.4 125.3,455.2 126.3,453.3 130.3,451.8 138.3,457.7 142,458.6 144.2,457.6 146.2,459.1 149,452.3 139.2,438.9 138,434.5 136.9,433.7 135.5,434.3 136,432.1 133.1,435.4 131,434.7 128.3,429.5 131.3,426.6 129.6,417.4 128.2,417.1 126.4,411.2 126.9,409.8 125.1,408.5Z","cx":126.0,"cy":439.1},"lefkadas":{"name":"Λευκάδας","capital":"Λευκάδα","region":"ionia_nisia","d":"M160.6,392.8 156.8,397.3 156.7,400.4 157.7,400.2 157,398.8 160.6,392.8ZM162.1,386.9 156.6,388.5 154.1,393.3 154.4,396.1 156.2,394.1 155.6,393.2 162,389.4 162.9,387.9 162.1,386.9ZM145.9,384 146.1,385.8 144.9,385 144,386.3 141.8,385.2 141.4,388.8 148.5,394.7 143.2,390.3 143.7,388.3 145.7,388.4 148.2,386.2 148.3,385.1 147.3,386 147.9,384.6 146.5,385.5 146.9,384.5 145.9,384ZM139.6,364 136.4,365 137.2,363.1 139.9,363.4 136.7,362.9 135.6,365.2 132.9,365.3 130.7,370 128.5,371.4 124.4,383.6 124.6,390 123,398 125.8,394.7 128,389.6 129.2,389.9 130,393.5 131.7,393.2 132.4,395.9 133.8,392.1 135.6,393.1 136.8,392 136.3,390.4 138.1,391.1 137.6,388.6 138.7,390.4 140.1,390.2 139.1,384.6 140.2,384.4 140.4,382 139.4,380.7 138.8,384 137.8,383.7 141.1,377.6 139.8,373.8 140.6,368.4 138.8,365.3 139.6,364Z","cx":132.9,"cy":380.3},"aitoloakarnanias":{"name":"Αιτωλοακαρνανίας","capital":"Μεσολόγγι","region":"dytiki_ellada","d":"M211.7,424.9 212.6,429.1 208.7,425.8 207.3,426.6 207.8,425.9 206.6,425.6 206.2,426.6 209.3,427.1 212.5,429.6 212.8,426.4 211.7,424.9ZM202,323.8 197.3,325.4 197.3,327.3 192.3,330.7 188.7,329 186.3,330.1 184.7,328.5 183.2,329.7 178.5,329.9 175.5,332.8 176.9,334.4 174.9,335.1 175.7,337.5 182.2,347.6 181.2,347.3 179.9,349.5 179.8,354.3 182.2,356.2 183.1,361.1 182,361.1 180.9,357.9 175.8,355.4 174.3,361.6 168.3,357.3 169.5,355.2 168.8,353.7 166.2,354.6 164.5,351.6 161.1,353.1 158.9,351.2 157.8,354.5 154.2,355 153.2,354.7 155.1,354.1 153.6,353 154.6,352.9 153.5,350.1 153.2,352.4 151.9,352.4 151.2,354.6 148.5,354.8 146.4,354.2 144.2,350.1 143.8,353.1 142.5,354.1 143.1,356.4 146,360.3 147.7,360.8 141.4,363.1 142,364.8 140.9,365.8 140.8,369.8 143.1,370.7 144,374.3 144.9,374.6 147.6,373.1 148,374 152.2,369.7 154.4,369.8 156.5,380.5 158.4,384.4 165.5,385 165.5,387.9 168.7,392.7 167.4,401.3 168.7,402.5 169.1,405.1 170.8,405.1 174.5,401.2 175.7,401.7 174.5,406.4 175.9,407.1 173.5,407.5 174.5,407.2 174.6,408.7 176.3,407.8 175.2,409.4 177.1,411.2 177,413.2 178.1,414.1 177.4,415.2 181.4,415.9 180.8,416.8 179.2,415.7 177.1,416.1 178.1,416.4 178.1,418 178.9,417.2 178.6,419.4 176.5,421.2 176,419.5 175.1,421.7 176,421.3 176.8,422.5 175.6,424.2 175.9,425.6 179.1,425.3 179.2,427.1 181.1,429.2 182.2,427.1 183.4,427.9 183.4,426.8 182,426.3 182.9,425.3 182.1,426.5 183.3,426.6 183.4,428.2 182.4,427.9 181.5,429.6 180.1,428.1 180.1,429.2 191,429.1 186.9,428.2 187.4,426.8 188.4,427.5 188.9,426.2 191.8,425 191.3,422.8 194,422.4 194.1,420.8 195.7,419.4 195.9,420.4 197,419 199.1,419.4 198.6,413.9 199.7,414.3 200.5,413 199.2,413 195.1,407.9 196.7,405.6 200.5,410.2 201.8,418.2 204.5,419.9 205.7,418.3 206.7,419.9 205.4,426.4 206.4,422 211,421.3 210.9,423.3 212.8,423.1 211.9,424.6 212.9,429.8 214.7,429.5 215.1,430.5 217.1,428 221.6,426.1 222.5,424.4 225,424.7 227.3,422.8 231.3,424.2 233.4,423.6 239.3,426.5 241.3,420.8 245.6,418.5 247.7,420.4 250.3,416.1 250.2,409.8 255.6,406.5 261.6,404.5 261.1,398.9 263,394.9 258.5,392.3 259.5,390.9 262,390.3 259.9,384.9 261.5,383.6 260,382.1 261.2,381.7 260.9,380 264,378.3 263.9,376.7 261.2,372.4 258.9,372.9 256.5,371.1 256.2,376 252,378.3 249.8,376.7 245.5,376.7 244.1,382.4 239.7,384.3 240.1,380.8 238.9,379.5 231.8,380.9 230.2,379.4 227.7,379.6 220.9,376.8 218.7,368.8 220.8,367 221.1,363.3 225.5,363 225.6,364.3 227,360.5 221.3,358.4 214.8,358.2 213.4,353 215.1,349 202.1,342.7 204,338.9 206.4,338.6 205.9,335.7 208,332.1 205.2,330.2 204.2,325 202,323.8Z","cx":202.8,"cy":383.4},"achaias":{"name":"Αχαΐας","capital":"Πάτρα","region":"dytiki_ellada","d":"M297.1,448.9 295,447.7 293.4,444.6 287.2,445.3 281.9,444 280.6,441.9 278.2,441.7 275.8,439.6 275.8,438.3 272.1,433.9 268.9,435.2 267.9,433.1 264.3,431.6 263.3,428.4 260.3,428.3 256.8,426.3 250,426.7 247.3,425 245.1,427.7 240.7,428.2 238.6,431.6 237.4,431.9 234.8,439.9 231,443.7 230.4,445.6 224.1,448.7 216.8,447.1 209.6,441.9 205.5,442.9 203.6,440.1 202,439.6 201.6,450 199.9,453.9 201,457 209.4,463.3 209,465.4 210.3,467.1 208.4,468.9 214,473.6 213.8,475.8 219.7,476.6 221.2,475.8 222.7,477.9 227.2,479 230.9,485.8 231.9,485.7 232.6,482.1 243.6,471.2 245.4,474.1 245.1,476 248,477.5 250.7,481.1 251.2,485 252.3,486.3 255.6,488.5 256.7,487.6 260.1,490.7 262.1,490.4 266.7,492.5 271.5,487.5 273.5,487.3 275,490 278.1,490.8 280.5,487 286.7,485.5 282.5,479.8 285,476.9 284.6,471.6 289.5,470.4 290.1,467.6 292.5,467.8 295.9,463.7 297.4,456.3 297.1,448.9Z","cx":252.2,"cy":458.9},"ileias":{"name":"Ηλείας","capital":"Πύργος","region":"dytiki_ellada","d":"M199.9,453.7 195.6,462.7 190.8,469.2 183.8,474.6 181.8,474.7 179.9,472.9 178.6,473.4 176.6,484.3 188.9,489.4 193.6,492.8 195.4,495.4 197,501.8 195.3,504.9 196,510.3 197.8,507 202.4,507.5 217.3,518.4 225.1,528.3 231.2,541.4 233.8,539.3 247.2,539.8 251.9,538.5 250.8,532.1 252.1,532.9 253.3,530.2 254.6,530.7 255.7,529.1 261.5,526.7 256.5,521 253.3,520.1 249.9,513.9 245.8,514.2 242.3,516.2 242,510 243.8,503.5 242,491.3 243.7,487.8 251.1,482.3 250.7,481.1 248,477.5 245.1,476 245.4,474.1 243.6,471.2 232.6,482.1 231.9,485.7 230.9,485.8 227.2,479 222.7,477.9 221.2,475.8 219.7,476.6 213.8,475.8 214,473.6 208.4,468.9 210.3,467.1 209,465.4 209.4,463.3 201,457 199.9,453.7Z","cx":220.4,"cy":498.7},"voiotias":{"name":"Βοιωτίας","capital":"Λιβαδειά","region":"sterea_ellada","d":"M392.6,402.3 388.9,402.3 380.4,405.4 376.4,404.8 376.4,401.1 373.8,401 370.9,398.7 369.1,399.1 369.6,395.5 368.8,395.1 362.9,395.9 362.1,399.9 360.2,401 352,397.6 344.9,399.4 343.5,394.8 339.9,395.2 338.1,393.9 336.8,395.6 334.7,395 329.8,399.9 322.4,404.1 316.9,398.3 308.8,395.7 308,397.9 310.5,400.9 311.7,405.9 313.9,408 312.7,410.8 316.2,414 318.9,413.3 319.9,416.5 319.3,422.9 320.4,421.9 322,423.7 323.2,421.7 321.3,420.6 323.1,419.4 326,420.7 327.1,423.8 325.6,424.4 327.4,427.6 337.4,432.7 336.3,435.1 334.1,436.3 335.7,437.8 340.7,438.8 343.8,437.8 345.4,439.1 346.4,437.3 347.7,443.9 348.4,442.5 350.9,443.9 353.7,443.1 351.2,440.8 349.3,442 349.9,439.6 352,438.9 352.5,440.6 359,440.2 361.5,442.4 359.4,444.3 362.3,444.5 363,445.4 367.2,441 370.2,443.9 369.3,445.6 377.7,443 383.9,443.7 384.3,437 387.4,434.3 391,434.6 393.2,433.4 394.2,433.7 394.2,435.2 393.8,437.5 391.8,438.4 392.2,440.2 400.5,440.8 400.6,446.2 405,447.6 405.7,449.6 404.4,450.2 407.1,450.7 407.6,449.6 411.1,448.5 411.8,447 416.6,445 417.1,432.6 418.4,430.2 419.9,429.7 419.7,427.3 421.6,426.9 422.3,424.8 418.9,423.4 415.5,423.4 412.7,421.6 408.4,421.9 404.4,420.3 398.6,415.8 397.8,414 401,410.8 395.9,410.8 394.3,409.1 386.9,412.5 387.1,414.4 384,416.2 382.3,412.4 384.7,409.4 385,407 387.5,405.7 388.2,403.3 392.6,402.3Z","cx":365.0,"cy":421.1},"evvoias":{"name":"Ευβοίας","capital":"Χαλκίδα","region":"sterea_ellada","d":"M476.2,463.2 474.8,463.7 473.6,466.7 474.6,468.9 475.6,468.1 477.9,468.8 478.6,467.7 478.3,464.7 476.2,463.2ZM479,461.5 478.1,463.7 479.6,464.7 479.8,461.8 479,461.5ZM468.5,444.1 465.9,444.1 467.4,447.2 467.3,445.4 468.5,444.1ZM418.9,423.4 416.6,420.4 416.7,416.3 413.2,415.7 413.5,412.5 410.8,412 412.8,408.6 407.9,404.1 405.4,408 402,407.2 400.7,405.5 396,405.9 395,404.3 390.3,404.4 389.4,405.7 387.8,405.3 385,407 384.7,409.4 382.3,412.4 384,416.2 387.1,414.4 386.9,412.5 394,409.1 395.9,410.8 401,410.8 397.8,414 398.6,415.8 404.4,420.3 408.4,421.9 412.7,421.6 415.5,423.4 418.9,423.4ZM509.2,373.4 508.5,375.2 511.2,375.3 511,374 509.2,373.4ZM500,364.5 497.2,368 498.4,369.3 500,364.5ZM485.5,363.4 484.2,364.7 485.4,365.9 487.2,364.9 485.5,363.4ZM498,347.5 496.7,347.8 494.4,351.1 496.3,355.1 492.9,359.9 495.4,359.3 496.1,361 497.1,360.1 497.3,362.5 500.3,362.3 499.6,364.2 502.3,363 503.3,364.9 505.3,364.1 505.7,368.2 502.4,369.3 502.1,370.5 504.4,371.4 504.1,372.5 505.3,373.7 505.4,371 507.3,370.3 510.7,373.5 512.3,372.1 513.7,373.3 516.5,372.3 516.5,368.3 515,366.2 509.3,362.7 508.3,360.8 505.8,360.1 506.7,359.3 506,355.9 507,354.1 498,347.5ZM452.2,384.4 449.9,383.6 447.4,386.1 441.5,383.9 438.3,384.8 433.7,382 428.4,380.5 427.9,378.1 423.6,373 420.1,375.1 418.2,374 416.5,374.6 414.3,372.6 412.7,373.4 412.7,371.1 411.3,371.7 410.1,369.8 406,368 405.7,366.5 400.2,363.5 398.2,359.9 399.2,359 397.2,356.6 397.5,350.6 393.2,349.5 392,347 392.5,344.1 388.8,343.1 386.9,340.3 383.2,340.3 375.9,344.5 368.9,344 365.3,347.2 364.4,352.1 361.4,351.8 357.4,355.9 351.1,357.3 347.3,359.8 342.5,360.5 340.8,363.7 340.4,366.1 345.8,364.4 352.8,364.8 355.9,363 356.1,361.9 354.7,360.3 352,360.2 353.3,358.2 355.7,359.3 359.8,359.3 360.7,362.5 364.5,364.5 369.4,362.8 376.1,365.4 383.5,373.1 387.4,373.7 393.3,381.5 397.5,383.4 399.3,387.4 403.4,389.3 405.3,394.9 407,396.1 409.6,395.5 411,396.7 413.7,397 416.2,400.3 417,404.2 415.9,408.5 415,409.2 414,408.3 412.5,411.7 414.5,410.7 415.7,411.9 415.7,414.1 418.2,417.7 422.4,416 432.7,419.6 435,417 441.6,419.6 448.2,419.3 451.3,417.1 453.3,418.8 456.5,418.3 457.3,424.7 454.1,425.3 453.8,426.3 462.2,427.7 462.1,429.6 463.2,429.4 462.7,431.2 460.7,432.1 461.9,432.7 461.3,434.4 462.3,435.6 464.9,431.9 466.3,432.2 466.7,433.7 462.7,439.3 463.8,441 464.4,439.6 465.7,440.2 464.8,438.7 466.8,438.4 469.4,440.1 471.7,446.2 468.7,450.3 471.9,451 471,455.7 476.5,454.6 478.8,456 478.9,457.8 480.8,457.6 482.3,460.6 480.7,462.9 481.7,464.4 483.3,464.6 483.9,467.7 488.3,470.9 488.5,469.5 490,468.7 488.4,467.9 489,465.4 491.3,464.3 495.5,466.4 497,469.7 496.6,471 498.6,472.2 500.2,472.2 502.9,469 504.6,468.6 506.1,465.6 505.5,464.7 507.1,463.1 507.6,457.8 506.2,453 507.9,447.1 504.4,448.9 492.1,448.5 489.3,445.8 484.9,447.2 482.9,445.6 482.9,443.4 481.7,444.2 477.6,442 475.3,438.5 475.1,436.7 476.3,436 475.9,431.1 474,429.4 474.4,427.7 473.3,427.8 472.6,425.8 471.1,425.1 472.4,422.2 471.9,420.1 469,418.2 469.8,416.4 471.4,416.8 470.6,414.4 468.9,413.3 469.9,411.2 469.4,407.5 473.7,402.5 463.3,393.8 463.2,390 466.3,387.1 456.2,382.9 452.2,384.4Z","cx":431.9,"cy":398.6},"evrytanias":{"name":"Ευρυτανίας","capital":"Καρπενήσι","region":"sterea_ellada","d":"M255.8,337.1 255,332.6 252.2,332 251.8,330.1 249.6,330 248,326.5 246,326.2 243.8,328.3 243.4,330.6 239.8,332.6 239.4,331.2 235.9,331 235.3,326.8 237.2,323.4 232.9,322.7 232,318.4 233.6,317.2 232.4,316.8 231.8,314.5 227.8,315.2 226.9,313.9 224.5,315.6 221.6,315.8 219,318.7 214.7,316.4 210.4,320.5 208.8,320.1 208.7,322.3 204.4,324.7 204.2,328.3 208,332.1 205.9,335.7 206.4,338.6 204,338.9 202.1,342.7 215.1,349 213.4,353 214.8,358.2 221.3,358.4 227,360.5 225.6,364.3 225.5,363 221.1,363.3 220.8,367 218.7,368.8 220.9,376.8 227.7,379.6 230.2,379.4 231.8,380.9 238.9,379.5 240.1,380.8 239.7,384.3 244.1,382.4 245.5,376.7 249.8,376.7 252,378.3 256.3,375.9 255.5,367.1 252.5,365.4 249.7,361.2 250.6,355.7 249.5,353.9 245.1,351.2 247.4,348.4 248.4,342.9 250.5,342 253.6,337.8 255.8,337.1Z","cx":230.7,"cy":347.9},"fthiotidas":{"name":"Φθιώτιδας","capital":"Λαμία","region":"sterea_ellada","d":"M309.6,329.1 307.1,327.6 305.4,328.5 304,327.9 304.5,324.5 303.6,322.4 300.5,320.9 300.3,318.6 298.9,317.3 288.9,316.2 288,313.3 286.1,312 279,323.8 276.1,325.5 277.5,329.7 270.5,333.8 269,331.8 267.9,334.5 265.8,334.8 266.4,337.8 267.6,338.6 263.7,339.4 262.4,341.4 260.6,340.4 257.1,341.9 255.8,337.1 254.3,337.4 250.5,342 248.4,342.9 247.4,348.4 245.1,351.2 249.5,353.9 250.6,355.7 249.8,361.5 252.5,365.4 255.5,367.1 256.2,370.9 258.9,372.9 260.6,372.1 266.9,374.3 268.2,376.6 272.6,376.8 274.4,379.8 276.1,378.4 278,378.5 279.2,374.1 281.5,374.3 285.3,371.1 286.4,371.6 287.2,369.2 289.8,368.2 291.6,370.5 289.8,375.8 290.8,379.2 297.2,377.1 298.5,378 302.1,377.3 304.1,381.2 308.7,383.1 309.1,386.6 311.8,386.7 313.3,385.2 314,388.7 315.6,390.4 315.9,397.2 322.4,404.1 329.8,399.9 334.7,395 336.8,395.6 338.1,393.9 339.9,395.2 343.5,394.8 344.9,399.4 352,397.6 360.2,401 362.1,399.9 362.9,395.9 368.8,395.1 369.6,395.5 369.1,399.1 370.9,398.7 373.8,401 376.2,400.9 376.4,404.8 378.6,405.3 382.8,404.8 388.9,402.3 392.6,402.3 389.5,400.8 388.5,401.6 386.7,397 383.9,398 385.8,394.7 389,392.9 388.6,390.5 386.4,388.3 380.3,387.9 375.3,383.6 372.3,384.3 374.7,387.4 372.6,388.6 370,387.8 369.1,389.4 366.3,390 366.1,389.3 368.3,387.9 366.2,387.7 366.9,388.8 366.1,389.2 364.8,388.4 364.8,386.9 365.6,387.8 362.4,382 362.8,378.5 359.9,374.4 353.5,375.8 347.1,371.9 343.9,374.7 339.9,370.3 335.2,371.9 328.9,365.5 327.9,362.8 324.5,365.1 321.5,364.6 319.6,366.5 318.7,366.2 318.7,363.9 317.6,366.1 316.4,366.2 316.1,364.3 314.3,365.1 314.1,364 316.8,361.1 311.7,361.9 314.6,360.3 313.7,359 316.4,358.3 319.3,355.8 323.1,356.6 325.3,359.3 327.7,359.8 329,358.5 330.6,360.1 333.7,360.9 335.3,359.4 336.2,359.9 341.3,357.9 341.2,355.7 343,353.8 348.7,354.8 350.9,353.6 350.6,351.7 351.9,352.6 353.9,350.7 355.7,351.7 358.5,344.3 356.6,344.6 353.7,347.8 350.1,348.6 345.6,347.3 344,344.4 333.7,345 332.5,342.7 331.1,343.4 328.4,342.5 326.6,340.5 327,339.2 324.8,338.3 317.7,340.4 308.6,339.3 309.4,333.8 308.4,333.3 308.2,331.1 309.6,329.1Z","cx":309.0,"cy":362.4},"fokidas":{"name":"Φωκίδας","capital":"Άμφισσα","region":"sterea_ellada","d":"M269,421.1 267.3,420.7 267.9,422.2 270,423 269,421.1ZM316.9,398.3 315.9,396.9 315.6,390.4 314,388.7 313.3,385.2 311.8,386.7 309.1,386.6 308.7,383.1 304.1,381.2 302.1,377.3 298.5,378 297.2,377.1 290.8,379.2 289.8,375.8 291.6,370.5 289.8,368.2 287.2,369.2 286.4,371.6 285.3,371.1 281.5,374.3 279.2,374.1 278,378.5 276.1,378.4 274.4,379.8 272.6,376.8 268.2,376.6 266.9,374.3 261.7,372.9 264,378.3 260.7,380.1 261.2,381.7 260,382.1 261.5,383.6 259.9,384.9 262,390.3 259.5,390.9 258.5,392.9 263,394.9 261.1,398.9 261.6,404.5 255.6,406.5 250.2,409.8 250.3,416.1 247.4,420.7 251.7,421.1 256,416.8 261.2,417.9 262,418.9 266.5,418.2 271.3,421.6 273.6,421.7 274.7,424 277.4,424.4 279.1,427.2 280.5,424.7 283.4,422.5 284.5,423.4 285.5,422.1 288.9,425.1 290,422.9 292.4,424.3 295.6,423.7 295.7,425.2 297.6,425.8 299.2,423.8 297.8,423.9 298,421.9 299.9,422 299.4,420.1 298.5,420.4 297.1,418.7 299.2,416.2 301.2,416.2 299.5,413.8 300,411.7 301.2,412.1 301.3,413.7 304.9,414.3 309.4,419.6 310.4,422.4 312.8,424.4 312.8,425.4 310.9,426.3 312.8,427.9 314.2,431.6 317.1,432.2 317.6,429 319.4,427.5 317.3,426.5 318,423.3 318.8,423.6 320,421.4 319.9,416.5 318.9,413.3 316.2,414 312.7,410.8 313.9,408 311.7,405.9 310.5,400.9 308,397.9 308.8,395.7 316.9,398.3Z","cx":285.7,"cy":400.7},"attikis":{"name":"Αττικής","capital":"Αθήνα","region":"attiki","d":"M434.9,469.2 432.7,467.7 431.6,468.3 431.4,466 429.1,465.4 430,461.9 427.5,462.4 427.5,459 421.9,468.7 423.6,469 423.2,469.8 424.9,470.7 425.9,472.8 427.1,472.5 427.4,475.8 432.5,476 433.3,476 432.8,473.8 434.9,469.2ZM434.9,469.2 437.8,460.7 443.2,460.6 446.5,461.9 448.2,461 437.1,454 438.2,451.2 435.5,451.5 431.4,453.9 427.5,459 427.5,462.4 430,461.9 429.1,465.4 431.4,466 431.6,468.3 432.7,467.7 434.9,469.2ZM425.1,458.4 421.6,458.2 419.2,460.1 418.4,462.5 413.4,464.2 412.4,466.2 410.6,466.8 413.2,467.3 417.7,466.2 420.1,468.9 421.8,468.9 426.6,460.5 425.1,458.4ZM433.3,476 427.4,475.8 427.1,472.5 425.9,472.8 424.9,470.7 423.2,469.8 423.6,469 421.6,469.2 422.3,470.6 420.8,471.3 420.5,472.9 422.3,473.5 422,474.9 424.8,477.5 425.4,480.9 427.9,483.1 427.3,483.7 430.1,483.7 431.7,482.3 431.8,480.5 433.7,479 433.3,476ZM442.5,527.6 444.2,530.5 446.1,531.4 444.9,528.7 442.5,527.6ZM427.3,483.7 429.7,486.2 428.6,488.5 430.1,489 430,490.5 430.6,488.7 431.5,490.7 433,488 435.6,489.1 436.1,488 440.8,491.9 440.9,493.5 442.2,493.3 443.1,499.9 444.4,500.7 445.4,499.3 446.5,499.8 445.5,501.3 445.8,505.8 449,506.4 449.8,507.7 450.7,506.9 453.8,507.6 454.6,508.6 456.7,505 458.4,504.8 457,502.9 458,502.6 457,501.1 457.9,499.8 456.7,498.9 457.3,497.8 458.4,498.2 457.9,497 459.4,497 458.7,495.6 459.8,491.2 456,487.6 457.3,486.9 456.2,485.9 457.2,483.4 455.5,482.5 455.8,481.1 454.9,482.1 453.8,481.6 452.4,479.4 455.7,478.7 455.9,477.7 454.7,475.4 451.7,475.1 453.3,473 452.6,468.4 454.7,467 451.7,461.9 451.7,457.9 449.8,453.2 455,448.9 456.7,448.9 457.1,451.2 457.4,446.9 459.3,446.1 457.1,444 458.6,442 456.3,440.9 447.2,431.5 435.9,428.3 433.4,426.3 431.5,427.1 429.6,425 426.4,425.8 425.8,424.7 422.3,424.8 421.6,426.9 419.7,427.3 419.9,429.7 418.4,430.2 417.1,432.6 416.9,440.3 421.7,442.4 423.1,446.6 422.4,447.8 425.9,450.5 424.3,453.9 425.9,459.6 427.1,459.6 431.4,453.9 435.5,451.5 438.2,451.2 437.1,454 448.2,461 446.5,461.9 443.2,460.6 437.8,460.7 434.4,472 432.8,473.8 433.7,479 430.1,483.7 427.3,483.7ZM416.9,440.4 416.6,445 411.8,447 411.1,448.5 407.6,449.6 407.1,450.7 405,450.5 405,447.6 400.4,445.9 400.5,440.8 392.2,440.2 391.8,438.4 393.8,437.5 394.2,433.7 387.4,434.3 384.2,437.2 383.9,443.7 377.9,443 368.6,445.7 375,446.1 378,448 373.3,448.7 373.7,450.9 376.3,450.9 377.3,452 377.2,453.8 374,455.2 372.7,457.1 367.8,458.6 367.6,462.5 369.1,463.6 367.6,464.3 366.7,466.6 367.5,467.9 372.7,469.6 374.2,471.9 380.3,468.9 396.6,469.7 393.6,468.7 393.8,467.9 396.2,467.3 399.6,463.1 403,463 406.3,460.6 408.6,461.9 411.5,460.7 413.1,462.2 413.4,464.2 418.2,462.7 419.2,460.1 421.6,458.2 425,458.6 424.3,453.1 426,451.4 422.4,447.8 423.1,446.6 421.7,442.4 416.9,440.4ZM421.8,468.9 420.1,468.9 417.7,466.2 413.2,467.3 410.9,466.7 409.1,468.5 409.4,470.8 414.7,470.8 414.3,472.3 415.5,473.2 417.6,472.3 417.3,473.6 416.1,473.7 416.7,475 420.5,472.9 420.8,471.3 422.3,470.6 421.8,468.9ZM382.8,720.2 384.4,726.1 387.8,729.6 386.9,722.8 385,721.4 384.4,722.7 382.8,720.2ZM352.3,662.2 351.8,661.5 349.1,662.7 346.2,669.5 349.2,673.3 348.4,675.2 349.6,678.2 347.2,680.4 348.6,682.5 347.9,684.2 350.5,687.1 351,689.2 352,688.5 352.8,690.1 354.1,689.8 355.5,692.1 356.4,690.6 357.1,691.7 358.8,690.9 361.1,692.4 362,690.4 360.9,686.6 361.8,681.8 363.3,680.8 365.2,681.7 366.5,679.7 366.2,678 355.4,669.4 352.3,662.2ZM367.6,553.1 365.3,553.6 367.4,557.1 369.5,558.8 371.5,558.5 372.7,555.4 367.6,553.1ZM389.5,544.6 388.5,546.5 387.5,545 383.4,546.5 385.2,548.2 388,548.2 391,545.9 389.5,544.6ZM408.8,542.2 407.5,543.3 405.8,542.3 400.6,544.4 391.1,550.9 394.1,550.6 394.3,551.7 399,548.8 404.5,548.6 404.4,545.7 411.8,542.9 408.8,542.2ZM402.5,519.3 401.4,520.8 401.8,522.4 397,523.4 396.8,524.3 400.1,525.8 399.5,526.6 400.5,527.3 400.2,525.7 404,526.3 406.4,524 405.3,523.2 404.4,523.8 403.4,522.1 402.5,522.7 402.5,519.3ZM397,537.3 403.8,536 406.4,534.1 405.5,533.7 405.9,532 402.1,529.6 402,528.4 398.2,526 393.8,525.5 393.8,524.2 395.4,524.4 396.3,522.9 391.3,519.3 393.4,519.2 393.5,517.2 395.3,515.4 396,512.8 394.9,510.3 389.3,510 385.8,512.3 385.5,513.1 387.7,513.7 390.8,517.4 391.6,520.2 388.2,522.6 382.3,519.7 379.8,516.3 375.7,514.9 374.3,515.8 374.7,517.6 372.3,521.1 373.7,523.8 377.1,523.8 380.5,526.4 382.4,526.3 382.8,527.3 385.5,526.9 386.2,530 389.1,529.9 389.6,531.5 391.4,530.9 395.1,531.8 396.9,530.3 399.8,531.1 397,537.3ZM389.6,500.8 387.7,503 387.8,505.5 389,505.7 392.1,503.1 391.4,501.1 389.6,500.8ZM402.8,493.3 396.4,494.7 397.8,498.9 400.6,500.6 401.1,502.5 399.4,503.9 402.1,505.6 406.5,503.3 406.2,501.1 408.1,498.9 407.5,497.4 409.3,496.9 410.4,494.5 409.1,493.6 402.8,493.3ZM402.8,465.6 401.2,466.5 401.8,468.3 396.2,468.4 399.5,469.5 396.2,471.2 396.9,471.8 404.3,470.4 401.2,475.2 395.2,474.5 394.7,478.7 397.2,479.5 398.7,481.3 402.7,479.6 403.2,478 405.4,478.7 405.3,476.6 407.3,476.7 407.3,475.5 408.5,475 407.9,473.2 411.3,472.6 408.1,472.5 408.9,471.6 406.5,470.5 408.3,466.5 407.2,467.6 402.8,465.6Z","cx":441.1,"cy":461.5},"argolidas":{"name":"Αργολίδας","capital":"Ναύπλιο","region":"peloponnisos","d":"M368,498.8 365,499.8 363,498.8 361,502.1 359,500.9 356.5,501.5 355.3,500.4 352.4,501.3 351.5,498.8 352.5,497.4 348.7,495.7 344.3,497.7 336.6,498.3 332.8,496.2 332.3,493 330.6,493.9 329.9,492.6 325.7,494.7 322.9,492.9 320.3,493.1 319.8,491.8 318.8,492.5 316.2,491.2 312.5,492.6 312.5,489.4 315.1,486.1 314.7,484.2 311.1,486 309.2,483 302.2,489.7 298.7,490.1 300.8,493.7 299.5,499.6 300.4,505.3 304.5,501.9 306.8,505.1 308.1,512.3 310.4,512.6 309.4,515.3 312.7,518.8 310.6,524.2 311.4,527 313.3,528.2 316.8,528.3 318.4,532.4 322.5,532.4 323.7,530.6 327.5,531.3 329.1,525.6 331.5,523.8 329.8,518.8 332.6,516.3 335.8,515.8 337.8,517.7 336.9,519.1 339.7,521.1 339.5,523.2 342.6,525.1 344.2,523.3 346.8,522.6 349.9,523.7 347,522 349.8,522.3 350.6,524.1 354.8,524.9 357,531.5 360.7,529 361.8,530.9 360.7,531.8 361.9,532.6 368.2,532.7 369.1,536.1 370.3,536.9 369,537.5 367.3,536 366.2,539.9 362.7,539.7 363.7,541.5 362.9,544.4 366.7,544.5 368.5,545.7 368.3,546.9 367.2,546.9 368.7,549.1 371,547.6 371.5,548.6 369.5,549.7 373.2,552.6 373.8,551.4 375.6,551.8 375.6,550.2 373.6,548.1 374.8,546 383.1,544.9 380.1,544.3 381.3,542.6 379.4,542.3 378.8,543.2 378.2,541 381.4,540.5 380.1,540.2 381.5,539.9 382.3,537.9 386,539.5 386.2,538.3 388.8,537 395.8,538.2 399.8,531.5 396.9,530.3 395.1,531.8 391.4,530.9 389.6,531.5 389.1,529.9 386.2,530 385.5,526.9 382.8,527.3 382.4,526.3 380.5,526.4 377.1,523.8 373.5,523.6 372.3,521.1 374.7,517.6 374.3,515.8 375.7,514.9 371.6,511.9 372.8,508.6 371,505.4 373.3,500.6 371.7,500.8 368,498.8Z","cx":344.1,"cy":514.8},"arkadias":{"name":"Αρκαδίας","capital":"Τρίπολη","region":"peloponnisos","d":"M286.7,485.5 280.5,487 278.1,490.8 275,490 273.5,487.3 271.5,487.5 266.7,492.5 262.1,490.4 260.1,490.7 256.7,487.6 255.4,488.4 251.2,485 251.1,482.3 243.7,487.8 242.2,490.8 242.2,497.6 243.8,503.5 242,510 242.3,516.2 245.8,514.2 249.9,513.9 253.3,520.1 256.5,521 261.3,526.1 256.7,529.8 257.4,531.8 259.2,532 260.7,533.7 261,536.7 259.2,540.8 257.4,541.9 259.2,544.6 263.4,547.6 264.2,554.3 267.9,555.9 268.9,559.3 271.6,559.4 272.6,562.1 274.6,563.7 274.6,565.4 278.2,567 278.5,569.6 280.1,570.6 282,567.1 283.4,567.8 285.5,566.7 282.9,553.8 285.6,554.7 289,552.9 289.9,557 293.9,558.9 293.9,561 297.4,561.1 298.5,558.3 299.5,560.8 301.1,561.4 302.7,555.9 300.5,551.8 299.8,547.8 301.5,546.5 302.6,548.1 303.9,547.2 307.4,549.2 310.6,548.2 313.3,550.3 314.2,552.7 319.3,551.7 319.5,559.3 321.5,562.3 323.4,569.7 328.7,575.8 326.6,579 329.1,582.9 333.8,580.3 337.1,583.1 338,585.4 341.8,586.2 342.4,587.9 344.4,587.3 345,584.5 346.5,583.7 349,585.2 352.3,584.4 354.9,581.3 353.2,578.6 355.2,578.3 355.1,576.8 353.8,576.9 352.2,575.2 352.3,572.7 349.9,572.7 348.9,574 346.9,572.7 346.4,569.7 348.2,564.2 346.6,562.9 344.8,557.4 342.8,556.2 343.6,554.4 341.2,553.1 341.7,551.7 339.5,548.8 340.2,548.1 338.5,547.2 339.2,546.2 338.1,545.9 335.1,540.2 333.2,539.7 335,535.8 332.7,533.7 332.9,531.1 330.8,528.3 331.5,523.8 329.1,525.6 327.5,531.3 323.7,530.6 322.2,532.5 318,532.2 316.8,528.3 313.3,528.2 311.4,527 310.6,524.2 312.7,518.8 309.4,515.3 310.4,512.6 308.1,512.3 306.8,505.1 304.5,501.9 300.4,505.3 299.5,499.6 300.8,493.7 298.8,489.8 293.1,490.5 289.5,486 286.7,485.5Z","cx":292.8,"cy":531.0},"korinthias":{"name":"Κορινθίας","capital":"Κόρινθος","region":"peloponnisos","d":"M367.8,458.6 361.9,459.7 360.1,458.3 358.9,459.4 355.4,456.9 352.2,456.3 348,459.4 345.8,459.5 342.3,462.6 348.1,464 354.3,468.7 352.9,471.9 357.5,476.1 358.3,475.3 361.6,475.5 362.1,476.7 366.9,476.2 369.9,475.5 373.7,471.9 372.7,469.6 367.5,467.9 366.7,466.6 367.6,464.3 369.1,463.6 367.6,462.5 367.8,458.6ZM368,498.8 368.9,498.4 367.8,495.6 368.7,494.3 368.9,495.3 370.9,495.4 373.7,492.9 373.7,489.8 372.4,489.5 370.1,486.2 369,486.3 369.5,485.6 366.8,484.4 362.7,485.5 361.1,484.5 357.5,484.7 355.9,480.4 358.3,478.2 357.5,476.2 352.8,472 347,474.3 343.1,473.6 337.5,470.2 335.2,466.1 330.4,461.6 322.2,456.5 313.6,453.4 308.2,449.5 301.1,450.2 297.1,448.9 297.4,456.3 295.9,463.7 292.5,467.8 290.1,467.6 289.5,470.4 284.6,471.6 285,476.9 282.5,479.8 286.7,485.5 289.5,486 293.1,490.5 302.2,489.7 309.2,483 311.1,486 314.7,484.2 315.1,486.1 312.5,489.4 312.5,492.6 316.2,491.2 318.8,492.5 319.8,491.8 320.3,493.1 322.9,492.9 325.7,494.7 329.9,492.6 330.6,493.9 332.3,493 332.8,496.2 336.6,498.3 344.3,497.7 348.7,495.7 352.5,497.4 351.5,498.8 352.4,501.3 355.3,500.4 356.5,501.5 359,500.9 361,502.1 363,498.8 365,499.8 368,498.8Z","cx":324.4,"cy":477.9},"lakonias":{"name":"Λακωνίας","capital":"Σπάρτη","region":"peloponnisos","d":"M354.7,646.3 351.5,647.5 349.7,650 350.2,652.4 353.5,650.5 353.9,652.2 354.9,651.8 355.4,653.1 354.7,646.3ZM354.9,581.3 352.3,584.4 349.3,585.3 347.3,583.7 345,584.5 344.4,587.3 342.4,587.9 341.8,586.2 338,585.4 337.1,583.1 333.8,580.3 329.1,582.9 326.6,579 328.7,575.8 323.4,569.7 321.5,562.3 319.5,559.3 319,551.2 314.2,552.7 311.4,548.5 307.4,549.2 303.9,547.2 302.6,548.1 301.3,546.5 299.8,548.2 302.7,555.9 301.1,561.4 299.5,560.8 298.5,558.3 297.4,561.1 293.9,561 293.9,558.9 289.9,557 289,552.9 285.6,554.7 282.8,554 285.5,566.7 287.8,570.3 288.1,573.5 289.9,573.7 290.3,574.8 289.6,578.4 287.2,581.5 291.7,582 292.7,585.6 294.9,588.1 294.4,594.8 296,596.9 296.2,599.4 295.4,600.5 299.8,608.7 299.4,612.4 298,613.1 296.7,617.3 293.1,618.9 295,624 298.6,624.6 296.4,626.1 296,627.7 298,630.1 296.1,630.9 297.4,633.5 296.2,634.7 298.4,636.5 296.9,638.3 298.3,638.6 297.9,641 298.8,642.7 297.1,643.5 296.2,642 296.4,643.6 294.6,644.4 294.7,646.4 296.8,650.5 299,651.8 299.6,650 301.4,652.1 305.2,653.6 305,654.8 306.9,656.2 306.1,658.5 307.6,661.5 307.8,659.7 309.2,659.7 308.3,658.2 308.8,656.8 307.4,655.7 309.3,654.5 308.6,652.7 309.4,652.4 309.5,649.3 306.5,644.4 307.4,641.1 306.8,634 308.8,633.3 310.1,635.2 311.9,633.6 309.1,628.4 310.2,627.2 312.3,628 313,629.8 314,629.5 313.7,627 311.2,625.8 312,623.9 311.3,622.5 316.3,619.4 315.4,614.2 321.6,610.5 336.2,611.6 339.6,621.7 338.3,626.9 339.6,629 341,624.9 344.4,627.9 345.6,630.8 344.3,632.2 345.8,634.5 350.6,637.6 351.4,639.1 350.6,640.3 352.3,641.6 353.6,645.2 360.2,644.7 362.9,647.3 362.5,650.9 365.7,655.3 366.7,654.8 368.9,656.4 370.4,654.9 375.5,655.5 375.2,652.7 372.4,651.8 372,649.6 369,648.2 370.1,646.2 369.8,644.3 371,643.2 369.2,642.5 368.7,640.5 366.1,639.9 362.9,637.3 359.7,632.2 359.1,628.1 360.3,625.1 362.3,624.6 359.8,624.4 359.3,620 361,619.8 362.2,618 364.9,620 364.6,616.5 367.2,614.5 365.8,612.8 363.7,613 365.2,613.1 365.2,609 361.6,606.7 362.2,606.2 360.4,604.4 361.5,603.9 357.7,594.4 358.5,593.8 357.2,592.5 357.6,590.9 355.7,590.3 357.2,589.2 356.2,584.9 357,584.1 354.9,581.3Z","cx":323.4,"cy":600.2},"messinias":{"name":"Μεσσηνίας","capital":"Καλαμάτα","region":"peloponnisos","d":"M239.9,617.9 238.6,616.7 237.7,621.2 238,621.9 239.6,621.5 239,622.8 240.5,623.6 240.6,619.5 241.5,618.6 239.9,617.9ZM233.5,611.9 232.3,614.3 232.7,619.1 233.1,616.4 234.9,615.6 234.6,613.9 235.6,613.2 233.5,611.9ZM229.4,593.3 228.7,593.6 230.3,598.1 229.4,593.3ZM258.3,528.6 255.7,529.1 254.6,530.7 253.3,530.2 252.1,532.9 250.8,532.1 251.9,538.5 247.2,539.8 233.8,539.3 231.9,540.6 231.2,541.4 232.9,548.6 232.2,551.7 230.3,555.8 222.5,562.1 220.5,566.8 221.9,575.9 221.1,580 224,582.5 225.3,585.5 227.4,586.6 229.5,591.6 229,593.1 231.6,592.5 234.1,594.1 231.1,600.7 233.4,609.7 234.5,609.3 235.9,611.5 238,611.5 238.8,613 239.7,611.4 244.8,611 245.4,614.1 248.8,617.7 250,621.3 255.1,616.5 255.5,613.8 258.5,612.1 255.8,610.4 254.1,603.5 255.4,595.4 255,589.4 263.8,584.4 273.3,584.2 275.9,585 276.3,587 275,591.3 275.5,594.7 273.6,597.6 277.9,600.5 280.7,598.6 283.1,600.1 285,604.1 286.1,604.4 286.2,606.6 289.8,609.7 291,614.1 290.2,615 291.4,614.9 292.4,618.3 296.2,617.9 298,613.1 299.4,612.4 299.8,608.7 295.4,600.5 296.2,599.4 296,596.9 294.4,594.8 294.9,588.1 292.7,585.6 291.7,582 287.2,581.5 289.7,578 290,573.9 288.1,573.5 287.8,570.3 285.5,566.7 283.4,567.8 282,567.1 280.4,570.5 279,570.4 278.2,567 274.6,565.4 274.6,563.7 272.6,562.1 272,559.8 268.9,559.3 267.9,555.9 264.2,554.3 263.4,547.6 259.2,544.6 257.4,541.9 259.2,540.8 261,536.7 260.7,533.7 259.2,532 257.6,531.9 256.7,530 258.3,528.6Z","cx":255.1,"cy":576.7},"lesvou":{"name":"Λέσβου","capital":"Μυτιλήνη","region":"voreio_aigaio","d":"M674.5,298.6 674.2,297.7 671.8,299.7 664.1,298.5 659.2,299 657.6,300 659,304.1 658,305.6 652.7,307.9 651.5,306.7 648.8,309 646.2,309.6 645.4,308.8 645.3,310 643.6,309.5 641.7,311.1 638.9,310.3 637.1,311.6 634.1,310.7 634.4,309.1 633.1,309.8 632.6,309.1 632.7,310.5 630.5,311.1 628.1,313.9 628.7,315.5 627.1,317.3 628.2,317.6 628,321.8 627.7,322.8 625.9,322.5 629,324.5 629.9,326.7 636.5,329.7 637.8,332.3 641.1,331.7 648.9,334.5 651,331.4 652.5,332.2 653.2,328.8 656.6,325.6 656.6,322.8 657.8,321.1 661.3,319.9 668,320.9 669.9,322.8 668.6,326.1 659.7,329.7 657.8,332.8 654.6,334.4 651.8,333.5 649.8,336.1 653.2,337.5 657.8,344.3 659.7,342.7 664.2,343.1 669,344.8 672.8,347.7 676.2,347.7 679.6,349.5 688.3,347.7 689.3,348.6 690.7,347.3 691,348.4 693.3,346.4 693.6,344.5 692.7,344.9 692.3,342.4 688.4,337.6 684.6,335 684,332 687.5,330.5 689.5,331.6 692,335 692.4,337.3 691,337.4 690.4,338.9 692.2,339.4 691.3,340.4 693.1,343.6 695.2,342.7 699.5,343.9 700,339.5 694.7,333.3 695.7,331.4 694.5,331.2 693.9,328.3 692.1,327.8 693.1,324.6 689.2,323 686.9,317.8 678,312.3 677.9,310.7 682.1,304.5 675.6,302.8 675,301.8 676.6,299.1 674.5,298.6ZM547,276.8 544,282.5 545.4,289 552.2,280.7 547,276.8ZM588.2,221.2 589.2,219.4 585.1,223.1 581.8,221.6 582.1,223.5 578.8,226.6 579.7,228 577.7,229 578.4,228 577.1,227.7 574.5,231.1 573,230.3 574.3,229.3 572,228.3 572.8,225.1 570.4,225.2 569.2,223.2 561.5,225.1 560.1,223 556.4,224.9 550.4,225.2 551.6,226.6 551.3,232 553.7,233.7 551.3,241 553.1,241.5 551.2,244 554,243 554.7,244 557.9,241.8 559.8,243.9 561.3,241.8 563,241.4 559.8,247.5 569.2,248.6 566.4,245.3 566.8,243.2 565.3,243 565.4,241.9 564.6,243 563.9,242.1 566,238.7 568.7,238.4 565,237.8 568.9,234.6 571.1,234.4 573.4,236.7 572.1,237.5 572.4,240 569.8,240.7 569.1,242 570.6,241.8 572.1,244.3 574.9,245.3 574.3,247.1 575.7,248.9 580.5,250.2 580.2,248.1 582.3,246.8 579.5,243.2 579.4,241.8 580.7,241 579.2,238.7 581.9,237.2 580.7,236.7 580.9,234.7 583.6,234.6 583.9,230.3 588.9,226.1 588.3,223.1 589.2,222.3 588.1,222.4 588.2,221.2Z","cx":664.8,"cy":324.3},"samou":{"name":"Σάμου","capital":"Σάμος","region":"voreio_aigaio","d":"M683.4,514.2 682.2,516.2 681,515.8 679.5,517.4 682.8,517 683.7,517.8 683.1,518.7 684.5,518.9 685.3,516.6 683.4,514.2ZM695.5,513.2 692.7,515.4 695.6,514.9 695.5,513.2ZM690.9,507.8 688.9,510.4 688.9,511.3 690.8,511.7 691,514.8 689.4,515.1 688.9,516.6 687.8,513.8 686.8,514.2 687.2,519.8 688.1,519.2 689.5,523.4 690.5,522.9 690.6,520.3 688.9,517.3 691.4,516.1 693.7,512 692.1,512.1 692.5,509.4 690.9,507.8ZM676.3,503.5 670.1,504.7 660.6,511.3 655.9,509.8 651,510.8 649.7,510 642.6,517.4 639.4,523 639.7,525.3 647.4,524.7 652.9,519.7 663,517.9 672.5,510.7 676.3,503.5ZM712.5,488.8 705.7,490.7 702.9,493.6 698.4,494.9 695.6,498.6 698,505.3 701.1,504.7 702.8,502.1 710.3,501.2 713.4,503 717.2,509.3 723.4,510.1 725.3,509.6 726.1,505.9 728.3,504.5 732.4,503.9 735.2,501.5 743.2,501 743.1,499 740.3,498.9 740.7,497.5 739.1,496 743.1,492.7 736.6,492.9 735.6,492.1 736,490.7 734.7,491 735.1,492.7 732.2,491.8 734.6,495.8 733.6,496.6 730,493.7 725.6,492.8 722.4,489.5 712.5,488.8Z","cx":718.7,"cy":498.3},"chiou":{"name":"Χίου","capital":"Χίος","region":"voreio_aigaio","d":"M668.8,403.7 668,403 667.9,404.2 669.3,406.2 669.9,405.3 668.8,403.7ZM596,399 593.9,401.5 596.6,401.7 596.8,399.4 596,399ZM659.5,400.2 661,403.6 663.6,403.6 664.5,404.7 665.5,403.8 665.4,405.2 666.5,403.7 667.3,404.3 667.4,402.7 659.5,400.2ZM601,392.5 597.1,393.9 600.5,397.7 599.5,399.5 600.1,401.4 600.9,400.1 602.5,401.3 604.7,401.3 605.8,394.6 602.9,392.2 601,392.5ZM642.6,392.9 628.2,395.7 625.7,400.5 628.7,406.4 636.4,410.5 637.7,412.6 637.9,417.1 640.1,419.3 641,418.7 640.4,422.1 641.3,424.6 640.4,424.5 640.3,426 639.1,426.3 638.5,430.3 635.9,430.5 635.2,429.7 635,431.3 634,429.7 630,433 628.8,436.5 630.9,436.5 631.1,439.7 631.6,438.9 632.5,439.8 633.6,439.1 633,440.3 634.8,441 634.7,442.6 637.2,442.5 638.7,445.7 641.2,446.2 642.8,448.3 645.3,442 651.2,440.5 652.8,437.9 651.6,436.3 651.6,433 656.8,428.5 657.1,426.2 655.3,424.8 654.5,417.1 656.4,410.3 656.2,409.6 655.5,410.5 654.7,410 655.4,408.2 653.5,408.1 653.9,406.7 656.3,405.9 656.1,402.7 657.3,401.1 656.9,399 654.7,397.3 653.8,398.7 654.3,400.2 652.9,398.7 652.7,400.5 651.9,398.6 649.9,398.6 647.8,394.1 645.8,394.7 642.6,392.9Z","cx":643.3,"cy":417.3},"kykladon":{"name":"Κυκλάδων","capital":"Ερμούπολη","region":"notio_aigaio","d":"M535.9,524.9 534.9,525.3 537.3,527.6 536.6,529.2 537.4,530 536.2,531.2 537.2,533.2 533.6,535.3 535.1,536.1 533.5,536.7 533,538.9 535.5,539.1 535.1,543.2 541.3,539.8 541.9,540.7 544.1,538.6 542.2,534.9 540.6,534.9 542.1,531.8 541.6,528.3 540.2,526.4 535.9,524.9ZM521.5,510.4 518.8,510.7 518.7,512.2 516.7,513.7 513.4,513.8 522.5,515.5 521.5,513.6 522.4,510.6 521.5,510.4ZM526.8,466.2 522.7,466.9 517.5,470.2 516.7,472 517.4,475 516.3,475.1 517.4,475.4 517.9,478 519.2,478.7 519.1,481.6 520.9,481.1 521.2,479.7 521.4,480.7 524.6,481.2 527.6,486.3 527.3,488.3 529.3,487.8 530.2,490.7 532.1,491.1 532.4,493.1 536,494.2 538.2,500.1 540.1,502.8 543.1,504.5 542.2,501.7 543.8,500.6 546.8,493.9 542.1,493.6 544.9,488.7 543.7,486.9 542.8,487.5 543,486.2 541.8,486.2 542.1,485.4 541.3,486 540.5,485.1 542.7,481.7 542.7,478.5 531.5,477 530.2,473.7 530.7,471 527.1,469.8 526.8,466.2ZM619.9,659.9 619.5,659.3 615.9,663.8 616.9,665.6 620.9,666.8 624.7,665.4 627,666.5 628.3,665.6 625.7,664.8 625,663.1 619.9,659.9ZM583.9,658.2 583.5,660 584.4,660.6 585.8,658.8 583.9,658.2ZM579.8,653.8 578.8,652.9 577.6,657 580.2,658.6 579.7,655.9 580.9,654.9 579.8,653.8ZM585.2,650.4 582.9,650.1 581.9,652.5 586.2,652.8 587,654.5 586.1,656.2 587.1,656.7 588,660.8 586.1,664.4 581.5,663.9 580.3,664.9 583.4,666.3 586.6,666.3 588.8,668.1 592.9,664.6 593,659.1 586.9,651 585.2,650.4ZM533.2,627.4 531.2,628.4 533.5,631.8 536.7,631.8 538.2,635.6 541.8,636.5 542.9,635.1 542.2,633.1 539.8,631.1 537.9,631.4 533.2,627.4ZM562.6,621.4 560,621.6 555.6,624.4 552.4,631.2 554.5,631.2 561.4,626.4 564.2,621.9 562.6,621.4ZM575.9,612.2 572.6,613 571.3,615.2 571.2,620.2 570.2,620.8 571.3,620.5 571.4,621.7 572.4,620.2 572,622 574.7,621.7 574.7,623.3 580.6,630.4 581.8,628.4 583.4,629.3 583.7,628.6 583.1,627 584.2,626.9 582.9,624 585,621.7 581.4,619 581.2,617.7 578,617 578.4,615.4 575.9,612.2ZM493.2,528.7 489.7,531.1 486.3,536.1 487.7,536.9 486.4,537.4 489.4,536.9 488.5,541.4 489.7,542.7 487.7,544.5 486.4,550.8 489,550.2 491.2,546.9 492.7,546.6 492.6,545.2 493.8,545.3 495.1,539.1 496.3,538.7 496.6,540.2 497.9,538.7 496.2,535.3 493.5,535.3 493.9,533.9 492.1,533.5 493.2,528.7ZM484.9,504.3 482.9,504.6 481.5,506.3 482.9,506.5 481.7,507.4 479.8,507.2 477.1,513.5 478,514.6 476.9,516.6 478.5,517.2 478,523.8 481,522.6 485.3,517.9 489.2,512.5 489.8,509 490.7,508.9 488.8,505.4 486,504.2 485,505.4 484.9,504.3ZM465.4,495.6 463.8,497.5 461.6,504.8 461.7,509 464.6,500.9 466,499.9 465.4,495.6ZM492.4,614.6 490.7,614.9 490.2,617.4 493,621 495,620.5 496.3,623.2 493.9,624.8 491.7,623.1 489.8,623.3 488.8,622.1 489.2,619.1 487,619.7 485.1,617.4 483.7,618.7 484,620.7 482.6,621.6 483.7,622.8 482.5,624.7 483.2,626.2 481.9,627.6 482.4,630.1 484.1,629.1 492.9,628.5 493.9,627.1 496.7,628.5 500.5,626.6 501.7,627 503,625.6 503.7,622.7 502.2,618.5 503.6,616.5 500.2,615.2 499.8,616.7 496.2,618.4 492.2,616.4 492.4,614.6ZM510.9,612.7 509.3,613.4 510.2,616.8 513.5,618.2 515,617.1 514.5,614.3 510.9,612.7ZM474.3,610.7 472.6,612 472.9,613.7 474.7,615.2 476.1,612.3 475.7,611 474.3,610.7ZM504.9,605.7 501.2,608.6 501.1,611.3 502.9,614.7 506.4,614 507.7,612.4 508.2,608.6 509.3,608.3 507.9,606.8 506.2,607.8 504.9,605.7ZM512.6,582.2 513.3,583.4 512.1,583.8 514,584.2 513.6,585.5 514.7,586.2 513.8,587.3 516.2,588 514.1,589.6 516.4,592.4 516.3,595.4 517.5,595.6 516.6,596.1 518.5,599.1 524.3,592.5 519,584.7 512.6,582.2ZM498.6,561.7 493.5,564.6 493.7,565.6 492.3,566.5 493.1,567.5 491.6,567.8 492.6,570.1 490.9,571.2 491,572.4 493.5,570.7 494.2,571.8 495.4,570.4 495.3,572.4 498.5,572.1 497.6,573.5 498.5,574.1 500.9,572.3 500.7,569.5 502.4,571.3 502.4,568 501.4,567.2 502.3,563.8 498.6,561.7ZM573.1,537.6 572.3,537.2 571.9,538.2 572,541.9 573.1,541 573.1,537.6ZM567.7,533.9 567.6,535.5 565.6,535.1 567.2,538.7 568.9,539 567.6,542.5 569.5,540.4 570.9,541.3 571.1,539.5 571,538.7 569.6,539.7 568.9,538.8 569.5,536.1 567.7,533.9ZM578.3,526.9 576.1,528.5 576.4,530.2 578,530.9 578.1,532.9 577.5,535.4 575.9,533.7 575.3,534.8 576.5,536.3 575.8,538.3 577.4,535.9 578.2,537.3 581.3,537.9 583.5,535.9 584.7,537 585.2,534.7 586.7,535 587,533.5 590.3,533.2 590.6,529.6 587.6,530.1 587.6,528.6 585.9,528.9 585.1,527.1 583.6,527 582.5,531.2 581.1,529.5 580.9,526.9 578.3,526.9ZM591.7,602.7 587.7,605.8 587.9,607.2 586.2,607.4 586.8,608.6 589.8,609 592,608.1 591.7,602.7ZM596.8,600.3 595.2,600.6 594.2,602.4 596.4,603.8 596.2,604.8 597.9,605 598.6,603 597.4,603.3 596.8,600.3ZM632.9,600.3 631.1,600.6 631.8,601.4 635.6,601.3 632.9,600.3ZM608.5,598.4 604.7,600.1 604.4,601.8 606.7,601.2 608.6,602.4 611.5,602.4 610.5,599.2 608.5,598.4ZM603.4,596.2 599.3,599.3 601.1,599.7 603.4,596.2ZM642.5,594.7 641.7,594.8 641.9,595.8 638.8,596 637.5,598 639.6,599 636.7,601.2 627,605.2 626.5,607 629,607.7 627.2,607.9 627.1,610.1 623.6,609.6 621.3,610.6 621.2,609.6 618.7,612.4 617.2,611.7 617.7,613.4 622.8,615.3 625.4,613 628.8,612.9 640.1,601.2 646.5,599.3 650,599.9 642.5,594.7ZM605,592.9 602.6,594.4 603.5,595.7 606,594.9 606.3,593.5 605,592.9ZM625.8,570.9 623.9,570.8 622.3,573.4 620.6,572.1 622.5,576.1 623.2,575.3 625.4,576.6 626.1,575.7 626.7,573.7 624.6,572.2 625.8,570.9ZM597.6,562.5 593.1,564.9 589.6,570 586,570.7 582.1,573.8 581.6,577.7 579.6,575.9 578.4,577.9 580.2,578.3 582.7,582.4 581.2,584.1 583.9,587.9 583.3,590 587,591 587,595.3 589.3,597.3 591.3,594.9 592.8,595.5 595,592.6 599,592.2 601.7,584.4 602.3,578.1 604.3,576.9 602.9,576.4 603.7,573.2 602.7,569.5 597.6,562.5ZM545.7,590.1 544.4,591.8 546,593.4 549.9,591.7 545.7,590.1ZM554.6,581.2 548.7,585.7 549.1,588.9 548.2,589.1 553.6,594.4 552.4,590.7 553.7,589.1 554.2,583.3 555.4,581.5 554.6,581.2ZM568.3,568.7 561.9,572.4 559.1,575.7 561.3,575.6 561.5,576.4 556.9,579.4 556,585 558,588.1 559.2,587.4 560.3,589.1 564.1,590.1 570,586.1 571,583.1 573.1,581.1 572,581 573.1,579.8 571,577.6 573.6,572.3 573.1,571.1 574.7,569.8 571.8,568.8 571.2,570.2 572.4,570.4 571.9,572 569.6,571.7 568.2,572.7 566.9,571.7 568.2,569.4 569.3,569.6 568.3,568.7ZM549.1,505 547.2,505.2 546.7,506.6 544.8,505 544.1,507.4 549.6,512.6 550.8,512.6 552.6,515.4 556.5,517 557.5,520.6 560.4,520.5 562.2,523 564.5,523.6 568.6,522.3 568.6,519.8 570.9,515.6 570.8,513.3 569.3,513.2 569.2,511.9 568.5,512.3 564.5,509.6 562.9,510.2 560.9,509.3 561.1,510.4 560.1,510.8 557.5,508 554.3,509.5 551.6,508.2 552.7,507 551.9,505.5 549.9,506 549.1,505Z","cx":592.6,"cy":579.8},"dodekanisou":{"name":"Δωδεκανήσου","capital":"Ρόδος","region":"notio_aigaio","d":"M705.8,664.5 704,665.5 705.2,667 704.6,667.5 705.4,668.2 706.2,667.3 706.8,668.8 708,666.7 705.8,664.5ZM678,630.2 677,631.1 678,633.9 681,633 678.8,634.3 679.9,637.6 678.1,636.3 676.2,637.1 675.7,639.2 674.2,639.2 673.9,637.9 670.9,636.1 669.1,635.8 668.3,637.2 668.2,635.9 667.2,635.7 666.6,636.6 667.8,639.6 666.8,640.8 668.2,641.6 669.3,645.3 670.7,645.2 672.3,646.8 673.9,645.9 676.6,646.4 674.1,642.8 675.8,642.4 675.3,639.8 676.8,640.1 676.5,638.2 680.3,639.2 680.4,638.3 681.5,638.9 681.8,637.3 682.1,638.5 684.1,636.7 684.9,637.8 684.2,638 686.8,638 681.8,632 678,630.2ZM749.4,592.3 747.1,592.8 749.6,595.4 749.5,596.6 753.8,596.7 751.2,595 753.2,592.9 751.4,592.1 750.3,593.1 749.4,592.3ZM670.7,588.3 669.4,589.2 667.5,588.7 667.4,590.3 669.1,590.9 670.5,590.1 671.3,589.2 670.7,588.3ZM685.5,585.4 685.4,584.5 684.1,586.3 682.4,585.7 682,586.7 683.7,587.2 681.5,588 684.6,588.2 684,587.4 685.8,586.7 686,587.5 688.9,587.7 688.6,586.5 685.5,585.4ZM728.2,585.1 725.7,585.6 728.9,587.2 729,588.3 729.6,586.3 728.2,585.1ZM726.8,578 725.4,578.3 729.1,580.8 728.4,582.5 731.1,581.9 733.7,585.2 730.9,585 731,586.8 729.6,588.9 730.5,590.8 728.1,593 730.1,593.6 731.1,596.1 733.4,595.4 735.4,596.2 735.5,593 741.9,593.7 739.6,592.2 741.1,590.8 739.5,590.3 741.8,587.7 740.3,585.5 738.6,585.4 737.3,586.7 737.4,585.1 734.1,582.2 736.2,582.6 735.4,581.5 732.6,579.5 731.7,579.3 732,580.1 726.8,578ZM718.8,562.8 717.3,563 718.6,563.9 718.1,564.5 715.8,563.5 714.4,566.1 717.4,567.4 717.6,568.7 720.6,568.8 718.4,571 720,573.5 723.5,571.3 723.5,572.8 720.8,573.7 721.8,575.1 725,575.4 724.5,573.9 726,575.3 726.4,573.2 723.4,569.6 724.9,568.3 721.2,567.5 722.7,566.5 723.2,564.5 719.9,563.4 719.5,564.3 718.8,562.8ZM745.7,550.5 744.4,551.2 745,553.8 746.6,553.2 745.1,552 745.7,550.5ZM710.3,547.3 710.6,548.6 709.3,548.6 709.8,550.5 712.6,551.8 714.3,551 714.3,553.4 715.6,552.8 716.2,553.8 716.6,549.9 714.1,550.3 710.3,547.3ZM695.7,541.3 694.1,542.8 692.3,541.7 693.5,546.7 692.2,547.5 692.9,548.3 691.8,551.8 694.5,551.8 693.2,553.7 694.8,554.6 696.2,554.5 695,551.6 696.2,550.3 693.6,547.2 695.1,547.6 694.6,545.8 695.7,544.6 699,546.6 700.1,545.9 698.8,545.1 698.4,543 696.4,542.7 696.7,541.6 695.7,541.3ZM710,538 710,537.1 709.3,538.5 709.9,540.1 711.8,540.9 711.3,541.8 712.4,541.7 712.5,543.4 714,541.8 710,538ZM734.9,529.7 729.7,529.6 731.2,530.1 731.6,532.9 733.1,533.4 733.5,531.7 734.6,533.3 736,531 737.4,532.1 734.9,529.7ZM737,776.6 730.4,778.8 727.7,778.2 722.5,784.3 722.4,787.2 725.8,788.2 727.9,785.4 730.3,785.3 732.9,781.6 735.1,781.5 736.9,779.8 736.6,778.7 738.3,776.9 737,776.6ZM757,728.8 756.4,729.6 757.9,729.9 756,729.9 754.7,732.1 752.3,732.1 752.3,741.4 748.6,746.5 748.2,751.4 742.6,757.1 744.3,759 744.1,760.4 746.7,761.6 747.6,763.3 746.6,764.5 748.1,771.2 746.7,771.7 747.3,772.6 744.5,775.6 747.5,778 749.5,777.7 750.6,779.8 749.7,781.4 753,778.2 751.2,777.7 753.3,773.4 755.1,773.4 755.9,771.1 758.5,772.1 759.8,769.4 758.6,767.7 755.9,767.1 755.8,765 757.5,762.9 756.1,761.8 756.2,759.9 754.7,759.4 753.7,756.9 751.1,754.9 752.3,754 752.1,750 757.6,740.8 756.7,736 758.8,732.6 758.9,729.3 757,728.8ZM758.5,719.8 757.2,721 757.2,723.3 754.5,725.3 756.2,727.6 758.8,727.7 759,728.9 759.7,726.2 758.8,723.4 759.7,720.6 758.5,719.8ZM753,633.2 748.9,634.6 748.5,638.9 749.6,638.9 749.6,640 755,640.8 757.1,637.4 754.7,633.2 753,633.2ZM749.6,625.6 746.7,627.8 747.6,630.8 748.7,627.4 750.6,627.2 749.6,625.6ZM764.2,599.5 763.4,597.2 758.7,600 752.6,600.6 744,605.3 736.3,614.8 733.3,614.4 729.4,615.7 729.7,623 732.4,626.3 734.2,626.8 733.7,622.8 735.3,621.5 734,619 735,617.4 741.1,615.2 747.5,616.5 753,610.5 770.6,604.2 769,600.3 766.4,600.9 764.2,599.5ZM983.1,688 981.2,689.6 980,693.4 984.2,690.8 982.8,690 983.8,688.4 983.1,688ZM793.7,678.2 786,679.5 786.2,683.2 789.5,681.7 791.9,682 792,683.2 794.2,681.3 795.4,682.2 795.9,679.2 793.7,678.2ZM804.6,673.6 801.9,675.7 801.8,676.8 804.2,675.6 803.9,677.2 802.8,677.1 803.5,678.7 805.5,675.5 804.6,673.6ZM770.1,649.6 768.6,652.6 765.2,651.2 764.5,656.6 766.4,656.9 767.1,658.6 767.7,656.9 770.5,655.9 771.2,660.8 772.2,659.5 773,662.3 773.7,661.4 774.3,662.8 779.7,659 778.3,657.7 777.4,659.7 775.4,657.5 774.7,658.6 773.6,658.1 774.1,655.4 770.1,649.6ZM853.2,653.2 852.8,652.6 849.8,657.1 843,657.4 822,667.9 817.5,673.7 813.4,675.4 809.7,685.5 806.7,687.8 801.8,689.4 802.5,690.8 804,690.3 804.3,694.5 808.1,695.5 808.9,696.8 808.6,706.6 805.1,715.5 806.6,718.5 810.1,721.3 808.1,723 812.4,721.7 815.2,718.7 817.1,718.8 817.3,717.5 818.8,717 827.4,702.8 835.4,698.9 836.9,700.6 840.1,701.8 839,699.5 841.3,695.7 838.3,695.1 839.1,690.8 841.8,686.3 844.8,686 845.8,680.8 848.4,678.2 847.6,676.6 848.8,673.5 852.1,669.3 851.6,666 855.3,661.3 853.5,659.4 854.5,655.3 853.2,653.2ZM816.4,630.5 812.5,632 812.6,633.9 811.3,635.3 810,634.3 809.8,637.5 814.1,636.8 812.4,639.7 815.3,638.9 817.3,640.1 817.3,641.8 815.9,641.7 815.5,642.8 817.1,643.3 820.1,641.8 818.7,639.7 820.2,638.3 818.5,637.9 820,637.2 820.5,634.8 820.3,633.5 818.2,633.9 819.6,633.1 819.6,631.7 816.5,633.7 816.2,632.7 814.4,632.9 816.4,630.5ZM818.6,627.4 815.9,628.6 816.1,630.1 818.8,629.5 818.6,627.4Z","cx":827.3,"cy":686.0},"irakleiou":{"name":"Ηρακλείου","capital":"Ηράκλειο","region":"kriti","d":"M593.4,793.2 587.2,793.6 584,790.8 583.6,788.5 582.4,788.2 569,789.3 565.2,789 564.3,787.5 551.8,787.9 550.3,784.2 551.1,780.6 549.3,781 548.3,778.4 545.7,779.2 544,777.4 542.9,780.4 539.8,779.9 539.5,784.1 536.7,783.1 535.7,784.1 537.6,789.4 534.7,790.9 539.5,793.7 538.2,796.8 539.5,799.2 537.6,802 537.5,805.7 535.2,808.3 533.3,806.9 530.3,807.5 529.1,802.8 527.4,802.2 526.8,814.5 524.9,814.1 520.4,815.9 520.3,818.2 522.9,821.6 524,827.4 522.5,830.5 523.4,835.5 521.2,838.7 524.9,837.9 527.1,838.6 528.6,837.1 531.5,836.5 538.9,838.3 542.1,837.4 543.3,838.5 545,837.3 548.3,838 551.1,836.4 555.8,837.5 559.7,835.1 564.6,835 565.2,835.9 570.2,834.6 572.5,833.2 573.3,831.3 578,831.6 582,829.6 586.4,831.1 589.7,830.5 594.5,831.6 596.6,830.4 598.8,830.7 598.7,827.1 597.1,826.4 596.8,824.9 594,824.3 596,821.4 590.8,818.2 589.1,815.8 586.6,815.3 587,814 585.6,812.9 586.1,810.5 584.6,809.1 586.5,806.7 585.9,804.5 586.8,803.9 589.6,805 592.2,802.1 595.4,801.8 593.7,799.3 594.8,796.5 593.4,793.2ZM567.4,772.9 564.2,775.9 566.2,775.9 566.9,777 567.9,776.1 569.5,778 570.3,774.6 567.4,772.9Z","cx":558.1,"cy":812.5},"lasithiou":{"name":"Λασιθίου","capital":"Άγιος Νικόλαος","region":"kriti","d":"M616.2,843.8 612.2,843.8 611.5,845 614,845.7 616.4,844.8 616.2,843.8ZM654.8,836 653.5,836.1 653.5,837.6 654.8,838.4 656.6,836.6 654.8,836ZM617.3,793.6 616.6,798.2 618.6,799 618.7,795.8 617.8,796 618.8,794.6 617.3,793.6ZM599,830.5 603.3,828.5 609.8,828.8 612.2,827.6 624.2,829.4 632.1,825.9 639.6,824.6 644.2,827.7 649.9,827.1 650.9,829.8 654.9,829.3 656.8,827.5 660.2,827.6 662.4,825.1 663.7,825.4 667.6,818.7 666.9,817.5 668.5,815.5 668.6,808.9 672,807.4 671.7,805.3 670.2,806.6 667.4,804.3 668.2,802.4 666.8,797.3 671,793.7 671.5,791 668.6,791.8 670.4,792.9 667.8,793.7 669.1,794.8 666,796.4 665,795.1 664,795.5 664.3,796.7 662.8,797 663.1,799.1 661.3,800 660.8,801.7 659,802.1 659.5,803.5 657.8,804.9 655,805.6 652.5,804.7 652.2,801.6 649.4,802.8 647.7,802.1 647.5,800.6 646.6,802 644.2,801.5 642.3,804.6 639.4,805.7 638.2,805.1 636.8,807.4 633.9,807.6 631.9,806.6 631.6,808.7 628.8,811 627.4,810.4 624,816.1 618.9,813.6 615.8,813.5 616.1,811.3 615.3,811.4 614.2,808.1 615.4,806.4 614.6,802.7 617,801.2 616.6,798.2 615.3,797.5 615.8,792.6 619.4,790.3 620.1,788 612.1,788.6 609.4,787.2 595.5,792 593.3,793.9 594.8,796.5 593.7,799.3 595.4,801.8 592.2,802.1 589.6,805 586.8,803.9 585.9,804.5 586.5,806.7 584.6,809.1 586.1,810.5 585.6,812.9 587,814 586.6,815.3 589.1,815.8 590.8,818.2 596,821.4 594,824.3 596.8,824.9 597.1,826.4 598.7,827.1 599,830.5ZM659.4,786.3 657.8,787 656.9,788.9 659.5,788.1 659.4,786.3Z","cx":626.1,"cy":812.4},"rethymnou":{"name":"Ρεθύμνου","capital":"Ρέθυμνο","region":"kriti","d":"M539.8,779.9 539,780.5 535.3,778.2 534.6,779.7 531,780.1 530.4,779.2 526.5,780.1 526.1,778.5 518.2,777.6 517.5,778.7 513.4,778.5 509.8,781.8 504.1,783.9 497.5,784.9 496.5,784 495.1,785.2 491.6,784.6 490.7,785.7 487.4,785.5 486,786.7 481.8,786.5 483.2,794.1 478.3,797.5 477.4,799.2 480.8,800.3 478.7,806.2 479,808 482.5,806.4 485.1,807.3 488.4,805.8 489.6,807 489.2,808.4 491.3,808.2 495,811.2 497,810.7 501.1,812 504.7,817.1 520.3,818.2 520.4,815.9 524.9,814.1 526.8,814.5 527.4,802.2 529.1,802.8 530.3,807.5 533.3,806.9 535.2,808.3 537.5,805.7 537.6,802 539.5,799.2 538.2,796.8 539.5,793.7 534.7,790.9 537.6,789.4 535.7,784.1 536.7,783.1 539.5,784.1 539.8,779.9Z","cx":511.1,"cy":797.2},"chanion":{"name":"Χανίων","capital":"Χανιά","region":"kriti","d":"M458,844.8 457.4,846.6 455.4,846.6 456.5,848.8 463.3,853.3 464.2,852.7 462.4,849.8 463.3,846.2 458,844.8ZM481.8,786.5 476.6,785.3 476.2,774.2 474.6,771.9 472.5,773.7 471.4,773.4 470.8,774.9 469.4,774.9 465.9,772.1 463,772.3 457.2,769.6 459.4,767.7 466.6,769.5 468.9,768.4 470.8,764.2 468.2,758.2 463.2,756.5 461,757.9 459.6,757.4 458.3,758.8 459.9,762.3 457.9,763 457.1,762.1 456.2,766 451.8,767.3 432.6,764.2 430.6,763 430,752.4 429.1,750.9 430.2,748.4 426.6,745.2 423.7,751.7 424.7,754.4 423.9,757.1 425.9,763.2 424.8,767.8 418.9,768.9 417.2,766.5 414.9,766.4 413.8,757.6 414.6,756.3 413.1,753.5 413.6,755.3 412.7,759.1 411.5,757.8 412.4,761.1 410.3,767.5 411.5,768.3 411.7,770.4 409.3,773.3 410.8,775.4 410.6,777.9 408.5,779.5 408.9,781.5 407.1,783 407.7,787 406.8,788.3 408.7,790.3 407,790.8 406.2,792.6 405.6,792.1 406.4,793.7 405.6,794.1 407.2,794.7 408,796.5 411.7,797.7 411.2,800 412.5,801.3 417.1,801.7 419.7,800.4 421.1,801.3 420.8,802.3 422.5,800.6 426,800.2 428.7,800.4 429.5,801.6 435.3,799.1 444.3,802.5 450.7,801.6 454.6,805.6 458.2,805.1 458.8,806 460,804.7 464.4,804.8 466.1,806.1 470.4,805 473.6,807.4 478.7,808.2 480.8,800.3 477.4,799.2 478.3,797.5 483.2,794.1 481.8,786.5Z","cx":444.1,"cy":783.3}}};
+
+const REGIONS = {
+  makedonia_thraki:{name:'Αν. Μακεδονία & Θράκη', color:'#e2574c'},
+  kentriki_makedonia:{name:'Κεντρική Μακεδονία', color:'#ef7d3b'},
+  dytiki_makedonia:{name:'Δυτική Μακεδονία', color:'#f0a93b'},
+  ipeiros:{name:'Ήπειρος', color:'#8d6e3a'},
+  thessalia:{name:'Θεσσαλία', color:'#d6b94a'},
+  ionia_nisia:{name:'Ιόνια Νησιά', color:'#3aa6a0'},
+  dytiki_ellada:{name:'Δυτική Ελλάδα', color:'#5bbf6a'},
+  sterea_ellada:{name:'Στερεά Ελλάδα', color:'#7c9c3f'},
+  attiki:{name:'Αττική', color:'#c8557e'},
+  peloponnisos:{name:'Πελοπόννησος', color:'#9b6cc0'},
+  voreio_aigaio:{name:'Βόρειο Αιγαίο', color:'#4f86d6'},
+  notio_aigaio:{name:'Νότιο Αιγαίο', color:'#5f6fc4'},
+  kriti:{name:'Κρήτη', color:'#d4699b'},
+};
+// region display order (north -> south, mainland then islands)
+const REGION_ORDER = ['makedonia_thraki','kentriki_makedonia','dytiki_makedonia','ipeiros','thessalia',
+  'dytiki_ellada','sterea_ellada','attiki','peloponnisos','ionia_nisia','voreio_aigaio','notio_aigaio','kriti'];
+
+const svg = document.getElementById('map');
+const VB = MAP.viewBox.split(' ').map(Number);
+const FULL = {x:VB[0], y:VB[1], w:VB[2], h:VB[3]};
+const pathEls = {};   // key -> <path>
+const keys = Object.keys(MAP.nomoi);
+
+// ---------- persistence (per nickname, on this device) ----------
+const LS_KEY='nomoi_app_v1';
+function loadStore(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)) || {currentUser:null,users:{}}; }catch(e){ return {currentUser:null,users:{}}; } }
+function saveStore(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(store)); }catch(e){} }
+let store=loadStore();
+let user=store.currentUser || null;
+const GUEST='__guest__';                                   // reserved key for the guest player
+function isGuest(n){ return n===GUEST; }
+function displayName(n){ return n===GUEST ? 'Επισκέπτης' : n; }
+// cumulative aggregate for a user record, migrating any legacy round-based data
+function aggOf(u){
+  if(!u) return {answered:0, correct:0, bestStreak:0};
+  if(u.answered!==undefined) return {answered:u.answered||0, correct:u.correct||0, bestStreak:u.bestStreak||0};
+  let a=0,c=0,bs=0;
+  if(Array.isArray(u.rounds)) for(const r of u.rounds){ a+=r.total||0; c+=r.score||0; bs=Math.max(bs, r.best||0); }
+  return {answered:a, correct:c, bestStreak:bs};
+}
+function userData(){
+  if(!user) return null;
+  let u=store.users[user];
+  if(!u){ u=store.users[user]={created:Date.now()}; }
+  if(u.answered===undefined){          // initialise / migrate to cumulative model
+    const g=aggOf(u);
+    u.answered=g.answered; u.correct=g.correct; u.bestStreak=g.bestStreak;
+    if(!u.perMode){
+      u.perMode={quizNomos:{a:0,c:0}, quizCapital:{a:0,c:0}};
+      if(Array.isArray(u.rounds)) for(const r of u.rounds){
+        const m=r.mode==='quizCapital'?'quizCapital':'quizNomos';
+        u.perMode[m].a+=r.total||0; u.perMode[m].c+=r.score||0;
+      }
+    }
+  }
+  if(!u.perNomos) u.perNomos={};
+  if(!u.perMode) u.perMode={quizNomos:{a:0,c:0}, quizCapital:{a:0,c:0}};
+  return u;
+}
+function setUser(name){
+  name=(name||'').trim().slice(0,24) || 'Παίκτης';
+  if(name===GUEST || name.toLowerCase()==='επισκέπτης') name=GUEST;   // typing the guest name plays as guest
+  user=name; store.currentUser=name;
+  if(!store.users[name]){
+    store.users[name]={created:Date.now(), answered:0, correct:0, bestStreak:0, perNomos:{}, perMode:{quizNomos:{a:0,c:0}, quizCapital:{a:0,c:0}}};
+    if(name===GUEST) store.users[name].guest=true;
+  }
+  saveStore(); updateBadge();
+}
+function updateBadge(){ const el=document.getElementById('playerName'); if(el) el.textContent = user ? displayName(user) : '—'; }
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// nickname modal
+const nickModal=document.getElementById('nickModal');
+const nickInput=document.getElementById('nickInput');
+function openNick(){
+  const ex=Object.keys(store.users||{}).filter(u=>u!==GUEST);   // named players only (guest shown separately)
+  const box=document.getElementById('nickExisting');
+  document.getElementById('nickTitle').textContent = user ? 'Άλλαξε παίκτη' : 'Καλώς όρισες!';
+  nickInput.value='';
+  let html='';
+  if(ex.length){
+    html+='<div class="lbl">Ή συνέχισε ως</div><div class="chips">'+
+      ex.map(u=>`<button type="button" class="chip" data-u="${escapeHtml(u)}">${escapeHtml(u)}</button>`).join('')+'</div>';
+  }
+  const guestHas = store.users[GUEST] && (store.users[GUEST].answered||0)>0;
+  html+='<div class="guestrow">'+
+    `<button type="button" class="chip guest" id="guestBtn">${guestHas?'Συνέχισε ως επισκέπτης':'Παίξε ως επισκέπτης'}</button>`+
+    '<div class="ghint">Ως επισκέπτης μπορείς να παίξεις χωρίς ψευδώνυμο. Τα δεδομένα σου δεν εμφανίζονται στην κατάταξη.</div></div>';
+  box.innerHTML=html;
+  box.querySelectorAll('.chip[data-u]').forEach(c=>c.onclick=()=>{ switchUser(c.dataset.u); });
+  document.getElementById('guestBtn').onclick=()=>{ switchUser(GUEST); };
+  nickModal.classList.remove('hidden');
+  setTimeout(()=>nickInput.focus(),60);
+}
+function closeNick(){ nickModal.classList.add('hidden'); }
+// switching player must start the new player from a clean slate: their own
+// data only, and a fresh quiz session (no carried-over streak/score/history)
+function switchUser(name){ setUser(name); closeNick(); setMode(mode); }
+document.getElementById('nickForm').addEventListener('submit', e=>{
+  e.preventDefault(); switchUser(nickInput.value);
+});
+
+// ---------- account (Firebase Login / Register) ----------
+// Identity comes from the shared Account widget. Signed-in players are ranked
+// under their account nickname; guests play immediately but stay unranked.
+(function(){
+  const ctrlLogin = document.getElementById('nomoiLogin');
+  const ctrlReg   = document.getElementById('nomoiRegister');
+  const who       = document.getElementById('acctwho');
+  const badge     = document.getElementById('playerBadge');
+  const pop       = document.getElementById('acctpop');
+  const emailEl   = document.getElementById('acctEmailN');
+  const logoutBtn = document.getElementById('nomoiLogout');
+  let signedIn = false;
+
+  function closePop(){ if(pop) pop.classList.add('hidden'); }
+  function renderAccount(u){
+    if(ctrlLogin) ctrlLogin.hidden = !!u;
+    if(ctrlReg)   ctrlReg.hidden   = !!u;
+    if(who)       who.hidden       = !u;
+    if(u && emailEl) emailEl.textContent = u.email || '';
+    if(!u) closePop();
+    updateBadge();
+  }
+  function applyAccount(u){
+    if(u){ signedIn = true; switchUser(u.nickname); }
+    else if(signedIn){ signedIn = false; switchUser(GUEST); }
+    renderAccount(u);
+  }
+  if(ctrlLogin)  ctrlLogin.onclick  = function(){ if(window.Account) window.Account.openLogin(); };
+  if(ctrlReg)    ctrlReg.onclick    = function(){ if(window.Account) window.Account.openRegister(); };
+  if(logoutBtn)  logoutBtn.onclick  = function(){ closePop(); if(window.Account) window.Account.logout(); };
+  if(badge)      badge.onclick      = function(e){ e.stopPropagation(); if(pop) pop.classList.toggle('hidden'); };
+  document.addEventListener('click', function(e){ if(who && !who.contains(e.target)) closePop(); });
+
+  renderAccount(null);
+  // Account widget is a deferred module (loads after this script): react to its event.
+  window.addEventListener('account-changed', function(e){ applyAccount(e.detail); });
+  // "Στατιστικά" menu item → opens the existing progress view for this account.
+  if(pop && logoutBtn && !pop.querySelector('.pfs-menu-stats')){
+    var sb=document.createElement('button');
+    sb.type='button'; sb.className='pfs-menu-stats'; sb.textContent='Στατιστικά';
+    sb.style.cssText='appearance:none;border:0;background:none;width:100%;text-align:left;cursor:pointer;font:inherit;font-weight:600;font-size:.85rem;color:#1f2937;padding:9px;border-radius:8px;';
+    sb.onmouseover=function(){ sb.style.background='#f1f5f9'; };
+    sb.onmouseout=function(){ sb.style.background='transparent'; };
+    sb.onclick=function(){ closePop(); setMode('progress'); };
+    pop.insertBefore(sb, logoutBtn);
+  }
+})();
+
+// ---------- build SVG ----------
+const landG = document.createElementNS('http://www.w3.org/2000/svg','g');
+const labelG = document.createElementNS('http://www.w3.org/2000/svg','g');
+labelG.setAttribute('class','labels');
+for(const k of keys){
+  const n = MAP.nomoi[k];
+  const p = document.createElementNS('http://www.w3.org/2000/svg','path');
+  p.setAttribute('d', n.d);
+  p.setAttribute('class','nomos');
+  p.dataset.key = k;
+  landG.appendChild(p);
+  pathEls[k] = p;
+  // label
+  const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+  g.setAttribute('class','lbl');
+  const t1 = document.createElementNS('http://www.w3.org/2000/svg','text');
+  t1.setAttribute('class','lname'); t1.setAttribute('x',n.cx); t1.setAttribute('y',n.cy);
+  t1.setAttribute('text-anchor','middle'); t1.textContent = n.name;
+  const t2 = document.createElementNS('http://www.w3.org/2000/svg','text');
+  t2.setAttribute('class','lcap'); t2.setAttribute('x',n.cx); t2.setAttribute('y',n.cy+6.5);
+  t2.setAttribute('text-anchor','middle'); t2.textContent = n.capital;
+  g.appendChild(t1); g.appendChild(t2);
+  labelG.appendChild(g);
+}
+svg.appendChild(landG);
+svg.appendChild(labelG);
+
+// ---------- pan / zoom ----------
+let vb = {...FULL};
+function applyVB(){ svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`); }
+applyVB();
+function clampVB(){
+  const minW = FULL.w*0.06, maxW = FULL.w*1.25;
+  vb.w = Math.max(minW, Math.min(maxW, vb.w));
+  vb.h = Math.max(FULL.h*0.06, Math.min(FULL.h*1.25, vb.h));
+}
+function screenToSvg(cx,cy){
+  const r = svg.getBoundingClientRect();
+  // account for preserveAspectRatio letterboxing
+  const sc = Math.min(r.width/vb.w, r.height/vb.h);
+  const offx = (r.width - vb.w*sc)/2, offy = (r.height - vb.h*sc)/2;
+  return { x: vb.x + (cx - r.left - offx)/sc, y: vb.y + (cy - r.top - offy)/sc };
+}
+function svgToScreen(sx,sy){
+  const r = svg.getBoundingClientRect();
+  const sc = Math.min(r.width/vb.w, r.height/vb.h);
+  const offx = (r.width - vb.w*sc)/2, offy = (r.height - vb.h*sc)/2;
+  return { x: r.left + offx + (sx-vb.x)*sc, y: r.top + offy + (sy-vb.y)*sc };
+}
+function zoomAt(cx,cy,factor){
+  const pt = screenToSvg(cx,cy);
+  const nw = vb.w*factor, nh = vb.h*factor;
+  vb.x = pt.x - (pt.x - vb.x)*(nw/vb.w);
+  vb.y = pt.y - (pt.y - vb.y)*(nh/vb.h);
+  vb.w = nw; vb.h = nh; clampVB(); applyVB();
+}
+svg.addEventListener('wheel', e=>{ e.preventDefault();
+  zoomAt(e.clientX,e.clientY, e.deltaY>0?1.12:0.89);
+},{passive:false});
+
+const pointers = new Map();
+let panStart=null, movedDist=0, pinchPrev=0;
+svg.addEventListener('pointerdown', e=>{
+  svg.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pointers.size===1){ panStart={x:e.clientX,y:e.clientY,vbx:vb.x,vby:vb.y}; movedDist=0; }
+  else if(pointers.size===2){ pinchPrev = pinchDist(); panStart=null; }
+});
+svg.addEventListener('pointermove', e=>{
+  if(!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pointers.size===2){
+    const d = pinchDist();
+    if(pinchPrev>0){
+      const c = pinchCenter();
+      zoomAt(c.x,c.y, pinchPrev/d);
+    }
+    pinchPrev=d; return;
+  }
+  if(panStart){
+    const r = svg.getBoundingClientRect();
+    const sc = Math.min(r.width/vb.w, r.height/vb.h);
+    const dx=(e.clientX-panStart.x), dy=(e.clientY-panStart.y);
+    movedDist=Math.max(movedDist, Math.hypot(dx,dy));
+    vb.x = panStart.vbx - dx/sc; vb.y = panStart.vby - dy/sc; applyVB();
+  }
+});
+function endPointer(e){
+  pointers.delete(e.pointerId);
+  if(pointers.size<2) pinchPrev=0;
+  if(pointers.size===0) panStart=null;
+}
+svg.addEventListener('pointerup', e=>{
+  // A "tap" is a single-pointer release (panStart set) with no real drag.
+  // We resolve the hit via elementFromPoint instead of the click event,
+  // because setPointerCapture re-targets the synthesized click to the <svg>.
+  const wasTap = pointers.size===1 && panStart && movedDist<=6;
+  endPointer(e);
+  if(wasTap){
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const path = el && el.closest ? el.closest('path.nomos') : null;
+    if(path) onNomosClick(path.dataset.key, e);
+    else hidePopup();        // tapped empty sea -> dismiss any popup
+  }
+});
+svg.addEventListener('pointercancel', endPointer);
+function pinchDist(){ const a=[...pointers.values()]; return Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y); }
+function pinchCenter(){ const a=[...pointers.values()]; return {x:(a[0].x+a[1].x)/2,y:(a[0].y+a[1].y)/2}; }
+
+document.getElementById('zin').onclick = ()=>{ const r=svg.getBoundingClientRect(); zoomAt(r.left+r.width/2,r.top+r.height/2,0.8); };
+document.getElementById('zout').onclick= ()=>{ const r=svg.getBoundingClientRect(); zoomAt(r.left+r.width/2,r.top+r.height/2,1.25); };
+document.getElementById('zreset').onclick=()=>{ vb={...FULL}; applyVB(); };
+
+// ---------- hover handling (taps are handled in pointerup above) ----------
+landG.addEventListener('pointerover', e=>{
+  const t=e.target.closest('path.nomos'); if(!t) return;
+  const inQuiz = (mode==='quizNomos'||mode==='quizCapital');
+  if(mode==='learn'||mode==='progress'||(inQuiz && !locked)) setHover(t.dataset.key,true);
+});
+landG.addEventListener('pointerout', e=>{
+  const t=e.target.closest('path.nomos'); if(!t) return;
+  setHover(t.dataset.key,false);   // always safe to clear the highlight
+});
+
+function setHover(k,on){
+  if(pathEls[k]) pathEls[k].classList.toggle('hover',on);
+  const li=document.querySelector(`#sideBody li[data-key="${k}"]`);
+  if(li) li.classList.toggle('hover',on);
+}
+function clearClasses(){
+  for(const k in pathEls){ pathEls[k].classList.remove('hover','sel','correct','wrong','target'); }
+}
+function colorByRegion(){
+  for(const k in pathEls){ pathEls[k].style.fill = REGIONS[MAP.nomoi[k].region].color; }
+}
+function clearFill(){ for(const k in pathEls){ pathEls[k].style.fill=''; } }
+
+// ---------- modes ----------
+let mode='learn';
+const promptEl=document.getElementById('prompt');
+const sideTitle=document.getElementById('sideTitle');
+const sideSmall=document.getElementById('sideSmall');
+const sideBody=document.getElementById('sideBody');
+const nextBtn=document.getElementById('nextBtn');
+const skipBtn=document.getElementById('skipBtn');
+const capToggleWrap=document.getElementById('capToggleWrap');
+
+document.querySelectorAll('.tab').forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    b.scrollIntoView({block:'nearest', inline:'center'});  // keep active tab visible in the scroll strip
+    setMode(b.dataset.mode);
+  };
+});
+document.getElementById('capToggle').onchange=e=>{
+  svg.classList.toggle('showcaps', e.target.checked);
+};
+
+function setMode(m){
+  clearTimeout(advanceTimer); advanceTimer=null;
+  hidePopup();
+  mode=m; clearClasses();
+  nextBtn.style.display='none'; skipBtn.style.display='none';
+  capToggleWrap.style.display='none';
+  if(m==='learn'){ svg.classList.add('learn'); capToggleWrap.style.display='flex'; startLearn(); }
+  else if(m==='progress'){ svg.classList.add('learn'); colorByRegion(); startProgress(); }
+  else if(m==='leaderboard'){ svg.classList.add('learn'); colorByRegion(); startLeaderboard(); }
+  else { svg.classList.remove('learn'); startQuiz(); }
+}
+
+// ----- LEARN -----
+function startLearn(){
+  colorByRegion();
+  promptEl.innerHTML='Περιήγησε τον χάρτη. Πάτησε σε έναν νομό για να δεις το όνομα και την πρωτεύουσά του.';
+  sideTitle.textContent='Νομοί & Πρωτεύουσες';
+  sideSmall.textContent= keys.length+' νομοί';
+  buildLegend();
+}
+function buildLegend(){
+  let html='';
+  for(const rk of REGION_ORDER){
+    const inReg = keys.filter(k=>MAP.nomoi[k].region===rk)
+                      .sort((a,b)=>MAP.nomoi[a].name.localeCompare(MAP.nomoi[b].name,'el'));
+    if(!inReg.length) continue;
+    html+=`<div class="reggroup"><h3><span class="dot" style="background:${REGIONS[rk].color}"></span>${REGIONS[rk].name}</h3><ul class="nlist">`;
+    for(const k of inReg){
+      const n=MAP.nomoi[k];
+      html+=`<li data-key="${k}"><span class="nm">${n.name}</span><span class="cap">${n.capital}</span></li>`;
+    }
+    html+='</ul></div>';
+  }
+  sideBody.innerHTML=html;
+  sideBody.querySelectorAll('li').forEach(li=>{
+    const k=li.dataset.key;
+    li.onmouseenter=()=>setHover(k,true);
+    li.onmouseleave=()=>setHover(k,false);
+    li.onclick=()=>{ showPopup(k); };   // anchored at the region's centroid
+  });
+}
+
+// ---------- tap popup: shows the νομός + its capital ----------
+const popup=document.getElementById('popup');
+function showPopup(k, ev){
+  const n=MAP.nomoi[k];
+  popup.innerHTML =
+    `<button class="pclose" aria-label="Κλείσιμο">&times;</button>`+
+    `<div class="ptitle">Νομός ${n.name}</div>`+
+    `<div class="prow"><span class="pk">Πρωτεύουσα</span><span class="pv cap">${n.capital}</span></div>`+
+    `<div class="prow"><span class="pk">Περιφέρεια</span><span class="pv">${REGIONS[n.region].name}</span></div>`;
+  popup.classList.remove('hidden');
+  popup.querySelector('.pclose').onclick=(e)=>{ e.stopPropagation(); hidePopup(); };
+  // highlight the tapped region
+  clearClasses(); pathEls[k].classList.add('sel');
+  // position the popup near the tap point (or the region centroid for legend clicks)
+  const stage=document.querySelector('.mapstage'); const sr=stage.getBoundingClientRect();
+  let scr;
+  if(ev && ev.clientX!=null){ scr={x:ev.clientX, y:ev.clientY}; }
+  else { scr=svgToScreen(n.cx, n.cy); }
+  const px=scr.x - sr.left, py=scr.y - sr.top;
+  const pw=popup.offsetWidth, ph=popup.offsetHeight;
+  let left=px - pw/2, top=py - ph - 14;
+  if(top<6) top=py + 18;                                   // not enough room above -> below
+  left=Math.max(6, Math.min(left, sr.width - pw - 6));
+  top =Math.max(6, Math.min(top,  sr.height - ph - 6));
+  popup.style.left=left+'px'; popup.style.top=top+'px';
+}
+function hidePopup(){ if(popup.classList.contains('hidden')) return; popup.classList.add('hidden'); clearClasses(); }
+// dismiss the popup when tapping anywhere outside it and outside the map
+document.addEventListener('pointerdown', e=>{
+  if(popup.classList.contains('hidden')) return;
+  if(e.target.closest('#popup') || e.target.closest('#map')) return;
+  hidePopup();
+});
+
+// ----- QUIZ (endless: regions are drawn at random, with repeats) -----
+let target=null, prevTarget=null, sessionAsked=0, sessionCorrect=0, streak=0, answeredLog=[], locked=false, advanceTimer=null;
+function startQuiz(){
+  sessionAsked=0; sessionCorrect=0; streak=0; answeredLog=[]; locked=false; prevTarget=null;
+  clearTimeout(advanceTimer); advanceTimer=null;
+  clearFill();
+  skipBtn.style.display='inline-block';
+  nextBtn.style.display='none';
+  nextQuestion();
+  renderQuizSide();
+}
+function nextQuestion(){
+  clearClasses(); locked=false; nextBtn.style.display='none';
+  let k;
+  do { k=keys[Math.floor(Math.random()*keys.length)]; } while(keys.length>1 && k===prevTarget);
+  target=k; prevTarget=k;
+  const n=MAP.nomoi[k];
+  if(mode==='quizNomos'){
+    promptEl.innerHTML = `Βρες στον χάρτη τον <b>Νομό ${n.name}</b> και κάνε κλικ.`;
+  } else {
+    promptEl.innerHTML = `Σε ποιον νομό ανήκει η πρωτεύουσα <b>${n.capital}</b>; Κάνε κλικ στον νομό.`;
+  }
+}
+function onNomosClick(k, ev){
+  if(mode!=='quizNomos' && mode!=='quizCapital'){ showPopup(k, ev); return; }
+  if(locked) return;
+  const t=target;
+  sessionAsked++;
+  if(k===t){
+    sessionCorrect++; streak++;
+    pathEls[k].classList.add('correct');
+    flash('Σωστά! '+sentence(t), true);
+    answeredLog.unshift({k:t, ok:true});
+    recordAnswer(t, true);
+    locked=true;
+    clearTimeout(advanceTimer);
+    advanceTimer=setTimeout(()=>{
+      advanceTimer=null;
+      if(mode!=='quizNomos' && mode!=='quizCapital') return; // tab changed meanwhile
+      nextQuestion(); renderQuizSide();
+    }, 950);
+  } else {
+    streak=0;
+    pathEls[k].classList.add('wrong');
+    pathEls[t].classList.add('target');
+    flash('Λάθος. '+wrongSentence(t,k), false);
+    answeredLog.unshift({k:t, ok:false});
+    recordAnswer(t, false);
+    locked=true;
+    nextBtn.style.display='inline-block';
+  }
+  renderQuizSide();
+}
+// persist one answer immediately so progress & the leaderboard stay live
+function recordAnswer(targetKey, correct){
+  const ud=userData(); if(!ud) return;
+  ud.answered=(ud.answered||0)+1;
+  if(correct) ud.correct=(ud.correct||0)+1;
+  ud.bestStreak=Math.max(ud.bestStreak||0, streak);
+  if(!ud.perNomos[targetKey]) ud.perNomos[targetKey]={asked:0, wrong:0};
+  ud.perNomos[targetKey].asked++; if(!correct) ud.perNomos[targetKey].wrong++;
+  if(!ud.perMode[mode]) ud.perMode[mode]={a:0,c:0};
+  ud.perMode[mode].a++; if(correct) ud.perMode[mode].c++;
+  saveStore();
+  refreshLiveViews();
+}
+// re-render progress / leaderboard when they are the active view (and across tabs)
+function refreshLiveViews(){
+  if(mode==='leaderboard') renderLeaderboard();
+  else if(mode==='progress') renderProgress();
+}
+window.addEventListener('storage', e=>{
+  if(e.key!==LS_KEY) return;
+  store=loadStore();
+  refreshLiveViews();
+});
+function sentence(k){ const n=MAP.nomoi[k]; return `Νομός ${n.name} — πρωτεύουσα ${n.capital}.`; }
+function wrongSentence(t,c){
+  const tn=MAP.nomoi[t], cn=MAP.nomoi[c];
+  if(mode==='quizNomos'){
+    return `Έκανες κλικ στον Νομό ${cn.name}. Ο Νομός ${tn.name} (πρωτεύουσα ${tn.capital}) είναι ο πράσινος.`;
+  }
+  return `Η ${tn.capital} είναι πρωτεύουσα του Νομού ${tn.name} (πράσινος), όχι του Νομού ${cn.name}.`;
+}
+function flash(msg, ok){
+  promptEl.innerHTML = `<span class="feedback ${ok?'good':'bad'}">${msg}</span>`;
+}
+nextBtn.onclick=()=>{ nextQuestion(); renderQuizSide(); };
+skipBtn.onclick=()=>{ if(locked) return; nextQuestion(); renderQuizSide(); };  // draw another random region
+
+function renderQuizSide(){
+  sideTitle.textContent = mode==='quizNomos' ? 'Βρες τον Νομό' : 'Βρες την Πρωτεύουσα';
+  sideSmall.textContent = `${sessionAsked} ${sessionAsked===1?'ερώτηση':'ερωτήσεις'}`;
+  const acc = sessionAsked? Math.round(sessionCorrect/sessionAsked*100):0;
+  let html=`<div class="stats">
+      <div class="stat"><div class="n">${sessionCorrect}</div><div class="l">Σωστά</div></div>
+      <div class="stat"><div class="n">${streak}</div><div class="l">Σερί</div></div>
+      <div class="stat"><div class="n">${acc}%</div><div class="l">Ακρίβεια</div></div>
+    </div>
+    <div class="progress"><span style="width:${acc}%"></span></div>`;
+  if(answeredLog.length){
+    html+='<div class="log"><h4>Ιστορικό</h4><ul>';
+    for(const e of answeredLog.slice(0,14)){
+      const n=MAP.nomoi[e.k];
+      html+=`<li class="${e.ok?'ok':'no'}"><span><span class="mk">${e.ok?'✓':'✗'}</span> Νομός ${n.name}</span><span class="cap">${n.capital}</span></li>`;
+    }
+    html+='</ul></div>';
+  }
+  sideBody.innerHTML=html;
+}
+
+// ----- PROGRESS -----
+function startProgress(){
+  promptEl.innerHTML = user
+    ? `Η πρόοδος του παίκτη <b>${escapeHtml(displayName(user))}</b> — δες πού τα πας καλά και τι χρειάζεται επανάληψη.`
+    : 'Διάλεξε ένα ψευδώνυμο για να καταγράφεται η πρόοδός σου.';
+  renderProgress();
+}
+function modebarHtml(label, acc){
+  const v = acc==null?0:acc, txt = acc==null?'—':acc+'%';
+  return `<div class="modebar"><div class="top"><span>${label}</span><span>${txt}</span></div>`+
+         `<div class="track"><span style="width:${v}%"></span></div></div>`;
+}
+function renderProgress(){
+  sideTitle.textContent='Η Πρόοδός μου';
+  const ud=userData();
+  if(!user){
+    sideSmall.textContent='';
+    sideBody.innerHTML='<div class="prog"><div class="empty">Δεν έχει επιλεγεί παίκτης.<br><br><button class="btn primary" id="pgChoose">Διάλεξε ψευδώνυμο</button></div></div>';
+    document.getElementById('pgChoose').onclick=openNick; return;
+  }
+  sideSmall.textContent=displayName(user);
+  const answered=ud.answered||0;
+  if(!answered){
+    sideBody.innerHTML='<div class="prog"><div class="empty">Δεν έχεις απαντήσει ακόμα σε καμία ερώτηση.<br><br>Παίξε «Βρες τον Νομό» ή «Βρες την Πρωτεύουσα» και η πρόοδός σου θα εμφανιστεί εδώ.</div></div>';
+    return;
+  }
+  const correct=ud.correct||0;
+  const acc=Math.round(correct/answered*100);
+  const bestStreak=ud.bestStreak||0;
+  const mAcc=m=>{ const x=ud.perMode[m]; return x&&x.a? Math.round(x.c/x.a*100):null; };
+  const weak=Object.keys(ud.perNomos||{}).map(k=>({k,...ud.perNomos[k]}))
+      .filter(x=>x.asked>=1 && x.wrong>0).map(x=>({...x, rate:x.wrong/x.asked}))
+      .sort((a,b)=> b.rate-a.rate || b.wrong-a.wrong).slice(0,8);
+  let html='<div class="prog">';
+  html+=`<div class="kpis">
+    <div class="kpi"><div class="n">${answered}</div><div class="l">Ερωτήσεις</div></div>
+    <div class="kpi"><div class="n">${acc}%</div><div class="l">Ακρίβεια</div></div>
+    <div class="kpi"><div class="n">${correct}</div><div class="l">Σωστά</div></div>
+    <div class="kpi"><div class="n">${bestStreak}</div><div class="l">Καλύτερο σερί</div></div>
+  </div>`;
+  html+='<h4>Ανά παιχνίδι (ακρίβεια)</h4><div class="modebars">';
+  html+=modebarHtml('Βρες τον Νομό', mAcc('quizNomos'));
+  html+=modebarHtml('Βρες την Πρωτεύουσα', mAcc('quizCapital'));
+  html+='</div>';
+  if(weak.length){
+    html+='<h4>Νομοί για επανάληψη</h4><ul class="weak">';
+    for(const w of weak){ const n=MAP.nomoi[w.k]; html+=`<li data-key="${w.k}"><span>Νομός ${n.name}</span><span class="pct">${Math.round(w.rate*100)}% λάθος</span></li>`; }
+    html+='</ul>';
+  }
+  html+='</div>';
+  sideBody.innerHTML=html;
+  sideBody.querySelectorAll('.weak li').forEach(li=>{
+    const k=li.dataset.key;
+    li.onmouseenter=()=>setHover(k,true);
+    li.onmouseleave=()=>setHover(k,false);
+  });
+}
+
+// ----- LEADERBOARD (live) -----
+let lbSort='acc';
+function userAgg(name){
+  const g=aggOf(store.users[name]);
+  const acc=g.answered?Math.round(g.correct/g.answered*100):0;
+  return {name, answered:g.answered, correct:g.correct, acc, bestStreak:g.bestStreak};
+}
+function startLeaderboard(){
+  promptEl.innerHTML='Κατάταξη όλων των παικτών σε αυτή τη συσκευή — δες ποιος ξέρει καλύτερα τους νομούς.';
+  renderLeaderboard();
+}
+function renderLeaderboard(){
+  sideTitle.textContent='Κατάταξη';
+  const rows=Object.keys(store.users||{}).filter(n=>n!==GUEST).map(userAgg).filter(r=>r.answered>0);  // guest excluded
+  sideSmall.textContent = rows.length ? rows.length+(rows.length===1?' παίκτης':' παίκτες') : '';
+  if(!rows.length){
+    sideBody.innerHTML='<div class="lbempty">Δεν υπάρχουν ακόμα καταγραφές.<br><br>Παίξε ένα παιχνίδι και θα εμφανιστείς εδώ!</div>';
+    return;
+  }
+  const labels={acc:'Ακρίβεια', answered:'Ερωτήσεις', bestStreak:'Σερί'};
+  const cmp={
+    acc:(a,b)=> b.acc-a.acc || b.answered-a.answered || b.bestStreak-a.bestStreak,
+    answered:(a,b)=> b.answered-a.answered || b.acc-a.acc || b.bestStreak-a.bestStreak,
+    bestStreak:(a,b)=> b.bestStreak-a.bestStreak || b.acc-a.acc || b.answered-a.answered,
+  };
+  if(!cmp[lbSort]) lbSort='acc';
+  rows.sort(cmp[lbSort]);
+  const medals=['🥇','🥈','🥉'];
+  let html='<div class="lbwrap"><div class="lbsort">';
+  for(const key of ['acc','answered','bestStreak'])
+    html+=`<button class="schip ${key===lbSort?'on':''}" data-sort="${key}">${labels[key]}</button>`;
+  html+='</div><ol class="lb">';
+  rows.forEach((r,i)=>{
+    const me=r.name===user;
+    const rank = i<3 ? `<span class="rank medal">${medals[i]}</span>` : `<span class="rank">${i+1}</span>`;
+    let mv,ml;
+    if(lbSort==='answered'){ mv=r.answered; ml='Ερωτήσεις'; }
+    else if(lbSort==='bestStreak'){ mv=r.bestStreak; ml='Σερί'; }
+    else { mv=r.acc+'%'; ml='Ακρίβεια'; }
+    html+=`<li class="${me?'me':''}">${rank}`+
+      `<span class="who"><span class="nm">${escapeHtml(r.name)}${me?'<span class="youtag">εσύ</span>':''}</span>`+
+      `<span class="sub">${r.answered} ${r.answered===1?'ερώτηση':'ερωτήσεις'} · ${r.correct} σωστά · σερί ${r.bestStreak}</span></span>`+
+      `<span class="metric"><span class="v">${mv}</span><div class="ml">${ml}</div></span></li>`;
+  });
+  html+='</ol></div>';
+  sideBody.innerHTML=html;
+  sideBody.querySelectorAll('.schip').forEach(b=>b.onclick=()=>{ lbSort=b.dataset.sort; renderLeaderboard(); });
+}
+
+// init
+updateBadge();
+setMode('learn');
+// New visitors start playing immediately as Guest — no welcome wall.
+// Returning local players resume their session; signed-in users are picked up
+// by the Account widget (account-changed) once Firebase resolves.
+if(!user){ setUser(GUEST); updateBadge(); }
+</script>
+<script>window.AUTHCORE_NO_BAR=true;</script>
+<!-- ============================================================
+     Account widget — Firebase email/password Login / Register
+     Shared across stouras.com /fun/ apps. Backend project: stouras-snake.
+     Exposes window.Account { user, isGuest(), onChange(cb),
+     openLogin(), openRegister(), logout() } and dispatches the
+     'account-changed' event. Set window.AUTHCORE_NO_BAR = true before
+     this block to suppress the built-in fixed top-right bar (apps that
+     place their own Login/Register trigger in their header).
+     ============================================================ -->
+<style>
+  :root{ --acct-accent:#2563eb; --acct-accent-ink:#fff; }
+  #acctRoot, #acctRoot *{ box-sizing:border-box; }
+  /* fixed top-right bar */
+  .acct-bar{
+    position:fixed; z-index:2147483000;
+    top:max(8px, env(safe-area-inset-top)); right:max(8px, env(safe-area-inset-right));
+    display:flex; gap:8px; align-items:center;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  .acct-chip{
+    appearance:none; cursor:pointer; border:0; border-radius:999px;
+    font:600 14px/1 inherit; padding:10px 16px; min-height:40px;
+    display:inline-flex; align-items:center; gap:6px;
+    box-shadow:0 2px 10px rgba(0,0,0,.18); transition:transform .06s ease, filter .15s ease, background .15s ease;
+    white-space:nowrap; -webkit-tap-highlight-color:transparent; touch-action:manipulation;
+  }
+  .acct-chip:active{ transform:translateY(1px); }
+  .acct-ghost{ background:#fff; color:#1f2937; border:1px solid rgba(0,0,0,.12); }
+  .acct-ghost:hover{ background:#f3f4f6; }
+  .acct-solid{ background:var(--acct-accent); color:var(--acct-accent-ink); }
+  .acct-solid:hover{ filter:brightness(1.05); }
+  .acct-acc{ position:relative; }
+  .acct-pill .acct-av{ font-size:15px; }
+  .acct-pill .acct-name{ max-width:34vw; overflow:hidden; text-overflow:ellipsis; }
+  .acct-car{ opacity:.55; font-size:11px; }
+  .acct-menu{
+    position:absolute; top:calc(100% + 8px); right:0; min-width:200px;
+    background:#fff; color:#1f2937; border-radius:14px; padding:8px;
+    box-shadow:0 14px 40px rgba(0,0,0,.28); border:1px solid rgba(0,0,0,.08);
+  }
+  .acct-menu-head{ font-size:12px; color:#6b7280; padding:8px 10px 10px; border-bottom:1px solid #eef0f3; margin-bottom:6px; line-height:1.5; }
+  .acct-menu-head b{ color:#111827; word-break:break-all; }
+  .acct-menu-item{
+    display:block; width:100%; text-align:left; appearance:none; border:0; background:none;
+    cursor:pointer; font:600 14px/1 inherit; color:#dc2626; padding:11px 10px; border-radius:9px; min-height:44px;
+  }
+  .acct-menu-item:hover{ background:#fef2f2; }
+  /* modal */
+  .acct-modal{ position:fixed; inset:0; z-index:2147483600; display:flex; align-items:center; justify-content:center; padding:16px; }
+  .acct-modal[hidden]{ display:none; }
+  .acct-backdrop{ position:absolute; inset:0; background:rgba(15,23,42,.55); backdrop-filter:blur(2px); }
+  .acct-card{
+    position:relative; width:100%; max-width:400px; max-height:calc(100dvh - 32px); overflow:auto;
+    background:#fff; color:#111827; border-radius:18px; padding:26px 22px 22px;
+    box-shadow:0 30px 80px rgba(0,0,0,.45);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    animation:acctIn .16s ease-out;
+  }
+  @keyframes acctIn{ from{ transform:translateY(8px) scale(.99); opacity:0 } to{ transform:none; opacity:1 } }
+  .acct-x{ position:absolute; top:10px; right:12px; appearance:none; border:0; background:none; font-size:26px; line-height:1; color:#9ca3af; cursor:pointer; width:40px; height:40px; border-radius:10px; }
+  .acct-x:hover{ background:#f3f4f6; color:#111827; }
+  .acct-title{ font-size:22px; margin:2px 0 4px; }
+  .acct-sub{ font-size:13.5px; color:#6b7280; margin:0 0 16px; line-height:1.5; }
+  .acct-form{ display:flex; flex-direction:column; gap:12px; }
+  .acct-lbl{ display:flex; flex-direction:column; gap:6px; font-size:12.5px; font-weight:600; color:#374151; }
+  .acct-lbl input{
+    font:400 16px/1.3 inherit; padding:12px 13px; border:1px solid #d1d5db; border-radius:11px; outline:none;
+    color:#111827; background:#fff; width:100%; min-height:46px;
+  }
+  .acct-lbl input:focus{ border-color:var(--acct-accent); box-shadow:0 0 0 3px rgba(37,99,235,.16); }
+  .acct-err{ margin:2px 0 0; font-size:13px; color:#dc2626; background:#fef2f2; border:1px solid #fde2e2; padding:9px 11px; border-radius:9px; }
+  .acct-submit{
+    margin-top:4px; appearance:none; border:0; cursor:pointer; border-radius:12px; min-height:48px;
+    background:var(--acct-accent); color:var(--acct-accent-ink); font:700 15px/1 inherit; padding:14px;
+    transition:filter .15s ease;
+  }
+  .acct-submit:hover{ filter:brightness(1.05); }
+  .acct-submit:disabled{ opacity:.6; cursor:default; }
+  .acct-switch{ margin:16px 0 0; font-size:13.5px; color:#6b7280; text-align:center; }
+  .acct-switch a{ color:var(--acct-accent); font-weight:600; cursor:pointer; text-decoration:none; }
+  .acct-switch a:hover{ text-decoration:underline; }
+  /* phones */
+  @media (max-width:520px){
+    .acct-chip{ padding:9px 14px; font-size:13.5px; }
+    .acct-pill .acct-name{ max-width:26vw; }
+    .acct-card{ border-radius:16px 16px 0 0; max-width:none; align-self:flex-end; padding-bottom:max(22px, env(safe-area-inset-bottom)); animation:acctUp .18s ease-out; }
+    .acct-modal{ padding:0; align-items:flex-end; }
+    @keyframes acctUp{ from{ transform:translateY(100%) } to{ transform:none } }
+  }
+</style>
+<script type="module">
+(function(){
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyB75wGPTvquIGme8XrGeBoQNFo52nquQkE",
+    authDomain: "stouras-snake.firebaseapp.com",
+    databaseURL: "https://stouras-snake-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "stouras-snake",
+    storageBucket: "stouras-snake.firebasestorage.app",
+    messagingSenderId: "678091659383",
+    appId: "1:678091659383:web:7446d607cfa99eae000e72",
+    measurementId: "G-Z3085SMKJ5"
+  };
+
+  const listeners = [];
+  let ready = false, auth = null, fns = null, mode = "login";
+
+  const Account = window.Account = {
+    user: null, ready: false,
+    isGuest(){ return !this.user; },
+    onChange(cb){ listeners.push(cb); if(ready){ try{ cb(this.user); }catch(e){} } },
+    openLogin(){ openModal("login"); },
+    openRegister(){ openModal("register"); },
+    async logout(){ if(auth && fns){ try{ await fns.signOut(auth); }catch(e){} } closeMenu(); }
+  };
+  function emit(u){
+    Account.user = u; ready = true; Account.ready = true;
+    listeners.forEach(cb=>{ try{ cb(u); }catch(e){} });
+    try{ window.dispatchEvent(new CustomEvent("account-changed",{detail:u})); }catch(e){}
+    renderBar();
+  }
+
+  // ---------- DOM ----------
+  const root = document.createElement("div"); root.id = "acctRoot";
+  const showBar = !window.AUTHCORE_NO_BAR;
+  root.innerHTML =
+    (showBar ? '<div class="acct-bar" data-bar>'
+      + '<button class="acct-chip acct-ghost" data-act="login">Log in</button>'
+      + '<button class="acct-chip acct-solid" data-act="register">Register</button>'
+      + '<div class="acct-acc" data-acc hidden>'
+        + '<button class="acct-chip acct-ghost acct-pill" data-act="menu"><span class="acct-av">👤</span><b class="acct-name">You</b><span class="acct-car">▾</span></button>'
+        + '<div class="acct-menu" data-menu hidden>'
+          + '<div class="acct-menu-head">Signed in as<br><b class="acct-email"></b></div>'
+          + '<button class="acct-menu-item" data-act="logout">Log out</button>'
+        + '</div>'
+      + '</div></div>' : '')
+    + '<div class="acct-modal" data-modal hidden>'
+      + '<div class="acct-backdrop" data-act="close"></div>'
+      + '<div class="acct-card" role="dialog" aria-modal="true">'
+        + '<button class="acct-x" data-act="close" aria-label="Close">×</button>'
+        + '<h2 class="acct-title"></h2><p class="acct-sub"></p>'
+        + '<form class="acct-form" novalidate>'
+          + '<label class="acct-lbl acct-nick-field" hidden><span>Nickname</span>'
+            + '<input class="f-nick" type="text" maxlength="16" autocomplete="nickname" placeholder="Shown on the leaderboard"></label>'
+          + '<label class="acct-lbl"><span>Email</span>'
+            + '<input class="f-email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com"></label>'
+          + '<label class="acct-lbl"><span>Password</span>'
+            + '<input class="f-pass" type="password" autocomplete="current-password" placeholder="At least 6 characters"></label>'
+          + '<p class="acct-err" hidden></p>'
+          + '<button class="acct-submit" type="submit"></button>'
+        + '</form>'
+        + '<p class="acct-switch"></p>'
+      + '</div></div>';
+  document.body.appendChild(root);
+
+  const $ = (s)=>root.querySelector(s);
+  const bar = $("[data-bar]"), accBox = $("[data-acc]"), menu = $("[data-menu]");
+  const modal = $("[data-modal]"), form = $(".acct-form");
+  const elTitle=$(".acct-title"), elSub=$(".acct-sub"), elSwitch=$(".acct-switch"),
+        elErr=$(".acct-err"), elSubmit=$(".acct-submit"), nickField=$(".acct-nick-field"),
+        inNick=$(".f-nick"), inEmail=$(".f-email"), inPass=$(".f-pass");
+
+  function renderBar(){
+    if(!bar) return;
+    const u = Account.user;
+    bar.querySelector('[data-act="login"]').hidden = !!u;
+    bar.querySelector('[data-act="register"]').hidden = !!u;
+    accBox.hidden = !u;
+    if(u){
+      accBox.querySelector(".acct-name").textContent = u.nickname || "You";
+      accBox.querySelector(".acct-email").textContent = u.email || "";
+    }
+  }
+  function openMenu(){ if(menu){ menu.hidden=false; } }
+  function closeMenu(){ if(menu){ menu.hidden=true; } }
+
+  function openModal(which){
+    mode = which;
+    const reg = which==="register";
+    elTitle.textContent = reg ? "Create an account" : "Log in";
+    elSub.textContent = reg
+      ? "Register to appear on the leaderboard and keep your progress."
+      : "Log in to track your scores on the leaderboard.";
+    elSubmit.textContent = reg ? "Create account" : "Log in";
+    nickField.hidden = !reg;
+    inPass.setAttribute("autocomplete", reg ? "new-password" : "current-password");
+    elErr.hidden = true; elErr.textContent = "";
+    elSwitch.innerHTML = reg
+      ? 'Already have an account? <a data-act="to-login">Log in</a>'
+      : 'New here? <a data-act="to-register">Register</a>';
+    modal.hidden = false;
+    setTimeout(()=>{ (reg?inNick:inEmail).focus(); }, 60);
+  }
+  function closeModal(){ modal.hidden = true; }
+
+  function friendly(code, msg){
+    const m = {
+      "auth/invalid-email":"That email address looks invalid.",
+      "auth/missing-password":"Please enter a password.",
+      "auth/weak-password":"Password must be at least 6 characters.",
+      "auth/email-already-in-use":"That email is already registered — try logging in instead.",
+      "auth/invalid-credential":"Wrong email or password.",
+      "auth/wrong-password":"Wrong email or password.",
+      "auth/user-not-found":"No account found for that email.",
+      "auth/too-many-requests":"Too many attempts. Please wait a moment and try again.",
+      "auth/network-request-failed":"Network error — check your connection and try again.",
+      "auth/operation-not-allowed":"Email/password sign-in isn’t enabled for this site yet."
+    };
+    return m[code] || msg || "Something went wrong. Please try again.";
+  }
+  function showErr(t){ elErr.textContent = t; elErr.hidden = false; }
+
+  // delegated clicks
+  root.addEventListener("click", (e)=>{
+    const act = e.target.closest("[data-act]")?.getAttribute("data-act");
+    if(!act) return;
+    if(act==="login") openModal("login");
+    else if(act==="register") openModal("register");
+    else if(act==="close") closeModal();
+    else if(act==="to-login") openModal("login");
+    else if(act==="to-register") openModal("register");
+    else if(act==="menu"){ e.stopPropagation(); menu.hidden ? openMenu() : closeMenu(); }
+    else if(act==="logout") Account.logout();
+  });
+  document.addEventListener("click", (e)=>{ if(accBox && !accBox.contains(e.target)) closeMenu(); });
+  document.addEventListener("keydown", (e)=>{ if(e.key==="Escape"){ closeModal(); closeMenu(); } });
+
+  form.addEventListener("submit", async (e)=>{
+    e.preventDefault();
+    if(!auth || !fns){ showErr(friendly("auth/operation-not-allowed")); return; }
+    const email = inEmail.value.trim(), pass = inPass.value;
+    const nick = (inNick.value.trim() || email.split("@")[0] || "Player").slice(0,16);
+    if(!email){ showErr("Please enter your email."); return; }
+    if(pass.length < 6){ showErr("Password must be at least 6 characters."); return; }
+    elErr.hidden = true; elSubmit.disabled = true;
+    const original = elSubmit.textContent; elSubmit.textContent = "Please wait…";
+    try{
+      if(mode==="register"){
+        const cred = await fns.createUserWithEmailAndPassword(auth, email, pass);
+        try{ await fns.updateProfile(cred.user, { displayName: nick }); }catch(_){}
+      } else {
+        await fns.signInWithEmailAndPassword(auth, email, pass);
+      }
+      closeModal();
+      form.reset(); nickField.hidden = true;
+    }catch(err){
+      showErr(friendly(err && err.code, err && err.message));
+    }finally{
+      elSubmit.disabled = false; elSubmit.textContent = original;
+    }
+  });
+
+  // ---------- Firebase ----------
+  (async function init(){
+    try{
+      const appMod = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+      const authMod = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
+      const app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(FIREBASE_CONFIG);
+      auth = authMod.getAuth(app);
+      fns = authMod;
+      authMod.onAuthStateChanged(auth, (u)=>{
+        if(u){
+          emit({ uid:u.uid, email:u.email || "", nickname:(u.displayName || (u.email||"").split("@")[0] || "Player") });
+        } else { emit(null); }
+      });
+    }catch(e){
+      console.warn("Account auth init failed:", e);
+      emit(null); // fall back to guest
+    }
+  })();
+})();
+</script>
+<!-- ===== end Account widget ===== -->
+</body>
+</html>

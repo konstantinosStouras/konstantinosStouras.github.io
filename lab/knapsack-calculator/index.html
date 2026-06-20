@@ -4,6 +4,30 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Knapsack Calculator</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <meta name="description" content="A free online 0-1 (bounded) knapsack solver: enter item values, weights, quantities and a capacity to compute the optimal selection.">
+    <link rel="canonical" href="https://www.stouras.com/lab/knapsack-calculator/">
+
+    <!-- Open Graph: link previews on Messenger, WhatsApp, Viber, Facebook, LinkedIn, etc. -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="stouras.com">
+    <meta property="og:title" content="Knapsack Calculator">
+    <meta property="og:description" content="A free online 0–1 and bounded knapsack solver — enter values, weights, quantities and a capacity to compute the optimal selection.">
+    <meta property="og:url" content="https://www.stouras.com/lab/knapsack-calculator/">
+    <meta property="og:image" content="https://www.stouras.com/lab/knapsack-calculator/og-image.jpg">
+    <meta property="og:image:secure_url" content="https://www.stouras.com/lab/knapsack-calculator/og-image.jpg">
+    <meta property="og:image:type" content="image/jpeg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Knapsack Calculator — a free online 0–1 / bounded knapsack solver.">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Knapsack Calculator">
+    <meta name="twitter:description" content="A free online 0–1 and bounded knapsack solver — find the optimal selection for any capacity.">
+    <meta name="twitter:image" content="https://www.stouras.com/lab/knapsack-calculator/og-image.jpg">
+
+    <link rel="icon" type="image/png" href="/images/KIS_favicon.png">
     <style>
         * {
             margin: 0;
@@ -608,16 +632,29 @@
 
             const items = [];
             let hasValidItems = false;
+            const invalidWeights = [];
 
             itemRows.forEach((itemRow, index) => {
                 const name = itemRow.querySelector('.item-name').value.trim();
                 const value = parseFloat(itemRow.querySelector('.item-value').value);
-                const weight = parseInt(itemRow.querySelector('.item-weight').value);
+                // Parse weight as a float so we can detect (rather than silently
+                // truncate) decimals — the DP indexes an integer capacity, so
+                // fractional weights are not supported.
+                const weight = parseFloat(itemRow.querySelector('.item-weight').value);
                 const quantity = parseInt(itemRow.querySelector('.item-quantity').value) || 1;
 
                 if (name && value > 0 && weight > 0 && quantity > 0) {
-                    // Create individual items for 0-1 knapsack with original order tracking
-                    for (let i = 0; i < quantity; i++) {
+                    if (!Number.isInteger(weight)) {
+                        invalidWeights.push(name);
+                        return;
+                    }
+                    hasValidItems = true;
+                    // A copy can never be used more times than fits in the
+                    // capacity, so cap the duplicated copies at floor(capacity /
+                    // weight). This is exact (it can't change the optimum) and
+                    // keeps the DP from exploding when huge quantities are entered.
+                    const maxCopies = Math.min(quantity, Math.floor(capacity / weight));
+                    for (let i = 0; i < maxCopies; i++) {
                         items.push({
                             name: name,
                             originalName: name,
@@ -627,12 +664,24 @@
                             originalOrder: index // Track the original input order
                         });
                     }
-                    hasValidItems = true;
                 }
             });
 
+            if (invalidWeights.length > 0) {
+                alert('Weights must be whole numbers (the solver packs an integer capacity). Please fix: ' + invalidWeights.join(', '));
+                return;
+            }
+
             if (!hasValidItems) {
                 alert('Please add at least one valid item with name, value, weight, and quantity');
+                return;
+            }
+
+            // Guard against allocating an unreasonably large DP table, which
+            // would freeze the browser tab with no feedback.
+            const cells = (items.length + 1) * (capacity + 1);
+            if (cells > 20000000) {
+                alert('This problem is too large to solve in the browser (capacity × number of item copies is too big). Please reduce the capacity or the quantities and try again.');
                 return;
             }
 
@@ -658,11 +707,14 @@
                 }
             }
 
-            // Backtrack to find selected items
+            // Backtrack to find selected items. Use an epsilon comparison rather
+            // than strict !== because decimal values (e.g. 0.1) accumulate
+            // floating-point rounding error and a strict compare can otherwise
+            // misidentify which items were taken.
             const selectedItems = [];
             let w = capacity;
             for (let i = n; i > 0 && w > 0; i--) {
-                if (dp[i][w] !== dp[i-1][w]) {
+                if (Math.abs(dp[i][w] - dp[i-1][w]) > 1e-9) {
                     selectedItems.push(items[i-1]);
                     w -= items[i-1].weight;
                 }
