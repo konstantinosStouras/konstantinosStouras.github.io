@@ -4,9 +4,9 @@ import { doc, collection, onSnapshot, getDocs, orderBy, query, updateDoc, server
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '../firebase'
 import { getPhaseSequence } from '../utils/phaseSequence'
-import { getRegistration } from '../data/formDefaults'
+import { getRegistration, getSurveyQuestions } from '../data/formDefaults'
 import { MODEL_PRICES, USD_TO_EUR, PRICES_AS_OF, replyCostUSD } from '../data/aiPricing'
-import * as XLSX from 'xlsx'
+import * as XLSX from 'xlsx-js-style'
 import styles from './AdminSession.module.css'
 
 export default function AdminSession() {
@@ -140,28 +140,57 @@ export default function AdminSession() {
       XLSX.utils.book_append_sheet(wb, wsIdeas, 'Ideas')
 
       // ── Sheet 3: Survey Answers ──
+      // Columns follow the survey's own question order with readable titles (the
+      // question text shown in the admin) instead of raw answer keys. A
+      // rating_group expands to one column per criterion; a radio follow-up gets
+      // its own column. Any stored answer key not in the session's survey config
+      // is appended at the end under its raw key so no data is ever dropped.
       const surveyParticipants = participants.filter(p => p.surveyAnswers)
       if (surveyParticipants.length > 0) {
-        const allKeys = new Set()
-        surveyParticipants.forEach(p => {
-          Object.keys(p.surveyAnswers).forEach(k => allKeys.add(k))
+        const questions = getSurveyQuestions(session)
+        const columns = []          // { header, key, subKey? }
+        const covered = new Set()
+        questions.forEach((q, i) => {
+          const n = i + 1
+          const qText = plain(q.text) || q.id
+          if (q.type === 'rating_group' && Array.isArray(q.items) && q.items.length) {
+            q.items.forEach(item => {
+              columns.push({ header: `Q${n}. ${qText} — ${plain(item.label) || item.id}`, key: q.id, subKey: item.id })
+            })
+          } else {
+            columns.push({ header: `Q${n}. ${qText}`, key: q.id })
+          }
+          covered.add(q.id)
+          if (q.followUp && q.followUp.id) {
+            columns.push({ header: `Q${n}. ${plain(q.followUp.prompt) || 'Follow-up'}`, key: q.followUp.id })
+            covered.add(q.followUp.id)
+          }
         })
-        const sortedKeys = [...allKeys].sort()
+        // Preserve any stored answers whose key isn't in the current config.
+        const extraKeys = new Set()
+        surveyParticipants.forEach(p =>
+          Object.keys(p.surveyAnswers).forEach(k => { if (!covered.has(k)) extraKeys.add(k) })
+        )
+        ;[...extraKeys].sort().forEach(k => columns.push({ header: k, key: k }))
 
+        const fmtAns = v => {
+          if (v == null) return ''
+          if (Array.isArray(v)) return v.join(', ')
+          if (typeof v === 'object') return Object.entries(v).map(([k, x]) => `${k}: ${x}`).join('; ')
+          return v
+        }
         const surveyRows = surveyParticipants.map(p => {
+          const a = p.surveyAnswers || {}
           const row = {
             'Participant ID': p.id,
             'Name': p.name || '',
             'Anonymous Label': p.anonymousLabel || '',
             'Completed At': p.surveyCompletedAt ? formatTimestamp(p.surveyCompletedAt) : '',
           }
-          sortedKeys.forEach(key => {
-            const val = p.surveyAnswers[key]
-            if (val && typeof val === 'object' && !Array.isArray(val)) {
-              row[key] = Object.entries(val).map(([k, v]) => `${k}: ${v}`).join('; ')
-            } else {
-              row[key] = val ?? ''
-            }
+          columns.forEach(col => {
+            let v = a[col.key]
+            if (col.subKey) v = (v && typeof v === 'object') ? v[col.subKey] : undefined
+            row[col.header] = fmtAns(v)
           })
           return row
         })
@@ -338,6 +367,7 @@ export default function AdminSession() {
     return count
   }
 
+  // Auto-fit column widths AND bold the header row (row 0) of every sheet.
   function autoWidth(ws, rows) {
     if (!rows.length) return
     const keys = Object.keys(rows[0])
@@ -349,6 +379,25 @@ export default function AdminSession() {
       return { wch: Math.min(maxContent + 2, 50) }
     })
     ws['!cols'] = widths
+    // Bold every cell in the header row (needs xlsx-js-style to be written out).
+    const range = XLSX.utils.decode_range(ws['!ref'])
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const cell = ws[XLSX.utils.encode_cell({ r: range.s.r, c })]
+      if (cell) cell.s = { ...(cell.s || {}), font: { ...(cell.s && cell.s.font), bold: true } }
+    }
+  }
+
+  // Strip any HTML/entities from instructor-authored question text so it reads
+  // cleanly as an Excel column header.
+  function plain(s) {
+    return String(s ?? '')
+      .replace(/<[^>]*>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/\s+/g, ' ')
+      .trim()
   }
 
   if (!session) return <div className={styles.loading}>Loading...</div>

@@ -13,7 +13,7 @@ to give Claude full context about this project instantly.
 **Firebase services used:** Firestore, Authentication (Email/Password), Cloud Functions (Node 20, europe-west1)
 **Frontend:** React + Vite, React Router with basename="/lab/ideasearchlab"
 **Favicon:** `public/favicon.svg` (idea-lamp SVG in the app palette), linked from index.html with an absolute path that Vite rewrites using `base` at build time.
-**NPM dependencies of note:** `xlsx` (SheetJS) for client-side Excel export in the admin panel.
+**NPM dependencies of note:** `xlsx-js-style` (a SheetJS fork that also *writes* cell styles) for client-side Excel export in the admin panel. The plain `xlsx` community build ignores `cell.s` styles when writing, so it cannot bold headers — `xlsx-js-style` is required for the bold header rows. Same `XLSX.utils` API; drop-in replacement.
 **Cloud Functions (all in europe-west1):**
 - joinSession: registers a participant and places them in EXACTLY ONE group atomically via `assignToGroup` (a single Firestore transaction). Every join is serialized through the session's `joinCount` counter, giving each participant a unique sequential join index → a deterministic group id (`g0`, `g1`, …) and label (`p1`, `p2`, …). This replaces the old racy query-then-batch `tryFormGroup`, which under concurrent joins (e.g. 70 students at once) could put one participant in two groups. The member who fills a group flips every member of that group into the first phase together; the first group to fill advances the session. Rejoins (participant doc already exists) only refresh name/email — never re-group. Transactions can't query, so it reads documents only (session doc + the single target group doc).
 - listRegisteredUsers: admin-only callable. Returns every Firebase Auth account (uid, email, displayName, creationTime, lastSignInTime) so the instructor can see who signed up, including users who never joined a session. The client SDK cannot list Auth users, so this goes through the Admin SDK. Lives in `functions/users.js`.
@@ -281,11 +281,12 @@ sessions/{sessionId}/aiMessages/{messageId}: {
 - Sits below the Participants/Config grid, above the advance bar
 - Shows three stat boxes: Participants count, Voted count, Surveys completed count
 - "Download Excel" button fetches all session data on-demand from Firestore and generates a multi-sheet `.xlsx` file
-- Uses the `xlsx` (SheetJS) npm package for client-side Excel generation
+- Uses the `xlsx-js-style` (SheetJS fork) npm package for client-side Excel generation, so cell styles are written out
+- **Every sheet's header row (row 0) is bold** — applied in `autoWidth()` after the column widths, by setting `cell.s.font.bold` on each header cell
 - Excel file name: `session_{CODE}_data.xlsx`
 - **Sheet 1 -- Participants**: ID, name, email, anonymous label, group ID, status, individual complete, votes submitted, voted for (comma-separated IDs), consent, demographics (all fields), joined at
 - **Sheet 2 -- Ideas**: ID, title, description, full text, author, phase, group ID, selected flag, vote count (tallied from participants' votedFor arrays), created at
-- **Sheet 3 -- Survey**: One row per participant who completed the survey. Fixed columns (ID, name, label, completed at) plus one column per survey question key. Nested rating_group answers flattened to "key: value; key: value" strings.
+- **Sheet 3 -- Survey**: One row per participant who completed the survey. Fixed columns (ID, name, label, completed at) followed by one column per survey question **in the session's own survey order, headed by the question text** (`Q{n}. {text}`) from `getSurveyQuestions(session)` — not the raw answer keys. A `rating_group` expands to one column per criterion (`Q{n}. {text} — {criterion label}`); a radio `followUp` gets its own column (`Q{n}. {prompt}`). Any stored answer key not present in the current survey config is appended at the end under its raw key so nothing is dropped.
 - **Sheet 4 -- Group Chat**: Group ID, author ID, author label, message text, sent at. Sorted chronologically. Fetched from each group's messages subcollection.
 - **Sheet 5 -- AI Chat**: Role (user/assistant), scope, scope ID, author ID, author name, message text, model, input/output tokens (assistant rows; blank for messages logged before token tracking), timestamp. Fetched from `sessions/{sessionId}/aiMessages` ordered by timestamp.
 - **Sheet "AI Usage"**: token totals per scope (participant UID for individual, groupId for group): AI reply count, input/output/total tokens, model(s) used, true cost in USD and EUR ("as of" date in the column headers), unpriced-reply count, plus TOTAL and AVG PER PARTICIPANT rows -- for budgeting and per-model cost analysis. Costs computed at export time from `src/data/aiPricing.js` (MODEL_PRICES per 1M tokens + USD_TO_EUR snapshot + PRICES_AS_OF date -- update that file when provider prices change).
@@ -334,7 +335,7 @@ Note: Firebase detects unchanged functions and skips them. If a redeploy is skip
 - autoGroupParticipants session-advance check must account for all group members in the current batch, not just the triggering participant. Using only change.after.id causes the check to fail for groups of 2+ because the other members still show old status in Firestore before the batch commits.
 - Atomic writeBatch operations fail entirely if any single write fails. For operations mixing critical updates (participant status) with non-critical ones (idea selection flags), separate them into independent calls so the critical path succeeds even if the non-critical batch fails due to missing Firestore rules.
 - GroupPhase individual ideas filter must fall back to "latest N by createdAt" when no ideas have `selected: true`, to handle the case where the selection batch failed due to Firestore rules.
-- The `xlsx` npm package must be installed (`npm install xlsx`) for the admin export to work. It's a client-side dependency used in AdminSession.jsx.
+- The `xlsx-js-style` npm package must be installed (`npm install xlsx-js-style`) for the admin export to work. It's a client-side dependency used in AdminSession.jsx. (Plain `xlsx` works for data but cannot write bold headers — its writer drops `cell.s` styles.)
 
 ## Files changed in latest session (voting client-side, chat, data export)
 
