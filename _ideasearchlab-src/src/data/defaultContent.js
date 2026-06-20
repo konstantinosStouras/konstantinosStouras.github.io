@@ -111,7 +111,7 @@ export const DEFAULT_CONTENT = {
       '<li>When your group is ready, click <strong>Proceed to Voting</strong>, double-click the <strong>{votes} ideas</strong> that should represent your group, then press <strong>Submit Votes</strong>.</li>' +
       '</ol>' +
       "<p>Remember: if your group's chosen idea ranks among the <strong>top five across all groups</strong>, every member wins a <strong>€50 Amazon voucher</strong>.</p>" +
-      '<p>[AI] A <strong>group-shared</strong> AI assistant is available on the right to help your group discuss, refine, and select ideas. Everyone sees the same conversation — all messages and replies are shared across the group.</p>',
+      "<p>[AI] A <strong>group-shared</strong> AI assistant, powered by Anthropic's Claude Sonnet 4.6, is available on the right to help your group discuss, refine, and select ideas. Everyone sees the same conversation — all messages and replies are shared across the group.</p>",
   },
 
   survey: {
