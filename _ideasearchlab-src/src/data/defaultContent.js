@@ -72,7 +72,7 @@ export const DEFAULT_CONTENT = {
       '<li><strong>Financial Value:</strong> Does it have market potential?</li>' +
       '<li><strong>Overall Quality:</strong> Is it well-structured and relevant?</li>' +
       '</ul>' +
-      '<p>[AI] AI is available on the right panel to help you brainstorm, develop, evaluate and select your ideas.</p>' +
+      "<p>[AI] A <strong>private</strong> AI assistant, powered by Anthropic's Claude Sonnet 4.6, is available on the right to help you brainstorm, develop, refine, and select your ideas. Your conversation is yours alone — only you can see it.</p>" +
       "<p>When you're done, <strong>double-click</strong> your best <strong>{ideasCarried} ideas</strong> to select them. These will be carried forward to the group phase.</p>",
   },
 
