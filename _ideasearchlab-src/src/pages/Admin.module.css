@@ -138,6 +138,15 @@
 }
 .deleteBtn:hover { color: #c0392b; background: #fce4ec; }
 
+/* "Close Session" — mark an active session completed (moves it to Completed
+   Sessions). Green-on-hover to signal a finishing, non-destructive action. */
+.closeBtn {
+  background: none; border: 1px solid var(--border); color: var(--muted);
+  font-size: 13px; cursor: pointer; padding: 6px 14px; border-radius: var(--radius);
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.closeBtn:hover { color: #2e9e5b; border-color: #2e9e5b; background: rgba(46,158,91,0.08); }
+
 /* Destructive "Delete all" action for a whole list (sessions / users). */
 .bulkDeleteBtn {
   display: inline-flex;
