@@ -83,13 +83,18 @@ export default function Registration() {
       }
 
       const participantRef = doc(db, 'sessions', sessionId, 'participants', user.uid)
-      await updateDoc(participantRef, {
+      // The next screen doesn't need the demographics/consent write to finish,
+      // so don't block navigation on it — fire it and move on immediately so
+      // the button doesn't sit on "Joining..." for an extra round-trip. The
+      // Firestore SDK still delivers the write after we leave this page.
+      updateDoc(participantRef, {
         demographics,
         consentGiven: true,
         consentTimestamp: new Date().toISOString(),
         timing,
       })
-      clearTiming(sessionId)
+        .then(() => clearTiming(sessionId))
+        .catch(err => console.error('Profile save failed:', err))
 
       navigate(`/session/${sessionId}`)
     } catch (err) {
