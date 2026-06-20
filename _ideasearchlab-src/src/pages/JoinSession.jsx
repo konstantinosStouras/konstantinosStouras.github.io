@@ -4,6 +4,7 @@ import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firesto
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import ProfileMenu from '../components/ProfileMenu'
+import ThemeToggle from '../components/ThemeToggle'
 import styles from './JoinSession.module.css'
 
 export default function JoinSession() {
@@ -60,7 +61,10 @@ export default function JoinSession() {
     <div className={styles.page}>
       <header className={styles.header}>
         <span className={styles.wordmark}>Ideation Challenge</span>
-        <ProfileMenu />
+        <div className={styles.headerRight}>
+          <ThemeToggle />
+          <ProfileMenu />
+        </div>
       </header>
 
       <main className={styles.main}>

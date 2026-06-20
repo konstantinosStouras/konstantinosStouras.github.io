@@ -20,6 +20,12 @@
   color: var(--ink);
 }
 
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .userBar {
   display: flex;
   align-items: center;
