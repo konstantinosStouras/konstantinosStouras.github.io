@@ -1,0 +1,19 @@
+/* Mirrors the admin header's .themeBtn so the participant-facing toggle looks
+   identical to the one instructors already have. */
+.themeBtn {
+  background: none;
+  border: 1.5px solid var(--border);
+  color: var(--ink);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  padding: 0;
+  flex-shrink: 0;
+}
+.themeBtn:hover { border-color: var(--accent); background: var(--paper-dark); }
