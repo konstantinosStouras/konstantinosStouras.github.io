@@ -569,7 +569,14 @@ export default function GroupPhase() {
   /** Collapsible task brief (shown in both sub-phases) */
   const taskBrief = (
     <div className={styles.brief}>
-      <button className={styles.briefToggle} onClick={() => setBriefOpen(o => !o)} type="button">
+      <button
+        className={styles.briefToggle}
+        onClick={() => setBriefOpen(o => !o)}
+        type="button"
+        title={briefOpen
+          ? 'Click here to minimize the Task Brief and see the ideas and workspace more clearly.'
+          : 'Click here to expand the Task Brief.'}
+      >
         <span>Task Brief</span>
         <span className={styles.briefChevron}>{briefOpen ? '▲' : '▼'}</span>
       </button>

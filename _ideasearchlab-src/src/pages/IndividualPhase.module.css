@@ -185,17 +185,22 @@
   justify-content: space-between;
   width: 100%;
   padding: 12px 18px;
-  background: var(--paper);
+  background: rgba(200, 86, 42, 0.10); /* fallback for older browsers */
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
   border: none;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid rgba(200, 86, 42, 0.30);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
   cursor: pointer;
   font-family: var(--font-display);
   font-size: 13px;
   font-weight: 600;
-  color: var(--ink);
+  color: var(--accent);
 }
-.briefToggle:hover { background: rgba(0,0,0,0.03); }
-.briefChevron { font-size: 10px; color: var(--muted); }
+.briefToggle:hover {
+  background: rgba(200, 86, 42, 0.18);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.briefChevron { font-size: 10px; color: var(--accent); }
 .briefContent { padding: 20px 22px; }
 .briefContent p { font-size: 13.5px; line-height: 1.7; color: var(--ink); margin-bottom: 12px; }
 .briefContent ul { padding-left: 20px; margin-bottom: 14px; }

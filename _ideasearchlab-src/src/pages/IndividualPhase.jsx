@@ -454,7 +454,14 @@ export default function IndividualPhase() {
 
       {/* Collapsible task brief */}
       <div className={styles.brief}>
-        <button className={styles.briefToggle} onClick={() => setBriefOpen(o => !o)} type="button">
+        <button
+          className={styles.briefToggle}
+          onClick={() => setBriefOpen(o => !o)}
+          type="button"
+          title={briefOpen
+            ? 'Click here to minimize the Task Brief and see the ideas and workspace more clearly.'
+            : 'Click here to expand the Task Brief.'}
+        >
           <span>Task Brief</span>
           <span className={styles.briefChevron}>{briefOpen ? '\u25B2' : '\u25BC'}</span>
         </button>
