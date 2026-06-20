@@ -103,6 +103,7 @@ export default function Admin() {
   const [editingSession, setEditingSession] = useState(null)
   const [config, setConfig] = useState(freshConfig)
   const [deleteConfirm, setDeleteConfirm] = useState(null)
+  const [closeConfirm, setCloseConfirm] = useState(null)
   const [bulkConfirm, setBulkConfirm] = useState(null) // 'active' | 'completed' | 'users'
   const [bulkBusy, setBulkBusy] = useState(false)
   const [customDefaults, setCustomDefaults] = useState(null)
@@ -494,6 +495,18 @@ export default function Admin() {
     setDeleteConfirm(null)
   }
 
+  // "Close Session" — mark a session as completed without deleting it. It moves
+  // out of Active Sessions into Completed Sessions (which filters on the 'done'
+  // status), where it stays read-only for review/export. Useful for closing out
+  // sessions that were only used for testing or that never finished on their own.
+  async function closeSession(sessionId) {
+    await updateDoc(doc(db, 'sessions', sessionId), {
+      status: 'done',
+      completedAt: serverTimestamp(),
+    })
+    setCloseConfirm(null)
+  }
+
   // ── Bulk "Delete all" actions ─────────────────────────────────────────────
   // Sessions are deleted directly (the instructor owns them). Registered
   // accounts live in Firebase Auth, which only the Admin SDK can delete, so
@@ -869,6 +882,7 @@ export default function Admin() {
                     <SessionCard key={s.id} session={s} participantCount={countFor(s.id)}
                       onOpen={() => navigate(`/admin/session/${s.id}`)}
                       onEdit={() => startEdit(s)}
+                      onClose={() => setCloseConfirm(s.id)}
                       onDelete={() => setDeleteConfirm(s.id)}
                       canEdit={s.status === 'waiting'} />
                   ))}
@@ -928,6 +942,19 @@ export default function Admin() {
         </div>
       </main>
 
+      {closeConfirm && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <h3 className={styles.modalTitle}>Close Session?</h3>
+            <p className={styles.modalDesc}>This marks the session as completed and moves it to Completed Sessions. Participants can no longer join or take part, but the session and all its data are kept so you can still review and export them.</p>
+            <div className={styles.modalActions}>
+              <button className="btn-primary" onClick={() => closeSession(closeConfirm)}>Close session</button>
+              <button className="btn-ghost" onClick={() => setCloseConfirm(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {deleteConfirm && (
         <div className={styles.modalOverlay}>
           <div className={styles.modal}>
@@ -967,7 +994,7 @@ export default function Admin() {
   )
 }
 
-function SessionCard({ session, participantCount, onOpen, onEdit, onDelete, canEdit }) {
+function SessionCard({ session, participantCount, onOpen, onEdit, onClose, onDelete, canEdit }) {
   const pc = session.phaseConfig || {}
   const phases = [pc.individualPhaseActive && 'Individual', pc.groupPhaseActive && 'Group'].filter(Boolean).join(' + ')
   const created = session.createdAt?.seconds
@@ -992,6 +1019,7 @@ function SessionCard({ session, participantCount, onOpen, onEdit, onDelete, canE
       <div className={styles.sessionCardActions}>
         <button className="btn-primary" style={{ padding: '6px 18px', fontSize: 13 }} onClick={onOpen}>Open</button>
         {canEdit && <button className="btn-ghost" style={{ padding: '6px 18px', fontSize: 13 }} onClick={onEdit}>Edit</button>}
+        {onClose && <button className={styles.closeBtn} onClick={onClose}>Close Session</button>}
         <button className={styles.deleteBtn} onClick={onDelete}>Delete</button>
       </div>
     </div>

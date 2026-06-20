@@ -246,6 +246,7 @@ sessions/{sessionId}/aiMessages/{messageId}: {
 - Only admin@admin.com can access /admin routes. Other users are redirected to /join.
 - Logging in as admin@admin.com redirects directly to /admin.
 - Session delete is allowed only for admin@admin.com (Firestore rule: isAdmin()).
+- **Close Session** (Admin.jsx): each Active Session card has a "Close Session" button (next to Open/Edit, before Delete). After a confirm modal it calls `closeSession()` which sets the session's `status: 'done'` + `completedAt` (via `updateDoc`), so the session leaves Active Sessions and appears in Completed Sessions (which filters on `['done','survey']`). The session and all its data are kept (unlike Delete) — read-only for review/export. Lets the admin retire any active session (e.g. abandoned/test sessions) without deleting it. No Cloud Function or rules change needed (instructor already has session update permission via isAdmin()).
 - Admin advance button is labelled "Force advance -> [phase]" and is a manual override; most transitions happen automatically.
 - Language throughout uses "participants" not "players".
 **Admin UI (Admin.jsx + Admin.module.css):**
