@@ -33,3 +33,12 @@ export function SessionProvider({ sessionId, children }) {
 export function useSession() {
   return useContext(SessionContext)
 }
+
+// True once the session has ended for participants: either the instructor
+// closed it (status === 'done') or deleted it (the doc no longer exists, so
+// the snapshot resolved to null). Stays false while the session is still
+// loading so pages can show their own loading state first.
+export function useSessionEnded() {
+  const { session, loading } = useContext(SessionContext)
+  return !loading && (!session || session.status === 'done')
+}

@@ -6,13 +6,14 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
-import { useSession } from '../context/SessionContext'
+import { useSession, useSessionEnded } from '../context/SessionContext'
 import SplitLayout from '../components/SplitLayout'
 import AIChat from '../components/AIChat'
 import PhaseTimer from '../components/PhaseTimer'
 import NudgeBanner from '../components/NudgeBanner'
 import { getContent } from '../data/defaultContent'
 import RichText from '../components/RichText'
+import { Done } from './Survey'
 import styles from './GroupPhase.module.css'
 
 const MAX_VOTES = 3
@@ -131,6 +132,7 @@ export default function GroupPhase() {
   const { sessionId } = useParams()
   const { user } = useAuth()
   const { session } = useSession()
+  const ended = useSessionEnded()
   const navigate = useNavigate()
   const [groupId, setGroupId] = useState(null)
   const [memberLabels, setMemberLabels] = useState({})
@@ -602,6 +604,12 @@ export default function GroupPhase() {
       </form>
     </div>
   )
+
+  // Instructor closed (status 'done') or deleted the session: show the same
+  // end message participants see when they finish, instead of stranding them.
+  if (ended) {
+    return <Done />
+  }
 
   // ─── Instructions view ───
   // The timer runs here too: a participant who never clicks Start still gets

@@ -6,13 +6,14 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
-import { useSession } from '../context/SessionContext'
+import { useSession, useSessionEnded } from '../context/SessionContext'
 import SplitLayout from '../components/SplitLayout'
 import AIChat from '../components/AIChat'
 import PhaseTimer from '../components/PhaseTimer'
 import NudgeBanner from '../components/NudgeBanner'
 import { getContent } from '../data/defaultContent'
 import RichText from '../components/RichText'
+import { Done } from './Survey'
 import styles from './IndividualPhase.module.css'
 
 // Deterministic pseudo-random pick, stable across renders for the same ideas.
@@ -31,6 +32,7 @@ export default function IndividualPhase() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const { session } = useSession()
+  const ended = useSessionEnded()
 
   const [ideas, setIdeas] = useState([])
   const [title, setTitle] = useState('')
@@ -232,6 +234,12 @@ export default function IndividualPhase() {
     !done && groupPhaseActive && otherMembers.length > 0 && otherMembers.every(m => m.individualComplete)
       ? 'everyone else in your group has submitted their ideas. Please wrap up and click Finish & Submit.'
       : null
+
+  // Instructor closed (status 'done') or deleted the session: show the same
+  // end message participants see when they finish, instead of stranding them.
+  if (ended) {
+    return <Done />
+  }
 
   // ─── Instructions view ───
   // The timer runs here too: a participant who never clicks Start still gets
