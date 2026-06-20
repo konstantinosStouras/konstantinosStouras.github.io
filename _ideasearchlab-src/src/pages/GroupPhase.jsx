@@ -141,6 +141,7 @@ export default function GroupPhase() {
   const [newDesc, setNewDesc] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [started, setStarted] = useState(false)
+  const [groupStartedAt, setGroupStartedAt] = useState(null)
   const [briefOpen, setBriefOpen] = useState(true)
   const [briefHintDismissed, setBriefHintDismissed] = useState(false)
   const [showConsensus, setShowConsensus] = useState(false)
@@ -208,9 +209,10 @@ export default function GroupPhase() {
         const data = snap.data()
         setGroupId(data.groupId)
         if (data.votesSubmitted) setVotesLocked(true)
+        setGroupStartedAt(data.groupStartedAt || null)
         // Resume the workspace (skip the instructions screen) if this
         // participant already started the group phase in an earlier visit.
-        if (data.groupStage) setStarted(true)
+        if (data.groupStage || data.groupStartedAt) setStarted(true)
         if (!subPhaseInit.current) {
           subPhaseInit.current = true
           if (data.votesSubmitted || data.groupStage === 'voting') setSubPhase('voting')
@@ -615,22 +617,27 @@ export default function GroupPhase() {
     </div>
   )
 
-  // Enter the group workspace from the instructions screen. Records groupStage
-  // 'ideation' so the admin (and other members) can tell "reading instructions"
-  // from "ideating". The group timer stays shared (phaseStartedAt), unchanged.
+  // Enter the group workspace from the instructions screen. Records the
+  // per-participant timer start (groupStartedAt) so the countdown begins now,
+  // when this participant actually starts — not from the shared phase start.
+  // Also records groupStage 'ideation' so the admin (and other members) can
+  // tell "reading instructions" from "ideating".
   function startGroup() {
     setStarted(true)
-    if (subPhase !== 'voting' && !votesLocked) {
+    const updates = {}
+    if (subPhase !== 'voting' && !votesLocked) updates.groupStage = 'ideation'
+    if (!groupStartedAt) updates.groupStartedAt = serverTimestamp()
+    if (Object.keys(updates).length) {
       updateDoc(
         doc(db, 'sessions', sessionId, 'participants', user.uid),
-        { groupStage: 'ideation' }
-      ).catch(err => console.warn('Could not set group stage:', err.message))
+        updates
+      ).catch(err => console.warn('Could not start group phase:', err.message))
     }
   }
 
   // ─── Instructions view ───
-  // The timer runs here too: a participant who never clicks Start still gets
-  // their votes auto-submitted on expiry instead of stalling their group.
+  // The timer is shown in a non-ticking preview here (full duration). It only
+  // starts counting once the participant presses Start (see startGroup).
   if (!started) {
     return (
       <div className={styles.instrPage}>
@@ -638,9 +645,8 @@ export default function GroupPhase() {
           <span className={styles.wordmark}>Ideation Challenge</span>
           <div className={styles.instrTimer}>
             <PhaseTimer
-              phaseStartedAt={session?.phaseStartedAt}
               durationSeconds={pc.groupPhaseDuration}
-              onExpire={votesLocked ? undefined : autoSubmitVotes}
+              preview
             />
           </div>
         </header>
@@ -672,7 +678,7 @@ export default function GroupPhase() {
           </div>
           <div className={styles.topRight}>
             <PhaseTimer
-              phaseStartedAt={session?.phaseStartedAt}
+              phaseStartedAt={groupStartedAt}
               durationSeconds={pc.groupPhaseDuration}
               onExpire={votesLocked ? undefined : autoSubmitVotes}
             />
@@ -755,7 +761,7 @@ export default function GroupPhase() {
         </div>
         <div className={styles.topRight}>
           <PhaseTimer
-            phaseStartedAt={session?.phaseStartedAt}
+            phaseStartedAt={groupStartedAt}
             durationSeconds={pc.groupPhaseDuration}
             onExpire={votesLocked ? undefined : autoSubmitVotes}
           />
