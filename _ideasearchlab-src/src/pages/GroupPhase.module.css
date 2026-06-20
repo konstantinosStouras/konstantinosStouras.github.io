@@ -229,15 +229,20 @@
 /* ═══════════════════════════════════════════
    IDEATION MODE: two columns (individual | group+chat)
    ═══════════════════════════════════════════ */
+/* Flex row so the column widths can be resized via the draggable ResizeDivider
+   (the left column gets an inline flex-basis %, the right column fills the
+   rest). The divider itself supplies the visual gap between columns. */
 .columns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
+  display: flex;
+  gap: 0;
   flex: 1;
   min-height: 0;
+  min-width: 0;
 }
 
 .column {
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -246,19 +251,23 @@
 }
 
 .columnRight {
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 0;
   min-height: 0;
   overflow: hidden;
 }
 
+/* Default height; the inline flex-basis from the ResizeDivider overrides it so
+   the Group Ideas / Group Chat split can be dragged up and down. */
 .groupIdeasSection {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  flex-shrink: 0;
-  max-height: 45%;
+  flex: 0 0 45%;
+  min-height: 0;
   overflow-y: auto;
 }
 

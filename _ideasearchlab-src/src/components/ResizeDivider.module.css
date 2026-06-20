@@ -1,0 +1,40 @@
+/* Draggable splitter bars between resizable workspace regions. The thin bar
+   shows a centered grip that highlights on hover; it never grows, so the
+   surrounding layout keeps its structure. */
+.dividerX {
+  flex: 0 0 12px;
+  align-self: stretch;
+  cursor: col-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+}
+.gripX {
+  width: 3px;
+  height: 44px;
+  max-height: 70%;
+  border-radius: 3px;
+  background: var(--border);
+  transition: background 0.15s;
+}
+.dividerX:hover .gripX { background: var(--accent); }
+
+.dividerY {
+  flex: 0 0 12px;
+  align-self: stretch;
+  cursor: row-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+}
+.gripY {
+  height: 3px;
+  width: 44px;
+  max-width: 70%;
+  border-radius: 3px;
+  background: var(--border);
+  transition: background 0.15s;
+}
+.dividerY:hover .gripY { background: var(--accent); }

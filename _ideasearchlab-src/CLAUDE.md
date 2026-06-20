@@ -86,7 +86,8 @@ Like IndividualPhase, GroupPhase has a **two-view structure**: an instructions s
 - **Title**: "Group Ideation Phase"
 - **Top right**: Timer + "Proceed to Voting" button (accent pill)
 - **Left column**: Individual Ideas (selected/carried from individual phase), chronological order
-- **Right column**: Split vertically into Group Ideas (top, max 45% height with add form) and Group Chat (bottom, fills remaining space)
+- **Right column**: Split vertically into Group Ideas (top, ~45% height by default with add form) and Group Chat (bottom, fills remaining space)
+- **Resizable regions**: the ideation workspace columns are a flex row with a draggable `ResizeDivider` (`src/components/ResizeDivider.jsx`) between the Individual Ideas column and the Group Ideas+Chat column (drag left/right), and a second `ResizeDivider` between Group Ideas and Group Chat (drag up/down). The parent (GroupPhase) holds `leftColPct` / `groupIdeasPct` state and applies them as inline `flex-basis`; the divider only reports the dragged-to %, so the overall structure is unchanged. Group-only sessions get just the left/right column divider. The main app↔AI split stays the existing `SplitLayout` divider.
 - Title + description submission form (dashed-border pill card) for adding group ideas
 - **Group-only sessions** (no individual phase, `phaseConfig.individualPhaseActive === false`): there are no individual ideas to show, so the layout adapts — the **Group Ideas list + add form become the primary left column** and Group Chat takes the right column (instead of rendering an empty "Individual Ideas" panel). The shared `groupIdeasList` JSX (ideas + add form) is reused across both layouts. This fixes the "one user in the group phase, no idea showing" feedback where a lone participant in a group-only session saw an empty primary column.
 
