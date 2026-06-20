@@ -92,7 +92,7 @@ export const DEFAULT_CONTENT = {
       '</ul>' +
       "<p>You have <strong>{minutes} minutes</strong> for this phase. A timer is shown at the top, and you'll move on automatically when it ends — so collaborate efficiently.</p>" +
       "<p>If your group's selected idea ranks among the <strong>top five across all groups</strong>, every member wins a <strong>€50 Amazon voucher</strong>.</p>" +
-      '<p>Work as one team — great ideas grow through collaboration! 🌿</p>',
+      '<p>Work as one team — great ideas grow through collaboration! ☘️</p>',
     brief:
       '<h3>Your task</h3>' +
       '<p>As a group, generate ideas for the <strong>smart materials and wearable technology</strong> market. You will design a <strong>completely new product using a fabric that changes color when it reaches 37°C (body temperature)</strong>. Consider what users currently have and what unmet needs remain.</p>' +
