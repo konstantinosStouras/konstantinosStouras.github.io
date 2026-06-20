@@ -6,13 +6,14 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
-import { useSession } from '../context/SessionContext'
+import { useSession, useSessionEnded, useAIModelLabel } from '../context/SessionContext'
 import SplitLayout from '../components/SplitLayout'
 import AIChat from '../components/AIChat'
 import PhaseTimer from '../components/PhaseTimer'
 import NudgeBanner from '../components/NudgeBanner'
 import { getContent } from '../data/defaultContent'
 import RichText from '../components/RichText'
+import { Done } from './Survey'
 import styles from './IndividualPhase.module.css'
 
 // Deterministic pseudo-random pick, stable across renders for the same ideas.
@@ -31,6 +32,8 @@ export default function IndividualPhase() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const { session } = useSession()
+  const ended = useSessionEnded()
+  const aiModel = useAIModelLabel()
 
   const [ideas, setIdeas] = useState([])
   const [title, setTitle] = useState('')
@@ -57,6 +60,9 @@ export default function IndividualPhase() {
   const ideasCarried = pc.ideasCarriedToGroup || 3
   const groupPhaseActive = pc.groupPhaseActive !== false
   const c = getContent(session).individual
+  // Shared placeholder values so {minutes}, {maxIdeas} and {ideasCarried} all
+  // resolve on both the instructions screen and the workspace task brief.
+  const contentVars = { minutes: durationMinutes, maxIdeas, ideasCarried, aiModel }
 
   useEffect(() => {
     if (!sessionId || !user) return
@@ -266,6 +272,12 @@ export default function IndividualPhase() {
     }
   }
 
+  // Instructor closed (status 'done') or deleted the session: show the same
+  // end message participants see when they finish, instead of stranding them.
+  if (ended) {
+    return <Done />
+  }
+
   // ─── Instructions view ───
   // The timer is shown in a non-ticking preview here (full duration). It only
   // starts counting once the participant presses Start (see handleStart).
@@ -285,7 +297,7 @@ export default function IndividualPhase() {
           <NudgeBanner sessionId={sessionId} autoMessage={autoNudgeMessage} />
           <div className={styles.instrCard}>
             <div className={styles.instrBody}>
-              <RichText html={c.instructions} vars={{ minutes: durationMinutes }} aiOn={!!aiEnabled} />
+              <RichText html={c.instructions} vars={contentVars} aiOn={!!aiEnabled} />
             </div>
             <button className={`btn-primary ${styles.startBtn}`} onClick={handleStart}>
               Start
@@ -456,7 +468,7 @@ export default function IndividualPhase() {
                 onError={e => { e.target.style.display = 'none' }}
               />
             </div>
-            <RichText html={c.brief} vars={{ maxIdeas, ideasCarried }} aiOn={!!aiEnabled} />
+            <RichText html={c.brief} vars={contentVars} aiOn={!!aiEnabled} />
           </div>
         )}
       </div>

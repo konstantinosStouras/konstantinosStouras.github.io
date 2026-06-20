@@ -11,7 +11,9 @@
  * the surrounding text. HTML is rendered safely (sanitised) by <RichText />.
  *
  * {placeholders} are filled in by the pages, e.g. {minutes}, {maxIdeas},
- * {ideasCarried}, {needed}, {neededPlural}.
+ * {ideasCarried}, {votes}, {aiModel}, {needed}, {neededPlural}.
+ * {aiModel} resolves to the friendly name of the AI model configured in the
+ * admin AI panel (via the settings/aiPublic mirror), with a default fallback.
  */
 
 import { isHtmlEmpty } from '../components/RichText'
@@ -50,18 +52,20 @@ export const DEFAULT_CONTENT = {
   individual: {
     instructions:
       '<h1>Individual Ideation Phase</h1>' +
-      '<p>Work independently to generate ideas for the health &amp; wellness market.</p>' +
+      '<p>Work on your own to come up with as many strong product ideas as you can.</p>' +
       '<h2>Instructions</h2>' +
-      '<p>Welcome to the <strong>Individual Phase</strong> of the challenge.</p>' +
-      "<p>In this part, you'll work <strong>completely on your own</strong> to generate ideas for new products in the <strong>health and wellness market</strong>. Please <strong>do not communicate or collaborate</strong> with others during this phase.</p>" +
-      '<p>Focus on creating as many ideas as you can, big or small, practical or experimental. Each idea should aim to offer value, improvement, or innovation in health and wellness.</p>' +
-      "<p>You'll have a limited amount of time to complete this phase, so work efficiently and record your ideas clearly. There is a timer at the top. You have <strong>{minutes} minutes</strong> to complete this phase. When the timer ends, you'll move on to the next stage.</p>" +
-      '<p>Try to write your ideas within {minutes} minutes or you will be at a disadvantage when you go to the group phase.</p>' +
+      "<p>In this phase you work <strong>completely on your own</strong> — please do not communicate or collaborate with others.</p>" +
+      '<p>Your goal: generate ideas for the <strong>smart materials and wearable technology</strong> market. You will design a <strong>completely new product using a fabric that changes color when it reaches 37°C (body temperature)</strong>. Consider what users currently have and what unmet needs remain.</p>' +
+      "<p>You have <strong>{minutes} minutes</strong> — a timer is shown at the top, and you'll move on automatically when it ends. Work efficiently: the ideas you create here are the ones you'll bring into the group phase.</p>" +
       '<h3>Your task</h3>' +
-      '<ul><li>Think independently</li><li>Develop original product ideas</li><li>Describe each idea briefly and clearly</li></ul>',
+      '<ul>' +
+      '<li>Generate original product ideas, big or small</li>' +
+      '<li>Give each one a clear <strong>title</strong> and a short <strong>description</strong></li>' +
+      '<li>Double-click your best <strong>{ideasCarried} ideas</strong> to carry them into the group phase</li>' +
+      '</ul>',
     brief:
-      '<p>Design a <strong>completely new product</strong> for people who want to improve their sleep wellness. Consider what users currently have and what unmet needs remain.</p>' +
-      '<p><strong>Example:</strong> A Bluetooth sleep mask that blocks light and plays relaxing audio through built-in headphones, helping users rest and sleep more comfortably.</p>' +
+      '<p>Design a <strong>completely new product using a fabric that changes color when it reaches 37°C (body temperature)</strong>, for the <strong>smart materials and wearable technology</strong> market. Consider what users currently have and what unmet needs remain.</p>' +
+      '<p><strong>Example:</strong> A wristband made with thermochromic fabric that changes color at body temperature, giving caregivers a passive visual signal of skin contact or warmth — without any electronics.</p>' +
       "<p>You can generate up to <strong>{maxIdeas} original product ideas</strong>. Each idea should include an <strong>idea title</strong> and a <strong>description</strong> explaining what it does, how it works, and why it's unique.</p>" +
       '<p>Use the following <strong>evaluation criteria</strong> to guide your thinking:</p>' +
       '<ul>' +
@@ -70,27 +74,46 @@ export const DEFAULT_CONTENT = {
       '<li><strong>Financial Value:</strong> Does it have market potential?</li>' +
       '<li><strong>Overall Quality:</strong> Is it well-structured and relevant?</li>' +
       '</ul>' +
-      '<p>[AI] AI is available on the right panel to help you brainstorm, develop, evaluate and select your ideas.</p>' +
+      '<p>[AI] A <strong>private</strong> AI assistant, powered by {aiModel}, is available on the right to help you brainstorm, develop, refine, and select your ideas. Your conversation is yours alone — only you can see it.</p>' +
       "<p>When you're done, <strong>double-click</strong> your best <strong>{ideasCarried} ideas</strong> to select them. These will be carried forward to the group phase.</p>",
   },
 
   group: {
     instructions:
       '<h1>Group Ideation Phase</h1>' +
-      '<p>Work with your group to share, build on, and select ideas for the health &amp; wellness market.</p>' +
+      "<p>Welcome to the Group Phase. You'll now team up with your group to combine and improve the ideas you each created — and choose your group's best ones.</p>" +
       '<h2>Instructions</h2>' +
-      '<p>Welcome to the <strong>Group Phase</strong> of the challenge.</p>' +
-      "<p>In this part, you'll work <strong>together with your group</strong> to share, discuss, and build on each other's ideas for new products in the <strong>health and wellness market</strong>. Use the <strong>group chat</strong> to communicate with your group members.</p>" +
-      "<p>You'll have a limited amount of time to complete this phase, so work efficiently. There is a timer at the top. You have <strong>{minutes} minutes</strong> to complete this phase. When the timer ends, you'll move on to the next stage.</p>" +
-      '<p>When your group is ready, click <strong>Proceed to Voting</strong> to choose the ideas that will represent your group.</p>' +
-      '<h3>Your task</h3>' +
-      '<ul><li>Share and discuss the ideas carried over from the individual phase</li><li>Build on them and add new group ideas together</li><li>Vote for the strongest ideas to represent your group</li></ul>',
+      '<p>The brief is the same as before: design a <strong>completely new product using a fabric that changes color when it reaches 37°C (body temperature)</strong>, in the <strong>smart materials and wearable technology</strong> market.</p>' +
+      '<p>Together, you will:</p>' +
+      '<ul>' +
+      '<li>Share and discuss the ideas each member carried in from the individual phase</li>' +
+      "<li>Build on each other's ideas, and generate brand-new ideas together as a team</li>" +
+      '<li>Agree on your group&rsquo;s <strong>{votes} best ideas</strong> and vote for them</li>' +
+      '</ul>' +
+      "<p>You have <strong>{minutes} minutes</strong> for this phase. A timer is shown at the top, and you'll move on automatically when it ends — so collaborate efficiently.</p>" +
+      "<p>If your group's selected idea ranks among the <strong>top five across all groups</strong>, every member wins a <strong>€50 Amazon voucher</strong>.</p>" +
+      '<p>Work as one team — great ideas grow through collaboration! 🌿</p>',
     brief:
-      "<p>Share and build on each other's ideas, then vote for the strongest ones to represent your group.</p>" +
-      '<p>Review the <strong>individual ideas</strong> each member carried into this phase, discuss them in the <strong>group chat</strong>, and add new <strong>group ideas</strong> as your discussion develops.</p>' +
-      '<p>Keep the <strong>evaluation criteria</strong> in mind: <strong>Novelty</strong>, <strong>Feasibility</strong>, <strong>Financial Value</strong>, and <strong>Overall Quality</strong>.</p>' +
-      '<p>[AI] AI is available on the right panel to support your group as you discuss, refine and select your ideas.</p>' +
-      '<p>When your group is ready, click <strong>Proceed to Voting</strong> and <strong>double-click</strong> the <strong>{votes} ideas</strong> you believe should represent your group, then press <strong>Submit Votes</strong>.</p>',
+      '<h3>Your task</h3>' +
+      '<p>As a group, generate ideas for the <strong>smart materials and wearable technology</strong> market. You will design a <strong>completely new product using a fabric that changes color when it reaches 37°C (body temperature)</strong>. Consider what users currently have and what unmet needs remain.</p>' +
+      "<p>You're in a team of three. Your screen shows up to <strong>nine ideas</strong> to start (three from each member).</p>" +
+      '<ol>' +
+      "<li><strong>Generate new group ideas together</strong> — don't just work with the ideas you each brought in; create brand-new ideas as a team in the <strong>Group Ideas</strong> panel (each member may add up to <strong>two</strong>).</li>" +
+      '<li><strong>Review all ideas together</strong> — both the individual ideas and your new group ideas — before deciding.</li>' +
+      '<li>Use the <strong>group chat</strong> to share feedback, opinions, and possible combinations.</li>' +
+      '<li>Evaluate every idea on:' +
+        '<ul>' +
+        '<li><strong>Novelty:</strong> Is the idea new, surprising, and original?</li>' +
+        "<li><strong>Feasibility:</strong> Can it be developed with today's technology?</li>" +
+        '<li><strong>Financial Value:</strong> Does it have market potential?</li>' +
+        '<li><strong>Overall Quality:</strong> Is it well-structured and relevant?</li>' +
+        '</ul>' +
+      '</li>' +
+      '<li>Discuss how each idea measures up and decide which ones stand out.</li>' +
+      '<li>When your group is ready, click <strong>Proceed to Voting</strong>, double-click the <strong>{votes} ideas</strong> that should represent your group, then press <strong>Submit Votes</strong>.</li>' +
+      '</ol>' +
+      "<p>Remember: if your group's chosen idea ranks among the <strong>top five across all groups</strong>, every member wins a <strong>€50 Amazon voucher</strong>.</p>" +
+      '<p>[AI] A <strong>group-shared</strong> AI assistant, powered by {aiModel}, is available on the right to help your group discuss, refine, and select ideas. Everyone sees the same conversation — all messages and replies are shared across the group.</p>',
   },
 
   survey: {

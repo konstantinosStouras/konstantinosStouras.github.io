@@ -6,7 +6,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
-import { useSession } from '../context/SessionContext'
+import { useSession, useSessionEnded, useAIModelLabel } from '../context/SessionContext'
 import SplitLayout from '../components/SplitLayout'
 import ResizeDivider from '../components/ResizeDivider'
 import AIChat from '../components/AIChat'
@@ -14,6 +14,7 @@ import PhaseTimer from '../components/PhaseTimer'
 import NudgeBanner from '../components/NudgeBanner'
 import { getContent } from '../data/defaultContent'
 import RichText from '../components/RichText'
+import { Done } from './Survey'
 import styles from './GroupPhase.module.css'
 
 const MAX_VOTES = 3
@@ -132,6 +133,8 @@ export default function GroupPhase() {
   const { sessionId } = useParams()
   const { user } = useAuth()
   const { session } = useSession()
+  const ended = useSessionEnded()
+  const aiModel = useAIModelLabel()
   const navigate = useNavigate()
   const [groupId, setGroupId] = useState(null)
   const [memberLabels, setMemberLabels] = useState({})
@@ -179,7 +182,7 @@ export default function GroupPhase() {
     ? Math.round(pc.groupPhaseDuration / 60)
     : 15
   const c = getContent(session).group
-  const contentVars = { minutes: durationMinutes, votes: MAX_VOTES }
+  const contentVars = { minutes: durationMinutes, votes: MAX_VOTES, aiModel }
 
   const isVoting = subPhase === 'voting'
 
@@ -655,6 +658,12 @@ export default function GroupPhase() {
         updates
       ).catch(err => console.warn('Could not start group phase:', err.message))
     }
+  }
+
+  // Instructor closed (status 'done') or deleted the session: show the same
+  // end message participants see when they finish, instead of stranding them.
+  if (ended) {
+    return <Done />
   }
 
   // ─── Instructions view ───

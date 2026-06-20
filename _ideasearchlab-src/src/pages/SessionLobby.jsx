@@ -4,15 +4,17 @@ import { collection, onSnapshot, doc } from 'firebase/firestore'
 import { signOut } from 'firebase/auth'
 import { db, auth } from '../firebase'
 import { useAuth } from '../context/AuthContext'
-import { useSession } from '../context/SessionContext'
+import { useSession, useSessionEnded } from '../context/SessionContext'
 import { getContent } from '../data/defaultContent'
 import RichText from '../components/RichText'
+import { Done } from './Survey'
 import styles from './SessionLobby.module.css'
 
 export default function SessionLobby() {
   const { sessionId } = useParams()
   const { user } = useAuth()
   const { session, loading } = useSession()
+  const ended = useSessionEnded()
   const navigate = useNavigate()
   const [participants, setParticipants] = useState([])
   const [myStatus, setMyStatus] = useState(null)
@@ -50,6 +52,12 @@ export default function SessionLobby() {
 
   if (loading) {
     return <div className={styles.loading}>Loading session...</div>
+  }
+
+  // Instructor closed (status 'done') or deleted the session: show the same
+  // end message participants see when they finish, instead of stranding them.
+  if (ended) {
+    return <Done />
   }
 
   if (!session) {

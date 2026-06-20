@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { doc, updateDoc, onSnapshot, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
-import { useSession } from '../context/SessionContext'
+import { useSession, useSessionEnded } from '../context/SessionContext'
 import { getContent } from '../data/defaultContent'
 import { getSurveyQuestions } from '../data/formDefaults'
 import RichText from '../components/RichText'
@@ -13,6 +13,7 @@ export default function Survey() {
   const { sessionId } = useParams()
   const { user } = useAuth()
   const { session } = useSession()
+  const ended = useSessionEnded()
   const navigate = useNavigate()
   const [answers, setAnswers] = useState({})
   const [submitting, setSubmitting] = useState(false)
@@ -94,6 +95,10 @@ export default function Survey() {
   }
 
   if (submitted) return <Done />
+
+  // Instructor closed (status 'done') or deleted the session: show the same
+  // end message instead of leaving the participant on an orphaned survey.
+  if (ended) return <Done />
 
   // Group visible questions into sections
   const sections = []

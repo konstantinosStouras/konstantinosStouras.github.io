@@ -32,6 +32,13 @@ service cloud.firestore {
     // Admin-only: settings/ai holds provider API keys. Participants never
     // read settings client-side; Cloud Functions use the Admin SDK (which
     // bypasses these rules), so restricting read to the admin is safe.
+    // Non-secret mirror of the active AI provider + model (no API keys), so the
+    // app can show participants which model is in use. Written by Cloud
+    // Functions (Admin SDK) only.
+    match /settings/aiPublic {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
     match /settings/{docId} {
       allow read: if isAdmin();
       // Only the admin can save page-content defaults from the admin panel.
