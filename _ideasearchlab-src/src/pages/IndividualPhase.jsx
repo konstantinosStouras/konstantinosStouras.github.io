@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   collection, addDoc, onSnapshot, query, where,
@@ -41,6 +41,7 @@ export default function IndividualPhase() {
   const [groupId, setGroupId] = useState(null)
   const [started, setStarted] = useState(false)
   const [individualStartedAt, setIndividualStartedAt] = useState(null)
+  const individualOpenedWrittenRef = useRef(false)
   const [briefOpen, setBriefOpen] = useState(true)
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [editingId, setEditingId] = useState(null)
@@ -84,6 +85,14 @@ export default function IndividualPhase() {
         const data = snap.data()
         setGroupId(data.groupId)
         setIndividualStartedAt(data.individualStartedAt || null)
+        // Timing: record when this participant first entered the individual
+        // phase (the instructions screen), once. individualStartedAt (Start) −
+        // individualOpenedAt = how long they read the instructions.
+        if (!data.timing?.individualOpenedAt && !individualOpenedWrittenRef.current) {
+          individualOpenedWrittenRef.current = true
+          updateDoc(doc(db, 'sessions', sessionId, 'participants', user.uid),
+            { 'timing.individualOpenedAt': serverTimestamp() }).catch(() => {})
+        }
         // Resume the workspace (skip the instructions screen) if this
         // participant already pressed Start in an earlier visit, so a reload
         // doesn't reset their place or restart their timer.

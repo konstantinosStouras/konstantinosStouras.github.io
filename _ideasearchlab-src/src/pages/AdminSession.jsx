@@ -199,6 +199,65 @@ export default function AdminSession() {
         XLSX.utils.book_append_sheet(wb, wsSurvey, 'Survey')
       }
 
+      // ── Sheet: Timing ──
+      // How long each participant spent on / between the key steps. Durations are
+      // in seconds; absolute timestamps are also given. Welcome + Registration
+      // are measured client-side (the participant doc doesn't exist yet) and
+      // flushed at registration; the rest come from server timestamps written as
+      // events happen (page entered, Start pressed, voting started, votes/idea
+      // submitted, survey opened/completed) and from the ideas / AI messages.
+      if (participants.length > 0) {
+        const timingRows = participants
+          .slice()
+          .sort((a, b) => (a.anonymousLabel || '').localeCompare(b.anonymousLabel || '', undefined, { numeric: true }))
+          .map(p => {
+            const t = p.timing || {}
+            const myIdeas = ideas
+              .filter(i => i.authorId === p.id)
+              .sort((a, b) => (toMs(a.createdAt) || 0) - (toMs(b.createdAt) || 0))
+            const myPrompts = aiMessages
+              .filter(m => m.authorId === p.id && m.role === 'user')
+              .sort((a, b) => (toMs(a.timestamp) || 0) - (toMs(b.timestamp) || 0))
+            const myReplies = aiMessages.filter(
+              m => m.role === 'assistant' && m.scope === 'individual' && m.scopeId === p.id
+            )
+            return {
+              'Participant ID': p.id,
+              'Name': p.name || '',
+              'Anonymous Label': p.anonymousLabel || '',
+              'Group ID': p.groupId || '',
+              'Joined At': fmtMs(p.joinedAt),
+              'Welcome opened At': fmtMs(t.welcomeOpenedAt),
+              'Welcome read (s)': durSec(t.welcomeOpenedAt, t.welcomeAgreedAt),
+              'Registration opened At': fmtMs(t.registrationOpenedAt),
+              'Registration time (s)': durSec(t.registrationOpenedAt, t.registrationSubmittedAt),
+              'Individual entered At': fmtMs(t.individualOpenedAt),
+              'Individual instructions read (s)': durSec(t.individualOpenedAt, p.individualStartedAt),
+              'Individual started At': fmtMs(p.individualStartedAt),
+              'First idea At': fmtMs(myIdeas[0]?.createdAt),
+              'Last idea At': fmtMs(myIdeas[myIdeas.length - 1]?.createdAt),
+              'Ideas count': myIdeas.length,
+              'All idea times': myIdeas.map(i => fmtMs(i.createdAt)).filter(Boolean).join(' ; '),
+              'Group entered At': fmtMs(t.groupOpenedAt),
+              'Group instructions read (s)': durSec(t.groupOpenedAt, p.groupStartedAt),
+              'Group started At': fmtMs(p.groupStartedAt),
+              'Group ideation time — adding ideas (s)': durSec(p.groupStartedAt, p.groupVotingStartedAt),
+              'Proceeded to voting At': fmtMs(p.groupVotingStartedAt),
+              'Group voting time (s)': durSec(p.groupVotingStartedAt, p.votedAt),
+              'Votes submitted At': fmtMs(p.votedAt),
+              'First AI message At': fmtMs(myPrompts[0]?.timestamp),
+              'AI prompts (by user)': myPrompts.length,
+              'AI replies (individual)': myReplies.length,
+              'Survey opened At': fmtMs(t.surveyOpenedAt),
+              'Survey time (s)': durSec(t.surveyOpenedAt, p.surveyCompletedAt),
+              'Survey completed At': fmtMs(p.surveyCompletedAt),
+            }
+          })
+        const wsTiming = XLSX.utils.json_to_sheet(timingRows)
+        autoWidth(wsTiming, timingRows)
+        XLSX.utils.book_append_sheet(wb, wsTiming, 'Timing')
+      }
+
       // ── Sheet 4: Group Chat Messages ──
       if (chatMessages.length > 0) {
         const chatRows = chatMessages
@@ -385,6 +444,27 @@ export default function AdminSession() {
       const cell = ws[XLSX.utils.encode_cell({ r: range.s.r, c })]
       if (cell) cell.s = { ...(cell.s || {}), font: { ...(cell.s && cell.s.font), bold: true } }
     }
+  }
+
+  // Timing helpers. Accept a Firestore Timestamp ({seconds}/{_seconds}) or a
+  // client epoch-ms number (the pre-join Welcome/Registration marks are stored
+  // as ms). toMs normalises both to milliseconds.
+  function toMs(v) {
+    if (v == null) return null
+    if (typeof v === 'number') return v
+    if (v.seconds != null) return v.seconds * 1000
+    if (v._seconds != null) return v._seconds * 1000
+    return null
+  }
+  function fmtMs(v) {
+    const ms = toMs(v)
+    return ms == null ? '' : new Date(ms).toISOString().replace('T', ' ').slice(0, 19)
+  }
+  // Duration in whole seconds between two marks of the SAME clock domain (both
+  // client-ms or both server). Blank if either is missing or the order is off.
+  function durSec(a, b) {
+    const x = toMs(a), y = toMs(b)
+    return (x != null && y != null && y >= x) ? Math.round((y - x) / 1000) : ''
   }
 
   // Strip any HTML/entities from instructor-authored question text so it reads
@@ -712,7 +792,7 @@ export default function AdminSession() {
               <h2 className={styles.cardTitle}>Data &amp; Export</h2>
               <p className={styles.exportSub}>
                 Download all session data as an Excel file with separate sheets for
-                participants, ideas, survey responses, group chat, AI chat, and groups.
+                participants, ideas, survey responses, timing, group chat, AI chat, and groups.
               </p>
             </div>
             <button

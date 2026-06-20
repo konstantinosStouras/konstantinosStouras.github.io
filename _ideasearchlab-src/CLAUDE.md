@@ -36,6 +36,9 @@ The participant join flow now has four steps before reaching the session lobby:
 
 Routes added to `App.jsx`: `/session/:sessionId/welcome` and `/session/:sessionId/register`, both wrapped in SessionWrapper.
 
+### Timing instrumentation
+The app records how long participants spend on the key steps, surfaced in the export's **Timing** sheet. The tricky part: **Welcome and Registration run before the participant doc exists** (it's created at Registration submit via `joinSession`), so those marks are collected client-side in `sessionStorage` (`src/utils/timing.js`: `markTiming`/`readTiming`/`clearTiming`, keyed by session, client epoch ms) and **flushed onto the participant doc as `timing.*` at Registration submit** (then cleared). Everything after the doc exists is written with `serverTimestamp()` directly to the participant doc: `timing.individualOpenedAt` / `timing.groupOpenedAt` / `timing.surveyOpenedAt` are written once on first entering each page (guarded by a `useRef` + a `!data.timing?.X` check so they capture the FIRST entry); `individualStartedAt` / `groupStartedAt` on Start; `groupVotingStartedAt` on first moving to voting (in `goToStage('voting')` + `autoSubmitVotes`). All are self-updates on the participant's own doc, so no Firestore rules change is needed. The export computes each duration within one clock domain (client-ms pairs or server pairs) so a client/server offset never skews a duration.
+
 ## Accounts: user activity panel + admin user visibility
 - **Profile menu** (`src/components/ProfileMenu.jsx` + `.module.css`): account dropdown in the top-right of the participant-facing headers (JoinSession, UserHistory). Shows the avatar/name; opens to "My activity & statistics" (→ `/history`), "Join a session" (→ `/join`), and "Log out". Closes on outside-click / Escape. Replaced the old plain name + Sign-out buttons.
 - **UserHistory** (`src/pages/UserHistory.jsx` + `.module.css`, route `/history`, RequireAuth): a participant's own activity page. Lists every session they joined with status, joined date, group label, and survey state, plus summary stats (joined / completed / in-progress). Implemented purely client-side under existing rules: read all sessions (signed-in read is allowed) then `getDoc` the user's own `participants/{uid}` doc in each (own-doc read is allowed). No schema/rules/functions changes; works with all existing data.
@@ -224,7 +227,16 @@ participants/{uid}: {
   consentGiven: boolean,
   consentTimestamp: string,
   surveyAnswers: { ... },
-  surveyCompletedAt: serverTimestamp
+  surveyCompletedAt: serverTimestamp,
+  // ── Timing instrumentation (feeds the export's "Timing" sheet) ──
+  individualStartedAt: serverTimestamp, // pressed Start on individual instructions (also the timer anchor)
+  groupStartedAt: serverTimestamp,      // pressed Start on group instructions (group timer anchor)
+  groupVotingStartedAt: serverTimestamp,// first moved to the voting sub-phase (splits group ideation vs voting)
+  timing: {                             // map; Welcome/Registration marks are client epoch ms, the rest serverTimestamp
+    welcomeOpenedAt, welcomeAgreedAt,         // client ms (sessionStorage, flushed at registration submit)
+    registrationOpenedAt, registrationSubmittedAt, // client ms
+    individualOpenedAt, groupOpenedAt, surveyOpenedAt, // serverTimestamp, written once on first entering each page
+  }
 }
 ```
 **AI Messages Firestore collection:**
@@ -287,6 +299,7 @@ sessions/{sessionId}/aiMessages/{messageId}: {
 - **Sheet 1 -- Participants**: ID, name, email, anonymous label, group ID, status, individual complete, votes submitted, voted for (comma-separated IDs), consent, demographics (all fields), joined at
 - **Sheet 2 -- Ideas**: ID, title, description, full text, author, phase, group ID, selected flag, vote count (tallied from participants' votedFor arrays), created at
 - **Sheet 3 -- Survey**: One row per participant who completed the survey. Fixed columns (ID, name, label, completed at) followed by one column per survey question **in the session's own survey order, headed by the question text** (`Q{n}. {text}`) from `getSurveyQuestions(session)` — not the raw answer keys. A `rating_group` expands to one column per criterion (`Q{n}. {text} — {criterion label}`); a radio `followUp` gets its own column (`Q{n}. {prompt}`). Any stored answer key not present in the current survey config is appended at the end under its raw key so nothing is dropped.
+- **Sheet "Timing"**: one row per participant capturing how long they spent on / between the key steps, as durations in seconds plus the absolute timestamps. Columns: Joined; **Welcome read (s)** (welcomeAgreedAt − welcomeOpenedAt); **Registration time (s)**; **Individual instructions read (s)** (individualStartedAt − individualOpenedAt) + Individual started; first/last idea, ideas count, and **all idea times** (when each idea was written); **Group instructions read (s)**, Group started, **Group ideation time — adding ideas (s)** (groupVotingStartedAt − groupStartedAt), Proceeded-to-voting, **Group voting time (s)** (votedAt − groupVotingStartedAt), Votes submitted; **First AI message** + AI prompt/reply counts; **Survey time (s)** (surveyCompletedAt − surveyOpenedAt) + Survey completed. `toMs`/`durSec`/`fmtMs` helpers normalise both Firestore Timestamps and the client-ms Welcome/Registration marks; each duration is computed within one clock domain. Per-message AI/idea times also live in the AI Chat / Ideas sheets.
 - **Sheet 4 -- Group Chat**: Group ID, author ID, author label, message text, sent at. Sorted chronologically. Fetched from each group's messages subcollection.
 - **Sheet 5 -- AI Chat**: Role (user/assistant), scope, scope ID, author ID, author name, message text, model, input/output tokens (assistant rows; blank for messages logged before token tracking), timestamp. Fetched from `sessions/{sessionId}/aiMessages` ordered by timestamp.
 - **Sheet "AI Usage"**: token totals per scope (participant UID for individual, groupId for group): AI reply count, input/output/total tokens, model(s) used, true cost in USD and EUR ("as of" date in the column headers), unpriced-reply count, plus TOTAL and AVG PER PARTICIPANT rows -- for budgeting and per-model cost analysis. Costs computed at export time from `src/data/aiPricing.js` (MODEL_PRICES per 1M tokens + USD_TO_EUR snapshot + PRICES_AS_OF date -- update that file when provider prices change).

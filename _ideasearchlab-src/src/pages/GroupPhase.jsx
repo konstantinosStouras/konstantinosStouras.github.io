@@ -142,6 +142,8 @@ export default function GroupPhase() {
   const [submitting, setSubmitting] = useState(false)
   const [started, setStarted] = useState(false)
   const [groupStartedAt, setGroupStartedAt] = useState(null)
+  const [groupVotingStartedAt, setGroupVotingStartedAt] = useState(null)
+  const groupOpenedWrittenRef = useRef(false)
   const [briefOpen, setBriefOpen] = useState(true)
   const [briefHintDismissed, setBriefHintDismissed] = useState(false)
   const [showConsensus, setShowConsensus] = useState(false)
@@ -210,6 +212,15 @@ export default function GroupPhase() {
         setGroupId(data.groupId)
         if (data.votesSubmitted) setVotesLocked(true)
         setGroupStartedAt(data.groupStartedAt || null)
+        setGroupVotingStartedAt(data.groupVotingStartedAt || null)
+        // Timing: record when this participant first entered the group phase
+        // (the instructions screen), once. groupStartedAt (Start) − groupOpenedAt
+        // = how long they read the group instructions.
+        if (!data.timing?.groupOpenedAt && !groupOpenedWrittenRef.current) {
+          groupOpenedWrittenRef.current = true
+          updateDoc(doc(db, 'sessions', sessionId, 'participants', user.uid),
+            { 'timing.groupOpenedAt': serverTimestamp() }).catch(() => {})
+        }
         // Resume the workspace (skip the instructions screen) if this
         // participant already started the group phase in an earlier visit.
         if (data.groupStage || data.groupStartedAt) setStarted(true)
@@ -330,7 +341,11 @@ export default function GroupPhase() {
   function goToStage(stage) {
     setSubPhase(stage)
     if (!sessionId || !user) return
-    updateDoc(doc(db, 'sessions', sessionId, 'participants', user.uid), { groupStage: stage })
+    const updates = { groupStage: stage }
+    // Timing: stamp the first move into voting so the export can split the
+    // group phase into "time adding ideas" vs "time voting".
+    if (stage === 'voting' && !groupVotingStartedAt) updates.groupVotingStartedAt = serverTimestamp()
+    updateDoc(doc(db, 'sessions', sessionId, 'participants', user.uid), updates)
       .catch(err => console.warn('Could not save stage:', err.message))
   }
 
@@ -359,12 +374,19 @@ export default function GroupPhase() {
     try {
       await updateDoc(
         doc(db, 'sessions', sessionId, 'participants', user.uid),
-        { votesSubmitted: true, votedAt: serverTimestamp(), groupStage: 'voting' }
+        {
+          votesSubmitted: true,
+          votedAt: serverTimestamp(),
+          groupStage: 'voting',
+          // If the timer expired during ideation, stamp the voting start now so
+          // the ideation/voting split still has a boundary.
+          ...(groupVotingStartedAt ? {} : { groupVotingStartedAt: serverTimestamp() }),
+        }
       )
     } catch (err) {
       console.error('Auto-submit votes error:', err)
     }
-  }, [votesLocked, sessionId, user])
+  }, [votesLocked, sessionId, user, groupVotingStartedAt])
 
   // ── Submit new group idea ───────────────────────────
   async function submitGroupIdea(e) {

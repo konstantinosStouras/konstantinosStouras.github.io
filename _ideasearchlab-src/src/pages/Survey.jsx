@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { doc, updateDoc, onSnapshot, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase'
@@ -17,6 +17,7 @@ export default function Survey() {
   const [answers, setAnswers] = useState({})
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const surveyOpenedWrittenRef = useRef(false)
 
   useEffect(() => {
     if (!sessionId || !user) return
@@ -24,7 +25,15 @@ export default function Survey() {
       doc(db, 'sessions', sessionId, 'participants', user.uid),
       snap => {
         if (!snap.exists()) return
-        if (snap.data().status === 'done') navigate(`/session/${sessionId}/done`)
+        const data = snap.data()
+        // Timing: record when this participant reached the survey, once.
+        // surveyCompletedAt − surveyOpenedAt = how long the survey took.
+        if (!data.timing?.surveyOpenedAt && !surveyOpenedWrittenRef.current) {
+          surveyOpenedWrittenRef.current = true
+          updateDoc(doc(db, 'sessions', sessionId, 'participants', user.uid),
+            { 'timing.surveyOpenedAt': serverTimestamp() }).catch(() => {})
+        }
+        if (data.status === 'done') navigate(`/session/${sessionId}/done`)
       }
     )
     return unsub
