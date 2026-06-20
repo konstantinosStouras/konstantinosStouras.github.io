@@ -21,6 +21,7 @@ export default function AIChat({ sessionId, scope, scopeId, aiConfig }) {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const bottomRef = useRef(null)
+  const inputRef = useRef(null)
 
   const chatPath = `sessions/${sessionId}/aiMessages`
 
@@ -44,6 +45,15 @@ export default function AIChat({ sessionId, scope, scopeId, aiConfig }) {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // Grow the input box with its content so the whole message stays visible
+  // (up to a max, after which it scrolls). Resets back down after sending.
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [input])
 
   async function sendMessage(e) {
     e.preventDefault()
@@ -132,14 +142,17 @@ export default function AIChat({ sessionId, scope, scopeId, aiConfig }) {
       </div>
 
       <form className={styles.inputRow} onSubmit={sendMessage}>
+        {/* Not disabled while sending: the participant can keep typing their
+            next question while the AI is thinking. Submitting is still gated on
+            `sending` (button + handleKeyDown) so requests don't overlap. */}
         <textarea
+          ref={inputRef}
           className={styles.input}
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Ask something... (Enter to send)"
           rows={2}
-          disabled={sending}
         />
         <button
           className={`btn-primary ${styles.sendBtn}`}

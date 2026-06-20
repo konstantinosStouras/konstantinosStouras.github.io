@@ -200,6 +200,9 @@ export default function GroupPhase() {
         const data = snap.data()
         setGroupId(data.groupId)
         if (data.votesSubmitted) setVotesLocked(true)
+        // Resume the workspace (skip the instructions screen) if this
+        // participant already started the group phase in an earlier visit.
+        if (data.groupStage) setStarted(true)
         if (!subPhaseInit.current) {
           subPhaseInit.current = true
           if (data.votesSubmitted || data.groupStage === 'voting') setSubPhase('voting')
@@ -603,6 +606,19 @@ export default function GroupPhase() {
     </div>
   )
 
+  // Enter the group workspace from the instructions screen. Records groupStage
+  // 'ideation' so the admin (and other members) can tell "reading instructions"
+  // from "ideating". The group timer stays shared (phaseStartedAt), unchanged.
+  function startGroup() {
+    setStarted(true)
+    if (subPhase !== 'voting' && !votesLocked) {
+      updateDoc(
+        doc(db, 'sessions', sessionId, 'participants', user.uid),
+        { groupStage: 'ideation' }
+      ).catch(err => console.warn('Could not set group stage:', err.message))
+    }
+  }
+
   // ─── Instructions view ───
   // The timer runs here too: a participant who never clicks Start still gets
   // their votes auto-submitted on expiry instead of stalling their group.
@@ -625,7 +641,7 @@ export default function GroupPhase() {
             <div className={styles.instrBody}>
               <RichText html={c.instructions} vars={contentVars} aiOn={!!aiEnabled} />
             </div>
-            <button className={`btn-primary ${styles.startBtn}`} onClick={() => setStarted(true)}>
+            <button className={`btn-primary ${styles.startBtn}`} onClick={startGroup}>
               Start
             </button>
           </div>

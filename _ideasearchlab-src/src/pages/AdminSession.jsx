@@ -553,7 +553,7 @@ export default function AdminSession() {
                                       votes {p.votesSubmitted ? '✓' : '–'}
                                     </span>
                                   )}
-                                  <span className={styles.pStatus}>{participantStageLabel(p.status)}</span>
+                                  <span className={styles.pStatus}>{participantStageLabel(p)}</span>
                                   {canNudge && (
                                     <button
                                       className={styles.nudgeBtn}
@@ -570,7 +570,7 @@ export default function AdminSession() {
 
                               {open && (
                                 <div className={styles.pDetail}>
-                                  <DetailRow label="Current stage" value={participantStageLabel(p.status)} />
+                                  <DetailRow label="Current stage" value={participantStageLabel(p)} />
                                   <DetailRow label="Email" value={p.email || '—'} />
                                   <DetailRow label="Joined" value={formatTimestamp(p.joinedAt) || '—'} />
                                   {indivActive && <DetailRow label="Individual ideas" value={p.individualComplete ? 'Submitted ✓' : 'Not yet'} />}
@@ -737,14 +737,31 @@ function ConfigRow({ label, value }) {
 
 const PARTICIPANT_STAGE_LABELS = {
   waiting: 'waiting in lobby',
-  waiting_for_group: 'waiting for group',
+  waiting_for_group: 'individual submitted — waiting for group',
   individual: 'individual phase',
   group: 'group phase',
   voting: 'group voting',
   survey: 'survey',
   done: 'finished',
 }
-function participantStageLabel(status) {
+// Fine-grained "exactly where is this participant" label. Distinguishes the
+// instructions screen (before they press Start) from the active workspace,
+// using the per-participant signals individualStartedAt / groupStage.
+function participantStageLabel(p) {
+  const status = typeof p === 'string' ? p : p?.status
+  if (typeof p === 'object' && p) {
+    if (status === 'individual') {
+      return p.individualStartedAt
+        ? 'individual — writing ideas'
+        : 'individual — reading instructions'
+    }
+    if (status === 'group') {
+      if (p.votesSubmitted) return 'group — votes submitted'
+      if (p.groupStage === 'voting') return 'group — voting'
+      if (p.groupStage === 'ideation') return 'group — ideation'
+      return 'group — reading instructions'
+    }
+  }
   return PARTICIPANT_STAGE_LABELS[status] || status || 'unknown'
 }
 
