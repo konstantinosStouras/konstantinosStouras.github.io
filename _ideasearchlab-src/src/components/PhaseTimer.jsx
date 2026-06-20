@@ -7,11 +7,19 @@ import styles from './PhaseTimer.module.css'
  *   phaseStartedAt - Firestore Timestamp
  *   durationSeconds - number | null (null = no timer)
  *   onExpire - callback when timer hits 0
+ *   preview - when true, the countdown has not started yet (e.g. the
+ *             participant is still on the instructions screen). Shows the full
+ *             duration statically without ticking down or firing onExpire.
  */
-export default function PhaseTimer({ phaseStartedAt, durationSeconds, onExpire }) {
+export default function PhaseTimer({ phaseStartedAt, durationSeconds, onExpire, preview = false }) {
   const [remaining, setRemaining] = useState(null)
 
   useEffect(() => {
+    // Preview: timer not started — show the full duration, don't tick.
+    if (preview) {
+      setRemaining(durationSeconds || null)
+      return
+    }
     if (!phaseStartedAt || !durationSeconds) {
       setRemaining(null)
       return

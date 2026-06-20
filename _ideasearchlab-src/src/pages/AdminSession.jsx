@@ -4,9 +4,9 @@ import { doc, collection, onSnapshot, getDocs, orderBy, query, updateDoc, server
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '../firebase'
 import { getPhaseSequence } from '../utils/phaseSequence'
-import { getRegistration } from '../data/formDefaults'
+import { getRegistration, getSurveyQuestions } from '../data/formDefaults'
 import { MODEL_PRICES, USD_TO_EUR, PRICES_AS_OF, replyCostUSD } from '../data/aiPricing'
-import * as XLSX from 'xlsx'
+import * as XLSX from 'xlsx-js-style'
 import styles from './AdminSession.module.css'
 
 export default function AdminSession() {
@@ -140,34 +140,122 @@ export default function AdminSession() {
       XLSX.utils.book_append_sheet(wb, wsIdeas, 'Ideas')
 
       // ── Sheet 3: Survey Answers ──
+      // Columns follow the survey's own question order with readable titles (the
+      // question text shown in the admin) instead of raw answer keys. A
+      // rating_group expands to one column per criterion; a radio follow-up gets
+      // its own column. Any stored answer key not in the session's survey config
+      // is appended at the end under its raw key so no data is ever dropped.
       const surveyParticipants = participants.filter(p => p.surveyAnswers)
       if (surveyParticipants.length > 0) {
-        const allKeys = new Set()
-        surveyParticipants.forEach(p => {
-          Object.keys(p.surveyAnswers).forEach(k => allKeys.add(k))
+        const questions = getSurveyQuestions(session)
+        const columns = []          // { header, key, subKey? }
+        const covered = new Set()
+        questions.forEach((q, i) => {
+          const n = i + 1
+          const qText = plain(q.text) || q.id
+          if (q.type === 'rating_group' && Array.isArray(q.items) && q.items.length) {
+            q.items.forEach(item => {
+              columns.push({ header: `Q${n}. ${qText} — ${plain(item.label) || item.id}`, key: q.id, subKey: item.id })
+            })
+          } else {
+            columns.push({ header: `Q${n}. ${qText}`, key: q.id })
+          }
+          covered.add(q.id)
+          if (q.followUp && q.followUp.id) {
+            columns.push({ header: `Q${n}. ${plain(q.followUp.prompt) || 'Follow-up'}`, key: q.followUp.id })
+            covered.add(q.followUp.id)
+          }
         })
-        const sortedKeys = [...allKeys].sort()
+        // Preserve any stored answers whose key isn't in the current config.
+        const extraKeys = new Set()
+        surveyParticipants.forEach(p =>
+          Object.keys(p.surveyAnswers).forEach(k => { if (!covered.has(k)) extraKeys.add(k) })
+        )
+        ;[...extraKeys].sort().forEach(k => columns.push({ header: k, key: k }))
 
+        const fmtAns = v => {
+          if (v == null) return ''
+          if (Array.isArray(v)) return v.join(', ')
+          if (typeof v === 'object') return Object.entries(v).map(([k, x]) => `${k}: ${x}`).join('; ')
+          return v
+        }
         const surveyRows = surveyParticipants.map(p => {
+          const a = p.surveyAnswers || {}
           const row = {
             'Participant ID': p.id,
             'Name': p.name || '',
             'Anonymous Label': p.anonymousLabel || '',
             'Completed At': p.surveyCompletedAt ? formatTimestamp(p.surveyCompletedAt) : '',
           }
-          sortedKeys.forEach(key => {
-            const val = p.surveyAnswers[key]
-            if (val && typeof val === 'object' && !Array.isArray(val)) {
-              row[key] = Object.entries(val).map(([k, v]) => `${k}: ${v}`).join('; ')
-            } else {
-              row[key] = val ?? ''
-            }
+          columns.forEach(col => {
+            let v = a[col.key]
+            if (col.subKey) v = (v && typeof v === 'object') ? v[col.subKey] : undefined
+            row[col.header] = fmtAns(v)
           })
           return row
         })
         const wsSurvey = XLSX.utils.json_to_sheet(surveyRows)
         autoWidth(wsSurvey, surveyRows)
         XLSX.utils.book_append_sheet(wb, wsSurvey, 'Survey')
+      }
+
+      // ── Sheet: Timing ──
+      // How long each participant spent on / between the key steps. Durations are
+      // in seconds; absolute timestamps are also given. Welcome + Registration
+      // are measured client-side (the participant doc doesn't exist yet) and
+      // flushed at registration; the rest come from server timestamps written as
+      // events happen (page entered, Start pressed, voting started, votes/idea
+      // submitted, survey opened/completed) and from the ideas / AI messages.
+      if (participants.length > 0) {
+        const timingRows = participants
+          .slice()
+          .sort((a, b) => (a.anonymousLabel || '').localeCompare(b.anonymousLabel || '', undefined, { numeric: true }))
+          .map(p => {
+            const t = p.timing || {}
+            const myIdeas = ideas
+              .filter(i => i.authorId === p.id)
+              .sort((a, b) => (toMs(a.createdAt) || 0) - (toMs(b.createdAt) || 0))
+            const myPrompts = aiMessages
+              .filter(m => m.authorId === p.id && m.role === 'user')
+              .sort((a, b) => (toMs(a.timestamp) || 0) - (toMs(b.timestamp) || 0))
+            const myReplies = aiMessages.filter(
+              m => m.role === 'assistant' && m.scope === 'individual' && m.scopeId === p.id
+            )
+            return {
+              'Participant ID': p.id,
+              'Name': p.name || '',
+              'Anonymous Label': p.anonymousLabel || '',
+              'Group ID': p.groupId || '',
+              'Joined At': fmtMs(p.joinedAt),
+              'Welcome opened At': fmtMs(t.welcomeOpenedAt),
+              'Welcome read (s)': durSec(t.welcomeOpenedAt, t.welcomeAgreedAt),
+              'Registration opened At': fmtMs(t.registrationOpenedAt),
+              'Registration time (s)': durSec(t.registrationOpenedAt, t.registrationSubmittedAt),
+              'Individual entered At': fmtMs(t.individualOpenedAt),
+              'Individual instructions read (s)': durSec(t.individualOpenedAt, p.individualStartedAt),
+              'Individual started At': fmtMs(p.individualStartedAt),
+              'First idea At': fmtMs(myIdeas[0]?.createdAt),
+              'Last idea At': fmtMs(myIdeas[myIdeas.length - 1]?.createdAt),
+              'Ideas count': myIdeas.length,
+              'All idea times': myIdeas.map(i => fmtMs(i.createdAt)).filter(Boolean).join(' ; '),
+              'Group entered At': fmtMs(t.groupOpenedAt),
+              'Group instructions read (s)': durSec(t.groupOpenedAt, p.groupStartedAt),
+              'Group started At': fmtMs(p.groupStartedAt),
+              'Group ideation time — adding ideas (s)': durSec(p.groupStartedAt, p.groupVotingStartedAt),
+              'Proceeded to voting At': fmtMs(p.groupVotingStartedAt),
+              'Group voting time (s)': durSec(p.groupVotingStartedAt, p.votedAt),
+              'Votes submitted At': fmtMs(p.votedAt),
+              'First AI message At': fmtMs(myPrompts[0]?.timestamp),
+              'AI prompts (by user)': myPrompts.length,
+              'AI replies (individual)': myReplies.length,
+              'Survey opened At': fmtMs(t.surveyOpenedAt),
+              'Survey time (s)': durSec(t.surveyOpenedAt, p.surveyCompletedAt),
+              'Survey completed At': fmtMs(p.surveyCompletedAt),
+            }
+          })
+        const wsTiming = XLSX.utils.json_to_sheet(timingRows)
+        autoWidth(wsTiming, timingRows)
+        XLSX.utils.book_append_sheet(wb, wsTiming, 'Timing')
       }
 
       // ── Sheet 4: Group Chat Messages ──
@@ -338,6 +426,7 @@ export default function AdminSession() {
     return count
   }
 
+  // Auto-fit column widths AND bold the header row (row 0) of every sheet.
   function autoWidth(ws, rows) {
     if (!rows.length) return
     const keys = Object.keys(rows[0])
@@ -349,6 +438,46 @@ export default function AdminSession() {
       return { wch: Math.min(maxContent + 2, 50) }
     })
     ws['!cols'] = widths
+    // Bold every cell in the header row (needs xlsx-js-style to be written out).
+    const range = XLSX.utils.decode_range(ws['!ref'])
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const cell = ws[XLSX.utils.encode_cell({ r: range.s.r, c })]
+      if (cell) cell.s = { ...(cell.s || {}), font: { ...(cell.s && cell.s.font), bold: true } }
+    }
+  }
+
+  // Timing helpers. Accept a Firestore Timestamp ({seconds}/{_seconds}) or a
+  // client epoch-ms number (the pre-join Welcome/Registration marks are stored
+  // as ms). toMs normalises both to milliseconds.
+  function toMs(v) {
+    if (v == null) return null
+    if (typeof v === 'number') return v
+    if (v.seconds != null) return v.seconds * 1000
+    if (v._seconds != null) return v._seconds * 1000
+    return null
+  }
+  function fmtMs(v) {
+    const ms = toMs(v)
+    return ms == null ? '' : new Date(ms).toISOString().replace('T', ' ').slice(0, 19)
+  }
+  // Duration in whole seconds between two marks of the SAME clock domain (both
+  // client-ms or both server). Blank if either is missing or the order is off.
+  function durSec(a, b) {
+    const x = toMs(a), y = toMs(b)
+    return (x != null && y != null && y >= x) ? Math.round((y - x) / 1000) : ''
+  }
+
+  // Strip any HTML/entities from instructor-authored question text so it reads
+  // cleanly as an Excel column header.
+  function plain(s) {
+    return String(s ?? '')
+      .replace(/<[^>]*>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/\s+/g, ' ')
+      .trim()
   }
 
   if (!session) return <div className={styles.loading}>Loading...</div>
@@ -553,7 +682,7 @@ export default function AdminSession() {
                                       votes {p.votesSubmitted ? '✓' : '–'}
                                     </span>
                                   )}
-                                  <span className={styles.pStatus}>{participantStageLabel(p.status)}</span>
+                                  <span className={styles.pStatus}>{participantStageLabel(p)}</span>
                                   {canNudge && (
                                     <button
                                       className={styles.nudgeBtn}
@@ -570,7 +699,7 @@ export default function AdminSession() {
 
                               {open && (
                                 <div className={styles.pDetail}>
-                                  <DetailRow label="Current stage" value={participantStageLabel(p.status)} />
+                                  <DetailRow label="Current stage" value={participantStageLabel(p)} />
                                   <DetailRow label="Email" value={p.email || '—'} />
                                   <DetailRow label="Joined" value={formatTimestamp(p.joinedAt) || '—'} />
                                   {indivActive && <DetailRow label="Individual ideas" value={p.individualComplete ? 'Submitted ✓' : 'Not yet'} />}
@@ -663,7 +792,7 @@ export default function AdminSession() {
               <h2 className={styles.cardTitle}>Data &amp; Export</h2>
               <p className={styles.exportSub}>
                 Download all session data as an Excel file with separate sheets for
-                participants, ideas, survey responses, group chat, AI chat, and groups.
+                participants, ideas, survey responses, timing, group chat, AI chat, and groups.
               </p>
             </div>
             <button
@@ -737,14 +866,31 @@ function ConfigRow({ label, value }) {
 
 const PARTICIPANT_STAGE_LABELS = {
   waiting: 'waiting in lobby',
-  waiting_for_group: 'waiting for group',
+  waiting_for_group: 'individual submitted — waiting for group',
   individual: 'individual phase',
   group: 'group phase',
   voting: 'group voting',
   survey: 'survey',
   done: 'finished',
 }
-function participantStageLabel(status) {
+// Fine-grained "exactly where is this participant" label. Distinguishes the
+// instructions screen (before they press Start) from the active workspace,
+// using the per-participant signals individualStartedAt / groupStage.
+function participantStageLabel(p) {
+  const status = typeof p === 'string' ? p : p?.status
+  if (typeof p === 'object' && p) {
+    if (status === 'individual') {
+      return p.individualStartedAt
+        ? 'individual — writing ideas'
+        : 'individual — reading instructions'
+    }
+    if (status === 'group') {
+      if (p.votesSubmitted) return 'group — votes submitted'
+      if (p.groupStage === 'voting') return 'group — voting'
+      if (p.groupStage === 'ideation') return 'group — ideation'
+      return 'group — reading instructions'
+    }
+  }
   return PARTICIPANT_STAGE_LABELS[status] || status || 'unknown'
 }
 

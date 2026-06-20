@@ -136,6 +136,7 @@
 /* Input row */
 .inputRow {
   display: flex;
+  align-items: flex-end;
   gap: 8px;
   padding: 12px 14px;
   border-top: 1px solid rgba(255,255,255,0.08);
@@ -143,17 +144,49 @@
   background: rgba(255,255,255,0.03);
 }
 
-.input {
+/* Column wrapper: drag handle on top, textarea below. */
+.inputWrap {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Draggable top border of the input — drag up to make the box taller. */
+.resizeHandle {
+  height: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: ns-resize;
+  touch-action: none;
+}
+.resizeGrip {
+  width: 40px;
+  height: 3px;
+  border-radius: 3px;
+  background: rgba(255,255,255,0.18);
+  transition: background 0.15s;
+}
+.resizeHandle:hover .resizeGrip { background: var(--accent); }
+
+.input {
+  width: 100%;
   background: rgba(255,255,255,0.06);
   border: 1px solid rgba(255,255,255,0.1);
   border-radius: var(--radius);
   color: var(--paper);
   font-size: 13.5px;
   padding: 10px 12px;
+  /* Height is controlled in JS: auto-grows with content (capped ~240px), or a
+     fixed height once the user drags the top handle (see AIChat.jsx). Scrolls
+     beyond, so a long message stays usable. */
   resize: none;
+  min-height: 52px;
+  overflow-y: auto;
   outline: none;
   line-height: 1.5;
+  box-sizing: border-box;
   transition: border-color 0.15s;
 }
 

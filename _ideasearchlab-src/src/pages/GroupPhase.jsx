@@ -8,6 +8,7 @@ import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import { useSession, useSessionEnded, useAIModelLabel } from '../context/SessionContext'
 import SplitLayout from '../components/SplitLayout'
+import ResizeDivider from '../components/ResizeDivider'
 import AIChat from '../components/AIChat'
 import PhaseTimer from '../components/PhaseTimer'
 import NudgeBanner from '../components/NudgeBanner'
@@ -143,10 +144,20 @@ export default function GroupPhase() {
   const [newDesc, setNewDesc] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [started, setStarted] = useState(false)
+  const [groupStartedAt, setGroupStartedAt] = useState(null)
+  const [groupVotingStartedAt, setGroupVotingStartedAt] = useState(null)
+  const groupOpenedWrittenRef = useRef(false)
   const [briefOpen, setBriefOpen] = useState(true)
   const [briefHintDismissed, setBriefHintDismissed] = useState(false)
   const [showConsensus, setShowConsensus] = useState(false)
   const consensusSeen = useRef(false)
+
+  // User-resizable workspace regions (drag the dividers). Percentages are of
+  // their container; the overall column/stack structure stays the same.
+  const columnsRef = useRef(null)       // Individual Ideas | Group Ideas+Chat
+  const rightColRef = useRef(null)      // Group Ideas / Group Chat (stacked)
+  const [leftColPct, setLeftColPct] = useState(50)
+  const [groupIdeasPct, setGroupIdeasPct] = useState(45)
 
   // Sub-phase: 'ideation' or 'voting'. Mirrored to the participant doc as
   // `groupStage` so other members can see where everyone stands; restored
@@ -203,6 +214,19 @@ export default function GroupPhase() {
         const data = snap.data()
         setGroupId(data.groupId)
         if (data.votesSubmitted) setVotesLocked(true)
+        setGroupStartedAt(data.groupStartedAt || null)
+        setGroupVotingStartedAt(data.groupVotingStartedAt || null)
+        // Timing: record when this participant first entered the group phase
+        // (the instructions screen), once. groupStartedAt (Start) − groupOpenedAt
+        // = how long they read the group instructions.
+        if (!data.timing?.groupOpenedAt && !groupOpenedWrittenRef.current) {
+          groupOpenedWrittenRef.current = true
+          updateDoc(doc(db, 'sessions', sessionId, 'participants', user.uid),
+            { 'timing.groupOpenedAt': serverTimestamp() }).catch(() => {})
+        }
+        // Resume the workspace (skip the instructions screen) if this
+        // participant already started the group phase in an earlier visit.
+        if (data.groupStage || data.groupStartedAt) setStarted(true)
         if (!subPhaseInit.current) {
           subPhaseInit.current = true
           if (data.votesSubmitted || data.groupStage === 'voting') setSubPhase('voting')
@@ -320,7 +344,11 @@ export default function GroupPhase() {
   function goToStage(stage) {
     setSubPhase(stage)
     if (!sessionId || !user) return
-    updateDoc(doc(db, 'sessions', sessionId, 'participants', user.uid), { groupStage: stage })
+    const updates = { groupStage: stage }
+    // Timing: stamp the first move into voting so the export can split the
+    // group phase into "time adding ideas" vs "time voting".
+    if (stage === 'voting' && !groupVotingStartedAt) updates.groupVotingStartedAt = serverTimestamp()
+    updateDoc(doc(db, 'sessions', sessionId, 'participants', user.uid), updates)
       .catch(err => console.warn('Could not save stage:', err.message))
   }
 
@@ -349,12 +377,19 @@ export default function GroupPhase() {
     try {
       await updateDoc(
         doc(db, 'sessions', sessionId, 'participants', user.uid),
-        { votesSubmitted: true, votedAt: serverTimestamp(), groupStage: 'voting' }
+        {
+          votesSubmitted: true,
+          votedAt: serverTimestamp(),
+          groupStage: 'voting',
+          // If the timer expired during ideation, stamp the voting start now so
+          // the ideation/voting split still has a boundary.
+          ...(groupVotingStartedAt ? {} : { groupVotingStartedAt: serverTimestamp() }),
+        }
       )
     } catch (err) {
       console.error('Auto-submit votes error:', err)
     }
-  }, [votesLocked, sessionId, user])
+  }, [votesLocked, sessionId, user, groupVotingStartedAt])
 
   // ── Submit new group idea ───────────────────────────
   async function submitGroupIdea(e) {
@@ -589,7 +624,8 @@ export default function GroupPhase() {
           className={styles.addDescInput}
           value={newDesc}
           onChange={e => setNewDesc(e.target.value)}
-          placeholder="Description"
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitGroupIdea(e) } }}
+          placeholder="Description (Enter to add, Shift+Enter for a new line)"
           rows={2}
           disabled={submitting}
         />
@@ -606,6 +642,24 @@ export default function GroupPhase() {
     </div>
   )
 
+  // Enter the group workspace from the instructions screen. Records the
+  // per-participant timer start (groupStartedAt) so the countdown begins now,
+  // when this participant actually starts — not from the shared phase start.
+  // Also records groupStage 'ideation' so the admin (and other members) can
+  // tell "reading instructions" from "ideating".
+  function startGroup() {
+    setStarted(true)
+    const updates = {}
+    if (subPhase !== 'voting' && !votesLocked) updates.groupStage = 'ideation'
+    if (!groupStartedAt) updates.groupStartedAt = serverTimestamp()
+    if (Object.keys(updates).length) {
+      updateDoc(
+        doc(db, 'sessions', sessionId, 'participants', user.uid),
+        updates
+      ).catch(err => console.warn('Could not start group phase:', err.message))
+    }
+  }
+
   // Instructor closed (status 'done') or deleted the session: show the same
   // end message participants see when they finish, instead of stranding them.
   if (ended) {
@@ -613,8 +667,8 @@ export default function GroupPhase() {
   }
 
   // ─── Instructions view ───
-  // The timer runs here too: a participant who never clicks Start still gets
-  // their votes auto-submitted on expiry instead of stalling their group.
+  // The timer is shown in a non-ticking preview here (full duration). It only
+  // starts counting once the participant presses Start (see startGroup).
   if (!started) {
     return (
       <div className={styles.instrPage}>
@@ -622,9 +676,8 @@ export default function GroupPhase() {
           <span className={styles.wordmark}>Ideation Challenge</span>
           <div className={styles.instrTimer}>
             <PhaseTimer
-              phaseStartedAt={session?.phaseStartedAt}
               durationSeconds={pc.groupPhaseDuration}
-              onExpire={votesLocked ? undefined : autoSubmitVotes}
+              preview
             />
           </div>
         </header>
@@ -634,7 +687,7 @@ export default function GroupPhase() {
             <div className={styles.instrBody}>
               <RichText html={c.instructions} vars={contentVars} aiOn={!!aiEnabled} />
             </div>
-            <button className={`btn-primary ${styles.startBtn}`} onClick={() => setStarted(true)}>
+            <button className={`btn-primary ${styles.startBtn}`} onClick={startGroup}>
               Start
             </button>
           </div>
@@ -656,7 +709,7 @@ export default function GroupPhase() {
           </div>
           <div className={styles.topRight}>
             <PhaseTimer
-              phaseStartedAt={session?.phaseStartedAt}
+              phaseStartedAt={groupStartedAt}
               durationSeconds={pc.groupPhaseDuration}
               onExpire={votesLocked ? undefined : autoSubmitVotes}
             />
@@ -739,7 +792,7 @@ export default function GroupPhase() {
         </div>
         <div className={styles.topRight}>
           <PhaseTimer
-            phaseStartedAt={session?.phaseStartedAt}
+            phaseStartedAt={groupStartedAt}
             durationSeconds={pc.groupPhaseDuration}
             onExpire={votesLocked ? undefined : autoSubmitVotes}
           />
@@ -758,9 +811,9 @@ export default function GroupPhase() {
       {taskBrief}
 
       {individualActive ? (
-        <div className={styles.columns}>
-          {/* Left: individual ideas */}
-          <div className={styles.column}>
+        <div className={styles.columns} ref={columnsRef}>
+          {/* Left: individual ideas — drag the divider to resize left/right */}
+          <div className={styles.column} style={{ flex: `0 0 ${leftColPct}%` }}>
             <h2 className={styles.columnTitle}>Individual Ideas</h2>
             <p className={styles.columnSub}>Selected ideas from each member</p>
             <div className={styles.ideaList}>
@@ -768,13 +821,18 @@ export default function GroupPhase() {
             </div>
           </div>
 
-          {/* Right: group ideas + add form + chat */}
-          <div className={styles.columnRight}>
-            <div className={styles.groupIdeasSection}>
+          <ResizeDivider direction="x" containerRef={columnsRef} onResize={setLeftColPct} min={20} max={80} />
+
+          {/* Right: group ideas + add form (top) and chat (bottom), with a
+              draggable divider between them to resize up/down */}
+          <div className={styles.columnRight} ref={rightColRef}>
+            <div className={styles.groupIdeasSection} style={{ flex: `0 0 ${groupIdeasPct}%`, maxHeight: 'none', minHeight: 0 }}>
               <h2 className={styles.columnTitle}>Group Ideas</h2>
               <p className={styles.columnSub}>Generated together in this phase</p>
               {groupIdeasList}
             </div>
+
+            <ResizeDivider direction="y" containerRef={rightColRef} onResize={setGroupIdeasPct} min={15} max={80} />
 
             {chatPanel}
           </div>
@@ -782,12 +840,13 @@ export default function GroupPhase() {
       ) : (
         /* Group-only session: no individual phase, so make the group ideas
            list the primary column instead of an empty "Individual Ideas" panel. */
-        <div className={styles.columns}>
-          <div className={styles.column}>
+        <div className={styles.columns} ref={columnsRef}>
+          <div className={styles.column} style={{ flex: `0 0 ${leftColPct}%` }}>
             <h2 className={styles.columnTitle}>Group Ideas</h2>
             <p className={styles.columnSub}>Add and develop ideas with your group</p>
             {groupIdeasList}
           </div>
+          <ResizeDivider direction="x" containerRef={columnsRef} onResize={setLeftColPct} min={20} max={80} />
           <div className={styles.columnRight}>
             {chatPanel}
           </div>

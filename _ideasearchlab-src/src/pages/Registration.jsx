@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { doc, updateDoc } from 'firebase/firestore'
 import { getFunctions, httpsCallable } from 'firebase/functions'
@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext'
 import { useSession } from '../context/SessionContext'
 import { getContent } from '../data/defaultContent'
 import { getRegistration, COUNTRIES } from '../data/formDefaults'
+import { markTiming, readTiming, clearTiming } from '../utils/timing'
 import RichText from '../components/RichText'
 import styles from './Registration.module.css'
 
@@ -26,6 +27,10 @@ export default function Registration() {
   const [consents, setConsents] = useState({})
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // Timing: stamp when the Registration page first opened (client-side, since
+  // the participant doc doesn't exist until submit).
+  useEffect(() => { markTiming(sessionId, 'registrationOpenedAt') }, [sessionId])
 
   function updateField(id, value) {
     setForm(prev => ({ ...prev, [id]: value }))
@@ -65,12 +70,26 @@ export default function Registration() {
         demographics[f.id] = f.type === 'number' ? (raw === '' ? '' : Number(raw)) : raw
       })
 
+      // Flush the client-side timing marks collected on Welcome + Registration
+      // (which ran before this participant doc existed) onto the doc, plus the
+      // submit moment. Stored as client epoch ms; durations (welcome read,
+      // registration time) are computed within this same clock domain.
+      const marks = readTiming(sessionId)
+      const timing = {
+        welcomeOpenedAt: marks.welcomeOpenedAt ?? null,
+        welcomeAgreedAt: marks.welcomeAgreedAt ?? null,
+        registrationOpenedAt: marks.registrationOpenedAt ?? null,
+        registrationSubmittedAt: Date.now(),
+      }
+
       const participantRef = doc(db, 'sessions', sessionId, 'participants', user.uid)
       await updateDoc(participantRef, {
         demographics,
         consentGiven: true,
         consentTimestamp: new Date().toISOString(),
+        timing,
       })
+      clearTiming(sessionId)
 
       navigate(`/session/${sessionId}`)
     } catch (err) {
