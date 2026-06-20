@@ -20,6 +20,7 @@ export default function AIChat({ sessionId, scope, scopeId, aiConfig }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [userHeight, setUserHeight] = useState(null)
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
 
@@ -47,13 +48,15 @@ export default function AIChat({ sessionId, scope, scopeId, aiConfig }) {
   }, [messages])
 
   // Grow the input box with its content so the whole message stays visible
-  // (up to a max, after which it scrolls). Resets back down after sending.
+  // (up to a cap, after which it scrolls) — UNLESS the user has manually
+  // resized it by dragging the top handle, in which case keep their height.
   useEffect(() => {
     const el = inputRef.current
     if (!el) return
+    if (userHeight != null) { el.style.height = `${userHeight}px`; return }
     el.style.height = 'auto'
-    el.style.height = `${el.scrollHeight}px`
-  }, [input])
+    el.style.height = `${Math.min(el.scrollHeight, 240)}px`
+  }, [input, userHeight])
 
   async function sendMessage(e) {
     e.preventDefault()
@@ -95,6 +98,31 @@ export default function AIChat({ sessionId, scope, scopeId, aiConfig }) {
       e.preventDefault()
       sendMessage(e)
     }
+  }
+
+  // Let the user drag the top border of the input to resize it — dragging up
+  // makes it taller. Sets an explicit height that overrides the content
+  // auto-grow (kept sticky until they drag again).
+  function startResize(e) {
+    e.preventDefault()
+    const el = inputRef.current
+    if (!el) return
+    const startY = e.clientY
+    const startH = el.getBoundingClientRect().height
+    const maxH = Math.min(460, Math.round(window.innerHeight * 0.6))
+    document.body.style.cursor = 'ns-resize'
+    document.body.style.userSelect = 'none'
+    function move(ev) {
+      setUserHeight(Math.max(52, Math.min(maxH, startH + (startY - ev.clientY))))
+    }
+    function up() {
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      window.removeEventListener('mousemove', move)
+      window.removeEventListener('mouseup', up)
+    }
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mouseup', up)
   }
 
   return (
@@ -142,18 +170,30 @@ export default function AIChat({ sessionId, scope, scopeId, aiConfig }) {
       </div>
 
       <form className={styles.inputRow} onSubmit={sendMessage}>
-        {/* Not disabled while sending: the participant can keep typing their
-            next question while the AI is thinking. Submitting is still gated on
-            `sending` (button + handleKeyDown) so requests don't overlap. */}
-        <textarea
-          ref={inputRef}
-          className={styles.input}
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Ask something... (Enter to send)"
-          rows={2}
-        />
+        <div className={styles.inputWrap}>
+          {/* Drag this top handle to resize the input (taller when dragged up) */}
+          <div
+            className={styles.resizeHandle}
+            onMouseDown={startResize}
+            title="Drag to resize"
+            role="separator"
+            aria-orientation="horizontal"
+          >
+            <div className={styles.resizeGrip} />
+          </div>
+          {/* Not disabled while sending: the participant can keep typing their
+              next question while the AI is thinking. Submitting is still gated on
+              `sending` (button + handleKeyDown) so requests don't overlap. */}
+          <textarea
+            ref={inputRef}
+            className={styles.input}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Ask something... (Enter to send)"
+            rows={2}
+          />
+        </div>
         <button
           className={`btn-primary ${styles.sendBtn}`}
           type="submit"
