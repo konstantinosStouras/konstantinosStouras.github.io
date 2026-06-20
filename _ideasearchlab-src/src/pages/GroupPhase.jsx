@@ -8,6 +8,7 @@ import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import { useSession } from '../context/SessionContext'
 import SplitLayout from '../components/SplitLayout'
+import ResizeDivider from '../components/ResizeDivider'
 import AIChat from '../components/AIChat'
 import PhaseTimer from '../components/PhaseTimer'
 import NudgeBanner from '../components/NudgeBanner'
@@ -144,6 +145,13 @@ export default function GroupPhase() {
   const [briefHintDismissed, setBriefHintDismissed] = useState(false)
   const [showConsensus, setShowConsensus] = useState(false)
   const consensusSeen = useRef(false)
+
+  // User-resizable workspace regions (drag the dividers). Percentages are of
+  // their container; the overall column/stack structure stays the same.
+  const columnsRef = useRef(null)       // Individual Ideas | Group Ideas+Chat
+  const rightColRef = useRef(null)      // Group Ideas / Group Chat (stacked)
+  const [leftColPct, setLeftColPct] = useState(50)
+  const [groupIdeasPct, setGroupIdeasPct] = useState(45)
 
   // Sub-phase: 'ideation' or 'voting'. Mirrored to the participant doc as
   // `groupStage` so other members can see where everyone stands; restored
@@ -766,9 +774,9 @@ export default function GroupPhase() {
       {taskBrief}
 
       {individualActive ? (
-        <div className={styles.columns}>
-          {/* Left: individual ideas */}
-          <div className={styles.column}>
+        <div className={styles.columns} ref={columnsRef}>
+          {/* Left: individual ideas — drag the divider to resize left/right */}
+          <div className={styles.column} style={{ flex: `0 0 ${leftColPct}%` }}>
             <h2 className={styles.columnTitle}>Individual Ideas</h2>
             <p className={styles.columnSub}>Selected ideas from each member</p>
             <div className={styles.ideaList}>
@@ -776,13 +784,18 @@ export default function GroupPhase() {
             </div>
           </div>
 
-          {/* Right: group ideas + add form + chat */}
-          <div className={styles.columnRight}>
-            <div className={styles.groupIdeasSection}>
+          <ResizeDivider direction="x" containerRef={columnsRef} onResize={setLeftColPct} min={20} max={80} />
+
+          {/* Right: group ideas + add form (top) and chat (bottom), with a
+              draggable divider between them to resize up/down */}
+          <div className={styles.columnRight} ref={rightColRef}>
+            <div className={styles.groupIdeasSection} style={{ flex: `0 0 ${groupIdeasPct}%`, maxHeight: 'none', minHeight: 0 }}>
               <h2 className={styles.columnTitle}>Group Ideas</h2>
               <p className={styles.columnSub}>Generated together in this phase</p>
               {groupIdeasList}
             </div>
+
+            <ResizeDivider direction="y" containerRef={rightColRef} onResize={setGroupIdeasPct} min={15} max={80} />
 
             {chatPanel}
           </div>
@@ -790,12 +803,13 @@ export default function GroupPhase() {
       ) : (
         /* Group-only session: no individual phase, so make the group ideas
            list the primary column instead of an empty "Individual Ideas" panel. */
-        <div className={styles.columns}>
-          <div className={styles.column}>
+        <div className={styles.columns} ref={columnsRef}>
+          <div className={styles.column} style={{ flex: `0 0 ${leftColPct}%` }}>
             <h2 className={styles.columnTitle}>Group Ideas</h2>
             <p className={styles.columnSub}>Add and develop ideas with your group</p>
             {groupIdeasList}
           </div>
+          <ResizeDivider direction="x" containerRef={columnsRef} onResize={setLeftColPct} min={20} max={80} />
           <div className={styles.columnRight}>
             {chatPanel}
           </div>
