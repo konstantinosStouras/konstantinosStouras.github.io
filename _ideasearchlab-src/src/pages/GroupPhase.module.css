@@ -714,3 +714,10 @@
   width: 100%;
   padding: 11px;
 }
+.consensusActions {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+.consensusActions > * { flex: 1; }
+.consensusActions .consensusBtn { margin-top: 0; }
