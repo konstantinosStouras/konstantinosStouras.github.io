@@ -304,7 +304,11 @@
     var label = S.sessionId ? ('Session ' + S.sessionId) : 'Playing anonymously';
     var bar = el('div', { class: 'pfx-topbar' }, [
       el('span', { html: 'PortfolioFit for Managers &middot; <b>' + esc(label) + '</b>' }),
-      el('button', { title: 'Start over with a fresh anonymous session', on: { click: doRestart } }, ['Restart'])
+      el('span', { style: 'display:flex;gap:8px;align-items:center;' }, [
+        // Opens the admin panel (itself gated behind the admin@admin.com login).
+        el('button', { title: 'Open the admin panel', on: { click: function () { location.href = location.pathname + '?admin'; } } }, ['Admin']),
+        el('button', { title: 'Start over with a fresh anonymous session', on: { click: doRestart } }, ['Restart'])
+      ])
     ]);
     document.body.appendChild(bar);
   }

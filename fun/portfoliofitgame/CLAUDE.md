@@ -92,7 +92,7 @@ Served app (`fun/portfoliofitgame/`):
 | `index.html` | The whole **game**: markup + CSS + the game engine (an IIFE). Also hosts the shared "snake" Account login widget and a localStorage `AppStats` block (legacy). Exposes `window.PFGame`, emits events via `window.PF.onGameEvent`, and reads the `window.PF_EXPERIMENT` / `window.PF_ADMIN` flags set by a tiny inline script. Loads the three layer scripts (deferred). |
 | `pf-defaults.js` | Sets `window.PF_DEFAULTS` = `{ texts, settings, registrationQuestions, surveyQuestions, defaultPuzzles }`. Loaded **before** the other two. |
 | `experiment.js` | The **participant experiment** layer. Activates only on `?exp=1`. Phase state machine, Firebase (named app), anonymous auth, event logging, per-round summaries, onboarding tour, movable/resizable boxes. |
-| `admin.js` | The **admin CMS**. Activates only on `?admin`. Login gate, content/question/settings/puzzle editors, participants table + Excel export, theme. |
+| `admin.js` | The **admin CMS**. Activates only on `?admin`. Login gate, content/settings/puzzle editors, participants table (+ per-row delete, **Delete all participants**, Excel export), sessions, theme. |
 | `404.html` | Redirects to `/`. |
 | `og-image.jpg`, `portfoliofit-difficulty.pdf`, `portfoliofit-difficulty.makepdf.py` | Social card + the κ methodology note (PDF + its generator). |
 
@@ -160,6 +160,9 @@ publish it; versioned in the repo, deployed manually):
   a `participants/{uid}` doc (created client-side) tagged with `sessionId` and a
   short `anonymousLabel`. Returning players resume via their persisted anonymous
   identity.
+- **Top bar:** a fixed bar shows the play status plus an **Admin** button (opens
+  `?admin`, itself gated behind the admin login) and a **Restart** button (fresh
+  anonymous session).
 - **Main phase puzzle source:** if the admin has **frozen** a set
   (`config.settings.activePuzzleIds` → `puzzleSets`), every player plays **exactly
   those** puzzles — the same reviewed, vetted set for everyone, with only the order
@@ -195,9 +198,10 @@ publish it; versioned in the repo, deployed manually):
   admin auth so a refresh shows the panel immediately (no login flash). Dark/
   light theme.
 - **Tabs:**
-  - **Content** — collapsible per-page text editors (welcome/training/registration/
-    game/stats/survey/thank-you), each pre-filled with the current effective text.
-  - **Registration** / **Survey** — add/edit/reorder/delete questions.
+  - **Content** — collapsible per-page text editors (welcome/training/game/stats/
+    thank-you), each pre-filled with the current effective text. (The Registration
+    and Survey page editors and their dedicated **Registration**/**Survey** tabs
+    were removed along with those participant phases.)
   - **Puzzles** — build the exact set every participant plays: **Generate set to
     match Settings** creates puzzles sized to the easy/hard counts (reusing vetted
     built-ins first, generating the shortfall), or generate one at a time via
@@ -217,9 +221,10 @@ publish it; versioned in the repo, deployed manually):
     enforced in `experiment.js` `beginSession`), and **delete**. Players join by
     code; data is tagged with `sessionId`.
   - **Participants** — table of all players (Player / Session / Status / Started),
-    per-row **delete** (doc + subcollections), and **Export to Excel** (SheetJS
-    via CDN; sheets: Participants / Events / Rounds / Survey, each carrying
-    `player` + `session` + `uid`).
+    per-row **delete** (doc + subcollections), a **Delete all participants** button
+    (double-confirmed bulk wipe of every participant + subcollections), and
+    **Export to Excel** (SheetJS via CDN; sheets: Participants / Events / Rounds /
+    Survey, each carrying `player` + `session` + `uid`).
 - Every editable tab carries the same three controls: **Save** and **Make this
   the default** (both persist this page to `config/app`; one live config, so they
   do the same write with different wording) and **Restore built-in default**

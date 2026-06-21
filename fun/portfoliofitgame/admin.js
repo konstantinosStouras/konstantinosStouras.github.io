@@ -2,11 +2,12 @@
    PortfolioFit for Managers — admin panel
    ---------------------------------------------------------------------
    Activates only with ?admin on the URL. Requires the admin@admin.com
-   account. Lets the administrator edit all participant-facing text, the
-   registration and survey questions, experiment settings, and view /
-   export all collected participant data (Excel).
+   account. Lets the administrator edit all participant-facing text,
+   experiment settings, and view / export all collected participant data
+   (Excel). The registration and survey question editors were removed along
+   with those participant phases.
 
-   Status: content + registration + survey + settings + participants/export.
+   Status: content + settings + participants/export.
    The "generate & freeze specific puzzles" tab is added in a following
    increment (it will reuse the game's generator via window.PFGame).
    ===================================================================== */
@@ -36,25 +37,18 @@
     ['trainingTitle', 'Training — title', 'line'],
     ['trainingBody', 'Training — body', 'area'],
     ['trainingButton', 'Training — button', 'line'],
-    ['registerTitle', 'Registration — title', 'line'],
-    ['registerIntro', 'Registration — intro', 'area'],
     ['mainTitle', 'Game phase — title', 'line'],
     ['mainIntro', 'Game phase — intro', 'area'],
     ['statsTitle', 'Stats — title', 'line'],
-    ['surveyTitle', 'Survey — title', 'line'],
-    ['surveyIntro', 'Survey — intro', 'area'],
     ['thankyouTitle', 'Thank-you — title', 'line'],
     ['thankyouBody', 'Thank-you — body', 'area']
   ];
-  var QUESTION_TYPES = ['text', 'email', 'password', 'number', 'select', 'radio', 'textarea'];
   // Group the text fields into collapsible "pages" for the Content tab.
   var PAGE_GROUPS = [
     { key: 'welcome', label: 'Welcome page', fields: ['welcomeTitle', 'welcomeIntro', 'welcomeBody', 'welcomeButton'] },
     { key: 'training', label: 'Training phase', fields: ['trainingTitle', 'trainingBody', 'trainingButton'] },
-    { key: 'registration', label: 'Registration page', fields: ['registerTitle', 'registerIntro'] },
     { key: 'main', label: 'Game phase', fields: ['mainTitle', 'mainIntro'] },
     { key: 'stats', label: 'Stats page', fields: ['statsTitle'] },
-    { key: 'survey', label: 'Survey page', fields: ['surveyTitle', 'surveyIntro'] },
     { key: 'thankyou', label: 'Thank-you page', fields: ['thankyouTitle', 'thankyouBody'] }
   ];
   var TEXT_FIELD_META = {}; TEXT_FIELDS.forEach(function (f) { TEXT_FIELD_META[f[0]] = { label: f[1], kind: f[2] }; });
@@ -219,7 +213,7 @@
 
   function renderShell() {
     clearRoot();
-    var tabs = [['content', 'Content'], ['registration', 'Registration'], ['survey', 'Survey'], ['puzzles', 'Puzzles'], ['settings', 'Settings'], ['sessions', 'Sessions'], ['participants', 'Participants']];
+    var tabs = [['content', 'Content'], ['puzzles', 'Puzzles'], ['settings', 'Settings'], ['sessions', 'Sessions'], ['participants', 'Participants']];
     var tabBar = el('div', { class: 'pfa-tabs' }, tabs.map(function (t) {
       return el('button', { class: tab === t[0] ? 'on' : '', on: { click: function () { tab = t[0]; renderShell(); } } }, [t[1]]);
     }));
@@ -234,8 +228,6 @@
     ]);
     root.appendChild(wrap);
     if (tab === 'content') renderContent(body);
-    else if (tab === 'registration') renderQuestions(body, 'registrationQuestions', 'Registration questions');
-    else if (tab === 'survey') renderQuestions(body, 'surveyQuestions', 'Survey questions');
     else if (tab === 'puzzles') renderPuzzles(body);
     else if (tab === 'settings') renderSettings(body);
     else if (tab === 'sessions') renderSessions(body);
@@ -303,69 +295,6 @@
       return saveConfig({ texts: merged }).then(function () { cfg.texts = merged; build(); toast(g.label + ' restored to built-in default.'); }).catch(function (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); throw e; });
     }
     return section;
-  }
-
-  // ---- Registration / Survey question editor ----
-  function renderQuestions(body, field, title) {
-    var list = ((cfg[field] && cfg[field].length) ? cfg[field] : ((window.PF_DEFAULTS && window.PF_DEFAULTS[field]) || [])).map(function (q) { return Object.assign({}, q); });
-    var card = el('div', { class: 'pfa-card' });
-    var listWrap = el('div', {});
-    card.appendChild(el('p', { class: 'pfa-note', text: title + '. Drag order with the up/down buttons. System fields (Participant ID, e-mail, password) are required by the app.' }));
-    card.appendChild(listWrap);
-    var addBtn = el('button', { class: 'pfa-btn sec sm', on: { click: function () { list.push({ id: 'q_' + Date.now().toString(36), label: 'New question', type: 'text', required: true }); render(); } } }, ['+ Add question']);
-    card.appendChild(el('div', { class: 'pfa-field' }, [addBtn]));
-    card.appendChild(el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;' }, [
-      el('button', { class: 'pfa-btn', on: { click: withFeedback(save) } }, ['Save']),
-      el('button', { class: 'pfa-btn sec', on: { click: withFeedback(makeDefault) } }, ['Make this the default']),
-      el('button', { class: 'pfa-btn sec', on: { click: withFeedback(restoreBuiltin, '✓ Restored') } }, ['Restore built-in default'])
-    ]));
-    body.appendChild(card);
-    render();
-
-    function builtinOrSaved() { return ((cfg[field] && cfg[field].length) ? cfg[field] : ((window.PF_DEFAULTS && window.PF_DEFAULTS[field]) || [])).map(function (q) { return Object.assign({}, q); }); }
-    function restoreBuiltin() {
-      list = ((window.PF_DEFAULTS && window.PF_DEFAULTS[field]) || []).map(function (q) { return Object.assign({}, q); });
-      var patch = {}; patch[field] = list;
-      return saveConfig(patch).then(function () { cfg[field] = list.map(function (q) { return Object.assign({}, q); }); render(); toast('Restored built-in default.'); }).catch(function (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); throw e; });
-    }
-
-    function render() {
-      listWrap.innerHTML = '';
-      list.forEach(function (q, i) {
-        var qb = el('div', { class: 'pfa-q' });
-        var labelI = el('input', { type: 'text', value: q.label || '', style: 'min-width:220px;flex:1 1 240px;' });
-        labelI.addEventListener('input', function () { q.label = labelI.value; });
-        var typeS = el('select', {}, QUESTION_TYPES.map(function (t) { return el('option', { value: t }, [t]); }));
-        typeS.value = q.type || 'text';
-        typeS.addEventListener('change', function () { q.type = typeS.value; render(); });
-        var reqL = el('label', { style: 'font-weight:500;display:flex;align-items:center;gap:5px;' });
-        var reqC = el('input', { type: 'checkbox' }); if (q.required) reqC.setAttribute('checked', 'checked');
-        reqC.addEventListener('change', function () { q.required = reqC.checked; });
-        reqL.appendChild(reqC); reqL.appendChild(document.createTextNode('required'));
-        var up = el('button', { class: 'pfa-btn sec sm', on: { click: function () { if (i > 0) { var t = list[i - 1]; list[i - 1] = list[i]; list[i] = t; render(); } } } }, ['↑']);
-        var dn = el('button', { class: 'pfa-btn sec sm', on: { click: function () { if (i < list.length - 1) { var t = list[i + 1]; list[i + 1] = list[i]; list[i] = t; render(); } } } }, ['↓']);
-        var del = el('button', { class: 'pfa-btn danger sm', on: { click: function () { list.splice(i, 1); render(); } } }, ['delete']);
-        qb.appendChild(el('div', { class: 'row' }, [labelI, typeS, reqL, up, dn, del]));
-        qb.appendChild(el('div', { class: 'pfa-note', style: 'margin-top:4px;', text: 'id: ' + (q.id || '') + (q.system ? ' (system: ' + q.system + ')' : '') }));
-        if (q.type === 'select' || q.type === 'radio') {
-          var opt = el('textarea', { rows: '3', value: (q.options || []).join('\n'), style: 'margin-top:6px;' });
-          opt.addEventListener('input', function () { q.options = opt.value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean); });
-          qb.appendChild(el('div', { class: 'pfa-field' }, [el('label', { text: 'Options (one per line)' }), opt]));
-        }
-        if (q.help != null || q.type === 'select' || q.type === 'radio') {
-          var help = el('input', { type: 'text', value: q.help || '', placeholder: 'Optional helper text' });
-          help.addEventListener('input', function () { q.help = help.value; });
-          qb.appendChild(el('div', { class: 'pfa-field' }, [el('label', { text: 'Helper text' }), help]));
-        }
-        listWrap.appendChild(qb);
-      });
-    }
-    function persist(msg) {
-      var patch = {}; patch[field] = list;
-      return saveConfig(patch).then(function () { cfg[field] = list.map(function (q) { return Object.assign({}, q); }); toast(msg); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); throw e; });
-    }
-    function save() { return persist(title + ' saved.'); }
-    function makeDefault() { return persist(title + ' saved as the default.'); }
   }
 
   // ---- Puzzles tab ----
@@ -752,7 +681,10 @@
     body.innerHTML = '';
     var head = el('div', { class: 'pfa-h' }, [
       el('div', { class: 'pfa-note', text: parts.length + ' participant' + (parts.length === 1 ? '' : 's') }),
-      el('button', { class: 'pfa-btn', on: { click: function () { exportExcel(parts); } } }, ['Export to Excel'])
+      el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;' }, [
+        el('button', { class: 'pfa-btn', on: { click: function () { exportExcel(parts); } } }, ['Export to Excel']),
+        el('button', { class: 'pfa-btn danger', on: { click: deleteAllParticipants } }, ['Delete all participants'])
+      ])
     ]);
     var rows = parts.map(function (p) {
       var who = p.anonymousLabel || p.participantId || p.email || p._id;
@@ -769,22 +701,40 @@
     table.appendChild(el('tbody', {}, rows.length ? rows : [el('tr', {}, [el('td', { colspan: '5', text: 'No players yet.' })])]));
     body.appendChild(el('div', { class: 'pfa-card' }, [head, table]));
 
+    // Delete a participant's doc plus its subcollections (events/rounds/survey).
+    async function deleteParticipantData(uid) {
+      var names = ['events', 'rounds'];
+      for (var n = 0; n < names.length; n++) {
+        try {
+          var sn = await fb.F.getDocs(fb.F.collection(fb.db, 'participants', uid, names[n]));
+          for (var j = 0; j < sn.docs.length; j++) { try { await fb.F.deleteDoc(sn.docs[j].ref); } catch (e) {} }
+        } catch (e) {}
+      }
+      try { await fb.F.deleteDoc(fb.F.doc(fb.db, 'participants', uid, 'survey', 'answers')); } catch (e) {}
+      await fb.F.deleteDoc(fb.F.doc(fb.db, 'participants', uid));
+    }
+
     async function deleteParticipant(uid, who) {
       if (!window.confirm('Delete participant "' + who + '" and all their data? This cannot be undone.')) return;
       toast('Deleting…');
       try {
-        var names = ['events', 'rounds'];
-        for (var n = 0; n < names.length; n++) {
-          try {
-            var sn = await fb.F.getDocs(fb.F.collection(fb.db, 'participants', uid, names[n]));
-            for (var j = 0; j < sn.docs.length; j++) { try { await fb.F.deleteDoc(sn.docs[j].ref); } catch (e) {} }
-          } catch (e) {}
-        }
-        try { await fb.F.deleteDoc(fb.F.doc(fb.db, 'participants', uid, 'survey', 'answers')); } catch (e) {}
-        await fb.F.deleteDoc(fb.F.doc(fb.db, 'participants', uid));
+        await deleteParticipantData(uid);
         toast('Participant deleted.');
         renderParticipants(body);
       } catch (e) { toast('Delete failed: ' + ((e && e.code) || 'error')); }
+    }
+
+    async function deleteAllParticipants() {
+      if (!parts.length) { toast('No participants to delete.'); return; }
+      if (!window.confirm('Delete ALL ' + parts.length + ' participants and every event, round, and survey answer they have? This cannot be undone.')) return;
+      if (!window.confirm('Are you absolutely sure? This permanently wipes all collected participant data.')) return;
+      toast('Deleting all participants…');
+      var failed = 0;
+      for (var i = 0; i < parts.length; i++) {
+        try { await deleteParticipantData(parts[i]._id); } catch (e) { failed++; }
+      }
+      toast(failed ? ('Done, but ' + failed + ' could not be deleted.') : 'All participants deleted.');
+      renderParticipants(body);
     }
   }
 
