@@ -648,7 +648,7 @@
   function renderSessions(body) {
     body.innerHTML = '';
     body.appendChild(el('div', { class: 'pfa-card' }, [
-      el('p', { class: 'pfa-note', html: 'Create a <b>session</b>, then share its <b>Session ID</b> (or a <code>?session=CODE</code> link) with players — they enter it on the welcome screen to join. A session snapshots the <b>current configuration</b> (Content, questions, Settings and the active puzzle set); players with no code get the default configuration. <b>Close</b> a session to block new joins; data already collected is unaffected.' })
+      el('p', { class: 'pfa-note', html: 'Create a <b>session</b>, then share its <b>Session ID</b> (or a <code>?session=CODE</code> link) with players — they enter it on the welcome screen to join (a code is required to play). A session snapshots the <b>current configuration</b> (Content, questions, Settings and the active puzzle set). Sessions are listed under <b>Active</b> (open, accepting players) and <b>Completed</b> (closed, read-only). <b>Close</b> a session to block new joins; data already collected is unaffected. Use <b>⬇ Excel</b> on any session to download a combined file of every player who has played it.' })
     ]));
 
     var nameIn = el('input', { type: 'text', placeholder: 'e.g. Spring MBA 2026', style: 'max-width:340px;' });
@@ -699,8 +699,7 @@
 
     function loadList() {
       listCard.innerHTML = '';
-      listCard.appendChild(el('h3', { id: 'pfa-sess-h', text: 'Sessions', style: 'margin:0 0 8px;font-size:15px;' }));
-      var hint = el('div', {}); listCard.appendChild(hint);
+      listCard.appendChild(el('p', { class: 'pfa-note', text: 'Loading sessions…' }));
       // Read the sessions list first; participant counts are a best-effort second
       // read so a failure there cannot blank the list. A permission-denied on the
       // sessions read almost always means this project's Firestore rules predate
@@ -713,48 +712,80 @@
           function () { return { docs: docs, counts: null }; }   // counts unavailable: still show the list
         );
       }).then(function (data) {
+        listCard.innerHTML = '';
         var docs = data.docs, counts = data.counts;
         docs.sort(function (a, b) { return tsMs(b.createdAt) - tsMs(a.createdAt); });
-        var h = listCard.querySelector('#pfa-sess-h'); if (h) h.textContent = docs.length + ' session' + (docs.length === 1 ? '' : 's');
-        if (!docs.length) { hint.appendChild(el('p', { class: 'pfa-note', text: 'No sessions yet. Create one above.' })); return; }
-        var table = el('table', { class: 'pfa-tbl' });
-        table.appendChild(el('thead', {}, [el('tr', {}, ['Session ID', 'Name', 'Status', 'Participants', 'Created', ''].map(function (th) { return el('th', { text: th }); }))]));
-        var tb = el('tbody', {});
-        docs.forEach(function (s) {
-          var closed = s.status === 'closed';
-          var actions = [el('button', { class: 'pfa-btn sec sm', on: { click: function () { copyText(s._id, 'Session ID copied.'); } } }, ['copy ID'])];
-          if (closed) actions.push(el('button', { class: 'pfa-btn sec sm', on: { click: function () { setStatus(s._id, 'open'); } } }, ['reopen']));
-          else actions.push(el('button', { class: 'pfa-btn sec sm', on: { click: function () { setStatus(s._id, 'closed'); } } }, ['close']));
-          actions.push(el('button', { class: 'pfa-btn danger sm', on: { click: function () { delSession(s._id); } } }, ['delete']));
-          tb.appendChild(el('tr', {}, [
-            el('td', {}, [el('b', { text: s._id })]),
-            el('td', { text: s.name || s.label || '' }),
-            el('td', { text: closed ? 'Closed' : 'Open' }),
-            el('td', { text: counts ? String(counts[s._id] || 0) : '—' }),
-            el('td', { text: fmtTs(s.createdAt) }),
-            el('td', {}, [el('div', { style: 'display:flex;gap:6px;flex-wrap:wrap;' }, actions)])
-          ]));
-        });
-        table.appendChild(tb);
-        hint.appendChild(table);
+        // Active = open (or no status); Completed = closed.
+        var active = docs.filter(function (s) { return s.status !== 'closed'; });
+        var done = docs.filter(function (s) { return s.status === 'closed'; });
+        listCard.appendChild(section('Active Sessions', 'Open sessions accept new players. Share the code, monitor joins, and download data anytime.', active, counts, false));
+        listCard.appendChild(section('Completed Sessions', 'Closed (read-only) sessions no longer accept new players. Download their data before deleting.', done, counts, true));
       }).catch(function (e) {
+        listCard.innerHTML = '';
         var code = (e && e.code) || 'error';
-        hint.appendChild(el('p', { class: 'pfa-err', text: 'Could not load sessions: ' + code + '.' }));
+        listCard.appendChild(el('p', { class: 'pfa-err', text: 'Could not load sessions: ' + code + '.' }));
         if (String(code).indexOf('permission-denied') >= 0) {
-          hint.appendChild(el('p', { class: 'pfa-note', text: 'This usually means this project’s Firestore security rules have not been deployed since the Sessions feature was added. Deploy the rules from the backend folder (firebase deploy --only firestore:rules), then reload this page.' }));
+          listCard.appendChild(el('p', { class: 'pfa-note', text: 'This usually means this project’s Firestore security rules have not been deployed since the Sessions feature was added. Deploy the rules from the backend folder (firebase deploy --only firestore:rules), then reload this page.' }));
         }
       });
     }
 
+    // Render one session group (Active or Completed) as its own card, with a
+    // bulk "Delete all" button and per-row Excel download.
+    function section(title, sub, docs, counts, isDone) {
+      var word = isDone ? 'completed' : 'active';
+      var card = el('div', { class: 'pfa-card' });
+      var head = el('div', { class: 'pfa-h' }, [
+        el('div', {}, [
+          el('h3', { text: title + ' (' + docs.length + ')', style: 'margin:0;font-size:15px;' }),
+          el('p', { class: 'pfa-note', style: 'margin:3px 0 0;', text: sub })
+        ]),
+        docs.length ? el('button', { class: 'pfa-btn danger sm', on: { click: function () { delAllSessions(docs, word); } } }, ['Delete all ' + word + ' sessions']) : el('span', {})
+      ]);
+      card.appendChild(head);
+      if (!docs.length) { card.appendChild(el('p', { class: 'pfa-note', text: isDone ? 'No completed sessions.' : 'No active sessions yet. Create one above.' })); return card; }
+      var table = el('table', { class: 'pfa-tbl' });
+      table.appendChild(el('thead', {}, [el('tr', {}, ['Session ID', 'Name', 'Participants', 'Created', ''].map(function (th) { return el('th', { text: th }); }))]));
+      var tb = el('tbody', {});
+      docs.forEach(function (s) {
+        var actions = [
+          el('button', { class: 'pfa-btn sec sm', on: { click: function () { copyText(s._id, 'Session ID copied.'); } } }, ['copy ID']),
+          el('button', { class: 'pfa-btn sm', on: { click: function () { exportSession(s._id); } } }, ['⬇ Excel'])
+        ];
+        if (isDone) actions.push(el('button', { class: 'pfa-btn sec sm', on: { click: function () { setStatus(s._id, 'open'); } } }, ['reopen']));
+        else actions.push(el('button', { class: 'pfa-btn sec sm', on: { click: function () { setStatus(s._id, 'closed'); } } }, ['close']));
+        actions.push(el('button', { class: 'pfa-btn danger sm', on: { click: function () { delSession(s._id); } } }, ['delete']));
+        tb.appendChild(el('tr', {}, [
+          el('td', {}, [el('b', { text: s._id })]),
+          el('td', { text: s.name || s.label || '' }),
+          el('td', { text: counts ? String(counts[s._id] || 0) : '—' }),
+          el('td', { text: fmtTs(s.createdAt) }),
+          el('td', {}, [el('div', { style: 'display:flex;gap:6px;flex-wrap:wrap;' }, actions)])
+        ]));
+      });
+      table.appendChild(tb);
+      card.appendChild(table);
+      return card;
+    }
+
     function setStatus(code, status) {
       fb.F.setDoc(fb.F.doc(fb.db, 'sessions', code), { status: status, updatedAt: fb.F.serverTimestamp() }, { merge: true })
-        .then(function () { toast(status === 'closed' ? 'Session closed to new joins.' : 'Session reopened.'); loadList(); })
+        .then(function () { toast(status === 'closed' ? 'Session closed (moved to Completed).' : 'Session reopened (moved to Active).'); loadList(); })
         .catch(function (e) { toast('Failed: ' + ((e && e.code) || 'error')); });
     }
     function delSession(code) {
       if (!window.confirm('Delete session "' + code + '"? Players can no longer join with this code. (Already-collected player data is not affected.)')) return;
       fb.F.deleteDoc(fb.F.doc(fb.db, 'sessions', code)).then(function () { toast('Session deleted.'); loadList(); })
         .catch(function (e) { toast('Delete failed: ' + ((e && e.code) || 'error')); });
+    }
+    async function delAllSessions(docs, word) {
+      if (!docs || !docs.length) return;
+      if (!window.confirm('Delete ALL ' + docs.length + ' ' + word + ' session' + (docs.length === 1 ? '' : 's') + '? Players can no longer join with these codes. (Already-collected player data is not affected.)')) return;
+      toast('Deleting ' + word + ' sessions…');
+      var ok = 0;
+      for (var i = 0; i < docs.length; i++) { try { await fb.F.deleteDoc(fb.F.doc(fb.db, 'sessions', docs[i]._id)); ok++; } catch (e) {} }
+      toast('Deleted ' + ok + ' ' + word + ' session' + (ok === 1 ? '' : 's') + '.');
+      loadList();
     }
   }
   function genCode() { var a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', s = ''; for (var i = 0; i < 6; i++) s += a.charAt(Math.floor(Math.random() * a.length)); return s; }
@@ -774,7 +805,10 @@
     body.innerHTML = '';
     var head = el('div', { class: 'pfa-h' }, [
       el('div', { class: 'pfa-note', text: parts.length + ' participant' + (parts.length === 1 ? '' : 's') }),
-      el('button', { class: 'pfa-btn', on: { click: function () { exportExcel(parts); } } }, ['Export to Excel'])
+      el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;' }, [
+        el('button', { class: 'pfa-btn', on: { click: function () { exportExcel(parts); } } }, ['Export all to Excel']),
+        parts.length ? el('button', { class: 'pfa-btn danger', on: { click: function () { deleteAllParticipants(); } } }, ['Delete all participants']) : el('span', {})
+      ])
     ]);
     var rows = parts.map(function (p) {
       var sid = p.studentId || (p.registration && p.registration.studentId) || '';
@@ -785,30 +819,31 @@
         el('td', { text: p.sessionId || '—' }),
         el('td', { text: p.status || '' }),
         el('td', { text: fmtTs(p.createdAt) }),
-        el('td', {}, [el('button', { class: 'pfa-btn danger sm', on: { click: function () { deleteParticipant(p._id, who); } } }, ['delete'])])
+        el('td', {}, [el('div', { style: 'display:flex;gap:6px;flex-wrap:wrap;' }, [
+          el('button', { class: 'pfa-btn sm', on: { click: function () { exportParticipant(p); } } }, ['⬇ Excel']),
+          el('button', { class: 'pfa-btn danger sm', on: { click: function () { deleteParticipant(p._id, who); } } }, ['delete'])
+        ])])
       ]);
     });
     var table = el('table', { class: 'pfa-tbl' });
     table.appendChild(el('thead', {}, [el('tr', {}, ['Player', 'UCD Student ID', 'Session', 'Status', 'Started', ''].map(function (h) { return el('th', { text: h }); }))]));
-    table.appendChild(el('tbody', {}, rows.length ? rows : [el('tr', {}, [el('td', { colspan: '5', text: 'No players yet.' })])]));
+    table.appendChild(el('tbody', {}, rows.length ? rows : [el('tr', {}, [el('td', { colspan: '6', text: 'No players yet.' })])]));
     body.appendChild(el('div', { class: 'pfa-card' }, [head, table]));
 
     async function deleteParticipant(uid, who) {
       if (!window.confirm('Delete participant "' + who + '" and all their data? This cannot be undone.')) return;
       toast('Deleting…');
-      try {
-        var names = ['events', 'rounds'];
-        for (var n = 0; n < names.length; n++) {
-          try {
-            var sn = await fb.F.getDocs(fb.F.collection(fb.db, 'participants', uid, names[n]));
-            for (var j = 0; j < sn.docs.length; j++) { try { await fb.F.deleteDoc(sn.docs[j].ref); } catch (e) {} }
-          } catch (e) {}
-        }
-        try { await fb.F.deleteDoc(fb.F.doc(fb.db, 'participants', uid, 'survey', 'answers')); } catch (e) {}
-        await fb.F.deleteDoc(fb.F.doc(fb.db, 'participants', uid));
-        toast('Participant deleted.');
-        renderParticipants(body);
-      } catch (e) { toast('Delete failed: ' + ((e && e.code) || 'error')); }
+      try { await deleteParticipantDeep(uid); toast('Participant deleted.'); renderParticipants(body); }
+      catch (e) { toast('Delete failed: ' + ((e && e.code) || 'error')); }
+    }
+    async function deleteAllParticipants() {
+      if (!parts.length) return;
+      if (!window.confirm('Delete ALL ' + parts.length + ' participant' + (parts.length === 1 ? '' : 's') + ' and all their data (moves, rounds, survey)? This cannot be undone.')) return;
+      toast('Deleting all participants…');
+      var ok = 0;
+      for (var i = 0; i < parts.length; i++) { try { await deleteParticipantDeep(parts[i]._id); ok++; } catch (e) {} }
+      toast('Deleted ' + ok + ' participant' + (ok === 1 ? '' : 's') + '.');
+      renderParticipants(body);
     }
   }
 
@@ -821,43 +856,143 @@
     XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs');
     return XLSX;
   }
-  async function exportExcel(parts) {
-    toast('Building export...');
+  function parseJson(s, fallback) { if (s == null) return fallback; if (typeof s !== 'string') return s; try { return JSON.parse(s); } catch (e) { return fallback; } }
+  // Build a rows x cols "FrameMatrix" (0 = empty, else brick name) from a list of
+  // placements [{name, cells:[[r,c],...]}]. Board size is inferred from the cells
+  // (PortfolioFit is a fixed 4x4, but this stays general).
+  function matrixFromPlacements(placements) {
+    placements = placements || [];
+    var rows = 4, cols = 4, i, j, cs;
+    for (i = 0; i < placements.length; i++) { cs = placements[i].cells || []; for (j = 0; j < cs.length; j++) { if (cs[j][0] + 1 > rows) rows = cs[j][0] + 1; if (cs[j][1] + 1 > cols) cols = cs[j][1] + 1; } }
+    var m = []; for (i = 0; i < rows; i++) { var row = []; for (j = 0; j < cols; j++) row.push(0); m.push(row); }
+    for (i = 0; i < placements.length; i++) { var p = placements[i], c2 = p.cells || []; for (j = 0; j < c2.length; j++) { var r = c2[j][0], c = c2[j][1]; if (m[r] && c < cols) m[r][c] = p.name || 1; } }
+    return m;
+  }
+  // Auto-size columns to the longest cell value (capped), for readability.
+  function autoWidth(ws, X) {
+    try {
+      var ref = ws['!ref']; if (!ref) return; var range = X.utils.decode_range(ref); var widths = [];
+      for (var c = range.s.c; c <= range.e.c; c++) {
+        var w = 10;
+        for (var r = range.s.r; r <= range.e.r; r++) { var cell = ws[X.utils.encode_cell({ r: r, c: c })]; if (cell && cell.v != null) { var len = String(cell.v).length; if (len > w) w = len; } }
+        widths.push({ wch: Math.min(60, w + 2) });
+      }
+      ws['!cols'] = widths;
+    } catch (e) {}
+  }
+  function whoOf(p) { return p.anonymousLabel || p.participantId || p.email || p._id; }
+  function sidOf(p) { return p.studentId || (p.registration && p.registration.studentId) || ''; }
+  function effRegQs(qs) { return (qs && qs.length) ? qs : ((window.PF_DEFAULTS && window.PF_DEFAULTS.registrationQuestions) || []); }
+  function effSurveyQs(qs) { return (qs && qs.length) ? qs : ((window.PF_DEFAULTS && window.PF_DEFAULTS.surveyQuestions) || []); }
+  function stamp() { return new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-'); }
+
+  // Assemble every play-derived sheet's rows for a set of participants, reading
+  // each player's events (→ Play log + Calculator + Notes + raw Events) and
+  // rounds. The Play log is the single tab that collects every brick move across
+  // all players: each row is one board change with its FrameMatrix snapshot.
+  async function gatherExport(parts) {
+    var play = [], calc = [], notes = [], rounds = [], survey = [], events = [], partInfo = [];
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i], uid = p._id, who = whoOf(p), sid = sidOf(p), sess = p.sessionId || '';
+      partInfo.push(p);
+      var evs = [];
+      try { var es = await fb.F.getDocs(fb.F.collection(fb.db, 'participants', uid, 'events')); es.forEach(function (d) { evs.push(d.data()); }); } catch (e) {}
+      evs.sort(function (a, b) { return (a.seq || 0) - (b.seq || 0); });
+      var lastT = {};   // per-puzzle baseline timestamp, for per-move durations
+      for (var k = 0; k < evs.length; k++) {
+        var v = evs[k], pid = v.puzzleId || '';
+        events.push({ 'Player': who, 'UCD Student ID': sid, 'Session': sess, 'Move #': v.seq, 'Type': v.type, 'Phase': v.phase, 'Round': v.round, 'Puzzle': pid, 'Net Value': v.net, 'Coverage %': v.coverage, 'Time': v.clientTime, 'Data (JSON)': v.dataJson });
+        if (v.type === 'round_start') {
+          lastT[pid] = v.t;
+          play.push({ 'Player': who, 'UCD Student ID': sid, 'Session': sess, 'Puzzle': pid, 'Difficulty': v.diff || '', 'Move #': v.seq, 'Action': 'start (empty board)', 'Brick (Id)': '', 'Anchor': '', 'Cells': '', 'Brick Value': '', 'Net Value': 0, 'Coverage %': 0, 'FrameMatrix': v.boardJson || '', 'Time': v.clientTime, 'Duration (s)': '' });
+        } else if (v.type === 'place' || v.type === 'remove') {
+          var prev = (lastT[pid] != null) ? lastT[pid] : v.t; var dur = (v.t - prev) / 1000; lastT[pid] = v.t;
+          play.push({ 'Player': who, 'UCD Student ID': sid, 'Session': sess, 'Puzzle': pid, 'Difficulty': '', 'Move #': v.seq, 'Action': v.action || (v.type === 'place' ? 'add' : 'remove'), 'Brick (Id)': v.brick || '', 'Anchor': v.anchor || '', 'Cells': v.cellsJson || '', 'Brick Value': (v.brickValue != null ? v.brickValue : ''), 'Net Value': v.net, 'Coverage %': v.coverage, 'FrameMatrix': v.boardJson || '', 'Time': v.clientTime, 'Duration (s)': Math.round(dur * 10) / 10 });
+        } else if (v.type === 'calc') {
+          calc.push({ 'Player': who, 'UCD Student ID': sid, 'Session': sess, 'Puzzle': pid, 'Time': v.clientTime, 'Input': v.calcExpr || '', 'Output': v.calcResult || '' });
+        } else if (v.type === 'note') {
+          notes.push({ 'Player': who, 'UCD Student ID': sid, 'Session': sess, 'Puzzle': pid, 'Time': v.clientTime, 'Note': v.noteText || '' });
+        }
+      }
+      try { var rs = await fb.F.getDocs(fb.F.collection(fb.db, 'participants', uid, 'rounds')); rs.forEach(function (d) { var rv = d.data(); var pls = parseJson(rv.placementsJson, []); rounds.push({ 'Player': who, 'UCD Student ID': sid, 'Session': sess, 'Puzzle #': rv.index, 'Puzzle ID': rv.puzzleId, 'Difficulty': rv.diff, 'Net Value': rv.net, 'Total Value': rv.value, 'Resource Cost': rv.cost, 'Coverage %': rv.coverage, 'Fitness %': rv.fitness, 'Bricks Placed': rv.placed, 'Board Cells': rv.total, 'Time (s)': rv.time, 'Best Value': rv.bestValue, 'Final FrameMatrix': JSON.stringify(matrixFromPlacements(pls)) }); }); } catch (e) {}
+      try { var sd = await fb.F.getDoc(fb.F.doc(fb.db, 'participants', uid, 'survey', 'answers')); if (sd.exists()) { var sv = sd.data(); survey.push({ _p: p, _answers: sv.answers || {}, _completedAt: fmtTs(sv.completedAt) }); } } catch (e) {}
+    }
+    return { play: play, calc: calc, notes: notes, rounds: rounds, survey: survey, events: events, partInfo: partInfo };
+  }
+
+  // Build & download the workbook for a set of participants. regQs / surveyQs set
+  // the column order for the Participants and Survey sheets so each question
+  // appears as a column in the order it was presented to participants.
+  async function exportWorkbook(parts, regQs, surveyQs, fileName) {
+    if (!parts || !parts.length) { toast('No participants to export.'); return; }
+    toast('Building export…');
     try {
       var X = await ensureXLSX();
-      var pRows = [], eRows = [], rRows = [], sRows = [];
-      for (var i = 0; i < parts.length; i++) {
-        var p = parts[i], uid = p._id;
-        var base = { player: p.anonymousLabel || p.participantId || '', studentId: p.studentId || (p.registration && p.registration.studentId) || '', session: p.sessionId || '', status: p.status || '', consentGiven: p.consentGiven === true ? 'yes' : '', started: fmtTs(p.createdAt), uid: uid };
+      var data = await gatherExport(parts);
+      var regList = effRegQs(regQs), sQ = effSurveyQs(surveyQs);
+
+      var pRows = data.partInfo.map(function (p) {
         var reg = p.registration || {};
-        pRows.push(Object.assign({}, base, flatten(reg)));
-        // events
-        try {
-          var es = await fb.F.getDocs(fb.F.collection(fb.db, 'participants', uid, 'events'));
-          es.forEach(function (d) { var v = d.data(); eRows.push({ player: base.player, session: base.session, uid: uid, seq: v.seq, type: v.type, phase: v.phase, round: v.round, puzzleId: v.puzzleId, net: v.net, coverage: v.coverage, clientTime: v.clientTime, data: v.dataJson }); });
-        } catch (e) {}
-        // rounds
-        try {
-          var rs = await fb.F.getDocs(fb.F.collection(fb.db, 'participants', uid, 'rounds'));
-          rs.forEach(function (d) { var v = d.data(); rRows.push({ player: base.player, session: base.session, uid: uid, puzzleId: v.puzzleId, index: v.index, diff: v.diff, net: v.net, value: v.value, cost: v.cost, coverage: v.coverage, fitness: v.fitness, placed: v.placed, total: v.total, time: v.time, placements: v.placementsJson }); });
-        } catch (e) {}
-        // survey
-        try {
-          var sd = await fb.F.getDoc(fb.F.doc(fb.db, 'participants', uid, 'survey', 'answers'));
-          if (sd.exists()) { var sv = sd.data(); sRows.push(Object.assign({ player: base.player, session: base.session, uid: uid, completedAt: fmtTs(sv.completedAt) }, flatten(sv.answers || {}))); }
-        } catch (e) {}
-      }
+        var row = { 'Player': whoOf(p), 'UCD Student ID': sidOf(p), 'Session': p.sessionId || '', 'Status': p.status || '', 'Consent': p.consentGiven === true ? 'yes' : '', 'Started': fmtTs(p.createdAt) };
+        regList.forEach(function (q) { if (q.id === 'studentId') return; row[q.label || q.id] = (reg[q.id] != null ? reg[q.id] : ''); });
+        Object.keys(reg).forEach(function (kk) { if (kk === 'studentId') return; var covered = regList.some(function (q) { return q.id === kk; }); if (!covered) row['reg_' + kk] = (reg[kk] && typeof reg[kk] === 'object') ? JSON.stringify(reg[kk]) : reg[kk]; });
+        var st = p.stats || {};
+        row['Final Net Value'] = (st.totalNet != null ? st.totalNet : '');
+        row['Final Coverage %'] = (st.coverage != null ? st.coverage : '');
+        row['Total Time (s)'] = (st.totalTime != null ? st.totalTime : '');
+        return row;
+      });
+
+      var sRows = data.survey.map(function (s) {
+        var p = s._p, ans = s._answers;
+        var row = { 'Player': whoOf(p), 'UCD Student ID': sidOf(p), 'Session': p.sessionId || '', 'Completed at': s._completedAt };
+        sQ.forEach(function (q) { row[q.label || q.id] = (ans[q.id] != null ? ans[q.id] : ''); });
+        Object.keys(ans).forEach(function (kk) { var covered = sQ.some(function (q) { return q.id === kk; }); if (!covered) row[kk] = ans[kk]; });
+        return row;
+      });
+
       var wb = X.utils.book_new();
-      X.utils.book_append_sheet(wb, X.utils.json_to_sheet(pRows.length ? pRows : [{}]), 'Participants');
-      X.utils.book_append_sheet(wb, X.utils.json_to_sheet(eRows.length ? eRows : [{}]), 'Events');
-      X.utils.book_append_sheet(wb, X.utils.json_to_sheet(rRows.length ? rRows : [{}]), 'Rounds');
-      X.utils.book_append_sheet(wb, X.utils.json_to_sheet(sRows.length ? sRows : [{}]), 'Survey');
-      var stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-      X.writeFile(wb, 'portfoliofit-data-' + stamp + '.xlsx');
+      function add(name, rows) { var ws = X.utils.json_to_sheet(rows.length ? rows : [{}]); autoWidth(ws, X); X.utils.book_append_sheet(wb, ws, name); }
+      add('Play log', data.play);
+      add('Calculator', data.calc);
+      add('Notes', data.notes);
+      add('Participants', pRows);
+      add('Rounds', data.rounds);
+      add('Survey', sRows);
+      add('Events (raw)', data.events);
+      X.writeFile(wb, fileName);
       toast('Export ready.');
     } catch (e) { toast('Export failed: ' + ((e && e.message) || 'error')); console.error('[PFA] export failed', e); }
   }
-  function flatten(obj) { var o = {}; Object.keys(obj || {}).forEach(function (k) { var v = obj[k]; o['reg_' + k] = (v && typeof v === 'object') ? JSON.stringify(v) : v; }); return o; }
+
+  // All participants (config/app question order).
+  function exportExcel(parts) { return exportWorkbook(parts, cfg.registrationQuestions, cfg.surveyQuestions, 'portfoliofit-all-' + stamp() + '.xlsx'); }
+  // One participant's own data.
+  function exportParticipant(p) { var tag = (sidOf(p) || whoOf(p) || p._id).toString().replace(/[^A-Za-z0-9_-]/g, '_'); return exportWorkbook([p], cfg.registrationQuestions, cfg.surveyQuestions, 'portfoliofit-user-' + tag + '-' + stamp() + '.xlsx'); }
+  // Every participant who played a given session (one combined file; the session's
+  // own registration/survey question order is used for those sheets).
+  async function exportSession(code) {
+    toast('Loading session data…');
+    try {
+      var sessSnap = await fb.F.getDoc(fb.F.doc(fb.db, 'sessions', code));
+      var sd = sessSnap.exists() ? sessSnap.data() : {};
+      var pSnap = await fb.F.getDocs(fb.F.collection(fb.db, 'participants'));
+      var parts = []; pSnap.forEach(function (d) { var v = d.data(); if ((v.sessionId || '') === code) parts.push(Object.assign({ _id: d.id }, v)); });
+      if (!parts.length) { toast('No participants have played session "' + code + '" yet.'); return; }
+      parts.sort(function (a, b) { return tsMs(a.createdAt) - tsMs(b.createdAt); });
+      return exportWorkbook(parts, sd.registrationQuestions, sd.surveyQuestions, 'portfoliofit-session-' + code + '-' + stamp() + '.xlsx');
+    } catch (e) { toast('Session export failed: ' + ((e && e.code) || (e && e.message) || 'error')); }
+  }
+
+  // ---- Deep delete helpers (used by single + bulk delete) ----
+  async function deleteParticipantDeep(uid) {
+    var names = ['events', 'rounds'];
+    for (var n = 0; n < names.length; n++) {
+      try { var sn = await fb.F.getDocs(fb.F.collection(fb.db, 'participants', uid, names[n])); for (var j = 0; j < sn.docs.length; j++) { try { await fb.F.deleteDoc(sn.docs[j].ref); } catch (e) {} } } catch (e) {}
+    }
+    try { await fb.F.deleteDoc(fb.F.doc(fb.db, 'participants', uid, 'survey', 'answers')); } catch (e) {}
+    await fb.F.deleteDoc(fb.F.doc(fb.db, 'participants', uid));
+  }
 
   // ---- bootstrap ----
   async function init() {

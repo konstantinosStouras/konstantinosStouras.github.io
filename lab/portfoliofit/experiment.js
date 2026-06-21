@@ -272,14 +272,40 @@
   }
 
   // ---- Event logging ----------------------------------------------------
+  // Every event is stored both as raw JSON (dataJson) and, for the meaningful
+  // action types, as flat structured fields so the admin export can build
+  // intuitive, per-section columns without re-parsing JSON. Board-changing
+  // moves carry the FrameMatrix snapshot (board), the brick, its anchor and the
+  // cells it occupies; calculator and notes carry their input/output/text.
   function logEvent(type, payload) {
     if (S.offline) return;                        // nothing to write to
+    payload = payload || {};
     var ev = {
       seq: S.seq++, t: Date.now(), clientTime: new Date().toISOString(),
       phase: S.phase, round: S.roundIndex, puzzleId: S.currentPuzzleId || null,
-      type: type, dataJson: safeJson(payload || {})
+      type: type, dataJson: safeJson(payload)
     };
-    if (payload && payload.metrics) { ev.net = payload.metrics.net; ev.coverage = payload.metrics.coverage; }
+    if (payload.metrics) {
+      ev.net = payload.metrics.net; ev.coverage = payload.metrics.coverage;
+      ev.value = payload.metrics.value; ev.cost = payload.metrics.cost;
+      ev.placed = payload.metrics.placed; ev.total = payload.metrics.total;
+    }
+    if (type === 'place' || type === 'remove') {
+      ev.action = (type === 'place') ? 'add' : 'remove';
+      ev.brick = payload.name || null;
+      ev.anchor = payload.anchor || null;
+      ev.cellsJson = payload.cells ? safeJson(payload.cells) : null;
+      ev.boardJson = payload.board ? safeJson(payload.board) : null;
+      if (payload.value != null) ev.brickValue = payload.value;
+    } else if (type === 'round_start' || type === 'round_end') {
+      ev.boardJson = payload.board ? safeJson(payload.board) : null;
+      if (payload.diff != null) ev.diff = payload.diff;
+    } else if (type === 'calc') {
+      ev.calcExpr = (payload.expr != null) ? String(payload.expr) : null;
+      ev.calcResult = (payload.result != null) ? String(payload.result) : null;
+    } else if (type === 'note') {
+      ev.noteText = (payload.text != null) ? String(payload.text) : null;
+    }
     S.buffer.push(ev);
     flush();
   }
