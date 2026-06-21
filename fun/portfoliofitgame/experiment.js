@@ -2,7 +2,7 @@
    PortfolioFit for Managers — anonymous play layer
    ---------------------------------------------------------------------
    Turns the PortfolioFit game into a fully anonymous, session-aware flow:
-     welcome  ->  training  ->  main phase  ->  stats  ->  survey  ->  thank-you
+     welcome  ->  training  ->  main phase  ->  stats  ->  thank-you
    plus per-action logging to a dedicated Firebase project.
 
    Anyone can play with NO sign-up: on the welcome screen a visitor is signed
@@ -42,7 +42,7 @@
       welcomeBody: [
         'In this game, you drag and drop project <b>bricks</b> of different shapes into a frame. Each brick carries a <b>dollar value</b>, representing its potential contribution to your portfolio.',
         'Your challenge is to <b>build smart</b>: bricks must fit entirely <b>within the frame</b> and <b>cannot overlap</b>. The strategic element: every <b>empty cell</b> left in the frame carries a <b>$1 penalty</b>. Maximise your <b>net value</b> (total value of placed bricks minus the penalty for empty cells).',
-        'This game has three phases: a <b>training phase</b>, a <b>game phase</b>, and a short <b>post-play survey</b>. You can play completely anonymously — no sign-up needed.'
+        'This game has two phases: a <b>training phase</b> and a <b>game phase</b>. You can play completely anonymously — no sign-up needed.'
       ],
       welcomeButton: 'Start',
       trainingTitle: 'Training phase',
@@ -230,18 +230,6 @@
     };
     authM.onAuthStateChanged(fb.auth, onAuthChanged);
   }
-  // Cloud Functions are optional: loaded on demand and non-fatal. If the module
-  // fails to load, registration/survey fall back to direct Firestore writes, so
-  // a functions hiccup never blocks the app from starting.
-  async function ensureFunctions() {
-    if (fb.Fn && fb.fns) return true;
-    try {
-      var fnM = await import(FB_BASE + 'firebase-functions.js');
-      fb.Fn = fnM; fb.fns = fnM.getFunctions(fb.app, 'europe-west1');
-      return true;
-    } catch (e) { console.warn('[PFX] Cloud Functions unavailable; using direct writes', e); return false; }
-  }
-
   // Load the effective configuration. With a session code, read sessions/{code}
   // (an admin-frozen snapshot); otherwise read the default config/app document.
   // Returns { ok, notFound } so the welcome screen can flag an unknown code.
@@ -328,25 +316,17 @@
   }
 
   // ---- Phase: welcome ---------------------------------------------------
-  // Anonymous entry point. A visitor may optionally type a session code (or one
-  // can arrive prefilled via ?session=CODE); with no code the default config is
-  // used. "Start" signs the player in anonymously and loads the right config.
+  // Anonymous entry point. A session code can arrive via a deep link
+  // (?session=CODE); with no code the default config is used. "Start" signs the
+  // player in anonymously and loads the right config.
   function showWelcome() {
     S.phase = 'welcome';
     var body = [el('p', { html: cfg.texts.welcomeIntro })];
     (cfg.texts.welcomeBody || []).forEach(function (p) { body.push(el('p', { html: p })); });
 
     var err = el('div', { class: 'pfx-err' });
-    var sessInput = null;
     if (S.offline) {
-      body.push(el('p', { class: 'muted', text: 'You appear to be offline, so your game will not be saved and session codes are unavailable. You can still play the default game.' }));
-    } else {
-      sessInput = el('input', { type: 'text', placeholder: 'e.g. SPRING25 (optional)', autocomplete: 'off', spellcheck: 'false', value: urlSession() || '' });
-      body.push(el('div', { class: 'pfx-field' }, [
-        el('label', { text: 'Session code (optional)' }),
-        el('div', { class: 'help', text: 'Have a code from the organiser? Enter it to join that specific session. Otherwise just press Start to play the default game.' }),
-        sessInput
-      ]));
+      body.push(el('p', { class: 'muted', text: 'You appear to be offline, so your game will not be saved. You can still play the default game.' }));
     }
 
     var startBtn = el('button', { class: 'pfx-btn', on: { click: onStart } }, [cfg.texts.welcomeButton || 'Start']);
@@ -356,7 +336,9 @@
 
     async function onStart() {
       err.textContent = '';
-      var sid = sessInput ? (sessInput.value || '').trim() : '';
+      // The session-code field was removed from the welcome screen, but a deep
+      // link (?session=CODE) still joins that specific admin-created session.
+      var sid = urlSession();
       startBtn.setAttribute('disabled', 'true'); startBtn.textContent = 'Starting…';
       var res = await beginSession(sid);
       if (!res.ok) {
@@ -450,7 +432,6 @@
       { sel: '.netcard', title: 'Net value', text: 'Your score: the total value of placed bricks minus the empty-cell penalty. The tempting high-ROI bricks are often traps — aim for the best portfolio, not just any fit.' },
       { sel: '.kpi-panel', title: 'Your KPIs', text: 'These update live as you build:<br><b>Total Value</b> — dollars of placed bricks.<br><b>Resource Cost</b> — the empty-cell penalty ($1 each).<br><b>Value / Resource</b> — your value-per-cell (ROI).<br><b>Coverage</b> — how much of the frame is filled.<br><b>Portfolio Fitness</b> — how close you are to the best possible net value.<br><i>Hover over any KPI to see a short explanation of what it means.</i>' },
       { sel: '.tools .tool:nth-of-type(1)', title: 'Calculator', text: 'Use the calculator to work out the value of each brick, its value-per-cell, or any other calculation you like while you plan your portfolio.' },
-      { sel: '.tools .tool:nth-of-type(2)', title: 'My notes', text: 'Writing down your strategy really matters. Note the <b>heuristic</b> you follow (for example, do you grab the highest value-per-cell bricks first, or plan the whole fit?), what you are trying to <b>maximise</b> (your net value), and the reasoning behind each move. It helps you think clearly now and remember your approach later.' },
       { sel: '#status', title: 'Helpful nudges', text: 'Keep an eye just below the board: encouraging messages and reminders pop up here to help you keep going and reach your best net value.' },
       { center: true, title: 'Make it yours', text: 'Every box on this screen is yours to arrange. <b>Drag a box by its body to move it</b>, or <b>drag any edge or corner to resize it</b>, so the layout suits you. A “Reset layout” button (bottom-left) restores the default at any time.' },
       { sel: '.pfx-submit', title: 'When you are ready', text: 'When you are happy with your portfolio (or the time runs out) this green button takes you forward — during training, on to the main game.' }
@@ -741,78 +722,12 @@
     }));
     showOverlay(card(cfg.texts.statsTitle || 'Thank you for playing!', [
       grid,
-      el('p', { class: 'muted', text: 'Please complete a short survey about your experience.' }),
-      el('div', { class: 'pfx-row' }, [el('button', { class: 'pfx-btn', on: { click: showSurvey } }, ['Continue to Survey'])])
+      el('div', { class: 'pfx-row' }, [el('button', { class: 'pfx-btn', on: { click: showThankYou } }, ['Finish'])])
     ]));
     if (fb && S.user) {
-      try { fb.F.setDoc(fb.F.doc(fb.db, 'participants', S.user.uid), { status: 'survey', stats: { totalNet: totalNet, coverage: coverage, totalTime: totalTime }, updatedAt: fb.F.serverTimestamp() }, { merge: true }); } catch (e) {}
+      try { fb.F.setDoc(fb.F.doc(fb.db, 'participants', S.user.uid), { status: 'done', stats: { totalNet: totalNet, coverage: coverage, totalTime: totalTime }, updatedAt: fb.F.serverTimestamp() }, { merge: true }); } catch (e) {}
     }
     logEvent('stats_shown', { totalNet: totalNet, coverage: coverage, totalTime: totalTime });
-  }
-
-  // ---- Phase: survey ----------------------------------------------------
-  function buildField(q) {
-    var field = el('div', { class: 'pfx-field' });
-    field.appendChild(el('label', { text: q.label + (q.required ? ' *' : '') }));
-    if (q.help) field.appendChild(el('div', { class: 'help', text: q.help }));
-    var input;
-    if (q.type === 'select') {
-      input = el('select', {}, [el('option', { value: '' }, ['Please select...'])].concat(
-        (q.options || []).map(function (o) { return el('option', { value: o }, [o]); })));
-    } else if (q.type === 'radio') {
-      input = el('div', { class: 'radio' });
-      (q.options || []).forEach(function (o) { input.appendChild(el('label', {}, [el('input', { type: 'radio', name: q.id, value: o }), o])); });
-    } else if (q.type === 'textarea') {
-      input = el('textarea', { rows: '3', style: 'width:100%;padding:10px 12px;border:1px solid #e0dbd0;border-radius:10px;font-size:14px;font-family:inherit;resize:vertical;' });
-    } else {
-      input = el('input', { type: q.type || 'text', autocomplete: 'off' });
-    }
-    field.appendChild(input);
-    return {
-      field: field, q: q,
-      read: function () { if (q.type === 'radio') { var s = input.querySelector('input:checked'); return s ? s.value : ''; } return input.value.trim(); }
-    };
-  }
-  function showSurvey() {
-    S.phase = 'survey';
-    var questions = (cfg.surveyQuestions && cfg.surveyQuestions.length) ? cfg.surveyQuestions : DEFAULTS.surveyQuestions;
-    var form = el('div', {});
-    var fields = questions.map(function (q) { var f = buildField(q); form.appendChild(f.field); return f; });
-    var err = el('div', { class: 'pfx-err' });
-    var submit = el('button', { class: 'pfx-btn', on: { click: doSubmit } }, ['Submit Survey']);
-    form.appendChild(err);
-    form.appendChild(el('div', { class: 'pfx-row' }, [submit]));
-    showOverlay(card(cfg.texts.surveyTitle || 'Post-Game Survey', [
-      el('p', { text: cfg.texts.surveyIntro || 'Please share your thoughts (all fields are required).' }), form
-    ]));
-    async function doSubmit() {
-      err.textContent = '';
-      var answers = {};
-      for (var i = 0; i < fields.length; i++) {
-        var f = fields[i], v = f.read();
-        if (f.q.required && !v) { err.textContent = 'Please complete: ' + f.q.label; return; }
-        answers[f.q.id] = v;
-      }
-      submit.setAttribute('disabled', 'true'); submit.textContent = 'Submitting...';
-      // Offline: nothing to save — just acknowledge and finish.
-      if (S.offline || !fb || !S.user) { showThankYou(); return; }
-      try {
-        try {
-          if (!(await ensureFunctions())) throw new Error('functions unavailable');
-          var fn = fb.Fn.httpsCallable(fb.fns, 'submitSurvey');
-          await fn({ answers: answers });
-        } catch (fnErr) {
-          await fb.F.setDoc(fb.F.doc(fb.db, 'participants', S.user.uid, 'survey', 'answers'),
-            { answers: answers, completedAt: fb.F.serverTimestamp() }, { merge: true });
-          await fb.F.setDoc(fb.F.doc(fb.db, 'participants', S.user.uid), { status: 'done', updatedAt: fb.F.serverTimestamp() }, { merge: true });
-        }
-        logEvent('survey_submit', { count: Object.keys(answers).length });
-        showThankYou();
-      } catch (e) {
-        submit.removeAttribute('disabled'); submit.textContent = 'Submit Survey';
-        err.textContent = 'Could not submit. Please try again.';
-      }
-    }
   }
 
   // ---- Phase: thank-you -------------------------------------------------
@@ -829,7 +744,7 @@
   async function resumeFlow() {
     var st = S.participant && S.participant.status;
     if (st === 'done') return showThankYou();
-    if (st === 'survey') return showSurvey();
+    if (st === 'survey') return showThankYou();   // legacy: survey phase removed
     if (st === 'playing') { try { await restoreQueue(); } catch (e) {} }
     startMain();
   }
@@ -844,7 +759,7 @@
   function enableLayoutCustomize() {
     var defs = [
       ['netcard', '.netcard'], ['kpis', '.kpi-panel'], ['board', '.board-card'],
-      ['bricks', '.game > div > .card'], ['calc', '.tools .tool:nth-of-type(1)'], ['notes', '.tools .tool:nth-of-type(2)']
+      ['bricks', '.game > div > .card'], ['calc', '.tools .tool:nth-of-type(1)']
     ];
     var saved = loadLayout(), any = false;
     defs.forEach(function (d) { var node = document.querySelector(d[1]); if (node) { setupMovable(d[0], node, saved[d[0]]); any = true; } });
@@ -889,9 +804,8 @@
       if (!playing() || e.button > 0) return;
       // Never hijack a press on a control (button/input/cell/piece…), even when it
       // sits inside an edge/corner resize band — otherwise the click is eaten and
-      // the control looks dead (e.g. the calculator "=" in a corner, or the full-
-      // width "Add note" button on the bottom edge). Resize from any non-control
-      // part of the edge instead.
+      // the control looks dead (e.g. the calculator "=" in a corner). Resize from
+      // any non-control part of the edge instead.
       if (isInteractive(e.target)) return; // let the click happen
       var rect = cardEl.getBoundingClientRect(), edge = edgeAt(e, rect);
       if (edge) {

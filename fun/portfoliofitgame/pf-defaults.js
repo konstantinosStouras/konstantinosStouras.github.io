@@ -10,7 +10,7 @@ window.PF_DEFAULTS = {
     welcomeBody: [
       'In this game, you drag and drop project <b>bricks</b> of different shapes into a frame. Each brick carries a <b>dollar value</b>, representing its potential contribution to your portfolio.',
       'Your challenge is to <b>build smart</b>: bricks must fit entirely <b>within the frame</b> and <b>cannot overlap</b>. The strategic element: every <b>empty cell</b> left in the frame carries a <b>$1 penalty</b>. Maximise your <b>net value</b> (total value of placed bricks minus the penalty for empty cells).',
-      'This game has three phases: a <b>training phase</b>, a <b>game phase</b>, and a short <b>post-play survey</b>. You can play completely anonymously — no sign-up needed.'
+      'This game has two phases: a <b>training phase</b> and a <b>game phase</b>. You can play completely anonymously — no sign-up needed.'
     ],
     welcomeButton: 'Start',
     trainingTitle: 'Training phase',
