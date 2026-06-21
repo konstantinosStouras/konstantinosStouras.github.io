@@ -3,9 +3,29 @@ import {
   collection, addDoc, onSnapshot, orderBy, query, serverTimestamp
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { db, functions } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import styles from './AIChat.module.css'
+
+// Render assistant Markdown safely: GitHub-flavoured Markdown -> HTML, then
+// sanitise to a small tag allow-list so things like **bold**, *italic*, # and
+// lists display properly instead of showing as literal characters.
+marked.setOptions({ gfm: true, breaks: true })
+const MD_TAGS = [
+  'p', 'br', 'strong', 'em', 'b', 'i', 'u', 's', 'del', 'code', 'pre',
+  'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote',
+  'a', 'hr', 'span', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+]
+const MD_ATTR = ['href', 'title', 'target', 'rel', 'class', 'align']
+function renderMarkdown(text) {
+  const html = marked.parse(text || '', { async: false })
+  const clean = DOMPurify.sanitize(html, { ALLOWED_TAGS: MD_TAGS, ALLOWED_ATTR: MD_ATTR })
+  // Open any links the AI returns in a new tab so they don't navigate away
+  // from the session.
+  return clean.replace(/<a /g, '<a target="_blank" rel="noopener noreferrer" ')
+}
 
 /**
  * AIChat
@@ -151,9 +171,16 @@ export default function AIChat({ sessionId, scope, scopeId, aiConfig }) {
             {msg.role === 'user' && (
               <span className={styles.userLabel}>{msg.authorName?.split(' ')[0] || 'You'}</span>
             )}
-            <div className={styles.bubble}>
-              {msg.text}
-            </div>
+            {msg.role === 'assistant' ? (
+              <div
+                className={`${styles.bubble} ${styles.markdown}`}
+                dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.text) }}
+              />
+            ) : (
+              <div className={styles.bubble}>
+                {msg.text}
+              </div>
+            )}
           </div>
         ))}
 
