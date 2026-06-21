@@ -214,10 +214,22 @@ publish it; versioned in the repo, deployed manually to the lab project):
   mirrors what each player will see. Order is shuffled per participant and persisted
   (`puzzleOrder` + `mainIndex`) so a mid-session reload resumes the same queue.
 - **Event logging:** one buffered, retry-on-failure writer appends a doc per
-  action to `participants/{uid}/events` (place/move/rotate/flip/remove/calc/note/
-  round-start/round-end/stats/survey). Nested arrays (cells/placements) are
-  JSON-stringified (Firestore rejects nested arrays). Per-round summaries go to
-  `participants/{uid}/rounds`.
+  action to `participants/{uid}/events` (round_start/place/remove/orient/calc/
+  note/round_end, plus stats/survey). Each event keeps the raw payload in
+  `dataJson` **and** flat structured fields so the export needs no re-parsing:
+  - **Board moves** (`place`/`remove`) carry `action` (add/remove), `brick`
+    (name), `anchor` (top-left `r,c`), `cellsJson`, `brickValue`, `net`,
+    `coverage`, and **`boardJson`** — the **FrameMatrix** snapshot of the board
+    *after* the move (a rows×cols matrix where each cell is `0` if empty or the
+    occupying brick's name; produced by the game's `pfBoardMatrix()` and included
+    on the `place`/`remove`/`round_start`/`round_end` payloads). `round_start`
+    logs the empty-board baseline.
+  - **Calculator** (`calc`) carries `calcExpr`/`calcResult` — every evaluation
+    attempt, including errors (so all input/output is captured).
+  - **Notes** (`note`) carries `noteText`.
+
+  Nested arrays (cells/board/placements) are JSON-stringified (Firestore rejects
+  nested arrays). Per-round summaries go to `participants/{uid}/rounds`.
 - **Stats → survey → thank-you:** aggregate the rounds (totals, coverage, time),
   render the survey from config, submit via the `submitSurvey` function (with a
   direct-write fallback), then the thank-you screen.
@@ -252,16 +264,39 @@ publish it; versioned in the repo, deployed manually to the lab project):
   - **Sessions** — create a **session** (a snapshot of the *current*
     configuration: texts, questions, settings, active puzzle set) under a
     **Session name** + optional **Session ID** (typed or auto-generated 3–40
-    char code), written to `sessions/{code}` with `status:'open'`. Lists sessions
-    (Session ID / Name / Status / **Participants** count / Created) with **copy
-    ID**, **close**/**reopen** (`status` toggles; closing blocks *new* joins —
+    char code), written to `sessions/{code}` with `status:'open'`. Sessions are
+    listed in two groups — **Active Sessions** (`status !== 'closed'`) and
+    **Completed Sessions** (`status === 'closed'`) — each with a **Delete all …
+    sessions** bulk button. Per row: **copy ID**, **⬇ Excel** (downloads a
+    combined workbook of *every* player who has played that session — see export
+    below), **close**/**reopen** (`status` toggles; closing blocks *new* joins —
     enforced in `experiment.js` `beginSession`), and **delete**. Players join by
     code; data is tagged with `sessionId`.
   - **Participants** — table of all players (Player / **UCD Student ID** / Session
-    / Status / Started), per-row **delete** (doc + subcollections), and **Export
-    to Excel** (SheetJS via CDN; sheets: Participants / Events / Rounds / Survey,
-    each carrying `player` + `session` + `uid`; the Participants sheet also carries
-    `studentId`, `consentGiven`, and the demographics flattened as `reg_*`).
+    / Status / Started). Header: **Export all to Excel** and **Delete all
+    participants** (deep delete via `deleteParticipantDeep`). Per row: **⬇ Excel**
+    (that one player's data) and **delete**.
+- **Excel export (`exportWorkbook`)** — SheetJS (xlsx) via CDN. One reusable
+  builder powers three entry points — **all participants** (`exportExcel`),
+  **one participant** (`exportParticipant`), and **one whole session**
+  (`exportSession`, aggregating every player tagged with that `sessionId` into a
+  single file, using that session's own question order). Sheets, each with
+  intuitive headings and ordered to follow the simulation:
+  - **Play log** — the google-sheet-style single tab collecting *every brick
+    move* across all included players: Player, UCD Student ID, Session, Puzzle,
+    Difficulty, Move #, Action (start/add/remove), Brick (Id), Anchor, Cells,
+    Brick Value, Net Value, Coverage %, **FrameMatrix** (board after the move),
+    Time, Duration (s) (gap since the previous move in that puzzle).
+  - **Calculator** — Player, Student ID, Session, Puzzle, Time, Input, Output.
+  - **Notes** — Player, Student ID, Session, Puzzle, Time, Note.
+  - **Participants** — identity columns then one column **per registration
+    question, in the order presented** (heading = question label), then summary
+    stats (Final Net Value / Coverage % / Total Time).
+  - **Rounds** — per-round summary incl. the round's **Final FrameMatrix**
+    (rebuilt from `placementsJson` via `matrixFromPlacements`).
+  - **Survey** — identity columns then one column **per survey question in order**
+    (heading = question label).
+  - **Events (raw)** — the full event log (incl. `dataJson`) for completeness.
 - Every editable tab carries the same three controls: **Save** and **Make this
   the default** (both persist this page to `config/app`; one live config, so they
   do the same write with different wording) and **Restore built-in default**
@@ -295,8 +330,14 @@ publish it; versioned in the repo, deployed manually to the lab project):
                                   country,levelOfStudy,workExperience,occupation,
                                   englishFluency}, studentId, consentGiven?,
                                   consentTimestamp?, puzzleOrder[], mainIndex
-    events/{autoId}               one doc per action (type + dataJson + context)
-    rounds/{autoId}               per-round summary (net/coverage/fitness/time…)
+    events/{autoId}               one doc per action: seq, t, clientTime, phase,
+                                  round, puzzleId, type, dataJson + flat fields —
+                                  place/remove: action, brick, anchor, cellsJson,
+                                  brickValue, boardJson (FrameMatrix), net,
+                                  coverage; calc: calcExpr/calcResult; note:
+                                  noteText; round_start/end: boardJson, diff
+    rounds/{autoId}               per-round summary (net/coverage/fitness/time,
+                                  placementsJson…)
     survey/answers                { answers, completedAt }
   ```
 - **Cloud Functions (v1, europe-west1):** `registerParticipant` (atomically

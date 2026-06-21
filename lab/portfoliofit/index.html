@@ -1171,7 +1171,7 @@
       setStatus('', '');
       resetTimer();
       startTimer();
-      pfEmit('round_start', { diff: diff, kappa: state.kappa, bestValue: state.bestValue, round: sessionRounds });
+      pfEmit('round_start', { diff: diff, kappa: state.kappa, bestValue: state.bestValue, round: sessionRounds, board: pfBoardMatrix() });
     }
 
     // Serialize a freshly generated puzzle so the admin can preview / freeze it.
@@ -1447,7 +1447,7 @@
       for (const [pr, pc] of cells) state.occupied.set(pr + ',' + pc, piece.id);
       piece.placed = true;
       piece.placedCells = cells;
-      pfEmit('place', { pieceId: piece.id, name: piece.name, value: piece.value, cells: cells, metrics: pfMetrics() });
+      pfEmit('place', { pieceId: piece.id, name: piece.name, value: piece.value, cells: cells, anchor: pfAnchorOf(cells), board: pfBoardMatrix(), metrics: pfMetrics() });
       state.selected = null;
       clearPreview();
       renderBoard();
@@ -1465,7 +1465,7 @@
       const formerCells = p.placedCells;
       for (const [r, c] of p.placedCells) state.occupied.delete(r + ',' + c);
       p.placed = false; p.placedCells = null;
-      pfEmit('remove', { pieceId: p.id, name: p.name, cells: formerCells, metrics: pfMetrics() });
+      pfEmit('remove', { pieceId: p.id, name: p.name, cells: formerCells, anchor: pfAnchorOf(formerCells), board: pfBoardMatrix(), metrics: pfMetrics() });
       state.selected = p.id;
       renderBoard();
       renderTray();
@@ -1672,7 +1672,7 @@
       const net = currentNet();
       const isHigh = saveBest(state.diff, net);
       showEnd(net, isHigh);
-      pfEmit('round_end', { diff: state.diff, net: net, full: state.occupied.size === state.region.size, metrics: pfMetrics(), placements: pfPlacements() });
+      pfEmit('round_end', { diff: state.diff, net: net, full: state.occupied.size === state.region.size, board: pfBoardMatrix(), metrics: pfMetrics(), placements: pfPlacements() });
       if (window.PFGame && typeof window.PFGame._onRoundEnd === 'function') { try { window.PFGame._onRoundEnd(pfMetrics()); } catch (e) {} }
     }
 
@@ -2148,11 +2148,13 @@
     function calcEval() {
       const expr = calcInput.value.trim();
       if (!expr) return;
-      if (!/^[0-9+\-*/().\s]+$/.test(expr)) { calcShow(expr, 'Error', true); return; }
+      // Log every evaluation attempt (input + output), including errors, so the
+      // research export captures everything typed into the calculator.
+      if (!/^[0-9+\-*/().\s]+$/.test(expr)) { calcShow(expr, 'Error', true); pfEmit('calc', { expr: expr, result: 'Error', error: true }); return; }
       let res;
       try { res = Function('"use strict"; return (' + expr + ');')(); }
-      catch (e) { calcShow(expr, 'Error', true); return; }
-      if (typeof res !== 'number' || !isFinite(res)) { calcShow(expr, 'Error', true); return; }
+      catch (e) { calcShow(expr, 'Error', true); pfEmit('calc', { expr: expr, result: 'Error', error: true }); return; }
+      if (typeof res !== 'number' || !isFinite(res)) { calcShow(expr, 'Error', true); pfEmit('calc', { expr: expr, result: 'Error', error: true }); return; }
       res = Math.round(res * 1e6) / 1e6;
       calcShow(expr, String(res), false);
       const line = document.createElement('div');
@@ -2225,6 +2227,28 @@
       const ps = state ? state.pieces : [];
       for (const p of ps) if (p.placed) out.push({ id: p.id, name: p.name, value: p.value, cells: p.placedCells });
       return out;
+    }
+    // Board as a rows x cols matrix: each cell is 0 (empty) or the NAME of the
+    // brick occupying it. This is the "FrameMatrix" notation used for logging —
+    // a snapshot of exactly which cells each placed brick occupies right now.
+    function pfBoardMatrix() {
+      if (!state) return null;
+      const rows = state.rows, cols = state.cols;
+      const m = [];
+      for (let r = 0; r < rows; r++) { const row = []; for (let c = 0; c < cols; c++) row.push(0); m.push(row); }
+      state.occupied.forEach(function (instId, key) {
+        const rc = key.split(','), r = +rc[0], c = +rc[1];
+        const p = state.pieces.find(function (pp) { return pp.id === instId; });
+        if (r >= 0 && r < rows && c >= 0 && c < cols) m[r][c] = p ? p.name : 1;
+      });
+      return m;
+    }
+    // Anchor = the top-left-most occupied cell of a brick, as an "r,c" string.
+    function pfAnchorOf(cells) {
+      if (!cells || !cells.length) return '';
+      let best = cells[0];
+      for (const cc of cells) { if (cc[0] < best[0] || (cc[0] === best[0] && cc[1] < best[1])) best = cc; }
+      return best[0] + ',' + best[1];
     }
     window.PFGame = {
       newGame: function (diff, limit) { newGame(diff || 'easy', limit); },
