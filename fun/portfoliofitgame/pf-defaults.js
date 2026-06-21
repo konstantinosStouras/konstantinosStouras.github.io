@@ -10,7 +10,7 @@ window.PF_DEFAULTS = {
     welcomeBody: [
       'In this game, you drag and drop project <b>bricks</b> of different shapes into a frame. Each brick carries a <b>dollar value</b>, representing its potential contribution to your portfolio.',
       'Your challenge is to <b>build smart</b>: bricks must fit entirely <b>within the frame</b> and <b>cannot overlap</b>. The strategic element: every <b>empty cell</b> left in the frame carries a <b>$1 penalty</b>. Maximise your <b>net value</b> (total value of placed bricks minus the penalty for empty cells).',
-      'This game has two phases: a <b>training phase</b> and a <b>game phase</b>. You can play completely anonymously — no sign-up needed.'
+      'You will start with a short interactive tour (which you can skip), then play a series of timed puzzles. You can play completely anonymously — no sign-up needed.'
     ],
     welcomeButton: 'Start',
     trainingTitle: 'Training phase',
@@ -28,10 +28,10 @@ window.PF_DEFAULTS = {
   },
   settings: {
     trainingDifficulty: 'easy',
-    puzzlesPerUser: { easy: 2, hard: 2 },
+    puzzlesPerUser: { easy: 1, hard: 1 },
     randomizeOrder: true,
     activePuzzleIds: [],
-    timeLimits: { easy: 120, hard: 180 }
+    timeLimits: { easy: 600, hard: 900 }   // 10 min easy, 15 min hard
   },
   registrationQuestions: [
     { id: 'participantId', label: 'Participant ID', type: 'text', required: true, system: 'participantId' },

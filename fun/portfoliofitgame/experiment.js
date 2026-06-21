@@ -2,7 +2,7 @@
    PortfolioFit for Managers — anonymous play layer
    ---------------------------------------------------------------------
    Turns the PortfolioFit game into a fully anonymous, session-aware flow:
-     welcome  ->  training  ->  main phase  ->  stats  ->  thank-you
+     welcome  ->  tour (skippable)  ->  main phase  ->  stats  ->  thank-you
    plus per-action logging to a dedicated Firebase project.
 
    Anyone can play with NO sign-up: on the welcome screen a visitor is signed
@@ -42,7 +42,7 @@
       welcomeBody: [
         'In this game, you drag and drop project <b>bricks</b> of different shapes into a frame. Each brick carries a <b>dollar value</b>, representing its potential contribution to your portfolio.',
         'Your challenge is to <b>build smart</b>: bricks must fit entirely <b>within the frame</b> and <b>cannot overlap</b>. The strategic element: every <b>empty cell</b> left in the frame carries a <b>$1 penalty</b>. Maximise your <b>net value</b> (total value of placed bricks minus the penalty for empty cells).',
-        'This game has two phases: a <b>training phase</b> and a <b>game phase</b>. You can play completely anonymously — no sign-up needed.'
+        'You will start with a short interactive tour (which you can skip), then play a series of timed puzzles. You can play completely anonymously — no sign-up needed.'
       ],
       welcomeButton: 'Start',
       trainingTitle: 'Training phase',
@@ -60,9 +60,10 @@
     },
     settings: {
       trainingDifficulty: 'easy',
-      puzzlesPerUser: { easy: 2, hard: 2 },
+      puzzlesPerUser: { easy: 1, hard: 1 },
       randomizeOrder: true,
-      activePuzzleIds: []
+      activePuzzleIds: [],
+      timeLimits: { easy: 600, hard: 900 }   // 10 min easy, 15 min hard
     },
     // Registration questions (matches the prototype form; admin-editable later).
     registrationQuestions: [
@@ -354,7 +355,7 @@
             : 'Could not start just now. Please check your connection and try again.');
         return;
       }
-      startTraining();
+      startTour();
     }
   }
 
@@ -402,31 +403,26 @@
   }
 
   // ---- Phase: training --------------------------------------------------
-  function startTraining() {
-    showOverlay(card(cfg.texts.trainingTitle, [
-      el('p', { html: cfg.texts.trainingBody }),
-      el('div', { class: 'pfx-row' }, [el('button', { class: 'pfx-btn', on: { click: runTraining } }, [cfg.texts.trainingButton || 'Begin training'])])
-    ]));
-  }
-  function runTraining() {
+  // After the welcome screen we run the (skippable) onboarding tour over a
+  // throwaway demo board, then go straight to the main game. There is no longer
+  // a separate, scored training round.
+  function startTour() {
     closeOverlay();
     document.body.classList.add('pf-playing');
-    S.phase = 'training';
-    S.roundIndex = 0;
-    S.currentPuzzleId = 'training';
+    S.phase = 'tour';
     var tdiff = (cfg.settings && cfg.settings.trainingDifficulty) || 'easy';
-    window.PFGame._onRoundEnd = onTrainingEnd;
-    window.PFGame.newGame(tdiff, limitFor(tdiff));
-    // Pause the clock and run the onboarding tour over the live board first.
-    if (window.PFGame.pauseTimer) window.PFGame.pauseTimer();
-    showGameSubmit('Continue to the game');   // visible so the tour can highlight it
+    window.PFGame._onRoundEnd = null;                 // the demo board is never scored
+    window.PFGame.newGame(tdiff, limitFor(tdiff));    // a sample puzzle for the tour to point at
+    if (window.PFGame.pauseTimer) window.PFGame.pauseTimer();   // freeze the demo clock during the tour
+    showGameSubmit('Continue to the game');           // visible so the tour can highlight it
     runTour(function () {
-      if (window.PFGame.resumeTimer) window.PFGame.resumeTimer();
-      showGameSubmit('Continue to the game');
+      hideGameSubmit();
+      document.body.classList.remove('pf-playing');
+      startMain();
     });
   }
 
-  // ---- Onboarding spotlight tour (before the first training round) -------
+  // ---- Onboarding spotlight tour (skippable; runs once after welcome) -------
   function runTour(onDone) {
     var STEPS = [
       { center: true, title: 'How PortfolioFit works', text: 'Each brick is a project worth a dollar value. Pack the right projects into the frame to maximise your <b>net value</b> — the total value of placed bricks minus a $1 penalty for every empty cell. Time is limited, so plan well. Let’s take a quick tour.' },
@@ -438,7 +434,7 @@
       { sel: '.tools .tool:nth-of-type(1)', title: 'Calculator', text: 'Use the calculator to work out the value of each brick, its value-per-cell, or any other calculation you like while you plan your portfolio.' },
       { sel: '#status', title: 'Helpful nudges', text: 'Keep an eye just below the board: encouraging messages and reminders pop up here to help you keep going and reach your best net value.' },
       { center: true, title: 'Make it yours', text: 'Every box on this screen is yours to arrange. <b>Drag a box by its body to move it</b>, or <b>drag any edge or corner to resize it</b>, so the layout suits you. A “Reset layout” button (bottom-left) restores the default at any time.' },
-      { sel: '.pfx-submit', title: 'When you are ready', text: 'When you are happy with your portfolio (or the time runs out) this green button takes you forward — during training, on to the main game.' }
+      { sel: '.pfx-submit', title: 'When you are ready', text: 'When you are happy with your portfolio (or the time runs out), this green button takes you forward to the next puzzle.' }
     ];
     var i = 0;
     var tour = el('div', { class: 'pfx-tour' });
@@ -461,7 +457,7 @@
     function navRow() {
       var last = (i === STEPS.length - 1);
       var back = (i > 0) ? el('button', { class: 'pfx-back', on: { click: function () { i--; show(); } } }, ['Back']) : el('span', {});
-      var next = el('button', { class: 'pfx-next', on: { click: function () { if (last) finish(); else { i++; show(); } } } }, [last ? 'Start training' : 'Next']);
+      var next = el('button', { class: 'pfx-next', on: { click: function () { if (last) finish(); else { i++; show(); } } } }, [last ? 'Start the game' : 'Next']);
       return el('div', { class: 'pfx-tiprow' }, [el('button', { class: 'pfx-skip', on: { click: finish } }, ['Skip tour']), el('div', { style: 'display:flex;gap:8px;' }, [back, next])]);
     }
     function show() {
@@ -534,13 +530,6 @@
       return function () { stopped = true; try { window.PFGame.demoClear(); } catch (e) {} };
     }
   }
-  function onTrainingEnd(metrics) {
-    window.PFGame._onRoundEnd = null;
-    hideGameSubmit();
-    logEvent('training_end', { trainingMetrics: metrics || null });
-    setTimeout(function () { startMain(); }, 400);
-  }
-
   // Load this anonymous player's existing participant record (used on reload to
   // resume them where they left off).
   async function loadParticipant() {
@@ -581,7 +570,7 @@
     // SAME reviewed set for every participant (only the order is randomized).
     // Nothing is generated invisibly per player; to serve more puzzles than the
     // built-in pool, the admin generates & freezes a reviewed set in the Puzzles tab.
-    var per = s.puzzlesPerUser || { easy: 2, hard: 2 };
+    var per = s.puzzlesPerUser || { easy: 1, hard: 1 };
     var def = (window.PF_DEFAULTS && window.PF_DEFAULTS.defaultPuzzles) || [];
     var poolE = [], poolH = [];
     def.forEach(function (spec, idx) { (spec.diff === 'hard' ? poolH : poolE).push({ id: 'default-' + idx, diff: (spec.diff === 'hard' ? 'hard' : 'easy'), spec: spec }); });
@@ -596,8 +585,8 @@
   }
   // Per-puzzle time budget (seconds): admin-configured if present, else built-in.
   function limitFor(diff) {
-    var tl = (cfg.settings && cfg.settings.timeLimits) || (window.PF_DEFAULTS && window.PF_DEFAULTS.settings && window.PF_DEFAULTS.settings.timeLimits) || { easy: 120, hard: 180 };
-    return (tl[diff] != null) ? tl[diff] : (diff === 'hard' ? 180 : 120);
+    var tl = (cfg.settings && cfg.settings.timeLimits) || (window.PF_DEFAULTS && window.PF_DEFAULTS.settings && window.PF_DEFAULTS.settings.timeLimits) || { easy: 600, hard: 900 };
+    return (tl[diff] != null) ? tl[diff] : (diff === 'hard' ? 900 : 600);
   }
   function money(v) { v = Math.round(v || 0); return (v < 0 ? '-$' : '$') + Math.abs(v); }
   function fmtTime(s) { s = Math.max(0, Math.round(s || 0)); var m = Math.floor(s / 60), ss = s % 60; return (m < 10 ? '0' : '') + m + ':' + (ss < 10 ? '0' : '') + ss; }
@@ -757,8 +746,11 @@
   // Each main box gets a drag grip (top-right) and a resize handle (bottom-right);
   // positions/sizes persist in localStorage. A Reset-layout button restores the
   // default. Grips/handles only show during play (body.pf-playing).
-  function loadLayout() { try { return JSON.parse(localStorage.getItem('pfx-layout')) || {}; } catch (e) { return {}; } }
-  function saveLayout(m) { try { localStorage.setItem('pfx-layout', JSON.stringify(m)); } catch (e) {} }
+  // Bumped to -v2 when the board/calculator layout was restructured, so stale
+  // saved positions from the old layout can't reintroduce overlaps.
+  var LAYOUT_KEY = 'pfx-layout-v2';
+  function loadLayout() { try { return JSON.parse(localStorage.getItem(LAYOUT_KEY)) || {}; } catch (e) { return {}; } }
+  function saveLayout(m) { try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(m)); } catch (e) {} }
   var _zTop = 5;
   function enableLayoutCustomize() {
     var defs = [
@@ -768,7 +760,7 @@
     var saved = loadLayout(), any = false;
     defs.forEach(function (d) { var node = document.querySelector(d[1]); if (node) { setupMovable(d[0], node, saved[d[0]]); any = true; } });
     if (any && !document.querySelector('.pfx-reset')) {
-      document.body.appendChild(el('button', { class: 'pfx-reset', title: 'Restore the default layout', on: { click: function () { try { localStorage.removeItem('pfx-layout'); } catch (e) {} location.reload(); } } }, ['↺ Reset layout']));
+      document.body.appendChild(el('button', { class: 'pfx-reset', title: 'Restore the default layout', on: { click: function () { try { localStorage.removeItem(LAYOUT_KEY); } catch (e) {} location.reload(); } } }, ['↺ Reset layout']));
     }
   }
   function setupMovable(key, cardEl, st) {
