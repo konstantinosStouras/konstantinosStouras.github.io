@@ -275,8 +275,11 @@ exports.sendAIMessage = functions.https.onCall(async (data, context) => {
 
   history.push({ role: 'user', content: userMessage })
 
+  // Time the provider call so we can report how long each AI reply took.
+  const genStart = Date.now()
   const { text: assistantText, inputTokens, outputTokens } =
     await callLLM(history.slice(-config.contextWindow), config)
+  const generationMs = Date.now() - genStart
 
   await db
     .collection('sessions').doc(sessionId)
@@ -293,6 +296,8 @@ exports.sendAIMessage = functions.https.onCall(async (data, context) => {
       model: config.model,
       inputTokens: inputTokens ?? null,
       outputTokens: outputTokens ?? null,
+      // How long the provider took to generate this reply (ms).
+      generationMs,
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
     })
 
