@@ -34,9 +34,6 @@
     ['welcomeIntro', 'Welcome — intro (HTML allowed)', 'area'],
     ['welcomeBody', 'Welcome — body paragraphs (one per line, HTML allowed)', 'paras'],
     ['welcomeButton', 'Welcome — start button', 'line'],
-    ['trainingTitle', 'Training — title', 'line'],
-    ['trainingBody', 'Training — body', 'area'],
-    ['trainingButton', 'Training — button', 'line'],
     ['mainTitle', 'Game phase — title', 'line'],
     ['mainIntro', 'Game phase — intro', 'area'],
     ['statsTitle', 'Stats — title', 'line'],
@@ -46,7 +43,6 @@
   // Group the text fields into collapsible "pages" for the Content tab.
   var PAGE_GROUPS = [
     { key: 'welcome', label: 'Welcome page', fields: ['welcomeTitle', 'welcomeIntro', 'welcomeBody', 'welcomeButton'] },
-    { key: 'training', label: 'Training phase', fields: ['trainingTitle', 'trainingBody', 'trainingButton'] },
     { key: 'main', label: 'Game phase', fields: ['mainTitle', 'mainIntro'] },
     { key: 'stats', label: 'Stats page', fields: ['statsTitle'] },
     { key: 'thankyou', label: 'Thank-you page', fields: ['thankyouTitle', 'thankyouBody'] }
@@ -316,7 +312,7 @@
       card.appendChild(el('p', { class: 'pfa-err', text: 'Puzzle generator not available. Open /fun/portfoliofitgame/?admin (the game must be on the page).' }));
       body.appendChild(card); return;
     }
-    var per0 = (cfg.settings && cfg.settings.puzzlesPerUser) || { easy: 2, hard: 2 };
+    var per0 = (cfg.settings && cfg.settings.puzzlesPerUser) || { easy: 1, hard: 1 };
     var needE0 = Math.max(0, per0.easy | 0), needH0 = Math.max(0, per0.hard | 0);
     card.appendChild(el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;align-items:center;' }, [
       el('button', { class: 'pfa-btn', on: { click: function () { generateSetForReview(); } } }, ['✨ Generate set to match Settings (' + needE0 + ' easy + ' + needH0 + ' hard)']),
@@ -362,7 +358,7 @@
     // built-in puzzles first, then generate the shortfall. Admin reviews/regenerates
     // and then Saves (freezes) so every participant plays this exact set.
     function generateSetForReview() {
-      var per = (cfg.settings && cfg.settings.puzzlesPerUser) || { easy: 2, hard: 2 };
+      var per = (cfg.settings && cfg.settings.puzzlesPerUser) || { easy: 1, hard: 1 };
       var needE = Math.max(0, per.easy | 0), needH = Math.max(0, per.hard | 0);
       if (!needE && !needH) { toast('Set the puzzle counts in the Settings tab first.'); return; }
       var def = (window.PF_DEFAULTS && window.PF_DEFAULTS.defaultPuzzles) || [];
@@ -410,7 +406,7 @@
       var ids = (cfg.settings && cfg.settings.activePuzzleIds) || [];
       if (!ids.length) {
         var def = (window.PF_DEFAULTS && window.PF_DEFAULTS.defaultPuzzles) || [];
-        var per = (cfg.settings && cfg.settings.puzzlesPerUser) || { easy: 2, hard: 2 };
+        var per = (cfg.settings && cfg.settings.puzzlesPerUser) || { easy: 1, hard: 1 };
         var poolE = def.filter(function (sp) { return sp.diff !== 'hard'; });
         var poolH = def.filter(function (sp) { return sp.diff === 'hard'; });
         var needE = Math.max(0, per.easy | 0), needH = Math.max(0, per.hard | 0);
@@ -507,18 +503,24 @@
   function renderSettings(body) {
     body.innerHTML = '';
     var s = cfg.settings || {};
-    var per = s.puzzlesPerUser || { easy: 2, hard: 2 };
-    var tl = s.timeLimits || { easy: 120, hard: 180 };
-    var easy = el('input', { type: 'number', value: String(per.easy != null ? per.easy : 2), style: 'max-width:120px;' });
-    var hard = el('input', { type: 'number', value: String(per.hard != null ? per.hard : 2), style: 'max-width:120px;' });
-    var teasy = el('input', { type: 'number', value: String(tl.easy != null ? tl.easy : 120), style: 'max-width:120px;' });
-    var thard = el('input', { type: 'number', value: String(tl.hard != null ? tl.hard : 180), style: 'max-width:120px;' });
+    var per = s.puzzlesPerUser || { easy: 1, hard: 1 };
+    var tl = s.timeLimits || { easy: 600, hard: 900 };
+    var easy = el('input', { type: 'number', value: String(per.easy != null ? per.easy : 1), style: 'max-width:120px;' });
+    var hard = el('input', { type: 'number', value: String(per.hard != null ? per.hard : 1), style: 'max-width:120px;' });
+    var easySecsTotal = tl.easy != null ? tl.easy : 600;
+    var hardSecsTotal = tl.hard != null ? tl.hard : 900;
+    var teMin = el('input', { type: 'number', min: '0', value: String(Math.floor(easySecsTotal / 60)), style: 'max-width:80px;' });
+    var teSec = el('input', { type: 'number', min: '0', max: '59', value: String(easySecsTotal % 60), style: 'max-width:80px;' });
+    var thMin = el('input', { type: 'number', min: '0', value: String(Math.floor(hardSecsTotal / 60)), style: 'max-width:80px;' });
+    var thSec = el('input', { type: 'number', min: '0', max: '59', value: String(hardSecsTotal % 60), style: 'max-width:80px;' });
     var rnd = el('input', { type: 'checkbox' }); if (s.randomizeOrder !== false) rnd.setAttribute('checked', 'checked');
     body.appendChild(el('div', { class: 'pfa-card' }, [
       el('div', { class: 'pfa-field' }, [el('label', { text: 'Easy puzzles per participant' }), easy]),
       el('div', { class: 'pfa-field' }, [el('label', { text: 'Hard puzzles per participant' }), hard]),
-      el('div', { class: 'pfa-field' }, [el('label', { text: 'Easy time limit (seconds per puzzle)' }), teasy]),
-      el('div', { class: 'pfa-field' }, [el('label', { text: 'Hard time limit (seconds per puzzle)' }), thard]),
+      el('div', { class: 'pfa-field' }, [el('label', { text: 'Easy time limit per puzzle' }),
+        el('div', { style: 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;' }, [teMin, el('span', { class: 'pfa-note', text: 'min' }), teSec, el('span', { class: 'pfa-note', text: 'sec' })])]),
+      el('div', { class: 'pfa-field' }, [el('label', { text: 'Hard time limit per puzzle' }),
+        el('div', { style: 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;' }, [thMin, el('span', { class: 'pfa-note', text: 'min' }), thSec, el('span', { class: 'pfa-note', text: 'sec' })])]),
       el('div', { class: 'pfa-field' }, [el('label', { style: 'display:flex;align-items:center;gap:8px;' }, [rnd, document.createTextNode('Randomize puzzle order per participant')])]),
       el('p', { class: 'pfa-note', text: 'Puzzle counts apply when no custom set is frozen (see the Puzzles tab): each participant gets that many easy/hard puzzles, drawn at random from the built-in pool (extra puzzles are generated if the pool runs short). Time limits apply to every puzzle of that difficulty, in training and the main game.' }),
       el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;' }, [
@@ -530,7 +532,10 @@
     function persist(msg) {
       var settings = Object.assign({}, s, {
         puzzlesPerUser: { easy: parseInt(easy.value, 10) || 0, hard: parseInt(hard.value, 10) || 0 },
-        timeLimits: { easy: parseInt(teasy.value, 10) || 120, hard: parseInt(thard.value, 10) || 180 },
+        timeLimits: {
+          easy: ((parseInt(teMin.value, 10) || 0) * 60 + (parseInt(teSec.value, 10) || 0)) || 600,
+          hard: ((parseInt(thMin.value, 10) || 0) * 60 + (parseInt(thSec.value, 10) || 0)) || 900
+        },
         randomizeOrder: rnd.checked
       });
       return saveConfig({ settings: settings }).then(function () { cfg.settings = settings; toast(msg); }).catch(function (e) { toast('Save failed: ' + ((e && e.code) || 'error')); throw e; });
@@ -540,8 +545,8 @@
     function restoreDefaults() {
       var D = (window.PF_DEFAULTS && window.PF_DEFAULTS.settings) || {};
       var settings = Object.assign({}, cfg.settings, {
-        puzzlesPerUser: D.puzzlesPerUser || { easy: 2, hard: 2 },
-        timeLimits: D.timeLimits || { easy: 120, hard: 180 },
+        puzzlesPerUser: D.puzzlesPerUser || { easy: 1, hard: 1 },
+        timeLimits: D.timeLimits || { easy: 600, hard: 900 },
         randomizeOrder: D.randomizeOrder !== false,
         trainingDifficulty: D.trainingDifficulty || 'easy'
       });

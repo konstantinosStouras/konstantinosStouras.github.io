@@ -31,14 +31,18 @@ are traps, so a greedy player is reliably sub-optimal (this is measured as a
 "Sahni number" κ — the fewest hand-placed hints a ratio-greedy needs to finish).
 
 On top of this single-player game sits a **research-experiment platform**: a
-multi-phase flow (welcome → training → main → stats → thank-you),
+multi-phase flow (welcome → tour → main → stats → thank-you),
 backed by Firebase, with detailed per-action logging and an admin CMS. Players
 are **fully anonymous** (Firebase Anonymous Auth, no sign-up) and may join a
 specific admin-created configuration via a **session-code deep link**
-(`?session=CODE`). The participant flow no longer includes a post-game survey,
-the welcome screen no longer shows a session-code input (deep links still work),
-and the in-game "My Notes" pad was removed; the survey config, admin Survey tab,
-and `submitSurvey` backend remain in place but are not presented to players.
+(`?session=CODE`). The participant flow no longer includes a separate scored
+**training round** (the skippable onboarding tour runs once over a throwaway demo
+board, then play goes straight to the main puzzles) nor a post-game survey; the
+welcome screen no longer shows a session-code input (deep links still work), and
+the in-game "My Notes" pad was removed; the survey config, admin Survey tab, and
+`submitSurvey` backend remain in place but are not presented to players. The
+built-in default config is 1 easy + 1 hard puzzle, 10-min easy / 15-min hard time
+limits, randomized order.
 
 ## 2. Design philosophy (the important part)
 
@@ -142,15 +146,17 @@ publish it; versioned in the repo, deployed manually):
   default; off only for `?admin`/`?classic`). Adds class `pf-exp` to `<body>`
   and hides research artifacts via CSS (the κ "difficulty" badge, the PDF-note
   footer, the legacy account widget, and the "Best $" pill).
-- **Phase machine:** `welcome → training → main → stats → thankyou`
-  (no registration or survey phase). Each screen is an overlay card; `S` holds the
-  live state (including `S.sessionId` and `S.offline`).
-- **Onboarding tour (before training):** an iPhone-style spotlight tour over the
-  live board (intro → board → bricks → a **scripted gameplay demo** that places/
-  rotates/removes solution bricks while KPIs update → net value → KPIs (with each
-  KPI explained) → calculator → nudges → "boxes are draggable/resizable"
-  → the green submit button). The clock is paused during the tour. Repositions on
-  scroll/resize for mobile.
+- **Phase machine:** `welcome → tour → main → stats → thankyou`
+  (no registration, training, or survey phase). Each screen is an overlay card;
+  `S` holds the live state (including `S.sessionId` and `S.offline`).
+- **Onboarding tour (skippable; runs once after welcome):** an iPhone-style
+  spotlight tour over a **throwaway demo board** (a sample puzzle loaded with its
+  clock paused, never scored): intro → board → bricks → a **scripted gameplay
+  demo** that places/rotates/removes solution bricks while KPIs update → net value
+  → KPIs (with each KPI explained) → calculator → nudges → "boxes are
+  draggable/resizable" → the green submit button. "Skip tour"/"Skip demo" exit
+  early. When the tour finishes or is skipped, `startMain` loads the real puzzles.
+  Repositions on scroll/resize for mobile.
 - **Auth:** a **named** Firebase app `'portfoliofit'` (so it coexists with the
   page's default `stouras-snake` app instead of colliding). Players sign in with
   **Anonymous Auth** on the welcome screen — **no** e-mail/password/registration.
@@ -198,10 +204,10 @@ publish it; versioned in the repo, deployed manually):
   admin auth so a refresh shows the panel immediately (no login flash). Dark/
   light theme.
 - **Tabs:**
-  - **Content** — collapsible per-page text editors (welcome/training/game/stats/
-    thank-you), each pre-filled with the current effective text. (The Registration
-    and Survey page editors and their dedicated **Registration**/**Survey** tabs
-    were removed along with those participant phases.)
+  - **Content** — collapsible per-page text editors (welcome/game/stats/
+    thank-you), each pre-filled with the current effective text. (The Training,
+    Registration, and Survey page editors — and the dedicated Registration/Survey
+    tabs — were removed along with those participant phases.)
   - **Puzzles** — build the exact set every participant plays: **Generate set to
     match Settings** creates puzzles sized to the easy/hard counts (reusing vetted
     built-ins first, generating the shortfall), or generate one at a time via
@@ -211,7 +217,9 @@ publish it; versioned in the repo, deployed manually):
     `config.settings.activePuzzleIds`) so every participant replays that frozen set.
     "Current active set" shows the frozen puzzles (or, if none frozen, the built-in
     set sized to the counts).
-  - **Settings** — easy/hard puzzle counts, per-puzzle time limits, randomize-order.
+  - **Settings** — easy/hard puzzle counts, per-puzzle time limits (entered as
+    **minutes + seconds**, stored as total seconds), randomize-order. Built-in
+    defaults: 1 easy + 1 hard, 10 min easy / 15 min hard, randomized.
   - **Sessions** — create a **session** (a snapshot of the *current*
     configuration: texts, questions, settings, active puzzle set) under a
     **Session name** + optional **Session ID** (typed or auto-generated 3–40
