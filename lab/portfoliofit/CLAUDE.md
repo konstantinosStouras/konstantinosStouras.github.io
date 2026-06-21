@@ -4,20 +4,24 @@ Context file for an LLM. Paste/point an assistant at this to understand how the
 **PortfolioFit** research-experiment app is designed, so a similar app can be
 built. It explains the *philosophy* and the *structure*, not just the code.
 
-- **Live (public, anonymous flow — now the default):** https://www.stouras.com/lab/portfoliofit/
-- **Live (join a session):** https://www.stouras.com/lab/portfoliofit/?session=CODE
+- **Live (session-gated research flow — the default):** https://www.stouras.com/lab/portfoliofit/
+- **Live (join a session directly):** https://www.stouras.com/lab/portfoliofit/?session=CODE
 - **Live (original plain game):** https://www.stouras.com/lab/portfoliofit/?classic
 - **Live (admin):** https://www.stouras.com/lab/portfoliofit/?admin
 - **Repo:** github.com/konstantinosStouras/konstantinosStouras.github.io → `lab/portfoliofit/`
 - **Backend (not web-served):** repo root `_portfoliofit-lab-firebase/`
 
-> **This is the DEV copy, on its own Firebase project.** It is kept **in sync** with
-> the production copy at `fun/portfoliofitgame/` and runs the **same fully anonymous
-> flow** (no sign-up; optional session code). The only differences are this copy's
-> own `stouras-portfoliofit-86127` Firebase project (so test data never touches
-> production) and the `lab/portfoliofit/` canonical / Open-Graph / share URLs. The
-> production copy at `fun/portfoliofitgame/` talks to `stouras-portfoliofit` and
-> **must not be repointed** — see `_portfoliofit-firebase/SWITCH-LAB-TO-NEW-PROJECT.md`.
+> **This is the DEV / research copy, on its own Firebase project.** It has
+> **intentionally diverged** from the public production copy at `fun/portfoliofitgame/`:
+> this lab copy is now a **session-gated research build** — there is **NO anonymous
+> play**. To take part a visitor MUST enter a session code matching an **active
+> (open)** admin-created session, and after the training phase they complete a
+> **Registration** form (compulsory **UCD Student ID** + demographics) before the
+> main game. The production copy at `fun/portfoliofitgame/` keeps the original
+> **fully anonymous** flow (optional session code) and **must not be repointed** —
+> it talks to `stouras-portfoliofit` (see
+> `_portfoliofit-firebase/SWITCH-LAB-TO-NEW-PROJECT.md`); this copy uses its own
+> `stouras-portfoliofit-86127` project so research data never touches production.
 
 ---
 
@@ -31,10 +35,14 @@ are traps, so a greedy player is reliably sub-optimal (this is measured as a
 "Sahni number" κ — the fewest hand-placed hints a ratio-greedy needs to finish).
 
 On top of this single-player game sits a **research-experiment platform**: a
-multi-phase flow (welcome → training → main → stats → survey → thank-you),
-backed by Firebase, with detailed per-action logging and an admin CMS. Players
-are **fully anonymous** (Firebase Anonymous Auth, no sign-up) and may optionally
-enter a **session code** to join a specific admin-created configuration.
+multi-phase flow (welcome → training → **registration** → main → stats → survey →
+thank-you), backed by Firebase, with detailed per-action logging and an admin CMS.
+Play is **session-gated**: there is **no anonymous play** — a visitor must enter a
+**session code** matching an **active (open)** admin-created session to take part.
+Firebase Anonymous Auth is still used as the technical identity (so Firestore
+reads/writes work), but the participant is identified for research by the
+**Registration** form shown after training (compulsory **UCD Student ID** +
+demographics; written to the participant doc as `registration`/`studentId`).
 
 ## 2. Design philosophy (the important part)
 
@@ -51,12 +59,13 @@ enter a **session code** to join a specific admin-created configuration.
    bridge; they never reach into game internals. The game emits user actions
    through a single hook, `window.PF.onGameEvent(type, payload)`.
 
-3. **Feature-flag the new flow, then flip the default.** The anonymous research
-   flow is now the **default** at the bare URL (`window.PF_EXPERIMENT`, true
+3. **Feature-flag the new flow, then flip the default.** The session-gated
+   research flow is the **default** at the bare URL (`window.PF_EXPERIMENT`, true
    unless `?admin` or `?classic`). `?classic` shows the original plain game and
    `?admin` opens the CMS. If Firebase is unreachable or Anonymous Auth is
-   disabled, the layer degrades to OFFLINE mode (the default game still plays,
-   just unsaved), so production never hard-fails.
+   disabled, the layer enters OFFLINE mode; because a session cannot be validated
+   offline, play is **blocked** and the welcome screen asks the visitor to
+   reconnect (the `?classic` URL remains as an unsaved escape hatch).
 
 4. **One source of truth for content.** `pf-defaults.js` defines all built-in
    text, settings, registration/survey questions, and the default puzzle set on
@@ -160,9 +169,17 @@ publish it; versioned in the repo, deployed manually to the lab project):
   default; off only for `?admin`/`?classic`). Adds class `pf-exp` to `<body>`
   and hides research artifacts via CSS (the κ "difficulty" badge, the PDF-note
   footer, the legacy account widget, and the "Best $" pill).
-- **Phase machine:** `welcome → training → main → stats → survey → thankyou`
-  (no registration phase). Each screen is an overlay card; `S` holds the live
-  state (including `S.sessionId` and `S.offline`).
+- **Phase machine:** `welcome → training → registration → main → stats → survey →
+  thankyou`. Each screen is an overlay card; `S` holds the live state (including
+  `S.sessionId` and `S.offline`). The **registration** phase (after training,
+  before the main game) renders `cfg.registrationQuestions` — UCD Student ID
+  (compulsory, first) + demographics (Age, Gender, Nationality, Country of
+  residence, Level of Study, Work Experience, Occupation, English Fluency) — via
+  `buildField` (now also handling `country` dropdowns and `min`/`max` `number`
+  inputs) plus any `cfg.registrationConsents` checkboxes (empty by default = no
+  consent section). On submit it writes `registration` (map) + `studentId` +
+  (when consents are shown) `consentGiven`/`consentTimestamp` to the participant
+  doc, then starts the main game.
 - **Onboarding tour (before training):** an iPhone-style spotlight tour over the
   live board (intro → board → bricks → a **scripted gameplay demo** that places/
   rotates/removes solution bricks while KPIs update → net value → KPIs (with each
@@ -171,12 +188,17 @@ publish it; versioned in the repo, deployed manually to the lab project):
   scroll/resize for mobile.
 - **Auth:** a **named** Firebase app `'portfoliofit'` (so it coexists with the
   page's default `stouras-snake` app instead of colliding). Players sign in with
-  **Anonymous Auth** on the welcome screen — **no** e-mail/password/registration.
-  On the welcome screen they may type an optional **session code** (or arrive via
-  `?session=CODE`); a valid code loads `sessions/{code}`, otherwise the default
-  config is used. Each player gets a `participants/{uid}` doc (created
-  client-side) tagged with `sessionId` and a short `anonymousLabel`. Returning
-  players resume via their persisted anonymous identity.
+  **Anonymous Auth** (the technical identity only) — **no** e-mail/password.
+  A **session code is REQUIRED**: the welcome screen will not start without one,
+  and `beginSession` validates the typed code (or one from `?session=CODE`)
+  against an **active** `sessions/{code}` (rejecting missing / `closed`
+  sessions). There is **no default / anonymous play path**. Each player gets a
+  `participants/{uid}` doc (created client-side) tagged with `sessionId` and a
+  short `anonymousLabel`, status `joined` until Registration completes then
+  `playing`. Returning players resume via their persisted identity **only if
+  their doc carries a `sessionId`** (legacy/anonymous docs are sent back to the
+  welcome screen to re-enter a code). Offline (Firebase unreachable / Anonymous
+  Auth disabled) **blocks play**, since a session cannot be validated.
 - **Main phase puzzle source:** if the admin has **frozen** a set
   (`config.settings.activePuzzleIds` → `puzzleSets`), every player plays **exactly
   those** puzzles — the same reviewed, vetted set for everyone, with only the order
@@ -213,7 +235,10 @@ publish it; versioned in the repo, deployed manually to the lab project):
 - **Tabs:**
   - **Content** — collapsible per-page text editors (welcome/training/registration/
     game/stats/survey/thank-you), each pre-filled with the current effective text.
-  - **Registration** / **Survey** — add/edit/reorder/delete questions.
+  - **Registration** / **Survey** — add/edit/reorder/delete questions. The
+    Registration form is the post-training demographics form (default first field
+    is the compulsory **UCD Student ID**); field types include `country` (full
+    country dropdown) and `number` (with `min`/`max`).
   - **Puzzles** — build the exact set every participant plays: **Generate set to
     match Settings** creates puzzles sized to the easy/hard counts (reusing vetted
     built-ins first, generating the shortfall), or generate one at a time via
@@ -232,10 +257,11 @@ publish it; versioned in the repo, deployed manually to the lab project):
     ID**, **close**/**reopen** (`status` toggles; closing blocks *new* joins —
     enforced in `experiment.js` `beginSession`), and **delete**. Players join by
     code; data is tagged with `sessionId`.
-  - **Participants** — table of all players (Player / Session / Status / Started),
-    per-row **delete** (doc + subcollections), and **Export to Excel** (SheetJS
-    via CDN; sheets: Participants / Events / Rounds / Survey, each carrying
-    `player` + `session` + `uid`).
+  - **Participants** — table of all players (Player / **UCD Student ID** / Session
+    / Status / Started), per-row **delete** (doc + subcollections), and **Export
+    to Excel** (SheetJS via CDN; sheets: Participants / Events / Rounds / Survey,
+    each carrying `player` + `session` + `uid`; the Participants sheet also carries
+    `studentId`, `consentGiven`, and the demographics flattened as `reg_*`).
 - Every editable tab carries the same three controls: **Save** and **Make this
   the default** (both persist this page to `config/app`; one live config, so they
   do the same write with different wording) and **Restore built-in default**
@@ -254,15 +280,21 @@ publish it; versioned in the repo, deployed manually to the lab project):
   ```
   config/app                      texts, settings (timeLimits, puzzlesPerUser,
                                   randomizeOrder, activePuzzleIds),
-                                  registrationQuestions, surveyQuestions
+                                  registrationQuestions, registrationConsents,
+                                  surveyQuestions
   sessions/{code}                 admin config snapshot players join by code
-                                  (label, texts, settings, questions)
+                                  (label, status, texts, settings, questions,
+                                  registrationConsents)
   puzzleSets/{id}                 frozen approved puzzles (diff, kappa, bestValue,
                                   cells, specJson)            ← admin-managed library
   counters/participants           { count }  legacy label source (unused anon flow)
   participants/{uid}              uid = anonymous-auth uid; anonymous:true,
-                                  anonymousLabel, sessionId, status,
-                                  puzzleOrder[], mainIndex
+                                  anonymousLabel, sessionId,
+                                  status ('joined'→'playing'→'survey'→'done'),
+                                  registration{studentId,age,gender,nationality,
+                                  country,levelOfStudy,workExperience,occupation,
+                                  englishFluency}, studentId, consentGiven?,
+                                  consentTimestamp?, puzzleOrder[], mainIndex
     events/{autoId}               one doc per action (type + dataJson + context)
     rounds/{autoId}               per-round summary (net/coverage/fitness/time…)
     survey/answers                { answers, completedAt }

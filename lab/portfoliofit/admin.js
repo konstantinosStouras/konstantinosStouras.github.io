@@ -46,7 +46,7 @@
     ['thankyouTitle', 'Thank-you — title', 'line'],
     ['thankyouBody', 'Thank-you — body', 'area']
   ];
-  var QUESTION_TYPES = ['text', 'email', 'password', 'number', 'select', 'radio', 'textarea'];
+  var QUESTION_TYPES = ['text', 'email', 'password', 'number', 'select', 'country', 'radio', 'textarea'];
   // Group the text fields into collapsible "pages" for the Content tab.
   var PAGE_GROUPS = [
     { key: 'welcome', label: 'Welcome page', fields: ['welcomeTitle', 'welcomeIntro', 'welcomeBody', 'welcomeButton'] },
@@ -167,10 +167,10 @@
     authM.onAuthStateChanged(fb.auth, function (u) { user = u || null; route(); });
   }
   async function loadConfig() {
-    cfg = { texts: {}, settings: {}, registrationQuestions: [], surveyQuestions: [] };
+    cfg = { texts: {}, settings: {}, registrationQuestions: [], registrationConsents: [], surveyQuestions: [] };
     try {
       var snap = await fb.F.getDoc(fb.F.doc(fb.db, 'config', 'app'));
-      if (snap.exists()) { var d = snap.data(); cfg = { texts: d.texts || {}, settings: d.settings || {}, registrationQuestions: d.registrationQuestions || [], surveyQuestions: d.surveyQuestions || [] }; }
+      if (snap.exists()) { var d = snap.data(); cfg = { texts: d.texts || {}, settings: d.settings || {}, registrationQuestions: d.registrationQuestions || [], registrationConsents: d.registrationConsents || [], surveyQuestions: d.surveyQuestions || [] }; }
     } catch (e) { /* defaults empty */ }
   }
   async function saveConfig(partial) {
@@ -310,7 +310,7 @@
     var list = ((cfg[field] && cfg[field].length) ? cfg[field] : ((window.PF_DEFAULTS && window.PF_DEFAULTS[field]) || [])).map(function (q) { return Object.assign({}, q); });
     var card = el('div', { class: 'pfa-card' });
     var listWrap = el('div', {});
-    card.appendChild(el('p', { class: 'pfa-note', text: title + '. Drag order with the up/down buttons. System fields (Participant ID, e-mail, password) are required by the app.' }));
+    card.appendChild(el('p', { class: 'pfa-note', text: title + '. Drag order with the up/down buttons. The Registration form is shown after the training phase; "country" renders a full country dropdown.' }));
     card.appendChild(listWrap);
     var addBtn = el('button', { class: 'pfa-btn sec sm', on: { click: function () { list.push({ id: 'q_' + Date.now().toString(36), label: 'New question', type: 'text', required: true }); render(); } } }, ['+ Add question']);
     card.appendChild(el('div', { class: 'pfa-field' }, [addBtn]));
@@ -681,6 +681,7 @@
           name: name, label: name, status: 'open',
           texts: cfg.texts || {}, settings: cfg.settings || {},
           registrationQuestions: cfg.registrationQuestions || [],
+          registrationConsents: cfg.registrationConsents || [],
           surveyQuestions: cfg.surveyQuestions || [],
           updatedAt: fb.F.serverTimestamp()
         };
@@ -776,9 +777,11 @@
       el('button', { class: 'pfa-btn', on: { click: function () { exportExcel(parts); } } }, ['Export to Excel'])
     ]);
     var rows = parts.map(function (p) {
+      var sid = p.studentId || (p.registration && p.registration.studentId) || '';
       var who = p.anonymousLabel || p.participantId || p.email || p._id;
       return el('tr', {}, [
         el('td', { text: who }),
+        el('td', { text: sid || '—' }),
         el('td', { text: p.sessionId || '—' }),
         el('td', { text: p.status || '' }),
         el('td', { text: fmtTs(p.createdAt) }),
@@ -786,7 +789,7 @@
       ]);
     });
     var table = el('table', { class: 'pfa-tbl' });
-    table.appendChild(el('thead', {}, [el('tr', {}, ['Player', 'Session', 'Status', 'Started', ''].map(function (h) { return el('th', { text: h }); }))]));
+    table.appendChild(el('thead', {}, [el('tr', {}, ['Player', 'UCD Student ID', 'Session', 'Status', 'Started', ''].map(function (h) { return el('th', { text: h }); }))]));
     table.appendChild(el('tbody', {}, rows.length ? rows : [el('tr', {}, [el('td', { colspan: '5', text: 'No players yet.' })])]));
     body.appendChild(el('div', { class: 'pfa-card' }, [head, table]));
 
@@ -825,7 +828,7 @@
       var pRows = [], eRows = [], rRows = [], sRows = [];
       for (var i = 0; i < parts.length; i++) {
         var p = parts[i], uid = p._id;
-        var base = { player: p.anonymousLabel || p.participantId || '', session: p.sessionId || '', email: p.email || '', status: p.status || '', started: fmtTs(p.createdAt), uid: uid };
+        var base = { player: p.anonymousLabel || p.participantId || '', studentId: p.studentId || (p.registration && p.registration.studentId) || '', session: p.sessionId || '', status: p.status || '', consentGiven: p.consentGiven === true ? 'yes' : '', started: fmtTs(p.createdAt), uid: uid };
         var reg = p.registration || {};
         pRows.push(Object.assign({}, base, flatten(reg)));
         // events

@@ -2,12 +2,16 @@ rules_version = '2';
 
 // PortfolioFit for Managers — Firestore security rules (LAB / dev project).
 //
-// Backend for the lab build at stouras.com/lab/portfoliofit/. It now uses the
-// SAME fully anonymous flow as fun/portfoliofitgame/: anyone can play with NO
-// sign-up (Firebase Anonymous Auth) and may OPTIONALLY enter a session code to
-// join an admin-created configuration snapshot. There is no e-mail/password
-// registration and joining is NOT gated on a session. The admin is the
-// signed-in admin@admin.com account (Email/Password).
+// Backend for the lab build at stouras.com/lab/portfoliofit/. This is a
+// SESSION-GATED research build (it has diverged from the fully anonymous
+// fun/portfoliofitgame/ copy): the client REQUIRES an ACTIVE session code to
+// play and collects a Registration form (UCD Student ID + demographics) after
+// training. Firebase Anonymous Auth is still the technical identity, so these
+// rules are unchanged — the anonymous owner creates and updates their own
+// participants/{uid} doc, which now also carries `registration`, `studentId`
+// and (when shown) `consentGiven`/`consentTimestamp`. Session gating is enforced
+// client-side (sessions stay signed-in-readable so a code can be validated); the
+// admin is the signed-in admin@admin.com account (Email/Password).
 //
 // Model:
 //   config/app            editable content + questions + settings      (admin write, signed-in read)
