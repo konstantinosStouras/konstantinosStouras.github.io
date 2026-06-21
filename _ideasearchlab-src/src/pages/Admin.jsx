@@ -1216,11 +1216,12 @@ function DurationField({ label, seconds, onChange, disabled }) {
 
 // A button that briefly turns green to confirm the action ran, then reverts.
 // Used for the admin default-management actions so a click gives clear feedback.
-function ConfirmButton({ children, onClick, className, title, confirmedLabel = 'Done ✓' }) {
+function ConfirmButton({ children, onClick, className, title, confirmedLabel = 'Done ✓', disabled = false }) {
   const [confirmed, setConfirmed] = useState(false)
   const timer = useRef(null)
   useEffect(() => () => clearTimeout(timer.current), [])
   async function handle(e) {
+    if (disabled) return
     try {
       await onClick?.(e)
     } catch (_) {
@@ -1234,6 +1235,7 @@ function ConfirmButton({ children, onClick, className, title, confirmedLabel = '
     <button
       type="button"
       title={title}
+      disabled={disabled}
       className={`${className || ''} ${confirmed ? styles.btnConfirmed : ''}`.trim()}
       onClick={handle}
     >
@@ -1265,16 +1267,17 @@ function DefaultActions({ onSave, onMakeDefault, onRestore, hasCustom, feedback 
       >
         Make this the default
       </ConfirmButton>
-      {hasCustom && (
-        <ConfirmButton
-          className={styles.contentResetBtn}
-          onClick={onRestore}
-          confirmedLabel="Restored ✓"
-          title="Delete the saved default and go back to the built-in"
-        >
-          Restore built-in default
-        </ConfirmButton>
-      )}
+      <ConfirmButton
+        className={styles.contentResetBtn}
+        onClick={onRestore}
+        confirmedLabel="Restored ✓"
+        disabled={!hasCustom}
+        title={hasCustom
+          ? 'Delete the saved default and go back to the built-in'
+          : 'Already using the built-in default'}
+      >
+        Restore built-in default
+      </ConfirmButton>
       {feedback && <span className={styles.contentSavedNote}>{feedback}</span>}
     </div>
   )
