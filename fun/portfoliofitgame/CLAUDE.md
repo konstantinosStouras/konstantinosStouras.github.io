@@ -31,10 +31,14 @@ are traps, so a greedy player is reliably sub-optimal (this is measured as a
 "Sahni number" κ — the fewest hand-placed hints a ratio-greedy needs to finish).
 
 On top of this single-player game sits a **research-experiment platform**: a
-multi-phase flow (welcome → training → main → stats → survey → thank-you),
+multi-phase flow (welcome → training → main → stats → thank-you),
 backed by Firebase, with detailed per-action logging and an admin CMS. Players
-are **fully anonymous** (Firebase Anonymous Auth, no sign-up) and may optionally
-enter a **session code** to join a specific admin-created configuration.
+are **fully anonymous** (Firebase Anonymous Auth, no sign-up) and may join a
+specific admin-created configuration via a **session-code deep link**
+(`?session=CODE`). The participant flow no longer includes a post-game survey,
+the welcome screen no longer shows a session-code input (deep links still work),
+and the in-game "My Notes" pad was removed; the survey config, admin Survey tab,
+and `submitSurvey` backend remain in place but are not presented to players.
 
 ## 2. Design philosophy (the important part)
 
@@ -87,8 +91,8 @@ Served app (`fun/portfoliofitgame/`):
 | --- | --- |
 | `index.html` | The whole **game**: markup + CSS + the game engine (an IIFE). Also hosts the shared "snake" Account login widget and a localStorage `AppStats` block (legacy). Exposes `window.PFGame`, emits events via `window.PF.onGameEvent`, and reads the `window.PF_EXPERIMENT` / `window.PF_ADMIN` flags set by a tiny inline script. Loads the three layer scripts (deferred). |
 | `pf-defaults.js` | Sets `window.PF_DEFAULTS` = `{ texts, settings, registrationQuestions, surveyQuestions, defaultPuzzles }`. Loaded **before** the other two. |
-| `experiment.js` | The **participant experiment** layer. Activates only on `?exp=1`. Phase state machine, Firebase (named app), auth/registration, event logging, per-round summaries, survey, onboarding tour, movable/resizable boxes. |
-| `admin.js` | The **admin CMS**. Activates only on `?admin`. Login gate, content/question/settings/puzzle editors, participants table + Excel export, theme. |
+| `experiment.js` | The **participant experiment** layer. Activates only on `?exp=1`. Phase state machine, Firebase (named app), anonymous auth, event logging, per-round summaries, onboarding tour, movable/resizable boxes. |
+| `admin.js` | The **admin CMS**. Activates only on `?admin`. Login gate, content/settings/puzzle editors, participants table (+ per-row delete, **Delete all participants**, Excel export), sessions, theme. |
 | `404.html` | Redirects to `/`. |
 | `og-image.jpg`, `portfoliofit-difficulty.pdf`, `portfoliofit-difficulty.makepdf.py` | Social card + the κ methodology note (PDF + its generator). |
 
@@ -117,7 +121,7 @@ publish it; versioned in the repo, deployed manually):
 - **KPIs (live):** Net Value, Total Value, Resource Cost (empty-cell penalty),
   Value/Resource (ROI), Coverage %, Portfolio Fitness (net ÷ best). Hover
   tooltips explain each.
-- **Tools:** a calculator and a notes pad. **Nudges:** encouraging/idle/time
+- **Tools:** a calculator. **Nudges:** encouraging/idle/time
   messages below the board (idle threshold ~15s).
 - **Round lifecycle:** `newGame(diff,limit)` → `startRound()` builds `state`,
   renders, starts the timer; the round ends on the deadline (not on completion),
@@ -138,23 +142,27 @@ publish it; versioned in the repo, deployed manually):
   default; off only for `?admin`/`?classic`). Adds class `pf-exp` to `<body>`
   and hides research artifacts via CSS (the κ "difficulty" badge, the PDF-note
   footer, the legacy account widget, and the "Best $" pill).
-- **Phase machine:** `welcome → training → main → stats → survey → thankyou`
-  (no registration phase). Each screen is an overlay card; `S` holds the live
-  state (including `S.sessionId` and `S.offline`).
+- **Phase machine:** `welcome → training → main → stats → thankyou`
+  (no registration or survey phase). Each screen is an overlay card; `S` holds the
+  live state (including `S.sessionId` and `S.offline`).
 - **Onboarding tour (before training):** an iPhone-style spotlight tour over the
   live board (intro → board → bricks → a **scripted gameplay demo** that places/
   rotates/removes solution bricks while KPIs update → net value → KPIs (with each
-  KPI explained) → calculator → notes → nudges → "boxes are draggable/resizable"
+  KPI explained) → calculator → nudges → "boxes are draggable/resizable"
   → the green submit button). The clock is paused during the tour. Repositions on
   scroll/resize for mobile.
 - **Auth:** a **named** Firebase app `'portfoliofit'` (so it coexists with the
   page's default `stouras-snake` app instead of colliding). Players sign in with
   **Anonymous Auth** on the welcome screen — **no** e-mail/password/registration.
-  On the welcome screen they may type an optional **session code** (or arrive via
-  `?session=CODE`); a valid code loads `sessions/{code}`, otherwise the default
-  config is used. Each player gets a `participants/{uid}` doc (created
-  client-side) tagged with `sessionId` and a short `anonymousLabel`. Returning
-  players resume via their persisted anonymous identity.
+  The welcome screen no longer shows a session-code input, but a player can still
+  join a specific session via a **deep link** (`?session=CODE`); a valid code
+  loads `sessions/{code}`, otherwise the default config is used. Each player gets
+  a `participants/{uid}` doc (created client-side) tagged with `sessionId` and a
+  short `anonymousLabel`. Returning players resume via their persisted anonymous
+  identity.
+- **Top bar:** a fixed bar shows the play status plus an **Admin** button (opens
+  `?admin`, itself gated behind the admin login) and a **Restart** button (fresh
+  anonymous session).
 - **Main phase puzzle source:** if the admin has **frozen** a set
   (`config.settings.activePuzzleIds` → `puzzleSets`), every player plays **exactly
   those** puzzles — the same reviewed, vetted set for everyone, with only the order
@@ -170,13 +178,14 @@ publish it; versioned in the repo, deployed manually):
   mirrors what each player will see. Order is shuffled per participant and persisted
   (`puzzleOrder` + `mainIndex`) so a mid-session reload resumes the same queue.
 - **Event logging:** one buffered, retry-on-failure writer appends a doc per
-  action to `participants/{uid}/events` (place/move/rotate/flip/remove/calc/note/
-  round-start/round-end/stats/survey). Nested arrays (cells/placements) are
+  action to `participants/{uid}/events` (place/move/rotate/flip/remove/calc/
+  round-start/round-end/stats). Nested arrays (cells/placements) are
   JSON-stringified (Firestore rejects nested arrays). Per-round summaries go to
   `participants/{uid}/rounds`.
-- **Stats → survey → thank-you:** aggregate the rounds (totals, coverage, time),
-  render the survey from config, submit via the `submitSurvey` function (with a
-  direct-write fallback), then the thank-you screen.
+- **Stats → thank-you:** aggregate the rounds (totals, coverage, time), show them
+  on the stats card, then a "Finish" button advances straight to the thank-you
+  screen (the post-game survey phase was removed; the participant `status` goes to
+  `done` at the stats screen).
 - **Movable/resizable boxes (during play only, `pf-playing`):** drag a box by its
   body (cursor "move") to reposition (CSS `transform`, with **no-overlap**
   collision), and resize from any **border/corner** (cursor changes; wide hit
@@ -189,9 +198,10 @@ publish it; versioned in the repo, deployed manually):
   admin auth so a refresh shows the panel immediately (no login flash). Dark/
   light theme.
 - **Tabs:**
-  - **Content** — collapsible per-page text editors (welcome/training/registration/
-    game/stats/survey/thank-you), each pre-filled with the current effective text.
-  - **Registration** / **Survey** — add/edit/reorder/delete questions.
+  - **Content** — collapsible per-page text editors (welcome/training/game/stats/
+    thank-you), each pre-filled with the current effective text. (The Registration
+    and Survey page editors and their dedicated **Registration**/**Survey** tabs
+    were removed along with those participant phases.)
   - **Puzzles** — build the exact set every participant plays: **Generate set to
     match Settings** creates puzzles sized to the easy/hard counts (reusing vetted
     built-ins first, generating the shortfall), or generate one at a time via
@@ -211,9 +221,10 @@ publish it; versioned in the repo, deployed manually):
     enforced in `experiment.js` `beginSession`), and **delete**. Players join by
     code; data is tagged with `sessionId`.
   - **Participants** — table of all players (Player / Session / Status / Started),
-    per-row **delete** (doc + subcollections), and **Export to Excel** (SheetJS
-    via CDN; sheets: Participants / Events / Rounds / Survey, each carrying
-    `player` + `session` + `uid`).
+    per-row **delete** (doc + subcollections), a **Delete all participants** button
+    (double-confirmed bulk wipe of every participant + subcollections), and
+    **Export to Excel** (SheetJS via CDN; sheets: Participants / Events / Rounds /
+    Survey, each carrying `player` + `session` + `uid`).
 - Every editable tab carries the same three controls: **Save** and **Make this
   the default** (both persist this page to `config/app`; one live config, so they
   do the same write with different wording) and **Restore built-in default**
