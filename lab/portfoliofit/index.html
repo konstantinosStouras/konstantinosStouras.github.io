@@ -594,10 +594,10 @@
   </div>
 
   <script>
-  // Mode flags. The anonymous play flow (welcome -> training -> main -> stats ->
-  // survey -> thank-you) is now the DEFAULT experience at the bare URL: anyone can
-  // play anonymously, optionally entering a session code to join a specific
-  // admin-created session, otherwise the default configuration is used.
+  // Mode flags. The session-gated research flow (welcome -> training ->
+  // registration -> main -> stats -> survey -> thank-you) is the DEFAULT
+  // experience at the bare URL. There is NO anonymous play: a visitor must enter
+  // an ACTIVE session code on the welcome screen to take part.
   //   ?admin    opens the CMS (and turns the participant flow off).
   //   ?classic  shows the original plain game with no experiment layer.
   //   ?exp=1    legacy alias; the flow is on by default now, so this is redundant.

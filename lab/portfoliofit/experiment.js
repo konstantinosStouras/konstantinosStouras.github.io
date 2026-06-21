@@ -1,21 +1,23 @@
 /* =====================================================================
-   PortfolioFit for Managers — anonymous play layer
+   PortfolioFit for Managers — session-gated research play layer
    ---------------------------------------------------------------------
-   Turns the PortfolioFit game into a fully anonymous, session-aware flow:
-     welcome  ->  training  ->  main phase  ->  stats  ->  survey  ->  thank-you
+   Turns the PortfolioFit game into a session-gated, session-aware flow:
+     welcome  ->  training  ->  registration  ->  main phase  ->  stats
+              ->  survey  ->  thank-you
    plus per-action logging to a dedicated Firebase project.
 
-   Anyone can play with NO sign-up: on the welcome screen a visitor is signed
-   in anonymously (Firebase Anonymous Auth) and may optionally enter a session
-   code to join a specific admin-created session (config stored at
-   sessions/{code}). With no code, the default configuration (config/app, or
-   the built-in defaults) is used. There is no e-mail/password registration.
+   NO anonymous play: to take part, a visitor MUST enter a session code that
+   matches an ACTIVE (open) admin-created session (config stored at
+   sessions/{code}). Firebase Anonymous Auth is used only as the technical
+   identity so Firestore reads/writes work; the participant is identified for
+   research by the Registration form (UCD Student ID + demographics + consent),
+   which is shown AFTER the training phase and BEFORE the main game.
 
    This layer is the DEFAULT experience at the bare URL (see the PF_EXPERIMENT
    flag in index.html). ?classic shows the original plain game; ?admin opens the
    CMS. If Firebase is unreachable or Anonymous Auth is not enabled, the layer
-   falls back to OFFLINE mode: the default game is still playable, just without
-   saving or session lookups.
+   falls back to OFFLINE mode: because a session cannot be validated offline,
+   play is blocked and the welcome screen asks the visitor to reconnect.
    ===================================================================== */
 (function () {
   'use strict';
@@ -42,14 +44,14 @@
       welcomeBody: [
         'In this game, you drag and drop project <b>bricks</b> of different shapes into a frame. Each brick carries a <b>dollar value</b>, representing its potential contribution to your portfolio.',
         'Your challenge is to <b>build smart</b>: bricks must fit entirely <b>within the frame</b> and <b>cannot overlap</b>. The strategic element: every <b>empty cell</b> left in the frame carries a <b>$1 penalty</b>. Maximise your <b>net value</b> (total value of placed bricks minus the penalty for empty cells).',
-        'This game has three phases: a <b>training phase</b>, a <b>game phase</b>, and a short <b>post-play survey</b>. You can play completely anonymously — no sign-up needed.'
+        'This game has three phases: a <b>training phase</b>, a <b>game phase</b>, and a short <b>post-play survey</b>. To take part you will need a <b>session code</b> from the organiser.'
       ],
       welcomeButton: 'Start',
       trainingTitle: 'Training phase',
       trainingBody: 'Each brick is a project that earns a dollar value when you place it in the frame. Choose the right projects and pack them in to maximise <b>net value</b> (the total value of placed bricks minus a $1 penalty for each unused cell) before the timer runs out.<br><br>How to play: tap a brick to select it, then tap a board tile to drop it. Use the arrow keys (or the Rotate / Flip buttons) to rotate and flip the selected brick; tap a placed brick to pick it back up.<br><br>This is a practice round. When the timer ends, or once you are comfortable, you will move on to the main game.',
       trainingButton: 'Begin training',
       registerTitle: 'Registration',
-      registerIntro: 'Please provide some basic information about yourself.',
+      registerIntro: 'Please complete the information below to join the PortfolioFit Challenge.',
       mainIntro: 'Each brick is a project that earns a dollar value when you place it in the frame. Pack the right projects to maximise <b>net value</b> (the total value of placed bricks minus a $1 penalty for each unused cell) before the timer runs out.<br><br>Every brick shows its dollar value and its value-per-cell (ROI). The tempting high-ROI bricks are often traps: there are many ways to fill the board, but only one reaches the highest Net Value. You will play a series of timed puzzles; do your best on each one.',
       mainTitle: 'Game phase',
       statsTitle: 'Thank you for playing!',
@@ -64,30 +66,25 @@
       randomizeOrder: true,
       activePuzzleIds: []
     },
-    // Registration questions (matches the prototype form; admin-editable later).
+    // Registration form (shown after training; UCD Student ID is the compulsory
+    // first field). Mirrors pf-defaults.js; admin-editable via the Registration tab.
     registrationQuestions: [
-      { id: 'participantId', label: 'Participant ID', type: 'text', required: true, system: 'participantId' },
-      { id: 'email', label: 'Personal E-mail', type: 'email', required: true, system: 'email' },
-      { id: 'password', label: 'Password', type: 'password', required: true, system: 'password' },
-      { id: 'mentalCalc', label: 'Mental Calculations', type: 'select', required: true,
-        help: 'On a scale from 1 to 10, how good are you at mental calculations compared to the general population of this country? (1 very poor, 5 average, 10 very strong)',
-        options: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'] },
-      { id: 'mathsAtSchool', label: 'Mathematics at School', type: 'radio', required: true,
-        help: 'Was maths among the five subjects you liked most at school?', options: ['Yes', 'No'] },
-      { id: 'age', label: 'Age', type: 'number', required: true },
-      { id: 'gender', label: 'Gender', type: 'select', required: true,
-        options: ['Female', 'Male', 'Non-binary', 'Prefer not to say'] },
-      { id: 'education', label: 'Education Level', type: 'select', required: true,
-        options: ['High school', 'Bachelor', 'Master', 'PhD', 'Other'] },
-      { id: 'workExp', label: 'Years of Work Experience', type: 'select', required: true,
-        options: ['0', '1-3', '4-6', '7-10', '11-20', '20+'] },
-      { id: 'mgmtExp', label: 'Years of Management Experience', type: 'select', required: true,
-        options: ['0', '1-3', '4-6', '7-10', '11-20', '20+'] },
-      { id: 'gamingExp', label: 'Gaming Experience', type: 'select', required: true,
-        options: ['None', 'Beginner', 'Intermediate', 'Advanced', 'Expert'] },
-      { id: 'tetrisExp', label: 'Tetris Experience', type: 'select', required: true,
-        options: ['None', 'Beginner', 'Intermediate', 'Advanced', 'Expert'] }
+      { id: 'studentId', label: 'UCD Student ID', type: 'text', required: true },
+      { id: 'age', label: 'Age', type: 'select', required: true,
+        options: ['18-24', '25-34', '35-44', '45-54', '55-64', '65+'] },
+      { id: 'gender', label: 'Gender', type: 'select', required: false,
+        options: ['Prefer not to say', 'Male', 'Female', 'Non-binary', 'Other'] },
+      { id: 'nationality', label: 'Nationality', type: 'country', required: true },
+      { id: 'country', label: 'Country of residence', type: 'country', required: true },
+      { id: 'levelOfStudy', label: 'Level of Study', type: 'select', required: true,
+        options: ['Undergraduate', 'Postgraduate (Masters)', 'Postgraduate (PhD)', 'MBA', 'Other'] },
+      { id: 'workExperience', label: 'Work Experience (in years)', type: 'number', required: true, min: 0, max: 50 },
+      { id: 'occupation', label: 'Occupation', type: 'select', required: true,
+        options: ['Student', 'Employed full-time', 'Employed part-time', 'Self-employed', 'Unemployed', 'Retired', 'Other'] },
+      { id: 'englishFluency', label: 'English Fluency', type: 'select', required: true,
+        options: ['Native speaker', 'Fluent', 'Advanced', 'Intermediate', 'Basic'] }
     ],
+    registrationConsents: [],
     surveyQuestions: [
       { id: 's_satisfaction', label: 'How satisfied are you with your performance in the game?', type: 'select', required: true, options: ['Very dissatisfied', 'Dissatisfied', 'Neutral', 'Satisfied', 'Very satisfied'] },
       { id: 's_difficulty', label: 'How would you rate the difficulty of the game?', type: 'select', required: true, options: ['Very easy', 'Easy', 'Moderate', 'Hard', 'Very hard'] },
@@ -256,7 +253,8 @@
         cfg = {
           texts: Object.assign({}, DEFAULTS.texts, d.texts || {}),
           settings: Object.assign({}, DEFAULTS.settings, d.settings || {}),
-          registrationQuestions: DEFAULTS.registrationQuestions,
+          registrationQuestions: (d.registrationQuestions && d.registrationQuestions.length) ? d.registrationQuestions : DEFAULTS.registrationQuestions,
+          registrationConsents: (d.registrationConsents && d.registrationConsents.length) ? d.registrationConsents : DEFAULTS.registrationConsents,
           surveyQuestions: (d.surveyQuestions && d.surveyQuestions.length) ? d.surveyQuestions : DEFAULTS.surveyQuestions
         };
         return { ok: true, status: d.status || 'open' };
@@ -313,10 +311,10 @@
     var existing = $('.pfx-topbar'); if (existing) existing.remove();
     if (!S.user && !S.offline) return;
     document.body.classList.add('pf-hastop');
-    var label = S.sessionId ? ('Session ' + S.sessionId) : 'Playing anonymously';
+    var label = S.sessionId ? ('Session ' + S.sessionId) : 'Not in a session';
     var bar = el('div', { class: 'pfx-topbar' }, [
       el('span', { html: 'PortfolioFit for Managers &middot; <b>' + esc(label) + '</b>' }),
-      el('button', { title: 'Start over with a fresh anonymous session', on: { click: doRestart } }, ['Restart'])
+      el('button', { title: 'Start over and re-enter a session code', on: { click: doRestart } }, ['Restart'])
     ]);
     document.body.appendChild(bar);
   }
@@ -328,35 +326,40 @@
   }
 
   // ---- Phase: welcome ---------------------------------------------------
-  // Anonymous entry point. A visitor may optionally type a session code (or one
-  // can arrive prefilled via ?session=CODE); with no code the default config is
-  // used. "Start" signs the player in anonymously and loads the right config.
+  // Session-gated entry point. A valid session code is REQUIRED — there is no
+  // anonymous / default-game path. A code may arrive prefilled via ?session=CODE.
+  // "Start" validates the code against an ACTIVE session, then begins training.
   function showWelcome() {
     S.phase = 'welcome';
     var body = [el('p', { html: cfg.texts.welcomeIntro })];
     (cfg.texts.welcomeBody || []).forEach(function (p) { body.push(el('p', { html: p })); });
 
-    var err = el('div', { class: 'pfx-err' });
-    var sessInput = null;
+    // Offline: a session cannot be validated, so play is blocked entirely.
     if (S.offline) {
-      body.push(el('p', { class: 'muted', text: 'You appear to be offline, so your game will not be saved and session codes are unavailable. You can still play the default game.' }));
-    } else {
-      sessInput = el('input', { type: 'text', placeholder: 'e.g. SPRING25 (optional)', autocomplete: 'off', spellcheck: 'false', value: urlSession() || '' });
-      body.push(el('div', { class: 'pfx-field' }, [
-        el('label', { text: 'Session code (optional)' }),
-        el('div', { class: 'help', text: 'Have a code from the organiser? Enter it to join that specific session. Otherwise just press Start to play the default game.' }),
-        sessInput
-      ]));
+      body.push(el('p', { class: 'muted', text: 'You appear to be offline. PortfolioFit requires an internet connection and a valid session code to play. Please reconnect and reload this page.' }));
+      var wcOff = card(cfg.texts.welcomeTitle, body); wcOff.classList.add('pfx-justify');
+      showOverlay(wcOff);
+      return;
     }
+
+    var err = el('div', { class: 'pfx-err' });
+    var sessInput = el('input', { type: 'text', placeholder: 'e.g. SPRING25', autocomplete: 'off', spellcheck: 'false', value: urlSession() || '' });
+    body.push(el('div', { class: 'pfx-field' }, [
+      el('label', { text: 'Session code *' }),
+      el('div', { class: 'help', text: 'Enter the session code provided by the organiser to begin. A code is required to take part.' }),
+      sessInput
+    ]));
 
     var startBtn = el('button', { class: 'pfx-btn', on: { click: onStart } }, [cfg.texts.welcomeButton || 'Start']);
     body.push(err, el('div', { class: 'pfx-row' }, [startBtn]));
     var wc = card(cfg.texts.welcomeTitle, body); wc.classList.add('pfx-justify');
     showOverlay(wc);
+    sessInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') onStart(); });
 
     async function onStart() {
       err.textContent = '';
-      var sid = sessInput ? (sessInput.value || '').trim() : '';
+      var sid = (sessInput.value || '').trim();
+      if (!sid) { err.textContent = 'Please enter a session code to begin.'; sessInput.focus(); return; }
       startBtn.setAttribute('disabled', 'true'); startBtn.textContent = 'Starting…';
       var res = await beginSession(sid);
       if (!res.ok) {
@@ -364,7 +367,7 @@
         err.textContent = res.closed
           ? ('Session “' + sid + '” is closed and is no longer accepting new players.')
           : (res.notFound
-            ? ('No session found for code “' + sid + '”. Check the code and try again, or clear it to play the default game.')
+            ? ('No active session found for code “' + sid + '”. Check the code with your organiser and try again.')
             : 'Could not start just now. Please check your connection and try again.');
         return;
       }
@@ -378,39 +381,38 @@
     try { return m ? decodeURIComponent(m[1]).trim() : ''; } catch (e) { return m ? m[1] : ''; }
   }
 
-  // Sign in anonymously (if needed), load the chosen configuration, and create
-  // the anonymous participant record. Returns { ok, notFound } for the welcome UI.
+  // Validate the REQUIRED session code against an active session, then create the
+  // participant record tagged with that session. A code is mandatory: there is no
+  // default / anonymous play. Returns { ok, notFound, closed } for the welcome UI.
   async function beginSession(sid) {
-    if (S.offline || !fb) { S.sessionId = null; cfg = DEFAULTS; return { ok: true }; }
+    if (S.offline || !fb) return { ok: false };          // can't validate a session offline
+    if (!sid) return { ok: false, notFound: true };      // no code → no play
     if (!S.user) {
       try { S.user = (await fb.A.signInAnonymously(fb.auth)).user; }
-      catch (e) { console.warn('[PFX] anonymous sign-in failed', e); S.offline = true; cfg = DEFAULTS; return { ok: true }; }
+      catch (e) { console.warn('[PFX] anonymous sign-in failed', e); S.offline = true; return { ok: false }; }
     }
-    if (sid) {
-      var r = await loadConfig(sid);
-      if (!r.ok) return { ok: false, notFound: !!r.notFound };
-      if (r.status === 'closed') return { ok: false, closed: true };
-      S.sessionId = sid;
-    } else {
-      await loadConfig(null);
-      S.sessionId = null;
-    }
+    var r = await loadConfig(sid);
+    if (!r.ok) return { ok: false, notFound: !!r.notFound };
+    if (r.status === 'closed') return { ok: false, closed: true };
+    S.sessionId = sid;
     await createParticipant();
     return { ok: true };
   }
 
-  // Create (or refresh) this anonymous player's participant document, tagged with
-  // the session code so the admin can group exported data by session.
+  // Create (or refresh) this player's participant document, tagged with the
+  // session code so the admin can group exported data by session. Identity stays
+  // anonymous-auth, but the player is gated to an active session (status 'joined'
+  // until they complete Registration; 'playing' once the main game starts).
   async function createParticipant() {
     if (!fb || !S.user || S.offline) return;
     var label = 'anon-' + S.user.uid.slice(0, 6);
     try {
       await fb.F.setDoc(fb.F.doc(fb.db, 'participants', S.user.uid), {
         uid: S.user.uid, anonymous: true, sessionId: S.sessionId || null,
-        anonymousLabel: label, status: 'playing',
+        anonymousLabel: label, status: 'joined',
         createdAt: fb.F.serverTimestamp(), updatedAt: fb.F.serverTimestamp()
       }, { merge: true });
-      S.participant = { anonymousLabel: label, sessionId: S.sessionId || null, status: 'playing' };
+      S.participant = { anonymousLabel: label, sessionId: S.sessionId || null, status: 'joined' };
       renderTopbar();
     } catch (e) { console.warn('[PFX] participant create failed', e); }
   }
@@ -553,7 +555,83 @@
     window.PFGame._onRoundEnd = null;
     hideGameSubmit();
     logEvent('training_end', { trainingMetrics: metrics || null });
-    setTimeout(function () { startMain(); }, 400);
+    setTimeout(function () { showRegistration(); }, 400);
+  }
+
+  // ---- Phase: registration (after training, before the main game) -------
+  // Collects the UCD Student ID (compulsory first field) plus demographics and
+  // research-consent checkboxes, then unlocks the main game. Data is written to
+  // the participant doc (registration map + studentId + consent) and exported by
+  // the admin panel.
+  function showRegistration() {
+    S.phase = 'registration';
+    document.body.classList.remove('pf-playing');
+    var questions = (cfg.registrationQuestions && cfg.registrationQuestions.length) ? cfg.registrationQuestions : DEFAULTS.registrationQuestions;
+    var consents = (cfg.registrationConsents && cfg.registrationConsents.length) ? cfg.registrationConsents : (DEFAULTS.registrationConsents || []);
+
+    var form = el('div', {});
+    form.appendChild(el('h3', { text: 'Participant Information', style: 'font-family:"Space Grotesk",Inter,sans-serif;font-size:1.05rem;margin:6px 0 2px;' }));
+    var fields = questions.map(function (q) { var f = buildField(q); form.appendChild(f.field); return f; });
+
+    var consentBoxes = [];
+    if (consents.length) {
+      form.appendChild(el('hr', { style: 'border:none;border-top:1px solid #f0ece3;margin:18px 0 10px;' }));
+      form.appendChild(el('h3', { text: 'Consent', style: 'font-family:"Space Grotesk",Inter,sans-serif;font-size:1.05rem;margin:0 0 8px;' }));
+      consents.forEach(function (stmt) {
+        var cb = el('input', { type: 'checkbox', style: 'width:16px;height:16px;flex:0 0 auto;margin-top:2px;accent-color:#e67e22;' });
+        consentBoxes.push(cb);
+        form.appendChild(el('label', { style: 'display:flex;gap:9px;align-items:flex-start;font-weight:500;font-size:14px;margin:8px 0;cursor:pointer;color:#4a4843;' },
+          [cb, el('span', { text: stmt })]));
+      });
+    }
+
+    var err = el('div', { class: 'pfx-err' });
+    var submit = el('button', { class: 'pfx-btn', on: { click: doSubmit } }, ['Submit and Start Challenge']);
+    form.appendChild(err);
+    form.appendChild(el('div', { class: 'pfx-row' }, [submit]));
+
+    var rc = card(cfg.texts.registerTitle || 'Registration', [
+      el('p', { html: cfg.texts.registerIntro || 'Please complete the information below.' }), form
+    ]);
+    showOverlay(rc);
+
+    async function doSubmit() {
+      err.textContent = '';
+      var reg = {};
+      for (var i = 0; i < fields.length; i++) {
+        var f = fields[i], q = f.q, v = f.read();
+        if (q.required && !v) { err.textContent = 'Please complete: ' + q.label + '.'; return; }
+        if (q.type === 'number' && v !== '') {
+          var num = Number(v);
+          if (isNaN(num) || Math.floor(num) !== num) { err.textContent = q.label + ' must be a whole number.'; return; }
+          if (q.min != null && num < q.min) { err.textContent = q.label + ' must be at least ' + q.min + '.'; return; }
+          if (q.max != null && num > q.max) { err.textContent = q.label + ' must be at most ' + q.max + '.'; return; }
+          v = num;
+        }
+        reg[q.id] = v;
+      }
+      for (var c = 0; c < consentBoxes.length; c++) {
+        if (!consentBoxes[c].checked) { err.textContent = 'Please accept all consent statements to continue.'; return; }
+      }
+      submit.setAttribute('disabled', 'true'); submit.textContent = 'Saving…';
+      await saveRegistration(reg, consentBoxes.length > 0);
+      logEvent('registration_submit', { studentId: reg.studentId || null });
+      startMain();
+    }
+  }
+
+  // Persist registration to the participant doc (research export reads p.registration,
+  // p.studentId, p.consentGiven). consentGiven is only recorded when consent
+  // statements were actually shown. Non-fatal: a write hiccup must not strand the player.
+  async function saveRegistration(reg, consented) {
+    S.participant = Object.assign({}, S.participant, { registration: reg, studentId: reg.studentId || null });
+    if (consented) S.participant.consentGiven = true;
+    if (!fb || !S.user || S.offline) return;
+    var payload = { registration: reg, studentId: reg.studentId || null, updatedAt: fb.F.serverTimestamp() };
+    if (consented) { payload.consentGiven = true; payload.consentTimestamp = new Date().toISOString(); }
+    try {
+      await fb.F.setDoc(fb.F.doc(fb.db, 'participants', S.user.uid), payload, { merge: true });
+    } catch (e) { console.warn('[PFX] registration save failed', e); }
   }
 
   // Load this anonymous player's existing participant record (used on reload to
@@ -566,10 +644,10 @@
     } catch (e) { /* ignore */ }
   }
 
-  // "Restart" — drop the current anonymous identity and reload to a fresh
-  // welcome screen (a brand-new anonymous session is created on next start).
+  // "Restart" — drop the current identity and reload to the welcome screen, where
+  // a session code must be entered again. Previously recorded data is left as-is.
   async function doRestart() {
-    if (!window.confirm('Start over with a fresh anonymous session? Your current progress will be left as-is.')) return;
+    if (!window.confirm('Start over and re-enter a session code? Your current progress will be left as-is.')) return;
     try { if (fb && fb.auth) await fb.A.signOut(fb.auth); } catch (e) {}
     location.reload();
   }
@@ -756,14 +834,22 @@
     field.appendChild(el('label', { text: q.label + (q.required ? ' *' : '') }));
     if (q.help) field.appendChild(el('div', { class: 'help', text: q.help }));
     var input;
-    if (q.type === 'select') {
-      input = el('select', {}, [el('option', { value: '' }, ['Please select...'])].concat(
-        (q.options || []).map(function (o) { return el('option', { value: o }, [o]); })));
+    if (q.type === 'select' || q.type === 'country') {
+      var opts = (q.type === 'country')
+        ? ((window.PF_DEFAULTS && window.PF_DEFAULTS.countries) || DEFAULTS.countries || [])
+        : (q.options || []);
+      input = el('select', {}, [el('option', { value: '' }, ['Select...'])].concat(
+        opts.map(function (o) { return el('option', { value: o }, [o]); })));
     } else if (q.type === 'radio') {
       input = el('div', { class: 'radio' });
       (q.options || []).forEach(function (o) { input.appendChild(el('label', {}, [el('input', { type: 'radio', name: q.id, value: o }), o])); });
     } else if (q.type === 'textarea') {
       input = el('textarea', { rows: '3', style: 'width:100%;padding:10px 12px;border:1px solid #e0dbd0;border-radius:10px;font-size:14px;font-family:inherit;resize:vertical;' });
+    } else if (q.type === 'number') {
+      var natts = { type: 'number', step: '1', autocomplete: 'off', placeholder: q.placeholder || 'e.g. 3' };
+      if (q.min != null) natts.min = q.min;
+      if (q.max != null) natts.max = q.max;
+      input = el('input', natts);
     } else {
       input = el('input', { type: q.type || 'text', autocomplete: 'off' });
     }
@@ -844,8 +930,11 @@
     var st = S.participant && S.participant.status;
     if (st === 'done') return showThankYou();
     if (st === 'survey') return showSurvey();
-    if (st === 'playing') { try { await restoreQueue(); } catch (e) {} }
-    startMain();
+    if (st === 'playing') { try { await restoreQueue(); } catch (e) {} return startMain(); }
+    // 'joined' (or anything pre-main): resume into the game if they already
+    // registered, otherwise restart the training -> registration lead-in.
+    if (S.participant && S.participant.registration) return startMain();
+    return startTraining();
   }
 
   // ---- Movable / resizable boxes (experiment mode) ----------------------
@@ -959,8 +1048,9 @@
     });
   }
 
-  // Offline fallback: Firebase is unreachable or Anonymous Auth is disabled. The
-  // default game stays fully playable; nothing is saved and codes are ignored.
+  // Offline fallback: Firebase is unreachable or Anonymous Auth is disabled. A
+  // session cannot be validated offline, so the welcome screen blocks play and
+  // asks the visitor to reconnect (no anonymous / default-game path).
   function startOffline() {
     S.offline = true; S.user = null; cfg = DEFAULTS;
     enableLayoutCustomize();
@@ -988,10 +1078,12 @@
     S.user = u;
     enableLayoutCustomize();
 
-    // Returning player with progress → reload their session config and resume.
+    // Returning player who already joined a session → reload that session's
+    // config and resume. A record with no sessionId (legacy/anonymous) is NOT
+    // resumed: they must (re-)enter an active session code on the welcome screen.
     await loadParticipant();
-    if (S.participant && S.participant.status) {
-      S.sessionId = S.participant.sessionId || null;
+    if (S.participant && S.participant.status && S.participant.sessionId) {
+      S.sessionId = S.participant.sessionId;
       await loadConfig(S.sessionId);
       renderTopbar();
       return resumeFlow();
