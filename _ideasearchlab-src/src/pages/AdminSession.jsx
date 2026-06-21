@@ -286,6 +286,8 @@ export default function AdminSession() {
           'Model': msg.model || '',
           'Input Tokens': msg.inputTokens ?? '',
           'Output Tokens': msg.outputTokens ?? '',
+          // How long the provider took to generate this reply (assistant rows only).
+          'Gen time (s)': msg.generationMs != null ? Math.round(msg.generationMs / 100) / 10 : '',
           'Timestamp': formatTimestamp(msg.timestamp),
         }))
         const wsAI = XLSX.utils.json_to_sheet(aiRows)
@@ -304,13 +306,14 @@ export default function AdminSession() {
             usageByScope[key] = {
               scope: msg.scope || '', scopeId: msg.scopeId || '',
               replies: 0, inputTokens: 0, outputTokens: 0,
-              costUSD: 0, unpriced: 0, models: new Set(),
+              genMs: 0, costUSD: 0, unpriced: 0, models: new Set(),
             }
           }
           const u = usageByScope[key]
           u.replies += 1
           u.inputTokens += msg.inputTokens || 0
           u.outputTokens += msg.outputTokens || 0
+          u.genMs += msg.generationMs || 0
           if (msg.model) u.models.add(msg.model)
           const cost = replyCostUSD(msg.model, msg.inputTokens, msg.outputTokens)
           if (msg.inputTokens == null && msg.outputTokens == null) u.unpriced += 1
@@ -324,6 +327,8 @@ export default function AdminSession() {
           'Input Tokens': u.inputTokens,
           'Output Tokens': u.outputTokens,
           'Total Tokens': u.inputTokens + u.outputTokens,
+          'Total gen time (s)': Math.round(u.genMs / 100) / 10,
+          'Avg gen time/reply (s)': u.replies ? Math.round(u.genMs / u.replies / 100) / 10 : '',
           'Model(s)': [...u.models].join(', '),
           [costUsdCol]: r4(u.costUSD),
           [costEurCol]: r4(u.costUSD * USD_TO_EUR),
@@ -338,6 +343,10 @@ export default function AdminSession() {
             'Input Tokens': sum('Input Tokens'),
             'Output Tokens': sum('Output Tokens'),
             'Total Tokens': sum('Total Tokens'),
+            'Total gen time (s)': Math.round(sum('Total gen time (s)') * 10) / 10,
+            'Avg gen time/reply (s)': sum('AI Replies')
+              ? Math.round(sum('Total gen time (s)') / sum('AI Replies') * 10) / 10
+              : '',
             'Model(s)': '',
             [costUsdCol]: r4(sum(costUsdCol)),
             [costEurCol]: r4(sum(costEurCol)),
@@ -353,6 +362,8 @@ export default function AdminSession() {
               'Input Tokens': Math.round(totals['Input Tokens'] / n),
               'Output Tokens': Math.round(totals['Output Tokens'] / n),
               'Total Tokens': Math.round(totals['Total Tokens'] / n),
+              'Total gen time (s)': Math.round(totals['Total gen time (s)'] / n * 10) / 10,
+              'Avg gen time/reply (s)': '',
               'Model(s)': '',
               [costUsdCol]: r4(totals[costUsdCol] / n),
               [costEurCol]: r4(totals[costEurCol] / n),
