@@ -312,6 +312,43 @@ export default function Admin() {
     }
   }
 
+  // "Save" for a content page: commit the current text. When editing a session
+  // it writes to that session immediately; in create mode the text is already
+  // captured and will be used when the session is created.
+  async function saveContentGroup(groupKey) {
+    try {
+      if (editingSession) {
+        await updateDoc(doc(db, 'sessions', editingSession.id), {
+          contentConfig: config.contentConfig,
+        })
+        flashDefaultFeedback(groupKey, 'Saved to this session.')
+      } else {
+        flashDefaultFeedback(groupKey, 'Saved — used when you create the session.')
+      }
+    } catch (err) {
+      console.error('Could not save:', err)
+      flashDefaultFeedback(groupKey, 'Could not save (check Firestore rules).')
+    }
+  }
+
+  // "Save" for the registration / survey builders (same Save semantics).
+  async function saveBuilder(key) {
+    const { configKey } = BUILDER_DEFAULTS[key]
+    try {
+      if (editingSession) {
+        await updateDoc(doc(db, 'sessions', editingSession.id), {
+          [configKey]: config[configKey],
+        })
+        flashDefaultFeedback(key, 'Saved to this session.')
+      } else {
+        flashDefaultFeedback(key, 'Saved — used when you create the session.')
+      }
+    } catch (err) {
+      console.error('Could not save:', err)
+      flashDefaultFeedback(key, 'Could not save (check Firestore rules).')
+    }
+  }
+
   // ── Idea Parameters: Save / Make this the default / Restore built-in ──
   // "Save" commits the current idea parameters. When editing a session it
   // writes them to that session immediately; in create mode the values are
@@ -772,7 +809,7 @@ export default function Admin() {
                 <ContentEditor
                   content={config.contentConfig}
                   onField={setContentField}
-                  onReset={resetContentGroup}
+                  onSaveGroup={saveContentGroup}
                   onSaveDefault={saveContentGroupAsDefault}
                   onRestoreBuiltin={restoreBuiltinDefault}
                   customDefaults={customDefaults}
@@ -786,8 +823,8 @@ export default function Admin() {
                 <Collapsible label="Edit registration questions">
                   <RegistrationBuilder value={config.registrationConfig} onChange={setRegistrationConfig} />
                   <DefaultActions
-                    onSave={() => saveBuilderAsDefault('registrationForm')}
-                    onReset={() => resetBuilder('registrationForm')}
+                    onSave={() => saveBuilder('registrationForm')}
+                    onMakeDefault={() => saveBuilderAsDefault('registrationForm')}
                     onRestore={() => restoreBuilderBuiltin('registrationForm')}
                     hasCustom={!!customDefaults?.registrationForm}
                     feedback={defaultFeedback?.key === 'registrationForm' ? defaultFeedback.text : null}
@@ -801,8 +838,8 @@ export default function Admin() {
                 <Collapsible label="Edit survey questions">
                   <SurveyBuilder value={config.surveyConfig} onChange={setSurveyConfig} />
                   <DefaultActions
-                    onSave={() => saveBuilderAsDefault('surveyQuestions')}
-                    onReset={() => resetBuilder('surveyQuestions')}
+                    onSave={() => saveBuilder('surveyQuestions')}
+                    onMakeDefault={() => saveBuilderAsDefault('surveyQuestions')}
                     onRestore={() => restoreBuilderBuiltin('surveyQuestions')}
                     hasCustom={!!customDefaults?.surveyQuestions}
                     feedback={defaultFeedback?.key === 'surveyQuestions' ? defaultFeedback.text : null}
@@ -1209,23 +1246,24 @@ function ConfirmButton({ children, onClick, className, title, confirmedLabel = '
 // save current state as the default for new sessions, reset the editor to the
 // effective default, and (when a saved default exists) restore the built-in.
 // Each turns green briefly to confirm it was pressed.
-function DefaultActions({ onSave, onReset, onRestore, hasCustom, feedback }) {
+function DefaultActions({ onSave, onMakeDefault, onRestore, hasCustom, feedback }) {
   return (
     <div className={styles.contentBtnRow}>
       <ConfirmButton
         className={styles.contentDefaultBtn}
         onClick={onSave}
+        confirmedLabel="Saved ✓"
+        title="Save the current text (to this session when editing one)"
+      >
+        Save
+      </ConfirmButton>
+      <ConfirmButton
+        className={styles.contentDefaultBtn}
+        onClick={onMakeDefault}
         confirmedLabel="Default set ✓"
         title="Save the current state as the default that every new session starts with"
       >
         Make this the default
-      </ConfirmButton>
-      <ConfirmButton
-        className={styles.contentResetBtn}
-        onClick={onReset}
-        confirmedLabel="Reset ✓"
-      >
-        Reset this page to defaults
       </ConfirmButton>
       {hasCustom && (
         <ConfirmButton
@@ -1257,7 +1295,7 @@ function Collapsible({ label, children }) {
 }
 
 // Collapsible per-page editor: one full-page rich-text document per page.
-function ContentEditor({ content, onField, onReset, onSaveDefault, onRestoreBuiltin, customDefaults, feedback }) {
+function ContentEditor({ content, onField, onSaveGroup, onSaveDefault, onRestoreBuiltin, customDefaults, feedback }) {
   const [openGroup, setOpenGroup] = useState(null)
 
   return (
@@ -1297,8 +1335,8 @@ function ContentEditor({ content, onField, onReset, onSaveDefault, onRestoreBuil
                 })}
 
                 <DefaultActions
-                  onSave={() => onSaveDefault(group.key)}
-                  onReset={() => onReset(group.key)}
+                  onSave={() => onSaveGroup(group.key)}
+                  onMakeDefault={() => onSaveDefault(group.key)}
                   onRestore={() => onRestoreBuiltin(group.key)}
                   hasCustom={!!customDefaults?.[group.key]}
                   feedback={feedback?.key === group.key ? feedback.text : null}

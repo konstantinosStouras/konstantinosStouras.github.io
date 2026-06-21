@@ -65,7 +65,8 @@ export const DEFAULT_CONTENT = {
       '</ul>',
     brief:
       '<p>Design a <strong>completely new product using a fabric that changes color when it reaches 37°C (body temperature)</strong>, for the <strong>smart materials and wearable technology</strong> market. Consider what users currently have and what unmet needs remain.</p>' +
-      '<p><strong>Example:</strong> A wristband made with thermochromic fabric that changes color at body temperature, giving caregivers a passive visual signal of skin contact or warmth — without any electronics.</p>' +
+      '<p><strong>Example:</strong></p>' +
+      '<p><strong>TITLE:</strong> Body-Heat Reveal Tee<br><strong>DESCRIPTION:</strong> A t-shirt that reveals a hidden pattern wherever your body heat warms the fabric, shifting as you move — no electronics needed.</p>' +
       "<p>You can generate up to <strong>{maxIdeas} original product ideas</strong>. Each idea should include an <strong>idea title</strong> and a <strong>description</strong> explaining what it does, how it works, and why it's unique.</p>" +
       '<p>Use the following <strong>evaluation criteria</strong> to guide your thinking:</p>' +
       '<ul>' +
