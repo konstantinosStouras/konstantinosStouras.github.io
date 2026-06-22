@@ -1446,10 +1446,11 @@
       const cells = placementAt(piece, r, c);
       if (!isValid(cells)) { flashBad(); return; }
       const mBefore = pfMetrics();   // KPI snapshot BEFORE this board change
+      const bBefore = pfBoardMatrix();   // frame BEFORE this brick is placed
       for (const [pr, pc] of cells) state.occupied.set(pr + ',' + pc, piece.id);
       piece.placed = true;
       piece.placedCells = cells;
-      pfEmit('place', { pieceId: piece.id, name: piece.name, value: piece.value, cells: cells, anchor: pfAnchorOf(cells), board: pfBoardMatrix(), metricsBefore: mBefore, metrics: pfMetrics() });
+      pfEmit('place', { pieceId: piece.id, name: piece.name, value: piece.value, cells: cells, anchor: pfAnchorOf(cells), boardBefore: bBefore, board: pfBoardMatrix(), metricsBefore: mBefore, metrics: pfMetrics() });
       state.selected = null;
       clearPreview();
       renderBoard();
@@ -1466,9 +1467,10 @@
       if (!p || !p.placed) return;
       const formerCells = p.placedCells;
       const mBefore = pfMetrics();   // KPI snapshot BEFORE this board change
+      const bBefore = pfBoardMatrix();   // frame BEFORE this brick is removed
       for (const [r, c] of p.placedCells) state.occupied.delete(r + ',' + c);
       p.placed = false; p.placedCells = null;
-      pfEmit('remove', { pieceId: p.id, name: p.name, cells: formerCells, anchor: pfAnchorOf(formerCells), board: pfBoardMatrix(), metricsBefore: mBefore, metrics: pfMetrics() });
+      pfEmit('remove', { pieceId: p.id, name: p.name, value: p.value, cells: formerCells, anchor: pfAnchorOf(formerCells), boardBefore: bBefore, board: pfBoardMatrix(), metricsBefore: mBefore, metrics: pfMetrics() });
       state.selected = p.id;
       renderBoard();
       renderTray();

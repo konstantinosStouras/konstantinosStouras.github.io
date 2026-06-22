@@ -303,7 +303,8 @@
       ev.brick = payload.name || null;
       ev.anchor = payload.anchor || null;
       ev.cellsJson = payload.cells ? safeJson(payload.cells) : null;
-      ev.boardJson = payload.board ? safeJson(payload.board) : null;
+      ev.boardBeforeJson = payload.boardBefore ? safeJson(payload.boardBefore) : null;  // frame before the move
+      ev.boardJson = payload.board ? safeJson(payload.board) : null;                    // frame after the move
       if (payload.value != null) ev.brickValue = payload.value;
     } else if (type === 'round_start' || type === 'round_end') {
       ev.boardJson = payload.board ? safeJson(payload.board) : null;
