@@ -874,7 +874,9 @@
       body.push(el('p', { class: 'muted', text: remaining + ' puzzle' + (remaining === 1 ? '' : 's') + ' remaining.' }));
       body.push(el('div', { class: 'pfx-row' }, [el('button', { class: 'pfx-btn', on: { click: runNextPuzzle } }, ['Continue to the ' + ordinal(doneN + 1) + ' puzzle'])]));
     }
-    var title = last ? (cfg.texts.statsTitle || 'Thank you for playing!') : ('Puzzle ' + doneN + ' of ' + total + ' complete');
+    // Every end-of-puzzle screen is titled per-puzzle (and shows only THIS
+    // puzzle's stats) — no cross-puzzle "Thank you for playing!" summary.
+    var title = 'Puzzle ' + doneN + ' of ' + total + ' complete';
     showOverlay(card(title, body));
     logEvent('round_stats_shown', { index: rec.index, net: rec.net, coverage: rec.coverage, time: rec.time, last: last });
   }
