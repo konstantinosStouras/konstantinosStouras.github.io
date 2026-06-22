@@ -29,6 +29,7 @@ window.PF_DEFAULTS = {
   },
   settings: {
     trainingDifficulty: 'easy',
+    trainingTimeLimit: 90,
     puzzlesPerUser: { easy: 2, hard: 2 },
     randomizeOrder: true,
     activePuzzleIds: [],

@@ -62,6 +62,7 @@
     },
     settings: {
       trainingDifficulty: 'easy',
+      trainingTimeLimit: 90,
       puzzlesPerUser: { easy: 2, hard: 2 },
       randomizeOrder: true,
       activePuzzleIds: []
@@ -493,8 +494,11 @@
     S.roundIndex = 0;
     S.currentPuzzleId = 'training';
     var tdiff = (cfg.settings && cfg.settings.trainingDifficulty) || 'easy';
+    // Training is a short practice round: 90s (1.5 min) by default, regardless of
+    // the easy/hard limits used for the main puzzles (admin-overridable).
+    var tlim = (cfg.settings && cfg.settings.trainingTimeLimit) || 90;
     window.PFGame._onRoundEnd = onTrainingEnd;
-    window.PFGame.newGame(tdiff, limitFor(tdiff));
+    window.PFGame.newGame(tdiff, tlim);
     // Pause the clock and run the onboarding tour over the live board first.
     if (window.PFGame.pauseTimer) window.PFGame.pauseTimer();
     showGameSubmit('Continue to the game');   // visible so the tour can highlight it
