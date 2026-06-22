@@ -223,7 +223,10 @@ publish it; versioned in the repo, deployed manually to the lab project):
     *after* the move (a rows×cols matrix where each cell is `0` if empty or the
     occupying brick's name; produced by the game's `pfBoardMatrix()` and included
     on the `place`/`remove`/`round_start`/`round_end` payloads). `round_start`
-    logs the empty-board baseline.
+    logs the empty-board baseline. They also carry a **full KPI snapshot before
+    and after** the change: `metricsBeforeJson` (place/remove) and
+    `metricsAfterJson` (the game captures `pfMetrics()` just before mutating the
+    board and again after), so the export can show every KPI's before↔after value.
   - **Calculator** (`calc`) carries `calcExpr`/`calcResult` — every evaluation
     attempt, including errors (so all input/output is captured).
   - **Notes** (`note`) carries `noteText`.
@@ -285,8 +288,12 @@ publish it; versioned in the repo, deployed manually to the lab project):
   - **Play log** — the google-sheet-style single tab collecting *every brick
     move* across all included players: Player, UCD Student ID, Session, Puzzle,
     Difficulty, Move #, Action (start/add/remove), Brick (Id), Anchor, Cells,
-    Brick Value, Net Value, Coverage %, **FrameMatrix** (board after the move),
-    Time, Duration (s) (gap since the previous move in that puzzle).
+    Brick Value, then **every KPI before↔after the change** — Net Value, Total
+    Value, Resource Cost, Value/Resource, Coverage %, Portfolio Fitness, each as
+    a `… (before)` and `… (after)` column — then **FrameMatrix** (board after the
+    move), Time, Duration (s) (gap since the previous move in that puzzle).
+  - All time-of-day cells are formatted as **UK time** (`Europe/London`, auto
+    BST/GMT) via `fmtUK`, e.g. `22/6/2026, 7:37:47 AM`.
   - **Calculator** — Player, Student ID, Session, Puzzle, Time, Input, Output.
   - **Notes** — Player, Student ID, Session, Puzzle, Time, Note.
   - **Participants** — identity columns then one column **per registration
@@ -334,8 +341,9 @@ publish it; versioned in the repo, deployed manually to the lab project):
                                   round, puzzleId, type, dataJson + flat fields —
                                   place/remove: action, brick, anchor, cellsJson,
                                   brickValue, boardJson (FrameMatrix), net,
-                                  coverage; calc: calcExpr/calcResult; note:
-                                  noteText; round_start/end: boardJson, diff
+                                  coverage, metricsBeforeJson/metricsAfterJson
+                                  (full KPI snapshots); calc: calcExpr/calcResult;
+                                  note: noteText; round_start/end: boardJson, diff
     rounds/{autoId}               per-round summary (net/coverage/fitness/time,
                                   placementsJson…)
     survey/answers                { answers, completedAt }

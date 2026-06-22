@@ -1171,7 +1171,7 @@
       setStatus('', '');
       resetTimer();
       startTimer();
-      pfEmit('round_start', { diff: diff, kappa: state.kappa, bestValue: state.bestValue, round: sessionRounds, board: pfBoardMatrix() });
+      pfEmit('round_start', { diff: diff, kappa: state.kappa, bestValue: state.bestValue, round: sessionRounds, board: pfBoardMatrix(), metrics: pfMetrics() });
     }
 
     // Serialize a freshly generated puzzle so the admin can preview / freeze it.
@@ -1444,10 +1444,11 @@
       if (!piece || piece.placed) return;
       const cells = placementAt(piece, r, c);
       if (!isValid(cells)) { flashBad(); return; }
+      const mBefore = pfMetrics();   // KPI snapshot BEFORE this board change
       for (const [pr, pc] of cells) state.occupied.set(pr + ',' + pc, piece.id);
       piece.placed = true;
       piece.placedCells = cells;
-      pfEmit('place', { pieceId: piece.id, name: piece.name, value: piece.value, cells: cells, anchor: pfAnchorOf(cells), board: pfBoardMatrix(), metrics: pfMetrics() });
+      pfEmit('place', { pieceId: piece.id, name: piece.name, value: piece.value, cells: cells, anchor: pfAnchorOf(cells), board: pfBoardMatrix(), metricsBefore: mBefore, metrics: pfMetrics() });
       state.selected = null;
       clearPreview();
       renderBoard();
@@ -1463,9 +1464,10 @@
       const p = state.pieces.find(pp => pp.id === instId);
       if (!p || !p.placed) return;
       const formerCells = p.placedCells;
+      const mBefore = pfMetrics();   // KPI snapshot BEFORE this board change
       for (const [r, c] of p.placedCells) state.occupied.delete(r + ',' + c);
       p.placed = false; p.placedCells = null;
-      pfEmit('remove', { pieceId: p.id, name: p.name, cells: formerCells, anchor: pfAnchorOf(formerCells), board: pfBoardMatrix(), metrics: pfMetrics() });
+      pfEmit('remove', { pieceId: p.id, name: p.name, cells: formerCells, anchor: pfAnchorOf(formerCells), board: pfBoardMatrix(), metricsBefore: mBefore, metrics: pfMetrics() });
       state.selected = p.id;
       renderBoard();
       renderTray();
