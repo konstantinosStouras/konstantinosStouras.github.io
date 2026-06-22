@@ -289,7 +289,12 @@
       ev.net = payload.metrics.net; ev.coverage = payload.metrics.coverage;
       ev.value = payload.metrics.value; ev.cost = payload.metrics.cost;
       ev.placed = payload.metrics.placed; ev.total = payload.metrics.total;
+      // Full KPI snapshot AFTER the change (Net/Total Value/Resource Cost/
+      // Value-Resource/Coverage/Fitness) for the export's before↔after columns.
+      ev.metricsAfterJson = safeJson(payload.metrics);
     }
+    // Full KPI snapshot BEFORE a board change (place/remove carry metricsBefore).
+    if (payload.metricsBefore) ev.metricsBeforeJson = safeJson(payload.metricsBefore);
     if (type === 'place' || type === 'remove') {
       ev.action = (type === 'place') ? 'add' : 'remove';
       ev.brick = payload.name || null;

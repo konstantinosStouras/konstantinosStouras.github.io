@@ -848,7 +848,27 @@
   }
 
   function tsMs(ts) { if (!ts) return 0; if (typeof ts.toMillis === 'function') return ts.toMillis(); if (ts.seconds) return ts.seconds * 1000; return 0; }
-  function fmtTs(ts) { var m = tsMs(ts); return m ? new Date(m).toLocaleString() : ''; }
+  // Coerce a Firestore Timestamp / ISO string / ms number / Date into a Date.
+  function toDate(x) {
+    if (!x) return null;
+    if (x instanceof Date) return isNaN(x.getTime()) ? null : x;
+    if (typeof x === 'object') { if (typeof x.toMillis === 'function') return new Date(x.toMillis()); if (x.seconds != null) return new Date(x.seconds * 1000); return null; }
+    if (typeof x === 'number') return new Date(x);
+    if (typeof x === 'string') { var d = new Date(x); return isNaN(d.getTime()) ? null : d; }
+    return null;
+  }
+  // Format any time as UK (Europe/London, auto BST/GMT) like "22/6/2026, 7:37:47 AM".
+  function fmtUK(x) {
+    var d = toDate(x); if (!d) return '';
+    try {
+      var parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', day: 'numeric', month: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }).formatToParts(d);
+      var m = {}; parts.forEach(function (p) { m[p.type] = p.value; });
+      var ap = (m.dayPeriod || '').toUpperCase();
+      // No leading zeros on day/month/hour; keep minute/second 2-digit (e.g. 22/6/2026, 7:37:47 AM).
+      return Number(m.day) + '/' + Number(m.month) + '/' + m.year + ', ' + Number(m.hour) + ':' + m.minute + ':' + m.second + (ap ? ' ' + ap : '');
+    } catch (e) { return d.toISOString(); }
+  }
+  function fmtTs(ts) { return fmtUK(ts); }
 
   // ---- Excel export ----
   async function ensureXLSX() {
@@ -882,6 +902,10 @@
   }
   function whoOf(p) { return p.anonymousLabel || p.participantId || p.email || p._id; }
   function sidOf(p) { return p.studentId || (p.registration && p.registration.studentId) || ''; }
+  // Value/Resource (ROI) derived from a metrics snapshot, and a generic KPI reader
+  // ('' when absent) — used to lay out the before↔after KPI columns of the Play log.
+  function vprOf(m) { return (m && m.cost > 0) ? Math.round((m.value / m.cost) * 100) / 100 : ''; }
+  function kval(m, key) { if (!m) return ''; if (key === 'vpr') return vprOf(m); var v = m[key]; return (v == null) ? '' : v; }
   function effRegQs(qs) { return (qs && qs.length) ? qs : ((window.PF_DEFAULTS && window.PF_DEFAULTS.registrationQuestions) || []); }
   function effSurveyQs(qs) { return (qs && qs.length) ? qs : ((window.PF_DEFAULTS && window.PF_DEFAULTS.surveyQuestions) || []); }
   function stamp() { return new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-'); }
@@ -901,17 +925,33 @@
       var lastT = {};   // per-puzzle baseline timestamp, for per-move durations
       for (var k = 0; k < evs.length; k++) {
         var v = evs[k], pid = v.puzzleId || '';
-        events.push({ 'Player': who, 'UCD Student ID': sid, 'Session': sess, 'Move #': v.seq, 'Type': v.type, 'Phase': v.phase, 'Round': v.round, 'Puzzle': pid, 'Net Value': v.net, 'Coverage %': v.coverage, 'Time': v.clientTime, 'Data (JSON)': v.dataJson });
+        events.push({ 'Player': who, 'UCD Student ID': sid, 'Session': sess, 'Move #': v.seq, 'Type': v.type, 'Phase': v.phase, 'Round': v.round, 'Puzzle': pid, 'Net Value': v.net, 'Coverage %': v.coverage, 'Time': fmtUK(v.clientTime), 'Data (JSON)': v.dataJson });
         if (v.type === 'round_start') {
           lastT[pid] = v.t;
-          play.push({ 'Player': who, 'UCD Student ID': sid, 'Session': sess, 'Puzzle': pid, 'Difficulty': v.diff || '', 'Move #': v.seq, 'Action': 'start (empty board)', 'Brick (Id)': '', 'Anchor': '', 'Cells': '', 'Brick Value': '', 'Net Value': 0, 'Coverage %': 0, 'FrameMatrix': v.boardJson || '', 'Time': v.clientTime, 'Duration (s)': '' });
+          var ma0 = parseJson(v.metricsAfterJson, null);
+          play.push({ 'Player': who, 'UCD Student ID': sid, 'Session': sess, 'Puzzle': pid, 'Difficulty': v.diff || '', 'Move #': v.seq, 'Action': 'start (empty board)', 'Brick (Id)': '', 'Anchor': '', 'Cells': '', 'Brick Value': '',
+            'Net Value (before)': '', 'Net Value (after)': kval(ma0, 'net'),
+            'Total Value (before)': '', 'Total Value (after)': kval(ma0, 'value'),
+            'Resource Cost (before)': '', 'Resource Cost (after)': kval(ma0, 'cost'),
+            'Value/Resource (before)': '', 'Value/Resource (after)': kval(ma0, 'vpr'),
+            'Coverage % (before)': '', 'Coverage % (after)': kval(ma0, 'coverage'),
+            'Portfolio Fitness (before)': '', 'Portfolio Fitness (after)': kval(ma0, 'fitness'),
+            'FrameMatrix': v.boardJson || '', 'Time': fmtUK(v.clientTime), 'Duration (s)': '' });
         } else if (v.type === 'place' || v.type === 'remove') {
           var prev = (lastT[pid] != null) ? lastT[pid] : v.t; var dur = (v.t - prev) / 1000; lastT[pid] = v.t;
-          play.push({ 'Player': who, 'UCD Student ID': sid, 'Session': sess, 'Puzzle': pid, 'Difficulty': '', 'Move #': v.seq, 'Action': v.action || (v.type === 'place' ? 'add' : 'remove'), 'Brick (Id)': v.brick || '', 'Anchor': v.anchor || '', 'Cells': v.cellsJson || '', 'Brick Value': (v.brickValue != null ? v.brickValue : ''), 'Net Value': v.net, 'Coverage %': v.coverage, 'FrameMatrix': v.boardJson || '', 'Time': v.clientTime, 'Duration (s)': Math.round(dur * 10) / 10 });
+          var mb = parseJson(v.metricsBeforeJson, null), ma = parseJson(v.metricsAfterJson, null);
+          play.push({ 'Player': who, 'UCD Student ID': sid, 'Session': sess, 'Puzzle': pid, 'Difficulty': '', 'Move #': v.seq, 'Action': v.action || (v.type === 'place' ? 'add' : 'remove'), 'Brick (Id)': v.brick || '', 'Anchor': v.anchor || '', 'Cells': v.cellsJson || '', 'Brick Value': (v.brickValue != null ? v.brickValue : ''),
+            'Net Value (before)': kval(mb, 'net'), 'Net Value (after)': kval(ma, 'net'),
+            'Total Value (before)': kval(mb, 'value'), 'Total Value (after)': kval(ma, 'value'),
+            'Resource Cost (before)': kval(mb, 'cost'), 'Resource Cost (after)': kval(ma, 'cost'),
+            'Value/Resource (before)': kval(mb, 'vpr'), 'Value/Resource (after)': kval(ma, 'vpr'),
+            'Coverage % (before)': kval(mb, 'coverage'), 'Coverage % (after)': kval(ma, 'coverage'),
+            'Portfolio Fitness (before)': kval(mb, 'fitness'), 'Portfolio Fitness (after)': kval(ma, 'fitness'),
+            'FrameMatrix': v.boardJson || '', 'Time': fmtUK(v.clientTime), 'Duration (s)': Math.round(dur * 10) / 10 });
         } else if (v.type === 'calc') {
-          calc.push({ 'Player': who, 'UCD Student ID': sid, 'Session': sess, 'Puzzle': pid, 'Time': v.clientTime, 'Input': v.calcExpr || '', 'Output': v.calcResult || '' });
+          calc.push({ 'Player': who, 'UCD Student ID': sid, 'Session': sess, 'Puzzle': pid, 'Time': fmtUK(v.clientTime), 'Input': v.calcExpr || '', 'Output': v.calcResult || '' });
         } else if (v.type === 'note') {
-          notes.push({ 'Player': who, 'UCD Student ID': sid, 'Session': sess, 'Puzzle': pid, 'Time': v.clientTime, 'Note': v.noteText || '' });
+          notes.push({ 'Player': who, 'UCD Student ID': sid, 'Session': sess, 'Puzzle': pid, 'Time': fmtUK(v.clientTime), 'Note': v.noteText || '' });
         }
       }
       try { var rs = await fb.F.getDocs(fb.F.collection(fb.db, 'participants', uid, 'rounds')); rs.forEach(function (d) { var rv = d.data(); var pls = parseJson(rv.placementsJson, []); rounds.push({ 'Player': who, 'UCD Student ID': sid, 'Session': sess, 'Puzzle #': rv.index, 'Puzzle ID': rv.puzzleId, 'Difficulty': rv.diff, 'Net Value': rv.net, 'Total Value': rv.value, 'Resource Cost': rv.cost, 'Coverage %': rv.coverage, 'Fitness %': rv.fitness, 'Bricks Placed': rv.placed, 'Board Cells': rv.total, 'Time (s)': rv.time, 'Best Value': rv.bestValue, 'Final FrameMatrix': JSON.stringify(matrixFromPlacements(pls)) }); }); } catch (e) {}
