@@ -167,6 +167,8 @@
       + '.pfx-tip .pfx-next{background:#e67e22;color:#fff;}.pfx-tip .pfx-back{background:#f1ece3;color:#2b2b2b;}.pfx-tip .pfx-skip{background:transparent;color:#8a877f;padding-left:0;}'
       + '.pfx-reset{display:none;position:fixed;left:14px;bottom:14px;z-index:8400;background:#fff;border:1px solid #e0dbd0;border-radius:10px;padding:9px 13px;font-size:12px;font-weight:700;color:#2b2b2b;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,.16);}'
       + '.pfx-reset:hover{background:#f6f3ee;}body.pf-playing .pfx-reset{display:block;}'
+      + '.pfx-phase{display:block;width:fit-content;max-width:90%;margin:2px auto 10px;padding:6px 16px;border-radius:999px;background:#e67e22;color:#fff;font-weight:800;font-size:13px;letter-spacing:.08em;text-transform:uppercase;text-align:center;font-family:Inter,system-ui,sans-serif;box-shadow:0 6px 16px rgba(230,126,34,.35);}'
+      + '.pfx-card .pfx-tag{display:inline-block;margin:0 0 6px;padding:5px 12px;border-radius:999px;background:#fdebd9;color:#cf6f17;font-weight:800;font-size:12px;letter-spacing:.06em;text-transform:uppercase;}'
       + '.pfx-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;}';
     document.head.appendChild(el('style', { text: css }));
   }
@@ -449,9 +451,38 @@
   }
 
   // ---- Phase: training --------------------------------------------------
+  // How many puzzles the participant will play in the MAIN phase after training
+  // (a frozen set's size, else the easy+hard counts), so the training intro can
+  // say exactly how many "real" puzzles follow.
+  function plannedMainCount() {
+    var s = cfg.settings || {};
+    var ids = s.activePuzzleIds || [];
+    if (ids.length) return ids.length;
+    var per = s.puzzlesPerUser || { easy: 2, hard: 2 };
+    return Math.max(0, per.easy | 0) + Math.max(0, per.hard | 0);
+  }
+  // Show/clear a "Training Phase" badge under the game's PortfolioFit title, so it
+  // is obvious on the live board that the current round is only practice.
+  function setPhaseBanner(text) {
+    var header = document.querySelector('header.app'); if (!header) return;
+    var b = header.querySelector('.pfx-phase');
+    if (!b) {
+      b = el('div', { class: 'pfx-phase' });
+      var h1 = header.querySelector('h1');
+      if (h1 && h1.nextSibling) header.insertBefore(b, h1.nextSibling); else header.appendChild(b);
+    }
+    b.textContent = text;
+  }
+  function clearPhaseBanner() { var b = document.querySelector('header.app .pfx-phase'); if (b) b.remove(); }
+
   function startTraining() {
-    showOverlay(card(cfg.texts.trainingTitle, [
+    setPhaseBanner('Training Phase');
+    var n = plannedMainCount();
+    var nTxt = (n > 0) ? ('<b>' + n + ' such puzzle' + (n === 1 ? '' : 's') + '</b>') : '<b>a series of such puzzles</b>';
+    showOverlay(card(cfg.texts.trainingTitle || 'Training Phase', [
+      el('p', { class: 'pfx-tag', text: 'Training Phase' }),
       el('p', { html: cfg.texts.trainingBody }),
+      el('p', { html: 'This is a <b>practice round</b> so you can get comfortable with how the game works. Right after it, you will play ' + nTxt + ' that count towards the study.' }),
       el('div', { class: 'pfx-row' }, [el('button', { class: 'pfx-btn', on: { click: runTraining } }, [cfg.texts.trainingButton || 'Begin training'])])
     ]));
   }
@@ -585,6 +616,7 @@
   function onTrainingEnd(metrics) {
     window.PFGame._onRoundEnd = null;
     hideGameSubmit();
+    clearPhaseBanner();
     logEvent('training_end', { trainingMetrics: metrics || null });
     setTimeout(function () { showRegistration(); }, 400);
   }
@@ -780,7 +812,7 @@
   function runNextPuzzle() {
     closeOverlay();
     document.body.classList.add('pf-playing');
-    if (S.mainIndex >= S.queue.length) { showStats(); return; }
+    if (S.mainIndex >= S.queue.length) { finalizeMainStats(); showSurvey(); return; }
     var item = S.queue[S.mainIndex];
     S.roundIndex = S.mainIndex + 1;
     S.currentPuzzleId = item.id || ('main-' + S.roundIndex + '-' + item.diff);
@@ -799,10 +831,10 @@
     writeRound(rec, placements);
     S.mainIndex += 1;
     persistProgress();
-    var remaining = S.queue.length - S.mainIndex;
-    // Show a results screen after EVERY puzzle: a per-puzzle breakdown between
-    // puzzles, and the overall summary after the last one (which leads to the survey).
-    setTimeout(function () { if (remaining <= 0) showStats(); else showRoundStats(rec); }, 350);
+    // Show a results screen after EVERY puzzle. It always reports THIS puzzle's
+    // own metrics (never an aggregate across puzzles). The last one leads to the
+    // survey; the others continue to the next puzzle.
+    setTimeout(function () { showRoundStats(rec); }, 350);
   }
   // The metrics breakdown grid, shared by the per-puzzle and final summary screens.
   function statsGrid(o) {
@@ -822,16 +854,25 @@
         [el('span', { class: 'muted', text: r[0] }), el('b', { text: r[1] })]);
     }));
   }
-  // Per-puzzle results screen, shown after each puzzle before moving to the next.
+  // Results screen shown after each puzzle. Always reports THIS puzzle's own
+  // metrics (rec) — never an aggregate. The last puzzle routes to the survey.
   function showRoundStats(rec) {
-    S.phase = 'roundstats';
     var doneN = S.mainIndex, total = S.queue.length, remaining = total - doneN;
-    showOverlay(card('Puzzle ' + doneN + ' of ' + total + ' complete', [
-      statsGrid(rec),
-      el('p', { class: 'muted', text: remaining + ' puzzle' + (remaining === 1 ? '' : 's') + ' remaining.' }),
-      el('div', { class: 'pfx-row' }, [el('button', { class: 'pfx-btn', on: { click: runNextPuzzle } }, ['Continue to the ' + ordinal(doneN + 1) + ' puzzle'])])
-    ]));
-    logEvent('round_stats_shown', { index: rec.index, net: rec.net, coverage: rec.coverage, time: rec.time });
+    var last = remaining <= 0;
+    var body = [statsGrid(rec)];
+    if (last) {
+      S.phase = 'stats';
+      body.push(el('p', { class: 'muted', text: 'Please complete a short survey about your experience.' }));
+      body.push(el('div', { class: 'pfx-row' }, [el('button', { class: 'pfx-btn', on: { click: showSurvey } }, ['Continue to Survey'])]));
+      finalizeMainStats();
+    } else {
+      S.phase = 'roundstats';
+      body.push(el('p', { class: 'muted', text: remaining + ' puzzle' + (remaining === 1 ? '' : 's') + ' remaining.' }));
+      body.push(el('div', { class: 'pfx-row' }, [el('button', { class: 'pfx-btn', on: { click: runNextPuzzle } }, ['Continue to the ' + ordinal(doneN + 1) + ' puzzle'])]));
+    }
+    var title = last ? (cfg.texts.statsTitle || 'Thank you for playing!') : ('Puzzle ' + doneN + ' of ' + total + ' complete');
+    showOverlay(card(title, body));
+    logEvent('round_stats_shown', { index: rec.index, net: rec.net, coverage: rec.coverage, time: rec.time, last: last });
   }
   // Ordinal label for a 1-based number: 1 -> "1st", 2 -> "2nd", 3 -> "3rd", ...
   function ordinal(n) {
@@ -846,27 +887,18 @@
     } catch (e) { console.warn('[PFX] round write failed', e); }
   }
 
-  // ---- Phase: stats -----------------------------------------------------
-  function showStats() {
-    S.phase = 'stats';
+  // ---- End of main phase ------------------------------------------------
+  // The displayed per-puzzle screens never aggregate; this only records an
+  // overall summary on the participant doc (for the admin export) and advances
+  // the participant's status to 'survey'. Nothing here is shown to the player.
+  function finalizeMainStats() {
     var rounds = S.rounds || [];
     var sum = function (f) { return rounds.reduce(function (a, r) { return a + (f(r) || 0); }, 0); };
-    var totalValue = sum(function (r) { return r.value; });
-    var totalCost = sum(function (r) { return r.cost; });
     var totalNet = sum(function (r) { return r.net; });
     var totalPlaced = sum(function (r) { return r.placed; });
     var totalCells = sum(function (r) { return r.total; });
     var coverage = totalCells ? Math.round(totalPlaced / totalCells * 100) : 0;
-    var fitVals = rounds.map(function (r) { return r.fitness; }).filter(function (x) { return x != null; });
-    var fitness = fitVals.length ? Math.round(fitVals.reduce(function (a, b) { return a + b; }, 0) / fitVals.length) : null;
     var totalTime = sum(function (r) { return r.time; });
-
-    var grid = statsGrid({ value: totalValue, cost: totalCost, net: totalNet, placed: totalPlaced, coverage: coverage, fitness: fitness, time: totalTime });
-    showOverlay(card(cfg.texts.statsTitle || 'Thank you for playing!', [
-      grid,
-      el('p', { class: 'muted', text: 'Please complete a short survey about your experience.' }),
-      el('div', { class: 'pfx-row' }, [el('button', { class: 'pfx-btn', on: { click: showSurvey } }, ['Continue to Survey'])])
-    ]));
     if (fb && S.user) {
       try { fb.F.setDoc(fb.F.doc(fb.db, 'participants', S.user.uid), { status: 'survey', stats: { totalNet: totalNet, coverage: coverage, totalTime: totalTime }, updatedAt: fb.F.serverTimestamp() }, { merge: true }); } catch (e) {}
     }

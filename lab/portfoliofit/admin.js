@@ -923,13 +923,14 @@
       try { var es = await fb.F.getDocs(fb.F.collection(fb.db, 'participants', uid, 'events')); es.forEach(function (d) { evs.push(d.data()); }); } catch (e) {}
       evs.sort(function (a, b) { return (a.seq || 0) - (b.seq || 0); });
       var lastT = {};   // per-puzzle baseline timestamp, for per-move durations
+      var moveNo = {};  // per-puzzle move counter (1,2,3… within each puzzle)
       for (var k = 0; k < evs.length; k++) {
         var v = evs[k], pid = v.puzzleId || '';
         events.push({ 'Player': who, 'UCD Student ID': sid, 'Session': sess, 'Move #': v.seq, 'Type': v.type, 'Phase': v.phase, 'Round': v.round, 'Puzzle': pid, 'Net Value': v.net, 'Coverage %': v.coverage, 'Time': fmtUK(v.clientTime), 'Data (JSON)': v.dataJson });
         if (v.type === 'round_start') {
-          lastT[pid] = v.t;
+          lastT[pid] = v.t; moveNo[pid] = 0;
           var ma0 = parseJson(v.metricsAfterJson, null);
-          play.push({ 'Player': who, 'UCD Student ID': sid, 'Session': sess, 'Puzzle': pid, 'Difficulty': v.diff || '', 'Move #': v.seq, 'Action': 'start (empty board)', 'Brick (Id)': '', 'Anchor': '', 'Cells': '', 'Brick Value': '',
+          play.push({ 'Player': who, 'UCD Student ID': sid, 'Session': sess, 'Puzzle': pid, 'Difficulty': v.diff || '', 'Move #': '', 'Action': 'start (empty board)', 'Brick (Id)': '', 'Anchor': '', 'Cells': '', 'Brick Value': '',
             'Net Value (before)': '', 'Net Value (after)': kval(ma0, 'net'),
             'Total Value (before)': '', 'Total Value (after)': kval(ma0, 'value'),
             'Resource Cost (before)': '', 'Resource Cost (after)': kval(ma0, 'cost'),
@@ -939,8 +940,9 @@
             'FrameMatrix': v.boardJson || '', 'Time': fmtUK(v.clientTime), 'Duration (s)': '' });
         } else if (v.type === 'place' || v.type === 'remove') {
           var prev = (lastT[pid] != null) ? lastT[pid] : v.t; var dur = (v.t - prev) / 1000; lastT[pid] = v.t;
+          moveNo[pid] = (moveNo[pid] || 0) + 1;
           var mb = parseJson(v.metricsBeforeJson, null), ma = parseJson(v.metricsAfterJson, null);
-          play.push({ 'Player': who, 'UCD Student ID': sid, 'Session': sess, 'Puzzle': pid, 'Difficulty': '', 'Move #': v.seq, 'Action': v.action || (v.type === 'place' ? 'add' : 'remove'), 'Brick (Id)': v.brick || '', 'Anchor': v.anchor || '', 'Cells': v.cellsJson || '', 'Brick Value': (v.brickValue != null ? v.brickValue : ''),
+          play.push({ 'Player': who, 'UCD Student ID': sid, 'Session': sess, 'Puzzle': pid, 'Difficulty': '', 'Move #': moveNo[pid], 'Action': v.action || (v.type === 'place' ? 'add' : 'remove'), 'Brick (Id)': v.brick || '', 'Anchor': v.anchor || '', 'Cells': v.cellsJson || '', 'Brick Value': (v.brickValue != null ? v.brickValue : ''),
             'Net Value (before)': kval(mb, 'net'), 'Net Value (after)': kval(ma, 'net'),
             'Total Value (before)': kval(mb, 'value'), 'Total Value (after)': kval(ma, 'value'),
             'Resource Cost (before)': kval(mb, 'cost'), 'Resource Cost (after)': kval(ma, 'cost'),
