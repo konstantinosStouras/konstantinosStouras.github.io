@@ -8,9 +8,14 @@
 .header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   padding: 20px 40px;
   border-bottom: 1px solid var(--border);
   background: var(--white);
+  position: sticky;
+  top: 0;
+  z-index: 20;
 }
 
 .wordmark {
@@ -108,6 +113,11 @@
   display: inline-flex;
   flex-direction: column;
   gap: 10px;
+  /* Stay sized to the box scale (not stretched) even inside a column-flex
+     parent like .ratingItem, so the low/high anchors line up under box 1 and
+     box 5 — matching the standalone likert5 scales, instead of the high label
+     drifting to the far right edge of the card. */
+  align-self: flex-start;
 }
 
 .boxScale {
@@ -292,6 +302,15 @@
   justify-content: center;
   background: var(--paper);
   padding: 40px 20px;
+}
+
+/* The completion screen has no header bar, so pin the participant controls to
+   the top-right corner to keep the theme toggle + account menu reachable. */
+.doneControls {
+  position: fixed;
+  top: 20px;
+  right: 40px;
+  z-index: 50;
 }
 
 .doneCard {

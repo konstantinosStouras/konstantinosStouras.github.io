@@ -78,6 +78,7 @@ export const QUESTION_TYPES = [
 
 export const DEFAULT_REGISTRATION = {
   fields: [
+    { id: 'ucdStudentId', label: 'UCD Student ID', type: 'text', required: true },
     { id: 'age', label: 'Age', type: 'select', required: true, options: ['18-24', '25-34', '35-44', '45-54', '55-64', '65+'] },
     { id: 'gender', label: 'Gender', type: 'select', required: false, options: ['Prefer not to say', 'Male', 'Female', 'Non-binary', 'Other'] },
     { id: 'nationality', label: 'Nationality', type: 'country', required: true, options: [] },

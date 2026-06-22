@@ -27,7 +27,7 @@
  *   required    - (optional) defaults to true
  */
 
-export const SURVEY_TITLE = 'Post-Survey: Creativity and Decision-Making'
+export const SURVEY_TITLE = 'Post-play Survey'
 export const SURVEY_SUBTITLE = 'Please reflect on your experience during the ideation challenge.'
 
 export const SURVEY_QUESTIONS = [

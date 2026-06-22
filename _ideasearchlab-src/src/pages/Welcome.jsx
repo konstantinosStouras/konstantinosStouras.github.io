@@ -4,6 +4,7 @@ import { useSession } from '../context/SessionContext'
 import { getContent } from '../data/defaultContent'
 import { markTiming } from '../utils/timing'
 import RichText from '../components/RichText'
+import HeaderControls from '../components/HeaderControls'
 import styles from './Welcome.module.css'
 
 export default function Welcome() {
@@ -31,13 +32,16 @@ export default function Welcome() {
   function handleContinue() {
     // Welcome read time = welcomeAgreedAt − welcomeOpenedAt.
     markTiming(sessionId, 'welcomeAgreedAt', false)
-    navigate(`/session/${sessionId}/register`)
+    // A short guided demo of how the app works sits between Welcome and
+    // Registration; participants can skip it from there.
+    navigate(`/session/${sessionId}/tour`)
   }
 
   return (
     <div className={styles.page}>
       <header className={styles.header}>
         <span className={styles.wordmark}>Ideation Challenge</span>
+        <HeaderControls />
       </header>
 
       <main className={styles.main}>
