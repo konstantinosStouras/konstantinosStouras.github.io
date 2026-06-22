@@ -800,7 +800,7 @@
       var snap = await fb.F.getDocs(fb.F.collection(fb.db, 'participants'));
       snap.forEach(function (d) { parts.push(Object.assign({ _id: d.id }, d.data())); });
     } catch (e) { body.innerHTML = ''; body.appendChild(el('div', { class: 'pfa-card' }, [el('p', { class: 'pfa-err', text: 'Could not load participants: ' + ((e && e.code) || 'error') })])); return; }
-    parts.sort(function (a, b) { return (tsMs(a.createdAt) - tsMs(b.createdAt)); });
+    var sortDir = 'asc';   // 'asc' = oldest first, 'desc' = newest first
 
     body.innerHTML = '';
     var head = el('div', { class: 'pfa-h' }, [
@@ -810,25 +810,39 @@
         parts.length ? el('button', { class: 'pfa-btn danger', on: { click: function () { deleteAllParticipants(); } } }, ['Delete all participants']) : el('span', {})
       ])
     ]);
-    var rows = parts.map(function (p) {
-      var sid = p.studentId || (p.registration && p.registration.studentId) || '';
-      var who = p.anonymousLabel || p.participantId || p.email || p._id;
-      return el('tr', {}, [
-        el('td', { text: who }),
-        el('td', { text: sid || '—' }),
-        el('td', { text: p.sessionId || '—' }),
-        el('td', { text: p.status || '' }),
-        el('td', { text: fmtTs(p.createdAt) }),
-        el('td', {}, [el('div', { style: 'display:flex;gap:6px;flex-wrap:wrap;' }, [
-          el('button', { class: 'pfa-btn sm', on: { click: function () { exportParticipant(p); } } }, ['⬇ Excel']),
-          el('button', { class: 'pfa-btn danger sm', on: { click: function () { deleteParticipant(p._id, who); } } }, ['delete'])
-        ])])
-      ]);
-    });
+    // "Started" is a clickable header: toggles ascending/descending by start date.
+    var startedTh = el('th', { style: 'cursor:pointer;user-select:none;white-space:nowrap;', title: 'Click to sort by start date (ascending / descending)' });
+    startedTh.addEventListener('click', function () { sortDir = (sortDir === 'asc') ? 'desc' : 'asc'; renderRows(); });
+    var tbody = el('tbody', {});
     var table = el('table', { class: 'pfa-tbl' });
-    table.appendChild(el('thead', {}, [el('tr', {}, ['Player', 'UCD Student ID', 'Session', 'Status', 'Started', ''].map(function (h) { return el('th', { text: h }); }))]));
-    table.appendChild(el('tbody', {}, rows.length ? rows : [el('tr', {}, [el('td', { colspan: '6', text: 'No players yet.' })])]));
+    table.appendChild(el('thead', {}, [el('tr', {},
+      ['Player', 'UCD Student ID', 'Session', 'Status'].map(function (h) { return el('th', { text: h }); })
+        .concat([startedTh, el('th', {})]))]));
+    table.appendChild(tbody);
     body.appendChild(el('div', { class: 'pfa-card' }, [head, table]));
+    renderRows();
+
+    function renderRows() {
+      startedTh.textContent = 'Started ' + (sortDir === 'asc' ? '▲' : '▼');
+      parts.sort(function (a, b) { var d = tsMs(a.createdAt) - tsMs(b.createdAt); return (sortDir === 'asc') ? d : -d; });
+      tbody.innerHTML = '';
+      if (!parts.length) { tbody.appendChild(el('tr', {}, [el('td', { colspan: '6', text: 'No players yet.' })])); return; }
+      parts.forEach(function (p) {
+        var sid = p.studentId || (p.registration && p.registration.studentId) || '';
+        var who = p.anonymousLabel || p.participantId || p.email || p._id;
+        tbody.appendChild(el('tr', {}, [
+          el('td', { text: who }),
+          el('td', { text: sid || '—' }),
+          el('td', { text: p.sessionId || '—' }),
+          el('td', { text: p.status || '' }),
+          el('td', { text: fmtTs(p.createdAt) }),
+          el('td', {}, [el('div', { style: 'display:flex;gap:6px;flex-wrap:wrap;' }, [
+            el('button', { class: 'pfa-btn sm', on: { click: function () { exportParticipant(p); } } }, ['⬇ Excel']),
+            el('button', { class: 'pfa-btn danger sm', on: { click: function () { deleteParticipant(p._id, who); } } }, ['delete'])
+          ])])
+        ]));
+      });
+    }
 
     async function deleteParticipant(uid, who) {
       if (!window.confirm('Delete participant "' + who + '" and all their data? This cannot be undone.')) return;
