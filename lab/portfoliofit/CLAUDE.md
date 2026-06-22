@@ -145,8 +145,10 @@ publish it; versioned in the repo, deployed manually to the lab project):
 - **KPIs (live):** Net Value, Total Value, Resource Cost (empty-cell penalty),
   Value/Resource (ROI), Coverage %, Portfolio Fitness (net ÷ best). Hover
   tooltips explain each.
-- **Tools:** a calculator and a notes pad. **Nudges:** encouraging/idle/time
-  messages below the board (idle threshold ~15s).
+- **Tools:** a calculator and a notes pad — **puzzle-specific**: `resetTools()`
+  (called from `startRound`) clears the calculator input/history and the notes
+  list at the start of every puzzle, so nothing carries across puzzles. **Nudges:**
+  encouraging/idle/time messages below the board (idle threshold ~15s).
 - **Round lifecycle:** `newGame(diff,limit)` → `startRound()` builds `state`,
   renders, starts the timer; the round ends on the deadline (not on completion),
   calling `endRound()` → `showEnd()` (end modal suppressed in experiment mode) →
@@ -180,12 +182,24 @@ publish it; versioned in the repo, deployed manually to the lab project):
   consent section). On submit it writes `registration` (map) + `studentId` +
   (when consents are shown) `consentGiven`/`consentTimestamp` to the participant
   doc, then starts the main game.
+- **Training phase signposting:** `startTraining` shows an intro pop-up clearly
+  marked **Training Phase** that says it is a practice round and states exactly how
+  many real puzzles follow (`plannedMainCount()` = frozen-set size, else
+  easy+hard counts). While the training round plays, a **"Training Phase" badge**
+  (`setPhaseBanner`) sits under the PortfolioFit title; it is removed
+  (`clearPhaseBanner`) when training ends, so the main puzzles show no badge.
 - **Onboarding tour (before training):** an iPhone-style spotlight tour over the
   live board (intro → board → bricks → a **scripted gameplay demo** that places/
   rotates/removes solution bricks while KPIs update → net value → KPIs (with each
   KPI explained) → calculator → notes → nudges → "boxes are draggable/resizable"
   → the green submit button). The clock is paused during the tour. Repositions on
   scroll/resize for mobile.
+- **Per-puzzle results screen:** after **every** main puzzle, `showRoundStats(rec)`
+  shows a breakdown of **that puzzle's own** metrics (never an aggregate across
+  puzzles) via the shared `statsGrid`. Between puzzles the button reads "Continue
+  to the Nth puzzle" (ordinals); after the last puzzle the screen leads to
+  "Continue to Survey" and `finalizeMainStats()` records an overall summary on the
+  participant doc (for the export only) and advances status to `survey`.
 - **Auth:** a **named** Firebase app `'portfoliofit'` (so it coexists with the
   page's default `stouras-snake` app instead of colliding). Players sign in with
   **Anonymous Auth** (the technical identity only) — **no** e-mail/password.
@@ -233,9 +247,9 @@ publish it; versioned in the repo, deployed manually to the lab project):
 
   Nested arrays (cells/board/placements) are JSON-stringified (Firestore rejects
   nested arrays). Per-round summaries go to `participants/{uid}/rounds`.
-- **Stats → survey → thank-you:** aggregate the rounds (totals, coverage, time),
-  render the survey from config, submit via the `submitSurvey` function (with a
-  direct-write fallback), then the thank-you screen.
+- **Survey → thank-you:** after the last puzzle's results screen, render the
+  survey from config, submit via the `submitSurvey` function (with a direct-write
+  fallback), then the thank-you screen (no "Play again" — the run is complete).
 - **Movable/resizable boxes (during play only, `pf-playing`):** drag a box by its
   body (cursor "move") to reposition (CSS `transform`, with **no-overlap**
   collision), and resize from any **border/corner** (cursor changes; wide hit
@@ -287,7 +301,9 @@ publish it; versioned in the repo, deployed manually to the lab project):
   intuitive headings and ordered to follow the simulation:
   - **Play log** — the google-sheet-style single tab collecting *every brick
     move* across all included players: Player, UCD Student ID, Session, Puzzle,
-    Difficulty, Move #, Action (start/add/remove), Brick (Id), Anchor, Cells,
+    Difficulty, Move # (counts 1,2,3… **within each puzzle**; the start row is
+    blank — the true global event sequence lives in the Events (raw) sheet's seq),
+    Action (start/add/remove), Brick (Id), Anchor, Cells,
     Brick Value, then **every KPI before↔after the change** — Net Value, Total
     Value, Resource Cost, Value/Resource, Coverage %, Portfolio Fitness, each as
     a `… (before)` and `… (after)` column — then **FrameMatrix** (board after the

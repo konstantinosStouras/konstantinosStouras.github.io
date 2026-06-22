@@ -1169,6 +1169,7 @@
       renderBoardMeta();
       renderKPIs();
       setStatus('', '');
+      resetTools();          // calculator + notes are per-puzzle: clear them each round
       resetTimer();
       startTimer();
       pfEmit('round_start', { diff: diff, kappa: state.kappa, bestValue: state.bestValue, round: sessionRounds, board: pfBoardMatrix(), metrics: pfMetrics() });
@@ -2201,6 +2202,13 @@
     }
     $('#notesAdd').addEventListener('click', addNote);
     notesInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addNote(); } });
+
+    // Reset the calculator and notes so each puzzle starts with a clean slate
+    // (they are puzzle-specific, not carried across puzzles). Called by startRound.
+    function resetTools() {
+      try { if (calcInput) calcInput.value = ''; if (calcHistory) calcHistory.innerHTML = ''; calcShow('', '0', false); } catch (e) {}
+      try { notesData = []; if (notesInput) notesInput.value = ''; renderNotes(); } catch (e) {}
+    }
 
     // ---------- Experiment integration (event hooks + game API) ----------
     // These helpers are no-ops unless the experiment layer (experiment.js) is
