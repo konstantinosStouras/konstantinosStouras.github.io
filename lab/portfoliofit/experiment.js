@@ -795,15 +795,43 @@
     S.mainIndex += 1;
     persistProgress();
     var remaining = S.queue.length - S.mainIndex;
-    setTimeout(function () { if (remaining <= 0) showStats(); else showInterstitial(remaining); }, 350);
+    // Show a results screen after EVERY puzzle: a per-puzzle breakdown between
+    // puzzles, and the overall summary after the last one (which leads to the survey).
+    setTimeout(function () { if (remaining <= 0) showStats(); else showRoundStats(rec); }, 350);
   }
-  function showInterstitial(remaining) {
-    var doneN = S.mainIndex, total = S.queue.length, last = S.rounds[S.rounds.length - 1];
-    showOverlay(card('Puzzle ' + doneN + ' complete', [
-      el('p', { html: 'Net value this puzzle: <b>' + money(last && last.net) + '</b>.' }),
+  // The metrics breakdown grid, shared by the per-puzzle and final summary screens.
+  function statsGrid(o) {
+    var vpr = (o.cost > 0) ? (o.value / o.cost) : null;
+    var rows = [
+      ['Total Value', money(o.value)],
+      ['Resource Cost', money(o.cost)],
+      ['Net Value', money(o.net)],
+      ['Bricks Placed', String(o.placed || 0)],
+      ['Coverage', (o.coverage || 0) + '%'],
+      ['Value/Resource', vpr == null ? '—' : '$' + vpr.toFixed(2)],
+      ['Portfolio Fitness', o.fitness == null ? 'N/A' : o.fitness + '%'],
+      ['Total Time', fmtTime(o.time)]
+    ];
+    return el('div', { style: 'margin:14px 0;' }, rows.map(function (r) {
+      return el('div', { style: 'display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0ece3;' },
+        [el('span', { class: 'muted', text: r[0] }), el('b', { text: r[1] })]);
+    }));
+  }
+  // Per-puzzle results screen, shown after each puzzle before moving to the next.
+  function showRoundStats(rec) {
+    S.phase = 'roundstats';
+    var doneN = S.mainIndex, total = S.queue.length, remaining = total - doneN;
+    showOverlay(card('Puzzle ' + doneN + ' of ' + total + ' complete', [
+      statsGrid(rec),
       el('p', { class: 'muted', text: remaining + ' puzzle' + (remaining === 1 ? '' : 's') + ' remaining.' }),
-      el('div', { class: 'pfx-row' }, [el('button', { class: 'pfx-btn', on: { click: runNextPuzzle } }, ['Next puzzle (' + (doneN + 1) + ' of ' + total + ')'])])
+      el('div', { class: 'pfx-row' }, [el('button', { class: 'pfx-btn', on: { click: runNextPuzzle } }, ['Continue to the ' + ordinal(doneN + 1) + ' puzzle'])])
     ]));
+    logEvent('round_stats_shown', { index: rec.index, net: rec.net, coverage: rec.coverage, time: rec.time });
+  }
+  // Ordinal label for a 1-based number: 1 -> "1st", 2 -> "2nd", 3 -> "3rd", ...
+  function ordinal(n) {
+    var s = ['th', 'st', 'nd', 'rd'], v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
   }
   async function writeRound(rec, placements) {
     if (!fb || !S.user) return;
@@ -824,25 +852,11 @@
     var totalPlaced = sum(function (r) { return r.placed; });
     var totalCells = sum(function (r) { return r.total; });
     var coverage = totalCells ? Math.round(totalPlaced / totalCells * 100) : 0;
-    var vpr = totalCost > 0 ? (totalValue / totalCost) : null;
     var fitVals = rounds.map(function (r) { return r.fitness; }).filter(function (x) { return x != null; });
     var fitness = fitVals.length ? Math.round(fitVals.reduce(function (a, b) { return a + b; }, 0) / fitVals.length) : null;
     var totalTime = sum(function (r) { return r.time; });
 
-    var rows = [
-      ['Total Value', money(totalValue)],
-      ['Resource Cost', money(totalCost)],
-      ['Net Value', money(totalNet)],
-      ['Bricks Placed', String(totalPlaced)],
-      ['Coverage', coverage + '%'],
-      ['Value/Resource', vpr == null ? '—' : '$' + vpr.toFixed(2)],
-      ['Portfolio Fitness', fitness == null ? 'N/A' : fitness + '%'],
-      ['Total Time', fmtTime(totalTime)]
-    ];
-    var grid = el('div', { style: 'margin:14px 0;' }, rows.map(function (r) {
-      return el('div', { style: 'display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0ece3;' },
-        [el('span', { class: 'muted', text: r[0] }), el('b', { text: r[1] })]);
-    }));
+    var grid = statsGrid({ value: totalValue, cost: totalCost, net: totalNet, placed: totalPlaced, coverage: coverage, fitness: fitness, time: totalTime });
     showOverlay(card(cfg.texts.statsTitle || 'Thank you for playing!', [
       grid,
       el('p', { class: 'muted', text: 'Please complete a short survey about your experience.' }),
@@ -932,23 +946,10 @@
     S.phase = 'thankyou';
     var tb = document.querySelector('.pfx-topbar'); if (tb) tb.remove();
     document.body.classList.remove('pf-hastop');
+    // No "Play again" — once the survey is submitted the study run is complete.
     showOverlay(card(cfg.texts.thankyouTitle || 'Thank you!', [
-      el('p', { text: cfg.texts.thankyouBody || 'Your responses have been recorded. You may now close this tab.' }),
-      el('div', { class: 'pfx-row' }, [
-        el('button', { class: 'pfx-btn', on: { click: playAgain } }, [cfg.texts.playAgainButton || 'Play again'])
-      ])
+      el('p', { text: cfg.texts.thankyouBody || 'Your responses have been recorded. You may now close this tab.' })
     ]));
-  }
-
-  // Restart the whole experience for this (anonymous) player: clear the in-memory
-  // progress and return to the welcome screen. Pressing Start there re-creates the
-  // participant with status 'playing', so a later reload resumes the new run
-  // rather than bouncing straight back here. Previously recorded data is left
-  // untouched (a fresh run simply appends new rounds under the same player).
-  function playAgain() {
-    S.rounds = []; S.queue = []; S.mainIndex = 0; S.roundIndex = 0; S.currentPuzzleId = null;
-    document.body.classList.remove('pf-playing');
-    showWelcome();
   }
 
   // Resume a returning participant at the right phase.
