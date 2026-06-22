@@ -315,8 +315,12 @@ publish it; versioned in the repo, deployed manually to the lab project):
   - **Participants** — identity columns then one column **per registration
     question, in the order presented** (heading = question label), then summary
     stats (Final Net Value / Coverage % / Total Time).
-  - **Rounds** — per-round summary incl. the round's **Final FrameMatrix**
-    (rebuilt from `placementsJson` via `matrixFromPlacements`).
+  - **Rounds** — per-round summary incl. **Bricks Placed** (the true count of
+    placed bricks, `metrics.bricks`), **Cells Filled** (occupied cells), and the
+    round's **Final FrameMatrix** (rebuilt from `placementsJson` via
+    `matrixFromPlacements`). Note: `pfMetrics()` exposes both `bricks` (number of
+    placed pieces, shown as "Bricks Placed" in the results screen) and `placed`
+    (occupied cells, used for coverage).
   - **Survey** — identity columns then one column **per survey question in order**
     (heading = question label).
   - **Events (raw)** — the full event log (incl. `dataJson`) for completeness.

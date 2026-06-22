@@ -2222,11 +2222,12 @@
       if (!state) return null;
       const total = state.region.size, occ = state.occupied.size, empty = total - occ;
       const value = placedValue();
+      const bricks = state.pieces.reduce((n, p) => n + (p.placed ? 1 : 0), 0);
       return {
         diff: state.diff, net: currentNet(), value: value, cost: empty,
         coverage: total ? Math.round(occ / total * 100) : 0,
         fitness: computeFitness(), bestValue: state.bestValue,
-        placed: occ, total: total, kappa: state.kappa,
+        bricks: bricks, placed: occ, total: total, kappa: state.kappa,
         ended: !!state.ended, time: timer ? timer.elapsed : 0,
         limit: roundLimit(),
         remaining: Math.max(0, roundLimit() - (timer ? timer.elapsed : 0))
