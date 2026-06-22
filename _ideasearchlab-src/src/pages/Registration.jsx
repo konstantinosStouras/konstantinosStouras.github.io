@@ -9,6 +9,7 @@ import { getContent } from '../data/defaultContent'
 import { getRegistration, COUNTRIES } from '../data/formDefaults'
 import { markTiming, readTiming, clearTiming } from '../utils/timing'
 import RichText from '../components/RichText'
+import HeaderControls from '../components/HeaderControls'
 import styles from './Registration.module.css'
 
 export default function Registration() {
@@ -151,6 +152,7 @@ export default function Registration() {
     <div className={styles.page}>
       <header className={styles.header}>
         <span className={styles.wordmark}>Ideation Challenge</span>
+        <HeaderControls />
       </header>
 
       <main className={styles.main}>

@@ -21,19 +21,17 @@ import { isHtmlEmpty } from '../components/RichText'
 export const DEFAULT_CONTENT = {
   welcome: {
     body:
-      '<h1>Welcome to the Ideation Challenge</h1>' +
-      '<p>Generate, evaluate, and select promising health &amp; wellness product concepts.</p>' +
-      '<h2>Welcome</h2>' +
-      '<p>You are about to take part in an ideation challenge focused on generating and evaluating new product concepts in the <strong>health and wellness market</strong>.</p>' +
-      '<p>The goal of this study is to understand how people generate best ideas when developing new products for an existing or an emerging market.</p>' +
-      '<p>The study will involve the following phases:</p>' +
-      '<ul>' +
-      '<li><strong>Individual Ideation Phase:</strong> Work independently to come up with potential product ideas.</li>' +
-      '<li><strong>Group Ideation Phase:</strong> Join a group to share, discuss, and refine ideas together.</li>' +
-      '<li><strong>Final Selection:</strong> As a group, review all ideas and agree on the top ideas.</li>' +
-      '</ul>' +
-      '<p>We will evaluate the quality of your ideas independently through external reviewers. If an idea selected by your group is among the top 5 ideas among all groups, then you will receive an award in the form of an Amazon Voucher worth 50 euros.</p>' +
-      '<p>Please follow the instructions carefully and complete each phase within the specific time.</p>' +
+      '<h1>Welcome to the Ideation Challenge 💡</h1>' +
+      '<p><strong>Generate, evaluate, and select promising smart materials and wearable technology product concepts.</strong></p>' +
+      '<h2>Welcome 👋</h2>' +
+      '<p>You are about to take part in an ideation challenge focused on generating and evaluating new product concepts in the <strong>smart materials and wearable technology market</strong>.</p>' +
+      '<p>The goal of this study is to understand how people generate the best ideas when developing new products for an existing or an emerging market.</p>' +
+      '<p>The study will involve 3 phases:</p>' +
+      '<p><strong>Phase 1 – Individual Ideation</strong> Work independently to come up with 3 potential product ideas.</p>' +
+      '<p><strong>Phase 2 – Group Ideation</strong> Join a group of 3 to share, discuss, and refine ideas together.</p>' +
+      '<p><strong>Phase 3 – Group Voting and Final Selection</strong> As a group, review all ideas and agree on the top 3 ideas.</p>' +
+      '<p>We will evaluate the quality of your ideas independently through external reviewers. If an idea selected by your group is among the <strong>top 5 ideas among 50 groups</strong>, you will receive an award in the form of an <strong>Amazon Voucher worth €50</strong>.</p>' +
+      '<p>Please follow the instructions carefully and complete each phase within the specified time.</p>' +
       '<p>Thank you for taking part in the study.</p>',
   },
 
@@ -119,7 +117,7 @@ export const DEFAULT_CONTENT = {
 
   survey: {
     body:
-      '<h1>Post-Survey: Creativity and Decision-Making</h1>' +
+      '<h1>Post-play Survey</h1>' +
       '<p>Please reflect on your experience during the ideation challenge.</p>',
   },
 

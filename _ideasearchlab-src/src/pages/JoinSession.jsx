@@ -3,8 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
-import ProfileMenu from '../components/ProfileMenu'
-import ThemeToggle from '../components/ThemeToggle'
+import HeaderControls from '../components/HeaderControls'
 import styles from './JoinSession.module.css'
 
 export default function JoinSession() {
@@ -61,10 +60,7 @@ export default function JoinSession() {
     <div className={styles.page}>
       <header className={styles.header}>
         <span className={styles.wordmark}>Ideation Challenge</span>
-        <div className={styles.headerRight}>
-          <ThemeToggle />
-          <ProfileMenu />
-        </div>
+        <HeaderControls />
       </header>
 
       <main className={styles.main}>

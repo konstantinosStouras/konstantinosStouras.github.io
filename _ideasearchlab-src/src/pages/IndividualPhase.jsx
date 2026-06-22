@@ -11,6 +11,7 @@ import SplitLayout from '../components/SplitLayout'
 import AIChat from '../components/AIChat'
 import PhaseTimer from '../components/PhaseTimer'
 import NudgeBanner from '../components/NudgeBanner'
+import HeaderControls from '../components/HeaderControls'
 import { getContent } from '../data/defaultContent'
 import RichText from '../components/RichText'
 import { Done } from './Survey'
@@ -292,6 +293,7 @@ export default function IndividualPhase() {
               preview
             />
           </div>
+          <HeaderControls />
         </header>
         <div className={styles.instrContainer}>
           <NudgeBanner sessionId={sessionId} autoMessage={autoNudgeMessage} />
@@ -331,6 +333,7 @@ export default function IndividualPhase() {
               durationSeconds={pc.individualPhaseDuration}
             />
           </div>
+          <HeaderControls />
         </header>
         <div className={styles.confirmContainer}>
           <div className={styles.confirmCard}>
@@ -396,6 +399,7 @@ export default function IndividualPhase() {
           <button className={`btn-primary ${styles.doneBtn}`} onClick={() => markDone()} disabled={!canFinish}>
             {done ? 'Waiting for group...' : 'Finish & Submit'}
           </button>
+          <HeaderControls />
         </div>
       </div>
 

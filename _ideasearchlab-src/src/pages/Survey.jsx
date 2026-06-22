@@ -7,6 +7,7 @@ import { useSession, useSessionEnded } from '../context/SessionContext'
 import { getContent } from '../data/defaultContent'
 import { getSurveyQuestions } from '../data/formDefaults'
 import RichText from '../components/RichText'
+import HeaderControls from '../components/HeaderControls'
 import styles from './Survey.module.css'
 
 export default function Survey() {
@@ -122,6 +123,7 @@ export default function Survey() {
     <div className={styles.page}>
       <header className={styles.header}>
         <span className={styles.wordmark}>Ideation Challenge</span>
+        <HeaderControls />
       </header>
 
       <div className={styles.container}>
@@ -299,6 +301,9 @@ export function Done() {
   const aiOn = !!(session?.aiConfig?.individualAI || session?.aiConfig?.groupAI)
   return (
     <div className={styles.donePage}>
+      <div className={styles.doneControls}>
+        <HeaderControls />
+      </div>
       <div className={styles.doneCard}>
         <div className={styles.doneIcon}>&#x25C8;</div>
         <RichText className={styles.doneSub} html={c.body} aiOn={aiOn} />

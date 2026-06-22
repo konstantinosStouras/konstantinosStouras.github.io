@@ -10,6 +10,7 @@
 .instrHeader {
   display: flex;
   align-items: center;
+  gap: 18px;
   padding: 20px 40px;
   border-bottom: 1px solid var(--border);
   background: var(--white);

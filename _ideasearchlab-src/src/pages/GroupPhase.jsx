@@ -12,6 +12,7 @@ import ResizeDivider from '../components/ResizeDivider'
 import AIChat from '../components/AIChat'
 import PhaseTimer from '../components/PhaseTimer'
 import NudgeBanner from '../components/NudgeBanner'
+import HeaderControls from '../components/HeaderControls'
 import { getContent } from '../data/defaultContent'
 import { getNextPhase } from '../utils/phaseSequence'
 import RichText from '../components/RichText'
@@ -759,6 +760,7 @@ export default function GroupPhase() {
               preview
             />
           </div>
+          <HeaderControls />
         </header>
         <div className={styles.instrContainer}>
           <NudgeBanner sessionId={sessionId} autoMessage={autoNudgeMessage} />
@@ -807,6 +809,7 @@ export default function GroupPhase() {
                 Submit Votes
               </button>
             )}
+            <HeaderControls />
           </div>
         </div>
 
@@ -881,6 +884,7 @@ export default function GroupPhase() {
           >
             Proceed to Voting
           </button>
+          <HeaderControls />
         </div>
       </div>
 

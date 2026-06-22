@@ -6,6 +6,7 @@ import { RequireAuth, RequireGuest, RequireInstructor } from './components/Prote
 import Login from './pages/Login'
 import JoinSession from './pages/JoinSession'
 import Welcome from './pages/Welcome'
+import DemoTour from './pages/DemoTour'
 import Registration from './pages/Registration'
 import SessionLobby from './pages/SessionLobby'
 import IndividualPhase from './pages/IndividualPhase'
@@ -38,6 +39,14 @@ export default function App() {
           <RequireAuth>
             <SessionWrapper>
               <Welcome />
+            </SessionWrapper>
+          </RequireAuth>
+        } />
+
+        <Route path="/session/:sessionId/tour" element={
+          <RequireAuth>
+            <SessionWrapper>
+              <DemoTour />
             </SessionWrapper>
           </RequireAuth>
         } />
