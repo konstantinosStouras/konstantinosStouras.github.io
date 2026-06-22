@@ -847,7 +847,7 @@
       ['Total Value', money(o.value)],
       ['Resource Cost', money(o.cost)],
       ['Net Value', money(o.net)],
-      ['Bricks Placed', String(o.placed || 0)],
+      ['Bricks Placed', String(o.bricks != null ? o.bricks : (o.placed || 0))],
       ['Coverage', (o.coverage || 0) + '%'],
       ['Value/Resource', vpr == null ? '—' : '$' + vpr.toFixed(2)],
       ['Portfolio Fitness', o.fitness == null ? 'N/A' : o.fitness + '%'],
