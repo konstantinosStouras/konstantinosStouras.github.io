@@ -937,7 +937,7 @@
             'Value/Resource (before)': '', 'Value/Resource (after)': kval(ma0, 'vpr'),
             'Coverage % (before)': '', 'Coverage % (after)': kval(ma0, 'coverage'),
             'Portfolio Fitness (before)': '', 'Portfolio Fitness (after)': kval(ma0, 'fitness'),
-            'FrameMatrix': v.boardJson || '', 'Time': fmtUK(v.clientTime), 'Duration (s)': '' });
+            'FrameMatrix (before)': '', 'FrameMatrix (after)': v.boardJson || '', 'Time': fmtUK(v.clientTime), 'Duration (s)': '' });
         } else if (v.type === 'place' || v.type === 'remove') {
           var prev = (lastT[pid] != null) ? lastT[pid] : v.t; var dur = (v.t - prev) / 1000; lastT[pid] = v.t;
           moveNo[pid] = (moveNo[pid] || 0) + 1;
@@ -949,7 +949,7 @@
             'Value/Resource (before)': kval(mb, 'vpr'), 'Value/Resource (after)': kval(ma, 'vpr'),
             'Coverage % (before)': kval(mb, 'coverage'), 'Coverage % (after)': kval(ma, 'coverage'),
             'Portfolio Fitness (before)': kval(mb, 'fitness'), 'Portfolio Fitness (after)': kval(ma, 'fitness'),
-            'FrameMatrix': v.boardJson || '', 'Time': fmtUK(v.clientTime), 'Duration (s)': Math.round(dur * 10) / 10 });
+            'FrameMatrix (before)': v.boardBeforeJson || '', 'FrameMatrix (after)': v.boardJson || '', 'Time': fmtUK(v.clientTime), 'Duration (s)': Math.round(dur * 10) / 10 });
         } else if (v.type === 'calc') {
           calc.push({ 'Player': who, 'UCD Student ID': sid, 'Session': sess, 'Puzzle': pid, 'Time': fmtUK(v.clientTime), 'Input': v.calcExpr || '', 'Output': v.calcResult || '' });
         } else if (v.type === 'note') {

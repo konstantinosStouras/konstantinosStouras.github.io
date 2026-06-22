@@ -232,15 +232,16 @@ publish it; versioned in the repo, deployed manually to the lab project):
   note/round_end, plus stats/survey). Each event keeps the raw payload in
   `dataJson` **and** flat structured fields so the export needs no re-parsing:
   - **Board moves** (`place`/`remove`) carry `action` (add/remove), `brick`
-    (name), `anchor` (top-left `r,c`), `cellsJson`, `brickValue`, `net`,
-    `coverage`, and **`boardJson`** — the **FrameMatrix** snapshot of the board
-    *after* the move (a rows×cols matrix where each cell is `0` if empty or the
-    occupying brick's name; produced by the game's `pfBoardMatrix()` and included
-    on the `place`/`remove`/`round_start`/`round_end` payloads). `round_start`
-    logs the empty-board baseline. They also carry a **full KPI snapshot before
-    and after** the change: `metricsBeforeJson` (place/remove) and
-    `metricsAfterJson` (the game captures `pfMetrics()` just before mutating the
-    board and again after), so the export can show every KPI's before↔after value.
+    (name), `anchor` (top-left `r,c`), `cellsJson` (the exact cells the brick
+    occupies), `brickValue` (incl. for removes), `net`, `coverage`, and **both**
+    FrameMatrix snapshots — **`boardBeforeJson`** (how the frame looked *before*
+    the brick was placed/removed) and **`boardJson`** (the frame *after* the
+    move). A FrameMatrix is a rows×cols matrix where each cell is `0` (empty) or
+    the occupying brick's name, produced by `pfBoardMatrix()` (captured both
+    before mutating `state.occupied` and after). `round_start` logs the empty
+    baseline (after only). They also carry a **full KPI snapshot before and
+    after**: `metricsBeforeJson` (place/remove) and `metricsAfterJson`, so the
+    export shows every KPI's before↔after value.
   - **Calculator** (`calc`) carries `calcExpr`/`calcResult` — every evaluation
     attempt, including errors (so all input/output is captured).
   - **Notes** (`note`) carries `noteText`.
@@ -306,8 +307,9 @@ publish it; versioned in the repo, deployed manually to the lab project):
     Action (start/add/remove), Brick (Id), Anchor, Cells,
     Brick Value, then **every KPI before↔after the change** — Net Value, Total
     Value, Resource Cost, Value/Resource, Coverage %, Portfolio Fitness, each as
-    a `… (before)` and `… (after)` column — then **FrameMatrix** (board after the
-    move), Time, Duration (s) (gap since the previous move in that puzzle).
+    a `… (before)` and `… (after)` column — then **FrameMatrix (before)** and
+    **FrameMatrix (after)** (the frame as the user saw it before the move, and
+    after it), Time, Duration (s) (gap since the previous move in that puzzle).
   - All time-of-day cells are formatted as **UK time** (`Europe/London`, auto
     BST/GMT) via `fmtUK`, e.g. `22/6/2026, 7:37:47 AM`.
   - **Calculator** — Player, Student ID, Session, Puzzle, Time, Input, Output.
@@ -360,10 +362,11 @@ publish it; versioned in the repo, deployed manually to the lab project):
     events/{autoId}               one doc per action: seq, t, clientTime, phase,
                                   round, puzzleId, type, dataJson + flat fields —
                                   place/remove: action, brick, anchor, cellsJson,
-                                  brickValue, boardJson (FrameMatrix), net,
-                                  coverage, metricsBeforeJson/metricsAfterJson
-                                  (full KPI snapshots); calc: calcExpr/calcResult;
-                                  note: noteText; round_start/end: boardJson, diff
+                                  brickValue, boardBeforeJson/boardJson (FrameMatrix
+                                  before+after), net, coverage, metricsBeforeJson/
+                                  metricsAfterJson (full KPI snapshots); calc:
+                                  calcExpr/calcResult; note: noteText;
+                                  round_start/end: boardJson, diff
     rounds/{autoId}               per-round summary (net/coverage/fitness/time,
                                   placementsJson…)
     survey/answers                { answers, completedAt }
