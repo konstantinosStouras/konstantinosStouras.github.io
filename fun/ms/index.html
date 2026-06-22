@@ -1769,11 +1769,43 @@ function debounceAffSearch() {
   }, 150);
 }
 
-// Condense the sticky top bar once the user scrolls, freeing space for papers.
-window.addEventListener('scroll', function() {
-  if (window.scrollY > 40) document.body.classList.add('compact');
-  else document.body.classList.remove('compact');
-}, { passive: true });
+// Condense the sticky top bar once the user has scrolled past it, freeing screen
+// space for the papers list. Two safeguards stop this from making the page
+// "shake" (the bar flickering between full and condensed, frame after frame):
+//
+//   1. Hysteresis. The top bar is in normal flow, so condensing it shrinks the
+//      whole page by ~100px. With a single threshold, that height drop can pull
+//      the scroll position back across the line, which un-condenses, which grows
+//      the page, which crosses the line again, an endless toggle/reflow loop.
+//      Separate add/remove thresholds, with a gap wider than the height the
+//      condense removes, mean a height-driven scroll change can never cross both
+//      edges of the band, so the class always settles.
+//   2. The toggle only runs where the bar is actually sticky (wide viewports).
+//      On phones the bar is `position: static`, so condensing it as it scrolls
+//      out of view frees no space yet still shrinks the page, pure downside.
+//
+// Reads are coalesced into one layout write per frame via requestAnimationFrame.
+var compactSticky = window.matchMedia('(min-width: 769px)');
+var COMPACT_ON = 180;   // add `compact` only well below the full-height bar
+var COMPACT_OFF = 40;   // and drop it only after scrolling back near the top
+var compactScheduled = false;
+function applyCompact() {
+  compactScheduled = false;
+  if (!compactSticky.matches) { document.body.classList.remove('compact'); return; }
+  var y = window.scrollY || window.pageYOffset || 0;
+  if (document.body.classList.contains('compact')) {
+    if (y < COMPACT_OFF) document.body.classList.remove('compact');
+  } else if (y > COMPACT_ON) {
+    document.body.classList.add('compact');
+  }
+}
+function scheduleCompact() {
+  if (!compactScheduled) { compactScheduled = true; requestAnimationFrame(applyCompact); }
+}
+window.addEventListener('scroll', scheduleCompact, { passive: true });
+// Re-evaluate when crossing the sticky/static breakpoint (e.g. device rotation).
+if (compactSticky.addEventListener) compactSticky.addEventListener('change', applyCompact);
+else if (compactSticky.addListener) compactSticky.addListener(applyCompact);
 
 loadLastPull(); // small + cached: render the last-pull date first, before the big Data CSV
 loadData();
