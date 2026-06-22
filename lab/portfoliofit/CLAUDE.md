@@ -193,7 +193,9 @@ publish it; versioned in the repo, deployed manually to the lab project):
   rotates/removes solution bricks while KPIs update → net value → KPIs (with each
   KPI explained) → calculator → notes → nudges → "boxes are draggable/resizable"
   → the green submit button). The clock is paused during the tour. Repositions on
-  scroll/resize for mobile.
+  scroll/resize for mobile. The add/remove demo (`runDemo`) is deliberately **slow
+  and step-by-step** (≈2–3s per action, narrated "Step 1/2", add → add → remove →
+  replace) so players clearly see how placing and removing bricks works.
 - **Per-puzzle results screen:** after **every** main puzzle, `showRoundStats(rec)`
   shows a breakdown of **that puzzle's own** metrics (never an aggregate across
   puzzles) via the shared `statsGrid`. Between puzzles the button reads "Continue
@@ -251,10 +253,18 @@ publish it; versioned in the repo, deployed manually to the lab project):
 - **Survey → thank-you:** after the last puzzle's results screen, render the
   survey from config, submit via the `submitSurvey` function (with a direct-write
   fallback), then the thank-you screen (no "Play again" — the run is complete).
+- **Desktop default layout:** on laptops/Macs (`@media (min-width:1024px) and
+  (pointer:fine)`, in the injected experiment CSS) the `.container` becomes a CSS
+  grid — the intermediate `.dash`/`.game`/`.tools` wrappers use `display:contents`
+  — laying the boxes out as **Calculator (left) · Board · Bricks · Notes (right)**
+  with Net Value + KPIs on top, so the whole screen fits without zooming and the
+  calculator/notepad are visible from the start. Tablets/phones keep the stacked
+  layout.
 - **Movable/resizable boxes (during play only, `pf-playing`):** drag a box by its
   body (cursor "move") to reposition (CSS `transform`, with **no-overlap**
   collision), and resize from any **border/corner** (cursor changes; wide hit
-  zones). Layout persists in `localStorage`; a "Reset layout" button restores it.
+  zones). These layer on top of the default (desktop grid or stacked). Layout
+  persists in `localStorage`; a "Reset layout" button restores the default.
 - **Privacy:** nudges never reveal the maximum/optimal in experiment mode.
 
 ## 6. The admin panel (`admin.js`)
@@ -291,9 +301,11 @@ publish it; versioned in the repo, deployed manually to the lab project):
     enforced in `experiment.js` `beginSession`), and **delete**. Players join by
     code; data is tagged with `sessionId`.
   - **Participants** — table of all players (Player / **UCD Student ID** / Session
-    / Status / Started). Header: **Export all to Excel** and **Delete all
-    participants** (deep delete via `deleteParticipantDeep`). Per row: **⬇ Excel**
-    (that one player's data) and **delete**.
+    / Status / Started). The **Started** header is clickable to sort by start date
+    ascending/descending (▲/▼, in place — no re-fetch). Header: **Export all to
+    Excel** and **Delete all participants** (deep delete via
+    `deleteParticipantDeep`). Per row: **⬇ Excel** (that one player's data) and
+    **delete**.
 - **Excel export (`exportWorkbook`)** — SheetJS (xlsx) via CDN. One reusable
   builder powers three entry points — **all participants** (`exportExcel`),
   **one participant** (`exportParticipant`), and **one whole session**

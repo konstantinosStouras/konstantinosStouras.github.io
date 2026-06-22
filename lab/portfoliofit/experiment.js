@@ -170,7 +170,29 @@
       + '.pfx-reset:hover{background:#f6f3ee;}body.pf-playing .pfx-reset{display:block;}'
       + '.pfx-phase{display:block;width:fit-content;max-width:90%;margin:2px auto 10px;padding:6px 16px;border-radius:999px;background:#e67e22;color:#fff;font-weight:800;font-size:13px;letter-spacing:.08em;text-transform:uppercase;text-align:center;font-family:Inter,system-ui,sans-serif;box-shadow:0 6px 16px rgba(230,126,34,.35);}'
       + '.pfx-card .pfx-tag{display:inline-block;margin:0 0 6px;padding:5px 12px;border-radius:999px;background:#fdebd9;color:#cf6f17;font-weight:800;font-size:12px;letter-spacing:.06em;text-transform:uppercase;}'
-      + '.pfx-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;}';
+      + '.pfx-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;}'
+      // ---- Desktop (laptop/Mac) layout: calculator LEFT of the board, notepad on
+      // the RIGHT, everything visible at once without zooming. Tablets/phones
+      // (coarse pointer or narrow width) keep the default stacked layout. Boxes
+      // stay draggable/resizable on top of this default (Reset layout restores it).
+      + '@media (min-width:1024px) and (pointer:fine){'
+      + 'body.pf-exp .container{max-width:none;width:100%;box-sizing:border-box;padding:0 18px 24px;display:grid;'
+      + 'grid-template-columns:minmax(208px,.95fr) minmax(250px,1.15fr) minmax(240px,1fr) minmax(220px,.95fr);'
+      + 'grid-template-areas:"hd hd hd hd" "tm tm tm tm" "ca nv kp no" "ca bo br no";'
+      + 'column-gap:16px;row-gap:14px;align-items:start;}'
+      + 'body.pf-exp .dash,body.pf-exp .game,body.pf-exp .game>div:not(.board-card),body.pf-exp .tools{display:contents;}'
+      + 'body.pf-exp .controls{display:none;}'
+      + 'body.pf-exp header.app{grid-area:hd;margin-bottom:0;}'
+      + 'body.pf-exp .timer-wrap{grid-area:tm;}'
+      + 'body.pf-exp .netcard{grid-area:nv;}'
+      + 'body.pf-exp .kpi-panel{grid-area:kp;}'
+      + 'body.pf-exp .board-card{grid-area:bo;}'
+      + 'body.pf-exp .game>div>.card{grid-area:br;}'
+      + 'body.pf-exp .tools .tool:nth-of-type(1){grid-area:ca;}'   /* calculator — left */
+      + 'body.pf-exp .tools .tool:nth-of-type(2){grid-area:no;}'   /* notes — right */
+      + 'body.pf-exp .kpi-grid{grid-template-columns:1fr 1fr;gap:8px;}'
+      + 'body.pf-exp .netcard,body.pf-exp .kpi-panel,body.pf-exp .board-card,body.pf-exp .game>div>.card,body.pf-exp .tools .tool{min-width:0;min-height:0;margin:0;}'
+      + '}';
     document.head.appendChild(el('style', { text: css }));
   }
 
@@ -603,14 +625,17 @@
     }
     function wait(ms, cb) { setTimeout(cb, ms); }
     function runDemo(setText, onComplete) {
+      // Deliberately slow and step-by-step: this is where players learn how
+      // adding and removing bricks works, so each action gets time to register
+      // and a short pause before the next one.
       var seq = [
-        function (cb) { setText('First, select a brick from your tray…'); try { window.PFGame.demoSelectSolution(0); } catch (e) {} wait(900, cb); },
-        function (cb) { setText('…rotate or flip it to fit…'); try { window.PFGame.demoCycleOri(); } catch (e) {} wait(650, function () { try { window.PFGame.demoCycleOri(); } catch (e) {} wait(650, cb); }); },
-        function (cb) { setText('…then place it on the board. Watch every KPI update at once.'); try { window.PFGame.demoPlaceSolution(0); } catch (e) {} wait(1500, cb); },
-        function (cb) { setText('Add a second brick — the KPIs change again.'); try { window.PFGame.demoPlaceSolution(1); } catch (e) {} wait(1500, cb); },
-        function (cb) { setText('You can remove a brick if you change your mind…'); try { window.PFGame.demoRemoveSolution(1); } catch (e) {} wait(1200, cb); },
-        function (cb) { setText('…and try a different one. The KPIs always reflect your current portfolio.'); try { window.PFGame.demoPlaceSolution(2); } catch (e) {} wait(1600, cb); },
-        function (cb) { setText('That’s the idea — arrange bricks to maximise your net value. The board is cleared so you can start fresh.'); try { window.PFGame.demoClear(); } catch (e) {} wait(1100, cb); }
+        function (cb) { setText('<b>Step 1 — pick a brick.</b> We tap a brick in your tray to select it.'); try { window.PFGame.demoSelectSolution(0); } catch (e) {} wait(2200, cb); },
+        function (cb) { setText('You can <b>rotate</b> or <b>flip</b> the selected brick so it fits where you want it…'); try { window.PFGame.demoCycleOri(); } catch (e) {} wait(1500, function () { try { window.PFGame.demoCycleOri(); } catch (e) {} wait(1700, cb); }); },
+        function (cb) { setText('<b>Step 2 — drop it on the board.</b> Watch the brick land in those cells, and every KPI update at once.'); try { window.PFGame.demoPlaceSolution(0); } catch (e) {} wait(3000, cb); },
+        function (cb) { setText('<b>Add a second brick.</b> Notice how the board fills up and the KPIs change again.'); try { window.PFGame.demoPlaceSolution(1); } catch (e) {} wait(3200, cb); },
+        function (cb) { setText('<b>Changed your mind?</b> Tap a placed brick to <b>remove</b> it — watch it leave the board and the KPIs adjust.'); try { window.PFGame.demoRemoveSolution(1); } catch (e) {} wait(3200, cb); },
+        function (cb) { setText('…then try a <b>different</b> brick instead. The board always shows your current portfolio.'); try { window.PFGame.demoPlaceSolution(2); } catch (e) {} wait(3200, cb); },
+        function (cb) { setText('That’s the whole idea — <b>add and remove</b> bricks to find the portfolio with the highest net value. We’ll clear the board so you can start fresh.'); try { window.PFGame.demoClear(); } catch (e) {} wait(2400, cb); }
       ];
       var idx = 0, stopped = false;
       function step() { if (stopped) return; if (idx >= seq.length) { onComplete(); return; } seq[idx++](step); }
