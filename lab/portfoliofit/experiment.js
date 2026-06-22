@@ -235,10 +235,25 @@
 
   // ---- Firebase ---------------------------------------------------------
   var FB_BASE = 'https://www.gstatic.com/firebasejs/' + SDK + '/';
+  // Dynamic imports of the Firebase SDK can stall/fail on a flaky network (seen
+  // as a blank "Connecting…" screen until a manual refresh). Race each import
+  // against a timeout and retry a couple of times so a transient hiccup self-heals.
+  function importRetry(url, attempts) {
+    attempts = attempts || 3;
+    function once() {
+      return Promise.race([
+        import(url),
+        new Promise(function (_, rej) { setTimeout(function () { rej(new Error('import timeout: ' + url)); }, 12000); })
+      ]);
+    }
+    var p = once();
+    for (var i = 1; i < attempts; i++) { p = p.catch(function () { return once(); }); }
+    return p;
+  }
   async function initFirebase() {
-    var appM = await import(FB_BASE + 'firebase-app.js');
-    var authM = await import(FB_BASE + 'firebase-auth.js');
-    var fsM = await import(FB_BASE + 'firebase-firestore.js');
+    var appM = await importRetry(FB_BASE + 'firebase-app.js');
+    var authM = await importRetry(FB_BASE + 'firebase-auth.js');
+    var fsM = await importRetry(FB_BASE + 'firebase-firestore.js');
     // Use a NAMED app ('portfoliofit') so the experiment coexists with the page's
     // existing DEFAULT Firebase app (the snake/Account login) instead of colliding
     // with it (app/duplicate-app) or accidentally reusing snake's project.
@@ -848,9 +863,15 @@
     S.currentPuzzleId = item.id || ('main-' + S.roundIndex + '-' + item.diff);
     window.PFGame._onRoundEnd = onMainRoundEnd;
     var lim = limitFor(item.diff);
-    if (item.spec) window.PFGame.loadPuzzle(item.spec, lim);
-    else window.PFGame.newGame(item.diff, lim);
-    showGameSubmit('Submit portfolio & continue');
+    // Loading/rendering the next puzzle is the spot users reported freezing on.
+    // If anything throws here, recover by reloading (the resume flow continues
+    // from this same puzzle) rather than leaving a frozen/blank board.
+    try {
+      if (item.spec) window.PFGame.loadPuzzle(item.spec, lim);
+      else window.PFGame.newGame(item.diff, lim);
+      showGameSubmit('Submit portfolio & continue');
+      clearRecover();   // this puzzle rendered fine — reset the auto-reload budget
+    } catch (e) { recoverByReload('runNextPuzzle: ' + (e && e.message)); }
   }
   function onMainRoundEnd(metrics) {
     window.PFGame._onRoundEnd = null;
@@ -864,7 +885,7 @@
     // Show a results screen after EVERY puzzle. It always reports THIS puzzle's
     // own metrics (never an aggregate across puzzles). The last one leads to the
     // survey; the others continue to the next puzzle.
-    setTimeout(function () { showRoundStats(rec); }, 350);
+    setTimeout(function () { try { showRoundStats(rec); } catch (e) { recoverByReload('showRoundStats: ' + (e && e.message)); } }, 350);
   }
   // The metrics breakdown grid, shared by the per-puzzle and final summary screens.
   function statsGrid(o) {
@@ -1153,14 +1174,43 @@
     showWelcome();
   }
 
+  // ---- Crash / stall recovery ------------------------------------------
+  // Progress is persisted to the participant doc, so the resume flow can always
+  // continue from the right phase. A few macOS/Safari edge cases were reported
+  // where the live page froze on the puzzle→puzzle hand-off and only a manual
+  // refresh recovered (resume works). So: if the page errors or stalls during
+  // play, reload once automatically to recover instead of stranding the player
+  // on a frozen/blank screen. Capped per tab so it can never loop.
+  function recoverByReload(reason) {
+    var n = 0;
+    try { n = (parseInt(sessionStorage.getItem('pfx-recover') || '0', 10) || 0); } catch (e) {}
+    if (n >= 3) return;                         // already retried — stop, don't loop
+    try { sessionStorage.setItem('pfx-recover', String(n + 1)); } catch (e) {}
+    console.warn('[PFX] recovering by reload:', reason);
+    setTimeout(function () { try { location.reload(); } catch (e) {} }, 60);
+  }
+  function clearRecover() { try { sessionStorage.removeItem('pfx-recover'); } catch (e) {} }
+  // Recover only from OUR OWN uncaught errors during play. Cross-origin / browser
+  // -extension noise ("Script error." with no/foreign filename) is ignored so an
+  // unrelated extension error never reloads a participant mid-game.
+  window.addEventListener('error', function (e) {
+    if (!document.body.classList.contains('pf-playing')) return;
+    var f = (e && e.filename) || '';
+    if (!f || f.indexOf(location.origin) !== 0) return;
+    recoverByReload('error: ' + (e && e.message));
+  });
+
   // ---- Bootstrap --------------------------------------------------------
   async function init() {
     if (inited) return; inited = true;
     injectStyles();
     showOverlay(card('Loading…', [el('p', { text: 'Connecting…' })]));
+    // Watchdog: if boot stalls (e.g. the SDK import or auth never resolves) and we
+    // are still on the Loading screen, reload once rather than sit on a blank page.
+    var bootWatch = setTimeout(function () { recoverByReload('boot stalled'); }, 16000);
 
     try { await initFirebase(); }
-    catch (e) { console.warn('[PFX] Firebase init failed; offline', e); return startOffline(); }
+    catch (e) { clearTimeout(bootWatch); console.warn('[PFX] Firebase init failed; offline', e); return startOffline(); }
 
     // Determine who (if anyone) is already signed in on this device.
     var u = await waitForAuth();
@@ -1169,9 +1219,11 @@
     // No persisted user → sign in anonymously so config/sessions are readable.
     if (!u) {
       try { u = (await fb.A.signInAnonymously(fb.auth)).user; }
-      catch (e) { console.warn('[PFX] anonymous sign-in unavailable; offline', e); return startOffline(); }
+      catch (e) { clearTimeout(bootWatch); console.warn('[PFX] anonymous sign-in unavailable; offline', e); return startOffline(); }
     }
     S.user = u;
+    clearTimeout(bootWatch);   // booted successfully
+    clearRecover();            // healthy boot — reset the auto-reload budget
     enableLayoutCustomize();
 
     // Returning player who already joined a session → reload that session's

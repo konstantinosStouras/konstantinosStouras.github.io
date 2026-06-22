@@ -407,6 +407,18 @@ publish it; versioned in the repo, deployed manually to the lab project):
 
 ## 9. Gotchas worth carrying into a new build
 
+- **Self-healing for frozen/blank screens.** Because all progress is persisted to
+  the participant doc, the resume flow can always continue. The experiment layer
+  leans on this: `recoverByReload()` reloads once (capped via `sessionStorage`
+  `pfx-recover`, reset by `clearRecover()` on a healthy boot / successful puzzle
+  render) to recover from (a) a same-origin uncaught error during play
+  (`window 'error'`, ignoring cross-origin/extension "Script error." noise),
+  (b) the puzzle→puzzle hand-off throwing (try/catch in `runNextPuzzle` /
+  `showRoundStats`), and (c) a stalled boot (a 16s watchdog in `init`). The
+  Firebase SDK imports also retry with a timeout (`importRetry`) to avoid a blank
+  "Connecting…" screen on a flaky network. This was added after macOS/Safari
+  users hit a frozen screen on the 1st→2nd puzzle transition that only a manual
+  refresh fixed.
 - Use a **named** Firebase app if another default app already lives on the page.
 - **Firestore rejects nested arrays** — JSON-stringify anything like cell lists.
 - Let `onAuthStateChanged` (not an eager call) drive routing to avoid a login
