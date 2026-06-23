@@ -78,7 +78,7 @@ export default function JoinSession() {
               value={code}
               onChange={e => setCode(e.target.value.toUpperCase())}
               placeholder="e.g. ABC123"
-              maxLength={8}
+              maxLength={40}
               required
               autoFocus
               spellCheck={false}
@@ -88,7 +88,7 @@ export default function JoinSession() {
             <button
               className={`btn-primary ${styles.joinBtn}`}
               type="submit"
-              disabled={loading || code.trim().length < 4}
+              disabled={loading || code.trim().length < 3}
             >
               {loading ? 'Looking up session...' : 'Join Session'}
             </button>
