@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   collection, addDoc, serverTimestamp, onSnapshot,
-  deleteDoc, doc, updateDoc, setDoc, deleteField, query, where
+  deleteDoc, doc, updateDoc, setDoc, deleteField, query, where, getDocs
 } from 'firebase/firestore'
 import { signOut } from 'firebase/auth'
 import { httpsCallable } from 'firebase/functions'
@@ -100,6 +100,9 @@ export default function Admin() {
   const [expandedUser, setExpandedUser] = useState(null)
   const [creating, setCreating] = useState(false)
   const [lastCreatedCode, setLastCreatedCode] = useState(null)
+  const [newName, setNewName] = useState('')      // optional human-friendly session name
+  const [newCode, setNewCode] = useState('')      // optional custom Session ID (blank = auto)
+  const [createError, setCreateError] = useState('')
   const [editingSession, setEditingSession] = useState(null)
   const [config, setConfig] = useState(freshConfig)
   const [deleteConfirm, setDeleteConfirm] = useState(null)
@@ -475,12 +478,40 @@ export default function Admin() {
   }
 
   async function createSession() {
+    setCreateError('')
+
+    // Resolve the session code: a custom one if the admin typed it, otherwise
+    // an auto-generated short code. Custom codes are validated (letters, digits
+    // and dashes, 3–40 chars) and stored upper-cased so the join page — which
+    // upper-cases what participants type — always matches.
+    const raw = newCode.trim()
+    let code
+    if (raw) {
+      if (!/^[A-Za-z0-9-]{3,40}$/.test(raw)) {
+        setCreateError('Session ID must be 3–40 characters using only letters, digits and dashes.')
+        return
+      }
+      code = raw.toUpperCase()
+    } else {
+      code = generateCode()
+    }
+
     setCreating(true)
     setLastCreatedCode(null)
     try {
-      const code = generateCode()
-      const docRef = await addDoc(collection(db, 'sessions'), {
+      // Reject a duplicate code (custom or, very rarely, a generated collision).
+      const dup = await getDocs(query(collection(db, 'sessions'), where('code', '==', code)))
+      if (!dup.empty) {
+        setCreateError(raw
+          ? 'That Session ID is already in use. Please choose another.'
+          : 'Code collision — please try creating the session again.')
+        setCreating(false)
+        return
+      }
+
+      await addDoc(collection(db, 'sessions'), {
         code,
+        name: newName.trim() || null,
         instructorId: user.uid,
         instructorName: user.displayName || user.email,
         status: 'waiting',
@@ -489,8 +520,11 @@ export default function Admin() {
         ...config,
       })
       setLastCreatedCode(code)
+      setNewName('')
+      setNewCode('')
     } catch (err) {
       console.error(err)
+      setCreateError('Could not create the session. Please try again.')
     } finally {
       setCreating(false)
     }
@@ -685,6 +719,35 @@ export default function Admin() {
                   ? 'Adjust the configuration for this session. Changes apply immediately on save.'
                   : 'Configure the session structure, timers, and AI assistance before launching.'}
               </p>
+
+              {!editingSession && (
+                <div className={styles.section}>
+                  <h3 className={styles.subTitle}>Session details</h3>
+                  <div className={styles.field}>
+                    <label className={styles.label}>Session name</label>
+                    <input
+                      className="input-field"
+                      value={newName}
+                      onChange={e => setNewName(e.target.value)}
+                      placeholder="e.g. Spring MBA 2026"
+                    />
+                  </div>
+                  <div className={styles.field} style={{ marginTop: 12 }}>
+                    <label className={styles.label}>Session ID</label>
+                    <input
+                      className="input-field"
+                      value={newCode}
+                      onChange={e => { setNewCode(e.target.value); setCreateError('') }}
+                      placeholder="(OPTIONAL) CUSTOM CODE"
+                      maxLength={40}
+                      spellCheck={false}
+                      autoComplete="off"
+                    />
+                    <p className={styles.sectionHint}>Leave blank to auto-generate a short code. Letters, digits and dashes only (3–40 chars).</p>
+                    {createError && <p className="error-msg">{createError}</p>}
+                  </div>
+                </div>
+              )}
 
               <div className={`${styles.section} ${styles.aiBox}`}>
                 <h3 className={styles.subTitle}>AI Assistant</h3>
@@ -1052,6 +1115,7 @@ function SessionCard({ session, participantCount, onOpen, onEdit, onClose, onDel
           <span className={styles.phasesMeta}>{phases}</span>
         </div>
       </div>
+      {session.name && <div className={styles.sessionName}>{session.name}</div>}
       {createdStr && <div className={styles.sessionDate}>Created {createdStr}</div>}
       <div className={styles.sessionCardActions}>
         <button className="btn-primary" style={{ padding: '6px 18px', fontSize: 13 }} onClick={onOpen}>Open</button>
