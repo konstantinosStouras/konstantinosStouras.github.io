@@ -720,35 +720,6 @@ export default function Admin() {
                   : 'Configure the session structure, timers, and AI assistance before launching.'}
               </p>
 
-              {!editingSession && (
-                <div className={styles.section}>
-                  <h3 className={styles.subTitle}>Session details</h3>
-                  <div className={styles.field}>
-                    <label className={styles.label}>Session name</label>
-                    <input
-                      className="input-field"
-                      value={newName}
-                      onChange={e => setNewName(e.target.value)}
-                      placeholder="e.g. Spring MBA 2026"
-                    />
-                  </div>
-                  <div className={styles.field} style={{ marginTop: 12 }}>
-                    <label className={styles.label}>Session ID</label>
-                    <input
-                      className="input-field"
-                      value={newCode}
-                      onChange={e => { setNewCode(e.target.value); setCreateError('') }}
-                      placeholder="(OPTIONAL) CUSTOM CODE"
-                      maxLength={40}
-                      spellCheck={false}
-                      autoComplete="off"
-                    />
-                    <p className={styles.sectionHint}>Leave blank to auto-generate a short code. Letters, digits and dashes only (3–40 chars).</p>
-                    {createError && <p className="error-msg">{createError}</p>}
-                  </div>
-                </div>
-              )}
-
               <div className={`${styles.section} ${styles.aiBox}`}>
                 <h3 className={styles.subTitle}>AI Assistant</h3>
                 <p className={styles.sectionHint}>Enable AI assistance per phase. Provider and model are configured globally in AI Settings.</p>
@@ -909,6 +880,35 @@ export default function Admin() {
                   />
                 </Collapsible>
               </div>
+
+              {!editingSession && (
+                <div className={styles.section}>
+                  <h3 className={styles.subTitle}>Session details</h3>
+                  <div className={styles.field}>
+                    <label className={styles.label}>Session name</label>
+                    <input
+                      className="input-field"
+                      value={newName}
+                      onChange={e => setNewName(e.target.value)}
+                      placeholder="e.g. Spring MBA 2026"
+                    />
+                  </div>
+                  <div className={styles.field} style={{ marginTop: 12 }}>
+                    <label className={styles.label}>Session ID</label>
+                    <input
+                      className="input-field"
+                      value={newCode}
+                      onChange={e => { setNewCode(e.target.value); setCreateError('') }}
+                      placeholder="(OPTIONAL) CUSTOM CODE"
+                      maxLength={40}
+                      spellCheck={false}
+                      autoComplete="off"
+                    />
+                    <p className={styles.sectionHint}>Leave blank to auto-generate a short code. Letters, digits and dashes only (3–40 chars).</p>
+                    {createError && <p className="error-msg">{createError}</p>}
+                  </div>
+                </div>
+              )}
 
               <div className={styles.formActions}>
                 {editingSession ? (
