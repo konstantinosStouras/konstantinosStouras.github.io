@@ -16,11 +16,19 @@ import UserHistory from './pages/UserHistory'
 import Admin from './pages/Admin'
 import AISettings from './pages/AISettings'
 import AdminSession from './pages/AdminSession'
+import AdminBroadcast from './components/AdminBroadcast'
 
-// Wraps session pages with SessionProvider using the :sessionId param
+// Wraps session pages with SessionProvider using the :sessionId param.
+// AdminBroadcast rides along so an instructor's group message / removal notice
+// can appear over any session page the participant is on.
 function SessionWrapper({ children }) {
   const { sessionId } = useParams()
-  return <SessionProvider sessionId={sessionId}>{children}</SessionProvider>
+  return (
+    <SessionProvider sessionId={sessionId}>
+      {children}
+      <AdminBroadcast />
+    </SessionProvider>
+  )
 }
 
 export default function App() {

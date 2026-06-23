@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { doc, collection, onSnapshot, getDocs, orderBy, query, updateDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, collection, onSnapshot, getDocs, orderBy, query, where, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '../firebase'
 import { getPhaseSequence } from '../utils/phaseSequence'
@@ -19,6 +19,12 @@ export default function AdminSession() {
   const [exporting, setExporting] = useState(false)
   const [nudgedId, setNudgedId] = useState(null)
   const [expandedPid, setExpandedPid] = useState(null)
+  const [removingId, setRemovingId] = useState(null)
+  const [removeConfirmId, setRemoveConfirmId] = useState(null)
+  const [viewGroup, setViewGroup] = useState(null)     // group bucket being watched live
+  const [messageGroup, setMessageGroup] = useState(null) // group bucket being messaged
+  const [messageText, setMessageText] = useState('')
+  const [messageSending, setMessageSending] = useState(false)
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'sessions', sessionId), snap => {
@@ -549,6 +555,47 @@ export default function AdminSession() {
     }
   }
 
+  // Remove a participant mid-session (Cloud Function: detaches them from their
+  // group, leaves a backfill vacancy for a late joiner). Two-click confirm.
+  function askRemove(participantId) {
+    setRemoveConfirmId(participantId)
+    setTimeout(() => setRemoveConfirmId(curr => (curr === participantId ? null : curr)), 4000)
+  }
+  async function removeParticipant(participantId) {
+    setRemovingId(participantId)
+    try {
+      await httpsCallable(functions, 'removeParticipant')({ sessionId, participantId })
+    } catch (err) {
+      console.error('Remove participant error:', err)
+      alert('Could not remove participant: ' + (err?.message || 'unknown error'))
+    } finally {
+      setRemovingId(null)
+      setRemoveConfirmId(null)
+    }
+  }
+
+  // Send a centred message window to every member of a group (writes
+  // `adminMessage` to each member's own doc; their screen pops it up).
+  async function sendGroupMessage() {
+    if (!messageGroup || !messageText.trim()) return
+    setMessageSending(true)
+    const msg = { id: Date.now(), text: messageText.trim(), from: session?.instructorName || null }
+    try {
+      await Promise.all(
+        messageGroup.members
+          .filter(m => !m.removed && m.status !== 'removed')
+          .map(m => updateDoc(doc(db, 'sessions', sessionId, 'participants', m.id), { adminMessage: msg }))
+      )
+      setMessageGroup(null)
+      setMessageText('')
+    } catch (err) {
+      console.error('Send message error:', err)
+      alert('Could not send the message: ' + (err?.message || 'unknown error'))
+    } finally {
+      setMessageSending(false)
+    }
+  }
+
   function getAutoNote() {
     const status = session.status
     if (status === 'waiting') return 'Auto-advances when a group forms'
@@ -655,6 +702,26 @@ export default function AdminSession() {
                             {indivActive && ` · ideas ${doneIdeas}/${g.members.length}`}
                             {groupActive && ` · votes ${doneVotes}/${g.members.length}`}
                           </span>
+                          {g.groupId && (
+                            <span className={styles.groupActions}>
+                              <button
+                                className={styles.groupActionBtn}
+                                onClick={() => setViewGroup(g)}
+                                type="button"
+                                title="Watch this group's ideas and chat live"
+                              >
+                                View
+                              </button>
+                              <button
+                                className={styles.groupActionBtn}
+                                onClick={() => { setMessageGroup(g); setMessageText('') }}
+                                type="button"
+                                title="Send this group a message that pops up on their screens"
+                              >
+                                Message
+                              </button>
+                            </span>
+                          )}
                         </div>
 
                         {g.members.map(p => {
@@ -703,6 +770,20 @@ export default function AdminSession() {
                                       title="Show this participant a reminder to wrap up and submit"
                                     >
                                       {nudgedId === p.id ? 'Nudged ✓' : 'Nudge'}
+                                    </button>
+                                  )}
+                                  {p.status !== 'removed' && p.status !== 'done' && (
+                                    <button
+                                      className={`${styles.removeBtn} ${removeConfirmId === p.id ? styles.removeBtnConfirm : ''}`}
+                                      onClick={e => {
+                                        e.stopPropagation()
+                                        removeConfirmId === p.id ? removeParticipant(p.id) : askRemove(p.id)
+                                      }}
+                                      disabled={removingId === p.id}
+                                      type="button"
+                                      title="Remove this participant from the session (frees a slot for a late joiner)"
+                                    >
+                                      {removingId === p.id ? 'Removing…' : removeConfirmId === p.id ? 'Confirm?' : 'Remove'}
                                     </button>
                                   )}
                                 </span>
@@ -862,6 +943,120 @@ export default function AdminSession() {
           <div className={styles.doneBar}>Session complete. All participants have finished.</div>
         )}
       </main>
+
+      {viewGroup && (
+        <GroupViewModal
+          sessionId={sessionId}
+          group={viewGroup}
+          onClose={() => setViewGroup(null)}
+        />
+      )}
+
+      {messageGroup && (
+        <div className={styles.modalBackdrop} onClick={() => !messageSending && setMessageGroup(null)}>
+          <div className={styles.modalCard} onClick={e => e.stopPropagation()}>
+            <h3 className={styles.modalTitle}>
+              Message {messageGroup.number ? `Group ${messageGroup.number}` : 'group'}
+            </h3>
+            <p className={styles.modalSub}>
+              Pops up as a window in the centre of every member's screen.
+            </p>
+            <textarea
+              className={`input-field ${styles.modalTextarea}`}
+              value={messageText}
+              onChange={e => setMessageText(e.target.value)}
+              placeholder="e.g. Please wrap up your individual ideas — about 2 minutes left."
+              rows={4}
+              autoFocus
+            />
+            <div className={styles.modalActions}>
+              <button className="btn-ghost" onClick={() => setMessageGroup(null)} disabled={messageSending} type="button">
+                Cancel
+              </button>
+              <button className="btn-primary" onClick={sendGroupMessage} disabled={messageSending || !messageText.trim()} type="button">
+                {messageSending ? 'Sending…' : 'Send message'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * GroupViewModal — a read-only live window into one group while they play:
+ * each member's current stage, the group's ideas, and the group chat.
+ */
+function GroupViewModal({ sessionId, group, onClose }) {
+  const [messages, setMessages] = useState([])
+  const [ideas, setIdeas] = useState([])
+
+  useEffect(() => {
+    const unsub = onSnapshot(
+      query(collection(db, 'sessions', sessionId, 'groups', group.groupId, 'messages'), orderBy('createdAt', 'asc')),
+      snap => setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      () => {}
+    )
+    return unsub
+  }, [sessionId, group.groupId])
+
+  useEffect(() => {
+    const unsub = onSnapshot(
+      query(collection(db, 'sessions', sessionId, 'ideas'), where('groupId', '==', group.groupId)),
+      snap => setIdeas(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      () => {}
+    )
+    return unsub
+  }, [sessionId, group.groupId])
+
+  const ideasSorted = [...ideas].sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0))
+
+  return (
+    <div className={styles.modalBackdrop} onClick={onClose}>
+      <div className={`${styles.modalCard} ${styles.viewCard}`} onClick={e => e.stopPropagation()}>
+        <div className={styles.viewHead}>
+          <h3 className={styles.modalTitle}>{group.number ? `Group ${group.number}` : 'Group'} — live view</h3>
+          <button className={styles.closeX} onClick={onClose} type="button" aria-label="Close">×</button>
+        </div>
+        <div className={styles.viewMembers}>
+          {group.members.map(m => (
+            <span key={m.id} className={styles.viewMemberChip}>
+              {m.anonymousLabel || m.id.slice(0, 5)} · {participantStageLabel(m)}
+            </span>
+          ))}
+        </div>
+        <div className={styles.viewCols}>
+          <div className={styles.viewCol}>
+            <div className={styles.viewColLabel}>Ideas ({ideasSorted.length})</div>
+            <div className={styles.viewScroll}>
+              {ideasSorted.length === 0 && <div className={styles.viewEmpty}>No ideas yet.</div>}
+              {ideasSorted.map(i => (
+                <div key={i.id} className={styles.viewIdea}>
+                  <div className={styles.viewIdeaTitle}>
+                    {i.title || i.text || 'Untitled'}
+                    <span className={styles.viewIdeaTag}>{i.phase === 'group' ? 'group' : 'individual'}</span>
+                  </div>
+                  {i.description && <div className={styles.viewIdeaDesc}>{i.description}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className={styles.viewCol}>
+            <div className={styles.viewColLabel}>Group chat ({messages.length})</div>
+            <div className={styles.viewScroll}>
+              {messages.length === 0 && <div className={styles.viewEmpty}>No messages yet.</div>}
+              {messages.map(msg => (
+                <div key={msg.id} className={styles.viewMsg}>
+                  <span className={styles.viewMsgWho}>{msg.authorLabel || 'p?'}</span>
+                  <span className={styles.viewMsgText}>{msg.text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <p className={styles.viewNote}>Read-only — use “Message” to send the group a note.</p>
+      </div>
     </div>
   )
 }

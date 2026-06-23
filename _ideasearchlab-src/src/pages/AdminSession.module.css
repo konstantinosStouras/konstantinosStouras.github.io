@@ -507,3 +507,132 @@
   .exportHeader { flex-direction: column; }
   .exportStats { flex-wrap: wrap; }
 }
+
+/* ── Remove participant button ─────────────────────────── */
+.removeBtn {
+  border: 1px solid rgba(192,57,43,0.4);
+  background: none;
+  color: #c0392b;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+.removeBtn:hover:not(:disabled) { background: rgba(192,57,43,0.08); }
+.removeBtn:disabled { cursor: default; opacity: 0.7; }
+.removeBtnConfirm { background: #c0392b; color: #fff; border-color: #c0392b; }
+.removeBtnConfirm:hover:not(:disabled) { background: #a93226; }
+
+/* ── Per-group View / Message actions ──────────────────── */
+.groupActions { display: flex; gap: 6px; margin-left: auto; }
+.groupActionBtn {
+  border: 1px solid var(--border);
+  background: var(--white);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s, background 0.15s;
+}
+.groupActionBtn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Modals (message composer + live group view) ───────── */
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15,14,12,0.5);
+  backdrop-filter: blur(2px);
+  animation: mbFade 0.16s ease;
+}
+@keyframes mbFade { from { opacity: 0; } to { opacity: 1; } }
+
+.modalCard {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 24px 26px;
+  width: 100%;
+  max-width: 460px;
+  animation: mcPop 0.18s ease;
+}
+@keyframes mcPop { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+.modalTitle { font-family: var(--font-display); font-size: 20px; color: var(--ink); }
+.modalSub { font-size: 12.5px; color: var(--muted); margin: 6px 0 14px; }
+.modalTextarea { width: 100%; resize: vertical; line-height: 1.5; }
+.modalActions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+.modalActions button { padding: 8px 18px; font-size: 13px; }
+
+/* Live group view */
+.viewCard { max-width: 760px; }
+.viewHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.closeX {
+  border: none; background: none; cursor: pointer;
+  font-size: 24px; line-height: 1; color: var(--muted); padding: 0 4px;
+}
+.closeX:hover { color: var(--ink); }
+
+.viewMembers { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 16px; }
+.viewMemberChip {
+  font-size: 11px;
+  color: var(--ink);
+  background: var(--paper-dark);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 3px 10px;
+}
+
+.viewCols { display: flex; gap: 16px; }
+@media (max-width: 640px) { .viewCols { flex-direction: column; } }
+.viewCol { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.viewColLabel {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--muted); margin-bottom: 8px;
+}
+.viewScroll {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--paper);
+  padding: 10px;
+  height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.viewEmpty { font-size: 12px; color: var(--muted); text-align: center; margin: auto; }
+
+.viewIdea {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+.viewIdeaTitle { font-size: 13px; font-weight: 700; color: var(--ink); display: flex; align-items: center; gap: 8px; }
+.viewIdeaTag {
+  font-size: 10px; font-weight: 500; color: var(--accent);
+  background: var(--paper); border: 1px solid var(--border);
+  border-radius: 10px; padding: 0 7px;
+}
+.viewIdeaDesc { font-size: 12px; color: var(--muted); line-height: 1.4; margin-top: 3px; }
+
+.viewMsg { display: flex; flex-direction: column; gap: 1px; }
+.viewMsgWho { font-size: 10px; color: var(--accent); font-weight: 600; }
+.viewMsgText {
+  font-size: 12.5px; color: var(--ink); line-height: 1.4;
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 9px;
+}
+.viewNote { font-size: 11px; color: var(--muted); text-align: center; margin-top: 14px; }

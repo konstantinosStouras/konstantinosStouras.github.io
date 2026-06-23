@@ -1,0 +1,86 @@
+/* Centred instructor message window */
+.msgBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 14, 12, 0.45);
+  backdrop-filter: blur(2px);
+  animation: bdFade 0.18s ease;
+}
+@keyframes bdFade { from { opacity: 0; } to { opacity: 1; } }
+
+.msgWindow {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-top: 4px solid var(--accent);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 26px 28px;
+  width: 100%;
+  max-width: 440px;
+  text-align: center;
+  animation: winPop 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+@keyframes winPop {
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+
+.msgHeader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  margin-bottom: 14px;
+}
+.msgDot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+.msgText {
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--ink);
+  white-space: pre-wrap;
+  margin-bottom: 22px;
+}
+.msgBtn { padding: 10px 30px; font-size: 14px; }
+
+/* Full-screen removed notice */
+.removedOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--paper);
+}
+.removedCard {
+  text-align: center;
+  max-width: 440px;
+}
+.removedIcon { font-size: 46px; margin-bottom: 12px; }
+.removedTitle {
+  font-family: var(--font-display);
+  font-size: 28px;
+  color: var(--ink);
+  margin-bottom: 12px;
+}
+.removedText {
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--muted);
+}

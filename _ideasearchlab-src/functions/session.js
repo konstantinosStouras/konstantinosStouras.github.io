@@ -22,31 +22,69 @@ const db = admin.firestore()
  */
 async function assignToGroup(sessionRef, uid, name, email) {
   return db.runTransaction(async (tx) => {
+    // ── All reads first (Firestore transactions forbid reads after writes) ──
     const sessionSnap = await tx.get(sessionRef)
     if (!sessionSnap.exists) throw new HttpsError('not-found', 'Session not found.')
     const session = sessionSnap.data()
 
     const participantRef = sessionRef.collection('participants').doc(uid)
     const pSnap = await tx.get(participantRef)
-    if (pSnap.exists) {
-      // Rejoin: refresh identity only. Never re-assign a group or touch status.
-      tx.update(participantRef, { name, email, uid })
-      return session.status
-    }
 
     const groupSize = session.phaseConfig?.groupSize ?? 3
     const individualActive = session.phaseConfig?.individualPhaseActive ?? true
     const phaseOrder = session.phaseConfig?.phaseOrder ?? 'individual_first'
     const firstPhase = (individualActive && phaseOrder === 'individual_first') ? 'individual' : 'group'
 
+    // A vacancy opens when the instructor removes someone from an in-progress
+    // group (see removeParticipant), recorded on session.backfillQueue. The
+    // oldest vacancy is read up front so a late joiner can backfill it.
+    const queue = Array.isArray(session.backfillQueue) ? session.backfillQueue : []
+    const slot = queue.length > 0 ? queue[0] : null
+    const backfillGroupRef = slot ? sessionRef.collection('groups').doc(slot.groupId) : null
+    const backfillGroupSnap = backfillGroupRef ? await tx.get(backfillGroupRef) : null
+
     const myIndex = session.joinCount || 0            // 0-based join order
     const groupNumber = Math.floor(myIndex / groupSize)
-    const label = `p${(myIndex % groupSize) + 1}`
-    const groupRef = sessionRef.collection('groups').doc(`g${groupNumber}`)
-    const groupSnap = await tx.get(groupRef)
+    const normalGroupRef = sessionRef.collection('groups').doc(`g${groupNumber}`)
+    const normalGroupSnap = await tx.get(normalGroupRef)
 
-    const prevMembers = groupSnap.exists ? (groupSnap.data().members || []) : []
-    const prevLabels = groupSnap.exists ? (groupSnap.data().memberLabels || {}) : {}
+    if (pSnap.exists) {
+      // Rejoin: refresh identity only. Never re-assign a group or touch status.
+      tx.update(participantRef, { name, email, uid })
+      return session.status
+    }
+
+    // ── Backfill a vacated slot: the late joiner jumps straight into that
+    // group's current phase, so the group is whole again. ──
+    if (slot && backfillGroupSnap && backfillGroupSnap.exists) {
+      const g = backfillGroupSnap.data()
+      const members = [...(g.members || []), uid]
+      const label = slot.label || `p${members.length}`
+      const memberLabels = { ...(g.memberLabels || {}), [uid]: label }
+      const joinStatus = slot.phase || firstPhase
+
+      tx.set(participantRef, {
+        name, email, uid,
+        joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+        status: joinStatus,
+        individualComplete: false,
+        groupId: backfillGroupRef.id,
+        anonymousLabel: label,
+        backfilled: true,
+      })
+      tx.set(backfillGroupRef, {
+        members, memberLabels,
+        status: 'active',
+        full: members.length >= groupSize,
+      }, { merge: true })
+      tx.update(sessionRef, { backfillQueue: queue.slice(1) })
+      return joinStatus
+    }
+
+    // ── Normal deterministic assignment (unchanged behaviour) ──
+    const label = `p${(myIndex % groupSize) + 1}`
+    const prevMembers = normalGroupSnap.exists ? (normalGroupSnap.data().members || []) : []
+    const prevLabels = normalGroupSnap.exists ? (normalGroupSnap.data().memberLabels || {}) : {}
     const members = [...prevMembers, uid]
     const memberLabels = { ...prevLabels, [uid]: label }
     const isFull = members.length >= groupSize
@@ -58,20 +96,24 @@ async function assignToGroup(sessionRef, uid, name, email) {
       joinedAt: admin.firestore.FieldValue.serverTimestamp(),
       status: startStatus,
       individualComplete: false,
-      groupId: groupRef.id,
+      groupId: normalGroupRef.id,
       anonymousLabel: label,
     })
 
     // The group document (merge so later joins never wipe createdAt/finalIdeas).
     const groupPayload = { members, memberLabels, status: 'active', full: isFull }
-    if (!groupSnap.exists) {
+    if (!normalGroupSnap.exists) {
       groupPayload.createdAt = admin.firestore.FieldValue.serverTimestamp()
       groupPayload.finalIdeas = []
     }
-    tx.set(groupRef, groupPayload, { merge: true })
+    tx.set(normalGroupRef, groupPayload, { merge: true })
 
     // Advance the join counter; if this filled the group, start everyone in it.
     const sessionUpdates = { joinCount: myIndex + 1 }
+    // A queued slot whose group has vanished is stale — drop it.
+    if (slot && (!backfillGroupSnap || !backfillGroupSnap.exists)) {
+      sessionUpdates.backfillQueue = queue.slice(1)
+    }
     if (isFull) {
       prevMembers.forEach(mUid => {
         tx.update(sessionRef.collection('participants').doc(mUid), { status: firstPhase })
@@ -85,6 +127,171 @@ async function assignToGroup(sessionRef, uid, name, email) {
 
     return sessionUpdates.status || session.status
   })
+}
+
+/**
+ * removeParticipant
+ * Instructor-only. Removes a participant from the session even after play has
+ * started: detaches them from their group (so the group has one fewer member),
+ * marks them `removed`, and — if the group is mid-experiment — queues a
+ * backfill vacancy so the next late joiner can take that exact slot and jump
+ * into the group's current phase. After detaching, reconciles the group in
+ * case the removed member was the only one still blocking it from advancing.
+ */
+exports.removeParticipant = functions.https.onCall(async (data, context) => {
+  if (!context.auth) throw new HttpsError('unauthenticated', 'Must be logged in.')
+  const { sessionId, participantId } = data
+  if (!sessionId || !participantId) {
+    throw new HttpsError('invalid-argument', 'sessionId and participantId required.')
+  }
+
+  const sessionRef = db.collection('sessions').doc(sessionId)
+
+  const result = await db.runTransaction(async (tx) => {
+    const sessionSnap = await tx.get(sessionRef)
+    if (!sessionSnap.exists) throw new HttpsError('not-found', 'Session not found.')
+    const session = sessionSnap.data()
+    if (session.instructorId !== context.auth.uid) {
+      throw new HttpsError('permission-denied', 'Only the instructor can remove participants.')
+    }
+
+    const pRef = sessionRef.collection('participants').doc(participantId)
+    const pSnap = await tx.get(pRef)
+    if (!pSnap.exists) throw new HttpsError('not-found', 'Participant not found.')
+    const p = pSnap.data()
+    if (p.removed) return { alreadyRemoved: true }
+
+    const groupId = p.groupId || null
+    const label = p.anonymousLabel || null
+    let groupRef = null
+    let groupData = null
+    if (groupId) {
+      groupRef = sessionRef.collection('groups').doc(groupId)
+      const gSnap = await tx.get(groupRef)
+      if (gSnap.exists) groupData = gSnap.data()
+    }
+
+    // Where a backfill joiner should resume = where the group is right now.
+    // 'waiting_for_group' means the removed member had finished their own
+    // individual work; a fresh joiner has not, so resume them in 'individual'.
+    let backfillPhase = null
+    if (['individual', 'waiting_for_group'].includes(p.status)) backfillPhase = 'individual'
+    else if (['group', 'voting'].includes(p.status)) backfillPhase = 'group'
+
+    // ── Writes ──
+    tx.update(pRef, {
+      removed: true,
+      removedAt: admin.firestore.FieldValue.serverTimestamp(),
+      status: 'removed',
+      groupId: null,
+      removedFromGroupId: groupId,
+    })
+
+    if (groupRef && groupData) {
+      const members = (groupData.members || []).filter(m => m !== participantId)
+      const memberLabels = { ...(groupData.memberLabels || {}) }
+      delete memberLabels[participantId]
+      tx.update(groupRef, {
+        members,
+        memberLabels,
+        full: members.length >= (session.phaseConfig?.groupSize ?? 3),
+      })
+
+      // Queue a backfill vacancy only while the group is still in play.
+      if (backfillPhase && groupData.status === 'active') {
+        const queue = Array.isArray(session.backfillQueue) ? session.backfillQueue : []
+        queue.push({ groupId, label, phase: backfillPhase })
+        tx.update(sessionRef, { backfillQueue: queue })
+      }
+    }
+
+    return { groupId }
+  })
+
+  // Reconcile outside the transaction (it needs a members query, which
+  // transactions can't run): if the removed member was the last one blocking
+  // the group, advance the remaining members now.
+  if (result.groupId && !result.alreadyRemoved) {
+    await reconcileGroupAfterRemoval(sessionRef, result.groupId)
+  }
+
+  return { ok: true }
+})
+
+/**
+ * reconcileGroupAfterRemoval
+ * After a member is detached, the remaining members may already all be done —
+ * in which case nothing else would trigger the group's advance. Mirror the
+ * autoGroupParticipants / finishGroupVoting checks for the survivors.
+ */
+async function reconcileGroupAfterRemoval(sessionRef, groupId) {
+  const sessionSnap = await sessionRef.get()
+  if (!sessionSnap.exists) return
+  const session = sessionSnap.data()
+
+  const groupRef = sessionRef.collection('groups').doc(groupId)
+  const groupSnap = await groupRef.get()
+  if (!groupSnap.exists || groupSnap.data().status !== 'active') return
+
+  const membersSnap = await sessionRef.collection('participants')
+    .where('groupId', '==', groupId)
+    .get()
+  const active = membersSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(m => !m.removed)
+  if (active.length === 0) return
+
+  const sequence = getPhaseSequence(session.phaseConfig)
+  const phaseOrder = session.phaseConfig?.phaseOrder ?? 'individual_first'
+  const individualActive = session.phaseConfig?.individualPhaseActive ?? true
+  const groupActive = session.phaseConfig?.groupPhaseActive ?? true
+
+  // Individual_first individual phase: all survivors finished -> move to group.
+  if (session.status === 'individual' && individualActive && groupActive && phaseOrder === 'individual_first') {
+    if (!active.every(m => m.individualComplete)) return
+    const memberIds = active.map(m => m.id)
+    const batch = db.batch()
+    active.forEach(m => batch.update(sessionRef.collection('participants').doc(m.id), { status: 'group' }))
+    const allSnap = await sessionRef.collection('participants').get()
+    const allMoved = allSnap.docs.every(d => {
+      if (d.data().removed || memberIds.includes(d.id)) return true
+      return ['group', 'voting', 'survey', 'done'].includes(d.data().status)
+    })
+    if (allMoved) {
+      batch.update(sessionRef, { status: 'group', phaseStartedAt: admin.firestore.FieldValue.serverTimestamp() })
+    }
+    await batch.commit()
+    return
+  }
+
+  // Group phase: all survivors voted -> tally and move the group on.
+  if (session.status === 'group') {
+    if (!active.every(m => m.votesSubmitted)) return
+    const groupIndex = sequence.indexOf('group')
+    if (groupIndex === -1 || groupIndex >= sequence.length - 1) return
+    const nextPhase = sequence[groupIndex + 1]
+    const voteMap = {}
+    active.forEach(m => (m.votedFor || []).forEach(id => { voteMap[id] = (voteMap[id] || 0) + 1 }))
+    const topIdeas = Object.entries(voteMap).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id]) => id)
+
+    const memberIds = active.map(m => m.id)
+    const batch = db.batch()
+    batch.update(groupRef, {
+      status: 'done',
+      finalIdeas: topIdeas,
+      votingCompletedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+    active.forEach(m => batch.update(sessionRef.collection('participants').doc(m.id), { status: nextPhase }))
+
+    const laterPhases = sequence.slice(groupIndex + 1)
+    const allSnap = await sessionRef.collection('participants').get()
+    const allMoved = allSnap.docs.every(d => {
+      if (d.data().removed || memberIds.includes(d.id)) return true
+      return laterPhases.includes(d.data().status)
+    })
+    if (allMoved) {
+      batch.update(sessionRef, { status: nextPhase, phaseStartedAt: admin.firestore.FieldValue.serverTimestamp() })
+    }
+    await batch.commit()
+  }
 }
 
 /**
