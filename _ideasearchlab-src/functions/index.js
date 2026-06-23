@@ -12,6 +12,7 @@ const users = require('./users')
 
 exports.joinSession = session.joinSession
 exports.advancePhase = session.advancePhase
+exports.removeParticipant = session.removeParticipant
 exports.autoGroupParticipants = grouping.autoGroupParticipants
 exports.handleStragglers = grouping.handleStragglers
 exports.sendAIMessage = ai.sendAIMessage
