@@ -575,9 +575,58 @@ async function finishGroupVoting(sessionId, triggeringUid, after) {
 
 
 /**
+ * Map a participant status to its index in the phase sequence, collapsing the
+ * sub-statuses that aren't themselves sequence entries. Unknown statuses return
+ * -1 so they never count as "reached this phase".
+ */
+function statusPhaseIndex(status, sequence) {
+  const norm = status === 'waiting_for_group' ? 'individual'
+    : status === 'voting' ? 'group'
+    : status
+  return sequence.indexOf(norm)
+}
+
+/**
+ * maybeAdvanceSession
+ * Monotonically advances session.status to the furthest phase that EVERY active
+ * (non-removed) participant has reached. Idempotent and safe to call on any
+ * participant change. This is the self-healing backstop that keeps the session
+ * phase in sync even when a per-group auto-advance was delayed or dropped and
+ * the members moved themselves on client-side — so the session still reaches
+ * survey/done and never sticks on 'group'.
+ */
+async function maybeAdvanceSession(sessionRef) {
+  const sessionSnap = await sessionRef.get()
+  if (!sessionSnap.exists) return
+  const session = sessionSnap.data()
+  const sequence = getPhaseSequence(session.phaseConfig)
+  const curIdx = sequence.indexOf(session.status)
+  if (curIdx === -1 || curIdx >= sequence.length - 1) return
+
+  const partsSnap = await sessionRef.collection('participants').get()
+  const active = partsSnap.docs.map(d => d.data()).filter(p => !p.removed)
+  if (active.length === 0) return
+
+  let target = curIdx
+  for (let i = sequence.length - 1; i > curIdx; i--) {
+    if (active.every(p => statusPhaseIndex(p.status, sequence) >= i)) { target = i; break }
+  }
+  if (target > curIdx) {
+    await sessionRef.update({
+      status: sequence[target],
+      phaseStartedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+  }
+}
+
+/**
  * onParticipantUpdated
- * Firestore trigger: when a participant's status changes to 'done',
- * check if all participants in the session are done and advance session to 'done'.
+ * Firestore trigger fired on every participant update. Two jobs:
+ *  1. When a participant locks in their votes, try to finish their group's
+ *     voting (tally finalIdeas, move members on).
+ *  2. Whenever a participant's phase changes, re-evaluate the session's overall
+ *     phase (maybeAdvanceSession) so the session self-heals to survey/done even
+ *     if a per-group trigger was missed and participants advanced themselves.
  */
 exports.onParticipantUpdated = functions.firestore
   .document('sessions/{sessionId}/participants/{participantId}')
@@ -585,6 +634,7 @@ exports.onParticipantUpdated = functions.firestore
     const before = change.before.data()
     const after = change.after.data()
     const { sessionId } = context.params
+    const sessionRef = db.collection('sessions').doc(sessionId)
 
     // A participant just locked in their votes -> if the whole group has now
     // voted, move it on automatically (group -> survey, or -> individual when
@@ -593,24 +643,9 @@ exports.onParticipantUpdated = functions.firestore
       await finishGroupVoting(sessionId, change.after.id, after)
     }
 
-    // Only act when status just became 'done'
-    if (before.status === after.status || after.status !== 'done') return null
-
-    const sessionRef = db.collection('sessions').doc(sessionId)
-    const sessionSnap = await sessionRef.get()
-    if (!sessionSnap.exists) return null
-
-    // Only advance if session is currently in 'survey'
-    if (sessionSnap.data().status !== 'survey') return null
-
-    const participantsSnap = await sessionRef.collection('participants').get()
-    const allDone = participantsSnap.docs.every(d => d.data().status === 'done')
-
-    if (allDone) {
-      await sessionRef.update({
-        status: 'done',
-        phaseStartedAt: admin.firestore.FieldValue.serverTimestamp(),
-      })
+    // Any phase change -> keep the session-level status in sync (self-healing).
+    if (before.status !== after.status) {
+      await maybeAdvanceSession(sessionRef)
     }
 
     return null

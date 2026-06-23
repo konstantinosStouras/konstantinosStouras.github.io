@@ -260,6 +260,33 @@ export default function GroupPhase() {
     return unsub
   }, [sessionId, user, navigate])
 
+  // ── Self-heal: never freeze on the voting screen ─────
+  // Once THIS participant has locked in their votes and every member of the
+  // group has done the same, advance my own status to the next phase (the
+  // status listener above then navigates me). Previously the move to the next
+  // phase relied solely on a single backend trigger (finishGroupVoting) firing
+  // for the last submitter; under load (many groups voting at once, or all
+  // members auto-submitting together at timer expiry) that one server
+  // round-trip could be delayed or dropped, leaving the other members stuck on
+  // "Votes submitted" forever. Each member now moves itself, so the group can
+  // never stall. The backend still tallies the group's finalIdeas when its
+  // trigger fires (and the instructor's Force advance remains a backstop).
+  const selfAdvancedRef = useRef(false)
+  useEffect(() => {
+    if (selfAdvancedRef.current) return
+    if (!votesLocked || !sessionId || !user || !groupId) return
+    if (members.length === 0 || !members.every(m => m.votesSubmitted)) return
+    selfAdvancedRef.current = true
+    updateDoc(
+      doc(db, 'sessions', sessionId, 'participants', user.uid),
+      { status: nextAfterGroup }
+    ).catch(err => {
+      // Allow a retry on the next members snapshot if the write failed.
+      selfAdvancedRef.current = false
+      console.warn('Self-advance after group voting failed:', err.message)
+    })
+  }, [votesLocked, members, sessionId, user, groupId, nextAfterGroup])
+
   // ── Load member labels from group document ──────────
   useEffect(() => {
     if (!sessionId || !groupId) return
@@ -389,18 +416,9 @@ export default function GroupPhase() {
         { votesSubmitted: true, votedAt: serverTimestamp() }
       )
       setVotesLocked(true)
-      // If this submission completes the group's voting, the backend tally
-      // trigger (fired by this very write) will flip everyone to the next phase
-      // — jump there now instead of sitting on a "votes submitted" screen while
-      // that round-trip happens. Only when the survey/end follows the group
-      // phase (the group-first 'individual' page redirects by status). Safe: no
-      // one can finish the survey in the moment before the trigger commits.
-      const everyoneElseSubmitted = members
-        .filter(m => m.id !== user.uid)
-        .every(m => m.votesSubmitted)
-      if (everyoneElseSubmitted && (nextAfterGroup === 'survey' || nextAfterGroup === 'done')) {
-        navigate(`/session/${sessionId}/${nextAfterGroup}`)
-      }
+      // Advancing to the next phase is handled by the self-heal effect below
+      // (fires once every member has submitted), so a participant is never left
+      // frozen waiting on a single backend round-trip.
     } catch (err) {
       console.error('Submit votes error:', err)
     }
