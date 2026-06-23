@@ -76,7 +76,7 @@ export default function JoinSession() {
               className={`input-field ${styles.codeInput}`}
               type="text"
               value={code}
-              onChange={e => setCode(e.target.value.toUpperCase())}
+              onChange={e => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
               placeholder="e.g. ABC123"
               maxLength={40}
               required
