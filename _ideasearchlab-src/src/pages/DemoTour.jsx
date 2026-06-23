@@ -64,8 +64,16 @@ const DEMO_IDEAS = [
 ]
 
 // ── Mock building blocks ─────────────────────────────────────────────────────
-function MockTimer() {
-  return <span className={styles.mockTimer}>⏱ 10:00</span>
+// Format a phase duration (seconds, as configured by the admin) as m:ss for the
+// mock timer; returns null when the phase is left on manual (no countdown).
+function fmtClock(totalSeconds) {
+  const s = Number(totalSeconds)
+  if (!Number.isFinite(s) || s <= 0) return null
+  return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
+}
+
+function MockTimer({ clock }) {
+  return <span className={styles.mockTimer}>⏱ {clock}</span>
 }
 
 function IdeaCard({ idea, selected, rank, tag }) {
@@ -82,13 +90,13 @@ function IdeaCard({ idea, selected, rank, tag }) {
   )
 }
 
-function MockPhaseChrome({ title, children, right }) {
+function MockPhaseChrome({ title, children, right, clock }) {
   return (
     <div className={styles.workspace}>
       <div className={styles.wsTop}>
         <h3 className={styles.wsTitle}>{title}</h3>
         <div className={styles.wsRight}>
-          <MockTimer />
+          {clock && <MockTimer clock={clock} />}
           {right}
         </div>
       </div>
@@ -130,9 +138,9 @@ function SceneWelcome() {
   )
 }
 
-function SceneTaskBrief() {
+function SceneTaskBrief({ clock }) {
   return (
-    <MockPhaseChrome title="Individual Phase">
+    <MockPhaseChrome title="Individual Phase" clock={clock}>
       <div className={`${styles.briefBar} ${styles.pulse}`}>
         <span>▸ Task Brief — tap to read what to design</span>
         <span className={styles.briefHint}>read the task here</span>
@@ -142,11 +150,11 @@ function SceneTaskBrief() {
   )
 }
 
-function SceneAddIdea() {
+function SceneAddIdea({ clock }) {
   const idea = DEMO_IDEAS[0]
   const { out: desc, done } = useTypewriter(idea.desc, { speed: 18, startDelay: 1500 })
   return (
-    <MockPhaseChrome title="Individual Phase">
+    <MockPhaseChrome title="Individual Phase" clock={clock}>
       <div className={styles.addForm}>
         <div className={styles.fieldLabel}>Idea title</div>
         <div className={`input-field ${styles.addInput}`}>
@@ -162,7 +170,7 @@ function SceneAddIdea() {
   )
 }
 
-function SceneMoreIdeas() {
+function SceneMoreIdeas({ clock }) {
   const [count, setCount] = useState(1)
   useEffect(() => {
     const timers = [1, 2, 3].map((n, i) =>
@@ -171,7 +179,7 @@ function SceneMoreIdeas() {
     return () => timers.forEach(clearTimeout)
   }, [])
   return (
-    <MockPhaseChrome title="Individual Phase" right={<span className={styles.countPill}>{count} / 5 ideas</span>}>
+    <MockPhaseChrome title="Individual Phase" clock={clock} right={<span className={styles.countPill}>{count} / 5 ideas</span>}>
       <div className={styles.ideaList}>
         {DEMO_IDEAS.slice(0, count).map((idea, i) => (
           <div key={idea.title} className={styles.fadeIn} style={{ animationDelay: `${i * 0.05}s` }}>
@@ -183,7 +191,7 @@ function SceneMoreIdeas() {
   )
 }
 
-function SceneSelect({ ideasCarried }) {
+function SceneSelect({ ideasCarried, clock }) {
   const [selCount, setSelCount] = useState(0)
   useEffect(() => {
     const timers = []
@@ -195,6 +203,7 @@ function SceneSelect({ ideasCarried }) {
   return (
     <MockPhaseChrome
       title="Individual Phase"
+      clock={clock}
       right={<span className={styles.countPill}>Selected: {selCount} / {ideasCarried}</span>}
     >
       <div className={styles.selHint}>Double-click your best {ideasCarried} ideas to carry them forward ↓</div>
@@ -286,6 +295,7 @@ function SceneVoting({ votes }) {
   return (
     <MockPhaseChrome
       title="Group Voting"
+      clock={clock}
       right={<span className={styles.countPill}>Votes: {voted} / {votes}</span>}
     >
       <div className={styles.consensus}>🤝 Agree as a group — everyone votes for the same {votes} ideas.</div>
@@ -365,6 +375,9 @@ export default function DemoTour() {
   const groupActive = pc.groupPhaseActive !== false
   const ideasCarried = pc.ideasCarriedToGroup || 3
   const votes = Math.max(1, Math.min(3, ideasCarried))
+  // Mock timers mirror the admin-allocated phase durations (seconds → m:ss).
+  const indivClock = fmtClock(pc.individualPhaseDuration)
+  const groupClock = fmtClock(pc.groupPhaseDuration)
   // Friendly model name without the long provider prefix for the input hint.
   const aiModel = (aiModelLabel || '').replace(/^[^’']*(?:’s|'s)\s*/, '') || aiModelLabel || ''
 
@@ -373,20 +386,20 @@ export default function DemoTour() {
   steps.push({ id: 'join', caption: 'Your instructor gives you a session code — type it in and join.', dur: 5200, Comp: SceneJoin, props: {} })
   steps.push({ id: 'welcome', caption: 'You’ll see what the challenge is about and the phases ahead, then agree to take part.', dur: 5600, Comp: SceneWelcome, props: {} })
   if (individualActive) {
-    steps.push({ id: 'brief', caption: 'When a phase begins, the full task is in the Task Brief — open it to read exactly what to design.', dur: 5600, Comp: SceneTaskBrief, props: {} })
-    steps.push({ id: 'add', caption: 'Add an idea: give it a short title and a description, then click Add.', dur: 7200, Comp: SceneAddIdea, props: {} })
-    steps.push({ id: 'more', caption: 'Keep going — capture as many ideas as you can while the timer runs.', dur: 5200, Comp: SceneMoreIdeas, props: {} })
+    steps.push({ id: 'brief', caption: 'When a phase begins, the full task is in the Task Brief — open it to read exactly what to design.', dur: 5600, Comp: SceneTaskBrief, props: { clock: indivClock } })
+    steps.push({ id: 'add', caption: 'Add an idea: give it a short title and a description, then click Add.', dur: 7200, Comp: SceneAddIdea, props: { clock: indivClock } })
+    steps.push({ id: 'more', caption: 'Keep going — capture as many ideas as you can while the timer runs.', dur: 5200, Comp: SceneMoreIdeas, props: { clock: indivClock } })
     if (ai.individualAI) {
       steps.push({ id: 'ai-ind', caption: 'If enabled, a private AI assistant helps you brainstorm and refine. Only you can see this chat.', dur: 8000, Comp: SceneAI, props: { phase: 'individual', aiModel } })
     }
-    steps.push({ id: 'select', caption: `Pick your best ${ideasCarried} ideas (double-click) — these carry into the group phase.`, dur: 6200, Comp: SceneSelect, props: { ideasCarried } })
+    steps.push({ id: 'select', caption: `Pick your best ${ideasCarried} ideas (double-click) — these carry into the group phase.`, dur: 6200, Comp: SceneSelect, props: { ideasCarried, clock: indivClock } })
   }
   if (groupActive) {
     steps.push({ id: 'group', caption: 'Now you team up: see everyone’s carried ideas, add new group ideas, and chat. Everyone stays anonymous (p1, p2, p3) — your name is never shown to peers.', dur: 8000, Comp: SceneGroup, props: {} })
     if (ai.groupAI) {
       steps.push({ id: 'ai-grp', caption: 'If enabled, the group shares one AI assistant — everyone sees the same conversation.', dur: 8000, Comp: SceneAI, props: { phase: 'group', aiModel } })
     }
-    steps.push({ id: 'vote', caption: `Each member votes for ${votes} ideas. Talk it through — it matters that the group agrees on the same ones.`, dur: 6600, Comp: SceneVoting, props: { votes } })
+    steps.push({ id: 'vote', caption: `Each member votes for ${votes} ideas. Talk it through — it matters that the group agrees on the same ones.`, dur: 6600, Comp: SceneVoting, props: { votes, clock: groupClock } })
     steps.push({ id: 'final', caption: 'The most-voted ideas become your group’s final selection.', dur: 5600, Comp: SceneFinal, props: { votes } })
   }
   steps.push({ id: 'survey', caption: 'Finally, a short survey about your experience — just a few minutes to wrap up.', dur: 5600, Comp: SceneSurvey, props: {} })
