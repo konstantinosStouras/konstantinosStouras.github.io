@@ -481,17 +481,17 @@ export default function Admin() {
     setCreateError('')
 
     // Resolve the session code: a custom one if the admin typed it, otherwise
-    // an auto-generated short code. Custom codes are validated (letters, digits
-    // and dashes, 3–40 chars) and stored upper-cased so the join page — which
-    // upper-cases what participants type — always matches.
-    const raw = newCode.trim()
+    // an auto-generated short code. Custom codes are a single word of capital
+    // letters and digits (3–40 chars) — the same normalisation the join page
+    // applies — so what the admin shares can always be typed back in.
+    const raw = newCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
     let code
     if (raw) {
-      if (!/^[A-Za-z0-9-]{3,40}$/.test(raw)) {
-        setCreateError('Session ID must be 3–40 characters using only letters, digits and dashes.')
+      if (!/^[A-Z0-9]{3,40}$/.test(raw)) {
+        setCreateError('Session ID must be a single word of 3–40 capital letters and digits (no spaces or dashes).')
         return
       }
-      code = raw.toUpperCase()
+      code = raw
     } else {
       code = generateCode()
     }
@@ -898,13 +898,13 @@ export default function Admin() {
                     <input
                       className="input-field"
                       value={newCode}
-                      onChange={e => { setNewCode(e.target.value); setCreateError('') }}
+                      onChange={e => { setNewCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '')); setCreateError('') }}
                       placeholder="(OPTIONAL) CUSTOM CODE"
                       maxLength={40}
                       spellCheck={false}
                       autoComplete="off"
                     />
-                    <p className={styles.sectionHint}>Leave blank to auto-generate a short code. Letters, digits and dashes only (3–40 chars).</p>
+                    <p className={styles.sectionHint}>Leave blank to auto-generate a short code. Single word — capital letters and digits only, no spaces or dashes (3–40 chars).</p>
                     {createError && <p className="error-msg">{createError}</p>}
                   </div>
                 </div>
