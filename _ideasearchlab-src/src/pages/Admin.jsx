@@ -1108,7 +1108,13 @@ function SessionCard({ session, participantCount, onOpen, onEdit, onClose, onDel
       <div className={styles.sessionCardTop}>
         <div className={styles.sessionCardLeft}>
           <span className={styles.sessionCode}>{session.code}</span>
-          <span className={`${styles.statusBadge} ${styles['status_' + session.status]}`}>{session.status}</span>
+          {/* A session only reaches 'survey' once every participant has, and it is
+              then filed under Completed Sessions — so a 'survey' badge there read
+              as if work was still happening. Show it (and 'done') as "done". */}
+          {(() => {
+            const shown = session.status === 'survey' ? 'done' : session.status
+            return <span className={`${styles.statusBadge} ${styles['status_' + shown]}`}>{shown}</span>
+          })()}
         </div>
         <div className={styles.sessionCardRight}>
           <span className={styles.participantCount}>{participantCount} participants</span>

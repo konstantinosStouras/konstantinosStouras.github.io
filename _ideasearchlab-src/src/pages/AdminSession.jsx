@@ -22,9 +22,10 @@ export default function AdminSession() {
   const [removingId, setRemovingId] = useState(null)
   const [removeConfirmId, setRemoveConfirmId] = useState(null)
   const [viewGroup, setViewGroup] = useState(null)     // group bucket being watched live
-  const [messageGroup, setMessageGroup] = useState(null) // group bucket being messaged
+  const [messageTarget, setMessageTarget] = useState(null) // { kind:'group'|'participant', group?, participant? }
   const [messageText, setMessageText] = useState('')
   const [messageSending, setMessageSending] = useState(false)
+  const [expandedGroups, setExpandedGroups] = useState(() => new Set()) // group buckets drilled open
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'sessions', sessionId), snap => {
@@ -500,7 +501,14 @@ export default function AdminSession() {
   if (!session) return <div className={styles.loading}>Loading...</div>
 
   const sequence = getPhaseSequence(session.phaseConfig)
-  const currentIndex = sequence.indexOf(session.status)
+  // A session in the survey phase is already filed under "Completed Sessions"
+  // (the admin list buckets both 'survey' and 'done' there) and needs no further
+  // phase advancing — a session only reaches 'survey' once every participant has.
+  // So the control room presents it as finished: the header badge and timeline
+  // read "done", and the advance bar is replaced by the completion note.
+  const isCompleted = session.status === 'done' || session.status === 'survey'
+  const displayStatus = isCompleted ? 'done' : session.status
+  const currentIndex = isCompleted ? sequence.indexOf('done') : sequence.indexOf(session.status)
   const nextPhase = sequence[currentIndex + 1]
   const isLast = !nextPhase || nextPhase === 'done'
 
@@ -574,19 +582,36 @@ export default function AdminSession() {
     }
   }
 
-  // Send a centred message window to every member of a group (writes
-  // `adminMessage` to each member's own doc; their screen pops it up).
-  async function sendGroupMessage() {
-    if (!messageGroup || !messageText.trim()) return
+  // Drill a group bucket open/closed to reveal its participant list.
+  function toggleGroup(key) {
+    setExpandedGroups(prev => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
+
+  // Open the message composer for either a whole group or a single participant.
+  function openMessage(target) {
+    setMessageTarget(target)
+    setMessageText('')
+  }
+
+  // Send a centred message window to the chosen recipient(s): the whole group,
+  // or one specific participant (writes `adminMessage` to each recipient's own
+  // doc; AdminBroadcast pops it up centered on their screen).
+  async function sendMessage() {
+    if (!messageTarget || !messageText.trim()) return
     setMessageSending(true)
     const msg = { id: Date.now(), text: messageText.trim(), from: session?.instructorName || null }
+    const recipients = messageTarget.kind === 'group'
+      ? messageTarget.group.members.filter(m => !m.removed && m.status !== 'removed')
+      : [messageTarget.participant]
     try {
       await Promise.all(
-        messageGroup.members
-          .filter(m => !m.removed && m.status !== 'removed')
-          .map(m => updateDoc(doc(db, 'sessions', sessionId, 'participants', m.id), { adminMessage: msg }))
+        recipients.map(m => updateDoc(doc(db, 'sessions', sessionId, 'participants', m.id), { adminMessage: msg }))
       )
-      setMessageGroup(null)
+      setMessageTarget(null)
       setMessageText('')
     } catch (err) {
       console.error('Send message error:', err)
@@ -619,22 +644,21 @@ export default function AdminSession() {
   // ── Submitted-ideas summary (individual phase) ────────
   // Confirmation view for the instructor: every idea each participant
   // submitted, grouped by participant, flagging the ones carried to the group.
-  const labelByUid = Object.fromEntries(
-    participants.map(p => [p.id, p.anonymousLabel || p.name || p.id.slice(0, 6)])
-  )
   const individualIdeas = ideas.filter(i => i.phase === 'individual')
-  const ideasByAuthor = Object.entries(
-    individualIdeas.reduce((acc, i) => {
-      const key = labelByUid[i.authorId] || i.authorName || 'unknown'
-      ;(acc[key] = acc[key] || []).push(i)
-      return acc
-    }, {})
+  // Ideas keyed by author id (each list chronological) so the Submitted Ideas
+  // panel can be laid out group-by-group and then participant-by-participant,
+  // reusing the same group buckets as the live participant list above.
+  const ideasByAuthorId = individualIdeas.reduce((acc, i) => {
+    ;(acc[i.authorId] = acc[i.authorId] || []).push(i)
+    return acc
+  }, {})
+  Object.values(ideasByAuthorId).forEach(list =>
+    list.sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0))
   )
-    .map(([label, list]) => [
-      label,
-      [...list].sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0)),
-    ])
-    .sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true }))
+  // Any author with no matching current participant (e.g. later removed/deleted)
+  // is shown under a trailing bucket so their ideas are never silently dropped.
+  const memberIds = new Set(participants.map(p => p.id))
+  const orphanAuthorIds = Object.keys(ideasByAuthorId).filter(id => !memberIds.has(id))
 
   return (
     <div className={styles.page}>
@@ -645,8 +669,8 @@ export default function AdminSession() {
           <span className={styles.slash}>/</span>
           <span className={styles.sessionCode}>{session.code}</span>
         </div>
-        <span className={`${styles.statusBadge} ${styles['status_' + session.status]}`}>
-          {phaseLabel(session.status)}
+        <span className={`${styles.statusBadge} ${styles['status_' + displayStatus]}`}>
+          {phaseLabel(displayStatus)}
         </span>
       </header>
 
@@ -687,21 +711,35 @@ export default function AdminSession() {
                     </div>
                   ))}
                 </div>
+                <p className={styles.panelHint}>
+                  Click a group to see its participants. Reach a single participant
+                  or a whole group with a message that pops up centered on their screen.
+                </p>
                 <div className={styles.participantGroups}>
                   {groupsOrdered.map(g => {
                     const doneIdeas = g.members.filter(m => m.individualComplete).length
                     const doneVotes = g.members.filter(m => m.votesSubmitted).length
+                    const gkey = g.groupId || 'none'
+                    const groupOpen = expandedGroups.has(gkey)
                     return (
-                      <div key={g.groupId || 'none'} className={styles.groupBlock}>
+                      <div key={gkey} className={styles.groupBlock}>
                         <div className={styles.groupHeader}>
-                          <span className={styles.groupName}>
-                            {g.number ? `Group ${g.number}` : 'Unassigned'}
-                          </span>
-                          <span className={styles.groupMeta}>
-                            {g.members.length} member{g.members.length === 1 ? '' : 's'}
-                            {indivActive && ` · ideas ${doneIdeas}/${g.members.length}`}
-                            {groupActive && ` · votes ${doneVotes}/${g.members.length}`}
-                          </span>
+                          <button
+                            className={styles.groupToggle}
+                            onClick={() => toggleGroup(gkey)}
+                            type="button"
+                            aria-expanded={groupOpen}
+                          >
+                            <span className={styles.gChevron}>{groupOpen ? '▾' : '▸'}</span>
+                            <span className={styles.groupName}>
+                              {g.number ? `Group ${g.number}` : 'Unassigned'}
+                            </span>
+                            <span className={styles.groupMeta}>
+                              {g.members.length} member{g.members.length === 1 ? '' : 's'}
+                              {indivActive && ` · ideas ${doneIdeas}/${g.members.length}`}
+                              {groupActive && ` · votes ${doneVotes}/${g.members.length}`}
+                            </span>
+                          </button>
                           {g.groupId && (
                             <span className={styles.groupActions}>
                               <button
@@ -714,17 +752,17 @@ export default function AdminSession() {
                               </button>
                               <button
                                 className={styles.groupActionBtn}
-                                onClick={() => { setMessageGroup(g); setMessageText('') }}
+                                onClick={() => openMessage({ kind: 'group', group: g })}
                                 type="button"
-                                title="Send this group a message that pops up on their screens"
+                                title="Send the whole group a message that pops up centered on their screens"
                               >
-                                Message
+                                Message group
                               </button>
                             </span>
                           )}
                         </div>
 
-                        {g.members.map(p => {
+                        {groupOpen && g.members.map(p => {
                           const canNudge = ['individual', 'group'].includes(p.status)
                           const open = expandedPid === p.id
                           const demoEntries = Object.entries(p.demographics || {})
@@ -761,31 +799,6 @@ export default function AdminSession() {
                                     </span>
                                   )}
                                   <span className={styles.pStatus}>{participantStageLabel(p)}</span>
-                                  {canNudge && (
-                                    <button
-                                      className={styles.nudgeBtn}
-                                      onClick={e => { e.stopPropagation(); nudgeParticipant(p.id) }}
-                                      disabled={nudgedId === p.id}
-                                      type="button"
-                                      title="Show this participant a reminder to wrap up and submit"
-                                    >
-                                      {nudgedId === p.id ? 'Nudged ✓' : 'Nudge'}
-                                    </button>
-                                  )}
-                                  {p.status !== 'removed' && p.status !== 'done' && (
-                                    <button
-                                      className={`${styles.removeBtn} ${removeConfirmId === p.id ? styles.removeBtnConfirm : ''}`}
-                                      onClick={e => {
-                                        e.stopPropagation()
-                                        removeConfirmId === p.id ? removeParticipant(p.id) : askRemove(p.id)
-                                      }}
-                                      disabled={removingId === p.id}
-                                      type="button"
-                                      title="Remove this participant from the session (frees a slot for a late joiner)"
-                                    >
-                                      {removingId === p.id ? 'Removing…' : removeConfirmId === p.id ? 'Confirm?' : 'Remove'}
-                                    </button>
-                                  )}
                                 </span>
                               </div>
 
@@ -805,6 +818,38 @@ export default function AdminSession() {
                                       ))}
                                     </div>
                                   )}
+                                  <div className={styles.pActions}>
+                                    <button
+                                      className={styles.msgBtn}
+                                      onClick={() => openMessage({ kind: 'participant', participant: p })}
+                                      type="button"
+                                      title="Send this participant a message that pops up centered on their screen"
+                                    >
+                                      Message
+                                    </button>
+                                    {canNudge && (
+                                      <button
+                                        className={styles.nudgeBtn}
+                                        onClick={() => nudgeParticipant(p.id)}
+                                        disabled={nudgedId === p.id}
+                                        type="button"
+                                        title="Show this participant a reminder banner to wrap up and submit"
+                                      >
+                                        {nudgedId === p.id ? 'Nudged ✓' : 'Nudge'}
+                                      </button>
+                                    )}
+                                    {p.status !== 'removed' && p.status !== 'done' && (
+                                      <button
+                                        className={`${styles.removeBtn} ${removeConfirmId === p.id ? styles.removeBtnConfirm : ''}`}
+                                        onClick={() => removeConfirmId === p.id ? removeParticipant(p.id) : askRemove(p.id)}
+                                        disabled={removingId === p.id}
+                                        type="button"
+                                        title="Remove this participant from the session (frees a slot for a late joiner)"
+                                      >
+                                        {removingId === p.id ? 'Removing…' : removeConfirmId === p.id ? 'Confirm?' : 'Remove'}
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
                               )}
                             </div>
@@ -843,35 +888,130 @@ export default function AdminSession() {
             </h2>
             <p className={styles.exportSub}>
               Every idea participants submitted in the individual phase, grouped by
-              participant. Ideas carried into the group phase are flagged.
+              group and then by participant. Ideas carried into the group phase are
+              flagged. Use “Message” to nudge a specific participant about their ideas.
             </p>
             {individualIdeas.length === 0 ? (
               <p className={styles.emptyNote}>No ideas submitted yet.</p>
             ) : (
-              <div className={styles.ideaSummary}>
-                {ideasByAuthor.map(([label, list]) => (
-                  <div key={label} className={styles.ideaSummaryGroup}>
-                    <div className={styles.ideaSummaryAuthor}>
-                      {label}
-                      <span className={styles.ideaSummaryCount}>
-                        {list.length} idea{list.length === 1 ? '' : 's'}
-                      </span>
-                    </div>
-                    {list.map(idea => (
-                      <div key={idea.id} className={styles.ideaSummaryItem}>
-                        <div className={styles.ideaSummaryText}>
-                          <span className={styles.ideaSummaryTitle}>{idea.title || idea.text}</span>
-                          {idea.description && (
-                            <span className={styles.ideaSummaryDesc}>{idea.description}</span>
-                          )}
-                        </div>
-                        {idea.selected && (
-                          <span className={styles.ideaSummaryBadge}>carried to group</span>
+              <div className={styles.ideaGroups}>
+                {groupsOrdered.map(g => {
+                  const groupIdeaCount = g.members.reduce(
+                    (n, m) => n + (ideasByAuthorId[m.id]?.length || 0), 0
+                  )
+                  return (
+                    <div key={g.groupId || 'none'} className={styles.ideaGroupBlock}>
+                      <div className={styles.ideaGroupHeader}>
+                        <span className={styles.ideaGroupName}>
+                          {g.number ? `Group ${g.number}` : 'Unassigned'}
+                        </span>
+                        <span className={styles.ideaGroupCount}>
+                          {groupIdeaCount} idea{groupIdeaCount === 1 ? '' : 's'}
+                        </span>
+                        {g.groupId && (
+                          <button
+                            className={styles.msgBtn}
+                            style={{ marginLeft: 'auto' }}
+                            onClick={() => openMessage({ kind: 'group', group: g })}
+                            type="button"
+                            title="Message the whole group"
+                          >
+                            Message group
+                          </button>
                         )}
                       </div>
-                    ))}
+                      {g.members.map(p => {
+                        const list = ideasByAuthorId[p.id] || []
+                        const canNudge = ['individual', 'group'].includes(p.status)
+                        return (
+                          <div key={p.id} className={styles.ideaUserBlock}>
+                            <div className={styles.ideaUserHeader}>
+                              <span className={styles.ideaUserIdentity}>
+                                {p.anonymousLabel && <span className={styles.pGroupTag}>{p.anonymousLabel}</span>}
+                                <span className={styles.ideaUserName}>{p.name || p.anonymousLabel || p.id.slice(0, 6)}</span>
+                                <span className={styles.ideaSummaryCount}>
+                                  {list.length} idea{list.length === 1 ? '' : 's'}
+                                </span>
+                              </span>
+                              <span className={styles.ideaUserActions}>
+                                <button
+                                  className={styles.msgBtn}
+                                  onClick={() => openMessage({ kind: 'participant', participant: p })}
+                                  type="button"
+                                  title="Send this participant a message centered on their screen"
+                                >
+                                  Message
+                                </button>
+                                {canNudge && (
+                                  <button
+                                    className={styles.nudgeBtn}
+                                    onClick={() => nudgeParticipant(p.id)}
+                                    disabled={nudgedId === p.id}
+                                    type="button"
+                                    title="Show this participant a reminder banner to wrap up"
+                                  >
+                                    {nudgedId === p.id ? 'Nudged ✓' : 'Nudge'}
+                                  </button>
+                                )}
+                              </span>
+                            </div>
+                            {list.length === 0 ? (
+                              <div className={styles.ideaNone}>No ideas submitted.</div>
+                            ) : list.map(idea => (
+                              <div key={idea.id} className={styles.ideaSummaryItem}>
+                                <div className={styles.ideaSummaryText}>
+                                  <span className={styles.ideaSummaryTitle}>{idea.title || idea.text}</span>
+                                  {idea.description && (
+                                    <span className={styles.ideaSummaryDesc}>{idea.description}</span>
+                                  )}
+                                </div>
+                                {idea.selected && (
+                                  <span className={styles.ideaSummaryBadge}>carried to group</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })}
+
+                {orphanAuthorIds.length > 0 && (
+                  <div className={styles.ideaGroupBlock}>
+                    <div className={styles.ideaGroupHeader}>
+                      <span className={styles.ideaGroupName}>Former participants</span>
+                    </div>
+                    {orphanAuthorIds.map(aid => {
+                      const list = ideasByAuthorId[aid]
+                      return (
+                        <div key={aid} className={styles.ideaUserBlock}>
+                          <div className={styles.ideaUserHeader}>
+                            <span className={styles.ideaUserIdentity}>
+                              <span className={styles.ideaUserName}>{list[0]?.authorName || aid.slice(0, 6)}</span>
+                              <span className={styles.ideaSummaryCount}>
+                                {list.length} idea{list.length === 1 ? '' : 's'}
+                              </span>
+                            </span>
+                          </div>
+                          {list.map(idea => (
+                            <div key={idea.id} className={styles.ideaSummaryItem}>
+                              <div className={styles.ideaSummaryText}>
+                                <span className={styles.ideaSummaryTitle}>{idea.title || idea.text}</span>
+                                {idea.description && (
+                                  <span className={styles.ideaSummaryDesc}>{idea.description}</span>
+                                )}
+                              </div>
+                              {idea.selected && (
+                                <span className={styles.ideaSummaryBadge}>carried to group</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    })}
                   </div>
-                ))}
+                )}
               </div>
             )}
           </div>
@@ -912,7 +1052,7 @@ export default function AdminSession() {
         </div>
 
         {/* Advance control */}
-        {session.status !== 'done' && (
+        {!isCompleted && (
           <div className={styles.advanceBar}>
             <div className={styles.advanceInfo}>
               <span className={styles.advanceLabel}>Current phase:</span>
@@ -939,8 +1079,18 @@ export default function AdminSession() {
           </div>
         )}
 
-        {session.status === 'done' && (
-          <div className={styles.doneBar}>Session complete. All participants have finished.</div>
+        {isCompleted && (
+          <div className={styles.doneBar}>
+            {session.status === 'done'
+              ? 'Session complete. All participants have finished.'
+              : (() => {
+                  const inSurvey = participants.filter(p => p.status === 'survey').length
+                  const finished = participants.filter(p => p.status === 'done').length
+                  return inSurvey > 0
+                    ? `Session complete and read-only. ${finished} of ${participants.length} finished the survey; ${inSurvey} still had it open.`
+                    : 'Session complete. All participants have finished.'
+                })()}
+          </div>
         )}
       </main>
 
@@ -952,14 +1102,18 @@ export default function AdminSession() {
         />
       )}
 
-      {messageGroup && (
-        <div className={styles.modalBackdrop} onClick={() => !messageSending && setMessageGroup(null)}>
+      {messageTarget && (
+        <div className={styles.modalBackdrop} onClick={() => !messageSending && setMessageTarget(null)}>
           <div className={styles.modalCard} onClick={e => e.stopPropagation()}>
             <h3 className={styles.modalTitle}>
-              Message {messageGroup.number ? `Group ${messageGroup.number}` : 'group'}
+              {messageTarget.kind === 'group'
+                ? `Message ${messageTarget.group.number ? `Group ${messageTarget.group.number}` : 'group'}`
+                : `Message ${messageTarget.participant.anonymousLabel || messageTarget.participant.name || 'participant'}`}
             </h3>
             <p className={styles.modalSub}>
-              Pops up as a window in the centre of every member's screen.
+              {messageTarget.kind === 'group'
+                ? "Pops up as a window in the centre of every member's screen."
+                : "Pops up as a window in the centre of this participant's screen."}
             </p>
             <textarea
               className={`input-field ${styles.modalTextarea}`}
@@ -970,10 +1124,10 @@ export default function AdminSession() {
               autoFocus
             />
             <div className={styles.modalActions}>
-              <button className="btn-ghost" onClick={() => setMessageGroup(null)} disabled={messageSending} type="button">
+              <button className="btn-ghost" onClick={() => setMessageTarget(null)} disabled={messageSending} type="button">
                 Cancel
               </button>
-              <button className="btn-primary" onClick={sendGroupMessage} disabled={messageSending || !messageText.trim()} type="button">
+              <button className="btn-primary" onClick={sendMessage} disabled={messageSending || !messageText.trim()} type="button">
                 {messageSending ? 'Sending…' : 'Send message'}
               </button>
             </div>
