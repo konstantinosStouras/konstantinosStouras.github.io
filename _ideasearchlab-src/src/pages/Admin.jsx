@@ -664,8 +664,12 @@ export default function Admin() {
     return map
   }, [participantsBySession, sessionsById])
 
-  // Merge the authoritative Auth list with anyone seen in participation (covers
-  // the case where the callable isn't deployed). The admin account is excluded.
+  // The Firebase Auth list (listRegisteredUsers) is the authoritative roster of
+  // registered accounts. Participation is only used to BACKFILL it when that
+  // callable is unavailable (not deployed / errored) — otherwise an account the
+  // admin just deleted would be resurrected from its intentionally-retained
+  // participant docs, so it would never disappear from this list. The admin
+  // account is excluded.
   const registeredUsers = useMemo(() => {
     const byUid = {}
     authUsers.forEach(u => {
@@ -675,22 +679,24 @@ export default function Admin() {
         createdAt: u.createdAt, lastSignInAt: u.lastSignInAt, fromAuth: true,
       }
     })
-    Object.entries(participationByUid).forEach(([uid, parts]) => {
-      if (byUid[uid]) return
-      const sample = parts[0] || {}
-      if (sample.email === ADMIN_EMAIL) return
-      byUid[uid] = {
-        uid, email: sample.email || '', name: sample.name || '',
-        createdAt: null, lastSignInAt: null, fromAuth: false,
-      }
-    })
+    if (usersError) {
+      Object.entries(participationByUid).forEach(([uid, parts]) => {
+        if (byUid[uid]) return
+        const sample = parts[0] || {}
+        if (sample.email === ADMIN_EMAIL) return
+        byUid[uid] = {
+          uid, email: sample.email || '', name: sample.name || '',
+          createdAt: null, lastSignInAt: null, fromAuth: false,
+        }
+      })
+    }
     return Object.values(byUid)
       .map(u => ({ ...u, sessions: participationByUid[u.uid] || [] }))
       .sort((a, b) =>
         (b.sessions.length - a.sessions.length) ||
         (a.email || '').localeCompare(b.email || '')
       )
-  }, [authUsers, participationByUid])
+  }, [authUsers, participationByUid, usersError])
 
   const filteredUsers = useMemo(() => {
     const q = userSearch.trim().toLowerCase()
