@@ -41,7 +41,11 @@ export default function AIChat({ sessionId, scope, scopeId, aiConfig }) {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [userHeight, setUserHeight] = useState(null)
-  const bottomRef = useRef(null)
+  const listRef = useRef(null)
+  // Whether to keep the view pinned to the latest message. Stays true while the
+  // user is at/near the bottom; set false the moment they scroll up to read, so
+  // new messages (or snapshot re-fires) never yank them back down mid-read.
+  const stickRef = useRef(true)
   const inputRef = useRef(null)
 
   const chatPath = `sessions/${sessionId}/aiMessages`
@@ -62,10 +66,21 @@ export default function AIChat({ sessionId, scope, scopeId, aiConfig }) {
     return unsub
   }, [sessionId, scopeId, scope])
 
-  // Auto-scroll to bottom
+  // Keep the latest message in view ONLY when the user is already at the bottom.
+  // Uses an instant scrollTop (not smooth scrollIntoView) so the list never
+  // animates/jumps while they're reading a long reply they've scrolled up into.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    const el = listRef.current
+    if (!el || !stickRef.current) return
+    el.scrollTop = el.scrollHeight
+  }, [messages, sending])
+
+  // Track whether the user is pinned to the bottom (within a small threshold).
+  function handleListScroll() {
+    const el = listRef.current
+    if (!el) return
+    stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+  }
 
   // Grow the input box with its content so the whole message stays visible
   // (up to a cap, after which it scrolls) — UNLESS the user has manually
@@ -85,6 +100,8 @@ export default function AIChat({ sessionId, scope, scopeId, aiConfig }) {
 
     setInput('')
     setSending(true)
+    // Sending a new message always jumps to the bottom to reveal it + the reply.
+    stickRef.current = true
 
     try {
       // Optimistically add user message to Firestore
@@ -152,7 +169,7 @@ export default function AIChat({ sessionId, scope, scopeId, aiConfig }) {
         <span className={styles.badge}>{scope}</span>
       </div>
 
-      <div className={styles.messageList}>
+      <div className={styles.messageList} ref={listRef} onScroll={handleListScroll}>
         {messages.length === 0 && (
           <div className={styles.empty}>
             <div className={styles.emptyIcon}>◈</div>
@@ -192,8 +209,6 @@ export default function AIChat({ sessionId, scope, scopeId, aiConfig }) {
             </div>
           </div>
         )}
-
-        <div ref={bottomRef} />
       </div>
 
       <form className={styles.inputRow} onSubmit={sendMessage}>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import styles from './PhaseTimer.module.css'
 
 /**
@@ -7,12 +7,19 @@ import styles from './PhaseTimer.module.css'
  *   phaseStartedAt - Firestore Timestamp
  *   durationSeconds - number | null (null = no timer)
  *   onExpire - callback when timer hits 0
+ *   onTick - optional callback(remainingSeconds) fired once per second while the
+ *            timer is running (not in preview). Lets a parent react to time
+ *            thresholds (e.g. show a "5 minutes left" reminder) without running
+ *            its own clock. Held in a ref so changing it never restarts the
+ *            interval.
  *   preview - when true, the countdown has not started yet (e.g. the
  *             participant is still on the instructions screen). Shows the full
- *             duration statically without ticking down or firing onExpire.
+ *             duration statically without ticking down or firing onExpire/onTick.
  */
-export default function PhaseTimer({ phaseStartedAt, durationSeconds, onExpire, preview = false }) {
+export default function PhaseTimer({ phaseStartedAt, durationSeconds, onExpire, onTick, preview = false }) {
   const [remaining, setRemaining] = useState(null)
+  const onTickRef = useRef(onTick)
+  useEffect(() => { onTickRef.current = onTick }, [onTick])
 
   useEffect(() => {
     // Preview: timer not started — show the full duration, don't tick.
@@ -30,6 +37,7 @@ export default function PhaseTimer({ phaseStartedAt, durationSeconds, onExpire, 
       const endMs = startMs + durationSeconds * 1000
       const left = Math.max(0, Math.round((endMs - Date.now()) / 1000))
       setRemaining(left)
+      if (onTickRef.current) onTickRef.current(left)
       if (left === 0 && onExpire) onExpire()
     }
 

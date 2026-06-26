@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Component } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useSession, useAIModelLabel } from '../context/SessionContext'
 import HeaderControls from '../components/HeaderControls'
@@ -283,7 +283,7 @@ function SceneGroup() {
   )
 }
 
-function SceneVoting({ votes }) {
+function SceneVoting({ votes, clock }) {
   const [voted, setVoted] = useState(0)
   useEffect(() => {
     const timers = []
@@ -360,6 +360,25 @@ function SceneEnd() {
       </div>
     </div>
   )
+}
+
+// Guards the dynamic scene: if any single scene throws while rendering, show a
+// quiet placeholder instead of blanking the whole app (the tour keeps
+// auto-advancing, and Skip/Start below still work). Resets when the scene
+// changes so one bad scene never poisons the rest of the tour.
+class SceneBoundary extends Component {
+  constructor(props) { super(props); this.state = { failed: false } }
+  static getDerivedStateFromError() { return { failed: true } }
+  componentDidCatch(err) { console.error('Demo scene failed to render:', err) }
+  componentDidUpdate(prev) {
+    if (prev.sceneKey !== this.props.sceneKey && this.state.failed) this.setState({ failed: false })
+  }
+  render() {
+    if (this.state.failed) {
+      return <div className={styles.centerStage}><div className={styles.miniCard}>Preview of this step is unavailable — continuing…</div></div>
+    }
+    return this.props.children
+  }
 }
 
 // ── Tour driver ──────────────────────────────────────────────────────────────
@@ -447,7 +466,9 @@ export default function DemoTour() {
 
         <div className={styles.stageWrap}>
           <div className={styles.stage} key={step.id}>
-            <StepComp {...step.props} />
+            <SceneBoundary sceneKey={step.id}>
+              <StepComp {...step.props} />
+            </SceneBoundary>
           </div>
           <div className={styles.coachmark} key={`cap-${step.id}`}>
             <span className={styles.stepNum}>Step {safeIndex + 1} / {steps.length}</span>

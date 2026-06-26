@@ -61,12 +61,21 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 24px 28px;
+  padding: 0 28px 24px;        /* top spacing moved into the sticky .topBar */
   gap: 20px;
   overflow-y: auto;
 }
 
+/* Pinned to the top of the scrolling workspace so the timer + Submit/Proceed
+   button stay visible however far the participant scrolls or zooms. */
 .topBar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--paper);
+  margin: 0 -28px;             /* span the .main horizontal padding, edge to edge */
+  padding: 18px 28px 14px;
+  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -722,3 +731,42 @@
 }
 .consensusActions > * { flex: 1; }
 .consensusActions .consensusBtn { margin-top: 0; }
+
+/* ─── Self-dismissing centred time reminder ───────────────
+   Fires as the group timer crosses thresholds (5/2 min ideation, 1 min/30 s
+   voting). Fades away on its own — no button — and never blocks the workspace. */
+.timeNudge {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  pointer-events: none;
+}
+.timeNudgeCard {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: 440px;
+  background: var(--ink);
+  color: var(--paper);
+  border: 2px solid var(--accent);
+  border-radius: 16px;
+  padding: 20px 26px;
+  font-size: 16px;
+  line-height: 1.5;
+  font-weight: 600;
+  box-shadow: 0 24px 70px rgba(0,0,0,0.4);
+  animation: timeNudgeIn 0.3s ease, timeNudgeOut 0.5s ease 5.8s forwards;
+}
+.timeNudgeIcon { font-size: 28px; flex-shrink: 0; line-height: 1; }
+@keyframes timeNudgeIn {
+  from { opacity: 0; transform: scale(0.9) translateY(12px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes timeNudgeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; transform: scale(0.97); }
+}
