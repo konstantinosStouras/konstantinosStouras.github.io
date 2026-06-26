@@ -98,6 +98,8 @@ export default function Admin() {
   const [usersError, setUsersError] = useState(null)
   const [userSearch, setUserSearch] = useState('')
   const [expandedUser, setExpandedUser] = useState(null)
+  const [removeUserConfirm, setRemoveUserConfirm] = useState(null) // user pending account removal
+  const [removingUserUid, setRemovingUserUid] = useState(null)
   const [creating, setCreating] = useState(false)
   const [lastCreatedCode, setLastCreatedCode] = useState(null)
   const [newName, setNewName] = useState('')      // optional human-friendly session name
@@ -602,6 +604,23 @@ export default function Admin() {
     }
   }
 
+  // Permanently remove ONE registered account. The deleteRegisteredUser callable
+  // first detaches them from any active group (which then continues with one
+  // fewer member, under the same parameters) and then deletes the Auth account.
+  async function removeUser(uid) {
+    setRemovingUserUid(uid)
+    try {
+      await httpsCallable(functions, 'deleteRegisteredUser')({ uid })
+      await loadUsers()
+    } catch (err) {
+      console.error('deleteRegisteredUser failed:', err)
+      alert('Could not remove this user: ' + (err?.message || 'unknown error'))
+    } finally {
+      setRemovingUserUid(null)
+      setRemoveUserConfirm(null)
+    }
+  }
+
   const pc = config.phaseConfig
   const ac = config.aiConfig
   const bothActive = pc.individualPhaseActive && pc.groupPhaseActive
@@ -1036,6 +1055,8 @@ export default function Admin() {
                 onToggle={uid => setExpandedUser(prev => (prev === uid ? null : uid))}
                 onRefresh={loadUsers}
                 onOpenSession={sid => navigate(`/admin/session/${sid}`)}
+                onRemoveUser={u => setRemoveUserConfirm(u)}
+                removingUserUid={removingUserUid}
               />
             </div>
           </div>
@@ -1086,6 +1107,39 @@ export default function Admin() {
                 {bulkBusy ? 'Deleting...' : 'Delete all permanently'}
               </button>
               <button className="btn-ghost" onClick={() => setBulkConfirm(null)} disabled={bulkBusy}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {removeUserConfirm && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <h3 className={styles.modalTitle}>Remove this user?</h3>
+            <p className={styles.modalDesc}>
+              This permanently deletes the account
+              {removeUserConfirm.email ? <> <strong>{removeUserConfirm.email}</strong></> : ''}.
+              {removeUserConfirm.sessions?.length > 0
+                ? ` They are in ${removeUserConfirm.sessions.length} session${removeUserConfirm.sessions.length === 1 ? '' : 's'}: any group they are still actively playing in will simply continue with one fewer member, under the same settings. Records from sessions they already finished are kept.`
+                : ' They have not joined any session.'}
+              {' '}This cannot be undone.
+            </p>
+            <div className={styles.modalActions}>
+              <button
+                className="btn-primary"
+                style={{ background: '#c0392b' }}
+                onClick={() => removeUser(removeUserConfirm.uid)}
+                disabled={removingUserUid === removeUserConfirm.uid}
+              >
+                {removingUserUid === removeUserConfirm.uid ? 'Removing…' : 'Remove user'}
+              </button>
+              <button
+                className="btn-ghost"
+                onClick={() => setRemoveUserConfirm(null)}
+                disabled={removingUserUid === removeUserConfirm.uid}
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>
@@ -1148,7 +1202,7 @@ const USER_STATUS_CLASS = {
   group: 'group', voting: 'voting', survey: 'survey', done: 'done',
 }
 
-function UsersPanel({ users, totalCount, search, onSearch, loading, expandedUser, onToggle, onRefresh, onOpenSession }) {
+function UsersPanel({ users, totalCount, search, onSearch, loading, expandedUser, onToggle, onRefresh, onOpenSession, onRemoveUser, removingUserUid }) {
   return (
     <div className={styles.usersWrap}>
       <div className={styles.usersToolbar}>
@@ -1214,6 +1268,19 @@ function UsersPanel({ users, totalCount, search, onSearch, loading, expandedUser
                             <button className={styles.userOpenBtn} onClick={() => onOpenSession(s.sessionId)}>Open</button>
                           </div>
                         ))}
+                      </div>
+                    )}
+                    {onRemoveUser && (
+                      <div className={styles.userActions}>
+                        <button
+                          className={styles.userRemoveBtn}
+                          type="button"
+                          onClick={() => onRemoveUser(u)}
+                          disabled={removingUserUid === u.uid}
+                          title="Permanently delete this account; any active group of theirs continues with one fewer member"
+                        >
+                          {removingUserUid === u.uid ? 'Removing…' : 'Remove user'}
+                        </button>
                       </div>
                     )}
                   </div>
