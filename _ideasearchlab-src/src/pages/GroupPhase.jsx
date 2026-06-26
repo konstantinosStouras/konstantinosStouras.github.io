@@ -157,6 +157,15 @@ export default function GroupPhase() {
   const [consensusMode, setConsensusMode] = useState('intro')
   const consensusSeen = useRef(false)
 
+  // Transient, self-dismissing centred reminder fired as the group timer crosses
+  // key thresholds (5/2 min in ideation, 1 min/30 s in voting). { key, text }.
+  const [timeNudge, setTimeNudge] = useState(null)
+  const lastRemainingRef = useRef(null)   // previous tick's remaining seconds
+  const firedNudgesRef = useRef({})        // threshold key -> already shown
+  const nudgeTimeoutRef = useRef(null)     // auto-dismiss timer
+  const nudgeKeyRef = useRef(0)            // bumps so each nudge replays its animation
+  useEffect(() => () => { if (nudgeTimeoutRef.current) clearTimeout(nudgeTimeoutRef.current) }, [])
+
   // User-resizable workspace regions (drag the dividers). Percentages are of
   // their container; the overall column/stack structure stays the same.
   const columnsRef = useRef(null)       // Group Ideas so far | Add form + Chat
@@ -769,6 +778,47 @@ export default function GroupPhase() {
     }
   }
 
+  // Show a centred reminder that fades away on its own after a few seconds — no
+  // button to click. A bumping key replays the entrance animation each time.
+  function showTimeNudge(text) {
+    nudgeKeyRef.current += 1
+    setTimeNudge({ key: nudgeKeyRef.current, text })
+    if (nudgeTimeoutRef.current) clearTimeout(nudgeTimeoutRef.current)
+    nudgeTimeoutRef.current = setTimeout(() => setTimeNudge(null), 6500)
+  }
+
+  // Driven by the group PhaseTimer's onTick. Fires each reminder exactly once, as
+  // the countdown crosses a threshold, and only in the matching sub-phase:
+  //   ideation → 5 min and 2 min left (keep adding ideas, then vote)
+  //   voting   → 1 min and 30 s left (place your votes)
+  function handleTimerTick(remaining) {
+    const prev = lastRemainingRef.current
+    lastRemainingRef.current = remaining
+    if (prev == null || remaining == null) return
+    const crossed = t => prev > t && remaining <= t
+    const fire = (key, text) => {
+      if (firedNudgesRef.current[key]) return
+      firedNudgesRef.current[key] = true
+      showTimeNudge(text)
+    }
+    if (isVoting) {
+      if (crossed(60)) fire('v60', '1 minute left — make sure you place your votes for the group.')
+      else if (crossed(30)) fire('v30', '30 seconds left — quickly place your votes!')
+    } else {
+      if (crossed(300)) fire('i300', '5 minutes left — keep generating ideas, and vote for the ones to take into the next phase.')
+      else if (crossed(120)) fire('i120', '2 minutes left — wrap up your ideas and move on to voting.')
+    }
+  }
+
+  const timeNudgeEl = timeNudge ? (
+    <div className={styles.timeNudge} role="status" aria-live="polite">
+      <div key={timeNudge.key} className={styles.timeNudgeCard}>
+        <span className={styles.timeNudgeIcon} aria-hidden="true">⏳</span>
+        <span className={styles.timeNudgeText}>{timeNudge.text}</span>
+      </div>
+    </div>
+  ) : null
+
   // Instructor closed (status 'done') or deleted the session: show the same
   // end message participants see when they finish, instead of stranding them.
   if (ended) {
@@ -822,6 +872,7 @@ export default function GroupPhase() {
               phaseStartedAt={groupStartedAt}
               durationSeconds={pc.groupPhaseDuration}
               onExpire={votesLocked ? undefined : autoSubmitVotes}
+              onTick={handleTimerTick}
             />
             <div className={styles.voteCounter}>
               <span className={styles.voteNum}>{myVoteCount}</span>
@@ -875,6 +926,7 @@ export default function GroupPhase() {
     return (
       <div className={styles.page}>
         {consensusModal}
+        {timeNudgeEl}
         <SplitLayout
           leftPanel={votingPanel}
           rightPanel={aiEnabled ? (
@@ -906,6 +958,7 @@ export default function GroupPhase() {
             phaseStartedAt={groupStartedAt}
             durationSeconds={pc.groupPhaseDuration}
             onExpire={votesLocked ? undefined : autoSubmitVotes}
+            onTick={handleTimerTick}
           />
           <button
             className={styles.proceedBtn}
@@ -975,6 +1028,7 @@ export default function GroupPhase() {
 
   return (
     <div className={styles.page}>
+      {timeNudgeEl}
       <SplitLayout
         leftPanel={ideationPanel}
         rightPanel={aiEnabled ? (
