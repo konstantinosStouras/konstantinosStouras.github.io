@@ -21,3 +21,4 @@ exports.submitVote = voting.submitVote
 exports.onParticipantUpdated = session.onParticipantUpdated
 exports.listRegisteredUsers = users.listRegisteredUsers
 exports.deleteAllRegisteredUsers = users.deleteAllRegisteredUsers
+exports.deleteRegisteredUser = users.deleteRegisteredUser

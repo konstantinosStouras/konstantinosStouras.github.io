@@ -331,3 +331,18 @@
   transition: border-color 0.15s, color 0.15s;
 }
 .userOpenBtn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Per-user "Remove account" footer in the expanded user card */
+.userActions {
+  display: flex; justify-content: flex-end;
+  padding-top: 10px; margin-top: 2px;
+  border-top: 1px dashed var(--border);
+}
+.userRemoveBtn {
+  background: none; border: 1px solid rgba(192,57,43,0.4); color: #c0392b;
+  font-size: 12px; font-weight: 600; padding: 5px 14px;
+  border-radius: var(--radius); cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.userRemoveBtn:hover:not(:disabled) { background: rgba(192,57,43,0.08); border-color: #c0392b; }
+.userRemoveBtn:disabled { cursor: default; opacity: 0.7; }

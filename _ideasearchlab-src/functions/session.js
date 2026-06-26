@@ -146,20 +146,46 @@ exports.removeParticipant = functions.https.onCall(async (data, context) => {
   }
 
   const sessionRef = db.collection('sessions').doc(sessionId)
+  const sessionSnap = await sessionRef.get()
+  if (!sessionSnap.exists) throw new HttpsError('not-found', 'Session not found.')
+  if (sessionSnap.data().instructorId !== context.auth.uid) {
+    throw new HttpsError('permission-denied', 'Only the instructor can remove participants.')
+  }
 
+  await detachParticipant(sessionRef, participantId)
+  return { ok: true }
+})
+
+/**
+ * detachParticipant (internal — the caller authorizes)
+ * Detaches one participant from their group within a session: marks them
+ * `removed`, pulls them from the group's `members`/`memberLabels` (so the group
+ * keeps playing with one fewer member, under the same parameters), and — if the
+ * group is mid-experiment — queues a backfill vacancy so a later joiner can take
+ * that exact slot. Then reconciles the group in case the removed member was the
+ * only one still blocking it from advancing.
+ *
+ * Shared by removeParticipant (one session, instructor-driven) and
+ * deleteRegisteredUser (every session, admin account deletion). With
+ * `opts.activeOnly` the detach is skipped for participants who are already past
+ * the group phase (survey/done) so account deletion never rewrites a finished
+ * participant's record — only groups still in play shrink to n-1.
+ *
+ * Returns { groupId? , alreadyRemoved? , notFound? , skipped? }.
+ */
+async function detachParticipant(sessionRef, participantId, opts = {}) {
   const result = await db.runTransaction(async (tx) => {
     const sessionSnap = await tx.get(sessionRef)
-    if (!sessionSnap.exists) throw new HttpsError('not-found', 'Session not found.')
+    if (!sessionSnap.exists) return { notFound: true }
     const session = sessionSnap.data()
-    if (session.instructorId !== context.auth.uid) {
-      throw new HttpsError('permission-denied', 'Only the instructor can remove participants.')
-    }
 
     const pRef = sessionRef.collection('participants').doc(participantId)
     const pSnap = await tx.get(pRef)
-    if (!pSnap.exists) throw new HttpsError('not-found', 'Participant not found.')
+    if (!pSnap.exists) return { notFound: true }
     const p = pSnap.data()
     if (p.removed) return { alreadyRemoved: true }
+    // Account deletion leaves finished participants' records intact.
+    if (opts.activeOnly && ['survey', 'done'].includes(p.status)) return { skipped: true }
 
     const groupId = p.groupId || null
     const label = p.anonymousLabel || null
@@ -211,12 +237,13 @@ exports.removeParticipant = functions.https.onCall(async (data, context) => {
   // Reconcile outside the transaction (it needs a members query, which
   // transactions can't run): if the removed member was the last one blocking
   // the group, advance the remaining members now.
-  if (result.groupId && !result.alreadyRemoved) {
+  if (result.groupId && !result.alreadyRemoved && !result.notFound) {
     await reconcileGroupAfterRemoval(sessionRef, result.groupId)
   }
 
-  return { ok: true }
-})
+  return result
+}
+exports.detachParticipant = detachParticipant
 
 /**
  * reconcileGroupAfterRemoval
