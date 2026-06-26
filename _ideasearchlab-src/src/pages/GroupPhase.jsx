@@ -46,7 +46,7 @@ function pickRandomStable(arr, n) {
 // caused the list to flicker/jump while typing in the group chat.
 function IdeaPill({
   idea, variant, label, isMe, isVoting, votesLocked,
-  voteCount, votedByMe, canVote, onVote,
+  voteCount, votedByMe, canVote, onVote, showPhaseTag,
 }) {
   return (
     <div
@@ -72,7 +72,7 @@ function IdeaPill({
         <div className={styles.pillMeta}>
           <span className={styles.pillAuthor}>{label}</span>
           {isMe && <span className={styles.youTag}>you</span>}
-          {isVoting && (
+          {(isVoting || showPhaseTag) && (
             <span className={styles.phaseTag}>
               {idea.phase === 'group' ? 'group' : 'individual'}
             </span>
@@ -159,10 +159,13 @@ export default function GroupPhase() {
 
   // User-resizable workspace regions (drag the dividers). Percentages are of
   // their container; the overall column/stack structure stays the same.
-  const columnsRef = useRef(null)       // Individual Ideas | Group Ideas+Chat
-  const rightColRef = useRef(null)      // Group Ideas / Group Chat (stacked)
+  const columnsRef = useRef(null)       // Group Ideas so far | Add form + Chat
+  const rightColRef = useRef(null)      // Add-a-Group-Idea form / Group Chat (stacked)
   const [leftColPct, setLeftColPct] = useState(50)
-  const [groupIdeasPct, setGroupIdeasPct] = useState(45)
+  // The right column's top section now holds only the compact "Add a Group
+  // Idea" form (the ideas themselves live in the combined list on the left),
+  // so it starts smaller and gives the chat below it more room.
+  const [groupIdeasPct, setGroupIdeasPct] = useState(34)
 
   // Sub-phase: 'ideation' or 'voting'. Mirrored to the participant doc as
   // `groupStage` so other members can see where everyone stands; restored
@@ -518,7 +521,7 @@ export default function GroupPhase() {
   const allIdeasForVoting = [...(ideas.individual || []), ...(ideas.group || [])].sort(sortByVotes)
 
   /** Renders one idea pill card (uses the stable module-scope IdeaPill) */
-  function renderPill(idea, variant) {
+  function renderPill(idea, variant, showTag = false) {
     const votedByMe = myVotes.includes(idea.id)
     const canVote = !votesLocked && (votedByMe || myVoteCount < MAX_VOTES)
     return (
@@ -534,6 +537,7 @@ export default function GroupPhase() {
         votedByMe={votedByMe}
         canVote={canVote}
         onVote={toggleVote}
+        showPhaseTag={showTag}
       />
     )
   }
@@ -703,40 +707,47 @@ export default function GroupPhase() {
     </div>
   ) : null
 
-  /** Group ideas list + add-idea form (reused in both ideation layouts) */
+  /** Add-a-group-idea form. In the standard layout this lives in the right
+      column on its own (new ideas land in the combined list on the left); in
+      group-only sessions it's appended under the list in the primary column. */
+  const addIdeaForm = (
+    <form onSubmit={submitGroupIdea} className={styles.addPill}>
+      <input
+        className={styles.addTitleInput}
+        type="text"
+        value={newTitle}
+        onChange={e => setNewTitle(e.target.value)}
+        placeholder="Idea title"
+        disabled={submitting}
+      />
+      <div className={styles.addDivider} />
+      <textarea
+        className={styles.addDescInput}
+        value={newDesc}
+        onChange={e => setNewDesc(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitGroupIdea(e) } }}
+        placeholder="Description (Enter to add, Shift+Enter for a new line)"
+        rows={2}
+        disabled={submitting}
+      />
+      <div className={styles.addFooter}>
+        <button
+          className={`btn-primary ${styles.addBtn}`}
+          type="submit"
+          disabled={submitting || !newTitle.trim() || !newDesc.trim()}
+        >
+          {submitting ? 'Adding...' : 'Add'}
+        </button>
+      </div>
+    </form>
+  )
+
+  /** Group ideas list + add form together — used by the group-only layout
+      (no individual phase, so there is only the one combined column). */
   const groupIdeasList = (
     <div className={styles.ideaList}>
       {sortedGroup.map(idea => renderPill(idea, 'group'))}
-
-      <form onSubmit={submitGroupIdea} className={styles.addPill}>
-        <input
-          className={styles.addTitleInput}
-          type="text"
-          value={newTitle}
-          onChange={e => setNewTitle(e.target.value)}
-          placeholder="Idea title"
-          disabled={submitting}
-        />
-        <div className={styles.addDivider} />
-        <textarea
-          className={styles.addDescInput}
-          value={newDesc}
-          onChange={e => setNewDesc(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitGroupIdea(e) } }}
-          placeholder="Description (Enter to add, Shift+Enter for a new line)"
-          rows={2}
-          disabled={submitting}
-        />
-        <div className={styles.addFooter}>
-          <button
-            className={`btn-primary ${styles.addBtn}`}
-            type="submit"
-            disabled={submitting || !newTitle.trim() || !newDesc.trim()}
-          >
-            {submitting ? 'Adding...' : 'Add'}
-          </button>
-        </div>
-      </form>
+      {addIdeaForm}
     </div>
   )
 
@@ -913,24 +924,30 @@ export default function GroupPhase() {
 
       {individualActive ? (
         <div className={styles.columns} ref={columnsRef}>
-          {/* Left: individual ideas — drag the divider to resize left/right */}
+          {/* Left: EVERY idea so far — the individual ideas carried into the
+              group plus the ideas the group adds (which land here too).
+              Drag the divider to resize left/right. */}
           <div className={styles.column} style={{ flex: `0 0 ${leftColPct}%` }}>
-            <h2 className={styles.columnTitle}>Individual Ideas</h2>
-            <p className={styles.columnSub}>Selected ideas from each member</p>
+            <h2 className={styles.columnTitle}>Group Ideas so far</h2>
+            <p className={styles.columnSub}>Ideas carried from the individual phase, plus the ideas your group adds</p>
             <div className={styles.ideaList}>
-              {sortedIndividual.map(idea => renderPill(idea, 'individual'))}
+              {sortedIndividual.map(idea => renderPill(idea, 'individual', true))}
+              {sortedGroup.map(idea => renderPill(idea, 'group', true))}
             </div>
           </div>
 
           <ResizeDivider direction="x" containerRef={columnsRef} onResize={setLeftColPct} min={20} max={80} />
 
-          {/* Right: group ideas + add form (top) and chat (bottom), with a
-              draggable divider between them to resize up/down */}
+          {/* Right: the add-a-group-idea form (top) and chat (bottom), with a
+              draggable divider between them. New group ideas appear in the
+              combined list on the left. */}
           <div className={styles.columnRight} ref={rightColRef}>
             <div className={styles.groupIdeasSection} style={{ flex: `0 0 ${groupIdeasPct}%`, maxHeight: 'none', minHeight: 0 }}>
-              <h2 className={styles.columnTitle}>Group Ideas</h2>
-              <p className={styles.columnSub}>Generated together in this phase</p>
-              {groupIdeasList}
+              <h2 className={styles.columnTitle}>Add a Group Idea</h2>
+              <p className={styles.columnSub}>New ideas appear in the list on the left</p>
+              <div className={styles.ideaList}>
+                {addIdeaForm}
+              </div>
             </div>
 
             <ResizeDivider direction="y" containerRef={rightColRef} onResize={setGroupIdeasPct} min={15} max={80} />
