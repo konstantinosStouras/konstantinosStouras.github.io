@@ -21,8 +21,10 @@ WHERE THE DATA COMES FROM (read this)
   to this script as the global string `DATA_CSV` (one row per idea). Columns:
       idea_id, session, condition, phase, group_id, author_id,
       novelty, usefulness, overall_quality, final_pick, text
-  `overall_quality` = mean(novelty, usefulness); rows with missing KPI scores are
-  dropped before fitting. Edit anything below freely, then press Run.
+  `condition` uses the Set A / placement encoding — None / Solo / Group / Both
+  (see CONDITION_PAPER below for the paper names). `overall_quality` =
+  mean(novelty, usefulness); rows with missing KPI scores are dropped before
+  fitting. Edit anything below freely, then press Run.
 """
 
 # ── Imports ───────────────────────────────────────────────────────────────────
@@ -43,16 +45,30 @@ from statsmodels.stats.multitest import multipletests # Holm family-wise correct
 from scipy import stats as spstats                    # t-distribution for plot CIs
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-# The no-AI condition is the regression reference, so every dummy coefficient
-# reads as "this condition − Human-Only Hybrid".
-REFERENCE = "Human-Only Hybrid"
-# Canonical display/analysis order of the four pre-registered conditions.
-CONDITION_ORDER = ["Human-Only Hybrid", "Individual + AI", "Group + AI", "Full AI"]
+# CONDITION ENCODING (Set A / "placement") — the `condition` column holds these
+# short codes; the paper names + where AI is present are:
+#     None  = Human-Only Hybrid  (AI in neither stage)   <- regression reference
+#     Solo  = Individual + AI     (AI in solo stage only)
+#     Group = Group + AI          (AI in group stage only)
+#     Both  = Full AI             (AI in both stages)
+# "None" (no AI) is the reference, so each dummy coefficient reads "this condition
+# − None".
+REFERENCE = "None"
+# Canonical display/analysis order of the four conditions.
+CONDITION_ORDER = ["None", "Solo", "Group", "Both"]
+# Placement -> readable description, used by the insights read-out.
+CONDITION_PAPER = {
+    "None": "Human-Only Hybrid (AI in neither stage)",
+    "Solo": "Individual + AI (AI in solo stage only)",
+    "Group": "Group + AI (AI in group stage only)",
+    "Both": "Full AI (AI in both stages)",
+}
 # The three dependent variables (idea-creativity KPIs).
 KPIS = ["novelty", "usefulness", "overall_quality"]
 # The single pre-registered contrast of interest: it isolates AI *timing*
-# (solo-stage AI vs group-stage AI), holding the human baseline constant.
-PRIMARY_CONTRAST = ("Individual + AI", "Group + AI")
+# (Solo = solo-stage AI vs Group = group-stage AI), holding the no-AI baseline
+# constant.
+PRIMARY_CONTRAST = ("Solo", "Group")
 
 pd.set_option("display.width", 140)        # wide console so tables don't wrap
 pd.set_option("display.max_columns", 40)
@@ -89,8 +105,8 @@ def _s(x):
 def term_for(level):
     """Name statsmodels gives the Treatment-coded dummy column for `level`.
 
-    With C(condition, Treatment(reference='Human-Only Hybrid')) the design-matrix
-    columns are exactly 'C(condition, Treatment(reference='...'))[T.<level>]' —
+    With C(condition, Treatment(reference='None')) the design-matrix columns are
+    exactly 'C(condition, Treatment(reference='...'))[T.<level>]' —
     one per non-reference condition. Building this string lets us look a
     coefficient up BY NAME (robust to column ordering) instead of by position.
     """
@@ -104,7 +120,10 @@ def load_data():
         # Should never happen via the page, but guard so a manual run fails loudly.
         print("ERROR: global variable DATA_CSV is not defined.", file=sys.stderr)
         sys.exit(1)
-    return pd.read_csv(io.StringIO(DATA_CSV))   # StringIO makes the str act as a file
+    # keep_default_na=False so the condition code "None" is NOT read as NaN
+    # (pandas treats the string "None" as missing by default). Blank KPI cells
+    # stay "" here and are coerced to NaN in prepare() via pd.to_numeric.
+    return pd.read_csv(io.StringIO(DATA_CSV), keep_default_na=False)
 
 
 def prepare(df):
@@ -400,6 +419,11 @@ def insights(df, models):
     print("\n" + "#" * 78)
     print("# INSIGHTS  (read directly off the regression results above)")
     print("#" * 78)
+
+    # Remind the reader what the condition codes mean (Set A / placement encoding).
+    print("\nCondition encoding (Set A / placement):")
+    for code in CONDITION_ORDER:
+        print(f"    {code:<6} = {CONDITION_PAPER[code]}")
 
     # Which of the four conditions actually have rows, and which are missing.
     present = [c for c in CONDITION_ORDER if (df["condition"] == c).any()]

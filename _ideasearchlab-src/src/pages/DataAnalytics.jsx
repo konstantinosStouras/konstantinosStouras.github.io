@@ -6,7 +6,7 @@ import * as XLSX from 'xlsx-js-style'
 import { auth, db } from '../firebase'
 import { useTheme } from '../context/ThemeContext'
 import {
-  CONDITIONS, KPIS, conditionForSession, buildRowsForSession,
+  CONDITIONS, CONDITION_INFO, KPIS, conditionForSession, buildRowsForSession,
   recomputeOverall, rowsToCsv, csvToRows, normalizeImportedRows, ideaText, summarize,
   matchScoresIntoRows,
 } from '../utils/analyticsData'
@@ -440,6 +440,7 @@ export default function DataAnalytics() {
           <span className={styles.role}>Instructor</span>
           <button className={styles.themeBtn} onClick={toggle} title="Toggle dark mode">{dark ? '☀' : '☾'}</button>
           <button className="btn-ghost" onClick={() => navigate('/admin')}>Admin</button>
+          <button className="btn-ghost" style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }} onClick={() => navigate('/admin/data-analytics')}>Data Analytics</button>
           <button className="btn-ghost" onClick={() => navigate('/admin/ai-settings')}>AI Settings</button>
           <button className="btn-ghost" onClick={() => signOut(auth)}>Sign out</button>
         </div>
@@ -455,6 +456,24 @@ export default function DataAnalytics() {
             four AI-timing conditions performs best, with p-values and plots. The four conditions are
             read automatically from each session's AI configuration.
           </p>
+
+          <div className={styles.encodingCard}>
+            <div className={styles.encodingTitle}>Condition encoding (used in every Excel/CSV export and the analyses)</div>
+            <table className={styles.encodingTable}>
+              <thead>
+                <tr><th>Condition (paper name)</th><th>AI is present in</th><th>Encoding (Set A)</th></tr>
+              </thead>
+              <tbody>
+                {CONDITION_INFO.map((c, i) => (
+                  <tr key={c.encoding}>
+                    <td>{c.paper}</td>
+                    <td>{c.ai}</td>
+                    <td><span className={`${styles.condTag} ${styles[`cond${i}`]}`}>{c.encoding}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* STEP 1 — Data source */}
@@ -466,13 +485,11 @@ export default function DataAnalytics() {
             </button>
           </h2>
           <p className={styles.hint}>
-            Tick the completed or active sessions to include. Each session's condition is derived
-            from its AI settings: no AI = <em>Human-Only Hybrid</em>, AI in the solo stage =
-            <em> Individual + AI</em>, AI in the group stage = <em>Group + AI</em>, AI in both =
-            <em> Full AI</em>. You can also import the admin <strong>Excel export</strong> — it reads
-            the <em>Ideas</em> sheet, takes the condition from its AI-stage columns, and averages any
-            <em> Novelty/Usefulness (rater n)</em> columns into the KPI scores (or a plain CSV with
-            condition/novelty/usefulness columns).
+            Tick the completed or active sessions to include — each session's condition (per the
+            encoding above) is read from its AI settings. You can also import the admin
+            {' '}<strong>Excel export</strong>: it reads the <em>Ideas</em> sheet, takes the condition
+            from its AI-stage columns, and averages any <em>Novelty/Usefulness (rater&nbsp;n)</em>
+            columns into the KPI scores (or import a plain CSV with condition / novelty / usefulness columns).
           </p>
 
           {loadingSessions ? (
@@ -681,8 +698,8 @@ export default function DataAnalytics() {
           </h2>
           <p className={styles.hint}>
             Both tabs run the <em>same</em> analysis on your scored dataset (after any removed participants):
-            one linear regression per KPI across the four conditions (Human-Only Hybrid = baseline), the
-            planned Individual + AI vs Group + AI contrast, a best→worst ranking, and plots. Edit the code
+            one linear regression per KPI across the four conditions (<em>None</em> = no-AI baseline), the
+            planned <em>Solo</em> vs <em>Group</em> contrast, a best→worst ranking, and plots. Edit the code
             and press Run — Python runs via Pyodide and R via WebR, both compiled in your browser (first run
             downloads the runtime, ~10–30&nbsp;s).
           </p>
@@ -747,6 +764,7 @@ export default function DataAnalytics() {
 function SectionActions({ onSave, onMakeDefault, onRestore, hasCustom }) {
   const [flash, setFlash] = useState('') // which button just fired: save|default|restore
   const timer = useRef(null)
+  useEffect(() => () => clearTimeout(timer.current), []) // clear the flash timer on unmount
   function fire(which, fn) {
     try { fn && fn() } catch (_) { /* ignore */ }
     setFlash(which)

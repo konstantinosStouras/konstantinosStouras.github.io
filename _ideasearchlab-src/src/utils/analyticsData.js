@@ -23,14 +23,24 @@
  * by hand, or imported from an uploaded spreadsheet.
  */
 
-// Canonical condition order. "Human-Only Hybrid" is first so it is the natural
-// regression reference level in both the Python and R templates.
-export const CONDITIONS = [
-  'Human-Only Hybrid',
-  'Individual + AI',
-  'Group + AI',
-  'Full AI',
+// Canonical condition encoding — the "Set A (placement)" short names. "None"
+// (no AI) is first so it is the natural regression reference level in both the
+// Python and R templates. Each maps to a paper name + where AI is present.
+export const CONDITIONS = ['None', 'Solo', 'Group', 'Both']
+
+// The encoding key shown to the admin (top-of-page table + insights) and written
+// into every exported "summarized file". encoding = placement (Set A).
+export const CONDITION_INFO = [
+  { encoding: 'None',  paper: 'Human-Only Hybrid', ai: 'neither stage' },
+  { encoding: 'Solo',  paper: 'Individual + AI',   ai: 'solo stage only' },
+  { encoding: 'Group', paper: 'Group + AI',        ai: 'group stage only' },
+  { encoding: 'Both',  paper: 'Full AI',           ai: 'both stages' },
 ]
+
+// Look up the paper name for an encoding (e.g. 'Group' -> 'Group + AI').
+export function paperNameFor(encoding) {
+  return (CONDITION_INFO.find(c => c.encoding === encoding) || {}).paper || encoding
+}
 
 // Columns of the analysis table, in CSV order. Keep in sync with the Python/R
 // templates (they read these exact names).
@@ -50,15 +60,10 @@ export const COLUMNS = [
 
 export const KPIS = ['novelty', 'usefulness', 'overall_quality']
 
-/** Map a session's AI configuration to its experimental condition label. */
+/** Map a session's AI configuration to its condition encoding (None/Solo/Group/Both). */
 export function conditionForSession(session) {
   const ai = session?.aiConfig || {}
-  const ind = !!ai.individualAI
-  const grp = !!ai.groupAI
-  if (ind && grp) return 'Full AI'
-  if (ind && !grp) return 'Individual + AI'
-  if (!ind && grp) return 'Group + AI'
-  return 'Human-Only Hybrid'
+  return conditionFromFlags(!!ai.individualAI, !!ai.groupAI)
 }
 
 /** Overall quality = mean of novelty and usefulness when both are present. */
@@ -275,10 +280,10 @@ function toFlag(zeroOne, yesNo) {
 }
 
 function conditionFromFlags(solo, group) {
-  if (solo && group) return 'Full AI'
-  if (solo && !group) return 'Individual + AI'
-  if (!solo && group) return 'Group + AI'
-  return 'Human-Only Hybrid'
+  if (solo && group) return 'Both'   // AI in both stages   (Full AI)
+  if (solo && !group) return 'Solo'  // AI in solo stage    (Individual + AI)
+  if (!solo && group) return 'Group' // AI in group stage   (Group + AI)
+  return 'None'                       // no AI               (Human-Only Hybrid)
 }
 
 /**
@@ -301,22 +306,32 @@ function meanRaterCols(lowerMap, plainKeys, kpiPrefix) {
   return vals.reduce((a, b) => a + b, 0) / vals.length
 }
 
-/** Best-effort match of a free-text condition label to a canonical one. */
+/**
+ * Best-effort match of any free-text condition label to the placement encoding
+ * (None/Solo/Group/Both). Accepts the new encoding directly, the paper names
+ * (Human-Only Hybrid / Individual + AI / Group + AI / Full AI), the old short
+ * codes (HumanOnly/IndAI/GroupAI/FullAI) and AI-Group/AI-Individual/Baseline
+ * style labels — so older exports still import correctly.
+ */
 export function canonicalCondition(raw) {
-  const s = String(raw || '').toLowerCase()
+  const s = String(raw || '').toLowerCase().trim()
   if (!s) return ''
+  // Direct placement names (the current encoding).
+  if (s === 'none') return 'None'
+  if (s === 'solo') return 'Solo'
+  if (s === 'group') return 'Group'
+  if (s === 'both') return 'Both'
+  // Otherwise infer from the words present.
+  const hasFull = /(full|both)/.test(s)
+  const hasNone = /(human[- ]?only|no[- ]?ai|control|baseline|none)/.test(s)
   const hasInd = /(individual|solo|ind)/.test(s)
   const hasGrp = /group/.test(s)
-  const hasFull = /(full|both)/.test(s)
-  const hasNone = /(human[- ]?only|no[- ]?ai|control|none|baseline)/.test(s)
-  if (hasFull) return 'Full AI'
-  if (hasNone) return 'Human-Only Hybrid'
-  if (hasInd && hasGrp) return 'Full AI'
-  if (hasInd) return 'Individual + AI'
-  if (hasGrp) return 'Group + AI'
-  // exact canonical match (case-insensitive)
-  const exact = CONDITIONS.find(c => c.toLowerCase() === s)
-  return exact || raw
+  if (hasFull) return 'Both'
+  if (hasNone) return 'None'
+  if (hasInd && hasGrp) return 'Both'
+  if (hasInd) return 'Solo'
+  if (hasGrp) return 'Group'
+  return raw
 }
 
 // ── Loading idea scores from an external ranked-ideas file ─────────────────────

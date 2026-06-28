@@ -4,20 +4,26 @@
 #
 # WHAT THIS SCRIPT DOES
 #   For each KPI (novelty, usefulness, overall_quality) it fits a linear
-#   regression of the KPI on the 4-level `condition` factor with "Human-Only
-#   Hybrid" (no AI) as the reference, then reports the coefficient table, the
-#   primary planned contrast (Individual + AI vs Group + AI), a best->worst
-#   ranking with Holm-adjusted pairwise tests, an INSIGHTS section that reads the
-#   results back in plain language, and plots. Base R only (stats + graphics) —
-#   no external CRAN packages needed.
+#   regression of the KPI on the 4-level `condition` factor with "None" (no AI)
+#   as the reference, then reports the coefficient table, the primary planned
+#   contrast (Solo vs Group = AI timing), a best->worst ranking with Holm-adjusted
+#   pairwise tests, an INSIGHTS section that reads the results back in plain
+#   language, and plots. Base R only (stats + graphics) — no external packages.
+#
+# CONDITION ENCODING (Set A / placement)
+#   None = Human-Only Hybrid (AI in neither stage)   <- regression reference
+#   Solo = Individual + AI    (AI in solo stage only)
+#   Group= Group + AI         (AI in group stage only)
+#   Both = Full AI            (AI in both stages)
 #
 # WHERE THE DATA COMES FROM (read this)
 #   The data is the SCORED DATASET built in the previous step of the page — the
 #   same rows you can grab with "Download CSV" / "Download Excel" (the
 #   "summarized file"), already including every idea's FINAL scores. The page
 #   mounts it in the WebR virtual filesystem at /tmp/data.csv. One row per idea;
-#   columns: idea_id, session, condition, phase, group_id, author_id, novelty,
-#   usefulness, overall_quality, final_pick, text. Edit freely, then press Run.
+#   columns: idea_id, session, condition (None/Solo/Group/Both), phase, group_id,
+#   author_id, novelty, usefulness, overall_quality, final_pick, text. Edit freely,
+#   then press Run.
 ###############################################################################
 
 # Read the step-2 dataset that the page wrote to the WebR virtual filesystem.
@@ -30,9 +36,16 @@ cat(" AsPredicted #298152: Effects of AI Timing on Idea Generation\n")
 cat("==========================================================\n")
 cat("Rows read:", nrow(dat), " Columns:", ncol(dat), "\n\n")
 
-# Canonical order of the four conditions; the FIRST element is the regression
-# reference (so every coefficient reads as "condition - Human-Only Hybrid").
-cond_levels <- c("Human-Only Hybrid", "Individual + AI", "Group + AI", "Full AI")
+# CONDITION ENCODING (Set A / placement): None = no AI (Human-Only Hybrid),
+# Solo = AI in solo stage only (Individual + AI), Group = AI in group stage only
+# (Group + AI), Both = AI in both stages (Full AI). "None" is first, so it is the
+# regression reference and every coefficient reads as "condition - None".
+cond_levels <- c("None", "Solo", "Group", "Both")
+# Placement -> readable description, used by the insights read-out.
+cond_paper <- c(None  = "Human-Only Hybrid (AI in neither stage)",
+                Solo  = "Individual + AI (AI in solo stage only)",
+                Group = "Group + AI (AI in group stage only)",
+                Both  = "Full AI (AI in both stages)")
 
 # Defensive: drop any rows whose condition label is not one of the four (e.g. a
 # typo from an imported file), announcing what was removed.
@@ -50,7 +63,7 @@ kpis <- c("novelty", "usefulness", "overall_quality")
 for (k in kpis) dat[[k]] <- suppressWarnings(as.numeric(dat[[k]]))
 
 # Short labels + a fixed colour per condition, reused across all plots.
-cond_short <- c("Human-Only", "Indiv+AI", "Group+AI", "Full AI")
+cond_short <- c("None", "Solo", "Group", "Both")
 cond_col   <- c("#4D4D4D", "#1F77B4", "#2CA02C", "#D62728")
 
 # 95% t critical value for a given residual df (falls back to the normal 1.96
@@ -91,7 +104,7 @@ for (k in kpis) {
   if (any(tab > 0 & tab < 2))
     cat("WARNING: some condition(s) have a single observation; estimates unstable.\n")
 
-  ## 1a. The regression itself: kpi ~ condition (reference = Human-Only Hybrid).
+  ## 1a. The regression itself: kpi ~ condition (reference = None / no AI).
   ## Wrapped in tryCatch so a degenerate fit warns instead of aborting the run.
   m <- tryCatch(lm(kpi ~ condition, data = d),
                 error = function(e) { cat("WARNING: lm() failed for '", k, "': ",
@@ -100,18 +113,18 @@ for (k in kpis) {
   models[[k]] <- m                            # remember for the insights section
 
   sm <- summary(m)
-  cat("\n--- lm(", k, " ~ condition) coefficients [reference = Human-Only Hybrid] ---\n", sep = "")
+  cat("\n--- lm(", k, " ~ condition) coefficients [reference = None / no AI] ---\n", sep = "")
   ct <- sm$coefficients                       # estimate / SE / t / p per term
   print(round(ct, 4))
 
   # Annotate each coefficient with a plain significance flag.
-  cat("\nSignificance (vs Human-Only Hybrid baseline, alpha = 0.05):\n")
+  cat("\nSignificance (vs None / no-AI baseline, alpha = 0.05):\n")
   for (r in seq_len(nrow(ct))) {
     nm <- rownames(ct)[r]; p <- ct[r, 4]
     star <- if (is.na(p)) "NA" else if (p < .001) "***" else if (p < .01) "**" else
             if (p < .05) "*" else if (p < .10) "." else "ns"
     # Strip the "condition" prefix R adds to each factor-dummy name.
-    lab <- if (nm == "(Intercept)") "(Intercept = Human-Only Hybrid mean)" else sub("^condition", "", nm)
+    lab <- if (nm == "(Intercept)") "(Intercept = None / no-AI mean)" else sub("^condition", "", nm)
     cat(sprintf("  %-28s  est=%+8.4f  p=%9.4g  %s\n", lab, ct[r, 1], p, star))
   }
   cat(sprintf("\nModel fit:  N = %d,  residual df = %d,  R^2 = %.4f,  Adj R^2 = %.4f\n",
@@ -123,14 +136,14 @@ for (k in kpis) {
     cat(sprintf("Omnibus F(%d, %d) = %.3f,  p = %.4g\n", fst[2], fst[3], fst[1], fp))
   }
 
-  ## 1b. PRIMARY PLANNED CONTRAST: (Individual + AI) - (Group + AI).
+  ## 1b. PRIMARY PLANNED CONTRAST: Solo - Group  (= AI timing).
   ## Both levels are coded vs the same reference, so the contrast equals
-  ## b_Ind - b_Grp (the intercept and the Full-AI term cancel). As a weight
+  ## b_Solo - b_Group (the intercept and the Both term cancel). As a weight
   ## vector L over the coefficients this is L = c(0, 1, -1, 0); its variance is
   ## L' vcov(m) L, giving SE, t, and a two-sided p on the residual df.
-  cat("\n--- PRIMARY PLANNED CONTRAST: (Individual + AI) - (Group + AI) ---\n")
+  cat("\n--- PRIMARY PLANNED CONTRAST: Solo (Individual + AI) - Group (Group + AI) ---\n")
   cn <- names(coef(m))                        # coefficient names, to build L by name
-  b_ind_nm <- "conditionIndividual + AI"; b_grp_nm <- "conditionGroup + AI"
+  b_ind_nm <- "conditionSolo"; b_grp_nm <- "conditionGroup"
   if (all(c(b_ind_nm, b_grp_nm) %in% cn)) {   # both conditions present in the model
     L <- setNames(rep(0, length(cn)), cn); L[b_ind_nm] <- 1; L[b_grp_nm] <- -1
     est <- sum(L * coef(m))                   # the contrast estimate
@@ -142,9 +155,9 @@ for (k in kpis) {
     cat(sprintf("  estimate = %+0.4f\n  SE       = %0.4f\n", est, se))
     cat(sprintf("  t(%d)     = %0.3f\n  p(two-sided) = %0.4g\n", dfres, tval, pval))
     cat(sprintf("  95%% CI   = [%+0.4f, %+0.4f]\n", est - tc * se, est + tc * se))
-    cat("  Positive => Individual+AI scores higher than Group+AI on", k, "\n")
+    cat("  Positive => Solo (solo-stage AI) scores higher than Group on", k, "\n")
   } else {
-    cat("  WARNING: Individual+AI / Group+AI absent (empty cell); contrast not estimable.\n")
+    cat("  WARNING: Solo / Group absent (empty cell); contrast not estimable.\n")
   }
 
   ## 1c. Condition means (these equal the EMMs for a single-factor model),
@@ -215,7 +228,7 @@ for (k in kpis) {
   est <- ct[eff_rows, 1]; se <- ct[eff_rows, 2]; pv <- ct[eff_rows, 4]
   labs <- sub("^condition", "", rownames(ct)[eff_rows])
   # keep a fixed left-to-right order of effects for readability
-  want <- c("Individual + AI", "Group + AI", "Full AI")
+  want <- c("Solo", "Group", "Both")
   idx  <- match(want, labs); idx <- idx[!is.na(idx)]
   est <- est[idx]; se <- se[idx]; pv <- pv[idx]; labs <- labs[idx]
   if (length(est) == 0) { cat("Coef plot skipped (no effects) for", k, "\n"); next }
@@ -223,7 +236,7 @@ for (k in kpis) {
   yy <- rev(seq_along(est))                    # top-to-bottom row positions
   xr <- range(c(lo, hi, 0), na.rm = TRUE); xr <- xr + c(-1, 1) * 0.08 * diff(xr)
   plot(NA, xlim = xr, ylim = c(0.5, length(est) + 0.5), yaxt = "n",
-       xlab = paste0("Effect on ", k, " vs Human-Only Hybrid"), ylab = "",
+       xlab = paste0("Effect on ", k, " vs None (no AI)"), ylab = "",
        main = paste0("Condition effects on ", k, "\n(coefficients vs baseline, 95% CI)"))
   axis(2, at = yy, labels = labs, las = 1)
   abline(v = 0, lty = 2, col = "grey50")       # zero = no difference from baseline
@@ -239,6 +252,10 @@ for (k in kpis) {
 cat("\n\n##############################################################\n")
 cat("# INSIGHTS  (read directly off the regression results above)\n")
 cat("##############################################################\n")
+
+# Remind the reader what the condition codes mean (Set A / placement encoding).
+cat("\nCondition encoding (Set A / placement):\n")
+for (cc in cond_levels) cat(sprintf("    %-6s = %s\n", cc, cond_paper[[cc]]))
 
 # Which of the four conditions actually have data, and which are missing.
 cond_counts <- table(factor(dat$condition, levels = cond_levels))
@@ -274,10 +291,10 @@ for (k in kpis) {
   # Each present condition vs the no-AI baseline, with significance, read off the
   # regression coefficient table.
   ct <- summary(m)$coefficients
-  cat("  Versus the 'Human-Only Hybrid' baseline:\n")
+  cat("  Versus the 'None' (no-AI) baseline:\n")
   any_sig <- FALSE
   for (c in present) {
-    if (c == "Human-Only Hybrid") next
+    if (c == "None") next
     nm <- paste0("condition", c)               # R's coefficient name for this level
     if (nm %in% rownames(ct)) {
       b <- ct[nm, 1]; p <- ct[nm, 4]
@@ -291,14 +308,14 @@ for (k in kpis) {
 
   # The pre-registered AI-timing contrast, recomputed from the coefficients and
   # summarised in one sentence.
-  cn <- names(coef(m)); ni <- "conditionIndividual + AI"; ng <- "conditionGroup + AI"
+  cn <- names(coef(m)); ni <- "conditionSolo"; ng <- "conditionGroup"
   if (all(c(ni, ng) %in% cn)) {
     L <- setNames(rep(0, length(cn)), cn); L[ni] <- 1; L[ng] <- -1
     est <- sum(L * coef(m)); se <- sqrt(as.numeric(t(L) %*% vcov(m) %*% L))
     pv <- 2 * pt(abs(est / se), df = m$df.residual, lower.tail = FALSE)
-    winner <- if (est >= 0) "Individual + AI" else "Group + AI"
+    winner <- if (est >= 0) "Solo" else "Group"
     how <- if (pv < 0.05) "significantly" else "but NOT significantly"
-    cat(sprintf("  AI timing (Individual + AI vs Group + AI): %s scores %.2f higher, %s (p = %.3f).\n",
+    cat(sprintf("  AI timing (Solo vs Group): %s scores %.2f higher, %s (p = %.3f).\n",
                 winner, abs(est), how, pv))
   }
   cat(sprintf("  => Best on %s: '%s'.  Worst: '%s'.\n", k,

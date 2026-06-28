@@ -107,27 +107,34 @@ export default function AdminSession() {
       const groupPhaseOn = session.phaseConfig?.groupPhaseActive !== false
       const aiSolo = !!session.aiConfig?.individualAI && indivPhaseOn
       const aiGroup = !!session.aiConfig?.groupAI && groupPhaseOn
-      const aiConditionLabel =
-        aiSolo && aiGroup ? 'Full AI (AI in both stages)'
-          : aiSolo && !aiGroup ? 'Individual + AI (AI in solo stage only)'
-            : !aiSolo && aiGroup ? 'Group + AI (AI in group stage only)'
-              : 'Human-Only Hybrid (no AI)'
       const sessionCode = session.code || sessionId
-      const conditionCode =
-        aiSolo && aiGroup ? 'FullAI'
-          : aiSolo && !aiGroup ? 'IndAI'
-            : !aiSolo && aiGroup ? 'GroupAI'
-              : 'HumanOnly'
+      // CONDITION ENCODING (Set A / placement): the short `Condition` code that
+      // every row carries, plus the paper name and where AI is present.
+      const placement =
+        aiSolo && aiGroup ? 'Both'
+          : aiSolo && !aiGroup ? 'Solo'
+            : !aiSolo && aiGroup ? 'Group'
+              : 'None'
+      const paperName =
+        aiSolo && aiGroup ? 'Full AI'
+          : aiSolo && !aiGroup ? 'Individual + AI'
+            : !aiSolo && aiGroup ? 'Group + AI'
+              : 'Human-Only Hybrid'
+      const aiPresentIn =
+        aiSolo && aiGroup ? 'both stages'
+          : aiSolo && !aiGroup ? 'solo stage only'
+            : !aiSolo && aiGroup ? 'group stage only'
+              : 'neither stage'
+      const aiConditionLabel = `${placement} = ${paperName} (AI in ${aiPresentIn})`  // for the About sheet
       // Prepend the condition keys so they are the leftmost columns of every
-      // sheet. Includes machine-friendly dummies (AI Solo / AI Group as 0/1 and a
-      // short Condition Code) so the planned condition-dummy regressions and the
-      // Individual+AI-vs-Group+AI contrast need no string parsing.
+      // sheet. `Condition` is the Set A placement code (None/Solo/Group/Both);
+      // the 0/1 dummies are kept so the condition-dummy regressions and the
+      // Solo-vs-Group contrast need no string parsing.
       const stamp = row => ({
         'Session Code': sessionCode,
-        'AI Condition': aiConditionLabel,
-        'Condition Code': conditionCode,
-        'AI Solo Stage': aiSolo ? 'Yes' : 'No',
-        'AI Group Stage': aiGroup ? 'Yes' : 'No',
+        'Condition': placement,
+        'Condition (paper name)': paperName,
+        'AI present in': aiPresentIn,
         'AI Solo (0/1)': aiSolo ? 1 : 0,
         'AI Group (0/1)': aiGroup ? 1 : 0,
         ...row,
@@ -166,13 +173,14 @@ export default function AdminSession() {
         [],
         ['STUDY — AsPredicted #298152: "The Effects of AI Timing on Idea Generation and Selection"'],
         ['Unit of analysis', 'the IDEA. Each idea is rated on Novelty, Usefulness, and Overall Quality (= mean of novelty & usefulness) by blind expert raters.'],
-        ['Manipulation', 'the TIMING of AI = {AI in solo stage} × {AI in group stage} → four between-subjects conditions:'],
-        ['  • Human-Only Hybrid', 'no AI in either stage'],
-        ['  • Individual + AI', 'AI in the solo (individual) stage only'],
-        ['  • Group + AI', 'AI in the group stage only'],
-        ['  • Full AI', 'AI in both stages'],
-        ['Pooling across sessions', 'each session is ONE condition; every data row carries Session Code + AI Condition (+ Condition Code, AI Solo/Group Stage, AI Solo/Group (0/1)), so you can stack the same sheet from several sessions into one condition-coded table.'],
-        ['Condition coding for regressions', 'use AI Solo (0/1) × AI Group (0/1) as the two dummies (main effects + interaction give the full 2×2); the planned Individual+AI vs Group+AI contrast = rows where exactly one of the two is 1.'],
+        ['Manipulation', 'the TIMING of AI = {AI in solo stage} × {AI in group stage} → four between-subjects conditions. Each row is tagged with the Set A placement code in the "Condition" column:'],
+        ['  Condition (code)', 'paper name           — AI is present in'],
+        ['  • None', 'Human-Only Hybrid    — neither stage'],
+        ['  • Solo', 'Individual + AI      — solo (individual) stage only'],
+        ['  • Group', 'Group + AI           — group stage only'],
+        ['  • Both', 'Full AI              — both stages'],
+        ['Pooling across sessions', 'each session is ONE condition; every data row carries Session Code + Condition (None/Solo/Group/Both) + Condition (paper name) + AI present in + AI Solo/Group (0/1), so you can stack the same sheet from several sessions into one condition-coded table.'],
+        ['Condition coding for regressions', 'regress on the Condition column (None/Solo/Group/Both; None = reference), or use AI Solo (0/1) × AI Group (0/1) as the two dummies (main effects + interaction give the full 2×2). The planned Solo-vs-Group contrast (= Individual+AI vs Group+AI) = rows where exactly one of the two dummies is 1.'],
         ['Clustering unit (triad)', 'use Group UID (= "SessionCode:groupId"), NOT the bare Group ID — g0/g1… repeat across sessions and would collide when pooled. Participant nesting: Author ID / Participant ID (Firebase uids, globally unique).'],
         [],
         ['WHERE EACH MEASURE LIVES'],
@@ -607,10 +615,9 @@ export default function AdminSession() {
       const conditionRows = [{
         'Session Code': sessionCode,
         'Session Name': session.name || '',
-        'AI Condition': aiConditionLabel,
-        'Condition Code': conditionCode,
-        'AI Solo Stage': aiSolo ? 'Yes' : 'No',
-        'AI Group Stage': aiGroup ? 'Yes' : 'No',
+        'Condition': placement,
+        'Condition (paper name)': paperName,
+        'AI present in': aiPresentIn,
         'AI Solo (0/1)': aiSolo ? 1 : 0,
         'AI Group (0/1)': aiGroup ? 1 : 0,
         'Participants': participants.length,
