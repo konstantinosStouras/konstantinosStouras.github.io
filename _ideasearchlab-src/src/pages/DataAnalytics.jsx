@@ -756,22 +756,25 @@ export default function DataAnalytics() {
             {runStatus && <span className={styles.statusLine}><span className={styles.spinner} /> {runStatus}</span>}
           </div>
 
-          <textarea
-            className={styles.codeArea}
-            value={code}
-            spellCheck={false}
-            onChange={e => setCode(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Tab') {
-                e.preventDefault()
-                const t = e.target
-                const s = t.selectionStart
-                const ne = code.slice(0, s) + '    ' + code.slice(t.selectionEnd)
-                setCode(ne)
-                requestAnimationFrame(() => { t.selectionStart = t.selectionEnd = s + 4 })
-              }
-            }}
-          />
+          <div className={styles.codeWrap}>
+            <CopyButton text={code} />
+            <textarea
+              className={styles.codeArea}
+              value={code}
+              spellCheck={false}
+              onChange={e => setCode(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Tab') {
+                  e.preventDefault()
+                  const t = e.target
+                  const s = t.selectionStart
+                  const ne = code.slice(0, s) + '    ' + code.slice(t.selectionEnd)
+                  setCode(ne)
+                  requestAnimationFrame(() => { t.selectionStart = t.selectionEnd = s + 4 })
+                }
+              }}
+            />
+          </div>
 
           <SectionActions
             onSave={saveCode}
@@ -929,6 +932,56 @@ function InsightsPanel({ report }) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+// Floating "Copy code" button (top-right of the code editor) styled to look like
+// the copy button developers know from Claude / Claude Code: clipboard glyph +
+// "Copy", flipping to a green check + "Copied" for ~2s after a successful copy.
+function CopyButton({ text }) {
+  const [copied, setCopied] = useState(false)
+  const timer = useRef(null)
+  useEffect(() => () => clearTimeout(timer.current), [])
+  async function copy() {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text)
+      } else {
+        // Fallback for older / non-secure contexts where the async API is absent.
+        const ta = document.createElement('textarea')
+        ta.value = text
+        ta.style.position = 'fixed'
+        ta.style.opacity = '0'
+        document.body.appendChild(ta)
+        ta.focus(); ta.select()
+        document.execCommand('copy')
+        document.body.removeChild(ta)
+      }
+      setCopied(true)
+      clearTimeout(timer.current)
+      timer.current = setTimeout(() => setCopied(false), 2000)
+    } catch (_) { /* clipboard blocked — silently ignore */ }
+  }
+  return (
+    <button
+      type="button"
+      className={`${styles.copyBtn} ${copied ? styles.copyBtnDone : ''}`}
+      onClick={copy}
+      title="Copy code"
+      aria-label={copied ? 'Code copied' : 'Copy code'}
+    >
+      {copied ? (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      ) : (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+        </svg>
+      )}
+      {copied ? 'Copied' : 'Copy'}
+    </button>
+  )
+}
 
 // Three-button row (Save / Make this the default / Restore built-in default) that
 // matches the admin panel's pattern; the clicked button flashes green for ~2s.

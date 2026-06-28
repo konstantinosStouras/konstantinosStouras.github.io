@@ -235,6 +235,36 @@
   flex-wrap: wrap;
   margin-bottom: 10px;
 }
+/* Editor wrapper so the floating "Copy code" button can pin to its top-right. */
+.codeWrap { position: relative; }
+.copyBtn {
+  position: absolute;
+  top: 10px;
+  right: 16px;            /* clear of the textarea's scrollbar */
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  font-family: var(--font-body);
+  color: #c7c7cf;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.copyBtn:hover { background: rgba(255, 255, 255, 0.16); color: #fff; border-color: rgba(255, 255, 255, 0.28); }
+.copyBtn svg { display: block; }
+.copyBtnDone, .copyBtnDone:hover {
+  color: #7ee787;
+  background: rgba(126, 231, 135, 0.14);
+  border-color: rgba(126, 231, 135, 0.4);
+}
+
 .codeArea {
   width: 100%;
   min-height: 360px;
