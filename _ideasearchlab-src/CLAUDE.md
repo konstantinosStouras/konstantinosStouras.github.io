@@ -354,7 +354,10 @@ exports carry it, and the Python/R templates regress on it (reference = `None`; 
 `read_csv(keep_default_na=False)` so the string `"None"` isn't parsed as NaN). So a session *is*
 a condition — no manual labelling.
 
-Five-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
+A condition-encoding card under the intro shows a **two-column** key — *Encoding* (the
+None/Solo/Group/Both tag) · *AI is present in* — centered under the full-width intro text.
+
+Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
 1. **Data source.** Lists every session (`getDocs('sessions')`) with its condition tag;
    tick any completed/active ones and "Load" pulls their ideas/participants/groups and
    flattens to **one row per idea** (`buildRowsForSession`): idea_id, session, condition,
@@ -390,7 +393,13 @@ Five-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      any **imported export workbooks** (`importedBooks` state — Step 1's *Import Excel/CSV* now
      retains every sheet of an imported `.xlsx`, not just the Ideas rows). `bookAboutMeta()` reads
      an imported book's Conditions/Ideas sheet for the aggregate About.
-3. **Score ideas, manage participants & download.** Every idea gets a per-KPI score:
+   - **Summary tallies:** three stat boxes — *Ideas generated* (`rows.length`), *Total final ideas*
+     (`final_pick == 1`), *Number of sessions* (distinct session codes in the loaded data).
+   - **Scores round-trip:** the Rankings tab's *Novelty / Usefulness / Quality* columns are filled
+     from any scores set in Step 3 (mapped by Idea ID via `rankingsSheetFromIdeas(ideaRows, scoreById)`),
+     so re-downloading the aggregate after scoring carries the scores back in.
+3. **Score ideas (the Rankings rows), manage participants & download.** Works the **Rankings**
+   rows of the consolidated Step-2 data. Every idea gets a per-KPI score:
    the configured LLM rates each on novelty + usefulness (1–7), overall = their mean.
    Scoring runs **client-side from the browser** via `src/utils/llmClient.js`, which reads
    the provider key straight from `settings/ai` (admin can read it per Firestore rules —
@@ -419,7 +428,21 @@ Five-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
    per-idea dataset), *Summary by condition* (n + mean/SD/n per KPI), *Summary by session*, and
    *Removed participants* when any — plus a raw-dataset **CSV**. Both reflect the current
    post-removal `effectiveRows`.
-4. **Regressions — edit & compile online.** Two tabs, **Python** and **R**, each pre-filled
+   - **Score scope toggle (`scoreOnlyFinal`, default ON):** a checkbox **"Only score the Final
+     Ideas"** scopes the AI scoring to the group-selected ideas (`final_pick == 1`) — the set
+     Step 5 analyses — or, unticked, to every idea. The button label + count adapt
+     (`scopeUnscored`). The data table now also shows a **Final** column (Final Group Pick Yes/No)
+     and the *Quality* header (= `overall_quality`), so it reads as the Rankings view. Scores set
+     here feed the Step-2 aggregate Rankings tab and the Step-5 regressions.
+4. **Summary Statistics.** Descriptive stats of the consolidated Step-3 data (`statRows`):
+   stat boxes (ideas analysed, final ideas, sessions, conditions with data, mean quality), a
+   per-condition table (n ideas / final / scored + each KPI's mean (SD) via `summarize()`), and
+   a stage breakdown (individual vs group, final-pick rate). A checkbox **"Only include ideas
+   scored on all 3 KPIs"** (`statsOnlyScored`) restricts every figure to fully-scored ideas.
+5. **Regressions — edit & compile online.** Runs on the **group-selected Final Ideas only**
+   (`effectiveRows.filter(final_pick == 1)` → `dataCsv`; the guard needs ≥2 scored final ideas) —
+   "currently we compare conditions for the ideas the group selected after the group phase; other
+   subsets may be added later". Two tabs, **Python** and **R**, each pre-filled
    with a complete script (`src/data/analyticsPython.py` / `analyticsR.R`, inlined via Vite
    `?raw` in `analyticsTemplates.js`) that runs the SAME analysis: one OLS/`lm` per KPI on
    the 4-level condition factor (Human-Only = baseline), the **primary planned contrast
@@ -440,7 +463,7 @@ Five-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
    jsDelivr on first Run (Pyodide `v314.0.1`, WebR `0.6.0`, each with same-API version
    fallbacks), so they add ~0 KB to the main bundle. **Entirely client-side — ships with a
    normal Pages build, no Cloud Functions or Firestore-rules change.**
-5. **Insights gained.** A readable, formatted write-up of the Step-4 results so the admin no
+6. **Insights gained.** A readable, formatted write-up of the Step-5 results so the admin no
    longer has to squint at the monospace console. On every Run the page snapshots the run
    (`lastRun = { lang, code, output, images, ranAt }`); `parseRunOutput()` in
    `src/utils/insightsReport.js` splits the console text at the `# INSIGHTS` banner into the

@@ -635,20 +635,25 @@ function buildAggregateAbout(entries) {
 
 /**
  * Build the extra "Rankings" tab from the aggregated Ideas rows. One row per idea
- * with fixed headings; the Novelty / Usefulness / Quality columns are left EMPTY
- * for blind expert rating.
+ * with fixed headings. The Novelty / Usefulness / Quality columns are filled from
+ * `scoreById` (Idea ID → { novelty, usefulness, quality }) when scores were set on
+ * the page in Step 3; otherwise they are left EMPTY for blind expert rating.
  */
-export function rankingsSheetFromIdeas(ideaRows) {
-  const rows = (ideaRows || []).map(r => ({
-    'Idea ID': r['Idea ID'] ?? '',
-    'Condition': r['Condition'] ?? '',
-    'Stage': r['Stage'] ?? '',
-    'Final Group Pick': r['Final Group Pick'] ?? '',
-    'Title': r['Title'] ?? '',
-    'Description': r['Description'] ?? '',
-    'Novelty': '',
-    'Usefulness': '',
-    'Quality': '',
-  }))
+export function rankingsSheetFromIdeas(ideaRows, scoreById) {
+  const blank = v => (v == null ? '' : v)
+  const rows = (ideaRows || []).map(r => {
+    const sc = scoreById && scoreById.get(String(r['Idea ID'] ?? ''))
+    return {
+      'Idea ID': r['Idea ID'] ?? '',
+      'Condition': r['Condition'] ?? '',
+      'Stage': r['Stage'] ?? '',
+      'Final Group Pick': r['Final Group Pick'] ?? '',
+      'Title': r['Title'] ?? '',
+      'Description': r['Description'] ?? '',
+      'Novelty': sc ? blank(sc.novelty) : '',
+      'Usefulness': sc ? blank(sc.usefulness) : '',
+      'Quality': sc ? blank(sc.quality) : '',
+    }
+  })
   return { name: 'Rankings', kind: 'json', rows }
 }
