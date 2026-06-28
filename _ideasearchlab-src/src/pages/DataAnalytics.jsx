@@ -58,6 +58,10 @@ export default function DataAnalytics() {
   const [scoreModel, setScoreModel] = useState(SCORING_DEFAULT_MODEL[DEFAULT_SCORING_PROVIDER])
   const [scoring, setScoring] = useState(null) // { done, total } | null
   const [scoreErr, setScoreErr] = useState('')
+  // Score only the group-selected ideas (Final Group Pick = 1) vs every idea.
+  const [scoreOnlyFinal, setScoreOnlyFinal] = useState(true)
+  // Summary Statistics: restrict to ideas scored on all three KPIs.
+  const [statsOnlyScored, setStatsOnlyScored] = useState(false)
 
   const [tab, setTab] = useState('python')
   const [pyCode, setPyCode] = useState(PYTHON_TEMPLATE)
@@ -67,7 +71,7 @@ export default function DataAnalytics() {
   const [output, setOutput] = useState('')
   const [images, setImages] = useState([])
   const [runError, setRunError] = useState(null)
-  // Snapshot of the most recent successful run — drives the Step 5 "Insights
+  // Snapshot of the most recent successful run — drives the Step 6 "Insights
   // gained" panel + its PDF export. { lang, code, output, images, ranAt }.
   const [lastRun, setLastRun] = useState(null)
 
@@ -333,10 +337,17 @@ export default function DataAnalytics() {
   // ── Score the unscored ideas with the configured LLM ──
   async function scoreUnscored() {
     setScoreErr('')
-    const targets = effectiveRows
+    // Score either every idea, or only the group-selected Final Ideas, per the toggle.
+    const pool = scoreOnlyFinal ? effectiveRows.filter(r => Number(r.final_pick) === 1) : effectiveRows
+    const targets = pool
       .filter(r => r.novelty === '' || r.usefulness === '')
       .map(r => ({ rid: r.rid, text: r.text || ideaText(r) }))
-    if (!targets.length) { setScoreErr('All ideas already have novelty and usefulness scores.'); return }
+    if (!targets.length) {
+      setScoreErr(scoreOnlyFinal
+        ? 'No unscored Final Ideas to score (none are marked Final Group Pick, or they are all scored). Untick the box to score all ideas.'
+        : 'All ideas already have novelty and usefulness scores.')
+      return
+    }
     setScoring({ done: 0, total: targets.length })
     try {
       const scores = await scoreIdeas(targets.map(t => t.text), {
@@ -427,7 +438,17 @@ export default function DataAnalytics() {
       }
       const merged = mergeSessionSheets(sources, aboutMeta)
       const ideasSheet = merged.find(s => s.name === 'Ideas')
-      if (ideasSheet) merged.push(rankingsSheetFromIdeas(ideasSheet.rows))
+      if (ideasSheet) {
+        // Carry any KPI scores set in Step 3 into the Rankings tab (by Idea ID),
+        // so the consolidated file reflects the scoring done on the page.
+        const scoreById = new Map()
+        for (const r of rows) {
+          if (r.novelty !== '' || r.usefulness !== '') {
+            scoreById.set(String(r.idea_id), { novelty: r.novelty, usefulness: r.usefulness, quality: r.overall_quality })
+          }
+        }
+        merged.push(rankingsSheetFromIdeas(ideasSheet.rows, scoreById))
+      }
       const wb = XLSX.utils.book_new()
       appendSheetsToWorkbook(wb, merged)
       const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
@@ -459,9 +480,12 @@ export default function DataAnalytics() {
 
   async function runCode() {
     if (running) return
-    const scored = effectiveRows.filter(r => r.novelty !== '' && r.usefulness !== '')
+    // The analysis compares conditions on the ideas the groups selected after the
+    // group phase (Final Group Pick = 1). Scored final ideas only.
+    const analysisRows = effectiveRows.filter(r => Number(r.final_pick) === 1)
+    const scored = analysisRows.filter(r => r.novelty !== '' && r.usefulness !== '')
     if (scored.length < 2) {
-      setRunError('Need at least a couple of scored ideas. Load a session and score the ideas first (or import a file with scores).')
+      setRunError('Need at least a couple of scored Final-Group-Pick ideas. In Step 3, score the final ideas first (the “Only score the Final Ideas” box is on by default).')
       return
     }
     setRunning(true)
@@ -469,7 +493,7 @@ export default function DataAnalytics() {
     setImages([])
     outRef.current = ''
     setOutput('')
-    const dataCsv = rowsToCsv(effectiveRows)
+    const dataCsv = rowsToCsv(analysisRows)
     try {
       const opts = { dataCsv, onStatus: setRunStatus }
       const result = tab === 'python'
@@ -479,7 +503,7 @@ export default function DataAnalytics() {
       setOutput(finalOutput)
       setImages(result.images || [])
       if (!result.ok) setRunError(result.error || 'Run failed.')
-      // Remember this run so Step 5 can present its insights + export the PDF.
+      // Remember this run so Step 6 can present its insights + export the PDF.
       // Kept even on a partial failure so whatever ran is still readable.
       setLastRun({
         lang: tab,
@@ -499,11 +523,35 @@ export default function DataAnalytics() {
   const stats = useMemo(() => summarize(effectiveRows), [effectiveRows])
   const scoredCount = effectiveRows.filter(r => r.novelty !== '' && r.usefulness !== '').length
   const unscoredCount = effectiveRows.length - scoredCount
+  // Section 2 / dataset tallies.
+  const isFinal = r => Number(r.final_pick) === 1
+  const finalCount = rows.filter(isFinal).length
+  const sessionCount = useMemo(() => new Set(rows.map(r => r.session)).size, [rows])
+  // Step-3 scoring scope (all ideas vs only Final Ideas) and its unscored count.
+  const scorePool = scoreOnlyFinal ? effectiveRows.filter(isFinal) : effectiveRows
+  const scopeUnscored = scorePool.filter(r => r.novelty === '' || r.usefulness === '').length
+  // Step-5 regression dataset: scored Final-Group-Pick ideas only.
+  const finalScoredCount = effectiveRows.filter(r => isFinal(r) && r.novelty !== '' && r.usefulness !== '').length
+
+  // ── Step 4: summary statistics over the consolidated Step-3 data ──
+  const isFullyScored = r => r.novelty !== '' && r.usefulness !== '' && r.overall_quality !== ''
+  const statRows = useMemo(
+    () => (statsOnlyScored ? effectiveRows.filter(isFullyScored) : effectiveRows),
+    [effectiveRows, statsOnlyScored])
+  const statSummary = useMemo(() => summarize(statRows), [statRows])
+  const statFinal = statRows.filter(isFinal).length
+  const statSessions = useMemo(() => new Set(statRows.map(r => r.session)).size, [statRows])
+  const statConditionsPresent = CONDITIONS.filter(c => (statSummary[c]?.count || 0) > 0).length
+  const statMeanQuality = useMemo(() => {
+    const v = statRows.map(r => Number(r.overall_quality)).filter(Number.isFinite)
+    return v.length ? (v.reduce((a, b) => a + b, 0) / v.length).toFixed(2) : '—'
+  }, [statRows])
+
   const code = tab === 'python' ? pyCode : rCode
   const setCode = tab === 'python' ? setPyCode : setRCode
   const resetCode = () => (tab === 'python' ? setPyCode(PYTHON_TEMPLATE) : setRCode(R_TEMPLATE))
 
-  // ── Step 5: insights derived from the last run ──
+  // ── Step 6: insights derived from the last run ──
   const report = useMemo(() => (lastRun ? parseRunOutput(lastRun.output) : null), [lastRun])
   // "rows used for analysis: N" is printed by both scripts; surface it in the PDF header.
   const rowsUsed = useMemo(() => {
@@ -557,14 +605,13 @@ export default function DataAnalytics() {
             <div className={styles.encodingTitle}>Condition encoding (used in every Excel/CSV export and the analyses)</div>
             <table className={styles.encodingTable}>
               <thead>
-                <tr><th>Condition (paper name)</th><th>AI is present in</th><th>Encoding (Set A)</th></tr>
+                <tr><th>Encoding</th><th>AI is present in</th></tr>
               </thead>
               <tbody>
                 {CONDITION_INFO.map((c, i) => (
                   <tr key={c.encoding}>
-                    <td>{c.paper}</td>
-                    <td>{c.ai}</td>
                     <td><span className={`${styles.condTag} ${styles[`cond${i}`]}`}>{c.encoding}</span></td>
+                    <td>{c.ai}</td>
                   </tr>
                 ))}
               </tbody>
@@ -655,9 +702,9 @@ export default function DataAnalytics() {
             <p className={styles.emptyNote}>Load one or more sessions (or import session export files) above, then build the consolidated file here.</p>
           ) : (
             <div className={styles.stats}>
-              <div className={styles.statBox}><div className={styles.statNum}>{loadedSessions.length + importedBooks.length}</div><div className={styles.statLabel}>Sources{importedBooks.length ? ` (${importedBooks.length} imported)` : ''}</div></div>
-              <div className={styles.statBox}><div className={styles.statNum}>{rows.length}</div><div className={styles.statLabel}>Ideas</div></div>
-              <div className={styles.statBox}><div className={styles.statNum}>11 + 1</div><div className={styles.statLabel}>Tabs + Rankings</div></div>
+              <div className={styles.statBox}><div className={styles.statNum}>{rows.length}</div><div className={styles.statLabel}>Ideas generated</div></div>
+              <div className={styles.statBox}><div className={styles.statNum}>{finalCount}</div><div className={styles.statLabel}>Total final ideas</div></div>
+              <div className={styles.statBox}><div className={styles.statNum}>{sessionCount}</div><div className={styles.statLabel}>Number of sessions</div></div>
             </div>
           )}
         </section>
@@ -694,10 +741,12 @@ export default function DataAnalytics() {
               </div>
 
               <div className={styles.banner}>
-                <strong>Extend the data — score each idea per KPI.</strong> The AI rater scores every idea
-                on novelty and usefulness (1–7); overall quality is their mean. Choose the API and model
-                below — it uses the matching key saved under AI&nbsp;Settings. You can also edit any score
-                directly in the table, remove participants, and download the summarized workbook.
+                <strong>Score the Rankings rows per KPI.</strong> These are the <em>Rankings</em> rows of the
+                consolidated data from Step&nbsp;2. The AI rater scores each idea on novelty and usefulness
+                (1–7); quality is their mean. Choose the API and model below — it uses the matching key saved
+                under AI&nbsp;Settings. The scores you set here flow back into the <em>Rankings</em> tab of the
+                Step&nbsp;2 aggregate and feed the Step&nbsp;5 regressions. You can also edit any score directly
+                in the table and remove participants.
               </div>
 
               <div className={styles.raterRow}>
@@ -713,9 +762,17 @@ export default function DataAnalytics() {
                 )}
               </div>
 
+              <label className={styles.checkRow}>
+                <input type="checkbox" checked={scoreOnlyFinal} onChange={e => setScoreOnlyFinal(e.target.checked)} disabled={!!scoring} />
+                <span>Only score the <strong>Final Ideas</strong> — the group-selected ideas (Final&nbsp;Group&nbsp;Pick&nbsp;=&nbsp;1)</span>
+                <span className={styles.kpiPill}>{finalCount} final</span>
+              </label>
+
               <div className={styles.row} style={{ marginBottom: 12 }}>
-                <button className="btn-primary" onClick={scoreUnscored} disabled={!!scoring || unscoredCount === 0}>
-                  {scoring ? `Scoring ${scoring.done}/${scoring.total}…` : `Score ${unscoredCount} unscored idea${unscoredCount === 1 ? '' : 's'} with AI`}
+                <button className="btn-primary" onClick={scoreUnscored} disabled={!!scoring || scopeUnscored === 0}>
+                  {scoring
+                    ? `Scoring ${scoring.done}/${scoring.total}…`
+                    : `Score ${scopeUnscored} ${scoreOnlyFinal ? 'final ' : ''}idea${scopeUnscored === 1 ? '' : 's'} with AI`}
                 </button>
                 {scoring && <span className={styles.statusLine}><span className={styles.spinner} /> contacting {scoreProvider}…</span>}
               </div>
@@ -783,8 +840,8 @@ export default function DataAnalytics() {
                 <table className={styles.dataTable}>
                   <thead>
                     <tr>
-                      <th>Idea ID</th><th>Session</th><th>Condition</th><th>Phase</th>
-                      <th>Novelty</th><th>Usefulness</th><th>Overall</th><th>Idea</th>
+                      <th>Idea ID</th><th>Session</th><th>Condition</th><th>Phase</th><th>Final</th>
+                      <th>Novelty</th><th>Usefulness</th><th>Quality</th><th>Idea</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -794,6 +851,7 @@ export default function DataAnalytics() {
                         <td>{r.session}</td>
                         <td><span className={`${styles.condTag} ${condClass(r.condition)}`}>{r.condition}</span></td>
                         <td>{r.phase}</td>
+                        <td>{isFinal(r) ? 'Yes' : 'No'}</td>
                         <td className="num">
                           <input className={styles.scoreInput} type="number" min="1" max="7" step="0.5"
                             value={r.novelty} onChange={e => updateScore(r.rid, 'novelty', e.target.value)} />
@@ -817,18 +875,87 @@ export default function DataAnalytics() {
           )}
         </section>
 
-        {/* STEP 4 — Code + compile */}
+        {/* STEP 4 — Summary statistics of the consolidated data */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>
-            <span><span className={styles.stepBadge}>4</span>Regressions — edit &amp; compile online</span>
+            <span><span className={styles.stepBadge}>4</span>Summary Statistics</span>
             <span className={styles.kpiPill}>KPIs: {KPIS.join(' · ')}</span>
           </h2>
           <p className={styles.hint}>
-            Both tabs run the <em>same</em> analysis on your scored dataset (after any removed participants):
-            one linear regression per KPI across the four conditions (<em>None</em> = no-AI baseline), the
-            planned <em>Solo</em> vs <em>Group</em> contrast, a best→worst ranking, and plots. Edit the code
-            and press Run — Python runs via Pyodide and R via WebR, both compiled in your browser (first run
+            Descriptive statistics of the consolidated dataset from Step&nbsp;3 — counts by condition and
+            stage, and each KPI's mean (SD) per condition. Optionally restrict to ideas that have been
+            scored on all three KPIs.
+          </p>
+
+          {effectiveRows.length === 0 ? (
+            <p className={styles.emptyNote}>Load (and optionally score) ideas above to see summary statistics.</p>
+          ) : (
+            <>
+              <label className={styles.checkRow}>
+                <input type="checkbox" checked={statsOnlyScored} onChange={e => setStatsOnlyScored(e.target.checked)} />
+                <span>Only include ideas scored on all 3 KPIs (novelty, usefulness, quality)</span>
+              </label>
+
+              <div className={styles.stats} style={{ marginTop: 12 }}>
+                <div className={styles.statBox}><div className={styles.statNum}>{statRows.length}</div><div className={styles.statLabel}>Ideas analysed</div></div>
+                <div className={styles.statBox}><div className={styles.statNum}>{statFinal}</div><div className={styles.statLabel}>Final ideas</div></div>
+                <div className={styles.statBox}><div className={styles.statNum}>{statSessions}</div><div className={styles.statLabel}>Sessions</div></div>
+                <div className={styles.statBox}><div className={styles.statNum}>{statConditionsPresent}</div><div className={styles.statLabel}>Conditions with data</div></div>
+                <div className={styles.statBox}><div className={styles.statNum}>{statMeanQuality}</div><div className={styles.statLabel}>Mean quality</div></div>
+              </div>
+
+              <div className={styles.tableWrap} style={{ marginTop: 14 }}>
+                <table className={styles.dataTable}>
+                  <thead>
+                    <tr>
+                      <th>Condition</th><th>Ideas</th><th>Final</th><th>Scored</th>
+                      <th>Novelty mean (SD)</th><th>Usefulness mean (SD)</th><th>Quality mean (SD)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {CONDITIONS.filter(c => (statSummary[c]?.count || 0) > 0).map(c => {
+                      const s = statSummary[c]
+                      const fmt = m => (m == null ? '—' : `${m.mean != null ? m.mean.toFixed(2) : '—'}${m.sd != null ? ` (${m.sd.toFixed(2)})` : ''}`)
+                      const finalIn = statRows.filter(r => r.condition === c && isFinal(r)).length
+                      return (
+                        <tr key={c}>
+                          <td><span className={`${styles.condTag} ${condClass(c)}`}>{c}</span></td>
+                          <td className="num">{s.count}</td>
+                          <td className="num">{finalIn}</td>
+                          <td className="num">{s.scored}</td>
+                          <td className="num">{fmt(s.kpis.novelty)}</td>
+                          <td className="num">{fmt(s.kpis.usefulness)}</td>
+                          <td className="num">{fmt(s.kpis.overall_quality)}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className={styles.stats} style={{ marginTop: 14 }}>
+                <div className={styles.statBox}><div className={styles.statNum}>{statRows.filter(r => /individual|solo/i.test(r.phase)).length}</div><div className={styles.statLabel}>Individual-stage ideas</div></div>
+                <div className={styles.statBox}><div className={styles.statNum}>{statRows.filter(r => /group/i.test(r.phase)).length}</div><div className={styles.statLabel}>Group-stage ideas</div></div>
+                <div className={styles.statBox}><div className={styles.statNum}>{statRows.length ? (statFinal / statRows.length * 100).toFixed(0) + '%' : '—'}</div><div className={styles.statLabel}>Final-pick rate</div></div>
+              </div>
+            </>
+          )}
+        </section>
+
+        {/* STEP 5 — Code + compile */}
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>
+            <span><span className={styles.stepBadge}>5</span>Regressions — edit &amp; compile online</span>
+            <span className={styles.kpiPill}>KPIs: {KPIS.join(' · ')}</span>
+          </h2>
+          <p className={styles.hint}>
+            Both tabs run the <em>same</em> analysis on the <strong>group-selected Final Ideas</strong>
+            {' '}(Final&nbsp;Group&nbsp;Pick&nbsp;=&nbsp;1, after any removed participants): one linear
+            regression per KPI across the four conditions (<em>None</em> = no-AI baseline), the planned
+            {' '}<em>Solo</em> vs <em>Group</em> contrast, a best→worst ranking, and plots. Edit the code and
+            press Run — Python runs via Pyodide and R via WebR, both compiled in your browser (first run
             downloads the runtime, ~10–30&nbsp;s).
+            {finalScoredCount < 2 && <><br /><span className={styles.unscored}>Score at least two Final Ideas in Step&nbsp;3 first (only {finalScoredCount} scored so far).</span></>}
           </p>
 
           <div className={styles.tabs}>
@@ -883,16 +1010,16 @@ export default function DataAnalytics() {
           )}
         </section>
 
-        {/* STEP 5 — Insights gained */}
+        {/* STEP 6 — Insights gained */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>
-            <span><span className={styles.stepBadge}>5</span>Insights gained</span>
+            <span><span className={styles.stepBadge}>6</span>Insights gained</span>
             {lastRun && (
               <button className="btn-primary" onClick={exportInsightsPdf}>⬇ Export PDF</button>
             )}
           </h2>
           <p className={styles.hint}>
-            A clean, readable write-up of what the Step&nbsp;4 regressions found — each KPI's
+            A clean, readable write-up of what the Step&nbsp;5 regressions found — each KPI's
             best→worst condition ranking, how every condition compares with the no-AI baseline,
             and the planned AI-timing contrast — with the plots shown large. <strong>Export PDF</strong>{' '}
             saves it all, including <strong>Appendix A</strong> (the regression results these insights
@@ -901,7 +1028,7 @@ export default function DataAnalytics() {
           </p>
 
           {!lastRun ? (
-            <p className={styles.emptyNote}>Run the analysis in Step&nbsp;4 (Python or R) first — the insights appear here.</p>
+            <p className={styles.emptyNote}>Run the analysis in Step&nbsp;5 (Python or R) first — the insights appear here.</p>
           ) : (
             <>
               <div className={styles.insightsMeta}>
@@ -914,8 +1041,8 @@ export default function DataAnalytics() {
                 <InsightsPanel report={report} />
               ) : (
                 <div className={styles.coverageCallout}>
-                  The current Step&nbsp;4 script produced no <strong>INSIGHTS</strong> section to format. The full
-                  output still shows in Step&nbsp;4, and <strong>Export PDF</strong> includes it as Appendix&nbsp;A.
+                  The current Step&nbsp;5 script produced no <strong>INSIGHTS</strong> section to format. The full
+                  output still shows in Step&nbsp;5, and <strong>Export PDF</strong> includes it as Appendix&nbsp;A.
                 </div>
               )}
 
@@ -937,7 +1064,7 @@ export default function DataAnalytics() {
   )
 }
 
-// ── Step 5 insights panel: a readable, formatted view of the INSIGHTS read-out
+// ── Step 6 insights panel: a readable, formatted view of the INSIGHTS read-out
 // parsed from the last Python/R run (the same data the PDF export renders). ────
 function InsightsPanel({ report }) {
   const { parsed } = report
