@@ -84,6 +84,10 @@ export function buildRowsForSession(session, ideas = [], participants = [], grou
   const authorGroup = Object.fromEntries(
     (participants || []).map(p => [p.id, p.groupId || ''])
   )
+  // uid -> display name, for the participants manager (not part of the analysis CSV).
+  const authorName = Object.fromEntries(
+    (participants || []).map(p => [p.id, p.name || p.displayName || ''])
+  )
   // ideaId -> 1 if it is one of its group's locked-in final picks.
   const finalPickIds = new Set((groups || []).flatMap(g => g.finalIdeas || []))
 
@@ -97,6 +101,8 @@ export function buildRowsForSession(session, ideas = [], participants = [], grou
       phase: idea.phase || '',
       group_id: groupId,
       author_id: idea.authorId || '',
+      // Display-only (kept off the COLUMNS list so it never enters the analysis CSV).
+      author_name: idea.authorName || authorName[idea.authorId] || '',
       // Scores filled later (AI / manual / import). Preserve any already present.
       novelty: numOrBlank(idea.novelty),
       usefulness: numOrBlank(idea.usefulness),
@@ -236,6 +242,7 @@ export function normalizeImportedRows(rawRows) {
       phase,
       group_id: String(pick('group uid', 'group_id', 'group id', 'group', 'groupid')),
       author_id: String(pick('author id', 'author_id', 'author', 'participant', 'participant_id')),
+      author_name: String(pick('author name', 'author label', 'author_name', 'name')),
       novelty: numOrBlank(novelty),
       usefulness: numOrBlank(usefulness),
       overall_quality: numOrBlank(overall),

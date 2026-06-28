@@ -357,15 +357,24 @@ Three-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
    `Exclude (Yes/No) = Yes` (the pre-registered screen). A plain table with
    `condition` / `novelty` / `usefulness` columns still works too
    (`normalizeImportedRows` in `analyticsData.js`).
-2. **Score ideas & review data ("extend the data").** Every idea gets a per-KPI score:
+2. **Score ideas, manage participants & download.** Every idea gets a per-KPI score:
    the configured LLM rates each on novelty + usefulness (1–7), overall = their mean.
    Scoring runs **client-side from the browser** via `src/utils/llmClient.js`, which reads
    the provider key straight from `settings/ai` (admin can read it per Firestore rules —
    no Cloud Function / redeploy needed) and calls Claude/OpenAI/Gemini directly (Claude
    needs the `anthropic-dangerous-direct-browser-access` header). Ideas are batched (8/req),
-   results map back by index. Scores are also **hand-editable** in the data table and
-   **downloadable as CSV**; nothing is written back to Firestore (admin lacks idea-write
-   permission, and keeping it in-memory avoids a rules change).
+   results map back by index. Scores are also **hand-editable** in the data table; nothing is
+   written back to Firestore (admin lacks idea-write permission, and keeping it in-memory
+   avoids a rules change). **Manage participants:** a collapsible panel lists every
+   participant in the loaded data grouped by session; **Remove** drops all of that person's
+   ideas from the table, the summary stats, the regressions, and the downloads (toggle to
+   restore — implemented as an `excludedUsers` set deriving `effectiveRows`, so it is
+   non-destructive). Each row carries a stable `rid` so score edits / AI write-back stay
+   correct even when the table shows the filtered view. **Download:** a single summarized
+   **Excel** workbook (`xlsx-js-style`, bold headers) — sheets *Ideas* (the per-idea dataset),
+   *Summary by condition* (n + mean/SD/n per KPI), *Summary by session*, and *Removed
+   participants* when any — plus a raw-dataset **CSV**. Both reflect the current
+   post-removal `effectiveRows`.
 3. **Regressions — edit & compile online.** Two tabs, **Python** and **R**, each pre-filled
    with a complete script (`src/data/analyticsPython.py` / `analyticsR.R`, inlined via Vite
    `?raw` in `analyticsTemplates.js`) that runs the SAME analysis: one OLS/`lm` per KPI on

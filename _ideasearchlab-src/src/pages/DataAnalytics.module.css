@@ -270,6 +270,42 @@
 .miniBtn { font-size: 12.5px; padding: 6px 14px; }
 .fileInput { display: none; }
 .emptyNote { color: var(--muted); font-size: 13px; padding: 14px 0; }
+
+/* ── Participants manager ── */
+.userPanel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  background: var(--paper);
+  max-height: 360px;
+  overflow-y: auto;
+}
+.userGroup { margin-bottom: 12px; }
+.userGroup:last-child { margin-bottom: 0; }
+.userGroupHead {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.userRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+}
+.userRow:hover { background: var(--paper-dark); }
+.userMeta { flex: 1; min-width: 0; }
+.userName { font-size: 13.5px; font-weight: 500; }
+.userSub { display: block; font-size: 11.5px; color: var(--muted); }
+.removed { opacity: 0.55; }
+.removed .userName { text-decoration: line-through; }
 .kpiPill {
   display: inline-block;
   font-size: 11px;
