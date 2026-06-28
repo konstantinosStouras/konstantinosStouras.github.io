@@ -62,6 +62,9 @@ export default function DataAnalytics() {
   const [scoreOnlyFinal, setScoreOnlyFinal] = useState(true)
   // Summary Statistics: restrict to ideas scored on all three KPIs (default on).
   const [statsOnlyScored, setStatsOnlyScored] = useState(true)
+  // Step-3 table sorting: which column + direction (0 = original order).
+  const [sortCol, setSortCol] = useState(null)
+  const [sortDir, setSortDir] = useState(0) // 1 asc, -1 desc, 0 none
 
   const [tab, setTab] = useState('python')
   const [pyCode, setPyCode] = useState(PYTHON_TEMPLATE)
@@ -174,16 +177,24 @@ export default function DataAnalytics() {
       return next
     })
   }
-  function selectAll() { setSelected(new Set(sessions.map(s => s.id))) }
+  function selectAll() {
+    setSelected(new Set(sessions.map(s => s.id)))
+    setImportedBooks(prev => prev.map(b => ({ ...b, selected: true })))
+  }
   function selectNone() { setSelected(new Set()) }
+  // Tick / untick an imported file (loaded into the dataset on the next "Load").
+  function toggleBook(id) {
+    setImportedBooks(prev => prev.map(b => (b.id === id ? { ...b, selected: !b.selected } : b)))
+  }
 
-  // ── Build the analysis dataset from the selected sessions ──
+  // ── Build the analysis dataset from the TICKED sessions + imported files ──
   async function loadSelected(replace = true) {
-    if (!selected.size) return
+    const loaded = sessions.filter(x => selected.has(x.id))
+    const tickedBooks = importedBooks.filter(b => b.selected)
+    if (!loaded.length && !tickedBooks.length) return
     setLoadingData(true)
     try {
       const collected = []
-      const loaded = sessions.filter(x => selected.has(x.id))
       for (const s of loaded) {
         const [ideasSnap, partsSnap, groupsSnap] = await Promise.all([
           getDocs(collection(db, 'sessions', s.id, 'ideas')),
@@ -196,12 +207,14 @@ export default function DataAnalytics() {
         collected.push(...buildRowsForSession(s, ideas, parts, groups))
       }
       const tagged = tagRows(collected)
+      const bookRows = tickedBooks.flatMap(b => b.rows || [])   // already tagged with _book + rid
       if (replace) setExcludedUsers(new Set())
-      // A "replace" load swaps the session-derived rows but KEEPS imported-file
-      // rows (tagged with _book) so an imported file isn't silently dropped.
       setRows(prev => {
-        const keptImports = prev.filter(r => r._book)
-        return recomputeOverall(replace ? [...keptImports, ...tagged] : [...prev, ...tagged])
+        if (replace) return recomputeOverall([...tagged, ...bookRows])
+        // Append: add the ticked sessions + any ticked books not already loaded.
+        const present = new Set(prev.filter(r => r._book).map(r => r._book))
+        const freshBooks = bookRows.filter(r => !present.has(r._book))
+        return recomputeOverall([...prev, ...tagged, ...freshBooks])
       })
       // Remember the loaded session docs so Step 2 can rebuild their full export.
       setLoadedSessions(prev => {
@@ -248,14 +261,16 @@ export default function DataAnalytics() {
         if (!looksLikeIdeaData(rawRows)) { alert(importFormatMsg(isCsv ? 'CSV' : 'Excel')); return }
         const imported = normalizeImportedRows(rawRows)
         if (!imported.length) { alert(importFormatMsg(isCsv ? 'CSV' : 'Excel')); return }
-        // Tag every row with its source file so it can be shown / removed as a unit.
+        // DEFERRED LOAD: keep the parsed rows in the book (tagged by source file,
+        // ticked by default) and add them to the dataset only when the admin
+        // presses "Load …" — importing alone no longer changes Section 2.
         const bookId = `book_${bookSeq.current++}`
-        const tagged = tagRows(imported).map(r => ({ ...r, _book: bookId }))
-        setRows(prev => recomputeOverall([...prev, ...tagged]))
+        const bookRows = tagRows(imported).map(r => ({ ...r, _book: bookId }))
         const conditions = [...new Set(imported.map(r => r.condition).filter(Boolean))]
         setImportedBooks(prev => [...prev, {
           id: bookId, label: file.name, kind: isCsv ? 'csv' : 'xlsx',
           sheets: bookSheets, count: imported.length, conditions,
+          rows: bookRows, selected: true,
         }])
       } catch (err) {
         alert('Could not read the file: ' + (err.message || err))
@@ -425,6 +440,33 @@ export default function DataAnalytics() {
     }
   }
 
+  // Click a Step-3 table header to sort by that column: 1st click ascending,
+  // 2nd descending, 3rd back to the original (loaded) order.
+  function toggleSort(colKey) {
+    if (sortCol !== colKey) { setSortCol(colKey); setSortDir(1) }
+    else if (sortDir === 1) setSortDir(-1)
+    else { setSortCol(null); setSortDir(0) }
+  }
+  const sortedRows = useMemo(() => {
+    if (!sortCol || !sortDir) return effectiveRows
+    const col = SORT_GETTERS[sortCol]
+    if (!col) return effectiveRows
+    const arr = effectiveRows.map((r, i) => [r, i])  // keep original index for a stable sort
+    arr.sort(([ra, ia], [rb, ib]) => {
+      const a = col.get(ra), b = col.get(rb)
+      let d
+      if (col.type === 'num') {
+        const x = (a === '' || a == null || Number.isNaN(Number(a))) ? -Infinity : Number(a)
+        const y = (b === '' || b == null || Number.isNaN(Number(b))) ? -Infinity : Number(b)
+        d = x - y
+      } else {
+        d = String(a ?? '').localeCompare(String(b ?? ''))
+      }
+      return d === 0 ? ia - ib : d * sortDir
+    })
+    return arr.map(([r]) => r)
+  }, [effectiveRows, sortCol, sortDir])
+
   function updateScore(rid, field, value) {
     setRows(prev => recomputeOverall(prev.map(r => {
       if (r.rid !== rid) return r
@@ -462,8 +504,9 @@ export default function DataAnalytics() {
   // any imported export workbook, and appends the extra "Rankings" tab.
   async function downloadAggregate() {
     if (aggregating) return
-    if (!loadedSessions.length && !importedBooks.length) {
-      alert('Load one or more sessions above (or import session export files), then build the aggregate file.')
+    const loadedImported = importedBooks.filter(b => loadedBookIds.has(b.id))
+    if (!loadedSessions.length && !loadedImported.length) {
+      alert('Load one or more sessions above (or import + load session export files), then build the aggregate file.')
       return
     }
     setAggregating(true)
@@ -480,8 +523,8 @@ export default function DataAnalytics() {
           participants: data.participants.length, ideas: data.ideas.length,
         })
       }
-      // Imported export workbooks: contribute their sheets as-is.
-      for (const b of importedBooks) {
+      // Imported export workbooks that have been LOADED: contribute their sheets.
+      for (const b of loadedImported) {
         sources.push({ sheets: b.sheets })
         aboutMeta.push(...bookAboutMeta(b))
       }
@@ -510,12 +553,14 @@ export default function DataAnalytics() {
     }
   }
 
+  // Section-3 "Clear": only removes what THIS step produced — the KPI scores and
+  // the regression run/insights — leaving the loaded dataset (Sections 1–2)
+  // untouched. Steps 5 & 6 (which depend on the scores) end up empty as a result.
   function clearData() {
-    if (rows.length && !confirm('Clear the loaded dataset?')) return
-    setRows([])
-    setExcludedUsers(new Set())
-    setLoadedSessions([])
-    setImportedBooks([])
+    if (scoredCount > 0 && !confirm('Clear the KPI scores and the analysis from this step? The loaded dataset in Sections 1–2 stays.')) return
+    setRows(prev => recomputeOverall(prev.map(r => ({ ...r, novelty: '', usefulness: '' }))))
+    setOutput(''); setImages([]); setRunError(null); setLastRun(null); setRunsByLang({})
+    setScoreErr(''); setScoreLoadMsg('')
   }
 
   // ── Run code (Python via Pyodide / R via WebR) ──
@@ -593,7 +638,11 @@ export default function DataAnalytics() {
   // Section 2 / dataset tallies.
   const isFinal = r => Number(r.final_pick) === 1
   const finalCount = rows.filter(isFinal).length
-  const sessionCount = useMemo(() => new Set(rows.map(r => r.session)).size, [rows])
+  const sessionCount = useMemo(() => new Set(rows.filter(r => !r._book).map(r => r.session)).size, [rows])
+  // Imported files actually loaded into the dataset (have rows present), for the
+  // Step-2 aggregate; and the count of ticked imported files for the Load button.
+  const loadedBookIds = useMemo(() => new Set(rows.filter(r => r._book).map(r => r._book)), [rows])
+  const selectedBookCount = importedBooks.filter(b => b.selected).length
   // Step-3 scoring scope (all ideas vs only Final Ideas) and its unscored count.
   const scorePool = scoreOnlyFinal ? effectiveRows.filter(isFinal) : effectiveRows
   const scopeUnscored = scorePool.filter(r => r.novelty === '' || r.usefulness === '').length
@@ -726,16 +775,18 @@ export default function DataAnalytics() {
             </div>
           )}
 
-          {/* Imported Excel / CSV files appear here as their own rows. */}
+          {/* Imported Excel / CSV files appear here as their own rows. Tick to
+              include; they load into the dataset only when "Load …" is pressed. */}
           {importedBooks.length > 0 && (
             <div className={styles.sessionList} style={{ marginTop: 10 }}>
               {importedBooks.map(b => (
                 <div key={b.id} className={styles.sessionRow} style={{ cursor: 'default' }}>
-                  <span className={styles.importTag}>Imported</span>
+                  <input type="checkbox" checked={!!b.selected} onChange={() => toggleBook(b.id)} />
                   <div className={styles.sessionMeta}>
                     <div className={styles.sessionCode}>{b.label}</div>
                     <div className={styles.sessionName}>
                       {b.count} idea{b.count === 1 ? '' : 's'}{b.conditions?.length ? ` · ${b.conditions.join(', ')}` : ''} · {b.kind.toUpperCase()}
+                      {loadedBookIds.has(b.id) ? ' · loaded' : ''}
                     </div>
                   </div>
                   <button className={`btn-ghost ${styles.miniBtn}`} onClick={() => removeImportedBook(b.id)} disabled={!!scoring}>Remove</button>
@@ -747,11 +798,12 @@ export default function DataAnalytics() {
           <div className={styles.row} style={{ marginTop: 14 }}>
             <button className={`btn-ghost ${styles.miniBtn}`} onClick={selectAll}>Select all</button>
             <button className={`btn-ghost ${styles.miniBtn}`} onClick={clearSection1} disabled={!!scoring}>Clear</button>
-            <button className="btn-primary" onClick={() => loadSelected(true)} disabled={!selected.size || loadingData || !!scoring}>
+            <button className="btn-primary" onClick={() => loadSelected(true)} disabled={(!selected.size && !selectedBookCount) || loadingData || !!scoring}>
               {loadingData ? 'Loading…' : (() => {
-                const parts = [`${selected.size} session${selected.size === 1 ? '' : 's'}`]
-                if (importedBooks.length) parts.push(`${importedBooks.length} imported file${importedBooks.length === 1 ? '' : 's'}`)
-                return `Load ${parts.join(' and ')}`
+                const parts = []
+                if (selected.size) parts.push(`${selected.size} session${selected.size === 1 ? '' : 's'}`)
+                if (selectedBookCount) parts.push(`${selectedBookCount} imported file${selectedBookCount === 1 ? '' : 's'}`)
+                return parts.length ? `Load ${parts.join(' and ')}` : 'Load'
               })()}
             </button>
             {rows.length > 0 && (
@@ -771,7 +823,7 @@ export default function DataAnalytics() {
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>
             <span><span className={styles.stepBadge}>2</span>Aggregate Data</span>
-            {(loadedSessions.length > 0 || importedBooks.length > 0) && (
+            {rows.length > 0 && (
               <button className="btn-primary" onClick={downloadAggregate} disabled={aggregating}>
                 {aggregating ? <><span className={styles.spinner} /> Building…</> : 'Download aggregate Excel'}
               </button>
@@ -787,8 +839,8 @@ export default function DataAnalytics() {
             Final&nbsp;Group&nbsp;Pick, Title, Description</em> and empty <em>Novelty / Usefulness /
             Quality</em> columns ready for blind expert rating.
           </p>
-          {(loadedSessions.length === 0 && importedBooks.length === 0) ? (
-            <p className={styles.emptyNote}>Load one or more sessions (or import session export files) above, then build the consolidated file here.</p>
+          {rows.length === 0 ? (
+            <p className={styles.emptyNote}>Tick sessions (or imported files) above and press “Load …”, then build the consolidated file here.</p>
           ) : (
             <div className={styles.stats}>
               <div className={styles.statBox}><div className={styles.statNum}>{rows.length}</div><div className={styles.statLabel}>Ideas generated</div></div>
@@ -929,12 +981,16 @@ export default function DataAnalytics() {
                 <table className={styles.dataTable}>
                   <thead>
                     <tr>
-                      <th>Idea ID</th><th>Session</th><th>Condition</th><th>Phase</th><th>Final</th>
-                      <th>Novelty</th><th>Usefulness</th><th>Quality</th><th>Idea</th>
+                      {TABLE_COLS.map(key => (
+                        <th key={key} className={styles.sortableTh} onClick={() => toggleSort(key)} title="Click to sort (asc → desc → original)">
+                          {SORT_GETTERS[key].label}
+                          <span className={styles.sortArrow}>{sortCol === key ? (sortDir === 1 ? ' ▲' : ' ▼') : ''}</span>
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {effectiveRows.map(r => (
+                    {sortedRows.map(r => (
                       <tr key={r.rid}>
                         <td className={styles.idCell} title={r.idea_id}>{r.idea_id}</td>
                         <td>{r.session}</td>
@@ -1344,6 +1400,22 @@ function saveBlob(content, filename, type) {
 }
 
 const round3 = x => (x == null || !Number.isFinite(x)) ? '' : Number(x.toFixed(3))
+
+// Step-3 table columns: header label + how to read/sort each one. `condition`
+// sorts by the canonical None<Solo<Group<Both order, scores numerically (blanks
+// last), the rest as text.
+const SORT_GETTERS = {
+  idea_id: { label: 'Idea ID', get: r => r.idea_id, type: 'str' },
+  session: { label: 'Session', get: r => r.session, type: 'str' },
+  condition: { label: 'Condition', get: r => CONDITIONS.indexOf(r.condition), type: 'num' },
+  phase: { label: 'Phase', get: r => r.phase, type: 'str' },
+  final: { label: 'Final', get: r => Number(r.final_pick) || 0, type: 'num' },
+  novelty: { label: 'Novelty', get: r => r.novelty, type: 'num' },
+  usefulness: { label: 'Usefulness', get: r => r.usefulness, type: 'num' },
+  quality: { label: 'Quality', get: r => r.overall_quality, type: 'num' },
+  idea: { label: 'Idea', get: r => r.text, type: 'str' },
+}
+const TABLE_COLS = ['idea_id', 'session', 'condition', 'phase', 'final', 'novelty', 'usefulness', 'quality', 'idea']
 
 // Does an imported sheet/CSV look like idea data we can analyse? Requires a
 // condition column AND at least one idea/KPI column (matches what

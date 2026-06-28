@@ -212,6 +212,9 @@
   font-size: 12px;
   z-index: 1;
 }
+.sortableTh { cursor: pointer; user-select: none; white-space: nowrap; }
+.sortableTh:hover { color: var(--accent); }
+.sortArrow { color: var(--accent); font-size: 11px; }
 .dataTable td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .dataTable td.textCell { white-space: normal; max-width: 360px; color: var(--muted); }
 .dataTable td.idCell {
