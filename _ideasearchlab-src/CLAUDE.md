@@ -329,6 +329,50 @@ sessions/{sessionId}/aiMessages/{messageId}: {
 - **Sheet 6 -- Groups**: Group ID, members, member labels, status, final ideas (raw ids), **Final Ideas (titles)** (the same chosen ideas as readable titles, top-voted first, each tagged `[group]`/`[individual]`), created at.
 - Column widths auto-fitted based on content (capped at 50 chars)
 
+## Data Analytics page (admin-only, `/admin/data-analytics`)
+A research analytics workbench reached from the **"Data Analytics"** button in the
+top-right of the Admin header (`Admin.jsx`, next to "AI Settings"). Route added to
+`App.jsx`, wrapped in `RequireInstructor` (admin@admin.com only), like the other
+`/admin/*` pages. Purpose: test which of the **four AI-timing conditions** wins on
+each of **three KPIs** (novelty, usefulness, overall quality), per the study design
+in AsPredicted #298152 ("Effects of AI Timing on Idea Generation").
+
+**The four conditions are derived from each session's AI config** (`conditionForSession`
+in `src/utils/analyticsData.js`): `individualAI`×`groupAI` → `Human-Only Hybrid`
+(no AI, the regression **reference**), `Individual + AI` (solo only), `Group + AI`
+(group only), `Full AI` (both). So a session *is* a condition — no manual labelling.
+
+Three-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
+1. **Data source.** Lists every session (`getDocs('sessions')`) with its condition tag;
+   tick any completed/active ones and "Load" pulls their ideas/participants/groups and
+   flattens to **one row per idea** (`buildRowsForSession`): idea_id, session, condition,
+   phase, group_id, author_id, novelty, usefulness, overall_quality, final_pick, text.
+   Also **Import Excel/CSV** (`xlsx-js-style` read + `normalizeImportedRows`, flexible
+   column names) to append external data.
+2. **Score ideas & review data ("extend the data").** Every idea gets a per-KPI score:
+   the configured LLM rates each on novelty + usefulness (1–7), overall = their mean.
+   Scoring runs **client-side from the browser** via `src/utils/llmClient.js`, which reads
+   the provider key straight from `settings/ai` (admin can read it per Firestore rules —
+   no Cloud Function / redeploy needed) and calls Claude/OpenAI/Gemini directly (Claude
+   needs the `anthropic-dangerous-direct-browser-access` header). Ideas are batched (8/req),
+   results map back by index. Scores are also **hand-editable** in the data table and
+   **downloadable as CSV**; nothing is written back to Firestore (admin lacks idea-write
+   permission, and keeping it in-memory avoids a rules change).
+3. **Regressions — edit & compile online.** Two tabs, **Python** and **R**, each pre-filled
+   with a complete script (`src/data/analyticsPython.py` / `analyticsR.R`, inlined via Vite
+   `?raw` in `analyticsTemplates.js`) that runs the SAME analysis: one OLS/`lm` per KPI on
+   the 4-level condition factor (Human-Only = baseline), the **primary planned contrast
+   Individual + AI − Group + AI**, a best→worst ranking with Holm-adjusted pairwise tests,
+   and plots (mean±95%CI bars + coefficient/forest plot). The admin edits the code and hits
+   **Run**: Python compiles in-browser via **Pyodide** (`src/utils/pyodideRunner.js`,
+   loads numpy/pandas/scipy/statsmodels/matplotlib; harvests open matplotlib figures as PNG
+   data URLs) and R via **WebR** (`src/utils/webrRunner.js`, base R only; CSV mounted at
+   `/tmp/data.csv`; base-graphics captured via `captureR({captureGraphics:true})`). Output
+   (with p-values) streams to a console; plots render below. Both runtimes load lazily from
+   jsDelivr on first Run (Pyodide `v314.0.1`, WebR `0.6.0`, each with same-API version
+   fallbacks), so they add ~0 KB to the main bundle. **Entirely client-side — ships with a
+   normal Pages build, no Cloud Functions or Firestore-rules change.**
+
 **Survey.jsx:**
 - On submit, writes status: 'done', surveyAnswers, surveyCompletedAt to participant doc directly (no Cloud Function)
 - onParticipantUpdated trigger in session.js detects all-done and advances session to 'done'
