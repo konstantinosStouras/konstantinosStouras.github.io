@@ -348,9 +348,11 @@ function clampScore(v) {
  * exact-on-normalised-title first, then a length-guarded contains match; each
  * dataset row is used at most once. Returns the updated rows plus counts.
  */
-export function matchScoresIntoRows(rows, entries) {
+export function matchScoresIntoRows(rows, entries, isEligible) {
+  const eligible = typeof isEligible === 'function' ? isEligible : () => true
   const byTitle = new Map()
   rows.forEach((r, i) => {
+    if (!eligible(r)) return // e.g. skip removed participants' ideas
     const key = normTitle(rowTitle(r))
     if (!key) return
     if (!byTitle.has(key)) byTitle.set(key, [])
@@ -367,14 +369,20 @@ export function matchScoresIntoRows(rows, entries) {
     if (!key) { unmatched++; continue }
     let candidates = byTitle.get(key)
     if (!candidates) {
-      // Length-guarded contains match (avoids short keys matching everything).
-      const acc = []
+      // Conservative contains-fallback: both titles reasonably long, of similar
+      // length (so a short title can't match inside a much longer one), AND a
+      // single candidate idea — otherwise leave it unmatched rather than guess.
+      const acc = new Set()
       if (key.length >= 10) {
         for (const [k, list] of byTitle) {
-          if (k.length >= 10 && (k.includes(key) || key.includes(k))) acc.push(...list)
+          if (k.length < 10) continue
+          if (!(k.includes(key) || key.includes(k))) continue
+          const ratio = Math.min(k.length, key.length) / Math.max(k.length, key.length)
+          if (ratio < 0.6) continue
+          list.forEach(i => acc.add(i))
         }
       }
-      candidates = acc.length ? acc : null
+      candidates = acc.size === 1 ? [...acc] : null
     }
     const idx = candidates && candidates.find(i => !used.has(i))
     if (idx == null) { unmatched++; continue }
