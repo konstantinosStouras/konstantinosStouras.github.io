@@ -348,11 +348,16 @@ export default function DataAnalytics() {
         : 'All ideas already have novelty and usefulness scores.')
       return
     }
+    // Always use the API keys CURRENTLY saved in AI Settings (settings/ai), even if
+    // they were added/changed after this page was opened — re-read them at score
+    // time and refresh the on-page "no key" hint. Falls back to the loaded copy.
+    let settings = aiSettings
+    try { settings = await fetchAISettings(); setAiSettings(settings) } catch (_) { /* keep the loaded copy */ }
     setScoring({ done: 0, total: targets.length })
     try {
       const scores = await scoreIdeas(targets.map(t => t.text), {
         brief: DESIGN_BRIEF,
-        settings: aiSettings,
+        settings,
         provider: scoreProvider,
         model: scoreModel,
         onProgress: ({ done, total }) => setScoring({ done, total }),
