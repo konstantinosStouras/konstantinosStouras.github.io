@@ -347,8 +347,16 @@ Three-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
    tick any completed/active ones and "Load" pulls their ideas/participants/groups and
    flattens to **one row per idea** (`buildRowsForSession`): idea_id, session, condition,
    phase, group_id, author_id, novelty, usefulness, overall_quality, final_pick, text.
-   Also **Import Excel/CSV** (`xlsx-js-style` read + `normalizeImportedRows`, flexible
-   column names) to append external data.
+   Also **Import Excel/CSV** to append external data. The importer understands the
+   admin's own condition-coded Excel export (`AdminSession.jsx`): it reads the
+   **Ideas** sheet (not the leading "About" guide), derives the condition from the
+   `AI Solo (0/1)` × `AI Group (0/1)` dummies (falling back to the `AI Condition` /
+   `Condition Code` label), **averages the blind-rater columns** `Novelty (rater 1..n)`
+   / `Usefulness (rater 1..n)` into the KPI scores, maps `Idea ID` / `Session Code` /
+   `Stage` / `Group UID` / `Final Group Pick`, and drops rows flagged
+   `Exclude (Yes/No) = Yes` (the pre-registered screen). A plain table with
+   `condition` / `novelty` / `usefulness` columns still works too
+   (`normalizeImportedRows` in `analyticsData.js`).
 2. **Score ideas & review data ("extend the data").** Every idea gets a per-KPI score:
    the configured LLM rates each on novelty + usefulness (1–7), overall = their mean.
    Scoring runs **client-side from the browser** via `src/utils/llmClient.js`, which reads

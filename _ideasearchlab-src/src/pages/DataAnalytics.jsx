@@ -118,10 +118,17 @@ export default function DataAnalytics() {
           imported = normalizeImportedRows(csvToRows(ev.target.result))
         } else {
           const wb = XLSX.read(ev.target.result, { type: 'array' })
-          const ws = wb.Sheets[wb.SheetNames[0]]
+          // The admin Excel export is multi-sheet with an "About" guide first;
+          // the per-idea analysis rows live in the "Ideas" sheet. Prefer it,
+          // then any sheet that looks like idea data, else the first sheet.
+          const name =
+            wb.SheetNames.find(n => n.toLowerCase() === 'ideas') ||
+            wb.SheetNames.find(n => /idea/i.test(n)) ||
+            wb.SheetNames[0]
+          const ws = wb.Sheets[name]
           imported = normalizeImportedRows(XLSX.utils.sheet_to_json(ws, { defval: '' }))
         }
-        if (!imported.length) { alert('No rows found in that file.'); return }
+        if (!imported.length) { alert('No idea rows found. For the admin Excel export, the data is on the "Ideas" sheet — import that workbook (or a CSV of it).'); return }
         setRows(prev => recomputeOverall([...prev, ...imported]))
       } catch (err) {
         alert('Could not parse file: ' + (err.message || err))
@@ -268,7 +275,10 @@ export default function DataAnalytics() {
             Tick the completed or active sessions to include. Each session's condition is derived
             from its AI settings: no AI = <em>Human-Only Hybrid</em>, AI in the solo stage =
             <em> Individual + AI</em>, AI in the group stage = <em>Group + AI</em>, AI in both =
-            <em> Full AI</em>. You can also import an Excel/CSV file of ideas (with or without scores).
+            <em> Full AI</em>. You can also import the admin <strong>Excel export</strong> — it reads
+            the <em>Ideas</em> sheet, takes the condition from its AI-stage columns, and averages any
+            <em> Novelty/Usefulness (rater n)</em> columns into the KPI scores (or a plain CSV with
+            condition/novelty/usefulness columns).
           </p>
 
           {loadingSessions ? (
