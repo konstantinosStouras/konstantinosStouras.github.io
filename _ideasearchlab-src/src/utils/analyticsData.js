@@ -84,6 +84,10 @@ export function buildRowsForSession(session, ideas = [], participants = [], grou
   const authorGroup = Object.fromEntries(
     (participants || []).map(p => [p.id, p.groupId || ''])
   )
+  // uid -> display name, for the participants manager (not part of the analysis CSV).
+  const authorName = Object.fromEntries(
+    (participants || []).map(p => [p.id, p.name || p.displayName || ''])
+  )
   // ideaId -> 1 if it is one of its group's locked-in final picks.
   const finalPickIds = new Set((groups || []).flatMap(g => g.finalIdeas || []))
 
@@ -97,6 +101,8 @@ export function buildRowsForSession(session, ideas = [], participants = [], grou
       phase: idea.phase || '',
       group_id: groupId,
       author_id: idea.authorId || '',
+      // Display-only (kept off the COLUMNS list so it never enters the analysis CSV).
+      author_name: idea.authorName || authorName[idea.authorId] || '',
       // Scores filled later (AI / manual / import). Preserve any already present.
       novelty: numOrBlank(idea.novelty),
       usefulness: numOrBlank(idea.usefulness),
@@ -117,6 +123,8 @@ export function ideaText(idea) {
 }
 
 function numOrBlank(v) {
+  // Treat empty / whitespace / null as blank (Number('') is 0, which we do NOT want).
+  if (v == null || String(v).trim() === '') return ''
   const n = Number(v)
   return Number.isFinite(n) ? n : ''
 }
@@ -180,39 +188,109 @@ export function csvToRows(text) {
 
 /**
  * Normalise arbitrary imported rows (from an uploaded spreadsheet) to the
- * analysis schema. Accepts flexible column names (case/spacing/synonyms) and
- * derives overall_quality + condition where possible.
+ * analysis schema. Handles BOTH a simple table (columns condition / novelty /
+ * usefulness / …) AND the admin's condition-coded "analysis-ready" Excel export
+ * (its **Ideas** sheet): the experimental condition is read from the
+ * `AI Solo (0/1)` × `AI Group (0/1)` dummies (or the `AI Condition` /
+ * `Condition Code` label), and each KPI is the mean of its blind-rater columns
+ * (`Novelty (rater 1..n)` / `Usefulness (rater 1..n)`). Rows flagged
+ * `Exclude (Yes/No) = Yes` (the pre-registered drop screen) are removed.
  */
 export function normalizeImportedRows(rawRows) {
-  const pick = (obj, keys) => {
-    const lower = Object.fromEntries(Object.entries(obj).map(([k, v]) => [k.toLowerCase().trim(), v]))
-    for (const k of keys) { if (lower[k] != null && lower[k] !== '') return lower[k] }
-    return ''
-  }
-  return (rawRows || []).map((r, i) => {
-    const novelty = pick(r, ['novelty', 'nov'])
-    const usefulness = pick(r, ['usefulness', 'useful', 'use'])
-    let overall = pick(r, ['overall_quality', 'overall quality', 'overall', 'quality'])
+  const out = []
+  ;(rawRows || []).forEach((raw, i) => {
+    const lower = {}
+    for (const [k, v] of Object.entries(raw)) lower[String(k).toLowerCase().trim()] = v
+    const pick = (...keys) => {
+      for (const k of keys) {
+        const v = lower[k]
+        if (v != null && String(v).trim() !== '') return v
+      }
+      return ''
+    }
+
+    // Pre-registered exclusion screen: drop rows the rater marked to exclude.
+    if (/^(1|yes|y|true|x)$/i.test(String(pick('exclude (yes/no)', 'exclude', 'excluded')).trim())) return
+
+    // Condition: prefer the analysis-ready 0/1 dummies, then the Yes/No stage
+    // flags, then the label / short code, then a generic 'condition' column.
+    const solo = toFlag(pick('ai solo (0/1)', 'ai solo (0_1)', 'ai_solo'), pick('ai solo stage'))
+    const group = toFlag(pick('ai group (0/1)', 'ai group (0_1)', 'ai_group'), pick('ai group stage'))
+    const condition = (solo !== null && group !== null)
+      ? conditionFromFlags(solo, group)
+      : canonicalCondition(pick('ai condition', 'condition code', 'condition', 'cond', 'group_condition', 'treatment'))
+
+    // KPIs: mean across any filled blind-rater columns, else a single column.
+    const novelty = meanRaterCols(lower, ['novelty', 'nov'], 'novelty')
+    const usefulness = meanRaterCols(lower, ['usefulness', 'useful'], 'usefulness')
+    let overall = pick('overall_quality', 'overall quality', 'overall', 'quality')
     if (overall === '' && (novelty !== '' || usefulness !== '')) {
       const oq = overallQuality(novelty, usefulness)
       overall = oq == null ? '' : oq
     }
-    let condition = String(pick(r, ['condition', 'cond', 'group_condition', 'treatment']) || '').trim()
-    condition = canonicalCondition(condition)
-    return {
-      idea_id: String(pick(r, ['idea_id', 'idea id', 'id', 'ideaid']) || `import_${i + 1}`),
-      session: String(pick(r, ['session', 'session_code', 'session code', 'code']) || 'imported'),
+
+    // Stage / phase → canonical 'individual' | 'group'.
+    let phase = String(pick('stage', 'phase')).toLowerCase()
+    if (phase.includes('group')) phase = 'group'
+    else if (phase.includes('individual') || phase.includes('solo')) phase = 'individual'
+    else phase = phase.trim()
+
+    out.push({
+      idea_id: String(pick('idea id', 'idea_id', 'id', 'ideaid') || `import_${i + 1}`),
+      session: String(pick('session code', 'session', 'session_code', 'code') || 'imported'),
       condition,
-      phase: String(pick(r, ['phase', 'stage']) || ''),
-      group_id: String(pick(r, ['group_id', 'group id', 'group', 'groupid']) || ''),
-      author_id: String(pick(r, ['author_id', 'author id', 'author', 'participant', 'participant_id']) || ''),
+      phase,
+      group_id: String(pick('group uid', 'group_id', 'group id', 'group', 'groupid')),
+      author_id: String(pick('author id', 'author_id', 'author', 'participant', 'participant_id')),
+      author_name: String(pick('author name', 'author label', 'author_name', 'name')),
       novelty: numOrBlank(novelty),
       usefulness: numOrBlank(usefulness),
       overall_quality: numOrBlank(overall),
-      final_pick: /^(1|yes|true)$/i.test(String(pick(r, ['final_pick', 'final pick', 'final', 'selected']) || '')) ? 1 : 0,
-      text: String(pick(r, ['text', 'idea', 'idea_text', 'description', 'content']) || ''),
-    }
+      final_pick: /^(1|yes|true)$/i.test(String(pick('final group pick', 'final_pick', 'final pick', 'final', 'selected')).trim()) ? 1 : 0,
+      text: String(pick('full text', 'text', 'idea', 'idea_text', 'title', 'description', 'content')),
+    })
   })
+  return out
+}
+
+/** Truthiness from a 0/1 dummy (preferred) or a Yes/No flag; null if unknown. */
+function toFlag(zeroOne, yesNo) {
+  if (zeroOne != null && String(zeroOne).trim() !== '') {
+    const n = Number(zeroOne)
+    if (n === 1) return true
+    if (n === 0) return false
+  }
+  const s = String(yesNo || '').trim().toLowerCase()
+  if (s === 'yes' || s === 'true' || s === 'y') return true
+  if (s === 'no' || s === 'false' || s === 'n') return false
+  return null
+}
+
+function conditionFromFlags(solo, group) {
+  if (solo && group) return 'Full AI'
+  if (solo && !group) return 'Individual + AI'
+  if (!solo && group) return 'Group + AI'
+  return 'Human-Only Hybrid'
+}
+
+/**
+ * Mean of every filled column for a KPI: a plain column (e.g. "novelty"/"nov")
+ * or any per-rater column "<kpi> (rater N)" / "<kpi> rater N" / "<kpi> (expert N)".
+ * Returns '' when none are filled — so an un-scored export row stays un-scored.
+ */
+function meanRaterCols(lowerMap, plainKeys, kpiPrefix) {
+  const vals = []
+  for (const [k, v] of Object.entries(lowerMap)) {
+    const isPlain = plainKeys.includes(k)
+    const isRater = k.startsWith(`${kpiPrefix} (rater`) || k.startsWith(`${kpiPrefix} rater`) ||
+                    k.startsWith(`${kpiPrefix}_rater`) || k.startsWith(`${kpiPrefix} (expert`)
+    if ((isPlain || isRater) && v != null && String(v).trim() !== '') {
+      const n = Number(v)
+      if (Number.isFinite(n)) vals.push(n)
+    }
+  }
+  if (!vals.length) return ''
+  return vals.reduce((a, b) => a + b, 0) / vals.length
 }
 
 /** Best-effort match of a free-text condition label to a canonical one. */
