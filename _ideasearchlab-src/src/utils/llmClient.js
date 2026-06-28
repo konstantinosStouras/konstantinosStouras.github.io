@@ -9,7 +9,7 @@
  * calls (Claude needs the `anthropic-dangerous-direct-browser-access` header).
  *
  * Used to "extend the data" by giving every idea an expert-style rating on the
- * two base KPIs — novelty (1–7) and usefulness (1–7); overall quality is the
+ * two base KPIs — novelty (1–5) and usefulness (1–5); overall quality is the
  * mean of the two and computed client-side.
  */
 import { doc, getDoc } from 'firebase/firestore'
@@ -37,7 +37,7 @@ export function resolveProvider(settings, providerOverride, modelOverride) {
 
 const RATER_SYSTEM_PROMPT = `You are one of several independent expert evaluators rating ideas produced in a
 product-design brainstorming study. You rate each idea on two dimensions using a
-1 to 7 Likert scale (1 = very low, 7 = very high):
+1 to 5 Likert scale (1 = very low, 5 = very high):
 
 - novelty: how original, innovative and rare the idea is — how far it departs
   from existing knowledge and conventional, obvious solutions.
@@ -47,7 +47,7 @@ product-design brainstorming study. You rate each idea on two dimensions using a
 Rate each idea on its own merits. You are blind to which experimental condition
 produced it. Use the full range of the scale and be discriminating. Return ONLY
 valid JSON — an array with one object per idea, in the same order given, each
-{"i": <index>, "novelty": <1-7>, "usefulness": <1-7>}. No prose, no markdown.`
+{"i": <index>, "novelty": <1-5>, "usefulness": <1-5>}. No prose, no markdown.`
 
 /** Build the user message listing a batch of ideas to rate. */
 function buildBatchPrompt(ideas, brief) {
@@ -183,8 +183,8 @@ export async function scoreIdeas(ideas, opts = {}) {
         if (!Number.isInteger(idx) || idx < 0 || idx >= batch.length) idx = pos
         if (idx >= 0 && idx < batch.length) {
           results[start + idx] = {
-            novelty: clamp1to7(item.novelty),
-            usefulness: clamp1to7(item.usefulness),
+            novelty: clamp1to5(item.novelty),
+            usefulness: clamp1to5(item.usefulness),
           }
         }
       })
@@ -195,10 +195,10 @@ export async function scoreIdeas(ideas, opts = {}) {
   return results
 }
 
-function clamp1to7(v) {
+function clamp1to5(v) {
   const n = Number(v)
   if (!Number.isFinite(n)) return null
-  return Math.max(1, Math.min(7, Math.round(n * 10) / 10))
+  return Math.max(1, Math.min(5, Math.round(n * 10) / 10))
 }
 
 export { PROVIDER_DEFAULTS }

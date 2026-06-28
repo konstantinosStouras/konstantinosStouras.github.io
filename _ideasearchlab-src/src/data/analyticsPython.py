@@ -387,11 +387,11 @@ def plot_means(df, present_levels):
         ax.set_xticks(x)
         ax.set_xticklabels([f"{lvl}\n(n={n})" for lvl, n in zip(present_levels, ns)], fontsize=14)
         ax.set_title(f"Mean {kpi}", fontweight="bold")
-        ax.set_ylabel(f"Mean {kpi} (1–7)"); ax.set_xlabel("Condition")
+        ax.set_ylabel(f"Mean {kpi} (1–5)"); ax.set_xlabel("Condition")
         ax.grid(axis="y", linestyle=":", alpha=0.5)
         finite = [m for m in means if np.isfinite(m)]
         if finite:
-            ax.set_ylim(0, max(7.2, max(finite) * 1.18))   # KPI scale tops out near 7
+            ax.set_ylim(0, max(5.2, max(finite) * 1.18))   # KPI scale tops out at 5
     fig.suptitle("Average score by condition (bars = mean, whiskers = 95% CI)", fontweight="bold", y=1.02)
     fig.tight_layout()
     print("Generated figure: average score per condition.")
@@ -432,7 +432,7 @@ def plot_forest(models):
             ax.set_yticks(ys); ax.set_yticklabels([f"{l} vs None" for l in labels], fontsize=15)
         ax.axvline(0.0, color="red", linestyle="--", linewidth=1.5)   # zero = no effect
         ax.set_title(f"{kpi}", fontweight="bold")
-        ax.set_xlabel("Difference from no-AI (points on 1–7)")
+        ax.set_xlabel("Difference from no-AI (points on 1–5)")
         ax.grid(axis="x", linestyle=":", alpha=0.5)
         ax.invert_yaxis()
     fig.suptitle("Each AI condition vs the no-AI baseline (dot = mean difference, bar = 95% CI; red = significant)",

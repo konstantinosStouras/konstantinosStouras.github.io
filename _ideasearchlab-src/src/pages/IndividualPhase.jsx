@@ -471,14 +471,6 @@ export default function IndividualPhase() {
         </button>
         {briefOpen && (
           <div className={styles.briefContent}>
-            <div className={styles.exampleImgWrap}>
-              <img
-                src={`${import.meta.env.BASE_URL}images/sleep-mask-example.png`}
-                alt="Example product"
-                className={styles.exampleImg}
-                onError={e => { e.target.style.display = 'none' }}
-              />
-            </div>
             <RichText html={c.brief} vars={contentVars} aiOn={!!aiEnabled} />
           </div>
         )}

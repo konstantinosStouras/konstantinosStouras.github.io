@@ -472,7 +472,7 @@ export default function DataAnalytics() {
   function updateScore(rid, field, value) {
     setRows(prev => recomputeOverall(prev.map(r => {
       if (r.rid !== rid) return r
-      const v = value === '' ? '' : Math.max(1, Math.min(7, Number(value)))
+      const v = value === '' ? '' : Math.max(1, Math.min(5, Number(value)))
       return { ...r, [field]: Number.isNaN(v) ? '' : v }
     })))
   }
@@ -886,7 +886,7 @@ export default function DataAnalytics() {
               <div className={styles.banner}>
                 <strong>Score the Rankings rows per KPI.</strong> These are the <em>Rankings</em> rows of the
                 consolidated data from Step&nbsp;2. The AI rater scores each idea on novelty and usefulness
-                (1–7); quality is their mean. Choose the API and model below — it uses the matching key saved
+                (1–5); quality is their mean. Choose the API and model below — it uses the matching key saved
                 under AI&nbsp;Settings. The scores you set here flow back into the <em>Rankings</em> tab of the
                 Step&nbsp;2 aggregate and feed the Step&nbsp;5 regressions. You can also edit any score directly
                 in the table and remove participants.
@@ -1000,11 +1000,11 @@ export default function DataAnalytics() {
                         <td>{r.phase}</td>
                         <td>{isFinal(r) ? 'Yes' : 'No'}</td>
                         <td className="num">
-                          <input className={styles.scoreInput} type="number" min="1" max="7" step="0.5"
+                          <input className={styles.scoreInput} type="number" min="1" max="5" step="0.5"
                             value={r.novelty} onChange={e => updateScore(r.rid, 'novelty', e.target.value)} />
                         </td>
                         <td className="num">
-                          <input className={styles.scoreInput} type="number" min="1" max="7" step="0.5"
+                          <input className={styles.scoreInput} type="number" min="1" max="5" step="0.5"
                             value={r.usefulness} onChange={e => updateScore(r.rid, 'usefulness', e.target.value)} />
                         </td>
                         <td className={`num ${r.overall_quality === '' ? styles.unscored : ''}`}>
@@ -1203,7 +1203,7 @@ export default function DataAnalytics() {
                 <>
                   <h3 className={styles.kpiName} style={{ marginTop: 18 }}>Figures</h3>
                   <p className={styles.figureNote}>
-                    <strong>Bar charts</strong> — each condition's <em>average</em> KPI score (1–7) with 95%
+                    <strong>Bar charts</strong> — each condition's <em>average</em> KPI score (1–5) with 95%
                     confidence intervals: a taller bar means ideas in that condition were rated higher, the
                     whisker shows the uncertainty, and the n under each bar is its number of final ideas
                     (the conditions have different sizes). <strong>Effect plots</strong> — each AI condition's

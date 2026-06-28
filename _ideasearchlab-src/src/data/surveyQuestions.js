@@ -91,25 +91,25 @@ export const SURVEY_QUESTIONS = [
     type: 'freetext',
   },
 
-  // ── Section 4: Questions about sleep wellness ──────────────
+  // ── Section 4: Questions about smart materials and wearable technology ──────────────
   {
-    id: 'q8_sleep_importance',
-    section: 'Questions about sleep wellness',
-    text: 'How important is it for you to sleep well in your daily life?',
+    id: 'q8_smartmaterials_importance',
+    section: 'Questions about smart materials and wearable technology',
+    text: 'How important is it for you to engage with or use smart materials and wearable technology in your daily life?',
     type: 'likert5',
     lowLabel: 'Not important at all',
     highLabel: 'Extremely important',
   },
   {
-    id: 'q9_wellness_activities',
-    text: 'How often do you engage in wellness-related activities (e.g., exercise, meditation, sleep tracking, healthy eating)?',
+    id: 'q9_innovation_engagement',
+    text: 'How often do you engage with technology-driven or material-innovation products (e.g., wearables, smart textiles, sensors)?',
     type: 'likert5',
     lowLabel: 'Never',
     highLabel: 'Daily',
   },
   {
     id: 'q10_purchased_products',
-    text: 'Have you purchased or used any products related to sleep or wellness in the past six months?',
+    text: 'Have you purchased or used any products related to smart materials or wearable technology in the past six months?',
     type: 'radio',
     options: ['Yes', 'No'],
     followUp: {
@@ -120,7 +120,7 @@ export const SURVEY_QUESTIONS = [
   },
   {
     id: 'q11_interest_new_products',
-    text: 'Would you consider yourself interested in trying new products or technologies that promote better sleep or wellness?',
+    text: 'Would you consider yourself interested in trying new products or technologies that use innovative materials?',
     type: 'likert5',
     lowLabel: 'Not interested',
     highLabel: 'Very interested',

@@ -68,7 +68,7 @@ Note: vote counts are NOT stored on idea documents. They are derived client-side
 ## IndividualPhase.jsx
 - **Two-view structure**: Instructions view (shown first with "Start" button), then workspace view.
 - **Instructions page**: Full-page card with study instructions, dynamic duration from `individualPhaseDuration`, task checklist, group-phase warning (conditional).
-- **Collapsible Task Brief**: Shown in workspace, contains the sleep wellness product design prompt, example product with image (`public/images/sleep-mask-example.png`), evaluation criteria (Novelty, Feasibility, Financial Value, Overall Quality), AI note (conditional), and selection instructions.
+- **Collapsible Task Brief**: Shown in workspace, contains the product design prompt (the smart-materials / colour-changing-fabric task — "design a new product using a fabric that changes colour at 37°C"), evaluation criteria (Novelty, Feasibility, Financial Value, Overall Quality), AI note (conditional), and selection instructions. (The old sleep-mask example image was removed — no example image is shown.)
 - **Structured idea submission**: Two fields, "Idea title" and "Description", rendered in pill-shaped cards (border-radius: 20px) with bold title, gradient separator line, and smaller description text. Pressing **Enter** in either field submits the idea (the same as clicking Add); **Shift+Enter** in the Description inserts a newline. Same behaviour in the GroupPhase "Group Ideas" add form.
 - **Inline editing**: Pencil icon appears on hover, click enters edit mode with editable fields + Save/Cancel.
 - **Delete**: Trash bin icon appears on hover (red on hover), calls `deleteDoc`.
