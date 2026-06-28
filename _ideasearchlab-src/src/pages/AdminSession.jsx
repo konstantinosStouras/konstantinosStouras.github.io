@@ -178,6 +178,7 @@ export default function AdminSession() {
         ['WHERE EACH MEASURE LIVES'],
         ['Dependent variables (idea creativity)', '"Ideas" sheet, one row per idea. Empty rater columns Novelty (rater 1..3) / Usefulness (rater 1..3) for blind expert scoring — aggregate across raters, then Overall Quality = mean(Novelty, Usefulness). Also Stage, Carried to Group, Vote Count, Final Group Pick, and Exclude (Yes/No) + Exclusion reason for the pre-registered "drop nonsensical/empty ideas" screen.'],
         ['Selected ideas (group level)', '"Ideas" sheet → filter Final Group Pick = Yes (the ideas each group locked in after voting). "Groups" sheet lists them per group as titles.'],
+        ['Vote completeness (read this before vote analysis)', '"Participants" sheet → Ballot Status + Votes Cast. A "submitted" ballot can hold ZERO votes (auto-submitted at timer expiry), so do NOT treat Votes Submitted = Yes as "actually voted". Ballot Status = voted / partial (n/required) / empty (submitted, no votes) / not submitted; treat empty + not submitted as non-votes, partial as fewer than the required votes. "Voted For (titles)" lists each ballot\'s chosen ideas by name.'],
         ['Mechanism — prompt behaviour', '"AI Chat" sheet (Role = user → prompts: count = intensity; prompt text → semantic diversity, by Author ID/Scope). "AI Usage" sheet aggregates prompts/replies per participant & per group (filter Row Type = scope to drop TOTAL/AVG summary rows).'],
         ['Mechanism — idea diversity / search breadth', '"Ideas" sheet Full Text, grouped by author / condition → compute semantic dispersion.'],
         ['Moderators', 'IF your session\'s survey includes them, the "Survey" sheet holds the moderator items (cognitive diversity, Big-Five personality, the divergent-thinking "creative uses" item). These are added per session in the admin Survey builder — confirm the columns are present for your session; the default questionnaire does NOT include them. Domain-expertise proxies: Survey items on prior product/innovation experience + Participants occupation / work experience.'],
@@ -203,8 +204,30 @@ export default function AdminSession() {
         ...regFields.map(f => f.id),
         ...participants.flatMap(p => Object.keys(p.demographics || {})),
       ])]
+      // Required votes per group mirrors GroupPhase: max(1, min(3, ideas in the
+      // group's voting pool)). Lets the Participants sheet say whether a ballot
+      // was full / partial / empty rather than just "submitted yes/no" — a
+      // "submitted" ballot can hold ZERO votes (auto-submitted at timer expiry),
+      // so "Votes Submitted = Yes" is NOT a safe proxy for "actually voted".
+      const groupPoolCount = {}
+      ideas.forEach(i => {
+        const gid = i.groupId || authorGroupId[i.authorId]
+        if (gid) groupPoolCount[gid] = (groupPoolCount[gid] || 0) + 1
+      })
+      const requiredVotesFor = gid => Math.max(1, Math.min(3, groupPoolCount[gid] || 3))
+
       const participantRows = participants.map(p => {
         const demo = p.demographics || {}
+        const votedFor = p.votedFor || []
+        const votesCast = votedFor.length
+        const required = requiredVotesFor(p.groupId)
+        // Human-readable ballot outcome — disambiguates the misleading
+        // "Votes Submitted = Yes, Voted For = (blank)" case.
+        const ballotStatus = !p.votesSubmitted
+          ? 'not submitted'
+          : votesCast === 0 ? 'empty (submitted, no votes)'
+            : votesCast < required ? `partial (${votesCast}/${required})`
+              : 'voted'
         const row = {
           'Participant ID': p.id,
           'Name': p.name || '',
@@ -216,8 +239,13 @@ export default function AdminSession() {
           'Group UID': p.groupId ? `${sessionCode}:${p.groupId}` : '',
           'Status': p.status || '',
           'Individual Complete': p.individualComplete ? 'Yes' : 'No',
+          // Raw flag (clicked Submit or auto-submitted) — kept for back-compat.
           'Votes Submitted': p.votesSubmitted ? 'Yes' : 'No',
-          'Voted For': (p.votedFor || []).join(', '),
+          // Derived, analysis-ready vote columns (the intuitive ones to read):
+          'Votes Cast': votesCast,
+          'Ballot Status': ballotStatus,
+          'Voted For (idea IDs)': votedFor.join(', '),
+          'Voted For (titles)': votedFor.map(id => ideaTitleById[id] || id).join(' | '),
           'Consent Given': p.consentGiven ? 'Yes' : 'No',
           'Consent Timestamp': p.consentTimestamp || '',
           'Joined At': formatTimestamp(p.joinedAt),
