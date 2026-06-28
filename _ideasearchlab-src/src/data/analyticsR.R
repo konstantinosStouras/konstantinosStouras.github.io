@@ -241,7 +241,7 @@ for (k in kpis) {
   nlab <- paste0(cond_short, "\n(n=", ifelse(is.na(n), 0, n), ")")   # show n under each bar
   bp <- barplot(mu_p, names.arg = nlab, col = cond_col, border = NA, ylim = yr, las = 1,
                 main = paste0("Average ", k, " by condition\n(bar = mean, whisker = 95% CI)"),
-                ylab = paste0("Mean ", k, " (1-7)"), xlab = "")
+                ylab = paste0("Mean ", k, " (1-5)"), xlab = "")
   valid <- !is.na(ci) & !is.na(mu)            # draw error bars only where defined
   if (any(valid))
     arrows(x0 = bp[valid], y0 = lo[valid], x1 = bp[valid], y1 = hi[valid],
@@ -268,7 +268,7 @@ for (k in kpis) {
   yy <- rev(seq_along(est))                    # top-to-bottom row positions
   xr <- range(c(lo, hi, 0), na.rm = TRUE); xr <- xr + c(-1, 1) * 0.12 * diff(xr)
   plot(NA, xlim = xr, ylim = c(0.5, length(est) + 0.5), yaxt = "n",
-       xlab = "Difference from no-AI (points on 1-7)", ylab = "",
+       xlab = "Difference from no-AI (points on 1-5)", ylab = "",
        main = paste0(k, ": each condition vs no-AI (None)\n(dot = difference, bar = 95% CI; red = significant)"))
   axis(2, at = yy, labels = paste0(labs, " vs None"), las = 1)
   abline(v = 0, lty = 2, lwd = 2, col = "red")  # zero = no difference from baseline

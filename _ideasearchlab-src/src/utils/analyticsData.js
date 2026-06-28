@@ -18,7 +18,7 @@
  *        false                  true            Group + AI
  *        true                   true            Full AI
  *
- * Each idea is scored on three KPIs — novelty (1–7), usefulness (1–7) and
+ * Each idea is scored on three KPIs — novelty (1–5), usefulness (1–5) and
  * overall_quality (= mean of the two) — either by the AI rater (llmClient.js),
  * by hand, or imported from an uploaded spreadsheet.
  */
@@ -353,7 +353,7 @@ function clampScore(v) {
   if (v == null || String(v).trim() === '') return ''
   const n = Number(v)
   if (!Number.isFinite(n)) return ''
-  return Math.max(1, Math.min(7, Math.round(n * 10) / 10))
+  return Math.max(1, Math.min(5, Math.round(n * 10) / 10))
 }
 
 /**

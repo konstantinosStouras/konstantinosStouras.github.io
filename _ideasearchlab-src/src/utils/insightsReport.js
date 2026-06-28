@@ -228,7 +228,7 @@ export function buildInsightsPrintHtml({ parsed, regressionsText, code, lang, im
   const langName = lang === 'r' ? 'R' : 'Python'
   const generated = meta.generatedAt || new Date().toLocaleString()
   const figNote =
-    '<p class="muted fignote"><b>Bar charts</b> — each condition\'s average KPI score (1–7) with 95% ' +
+    '<p class="muted fignote"><b>Bar charts</b> — each condition\'s average KPI score (1–5) with 95% ' +
     'confidence intervals (taller bar = rated higher; whisker = uncertainty; n under each bar = number of ' +
     'final ideas). <b>Effect plots</b> — each AI condition\'s mean difference from the no-AI baseline (None): ' +
     'a dot right of the dashed zero line scored higher than no-AI, and a red dot (95% CI not crossing zero) ' +
