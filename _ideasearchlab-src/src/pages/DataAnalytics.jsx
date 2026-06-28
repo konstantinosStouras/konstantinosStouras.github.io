@@ -15,6 +15,7 @@ import { PROVIDERS, SCORING_DEFAULT_MODEL, DEFAULT_SCORING_PROVIDER, providerByI
 import { PYTHON_TEMPLATE, R_TEMPLATE } from '../data/analyticsTemplates'
 import { runPython } from '../utils/pyodideRunner'
 import { runR } from '../utils/webrRunner'
+import { parseRunOutput, buildInsightsPrintHtml, kpiLabel } from '../utils/insightsReport'
 import styles from './DataAnalytics.module.css'
 
 const DESIGN_BRIEF = 'Designing a new product to improve sleep wellness.'
@@ -56,6 +57,9 @@ export default function DataAnalytics() {
   const [output, setOutput] = useState('')
   const [images, setImages] = useState([])
   const [runError, setRunError] = useState(null)
+  // Snapshot of the most recent successful run — drives the Step 4 "Insights
+  // gained" panel + its PDF export. { lang, code, output, images, ranAt }.
+  const [lastRun, setLastRun] = useState(null)
 
   const fileRef = useRef(null)
   const scoreFileRef = useRef(null)
@@ -414,9 +418,19 @@ export default function DataAnalytics() {
       const result = tab === 'python'
         ? await runPython(pyCode, { ...opts, onStdout: pushLine })
         : await runR(rCode, { ...opts, onOutput: pushLine })
-      setOutput(outRef.current || (tab === 'python' ? result.stdout : result.output) || '')
+      const finalOutput = outRef.current || (tab === 'python' ? result.stdout : result.output) || ''
+      setOutput(finalOutput)
       setImages(result.images || [])
       if (!result.ok) setRunError(result.error || 'Run failed.')
+      // Remember this run so Step 4 can present its insights + export the PDF.
+      // Kept even on a partial failure so whatever ran is still readable.
+      setLastRun({
+        lang: tab,
+        code: tab === 'python' ? pyCode : rCode,
+        output: finalOutput,
+        images: result.images || [],
+        ranAt: new Date(),
+      })
     } catch (err) {
       setRunError(err.message || String(err))
     } finally {
@@ -431,6 +445,31 @@ export default function DataAnalytics() {
   const code = tab === 'python' ? pyCode : rCode
   const setCode = tab === 'python' ? setPyCode : setRCode
   const resetCode = () => (tab === 'python' ? setPyCode(PYTHON_TEMPLATE) : setRCode(R_TEMPLATE))
+
+  // ── Step 4: insights derived from the last run ──
+  const report = useMemo(() => (lastRun ? parseRunOutput(lastRun.output) : null), [lastRun])
+  // "rows used for analysis: N" is printed by both scripts; surface it in the PDF header.
+  const rowsUsed = useMemo(() => {
+    const m = lastRun && /rows used for analysis:\s*(\d+)|N analysed:\s*(\d+)/i.exec(lastRun.output)
+    return m ? Number(m[1] ?? m[2]) : (lastRun ? scoredCount : null)
+  }, [lastRun, scoredCount])
+
+  function exportInsightsPdf() {
+    if (!lastRun || !report) return
+    const html = buildInsightsPrintHtml({
+      parsed: report.parsed,
+      regressionsText: report.regressionsText,
+      code: lastRun.code,
+      lang: lastRun.lang,
+      images: lastRun.images,
+      meta: { generatedAt: (lastRun.ranAt || new Date()).toLocaleString(), rowsUsed },
+    })
+    const win = window.open('', '_blank')
+    if (!win) { alert('Please allow pop-ups for this site to export the PDF.'); return }
+    win.document.open()
+    win.document.write(html)
+    win.document.close()
+  }
 
   return (
     <div className={styles.pageWrap}>
@@ -752,7 +791,139 @@ export default function DataAnalytics() {
             </div>
           )}
         </section>
+
+        {/* STEP 4 — Insights gained */}
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>
+            <span><span className={styles.stepBadge}>4</span>Insights gained</span>
+            {lastRun && (
+              <button className="btn-primary" onClick={exportInsightsPdf}>⬇ Export PDF</button>
+            )}
+          </h2>
+          <p className={styles.hint}>
+            A clean, readable write-up of what the Step&nbsp;3 regressions found — each KPI's
+            best→worst condition ranking, how every condition compares with the no-AI baseline,
+            and the planned AI-timing contrast — with the plots shown large. <strong>Export PDF</strong>{' '}
+            saves it all, including <strong>Appendix A</strong> (the regression results these insights
+            are based on) and <strong>Appendix B</strong> (the{' '}
+            {lastRun ? (lastRun.lang === 'r' ? 'R' : 'Python') : 'Python / R'} code that produced them).
+          </p>
+
+          {!lastRun ? (
+            <p className={styles.emptyNote}>Run the analysis in Step&nbsp;3 (Python or R) first — the insights appear here.</p>
+          ) : (
+            <>
+              <div className={styles.insightsMeta}>
+                Based on the {lastRun.lang === 'r' ? 'R' : 'Python'} run
+                {rowsUsed != null ? ` · ${rowsUsed} idea${rowsUsed === 1 ? '' : 's'} analysed` : ''}
+                {lastRun.ranAt ? ` · ${lastRun.ranAt.toLocaleString()}` : ''}
+              </div>
+
+              {report?.hasInsights ? (
+                <InsightsPanel report={report} />
+              ) : (
+                <div className={styles.coverageCallout}>
+                  The current Step&nbsp;3 script produced no <strong>INSIGHTS</strong> section to format. The full
+                  output still shows in Step&nbsp;3, and <strong>Export PDF</strong> includes it as Appendix&nbsp;A.
+                </div>
+              )}
+
+              {lastRun.images.length > 0 && (
+                <div className={styles.plotGridLarge}>
+                  {lastRun.images.map((src, i) => (
+                    <figure className={styles.plotCardLarge} key={i}>
+                      <img src={src} alt={`figure ${i + 1}`} />
+                      <figcaption className={styles.plotCaption}>Figure {i + 1}</figcaption>
+                    </figure>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </section>
       </div>
+    </div>
+  )
+}
+
+// ── Step 4 insights panel: a readable, formatted view of the INSIGHTS read-out
+// parsed from the last Python/R run (the same data the PDF export renders). ────
+function InsightsPanel({ report }) {
+  const { parsed } = report
+  if (!parsed) {
+    return <pre className={styles.insightsRaw}>{report.insightsText || report.regressionsText}</pre>
+  }
+  return (
+    <div className={styles.insightsBody}>
+      {parsed.coverageWarning && (
+        <div className={styles.coverageCallout}>
+          <strong>Data-coverage check.</strong> {parsed.coverageWarning}
+        </div>
+      )}
+      {parsed.conditionsWithData && (
+        <p className={styles.insightsLead}>Conditions with data: <strong>{parsed.conditionsWithData}</strong>.</p>
+      )}
+
+      {parsed.kpis.map(kpi => (
+        <div className={styles.kpiCard} key={kpi.name}>
+          <h3 className={styles.kpiName}>{kpiLabel(kpi.name)}</h3>
+          {kpi.notEstimable ? (
+            <p className={styles.kpiMuted}>Not estimable (needs ≥ 2 conditions with data) — no ranking for this KPI.</p>
+          ) : (
+            <>
+              {kpi.ranking.length > 0 && (
+                <div className={styles.rankRow}>
+                  <span className={styles.rankLabel}>Ranking (best → worst)</span>
+                  <span className={styles.rankChips}>
+                    {kpi.ranking.map((r, i) => (
+                      <span className={styles.rankChipWrap} key={r.cond}>
+                        <span className={styles.rankChip}>{r.rank}. <b>{r.cond}</b> <span className={styles.rankMean}>{r.mean.toFixed(2)}</span></span>
+                        {i < kpi.ranking.length - 1 && <span className={styles.gt}>›</span>}
+                      </span>
+                    ))}
+                  </span>
+                </div>
+              )}
+              {kpi.baselines.length > 0 ? (
+                <div className={styles.vsBlock}>
+                  <div className={styles.vsLabel}>Versus the no-AI baseline</div>
+                  <ul className={styles.vsList}>
+                    {kpi.baselines.map(b => (
+                      <li key={b.cond}>
+                        <b>{b.cond}</b>: {Math.abs(b.delta).toFixed(2)} points {b.dir} than no-AI{' '}
+                        <span className={b.sig ? styles.sigYes : styles.sigNo}>(p = {b.p.toFixed(3)}, {b.verdict})</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : kpi.noSig ? (
+                <p className={styles.kpiMuted}>No condition differs significantly from the no-AI baseline on this KPI.</p>
+              ) : null}
+              {kpi.aiTiming && <p className={styles.timingLine}>{kpi.aiTiming}</p>}
+              {kpi.best && (
+                <p className={styles.bestWorst}>
+                  Best: <b className={styles.best}>{kpi.best}</b> · Worst: <b className={styles.worst}>{kpi.worst}</b>
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      ))}
+
+      {parsed.rankingSummary.length > 0 && (
+        <div className={styles.kpiCard}>
+          <h3 className={styles.kpiName}>Condition ranking per KPI (best → worst)</h3>
+          <table className={styles.summaryTable}>
+            <thead><tr><th>KPI</th><th>Ranking (best → worst)</th></tr></thead>
+            <tbody>
+              {parsed.rankingSummary.map(r => (
+                <tr key={r.kpi}><td>{kpiLabel(r.kpi)}</td><td>{r.text}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {parsed.reminder && <p className={styles.kpiMuted}>Note: {parsed.reminder}</p>}
     </div>
   )
 }

@@ -354,7 +354,7 @@ exports carry it, and the Python/R templates regress on it (reference = `None`; 
 `read_csv(keep_default_na=False)` so the string `"None"` isn't parsed as NaN). So a session *is*
 a condition — no manual labelling.
 
-Three-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
+Four-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
 1. **Data source.** Lists every session (`getDocs('sessions')`) with its condition tag;
    tick any completed/active ones and "Load" pulls their ideas/participants/groups and
    flattens to **one row per idea** (`buildRowsForSession`): idea_id, session, condition,
@@ -419,6 +419,24 @@ Three-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
    jsDelivr on first Run (Pyodide `v314.0.1`, WebR `0.6.0`, each with same-API version
    fallbacks), so they add ~0 KB to the main bundle. **Entirely client-side — ships with a
    normal Pages build, no Cloud Functions or Firestore-rules change.**
+4. **Insights gained.** A readable, formatted write-up of the Step-3 results so the admin no
+   longer has to squint at the monospace console. On every Run the page snapshots the run
+   (`lastRun = { lang, code, output, images, ranAt }`); `parseRunOutput()` in
+   `src/utils/insightsReport.js` splits the console text at the `# INSIGHTS` banner into the
+   **regression results** (everything before it) and the **INSIGHTS** block, then
+   `parseInsights()` structures that block — the data-coverage warning, conditions-with-data,
+   and per-KPI {best→worst ranking chips, each condition vs the no-AI baseline with
+   significance coloured, the AI-timing contrast sentence, best/worst}, plus the cross-KPI
+   ranking summary table. `InsightsPanel` (in `DataAnalytics.jsx`) renders this with large
+   easy-to-read fonts and shows the **plots full-width** (`.plotGridLarge`). The parser is
+   tolerant: a custom edit that drops the INSIGHTS section falls back to the raw text. An
+   **Export PDF** button (`exportInsightsPdf`) opens a print-ready document built by
+   `buildInsightsPrintHtml()` (self-contained HTML + inline CSS, the figures embedded as their
+   data-URL PNGs) in a new window that auto-fires `window.print()` → the browser's "Save as
+   PDF". The PDF carries the formatted insights + large figures, then **Appendix A — Regression
+   results** (the verbatim stats the insights are read from) and **Appendix B — Python/R code**
+   (the exact script that produced them, for whichever tab was last run). No new npm dependency
+   (uses native print-to-PDF), no Cloud Functions / rules change — pure client-side.
 
 **Per-section Save / Make-default / Restore (browser-local).** Each section (data source,
 dataset, and each code tab) has the admin-style three-button row (`SectionActions` in
