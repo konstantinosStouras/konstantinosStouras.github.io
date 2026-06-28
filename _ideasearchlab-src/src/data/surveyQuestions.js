@@ -131,4 +131,128 @@ export const SURVEY_QUESTIONS = [
     type: 'radio',
     options: ['Yes', 'No', 'Unsure'],
   },
+
+  // ── Section 5: About you (Big Five personality, short form) ──
+  // A 2-item-per-trait short form (Openness, Conscientiousness, Extraversion,
+  // Agreeableness, Neuroticism). A pre-registered moderator (AsPredicted
+  // #298152). 1–5 agreement scale.
+  {
+    id: 'bf_openness_1',
+    section: 'About you',
+    sectionSubheading: 'There are no right or wrong answers — rate how much you agree with each statement.',
+    text: 'I am curious about new ideas and different ways of thinking.',
+    type: 'likert5',
+    lowLabel: 'Strongly disagree',
+    highLabel: 'Strongly agree',
+  },
+  {
+    id: 'bf_openness_2',
+    text: 'I enjoy thinking about abstract or unconventional ideas.',
+    type: 'likert5',
+    lowLabel: 'Strongly disagree',
+    highLabel: 'Strongly agree',
+  },
+  {
+    id: 'bf_conscientiousness_1',
+    text: 'I like to work in an organized and structured way.',
+    type: 'likert5',
+    lowLabel: 'Strongly disagree',
+    highLabel: 'Strongly agree',
+  },
+  {
+    id: 'bf_conscientiousness_2',
+    text: 'I pay attention to details when working on tasks.',
+    type: 'likert5',
+    lowLabel: 'Strongly disagree',
+    highLabel: 'Strongly agree',
+  },
+  {
+    id: 'bf_extraversion_1',
+    text: 'I feel comfortable speaking up in group discussions.',
+    type: 'likert5',
+    lowLabel: 'Strongly disagree',
+    highLabel: 'Strongly agree',
+  },
+  {
+    id: 'bf_extraversion_2',
+    text: 'I enjoy interacting and exchanging ideas with others.',
+    type: 'likert5',
+    lowLabel: 'Strongly disagree',
+    highLabel: 'Strongly agree',
+  },
+  {
+    id: 'bf_agreeableness_1',
+    text: 'I try to cooperate and get along with others.',
+    type: 'likert5',
+    lowLabel: 'Strongly disagree',
+    highLabel: 'Strongly agree',
+  },
+  {
+    id: 'bf_agreeableness_2',
+    text: 'I respect opinions that differ from my own.',
+    type: 'likert5',
+    lowLabel: 'Strongly disagree',
+    highLabel: 'Strongly agree',
+  },
+  {
+    id: 'bf_neuroticism_1',
+    text: 'I feel stressed easily when working under pressure.',
+    type: 'likert5',
+    lowLabel: 'Strongly disagree',
+    highLabel: 'Strongly agree',
+  },
+  {
+    id: 'bf_neuroticism_2',
+    text: 'I worry about making mistakes in challenging tasks.',
+    type: 'likert5',
+    lowLabel: 'Strongly disagree',
+    highLabel: 'Strongly agree',
+  },
+
+  // ── Section 6: Your group (cognitive diversity) ──
+  // Group-level moderator; only shown when a group phase was played.
+  {
+    id: 'cogdiv_thinking',
+    section: 'Your group',
+    sectionSubheading: 'Thinking about the people you worked with in the group phase.',
+    text: 'Members of my group differ in their way of thinking about problems.',
+    type: 'likert5',
+    lowLabel: 'Strongly disagree',
+    highLabel: 'Strongly agree',
+    showIf: (session) => session?.phaseConfig?.groupPhaseActive,
+  },
+  {
+    id: 'cogdiv_knowledge',
+    text: 'Members of my group differ in their knowledge and skills.',
+    type: 'likert5',
+    lowLabel: 'Strongly disagree',
+    highLabel: 'Strongly agree',
+    showIf: (session) => session?.phaseConfig?.groupPhaseActive,
+  },
+  {
+    id: 'cogdiv_beliefs',
+    text: 'Members of my group differ in their beliefs about what is right and wrong.',
+    type: 'likert5',
+    lowLabel: 'Strongly disagree',
+    highLabel: 'Strongly agree',
+    showIf: (session) => session?.phaseConfig?.groupPhaseActive,
+  },
+  {
+    id: 'cogdiv_worldview',
+    text: 'Members of my group differ in how they view the world and society.',
+    type: 'likert5',
+    lowLabel: 'Strongly disagree',
+    highLabel: 'Strongly agree',
+    showIf: (session) => session?.phaseConfig?.groupPhaseActive,
+  },
+
+  // ── Section 7: Creative thinking (divergent-thinking task) ──
+  // An alternative-uses task — a pre-registered measure of creative ability.
+  {
+    id: 'dt_brick_uses',
+    section: 'Creative thinking',
+    sectionSubheading: 'One last quick task.',
+    text: 'List as many unusual and creative uses for a brick as you can (up to 10).',
+    type: 'freetext',
+  },
 ]

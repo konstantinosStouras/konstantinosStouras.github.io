@@ -140,11 +140,15 @@ Vote tallying happens on either of two paths. Automatic: when the last member of
 The separate VotingPhase page is no longer used. The `/voting` route can be removed from App.jsx. The old VotingPhase.jsx and VotingPhase.module.css files remain in the repo but are not imported anywhere.
 
 ## Survey (redesigned)
-- **surveyQuestions.js** (`src/data/surveyQuestions.js`): Completely rewritten with 12 questions across 4 sections:
+- **surveyQuestions.js** (`src/data/surveyQuestions.js`): 27 questions across 7 sections:
   - "Your Experience" (Q1-Q4): difficulty, satisfaction, idea rating group, collaboration comfort
   - "Creativity and Idea Generation" (Q5): supporting others' ideas
   - "Reflection" (Q6-Q7): two freetext questions
   - "Questions about sleep wellness" (Q8-Q12): importance, activities, product purchases, interest, prior experience
+  - **"About you" (10 items): a Big-Five personality short form** (2 likert items each for Openness/Conscientiousness/Extraversion/Agreeableness/Neuroticism) — a pre-registered moderator.
+  - **"Your group" (4 items): cognitive-diversity** likert items ("members of my group differ in…"), `showIf` groupPhaseActive (a group-level moderator).
+  - **"Creative thinking" (1 freetext): the divergent-thinking "list creative uses for a brick" task** — pre-registered creative-ability measure.
+  - These three moderator sections were added so the **default** questionnaire collects the AsPredicted #298152 moderators without per-session customization; they flow into `surveyAnswers` and the export's Survey sheet via the existing dynamic-column logic (no export-code change). Existing/custom sessions are unaffected.
 - **New question types**: `likert5` (1-5 scale with custom anchors), `rating_group` (each sub-item/criterion rated on its own 1-5 box scale with optional description + anchors; fully editable in the admin SurveyBuilder — label, description, low/high anchor per criterion), `radio` (pill buttons with optional conditional follow-up), `freetext`
 - **Exports**: `SURVEY_TITLE`, `SURVEY_SUBTITLE`, `SURVEY_QUESTIONS`
 - **Survey.jsx**: Questions grouped into section cards. The likert5 1–5 scale renders as five numbered square boxes (`.scaleBox`, rounded squares, accent-filled when selected) — replaced the older connected-dot/track scale per participant feedback. **rating_group** no longer renders as a table grid of circles; instead each criterion is a stacked sub-question with its own 1–5 box scale (reusing `.scaleBox`/`.boxScale`/`.scaleAnchors`), an optional italic description (subheading) after the criterion name, and optional per-criterion `lowLabel`/`highLabel` anchors under the scale. Item shape is now `{ id, label, description?, lowLabel?, highLabel? }` (description/anchors all optional — render only when filled). Pill-shaped radio buttons. Conditional follow-up field (Q10). Proper validation for all types including nested groups and conditional follow-ups. Each section can have an optional `sectionSubheading` (set per question in the admin SurveyBuilder, second input under "Section heading") rendered as a smaller muted line under the section heading.
