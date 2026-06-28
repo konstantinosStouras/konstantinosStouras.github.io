@@ -375,6 +375,15 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
    `Exclude (Yes/No) = Yes` (the pre-registered screen). A plain table with
    `condition` / `novelty` / `usefulness` columns still works too
    (`normalizeImportedRows` in `analyticsData.js`).
+   - **Format check:** a file that doesn't look like idea data (needs a condition column +
+     idea/KPI columns, via `looksLikeIdeaData`) is **rejected with a pop-up** and not imported;
+     the same check guards Step 3's "Load scores file".
+   - **Deferred load:** an imported file is parsed and shown in the list as its **own ticked
+     checkbox row** (`importedBooks` entries carry their parsed `rows` + `selected`), but is added
+     to the dataset only when **"Load …"** is pressed — the Load button reads e.g. *"Load 3
+     sessions and 1 imported file"*. `loadedBookIds` (derived from `rows._book`) is which imports
+     are actually loaded; the Step-2 aggregate uses those. Each imported row has a **Remove**.
+   - **"Clear"** here does a full reset (selection + loaded dataset + imported files).
 2. **Aggregate Data.** A single **Download aggregate Excel** button (`downloadAggregate`
    in `DataAnalytics.jsx`) consolidates **every loaded source into ONE workbook with the exact
    same multi-tab structure and format as the per-session research export** — *About,
@@ -437,6 +446,10 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      (`scopeUnscored`). The data table now also shows a **Final** column (Final Group Pick Yes/No)
      and the *Quality* header (= `overall_quality`), so it reads as the Rankings view. Scores set
      here feed the Step-2 aggregate Rankings tab and the Step-5 regressions.
+   - **Sortable table:** each header is clickable (`toggleSort`/`sortedRows`/`SORT_GETTERS`) and
+     cycles ascending → descending → original order; the active column shows ▲/▼.
+   - **"Clear"** here is scoped to THIS step: it wipes the KPI scores + the regression run/insights
+     (so Steps 5–6 empty) but leaves the loaded dataset and Sections 1–2 intact.
 4. **Summary Statistics.** Descriptive stats of the consolidated Step-3 data (`statRows`):
    stat boxes (ideas analysed, final ideas, sessions, conditions with data, mean quality), a
    per-condition table (n ideas / final / scored + each KPI's mean (SD) via `summarize()`), and
