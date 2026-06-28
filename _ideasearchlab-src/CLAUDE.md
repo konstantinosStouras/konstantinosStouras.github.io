@@ -379,11 +379,18 @@ Three-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
    participant in the loaded data grouped by session; **Remove** drops all of that person's
    ideas from the table, the summary stats, the regressions, and the downloads (toggle to
    restore — implemented as an `excludedUsers` set deriving `effectiveRows`, so it is
-   non-destructive). Each row carries a stable `rid` so score edits / AI write-back stay
-   correct even when the table shows the filtered view. **Download:** a single summarized
-   **Excel** workbook (`xlsx-js-style`, bold headers) — sheets *Ideas* (the per-idea dataset),
-   *Summary by condition* (n + mean/SD/n per KPI), *Summary by session*, and *Removed
-   participants* when any — plus a raw-dataset **CSV**. Both reflect the current
+   non-destructive). A **search box** filters the participant list by name / email / user ID
+   (rows carry display-only `author_name` + `author_email`). Each row carries a stable `rid`
+   so score edits / AI write-back stay correct even when the table shows the filtered view.
+   **Load scores file:** a second button reads idea scores from an external ranked-ideas file
+   — it locates the **"All Ideas Ranked"** sheet (skipping any preamble to the header row that
+   has *Idea Title* + *Novelty* columns) and matches each row's Novelty/Usefulness onto the
+   loaded ideas **by normalised title** (`matchScoresIntoRows` in `analyticsData.js`: exact,
+   then length-guarded contains; each idea used once), reporting matched/unmatched counts. So
+   you can score externally and pull the scores back in, then re-download. **Download:** a
+   single summarized **Excel** workbook (`xlsx-js-style`, bold headers) — sheets *Ideas* (the
+   per-idea dataset), *Summary by condition* (n + mean/SD/n per KPI), *Summary by session*, and
+   *Removed participants* when any — plus a raw-dataset **CSV**. Both reflect the current
    post-removal `effectiveRows`.
 3. **Regressions — edit & compile online.** Two tabs, **Python** and **R**, each pre-filled
    with a complete script (`src/data/analyticsPython.py` / `analyticsR.R`, inlined via Vite
