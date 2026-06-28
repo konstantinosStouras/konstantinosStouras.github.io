@@ -227,8 +227,14 @@ function insightsToHtml(parsed) {
 export function buildInsightsPrintHtml({ parsed, regressionsText, code, lang, images = [], meta = {} }) {
   const langName = lang === 'r' ? 'R' : 'Python'
   const generated = meta.generatedAt || new Date().toLocaleString()
+  const figNote =
+    '<p class="muted fignote"><b>Bar charts</b> — each condition\'s average KPI score (1–7) with 95% ' +
+    'confidence intervals (taller bar = rated higher; whisker = uncertainty; n under each bar = number of ' +
+    'final ideas). <b>Effect plots</b> — each AI condition\'s mean difference from the no-AI baseline (None): ' +
+    'a dot right of the dashed zero line scored higher than no-AI, and a red dot (95% CI not crossing zero) ' +
+    'marks a statistically significant difference.</p>'
   const figs = images.length
-    ? `<section class="figures avoid-break"><h2>Figures</h2>${images
+    ? `<section class="figures"><h2>Figures</h2>${figNote}${images
         .map((src, i) => `<figure class="avoid-break"><img src="${src}" alt="Figure ${i + 1}"/><figcaption>Figure ${i + 1}</figcaption></figure>`)
         .join('')}</section>`
     : ''
@@ -280,13 +286,14 @@ export function buildInsightsPrintHtml({ parsed, regressionsText, code, lang, im
   table.summary { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 4px; }
   table.summary th, table.summary td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
   table.summary th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+  .fignote { font-size: 12px; line-height: 1.5; margin: 0 0 12px; }
   figure { margin: 0 0 18px; text-align: center; }
-  figure img { max-width: 100%; height: auto; border: 1px solid var(--border); border-radius: 6px; }
+  figure img { width: 100%; max-width: 100%; height: auto; border: 1px solid var(--border); border-radius: 6px; }
   figcaption { font-size: 11.5px; color: var(--muted); margin-top: 5px; }
   pre.mono {
     font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-    font-size: 10px; line-height: 1.45; white-space: pre-wrap; word-break: break-word;
-    background: var(--paper); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px;
+    font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word;
+    background: var(--paper); border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px;
   }
   .appendix { page-break-before: always; }
   .avoid-break, figure, .kpi { page-break-inside: avoid; }

@@ -358,7 +358,10 @@ A condition-encoding card under the intro shows a **two-column** key — *Encodi
 None/Solo/Group/Both tag) · *AI is present in* — centered under the full-width intro text.
 
 Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
-1. **Data source.** Lists every session (`getDocs('sessions')`) with its condition tag;
+1. **Data source.** Lists **only the instructor's own sessions** — `refreshSessions` queries
+   `sessions` with `where('instructorId','==', auth.currentUser.uid)`, the same ownership
+   filter the Admin panel uses, so orphan/foreign sessions never appear here (an admin's
+   active + completed sessions). Each shows its condition tag;
    tick any completed/active ones and "Load" pulls their ideas/participants/groups and
    flattens to **one row per idea** (`buildRowsForSession`): idea_id, session, condition,
    phase, group_id, author_id, novelty, usefulness, overall_quality, final_pick, text.
@@ -438,11 +441,18 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
    stat boxes (ideas analysed, final ideas, sessions, conditions with data, mean quality), a
    per-condition table (n ideas / final / scored + each KPI's mean (SD) via `summarize()`), and
    a stage breakdown (individual vs group, final-pick rate). A checkbox **"Only include ideas
-   scored on all 3 KPIs"** (`statsOnlyScored`) restricts every figure to fully-scored ideas.
+   scored on all 3 KPIs"** (`statsOnlyScored`, **default on**) restricts every figure to
+   fully-scored ideas.
 5. **Regressions — edit & compile online.** Runs on the **group-selected Final Ideas only**
    (`effectiveRows.filter(final_pick == 1)` → `dataCsv`; the guard needs ≥2 scored final ideas) —
    "currently we compare conditions for the ideas the group selected after the group phase; other
-   subsets may be added later". Two tabs, **Python** and **R**, each pre-filled
+   subsets may be added later". **Unbalanced design handled:** the conditions have different n
+   (e.g. None~27/Solo~39/Group~33), so both templates fit the OLS with **HC3 heteroscedasticity-
+   robust SEs** (Python `cov_type='HC3'`; R has a base-R `hc3_coef()` helper since WebR has no
+   `sandwich`) and use **Welch / unequal-variance pairwise tests** + a **Welch ANOVA** omnibus (R),
+   and print each condition's n. The plots use **large fonts**, annotate every value, and explain
+   what they show (a caption appears above them in Step 6 and the PDF). Two tabs, **Python** and
+   **R**, each pre-filled
    with a complete script (`src/data/analyticsPython.py` / `analyticsR.R`, inlined via Vite
    `?raw` in `analyticsTemplates.js`) that runs the SAME analysis: one OLS/`lm` per KPI on
    the 4-level condition factor (Human-Only = baseline), the **primary planned contrast

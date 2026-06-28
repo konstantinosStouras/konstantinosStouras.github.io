@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { signOut } from 'firebase/auth'
-import { collection, getDocs } from 'firebase/firestore'
+import { collection, getDocs, query, where } from 'firebase/firestore'
 import * as XLSX from 'xlsx-js-style'
 import { auth, db } from '../firebase'
 import { useTheme } from '../context/ThemeContext'
@@ -60,8 +60,8 @@ export default function DataAnalytics() {
   const [scoreErr, setScoreErr] = useState('')
   // Score only the group-selected ideas (Final Group Pick = 1) vs every idea.
   const [scoreOnlyFinal, setScoreOnlyFinal] = useState(true)
-  // Summary Statistics: restrict to ideas scored on all three KPIs.
-  const [statsOnlyScored, setStatsOnlyScored] = useState(false)
+  // Summary Statistics: restrict to ideas scored on all three KPIs (default on).
+  const [statsOnlyScored, setStatsOnlyScored] = useState(true)
 
   const [tab, setTab] = useState('python')
   const [pyCode, setPyCode] = useState(PYTHON_TEMPLATE)
@@ -143,7 +143,14 @@ export default function DataAnalytics() {
   async function refreshSessions() {
     setLoadingSessions(true)
     try {
-      const snap = await getDocs(collection(db, 'sessions'))
+      // Only the instructor's OWN sessions (their active + completed sessions) —
+      // same `instructorId` filter the Admin panel uses — so orphan / foreign
+      // sessions never show up here.
+      const uid = auth.currentUser?.uid
+      const ref = uid
+        ? query(collection(db, 'sessions'), where('instructorId', '==', uid))
+        : collection(db, 'sessions')
+      const snap = await getDocs(ref)
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
       list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
       setSessions(list)
@@ -957,9 +964,12 @@ export default function DataAnalytics() {
             Both tabs run the <em>same</em> analysis on the <strong>group-selected Final Ideas</strong>
             {' '}(Final&nbsp;Group&nbsp;Pick&nbsp;=&nbsp;1, after any removed participants): one linear
             regression per KPI across the four conditions (<em>None</em> = no-AI baseline), the planned
-            {' '}<em>Solo</em> vs <em>Group</em> contrast, a best→worst ranking, and plots. Edit the code and
-            press Run — Python runs via Pyodide and R via WebR, both compiled in your browser (first run
-            downloads the runtime, ~10–30&nbsp;s).
+            {' '}<em>Solo</em> vs <em>Group</em> contrast, a best→worst ranking, and plots. The conditions are
+            <strong> unbalanced</strong> (different n per condition), so the analysis uses
+            <strong> HC3 heteroscedasticity-robust standard errors</strong> and <strong>Welch</strong>
+            {' '}(unequal-variance) pairwise tests, and prints each condition's n. Edit the code and press
+            Run — Python runs via Pyodide and R via WebR, both compiled in your browser (first run downloads
+            the runtime, ~10–30&nbsp;s).
             {finalScoredCount < 2 && <><br /><span className={styles.unscored}>Score at least two Final Ideas in Step&nbsp;3 first (only {finalScoredCount} scored so far).</span></>}
           </p>
 
@@ -1007,9 +1017,12 @@ export default function DataAnalytics() {
           {output && <div className={styles.console}>{output}</div>}
 
           {images.length > 0 && (
-            <div className={styles.plotGrid}>
+            <div className={styles.plotGridLarge}>
               {images.map((src, i) => (
-                <div className={styles.plotCard} key={i}><img src={src} alt={`plot ${i + 1}`} /></div>
+                <figure className={styles.plotCardLarge} key={i}>
+                  <img src={src} alt={`figure ${i + 1}`} />
+                  <figcaption className={styles.plotCaption}>Figure {i + 1}</figcaption>
+                </figure>
               ))}
             </div>
           )}
@@ -1052,14 +1065,26 @@ export default function DataAnalytics() {
               )}
 
               {lastRun.images.length > 0 && (
-                <div className={styles.plotGridLarge}>
-                  {lastRun.images.map((src, i) => (
-                    <figure className={styles.plotCardLarge} key={i}>
-                      <img src={src} alt={`figure ${i + 1}`} />
-                      <figcaption className={styles.plotCaption}>Figure {i + 1}</figcaption>
-                    </figure>
-                  ))}
-                </div>
+                <>
+                  <h3 className={styles.kpiName} style={{ marginTop: 18 }}>Figures</h3>
+                  <p className={styles.figureNote}>
+                    <strong>Bar charts</strong> — each condition's <em>average</em> KPI score (1–7) with 95%
+                    confidence intervals: a taller bar means ideas in that condition were rated higher, the
+                    whisker shows the uncertainty, and the n under each bar is its number of final ideas
+                    (the conditions have different sizes). <strong>Effect plots</strong> — each AI condition's
+                    mean <em>difference from the no-AI baseline</em> (None): a dot to the right of the dashed
+                    zero line scored higher than no-AI, and a <span style={{ color: '#c8562a', fontWeight: 700 }}>red</span>
+                    {' '}dot (its 95% CI not crossing zero) marks a statistically significant difference.
+                  </p>
+                  <div className={styles.plotGridLarge}>
+                    {lastRun.images.map((src, i) => (
+                      <figure className={styles.plotCardLarge} key={i}>
+                        <img src={src} alt={`figure ${i + 1}`} />
+                        <figcaption className={styles.plotCaption}>Figure {i + 1}</figcaption>
+                      </figure>
+                    ))}
+                  </div>
+                </>
               )}
             </>
           )}
