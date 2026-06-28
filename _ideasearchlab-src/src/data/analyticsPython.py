@@ -115,7 +115,7 @@ def term_for(level):
 
 # ── 1. Load + clean ───────────────────────────────────────────────────────────
 def load_data():
-    """Parse the injected DATA_CSV global (the scored dataset from step 2)."""
+    """Parse the injected DATA_CSV global (the scored dataset from step 3)."""
     if "DATA_CSV" not in globals():
         # Should never happen via the page, but guard so a manual run fails loudly.
         print("ERROR: global variable DATA_CSV is not defined.", file=sys.stderr)
@@ -504,7 +504,7 @@ def insights(df, models):
 
 # ── Main driver ───────────────────────────────────────────────────────────────
 def main():
-    df = prepare(load_data())                    # parse + clean the step-2 dataset
+    df = prepare(load_data())                    # parse + clean the step-3 dataset
     if df.empty:
         print("WARNING: no usable rows after cleaning - nothing to analyse.")
         return
