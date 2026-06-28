@@ -311,7 +311,7 @@ sessions/{sessionId}/aiMessages/{messageId}: {
 **Data & Export section (AdminSession.jsx):**
 - Sits below the Participants/Config grid, above the advance bar
 - Shows three stat boxes: Participants count, Voted count, Surveys completed count
-- "Download Excel" button fetches all session data on-demand from Firestore and generates a multi-sheet `.xlsx` file
+- "Download Excel" button fetches all session data on-demand from Firestore and generates a multi-sheet `.xlsx` file. **The actual workbook is now built by the shared `src/utils/sessionExport.js` (`exportSessionWorkbook`/`buildSessionSheets`), the same builder the Data Analytics "Aggregate Data" step uses — so the single-session export and the aggregate share one identical format. `AdminSession.exportData` is now a thin wrapper around it.**
 - Uses the `xlsx-js-style` (SheetJS fork) npm package for client-side Excel generation, so cell styles are written out
 - **Every sheet's header row (row 0) is bold** — applied in `autoWidth()` after the column widths, by setting `cell.s.font.bold` on each header cell
 - Excel file name: `session_{CODE}_data.xlsx`
@@ -370,16 +370,26 @@ Five-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
    `condition` / `novelty` / `usefulness` columns still works too
    (`normalizeImportedRows` in `analyticsData.js`).
 2. **Aggregate Data.** A single **Download aggregate Excel** button (`downloadAggregate`
-   in `DataAnalytics.jsx`) merges *everything loaded above* (all `rows`, pre-removal — this
-   is the raw merge, unlike the scored/summarised Download Excel in the next step) into one
-   clean workbook that keeps the same tab structure as the page's data files — **Ideas**
-   (shared with Download Excel via the extracted `ideaSheetRows()` helper), **Summary by
-   condition**, **Summary by session** — **plus one extra tab, `Rankings`**: one row per idea
-   with the fixed headings *Idea ID, Condition, Stage, Final Group Pick, Title, Description,
-   Novelty, Usefulness, Quality*, where the three score columns are intentionally left **empty**
-   for a blind expert rater to fill in (`rankingsRows()` builds it; `splitTitleDesc()` recovers
-   the title/description from the combined `text`, `stageLabel()` maps phase →
-   `individual (solo)`/`group`). File name `idea_analytics_aggregate.xlsx`.
+   in `DataAnalytics.jsx`) consolidates **every loaded source into ONE workbook with the exact
+   same multi-tab structure and format as the per-session research export** — *About,
+   Participants, Ideas, Survey, Timing, Group Chat, AI Chat, AI Usage, AI Pricing, Groups,
+   Conditions* — with each session's rows stacked within every tab (condition-stamped), **plus
+   one extra tab, `Rankings`** (one row per idea: *Idea ID, Condition, Stage, Final Group Pick,
+   Title, Description* + empty *Novelty / Usefulness / Quality* for blind expert rating). File
+   name `idea_analytics_aggregate.xlsx`.
+   - **Shared builder (`src/utils/sessionExport.js`).** The per-session export logic was
+     extracted from `AdminSession.jsx` into this module — `fetchSessionExportData(session)`,
+     `buildSessionSheets(session, data)` (returns the ordered sheet descriptors for all 11
+     tabs), `appendSheetsToWorkbook(wb, sheets)`, `exportSessionWorkbook(session)` (single-file
+     download, now called by AdminSession), `mergeSessionSheets(sources, aboutMeta)` (stacks the
+     same tab across sessions; About replaced by one aggregate guide via `buildAggregateAbout`,
+     AI Pricing kept once, Conditions stacks one row per session) and `rankingsSheetFromIdeas()`.
+     **Both the per-session "Download Excel" and the aggregate now go through this one builder, so
+     they can never drift in format.** The aggregate sources are the **Firestore sessions loaded**
+     in Step 1 (`loadedSessions` state — re-fetched in full, incl. group chat + aiMessages) and
+     any **imported export workbooks** (`importedBooks` state — Step 1's *Import Excel/CSV* now
+     retains every sheet of an imported `.xlsx`, not just the Ideas rows). `bookAboutMeta()` reads
+     an imported book's Conditions/Ideas sheet for the aggregate About.
 3. **Score ideas, manage participants & download.** Every idea gets a per-KPI score:
    the configured LLM rates each on novelty + usefulness (1–7), overall = their mean.
    Scoring runs **client-side from the browser** via `src/utils/llmClient.js`, which reads

@@ -16,6 +16,10 @@ import { PYTHON_TEMPLATE, R_TEMPLATE } from '../data/analyticsTemplates'
 import { runPython } from '../utils/pyodideRunner'
 import { runR } from '../utils/webrRunner'
 import { parseRunOutput, buildInsightsPrintHtml, kpiLabel } from '../utils/insightsReport'
+import {
+  fetchSessionExportData, buildSessionSheets, mergeSessionSheets,
+  appendSheetsToWorkbook, rankingsSheetFromIdeas, conditionOf,
+} from '../utils/sessionExport'
 import styles from './DataAnalytics.module.css'
 
 const DESIGN_BRIEF = 'Designing a new product to improve sleep wellness.'
@@ -36,6 +40,12 @@ export default function DataAnalytics() {
   const [loadingSessions, setLoadingSessions] = useState(true)
   const [loadingData, setLoadingData] = useState(false)
   const [rows, setRows] = useState([])
+  // Sources for the Step-2 aggregate (the full multi-tab consolidation): the
+  // Firestore session docs currently loaded, and any imported per-session export
+  // workbooks (kept whole, all sheets — not just the Ideas rows that feed `rows`).
+  const [loadedSessions, setLoadedSessions] = useState([])
+  const [importedBooks, setImportedBooks] = useState([])
+  const [aggregating, setAggregating] = useState(false)
   const [excludedUsers, setExcludedUsers] = useState(() => new Set())
   const [showUsers, setShowUsers] = useState(false)
   const [userQuery, setUserQuery] = useState('')
@@ -156,7 +166,8 @@ export default function DataAnalytics() {
     setLoadingData(true)
     try {
       const collected = []
-      for (const s of sessions.filter(x => selected.has(x.id))) {
+      const loaded = sessions.filter(x => selected.has(x.id))
+      for (const s of loaded) {
         const [ideasSnap, partsSnap, groupsSnap] = await Promise.all([
           getDocs(collection(db, 'sessions', s.id, 'ideas')),
           getDocs(collection(db, 'sessions', s.id, 'participants')),
@@ -170,6 +181,11 @@ export default function DataAnalytics() {
       const tagged = tagRows(collected)
       if (replace) setExcludedUsers(new Set())
       setRows(prev => recomputeOverall(replace ? tagged : [...prev, ...tagged]))
+      // Remember the loaded session docs so Step 2 can rebuild their full export.
+      setLoadedSessions(prev => {
+        const merged = replace ? loaded : [...prev, ...loaded]
+        return [...new Map(merged.map(s => [s.id, s])).values()]
+      })
     } catch (err) {
       console.error('Failed to load session data', err)
       alert('Failed to load session data: ' + (err.message || err))
@@ -199,6 +215,13 @@ export default function DataAnalytics() {
             wb.SheetNames[0]
           const ws = wb.Sheets[name]
           imported = normalizeImportedRows(XLSX.utils.sheet_to_json(ws, { defval: '' }))
+          // Keep the WHOLE workbook (every sheet) so Step 2's "Aggregate Data" can
+          // consolidate this file with the same multi-tab structure, not just its
+          // Ideas rows. Each sheet becomes { name, kind:'json', rows }.
+          const bookSheets = wb.SheetNames.map(sn => ({
+            name: sn, kind: 'json', rows: XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: '' }),
+          }))
+          setImportedBooks(prev => [...prev, { label: file.name, sheets: bookSheets }])
         }
         if (!imported.length) { alert('No idea rows found. For the admin Excel export, the data is on the "Ideas" sheet — import that workbook (or a CSV of it).'); return }
         const tagged = tagRows(imported)
@@ -372,26 +395,57 @@ export default function DataAnalytics() {
     saveBlob(out, 'idea_analytics_summary.xlsx', 'application/octet-stream')
   }
 
-  // ── Step 2: aggregate ALL loaded data into one clean workbook ──
-  // Mirrors the Download-Excel structure (Ideas + per-condition/per-session
-  // summaries) over every loaded idea (pre-removal — this is the raw merge), and
-  // appends the extra "Rankings" tab for blind expert rating.
-  function downloadAggregate() {
-    const data = rows
-    if (!data.length) return
-    const wb = XLSX.utils.book_new()
-    addSheet(wb, 'Ideas', ideaSheetRows(data))
-    addSheet(wb, 'Summary by condition', summaryByConditionRows(data))
-    addSheet(wb, 'Summary by session', summaryBySessionRows(data))
-    addSheet(wb, 'Rankings', rankingsRows(data))
-    const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
-    saveBlob(out, 'idea_analytics_aggregate.xlsx', 'application/octet-stream')
+  // ── Step 2: consolidate every loaded source into ONE workbook ──
+  // Rebuilds the full multi-tab research export for each loaded Firestore session
+  // (via the shared sessionExport builder, so it is byte-for-byte the same format
+  // as the per-session "Download Excel"), stacks the same tab from every session +
+  // any imported export workbook, and appends the extra "Rankings" tab.
+  async function downloadAggregate() {
+    if (aggregating) return
+    if (!loadedSessions.length && !importedBooks.length) {
+      alert('Load one or more sessions above (or import session export files), then build the aggregate file.')
+      return
+    }
+    setAggregating(true)
+    try {
+      const sources = []
+      const aboutMeta = []
+      // Firestore-loaded sessions: fetch their full data and build all tabs.
+      for (const s of loadedSessions) {
+        const data = await fetchSessionExportData(s)
+        sources.push({ sheets: buildSessionSheets(s, data) })
+        const c = conditionOf(s)
+        aboutMeta.push({
+          code: c.sessionCode, placement: c.placement, paperName: c.paperName,
+          participants: data.participants.length, ideas: data.ideas.length,
+        })
+      }
+      // Imported export workbooks: contribute their sheets as-is.
+      for (const b of importedBooks) {
+        sources.push({ sheets: b.sheets })
+        aboutMeta.push(...bookAboutMeta(b))
+      }
+      const merged = mergeSessionSheets(sources, aboutMeta)
+      const ideasSheet = merged.find(s => s.name === 'Ideas')
+      if (ideasSheet) merged.push(rankingsSheetFromIdeas(ideasSheet.rows))
+      const wb = XLSX.utils.book_new()
+      appendSheetsToWorkbook(wb, merged)
+      const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+      saveBlob(out, 'idea_analytics_aggregate.xlsx', 'application/octet-stream')
+    } catch (err) {
+      console.error('Aggregate export failed', err)
+      alert('Could not build the aggregate file: ' + (err.message || err))
+    } finally {
+      setAggregating(false)
+    }
   }
 
   function clearData() {
     if (rows.length && !confirm('Clear the loaded dataset?')) return
     setRows([])
     setExcludedUsers(new Set())
+    setLoadedSessions([])
+    setImportedBooks([])
   }
 
   // ── Run code (Python via Pyodide / R via WebR) ──
@@ -577,29 +631,33 @@ export default function DataAnalytics() {
           <SectionActions onSave={saveSessions} onMakeDefault={saveSessions} onRestore={restoreSessions} hasCustom={saved.sessions} />
         </section>
 
-        {/* STEP 2 — Aggregate the loaded data into one clean Excel */}
+        {/* STEP 2 — Consolidate every loaded source into one clean Excel */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>
             <span><span className={styles.stepBadge}>2</span>Aggregate Data</span>
-            {rows.length > 0 && (
-              <button className="btn-primary" onClick={downloadAggregate} disabled={!rows.length}>Download aggregate Excel</button>
+            {(loadedSessions.length > 0 || importedBooks.length > 0) && (
+              <button className="btn-primary" onClick={downloadAggregate} disabled={aggregating}>
+                {aggregating ? <><span className={styles.spinner} /> Building…</> : 'Download aggregate Excel'}
+              </button>
             )}
           </h2>
           <p className={styles.hint}>
-            Merge everything loaded above into a single clean Excel workbook, keeping the same
-            tab structure as the data files (the <em>Ideas</em> sheet plus the per-condition and
-            per-session summaries). It adds one extra tab, <strong>Rankings</strong> — one row per
-            idea with <em>Idea&nbsp;ID, Condition, Stage, Final&nbsp;Group&nbsp;Pick, Title,
-            Description</em> and empty <em>Novelty / Usefulness / Quality</em> columns ready for
-            blind expert rating.
+            Consolidate every loaded session (and any imported export workbook) into a
+            <strong> single Excel file with the same structure and format as the per-session data
+            export</strong> — all the same tabs (<em>About, Participants, Ideas, Survey, Timing,
+            Group&nbsp;Chat, AI&nbsp;Chat, AI&nbsp;Usage, AI&nbsp;Pricing, Groups, Conditions</em>),
+            with every session's rows stacked together and condition-stamped. It adds one extra tab,
+            <strong> Rankings</strong> — one row per idea with <em>Idea&nbsp;ID, Condition, Stage,
+            Final&nbsp;Group&nbsp;Pick, Title, Description</em> and empty <em>Novelty / Usefulness /
+            Quality</em> columns ready for blind expert rating.
           </p>
-          {rows.length === 0 ? (
-            <p className={styles.emptyNote}>Load a session or import a file above, then build the aggregate file here.</p>
+          {(loadedSessions.length === 0 && importedBooks.length === 0) ? (
+            <p className={styles.emptyNote}>Load one or more sessions (or import session export files) above, then build the consolidated file here.</p>
           ) : (
             <div className={styles.stats}>
-              <div className={styles.statBox}><div className={styles.statNum}>{rows.length}</div><div className={styles.statLabel}>Ideas merged</div></div>
-              <div className={styles.statBox}><div className={styles.statNum}>{new Set(rows.map(r => r.session)).size}</div><div className={styles.statLabel}>Sessions</div></div>
-              <div className={styles.statBox}><div className={styles.statNum}>4</div><div className={styles.statLabel}>Data tabs + Rankings</div></div>
+              <div className={styles.statBox}><div className={styles.statNum}>{loadedSessions.length + importedBooks.length}</div><div className={styles.statLabel}>Sources{importedBooks.length ? ` (${importedBooks.length} imported)` : ''}</div></div>
+              <div className={styles.statBox}><div className={styles.statNum}>{rows.length}</div><div className={styles.statLabel}>Ideas</div></div>
+              <div className={styles.statBox}><div className={styles.statNum}>11 + 1</div><div className={styles.statLabel}>Tabs + Rankings</div></div>
             </div>
           )}
         </section>
@@ -1069,49 +1127,29 @@ function ideaSheetRows(data) {
   })))
 }
 
-// Human-readable phase → stage label, matching the admin export's "Stage" column.
-function stageLabel(phase) {
-  const p = String(phase || '').toLowerCase()
-  if (p.includes('group')) return 'group'
-  if (p.includes('individual') || p.includes('solo')) return 'individual (solo)'
-  return phase || ''
-}
-
-// Recover an idea's title + description from a row. Ideas are stored as a combined
-// "title: description" text (plus an explicit idea_title), so split them back out.
-function splitTitleDesc(r) {
-  const text = String(r.text || '').trim()
-  let title = String(r.idea_title || '').trim()
-  let description = ''
-  if (title) {
-    if (text.startsWith(title)) description = text.slice(title.length).replace(/^\s*:\s*/, '').trim()
-    else description = text === title ? '' : text
-  } else {
-    const i = text.indexOf(': ')
-    if (i > 0) { title = text.slice(0, i).trim(); description = text.slice(i + 2).trim() }
-    else title = text
+// About-sheet metadata for an imported export workbook (one entry per session it
+// contains): prefer its "Conditions" rows, else infer from its "Ideas" sheet.
+function bookAboutMeta(book) {
+  const num = v => Number(v) || 0
+  const cond = book.sheets.find(s => s.name === 'Conditions')
+  if (cond && cond.rows.length) {
+    return cond.rows.map(r => ({
+      code: r['Session Code'] || book.label || 'imported',
+      placement: r['Condition'] || '',
+      paperName: r['Condition (paper name)'] || '',
+      participants: num(r['Participants']),
+      ideas: num(r['Individual-stage ideas']) + num(r['Group-stage ideas']),
+    }))
   }
-  return { title, description }
-}
-
-// The extra "Rankings" tab for the aggregate workbook: one row per idea with the
-// fixed headings; the Novelty / Usefulness / Quality columns are left empty for a
-// blind expert rater to fill in.
-function rankingsRows(data) {
-  return data.map(r => {
-    const { title, description } = splitTitleDesc(r)
-    return {
-      'Idea ID': r.idea_id,
-      'Condition': r.condition,
-      'Stage': stageLabel(r.phase),
-      'Final Group Pick': r.final_pick ? 'Yes' : 'No',
-      'Title': title,
-      'Description': description,
-      'Novelty': '',
-      'Usefulness': '',
-      'Quality': '',
-    }
-  })
+  const ideas = book.sheets.find(s => s.name === 'Ideas')
+  const first = ideas?.rows?.[0] || {}
+  return [{
+    code: first['Session Code'] || book.label || 'imported',
+    placement: first['Condition'] || '',
+    paperName: first['Condition (paper name)'] || '',
+    participants: 0,
+    ideas: ideas ? ideas.rows.length : 0,
+  }]
 }
 
 function summaryByConditionRows(rs) {
