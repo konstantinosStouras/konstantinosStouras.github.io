@@ -84,9 +84,13 @@ export function buildRowsForSession(session, ideas = [], participants = [], grou
   const authorGroup = Object.fromEntries(
     (participants || []).map(p => [p.id, p.groupId || ''])
   )
-  // uid -> display name, for the participants manager (not part of the analysis CSV).
+  // uid -> display name / email, for the participants manager + search (not part
+  // of the analysis CSV).
   const authorName = Object.fromEntries(
     (participants || []).map(p => [p.id, p.name || p.displayName || ''])
+  )
+  const authorEmail = Object.fromEntries(
+    (participants || []).map(p => [p.id, p.email || ''])
   )
   // ideaId -> 1 if it is one of its group's locked-in final picks.
   const finalPickIds = new Set((groups || []).flatMap(g => g.finalIdeas || []))
@@ -101,8 +105,10 @@ export function buildRowsForSession(session, ideas = [], participants = [], grou
       phase: idea.phase || '',
       group_id: groupId,
       author_id: idea.authorId || '',
-      // Display-only (kept off the COLUMNS list so it never enters the analysis CSV).
+      // Display-only (kept off the COLUMNS list so they never enter the analysis CSV).
       author_name: idea.authorName || authorName[idea.authorId] || '',
+      author_email: authorEmail[idea.authorId] || '',
+      idea_title: idea.title || '',
       // Scores filled later (AI / manual / import). Preserve any already present.
       novelty: numOrBlank(idea.novelty),
       usefulness: numOrBlank(idea.usefulness),
@@ -243,6 +249,8 @@ export function normalizeImportedRows(rawRows) {
       group_id: String(pick('group uid', 'group_id', 'group id', 'group', 'groupid')),
       author_id: String(pick('author id', 'author_id', 'author', 'participant', 'participant_id')),
       author_name: String(pick('author name', 'author label', 'author_name', 'name')),
+      author_email: String(pick('author email', 'email', 'author_email')),
+      idea_title: String(pick('idea title', 'title')),
       novelty: numOrBlank(novelty),
       usefulness: numOrBlank(usefulness),
       overall_quality: numOrBlank(overall),
@@ -309,6 +317,72 @@ export function canonicalCondition(raw) {
   // exact canonical match (case-insensitive)
   const exact = CONDITIONS.find(c => c.toLowerCase() === s)
   return exact || raw
+}
+
+// ── Loading idea scores from an external ranked-ideas file ─────────────────────
+
+/** Normalised title key for fuzzy matching (lowercase, alphanumerics only). */
+export function normTitle(s) {
+  return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '')
+}
+
+/** A row's idea title — explicit `idea_title`, else the part of text before ": ". */
+function rowTitle(r) {
+  if (r.idea_title) return r.idea_title
+  const t = r.text || ''
+  const i = t.indexOf(': ')
+  return i > 0 ? t.slice(0, i) : t
+}
+
+function clampScore(v) {
+  if (v == null || String(v).trim() === '') return ''
+  const n = Number(v)
+  if (!Number.isFinite(n)) return ''
+  return Math.max(1, Math.min(7, Math.round(n * 10) / 10))
+}
+
+/**
+ * Apply externally-rated idea scores onto the loaded dataset by matching the
+ * idea TITLE (the imported file — e.g. an "All Ideas Ranked" sheet — usually has
+ * no idea id). Each `entry` is { title, novelty, usefulness }. Matching is
+ * exact-on-normalised-title first, then a length-guarded contains match; each
+ * dataset row is used at most once. Returns the updated rows plus counts.
+ */
+export function matchScoresIntoRows(rows, entries) {
+  const byTitle = new Map()
+  rows.forEach((r, i) => {
+    const key = normTitle(rowTitle(r))
+    if (!key) return
+    if (!byTitle.has(key)) byTitle.set(key, [])
+    byTitle.get(key).push(i)
+  })
+
+  const next = rows.slice()
+  const used = new Set()
+  let matched = 0
+  let unmatched = 0
+
+  for (const e of entries || []) {
+    const key = normTitle(e.title)
+    if (!key) { unmatched++; continue }
+    let candidates = byTitle.get(key)
+    if (!candidates) {
+      // Length-guarded contains match (avoids short keys matching everything).
+      const acc = []
+      if (key.length >= 10) {
+        for (const [k, list] of byTitle) {
+          if (k.length >= 10 && (k.includes(key) || key.includes(k))) acc.push(...list)
+        }
+      }
+      candidates = acc.length ? acc : null
+    }
+    const idx = candidates && candidates.find(i => !used.has(i))
+    if (idx == null) { unmatched++; continue }
+    used.add(idx)
+    next[idx] = { ...next[idx], novelty: clampScore(e.novelty), usefulness: clampScore(e.usefulness) }
+    matched++
+  }
+  return { rows: next, matched, unmatched }
 }
 
 /** Quick per-condition / per-KPI summary used for the on-page preview table. */

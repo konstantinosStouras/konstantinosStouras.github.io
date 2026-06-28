@@ -5,64 +5,8 @@ import { doc, onSnapshot } from 'firebase/firestore'
 import { signOut } from 'firebase/auth'
 import { db, auth, functions } from '../firebase'
 import { useTheme } from '../context/ThemeContext'
+import { PROVIDERS } from '../data/aiModels'
 import styles from './AISettings.module.css'
-
-// Model lists updated June 2026. Keep in sync with PROVIDER_DEFAULTS in
-// functions/ai.js (the "Use default" option). Older saved model IDs keep
-// working until the provider retires them.
-const PROVIDERS = [
-  {
-    id: 'claude',
-    name: 'Claude (Anthropic)',
-    keyLabel: 'API Key',
-    keyPlaceholder: 'sk-ant-...',
-    keyLink: 'https://console.anthropic.com',
-    defaultModel: 'claude-sonnet-4-6',
-    models: [
-      { id: 'claude-opus-4-8', label: 'Claude Opus 4.8 — most capable Opus (recommended)' },
-      { id: 'claude-fable-5', label: 'Claude Fable 5 — frontier model (premium pricing)' },
-      { id: 'claude-opus-4-7', label: 'Claude Opus 4.7' },
-      { id: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
-      { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 — best speed/cost balance' },
-      { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5 — fastest, most cost-effective' },
-      { id: 'claude-opus-4-5', label: 'Claude Opus 4.5 (older)' },
-      { id: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5 (older)' },
-    ],
-  },
-  {
-    id: 'openai',
-    name: 'ChatGPT (OpenAI)',
-    keyLabel: 'API Key',
-    keyPlaceholder: 'sk-...',
-    keyLink: 'https://platform.openai.com/api-keys',
-    defaultModel: 'gpt-5.5',
-    models: [
-      { id: 'gpt-5.5', label: 'GPT-5.5 — flagship (recommended)' },
-      { id: 'gpt-5.4-mini', label: 'GPT-5.4 mini — fast, cost-efficient' },
-      { id: 'gpt-5.4-nano', label: 'GPT-5.4 nano — fastest, cheapest' },
-      { id: 'gpt-5.2', label: 'GPT-5.2 — previous flagship' },
-      { id: 'gpt-5.1', label: 'GPT-5.1' },
-      { id: 'gpt-4.1', label: 'GPT-4.1 (older)' },
-      { id: 'gpt-4o', label: 'GPT-4o (legacy)' },
-    ],
-  },
-  {
-    id: 'gemini',
-    name: 'Gemini (Google)',
-    keyLabel: 'API Key',
-    keyPlaceholder: 'AIza...',
-    keyLink: 'https://aistudio.google.com/app/apikey',
-    defaultModel: 'gemini-3.5-flash',
-    models: [
-      { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash — latest GA (recommended)' },
-      { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro (preview) — deepest reasoning' },
-      { id: 'gemini-3-flash', label: 'Gemini 3 Flash' },
-      { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-      { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite' },
-    ],
-  },
-]
 
 // The same three default-management buttons used across the admin panel,
 // shown under every section. In this app the global `settings/ai` document IS
@@ -223,7 +167,8 @@ export default function AISettings() {
           <button className={styles.themeBtn} onClick={toggle} title="Toggle dark mode">
             {dark ? '☀' : '☾'}
           </button>
-          <button className="btn-ghost" onClick={() => navigate('/admin')}>{'←'} Back to Admin</button>
+          <button className="btn-ghost" onClick={() => navigate('/admin')}>Admin</button>
+          <button className="btn-ghost" onClick={() => navigate('/admin/data-analytics')}>Data Analytics</button>
           <button className="btn-ghost" onClick={() => signOut(auth)}>Sign out</button>
         </div>
       </header>

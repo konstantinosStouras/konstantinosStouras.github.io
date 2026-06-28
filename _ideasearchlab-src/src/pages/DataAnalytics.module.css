@@ -268,6 +268,35 @@
 .progressWrap { width: 100%; height: 7px; background: var(--paper-dark); border-radius: 999px; overflow: hidden; margin-top: 8px; }
 .progressBar { height: 100%; background: var(--accent); transition: width 0.2s; }
 .miniBtn { font-size: 12.5px; padding: 6px 14px; }
+
+/* AI rater provider + model selectors */
+.raterRow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.raterLabel {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  font-weight: 600;
+}
+.miniSelect {
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: var(--white);
+  color: var(--ink);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 7px 30px 7px 12px;
+  font-size: 13px;
+  font-family: var(--font-body);
+  cursor: pointer;
+  max-width: 340px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237a7670' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 12px;
+}
+.miniSelect:focus { outline: none; border-color: var(--accent); }
+.miniSelect:disabled { opacity: 0.6; cursor: not-allowed; }
 .fileInput { display: none; }
 .emptyNote { color: var(--muted); font-size: 13px; padding: 14px 0; }
 
@@ -280,6 +309,17 @@
   background: var(--paper);
   max-height: 360px;
   overflow-y: auto;
+}
+.userSearch { margin-bottom: 10px; }
+.loadMsg {
+  font-size: 12.5px;
+  color: var(--ink);
+  background: var(--paper-dark);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  margin: 4px 0 0;
+  line-height: 1.5;
 }
 .userGroup { margin-bottom: 12px; }
 .userGroup:last-child { margin-bottom: 0; }
