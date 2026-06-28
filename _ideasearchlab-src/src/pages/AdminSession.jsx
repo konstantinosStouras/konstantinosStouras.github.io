@@ -82,6 +82,19 @@ export default function AdminSession() {
       const groups = groupsSnap.docs.map(d => ({ id: d.id, ...d.data() }))
       const aiMessages = aiMessagesSnap.docs.map(d => ({ id: d.id, ...d.data() }))
 
+      // Which ideas each group locked in as its final (voted) selection. A
+      // group's `finalIdeas` is stored top-voted-first, so the index gives the
+      // rank. These maps let the Ideas sheet flag the winners directly and the
+      // Groups sheet show them as titles instead of bare ids.
+      const finalIdeaIds = new Set(groups.flatMap(g => g.finalIdeas || []))
+      const finalIdeaRank = {}                       // ideaId -> "g2 #1 (most-voted)"
+      groups.forEach(g => (g.finalIdeas || []).forEach((id, i) => {
+        finalIdeaRank[id] = `${g.id} #${i + 1}`
+      }))
+      const authorGroupId = Object.fromEntries(participants.map(p => [p.id, p.groupId || '']))
+      const ideaById = Object.fromEntries(ideas.map(i => [i.id, i]))
+      const ideaTitleById = Object.fromEntries(ideas.map(i => [i.id, i.title || i.text || i.id]))
+
       // Fetch group chat messages from each group
       const chatMessages = []
       for (const group of groups) {
@@ -137,9 +150,19 @@ export default function AdminSession() {
         'Author ID': idea.authorId || '',
         'Author Name': idea.authorName || '',
         'Phase': idea.phase || '',
-        'Group ID': idea.groupId || '',
-        'Selected': idea.selected ? 'Yes' : 'No',
+        // Individual ideas don't carry a groupId on the doc — fall back to the
+        // author's group so every idea row shows which group it belongs to.
+        'Group ID': idea.groupId || authorGroupId[idea.authorId] || '',
+        // Renamed from 'Selected' (which read ambiguously): this means the idea
+        // was double-click-selected in the INDIVIDUAL phase to be carried into
+        // the group — NOT that it was a final group choice.
+        'Carried to Group': idea.selected ? 'Yes' : 'No',
         'Vote Count': countVotes(idea.id, participants),
+        // The actual answer to "which ideas did the group pick after voting":
+        // Yes if this idea is in its group's finalIdeas; the rank column shows
+        // its position (#1 = most-voted) and which group selected it.
+        'Final Group Pick': finalIdeaIds.has(idea.id) ? 'Yes' : 'No',
+        'Final Pick Rank': finalIdeaRank[idea.id] || '',
         'Created At': formatTimestamp(idea.createdAt),
       }))
       const wsIdeas = XLSX.utils.json_to_sheet(ideaRows)
@@ -409,6 +432,16 @@ export default function AdminSession() {
             : '',
           'Status': g.status || '',
           'Final Ideas': (g.finalIdeas || []).join(', '),
+          // Readable version of the line above: the chosen ideas as titles
+          // (top-voted first), each tagged with its phase, so you don't have to
+          // look the ids up in the Ideas sheet.
+          'Final Ideas (titles)': (g.finalIdeas || [])
+            .map(id => {
+              const it = ideaById[id]
+              const tag = it ? (it.phase === 'group' ? ' [group]' : ' [individual]') : ''
+              return `${ideaTitleById[id] || id}${tag}`
+            })
+            .join(' | '),
           'Created At': formatTimestamp(g.createdAt),
         }))
         const wsGroups = XLSX.utils.json_to_sheet(groupRows)
