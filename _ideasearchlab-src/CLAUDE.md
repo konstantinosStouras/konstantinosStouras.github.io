@@ -354,7 +354,7 @@ exports carry it, and the Python/R templates regress on it (reference = `None`; 
 `read_csv(keep_default_na=False)` so the string `"None"` isn't parsed as NaN). So a session *is*
 a condition — no manual labelling.
 
-Four-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
+Five-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
 1. **Data source.** Lists every session (`getDocs('sessions')`) with its condition tag;
    tick any completed/active ones and "Load" pulls their ideas/participants/groups and
    flattens to **one row per idea** (`buildRowsForSession`): idea_id, session, condition,
@@ -369,7 +369,18 @@ Four-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
    `Exclude (Yes/No) = Yes` (the pre-registered screen). A plain table with
    `condition` / `novelty` / `usefulness` columns still works too
    (`normalizeImportedRows` in `analyticsData.js`).
-2. **Score ideas, manage participants & download.** Every idea gets a per-KPI score:
+2. **Aggregate Data.** A single **Download aggregate Excel** button (`downloadAggregate`
+   in `DataAnalytics.jsx`) merges *everything loaded above* (all `rows`, pre-removal — this
+   is the raw merge, unlike the scored/summarised Download Excel in the next step) into one
+   clean workbook that keeps the same tab structure as the page's data files — **Ideas**
+   (shared with Download Excel via the extracted `ideaSheetRows()` helper), **Summary by
+   condition**, **Summary by session** — **plus one extra tab, `Rankings`**: one row per idea
+   with the fixed headings *Idea ID, Condition, Stage, Final Group Pick, Title, Description,
+   Novelty, Usefulness, Quality*, where the three score columns are intentionally left **empty**
+   for a blind expert rater to fill in (`rankingsRows()` builds it; `splitTitleDesc()` recovers
+   the title/description from the combined `text`, `stageLabel()` maps phase →
+   `individual (solo)`/`group`). File name `idea_analytics_aggregate.xlsx`.
+3. **Score ideas, manage participants & download.** Every idea gets a per-KPI score:
    the configured LLM rates each on novelty + usefulness (1–7), overall = their mean.
    Scoring runs **client-side from the browser** via `src/utils/llmClient.js`, which reads
    the provider key straight from `settings/ai` (admin can read it per Firestore rules —
@@ -398,7 +409,7 @@ Four-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
    per-idea dataset), *Summary by condition* (n + mean/SD/n per KPI), *Summary by session*, and
    *Removed participants* when any — plus a raw-dataset **CSV**. Both reflect the current
    post-removal `effectiveRows`.
-3. **Regressions — edit & compile online.** Two tabs, **Python** and **R**, each pre-filled
+4. **Regressions — edit & compile online.** Two tabs, **Python** and **R**, each pre-filled
    with a complete script (`src/data/analyticsPython.py` / `analyticsR.R`, inlined via Vite
    `?raw` in `analyticsTemplates.js`) that runs the SAME analysis: one OLS/`lm` per KPI on
    the 4-level condition factor (Human-Only = baseline), the **primary planned contrast
@@ -419,7 +430,7 @@ Four-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
    jsDelivr on first Run (Pyodide `v314.0.1`, WebR `0.6.0`, each with same-API version
    fallbacks), so they add ~0 KB to the main bundle. **Entirely client-side — ships with a
    normal Pages build, no Cloud Functions or Firestore-rules change.**
-4. **Insights gained.** A readable, formatted write-up of the Step-3 results so the admin no
+5. **Insights gained.** A readable, formatted write-up of the Step-4 results so the admin no
    longer has to squint at the monospace console. On every Run the page snapshots the run
    (`lastRun = { lang, code, output, images, ranAt }`); `parseRunOutput()` in
    `src/utils/insightsReport.js` splits the console text at the `# INSIGHTS` banner into the

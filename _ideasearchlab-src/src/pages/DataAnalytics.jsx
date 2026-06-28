@@ -57,7 +57,7 @@ export default function DataAnalytics() {
   const [output, setOutput] = useState('')
   const [images, setImages] = useState([])
   const [runError, setRunError] = useState(null)
-  // Snapshot of the most recent successful run — drives the Step 4 "Insights
+  // Snapshot of the most recent successful run — drives the Step 5 "Insights
   // gained" panel + its PDF export. { lang, code, output, images, ranAt }.
   const [lastRun, setLastRun] = useState(null)
 
@@ -360,20 +360,7 @@ export default function DataAnalytics() {
     const data = effectiveRows
     if (!data.length) return
     const wb = XLSX.utils.book_new()
-
-    // Sheet 1 — the per-idea dataset (one row per idea).
-    const labels = {
-      idea_id: 'Idea ID', session: 'Session', condition: 'Condition', phase: 'Phase',
-      group_id: 'Group', author_id: 'Author ID', author_name: 'Author',
-      novelty: 'Novelty', usefulness: 'Usefulness', overall_quality: 'Overall Quality',
-      final_pick: 'Final Group Pick', text: 'Idea',
-    }
-    const ideaCols = Object.keys(labels)
-    const ideaRows = data.map(r => Object.fromEntries(ideaCols.map(c => {
-      const v = c === 'author_name' ? (r.author_name || '') : c === 'final_pick' ? (r.final_pick ? 'Yes' : 'No') : r[c]
-      return [labels[c], v]
-    })))
-    addSheet(wb, 'Ideas', ideaRows)
+    addSheet(wb, 'Ideas', ideaSheetRows(data))
     addSheet(wb, 'Summary by condition', summaryByConditionRows(data))
     addSheet(wb, 'Summary by session', summaryBySessionRows(data))
     if (excludedUsers.size) {
@@ -383,6 +370,22 @@ export default function DataAnalytics() {
     }
     const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
     saveBlob(out, 'idea_analytics_summary.xlsx', 'application/octet-stream')
+  }
+
+  // ── Step 2: aggregate ALL loaded data into one clean workbook ──
+  // Mirrors the Download-Excel structure (Ideas + per-condition/per-session
+  // summaries) over every loaded idea (pre-removal — this is the raw merge), and
+  // appends the extra "Rankings" tab for blind expert rating.
+  function downloadAggregate() {
+    const data = rows
+    if (!data.length) return
+    const wb = XLSX.utils.book_new()
+    addSheet(wb, 'Ideas', ideaSheetRows(data))
+    addSheet(wb, 'Summary by condition', summaryByConditionRows(data))
+    addSheet(wb, 'Summary by session', summaryBySessionRows(data))
+    addSheet(wb, 'Rankings', rankingsRows(data))
+    const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+    saveBlob(out, 'idea_analytics_aggregate.xlsx', 'application/octet-stream')
   }
 
   function clearData() {
@@ -422,7 +425,7 @@ export default function DataAnalytics() {
       setOutput(finalOutput)
       setImages(result.images || [])
       if (!result.ok) setRunError(result.error || 'Run failed.')
-      // Remember this run so Step 4 can present its insights + export the PDF.
+      // Remember this run so Step 5 can present its insights + export the PDF.
       // Kept even on a partial failure so whatever ran is still readable.
       setLastRun({
         lang: tab,
@@ -446,7 +449,7 @@ export default function DataAnalytics() {
   const setCode = tab === 'python' ? setPyCode : setRCode
   const resetCode = () => (tab === 'python' ? setPyCode(PYTHON_TEMPLATE) : setRCode(R_TEMPLATE))
 
-  // ── Step 4: insights derived from the last run ──
+  // ── Step 5: insights derived from the last run ──
   const report = useMemo(() => (lastRun ? parseRunOutput(lastRun.output) : null), [lastRun])
   // "rows used for analysis: N" is printed by both scripts; surface it in the PDF header.
   const rowsUsed = useMemo(() => {
@@ -574,10 +577,37 @@ export default function DataAnalytics() {
           <SectionActions onSave={saveSessions} onMakeDefault={saveSessions} onRestore={restoreSessions} hasCustom={saved.sessions} />
         </section>
 
-        {/* STEP 2 — KPI scoring + dataset */}
+        {/* STEP 2 — Aggregate the loaded data into one clean Excel */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>
-            <span><span className={styles.stepBadge}>2</span>Score ideas, manage participants &amp; download</span>
+            <span><span className={styles.stepBadge}>2</span>Aggregate Data</span>
+            {rows.length > 0 && (
+              <button className="btn-primary" onClick={downloadAggregate} disabled={!rows.length}>Download aggregate Excel</button>
+            )}
+          </h2>
+          <p className={styles.hint}>
+            Merge everything loaded above into a single clean Excel workbook, keeping the same
+            tab structure as the data files (the <em>Ideas</em> sheet plus the per-condition and
+            per-session summaries). It adds one extra tab, <strong>Rankings</strong> — one row per
+            idea with <em>Idea&nbsp;ID, Condition, Stage, Final&nbsp;Group&nbsp;Pick, Title,
+            Description</em> and empty <em>Novelty / Usefulness / Quality</em> columns ready for
+            blind expert rating.
+          </p>
+          {rows.length === 0 ? (
+            <p className={styles.emptyNote}>Load a session or import a file above, then build the aggregate file here.</p>
+          ) : (
+            <div className={styles.stats}>
+              <div className={styles.statBox}><div className={styles.statNum}>{rows.length}</div><div className={styles.statLabel}>Ideas merged</div></div>
+              <div className={styles.statBox}><div className={styles.statNum}>{new Set(rows.map(r => r.session)).size}</div><div className={styles.statLabel}>Sessions</div></div>
+              <div className={styles.statBox}><div className={styles.statNum}>4</div><div className={styles.statLabel}>Data tabs + Rankings</div></div>
+            </div>
+          )}
+        </section>
+
+        {/* STEP 3 — KPI scoring + dataset */}
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>
+            <span><span className={styles.stepBadge}>3</span>Score ideas, manage participants &amp; download</span>
             {rows.length > 0 && (
               <span className={styles.row}>
                 <button className="btn-primary" onClick={downloadExcel} disabled={!effectiveRows.length}>Download Excel</button>
@@ -729,10 +759,10 @@ export default function DataAnalytics() {
           )}
         </section>
 
-        {/* STEP 3 — Code + compile */}
+        {/* STEP 4 — Code + compile */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>
-            <span><span className={styles.stepBadge}>3</span>Regressions — edit &amp; compile online</span>
+            <span><span className={styles.stepBadge}>4</span>Regressions — edit &amp; compile online</span>
             <span className={styles.kpiPill}>KPIs: {KPIS.join(' · ')}</span>
           </h2>
           <p className={styles.hint}>
@@ -795,16 +825,16 @@ export default function DataAnalytics() {
           )}
         </section>
 
-        {/* STEP 4 — Insights gained */}
+        {/* STEP 5 — Insights gained */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>
-            <span><span className={styles.stepBadge}>4</span>Insights gained</span>
+            <span><span className={styles.stepBadge}>5</span>Insights gained</span>
             {lastRun && (
               <button className="btn-primary" onClick={exportInsightsPdf}>⬇ Export PDF</button>
             )}
           </h2>
           <p className={styles.hint}>
-            A clean, readable write-up of what the Step&nbsp;3 regressions found — each KPI's
+            A clean, readable write-up of what the Step&nbsp;4 regressions found — each KPI's
             best→worst condition ranking, how every condition compares with the no-AI baseline,
             and the planned AI-timing contrast — with the plots shown large. <strong>Export PDF</strong>{' '}
             saves it all, including <strong>Appendix A</strong> (the regression results these insights
@@ -813,7 +843,7 @@ export default function DataAnalytics() {
           </p>
 
           {!lastRun ? (
-            <p className={styles.emptyNote}>Run the analysis in Step&nbsp;3 (Python or R) first — the insights appear here.</p>
+            <p className={styles.emptyNote}>Run the analysis in Step&nbsp;4 (Python or R) first — the insights appear here.</p>
           ) : (
             <>
               <div className={styles.insightsMeta}>
@@ -826,8 +856,8 @@ export default function DataAnalytics() {
                 <InsightsPanel report={report} />
               ) : (
                 <div className={styles.coverageCallout}>
-                  The current Step&nbsp;3 script produced no <strong>INSIGHTS</strong> section to format. The full
-                  output still shows in Step&nbsp;3, and <strong>Export PDF</strong> includes it as Appendix&nbsp;A.
+                  The current Step&nbsp;4 script produced no <strong>INSIGHTS</strong> section to format. The full
+                  output still shows in Step&nbsp;4, and <strong>Export PDF</strong> includes it as Appendix&nbsp;A.
                 </div>
               )}
 
@@ -849,7 +879,7 @@ export default function DataAnalytics() {
   )
 }
 
-// ── Step 4 insights panel: a readable, formatted view of the INSIGHTS read-out
+// ── Step 5 insights panel: a readable, formatted view of the INSIGHTS read-out
 // parsed from the last Python/R run (the same data the PDF export renders). ────
 function InsightsPanel({ report }) {
   const { parsed } = report
@@ -1022,6 +1052,67 @@ function saveBlob(content, filename, type) {
 }
 
 const round3 = x => (x == null || !Number.isFinite(x)) ? '' : Number(x.toFixed(3))
+
+// The "Ideas" sheet (one row per idea) — shared by the Download Excel and the
+// Step-2 aggregate workbook so both keep an identical Ideas tab.
+function ideaSheetRows(data) {
+  const labels = {
+    idea_id: 'Idea ID', session: 'Session', condition: 'Condition', phase: 'Phase',
+    group_id: 'Group', author_id: 'Author ID', author_name: 'Author',
+    novelty: 'Novelty', usefulness: 'Usefulness', overall_quality: 'Overall Quality',
+    final_pick: 'Final Group Pick', text: 'Idea',
+  }
+  const cols = Object.keys(labels)
+  return data.map(r => Object.fromEntries(cols.map(c => {
+    const v = c === 'author_name' ? (r.author_name || '') : c === 'final_pick' ? (r.final_pick ? 'Yes' : 'No') : r[c]
+    return [labels[c], v]
+  })))
+}
+
+// Human-readable phase → stage label, matching the admin export's "Stage" column.
+function stageLabel(phase) {
+  const p = String(phase || '').toLowerCase()
+  if (p.includes('group')) return 'group'
+  if (p.includes('individual') || p.includes('solo')) return 'individual (solo)'
+  return phase || ''
+}
+
+// Recover an idea's title + description from a row. Ideas are stored as a combined
+// "title: description" text (plus an explicit idea_title), so split them back out.
+function splitTitleDesc(r) {
+  const text = String(r.text || '').trim()
+  let title = String(r.idea_title || '').trim()
+  let description = ''
+  if (title) {
+    if (text.startsWith(title)) description = text.slice(title.length).replace(/^\s*:\s*/, '').trim()
+    else description = text === title ? '' : text
+  } else {
+    const i = text.indexOf(': ')
+    if (i > 0) { title = text.slice(0, i).trim(); description = text.slice(i + 2).trim() }
+    else title = text
+  }
+  return { title, description }
+}
+
+// The extra "Rankings" tab for the aggregate workbook: one row per idea with the
+// fixed headings; the Novelty / Usefulness / Quality columns are left empty for a
+// blind expert rater to fill in.
+function rankingsRows(data) {
+  return data.map(r => {
+    const { title, description } = splitTitleDesc(r)
+    return {
+      'Idea ID': r.idea_id,
+      'Condition': r.condition,
+      'Stage': stageLabel(r.phase),
+      'Final Group Pick': r.final_pick ? 'Yes' : 'No',
+      'Title': title,
+      'Description': description,
+      'Novelty': '',
+      'Usefulness': '',
+      'Quality': '',
+    }
+  })
+}
 
 function summaryByConditionRows(rs) {
   const s = summarize(rs)

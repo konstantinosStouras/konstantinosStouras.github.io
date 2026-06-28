@@ -1,11 +1,11 @@
 /**
  * insightsReport.js
  *
- * Turns the raw console output of the Data Analytics Step 3 run (Python via
+ * Turns the raw console output of the Data Analytics regressions run (Python via
  * Pyodide or R via WebR — both print the SAME, intentionally identical INSIGHTS
  * read-out) into:
  *   1. `parseRunOutput()` — a structured object the page renders as a clean,
- *      easy-to-read "Insights gained" panel (Step 4), and that also splits off
+ *      easy-to-read "Insights gained" panel, and that also splits off
  *      the regression results (everything BEFORE the INSIGHTS banner) so they
  *      can be shown verbatim as an appendix.
  *   2. `buildInsightsPrintHtml()` — a self-contained, print-ready HTML document

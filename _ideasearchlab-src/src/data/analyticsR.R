@@ -26,7 +26,7 @@
 #   then press Run.
 ###############################################################################
 
-# Read the step-2 dataset that the page wrote to the WebR virtual filesystem.
+# Read the step-3 dataset that the page wrote to the WebR virtual filesystem.
 # stringsAsFactors = FALSE so text/id columns stay character (we factor only
 # `condition`, below).
 dat <- read.csv("/tmp/data.csv", stringsAsFactors = FALSE)
