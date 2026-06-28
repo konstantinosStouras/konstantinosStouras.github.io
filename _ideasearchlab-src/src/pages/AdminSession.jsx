@@ -92,8 +92,46 @@ export default function AdminSession() {
         finalIdeaRank[id] = `${g.id} #${i + 1}`
       }))
       const authorGroupId = Object.fromEntries(participants.map(p => [p.id, p.groupId || '']))
+      const authorLabel = Object.fromEntries(participants.map(p => [p.id, p.anonymousLabel || '']))
       const ideaById = Object.fromEntries(ideas.map(i => [i.id, i]))
       const ideaTitleById = Object.fromEntries(ideas.map(i => [i.id, i.title || i.text || i.id]))
+
+      // ── AI-timing condition (the experimental manipulation) ──────────────
+      // The 2×2 of {AI in the solo/individual stage} × {AI in the group stage}
+      // maps to the four pre-registered between-subjects conditions (AsPredicted
+      // #298152, "The Effects of AI Timing on Idea Generation and Selection").
+      // Each session is ONE condition; we stamp it (plus the session code) onto
+      // every analysis row so exports from different sessions stack straight into
+      // a single condition-coded dataset.
+      const indivPhaseOn = session.phaseConfig?.individualPhaseActive !== false
+      const groupPhaseOn = session.phaseConfig?.groupPhaseActive !== false
+      const aiSolo = !!session.aiConfig?.individualAI && indivPhaseOn
+      const aiGroup = !!session.aiConfig?.groupAI && groupPhaseOn
+      const aiConditionLabel =
+        aiSolo && aiGroup ? 'Full AI (AI in both stages)'
+          : aiSolo && !aiGroup ? 'Individual + AI (AI in solo stage only)'
+            : !aiSolo && aiGroup ? 'Group + AI (AI in group stage only)'
+              : 'Human-Only Hybrid (no AI)'
+      const sessionCode = session.code || sessionId
+      const conditionCode =
+        aiSolo && aiGroup ? 'FullAI'
+          : aiSolo && !aiGroup ? 'IndAI'
+            : !aiSolo && aiGroup ? 'GroupAI'
+              : 'HumanOnly'
+      // Prepend the condition keys so they are the leftmost columns of every
+      // sheet. Includes machine-friendly dummies (AI Solo / AI Group as 0/1 and a
+      // short Condition Code) so the planned condition-dummy regressions and the
+      // Individual+AI-vs-Group+AI contrast need no string parsing.
+      const stamp = row => ({
+        'Session Code': sessionCode,
+        'AI Condition': aiConditionLabel,
+        'Condition Code': conditionCode,
+        'AI Solo Stage': aiSolo ? 'Yes' : 'No',
+        'AI Group Stage': aiGroup ? 'Yes' : 'No',
+        'AI Solo (0/1)': aiSolo ? 1 : 0,
+        'AI Group (0/1)': aiGroup ? 1 : 0,
+        ...row,
+      })
 
       // Fetch group chat messages from each group
       const chatMessages = []
@@ -109,6 +147,53 @@ export default function AdminSession() {
 
       // Build workbook
       const wb = XLSX.utils.book_new()
+
+      // ── Sheet 0: About / Analysis Guide ──
+      // A self-documenting first tab so an analyst (or an LLM) can use the file
+      // for the pre-registered analysis without external context: it states this
+      // session's condition, the four-condition coding, and where each measure
+      // (DVs, selected ideas, mechanisms, moderators, controls) lives.
+      const nIndivIdeas = ideas.filter(i => i.phase === 'individual').length
+      const nGroupIdeas = ideas.filter(i => i.phase === 'group').length
+      const aboutAoa = [
+        ['Ideation Challenge — research data export'],
+        [],
+        ['Session code', sessionCode],
+        ['Session name', session.name || ''],
+        ['AI CONDITION (this session)', aiConditionLabel],
+        ['  AI in solo (individual) stage', aiSolo ? 'Yes' : 'No'],
+        ['  AI in group stage', aiGroup ? 'Yes' : 'No'],
+        [],
+        ['STUDY — AsPredicted #298152: "The Effects of AI Timing on Idea Generation and Selection"'],
+        ['Unit of analysis', 'the IDEA. Each idea is rated on Novelty, Usefulness, and Overall Quality (= mean of novelty & usefulness) by blind expert raters.'],
+        ['Manipulation', 'the TIMING of AI = {AI in solo stage} × {AI in group stage} → four between-subjects conditions:'],
+        ['  • Human-Only Hybrid', 'no AI in either stage'],
+        ['  • Individual + AI', 'AI in the solo (individual) stage only'],
+        ['  • Group + AI', 'AI in the group stage only'],
+        ['  • Full AI', 'AI in both stages'],
+        ['Pooling across sessions', 'each session is ONE condition; every data row carries Session Code + AI Condition (+ Condition Code, AI Solo/Group Stage, AI Solo/Group (0/1)), so you can stack the same sheet from several sessions into one condition-coded table.'],
+        ['Condition coding for regressions', 'use AI Solo (0/1) × AI Group (0/1) as the two dummies (main effects + interaction give the full 2×2); the planned Individual+AI vs Group+AI contrast = rows where exactly one of the two is 1.'],
+        ['Clustering unit (triad)', 'use Group UID (= "SessionCode:groupId"), NOT the bare Group ID — g0/g1… repeat across sessions and would collide when pooled. Participant nesting: Author ID / Participant ID (Firebase uids, globally unique).'],
+        [],
+        ['WHERE EACH MEASURE LIVES'],
+        ['Dependent variables (idea creativity)', '"Ideas" sheet, one row per idea. Empty rater columns Novelty (rater 1..3) / Usefulness (rater 1..3) for blind expert scoring — aggregate across raters, then Overall Quality = mean(Novelty, Usefulness). Also Stage, Carried to Group, Vote Count, Final Group Pick, and Exclude (Yes/No) + Exclusion reason for the pre-registered "drop nonsensical/empty ideas" screen.'],
+        ['Selected ideas (group level)', '"Ideas" sheet → filter Final Group Pick = Yes (the ideas each group locked in after voting). "Groups" sheet lists them per group as titles.'],
+        ['Mechanism — prompt behaviour', '"AI Chat" sheet (Role = user → prompts: count = intensity; prompt text → semantic diversity, by Author ID/Scope). "AI Usage" sheet aggregates prompts/replies per participant & per group (filter Row Type = scope to drop TOTAL/AVG summary rows).'],
+        ['Mechanism — idea diversity / search breadth', '"Ideas" sheet Full Text, grouped by author / condition → compute semantic dispersion.'],
+        ['Moderators', 'the "Survey" sheet holds the moderator items — the default questionnaire now includes them: Big-Five personality (2 items/trait), cognitive diversity (group level), and the divergent-thinking "creative uses for a brick" task. (Sessions created before this was added, or with a custom survey, only have them if the instructor included them — confirm the columns are present for your session.) Domain-expertise proxies: Survey items on prior product/innovation experience + Participants occupation / work experience.'],
+        ['Controls', '"Participants" sheet — Age, Gender (+ other demographics).'],
+        ['Engagement / timing', '"Timing" sheet; "Group Chat" sheet (group-stage discussion).'],
+        [],
+        ['THIS SESSION AT A GLANCE'],
+        ['Participants', participants.length],
+        ['Groups (triads)', groups.length],
+        ['Individual-stage ideas', nIndivIdeas],
+        ['Group-stage ideas', nGroupIdeas],
+        ['Final selected ideas (across groups)', finalIdeaIds.size],
+      ]
+      const wsAbout = XLSX.utils.aoa_to_sheet(aboutAoa)
+      wsAbout['!cols'] = [{ wch: 40 }, { wch: 96 }]
+      XLSX.utils.book_append_sheet(wb, wsAbout, 'About')
 
       // ── Sheet 1: Participants ──
       // Demographic columns are dynamic so custom registration fields export too.
@@ -126,6 +211,9 @@ export default function AdminSession() {
           'Email': p.email || '',
           'Anonymous Label': p.anonymousLabel || '',
           'Group ID': p.groupId || '',
+          // Globally-unique triad id for clustering when sessions are pooled
+          // (bare g0/g1… collide across sessions).
+          'Group UID': p.groupId ? `${sessionCode}:${p.groupId}` : '',
           'Status': p.status || '',
           'Individual Complete': p.individualComplete ? 'Yes' : 'No',
           'Votes Submitted': p.votesSubmitted ? 'Yes' : 'No',
@@ -136,23 +224,31 @@ export default function AdminSession() {
         }
         demoKeys.forEach(k => { row[labelById[k] || k] = demo[k] ?? '' })
         return row
-      })
+      }).map(stamp)
       const wsParticipants = XLSX.utils.json_to_sheet(participantRows)
       autoWidth(wsParticipants, participantRows)
       XLSX.utils.book_append_sheet(wb, wsParticipants, 'Participants')
 
-      // ── Sheet 2: Ideas ──
+      // ── Sheet 2: Ideas ──  (the primary unit of analysis)
+      // One row per idea, condition-stamped, with empty columns for the blind
+      // expert ratings (the pre-registered DVs) so the file doubles as the rating
+      // sheet. `Stage` = which stage produced it (individual = solo, group).
       const ideaRows = ideas.map(idea => ({
         'Idea ID': idea.id,
-        'Title': idea.title || '',
-        'Description': idea.description || '',
-        'Full Text': idea.text || '',
-        'Author ID': idea.authorId || '',
-        'Author Name': idea.authorName || '',
+        'Stage': idea.phase === 'group' ? 'group' : (idea.phase === 'individual' ? 'individual (solo)' : (idea.phase || '')),
         'Phase': idea.phase || '',
         // Individual ideas don't carry a groupId on the doc — fall back to the
         // author's group so every idea row shows which group it belongs to.
         'Group ID': idea.groupId || authorGroupId[idea.authorId] || '',
+        // Globally-unique triad id for clustering when sessions are pooled.
+        'Group UID': (idea.groupId || authorGroupId[idea.authorId])
+          ? `${sessionCode}:${idea.groupId || authorGroupId[idea.authorId]}` : '',
+        'Author ID': idea.authorId || '',
+        'Author Name': idea.authorName || '',
+        'Author Label': authorLabel[idea.authorId] || idea.anonymousLabel || '',
+        'Title': idea.title || '',
+        'Description': idea.description || '',
+        'Full Text': idea.text || '',
         // Renamed from 'Selected' (which read ambiguously): this means the idea
         // was double-click-selected in the INDIVIDUAL phase to be carried into
         // the group — NOT that it was a final group choice.
@@ -164,7 +260,19 @@ export default function AdminSession() {
         'Final Group Pick': finalIdeaIds.has(idea.id) ? 'Yes' : 'No',
         'Final Pick Rank': finalIdeaRank[idea.id] || '',
         'Created At': formatTimestamp(idea.createdAt),
-      }))
+        // Quality screen (pre-reg: drop irrelevant/empty/nonsensical ideas).
+        'Exclude (Yes/No)': '',
+        'Exclusion reason': '',
+        // Empty — for the blind expert raters (pre-registered DVs). Multiple
+        // raters score each idea; aggregate across raters, then Overall Quality
+        // = mean(Novelty, Usefulness). Add more rater columns if you use >3.
+        'Novelty (rater 1)': '',
+        'Usefulness (rater 1)': '',
+        'Novelty (rater 2)': '',
+        'Usefulness (rater 2)': '',
+        'Novelty (rater 3)': '',
+        'Usefulness (rater 3)': '',
+      })).map(stamp)
       const wsIdeas = XLSX.utils.json_to_sheet(ideaRows)
       autoWidth(wsIdeas, ideaRows)
       XLSX.utils.book_append_sheet(wb, wsIdeas, 'Ideas')
@@ -224,8 +332,9 @@ export default function AdminSession() {
           })
           return row
         })
-        const wsSurvey = XLSX.utils.json_to_sheet(surveyRows)
-        autoWidth(wsSurvey, surveyRows)
+        const surveyRowsS = surveyRows.map(stamp)
+        const wsSurvey = XLSX.utils.json_to_sheet(surveyRowsS)
+        autoWidth(wsSurvey, surveyRowsS)
         XLSX.utils.book_append_sheet(wb, wsSurvey, 'Survey')
       }
 
@@ -256,6 +365,7 @@ export default function AdminSession() {
               'Name': p.name || '',
               'Anonymous Label': p.anonymousLabel || '',
               'Group ID': p.groupId || '',
+              'Group UID': p.groupId ? `${sessionCode}:${p.groupId}` : '',
               'Joined At': fmtMs(p.joinedAt),
               'Welcome opened At': fmtMs(t.welcomeOpenedAt),
               'Welcome read (s)': durSec(t.welcomeOpenedAt, t.welcomeAgreedAt),
@@ -283,8 +393,9 @@ export default function AdminSession() {
               'Survey completed At': fmtMs(p.surveyCompletedAt),
             }
           })
-        const wsTiming = XLSX.utils.json_to_sheet(timingRows)
-        autoWidth(wsTiming, timingRows)
+        const timingRowsS = timingRows.map(stamp)
+        const wsTiming = XLSX.utils.json_to_sheet(timingRowsS)
+        autoWidth(wsTiming, timingRowsS)
         XLSX.utils.book_append_sheet(wb, wsTiming, 'Timing')
       }
 
@@ -299,8 +410,9 @@ export default function AdminSession() {
             'Message': msg.text || '',
             'Sent At': formatTimestamp(msg.createdAt),
           }))
-        const wsChat = XLSX.utils.json_to_sheet(chatRows)
-        autoWidth(wsChat, chatRows)
+        const chatRowsS = chatRows.map(stamp)
+        const wsChat = XLSX.utils.json_to_sheet(chatRowsS)
+        autoWidth(wsChat, chatRowsS)
         XLSX.utils.book_append_sheet(wb, wsChat, 'Group Chat')
       }
 
@@ -320,8 +432,9 @@ export default function AdminSession() {
           'Gen time (s)': msg.generationMs != null ? Math.round(msg.generationMs / 100) / 10 : '',
           'Timestamp': formatTimestamp(msg.timestamp),
         }))
-        const wsAI = XLSX.utils.json_to_sheet(aiRows)
-        autoWidth(wsAI, aiRows)
+        const aiRowsS = aiRows.map(stamp)
+        const wsAI = XLSX.utils.json_to_sheet(aiRowsS)
+        autoWidth(wsAI, aiRowsS)
         XLSX.utils.book_append_sheet(wb, wsAI, 'AI Chat')
 
         // ── Sheet 5b: AI Usage summary (tokens + true cost per participant/group) ──
@@ -351,6 +464,10 @@ export default function AdminSession() {
           else u.costUSD += cost
         })
         const usageRows = Object.values(usageByScope).map(u => ({
+          // Distinguishes per-scope data rows from the TOTAL/AVG summary rows so
+          // that, when several sessions' sheets are stacked, the summaries aren't
+          // silently summed in (filter Row Type = 'scope').
+          'Row Type': 'scope',
           'Scope': u.scope,
           'Scope ID': u.scopeId,
           'AI Replies': u.replies,
@@ -367,6 +484,7 @@ export default function AdminSession() {
         if (usageRows.length > 0) {
           const sum = col => usageRows.reduce((s, r) => s + (r[col] || 0), 0)
           const totals = {
+            'Row Type': 'TOTAL',
             'Scope': 'TOTAL',
             'Scope ID': '',
             'AI Replies': sum('AI Replies'),
@@ -386,6 +504,7 @@ export default function AdminSession() {
           const n = participants.length
           if (n > 0) {
             usageRows.push({
+              'Row Type': 'AVG',
               'Scope': `AVG PER PARTICIPANT (n=${n})`,
               'Scope ID': '',
               'AI Replies': r4(totals['AI Replies'] / n),
@@ -400,8 +519,9 @@ export default function AdminSession() {
               'Unpriced Replies': '',
             })
           }
-          const wsUsage = XLSX.utils.json_to_sheet(usageRows)
-          autoWidth(wsUsage, usageRows)
+          const usageRowsS = usageRows.map(stamp)
+          const wsUsage = XLSX.utils.json_to_sheet(usageRowsS)
+          autoWidth(wsUsage, usageRowsS)
           XLSX.utils.book_append_sheet(wb, wsUsage, 'AI Usage')
         }
 
@@ -444,10 +564,43 @@ export default function AdminSession() {
             .join(' | '),
           'Created At': formatTimestamp(g.createdAt),
         }))
-        const wsGroups = XLSX.utils.json_to_sheet(groupRows)
-        autoWidth(wsGroups, groupRows)
+        const groupRowsS = groupRows.map(stamp)
+        const wsGroups = XLSX.utils.json_to_sheet(groupRowsS)
+        autoWidth(wsGroups, groupRowsS)
         XLSX.utils.book_append_sheet(wb, wsGroups, 'Groups')
       }
+
+      // ── Sheet: Conditions (one stackable row per session) ──
+      // A single condition-level summary row so pooling several session exports
+      // gives a between-condition overview at a glance (n per condition, idea and
+      // prompt counts). Stack these rows from each session's file.
+      const isUserPrompt = (m, sc) => m.role === 'user' && m.scope === sc
+      const isAiReply = (m, sc) => m.role === 'assistant' && m.scope === sc
+      const conditionRows = [{
+        'Session Code': sessionCode,
+        'Session Name': session.name || '',
+        'AI Condition': aiConditionLabel,
+        'Condition Code': conditionCode,
+        'AI Solo Stage': aiSolo ? 'Yes' : 'No',
+        'AI Group Stage': aiGroup ? 'Yes' : 'No',
+        'AI Solo (0/1)': aiSolo ? 1 : 0,
+        'AI Group (0/1)': aiGroup ? 1 : 0,
+        'Participants': participants.length,
+        'Groups (triads)': groups.length,
+        'Individual-stage ideas': nIndivIdeas,
+        'Group-stage ideas': nGroupIdeas,
+        'Carried-to-group ideas': ideas.filter(i => i.selected).length,
+        'Final selected ideas': finalIdeaIds.size,
+        'Ideas / participant (avg)': participants.length ? Math.round(ideas.length / participants.length * 100) / 100 : '',
+        'AI prompts — solo (user)': aiMessages.filter(m => isUserPrompt(m, 'individual')).length,
+        'AI prompts — group (user)': aiMessages.filter(m => isUserPrompt(m, 'group')).length,
+        'AI replies — solo': aiMessages.filter(m => isAiReply(m, 'individual')).length,
+        'AI replies — group': aiMessages.filter(m => isAiReply(m, 'group')).length,
+        'Participants who completed survey': participants.filter(p => p.surveyAnswers).length,
+      }]
+      const wsConditions = XLSX.utils.json_to_sheet(conditionRows)
+      autoWidth(wsConditions, conditionRows)
+      XLSX.utils.book_append_sheet(wb, wsConditions, 'Conditions')
 
       // Download
       const fileName = `session_${session.code || sessionId}_data.xlsx`
