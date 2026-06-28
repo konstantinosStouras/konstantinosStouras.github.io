@@ -726,6 +726,7 @@ export default function Admin() {
           <button className={styles.themeBtn} onClick={toggle} title="Toggle dark mode">
             {dark ? '\u2600' : '\u263E'}
           </button>
+          <button className="btn-ghost" onClick={() => navigate('/admin/data-analytics')}>Data Analytics</button>
           <button className="btn-ghost" onClick={() => navigate('/admin/ai-settings')}>AI Settings</button>
           <button className="btn-ghost" onClick={() => signOut(auth)}>Sign out</button>
         </div>
