@@ -167,6 +167,16 @@
   border: 1px solid var(--border);
   font-weight: 600;
 }
+.importTag {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  background: rgba(200,86,42,0.14);
+  color: var(--accent);
+  border: 1px solid var(--border);
+}
 .cond0 { background: rgba(122,118,112,0.15); color: var(--muted); }   /* None  (Human-Only Hybrid) */
 .cond1 { background: rgba(200,86,42,0.14); color: var(--accent); }     /* Solo  (Individual + AI) */
 .cond2 { background: rgba(42,120,200,0.16); color: #2a78c8; }          /* Group (Group + AI) */

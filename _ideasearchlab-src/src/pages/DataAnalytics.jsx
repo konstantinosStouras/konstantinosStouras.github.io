@@ -85,6 +85,7 @@ export default function DataAnalytics() {
   const outRef = useRef('')
   const flushQueued = useRef(false)
   const ridSeq = useRef(0)
+  const bookSeq = useRef(0)
   const tagRows = arr => arr.map(r => (r.rid ? r : { ...r, rid: `row_${ridSeq.current++}` }))
 
   // ── Load session list + AI settings on mount ──
@@ -214,12 +215,13 @@ export default function DataAnalytics() {
   function onPickFile(e) {
     const file = e.target.files?.[0]
     if (!file) return
+    const isCsv = /\.csv$/i.test(file.name)
     const reader = new FileReader()
     reader.onload = ev => {
       try {
-        let imported
-        if (/\.csv$/i.test(file.name)) {
-          imported = normalizeImportedRows(csvToRows(ev.target.result))
+        let rawRows, bookSheets = []
+        if (isCsv) {
+          rawRows = csvToRows(ev.target.result)
         } else {
           const wb = XLSX.read(ev.target.result, { type: 'array' })
           // The admin Excel export is multi-sheet with an "About" guide first;
@@ -229,26 +231,51 @@ export default function DataAnalytics() {
             wb.SheetNames.find(n => n.toLowerCase() === 'ideas') ||
             wb.SheetNames.find(n => /idea/i.test(n)) ||
             wb.SheetNames[0]
-          const ws = wb.Sheets[name]
-          imported = normalizeImportedRows(XLSX.utils.sheet_to_json(ws, { defval: '' }))
+          rawRows = XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '' })
           // Keep the WHOLE workbook (every sheet) so Step 2's "Aggregate Data" can
-          // consolidate this file with the same multi-tab structure, not just its
-          // Ideas rows. Each sheet becomes { name, kind:'json', rows }.
-          const bookSheets = wb.SheetNames.map(sn => ({
+          // consolidate this file with the same multi-tab structure.
+          bookSheets = wb.SheetNames.map(sn => ({
             name: sn, kind: 'json', rows: XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: '' }),
           }))
-          setImportedBooks(prev => [...prev, { label: file.name, sheets: bookSheets }])
         }
-        if (!imported.length) { alert('No idea rows found. For the admin Excel export, the data is on the "Ideas" sheet — import that workbook (or a CSV of it).'); return }
-        const tagged = tagRows(imported)
+        // Format check: reject anything that doesn't look like idea data (a
+        // condition column + idea/KPI columns) with a pop-up, and do NOT import.
+        if (!looksLikeIdeaData(rawRows)) { alert(importFormatMsg(isCsv ? 'CSV' : 'Excel')); return }
+        const imported = normalizeImportedRows(rawRows)
+        if (!imported.length) { alert(importFormatMsg(isCsv ? 'CSV' : 'Excel')); return }
+        // Tag every row with its source file so it can be shown / removed as a unit.
+        const bookId = `book_${bookSeq.current++}`
+        const tagged = tagRows(imported).map(r => ({ ...r, _book: bookId }))
         setRows(prev => recomputeOverall([...prev, ...tagged]))
+        const conditions = [...new Set(imported.map(r => r.condition).filter(Boolean))]
+        setImportedBooks(prev => [...prev, {
+          id: bookId, label: file.name, kind: isCsv ? 'csv' : 'xlsx',
+          sheets: bookSheets, count: imported.length, conditions,
+        }])
       } catch (err) {
-        alert('Could not parse file: ' + (err.message || err))
+        alert('Could not read the file: ' + (err.message || err))
       }
     }
-    if (/\.csv$/i.test(file.name)) reader.readAsText(file)
+    if (isCsv) reader.readAsText(file)
     else reader.readAsArrayBuffer(file)
     e.target.value = '' // allow re-importing the same file
+  }
+
+  // Remove a previously-imported file and all of its rows.
+  function removeImportedBook(id) {
+    setImportedBooks(prev => prev.filter(b => b.id !== id))
+    setRows(prev => recomputeOverall(prev.filter(r => r._book !== id)))
+  }
+
+  // Section-1 "Clear": drop the selection AND the loaded dataset, so Section 2
+  // (and the rest of the page) shows nothing.
+  function clearSection1() {
+    if ((rows.length || importedBooks.length) && !confirm('Clear the selection and the loaded data?')) return
+    setSelected(new Set())
+    setRows([])
+    setExcludedUsers(new Set())
+    setLoadedSessions([])
+    setImportedBooks([])
   }
 
   // ── Load idea scores from a ranked-ideas file ("All Ideas Ranked" tab) ──
@@ -273,7 +300,7 @@ export default function DataAnalytics() {
           const cells = aoa[i].map(c => String(c).toLowerCase())
           if (cells.some(c => c.includes('idea title') || c === 'title') && cells.some(c => c.includes('novelty'))) { h = i; break }
         }
-        if (h === -1) { setScoreLoadMsg(`Could not find a ranked-ideas table (a header row with "Idea Title" and "Novelty") on the "${sheetName}" sheet.`); return }
+        if (h === -1) { alert(`This scores file does not match the expected format and was not imported.\n\nExpected an "All Ideas Ranked" sheet with a header row containing "Idea Title" and "Novelty" columns (none found on the "${sheetName}" sheet).`); return }
         const header = aoa[h].map(c => String(c).toLowerCase().trim())
         const find = pred => header.findIndex(pred)
         const ciTitle = find(c => c.includes('idea title') || c === 'title')
@@ -289,7 +316,7 @@ export default function DataAnalytics() {
           if ((nov === '' || nov == null) && (use === '' || use == null)) continue
           entries.push({ title, novelty: nov, usefulness: use })
         }
-        if (!entries.length) { setScoreLoadMsg(`No scored idea rows found under "${sheetName}".`); return }
+        if (!entries.length) { alert(`This scores file does not match the expected format and was not imported.\n\nNo scored idea rows (with a Novelty/Usefulness value) were found under "${sheetName}".`); return }
         // Don't let a removed participant's idea absorb a title match meant for a visible one.
         const res = matchScoresIntoRows(rows, entries, r => !excludedUsers.has(userKey(r.session, r.author_id)))
         setRows(recomputeOverall(res.rows))
@@ -694,9 +721,27 @@ export default function DataAnalytics() {
             </div>
           )}
 
+          {/* Imported Excel / CSV files appear here as their own rows. */}
+          {importedBooks.length > 0 && (
+            <div className={styles.sessionList} style={{ marginTop: 10 }}>
+              {importedBooks.map(b => (
+                <div key={b.id} className={styles.sessionRow} style={{ cursor: 'default' }}>
+                  <span className={styles.importTag}>Imported</span>
+                  <div className={styles.sessionMeta}>
+                    <div className={styles.sessionCode}>{b.label}</div>
+                    <div className={styles.sessionName}>
+                      {b.count} idea{b.count === 1 ? '' : 's'}{b.conditions?.length ? ` · ${b.conditions.join(', ')}` : ''} · {b.kind.toUpperCase()}
+                    </div>
+                  </div>
+                  <button className={`btn-ghost ${styles.miniBtn}`} onClick={() => removeImportedBook(b.id)} disabled={!!scoring}>Remove</button>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className={styles.row} style={{ marginTop: 14 }}>
             <button className={`btn-ghost ${styles.miniBtn}`} onClick={selectAll}>Select all</button>
-            <button className={`btn-ghost ${styles.miniBtn}`} onClick={selectNone}>Clear</button>
+            <button className={`btn-ghost ${styles.miniBtn}`} onClick={clearSection1} disabled={!!scoring}>Clear</button>
             <button className="btn-primary" onClick={() => loadSelected(true)} disabled={!selected.size || loadingData || !!scoring}>
               {loadingData ? 'Loading…' : `Load ${selected.size || ''} session${selected.size === 1 ? '' : 's'}`.trim()}
             </button>
@@ -1290,6 +1335,25 @@ function saveBlob(content, filename, type) {
 }
 
 const round3 = x => (x == null || !Number.isFinite(x)) ? '' : Number(x.toFixed(3))
+
+// Does an imported sheet/CSV look like idea data we can analyse? Requires a
+// condition column AND at least one idea/KPI column (matches what
+// normalizeImportedRows reads). Used to reject mis-formatted imports with a pop-up.
+function looksLikeIdeaData(rawRows) {
+  if (!Array.isArray(rawRows) || !rawRows.length) return false
+  const keys = new Set()
+  for (const r of rawRows.slice(0, 8)) for (const k of Object.keys(r || {})) keys.add(String(k).toLowerCase().trim())
+  const has = cands => cands.some(c => [...keys].some(k => k === c || k.startsWith(c)))
+  const cond = ['condition', 'ai condition', 'condition code', 'cond', 'treatment', 'group_condition', 'ai solo (0/1)', 'ai group (0/1)', 'ai solo stage', 'ai group stage']
+  const kpi = ['novelty', 'usefulness', 'overall_quality', 'overall quality', 'quality', 'nov', 'useful']
+  const idea = ['idea title', 'title', 'idea id', 'idea_id', 'full text', 'idea', 'description']
+  return has(cond) && (has(kpi) || has(idea))
+}
+
+const importFormatMsg = kind =>
+  `This ${kind} file does not match the expected format and was not imported.\n\n` +
+  `Expected the admin Excel export (its "Ideas" sheet — a Condition column plus the idea / score columns), ` +
+  `or a plain CSV with condition / novelty / usefulness columns.`
 
 // The "Ideas" sheet (one row per idea) — shared by the Download Excel and the
 // Step-2 aggregate workbook so both keep an identical Ideas tab.
