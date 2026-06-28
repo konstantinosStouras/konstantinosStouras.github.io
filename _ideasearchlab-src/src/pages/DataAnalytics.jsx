@@ -74,6 +74,11 @@ export default function DataAnalytics() {
   // Snapshot of the most recent successful run — drives the Step 6 "Insights
   // gained" panel + its PDF export. { lang, code, output, images, ranAt }.
   const [lastRun, setLastRun] = useState(null)
+  // The console output / plots / insights belong to whichever language produced
+  // them. We stash each language's last run here and restore it on tab switch, so
+  // switching Python↔R shows that tab's own results (and a clean panel if it has
+  // never been run) rather than the other language's output.
+  const [runsByLang, setRunsByLang] = useState({}) // { python:{output,images,runError,lastRun}, r:{...} }
 
   const fileRef = useRef(null)
   const scoreFileRef = useRef(null)
@@ -511,25 +516,43 @@ export default function DataAnalytics() {
       const result = tab === 'python'
         ? await runPython(pyCode, { ...opts, onStdout: pushLine })
         : await runR(rCode, { ...opts, onOutput: pushLine })
-      const finalOutput = outRef.current || (tab === 'python' ? result.stdout : result.output) || ''
+      const lang = tab
+      const finalOutput = outRef.current || (lang === 'python' ? result.stdout : result.output) || ''
+      const runErr = result.ok ? null : (result.error || 'Run failed.')
       setOutput(finalOutput)
       setImages(result.images || [])
-      if (!result.ok) setRunError(result.error || 'Run failed.')
+      if (runErr) setRunError(runErr)
       // Remember this run so Step 6 can present its insights + export the PDF.
       // Kept even on a partial failure so whatever ran is still readable.
-      setLastRun({
-        lang: tab,
-        code: tab === 'python' ? pyCode : rCode,
+      const thisRun = {
+        lang,
+        code: lang === 'python' ? pyCode : rCode,
         output: finalOutput,
         images: result.images || [],
         ranAt: new Date(),
-      })
+      }
+      setLastRun(thisRun)
+      // Stash under this language so switching tabs restores the right results.
+      setRunsByLang(prev => ({ ...prev, [lang]: { output: finalOutput, images: result.images || [], runError: runErr, lastRun: thisRun } }))
     } catch (err) {
-      setRunError(err.message || String(err))
+      const msg = err.message || String(err)
+      setRunError(msg)
+      setRunsByLang(prev => ({ ...prev, [tab]: { output: outRef.current || '', images: [], runError: msg, lastRun: prev[tab]?.lastRun || null } }))
     } finally {
       setRunStatus('')
       setRunning(false)
     }
+  }
+
+  // Switch language tab, restoring that tab's own last run (or a clean panel).
+  function selectTab(next) {
+    if (next === tab || running) return
+    setTab(next)
+    const r = runsByLang[next]
+    setOutput(r?.output || '')
+    setImages(r?.images || [])
+    setRunError(r?.runError || null)
+    setLastRun(r?.lastRun || null)
   }
 
   const stats = useMemo(() => summarize(effectiveRows), [effectiveRows])
@@ -974,8 +997,8 @@ export default function DataAnalytics() {
           </p>
 
           <div className={styles.tabs}>
-            <button className={`${styles.tab} ${tab === 'python' ? styles.tabActive : ''}`} onClick={() => setTab('python')}>Python</button>
-            <button className={`${styles.tab} ${tab === 'r' ? styles.tabActive : ''}`} onClick={() => setTab('r')}>R</button>
+            <button className={`${styles.tab} ${tab === 'python' ? styles.tabActive : ''}`} onClick={() => selectTab('python')} disabled={running}>Python</button>
+            <button className={`${styles.tab} ${tab === 'r' ? styles.tabActive : ''}`} onClick={() => selectTab('r')} disabled={running}>R</button>
           </div>
 
           <div className={styles.editorBar}>
