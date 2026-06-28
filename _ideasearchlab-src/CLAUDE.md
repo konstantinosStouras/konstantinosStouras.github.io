@@ -397,7 +397,14 @@ Three-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
    `?raw` in `analyticsTemplates.js`) that runs the SAME analysis: one OLS/`lm` per KPI on
    the 4-level condition factor (Human-Only = baseline), the **primary planned contrast
    Individual + AI − Group + AI**, a best→worst ranking with Holm-adjusted pairwise tests,
-   and plots (mean±95%CI bars + coefficient/forest plot). The admin edits the code and hits
+   then an **INSIGHTS** section that reads the results back in plain language (per-KPI
+   best→worst ranking of the conditions + a DATA-COVERAGE CHECK that flags any of the four
+   conditions with no data, e.g. "Full AI", and excludes it from the rankings), and plots
+   (mean±95%CI bars + coefficient/forest plot). Both scripts are heavily commented and load
+   the **scored step-2 dataset** (the same rows as the "Download CSV/Excel" summary, including
+   each idea's final scores). Note: statsmodels `t_test().effect`/`.sd` can be 2-D, and the
+   NumPy in current Pyodide refuses `float()` on a non-0-D array — the Python template uses an
+   `_s()` helper (`float(np.ravel(...)[0])`) for every scalar extraction. The admin edits the code and hits
    **Run**: Python compiles in-browser via **Pyodide** (`src/utils/pyodideRunner.js`,
    loads numpy/pandas/scipy/statsmodels/matplotlib; harvests open matplotlib figures as PNG
    data URLs) and R via **WebR** (`src/utils/webrRunner.js`, base R only; CSV mounted at
@@ -406,6 +413,16 @@ Three-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
    jsDelivr on first Run (Pyodide `v314.0.1`, WebR `0.6.0`, each with same-API version
    fallbacks), so they add ~0 KB to the main bundle. **Entirely client-side — ships with a
    normal Pages build, no Cloud Functions or Firestore-rules change.**
+
+**Per-section Save / Make-default / Restore (browser-local).** Each section (data source,
+dataset, and each code tab) has the admin-style three-button row (`SectionActions` in
+`DataAnalytics.jsx`): **Save** and **Make this the default** both persist that section's
+current value to `localStorage` (session selection / the scored rows+removed-participants /
+the active tab's code) and the clicked button **flashes green** for ~2s (the admin's
+`#2e7d32`); **Restore built-in default** clears the saved value (and resets a code tab to its
+bundled template). Saved values are reloaded on page open (a `useEffect` reads the `LS.*`
+keys). Browser-local by design — no Firestore-rules change. (`userKey()` joins
+session+author with `|`; session codes `[A-Z0-9]` and Firebase UIDs never contain it.)
 
 **Survey.jsx:**
 - On submit, writes status: 'done', surveyAnswers, surveyCompletedAt to participant doc directly (no Cloud Function)

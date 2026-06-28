@@ -1,15 +1,28 @@
 ###############################################################################
-# Effects of AI Timing on Idea Generation (AsPredicted #298152)
-# For each KPI (novelty, usefulness, overall_quality): linear regression on the
-# 4-level `condition` factor (Human-Only Hybrid = reference), the primary planned
-# contrast (Individual + AI  vs  Group + AI), a best->worst ranking, and plots.
-# Base R only (stats + graphics) - no external packages. Edit freely, then Run.
+# Effects of AI Timing on Idea Generation (AsPredicted #298152) — R ANALYSIS
+###############################################################################
 #
-# The data is mounted at /tmp/data.csv (one row per idea). Columns: idea_id,
-# session, condition, phase, group_id, author_id, novelty, usefulness,
-# overall_quality, final_pick, text.
+# WHAT THIS SCRIPT DOES
+#   For each KPI (novelty, usefulness, overall_quality) it fits a linear
+#   regression of the KPI on the 4-level `condition` factor with "Human-Only
+#   Hybrid" (no AI) as the reference, then reports the coefficient table, the
+#   primary planned contrast (Individual + AI vs Group + AI), a best->worst
+#   ranking with Holm-adjusted pairwise tests, an INSIGHTS section that reads the
+#   results back in plain language, and plots. Base R only (stats + graphics) —
+#   no external CRAN packages needed.
+#
+# WHERE THE DATA COMES FROM (read this)
+#   The data is the SCORED DATASET built in the previous step of the page — the
+#   same rows you can grab with "Download CSV" / "Download Excel" (the
+#   "summarized file"), already including every idea's FINAL scores. The page
+#   mounts it in the WebR virtual filesystem at /tmp/data.csv. One row per idea;
+#   columns: idea_id, session, condition, phase, group_id, author_id, novelty,
+#   usefulness, overall_quality, final_pick, text. Edit freely, then press Run.
 ###############################################################################
 
+# Read the step-2 dataset that the page wrote to the WebR virtual filesystem.
+# stringsAsFactors = FALSE so text/id columns stay character (we factor only
+# `condition`, below).
 dat <- read.csv("/tmp/data.csv", stringsAsFactors = FALSE)
 
 cat("==========================================================\n")
@@ -17,8 +30,12 @@ cat(" AsPredicted #298152: Effects of AI Timing on Idea Generation\n")
 cat("==========================================================\n")
 cat("Rows read:", nrow(dat), " Columns:", ncol(dat), "\n\n")
 
+# Canonical order of the four conditions; the FIRST element is the regression
+# reference (so every coefficient reads as "condition - Human-Only Hybrid").
 cond_levels <- c("Human-Only Hybrid", "Individual + AI", "Group + AI", "Full AI")
 
+# Defensive: drop any rows whose condition label is not one of the four (e.g. a
+# typo from an imported file), announcing what was removed.
 unknown <- setdiff(unique(dat$condition), cond_levels)
 if (length(unknown) > 0) {
   cat("NOTE: dropping rows with unexpected condition label(s): ",
@@ -26,35 +43,45 @@ if (length(unknown) > 0) {
   dat <- dat[dat$condition %in% cond_levels, , drop = FALSE]
 }
 
-dat$condition <- factor(dat$condition, levels = cond_levels)   # 1st level = reference
+# Make `condition` a factor with the reference as level 1 (controls the dummy
+# coding in lm); coerce the KPI columns to numeric (blank cells -> NA).
+dat$condition <- factor(dat$condition, levels = cond_levels)
 kpis <- c("novelty", "usefulness", "overall_quality")
 for (k in kpis) dat[[k]] <- suppressWarnings(as.numeric(dat[[k]]))
 
+# Short labels + a fixed colour per condition, reused across all plots.
 cond_short <- c("Human-Only", "Indiv+AI", "Group+AI", "Full AI")
 cond_col   <- c("#4D4D4D", "#1F77B4", "#2CA02C", "#D62728")
 
+# 95% t critical value for a given residual df (falls back to the normal 1.96
+# when df is not finite/positive), used for the error bars and contrast CIs.
 tcrit <- function(df) if (is.finite(df) && df > 0) qt(0.975, df) else qnorm(0.975)
 
-models   <- list()
-emm_list <- list()
+# Per-KPI containers, filled in the loop below and reused by the insights block.
+models   <- list()   # fitted lm objects, keyed by KPI
+emm_list <- list()   # named vectors of condition means, keyed by KPI
 
-## === 1. Per-KPI analysis =====================================================
+## === 1. Per-KPI regression, contrast, ranking, pairwise tests ================
 for (k in kpis) {
 
   cat("\n\n###########################################################\n")
   cat("##  KPI:", k, "\n")
   cat("###########################################################\n")
 
+  # Keep only rows with a non-NA value for THIS KPI (and a known condition),
+  # announcing how many were dropped.
   ok  <- !is.na(dat[[k]]) & !is.na(dat$condition)
   ndr <- sum(!ok)
   if (ndr > 0) cat("NOTE:", ndr, "row(s) dropped due to NA in", k, "or condition.\n")
   d <- dat[ok, c("condition", k), drop = FALSE]
-  names(d)[2] <- "kpi"
+  names(d)[2] <- "kpi"                       # rename the outcome to a stable name
   cat("N analysed:", nrow(d), "\n")
 
+  # Show how many observations each condition has (a quick coverage check).
   tab <- table(factor(d$condition, levels = cond_levels))
   cat("Per-condition N:\n"); print(tab)
 
+  # Guard: need >=3 rows and >=2 non-empty conditions for a meaningful regression.
   nonempty <- sum(tab > 0)
   if (nrow(d) < 3 || nonempty < 2) {
     cat("WARNING: too few observations / <2 non-empty conditions for '", k,
@@ -64,46 +91,54 @@ for (k in kpis) {
   if (any(tab > 0 & tab < 2))
     cat("WARNING: some condition(s) have a single observation; estimates unstable.\n")
 
-  ## 1a. Linear regression
+  ## 1a. The regression itself: kpi ~ condition (reference = Human-Only Hybrid).
+  ## Wrapped in tryCatch so a degenerate fit warns instead of aborting the run.
   m <- tryCatch(lm(kpi ~ condition, data = d),
                 error = function(e) { cat("WARNING: lm() failed for '", k, "': ",
                                           conditionMessage(e), "\n", sep = ""); NULL })
   if (is.null(m)) next
-  models[[k]] <- m
+  models[[k]] <- m                            # remember for the insights section
 
   sm <- summary(m)
   cat("\n--- lm(", k, " ~ condition) coefficients [reference = Human-Only Hybrid] ---\n", sep = "")
-  ct <- sm$coefficients
+  ct <- sm$coefficients                       # estimate / SE / t / p per term
   print(round(ct, 4))
 
+  # Annotate each coefficient with a plain significance flag.
   cat("\nSignificance (vs Human-Only Hybrid baseline, alpha = 0.05):\n")
   for (r in seq_len(nrow(ct))) {
     nm <- rownames(ct)[r]; p <- ct[r, 4]
     star <- if (is.na(p)) "NA" else if (p < .001) "***" else if (p < .01) "**" else
             if (p < .05) "*" else if (p < .10) "." else "ns"
+    # Strip the "condition" prefix R adds to each factor-dummy name.
     lab <- if (nm == "(Intercept)") "(Intercept = Human-Only Hybrid mean)" else sub("^condition", "", nm)
     cat(sprintf("  %-28s  est=%+8.4f  p=%9.4g  %s\n", lab, ct[r, 1], p, star))
   }
   cat(sprintf("\nModel fit:  N = %d,  residual df = %d,  R^2 = %.4f,  Adj R^2 = %.4f\n",
               nrow(d), m$df.residual, sm$r.squared, sm$adj.r.squared))
+  # Omnibus F-test (is condition associated with the KPI at all?).
   fst <- sm$fstatistic
   if (!is.null(fst)) {
     fp <- pf(fst[1], fst[2], fst[3], lower.tail = FALSE)
     cat(sprintf("Omnibus F(%d, %d) = %.3f,  p = %.4g\n", fst[2], fst[3], fst[1], fp))
   }
 
-  ## 1b. PRIMARY PLANNED CONTRAST: (Individual + AI) - (Group + AI)
-  ## Both levels are coded vs the Human-Only reference, so the contrast equals
-  ## b_Ind - b_Grp (intercept and Full-AI term cancel). L = c(0, 1, -1, 0).
+  ## 1b. PRIMARY PLANNED CONTRAST: (Individual + AI) - (Group + AI).
+  ## Both levels are coded vs the same reference, so the contrast equals
+  ## b_Ind - b_Grp (the intercept and the Full-AI term cancel). As a weight
+  ## vector L over the coefficients this is L = c(0, 1, -1, 0); its variance is
+  ## L' vcov(m) L, giving SE, t, and a two-sided p on the residual df.
   cat("\n--- PRIMARY PLANNED CONTRAST: (Individual + AI) - (Group + AI) ---\n")
-  cn <- names(coef(m))
+  cn <- names(coef(m))                        # coefficient names, to build L by name
   b_ind_nm <- "conditionIndividual + AI"; b_grp_nm <- "conditionGroup + AI"
-  if (all(c(b_ind_nm, b_grp_nm) %in% cn)) {
+  if (all(c(b_ind_nm, b_grp_nm) %in% cn)) {   # both conditions present in the model
     L <- setNames(rep(0, length(cn)), cn); L[b_ind_nm] <- 1; L[b_grp_nm] <- -1
-    est <- sum(L * coef(m)); V <- vcov(m)
-    se  <- sqrt(as.numeric(t(L) %*% V %*% L))
+    est <- sum(L * coef(m))                   # the contrast estimate
+    V <- vcov(m)                              # coefficient covariance matrix
+    se  <- sqrt(as.numeric(t(L) %*% V %*% L)) # SE of the linear combination
     dfres <- m$df.residual; tval <- est / se
-    pval <- 2 * pt(abs(tval), df = dfres, lower.tail = FALSE); tc <- tcrit(dfres)
+    pval <- 2 * pt(abs(tval), df = dfres, lower.tail = FALSE)  # two-sided p
+    tc <- tcrit(dfres)
     cat(sprintf("  estimate = %+0.4f\n  SE       = %0.4f\n", est, se))
     cat(sprintf("  t(%d)     = %0.3f\n  p(two-sided) = %0.4g\n", dfres, tval, pval))
     cat(sprintf("  95%% CI   = [%+0.4f, %+0.4f]\n", est - tc * se, est + tc * se))
@@ -112,14 +147,16 @@ for (k in kpis) {
     cat("  WARNING: Individual+AI / Group+AI absent (empty cell); contrast not estimable.\n")
   }
 
-  ## 1c. Condition means ranked best -> worst
+  ## 1c. Condition means (these equal the EMMs for a single-factor model),
+  ## stored for the insights section and printed best->worst here.
   cat("\n--- Condition means (EMM) ranked BEST -> WORST ---\n")
-  emm <- tapply(d$kpi, factor(d$condition, levels = cond_levels), mean)
+  emm <- tapply(d$kpi, factor(d$condition, levels = cond_levels), mean)  # mean per level
   emm_list[[k]] <- emm
   ord <- order(emm, decreasing = TRUE, na.last = NA); rk <- emm[ord]
   for (i in seq_along(rk)) cat(sprintf("  %d. %-20s  mean = %0.4f\n", i, names(rk)[i], rk[i]))
 
-  ## 1d. Pairwise comparisons (Holm-adjusted)
+  ## 1d. All pairwise condition comparisons with a Holm family-wise correction
+  ## (pooled SD, base stats), wrapped so a failure warns instead of aborting.
   cat("\n--- Pairwise t-tests (pooled SD, Holm-adjusted p-values) ---\n")
   ptt <- tryCatch(
     pairwise.t.test(d$kpi, factor(d$condition, levels = cond_levels),
@@ -127,7 +164,7 @@ for (k in kpis) {
     error = function(e) { cat("  WARNING: pairwise.t.test failed: ",
                               conditionMessage(e), "\n", sep = ""); NULL })
   if (!is.null(ptt)) {
-    print(round(ptt$p.value, 4))
+    print(round(ptt$p.value, 4))              # the adjusted p-value matrix
     pm <- ptt$p.value; any_sig <- FALSE
     cat("\n  Significant pairwise differences (Holm p < 0.05):\n")
     for (i in seq_len(nrow(pm))) for (j in seq_len(ncol(pm))) {
@@ -142,68 +179,145 @@ for (k in kpis) {
 }
 
 ## === 2. Plots ================================================================
-## 2a. Per-KPI barplot of condition means with 95% CI error bars
+## 2a. Per-KPI barplot of condition means with 95% CI error bars.
 for (k in kpis) {
   ok <- !is.na(dat[[k]]) & !is.na(dat$condition)
   d  <- data.frame(condition = factor(dat$condition[ok], levels = cond_levels), kpi = dat[[k]][ok])
   if (nrow(d) == 0) { cat("Plot skipped (no data) for", k, "\n"); next }
-  mu <- tapply(d$kpi, d$condition, mean)
-  s  <- tapply(d$kpi, d$condition, sd)
-  n  <- tapply(d$kpi, d$condition, length)
-  se <- s / sqrt(n)
+  mu <- tapply(d$kpi, d$condition, mean)      # mean per condition
+  s  <- tapply(d$kpi, d$condition, sd)        # SD per condition
+  n  <- tapply(d$kpi, d$condition, length)    # n per condition
+  se <- s / sqrt(n)                           # standard error of the mean
+  # per-group t critical value (NA when n<2 so no bar is drawn for that cell)
   tc <- mapply(function(nn) if (!is.na(nn) && nn > 1) qt(0.975, nn - 1) else NA_real_, n)
-  ci <- tc * se
+  ci <- tc * se                               # 95% CI half-width per condition
   mu_p <- ifelse(is.na(mu), 0, mu); lo <- mu - ci; hi <- mu + ci
   yr <- c(min(0, min(c(lo, mu_p, 0), na.rm = TRUE)), max(c(hi, mu_p, 1), na.rm = TRUE) * 1.10)
   bp <- barplot(mu_p, names.arg = cond_short, col = cond_col, border = NA, ylim = yr, las = 1,
                 main = paste0("Mean ", k, " by condition (95% CI)"),
                 ylab = paste("Mean", k), xlab = "Condition")
+  # draw the error bars only where a CI is defined
   valid <- !is.na(ci) & !is.na(mu)
   if (any(valid))
     arrows(x0 = bp[valid], y0 = lo[valid], x1 = bp[valid], y1 = hi[valid],
            angle = 90, code = 3, length = 0.06, lwd = 2, col = "black")
   text(bp, mu_p, labels = ifelse(is.na(mu), "NA", sprintf("%.2f", mu)),
-       pos = 3, offset = 0.6, cex = 0.85, font = 2)
+       pos = 3, offset = 0.6, cex = 0.85, font = 2)   # annotate each bar with its mean
   abline(h = 0, col = "grey70")
 }
 
-## 2b. Coefficient / forest plot of condition effects vs baseline
+## 2b. Per-KPI coefficient/forest plot of each condition's effect vs baseline.
 for (k in kpis) {
   m <- models[[k]]
   if (is.null(m)) { cat("Coef plot skipped (no model) for", k, "\n"); next }
   ct <- summary(m)$coefficients; dfres <- m$df.residual; tc <- tcrit(dfres)
-  eff_rows <- rownames(ct) != "(Intercept)"
+  eff_rows <- rownames(ct) != "(Intercept)"   # the non-intercept (dummy) effects
   est <- ct[eff_rows, 1]; se <- ct[eff_rows, 2]; pv <- ct[eff_rows, 4]
   labs <- sub("^condition", "", rownames(ct)[eff_rows])
+  # keep a fixed left-to-right order of effects for readability
   want <- c("Individual + AI", "Group + AI", "Full AI")
   idx  <- match(want, labs); idx <- idx[!is.na(idx)]
   est <- est[idx]; se <- se[idx]; pv <- pv[idx]; labs <- labs[idx]
   if (length(est) == 0) { cat("Coef plot skipped (no effects) for", k, "\n"); next }
-  lo <- est - tc * se; hi <- est + tc * se
-  yy <- rev(seq_along(est))
+  lo <- est - tc * se; hi <- est + tc * se    # 95% CI per effect
+  yy <- rev(seq_along(est))                    # top-to-bottom row positions
   xr <- range(c(lo, hi, 0), na.rm = TRUE); xr <- xr + c(-1, 1) * 0.08 * diff(xr)
   plot(NA, xlim = xr, ylim = c(0.5, length(est) + 0.5), yaxt = "n",
        xlab = paste0("Effect on ", k, " vs Human-Only Hybrid"), ylab = "",
        main = paste0("Condition effects on ", k, "\n(coefficients vs baseline, 95% CI)"))
   axis(2, at = yy, labels = labs, las = 1)
-  abline(v = 0, lty = 2, col = "grey50")
-  segments(lo, yy, hi, yy, lwd = 2, col = "grey30")
+  abline(v = 0, lty = 2, col = "grey50")       # zero = no difference from baseline
+  segments(lo, yy, hi, yy, lwd = 2, col = "grey30")   # the CI bars
   sig <- !is.na(pv) & pv < 0.05
-  points(est, yy, pch = 19, cex = 1.4, col = ifelse(sig, "#D62728", "#1F77B4"))
+  points(est, yy, pch = 19, cex = 1.4, col = ifelse(sig, "#D62728", "#1F77B4"))  # red if sig
   text(hi, yy, labels = sprintf("%+.2f%s", est, ifelse(sig, "*", "")), pos = 4, cex = 0.8, xpd = NA)
   legend("topright", bty = "n", pch = 19, col = c("#D62728", "#1F77B4"),
          legend = c("p < 0.05", "n.s."), cex = 0.85)
 }
 
-## === 3. Cross-KPI ranking summary ===========================================
-cat("\n\n==========================================================\n")
-cat(" CROSS-KPI SUMMARY: condition means (best -> worst per KPI)\n")
-cat("==========================================================\n")
+## === 3. INSIGHTS (plain-language read-out of the regressions above) ==========
+cat("\n\n##############################################################\n")
+cat("# INSIGHTS  (read directly off the regression results above)\n")
+cat("##############################################################\n")
+
+# Which of the four conditions actually have data, and which are missing.
+cond_counts <- table(factor(dat$condition, levels = cond_levels))
+present <- cond_levels[cond_counts > 0]
+missing <- setdiff(cond_levels, present)
+
+# Coverage check — e.g. "Full AI" not collected yet — flagged loudly and excluded
+# from the rankings below.
+if (length(missing) > 0) {
+  cat("\nDATA-COVERAGE CHECK: NO data was collected for condition(s): ",
+      paste(missing, collapse = ", "), ".\n", sep = "")
+  cat("  -> Excluded from every ranking and comparison below; no conclusion can\n")
+  cat("     be drawn about them until data for that condition is collected.\n")
+}
+cat("\nConditions with data (", length(present), " of 4): ",
+    paste(present, collapse = ", "), ".\n", sep = "")
+
+for (k in kpis) {
+  cat("\n--------------------------------------------------------------\n")
+  cat("KPI:", k, "\n")
+  cat("--------------------------------------------------------------\n")
+  m <- models[[k]]; emm <- emm_list[[k]]
+  if (is.null(m) || is.null(emm)) {            # KPI not estimable
+    cat("  Not estimable (need >= 2 conditions with data) - no ranking for this KPI.\n"); next
+  }
+  # Rank the present conditions by mean (drop any NA means).
+  emm_p <- emm[present]; emm_p <- emm_p[!is.na(emm_p)]
+  ord <- order(emm_p, decreasing = TRUE)
+  cat("  Ranking of conditions (best -> worst), by mean:\n")
+  for (i in seq_along(ord))
+    cat(sprintf("    %d. %-18s  mean = %.3f\n", i, names(emm_p)[ord][i], emm_p[ord][i]))
+
+  # Each present condition vs the no-AI baseline, with significance, read off the
+  # regression coefficient table.
+  ct <- summary(m)$coefficients
+  cat("  Versus the 'Human-Only Hybrid' baseline:\n")
+  any_sig <- FALSE
+  for (c in present) {
+    if (c == "Human-Only Hybrid") next
+    nm <- paste0("condition", c)               # R's coefficient name for this level
+    if (nm %in% rownames(ct)) {
+      b <- ct[nm, 1]; p <- ct[nm, 4]
+      dir <- if (b >= 0) "higher" else "lower"
+      verdict <- if (p < 0.05) "significant" else "not significant"
+      if (!is.na(p) && p < 0.05) any_sig <- TRUE
+      cat(sprintf("    - %s: %.2f points %s (p = %.3f, %s)\n", c, abs(b), dir, p, verdict))
+    }
+  }
+  if (!any_sig) cat("    (no condition differs significantly from baseline on this KPI)\n")
+
+  # The pre-registered AI-timing contrast, recomputed from the coefficients and
+  # summarised in one sentence.
+  cn <- names(coef(m)); ni <- "conditionIndividual + AI"; ng <- "conditionGroup + AI"
+  if (all(c(ni, ng) %in% cn)) {
+    L <- setNames(rep(0, length(cn)), cn); L[ni] <- 1; L[ng] <- -1
+    est <- sum(L * coef(m)); se <- sqrt(as.numeric(t(L) %*% vcov(m) %*% L))
+    pv <- 2 * pt(abs(est / se), df = m$df.residual, lower.tail = FALSE)
+    winner <- if (est >= 0) "Individual + AI" else "Group + AI"
+    how <- if (pv < 0.05) "significantly" else "but NOT significantly"
+    cat(sprintf("  AI timing (Individual + AI vs Group + AI): %s scores %.2f higher, %s (p = %.3f).\n",
+                winner, abs(est), how, pv))
+  }
+  cat(sprintf("  => Best on %s: '%s'.  Worst: '%s'.\n", k,
+              names(emm_p)[ord][1], names(emm_p)[ord][length(ord)]))
+}
+
+# Compact one-line ranking per KPI for a quick cross-KPI comparison.
+cat("\n--------------------------------------------------------------\n")
+cat("CONDITION RANKING PER KPI (best -> worst):\n")
+cat("--------------------------------------------------------------\n")
 for (k in kpis) {
   emm <- emm_list[[k]]
-  if (is.null(emm)) { cat(k, ": not available\n"); next }
-  ord <- order(emm, decreasing = TRUE, na.last = NA)
-  cat(sprintf("%-16s: %s\n", k,
-              paste(sprintf("%s(%.2f)", names(emm)[ord], emm[ord]), collapse = "  >  ")))
+  if (is.null(emm)) { cat(sprintf("  %-16s: (not estimable)\n", k)); next }
+  emm_p <- emm[present]; emm_p <- emm_p[!is.na(emm_p)]
+  ord <- order(emm_p, decreasing = TRUE)
+  cat(sprintf("  %-16s: %s\n", k,
+              paste(sprintf("%s (%.2f)", names(emm_p)[ord], emm_p[ord]), collapse = "  >  ")))
 }
+if (length(missing) > 0)
+  cat("\n  Reminder: ", paste(missing, collapse = ", "),
+      " had NO data and is omitted from all of the above.\n", sep = "")
 cat("\nDone.\n")
