@@ -22,7 +22,9 @@ import {
 } from '../utils/sessionExport'
 import styles from './DataAnalytics.module.css'
 
-const DESIGN_BRIEF = 'Designing a new product to improve sleep wellness.'
+// The study task: rate ideas against THIS design brief (the smart-materials /
+// colour-changing-fabric task this version of the study actually ran).
+const DESIGN_BRIEF = 'Designing a completely new product using a fabric that changes colour when it reaches 37°C (body temperature), for the smart materials and wearable technology market.'
 const condClass = cond => styles[`cond${Math.max(0, CONDITIONS.indexOf(cond))}`]
 const userKey = (session, authorId) => `${session}|${authorId || ''}`
 
