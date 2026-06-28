@@ -129,7 +129,7 @@
   margin-right: 10px;
   font-family: var(--font-body);
 }
-.hint { font-size: 13px; color: var(--muted); line-height: 1.55; margin-bottom: 14px; max-width: 880px; }
+.hint { font-size: 14.5px; color: var(--ink); opacity: 0.82; line-height: 1.65; margin-bottom: 14px; max-width: none; }
 
 .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .spacer { flex: 1; }
@@ -343,10 +343,11 @@
   border-left: 3px solid var(--accent);
   background: var(--paper);
   border-radius: var(--radius);
-  padding: 12px 14px;
-  font-size: 13px;
-  color: var(--muted);
-  line-height: 1.55;
+  padding: 13px 16px;
+  font-size: 14px;
+  color: var(--ink);
+  opacity: 0.9;
+  line-height: 1.6;
   margin-bottom: 14px;
 }
 .progressWrap { width: 100%; height: 7px; background: var(--paper-dark); border-radius: 999px; overflow: hidden; margin-top: 8px; }
@@ -413,7 +414,7 @@
 .miniSelect:focus { outline: none; border-color: var(--accent); }
 .miniSelect:disabled { opacity: 0.6; cursor: not-allowed; }
 .fileInput { display: none; }
-.emptyNote { color: var(--muted); font-size: 13px; padding: 14px 0; }
+.emptyNote { color: var(--muted); font-size: 14.5px; padding: 14px 0; }
 
 /* ── Participants manager ── */
 .userPanel {
@@ -463,11 +464,11 @@
 .removed .userName { text-decoration: line-through; }
 .kpiPill {
   display: inline-block;
-  font-size: 11px;
-  padding: 2px 8px;
+  font-size: 12.5px;
+  padding: 3px 10px;
   border-radius: 999px;
   background: var(--paper-dark);
-  color: var(--muted);
+  color: var(--ink);
   margin-left: 6px;
 }
 
@@ -599,8 +600,10 @@
   border-radius: var(--radius-lg);
   background: #fff;
   box-shadow: var(--shadow-sm);
-  padding: 14px;
+  padding: 16px;
   text-align: center;
 }
-.plotCardLarge img { max-width: 100%; height: auto; border-radius: 4px; }
-.plotCaption { font-size: 12px; color: var(--muted); margin-top: 8px; }
+/* Fill the full card width so the (wide, multi-panel) figures render large. */
+.plotCardLarge img { width: 100%; max-width: 100%; height: auto; border-radius: 4px; }
+.plotCaption { font-size: 13px; color: var(--muted); margin-top: 10px; }
+.figureNote { font-size: 14px; color: var(--ink); opacity: 0.85; line-height: 1.6; margin: 4px 0 12px; }

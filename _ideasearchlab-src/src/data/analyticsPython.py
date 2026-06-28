@@ -3,11 +3,20 @@
 Effects of AI Timing on Idea Generation (AsPredicted #298152) — PYTHON ANALYSIS
 ================================================================================
 
+UNIT OF ANALYSIS & UNBALANCED DESIGN (read this)
+  The rows are the FINAL ideas — each group's top-3 voted ideas (Final Group Pick
+  = 1). The four conditions have DIFFERENT numbers of these (e.g. None ~27, Solo
+  ~39, Group ~33, Both 0), i.e. the design is unbalanced. The regressions account
+  for this: they are fitted with HC3 heteroscedasticity-robust standard errors, so
+  the condition comparisons stay valid under unequal group sizes and unequal
+  variances (OLS point estimates are unbiased under unequal n; only the SEs need to
+  be robust). Per-condition n is printed up front.
+
 WHAT THIS SCRIPT DOES
   For each of the three KPIs (novelty, usefulness, overall_quality) it fits one
   linear regression of the KPI on the 4-level, between-subjects `condition`
   factor, with "Human-Only Hybrid" (the no-AI condition) as the dummy-coded
-  reference. It then prints, per KPI:
+  reference, using HC3 robust SEs. It then prints, per KPI:
     * the regression coefficient table (estimate, SE, t, p-value, 95% CI),
     * the PRIMARY PLANNED CONTRAST  Individual + AI  −  Group + AI  (AI timing),
     * the estimated marginal means with Holm-adjusted pairwise comparisons,
@@ -177,7 +186,14 @@ def fit_kpi(df, kpi):
         warnings.warn(f"[{kpi}] too few rows ({len(df)}) for the model; skipping.")
         return None
     try:
-        return smf.ols(formula, data=df).fit()        # ordinary least squares fit
+        # The four conditions are UNBALANCED (different numbers of final ideas per
+        # condition) and may have unequal variances, so fit with HC3
+        # heteroscedasticity-robust standard errors. The point estimates (condition
+        # means and their differences) are unchanged by unequal n, but every SE / t
+        # / p-value / CI used below — the coefficient table, the planned contrast,
+        # the estimated marginal means and the pairwise comparisons — is then
+        # computed robustly instead of assuming equal variances across conditions.
+        return smf.ols(formula, data=df).fit(cov_type="HC3")
     except Exception as exc:                          # never let a degenerate fit abort
         warnings.warn(f"[{kpi}] OLS failed: {exc}")
         return None
@@ -217,6 +233,7 @@ def print_coef_table(model, kpi):
     with pd.option_context("display.float_format", lambda v: f"{v:9.4f}"):
         print(tbl.to_string(index=False))
     print(f"\nN = {int(model.nobs)}    R^2 = {model.rsquared:.4f}    adj R^2 = {model.rsquared_adj:.4f}")
+    print("SEs: HC3 heteroscedasticity-robust (valid under unequal condition sizes/variances).")
     print("Signif. codes: *** p<.001  ** p<.01  * p<.05  . p<.10\n")
 
 
@@ -318,7 +335,7 @@ def emm_and_pairwise(model, df, kpi):
     pw = pd.DataFrame(rows, columns=["comparison", "diff", "std_err", "t", "p_raw"])
     pw["p_holm"] = p_holm
     pw["sig(Holm)"] = pw["p_holm"].map(lambda p: stars(p) if stars(p) else "ns")
-    print(f"\nPairwise condition differences - {kpi}  (Holm-adjusted, {len(pairs)} pairs):")
+    print(f"\nPairwise condition differences - {kpi}  (HC3-robust, Holm-adjusted, {len(pairs)} pairs):")
     with pd.option_context("display.float_format", lambda v: f"{v:8.4f}"):
         print(pw.to_string(index=False))
     print()
@@ -333,68 +350,95 @@ def ci95_halfwidth(std, n):
     return float(spstats.t.ppf(0.975, n - 1)) * std / np.sqrt(n)
 
 
+# Larger default fonts so every label/tick/title is legible when the figure is
+# shown on the page and in the exported PDF.
+plt.rcParams.update({
+    "font.size": 15, "axes.titlesize": 18, "axes.labelsize": 15,
+    "xtick.labelsize": 14, "ytick.labelsize": 14, "figure.titlesize": 21,
+})
+
+
 def plot_means(df, present_levels):
-    """One bar chart per KPI: condition means with 95% CI error bars."""
-    fig, axes = plt.subplots(1, len(KPIS), figsize=(5 * len(KPIS), 5), squeeze=False)
+    """FIGURE 1 — average score per condition. One bar chart per KPI: the bar
+    height is the mean KPI score for that condition, the black whisker is its 95%
+    confidence interval (taller bar = higher rated; overlapping whiskers ≈ not a
+    clear difference)."""
+    fig, axes = plt.subplots(1, len(KPIS), figsize=(6.6 * len(KPIS), 6.2), squeeze=False)
     axes = axes[0]
     colors = ["#4D4D4D", "#1F77B4", "#2CA02C", "#D62728"]  # one colour per condition
     for ax, kpi in zip(axes, KPIS):
-        means, halfs = [], []
+        means, halfs, ns = [], [], []
         for lvl in present_levels:                     # raw cell mean + CI per condition
             vals = df.loc[df["condition"] == lvl, kpi].dropna()
+            ns.append(len(vals))
             if len(vals) == 0:
                 means.append(np.nan); halfs.append(np.nan)
             else:
                 means.append(vals.mean())
                 halfs.append(ci95_halfwidth(vals.std(ddof=1), len(vals)))
         x = np.arange(len(present_levels))
-        ax.bar(x, means, yerr=halfs, capsize=5, color=colors[:len(present_levels)],
-               edgecolor="black", alpha=0.85)
+        ax.bar(x, means, yerr=halfs, capsize=7, color=colors[:len(present_levels)],
+               edgecolor="black", alpha=0.88)
+        # Print each bar's mean value above it, and the n under the label.
+        for xi, m, n in zip(x, means, ns):
+            if np.isfinite(m):
+                ax.annotate(f"{m:.2f}", (xi, m), textcoords="offset points",
+                            xytext=(0, 8), ha="center", fontsize=14, fontweight="bold")
         ax.set_xticks(x)
-        ax.set_xticklabels(present_levels, rotation=25, ha="right", fontsize=9)
-        ax.set_title(f"Mean {kpi}\n(95% CI)", fontsize=11)
-        ax.set_ylabel(kpi); ax.set_xlabel("Condition")
+        ax.set_xticklabels([f"{lvl}\n(n={n})" for lvl, n in zip(present_levels, ns)], fontsize=14)
+        ax.set_title(f"Mean {kpi}", fontweight="bold")
+        ax.set_ylabel(f"Mean {kpi} (1–7)"); ax.set_xlabel("Condition")
         ax.grid(axis="y", linestyle=":", alpha=0.5)
         finite = [m for m in means if np.isfinite(m)]
         if finite:
-            ax.set_ylim(0, max(7.2, max(finite) * 1.15))   # KPI scale tops out near 7
-    fig.suptitle("KPI means by condition (95% CI error bars)", fontsize=13, y=1.02)
+            ax.set_ylim(0, max(7.2, max(finite) * 1.18))   # KPI scale tops out near 7
+    fig.suptitle("Average score by condition (bars = mean, whiskers = 95% CI)", fontweight="bold", y=1.02)
     fig.tight_layout()
-    print("Generated figure: KPI means by condition.")
+    print("Generated figure: average score per condition.")
 
 
 def plot_forest(models):
-    """One forest/coefficient plot per KPI: each condition's effect vs the
-    baseline with its 95% CI (a red line marks zero = no difference)."""
+    """FIGURE 2 — how each AI condition compares with the no-AI baseline. Each dot
+    is a condition's estimated mean DIFFERENCE from 'None' (Human-Only) on that
+    KPI; the horizontal bar is its 95% CI. Dashed line = 0 (no difference): a dot
+    to the RIGHT scores higher than no-AI, and if the bar does NOT cross 0 the
+    difference is statistically significant (red dot)."""
     non_ref = [l for l in CONDITION_ORDER if l != REFERENCE]   # the dummy effects
-    fig, axes = plt.subplots(1, len(KPIS), figsize=(5 * len(KPIS), 4.5),
+    fig, axes = plt.subplots(1, len(KPIS), figsize=(6.6 * len(KPIS), 5.4),
                              squeeze=False, sharey=True)
     axes = axes[0]
     for ax, kpi in zip(axes, KPIS):
         model = models.get(kpi)
-        ys, ests, los, his, labels = [], [], [], [], []
+        ys, ests, los, his, labels, sig = [], [], [], [], [], []
         if model is not None:
             ci = model.conf_int(alpha=0.05)
             for i, lvl in enumerate(non_ref):          # collect estimate + CI per effect
                 t = term_for(lvl)
                 if t in model.params.index:
                     ests.append(model.params[t])
-                    los.append(ci.loc[t, 0]); his.append(ci.loc[t, 1])
+                    lo, hi = ci.loc[t, 0], ci.loc[t, 1]
+                    los.append(lo); his.append(hi)
                     ys.append(i); labels.append(lvl)
+                    sig.append(not (lo <= 0 <= hi))    # CI excludes 0 → significant
         if ys:
             ests = np.array(ests)
             err = np.vstack([ests - np.array(los), np.array(his) - ests])   # CI half-widths
-            ax.errorbar(ests, ys, xerr=err, fmt="o", color="#333333",
-                        ecolor="#1F77B4", elinewidth=2, capsize=4, markersize=7)
-            ax.set_yticks(ys); ax.set_yticklabels(labels, fontsize=9)
-        ax.axvline(0.0, color="red", linestyle="--", linewidth=1)   # zero = no effect
-        ax.set_title(f"{kpi}", fontsize=11)
-        ax.set_xlabel(f"Effect vs '{REFERENCE}'\n(point = estimate, bar = 95% CI)", fontsize=9)
+            dot_colors = ["#D62728" if s else "#1F77B4" for s in sig]       # red if significant
+            ax.errorbar(ests, ys, xerr=err, fmt="none", ecolor="#888888", elinewidth=2.5, capsize=6)
+            ax.scatter(ests, ys, c=dot_colors, s=130, zorder=3, edgecolor="black")
+            for xi, yi, e in zip(ests, ys, ests):      # annotate each point's value
+                ax.annotate(f"{e:+.2f}", (xi, yi), textcoords="offset points",
+                            xytext=(0, 12), ha="center", fontsize=13, fontweight="bold")
+            ax.set_yticks(ys); ax.set_yticklabels([f"{l} vs None" for l in labels], fontsize=15)
+        ax.axvline(0.0, color="red", linestyle="--", linewidth=1.5)   # zero = no effect
+        ax.set_title(f"{kpi}", fontweight="bold")
+        ax.set_xlabel("Difference from no-AI (points on 1–7)")
         ax.grid(axis="x", linestyle=":", alpha=0.5)
         ax.invert_yaxis()
-    fig.suptitle(f"Condition effects vs baseline '{REFERENCE}' (95% CIs)", fontsize=13, y=1.03)
+    fig.suptitle("Each AI condition vs the no-AI baseline (dot = mean difference, bar = 95% CI; red = significant)",
+                 fontweight="bold", y=1.04)
     fig.tight_layout()
-    print("Generated figure: coefficient / forest plot.")
+    print("Generated figure: condition effects vs baseline.")
 
 
 # ── 6. Insights (plain-language read-out of the regressions above) ────────────
@@ -512,6 +556,17 @@ def main():
     present_levels = list(df["condition"].cat.categories)
     if len(present_levels) < 2:
         print(f"WARNING: only condition(s) {present_levels} present; regression not meaningful.")
+
+    # Per-condition sample sizes — the design is UNBALANCED, so report n up front.
+    # (Unit of analysis = the final ideas: each group's top-3 voted ideas.)
+    print("=" * 78)
+    print("FINAL-IDEA COUNT PER CONDITION (the unit of analysis; unbalanced design)")
+    print("=" * 78)
+    vc = df["condition"].value_counts()
+    for lvl in present_levels:
+        print(f"    {lvl:<6} n = {int(vc.get(lvl, 0))}")
+    print("Unequal n is accounted for: all SEs / p-values use HC3 heteroscedasticity-")
+    print("robust covariance (no equal-variance assumption across conditions).\n")
 
     # Fit + report each KPI's regression, collecting the models + planned contrasts.
     models, contrasts = {}, []
