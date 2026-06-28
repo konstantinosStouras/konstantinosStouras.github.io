@@ -140,11 +140,15 @@ Vote tallying happens on either of two paths. Automatic: when the last member of
 The separate VotingPhase page is no longer used. The `/voting` route can be removed from App.jsx. The old VotingPhase.jsx and VotingPhase.module.css files remain in the repo but are not imported anywhere.
 
 ## Survey (redesigned)
-- **surveyQuestions.js** (`src/data/surveyQuestions.js`): Completely rewritten with 12 questions across 4 sections:
+- **surveyQuestions.js** (`src/data/surveyQuestions.js`): 27 questions across 7 sections:
   - "Your Experience" (Q1-Q4): difficulty, satisfaction, idea rating group, collaboration comfort
   - "Creativity and Idea Generation" (Q5): supporting others' ideas
   - "Reflection" (Q6-Q7): two freetext questions
   - "Questions about sleep wellness" (Q8-Q12): importance, activities, product purchases, interest, prior experience
+  - **"About you" (10 items): a Big-Five personality short form** (2 likert items each for Openness/Conscientiousness/Extraversion/Agreeableness/Neuroticism) — a pre-registered moderator.
+  - **"Your group" (4 items): cognitive-diversity** likert items ("members of my group differ in…"), `showIf` groupPhaseActive (a group-level moderator).
+  - **"Creative thinking" (1 freetext): the divergent-thinking "list creative uses for a brick" task** — pre-registered creative-ability measure.
+  - These three moderator sections were added so the **default** questionnaire collects the AsPredicted #298152 moderators without per-session customization; they flow into `surveyAnswers` and the export's Survey sheet via the existing dynamic-column logic (no export-code change). Existing/custom sessions are unaffected.
 - **New question types**: `likert5` (1-5 scale with custom anchors), `rating_group` (each sub-item/criterion rated on its own 1-5 box scale with optional description + anchors; fully editable in the admin SurveyBuilder — label, description, low/high anchor per criterion), `radio` (pill buttons with optional conditional follow-up), `freetext`
 - **Exports**: `SURVEY_TITLE`, `SURVEY_SUBTITLE`, `SURVEY_QUESTIONS`
 - **Survey.jsx**: Questions grouped into section cards. The likert5 1–5 scale renders as five numbered square boxes (`.scaleBox`, rounded squares, accent-filled when selected) — replaced the older connected-dot/track scale per participant feedback. **rating_group** no longer renders as a table grid of circles; instead each criterion is a stacked sub-question with its own 1–5 box scale (reusing `.scaleBox`/`.boxScale`/`.scaleAnchors`), an optional italic description (subheading) after the criterion name, and optional per-criterion `lowLabel`/`highLabel` anchors under the scale. Item shape is now `{ id, label, description?, lowLabel?, highLabel? }` (description/anchors all optional — render only when filled). Pill-shaped radio buttons. Conditional follow-up field (Q10). Proper validation for all types including nested groups and conditional follow-ups. Each section can have an optional `sectionSubheading` (set per question in the admin SurveyBuilder, second input under "Section heading") rendered as a smaller muted line under the section heading.
@@ -324,6 +328,67 @@ sessions/{sessionId}/aiMessages/{messageId}: {
 - **Sheet "AI Pricing"**: the price table and exchange rate the cost columns were computed with, for transparency/reproducibility.
 - **Sheet 6 -- Groups**: Group ID, members, member labels, status, final ideas (raw ids), **Final Ideas (titles)** (the same chosen ideas as readable titles, top-voted first, each tagged `[group]`/`[individual]`), created at.
 - Column widths auto-fitted based on content (capped at 50 chars)
+
+## Data Analytics page (admin-only, `/admin/data-analytics`)
+A research analytics workbench reached from the **"Data Analytics"** button in the
+top-right of the Admin header (`Admin.jsx`, next to "AI Settings"). Route added to
+`App.jsx`, wrapped in `RequireInstructor` (admin@admin.com only), like the other
+`/admin/*` pages. Purpose: test which of the **four AI-timing conditions** wins on
+each of **three KPIs** (novelty, usefulness, overall quality), per the study design
+in AsPredicted #298152 ("Effects of AI Timing on Idea Generation").
+
+**The four conditions are derived from each session's AI config** (`conditionForSession`
+in `src/utils/analyticsData.js`): `individualAI`×`groupAI` → `Human-Only Hybrid`
+(no AI, the regression **reference**), `Individual + AI` (solo only), `Group + AI`
+(group only), `Full AI` (both). So a session *is* a condition — no manual labelling.
+
+Three-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
+1. **Data source.** Lists every session (`getDocs('sessions')`) with its condition tag;
+   tick any completed/active ones and "Load" pulls their ideas/participants/groups and
+   flattens to **one row per idea** (`buildRowsForSession`): idea_id, session, condition,
+   phase, group_id, author_id, novelty, usefulness, overall_quality, final_pick, text.
+   Also **Import Excel/CSV** to append external data. The importer understands the
+   admin's own condition-coded Excel export (`AdminSession.jsx`): it reads the
+   **Ideas** sheet (not the leading "About" guide), derives the condition from the
+   `AI Solo (0/1)` × `AI Group (0/1)` dummies (falling back to the `AI Condition` /
+   `Condition Code` label), **averages the blind-rater columns** `Novelty (rater 1..n)`
+   / `Usefulness (rater 1..n)` into the KPI scores, maps `Idea ID` / `Session Code` /
+   `Stage` / `Group UID` / `Final Group Pick`, and drops rows flagged
+   `Exclude (Yes/No) = Yes` (the pre-registered screen). A plain table with
+   `condition` / `novelty` / `usefulness` columns still works too
+   (`normalizeImportedRows` in `analyticsData.js`).
+2. **Score ideas, manage participants & download.** Every idea gets a per-KPI score:
+   the configured LLM rates each on novelty + usefulness (1–7), overall = their mean.
+   Scoring runs **client-side from the browser** via `src/utils/llmClient.js`, which reads
+   the provider key straight from `settings/ai` (admin can read it per Firestore rules —
+   no Cloud Function / redeploy needed) and calls Claude/OpenAI/Gemini directly (Claude
+   needs the `anthropic-dangerous-direct-browser-access` header). Ideas are batched (8/req),
+   results map back by index. Scores are also **hand-editable** in the data table; nothing is
+   written back to Firestore (admin lacks idea-write permission, and keeping it in-memory
+   avoids a rules change). **Manage participants:** a collapsible panel lists every
+   participant in the loaded data grouped by session; **Remove** drops all of that person's
+   ideas from the table, the summary stats, the regressions, and the downloads (toggle to
+   restore — implemented as an `excludedUsers` set deriving `effectiveRows`, so it is
+   non-destructive). Each row carries a stable `rid` so score edits / AI write-back stay
+   correct even when the table shows the filtered view. **Download:** a single summarized
+   **Excel** workbook (`xlsx-js-style`, bold headers) — sheets *Ideas* (the per-idea dataset),
+   *Summary by condition* (n + mean/SD/n per KPI), *Summary by session*, and *Removed
+   participants* when any — plus a raw-dataset **CSV**. Both reflect the current
+   post-removal `effectiveRows`.
+3. **Regressions — edit & compile online.** Two tabs, **Python** and **R**, each pre-filled
+   with a complete script (`src/data/analyticsPython.py` / `analyticsR.R`, inlined via Vite
+   `?raw` in `analyticsTemplates.js`) that runs the SAME analysis: one OLS/`lm` per KPI on
+   the 4-level condition factor (Human-Only = baseline), the **primary planned contrast
+   Individual + AI − Group + AI**, a best→worst ranking with Holm-adjusted pairwise tests,
+   and plots (mean±95%CI bars + coefficient/forest plot). The admin edits the code and hits
+   **Run**: Python compiles in-browser via **Pyodide** (`src/utils/pyodideRunner.js`,
+   loads numpy/pandas/scipy/statsmodels/matplotlib; harvests open matplotlib figures as PNG
+   data URLs) and R via **WebR** (`src/utils/webrRunner.js`, base R only; CSV mounted at
+   `/tmp/data.csv`; base-graphics captured via `captureR({captureGraphics:true})`). Output
+   (with p-values) streams to a console; plots render below. Both runtimes load lazily from
+   jsDelivr on first Run (Pyodide `v314.0.1`, WebR `0.6.0`, each with same-API version
+   fallbacks), so they add ~0 KB to the main bundle. **Entirely client-side — ships with a
+   normal Pages build, no Cloud Functions or Firestore-rules change.**
 
 **Survey.jsx:**
 - On submit, writes status: 'done', surveyAnswers, surveyCompletedAt to participant doc directly (no Cloud Function)

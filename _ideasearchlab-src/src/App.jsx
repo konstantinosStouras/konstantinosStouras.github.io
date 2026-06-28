@@ -15,6 +15,7 @@ import Survey, { Done } from './pages/Survey'
 import UserHistory from './pages/UserHistory'
 import Admin from './pages/Admin'
 import AISettings from './pages/AISettings'
+import DataAnalytics from './pages/DataAnalytics'
 import AdminSession from './pages/AdminSession'
 import AdminBroadcast from './components/AdminBroadcast'
 
@@ -110,6 +111,7 @@ export default function App() {
         {/* Instructor flow */}
         <Route path="/admin" element={<RequireInstructor><Admin /></RequireInstructor>} />
         <Route path="/admin/ai-settings" element={<RequireInstructor><AISettings /></RequireInstructor>} />
+        <Route path="/admin/data-analytics" element={<RequireInstructor><DataAnalytics /></RequireInstructor>} />
         <Route path="/admin/session/:sessionId" element={
           <RequireInstructor>
             <SessionWrapper>
