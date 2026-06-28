@@ -197,7 +197,12 @@ export default function DataAnalytics() {
       }
       const tagged = tagRows(collected)
       if (replace) setExcludedUsers(new Set())
-      setRows(prev => recomputeOverall(replace ? tagged : [...prev, ...tagged]))
+      // A "replace" load swaps the session-derived rows but KEEPS imported-file
+      // rows (tagged with _book) so an imported file isn't silently dropped.
+      setRows(prev => {
+        const keptImports = prev.filter(r => r._book)
+        return recomputeOverall(replace ? [...keptImports, ...tagged] : [...prev, ...tagged])
+      })
       // Remember the loaded session docs so Step 2 can rebuild their full export.
       setLoadedSessions(prev => {
         const merged = replace ? loaded : [...prev, ...loaded]
@@ -743,7 +748,11 @@ export default function DataAnalytics() {
             <button className={`btn-ghost ${styles.miniBtn}`} onClick={selectAll}>Select all</button>
             <button className={`btn-ghost ${styles.miniBtn}`} onClick={clearSection1} disabled={!!scoring}>Clear</button>
             <button className="btn-primary" onClick={() => loadSelected(true)} disabled={!selected.size || loadingData || !!scoring}>
-              {loadingData ? 'Loading…' : `Load ${selected.size || ''} session${selected.size === 1 ? '' : 's'}`.trim()}
+              {loadingData ? 'Loading…' : (() => {
+                const parts = [`${selected.size} session${selected.size === 1 ? '' : 's'}`]
+                if (importedBooks.length) parts.push(`${importedBooks.length} imported file${importedBooks.length === 1 ? '' : 's'}`)
+                return `Load ${parts.join(' and ')}`
+              })()}
             </button>
             {rows.length > 0 && (
               <button className={`btn-ghost ${styles.miniBtn}`} onClick={() => loadSelected(false)} disabled={!selected.size || loadingData || !!scoring}>
