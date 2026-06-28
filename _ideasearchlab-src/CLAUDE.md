@@ -315,7 +315,7 @@ sessions/{sessionId}/aiMessages/{messageId}: {
 - Uses the `xlsx-js-style` (SheetJS fork) npm package for client-side Excel generation, so cell styles are written out
 - **Every sheet's header row (row 0) is bold** — applied in `autoWidth()` after the column widths, by setting `cell.s.font.bold` on each header cell
 - Excel file name: `session_{CODE}_data.xlsx`
-- **Analysis-ready / condition-coded export (for AsPredicted #298152, "The Effects of AI Timing on Idea Generation and Selection" — the 2×2 AI-timing study; the idea is the unit of analysis):** the export is shaped so single-session files **stack into one condition-coded dataset**. A `stamp()` helper prepends condition columns to **every** data sheet (all except the static "AI Pricing"): **Session Code**, **AI Condition** (one of the four pre-registered labels — `Human-Only Hybrid (no AI)`, `Individual + AI`, `Group + AI`, `Full AI`, derived from `aiConfig.individualAI`/`groupAI` gated by phase-active), **Condition Code** (`HumanOnly`/`IndAI`/`GroupAI`/`FullAI`), **AI Solo Stage** / **AI Group Stage** (Yes/No), and machine-friendly **AI Solo (0/1)** / **AI Group (0/1)** dummies (so condition-dummy regressions and the Individual+AI-vs-Group+AI contrast need no string parsing). The condition for a session can also be inferred from AI usage (e.g. 0 solo prompts + group prompts ⇒ Group + AI). Clustering on the triad must use **Group UID** (`SessionCode:groupId`) not the bare `Group ID` (g0/g1… repeat across sessions).
+- **Analysis-ready / condition-coded export (for AsPredicted #298152, "The Effects of AI Timing on Idea Generation and Selection" — the 2×2 AI-timing study; the idea is the unit of analysis):** the export is shaped so single-session files **stack into one condition-coded dataset**. A `stamp()` helper prepends condition columns to **every** data sheet (all except the static "AI Pricing"): **Session Code**, **Condition** (the Set A / placement encoding — `None`/`Solo`/`Group`/`Both`, derived from `aiConfig.individualAI`/`groupAI` gated by phase-active), **Condition (paper name)** (`Human-Only Hybrid`/`Individual + AI`/`Group + AI`/`Full AI`), **AI present in** (`neither stage`/`solo stage only`/`group stage only`/`both stages`), and machine-friendly **AI Solo (0/1)** / **AI Group (0/1)** dummies (so condition-dummy regressions and the Solo-vs-Group contrast need no string parsing). Encoding map: None=Human-Only Hybrid, Solo=Individual + AI, Group=Group + AI, Both=Full AI. (The old `AI Condition`/`Condition Code`/`AI Solo Stage`/`AI Group Stage` columns were replaced by this encoding.) Clustering on the triad must use **Group UID** (`SessionCode:groupId`) not the bare `Group ID` (g0/g1… repeat across sessions).
 - **Sheet "About" (first tab)**: a self-documenting analysis guide (`aoa_to_sheet`) stating this session's condition, the four-condition coding, where each measure lives (DVs → Ideas; selected ideas → Ideas filter / Groups; mechanisms → AI Chat/Usage + Ideas text; moderators → Survey; controls → Participants), and a this-session-at-a-glance tally.
 - **Sheet "Conditions" (last tab)**: one stackable summary row per session — n participants, groups, individual/group/carried/final-selected idea counts, AI prompts & replies (solo vs group), survey completers — so stacking several files gives a between-condition overview.
 - **Sheet 1 -- Participants**: ID, name, email, anonymous label, group ID, status, individual complete, **votes submitted** (raw flag, back-compat), and the derived vote columns **Votes Cast** (count), **Ballot Status** (`voted` / `partial (n/required)` / `empty (submitted, no votes)` / `not submitted`), **Voted For (idea IDs)** and **Voted For (titles)**, consent, demographics (all fields incl. **Age/Gender controls**), joined at — condition-stamped. The Ballot Status/Votes Cast columns exist because a "submitted" ballot can hold ZERO votes (auto-submitted at group-timer expiry), so `Votes Submitted = Yes` is **not** a safe proxy for "actually voted"; required-votes per group mirrors GroupPhase (`max(1, min(3, group voting-pool size))`). Documented in the "About" sheet too.
@@ -344,9 +344,15 @@ Admin / AI Settings; AI Settings → Admin / Data Analytics), so the header look
 across the admin area.
 
 **The four conditions are derived from each session's AI config** (`conditionForSession`
-in `src/utils/analyticsData.js`): `individualAI`×`groupAI` → `Human-Only Hybrid`
-(no AI, the regression **reference**), `Individual + AI` (solo only), `Group + AI`
-(group only), `Full AI` (both). So a session *is* a condition — no manual labelling.
+in `src/utils/analyticsData.js`), and encoded with the **Set A / placement** scheme
+`individualAI`×`groupAI` → **None** (no AI = Human-Only Hybrid, the regression **reference**),
+**Solo** (solo only = Individual + AI), **Group** (group only = Group + AI), **Both** (both =
+Full AI). `CONDITIONS = ['None','Solo','Group','Both']`; `CONDITION_INFO`/`paperNameFor` hold the
+paper-name mapping; `canonicalCondition` maps the encoding, the paper names and the old
+codes/labels → placement. The page shows this mapping in a top-of-page table, the Excel/CSV
+exports carry it, and the Python/R templates regress on it (reference = `None`; pandas
+`read_csv(keep_default_na=False)` so the string `"None"` isn't parsed as NaN). So a session *is*
+a condition — no manual labelling.
 
 Three-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
 1. **Data source.** Lists every session (`getDocs('sessions')`) with its condition tag;

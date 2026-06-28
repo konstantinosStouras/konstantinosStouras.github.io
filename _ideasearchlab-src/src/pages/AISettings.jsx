@@ -169,6 +169,7 @@ export default function AISettings() {
           </button>
           <button className="btn-ghost" onClick={() => navigate('/admin')}>Admin</button>
           <button className="btn-ghost" onClick={() => navigate('/admin/data-analytics')}>Data Analytics</button>
+          <button className="btn-ghost" style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }} onClick={() => navigate('/admin/ai-settings')}>AI Settings</button>
           <button className="btn-ghost" onClick={() => signOut(auth)}>Sign out</button>
         </div>
       </header>
