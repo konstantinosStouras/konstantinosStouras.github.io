@@ -82,8 +82,8 @@ export function extractJsonArray(text) {
 // ── Provider calls (browser) ──────────────────────────────────────────────────
 
 async function callClaude({ apiKey, model }, system, userText) {
-  // Opus 4.7+/Fable/Mythos reject sampling params; older models accept them.
-  const supportsTemperature = !/^claude-(opus-4-(?:[7-9]|\d{2})|fable|mythos)/.test(model || '')
+  // Opus 4.7+/Opus 5+/Fable/Mythos reject sampling params; older models accept them.
+  const supportsTemperature = !/^claude-(opus-(?:4-(?:[7-9]|\d{2})|[5-9])|fable|mythos)/.test(model || '')
   const body = { model, max_tokens: 1500, system, messages: [{ role: 'user', content: userText }] }
   if (supportsTemperature) body.temperature = 0
   const res = await fetch('https://api.anthropic.com/v1/messages', {
