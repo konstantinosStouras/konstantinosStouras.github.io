@@ -277,6 +277,37 @@
 .progressBar { height: 100%; background: var(--accent); transition: width 0.2s; }
 .miniBtn { font-size: 12.5px; padding: 6px 14px; }
 
+/* Per-section Save / Make-default / Restore buttons (with a green click flash) */
+.sectionActions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.saveBtn, .defaultBtn, .restoreBtn {
+  padding: 8px 18px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.saveBtn { background: var(--accent); color: #fff; border: 1.5px solid var(--accent); }
+.saveBtn:hover { background: var(--accent-light); border-color: var(--accent-light); }
+.defaultBtn { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); }
+.defaultBtn:hover { background: rgba(200, 86, 42, 0.12); }
+.restoreBtn { background: transparent; color: var(--muted); border: 1.5px solid var(--border); }
+.restoreBtn:hover:not(:disabled) { border-color: var(--ink); color: var(--ink); }
+.restoreBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+/* Green confirmation flash, matching the admin panel's saved-state colour. */
+.btnGreen, .btnGreen:hover {
+  background: #2e7d32 !important;
+  color: #fff !important;
+  border-color: #2e7d32 !important;
+}
+
 /* AI rater provider + model selectors */
 .raterRow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .raterLabel {
