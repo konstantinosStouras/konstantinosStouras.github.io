@@ -18,7 +18,8 @@
 #   into the Section-6 tables + LaTeX/PDF. Base R only (runs in WebR).
 #
 # UNBALANCED & PARTIAL COVERAGE
-#   Rows are the FINAL ideas. Conditions have different n and KPIs have different
+#   Rows are the analysis subset chosen on the page (the group-voted FINAL ideas, or
+#   ALL ideas that entered the group phase). Conditions have different n; KPIs differ in
 #   coverage (e.g. AI scored but not evaluator-rated). Each KPI's models are fitted
 #   on the rows that HAVE that KPI, with HC3 robust SEs; a condition with < MIN_CELL
 #   ideas for a KPI (or an absent None baseline) is dropped and shown as "—".

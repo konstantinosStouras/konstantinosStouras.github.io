@@ -97,6 +97,19 @@ export const KPI_DEFS = [
   { key: 'det_score', label: 'Combined score', source: 'det', scale5: false },
 ]
 
+/**
+ * Did this idea enter the group phase? True for every group-stage idea, and for an
+ * individual-stage idea only if the participant carried it forward (carried == 1).
+ * This is the Section-5 "all ideas that entered the group phase" analysis scope —
+ * it uses every idea the brainstorming process kept, excluding only the individual
+ * ideas a participant did NOT select in the individual phase.
+ */
+export function enteredGroupPhase(r) {
+  const phase = String(r.phase || '').toLowerCase()
+  if (phase.includes('group')) return true
+  return Number(r.carried) === 1
+}
+
 // ── Admin-uploaded extra KPIs (Section 3.1) ────────────────────────────────────
 // The admin can upload externally-computed KPIs (e.g. Prototypicality / KS) and
 // match them onto the loaded ideas. They are stored on each row under an "x_"-
@@ -312,6 +325,10 @@ export function buildRowsForSession(session, ideas = [], participants = [], grou
       det_distinctiveness: '',
       det_score: '',
       final_pick: finalPickIds.has(idea.id) ? 1 : 0,
+      // Carried to the group phase = the participant selected this individual idea
+      // to carry forward (idea.selected). Group-stage ideas weren't "carried"; the
+      // enteredGroupPhase() helper adds them in via phase.
+      carried: idea.selected ? 1 : 0,
       text,
     }
   })
@@ -473,6 +490,7 @@ export function normalizeImportedRows(rawRows) {
       det_distinctiveness: numOrBlank(pick('det_distinctiveness', 'objective distinctiveness', 'obj. distinctiveness')),
       det_score: numOrBlank(pick('det_score', 'objective score', 'obj. score')),
       final_pick: /^(1|yes|true)$/i.test(String(pick('final group pick', 'final_pick', 'final pick', 'final', 'selected')).trim()) ? 1 : 0,
+      carried: /^(1|yes|true)$/i.test(String(pick('carried to group', 'carried', 'carried_to_group')).trim()) ? 1 : 0,
       text,
     })
   })

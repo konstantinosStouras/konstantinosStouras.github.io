@@ -30,7 +30,8 @@ WHAT THIS SCRIPT PRODUCES
   markers) that the page turns into the Section-6 tables and the LaTeX/PDF export.
 
 UNIT OF ANALYSIS, UNBALANCED & PARTIAL-COVERAGE DESIGN (read this)
-  Rows are the FINAL ideas (each group's top-voted ideas). Conditions have DIFFERENT
+  Rows are the analysis subset chosen on the page — the group-voted FINAL ideas, or
+  ALL ideas that entered the group phase. Conditions have DIFFERENT
   n (unbalanced) and KPIs have DIFFERENT coverage (e.g. AI scored but not yet
   evaluator-rated). So each KPI's models are fitted on the rows that HAVE that KPI,
   with HC3 heteroscedasticity-robust SEs; a condition with < 2 ideas for a KPI — or

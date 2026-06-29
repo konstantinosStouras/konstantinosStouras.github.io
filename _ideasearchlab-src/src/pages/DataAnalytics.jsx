@@ -11,6 +11,7 @@ import {
   matchScoresIntoRows, buildSummaryTable, DEFAULT_REFERENCE_SET, presentKpis,
   uploadedKpiKeys, uploadedKpiDefs, uploadedKpiLabel, analysisColumns,
   matchUploadedKpisIntoRows, clearUploadedKpis, stripAllKpis, UPLOADED_KPI_PREFIX,
+  enteredGroupPhase,
 } from '../utils/analyticsData'
 import { scoreIdeas, fetchAISettings } from '../utils/llmClient'
 import { tfidfVectors } from '../utils/tfidf'
@@ -80,6 +81,9 @@ export default function DataAnalytics() {
   const [scoreOnlyFinal, setScoreOnlyFinal] = useState(true)
   // Summary Statistics: restrict to ideas scored on all three KPIs (default on).
   const [statsOnlyScored, setStatsOnlyScored] = useState(true)
+  // Regression scope: 'final' = group-voted Final Ideas (default); 'group' = all
+  // ideas that entered the group phase (group-stage + carried-forward individual).
+  const [regScope, setRegScope] = useState('final')
 
   // ── Section 3.1 — deterministic / objective KPIs (in-browser TF-IDF) ──
   // No API key / billing: similarity is computed locally from the idea text.
@@ -837,13 +841,18 @@ export default function DataAnalytics() {
 
   async function runCode() {
     if (running) return
-    // The analysis compares conditions on the ideas the groups selected after the
-    // group phase (Final Group Pick = 1). Scored final ideas only.
-    const analysisRows = effectiveRows.filter(r => Number(r.final_pick) === 1)
-    // Need ≥2 final ideas carrying at least one KPI from any source (AI / evaluator / objective).
+    // Analysis scope (admin's choice): the group-voted Final Ideas (Final Group
+    // Pick = 1), or every idea that entered the group phase (group-stage ideas +
+    // individual ideas carried forward — excludes only the individual ideas a
+    // participant didn't select).
+    const analysisRows = regScope === 'group'
+      ? effectiveRows.filter(enteredGroupPhase)
+      : effectiveRows.filter(r => Number(r.final_pick) === 1)
+    // Need ≥2 ideas in scope carrying at least one KPI from any source.
     const scored = analysisRows.filter(hasAnyKpi)
     if (scored.length < 2) {
-      setRunError('Need at least a couple of Final-Group-Pick ideas with a KPI. In Step 3, score the final ideas with AI (3.2), upload evaluator scores (3.3), or compute the objective KPIs (3.1).')
+      const where = regScope === 'group' ? 'ideas that entered the group phase' : 'Final-Group-Pick ideas'
+      setRunError(`Need at least a couple of ${where} with a KPI. In Step 3, score them with AI (3.2), upload evaluator scores (3.3), or compute the objective KPIs (3.1).`)
       return
     }
     setRunning(true)
@@ -905,6 +914,12 @@ export default function DataAnalytics() {
   // Section 2 / dataset tallies.
   const isFinal = r => Number(r.final_pick) === 1
   const finalCount = rows.filter(isFinal).length
+  // Ideas that entered the group phase (Section-5 alternative regression scope).
+  const groupPhaseCount = useMemo(() => effectiveRows.filter(enteredGroupPhase).length, [effectiveRows])
+  // Ideas in the currently-selected regression scope that carry at least one KPI.
+  const regScopedScored = useMemo(
+    () => (regScope === 'group' ? effectiveRows.filter(enteredGroupPhase) : effectiveRows.filter(isFinal)).filter(hasAnyKpi).length,
+    [effectiveRows, regScope])
   const sessionCount = useMemo(() => new Set(rows.filter(r => !r._book).map(r => r.session)).size, [rows])
   // Imported files actually loaded into the dataset (have rows present), for the
   // Step-2 aggregate; and the count of ticked imported files for the Load button.
@@ -1549,17 +1564,32 @@ export default function DataAnalytics() {
             <span className={styles.kpiPill}>KPIs: AI · Evaluator · Objective (per source)</span>
           </h2>
           <p className={styles.hint}>
-            Both tabs run the <em>same</em> analysis on the <strong>group-selected Final Ideas</strong>
-            {' '}(Final&nbsp;Group&nbsp;Pick&nbsp;=&nbsp;1, after any removed participants): one linear
-            regression per KPI across the four conditions (<em>None</em> = no-AI baseline), the planned
-            {' '}<em>Solo</em> vs <em>Group</em> contrast, a best→worst ranking, and plots. The conditions are
-            <strong> unbalanced</strong> (different n per condition), so the analysis uses
-            <strong> HC3 heteroscedasticity-robust standard errors</strong> and <strong>Welch</strong>
-            {' '}(unequal-variance) pairwise tests, and prints each condition's n. Edit the code and press
-            Run — Python runs via Pyodide and R via WebR, both compiled in your browser (first run downloads
-            the runtime, ~10–30&nbsp;s).
-            {finalScoredCount < 2 && <><br /><span className={styles.unscored}>Give at least two Final Ideas a KPI in Step&nbsp;3 first — via AI&nbsp;(3.2), evaluator upload&nbsp;(3.3) or objective compute&nbsp;(3.1). Only {finalScoredCount} so far.</span></>}
+            Both tabs run the <em>same</em> analysis (after any removed participants) on the
+            {' '}<strong>scope you pick below</strong>: one linear regression per KPI across the four
+            conditions (<em>None</em> = no-AI baseline), the planned <em>Solo</em> vs <em>Group</em> contrast,
+            a best→worst ranking, and plots. The conditions are <strong>unbalanced</strong> (different n per
+            condition), so the analysis uses <strong>HC3 heteroscedasticity-robust standard errors</strong> and
+            {' '}<strong>Welch</strong> (unequal-variance) pairwise tests, and prints each condition's n. Edit
+            the code and press Run — Python runs via Pyodide and R via WebR, both compiled in your browser
+            (first run downloads the runtime, ~10–30&nbsp;s).
           </p>
+
+          <label className={styles.checkRow}>
+            <input type="checkbox" checked={regScope === 'group'}
+              onChange={e => setRegScope(e.target.checked ? 'group' : 'final')} disabled={running} />
+            <span>
+              Run on <strong>all ideas that entered the group phase</strong> — group-stage ideas plus the
+              individual ideas each participant carried forward (ignores which ideas the group voted for;
+              excludes only individual ideas a participant didn't select). Unticked = only the group-voted
+              {' '}<strong>Final&nbsp;Ideas</strong> (Final&nbsp;Group&nbsp;Pick&nbsp;=&nbsp;1).
+            </span>
+            <span className={styles.kpiPill}>{regScope === 'group' ? `${groupPhaseCount} in group phase` : `${finalCount} final`}</span>
+          </label>
+          {regScopedScored < 2 && (
+            <p className={styles.hint}>
+              <span className={styles.unscored}>Give at least two {regScope === 'group' ? 'ideas that entered the group phase' : 'Final Ideas'} a KPI in Step&nbsp;3 first — via AI&nbsp;(3.2), evaluator upload&nbsp;(3.3) or objective compute&nbsp;(3.1). Only {regScopedScored} so far.</span>
+            </p>
+          )}
 
           <div className={styles.tabs}>
             <button className={`${styles.tab} ${tab === 'python' ? styles.tabActive : ''}`} onClick={() => selectTab('python')} disabled={running}>Python</button>
