@@ -622,7 +622,7 @@ function buildAggregateAbout(entries) {
     ['Clustering unit (triad)', 'use Group UID (= "SessionCode:groupId"), NOT the bare Group ID — g0/g1… repeat across sessions.'],
     [],
     ['WHERE EACH MEASURE LIVES'],
-    ['Dependent variables', '"Ideas" sheet (one row per idea) + the "Rankings" sheet (one row per idea, with empty Novelty / Usefulness / Quality columns for blind expert rating).'],
+    ['Dependent variables', '"Ideas" sheet (one row per idea) + the "Rankings" sheet (one row per idea: Novelty / Usefulness / Quality columns for blind expert rating, plus the objective KPIs — Obj. Novelty / Obj. Distinctiveness / Obj. Score — computed in Section 3.1).'],
     ['Selected ideas (group level)', '"Ideas" sheet → Final Group Pick = Yes; "Groups" sheet lists them as titles.'],
     ['Vote completeness', '"Participants" sheet → Ballot Status + Votes Cast (a submitted ballot can hold zero votes).'],
     ['Mechanisms', '"AI Chat" / "AI Usage" (prompt behaviour & tokens); "Ideas" Full Text (idea diversity).'],
@@ -635,9 +635,11 @@ function buildAggregateAbout(entries) {
 
 /**
  * Build the extra "Rankings" tab from the aggregated Ideas rows. One row per idea
- * with fixed headings. The Novelty / Usefulness / Quality columns are filled from
- * `scoreById` (Idea ID → { novelty, usefulness, quality }) when scores were set on
- * the page in Step 3; otherwise they are left EMPTY for blind expert rating.
+ * with fixed headings. The AI Novelty / Usefulness / Quality columns are filled from
+ * `scoreById` (Idea ID → { novelty, usefulness, quality, detNovelty,
+ * detDistinctiveness, detScore }) when scores were set on the page in Step 3;
+ * otherwise the AI columns are left EMPTY for blind expert rating. The three
+ * objective KPI columns (computed in Section 3.1) are carried through the same map.
  */
 export function rankingsSheetFromIdeas(ideaRows, scoreById) {
   const blank = v => (v == null ? '' : v)
@@ -653,6 +655,9 @@ export function rankingsSheetFromIdeas(ideaRows, scoreById) {
       'Novelty': sc ? blank(sc.novelty) : '',
       'Usefulness': sc ? blank(sc.usefulness) : '',
       'Quality': sc ? blank(sc.quality) : '',
+      'Obj. Novelty': sc ? blank(sc.detNovelty) : '',
+      'Obj. Distinctiveness': sc ? blank(sc.detDistinctiveness) : '',
+      'Obj. Score': sc ? blank(sc.detScore) : '',
     }
   })
   return { name: 'Rankings', kind: 'json', rows }
