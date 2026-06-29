@@ -95,9 +95,108 @@ export const KPI_DEFS = [
   { key: 'det_score', label: 'Obj. Score', source: 'det', scale5: false },
 ]
 
-/** A KPI def has data in `rows` if at least one row carries a finite value for it. */
+// ── Admin-uploaded extra KPIs (Section 3.1) ────────────────────────────────────
+// The admin can upload externally-computed KPIs (e.g. Prototypicality / KS) and
+// match them onto the loaded ideas. They are stored on each row under an "x_"-
+// prefixed column (e.g. x_prototypicality), so the registry is fully derivable
+// from the data — no separate state to persist, and clearing them is just dropping
+// the x_ columns. Treated as continuous measures (no 1–5 "top rating" Tables 5/6).
+export const UPLOADED_KPI_PREFIX = 'x_'
+
+/** Display label for an uploaded-KPI key (drop the prefix, "_" → space). */
+export function uploadedKpiLabel(key) {
+  return String(key).slice(UPLOADED_KPI_PREFIX.length).replace(/_/g, ' ')
+}
+
+/** The uploaded-KPI column keys present (with at least one numeric value), sorted. */
+export function uploadedKpiKeys(rows) {
+  const keys = new Set()
+  for (const r of rows || []) {
+    for (const k of Object.keys(r)) {
+      if (k.startsWith(UPLOADED_KPI_PREFIX) && r[k] !== '' && r[k] != null && Number.isFinite(Number(r[k]))) keys.add(k)
+    }
+  }
+  return [...keys].sort()
+}
+
+/** KPI def objects for the uploaded extra KPIs present in the rows. */
+export function uploadedKpiDefs(rows) {
+  return uploadedKpiKeys(rows).map(key => ({ key, label: uploadedKpiLabel(key), source: 'upload', scale5: false }))
+}
+
+/** Every analysis column for the CSV/regressions: the fixed COLUMNS + uploaded KPIs. */
+export function analysisColumns(rows) {
+  return [...COLUMNS, ...uploadedKpiKeys(rows)]
+}
+
+/** Drop every uploaded extra-KPI column (x_*) from the rows (the "clear" action). */
+export function clearUploadedKpis(rows) {
+  return (rows || []).map(r => {
+    const out = {}
+    for (const k of Object.keys(r)) if (!k.startsWith(UPLOADED_KPI_PREFIX)) out[k] = r[k]
+    return out
+  })
+}
+
+/** Every built-in KPI column (AI + external + deterministic), from the registry. */
+export const ALL_KPI_COLUMNS = KPI_DEFS.map(d => d.key)
+
+/**
+ * Return rows with NO pre-computed KPIs: every built-in KPI value blanked and all
+ * uploaded extra-KPI (x_*) columns dropped. Used for the persisted dataset default,
+ * so a page refresh starts clean across all of Section 3 — the admin re-computes
+ * (3.1) / re-scores (3.2) / re-uploads (3.3 + extra KPIs) within the session.
+ */
+export function stripAllKpis(rows) {
+  return (rows || []).map(r => {
+    const out = {}
+    for (const k of Object.keys(r)) {
+      if (k.startsWith(UPLOADED_KPI_PREFIX)) continue
+      out[k] = ALL_KPI_COLUMNS.includes(k) ? '' : r[k]
+    }
+    return out
+  })
+}
+
+/**
+ * Apply uploaded extra-KPI values onto the loaded rows, matched by Idea ID (then,
+ * if no id match, by normalised title). `entries` = [{ idea_id, title, values }]
+ * where `values` maps each x_ key to a number; `keys` is the x_ columns to write.
+ * Returns { rows, matched, unmatched }.
+ */
+export function matchUploadedKpisIntoRows(rows, entries, keys) {
+  const byId = new Map()
+  const byTitle = new Map()
+  rows.forEach((r, i) => {
+    const id = String(r.idea_id ?? '')
+    if (id && !byId.has(id)) byId.set(id, i)
+    const t = normTitle(r.idea_title || rowTitle(r))
+    if (t && !byTitle.has(t)) byTitle.set(t, i)
+  })
+  const next = rows.slice()
+  let matched = 0, unmatched = 0
+  for (const e of entries || []) {
+    let idx = byId.get(String(e.idea_id ?? ''))
+    if (idx == null) idx = byTitle.get(normTitle(e.title))
+    if (idx == null) { unmatched++; continue }
+    const patch = {}
+    for (const k of keys) {
+      const v = e.values?.[k]
+      patch[k] = (v === '' || v == null || !Number.isFinite(Number(v))) ? '' : Number(v)
+    }
+    next[idx] = { ...next[idx], ...patch }
+    matched++
+  }
+  return { rows: next, matched, unmatched }
+}
+
+/**
+ * A KPI def has data in `rows` if at least one row carries a finite value for it.
+ * Includes any admin-uploaded extra KPIs (x_* columns) after the built-in registry.
+ */
 export function presentKpis(rows) {
-  return KPI_DEFS.filter(d => (rows || []).some(r => Number.isFinite(Number(r[d.key])) && r[d.key] !== ''))
+  const known = KPI_DEFS.filter(d => (rows || []).some(r => Number.isFinite(Number(r[d.key])) && r[d.key] !== ''))
+  return [...known, ...uploadedKpiDefs(rows)]
 }
 
 /**

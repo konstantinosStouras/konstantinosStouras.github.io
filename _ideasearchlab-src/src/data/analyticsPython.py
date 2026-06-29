@@ -160,6 +160,16 @@ def prepare(df):
         warnings.warn(f"Dropping rows with unrecognised condition(s): {sorted(unknown)}")
         df = df[df["condition"].isin(CONDITION_ORDER)].copy()
 
+    # Append any admin-uploaded extra-KPI columns (header begins with "x_") to the
+    # registry, so they are analysed exactly like the built-in KPIs — as continuous
+    # measures (levels Tables 3/4, no top-rating Tables 5/6). Discovered in data-
+    # column order so the Python and R tabs stay in lock-step.
+    known_keys = {key for key, _, _ in KPI_DEFS}
+    for col in df.columns:
+        if col.startswith("x_") and col not in known_keys:
+            KPI_DEFS.append((col, col[2:].replace("_", " "), False))
+            known_keys.add(col)
+
     # Coerce every KPI column that exists to numeric (blank cells -> NaN).
     for key, _, _ in KPI_DEFS:
         if key in df.columns:
