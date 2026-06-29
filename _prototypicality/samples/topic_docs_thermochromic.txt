@@ -1,0 +1,93 @@
+Thermochromism is the property of a material changing color in response to a change in temperature, and it is the basis for many color shifting products.
+A thermochromic material can be reversible, returning to its first color when it cools, or irreversible, holding the new color once a threshold has been passed.
+The temperature at which a thermochromic material switches color is called its activation temperature, and it can be tuned during manufacturing.
+Many thermochromic systems show hysteresis, meaning the color changes at a slightly different temperature when warming than when cooling.
+Leuco dyes are a common class of thermochromic colorant, switching between a colored and a colorless state as temperature rises and falls.
+A typical leuco dye system combines a color former such as crystal violet lactone, a weak acid developer, and a solvent whose melting point sets the switching temperature.
+Microencapsulation protects leuco dye mixtures inside tiny capsules so they survive printing, washing, and abrasion on a fabric surface.
+Thermochromic liquid crystals reflect specific wavelengths of light depending on temperature, producing a sweep of colors across a narrow temperature band.
+Cholesteric liquid crystals are used in precise thermometers because their reflected color maps closely to temperature.
+Compared with liquid crystals, leuco dyes give bold single color transitions but less precise temperature reading.
+Thermochromic colorants are applied to textiles by screen printing, coating, or dyeing, often as an ink layer on the fabric face.
+The durability of a printed thermochromic layer depends on binder quality, capsule strength, and how often the fabric is flexed and laundered.
+Repeated washing, ironing, and ultraviolet exposure gradually fade thermochromic prints and reduce the strength of the color change.
+The number of reliable switching cycles is an important quality measure for any color changing textile.
+Color changing novelty clothing became popular in the late twentieth century, with heat sensitive shirts that shifted shade with body warmth and sunlight.
+Mood rings use thermochromic liquid crystals to change color with the temperature of the wearer's skin.
+Color changing mugs reveal a hidden image when a hot drink is poured, a familiar consumer use of thermochromic ink.
+Forehead fever strips use liquid crystal panels to give a rough body temperature reading without a digital thermometer.
+Baby bath thermometers often change color to warn a parent when the water is too hot for an infant.
+Battery test strips printed on packaging use thermochromic ink and a small resistor to show remaining charge.
+Some food and drink packaging carries thermochromic labels that signal when a product is chilled or warmed to the right temperature.
+Color shifting phone cases, nail polish, and toys are common low cost applications of thermochromic pigment.
+Aquarium and refrigerator thermometers use stick on liquid crystal strips that report temperature through color.
+Smart textiles, also called electronic textiles or e-textiles, combine fabric with electronics, sensors, or responsive materials to add new functions.
+Wearable technology covers devices worn on the body that sense, display, or transmit information, including watches, bands, and instrumented clothing.
+The smart materials market includes substances that respond to heat, light, pressure, moisture, or electric fields with a measurable change.
+Conductive yarns and threads let designers knit or weave electrical pathways directly into a garment.
+Flexible and stretchable electronics aim to keep circuits working while a fabric bends, folds, and stretches with the body.
+Wearable sensors can track heart rate, skin temperature, breathing, motion, and sweat chemistry during daily life or exercise.
+Fitness trackers and smartwatches measure activity, heart rate, and sleep, and sync the data to a phone application.
+Chest straps remain a popular way to measure heart rate accurately during intense training.
+Sweat sensors analyze electrolytes and metabolites in perspiration to estimate hydration and effort.
+Performance sportswear uses moisture wicking fabric to move sweat away from the skin and help it evaporate.
+Breathable membranes and knit structures help regulate the microclimate of warm air and moisture trapped between clothing and skin.
+Compression garments are designed to support muscles and may aid recovery after exercise.
+A major challenge for electronic clothing is surviving repeated machine washing without damage to circuits or sensors.
+Batteries add weight, bulk, and the burden of regular charging to any powered garment.
+Comfort, flexibility, and breathability often suffer when rigid electronic components are added to soft fabric.
+The cost of sensors, wiring, and assembly can make instrumented clothing expensive compared with ordinary garments.
+Passive materials that respond without any power source avoid the charging and laundering problems of electronics.
+Normal human body temperature is about thirty seven degrees Celsius, although it varies by person, time of day, and measurement site.
+Skin temperature is usually lower than core body temperature and changes quickly with activity and the surrounding environment.
+A fever is a rise in body temperature above the normal range and is a common early sign of infection.
+Hypothermia is a dangerous drop in body temperature that can occur with cold exposure.
+Thermoregulation is the body's process of keeping core temperature stable through sweating, shivering, and blood flow changes.
+During exercise, working muscles generate heat, raising skin temperature and triggering sweat to cool the body.
+The layer of warm air next to the skin inside clothing is part of what keeps a person comfortable or overheated.
+Monitoring skin temperature can give clues about exertion, stress, circulation, and the onset of illness.
+A color change keyed to body temperature near thirty seven degrees could indicate warmth without any electronic display.
+Designers of responsive clothing must balance the activation temperature against normal swings in skin temperature to avoid false signals.
+The visibility of a color change depends on lighting, contrast, and the base color of the fabric.
+Tuning a thermochromic system to switch within a narrow band around body temperature is technically demanding.
+Medical grade temperature sensing requires accuracy and repeatability that simple color change materials struggle to reach.
+Safety and visibility clothing for workers and cyclists is a large market where responsive color could carry meaning.
+Children's clothing and accessories are a frequent target for playful color changing effects.
+Fashion and costume design use color shifting fabric for novelty and visual surprise.
+Pattern reveal effects appear when only part of a printed design is thermochromic and the rest is permanent.
+Multi color effects can be built by layering inks with different activation temperatures on the same fabric.
+The hand feel of a fabric, meaning its softness and drape, can change when a thick ink layer is printed on top.
+Knitted structures, woven structures, and nonwoven structures each respond differently to printing and coating.
+Yarn dyeing places color in the fiber itself, while surface printing places color on the outside of the cloth.
+Inkjet and digital textile printing allow fine thermochromic patterns that would be hard to screen print.
+Encapsulated pigments can be mixed into coatings, foams, and even molded plastics, not only textile inks.
+Phase change materials store and release heat as they melt and solidify, and are sometimes added to clothing for comfort.
+Photochromic materials change color with light rather than heat and are used in eyeglass lenses.
+Electrochromic materials change color when a voltage is applied and appear in smart windows.
+Hydrochromic materials change color when wetted and appear on some umbrellas and swimwear.
+Combining a temperature response with a moisture response could in principle signal both heat and sweat.
+The reversibility of a color change is essential for any garment meant to be worn and washed many times.
+Wash testing under standard laundry cycles is a key step in evaluating a color changing fabric for the market.
+Abrasion resistance matters because rubbing against skin and other surfaces wears down a printed layer.
+Lightfastness describes how well a colorant resists fading under sunlight and indoor lighting.
+Regulatory and skin safety testing is required for dyes and pigments that sit against the body.
+Cost per garment, scalability of printing, and supply of specialty pigments shape what reaches mass production.
+Sports teams and athletes are interested in any wearable signal that reports effort or overheating at a glance.
+Outdoor and military clothing research explores fabrics that adapt to temperature for camouflage or comfort.
+Healthcare settings could use simple color cues to flag fever or pressure points without bulky monitors.
+Many current wearable health products rely on rigid sensors and batteries, leaving room for simpler passive alternatives.
+A reliable, washable, accurately tuned thermochromic fabric remains a difficult combination to achieve at low cost.
+Consumers already own ordinary clothing, fitness bands, and smartwatches, so a new responsive garment must offer a clearly different benefit.
+The appeal of a no electronics color signal is that it needs no charging, pairing, or app, and cannot run out of power.
+Reading a color change is intuitive and immediate, unlike interpreting a number on a small screen.
+The main risks for a color based wearable are inaccuracy, fading, narrow viewing conditions, and confusion from normal temperature swings.
+Color memory effects, where a fabric briefly holds a pattern after warming, can be a feature or a defect depending on the goal.
+The contrast between a resting color and an activated color affects how clearly a wearer or observer reads the signal.
+Layering a thermochromic print over a permanent print creates hidden images that appear only when warmed.
+Sweat, rain, and humidity can interfere with both printed inks and embedded electronics in worn fabric.
+Designers often prototype color changing fabric with swatches before committing to a full garment.
+Manufacturing consistency, so that every garment switches at the same temperature, is hard to guarantee across large batches.
+The textile supply chain for specialty functional inks is smaller and more specialized than for ordinary dyes.
+Research on responsive fibers aims to build the color change into the fiber rather than printing it on the surface.
+A fiber that changes color along its length could give effects that survive wear better than a surface coating.
+The wearable market values comfort, washability, durability, and a clear benefit over what people already use.

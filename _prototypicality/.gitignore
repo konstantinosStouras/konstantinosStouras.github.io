@@ -1,0 +1,21 @@
+# GloVe vector files are large (hundreds of MB to several GB). Download once, keep locally,
+# do not commit.
+glove*.txt
+glove*.zip
+
+# Built model(s) and scoring output are generated artifacts, not source.
+glove_model*.json
+scored_ideas*.csv
+scored_ideas*.xlsx
+output/
+
+# Wikipedia path cache (fetched articles).
+wiki_cache/
+
+# Local data workbooks you drop in to score.
+ideas.xlsx
+idea_analytics_aggregate.xlsx
+
+# Python caches.
+__pycache__/
+*.pyc

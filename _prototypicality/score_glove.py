@@ -298,6 +298,7 @@ def cmd_score(args):
                 n_unscored += 1
 
             out = dict(r)
+            out["ks"] = round(res["ks"], 4) if res["scorable"] else ""
             out["prototypicality"] = round(res["prototypicality"], 4) if res["scorable"] else ""
             out["n_nodes"] = res["n_nodes"]
             out["n_edges"] = res["n_edges"]
@@ -340,7 +341,6 @@ def cmd_score(args):
             open_vectors = load_glove(
                 args.glove, _collect_words([{"t": idea["title"], "d": idea["description"]}], "t", "d"))
         res, mode = score_idea(idea, vocab, edges, proto, open_vectors, args.open_only)
-        res.pop("ks", None)
         res["score_mode"] = mode
         print(json.dumps(res, indent=2))
 

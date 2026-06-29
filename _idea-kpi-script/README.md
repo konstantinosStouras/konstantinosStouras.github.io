@@ -22,10 +22,9 @@ For each idea (Title + Description):
 
 ### Excluded for now (by request)
 
-- **KPI 1 — Prototypicality (KS statistic).** Needs a topic-specific web corpus, Porter
-  stemming, a Jaccard semantic network and the prototypical CDF. `idea_kpis.py` still leaves
-  this blank, but the **GloVe path is now implemented separately** in `score_glove.py` (see
-  the section at the bottom of this file).
+- **KPI 1 — Prototypicality (KS statistic).** Needs a topic-specific corpus, Porter stemming, a
+  semantic network and the prototypical CDF. `idea_kpis.py` still leaves this blank, but it now has
+  its own self-contained implementation (GloVe and Wikipedia paths) in **[`../_prototypicality/`](../_prototypicality/)**.
 - **KPI 3 — Brainstorming creativity.** Defined as the share of ideas below the KS
   creativity cutoff, so it depends on KPI 1 and is deferred together with it.
 
@@ -152,45 +151,14 @@ python idea_kpis.py -i idea_analytics_aggregate.xlsx --backend st --pool-by cond
   novelty/distinctiveness values depend on which embedding model you choose, so record the
   backend (the script prints it and stores it in the JSON `settings`).
 
-## KPI 1 — Prototypicality, GloVe path (`score_glove.py`)
+## KPI 1 — Prototypicality (moved to its own project)
 
-`score_glove.py` is the standalone tool for **KPI 1 — Prototypicality** (Toubia & Netzer),
-using GloVe word vectors. It needs its two sibling modules in the same folder —
-`proto_core.py` (tokenising/stemming, vocabulary, cosine edges, the prototypical CDF and the
-KS scorer) and `glove_loader.py` (reads the GloVe text file) — plus `pip install nltk numpy`
-and a GloVe file such as `glove.6B.300d.txt`.
-
-It runs in two steps:
-
-```bat
-REM 1) build the topic model once (reads the big GloVe file)
-python score_glove.py build --glove glove.6B.300d.txt --docs topic_docs.txt --model glove_model.json
-
-REM 2) score a workbook of ideas (Title + Description columns)
-python score_glove.py score --model glove_model.json --ideas ideas.xlsx --glove glove.6B.300d.txt
-```
-
-Output adds `prototypicality`, `n_nodes`, `n_edges`, `scorable` and `score_mode` columns.
-
-### Why some ideas came back with a blank KPI — and the fix
-
-Scoring has two modes:
-
-- **closed** (no `--glove`): an idea's semantic network is built **only from its words that are
-  in the topic vocabulary** that `build` learned from the corpus. Fast and topic-specific, but
-  an idea whose words fall outside that narrow vocabulary ends up with fewer than two nodes and
-  comes back **not scorable** — a blank `prototypicality`. This is why a run without `--glove`
-  left many perfectly good ideas (e.g. *Thermochromic Socks*, *Wound Dressing*) unscored: their
-  vocabulary simply didn't overlap the topic corpus enough.
-- **open** (`--glove …`): any idea closed mode cannot score is **rescued** by building its
-  network from **all of its own content words that have a GloVe vector**, still benchmarked
-  against the topic prototype. Nearly every idea with two real content words then gets a KPI.
-  The `score_mode` column records whether each idea was scored `closed`, `open`, or left blank
-  (genuinely fewer than two content words, e.g. an idea literally titled *"no"*). Add
-  `--open-only` to score **every** idea in open mode for full comparability across rows.
-
-So: **pass `--glove` when scoring.** Ideas that remain blank afterwards are only the ones with
-fewer than two real content words, which cannot be scored by any method.
+The prototypicality scorer (Toubia & Netzer, GloVe and Wikipedia paths) is now a self-contained
+project in **[`../_prototypicality/`](../_prototypicality/)** — `proto_core.py`, `glove_loader.py`,
+`score_glove.py`, the Wikipedia-path scripts, docs, samples and a self-test. See its `README.md`
+for the `build` then `score` flow. In short: build the topic model once, then score ideas, and pass
+`--glove` so out-of-vocabulary ideas are rescued in open mode (otherwise they come back with a blank
+KPI).
 
 ## Sources
 
