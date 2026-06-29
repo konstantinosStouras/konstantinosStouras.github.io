@@ -206,6 +206,40 @@ export function matchUploadedKpisIntoRows(rows, entries, keys) {
 }
 
 /**
+ * Map an uploaded column header to a canonical row KPI field, so a re-uploaded
+ * KPI/ideas file (e.g. the app's own "ideas_with_kpis") lands in the right columns
+ * (Novelty / Usefulness / Quality / objective / evaluator) instead of as redundant
+ * x_ extras — and so its scores feed Steps 4–5. Tolerant of label drift across
+ * versions ("Obj. Novelty" vs "Novelty (objective)", "AI Novelty" vs "Novelty").
+ * Returns null for anything that isn't a recognised KPI (e.g. "prototypicality",
+ * "ks"), which then stays an uploaded extra (x_ column).
+ */
+export function canonicalKpiField(header) {
+  const h = String(header || '').toLowerCase().trim()
+  const has = w => h.includes(w)
+  const isObj = /\bobj\b|\bobjective\b|\(objective\)/.test(h)
+  const isEval = /\beval\b|\bevaluator\b|external/.test(h)
+  if (isObj) {
+    if (has('distinct')) return 'det_distinctiveness'
+    if (has('score') || has('combined')) return 'det_score'
+    if (has('novelty')) return 'det_novelty'
+    return null
+  }
+  if (has('pool distinctiveness')) return 'det_distinctiveness'
+  if (h === 'combined score') return 'det_score'
+  if (isEval) {
+    if (has('novelty')) return 'ext_novelty'
+    if (has('useful')) return 'ext_usefulness'
+    if (has('quality')) return 'ext_quality'
+    return null
+  }
+  if (has('novelty')) return 'novelty'
+  if (has('useful')) return 'usefulness'
+  if (has('quality')) return 'overall_quality'
+  return null
+}
+
+/**
  * A KPI def has data in `rows` if at least one row carries a finite value for it.
  * Includes any admin-uploaded extra KPIs (x_* columns) after the built-in registry.
  */

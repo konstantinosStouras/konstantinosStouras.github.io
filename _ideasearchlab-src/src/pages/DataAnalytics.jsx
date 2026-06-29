@@ -11,7 +11,7 @@ import {
   matchScoresIntoRows, buildSummaryTable, DEFAULT_REFERENCE_SET, presentKpis,
   uploadedKpiKeys, uploadedKpiDefs, uploadedKpiLabel, analysisColumns,
   matchUploadedKpisIntoRows, clearUploadedKpis, stripAllKpis, UPLOADED_KPI_PREFIX,
-  enteredGroupPhase,
+  enteredGroupPhase, canonicalKpiField, KPI_DEFS,
 } from '../utils/analyticsData'
 import { scoreIdeas, fetchAISettings } from '../utils/llmClient'
 import { tfidfVectors } from '../utils/tfidf'
@@ -118,6 +118,7 @@ export default function DataAnalytics() {
 
   const fileRef = useRef(null)
   const aggFileRef = useRef(null)   // Step-2 import: parse AND load immediately
+  const sec4FileRef = useRef(null)  // Step-4 import: parse AND load immediately
   const scoreFileRef = useRef(null)
   const evalScoreFileRef = useRef(null)
   const kpiFileRef = useRef(null)
@@ -489,20 +490,36 @@ export default function DataAnalytics() {
     const idCol = headers.find(h => ['idea id', 'idea_id', 'id', 'ideaid'].includes(lc(h)))
     const titleCol = headers.find(h => ['title', 'idea title'].includes(lc(h)))
     if (!idCol && !titleCol) { setKpiUploadMsg('The file needs an "Idea ID" (or "Title") column so the KPIs can be matched onto your ideas.'); return }
+    const KPI_LABEL = Object.fromEntries(KPI_DEFS.map(d => [d.key, d.label]))
     const seen = new Set()
     const cols = []
-    // A KPI column is numeric AND has at least one fractional (non-integer) value:
-    // continuous scores (prototypicality, ks, …) come in, while integer-count
-    // diagnostics (n_nodes, n_edges) and boolean flags (scorable) are skipped — they
-    // aren't KPIs and aren't used anywhere downstream.
-    const isKpiNum = v => v !== '' && v != null && typeof v !== 'boolean' && Number.isFinite(Number(v)) && !Number.isInteger(Number(v))
+    // Column acceptance: a value is "numeric" if finite and not boolean. Recognised
+    // KPIs (Novelty/Usefulness/… are often integer 1–5 ratings) accept ANY numeric
+    // column; unknown columns must carry at least one fractional value, so continuous
+    // scores (prototypicality, ks, …) come in while integer-count diagnostics
+    // (n_nodes, n_edges) and boolean flags (scorable) are skipped.
+    const numeric = v => v !== '' && v != null && typeof v !== 'boolean' && Number.isFinite(Number(v))
+    const isFrac = v => numeric(v) && !Number.isInteger(Number(v))
     for (const h of headers) {
       if (STD_KPI_COLS.has(lc(h))) continue
-      if (!rawRows.some(r => isKpiNum(r[h]))) continue
-      let key = sanitizeKpiKey(h)
-      if (key === UPLOADED_KPI_PREFIX || seen.has(key)) key = `${key}_${cols.length + 1}`
+      // Recognised KPI columns (Novelty / Usefulness / Quality / objective /
+      // evaluator) route onto their CANONICAL row field, so a re-uploaded
+      // "ideas_with_kpis" fills the right Rankings columns and feeds Steps 4–5.
+      // Anything else (prototypicality, ks, …) stays an uploaded extra (x_ column).
+      const canon = canonicalKpiField(h)
+      if (canon ? !rawRows.some(r => numeric(r[h])) : !rawRows.some(r => isFrac(r[h]))) continue
+      let key, label
+      if (canon) {
+        if (seen.has(canon)) continue          // first column wins for a given canonical KPI
+        key = canon
+        label = KPI_LABEL[canon] || canon
+      } else {
+        key = sanitizeKpiKey(h)
+        if (key === UPLOADED_KPI_PREFIX || seen.has(key)) key = `${key}_${cols.length + 1}`
+        label = uploadedKpiLabel(key)
+      }
       seen.add(key)
-      cols.push({ name: h, key })
+      cols.push({ name: h, key, label })
     }
     if (!cols.length) { setKpiUploadMsg('No numeric KPI columns found beyond the standard idea columns.'); return }
     const keys = cols.map(c => c.key)
@@ -513,7 +530,7 @@ export default function DataAnalytics() {
     }))
     const { rows: next, matched, unmatched } = matchUploadedKpisIntoRows(rows, entries, keys)
     setRows(next)
-    const names = cols.map(c => uploadedKpiLabel(c.key)).join(', ')
+    const names = cols.map(c => c.label).join(', ')
     setKpiUploadMsg(
       `Loaded ${keys.length} KPI${keys.length === 1 ? '' : 's'} (${names}) from “${fileName}” onto ${matched} idea${matched === 1 ? '' : 's'}` +
       (unmatched ? `, ${unmatched} file row${unmatched === 1 ? '' : 's'} unmatched.` : '.') +
@@ -1197,8 +1214,6 @@ export default function DataAnalytics() {
             <span><span className={styles.stepBadge}>3</span>Score &amp; extend ideas across KPI sources, manage participants &amp; download</span>
             {rows.length > 0 && (
               <span className={styles.row}>
-                <button className="btn-primary" onClick={downloadExcel} disabled={!effectiveRows.length}>Download Excel</button>
-                <button className={`btn-ghost ${styles.miniBtn}`} onClick={downloadCsv} disabled={!effectiveRows.length}>Download CSV</button>
                 <button className={`btn-ghost ${styles.miniBtn}`} onClick={clearData} disabled={!!scoring}>Clear</button>
               </span>
             )}
@@ -1500,6 +1515,20 @@ export default function DataAnalytics() {
                 <span className={styles.kpiPill}>{extScoredCount} of {effectiveRows.length} ideas rated</span>
               </div>
               {evalLoadMsg && <p className={styles.loadMsg}>{evalLoadMsg}</p>}
+
+              {/* Download the UPDATED consolidated workbook: the same multi-tab
+                  idea_analytics_aggregate.xlsx as Step 2, but with the KPIs added here
+                  (AI / objective / evaluator / uploaded like Prototypicality) merged into
+                  the Rankings tab by Idea ID. This file is the input to the next stages. */}
+              <div className={styles.row} style={{ marginTop: 18, alignItems: 'center', gap: 10 }}>
+                <button className="btn-primary" onClick={downloadAggregate} disabled={aggregating || !effectiveRows.length}>
+                  {aggregating ? <><span className={styles.spinner} /> Building…</> : 'Download Excel'}
+                </button>
+                <span className={styles.hint} style={{ margin: 0 }}>
+                  Downloads the updated <strong>idea_analytics_aggregate.xlsx</strong> — every tab from Step&nbsp;2
+                  plus the KPIs added here, merged into the <em>Rankings</em> tab by Idea&nbsp;ID.
+                </span>
+              </div>
             </>
           )}
         </section>
@@ -1508,16 +1537,26 @@ export default function DataAnalytics() {
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>
             <span><span className={styles.stepBadge}>4</span>Summary Statistics</span>
-            <span className={styles.kpiPill}>KPIs: AI · Evaluator · Objective (per source)</span>
+            <span className={styles.row}>
+              <span className={styles.kpiPill}>KPIs: AI · Evaluator · Objective (per source)</span>
+              <button className={`btn-ghost ${styles.miniBtn}`} onClick={() => sec4FileRef.current?.click()} disabled={!!scoring}>Upload data</button>
+              <input ref={sec4FileRef} type="file" accept=".xlsx,.xls,.csv" className={styles.fileInput} onChange={e => onPickFile(e, true)} />
+              {rows.length > 0 && (
+                <button className={`btn-ghost ${styles.miniBtn}`} onClick={clearSection1} disabled={!!scoring}>Clear</button>
+              )}
+            </span>
           </h2>
           <p className={styles.hint}>
             Descriptive statistics of the consolidated dataset from Step&nbsp;3 — counts by condition and
             stage, and <strong>every available KPI's</strong> mean (SD) per condition (AI, evaluator, objective
-            and any uploaded KPI). Optionally restrict to ideas that carry at least one KPI.
+            and any uploaded KPI). Optionally restrict to ideas that carry at least one KPI. You can also
+            <strong> Upload data</strong> here to skip Steps 1–3 and chart a file directly (e.g. an
+            <em> idea_analytics_aggregate</em> / <em>ideas_with_kpis</em> workbook); it stays loaded until you
+            press <em>Clear</em>.
           </p>
 
           {effectiveRows.length === 0 ? (
-            <p className={styles.emptyNote}>Load (and optionally score) ideas above to see summary statistics.</p>
+            <p className={styles.emptyNote}>Load or score ideas above — or <strong>Upload data</strong> here — to see summary statistics.</p>
           ) : (
             <>
               <label className={styles.checkRow}>
