@@ -662,12 +662,19 @@ export default function DataAnalytics() {
       const merged = mergeSessionSheets(sources, aboutMeta)
       const ideasSheet = merged.find(s => s.name === 'Ideas')
       if (ideasSheet) {
-        // Carry any KPI scores set in Step 3 into the Rankings tab (by Idea ID),
-        // so the consolidated file reflects the scoring done on the page.
+        // Carry any KPI set on the page into the Rankings tab (by Idea ID), so the
+        // consolidated file reflects both the AI scoring (3.2) and the objective
+        // KPIs computed in 3.1. Include a row if it has EITHER kind of value.
+        const has = v => v !== '' && v != null
         const scoreById = new Map()
         for (const r of rows) {
-          if (r.novelty !== '' || r.usefulness !== '') {
-            scoreById.set(String(r.idea_id), { novelty: r.novelty, usefulness: r.usefulness, quality: r.overall_quality })
+          const hasAi = has(r.novelty) || has(r.usefulness)
+          const hasDet = has(r.det_novelty) || has(r.det_distinctiveness) || has(r.det_score)
+          if (hasAi || hasDet) {
+            scoreById.set(String(r.idea_id), {
+              novelty: r.novelty, usefulness: r.usefulness, quality: r.overall_quality,
+              detNovelty: r.det_novelty, detDistinctiveness: r.det_distinctiveness, detScore: r.det_score,
+            })
           }
         }
         merged.push(rankingsSheetFromIdeas(ideasSheet.rows, scoreById))
@@ -998,8 +1005,10 @@ export default function DataAnalytics() {
             Group&nbsp;Chat, AI&nbsp;Chat, AI&nbsp;Usage, AI&nbsp;Pricing, Groups, Conditions</em>),
             with every session's rows stacked together and condition-stamped. It adds one extra tab,
             <strong> Rankings</strong> — one row per idea with <em>Idea&nbsp;ID, Condition, Stage,
-            Final&nbsp;Group&nbsp;Pick, Title, Description</em> and empty <em>Novelty / Usefulness /
-            Quality</em> columns ready for blind expert rating. You can also <strong>Import Excel / CSV</strong>
+            Final&nbsp;Group&nbsp;Pick, Title, Description</em>, the <em>Novelty / Usefulness / Quality</em>
+            columns ready for blind expert rating, and the Section&nbsp;3.1 objective KPIs
+            (<em>Obj.&nbsp;Novelty / Obj.&nbsp;Distinctiveness / Obj.&nbsp;Score</em>) when computed.
+            You can also <strong>Import Excel / CSV</strong>
             here (same importer as Step&nbsp;1): the file is added to the source list above — tick it and press
             “Load …” to include it in the aggregate.
           </p>
