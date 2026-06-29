@@ -514,7 +514,7 @@ def insights(df, kpis, means_models):
             ranking_by_kpi[label] = None
             continue
         means = {c: emm_for(model, c) for c in present}
-        means = {c: m for c, m in means.items() if m is not None}
+        means = {c: m for c, m in means.items() if m is not None and np.isfinite(m)}
         ranked = sorted(means.items(), key=lambda kv: kv[1], reverse=True)
         ranking_by_kpi[label] = ranked
         print("  Ranking of conditions (best -> worst), by estimated mean:")
