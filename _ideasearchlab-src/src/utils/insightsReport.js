@@ -26,7 +26,14 @@ const COND_CODES = ['None', 'Solo', 'Group', 'Both']
  * insights. Returns { hasInsights, regressionsText, insightsText, parsed }.
  */
 export function parseRunOutput(rawOutput) {
-  const raw = String(rawOutput || '')
+  let raw = String(rawOutput || '')
+
+  // Pull out the machine-readable regression-table block (between the BEGIN/END
+  // markers both scripts print) and remove it from the text, so it never shows in
+  // the console appendix — it is rebuilt as the formatted Tables 3–6 instead.
+  const tables = parseRegressionTables(raw)
+  raw = stripRegressionTableBlock(raw)
+
   const lines = raw.split('\n')
 
   // Locate the "# INSIGHTS …" banner line that both scripts print.
@@ -35,7 +42,7 @@ export function parseRunOutput(rawOutput) {
     if (/^#+\s*INSIGHTS\b/i.test(lines[i].trim())) { marker = i; break }
   }
   if (marker === -1) {
-    return { hasInsights: false, regressionsText: raw.trim(), insightsText: '', parsed: null }
+    return { hasInsights: false, regressionsText: raw.trim(), insightsText: '', parsed: null, tables }
   }
 
   // Back up over the row(s) of '#' that form the banner above the marker, so the
@@ -54,7 +61,115 @@ export function parseRunOutput(rawOutput) {
   const insightsLines = lines.slice(marker).filter(l => !isNoise(l))
   const insightsText = insightsLines.join('\n').trim()
 
-  return { hasInsights: true, regressionsText, insightsText, parsed: parseInsights(insightsLines) }
+  return { hasInsights: true, regressionsText, insightsText, parsed: parseInsights(insightsLines), tables }
+}
+
+// ── Regression tables (Tables 3–6) parsed from the machine-readable block ──────
+//
+// Both scripts print, between "===BEGIN REGRESSION TABLES===" and the matching
+// END marker, one block per table in this line grammar (cells split on "||"):
+//   @@TABLE num=<n>||<title>||<sub>
+//   @@HEAD Variable||<col1>||<col2>||…
+//   @@COEF <label>||<est1>||<est2>||…   (a coefficient row)
+//   @@SE   ||<se1>||<se2>||…            (its standard-error row, blank label)
+//   @@RULE                             (rule before the footer statistics)
+//   @@STAT <label>||<c1>||<c2>||…       (a footer statistic row)
+//   @@NOTE <table note>
+//   @@ENDTABLE
+// We parse it ONCE here; the page renders the result as HTML (on-page + PDF) and
+// as LaTeX (the .tex export), so all three views share one source of truth.
+
+const TBL_BEGIN = '===BEGIN REGRESSION TABLES==='
+const TBL_END = '===END REGRESSION TABLES==='
+
+/** A cell that could not be estimated is printed as the ASCII sentinel "n/a";
+ *  show it as a real em dash in the formatted tables. */
+export function tableCell(value) {
+  const s = String(value ?? '').trim()
+  return s === 'n/a' || s === '' ? '—' : s
+}
+
+/** Remove the machine-readable table block (and its markers) from run text. */
+function stripRegressionTableBlock(text) {
+  const s = String(text || '')
+  const a = s.indexOf(TBL_BEGIN)
+  if (a === -1) return s
+  const b = s.indexOf(TBL_END, a)
+  const end = b === -1 ? s.length : b + TBL_END.length
+  return (s.slice(0, a) + s.slice(end)).replace(/\n{3,}/g, '\n\n').trim()
+}
+
+/**
+ * Parse the machine block into an array of table objects:
+ *   { num, title, sub, columns:[…], rows:[{kind,label,cells}], note }
+ * where kind is 'coef' | 'se' | 'rule' | 'stat'. Returns [] if absent/malformed,
+ * so a custom script that drops the block simply yields no formatted tables.
+ */
+export function parseRegressionTables(rawOutput) {
+  const raw = String(rawOutput || '')
+  const a = raw.indexOf(TBL_BEGIN)
+  if (a === -1) return []
+  const b = raw.indexOf(TBL_END, a)
+  const body = raw.slice(a + TBL_BEGIN.length, b === -1 ? raw.length : b)
+
+  const tables = []
+  let cur = null
+  for (const rawLine of body.split('\n')) {
+    const line = rawLine.replace(/\s+$/, '')
+    if (line.startsWith('@@TABLE')) {
+      const parts = line.replace(/^@@TABLE\s*/, '').split('||')
+      const num = parseInt((parts[0] || '').replace(/[^0-9]/g, ''), 10)
+      cur = { num: Number.isFinite(num) ? num : null, title: (parts[1] || '').trim(), sub: (parts[2] || '').trim(), columns: [], rows: [], note: '' }
+      tables.push(cur)
+    } else if (!cur) {
+      continue
+    } else if (line.startsWith('@@HEAD')) {
+      cur.columns = line.replace(/^@@HEAD\s*/, '').split('||').slice(1).map(c => c.trim())
+    } else if (line.startsWith('@@COEF')) {
+      const p = line.replace(/^@@COEF\s*/, '').split('||')
+      cur.rows.push({ kind: 'coef', label: (p[0] || '').trim(), cells: p.slice(1).map(c => c.trim()) })
+    } else if (line.startsWith('@@SE')) {
+      const p = line.replace(/^@@SE\s*/, '').split('||')
+      cur.rows.push({ kind: 'se', label: '', cells: p.slice(1).map(c => c.trim()) })
+    } else if (line.startsWith('@@RULE')) {
+      cur.rows.push({ kind: 'rule' })
+    } else if (line.startsWith('@@STAT')) {
+      const p = line.replace(/^@@STAT\s*/, '').split('||')
+      cur.rows.push({ kind: 'stat', label: (p[0] || '').trim(), cells: p.slice(1).map(c => c.trim()) })
+    } else if (line.startsWith('@@NOTE')) {
+      cur.note = line.replace(/^@@NOTE\s*/, '').trim()
+    }
+  }
+  // Keep only well-formed tables (have a header and at least one body row).
+  return tables.filter(t => t.columns.length && t.rows.length)
+}
+
+/** Render the parsed regression tables as booktabs-style HTML (used by the PDF). */
+function regressionTablesToHtml(tables) {
+  if (!tables || !tables.length) return ''
+  const cell = v => esc(tableCell(v))
+  const blocks = tables.map(t => {
+    const head = `<tr><th class="rt-var">Variable</th>${t.columns.map(c => `<th>${esc(c)}</th>`).join('')}</tr>`
+    let seenStat = false
+    const body = t.rows.map(r => {
+      if (r.kind === 'rule') return ''        // the stat block is separated by a CSS border instead
+      let cls = r.kind === 'se' ? 'rt-se' : r.kind === 'stat' ? 'rt-stat' : 'rt-coef'
+      if (r.kind === 'stat' && !seenStat) { cls += ' rt-firststat'; seenStat = true } // mid-rule here
+      // SE rows keep empty cells blank (no SE under an n/a coefficient); coef/stat
+      // cells map the "n/a" sentinel to an em dash.
+      const disp = r.kind === 'se' ? (c => esc(String(c ?? ''))) : (c => esc(tableCell(c)))
+      const cells = (r.cells || []).map(c => `<td>${disp(c)}</td>`).join('')
+      const filler = t.columns.length - (r.cells ? r.cells.length : 0)
+      const pad = filler > 0 ? '<td></td>'.repeat(filler) : ''
+      return `<tr class="${cls}"><td class="rt-var">${esc(r.label || '')}</td>${cells}${pad}</tr>`
+    }).join('')
+    return `<figure class="rt-fig avoid-break">
+      <figcaption class="rt-cap"><b>Table ${esc(String(t.num ?? ''))}.</b> ${esc(t.title)}<br/><span class="rt-sub">${esc(t.sub)}</span></figcaption>
+      <table class="rt-table"><thead>${head}</thead><tbody>${body}</tbody></table>
+      <p class="rt-note">${esc(t.note)}</p>
+    </figure>`
+  }).join('\n')
+  return `<section class="reg-tables"><h2>Regression tables (Tables 3–6)</h2>${blocks}</section>`
 }
 
 /** Parse the INSIGHTS block (array of lines) into structured data. */
@@ -219,12 +334,34 @@ function insightsToHtml(parsed) {
   return parts.join('\n')
 }
 
+/** Render the Section-4 summary statistics + correlation matrix as Table 1 HTML. */
+function summaryTableToHtml(summary) {
+  if (!summary || !summary.variables || !summary.variables.length || !summary.n) return ''
+  const v = summary.variables
+  const num = x => (x == null || Number.isNaN(x) ? '—' : Number(x).toFixed(2))
+  const head =
+    `<tr><th class="rt-var">Variable</th><th>Mean</th><th>Median</th><th>SD</th><th>Min</th><th>Max</th>` +
+    v.map((_, i) => `<th>${i + 1}</th>`).join('') + `</tr>`
+  const body = v.map((row, i) => {
+    const corr = v.map((_, j) => (j <= i ? `<td>${num(summary.corr?.[i]?.[j])}</td>` : '<td></td>')).join('')
+    return `<tr class="rt-coef"><td class="rt-var">${esc(`${i + 1}. ${row.label}`)}</td>` +
+      `<td>${num(row.mean)}</td><td>${num(row.median)}</td><td>${num(row.sd)}</td>` +
+      `<td>${num(row.min)}</td><td>${num(row.max)}</td>${corr}</tr>`
+  }).join('')
+  return `<section class="reg-tables"><h2>Table 1. Summary statistics and correlations</h2>
+    <figure class="rt-fig avoid-break">
+      <table class="rt-table"><thead>${head}</thead><tbody>${body}</tbody></table>
+      <p class="rt-note">N = ${esc(String(summary.n ?? '—'))} fully-scored ideas. Cells are Pearson correlations (lower triangle). Dummies: AI / Solo / Group / Both vs None.</p>
+    </figure></section>`
+}
+
 /**
  * Build the full print-ready HTML document.
  * @param {{parsed:object, regressionsText:string, code:string, lang:'python'|'r',
- *          images:string[], meta:{generatedAt?:string, rowsUsed?:number}}} opts
+ *          images:string[], meta:{generatedAt?:string, rowsUsed?:number},
+ *          tables?:object[], summaryTable?:object}} opts
  */
-export function buildInsightsPrintHtml({ parsed, regressionsText, code, lang, images = [], meta = {} }) {
+export function buildInsightsPrintHtml({ parsed, regressionsText, code, lang, images = [], meta = {}, tables = [], summaryTable = null }) {
   const langName = lang === 'r' ? 'R' : 'Python'
   const generated = meta.generatedAt || new Date().toLocaleString()
   const figNote =
@@ -241,6 +378,8 @@ export function buildInsightsPrintHtml({ parsed, regressionsText, code, lang, im
 
   const insightsHtml = insightsToHtml(parsed) ||
     `<pre class="mono">${esc(parseRunOutput('').insightsText || '')}</pre>`
+  const summaryHtml = summaryTableToHtml(summaryTable)   // Table 1 (from Section 4)
+  const regHtml = regressionTablesToHtml(tables)         // Tables 3–6 (from the run)
 
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"/>
@@ -297,6 +436,20 @@ export function buildInsightsPrintHtml({ parsed, regressionsText, code, lang, im
   }
   .appendix { page-break-before: always; }
   .avoid-break, figure, .kpi { page-break-inside: avoid; }
+  /* Booktabs-style regression / summary tables (Tables 1, 3–6) */
+  .reg-tables h2 { margin-top: 22px; }
+  .rt-fig { margin: 10px 0 20px; text-align: left; }
+  .rt-cap { font-size: 13px; margin: 0 0 6px; line-height: 1.4; }
+  .rt-cap .rt-sub { color: var(--muted); font-weight: 400; font-size: 12px; }
+  table.rt-table { border-collapse: collapse; width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; }
+  table.rt-table th, table.rt-table td { padding: 4px 8px; text-align: right; white-space: nowrap; }
+  table.rt-table th.rt-var, table.rt-table td.rt-var { text-align: left; }
+  table.rt-table thead th { border-top: 1.6px solid var(--ink); border-bottom: 1px solid var(--ink); font-weight: 700; }
+  table.rt-table tbody tr:last-child td { border-bottom: 1.6px solid var(--ink); }
+  table.rt-table tr.rt-se td { color: var(--muted); padding-top: 0; }
+  table.rt-table tr.rt-firststat td { border-top: 1px solid var(--ink); }
+  table.rt-table tr.rt-stat td { font-size: 11.5px; }
+  .rt-note { font-size: 10.5px; color: var(--muted); margin: 5px 0 0; line-height: 1.45; }
   @page { margin: 14mm; }
   @media print { body { padding: 0; } }
 </style></head>
@@ -307,7 +460,12 @@ export function buildInsightsPrintHtml({ parsed, regressionsText, code, lang, im
     <p class="doc-meta">Generated ${esc(generated)} · Analysis run in ${esc(langName)}${meta.rowsUsed != null ? ` · ${esc(String(meta.rowsUsed))} ideas analysed` : ''}</p>
   </header>
 
+  ${summaryHtml}
+
+  ${regHtml}
+
   <section class="insights">
+    <h2>Insights</h2>
     ${insightsHtml}
   </section>
 

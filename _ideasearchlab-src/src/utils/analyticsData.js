@@ -408,6 +408,69 @@ export function matchScoresIntoRows(rows, entries, isEligible) {
   return { rows: next, matched, unmatched }
 }
 
+/**
+ * Build the "Table 1" summary statistics + correlation matrix (Section 4), in the
+ * style of Table 1 of Boussioux et al. (2024). Computed over the FULLY-SCORED ideas
+ * (all three KPIs present) so the correlations are well defined. The variables are
+ * the three KPIs, the condition dummies (Any-AI / Solo / Group / Both vs None) and
+ * the idea word count — the same variables the Step-5 regressions use.
+ *
+ * Returns { n, variables:[{key,label,mean,median,sd,min,max}], corr:[[...]] } where
+ * corr is the full Pearson matrix (the UI renders the lower triangle). A constant
+ * series (e.g. an absent condition) yields null SD/correlations rather than NaN.
+ */
+export function buildSummaryTable(rows) {
+  const fully = (rows || []).filter(
+    r => Number.isFinite(Number(r.novelty)) && Number.isFinite(Number(r.usefulness)) && Number.isFinite(Number(r.overall_quality))
+  )
+  const wordCount = r => String(r.text || '').trim().split(/\s+/).filter(Boolean).length
+  // Each variable: a label + how to read its value off a row. Order mirrors the
+  // paper (outcomes first, then the treatment indicators, then the control).
+  const defs = [
+    { key: 'novelty', label: 'Novelty', get: r => Number(r.novelty) },
+    { key: 'usefulness', label: 'Usefulness', get: r => Number(r.usefulness) },
+    { key: 'overall_quality', label: 'Quality', get: r => Number(r.overall_quality) },
+    { key: 'ai', label: 'AI (any)', get: r => (r.condition !== 'None' ? 1 : 0) },
+    { key: 'solo', label: 'Solo', get: r => (r.condition === 'Solo' ? 1 : 0) },
+    { key: 'group', label: 'Group', get: r => (r.condition === 'Group' ? 1 : 0) },
+    { key: 'both', label: 'Both', get: r => (r.condition === 'Both' ? 1 : 0) },
+    { key: 'word_count', label: 'Word count', get: wordCount },
+  ]
+  const series = defs.map(d => fully.map(d.get))
+
+  const mean = a => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null)
+  const median = a => {
+    if (!a.length) return null
+    const s = [...a].sort((x, y) => x - y)
+    const m = Math.floor(s.length / 2)
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2
+  }
+  const sd = a => {
+    if (a.length < 2) return null
+    const mu = mean(a)
+    const v = a.reduce((x, y) => x + (y - mu) ** 2, 0) / (a.length - 1)
+    return Math.sqrt(v)
+  }
+  // Pearson correlation; null if either series is constant (zero variance).
+  const corrOf = (a, b) => {
+    if (a.length < 2) return null
+    const ma = mean(a), mb = mean(b)
+    let sab = 0, saa = 0, sbb = 0
+    for (let i = 0; i < a.length; i++) { const da = a[i] - ma, db = b[i] - mb; sab += da * db; saa += da * da; sbb += db * db }
+    if (saa === 0 || sbb === 0) return null
+    return sab / Math.sqrt(saa * sbb)
+  }
+
+  const variables = defs.map((d, i) => ({
+    key: d.key, label: d.label,
+    mean: mean(series[i]), median: median(series[i]), sd: sd(series[i]),
+    min: series[i].length ? Math.min(...series[i]) : null,
+    max: series[i].length ? Math.max(...series[i]) : null,
+  }))
+  const corr = series.map((a, i) => series.map((b, j) => (i === j ? 1 : corrOf(a, b))))
+  return { n: fully.length, variables, corr }
+}
+
 /** Quick per-condition / per-KPI summary used for the on-page preview table. */
 export function summarize(rows) {
   const out = {}

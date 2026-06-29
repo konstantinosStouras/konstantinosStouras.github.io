@@ -620,3 +620,30 @@
 .plotCardLarge img { width: 100%; max-width: 100%; height: auto; border-radius: 4px; }
 .plotCaption { font-size: 13px; color: var(--muted); margin-top: 10px; }
 .figureNote { font-size: 14px; color: var(--ink); opacity: 0.85; line-height: 1.6; margin: 4px 0 12px; }
+
+/* ── Booktabs-style regression / summary tables (Table 1 and Tables 3–6) ──
+   Horizontal rules only (no vertical lines), SE rows muted under their estimate,
+   a mid-rule above the footer statistics — the look of the paper's tables. */
+.regTablesWrap { margin-top: 6px; }
+.regBlock { margin: 16px 0 22px; }
+.regCap { font-size: 14px; line-height: 1.45; margin: 0 0 8px; }
+.regSub { color: var(--muted); font-weight: 400; font-size: 13px; }
+.regTable {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.regTable th, .regTable td { padding: 5px 10px; text-align: right; white-space: nowrap; }
+.regTable th.regVar, .regTable td.regVar { text-align: left; font-weight: 500; }
+.regTable thead th {
+  border-top: 2px solid var(--ink);
+  border-bottom: 1.5px solid var(--ink);
+  font-weight: 700;
+  font-size: 12.5px;
+  background: var(--paper);
+}
+.regTable tbody tr:last-child td { border-bottom: 2px solid var(--ink); }
+.regTable tr.regSe td { color: var(--muted); padding-top: 0; padding-bottom: 6px; }
+.regTable tr.regFirstStat td { border-top: 1.5px solid var(--ink); }
+.regNote { font-size: 11.5px; color: var(--muted); margin: 7px 0 0; line-height: 1.5; }
