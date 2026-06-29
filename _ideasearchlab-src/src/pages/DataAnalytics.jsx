@@ -477,10 +477,14 @@ export default function DataAnalytics() {
     if (!idCol && !titleCol) { setKpiUploadMsg('The file needs an "Idea ID" (or "Title") column so the KPIs can be matched onto your ideas.'); return }
     const seen = new Set()
     const cols = []
-    const isNum = v => v !== '' && v != null && typeof v !== 'boolean' && Number.isFinite(Number(v))
+    // A KPI column is numeric AND has at least one fractional (non-integer) value:
+    // continuous scores (prototypicality, ks, …) come in, while integer-count
+    // diagnostics (n_nodes, n_edges) and boolean flags (scorable) are skipped — they
+    // aren't KPIs and aren't used anywhere downstream.
+    const isKpiNum = v => v !== '' && v != null && typeof v !== 'boolean' && Number.isFinite(Number(v)) && !Number.isInteger(Number(v))
     for (const h of headers) {
       if (STD_KPI_COLS.has(lc(h))) continue
-      if (!rawRows.some(r => isNum(r[h]))) continue   // numeric KPI columns only (skip text / boolean flags)
+      if (!rawRows.some(r => isKpiNum(r[h]))) continue
       let key = sanitizeKpiKey(h)
       if (key === UPLOADED_KPI_PREFIX || seen.has(key)) key = `${key}_${cols.length + 1}`
       seen.add(key)
@@ -546,6 +550,13 @@ export default function DataAnalytics() {
   const effectiveRows = useMemo(() => rows.filter(r => !isExcluded(r)), [rows, excludedUsers])
   // Uploaded extra KPIs currently present in the data (drives the 3.1 chip + Clear).
   const uploadedNow = useMemo(() => uploadedKpiDefs(effectiveRows), [effectiveRows])
+  // KPI columns shown in the Step-3 table beyond the editable AI ones (Novelty /
+  // Usefulness / Quality already have their own columns): the objective KPIs (3.1),
+  // evaluator KPIs (3.3) and any uploaded KPIs — appended read-only after Quality.
+  const AI_KPI_KEYS = ['novelty', 'usefulness', 'overall_quality']
+  const extraKpiCols = useMemo(
+    () => presentKpis(effectiveRows).filter(d => !AI_KPI_KEYS.includes(d.key)),
+    [effectiveRows])
 
   // Distinct participants in the loaded data (for the remove/restore panel).
   const users = useMemo(() => {
@@ -643,7 +654,9 @@ export default function DataAnalytics() {
   }
   const sortedRows = useMemo(() => {
     if (!sortCol || !sortDir) return effectiveRows
-    const col = SORT_GETTERS[sortCol]
+    // Built-in columns have a getter; dynamic KPI columns (det_* / ext_* / x_*)
+    // fall back to reading the row field numerically.
+    const col = SORT_GETTERS[sortCol] || { get: r => r[sortCol], type: 'num' }
     if (!col) return effectiveRows
     const arr = effectiveRows.map((r, i) => [r, i])  // keep original index for a stable sort
     arr.sort(([ra, ia], [rb, ib]) => {
@@ -905,14 +918,33 @@ export default function DataAnalytics() {
   const finalScoredCount = effectiveRows.filter(r => isFinal(r) && hasAnyKpi(r)).length
 
   // ── Step 4: summary statistics over the consolidated Step-3 data ──
-  const isFullyScored = r => r.novelty !== '' && r.usefulness !== '' && r.overall_quality !== ''
+  // "scored" = carries at least one KPI from ANY source (AI / evaluator / objective
+  // / uploaded), so Section 4 reflects whatever Step 3 produced — not only AI-rated
+  // ideas (objective KPIs alone now populate the summary).
   const statRows = useMemo(
-    () => (statsOnlyScored ? effectiveRows.filter(isFullyScored) : effectiveRows),
+    () => (statsOnlyScored ? effectiveRows.filter(hasAnyKpi) : effectiveRows),
     [effectiveRows, statsOnlyScored])
-  const statSummary = useMemo(() => summarize(statRows), [statRows])
+  // Per-condition counts + mean (SD) for EVERY present KPI (each KPI over its own
+  // non-missing rows), so the table shows objective / uploaded KPIs, not just AI.
+  const statByCondition = useMemo(() => {
+    const present = presentKpis(statRows)
+    const num = v => (v === '' || v == null || !Number.isFinite(Number(v)) ? null : Number(v))
+    const rows = CONDITIONS.map(c => {
+      const sub = statRows.filter(r => r.condition === c)
+      const kpis = present.map(d => {
+        const vals = sub.map(r => num(r[d.key])).filter(v => v != null)
+        const n = vals.length
+        const mean = n ? vals.reduce((a, b) => a + b, 0) / n : null
+        const sd = n > 1 ? Math.sqrt(vals.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1)) : null
+        return { key: d.key, label: d.label, n, mean, sd }
+      })
+      return { condition: c, count: sub.length, final: sub.filter(isFinal).length, scored: sub.filter(hasAnyKpi).length, kpis }
+    }).filter(r => r.count > 0)
+    return { present, rows }
+  }, [statRows])
   const statFinal = statRows.filter(isFinal).length
   const statSessions = useMemo(() => new Set(statRows.map(r => r.session)).size, [statRows])
-  const statConditionsPresent = CONDITIONS.filter(c => (statSummary[c]?.count || 0) > 0).length
+  const statConditionsPresent = statByCondition.rows.length
   const statMeanQuality = useMemo(() => {
     const v = statRows.map(r => Number(r.overall_quality)).filter(Number.isFinite)
     return v.length ? (v.reduce((a, b) => a + b, 0) / v.length).toFixed(2) : '—'
@@ -1367,12 +1399,25 @@ export default function DataAnalytics() {
                 <table className={styles.dataTable}>
                   <thead>
                     <tr>
-                      {TABLE_COLS.map(key => (
-                        <th key={key} className={styles.sortableTh} onClick={() => toggleSort(key)} title="Click to sort (asc → desc → original)">
-                          {SORT_GETTERS[key].label}
-                          <span className={styles.sortArrow}>{sortCol === key ? (sortDir === 1 ? ' ▲' : ' ▼') : ''}</span>
-                        </th>
-                      ))}
+                      {TABLE_COLS.map(key => {
+                        // Inject the computed/uploaded KPI headers just before the Idea text column.
+                        const head = []
+                        if (key === 'idea') {
+                          for (const d of extraKpiCols) head.push(
+                            <th key={d.key} className={styles.sortableTh} onClick={() => toggleSort(d.key)} title={`${d.label} — click to sort`}>
+                              {d.label}
+                              <span className={styles.sortArrow}>{sortCol === d.key ? (sortDir === 1 ? ' ▲' : ' ▼') : ''}</span>
+                            </th>
+                          )
+                        }
+                        head.push(
+                          <th key={key} className={styles.sortableTh} onClick={() => toggleSort(key)} title="Click to sort (asc → desc → original)">
+                            {SORT_GETTERS[key].label}
+                            <span className={styles.sortArrow}>{sortCol === key ? (sortDir === 1 ? ' ▲' : ' ▼') : ''}</span>
+                          </th>
+                        )
+                        return head
+                      })}
                     </tr>
                   </thead>
                   <tbody>
@@ -1394,6 +1439,15 @@ export default function DataAnalytics() {
                         <td className={`num ${r.overall_quality === '' ? styles.unscored : ''}`}>
                           {r.overall_quality === '' ? '—' : Number(r.overall_quality).toFixed(2)}
                         </td>
+                        {extraKpiCols.map(d => {
+                          const v = r[d.key]
+                          const blank = v === '' || v == null || !Number.isFinite(Number(v))
+                          return (
+                            <td key={d.key} className={`num ${blank ? styles.unscored : ''}`}>
+                              {blank ? '—' : Number(v).toFixed(2)}
+                            </td>
+                          )
+                        })}
                         <td className={styles.textCell}>{r.text}</td>
                       </tr>
                     ))}
@@ -1430,8 +1484,8 @@ export default function DataAnalytics() {
           </h2>
           <p className={styles.hint}>
             Descriptive statistics of the consolidated dataset from Step&nbsp;3 — counts by condition and
-            stage, and each KPI's mean (SD) per condition. Optionally restrict to ideas that have been
-            scored on all three KPIs.
+            stage, and <strong>every available KPI's</strong> mean (SD) per condition (AI, evaluator, objective
+            and any uploaded KPI). Optionally restrict to ideas that carry at least one KPI.
           </p>
 
           {effectiveRows.length === 0 ? (
@@ -1440,7 +1494,7 @@ export default function DataAnalytics() {
             <>
               <label className={styles.checkRow}>
                 <input type="checkbox" checked={statsOnlyScored} onChange={e => setStatsOnlyScored(e.target.checked)} />
-                <span>Only include ideas scored on all 3 AI KPIs (novelty, usefulness, quality)</span>
+                <span>Only include ideas that carry at least one KPI (any source — AI, evaluator, objective or uploaded)</span>
               </label>
 
               <div className={styles.stats} style={{ marginTop: 12 }}>
@@ -1456,23 +1510,19 @@ export default function DataAnalytics() {
                   <thead>
                     <tr>
                       <th>Condition</th><th>Ideas</th><th>Final</th><th>Scored</th>
-                      <th>Novelty mean (SD)</th><th>Usefulness mean (SD)</th><th>Quality mean (SD)</th>
+                      {statByCondition.present.map(d => <th key={d.key}>{d.label} mean (SD)</th>)}
                     </tr>
                   </thead>
                   <tbody>
-                    {CONDITIONS.filter(c => (statSummary[c]?.count || 0) > 0).map(c => {
-                      const s = statSummary[c]
-                      const fmt = m => (m == null ? '—' : `${m.mean != null ? m.mean.toFixed(2) : '—'}${m.sd != null ? ` (${m.sd.toFixed(2)})` : ''}`)
-                      const finalIn = statRows.filter(r => r.condition === c && isFinal(r)).length
+                    {statByCondition.rows.map(row => {
+                      const fmt = m => (m.mean == null ? '—' : `${m.mean.toFixed(2)}${m.sd != null ? ` (${m.sd.toFixed(2)})` : ''}`)
                       return (
-                        <tr key={c}>
-                          <td><span className={`${styles.condTag} ${condClass(c)}`}>{c}</span></td>
-                          <td className="num">{s.count}</td>
-                          <td className="num">{finalIn}</td>
-                          <td className="num">{s.scored}</td>
-                          <td className="num">{fmt(s.kpis.novelty)}</td>
-                          <td className="num">{fmt(s.kpis.usefulness)}</td>
-                          <td className="num">{fmt(s.kpis.overall_quality)}</td>
+                        <tr key={row.condition}>
+                          <td><span className={`${styles.condTag} ${condClass(row.condition)}`}>{row.condition}</span></td>
+                          <td className="num">{row.count}</td>
+                          <td className="num">{row.final}</td>
+                          <td className="num">{row.scored}</td>
+                          {row.kpis.map(m => <td key={m.key} className="num">{fmt(m)}</td>)}
                         </tr>
                       )
                     })}
