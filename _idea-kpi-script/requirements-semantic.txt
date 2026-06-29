@@ -1,0 +1,6 @@
+# Optional, RECOMMENDED: real semantic embeddings (local, deterministic, free).
+# Install with:  pip install -r requirements-semantic.txt
+# Then run idea_kpis.py with the default backend (--backend auto picks this up) or
+# force it with --backend st. The first run downloads a small model (~90 MB) once;
+# afterwards it works offline.
+sentence-transformers>=2.2
