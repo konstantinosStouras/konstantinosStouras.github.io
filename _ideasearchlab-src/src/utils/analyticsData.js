@@ -43,7 +43,11 @@ export function paperNameFor(encoding) {
 }
 
 // Columns of the analysis table, in CSV order. Keep in sync with the Python/R
-// templates (they read these exact names).
+// templates (they read these exact names). KPIs come from THREE sources, each
+// kept in its own columns so they can be compared side by side (Section 3.1/3.2/3.3):
+//   • AI-generated (3.2):        novelty / usefulness / overall_quality
+//   • External evaluators (3.3): ext_novelty / ext_usefulness / ext_quality
+//   • Deterministic/objective (3.1): det_* — appended once those KPIs are defined.
 export const COLUMNS = [
   'idea_id',
   'session',
@@ -54,11 +58,78 @@ export const COLUMNS = [
   'novelty',
   'usefulness',
   'overall_quality',
+  'ext_novelty',
+  'ext_usefulness',
+  'ext_quality',
+  'det_novelty',
+  'det_distinctiveness',
+  'det_score',
   'final_pick',
   'text',
 ]
 
+// The AI-generated KPI set (kept under these names for back-compat with scoring,
+// the editable table, exports and the Rankings round-trip).
 export const KPIS = ['novelty', 'usefulness', 'overall_quality']
+// The external-evaluator KPI set (Section 3.3 upload).
+export const EXT_KPIS = ['ext_novelty', 'ext_usefulness', 'ext_quality']
+
+/**
+ * Registry of every analysable KPI, in display order, with its source, a friendly
+ * label and whether it lives on the 1–5 rating scale (so a "top rating" binary is
+ * meaningful — used by Tables 5/6). The Section-4 summary, the Section-6 tables and
+ * the Python/R regressions all iterate whichever of these have data, so adding a
+ * deterministic KPI here (3.1) makes it flow through the whole pipeline.
+ */
+export const KPI_DEFS = [
+  { key: 'novelty', label: 'AI Novelty', source: 'ai', scale5: true },
+  { key: 'usefulness', label: 'AI Usefulness', source: 'ai', scale5: true },
+  { key: 'overall_quality', label: 'AI Quality', source: 'ai', scale5: true },
+  { key: 'ext_novelty', label: 'Eval. Novelty', source: 'ext', scale5: true },
+  { key: 'ext_usefulness', label: 'Eval. Usefulness', source: 'ext', scale5: true },
+  { key: 'ext_quality', label: 'Eval. Quality', source: 'ext', scale5: true },
+  // 3.1 Deterministic / objective KPIs (embedding-based, range 0–1; not a 1–5 scale,
+  // so they have no "top rating" Tables 5/6). Computed in deterministicKpis.js.
+  { key: 'det_novelty', label: 'Obj. Novelty', source: 'det', scale5: false },
+  { key: 'det_distinctiveness', label: 'Obj. Distinctiveness', source: 'det', scale5: false },
+  { key: 'det_score', label: 'Obj. Score', source: 'det', scale5: false },
+]
+
+/** A KPI def has data in `rows` if at least one row carries a finite value for it. */
+export function presentKpis(rows) {
+  return KPI_DEFS.filter(d => (rows || []).some(r => Number.isFinite(Number(r[d.key])) && r[d.key] !== ''))
+}
+
+/**
+ * Default reference set R for the study's task (colour-change-at-37°C fabric), taken
+ * verbatim from the idea-ranking spec (§11.2) — a representative list of products
+ * that already exist in this market. Novelty = 1 − max similarity to these. The
+ * admin can edit this list in Section 3.1 (it is the one human-assembled input).
+ */
+export const DEFAULT_REFERENCE_SET = [
+  'Hypercolor-style colour-change t-shirt',
+  'hidden-design reveal t-shirt that shows a pattern when warmed',
+  'thermochromic hoodie',
+  'colour-change athletic top',
+  'thermochromic socks',
+  'colour-changing swim shorts',
+  'mood ring',
+  'mood necklace',
+  'thermochromic bracelet or beads',
+  'thermochromic phone case',
+  'thermochromic nail polish',
+  'colour-change lipstick',
+  'photochromic eyeglass lenses',
+  'forehead fever thermometer strip',
+  'thermochromic fever-indicator baby sticker',
+  'colour-changing baby feeding spoon',
+  'thermochromic baby bath thermometer or toy',
+  'liquid-crystal room or aquarium strip',
+  'colour-changing coffee mug',
+  'thermochromic kettle band',
+  'colour-change bath or floor mat',
+  'thermochromic shower-head indicator',
+]
 
 /** Map a session's AI configuration to its condition encoding (None/Solo/Group/Both). */
 export function conditionForSession(session) {
@@ -66,13 +137,22 @@ export function conditionForSession(session) {
   return conditionFromFlags(!!ai.individualAI, !!ai.groupAI)
 }
 
-/** Overall quality = mean of novelty and usefulness when both are present. */
+/** Overall quality = mean of novelty and usefulness when both are present.
+ *  IMPORTANT: a blank ("") input is MISSING, not 0 — `Number("")` is 0 in JS, which
+ *  would otherwise give unscored ideas a spurious quality of 0. `numOrNull` guards
+ *  that, so a blank KPI stays blank all the way through (quality shows "—", and the
+ *  regressions correctly drop the row instead of treating it as a real 0). */
+function numOrNull(v) {
+  if (v == null || String(v).trim() === '') return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
 export function overallQuality(novelty, usefulness) {
-  const n = Number(novelty)
-  const u = Number(usefulness)
-  if (Number.isFinite(n) && Number.isFinite(u)) return (n + u) / 2
-  if (Number.isFinite(n)) return n
-  if (Number.isFinite(u)) return u
+  const n = numOrNull(novelty)
+  const u = numOrNull(usefulness)
+  if (n != null && u != null) return (n + u) / 2
+  if (n != null) return n
+  if (u != null) return u
   return null
 }
 
@@ -114,13 +194,21 @@ export function buildRowsForSession(session, ideas = [], participants = [], grou
       author_name: idea.authorName || authorName[idea.authorId] || '',
       author_email: authorEmail[idea.authorId] || '',
       idea_title: idea.title || '',
-      // Scores filled later (AI / manual / import). Preserve any already present.
+      // AI-generated KPIs (3.2) — filled later by AI scoring / manual edit / import.
       novelty: numOrBlank(idea.novelty),
       usefulness: numOrBlank(idea.usefulness),
       overall_quality:
         idea.overall_quality != null
           ? numOrBlank(idea.overall_quality)
           : numOrBlankOrNull(overallQuality(idea.novelty, idea.usefulness)),
+      // External-evaluator KPIs (3.3) — filled by the evaluator-scores upload.
+      ext_novelty: '',
+      ext_usefulness: '',
+      ext_quality: '',
+      // Deterministic/objective KPIs (3.1) — filled by the "Compute" step.
+      det_novelty: '',
+      det_distinctiveness: '',
+      det_score: '',
       final_pick: finalPickIds.has(idea.id) ? 1 : 0,
       text,
     }
@@ -143,11 +231,12 @@ function numOrBlankOrNull(v) {
   return v == null ? '' : numOrBlank(v)
 }
 
-/** Recompute overall_quality for every row from its novelty/usefulness. */
+/** Recompute each source's quality = mean(novelty, usefulness) for every row. */
 export function recomputeOverall(rows) {
   return rows.map(r => ({
     ...r,
     overall_quality: numOrBlankOrNull(overallQuality(r.novelty, r.usefulness)),
+    ext_quality: numOrBlankOrNull(overallQuality(r.ext_novelty, r.ext_usefulness)),
   }))
 }
 
@@ -231,14 +320,21 @@ export function normalizeImportedRows(rawRows) {
       ? conditionFromFlags(solo, group)
       : canonicalCondition(pick('ai condition', 'condition code', 'condition', 'cond', 'group_condition', 'treatment'))
 
-    // KPIs: mean across any filled blind-rater columns, else a single column.
-    const novelty = meanRaterCols(lower, ['novelty', 'nov'], 'novelty')
-    const usefulness = meanRaterCols(lower, ['usefulness', 'useful'], 'usefulness')
+    // KPIs split by source:
+    //  • AI-generated (3.2): a PLAIN novelty/usefulness/quality column (a simple CSV
+    //    or an offline AI scoring sheet).
+    //  • External evaluators (3.3): the blind-rater columns "Novelty (rater n)" etc.
+    //    of the admin Excel export are human evaluators → averaged into ext_*.
+    const novelty = numOrBlank(pick('novelty', 'nov'))
+    const usefulness = numOrBlank(pick('usefulness', 'useful'))
     let overall = pick('overall_quality', 'overall quality', 'overall', 'quality')
     if (overall === '' && (novelty !== '' || usefulness !== '')) {
       const oq = overallQuality(novelty, usefulness)
       overall = oq == null ? '' : oq
     }
+    const extNovelty = meanRaterCols(lower, 'novelty')        // blind-rater averages
+    const extUsefulness = meanRaterCols(lower, 'usefulness')
+    const extOverall = overallQuality(extNovelty, extUsefulness)
 
     // Stage / phase → canonical 'individual' | 'group'.
     let phase = String(pick('stage', 'phase')).toLowerCase()
@@ -259,6 +355,12 @@ export function normalizeImportedRows(rawRows) {
       novelty: numOrBlank(novelty),
       usefulness: numOrBlank(usefulness),
       overall_quality: numOrBlank(overall),
+      ext_novelty: numOrBlank(extNovelty),
+      ext_usefulness: numOrBlank(extUsefulness),
+      ext_quality: numOrBlankOrNull(extOverall),
+      det_novelty: numOrBlank(pick('det_novelty', 'objective novelty', 'obj. novelty')),
+      det_distinctiveness: numOrBlank(pick('det_distinctiveness', 'objective distinctiveness', 'obj. distinctiveness')),
+      det_score: numOrBlank(pick('det_score', 'objective score', 'obj. score')),
       final_pick: /^(1|yes|true)$/i.test(String(pick('final group pick', 'final_pick', 'final pick', 'final', 'selected')).trim()) ? 1 : 0,
       text: String(pick('full text', 'text', 'idea', 'idea_text', 'title', 'description', 'content')),
     })
@@ -287,17 +389,17 @@ function conditionFromFlags(solo, group) {
 }
 
 /**
- * Mean of every filled column for a KPI: a plain column (e.g. "novelty"/"nov")
- * or any per-rater column "<kpi> (rater N)" / "<kpi> rater N" / "<kpi> (expert N)".
- * Returns '' when none are filled — so an un-scored export row stays un-scored.
+ * Mean of every filled per-rater column for a KPI — "<kpi> (rater N)" /
+ * "<kpi> rater N" / "<kpi>_rater N" / "<kpi> (expert N)". These are the blind
+ * expert/evaluator columns of the admin Excel export, so they feed the external
+ * KPIs (3.3). Returns '' when none are filled — so an un-rated row stays un-rated.
  */
-function meanRaterCols(lowerMap, plainKeys, kpiPrefix) {
+function meanRaterCols(lowerMap, kpiPrefix) {
   const vals = []
   for (const [k, v] of Object.entries(lowerMap)) {
-    const isPlain = plainKeys.includes(k)
     const isRater = k.startsWith(`${kpiPrefix} (rater`) || k.startsWith(`${kpiPrefix} rater`) ||
                     k.startsWith(`${kpiPrefix}_rater`) || k.startsWith(`${kpiPrefix} (expert`)
-    if ((isPlain || isRater) && v != null && String(v).trim() !== '') {
+    if (isRater && v != null && String(v).trim() !== '') {
       const n = Number(v)
       if (Number.isFinite(n)) vals.push(n)
     }
@@ -362,8 +464,12 @@ function clampScore(v) {
  * no idea id). Each `entry` is { title, novelty, usefulness }. Matching is
  * exact-on-normalised-title first, then a length-guarded contains match; each
  * dataset row is used at most once. Returns the updated rows plus counts.
+ *
+ * `fields` chooses WHICH KPI columns to fill, so the same matcher serves both the
+ * 3.2 AI-scores upload ({novelty:'novelty', usefulness:'usefulness'}, the default)
+ * and the 3.3 external-evaluator upload ({novelty:'ext_novelty', usefulness:'ext_usefulness'}).
  */
-export function matchScoresIntoRows(rows, entries, isEligible) {
+export function matchScoresIntoRows(rows, entries, isEligible, fields = { novelty: 'novelty', usefulness: 'usefulness' }) {
   const eligible = typeof isEligible === 'function' ? isEligible : () => true
   const byTitle = new Map()
   rows.forEach((r, i) => {
@@ -402,7 +508,7 @@ export function matchScoresIntoRows(rows, entries, isEligible) {
     const idx = candidates && candidates.find(i => !used.has(i))
     if (idx == null) { unmatched++; continue }
     used.add(idx)
-    next[idx] = { ...next[idx], novelty: clampScore(e.novelty), usefulness: clampScore(e.usefulness) }
+    next[idx] = { ...next[idx], [fields.novelty]: clampScore(e.novelty), [fields.usefulness]: clampScore(e.usefulness) }
     matched++
   }
   return { rows: next, matched, unmatched }
@@ -410,33 +516,33 @@ export function matchScoresIntoRows(rows, entries, isEligible) {
 
 /**
  * Build the "Table 1" summary statistics + correlation matrix (Section 4), in the
- * style of Table 1 of Boussioux et al. (2024). Computed over the FULLY-SCORED ideas
- * (all three KPIs present) so the correlations are well defined. The variables are
- * the three KPIs, the condition dummies (Any-AI / Solo / Group / Both vs None) and
- * the idea word count — the same variables the Step-5 regressions use.
+ * style of Table 1 of Boussioux et al. (2024). The variables are EVERY KPI that has
+ * data — across all three sources (AI / external / deterministic) — plus the
+ * condition dummies (Any-AI / Solo / Group / Both vs None) and the idea word count.
  *
- * Returns { n, variables:[{key,label,mean,median,sd,min,max}], corr:[[...]] } where
- * corr is the full Pearson matrix (the UI renders the lower triangle). A constant
- * series (e.g. an absent condition) yields null SD/correlations rather than NaN.
+ * Coverage differs by source (e.g. AI scored but not yet evaluator-rated), so each
+ * variable's mean/median/SD/min/max use its OWN non-missing rows and the
+ * correlations are PAIRWISE-complete (each cell uses rows where both variables are
+ * present). Returns { n, variables:[{key,label,mean,median,sd,min,max,n}], corr:[[...]] };
+ * a constant series yields null SD/correlations rather than NaN.
  */
 export function buildSummaryTable(rows) {
-  const fully = (rows || []).filter(
-    r => Number.isFinite(Number(r.novelty)) && Number.isFinite(Number(r.usefulness)) && Number.isFinite(Number(r.overall_quality))
-  )
+  const data = rows || []
   const wordCount = r => String(r.text || '').trim().split(/\s+/).filter(Boolean).length
-  // Each variable: a label + how to read its value off a row. Order mirrors the
-  // paper (outcomes first, then the treatment indicators, then the control).
+  // Variables = present KPIs (any source) + condition dummies + word count. Each
+  // `get` returns a number, or null when that variable is missing for the row.
+  const num = v => (v === '' || v == null || !Number.isFinite(Number(v)) ? null : Number(v))
   const defs = [
-    { key: 'novelty', label: 'Novelty', get: r => Number(r.novelty) },
-    { key: 'usefulness', label: 'Usefulness', get: r => Number(r.usefulness) },
-    { key: 'overall_quality', label: 'Quality', get: r => Number(r.overall_quality) },
+    ...presentKpis(data).map(d => ({ key: d.key, label: d.label, get: r => num(r[d.key]) })),
     { key: 'ai', label: 'AI (any)', get: r => (r.condition !== 'None' ? 1 : 0) },
     { key: 'solo', label: 'Solo', get: r => (r.condition === 'Solo' ? 1 : 0) },
     { key: 'group', label: 'Group', get: r => (r.condition === 'Group' ? 1 : 0) },
     { key: 'both', label: 'Both', get: r => (r.condition === 'Both' ? 1 : 0) },
     { key: 'word_count', label: 'Word count', get: wordCount },
   ]
-  const series = defs.map(d => fully.map(d.get))
+  // series[d] = the per-row value or null (kept row-aligned so correlations can pair).
+  const series = defs.map(d => data.map(d.get))
+  const present = s => s.filter(v => v != null)        // drop missing for univariate stats
 
   const mean = a => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null)
   const median = a => {
@@ -451,24 +557,32 @@ export function buildSummaryTable(rows) {
     const v = a.reduce((x, y) => x + (y - mu) ** 2, 0) / (a.length - 1)
     return Math.sqrt(v)
   }
-  // Pearson correlation; null if either series is constant (zero variance).
-  const corrOf = (a, b) => {
-    if (a.length < 2) return null
-    const ma = mean(a), mb = mean(b)
+  // Pairwise-complete Pearson correlation; null if either side is constant/too thin.
+  const corrOf = (sa, sb) => {
+    const xs = [], ys = []
+    for (let i = 0; i < sa.length; i++) if (sa[i] != null && sb[i] != null) { xs.push(sa[i]); ys.push(sb[i]) }
+    if (xs.length < 2) return null
+    const mx = mean(xs), my = mean(ys)
     let sab = 0, saa = 0, sbb = 0
-    for (let i = 0; i < a.length; i++) { const da = a[i] - ma, db = b[i] - mb; sab += da * db; saa += da * da; sbb += db * db }
+    for (let i = 0; i < xs.length; i++) { const da = xs[i] - mx, db = ys[i] - my; sab += da * db; saa += da * da; sbb += db * db }
     if (saa === 0 || sbb === 0) return null
     return sab / Math.sqrt(saa * sbb)
   }
 
-  const variables = defs.map((d, i) => ({
-    key: d.key, label: d.label,
-    mean: mean(series[i]), median: median(series[i]), sd: sd(series[i]),
-    min: series[i].length ? Math.min(...series[i]) : null,
-    max: series[i].length ? Math.max(...series[i]) : null,
-  }))
+  const variables = defs.map((d, i) => {
+    const vals = present(series[i])
+    return {
+      key: d.key, label: d.label, n: vals.length,
+      mean: mean(vals), median: median(vals), sd: sd(vals),
+      min: vals.length ? Math.min(...vals) : null,
+      max: vals.length ? Math.max(...vals) : null,
+    }
+  })
   const corr = series.map((a, i) => series.map((b, j) => (i === j ? 1 : corrOf(a, b))))
-  return { n: fully.length, variables, corr }
+  // N = ideas with at least one KPI value (the correlations are pairwise within this).
+  const kpiKeys = presentKpis(data).map(d => d.key)
+  const n = data.filter(r => kpiKeys.some(k => num(r[k]) != null)).length
+  return { n, variables, corr }
 }
 
 /** Quick per-condition / per-KPI summary used for the on-page preview table. */

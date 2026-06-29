@@ -4,52 +4,49 @@ Effects of AI Timing on Idea Generation (AsPredicted #298152) — PYTHON ANALYSI
 ================================================================================
 
 WHAT THIS SCRIPT PRODUCES
-  Four regression tables, laid out exactly like Tables 3–6 of Boussioux, Lane,
-  Zhang, Jacimovic & Lakhani (2024), "The Crowdless Future? Generative AI and
-  Creative Problem Solving" (Organization Science), but adapted to THIS study's
-  three KPIs and four conditions (baseline = None / no AI):
+  Four regression tables, laid out like Tables 3–6 of Boussioux, Lane, Zhang,
+  Jacimovic & Lakhani (2024), "The Crowdless Future? Generative AI and Creative
+  Problem Solving" (Organization Science), adapted to THIS study's conditions
+  (baseline = None / no AI) and to EVERY KPI that has data — across all three
+  sources scored on the page:
+    • AI-generated (3.2):        novelty / usefulness / overall_quality   (1–5)
+    • External evaluators (3.3): ext_novelty / ext_usefulness / ext_quality (1–5)
+    • Deterministic/objective (3.1): det_novelty / det_distinctiveness / det_score (0–1)
 
-    Table 3  KPI ratings        ~  Any AI            (one AI dummy vs None)
-    Table 4  KPI ratings        ~  Solo + Group + Both (each vs None)
-    Table 5  Top-rated (== 5)   ~  Any AI            (linear probability model)
-    Table 6  Top-rated (== 5)   ~  Solo + Group + Both (linear probability model)
+  For each KPI the tables report one column, so you can compare conditions on
+  every available measure side by side:
+    Table 3  KPI level   ~  Any AI              (one AI dummy vs None)
+    Table 4  KPI level   ~  Solo + Group + Both (each vs None)
+    Table 5  Top rating  ~  Any AI              (linear probability model)
+    Table 6  Top rating  ~  Solo + Group + Both (linear probability model)
+  Tables 5/6 only apply to the 1–5 KPIs (a "top rating = 5/5" is meaningless on
+  the 0–1 deterministic KPIs), so those columns are restricted accordingly.
 
-  Tables 3/4 are OLS on the 1–5 KPI score; Tables 5/6 are linear-probability
-  models on a binary "did this idea earn the top rating (5/5)?" — the same split
-  the paper uses (its Table 3/4 = average ratings, Table 5/6 = top ratings).
-  Each table reports, per KPI column: the coefficient with significance stars,
-  its standard error in parentheses, the intercept, N, the number of groups and
-  sessions, whether controls are included, and the model R² / log-likelihood —
-  mirroring the paper's footer rows. After the tables it prints the planned
-  AI-timing contrast (Solo − Group), an INSIGHTS read-out, and two plots, then a
-  compact machine-readable copy of the tables (between BEGIN/END markers) that
-  the page turns into the formatted "Insights" tables and the LaTeX/PDF export.
+  Each table column reports the coefficient (with stars) over its (standard error),
+  the intercept, N, the number of groups and sessions, whether controls are used,
+  and R² / log-likelihood — mirroring the paper's footer rows. After the tables it
+  prints the planned AI-timing contrast (Solo − Group) per KPI, an INSIGHTS read-out,
+  and plots, then a compact machine-readable copy of the tables (between BEGIN/END
+  markers) that the page turns into the Section-6 tables and the LaTeX/PDF export.
 
-UNIT OF ANALYSIS & UNBALANCED DESIGN (read this)
-  The rows are the FINAL ideas — each group's top-voted ideas (Final Group Pick
-  = 1). The four conditions have DIFFERENT numbers of these (the design is
-  UNBALANCED) and may have unequal variances, so every model is fitted with HC3
-  heteroscedasticity-robust standard errors: the point estimates are unchanged by
-  unequal n, but the SEs / t / p-values stay valid. Per-condition n is printed up
-  front, and any condition with NO data (or a "top" outcome with no variation) is
-  detected and skipped rather than forced into a singular regression.
+UNIT OF ANALYSIS, UNBALANCED & PARTIAL-COVERAGE DESIGN (read this)
+  Rows are the FINAL ideas (each group's top-voted ideas). Conditions have DIFFERENT
+  n (unbalanced) and KPIs have DIFFERENT coverage (e.g. AI scored but not yet
+  evaluator-rated). So each KPI's models are fitted on the rows that HAVE that KPI,
+  with HC3 heteroscedasticity-robust SEs; a condition with < 2 ideas for a KPI — or
+  an absent None baseline — is dropped from that KPI's model and shown as "n/a".
 
-WHERE THE DATA COMES FROM (read this)
-  The data is the SCORED DATASET built in the previous step of the page — the
-  exact rows behind "Download CSV" / "Download Excel". It is handed to this
-  script as the global string `DATA_CSV` (one row per idea). Columns:
-      idea_id, session, condition, phase, group_id, author_id,
-      novelty, usefulness, overall_quality, final_pick, text
-  `condition` is the Set A / placement encoding — None / Solo / Group / Both.
-  Rows with a missing KPI score are dropped before fitting. Edit anything below
-  freely, then press Run.
+WHERE THE DATA COMES FROM
+  The scored dataset from the page is handed in as the global string DATA_CSV (one
+  row per idea). Columns: idea_id, session, condition, phase, group_id, author_id,
+  the KPI columns listed above, final_pick, text. Edit anything below, then Run.
 """
 
 # ── Imports ───────────────────────────────────────────────────────────────────
 import io          # wrap the DATA_CSV string in a file-like object for pandas
 import sys         # print a fatal message to stderr if the data global is absent
-import warnings    # non-fatal problems are warned about, never raised, so a small
-                   # or degenerate dataset never aborts the whole run
+import math        # ceil() for the plot grid
+import warnings    # non-fatal problems are warned about, never raised
 
 import numpy as np                 # numeric arrays + contrast vectors
 import pandas as pd                # the data frame, group means, pretty tables
@@ -62,13 +59,8 @@ from scipy import stats as spstats                    # t-distribution for plot 
 
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-# CONDITION ENCODING (Set A / "placement"). The `condition` column holds these
-# short codes; "None" (no AI) is the regression REFERENCE, so every coefficient
-# reads as "this condition − None".
-#     None  = Human-Only Hybrid  (AI in neither stage)   <- reference / baseline
-#     Solo  = Individual + AI     (AI in solo stage only)
-#     Group = Group + AI          (AI in group stage only)
-#     Both  = Full AI             (AI in both stages)
+# CONDITION ENCODING (Set A / "placement"). "None" (no AI) is the reference, so
+# every coefficient reads "this condition − None".
 REFERENCE = "None"
 CONDITION_ORDER = ["None", "Solo", "Group", "Both"]
 CONDITION_PAPER = {
@@ -78,35 +70,30 @@ CONDITION_PAPER = {
     "Both": "Full AI (AI in both stages)",
 }
 
-# The three dependent variables (idea-creativity KPIs) and their display labels.
-KPIS = ["novelty", "usefulness", "overall_quality"]
-KPI_LABELS = {"novelty": "Novelty", "usefulness": "Usefulness", "overall_quality": "Quality"}
+# KPI REGISTRY — every analysable KPI, its display label, and whether it lives on
+# the 1–5 rating scale (so a "top rating = 5/5" binary is meaningful, Tables 5/6).
+# Keep in sync with KPI_DEFS in analyticsData.js. The script analyses whichever of
+# these columns are present in the data AND have at least one value.
+KPI_DEFS = [
+    ("novelty", "AI Novelty", True),
+    ("usefulness", "AI Usefulness", True),
+    ("overall_quality", "AI Quality", True),
+    ("ext_novelty", "Eval Novelty", True),
+    ("ext_usefulness", "Eval Usefulness", True),
+    ("ext_quality", "Eval Quality", True),
+    ("det_novelty", "Obj Novelty", False),
+    ("det_distinctiveness", "Obj Distinct.", False),
+    ("det_score", "Obj Score", False),
+]
 
-# A "top" idea = one that earned the very top of the 1–5 rating scale (the paper's
-# Table 5/6 "top rating (out of 5)"). >= is used so floating-point 5.0 always counts.
-TOP_RATING = 5.0
+TOP_RATING = 5.0           # a "top" idea earned the top of the 1–5 scale (Tables 5/6)
+USE_CONTROLS = False       # add word-count + stage controls? (size-guarded below)
+MIN_RESID_DF_FOR_CONTROLS = 8
+MIN_CELL = 2               # min ideas per condition (per KPI) to enter a model
+PRIMARY_CONTRAST = ("Solo", "Group")   # AI-timing contrast (solo- vs group-stage AI)
 
-# Optional controls (the analogs of the paper's "solution word count" + stage that
-# are actually available at the idea level). OFF by default so Tables 3–6 report
-# the raw condition comparisons (consistent with the Insights read-out and the
-# paper's no-controls Appendix D). Flip to True to add them — the size guard below
-# still drops a control if it has no variation or would leave too few residual df.
-USE_CONTROLS = False
-MIN_RESID_DF_FOR_CONTROLS = 8   # need at least this many residual df to add controls
-
-# A condition must have at least this many ideas to enter a regression: with only
-# one observation a dummy's HC3 standard error is undefined (its leverage is 1),
-# and with no observations in the reference (None) the "vs None" coefficients are
-# not identified. Smaller conditions are still reported in the size table, but are
-# dropped from the models (shown as "—") — this is the per-condition size check.
-MIN_CELL = 2
-
-# The pre-registered contrast of interest: it isolates AI *timing* — solo-stage AI
-# (Solo) vs group-stage AI (Group), holding the no-AI baseline constant.
-PRIMARY_CONTRAST = ("Solo", "Group")
-
-pd.set_option("display.width", 160)        # wide console so tables don't wrap
-pd.set_option("display.max_columns", 40)
+pd.set_option("display.width", 200)
+pd.set_option("display.max_columns", 60)
 
 
 # ── Small formatting helpers ──────────────────────────────────────────────────
@@ -126,7 +113,11 @@ def stars(p):
 
 
 def fmt_est(est, p):
-    """A coefficient cell: estimate to 3 dp with its significance stars."""
+    """A coefficient cell: estimate to 3 dp with its significance stars. A value that
+    rounds to zero is shown as a positive '0.000' (avoids a '-0.000' sign that can
+    differ from R on floating-point noise)."""
+    if round(est, 3) == 0:
+        est = 0.0
     return f"{est:.3f}{stars(p)}"
 
 
@@ -135,49 +126,33 @@ def fmt_se(se):
     return f"({se:.3f})"
 
 
-# Sentinel for a cell that cannot be estimated (absent / too-small condition, or a
-# constant "top" outcome). Plain ASCII so the text tables align in any locale; the
-# page renders it as a real em dash "—" in the formatted Insights / LaTeX tables.
+# Sentinel for a cell that cannot be estimated. Plain ASCII so the text tables align
+# in any locale; the page renders it as a real em dash "—" in the formatted tables.
 DASH = "n/a"
 
 
 def _s(x):
-    """First element of a statsmodels result array as a plain float.
-
-    Recent NumPy (the build inside Pyodide) refuses float() on a non-0-D array,
-    and t_test().effect / .sd can come back 2-D — so flatten with np.ravel,
-    take [0], then convert. Avoids the "only 0-dimensional arrays …" TypeError.
-    """
+    """First element of a statsmodels result array as a plain float (Pyodide-safe)."""
     return float(np.ravel(np.asarray(x))[0])
 
 
 # ── 1. Load + clean + derive the analysis columns ─────────────────────────────
 def load_data():
-    """Parse the injected DATA_CSV global (the scored dataset from step 3)."""
     if "DATA_CSV" not in globals():
         print("ERROR: global variable DATA_CSV is not defined.", file=sys.stderr)
         sys.exit(1)
-    # keep_default_na=False so the condition code "None" is NOT read as NaN
-    # (pandas would otherwise treat the string "None" as missing).
+    # keep_default_na=False so the condition code "None" is NOT read as NaN.
     return pd.read_csv(io.StringIO(DATA_CSV), keep_default_na=False)
 
 
 def prepare(df):
-    """Validate columns, coerce types, drop unscored rows, and add the derived
-    columns the four tables need (word count, the AI dummies, the top-rating
-    binaries). Returns the cleaned frame."""
+    """Validate, coerce KPI types, add the derived columns (condition dummies, word
+    count, stage, top-rating binaries). Rows are NOT globally dropped — each KPI's
+    models drop only the rows missing THAT KPI (partial coverage across sources)."""
     n0 = len(df)
-
-    # Fail fast if a structural column is missing.
-    for col in ["condition"] + KPIS:
-        if col not in df.columns:
-            print(f"ERROR: required column '{col}' missing from data.", file=sys.stderr)
-            sys.exit(1)
-
-    # KPI columns may arrive as strings (blank cells) — coerce to numeric so any
-    # blank/non-numeric value becomes NaN and is dropped below.
-    for k in KPIS:
-        df[k] = pd.to_numeric(df[k], errors="coerce")
+    if "condition" not in df.columns:
+        print("ERROR: required column 'condition' missing from data.", file=sys.stderr)
+        sys.exit(1)
 
     # Drop rows whose condition label is not one of the four we know about.
     unknown = set(df["condition"].dropna().unique()) - set(CONDITION_ORDER)
@@ -185,45 +160,43 @@ def prepare(df):
         warnings.warn(f"Dropping rows with unrecognised condition(s): {sorted(unknown)}")
         df = df[df["condition"].isin(CONDITION_ORDER)].copy()
 
-    # Listwise-drop rows missing ANY KPI so all models share one clean sample.
-    before = len(df)
-    df = df.dropna(subset=KPIS).copy()
-    dropped = before - len(df)
-    if dropped:
-        print(f"NOTE: dropped {dropped} row(s) with missing KPI value(s).")
-    print(f"NOTE: rows in: {n0}; rows used for analysis: {len(df)}.\n")
+    # Coerce every KPI column that exists to numeric (blank cells -> NaN).
+    for key, _, _ in KPI_DEFS:
+        if key in df.columns:
+            df[key] = pd.to_numeric(df[key], errors="coerce")
+
+    print(f"NOTE: rows in: {n0}; rows kept (known condition): {len(df)}.\n")
     if df.empty:
         return df
 
-    # ── Derived columns ───────────────────────────────────────────────────────
-    # AI-presence dummy (Table 3/5): 1 for any AI condition, 0 for None.
+    # Condition dummies for the whole frame (always defined).
     df["ai"] = (df["condition"] != REFERENCE).astype(int)
-    # One 0/1 dummy per non-reference condition (Table 4/6). An absent condition's
-    # column is therefore all-zeros and is detected + skipped when building the RHS.
     df["solo"] = (df["condition"] == "Solo").astype(int)
     df["group"] = (df["condition"] == "Group").astype(int)
     df["both"] = (df["condition"] == "Both").astype(int)
-    # Stage control: 1 if the idea came from the group stage, 0 if solo/individual.
     phase = df.get("phase", pd.Series([""] * len(df), index=df.index)).astype(str).str.lower()
     df["stage_group"] = phase.str.contains("group").astype(int)
-    # Word-count control: number of whitespace-separated tokens in the idea text.
     text = df.get("text", pd.Series([""] * len(df), index=df.index)).astype(str)
     df["word_count"] = text.str.split().apply(len)
-    # Top-rating binaries (Table 5/6): 1 if the KPI hit the top of the scale.
-    for k in KPIS:
-        df[f"top_{k}"] = (df[k] >= TOP_RATING).astype(int)
 
-    # Order the condition factor with the reference level first (used by the
-    # means model / plots), keeping only the levels actually present.
+    # Top-rating binaries for the present 1–5 KPIs only — NaN where the KPI is missing
+    # (so a missing score is never miscounted as "not top").
+    for key, _, scale5 in KPI_DEFS:
+        if scale5 and key in df.columns:
+            df[f"top_{key}"] = np.where(df[key].notna(), (df[key] >= TOP_RATING).astype(float), np.nan)
+
     present = [c for c in CONDITION_ORDER if c in df["condition"].unique()]
     df["condition"] = pd.Categorical(df["condition"], categories=present, ordered=True)
     return df
 
 
+def present_kpis(df):
+    """KPI defs whose column exists AND has at least one non-NaN value."""
+    return [(k, lab, s5) for (k, lab, s5) in KPI_DEFS if k in df.columns and df[k].notna().any()]
+
+
 def control_terms(df):
-    """The control terms to add to every model in a table, after the size guard:
-    word count and the stage dummy — but only when USE_CONTROLS is on, the column
-    varies, and there are enough rows. Returns a (possibly empty) list of names."""
+    """Controls (word count + stage) when USE_CONTROLS, they vary, and df is big enough."""
     if not USE_CONTROLS:
         return []
     terms = []
@@ -231,169 +204,132 @@ def control_terms(df):
         terms.append("word_count")
     if df["stage_group"].nunique() > 1:
         terms.append("stage_group")
-    # The largest model is 3 condition dummies + intercept + these controls; require
-    # enough residual df, else drop the controls entirely (keep estimates stable).
     if terms and (len(df) - (4 + len(terms))) < MIN_RESID_DF_FOR_CONTROLS:
         warnings.warn("Too few rows for controls; fitting without them.")
         return []
     return terms
 
 
-# ── 2. Fit one OLS / LPM per dependent variable ───────────────────────────────
-def fit_one(df, dv, treatment_terms, controls):
-    """Fit `dv ~ treatment_terms (+ controls)` with HC3-robust SEs. Returns the
-    fitted model, or None if it cannot be estimated (no treatment variation, a
-    constant outcome, too few rows, or a degenerate fit)."""
-    if not treatment_terms:
-        return None
-    if df[dv].nunique() < 2:                      # constant outcome (e.g. no "top" idea)
+# ── Which condition dummies are large enough to enter a model (per subset) ──────
+def reference_ok(sub):
+    return int((sub["condition"] == REFERENCE).sum()) >= MIN_CELL
+
+
+def split_terms(sub):
+    if not reference_ok(sub):
+        return []
+    return [c for c in ["solo", "group", "both"] if int(sub[c].sum()) >= MIN_CELL]
+
+
+def collapsed_term(sub):
+    if not reference_ok(sub):
+        return []
+    return ["ai"] if int((sub["condition"] != REFERENCE).sum()) >= MIN_CELL else []
+
+
+# ── 2. Fit one OLS / LPM ──────────────────────────────────────────────────────
+def fit_one(sub, dv, treatment_terms, controls):
+    """Fit `dv ~ treatment_terms (+ controls)` with HC3-robust SEs on `sub` (already
+    restricted to rows that have this KPI). Returns the model or None."""
+    if not treatment_terms or sub[dv].nunique() < 2:
         return None
     rhs = " + ".join(treatment_terms + controls)
-    n_params = 1 + len(treatment_terms) + len(controls)   # +1 for the intercept
-    if len(df) - n_params < 2:                     # need ≥2 residual df for stable robust SEs
+    n_params = 1 + len(treatment_terms) + len(controls)
+    if len(sub) - n_params < 2:
         return None
     try:
-        return smf.ols(f"{dv} ~ {rhs}", data=df).fit(cov_type="HC3")
-    except Exception as exc:                       # never let a degenerate fit abort
+        return smf.ols(f"{dv} ~ {rhs}", data=sub).fit(cov_type="HC3")
+    except Exception as exc:
         warnings.warn(f"[{dv}] OLS failed: {exc}")
         return None
 
 
 def cell(model, term):
-    """(estimate, se, p) for one coefficient of a model, or None if it is absent
-    (term dropped because its condition had no data) or non-finite (degenerate fit).
-    Uses _s() so the extraction is safe on Pyodide's NumPy, and returning None for a
-    non-finite estimate/SE keeps a stray 'nan' out of the machine-readable grammar."""
+    """(estimate, se, p) for one coefficient, or None if absent / non-finite."""
     if model is None or term not in model.params.index:
         return None
     est, se, p = _s(model.params[term]), _s(model.bse[term]), _s(model.pvalues[term])
-    if not (np.isfinite(est) and np.isfinite(se)):
+    # Drop non-finite OR numerically-degenerate (≈0) SEs — e.g. a perfectly-separated
+    # LPM cell where the baseline has no events gives a ~1e-17 SE in one engine and
+    # NaN in the other; treat both as not estimable so Python and R agree.
+    if not (np.isfinite(est) and np.isfinite(se) and se > 1e-8):
         return None
     return est, se, p
 
 
-# ── Which condition dummies are large enough to enter the models ───────────────
-def reference_ok(df):
-    """True when the baseline None has enough ideas to identify "vs None"
-    coefficients (otherwise every Table 3–6 coefficient is unestimable)."""
-    return int((df["condition"] == REFERENCE).sum()) >= MIN_CELL
-
-
-def split_terms(df):
-    """The non-reference condition dummies (Solo/Group/Both) with enough ideas to
-    estimate — empty if the None baseline itself is too small."""
-    if not reference_ok(df):
-        return []
-    return [c for c in ["solo", "group", "both"] if int(df[c].sum()) >= MIN_CELL]
-
-
-def collapsed_term(df):
-    """The single Any-AI dummy, included only when both None and the pooled AI
-    side have enough ideas — empty otherwise."""
-    if not reference_ok(df):
-        return []
-    return ["ai"] if int((df["condition"] != REFERENCE).sum()) >= MIN_CELL else []
-
-
-# ── 3. Build one table (the shared shape behind Tables 3–6) ────────────────────
-def build_table(df, num, title, sub, dv_list, dv_labels, split, controls):
-    """Assemble one regression table as a dict the printer + machine-emitter use.
-
-    df         cleaned analysis frame (with the derived dummy columns)
-    num        table number (3–6), only for the heading
-    title      table title (paper style)
-    sub        one-line description of the independent variable(s)
-    dv_list    the dependent-variable column names (one per output column)
-    dv_labels  human labels for those columns
-    split      False -> single 'Any AI' dummy (Tables 3/5);
-               True  -> one dummy per present condition vs None (Tables 4/6)
-    controls   control terms to include in every model (display "Controls: Yes/No")
-    """
-    # Independent variables (the rows shown), in fixed display order, each as a
-    # (column-name-in-df, row-label) pair. Absent / too-small conditions still get
-    # a row, shown as "—", so the layout always matches the paper.
+# ── 3. Build one table (shared shape behind Tables 3–6) ────────────────────────
+def build_table(df, num, title, sub_desc, dvs, split, controls):
+    """dvs = list of (column, label). Each column is fitted on its own non-NaN subset
+    (KPIs differ in coverage), so a table's columns can have different N."""
     if split:
         rows = [(c.lower(), f"{c} (vs {REFERENCE})") for c in ["Solo", "Group", "Both"]]
     else:
         rows = [("ai", f"Any AI (vs {REFERENCE})")]
 
-    # Only put a treatment term in the model if its condition is large enough AND
-    # the None baseline exists (per-condition size check; see split_terms above).
-    treatment_terms = split_terms(df) if split else collapsed_term(df)
+    # Per-column: the KPI's row subset, its treatment terms, and the fitted model.
+    fits = {}
+    for dv, _ in dvs:
+        s = df.dropna(subset=[dv])
+        terms = split_terms(s) if split else collapsed_term(s)
+        fits[dv] = (fit_one(s, dv, terms, controls), s, terms)
 
-    # Fit every DV on the same RHS so a table's columns share one specification.
-    models = {dv: fit_one(df, dv, treatment_terms, controls) for dv in dv_list}
-
-    coef_rows = []
-    for name, label in rows:                       # one block per independent variable
+    def coef_block(term, label):
         ests, ses = [], []
-        for dv in dv_list:
-            c = cell(models[dv], name)
+        for dv, _ in dvs:
+            c = cell(fits[dv][0], term)
             ests.append(fmt_est(c[0], c[2]) if c else DASH)
             ses.append(fmt_se(c[1]) if c else "")
-        coef_rows.append({"label": label, "est": ests, "se": ses})
-    # Intercept row (= baseline mean when no controls).
-    inter_est, inter_se = [], []
-    for dv in dv_list:
-        c = cell(models[dv], "Intercept")
-        inter_est.append(fmt_est(c[0], c[2]) if c else DASH)
-        inter_se.append(fmt_se(c[1]) if c else "")
-    coef_rows.append({"label": f"Intercept ({REFERENCE})", "est": inter_est, "se": inter_se})
+        return {"label": label, "est": ests, "se": ses}
 
-    # Footer statistics (mirroring the paper's N / blocks / evaluators / controls /
-    # fit rows). "Number of groups/sessions" are descriptive counts of the nesting.
+    coef_rows = [coef_block(name, label) for name, label in rows]
+    coef_rows.append(coef_block("Intercept", f"Intercept ({REFERENCE})"))
+
     def stat(fn):
         out = []
-        for dv in dv_list:
-            m = models[dv]
-            out.append(fn(m) if m is not None else DASH)
+        for dv, _ in dvs:
+            model, s, _ = fits[dv]
+            out.append(fn(model, s) if model is not None else DASH)
         return out
 
-    n_groups = df["group_id"].nunique() if "group_id" in df.columns else 0
-    n_sessions = df["session"].nunique() if "session" in df.columns else 0
     ctrl_label = "Yes" if controls else "No"
     stat_rows = [
-        {"label": "N (ideas)", "cells": stat(lambda m: str(int(m.nobs)))},
-        {"label": "Number of groups", "cells": stat(lambda m: str(n_groups))},
-        {"label": "Number of sessions", "cells": stat(lambda m: str(n_sessions))},
-        {"label": "Controls", "cells": stat(lambda m: ctrl_label)},
-        {"label": "R-squared", "cells": stat(lambda m: f"{m.rsquared:.3f}" if np.isfinite(m.rsquared) else DASH)},
-        {"label": "Log-likelihood", "cells": stat(lambda m: f"{m.llf:.1f}" if np.isfinite(m.llf) else DASH)},
+        {"label": "N (ideas)", "cells": stat(lambda m, s: str(int(m.nobs)))},
+        {"label": "Number of groups", "cells": stat(lambda m, s: str(s["group_id"].nunique()) if "group_id" in s else "0")},
+        {"label": "Number of sessions", "cells": stat(lambda m, s: str(s["session"].nunique()) if "session" in s else "0")},
+        {"label": "Controls", "cells": stat(lambda m, s: ctrl_label)},
+        {"label": "R-squared", "cells": stat(lambda m, s: f"{m.rsquared:.3f}" if np.isfinite(m.rsquared) else DASH)},
+        {"label": "Log-likelihood", "cells": stat(lambda m, s: f"{m.llf:.1f}" if np.isfinite(m.llf) else DASH)},
     ]
 
     note = ("Standard errors (HC3 heteroscedasticity-robust) in parentheses. "
-            "Reference category = None (no AI). "
-            ". p<.10  * p<.05  ** p<.01  *** p<.001.")
-    # If nothing was estimable, say why up front (the user's size check).
-    if not treatment_terms:
-        reason = (f"Baseline None has < {MIN_CELL} ideas" if not reference_ok(df)
-                  else f"no AI condition has >= {MIN_CELL} ideas")
-        note = f"NOT ESTIMABLE: {reason}; this model needs the None baseline plus an AI condition. " + note
-    return {
-        "num": num, "title": title, "sub": sub,
-        "columns": [dv_labels[dv] for dv in dv_list],
-        "coef_rows": coef_rows, "stat_rows": stat_rows, "note": note,
-        "models": models,
-    }
+            "Reference category = None (no AI). . p<.10  * p<.05  ** p<.01  *** p<.001.")
+    treatment_any = any(fits[dv][2] for dv, _ in dvs)
+    if not treatment_any:
+        note = ("NOT ESTIMABLE for any column: each needs the None baseline plus an AI "
+                "condition with >= 2 ideas for that KPI. ") + note
+
+    return {"num": num, "title": title, "sub": sub_desc,
+            "columns": [lab for _, lab in dvs], "coef_rows": coef_rows,
+            "stat_rows": stat_rows, "note": note, "fits": fits}
 
 
-# ── 4. Print a table as aligned text (for the console + Appendix A) ────────────
+# ── 4. Print a table as aligned text ──────────────────────────────────────────
 def print_table(t):
     labels = [r["label"] for r in t["coef_rows"]] + [r["label"] for r in t["stat_rows"]]
-    w0 = max([len(s) for s in labels] + [len("Variable")]) + 2          # label column width
-    colw = max(14, max(len(c) for c in t["columns"]) + 2)               # data column width
+    w0 = max([len(s) for s in labels] + [len("Variable")]) + 2
+    colw = max(13, max((len(c) for c in t["columns"]), default=10) + 2)
 
     def line(label, cells):
         return label.ljust(w0) + "".join(str(c).rjust(colw) for c in cells)
 
-    bar = "=" * (w0 + colw * len(t["columns"]))
+    bar = "=" * (w0 + colw * max(1, len(t["columns"])))
     print(bar)
     print(f"TABLE {t['num']}.  {t['title']}")
     print(f"           {t['sub']}")
     print(bar)
     print(line("Variable", t["columns"]))
     print("-" * len(bar))
-    for r in t["coef_rows"]:                       # estimate line, then its SE line
+    for r in t["coef_rows"]:
         print(line(r["label"], r["est"]))
         if any(s for s in r["se"]):
             print(line("", r["se"]))
@@ -405,17 +341,6 @@ def print_table(t):
 
 
 # ── 5. Machine-readable copy of the tables (parsed by the page) ────────────────
-# Emitted between BEGIN/END markers and stripped from the on-page console; the
-# page turns it into the formatted "Insights" tables and the LaTeX / PDF export.
-# Grammar (cells separated by "||"):
-#   @@TABLE num=<n>||<title>||<sub>
-#   @@HEAD Variable||<col1>||<col2>||...
-#   @@COEF <label>||<est1>||<est2>||...      (a coefficient row)
-#   @@SE   ||<se1>||<se2>||...               (its standard-error row)
-#   @@RULE                                   (mid-rule before the footer stats)
-#   @@STAT <label>||<c1>||<c2>||...          (a footer statistic row)
-#   @@NOTE <table note>
-#   @@ENDTABLE
 def emit_machine(tables):
     print("===BEGIN REGRESSION TABLES===")
     for t in tables:
@@ -433,11 +358,8 @@ def emit_machine(tables):
     print("===END REGRESSION TABLES===\n")
 
 
-# ── 6. Primary planned contrast: Solo − Group (AI timing), across KPIs ─────────
-def planned_contrast(model, kpi):
-    """The AI-timing contrast (Solo − Group) for one KPI's split model. Both are
-    coded vs the same reference, so the contrast = b_solo − b_group. Returns a
-    dict, or None if either level is absent from the model."""
+# ── 6. Primary planned contrast: Solo − Group, per KPI ────────────────────────
+def planned_contrast(model, label):
     if model is None:
         return None
     names = list(model.params.index)
@@ -448,126 +370,122 @@ def planned_contrast(model, kpi):
     cvec[names.index("group")] = -1.0
     res = model.t_test(cvec)
     est, sd = _s(res.effect), _s(res.sd)
-    if not (np.isfinite(est) and np.isfinite(sd)):   # non-estimable contrast → skip
+    if not (np.isfinite(est) and np.isfinite(sd) and sd > 1e-8):
         return None
-    return {"kpi": kpi, "estimate": est, "std_err": sd,
-            "t": _s(res.tvalue), "p_value": _s(res.pvalue)}
+    return {"kpi": label, "estimate": est, "std_err": sd, "t": _s(res.tvalue), "p_value": _s(res.pvalue)}
 
 
-# ── 7. Plots (use the no-controls condition means for interpretability) ────────
+# ── 7. Plots (no-controls condition means, wrapped grid over present KPIs) ─────
 plt.rcParams.update({
-    "font.size": 15, "axes.titlesize": 18, "axes.labelsize": 15,
-    "xtick.labelsize": 14, "ytick.labelsize": 14, "figure.titlesize": 21,
+    "font.size": 14, "axes.titlesize": 16, "axes.labelsize": 13,
+    "xtick.labelsize": 12, "ytick.labelsize": 12, "figure.titlesize": 19,
 })
 
 
 def ci95_halfwidth(std, n):
-    """95% CI half-width from the per-group t distribution. NaN for n<=1."""
     if n is None or n <= 1 or not np.isfinite(std):
         return np.nan
     return float(spstats.t.ppf(0.975, n - 1)) * std / np.sqrt(n)
 
 
-def plot_means(df, present_levels):
-    """FIGURE 1 — one bar chart per KPI: each condition's mean score with a 95%
-    CI whisker (taller bar = rated higher; n shown under each bar)."""
-    fig, axes = plt.subplots(1, len(KPIS), figsize=(6.6 * len(KPIS), 6.2), squeeze=False)
-    axes = axes[0]
+def _grid(n):
+    ncols = min(3, max(1, n))
+    nrows = max(1, math.ceil(n / ncols))
+    return nrows, ncols
+
+
+def plot_means(df, kpis, present_levels):
+    """One bar chart per KPI: each condition's mean (95% CI), n under each bar."""
+    nrows, ncols = _grid(len(kpis))
+    fig, axes = plt.subplots(nrows, ncols, figsize=(6.0 * ncols, 5.4 * nrows), squeeze=False)
+    flat = [ax for row in axes for ax in row]
     colors = ["#4D4D4D", "#1F77B4", "#2CA02C", "#D62728"]
-    for ax, kpi in zip(axes, KPIS):
+    for ax, (key, label, scale5) in zip(flat, kpis):
         means, halfs, ns = [], [], []
         for lvl in present_levels:
-            vals = df.loc[df["condition"] == lvl, kpi].dropna()
+            vals = df.loc[df["condition"] == lvl, key].dropna()
             ns.append(len(vals))
             if len(vals) == 0:
                 means.append(np.nan); halfs.append(np.nan)
             else:
-                means.append(vals.mean())
-                halfs.append(ci95_halfwidth(vals.std(ddof=1), len(vals)))
+                means.append(vals.mean()); halfs.append(ci95_halfwidth(vals.std(ddof=1), len(vals)))
         x = np.arange(len(present_levels))
-        ax.bar(x, means, yerr=halfs, capsize=7, color=colors[:len(present_levels)],
-               edgecolor="black", alpha=0.88)
+        ax.bar(x, means, yerr=halfs, capsize=6, color=colors[:len(present_levels)], edgecolor="black", alpha=0.88)
         for xi, m in zip(x, means):
             if np.isfinite(m):
-                ax.annotate(f"{m:.2f}", (xi, m), textcoords="offset points",
-                            xytext=(0, 8), ha="center", fontsize=14, fontweight="bold")
+                ax.annotate(f"{m:.2f}", (xi, m), textcoords="offset points", xytext=(0, 7), ha="center", fontsize=12, fontweight="bold")
         ax.set_xticks(x)
-        ax.set_xticklabels([f"{lvl}\n(n={n})" for lvl, n in zip(present_levels, ns)], fontsize=14)
-        ax.set_title(f"Mean {KPI_LABELS[kpi]}", fontweight="bold")
-        ax.set_ylabel(f"Mean {KPI_LABELS[kpi]} (1–5)"); ax.set_xlabel("Condition")
+        ax.set_xticklabels([f"{lvl}\n(n={n})" for lvl, n in zip(present_levels, ns)], fontsize=11)
+        ax.set_title(f"Mean {label}", fontweight="bold")
+        ax.set_ylabel(label); ax.set_xlabel("Condition")
         ax.grid(axis="y", linestyle=":", alpha=0.5)
         finite = [m for m in means if np.isfinite(m)]
+        top = 5.2 if scale5 else 1.05
         if finite:
-            ax.set_ylim(0, max(5.2, max(finite) * 1.18))
-    fig.suptitle("Average score by condition (bars = mean, whiskers = 95% CI)", fontweight="bold", y=1.02)
+            ax.set_ylim(0, max(top, max(finite) * 1.18))
+    for ax in flat[len(kpis):]:
+        ax.axis("off")
+    fig.suptitle("Average score by condition (bars = mean, whiskers = 95% CI)", fontweight="bold", y=1.0)
     fig.tight_layout()
     print("Generated figure: average score per condition.")
 
 
-def plot_forest(models):
-    """FIGURE 2 — each AI condition's mean difference from the no-AI baseline
-    (None), per KPI, with a 95% CI. Dot right of the dashed zero = higher than
-    no-AI; red dot (CI excludes 0) = statistically significant."""
+def plot_forest(means_models, kpis):
+    """Each AI condition's mean difference from None per KPI (dot + 95% CI; red = sig)."""
+    nrows, ncols = _grid(len(kpis))
+    fig, axes = plt.subplots(nrows, ncols, figsize=(6.0 * ncols, 4.6 * nrows), squeeze=False)
+    flat = [ax for row in axes for ax in row]
     non_ref = [l for l in CONDITION_ORDER if l != REFERENCE]
-    fig, axes = plt.subplots(1, len(KPIS), figsize=(6.6 * len(KPIS), 5.4),
-                             squeeze=False, sharey=True)
-    axes = axes[0]
     term = {"Solo": "solo", "Group": "group", "Both": "both"}
-    for ax, kpi in zip(axes, KPIS):
-        model = models.get(kpi)
+    for ax, (key, label, scale5) in zip(flat, kpis):
+        model = means_models.get(key)
         ys, ests, los, his, labels, sig = [], [], [], [], [], []
         if model is not None:
             ci = model.conf_int(alpha=0.05)
             for i, lvl in enumerate(non_ref):
                 t = term[lvl]
                 if t in model.params.index:
-                    ests.append(model.params[t])
-                    lo, hi = ci.loc[t, 0], ci.loc[t, 1]
-                    los.append(lo); his.append(hi)
-                    ys.append(i); labels.append(lvl)
+                    ests.append(model.params[t]); lo, hi = ci.loc[t, 0], ci.loc[t, 1]
+                    los.append(lo); his.append(hi); ys.append(i); labels.append(lvl)
                     sig.append(not (lo <= 0 <= hi))
         if ys:
             ests = np.array(ests)
             err = np.vstack([ests - np.array(los), np.array(his) - ests])
             dot_colors = ["#D62728" if s else "#1F77B4" for s in sig]
-            ax.errorbar(ests, ys, xerr=err, fmt="none", ecolor="#888888", elinewidth=2.5, capsize=6)
-            ax.scatter(ests, ys, c=dot_colors, s=130, zorder=3, edgecolor="black")
+            ax.errorbar(ests, ys, xerr=err, fmt="none", ecolor="#888888", elinewidth=2.2, capsize=5)
+            ax.scatter(ests, ys, c=dot_colors, s=110, zorder=3, edgecolor="black")
             for xi, yi in zip(ests, ys):
-                ax.annotate(f"{xi:+.2f}", (xi, yi), textcoords="offset points",
-                            xytext=(0, 12), ha="center", fontsize=13, fontweight="bold")
-            ax.set_yticks(ys); ax.set_yticklabels([f"{l} vs None" for l in labels], fontsize=15)
+                ax.annotate(f"{xi:+.2f}", (xi, yi), textcoords="offset points", xytext=(0, 10), ha="center", fontsize=11, fontweight="bold")
+            ax.set_yticks(ys); ax.set_yticklabels([f"{l} vs None" for l in labels], fontsize=12)
         ax.axvline(0.0, color="red", linestyle="--", linewidth=1.5)
-        ax.set_title(f"{KPI_LABELS[kpi]}", fontweight="bold")
-        ax.set_xlabel("Difference from no-AI (points on 1–5)")
+        ax.set_title(label, fontweight="bold")
+        ax.set_xlabel("Difference from no-AI")
         ax.grid(axis="x", linestyle=":", alpha=0.5)
         ax.invert_yaxis()
-    fig.suptitle("Each AI condition vs the no-AI baseline (dot = mean difference, bar = 95% CI; red = significant)",
-                 fontweight="bold", y=1.04)
+    for ax in flat[len(kpis):]:
+        ax.axis("off")
+    fig.suptitle("Each AI condition vs the no-AI baseline (dot = mean difference, bar = 95% CI; red = significant)", fontweight="bold", y=1.0)
     fig.tight_layout()
     print("Generated figure: condition effects vs baseline.")
 
 
-# ── 8. Insights (plain-language read-out, drives the page's Insights panel) ────
+# ── 8. Insights (plain-language read-out; drives the page's Insights panel) ────
 def emm_for(model, level):
-    """Estimated mean of one condition from the no-controls split model, or None
-    if that condition is absent from the model."""
     if model is None:
         return None
     names = list(model.params.index)
     v = np.zeros(len(names))
-    v[names.index("Intercept")] = 1.0           # intercept = reference (None) mean
+    v[names.index("Intercept")] = 1.0
     if level != REFERENCE:
         t = {"Solo": "solo", "Group": "group", "Both": "both"}[level]
         if t not in names:
             return None
         v[names.index(t)] = 1.0
-    return _s(model.t_test(v).effect)
+    val = _s(model.t_test(v).effect)
+    return val if np.isfinite(val) else None
 
 
-def insights(df, means_models):
-    """Plain-language insights read straight off the (no-controls) split models —
-    the same numbers as Table 4 with controls off. Keeps the exact wording the
-    page's Insights panel + PDF already parse."""
+def insights(df, kpis, means_models):
     print("\n" + "#" * 78)
     print("# INSIGHTS  (read directly off the regression results above)")
     print("#" * 78)
@@ -584,27 +502,24 @@ def insights(df, means_models):
         print("     be drawn about them until data for that condition is collected.")
     print(f"\nConditions with data ({len(present)} of 4): {', '.join(present)}.")
 
-    ranking_by_kpi = {}
     term = {"Solo": "solo", "Group": "group", "Both": "both"}
-    for kpi in KPIS:
-        model = means_models.get(kpi)
+    ranking_by_kpi = {}
+    for key, label, _ in kpis:
+        model = means_models.get(key)
         print("\n" + "-" * 78)
-        print(f"KPI: {kpi}")
+        print(f"KPI: {label}")
         print("-" * 78)
         if model is None:
             print("  Not estimable (need >= 2 conditions with data) - no ranking for this KPI.")
-            ranking_by_kpi[kpi] = None
+            ranking_by_kpi[label] = None
             continue
-
         means = {c: emm_for(model, c) for c in present}
         means = {c: m for c, m in means.items() if m is not None and np.isfinite(m)}
         ranked = sorted(means.items(), key=lambda kv: kv[1], reverse=True)
-        ranking_by_kpi[kpi] = ranked
-
+        ranking_by_kpi[label] = ranked
         print("  Ranking of conditions (best -> worst), by estimated mean:")
         for i, (c, m) in enumerate(ranked, 1):
             print(f"    {i}. {c:<18}  mean = {m:.3f}")
-
         print(f"  Versus the '{REFERENCE}' baseline:")
         any_sig = False
         for c in present:
@@ -619,26 +534,24 @@ def insights(df, means_models):
                 print(f"    - {c}: {abs(b):.2f} points {direction} (p = {p:.3f}, {verdict})")
         if not any_sig:
             print("    (no condition differs significantly from baseline on this KPI)")
-
-        pc = planned_contrast(model, kpi)
+        pc = planned_contrast(model, label)
         if pc is not None:
             winner = PRIMARY_CONTRAST[0] if pc["estimate"] >= 0 else PRIMARY_CONTRAST[1]
             how = "significantly" if pc["p_value"] < 0.05 else "but NOT significantly"
             print(f"  AI timing ({PRIMARY_CONTRAST[0]} vs {PRIMARY_CONTRAST[1]}): {winner} scores "
                   f"{abs(pc['estimate']):.2f} higher, {how} (p = {pc['p_value']:.3f}).")
-
         if ranked:
-            print(f"  => Best on {kpi}: '{ranked[0][0]}'.  Worst: '{ranked[-1][0]}'.")
+            print(f"  => Best on {label}: '{ranked[0][0]}'.  Worst: '{ranked[-1][0]}'.")
 
     print("\n" + "-" * 78)
     print("CONDITION RANKING PER KPI (best -> worst):")
     print("-" * 78)
-    for kpi in KPIS:
-        ranked = ranking_by_kpi.get(kpi)
+    for key, label, _ in kpis:
+        ranked = ranking_by_kpi.get(label)
         if not ranked:
-            print(f"  {kpi:<16}: (not estimable)")
+            print(f"  {label:<18}: (not estimable)")
         else:
-            print(f"  {kpi:<16}: " + "  >  ".join(f"{c} ({m:.2f})" for c, m in ranked))
+            print(f"  {label:<18}: " + "  >  ".join(f"{c} ({m:.2f})" for c, m in ranked))
     if missing:
         print(f"\n  Reminder: {', '.join(missing)} had NO data and is omitted from all of the above.")
     print()
@@ -651,48 +564,54 @@ def main():
         print("WARNING: no usable rows after cleaning - nothing to analyse.")
         return
 
+    kpis = present_kpis(df)               # [(key, label, scale5)] with data
+    if not kpis:
+        print("WARNING: no KPI columns have any values yet. Score ideas in Step 3 first.")
+        return
+    level_dvs = [(k, lab) for (k, lab, _) in kpis]
+    top_kpis = [(k, lab, s5) for (k, lab, s5) in kpis
+                if s5 and f"top_{k}" in df.columns and df[f"top_{k}"].notna().any()
+                and df[f"top_{k}"].dropna().nunique() > 1]
+    top_dvs = [(f"top_{k}", f"Top {lab}") for (k, lab, _) in top_kpis]
+
     present_levels = list(df["condition"].cat.categories)
 
-    # Per-condition sample sizes — the design is UNBALANCED, so report n up front.
+    # Per-condition sample sizes + per-KPI coverage.
     print("=" * 78)
-    print("FINAL-IDEA COUNT PER CONDITION (the unit of analysis; unbalanced design)")
+    print("FINAL-IDEA COUNT PER CONDITION (unit of analysis; unbalanced design)")
     print("=" * 78)
     vc = df["condition"].value_counts()
     for lvl in CONDITION_ORDER:
         flag = "" if lvl in present_levels else "   <- NO DATA (skipped)"
         print(f"    {lvl:<6} n = {int(vc.get(lvl, 0))}{flag}")
-    # How many ideas hit the top rating, per KPI (drives whether Tables 5/6 are
-    # estimable — a "top" outcome with no variation cannot be regressed).
-    print("\nTop-rated ideas (KPI == 5.0), per KPI:")
-    for k in KPIS:
-        print(f"    {KPI_LABELS[k]:<10} top = {int(df[f'top_{k}'].sum())} / {len(df)}")
-    print(f"\nConditions with < {MIN_CELL} ideas (or an absent None baseline) are dropped from")
-    print("the regressions and shown as '—' (no stable robust SE). All SEs / p-values use")
-    print("HC3 heteroscedasticity-robust covariance (no equal-variance assumption).\n")
+    print("\nKPI coverage (ideas with a value, by source):")
+    for key, label, _ in kpis:
+        print(f"    {label:<18} n = {int(df[key].notna().sum())} / {len(df)}")
+    print(f"\nConditions with < {MIN_CELL} ideas for a KPI (or an absent None baseline) are dropped")
+    print("from that KPI's model and shown as '—'. SEs use HC3 robust covariance.\n")
 
     controls = control_terms(df)
-    top_kpis = [f"top_{k}" for k in KPIS]
-    top_labels = {f"top_{k}": f"Top {KPI_LABELS[k]}" for k in KPIS}
 
-    # ── The four tables (Tables 3–6, paper layout) ────────────────────────────
+    # ── The four tables (paper layout), columns = present KPIs ─────────────────
     tables = [
-        build_table(
-            df, 3, "Human-Only vs Any-AI - average KPI ratings",
-            "OLS of each KPI score (1-5) on a single Any-AI dummy (reference = None).",
-            KPIS, KPI_LABELS, split=False, controls=controls),
-        build_table(
-            df, 4, "Human-Only vs Solo / Group / Both - average KPI ratings",
-            "OLS of each KPI score (1-5) on the condition dummies (reference = None).",
-            KPIS, KPI_LABELS, split=True, controls=controls),
-        build_table(
-            df, 5, "Human-Only vs Any-AI - probability of a top (5/5) rating",
-            "Linear-probability model of P(top rating) on a single Any-AI dummy (reference = None).",
-            top_kpis, top_labels, split=False, controls=controls),
-        build_table(
-            df, 6, "Human-Only vs Solo / Group / Both - probability of a top (5/5) rating",
-            "Linear-probability model of P(top rating) on the condition dummies (reference = None).",
-            top_kpis, top_labels, split=True, controls=controls),
+        build_table(df, 3, "Human-Only vs Any-AI - KPI level by condition",
+                    "OLS of each KPI on a single Any-AI dummy (reference = None).",
+                    level_dvs, split=False, controls=controls),
+        build_table(df, 4, "Human-Only vs Solo / Group / Both - KPI level by condition",
+                    "OLS of each KPI on the condition dummies (reference = None).",
+                    level_dvs, split=True, controls=controls),
     ]
+    if top_dvs:
+        tables += [
+            build_table(df, 5, "Human-Only vs Any-AI - probability of a top (5/5) rating",
+                        "Linear-probability model of P(top) on a single Any-AI dummy (1-5 KPIs only).",
+                        top_dvs, split=False, controls=controls),
+            build_table(df, 6, "Human-Only vs Solo / Group / Both - probability of a top (5/5) rating",
+                        "Linear-probability model of P(top) on the condition dummies (1-5 KPIs only).",
+                        top_dvs, split=True, controls=controls),
+        ]
+    else:
+        print("NOTE: no 1-5 KPI has variation in its top-rating outcome; Tables 5 & 6 are skipped.\n")
     for t in tables:
         print_table(t)
 
@@ -700,8 +619,8 @@ def main():
     print("=" * 78)
     print(f"PRIMARY PLANNED CONTRAST:  '{PRIMARY_CONTRAST[0]}'  -  '{PRIMARY_CONTRAST[1]}'   (AI timing)")
     print("=" * 78)
-    split_level_models = tables[1]["models"]       # Table 4 = KPI ~ conditions
-    contrasts = [c for c in (planned_contrast(split_level_models[k], k) for k in KPIS) if c]
+    split_fits = tables[1]["fits"]      # Table 4
+    contrasts = [c for c in (planned_contrast(split_fits[k][0], lab) for (k, lab) in level_dvs) if c]
     if contrasts:
         ctab = pd.DataFrame(contrasts)
         ctab["sig"] = ctab["p_value"].map(stars)
@@ -713,24 +632,22 @@ def main():
         print("No KPI had both contrast levels present - contrast not computed.")
     print()
 
-    # ── Insights + plots (use no-controls condition means for interpretability) ─
-    # A dedicated set of no-controls split models so the insights/plots read as
-    # raw condition mean differences (== Table 4 when USE_CONTROLS is off). Uses the
-    # same per-condition size guard as the tables (split_terms).
-    means_models = {k: fit_one(df, k, split_terms(df), []) for k in KPIS}
-    insights(df, means_models)
+    # No-controls condition-means models per KPI (for insights + plots).
+    means_models = {}
+    for key, _, _ in kpis:
+        s = df.dropna(subset=[key])
+        means_models[key] = fit_one(s, key, split_terms(s), [])
+    insights(df, kpis, means_models)
 
     try:
-        plot_means(df, present_levels)
+        plot_means(df, kpis, present_levels)
     except Exception as exc:
         warnings.warn(f"Mean plot failed: {exc}")
     try:
-        plot_forest(means_models)
+        plot_forest(means_models, kpis)
     except Exception as exc:
         warnings.warn(f"Forest plot failed: {exc}")
 
-    # Machine-readable copy LAST (after the figures' log lines), so the page can
-    # rebuild the four tables for the Insights section and the LaTeX / PDF export.
     emit_machine(tables)
     print("Done.")
 
