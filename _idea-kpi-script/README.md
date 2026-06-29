@@ -22,9 +22,9 @@ For each idea (Title + Description):
 
 ### Excluded for now (by request)
 
-- **KPI 1 — Prototypicality (KS statistic).** Needs a topic-specific web corpus, Porter
-  stemming, a Jaccard semantic network and the prototypical CDF. Deferred — *"will come
-  back to add it later."*
+- **KPI 1 — Prototypicality (KS statistic).** Needs a topic-specific corpus, Porter stemming, a
+  semantic network and the prototypical CDF. `idea_kpis.py` still leaves this blank, but it now has
+  its own self-contained implementation (GloVe and Wikipedia paths) in **[`../_prototypicality/`](../_prototypicality/)**.
 - **KPI 3 — Brainstorming creativity.** Defined as the share of ideas below the KS
   creativity cutoff, so it depends on KPI 1 and is deferred together with it.
 
@@ -150,6 +150,15 @@ python idea_kpis.py -i idea_analytics_aggregate.xlsx --backend st --pool-by cond
 - **Reproducibility.** Same input + same embedding backend ⇒ same numbers. The absolute
   novelty/distinctiveness values depend on which embedding model you choose, so record the
   backend (the script prints it and stores it in the JSON `settings`).
+
+## KPI 1 — Prototypicality (moved to its own project)
+
+The prototypicality scorer (Toubia & Netzer, GloVe and Wikipedia paths) is now a self-contained
+project in **[`../_prototypicality/`](../_prototypicality/)** — `proto_core.py`, `glove_loader.py`,
+`score_glove.py`, the Wikipedia-path scripts, docs, samples and a self-test. See its `README.md`
+for the `build` then `score` flow. In short: build the topic model once, then score ideas, and pass
+`--glove` so out-of-vocabulary ideas are rescued in open mode (otherwise they come back with a blank
+KPI).
 
 ## Sources
 

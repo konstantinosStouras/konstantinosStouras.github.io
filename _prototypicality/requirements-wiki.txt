@@ -1,0 +1,4 @@
+# Extra requirement for the Wikipedia path only (run_wikipedia.py / wiki_corpus.py).
+# The GloVe path does not need this.
+#   pip install -r requirements-wiki.txt
+requests>=2.28
