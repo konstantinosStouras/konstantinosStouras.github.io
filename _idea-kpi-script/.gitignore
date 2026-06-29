@@ -1,0 +1,7 @@
+# Generated results and Python caches — not source.
+output/
+__pycache__/
+*.pyc
+
+# Don't commit the (large, data) workbook itself; drop it here locally to run.
+idea_analytics_aggregate.xlsx
