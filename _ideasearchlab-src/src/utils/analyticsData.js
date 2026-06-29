@@ -194,6 +194,7 @@ export function buildRowsForSession(session, ideas = [], participants = [], grou
       author_name: idea.authorName || authorName[idea.authorId] || '',
       author_email: authorEmail[idea.authorId] || '',
       idea_title: idea.title || '',
+      idea_description: idea.description || '',
       // AI-generated KPIs (3.2) — filled later by AI scoring / manual edit / import.
       novelty: numOrBlank(idea.novelty),
       usefulness: numOrBlank(idea.usefulness),
@@ -342,6 +343,14 @@ export function normalizeImportedRows(rawRows) {
     else if (phase.includes('individual') || phase.includes('solo')) phase = 'individual'
     else phase = phase.trim()
 
+    // Idea text: prefer the export's combined "Full Text"; otherwise join Title +
+    // Description so the deterministic KPIs (and word counts) use the WHOLE idea,
+    // not just the title. Title and Description are kept separately for re-export.
+    const title = String(pick('idea title', 'title'))
+    const description = String(pick('description'))
+    const fullText = String(pick('full text', 'text', 'idea', 'idea_text', 'content'))
+    const text = fullText || (title && description ? `${title}: ${description}` : (title || description))
+
     out.push({
       idea_id: String(pick('idea id', 'idea_id', 'id', 'ideaid') || `import_${i + 1}`),
       session: String(pick('session code', 'session', 'session_code', 'code') || 'imported'),
@@ -351,7 +360,8 @@ export function normalizeImportedRows(rawRows) {
       author_id: String(pick('author id', 'author_id', 'author', 'participant', 'participant_id')),
       author_name: String(pick('author name', 'author label', 'author_name', 'name')),
       author_email: String(pick('author email', 'email', 'author_email')),
-      idea_title: String(pick('idea title', 'title')),
+      idea_title: title,
+      idea_description: description,
       novelty: numOrBlank(novelty),
       usefulness: numOrBlank(usefulness),
       overall_quality: numOrBlank(overall),
@@ -362,7 +372,7 @@ export function normalizeImportedRows(rawRows) {
       det_distinctiveness: numOrBlank(pick('det_distinctiveness', 'objective distinctiveness', 'obj. distinctiveness')),
       det_score: numOrBlank(pick('det_score', 'objective score', 'obj. score')),
       final_pick: /^(1|yes|true)$/i.test(String(pick('final group pick', 'final_pick', 'final pick', 'final', 'selected')).trim()) ? 1 : 0,
-      text: String(pick('full text', 'text', 'idea', 'idea_text', 'title', 'description', 'content')),
+      text,
     })
   })
   return out

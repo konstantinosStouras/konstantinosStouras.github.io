@@ -8,7 +8,7 @@ import { useTheme } from '../context/ThemeContext'
 import {
   CONDITIONS, CONDITION_INFO, KPIS, conditionForSession, buildRowsForSession,
   recomputeOverall, rowsToCsv, csvToRows, normalizeImportedRows, ideaText, summarize,
-  matchScoresIntoRows, buildSummaryTable, DEFAULT_REFERENCE_SET,
+  matchScoresIntoRows, buildSummaryTable, DEFAULT_REFERENCE_SET, presentKpis,
 } from '../utils/analyticsData'
 import { scoreIdeas, fetchAISettings } from '../utils/llmClient'
 import { tfidfVectors } from '../utils/tfidf'
@@ -587,6 +587,47 @@ export default function DataAnalytics() {
     saveBlob(out, 'idea_analytics_summary.xlsx', 'application/octet-stream')
   }
 
+  // ── Section 3.1: download the input "ideas" file with a KPI column per idea ──
+  // Re-emits each idea in the original Rankings/"ideas" layout (Idea ID, Condition,
+  // Stage, Final Group Pick, Title, Description) and appends one column for every
+  // computed KPI that has data (the 3.1 objective KPIs, plus AI/evaluator scores if
+  // present). A second tab carries the per-condition pool KPIs (not per-idea).
+  function downloadIdeasWithKpis() {
+    const data = effectiveRows
+    if (!data.length) return
+    const kpis = presentKpis(data)
+    const stageLabel = ph => (ph === 'group' ? 'group' : ph === 'individual' ? 'individual (solo)' : (ph || ''))
+    const num = v => (v === '' || v == null || !Number.isFinite(Number(v)) ? '' : Number(v))
+    const ideaRows = data.map(r => {
+      const row = {
+        'Idea ID': r.idea_id,
+        'Condition': r.condition,
+        'Stage': stageLabel(r.phase),
+        'Final Group Pick': r.final_pick ? 'Yes' : 'No',
+        'Title': r.idea_title || '',
+        'Description': r.idea_description || '',
+      }
+      for (const k of kpis) row[k.label] = num(r[k.key])
+      return row
+    })
+    const wb = XLSX.utils.book_new()
+    addSheet(wb, 'ideas', ideaRows)
+    // Pool-level KPIs (Unique fraction / Productivity) are per condition, not per
+    // idea, so they live on their own tab when a compute run produced them.
+    if (detResult?.perCond?.length) {
+      addSheet(wb, 'Pool KPIs by condition', detResult.perCond.map(c => ({
+        Condition: c.condition,
+        Ideas: c.n,
+        'Unique fraction (τ=.80)': round3(c.uf80),
+        'Unique fraction (τ=.75)': round3(c.uf75),
+        'Unique fraction (τ=.85)': round3(c.uf85),
+        'Productivity (KPI 2)': c.productivity,
+      })))
+    }
+    const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+    saveBlob(out, 'ideas_with_kpis.xlsx', 'application/octet-stream')
+  }
+
   // ── Step 2: consolidate every loaded source into ONE workbook ──
   // Rebuilds the full multi-tab research export for each loaded Firestore session
   // (via the shared sessionExport builder, so it is byte-for-byte the same format
@@ -1020,6 +1061,7 @@ export default function DataAnalytics() {
                 {' '}(1&nbsp;−&nbsp;mean similarity to the other ideas) and their mean <em>Score</em>; and per condition the
                 pool-level <em>Unique fraction</em> and <em>Productivity</em> (KPI&nbsp;2). <em>Prototypicality (KS)</em> and the
                 KS-based creativity count are not computed yet. Everything here is derived from the loaded idea text alone.
+                {' '}Once computed, <em>Download ideas&nbsp;+&nbsp;KPIs</em> exports the input file with a column added per idea for each KPI.
               </div>
               <div style={{ margin: '8px 0' }}>
                 <div className={styles.raterLabel} style={{ marginBottom: 4 }}>Reference set R — products that already exist (one per line)</div>
@@ -1041,6 +1083,11 @@ export default function DataAnalytics() {
               <div className={styles.row} style={{ marginBottom: 8 }}>
                 <button className="btn-primary" onClick={computeDeterministic} disabled={!!detComputing || effectiveRows.length < 2}>
                   {detComputing ? `${detComputing.phase}… ${detComputing.done}/${detComputing.total}` : `Compute objective KPIs for ${effectiveRows.length} idea${effectiveRows.length === 1 ? '' : 's'}`}
+                </button>
+                <button className={`btn-ghost ${styles.miniBtn}`} onClick={downloadIdeasWithKpis}
+                  disabled={!!detComputing || !effectiveRows.some(r => r.det_score !== '' && r.det_score != null)}
+                  title='Download the input "ideas" file with a column added per idea for each computed KPI'>
+                  Download ideas + KPIs (Excel)
                 </button>
                 {detComputing && <span className={styles.statusLine}><span className={styles.spinner} /> computing TF-IDF in your browser…</span>}
               </div>
