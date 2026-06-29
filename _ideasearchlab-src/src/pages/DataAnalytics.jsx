@@ -10,7 +10,8 @@ import {
   recomputeOverall, rowsToCsv, csvToRows, normalizeImportedRows, ideaText, summarize,
   matchScoresIntoRows, buildSummaryTable, DEFAULT_REFERENCE_SET,
 } from '../utils/analyticsData'
-import { scoreIdeas, fetchAISettings, embedTexts, EMBED_PROVIDERS } from '../utils/llmClient'
+import { scoreIdeas, fetchAISettings } from '../utils/llmClient'
+import { tfidfVectors } from '../utils/tfidf'
 import { computeDeterministicKpis, uniqueFraction, productivityCount, cosine, simMatrix } from '../utils/deterministicKpis'
 import { PROVIDERS, SCORING_DEFAULT_MODEL, DEFAULT_SCORING_PROVIDER, providerById } from '../data/aiModels'
 import { PYTHON_TEMPLATE, R_TEMPLATE } from '../data/analyticsTemplates'
@@ -42,7 +43,7 @@ const hasAnyKpi = r => ALL_KPI_KEYS.some(k => r[k] !== '' && r[k] != null)
 // localStorage keys for the per-section Save / Make-default persistence. Kept in
 // the browser (no Firestore-rules change needed); "Save" and "Make this the
 // default" both write the same key, which is loaded back on page open.
-const LS = { sessions: 'da:sessions', dataset: 'da:dataset', python: 'da:code:python', r: 'da:code:r', refset: 'da:refset', embed: 'da:embedProvider' }
+const LS = { sessions: 'da:sessions', dataset: 'da:dataset', python: 'da:code:python', r: 'da:code:r', refset: 'da:refset' }
 
 export default function DataAnalytics() {
   const navigate = useNavigate()
@@ -76,8 +77,8 @@ export default function DataAnalytics() {
   // Summary Statistics: restrict to ideas scored on all three KPIs (default on).
   const [statsOnlyScored, setStatsOnlyScored] = useState(true)
 
-  // ── Section 3.1 — deterministic / objective KPIs (embedding-based) ──
-  const [embedProvider, setEmbedProvider] = useState('openai')
+  // ── Section 3.1 — deterministic / objective KPIs (in-browser TF-IDF) ──
+  // No API key / billing: similarity is computed locally from the idea text.
   const [referenceSet, setReferenceSet] = useState(() => DEFAULT_REFERENCE_SET.join('\n'))
   const [detComputing, setDetComputing] = useState(null) // { phase, done, total } | null
   const [detErr, setDetErr] = useState('')
@@ -126,7 +127,6 @@ export default function DataAnalytics() {
       const py = localStorage.getItem(LS.python); if (py != null) setPyCode(py)
       const rc = localStorage.getItem(LS.r); if (rc != null) setRCode(rc)
       const rs = localStorage.getItem(LS.refset); if (rs != null) setReferenceSet(rs)
-      const ep = localStorage.getItem(LS.embed); if (ep != null) setEmbedProvider(ep)
       const sel = localStorage.getItem(LS.sessions)
       if (sel) { const a = JSON.parse(sel); if (Array.isArray(a)) setSelected(new Set(a)) }
       const ds = localStorage.getItem(LS.dataset)
@@ -385,29 +385,28 @@ export default function DataAnalytics() {
     e.target.value = ''
   }
 
-  // ── Section 3.1: compute the deterministic / objective KPIs via embeddings ──
-  // Embeds every loaded idea + the reference set R, then computes per-idea Novelty
-  // (1 − max sim to R), Distinctiveness (1 − mean sim to the pool) and the combined
-  // Score, plus the pool-level Unique fraction and Productivity per condition.
+  // ── Section 3.1: compute the deterministic / objective KPIs via TF-IDF ──────
+  // Vectorises every loaded idea + the reference set R with classical TF-IDF
+  // (in the browser, no API key, no model download), then computes per-idea
+  // Novelty (1 − max sim to R), Distinctiveness (1 − mean sim to the pool) and
+  // the combined Score, plus the pool-level Unique fraction and Productivity per
+  // condition. Cosine over TF-IDF vectors → fully reproducible from the data.
   async function computeDeterministic() {
     setDetErr(''); setDetResult(null)
     const pool = effectiveRows                         // distinctiveness pool = all loaded ideas
     if (pool.length < 2) { setDetErr('Load at least two ideas first.'); return }
     const refs = referenceSet.split('\n').map(s => s.trim()).filter(Boolean)
     if (!refs.length) { setDetErr('The reference set R is empty. Add the products that already exist (one per line).'); return }
-    let settings = aiSettings
-    try { settings = await fetchAISettings(); setAiSettings(settings) } catch (_) { /* keep loaded copy */ }
-    setDetComputing({ phase: 'Embedding ideas', done: 0, total: pool.length + refs.length })
+    setDetComputing({ phase: 'Vectorising ideas (TF-IDF)', done: 0, total: pool.length + refs.length })
+    // Let the "computing…" state paint before the synchronous TF-IDF work.
+    await new Promise(res => setTimeout(res, 0))
     try {
-      const ideaVecs = await embedTexts(pool.map(r => r.text || ideaText(r)), {
-        provider: embedProvider, settings,
-        onProgress: ({ done }) => setDetComputing({ phase: 'Embedding ideas', done, total: pool.length + refs.length }),
-      })
-      setDetComputing({ phase: 'Embedding reference set', done: pool.length, total: pool.length + refs.length })
-      const refVecs = await embedTexts(refs, {
-        provider: embedProvider, settings,
-        onProgress: ({ done }) => setDetComputing({ phase: 'Embedding reference set', done: pool.length + done, total: pool.length + refs.length }),
-      })
+      // Vectorise ideas + reference set TOGETHER so they share one vocabulary and
+      // IDF space — required for the idea-vs-R cosine in Novelty to be meaningful.
+      const ideaTexts = pool.map(r => r.text || ideaText(r))
+      const { vectors } = tfidfVectors([...ideaTexts, ...refs])
+      const ideaVecs = vectors.slice(0, pool.length)
+      const refVecs = vectors.slice(pool.length)
       // Per-idea KPIs over the full pool.
       const { perIdea } = computeDeterministicKpis(ideaVecs, refVecs, { tau: 0.8 })
       const round4 = x => (x == null ? '' : Math.round(x * 1e4) / 1e4)
@@ -1015,22 +1014,12 @@ export default function DataAnalytics() {
               <h3 className={styles.subTitle}><span className={styles.subBadge}>3.1</span>Deterministic and objective KPIs</h3>
               <div className={styles.banner}>
                 <strong>Objective, repeatable KPIs computed from the idea text</strong> (Lee&nbsp;&amp;&nbsp;Chung 2024;
-                Meincke et&nbsp;al. 2025; Bouschery et&nbsp;al. 2024). Using a fixed embedding model it computes, per idea,
+                Meincke et&nbsp;al. 2025; Bouschery et&nbsp;al. 2024). Using classical <strong>TF-IDF</strong> similarity computed
+                {' '}entirely in your browser (no&nbsp;API key, no&nbsp;model download), it computes, per idea,
                 {' '}<em>Novelty</em> (1&nbsp;−&nbsp;max similarity to the reference set R), <em>Distinctiveness</em>
                 {' '}(1&nbsp;−&nbsp;mean similarity to the other ideas) and their mean <em>Score</em>; and per condition the
                 pool-level <em>Unique fraction</em> and <em>Productivity</em> (KPI&nbsp;2). <em>Prototypicality (KS)</em> and the
-                KS-based creativity count are not computed yet. Embeddings need an OpenAI or Gemini key (AI&nbsp;Settings).
-              </div>
-              <div className={styles.raterRow}>
-                <span className={styles.raterLabel}>Embedding model</span>
-                <select className={styles.miniSelect} value={embedProvider}
-                  onChange={e => { setEmbedProvider(e.target.value); try { localStorage.setItem(LS.embed, e.target.value) } catch (_) {} }}
-                  disabled={!!detComputing}>
-                  {EMBED_PROVIDERS.map(p => <option key={p.id} value={p.id}>{p.name} · {p.defaultModel}</option>)}
-                </select>
-                {aiSettings && !aiSettings?.apiKeys?.[embedProvider] && (
-                  <span className={styles.unscored}>no {embedProvider} key saved — add it under AI Settings</span>
-                )}
+                KS-based creativity count are not computed yet. Everything here is derived from the loaded idea text alone.
               </div>
               <div style={{ margin: '8px 0' }}>
                 <div className={styles.raterLabel} style={{ marginBottom: 4 }}>Reference set R — products that already exist (one per line)</div>
@@ -1053,7 +1042,7 @@ export default function DataAnalytics() {
                 <button className="btn-primary" onClick={computeDeterministic} disabled={!!detComputing || effectiveRows.length < 2}>
                   {detComputing ? `${detComputing.phase}… ${detComputing.done}/${detComputing.total}` : `Compute objective KPIs for ${effectiveRows.length} idea${effectiveRows.length === 1 ? '' : 's'}`}
                 </button>
-                {detComputing && <span className={styles.statusLine}><span className={styles.spinner} /> embedding via {embedProvider}…</span>}
+                {detComputing && <span className={styles.statusLine}><span className={styles.spinner} /> computing TF-IDF in your browser…</span>}
               </div>
               {detComputing && (
                 <div className={styles.progressWrap}>

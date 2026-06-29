@@ -206,71 +206,8 @@ function clamp1to5(v) {
   return Math.max(1, Math.min(5, Math.round(n * 10) / 10))
 }
 
-// ── Text embeddings (for the Section 3.1 deterministic KPIs) ───────────────────
-// Only OpenAI and Gemini expose an embeddings endpoint usable from the browser;
-// Anthropic/Claude has no embeddings API, so it is not offered here.
-export const EMBED_PROVIDERS = [
-  { id: 'openai', name: 'OpenAI', defaultModel: 'text-embedding-3-small' },
-  { id: 'gemini', name: 'Google Gemini', defaultModel: 'text-embedding-004' },
-]
-const EMBED_DEFAULTS = { openai: 'text-embedding-3-small', gemini: 'text-embedding-004' }
+// Note: the Section 3.1 deterministic KPIs no longer use text embeddings — they
+// are computed in the browser with classical TF-IDF (see utils/tfidf.js), so
+// there is no embedding API, model download, or billing involved.
 
-async function embedOpenAI(apiKey, model, batch) {
-  const res = await fetch('https://api.openai.com/v1/embeddings', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ model, input: batch }),
-  })
-  if (!res.ok) throw new Error(`OpenAI embeddings error: ${await res.text()}`)
-  const data = await res.json()
-  // Sort by the echoed index so the vectors line up with the input order.
-  return (data.data || []).slice().sort((a, b) => a.index - b.index).map(d => d.embedding)
-}
-
-async function embedGemini(apiKey, model, batch) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:batchEmbedContents?key=${apiKey}`
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      requests: batch.map(text => ({ model: `models/${model}`, content: { parts: [{ text }] } })),
-    }),
-  })
-  if (!res.ok) throw new Error(`Gemini embeddings error: ${await res.text()}`)
-  const data = await res.json()
-  return (data.embeddings || []).map(e => e.values)
-}
-
-/**
- * Embed a list of texts into vectors with a fixed embedding model, in batches.
- * Returns number[][] in the SAME order as `texts` (every text must embed, so the
- * deterministic KPIs are reproducible). Throws with a clear message on any error.
- * @param texts string[]
- * @param opts  { provider?, model?, settings?, onProgress?, batchSize? }
- */
-export async function embedTexts(texts, opts = {}) {
-  const provider = opts.provider || 'openai'
-  if (!EMBED_DEFAULTS[provider]) throw new Error(`Provider "${provider}" has no embeddings API. Use OpenAI or Gemini.`)
-  const settings = opts.settings || (await fetchAISettings())
-  const apiKey = settings?.apiKeys?.[provider]
-  if (!apiKey) throw new Error(`No API key saved for "${provider}". Add it under Admin → AI Settings first.`)
-  const model = opts.model || EMBED_DEFAULTS[provider]
-  const batchSize = opts.batchSize || 96
-  const out = new Array(texts.length)
-  let done = 0
-  for (let start = 0; start < texts.length; start += batchSize) {
-    const batch = texts.slice(start, start + batchSize).map(t => oneLine(t) || ' ')
-    const vecs = provider === 'gemini'
-      ? await embedGemini(apiKey, model, batch)
-      : await embedOpenAI(apiKey, model, batch)
-    if (!Array.isArray(vecs) || vecs.length !== batch.length) {
-      throw new Error(`Embeddings provider returned ${vecs?.length} vectors for ${batch.length} inputs.`)
-    }
-    for (let k = 0; k < vecs.length; k++) out[start + k] = vecs[k]
-    done += batch.length
-    if (opts.onProgress) opts.onProgress({ done, total: texts.length })
-  }
-  return out
-}
-
-export { PROVIDER_DEFAULTS, EMBED_DEFAULTS }
+export { PROVIDER_DEFAULTS }

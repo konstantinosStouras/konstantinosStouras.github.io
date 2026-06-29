@@ -18,8 +18,9 @@
  *     creativity cutoff, so it depends on KPI 1 and is deferred together with it.
  *
  * Everything here is PURE arithmetic over similarity values, so it is fully unit-
- * testable independently of any embedding model (see deterministicKpis.test logic).
- * The embedding vectors themselves come from llmClient.embedTexts() at call time.
+ * testable independently of how the vectors are produced (see deterministicKpis
+ * test logic). The vectors themselves come from utils/tfidf.tfidfVectors() at
+ * call time — classical TF-IDF computed in the browser, no embedding model.
  */
 
 /** Cosine similarity of two numeric vectors; 0 if either has zero length. */
