@@ -8,14 +8,15 @@ import { useTheme } from '../context/ThemeContext'
 import {
   CONDITIONS, CONDITION_INFO, KPIS, conditionForSession, buildRowsForSession,
   recomputeOverall, rowsToCsv, csvToRows, normalizeImportedRows, ideaText, summarize,
-  matchScoresIntoRows,
+  matchScoresIntoRows, buildSummaryTable,
 } from '../utils/analyticsData'
 import { scoreIdeas, fetchAISettings } from '../utils/llmClient'
 import { PROVIDERS, SCORING_DEFAULT_MODEL, DEFAULT_SCORING_PROVIDER, providerById } from '../data/aiModels'
 import { PYTHON_TEMPLATE, R_TEMPLATE } from '../data/analyticsTemplates'
 import { runPython } from '../utils/pyodideRunner'
 import { runR } from '../utils/webrRunner'
-import { parseRunOutput, buildInsightsPrintHtml, kpiLabel } from '../utils/insightsReport'
+import { parseRunOutput, buildInsightsPrintHtml, kpiLabel, tableCell } from '../utils/insightsReport'
+import { buildLatexSource } from '../utils/latexReport'
 import {
   fetchSessionExportData, buildSessionSheets, mergeSessionSheets,
   appendSheetsToWorkbook, rankingsSheetFromIdeas, conditionOf,
@@ -664,6 +665,9 @@ export default function DataAnalytics() {
     const v = statRows.map(r => Number(r.overall_quality)).filter(Number.isFinite)
     return v.length ? (v.reduce((a, b) => a + b, 0) / v.length).toFixed(2) : '—'
   }, [statRows])
+  // Table 1 (summary statistics + correlation matrix), in the style of the paper's
+  // Table 1 — computed over the fully-scored ideas in the Section-4 dataset.
+  const summaryTable = useMemo(() => buildSummaryTable(statRows), [statRows])
 
   const code = tab === 'python' ? pyCode : rCode
   const setCode = tab === 'python' ? setPyCode : setRCode
@@ -685,6 +689,8 @@ export default function DataAnalytics() {
       code: lastRun.code,
       lang: lastRun.lang,
       images: lastRun.images,
+      tables: report.tables || [],            // Tables 3–6 (booktabs style)
+      summaryTable,                            // Table 1 (summary stats + correlations)
       meta: { generatedAt: (lastRun.ranAt || new Date()).toLocaleString(), rowsUsed },
     })
     const win = window.open('', '_blank')
@@ -692,6 +698,20 @@ export default function DataAnalytics() {
     win.document.open()
     win.document.write(html)
     win.document.close()
+  }
+
+  // Download the genuine LaTeX source (Table 1 + Tables 3–6, booktabs) — compiles
+  // with pdflatex/xelatex to a publication-quality PDF formatted like the paper.
+  function exportLatex() {
+    if (!report) return
+    const tex = buildLatexSource({
+      tables: report.tables || [],
+      summaryTable,
+      parsed: report.parsed,
+      lang: lastRun?.lang || 'python',
+      meta: { generatedAt: (lastRun?.ranAt || new Date()).toLocaleString(), rowsUsed },
+    })
+    saveBlob(tex, 'idea_analytics_tables.tex', 'application/x-tex;charset=utf-8')
   }
 
   return (
@@ -1085,6 +1105,9 @@ export default function DataAnalytics() {
                 <div className={styles.statBox}><div className={styles.statNum}>{statRows.filter(r => /group/i.test(r.phase)).length}</div><div className={styles.statLabel}>Group-stage ideas</div></div>
                 <div className={styles.statBox}><div className={styles.statNum}>{statRows.length ? (statFinal / statRows.length * 100).toFixed(0) + '%' : '—'}</div><div className={styles.statLabel}>Final-pick rate</div></div>
               </div>
+
+              {/* Table 1 — summary statistics + correlation matrix (paper style) */}
+              <SummaryStatsTable summary={summaryTable} />
             </>
           )}
         </section>
@@ -1168,7 +1191,10 @@ export default function DataAnalytics() {
           <h2 className={styles.sectionTitle}>
             <span><span className={styles.stepBadge}>6</span>Insights gained</span>
             {lastRun && (
-              <button className="btn-primary" onClick={exportInsightsPdf}>⬇ Export PDF</button>
+              <span className={styles.row}>
+                <button className="btn-primary" onClick={exportInsightsPdf}>⬇ Export PDF</button>
+                <button className={`btn-ghost ${styles.miniBtn}`} onClick={exportLatex} title="Download the LaTeX (.tex) source of Table 1 + Tables 3–6 — compile with pdflatex for a publication-quality PDF formatted like the paper">⬇ Download LaTeX (.tex)</button>
+              </span>
             )}
           </h2>
           <p className={styles.hint}>
@@ -1189,6 +1215,9 @@ export default function DataAnalytics() {
                 {rowsUsed != null ? ` · ${rowsUsed} idea${rowsUsed === 1 ? '' : 's'} analysed` : ''}
                 {lastRun.ranAt ? ` · ${lastRun.ranAt.toLocaleString()}` : ''}
               </div>
+
+              {/* Tables 3–6 (paper layout) parsed from the run, shown formatted */}
+              {report?.tables?.length > 0 && <RegressionTables tables={report.tables} />}
 
               {report?.hasInsights ? (
                 <InsightsPanel report={report} />
@@ -1307,6 +1336,99 @@ function InsightsPanel({ report }) {
         </div>
       )}
       {parsed.reminder && <p className={styles.kpiMuted}>Note: {parsed.reminder}</p>}
+    </div>
+  )
+}
+
+// ── Section 4: Table 1 — summary statistics + correlation matrix (paper style) ──
+// Renders the structure from buildSummaryTable(): five descriptive columns then a
+// lower-triangular Pearson correlation matrix, in the booktabs look of the paper.
+function SummaryStatsTable({ summary }) {
+  if (!summary || !summary.variables || !summary.variables.length || !summary.n) return null
+  const v = summary.variables
+  const f2 = x => (x == null || Number.isNaN(Number(x)) ? '—' : Number(x).toFixed(2))
+  return (
+    <div className={styles.regBlock}>
+      <div className={styles.regCap}>
+        <strong>Table 1.</strong> Summary statistics and correlations
+        <span className={styles.regSub}> Descriptive statistics and the Pearson correlation matrix between the main variables.</span>
+      </div>
+      <div className={styles.tableWrap}>
+        <table className={styles.regTable}>
+          <thead>
+            <tr>
+              <th className={styles.regVar}>Variable</th>
+              <th>Mean</th><th>Median</th><th>SD</th><th>Min</th><th>Max</th>
+              {v.map((_, i) => <th key={i}>{i + 1}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {v.map((row, i) => (
+              <tr key={row.key}>
+                <td className={styles.regVar}>{i + 1}. {row.label}</td>
+                <td>{f2(row.mean)}</td><td>{f2(row.median)}</td><td>{f2(row.sd)}</td>
+                <td>{f2(row.min)}</td><td>{f2(row.max)}</td>
+                {v.map((_, j) => <td key={j}>{j <= i ? f2(summary.corr?.[i]?.[j]) : ''}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className={styles.regNote}>
+        N = {summary.n} fully-scored ideas. Cells are Pearson correlations (lower triangle).
+        Dummies: AI (any) / Solo / Group / Both are coded vs the None baseline.
+      </p>
+    </div>
+  )
+}
+
+// ── Section 6: Tables 3–6 — the regression tables parsed from the Step-5 run ────
+// One booktabs-style table per parsed block; coefficient rows show the estimate
+// (with stars) over its (standard error); an "n/a" cell renders as an em dash.
+function RegressionTables({ tables }) {
+  if (!tables || !tables.length) return null
+  return (
+    <div className={styles.regTablesWrap}>
+      <h3 className={styles.kpiName}>Regression tables (Tables 3–6)</h3>
+      {tables.map((t, ti) => {
+        const firstStat = t.rows.findIndex(r => r.kind === 'stat')
+        return (
+          <div className={styles.regBlock} key={t.num ?? ti}>
+            <div className={styles.regCap}>
+              <strong>Table {t.num}.</strong> {t.title}
+              <span className={styles.regSub}> {t.sub}</span>
+            </div>
+            <div className={styles.tableWrap}>
+              <table className={styles.regTable}>
+                <thead>
+                  <tr>
+                    <th className={styles.regVar}>Variable</th>
+                    {t.columns.map((c, i) => <th key={`${c}-${i}`}>{c}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {t.rows.map((r, idx) => {
+                    if (r.kind === 'rule') return null
+                    // SE rows keep empty cells blank; coef/stat map "n/a" → em dash.
+                    const disp = r.kind === 'se' ? (c => String(c ?? '')) : (c => tableCell(c))
+                    const cls = [
+                      r.kind === 'se' ? styles.regSe : '',
+                      r.kind === 'stat' && idx === firstStat ? styles.regFirstStat : '',
+                    ].filter(Boolean).join(' ')
+                    return (
+                      <tr key={idx} className={cls}>
+                        <td className={styles.regVar}>{r.label || ''}</td>
+                        {t.columns.map((_, i) => <td key={i}>{disp(r.cells?.[i] ?? '')}</td>)}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className={styles.regNote}>{t.note}</p>
+          </div>
+        )
+      })}
     </div>
   )
 }
