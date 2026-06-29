@@ -60,7 +60,7 @@ def cmd_build(args):
         maps.append(m)
     s2w = merge_s2w(maps)
 
-    min_dc = args.min_doc_count if args.min_doc_count else max(2, round(0.03 * len(docs_stems)))
+    min_dc = args.min_doc_count if args.min_doc_count else max(2, round(0.02 * len(docs_stems)))
     vocab = build_vocab(docs_stems, min_dc)
     if not vocab:
         sys.exit("Empty vocabulary. Lower --min-doc-count or add more documents.")
@@ -359,7 +359,8 @@ def main():
     b.add_argument("--model", default="glove_model.json",
                    help="Where to save the model JSON. Default glove_model.json")
     b.add_argument("--min-doc-count", type=int, default=0,
-                   help="Min documents a stem must appear in. Default is 3 percent of documents.")
+                   help="Min documents a stem must appear in. Default is about 2 percent of documents "
+                        "(at least 2). Lower it to keep more nodes so more ideas are scorable.")
     b.set_defaults(func=cmd_build)
 
     s = sub.add_parser("score",
