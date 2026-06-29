@@ -90,8 +90,8 @@ Useful flags:
 - `--docs-dir`  a folder of `.txt` files, one document each.
 - `--model`  where to save the model JSON. Default `glove_model.json`.
 - `--min-doc-count`  how many documents a stem must appear in to become a node. The default is about
-  3 percent of the document count (at least 2). Raise it to drop generic words, lower it (e.g. 2) to
-  keep more nodes so more ideas are scorable.
+  2 percent of the document count (at least 2). Raise it to drop generic words, lower it to keep more
+  nodes so more ideas are scorable.
 
 Example output from the sample documents:
 
