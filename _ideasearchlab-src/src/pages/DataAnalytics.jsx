@@ -843,18 +843,18 @@ export default function DataAnalytics() {
     }
   }
 
-  // Section-3 "Clear": only removes what THIS step produced — the KPI scores and
-  // the regression run/insights — leaving the loaded dataset (Sections 1–2)
-  // untouched. Steps 5 & 6 (which depend on the scores) end up empty as a result.
+  // Section-3 "Clear": removes ONLY the KPI data added in THIS step — AI scores (3.2),
+  // objective KPIs (3.1), evaluator scores (3.3) and any uploaded extra KPIs (e.g.
+  // Prototypicality). The loaded ideas (Sections 1–2) and the Step-5/6 analysis are
+  // left untouched. `stripAllKpis` blanks every built-in KPI and drops all x_ columns
+  // while keeping the idea data.
   function clearData() {
-    if ((scoredCount > 0 || extScoredCount > 0 || detScoredCount > 0) &&
-        !confirm('Clear ALL KPI scores (AI, evaluator and objective) and the analysis from this step? The loaded dataset in Sections 1–2 stays.')) return
-    setRows(prev => recomputeOverall(prev.map(r => ({
-      ...r, novelty: '', usefulness: '', ext_novelty: '', ext_usefulness: '',
-      det_novelty: '', det_distinctiveness: '', det_score: '',
-    }))))
-    setOutput(''); setImages([]); setRunError(null); setLastRun(null); setRunsByLang({})
-    setScoreErr(''); setScoreLoadMsg(''); setEvalLoadMsg(''); setDetErr(''); setDetResult(null)
+    const hasUploaded = uploadedKpiKeys(rows).length > 0
+    if ((scoredCount > 0 || extScoredCount > 0 || detScoredCount > 0 || hasUploaded) &&
+        !confirm('Clear the KPIs added in this step — AI scores, objective KPIs, evaluator scores and any uploaded extra KPIs (e.g. Prototypicality)? Your loaded ideas in Sections 1–2 stay.')) return
+    setRows(prev => stripAllKpis(prev))
+    setDetResult(null); setDetErr('')
+    setScoreErr(''); setScoreLoadMsg(''); setEvalLoadMsg(''); setKpiUploadMsg('')
   }
 
   // ── Run code (Python via Pyodide / R via WebR) ──
@@ -1154,11 +1154,6 @@ export default function DataAnalytics() {
                 return parts.length ? `Load ${parts.join(' and ')}` : 'Load'
               })()}
             </button>
-            {rows.length > 0 && (
-              <button className={`btn-ghost ${styles.miniBtn}`} onClick={() => loadSelected(false)} disabled={!selected.size || loadingData || !!scoring}>
-                Append to current
-              </button>
-            )}
             <div className={styles.spacer} />
             <button className={`btn-ghost ${styles.miniBtn}`} onClick={() => fileRef.current?.click()} disabled={!!scoring}>Import Excel / CSV</button>
             <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className={styles.fileInput} onChange={onPickFile} />
