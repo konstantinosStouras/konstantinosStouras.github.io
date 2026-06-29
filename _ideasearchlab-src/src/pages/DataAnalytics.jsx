@@ -8,9 +8,10 @@ import { useTheme } from '../context/ThemeContext'
 import {
   CONDITIONS, CONDITION_INFO, KPIS, conditionForSession, buildRowsForSession,
   recomputeOverall, rowsToCsv, csvToRows, normalizeImportedRows, ideaText, summarize,
-  matchScoresIntoRows, buildSummaryTable,
+  matchScoresIntoRows, buildSummaryTable, DEFAULT_REFERENCE_SET,
 } from '../utils/analyticsData'
-import { scoreIdeas, fetchAISettings } from '../utils/llmClient'
+import { scoreIdeas, fetchAISettings, embedTexts, EMBED_PROVIDERS } from '../utils/llmClient'
+import { computeDeterministicKpis, uniqueFraction, productivityCount, cosine, simMatrix } from '../utils/deterministicKpis'
 import { PROVIDERS, SCORING_DEFAULT_MODEL, DEFAULT_SCORING_PROVIDER, providerById } from '../data/aiModels'
 import { PYTHON_TEMPLATE, R_TEMPLATE } from '../data/analyticsTemplates'
 import { runPython } from '../utils/pyodideRunner'
@@ -29,10 +30,19 @@ const DESIGN_BRIEF = 'Designing a completely new product using a fabric that cha
 const condClass = cond => styles[`cond${Math.max(0, CONDITIONS.indexOf(cond))}`]
 const userKey = (session, authorId) => `${session}|${authorId || ''}`
 
+// Every KPI column across the three sources (AI / external / objective); a row is
+// "scored" for the analysis if it carries at least one of these.
+const ALL_KPI_KEYS = [
+  'novelty', 'usefulness', 'overall_quality',
+  'ext_novelty', 'ext_usefulness', 'ext_quality',
+  'det_novelty', 'det_distinctiveness', 'det_score',
+]
+const hasAnyKpi = r => ALL_KPI_KEYS.some(k => r[k] !== '' && r[k] != null)
+
 // localStorage keys for the per-section Save / Make-default persistence. Kept in
 // the browser (no Firestore-rules change needed); "Save" and "Make this the
 // default" both write the same key, which is loaded back on page open.
-const LS = { sessions: 'da:sessions', dataset: 'da:dataset', python: 'da:code:python', r: 'da:code:r' }
+const LS = { sessions: 'da:sessions', dataset: 'da:dataset', python: 'da:code:python', r: 'da:code:r', refset: 'da:refset', embed: 'da:embedProvider' }
 
 export default function DataAnalytics() {
   const navigate = useNavigate()
@@ -65,6 +75,15 @@ export default function DataAnalytics() {
   const [scoreOnlyFinal, setScoreOnlyFinal] = useState(true)
   // Summary Statistics: restrict to ideas scored on all three KPIs (default on).
   const [statsOnlyScored, setStatsOnlyScored] = useState(true)
+
+  // ── Section 3.1 — deterministic / objective KPIs (embedding-based) ──
+  const [embedProvider, setEmbedProvider] = useState('openai')
+  const [referenceSet, setReferenceSet] = useState(() => DEFAULT_REFERENCE_SET.join('\n'))
+  const [detComputing, setDetComputing] = useState(null) // { phase, done, total } | null
+  const [detErr, setDetErr] = useState('')
+  const [detResult, setDetResult] = useState(null)       // per-condition pool KPIs
+  // ── Section 3.3 — external-evaluator KPI upload ──
+  const [evalLoadMsg, setEvalLoadMsg] = useState('')
   // Step-3 table sorting: which column + direction (0 = original order).
   const [sortCol, setSortCol] = useState(null)
   const [sortDir, setSortDir] = useState(0) // 1 asc, -1 desc, 0 none
@@ -88,6 +107,7 @@ export default function DataAnalytics() {
 
   const fileRef = useRef(null)
   const scoreFileRef = useRef(null)
+  const evalScoreFileRef = useRef(null)
   const outRef = useRef('')
   const flushQueued = useRef(false)
   const ridSeq = useRef(0)
@@ -105,6 +125,8 @@ export default function DataAnalytics() {
     try {
       const py = localStorage.getItem(LS.python); if (py != null) setPyCode(py)
       const rc = localStorage.getItem(LS.r); if (rc != null) setRCode(rc)
+      const rs = localStorage.getItem(LS.refset); if (rs != null) setReferenceSet(rs)
+      const ep = localStorage.getItem(LS.embed); if (ep != null) setEmbedProvider(ep)
       const sel = localStorage.getItem(LS.sessions)
       if (sel) { const a = JSON.parse(sel); if (Array.isArray(a)) setSelected(new Set(a)) }
       const ds = localStorage.getItem(LS.dataset)
@@ -302,14 +324,16 @@ export default function DataAnalytics() {
   }
 
   // ── Load idea scores from a ranked-ideas file ("All Ideas Ranked" tab) ──
-  function onPickScores(e) {
-    const file = e.target.files?.[0]
+  // Shared by the 3.2 AI-scores upload (→ novelty/usefulness) and the 3.3
+  // external-evaluator upload (→ ext_novelty/ext_usefulness). `fields` chooses the
+  // target KPI columns; `setMsg` reports the result for that subsection.
+  function loadScoresFile(file, fields, setMsg) {
     if (!file) return
-    setScoreLoadMsg('')
+    setMsg('')
     const reader = new FileReader()
     reader.onload = ev => {
       try {
-        if (!rows.length) { setScoreLoadMsg('Load a session (or import ideas) first, then load the scores file to match scores onto those ideas.'); return }
+        if (!rows.length) { setMsg('Load a session (or import ideas) first, then load the scores file to match scores onto those ideas.'); return }
         const wb = XLSX.read(ev.target.result, { type: 'array' })
         const sheetName =
           wb.SheetNames.find(n => /all ideas ranked/i.test(n)) ||
@@ -323,7 +347,7 @@ export default function DataAnalytics() {
           const cells = aoa[i].map(c => String(c).toLowerCase())
           if (cells.some(c => c.includes('idea title') || c === 'title') && cells.some(c => c.includes('novelty'))) { h = i; break }
         }
-        if (h === -1) { alert(`This scores file does not match the expected format and was not imported.\n\nExpected an "All Ideas Ranked" sheet with a header row containing "Idea Title" and "Novelty" columns (none found on the "${sheetName}" sheet).`); return }
+        if (h === -1) { alert(`This scores file does not match the expected format and was not imported.\n\nExpected an "All Ideas Ranked" (or Rankings) sheet with a header row containing "Idea Title" and "Novelty" columns (none found on the "${sheetName}" sheet).`); return }
         const header = aoa[h].map(c => String(c).toLowerCase().trim())
         const find = pred => header.findIndex(pred)
         const ciTitle = find(c => c.includes('idea title') || c === 'title')
@@ -341,15 +365,79 @@ export default function DataAnalytics() {
         }
         if (!entries.length) { alert(`This scores file does not match the expected format and was not imported.\n\nNo scored idea rows (with a Novelty/Usefulness value) were found under "${sheetName}".`); return }
         // Don't let a removed participant's idea absorb a title match meant for a visible one.
-        const res = matchScoresIntoRows(rows, entries, r => !excludedUsers.has(userKey(r.session, r.author_id)))
+        const res = matchScoresIntoRows(rows, entries, r => !excludedUsers.has(userKey(r.session, r.author_id)), fields)
         setRows(recomputeOverall(res.rows))
-        setScoreLoadMsg(`Loaded scores from "${sheetName}": updated ${res.matched} idea${res.matched === 1 ? '' : 's'} by title; ${res.unmatched} file row${res.unmatched === 1 ? '' : 's'} had no match in the loaded data.`)
+        setMsg(`Loaded scores from "${sheetName}": updated ${res.matched} idea${res.matched === 1 ? '' : 's'} by title; ${res.unmatched} file row${res.unmatched === 1 ? '' : 's'} had no match in the loaded data.`)
       } catch (err) {
-        setScoreLoadMsg('Could not read the scores file: ' + (err.message || err))
+        setMsg('Could not read the scores file: ' + (err.message || err))
       }
     }
     reader.readAsArrayBuffer(file)
+  }
+  // 3.2 — AI scores upload (fills the AI KPI columns).
+  function onPickScores(e) {
+    loadScoresFile(e.target.files?.[0], { novelty: 'novelty', usefulness: 'usefulness' }, setScoreLoadMsg)
     e.target.value = ''
+  }
+  // 3.3 — external-evaluator scores upload (fills the ext_* KPI columns).
+  function onPickEvalScores(e) {
+    loadScoresFile(e.target.files?.[0], { novelty: 'ext_novelty', usefulness: 'ext_usefulness' }, setEvalLoadMsg)
+    e.target.value = ''
+  }
+
+  // ── Section 3.1: compute the deterministic / objective KPIs via embeddings ──
+  // Embeds every loaded idea + the reference set R, then computes per-idea Novelty
+  // (1 − max sim to R), Distinctiveness (1 − mean sim to the pool) and the combined
+  // Score, plus the pool-level Unique fraction and Productivity per condition.
+  async function computeDeterministic() {
+    setDetErr(''); setDetResult(null)
+    const pool = effectiveRows                         // distinctiveness pool = all loaded ideas
+    if (pool.length < 2) { setDetErr('Load at least two ideas first.'); return }
+    const refs = referenceSet.split('\n').map(s => s.trim()).filter(Boolean)
+    if (!refs.length) { setDetErr('The reference set R is empty. Add the products that already exist (one per line).'); return }
+    let settings = aiSettings
+    try { settings = await fetchAISettings(); setAiSettings(settings) } catch (_) { /* keep loaded copy */ }
+    setDetComputing({ phase: 'Embedding ideas', done: 0, total: pool.length + refs.length })
+    try {
+      const ideaVecs = await embedTexts(pool.map(r => r.text || ideaText(r)), {
+        provider: embedProvider, settings,
+        onProgress: ({ done }) => setDetComputing({ phase: 'Embedding ideas', done, total: pool.length + refs.length }),
+      })
+      setDetComputing({ phase: 'Embedding reference set', done: pool.length, total: pool.length + refs.length })
+      const refVecs = await embedTexts(refs, {
+        provider: embedProvider, settings,
+        onProgress: ({ done }) => setDetComputing({ phase: 'Embedding reference set', done: pool.length + done, total: pool.length + refs.length }),
+      })
+      // Per-idea KPIs over the full pool.
+      const { perIdea } = computeDeterministicKpis(ideaVecs, refVecs, { tau: 0.8 })
+      const round4 = x => (x == null ? '' : Math.round(x * 1e4) / 1e4)
+      const byRid = new Map(pool.map((r, i) => [r.rid, perIdea[i]]))
+      setRows(prev => recomputeOverall(prev.map(r => {
+        const d = byRid.get(r.rid)
+        if (!d) return r
+        return { ...r, det_novelty: round4(d.novelty), det_distinctiveness: round4(d.distinctiveness), det_score: round4(d.score) }
+      })))
+      // Pool-level KPIs per condition (unique fraction at three thresholds + KPI 2 productivity).
+      const perCond = []
+      for (const cond of CONDITIONS) {
+        const idxs = pool.map((r, i) => (r.condition === cond ? i : -1)).filter(i => i >= 0)
+        if (!idxs.length) continue
+        const vecs = idxs.map(i => ideaVecs[i])
+        const M = simMatrix(vecs)
+        const items = idxs.map(i => ({ text: pool[i].text || ideaText(pool[i]), group: pool[i].group_id }))
+        const prod = productivityCount(items, (a, b) => cosine(vecs[a], vecs[b]), { dedupTau: 0.9, minWords: 2 })
+        perCond.push({
+          condition: cond, n: idxs.length,
+          uf80: uniqueFraction(M, 0.8), uf75: uniqueFraction(M, 0.75), uf85: uniqueFraction(M, 0.85),
+          productivity: prod.count,
+        })
+      }
+      setDetResult({ perCond, refCount: refs.length, ideas: pool.length })
+    } catch (err) {
+      setDetErr(err.message || String(err))
+    } finally {
+      setDetComputing(null)
+    }
   }
 
   // ── Derived: the dataset minus any removed participants ──
@@ -560,10 +648,14 @@ export default function DataAnalytics() {
   // the regression run/insights — leaving the loaded dataset (Sections 1–2)
   // untouched. Steps 5 & 6 (which depend on the scores) end up empty as a result.
   function clearData() {
-    if (scoredCount > 0 && !confirm('Clear the KPI scores and the analysis from this step? The loaded dataset in Sections 1–2 stays.')) return
-    setRows(prev => recomputeOverall(prev.map(r => ({ ...r, novelty: '', usefulness: '' }))))
+    if ((scoredCount > 0 || extScoredCount > 0 || detScoredCount > 0) &&
+        !confirm('Clear ALL KPI scores (AI, evaluator and objective) and the analysis from this step? The loaded dataset in Sections 1–2 stays.')) return
+    setRows(prev => recomputeOverall(prev.map(r => ({
+      ...r, novelty: '', usefulness: '', ext_novelty: '', ext_usefulness: '',
+      det_novelty: '', det_distinctiveness: '', det_score: '',
+    }))))
     setOutput(''); setImages([]); setRunError(null); setLastRun(null); setRunsByLang({})
-    setScoreErr(''); setScoreLoadMsg('')
+    setScoreErr(''); setScoreLoadMsg(''); setEvalLoadMsg(''); setDetErr(''); setDetResult(null)
   }
 
   // ── Run code (Python via Pyodide / R via WebR) ──
@@ -580,9 +672,10 @@ export default function DataAnalytics() {
     // The analysis compares conditions on the ideas the groups selected after the
     // group phase (Final Group Pick = 1). Scored final ideas only.
     const analysisRows = effectiveRows.filter(r => Number(r.final_pick) === 1)
-    const scored = analysisRows.filter(r => r.novelty !== '' && r.usefulness !== '')
+    // Need ≥2 final ideas carrying at least one KPI from any source (AI / evaluator / objective).
+    const scored = analysisRows.filter(hasAnyKpi)
     if (scored.length < 2) {
-      setRunError('Need at least a couple of scored Final-Group-Pick ideas. In Step 3, score the final ideas first (the “Only score the Final Ideas” box is on by default).')
+      setRunError('Need at least a couple of Final-Group-Pick ideas with a KPI. In Step 3, score the final ideas with AI (3.2), upload evaluator scores (3.3), or compute the objective KPIs (3.1).')
       return
     }
     setRunning(true)
@@ -638,6 +731,9 @@ export default function DataAnalytics() {
   const stats = useMemo(() => summarize(effectiveRows), [effectiveRows])
   const scoredCount = effectiveRows.filter(r => r.novelty !== '' && r.usefulness !== '').length
   const unscoredCount = effectiveRows.length - scoredCount
+  // Coverage of the other two KPI sources (Section 3.1 / 3.3).
+  const extScoredCount = effectiveRows.filter(r => r.ext_novelty !== '' && r.ext_usefulness !== '').length
+  const detScoredCount = effectiveRows.filter(r => r.det_score !== '' && r.det_score != null).length
   // Section 2 / dataset tallies.
   const isFinal = r => Number(r.final_pick) === 1
   const finalCount = rows.filter(isFinal).length
@@ -649,8 +745,9 @@ export default function DataAnalytics() {
   // Step-3 scoring scope (all ideas vs only Final Ideas) and its unscored count.
   const scorePool = scoreOnlyFinal ? effectiveRows.filter(isFinal) : effectiveRows
   const scopeUnscored = scorePool.filter(r => r.novelty === '' || r.usefulness === '').length
-  // Step-5 regression dataset: scored Final-Group-Pick ideas only.
-  const finalScoredCount = effectiveRows.filter(r => isFinal(r) && r.novelty !== '' && r.usefulness !== '').length
+  // Step-5 regression dataset: Final-Group-Pick ideas carrying at least one KPI
+  // (from any source — AI / evaluator / objective).
+  const finalScoredCount = effectiveRows.filter(r => isFinal(r) && hasAnyKpi(r)).length
 
   // ── Step 4: summary statistics over the consolidated Step-3 data ──
   const isFullyScored = r => r.novelty !== '' && r.usefulness !== '' && r.overall_quality !== ''
@@ -845,11 +942,14 @@ export default function DataAnalytics() {
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>
             <span><span className={styles.stepBadge}>2</span>Aggregate Data</span>
-            {rows.length > 0 && (
-              <button className="btn-primary" onClick={downloadAggregate} disabled={aggregating}>
-                {aggregating ? <><span className={styles.spinner} /> Building…</> : 'Download aggregate Excel'}
-              </button>
-            )}
+            <span className={styles.row}>
+              <button className={`btn-ghost ${styles.miniBtn}`} onClick={() => fileRef.current?.click()} disabled={!!scoring}>Import Excel / CSV</button>
+              {rows.length > 0 && (
+                <button className="btn-primary" onClick={downloadAggregate} disabled={aggregating}>
+                  {aggregating ? <><span className={styles.spinner} /> Building…</> : 'Download aggregate Excel'}
+                </button>
+              )}
+            </span>
           </h2>
           <p className={styles.hint}>
             Consolidate every loaded session (and any imported export workbook) into a
@@ -859,7 +959,9 @@ export default function DataAnalytics() {
             with every session's rows stacked together and condition-stamped. It adds one extra tab,
             <strong> Rankings</strong> — one row per idea with <em>Idea&nbsp;ID, Condition, Stage,
             Final&nbsp;Group&nbsp;Pick, Title, Description</em> and empty <em>Novelty / Usefulness /
-            Quality</em> columns ready for blind expert rating.
+            Quality</em> columns ready for blind expert rating. You can also <strong>Import Excel / CSV</strong>
+            here (same importer as Step&nbsp;1): the file is added to the source list above — tick it and press
+            “Load …” to include it in the aggregate.
           </p>
           {rows.length === 0 ? (
             <p className={styles.emptyNote}>Tick sessions (or imported files) above and press “Load …”, then build the consolidated file here.</p>
@@ -875,17 +977,22 @@ export default function DataAnalytics() {
         {/* STEP 3 — KPI scoring + dataset */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>
-            <span><span className={styles.stepBadge}>3</span>Score ideas, manage participants &amp; download</span>
+            <span><span className={styles.stepBadge}>3</span>Score &amp; extend ideas across KPI sources, manage participants &amp; download</span>
             {rows.length > 0 && (
               <span className={styles.row}>
                 <button className="btn-primary" onClick={downloadExcel} disabled={!effectiveRows.length}>Download Excel</button>
-                <button className={`btn-ghost ${styles.miniBtn}`} onClick={() => scoreFileRef.current?.click()} disabled={!!scoring} title='Load idea scores from a ranked-ideas file ("All Ideas Ranked" tab)'>Load scores file</button>
-                <input ref={scoreFileRef} type="file" accept=".xlsx,.xls" className={styles.fileInput} onChange={onPickScores} />
                 <button className={`btn-ghost ${styles.miniBtn}`} onClick={downloadCsv} disabled={!effectiveRows.length}>Download CSV</button>
                 <button className={`btn-ghost ${styles.miniBtn}`} onClick={clearData} disabled={!!scoring}>Clear</button>
               </span>
             )}
           </h2>
+          <p className={styles.hint}>
+            Each idea can carry KPIs from three independent sources, kept separate so the analysis
+            can compare them: <strong>3.1 deterministic/objective</strong> KPIs computed from the idea
+            text, <strong>3.2 AI-generated</strong> KPIs (scored now via an API or uploaded), and
+            <strong> 3.3 external-evaluator</strong> KPIs (uploaded). Every available KPI flows into the
+            Step&nbsp;4 summary and the Step&nbsp;5 regressions.
+          </p>
 
           {rows.length === 0 ? (
             <p className={styles.emptyNote}>Load a session or import a file above to build the dataset.</p>
@@ -893,8 +1000,9 @@ export default function DataAnalytics() {
             <>
               <div className={styles.stats}>
                 <div className={styles.statBox}><div className={styles.statNum}>{effectiveRows.length}</div><div className={styles.statLabel}>Ideas{excludedUsers.size ? ` (${rows.length - effectiveRows.length} removed)` : ''}</div></div>
-                <div className={styles.statBox}><div className={styles.statNum}>{scoredCount}</div><div className={styles.statLabel}>Scored</div></div>
-                <div className={styles.statBox}><div className={styles.statNum}>{unscoredCount}</div><div className={styles.statLabel}>Unscored</div></div>
+                <div className={styles.statBox}><div className={styles.statNum}>{detScoredCount}</div><div className={styles.statLabel}>Obj. computed (3.1)</div></div>
+                <div className={styles.statBox}><div className={styles.statNum}>{scoredCount}</div><div className={styles.statLabel}>AI scored (3.2)</div></div>
+                <div className={styles.statBox}><div className={styles.statNum}>{extScoredCount}</div><div className={styles.statLabel}>Eval. rated (3.3)</div></div>
                 {CONDITIONS.map(c => (
                   <div className={styles.statBox} key={c}>
                     <div className={styles.statNum}>{stats[c]?.count || 0}</div>
@@ -903,13 +1011,91 @@ export default function DataAnalytics() {
                 ))}
               </div>
 
+              {/* ── Sub-step 3.1 — Deterministic & objective KPIs ───────────── */}
+              <h3 className={styles.subTitle}><span className={styles.subBadge}>3.1</span>Deterministic and objective KPIs</h3>
               <div className={styles.banner}>
-                <strong>Score the Rankings rows per KPI.</strong> These are the <em>Rankings</em> rows of the
-                consolidated data from Step&nbsp;2. The AI rater scores each idea on novelty and usefulness
-                (1–5); quality is their mean. Choose the API and model below — it uses the matching key saved
-                under AI&nbsp;Settings. The scores you set here flow back into the <em>Rankings</em> tab of the
-                Step&nbsp;2 aggregate and feed the Step&nbsp;5 regressions. You can also edit any score directly
-                in the table and remove participants.
+                <strong>Objective, repeatable KPIs computed from the idea text</strong> (Lee&nbsp;&amp;&nbsp;Chung 2024;
+                Meincke et&nbsp;al. 2025; Bouschery et&nbsp;al. 2024). Using a fixed embedding model it computes, per idea,
+                {' '}<em>Novelty</em> (1&nbsp;−&nbsp;max similarity to the reference set R), <em>Distinctiveness</em>
+                {' '}(1&nbsp;−&nbsp;mean similarity to the other ideas) and their mean <em>Score</em>; and per condition the
+                pool-level <em>Unique fraction</em> and <em>Productivity</em> (KPI&nbsp;2). <em>Prototypicality (KS)</em> and the
+                KS-based creativity count are not computed yet. Embeddings need an OpenAI or Gemini key (AI&nbsp;Settings).
+              </div>
+              <div className={styles.raterRow}>
+                <span className={styles.raterLabel}>Embedding model</span>
+                <select className={styles.miniSelect} value={embedProvider}
+                  onChange={e => { setEmbedProvider(e.target.value); try { localStorage.setItem(LS.embed, e.target.value) } catch (_) {} }}
+                  disabled={!!detComputing}>
+                  {EMBED_PROVIDERS.map(p => <option key={p.id} value={p.id}>{p.name} · {p.defaultModel}</option>)}
+                </select>
+                {aiSettings && !aiSettings?.apiKeys?.[embedProvider] && (
+                  <span className={styles.unscored}>no {embedProvider} key saved — add it under AI Settings</span>
+                )}
+              </div>
+              <div style={{ margin: '8px 0' }}>
+                <div className={styles.raterLabel} style={{ marginBottom: 4 }}>Reference set R — products that already exist (one per line)</div>
+                <textarea
+                  className={styles.refsArea}
+                  value={referenceSet}
+                  spellCheck={false}
+                  disabled={!!detComputing}
+                  onChange={e => { setReferenceSet(e.target.value); try { localStorage.setItem(LS.refset, e.target.value) } catch (_) {} }}
+                />
+                <div className={styles.row} style={{ marginTop: 4 }}>
+                  <button className={`btn-ghost ${styles.miniBtn}`} disabled={!!detComputing}
+                    onClick={() => { setReferenceSet(DEFAULT_REFERENCE_SET.join('\n')); try { localStorage.removeItem(LS.refset) } catch (_) {} }}>
+                    Reset reference set
+                  </button>
+                  <span className={styles.kpiPill}>{referenceSet.split('\n').filter(s => s.trim()).length} items</span>
+                </div>
+              </div>
+              <div className={styles.row} style={{ marginBottom: 8 }}>
+                <button className="btn-primary" onClick={computeDeterministic} disabled={!!detComputing || effectiveRows.length < 2}>
+                  {detComputing ? `${detComputing.phase}… ${detComputing.done}/${detComputing.total}` : `Compute objective KPIs for ${effectiveRows.length} idea${effectiveRows.length === 1 ? '' : 's'}`}
+                </button>
+                {detComputing && <span className={styles.statusLine}><span className={styles.spinner} /> embedding via {embedProvider}…</span>}
+              </div>
+              {detComputing && (
+                <div className={styles.progressWrap}>
+                  <div className={styles.progressBar} style={{ width: `${Math.round((detComputing.done / Math.max(1, detComputing.total)) * 100)}%` }} />
+                </div>
+              )}
+              {detErr && <p className="error-msg">{detErr}</p>}
+              {detResult && (
+                <div style={{ marginTop: 8 }}>
+                  <p className={styles.loadMsg}>
+                    Computed Novelty / Distinctiveness / Score for {detResult.ideas} idea{detResult.ideas === 1 ? '' : 's'}
+                    {' '}against {detResult.refCount} reference item{detResult.refCount === 1 ? '' : 's'}. Pool-level KPIs per condition:
+                  </p>
+                  <div className={styles.tableWrap} style={{ marginTop: 8 }}>
+                    <table className={styles.regTable}>
+                      <thead>
+                        <tr><th className={styles.regVar}>Condition</th><th>Ideas</th><th>Unique fraction (τ=.80)</th><th>τ=.75</th><th>τ=.85</th><th>Productivity (KPI 2)</th></tr>
+                      </thead>
+                      <tbody>
+                        {detResult.perCond.map(c => (
+                          <tr key={c.condition}>
+                            <td className={styles.regVar}><span className={`${styles.condTag} ${condClass(c.condition)}`}>{c.condition}</span></td>
+                            <td>{c.n}</td>
+                            <td>{c.uf80 == null ? '—' : c.uf80.toFixed(2)}</td>
+                            <td>{c.uf75 == null ? '—' : c.uf75.toFixed(2)}</td>
+                            <td>{c.uf85 == null ? '—' : c.uf85.toFixed(2)}</td>
+                            <td>{c.productivity}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Sub-step 3.2 — AI-generated KPIs ────────────────────────── */}
+              <h3 className={styles.subTitle} style={{ marginTop: 22 }}><span className={styles.subBadge}>3.2</span>AI-generated KPIs</h3>
+              <div className={styles.banner}>
+                <strong>Score each idea with an LLM, or upload an offline AI-scoring file.</strong> The AI rater scores each
+                idea on novelty and usefulness (1–5); quality is their mean. Choose the API and model below — it uses the
+                matching key saved under AI&nbsp;Settings. Scores flow into the <em>Rankings</em> tab of the Step&nbsp;2
+                aggregate and the Step&nbsp;5 regressions. You can also edit any score directly in the table below.
               </div>
 
               <div className={styles.raterRow}>
@@ -937,6 +1123,9 @@ export default function DataAnalytics() {
                     ? `Scoring ${scoring.done}/${scoring.total}…`
                     : `Score ${scopeUnscored} ${scoreOnlyFinal ? 'final ' : ''}idea${scopeUnscored === 1 ? '' : 's'} with AI`}
                 </button>
+                <button className={`btn-ghost ${styles.miniBtn}`} onClick={() => scoreFileRef.current?.click()} disabled={!!scoring}
+                  title='Upload an offline AI-scoring file ("All Ideas Ranked" / Rankings sheet) → fills the AI KPI columns'>Load AI scores file</button>
+                <input ref={scoreFileRef} type="file" accept=".xlsx,.xls" className={styles.fileInput} onChange={onPickScores} />
                 {scoring && <span className={styles.statusLine}><span className={styles.spinner} /> contacting {scoreProvider}…</span>}
               </div>
               {scoring && (
@@ -1038,6 +1227,22 @@ export default function DataAnalytics() {
               </div>
 
               <SectionActions onSave={saveDataset} onMakeDefault={saveDataset} onRestore={restoreDataset} hasCustom={saved.dataset} />
+
+              {/* ── Sub-step 3.3 — KPIs by external evaluators ──────────────── */}
+              <h3 className={styles.subTitle} style={{ marginTop: 24 }}><span className={styles.subBadge}>3.3</span>KPIs by external evaluators</h3>
+              <div className={styles.banner}>
+                <strong>Upload human-evaluator ratings</strong> from an Excel file in the same layout as the aggregate's
+                {' '}<em>Rankings</em> / <em>All Ideas Ranked</em> sheet — a header row with an <em>Idea Title</em> (or Title)
+                column plus <em>Novelty</em> and <em>Usefulness</em> columns (one or more rater columns are averaged); quality
+                is their mean. They are matched onto the loaded ideas by title and kept in their own <em>Evaluator</em> KPI
+                columns (separate from the AI scores), so Step&nbsp;4 and Step&nbsp;5 can compare the two.
+              </div>
+              <div className={styles.row} style={{ marginBottom: 8 }}>
+                <button className="btn-primary" onClick={() => evalScoreFileRef.current?.click()}>Load evaluator scores file</button>
+                <input ref={evalScoreFileRef} type="file" accept=".xlsx,.xls" className={styles.fileInput} onChange={onPickEvalScores} />
+                <span className={styles.kpiPill}>{extScoredCount} of {effectiveRows.length} ideas rated</span>
+              </div>
+              {evalLoadMsg && <p className={styles.loadMsg}>{evalLoadMsg}</p>}
             </>
           )}
         </section>
@@ -1046,7 +1251,7 @@ export default function DataAnalytics() {
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>
             <span><span className={styles.stepBadge}>4</span>Summary Statistics</span>
-            <span className={styles.kpiPill}>KPIs: {KPIS.join(' · ')}</span>
+            <span className={styles.kpiPill}>KPIs: AI · Evaluator · Objective (per source)</span>
           </h2>
           <p className={styles.hint}>
             Descriptive statistics of the consolidated dataset from Step&nbsp;3 — counts by condition and
@@ -1060,7 +1265,7 @@ export default function DataAnalytics() {
             <>
               <label className={styles.checkRow}>
                 <input type="checkbox" checked={statsOnlyScored} onChange={e => setStatsOnlyScored(e.target.checked)} />
-                <span>Only include ideas scored on all 3 KPIs (novelty, usefulness, quality)</span>
+                <span>Only include ideas scored on all 3 AI KPIs (novelty, usefulness, quality)</span>
               </label>
 
               <div className={styles.stats} style={{ marginTop: 12 }}>
@@ -1116,7 +1321,7 @@ export default function DataAnalytics() {
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>
             <span><span className={styles.stepBadge}>5</span>Regressions — edit &amp; compile online</span>
-            <span className={styles.kpiPill}>KPIs: {KPIS.join(' · ')}</span>
+            <span className={styles.kpiPill}>KPIs: AI · Evaluator · Objective (per source)</span>
           </h2>
           <p className={styles.hint}>
             Both tabs run the <em>same</em> analysis on the <strong>group-selected Final Ideas</strong>
@@ -1128,7 +1333,7 @@ export default function DataAnalytics() {
             {' '}(unequal-variance) pairwise tests, and prints each condition's n. Edit the code and press
             Run — Python runs via Pyodide and R via WebR, both compiled in your browser (first run downloads
             the runtime, ~10–30&nbsp;s).
-            {finalScoredCount < 2 && <><br /><span className={styles.unscored}>Score at least two Final Ideas in Step&nbsp;3 first (only {finalScoredCount} scored so far).</span></>}
+            {finalScoredCount < 2 && <><br /><span className={styles.unscored}>Give at least two Final Ideas a KPI in Step&nbsp;3 first — via AI&nbsp;(3.2), evaluator upload&nbsp;(3.3) or objective compute&nbsp;(3.1). Only {finalScoredCount} so far.</span></>}
           </p>
 
           <div className={styles.tabs}>

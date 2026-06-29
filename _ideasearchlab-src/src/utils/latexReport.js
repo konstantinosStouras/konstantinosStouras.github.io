@@ -49,14 +49,15 @@ function summaryTableTex(summary) {
   return `\\begin{table}[H]\\centering
 \\caption*{\\textbf{Table 1.} Summary statistics and correlations}
 \\setlength{\\tabcolsep}{4pt}\\footnotesize
+\\resizebox{\\ifdim\\width>\\linewidth \\linewidth\\else\\width\\fi}{!}{%
 \\begin{tabular}{${colspec}}
 \\toprule
 ${header} \\\\
 \\midrule
 ${rows}
 \\bottomrule
-\\end{tabular}
-\\\\[3pt] {\\footnotesize $N = ${tex(String(summary.n ?? '—'))}$ fully-scored ideas. Lower-triangular Pearson correlations. Dummies: AI / Solo / Group / Both vs None.}
+\\end{tabular}}
+\\\\[3pt] {\\footnotesize $N = ${tex(String(summary.n ?? '—'))}$ ideas (pairwise-complete correlations; per-variable N varies by source). Lower-triangular Pearson correlations. Dummies: AI / Solo / Group / Both vs None.}
 \\end{table}`
 }
 
@@ -80,13 +81,14 @@ function regressionTableTex(t) {
   return `\\begin{table}[H]\\centering
 \\caption*{\\textbf{Table ${tex(String(t.num ?? ''))}.} ${tex(t.title)}\\\\[1pt] {\\small ${tex(t.sub)}}}
 \\setlength{\\tabcolsep}{6pt}\\small
+\\resizebox{\\ifdim\\width>\\linewidth \\linewidth\\else\\width\\fi}{!}{%
 \\begin{tabular}{${colspec}}
 \\toprule
 ${header} \\\\
 \\midrule
 ${lines.join('\n')}
 \\bottomrule
-\\end{tabular}
+\\end{tabular}}
 \\\\[3pt] {\\footnotesize ${tex(t.note)}}
 \\end{table}`
 }
@@ -130,6 +132,7 @@ export function buildLatexSource({ tables = [], summaryTable = null, parsed = nu
 \\usepackage{float}
 \\usepackage{booktabs}
 \\usepackage{array}
+\\usepackage{graphicx}
 \\usepackage{caption}
 \\captionsetup{labelformat=empty,skip=4pt}
 \\renewcommand{\\arraystretch}{1.12}
