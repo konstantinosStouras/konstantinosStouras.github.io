@@ -29,10 +29,10 @@ if "%MDC%"=="" (
 )
 
 REM Score with open-mode rescue on, so out-of-topic ideas still get a KPI.
-python score_glove.py score --model glove_model.json --ideas "%IDEAS%" --glove "%GLOVE%" --out scored_ideas.xlsx
+python score_glove.py score --model glove_model.json --ideas "%IDEAS%" --glove "%GLOVE%" --out ideas_with_prototypicality.xlsx
 
 echo.
-echo Done. See scored_ideas.xlsx
+echo Done. See ideas_with_prototypicality.xlsx
 goto :eof
 
 :usage

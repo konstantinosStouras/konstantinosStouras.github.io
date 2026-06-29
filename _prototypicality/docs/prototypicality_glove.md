@@ -134,17 +134,17 @@ The CSV needs a `description` column and ideally a `title` column. Any other col
 carried through to the output untouched.
 
 ```
-python score_glove.py score --model glove_model.json --ideas ideas_sample.csv --out scored_ideas.csv
+python score_glove.py score --model glove_model.json --ideas ideas_sample.csv --out ideas_with_prototypicality.csv
 ```
 
 Output on screen:
 
 ```
-Scored 3 ideas. Wrote scored_ideas.csv
+Scored 3 ideas. Wrote ideas_with_prototypicality.csv
   2 on the topic vocabulary (closed mode), 1 not scorable.
 ```
 
-The written `scored_ideas.csv` has your original columns plus six new ones
+The written `ideas_with_prototypicality.csv` has your original columns plus six new ones
 (`ks, prototypicality, n_nodes, n_edges, scorable, score_mode`):
 
 ```

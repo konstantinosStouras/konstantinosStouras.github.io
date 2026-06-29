@@ -117,6 +117,7 @@ export default function DataAnalytics() {
   const [runsByLang, setRunsByLang] = useState({}) // { python:{output,images,runError,lastRun}, r:{...} }
 
   const fileRef = useRef(null)
+  const aggFileRef = useRef(null)   // Step-2 import: parse AND load immediately
   const scoreFileRef = useRef(null)
   const evalScoreFileRef = useRef(null)
   const kpiFileRef = useRef(null)
@@ -270,7 +271,12 @@ export default function DataAnalytics() {
   }
 
   // ── Import a spreadsheet / CSV file ──
-  function onPickFile(e) {
+  // autoLoad=false (Step 1): the file is queued in the source list and loaded only
+  //   when "Load …" is pressed (deferred load).
+  // autoLoad=true (Step 2): the file is queued AND its rows are loaded immediately
+  //   (appended to whatever is already loaded), so Section 2 and the steps below fill
+  //   in right away without scrolling back up to press "Load".
+  function onPickFile(e, autoLoad = false) {
     const file = e.target.files?.[0]
     if (!file) return
     const isCsv = /\.csv$/i.test(file.name)
@@ -312,6 +318,10 @@ export default function DataAnalytics() {
           sheets: bookSheets, count: imported.length, conditions,
           rows: bookRows, selected: true,
         }])
+        // Step-2 import: also load the rows now (append) so the aggregate stats,
+        // the Download button and Steps 3-6 populate immediately. loadedBookIds is
+        // derived from rows tagged with _book, so this also marks the book "loaded".
+        if (autoLoad) setRows(prev => recomputeOverall([...prev, ...bookRows]))
       } catch (err) {
         alert('Could not read the file: ' + (err.message || err))
       }
@@ -1145,7 +1155,8 @@ export default function DataAnalytics() {
           <h2 className={styles.sectionTitle}>
             <span><span className={styles.stepBadge}>2</span>Aggregate Data</span>
             <span className={styles.row}>
-              <button className={`btn-ghost ${styles.miniBtn}`} onClick={() => fileRef.current?.click()} disabled={!!scoring}>Import Excel / CSV</button>
+              <button className={`btn-ghost ${styles.miniBtn}`} onClick={() => aggFileRef.current?.click()} disabled={!!scoring}>Import Excel / CSV</button>
+              <input ref={aggFileRef} type="file" accept=".xlsx,.xls,.csv" className={styles.fileInput} onChange={e => onPickFile(e, true)} />
               {rows.length > 0 && (
                 <button className="btn-primary" onClick={downloadAggregate} disabled={aggregating}>
                   {aggregating ? <><span className={styles.spinner} /> Building…</> : 'Download aggregate Excel'}
@@ -1164,8 +1175,10 @@ export default function DataAnalytics() {
             columns ready for blind expert rating, and the Section&nbsp;3.1 objective KPIs
             (<em>Obj.&nbsp;Novelty / Obj.&nbsp;Distinctiveness / Obj.&nbsp;Score</em>) when computed.
             You can also <strong>Import Excel / CSV</strong>
-            here (same importer as Step&nbsp;1): the file is added to the source list above — tick it and press
-            “Load …” to include it in the aggregate.
+            here (same importer as Step&nbsp;1): the file is added to the source list above <strong>and
+            loaded right away</strong>, so the aggregate, the stats below and Steps&nbsp;3–6 fill in
+            immediately — no need to scroll back up and press “Load …”. (It is appended to whatever is
+            already loaded; use Section&nbsp;1’s <em>Clear</em> first if you want only this file.)
           </p>
           {rows.length === 0 ? (
             <p className={styles.emptyNote}>Tick sessions (or imported files) above and press “Load …”, then build the consolidated file here.</p>

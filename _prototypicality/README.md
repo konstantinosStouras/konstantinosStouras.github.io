@@ -61,10 +61,13 @@ REM 1) Build the topic model once. This is the only step that reads the big GloV
 python score_glove.py build --glove glove.6B.300d.txt --docs samples\topic_docs_thermochromic.txt --model glove_model.json
 
 REM 2) Score a workbook (or CSV) of ideas with the open-mode rescue on.
-python score_glove.py score --model glove_model.json --ideas ideas.xlsx --glove glove.6B.300d.txt --out scored_ideas.xlsx
+python score_glove.py score --model glove_model.json --ideas ideas.xlsx --glove glove.6B.300d.txt --out ideas_with_prototypicality.xlsx
 ```
 
 The output adds six columns: `ks, prototypicality, n_nodes, n_edges, scorable, score_mode`.
+(On Windows you can also just double-click `update_prototypicality.bat`, which runs that score
+step in its own folder and writes `ideas_with_prototypicality.xlsx`. The default output name when
+`--out` is omitted is also `ideas_with_prototypicality.xlsx`.)
 
 ## Closed mode vs. open mode — why some ideas would otherwise get a blank KPI
 

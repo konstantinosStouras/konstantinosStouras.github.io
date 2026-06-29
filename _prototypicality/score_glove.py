@@ -253,7 +253,7 @@ def write_results(rows, path):
 
 def default_out_path(ideas_path):
     ext = os.path.splitext(ideas_path)[1].lower()
-    return "scored_ideas.xlsx" if ext in (".xlsx", ".xlsm") else "scored_ideas.csv"
+    return "ideas_with_prototypicality.xlsx" if ext in (".xlsx", ".xlsm") else "ideas_with_prototypicality.csv"
 
 
 def cmd_score(args):
