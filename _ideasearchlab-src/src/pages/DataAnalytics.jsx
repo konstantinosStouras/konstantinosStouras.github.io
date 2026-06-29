@@ -9,6 +9,8 @@ import {
   CONDITIONS, CONDITION_INFO, KPIS, conditionForSession, buildRowsForSession,
   recomputeOverall, rowsToCsv, csvToRows, normalizeImportedRows, ideaText, summarize,
   matchScoresIntoRows, buildSummaryTable, DEFAULT_REFERENCE_SET, presentKpis,
+  uploadedKpiKeys, uploadedKpiDefs, uploadedKpiLabel, analysisColumns,
+  matchUploadedKpisIntoRows, clearUploadedKpis, stripAllKpis, UPLOADED_KPI_PREFIX,
 } from '../utils/analyticsData'
 import { scoreIdeas, fetchAISettings } from '../utils/llmClient'
 import { tfidfVectors } from '../utils/tfidf'
@@ -38,7 +40,9 @@ const ALL_KPI_KEYS = [
   'ext_novelty', 'ext_usefulness', 'ext_quality',
   'det_novelty', 'det_distinctiveness', 'det_score',
 ]
-const hasAnyKpi = r => ALL_KPI_KEYS.some(k => r[k] !== '' && r[k] != null)
+const hasAnyKpi = r =>
+  ALL_KPI_KEYS.some(k => r[k] !== '' && r[k] != null) ||
+  Object.keys(r).some(k => k.startsWith('x_') && r[k] !== '' && r[k] != null)
 
 // localStorage keys for the per-section Save / Make-default persistence. Kept in
 // the browser (no Firestore-rules change needed); "Save" and "Make this the
@@ -83,6 +87,8 @@ export default function DataAnalytics() {
   const [detComputing, setDetComputing] = useState(null) // { phase, done, total } | null
   const [detErr, setDetErr] = useState('')
   const [detResult, setDetResult] = useState(null)       // per-condition pool KPIs
+  // 3.1 — admin-uploaded extra KPIs (e.g. externally-computed Prototypicality/KS)
+  const [kpiUploadMsg, setKpiUploadMsg] = useState('')
   // ── Section 3.3 — external-evaluator KPI upload ──
   const [evalLoadMsg, setEvalLoadMsg] = useState('')
   // Step-3 table sorting: which column + direction (0 = original order).
@@ -109,6 +115,7 @@ export default function DataAnalytics() {
   const fileRef = useRef(null)
   const scoreFileRef = useRef(null)
   const evalScoreFileRef = useRef(null)
+  const kpiFileRef = useRef(null)
   const outRef = useRef('')
   const flushQueued = useRef(false)
   const ridSeq = useRef(0)
@@ -133,7 +140,9 @@ export default function DataAnalytics() {
       if (ds) {
         const parsed = JSON.parse(ds)
         if (Array.isArray(parsed?.rows)) {
-          setRows(parsed.rows)
+          // Default = NO pre-computed KPIs: strip any saved KPI values so a refresh
+          // starts clean across all of Section 3 (the admin re-computes/uploads).
+          setRows(stripAllKpis(parsed.rows))
           // Keep the rid counter ahead of any restored ids so future rows don't collide.
           const maxN = parsed.rows.reduce((m, r) => Math.max(m, parseInt(String(r.rid || '').replace('row_', ''), 10) || 0), 0)
           ridSeq.current = maxN + 1
@@ -159,7 +168,9 @@ export default function DataAnalytics() {
   }
   const saveSessions = () => persist(LS.sessions, JSON.stringify([...selected]), 'sessions')
   const restoreSessions = () => { forget(LS.sessions, 'sessions'); selectNone() }
-  const saveDataset = () => persist(LS.dataset, JSON.stringify({ rows, excluded: [...excludedUsers] }), 'dataset')
+  // The dataset default deliberately carries NO KPIs (stripAllKpis), so a refresh
+  // never reloads pre-computed/uploaded KPI values — only the loaded ideas + removals.
+  const saveDataset = () => persist(LS.dataset, JSON.stringify({ rows: stripAllKpis(rows), excluded: [...excludedUsers] }), 'dataset')
   const restoreDataset = () => forget(LS.dataset, 'dataset')
   const saveCode = () => (tab === 'python' ? persist(LS.python, pyCode, 'python') : persist(LS.r, rCode, 'r'))
   const restoreCode = () => {
@@ -439,9 +450,102 @@ export default function DataAnalytics() {
     }
   }
 
+  // ── Section 3.1: upload additional, externally-computed KPIs ────────────────
+  // The admin uploads an Excel/CSV with an Idea ID column plus their own KPI
+  // columns (e.g. Prototypicality / KS). EVERY non-standard numeric column is read
+  // and matched onto the loaded ideas by Idea ID; once loaded the KPIs flow into
+  // Section 4, the Step-2 aggregate "Rankings" tab, the Step-5 regressions and the
+  // downloads like any other KPI. Stored per row as x_<column>.
+  const STD_KPI_COLS = new Set([
+    'idea id', 'idea_id', 'id', 'ideaid', 'condition', 'stage', 'phase',
+    'final group pick', 'final_pick', 'final pick', 'title', 'idea title', 'description',
+    'session', 'session code', 'group uid', 'group id', 'author id', 'author name',
+    'author email', 'text', 'full text',
+  ])
+  const sanitizeKpiKey = h =>
+    UPLOADED_KPI_PREFIX + String(h).toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+
+  // Read every non-standard numeric column from the file and match onto the loaded
+  // ideas by Idea ID (then title). No manual picking — all calculated KPI columns
+  // (prototypicality, ks, …) are loaded at once.
+  function importKpisFromRows(rawRows, fileName) {
+    if (!rawRows?.length) { setKpiUploadMsg('That file has no rows.'); return }
+    const headers = Object.keys(rawRows[0])
+    const lc = h => String(h).toLowerCase().trim()
+    const idCol = headers.find(h => ['idea id', 'idea_id', 'id', 'ideaid'].includes(lc(h)))
+    const titleCol = headers.find(h => ['title', 'idea title'].includes(lc(h)))
+    if (!idCol && !titleCol) { setKpiUploadMsg('The file needs an "Idea ID" (or "Title") column so the KPIs can be matched onto your ideas.'); return }
+    const seen = new Set()
+    const cols = []
+    const isNum = v => v !== '' && v != null && typeof v !== 'boolean' && Number.isFinite(Number(v))
+    for (const h of headers) {
+      if (STD_KPI_COLS.has(lc(h))) continue
+      if (!rawRows.some(r => isNum(r[h]))) continue   // numeric KPI columns only (skip text / boolean flags)
+      let key = sanitizeKpiKey(h)
+      if (key === UPLOADED_KPI_PREFIX || seen.has(key)) key = `${key}_${cols.length + 1}`
+      seen.add(key)
+      cols.push({ name: h, key })
+    }
+    if (!cols.length) { setKpiUploadMsg('No numeric KPI columns found beyond the standard idea columns.'); return }
+    const keys = cols.map(c => c.key)
+    const entries = rawRows.map(r => ({
+      idea_id: idCol ? r[idCol] : '',
+      title: titleCol ? r[titleCol] : '',
+      values: Object.fromEntries(cols.map(c => [c.key, r[c.name]])),
+    }))
+    const { rows: next, matched, unmatched } = matchUploadedKpisIntoRows(rows, entries, keys)
+    setRows(next)
+    const names = cols.map(c => uploadedKpiLabel(c.key)).join(', ')
+    setKpiUploadMsg(
+      `Loaded ${keys.length} KPI${keys.length === 1 ? '' : 's'} (${names}) from “${fileName}” onto ${matched} idea${matched === 1 ? '' : 's'}` +
+      (unmatched ? `, ${unmatched} file row${unmatched === 1 ? '' : 's'} unmatched.` : '.') +
+      ' Added to the Step-2 aggregate Rankings tab and the Step-5 regressions.'
+    )
+  }
+
+  function onPickKpiFile(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!effectiveRows.length) { setKpiUploadMsg('Load ideas first (Steps 1–2), then upload KPIs to match onto them.'); return }
+    const isCsv = /\.csv$/i.test(file.name)
+    const reader = new FileReader()
+    reader.onload = ev => {
+      try {
+        let rawRows
+        if (isCsv) rawRows = csvToRows(ev.target.result)
+        else {
+          const wb = XLSX.read(ev.target.result, { type: 'array' })
+          const name = wb.SheetNames.find(n => /idea|score|sheet/i.test(n)) || wb.SheetNames[0]
+          rawRows = XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '' })
+        }
+        importKpisFromRows(rawRows, file.name)
+      } catch (err) {
+        setKpiUploadMsg('Could not read the file: ' + (err.message || err))
+      }
+    }
+    if (isCsv) reader.readAsText(file)
+    else reader.readAsArrayBuffer(file)
+  }
+
+  // Remove every uploaded KPI (x_*) from the data, and update the stored dataset
+  // default so a reload starts with NO past KPIs available.
+  function onClearUploadedKpis() {
+    const cleared = clearUploadedKpis(rows)
+    setRows(cleared)
+    try {
+      if (localStorage.getItem(LS.dataset) != null) {
+        localStorage.setItem(LS.dataset, JSON.stringify({ rows: stripAllKpis(cleared), excluded: [...excludedUsers] }))
+      }
+    } catch (_) { /* ignore storage errors */ }
+    setKpiUploadMsg('Cleared all uploaded KPIs.')
+  }
+
   // ── Derived: the dataset minus any removed participants ──
   const isExcluded = r => excludedUsers.has(userKey(r.session, r.author_id))
   const effectiveRows = useMemo(() => rows.filter(r => !isExcluded(r)), [rows, excludedUsers])
+  // Uploaded extra KPIs currently present in the data (drives the 3.1 chip + Clear).
+  const uploadedNow = useMemo(() => uploadedKpiDefs(effectiveRows), [effectiveRows])
 
   // Distinct participants in the loaded data (for the remove/restore panel).
   const users = useMemo(() => {
@@ -568,7 +672,7 @@ export default function DataAnalytics() {
   // ── Downloads ──
   function downloadCsv() {
     if (!effectiveRows.length) return
-    saveBlob(rowsToCsv(effectiveRows), 'idea_analytics_dataset.csv', 'text/csv;charset=utf-8')
+    saveBlob(rowsToCsv(effectiveRows, analysisColumns(effectiveRows)), 'idea_analytics_dataset.csv', 'text/csv;charset=utf-8')
   }
 
   function downloadExcel() {
@@ -615,14 +719,7 @@ export default function DataAnalytics() {
     // Pool-level KPIs (Unique fraction / Productivity) are per condition, not per
     // idea, so they live on their own tab when a compute run produced them.
     if (detResult?.perCond?.length) {
-      addSheet(wb, 'Pool KPIs by condition', detResult.perCond.map(c => ({
-        Condition: c.condition,
-        Ideas: c.n,
-        'Unique fraction (τ=.80)': round3(c.uf80),
-        'Unique fraction (τ=.75)': round3(c.uf75),
-        'Unique fraction (τ=.85)': round3(c.uf85),
-        'Productivity (KPI 2)': c.productivity,
-      })))
+      addSheet(wb, 'Pool KPIs by condition', poolKpiRows(detResult.perCond))
     }
     const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
     saveBlob(out, 'ideas_with_kpis.xlsx', 'application/octet-stream')
@@ -663,21 +760,32 @@ export default function DataAnalytics() {
       const ideasSheet = merged.find(s => s.name === 'Ideas')
       if (ideasSheet) {
         // Carry any KPI set on the page into the Rankings tab (by Idea ID), so the
-        // consolidated file reflects both the AI scoring (3.2) and the objective
-        // KPIs computed in 3.1. Include a row if it has EITHER kind of value.
+        // consolidated file reflects the AI scoring (3.2), the objective KPIs
+        // computed in 3.1, AND any uploaded extra KPIs. Include a row if it has any.
         const has = v => v !== '' && v != null
+        const upDefs = uploadedKpiDefs(rows)         // [{ key:'x_…', label }]
         const scoreById = new Map()
         for (const r of rows) {
           const hasAi = has(r.novelty) || has(r.usefulness)
           const hasDet = has(r.det_novelty) || has(r.det_distinctiveness) || has(r.det_score)
-          if (hasAi || hasDet) {
+          const extra = {}
+          let hasUp = false
+          for (const d of upDefs) { extra[d.key] = r[d.key]; if (has(r[d.key])) hasUp = true }
+          if (hasAi || hasDet || hasUp) {
             scoreById.set(String(r.idea_id), {
               novelty: r.novelty, usefulness: r.usefulness, quality: r.overall_quality,
               detNovelty: r.det_novelty, detDistinctiveness: r.det_distinctiveness, detScore: r.det_score,
+              extra,
             })
           }
         }
-        merged.push(rankingsSheetFromIdeas(ideasSheet.rows, scoreById))
+        merged.push(rankingsSheetFromIdeas(ideasSheet.rows, scoreById, upDefs))
+      }
+      // The per-pool deterministic KPIs (Unique fraction / Productivity) are batch-
+      // level, not per idea, so the consolidated aggregate carries them on their own
+      // tab (the per-idea KPIs already sit as columns in Rankings).
+      if (detResult?.perCond?.length) {
+        merged.push({ name: 'Pool KPIs by condition', kind: 'json', rows: poolKpiRows(detResult.perCond) })
       }
       const wb = XLSX.utils.book_new()
       appendSheetsToWorkbook(wb, merged)
@@ -730,7 +838,7 @@ export default function DataAnalytics() {
     setImages([])
     outRef.current = ''
     setOutput('')
-    const dataCsv = rowsToCsv(analysisRows)
+    const dataCsv = rowsToCsv(analysisRows, analysisColumns(analysisRows))
     try {
       const opts = { dataCsv, onStatus: setRunStatus }
       const result = tab === 'python'
@@ -1036,11 +1144,12 @@ export default function DataAnalytics() {
             )}
           </h2>
           <p className={styles.hint}>
-            Each idea can carry KPIs from three independent sources, kept separate so the analysis
+            Each idea can carry KPIs from independent sources, kept separate so the analysis
             can compare them: <strong>3.1 deterministic/objective</strong> KPIs computed from the idea
-            text, <strong>3.2 AI-generated</strong> KPIs (scored now via an API or uploaded), and
+            text (plus any <strong>extra KPIs you upload</strong>, e.g. Prototypicality&nbsp;/&nbsp;KS),
+            <strong> 3.2 AI-generated</strong> KPIs (scored now via an API or uploaded), and
             <strong> 3.3 external-evaluator</strong> KPIs (uploaded). Every available KPI flows into the
-            Step&nbsp;4 summary and the Step&nbsp;5 regressions.
+            Step&nbsp;4 summary, the Step&nbsp;2 aggregate <em>Rankings</em> tab and the Step&nbsp;5 regressions.
           </p>
 
           {rows.length === 0 ? (
@@ -1069,8 +1178,10 @@ export default function DataAnalytics() {
                 {' '}<em>Novelty</em> (1&nbsp;−&nbsp;max similarity to the reference set R), <em>Distinctiveness</em>
                 {' '}(1&nbsp;−&nbsp;mean similarity to the other ideas) and their mean <em>Score</em>; and per condition the
                 pool-level <em>Unique fraction</em> and <em>Productivity</em> (KPI&nbsp;2). <em>Prototypicality (KS)</em> and the
-                KS-based creativity count are not computed yet. Everything here is derived from the loaded idea text alone.
-                {' '}Once computed, <em>Download ideas&nbsp;+&nbsp;KPIs</em> exports the input file with a column added per idea for each KPI.
+                KS-based creativity count are not computed in the browser yet — compute them elsewhere and
+                {' '}<strong>Upload additional KPIs</strong> below: every numeric column (matched to your ideas by Idea&nbsp;ID)
+                becomes a KPI that flows into Section&nbsp;4, the Step-2 aggregate <em>Rankings</em> tab and the Step-5
+                regressions. Once computed, <em>Download ideas&nbsp;+&nbsp;KPIs</em> exports the input file with a column added per idea for each KPI.
               </div>
               <div style={{ margin: '8px 0' }}>
                 <div className={styles.raterLabel} style={{ marginBottom: 4 }}>Reference set R — products that already exist (one per line)</div>
@@ -1133,6 +1244,25 @@ export default function DataAnalytics() {
                   </div>
                 </div>
               )}
+
+              {/* Upload additional, externally-computed KPIs (matched by Idea ID). */}
+              <div className={styles.row} style={{ marginTop: 12 }}>
+                <button className={`btn-ghost ${styles.miniBtn}`} onClick={() => kpiFileRef.current?.click()}
+                  title="Upload an Excel/CSV with an Idea ID column plus your own KPI columns (e.g. Prototypicality / KS); every numeric column is matched onto the loaded ideas">
+                  Upload additional KPIs (Excel/CSV)
+                </button>
+                <input ref={kpiFileRef} type="file" accept=".xlsx,.xls,.csv" className={styles.fileInput} onChange={onPickKpiFile} />
+                {uploadedNow.length > 0 && (
+                  <>
+                    <button className={`btn-ghost ${styles.miniBtn}`} onClick={onClearUploadedKpis}
+                      title="Remove every uploaded KPI; the default is no uploaded KPIs">
+                      Clear uploaded KPIs
+                    </button>
+                    <span className={styles.kpiPill}>{uploadedNow.length} uploaded: {uploadedNow.map(d => d.label).join(', ')}</span>
+                  </>
+                )}
+              </div>
+              {kpiUploadMsg && <p className={styles.loadMsg}>{kpiUploadMsg}</p>}
 
               {/* ── Sub-step 3.2 — AI-generated KPIs ────────────────────────── */}
               <h3 className={styles.subTitle} style={{ marginTop: 22 }}><span className={styles.subBadge}>3.2</span>AI-generated KPIs</h3>
@@ -1774,6 +1904,18 @@ function saveBlob(content, filename, type) {
 }
 
 const round3 = x => (x == null || !Number.isFinite(x)) ? '' : Number(x.toFixed(3))
+
+// Rows for the "Pool KPIs by condition" tab — the per-pool deterministic KPIs
+// (Unique fraction at three thresholds + Productivity) the spec reports separately
+// from the per-idea columns. Shared by the standalone 3.1 download and the aggregate.
+const poolKpiRows = perCond => (perCond || []).map(c => ({
+  Condition: c.condition,
+  Ideas: c.n,
+  'Unique fraction (τ=.80)': round3(c.uf80),
+  'Unique fraction (τ=.75)': round3(c.uf75),
+  'Unique fraction (τ=.85)': round3(c.uf85),
+  'Productivity (KPI 2)': c.productivity,
+}))
 
 // Step-3 table columns: header label + how to read/sort each one. `condition`
 // sorts by the canonical None<Solo<Group<Both order, scores numerically (blanks

@@ -641,11 +641,11 @@ function buildAggregateAbout(entries) {
  * otherwise the AI columns are left EMPTY for blind expert rating. The three
  * objective KPI columns (computed in Section 3.1) are carried through the same map.
  */
-export function rankingsSheetFromIdeas(ideaRows, scoreById) {
+export function rankingsSheetFromIdeas(ideaRows, scoreById, extraKpis = []) {
   const blank = v => (v == null ? '' : v)
   const rows = (ideaRows || []).map(r => {
     const sc = scoreById && scoreById.get(String(r['Idea ID'] ?? ''))
-    return {
+    const row = {
       'Idea ID': r['Idea ID'] ?? '',
       'Condition': r['Condition'] ?? '',
       'Stage': r['Stage'] ?? '',
@@ -659,6 +659,9 @@ export function rankingsSheetFromIdeas(ideaRows, scoreById) {
       'Obj. Distinctiveness': sc ? blank(sc.detDistinctiveness) : '',
       'Obj. Score': sc ? blank(sc.detScore) : '',
     }
+    // Admin-uploaded extra KPIs (Section 3.1), each carried through sc.extra.
+    for (const k of extraKpis) row[k.label] = sc ? blank(sc.extra?.[k.key]) : ''
+    return row
   })
   return { name: 'Rankings', kind: 'json', rows }
 }

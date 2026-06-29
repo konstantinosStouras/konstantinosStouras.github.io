@@ -90,6 +90,17 @@ load_prepare <- function() {
         paste(shQuote(unknown), collapse = ", "), "\n", sep = "")
     dat <- dat[dat$condition %in% COND_LEVELS, , drop = FALSE]
   }
+
+  # Append any admin-uploaded extra-KPI columns (names begin with "x_") to the
+  # registry, so they are analysed like the built-in KPIs — continuous (Tables 3/4,
+  # no top-rating Tables 5/6). In data-column order to match the Python tab.
+  extra <- setdiff(names(dat)[startsWith(names(dat), "x_")], KPI_KEYS)
+  if (length(extra) > 0) {
+    KPI_KEYS   <<- c(KPI_KEYS, extra)
+    KPI_LABELS <<- c(KPI_LABELS, setNames(gsub("_", " ", substring(extra, 3)), extra))
+    KPI_SCALE5 <<- c(KPI_SCALE5, setNames(rep(FALSE, length(extra)), extra))
+  }
+
   for (k in KPI_KEYS) if (k %in% names(dat)) dat[[k]] <- suppressWarnings(as.numeric(dat[[k]]))
   cat(sprintf("NOTE: rows in: %d; rows kept (known condition): %d.\n\n", n0, nrow(dat)))
   if (nrow(dat) == 0) return(dat)
