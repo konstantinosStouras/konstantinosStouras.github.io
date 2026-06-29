@@ -37,7 +37,12 @@ export function resolveProvider(settings, providerOverride, modelOverride) {
 
 const RATER_SYSTEM_PROMPT = `You are one of several independent expert evaluators rating ideas produced in a
 product-design brainstorming study. You rate each idea on two dimensions using a
-1 to 5 Likert scale (1 = very low, 5 = very high):
+1 to 5 Likert scale, where each point means:
+  1 = Poor
+  2 = Below average
+  3 = Average
+  4 = Above average
+  5 = Excellent
 
 - novelty: how original, innovative and rare the idea is — how far it departs
   from existing knowledge and conventional, obvious solutions.
