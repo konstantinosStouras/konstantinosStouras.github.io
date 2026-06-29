@@ -1,0 +1,33 @@
+# Reference set R for the Novelty KPI (one existing product per line).
+#
+# Novelty(idea) = 1 - (highest cosine similarity to any line below).
+# So R must be a broad, representative list of products that ALREADY EXIST for the
+# task (here: a fabric that changes colour at ~37 C body temperature, for the smart
+# materials / wearable technology market). A short or incomplete list makes every
+# idea look more novel than it is — cover the obvious near-neighbours.
+#
+# This default list is taken verbatim from idea_ranking_kpis_llm_guide.md (section 11.2).
+# Lines starting with '#' and blank lines are ignored. Edit freely and re-run.
+
+Hypercolor-style colour-change t-shirt
+hidden-design reveal t-shirt that shows a pattern when warmed
+thermochromic hoodie
+colour-change athletic top
+thermochromic socks
+colour-changing swim shorts
+mood ring
+mood necklace
+thermochromic bracelet or beads
+thermochromic phone case
+thermochromic nail polish
+colour-change lipstick
+photochromic eyeglass lenses
+forehead fever thermometer strip
+thermochromic fever-indicator baby sticker
+colour-changing baby feeding spoon
+thermochromic baby bath thermometer or toy
+liquid-crystal room or aquarium strip
+colour-changing coffee mug
+thermochromic kettle band
+colour-change bath or floor mat
+thermochromic shower-head indicator
