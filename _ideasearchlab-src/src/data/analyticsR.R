@@ -43,7 +43,7 @@ KPI_KEYS   <- c("novelty","usefulness","overall_quality",
                 "det_novelty","det_distinctiveness","det_score")
 KPI_LABELS <- c(novelty="AI Novelty", usefulness="AI Usefulness", overall_quality="AI Quality",
                 ext_novelty="Eval Novelty", ext_usefulness="Eval Usefulness", ext_quality="Eval Quality",
-                det_novelty="Obj Novelty", det_distinctiveness="Obj Distinct.", det_score="Obj Score")
+                det_novelty="Novelty (objective)", det_distinctiveness="Pool distinctiveness", det_score="Combined score")
 KPI_SCALE5 <- c(novelty=TRUE, usefulness=TRUE, overall_quality=TRUE,
                 ext_novelty=TRUE, ext_usefulness=TRUE, ext_quality=TRUE,
                 det_novelty=FALSE, det_distinctiveness=FALSE, det_score=FALSE)

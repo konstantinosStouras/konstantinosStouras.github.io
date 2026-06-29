@@ -88,11 +88,13 @@ export const KPI_DEFS = [
   { key: 'ext_novelty', label: 'Eval. Novelty', source: 'ext', scale5: true },
   { key: 'ext_usefulness', label: 'Eval. Usefulness', source: 'ext', scale5: true },
   { key: 'ext_quality', label: 'Eval. Quality', source: 'ext', scale5: true },
-  // 3.1 Deterministic / objective KPIs (embedding-based, range 0–1; not a 1–5 scale,
-  // so they have no "top rating" Tables 5/6). Computed in deterministicKpis.js.
-  { key: 'det_novelty', label: 'Obj. Novelty', source: 'det', scale5: false },
-  { key: 'det_distinctiveness', label: 'Obj. Distinctiveness', source: 'det', scale5: false },
-  { key: 'det_score', label: 'Obj. Score', source: 'det', scale5: false },
+  // 3.1 Deterministic / objective KPIs (range 0–1; not a 1–5 scale, so no "top
+  // rating" Tables 5/6). Labels follow the idea-ranking spec (Novelty / Pool
+  // distinctiveness / Combined score); "Novelty (objective)" is qualified so it
+  // never clashes with the AI "Novelty" column. Computed in deterministicKpis.js.
+  { key: 'det_novelty', label: 'Novelty (objective)', source: 'det', scale5: false },
+  { key: 'det_distinctiveness', label: 'Pool distinctiveness', source: 'det', scale5: false },
+  { key: 'det_score', label: 'Combined score', source: 'det', scale5: false },
 ]
 
 // ── Admin-uploaded extra KPIs (Section 3.1) ────────────────────────────────────

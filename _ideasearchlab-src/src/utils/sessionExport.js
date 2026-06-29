@@ -655,9 +655,9 @@ export function rankingsSheetFromIdeas(ideaRows, scoreById, extraKpis = []) {
       'Novelty': sc ? blank(sc.novelty) : '',
       'Usefulness': sc ? blank(sc.usefulness) : '',
       'Quality': sc ? blank(sc.quality) : '',
-      'Obj. Novelty': sc ? blank(sc.detNovelty) : '',
-      'Obj. Distinctiveness': sc ? blank(sc.detDistinctiveness) : '',
-      'Obj. Score': sc ? blank(sc.detScore) : '',
+      'Novelty (objective)': sc ? blank(sc.detNovelty) : '',
+      'Pool distinctiveness': sc ? blank(sc.detDistinctiveness) : '',
+      'Combined score': sc ? blank(sc.detScore) : '',
     }
     // Admin-uploaded extra KPIs (Section 3.1), each carried through sc.extra.
     for (const k of extraKpis) row[k.label] = sc ? blank(sc.extra?.[k.key]) : ''
