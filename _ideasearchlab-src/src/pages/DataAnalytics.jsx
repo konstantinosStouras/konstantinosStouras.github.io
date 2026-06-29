@@ -719,14 +719,7 @@ export default function DataAnalytics() {
     // Pool-level KPIs (Unique fraction / Productivity) are per condition, not per
     // idea, so they live on their own tab when a compute run produced them.
     if (detResult?.perCond?.length) {
-      addSheet(wb, 'Pool KPIs by condition', detResult.perCond.map(c => ({
-        Condition: c.condition,
-        Ideas: c.n,
-        'Unique fraction (τ=.80)': round3(c.uf80),
-        'Unique fraction (τ=.75)': round3(c.uf75),
-        'Unique fraction (τ=.85)': round3(c.uf85),
-        'Productivity (KPI 2)': c.productivity,
-      })))
+      addSheet(wb, 'Pool KPIs by condition', poolKpiRows(detResult.perCond))
     }
     const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
     saveBlob(out, 'ideas_with_kpis.xlsx', 'application/octet-stream')
@@ -787,6 +780,12 @@ export default function DataAnalytics() {
           }
         }
         merged.push(rankingsSheetFromIdeas(ideasSheet.rows, scoreById, upDefs))
+      }
+      // The per-pool deterministic KPIs (Unique fraction / Productivity) are batch-
+      // level, not per idea, so the consolidated aggregate carries them on their own
+      // tab (the per-idea KPIs already sit as columns in Rankings).
+      if (detResult?.perCond?.length) {
+        merged.push({ name: 'Pool KPIs by condition', kind: 'json', rows: poolKpiRows(detResult.perCond) })
       }
       const wb = XLSX.utils.book_new()
       appendSheetsToWorkbook(wb, merged)
@@ -1905,6 +1904,18 @@ function saveBlob(content, filename, type) {
 }
 
 const round3 = x => (x == null || !Number.isFinite(x)) ? '' : Number(x.toFixed(3))
+
+// Rows for the "Pool KPIs by condition" tab — the per-pool deterministic KPIs
+// (Unique fraction at three thresholds + Productivity) the spec reports separately
+// from the per-idea columns. Shared by the standalone 3.1 download and the aggregate.
+const poolKpiRows = perCond => (perCond || []).map(c => ({
+  Condition: c.condition,
+  Ideas: c.n,
+  'Unique fraction (τ=.80)': round3(c.uf80),
+  'Unique fraction (τ=.75)': round3(c.uf75),
+  'Unique fraction (τ=.85)': round3(c.uf85),
+  'Productivity (KPI 2)': c.productivity,
+}))
 
 // Step-3 table columns: header label + how to read/sort each one. `condition`
 // sorts by the canonical None<Solo<Group<Both order, scores numerically (blanks
