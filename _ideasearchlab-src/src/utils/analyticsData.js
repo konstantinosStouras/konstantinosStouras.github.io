@@ -478,9 +478,9 @@ export function normalizeImportedRows(rawRows) {
     //    or an offline AI scoring sheet).
     //  • External evaluators (3.3): the blind-rater columns "Novelty (rater n)" etc.
     //    of the admin Excel export are human evaluators → averaged into ext_*.
-    const novelty = numOrBlank(pick('novelty', 'nov'))
-    const usefulness = numOrBlank(pick('usefulness', 'useful'))
-    let overall = pick('overall_quality', 'overall quality', 'overall', 'quality')
+    const novelty = numOrBlank(pick('novelty', 'ai novelty', 'nov'))
+    const usefulness = numOrBlank(pick('usefulness', 'ai usefulness', 'useful'))
+    let overall = pick('overall_quality', 'overall quality', 'overall', 'quality', 'ai quality')
     if (overall === '' && (novelty !== '' || usefulness !== '')) {
       const oq = overallQuality(novelty, usefulness)
       overall = oq == null ? '' : oq
@@ -503,7 +503,7 @@ export function normalizeImportedRows(rawRows) {
     const fullText = String(pick('full text', 'text', 'idea', 'idea_text', 'content'))
     const text = fullText || (title && description ? `${title}: ${description}` : (title || description))
 
-    out.push({
+    const row = {
       idea_id: String(pick('idea id', 'idea_id', 'id', 'ideaid') || `import_${i + 1}`),
       session: String(pick('session code', 'session', 'session_code', 'code') || 'imported'),
       condition,
@@ -520,16 +520,53 @@ export function normalizeImportedRows(rawRows) {
       ext_novelty: numOrBlank(extNovelty),
       ext_usefulness: numOrBlank(extUsefulness),
       ext_quality: numOrBlankOrNull(extOverall),
-      det_novelty: numOrBlank(pick('det_novelty', 'objective novelty', 'obj. novelty')),
-      det_distinctiveness: numOrBlank(pick('det_distinctiveness', 'objective distinctiveness', 'obj. distinctiveness')),
-      det_score: numOrBlank(pick('det_score', 'objective score', 'obj. score')),
+      det_novelty: numOrBlank(pick('det_novelty', 'novelty (objective)', 'objective novelty', 'obj. novelty', 'obj novelty')),
+      det_distinctiveness: numOrBlank(pick('det_distinctiveness', 'pool distinctiveness', 'objective distinctiveness', 'obj. distinctiveness', 'obj distinctiveness')),
+      det_score: numOrBlank(pick('det_score', 'combined score', 'objective score', 'obj. score', 'obj score')),
       final_pick: /^(1|yes|true)$/i.test(String(pick('final group pick', 'final_pick', 'final pick', 'final', 'selected')).trim()) ? 1 : 0,
       carried: /^(1|yes|true)$/i.test(String(pick('carried to group', 'carried', 'carried_to_group')).trim()) ? 1 : 0,
       text,
-    })
+    }
+
+    // Carry through any OTHER continuous KPI column the file has (e.g. a re-imported
+    // ideas_with_kpis / aggregate Rankings with Prototypicality, KS, …) as an uploaded
+    // extra (x_*), matched onto this idea by Idea ID downstream. Built-in KPIs (AI /
+    // objective / evaluator) are already mapped above via canonicalKpiField, so they
+    // are skipped here; integer-count diagnostics (n_nodes, n_edges), 0/1 dummies,
+    // vote counts and blind-rater columns are skipped too.
+    for (const [k, v] of Object.entries(lower)) {
+      if (STD_IMPORT_COLS.has(k)) continue
+      if (canonicalKpiField(k)) continue
+      if (/\brater\b|\(rater/.test(k)) continue
+      if (v === '' || v == null || typeof v === 'boolean') continue
+      const n = Number(v)
+      if (!Number.isFinite(n) || Number.isInteger(n)) continue
+      const key = UPLOADED_KPI_PREFIX + k.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+      if (key !== UPLOADED_KPI_PREFIX) row[key] = n
+    }
+    out.push(row)
   })
   return out
 }
+
+// Standard (non-KPI) idea columns recognised on import — skipped when sweeping for
+// extra continuous KPI columns to carry through as x_*.
+const STD_IMPORT_COLS = new Set([
+  'idea id', 'idea_id', 'id', 'ideaid', 'session code', 'session', 'session_code', 'code',
+  'condition', 'ai condition', 'condition code', 'cond', 'group_condition', 'treatment',
+  'condition (paper name)', 'ai present in',
+  'ai solo (0/1)', 'ai solo (0_1)', 'ai_solo', 'ai solo stage',
+  'ai group (0/1)', 'ai group (0_1)', 'ai_group', 'ai group stage',
+  'stage', 'phase', 'group uid', 'group_id', 'group id', 'group', 'groupid',
+  'author id', 'author_id', 'author', 'participant', 'participant_id',
+  'author name', 'author label', 'author_name', 'name', 'author email', 'email', 'author_email',
+  'idea title', 'title', 'description', 'full text', 'text', 'idea', 'idea_text', 'content',
+  'final group pick', 'final_pick', 'final pick', 'final', 'selected',
+  'carried to group', 'carried', 'carried_to_group', 'final pick rank',
+  'exclude (yes/no)', 'exclude', 'excluded', 'exclusion reason',
+  'votes', 'vote count', 'votes cast', 'created at', 'createdat',
+  'n edges', 'n_edges', 'n nodes', 'n_nodes', 'scorable', 'score_mode', 'score mode',
+])
 
 /** Truthiness from a 0/1 dummy (preferred) or a Yes/No flag; null if unknown. */
 function toFlag(zeroOne, yesNo) {
