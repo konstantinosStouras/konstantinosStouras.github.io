@@ -1524,6 +1524,19 @@ export default function DataAnalytics() {
                   plus the KPIs added here, merged into the <em>Rankings</em> tab by Idea&nbsp;ID.
                 </span>
               </div>
+              {(() => {
+                // Show exactly which KPI columns will be written into the Rankings tab,
+                // so the admin can confirm (before downloading) that every KPI they loaded
+                // — AI, objective and any uploaded extra like Prototypicality — is included.
+                const labels = presentKpis(effectiveRows).map(k => k.label)
+                return (
+                  <p className={styles.hint} style={{ marginTop: 8, marginBottom: 0 }}>
+                    {labels.length
+                      ? <>The <em>Rankings</em> tab will include these KPIs (matched by Idea&nbsp;ID): <strong>{labels.join(', ')}</strong>.</>
+                      : <>No KPIs loaded yet — compute/score/upload them above, then download.</>}
+                  </p>
+                )
+              })()}
             </>
           )}
         </section>
