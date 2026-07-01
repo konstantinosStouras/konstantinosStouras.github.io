@@ -358,6 +358,19 @@ Four sections:
    Responses · Events · Survey` plus any imported extras, each source stacked
    within every tab. Sheet names are sanitised/deduped for Excel's rules
    (`safeSheetName`).
+   - **Model-provisioning charts** (`renderProvisioning` + `daProvChart`). Below
+     the stats, three inline-SVG grouped-bar charts computed from the aggregate
+     **Responses** sheet: preferring **Opus** = **over-provisioning**, a **tie** =
+     **indifference**, preferring **Haiku** = **under-provisioning**. **Per task**
+     (sorted by over-provision rate) shows the % in each with **Wilson** 95% CIs
+     (so a task with fewer responses gets a wider whisker); **by task type** and
+     **by domain** show the **average of the per-task rates** (each task weighted
+     equally) with a **t-interval across tasks** — this is how the CIs "account for
+     unequal responses per task" (the random 15-of-30 subset). Task
+     complexity/domain come from the exported `task_complexity`/`task_domain`
+     columns when present, else the built-in `DA_TASK_META` map (the 30-task list).
+     Helpers: `daWilson` (proportion CI), `daMeanCI` + `daTcrit` (across-task
+     t-CI), `svgEl` (SVG builder — `var()` colours go via `style`, not attributes).
 
 3. **Process with Python or R** (`buildDaSection3`). Pick a table from the
    aggregate (default **Responses** = one row per comparison, the analysis unit),
