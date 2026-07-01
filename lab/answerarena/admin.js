@@ -216,10 +216,38 @@
 
   /* ---- routing ---- */
   function cachedAdmin() { try { return localStorage.getItem('aa-admin') === '1'; } catch (e) { return false; } }
+  // Which view a URL points at, so the Data Analytics tab is directly linkable
+  // (like ideasearchlab's /admin/data-analytics). Recognised forms:
+  //   ?admin=data-analytics · ?admin=analytics · ?admin&view=analytics · #data-analytics
+  function viewFromUrl() {
+    try {
+      var sp = new URLSearchParams(location.search);
+      var a = (sp.get('admin') || '').toLowerCase(), v = (sp.get('view') || '').toLowerCase();
+      if (/analytic/.test(a) || /analytic/.test(v) || /analytic/.test((location.hash || '').toLowerCase())) return 'analytics';
+    } catch (e) {}
+    return 'admin';
+  }
+  // Keep the address bar in sync with the active tab (canonical form
+  // ?admin / ?admin=data-analytics), preserving any other query params + hash.
+  // push=true adds a history entry so the browser Back button returns to the
+  // previous tab; otherwise it just replaces the current URL.
+  function setViewUrl(view, push) {
+    try {
+      var sp = new URLSearchParams(location.search);
+      sp.delete('admin'); sp.delete('view');
+      var rest = sp.toString();
+      var q = '?admin' + (view === 'analytics' ? '=data-analytics' : '') + (rest ? '&' + rest : '');
+      var url = location.pathname + q + location.hash;
+      if (push) history.pushState(null, '', url); else history.replaceState(null, '', url);
+    } catch (e) {}
+  }
+
   function route() {
     if (!user) { try { localStorage.removeItem('aa-admin'); } catch (e) {} return renderLogin(); }
     if (!Store.isAdminEmail(user.email)) { try { localStorage.removeItem('aa-admin'); } catch (e) {} return renderNotAuthorized(); }
     try { localStorage.setItem('aa-admin', '1'); } catch (e) {}
+    currentView = viewFromUrl();          // open the tab the link points at
+    setViewUrl(currentView, false);       // normalise the address bar
     loadConfig().then(renderShell);
   }
   function renderLogin() {
@@ -268,7 +296,7 @@
   // destination is highlighted. Switching views re-renders the shell in place.
   function headerRow() {
     function nav(label, view) {
-      var b = el('button', { class: 'aa-btn sec sm' + (currentView === view ? ' is-nav-on' : ''), on: { click: function () { if (currentView !== view) { currentView = view; renderShell(); } } } }, [label]);
+      var b = el('button', { class: 'aa-btn sec sm' + (currentView === view ? ' is-nav-on' : ''), on: { click: function () { if (currentView !== view) { currentView = view; setViewUrl(view, true); renderShell(); } } } }, [label]);
       return b;
     }
     return el('div', { class: 'aa-h' }, [
@@ -1572,11 +1600,6 @@
     (kids || []).forEach(function (c) { n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
     return n;
   }
-  // 97.5% two-sided Student-t critical value (df 1..30; ~1.96 beyond).
-  function daTcrit(df) {
-    var T = [0, 12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228, 2.201, 2.179, 2.160, 2.145, 2.131, 2.120, 2.110, 2.101, 2.093, 2.086, 2.080, 2.074, 2.069, 2.064, 2.060, 2.056, 2.052, 2.048, 2.045, 2.042];
-    return (df >= 1 && df <= 30) ? T[df] : 1.96;
-  }
   // Wilson score 95% interval for a proportion x/n (the right CI for a rate), 0..1.
   function daWilson(x, n) {
     if (n <= 0) return { lo: 0, hi: 0 };
@@ -1584,15 +1607,27 @@
     var c = (p + z * z / (2 * n)) / d, h = (z / d) * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n));
     return { lo: Math.max(0, c - h), hi: Math.min(1, c + h) };
   }
-  // Mean + t-based 95% CI of a set of per-task rates (percent). Each task counts
-  // once, so a task with more responses doesn't dominate the group average.
-  function daMeanCI(vals) {
-    var k = vals.length; if (!k) return { mean: NaN, lo: NaN, hi: NaN, k: 0 };
-    var m = vals.reduce(function (a, b) { return a + b; }, 0) / k;
-    if (k < 2) return { mean: m, lo: NaN, hi: NaN, k: k };
-    var sd = Math.sqrt(vals.reduce(function (a, b) { return a + (b - m) * (b - m); }, 0) / (k - 1));
-    var hw = daTcrit(k - 1) * sd / Math.sqrt(k);
-    return { mean: m, lo: Math.max(0, m - hw), hi: Math.min(100, m + hw), k: k };
+  // Group rate (by task type / domain) = the MEAN of the per-task proportions, so
+  // each task is weighted equally regardless of how many responses it got. Its 95%
+  // CI comes from the DELTA METHOD: SE = sqrt(sum of each task's binomial variance)
+  // / k, with the Agresti-Coull adjusted variance so a task at 0% or 100% still
+  // contributes uncertainty. The 30 tasks are the whole study (fixed, not sampled),
+  // so only the finite student responses carry error — a t-interval ACROSS tasks
+  // would add spurious task-sampling variance and, with only 2–4 tasks per domain,
+  // blow the interval out to span 0–100%. `arr` holds task objects with `.n` and
+  // the outcome count `ck` (cOver / cInd / cUnder). Returns { mean, lo, hi } (%).
+  function daGroupRate(arr, ck) {
+    var k = arr.length, z = 1.96; if (!k) return { mean: NaN, lo: NaN, hi: NaN, k: 0 };
+    var mean = 0, sumVar = 0;
+    arr.forEach(function (t) {
+      var x = t[ck], n = t.n;
+      mean += (n > 0 ? x / n : 0);                       // equal-weight mean of per-task rates
+      var nt = n + z * z, pt = (x + z * z / 2) / nt;      // Agresti-Coull adjusted proportion
+      sumVar += pt * (1 - pt) / nt;                       // this task's (regularised) variance
+    });
+    mean = 100 * mean / k;
+    var se = 100 * Math.sqrt(sumVar) / k;                 // delta-method SE, in percent
+    return { mean: mean, lo: Math.max(0, mean - z * se), hi: Math.min(100, mean + z * se), k: k };
   }
   // From the aggregate Responses sheet: per-task over/indifference/under rates
   // (% Opus / % tie / % Haiku) + Wilson CIs, plus the group averages (by task type
@@ -1619,6 +1654,7 @@
     var tasks = Object.keys(byTask).map(function (t) {
       var o = byTask[t];
       return { task: t, n: o.n, cx: o.cx, dm: o.dm,
+        cOver: o.over, cInd: o.ind, cUnder: o.under,   // raw counts (for the delta-method group CI)
         over: 100 * o.over / o.n, ind: 100 * o.ind / o.n, under: 100 * o.under / o.n,
         overCI: daWilson(o.over, o.n), indCI: daWilson(o.ind, o.n), underCI: daWilson(o.under, o.n) };
     });
@@ -1628,9 +1664,7 @@
       return Object.keys(groups).sort().map(function (k) {
         var arr = groups[k];
         return { label: k, nTasks: arr.length,
-          over: daMeanCI(arr.map(function (t) { return t.over; })),
-          ind: daMeanCI(arr.map(function (t) { return t.ind; })),
-          under: daMeanCI(arr.map(function (t) { return t.under; })) };
+          over: daGroupRate(arr, 'cOver'), ind: daGroupRate(arr, 'cInd'), under: daGroupRate(arr, 'cUnder') };
       });
     }
     return { tasks: tasks, byType: aggBy(function (t) { return t.cx; }), byDomain: aggBy(function (t) { return t.dm; }) };
@@ -1687,7 +1721,7 @@
     var data = daProvisionData(sheetMap);
     if (!data.tasks.length) return;                            // no per-task Responses to plot
     container.appendChild(el('div', { class: 'aa-sub', style: 'margin:20px 0 4px;', text: 'Model provisioning — over / indifference / under' }));
-    container.appendChild(el('p', { class: 'aa-note', html: 'Preferring <b>Opus</b> = <b>over-provisioning</b> (a bigger model than a simple task needs), a <b>tie</b> = <b>indifference</b>, preferring <b>Haiku</b> = <b>under-provisioning</b>. Bars are the % of responses in each; whiskers are 95% CIs — <b>Wilson</b> per task, and a <b>t-interval across tasks</b> for the type/domain averages (each task weighted equally, so unequal responses per task don\'t bias the averages).' }));
+    container.appendChild(el('p', { class: 'aa-note', html: 'Preferring <b>Opus</b> = <b>over-provisioning</b> (a bigger model than a simple task needs), a <b>tie</b> = <b>indifference</b>, preferring <b>Haiku</b> = <b>under-provisioning</b>. Bars are the % of responses in each; whiskers are 95% CIs — a <b>Wilson</b> interval per task, and for the type/domain averages the mean of the per-task rates (each task weighted equally) with a CI that pools the per-task sampling errors (<b>delta method</b>), so unequal responses per task don\'t bias the averages.' }));
 
     var taskGroups = data.tasks.slice().sort(function (a, b) { return b.over - a.over; }).map(function (t) {
       return { label: t.task + ' (n=' + t.n + ')',
@@ -3140,6 +3174,12 @@
     root = el('div', { id: 'aa-root' }, [el('div', { class: 'aa-wrap' }, [el('div', { class: 'aa-card' }, [el('p', { text: 'Connecting...' })])])]);
     document.body.appendChild(root);
     applyTheme(currentTheme());
+    // Back/forward between the Admin and Data-analytics tabs (their URLs differ).
+    window.addEventListener('popstate', function () {
+      if (!user || !Store.isAdminEmail(user.email)) return;
+      var v = viewFromUrl();
+      if (v !== currentView) { currentView = v; renderShell(); }
+    });
     if (cachedAdmin()) { /* render after config loads */ }
     if (!Store) { clearRoot(); root.appendChild(el('div', { class: 'aa-wrap' }, [el('div', { class: 'aa-card' }, [el('p', { class: 'aa-err', text: 'arena-store.js failed to load.' })])])); return; }
     Store.init().then(function () {

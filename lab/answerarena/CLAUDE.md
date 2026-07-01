@@ -335,6 +335,15 @@ module-level `daState` object, so leaving and returning to the tab preserves the
 loaded data, selections and edited code. Everything runs **entirely in the
 browser** — no data is uploaded, no Cloud Function or Firestore-rules change.
 
+**The Data-analytics tab is directly linkable** (like ideasearchlab's
+`/admin/data-analytics`): `?admin=data-analytics` opens straight on it, plain
+`?admin` opens the Admin panel. `viewFromUrl()` reads the initial tab (also
+accepts `?admin=analytics` / `?admin&view=analytics` / `#data-analytics`),
+`setViewUrl()` keeps the address bar in sync as you switch tabs (canonical
+`?admin` / `?admin=data-analytics`, preserving other params), and a `popstate`
+listener makes the browser Back/Forward switch tabs. The top-of-file guard still
+activates on `/[?&]admin\b/`, which matches `?admin=data-analytics`.
+
 Four sections:
 
 1. **Data source** (`buildDaSection1`). Lists every session (with participant
@@ -365,12 +374,20 @@ Four sections:
      (sorted by over-provision rate) shows the % in each with **Wilson** 95% CIs
      (so a task with fewer responses gets a wider whisker); **by task type** and
      **by domain** show the **average of the per-task rates** (each task weighted
-     equally) with a **t-interval across tasks** — this is how the CIs "account for
-     unequal responses per task" (the random 15-of-30 subset). Task
-     complexity/domain come from the exported `task_complexity`/`task_domain`
-     columns when present, else the built-in `DA_TASK_META` map (the 30-task list).
-     Helpers: `daWilson` (proportion CI), `daMeanCI` + `daTcrit` (across-task
-     t-CI), `svgEl` (SVG builder — `var()` colours go via `style`, not attributes).
+     equally) with a CI from the **delta method** (`daGroupRate`): SE =
+     `sqrt(Σ per-task Agresti-Coull variance) / k`. This is the correct CI because
+     the 30 tasks are the **whole study** (fixed, not sampled), so only the finite
+     student responses carry error — a t-interval *across tasks* (an earlier
+     version) added spurious task-sampling variance and, with only 2–4 tasks per
+     domain, blew the interval out to span 0–100%; the delta method keeps the same
+     equal-weight mean but gives an informative CI (e.g. Data Analysis over ≈ 58%
+     `[44, 72]` instead of `[10, 100]`). It still "accounts for unequal responses
+     per task" — each task weighted equally in the mean, and a task with fewer
+     responses contributes more variance. Task complexity/domain come from the
+     exported `task_complexity`/`task_domain` columns when present, else the
+     built-in `DA_TASK_META` map (the 30-task list). Helpers: `daWilson`
+     (per-task proportion CI), `daGroupRate` (equal-weight mean + delta-method CI),
+     `svgEl` (SVG builder — `var()` colours go via `style`, not attributes).
 
 3. **Process with Python or R** (`buildDaSection3`). Pick a table from the
    aggregate (default **Responses** = one row per comparison, the analysis unit),
