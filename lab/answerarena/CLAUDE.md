@@ -335,7 +335,7 @@ module-level `daState` object, so leaving and returning to the tab preserves the
 loaded data, selections and edited code. Everything runs **entirely in the
 browser** — no data is uploaded, no Cloud Function or Firestore-rules change.
 
-Three sections:
+Four sections:
 
 1. **Data source** (`buildDaSection1`). Lists every session (with participant
    count + condition) as a checkbox; you can also **Import Excel / CSV** (a
@@ -369,12 +369,30 @@ Three sections:
    **WebR** (`daRunR`, base R; base-graphics captured as PNGs) — both ported from
    the ideasearchlab Data Analytics page and loaded lazily from jsDelivr on first
    Run. Console output streams below; matplotlib / base-graphics plots render
-   under it. The default templates (`DA_PY_TEMPLATE` / `DA_R_TEMPLATE`) run a
-   worked example on the Responses table (frontier win rate + mean
-   `preference_model` by the 2×2 factors, an OLS with HC3 robust SEs, and a bar
-   plot); they are defensive about missing columns so they also run on any other
-   table. Edited code auto-persists to `localStorage` (`aa-da:py` / `aa-da:r`);
+   under it. Edited code auto-persists to `localStorage` (`aa-da:py` / `aa-da:r`);
    **Reset template** restores the bundled default.
+
+   The default templates (`DA_PY_TEMPLATE` / `DA_R_TEMPLATE`) answer the study's
+   core question — *given a task and two blind answers (Haiku 4.5 = baseline, Opus
+   4.8 = frontier), do participants **prefer a model or are they indifferent**?*
+   They report: outcome shares + a binomial win-rate test; **the main indifference
+   test two ways** — (A) **averaging across tasks** (each task's mean preference is
+   one observation → one-sample t-test vs 0, the headline "average across tasks"
+   answer) and (B) across all comparisons with SEs **clustered on the participant**
+   (repeated measures) — plus a sign test across tasks; a 2×2-factor OLS
+   (cost_transparency / firm_pay) with clustered SEs; a by-task heterogeneity
+   table; and figures (preference distribution, outcome shares, by-task means, mean
+   by condition ± 95% CI). R has no `sandwich`/`lmtest`, so the cluster-robust
+   vcov (CR1) is computed in base R (`cluster_vcov`); it matches statsmodels'
+   clustered SE on the same data. Both templates are defensive about missing
+   columns/small n and end with a plain-language **`INSIGHTS`** block.
+
+4. **Insights gained** (`buildDaSection4`). A readable write-up of the last run:
+   `daParseInsights()` extracts the script's `INSIGHTS` block (the text after a
+   line reading `INSIGHTS`) and renders it with `## ` headings, `- ` bullets and
+   `**bold**` (`daInlineBold`), followed by the plots shown large. `run()`
+   snapshots each run into `daState.lastRun` and calls `daRefs.updateInsights()`.
+   Editing the script's `INSIGHTS` prose changes what this section shows.
 
 **Gotchas:** the runtimes need network access to jsDelivr on first Run (blocked
 in some sandboxes → a visible "Failed to load … (CDN / network / CSP?)" error,
