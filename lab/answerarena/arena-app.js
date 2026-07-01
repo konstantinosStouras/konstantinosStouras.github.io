@@ -328,7 +328,15 @@
     S.phase = 'main';
     if (S.tasks.length && S.order.length) { renderComparison(); return; }
     setScreen(overlayWrap(card(t('mainTitle', 'Your comparisons'), [el('p', { text: 'Preparing your comparisons...' })])));
-    Store.loadActiveTasks().then(function (set) {
+    // Honor the session's snapshotted task set so a session keeps the comparisons
+    // it was built with even if the admin changes the global active set later
+    // (matching how comparisonsPerUser/randomizeOrder are snapshotted). Older
+    // sessions without a snapshot, and the default no-code play, use the active
+    // set; an empty/deleted snapshot degrades to the built-in default inside the
+    // store, so this never dead-ends anyone.
+    var sessSet = S.session && S.session.taskSetId;
+    var loadTasks = (sessSet && Store.loadTaskSet) ? Store.loadTaskSet(sessSet) : Store.loadActiveTasks();
+    loadTasks.then(function (set) {
       S.tasks = (set && set.tasks) || [];
       // Build a fresh, freshly-shuffled set every time the participant enters the
       // comparisons. Past progress is intentionally NOT resumed - each play
@@ -359,7 +367,12 @@
       // those still on it or who finished it).
       var played = Object.assign({}, (S.p && S.p.playedSessions) || {});
       if (!played[curSid()]) played[curSid()] = nowStamp();
-      persist({ order: S.order, flips: S.flips, idx: 0, status: 'playing', playedSessions: played });
+      // Start clean: drop any leftover draftResponse from an earlier, abandoned
+      // play. Progress is never resumed (a fresh shuffle starts at comparison 1),
+      // so a stale draft would otherwise export as a phantom row with an idx/
+      // taskId that no longer matches this play's order.
+      S.draft = null;
+      persist({ order: S.order, flips: S.flips, idx: 0, status: 'playing', playedSessions: played, draftResponse: null });
       if (!S.order.length) { showThankYou(); return; }
       renderComparison();
     }).catch(function (e) {

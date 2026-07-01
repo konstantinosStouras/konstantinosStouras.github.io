@@ -110,11 +110,14 @@ along in the admin Excel export (Responses sheet: `preference`, `preference_AB`,
 `preference_model`). `settings.comparisonsPerUser` (0 = whole set) caps how
 many comparisons each participant sees: when it is below the active-set size the
 participant gets that many **randomly chosen** task pairs. **Each session
-snapshots `comparisonsPerUser` and `randomizeOrder` at creation** (alongside the
-2x2 `condition`), and `startMain` prefers the session's snapshot over the live
-global settings (older sessions with no snapshot fall back to global) - so a
-session keeps the count it was built with even if the global setting changes
-later. The admin **Setup summary** shows this as e.g. "2 of 100 (random subset)"
+snapshots `comparisonsPerUser`, `randomizeOrder` and `taskSetId` at creation**
+(alongside the 2x2 `condition`), and `startMain` prefers the session's snapshot
+over the live global settings (older sessions with no snapshot fall back to
+global) - so a session keeps the count **and the exact task set** it was built
+with even if the global active set changes later. The task set is loaded via
+`Store.loadTaskSet(session.taskSetId)` (falling back to `loadActiveTasks()` for a
+no-code play or a session with no snapshot; an empty/deleted snapshot degrades to
+the built-in default inside the store, so it never dead-ends anyone). The admin **Setup summary** shows this as e.g. "2 of 100 (random subset)"
 and auto-refreshes (via
 the `summaryRefresh` hook) whenever a card that feeds it is saved - the
 Comparison-flow, 2x2 and Long-list cards (in each `saveConfig().then` **after**
@@ -223,13 +226,26 @@ participant currently in or having completed that session.
 ts }`), so the time of each decision - and of each change to a new option - is
 recorded. Both the all-users export ("Export to Excel") and the per-session
 export ("Export data" on a session card) produce a workbook with sheets:
-**Conventions** (documents every column), **Participants**, **Responses**,
-**Events**, **Survey**. Columns use self-explanatory snake_case names
-(`participant_id`, `shown_order`, `left_model`/`right_model`,
-`satisfaction_answer_A/B`, `cost_transparency`/`firm_pay` (per-participant 2x2
-group as 1/0 via `condBit()`; blank if that factor was not varied), ...);
-the Conventions sheet (built by `buildConventions()`, including each
-registration/survey question label) is the source of truth - keep it in sync
+**Conventions** (documents every sheet/column + the join keys), **Sessions**
+(one row per session play - status, snapshotted 2x2/flow settings, participant
+count), **Participants** (one per person), **Tasks** (one per task pair = the
+unit of analysis: full description + both model answers + costs), **Task
+summary** (per-task aggregates: n, baseline/frontier/tie counts,
+`frontier_win_rate`, `mean_preference_model`, `mean_response_ms`), **Responses**
+(one per comparison), **Events** (one per click/change), **Survey**. **Join keys:
+`account_id`** (the Firebase anonymous UID) is the unique participant key present
+on *every* sheet - `participant_id`/`email` are optional/legacy and usually blank
+for anonymous players, so never join on them; **`task_id`** joins Responses /
+Events / Task summary to Tasks; **`session_id`** (+ human `session_code`) joins to
+Sessions. Task text is resolved from the active set **merged with each in-scope
+session's pinned task set** (what participants actually saw wins), so a per-session
+export shows the right descriptions even after the active set changed; long model
+outputs are capped at ~32,000 chars (`cellCap()`) so one huge answer can't break
+the write. Columns use self-explanatory snake_case names
+(`shown_order`, `left_model`/`right_model`, `cost_transparency`/`firm_pay`
+(per-participant 2x2 group as 1/0 via `condBit()`; blank if that factor was not
+varied), ...); the Conventions sheet (built by `buildConventions()`, including
+each registration/survey question label) is the source of truth - keep it in sync
 when columns change.
 
 **Nothing is lost on an abrupt close.** Each comparison is written one-by-one as
