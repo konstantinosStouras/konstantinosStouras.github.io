@@ -1101,6 +1101,11 @@
             participant_id: p.participantId || '', account_id: uid, email: p.email || '',
             status: p.status || '', current_session_id: p.sessionId || '',
             current_session_code: sessCode(p.sessionId, sessById),
+            // How far they got: size of their assigned set (most recent session) and
+            // how many comparisons they actually submitted (filled in below). A
+            // drop-out shows e.g. 7 submitted of 20 assigned, with status "playing".
+            comparisons_assigned: (p.order && p.order.length != null) ? p.order.length : '',
+            comparisons_submitted: 0,
             played_session_ids: Object.keys(p.playedSessions || {}).join(', '),
             completed_session_ids: completed.join(', '),
             completed_this_session_at: only ? ((p.completedSessions && p.completedSessions[only]) ? fmtTs(p.completedSessions[only]) : 'no') : undefined,
@@ -1111,7 +1116,8 @@
             registered_at: fmtTs(p.createdAt)
           };
           if (!only) delete base.completed_this_session_at;
-          pRows.push(Object.assign({}, base, orderedAnswers('reg_', p.registration || {}, activeQuestions('registrationQuestions'), false)));
+          var prow = Object.assign({}, base, orderedAnswers('reg_', p.registration || {}, activeQuestions('registrationQuestions'), false));
+          pRows.push(prow);
           chain = chain.then(function () {
             return Store.listResponses(uid).then(function (rs) {
               // One ordered list per participant: the submitted answers plus the
@@ -1139,6 +1145,8 @@
                   var ms = Number(it.v.responseMs); if (it.v.responseMs != null && isFinite(ms)) { a.msSum += ms; a.msN++; }
                 }
               });
+              // Answers tracked so far for this participant (in this export's scope).
+              prow.comparisons_submitted = items.reduce(function (n, it) { return n + (it.sub === 'yes' ? 1 : 0); }, 0);
             }).catch(function () {});
           }).then(function () {
             return Store.listEvents(uid).then(function (evs) {
@@ -1309,6 +1317,8 @@
     add('Participants', 'status', 'Where the participant is in the flow: registered, playing, survey, or done.');
     add('Participants', 'current_session_id', 'Internal ID of the session the participant is currently in.');
     add('Participants', 'current_session_code', 'Join code of the session the participant is currently in.');
+    add('Participants', 'comparisons_assigned', 'How many comparisons this participant was assigned in their most recent session (their shuffled set size); blank if they never started.');
+    add('Participants', 'comparisons_submitted', 'How many comparisons this participant actually submitted (in this export\'s scope). A drop-out shows fewer submitted than assigned with status "playing" - this is the count of answers collected so far. Every submitted answer is also a row on the Responses sheet.');
     add('Participants', 'played_session_ids', 'Internal IDs of every session the participant has started (comma-separated).');
     add('Participants', 'completed_session_ids', 'Internal IDs of every session the participant has finished (comma-separated).');
     if (only) add('Participants', 'completed_this_session_at', 'When the participant finished THIS session, or "no" if not finished.');

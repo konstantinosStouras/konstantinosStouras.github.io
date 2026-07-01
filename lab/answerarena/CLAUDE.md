@@ -246,7 +246,9 @@ recorded. Both the all-users export ("Export to Excel") and the per-session
 export ("Export data" on a session card) produce a workbook with sheets:
 **Conventions** (documents every sheet/column + the join keys), **Sessions**
 (one row per session play - status, snapshotted 2x2/flow settings, participant
-count), **Participants** (one per person), **Tasks** (one per task pair = the
+count), **Participants** (one per person, incl. `comparisons_assigned` /
+`comparisons_submitted` so a **drop-out** is visible at a glance - fewer submitted
+than assigned while `status` = playing), **Tasks** (one per task pair = the
 unit of analysis: full description + both model answers + costs), **Task
 summary** (per-task aggregates: n, baseline/frontier/tie counts,
 `frontier_win_rate`, `mean_preference_model`, `mean_response_ms`), **Responses**
