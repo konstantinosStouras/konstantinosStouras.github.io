@@ -1928,7 +1928,11 @@
      from jsDelivr on first Run and is then reused across runs.
      ===================================================================== */
   var DA_PYODIDE_VERSIONS = ['314.0.1', '0.29.4', '0.28.3'];
-  var DA_PY_PACKAGES = ['numpy', 'pandas', 'scipy', 'statsmodels', 'matplotlib'];
+  // Only the packages the bundled template needs. statsmodels is deliberately NOT
+  // here: it is a large, sometimes-unavailable Pyodide build, and requiring it used
+  // to make Python fail to start ("R works, Python doesn't"). The template does its
+  // own regressions with numpy, so numpy/pandas/scipy/matplotlib are enough.
+  var DA_PY_PACKAGES = ['numpy', 'pandas', 'scipy', 'matplotlib'];
   var _pyodidePromise = null;
   function daPyScriptUrl(v) { return 'https://cdn.jsdelivr.net/pyodide/v' + v + '/full/pyodide.js'; }
   function daPyBaseUrl(v) { return 'https://cdn.jsdelivr.net/pyodide/v' + v + '/full/'; }
@@ -1980,9 +1984,15 @@
       try { await pyodide.loadPackage(DA_PY_PACKAGES[i]); } catch (e) { fallback.push(DA_PY_PACKAGES[i]); }
     }
     if (fallback.length) {
-      await pyodide.loadPackage('micropip');
-      var micropip = pyodide.pyimport('micropip');
-      for (var j = 0; j < fallback.length; j++) await micropip.install(fallback[j]);
+      // Best effort via micropip; a package that still can't be installed is
+      // SKIPPED (non-fatal) so one unavailable package never blocks Python startup.
+      try {
+        await pyodide.loadPackage('micropip');
+        var micropip = pyodide.pyimport('micropip');
+        for (var j = 0; j < fallback.length; j++) {
+          try { await micropip.install(fallback[j]); } catch (e2) { if (window.console) console.warn('[Arena analytics] could not install ' + fallback[j], e2); }
+        }
+      } catch (e3) { if (window.console) console.warn('[Arena analytics] micropip unavailable', e3); }
     }
   }
   var DA_MPL_BACKEND = '\nimport os as __os\n__os.environ.setdefault("MPLBACKEND", "Agg")\ntry:\n    import matplotlib\n    matplotlib.use("Agg", force=True)\nexcept Exception:\n    pass\n';
@@ -2106,8 +2116,9 @@
     '  cost_transparency, firm_pay   optional 2x2 factors (1/0), if they were varied',
     '  submitted         \'yes\' for a real (non-draft) answer',
     '',
-    'Edit anything, then Run. The INSIGHTS block at the very end is what the',
-    '"Insights gained" section renders.',
+    'Uses only numpy / pandas / scipy / matplotlib (no statsmodels), so it runs',
+    'wherever the R version does. Edit anything, then Run. The INSIGHTS block at the',
+    'very end is what the "Insights gained" section renders.',
     '"""',
     'import io',
     'import numpy as np',
@@ -2119,14 +2130,33 @@
     '',
     'OPUS, HAIKU = "frontier", "baseline"',
     '',
-    'def clustered_ols(formula, data, group="account_id"):',
-    '    """OLS with SEs clustered on participant when possible, else HC3-robust."""',
-    '    import statsmodels.formula.api as smf',
-    '    if group in data.columns and data[group].nunique() > 1:',
-    '        return smf.ols(formula, data=data).fit(cov_type="cluster", cov_kwds={"groups": data[group]})',
-    '    return smf.ols(formula, data=data).fit(cov_type="HC3")',
+    'def ols_robust(y, X, groups=None):',
+    '    """OLS with a robust covariance: cluster-robust (CR1) when `groups` has >1',
+    '    level, else HC3. Mirrors the base-R helper in the R template - no statsmodels.',
+    '    Returns dict(beta, se, t, p) using n-k residual df for the p-values."""',
+    '    y = np.asarray(y, float); X = np.asarray(X, float)',
+    '    n, k = X.shape',
+    '    XtXinv = np.linalg.inv(X.T @ X)',
+    '    beta = XtXinv @ (X.T @ y)',
+    '    resid = y - X @ beta',
+    '    if groups is not None and len(np.unique(groups)) > 1:',
+    '        g = np.asarray(groups); uniq = np.unique(g); G = len(uniq)',
+    '        meat = np.zeros((k, k))',
+    '        for gi in uniq:',
+    '            m = g == gi',
+    '            s = X[m].T @ resid[m]',
+    '            meat += np.outer(s, s)',
+    '        adj = (G / (G - 1.0)) * ((n - 1.0) / (n - k))',
+    '        V = XtXinv @ (adj * meat) @ XtXinv',
+    '    else:',
+    '        h = np.sum((X @ XtXinv) * X, axis=1)',
+    '        V = XtXinv @ (X.T @ (X * (resid ** 2 / (1 - h) ** 2)[:, None])) @ XtXinv',
+    '    se = np.sqrt(np.diag(V))',
+    '    df = max(n - k, 1)',
+    '    t = beta / se',
+    '    p = 2 * st.t.sf(np.abs(t), df)',
+    '    return {"beta": beta, "se": se, "t": t, "p": p, "n": n, "df": df}',
     '',
-    '# collect insight lines as we go, print them all at the end',
     'INS = []',
     'def note(s=""):',
     '    INS.append(s)',
@@ -2183,19 +2213,21 @@
     '        task_means = df.groupby("task_id")["pref"].mean().dropna()',
     '        k_tasks = len(task_means)',
     '    if k_tasks >= 2:',
-    '        tr = st.ttest_1samp(task_means, 0.0)',
-    '        t_task, p_task = float(tr.statistic), float(tr.pvalue)',
+    '        tr = st.ttest_1samp(task_means.values, 0.0)',
+    '        t_task, p_task = float(np.ravel(tr.statistic)[0]), float(np.ravel(tr.pvalue)[0])',
     '        mtm = float(task_means.mean())',
-    '        tlo, thi = st.t.interval(0.95, k_tasks - 1, loc=mtm, scale=st.sem(task_means))',
+    '        tci = st.t.interval(0.95, k_tasks - 1, loc=mtm, scale=float(st.sem(task_means.values)))',
+    '        tlo, thi = float(np.ravel(tci[0])[0]), float(np.ravel(tci[1])[0])',
     '    pos = int((task_means > 0).sum()); neg = int((task_means < 0).sum())',
     '    p_sign = st.binomtest(pos, pos + neg, 0.5).pvalue if (pos + neg) else float("nan")',
     '',
     '    # (B) Comparison-level: intercept-only OLS, SEs clustered on participant.',
     '    mean = se = p_mean = lo = hi = float("nan")',
     '    if len(reg):',
-    '        m = clustered_ols("pref ~ 1", reg)',
-    '        mean = m.params["Intercept"]; se = m.bse["Intercept"]; p_mean = m.pvalues["Intercept"]',
-    '        lo, hi = m.conf_int().loc["Intercept"].tolist()',
+    '        grp = reg["account_id"].values if ("account_id" in reg.columns and reg["account_id"].nunique() > 1) else None',
+    '        rB = ols_robust(reg["pref"].values, np.ones((len(reg), 1)), grp)',
+    '        mean = float(rB["beta"][0]); se = float(rB["se"][0]); p_mean = float(rB["p"][0])',
+    '        lo, hi = mean - 1.96 * se, mean + 1.96 * se',
     '',
     '    print("\\nTABLE 2 - The main test: are users indifferent (mean preference = 0)?")',
     '    print("  -3 = strongly Haiku .. 0 = equal .. +3 = strongly Opus")',
@@ -2218,12 +2250,15 @@
     '    for c in factors:',
     '        reg[c] = pd.to_numeric(reg.get(c), errors="coerce")',
     '    factors = [c for c in factors if c in reg.columns and reg[c].nunique() > 1]',
-    '    m2 = None',
+    '    coefs = None',
     '    if factors and len(reg.dropna(subset=factors)) > len(factors) + 1:',
     '        try:',
     '            rr = reg.dropna(subset=factors)',
-    '            m2 = clustered_ols("pref ~ " + " + ".join(factors), rr)',
-    '            coefs = pd.DataFrame({"coef": m2.params, "robust_SE": m2.bse, "t": m2.tvalues, "p": m2.pvalues})',
+    '            Xmat = np.column_stack([np.ones(len(rr))] + [rr[c].values.astype(float) for c in factors])',
+    '            grp3 = rr["account_id"].values if ("account_id" in rr.columns and rr["account_id"].nunique() > 1) else None',
+    '            r3 = ols_robust(rr["pref"].values, Xmat, grp3)',
+    '            coefs = pd.DataFrame({"coef": r3["beta"], "robust_SE": r3["se"], "t": r3["t"], "p": r3["p"]},',
+    '                                 index=["Intercept"] + factors)',
     '            print("\\nTABLE 3 - OLS  pref ~ " + " + ".join(factors) + "   (SEs clustered on participant)")',
     '            print(coefs.to_string(float_format=lambda x: "%.4f" % x))',
     '        except Exception as e:',
@@ -2231,6 +2266,7 @@
     '',
     '    # ── TABLE 4 - by task (the heterogeneity across user needs) ────────────────',
     '    tasks_favouring_opus = tasks_favouring_haiku = tasks_total = 0',
+    '    tt = None',
     '    if "task_id" in df.columns:',
     '        g = df.groupby("task_id")',
     '        tt = pd.DataFrame({',
@@ -2274,7 +2310,7 @@
     '    fig.tight_layout()',
     '',
     '    # Figure 2: mean preference by task',
-    '    if "task_id" in df.columns and tasks_total:',
+    '    if tt is not None and tasks_total:',
     '        top = tt if len(tt) <= 18 else pd.concat([tt.head(9), tt.tail(9)])',
     '        fig2, ax2 = plt.subplots(figsize=(9, max(3.2, 0.4 * len(top) + 1.2)))',
     '        y = range(len(top))',
@@ -2345,11 +2381,11 @@
     '             "(the rest tied) - so the winner is **not uniform** across user needs "',
     '             "(see the by-task table and plot)."',
     '             % (tasks_total, tasks_favouring_opus, tasks_favouring_haiku))',
-    '    if factors and m2 is not None:',
+    '    if factors and coefs is not None:',
     '        note("")',
     '        note("## The 2x2 conditions")',
     '        for c in factors:',
-    '            b = m2.params.get(c, float("nan")); pp = m2.pvalues.get(c, float("nan"))',
+    '            b = float(coefs.loc[c, "coef"]); pp = float(coefs.loc[c, "p"])',
     '            direction = "raises" if b > 0 else "lowers"',
     '            note("- Turning on **%s** %s the preference for Opus by **%+.2f** points (p = %.3g)%s."',
     '                 % (c, direction, b, pp, "" if pp < 0.05 else ", not significant"))',
