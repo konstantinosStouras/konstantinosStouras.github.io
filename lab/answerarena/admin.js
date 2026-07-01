@@ -1537,6 +1537,20 @@
                         the aggregate, entirely in the browser; output below.
      ===================================================================== */
   function daLoadSaved(key, dflt) { try { var v = localStorage.getItem(key); return v != null ? v : dflt; } catch (e) { return dflt; } }
+  // Bump DA_TPL_VERSION whenever the bundled Python/R templates change. A saved
+  // script from a previous version lives in localStorage and would otherwise
+  // SHADOW the current template (daLoadSaved returns the saved copy) — that is how
+  // an old, now-broken script kept running and looked like "Python won't run".
+  // On a version change we drop the saved code so the fixed template loads fresh.
+  var DA_TPL_VERSION = '2026-07-01-figs-in-insights';
+  function daMigrateTemplates() {
+    try {
+      if (localStorage.getItem('aa-da:ver') === DA_TPL_VERSION) return;
+      localStorage.removeItem('aa-da:py');
+      localStorage.removeItem('aa-da:r');
+      localStorage.setItem('aa-da:ver', DA_TPL_VERSION);
+    } catch (e) { /* ignore */ }
+  }
   function emptySheetMap() { var m = {}; SHEET_ORDER.forEach(function (n) { m[n] = []; }); return m; }
   // Stack every sheet of an imported workbook onto the aggregate map: matched onto
   // an existing tab by (case-insensitive) name, else added as its own tab.
@@ -1965,7 +1979,7 @@
   function buildDaSection3() {
     var card = el('div', { class: 'aa-card' });
     card.appendChild(el('div', { class: 'aa-sechead' }, [el('span', { class: 'aa-secnum', text: '3' }), el('h3', { text: 'Process with Python or R', style: 'margin:0;' })]));
-    card.appendChild(el('p', { class: 'aa-note', html: 'Pick a table from the aggregate above, then run <b>Python</b> (Pyodide: numpy / pandas / scipy / statsmodels / matplotlib) or <b>R</b> (WebR, base R) on it — compiled entirely in your browser (the first run downloads the runtime, ~10–30&nbsp;s). The table is handed to your code as the string <code>DATA_CSV</code> (Python) or the file <code>/tmp/data.csv</code> (R). Output and plots appear below.' }));
+    card.appendChild(el('p', { class: 'aa-note', html: 'Pick a table from the aggregate above, then run <b>Python</b> (Pyodide: numpy / pandas / scipy / statsmodels / matplotlib) or <b>R</b> (WebR, base R) on it — compiled entirely in your browser (the first run downloads the runtime, ~10–30&nbsp;s). The table is handed to your code as the string <code>DATA_CSV</code> (Python) or the file <code>/tmp/data.csv</code> (R). Text output appears below; the <b>plots are shown in the “Insights gained” section</b>, each next to an explanation of how to read it.' }));
 
     var tableSel = el('select', {});
     card.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: 'Analysis table (from Section 2)' }), tableSel]));
@@ -1990,7 +2004,9 @@
 
     var running = false, outText = '', flushQueued = false, outPre = null;
 
-    // Restore persisted code (or the bundled templates) once.
+    // Restore persisted code (or the bundled templates) once. Refresh first so a
+    // stale saved script from an older template version cannot shadow the fix.
+    daMigrateTemplates();
     if (daState.code.python == null) daState.code.python = daLoadSaved('aa-da:py', DA_PY_TEMPLATE);
     if (daState.code.r == null) daState.code.r = daLoadSaved('aa-da:r', DA_R_TEMPLATE);
     editor.value = daState.code[daState.lang];
@@ -2061,8 +2077,12 @@
         var imgs = (result && result.images) || [];
         if (result && !result.ok && result.error) finalOut = (finalOut ? finalOut + '\n' : '') + '⚠ ' + result.error;
         if (outPre) outPre.textContent = finalOut || '(no output)';
-        imgs.forEach(function (src) { plots.appendChild(el('img', { src: src, alt: 'plot' })); });
-        setStatus(imgs.length ? (imgs.length + ' plot' + (imgs.length === 1 ? '' : 's') + ' rendered.') : (result && result.ok ? 'Done.' : ''));
+        // Plots live in the Insights section (each beside its explanation), so here
+        // we only point there rather than duplicating the figures.
+        if (imgs.length) {
+          plots.appendChild(el('p', { class: 'aa-note', html: '📊 <b>' + imgs.length + ' figure' + (imgs.length === 1 ? '' : 's') + '</b> rendered — see the <b>“Insights gained”</b> section below, where each plot is shown with an explanation of how to read it.' }));
+        }
+        setStatus(imgs.length ? (imgs.length + ' figure' + (imgs.length === 1 ? '' : 's') + ' rendered — shown in “Insights gained” below.') : (result && result.ok ? 'Done.' : ''));
         // Snapshot the run so the Insights section can render its INSIGHTS block + plots.
         daState.lastRun = { output: finalOut, images: imgs, lang: lang, ok: !!(result && result.ok) };
         if (daRefs.updateInsights) daRefs.updateInsights();
@@ -2080,7 +2100,7 @@
   function buildDaSection4() {
     var card = el('div', { class: 'aa-card' });
     card.appendChild(el('div', { class: 'aa-sechead' }, [el('span', { class: 'aa-secnum', text: '4' }), el('h3', { text: 'Insights gained', style: 'margin:0;' })]));
-    card.appendChild(el('p', { class: 'aa-note', html: 'A readable write-up of what the Section 3 analysis found — the answer to <b>“do participants prefer a model, or are they indifferent?”</b>, plus the by-task and 2×2 breakdowns, with the plots shown large. It comes from the <code>INSIGHTS</code> block the script prints, so editing the script changes it.' }));
+    card.appendChild(el('p', { class: 'aa-note', html: 'A readable write-up of what the Section 3 analysis found — the answer to <b>“do participants prefer a model, or are they indifferent?”</b>, plus the by-task and 2×2 breakdowns. <b>Every plot is shown here</b>, each one dropped in right under the paragraph that explains how to read it. It all comes from the <code>INSIGHTS</code> block the script prints, so editing the script changes it.' }));
     var body = el('div', {});
     card.appendChild(body);
     daRefs.updateInsights = render;
@@ -2088,13 +2108,29 @@
     function render() {
       body.innerHTML = '';
       var run = daState.lastRun;
-      if (!run) { body.appendChild(el('p', { class: 'aa-note', text: 'Run the analysis in Section 3 first — the insights appear here.' })); return; }
+      if (!run) { body.appendChild(el('p', { class: 'aa-note', text: 'Run the analysis in Section 3 first — the insights and plots appear here.' })); return; }
       var text = daParseInsights(run.output);
+      var images = (run.images || []).slice();
+      var placed = [];               // image indices already dropped under a "Figure N" heading
       if (text) {
         var ul = null;
         text.split('\n').forEach(function (raw) {
           var t = raw.replace(/\s+$/, '');
-          if (/^\s*##\s+/.test(t)) { ul = null; body.appendChild(el('h4', { class: 'aa-insh', text: t.replace(/^\s*##\s+/, '') })); }
+          if (/^\s*##\s+/.test(t)) {
+            ul = null;
+            var head = t.replace(/^\s*##\s+/, '');
+            body.appendChild(el('h4', { class: 'aa-insh', text: head }));
+            // A "Figure N …" heading pulls its plot in right here, so each figure
+            // sits with the paragraph that explains how to read it.
+            var fm = head.match(/^Figure\s+(\d+)\b/i);
+            if (fm) {
+              var idx = parseInt(fm[1], 10) - 1;
+              if (idx >= 0 && idx < images.length && placed.indexOf(idx) < 0) {
+                body.appendChild(el('img', { src: images[idx], class: 'aa-insimg', alt: head }));
+                placed.push(idx);
+              }
+            }
+          }
           else if (/^\s*[-•*]\s+/.test(t)) { if (!ul) { ul = el('ul', { class: 'aa-insul' }); body.appendChild(ul); } ul.appendChild(el('li', { html: daInlineBold(t.replace(/^\s*[-•*]\s+/, '')) })); }
           else if (t.trim() === '') { ul = null; }
           else { ul = null; body.appendChild(el('p', { class: 'aa-insp', html: daInlineBold(t) })); }
@@ -2104,9 +2140,12 @@
           ? 'The last run printed no INSIGHTS block. Add one to your script (a line "INSIGHTS" followed by the write-up), or read the full console output in Section 3.'
           : 'The last run did not finish — see the error in Section 3.' }));
       }
-      if (run.images && run.images.length) {
-        body.appendChild(el('div', { class: 'aa-sub', style: 'margin:14px 0 4px;', text: 'Figures' }));
-        run.images.forEach(function (src) { body.appendChild(el('img', { src: src, class: 'aa-insimg', alt: 'figure' })); });
+      // Any plots not matched to a "Figure N" heading (e.g. a user's custom script)
+      // are shown at the end so nothing is ever silently dropped.
+      var leftover = images.filter(function (_, i) { return placed.indexOf(i) < 0; });
+      if (leftover.length) {
+        body.appendChild(el('div', { class: 'aa-sub', style: 'margin:14px 0 4px;', text: placed.length ? 'More figures' : 'Figures' }));
+        leftover.forEach(function (src) { body.appendChild(el('img', { src: src, class: 'aa-insimg', alt: 'figure' })); });
       }
     }
     return card;
@@ -2740,6 +2779,70 @@
     '    ax2.set_title("Per-task preference (CI widens when a task got fewer responses)")',
     '    fig2.tight_layout()',
     '',
+    '    # Figure 2b: WHICH MODEL EACH TASK\'S USERS PREFER, ranked Haiku (top) ->',
+    '    # indifferent (middle) -> Opus (bottom). The winner is the per-task',
+    '    # recommendation from Section 3 (the one-sample t-test): "Haiku" / "Opus" when',
+    '    # the lean is significant, else "no clear preference" (indifferent). The bar is',
+    '    # the mean graded preference and the colour is the winner.',
+    '    from matplotlib.patches import Patch                # legend swatches',
+    '    rank_of = {"Haiku": 0, "no clear preference": 1, "n/a (too few)": 1, "Opus": 2}',
+    '    col_of = {"Haiku": "#3d7bd6", "no clear preference": "#9a978f", "n/a (too few)": "#9a978f", "Opus": "#e67e22"}',
+    '    rw = rec_tbl.copy()                                 # per-task recommendation table',
+    '    rw["rank"] = rw["recommendation"].map(lambda r: rank_of.get(r, 1))',
+    '    rw = rw.sort_values(["rank", "mean_pref"])          # Haiku block first; strongest within each block',
+    '    figW, axW = plt.subplots(figsize=(9, max(4, 0.32 * len(rw) + 1)))',
+    '    yw = np.arange(len(rw))',
+    '    axW.barh(yw, rw["mean_pref"].values, color=[col_of.get(c, "#9a978f") for c in rw["recommendation"]])',
+    '    axW.set_yticks(yw); axW.set_yticklabels(rw["task_id"].values, fontsize=8)',
+    '    axW.invert_yaxis()                                  # first sorted row (Haiku) at the TOP',
+    '    axW.axvline(0, color="#111", lw=1)',
+    '    axW.set_xlabel("mean graded preference (<0 Haiku .. >0 Opus)")',
+    '    axW.set_title("What each task\'s users prefer  (Haiku -> indifferent -> Opus)")',
+    '    axW.legend(handles=[Patch(color="#3d7bd6", label="Haiku"), Patch(color="#9a978f", label="Indifferent"),',
+    '                        Patch(color="#e67e22", label="Opus")], loc="lower right", fontsize=9)',
+    '    figW.tight_layout()',
+    '',
+    '    # Figure 2c: CONFIDENT per-task provisioning. Classify each task\'s CHOICES as',
+    '    # over- (chose Opus) / indifferent (tie) / under-provision (chose Haiku) by the',
+    '    # DOMINANT category, but keep it ONLY when that category is significantly larger',
+    '    # than the runner-up — a two-proportion z-test on the multinomial counts (the',
+    '    # variance uses the within-task negative correlation), p<0.05. That means we are',
+    '    # 95% confident which of the three the task is; tasks that don\'t clear the bar',
+    '    # are dropped ("not enough data"). Because the top beats the runner-up, it also',
+    '    # beats the third, so this is "significant and different from the other two".',
+    '    prov_cat = [("under", "#3d7bd6", "Under-provision (Haiku)"),',
+    '                ("ind", "#9a978f", "Indifferent"), ("over", "#e67e22", "Over-provision (Opus)")]',
+    '    conf = []',
+    '    for _, r in task_tbl.iterrows():',
+    '        nn = int(r["n"]); cnt = {"over": int(r["opus"]), "ind": int(r["tie"]), "under": int(r["haiku"])}',
+    '        srt = sorted(cnt, key=lambda kk: cnt[kk], reverse=True)       # top, runner-up, third',
+    '        top, run = srt[0], srt[1]',
+    '        pt, pr = cnt[top] / nn, cnt[run] / nn',
+    '        diff = pt - pr',
+    '        if diff <= 0:                                                 # tie for the lead -> not confident',
+    '            continue',
+    '        se = np.sqrt(max(0.0, (pt + pr - diff * diff) / nn))          # SE of the difference of two multinomial cells',
+    '        p = 0.0 if se == 0 else 2 * float(st.norm.sf(diff / se))      # two-sided p',
+    '        if p < 0.05:',
+    '            conf.append({"task": r["task_id"], "cat": top, "share": 100 * pt, "p": p})',
+    '    figC, axC = plt.subplots(figsize=(9, max(3, 0.34 * max(1, len(conf)) + 1)))',
+    '    if conf:',
+    '        cdf = pd.DataFrame(conf)',
+    '        cdf["rank"] = cdf["cat"].map({"under": 0, "ind": 1, "over": 2})',
+    '        cdf = cdf.sort_values(["rank", "share"])                      # under block -> ind -> over',
+    '        cmap = {c[0]: c[1] for c in prov_cat}',
+    '        yc = np.arange(len(cdf))',
+    '        axC.barh(yc, cdf["share"].values, color=[cmap[c] for c in cdf["cat"]])',
+    '        axC.set_yticks(yc); axC.set_yticklabels(cdf["task"].values, fontsize=8)',
+    '        axC.invert_yaxis(); axC.set_xlim(0, 100)',
+    '        axC.set_xlabel("share of responses for the dominant (winning) choice (%)")',
+    '        axC.set_title("Confidently-classified tasks (95%%): under -> indifferent -> over  (%d of %d)" % (len(cdf), n_task))',
+    '        axC.legend(handles=[Patch(color=c[1], label=c[2]) for c in prov_cat], loc="lower right", fontsize=9)',
+    '    else:',
+    '        axC.text(0.5, 0.5, "No task reaches a 95%-confident\\nover / indifferent / under classification\\nwith the current data.",',
+    '                 ha="center", va="center", fontsize=12); axC.axis("off")',
+    '    figC.tight_layout()',
+    '',
     '    # Figure 3: by domain and by type, task-level means +/- 95% CI.',
     '    fig3, ax3 = plt.subplots(1, 2, figsize=(12, 4.6))',
     '    d = dom_tbl.iloc[::-1]                                      # smallest at bottom',
@@ -2811,6 +2914,77 @@
     '         "**%d show no clear preference**. So the right answer is task-dependent - see the per-task "',
     '         "table and the CI plot (whiskers widen where fewer students responded)."',
     '         % (n_task, n_opus_tasks, n_haiku_tasks, n_none_tasks))',
+    '',
+    '    # ---- The figures, each with a plain-language guide (the Insights section',
+    '    # ---- drops the matching plot in right under each "## Figure N" heading). ----',
+    '    n_over = sum(1 for c in conf if c["cat"] == "over")     # confident Opus tasks',
+    '    n_under = sum(1 for c in conf if c["cat"] == "under")   # confident Haiku tasks',
+    '    n_ind = sum(1 for c in conf if c["cat"] == "ind")       # confident tie tasks',
+    '    note("")',
+    '    note("## How to read the figures below")',
+    '    note("All six figures come from the analysis above - nothing new is computed. Each one is shown "',
+    '         "here with a short guide to reading it, so the plots live in one place with their explanation.")',
+    '    note("")',
+    '    note("## Figure 1 - Sample balance: how many students answered each task")',
+    '    note("- One bar per task = the number of real (submitted) responses it got; the dashed line is the "',
+    '         "average. Because each student saw a random 15 of the 30 tasks, the bars are uneven. **This is "',
+    '         "exactly why the confidence intervals below are task-weighted and why some are wider than "',
+    '         "others** - a task with fewer responses carries less certainty.")',
+    '    note("")',
+    '    note("## Figure 2 - Overall: how strongly, and who was preferred")',
+    '    note("- Left: the spread of the -3..+3 graded preference across every response (negative = Haiku, "',
+    '         "0 = equivalent, positive = Opus); the dashed line is the overall mean. Right: the raw count of "',
+    '         "responses that picked Opus, called it a tie, or picked Haiku. Read them together - a mean near "',
+    '         "0 with many -3 and +3 votes means students *disagreed strongly*, not that everyone was "',
+    '         "indifferent.")',
+    '    note("")',
+    '    note("## Figure 3 - Per-task preference with 95% confidence intervals")',
+    '    note("- Each dot is one task\'s mean graded preference; the whisker is its 95% confidence interval. "',
+    '         "A task whose whisker **crosses the 0 line has no statistically clear preference**; one whose "',
+    '         "whisker sits entirely on one side does. Whiskers widen for tasks with fewer responses "',
+    '         "(Figure 1) - that is the correct handling of unequal response counts.")',
+    '    note("")',
+    '    note("## Figure 4 - What each task\'s users prefer (Haiku -> indifferent -> Opus)")',
+    '    note("- **Two different things are drawn here - do not confuse them.** The **bar length** is the "',
+    '         "task\'s *average* graded preference (left = leaned Haiku, right = leaned Opus). The **colour** "',
+    '         "is the *statistical verdict* (same test as Figure 3): blue = students significantly preferred "',
+    '         "Haiku, orange = significantly preferred Opus, **grey = no statistically clear preference** "',
+    '         "(its 95% interval still includes 0, i.e. its Figure-3 whisker crosses zero).")',
+    '    note("- That is why a **long grey bar** can appear (a task whose average is sizeable yet still "',
+    '         "grey): on average those students leaned one way, but either few of them answered or they "',
+    '         "disagreed a lot, so we cannot rule out that the true preference is zero. **Grey does NOT mean "',
+    '         "everyone clicked \\"equivalent\\"** - it means \\"not distinguishable from indifference at 95% "',
+    '         "confidence.\\" A task turns grey either because opinions genuinely split (some strongly Opus, "',
+    '         "some strongly Haiku, cancelling out in the average) OR because too few students answered to be "',
+    '         "sure. In short: **the bar shows the direction and size of the average; the colour shows "',
+    '         "whether we are confident about it.**")',
+    '    note("")',
+    '    note("## Figure 5 - Tasks we can classify with 95% confidence (over / indifferent / under-provisioning)")',
+    '    note("- In the provisioning frame: **over-provisioning = students preferred Opus** (the larger "',
+    '         "model), **under-provisioning = students preferred Haiku** (the smaller model), **indifferent "',
+    '         "= a genuine tie**. A task appears here **only if one of the three categories is statistically "',
+    '         "dominant** - a two-proportion test shows the leading choice significantly beats the runner-up "',
+    '         "(and therefore the third) at 95%. Tasks that do not clear that bar are omitted as \\"not enough "',
+    '         "evidence to classify.\\"")',
+    '    if conf:',
+    '        note("- Of the %d tasks, **%d clear the bar**: %d over-provisioning (Opus), %d under-provisioning "',
+    '             "(Haiku), %d indifferent. Each bar\'s length is the winning choice\'s share of that task\'s "',
+    '             "responses." % (n_task, len(conf), n_over, n_under, n_ind))',
+    '    else:',
+    '        note("- **No task clears the bar with the current data**, so the figure says so rather than "',
+    '             "showing a classification we are not sure of. More responses per task would resolve the "',
+    '             "borderline ones.")',
+    '    note("- Figures 4 and 5 ask *different* questions and can disagree. Figure 4 tests whether a task\'s "',
+    '         "**average strength** of preference (on the -3..+3 scale) differs from 0; Figure 5 tests whether "',
+    '         "one of the three **choice categories** (Opus / tie / Haiku) is a significant plurality of the "',
+    '         "picks. So a task can be grey in Figure 4 yet still be confidently classified in Figure 5, or "',
+    '         "the reverse - the two views are complementary, not a contradiction.")',
+    '    note("")',
+    '    note("## Figure 6 - By domain and by task type, with confidence intervals")',
+    '    note("- Left: each domain\'s task-weighted mean preference with its 95% interval; right: the same for "',
+    '         "Simple vs Complex tasks. A bar/whisker that clears the 0 line marks a group that reliably leans "',
+    '         "to one model. This is the aggregated view behind the \\"By task type\\" and \\"By domain\\" "',
+    '         "bullets above.")',
     '    for line in INS:',
     '        print(line)',
     '    print("\\nDone.")'
@@ -3120,6 +3294,56 @@
     '  axis(2, at = seq_len(nrow(ts)), labels = ts$task_id, las = 1, cex.axis = 0.6)',
     '  segments(ts$ci_lo, seq_len(nrow(ts)), ts$ci_hi, seq_len(nrow(ts)), col = "#888888")',
     '  abline(v = 0, col = "#111111"); par(op2)',
+    '  # Figure 2b: WHICH MODEL EACH TASK\'S USERS PREFER, ranked Haiku (top) ->',
+    '  # indifferent (middle) -> Opus (bottom). The winner is the per-task recommendation',
+    '  # from Section 3 (the one-sample t-test): "Haiku"/"Opus" when the lean is',
+    '  # significant, else "no clear preference". Bar = mean preference, colour = winner.',
+    '  rankw <- ifelse(rec$recommendation == "Haiku", 0, ifelse(rec$recommendation == "Opus", 2, 1))',
+    '  colw <- ifelse(rec$recommendation == "Haiku", "#3d7bd6", ifelse(rec$recommendation == "Opus", "#e67e22", "#9a978f"))',
+    '  ow <- order(rankw, rec$mean_pref)                     # Haiku block first; strongest within each block',
+    '  rw <- rec[ow, ]; cw <- colw[ow]',
+    '  ri <- rev(seq_len(nrow(rw)))                          # barplot draws the first bar at the BOTTOM -> reverse so Haiku is on top',
+    '  opW <- par(mar = c(4.5, 5, 3, 1))',
+    '  barplot(rw$mean_pref[ri], names.arg = rw$task_id[ri], horiz = TRUE, las = 1, col = cw[ri],',
+    '          cex.names = 0.6, xlab = "mean graded preference (<0 Haiku .. >0 Opus)",',
+    '          main = "What each task\'s users prefer (Haiku -> indifferent -> Opus)")',
+    '  abline(v = 0)',
+    '  legend("bottomright", legend = c("Haiku", "Indifferent", "Opus"), fill = c("#3d7bd6", "#9a978f", "#e67e22"), cex = 0.8)',
+    '  par(opW)',
+    '  # Figure 2c: CONFIDENT per-task provisioning. Classify each task\'s CHOICES as',
+    '  # over- (chose Opus) / indifferent (tie) / under-provision (chose Haiku) by the',
+    '  # DOMINANT category, keeping it ONLY when that category is significantly larger',
+    '  # than the runner-up (a two-proportion z-test on the multinomial counts, p<0.05):',
+    '  # then we are 95% confident of the label. The top beats the runner-up (and so the',
+    '  # third too), i.e. it is significant and different from the other two. Tasks that',
+    '  # don\'t clear the bar are dropped ("not enough data").',
+    '  cf_task <- c(); cf_cat <- c(); cf_share <- c()',
+    '  for (i in seq_len(nrow(per_task))) {',
+    '    ro <- per_task[i, ]; nn <- ro$n',
+    '    counts <- c(over = ro$opus, ind = ro$tie, under = ro$haiku)',
+    '    o <- order(counts, decreasing = TRUE); top <- names(counts)[o[1]]; run <- names(counts)[o[2]]',
+    '    pt <- counts[[top]] / nn; pr <- counts[[run]] / nn; diff <- pt - pr',
+    '    if (diff <= 0) next                                             # tie for the lead -> not confident',
+    '    se <- sqrt(max(0, (pt + pr - diff * diff) / nn))                # SE of the difference of two multinomial cells',
+    '    p <- if (se == 0) 0 else 2 * (1 - pnorm(diff / se))             # two-sided p',
+    '    if (p < 0.05) { cf_task <- c(cf_task, ro$task_id); cf_cat <- c(cf_cat, top); cf_share <- c(cf_share, 100 * pt) }',
+    '  }',
+    '  colmap <- c(under = "#3d7bd6", ind = "#9a978f", over = "#e67e22")',
+    '  opC <- par(mar = c(4.5, 5, 3, 1))',
+    '  if (length(cf_task)) {',
+    '    rk <- c(under = 0, ind = 1, over = 2)[cf_cat]',
+    '    oc <- order(rk, cf_share)                                       # under block -> ind -> over',
+    '    tt2 <- cf_task[oc]; cc2 <- cf_cat[oc]; sh2 <- cf_share[oc]',
+    '    ri <- rev(seq_len(length(tt2)))                                 # barplot draws first at bottom -> reverse so \'under\' is on top',
+    '    barplot(sh2[ri], names.arg = tt2[ri], horiz = TRUE, las = 1, col = colmap[cc2[ri]], cex.names = 0.6,',
+    '            xlim = c(0, 100), xlab = "share of responses for the dominant (winning) choice (%)",',
+    '            main = sprintf("Confidently-classified tasks (95%%): under -> indifferent -> over  (%d of %d)", length(tt2), nt))',
+    '    legend("bottomright", legend = c("Under-provision (Haiku)", "Indifferent", "Over-provision (Opus)"),',
+    '           fill = c("#3d7bd6", "#9a978f", "#e67e22"), cex = 0.8)',
+    '  } else {',
+    '    plot.new(); text(0.5, 0.5, "No task reaches a 95%-confident\\nover / indifferent / under classification\\nwith the current data.", cex = 1.1)',
+    '  }',
+    '  par(opC)',
     '  # Figure 3: by domain (horizontal) and by task type, task-level mean +/- 95% CI.',
     '  op3 <- par(mfrow = c(1, 2), mar = c(4.5, 10, 3, 1))',
     '  dd <- dom_tbl[order(dom_tbl$mean_pref), ]',
@@ -3163,6 +3387,31 @@
     '  if (!is.na(p_anova)) add(sprintf("- Domains **%s** differ overall (ANOVA p = %.3g).", if (p_anova < 0.05) "do" else "do not clearly", p_anova))',
     '  add(""); add("## Per-task picture")',
     '  add(sprintf("- Of the %d tasks, **Opus is the clear winner on %d** and **Haiku on %d**; the remaining **%d show no clear preference**. So the right answer is task-dependent - see the per-task table and the CI plot (whiskers widen where fewer students responded).", nt, n_opus, n_haiku, n_none))',
+    '',
+    '  # ---- The figures, each with a plain-language guide (the Insights section',
+    '  # ---- drops the matching plot in right under each "## Figure N" heading). ----',
+    '  n_over <- sum(cf_cat == "over"); n_under <- sum(cf_cat == "under"); n_ind <- sum(cf_cat == "ind")',
+    '  add(""); add("## How to read the figures below")',
+    '  add("All six figures come from the analysis above - nothing new is computed. Each one is shown here with a short guide to reading it, so the plots live in one place with their explanation.")',
+    '  add(""); add("## Figure 1 - Sample balance: how many students answered each task")',
+    '  add("- One bar per task = the number of real (submitted) responses it got; the dashed line is the average. Because each student saw a random 15 of the 30 tasks, the bars are uneven. **This is exactly why the confidence intervals below are task-weighted and why some are wider than others** - a task with fewer responses carries less certainty.")',
+    '  add(""); add("## Figure 2 - Overall: how strongly, and who was preferred")',
+    '  add("- Left: the spread of the -3..+3 graded preference across every response (negative = Haiku, 0 = equivalent, positive = Opus); the dashed line is the overall mean. Right: the raw count of responses that picked Opus, called it a tie, or picked Haiku. Read them together - a mean near 0 with many -3 and +3 votes means students *disagreed strongly*, not that everyone was indifferent.")',
+    '  add(""); add("## Figure 3 - Per-task preference with 95% confidence intervals")',
+    '  add("- Each dot is one task\'s mean graded preference; the whisker is its 95% confidence interval. A task whose whisker **crosses the 0 line has no statistically clear preference**; one whose whisker sits entirely on one side does. Whiskers widen for tasks with fewer responses (Figure 1) - that is the correct handling of unequal response counts.")',
+    '  add(""); add("## Figure 4 - What each task\'s users prefer (Haiku -> indifferent -> Opus)")',
+    '  add("- **Two different things are drawn here - do not confuse them.** The **bar length** is the task\'s *average* graded preference (left = leaned Haiku, right = leaned Opus). The **colour** is the *statistical verdict* (same test as Figure 3): blue = students significantly preferred Haiku, orange = significantly preferred Opus, **grey = no statistically clear preference** (its 95% interval still includes 0, i.e. its Figure-3 whisker crosses zero).")',
+    '  add("- That is why a **long grey bar** can appear (a task whose average is sizeable yet still grey): on average those students leaned one way, but either few of them answered or they disagreed a lot, so we cannot rule out that the true preference is zero. **Grey does NOT mean everyone clicked \\"equivalent\\"** - it means \\"not distinguishable from indifference at 95% confidence.\\" A task turns grey either because opinions genuinely split (some strongly Opus, some strongly Haiku, cancelling out in the average) OR because too few students answered to be sure. In short: **the bar shows the direction and size of the average; the colour shows whether we are confident about it.**")',
+    '  add(""); add("## Figure 5 - Tasks we can classify with 95% confidence (over / indifferent / under-provisioning)")',
+    '  add("- In the provisioning frame: **over-provisioning = students preferred Opus** (the larger model), **under-provisioning = students preferred Haiku** (the smaller model), **indifferent = a genuine tie**. A task appears here **only if one of the three categories is statistically dominant** - a two-proportion test shows the leading choice significantly beats the runner-up (and therefore the third) at 95%. Tasks that do not clear that bar are omitted as \\"not enough evidence to classify.\\"")',
+    '  if (length(cf_task)) {',
+    '    add(sprintf("- Of the %d tasks, **%d clear the bar**: %d over-provisioning (Opus), %d under-provisioning (Haiku), %d indifferent. Each bar\'s length is the winning choice\'s share of that task\'s responses.", nt, length(cf_task), n_over, n_under, n_ind))',
+    '  } else {',
+    '    add("- **No task clears the bar with the current data**, so the figure says so rather than showing a classification we are not sure of. More responses per task would resolve the borderline ones.")',
+    '  }',
+    '  add("- Figures 4 and 5 ask *different* questions and can disagree. Figure 4 tests whether a task\'s **average strength** of preference (on the -3..+3 scale) differs from 0; Figure 5 tests whether one of the three **choice categories** (Opus / tie / Haiku) is a significant plurality of the picks. So a task can be grey in Figure 4 yet still be confidently classified in Figure 5, or the reverse - the two views are complementary, not a contradiction.")',
+    '  add(""); add("## Figure 6 - By domain and by task type, with confidence intervals")',
+    '  add("- Left: each domain\'s task-weighted mean preference with its 95% interval; right: the same for Simple vs Complex tasks. A bar/whisker that clears the 0 line marks a group that reliably leans to one model. This is the aggregated view behind the \\"By task type\\" and \\"By domain\\" bullets above.")',
     '  for (s in INS) cat(s, "\\n")',
     '  cat("\\nDone.\\n")',
     '}'
