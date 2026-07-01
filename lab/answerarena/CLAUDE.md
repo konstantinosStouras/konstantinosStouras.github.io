@@ -365,7 +365,7 @@ Four sections:
    is serialised to CSV (`XLSX.utils.sheet_to_csv(json_to_sheet(rows))`) and
    handed to the code as the string `DATA_CSV` (Python) / the file
    `/tmp/data.csv` (R). Python compiles in-browser via **Pyodide**
-   (`daRunPython`, loads numpy/pandas/scipy/statsmodels/matplotlib) and R via
+   (`daRunPython`, loads numpy/pandas/scipy/matplotlib) and R via
    **WebR** (`daRunR`, base R; base-graphics captured as PNGs) — both ported from
    the ideasearchlab Data Analytics page and loaded lazily from jsDelivr on first
    Run. Console output streams below; matplotlib / base-graphics plots render
@@ -382,10 +382,15 @@ Four sections:
    (repeated measures) — plus a sign test across tasks; a 2×2-factor OLS
    (cost_transparency / firm_pay) with clustered SEs; a by-task heterogeneity
    table; and figures (preference distribution, outcome shares, by-task means, mean
-   by condition ± 95% CI). R has no `sandwich`/`lmtest`, so the cluster-robust
-   vcov (CR1) is computed in base R (`cluster_vcov`); it matches statsmodels'
-   clustered SE on the same data. Both templates are defensive about missing
-   columns/small n and end with a plain-language **`INSIGHTS`** block.
+   by condition ± 95% CI). **Neither template needs statsmodels** — the
+   cluster-robust vcov (CR1, else HC3) is computed with numpy in Python
+   (`ols_robust`) and base R in R (`cluster_vcov`); the two match to 4 dp on the
+   same data. statsmodels was deliberately dropped after it made Python fail to
+   start ("R works, Python doesn't") — it is a large, sometimes-unavailable
+   Pyodide build, and requiring it blocked startup; the auto-loaded packages are
+   now just numpy/pandas/scipy/matplotlib and any missing one is non-fatal
+   (`daEnsurePyPackages`). Both templates are defensive about missing columns /
+   small n and end with a plain-language **`INSIGHTS`** block.
 
 4. **Insights gained** (`buildDaSection4`). A readable write-up of the last run:
    `daParseInsights()` extracts the script's `INSIGHTS` block (the text after a
