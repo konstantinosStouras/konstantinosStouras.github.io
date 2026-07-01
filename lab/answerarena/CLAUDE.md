@@ -398,9 +398,15 @@ Four sections:
    (`daRunPython`, loads numpy/pandas/scipy/matplotlib) and R via
    **WebR** (`daRunR`, base R; base-graphics captured as PNGs) — both ported from
    the ideasearchlab Data Analytics page and loaded lazily from jsDelivr on first
-   Run. Console output streams below; matplotlib / base-graphics plots render
-   under it. Edited code auto-persists to `localStorage` (`aa-da:py` / `aa-da:r`);
-   **Reset template** restores the bundled default.
+   Run. Console output streams below; the **plots do not render here** — they are
+   shown in **Insights gained** (§4), each beside the paragraph that explains it,
+   so Section 3 only prints a "N figures rendered — see Insights gained" pointer.
+   Edited code auto-persists to `localStorage` (`aa-da:py` / `aa-da:r`); **Reset
+   template** restores the bundled default. A `DA_TPL_VERSION` stamp
+   (`aa-da:ver`) is checked by `daMigrateTemplates()` on load: when the bundled
+   templates change we bump the version and **drop the saved code**, so a stale
+   saved script from an older version can't shadow the current template (that was
+   the "Python won't run" symptom — an old saved script erroring on new data).
 
    The default templates (`DA_PY_TEMPLATE` / `DA_R_TEMPLATE`) answer the study's
    core question — *given a task (a user need) and two blind answers (Haiku 4.5 =
@@ -420,10 +426,22 @@ Four sections:
    "account for unequal responses per task" — the random 15-of-30 subset per
    student), each group tested vs baseline, a Welch Simple-vs-Complex test and a
    one-way ANOVA across domains; **(6) regressions** of preference on complexity and
-   on domain (cluster-robust). Figures: **responses-per-task (sample balance)**,
-   the preference distribution + outcome shares, **per-task means ± 95% CI**
-   (whiskers widen where fewer students responded), and **by-domain / by-type means
-   ± 95% CI**. A plain-language **`INSIGHTS`** block ends each script.
+   on domain (cluster-robust). **Six figures**, in this order (the harvest order the
+   Insights section relies on): **(1)** responses-per-task (sample balance);
+   **(2)** the preference distribution + outcome shares; **(3)** per-task means ±
+   95% CI (whiskers widen where fewer students responded); **(4)** *"what each
+   task's users prefer"* — a ranked bar chart (Haiku → indifferent → Opus) whose
+   **bar length is the task's mean preference** and whose **colour is the
+   statistical verdict** (blue Haiku / orange Opus when the per-task t-test is
+   significant, **grey = no clear preference**, i.e. its CI still includes 0 — so a
+   long grey bar means "leaned one way on average but not distinguishable from
+   indifference"); **(5)** the tasks classifiable **with 95% confidence** into
+   over- / indifferent / under-provisioning (a two-proportion z-test on the
+   multinomial choice counts keeps only tasks where one category significantly
+   beats the runner-up, hence the other two; empty → a "not enough data" note);
+   **(6)** by-domain / by-type means ± 95% CI. A plain-language **`INSIGHTS`** block
+   ends each script and now also contains a **`## Figure N — …` heading + guide for
+   every figure**, so each plot is explained in words next to it (§4).
 
    The Python version uses numpy / pandas / scipy; the R version computes the
    **same numbers** with base R (`t.test`, `lm`, `anova`, `tapply`, `binom.test`);
@@ -437,12 +455,17 @@ Four sections:
    small n; a domain with only 2 tasks has a very wide CI, clipped to the bounded
    [-3, +3] preference scale for display.
 
-4. **Insights gained** (`buildDaSection4`). A readable write-up of the last run:
-   `daParseInsights()` extracts the script's `INSIGHTS` block (the text after a
-   line reading `INSIGHTS`) and renders it with `## ` headings, `- ` bullets and
-   `**bold**` (`daInlineBold`), followed by the plots shown large. `run()`
-   snapshots each run into `daState.lastRun` and calls `daRefs.updateInsights()`.
-   Editing the script's `INSIGHTS` prose changes what this section shows.
+4. **Insights gained** (`buildDaSection4`). A readable write-up of the last run
+   **and the home of every plot**: `daParseInsights()` extracts the script's
+   `INSIGHTS` block (the text after a line reading `INSIGHTS`) and renders it with
+   `## ` headings, `- ` bullets and `**bold**` (`daInlineBold`). A heading matching
+   `^Figure N` **drops the Nth harvested image (`run.images[N-1]`) in right under
+   it**, so each plot sits with its explanation; any image not matched to a
+   `Figure N` heading is appended at the end (so a user's custom script never
+   silently loses a plot). `run()` snapshots each run into `daState.lastRun`
+   (`{output, images, lang, ok}`) and calls `daRefs.updateInsights()`. Editing the
+   script's `INSIGHTS` prose (or the `## Figure N` headings) changes what shows and
+   where the plots land.
 
 **Gotchas:** the runtimes need network access to jsDelivr on first Run (blocked
 in some sandboxes → a visible "Failed to load … (CDN / network / CSP?)" error,
