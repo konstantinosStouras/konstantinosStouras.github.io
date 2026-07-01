@@ -324,3 +324,61 @@ Responses row with `submitted = no (draft)`.
   `firebase deploy --only firestore:rules` (and enable the Anonymous sign-in
   provider). `authError()` now shows a clear message + logs this hint instead of
   the raw Firebase string.
+
+## 8. Data analytics tab (admin)
+
+The admin has a **top nav** (`headerRow()` in `admin.js`) with two views —
+**Admin** (the two-column panel) and **Data analytics** — mirroring the
+ideasearchlab admin. `currentView` (`'admin'|'analytics'`) drives `renderShell()`,
+which dispatches to `renderAnalytics()`. All analytics state lives in the
+module-level `daState` object, so leaving and returning to the tab preserves the
+loaded data, selections and edited code. Everything runs **entirely in the
+browser** — no data is uploaded, no Cloud Function or Firestore-rules change.
+
+Three sections:
+
+1. **Data source** (`buildDaSection1`). Lists every session (with participant
+   count + condition) as a checkbox; you can also **Import Excel / CSV** (a
+   per-session or all-data export from this admin, or any table). Imported files
+   are queued as their own ticked rows (parsed into `{name, rows}` per sheet; a
+   CSV becomes one sheet named `Responses`). Pressing **Load** pulls the ticked
+   sessions' data into memory: it fetches the participants who played any ticked
+   session and calls `collectAggregateSheets(parts, ids)` — a thin wrapper over
+   the **same** export builder (`exportExcel`/`buildWorkbook` with
+   `opts.sessionIds` = a `{id:true}` map and `opts.returnSheets`), so the
+   aggregate is byte-for-byte the same multi-tab shape as the per-session export.
+   Ticked imported workbooks are then stacked onto the map by sheet name
+   (`mergeBookIntoSheetMap`, case-insensitive; unmatched sheets added as their
+   own tab).
+
+2. **Aggregate data** (`buildDaSection2`). Shows stat boxes (responses,
+   participants, sessions, tasks-with-data) and a **Download aggregate Excel**
+   button that writes the in-memory sheet map (`daState.sheetMap`) as one
+   workbook — tabs `Conventions · Sessions · Participants · Tasks · Task summary ·
+   Responses · Events · Survey` plus any imported extras, each source stacked
+   within every tab. Sheet names are sanitised/deduped for Excel's rules
+   (`safeSheetName`).
+
+3. **Process with Python or R** (`buildDaSection3`). Pick a table from the
+   aggregate (default **Responses** = one row per comparison, the analysis unit),
+   edit the pre-filled **Python** or **R** script, and **Run**. The chosen table
+   is serialised to CSV (`XLSX.utils.sheet_to_csv(json_to_sheet(rows))`) and
+   handed to the code as the string `DATA_CSV` (Python) / the file
+   `/tmp/data.csv` (R). Python compiles in-browser via **Pyodide**
+   (`daRunPython`, loads numpy/pandas/scipy/statsmodels/matplotlib) and R via
+   **WebR** (`daRunR`, base R; base-graphics captured as PNGs) — both ported from
+   the ideasearchlab Data Analytics page and loaded lazily from jsDelivr on first
+   Run. Console output streams below; matplotlib / base-graphics plots render
+   under it. The default templates (`DA_PY_TEMPLATE` / `DA_R_TEMPLATE`) run a
+   worked example on the Responses table (frontier win rate + mean
+   `preference_model` by the 2×2 factors, an OLS with HC3 robust SEs, and a bar
+   plot); they are defensive about missing columns so they also run on any other
+   table. Edited code auto-persists to `localStorage` (`aa-da:py` / `aa-da:r`);
+   **Reset template** restores the bundled default.
+
+**Gotchas:** the runtimes need network access to jsDelivr on first Run (blocked
+in some sandboxes → a visible "Failed to load … (CDN / network / CSP?)" error,
+not a crash). `SHEET_ORDER` is the single source of truth for the tab order,
+shared by the export and the aggregate. The export refactor kept the single/all
+export behaviour identical — `keep()` and `buildSessionRows(sessions, parts,
+keep)` now take an in-scope predicate instead of a single `only` id.
