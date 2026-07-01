@@ -373,24 +373,39 @@ Four sections:
    **Reset template** restores the bundled default.
 
    The default templates (`DA_PY_TEMPLATE` / `DA_R_TEMPLATE`) answer the study's
-   core question — *given a task and two blind answers (Haiku 4.5 = baseline, Opus
-   4.8 = frontier), do participants **prefer a model or are they indifferent**?*
-   They report: outcome shares + a binomial win-rate test; **the main indifference
-   test two ways** — (A) **averaging across tasks** (each task's mean preference is
-   one observation → one-sample t-test vs 0, the headline "average across tasks"
-   answer) and (B) across all comparisons with SEs **clustered on the participant**
-   (repeated measures) — plus a sign test across tasks; a 2×2-factor OLS
-   (cost_transparency / firm_pay) with clustered SEs; a by-task heterogeneity
-   table; and figures (preference distribution, outcome shares, by-task means, mean
-   by condition ± 95% CI). **Neither template needs statsmodels** — the
-   cluster-robust vcov (CR1, else HC3) is computed with numpy in Python
-   (`ols_robust`) and base R in R (`cluster_vcov`); the two match to 4 dp on the
-   same data. statsmodels was deliberately dropped after it made Python fail to
-   start ("R works, Python doesn't") — it is a large, sometimes-unavailable
-   Pyodide build, and requiring it blocked startup; the auto-loaded packages are
-   now just numpy/pandas/scipy/matplotlib and any missing one is non-fatal
-   (`daEnsurePyPackages`). Both templates are defensive about missing columns /
-   small n and end with a plain-language **`INSIGHTS`** block.
+   core question — *given a task (a user need) and two blind answers (Haiku 4.5 =
+   baseline, Opus 4.8 = frontier), do students **prefer a model or are they
+   indifferent**?* — and are **heavily commented line-by-line** so a non-coder can
+   read them. Both embed a `TASK_META` map (task_id → **complexity** Simple/Complex
+   + **domain**, the 30-task study list) and join it onto each row (a non-blank
+   exported `task_complexity`/`task_domain` overrides it). They then print, in
+   order: **(1) summary statistics** per task, per domain and per task type
+   (mean/SD/n + Opus win-rate); **(2) the main hypothesis test** with Haiku as the
+   baseline (H0: mean graded preference = 0) two ways — task-level (each task = one
+   observation, so unequal response counts don't bias it) and response-level with
+   SEs **clustered on the student** — plus the decisive-choice binomial test;
+   **(3) a per-task recommendation** (one-sample t-test of each task → Opus / Haiku
+   / no clear preference, with p-values); **(4) by task type** and **(5) by domain**
+   using **task-level means so each task is weighted equally** (this is how the CIs
+   "account for unequal responses per task" — the random 15-of-30 subset per
+   student), each group tested vs baseline, a Welch Simple-vs-Complex test and a
+   one-way ANOVA across domains; **(6) regressions** of preference on complexity and
+   on domain (cluster-robust). Figures: **responses-per-task (sample balance)**,
+   the preference distribution + outcome shares, **per-task means ± 95% CI**
+   (whiskers widen where fewer students responded), and **by-domain / by-type means
+   ± 95% CI**. A plain-language **`INSIGHTS`** block ends each script.
+
+   The Python version uses numpy / pandas / scipy; the R version computes the
+   **same numbers** with base R (`t.test`, `lm`, `anova`, `tapply`, `binom.test`);
+   they are verified to agree. **Neither needs statsmodels** — the cluster-robust
+   vcov (CR1, else HC3) is done by hand (`ols_robust` in Python, the same algebra
+   in R), matching to 4 dp; statsmodels was dropped because it made Python fail to
+   start on some Pyodide builds, so the auto-loaded packages are now just
+   numpy/pandas/scipy/matplotlib and any missing one is non-fatal
+   (`daEnsurePyPackages`). Note: R rejects 3-digit hex colours (`#888`), so the
+   templates use 6-digit (`#888888`). Both are defensive about missing columns /
+   small n; a domain with only 2 tasks has a very wide CI, clipped to the bounded
+   [-3, +3] preference scale for display.
 
 4. **Insights gained** (`buildDaSection4`). A readable write-up of the last run:
    `daParseInsights()` extracts the script's `INSIGHTS` block (the text after a
