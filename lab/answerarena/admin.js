@@ -20,6 +20,16 @@
   var cfg = { texts: {}, settings: {}, registrationQuestions: [], surveyQuestions: [], activeTaskSetId: null };
   var user = null, root;
   var summaryRefresh = null;   // set by the Setup summary; lets other cards refresh it after a save
+  var currentView = 'admin';   // 'admin' (the two-column panel) | 'analytics' (Data analytics)
+  // Data-analytics working state, kept across view switches so leaving and
+  // returning to the tab preserves the loaded data + selections. `sheetMap` is the
+  // aggregated workbook held in memory (Section 2) that Section 3 runs code against.
+  var daState = { selected: {}, importedBooks: [], parts: null, sessions: null, sheetMap: null, sheetOrder: [], code: {}, lang: 'python', running: false };
+  // The CURRENTLY-mounted analytics view's cross-section refreshers. Reset by
+  // renderAnalytics on every entry, so an async op started under an earlier render
+  // (e.g. a Load that resolves after the user left and came back) refreshes the
+  // sections that are actually on screen now — not detached, stale closures.
+  var daRefs = {};
 
   /* ---- text fields grouped into collapsible "pages" ---- */
   var TEXT_FIELD_META = {
@@ -161,7 +171,28 @@
       + '.aa-slider{position:absolute;inset:0;background:#5a5a5a;border-radius:99px;transition:.18s;cursor:pointer;}'
       + '.aa-slider:before{content:"";position:absolute;height:18px;width:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.18s;}'
       + '.aa-switch input:checked + .aa-slider{background:var(--accent);}'
-      + '.aa-switch input:checked + .aa-slider:before{transform:translateX(20px);}';
+      + '.aa-switch input:checked + .aa-slider:before{transform:translateX(20px);}'
+      + '.aa-btn.is-nav-on{background:var(--accent);color:#fff;border-color:var(--accent);}'
+      + '.aa-secnum{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;font-weight:800;font-size:14px;margin-right:9px;flex:0 0 auto;}'
+      + '.aa-sechead{display:flex;align-items:center;}'
+      + '.aa-statgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;}'
+      + '.aa-statbox{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:var(--qbg);}'
+      + '.aa-statbox b{font-size:26px;display:block;line-height:1.1;}'
+      + '.aa-statbox span{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);}'
+      + '.aa-seclist{max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:2px 12px;background:var(--qbg);}'
+      + '.aa-checkrow{display:flex;align-items:flex-start;gap:10px;padding:10px 2px;border-bottom:1px solid var(--line);}'
+      + '.aa-checkrow:last-child{border-bottom:none;}'
+      + '.aa-checkrow input[type=checkbox]{width:16px;height:16px;flex:0 0 auto;margin-top:2px;accent-color:var(--accent);}'
+      + '.aa-checkrow .g{min-width:0;flex:1 1 auto;}'
+      + '.aa-tag{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:rgba(230,126,34,.16);color:var(--accent);}'
+      + '.aa-tag.blue{background:rgba(20,86,200,.16);color:#5b8def;}'
+      + '.aa-langtabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:4px 0 10px;}'
+      + '.aa-langtabs button{border:none;background:transparent;padding:8px 14px;font-weight:700;font-size:13px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;}'
+      + '.aa-langtabs button.on{color:var(--accent);border-bottom-color:var(--accent);}'
+      + '#aa-root textarea.aa-code{width:100%;min-height:340px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;font-size:12.5px;line-height:1.5;white-space:pre;overflow:auto;tab-size:4;-moz-tab-size:4;}'
+      + '.aa-out{background:#0c0c0c;color:#e6e6e6;border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;max-height:540px;overflow:auto;margin-top:10px;}'
+      + '.aa-plots{margin-top:12px;}.aa-plots img{display:block;max-width:100%;border:1px solid var(--line);border-radius:8px;margin-top:10px;background:#fff;}'
+      + '.aa-runstatus{font-size:13px;color:var(--muted);margin:8px 0;min-height:18px;}';
     document.head.appendChild(el('style', { text: css }));
   }
   function currentTheme() { try { return localStorage.getItem('aa-theme') || 'dark'; } catch (e) { return 'dark'; } }
@@ -226,15 +257,30 @@
     return section;
   }
 
+  // Shared admin header: title + top-right nav (Admin | Data analytics) + theme +
+  // Sign out. The nav mirrors the ideasearchlab admin's tab bar; the active
+  // destination is highlighted. Switching views re-renders the shell in place.
+  function headerRow() {
+    function nav(label, view) {
+      var b = el('button', { class: 'aa-btn sec sm' + (currentView === view ? ' is-nav-on' : ''), on: { click: function () { if (currentView !== view) { currentView = view; renderShell(); } } } }, [label]);
+      return b;
+    }
+    return el('div', { class: 'aa-h' }, [
+      el('h1', { text: 'Answer Arena admin' }),
+      el('div', { class: 'aa-row' }, [
+        nav('Admin', 'admin'), nav('Data analytics', 'analytics'), themeToggle(),
+        el('button', { class: 'aa-btn sec sm', on: { click: function () { Store.logout().then(function () { user = null; route(); }); } } }, ['Sign out'])
+      ])
+    ]);
+  }
+
   /* ---- main shell: ideasearchlab-style two-column layout ----
      LEFT: create session + design parameters + page text + forms.
      RIGHT: active sessions, then registered users. */
   function renderShell() {
     clearRoot();
-    var header = el('div', { class: 'aa-h' }, [
-      el('h1', { text: 'Answer Arena admin' }),
-      el('div', { class: 'aa-row' }, [themeToggle(), el('button', { class: 'aa-btn sec sm', on: { click: function () { Store.logout().then(function () { user = null; route(); }); } } }, ['Sign out'])])
-    ]);
+    if (currentView === 'analytics') return renderAnalytics();
+    var header = headerRow();
     var left = el('div', { class: 'aa-col' });
     var right = el('div', { class: 'aa-col' });
 
@@ -1044,6 +1090,9 @@
   }
 
   /* ===================== EXPORT ===================== */
+  // The multi-tab structure shared by the single/all-session export and the
+  // Data-analytics aggregate, so both always produce the identical workbook shape.
+  var SHEET_ORDER = ['Conventions', 'Sessions', 'Participants', 'Tasks', 'Task summary', 'Responses', 'Events', 'Survey'];
   // Downloads everything collected for every user: their profile + registration,
   // every response (with the decision time), every logged decision/change event
   // (with its timestamp), and one survey per session taken.
@@ -1052,8 +1101,8 @@
   function exportExcel(parts, opts) {
     opts = opts || {};
     var only = opts.sessionId || null;
-    toast('Building export...');
-    ensureXLSX().then(function (X) {
+    if (!opts.returnSheets) toast('Building export...');
+    var run = ensureXLSX().then(function (X) {
       // Load the active task set and the session list up front. The task set is the
       // lookup table that turns each task_id into its full description + the two
       // model outputs (the Tasks and Task summary sheets - the task is the unit of
@@ -1070,20 +1119,30 @@
         // whose set differs from the current active set (the admin changed it since)
         // still resolves its task_ids to the text participants actually saw. The
         // active set is the base; each pinned set overlays it (what was shown wins).
+        // For the aggregate, opts.sessionIds is a { sessionId: true } map of the
+        // ticked sessions; the single/all export uses `only` (one id, or null = all).
+        var ids = opts.sessionIds || null;
         var pinnedIds = {};
-        sessions.forEach(function (s) { if (s.taskSetId && (!only || s.id === only)) pinnedIds[s.taskSetId] = true; });
+        sessions.forEach(function (s) { if (s.taskSetId && (ids ? ids[s.id] : (!only || s.id === only))) pinnedIds[s.taskSetId] = true; });
         return Promise.all(Object.keys(pinnedIds).map(function (id) {
           return (Store.loadTaskSet ? Store.loadTaskSet(id) : Promise.resolve({ tasks: [] })).catch(function () { return { tasks: [] }; });
         })).then(function (pinnedSets) {
           return buildWorkbook(X, activeSet, pinnedSets, sessions, sessById, parts, only, opts);
         });
       });
-    }).catch(function (e) { toast('Export failed: ' + ((e && e.message) || 'error')); });
+    });
+    // Aggregate path: return the promise so the caller gets the in-memory sheet map
+    // (and handles its own errors/UI). Export path: fire-and-forget with a toast.
+    if (opts.returnSheets) return run;
+    run.catch(function (e) { toast('Export failed: ' + ((e && e.message) || 'error')); });
   }
   // Assemble and download the workbook once the task sets + sessions are loaded.
   function buildWorkbook(X, activeSet, pinnedSets, sessions, sessById, parts, only, opts) {
+    var ids = opts.sessionIds || null;
+    // A response/event/survey is in scope if it belongs to the ticked set (aggregate)
+    // or the single/all export scope.
+    var keep = function (sid) { return ids ? !!ids[sid || ''] : (!only || (sid || '') === only); };
     return Promise.resolve().then(function () {
-        var keep = function (sid) { return !only || (sid || '') === only; };
         var activeById = {}; (activeSet.tasks || []).forEach(function (t) { if (t && t.id != null) activeById[String(t.id)] = t; });
         var taskById = {}; Object.keys(activeById).forEach(function (k) { taskById[k] = activeById[k]; });
         (pinnedSets || []).forEach(function (set) { ((set && set.tasks) || []).forEach(function (t) { if (t && t.id != null) taskById[String(t.id)] = t; }); });
@@ -1191,22 +1250,34 @@
               cost_baseline_usd: t.costA != null ? t.costA : '', cost_frontier_usd: t.costB != null ? t.costB : ''
             };
           });
-          var sessRows = buildSessionRows(sessions, parts, only);
+          var sheetMap = {
+            Conventions: buildConventions(only),
+            Sessions: buildSessionRows(sessions, parts, keep),
+            Participants: pRows,
+            Tasks: taskRows,
+            'Task summary': sumRows,
+            Responses: rRows,
+            Events: eRows,
+            Survey: sRows
+          };
+          // Aggregate path (Data analytics): hand the sheet map back so it can be
+          // held in memory and have imported workbooks stacked onto it. Export path:
+          // write the multi-tab workbook in SHEET_ORDER and download it.
+          if (opts.returnSheets) return sheetMap;
           var wb = X.utils.book_new();
-          X.utils.book_append_sheet(wb, X.utils.json_to_sheet(buildConventions(only)), 'Conventions');
-          X.utils.book_append_sheet(wb, X.utils.json_to_sheet(sessRows.length ? sessRows : [{}]), 'Sessions');
-          X.utils.book_append_sheet(wb, X.utils.json_to_sheet(pRows.length ? pRows : [{}]), 'Participants');
-          X.utils.book_append_sheet(wb, X.utils.json_to_sheet(taskRows.length ? taskRows : [{}]), 'Tasks');
-          X.utils.book_append_sheet(wb, X.utils.json_to_sheet(sumRows.length ? sumRows : [{}]), 'Task summary');
-          X.utils.book_append_sheet(wb, X.utils.json_to_sheet(rRows.length ? rRows : [{}]), 'Responses');
-          X.utils.book_append_sheet(wb, X.utils.json_to_sheet(eRows.length ? eRows : [{}]), 'Events');
-          X.utils.book_append_sheet(wb, X.utils.json_to_sheet(sRows.length ? sRows : [{}]), 'Survey');
+          SHEET_ORDER.forEach(function (name) { var rows = sheetMap[name] || []; X.utils.book_append_sheet(wb, X.utils.json_to_sheet(rows.length ? rows : [{}]), name); });
           var stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
           var fname = only ? ('answerarena-session-' + (opts.sessionCode || only) + '-' + stamp + '.xlsx') : ('answerarena-data-' + stamp + '.xlsx');
           X.writeFile(wb, fname);
           toast('Export ready.');
         });
     });
+  }
+  // Build the aggregate sheet map for the ticked sessions (a { sessionId: true }
+  // map) over the given participants, without downloading — the Data-analytics
+  // Section 2 keeps it in memory. Reuses the exact export builder above.
+  function collectAggregateSheets(parts, sessionIdMap) {
+    return exportExcel(parts, { sessionIds: sessionIdMap, returnSheets: true });
   }
   // Human session code for an internal session id ('_none' = the default no-code
   // play; unknown ids fall back to the raw id so nothing is lost).
@@ -1229,7 +1300,8 @@
   // The Sessions sheet: one row per session (documenting each session play), with
   // its snapshotted 2x2 + flow settings and a participant count from this export's
   // scope. Adds a synthetic row for the default no-code play if anyone took it.
-  function buildSessionRows(sessions, parts, only) {
+  function buildSessionRows(sessions, parts, keep) {
+    keep = keep || function () { return true; };
     var counts = {};
     (parts || []).forEach(function (p) {
       var seen = {};
@@ -1238,8 +1310,7 @@
       Object.keys(p.completedSessions || {}).forEach(function (sid) { seen[sid] = true; });
       Object.keys(seen).forEach(function (sid) { counts[sid] = (counts[sid] || 0) + 1; });
     });
-    var list = (sessions || []).slice();
-    if (only) list = list.filter(function (s) { return s.id === only; });
+    var list = (sessions || []).slice().filter(function (s) { return keep(s.id); });
     list.sort(function (a, b) { return tsMs(b.createdAt) - tsMs(a.createdAt); });
     var rows = list.map(function (s) {
       var f = (s.condition && s.condition.factors) || {};
@@ -1252,7 +1323,7 @@
         task_set_id: s.taskSetId || '', participants: counts[s.id] || 0, created_at: fmtTs(s.createdAt)
       };
     });
-    if ((!only || only === '_none') && counts['_none']) {
+    if (keep('_none') && counts['_none']) {
       rows.push({ session_id: '_none', session_code: '(default / no code)', name: 'Default (no session code)', status: 'n/a', cost_transparency_varied: 'n/a', firm_pay_varied: 'n/a', comparisons_per_participant: '(live setting)', randomize_order: 'n/a', task_set_id: '', participants: counts['_none'], created_at: '' });
     }
     return rows;
@@ -1421,6 +1492,707 @@
   function tsMs(ts) { if (!ts) return 0; if (typeof ts === 'number') return ts; if (typeof ts.toMillis === 'function') return ts.toMillis(); if (ts.seconds) return ts.seconds * 1000; return 0; }
   function fmtTs(ts) { var m = tsMs(ts); return m ? new Date(m).toLocaleString() : ''; }
   function ensureXLSX() { if (XLSX) return Promise.resolve(XLSX); return import('https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs').then(function (m) { XLSX = m; return m; }); }
+
+  /* =====================================================================
+     DATA ANALYTICS  (the "Data analytics" tab)
+     ---------------------------------------------------------------------
+     1) Data source   - tick sessions and/or import an exported Excel/CSV, Load.
+     2) Aggregate     - consolidate every loaded source into one Excel (same
+                        multi-tab structure as the export), held in memory.
+     3) Process       - run Python (Pyodide) or R (WebR) on a chosen table from
+                        the aggregate, entirely in the browser; output below.
+     ===================================================================== */
+  function daLoadSaved(key, dflt) { try { var v = localStorage.getItem(key); return v != null ? v : dflt; } catch (e) { return dflt; } }
+  function emptySheetMap() { var m = {}; SHEET_ORDER.forEach(function (n) { m[n] = []; }); return m; }
+  // Stack every sheet of an imported workbook onto the aggregate map: matched onto
+  // an existing tab by (case-insensitive) name, else added as its own tab.
+  function mergeBookIntoSheetMap(map, book) {
+    (book.sheets || []).forEach(function (sh) {
+      var key = Object.keys(map).filter(function (k) { return k.toLowerCase() === String(sh.name).toLowerCase(); })[0];
+      if (!key) { key = String(sh.name); if (!map[key]) map[key] = []; }
+      map[key] = (map[key] || []).concat(sh.rows || []);
+    });
+  }
+  // Tab order for the aggregate: the standard sheets first, then any extra
+  // (imported) sheets in insertion order.
+  function orderSheetNames(map) {
+    var order = SHEET_ORDER.filter(function (n) { return map[n] !== undefined; });
+    Object.keys(map).forEach(function (k) { if (order.indexOf(k) < 0) order.push(k); });
+    return order;
+  }
+  function summarizeMap(m) {
+    return (m.Responses || []).length + ' response' + ((m.Responses || []).length === 1 ? '' : 's')
+      + ', ' + (m.Participants || []).length + ' participant' + ((m.Participants || []).length === 1 ? '' : 's')
+      + ' across ' + (m.Sessions || []).length + ' session' + ((m.Sessions || []).length === 1 ? '' : 's');
+  }
+  // A valid, unique Excel sheet name (<=31 chars, no : \ / ? * [ ], no dupes).
+  function safeSheetName(name, used) {
+    var n = String(name).replace(/[\\\/\?\*\[\]:]/g, ' ').slice(0, 31).trim() || 'Sheet';
+    var base = n, i = 2;
+    while (used[n.toLowerCase()]) { var suf = ' (' + i + ')'; n = base.slice(0, 31 - suf.length) + suf; i++; }
+    used[n.toLowerCase()] = true; return n;
+  }
+
+  function renderAnalytics() {
+    clearRoot();
+    var wrap = el('div', { class: 'aa-wrap aa-wrap2' });
+    wrap.appendChild(headerRow());
+    wrap.appendChild(el('div', { class: 'aa-card' }, [
+      el('h3', { text: 'Data analytics' }),
+      el('p', { class: 'aa-note', html: 'Load your session data (or import an already-exported Excel), consolidate it into a single workbook, then run Python or R on it — compiled entirely in your browser (nothing is uploaded). Three steps:' })
+    ]));
+    daRefs = {};   // this render's sections register their live refreshers here
+    wrap.appendChild(buildDaSection1());
+    wrap.appendChild(buildDaSection2());
+    wrap.appendChild(buildDaSection3());
+    root.appendChild(wrap);
+  }
+
+  /* ---- Section 1: data source ---- */
+  function buildDaSection1() {
+    var card = el('div', { class: 'aa-card' });
+    card.appendChild(el('div', { class: 'aa-sechead' }, [el('span', { class: 'aa-secnum', text: '1' }), el('h3', { text: 'Data source', style: 'margin:0;' })]));
+    card.appendChild(el('p', { class: 'aa-note', html: 'Tick the sessions to include, and/or <b>import an exported Excel/CSV</b> (a per-session or all-data export from this admin). Then press <b>Load</b> to pull them into memory for Section 2.' }));
+
+    var listWrap = el('div', { class: 'aa-seclist' }, [el('p', { class: 'aa-note', text: 'Loading sessions…' })]);
+    card.appendChild(listWrap);
+
+    var loadBtn = el('button', { class: 'aa-btn', on: { click: doLoad } }, ['Load']);
+    var selAll = el('button', { class: 'aa-btn sec sm', on: { click: function () { setAll(true); } } }, ['Select all']);
+    var clr = el('button', { class: 'aa-btn sec sm', on: { click: function () { setAll(false); } } }, ['Clear']);
+    var refreshB = el('button', { class: 'aa-btn sec sm', on: { click: loadSessions } }, ['↻ Refresh']);
+    var fileIn = el('input', { type: 'file', accept: '.xlsx,.xls,.csv', style: 'display:none;' });
+    var importB = el('button', { class: 'aa-btn sec', on: { click: function () { fileIn.click(); } } }, ['Import Excel / CSV']);
+    fileIn.addEventListener('change', onImport);
+
+    card.appendChild(el('div', { class: 'aa-row', style: 'margin-top:10px;' }, [selAll, clr, refreshB, importB]));
+    card.appendChild(el('div', { class: 'aa-row', style: 'margin-top:10px;' }, [loadBtn]));
+    var status = el('div', { class: 'aa-runstatus' });
+    card.appendChild(status);
+    card.appendChild(fileIn);
+
+    loadSessions();
+
+    function loadSessions() {
+      // Show the cached list immediately on re-entry (no transient blank); only
+      // show the loading placeholder on the very first fetch.
+      if (daState.sessions) render();
+      else { listWrap.innerHTML = ''; listWrap.appendChild(el('p', { class: 'aa-note', text: 'Loading sessions…' })); }
+      Promise.all([Store.listSessions(), Store.listParticipants().catch(function () { return []; })]).then(function (res) {
+        daState.sessions = res[0] || [];
+        daState.allParts = res[1] || [];
+        daState.sessions.sort(function (a, b) { return tsMs(b.createdAt) - tsMs(a.createdAt); });
+        render();
+      }).catch(function (e) {
+        // Keep whatever is already shown if we have a cached list; only surface the
+        // error when there is nothing to fall back to.
+        if (daState.sessions) { toast('Could not refresh sessions: ' + ((e && e.code) || (e && e.message) || 'error')); return; }
+        listWrap.innerHTML = '';
+        listWrap.appendChild(el('p', { class: 'aa-err', text: 'Could not load sessions: ' + ((e && e.code) || (e && e.message) || 'error') }));
+      });
+    }
+    function partCounts() {
+      var c = {};
+      (daState.allParts || []).forEach(function (p) {
+        var seen = {}; if (p.sessionId) seen[p.sessionId] = true;
+        Object.keys(p.playedSessions || {}).forEach(function (s) { seen[s] = true; });
+        Object.keys(p.completedSessions || {}).forEach(function (s) { seen[s] = true; });
+        Object.keys(seen).forEach(function (s) { c[s] = (c[s] || 0) + 1; });
+      });
+      return c;
+    }
+    function setAll(on) {
+      (daState.sessions || []).forEach(function (s) { if (on) daState.selected[s.id] = true; else delete daState.selected[s.id]; });
+      daState.importedBooks.forEach(function (b) { b.selected = on; });
+      render();
+    }
+    function render() {
+      listWrap.innerHTML = '';
+      var c = partCounts();
+      var sess = daState.sessions || [];
+      if (!sess.length && !daState.importedBooks.length) {
+        listWrap.appendChild(el('p', { class: 'aa-note', text: 'No sessions yet. Create one from the Admin tab, or import an Excel/CSV file.' }));
+        updateLoadLabel(); return;
+      }
+      sess.forEach(function (s) {
+        var cb = el('input', { type: 'checkbox' }); if (daState.selected[s.id]) cb.setAttribute('checked', 'checked');
+        cb.addEventListener('change', function () { if (cb.checked) daState.selected[s.id] = true; else delete daState.selected[s.id]; updateLoadLabel(); });
+        var n = c[s.id] || 0;
+        var meta = el('div', { class: 'g' }, [
+          el('b', { text: s.code || s.id }), ' ',
+          el('span', { class: 'aa-badge ' + (s.status || 'open'), text: (s.status || 'open') }),
+          el('div', { class: 'aa-note', style: 'margin-top:2px;', text: (s.name ? s.name + ' · ' : '') + n + ' participant' + (n === 1 ? '' : 's') + ' · ' + condLabel(s.condition) })
+        ]);
+        listWrap.appendChild(el('label', { class: 'aa-checkrow' }, [cb, meta]));
+      });
+      daState.importedBooks.forEach(function (b) {
+        var cb = el('input', { type: 'checkbox' }); if (b.selected) cb.setAttribute('checked', 'checked');
+        cb.addEventListener('change', function () { b.selected = cb.checked; updateLoadLabel(); });
+        var rm = el('button', { class: 'aa-btn danger sm', on: { click: function (e) { e.preventDefault(); daState.importedBooks = daState.importedBooks.filter(function (x) { return x !== b; }); render(); } } }, ['remove']);
+        var meta = el('div', { class: 'g' }, [
+          el('b', { text: b.label }), ' ', el('span', { class: 'aa-tag blue', text: 'imported' }),
+          el('div', { class: 'aa-note', style: 'margin-top:2px;', text: b.sheets.length + ' sheet' + (b.sheets.length === 1 ? '' : 's') + ' · ' + b.totalRows + ' rows' })
+        ]);
+        listWrap.appendChild(el('label', { class: 'aa-checkrow' }, [cb, meta, rm]));
+      });
+      updateLoadLabel();
+    }
+    function updateLoadLabel() {
+      var ns = Object.keys(daState.selected).filter(function (k) { return daState.selected[k]; }).length;
+      var nf = daState.importedBooks.filter(function (b) { return b.selected; }).length;
+      var bits = []; if (ns) bits.push(ns + ' session' + (ns === 1 ? '' : 's')); if (nf) bits.push(nf + ' file' + (nf === 1 ? '' : 's'));
+      loadBtn.textContent = bits.length ? ('Load ' + bits.join(' + ')) : 'Load';
+    }
+    function onImport() {
+      var f = fileIn.files && fileIn.files[0]; fileIn.value = ''; if (!f) return;
+      var isCsv = /\.csv$/i.test(f.name);
+      status.textContent = 'Reading ' + f.name + '…';
+      ensureXLSX().then(function (X) {
+        var reader = new FileReader();
+        reader.onload = function (e) {
+          try {
+            var sheets;
+            if (isCsv) {
+              var wbc = X.read(e.target.result, { type: 'string' });
+              sheets = [{ name: 'Responses', rows: X.utils.sheet_to_json(wbc.Sheets[wbc.SheetNames[0]], { defval: '' }) }];
+            } else {
+              var wb = X.read(new Uint8Array(e.target.result), { type: 'array' });
+              sheets = wb.SheetNames.map(function (nm) { return { name: nm, rows: X.utils.sheet_to_json(wb.Sheets[nm], { defval: '' }) }; });
+            }
+            sheets = sheets.filter(function (sh) { return sh.rows && sh.rows.length; });
+            if (!sheets.length) { status.textContent = ''; toast('That file has no data rows.'); return; }
+            var totalRows = sheets.reduce(function (t, sh) { return t + sh.rows.length; }, 0);
+            daState.importedBooks.push({ label: f.name, sheets: sheets, totalRows: totalRows, selected: true });
+            status.textContent = 'Imported ' + f.name + ' — ' + sheets.length + ' sheet' + (sheets.length === 1 ? '' : 's') + ', ' + totalRows + ' rows. Press Load to include it.';
+            render();
+          } catch (err) { status.textContent = ''; toast('Could not read the file: ' + (err.message || err)); }
+        };
+        if (isCsv) reader.readAsText(f); else reader.readAsArrayBuffer(f);
+      }).catch(function () { status.textContent = ''; toast('Could not load the Excel reader (offline?).'); });
+    }
+    function doLoad() {
+      var ids = {}; Object.keys(daState.selected).forEach(function (k) { if (daState.selected[k]) ids[k] = true; });
+      var nSess = Object.keys(ids).length;
+      var books = daState.importedBooks.filter(function (b) { return b.selected; });
+      if (!nSess && !books.length) { toast('Tick at least one session or import a file first.'); return; }
+      status.textContent = 'Loading…';
+      loadBtn.setAttribute('disabled', 'true');
+      var done = function () { loadBtn.removeAttribute('disabled'); };
+      // Participants who played any ticked session (re-fetched so counts are current).
+      var partsP;
+      if (nSess) {
+        partsP = Store.listParticipants().catch(function () { return daState.allParts || []; }).then(function (all) {
+          daState.allParts = all;
+          return all.filter(function (p) {
+            return Object.keys(ids).some(function (sid) { return p.sessionId === sid || (p.playedSessions && p.playedSessions[sid]) || (p.completedSessions && p.completedSessions[sid]); });
+          });
+        });
+      } else { partsP = Promise.resolve([]); }
+      partsP.then(function (parts) {
+        return nSess ? collectAggregateSheets(parts, ids) : emptySheetMap();
+      }).then(function (sheetMap) {
+        books.forEach(function (b) { mergeBookIntoSheetMap(sheetMap, b); });
+        daState.sheetMap = sheetMap;
+        daState.sheetOrder = orderSheetNames(sheetMap);
+        status.textContent = 'Loaded ' + summarizeMap(sheetMap) + '.';
+        done();
+        // Refresh whichever Section 2/3 are currently mounted (daRefs is reset on
+        // each render), so a Load that resolves after a view switch still lands.
+        if (daRefs.updateSec2) daRefs.updateSec2();
+        if (daRefs.updateSec3Tables) daRefs.updateSec3Tables();
+      }).catch(function (e) {
+        done(); status.textContent = '';
+        toast('Load failed: ' + ((e && e.message) || 'error'));
+        if (window.console) console.error('[Arena analytics] load failed', e);
+      });
+    }
+    return card;
+  }
+
+  /* ---- Section 2: aggregate ---- */
+  function buildDaSection2() {
+    var card = el('div', { class: 'aa-card' });
+    card.appendChild(el('div', { class: 'aa-sechead' }, [el('span', { class: 'aa-secnum', text: '2' }), el('h3', { text: 'Aggregate data', style: 'margin:0;' })]));
+    card.appendChild(el('p', { class: 'aa-note', html: 'Consolidate every loaded session (and any imported workbook) into <b>one Excel file</b> with the same multi-tab structure as the per-session export — Conventions, Sessions, Participants, Tasks, Task summary, Responses, Events, Survey — with each source stacked within every tab.' }));
+    var stats = el('div', { class: 'aa-statgrid', style: 'margin-top:6px;' });
+    card.appendChild(stats);
+    var dl = el('button', { class: 'aa-btn green', on: { click: download } }, ['Download aggregate Excel']);
+    card.appendChild(el('div', { class: 'aa-row', style: 'margin-top:12px;' }, [dl]));
+    var hint = el('p', { class: 'aa-note', text: 'Load data in Section 1 first.' });
+    card.appendChild(hint);
+    daRefs.updateSec2 = update;
+    update();
+    function statBox(v, l) { return el('div', { class: 'aa-statbox' }, [el('b', { text: String(v) }), el('span', { text: l })]); }
+    function update() {
+      var m = daState.sheetMap;
+      stats.innerHTML = '';
+      if (!m) { dl.setAttribute('disabled', 'true'); hint.style.display = 'block'; return; }
+      hint.style.display = 'none'; dl.removeAttribute('disabled');
+      stats.appendChild(statBox((m.Responses || []).length, 'Responses'));
+      stats.appendChild(statBox((m.Participants || []).length, 'Participants'));
+      stats.appendChild(statBox((m.Sessions || []).length, 'Sessions'));
+      stats.appendChild(statBox((m['Task summary'] || []).length, 'Tasks with data'));
+    }
+    function download() {
+      var m = daState.sheetMap;
+      if (!m) { toast('Load data in Section 1 first.'); return; }
+      ensureXLSX().then(function (X) {
+        var wb = X.utils.book_new(), used = {};
+        daState.sheetOrder.forEach(function (name) {
+          var rows = m[name] || [];
+          X.utils.book_append_sheet(wb, X.utils.json_to_sheet(rows.length ? rows : [{}]), safeSheetName(name, used));
+        });
+        var stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+        X.writeFile(wb, 'answerarena-aggregate-' + stamp + '.xlsx');
+        toast('Aggregate downloaded.');
+      }).catch(function (e) { toast('Download failed: ' + ((e && e.message) || 'error')); });
+    }
+    return card;
+  }
+
+  /* ---- Section 3: run Python / R ---- */
+  function buildDaSection3() {
+    var card = el('div', { class: 'aa-card' });
+    card.appendChild(el('div', { class: 'aa-sechead' }, [el('span', { class: 'aa-secnum', text: '3' }), el('h3', { text: 'Process with Python or R', style: 'margin:0;' })]));
+    card.appendChild(el('p', { class: 'aa-note', html: 'Pick a table from the aggregate above, then run <b>Python</b> (Pyodide: numpy / pandas / scipy / statsmodels / matplotlib) or <b>R</b> (WebR, base R) on it — compiled entirely in your browser (the first run downloads the runtime, ~10–30&nbsp;s). The table is handed to your code as the string <code>DATA_CSV</code> (Python) or the file <code>/tmp/data.csv</code> (R). Output and plots appear below.' }));
+
+    var tableSel = el('select', {});
+    card.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: 'Analysis table (from Section 2)' }), tableSel]));
+
+    var pyTabBtn = el('button', { on: { click: function () { setLang('python'); } } }, ['Python']);
+    var rTabBtn = el('button', { on: { click: function () { setLang('r'); } } }, ['R']);
+    card.appendChild(el('div', { class: 'aa-langtabs' }, [pyTabBtn, rTabBtn]));
+
+    var editor = el('textarea', { class: 'aa-code', spellcheck: 'false' });
+    card.appendChild(editor);
+
+    var runBtn = el('button', { class: 'aa-btn', on: { click: run } }, ['▶ Run']);
+    var resetBtn = el('button', { class: 'aa-btn sec', on: { click: resetTemplate } }, ['Reset template']);
+    card.appendChild(el('div', { class: 'aa-row', style: 'margin-top:10px;' }, [runBtn, resetBtn]));
+    var statusEl = el('div', { class: 'aa-runstatus' });
+    card.appendChild(statusEl);
+    card.appendChild(el('div', { class: 'aa-sub', style: 'margin:12px 0 4px;', text: 'Output' }));
+    var outWrap = el('div', {}, [el('p', { class: 'aa-note', text: 'Run your code to see the output here.' })]);
+    card.appendChild(outWrap);
+    var plots = el('div', { class: 'aa-plots' });
+    card.appendChild(plots);
+
+    var running = false, outText = '', flushQueued = false, outPre = null;
+
+    // Restore persisted code (or the bundled templates) once.
+    if (daState.code.python == null) daState.code.python = daLoadSaved('aa-da:py', DA_PY_TEMPLATE);
+    if (daState.code.r == null) daState.code.r = daLoadSaved('aa-da:r', DA_R_TEMPLATE);
+    editor.value = daState.code[daState.lang];
+    editor.addEventListener('input', function () { daState.code[daState.lang] = editor.value; saveCode(); });
+
+    setLang(daState.lang);
+    daRefs.updateSec3Tables = updateTables;
+    updateTables();
+    // If a run started under an earlier render is still going, say so (the run()
+    // guard below blocks a concurrent second run until it finishes).
+    if (daState.running) setStatus('A run started earlier is still in progress — please wait for it to finish.');
+
+    function setLang(lang) {
+      if (running) return;
+      daState.lang = lang;
+      pyTabBtn.className = lang === 'python' ? 'on' : '';
+      rTabBtn.className = lang === 'r' ? 'on' : '';
+      editor.value = daState.code[lang];
+      runBtn.textContent = lang === 'python' ? '▶ Run Python' : '▶ Run R';
+    }
+    function updateTables() {
+      var m = daState.sheetMap;
+      var prev = tableSel.value;
+      tableSel.innerHTML = '';
+      var names = m ? daState.sheetOrder.filter(function (n) { return (m[n] || []).length; }) : [];
+      if (!names.length) { tableSel.appendChild(el('option', { value: '' }, ['(load data in Section 1 first)'])); tableSel.setAttribute('disabled', 'true'); return; }
+      tableSel.removeAttribute('disabled');
+      names.forEach(function (n) { tableSel.appendChild(el('option', { value: n }, [n + ' (' + (m[n] || []).length + ' rows)'])); });
+      if (names.indexOf(prev) >= 0) tableSel.value = prev;
+      else if (names.indexOf('Responses') >= 0) tableSel.value = 'Responses';
+      else tableSel.value = names[0];
+    }
+    function resetTemplate() {
+      if (running) return;
+      var tpl = daState.lang === 'python' ? DA_PY_TEMPLATE : DA_R_TEMPLATE;
+      daState.code[daState.lang] = tpl; editor.value = tpl; saveCode();
+    }
+    function saveCode() { try { localStorage.setItem(daState.lang === 'python' ? 'aa-da:py' : 'aa-da:r', daState.code[daState.lang]); } catch (e) {} }
+    function pushLine(line) {
+      outText += line + '\n';
+      if (!flushQueued) { flushQueued = true; requestAnimationFrame(function () { flushQueued = false; if (outPre) outPre.textContent = outText; }); }
+    }
+    function setStatus(s) { statusEl.textContent = s || ''; }
+    function run() {
+      if (running) return;
+      // Cross-render guard: a run started under an earlier render (before the user
+      // switched tabs and back) shares the one Pyodide/WebR runtime, so never start
+      // a second concurrent run against it.
+      if (daState.running) { toast('A run is already in progress — please wait for it to finish.'); return; }
+      var m = daState.sheetMap;
+      if (!m) { toast('Load data in Section 1 first.'); return; }
+      var name = tableSel.value;
+      var rows = name && m[name] ? m[name] : [];
+      if (!rows.length) { toast('The selected table is empty — pick another or load data.'); return; }
+      running = true; daState.running = true; runBtn.setAttribute('disabled', 'true'); resetBtn.setAttribute('disabled', 'true');
+      outText = ''; plots.innerHTML = ''; outWrap.innerHTML = '';
+      outPre = el('pre', { class: 'aa-out', text: '' }); outWrap.appendChild(outPre);
+      setStatus('Preparing…');
+      var lang = daState.lang, code = editor.value;
+      daState.code[lang] = code; saveCode();
+      ensureXLSX().then(function (X) {
+        var csv = X.utils.sheet_to_csv(X.utils.json_to_sheet(rows));
+        return lang === 'python'
+          ? daRunPython(code, { dataCsv: csv, onStdout: pushLine, onStatus: setStatus })
+          : daRunR(code, { dataCsv: csv, onOutput: pushLine, onStatus: setStatus });
+      }).then(function (result) {
+        var finalOut = outText || (result && (result.stdout || result.output)) || '';
+        var imgs = (result && result.images) || [];
+        if (result && !result.ok && result.error) finalOut = (finalOut ? finalOut + '\n' : '') + '⚠ ' + result.error;
+        if (outPre) outPre.textContent = finalOut || '(no output)';
+        imgs.forEach(function (src) { plots.appendChild(el('img', { src: src, alt: 'plot' })); });
+        setStatus(imgs.length ? (imgs.length + ' plot' + (imgs.length === 1 ? '' : 's') + ' rendered.') : (result && result.ok ? 'Done.' : ''));
+      }).catch(function (err) {
+        if (outPre) outPre.textContent = (outText ? outText + '\n' : '') + '⚠ ' + ((err && err.message) || err);
+        setStatus('');
+      }).then(function () {
+        running = false; daState.running = false; runBtn.removeAttribute('disabled'); resetBtn.removeAttribute('disabled');
+      });
+    }
+    return card;
+  }
+
+  /* =====================================================================
+     In-browser runtimes: Pyodide (Python) + WebR (R).
+     Ported from the ideasearchlab Data Analytics page. Each loads lazily
+     from jsDelivr on first Run and is then reused across runs.
+     ===================================================================== */
+  var DA_PYODIDE_VERSIONS = ['314.0.1', '0.29.4', '0.28.3'];
+  var DA_PY_PACKAGES = ['numpy', 'pandas', 'scipy', 'statsmodels', 'matplotlib'];
+  var _pyodidePromise = null;
+  function daPyScriptUrl(v) { return 'https://cdn.jsdelivr.net/pyodide/v' + v + '/full/pyodide.js'; }
+  function daPyBaseUrl(v) { return 'https://cdn.jsdelivr.net/pyodide/v' + v + '/full/'; }
+  function daInjectScript(url) {
+    return new Promise(function (resolve, reject) {
+      var existing = document.querySelector('script[data-pyodide-src="' + url + '"]');
+      if (existing) {
+        if (existing.dataset.loaded === '1' && typeof globalThis.loadPyodide === 'function') return resolve();
+        if (existing.dataset.loaded === '1') { existing.remove(); }
+        else { existing.addEventListener('load', function () { resolve(); }); existing.addEventListener('error', function () { reject(new Error('Failed to load ' + url)); }); return; }
+      }
+      var s = document.createElement('script');
+      s.src = url; s.async = true; s.crossOrigin = 'anonymous'; s.dataset.pyodideSrc = url;
+      s.onload = function () { s.dataset.loaded = '1'; resolve(); };
+      s.onerror = function () { reject(new Error('Failed to load ' + url + ' (CDN / network / CSP?)')); };
+      document.head.appendChild(s);
+    });
+  }
+  function daGetPyodide(onStatus) {
+    if (_pyodidePromise) return _pyodidePromise;
+    _pyodidePromise = (async function () {
+      var lastErr = null;
+      for (var i = 0; i < DA_PYODIDE_VERSIONS.length; i++) {
+        var v = DA_PYODIDE_VERSIONS[i];
+        try {
+          if (onStatus) onStatus('Loading Python runtime (Pyodide v' + v + ')…');
+          await daInjectScript(daPyScriptUrl(v));
+          var pyodide = await globalThis.loadPyodide({ indexURL: daPyBaseUrl(v) });
+          if (onStatus) onStatus('Loading data-science packages (pandas, statsmodels, matplotlib)…');
+          await daEnsurePyPackages(pyodide);
+          if (onStatus) onStatus('');
+          return pyodide;
+        } catch (err) {
+          lastErr = err;
+          try { delete globalThis.loadPyodide; } catch (e) { /* non-configurable */ }
+          var stale = document.querySelector('script[data-pyodide-src="' + daPyScriptUrl(v) + '"]');
+          if (stale) stale.remove();
+        }
+      }
+      throw lastErr || new Error('Pyodide failed to load from all candidate versions.');
+    })();
+    _pyodidePromise.catch(function () { _pyodidePromise = null; });
+    return _pyodidePromise;
+  }
+  async function daEnsurePyPackages(pyodide) {
+    try { await pyodide.loadPackage(DA_PY_PACKAGES); return; } catch (e) { /* isolate below */ }
+    var fallback = [];
+    for (var i = 0; i < DA_PY_PACKAGES.length; i++) {
+      try { await pyodide.loadPackage(DA_PY_PACKAGES[i]); } catch (e) { fallback.push(DA_PY_PACKAGES[i]); }
+    }
+    if (fallback.length) {
+      await pyodide.loadPackage('micropip');
+      var micropip = pyodide.pyimport('micropip');
+      for (var j = 0; j < fallback.length; j++) await micropip.install(fallback[j]);
+    }
+  }
+  var DA_MPL_BACKEND = '\nimport os as __os\n__os.environ.setdefault("MPLBACKEND", "Agg")\ntry:\n    import matplotlib\n    matplotlib.use("Agg", force=True)\nexcept Exception:\n    pass\n';
+  var DA_FIG_HARVEST = '\ndef __collect_figures():\n    import io, base64\n    try:\n        import matplotlib\n        import matplotlib.pyplot as plt\n    except Exception:\n        return []\n    out = []\n    for num in plt.get_fignums():\n        fig = plt.figure(num)\n        buf = io.BytesIO()\n        fig.savefig(buf, format="png", dpi=110, bbox_inches="tight")\n        buf.seek(0)\n        out.append("data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii"))\n        buf.close()\n    plt.close("all")\n    return out\n\n__pyo_images = __collect_figures()\n';
+  async function daRunPython(code, opts) {
+    opts = opts || {};
+    var pyodide = await daGetPyodide(opts.onStatus);
+    var collected = [];
+    var emit = function (chunk) {
+      var text = String(chunk); collected.push(text);
+      if (typeof opts.onStdout === 'function') { var parts = text.split('\n'); for (var i = 0; i < parts.length; i++) opts.onStdout(parts[i]); }
+    };
+    pyodide.setStdout({ batched: emit });
+    pyodide.setStderr({ batched: emit });
+    pyodide.globals.set('DATA_CSV', opts.dataCsv || '');
+    var ok = true, error = null, images = [];
+    try {
+      await pyodide.runPythonAsync(DA_MPL_BACKEND + '\n' + code + '\n' + DA_FIG_HARVEST);
+      var pyImages = pyodide.globals.get('__pyo_images');
+      if (pyImages) { try { images = pyImages.toJs(); } finally { pyImages.destroy(); } }
+    } catch (e) {
+      ok = false; error = e && e.message ? e.message : String(e); emit(error);
+    } finally {
+      pyodide.setStdout(); pyodide.setStderr();
+      try { pyodide.runPython("for __n in ('DATA_CSV','__pyo_images'):\n    globals().pop(__n, None)\n"); } catch (e) { /* ignore */ }
+    }
+    return { ok: ok, stdout: collected.join('\n'), images: images, error: error };
+  }
+
+  var DA_WEBR_VERSIONS = ['0.6.0', '0.5.9', '0.4.4'];
+  var _webRPromise = null;
+  function daWebrEsmUrl(v) { return 'https://cdn.jsdelivr.net/npm/webr@' + v + '/dist/webr.mjs'; }
+  function daWebrBaseUrl(v) { return 'https://cdn.jsdelivr.net/npm/webr@' + v + '/dist/'; }
+  function daGetWebR(onStatus) {
+    if (_webRPromise) return _webRPromise;
+    _webRPromise = (async function () {
+      var lastErr = null;
+      for (var i = 0; i < DA_WEBR_VERSIONS.length; i++) {
+        var v = DA_WEBR_VERSIONS[i], webR;
+        try {
+          if (onStatus) onStatus('Loading R runtime (WebR v' + v + ')… this is a large one-time download.');
+          var mod = await import(daWebrEsmUrl(v));
+          var WebR = mod.WebR || (mod.default && mod.default.WebR);
+          if (!WebR) throw new Error('WebR export not found in module');
+          webR = new WebR({ baseUrl: daWebrBaseUrl(v) });
+          await webR.init();
+          if (onStatus) onStatus('');
+          return webR;
+        } catch (err) {
+          lastErr = err;
+          if (webR && typeof webR.close === 'function') { try { webR.close(); } catch (e) { /* ignore */ } }
+        }
+      }
+      throw lastErr || new Error('WebR failed to load from all candidate versions.');
+    })();
+    _webRPromise.catch(function () { _webRPromise = null; });
+    return _webRPromise;
+  }
+  async function daBitmapToPng(bitmap) {
+    var w = bitmap.width, h = bitmap.height;
+    if (typeof OffscreenCanvas !== 'undefined') {
+      var off = new OffscreenCanvas(w, h);
+      off.getContext('2d').drawImage(bitmap, 0, 0);
+      var blob = await off.convertToBlob({ type: 'image/png' });
+      return await new Promise(function (res, rej) { var fr = new FileReader(); fr.onload = function () { res(fr.result); }; fr.onerror = rej; fr.readAsDataURL(blob); });
+    }
+    var canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(bitmap, 0, 0);
+    return canvas.toDataURL('image/png');
+  }
+  async function daRunR(code, opts) {
+    opts = opts || {};
+    var csvPath = '/tmp/data.csv';
+    var lines = [], buffer = '';
+    var push = function (text) {
+      if (text == null) return; buffer += text; var idx;
+      while ((idx = buffer.indexOf('\n')) !== -1) { var line = buffer.slice(0, idx); buffer = buffer.slice(idx + 1); lines.push(line); if (typeof opts.onOutput === 'function') opts.onOutput(line); }
+    };
+    var flush = function () { if (buffer.length) { lines.push(buffer); if (typeof opts.onOutput === 'function') opts.onOutput(buffer); buffer = ''; } };
+    var webR, shelter, images = [];
+    try {
+      webR = await daGetWebR(opts.onStatus);
+      if (typeof opts.dataCsv === 'string') {
+        try { await webR.FS.mkdir('/tmp'); } catch (e) { /* exists */ }
+        await webR.FS.writeFile(csvPath, new TextEncoder().encode(opts.dataCsv));
+      }
+      shelter = await new webR.Shelter();
+      var capture = await shelter.captureR(code, { withAutoprint: true, captureGraphics: true });
+      var out = capture.output || [];
+      for (var i = 0; i < out.length; i++) { var evt = out[i]; if (evt && (evt.type === 'stdout' || evt.type === 'stderr')) push(evt.data + '\n'); }
+      flush();
+      if (Array.isArray(capture.images)) {
+        for (var k = 0; k < capture.images.length; k++) { var bmp = capture.images[k]; images.push(await daBitmapToPng(bmp)); if (bmp && typeof bmp.close === 'function') bmp.close(); }
+      }
+      return { ok: true, output: lines.join('\n'), images: images, error: null };
+    } catch (err) {
+      flush();
+      return { ok: false, output: lines.join('\n'), images: images, error: err && err.message ? err.message : String(err) };
+    } finally {
+      if (shelter) { try { await shelter.purge(); } catch (e) { /* ignore */ } }
+    }
+  }
+
+  /* ---- default Python / R templates (edit-and-Run) ---- */
+  var DA_PY_TEMPLATE = [
+    '"""',
+    'Answer Arena - Python analysis (edit freely, then Run).',
+    '',
+    'The table picked in Section 3 is handed in as the string DATA_CSV (one row per',
+    'record). For the Responses table the useful columns are: session_code, task_id,',
+    'choice (left/right/tie), chosen_model (baseline/frontier/tie), preference_AB',
+    '(-3..+3, A=left/B=right), preference_model (-3..+3; <0 baseline, >0 frontier),',
+    'response_ms, cost_transparency (1/0), firm_pay (1/0), submitted. Change anything.',
+    '"""',
+    'import io',
+    'import numpy as np',
+    'import pandas as pd',
+    'import matplotlib',
+    'matplotlib.use("Agg")',
+    'import matplotlib.pyplot as plt',
+    '',
+    '# keep_default_na=False so the literal strings "None"/"" are not read as NaN.',
+    'df = pd.read_csv(io.StringIO(DATA_CSV), keep_default_na=False)',
+    'print("Rows:", len(df), " Columns:", list(df.columns))',
+    'print(df.head(8).to_string(), "\\n")',
+    '',
+    '# Keep only submitted comparisons when that column exists (drafts excluded).',
+    'if "submitted" in df.columns:',
+    '    d = df[df["submitted"].astype(str).str.lower().eq("yes")].copy()',
+    'else:',
+    '    d = df.copy()',
+    'print("Analysed rows:", len(d))',
+    '',
+    '# Overall preference for the frontier model.',
+    'if "preference_model" in d.columns:',
+    '    pm = pd.to_numeric(d["preference_model"], errors="coerce").dropna()',
+    '    if len(pm):',
+    '        print("\\npreference_model (-3 baseline .. +3 frontier):")',
+    '        print("  n = %d   mean = %.3f   sd = %.3f" % (len(pm), pm.mean(), pm.std(ddof=1)))',
+    'if "chosen_model" in d.columns:',
+    '    cm = d["chosen_model"].astype(str)',
+    '    decisive = int(cm.isin(["baseline", "frontier"]).sum())',
+    '    if decisive:',
+    '        wr = cm.eq("frontier").sum() / decisive',
+    '        print("Frontier win rate (decisive choices only): %.1f%%  (ties: %d)" % (100 * wr, int(cm.eq("tie").sum())))',
+    '',
+    '# Mean preference by each 2x2 factor (collect for the plot).',
+    'labels, means = [], []',
+    'for factor in ["cost_transparency", "firm_pay"]:',
+    '    if factor in d.columns and "preference_model" in d.columns:',
+    '        g = pd.DataFrame({"pm": pd.to_numeric(d["preference_model"], errors="coerce"),',
+    '                          "f": pd.to_numeric(d[factor], errors="coerce")}).dropna()',
+    '        if len(g):',
+    '            print("\\nMean preference_model by %s:" % factor)',
+    '            for lvl, grp in g.groupby("f"):',
+    '                print("  %s = %g : n=%d  mean=%.3f" % (factor, lvl, len(grp), grp["pm"].mean()))',
+    '                labels.append("%s=%g" % (factor, lvl)); means.append(grp["pm"].mean())',
+    '',
+    '# OLS with HC3 heteroscedasticity-robust SEs (statsmodels).',
+    'try:',
+    '    import statsmodels.formula.api as smf',
+    '    cols = [c for c in ["cost_transparency", "firm_pay"] if c in d.columns]',
+    '    if "preference_model" in d.columns and cols:',
+    '        reg = pd.DataFrame({"y": pd.to_numeric(d["preference_model"], errors="coerce")})',
+    '        for c in cols:',
+    '            reg[c] = pd.to_numeric(d[c], errors="coerce")',
+    '        reg = reg.dropna()',
+    '        cols = [c for c in cols if reg[c].nunique() > 1]',
+    '        if len(reg) > len(cols) + 1 and cols:',
+    '            model = smf.ols("y ~ " + " + ".join(cols), data=reg).fit(cov_type="HC3")',
+    '            print("\\nOLS: preference_model ~ " + " + ".join(cols) + "  (HC3 robust SEs)")',
+    '            print(model.summary())',
+    '        else:',
+    '            print("\\n(Not enough variation for a regression - need >=2 conditions that vary.)")',
+    'except Exception as e:',
+    '    print("\\n(Regression skipped:", e, ")")',
+    '',
+    '# Bar plot of the condition means.',
+    'if means:',
+    '    fig, ax = plt.subplots(figsize=(7, 4.2))',
+    '    ax.bar(range(len(means)), means, color="#e67e22")',
+    '    ax.set_xticks(range(len(means))); ax.set_xticklabels(labels, rotation=20, ha="right", fontsize=11)',
+    '    ax.axhline(0, color="#888", lw=1)',
+    '    ax.set_ylabel("mean preference_model", fontsize=12)',
+    '    ax.set_title("Frontier preference by condition (>0 favours frontier)", fontsize=13)',
+    '    for i, v in enumerate(means):',
+    '        ax.text(i, v, "%.2f" % v, ha="center", va="bottom" if v >= 0 else "top", fontsize=11)',
+    '    fig.tight_layout()',
+    'print("\\nDone.")',
+    ''
+  ].join('\n');
+
+  var DA_R_TEMPLATE = [
+    '# Answer Arena - R analysis (edit freely, then Run).',
+    '# The picked table is mounted at /tmp/data.csv. For the Responses table the key',
+    '# columns are session_code, task_id, choice, chosen_model (baseline/frontier/tie),',
+    '# preference_model (-3..+3; <0 baseline, >0 frontier), response_ms,',
+    '# cost_transparency (1/0), firm_pay (1/0), submitted.',
+    '',
+    'df <- read.csv("/tmp/data.csv", stringsAsFactors = FALSE, check.names = FALSE)',
+    'cat("Rows:", nrow(df), " Columns:", paste(names(df), collapse = ", "), "\\n\\n")',
+    'print(utils::head(df, 8))',
+    '',
+    'num <- function(x) suppressWarnings(as.numeric(as.character(x)))',
+    '',
+    '# Keep submitted comparisons only, when that column exists.',
+    'if ("submitted" %in% names(df)) {',
+    '  d <- df[tolower(as.character(df$submitted)) == "yes", , drop = FALSE]',
+    '} else { d <- df }',
+    'cat("\\nAnalysed rows:", nrow(d), "\\n")',
+    '',
+    '# Overall frontier preference.',
+    'if ("preference_model" %in% names(d)) {',
+    '  pm <- num(d$preference_model); pm <- pm[!is.na(pm)]',
+    '  if (length(pm)) cat(sprintf("\\npreference_model: n=%d  mean=%.3f  sd=%.3f\\n", length(pm), mean(pm), sd(pm)))',
+    '}',
+    'if ("chosen_model" %in% names(d)) {',
+    '  cm <- as.character(d$chosen_model); decisive <- sum(cm %in% c("baseline", "frontier"))',
+    '  if (decisive > 0) cat(sprintf("Frontier win rate (decisive): %.1f%%  (ties: %d)\\n", 100 * sum(cm == "frontier") / decisive, sum(cm == "tie")))',
+    '}',
+    '',
+    '# Mean preference by each 2x2 factor + a bar plot.',
+    'labels <- c(); means <- c()',
+    'for (fac in c("cost_transparency", "firm_pay")) {',
+    '  if (fac %in% names(d) && "preference_model" %in% names(d)) {',
+    '    y <- num(d$preference_model); f <- num(d[[fac]]); ok <- !is.na(y) & !is.na(f)',
+    '    if (any(ok)) {',
+    '      cat(sprintf("\\nMean preference_model by %s:\\n", fac))',
+    '      for (lvl in sort(unique(f[ok]))) {',
+    '        m <- mean(y[ok & f == lvl])',
+    '        cat(sprintf("  %s=%g : n=%d  mean=%.3f\\n", fac, lvl, sum(ok & f == lvl), m))',
+    '        labels <- c(labels, sprintf("%s=%g", fac, lvl)); means <- c(means, m)',
+    '      }',
+    '    }',
+    '  }',
+    '}',
+    '',
+    '# OLS with HC3 robust SEs (base R; WebR has no sandwich package).',
+    'hc3 <- function(fit) {',
+    '  X <- model.matrix(fit); h <- hatvalues(fit); u <- residuals(fit)',
+    '  bread <- solve(t(X) %*% X)',
+    '  meat <- t(X) %*% (X * ((u^2) / (1 - h)^2))',
+    '  V <- bread %*% meat %*% bread; se <- sqrt(diag(V)); est <- coef(fit); tval <- est / se',
+    '  data.frame(estimate = est, HC3_se = se, t = tval, p = 2 * pt(-abs(tval), df.residual(fit)))',
+    '}',
+    'cols <- intersect(c("cost_transparency", "firm_pay"), names(d))',
+    'if ("preference_model" %in% names(d) && length(cols)) {',
+    '  reg <- data.frame(y = num(d$preference_model))',
+    '  for (cn in cols) reg[[cn]] <- num(d[[cn]])',
+    '  reg <- reg[stats::complete.cases(reg), , drop = FALSE]',
+    '  cols <- cols[sapply(cols, function(cn) length(unique(reg[[cn]])) > 1)]',
+    '  if (nrow(reg) > length(cols) + 1 && length(cols)) {',
+    '    tryCatch({',
+    '      fit <- lm(as.formula(paste("y ~", paste(cols, collapse = " + "))), data = reg)',
+    '      cat("\\nOLS: preference_model ~", paste(cols, collapse = " + "), " (HC3 robust SEs)\\n")',
+    '      print(round(hc3(fit), 4))',
+    '    }, error = function(e) cat("\\n(Regression skipped:", conditionMessage(e), ")\\n"))',
+    '  } else { cat("\\n(Not enough variation for a regression.)\\n") }',
+    '}',
+    '',
+    'if (length(means)) {',
+    '  bp <- barplot(means, names.arg = labels, col = "#e67e22", las = 2, ylab = "mean preference_model",',
+    '                main = "Frontier preference by condition (>0 favours frontier)")',
+    '  abline(h = 0, col = "#888")',
+    '  text(bp, means, labels = sprintf("%.2f", means), pos = 3, cex = 0.9)',
+    '}',
+    'cat("\\nDone.\\n")',
+    ''
+  ].join('\n');
 
   /* ---- bootstrap ---- */
   function init() {
