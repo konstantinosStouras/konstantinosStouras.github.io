@@ -109,7 +109,17 @@ reason - removed in favour of the single graded preference.) These columns ride
 along in the admin Excel export (Responses sheet: `preference`, `preference_AB`,
 `preference_model`). `settings.comparisonsPerUser` (0 = whole set) caps how
 many comparisons each participant sees: when it is below the active-set size the
-participant gets that many **randomly chosen** task pairs. **Each session
+participant gets that many **randomly chosen** task pairs. `startMain` picks the
+subset in three independent random steps so the exposure is statistically clean:
+(1) a uniform **simple random sample without replacement** of `comparisonsPerUser`
+tasks from the whole set (unbiased Fisher-Yates `shuffle` + `slice`), so every task
+has an equal `lim/N` chance of being shown to any participant and each task's
+**expected number of responses is identical** (`P·lim/N` across `P` participants) -
+this selection is **independent of `randomizeOrder`** (a fixed display order still
+gets a random subset, not the first `lim` rows); (2) the chosen subset is shown in
+**random order** per participant when `randomizeOrder` is on, else in the sheet's
+original order; (3) each comparison independently flips **left/right** 50/50 so
+outputA (Haiku) and outputB (Opus) are equally likely on either side. **Each session
 snapshots `comparisonsPerUser`, `randomizeOrder` and `taskSetId` at creation**
 (alongside the 2x2 `condition`), and `startMain` prefers the session's snapshot
 over the live global settings (older sessions with no snapshot fall back to

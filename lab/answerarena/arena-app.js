@@ -376,8 +376,20 @@
       var rnd = (sess.randomizeOrder != null) ? (sess.randomizeOrder !== false) : (cfg.settings.randomizeOrder !== false);
       var n = S.tasks.length;
       var idxs = []; for (var i = 0; i < n; i++) idxs.push(i);
-      if (rnd) shuffle(idxs);
-      if (lim > 0 && lim < idxs.length) idxs = idxs.slice(0, lim);
+      // 1) SELECT the per-participant subset at random. When comparisonsPerUser
+      //    (lim) is below the pool size, every participant gets a DIFFERENT random
+      //    sample of `lim` questions out of the whole sheet. This random selection
+      //    is intentionally INDEPENDENT of the display-order toggle below, so a
+      //    large sheet is always sub-sampled at random even if the order is left
+      //    fixed (otherwise everyone would get the same first `lim` rows).
+      if (lim > 0 && lim < n) { shuffle(idxs); idxs = idxs.slice(0, lim); }
+      // 2) ORDER: randomize the chosen subset per participant when enabled;
+      //    otherwise present it in the sheet's original order (the selection step
+      //    above may have shuffled the indices, so sort to restore that order).
+      if (rnd) shuffle(idxs); else idxs.sort(function (a, b) { return a - b; });
+      // 3) Randomize which side (left/right) each answer is shown on, per
+      //    comparison, so outputA (Haiku) and outputB (Opus) are equally likely
+      //    to appear on either side - independent of the ordering above.
       S.order = idxs; S.flips = idxs.map(function () { return Math.random() < 0.5; }); S.idx = 0;
       // Cost transparency: the running US$ cost is reset for this play, and the
       // top-bar "Spent so far" meter is shown only to participants in the
