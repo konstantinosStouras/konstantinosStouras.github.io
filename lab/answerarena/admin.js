@@ -196,7 +196,9 @@
       + '.aa-insh{font-size:15px;margin:16px 0 6px;color:var(--ink);}'
       + '.aa-insul{margin:4px 0;padding-left:20px;}.aa-insul li{font-size:14px;line-height:1.65;margin:5px 0;}'
       + '.aa-insp{font-size:14px;line-height:1.65;margin:8px 0;}'
-      + '.aa-insimg{display:block;max-width:100%;border:1px solid var(--line);border-radius:8px;margin-top:12px;background:#fff;}';
+      + '.aa-insimg{display:block;max-width:100%;border:1px solid var(--line);border-radius:8px;margin-top:12px;background:#fff;}'
+      + '.aa-sub2{font-size:13px;font-weight:700;color:var(--ink);margin:16px 0 6px;}'
+      + '.aa-provscroll{max-height:560px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px;background:var(--qbg);}';
     document.head.appendChild(el('style', { text: css }));
   }
   function currentTheme() { try { return localStorage.getItem('aa-theme') || 'dark'; } catch (e) { return 'dark'; } }
@@ -1537,6 +1539,173 @@
     used[n.toLowerCase()] = true; return n;
   }
 
+  /* ---- Section 2 "model provisioning" charts (over / indifference / under) ----
+     For each comparison, preferring Opus (the bigger model) = OVER-provisioning,
+     a tie = INDIFFERENCE, preferring Haiku (the smaller model) = UNDER-provisioning.
+     We chart the % of each per task (Wilson CIs), then averaged across tasks by
+     task type and by domain (each task weighted equally -> a t-interval across
+     tasks, so unequal responses per task don't bias the group averages). */
+  // task_id -> complexity (c) + domain (d), from the study's task list; used when
+  // the exported Responses rows don't carry task_complexity/task_domain.
+  var DA_TASK_META = {
+    'T075': { c: 'Simple', d: 'Creative & Marketing' }, 'T080': { c: 'Simple', d: 'Creative & Marketing' },
+    'T083': { c: 'Simple', d: 'Customer Support' }, 'T086': { c: 'Simple', d: 'Customer Support' },
+    'T051': { c: 'Simple', d: 'Data Analysis' }, 'T064': { c: 'Simple', d: 'Extraction & Classification' },
+    'T022': { c: 'Simple', d: 'Knowledge Q&A' }, 'T025': { c: 'Simple', d: 'Knowledge Q&A' },
+    'T067': { c: 'Simple', d: 'Planning & Strategy' }, 'T073': { c: 'Simple', d: 'Planning & Strategy' },
+    'T099': { c: 'Simple', d: 'Review & QA' }, 'T013': { c: 'Simple', d: 'Summarization' },
+    'T016': { c: 'Simple', d: 'Summarization' }, 'T001': { c: 'Simple', d: 'Writing' },
+    'T005': { c: 'Simple', d: 'Writing' }, 'T082': { c: 'Complex', d: 'Creative & Marketing' },
+    'T085': { c: 'Complex', d: 'Customer Support' }, 'T054': { c: 'Complex', d: 'Data Analysis' },
+    'T056': { c: 'Complex', d: 'Data Analysis' }, 'T065': { c: 'Complex', d: 'Extraction & Classification' },
+    'T026': { c: 'Complex', d: 'Knowledge Q&A' }, 'T029': { c: 'Complex', d: 'Knowledge Q&A' },
+    'T046': { c: 'Complex', d: 'Math & Reasoning' }, 'T048': { c: 'Complex', d: 'Math & Reasoning' },
+    'T071': { c: 'Complex', d: 'Planning & Strategy' }, 'T098': { c: 'Complex', d: 'Review & QA' },
+    'T018': { c: 'Complex', d: 'Summarization' }, 'T019': { c: 'Complex', d: 'Summarization' },
+    'T002': { c: 'Complex', d: 'Writing' }, 'T009': { c: 'Complex', d: 'Writing' }
+  };
+  // SVG element (var()-based colours must be passed via a `style` attribute, since
+  // SVG presentation attributes don't resolve CSS custom properties).
+  function svgEl(tag, attrs, kids) {
+    var n = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    if (attrs) Object.keys(attrs).forEach(function (k) { if (k === 'text') n.textContent = attrs[k]; else n.setAttribute(k, attrs[k]); });
+    (kids || []).forEach(function (c) { n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
+    return n;
+  }
+  // 97.5% two-sided Student-t critical value (df 1..30; ~1.96 beyond).
+  function daTcrit(df) {
+    var T = [0, 12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228, 2.201, 2.179, 2.160, 2.145, 2.131, 2.120, 2.110, 2.101, 2.093, 2.086, 2.080, 2.074, 2.069, 2.064, 2.060, 2.056, 2.052, 2.048, 2.045, 2.042];
+    return (df >= 1 && df <= 30) ? T[df] : 1.96;
+  }
+  // Wilson score 95% interval for a proportion x/n (the right CI for a rate), 0..1.
+  function daWilson(x, n) {
+    if (n <= 0) return { lo: 0, hi: 0 };
+    var z = 1.96, p = x / n, d = 1 + z * z / n;
+    var c = (p + z * z / (2 * n)) / d, h = (z / d) * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n));
+    return { lo: Math.max(0, c - h), hi: Math.min(1, c + h) };
+  }
+  // Mean + t-based 95% CI of a set of per-task rates (percent). Each task counts
+  // once, so a task with more responses doesn't dominate the group average.
+  function daMeanCI(vals) {
+    var k = vals.length; if (!k) return { mean: NaN, lo: NaN, hi: NaN, k: 0 };
+    var m = vals.reduce(function (a, b) { return a + b; }, 0) / k;
+    if (k < 2) return { mean: m, lo: NaN, hi: NaN, k: k };
+    var sd = Math.sqrt(vals.reduce(function (a, b) { return a + (b - m) * (b - m); }, 0) / (k - 1));
+    var hw = daTcrit(k - 1) * sd / Math.sqrt(k);
+    return { mean: m, lo: Math.max(0, m - hw), hi: Math.min(100, m + hw), k: k };
+  }
+  // From the aggregate Responses sheet: per-task over/indifference/under rates
+  // (% Opus / % tie / % Haiku) + Wilson CIs, plus the group averages (by task type
+  // and by domain) as means across tasks with t-CIs. Drafts are excluded.
+  function daProvisionData(sheetMap) {
+    var resp = (sheetMap && sheetMap.Responses) || [];
+    var byTask = {};
+    resp.forEach(function (r) {
+      var sub = r.submitted;
+      if (sub != null && sub !== '' && String(sub).toLowerCase() !== 'yes') return;   // skip drafts
+      var t = String(r.task_id == null ? '' : r.task_id); if (!t) return;
+      var cm = String(r.chosen_model == null ? '' : r.chosen_model).toLowerCase();
+      var o = byTask[t] || (byTask[t] = { n: 0, over: 0, ind: 0, under: 0, cx: '', dm: '' });
+      if (cm === 'frontier') o.over++; else if (cm === 'tie') o.ind++; else if (cm === 'baseline') o.under++; else return;
+      o.n++;
+      if (!o.cx) {                                        // resolve complexity/domain once per task
+        var meta = DA_TASK_META[t] || {};
+        var dc = r.task_complexity == null ? '' : String(r.task_complexity).trim();
+        var dd = r.task_domain == null ? '' : String(r.task_domain).trim();
+        o.cx = (dc && dc.toLowerCase() !== 'nan') ? dc : (meta.c || '(unknown)');
+        o.dm = (dd && dd.toLowerCase() !== 'nan') ? dd : (meta.d || '(unknown)');
+      }
+    });
+    var tasks = Object.keys(byTask).map(function (t) {
+      var o = byTask[t];
+      return { task: t, n: o.n, cx: o.cx, dm: o.dm,
+        over: 100 * o.over / o.n, ind: 100 * o.ind / o.n, under: 100 * o.under / o.n,
+        overCI: daWilson(o.over, o.n), indCI: daWilson(o.ind, o.n), underCI: daWilson(o.under, o.n) };
+    });
+    function aggBy(keyFn) {
+      var groups = {};
+      tasks.forEach(function (t) { var k = keyFn(t); (groups[k] = groups[k] || []).push(t); });
+      return Object.keys(groups).sort().map(function (k) {
+        var arr = groups[k];
+        return { label: k, nTasks: arr.length,
+          over: daMeanCI(arr.map(function (t) { return t.over; })),
+          ind: daMeanCI(arr.map(function (t) { return t.ind; })),
+          under: daMeanCI(arr.map(function (t) { return t.under; })) };
+      });
+    }
+    return { tasks: tasks, byType: aggBy(function (t) { return t.cx; }), byDomain: aggBy(function (t) { return t.dm; }) };
+  }
+  var DA_PROV = {
+    over: { c: '#e67e22', name: 'Over-provision (Opus)' },
+    ind: { c: '#9a978f', name: 'Indifferent (tie)' },
+    under: { c: '#3d7bd6', name: 'Under-provision (Haiku)' }
+  };
+  // Horizontal grouped-bar SVG: one band per group, three bars (over/ind/under)
+  // each with a 95% CI whisker. Each group's bars are objects with `.value`
+  // (per-task) or `.mean` (aggregate) plus `.lo`/`.hi` in percent.
+  function daProvChart(groups, labelW) {
+    var W = 760, bandH = 46, top = 6, legendH = 24, bottom = 24;
+    var plotL = labelW, plotR = W - 14, plotW = plotR - plotL;
+    var H = top + legendH + groups.length * bandH + bottom;
+    function xs(v) { return plotL + Math.max(0, Math.min(100, v)) / 100 * plotW; }
+    var svg = svgEl('svg', { width: '100%', viewBox: '0 0 ' + W + ' ' + H, style: 'max-width:' + W + 'px;display:block;' });
+    [0, 25, 50, 75, 100].forEach(function (g) {                 // gridlines + % ticks
+      svg.appendChild(svgEl('line', { x1: xs(g), y1: top + legendH, x2: xs(g), y2: H - bottom, style: 'stroke:var(--line);stroke-width:1;' }));
+      svg.appendChild(svgEl('text', { x: xs(g), y: H - bottom + 14, 'text-anchor': 'middle', 'font-size': '10', style: 'fill:var(--muted);' }, [g + '%']));
+    });
+    var lx = plotL;                                            // legend
+    ['over', 'ind', 'under'].forEach(function (k) {
+      svg.appendChild(svgEl('rect', { x: lx, y: top, width: '11', height: '11', rx: '2', fill: DA_PROV[k].c }));
+      svg.appendChild(svgEl('text', { x: lx + 15, y: top + 9, 'font-size': '10.5', style: 'fill:var(--ink);' }, [DA_PROV[k].name]));
+      lx += 15 + DA_PROV[k].name.length * 6 + 16;
+    });
+    groups.forEach(function (grp, gi) {
+      var by = top + legendH + gi * bandH;
+      svg.appendChild(svgEl('text', { x: plotL - 7, y: by + bandH / 2 + 3, 'text-anchor': 'end', 'font-size': '10.5', style: 'fill:var(--ink);' }, [grp.label]));
+      var gap = 3, barH = (bandH - 2 * gap) / 3;
+      ['over', 'ind', 'under'].forEach(function (k, bi) {
+        var b = grp[k]; var val = b.value != null ? b.value : b.mean;
+        var y = by + gap + bi * barH + 1, h = barH - 2;
+        svg.appendChild(svgEl('rect', { x: plotL, y: y, width: Math.max(0, xs(val) - plotL), height: h, rx: '2', fill: DA_PROV[k].c }));
+        // Value label: after the bar, but right-aligned inside for near-full bars so
+        // it never clips at the edge.
+        var lblX = val >= 85 ? plotR - 2 : xs(val) + 3, anchor = val >= 85 ? 'end' : 'start';
+        svg.appendChild(svgEl('text', { x: lblX, y: y + h - 1, 'text-anchor': anchor, 'font-size': '9', style: 'fill:var(--muted);' }, [Math.round(val) + '%']));
+        if (b.lo != null && b.hi != null && !isNaN(b.lo) && !isNaN(b.hi)) {   // 95% CI whisker
+          var cy = y + h / 2;
+          svg.appendChild(svgEl('line', { x1: xs(b.lo), y1: cy, x2: xs(b.hi), y2: cy, style: 'stroke:var(--ink);stroke-width:1;' }));
+          svg.appendChild(svgEl('line', { x1: xs(b.lo), y1: cy - 3, x2: xs(b.lo), y2: cy + 3, style: 'stroke:var(--ink);stroke-width:1;' }));
+          svg.appendChild(svgEl('line', { x1: xs(b.hi), y1: cy - 3, x2: xs(b.hi), y2: cy + 3, style: 'stroke:var(--ink);stroke-width:1;' }));
+        }
+      });
+    });
+    return svg;
+  }
+  // Render the three provisioning charts into `container` from the aggregate.
+  function renderProvisioning(container, sheetMap) {
+    container.innerHTML = '';
+    var data = daProvisionData(sheetMap);
+    if (!data.tasks.length) return;                            // no per-task Responses to plot
+    container.appendChild(el('div', { class: 'aa-sub', style: 'margin:20px 0 4px;', text: 'Model provisioning — over / indifference / under' }));
+    container.appendChild(el('p', { class: 'aa-note', html: 'Preferring <b>Opus</b> = <b>over-provisioning</b> (a bigger model than a simple task needs), a <b>tie</b> = <b>indifference</b>, preferring <b>Haiku</b> = <b>under-provisioning</b>. Bars are the % of responses in each; whiskers are 95% CIs — <b>Wilson</b> per task, and a <b>t-interval across tasks</b> for the type/domain averages (each task weighted equally, so unequal responses per task don\'t bias the averages).' }));
+
+    var taskGroups = data.tasks.slice().sort(function (a, b) { return b.over - a.over; }).map(function (t) {
+      return { label: t.task + ' (n=' + t.n + ')',
+        over: { value: t.over, lo: t.overCI.lo * 100, hi: t.overCI.hi * 100 },
+        ind: { value: t.ind, lo: t.indCI.lo * 100, hi: t.indCI.hi * 100 },
+        under: { value: t.under, lo: t.underCI.lo * 100, hi: t.underCI.hi * 100 } };
+    });
+    var aggGroups = function (arr) { return arr.map(function (g) { return { label: g.label + ' (' + g.nTasks + ')', over: g.over, ind: g.ind, under: g.under }; }); };
+
+    container.appendChild(el('div', { class: 'aa-sub2', text: 'Per task (' + data.tasks.length + ' tasks, sorted by over-provision rate)' }));
+    var scroll = el('div', { class: 'aa-provscroll' }, [daProvChart(taskGroups, 82)]);
+    container.appendChild(scroll);
+    container.appendChild(el('div', { class: 'aa-sub2', text: 'By task type (average across tasks)' }));
+    container.appendChild(daProvChart(aggGroups(data.byType), 130));
+    container.appendChild(el('div', { class: 'aa-sub2', text: 'By domain (average across tasks)' }));
+    container.appendChild(daProvChart(aggGroups(data.byDomain), 190));
+  }
+
   function renderAnalytics() {
     clearRoot();
     var wrap = el('div', { class: 'aa-wrap aa-wrap2' });
@@ -1725,18 +1894,21 @@
     card.appendChild(el('div', { class: 'aa-row', style: 'margin-top:12px;' }, [dl]));
     var hint = el('p', { class: 'aa-note', text: 'Load data in Section 1 first.' });
     card.appendChild(hint);
+    var charts = el('div', {});
+    card.appendChild(charts);
     daRefs.updateSec2 = update;
     update();
     function statBox(v, l) { return el('div', { class: 'aa-statbox' }, [el('b', { text: String(v) }), el('span', { text: l })]); }
     function update() {
       var m = daState.sheetMap;
-      stats.innerHTML = '';
+      stats.innerHTML = ''; charts.innerHTML = '';
       if (!m) { dl.setAttribute('disabled', 'true'); hint.style.display = 'block'; return; }
       hint.style.display = 'none'; dl.removeAttribute('disabled');
       stats.appendChild(statBox((m.Responses || []).length, 'Responses'));
       stats.appendChild(statBox((m.Participants || []).length, 'Participants'));
       stats.appendChild(statBox((m.Sessions || []).length, 'Sessions'));
       stats.appendChild(statBox((m['Task summary'] || []).length, 'Tasks with data'));
+      renderProvisioning(charts, m);       // over / indifference / under-provisioning plots
     }
     function download() {
       var m = daState.sheetMap;
