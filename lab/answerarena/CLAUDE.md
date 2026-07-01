@@ -63,7 +63,7 @@ Served (`lab/answerarena/`):
 | --- | --- |
 | `index.html` | Shell: SEO, all participant CSS, `#arena-top` + `#arena-screen`, loads the scripts in order. |
 | `arena-config.js` | Public Firebase web config (placeholder until filled) + `ARENA_FB_READY`. Edit this after creating the Firebase project. |
-| `arena-data.js` | `window.ARENA_DEFAULTS`: texts, tourSteps, settings (incl. `twoByTwo`), registration/survey questions, practiceTask, `defaultTasks` (20 placeholders). |
+| `arena-data.js` | `window.ARENA_DEFAULTS`: texts, tourSteps, settings (incl. `twoByTwo`), registration/survey questions, practiceTask, `defaultTasks` (20 placeholders). Also `window.ARENA_COUNTRIES` (195+ list shared by the two `country` registration fields). |
 | `arena-store.js` | `window.ArenaStore`: Firebase + local backends behind one API. |
 | `arena-app.js` | Participant phase machine, comparison UI, 2x2 assignment, session join, resume. |
 | `admin.js` | Admin panel (`?admin`): Sessions, Tasks (Excel upload), Content, Registration, Survey, 2x2 & Settings, Participants + Excel export. |
@@ -182,7 +182,15 @@ hypothetical cost is analysable too; only the `translated` group sees the meter.
 
 Admin creates sessions from the **"Create a session"** card at the bottom of the
 left column (a "Create Session" button + a **setup summary** of the saved
-parameters a new session will use). Every session is **created open**; there is
+parameters a new session will use). The card has an optional **Session name** and
+an optional **Session ID** (custom code), mirroring the ideasearchlab admin: the
+code input live-normalises to a single word of capital letters and digits
+(`.toUpperCase().replace(/[^A-Z0-9]/g,'')`), is validated `^[A-Z0-9]{3,40}$`, and
+is checked for uniqueness via `Store.getSessionByCode()` before creating; a blank
+ID falls back to the auto-generated 6-char `code6()`. On success a vivid dashed
+**code box** (`.aa-codebox`) shows the session code (custom or auto) with a share
+hint. `Store.createSession` already honours a passed `data.code` (both backends
+fall back to `code6()` when it is blank). Every session is **created open**; there is
 no status picker. The right column has two cards: **Active sessions** and a
 separate **Closed sessions** card (shown only when there are closed ones). Each
 card shows a session's code + status, participant count + **2x2 conditions**
@@ -240,6 +248,20 @@ Responses row with `submitted = no (draft)`.
 
 ## 7. Gotchas to carry forward
 
+- **The registration form mirrors the ideasearchlab admin's registration form**
+  (same questions + dropdown options): UCD Student ID, Age, Gender (optional),
+  Nationality, Country of residence, Level of Study, Work Experience (0-50),
+  Occupation, English Fluency, then two consent checkboxes. To support it,
+  `buildField()` (arena-app.js) and the admin question editor (admin.js
+  `QUESTION_TYPES`) handle two extra field types beyond `select`/`radio`/
+  `text`/`number`/`textarea`: **`country`** (a `select` populated from the shared
+  `window.ARENA_COUNTRIES` list - the editor shows a "built-in country list" note
+  instead of an options box) and **`checkbox`** (a single required consent tick;
+  the label sits beside the box, not as a top label). `number` fields honour
+  optional `min`/`max` (rendered + validated; editable via the "Number range"
+  inputs in the admin). The **UCD Student ID keeps `system: 'participantId'`** so
+  it still stores into the participant-doc `participantId` slot / export column -
+  but it is now **required** (unlike the old optional Participant ID).
 - Keep model identities out of anything the participant sees.
 - Anonymous play needs the **Anonymous** sign-in provider enabled in the
   Firebase console; otherwise `Store.signInAnonymously()` fails

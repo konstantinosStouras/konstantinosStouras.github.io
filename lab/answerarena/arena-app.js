@@ -207,21 +207,36 @@
   /* ===================== REGISTRATION / LOGIN ===================== */
   function buildField(q) {
     var field = el('div', { class: 'a-field' });
-    field.appendChild(el('label', { text: q.label + (q.required ? ' *' : '') }));
+    var isCheck = q.type === 'checkbox';
+    // A consent-style checkbox carries its (often long) label next to the box,
+    // so don't also print it as the field's top label.
+    if (!isCheck) field.appendChild(el('label', { text: q.label + (q.required ? ' *' : '') }));
     if (q.help) field.appendChild(el('div', { class: 'a-help', text: q.help }));
     var input;
-    if (q.type === 'select') {
-      input = el('select', {}, [el('option', { value: '' }, ['Please select...'])].concat((q.options || []).map(function (o) { return el('option', { value: o }, [o]); })));
+    if (q.type === 'select' || q.type === 'country') {
+      // 'country' shares the select rendering but pulls the shared built-in
+      // 195-country list instead of the question's own options.
+      var opts = (q.type === 'country') ? (window.ARENA_COUNTRIES || []) : (q.options || []);
+      input = el('select', {}, [el('option', { value: '' }, ['Please select...'])].concat(opts.map(function (o) { return el('option', { value: o }, [o]); })));
     } else if (q.type === 'radio') {
       input = el('div', { class: 'a-radio' });
       (q.options || []).forEach(function (o) { input.appendChild(el('label', {}, [el('input', { type: 'radio', name: q.id, value: o }), o])); });
+    } else if (isCheck) {
+      input = el('div', { class: 'a-check' });
+      input.appendChild(el('label', {}, [el('input', { type: 'checkbox', value: 'Yes' }), q.label + (q.required ? ' *' : '')]));
     } else if (q.type === 'textarea') {
       input = el('textarea', { rows: '3' });
     } else {
-      input = el('input', { type: q.type || 'text', autocomplete: q.system === 'email' ? 'username' : (q.system === 'password' ? 'new-password' : 'off') });
+      var attrs = { type: q.type || 'text', autocomplete: q.system === 'email' ? 'username' : (q.system === 'password' ? 'new-password' : 'off') };
+      if (q.type === 'number') { if (q.min != null) attrs.min = String(q.min); if (q.max != null) attrs.max = String(q.max); attrs.step = String(q.step != null ? q.step : 1); }
+      input = el('input', attrs);
     }
     field.appendChild(input);
-    return { q: q, node: input, read: function () { if (q.type === 'radio') { var s = input.querySelector('input:checked'); return s ? s.value : ''; } return (input.value || '').trim(); } };
+    return { q: q, node: input, read: function () {
+      if (q.type === 'radio') { var s = input.querySelector('input:checked'); return s ? s.value : ''; }
+      if (isCheck) { var cb = input.querySelector('input'); return cb && cb.checked ? 'Yes' : ''; }
+      return (input.value || '').trim();
+    } };
   }
 
   function showRegister() {
@@ -242,7 +257,18 @@
       var answers = {}, participantId = '';
       for (var i = 0; i < fields.length; i++) {
         var f = fields[i], v = f.read();
-        if (f.q.required && !v) { err.textContent = 'Please complete: ' + f.q.label; return; }
+        if (f.q.required && !v) {
+          err.textContent = (f.q.type === 'checkbox') ? 'Please tick the box to continue.' : ('Please complete: ' + f.q.label);
+          return;
+        }
+        if (f.q.type === 'number' && v !== '') {
+          var num = Number(v);
+          if (isNaN(num) || (f.q.min != null && num < f.q.min) || (f.q.max != null && num > f.q.max)) {
+            var range = (f.q.min != null && f.q.max != null) ? (' (' + f.q.min + '-' + f.q.max + ')') : '';
+            err.textContent = 'Please enter a valid number for: ' + f.q.label + range;
+            return;
+          }
+        }
         if (f.q.system === 'participantId') participantId = v;
         else answers[f.q.id] = v;
       }
@@ -280,13 +306,12 @@
     // Firestore default-deny: the participant signed in anonymously fine, but the
     // write to their participant doc was refused because the security rules have
     // not been deployed (or the database is still locked). Nothing the participant
-    // typed is at fault - the session code and Participant ID are both optional. So
-    // don't surface the raw "Missing or insufficient permissions." string (which
-    // reads like a form error); show a clear message and log a precise fix hint for
-    // the organiser instead.
+    // typed is at fault. So don't surface the raw "Missing or insufficient
+    // permissions." string (which reads like a form error); show a clear message
+    // and log a precise fix hint for the organiser instead.
     if (c.indexOf('permission-denied') >= 0 || /insufficient permissions/i.test(msg)) {
       if (window.console) console.error('[Arena] Firestore write denied (permission-denied). Deploy the security rules: from _lab-arena-firebase/ run `firebase deploy --only firestore:rules` (and make sure the Anonymous sign-in provider is enabled). See _lab-arena-firebase/README.md section C.');
-      return "We couldn't start your session - the study isn't accepting responses just yet. This is a setup issue on our side, not anything you entered (the session code and Participant ID are both optional). Please let the study organiser know, or try again a little later.";
+      return "We couldn't start your session - the study isn't accepting responses just yet. This is a setup issue on our side, not anything you entered. Please let the study organiser know, or try again a little later.";
     }
     return msg || 'Something went wrong. Please try again.';
   }

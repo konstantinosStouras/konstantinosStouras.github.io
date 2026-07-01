@@ -52,7 +52,7 @@
     { key: 'survey', label: 'Survey page', fields: ['surveyTitle', 'surveyIntro'] },
     { key: 'thankyou', label: 'Thank-you page', fields: ['thankyouTitle', 'thankyouBody'] }
   ];
-  var QUESTION_TYPES = ['text', 'email', 'password', 'number', 'select', 'radio', 'textarea'];
+  var QUESTION_TYPES = ['text', 'number', 'select', 'radio', 'checkbox', 'country', 'textarea', 'email', 'password'];
 
   /* ---- DOM helpers ---- */
   function el(tag, attrs, kids) {
@@ -129,6 +129,10 @@
       + '.aa-sumrow:last-child{border-bottom:none;}'
       + '.aa-sumk{color:var(--muted);font-size:13px;}'
       + '.aa-sumv{font-weight:700;font-size:13px;text-align:right;min-width:0;overflow-wrap:anywhere;}'
+      + '.aa-codebox{border:1.5px dashed var(--accent);border-radius:12px;padding:14px 16px;margin-top:4px;background:rgba(230,126,34,.08);text-align:center;}'
+      + '.aa-codelabel{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;}'
+      + '.aa-codeval{font-size:26px;font-weight:800;letter-spacing:.16em;margin-top:4px;color:var(--ink);overflow-wrap:anywhere;}'
+      + '.aa-codebox a{color:var(--accent);}'
       + '.aa-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}'
       + '.aa-note{color:var(--muted);font-size:13px;line-height:1.6;}'
       + '.aa-q{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--qbg);overflow-wrap:break-word;}'
@@ -413,18 +417,38 @@
     card.appendChild(el('p', { class: 'aa-note', text: 'Creates an open session using the parameters and content above. Share its join link with participants; close it later (from the right) to stop new joins.' }));
     var nameI = el('input', { type: 'text', placeholder: 'Optional label, e.g. "Pilot group A"' });
     card.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: 'Session name (optional)' }), nameI]));
+    // Optional custom session code (mirrors the ideasearchlab admin): a single
+    // word of capital letters and digits. Live-normalised so whatever the admin
+    // types is exactly typeable back on the participant welcome screen (which
+    // uppercases the code the same way).
+    var idI = el('input', { type: 'text', placeholder: '(OPTIONAL) CUSTOM CODE', maxlength: '40', style: 'text-transform:uppercase;letter-spacing:.08em;' });
+    idI.addEventListener('input', function () { idI.value = idI.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 40); });
+    card.appendChild(el('div', { class: 'aa-field' }, [
+      el('label', { text: 'Session ID (optional)' }),
+      idI,
+      el('div', { class: 'aa-note', style: 'margin-top:4px;', text: 'Leave blank to auto-generate a short code. Single word — capital letters and digits only, no spaces or dashes (3–40 chars).' })
+    ]));
     var err = el('div', { class: 'aa-err' });
     var btn = el('button', { class: 'aa-btn', on: { click: create } }, ['Create Session']);
     card.appendChild(el('div', { class: 'aa-row' }, [btn]));
     card.appendChild(err);
+    var codeBox = el('div', { style: 'margin-top:10px;' });    card.appendChild(codeBox);
     var summary = el('div', { style: 'margin-top:16px;' });    card.appendChild(summary);
     nameI.addEventListener('keydown', function (e) { if (e.key === 'Enter') create(); });
+    idI.addEventListener('keydown', function (e) { if (e.key === 'Enter') create(); });
     summaryRefresh = renderSummary;   // let the flow / 2x2 cards refresh this after a save
     renderSummary();
 
     function factors() { return (cfg.settings && cfg.settings.twoByTwo && cfg.settings.twoByTwo.factors) || {}; }
     function create() {
       err.textContent = '';
+      // Optional custom code: normalise, then require a single 3–40 char word of
+      // capital letters and digits (blank = auto-generate a short code).
+      var code = (idI.value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (code && !/^[A-Z0-9]{3,40}$/.test(code)) {
+        err.textContent = 'Session ID must be 3–40 characters, capital letters and digits only (no spaces or dashes).';
+        return;
+      }
       var f = factors();
       var cond = { factors: { transparency: !!f.transparency, incentive: !!f.incentive } };  // snapshot the 2x2 onto the session
       var sct = cfg.settings || {};
@@ -433,14 +457,30 @@
       // THIS session with N comparisons").
       var flow = { comparisonsPerUser: sct.comparisonsPerUser || 0, randomizeOrder: sct.randomizeOrder !== false };
       btn.setAttribute('disabled', 'true'); btn.textContent = 'Creating...';
-      Store.createSession({ name: nameI.value.trim(), status: 'open', condition: cond, taskSetId: cfg.activeTaskSetId || null, comparisonsPerUser: flow.comparisonsPerUser, randomizeOrder: flow.randomizeOrder })
-        .then(function (s) { toast('Session created: ' + s.code); nameI.value = ''; btn.removeAttribute('disabled'); btn.textContent = 'Create Session'; if (sessionsRefresh) sessionsRefresh(); })
+      // If a custom code was given, make sure it isn't already taken before creating.
+      var precheck = code ? Store.getSessionByCode(code) : Promise.resolve(null);
+      precheck.then(function (existing) {
+        if (existing) return Promise.reject({ code: 'code-taken' });
+        return Store.createSession({ name: nameI.value.trim(), code: code || undefined, status: 'open', condition: cond, taskSetId: cfg.activeTaskSetId || null, comparisonsPerUser: flow.comparisonsPerUser, randomizeOrder: flow.randomizeOrder });
+      })
+        .then(function (s) { toast('Session created: ' + s.code); nameI.value = ''; idI.value = ''; btn.removeAttribute('disabled'); btn.textContent = 'Create Session'; showCreatedCode(s.code); if (sessionsRefresh) sessionsRefresh(); })
         .catch(function (e) {
           btn.removeAttribute('disabled'); btn.textContent = 'Create Session';
+          if (e && e.code === 'code-taken') { err.textContent = 'That Session ID is already in use. Please choose another.'; return; }
           var msg = (e && (e.code || e.message)) || 'error';
           err.textContent = 'Could not create the session: ' + msg + (/(permission|insufficient)/i.test(msg) ? ' - the Firestore rules may need (re)deploying.' : '');
           if (window.console) console.error('[Arena] createSession failed', e);
         });
+    }
+    // Vivid confirmation box with the session code (custom or auto-generated),
+    // shown just below the Create button after a successful create.
+    function showCreatedCode(codeVal) {
+      codeBox.innerHTML = '';
+      codeBox.appendChild(el('div', { class: 'aa-codebox' }, [
+        el('div', { class: 'aa-codelabel', text: 'Session code' }),
+        el('div', { class: 'aa-codeval', text: codeVal }),
+        el('div', { class: 'aa-note', style: 'margin-top:6px;', html: 'Share this code before your session begins. Participants join at: <a href="https://www.stouras.com/lab/answerarena/" target="_blank" rel="noopener">stouras.com/lab/answerarena</a>' })
+      ]));
     }
     function renderSummary() {
       var s = cfg.settings || {}, f = factors();
@@ -879,6 +919,16 @@
           var opt = el('textarea', { rows: '3', value: (q.options || []).join('\n'), style: 'margin-top:6px;' });
           opt.addEventListener('input', function () { q.options = opt.value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean); });
           qb.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: 'Options (one per line)' }), opt]));
+        }
+        if (q.type === 'country') {
+          qb.appendChild(el('div', { class: 'aa-note', style: 'margin-top:6px;', text: 'Uses the built-in country list — a dropdown of all countries. No options needed.' }));
+        }
+        if (q.type === 'number') {
+          var minI = el('input', { type: 'number', value: (q.min != null ? String(q.min) : ''), placeholder: 'min', style: 'max-width:90px;' });
+          var maxI = el('input', { type: 'number', value: (q.max != null ? String(q.max) : ''), placeholder: 'max', style: 'max-width:90px;' });
+          minI.addEventListener('input', function () { var v = minI.value.trim(); if (v === '') delete q.min; else q.min = Number(v); });
+          maxI.addEventListener('input', function () { var v = maxI.value.trim(); if (v === '') delete q.max; else q.max = Number(v); });
+          qb.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: 'Number range (optional)' }), el('div', { class: 'row', style: 'gap:8px;' }, [minI, maxI])]));
         }
         var help = el('input', { type: 'text', value: q.help || '', placeholder: 'Optional helper text' });
         help.addEventListener('input', function () { q.help = help.value; });
