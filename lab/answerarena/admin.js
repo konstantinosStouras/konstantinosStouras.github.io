@@ -1002,81 +1002,216 @@
   function exportExcel(parts, opts) {
     opts = opts || {};
     var only = opts.sessionId || null;
-    var keep = function (sid) { return !only || (sid || '') === only; };
     toast('Building export...');
     ensureXLSX().then(function (X) {
-      var pRows = [], rRows = [], eRows = [], sRows = [];
-      var chain = Promise.resolve();
-      parts.forEach(function (p) {
-        var uid = p._id, c = p.condition || {};
-        var completed = Object.keys(p.completedSessions || {});
-        var base = {
-          participant_id: p.participantId || '', email: p.email || '', account_id: uid,
-          status: p.status || '', current_session_id: p.sessionId || '',
-          played_session_ids: Object.keys(p.playedSessions || {}).join(', '),
-          completed_session_ids: completed.join(', '),
-          completed_this_session_at: only ? ((p.completedSessions && p.completedSessions[only]) ? fmtTs(p.completedSessions[only]) : 'no') : undefined,
-          // Per-participant 2x2 group as 1/0 (1 = treatment, 0 = control), blank if
-          // the factor was not varied for this participant's session.
-          cost_transparency: condBit(c.transparency, c.transparencyOn, 'translated'),
-          firm_pay: condBit(c.incentive, c.incentiveOn, 'firm'),
-          registered_at: fmtTs(p.createdAt)
-        };
-        if (!only) delete base.completed_this_session_at;
-        pRows.push(Object.assign({}, base, orderedAnswers('reg_', p.registration || {}, activeQuestions('registrationQuestions'), false)));
-        chain = chain.then(function () {
-          return Store.listResponses(uid).then(function (rs) {
-            // One ordered list per participant: the submitted answers plus the
-            // in-progress draft, sorted by session then shown_order (idx) so the
-            // Responses sheet reads 1, 2, 3, ... as the participant saw them.
-            var items = [];
-            rs.forEach(function (v) { if (keep(v.sessionId)) items.push({ v: v, sub: 'yes', ms: v.responseMs, ts: v.ts }); });
-            var dr = p.draftResponse;
-            if (dr && keep(dr.sessionId)) items.push({ v: dr, sub: 'no (draft)', ms: '', ts: dr.updatedAt });
-            var ord = function (x) { return (x == null || x === '' || !isFinite(Number(x))) ? 1e9 : Number(x); };
-            items.sort(function (a, b) {
-              var sa = a.v.sessionId || '', sb = b.v.sessionId || '';
-              if (sa !== sb) return sa < sb ? -1 : 1;
-              return ord(a.v.idx) - ord(b.v.idx);
-            });
-            items.forEach(function (it) { rRows.push(respRow(base, it.v, it.sub, it.ms, it.ts)); });
-          }).catch(function () {});
-        }).then(function () {
-          return Store.listEvents(uid).then(function (evs) {
-            evs.sort(function (a, b) { return tsMs(a.ts) - tsMs(b.ts); });
-            evs.forEach(function (v) {
-              if (!keep(v.sessionId)) return;
-              var et = v.type === 'choice' ? 'side_choice' : v.type === 'preference' ? 'preference' : v.type === 'satisfA' ? 'satisfaction_answer_A' : v.type === 'satisfB' ? 'satisfaction_answer_B' : (v.type || '');
-              eRows.push({ participant_id: base.participant_id, email: base.email, session_id: v.sessionId || '', shown_order: v.idx != null ? v.idx + 1 : '', task_id: v.taskId || '', event_type: et, event_value: v.value != null ? v.value : '', model: modelName(v.model), event_at: fmtTs(v.ts), event_ts: v.ts || '' });
-            });
-          }).catch(function () {});
-        }).then(function () {
-          return Store.listSurveys(uid).then(function (svs) {
-            (svs || []).forEach(function (sv) { if (sv && keep(sv.sessionId || sv.id)) sRows.push(Object.assign({ participant_id: base.participant_id, email: base.email, session_id: sv.sessionId || sv.id || '', completed_at: fmtTs(sv.completedAt) }, orderedAnswers('', sv.answers || {}, activeQuestions('surveyQuestions'), true))); });
-          }).catch(function () {});
+      // Load the active task set and the session list up front. The task set is the
+      // lookup table that turns each task_id into its full description + the two
+      // model outputs (the Tasks and Task summary sheets - the task is the unit of
+      // analysis); the session list documents every session play and maps internal
+      // session ids to their human join codes on every sheet.
+      return Promise.all([
+        Store.loadActiveTasks().catch(function () { return { tasks: [] }; }),
+        Store.listSessions().catch(function () { return []; })
+      ]).then(function (pre) {
+        var activeSet = pre[0] || { tasks: [] };
+        var sessions = pre[1] || [];
+        var sessById = {}; sessions.forEach(function (s) { if (s && s.id != null) sessById[String(s.id)] = s; });
+        // Also load the task set each in-scope session was pinned to, so a session
+        // whose set differs from the current active set (the admin changed it since)
+        // still resolves its task_ids to the text participants actually saw. The
+        // active set is the base; each pinned set overlays it (what was shown wins).
+        var pinnedIds = {};
+        sessions.forEach(function (s) { if (s.taskSetId && (!only || s.id === only)) pinnedIds[s.taskSetId] = true; });
+        return Promise.all(Object.keys(pinnedIds).map(function (id) {
+          return (Store.loadTaskSet ? Store.loadTaskSet(id) : Promise.resolve({ tasks: [] })).catch(function () { return { tasks: [] }; });
+        })).then(function (pinnedSets) {
+          return buildWorkbook(X, activeSet, pinnedSets, sessions, sessById, parts, only, opts);
         });
-      });
-      chain.then(function () {
-        var wb = X.utils.book_new();
-        X.utils.book_append_sheet(wb, X.utils.json_to_sheet(buildConventions(only)), 'Conventions');
-        X.utils.book_append_sheet(wb, X.utils.json_to_sheet(pRows.length ? pRows : [{}]), 'Participants');
-        X.utils.book_append_sheet(wb, X.utils.json_to_sheet(rRows.length ? rRows : [{}]), 'Responses');
-        X.utils.book_append_sheet(wb, X.utils.json_to_sheet(eRows.length ? eRows : [{}]), 'Events');
-        X.utils.book_append_sheet(wb, X.utils.json_to_sheet(sRows.length ? sRows : [{}]), 'Survey');
-        var stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-        var fname = only ? ('answerarena-session-' + (opts.sessionCode || only) + '-' + stamp + '.xlsx') : ('answerarena-data-' + stamp + '.xlsx');
-        X.writeFile(wb, fname);
-        toast('Export ready.');
       });
     }).catch(function (e) { toast('Export failed: ' + ((e && e.message) || 'error')); });
   }
+  // Assemble and download the workbook once the task sets + sessions are loaded.
+  function buildWorkbook(X, activeSet, pinnedSets, sessions, sessById, parts, only, opts) {
+    return Promise.resolve().then(function () {
+        var keep = function (sid) { return !only || (sid || '') === only; };
+        var activeById = {}; (activeSet.tasks || []).forEach(function (t) { if (t && t.id != null) activeById[String(t.id)] = t; });
+        var taskById = {}; Object.keys(activeById).forEach(function (k) { taskById[k] = activeById[k]; });
+        (pinnedSets || []).forEach(function (set) { ((set && set.tasks) || []).forEach(function (t) { if (t && t.id != null) taskById[String(t.id)] = t; }); });
+        var pRows = [], rRows = [], eRows = [], sRows = [];
+        // Per-task aggregates for the Task summary sheet, and the set of every
+        // task_id that shows up anywhere in the exported data (so the Tasks sheet
+        // lists them even if the active set has since changed).
+        var agg = {}, seenTaskIds = {};
+        function aggOf(id) { return agg[id] || (agg[id] = { n: 0, baseline: 0, frontier: 0, tie: 0, prefSum: 0, prefN: 0, msSum: 0, msN: 0 }); }
+        var chain = Promise.resolve();
+        parts.forEach(function (p) {
+          var uid = p._id, c = p.condition || {};
+          var completed = Object.keys(p.completedSessions || {});
+          var base = {
+            participant_id: p.participantId || '', account_id: uid, email: p.email || '',
+            status: p.status || '', current_session_id: p.sessionId || '',
+            current_session_code: sessCode(p.sessionId, sessById),
+            played_session_ids: Object.keys(p.playedSessions || {}).join(', '),
+            completed_session_ids: completed.join(', '),
+            completed_this_session_at: only ? ((p.completedSessions && p.completedSessions[only]) ? fmtTs(p.completedSessions[only]) : 'no') : undefined,
+            // Per-participant 2x2 group as 1/0 (1 = treatment, 0 = control), blank if
+            // the factor was not varied for this participant's session.
+            cost_transparency: condBit(c.transparency, c.transparencyOn, 'translated'),
+            firm_pay: condBit(c.incentive, c.incentiveOn, 'firm'),
+            registered_at: fmtTs(p.createdAt)
+          };
+          if (!only) delete base.completed_this_session_at;
+          pRows.push(Object.assign({}, base, orderedAnswers('reg_', p.registration || {}, activeQuestions('registrationQuestions'), false)));
+          chain = chain.then(function () {
+            return Store.listResponses(uid).then(function (rs) {
+              // One ordered list per participant: the submitted answers plus the
+              // in-progress draft, sorted by session then shown_order (idx) so the
+              // Responses sheet reads 1, 2, 3, ... as the participant saw them.
+              var items = [];
+              rs.forEach(function (v) { if (keep(v.sessionId)) items.push({ v: v, sub: 'yes', ms: v.responseMs, ts: v.ts }); });
+              var dr = p.draftResponse;
+              if (dr && keep(dr.sessionId)) items.push({ v: dr, sub: 'no (draft)', ms: '', ts: dr.updatedAt });
+              var ord = function (x) { return (x == null || x === '' || !isFinite(Number(x))) ? 1e9 : Number(x); };
+              items.sort(function (a, b) {
+                var sa = a.v.sessionId || '', sb = b.v.sessionId || '';
+                if (sa !== sb) return sa < sb ? -1 : 1;
+                return ord(a.v.idx) - ord(b.v.idx);
+              });
+              items.forEach(function (it) {
+                rRows.push(respRow(base, it.v, it.sub, it.ms, it.ts, taskById, sessById));
+                if (it.v.taskId != null) seenTaskIds[String(it.v.taskId)] = true;
+                // Aggregate only SUBMITTED comparisons into the per-task summary.
+                if (it.sub === 'yes' && it.v.taskId != null) {
+                  var a = aggOf(String(it.v.taskId)); a.n++;
+                  var cm = it.v.chosenOutput;
+                  if (cm === 'o1') a.baseline++; else if (cm === 'o2') a.frontier++; else if (cm === 'tie') a.tie++;
+                  var pm = Number(it.v.prefModelValue); if (it.v.prefModelValue != null && isFinite(pm)) { a.prefSum += pm; a.prefN++; }
+                  var ms = Number(it.v.responseMs); if (it.v.responseMs != null && isFinite(ms)) { a.msSum += ms; a.msN++; }
+                }
+              });
+            }).catch(function () {});
+          }).then(function () {
+            return Store.listEvents(uid).then(function (evs) {
+              evs.sort(function (a, b) { return tsMs(a.ts) - tsMs(b.ts); });
+              evs.forEach(function (v) {
+                if (!keep(v.sessionId)) return;
+                if (v.taskId != null) seenTaskIds[String(v.taskId)] = true;
+                var et = v.type === 'choice' ? 'side_choice' : v.type === 'preference' ? 'preference' : v.type === 'satisfA' ? 'satisfaction_answer_A' : v.type === 'satisfB' ? 'satisfaction_answer_B' : (v.type || '');
+                eRows.push({ participant_id: base.participant_id, account_id: uid, email: base.email, session_id: v.sessionId || '', session_code: sessCode(v.sessionId, sessById), shown_order: v.idx != null ? v.idx + 1 : '', task_id: v.taskId || '', event_type: et, event_value: v.value != null ? v.value : '', model: modelName(v.model), event_at: fmtTs(v.ts), event_ts: v.ts || '' });
+              });
+            }).catch(function () {});
+          }).then(function () {
+            return Store.listSurveys(uid).then(function (svs) {
+              (svs || []).forEach(function (sv) { if (sv && keep(sv.sessionId || sv.id)) sRows.push(Object.assign({ participant_id: base.participant_id, account_id: uid, email: base.email, session_id: sv.sessionId || sv.id || '', session_code: sessCode(sv.sessionId || sv.id, sessById), completed_at: fmtTs(sv.completedAt) }, orderedAnswers('', sv.answers || {}, activeQuestions('surveyQuestions'), true))); });
+            }).catch(function () {});
+          });
+        });
+        return chain.then(function () {
+          // Tasks sheet: one row per task in the active set OR seen in the data, so
+          // every task_id used elsewhere resolves to its full text and outputs.
+          Object.keys(taskById).forEach(function (id) { seenTaskIds[id] = true; });
+          var taskRows = Object.keys(seenTaskIds).sort(taskIdSort).map(function (id) {
+            var t = taskById[id] || {}, a = agg[id];
+            return {
+              task_id: id, title: t.title || '', domain: t.domain || '', complexity: t.complexity || '',
+              in_active_set: activeById[id] ? 'yes' : 'no', n_responses: a ? a.n : 0,
+              task_description: cellCap(t.task || t.prompt || ''),
+              output_baseline: cellCap(t.outputA || ''), output_frontier: cellCap(t.outputB || ''),
+              cost_baseline_usd: t.costA != null ? t.costA : '', cost_frontier_usd: t.costB != null ? t.costB : ''
+            };
+          });
+          // Task summary sheet: analysis-ready aggregates, one row per task, over
+          // the submitted responses in this export's scope.
+          var sumRows = Object.keys(agg).sort(taskIdSort).map(function (id) {
+            var a = agg[id], t = taskById[id] || {}, decisive = a.baseline + a.frontier;
+            return {
+              task_id: id, title: t.title || '', domain: t.domain || '', complexity: t.complexity || '',
+              n_responses: a.n, n_baseline_preferred: a.baseline, n_frontier_preferred: a.frontier, n_tie: a.tie,
+              frontier_win_rate: decisive ? round4(a.frontier / decisive) : '',
+              mean_preference_model: a.prefN ? round4(a.prefSum / a.prefN) : '',
+              mean_response_ms: a.msN ? Math.round(a.msSum / a.msN) : '',
+              cost_baseline_usd: t.costA != null ? t.costA : '', cost_frontier_usd: t.costB != null ? t.costB : ''
+            };
+          });
+          var sessRows = buildSessionRows(sessions, parts, only);
+          var wb = X.utils.book_new();
+          X.utils.book_append_sheet(wb, X.utils.json_to_sheet(buildConventions(only)), 'Conventions');
+          X.utils.book_append_sheet(wb, X.utils.json_to_sheet(sessRows.length ? sessRows : [{}]), 'Sessions');
+          X.utils.book_append_sheet(wb, X.utils.json_to_sheet(pRows.length ? pRows : [{}]), 'Participants');
+          X.utils.book_append_sheet(wb, X.utils.json_to_sheet(taskRows.length ? taskRows : [{}]), 'Tasks');
+          X.utils.book_append_sheet(wb, X.utils.json_to_sheet(sumRows.length ? sumRows : [{}]), 'Task summary');
+          X.utils.book_append_sheet(wb, X.utils.json_to_sheet(rRows.length ? rRows : [{}]), 'Responses');
+          X.utils.book_append_sheet(wb, X.utils.json_to_sheet(eRows.length ? eRows : [{}]), 'Events');
+          X.utils.book_append_sheet(wb, X.utils.json_to_sheet(sRows.length ? sRows : [{}]), 'Survey');
+          var stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+          var fname = only ? ('answerarena-session-' + (opts.sessionCode || only) + '-' + stamp + '.xlsx') : ('answerarena-data-' + stamp + '.xlsx');
+          X.writeFile(wb, fname);
+          toast('Export ready.');
+        });
+    });
+  }
+  // Human session code for an internal session id ('_none' = the default no-code
+  // play; unknown ids fall back to the raw id so nothing is lost).
+  function sessCode(id, map) {
+    if (id == null || id === '') return '';
+    if (String(id) === '_none') return '(default / no code)';
+    var s = map && map[String(id)];
+    return (s && s.code) ? s.code : String(id);
+  }
+  // Excel caps a cell at 32,767 chars; keep long model outputs safely under it so
+  // the whole workbook never fails to write on one oversized answer.
+  function cellCap(s) { s = String(s == null ? '' : s); return s.length > 32000 ? s.slice(0, 32000) + '… [truncated]' : s; }
+  function round4(n) { return Math.round(n * 10000) / 10000; }
+  // Sort task ids naturally so T2 precedes T10 (falls back to string order).
+  function taskIdSort(a, b) {
+    var na = parseInt(String(a).replace(/[^0-9]/g, ''), 10), nb = parseInt(String(b).replace(/[^0-9]/g, ''), 10);
+    if (isFinite(na) && isFinite(nb) && na !== nb) return na - nb;
+    return String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0;
+  }
+  // The Sessions sheet: one row per session (documenting each session play), with
+  // its snapshotted 2x2 + flow settings and a participant count from this export's
+  // scope. Adds a synthetic row for the default no-code play if anyone took it.
+  function buildSessionRows(sessions, parts, only) {
+    var counts = {};
+    (parts || []).forEach(function (p) {
+      var seen = {};
+      if (p.sessionId) seen[p.sessionId] = true;
+      Object.keys(p.playedSessions || {}).forEach(function (sid) { seen[sid] = true; });
+      Object.keys(p.completedSessions || {}).forEach(function (sid) { seen[sid] = true; });
+      Object.keys(seen).forEach(function (sid) { counts[sid] = (counts[sid] || 0) + 1; });
+    });
+    var list = (sessions || []).slice();
+    if (only) list = list.filter(function (s) { return s.id === only; });
+    list.sort(function (a, b) { return tsMs(b.createdAt) - tsMs(a.createdAt); });
+    var rows = list.map(function (s) {
+      var f = (s.condition && s.condition.factors) || {};
+      var lim = s.comparisonsPerUser;
+      return {
+        session_id: s.id || '', session_code: s.code || '', name: s.name || '', status: s.status || 'open',
+        cost_transparency_varied: f.transparency ? 'yes' : 'no', firm_pay_varied: f.incentive ? 'yes' : 'no',
+        comparisons_per_participant: (lim == null) ? '(live setting)' : ((Number(lim) || 0) || 'whole active set'),
+        randomize_order: (s.randomizeOrder === false) ? 'no' : 'yes',
+        task_set_id: s.taskSetId || '', participants: counts[s.id] || 0, created_at: fmtTs(s.createdAt)
+      };
+    });
+    if ((!only || only === '_none') && counts['_none']) {
+      rows.push({ session_id: '_none', session_code: '(default / no code)', name: 'Default (no session code)', status: 'n/a', cost_transparency_varied: 'n/a', firm_pay_varied: 'n/a', comparisons_per_participant: '(live setting)', randomize_order: 'n/a', task_set_id: '', participants: counts['_none'], created_at: '' });
+    }
+    return rows;
+  }
   // o1/o2 are the underlying models: o1 = outputA = baseline, o2 = outputB = frontier.
   function modelName(id) { return id === 'o1' ? 'baseline' : (id === 'o2' ? 'frontier' : (id || '')); }
-  // One Responses row (shared by submitted answers and the saved draft).
-  function respRow(base, v, submitted, responseMs, ts) {
+  // One Responses row (shared by submitted answers and the saved draft). taskById
+  // adds the task's title/domain/complexity so each row is self-describing for a
+  // task-level pivot without a lookup; sessById maps the session id to its code.
+  function respRow(base, v, submitted, responseMs, ts, taskById, sessById) {
+    var t = (taskById && v.taskId != null && taskById[String(v.taskId)]) || {};
     return {
-      participant_id: base.participant_id, email: base.email, session_id: v.sessionId || '',
-      shown_order: v.idx != null ? v.idx + 1 : '', task_id: v.taskId, submitted: submitted,
+      participant_id: base.participant_id, account_id: base.account_id, email: base.email,
+      session_id: v.sessionId || '', session_code: sessCode(v.sessionId, sessById || {}),
+      shown_order: v.idx != null ? v.idx + 1 : '', task_id: v.taskId,
+      task_title: t.title || '', task_domain: t.domain || '', task_complexity: t.complexity || '',
+      submitted: submitted,
       choice: v.choice || '', chosen_model: modelName(v.chosenOutput),
       left_model: modelName(v.leftOutput), right_model: modelName(v.rightOutput),
       preference: v.prefLabel || '',
@@ -1096,15 +1231,34 @@
     if (level == null || level === '') return '';
     return level === treatmentLevel ? 1 : 0;
   }
-  // The "Conventions" sheet: documents every column used in the export.
+  // The "Conventions" sheet: documents every sheet and column used in the export
+  // and the keys that join them - the source of truth for the workbook.
   function buildConventions(only) {
     var rows = [];
     function add(sheet, col, desc) { rows.push({ sheet: sheet, column: col, description: desc }); }
-    add('Participants', 'participant_id', "The participant's own ID (e.g. a Prolific ID) if they entered one; blank otherwise.");
+    // How the workbook fits together (the two unique IDs and how the sheets join).
+    add('(guide)', 'workbook', 'Sheets: Sessions (one row per session play) · Participants (one row per person) · Tasks (one row per task pair = the unit of analysis) · Task summary (per-task aggregates) · Responses (one row per comparison) · Events (one row per click/change) · Survey (one row per completed survey).');
+    add('(guide)', 'participant key', 'account_id is the unique, always-present participant ID (the Firebase anonymous UID). Join every sheet to Participants on account_id. participant_id (a Prolific-style ID) and email are OPTIONAL and usually blank, so do NOT join on them.');
+    add('(guide)', 'task key', 'task_id is the unique task (task-pair) ID. Join Responses / Events / Task summary to Tasks on task_id to get the task description and the two answers. The task is the intended unit of analysis - use the Task summary sheet, or group Responses by task_id.');
+    add('(guide)', 'session key', 'session_id is the internal session ID; session_code is its human join code. "_none" = the default no-code play. Join to the Sessions sheet on session_id.');
+    add('(guide)', 'models', 'Two systems are compared, never named to participants: baseline (= Output A) and frontier (= Output B). Left/right placement is randomised per participant, so use *_model columns, not left/right.');
+    add('Sessions', 'session_id', 'Internal unique ID of the session.');
+    add('Sessions', 'session_code', 'The 6-character join code participants enter (or "_none" for the default no-code play).');
+    add('Sessions', 'name', 'Optional admin label for the session.');
+    add('Sessions', 'status', 'open (accepting joins), closed (no new joins), or n/a for the default play.');
+    add('Sessions', 'cost_transparency_varied', 'yes if the cost-transparency factor was varied between participants in this session (snapshotted at creation); otherwise no.');
+    add('Sessions', 'firm_pay_varied', 'yes if the firm-pay factor was varied between participants in this session; otherwise no.');
+    add('Sessions', 'comparisons_per_participant', 'How many comparisons each participant is shown ("whole active set" = all of them), snapshotted at creation.');
+    add('Sessions', 'randomize_order', 'yes if the comparison order is randomised per participant.');
+    add('Sessions', 'task_set_id', 'Internal ID of the task set this session was pinned to at creation (blank = built-in default / live active set).');
+    add('Sessions', 'participants', 'Number of participants (in this export) who played this session.');
+    add('Sessions', 'created_at', 'When the session was created.');
+    add('Participants', 'participant_id', "The participant's own ID (e.g. a Prolific ID) if they entered one; blank otherwise. NOT a reliable key - use account_id.");
+    add('Participants', 'account_id', 'Unique, always-present participant ID (Firebase anonymous UID). The key to join every other sheet on.');
     add('Participants', 'email', "Legacy column - players take part anonymously, so this is blank (kept for older accounts).");
-    add('Participants', 'account_id', 'Internal unique account ID (Firebase anonymous UID) for this participant.');
     add('Participants', 'status', 'Where the participant is in the flow: registered, playing, survey, or done.');
     add('Participants', 'current_session_id', 'Internal ID of the session the participant is currently in.');
+    add('Participants', 'current_session_code', 'Join code of the session the participant is currently in.');
     add('Participants', 'played_session_ids', 'Internal IDs of every session the participant has started (comma-separated).');
     add('Participants', 'completed_session_ids', 'Internal IDs of every session the participant has finished (comma-separated).');
     if (only) add('Participants', 'completed_this_session_at', 'When the participant finished THIS session, or "no" if not finished.');
@@ -1113,11 +1267,37 @@
     add('Participants', 'registered_at', 'When the participant registered.');
     var regQs = (cfg.registrationQuestions && cfg.registrationQuestions.length) ? cfg.registrationQuestions : (D.registrationQuestions || []);
     regQs.forEach(function (q) { if (!q.system) add('Participants', 'reg_' + q.id, 'Registration answer: ' + (q.label || q.id)); });
-    add('Responses', 'participant_id', "The participant's ID (see Participants).");
-    add('Responses', 'email', "The participant's e-mail.");
+    add('Tasks', 'task_id', 'Unique task (task-pair) ID - the Task ID column of the uploaded set. Join key for Responses / Events / Task summary.');
+    add('Tasks', 'title', 'Short title of the task (if provided).');
+    add('Tasks', 'domain', 'Task domain/category (if provided).');
+    add('Tasks', 'complexity', 'Task complexity label (if provided).');
+    add('Tasks', 'in_active_set', 'yes if this task is in the current active task set; no if it only appears in older recorded data (e.g. the active set changed since).');
+    add('Tasks', 'n_responses', 'How many submitted comparisons in this export used this task.');
+    add('Tasks', 'task_description', 'The full problem text shown to participants (the task). Long text is capped at ~32,000 characters.');
+    add('Tasks', 'output_baseline', "The baseline model's answer (shown as Output A). Capped at ~32,000 characters.");
+    add('Tasks', 'output_frontier', "The frontier model's answer (shown as Output B). Capped at ~32,000 characters.");
+    add('Tasks', 'cost_baseline_usd', 'US$ cost of the baseline answer for this task (blank if none provided).');
+    add('Tasks', 'cost_frontier_usd', 'US$ cost of the frontier answer for this task (blank if none provided).');
+    add('Task summary', 'task_id', 'The task these aggregates are for (join to Tasks for the text). One row per task.');
+    add('Task summary', 'title / domain / complexity', 'Copied from Tasks for convenience.');
+    add('Task summary', 'n_responses', 'Number of submitted comparisons for this task in this export.');
+    add('Task summary', 'n_baseline_preferred', 'How many participants preferred the baseline answer.');
+    add('Task summary', 'n_frontier_preferred', 'How many participants preferred the frontier answer.');
+    add('Task summary', 'n_tie', 'How many participants marked the two answers equally good.');
+    add('Task summary', 'frontier_win_rate', 'n_frontier_preferred / (n_frontier_preferred + n_baseline_preferred), i.e. the frontier win share among decisive (non-tie) choices; blank if all ties.');
+    add('Task summary', 'mean_preference_model', 'Mean of preference_model over this task (-3..+3): negative favours baseline, positive favours frontier.');
+    add('Task summary', 'mean_response_ms', 'Mean decision time (milliseconds) for this task.');
+    add('Task summary', 'cost_baseline_usd / cost_frontier_usd', 'The two answers\' US$ costs for this task (from the uploaded set).');
+    add('Responses', 'participant_id', "The participant's optional ID (see Participants); usually blank - join on account_id.");
+    add('Responses', 'account_id', 'Unique participant ID (see Participants). The reliable join key.');
+    add('Responses', 'email', "The participant's e-mail (legacy; usually blank).");
     add('Responses', 'session_id', 'Internal ID of the session this comparison belongs to.');
+    add('Responses', 'session_code', 'Join code of that session ("_none" = default no-code play).');
     add('Responses', 'shown_order', "Position of this comparison in the participant's randomised sequence (1 = first shown).");
-    add('Responses', 'task_id', 'ID of the task pair shown (e.g. T18); the Task ID column of the uploaded set.');
+    add('Responses', 'task_id', 'ID of the task pair shown (e.g. T18); join to Tasks for the full description.');
+    add('Responses', 'task_title', 'Title of the task shown (copied from the task set for convenience).');
+    add('Responses', 'task_domain', 'Domain of the task shown.');
+    add('Responses', 'task_complexity', 'Complexity of the task shown.');
     add('Responses', 'submitted', '"yes" for a submitted answer; "no (draft)" for an in-progress answer saved if the participant left before pressing Next.');
     add('Responses', 'choice', 'Which side the participant preferred: left, right, or tie (equally good).');
     add('Responses', 'chosen_model', 'Which underlying model the participant preferred: baseline, frontier, or tie.');
@@ -1135,19 +1315,23 @@
     add('Responses', 'decided_ts', 'Decision time as epoch milliseconds (useful for sorting).');
     add('Responses', 'cost_transparency', "The participant's cost-transparency group, 1/0 (see Participants).");
     add('Responses', 'firm_pay', "The participant's firm-pay group, 1/0 (see Participants).");
-    add('Events', 'participant_id', "The participant's ID.");
-    add('Events', 'email', "The participant's e-mail.");
+    add('Events', 'participant_id', "The participant's optional ID (usually blank - join on account_id).");
+    add('Events', 'account_id', 'Unique participant ID (see Participants). The reliable join key.');
+    add('Events', 'email', "The participant's e-mail (legacy; usually blank).");
     add('Events', 'session_id', 'Internal ID of the session.');
+    add('Events', 'session_code', 'Join code of that session.');
     add('Events', 'shown_order', 'Position of the comparison this event refers to (1 = first shown).');
     add('Events', 'task_id', 'ID of the task pair.');
     add('Events', 'event_type', 'What the participant did: side_choice (tapped an answer or "equally good") or preference (moved the 7-point bar; event_value is -3..+3). Older data may also have satisfaction_answer_A/B.');
-    add('Events', 'event_value', 'The value set: left/right/tie for a side_choice, -3..+3 for a preference (older data: 1-5 for a satisfaction rating).');
-    add('Events', 'model', 'Which underlying model the event refers to: baseline, frontier, or tie.');
+    add('Events', 'event_value', 'The value set: left/right/tie for a side_choice, -3..+3 for a preference in the DISPLAYED A/B frame (A = left; join to the matching Responses row for the model framing). Older data: 1-5 for a satisfaction rating.');
+    add('Events', 'model', 'For a side_choice, which underlying model was tapped: baseline, frontier, or tie. Blank for preference events.');
     add('Events', 'event_at', 'Local date/time of the event.');
     add('Events', 'event_ts', 'Event time as epoch milliseconds. Every change is logged, so re-selections appear as multiple rows; the last per comparison is the final value.');
-    add('Survey', 'participant_id', "The participant's ID.");
-    add('Survey', 'email', "The participant's e-mail.");
+    add('Survey', 'participant_id', "The participant's optional ID (usually blank - join on account_id).");
+    add('Survey', 'account_id', 'Unique participant ID (see Participants). The reliable join key.');
+    add('Survey', 'email', "The participant's e-mail (legacy; usually blank).");
     add('Survey', 'session_id', 'Internal ID of the session the survey was taken for.');
+    add('Survey', 'session_code', 'Join code of that session.');
     add('Survey', 'completed_at', 'When the participant submitted the survey for this session.');
     var surQs = (cfg.surveyQuestions && cfg.surveyQuestions.length) ? cfg.surveyQuestions : (D.surveyQuestions || []);
     surQs.forEach(function (q) { add('Survey', q.id, 'Survey answer: ' + (q.label || q.id)); });
