@@ -59,3 +59,23 @@ the app, edit `_ideasearchlab-src/`, then run `ideasearchlab-deploy-update.bat`
 The retired static prototype `lab/brainstorming/` (an older Google-Sheets-backed
 version of the same Ideation Challenge, superseded by `lab/ideasearchlab/`) was
 removed.
+
+## `/lab/search` — self-contained "Searching the Unknown" replica
+
+`lab/search/index.html` is a **single, self-contained** static page (no build
+step, no backend, no external CDN) that recreates the online experiment app for
+the "Searching the Unknown" sequential-search study by Ilya Morozov & Suraj
+Malladi (Kellogg). It reproduces the full flow client-side: consent + Prolific-ID
+entry (with the case-sensitive treatment codes `Unrestricted`, `High_Variability`,
+`Low_Variability`, `Sweet_Spot`, `Known_Maximum`), comprehension-gated
+instructions (7 screens), 25 search rounds split into Part I (13) and Part II
+(12, with a few free pre-revealed prizes), the per-round payoff = best prize −
+total reveal fees ($0.05 each), a two-round payment lottery, and an exit survey.
+The prize maps are generated in the browser per Section IV of the paper
+(`genPrizesRaw`): Unrestricted = i.i.d. U[0,1]; High/Low Variability = a bounded
+random walk with step ±10¢/±5¢ from a random peak; Sweet Spot = the same walk
+with a mass-at-zero downward shock (quasiconcave "mountain"); Known Maximum = the
+High-Variability walk with the peak pinned to $1. **No data is collected or
+transmitted.** The plot is drawn as inline SVG. To change behavior, edit the
+constants near the top of the `<script>` (`FEE`, `PART1_ROUNDS`, `TOTAL_ROUNDS`,
+`PART2_PREREVEAL`) or the treatment logic in `genPrizesRaw`.
