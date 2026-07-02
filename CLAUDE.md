@@ -60,14 +60,17 @@ The retired static prototype `lab/brainstorming/` (an older Google-Sheets-backed
 version of the same Ideation Challenge, superseded by `lab/ideasearchlab/`) was
 removed.
 
-## `/lab/search` — self-contained "Searching the Unknown" replica
+## `/lab/search` — self-contained "Space Exploration" search-experiment replica
 
 `lab/search/index.html` is a **single, self-contained** static page (no build
 step, no backend, no external CDN) that recreates the online experiment app for
-the "Searching the Unknown" sequential-search study by Ilya Morozov & Suraj
-Malladi (Kellogg). It reproduces the full flow client-side: consent + Prolific-ID
-entry (with the case-sensitive treatment codes `Unrestricted`, `High_Variability`,
-`Low_Variability`, `Sweet_Spot`, `Known_Maximum`), comprehension-gated
+the sequential-search study in the paper **"Space Exploration" (EC 2026)** by
+Suraj Malladi, Alejandro Martínez-Marquina & Ilya Morozov. (The reproduced
+consent form keeps the original IRB study title, "Searching the Unknown".)
+It reproduces the full flow client-side: consent + Prolific-ID
+entry (with the treatment codes `Unrestricted`, `High_Variability`,
+`Low_Variability`, `Sweet_Spot`, `Known_Maximum` — matched leniently, ignoring
+case/spaces/hyphens/underscores; any other ID randomizes), comprehension-gated
 instructions (7 screens), 25 search rounds split into Part I (13) and Part II
 (12, with a few free pre-revealed prizes), the per-round payoff = best prize −
 total reveal fees ($0.05 each), a two-round payment lottery, and an exit survey.

@@ -3,17 +3,17 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Search Game &mdash; Searching the Unknown</title>
-  <meta name="description" content="An interactive replica of the “Searching the Unknown” spatial-search experiment (Morozov &amp; Malladi): reveal hidden prizes across 100 positions, pay a fee per reveal, and decide when to stop. Five treatments (Unrestricted, High/Low Variability, Sweet Spot, Known Maximum)." />
-  <meta name="keywords" content="sequential search, spatial search, experiment, Pandora, optimal stopping, Morozov, Malladi, search costs, Kellogg" />
+  <title>Search Game &mdash; Space Exploration (EC 2026)</title>
+  <meta name="description" content="An interactive replica of the online experiment for “Space Exploration” (EC 2026) by Suraj Malladi, Alejandro Martínez-Marquina &amp; Ilya Morozov: reveal hidden prizes across 100 positions, pay a fee per reveal, and decide when to stop. Five treatments (Unrestricted, High/Low Variability, Sweet Spot, Known Maximum)." />
+  <meta name="keywords" content="sequential search, spatial search, experiment, Pandora, optimal stopping, Space Exploration, EC 2026, Malladi, Martínez-Marquina, Morozov, search costs, Kellogg" />
   <meta name="robots" content="index,follow" />
   <link rel="canonical" href="https://www.stouras.com/lab/search/" />
 
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="stouras.com" />
-  <meta property="og:title" content="Search Game — Searching the Unknown" />
-  <meta property="og:description" content="An interactive replica of a spatial-search experiment: reveal hidden prizes across 100 positions, pay a fee per reveal, and decide when to stop." />
+  <meta property="og:title" content="Search Game — Space Exploration (EC 2026)" />
+  <meta property="og:description" content="An interactive replica of the online experiment for “Space Exploration” (EC 2026) by Malladi, Martínez-Marquina &amp; Morozov: reveal hidden prizes across 100 positions, pay a fee per reveal, and decide when to stop." />
   <meta property="og:url" content="https://www.stouras.com/lab/search/" />
 
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%236f42c1'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='22' font-weight='bold' text-anchor='middle' fill='white'%3EK%3C/text%3E%3C/svg%3E" />
@@ -126,9 +126,8 @@
     }
     input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; appearance:none; width:20px; height:24px; border-radius:5px; background:#fff; border:1px solid #b9bec4; box-shadow:0 1px 3px rgba(0,0,0,.25); cursor:grab;}
     input[type=range]::-moz-range-thumb{width:20px; height:24px; border-radius:5px; background:#fff; border:1px solid #b9bec4; box-shadow:0 1px 3px rgba(0,0,0,.25); cursor:grab;}
-    .caret-btn{width:44px; height:44px; border-radius:50%; border:1.5px solid var(--red); background:#fff; color:var(--red); font-size:18px; cursor:pointer; margin-top:14px;}
-    .caret-btn:hover{background:var(--red); color:#fff;}
-    .reveal-list{margin-top:10px; border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:13.5px; background:var(--panel); max-height:150px; overflow:auto;}
+    .reveal-list{margin-top:18px; border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:13.5px; background:var(--panel); max-height:170px; overflow:auto;}
+    .reveal-list-title{font-size:13.5px; color:var(--muted); font-weight:600; padding:2px 4px 6px;}
     .reveal-list.hidden{display:none;}
     .reveal-list table{width:100%; border-collapse:collapse;}
     .reveal-list td{padding:2px 4px;}
@@ -156,7 +155,7 @@
 </head>
 <body>
   <div class="nav">
-    <div class="brand">Search Game <span class="dot">&bull;</span> <span class="muted" style="font-weight:400; font-size:14px;">Searching the Unknown</span></div>
+    <div class="brand">Search Game <span class="dot">&bull;</span> <span class="muted" style="font-weight:400; font-size:14px;">Space Exploration</span></div>
     <div class="nav-right">
       <span class="pill" id="stage-pill">Consent</span>
       <button class="btn btn-ghost btn-sm" id="restart">&#8635; Restart</button>
@@ -252,7 +251,6 @@
           <div class="stat-val" id="st-fees">$0.00</div>
           <div class="stat-label">Your Payoff if you quit now:</div>
           <div class="stat-val" id="st-payoff">$0.00</div>
-          <button class="caret-btn" id="caret" title="Show revealed prizes">&#9662;</button>
           <div class="reveal-list hidden" id="reveal-list"></div>
         </div>
         <!-- CENTER -->
@@ -360,7 +358,7 @@
     </section>
 
     <div class="footer-note">
-      Replica of the <i>&ldquo;Searching the Unknown&rdquo;</i> online experiment app by Ilya Morozov &amp; Suraj Malladi (Kellogg School of Management, Northwestern University).
+      Replica of the online experiment app for <a href="https://sites.google.com/view/surajm/home" target="_blank" rel="noreferrer noopener"><i>&ldquo;Space Exploration&rdquo;</i> (EC 2026)</a> by Suraj Malladi, Alejandro Mart&iacute;nez-Marquina &amp; Ilya Morozov.
       Rebuilt as a self-contained, client-side page for <a href="https://www.stouras.com/">stouras.com</a>. Demonstration only &mdash; no data collection, no payment.
     </div>
   </div>
@@ -392,8 +390,9 @@
 <script>
 "use strict";
 /* ============================================================
-   Search Game — client-side replica of "Searching the Unknown"
-   (Morozov & Malladi). No backend, no data collection.
+   Search Game — client-side replica of the online experiment for
+   "Space Exploration" (EC 2026) by Suraj Malladi, Alejandro
+   Martinez-Marquina & Ilya Morozov. No backend, no data collection.
    ============================================================ */
 
 // ---------- constants ----------
@@ -553,7 +552,7 @@ var miniPlot =
   '<line x1="250" y1="14" x2="250" y2="168" stroke="#e41a1c" stroke-width="1.5" stroke-dasharray="6 5"/>'+
   '<circle cx="150" cy="96" r="5" fill="#e41a1c"/><circle cx="250" cy="70" r="5" fill="#e41a1c"/><circle cx="330" cy="130" r="5" fill="#e41a1c"/>'+
   '<text x="256" y="196" class="axtitle">Position &rarr;</text>'+
-  '<text x="14" y="94" class="axtitle" transform="rotate(-90 14 94)">Prize</text>'+
+  '<text x="14" y="94" class="axtitle" transform="rotate(-90 14 94)">Prize (in $)</text>'+
   '</svg></div>';
 
 var CARDS = [];
@@ -676,7 +675,6 @@ function startRound(){
       if(state.q[p] > state.best) state.best = state.q[p];
     }
   }
-  $('reveal-list').classList.add('hidden');
   showScreen('s-game');
   syncSlider(); renderPlot(); updateStats(); renderRevealList();
 }
@@ -723,23 +721,22 @@ function renderPlot(){
     g+='<circle cx="'+x(pp)+'" cy="'+y(state.revealed[p])+'" r="4.6" fill="#e41a1c"/>';
   }}
   g+='<text x="'+((L+R)/2)+'" y="'+(H-6)+'" text-anchor="middle" class="axtitle">Position</text>';
-  g+='<text x="16" y="'+((T+B)/2)+'" text-anchor="middle" class="axtitle" transform="rotate(-90 16 '+((T+B)/2)+')">Prize</text>';
+  g+='<text x="16" y="'+((T+B)/2)+'" text-anchor="middle" class="axtitle" transform="rotate(-90 16 '+((T+B)/2)+')">Prize (in $)</text>';
   $('plot').innerHTML = '<svg viewBox="0 0 '+W+' '+H+'" class="plot-svg" preserveAspectRatio="xMidYMid meet">'+g+'</svg>';
 }
 
 function renderRevealList(){
-  var rows='';
-  if(state.order.length===0){ rows='<i class="muted">No prizes revealed yet.</i>'; }
-  else {
-    rows='<table>';
-    for(var i=0;i<state.order.length;i++){
-      var p=state.order[i];
-      var free=(state.part===2 && i<PART2_PREREVEAL);
-      rows+='<tr><td>Position <b>'+p+'</b></td><td>$'+fmt(state.revealed[p])+'</td><td class="muted">'+(free?'free':'')+'</td></tr>';
-    }
-    rows+='</table>';
+  var box=$('reveal-list');
+  if(state.order.length===0){ box.classList.add('hidden'); box.innerHTML=''; return; } // show only after >=1 prize
+  box.classList.remove('hidden');
+  var rows='<div class="reveal-list-title">Revealed prizes</div><table>';
+  for(var i=0;i<state.order.length;i++){
+    var p=state.order[i];
+    var free=(state.part===2 && i<PART2_PREREVEAL);
+    rows+='<tr><td>Position <b>'+p+'</b></td><td>$'+fmt(state.revealed[p])+'</td><td class="muted">'+(free?'free':'')+'</td></tr>';
   }
-  $('reveal-list').innerHTML = rows;
+  rows+='</table>';
+  box.innerHTML=rows;
 }
 
 function submitReveal(){
@@ -881,7 +878,6 @@ document.addEventListener('DOMContentLoaded', function(){
   });
   $('btn-submit').addEventListener('click', submitReveal);
   $('btn-quit').addEventListener('click', acceptPayout);
-  $('caret').addEventListener('click', function(){ $('reveal-list').classList.toggle('hidden'); });
 
   // in-game instructions modal
   $('btn-instr').addEventListener('click', function(){
