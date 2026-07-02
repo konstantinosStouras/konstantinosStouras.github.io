@@ -47,7 +47,7 @@ const PULL_DATE = process.env.MS2_PULL_DATE || new Date().toISOString().slice(0,
 const SELECT = [
   'DOI', 'title', 'author', 'issued', 'published-print', 'published-online',
   'created', 'volume', 'issue', 'page', 'abstract', 'type', 'group-title',
-  'subject', 'is-referenced-by-count', 'container-title', 'short-container-title',
+  'subject', 'container-title', 'short-container-title',
 ].join(',');
 
 async function fetchJson(url, attempt = 0) {
@@ -172,7 +172,6 @@ function mapWork(item) {
     Abstract: abstract,
     'Accepting Editor': editor,
     Area: area,
-    Citations: Number(item['is-referenced-by-count'] || 0),
     // internal, dropped before writing papers.json:
     _doi: (item.DOI || '').toLowerCase(),
     _orcids: (item.author || []).map(a => (a.ORCID || '').replace(/^https?:\/\/orcid\.org\//, '')),
