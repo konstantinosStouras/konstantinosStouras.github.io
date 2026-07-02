@@ -203,11 +203,13 @@
 
       <div class="field">
         <label for="pid">Before continuing, please write down your Prolific ID:</label>
-        <input type="text" id="pid" placeholder="e.g. your Prolific ID, or any text" autocomplete="off" />
+        <input type="text" id="pid" placeholder="e.g. your Prolific ID, or any text" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" />
+        <div id="pid-hint" class="small" style="margin-top:6px; min-height:18px;"></div>
       </div>
       <div class="note small">
-        <b>Treatment codes (optional).</b> By default you are randomly assigned to one of five treatments. To access a specific treatment, enter one of these <b>case-sensitive</b> codes as your ID:
+        <b>Treatment codes (optional).</b> By default you are randomly assigned to one of five treatments. To access a specific treatment, enter one of these codes as your ID:
         <code>Unrestricted</code>, <code>High_Variability</code>, <code>Low_Variability</code>, <code>Sweet_Spot</code>, <code>Known_Maximum</code>.
+        Capitalization, spaces, and hyphens don&rsquo;t matter (e.g. <code>sweet spot</code> also works).
       </div>
 
       <p class="muted" style="margin-top:14px;">We will start with a brief instruction period. As you read, you will be asked questions to check your comprehension.</p>
@@ -487,8 +489,21 @@ function showScreen(id){
 }
 
 // ---------- treatment assignment ----------
+// A typed treatment code selects that treatment; anything else -> random.
+// Matching is forgiving about case, spaces, hyphens, and underscores so the
+// documented codes work even when a keyboard autocapitalizes or autocorrects.
+function matchTreatmentCode(id){
+  if(!id) return null;
+  var norm = id.trim().toLowerCase().replace(/[\s_-]+/g,''); // "Sweet_Spot","sweet spot","SWEET-SPOT" -> "sweetspot"
+  var map = {
+    unrestricted:'Unrestricted', highvariability:'High_Variability', lowvariability:'Low_Variability',
+    sweetspot:'Sweet_Spot', knownmaximum:'Known_Maximum'
+  };
+  return map[norm] || null;
+}
 function assignTreatment(id){
-  for(var i=0;i<TREATMENTS.length;i++){ if(id===TREATMENTS[i]) return TREATMENTS[i]; } // case-sensitive code
+  var coded = matchTreatmentCode(id);
+  if(coded) return coded;
   return TREATMENTS[Math.floor(Math.random()*TREATMENTS.length)];
 }
 
@@ -840,6 +855,15 @@ document.addEventListener('DOMContentLoaded', function(){
   $('consent-no').addEventListener('change', function(){ if(this.checked) $('consent-yes').checked=false; });
   $('btn-consent-next').addEventListener('click', beginStudy);
 
+  // live treatment-code feedback under the Prolific ID field
+  $('pid').addEventListener('input', function(){
+    var hint = $('pid-hint');
+    var coded = matchTreatmentCode(this.value);
+    if(coded){ hint.style.color='#349612'; hint.innerHTML='&#10003; You will play the <b>'+TREATMENT_LABEL[coded]+'</b> treatment.'; }
+    else if(this.value.trim()){ hint.style.color='#6a6f76'; hint.innerHTML='A treatment will be randomly assigned.'; }
+    else { hint.innerHTML=''; }
+  });
+
   // instructions
   $('ins-back').addEventListener('click', insBack);
   $('ins-next').addEventListener('click', insNext);
@@ -884,7 +908,7 @@ document.addEventListener('DOMContentLoaded', function(){
   });
 
   // restart / play again
-  function restart(){ resetState(); $('pid').value=''; $('consent-yes').checked=false; $('consent-no').checked=false; showScreen('s-consent'); }
+  function restart(){ resetState(); $('pid').value=''; $('pid-hint').innerHTML=''; $('consent-yes').checked=false; $('consent-no').checked=false; showScreen('s-consent'); }
   $('restart').addEventListener('click', restart);
   $('btn-play-again').addEventListener('click', restart);
 
