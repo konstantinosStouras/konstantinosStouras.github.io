@@ -208,8 +208,8 @@ function updateRegistry(papers, reg) {
   // have not seen before with today's pull date.
   const seedSet = new Set();
   if (reg.firstRun) {
-    [...papers].sort((a, b) => b._rank - a._rank).slice(0, SEED_COUNT)
-      .forEach(p => seedSet.add(p._doi));
+    // `papers` is already in newest-first order, so the head is the newest N.
+    papers.slice(0, SEED_COUNT).forEach(p => seedSet.add(p._doi));
   }
   for (const p of papers) {
     if (p._doi in reg.map) continue;
@@ -224,8 +224,14 @@ function stripAccents(s) {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 
+// Plain code-point comparison — deterministic across machines/locales, unlike
+// String.localeCompare (whose collation can vary by environment).
+function cmp(a, b) { return a < b ? -1 : a > b ? 1 : 0; }
+
 function buildAuthors(papers) {
   // Identity = ORCID when present, else accent-stripped lowercase name.
+  // `papers` is already in deterministic order, so first-seen orderings below
+  // (name variants, areas) are reproducible run to run.
   const byId = new Map();
   for (const p of papers) {
     const names = p.Authors ? p.Authors.split(',').map(s => s.trim()).filter(Boolean) : [];
@@ -242,18 +248,20 @@ function buildAuthors(papers) {
     });
   }
   const out = [];
-  for (const rec of byId.values()) {
+  for (const [id, rec] of byId) {
     // Display name = the most common spelling; variants = every spelling seen.
     const variants = [...rec.names.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]);
     out.push({
+      id,
       Author: variants[0],
       Papers: rec.papers,
       Areas: [...rec.areas].join(', '),
       Name_Variants: variants.join(';'),
     });
   }
-  out.sort((a, b) => b.Papers - a.Papers || a.Author.localeCompare(b.Author));
-  return out;
+  // Total order (Papers desc, then name, then identity) so ties never flip.
+  out.sort((a, b) => (b.Papers - a.Papers) || cmp(a.Author, b.Author) || cmp(a.id, b.id));
+  return out.map(({ id, ...rest }) => rest);
 }
 
 function buildAffiliations(papers) {
@@ -271,14 +279,16 @@ function buildAffiliations(papers) {
       if (p.Area) rec.areas.add(p.Area);
     }
   }
-  const out = [...byAff.values()].map(r => ({
+  const out = [...byAff.entries()].map(([key, r]) => ({
+    key,
     Affiliation: r.name,
     Papers: r.papers,
     Areas: [...r.areas].join(', '),
     Area_Count: r.areas.size,
   }));
-  out.sort((a, b) => b.Papers - a.Papers || a.Affiliation.localeCompare(b.Affiliation));
-  return out.slice(0, TOP_AFFILIATIONS);
+  // Total order (Papers desc, then name, then normalized key) so ties never flip.
+  out.sort((a, b) => (b.Papers - a.Papers) || cmp(a.Affiliation, b.Affiliation) || cmp(a.key, b.key));
+  return out.slice(0, TOP_AFFILIATIONS).map(({ key, ...rest }) => rest);
 }
 
 function buildRecent(papers, registry) {
@@ -292,7 +302,7 @@ function buildRecent(papers, registry) {
     if (isNaN(d) || d < cutoff) continue;
     rows.push({ p, d });
   }
-  rows.sort((a, b) => (b.d - a.d) || (b.p._rank - a.p._rank));
+  rows.sort((a, b) => (b.d - a.d) || (b.p._rank - a.p._rank) || cmp(a.p._doi, b.p._doi));
   return rows.map(x => ({ ...publicRow(x.p), 'Date Added': registry[x.p._doi] }));
 }
 
@@ -323,15 +333,20 @@ async function main() {
   }
   console.log(`mapped ${papers.length} papers`);
 
+  // Deterministic total order (rank desc, then DOI) BEFORE anything derives from
+  // it. Crossref returns pages in a varying order and many papers share a rank
+  // (e.g. Articles in Advance with no page number), so without the DOI tiebreak
+  // the files would reshuffle every run and rewrite the ~19 MB papers.json even
+  // when nothing actually changed. Aggregates are built from this same order so
+  // they are reproducible too.
+  papers.sort((a, b) => (b._rank - a._rank) || cmp(a._doi, b._doi));
+
   const reg = await loadRegistry();
   const registry = updateRegistry(papers, reg);
 
   const authors = buildAuthors(papers);
   const affiliations = buildAffiliations(papers);
   const recent = buildRecent(papers, registry);
-
-  // Sort papers newest-first so the file is stable and diffs stay small.
-  papers.sort((a, b) => b._rank - a._rank);
   const publicPapers = papers.map(publicRow);
 
   const meta = { lastPull: PULL_DATE, paperCount: publicPapers.length, source: 'Crossref REST API' };
