@@ -103,8 +103,11 @@ learning** (Off/On), which on Verify adds the checked point to the AI's knowledg
 re-interpolates (`computeInterp`), an endogenous data-flywheel extension beyond Gans's
 exogenous scaling. The start-screen illustration is a fresh random landscape at the
 selected coverage (it reshuffles when Sparse/Dense is toggled) with labelled in-plot
-arrows; the game itself uses a fresh Brownian walk (`buildLandscape`). Displayed values
-are rounded to the shown 2 decimals so "off by" always equals (AI answer − truth). The
+arrows (in a header band above the plot so they never overlap the curve); the game
+itself uses a fresh Brownian walk (`buildLandscape`). An "Experimental conditions"
+section previews the playing environment for the chosen toggles (`drawPreview` over a
+stable base landscape) and updates live. Displayed values are rounded to the shown 2
+decimals so "off by" always equals (AI answer − truth). The
 end screen reveals the true curve over the AI's line and compares
 the player to always-trust / always-verify / perfect-play. **No data is collected
 or transmitted.** The plot is inline SVG. To change behavior, edit the constants
