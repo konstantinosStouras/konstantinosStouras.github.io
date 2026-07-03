@@ -110,7 +110,7 @@
 
     <!-- ============ START ============ -->
     <section class="screen active" id="s-start">
-      <h1>Trust the AI?</h1>
+      <h1>Trust the AI? <span style="font-weight:400; color:var(--muted); font-size:0.68em;">An exploration vs.&nbsp;exploitation trade-off</span></h1>
       <p><b>AI knowledge is jagged.</b> A model can be brilliant on one question and confidently wrong on an almost
       identical one &mdash; what Karpathy called &ldquo;jagged intelligence&rdquo; and Dell&rsquo;Acqua et&nbsp;al. the
       &ldquo;jagged frontier.&rdquo; The reason is simple: a model reliably knows the answers it has actually seen, and
@@ -380,9 +380,28 @@ function polyline(arr, from, to){
   var pts=[]; for(var x=from;x<=to;x++){ pts.push(xco(x)+','+yco(arr[x])); } return pts.join(' ');
 }
 // opts: {band, current, revealed:[x..], showTruth}
+// One annotation callout: a labelled box + a connector line with an arrowhead at the anchor.
+function calloutSVG(o){
+  var lh=18, pad=9, H=pad*2 + o.lines.length*lh;
+  var marker = (o.color==='#e41a1c') ? 'ar-red' : 'ar-blue';
+  var s='';
+  s+='<line x1="'+o.sx+'" y1="'+o.sy+'" x2="'+o.ax+'" y2="'+o.ay+'" stroke="'+o.color+'" stroke-width="1.8" marker-end="url(#'+marker+')"/>';
+  s+='<circle cx="'+o.ax+'" cy="'+o.ay+'" r="3.4" fill="'+o.color+'"/>';
+  s+='<rect x="'+o.boxX+'" y="'+o.boxY+'" width="'+o.W+'" height="'+H+'" rx="8" fill="#ffffff" stroke="'+o.color+'" stroke-width="1.4" opacity="0.97"/>';
+  for(var i=0;i<o.lines.length;i++){
+    var ln=o.lines[i];
+    s+='<text x="'+(o.boxX+pad)+'" y="'+(o.boxY+pad+(i+1)*lh-5)+'" font-family="-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,Arial,sans-serif" '+
+       'font-size="13.5" font-weight="'+(ln.b?'700':'400')+'" fill="'+(ln.b?o.color:'#2b2b2b')+'">'+ln.t+'</text>';
+  }
+  return s;
+}
 function drawPlot(target, opts){
   opts = opts||{};
   var g='', i, x;
+  g+='<defs>'+
+     '<marker id="ar-red" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="#e41a1c"/></marker>'+
+     '<marker id="ar-blue" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="#2780e3"/></marker>'+
+     '</defs>';
   // grid + y labels
   [0,0.25,0.5,0.75,1].forEach(function(v){
     g+='<line x1="'+VB.L+'" y1="'+yco(v)+'" x2="'+VB.R+'" y2="'+yco(v)+'" stroke="#ececec"/>';
@@ -430,6 +449,16 @@ function drawPlot(target, opts){
       g+='<line x1="'+cx+'" y1="'+yco(state.ai[opts.current])+'" x2="'+cx+'" y2="'+yco(state.truth[opts.current])+'" stroke="#e41a1c" stroke-width="2"/>';
       g+='<circle cx="'+cx+'" cy="'+yco(state.truth[opts.current])+'" r="5.5" fill="#e41a1c"/>';
     }
+  }
+  // start-screen explanatory arrows (pointing to the red truth and the blue AI line)
+  if(opts.annotate){
+    var rx=42, bxp=67; // dip (truth departs from the AI) and a clean chord segment
+    // red: box in the clear top band, arrow down to the true curve in the gap
+    g += calloutSVG({ color:'#e41a1c', ax:xco(rx), ay:yco(state.truth[rx]), sx:250, sy:94, boxX:70, boxY:22, W:262,
+      lines:[{t:'The true answer',b:true},{t:'hidden while you play — it drifts'},{t:'away from the AI in the wide gaps'}] });
+    // blue: box in the clear bottom band, arrow up to the AI's interpolated line
+    g += calloutSVG({ color:'#2780e3', ax:xco(bxp), ay:yco(state.ai[bxp]), sx:452, sy:252, boxX:322, boxY:252, W:280,
+      lines:[{t:'The AI’s answer',b:true},{t:'it fills in (interpolates) between'},{t:'its dots — just as confidently'}] });
   }
   g+='<text x="'+((VB.L+VB.R)/2)+'" y="'+(VB.H-6)+'" text-anchor="middle" class="axtitle">Question</text>';
   g+='<text x="16" y="'+((VB.T+VB.B)/2)+'" text-anchor="middle" class="axtitle" transform="rotate(-90 16 '+((VB.T+VB.B)/2)+')">Answer</text>';
@@ -552,14 +581,36 @@ function segWire(segId, key){
     var b=e.target.closest('button'); if(!b) return;
     Array.prototype.forEach.call(seg.querySelectorAll('button'), function(x){ x.classList.remove('on'); });
     b.classList.add('on'); state[key]=b.getAttribute('data-v');
-    if(segId==='seg-band' || segId==='seg-cov') drawDemo();
   });
 }
+// A fixed, hand-tuned landscape purely for the annotated start-screen illustration
+// (the actual game uses a fresh Brownian walk in buildLandscape). It stays in a
+// mid-band so the top and bottom of the plot are clear for the two labels, with a
+// clear gap where the truth dips away from the AI's straight-line interpolation.
+function buildDemo(){
+  var known=[10,30,55,80,95];
+  var cX=[1,10,30,42,55,80,95,100], cY=[0.55,0.55,0.60,0.43,0.56,0.69,0.50,0.52];
+  function baseAt(x){
+    for(var i=0;i<cX.length-1;i++){ if(x>=cX[i] && x<=cX[i+1]){ var t=(x-cX[i])/(cX[i+1]-cX[i]); return cY[i]+t*(cY[i+1]-cY[i]); } }
+    return cY[cY.length-1];
+  }
+  var truth=new Array(N_POS+1);
+  for(var x=1;x<=N_POS;x++){ truth[x]=clamp(baseAt(x)+0.02*Math.sin(x*0.9)+0.014*Math.sin(x*2.3+1),0,1); }
+  var ai=new Array(N_POS+1), sd=new Array(N_POS+1), first=known[0], last=known[known.length-1], i, xx;
+  for(i=0;i<known.length-1;i++){
+    var lo=known[i], hi=known[i+1], ylo=truth[lo], yhi=truth[hi];
+    for(xx=lo; xx<=hi; xx++){ var t=(xx-lo)/(hi-lo); ai[xx]=ylo+t*(yhi-ylo); sd[xx]=STEP_SD*Math.sqrt((xx-lo)*(hi-xx)/(hi-lo)); }
+  }
+  for(var xl=1;xl<first;xl++){ ai[xl]=truth[first]; sd[xl]=STEP_SD*Math.sqrt(first-xl); }
+  for(var xr=last+1;xr<=N_POS;xr++){ ai[xr]=truth[last]; sd[xr]=STEP_SD*Math.sqrt(xr-last); }
+  return { truth:truth, known:known, ai:ai, sd:sd };
+}
 function drawDemo(){
-  // small illustrative landscape on the start screen
+  // fixed, annotated illustration on the start screen
   var saved = { truth:state.truth, known:state.known, ai:state.ai, sd:state.sd };
-  buildLandscape();
-  drawPlot('demo-plot', { band: state.band==='shown', revealed:[], showTruth:true });
+  var d = buildDemo();
+  state.truth=d.truth; state.known=d.known; state.ai=d.ai; state.sd=d.sd;
+  drawPlot('demo-plot', { showTruth:true, annotate:true });
   state.truth=saved.truth; state.known=saved.known; state.ai=saved.ai; state.sd=saved.sd;
 }
 
