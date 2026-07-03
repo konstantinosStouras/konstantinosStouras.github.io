@@ -60,14 +60,17 @@ The retired static prototype `lab/brainstorming/` (an older Google-Sheets-backed
 version of the same Ideation Challenge, superseded by `lab/ideasearchlab/`) was
 removed.
 
-## `/lab/search` — self-contained "Searching the Unknown" replica
+## `/lab/search` — self-contained "Space Exploration" search-experiment replica
 
 `lab/search/index.html` is a **single, self-contained** static page (no build
 step, no backend, no external CDN) that recreates the online experiment app for
-the "Searching the Unknown" sequential-search study by Ilya Morozov & Suraj
-Malladi (Kellogg). It reproduces the full flow client-side: consent + Prolific-ID
-entry (with the case-sensitive treatment codes `Unrestricted`, `High_Variability`,
-`Low_Variability`, `Sweet_Spot`, `Known_Maximum`), comprehension-gated
+the sequential-search study in the paper **"Space Exploration" (EC 2026)** by
+Suraj Malladi, Alejandro Martínez-Marquina & Ilya Morozov. (The reproduced
+consent form keeps the original IRB study title, "Searching the Unknown".)
+It reproduces the full flow client-side: consent + Prolific-ID
+entry (with the treatment codes `Unrestricted`, `High_Variability`,
+`Low_Variability`, `Sweet_Spot`, `Known_Maximum` — matched leniently, ignoring
+case/spaces/hyphens/underscores; any other ID randomizes), comprehension-gated
 instructions (7 screens), 25 search rounds split into Part I (13) and Part II
 (12, with a few free pre-revealed prizes), the per-round payoff = best prize −
 total reveal fees ($0.05 each), a two-round payment lottery, and an exit survey.
@@ -79,3 +82,23 @@ High-Variability walk with the peak pinned to $1. **No data is collected or
 transmitted.** The plot is drawn as inline SVG. To change behavior, edit the
 constants near the top of the `<script>` (`FEE`, `PART1_ROUNDS`, `TOTAL_ROUNDS`,
 `PART2_PREREVEAL`) or the treatment logic in `genPrizesRaw`.
+
+## `/lab/jagged` — self-contained "Trust the AI?" jagged-intelligence game
+
+`lab/jagged/index.html` is a **single, self-contained** static page (no build
+step, no backend, no external CDN) — a clean teaching game inspired by Joshua
+Gans, *"A Model of Artificial Jagged Intelligence"* (2026, arXiv:2601.07573). One
+hidden rough "truth" curve over 100 questions; an AI knows a scatter of points
+exactly and **interpolates** (linear between neighbours, flat extrapolation past
+the ends), looking equally confident everywhere. Each of 15 questions the player
+chooses **Trust** (free; keeps points to the extent the AI was close) or
+**Verify** (−20; reveals the truth and scores +80). Questions land uniformly so
+players over-encounter wide gaps (the paper's inspection paradox). Two start-screen
+toggles are the experimental levers: coverage **Sparse/Dense** (AI scaling) and
+reliability shading **Hidden/Shown** (Gans's blind vs calibrated user — the shaded
+band is the Brownian-bridge posterior std, zero at knowledge points and largest
+mid-gap). The end screen reveals the true curve over the AI's line and compares
+the player to always-trust / always-verify / perfect-play. **No data is collected
+or transmitted.** The plot is inline SVG. To change behavior, edit the constants
+near the top of the `<script>` (`N_Q`, `CORRECT`, `VERIFY_FEE`, `PEN`, `STEP_SD`,
+`K_SPARSE`, `K_DENSE`) or `buildLandscape`.
