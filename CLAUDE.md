@@ -94,10 +94,14 @@ the ends), looking equally confident everywhere. Each of 15 questions the player
 chooses **Trust** (free; keeps points to the extent the AI was close) or
 **Verify** (−20; reveals the truth and scores +80). Questions land uniformly so
 players over-encounter wide gaps (the paper's inspection paradox). Two start-screen
-toggles are the experimental levers: coverage **Sparse/Dense** (AI scaling) and
-reliability shading **Hidden/Shown** (Gans's blind vs calibrated user — the shaded
-band is the Brownian-bridge posterior std, zero at knowledge points and largest
-mid-gap). The end screen reveals the true curve over the AI's line and compares
+toggles are the experimental levers: coverage **Sparse/Dense** (AI scaling = the
+knowledge-point intensity λ) and a 3-way reliability view **Blind / Dots / Dots+band**
+(Gans's pure blind user who sees only the AI's answer with no map · a mastery user
+who infers risk from the visible dots · a calibrated user shown the Brownian-bridge
+posterior-std band, zero at knowledge points and largest mid-gap). The start-screen
+illustration is drawn from a fixed hand-tuned landscape (`buildDemo`) with labelled
+in-plot arrows; the game itself uses a fresh Brownian walk (`buildLandscape`). The
+end screen reveals the true curve over the AI's line and compares
 the player to always-trust / always-verify / perfect-play. **No data is collected
 or transmitted.** The plot is inline SVG. To change behavior, edit the constants
 near the top of the `<script>` (`N_Q`, `CORRECT`, `VERIFY_FEE`, `PEN`, `STEP_SD`,
