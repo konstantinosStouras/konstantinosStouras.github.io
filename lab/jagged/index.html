@@ -195,10 +195,9 @@
           <div class="tlabel">What can you see about reliability?</div>
           <div class="seg" id="seg-band">
             <button data-v="blind">Blind</button>
-            <button data-v="hidden" class="on">Dots</button>
-            <button data-v="shown">Dots + band</button>
+            <button data-v="shown" class="on">Band</button>
           </div>
-          <div class="small muted" style="margin-top:8px;"><b>Blind</b> = only the AI&rsquo;s answer, no map (a truly blind user). <b>Dots</b> = you see what the AI knows and judge risk from the gaps (mastery). <b>Dots + band</b> = a shaded band shows where it is unsure (a calibrated user).</div>
+          <div class="small muted" style="margin-top:8px;"><b>Blind</b> = only the AI&rsquo;s answer, no map (a truly blind user). <b>Band</b> = you see the AI&rsquo;s known points, the line it interpolates, and a shaded band for where it is unsure (a calibrated user). The band is roughly a 95% range, so the true answer can occasionally fall outside it.</div>
         </div>
         <div class="toggle" style="min-width:100%;">
           <div class="tlabel">Shared learning: your checks train the AI</div>
@@ -339,7 +338,7 @@ function $(id){ return document.getElementById(id); }
 // ---- state ----
 var state = {};
 function newState(){
-  state = { coverage:'sparse', band:'hidden', shared:'off', truth:[], known:[], ai:[], sd:[],
+  state = { coverage:'sparse', band:'shown', shared:'off', truth:[], known:[], ai:[], sd:[],
             questions:[], qi:0, score:0, records:[] };
 }
 newState();
@@ -680,8 +679,7 @@ function drawPreview(){
     ? '<b>Dense coverage</b>: many dots, small gaps, usually safe to trust.'
     : '<b>Sparse coverage</b>: few dots, wide gaps, often better to verify.';
   var vis = (state.band==='blind') ? '<b>Blind</b>: you see only the AI’s answer and the trust zone, no map.'
-          : (state.band==='shown') ? '<b>Dots + band</b>: the shaded band shows where the AI is unsure.'
-          : '<b>Dots</b>: you see what the AI knows and judge risk from the gaps.';
+          : '<b>Band</b>: the AI’s points, the line it interpolates, and a shaded ~95% uncertainty band.';
   var shr = (state.shared==='on')
     ? '<b>Shared learning ON</b>: knowledge points you verify become new dots (shown), so the map fills in where you search.'
     : '<b>Shared learning OFF</b>: the AI’s knowledge is fixed.';
@@ -702,7 +700,7 @@ document.addEventListener('DOMContentLoaded', function(){
   $('btn-help-close').addEventListener('click', function(){ $('ov-help').classList.remove('show'); });
 
   function resetSegs(){
-    [['seg-cov','sparse'],['seg-band','hidden'],['seg-share','off']].forEach(function(pair){
+    [['seg-cov','sparse'],['seg-band','shown'],['seg-share','off']].forEach(function(pair){
       Array.prototype.forEach.call($(pair[0]).querySelectorAll('button'), function(b){
         b.classList.toggle('on', b.getAttribute('data-v')===pair[1]);
       });

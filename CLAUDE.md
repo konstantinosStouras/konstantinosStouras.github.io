@@ -95,10 +95,10 @@ chooses **Trust** (free; keeps points to the extent the AI was close) or
 **Verify** (−20; reveals the truth and scores +80). Questions land uniformly so
 players over-encounter wide gaps (the paper's inspection paradox). Three start-screen
 toggles are the experimental levers: coverage **Sparse/Dense** (AI scaling = the
-knowledge-point intensity λ); a 3-way reliability view **Blind / Dots / Dots+band**
-(Gans's pure blind user who sees only the AI's answer with no map · a mastery user
-who infers risk from the visible dots · a calibrated user shown the Brownian-bridge
-posterior-std band, zero at knowledge points and largest mid-gap); and **Shared
+knowledge-point intensity λ); a 2-way reliability view **Blind / Band** (a blind user
+who sees only the AI's answer with no map · a calibrated user shown the AI's points,
+its interpolated line, and the Brownian-bridge posterior-std band, a ~95% region,
+zero at knowledge points and largest mid-gap); and **Shared
 learning** (Off/On), which on Verify adds the checked point to the AI's knowledge and
 re-interpolates (`computeInterp`), an endogenous data-flywheel extension beyond Gans's
 exogenous scaling. The start-screen illustration is a fresh random landscape at the
