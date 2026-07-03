@@ -122,9 +122,9 @@
 
       <h3 style="margin-top:18px;">What the map shows</h3>
       <ul>
-        <li><b>x&#8209;axis:</b> the question. A one&#8209;dimensional map of every question you could ask
+        <li><b>x&#8209;axis:</b> the question, <i>x</i>. A one&#8209;dimensional map of every question you could ask
         (numbered 1&ndash;100). Questions that sit close together are <i>similar</i>, so their answers are related.</li>
-        <li><b>y&#8209;axis:</b> the answer. The correct answer to that question, on a 0&ndash;1 scale.</li>
+        <li><b>y&#8209;axis:</b> the answer, <i>y</i>. The correct answer to that question, on a 0&ndash;1 scale.</li>
         <li><span class="swatch" style="background:#e41a1c"></span> <b>Red curve:</b> the truth. The correct
         answer to every question. It is rough (neighbouring questions differ a little) and is <b>hidden from you</b>
         while you play.</li>
@@ -474,8 +474,10 @@ function drawPlot(target, opts){
     g+='<rect x="'+(cx-7)+'" y="'+zTop+'" width="14" height="'+(zBot-zTop)+'" fill="#3fb618" opacity="0.16" rx="3"/>';
     g+='<line x1="'+(cx-10)+'" y1="'+zTop+'" x2="'+(cx+10)+'" y2="'+zTop+'" stroke="#3fb618" stroke-width="1.5" opacity="0.7"/>';
     g+='<line x1="'+(cx-10)+'" y1="'+zBot+'" x2="'+(cx+10)+'" y2="'+zBot+'" stroke="#3fb618" stroke-width="1.5" opacity="0.7"/>';
-    g+='<line x1="'+cx+'" y1="'+VB.T+'" x2="'+cx+'" y2="'+VB.B+'" stroke="#e41a1c" stroke-width="1.5" stroke-dasharray="6 5"/>';
-    g+='<circle cx="'+cx+'" cy="'+yco(state.ai[opts.current])+'" r="6" fill="#fff" stroke="#2780e3" stroke-width="2.4"/>';
+    var my=yco(state.ai[opts.current]); // the AI's answer marker
+    g+='<line x1="'+cx+'" y1="'+VB.B+'" x2="'+cx+'" y2="'+my+'" stroke="#e41a1c" stroke-width="1.5" stroke-dasharray="6 5"/>'; // up from the x-axis to the marker (reads the question)
+    g+='<line x1="'+VB.L+'" y1="'+my+'" x2="'+cx+'" y2="'+my+'" stroke="#e41a1c" stroke-width="1.5" stroke-dasharray="6 5"/>'; // across to the y-axis (reads the answer)
+    g+='<circle cx="'+cx+'" cy="'+my+'" r="6" fill="#fff" stroke="#2780e3" stroke-width="2.4"/>';
     if(opts.showAnswerTruth){
       g+='<line x1="'+cx+'" y1="'+yco(state.ai[opts.current])+'" x2="'+cx+'" y2="'+yco(state.truth[opts.current])+'" stroke="#e41a1c" stroke-width="2"/>';
       g+='<circle cx="'+cx+'" cy="'+yco(state.truth[opts.current])+'" r="5.5" fill="#e41a1c"/>';
