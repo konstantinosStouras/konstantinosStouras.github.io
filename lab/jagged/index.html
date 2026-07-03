@@ -130,9 +130,11 @@
       &ldquo;knows&rdquo;) and <b>exploring</b> (spending to find out).</p>
 
       <div class="note small">
-        <b>Scoring.</b> A correct answer is worth <b>+100</b>. Verifying costs <b>&minus;20</b> (so a verified answer
-        scores +80). If you trust, you keep points only to the extent the AI was close &mdash; a badly wrong answer
-        in a gap can cost you points. Questions can land anywhere, so you will often land in the AI&rsquo;s blind gaps.
+        <b>Scoring.</b> <b>Verify</b> is a guaranteed <b>+80</b> (a correct answer is worth +100, minus the &minus;20 fee).
+        <b>Trust</b> scores <b>100 &minus; 200&times;(how far the AI is off)</b> &mdash; full marks if it&rsquo;s spot-on,
+        dropping as the error grows, and negative in a bad gap. Setting the two equal, <b>trusting beats verifying only
+        when the AI is off by less than 0.10</b> (a tenth of the axis), shown in-game as a green &ldquo;trust zone&rdquo;
+        around the AI&rsquo;s answer. Questions land anywhere, so you often land in the AI&rsquo;s blind gaps.
       </div>
 
       <div class="toggle-row">
@@ -183,6 +185,7 @@
             <span><span class="swatch" style="background:#2780e3"></span> AI knows</span>
             <span><span class="swatch" style="background:#2780e3;opacity:.5"></span> AI&rsquo;s answer</span>
             <span id="lg-band" style="display:none;"><span class="swatch" style="background:#bcd6f5"></span> AI&rsquo;s uncertainty</span>
+            <span><span class="swatch" style="background:#3fb618;opacity:.45"></span> trust zone (&plusmn;0.10)</span>
             <span><span class="swatch" style="background:#e41a1c"></span> true answer (revealed)</span>
           </div>
         </div>
@@ -239,12 +242,14 @@
       <p>The AI has learned the true answer at the <b>blue dots</b>. Everywhere else it draws the straight line
       between neighbouring dots (it <b>interpolates</b>) and reports that value &mdash; confidently.</p>
       <ul>
-        <li><b>Trust the AI</b> (free): you submit the AI&rsquo;s answer. You keep points to the extent it was close.
-        Near a dot it is safe; in a wide gap it can be far off and cost you.</li>
-        <li><b>Verify</b> (&minus;20): you pay to reveal the true answer and submit that, scoring +80.</li>
+        <li><b>Trust the AI</b> (free): submit the AI&rsquo;s answer. Score = <b>100 &minus; 200&times;(how far the AI is off)</b>
+        &mdash; +100 if spot-on, less as the error grows, and negative in a bad gap.</li>
+        <li><b>Verify</b> (&minus;20): pay to reveal the true answer and submit it, for a guaranteed <b>+80</b>.</li>
       </ul>
-      <p>Verifying is worth it whenever you think the AI is likely off by more than a little &mdash; i.e. in the wide
-      gaps. Trusting is better when the question sits close to what the AI knows. That is the tension between
+      <p>Setting the two equal, <b>trusting beats verifying exactly when the AI&rsquo;s error is below 0.10</b>. The green
+      <b>&ldquo;trust zone&rdquo;</b> drawn around the AI&rsquo;s answer marks that &plusmn;0.10 window: if the hidden truth lands
+      inside it, trusting was the better call; if outside, you should have verified. You must judge that <i>before</i>
+      seeing the truth, from how close the question sits to the AI&rsquo;s known dots &mdash; the tension between
       <b>interpolation</b> and <b>exploration</b>.</p>
       <div class="modal-foot"><button class="btn btn-blue" id="btn-help-close">Got it</button></div>
     </div>
@@ -378,6 +383,12 @@ function drawPlot(target, opts){
   // current question
   if(opts.current){
     var cx=xco(opts.current);
+    // "trust zone": if the hidden truth lands within AI answer +/- GOOD_ERR, trusting beats verifying
+    var zTop=yco(clamp(state.ai[opts.current]+GOOD_ERR,0,1));
+    var zBot=yco(clamp(state.ai[opts.current]-GOOD_ERR,0,1));
+    g+='<rect x="'+(cx-7)+'" y="'+zTop+'" width="14" height="'+(zBot-zTop)+'" fill="#3fb618" opacity="0.16" rx="3"/>';
+    g+='<line x1="'+(cx-10)+'" y1="'+zTop+'" x2="'+(cx+10)+'" y2="'+zTop+'" stroke="#3fb618" stroke-width="1.5" opacity="0.7"/>';
+    g+='<line x1="'+(cx-10)+'" y1="'+zBot+'" x2="'+(cx+10)+'" y2="'+zBot+'" stroke="#3fb618" stroke-width="1.5" opacity="0.7"/>';
     g+='<line x1="'+cx+'" y1="'+VB.T+'" x2="'+cx+'" y2="'+VB.B+'" stroke="#e41a1c" stroke-width="1.5" stroke-dasharray="6 5"/>';
     g+='<circle cx="'+cx+'" cy="'+yco(state.ai[opts.current])+'" r="6" fill="#fff" stroke="#2780e3" stroke-width="2.4"/>';
     if(opts.showAnswerTruth){
@@ -429,20 +440,24 @@ function decide(choice){
   $('st-score').textContent = state.score;
   drawPlot('plot', { band: state.band==='shown', current:q, revealed:revealedSoFar(), showAnswerTruth:true });
 
-  var fb=$('feedback'), msg;
-  if(choice==='trust'){
-    var cls = err<=GOOD_ERR ? 'good' : (err>0.25 ? 'bad' : 'neutral');
-    fb.className='feedback show '+cls;
-    msg = 'You <b>trusted</b> the AI. It said <b>'+round2(ai).toFixed(2)+'</b>; the truth was <b>'+round2(truth).toFixed(2)+'</b> '+
-          '(off by '+round2(err).toFixed(2)+'). You earned <b>'+(earned>=0?'+':'')+earned+'</b>.';
-    if(err>0.25) msg += ' &mdash; that question sat in one of the AI&rsquo;s blind gaps.';
+  var tp = trustPoints(err), vp = verifyPoints();
+  var best = Math.max(tp, vp), optimal = (earned >= best);
+  var inZone = err <= GOOD_ERR;
+  var fb=$('feedback');
+  fb.className = 'feedback show ' + (optimal ? 'good' : 'bad');
+  var head = 'The AI said <b>'+round2(ai).toFixed(2)+'</b>; the truth was <b>'+round2(truth).toFixed(2)+'</b> '+
+             '(off by '+round2(err).toFixed(2)+') &mdash; '+(inZone?'<b>inside</b>':'<b>outside</b>')+
+             ' the &plusmn;'+GOOD_ERR.toFixed(2)+' trust zone.';
+  var scores = 'Trust would score '+(tp>=0?'+':'')+tp+'; Verify +'+vp+'.';
+  var verdict;
+  var choiceName = (choice==='trust') ? 'Trust' : 'Verify';
+  if(optimal){
+    verdict = 'You chose <b>'+choiceName+'</b> for <b>'+(earned>=0?'+':'')+earned+'</b> &mdash; the better call here. &#10003;';
   } else {
-    fb.className='feedback show neutral';
-    msg = 'You <b>verified</b> (&minus;'+VERIFY_FEE+') and answered correctly: <b>+'+earned+'</b>.'+
-          ' The AI would have said '+round2(ai).toFixed(2)+' vs the truth '+round2(truth).toFixed(2)+
-          ' (off by '+round2(err).toFixed(2)+').';
+    verdict = 'You chose <b>'+choiceName+'</b> for <b>'+(earned>=0?'+':'')+earned+'</b>; '+
+              (choice==='trust'?'verifying':'trusting')+' would have given <b>+'+best+'</b> ('+(best-earned)+' more).';
   }
-  fb.innerHTML = msg;
+  fb.innerHTML = head + '<br>' + scores + '<br>' + verdict;
   $('next-wrap').style.display='block';
 }
 
