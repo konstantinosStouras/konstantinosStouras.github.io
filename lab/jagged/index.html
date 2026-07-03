@@ -182,12 +182,13 @@
           <div class="small muted" style="margin-top:8px;">More data = denser dots = safer to trust (the effect of AI &ldquo;scaling&rdquo;).</div>
         </div>
         <div class="toggle">
-          <div class="tlabel">Show the AI&rsquo;s reliability?</div>
+          <div class="tlabel">What can you see about reliability?</div>
           <div class="seg" id="seg-band">
-            <button data-v="hidden" class="on">Hidden</button>
-            <button data-v="shown">Shown</button>
+            <button data-v="blind">Blind</button>
+            <button data-v="hidden" class="on">Dots</button>
+            <button data-v="shown">Dots + band</button>
           </div>
-          <div class="small muted" style="margin-top:8px;">Hidden = you judge risk from the dot spacing (a &ldquo;blind&rdquo; user). Shown = a shaded band reveals where it is unsure (a &ldquo;calibrated&rdquo; user).</div>
+          <div class="small muted" style="margin-top:8px;"><b>Blind</b> = only the AI&rsquo;s answer, no map (a truly blind user). <b>Dots</b> = you see what the AI knows and judge risk from the gaps (mastery). <b>Dots + band</b> = a shaded band shows where it is unsure (a calibrated user).</div>
         </div>
       </div>
 
@@ -217,8 +218,8 @@
         <div>
           <div class="plot-wrap"><div id="plot"></div></div>
           <div class="legend">
-            <span><span class="swatch" style="background:#2780e3"></span> AI knows</span>
-            <span><span class="swatch" style="background:#2780e3;opacity:.5"></span> AI&rsquo;s answer</span>
+            <span id="lg-known"><span class="swatch" style="background:#2780e3"></span> AI knows</span>
+            <span id="lg-line"><span class="swatch" style="background:#2780e3;opacity:.5"></span> AI&rsquo;s answer</span>
             <span id="lg-band" style="display:none;"><span class="swatch" style="background:#bcd6f5"></span> AI&rsquo;s uncertainty</span>
             <span><span class="swatch" style="background:#3fb618;opacity:.45"></span> trust zone (&plusmn;0.10)</span>
             <span><span class="swatch" style="background:#e41a1c"></span> true answer (revealed)</span>
@@ -413,23 +414,26 @@ function drawPlot(target, opts){
   g+='<line x1="'+VB.L+'" y1="'+VB.T+'" x2="'+VB.L+'" y2="'+VB.B+'" stroke="#bbb"/>';
   g+='<line x1="'+VB.L+'" y1="'+VB.B+'" x2="'+VB.R+'" y2="'+VB.B+'" stroke="#bbb"/>';
 
-  // uncertainty band
-  if(opts.band){
+  var showMap = (opts.mode !== 'blind'); // 'blind' hides the AI's line and its known dots
+  // uncertainty band (calibrated view)
+  if(opts.mode==='shown'){
     var top=[], bot=[];
     for(x=1;x<=N_POS;x++){ top.push(xco(x)+','+yco(clamp(state.ai[x]+2*state.sd[x],0,1))); }
     for(x=N_POS;x>=1;x--){ bot.push(xco(x)+','+yco(clamp(state.ai[x]-2*state.sd[x],0,1))); }
     g+='<polygon points="'+top.concat(bot).join(' ')+'" fill="#bcd6f5" opacity="0.5" stroke="none"/>';
   }
   // AI interpolated line
-  g+='<polyline points="'+polyline(state.ai,1,N_POS)+'" fill="none" stroke="#2780e3" stroke-width="2"/>';
+  if(showMap){
+    g+='<polyline points="'+polyline(state.ai,1,N_POS)+'" fill="none" stroke="#2780e3" stroke-width="2"/>';
+  }
   // true curve (reveal only)
   if(opts.showTruth){
     g+='<polyline points="'+polyline(state.truth,1,N_POS)+'" fill="none" stroke="#e41a1c" stroke-width="2" opacity="0.85"/>';
   }
   // AI knowledge points
-  state.known.forEach(function(k){
+  if(showMap){ state.known.forEach(function(k){
     g+='<circle cx="'+xco(k)+'" cy="'+yco(state.truth[k])+'" r="4.6" fill="#2780e3"/>';
-  });
+  }); }
   // revealed truths
   (opts.revealed||[]).forEach(function(x){
     g+='<circle cx="'+xco(x)+'" cy="'+yco(state.truth[x])+'" r="3.6" fill="#e41a1c" opacity="0.7"/>';
@@ -473,7 +477,10 @@ function verifyPoints(){ return CORRECT - VERIFY_FEE; }
 function startRound(){
   buildLandscape();
   state.qi=0; state.score=0; state.records=[];
-  $('lg-band').style.display = (state.band==='shown') ? 'inline-flex' : 'none';
+  var mapVisible = (state.band !== 'blind');
+  $('lg-known').style.display = mapVisible ? 'inline-flex' : 'none';
+  $('lg-line').style.display  = mapVisible ? 'inline-flex' : 'none';
+  $('lg-band').style.display  = (state.band==='shown') ? 'inline-flex' : 'none';
   showScreen('s-game');
   renderQuestion();
 }
@@ -489,7 +496,7 @@ function renderQuestion(){
   $('btn-trust').disabled=false; $('btn-verify').disabled=false;
   $('feedback').className='feedback'; $('feedback').innerHTML='';
   $('next-wrap').style.display='none';
-  drawPlot('plot', { band: state.band==='shown', current:q, revealed:revealedSoFar() });
+  drawPlot('plot', { mode: state.band, current:q, revealed:revealedSoFar() });
 }
 
 function decide(choice){
@@ -502,7 +509,7 @@ function decide(choice){
 
   $('btn-trust').disabled=true; $('btn-verify').disabled=true;
   $('st-score').textContent = state.score;
-  drawPlot('plot', { band: state.band==='shown', current:q, revealed:revealedSoFar(), showAnswerTruth:true });
+  drawPlot('plot', { mode: state.band, current:q, revealed:revealedSoFar(), showAnswerTruth:true });
 
   var tp = trustPoints(err), vp = verifyPoints();
   var best = Math.max(tp, vp), optimal = (earned >= best);
@@ -564,7 +571,7 @@ function finish(){
   });
   $('bars').innerHTML=html;
 
-  drawPlot('reveal-plot', { band:false, revealed:revealedSoFar(), showTruth:true });
+  drawPlot('reveal-plot', { mode:'hidden', revealed:revealedSoFar(), showTruth:true });
   showScreen('s-done');
 }
 
