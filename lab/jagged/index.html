@@ -386,8 +386,12 @@ function calloutSVG(o){
   var lh=18, pad=9, H=pad*2 + o.lines.length*lh;
   var marker = (o.color==='#e41a1c') ? 'ar-red' : 'ar-blue';
   var s='';
-  s+='<line x1="'+o.sx+'" y1="'+o.sy+'" x2="'+o.ax+'" y2="'+o.ay+'" stroke="'+o.color+'" stroke-width="1.8" marker-end="url(#'+marker+')"/>';
-  s+='<circle cx="'+o.ax+'" cy="'+o.ay+'" r="3.4" fill="'+o.color+'"/>';
+  var arrows = o.arrows || [{sx:o.sx, sy:o.sy, ax:o.ax, ay:o.ay}];
+  for(var a=0;a<arrows.length;a++){
+    var ar=arrows[a];
+    s+='<line x1="'+ar.sx+'" y1="'+ar.sy+'" x2="'+ar.ax+'" y2="'+ar.ay+'" stroke="'+o.color+'" stroke-width="1.8" marker-end="url(#'+marker+')"/>';
+    s+='<circle cx="'+ar.ax+'" cy="'+ar.ay+'" r="3.4" fill="'+o.color+'"/>';
+  }
   s+='<rect x="'+o.boxX+'" y="'+o.boxY+'" width="'+o.W+'" height="'+H+'" rx="8" fill="#ffffff" stroke="'+o.color+'" stroke-width="1.4" opacity="0.97"/>';
   for(var i=0;i<o.lines.length;i++){
     var ln=o.lines[i];
@@ -454,15 +458,17 @@ function drawPlot(target, opts){
       g+='<circle cx="'+cx+'" cy="'+yco(state.truth[opts.current])+'" r="5.5" fill="#e41a1c"/>';
     }
   }
-  // start-screen explanatory arrows (pointing to the red truth and the blue AI line)
+  // start-screen explanatory arrows
   if(opts.annotate){
-    var rx=42, bxp=67; // dip (truth departs from the AI) and a clean chord segment
-    // red: box in the clear top band, arrow down to the true curve in the gap
-    g += calloutSVG({ color:'#e41a1c', ax:xco(rx), ay:yco(state.truth[rx]), sx:250, sy:94, boxX:70, boxY:22, W:262,
-      lines:[{t:'The true answer',b:true},{t:'hidden while you play — it drifts'},{t:'away from the AI in the wide gaps'}] });
-    // blue: box in the clear bottom band, arrow up to the AI's interpolated line
-    g += calloutSVG({ color:'#2780e3', ax:xco(bxp), ay:yco(state.ai[bxp]), sx:452, sy:252, boxX:322, boxY:252, W:280,
-      lines:[{t:'The AI’s answer',b:true},{t:'it fills in (interpolates) between'},{t:'its dots — just as confidently'}] });
+    // blue callout (top-left): what the AI knows — its dots AND its interpolated line (two arrows)
+    g += calloutSVG({ color:'#2780e3', boxX:64, boxY:20, W:252,
+      lines:[{t:'What the AI knows —',b:true},{t:'its knowledge points (dots) and'},{t:'its interpolated answer (line)'}],
+      arrows:[ {sx:150,sy:92,ax:xco(20),ay:yco(state.ai[20])},
+               {sx:242,sy:92,ax:xco(30),ay:yco(state.truth[30])} ] });
+    // red callout (top-right): the true answer, hidden — arrow to the true curve where it departs from the AI
+    g += calloutSVG({ color:'#e41a1c', boxX:452, boxY:20, W:246,
+      lines:[{t:'The true answer —',b:true},{t:'the correct answer to every'},{t:'question, hidden from you'}],
+      arrows:[ {sx:548,sy:92,ax:xco(65),ay:yco(state.truth[65])} ] });
   }
   g+='<text x="'+((VB.L+VB.R)/2)+'" y="'+(VB.H-6)+'" text-anchor="middle" class="axtitle">Question</text>';
   g+='<text x="16" y="'+((VB.T+VB.B)/2)+'" text-anchor="middle" class="axtitle" transform="rotate(-90 16 '+((VB.T+VB.B)/2)+')">Answer</text>';
@@ -596,7 +602,7 @@ function segWire(segId, key){
 // clear gap where the truth dips away from the AI's straight-line interpolation.
 function buildDemo(){
   var known=[10,30,55,80,95];
-  var cX=[1,10,30,42,55,80,95,100], cY=[0.55,0.55,0.60,0.43,0.56,0.69,0.50,0.52];
+  var cX=[1,10,30,42,55,65,80,95,100], cY=[0.56,0.56,0.60,0.44,0.55,0.67,0.55,0.45,0.47];
   function baseAt(x){
     for(var i=0;i<cX.length-1;i++){ if(x>=cX[i] && x<=cX[i+1]){ var t=(x-cX[i])/(cX[i+1]-cX[i]); return cY[i]+t*(cY[i+1]-cY[i]); } }
     return cY[cY.length-1];
