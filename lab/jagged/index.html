@@ -111,7 +111,7 @@
     <!-- ============ START ============ -->
     <section class="screen active" id="s-start">
       <h1>Trust the AI? <span style="font-weight:400;">An exploration vs.&nbsp;interpolation trade-off</span></h1>
-      <p><b>AI knowledge is jagged.</b> A model can be brilliant on one question and confidently wrong on an almost
+      <p>AI knowledge is <i>jagged</i>. An AI model can be brilliant on one question and confidently wrong on an almost
       identical one. <a href="https://x.com/karpathy/status/1816531576228053133" target="_blank" rel="noreferrer noopener">Karpathy</a>
       called this &ldquo;jagged intelligence,&rdquo; and <a href="https://pubsonline.informs.org/doi/10.1287/orsc.2025.21838" target="_blank" rel="noreferrer noopener">Dell&rsquo;Acqua et&nbsp;al. (2026)</a> the
       &ldquo;jagged frontier.&rdquo; The reason is simple: a model reliably knows the answers it has actually seen, and
@@ -383,6 +383,7 @@ function buildLandscape(){
 
 // ---- plot ----
 var VB={L:54,R:702,T:14,B:338,W:720,H:380};
+var HEADER=104; // reserved band ABOVE the plot for the annotated callout boxes (start screen only)
 function xco(p){ return VB.L + (p-1)/(N_POS-1)*(VB.R-VB.L); }
 function yco(v){ return VB.B - v*(VB.B-VB.T); }
 function polyline(arr, from, to){
@@ -466,26 +467,31 @@ function drawPlot(target, opts){
       g+='<circle cx="'+cx+'" cy="'+yco(state.truth[opts.current])+'" r="5.5" fill="#e41a1c"/>';
     }
   }
-  // start-screen explanatory arrows (anchors adapt to the current random landscape)
+  // start-screen callouts live in the header band above the plot (never overlap the curve);
+  // arrows drop down into the plot. Blue points to two knowledge dots (ordered left->right so
+  // they cannot cross); red points to a right-side spot where the truth rises above the AI (so
+  // the red arrow stays above the blue line and does not cross it).
   if(opts.annotate){
-    var kn = state.known, i2;
-    // blue: a knowledge dot (nearest x=25) and a point on the interpolated line in a left-region gap
-    var dotX = kn[0]; for(i2=0;i2<kn.length;i2++){ if(Math.abs(kn[i2]-25) < Math.abs(dotX-25)) dotX=kn[i2]; }
-    var lineX = Math.max(6, dotX-9);
-    for(i2=0;i2<kn.length-1;i2++){ var mid=Math.round((kn[i2]+kn[i2+1])/2); if(mid>=12 && mid<=45){ lineX=mid; break; } }
-    g += calloutSVG({ color:'#2780e3', boxX:64, boxY:20, W:252,
+    var kn = state.known, i2, dv;
+    var d1=kn[0]; for(i2=0;i2<kn.length;i2++){ if(Math.abs(kn[i2]-15)<Math.abs(d1-15)) d1=kn[i2]; }
+    var d2=-1;    for(i2=0;i2<kn.length;i2++){ if(kn[i2]!==d1 && (d2<0 || Math.abs(kn[i2]-42)<Math.abs(d2-42))) d2=kn[i2]; }
+    if(d2<0) d2=d1;
+    var lo=Math.min(d1,d2), hi=Math.max(d1,d2);
+    g += calloutSVG({ color:'#2780e3', boxX:64, boxY:-96, W:252,
       lines:[{t:'What the AI knows:',b:true},{t:'its knowledge points (dots) and'},{t:'its interpolated answer (line)'}],
-      arrows:[ {sx:150,sy:92,ax:xco(lineX),ay:yco(state.ai[lineX])},
-               {sx:242,sy:92,ax:xco(dotX),ay:yco(state.truth[dotX])} ] });
-    // red: point to where the true curve departs most from the AI in the right region
-    var rx=64, rb=-1; for(i2=52;i2<=92;i2++){ var dv=Math.abs(state.truth[i2]-state.ai[i2]); if(dv>rb){rb=dv; rx=i2;} }
-    g += calloutSVG({ color:'#e41a1c', boxX:452, boxY:20, W:246,
+      arrows:[ {sx:clamp(xco(lo),80,175), sy:-22, ax:xco(lo), ay:yco(state.truth[lo])},
+               {sx:clamp(xco(hi),205,305), sy:-22, ax:xco(hi), ay:yco(state.truth[hi])} ] });
+    var rx=70, rb=-1; for(i2=52;i2<=95;i2++){ dv=state.truth[i2]-state.ai[i2]; if(dv>rb){rb=dv; rx=i2;} }
+    if(rb<=0){ for(i2=52;i2<=95;i2++){ dv=Math.abs(state.truth[i2]-state.ai[i2]); if(dv>rb){rb=dv; rx=i2;} } }
+    g += calloutSVG({ color:'#e41a1c', boxX:452, boxY:-96, W:246,
       lines:[{t:'The true answer:',b:true},{t:'the correct answer to every'},{t:'question, hidden from you'}],
-      arrows:[ {sx:548,sy:92,ax:xco(rx),ay:yco(state.truth[rx])} ] });
+      arrows:[ {sx:clamp(xco(rx),470,690), sy:-22, ax:xco(rx), ay:yco(state.truth[rx])} ] });
   }
   g+='<text x="'+((VB.L+VB.R)/2)+'" y="'+(VB.H-6)+'" text-anchor="middle" class="axtitle">Question</text>';
   g+='<text x="16" y="'+((VB.T+VB.B)/2)+'" text-anchor="middle" class="axtitle" transform="rotate(-90 16 '+((VB.T+VB.B)/2)+')">Answer</text>';
-  $(target).innerHTML='<svg viewBox="0 0 '+VB.W+' '+VB.H+'" class="plot-svg" preserveAspectRatio="xMidYMid meet">'+g+'</svg>';
+  var vbTop = opts.annotate ? -HEADER : 0;
+  var vbH   = opts.annotate ? (VB.H+HEADER) : VB.H;
+  $(target).innerHTML='<svg viewBox="0 '+vbTop+' '+VB.W+' '+vbH+'" class="plot-svg" preserveAspectRatio="xMidYMid meet">'+g+'</svg>';
 }
 
 // ---- scoring ----
