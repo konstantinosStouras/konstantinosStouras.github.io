@@ -111,10 +111,28 @@
     <!-- ============ START ============ -->
     <section class="screen active" id="s-start">
       <h1>Trust the AI?</h1>
-      <p>An AI has learned the answers at a handful of <b>scattered points</b> (the dots). For every other
-      question it <b>interpolates</b> &mdash; it connects the dots and reports the value on that line. The catch:
-      it looks <b>equally confident everywhere</b>, but it is only reliable <i>near</i> what it actually knows.
-      In the wide gaps between dots, its confident-looking answer can be badly wrong.</p>
+      <p><b>AI knowledge is jagged.</b> A model can be brilliant on one question and confidently wrong on an almost
+      identical one &mdash; what Karpathy called &ldquo;jagged intelligence&rdquo; and Dell&rsquo;Acqua et&nbsp;al. the
+      &ldquo;jagged frontier.&rdquo; The reason is simple: a model reliably knows the answers it has actually seen, and
+      for every other question it <b>interpolates</b> from those &mdash; guessing by filling in between what it knows.
+      Near its knowledge it is accurate; far from it, in the gaps, its answer is a confident-looking guess that can be
+      badly off. The map below is a <b>conceptual model</b> of exactly this &mdash; and of how a user searches such a
+      model for correct answers.</p>
+
+      <h3 style="margin-top:18px;">What the map shows</h3>
+      <ul>
+        <li><b>x&#8209;axis &mdash; the question.</b> A one&#8209;dimensional map of every question you could ask
+        (numbered 1&ndash;100). Questions that sit close together are <i>similar</i>, so their answers are related.</li>
+        <li><b>y&#8209;axis &mdash; the answer.</b> The correct answer to that question, on a 0&ndash;1 scale.</li>
+        <li><span class="swatch" style="background:#e41a1c"></span> <b>Red curve &mdash; the truth.</b> The correct
+        answer to every question. It is rough (neighbouring questions differ a little) and is <b>hidden from you</b>
+        while you play.</li>
+        <li><span class="swatch" style="background:#2780e3"></span> <b>Blue dots &mdash; what the AI actually knows.</b>
+        The questions it has learned exactly &mdash; its training data, or &ldquo;knowledge points.&rdquo;</li>
+        <li><b>Blue line &mdash; the AI&rsquo;s answer everywhere.</b> It simply connects its dots and reports that
+        value. Notice it looks equally confident across the whole space, yet it only hugs the truth near its dots and
+        drifts away in the wide gaps.</li>
+      </ul>
 
       <div class="card" style="padding:14px;">
         <div id="demo-plot"></div>
@@ -122,19 +140,36 @@
           <span><span class="swatch" style="background:#2780e3"></span> AI&rsquo;s known points &amp; interpolated answer</span>
           <span><span class="swatch" style="background:#e41a1c"></span> the true answer (hidden from you)</span>
         </div>
+        <div class="small muted center" style="margin-top:6px;">x = the space of questions (similar questions sit near each other) &nbsp;&middot;&nbsp; y = the correct answer (0&ndash;1)</div>
       </div>
 
-      <p>Each question, you decide: <b>Trust the AI&rsquo;s answer</b> (free), or <b>Verify</b> &mdash; pay a small
-      fee to check the true answer and be right. Trust pays off near the dots; in the gaps you are usually better
-      off paying to look. This is the trade-off between <b>interpolating</b> (relying on what the model already
-      &ldquo;knows&rdquo;) and <b>exploring</b> (spending to find out).</p>
+      <h3 style="margin-top:18px;">Your task</h3>
+      <p>You are a user querying this AI for correct answers. Over <b>15 questions</b> &mdash; which can land anywhere on
+      the map, so you will often fall in the AI&rsquo;s blind gaps &mdash; you decide each time whether the AI&rsquo;s
+      confident answer can be trusted <i>here</i>, or whether to pay to check it. That is the trade-off between
+      <b>interpolating</b> (relying on what the model already &ldquo;knows&rdquo;) and <b>exploring</b> (spending to
+      find out).</p>
 
+      <h3 style="margin-top:18px;">How points are scored</h3>
       <div class="note small">
-        <b>Scoring.</b> <b>Verify</b> is a guaranteed <b>+80</b> (a correct answer is worth +100, minus the &minus;20 fee).
-        <b>Trust</b> scores <b>100 &minus; 200&times;(how far the AI is off)</b> &mdash; full marks if it&rsquo;s spot-on,
-        dropping as the error grows, and negative in a bad gap. Setting the two equal, <b>trusting beats verifying only
-        when the AI is off by less than 0.10</b> (a tenth of the axis), shown in-game as a green &ldquo;trust zone&rdquo;
-        around the AI&rsquo;s answer. Questions land anywhere, so you often land in the AI&rsquo;s blind gaps.
+        Each question you pick one of two actions:
+        <ul style="margin:8px 0;">
+          <li><b>Trust the AI</b> (free): you submit the AI&rsquo;s answer as your own and are paid for accuracy.
+          You get <b>+100</b> if it is exactly right, and lose <b>2 points for every 0.01</b> the AI is off.
+          (Formula: <b>100 &minus; 200&times;error</b>, where <i>error</i> is the distance between the AI&rsquo;s answer
+          and the truth on the 0&ndash;1 scale. It can go negative &mdash; down to &minus;40 &mdash; in a bad gap.)</li>
+          <li><b>Verify</b> (&minus;20): you pay 20 to look up the true answer and submit that, so you are right &mdash;
+          a guaranteed <b>+80</b>.</li>
+        </ul>
+        Because verifying locks in +80, <b>trusting is the better bet only when you expect the AI to be off by less
+        than 0.10</b> (that is where 100 &minus; 200&times;error = 80). In-game, a green <b>&ldquo;trust zone&rdquo;</b>
+        of &plusmn;0.10 is drawn around the AI&rsquo;s answer: if the hidden truth turns out to lie inside it, trusting
+        won; outside it, you should have verified.
+        <div style="margin-top:10px; padding:9px 11px; background:#fff; border:1px solid var(--line); border-radius:8px;">
+          <b>Example.</b> The AI answers <b>0.60</b>.
+          If the truth is 0.55 (off by 0.05) &rarr; Trust scores 100 &minus; 200&times;0.05 = <b>+90</b> &mdash; beats +80, so trust.
+          If the truth is 0.80 (off by 0.20) &rarr; Trust scores 100 &minus; 200&times;0.20 = <b>+60</b> &mdash; below +80, so you should have verified.
+        </div>
       </div>
 
       <div class="toggle-row">
