@@ -82,3 +82,23 @@ High-Variability walk with the peak pinned to $1. **No data is collected or
 transmitted.** The plot is drawn as inline SVG. To change behavior, edit the
 constants near the top of the `<script>` (`FEE`, `PART1_ROUNDS`, `TOTAL_ROUNDS`,
 `PART2_PREREVEAL`) or the treatment logic in `genPrizesRaw`.
+
+## `/lab/jagged` — self-contained "Trust the AI?" jagged-intelligence game
+
+`lab/jagged/index.html` is a **single, self-contained** static page (no build
+step, no backend, no external CDN) — a clean teaching game inspired by Joshua
+Gans, *"A Model of Artificial Jagged Intelligence"* (2026, arXiv:2601.07573). One
+hidden rough "truth" curve over 100 questions; an AI knows a scatter of points
+exactly and **interpolates** (linear between neighbours, flat extrapolation past
+the ends), looking equally confident everywhere. Each of 15 questions the player
+chooses **Trust** (free; keeps points to the extent the AI was close) or
+**Verify** (−20; reveals the truth and scores +80). Questions land uniformly so
+players over-encounter wide gaps (the paper's inspection paradox). Two start-screen
+toggles are the experimental levers: coverage **Sparse/Dense** (AI scaling) and
+reliability shading **Hidden/Shown** (Gans's blind vs calibrated user — the shaded
+band is the Brownian-bridge posterior std, zero at knowledge points and largest
+mid-gap). The end screen reveals the true curve over the AI's line and compares
+the player to always-trust / always-verify / perfect-play. **No data is collected
+or transmitted.** The plot is inline SVG. To change behavior, edit the constants
+near the top of the `<script>` (`N_Q`, `CORRECT`, `VERIFY_FEE`, `PEN`, `STEP_SD`,
+`K_SPARSE`, `K_DENSE`) or `buildLandscape`.
