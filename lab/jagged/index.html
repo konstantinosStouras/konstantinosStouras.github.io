@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Trust the AI? A Jagged Intelligence Game</title>
-  <meta name="description" content="A simple interactive game about Artificial Jagged Intelligence: an AI knows scattered points and interpolates between them, looking equally confident everywhere. Decide when to trust its answer and when to check it yourself. Inspired by Joshua Gans, “A Model of Artificial Jagged Intelligence” (2026)." />
-  <meta name="keywords" content="artificial jagged intelligence, AJI, interpolation, extrapolation, AI reliability, calibration, trust, Gans, spatial search, exploration" />
+  <meta name="description" content="A simple interactive game about Artificial Jagged Intelligence: an AI knows scattered points and interpolates between them, looking equally confident everywhere. Decide when to trust its answer and when to check it yourself." />
+  <meta name="keywords" content="artificial jagged intelligence, AJI, interpolation, extrapolation, AI reliability, calibration, trust, spatial search, exploration" />
   <meta name="robots" content="index,follow" />
   <link rel="canonical" href="https://www.stouras.com/lab/jagged/" />
 
@@ -206,7 +206,7 @@
             <button data-v="off" class="on">Off</button>
             <button data-v="on">On</button>
           </div>
-          <div class="small muted" style="margin-top:8px;">When on, every prize you verify is added to the AI&rsquo;s knowledge: its line bends to pass through that point, and its blind gaps shrink where you searched. This is a data flywheel, where user data (not just bigger models) improves the AI. Gans treats AI improvement as exogenous scaling; this makes it endogenous, and targeted at the spots users probe. It lets you study whether verifying becomes an investment that pays off on later nearby questions rather than a pure cost, whether usage fills the widest gaps first and reduces jaggedness faster than uniform scaling, and the externality that your paid checks improve the model for everyone (a public-good problem in a multi-user version).</div>
+          <div class="small muted" style="margin-top:8px;">When on, every knowledge point you verify is added to the AI&rsquo;s model: its line bends to pass through that point, and its blind gaps shrink where you searched. This is a data flywheel, where user data (not just bigger models) improves the AI. The improvement is endogenous, and targeted at the spots users probe. It lets you study whether verifying becomes an investment that pays off on later nearby questions rather than a pure cost, whether usage fills the widest gaps first and reduces jaggedness faster than uniform scaling, and the externality that your checks improve the model for everyone (a public-good problem in a multi-user version).</div>
         </div>
       </div>
 
@@ -309,8 +309,8 @@
 <script>
 "use strict";
 /* ==========================================================================
-   Trust the AI? — a clean game about Artificial Jagged Intelligence (AJI),
-   after Gans (2026). One hidden "truth" curve; an AI that knows scattered
+   Trust the AI? A clean game about Artificial Jagged Intelligence (AJI).
+   One hidden "truth" curve; an AI that knows scattered
    points and interpolates between them; you decide Trust vs Verify.
    Self-contained, no backend, no data collection.
    ========================================================================== */
@@ -683,7 +683,7 @@ function drawPreview(){
           : (state.band==='shown') ? '<b>Dots + band</b>: the shaded band shows where the AI is unsure.'
           : '<b>Dots</b>: you see what the AI knows and judge risk from the gaps.';
   var shr = (state.shared==='on')
-    ? '<b>Shared learning ON</b>: prizes you verify become new dots (shown), so the map fills in where you search.'
+    ? '<b>Shared learning ON</b>: knowledge points you verify become new dots (shown), so the map fills in where you search.'
     : '<b>Shared learning OFF</b>: the AI’s knowledge is fixed.';
   $('preview-caption').innerHTML = cov+' &nbsp;&middot;&nbsp; '+vis+' &nbsp;&middot;&nbsp; '+shr;
 }
