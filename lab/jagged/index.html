@@ -172,6 +172,16 @@
         </div>
       </div>
 
+      <h3 style="margin-top:22px;">Experimental conditions</h3>
+      <p>These three switches are the levers of the model, and together they frame a defining question of the AI era:
+      what turns raw model capability into value people can actually use? A model can score well on average yet stay
+      jagged and opaque, so whether it truly helps depends on three things: how much it has learned
+      (<b>coverage</b>, i.e. scaling), whether you can tell where it is reliable (<b>visibility</b>, i.e. calibration
+      and discoverability), and whether using it makes it better (<b>shared learning</b>, i.e. a data flywheel). Flip
+      the switches below to reshape your playing environment. The plot updates to show what you would face, so you can
+      study when scaling, transparency, or user-generated data is what closes the gap between a high benchmark score
+      and real usefulness on the task in front of you.</p>
+
       <div class="toggle-row">
         <div class="toggle">
           <div class="tlabel">How much has the AI learned?</div>
@@ -199,6 +209,10 @@
           <div class="small muted" style="margin-top:8px;">When on, every prize you verify is added to the AI&rsquo;s knowledge: its line bends to pass through that point, and its blind gaps shrink where you searched. This is a data flywheel, where user data (not just bigger models) improves the AI. Gans treats AI improvement as exogenous scaling; this makes it endogenous, and targeted at the spots users probe. It lets you study whether verifying becomes an investment that pays off on later nearby questions rather than a pure cost, whether usage fills the widest gaps first and reduces jaggedness faster than uniform scaling, and the externality that your paid checks improve the model for everyone (a public-good problem in a multi-user version).</div>
         </div>
       </div>
+
+      <div style="font-weight:600; font-size:14px; margin:16px 0 4px;">Your playing environment under these conditions</div>
+      <div class="plot-wrap"><div id="preview-plot"></div></div>
+      <div class="small muted center" id="preview-caption" style="margin-top:6px;"></div>
 
       <div class="right"><button class="btn btn-green" id="btn-start">Start (15 questions)</button></div>
     </section>
@@ -622,7 +636,8 @@ function segWire(segId, key){
     var b=e.target.closest('button'); if(!b) return;
     Array.prototype.forEach.call(seg.querySelectorAll('button'), function(x){ x.classList.remove('on'); });
     b.classList.add('on'); state[key]=b.getAttribute('data-v');
-    if(segId==='seg-cov') drawDemo(); // coverage changes how many dots the illustration shows
+    if(segId==='seg-cov'){ drawDemo(); genPreviewBase(); } // coverage reshuffles both illustrations
+    drawPreview(); // every condition updates the "playing environment" preview
   });
 }
 // Annotated start-screen illustration. It is dynamic: a fresh random landscape
@@ -641,6 +656,43 @@ function drawDemo(){
   state.truth=saved.truth; state.known=saved.known; state.ai=saved.ai; state.sd=saved.sd;
 }
 
+// A stable base landscape for the "Experimental conditions" preview. Regenerated only when
+// coverage changes; reliability and shared-learning toggles re-render the SAME landscape so
+// their effect is a clean comparison.
+function genPreviewBase(){
+  var truth=new Array(N_POS+1); truth[1]=0.5;
+  for(var x=2;x<=N_POS;x++){ var v=truth[x-1]+STEP_SD*gauss(); if(v<0)v=-v; if(v>1)v=2-v; truth[x]=clamp(v,0,1); }
+  var K=(state.coverage==='dense')?K_DENSE:K_SPARSE, pts={};
+  while(Object.keys(pts).length<K){ pts[randint(4,N_POS-3)]=1; }
+  var base=Object.keys(pts).map(Number).sort(function(a,b){return a-b;});
+  var extra=[], guard=0; // points a player might verify (shown when Shared learning is On)
+  while(extra.length<3 && guard++<300){ var e=randint(6,N_POS-5); if(pts[e]) continue; pts[e]=1; extra.push(e); }
+  extra.sort(function(a,b){return a-b;});
+  var q=50, wid=-1; // sample question: midpoint of the widest gap (a risky spot)
+  for(var i=0;i<base.length-1;i++){ var w=base[i+1]-base[i]; if(w>wid){ wid=w; q=Math.round((base[i]+base[i+1])/2); } }
+  state._pvTruth=truth; state._pvBase=base; state._pvExtra=extra; state._pvQ=q;
+}
+function drawPreview(){
+  if(!state._pvTruth) genPreviewBase();
+  var saved={truth:state.truth,known:state.known,ai:state.ai,sd:state.sd};
+  var known=state._pvBase.slice(), revealed=[];
+  if(state.shared==='on'){ known=known.concat(state._pvExtra).sort(function(a,b){return a-b;}); revealed=state._pvExtra.slice(); }
+  var it=computeInterp(state._pvTruth, known);
+  state.truth=state._pvTruth; state.known=known; state.ai=it.ai; state.sd=it.sd;
+  drawPlot('preview-plot', { mode: state.band, current: state._pvQ, revealed: revealed });
+  state.truth=saved.truth; state.known=saved.known; state.ai=saved.ai; state.sd=saved.sd;
+  var cov = (state.coverage==='dense')
+    ? '<b>Dense coverage</b>: many dots, small gaps, usually safe to trust.'
+    : '<b>Sparse coverage</b>: few dots, wide gaps, often better to verify.';
+  var vis = (state.band==='blind') ? '<b>Blind</b>: you see only the AI’s answer and the trust zone, no map.'
+          : (state.band==='shown') ? '<b>Dots + band</b>: the shaded band shows where the AI is unsure.'
+          : '<b>Dots</b>: you see what the AI knows and judge risk from the gaps.';
+  var shr = (state.shared==='on')
+    ? '<b>Shared learning ON</b>: prizes you verify become new dots (shown), so the map fills in where you search.'
+    : '<b>Shared learning OFF</b>: the AI’s knowledge is fixed.';
+  $('preview-caption').innerHTML = cov+' &nbsp;&middot;&nbsp; '+vis+' &nbsp;&middot;&nbsp; '+shr;
+}
+
 document.addEventListener('DOMContentLoaded', function(){
   segWire('seg-cov','coverage');
   segWire('seg-band','band');
@@ -649,8 +701,8 @@ document.addEventListener('DOMContentLoaded', function(){
   $('btn-trust').addEventListener('click', function(){ decide('trust'); });
   $('btn-verify').addEventListener('click', function(){ decide('verify'); });
   $('btn-next').addEventListener('click', nextQuestion);
-  $('btn-again').addEventListener('click', function(){ showScreen('s-start'); drawDemo(); });
-  $('btn-restart').addEventListener('click', function(){ newState(); resetSegs(); showScreen('s-start'); drawDemo(); });
+  $('btn-again').addEventListener('click', function(){ showScreen('s-start'); drawDemo(); drawPreview(); });
+  $('btn-restart').addEventListener('click', function(){ newState(); resetSegs(); showScreen('s-start'); drawDemo(); drawPreview(); });
   $('btn-help').addEventListener('click', function(){ $('ov-help').classList.add('show'); });
   $('btn-help-close').addEventListener('click', function(){ $('ov-help').classList.remove('show'); });
 
@@ -663,6 +715,7 @@ document.addEventListener('DOMContentLoaded', function(){
   }
   window.__resetSegs = resetSegs;
   drawDemo();
+  drawPreview();
 });
 </script>
 </body>
