@@ -84,6 +84,24 @@
 .encodingTable tr:last-child td { border-bottom: none; }
 .encodingTable .condTag { font-size: 13px; padding: 4px 12px; }
 
+/* Participants per condition (Step 2) — same look as the encoding key card */
+.condCountCard {
+  margin: 16px auto 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--paper);
+  padding: 16px 24px 14px;
+  max-width: 460px;
+}
+.condCountZero { opacity: 0.45; }
+.condCountNote {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 10px;
+  text-align: center;
+  line-height: 1.5;
+}
+
 /* Inline option checkbox row (Step 3 scoring scope, Step 4 stats filter) */
 .checkRow {
   display: flex;
