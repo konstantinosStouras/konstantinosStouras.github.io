@@ -262,7 +262,10 @@ def fit_one(sub, dv, treatment_terms, controls):
     if len(sub) - n_params < 2:
         return None
     try:
-        return smf.ols(f"{dv} ~ {rhs}", data=sub).fit(cov_type="HC3")
+        # use_t=True: with a robust cov_type statsmodels defaults to NORMAL-based
+        # p-values; force t(df_resid) inference so p-values/stars match the R tab
+        # (which uses pt() with the residual df) and stay small-sample appropriate.
+        return smf.ols(f"{dv} ~ {rhs}", data=sub).fit(cov_type="HC3", use_t=True)
     except Exception as exc:
         warnings.warn(f"[{dv}] OLS failed: {exc}")
         return None
@@ -606,7 +609,10 @@ def main():
     present_levels = list(df["condition"].cat.categories)
 
     # The page reads this exact line for the "N ideas analysed" header (Step 6/PDF).
-    print(f"rows used for analysis: {len(df)}\n")
+    # Count only rows that carry at least one present KPI — a row with no KPI at all
+    # enters no model, so it must not inflate the headline N.
+    n_used = int(df[[k for k, _, _ in kpis]].notna().any(axis=1).sum())
+    print(f"rows used for analysis: {n_used}\n")
 
     # Per-condition sample sizes + per-KPI coverage.
     print("=" * 78)

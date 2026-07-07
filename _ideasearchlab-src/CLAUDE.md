@@ -408,9 +408,10 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
    - **Summary tallies:** three stat boxes — *Ideas generated* (`rows.length`), *Total final ideas*
      (`final_pick == 1`), *Number of sessions* (distinct session codes in the loaded data) — plus a
      **Participants by condition** two-column table (coloured encoding tag · head-count):
-     Firestore-loaded sessions use the real (non-removed) participant count captured at load time
+     Firestore-loaded sessions use the real registered-participant count captured at load time
      (`_participantCount` on `loadedSessions`), imported/restored data falls back to distinct idea
-     authors per condition (`participantsByCondition` in DataAnalytics.jsx).
+     authors per condition (blank author IDs skipped; unrecognised condition labels surface as an
+     "Other" row) — `participantsByCondition` in DataAnalytics.jsx.
    - **Scores round-trip:** the Rankings tab's *Novelty / Usefulness / Quality* columns are filled
      from any scores set in Step 3 (mapped by Idea ID via `rankingsSheetFromIdeas(ideaRows, scoreById)`),
      so re-downloading the aggregate after scoring carries the scores back in.

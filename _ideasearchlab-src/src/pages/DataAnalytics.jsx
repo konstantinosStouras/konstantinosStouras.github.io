@@ -250,8 +250,10 @@ export default function DataAnalytics() {
         collected.push(...buildRowsForSession(s, ideas, parts, groups))
         // Head-count captured now (participant docs are only fetched here), so the
         // Section-2 "participants by condition" table can show real counts — not
-        // just idea authors. Admin-removed participants are excluded.
-        enriched.push({ ...s, _participantCount: parts.filter(p => !p.removed && p.status !== 'removed').length })
+        // just idea authors. Every registered participant counts, including any the
+        // admin detached mid-session — their ideas stay in the dataset too, so the
+        // participant and idea tallies share one basis.
+        enriched.push({ ...s, _participantCount: parts.length })
       }
       const tagged = tagRows(collected)
       const bookRows = tickedBooks.flatMap(b => b.rows || [])   // already tagged with _book + rid
@@ -714,7 +716,12 @@ export default function DataAnalytics() {
     setRows(prev => recomputeOverall(prev.map(r => {
       if (r.rid !== rid) return r
       const v = value === '' ? '' : Math.max(1, Math.min(5, Number(value)))
-      return { ...r, [field]: Number.isNaN(v) ? '' : v }
+      const next = { ...r, [field]: Number.isNaN(v) ? '' : v }
+      // Hand-clearing BOTH components clears the derived quality too (recomputeOverall
+      // deliberately preserves a standalone quality when both components are missing,
+      // which would otherwise freeze the stale mean here — quality isn't editable).
+      if (next.novelty === '' && next.usefulness === '') next.overall_quality = ''
+      return next
     })))
   }
 
@@ -958,7 +965,8 @@ export default function DataAnalytics() {
   // (imported export files, a dataset restored from a saved default) falls back to
   // counting distinct idea authors per condition.
   const participantsByCondition = useMemo(() => {
-    const counts = Object.fromEntries(CONDITIONS.map(c => [c, 0]))
+    const OTHER = 'Other'      // rows whose condition isn't one of the four encodings
+    const counts = Object.fromEntries([...CONDITIONS, OTHER].map(c => [c, 0]))
     const counted = new Set()   // session codes whose real head-count is known
     for (const s of loadedSessions) {
       if (Number.isFinite(s._participantCount)) {
@@ -970,12 +978,16 @@ export default function DataAnalytics() {
     const seen = new Set()
     for (const r of rows) {
       if (counted.has(r.session)) continue
+      if (!r.author_id) continue   // an idea without an author can't be attributed
       const key = userKey(r.session, r.author_id)
       if (seen.has(key)) continue
       seen.add(key)
-      if (counts[r.condition] != null) counts[r.condition]++
+      counts[counts[r.condition] != null ? r.condition : OTHER]++
     }
-    return CONDITIONS.map(c => ({ condition: c, count: counts[c] }))
+    const out = CONDITIONS.map(c => ({ condition: c, count: counts[c] }))
+    // Unrecognised condition labels are surfaced, not silently dropped.
+    if (counts[OTHER] > 0) out.push({ condition: OTHER, count: counts[OTHER] })
+    return out
   }, [rows, loadedSessions])
   const participantTotal = participantsByCondition.reduce((s, c) => s + c.count, 0)
   // Imported files actually loaded into the dataset (have rows present), for the
@@ -1254,8 +1266,10 @@ export default function DataAnalytics() {
                   </tbody>
                 </table>
                 <p className={styles.partCondNote}>
-                  Sessions loaded from Firebase count every (non-removed) registered participant;
-                  imported files and restored datasets count distinct idea authors.
+                  Sessions loaded from Firebase count every registered participant; imported files
+                  and restored datasets count distinct idea authors (ideas without an author ID
+                  can't be attributed). Like the boxes above, this reflects the full loaded
+                  dataset — before any Step-3 participant removals.
                 </p>
               </div>
             </>

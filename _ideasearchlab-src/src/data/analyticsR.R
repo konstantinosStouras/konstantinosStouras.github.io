@@ -434,7 +434,10 @@ if (nrow(dat) == 0) {
     present_levels <- COND_LEVELS[sapply(COND_LEVELS, function(c) any(dat$condition == c))]
 
     # The page reads this exact line for the "N ideas analysed" header (Step 6/PDF).
-    cat(sprintf("rows used for analysis: %d\n\n", nrow(dat)))
+    # Count only rows that carry at least one present KPI — a row with no KPI at all
+    # enters no model, so it must not inflate the headline N.
+    n_used <- sum(Reduce(`|`, lapply(kpis, function(k) !is.na(dat[[k]]))))
+    cat(sprintf("rows used for analysis: %d\n\n", n_used))
 
     level_dvs <- setNames(as.list(KPI_LABELS[kpis]), kpis)
     # Top KPIs: 1–5 scale, top variable present with variation.
