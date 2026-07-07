@@ -62,6 +62,12 @@
   // ---- state ----
   var fb = null, XLSX = null, cfg = { texts: {}, settings: {}, registrationQuestions: [], surveyQuestions: [] }, user = null, tab = 'content', approvedPuzzles = [];
   var inited = false;
+  // Top-right nav: 'admin' (the tabbed CMS) or 'analytics' (the Data analytics
+  // view). Mirrors the answerarena admin. All analytics state lives in daState
+  // so leaving and returning to the view preserves loaded data, ticks and code.
+  var currentView = 'admin';
+  var daState = { selected: {}, importedBooks: [], sessions: null, allParts: null, sheetMap: null, sheetOrder: [], code: { python: null, r: null }, lang: 'python', running: false };
+  var daRefs = {};   // the mounted analytics sections register their refreshers here (reset on each render)
 
   // ---- DOM helpers ----
   function el(tag, attrs, kids) {
@@ -135,7 +141,36 @@
       + 'table.pfa-tbl th,table.pfa-tbl td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);}'
       + 'table.pfa-tbl th{color:var(--muted);font-weight:600;}'
       + '.pfa-login{max-width:380px;margin:8vh auto 0;}'
-      + '.pfa-err{color:#e74c3c;font-size:13px;min-height:18px;margin:6px 0;}';
+      + '.pfa-err{color:#e74c3c;font-size:13px;min-height:18px;margin:6px 0;}'
+      // ---- Data analytics view (ported from the answerarena admin) ----
+      + '.pfa-wrap2{max-width:1180px;}'
+      + '.pfa-btn.is-nav-on{background:var(--accent);color:#fff;border-color:var(--accent);}'
+      + '.pfa-btn.green{background:#2faa5e;color:#fff;border:none;box-shadow:0 4px 12px rgba(47,170,94,.30);}.pfa-btn.green:hover{background:#268a4c;}'
+      + '.pfa-btn[disabled]{opacity:.5;cursor:not-allowed;}'
+      + '.pfa-sechead{display:flex;align-items:center;margin-bottom:8px;}'
+      + '.pfa-secnum{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;font-weight:800;font-size:14px;margin-right:9px;flex:0 0 auto;}'
+      + '.pfa-seclist{max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:2px 12px;background:var(--qbg);}'
+      + '.pfa-checkrow{display:flex;align-items:flex-start;gap:10px;padding:10px 2px;border-bottom:1px solid var(--line);cursor:pointer;}'
+      + '.pfa-checkrow:last-child{border-bottom:none;}'
+      + '.pfa-checkrow input[type=checkbox]{width:16px;height:16px;flex:0 0 auto;margin-top:2px;accent-color:var(--accent);}'
+      + '.pfa-checkrow .g{min-width:0;flex:1 1 auto;}'
+      + '.pfa-badge{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 8px;border-radius:99px;}'
+      + '.pfa-badge.open{color:#2faa5e;background:rgba(47,170,94,.14);}.pfa-badge.closed{color:var(--muted);background:rgba(154,151,143,.16);}'
+      + '.pfa-tag{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:rgba(230,126,34,.16);color:var(--accent);}'
+      + '.pfa-tag.blue{background:rgba(20,86,200,.16);color:#5b8def;}'
+      + '.pfa-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}'
+      + '.pfa-statgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;}'
+      + '.pfa-statbox{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:var(--qbg);}'
+      + '.pfa-statbox b{font-size:24px;display:block;line-height:1.1;color:var(--ink);}'
+      + '.pfa-statbox span{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);}'
+      + '.pfa-langtabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:4px 0 10px;}'
+      + '.pfa-langtabs button{border:none;background:transparent;padding:8px 14px;font-weight:700;font-size:13px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;}'
+      + '.pfa-langtabs button.on{color:var(--accent);border-bottom-color:var(--accent);}'
+      + '#pfa-root textarea.pfa-code{width:100%;min-height:340px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;font-size:12.5px;line-height:1.5;white-space:pre;overflow:auto;tab-size:4;-moz-tab-size:4;}'
+      + '.pfa-out{background:#0c0c0c;color:#e6e6e6;border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;max-height:540px;overflow:auto;margin-top:10px;}'
+      + '.pfa-plots{margin-top:12px;}.pfa-plots img{display:block;max-width:100%;border:1px solid var(--line);border-radius:8px;margin-top:10px;background:#fff;}'
+      + '.pfa-runstatus{font-size:13px;color:var(--muted);margin:8px 0;min-height:18px;}'
+      + '.pfa-scrolltbl{max-height:340px;overflow:auto;border:1px solid var(--line);border-radius:10px;background:var(--qbg);}';
     document.head.appendChild(el('style', { text: css }));
   }
   function currentTheme() { try { return localStorage.getItem('pfa-theme') || 'dark'; } catch (e) { return 'dark'; } }
@@ -180,10 +215,37 @@
 
   // ---- Routing ----
   function cachedAdmin() { try { return localStorage.getItem('pfa-admin') === '1'; } catch (e) { return false; } }
+  // Which view a URL points at, so the Data analytics view is directly linkable
+  // (like answerarena's ?admin=data-analytics). Recognised forms:
+  //   ?admin=data-analytics · ?admin=analytics · ?admin&view=analytics · #data-analytics
+  function viewFromUrl() {
+    try {
+      var sp = new URLSearchParams(location.search);
+      var a = (sp.get('admin') || '').toLowerCase(), v = (sp.get('view') || '').toLowerCase();
+      if (/analytic/.test(a) || /analytic/.test(v) || /analytic/.test((location.hash || '').toLowerCase())) return 'analytics';
+    } catch (e) {}
+    return 'admin';
+  }
+  // Keep the address bar in sync with the active view (canonical form
+  // ?admin / ?admin=data-analytics), preserving any other query params + hash.
+  // push=true adds a history entry so the browser Back button returns to the
+  // previous view; otherwise it just replaces the current URL.
+  function setViewUrl(view, push) {
+    try {
+      var sp = new URLSearchParams(location.search);
+      sp.delete('admin'); sp.delete('view');
+      var rest = sp.toString();
+      var q = '?admin' + (view === 'analytics' ? '=data-analytics' : '') + (rest ? '&' + rest : '');
+      var url = location.pathname + q + location.hash;
+      if (push) history.pushState(null, '', url); else history.replaceState(null, '', url);
+    } catch (e) {}
+  }
   function route() {
     if (!user) { try { localStorage.removeItem('pfa-admin'); } catch (e) {} return renderLogin(); }
     if (user.email !== ADMIN_EMAIL) { try { localStorage.removeItem('pfa-admin'); } catch (e) {} return renderNotAuthorized(); }
     try { localStorage.setItem('pfa-admin', '1'); } catch (e) {}
+    currentView = viewFromUrl();          // open the view the link points at
+    setViewUrl(currentView, false);       // normalise the address bar
     loadConfig().then(renderShell);
   }
 
@@ -217,19 +279,32 @@
     ])]));
   }
 
+  // Shared admin header: title + top-right nav (Admin | Data analytics) + theme +
+  // Sign out. The nav mirrors the answerarena admin; the active view is
+  // highlighted. Switching views re-renders the shell in place.
+  function headerRow() {
+    function nav(label, view) {
+      return el('button', { class: 'pfa-btn sec sm' + (currentView === view ? ' is-nav-on' : ''), on: { click: function () { if (currentView !== view) { currentView = view; setViewUrl(view, true); renderShell(); } } } }, [label]);
+    }
+    return el('div', { class: 'pfa-h' }, [
+      el('h1', { text: 'PortfolioFit admin' }),
+      el('div', { style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;' }, [
+        nav('Admin', 'admin'), nav('Data analytics', 'analytics'), themeToggle(),
+        el('button', { class: 'pfa-btn sec sm', on: { click: function () { if (fb) fb.A.signOut(fb.auth); } } }, ['Sign out'])
+      ])
+    ]);
+  }
+
   function renderShell() {
     clearRoot();
+    if (currentView === 'analytics') return renderAnalytics();
     var tabs = [['content', 'Content'], ['registration', 'Registration'], ['survey', 'Survey'], ['puzzles', 'Puzzles'], ['settings', 'Settings'], ['sessions', 'Sessions'], ['participants', 'Participants']];
     var tabBar = el('div', { class: 'pfa-tabs' }, tabs.map(function (t) {
       return el('button', { class: tab === t[0] ? 'on' : '', on: { click: function () { tab = t[0]; renderShell(); } } }, [t[1]]);
     }));
     var body = el('div', {});
     var wrap = el('div', { class: 'pfa-wrap' }, [
-      el('div', { class: 'pfa-h' }, [
-        el('h1', { text: 'PortfolioFit admin' }),
-        el('div', { style: 'display:flex;gap:8px;align-items:center;' }, [themeToggle(),
-          el('button', { class: 'pfa-btn sec sm', on: { click: function () { if (fb) fb.A.signOut(fb.auth); } } }, ['Sign out'])])
-      ]),
+      headerRow(),
       tabBar, body
     ]);
     root.appendChild(wrap);
@@ -976,46 +1051,54 @@
     return { play: play, calc: calc, notes: notes, rounds: rounds, survey: survey, events: events, partInfo: partInfo };
   }
 
-  // Build & download the workbook for a set of participants. regQs / surveyQs set
-  // the column order for the Participants and Survey sheets so each question
-  // appears as a column in the order it was presented to participants.
+  // The canonical tab order of every export (and of the analytics aggregate).
+  var SHEET_ORDER = ['Play log', 'Calculator', 'Notes', 'Participants', 'Rounds', 'Survey', 'Events (raw)'];
+
+  // Assemble the full export as a { sheetName: rows[] } map for a set of
+  // participants. regQs / surveyQs set the column order for the Participants and
+  // Survey sheets so each question appears as a column in the order it was
+  // presented to participants. Shared by the Excel downloads (exportWorkbook)
+  // and the Data-analytics loader, so the aggregate is byte-for-byte the same
+  // shape as the per-session export.
+  async function buildSheetMap(parts, regQs, surveyQs) {
+    var data = await gatherExport(parts);
+    var regList = effRegQs(regQs), sQ = effSurveyQs(surveyQs);
+
+    var pRows = data.partInfo.map(function (p) {
+      var reg = p.registration || {};
+      var row = { 'Player': whoOf(p), 'UCD Student ID': sidOf(p), 'Session': p.sessionId || '', 'Status': p.status || '', 'Consent': p.consentGiven === true ? 'yes' : '', 'Started': fmtTs(p.createdAt) };
+      regList.forEach(function (q) { if (q.id === 'studentId') return; row[q.label || q.id] = (reg[q.id] != null ? reg[q.id] : ''); });
+      Object.keys(reg).forEach(function (kk) { if (kk === 'studentId') return; var covered = regList.some(function (q) { return q.id === kk; }); if (!covered) row['reg_' + kk] = (reg[kk] && typeof reg[kk] === 'object') ? JSON.stringify(reg[kk]) : reg[kk]; });
+      var st = p.stats || {};
+      row['Final Net Value'] = (st.totalNet != null ? st.totalNet : '');
+      row['Final Coverage %'] = (st.coverage != null ? st.coverage : '');
+      row['Total Time (s)'] = (st.totalTime != null ? st.totalTime : '');
+      return row;
+    });
+
+    var sRows = data.survey.map(function (s) {
+      var p = s._p, ans = s._answers;
+      var row = { 'Player': whoOf(p), 'UCD Student ID': sidOf(p), 'Session': p.sessionId || '', 'Completed at': s._completedAt };
+      sQ.forEach(function (q) { row[q.label || q.id] = (ans[q.id] != null ? ans[q.id] : ''); });
+      Object.keys(ans).forEach(function (kk) { var covered = sQ.some(function (q) { return q.id === kk; }); if (!covered) row[kk] = ans[kk]; });
+      return row;
+    });
+
+    return { 'Play log': data.play, 'Calculator': data.calc, 'Notes': data.notes, 'Participants': pRows, 'Rounds': data.rounds, 'Survey': sRows, 'Events (raw)': data.events };
+  }
+
+  // Build & download the workbook for a set of participants.
   async function exportWorkbook(parts, regQs, surveyQs, fileName) {
     if (!parts || !parts.length) { toast('No participants to export.'); return; }
     toast('Building export…');
     try {
       var X = await ensureXLSX();
-      var data = await gatherExport(parts);
-      var regList = effRegQs(regQs), sQ = effSurveyQs(surveyQs);
-
-      var pRows = data.partInfo.map(function (p) {
-        var reg = p.registration || {};
-        var row = { 'Player': whoOf(p), 'UCD Student ID': sidOf(p), 'Session': p.sessionId || '', 'Status': p.status || '', 'Consent': p.consentGiven === true ? 'yes' : '', 'Started': fmtTs(p.createdAt) };
-        regList.forEach(function (q) { if (q.id === 'studentId') return; row[q.label || q.id] = (reg[q.id] != null ? reg[q.id] : ''); });
-        Object.keys(reg).forEach(function (kk) { if (kk === 'studentId') return; var covered = regList.some(function (q) { return q.id === kk; }); if (!covered) row['reg_' + kk] = (reg[kk] && typeof reg[kk] === 'object') ? JSON.stringify(reg[kk]) : reg[kk]; });
-        var st = p.stats || {};
-        row['Final Net Value'] = (st.totalNet != null ? st.totalNet : '');
-        row['Final Coverage %'] = (st.coverage != null ? st.coverage : '');
-        row['Total Time (s)'] = (st.totalTime != null ? st.totalTime : '');
-        return row;
-      });
-
-      var sRows = data.survey.map(function (s) {
-        var p = s._p, ans = s._answers;
-        var row = { 'Player': whoOf(p), 'UCD Student ID': sidOf(p), 'Session': p.sessionId || '', 'Completed at': s._completedAt };
-        sQ.forEach(function (q) { row[q.label || q.id] = (ans[q.id] != null ? ans[q.id] : ''); });
-        Object.keys(ans).forEach(function (kk) { var covered = sQ.some(function (q) { return q.id === kk; }); if (!covered) row[kk] = ans[kk]; });
-        return row;
-      });
-
+      var map = await buildSheetMap(parts, regQs, surveyQs);
       var wb = X.utils.book_new();
-      function add(name, rows) { var ws = X.utils.json_to_sheet(rows.length ? rows : [{}]); autoWidth(ws, X); X.utils.book_append_sheet(wb, ws, name); }
-      add('Play log', data.play);
-      add('Calculator', data.calc);
-      add('Notes', data.notes);
-      add('Participants', pRows);
-      add('Rounds', data.rounds);
-      add('Survey', sRows);
-      add('Events (raw)', data.events);
+      SHEET_ORDER.forEach(function (name) {
+        var rows = map[name] || [];
+        var ws = X.utils.json_to_sheet(rows.length ? rows : [{}]); autoWidth(ws, X); X.utils.book_append_sheet(wb, ws, name);
+      });
       X.writeFile(wb, fileName);
       toast('Export ready.');
     } catch (e) { toast('Export failed: ' + ((e && e.message) || 'error')); console.error('[PFA] export failed', e); }
@@ -1040,6 +1123,1037 @@
     } catch (e) { toast('Session export failed: ' + ((e && e.code) || (e && e.message) || 'error')); }
   }
 
+  /* =====================================================================
+     Data analytics view (?admin=data-analytics)
+     ---------------------------------------------------------------------
+     Mirrors the answerarena admin's Data analytics tab. Three sections:
+       1. Data source — tick any active/completed sessions and/or import an
+          exported Excel/CSV; Load pulls everything into one in-memory
+          sheet map (the SAME multi-tab shape as the Excel export, via
+          buildSheetMap), downloadable as a single consolidated workbook.
+       2. Aggregate data — headline stats from the Rounds sheet: users
+          played, easy/hard puzzles completed, average completion time per
+          difficulty (each user weighted equally) and the % of users who
+          reached the puzzle maximum, plus a per-puzzle breakdown.
+       3. Process with Python or R — edit + run a script against any loaded
+          table. Python runs on Pyodide, R on WebR — both compiled entirely
+          in the browser (loaded lazily from jsDelivr on first Run); no
+          data leaves the page.
+     ===================================================================== */
+  function renderAnalytics() {
+    clearRoot();
+    var wrap = el('div', { class: 'pfa-wrap pfa-wrap2' });
+    wrap.appendChild(headerRow());
+    wrap.appendChild(el('div', { class: 'pfa-card' }, [
+      el('h3', { text: 'Data analytics', style: 'margin:0 0 6px;font-size:16px;' }),
+      el('p', { class: 'pfa-note', html: 'Load play data from any <b>active or completed session</b> (or import an already-exported Excel), consolidate it into a <b>single Excel file</b>, read the headline aggregates, then process the data with <b>Python or R</b> — compiled entirely in your browser (nothing is uploaded). Three steps:' })
+    ]));
+    daRefs = {};   // this render's sections register their live refreshers here
+    wrap.appendChild(buildDaSection1());
+    wrap.appendChild(buildDaSection2());
+    wrap.appendChild(buildDaSection3());
+    root.appendChild(wrap);
+  }
+
+  /* ---- Section 1: data source ---- */
+  function buildDaSection1() {
+    var card = el('div', { class: 'pfa-card' });
+    card.appendChild(el('div', { class: 'pfa-sechead' }, [el('span', { class: 'pfa-secnum', text: '1' }), el('h3', { text: 'Data source', style: 'margin:0;font-size:16px;' })]));
+    card.appendChild(el('p', { class: 'pfa-note', html: 'Tick the sessions to include (active and completed are both listed), and/or <b>import an exported Excel/CSV</b> (a per-session, per-player or all-data export from this admin). Press <b>Load</b> to pull everything into memory, then <b>Download consolidated Excel</b> writes it all as one workbook — tabs ' + SHEET_ORDER.join(' · ') + ', each source stacked within every tab.' }));
+
+    var listWrap = el('div', { class: 'pfa-seclist' }, [el('p', { class: 'pfa-note', text: 'Loading sessions…' })]);
+    card.appendChild(listWrap);
+
+    var loadBtn = el('button', { class: 'pfa-btn', on: { click: doLoad } }, ['Load']);
+    var dlBtn = el('button', { class: 'pfa-btn green', on: { click: download } }, ['⬇ Download consolidated Excel']);
+    if (!daState.sheetMap) dlBtn.setAttribute('disabled', 'true');
+    var selAll = el('button', { class: 'pfa-btn sec sm', on: { click: function () { setAll(true); } } }, ['Select all']);
+    var clr = el('button', { class: 'pfa-btn sec sm', on: { click: function () { setAll(false); } } }, ['Clear']);
+    var refreshB = el('button', { class: 'pfa-btn sec sm', on: { click: loadSessions } }, ['↻ Refresh']);
+    var fileIn = el('input', { type: 'file', accept: '.xlsx,.xls,.csv', style: 'display:none;' });
+    var importB = el('button', { class: 'pfa-btn sec', on: { click: function () { fileIn.click(); } } }, ['Import Excel / CSV']);
+    fileIn.addEventListener('change', onImport);
+
+    card.appendChild(el('div', { class: 'pfa-row', style: 'margin-top:10px;' }, [selAll, clr, refreshB, importB]));
+    card.appendChild(el('div', { class: 'pfa-row', style: 'margin-top:10px;' }, [loadBtn, dlBtn]));
+    var status = el('div', { class: 'pfa-runstatus' });
+    card.appendChild(status);
+    card.appendChild(fileIn);
+
+    loadSessions();
+
+    function loadSessions() {
+      // The cached-admin early render can run before Firebase connects; route()
+      // re-renders this section once the connection is up.
+      if (!fb) { listWrap.innerHTML = ''; listWrap.appendChild(el('p', { class: 'pfa-note', text: 'Connecting…' })); return; }
+      // Show the cached list immediately on re-entry (no transient blank); only
+      // show the loading placeholder on the very first fetch.
+      if (daState.sessions) render();
+      else { listWrap.innerHTML = ''; listWrap.appendChild(el('p', { class: 'pfa-note', text: 'Loading sessions…' })); }
+      var sessP = fb.F.getDocs(fb.F.collection(fb.db, 'sessions')).then(function (snap) {
+        var docs = []; snap.forEach(function (d) { docs.push(Object.assign({ _id: d.id }, d.data())); }); return docs;
+      });
+      var partP = fb.F.getDocs(fb.F.collection(fb.db, 'participants')).then(function (snap) {
+        var ps = []; snap.forEach(function (d) { ps.push(Object.assign({ _id: d.id }, d.data())); }); return ps;
+      }).catch(function () { return daState.allParts || []; });
+      Promise.all([sessP, partP]).then(function (res) {
+        daState.sessions = res[0] || [];
+        daState.allParts = res[1] || [];
+        daState.sessions.sort(function (a, b) { return tsMs(b.createdAt) - tsMs(a.createdAt); });
+        render();
+      }).catch(function (e) {
+        if (daState.sessions) { toast('Could not refresh sessions: ' + ((e && e.code) || (e && e.message) || 'error')); return; }
+        listWrap.innerHTML = '';
+        listWrap.appendChild(el('p', { class: 'pfa-err', text: 'Could not load sessions: ' + ((e && e.code) || (e && e.message) || 'error') }));
+      });
+    }
+    function partCounts() {
+      var c = {};
+      (daState.allParts || []).forEach(function (p) { var sid = p.sessionId; if (sid) c[sid] = (c[sid] || 0) + 1; });
+      return c;
+    }
+    function setAll(on) {
+      (daState.sessions || []).forEach(function (s) { if (on) daState.selected[s._id] = true; else delete daState.selected[s._id]; });
+      daState.importedBooks.forEach(function (b) { b.selected = on; });
+      render();
+    }
+    function render() {
+      listWrap.innerHTML = '';
+      var c = partCounts();
+      var sess = daState.sessions || [];
+      if (!sess.length && !daState.importedBooks.length) {
+        listWrap.appendChild(el('p', { class: 'pfa-note', text: 'No sessions yet. Create one from the Admin view (Sessions tab), or import an Excel/CSV file.' }));
+        updateLoadLabel(); return;
+      }
+      sess.forEach(function (s) {
+        var cb = el('input', { type: 'checkbox' }); if (daState.selected[s._id]) cb.setAttribute('checked', 'checked');
+        cb.addEventListener('change', function () { if (cb.checked) daState.selected[s._id] = true; else delete daState.selected[s._id]; updateLoadLabel(); });
+        var n = c[s._id] || 0;
+        var closed = s.status === 'closed';
+        var meta = el('div', { class: 'g' }, [
+          el('b', { text: s._id }), ' ',
+          el('span', { class: 'pfa-badge ' + (closed ? 'closed' : 'open'), text: closed ? 'completed' : 'active' }),
+          el('div', { class: 'pfa-note', style: 'margin-top:2px;', text: (s.name || s.label ? (s.name || s.label) + ' · ' : '') + n + ' participant' + (n === 1 ? '' : 's') + ' · created ' + (fmtTs(s.createdAt) || '—') })
+        ]);
+        listWrap.appendChild(el('label', { class: 'pfa-checkrow' }, [cb, meta]));
+      });
+      daState.importedBooks.forEach(function (b) {
+        var cb = el('input', { type: 'checkbox' }); if (b.selected) cb.setAttribute('checked', 'checked');
+        cb.addEventListener('change', function () { b.selected = cb.checked; updateLoadLabel(); });
+        var rm = el('button', { class: 'pfa-btn danger sm', on: { click: function (e) { e.preventDefault(); daState.importedBooks = daState.importedBooks.filter(function (x) { return x !== b; }); render(); } } }, ['remove']);
+        var meta = el('div', { class: 'g' }, [
+          el('b', { text: b.label }), ' ', el('span', { class: 'pfa-tag blue', text: 'imported' }),
+          el('div', { class: 'pfa-note', style: 'margin-top:2px;', text: b.sheets.length + ' sheet' + (b.sheets.length === 1 ? '' : 's') + ' · ' + b.totalRows + ' rows' })
+        ]);
+        listWrap.appendChild(el('label', { class: 'pfa-checkrow' }, [cb, meta, rm]));
+      });
+      updateLoadLabel();
+    }
+    function updateLoadLabel() {
+      var ns = Object.keys(daState.selected).filter(function (k) { return daState.selected[k]; }).length;
+      var nf = daState.importedBooks.filter(function (b) { return b.selected; }).length;
+      var bits = []; if (ns) bits.push(ns + ' session' + (ns === 1 ? '' : 's')); if (nf) bits.push(nf + ' file' + (nf === 1 ? '' : 's'));
+      loadBtn.textContent = bits.length ? ('Load ' + bits.join(' + ')) : 'Load';
+    }
+    function onImport() {
+      var f = fileIn.files && fileIn.files[0]; fileIn.value = ''; if (!f) return;
+      var isCsv = /\.csv$/i.test(f.name);
+      status.textContent = 'Reading ' + f.name + '…';
+      ensureXLSX().then(function (X) {
+        var reader = new FileReader();
+        reader.onload = function (e) {
+          try {
+            var sheets;
+            if (isCsv) {
+              // A bare CSV becomes one sheet named Rounds (the analysis unit).
+              var wbc = X.read(e.target.result, { type: 'string' });
+              sheets = [{ name: 'Rounds', rows: X.utils.sheet_to_json(wbc.Sheets[wbc.SheetNames[0]], { defval: '' }) }];
+            } else {
+              var wb = X.read(new Uint8Array(e.target.result), { type: 'array' });
+              sheets = wb.SheetNames.map(function (nm) { return { name: nm, rows: X.utils.sheet_to_json(wb.Sheets[nm], { defval: '' }) }; });
+            }
+            sheets = sheets.filter(function (sh) { return sh.rows && sh.rows.length; });
+            if (!sheets.length) { status.textContent = ''; toast('That file has no data rows.'); return; }
+            var totalRows = sheets.reduce(function (t, sh) { return t + sh.rows.length; }, 0);
+            daState.importedBooks.push({ label: f.name, sheets: sheets, totalRows: totalRows, selected: true });
+            status.textContent = 'Imported ' + f.name + ' — ' + sheets.length + ' sheet' + (sheets.length === 1 ? '' : 's') + ', ' + totalRows + ' rows. Press Load to include it.';
+            render();
+          } catch (err) { status.textContent = ''; toast('Could not read the file: ' + (err.message || err)); }
+        };
+        if (isCsv) reader.readAsText(f); else reader.readAsArrayBuffer(f);
+      }).catch(function () { status.textContent = ''; toast('Could not load the Excel reader (offline?).'); });
+    }
+    function doLoad() {
+      var ids = {}; Object.keys(daState.selected).forEach(function (k) { if (daState.selected[k]) ids[k] = true; });
+      var nSess = Object.keys(ids).length;
+      var books = daState.importedBooks.filter(function (b) { return b.selected; });
+      if (!nSess && !books.length) { toast('Tick at least one session or import a file first.'); return; }
+      if (nSess && !fb) { toast('Still connecting — try again in a moment.'); return; }
+      status.textContent = 'Loading…';
+      loadBtn.setAttribute('disabled', 'true');
+      var done = function () { loadBtn.removeAttribute('disabled'); };
+      // Participants who played any ticked session (re-fetched so data is current).
+      var partsP = nSess
+        ? fb.F.getDocs(fb.F.collection(fb.db, 'participants')).then(function (snap) {
+            var ps = []; snap.forEach(function (d) { var v = d.data(); if (ids[v.sessionId || '']) ps.push(Object.assign({ _id: d.id }, v)); });
+            ps.sort(function (a, b) { return tsMs(a.createdAt) - tsMs(b.createdAt); });
+            return ps;
+          })
+        : Promise.resolve(null);
+      partsP.then(function (parts) {
+        // The aggregate reuses the exact export builder, so it is the same
+        // multi-tab shape as any per-session/all-data Excel export.
+        return parts ? buildSheetMap(parts, cfg.registrationQuestions, cfg.surveyQuestions) : emptySheetMap();
+      }).then(function (sheetMap) {
+        books.forEach(function (b) { mergeBookIntoSheetMap(sheetMap, b); });
+        daState.sheetMap = sheetMap;
+        daState.sheetOrder = orderSheetNames(sheetMap);
+        status.textContent = 'Loaded ' + summarizeMap(sheetMap) + '.';
+        dlBtn.removeAttribute('disabled');
+        done();
+        // Refresh whichever Section 2/3 are currently mounted (daRefs is reset on
+        // each render), so a Load that resolves after a view switch still lands.
+        if (daRefs.updateSec2) daRefs.updateSec2();
+        if (daRefs.updateSec3Tables) daRefs.updateSec3Tables();
+      }).catch(function (e) {
+        done(); status.textContent = '';
+        toast('Load failed: ' + ((e && e.message) || 'error'));
+        if (window.console) console.error('[PFA analytics] load failed', e);
+      });
+    }
+    function download() {
+      var m = daState.sheetMap;
+      if (!m) { toast('Load data first.'); return; }
+      ensureXLSX().then(function (X) {
+        var wb = X.utils.book_new(), used = {};
+        daState.sheetOrder.forEach(function (name) {
+          var rows = m[name] || [];
+          var ws = X.utils.json_to_sheet(rows.length ? rows : [{}]); autoWidth(ws, X);
+          X.utils.book_append_sheet(wb, ws, safeSheetName(name, used));
+        });
+        X.writeFile(wb, 'portfoliofit-consolidated-' + stamp() + '.xlsx');
+        toast('Consolidated Excel downloaded.');
+      }).catch(function (e) { toast('Download failed: ' + ((e && e.message) || 'error')); });
+    }
+    return card;
+  }
+
+  /* ---- Section 2: aggregate data ---- */
+  function buildDaSection2() {
+    var card = el('div', { class: 'pfa-card' });
+    card.appendChild(el('div', { class: 'pfa-sechead' }, [el('span', { class: 'pfa-secnum', text: '2' }), el('h3', { text: 'Aggregate data', style: 'margin:0;font-size:16px;' })]));
+    card.appendChild(el('p', { class: 'pfa-note', html: 'Headline numbers from the loaded <b>Rounds</b> data (one row per completed puzzle): how many users played, how many easy/hard puzzles were completed, the <b>average time to complete</b> one (each user weighted equally — their own average is taken first) and the <b>% of users who reached the maximum</b> (the puzzle\'s single optimal portfolio) at least once.' }));
+    var stats = el('div', { class: 'pfa-statgrid', style: 'margin-top:6px;' });
+    card.appendChild(stats);
+    var hint = el('p', { class: 'pfa-note', text: 'Load data in Section 1 first.' });
+    card.appendChild(hint);
+    var tblWrap = el('div', {});
+    card.appendChild(tblWrap);
+    daRefs.updateSec2 = update;
+    update();
+    function statBox(v, l) { return el('div', { class: 'pfa-statbox' }, [el('b', { text: String(v) }), el('span', { text: l })]); }
+    function update() {
+      stats.innerHTML = ''; tblWrap.innerHTML = '';
+      var agg = daAggStats(daState.sheetMap);
+      if (!agg) {
+        hint.style.display = 'block';
+        hint.textContent = daState.sheetMap ? 'The loaded data has no usable Rounds rows (needs Difficulty + Player columns) — tick a session with plays, or import an export that includes the Rounds sheet.' : 'Load data in Section 1 first.';
+        return;
+      }
+      hint.style.display = 'none';
+      stats.appendChild(statBox(agg.usersPlayed, 'Users played'));
+      stats.appendChild(statBox(agg.played.easy, 'Easy puzzles played'));
+      stats.appendChild(statBox(agg.played.hard, 'Hard puzzles played'));
+      stats.appendChild(statBox(agg.easy.avgTime != null ? fmtDur(agg.easy.avgTime) : '—', 'Avg time · easy'));
+      stats.appendChild(statBox(agg.hard.avgTime != null ? fmtDur(agg.hard.avgTime) : '—', 'Avg time · hard'));
+      stats.appendChild(statBox(agg.easy.pctMax != null ? agg.easy.pctMax + '%' : '—', 'Reached max · easy (users)'));
+      stats.appendChild(statBox(agg.hard.pctMax != null ? agg.hard.pctMax + '%' : '—', 'Reached max · hard (users)'));
+      if (agg.puzzles.length) {
+        tblWrap.appendChild(el('p', { class: 'pfa-note', style: 'margin-top:12px;', html: '<b>By puzzle</b> — plays, average completion time and the share of plays that reached the maximum:' }));
+        var t = el('table', { class: 'pfa-tbl' });
+        t.appendChild(el('thead', {}, [el('tr', {}, ['Puzzle', 'Difficulty', 'Plays', 'Avg time', 'Plays at max'].map(function (h) { return el('th', { text: h }); }))]));
+        var tb = el('tbody', {});
+        agg.puzzles.forEach(function (pz) {
+          tb.appendChild(el('tr', {}, [
+            el('td', { text: pz.id }),
+            el('td', { text: pz.diff }),
+            el('td', { text: String(pz.n) }),
+            el('td', { text: pz.timeN ? fmtDur(pz.timeSum / pz.timeN) : '—' }),
+            el('td', { text: pz.knownN ? Math.round(pz.maxN / pz.knownN * 100) + '% (' + pz.maxN + '/' + pz.knownN + ')' : '—' })
+          ]));
+        });
+        t.appendChild(tb);
+        tblWrap.appendChild(el('div', { class: 'pfa-scrolltbl' }, [t]));
+      }
+    }
+    return card;
+  }
+
+  // Compute the Section-2 aggregates from the loaded sheet map's Rounds rows.
+  // Column lookup is tolerant (case/spacing-insensitive) so an imported export
+  // — or a hand-made sheet with the same column meanings — also works.
+  // "Reached the maximum" = Net Value >= Best Value when both are present,
+  // else Fitness % >= 100 as a fallback, else unknown (excluded from the rate).
+  function daAggStats(map) {
+    var rounds = (map && map.Rounds) || [];
+    if (!rounds.length) return null;
+    var kPlayer = daPickKey(rounds, ['Player', 'account_id', 'participant', 'user']);
+    var kSess = daPickKey(rounds, ['Session', 'session_id']);
+    var kDiff = daPickKey(rounds, ['Difficulty', 'diff']);
+    var kTime = daPickKey(rounds, ['Time (s)', 'time_s', 'time', 'duration (s)']);
+    var kNet = daPickKey(rounds, ['Net Value', 'net']);
+    var kBest = daPickKey(rounds, ['Best Value', 'bestValue']);
+    var kFit = daPickKey(rounds, ['Fitness %', 'fitness']);
+    var kPuz = daPickKey(rounds, ['Puzzle ID', 'puzzleId', 'Puzzle']);
+    if (!kDiff || !kPlayer) return null;
+    var users = {}, puzzles = {}, played = { easy: 0, hard: 0 };
+    rounds.forEach(function (r) {
+      var d0 = String(r[kDiff] == null ? '' : r[kDiff]).trim().toLowerCase().charAt(0);
+      var d = d0 === 'e' ? 'easy' : (d0 === 'h' ? 'hard' : null);
+      if (!d) return;
+      played[d]++;
+      // One user = one Player within one Session (labels are unique per
+      // participant, but pairing with the session keeps stacked imports apart).
+      var ukey = String(r[kPlayer]) + '|' + String(kSess ? (r[kSess] || '') : '');
+      var u = users[ukey] || (users[ukey] = {});
+      var a = u[d] || (u[d] = { n: 0, timeSum: 0, timeN: 0, max: false, known: false });
+      a.n++;
+      var t = daNum(kTime ? r[kTime] : null);
+      if (t != null) { a.timeSum += t; a.timeN++; }
+      var atMax = null;
+      var net = daNum(kNet ? r[kNet] : null), best = daNum(kBest ? r[kBest] : null), fit = daNum(kFit ? r[kFit] : null);
+      if (net != null && best != null) atMax = net >= best;
+      else if (fit != null) atMax = fit >= 100;
+      if (atMax != null) { a.known = true; if (atMax) a.max = true; }
+      var pid = String(kPuz ? (r[kPuz] == null ? '' : r[kPuz]) : '') || '(unknown)';
+      var pz = puzzles[pid + '|' + d] || (puzzles[pid + '|' + d] = { id: pid, diff: d, n: 0, timeSum: 0, timeN: 0, maxN: 0, knownN: 0 });
+      pz.n++;
+      if (t != null) { pz.timeSum += t; pz.timeN++; }
+      if (atMax != null) { pz.knownN++; if (atMax) pz.maxN++; }
+    });
+    var ukeys = Object.keys(users);
+    if (!ukeys.length) return null;
+    function diffStats(d) {
+      var timeMeans = [], maxUsers = 0, knownUsers = 0, n = 0;
+      ukeys.forEach(function (k) {
+        var a = users[k][d]; if (!a) return;
+        n++;
+        if (a.timeN) timeMeans.push(a.timeSum / a.timeN);
+        if (a.known) { knownUsers++; if (a.max) maxUsers++; }
+      });
+      var avgTime = timeMeans.length ? timeMeans.reduce(function (s, x) { return s + x; }, 0) / timeMeans.length : null;
+      return { users: n, avgTime: avgTime, maxUsers: maxUsers, knownUsers: knownUsers, pctMax: knownUsers ? Math.round(maxUsers / knownUsers * 1000) / 10 : null };
+    }
+    var puzzleRows = Object.keys(puzzles).map(function (k) { return puzzles[k]; });
+    puzzleRows.sort(function (a, b) { return (a.diff === b.diff ? 0 : (a.diff === 'easy' ? -1 : 1)) || (b.n - a.n); });
+    return { usersPlayed: ukeys.length, played: played, easy: diffStats('easy'), hard: diffStats('hard'), puzzles: puzzleRows };
+  }
+  function daNorm(s) { return String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9%]/g, ''); }
+  // Coerce a cell to a finite number ('' / '—' / text → null).
+  function daNum(v) { if (v == null || v === '') return null; var n = Number(v); return isFinite(n) ? n : null; }
+  // Find the real header matching any candidate name, scanning the union of
+  // keys over the first rows (stacked imports may not all share row 1's keys).
+  function daPickKey(rows, cands) {
+    var seen = {}, norm = {};
+    for (var i = 0; i < rows.length && i < 500; i++) {
+      var ks = Object.keys(rows[i] || {});
+      for (var j = 0; j < ks.length; j++) { if (!seen[ks[j]]) { seen[ks[j]] = 1; var nk = daNorm(ks[j]); if (norm[nk] === undefined) norm[nk] = ks[j]; } }
+    }
+    for (var c = 0; c < cands.length; c++) { var hit = norm[daNorm(cands[c])]; if (hit !== undefined) return hit; }
+    return null;
+  }
+  // "84s" / "2m 05s" for an average number of seconds.
+  function fmtDur(sec) {
+    if (sec == null || !isFinite(sec)) return '—';
+    if (sec < 60) return Math.round(sec) + 's';
+    var m = Math.floor(sec / 60), s = Math.round(sec - m * 60);
+    if (s === 60) { m++; s = 0; }
+    return m + 'm ' + (s < 10 ? '0' : '') + s + 's';
+  }
+  function emptySheetMap() { var m = {}; SHEET_ORDER.forEach(function (n) { m[n] = []; }); return m; }
+  // Stack every sheet of an imported workbook onto the aggregate map: matched onto
+  // an existing tab by (case-insensitive) name, else added as its own tab.
+  function mergeBookIntoSheetMap(map, book) {
+    (book.sheets || []).forEach(function (sh) {
+      var key = Object.keys(map).filter(function (k) { return k.toLowerCase() === String(sh.name).toLowerCase(); })[0];
+      if (!key) { key = String(sh.name); if (!map[key]) map[key] = []; }
+      map[key] = (map[key] || []).concat(sh.rows || []);
+    });
+  }
+  // Tab order for the aggregate: the standard sheets first, then any extra
+  // (imported) sheets in insertion order.
+  function orderSheetNames(map) {
+    var order = SHEET_ORDER.filter(function (n) { return map[n] !== undefined; });
+    Object.keys(map).forEach(function (k) { if (order.indexOf(k) < 0) order.push(k); });
+    return order;
+  }
+  function summarizeMap(m) {
+    var np = (m.Participants || []).length, nr = (m.Rounds || []).length, nm = (m['Play log'] || []).length;
+    return np + ' participant' + (np === 1 ? '' : 's') + ', ' + nr + ' completed puzzle' + (nr === 1 ? '' : 's') + ', ' + nm + ' logged move' + (nm === 1 ? '' : 's');
+  }
+  // A valid, unique Excel sheet name (<=31 chars, no : \ / ? * [ ], no dupes).
+  function safeSheetName(name, used) {
+    var n = String(name).replace(/[\\\/\?\*\[\]:]/g, ' ').slice(0, 31).trim() || 'Sheet';
+    var base = n, i = 2;
+    while (used[n.toLowerCase()]) { var suf = ' (' + i + ')'; n = base.slice(0, 31 - suf.length) + suf; i++; }
+    used[n.toLowerCase()] = true; return n;
+  }
+
+  /* ---- Section 3: run Python / R ---- */
+  function buildDaSection3() {
+    var card = el('div', { class: 'pfa-card' });
+    card.appendChild(el('div', { class: 'pfa-sechead' }, [el('span', { class: 'pfa-secnum', text: '3' }), el('h3', { text: 'Process with Python or R', style: 'margin:0;font-size:16px;' })]));
+    card.appendChild(el('p', { class: 'pfa-note', html: 'Pick a table from the loaded data, then run <b>Python</b> (Pyodide: numpy / pandas / scipy / matplotlib) or <b>R</b> (WebR, base R) on it — compiled entirely in your browser (the first run downloads the runtime, ~10–30&nbsp;s). The table is handed to your code as the string <code>DATA_CSV</code> (Python) or the file <code>/tmp/data.csv</code> (R). Any valid Python or R works; the bundled template computes the Section-2 aggregates with tests and plots. Output and figures appear below.' }));
+
+    var tableSel = el('select', {});
+    card.appendChild(el('div', { class: 'pfa-field' }, [el('label', { text: 'Analysis table (from the loaded data)' }), tableSel]));
+
+    var pyTabBtn = el('button', { on: { click: function () { setLang('python'); } } }, ['Python']);
+    var rTabBtn = el('button', { on: { click: function () { setLang('r'); } } }, ['R']);
+    card.appendChild(el('div', { class: 'pfa-langtabs' }, [pyTabBtn, rTabBtn]));
+
+    var editor = el('textarea', { class: 'pfa-code', spellcheck: 'false' });
+    card.appendChild(editor);
+
+    var runBtn = el('button', { class: 'pfa-btn', on: { click: run } }, ['▶ Run']);
+    var resetBtn = el('button', { class: 'pfa-btn sec', on: { click: resetTemplate } }, ['Reset template']);
+    card.appendChild(el('div', { class: 'pfa-row', style: 'margin-top:10px;' }, [runBtn, resetBtn]));
+    var statusEl = el('div', { class: 'pfa-runstatus' });
+    card.appendChild(statusEl);
+    card.appendChild(el('p', { class: 'pfa-note', style: 'margin:12px 0 4px;', html: '<b>Output</b>' }));
+    var outWrap = el('div', {}, [el('p', { class: 'pfa-note', text: 'Run your code to see the output here.' })]);
+    card.appendChild(outWrap);
+    var plots = el('div', { class: 'pfa-plots' });
+    card.appendChild(plots);
+
+    var running = false, outText = '', flushQueued = false, outPre = null;
+
+    // Restore persisted code (or the bundled templates) once. Refresh first so a
+    // stale saved script from an older template version cannot shadow a fix.
+    daMigrateTemplates();
+    if (daState.code.python == null) daState.code.python = daLoadSaved('pfa-da:py', DA_PY_TEMPLATE);
+    if (daState.code.r == null) daState.code.r = daLoadSaved('pfa-da:r', DA_R_TEMPLATE);
+    editor.value = daState.code[daState.lang];
+    editor.addEventListener('input', function () { daState.code[daState.lang] = editor.value; saveCode(); });
+
+    setLang(daState.lang);
+    daRefs.updateSec3Tables = updateTables;
+    updateTables();
+    // If a run started under an earlier render is still going, say so (the run()
+    // guard below blocks a concurrent second run until it finishes).
+    if (daState.running) setStatus('A run started earlier is still in progress — please wait for it to finish.');
+
+    function setLang(lang) {
+      if (running) return;
+      daState.lang = lang;
+      pyTabBtn.className = lang === 'python' ? 'on' : '';
+      rTabBtn.className = lang === 'r' ? 'on' : '';
+      editor.value = daState.code[lang];
+      runBtn.textContent = lang === 'python' ? '▶ Run Python' : '▶ Run R';
+    }
+    function updateTables() {
+      var m = daState.sheetMap;
+      var prev = tableSel.value;
+      tableSel.innerHTML = '';
+      var names = m ? daState.sheetOrder.filter(function (n) { return (m[n] || []).length; }) : [];
+      if (!names.length) { tableSel.appendChild(el('option', { value: '' }, ['(load data in Section 1 first)'])); tableSel.setAttribute('disabled', 'true'); return; }
+      tableSel.removeAttribute('disabled');
+      names.forEach(function (n) { tableSel.appendChild(el('option', { value: n }, [n + ' (' + (m[n] || []).length + ' rows)'])); });
+      if (names.indexOf(prev) >= 0) tableSel.value = prev;
+      else if (names.indexOf('Rounds') >= 0) tableSel.value = 'Rounds';
+      else tableSel.value = names[0];
+    }
+    function resetTemplate() {
+      if (running) return;
+      var tpl = daState.lang === 'python' ? DA_PY_TEMPLATE : DA_R_TEMPLATE;
+      daState.code[daState.lang] = tpl; editor.value = tpl; saveCode();
+    }
+    function saveCode() { try { localStorage.setItem(daState.lang === 'python' ? 'pfa-da:py' : 'pfa-da:r', daState.code[daState.lang]); } catch (e) {} }
+    function pushLine(line) {
+      outText += line + '\n';
+      if (!flushQueued) { flushQueued = true; requestAnimationFrame(function () { flushQueued = false; if (outPre) outPre.textContent = outText; }); }
+    }
+    function setStatus(s) { statusEl.textContent = s || ''; }
+    function run() {
+      if (running) return;
+      // Cross-render guard: a run started under an earlier render (before the user
+      // switched views and back) shares the one Pyodide/WebR runtime, so never
+      // start a second concurrent run against it.
+      if (daState.running) { toast('A run is already in progress — please wait for it to finish.'); return; }
+      var m = daState.sheetMap;
+      if (!m) { toast('Load data in Section 1 first.'); return; }
+      var name = tableSel.value;
+      var rows = name && m[name] ? m[name] : [];
+      if (!rows.length) { toast('The selected table is empty — pick another or load data.'); return; }
+      running = true; daState.running = true; runBtn.setAttribute('disabled', 'true'); resetBtn.setAttribute('disabled', 'true');
+      outText = ''; plots.innerHTML = ''; outWrap.innerHTML = '';
+      outPre = el('pre', { class: 'pfa-out', text: '' }); outWrap.appendChild(outPre);
+      setStatus('Preparing…');
+      var lang = daState.lang, code = editor.value;
+      daState.code[lang] = code; saveCode();
+      ensureXLSX().then(function (X) {
+        var csv = X.utils.sheet_to_csv(X.utils.json_to_sheet(rows));
+        return lang === 'python'
+          ? daRunPython(code, { dataCsv: csv, onStdout: pushLine, onStatus: setStatus })
+          : daRunR(code, { dataCsv: csv, onOutput: pushLine, onStatus: setStatus });
+      }).then(function (result) {
+        var finalOut = outText || (result && (result.stdout || result.output)) || '';
+        var imgs = (result && result.images) || [];
+        if (result && !result.ok && result.error) finalOut = (finalOut ? finalOut + '\n' : '') + '⚠ ' + result.error;
+        if (outPre) outPre.textContent = finalOut || '(no output)';
+        imgs.forEach(function (src) { plots.appendChild(el('img', { src: src, alt: 'figure' })); });
+        setStatus(imgs.length ? (imgs.length + ' figure' + (imgs.length === 1 ? '' : 's') + ' rendered below.') : (result && result.ok ? 'Done.' : ''));
+      }).catch(function (err) {
+        if (outPre) outPre.textContent = (outText ? outText + '\n' : '') + '⚠ ' + ((err && err.message) || err);
+        setStatus('');
+      }).then(function () {
+        running = false; daState.running = false; runBtn.removeAttribute('disabled'); resetBtn.removeAttribute('disabled');
+      });
+    }
+    return card;
+  }
+
+  function daLoadSaved(key, dflt) { try { var v = localStorage.getItem(key); return v != null ? v : dflt; } catch (e) { return dflt; } }
+  // Bump PF_DA_TPL_VERSION whenever the bundled Python/R templates change. A
+  // saved script from a previous version lives in localStorage and would
+  // otherwise SHADOW the current template (daLoadSaved returns the saved copy).
+  // On a version change we drop the saved code so the fresh template loads.
+  var PF_DA_TPL_VERSION = '2026-07-07-initial';
+  function daMigrateTemplates() {
+    try {
+      if (localStorage.getItem('pfa-da:ver') === PF_DA_TPL_VERSION) return;
+      localStorage.removeItem('pfa-da:py');
+      localStorage.removeItem('pfa-da:r');
+      localStorage.setItem('pfa-da:ver', PF_DA_TPL_VERSION);
+    } catch (e) { /* ignore */ }
+  }
+
+  /* =====================================================================
+     In-browser runtimes: Pyodide (Python) + WebR (R).
+     Ported from the answerarena admin. Each loads lazily from jsDelivr on
+     first Run and is then reused across runs.
+     ===================================================================== */
+  var DA_PYODIDE_VERSIONS = ['314.0.1', '0.29.4', '0.28.3'];
+  // Only the packages the bundled template needs. A package that fails to load
+  // is skipped (non-fatal) so one unavailable package never blocks Python.
+  var DA_PY_PACKAGES = ['numpy', 'pandas', 'scipy', 'matplotlib'];
+  var _pyodidePromise = null;
+  function daPyScriptUrl(v) { return 'https://cdn.jsdelivr.net/pyodide/v' + v + '/full/pyodide.js'; }
+  function daPyBaseUrl(v) { return 'https://cdn.jsdelivr.net/pyodide/v' + v + '/full/'; }
+  function daInjectScript(url) {
+    return new Promise(function (resolve, reject) {
+      var existing = document.querySelector('script[data-pyodide-src="' + url + '"]');
+      if (existing) {
+        if (existing.dataset.loaded === '1' && typeof globalThis.loadPyodide === 'function') return resolve();
+        if (existing.dataset.loaded === '1') { existing.remove(); }
+        else { existing.addEventListener('load', function () { resolve(); }); existing.addEventListener('error', function () { reject(new Error('Failed to load ' + url)); }); return; }
+      }
+      var s = document.createElement('script');
+      s.src = url; s.async = true; s.crossOrigin = 'anonymous'; s.dataset.pyodideSrc = url;
+      s.onload = function () { s.dataset.loaded = '1'; resolve(); };
+      s.onerror = function () { reject(new Error('Failed to load ' + url + ' (CDN / network / CSP?)')); };
+      document.head.appendChild(s);
+    });
+  }
+  function daGetPyodide(onStatus) {
+    if (_pyodidePromise) return _pyodidePromise;
+    _pyodidePromise = (async function () {
+      var lastErr = null;
+      for (var i = 0; i < DA_PYODIDE_VERSIONS.length; i++) {
+        var v = DA_PYODIDE_VERSIONS[i];
+        try {
+          if (onStatus) onStatus('Loading Python runtime (Pyodide v' + v + ')…');
+          await daInjectScript(daPyScriptUrl(v));
+          var pyodide = await globalThis.loadPyodide({ indexURL: daPyBaseUrl(v) });
+          if (onStatus) onStatus('Loading data-science packages (numpy, pandas, scipy, matplotlib)…');
+          await daEnsurePyPackages(pyodide);
+          if (onStatus) onStatus('');
+          return pyodide;
+        } catch (err) {
+          lastErr = err;
+          try { delete globalThis.loadPyodide; } catch (e) { /* non-configurable */ }
+          var stale = document.querySelector('script[data-pyodide-src="' + daPyScriptUrl(v) + '"]');
+          if (stale) stale.remove();
+        }
+      }
+      throw lastErr || new Error('Pyodide failed to load from all candidate versions.');
+    })();
+    _pyodidePromise.catch(function () { _pyodidePromise = null; });
+    return _pyodidePromise;
+  }
+  async function daEnsurePyPackages(pyodide) {
+    try { await pyodide.loadPackage(DA_PY_PACKAGES); return; } catch (e) { /* isolate below */ }
+    var fallback = [];
+    for (var i = 0; i < DA_PY_PACKAGES.length; i++) {
+      try { await pyodide.loadPackage(DA_PY_PACKAGES[i]); } catch (e) { fallback.push(DA_PY_PACKAGES[i]); }
+    }
+    if (fallback.length) {
+      // Best effort via micropip; a package that still can't be installed is
+      // SKIPPED (non-fatal) so one unavailable package never blocks Python.
+      try {
+        await pyodide.loadPackage('micropip');
+        var micropip = pyodide.pyimport('micropip');
+        for (var j = 0; j < fallback.length; j++) {
+          try { await micropip.install(fallback[j]); } catch (e2) { if (window.console) console.warn('[PFA analytics] could not install ' + fallback[j], e2); }
+        }
+      } catch (e3) { if (window.console) console.warn('[PFA analytics] micropip unavailable', e3); }
+    }
+  }
+  var DA_MPL_BACKEND = '\nimport os as __os\n__os.environ.setdefault("MPLBACKEND", "Agg")\ntry:\n    import matplotlib\n    matplotlib.use("Agg", force=True)\nexcept Exception:\n    pass\n';
+  var DA_FIG_HARVEST = '\ndef __collect_figures():\n    import io, base64\n    try:\n        import matplotlib\n        import matplotlib.pyplot as plt\n    except Exception:\n        return []\n    out = []\n    for num in plt.get_fignums():\n        fig = plt.figure(num)\n        buf = io.BytesIO()\n        fig.savefig(buf, format="png", dpi=110, bbox_inches="tight")\n        buf.seek(0)\n        out.append("data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii"))\n        buf.close()\n    plt.close("all")\n    return out\n\n__pyo_images = __collect_figures()\n';
+  async function daRunPython(code, opts) {
+    opts = opts || {};
+    var pyodide = await daGetPyodide(opts.onStatus);
+    var collected = [];
+    var emit = function (chunk) {
+      var text = String(chunk); collected.push(text);
+      if (typeof opts.onStdout === 'function') { var parts = text.split('\n'); for (var i = 0; i < parts.length; i++) opts.onStdout(parts[i]); }
+    };
+    pyodide.setStdout({ batched: emit });
+    pyodide.setStderr({ batched: emit });
+    pyodide.globals.set('DATA_CSV', opts.dataCsv || '');
+    var ok = true, error = null, images = [];
+    try {
+      await pyodide.runPythonAsync(DA_MPL_BACKEND + '\n' + code + '\n' + DA_FIG_HARVEST);
+      var pyImages = pyodide.globals.get('__pyo_images');
+      if (pyImages) { try { images = pyImages.toJs(); } finally { pyImages.destroy(); } }
+    } catch (e) {
+      ok = false; error = e && e.message ? e.message : String(e); emit(error);
+    } finally {
+      pyodide.setStdout(); pyodide.setStderr();
+      try { pyodide.runPython("for __n in ('DATA_CSV','__pyo_images'):\n    globals().pop(__n, None)\n"); } catch (e) { /* ignore */ }
+    }
+    return { ok: ok, stdout: collected.join('\n'), images: images, error: error };
+  }
+
+  var DA_WEBR_VERSIONS = ['0.6.0', '0.5.9', '0.4.4'];
+  var _webRPromise = null;
+  function daWebrEsmUrl(v) { return 'https://cdn.jsdelivr.net/npm/webr@' + v + '/dist/webr.mjs'; }
+  function daWebrBaseUrl(v) { return 'https://cdn.jsdelivr.net/npm/webr@' + v + '/dist/'; }
+  function daGetWebR(onStatus) {
+    if (_webRPromise) return _webRPromise;
+    _webRPromise = (async function () {
+      var lastErr = null;
+      for (var i = 0; i < DA_WEBR_VERSIONS.length; i++) {
+        var v = DA_WEBR_VERSIONS[i], webR;
+        try {
+          if (onStatus) onStatus('Loading R runtime (WebR v' + v + ')… this is a large one-time download.');
+          var mod = await import(daWebrEsmUrl(v));
+          var WebR = mod.WebR || (mod.default && mod.default.WebR);
+          if (!WebR) throw new Error('WebR export not found in module');
+          webR = new WebR({ baseUrl: daWebrBaseUrl(v) });
+          await webR.init();
+          if (onStatus) onStatus('');
+          return webR;
+        } catch (err) {
+          lastErr = err;
+          if (webR && typeof webR.close === 'function') { try { webR.close(); } catch (e) { /* ignore */ } }
+        }
+      }
+      throw lastErr || new Error('WebR failed to load from all candidate versions.');
+    })();
+    _webRPromise.catch(function () { _webRPromise = null; });
+    return _webRPromise;
+  }
+  async function daBitmapToPng(bitmap) {
+    var w = bitmap.width, h = bitmap.height;
+    if (typeof OffscreenCanvas !== 'undefined') {
+      var off = new OffscreenCanvas(w, h);
+      off.getContext('2d').drawImage(bitmap, 0, 0);
+      var blob = await off.convertToBlob({ type: 'image/png' });
+      return await new Promise(function (res, rej) { var fr = new FileReader(); fr.onload = function () { res(fr.result); }; fr.onerror = rej; fr.readAsDataURL(blob); });
+    }
+    var canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(bitmap, 0, 0);
+    return canvas.toDataURL('image/png');
+  }
+  async function daRunR(code, opts) {
+    opts = opts || {};
+    var csvPath = '/tmp/data.csv';
+    var lines = [], buffer = '';
+    var push = function (text) {
+      if (text == null) return; buffer += text; var idx;
+      while ((idx = buffer.indexOf('\n')) !== -1) { var line = buffer.slice(0, idx); buffer = buffer.slice(idx + 1); lines.push(line); if (typeof opts.onOutput === 'function') opts.onOutput(line); }
+    };
+    var flush = function () { if (buffer.length) { lines.push(buffer); if (typeof opts.onOutput === 'function') opts.onOutput(buffer); buffer = ''; } };
+    var webR, shelter, images = [];
+    try {
+      webR = await daGetWebR(opts.onStatus);
+      if (typeof opts.dataCsv === 'string') {
+        try { await webR.FS.mkdir('/tmp'); } catch (e) { /* exists */ }
+        await webR.FS.writeFile(csvPath, new TextEncoder().encode(opts.dataCsv));
+      }
+      shelter = await new webR.Shelter();
+      var capture = await shelter.captureR(code, { withAutoprint: true, captureGraphics: true });
+      var out = capture.output || [];
+      for (var i = 0; i < out.length; i++) { var evt = out[i]; if (evt && (evt.type === 'stdout' || evt.type === 'stderr')) push(evt.data + '\n'); }
+      flush();
+      if (Array.isArray(capture.images)) {
+        for (var k = 0; k < capture.images.length; k++) { var bmp = capture.images[k]; images.push(await daBitmapToPng(bmp)); if (bmp && typeof bmp.close === 'function') bmp.close(); }
+      }
+      return { ok: true, output: lines.join('\n'), images: images, error: null };
+    } catch (err) {
+      flush();
+      return { ok: false, output: lines.join('\n'), images: images, error: err && err.message ? err.message : String(err) };
+    } finally {
+      if (shelter) { try { await shelter.purge(); } catch (e) { /* ignore */ } }
+    }
+  }
+
+  /* ---- default Python / R templates (edit-and-Run) ---- */
+  var DA_PY_TEMPLATE = [
+    '"""',
+    '================================================================================',
+    'PORTFOLIOFIT - aggregate analysis: how did players do on easy vs hard puzzles?',
+    '================================================================================',
+    'Design. Each participant plays a series of PortfolioFit puzzles (a knapsack',
+    'game): pack project bricks into a fixed 4x4 frame to maximise Net Value =',
+    'value of the placed bricks minus $1 per empty cell, before the timer ends.',
+    'Every puzzle is generated as EASY (Sahni kappa = 1) or HARD (kappa >= 2) and',
+    'has exactly ONE optimal portfolio worth "Best Value"; a player whose Net Value',
+    'reaches it solved the puzzle optimally ("reached the maximum").',
+    '',
+    'Data. The table picked in Section 3 arrives as the string DATA_CSV. Use the',
+    'ROUNDS table (the default) - one row per completed puzzle. Columns used:',
+    '  Player       anonymous label (p1, p2, ...) - one per participant',
+    '  Session      the session code the player joined with',
+    '  Difficulty   easy | hard',
+    '  Time (s)     seconds spent on that puzzle',
+    '  Net Value    the score reached ($)',
+    '  Best Value   the puzzle optimum ($)',
+    '  Fitness %    Net Value / Best Value x 100 (fallback when Best Value is',
+    '               missing: 100% = optimal)',
+    '  Puzzle ID    which puzzle it was',
+    '',
+    'What it prints, in order:',
+    '  1. Participation - users who played, easy / hard puzzles completed.',
+    '  2. Time - average time to complete an easy / hard puzzle. Each USER is',
+    '     weighted equally (their own mean is computed first), so one player who',
+    '     played many puzzles cannot dominate the average.',
+    '  3. Success - the % of users who reached the maximum in at least one easy /',
+    '     hard puzzle, plus the per-round solve rate.',
+    '  4. Easy vs hard - a Welch t-test on the per-user times and a two-proportion',
+    '     z-test on the user-level solve rates.',
+    '  5. A per-puzzle breakdown (plays, average time, solve rate).',
+    'Then 3 figures: (1) puzzles played, (2) time-to-complete distributions,',
+    '(3) the share of users reaching the maximum - each easy vs hard.',
+    '"""',
+    '',
+    'import io',
+    'import numpy as np',
+    'import pandas as pd',
+    'import matplotlib',
+    'matplotlib.use("Agg")               # headless backend; the page harvests the figures',
+    'import matplotlib.pyplot as plt',
+    'from scipy import stats as st',
+    '',
+    'df = pd.read_csv(io.StringIO(DATA_CSV))',
+    '',
+    '# -- tolerant column lookup (case / spacing / punctuation insensitive) ---------',
+    'def _norm(s):',
+    '    return "".join(ch for ch in str(s).lower() if ch.isalnum())',
+    'def find_col(*names):',
+    '    m = {_norm(c): c for c in df.columns}',
+    '    for n in names:',
+    '        if _norm(n) in m:',
+    '            return m[_norm(n)]',
+    '    return None',
+    '',
+    'C_PLAYER = find_col("Player", "account_id", "participant")',
+    'C_SESS   = find_col("Session", "session_id")',
+    'C_DIFF   = find_col("Difficulty", "diff")',
+    'C_TIME   = find_col("Time (s)", "time_s", "time")',
+    'C_NET    = find_col("Net Value", "net")',
+    'C_BEST   = find_col("Best Value", "bestValue")',
+    'C_FIT    = find_col("Fitness %", "fitness")',
+    'C_PUZ    = find_col("Puzzle ID", "puzzleId", "Puzzle")',
+    'missing = [n for n, c in [("Player", C_PLAYER), ("Difficulty", C_DIFF)] if c is None]',
+    'if missing:',
+    '    raise SystemExit("This table is missing column(s): %s. Pick the ROUNDS table in Section 3." % ", ".join(missing))',
+    '',
+    '# -- derived columns ------------------------------------------------------------',
+    '# One user = one Player within one Session (labels are unique per participant,',
+    '# but pairing with the session keeps stacked imports from colliding).',
+    'df["_user"] = df[C_PLAYER].astype(str) + "|" + (df[C_SESS].astype(str) if C_SESS else "")',
+    'df["_diff"] = df[C_DIFF].astype(str).str.strip().str.lower().str[:1].map({"e": "easy", "h": "hard"})',
+    'df = df[df["_diff"].notna()].copy()',
+    'if not len(df):',
+    '    raise SystemExit("No rounds with an easy/hard difficulty found - load data in Section 1 and pick the Rounds table.")',
+    'df["_time"] = pd.to_numeric(df[C_TIME], errors="coerce") if C_TIME else np.nan',
+    'net  = pd.to_numeric(df[C_NET],  errors="coerce") if C_NET  else pd.Series(np.nan, index=df.index)',
+    'best = pd.to_numeric(df[C_BEST], errors="coerce") if C_BEST else pd.Series(np.nan, index=df.index)',
+    'fit  = pd.to_numeric(df[C_FIT],  errors="coerce") if C_FIT  else pd.Series(np.nan, index=df.index)',
+    '# Reached the maximum: Net Value >= Best Value when both are present, else',
+    '# Fitness >= 100 as a fallback; otherwise unknown (NaN, excluded from rates).',
+    'at_max = pd.Series(np.nan, index=df.index)',
+    'has_nb = net.notna() & best.notna()',
+    'at_max[has_nb] = (net[has_nb] >= best[has_nb]).astype(float)',
+    'fb_ok = at_max.isna() & fit.notna()',
+    'at_max[fb_ok] = (fit[fb_ok] >= 100).astype(float)',
+    'df["_max"] = at_max',
+    '',
+    'def line(ch="-"):',
+    '    print(ch * 78)',
+    '',
+    '# 1 -- participation --------------------------------------------------------------',
+    'line("="); print("1. PARTICIPATION"); line("=")',
+    'n_users = df["_user"].nunique()',
+    'n_easy  = int((df["_diff"] == "easy").sum())',
+    'n_hard  = int((df["_diff"] == "hard").sum())',
+    'print(f"Users who played (>=1 completed puzzle): {n_users}")',
+    'print(f"Easy puzzles completed:  {n_easy}")',
+    'print(f"Hard puzzles completed:  {n_hard}")',
+    'print(f"Puzzles per user (mean): {len(df) / n_users:.2f}")',
+    '',
+    '# 2 -- time to complete (each user weighted equally) -------------------------------',
+    'line("="); print("2. TIME TO COMPLETE (each user weighted equally)"); line("=")',
+    'per_user_time = df.groupby(["_user", "_diff"])["_time"].mean().unstack()',
+    'te = per_user_time["easy"].dropna() if "easy" in per_user_time.columns else pd.Series(dtype=float)',
+    'th = per_user_time["hard"].dropna() if "hard" in per_user_time.columns else pd.Series(dtype=float)',
+    'for d, col in (("easy", te), ("hard", th)):',
+    '    if len(col):',
+    '        sd = col.std(ddof=1) if len(col) > 1 else 0.0',
+    '        print(f"{d.capitalize():5s}: mean {col.mean():6.1f} s per puzzle   (SD {sd:.1f}, users n={len(col)})")',
+    '    else:',
+    '        print(f"{d.capitalize():5s}: no timed rounds")',
+    '',
+    '# 3 -- reaching the maximum ---------------------------------------------------------',
+    'line("="); print("3. REACHING THE MAXIMUM (the single optimal portfolio)"); line("=")',
+    'user_max = {"easy": None, "hard": None}',
+    'for d in ("easy", "hard"):',
+    '    sub = df[(df["_diff"] == d) & df["_max"].notna()]',
+    '    if not len(sub):',
+    '        print(f"{d.capitalize():5s}: no rounds with a known optimum")',
+    '        continue',
+    '    per_user = sub.groupby("_user")["_max"].max()   # 1 if the user hit the optimum at least once',
+    '    k, n = int(per_user.sum()), len(per_user)',
+    '    user_max[d] = (k, n)',
+    '    kr = int(sub["_max"].sum())',
+    '    rr = sub["_max"].mean() * 100   # per-round solve rate',
+    '    print(f"{d.capitalize():5s}: {k}/{n} users reached the maximum at least once ({k / n * 100:.1f}%); per-round solve rate {rr:.1f}% ({kr}/{len(sub)} rounds)")',
+    '',
+    '# 4 -- easy vs hard -----------------------------------------------------------------',
+    'line("="); print("4. EASY vs HARD"); line("=")',
+    'if len(te) > 1 and len(th) > 1:',
+    '    t, p = st.ttest_ind(te, th, equal_var=False)   # Welch: users are independent',
+    '    print(f"Time (per-user means): easy {te.mean():.1f} s vs hard {th.mean():.1f} s -> Welch t = {t:.2f}, p = {p:.4f}")',
+    'else:',
+    '    print("Time: not enough users with timed rounds in both difficulties for a test")',
+    'if user_max["easy"] and user_max["hard"]:',
+    '    (k1, n1), (k2, n2) = user_max["easy"], user_max["hard"]',
+    '    p1, p2 = k1 / n1, k2 / n2',
+    '    pp = (k1 + k2) / (n1 + n2)',
+    '    se = (pp * (1 - pp) * (1 / n1 + 1 / n2)) ** 0.5',
+    '    if se > 0:',
+    '        z = (p1 - p2) / se',
+    '        pz = 2 * (1 - st.norm.cdf(abs(z)))',
+    '        print(f"Solve rate (users): easy {p1 * 100:.1f}% vs hard {p2 * 100:.1f}% -> z = {z:.2f}, p = {pz:.4f}")',
+    '    else:',
+    '        print("Solve rate: both groups at 0% or 100% - no variance to test")',
+    'else:',
+    '    print("Solve rate: need rounds with a known optimum in both difficulties")',
+    '',
+    '# 5 -- per-puzzle breakdown -----------------------------------------------------------',
+    'line("="); print("5. PER-PUZZLE BREAKDOWN"); line("=")',
+    'if C_PUZ:',
+    '    g = df.groupby([C_PUZ, "_diff"], dropna=False)',
+    '    tbl = pd.DataFrame({',
+    '        "plays": g.size(),',
+    '        "avg_time_s": g["_time"].mean().round(1),',
+    '        "solve_rate_pct": (g["_max"].mean() * 100).round(1),',
+    '    }).reset_index().rename(columns={C_PUZ: "puzzle", "_diff": "difficulty"})',
+    '    tbl = tbl.sort_values(["difficulty", "plays"], ascending=[True, False])',
+    '    print(tbl.to_string(index=False))',
+    'else:',
+    '    print("(no Puzzle ID column in this table)")',
+    '',
+    '# -- figures (harvested by the page and shown under the output) -----------------',
+    'BLUE, ORANGE = "#4c72b0", "#e67e22"',
+    '',
+    '# Figure 1 - how many easy / hard puzzles were completed',
+    'fig, ax = plt.subplots(figsize=(6, 3.4))',
+    'ax.bar(["Easy", "Hard"], [n_easy, n_hard], color=[BLUE, ORANGE])',
+    'for i, v in enumerate([n_easy, n_hard]):',
+    '    ax.text(i, v, f" {v}", ha="center", va="bottom", fontweight="bold")',
+    'ax.set_ylabel("Puzzles completed")',
+    'ax.set_title(f"Puzzles played ({n_users} users)")',
+    'fig.tight_layout()',
+    '',
+    '# Figure 2 - how long a puzzle took, easy vs hard (per-user averages)',
+    'groups = [(lbl, s.values) for lbl, s in (("Easy", te), ("Hard", th)) if len(s)]',
+    'if groups:',
+    '    fig, ax = plt.subplots(figsize=(6, 3.4))',
+    '    ax.boxplot([g[1] for g in groups], showmeans=True)   # (labels= was removed in matplotlib 3.9)',
+    '    ax.set_xticks(range(1, len(groups) + 1))',
+    '    ax.set_xticklabels([g[0] for g in groups])',
+    '    ax.set_ylabel("Seconds per puzzle (user average)")',
+    '    ax.set_title("Time to complete a puzzle")',
+    '    fig.tight_layout()',
+    '',
+    '# Figure 3 - the share of users who reached the maximum at least once',
+    'vals, labs, cols = [], [], []',
+    'for d, c in (("easy", BLUE), ("hard", ORANGE)):',
+    '    if user_max[d]:',
+    '        k, n = user_max[d]',
+    '        vals.append(k / n * 100)',
+    '        labs.append(f"{d.capitalize()}\\n({k}/{n} users)")',
+    '        cols.append(c)',
+    'if vals:',
+    '    fig, ax = plt.subplots(figsize=(6, 3.4))',
+    '    ax.bar(labs, vals, color=cols)',
+    '    for i, v in enumerate(vals):',
+    '        ax.text(i, v, f" {v:.0f}%", ha="center", va="bottom", fontweight="bold")',
+    '    ax.set_ylim(0, 108)',
+    '    ax.set_ylabel("% of users")',
+    '    ax.set_title("Users who reached the maximum value at least once")',
+    '    fig.tight_layout()',
+    '',
+    'print()',
+    'print("Done. Figures (if any) are shown below the output.")'
+  ].join('\n');
+
+  var DA_R_TEMPLATE = [
+    '# ==============================================================================',
+    '# PORTFOLIOFIT - aggregate analysis: how did players do on easy vs hard puzzles?',
+    '# ==============================================================================',
+    '# Computes the SAME numbers as the Python template, with base R only.',
+    '# The table picked in Section 3 is at /tmp/data.csv - use the ROUNDS table',
+    '# (one row per completed puzzle). Columns used: Player, Session, Difficulty,',
+    '# Time (s), Net Value, Best Value, Fitness %, Puzzle ID.',
+    '# "Reached the maximum" = Net Value >= Best Value (both known), else',
+    '# Fitness >= 100 as a fallback, else unknown (excluded from the rates).',
+    '',
+    'df <- read.csv("/tmp/data.csv", check.names = FALSE, stringsAsFactors = FALSE)',
+    '',
+    '# -- tolerant column lookup (case / spacing / punctuation insensitive) ---------',
+    'norm <- function(s) gsub("[^a-z0-9]", "", tolower(s))',
+    'find_col <- function(...) {',
+    '  want <- vapply(list(...), norm, "")',
+    '  have <- vapply(names(df), norm, "")',
+    '  for (w in want) { i <- match(w, have); if (!is.na(i)) return(names(df)[i]) }',
+    '  NA_character_',
+    '}',
+    'C_PLAYER <- find_col("Player", "account_id", "participant")',
+    'C_SESS   <- find_col("Session", "session_id")',
+    'C_DIFF   <- find_col("Difficulty", "diff")',
+    'C_TIME   <- find_col("Time (s)", "time_s", "time")',
+    'C_NET    <- find_col("Net Value", "net")',
+    'C_BEST   <- find_col("Best Value", "bestValue")',
+    'C_FIT    <- find_col("Fitness %", "fitness")',
+    'C_PUZ    <- find_col("Puzzle ID", "puzzleId", "Puzzle")',
+    'if (is.na(C_PLAYER) || is.na(C_DIFF)) stop("This table is missing Player/Difficulty - pick the ROUNDS table in Section 3.")',
+    '',
+    'num <- function(x) suppressWarnings(as.numeric(x))',
+    'd0 <- substr(trimws(tolower(as.character(df[[C_DIFF]]))), 1, 1)',
+    'df$diff2 <- ifelse(d0 == "e", "easy", ifelse(d0 == "h", "hard", NA))',
+    'df <- df[!is.na(df$diff2), ]',
+    'if (!nrow(df)) stop("No rounds with an easy/hard difficulty found - load data in Section 1 and pick the Rounds table.")',
+    '# One user = one Player within one Session (keeps stacked imports apart).',
+    'df$user <- paste0(as.character(df[[C_PLAYER]]), "|", if (!is.na(C_SESS)) as.character(df[[C_SESS]]) else "")',
+    'df$time2 <- if (!is.na(C_TIME)) num(df[[C_TIME]]) else rep(NA_real_, nrow(df))',
+    'netv  <- if (!is.na(C_NET))  num(df[[C_NET]])  else rep(NA_real_, nrow(df))',
+    'bestv <- if (!is.na(C_BEST)) num(df[[C_BEST]]) else rep(NA_real_, nrow(df))',
+    'fitv  <- if (!is.na(C_FIT))  num(df[[C_FIT]])  else rep(NA_real_, nrow(df))',
+    'df$max2 <- ifelse(!is.na(netv) & !is.na(bestv), as.numeric(netv >= bestv),',
+    '           ifelse(!is.na(fitv), as.numeric(fitv >= 100), NA))',
+    '',
+    'line <- function(ch = "-") cat(strrep(ch, 78), "\\n", sep = "")',
+    '',
+    '# 1 -- participation ------------------------------------------------------------',
+    'line("="); cat("1. PARTICIPATION\\n"); line("=")',
+    'n_users <- length(unique(df$user))',
+    'n_easy <- sum(df$diff2 == "easy"); n_hard <- sum(df$diff2 == "hard")',
+    'cat(sprintf("Users who played (>=1 completed puzzle): %d\\n", n_users))',
+    'cat(sprintf("Easy puzzles completed:  %d\\n", n_easy))',
+    'cat(sprintf("Hard puzzles completed:  %d\\n", n_hard))',
+    'cat(sprintf("Puzzles per user (mean): %.2f\\n", nrow(df) / n_users))',
+    '',
+    '# 2 -- time to complete (each user weighted equally) -----------------------------',
+    'line("="); cat("2. TIME TO COMPLETE (each user weighted equally)\\n"); line("=")',
+    'pu <- if (all(is.na(df$time2))) {',
+    '  data.frame(user = character(), diff2 = character(), time2 = numeric())',
+    '} else {',
+    '  aggregate(time2 ~ user + diff2, data = df, FUN = mean)',
+    '}',
+    'te <- pu$time2[pu$diff2 == "easy"]; th <- pu$time2[pu$diff2 == "hard"]',
+    'for (d in c("easy", "hard")) {',
+    '  v <- if (d == "easy") te else th',
+    '  if (length(v)) cat(sprintf("%-5s: mean %6.1f s per puzzle   (SD %.1f, users n=%d)\\n",',
+    '                             d, mean(v), if (length(v) > 1) sd(v) else 0, length(v)))',
+    '  else cat(sprintf("%-5s: no timed rounds\\n", d))',
+    '}',
+    '',
+    '# 3 -- reaching the maximum -------------------------------------------------------',
+    'line("="); cat("3. REACHING THE MAXIMUM (the single optimal portfolio)\\n"); line("=")',
+    'um <- list()',
+    'for (d in c("easy", "hard")) {',
+    '  sub <- df[df$diff2 == d & !is.na(df$max2), ]',
+    '  if (!nrow(sub)) { cat(sprintf("%-5s: no rounds with a known optimum\\n", d)); next }',
+    '  per <- tapply(sub$max2, sub$user, max)   # 1 if the user hit the optimum at least once',
+    '  k <- as.integer(sum(per)); n <- length(per)',
+    '  um[[d]] <- c(k, n)',
+    '  cat(sprintf("%-5s: %d/%d users reached the maximum at least once (%.1f%%); per-round solve rate %.1f%% (%d/%d rounds)\\n",',
+    '      d, k, n, 100 * k / n, 100 * mean(sub$max2), as.integer(sum(sub$max2)), nrow(sub)))',
+    '}',
+    '',
+    '# 4 -- easy vs hard -----------------------------------------------------------------',
+    'line("="); cat("4. EASY vs HARD\\n"); line("=")',
+    'if (length(te) > 1 && length(th) > 1) {',
+    '  tt <- t.test(te, th)   # Welch: users are independent',
+    '  cat(sprintf("Time (per-user means): easy %.1f s vs hard %.1f s -> Welch t = %.2f, p = %.4f\\n",',
+    '      mean(te), mean(th), tt$statistic, tt$p.value))',
+    '} else cat("Time: not enough users with timed rounds in both difficulties for a test\\n")',
+    'if (!is.null(um$easy) && !is.null(um$hard)) {',
+    '  pt <- suppressWarnings(prop.test(c(um$easy[1], um$hard[1]), c(um$easy[2], um$hard[2])))',
+    '  cat(sprintf("Solve rate (users): easy %.1f%% vs hard %.1f%% -> two-proportion test p = %.4f\\n",',
+    '      100 * um$easy[1] / um$easy[2], 100 * um$hard[1] / um$hard[2], pt$p.value))',
+    '} else cat("Solve rate: need rounds with a known optimum in both difficulties\\n")',
+    '',
+    '# 5 -- per-puzzle breakdown -----------------------------------------------------------',
+    'line("="); cat("5. PER-PUZZLE BREAKDOWN\\n"); line("=")',
+    'if (!is.na(C_PUZ)) {',
+    '  key <- paste(as.character(df[[C_PUZ]]), df$diff2, sep = " | ")',
+    '  plays <- tapply(rep(1, nrow(df)), key, sum)',
+    '  avgt <- tapply(df$time2, key, function(v) round(mean(v, na.rm = TRUE), 1))',
+    '  solv <- tapply(df$max2, key, function(v) round(100 * mean(v, na.rm = TRUE), 1))',
+    '  out <- data.frame(puzzle = names(plays), plays = as.integer(plays),',
+    '                    avg_time_s = as.numeric(avgt[names(plays)]),',
+    '                    solve_rate_pct = as.numeric(solv[names(plays)]))',
+    '  print(out[order(out$puzzle), ], row.names = FALSE)',
+    '} else cat("(no Puzzle ID column in this table)\\n")',
+    '',
+    '# -- figures (captured by the page and shown under the output) -------------------',
+    '# NOTE: R needs 6-digit hex colours (3-digit like #888 fail).',
+    'BLUE <- "#4c72b0"; ORANGE <- "#e67e22"',
+    '',
+    '# Figure 1 - how many easy / hard puzzles were completed',
+    'bp <- barplot(c(n_easy, n_hard), names.arg = c("Easy", "Hard"), col = c(BLUE, ORANGE),',
+    '              ylab = "Puzzles completed", main = sprintf("Puzzles played (%d users)", n_users),',
+    '              ylim = c(0, max(1, n_easy, n_hard) * 1.15))',
+    'text(bp, c(n_easy, n_hard), labels = c(n_easy, n_hard), pos = 3, font = 2)',
+    '',
+    '# Figure 2 - how long a puzzle took, easy vs hard (per-user averages)',
+    'vals <- list(); labs <- c(); cls <- c()',
+    'if (length(te)) { vals <- c(vals, list(te)); labs <- c(labs, "Easy"); cls <- c(cls, BLUE) }',
+    'if (length(th)) { vals <- c(vals, list(th)); labs <- c(labs, "Hard"); cls <- c(cls, ORANGE) }',
+    'if (length(vals)) boxplot(vals, names = labs, col = cls,',
+    '                          ylab = "Seconds per puzzle (user average)",',
+    '                          main = "Time to complete a puzzle")',
+    '',
+    '# Figure 3 - the share of users who reached the maximum at least once',
+    'vals <- c(); labs <- c(); cls <- c()',
+    'if (!is.null(um$easy)) { vals <- c(vals, 100 * um$easy[1] / um$easy[2]); labs <- c(labs, sprintf("Easy (%d/%d)", um$easy[1], um$easy[2])); cls <- c(cls, BLUE) }',
+    'if (!is.null(um$hard)) { vals <- c(vals, 100 * um$hard[1] / um$hard[2]); labs <- c(labs, sprintf("Hard (%d/%d)", um$hard[1], um$hard[2])); cls <- c(cls, ORANGE) }',
+    'if (length(vals)) {',
+    '  bp <- barplot(vals, names.arg = labs, col = cls, ylim = c(0, 108), ylab = "% of users",',
+    '                main = "Users who reached the maximum value at least once")',
+    '  text(bp, vals, labels = sprintf("%.0f%%", vals), pos = 3, font = 2)',
+    '}',
+    '',
+    'cat("\\nDone. Figures (if any) are shown below the output.\\n")'
+  ].join('\n');
+
   // ---- Deep delete helpers (used by single + bulk delete) ----
   async function deleteParticipantDeep(uid) {
     var names = ['events', 'rounds'];
@@ -1057,9 +2171,17 @@
     root = el('div', { id: 'pfa-root' }, [el('div', { class: 'pfa-wrap' }, [el('div', { class: 'pfa-card' }, [el('p', { text: 'Connecting...' })])])]);
     document.body.appendChild(root);
     applyTheme(currentTheme());
+    // Back/forward between the Admin and Data-analytics views (their URLs differ).
+    window.addEventListener('popstate', function () {
+      if (!user || user.email !== ADMIN_EMAIL) return;
+      var v = viewFromUrl();
+      if (v !== currentView) { currentView = v; renderShell(); }
+    });
     // Returning admin on this device: render the panel immediately (no
     // 'Connecting' flash). onAuthStateChanged then confirms the session, or
-    // routes to login if it has expired.
+    // routes to login if it has expired. Honour the view the URL points at
+    // (?admin=data-analytics) so the cached render doesn't flash the wrong view.
+    currentView = viewFromUrl();
     if (cachedAdmin()) { try { renderShell(); } catch (e) {} }
     try { await initFirebase(); } catch (e) { clearRoot(); root.appendChild(el('div', { class: 'pfa-wrap' }, [el('div', { class: 'pfa-card' }, [el('p', { class: 'pfa-err', text: 'Could not connect: ' + ((e && e.message) || 'error') })])])); return; }
     // Routing is driven solely by onAuthStateChanged (registered in initFirebase),
