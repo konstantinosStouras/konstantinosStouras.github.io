@@ -330,13 +330,27 @@ function buildAuthors(papers) {
   const nameSet = new Set();
   for (const p of papers) authorNames(p).forEach(n => nameSet.add(normName(n)));
 
+  // Crossref occasionally mis-attributes someone else's ORCID on a single
+  // paper, which would chain two different people into one entry (this bit
+  // the sheet too: it marks Erik Brynjolfsson's ORCID "ambiguous" after his
+  // records also carried Eric Overby's). So when an ORCID appears with more
+  // than one distinct name, only merge the names it accompanies on 2+ papers.
+  const orcidNames = new Map(); // orcid -> Map(nameKey -> co-occurrence count)
   for (const p of papers) {
     authorNames(p).forEach((name, i) => {
-      const nk = 'n:' + normName(name);
-      add(nk);
+      add('n:' + normName(name));
       const orcid = p._orcids[i] || '';
-      if (orcid) union(nk, 'o:' + orcid);
+      if (!orcid) return;
+      let m = orcidNames.get(orcid);
+      if (!m) { m = new Map(); orcidNames.set(orcid, m); }
+      const nk = normName(name);
+      m.set(nk, (m.get(nk) || 0) + 1);
     });
+  }
+  for (const [orcid, names] of orcidNames) {
+    for (const [nk, count] of names) {
+      if (names.size === 1 || count >= 2) union('n:' + nk, 'o:' + orcid);
+    }
   }
   // "Hau L. Lee" and "Hau Lee" are the same person: when dropping the middle
   // initial(s) of a name yields another name that actually occurs, merge them
