@@ -42,12 +42,21 @@ const TOP_AFFILIATIONS = 1500;     // cap the affiliations file so it stays smal
 // The date we stamp newly seen papers with. Overridable so a re-run is reproducible.
 const PULL_DATE = process.env.MS2_PULL_DATE || new Date().toISOString().slice(0, 10);
 
+// One-time import of the editor/area data the /fun/ms/ Google Sheet collected
+// from sources that don't exist on Crossref (INFORMS page scrapes + a manually
+// curated tab). Used only when a paper's Crossref record yields no editor.
+// Built by make-editor-overrides.mjs; { "<doi>": { editor, area? } }.
+const OVERRIDES_PATH = join(__dirname, 'editor-overrides.json');
+const OVERRIDES = existsSync(OVERRIDES_PATH)
+  ? JSON.parse(await readFile(OVERRIDES_PATH, 'utf8'))
+  : {};
+
 // ── Crossref fetch ─────────────────────────────────────────────────────────
 
 const SELECT = [
   'DOI', 'title', 'author', 'issued', 'published-print', 'published-online',
   'created', 'volume', 'issue', 'page', 'abstract', 'type', 'group-title',
-  'subject', 'container-title', 'short-container-title',
+  'subject', 'container-title', 'short-container-title', 'assertion',
 ].join(',');
 
 async function fetchJson(url, attempt = 0) {
@@ -119,23 +128,86 @@ function authorName(a) {
   return nm.replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+// Trailing abstract sections ("Funding: …", "Supplemental Material: …",
+// "History: …", bare URLs) that INFORMS appends right after the acceptance
+// sentence and that the capture regex below can swallow when they contain a
+// long period-free run (e.g. "…[Grant SRG1920/100428], the …"). The page
+// defends itself with the same list (normalizeArea), but cleaning at the
+// source keeps the derived files (per-author/affiliation area lists, the
+// Areas dropdown vocabulary) clean too — the Sheets pipeline stored areas
+// already cleaned, so this restores parity with /fun/ms/.
+function stripTrailers(s) {
+  return s
+    .replace(/\.?\s*(funding|supplemental material|history|data|acknowledgments?|conflicts?[^:]{0,30}|epub)\s*:.*$/i, '')
+    .replace(/\.?\s*https?:\/\/.*$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Editor names are 1-2 people ("D. J. Wu", "X and Y"); anything with sentence
+// words in it is a mis-capture of ordinary abstract text (e.g. "…accepted by
+// workers when the task is hard…"). Rejecting those leaves the field blank so
+// the sheet-imported overrides below can supply the real editor.
+function plausibleEditorName(s) {
+  if (!s || s.length > 70) return false;
+  if (s.split(/\s+/).length > 8) return false;
+  if (!/^[A-ZÀ-Þ]/.test(s)) return false;
+  return !/\b(the|this|that|is|are|was|were|we|when|which|of|by|in|on|to|as|editors?)\b/i.test(s);
+}
+
 // Pull "This paper was accepted by <Editor>, <area>." out of the abstract. The
 // page's own cleanEditorField() parses the editor name back out of this exact
 // sentence, and normalizeArea() cleans the area, so we hand it the raw sentence.
 function acceptance(abstractText) {
-  // Same capture the page's cleanEditorField() uses: a name that may contain
-  // initials ("D. J. Wu", "Gérard P. Cachon") followed by ", <area>.".
-  const m = abstractText.match(/accepted by\s+([^.]+(?:\.[^.]{0,5})*[^.]*)\./i);
+  // Prefer the canonical full sentence; only fall back to a bare "accepted by"
+  // (which can also match unrelated abstract prose). The capture allows
+  // initials in names ("D. J. Wu", "Gérard P. Cachon") before ", <area>.".
+  let m = abstractText.match(/(?:this\s+)?(?:paper|work)\s+(?:was|has\s+been)\s+accepted by\s+([^.]+(?:\.[^.]{0,5})*[^.]*)\./i);
+  if (!m) m = abstractText.match(/accepted by\s+([^.]+(?:\.[^.]{0,5})*[^.]*)\./i);
   if (!m) return { editor: '', area: '' };
-  const body = m[1].trim();                    // e.g. "Gérard P. Cachon, finance"
+  let body = stripTrailers(m[1].trim());       // e.g. "Gérard P. Cachon, finance"
   const comma = body.indexOf(',');
-  const area = comma !== -1 ? body.slice(comma + 1).trim() : '';
+  let area = comma !== -1 ? body.slice(comma + 1).trim() : '';
+  if (comma !== -1) body = body.slice(0, comma).trim();
+  if (area) {
+    // The area part never legitimately spans a sentence break; anything after
+    // one is over-captured abstract text.
+    area = area.split(/\.\s/)[0].replace(/\.$/, '').trim();
+  }
+  // "…accepted by <Editor> for the <(Virtual) Special Issue/Section …>": the
+  // special-issue title is the area, not part of the editor's name — the same
+  // split the Sheets pipeline applies. It wins over any comma-area.
+  const si = body.match(/^(.*?)\s+for\s+the\s+(.*(?:special\s+issue|special\s+section).*)$/i);
+  if (si) { body = si[1].trim(); area = si[2].trim(); }
+  if (!plausibleEditorName(body)) return { editor: '', area: '' };
   // Store the full sentence so the page can re-parse the editor name itself.
-  return { editor: 'This paper was accepted by ' + body + '.', area };
+  return {
+    editor: 'This paper was accepted by ' + body + (area ? ', ' + area : '') + '.',
+    area,
+  };
 }
 
 function normArea(s) {
   return (s || '').replace(/<[^>]+>/g, '').replace(/\.\s*$/, '').trim().toLowerCase();
+}
+
+// Some papers carry the accepting editor in Crossref's structured `assertion`
+// metadata instead of (or before it appears in) the abstract sentence. The
+// Google-Sheets pipeline behind /fun/ms/ reads this field first
+// (Assertion_Editor), so without it ms2 under-counted several editors. The
+// value is a bare name ("Gustavo Manso"); wrap it in the canonical sentence so
+// the page's cleanEditorField() parses it exactly like the abstract-sourced ones.
+function assertionEditor(item) {
+  for (const a of item.assertion || []) {
+    const label = ((a.label || a.name || '') + '').toLowerCase();
+    if (label.includes('editor')) {
+      const v = stripJats(a.value || '');
+      if (!v) return '';
+      return /accepted by/i.test(v) ? v.replace(/\.?$/, '.')
+        : 'This paper was accepted by ' + v.replace(/\.$/, '') + '.';
+    }
+  }
+  return '';
 }
 
 function mapWork(item) {
@@ -149,10 +221,16 @@ function mapWork(item) {
   }));
 
   const abstract = stripJats(item.abstract || '');
-  const { editor, area: acceptedArea } = acceptance(abstract);
+  let { editor, area: acceptedArea } = acceptance(abstract);
+  if (!editor) editor = assertionEditor(item);
+  const ov = OVERRIDES[(item.DOI || '').toLowerCase()];
+  if (!editor && ov) {
+    editor = 'This paper was accepted by ' + ov.editor.replace(/\.+$/, '') + '.';
+  }
   const groupTitle = Array.isArray(item['group-title']) ? item['group-title'][0] : item['group-title'];
   const subject = Array.isArray(item.subject) ? item.subject[0] : '';
-  const area = normArea(acceptedArea) || normArea(groupTitle) || normArea(subject) || '';
+  const area = normArea(acceptedArea) || normArea(ov && ov.area) ||
+    normArea(groupTitle) || normArea(subject) || '';
 
   const volume = item.volume || '';
   const issue = item.issue || '';

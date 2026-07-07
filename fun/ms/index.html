@@ -396,17 +396,17 @@
     <div class="filters-row">
       <div class="filter-group">
         <label title="Some authors may appear under different name variants. ORCID-based disambiguation is not yet available for all authors.">Search Authors &#9432;</label>
-        <input id="filterAuthors" placeholder="Author..." type="search" oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('author','filterAuthors');event.preventDefault();}">
+        <input id="filterAuthors" name="ms-filter-author" placeholder="Author..." type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('author','filterAuthors');event.preventDefault();}">
         <div id="chipsAuthor" class="chips"></div>
       </div>
       <div class="filter-group">
         <label>Search Title</label>
-        <input id="filterSearch" placeholder="Paper title..." type="search" oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('title','filterSearch');event.preventDefault();}">
+        <input id="filterSearch" name="ms-filter-title" placeholder="Paper title..." type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('title','filterSearch');event.preventDefault();}">
         <div id="chipsTitle" class="chips"></div>
       </div>
       <div class="filter-group">
         <label title="Affiliation names are not standardized across papers. Duplicates may exist despite ongoing deduplication efforts.">Search Affiliations &#9432;</label>
-        <input id="filterAffiliations" placeholder="Affiliation..." type="search" oninput="debounceAffSearch()" onkeydown="if(event.key==='Enter'){addTextChip('affiliation','filterAffiliations');event.preventDefault();}">
+        <input id="filterAffiliations" name="ms-filter-affiliation" placeholder="Affiliation..." type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore oninput="debounceAffSearch()" onkeydown="if(event.key==='Enter'){addTextChip('affiliation','filterAffiliations');event.preventDefault();}">
         <div id="chipsAffiliation" class="chips"></div>
       </div>
       <div class="filter-group">
@@ -469,7 +469,7 @@
 <div id="libraryBar" class="library-bar">
   <h2><span>★ My Library</span> <span class="acct-link" style="font-size:13px;font-weight:600" onclick="acctExitLibrary()">Exit library</span></h2>
   <div class="library-sub">Your private saved papers, notes, lists and tags. Only you can see these.</div>
-  <input id="libSearch" class="library-search" placeholder="Search my notes, titles, authors, tags…" oninput="acctLibSearch(this.value)">
+  <input id="libSearch" name="ms-lib-search" class="library-search" placeholder="Search my notes, titles, authors, tags…" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore oninput="acctLibSearch(this.value)">
   <div class="library-section-label">Lists &amp; views</div>
   <div class="library-chips" id="libListChips"></div>
   <div class="library-section-label" id="libTagsLabel">Tags</div>
@@ -1950,7 +1950,7 @@ loadRecent(); // pre-fetch the small RecentlyAdded tab so the view opens instant
       <div class="acct-or">or with email</div>
       <div class="acct-field">
         <label for="acctEmail">Email</label>
-        <input id="acctEmail" type="email" autocomplete="email" placeholder="you@example.com" onkeydown="if(event.key==='Enter')acctSubmitAuth()">
+        <input id="acctEmail" type="email" autocomplete="username" placeholder="you@example.com" onkeydown="if(event.key==='Enter')acctSubmitAuth()">
       </div>
       <div class="acct-field">
         <label for="acctPassword">Password</label>
