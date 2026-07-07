@@ -64,10 +64,6 @@ export default function DataAnalytics() {
   // workbooks (kept whole, all sheets — not just the Ideas rows that feed `rows`).
   const [loadedSessions, setLoadedSessions] = useState([])
   const [importedBooks, setImportedBooks] = useState([])
-  // Participant head-count per loaded Firestore session ({ [sessionId]: n },
-  // non-removed only), captured at Load time — feeds the Step-2 "Participants
-  // per condition" table (imported workbooks are counted from their own sheets).
-  const [sessionPartCounts, setSessionPartCounts] = useState({})
   const [aggregating, setAggregating] = useState(false)
   const [excludedUsers, setExcludedUsers] = useState(() => new Set())
   const [showUsers, setShowUsers] = useState(false)
@@ -241,7 +237,7 @@ export default function DataAnalytics() {
     setLoadingData(true)
     try {
       const collected = []
-      const partCounts = {}
+      const enriched = []   // session docs + their registered-participant head-count
       for (const s of loaded) {
         const [ideasSnap, partsSnap, groupsSnap] = await Promise.all([
           getDocs(collection(db, 'sessions', s.id, 'ideas')),
@@ -251,10 +247,13 @@ export default function DataAnalytics() {
         const ideas = ideasSnap.docs.map(d => ({ id: d.id, ...d.data() }))
         const parts = partsSnap.docs.map(d => ({ id: d.id, ...d.data() }))
         const groups = groupsSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-        // Head-count for "Participants per condition" (Step 2): everyone still in
-        // the session (detached/removed participants excluded).
-        partCounts[s.id] = parts.filter(p => !p.removed && p.status !== 'removed').length
         collected.push(...buildRowsForSession(s, ideas, parts, groups))
+        // Head-count captured now (participant docs are only fetched here), so the
+        // Section-2 "participants by condition" table can show real counts — not
+        // just idea authors. Every registered participant counts, including any the
+        // admin detached mid-session — their ideas stay in the dataset too, so the
+        // participant and idea tallies share one basis.
+        enriched.push({ ...s, _participantCount: parts.length })
       }
       const tagged = tagRows(collected)
       const bookRows = tickedBooks.flatMap(b => b.rows || [])   // already tagged with _book + rid
@@ -268,10 +267,9 @@ export default function DataAnalytics() {
       })
       // Remember the loaded session docs so Step 2 can rebuild their full export.
       setLoadedSessions(prev => {
-        const merged = replace ? loaded : [...prev, ...loaded]
+        const merged = replace ? enriched : [...prev, ...enriched]
         return [...new Map(merged.map(s => [s.id, s])).values()]
       })
-      setSessionPartCounts(prev => (replace ? partCounts : { ...prev, ...partCounts }))
     } catch (err) {
       console.error('Failed to load session data', err)
       alert('Failed to load session data: ' + (err.message || err))
@@ -356,7 +354,6 @@ export default function DataAnalytics() {
     setExcludedUsers(new Set())
     setLoadedSessions([])
     setImportedBooks([])
-    setSessionPartCounts({})
   }
 
   // ── Load idea scores from a ranked-ideas file ("All Ideas Ranked" tab) ──
@@ -719,7 +716,12 @@ export default function DataAnalytics() {
     setRows(prev => recomputeOverall(prev.map(r => {
       if (r.rid !== rid) return r
       const v = value === '' ? '' : Math.max(1, Math.min(5, Number(value)))
-      return { ...r, [field]: Number.isNaN(v) ? '' : v }
+      const next = { ...r, [field]: Number.isNaN(v) ? '' : v }
+      // Hand-clearing BOTH components clears the derived quality too (recomputeOverall
+      // deliberately preserves a standalone quality when both components are missing,
+      // which would otherwise freeze the stale mean here — quality isn't editable).
+      if (next.novelty === '' && next.usefulness === '') next.overall_quality = ''
+      return next
     })))
   }
 
@@ -963,36 +965,50 @@ export default function DataAnalytics() {
   const loadedBookIds = useMemo(() => new Set(rows.filter(r => r._book).map(r => r._book)), [rows])
   const selectedBookCount = importedBooks.filter(b => b.selected).length
   // ── Step 2: participants per condition (by the None/Solo/Group/Both encoding) ──
-  // Firestore-loaded sessions use the real head-count captured at Load time; a
-  // loaded imported workbook is counted from its condition-stamped Participants
-  // sheet when it has one, else by its distinct idea authors (plain CSV imports).
-  const condParticipants = useMemo(() => {
-    const counts = Object.fromEntries(CONDITIONS.map(c => [c, 0]))
+  // Every registered participant counts — including any the admin detached
+  // mid-session, whose ideas stay in the dataset — so the participant and idea
+  // tallies share one basis (same as the export's Conditions-sheet counts).
+  // Firestore-loaded sessions use the real head-count captured at Load time
+  // (_participantCount); a loaded imported workbook is counted from its
+  // condition-stamped Participants sheet when it has one; anything else (plain
+  // CSV imports, a dataset restored from a saved default) falls back to distinct
+  // idea authors. Unrecognised condition labels surface as an "Other" row.
+  const participantsByCondition = useMemo(() => {
+    const OTHER = 'Other'
+    const counts = Object.fromEntries([...CONDITIONS, OTHER].map(c => [c, 0]))
+    const bucket = c => (counts[c] != null ? c : OTHER)
+    const counted = new Set()   // session codes whose real head-count is known
     for (const s of loadedSessions) {
-      const c = canonicalCondition(conditionForSession(s))
-      if (counts[c] != null) counts[c] += sessionPartCounts[s.id] || 0
+      if (Number.isFinite(s._participantCount)) {
+        counts[bucket(conditionForSession(s))] += s._participantCount
+        counted.add(s.code || s.id)
+      }
     }
+    const booksFromSheet = new Set()
     for (const b of importedBooks) {
       if (!loadedBookIds.has(b.id)) continue
       const partSheet = (b.sheets || []).find(sh => String(sh.name).toLowerCase() === 'participants')
-      if (partSheet?.rows?.length) {
-        for (const row of partSheet.rows) {
-          if (String(row['Status'] || '').toLowerCase() === 'removed') continue
-          const c = canonicalCondition(row['Condition'] || row['AI Condition'] || row['Condition Code'] || '')
-          if (counts[c] != null) counts[c]++
-        }
-      } else {
-        const seen = new Set()
-        for (const r of rows) {
-          if (r._book !== b.id) continue
-          const c = canonicalCondition(r.condition)
-          const key = `${r.session}|${r.author_id}`
-          if (counts[c] != null && !seen.has(key)) { seen.add(key); counts[c]++ }
-        }
+      if (!partSheet?.rows?.length) continue
+      booksFromSheet.add(b.id)
+      for (const row of partSheet.rows) {
+        counts[bucket(canonicalCondition(row['Condition'] || row['AI Condition'] || row['Condition Code'] || ''))]++
       }
     }
-    return counts
-  }, [loadedSessions, sessionPartCounts, importedBooks, loadedBookIds, rows])
+    const seen = new Set()
+    for (const r of rows) {
+      if (r._book ? booksFromSheet.has(r._book) : counted.has(r.session)) continue
+      if (!r.author_id) continue   // an idea without an author can't be attributed
+      const key = userKey(r.session, r.author_id)
+      if (seen.has(key)) continue
+      seen.add(key)
+      counts[bucket(canonicalCondition(r.condition))]++
+    }
+    const out = CONDITIONS.map(c => ({ condition: c, count: counts[c] }))
+    // Unrecognised condition labels are surfaced, not silently dropped.
+    if (counts[OTHER] > 0) out.push({ condition: OTHER, count: counts[OTHER] })
+    return out
+  }, [rows, loadedSessions, importedBooks, loadedBookIds])
+  const participantTotal = participantsByCondition.reduce((s, c) => s + c.count, 0)
   // Step-3 scoring scope (all ideas vs only Final Ideas) and its unscored count.
   const scorePool = scoreOnlyFinal ? effectiveRows.filter(isFinal) : effectiveRows
   const scopeUnscored = scorePool.filter(r => r.novelty === '' || r.usefulness === '').length
@@ -1029,7 +1045,9 @@ export default function DataAnalytics() {
   const statSessions = useMemo(() => new Set(statRows.map(r => r.session)).size, [statRows])
   const statConditionsPresent = statByCondition.rows.length
   const statMeanQuality = useMemo(() => {
-    const v = statRows.map(r => Number(r.overall_quality)).filter(Number.isFinite)
+    // Blank ('') quality cells are missing, not 0 — Number('') is 0 and would drag
+    // the mean down for every unscored idea in the Section-4 subset.
+    const v = statRows.map(r => r.overall_quality).filter(x => x !== '' && x != null).map(Number).filter(Number.isFinite)
     return v.length ? (v.reduce((a, b) => a + b, 0) / v.length).toFixed(2) : '—'
   }, [statRows])
   // Table 1 (summary statistics + correlation matrix), in the style of the paper's
@@ -1042,11 +1060,14 @@ export default function DataAnalytics() {
 
   // ── Step 6: insights derived from the last run ──
   const report = useMemo(() => (lastRun ? parseRunOutput(lastRun.output) : null), [lastRun])
-  // "rows used for analysis: N" is printed by both scripts; surface it in the PDF header.
+  // "rows used for analysis: N" is printed by both scripts; surface it in the PDF
+  // header. No fallback guess — a run that doesn't print it just shows no count
+  // (the old scoredCount fallback reported the wrong scope: AI-scored ideas over
+  // the WHOLE dataset, not the analysed subset).
   const rowsUsed = useMemo(() => {
     const m = lastRun && /rows used for analysis:\s*(\d+)|N analysed:\s*(\d+)/i.exec(lastRun.output)
-    return m ? Number(m[1] ?? m[2]) : (lastRun ? scoredCount : null)
-  }, [lastRun, scoredCount])
+    return m ? Number(m[1] ?? m[2]) : null
+  }, [lastRun])
 
   function exportInsightsPdf() {
     if (!lastRun || !report) return
@@ -1243,24 +1264,26 @@ export default function DataAnalytics() {
                 <div className={styles.statBox}><div className={styles.statNum}>{sessionCount}</div><div className={styles.statLabel}>Number of sessions</div></div>
               </div>
               <div className={styles.condCountCard}>
-                <div className={styles.encodingTitle}>Participants per condition</div>
+                <div className={styles.encodingTitle}>Participants per condition ({participantTotal} total)</div>
                 <table className={styles.encodingTable}>
                   <thead>
                     <tr><th>Encoding</th><th>Participants</th></tr>
                   </thead>
                   <tbody>
-                    {CONDITIONS.map((c, i) => (
-                      <tr key={c} className={condParticipants[c] ? '' : styles.condCountZero}>
-                        <td><span className={`${styles.condTag} ${styles[`cond${i}`]}`}>{c}</span></td>
-                        <td>{condParticipants[c]} participant{condParticipants[c] === 1 ? '' : 's'}</td>
+                    {participantsByCondition.map(p => (
+                      <tr key={p.condition} className={p.count ? '' : styles.condCountZero}>
+                        <td><span className={`${styles.condTag} ${condClass(p.condition)}`}>{p.condition}</span></td>
+                        <td>{p.count} participant{p.count === 1 ? '' : 's'}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
                 <div className={styles.condCountNote}>
-                  Every participant of each loaded session, counted under its session&rsquo;s condition
-                  (removed participants excluded). An imported workbook is counted from its
-                  Participants sheet; a plain CSV by its distinct idea authors.
+                  Every registered participant of each loaded session, counted under its
+                  session&rsquo;s condition. An imported workbook is counted from its Participants
+                  sheet; a plain CSV (or a restored dataset) by its distinct idea authors —
+                  ideas without an author ID can&rsquo;t be attributed. Reflects the full loaded
+                  dataset, before any Step-3 participant removals.
                 </div>
               </div>
             </>
@@ -1690,10 +1713,11 @@ export default function DataAnalytics() {
           <p className={styles.hint}>
             Both tabs run the <em>same</em> analysis (after any removed participants) on the
             {' '}<strong>scope you pick below</strong>: one linear regression per KPI across the four
-            conditions (<em>None</em> = no-AI baseline), the planned <em>Solo</em> vs <em>Group</em> contrast,
-            a best→worst ranking, and plots. The conditions are <strong>unbalanced</strong> (different n per
-            condition), so the analysis uses <strong>HC3 heteroscedasticity-robust standard errors</strong> and
-            {' '}<strong>Welch</strong> (unequal-variance) pairwise tests, and prints each condition's n. Edit
+            conditions (<em>None</em> = no-AI baseline; Tables 3–6 in the paper's layout), the planned
+            {' '}<em>Solo</em> vs <em>Group</em> contrast, a best→worst ranking, and plots. The conditions are
+            {' '}<strong>unbalanced</strong> (different n per condition), so every model uses
+            {' '}<strong>HC3 heteroscedasticity-robust standard errors</strong>, a condition with fewer than 2
+            ideas for a KPI is dropped from that KPI's model, and each condition's n is printed. Edit
             the code and press Run — Python runs via Pyodide and R via WebR, both compiled in your browser
             (first run downloads the runtime, ~10–30&nbsp;s).
           </p>
@@ -2219,7 +2243,8 @@ function summaryBySessionRows(rs) {
     by.get(r.session).rows.push(r)
   }
   const mean = (arr, key) => {
-    const v = arr.map(x => Number(x[key])).filter(Number.isFinite)
+    // Blank ('') cells are missing, not 0 — Number('') is 0 and would skew the mean.
+    const v = arr.map(x => x[key]).filter(x => x !== '' && x != null).map(Number).filter(Number.isFinite)
     return v.length ? round3(v.reduce((a, b) => a + b, 0) / v.length) : ''
   }
   return [...by.values()].map(g => ({
