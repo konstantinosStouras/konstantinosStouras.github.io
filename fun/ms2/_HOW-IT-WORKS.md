@@ -55,7 +55,7 @@ fun/ms2/
    six JSON files into `data/`. It needs nothing installed — plain Node 20.
 
 3. **Automation: the GitHub Action.** `.github/workflows/ms2-update-data.yml` runs
-   `build-data.mjs` **every Monday** (and whenever you click *Run workflow*, and
+   `build-data.mjs` **every day at 05:00 UTC** (and whenever you click *Run workflow*, and
    once whenever the scraper code changes). If the data changed, it commits the new
    JSON back to the repo. GitHub Actions runners have open internet, so they can
    reach Crossref even though the files are then served as boring static assets.

@@ -1347,7 +1347,7 @@
   function buildDaSection2() {
     var card = el('div', { class: 'pfa-card' });
     card.appendChild(el('div', { class: 'pfa-sechead' }, [el('span', { class: 'pfa-secnum', text: '2' }), el('h3', { text: 'Aggregate data', style: 'margin:0;font-size:16px;' })]));
-    card.appendChild(el('p', { class: 'pfa-note', html: 'Headline numbers from the loaded <b>Rounds</b> data (one row per completed puzzle): how many users played, how many easy/hard puzzles were completed, the <b>average time to complete</b> one (each user weighted equally — their own average is taken first) and the <b>% of users who reached the maximum</b> (final Net Value ≥ the puzzle\'s Best Value) at least once.' }));
+    card.appendChild(el('p', { class: 'pfa-note', html: 'Headline numbers from the loaded <b>Rounds</b> data (one row per completed puzzle): how many users played, how many easy/hard puzzles were completed, the <b>average time to complete</b> one (each user weighted equally — their own average is taken first), the <b>% of users who reached the maximum</b> (final Net Value ≥ the puzzle\'s Best Value) at least once, plus the % who got <b>within 5%</b> and <b>within 10%</b> of that maximum Net Value at least once (cumulative — a user at the maximum also counts as within 5% and 10%).' }));
     var stats = el('div', { class: 'pfa-statgrid', style: 'margin-top:6px;' });
     card.appendChild(stats);
     var hint = el('p', { class: 'pfa-note', text: 'Load data in Section 1 first.' });
@@ -1373,18 +1373,25 @@
       stats.appendChild(statBox(agg.hard.avgTime != null ? fmtDur(agg.hard.avgTime) : '—', 'Avg time · hard'));
       stats.appendChild(statBox(agg.easy.pctMax != null ? agg.easy.pctMax + '%' : '—', 'Reached max · easy (users)'));
       stats.appendChild(statBox(agg.hard.pctMax != null ? agg.hard.pctMax + '%' : '—', 'Reached max · hard (users)'));
+      stats.appendChild(statBox(agg.easy.pct5 != null ? agg.easy.pct5 + '%' : '—', 'Within 5% of max · easy (users)'));
+      stats.appendChild(statBox(agg.hard.pct5 != null ? agg.hard.pct5 + '%' : '—', 'Within 5% of max · hard (users)'));
+      stats.appendChild(statBox(agg.easy.pct10 != null ? agg.easy.pct10 + '%' : '—', 'Within 10% of max · easy (users)'));
+      stats.appendChild(statBox(agg.hard.pct10 != null ? agg.hard.pct10 + '%' : '—', 'Within 10% of max · hard (users)'));
       if (agg.puzzles.length) {
-        tblWrap.appendChild(el('p', { class: 'pfa-note', style: 'margin-top:12px;', html: '<b>By puzzle</b> — plays, average completion time and the share of plays that reached the maximum:' }));
+        tblWrap.appendChild(el('p', { class: 'pfa-note', style: 'margin-top:12px;', html: '<b>By puzzle</b> — plays, average completion time and the share of plays that reached the maximum, or got within 5% / 10% of it:' }));
         var t = el('table', { class: 'pfa-tbl' });
-        t.appendChild(el('thead', {}, [el('tr', {}, ['Puzzle', 'Difficulty', 'Plays', 'Avg time', 'Plays at max'].map(function (h) { return el('th', { text: h }); }))]));
+        t.appendChild(el('thead', {}, [el('tr', {}, ['Puzzle', 'Difficulty', 'Plays', 'Avg time', 'Plays at max', 'Within 5%', 'Within 10%'].map(function (h) { return el('th', { text: h }); }))]));
         var tb = el('tbody', {});
+        function shareCell(k, known) { return known ? Math.round(k / known * 100) + '% (' + k + '/' + known + ')' : '—'; }
         agg.puzzles.forEach(function (pz) {
           tb.appendChild(el('tr', {}, [
             el('td', { text: pz.id }),
             el('td', { text: pz.diff }),
             el('td', { text: String(pz.n) }),
             el('td', { text: pz.timeN ? fmtDur(pz.timeSum / pz.timeN) : '—' }),
-            el('td', { text: pz.knownN ? Math.round(pz.maxN / pz.knownN * 100) + '% (' + pz.maxN + '/' + pz.knownN + ')' : '—' })
+            el('td', { text: shareCell(pz.maxN, pz.knownN) }),
+            el('td', { text: shareCell(pz.near5N, pz.knownN) }),
+            el('td', { text: shareCell(pz.near10N, pz.knownN) })
           ]));
         });
         t.appendChild(tb);
@@ -1397,9 +1404,12 @@
   // Compute the Section-2 aggregates from the loaded sheet map's Rounds rows.
   // Column lookup is tolerant (case/spacing-insensitive) so an imported export
   // — or a hand-made sheet with the same column meanings — also works.
-  // "Reached the maximum" = Net Value >= Best Value; rows missing either are
-  // "unknown" and excluded from the rate. (The Fitness % column is a geometric
-  // COMPACTNESS score, NOT net/best — it must never be used as a fallback.)
+  // "Reached the maximum" = Net Value >= Best Value; "within 5% / 10%" =
+  // Net Value >= 95% / 90% of Best Value (Best Value is always positive) —
+  // cumulative, so a round at the maximum also counts as within 5% and 10%.
+  // Rows missing Net or Best Value are "unknown" and excluded from the rates.
+  // (The Fitness % column is a geometric COMPACTNESS score, NOT net/best — it
+  // must never be used as a fallback for any of these.)
   function daAggStats(map) {
     var rounds = (map && map.Rounds) || [];
     if (!rounds.length) return null;
@@ -1409,7 +1419,6 @@
     var kTime = daPickKey(rounds, ['Time (s)', 'time_s', 'time', 'duration (s)']);
     var kNet = daPickKey(rounds, ['Net Value', 'net']);
     var kBest = daPickKey(rounds, ['Best Value', 'bestValue']);
-    var kFit = daPickKey(rounds, ['Fitness %', 'fitness']);
     var kPuz = daPickKey(rounds, ['Puzzle ID', 'puzzleId', 'Puzzle']);
     if (!kDiff || !kPlayer) return null;
     var users = {}, puzzles = {}, played = { easy: 0, hard: 0 };
@@ -1422,33 +1431,33 @@
       // participant, but pairing with the session keeps stacked imports apart).
       var ukey = String(r[kPlayer]) + '|' + String(kSess ? (r[kSess] || '') : '');
       var u = users[ukey] || (users[ukey] = {});
-      var a = u[d] || (u[d] = { n: 0, timeSum: 0, timeN: 0, max: false, known: false });
+      var a = u[d] || (u[d] = { n: 0, timeSum: 0, timeN: 0, max: false, near5: false, near10: false, known: false });
       a.n++;
       var t = daNum(kTime ? r[kTime] : null);
       if (t != null) { a.timeSum += t; a.timeN++; }
-      var atMax = null;
-      var net = daNum(kNet ? r[kNet] : null), best = daNum(kBest ? r[kBest] : null), fit = daNum(kFit ? r[kFit] : null);
-      if (net != null && best != null) atMax = net >= best;
-      else if (fit != null) atMax = fit >= 100;
-      if (atMax != null) { a.known = true; if (atMax) a.max = true; }
+      var atMax = null, near5 = null, near10 = null;
+      var net = daNum(kNet ? r[kNet] : null), best = daNum(kBest ? r[kBest] : null);
+      if (net != null && best != null) { atMax = net >= best; near5 = net >= 0.95 * best; near10 = net >= 0.90 * best; }
+      if (atMax != null) { a.known = true; if (atMax) a.max = true; if (near5) a.near5 = true; if (near10) a.near10 = true; }
       var pid = String(kPuz ? (r[kPuz] == null ? '' : r[kPuz]) : '') || '(unknown)';
-      var pz = puzzles[pid + '|' + d] || (puzzles[pid + '|' + d] = { id: pid, diff: d, n: 0, timeSum: 0, timeN: 0, maxN: 0, knownN: 0 });
+      var pz = puzzles[pid + '|' + d] || (puzzles[pid + '|' + d] = { id: pid, diff: d, n: 0, timeSum: 0, timeN: 0, maxN: 0, near5N: 0, near10N: 0, knownN: 0 });
       pz.n++;
       if (t != null) { pz.timeSum += t; pz.timeN++; }
-      if (atMax != null) { pz.knownN++; if (atMax) pz.maxN++; }
+      if (atMax != null) { pz.knownN++; if (atMax) pz.maxN++; if (near5) pz.near5N++; if (near10) pz.near10N++; }
     });
     var ukeys = Object.keys(users);
     if (!ukeys.length) return null;
     function diffStats(d) {
-      var timeMeans = [], maxUsers = 0, knownUsers = 0, n = 0;
+      var timeMeans = [], maxUsers = 0, near5Users = 0, near10Users = 0, knownUsers = 0, n = 0;
       ukeys.forEach(function (k) {
         var a = users[k][d]; if (!a) return;
         n++;
         if (a.timeN) timeMeans.push(a.timeSum / a.timeN);
-        if (a.known) { knownUsers++; if (a.max) maxUsers++; }
+        if (a.known) { knownUsers++; if (a.max) maxUsers++; if (a.near5) near5Users++; if (a.near10) near10Users++; }
       });
       var avgTime = timeMeans.length ? timeMeans.reduce(function (s, x) { return s + x; }, 0) / timeMeans.length : null;
-      return { users: n, avgTime: avgTime, maxUsers: maxUsers, knownUsers: knownUsers, pctMax: knownUsers ? Math.round(maxUsers / knownUsers * 1000) / 10 : null };
+      function pct(k) { return knownUsers ? Math.round(k / knownUsers * 1000) / 10 : null; }
+      return { users: n, avgTime: avgTime, maxUsers: maxUsers, near5Users: near5Users, near10Users: near10Users, knownUsers: knownUsers, pctMax: pct(maxUsers), pct5: pct(near5Users), pct10: pct(near10Users) };
     }
     var puzzleRows = Object.keys(puzzles).map(function (k) { return puzzles[k]; });
     puzzleRows.sort(function (a, b) { return (a.diff === b.diff ? 0 : (a.diff === 'easy' ? -1 : 1)) || (b.n - a.n); });
