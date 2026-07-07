@@ -8,6 +8,7 @@ built. It explains the *philosophy* and the *structure*, not just the code.
 - **Live (join a session directly):** https://www.stouras.com/lab/portfoliofit/?session=CODE
 - **Live (original plain game):** https://www.stouras.com/lab/portfoliofit/?classic
 - **Live (admin):** https://www.stouras.com/lab/portfoliofit/?admin
+- **Live (admin · data analytics):** https://www.stouras.com/lab/portfoliofit/?admin=data-analytics
 - **Repo:** github.com/konstantinosStouras/konstantinosStouras.github.io → `lab/portfoliofit/`
 - **Backend (not web-served):** repo root `_portfoliofit-lab-firebase/`
 
@@ -97,7 +98,7 @@ Served app (`lab/portfoliofit/`):
 | `index.html` | The whole **game**: markup + CSS + the game engine (an IIFE). Also hosts the shared "snake" Account login widget and a localStorage `AppStats` block (legacy). Exposes `window.PFGame`, emits events via `window.PF.onGameEvent`, and reads the `window.PF_EXPERIMENT` / `window.PF_ADMIN` flags set by a tiny inline script. Loads the three layer scripts (deferred). |
 | `pf-defaults.js` | Sets `window.PF_DEFAULTS` = `{ texts, settings, registrationQuestions, surveyQuestions, defaultPuzzles }`. Loaded **before** the other two. |
 | `experiment.js` | The **participant experiment** layer. Activates only on `?exp=1`. Phase state machine, Firebase (named app), auth/registration, event logging, per-round summaries, survey, onboarding tour, movable/resizable boxes. |
-| `admin.js` | The **admin CMS**. Activates only on `?admin`. Login gate, content/question/settings/puzzle editors, participants table + Excel export, theme. |
+| `admin.js` | The **admin CMS**. Activates only on `?admin`. Login gate, content/question/settings/puzzle editors, participants table + Excel export, theme. Also hosts the **Data analytics** view (`?admin=data-analytics`) — see §6. |
 | `404.html` | Redirects to `/`. |
 | `og-image.jpg`, `portfoliofit-difficulty.pdf`, `portfoliofit-difficulty.makepdf.py` | Social card + the κ methodology note (PDF + its generator). |
 
@@ -269,9 +270,18 @@ publish it; versioned in the repo, deployed manually to the lab project):
 
 ## 6. The admin panel (`admin.js`)
 
-- **Activation:** `?admin`; requires the `admin@admin.com` account. Caches the
-  admin auth so a refresh shows the panel immediately (no login flash). Dark/
-  light theme.
+- **Activation:** `?admin` (a value is allowed — `index.html`'s flag script
+  tests `/[?&]admin([=&]|$)/`, so `?admin=data-analytics` also counts as admin
+  and keeps the participant experiment off); requires the `admin@admin.com`
+  account. Caches the admin auth so a refresh shows the panel immediately (no
+  login flash). Dark/light theme.
+- **Top-right nav** (`headerRow()`): two views — **Admin** (the tabbed CMS
+  below) and **Data analytics** — mirroring the answerarena admin.
+  `currentView` (`'admin'|'analytics'`) drives `renderShell()`;
+  `viewFromUrl()`/`setViewUrl()` make the analytics view directly linkable
+  (`?admin=data-analytics`, also accepting `?admin=analytics` /
+  `?admin&view=analytics` / `#data-analytics`) and keep the address bar
+  canonical; a `popstate` listener makes browser Back/Forward switch views.
 - **Tabs:**
   - **Content** — collapsible per-page text editors (welcome/training/registration/
     game/stats/survey/thank-you), each pre-filled with the current effective text.
@@ -307,11 +317,13 @@ publish it; versioned in the repo, deployed manually to the lab project):
     `deleteParticipantDeep`). Per row: **⬇ Excel** (that one player's data) and
     **delete**.
 - **Excel export (`exportWorkbook`)** — SheetJS (xlsx) via CDN. One reusable
-  builder powers three entry points — **all participants** (`exportExcel`),
-  **one participant** (`exportParticipant`), and **one whole session**
-  (`exportSession`, aggregating every player tagged with that `sessionId` into a
-  single file, using that session's own question order). Sheets, each with
-  intuitive headings and ordered to follow the simulation:
+  builder (`buildSheetMap`, which returns the whole export as a
+  `{sheetName: rows[]}` map in `SHEET_ORDER` — also reused verbatim by the Data
+  analytics view's Load) powers three entry points — **all participants**
+  (`exportExcel`), **one participant** (`exportParticipant`), and **one whole
+  session** (`exportSession`, aggregating every player tagged with that
+  `sessionId` into a single file, using that session's own question order).
+  Sheets, each with intuitive headings and ordered to follow the simulation:
   - **Play log** — the google-sheet-style single tab collecting *every brick
     move* across all included players: Player, UCD Student ID, Session, Puzzle,
     Difficulty, Move # (counts 1,2,3… **within each puzzle**; the start row is
@@ -343,6 +355,56 @@ publish it; versioned in the repo, deployed manually to the lab project):
   do the same write with different wording) and **Restore built-in default**
   (revert to `PF_DEFAULTS`). Each uses `withFeedback` so the button itself
   confirms — it presses, shows "Saving…", then flashes green "✓ Saved".
+
+### The Data analytics view (`?admin=data-analytics`)
+
+Ported from the answerarena admin's Data analytics tab. All state lives in the
+module-level `daState`, so leaving and returning to the view preserves loaded
+data, ticked sources and edited code. Everything runs **entirely in the
+browser** — no data is uploaded, no Cloud Function or Firestore-rules change.
+Three sections:
+
+1. **Data source** (`buildDaSection1`). Every session — active and completed —
+   is a checkbox row (with participant count + created date); you can also
+   **Import Excel / CSV** (a per-session / per-player / all-data export from
+   this admin, or any workbook; a bare CSV becomes one `Rounds` sheet).
+   **Load** fetches the ticked sessions' participants and builds the aggregate
+   through the **same** export builder (`buildSheetMap`), so the in-memory
+   aggregate is exactly the multi-tab shape of the Excel export; ticked
+   imports are then stacked on by case-insensitive sheet name
+   (`mergeBookIntoSheetMap`, unmatched sheets become their own tab).
+   **Download consolidated Excel** writes the whole aggregate as one workbook
+   (`SHEET_ORDER` first, then imported extras; names via `safeSheetName`).
+2. **Aggregate data** (`buildDaSection2`, numbers from `daAggStats`). Stat
+   boxes from the aggregate **Rounds** sheet (one row per completed puzzle),
+   with tolerant case/spacing-insensitive header matching (`daPickKey`) so
+   imported files work too: users played, easy/hard puzzles completed,
+   **average time to complete** a puzzle of each difficulty (each user's own
+   mean is taken first, then averaged, so a heavy player cannot dominate), and
+   the **% of users who reached the maximum** — Net Value ≥ Best Value, falling
+   back to Fitness % ≥ 100 when Best Value is absent — at least once in that
+   difficulty. Plus a per-puzzle breakdown table (plays, avg time, share of
+   plays at max).
+3. **Process with Python or R** (`buildDaSection3`). Pick any loaded table
+   (default **Rounds**, the analysis unit), edit the pre-filled script, **Run**.
+   The table is serialised to CSV and handed to the code as the string
+   `DATA_CSV` (Python) / the file `/tmp/data.csv` (R). Python compiles
+   in-browser via **Pyodide** (numpy/pandas/scipy/matplotlib — a package that
+   fails to load is skipped, non-fatal) and R via **WebR** (base R;
+   base-graphics captured as PNGs) — both loaded lazily from jsDelivr on first
+   Run (~10–30 s, needs network). **Any valid Python or R works** against the
+   loaded data; console output and figures render below the editor. The
+   bundled templates (`DA_PY_TEMPLATE` / `DA_R_TEMPLATE`) are heavily
+   commented, compute the Section-2 aggregates plus a Welch t-test (per-user
+   times) and a two-proportion test (user-level solve rates) and draw 3
+   figures; both are verified to produce the same numbers and are defensive
+   about missing columns. Edited code persists to localStorage
+   (`pfa-da:py` / `pfa-da:r`); when changing the bundled templates bump
+   `PF_DA_TPL_VERSION` so stale saved scripts are dropped
+   (`daMigrateTemplates`). Gotchas: matplotlib ≥ 3.9 removed
+   `boxplot(labels=)` (use `set_xticks` + `set_xticklabels`); R rejects
+   3-digit hex colours (use `#888888`); a top-level R `if`/`else` split across
+   lines needs braces.
 
 ## 7. Firebase backend
 
