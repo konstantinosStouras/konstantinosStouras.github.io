@@ -326,13 +326,27 @@ function buildAuthors(papers) {
   const union = (a, b) => { const ra = add(a), rb = add(b); if (ra !== rb) parent.set(rb, ra); };
 
   const authorNames = (p) => p.Authors ? p.Authors.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const normName = (name) => stripAccents(name).toLowerCase();
+  const nameSet = new Set();
+  for (const p of papers) authorNames(p).forEach(n => nameSet.add(normName(n)));
+
   for (const p of papers) {
     authorNames(p).forEach((name, i) => {
-      const nk = 'n:' + stripAccents(name).toLowerCase();
+      const nk = 'n:' + normName(name);
       add(nk);
       const orcid = p._orcids[i] || '';
       if (orcid) union(nk, 'o:' + orcid);
     });
+  }
+  // "Hau L. Lee" and "Hau Lee" are the same person: when dropping the middle
+  // initial(s) of a name yields another name that actually occurs, merge them
+  // (the sheet's Authors tab does the same). Requiring the bare form to exist
+  // avoids uniting "Hau K. Lee" and "Hau L. Lee", who may be different people.
+  for (const n of nameSet) {
+    const toks = n.split(/\s+/);
+    if (toks.length < 3) continue;
+    const stripped = toks.filter((t, i) => i === 0 || i === toks.length - 1 || !/^[a-z]\.?$/.test(t)).join(' ');
+    if (stripped !== n && nameSet.has(stripped)) union('n:' + stripped, 'n:' + n);
   }
 
   const byRoot = new Map();
