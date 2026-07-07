@@ -96,7 +96,15 @@ Then open `fun/ms2/index.html` through any static server and browse.
 
 - **Editors and research areas exist only for ~2011+ papers**, because they are
   parsed from the "This paper was accepted by …" sentence in the abstract. This is
-  the same limitation the original has.
+  the same limitation the original has. Special-issue sentences ("accepted by X for
+  the Special Issue on Y") split like the sheet does: X is the editor, the
+  special-issue title is the area. On top of that, `_scraper/editor-overrides.json`
+  carries a one-time import of the editors the sheet collected from sources that
+  don't exist on Crossref (INFORMS page scrapes and a hand-curated tab); the build
+  uses it whenever Crossref itself yields no editor, so ms2's per-editor counts
+  match /fun/ms/ (and exceed it slightly where the abstract names an editor the
+  sheet missed). If the sheet gains more hand-collected editors before it retires,
+  regenerate the file with `_scraper/make-editor-overrides.mjs`.
 - **Author and affiliation cleanup is lighter.** The Sheets pipeline has years of
   hand-tuned name-merging and ORCID resolution. ms2 does a reasonable automatic
   version (ORCID when Crossref provides it, otherwise name-based), so a few authors
