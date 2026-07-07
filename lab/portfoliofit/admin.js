@@ -1342,7 +1342,7 @@
   function buildDaSection2() {
     var card = el('div', { class: 'pfa-card' });
     card.appendChild(el('div', { class: 'pfa-sechead' }, [el('span', { class: 'pfa-secnum', text: '2' }), el('h3', { text: 'Aggregate data', style: 'margin:0;font-size:16px;' })]));
-    card.appendChild(el('p', { class: 'pfa-note', html: 'Headline numbers from the loaded <b>Rounds</b> data (one row per completed puzzle): how many users played, how many easy/hard puzzles were completed, the <b>average time to complete</b> one (each user weighted equally — their own average is taken first) and the <b>% of users who reached the maximum</b> (the puzzle\'s single optimal portfolio) at least once.' }));
+    card.appendChild(el('p', { class: 'pfa-note', html: 'Headline numbers from the loaded <b>Rounds</b> data (one row per completed puzzle): how many users played, how many easy/hard puzzles were completed, the <b>average time to complete</b> one (each user weighted equally — their own average is taken first) and the <b>% of users who reached the maximum</b> (the puzzle\'s single optimal portfolio) at least once, plus the % who got <b>within 5%</b> and <b>within 10%</b> of that maximum Net Value at least once (cumulative — a user at the maximum also counts as within 5% and 10%).' }));
     var stats = el('div', { class: 'pfa-statgrid', style: 'margin-top:6px;' });
     card.appendChild(stats);
     var hint = el('p', { class: 'pfa-note', text: 'Load data in Section 1 first.' });
@@ -1368,18 +1368,25 @@
       stats.appendChild(statBox(agg.hard.avgTime != null ? fmtDur(agg.hard.avgTime) : '—', 'Avg time · hard'));
       stats.appendChild(statBox(agg.easy.pctMax != null ? agg.easy.pctMax + '%' : '—', 'Reached max · easy (users)'));
       stats.appendChild(statBox(agg.hard.pctMax != null ? agg.hard.pctMax + '%' : '—', 'Reached max · hard (users)'));
+      stats.appendChild(statBox(agg.easy.pct5 != null ? agg.easy.pct5 + '%' : '—', 'Within 5% of max · easy (users)'));
+      stats.appendChild(statBox(agg.hard.pct5 != null ? agg.hard.pct5 + '%' : '—', 'Within 5% of max · hard (users)'));
+      stats.appendChild(statBox(agg.easy.pct10 != null ? agg.easy.pct10 + '%' : '—', 'Within 10% of max · easy (users)'));
+      stats.appendChild(statBox(agg.hard.pct10 != null ? agg.hard.pct10 + '%' : '—', 'Within 10% of max · hard (users)'));
       if (agg.puzzles.length) {
-        tblWrap.appendChild(el('p', { class: 'pfa-note', style: 'margin-top:12px;', html: '<b>By puzzle</b> — plays, average completion time and the share of plays that reached the maximum:' }));
+        tblWrap.appendChild(el('p', { class: 'pfa-note', style: 'margin-top:12px;', html: '<b>By puzzle</b> — plays, average completion time and the share of plays that reached the maximum, or got within 5% / 10% of it:' }));
         var t = el('table', { class: 'pfa-tbl' });
-        t.appendChild(el('thead', {}, [el('tr', {}, ['Puzzle', 'Difficulty', 'Plays', 'Avg time', 'Plays at max'].map(function (h) { return el('th', { text: h }); }))]));
+        t.appendChild(el('thead', {}, [el('tr', {}, ['Puzzle', 'Difficulty', 'Plays', 'Avg time', 'Plays at max', 'Within 5%', 'Within 10%'].map(function (h) { return el('th', { text: h }); }))]));
         var tb = el('tbody', {});
+        function shareCell(k, known) { return known ? Math.round(k / known * 100) + '% (' + k + '/' + known + ')' : '—'; }
         agg.puzzles.forEach(function (pz) {
           tb.appendChild(el('tr', {}, [
             el('td', { text: pz.id }),
             el('td', { text: pz.diff }),
             el('td', { text: String(pz.n) }),
             el('td', { text: pz.timeN ? fmtDur(pz.timeSum / pz.timeN) : '—' }),
-            el('td', { text: pz.knownN ? Math.round(pz.maxN / pz.knownN * 100) + '% (' + pz.maxN + '/' + pz.knownN + ')' : '—' })
+            el('td', { text: shareCell(pz.maxN, pz.knownN) }),
+            el('td', { text: shareCell(pz.near5N, pz.knownN) }),
+            el('td', { text: shareCell(pz.near10N, pz.knownN) })
           ]));
         });
         t.appendChild(tb);
@@ -1394,6 +1401,9 @@
   // — or a hand-made sheet with the same column meanings — also works.
   // "Reached the maximum" = Net Value >= Best Value when both are present,
   // else Fitness % >= 100 as a fallback, else unknown (excluded from the rate).
+  // "Within 5% / 10% of the maximum" = Net Value >= 95% / 90% of Best Value
+  // (Best Value is always positive), fallback Fitness % >= 95 / 90 — cumulative,
+  // so a round at the maximum also counts as within 5% and within 10%.
   function daAggStats(map) {
     var rounds = (map && map.Rounds) || [];
     if (!rounds.length) return null;
@@ -1416,33 +1426,34 @@
       // participant, but pairing with the session keeps stacked imports apart).
       var ukey = String(r[kPlayer]) + '|' + String(kSess ? (r[kSess] || '') : '');
       var u = users[ukey] || (users[ukey] = {});
-      var a = u[d] || (u[d] = { n: 0, timeSum: 0, timeN: 0, max: false, known: false });
+      var a = u[d] || (u[d] = { n: 0, timeSum: 0, timeN: 0, max: false, near5: false, near10: false, known: false });
       a.n++;
       var t = daNum(kTime ? r[kTime] : null);
       if (t != null) { a.timeSum += t; a.timeN++; }
-      var atMax = null;
+      var atMax = null, near5 = null, near10 = null;
       var net = daNum(kNet ? r[kNet] : null), best = daNum(kBest ? r[kBest] : null), fit = daNum(kFit ? r[kFit] : null);
-      if (net != null && best != null) atMax = net >= best;
-      else if (fit != null) atMax = fit >= 100;
-      if (atMax != null) { a.known = true; if (atMax) a.max = true; }
+      if (net != null && best != null) { atMax = net >= best; near5 = net >= 0.95 * best; near10 = net >= 0.90 * best; }
+      else if (fit != null) { atMax = fit >= 100; near5 = fit >= 95; near10 = fit >= 90; }
+      if (atMax != null) { a.known = true; if (atMax) a.max = true; if (near5) a.near5 = true; if (near10) a.near10 = true; }
       var pid = String(kPuz ? (r[kPuz] == null ? '' : r[kPuz]) : '') || '(unknown)';
-      var pz = puzzles[pid + '|' + d] || (puzzles[pid + '|' + d] = { id: pid, diff: d, n: 0, timeSum: 0, timeN: 0, maxN: 0, knownN: 0 });
+      var pz = puzzles[pid + '|' + d] || (puzzles[pid + '|' + d] = { id: pid, diff: d, n: 0, timeSum: 0, timeN: 0, maxN: 0, near5N: 0, near10N: 0, knownN: 0 });
       pz.n++;
       if (t != null) { pz.timeSum += t; pz.timeN++; }
-      if (atMax != null) { pz.knownN++; if (atMax) pz.maxN++; }
+      if (atMax != null) { pz.knownN++; if (atMax) pz.maxN++; if (near5) pz.near5N++; if (near10) pz.near10N++; }
     });
     var ukeys = Object.keys(users);
     if (!ukeys.length) return null;
     function diffStats(d) {
-      var timeMeans = [], maxUsers = 0, knownUsers = 0, n = 0;
+      var timeMeans = [], maxUsers = 0, near5Users = 0, near10Users = 0, knownUsers = 0, n = 0;
       ukeys.forEach(function (k) {
         var a = users[k][d]; if (!a) return;
         n++;
         if (a.timeN) timeMeans.push(a.timeSum / a.timeN);
-        if (a.known) { knownUsers++; if (a.max) maxUsers++; }
+        if (a.known) { knownUsers++; if (a.max) maxUsers++; if (a.near5) near5Users++; if (a.near10) near10Users++; }
       });
       var avgTime = timeMeans.length ? timeMeans.reduce(function (s, x) { return s + x; }, 0) / timeMeans.length : null;
-      return { users: n, avgTime: avgTime, maxUsers: maxUsers, knownUsers: knownUsers, pctMax: knownUsers ? Math.round(maxUsers / knownUsers * 1000) / 10 : null };
+      function pct(k) { return knownUsers ? Math.round(k / knownUsers * 1000) / 10 : null; }
+      return { users: n, avgTime: avgTime, maxUsers: maxUsers, near5Users: near5Users, near10Users: near10Users, knownUsers: knownUsers, pctMax: pct(maxUsers), pct5: pct(near5Users), pct10: pct(near10Users) };
     }
     var puzzleRows = Object.keys(puzzles).map(function (k) { return puzzles[k]; });
     puzzleRows.sort(function (a, b) { return (a.diff === b.diff ? 0 : (a.diff === 'easy' ? -1 : 1)) || (b.n - a.n); });
@@ -1618,7 +1629,7 @@
   // saved script from a previous version lives in localStorage and would
   // otherwise SHADOW the current template (daLoadSaved returns the saved copy).
   // On a version change we drop the saved code so the fresh template loads.
-  var PF_DA_TPL_VERSION = '2026-07-07-initial';
+  var PF_DA_TPL_VERSION = '2026-07-07-within-5-10-pct';
   function daMigrateTemplates() {
     try {
       if (localStorage.getItem('pfa-da:ver') === PF_DA_TPL_VERSION) return;
@@ -1832,7 +1843,9 @@
     '     weighted equally (their own mean is computed first), so one player who',
     '     played many puzzles cannot dominate the average.',
     '  3. Success - the % of users who reached the maximum in at least one easy /',
-    '     hard puzzle, plus the per-round solve rate.',
+    '     hard puzzle, plus the per-round solve rate, and the % of users who got',
+    '     within 5% / within 10% of the maximum at least once (cumulative: a user',
+    '     at the maximum also counts as within 5% and 10%).',
     '  4. Easy vs hard - a Welch t-test on the per-user times and a two-proportion',
     '     z-test on the user-level solve rates.',
     '  5. A per-puzzle breakdown (plays, average time, solve rate).',
@@ -1886,12 +1899,18 @@
     'fit  = pd.to_numeric(df[C_FIT],  errors="coerce") if C_FIT  else pd.Series(np.nan, index=df.index)',
     '# Reached the maximum: Net Value >= Best Value when both are present, else',
     '# Fitness >= 100 as a fallback; otherwise unknown (NaN, excluded from rates).',
-    'at_max = pd.Series(np.nan, index=df.index)',
+    '# Within 5% / 10% of the maximum: Net Value >= 95% / 90% of Best Value (Best',
+    '# Value is always positive), fallback Fitness >= 95 / 90 - cumulative.',
     'has_nb = net.notna() & best.notna()',
-    'at_max[has_nb] = (net[has_nb] >= best[has_nb]).astype(float)',
-    'fb_ok = at_max.isna() & fit.notna()',
-    'at_max[fb_ok] = (fit[fb_ok] >= 100).astype(float)',
-    'df["_max"] = at_max',
+    'def flag(frac, fit_min):',
+    '    s = pd.Series(np.nan, index=df.index)',
+    '    s[has_nb] = (net[has_nb] >= frac * best[has_nb]).astype(float)',
+    '    fb = s.isna() & fit.notna()',
+    '    s[fb] = (fit[fb] >= fit_min).astype(float)',
+    '    return s',
+    'df["_max"]    = flag(1.00, 100)',
+    'df["_near5"]  = flag(0.95, 95)',
+    'df["_near10"] = flag(0.90, 90)',
     '',
     'def line(ch="-"):',
     '    print(ch * 78)',
@@ -1932,6 +1951,9 @@
     '    kr = int(sub["_max"].sum())',
     '    rr = sub["_max"].mean() * 100   # per-round solve rate',
     '    print(f"{d.capitalize():5s}: {k}/{n} users reached the maximum at least once ({k / n * 100:.1f}%); per-round solve rate {rr:.1f}% ({kr}/{len(sub)} rounds)")',
+    '    for lbl, coln in ((" 5", "_near5"), ("10", "_near10")):',
+    '        kn = int(sub.groupby("_user")[coln].max().sum())',
+    '        print(f"       within {lbl}% of the maximum at least once: {kn}/{n} users ({kn / n * 100:.1f}%)")',
     '',
     '# 4 -- easy vs hard -----------------------------------------------------------------',
     'line("="); print("4. EASY vs HARD"); line("=")',
@@ -2023,6 +2045,8 @@
     '# Time (s), Net Value, Best Value, Fitness %, Puzzle ID.',
     '# "Reached the maximum" = Net Value >= Best Value (both known), else',
     '# Fitness >= 100 as a fallback, else unknown (excluded from the rates).',
+    '# "Within 5% / 10% of the maximum" = Net Value >= 95% / 90% of Best Value,',
+    '# fallback Fitness >= 95 / 90 - cumulative (the maximum counts as within both).',
     '',
     'df <- read.csv("/tmp/data.csv", check.names = FALSE, stringsAsFactors = FALSE)',
     '',
@@ -2055,8 +2079,11 @@
     'netv  <- if (!is.na(C_NET))  num(df[[C_NET]])  else rep(NA_real_, nrow(df))',
     'bestv <- if (!is.na(C_BEST)) num(df[[C_BEST]]) else rep(NA_real_, nrow(df))',
     'fitv  <- if (!is.na(C_FIT))  num(df[[C_FIT]])  else rep(NA_real_, nrow(df))',
-    'df$max2 <- ifelse(!is.na(netv) & !is.na(bestv), as.numeric(netv >= bestv),',
-    '           ifelse(!is.na(fitv), as.numeric(fitv >= 100), NA))',
+    'flag <- function(frac, fit_min) ifelse(!is.na(netv) & !is.na(bestv), as.numeric(netv >= frac * bestv),',
+    '                                ifelse(!is.na(fitv), as.numeric(fitv >= fit_min), NA))',
+    'df$max2   <- flag(1.00, 100)',
+    'df$near5  <- flag(0.95, 95)',
+    'df$near10 <- flag(0.90, 90)',
     '',
     'line <- function(ch = "-") cat(strrep(ch, 78), "\\n", sep = "")',
     '',
@@ -2095,6 +2122,10 @@
     '  um[[d]] <- c(k, n)',
     '  cat(sprintf("%-5s: %d/%d users reached the maximum at least once (%.1f%%); per-round solve rate %.1f%% (%d/%d rounds)\\n",',
     '      d, k, n, 100 * k / n, 100 * mean(sub$max2), as.integer(sum(sub$max2)), nrow(sub)))',
+    '  k5  <- as.integer(sum(tapply(sub$near5,  sub$user, max)))',
+    '  k10 <- as.integer(sum(tapply(sub$near10, sub$user, max)))',
+    '  cat(sprintf("       within  5%% of the maximum at least once: %d/%d users (%.1f%%)\\n", k5, n, 100 * k5 / n))',
+    '  cat(sprintf("       within 10%% of the maximum at least once: %d/%d users (%.1f%%)\\n", k10, n, 100 * k10 / n))',
     '}',
     '',
     '# 4 -- easy vs hard -----------------------------------------------------------------',
