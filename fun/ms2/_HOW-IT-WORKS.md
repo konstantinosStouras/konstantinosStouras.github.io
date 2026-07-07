@@ -60,6 +60,14 @@ fun/ms2/
    JSON back to the repo. GitHub Actions runners have open internet, so they can
    reach Crossref even though the files are then served as boring static assets.
 
+   After committing, the workflow **verifies the live site actually serves the new
+   dataset**. GitHub Pages deploys occasionally fail with a transient error (it
+   happened on 2026-07-03 and 2026-07-06), which used to mean the site silently kept
+   serving stale data until the next unrelated commit. Now the workflow polls
+   `stouras.com/fun/ms2/data/meta.json`, requests a fresh Pages build via the API if
+   the deploy didn't land, and fails the run loudly if the site is still stale — so
+   a broken deploy shows up as a red ✗ in the Actions tab instead of going unnoticed.
+
 4. **The page: `index.html`.** On load it does
    `fetch('./data/papers.json')` (and the other files) and renders. All filtering,
    sorting and BibTeX happens in your browser, exactly as before.
