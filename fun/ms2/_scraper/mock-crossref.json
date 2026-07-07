@@ -25,6 +25,15 @@
     "is-referenced-by-count": 0
   },
   {
+    "DOI": "10.1287/mnsc.2025.5555",
+    "type": "journal-article",
+    "title": ["Editor Only in Assertions"],
+    "author": [ { "given": "Ada", "family": "Lovelace", "affiliation": [{ "name": "University of Cambridge" }] } ],
+    "issued": { "date-parts": [[2025]] },
+    "abstract": "An abstract with no acceptance sentence. Funding: none.",
+    "assertion": [ { "name": "accepted_by", "label": "Accepting Editor", "value": "Gustavo Manso" } ]
+  },
+  {
     "DOI": "10.1287/mnsc.1.1.1",
     "type": "journal-article",
     "title": ["The Nature of Management Science"],

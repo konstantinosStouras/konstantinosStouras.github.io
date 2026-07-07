@@ -47,7 +47,7 @@ const PULL_DATE = process.env.MS2_PULL_DATE || new Date().toISOString().slice(0,
 const SELECT = [
   'DOI', 'title', 'author', 'issued', 'published-print', 'published-online',
   'created', 'volume', 'issue', 'page', 'abstract', 'type', 'group-title',
-  'subject', 'container-title', 'short-container-title',
+  'subject', 'container-title', 'short-container-title', 'assertion',
 ].join(',');
 
 async function fetchJson(url, attempt = 0) {
@@ -161,6 +161,25 @@ function normArea(s) {
   return (s || '').replace(/<[^>]+>/g, '').replace(/\.\s*$/, '').trim().toLowerCase();
 }
 
+// Some papers carry the accepting editor in Crossref's structured `assertion`
+// metadata instead of (or before it appears in) the abstract sentence. The
+// Google-Sheets pipeline behind /fun/ms/ reads this field first
+// (Assertion_Editor), so without it ms2 under-counted several editors. The
+// value is a bare name ("Gustavo Manso"); wrap it in the canonical sentence so
+// the page's cleanEditorField() parses it exactly like the abstract-sourced ones.
+function assertionEditor(item) {
+  for (const a of item.assertion || []) {
+    const label = ((a.label || a.name || '') + '').toLowerCase();
+    if (label.includes('editor')) {
+      const v = stripJats(a.value || '');
+      if (!v) return '';
+      return /accepted by/i.test(v) ? v.replace(/\.?$/, '.')
+        : 'This paper was accepted by ' + v.replace(/\.$/, '') + '.';
+    }
+  }
+  return '';
+}
+
 function mapWork(item) {
   const title = (item.title && item.title[0]) ? stripJats(item.title[0]) : '';
   if (!title) return null;
@@ -172,7 +191,8 @@ function mapWork(item) {
   }));
 
   const abstract = stripJats(item.abstract || '');
-  const { editor, area: acceptedArea } = acceptance(abstract);
+  let { editor, area: acceptedArea } = acceptance(abstract);
+  if (!editor) editor = assertionEditor(item);
   const groupTitle = Array.isArray(item['group-title']) ? item['group-title'][0] : item['group-title'];
   const subject = Array.isArray(item.subject) ? item.subject[0] : '';
   const area = normArea(acceptedArea) || normArea(groupTitle) || normArea(subject) || '';
