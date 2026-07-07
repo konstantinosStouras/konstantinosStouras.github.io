@@ -7,9 +7,11 @@ name: ms2 — update Management Science data
 
 on:
   schedule:
-    # Weekly, Mondays 05:00 UTC. Management Science publishes on a monthly-ish
-    # cadence, so weekly is plenty fresh and keeps commit churn low.
-    - cron: '0 5 * * 1'
+    # Daily, 05:00 UTC — the same cadence as the /fun/ms/ Google Sheet's
+    # update trigger, so the two apps never drift apart by more than a day
+    # while both are live. Nothing is committed (and no Pages deploy happens)
+    # on days when Crossref has nothing new, so the extra runs are free.
+    - cron: '0 5 * * *'
   workflow_dispatch: {}      # let me run it on demand from the Actions tab
   push:
     # Run once whenever the pipeline itself changes, so a new branch seeds its

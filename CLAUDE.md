@@ -35,7 +35,7 @@ keep that in mind if a change there is warranted.
 Its data lives as static JSON in `fun/ms2/data/` (`papers.json`, `authors.json`,
 `affiliations.json`, `recent.json`, `meta.json`), built directly from the Crossref
 API by `fun/ms2/_scraper/build-data.mjs` and refreshed by the GitHub Action
-`.github/workflows/ms2-update-data.yml` (weekly + manual), which commits the
+`.github/workflows/ms2-update-data.yml` (daily + manual), which commits the
 refreshed files back to the repo and then verifies the live site serves them
 (self-healing a transiently failed Pages deploy by requesting a rebuild). The page (`fun/ms2/index.html`) reads those
 files with `fetch()` — GitHub Pages serves them from its CDN, same origin. To
