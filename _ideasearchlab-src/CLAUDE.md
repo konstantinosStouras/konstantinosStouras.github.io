@@ -407,6 +407,13 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      an imported book's Conditions/Ideas sheet for the aggregate About.
    - **Summary tallies:** three stat boxes — *Ideas generated* (`rows.length`), *Total final ideas*
      (`final_pick == 1`), *Number of sessions* (distinct session codes in the loaded data).
+   - **Participants per condition:** a two-column card under the stat boxes (styled like the
+     top-of-page encoding key, each encoding as its coloured `condTag` chip) listing all four
+     conditions with the number of participants loaded under each (zero-count rows dimmed).
+     Firestore-loaded sessions use the real head-count captured at Load time (`sessionPartCounts`,
+     non-removed participants of each session, counted under `conditionForSession`); a loaded
+     imported workbook is counted from its condition-stamped *Participants* sheet (Status ≠
+     removed), falling back to distinct idea authors for a plain CSV (`condParticipants` memo).
    - **Scores round-trip:** the Rankings tab's *Novelty / Usefulness / Quality* columns are filled
      from any scores set in Step 3 (mapped by Idea ID via `rankingsSheetFromIdeas(ideaRows, scoreById)`),
      so re-downloading the aggregate after scoring carries the scores back in.

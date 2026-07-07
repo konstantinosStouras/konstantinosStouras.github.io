@@ -11,7 +11,7 @@ import {
   matchScoresIntoRows, buildSummaryTable, DEFAULT_REFERENCE_SET, presentKpis,
   uploadedKpiKeys, uploadedKpiDefs, uploadedKpiLabel, analysisColumns,
   matchUploadedKpisIntoRows, clearUploadedKpis, stripAllKpis, UPLOADED_KPI_PREFIX,
-  enteredGroupPhase, canonicalKpiField, KPI_DEFS,
+  enteredGroupPhase, canonicalKpiField, KPI_DEFS, canonicalCondition,
 } from '../utils/analyticsData'
 import { scoreIdeas, fetchAISettings } from '../utils/llmClient'
 import { tfidfVectors } from '../utils/tfidf'
@@ -64,6 +64,10 @@ export default function DataAnalytics() {
   // workbooks (kept whole, all sheets — not just the Ideas rows that feed `rows`).
   const [loadedSessions, setLoadedSessions] = useState([])
   const [importedBooks, setImportedBooks] = useState([])
+  // Participant head-count per loaded Firestore session ({ [sessionId]: n },
+  // non-removed only), captured at Load time — feeds the Step-2 "Participants
+  // per condition" table (imported workbooks are counted from their own sheets).
+  const [sessionPartCounts, setSessionPartCounts] = useState({})
   const [aggregating, setAggregating] = useState(false)
   const [excludedUsers, setExcludedUsers] = useState(() => new Set())
   const [showUsers, setShowUsers] = useState(false)
@@ -237,6 +241,7 @@ export default function DataAnalytics() {
     setLoadingData(true)
     try {
       const collected = []
+      const partCounts = {}
       for (const s of loaded) {
         const [ideasSnap, partsSnap, groupsSnap] = await Promise.all([
           getDocs(collection(db, 'sessions', s.id, 'ideas')),
@@ -246,6 +251,9 @@ export default function DataAnalytics() {
         const ideas = ideasSnap.docs.map(d => ({ id: d.id, ...d.data() }))
         const parts = partsSnap.docs.map(d => ({ id: d.id, ...d.data() }))
         const groups = groupsSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+        // Head-count for "Participants per condition" (Step 2): everyone still in
+        // the session (detached/removed participants excluded).
+        partCounts[s.id] = parts.filter(p => !p.removed && p.status !== 'removed').length
         collected.push(...buildRowsForSession(s, ideas, parts, groups))
       }
       const tagged = tagRows(collected)
@@ -263,6 +271,7 @@ export default function DataAnalytics() {
         const merged = replace ? loaded : [...prev, ...loaded]
         return [...new Map(merged.map(s => [s.id, s])).values()]
       })
+      setSessionPartCounts(prev => (replace ? partCounts : { ...prev, ...partCounts }))
     } catch (err) {
       console.error('Failed to load session data', err)
       alert('Failed to load session data: ' + (err.message || err))
@@ -347,6 +356,7 @@ export default function DataAnalytics() {
     setExcludedUsers(new Set())
     setLoadedSessions([])
     setImportedBooks([])
+    setSessionPartCounts({})
   }
 
   // ── Load idea scores from a ranked-ideas file ("All Ideas Ranked" tab) ──
@@ -952,6 +962,37 @@ export default function DataAnalytics() {
   // Step-2 aggregate; and the count of ticked imported files for the Load button.
   const loadedBookIds = useMemo(() => new Set(rows.filter(r => r._book).map(r => r._book)), [rows])
   const selectedBookCount = importedBooks.filter(b => b.selected).length
+  // ── Step 2: participants per condition (by the None/Solo/Group/Both encoding) ──
+  // Firestore-loaded sessions use the real head-count captured at Load time; a
+  // loaded imported workbook is counted from its condition-stamped Participants
+  // sheet when it has one, else by its distinct idea authors (plain CSV imports).
+  const condParticipants = useMemo(() => {
+    const counts = Object.fromEntries(CONDITIONS.map(c => [c, 0]))
+    for (const s of loadedSessions) {
+      const c = canonicalCondition(conditionForSession(s))
+      if (counts[c] != null) counts[c] += sessionPartCounts[s.id] || 0
+    }
+    for (const b of importedBooks) {
+      if (!loadedBookIds.has(b.id)) continue
+      const partSheet = (b.sheets || []).find(sh => String(sh.name).toLowerCase() === 'participants')
+      if (partSheet?.rows?.length) {
+        for (const row of partSheet.rows) {
+          if (String(row['Status'] || '').toLowerCase() === 'removed') continue
+          const c = canonicalCondition(row['Condition'] || row['AI Condition'] || row['Condition Code'] || '')
+          if (counts[c] != null) counts[c]++
+        }
+      } else {
+        const seen = new Set()
+        for (const r of rows) {
+          if (r._book !== b.id) continue
+          const c = canonicalCondition(r.condition)
+          const key = `${r.session}|${r.author_id}`
+          if (counts[c] != null && !seen.has(key)) { seen.add(key); counts[c]++ }
+        }
+      }
+    }
+    return counts
+  }, [loadedSessions, sessionPartCounts, importedBooks, loadedBookIds, rows])
   // Step-3 scoring scope (all ideas vs only Final Ideas) and its unscored count.
   const scorePool = scoreOnlyFinal ? effectiveRows.filter(isFinal) : effectiveRows
   const scopeUnscored = scorePool.filter(r => r.novelty === '' || r.usefulness === '').length
@@ -1195,11 +1236,34 @@ export default function DataAnalytics() {
           {rows.length === 0 ? (
             <p className={styles.emptyNote}>Tick sessions (or imported files) above and press “Load …”, then build the consolidated file here.</p>
           ) : (
-            <div className={styles.stats}>
-              <div className={styles.statBox}><div className={styles.statNum}>{rows.length}</div><div className={styles.statLabel}>Ideas generated</div></div>
-              <div className={styles.statBox}><div className={styles.statNum}>{finalCount}</div><div className={styles.statLabel}>Total final ideas</div></div>
-              <div className={styles.statBox}><div className={styles.statNum}>{sessionCount}</div><div className={styles.statLabel}>Number of sessions</div></div>
-            </div>
+            <>
+              <div className={styles.stats}>
+                <div className={styles.statBox}><div className={styles.statNum}>{rows.length}</div><div className={styles.statLabel}>Ideas generated</div></div>
+                <div className={styles.statBox}><div className={styles.statNum}>{finalCount}</div><div className={styles.statLabel}>Total final ideas</div></div>
+                <div className={styles.statBox}><div className={styles.statNum}>{sessionCount}</div><div className={styles.statLabel}>Number of sessions</div></div>
+              </div>
+              <div className={styles.condCountCard}>
+                <div className={styles.encodingTitle}>Participants per condition</div>
+                <table className={styles.encodingTable}>
+                  <thead>
+                    <tr><th>Encoding</th><th>Participants</th></tr>
+                  </thead>
+                  <tbody>
+                    {CONDITIONS.map((c, i) => (
+                      <tr key={c} className={condParticipants[c] ? '' : styles.condCountZero}>
+                        <td><span className={`${styles.condTag} ${styles[`cond${i}`]}`}>{c}</span></td>
+                        <td>{condParticipants[c]} participant{condParticipants[c] === 1 ? '' : 's'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className={styles.condCountNote}>
+                  Every participant of each loaded session, counted under its session&rsquo;s condition
+                  (removed participants excluded). An imported workbook is counted from its
+                  Participants sheet; a plain CSV by its distinct idea authors.
+                </div>
+              </div>
+            </>
           )}
         </section>
 
