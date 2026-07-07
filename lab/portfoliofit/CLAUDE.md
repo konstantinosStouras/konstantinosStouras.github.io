@@ -144,7 +144,9 @@ publish it; versioned in the repo, deployed manually to the lab project):
     set reaches on this square). Easy returns the first qualifying board; Hard scans
     for the hardest and stops at the ceiling.
 - **KPIs (live):** Net Value, Total Value, Resource Cost (empty-cell penalty),
-  Value/Resource (ROI), Coverage %, Portfolio Fitness (net ÷ best). Hover
+  Value/Resource (ROI), Coverage %, Portfolio Fitness (a **geometric
+  compactness** score: occupied cells ÷ fillable cells inside their convex
+  hull, 0–100 — NOT net ÷ best; see `computeFitness`). Hover
   tooltips explain each.
 - **Tools:** a calculator and a notes pad — **puzzle-specific**: `resetTools()`
   (called from `startRound`) clears the calculator input/history and the notes
@@ -360,9 +362,9 @@ publish it; versioned in the repo, deployed manually to the lab project):
 
 Ported from the answerarena admin's Data analytics tab. All state lives in the
 module-level `daState`, so leaving and returning to the view preserves loaded
-data, ticked sources and edited code. Everything runs **entirely in the
-browser** — no data is uploaded, no Cloud Function or Firestore-rules change.
-Three sections:
+data, ticked sources, edited code and the last run. Everything runs **entirely
+in the browser** — no data is uploaded, no Cloud Function or Firestore-rules
+change. Four sections:
 
 1. **Data source** (`buildDaSection1`). Every session — active and completed —
    is a checkbox row (with participant count + created date); you can also
@@ -381,30 +383,74 @@ Three sections:
    imported files work too: users played, easy/hard puzzles completed,
    **average time to complete** a puzzle of each difficulty (each user's own
    mean is taken first, then averaged, so a heavy player cannot dominate), and
-   the **% of users who reached the maximum** — Net Value ≥ Best Value, falling
-   back to Fitness % ≥ 100 when Best Value is absent — at least once in that
-   difficulty. Plus a per-puzzle breakdown table (plays, avg time, share of
-   plays at max).
-3. **Process with Python or R** (`buildDaSection3`). Pick any loaded table
-   (default **Rounds**, the analysis unit), edit the pre-filled script, **Run**.
-   The table is serialised to CSV and handed to the code as the string
-   `DATA_CSV` (Python) / the file `/tmp/data.csv` (R). Python compiles
-   in-browser via **Pyodide** (numpy/pandas/scipy/matplotlib — a package that
-   fails to load is skipped, non-fatal) and R via **WebR** (base R;
-   base-graphics captured as PNGs) — both loaded lazily from jsDelivr on first
-   Run (~10–30 s, needs network). **Any valid Python or R works** against the
-   loaded data; console output and figures render below the editor. The
-   bundled templates (`DA_PY_TEMPLATE` / `DA_R_TEMPLATE`) are heavily
-   commented, compute the Section-2 aggregates plus a Welch t-test (per-user
-   times) and a two-proportion test (user-level solve rates) and draw 3
-   figures; both are verified to produce the same numbers and are defensive
-   about missing columns. Edited code persists to localStorage
-   (`pfa-da:py` / `pfa-da:r`); when changing the bundled templates bump
-   `PF_DA_TPL_VERSION` so stale saved scripts are dropped
-   (`daMigrateTemplates`). Gotchas: matplotlib ≥ 3.9 removed
-   `boxplot(labels=)` (use `set_xticks` + `set_xticklabels`); R rejects
-   3-digit hex colours (use `#888888`); a top-level R `if`/`else` split across
-   lines needs braces.
+   the **% of users who reached the maximum** — Net Value ≥ Best Value; rows
+   missing either are excluded (never use Fitness % here: it is a geometric
+   **compactness** score, not net ÷ best). Plus a per-puzzle breakdown table
+   (plays, avg time, share of plays at max).
+3. **Process with Python or R** (`buildDaSection3`). Edit the pre-filled
+   script, **Run**. The code always receives THREE tables: the table picked in
+   the selector (default **Play log**) as the string `DATA_CSV` (Python) / the
+   file `/tmp/data.csv` (R), plus — regardless of the selector — the **Play
+   log** and **Rounds** sheets as `PLAYLOG_CSV` / `ROUNDS_CSV` (Python) and
+   `/tmp/playlog.csv` / `/tmp/rounds.csv` (R; files are rewritten — empty when
+   absent — on every run so a previous run's data never leaks). Python
+   compiles in-browser via **Pyodide** (numpy/pandas/scipy/matplotlib — a
+   package that fails to load is skipped, non-fatal) and R via **WebR** (base
+   R; base-graphics captured as PNGs) — both loaded lazily from jsDelivr on
+   first Run (~10–30 s, needs network). **Any valid Python or R works**; text
+   output prints below the editor, the **plots render in §4 Insights gained**
+   (Section 3 only shows an "N figures rendered" pointer).
+
+   The bundled templates (`DA_PY_TEMPLATE` / `DA_R_TEMPLATE`) are heavily
+   commented, ignore `DATA_CSV` and analyse the **Play log joined to Rounds**
+   (the inner join on Player|Session + Puzzle also drops training-phase moves,
+   which have no Rounds row). They answer two questions and are **verified to
+   print byte-identical output** in the two languages:
+   - **Heuristics.** "Top player" = touched the puzzle's maximum net value at
+     least once *during play* (any move, not just the final board); relaxed
+     definition = came within 5% of it. Six behavioural markers per
+     player-puzzle (moves made, removal share, mean $/cell of the first 3
+     bricks, board coverage after 3 moves, seconds per move, when the own peak
+     was first hit), averaged to player level and compared top-vs-rest per
+     difficulty (Welch t) plus an easy-vs-hard table, and regression **R1**
+     (LPM of reached-max on standardised markers, player-clustered CR1 SEs).
+   - **Balanced-KPI hypothesis (H1).** The six on-screen KPIs collapse to
+     three independent objectives; each is scored **relative to its optimal
+     value**: `s_net = (Net+16)/(Best+16)`, `s_cov = Coverage/100`,
+     `s_fit = Fitness/100` (compactness). `kpi_avg` = their mean = the
+     balanced-KPI score per move (1 = every KPI at its optimum), averaged
+     move → puzzle → player, then average-top-user vs average-non-top-user
+     per difficulty under both definitions; move-level regressions **R2–R5**
+     (strict / relaxed / excluding at-max moves / evenness outcome
+     `kpi_even = 1 − SD`) with the `s_net` level as control and
+     player-clustered SEs (`ols_cluster`, SVD pseudoinverse with a shared
+     1e-10 tolerance so both languages behave identically even under
+     collinearity). Five figures + a data-driven `INSIGHTS` block
+     (`## Figure N` headings anchor each plot in §4), which **ends with a
+     computed verdict** — BALANCED / FOCUSED BUT EFFECTIVE / PARTLY BALANCED /
+     MORE EVEN, NOT CLOSER / NO CLEAR SIGNAL — answering "are the best players
+     focused on one KPI or balancing across KPIs?" from each group's per-KPI
+     profile (strongest/weakest KPI + spread) and the evenness and
+     balanced-score gaps with p-values.
+
+   Edited code persists to localStorage (`pfa-da:py` / `pfa-da:r`); when
+   changing the bundled templates bump `PF_DA_TPL_VERSION` so stale saved
+   scripts are dropped (`daMigrateTemplates`). Gotchas: matplotlib ≥ 3.9
+   removed `boxplot(labels=)` (use `set_xticks` + `set_xticklabels`); R
+   rejects 3-digit hex colours (use `#888888`); a top-level R `if`/`else`
+   split across lines needs braces; R's `t.test` errors on constant data
+   (both templates guard with an sd > 1e-12 check).
+4. **Insights gained** (`buildDaSection4`). A readable write-up of the last
+   run **and the home of every plot**: `daParseInsights()` extracts the
+   script's `INSIGHTS` block (the text after a line reading `INSIGHTS`) and
+   renders it with `## ` headings, `- ` bullets and `**bold**`
+   (`daInlineBold`). A heading matching `^Figure N` drops the Nth harvested
+   image right under it; unmatched images are appended at the end so a custom
+   script never silently loses a plot. `run()` snapshots each run into
+   `daState.lastRun` and calls `daRefs.updateInsights()`. The bundled
+   templates print the INSIGHTS text with **computed values interpolated**
+   (player counts, marker gaps, the balanced-KPI comparison with p-values), so
+   the write-up reflects the loaded data, not canned prose.
 
 ## 7. Firebase backend
 
