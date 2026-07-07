@@ -307,26 +307,76 @@ function stripAccents(s) {
 function cmp(a, b) { return a < b ? -1 : a > b ? 1 : 0; }
 
 function buildAuthors(papers) {
-  // Identity = ORCID when present, else accent-stripped lowercase name.
-  // `papers` is already in deterministic order, so first-seen orderings below
-  // (name variants, areas) are reproducible run to run.
-  const byId = new Map();
+  // Two records are the same person when they share an accent-stripped
+  // lowercase name OR an ORCID (union-find). Keying on ORCID alone split
+  // authors in two whenever Crossref tagged the ORCID on only some of their
+  // papers (e.g. "Serguei Netessine" showed as separate 18- and 13-paper
+  // entries); the name key keeps those together, while ORCID still merges
+  // spelling variants of one person. `papers` is already in deterministic
+  // order, so roots, name variants and areas are reproducible run to run.
+  const parent = new Map();
+  const find = (k) => {
+    let r = k;
+    while (parent.get(r) !== r) r = parent.get(r);
+    let c = k;
+    while (parent.get(c) !== c) { const n = parent.get(c); parent.set(c, r); c = n; }
+    return r;
+  };
+  const add = (k) => { if (!parent.has(k)) parent.set(k, k); return find(k); };
+  const union = (a, b) => { const ra = add(a), rb = add(b); if (ra !== rb) parent.set(rb, ra); };
+
+  const authorNames = (p) => p.Authors ? p.Authors.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const normName = (name) => stripAccents(name).toLowerCase();
+  const nameSet = new Set();
+  for (const p of papers) authorNames(p).forEach(n => nameSet.add(normName(n)));
+
+  // Crossref occasionally mis-attributes someone else's ORCID on a single
+  // paper, which would chain two different people into one entry (this bit
+  // the sheet too: it marks Erik Brynjolfsson's ORCID "ambiguous" after his
+  // records also carried Eric Overby's). So when an ORCID appears with more
+  // than one distinct name, only merge the names it accompanies on 2+ papers.
+  const orcidNames = new Map(); // orcid -> Map(nameKey -> co-occurrence count)
   for (const p of papers) {
-    const names = p.Authors ? p.Authors.split(',').map(s => s.trim()).filter(Boolean) : [];
-    const area = p.Area;
-    names.forEach((name, i) => {
+    authorNames(p).forEach((name, i) => {
+      add('n:' + normName(name));
       const orcid = p._orcids[i] || '';
-      const id = orcid || stripAccents(name).toLowerCase();
-      if (!id) return;
-      let rec = byId.get(id);
-      if (!rec) { rec = { names: new Map(), papers: 0, areas: new Set() }; byId.set(id, rec); }
+      if (!orcid) return;
+      let m = orcidNames.get(orcid);
+      if (!m) { m = new Map(); orcidNames.set(orcid, m); }
+      const nk = normName(name);
+      m.set(nk, (m.get(nk) || 0) + 1);
+    });
+  }
+  for (const [orcid, names] of orcidNames) {
+    for (const [nk, count] of names) {
+      if (names.size === 1 || count >= 2) union('n:' + nk, 'o:' + orcid);
+    }
+  }
+  // "Hau L. Lee" and "Hau Lee" are the same person: when dropping the middle
+  // initial(s) of a name yields another name that actually occurs, merge them
+  // (the sheet's Authors tab does the same). Requiring the bare form to exist
+  // avoids uniting "Hau K. Lee" and "Hau L. Lee", who may be different people.
+  for (const n of nameSet) {
+    const toks = n.split(/\s+/);
+    if (toks.length < 3) continue;
+    const stripped = toks.filter((t, i) => i === 0 || i === toks.length - 1 || !/^[a-z]\.?$/.test(t)).join(' ');
+    if (stripped !== n && nameSet.has(stripped)) union('n:' + stripped, 'n:' + n);
+  }
+
+  const byRoot = new Map();
+  for (const p of papers) {
+    const area = p.Area;
+    authorNames(p).forEach((name) => {
+      const root = find('n:' + stripAccents(name).toLowerCase());
+      let rec = byRoot.get(root);
+      if (!rec) { rec = { names: new Map(), papers: 0, areas: new Set() }; byRoot.set(root, rec); }
       rec.papers++;
       rec.names.set(name, (rec.names.get(name) || 0) + 1);
       if (area) rec.areas.add(area);
     });
   }
   const out = [];
-  for (const [id, rec] of byId) {
+  for (const [id, rec] of byRoot) {
     // Display name = the most common spelling; variants = every spelling seen.
     const variants = [...rec.names.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]);
     out.push({
