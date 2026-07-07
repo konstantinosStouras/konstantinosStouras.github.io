@@ -380,11 +380,14 @@ Three sections:
    with tolerant case/spacing-insensitive header matching (`daPickKey`) so
    imported files work too: users played, easy/hard puzzles completed,
    **average time to complete** a puzzle of each difficulty (each user's own
-   mean is taken first, then averaged, so a heavy player cannot dominate), and
-   the **% of users who reached the maximum** — Net Value ≥ Best Value, falling
+   mean is taken first, then averaged, so a heavy player cannot dominate), the
+   **% of users who reached the maximum** — Net Value ≥ Best Value, falling
    back to Fitness % ≥ 100 when Best Value is absent — at least once in that
-   difficulty. Plus a per-puzzle breakdown table (plays, avg time, share of
-   plays at max).
+   difficulty, and the % of users who got **within 5% / within 10%** of the
+   maximum Net Value at least once (Net Value ≥ 95% / 90% of Best Value,
+   fallback Fitness % ≥ 95 / 90 — cumulative, so a user at the maximum also
+   counts as within 5% and 10%). Plus a per-puzzle breakdown table (plays, avg
+   time, share of plays at max / within 5% / within 10%).
 3. **Process with Python or R** (`buildDaSection3`). Pick any loaded table
    (default **Rounds**, the analysis unit), edit the pre-filled script, **Run**.
    The table is serialised to CSV and handed to the code as the string
