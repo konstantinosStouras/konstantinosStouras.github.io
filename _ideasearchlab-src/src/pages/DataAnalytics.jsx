@@ -237,6 +237,7 @@ export default function DataAnalytics() {
     setLoadingData(true)
     try {
       const collected = []
+      const enriched = []   // session docs + their active-participant head-count
       for (const s of loaded) {
         const [ideasSnap, partsSnap, groupsSnap] = await Promise.all([
           getDocs(collection(db, 'sessions', s.id, 'ideas')),
@@ -247,6 +248,10 @@ export default function DataAnalytics() {
         const parts = partsSnap.docs.map(d => ({ id: d.id, ...d.data() }))
         const groups = groupsSnap.docs.map(d => ({ id: d.id, ...d.data() }))
         collected.push(...buildRowsForSession(s, ideas, parts, groups))
+        // Head-count captured now (participant docs are only fetched here), so the
+        // Section-2 "participants by condition" table can show real counts — not
+        // just idea authors. Admin-removed participants are excluded.
+        enriched.push({ ...s, _participantCount: parts.filter(p => !p.removed && p.status !== 'removed').length })
       }
       const tagged = tagRows(collected)
       const bookRows = tickedBooks.flatMap(b => b.rows || [])   // already tagged with _book + rid
@@ -260,7 +265,7 @@ export default function DataAnalytics() {
       })
       // Remember the loaded session docs so Step 2 can rebuild their full export.
       setLoadedSessions(prev => {
-        const merged = replace ? loaded : [...prev, ...loaded]
+        const merged = replace ? enriched : [...prev, ...enriched]
         return [...new Map(merged.map(s => [s.id, s])).values()]
       })
     } catch (err) {
@@ -948,6 +953,31 @@ export default function DataAnalytics() {
     () => (regScope === 'group' ? effectiveRows.filter(enteredGroupPhase) : effectiveRows.filter(isFinal)).filter(hasAnyKpi).length,
     [effectiveRows, regScope])
   const sessionCount = useMemo(() => new Set(rows.filter(r => !r._book).map(r => r.session)).size, [rows])
+  // Section-2 table: participants per condition (by encoding). Firestore-loaded
+  // sessions use the real head-count captured at load time; any other loaded data
+  // (imported export files, a dataset restored from a saved default) falls back to
+  // counting distinct idea authors per condition.
+  const participantsByCondition = useMemo(() => {
+    const counts = Object.fromEntries(CONDITIONS.map(c => [c, 0]))
+    const counted = new Set()   // session codes whose real head-count is known
+    for (const s of loadedSessions) {
+      if (Number.isFinite(s._participantCount)) {
+        const cond = conditionForSession(s)
+        if (counts[cond] != null) counts[cond] += s._participantCount
+        counted.add(s.code || s.id)
+      }
+    }
+    const seen = new Set()
+    for (const r of rows) {
+      if (counted.has(r.session)) continue
+      const key = userKey(r.session, r.author_id)
+      if (seen.has(key)) continue
+      seen.add(key)
+      if (counts[r.condition] != null) counts[r.condition]++
+    }
+    return CONDITIONS.map(c => ({ condition: c, count: counts[c] }))
+  }, [rows, loadedSessions])
+  const participantTotal = participantsByCondition.reduce((s, c) => s + c.count, 0)
   // Imported files actually loaded into the dataset (have rows present), for the
   // Step-2 aggregate; and the count of ticked imported files for the Load button.
   const loadedBookIds = useMemo(() => new Set(rows.filter(r => r._book).map(r => r._book)), [rows])
@@ -988,7 +1018,9 @@ export default function DataAnalytics() {
   const statSessions = useMemo(() => new Set(statRows.map(r => r.session)).size, [statRows])
   const statConditionsPresent = statByCondition.rows.length
   const statMeanQuality = useMemo(() => {
-    const v = statRows.map(r => Number(r.overall_quality)).filter(Number.isFinite)
+    // Blank ('') quality cells are missing, not 0 — Number('') is 0 and would drag
+    // the mean down for every unscored idea in the Section-4 subset.
+    const v = statRows.map(r => r.overall_quality).filter(x => x !== '' && x != null).map(Number).filter(Number.isFinite)
     return v.length ? (v.reduce((a, b) => a + b, 0) / v.length).toFixed(2) : '—'
   }, [statRows])
   // Table 1 (summary statistics + correlation matrix), in the style of the paper's
@@ -1001,11 +1033,14 @@ export default function DataAnalytics() {
 
   // ── Step 6: insights derived from the last run ──
   const report = useMemo(() => (lastRun ? parseRunOutput(lastRun.output) : null), [lastRun])
-  // "rows used for analysis: N" is printed by both scripts; surface it in the PDF header.
+  // "rows used for analysis: N" is printed by both scripts; surface it in the PDF
+  // header. No fallback guess — a run that doesn't print it just shows no count
+  // (the old scoredCount fallback reported the wrong scope: AI-scored ideas over
+  // the WHOLE dataset, not the analysed subset).
   const rowsUsed = useMemo(() => {
     const m = lastRun && /rows used for analysis:\s*(\d+)|N analysed:\s*(\d+)/i.exec(lastRun.output)
-    return m ? Number(m[1] ?? m[2]) : (lastRun ? scoredCount : null)
-  }, [lastRun, scoredCount])
+    return m ? Number(m[1] ?? m[2]) : null
+  }, [lastRun])
 
   function exportInsightsPdf() {
     if (!lastRun || !report) return
@@ -1195,11 +1230,35 @@ export default function DataAnalytics() {
           {rows.length === 0 ? (
             <p className={styles.emptyNote}>Tick sessions (or imported files) above and press “Load …”, then build the consolidated file here.</p>
           ) : (
-            <div className={styles.stats}>
-              <div className={styles.statBox}><div className={styles.statNum}>{rows.length}</div><div className={styles.statLabel}>Ideas generated</div></div>
-              <div className={styles.statBox}><div className={styles.statNum}>{finalCount}</div><div className={styles.statLabel}>Total final ideas</div></div>
-              <div className={styles.statBox}><div className={styles.statNum}>{sessionCount}</div><div className={styles.statLabel}>Number of sessions</div></div>
-            </div>
+            <>
+              <div className={styles.stats}>
+                <div className={styles.statBox}><div className={styles.statNum}>{rows.length}</div><div className={styles.statLabel}>Ideas generated</div></div>
+                <div className={styles.statBox}><div className={styles.statNum}>{finalCount}</div><div className={styles.statLabel}>Total final ideas</div></div>
+                <div className={styles.statBox}><div className={styles.statNum}>{sessionCount}</div><div className={styles.statLabel}>Number of sessions</div></div>
+              </div>
+
+              {/* Participants per condition (by encoding), across every loaded source. */}
+              <div className={styles.partCondCard}>
+                <div className={styles.encodingTitle}>Participants by condition ({participantTotal} total)</div>
+                <table className={styles.encodingTable}>
+                  <thead>
+                    <tr><th>Encoding</th><th>Participants</th></tr>
+                  </thead>
+                  <tbody>
+                    {participantsByCondition.map(p => (
+                      <tr key={p.condition}>
+                        <td><span className={`${styles.condTag} ${condClass(p.condition)}`}>{p.condition}</span></td>
+                        <td className={styles.partCondNum}>{p.count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className={styles.partCondNote}>
+                  Sessions loaded from Firebase count every (non-removed) registered participant;
+                  imported files and restored datasets count distinct idea authors.
+                </p>
+              </div>
+            </>
           )}
         </section>
 
@@ -1626,10 +1685,11 @@ export default function DataAnalytics() {
           <p className={styles.hint}>
             Both tabs run the <em>same</em> analysis (after any removed participants) on the
             {' '}<strong>scope you pick below</strong>: one linear regression per KPI across the four
-            conditions (<em>None</em> = no-AI baseline), the planned <em>Solo</em> vs <em>Group</em> contrast,
-            a best→worst ranking, and plots. The conditions are <strong>unbalanced</strong> (different n per
-            condition), so the analysis uses <strong>HC3 heteroscedasticity-robust standard errors</strong> and
-            {' '}<strong>Welch</strong> (unequal-variance) pairwise tests, and prints each condition's n. Edit
+            conditions (<em>None</em> = no-AI baseline; Tables 3–6 in the paper's layout), the planned
+            {' '}<em>Solo</em> vs <em>Group</em> contrast, a best→worst ranking, and plots. The conditions are
+            {' '}<strong>unbalanced</strong> (different n per condition), so every model uses
+            {' '}<strong>HC3 heteroscedasticity-robust standard errors</strong>, a condition with fewer than 2
+            ideas for a KPI is dropped from that KPI's model, and each condition's n is printed. Edit
             the code and press Run — Python runs via Pyodide and R via WebR, both compiled in your browser
             (first run downloads the runtime, ~10–30&nbsp;s).
           </p>
@@ -2155,7 +2215,8 @@ function summaryBySessionRows(rs) {
     by.get(r.session).rows.push(r)
   }
   const mean = (arr, key) => {
-    const v = arr.map(x => Number(x[key])).filter(Number.isFinite)
+    // Blank ('') cells are missing, not 0 — Number('') is 0 and would skew the mean.
+    const v = arr.map(x => x[key]).filter(x => x !== '' && x != null).map(Number).filter(Number.isFinite)
     return v.length ? round3(v.reduce((a, b) => a + b, 0) / v.length) : ''
   }
   return [...by.values()].map(g => ({

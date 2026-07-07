@@ -384,13 +384,20 @@ function numOrBlankOrNull(v) {
   return v == null ? '' : numOrBlank(v)
 }
 
-/** Recompute each source's quality = mean(novelty, usefulness) for every row. */
+/** Recompute each source's quality = mean(novelty, usefulness) for every row.
+ *  When BOTH components are missing (overallQuality → null) an existing quality
+ *  value is kept, so an imported file that carries only a standalone quality
+ *  column isn't wiped by the recompute that runs after every load/score. */
 export function recomputeOverall(rows) {
-  return rows.map(r => ({
-    ...r,
-    overall_quality: numOrBlankOrNull(overallQuality(r.novelty, r.usefulness)),
-    ext_quality: numOrBlankOrNull(overallQuality(r.ext_novelty, r.ext_usefulness)),
-  }))
+  return rows.map(r => {
+    const oq = overallQuality(r.novelty, r.usefulness)
+    const eq = overallQuality(r.ext_novelty, r.ext_usefulness)
+    return {
+      ...r,
+      overall_quality: oq != null ? numOrBlank(oq) : numOrBlank(r.overall_quality),
+      ext_quality: eq != null ? numOrBlank(eq) : numOrBlank(r.ext_quality),
+    }
+  })
 }
 
 // ── CSV (de)serialisation ───────────────────────────────────────────────────
@@ -785,14 +792,16 @@ export function buildSummaryTable(rows) {
   return { n, variables, corr }
 }
 
-/** Quick per-condition / per-KPI summary used for the on-page preview table. */
+/** Quick per-condition / per-KPI summary used for the on-page preview table.
+ *  IMPORTANT: blank ('') KPI cells are MISSING, not 0 — `Number('')` is 0 in JS,
+ *  which would silently drag every mean/SD toward zero and inflate n. */
 export function summarize(rows) {
   const out = {}
   for (const cond of CONDITIONS) {
     const sub = rows.filter(r => r.condition === cond)
     const stat = {}
     for (const kpi of KPIS) {
-      const vals = sub.map(r => Number(r[kpi])).filter(Number.isFinite)
+      const vals = sub.map(r => numOrNull(r[kpi])).filter(v => v != null)
       const n = vals.length
       const mean = n ? vals.reduce((a, b) => a + b, 0) / n : null
       const sd = n > 1 ? Math.sqrt(vals.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1)) : null

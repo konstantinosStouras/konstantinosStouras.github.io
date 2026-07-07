@@ -406,7 +406,11 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      retains every sheet of an imported `.xlsx`, not just the Ideas rows). `bookAboutMeta()` reads
      an imported book's Conditions/Ideas sheet for the aggregate About.
    - **Summary tallies:** three stat boxes — *Ideas generated* (`rows.length`), *Total final ideas*
-     (`final_pick == 1`), *Number of sessions* (distinct session codes in the loaded data).
+     (`final_pick == 1`), *Number of sessions* (distinct session codes in the loaded data) — plus a
+     **Participants by condition** two-column table (coloured encoding tag · head-count):
+     Firestore-loaded sessions use the real (non-removed) participant count captured at load time
+     (`_participantCount` on `loadedSessions`), imported/restored data falls back to distinct idea
+     authors per condition (`participantsByCondition` in DataAnalytics.jsx).
    - **Scores round-trip:** the Rankings tab's *Novelty / Usefulness / Quality* columns are filled
      from any scores set in Step 3 (mapped by Idea ID via `rankingsSheetFromIdeas(ideaRows, scoreById)`),
      so re-downloading the aggregate after scoring carries the scores back in.
@@ -460,16 +464,19 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
    (`effectiveRows.filter(final_pick == 1)` → `dataCsv`; the guard needs ≥2 scored final ideas) —
    "currently we compare conditions for the ideas the group selected after the group phase; other
    subsets may be added later". **Unbalanced design handled:** the conditions have different n
-   (e.g. None~27/Solo~39/Group~33), so both templates fit the OLS with **HC3 heteroscedasticity-
-   robust SEs** (Python `cov_type='HC3'`; R has a base-R `hc3_coef()` helper since WebR has no
-   `sandwich`) and use **Welch / unequal-variance pairwise tests** + a **Welch ANOVA** omnibus (R),
-   and print each condition's n. The plots use **large fonts**, annotate every value, and explain
+   (e.g. None~27/Solo~39/Group~33), so both templates fit every OLS/LPM with **HC3
+   heteroscedasticity-robust SEs** (Python `cov_type='HC3'`; R has a base-R `hc3_coef()` helper
+   since WebR has no `sandwich`), print each condition's n, and drop a condition with < 2 ideas
+   for a KPI from that KPI's split models — **dummy AND rows**, so a tiny condition can never
+   pool into the None baseline. Both print `rows used for analysis: N` (read by the page for the
+   Step-6/PDF header). The plots use **large fonts**, annotate every value, and explain
    what they show (a caption appears above them in Step 6 and the PDF). Two tabs, **Python** and
    **R**, each pre-filled
    with a complete script (`src/data/analyticsPython.py` / `analyticsR.R`, inlined via Vite
-   `?raw` in `analyticsTemplates.js`) that runs the SAME analysis: one OLS/`lm` per KPI on
-   the 4-level condition factor (Human-Only = baseline), the **primary planned contrast
-   Individual + AI − Group + AI**, a best→worst ranking with Holm-adjusted pairwise tests,
+   `?raw` in `analyticsTemplates.js`) that runs the SAME analysis: paper-style **Tables 3–6**
+   (one OLS/`lm` column per KPI on the Any-AI dummy and on the condition dummies, Human-Only =
+   baseline, plus top-rating linear-probability models), the **primary planned contrast
+   Individual + AI − Group + AI** per KPI,
    then an **INSIGHTS** section that reads the results back in plain language (per-KPI
    best→worst ranking of the conditions + a DATA-COVERAGE CHECK that flags any of the four
    conditions with no data, e.g. "Full AI", and excludes it from the rankings), and plots
