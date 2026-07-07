@@ -42,6 +42,15 @@ const TOP_AFFILIATIONS = 1500;     // cap the affiliations file so it stays smal
 // The date we stamp newly seen papers with. Overridable so a re-run is reproducible.
 const PULL_DATE = process.env.MS2_PULL_DATE || new Date().toISOString().slice(0, 10);
 
+// One-time import of the editor/area data the /fun/ms/ Google Sheet collected
+// from sources that don't exist on Crossref (INFORMS page scrapes + a manually
+// curated tab). Used only when a paper's Crossref record yields no editor.
+// Built by make-editor-overrides.mjs; { "<doi>": { editor, area? } }.
+const OVERRIDES_PATH = join(__dirname, 'editor-overrides.json');
+const OVERRIDES = existsSync(OVERRIDES_PATH)
+  ? JSON.parse(await readFile(OVERRIDES_PATH, 'utf8'))
+  : {};
+
 // ── Crossref fetch ─────────────────────────────────────────────────────────
 
 const SELECT = [
@@ -135,26 +144,47 @@ function stripTrailers(s) {
     .trim();
 }
 
+// Editor names are 1-2 people ("D. J. Wu", "X and Y"); anything with sentence
+// words in it is a mis-capture of ordinary abstract text (e.g. "…accepted by
+// workers when the task is hard…"). Rejecting those leaves the field blank so
+// the sheet-imported overrides below can supply the real editor.
+function plausibleEditorName(s) {
+  if (!s || s.length > 70) return false;
+  if (s.split(/\s+/).length > 8) return false;
+  if (!/^[A-ZÀ-Þ]/.test(s)) return false;
+  return !/\b(the|this|that|is|are|was|were|we|when|which|of|by|in|on|to|as|editors?)\b/i.test(s);
+}
+
 // Pull "This paper was accepted by <Editor>, <area>." out of the abstract. The
 // page's own cleanEditorField() parses the editor name back out of this exact
 // sentence, and normalizeArea() cleans the area, so we hand it the raw sentence.
 function acceptance(abstractText) {
-  // Same capture the page's cleanEditorField() uses: a name that may contain
-  // initials ("D. J. Wu", "Gérard P. Cachon") followed by ", <area>.".
-  const m = abstractText.match(/accepted by\s+([^.]+(?:\.[^.]{0,5})*[^.]*)\./i);
+  // Prefer the canonical full sentence; only fall back to a bare "accepted by"
+  // (which can also match unrelated abstract prose). The capture allows
+  // initials in names ("D. J. Wu", "Gérard P. Cachon") before ", <area>.".
+  let m = abstractText.match(/(?:this\s+)?(?:paper|work)\s+(?:was|has\s+been)\s+accepted by\s+([^.]+(?:\.[^.]{0,5})*[^.]*)\./i);
+  if (!m) m = abstractText.match(/accepted by\s+([^.]+(?:\.[^.]{0,5})*[^.]*)\./i);
   if (!m) return { editor: '', area: '' };
   let body = stripTrailers(m[1].trim());       // e.g. "Gérard P. Cachon, finance"
   const comma = body.indexOf(',');
   let area = comma !== -1 ? body.slice(comma + 1).trim() : '';
+  if (comma !== -1) body = body.slice(0, comma).trim();
   if (area) {
     // The area part never legitimately spans a sentence break; anything after
-    // one is over-captured abstract text. (Editor initials sit before the
-    // comma, so cutting here cannot touch them.)
+    // one is over-captured abstract text.
     area = area.split(/\.\s/)[0].replace(/\.$/, '').trim();
-    body = body.slice(0, comma).trim() + ', ' + area;
   }
+  // "…accepted by <Editor> for the <(Virtual) Special Issue/Section …>": the
+  // special-issue title is the area, not part of the editor's name — the same
+  // split the Sheets pipeline applies. It wins over any comma-area.
+  const si = body.match(/^(.*?)\s+for\s+the\s+(.*(?:special\s+issue|special\s+section).*)$/i);
+  if (si) { body = si[1].trim(); area = si[2].trim(); }
+  if (!plausibleEditorName(body)) return { editor: '', area: '' };
   // Store the full sentence so the page can re-parse the editor name itself.
-  return { editor: 'This paper was accepted by ' + body + '.', area };
+  return {
+    editor: 'This paper was accepted by ' + body + (area ? ', ' + area : '') + '.',
+    area,
+  };
 }
 
 function normArea(s) {
@@ -193,9 +223,14 @@ function mapWork(item) {
   const abstract = stripJats(item.abstract || '');
   let { editor, area: acceptedArea } = acceptance(abstract);
   if (!editor) editor = assertionEditor(item);
+  const ov = OVERRIDES[(item.DOI || '').toLowerCase()];
+  if (!editor && ov) {
+    editor = 'This paper was accepted by ' + ov.editor.replace(/\.+$/, '') + '.';
+  }
   const groupTitle = Array.isArray(item['group-title']) ? item['group-title'][0] : item['group-title'];
   const subject = Array.isArray(item.subject) ? item.subject[0] : '';
-  const area = normArea(acceptedArea) || normArea(groupTitle) || normArea(subject) || '';
+  const area = normArea(acceptedArea) || normArea(ov && ov.area) ||
+    normArea(groupTitle) || normArea(subject) || '';
 
   const volume = item.volume || '';
   const issue = item.issue || '';
