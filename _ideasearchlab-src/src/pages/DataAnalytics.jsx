@@ -11,7 +11,7 @@ import {
   matchScoresIntoRows, buildSummaryTable, DEFAULT_REFERENCE_SET, presentKpis,
   uploadedKpiKeys, uploadedKpiDefs, uploadedKpiLabel, analysisColumns,
   matchUploadedKpisIntoRows, clearUploadedKpis, stripAllKpis, UPLOADED_KPI_PREFIX,
-  enteredGroupPhase, canonicalKpiField, KPI_DEFS,
+  enteredGroupPhase, canonicalKpiField, KPI_DEFS, canonicalCondition,
 } from '../utils/analyticsData'
 import { scoreIdeas, fetchAISettings } from '../utils/llmClient'
 import { tfidfVectors } from '../utils/tfidf'
@@ -237,7 +237,7 @@ export default function DataAnalytics() {
     setLoadingData(true)
     try {
       const collected = []
-      const enriched = []   // session docs + their active-participant head-count
+      const enriched = []   // session docs + their registered-participant head-count
       for (const s of loaded) {
         const [ideasSnap, partsSnap, groupsSnap] = await Promise.all([
           getDocs(collection(db, 'sessions', s.id, 'ideas')),
@@ -960,40 +960,55 @@ export default function DataAnalytics() {
     () => (regScope === 'group' ? effectiveRows.filter(enteredGroupPhase) : effectiveRows.filter(isFinal)).filter(hasAnyKpi).length,
     [effectiveRows, regScope])
   const sessionCount = useMemo(() => new Set(rows.filter(r => !r._book).map(r => r.session)).size, [rows])
-  // Section-2 table: participants per condition (by encoding). Firestore-loaded
-  // sessions use the real head-count captured at load time; any other loaded data
-  // (imported export files, a dataset restored from a saved default) falls back to
-  // counting distinct idea authors per condition.
+  // Imported files actually loaded into the dataset (have rows present), for the
+  // Step-2 aggregate; and the count of ticked imported files for the Load button.
+  const loadedBookIds = useMemo(() => new Set(rows.filter(r => r._book).map(r => r._book)), [rows])
+  const selectedBookCount = importedBooks.filter(b => b.selected).length
+  // ── Step 2: participants per condition (by the None/Solo/Group/Both encoding) ──
+  // Every registered participant counts — including any the admin detached
+  // mid-session, whose ideas stay in the dataset — so the participant and idea
+  // tallies share one basis (same as the export's Conditions-sheet counts).
+  // Firestore-loaded sessions use the real head-count captured at Load time
+  // (_participantCount); a loaded imported workbook is counted from its
+  // condition-stamped Participants sheet when it has one; anything else (plain
+  // CSV imports, a dataset restored from a saved default) falls back to distinct
+  // idea authors. Unrecognised condition labels surface as an "Other" row.
   const participantsByCondition = useMemo(() => {
-    const OTHER = 'Other'      // rows whose condition isn't one of the four encodings
+    const OTHER = 'Other'
     const counts = Object.fromEntries([...CONDITIONS, OTHER].map(c => [c, 0]))
+    const bucket = c => (counts[c] != null ? c : OTHER)
     const counted = new Set()   // session codes whose real head-count is known
     for (const s of loadedSessions) {
       if (Number.isFinite(s._participantCount)) {
-        const cond = conditionForSession(s)
-        if (counts[cond] != null) counts[cond] += s._participantCount
+        counts[bucket(conditionForSession(s))] += s._participantCount
         counted.add(s.code || s.id)
+      }
+    }
+    const booksFromSheet = new Set()
+    for (const b of importedBooks) {
+      if (!loadedBookIds.has(b.id)) continue
+      const partSheet = (b.sheets || []).find(sh => String(sh.name).toLowerCase() === 'participants')
+      if (!partSheet?.rows?.length) continue
+      booksFromSheet.add(b.id)
+      for (const row of partSheet.rows) {
+        counts[bucket(canonicalCondition(row['Condition'] || row['AI Condition'] || row['Condition Code'] || ''))]++
       }
     }
     const seen = new Set()
     for (const r of rows) {
-      if (counted.has(r.session)) continue
+      if (r._book ? booksFromSheet.has(r._book) : counted.has(r.session)) continue
       if (!r.author_id) continue   // an idea without an author can't be attributed
       const key = userKey(r.session, r.author_id)
       if (seen.has(key)) continue
       seen.add(key)
-      counts[counts[r.condition] != null ? r.condition : OTHER]++
+      counts[bucket(canonicalCondition(r.condition))]++
     }
     const out = CONDITIONS.map(c => ({ condition: c, count: counts[c] }))
     // Unrecognised condition labels are surfaced, not silently dropped.
     if (counts[OTHER] > 0) out.push({ condition: OTHER, count: counts[OTHER] })
     return out
-  }, [rows, loadedSessions])
+  }, [rows, loadedSessions, importedBooks, loadedBookIds])
   const participantTotal = participantsByCondition.reduce((s, c) => s + c.count, 0)
-  // Imported files actually loaded into the dataset (have rows present), for the
-  // Step-2 aggregate; and the count of ticked imported files for the Load button.
-  const loadedBookIds = useMemo(() => new Set(rows.filter(r => r._book).map(r => r._book)), [rows])
-  const selectedBookCount = importedBooks.filter(b => b.selected).length
   // Step-3 scoring scope (all ideas vs only Final Ideas) and its unscored count.
   const scorePool = scoreOnlyFinal ? effectiveRows.filter(isFinal) : effectiveRows
   const scopeUnscored = scorePool.filter(r => r.novelty === '' || r.usefulness === '').length
@@ -1248,29 +1263,28 @@ export default function DataAnalytics() {
                 <div className={styles.statBox}><div className={styles.statNum}>{finalCount}</div><div className={styles.statLabel}>Total final ideas</div></div>
                 <div className={styles.statBox}><div className={styles.statNum}>{sessionCount}</div><div className={styles.statLabel}>Number of sessions</div></div>
               </div>
-
-              {/* Participants per condition (by encoding), across every loaded source. */}
-              <div className={styles.partCondCard}>
-                <div className={styles.encodingTitle}>Participants by condition ({participantTotal} total)</div>
+              <div className={styles.condCountCard}>
+                <div className={styles.encodingTitle}>Participants per condition ({participantTotal} total)</div>
                 <table className={styles.encodingTable}>
                   <thead>
                     <tr><th>Encoding</th><th>Participants</th></tr>
                   </thead>
                   <tbody>
                     {participantsByCondition.map(p => (
-                      <tr key={p.condition}>
+                      <tr key={p.condition} className={p.count ? '' : styles.condCountZero}>
                         <td><span className={`${styles.condTag} ${condClass(p.condition)}`}>{p.condition}</span></td>
-                        <td className={styles.partCondNum}>{p.count}</td>
+                        <td>{p.count} participant{p.count === 1 ? '' : 's'}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                <p className={styles.partCondNote}>
-                  Sessions loaded from Firebase count every registered participant; imported files
-                  and restored datasets count distinct idea authors (ideas without an author ID
-                  can't be attributed). Like the boxes above, this reflects the full loaded
-                  dataset — before any Step-3 participant removals.
-                </p>
+                <div className={styles.condCountNote}>
+                  Every registered participant of each loaded session, counted under its
+                  session&rsquo;s condition. An imported workbook is counted from its Participants
+                  sheet; a plain CSV (or a restored dataset) by its distinct idea authors —
+                  ideas without an author ID can&rsquo;t be attributed. Reflects the full loaded
+                  dataset, before any Step-3 participant removals.
+                </div>
               </div>
             </>
           )}

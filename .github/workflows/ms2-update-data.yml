@@ -25,6 +25,7 @@ concurrency:
 
 permissions:
   contents: write            # needed to commit the refreshed data back
+  pages: write               # needed to request a Pages rebuild if a deploy fails
 
 jobs:
   build:
@@ -54,6 +55,41 @@ jobs:
             git commit -m "ms2: refresh Management Science data from Crossref"
             git push origin HEAD:${{ github.ref_name }}
           fi
+
+      # Committing fresh data is not enough: the GitHub Pages deploy that follows
+      # the push can fail transiently (observed 2026-07-03 and 2026-07-06:
+      # "Deployment failed, try again later"), and then the site silently serves
+      # stale data until some unrelated commit triggers another deploy. So after
+      # committing, poll the live site until it serves the dataset we just built;
+      # if it doesn't, request a fresh Pages build via the API and poll again.
+      # Failing loudly here turns a silent week of stale data into a red run.
+      - name: Verify the live site serves this dataset (self-heal a failed deploy)
+        if: github.ref == 'refs/heads/master'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LIVE_META: https://www.stouras.com/fun/ms2/data/meta.json
+        run: |
+          want=$(jq -r .lastPull fun/ms2/data/meta.json)
+          echo "Committed dataset lastPull: $want"
+          poll() {  # poll <tries> — succeed once live lastPull >= committed lastPull
+            for i in $(seq 1 "$1"); do
+              live=$(curl -sf --max-time 20 "$LIVE_META?nc=${GITHUB_RUN_ID}-${RANDOM}" | jq -r .lastPull || echo "unreachable")
+              echo "  try $i/$1: live lastPull = $live"
+              if [ "$live" != "unreachable" ] && [ ! "$live" \< "$want" ]; then return 0; fi
+              sleep 60
+            done
+            return 1
+          }
+          if poll 8; then echo "Live site is serving the current dataset."; exit 0; fi
+          echo "Live site still stale — requesting a GitHub Pages rebuild..."
+          curl -sf -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/pages/builds" \
+            || echo "WARNING: Pages rebuild request failed (check token permissions)."
+          if poll 10; then echo "Live site recovered after the rebuild request."; exit 0; fi
+          echo "::error::Live site is still serving stale ms2 data (wanted lastPull >= $want). Re-run this workflow or the pages-build-deployment workflow."
+          exit 1
 
       - name: Summary
         if: always()

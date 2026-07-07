@@ -436,9 +436,12 @@ Four sections:
    significant, **grey = no clear preference**, i.e. its CI still includes 0 — so a
    long grey bar means "leaned one way on average but not distinguishable from
    indifference"); **(5)** the tasks classifiable **with 95% confidence** into
-   over- / indifferent / under-provisioning (a two-proportion z-test on the
-   multinomial choice counts keeps only tasks where one category significantly
-   beats the runner-up, hence the other two; empty → a "not enough data" note);
+   over- / indifferent / under-provisioning (an **exact binomial test** on the
+   top-two choice counts — under H0 the leading category and the runner-up are
+   equally likely — keeps only tasks where the leader significantly beats the
+   runner-up, hence the other two; exact, so small/lopsided tasks are not
+   over-called the way the earlier z-test was, e.g. 5-0-0 came out "certain";
+   empty → a "not enough data" note);
    **(6)** by-domain / by-type means ± 95% CI. A plain-language **`INSIGHTS`** block
    ends each script and now also contains a **`## Figure N — …` heading + guide for
    every figure**, so each plot is explained in words next to it (§4).
@@ -447,13 +450,20 @@ Four sections:
    **same numbers** with base R (`t.test`, `lm`, `anova`, `tapply`, `binom.test`);
    they are verified to agree. **Neither needs statsmodels** — the cluster-robust
    vcov (CR1, else HC3) is done by hand (`ols_robust` in Python, the same algebra
-   in R), matching to 4 dp; statsmodels was dropped because it made Python fail to
+   in R), matching to 4 dp, with **G−1 degrees of freedom when clustered** (the
+   cluster-robust standard; n−k for HC3) and the response-level CI using the same
+   t critical value; statsmodels was dropped because it made Python fail to
    start on some Pyodide builds, so the auto-loaded packages are now just
    numpy/pandas/scipy/matplotlib and any missing one is non-fatal
    (`daEnsurePyPackages`). Note: R rejects 3-digit hex colours (`#888`), so the
    templates use 6-digit (`#888888`). Both are defensive about missing columns /
-   small n; a domain with only 2 tasks has a very wide CI, clipped to the bounded
-   [-3, +3] preference scale for display.
+   small n (verified by running both against the same synthetic exports): a
+   table without the preference/choice columns gets a clear "pick the Responses
+   table" message; an all-blank `task_complexity`/`task_domain` column, a
+   zero-variance task (R's `t.test` errors on constant data — mapped to scipy's
+   ±Inf/p=0 convention), and a no-graded-data load all degrade gracefully
+   instead of crashing; a domain with only 2 tasks has a very wide CI, clipped
+   to the bounded [-3, +3] preference scale for display.
 
 4. **Insights gained** (`buildDaSection4`). A readable write-up of the last run
    **and the home of every plot**: `daParseInsights()` extracts the script's

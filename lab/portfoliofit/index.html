@@ -598,10 +598,11 @@
   // registration -> main -> stats -> survey -> thank-you) is the DEFAULT
   // experience at the bare URL. There is NO anonymous play: a visitor must enter
   // an ACTIVE session code on the welcome screen to take part.
-  //   ?admin    opens the CMS (and turns the participant flow off).
+  //   ?admin    opens the CMS (and turns the participant flow off). A value is
+  //             allowed (?admin=data-analytics opens the admin's analytics view).
   //   ?classic  shows the original plain game with no experiment layer.
   //   ?exp=1    legacy alias; the flow is on by default now, so this is redundant.
-  window.PF_ADMIN = /[?&]admin(=1)?(&|$)/.test(location.search);
+  window.PF_ADMIN = /[?&]admin([=&]|$)/.test(location.search);
   window.PF_CLASSIC = /[?&]classic(=1)?(&|$)/.test(location.search);
   window.PF_EXPERIMENT = !window.PF_ADMIN && !window.PF_CLASSIC;
   </script>

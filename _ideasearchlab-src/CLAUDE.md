@@ -406,12 +406,18 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      retains every sheet of an imported `.xlsx`, not just the Ideas rows). `bookAboutMeta()` reads
      an imported book's Conditions/Ideas sheet for the aggregate About.
    - **Summary tallies:** three stat boxes — *Ideas generated* (`rows.length`), *Total final ideas*
-     (`final_pick == 1`), *Number of sessions* (distinct session codes in the loaded data) — plus a
-     **Participants by condition** two-column table (coloured encoding tag · head-count):
-     Firestore-loaded sessions use the real registered-participant count captured at load time
-     (`_participantCount` on `loadedSessions`), imported/restored data falls back to distinct idea
-     authors per condition (blank author IDs skipped; unrecognised condition labels surface as an
-     "Other" row) — `participantsByCondition` in DataAnalytics.jsx.
+     (`final_pick == 1`), *Number of sessions* (distinct session codes in the loaded data).
+   - **Participants per condition:** a two-column card under the stat boxes (styled like the
+     top-of-page encoding key, each encoding as its coloured `condTag` chip) listing all four
+     conditions with the number of participants loaded under each (zero-count rows dimmed;
+     total in the title). EVERY registered participant counts — including admin-detached
+     ones, whose ideas stay in the dataset — so participant and idea tallies share one basis
+     (same as the export's Conditions-sheet counts). Firestore-loaded sessions use the real
+     head-count captured at Load time (`_participantCount` on `loadedSessions`); a loaded
+     imported workbook is counted from its condition-stamped *Participants* sheet; anything
+     else (plain CSV import, restored dataset) by distinct idea authors (blank author IDs
+     skipped; unrecognised condition labels surface as an "Other" row) — the
+     `participantsByCondition` memo in DataAnalytics.jsx.
    - **Scores round-trip:** the Rankings tab's *Novelty / Usefulness / Quality* columns are filled
      from any scores set in Step 3 (mapped by Idea ID via `rankingsSheetFromIdeas(ideaRows, scoreById)`),
      so re-downloading the aggregate after scoring carries the scores back in.
