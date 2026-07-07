@@ -8,6 +8,12 @@ name: ms2 — TEMP fetch ms Google Sheet for comparison
 
 on:
   workflow_dispatch: {}
+  push:
+    # Not on master (this file never merges): runs when this file itself is
+    # pushed to the working branch, since branch-only workflows cannot be
+    # dispatched by the API.
+    paths:
+      - '.github/workflows/ms2-sheet-sync-temp.yml'
 
 permissions:
   contents: write
