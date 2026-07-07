@@ -407,16 +407,19 @@ change. Four sections:
    The bundled templates (`DA_PY_TEMPLATE` / `DA_R_TEMPLATE`) are heavily
    commented, ignore `DATA_CSV` and analyse the **Play log joined to Rounds**
    (the inner join on Player|Session + Puzzle also drops training-phase moves,
-   which have no Rounds row). They answer two questions and are **verified to
-   print byte-identical output** in the two languages:
+   which have no Rounds row; the Play log's *(before)* KPI columns are also
+   required, for the per-move deltas). They answer three questions and are
+   **verified to print byte-identical output** in the two languages:
    - **Heuristics.** "Top player" = touched the puzzle's maximum net value at
      least once *during play* (any move, not just the final board); relaxed
      definition = came within 5% of it. Six behavioural markers per
      player-puzzle (moves made, removal share, mean $/cell of the first 3
      bricks, board coverage after 3 moves, seconds per move, when the own peak
      was first hit), averaged to player level and compared top-vs-rest per
-     difficulty (Welch t) plus an easy-vs-hard table, and regression **R1**
-     (LPM of reached-max on standardised markers, player-clustered CR1 SEs).
+     difficulty (Welch t) **under both definitions** (Cohen's-d fingerprints:
+     Figure 1 strict, Figure 7 within-5%), plus an easy-vs-hard table and
+     regressions **R1/R1b** (LPM of reached-max / within-5% on standardised
+     markers, player-clustered CR1 SEs).
    - **Balanced-KPI hypothesis (H1).** The six on-screen KPIs collapse to
      three independent objectives; each is scored **relative to its optimal
      value**: `s_net = (Net+16)/(Best+16)`, `s_cov = Coverage/100`,
@@ -428,13 +431,29 @@ change. Four sections:
      `kpi_even = 1 − SD`) with the `s_net` level as control and
      player-clustered SEs (`ols_cluster`, SVD pseudoinverse with a shared
      1e-10 tolerance so both languages behave identically even under
-     collinearity). Five figures + a data-driven `INSIGHTS` block
-     (`## Figure N` headings anchor each plot in §4), which **ends with a
-     computed verdict** — BALANCED / FOCUSED BUT EFFECTIVE / PARTLY BALANCED /
-     MORE EVEN, NOT CLOSER / NO CLEAR SIGNAL — answering "are the best players
-     focused on one KPI or balancing across KPIs?" from each group's per-KPI
-     profile (strongest/weakest KPI + spread) and the evenness and
-     balanced-score gaps with p-values.
+     collinearity). Trajectories at fifth- AND tenth-of-play resolution
+     (printed tables + Figures 2/3/6).
+   - **Focused or diversified (revealed objective).** Candidate objectives =
+     net value only, net+coverage, net+compactness, all three (each = the
+     mean of its KPIs' attainment scores). Because every placement raises
+     Net Value and Coverage *mechanically* (net rises by brick value + cells
+     saved), improvement yes/no flags cannot separate candidates — so the
+     test compares each candidate's **per-move climb rate** (points/move,
+     averaged move → puzzle → player). **FOCUS GAP** = net-only climb minus
+     all-three climb (positive = net-focused, negative = diversified), tested
+     vs 0 within each group and top-vs-rest, under both definitions
+     (Figure 8).
+
+   Eight figures + a data-driven `INSIGHTS` block (`## Figure N` headings
+   anchor each plot in §4), which **ends with a computed verdict** —
+   BALANCED / FOCUSED BUT EFFECTIVE / PARTLY BALANCED / MORE EVEN, NOT
+   CLOSER / NO CLEAR SIGNAL — answering "are the best players focused on one
+   KPI or balancing across KPIs?" from each group's per-KPI profile
+   (strongest/weakest KPI + spread), the evenness and balanced-score gaps
+   with p-values, and an OBJECTIVE TEST line from the focus gap. (Figure 5's
+   caption spells out that its $/cell is a per-brick price density, not the
+   Value/Resource ROI KPI, and that "completing the board" means geometric
+   fit, not the Portfolio Fitness compactness KPI.)
 
    Edited code persists to localStorage (`pfa-da:py` / `pfa-da:r`); when
    changing the bundled templates bump `PF_DA_TPL_VERSION` so stale saved
