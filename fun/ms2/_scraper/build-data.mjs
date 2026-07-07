@@ -119,6 +119,22 @@ function authorName(a) {
   return nm.replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+// Trailing abstract sections ("Funding: …", "Supplemental Material: …",
+// "History: …", bare URLs) that INFORMS appends right after the acceptance
+// sentence and that the capture regex below can swallow when they contain a
+// long period-free run (e.g. "…[Grant SRG1920/100428], the …"). The page
+// defends itself with the same list (normalizeArea), but cleaning at the
+// source keeps the derived files (per-author/affiliation area lists, the
+// Areas dropdown vocabulary) clean too — the Sheets pipeline stored areas
+// already cleaned, so this restores parity with /fun/ms/.
+function stripTrailers(s) {
+  return s
+    .replace(/\.?\s*(funding|supplemental material|history|data|acknowledgments?|conflicts?[^:]{0,30}|epub)\s*:.*$/i, '')
+    .replace(/\.?\s*https?:\/\/.*$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 // Pull "This paper was accepted by <Editor>, <area>." out of the abstract. The
 // page's own cleanEditorField() parses the editor name back out of this exact
 // sentence, and normalizeArea() cleans the area, so we hand it the raw sentence.
@@ -127,9 +143,16 @@ function acceptance(abstractText) {
   // initials ("D. J. Wu", "Gérard P. Cachon") followed by ", <area>.".
   const m = abstractText.match(/accepted by\s+([^.]+(?:\.[^.]{0,5})*[^.]*)\./i);
   if (!m) return { editor: '', area: '' };
-  const body = m[1].trim();                    // e.g. "Gérard P. Cachon, finance"
+  let body = stripTrailers(m[1].trim());       // e.g. "Gérard P. Cachon, finance"
   const comma = body.indexOf(',');
-  const area = comma !== -1 ? body.slice(comma + 1).trim() : '';
+  let area = comma !== -1 ? body.slice(comma + 1).trim() : '';
+  if (area) {
+    // The area part never legitimately spans a sentence break; anything after
+    // one is over-captured abstract text. (Editor initials sit before the
+    // comma, so cutting here cannot touch them.)
+    area = area.split(/\.\s/)[0].replace(/\.$/, '').trim();
+    body = body.slice(0, comma).trim() + ', ' + area;
+  }
   // Store the full sentence so the page can re-parse the editor name itself.
   return { editor: 'This paper was accepted by ' + body + '.', area };
 }
