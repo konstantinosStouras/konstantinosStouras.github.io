@@ -246,7 +246,9 @@ function parseInsights(lines) {
       continue
     }
     if (section === 'summary') {
-      const m = line.match(/^([A-Za-z][\w ]*?)\s*:\s*(.+)$/)
+      // KPI labels may contain parentheses / dots ("Novelty (objective)"), so the
+      // label class must accept them or those rows silently vanish from the table.
+      const m = line.match(/^([A-Za-z][\w ()./-]*?)\s*:\s*(.+)$/)
       // Only keep rows whose value reads like a ranking ("Cond (1.23) > …") or a
       // "(not estimable)" note — never stray log lines that happen to have a colon.
       if (m && /(\(\s*-?\d|not estimable|>)/i.test(m[2])) {

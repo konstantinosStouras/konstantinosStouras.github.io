@@ -9,6 +9,7 @@
 <meta name="description" content="Browse and filter all Management Science (INFORMS) articles from 1954–present. Search by editor, area, year, or author. Export BibTeX citations.">
 <meta name="keywords" content="Management Science, INFORMS, academic papers, research browser, BibTeX, journal articles, operations research, finance, marketing, accounting">
 <meta name="author" content="Konstantinos Stouras">
+
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://stouras.com/fun/ms/">
 
@@ -396,17 +397,17 @@
     <div class="filters-row">
       <div class="filter-group">
         <label title="Some authors may appear under different name variants. ORCID-based disambiguation is not yet available for all authors.">Search Authors &#9432;</label>
-        <input id="filterAuthors" placeholder="Author..." type="search" oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('author','filterAuthors');event.preventDefault();}">
+        <input id="filterAuthors" name="ms-filter-author" placeholder="Author..." type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('author','filterAuthors');event.preventDefault();}">
         <div id="chipsAuthor" class="chips"></div>
       </div>
       <div class="filter-group">
         <label>Search Title</label>
-        <input id="filterSearch" placeholder="Paper title..." type="search" oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('title','filterSearch');event.preventDefault();}">
+        <input id="filterSearch" name="ms-filter-title" placeholder="Paper title..." type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('title','filterSearch');event.preventDefault();}">
         <div id="chipsTitle" class="chips"></div>
       </div>
       <div class="filter-group">
         <label title="Affiliation names are not standardized across papers. Duplicates may exist despite ongoing deduplication efforts.">Search Affiliations &#9432;</label>
-        <input id="filterAffiliations" placeholder="Affiliation..." type="search" oninput="debounceAffSearch()" onkeydown="if(event.key==='Enter'){addTextChip('affiliation','filterAffiliations');event.preventDefault();}">
+        <input id="filterAffiliations" name="ms-filter-affiliation" placeholder="Affiliation..." type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore oninput="debounceAffSearch()" onkeydown="if(event.key==='Enter'){addTextChip('affiliation','filterAffiliations');event.preventDefault();}">
         <div id="chipsAffiliation" class="chips"></div>
       </div>
       <div class="filter-group">
@@ -469,7 +470,7 @@
 <div id="libraryBar" class="library-bar">
   <h2><span>★ My Library</span> <span class="acct-link" style="font-size:13px;font-weight:600" onclick="acctExitLibrary()">Exit library</span></h2>
   <div class="library-sub">Your private saved papers, notes, lists and tags. Only you can see these.</div>
-  <input id="libSearch" class="library-search" placeholder="Search my notes, titles, authors, tags…" oninput="acctLibSearch(this.value)">
+  <input id="libSearch" name="ms-lib-search" class="library-search" placeholder="Search my notes, titles, authors, tags…" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore oninput="acctLibSearch(this.value)">
   <div class="library-section-label">Lists &amp; views</div>
   <div class="library-chips" id="libListChips"></div>
   <div class="library-section-label" id="libTagsLabel">Tags</div>
@@ -504,15 +505,17 @@
 </footer>
 
 <script>
-const SHEET_ID = '11MKt6uzfnxTNTbK4Kb1jwW32cEsKZcBRncubV2omJzQ';
-const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Data`;
-const AUTHORS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Authors`;
-const EDITORS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Editors`;
-const AREAS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Areas`;
-const AFFILIATIONS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Affiliations_Merged`;
-const AFFILIATIONS_FALLBACK_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Affiliations`;
-const META_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Meta`;
-const RECENT_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=RecentlyAdded`;
+// ── Data source: static JSON, no Google Sheets ───────────────────────────────
+// These files are built directly from the Crossref API by a scheduled GitHub
+// Action (fun/ms/_scraper/build-data.mjs) and committed into fun/ms/data/.
+// GitHub Pages serves them from its CDN, same origin as this page, so a visitor
+// never touches Google. To point the page at a different dataset, change only
+// these paths. See fun/ms/_HOW-IT-WORKS.md for the full picture.
+const PAPERS_URL = './data/papers.json';
+const AUTHORS_URL = './data/authors.json';
+const AFFILIATIONS_URL = './data/affiliations.json';
+const META_URL = './data/meta.json';
+const RECENT_URL = './data/recent.json';
 const PER_PAGE = 20;
 let allPapers = [], filtered = [], currentPage = 1;
 let authorData = []; // pre-computed from Authors tab (ORCID-resolved)
@@ -615,63 +618,55 @@ function addChipFromCard(type, val) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// Load the whole paper set from the static papers.json built by the GitHub
+// Action. It arrives already as an array of objects with the same keys the CSV
+// version produced (Title, Authors, Year, DOI, Abstract, Accepting Editor,
+// Area, ...), so the rest of the pipeline is unchanged.
 async function loadData() {
   try {
-    const resp = await fetch(CSV_URL);
-    const text = await resp.text();
-    allPapers = parseCSV(text);
+    const resp = await fetch(PAPERS_URL, { cache: 'no-cache' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    allPapers = Array.isArray(data) ? data : [];
     allPapers.forEach(normalizeEditors);
     fuzzyMergeEditors();
     fuzzyMergeAreas();
-    // Load affiliation data — try Affiliations_Merged, fallback to Affiliations
-    async function tryLoadAff(url, label) {
-      try {
-        var r = await fetch(url);
-        if (!r || !r.ok) return [];
-        var t = await r.text();
-        if (t.trim().charAt(0) === '<') return []; // got HTML error page, not CSV
-        var parsed = parseCSV(t, 'Affiliation');
-        if (parsed.length > 0) console.log('Loaded ' + parsed.length + ' affiliations from ' + label);
-        return parsed;
-      } catch(e) { return []; }
-    }
-    affiliationData = await tryLoadAff(AFFILIATIONS_CSV_URL, 'Affiliations_Merged');
-    if (affiliationData.length === 0) {
-      affiliationData = await tryLoadAff(AFFILIATIONS_FALLBACK_URL, 'Affiliations');
-    }
-    // Render results for any filters set while loading (e.g. a click on the
-    // pre-computed Editors/Areas lists); with no filters this builds the
-    // dropdowns and shows the welcome state. If the user opened the "Recently
-    // added papers" view before the data finished loading, fill it in now.
+    // Affiliation aggregates come from their own small JSON file.
+    try {
+      const r = await fetch(AFFILIATIONS_URL, { cache: 'no-cache' });
+      if (r.ok) { var a = await r.json(); affiliationData = Array.isArray(a) ? a : []; }
+    } catch (e) { affiliationData = []; }
+    // Render whatever filters were set while loading; with none, this builds the
+    // dropdowns/summary lists and shows the welcome state. If the user opened the
+    // "Recently added" view before data arrived, fill it in now.
     if (recentMode) renderRecent(); else applyFilters();
-    // Update year range in header
+    // Update the year range shown in the header.
     var years = allPapers.map(function(p) { return parseInt(p['Year']); }).filter(function(y) { return !isNaN(y); });
     if (years.length > 0) {
       var minY = Math.min.apply(null, years);
       var el = document.getElementById('yearRange');
       if (el) el.textContent = minY + '–present';
     }
+    if (!allPapers.length) console.warn('papers.json is empty — the data pipeline has not run yet.');
   } catch (e) {
+    // Only retry on a genuine network/parse failure (an empty-but-valid file is fine).
     setTimeout(loadData, 3000);
   }
 }
 
-// Authors are pre-computed in the sheet's Authors tab by the weekly pipeline
-// (ORCID-resolved, with paper counts, areas and name variants). Load and
-// render them independently of the much larger Data CSV, so the Authors
-// panel is ready as soon as its own small CSV arrives instead of waiting for
-// every paper + abstract since 1954 to download and parse.
+// Authors are pre-aggregated (paper counts, areas, name variants, ORCID identity)
+// in authors.json by the build step, so the Authors panel is ready without
+// waiting for every paper since 1954 to download and parse.
 async function loadAuthors() {
-  // Paint instantly from the previous visit's cached CSV, then refresh.
-  var cached = lsGet('ms_csv_authors');
-  if (cached) { try { authorData = parseCSV(cached, 'Author'); if (authorData.length) renderAuthorsSummary(); } catch (e) {} }
+  // Paint instantly from the previous visit's cache, then refresh from network.
+  var cached = lsGet('ms2_authors');
+  if (cached) { try { authorData = JSON.parse(cached); if (authorData.length) renderAuthorsSummary(); } catch (e) {} }
   try {
-    var r = await fetch(AUTHORS_CSV_URL);
+    var r = await fetch(AUTHORS_URL, { cache: 'no-cache' });
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    var t = await r.text();
-    if (t.trim().charAt(0) === '<') throw new Error('not CSV'); // HTML error page
-    lsSet('ms_csv_authors', t);
-    authorData = parseCSV(t, 'Author');
+    var data = await r.json();
+    authorData = Array.isArray(data) ? data : [];
+    lsSet('ms2_authors', JSON.stringify(authorData));
     renderAuthorsSummary();
   } catch (e) {
     if (!authorData.length) setTimeout(loadAuthors, 3000);
@@ -682,52 +677,13 @@ async function loadAuthors() {
 function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 
-// The Editors and Areas summary lists are pre-computed in the sheet's
-// Editors/Areas tabs by the weekly pipeline (same alias/junk/fuzzy-merge
-// normalization the browser applies). They change only ~weekly, so cache the
-// raw CSV in localStorage and paint the panels instantly from the last visit,
-// then refresh from the network (stale-while-revalidate). Once the full Data
-// CSV is parsed, buildSummaryTabs() takes over with live (filter-aware) counts.
-async function loadSummaries() {
-  renderSummaryCSVs(lsGet('ms_csv_editors'), lsGet('ms_csv_areas'));
-  async function tryTab(url, cacheKey) {
-    try {
-      var r = await fetch(url);
-      if (!r.ok) return null;
-      var t = await r.text();
-      if (t.trim().charAt(0) === '<') return null; // HTML error page, not CSV
-      lsSet(cacheKey, t);
-      return t;
-    } catch (e) { return null; }
-  }
-  var results = await Promise.all([
-    tryTab(EDITORS_CSV_URL, 'ms_csv_editors'),
-    tryTab(AREAS_CSV_URL, 'ms_csv_areas')
-  ]);
-  renderSummaryCSVs(results[0], results[1]);
-}
+// The Editors and Areas summary lists are derived live from the papers by
+// buildSummaryTabs() as soon as papers.json is parsed, so ms2 needs no separate
+// pre-computed tabs for them. (loadSummaries is intentionally gone.)
 
-// Render the Editors/Areas panels from raw CSV text (cached or freshly fetched).
-// No-op once the Data CSV has loaded — buildSummaryTabs() then owns these lists.
-function renderSummaryCSVs(edText, arText) {
-  if (allPapers.length > 0) return;
-  if (edText) {
-    var eds = parseCSV(edText, 'Editor');
-    // Pipeline emits the Editors tab already sorted by paper count descending.
-    if (eds.length) renderEditorsSummary(eds.map(function(e) { return { label: e['Editor'], count: e['Papers'] }; }));
-  }
-  if (arText) {
-    var ars = parseCSV(arText, 'Area');
-    if (ars.length) document.getElementById('summaryAreasList').innerHTML = ars.map(function(a) {
-      return '<div class="summary-item" onclick="filterByArea(\'' + escAttr(a['Area']) + '\')"><span class="summary-count">' + esc(a['Papers']) + '</span> papers in ' + esc(a['Area']) + '</div>';
-    }).join('');
-  }
-}
-
-// Show when the pipeline last checked Crossref for new papers (Meta tab).
-// The value changes only ~weekly, so show the cached value instantly on load
-// (no late pop-in) and refresh it in the background.
-var LAST_PULL_CACHE_KEY = 'ms_lastPull';
+// Show when the pipeline last pulled from Crossref (meta.json). Cached so it
+// paints instantly on repeat visits, then refreshes in the background.
+var LAST_PULL_CACHE_KEY = 'ms2_lastPull';
 function setLastPullText(date) {
   var el = document.getElementById('lastPull');
   if (el && date) el.textContent = 'Last publication data pull: ' + date;
@@ -737,19 +693,11 @@ function loadLastPull() {
     var cached = localStorage.getItem(LAST_PULL_CACHE_KEY);
     if (cached) setLastPullText(cached);
   } catch (e) {}
-  fetch(META_CSV_URL).then(function(r) { return r && r.ok ? r.text() : null; }).then(function(txt) {
-    if (!txt || txt.trim().charAt(0) === '<') return; // not CSV (error page)
-    var lines = txt.split('\n');
-    for (var i = 0; i < lines.length; i++) {
-      var cols = parseLine(lines[i]);
-      if (cols.length >= 2 && clean(cols[0]) === 'Last Publication Data Pull') {
-        var date = clean(cols[1]);
-        if (date) {
-          setLastPullText(date);
-          try { localStorage.setItem(LAST_PULL_CACHE_KEY, date); } catch (e) {}
-        }
-        return;
-      }
+  fetch(META_URL, { cache: 'no-cache' }).then(function(r) { return r && r.ok ? r.json() : null; }).then(function(meta) {
+    var date = meta && meta.lastPull;
+    if (date) {
+      setLastPullText(date);
+      try { localStorage.setItem(LAST_PULL_CACHE_KEY, date); } catch (e) {}
     }
   }).catch(function() {});
 }
@@ -1607,23 +1555,23 @@ function toggleRecent() {
   }
 }
 
-// Pre-fetch the small RecentlyAdded tab at page load (like the Editors/Areas/
-// Authors tabs) so the view opens instantly. A genuinely missing tab falls back
-// to scanning the Data set; a transient network error retries a few times.
+// Pre-fetch the small recent.json (papers first seen recently) at page load so
+// the "Recently added" view opens instantly. If the file is missing we fall back
+// to scanning the full Data set; a transient network error retries a few times.
 async function loadRecent(attempt) {
   recentFetched = true;
   recentLoading = true;
   try {
-    var r = await fetch(RECENT_CSV_URL);
-    if (!r.ok) throw new Error('HTTP ' + r.status); // transient -> retry below
-    var t = await r.text();
-    if (t.trim().charAt(0) === '<') { // HTML error page = tab missing -> fall back
+    var r = await fetch(RECENT_URL, { cache: 'no-cache' });
+    if (r.status === 404) { // file not generated yet -> fall back to scanning allPapers
       recentData = null;
       recentLoading = false;
       if (recentMode) renderRecent();
       return;
     }
-    var rows = parseCSV(t, 'Title');
+    if (!r.ok) throw new Error('HTTP ' + r.status); // transient -> retry below
+    var rows = await r.json();
+    if (!Array.isArray(rows)) rows = [];
     rows.forEach(normalizeEditors); // populate _editors / _area so the tags render
     recentData = rows; // authoritative once loaded, even if empty
   } catch (e) {
@@ -1927,11 +1875,10 @@ window.addEventListener('scroll', scheduleCompact, { passive: true });
 if (compactSticky.addEventListener) compactSticky.addEventListener('change', applyCompact);
 else if (compactSticky.addListener) compactSticky.addListener(applyCompact);
 
-loadLastPull(); // small + cached: render the last-pull date first, before the big Data CSV
+loadLastPull(); // small + cached: render the last-pull date first, before the big papers.json
 loadData();
 loadAuthors();
-loadSummaries();
-loadRecent(); // pre-fetch the small RecentlyAdded tab so the view opens instantly
+loadRecent(); // pre-fetch the small recent.json so the "Recently added" view opens instantly
 </script>
 
 <!-- ── Accounts: sign in / register modal ─────────────────────────────────── -->
@@ -1943,14 +1890,14 @@ loadRecent(); // pre-fetch the small RecentlyAdded tab so the view opens instant
       <p>Save papers, add private notes, build lists and tag your reading. Optional, and only you can see your library.</p>
     </div>
     <div class="acct-modal-body">
-      <button class="acct-google" onclick="acctGoogle()">
-        <svg viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.71-1.57 2.68-3.89 2.68-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.02-3.7H.96v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.98 10.72a5.4 5.4 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.02-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58A9 9 0 0 0 9 0 9 9 0 0 0 .96 4.95l3.02 2.33C4.68 5.16 6.66 3.58 9 3.58z"/></svg>
-        Continue with Google
-      </button>
+      <!-- Third-party sign-in buttons are rendered here from AUTH_PROVIDERS
+           (see the accounts script below); only providers you have enabled in
+           the Firebase console should be listed there. -->
+      <div id="acctProviders" style="display:flex;flex-direction:column;gap:8px"></div>
       <div class="acct-or">or with email</div>
       <div class="acct-field">
         <label for="acctEmail">Email</label>
-        <input id="acctEmail" type="email" autocomplete="email" placeholder="you@example.com" onkeydown="if(event.key==='Enter')acctSubmitAuth()">
+        <input id="acctEmail" type="email" autocomplete="username" placeholder="you@example.com" onkeydown="if(event.key==='Enter')acctSubmitAuth()">
       </div>
       <div class="acct-field">
         <label for="acctPassword">Password</label>
@@ -1988,16 +1935,25 @@ loadRecent(); // pre-fetch the small RecentlyAdded tab so the view opens instant
 (function () {
   'use strict';
 
-  // ↓↓↓ PASTE YOUR FIREBASE WEB CONFIG HERE (see fun/ms/_ACCOUNTS-SETUP.md) ↓↓↓
+  // Web config of the dedicated "ms-paper-browser" Firebase project (see
+  // fun/ms/_ACCOUNTS-SETUP.md). These values are not secrets — every Firebase
+  // web app ships them to the browser; access is enforced by the Firestore
+  // security rules in fun/ms/_firestore.rules.
   var FB_CONFIG = {
-    apiKey: "PASTE_API_KEY",
-    authDomain: "PASTE_PROJECT.firebaseapp.com",
-    projectId: "PASTE_PROJECT_ID",
-    storageBucket: "PASTE_PROJECT.appspot.com",
-    messagingSenderId: "PASTE_SENDER_ID",
-    appId: "PASTE_APP_ID"
+    apiKey: "AIzaSyDJSZ20yUnSx8kkI_FocTxWVZOjc6dhBM4",
+    authDomain: "ms-paper-browser.firebaseapp.com",
+    projectId: "ms-paper-browser",
+    storageBucket: "ms-paper-browser.firebasestorage.app",
+    messagingSenderId: "784267873924",
+    appId: "1:784267873924:web:3766507c09c59c32c2fcd1",
+    measurementId: "G-L8Y2WLPJRS"
   };
-  // ↑↑↑ ─────────────────────────────────────────────────────────────────── ↑↑↑
+
+  // Third-party sign-in buttons, in display order. List a provider here ONLY
+  // after enabling it in Firebase console → Authentication → Sign-in method
+  // (per-provider steps in fun/ms/_ACCOUNTS-SETUP.md). Supported keys:
+  // 'google', 'microsoft', 'apple', 'github'.
+  var AUTH_PROVIDERS = ['google', 'microsoft'];
 
   var ACCOUNTS_ENABLED = !!(FB_CONFIG.apiKey
     && FB_CONFIG.apiKey.indexOf('PASTE_') === -1
@@ -2355,11 +2311,54 @@ loadRecent(); // pre-fetch the small RecentlyAdded tab so the view opens instant
       .catch(function (e) { acctErr(friendly(e)); })
       .then(function () { btn.disabled = false; });
   };
-  window.acctGoogle = function () {
-    auth.signInWithPopup(new firebase.auth.GoogleAuthProvider())
+  // ── Third-party sign-in providers ──
+  // Google covers Gmail accounts; Microsoft covers university/work Microsoft
+  // 365 accounts; Apple and GitHub are available once configured. Each entry:
+  // label, brand mark (inline SVG), and a factory for the Firebase provider.
+  var PROVIDER_DEFS = {
+    google: {
+      label: 'Continue with Google',
+      svg: '<svg viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.71-1.57 2.68-3.89 2.68-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.02-3.7H.96v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.98 10.72a5.4 5.4 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.02-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58A9 9 0 0 0 9 0 9 9 0 0 0 .96 4.95l3.02 2.33C4.68 5.16 6.66 3.58 9 3.58z"/></svg>',
+      make: function () { return new firebase.auth.GoogleAuthProvider(); }
+    },
+    microsoft: {
+      label: 'Continue with Microsoft',
+      svg: '<svg viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>',
+      make: function () {
+        var p = new firebase.auth.OAuthProvider('microsoft.com');
+        p.setCustomParameters({ prompt: 'select_account' });
+        return p;
+      }
+    },
+    apple: {
+      label: 'Continue with Apple',
+      svg: '<svg viewBox="0 0 814 1000" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" d="M788 341c-6 4-107 61-107 187 0 146 128 197 132 199-1 3-20 70-67 138-42 60-86 120-153 120s-84-39-161-39c-75 0-102 40-163 40s-104-56-153-124C60 782 14 660 14 544c0-186 121-285 240-285 63 0 116 42 156 42 38 0 97-44 169-44 27 0 125 2 209 84zM554 172c31-37 53-88 53-139 0-7-1-14-2-20-50 2-110 34-146 76-29 32-55 83-55 135 0 8 1 16 2 18 3 1 8 2 13 2 45 0 102-30 135-72z"/></svg>',
+      make: function () { return new firebase.auth.OAuthProvider('apple.com'); }
+    },
+    github: {
+      label: 'Continue with GitHub',
+      svg: '<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>',
+      make: function () { return new firebase.auth.GithubAuthProvider(); }
+    }
+  };
+
+  window.acctProvider = function (key) {
+    var def = PROVIDER_DEFS[key];
+    if (!def) return;
+    auth.signInWithPopup(def.make())
       .then(function () { acctCloseAuth(); })
       .catch(function (e) { if (e && (e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request')) return; acctErr(friendly(e)); });
   };
+  // Kept for any old references; Google is just one of the providers now.
+  window.acctGoogle = function () { window.acctProvider('google'); };
+
+  (function renderProviderButtons() {
+    var box = document.getElementById('acctProviders');
+    if (!box) return;
+    box.innerHTML = AUTH_PROVIDERS.filter(function (k) { return PROVIDER_DEFS[k]; }).map(function (k) {
+      return '<button class="acct-google" onclick="acctProvider(\'' + k + '\')">' + PROVIDER_DEFS[k].svg + PROVIDER_DEFS[k].label + '</button>';
+    }).join('');
+  })();
   window.acctForgot = function () {
     var email = document.getElementById('acctEmail').value.trim();
     if (!email) { acctErr('Enter your email above first, then click reset.'); return; }
@@ -2382,6 +2381,7 @@ loadRecent(); // pre-fetch the small RecentlyAdded tab so the view opens instant
     if (c === 'auth/too-many-requests') return 'Too many attempts. Please try again later.';
     if (c === 'auth/unauthorized-domain') return 'This domain is not authorized in the Firebase console yet.';
     if (c === 'auth/operation-not-allowed') return 'This sign-in method is not enabled in the Firebase console yet.';
+    if (c === 'auth/account-exists-with-different-credential') return 'An account already exists for this email with a different sign-in method — use the method you signed up with.';
     if (c === 'permission-denied') return 'Permission denied. The Firestore security rules may not be deployed yet.';
     return (e && e.message) || 'Something went wrong. Please try again.';
   }

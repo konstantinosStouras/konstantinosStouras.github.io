@@ -35,7 +35,8 @@ UNIT OF ANALYSIS, UNBALANCED & PARTIAL-COVERAGE DESIGN (read this)
   n (unbalanced) and KPIs have DIFFERENT coverage (e.g. AI scored but not yet
   evaluator-rated). So each KPI's models are fitted on the rows that HAVE that KPI,
   with HC3 heteroscedasticity-robust SEs; a condition with < 2 ideas for a KPI — or
-  an absent None baseline — is dropped from that KPI's model and shown as "n/a".
+  an absent None baseline — is dropped from that KPI's split models (dummy AND rows,
+  so it cannot pool into the baseline) and shown as "n/a".
 
 WHERE THE DATA COMES FROM
   The scored dataset from the page is handed in as the global string DATA_CSV (one
@@ -238,6 +239,18 @@ def collapsed_term(sub):
     return ["ai"] if int((sub["condition"] != REFERENCE).sum()) >= MIN_CELL else []
 
 
+TERM_LEVEL = {"solo": "Solo", "group": "Group", "both": "Both"}
+
+
+def restrict_to_terms(sub, terms):
+    """For a SPLIT model, keep only the reference rows plus the rows of conditions
+    whose dummy made it into the model. Without this, a condition with < MIN_CELL
+    ideas would keep its rows with all dummies = 0 and silently pool into the None
+    baseline, biasing the intercept and every coefficient."""
+    keep = [REFERENCE] + [TERM_LEVEL[t] for t in terms if t in TERM_LEVEL]
+    return sub[sub["condition"].isin(keep)]
+
+
 # ── 2. Fit one OLS / LPM ──────────────────────────────────────────────────────
 def fit_one(sub, dv, treatment_terms, controls):
     """Fit `dv ~ treatment_terms (+ controls)` with HC3-robust SEs on `sub` (already
@@ -249,7 +262,10 @@ def fit_one(sub, dv, treatment_terms, controls):
     if len(sub) - n_params < 2:
         return None
     try:
-        return smf.ols(f"{dv} ~ {rhs}", data=sub).fit(cov_type="HC3")
+        # use_t=True: with a robust cov_type statsmodels defaults to NORMAL-based
+        # p-values; force t(df_resid) inference so p-values/stars match the R tab
+        # (which uses pt() with the residual df) and stay small-sample appropriate.
+        return smf.ols(f"{dv} ~ {rhs}", data=sub).fit(cov_type="HC3", use_t=True)
     except Exception as exc:
         warnings.warn(f"[{dv}] OLS failed: {exc}")
         return None
@@ -278,10 +294,14 @@ def build_table(df, num, title, sub_desc, dvs, split, controls):
         rows = [("ai", f"Any AI (vs {REFERENCE})")]
 
     # Per-column: the KPI's row subset, its treatment terms, and the fitted model.
+    # Split models drop the ROWS of any condition whose dummy was excluded
+    # (< MIN_CELL ideas), so they cannot leak into the None baseline.
     fits = {}
     for dv, _ in dvs:
         s = df.dropna(subset=[dv])
         terms = split_terms(s) if split else collapsed_term(s)
+        if split:
+            s = restrict_to_terms(s, terms)
         fits[dv] = (fit_one(s, dv, terms, controls), s, terms)
 
     def coef_block(term, label):
@@ -430,10 +450,11 @@ def plot_means(df, kpis, present_levels):
         ax.set_title(f"Mean {label}", fontweight="bold")
         ax.set_ylabel(label); ax.set_xlabel("Condition")
         ax.grid(axis="y", linestyle=":", alpha=0.5)
-        finite = [m for m in means if np.isfinite(m)]
+        # Show the full rating scale (5.2 / 1.05 headroom) and never clip a CI whisker.
+        finite = [m + (h if np.isfinite(h) else 0.0) for m, h in zip(means, halfs) if np.isfinite(m)]
         top = 5.2 if scale5 else 1.05
         if finite:
-            ax.set_ylim(0, max(top, max(finite) * 1.18))
+            ax.set_ylim(0, max(top, max(finite) * 1.12))
     for ax in flat[len(kpis):]:
         ax.axis("off")
     fig.suptitle("Average score by condition (bars = mean, whiskers = 95% CI)", fontweight="bold", y=1.0)
@@ -587,6 +608,12 @@ def main():
 
     present_levels = list(df["condition"].cat.categories)
 
+    # The page reads this exact line for the "N ideas analysed" header (Step 6/PDF).
+    # Count only rows that carry at least one present KPI — a row with no KPI at all
+    # enters no model, so it must not inflate the headline N.
+    n_used = int(df[[k for k, _, _ in kpis]].notna().any(axis=1).sum())
+    print(f"rows used for analysis: {n_used}\n")
+
     # Per-condition sample sizes + per-KPI coverage.
     print("=" * 78)
     print("FINAL-IDEA COUNT PER CONDITION (unit of analysis; unbalanced design)")
@@ -643,11 +670,13 @@ def main():
         print("No KPI had both contrast levels present - contrast not computed.")
     print()
 
-    # No-controls condition-means models per KPI (for insights + plots).
+    # No-controls condition-means models per KPI (for insights + plots). Same rule
+    # as the split tables: rows of a dropped (< MIN_CELL) condition are excluded.
     means_models = {}
     for key, _, _ in kpis:
         s = df.dropna(subset=[key])
-        means_models[key] = fit_one(s, key, split_terms(s), [])
+        terms = split_terms(s)
+        means_models[key] = fit_one(restrict_to_terms(s, terms), key, terms, [])
     insights(df, kpis, means_models)
 
     try:

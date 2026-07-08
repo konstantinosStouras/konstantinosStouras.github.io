@@ -20,6 +20,16 @@
   var cfg = { texts: {}, settings: {}, registrationQuestions: [], surveyQuestions: [], activeTaskSetId: null };
   var user = null, root;
   var summaryRefresh = null;   // set by the Setup summary; lets other cards refresh it after a save
+  var currentView = 'admin';   // 'admin' (the two-column panel) | 'analytics' (Data analytics)
+  // Data-analytics working state, kept across view switches so leaving and
+  // returning to the tab preserves the loaded data + selections. `sheetMap` is the
+  // aggregated workbook held in memory (Section 2) that Section 3 runs code against.
+  var daState = { selected: {}, importedBooks: [], parts: null, sessions: null, sheetMap: null, sheetOrder: [], code: {}, lang: 'python', running: false, lastRun: null };
+  // The CURRENTLY-mounted analytics view's cross-section refreshers. Reset by
+  // renderAnalytics on every entry, so an async op started under an earlier render
+  // (e.g. a Load that resolves after the user left and came back) refreshes the
+  // sections that are actually on screen now — not detached, stale closures.
+  var daRefs = {};
 
   /* ---- text fields grouped into collapsible "pages" ---- */
   var TEXT_FIELD_META = {
@@ -52,7 +62,7 @@
     { key: 'survey', label: 'Survey page', fields: ['surveyTitle', 'surveyIntro'] },
     { key: 'thankyou', label: 'Thank-you page', fields: ['thankyouTitle', 'thankyouBody'] }
   ];
-  var QUESTION_TYPES = ['text', 'email', 'password', 'number', 'select', 'radio', 'textarea'];
+  var QUESTION_TYPES = ['text', 'number', 'select', 'radio', 'checkbox', 'country', 'textarea', 'email', 'password'];
 
   /* ---- DOM helpers ---- */
   function el(tag, attrs, kids) {
@@ -129,6 +139,10 @@
       + '.aa-sumrow:last-child{border-bottom:none;}'
       + '.aa-sumk{color:var(--muted);font-size:13px;}'
       + '.aa-sumv{font-weight:700;font-size:13px;text-align:right;min-width:0;overflow-wrap:anywhere;}'
+      + '.aa-codebox{border:1.5px dashed var(--accent);border-radius:12px;padding:14px 16px;margin-top:4px;background:rgba(230,126,34,.08);text-align:center;}'
+      + '.aa-codelabel{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;}'
+      + '.aa-codeval{font-size:26px;font-weight:800;letter-spacing:.16em;margin-top:4px;color:var(--ink);overflow-wrap:anywhere;}'
+      + '.aa-codebox a{color:var(--accent);}'
       + '.aa-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}'
       + '.aa-note{color:var(--muted);font-size:13px;line-height:1.6;}'
       + '.aa-q{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--qbg);overflow-wrap:break-word;}'
@@ -157,7 +171,34 @@
       + '.aa-slider{position:absolute;inset:0;background:#5a5a5a;border-radius:99px;transition:.18s;cursor:pointer;}'
       + '.aa-slider:before{content:"";position:absolute;height:18px;width:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.18s;}'
       + '.aa-switch input:checked + .aa-slider{background:var(--accent);}'
-      + '.aa-switch input:checked + .aa-slider:before{transform:translateX(20px);}';
+      + '.aa-switch input:checked + .aa-slider:before{transform:translateX(20px);}'
+      + '.aa-btn.is-nav-on{background:var(--accent);color:#fff;border-color:var(--accent);}'
+      + '.aa-secnum{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;font-weight:800;font-size:14px;margin-right:9px;flex:0 0 auto;}'
+      + '.aa-sechead{display:flex;align-items:center;}'
+      + '.aa-statgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;}'
+      + '.aa-statbox{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:var(--qbg);}'
+      + '.aa-statbox b{font-size:26px;display:block;line-height:1.1;}'
+      + '.aa-statbox span{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);}'
+      + '.aa-seclist{max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:2px 12px;background:var(--qbg);}'
+      + '.aa-checkrow{display:flex;align-items:flex-start;gap:10px;padding:10px 2px;border-bottom:1px solid var(--line);}'
+      + '.aa-checkrow:last-child{border-bottom:none;}'
+      + '.aa-checkrow input[type=checkbox]{width:16px;height:16px;flex:0 0 auto;margin-top:2px;accent-color:var(--accent);}'
+      + '.aa-checkrow .g{min-width:0;flex:1 1 auto;}'
+      + '.aa-tag{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:rgba(230,126,34,.16);color:var(--accent);}'
+      + '.aa-tag.blue{background:rgba(20,86,200,.16);color:#5b8def;}'
+      + '.aa-langtabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:4px 0 10px;}'
+      + '.aa-langtabs button{border:none;background:transparent;padding:8px 14px;font-weight:700;font-size:13px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;}'
+      + '.aa-langtabs button.on{color:var(--accent);border-bottom-color:var(--accent);}'
+      + '#aa-root textarea.aa-code{width:100%;min-height:340px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;font-size:12.5px;line-height:1.5;white-space:pre;overflow:auto;tab-size:4;-moz-tab-size:4;}'
+      + '.aa-out{background:#0c0c0c;color:#e6e6e6;border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;max-height:540px;overflow:auto;margin-top:10px;}'
+      + '.aa-plots{margin-top:12px;}.aa-plots img{display:block;max-width:100%;border:1px solid var(--line);border-radius:8px;margin-top:10px;background:#fff;}'
+      + '.aa-runstatus{font-size:13px;color:var(--muted);margin:8px 0;min-height:18px;}'
+      + '.aa-insh{font-size:15px;margin:16px 0 6px;color:var(--ink);}'
+      + '.aa-insul{margin:4px 0;padding-left:20px;}.aa-insul li{font-size:14px;line-height:1.65;margin:5px 0;}'
+      + '.aa-insp{font-size:14px;line-height:1.65;margin:8px 0;}'
+      + '.aa-insimg{display:block;max-width:100%;border:1px solid var(--line);border-radius:8px;margin-top:12px;background:#fff;}'
+      + '.aa-sub2{font-size:13px;font-weight:700;color:var(--ink);margin:16px 0 6px;}'
+      + '.aa-provscroll{max-height:560px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px;background:var(--qbg);}';
     document.head.appendChild(el('style', { text: css }));
   }
   function currentTheme() { try { return localStorage.getItem('aa-theme') || 'dark'; } catch (e) { return 'dark'; } }
@@ -175,10 +216,38 @@
 
   /* ---- routing ---- */
   function cachedAdmin() { try { return localStorage.getItem('aa-admin') === '1'; } catch (e) { return false; } }
+  // Which view a URL points at, so the Data Analytics tab is directly linkable
+  // (like ideasearchlab's /admin/data-analytics). Recognised forms:
+  //   ?admin=data-analytics · ?admin=analytics · ?admin&view=analytics · #data-analytics
+  function viewFromUrl() {
+    try {
+      var sp = new URLSearchParams(location.search);
+      var a = (sp.get('admin') || '').toLowerCase(), v = (sp.get('view') || '').toLowerCase();
+      if (/analytic/.test(a) || /analytic/.test(v) || /analytic/.test((location.hash || '').toLowerCase())) return 'analytics';
+    } catch (e) {}
+    return 'admin';
+  }
+  // Keep the address bar in sync with the active tab (canonical form
+  // ?admin / ?admin=data-analytics), preserving any other query params + hash.
+  // push=true adds a history entry so the browser Back button returns to the
+  // previous tab; otherwise it just replaces the current URL.
+  function setViewUrl(view, push) {
+    try {
+      var sp = new URLSearchParams(location.search);
+      sp.delete('admin'); sp.delete('view');
+      var rest = sp.toString();
+      var q = '?admin' + (view === 'analytics' ? '=data-analytics' : '') + (rest ? '&' + rest : '');
+      var url = location.pathname + q + location.hash;
+      if (push) history.pushState(null, '', url); else history.replaceState(null, '', url);
+    } catch (e) {}
+  }
+
   function route() {
     if (!user) { try { localStorage.removeItem('aa-admin'); } catch (e) {} return renderLogin(); }
     if (!Store.isAdminEmail(user.email)) { try { localStorage.removeItem('aa-admin'); } catch (e) {} return renderNotAuthorized(); }
     try { localStorage.setItem('aa-admin', '1'); } catch (e) {}
+    currentView = viewFromUrl();          // open the tab the link points at
+    setViewUrl(currentView, false);       // normalise the address bar
     loadConfig().then(renderShell);
   }
   function renderLogin() {
@@ -222,15 +291,30 @@
     return section;
   }
 
+  // Shared admin header: title + top-right nav (Admin | Data analytics) + theme +
+  // Sign out. The nav mirrors the ideasearchlab admin's tab bar; the active
+  // destination is highlighted. Switching views re-renders the shell in place.
+  function headerRow() {
+    function nav(label, view) {
+      var b = el('button', { class: 'aa-btn sec sm' + (currentView === view ? ' is-nav-on' : ''), on: { click: function () { if (currentView !== view) { currentView = view; setViewUrl(view, true); renderShell(); } } } }, [label]);
+      return b;
+    }
+    return el('div', { class: 'aa-h' }, [
+      el('h1', { text: 'Answer Arena admin' }),
+      el('div', { class: 'aa-row' }, [
+        nav('Admin', 'admin'), nav('Data analytics', 'analytics'), themeToggle(),
+        el('button', { class: 'aa-btn sec sm', on: { click: function () { Store.logout().then(function () { user = null; route(); }); } } }, ['Sign out'])
+      ])
+    ]);
+  }
+
   /* ---- main shell: ideasearchlab-style two-column layout ----
      LEFT: create session + design parameters + page text + forms.
      RIGHT: active sessions, then registered users. */
   function renderShell() {
     clearRoot();
-    var header = el('div', { class: 'aa-h' }, [
-      el('h1', { text: 'Answer Arena admin' }),
-      el('div', { class: 'aa-row' }, [themeToggle(), el('button', { class: 'aa-btn sec sm', on: { click: function () { Store.logout().then(function () { user = null; route(); }); } } }, ['Sign out'])])
-    ]);
+    if (currentView === 'analytics') return renderAnalytics();
+    var header = headerRow();
     var left = el('div', { class: 'aa-col' });
     var right = el('div', { class: 'aa-col' });
 
@@ -413,18 +497,38 @@
     card.appendChild(el('p', { class: 'aa-note', text: 'Creates an open session using the parameters and content above. Share its join link with participants; close it later (from the right) to stop new joins.' }));
     var nameI = el('input', { type: 'text', placeholder: 'Optional label, e.g. "Pilot group A"' });
     card.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: 'Session name (optional)' }), nameI]));
+    // Optional custom session code (mirrors the ideasearchlab admin): a single
+    // word of capital letters and digits. Live-normalised so whatever the admin
+    // types is exactly typeable back on the participant welcome screen (which
+    // uppercases the code the same way).
+    var idI = el('input', { type: 'text', placeholder: '(OPTIONAL) CUSTOM CODE', maxlength: '40', style: 'text-transform:uppercase;letter-spacing:.08em;' });
+    idI.addEventListener('input', function () { idI.value = idI.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 40); });
+    card.appendChild(el('div', { class: 'aa-field' }, [
+      el('label', { text: 'Session ID (optional)' }),
+      idI,
+      el('div', { class: 'aa-note', style: 'margin-top:4px;', text: 'Leave blank to auto-generate a short code. Single word — capital letters and digits only, no spaces or dashes (3–40 chars).' })
+    ]));
     var err = el('div', { class: 'aa-err' });
     var btn = el('button', { class: 'aa-btn', on: { click: create } }, ['Create Session']);
     card.appendChild(el('div', { class: 'aa-row' }, [btn]));
     card.appendChild(err);
+    var codeBox = el('div', { style: 'margin-top:10px;' });    card.appendChild(codeBox);
     var summary = el('div', { style: 'margin-top:16px;' });    card.appendChild(summary);
     nameI.addEventListener('keydown', function (e) { if (e.key === 'Enter') create(); });
+    idI.addEventListener('keydown', function (e) { if (e.key === 'Enter') create(); });
     summaryRefresh = renderSummary;   // let the flow / 2x2 cards refresh this after a save
     renderSummary();
 
     function factors() { return (cfg.settings && cfg.settings.twoByTwo && cfg.settings.twoByTwo.factors) || {}; }
     function create() {
       err.textContent = '';
+      // Optional custom code: normalise, then require a single 3–40 char word of
+      // capital letters and digits (blank = auto-generate a short code).
+      var code = (idI.value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (code && !/^[A-Z0-9]{3,40}$/.test(code)) {
+        err.textContent = 'Session ID must be 3–40 characters, capital letters and digits only (no spaces or dashes).';
+        return;
+      }
       var f = factors();
       var cond = { factors: { transparency: !!f.transparency, incentive: !!f.incentive } };  // snapshot the 2x2 onto the session
       var sct = cfg.settings || {};
@@ -433,14 +537,30 @@
       // THIS session with N comparisons").
       var flow = { comparisonsPerUser: sct.comparisonsPerUser || 0, randomizeOrder: sct.randomizeOrder !== false };
       btn.setAttribute('disabled', 'true'); btn.textContent = 'Creating...';
-      Store.createSession({ name: nameI.value.trim(), status: 'open', condition: cond, taskSetId: cfg.activeTaskSetId || null, comparisonsPerUser: flow.comparisonsPerUser, randomizeOrder: flow.randomizeOrder })
-        .then(function (s) { toast('Session created: ' + s.code); nameI.value = ''; btn.removeAttribute('disabled'); btn.textContent = 'Create Session'; if (sessionsRefresh) sessionsRefresh(); })
+      // If a custom code was given, make sure it isn't already taken before creating.
+      var precheck = code ? Store.getSessionByCode(code) : Promise.resolve(null);
+      precheck.then(function (existing) {
+        if (existing) return Promise.reject({ code: 'code-taken' });
+        return Store.createSession({ name: nameI.value.trim(), code: code || undefined, status: 'open', condition: cond, taskSetId: cfg.activeTaskSetId || null, comparisonsPerUser: flow.comparisonsPerUser, randomizeOrder: flow.randomizeOrder });
+      })
+        .then(function (s) { toast('Session created: ' + s.code); nameI.value = ''; idI.value = ''; btn.removeAttribute('disabled'); btn.textContent = 'Create Session'; showCreatedCode(s.code); if (sessionsRefresh) sessionsRefresh(); })
         .catch(function (e) {
           btn.removeAttribute('disabled'); btn.textContent = 'Create Session';
+          if (e && e.code === 'code-taken') { err.textContent = 'That Session ID is already in use. Please choose another.'; return; }
           var msg = (e && (e.code || e.message)) || 'error';
           err.textContent = 'Could not create the session: ' + msg + (/(permission|insufficient)/i.test(msg) ? ' - the Firestore rules may need (re)deploying.' : '');
           if (window.console) console.error('[Arena] createSession failed', e);
         });
+    }
+    // Vivid confirmation box with the session code (custom or auto-generated),
+    // shown just below the Create button after a successful create.
+    function showCreatedCode(codeVal) {
+      codeBox.innerHTML = '';
+      codeBox.appendChild(el('div', { class: 'aa-codebox' }, [
+        el('div', { class: 'aa-codelabel', text: 'Session code' }),
+        el('div', { class: 'aa-codeval', text: codeVal }),
+        el('div', { class: 'aa-note', style: 'margin-top:6px;', html: 'Share this code before your session begins. Participants join at: <a href="https://www.stouras.com/lab/answerarena/" target="_blank" rel="noopener">stouras.com/lab/answerarena</a>' })
+      ]));
     }
     function renderSummary() {
       var s = cfg.settings || {}, f = factors();
@@ -880,6 +1000,16 @@
           opt.addEventListener('input', function () { q.options = opt.value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean); });
           qb.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: 'Options (one per line)' }), opt]));
         }
+        if (q.type === 'country') {
+          qb.appendChild(el('div', { class: 'aa-note', style: 'margin-top:6px;', text: 'Uses the built-in country list — a dropdown of all countries. No options needed.' }));
+        }
+        if (q.type === 'number') {
+          var minI = el('input', { type: 'number', value: (q.min != null ? String(q.min) : ''), placeholder: 'min', style: 'max-width:90px;' });
+          var maxI = el('input', { type: 'number', value: (q.max != null ? String(q.max) : ''), placeholder: 'max', style: 'max-width:90px;' });
+          minI.addEventListener('input', function () { var v = minI.value.trim(); if (v === '') delete q.min; else q.min = Number(v); });
+          maxI.addEventListener('input', function () { var v = maxI.value.trim(); if (v === '') delete q.max; else q.max = Number(v); });
+          qb.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: 'Number range (optional)' }), el('div', { class: 'row', style: 'gap:8px;' }, [minI, maxI])]));
+        }
         var help = el('input', { type: 'text', value: q.help || '', placeholder: 'Optional helper text' });
         help.addEventListener('input', function () { q.help = help.value; });
         qb.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: 'Helper text' }), help]));
@@ -994,6 +1124,9 @@
   }
 
   /* ===================== EXPORT ===================== */
+  // The multi-tab structure shared by the single/all-session export and the
+  // Data-analytics aggregate, so both always produce the identical workbook shape.
+  var SHEET_ORDER = ['Conventions', 'Sessions', 'Participants', 'Tasks', 'Task summary', 'Responses', 'Events', 'Survey'];
   // Downloads everything collected for every user: their profile + registration,
   // every response (with the decision time), every logged decision/change event
   // (with its timestamp), and one survey per session taken.
@@ -1002,81 +1135,246 @@
   function exportExcel(parts, opts) {
     opts = opts || {};
     var only = opts.sessionId || null;
-    var keep = function (sid) { return !only || (sid || '') === only; };
-    toast('Building export...');
-    ensureXLSX().then(function (X) {
-      var pRows = [], rRows = [], eRows = [], sRows = [];
-      var chain = Promise.resolve();
-      parts.forEach(function (p) {
-        var uid = p._id, c = p.condition || {};
-        var completed = Object.keys(p.completedSessions || {});
-        var base = {
-          participant_id: p.participantId || '', email: p.email || '', account_id: uid,
-          status: p.status || '', current_session_id: p.sessionId || '',
-          played_session_ids: Object.keys(p.playedSessions || {}).join(', '),
-          completed_session_ids: completed.join(', '),
-          completed_this_session_at: only ? ((p.completedSessions && p.completedSessions[only]) ? fmtTs(p.completedSessions[only]) : 'no') : undefined,
-          // Per-participant 2x2 group as 1/0 (1 = treatment, 0 = control), blank if
-          // the factor was not varied for this participant's session.
-          cost_transparency: condBit(c.transparency, c.transparencyOn, 'translated'),
-          firm_pay: condBit(c.incentive, c.incentiveOn, 'firm'),
-          registered_at: fmtTs(p.createdAt)
-        };
-        if (!only) delete base.completed_this_session_at;
-        pRows.push(Object.assign({}, base, orderedAnswers('reg_', p.registration || {}, activeQuestions('registrationQuestions'), false)));
-        chain = chain.then(function () {
-          return Store.listResponses(uid).then(function (rs) {
-            // One ordered list per participant: the submitted answers plus the
-            // in-progress draft, sorted by session then shown_order (idx) so the
-            // Responses sheet reads 1, 2, 3, ... as the participant saw them.
-            var items = [];
-            rs.forEach(function (v) { if (keep(v.sessionId)) items.push({ v: v, sub: 'yes', ms: v.responseMs, ts: v.ts }); });
-            var dr = p.draftResponse;
-            if (dr && keep(dr.sessionId)) items.push({ v: dr, sub: 'no (draft)', ms: '', ts: dr.updatedAt });
-            var ord = function (x) { return (x == null || x === '' || !isFinite(Number(x))) ? 1e9 : Number(x); };
-            items.sort(function (a, b) {
-              var sa = a.v.sessionId || '', sb = b.v.sessionId || '';
-              if (sa !== sb) return sa < sb ? -1 : 1;
-              return ord(a.v.idx) - ord(b.v.idx);
-            });
-            items.forEach(function (it) { rRows.push(respRow(base, it.v, it.sub, it.ms, it.ts)); });
-          }).catch(function () {});
-        }).then(function () {
-          return Store.listEvents(uid).then(function (evs) {
-            evs.sort(function (a, b) { return tsMs(a.ts) - tsMs(b.ts); });
-            evs.forEach(function (v) {
-              if (!keep(v.sessionId)) return;
-              var et = v.type === 'choice' ? 'side_choice' : v.type === 'preference' ? 'preference' : v.type === 'satisfA' ? 'satisfaction_answer_A' : v.type === 'satisfB' ? 'satisfaction_answer_B' : (v.type || '');
-              eRows.push({ participant_id: base.participant_id, email: base.email, session_id: v.sessionId || '', shown_order: v.idx != null ? v.idx + 1 : '', task_id: v.taskId || '', event_type: et, event_value: v.value != null ? v.value : '', model: modelName(v.model), event_at: fmtTs(v.ts), event_ts: v.ts || '' });
-            });
-          }).catch(function () {});
-        }).then(function () {
-          return Store.listSurveys(uid).then(function (svs) {
-            (svs || []).forEach(function (sv) { if (sv && keep(sv.sessionId || sv.id)) sRows.push(Object.assign({ participant_id: base.participant_id, email: base.email, session_id: sv.sessionId || sv.id || '', completed_at: fmtTs(sv.completedAt) }, orderedAnswers('', sv.answers || {}, activeQuestions('surveyQuestions'), true))); });
-          }).catch(function () {});
+    if (!opts.returnSheets) toast('Building export...');
+    var run = ensureXLSX().then(function (X) {
+      // Load the active task set and the session list up front. The task set is the
+      // lookup table that turns each task_id into its full description + the two
+      // model outputs (the Tasks and Task summary sheets - the task is the unit of
+      // analysis); the session list documents every session play and maps internal
+      // session ids to their human join codes on every sheet.
+      return Promise.all([
+        Store.loadActiveTasks().catch(function () { return { tasks: [] }; }),
+        Store.listSessions().catch(function () { return []; })
+      ]).then(function (pre) {
+        var activeSet = pre[0] || { tasks: [] };
+        var sessions = pre[1] || [];
+        var sessById = {}; sessions.forEach(function (s) { if (s && s.id != null) sessById[String(s.id)] = s; });
+        // Also load the task set each in-scope session was pinned to, so a session
+        // whose set differs from the current active set (the admin changed it since)
+        // still resolves its task_ids to the text participants actually saw. The
+        // active set is the base; each pinned set overlays it (what was shown wins).
+        // For the aggregate, opts.sessionIds is a { sessionId: true } map of the
+        // ticked sessions; the single/all export uses `only` (one id, or null = all).
+        var ids = opts.sessionIds || null;
+        var pinnedIds = {};
+        sessions.forEach(function (s) { if (s.taskSetId && (ids ? ids[s.id] : (!only || s.id === only))) pinnedIds[s.taskSetId] = true; });
+        return Promise.all(Object.keys(pinnedIds).map(function (id) {
+          return (Store.loadTaskSet ? Store.loadTaskSet(id) : Promise.resolve({ tasks: [] })).catch(function () { return { tasks: [] }; });
+        })).then(function (pinnedSets) {
+          return buildWorkbook(X, activeSet, pinnedSets, sessions, sessById, parts, only, opts);
         });
       });
-      chain.then(function () {
-        var wb = X.utils.book_new();
-        X.utils.book_append_sheet(wb, X.utils.json_to_sheet(buildConventions(only)), 'Conventions');
-        X.utils.book_append_sheet(wb, X.utils.json_to_sheet(pRows.length ? pRows : [{}]), 'Participants');
-        X.utils.book_append_sheet(wb, X.utils.json_to_sheet(rRows.length ? rRows : [{}]), 'Responses');
-        X.utils.book_append_sheet(wb, X.utils.json_to_sheet(eRows.length ? eRows : [{}]), 'Events');
-        X.utils.book_append_sheet(wb, X.utils.json_to_sheet(sRows.length ? sRows : [{}]), 'Survey');
-        var stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-        var fname = only ? ('answerarena-session-' + (opts.sessionCode || only) + '-' + stamp + '.xlsx') : ('answerarena-data-' + stamp + '.xlsx');
-        X.writeFile(wb, fname);
-        toast('Export ready.');
-      });
-    }).catch(function (e) { toast('Export failed: ' + ((e && e.message) || 'error')); });
+    });
+    // Aggregate path: return the promise so the caller gets the in-memory sheet map
+    // (and handles its own errors/UI). Export path: fire-and-forget with a toast.
+    if (opts.returnSheets) return run;
+    run.catch(function (e) { toast('Export failed: ' + ((e && e.message) || 'error')); });
+  }
+  // Assemble and download the workbook once the task sets + sessions are loaded.
+  function buildWorkbook(X, activeSet, pinnedSets, sessions, sessById, parts, only, opts) {
+    var ids = opts.sessionIds || null;
+    // A response/event/survey is in scope if it belongs to the ticked set (aggregate)
+    // or the single/all export scope.
+    var keep = function (sid) { return ids ? !!ids[sid || ''] : (!only || (sid || '') === only); };
+    return Promise.resolve().then(function () {
+        var activeById = {}; (activeSet.tasks || []).forEach(function (t) { if (t && t.id != null) activeById[String(t.id)] = t; });
+        var taskById = {}; Object.keys(activeById).forEach(function (k) { taskById[k] = activeById[k]; });
+        (pinnedSets || []).forEach(function (set) { ((set && set.tasks) || []).forEach(function (t) { if (t && t.id != null) taskById[String(t.id)] = t; }); });
+        var pRows = [], rRows = [], eRows = [], sRows = [];
+        // Per-task aggregates for the Task summary sheet, and the set of every
+        // task_id that shows up anywhere in the exported data (so the Tasks sheet
+        // lists them even if the active set has since changed).
+        var agg = {}, seenTaskIds = {};
+        function aggOf(id) { return agg[id] || (agg[id] = { n: 0, baseline: 0, frontier: 0, tie: 0, prefSum: 0, prefN: 0, msSum: 0, msN: 0 }); }
+        var chain = Promise.resolve();
+        parts.forEach(function (p) {
+          var uid = p._id, c = p.condition || {};
+          var completed = Object.keys(p.completedSessions || {});
+          var base = {
+            participant_id: p.participantId || '', account_id: uid, email: p.email || '',
+            status: p.status || '', current_session_id: p.sessionId || '',
+            current_session_code: sessCode(p.sessionId, sessById),
+            // How far they got: size of their assigned set (most recent session) and
+            // how many comparisons they actually submitted (filled in below). A
+            // drop-out shows e.g. 7 submitted of 20 assigned, with status "playing".
+            comparisons_assigned: (p.order && p.order.length != null) ? p.order.length : '',
+            comparisons_submitted: 0,
+            played_session_ids: Object.keys(p.playedSessions || {}).join(', '),
+            completed_session_ids: completed.join(', '),
+            completed_this_session_at: only ? ((p.completedSessions && p.completedSessions[only]) ? fmtTs(p.completedSessions[only]) : 'no') : undefined,
+            // Per-participant 2x2 group as 1/0 (1 = treatment, 0 = control), blank if
+            // the factor was not varied for this participant's session.
+            cost_transparency: condBit(c.transparency, c.transparencyOn, 'translated'),
+            firm_pay: condBit(c.incentive, c.incentiveOn, 'firm'),
+            registered_at: fmtTs(p.createdAt)
+          };
+          if (!only) delete base.completed_this_session_at;
+          var prow = Object.assign({}, base, orderedAnswers('reg_', p.registration || {}, activeQuestions('registrationQuestions'), false));
+          pRows.push(prow);
+          chain = chain.then(function () {
+            return Store.listResponses(uid).then(function (rs) {
+              // One ordered list per participant: the submitted answers plus the
+              // in-progress draft, sorted by session then shown_order (idx) so the
+              // Responses sheet reads 1, 2, 3, ... as the participant saw them.
+              var items = [];
+              rs.forEach(function (v) { if (keep(v.sessionId)) items.push({ v: v, sub: 'yes', ms: v.responseMs, ts: v.ts }); });
+              var dr = p.draftResponse;
+              if (dr && keep(dr.sessionId)) items.push({ v: dr, sub: 'no (draft)', ms: '', ts: dr.updatedAt });
+              var ord = function (x) { return (x == null || x === '' || !isFinite(Number(x))) ? 1e9 : Number(x); };
+              items.sort(function (a, b) {
+                var sa = a.v.sessionId || '', sb = b.v.sessionId || '';
+                if (sa !== sb) return sa < sb ? -1 : 1;
+                return ord(a.v.idx) - ord(b.v.idx);
+              });
+              items.forEach(function (it) {
+                rRows.push(respRow(base, it.v, it.sub, it.ms, it.ts, taskById, sessById));
+                if (it.v.taskId != null) seenTaskIds[String(it.v.taskId)] = true;
+                // Aggregate only SUBMITTED comparisons into the per-task summary.
+                if (it.sub === 'yes' && it.v.taskId != null) {
+                  var a = aggOf(String(it.v.taskId)); a.n++;
+                  var cm = it.v.chosenOutput;
+                  if (cm === 'o1') a.baseline++; else if (cm === 'o2') a.frontier++; else if (cm === 'tie') a.tie++;
+                  var pm = Number(it.v.prefModelValue); if (it.v.prefModelValue != null && isFinite(pm)) { a.prefSum += pm; a.prefN++; }
+                  var ms = Number(it.v.responseMs); if (it.v.responseMs != null && isFinite(ms)) { a.msSum += ms; a.msN++; }
+                }
+              });
+              // Answers tracked so far for this participant (in this export's scope).
+              prow.comparisons_submitted = items.reduce(function (n, it) { return n + (it.sub === 'yes' ? 1 : 0); }, 0);
+            }).catch(function () {});
+          }).then(function () {
+            return Store.listEvents(uid).then(function (evs) {
+              evs.sort(function (a, b) { return tsMs(a.ts) - tsMs(b.ts); });
+              evs.forEach(function (v) {
+                if (!keep(v.sessionId)) return;
+                if (v.taskId != null) seenTaskIds[String(v.taskId)] = true;
+                var et = v.type === 'choice' ? 'side_choice' : v.type === 'preference' ? 'preference' : v.type === 'satisfA' ? 'satisfaction_answer_A' : v.type === 'satisfB' ? 'satisfaction_answer_B' : (v.type || '');
+                eRows.push({ participant_id: base.participant_id, account_id: uid, email: base.email, session_id: v.sessionId || '', session_code: sessCode(v.sessionId, sessById), shown_order: v.idx != null ? v.idx + 1 : '', task_id: v.taskId || '', event_type: et, event_value: v.value != null ? v.value : '', model: modelName(v.model), event_at: fmtTs(v.ts), event_ts: v.ts || '' });
+              });
+            }).catch(function () {});
+          }).then(function () {
+            return Store.listSurveys(uid).then(function (svs) {
+              (svs || []).forEach(function (sv) { if (sv && keep(sv.sessionId || sv.id)) sRows.push(Object.assign({ participant_id: base.participant_id, account_id: uid, email: base.email, session_id: sv.sessionId || sv.id || '', session_code: sessCode(sv.sessionId || sv.id, sessById), completed_at: fmtTs(sv.completedAt) }, orderedAnswers('', sv.answers || {}, activeQuestions('surveyQuestions'), true))); });
+            }).catch(function () {});
+          });
+        });
+        return chain.then(function () {
+          // Tasks sheet: one row per task in the active set OR seen in the data, so
+          // every task_id used elsewhere resolves to its full text and outputs.
+          Object.keys(taskById).forEach(function (id) { seenTaskIds[id] = true; });
+          var taskRows = Object.keys(seenTaskIds).sort(taskIdSort).map(function (id) {
+            var t = taskById[id] || {}, a = agg[id];
+            return {
+              task_id: id, title: t.title || '', domain: t.domain || '', complexity: t.complexity || '',
+              in_active_set: activeById[id] ? 'yes' : 'no', n_responses: a ? a.n : 0,
+              task_description: cellCap(t.task || t.prompt || ''),
+              output_baseline: cellCap(t.outputA || ''), output_frontier: cellCap(t.outputB || ''),
+              cost_baseline_usd: t.costA != null ? t.costA : '', cost_frontier_usd: t.costB != null ? t.costB : ''
+            };
+          });
+          // Task summary sheet: analysis-ready aggregates, one row per task, over
+          // the submitted responses in this export's scope.
+          var sumRows = Object.keys(agg).sort(taskIdSort).map(function (id) {
+            var a = agg[id], t = taskById[id] || {}, decisive = a.baseline + a.frontier;
+            return {
+              task_id: id, title: t.title || '', domain: t.domain || '', complexity: t.complexity || '',
+              n_responses: a.n, n_baseline_preferred: a.baseline, n_frontier_preferred: a.frontier, n_tie: a.tie,
+              frontier_win_rate: decisive ? round4(a.frontier / decisive) : '',
+              mean_preference_model: a.prefN ? round4(a.prefSum / a.prefN) : '',
+              mean_response_ms: a.msN ? Math.round(a.msSum / a.msN) : '',
+              cost_baseline_usd: t.costA != null ? t.costA : '', cost_frontier_usd: t.costB != null ? t.costB : ''
+            };
+          });
+          var sheetMap = {
+            Conventions: buildConventions(only),
+            Sessions: buildSessionRows(sessions, parts, keep),
+            Participants: pRows,
+            Tasks: taskRows,
+            'Task summary': sumRows,
+            Responses: rRows,
+            Events: eRows,
+            Survey: sRows
+          };
+          // Aggregate path (Data analytics): hand the sheet map back so it can be
+          // held in memory and have imported workbooks stacked onto it. Export path:
+          // write the multi-tab workbook in SHEET_ORDER and download it.
+          if (opts.returnSheets) return sheetMap;
+          var wb = X.utils.book_new();
+          SHEET_ORDER.forEach(function (name) { var rows = sheetMap[name] || []; X.utils.book_append_sheet(wb, X.utils.json_to_sheet(rows.length ? rows : [{}]), name); });
+          var stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+          var fname = only ? ('answerarena-session-' + (opts.sessionCode || only) + '-' + stamp + '.xlsx') : ('answerarena-data-' + stamp + '.xlsx');
+          X.writeFile(wb, fname);
+          toast('Export ready.');
+        });
+    });
+  }
+  // Build the aggregate sheet map for the ticked sessions (a { sessionId: true }
+  // map) over the given participants, without downloading — the Data-analytics
+  // Section 2 keeps it in memory. Reuses the exact export builder above.
+  function collectAggregateSheets(parts, sessionIdMap) {
+    return exportExcel(parts, { sessionIds: sessionIdMap, returnSheets: true });
+  }
+  // Human session code for an internal session id ('_none' = the default no-code
+  // play; unknown ids fall back to the raw id so nothing is lost).
+  function sessCode(id, map) {
+    if (id == null || id === '') return '';
+    if (String(id) === '_none') return '(default / no code)';
+    var s = map && map[String(id)];
+    return (s && s.code) ? s.code : String(id);
+  }
+  // Excel caps a cell at 32,767 chars; keep long model outputs safely under it so
+  // the whole workbook never fails to write on one oversized answer.
+  function cellCap(s) { s = String(s == null ? '' : s); return s.length > 32000 ? s.slice(0, 32000) + '… [truncated]' : s; }
+  function round4(n) { return Math.round(n * 10000) / 10000; }
+  // Sort task ids naturally so T2 precedes T10 (falls back to string order).
+  function taskIdSort(a, b) {
+    var na = parseInt(String(a).replace(/[^0-9]/g, ''), 10), nb = parseInt(String(b).replace(/[^0-9]/g, ''), 10);
+    if (isFinite(na) && isFinite(nb) && na !== nb) return na - nb;
+    return String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0;
+  }
+  // The Sessions sheet: one row per session (documenting each session play), with
+  // its snapshotted 2x2 + flow settings and a participant count from this export's
+  // scope. Adds a synthetic row for the default no-code play if anyone took it.
+  function buildSessionRows(sessions, parts, keep) {
+    keep = keep || function () { return true; };
+    var counts = {};
+    (parts || []).forEach(function (p) {
+      var seen = {};
+      if (p.sessionId) seen[p.sessionId] = true;
+      Object.keys(p.playedSessions || {}).forEach(function (sid) { seen[sid] = true; });
+      Object.keys(p.completedSessions || {}).forEach(function (sid) { seen[sid] = true; });
+      Object.keys(seen).forEach(function (sid) { counts[sid] = (counts[sid] || 0) + 1; });
+    });
+    var list = (sessions || []).slice().filter(function (s) { return keep(s.id); });
+    list.sort(function (a, b) { return tsMs(b.createdAt) - tsMs(a.createdAt); });
+    var rows = list.map(function (s) {
+      var f = (s.condition && s.condition.factors) || {};
+      var lim = s.comparisonsPerUser;
+      return {
+        session_id: s.id || '', session_code: s.code || '', name: s.name || '', status: s.status || 'open',
+        cost_transparency_varied: f.transparency ? 'yes' : 'no', firm_pay_varied: f.incentive ? 'yes' : 'no',
+        comparisons_per_participant: (lim == null) ? '(live setting)' : ((Number(lim) || 0) || 'whole active set'),
+        randomize_order: (s.randomizeOrder === false) ? 'no' : 'yes',
+        task_set_id: s.taskSetId || '', participants: counts[s.id] || 0, created_at: fmtTs(s.createdAt)
+      };
+    });
+    if (keep('_none') && counts['_none']) {
+      rows.push({ session_id: '_none', session_code: '(default / no code)', name: 'Default (no session code)', status: 'n/a', cost_transparency_varied: 'n/a', firm_pay_varied: 'n/a', comparisons_per_participant: '(live setting)', randomize_order: 'n/a', task_set_id: '', participants: counts['_none'], created_at: '' });
+    }
+    return rows;
   }
   // o1/o2 are the underlying models: o1 = outputA = baseline, o2 = outputB = frontier.
   function modelName(id) { return id === 'o1' ? 'baseline' : (id === 'o2' ? 'frontier' : (id || '')); }
-  // One Responses row (shared by submitted answers and the saved draft).
-  function respRow(base, v, submitted, responseMs, ts) {
+  // One Responses row (shared by submitted answers and the saved draft). taskById
+  // adds the task's title/domain/complexity so each row is self-describing for a
+  // task-level pivot without a lookup; sessById maps the session id to its code.
+  function respRow(base, v, submitted, responseMs, ts, taskById, sessById) {
+    var t = (taskById && v.taskId != null && taskById[String(v.taskId)]) || {};
     return {
-      participant_id: base.participant_id, email: base.email, session_id: v.sessionId || '',
-      shown_order: v.idx != null ? v.idx + 1 : '', task_id: v.taskId, submitted: submitted,
+      participant_id: base.participant_id, account_id: base.account_id, email: base.email,
+      session_id: v.sessionId || '', session_code: sessCode(v.sessionId, sessById || {}),
+      shown_order: v.idx != null ? v.idx + 1 : '', task_id: v.taskId,
+      task_title: t.title || '', task_domain: t.domain || '', task_complexity: t.complexity || '',
+      submitted: submitted,
       choice: v.choice || '', chosen_model: modelName(v.chosenOutput),
       left_model: modelName(v.leftOutput), right_model: modelName(v.rightOutput),
       preference: v.prefLabel || '',
@@ -1096,15 +1394,36 @@
     if (level == null || level === '') return '';
     return level === treatmentLevel ? 1 : 0;
   }
-  // The "Conventions" sheet: documents every column used in the export.
+  // The "Conventions" sheet: documents every sheet and column used in the export
+  // and the keys that join them - the source of truth for the workbook.
   function buildConventions(only) {
     var rows = [];
     function add(sheet, col, desc) { rows.push({ sheet: sheet, column: col, description: desc }); }
-    add('Participants', 'participant_id', "The participant's own ID (e.g. a Prolific ID) if they entered one; blank otherwise.");
+    // How the workbook fits together (the two unique IDs and how the sheets join).
+    add('(guide)', 'workbook', 'Sheets: Sessions (one row per session play) · Participants (one row per person) · Tasks (one row per task pair = the unit of analysis) · Task summary (per-task aggregates) · Responses (one row per comparison) · Events (one row per click/change) · Survey (one row per completed survey).');
+    add('(guide)', 'participant key', 'account_id is the unique, always-present participant ID (the Firebase anonymous UID). Join every sheet to Participants on account_id. participant_id (a Prolific-style ID) and email are OPTIONAL and usually blank, so do NOT join on them.');
+    add('(guide)', 'task key', 'task_id is the unique task (task-pair) ID. Join Responses / Events / Task summary to Tasks on task_id to get the task description and the two answers. The task is the intended unit of analysis - use the Task summary sheet, or group Responses by task_id.');
+    add('(guide)', 'session key', 'session_id is the internal session ID; session_code is its human join code. "_none" = the default no-code play. Join to the Sessions sheet on session_id.');
+    add('(guide)', 'models', 'Two systems are compared, never named to participants: baseline (= Output A) and frontier (= Output B). Left/right placement is randomised per participant, so use *_model columns, not left/right.');
+    add('Sessions', 'session_id', 'Internal unique ID of the session.');
+    add('Sessions', 'session_code', 'The 6-character join code participants enter (or "_none" for the default no-code play).');
+    add('Sessions', 'name', 'Optional admin label for the session.');
+    add('Sessions', 'status', 'open (accepting joins), closed (no new joins), or n/a for the default play.');
+    add('Sessions', 'cost_transparency_varied', 'yes if the cost-transparency factor was varied between participants in this session (snapshotted at creation); otherwise no.');
+    add('Sessions', 'firm_pay_varied', 'yes if the firm-pay factor was varied between participants in this session; otherwise no.');
+    add('Sessions', 'comparisons_per_participant', 'How many comparisons each participant is shown ("whole active set" = all of them), snapshotted at creation.');
+    add('Sessions', 'randomize_order', 'yes if the comparison order is randomised per participant.');
+    add('Sessions', 'task_set_id', 'Internal ID of the task set this session was pinned to at creation (blank = built-in default / live active set).');
+    add('Sessions', 'participants', 'Number of participants (in this export) who played this session.');
+    add('Sessions', 'created_at', 'When the session was created.');
+    add('Participants', 'participant_id', "The participant's own ID (e.g. a Prolific ID) if they entered one; blank otherwise. NOT a reliable key - use account_id.");
+    add('Participants', 'account_id', 'Unique, always-present participant ID (Firebase anonymous UID). The key to join every other sheet on.');
     add('Participants', 'email', "Legacy column - players take part anonymously, so this is blank (kept for older accounts).");
-    add('Participants', 'account_id', 'Internal unique account ID (Firebase anonymous UID) for this participant.');
     add('Participants', 'status', 'Where the participant is in the flow: registered, playing, survey, or done.');
     add('Participants', 'current_session_id', 'Internal ID of the session the participant is currently in.');
+    add('Participants', 'current_session_code', 'Join code of the session the participant is currently in.');
+    add('Participants', 'comparisons_assigned', 'How many comparisons this participant was assigned in their most recent session (their shuffled set size); blank if they never started.');
+    add('Participants', 'comparisons_submitted', 'How many comparisons this participant actually submitted (in this export\'s scope). A drop-out shows fewer submitted than assigned with status "playing" - this is the count of answers collected so far. Every submitted answer is also a row on the Responses sheet.');
     add('Participants', 'played_session_ids', 'Internal IDs of every session the participant has started (comma-separated).');
     add('Participants', 'completed_session_ids', 'Internal IDs of every session the participant has finished (comma-separated).');
     if (only) add('Participants', 'completed_this_session_at', 'When the participant finished THIS session, or "no" if not finished.');
@@ -1113,11 +1432,37 @@
     add('Participants', 'registered_at', 'When the participant registered.');
     var regQs = (cfg.registrationQuestions && cfg.registrationQuestions.length) ? cfg.registrationQuestions : (D.registrationQuestions || []);
     regQs.forEach(function (q) { if (!q.system) add('Participants', 'reg_' + q.id, 'Registration answer: ' + (q.label || q.id)); });
-    add('Responses', 'participant_id', "The participant's ID (see Participants).");
-    add('Responses', 'email', "The participant's e-mail.");
+    add('Tasks', 'task_id', 'Unique task (task-pair) ID - the Task ID column of the uploaded set. Join key for Responses / Events / Task summary.');
+    add('Tasks', 'title', 'Short title of the task (if provided).');
+    add('Tasks', 'domain', 'Task domain/category (if provided).');
+    add('Tasks', 'complexity', 'Task complexity label (if provided).');
+    add('Tasks', 'in_active_set', 'yes if this task is in the current active task set; no if it only appears in older recorded data (e.g. the active set changed since).');
+    add('Tasks', 'n_responses', 'How many submitted comparisons in this export used this task.');
+    add('Tasks', 'task_description', 'The full problem text shown to participants (the task). Long text is capped at ~32,000 characters.');
+    add('Tasks', 'output_baseline', "The baseline model's answer (shown as Output A). Capped at ~32,000 characters.");
+    add('Tasks', 'output_frontier', "The frontier model's answer (shown as Output B). Capped at ~32,000 characters.");
+    add('Tasks', 'cost_baseline_usd', 'US$ cost of the baseline answer for this task (blank if none provided).');
+    add('Tasks', 'cost_frontier_usd', 'US$ cost of the frontier answer for this task (blank if none provided).');
+    add('Task summary', 'task_id', 'The task these aggregates are for (join to Tasks for the text). One row per task.');
+    add('Task summary', 'title / domain / complexity', 'Copied from Tasks for convenience.');
+    add('Task summary', 'n_responses', 'Number of submitted comparisons for this task in this export.');
+    add('Task summary', 'n_baseline_preferred', 'How many participants preferred the baseline answer.');
+    add('Task summary', 'n_frontier_preferred', 'How many participants preferred the frontier answer.');
+    add('Task summary', 'n_tie', 'How many participants marked the two answers equally good.');
+    add('Task summary', 'frontier_win_rate', 'n_frontier_preferred / (n_frontier_preferred + n_baseline_preferred), i.e. the frontier win share among decisive (non-tie) choices; blank if all ties.');
+    add('Task summary', 'mean_preference_model', 'Mean of preference_model over this task (-3..+3): negative favours baseline, positive favours frontier.');
+    add('Task summary', 'mean_response_ms', 'Mean decision time (milliseconds) for this task.');
+    add('Task summary', 'cost_baseline_usd / cost_frontier_usd', 'The two answers\' US$ costs for this task (from the uploaded set).');
+    add('Responses', 'participant_id', "The participant's optional ID (see Participants); usually blank - join on account_id.");
+    add('Responses', 'account_id', 'Unique participant ID (see Participants). The reliable join key.');
+    add('Responses', 'email', "The participant's e-mail (legacy; usually blank).");
     add('Responses', 'session_id', 'Internal ID of the session this comparison belongs to.');
+    add('Responses', 'session_code', 'Join code of that session ("_none" = default no-code play).');
     add('Responses', 'shown_order', "Position of this comparison in the participant's randomised sequence (1 = first shown).");
-    add('Responses', 'task_id', 'ID of the task pair shown (e.g. T18); the Task ID column of the uploaded set.');
+    add('Responses', 'task_id', 'ID of the task pair shown (e.g. T18); join to Tasks for the full description.');
+    add('Responses', 'task_title', 'Title of the task shown (copied from the task set for convenience).');
+    add('Responses', 'task_domain', 'Domain of the task shown.');
+    add('Responses', 'task_complexity', 'Complexity of the task shown.');
     add('Responses', 'submitted', '"yes" for a submitted answer; "no (draft)" for an in-progress answer saved if the participant left before pressing Next.');
     add('Responses', 'choice', 'Which side the participant preferred: left, right, or tie (equally good).');
     add('Responses', 'chosen_model', 'Which underlying model the participant preferred: baseline, frontier, or tie.');
@@ -1135,19 +1480,23 @@
     add('Responses', 'decided_ts', 'Decision time as epoch milliseconds (useful for sorting).');
     add('Responses', 'cost_transparency', "The participant's cost-transparency group, 1/0 (see Participants).");
     add('Responses', 'firm_pay', "The participant's firm-pay group, 1/0 (see Participants).");
-    add('Events', 'participant_id', "The participant's ID.");
-    add('Events', 'email', "The participant's e-mail.");
+    add('Events', 'participant_id', "The participant's optional ID (usually blank - join on account_id).");
+    add('Events', 'account_id', 'Unique participant ID (see Participants). The reliable join key.');
+    add('Events', 'email', "The participant's e-mail (legacy; usually blank).");
     add('Events', 'session_id', 'Internal ID of the session.');
+    add('Events', 'session_code', 'Join code of that session.');
     add('Events', 'shown_order', 'Position of the comparison this event refers to (1 = first shown).');
     add('Events', 'task_id', 'ID of the task pair.');
     add('Events', 'event_type', 'What the participant did: side_choice (tapped an answer or "equally good") or preference (moved the 7-point bar; event_value is -3..+3). Older data may also have satisfaction_answer_A/B.');
-    add('Events', 'event_value', 'The value set: left/right/tie for a side_choice, -3..+3 for a preference (older data: 1-5 for a satisfaction rating).');
-    add('Events', 'model', 'Which underlying model the event refers to: baseline, frontier, or tie.');
+    add('Events', 'event_value', 'The value set: left/right/tie for a side_choice, -3..+3 for a preference in the DISPLAYED A/B frame (A = left; join to the matching Responses row for the model framing). Older data: 1-5 for a satisfaction rating.');
+    add('Events', 'model', 'For a side_choice, which underlying model was tapped: baseline, frontier, or tie. Blank for preference events.');
     add('Events', 'event_at', 'Local date/time of the event.');
     add('Events', 'event_ts', 'Event time as epoch milliseconds. Every change is logged, so re-selections appear as multiple rows; the last per comparison is the final value.');
-    add('Survey', 'participant_id', "The participant's ID.");
-    add('Survey', 'email', "The participant's e-mail.");
+    add('Survey', 'participant_id', "The participant's optional ID (usually blank - join on account_id).");
+    add('Survey', 'account_id', 'Unique participant ID (see Participants). The reliable join key.');
+    add('Survey', 'email', "The participant's e-mail (legacy; usually blank).");
     add('Survey', 'session_id', 'Internal ID of the session the survey was taken for.');
+    add('Survey', 'session_code', 'Join code of that session.');
     add('Survey', 'completed_at', 'When the participant submitted the survey for this session.');
     var surQs = (cfg.surveyQuestions && cfg.surveyQuestions.length) ? cfg.surveyQuestions : (D.surveyQuestions || []);
     surQs.forEach(function (q) { add('Survey', q.id, 'Survey answer: ' + (q.label || q.id)); });
@@ -1178,12 +1527,2098 @@
   function fmtTs(ts) { var m = tsMs(ts); return m ? new Date(m).toLocaleString() : ''; }
   function ensureXLSX() { if (XLSX) return Promise.resolve(XLSX); return import('https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs').then(function (m) { XLSX = m; return m; }); }
 
+  /* =====================================================================
+     DATA ANALYTICS  (the "Data analytics" tab)
+     ---------------------------------------------------------------------
+     1) Data source   - tick sessions and/or import an exported Excel/CSV, Load.
+     2) Aggregate     - consolidate every loaded source into one Excel (same
+                        multi-tab structure as the export), held in memory.
+     3) Process       - run Python (Pyodide) or R (WebR) on a chosen table from
+                        the aggregate, entirely in the browser; output below.
+     ===================================================================== */
+  function daLoadSaved(key, dflt) { try { var v = localStorage.getItem(key); return v != null ? v : dflt; } catch (e) { return dflt; } }
+  // Bump DA_TPL_VERSION whenever the bundled Python/R templates change. A saved
+  // script from a previous version lives in localStorage and would otherwise
+  // SHADOW the current template (daLoadSaved returns the saved copy) — that is how
+  // an old, now-broken script kept running and looked like "Python won't run".
+  // On a version change we drop the saved code so the fixed template loads fresh.
+  var DA_TPL_VERSION = '2026-07-08-ci-review';
+  function daMigrateTemplates() {
+    try {
+      if (localStorage.getItem('aa-da:ver') === DA_TPL_VERSION) return;
+      localStorage.removeItem('aa-da:py');
+      localStorage.removeItem('aa-da:r');
+      localStorage.setItem('aa-da:ver', DA_TPL_VERSION);
+    } catch (e) { /* ignore */ }
+  }
+  function emptySheetMap() { var m = {}; SHEET_ORDER.forEach(function (n) { m[n] = []; }); return m; }
+  // Stack every sheet of an imported workbook onto the aggregate map: matched onto
+  // an existing tab by (case-insensitive) name, else added as its own tab.
+  function mergeBookIntoSheetMap(map, book) {
+    (book.sheets || []).forEach(function (sh) {
+      var key = Object.keys(map).filter(function (k) { return k.toLowerCase() === String(sh.name).toLowerCase(); })[0];
+      if (!key) { key = String(sh.name); if (!map[key]) map[key] = []; }
+      map[key] = (map[key] || []).concat(sh.rows || []);
+    });
+  }
+  // Tab order for the aggregate: the standard sheets first, then any extra
+  // (imported) sheets in insertion order.
+  function orderSheetNames(map) {
+    var order = SHEET_ORDER.filter(function (n) { return map[n] !== undefined; });
+    Object.keys(map).forEach(function (k) { if (order.indexOf(k) < 0) order.push(k); });
+    return order;
+  }
+  function summarizeMap(m) {
+    return (m.Responses || []).length + ' response' + ((m.Responses || []).length === 1 ? '' : 's')
+      + ', ' + (m.Participants || []).length + ' participant' + ((m.Participants || []).length === 1 ? '' : 's')
+      + ' across ' + (m.Sessions || []).length + ' session' + ((m.Sessions || []).length === 1 ? '' : 's');
+  }
+  // A valid, unique Excel sheet name (<=31 chars, no : \ / ? * [ ], no dupes).
+  function safeSheetName(name, used) {
+    var n = String(name).replace(/[\\\/\?\*\[\]:]/g, ' ').slice(0, 31).trim() || 'Sheet';
+    var base = n, i = 2;
+    while (used[n.toLowerCase()]) { var suf = ' (' + i + ')'; n = base.slice(0, 31 - suf.length) + suf; i++; }
+    used[n.toLowerCase()] = true; return n;
+  }
+
+  /* ---- Section 2 "model provisioning" charts (over / indifference / under) ----
+     For each comparison, preferring Opus (the bigger model) = OVER-provisioning,
+     a tie = INDIFFERENCE, preferring Haiku (the smaller model) = UNDER-provisioning.
+     We chart the % of each per task (Wilson CIs), then averaged across tasks by
+     task type and by domain (each task weighted equally, with a delta-method CI
+     that pools the per-task binomial errors, so unequal responses per task don't
+     bias the group averages - see daGroupRate). */
+  // task_id -> complexity (c) + domain (d), from the study's task list; used when
+  // the exported Responses rows don't carry task_complexity/task_domain.
+  var DA_TASK_META = {
+    'T075': { c: 'Simple', d: 'Creative & Marketing' }, 'T080': { c: 'Simple', d: 'Creative & Marketing' },
+    'T083': { c: 'Simple', d: 'Customer Support' }, 'T086': { c: 'Simple', d: 'Customer Support' },
+    'T051': { c: 'Simple', d: 'Data Analysis' }, 'T064': { c: 'Simple', d: 'Extraction & Classification' },
+    'T022': { c: 'Simple', d: 'Knowledge Q&A' }, 'T025': { c: 'Simple', d: 'Knowledge Q&A' },
+    'T067': { c: 'Simple', d: 'Planning & Strategy' }, 'T073': { c: 'Simple', d: 'Planning & Strategy' },
+    'T099': { c: 'Simple', d: 'Review & QA' }, 'T013': { c: 'Simple', d: 'Summarization' },
+    'T016': { c: 'Simple', d: 'Summarization' }, 'T001': { c: 'Simple', d: 'Writing' },
+    'T005': { c: 'Simple', d: 'Writing' }, 'T082': { c: 'Complex', d: 'Creative & Marketing' },
+    'T085': { c: 'Complex', d: 'Customer Support' }, 'T054': { c: 'Complex', d: 'Data Analysis' },
+    'T056': { c: 'Complex', d: 'Data Analysis' }, 'T065': { c: 'Complex', d: 'Extraction & Classification' },
+    'T026': { c: 'Complex', d: 'Knowledge Q&A' }, 'T029': { c: 'Complex', d: 'Knowledge Q&A' },
+    'T046': { c: 'Complex', d: 'Math & Reasoning' }, 'T048': { c: 'Complex', d: 'Math & Reasoning' },
+    'T071': { c: 'Complex', d: 'Planning & Strategy' }, 'T098': { c: 'Complex', d: 'Review & QA' },
+    'T018': { c: 'Complex', d: 'Summarization' }, 'T019': { c: 'Complex', d: 'Summarization' },
+    'T002': { c: 'Complex', d: 'Writing' }, 'T009': { c: 'Complex', d: 'Writing' }
+  };
+  // SVG element (var()-based colours must be passed via a `style` attribute, since
+  // SVG presentation attributes don't resolve CSS custom properties).
+  function svgEl(tag, attrs, kids) {
+    var n = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    if (attrs) Object.keys(attrs).forEach(function (k) { if (k === 'text') n.textContent = attrs[k]; else n.setAttribute(k, attrs[k]); });
+    (kids || []).forEach(function (c) { n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
+    return n;
+  }
+  // Wilson score 95% interval for a proportion x/n (the right CI for a rate), 0..1.
+  function daWilson(x, n) {
+    if (n <= 0) return { lo: 0, hi: 0 };
+    var z = 1.96, p = x / n, d = 1 + z * z / n;
+    var c = (p + z * z / (2 * n)) / d, h = (z / d) * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n));
+    return { lo: Math.max(0, c - h), hi: Math.min(1, c + h) };
+  }
+  // Group rate (by task type / domain) = the MEAN of the per-task proportions, so
+  // each task is weighted equally regardless of how many responses it got. Its 95%
+  // CI comes from the DELTA METHOD: SE = sqrt(sum of each task's binomial variance)
+  // / k, with the Agresti-Coull adjusted variance so a task at 0% or 100% still
+  // contributes uncertainty. The 30 tasks are the whole study (fixed, not sampled),
+  // so only the finite student responses carry error — a t-interval ACROSS tasks
+  // would add spurious task-sampling variance and, with only 2–4 tasks per domain,
+  // blow the interval out to span 0–100%. `arr` holds task objects with `.n` and
+  // the outcome count `ck` (cOver / cInd / cUnder). Returns { mean, lo, hi } (%).
+  function daGroupRate(arr, ck) {
+    var k = arr.length, z = 1.96; if (!k) return { mean: NaN, lo: NaN, hi: NaN, k: 0 };
+    var mean = 0, sumVar = 0;
+    arr.forEach(function (t) {
+      var x = t[ck], n = t.n;
+      mean += (n > 0 ? x / n : 0);                       // equal-weight mean of per-task rates
+      var nt = n + z * z, pt = (x + z * z / 2) / nt;      // Agresti-Coull adjusted proportion
+      sumVar += pt * (1 - pt) / nt;                       // this task's (regularised) variance
+    });
+    mean = 100 * mean / k;
+    var se = 100 * Math.sqrt(sumVar) / k;                 // delta-method SE, in percent
+    return { mean: mean, lo: Math.max(0, mean - z * se), hi: Math.min(100, mean + z * se), k: k };
+  }
+  // From the aggregate Responses sheet: per-task over/indifference/under rates
+  // (% Opus / % tie / % Haiku) + Wilson CIs, plus the group averages (by task type
+  // and by domain) as equal-weight means across tasks with delta-method CIs
+  // (daGroupRate). Drafts are excluded.
+  function daProvisionData(sheetMap) {
+    var resp = (sheetMap && sheetMap.Responses) || [];
+    var byTask = {};
+    resp.forEach(function (r) {
+      var sub = r.submitted;
+      if (sub != null && sub !== '' && String(sub).toLowerCase() !== 'yes') return;   // skip drafts
+      var t = String(r.task_id == null ? '' : r.task_id).trim(); if (!t) return;
+      var cm = String(r.chosen_model == null ? '' : r.chosen_model).trim().toLowerCase();
+      // Classify BEFORE creating the task entry: a row with an unrecognised
+      // chosen_model (possible in an imported foreign CSV) must not leave an
+      // n=0 task behind - that used to render NaN% bars and a phantom
+      // empty-label row in the by-type / by-domain charts.
+      var cat = cm === 'frontier' ? 'over' : (cm === 'tie' ? 'ind' : (cm === 'baseline' ? 'under' : ''));
+      if (!cat) return;
+      var o = byTask[t] || (byTask[t] = { n: 0, over: 0, ind: 0, under: 0, cx: '', dm: '' });
+      o[cat]++;
+      o.n++;
+      if (!o.cx) {                                        // resolve complexity/domain once per task
+        var meta = DA_TASK_META[t] || {};
+        var dc = r.task_complexity == null ? '' : String(r.task_complexity).trim();
+        var dd = r.task_domain == null ? '' : String(r.task_domain).trim();
+        o.cx = (dc && dc.toLowerCase() !== 'nan') ? dc : (meta.c || '(unknown)');
+        o.dm = (dd && dd.toLowerCase() !== 'nan') ? dd : (meta.d || '(unknown)');
+      }
+    });
+    var tasks = Object.keys(byTask).map(function (t) {
+      var o = byTask[t];
+      return { task: t, n: o.n, cx: o.cx, dm: o.dm,
+        cOver: o.over, cInd: o.ind, cUnder: o.under,   // raw counts (for the delta-method group CI)
+        over: 100 * o.over / o.n, ind: 100 * o.ind / o.n, under: 100 * o.under / o.n,
+        overCI: daWilson(o.over, o.n), indCI: daWilson(o.ind, o.n), underCI: daWilson(o.under, o.n) };
+    });
+    function aggBy(keyFn) {
+      var groups = {};
+      tasks.forEach(function (t) { var k = keyFn(t); (groups[k] = groups[k] || []).push(t); });
+      return Object.keys(groups).sort().map(function (k) {
+        var arr = groups[k];
+        return { label: k, nTasks: arr.length,
+          over: daGroupRate(arr, 'cOver'), ind: daGroupRate(arr, 'cInd'), under: daGroupRate(arr, 'cUnder') };
+      });
+    }
+    return { tasks: tasks, byType: aggBy(function (t) { return t.cx; }), byDomain: aggBy(function (t) { return t.dm; }) };
+  }
+  var DA_PROV = {
+    over: { c: '#e67e22', name: 'Over-provision (Opus)' },
+    ind: { c: '#9a978f', name: 'Indifferent (tie)' },
+    under: { c: '#3d7bd6', name: 'Under-provision (Haiku)' }
+  };
+  // Horizontal grouped-bar SVG: one band per group, three bars (over/ind/under)
+  // each with a 95% CI whisker. Each group's bars are objects with `.value`
+  // (per-task) or `.mean` (aggregate) plus `.lo`/`.hi` in percent.
+  function daProvChart(groups, labelW) {
+    var W = 760, bandH = 46, top = 6, legendH = 24, bottom = 24;
+    var plotL = labelW, plotR = W - 14, plotW = plotR - plotL;
+    var H = top + legendH + groups.length * bandH + bottom;
+    function xs(v) { return plotL + Math.max(0, Math.min(100, v)) / 100 * plotW; }
+    var svg = svgEl('svg', { width: '100%', viewBox: '0 0 ' + W + ' ' + H, style: 'max-width:' + W + 'px;display:block;' });
+    [0, 25, 50, 75, 100].forEach(function (g) {                 // gridlines + % ticks
+      svg.appendChild(svgEl('line', { x1: xs(g), y1: top + legendH, x2: xs(g), y2: H - bottom, style: 'stroke:var(--line);stroke-width:1;' }));
+      svg.appendChild(svgEl('text', { x: xs(g), y: H - bottom + 14, 'text-anchor': 'middle', 'font-size': '10', style: 'fill:var(--muted);' }, [g + '%']));
+    });
+    var lx = plotL;                                            // legend
+    ['over', 'ind', 'under'].forEach(function (k) {
+      svg.appendChild(svgEl('rect', { x: lx, y: top, width: '11', height: '11', rx: '2', fill: DA_PROV[k].c }));
+      svg.appendChild(svgEl('text', { x: lx + 15, y: top + 9, 'font-size': '10.5', style: 'fill:var(--ink);' }, [DA_PROV[k].name]));
+      lx += 15 + DA_PROV[k].name.length * 6 + 16;
+    });
+    groups.forEach(function (grp, gi) {
+      var by = top + legendH + gi * bandH;
+      svg.appendChild(svgEl('text', { x: plotL - 7, y: by + bandH / 2 + 3, 'text-anchor': 'end', 'font-size': '10.5', style: 'fill:var(--ink);' }, [grp.label]));
+      var gap = 3, barH = (bandH - 2 * gap) / 3;
+      ['over', 'ind', 'under'].forEach(function (k, bi) {
+        var b = grp[k]; var val = b.value != null ? b.value : b.mean;
+        var y = by + gap + bi * barH + 1, h = barH - 2;
+        svg.appendChild(svgEl('rect', { x: plotL, y: y, width: Math.max(0, xs(val) - plotL), height: h, rx: '2', fill: DA_PROV[k].c }));
+        // Value label: after the bar, but right-aligned inside for near-full bars so
+        // it never clips at the edge.
+        var lblX = val >= 85 ? plotR - 2 : xs(val) + 3, anchor = val >= 85 ? 'end' : 'start';
+        svg.appendChild(svgEl('text', { x: lblX, y: y + h - 1, 'text-anchor': anchor, 'font-size': '9', style: 'fill:var(--muted);' }, [Math.round(val) + '%']));
+        if (b.lo != null && b.hi != null && !isNaN(b.lo) && !isNaN(b.hi)) {   // 95% CI whisker
+          var cy = y + h / 2;
+          svg.appendChild(svgEl('line', { x1: xs(b.lo), y1: cy, x2: xs(b.hi), y2: cy, style: 'stroke:var(--ink);stroke-width:1;' }));
+          svg.appendChild(svgEl('line', { x1: xs(b.lo), y1: cy - 3, x2: xs(b.lo), y2: cy + 3, style: 'stroke:var(--ink);stroke-width:1;' }));
+          svg.appendChild(svgEl('line', { x1: xs(b.hi), y1: cy - 3, x2: xs(b.hi), y2: cy + 3, style: 'stroke:var(--ink);stroke-width:1;' }));
+        }
+      });
+    });
+    return svg;
+  }
+  // Render the three provisioning charts into `container` from the aggregate.
+  function renderProvisioning(container, sheetMap) {
+    container.innerHTML = '';
+    var data = daProvisionData(sheetMap);
+    if (!data.tasks.length) return;                            // no per-task Responses to plot
+    container.appendChild(el('div', { class: 'aa-sub', style: 'margin:20px 0 4px;', text: 'Model provisioning — over / indifference / under' }));
+    container.appendChild(el('p', { class: 'aa-note', html: 'Preferring <b>Opus</b> = <b>over-provisioning</b> (a bigger model than a simple task needs), a <b>tie</b> = <b>indifference</b>, preferring <b>Haiku</b> = <b>under-provisioning</b>. Bars are the % of responses in each; whiskers are 95% CIs — a <b>Wilson</b> interval per task, and for the type/domain averages the mean of the per-task rates (each task weighted equally) with a CI that pools the per-task sampling errors (<b>delta method</b>), so unequal responses per task don\'t bias the averages. These descriptive CIs treat responses as independent across tasks (the same student answers several tasks in a group); the formal tests in Section&nbsp;3 additionally cluster on the student.' }));
+
+    var taskGroups = data.tasks.slice().sort(function (a, b) { return b.over - a.over; }).map(function (t) {
+      return { label: t.task + ' (n=' + t.n + ')',
+        over: { value: t.over, lo: t.overCI.lo * 100, hi: t.overCI.hi * 100 },
+        ind: { value: t.ind, lo: t.indCI.lo * 100, hi: t.indCI.hi * 100 },
+        under: { value: t.under, lo: t.underCI.lo * 100, hi: t.underCI.hi * 100 } };
+    });
+    var aggGroups = function (arr) { return arr.map(function (g) { return { label: g.label + ' (' + g.nTasks + ')', over: g.over, ind: g.ind, under: g.under }; }); };
+
+    container.appendChild(el('div', { class: 'aa-sub2', text: 'Per task (' + data.tasks.length + ' tasks, sorted by over-provision rate)' }));
+    var scroll = el('div', { class: 'aa-provscroll' }, [daProvChart(taskGroups, 82)]);
+    container.appendChild(scroll);
+    container.appendChild(el('div', { class: 'aa-sub2', text: 'By task type (average across tasks)' }));
+    container.appendChild(daProvChart(aggGroups(data.byType), 130));
+    container.appendChild(el('div', { class: 'aa-sub2', text: 'By domain (average across tasks)' }));
+    container.appendChild(daProvChart(aggGroups(data.byDomain), 190));
+  }
+
+  function renderAnalytics() {
+    clearRoot();
+    var wrap = el('div', { class: 'aa-wrap aa-wrap2' });
+    wrap.appendChild(headerRow());
+    wrap.appendChild(el('div', { class: 'aa-card' }, [
+      el('h3', { text: 'Data analytics' }),
+      el('p', { class: 'aa-note', html: 'Load your session data (or import an already-exported Excel), consolidate it into a single workbook, then run Python or R on it — compiled entirely in your browser (nothing is uploaded). Each comparison asked a blind participant which answer they preferred (Haiku vs Opus, unlabelled) and how strongly, so the bundled scripts test whether people are <b>indifferent</b> or actually <b>prefer one model</b>. Four steps:' })
+    ]));
+    daRefs = {};   // this render's sections register their live refreshers here
+    wrap.appendChild(buildDaSection1());
+    wrap.appendChild(buildDaSection2());
+    wrap.appendChild(buildDaSection3());
+    wrap.appendChild(buildDaSection4());
+    root.appendChild(wrap);
+  }
+
+  /* ---- Section 1: data source ---- */
+  function buildDaSection1() {
+    var card = el('div', { class: 'aa-card' });
+    card.appendChild(el('div', { class: 'aa-sechead' }, [el('span', { class: 'aa-secnum', text: '1' }), el('h3', { text: 'Data source', style: 'margin:0;' })]));
+    card.appendChild(el('p', { class: 'aa-note', html: 'Tick the sessions to include, and/or <b>import an exported Excel/CSV</b> (a per-session or all-data export from this admin). Then press <b>Load</b> to pull them into memory for Section 2.' }));
+
+    var listWrap = el('div', { class: 'aa-seclist' }, [el('p', { class: 'aa-note', text: 'Loading sessions…' })]);
+    card.appendChild(listWrap);
+
+    var loadBtn = el('button', { class: 'aa-btn', on: { click: doLoad } }, ['Load']);
+    var selAll = el('button', { class: 'aa-btn sec sm', on: { click: function () { setAll(true); } } }, ['Select all']);
+    var clr = el('button', { class: 'aa-btn sec sm', on: { click: function () { setAll(false); } } }, ['Clear']);
+    var refreshB = el('button', { class: 'aa-btn sec sm', on: { click: loadSessions } }, ['↻ Refresh']);
+    var fileIn = el('input', { type: 'file', accept: '.xlsx,.xls,.csv', style: 'display:none;' });
+    var importB = el('button', { class: 'aa-btn sec', on: { click: function () { fileIn.click(); } } }, ['Import Excel / CSV']);
+    fileIn.addEventListener('change', onImport);
+
+    card.appendChild(el('div', { class: 'aa-row', style: 'margin-top:10px;' }, [selAll, clr, refreshB, importB]));
+    card.appendChild(el('div', { class: 'aa-row', style: 'margin-top:10px;' }, [loadBtn]));
+    var status = el('div', { class: 'aa-runstatus' });
+    card.appendChild(status);
+    card.appendChild(fileIn);
+
+    loadSessions();
+
+    function loadSessions() {
+      // Show the cached list immediately on re-entry (no transient blank); only
+      // show the loading placeholder on the very first fetch.
+      if (daState.sessions) render();
+      else { listWrap.innerHTML = ''; listWrap.appendChild(el('p', { class: 'aa-note', text: 'Loading sessions…' })); }
+      Promise.all([Store.listSessions(), Store.listParticipants().catch(function () { return []; })]).then(function (res) {
+        daState.sessions = res[0] || [];
+        daState.allParts = res[1] || [];
+        daState.sessions.sort(function (a, b) { return tsMs(b.createdAt) - tsMs(a.createdAt); });
+        render();
+      }).catch(function (e) {
+        // Keep whatever is already shown if we have a cached list; only surface the
+        // error when there is nothing to fall back to.
+        if (daState.sessions) { toast('Could not refresh sessions: ' + ((e && e.code) || (e && e.message) || 'error')); return; }
+        listWrap.innerHTML = '';
+        listWrap.appendChild(el('p', { class: 'aa-err', text: 'Could not load sessions: ' + ((e && e.code) || (e && e.message) || 'error') }));
+      });
+    }
+    function partCounts() {
+      var c = {};
+      (daState.allParts || []).forEach(function (p) {
+        var seen = {}; if (p.sessionId) seen[p.sessionId] = true;
+        Object.keys(p.playedSessions || {}).forEach(function (s) { seen[s] = true; });
+        Object.keys(p.completedSessions || {}).forEach(function (s) { seen[s] = true; });
+        Object.keys(seen).forEach(function (s) { c[s] = (c[s] || 0) + 1; });
+      });
+      return c;
+    }
+    function setAll(on) {
+      (daState.sessions || []).forEach(function (s) { if (on) daState.selected[s.id] = true; else delete daState.selected[s.id]; });
+      daState.importedBooks.forEach(function (b) { b.selected = on; });
+      render();
+    }
+    function render() {
+      listWrap.innerHTML = '';
+      var c = partCounts();
+      var sess = daState.sessions || [];
+      if (!sess.length && !daState.importedBooks.length) {
+        listWrap.appendChild(el('p', { class: 'aa-note', text: 'No sessions yet. Create one from the Admin tab, or import an Excel/CSV file.' }));
+        updateLoadLabel(); return;
+      }
+      sess.forEach(function (s) {
+        var cb = el('input', { type: 'checkbox' }); if (daState.selected[s.id]) cb.setAttribute('checked', 'checked');
+        cb.addEventListener('change', function () { if (cb.checked) daState.selected[s.id] = true; else delete daState.selected[s.id]; updateLoadLabel(); });
+        var n = c[s.id] || 0;
+        var meta = el('div', { class: 'g' }, [
+          el('b', { text: s.code || s.id }), ' ',
+          el('span', { class: 'aa-badge ' + (s.status || 'open'), text: (s.status || 'open') }),
+          el('div', { class: 'aa-note', style: 'margin-top:2px;', text: (s.name ? s.name + ' · ' : '') + n + ' participant' + (n === 1 ? '' : 's') + ' · ' + condLabel(s.condition) })
+        ]);
+        listWrap.appendChild(el('label', { class: 'aa-checkrow' }, [cb, meta]));
+      });
+      daState.importedBooks.forEach(function (b) {
+        var cb = el('input', { type: 'checkbox' }); if (b.selected) cb.setAttribute('checked', 'checked');
+        cb.addEventListener('change', function () { b.selected = cb.checked; updateLoadLabel(); });
+        var rm = el('button', { class: 'aa-btn danger sm', on: { click: function (e) { e.preventDefault(); daState.importedBooks = daState.importedBooks.filter(function (x) { return x !== b; }); render(); } } }, ['remove']);
+        var meta = el('div', { class: 'g' }, [
+          el('b', { text: b.label }), ' ', el('span', { class: 'aa-tag blue', text: 'imported' }),
+          el('div', { class: 'aa-note', style: 'margin-top:2px;', text: b.sheets.length + ' sheet' + (b.sheets.length === 1 ? '' : 's') + ' · ' + b.totalRows + ' rows' })
+        ]);
+        listWrap.appendChild(el('label', { class: 'aa-checkrow' }, [cb, meta, rm]));
+      });
+      updateLoadLabel();
+    }
+    function updateLoadLabel() {
+      var ns = Object.keys(daState.selected).filter(function (k) { return daState.selected[k]; }).length;
+      var nf = daState.importedBooks.filter(function (b) { return b.selected; }).length;
+      var bits = []; if (ns) bits.push(ns + ' session' + (ns === 1 ? '' : 's')); if (nf) bits.push(nf + ' file' + (nf === 1 ? '' : 's'));
+      loadBtn.textContent = bits.length ? ('Load ' + bits.join(' + ')) : 'Load';
+    }
+    function onImport() {
+      var f = fileIn.files && fileIn.files[0]; fileIn.value = ''; if (!f) return;
+      var isCsv = /\.csv$/i.test(f.name);
+      status.textContent = 'Reading ' + f.name + '…';
+      ensureXLSX().then(function (X) {
+        var reader = new FileReader();
+        reader.onload = function (e) {
+          try {
+            var sheets;
+            if (isCsv) {
+              var wbc = X.read(e.target.result, { type: 'string' });
+              sheets = [{ name: 'Responses', rows: X.utils.sheet_to_json(wbc.Sheets[wbc.SheetNames[0]], { defval: '' }) }];
+            } else {
+              var wb = X.read(new Uint8Array(e.target.result), { type: 'array' });
+              sheets = wb.SheetNames.map(function (nm) { return { name: nm, rows: X.utils.sheet_to_json(wb.Sheets[nm], { defval: '' }) }; });
+            }
+            sheets = sheets.filter(function (sh) { return sh.rows && sh.rows.length; });
+            if (!sheets.length) { status.textContent = ''; toast('That file has no data rows.'); return; }
+            var totalRows = sheets.reduce(function (t, sh) { return t + sh.rows.length; }, 0);
+            daState.importedBooks.push({ label: f.name, sheets: sheets, totalRows: totalRows, selected: true });
+            status.textContent = 'Imported ' + f.name + ' — ' + sheets.length + ' sheet' + (sheets.length === 1 ? '' : 's') + ', ' + totalRows + ' rows. Press Load to include it.';
+            render();
+          } catch (err) { status.textContent = ''; toast('Could not read the file: ' + (err.message || err)); }
+        };
+        if (isCsv) reader.readAsText(f); else reader.readAsArrayBuffer(f);
+      }).catch(function () { status.textContent = ''; toast('Could not load the Excel reader (offline?).'); });
+    }
+    function doLoad() {
+      var ids = {}; Object.keys(daState.selected).forEach(function (k) { if (daState.selected[k]) ids[k] = true; });
+      var nSess = Object.keys(ids).length;
+      var books = daState.importedBooks.filter(function (b) { return b.selected; });
+      if (!nSess && !books.length) { toast('Tick at least one session or import a file first.'); return; }
+      status.textContent = 'Loading…';
+      loadBtn.setAttribute('disabled', 'true');
+      var done = function () { loadBtn.removeAttribute('disabled'); };
+      // Participants who played any ticked session (re-fetched so counts are current).
+      var partsP;
+      if (nSess) {
+        partsP = Store.listParticipants().catch(function () { return daState.allParts || []; }).then(function (all) {
+          daState.allParts = all;
+          return all.filter(function (p) {
+            return Object.keys(ids).some(function (sid) { return p.sessionId === sid || (p.playedSessions && p.playedSessions[sid]) || (p.completedSessions && p.completedSessions[sid]); });
+          });
+        });
+      } else { partsP = Promise.resolve([]); }
+      partsP.then(function (parts) {
+        return nSess ? collectAggregateSheets(parts, ids) : emptySheetMap();
+      }).then(function (sheetMap) {
+        // Double-count guard: stacking a ticked session AND an imported export of
+        // that same session duplicates its rows in every tab - the rates would look
+        // unchanged while every n doubles and the CIs silently shrink. Warn by code.
+        var loadedSess = {};
+        (sheetMap.Responses || []).forEach(function (r) {
+          if (r.session_id) loadedSess[String(r.session_id)] = true;
+          if (r.session_code) loadedSess[String(r.session_code)] = true;
+        });
+        var overlap = {};
+        books.forEach(function (b) {
+          (b.sheets || []).forEach(function (sh) {
+            (sh.rows || []).forEach(function (r) {
+              if (r.session_id && loadedSess[String(r.session_id)]) overlap[String(r.session_code || r.session_id)] = true;
+              else if (r.session_code && loadedSess[String(r.session_code)]) overlap[String(r.session_code)] = true;
+            });
+          });
+        });
+        books.forEach(function (b) { mergeBookIntoSheetMap(sheetMap, b); });
+        daState.sheetMap = sheetMap;
+        daState.sheetOrder = orderSheetNames(sheetMap);
+        var ovKeys = Object.keys(overlap);
+        status.textContent = 'Loaded ' + summarizeMap(sheetMap) + '.' + (ovKeys.length
+          ? ' ⚠ Session ' + ovKeys.join(', ') + ' is in BOTH a ticked session and an imported file - its rows are now counted twice (every n doubles and the CIs shrink). Untick the session or remove the import, then Load again.'
+          : '');
+        done();
+        // Refresh whichever Section 2/3 are currently mounted (daRefs is reset on
+        // each render), so a Load that resolves after a view switch still lands.
+        if (daRefs.updateSec2) daRefs.updateSec2();
+        if (daRefs.updateSec3Tables) daRefs.updateSec3Tables();
+      }).catch(function (e) {
+        done(); status.textContent = '';
+        toast('Load failed: ' + ((e && e.message) || 'error'));
+        if (window.console) console.error('[Arena analytics] load failed', e);
+      });
+    }
+    return card;
+  }
+
+  /* ---- Section 2: aggregate ---- */
+  function buildDaSection2() {
+    var card = el('div', { class: 'aa-card' });
+    card.appendChild(el('div', { class: 'aa-sechead' }, [el('span', { class: 'aa-secnum', text: '2' }), el('h3', { text: 'Aggregate data', style: 'margin:0;' })]));
+    card.appendChild(el('p', { class: 'aa-note', html: 'Consolidate every loaded session (and any imported workbook) into <b>one Excel file</b> with the same multi-tab structure as the per-session export — Conventions, Sessions, Participants, Tasks, Task summary, Responses, Events, Survey — with each source stacked within every tab. Sources are stacked <b>as-is (no dedup)</b>: don\'t tick a session <i>and</i> import that same session\'s export, or its rows count twice and every statistic below silently overstates its precision.' }));
+    var stats = el('div', { class: 'aa-statgrid', style: 'margin-top:6px;' });
+    card.appendChild(stats);
+    var dl = el('button', { class: 'aa-btn green', on: { click: download } }, ['Download aggregate Excel']);
+    card.appendChild(el('div', { class: 'aa-row', style: 'margin-top:12px;' }, [dl]));
+    var hint = el('p', { class: 'aa-note', text: 'Load data in Section 1 first.' });
+    card.appendChild(hint);
+    var charts = el('div', {});
+    card.appendChild(charts);
+    daRefs.updateSec2 = update;
+    update();
+    function statBox(v, l) { return el('div', { class: 'aa-statbox' }, [el('b', { text: String(v) }), el('span', { text: l })]); }
+    function update() {
+      var m = daState.sheetMap;
+      stats.innerHTML = ''; charts.innerHTML = '';
+      if (!m) { dl.setAttribute('disabled', 'true'); hint.style.display = 'block'; return; }
+      hint.style.display = 'none'; dl.removeAttribute('disabled');
+      stats.appendChild(statBox((m.Responses || []).length, 'Responses'));
+      stats.appendChild(statBox((m.Participants || []).length, 'Participants'));
+      stats.appendChild(statBox((m.Sessions || []).length, 'Sessions'));
+      stats.appendChild(statBox((m['Task summary'] || []).length, 'Tasks with data'));
+      renderProvisioning(charts, m);       // over / indifference / under-provisioning plots
+    }
+    function download() {
+      var m = daState.sheetMap;
+      if (!m) { toast('Load data in Section 1 first.'); return; }
+      ensureXLSX().then(function (X) {
+        var wb = X.utils.book_new(), used = {};
+        daState.sheetOrder.forEach(function (name) {
+          var rows = m[name] || [];
+          X.utils.book_append_sheet(wb, X.utils.json_to_sheet(rows.length ? rows : [{}]), safeSheetName(name, used));
+        });
+        var stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+        X.writeFile(wb, 'answerarena-aggregate-' + stamp + '.xlsx');
+        toast('Aggregate downloaded.');
+      }).catch(function (e) { toast('Download failed: ' + ((e && e.message) || 'error')); });
+    }
+    return card;
+  }
+
+  /* ---- Section 3: run Python / R ---- */
+  function buildDaSection3() {
+    var card = el('div', { class: 'aa-card' });
+    card.appendChild(el('div', { class: 'aa-sechead' }, [el('span', { class: 'aa-secnum', text: '3' }), el('h3', { text: 'Process with Python or R', style: 'margin:0;' })]));
+    card.appendChild(el('p', { class: 'aa-note', html: 'Pick a table from the aggregate above, then run <b>Python</b> (Pyodide: numpy / pandas / scipy / matplotlib) or <b>R</b> (WebR, base R) on it — compiled entirely in your browser (the first run downloads the runtime, ~10–30&nbsp;s). The table is handed to your code as the string <code>DATA_CSV</code> (Python) or the file <code>/tmp/data.csv</code> (R). Text output appears below; the <b>plots are shown in the “Insights gained” section</b>, each next to an explanation of how to read it.' }));
+
+    var tableSel = el('select', {});
+    card.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: 'Analysis table (from Section 2)' }), tableSel]));
+
+    var pyTabBtn = el('button', { on: { click: function () { setLang('python'); } } }, ['Python']);
+    var rTabBtn = el('button', { on: { click: function () { setLang('r'); } } }, ['R']);
+    card.appendChild(el('div', { class: 'aa-langtabs' }, [pyTabBtn, rTabBtn]));
+
+    var editor = el('textarea', { class: 'aa-code', spellcheck: 'false' });
+    card.appendChild(editor);
+
+    var runBtn = el('button', { class: 'aa-btn', on: { click: run } }, ['▶ Run']);
+    var resetBtn = el('button', { class: 'aa-btn sec', on: { click: resetTemplate } }, ['Reset template']);
+    card.appendChild(el('div', { class: 'aa-row', style: 'margin-top:10px;' }, [runBtn, resetBtn]));
+    var statusEl = el('div', { class: 'aa-runstatus' });
+    card.appendChild(statusEl);
+    card.appendChild(el('div', { class: 'aa-sub', style: 'margin:12px 0 4px;', text: 'Output' }));
+    var outWrap = el('div', {}, [el('p', { class: 'aa-note', text: 'Run your code to see the output here.' })]);
+    card.appendChild(outWrap);
+    var plots = el('div', { class: 'aa-plots' });
+    card.appendChild(plots);
+
+    var running = false, outText = '', flushQueued = false, outPre = null;
+
+    // Restore persisted code (or the bundled templates) once. Refresh first so a
+    // stale saved script from an older template version cannot shadow the fix.
+    daMigrateTemplates();
+    if (daState.code.python == null) daState.code.python = daLoadSaved('aa-da:py', DA_PY_TEMPLATE);
+    if (daState.code.r == null) daState.code.r = daLoadSaved('aa-da:r', DA_R_TEMPLATE);
+    editor.value = daState.code[daState.lang];
+    editor.addEventListener('input', function () { daState.code[daState.lang] = editor.value; saveCode(); });
+
+    setLang(daState.lang);
+    daRefs.updateSec3Tables = updateTables;
+    updateTables();
+    // If a run started under an earlier render is still going, say so (the run()
+    // guard below blocks a concurrent second run until it finishes).
+    if (daState.running) setStatus('A run started earlier is still in progress — please wait for it to finish.');
+
+    function setLang(lang) {
+      if (running) return;
+      daState.lang = lang;
+      pyTabBtn.className = lang === 'python' ? 'on' : '';
+      rTabBtn.className = lang === 'r' ? 'on' : '';
+      editor.value = daState.code[lang];
+      runBtn.textContent = lang === 'python' ? '▶ Run Python' : '▶ Run R';
+    }
+    function updateTables() {
+      var m = daState.sheetMap;
+      var prev = tableSel.value;
+      tableSel.innerHTML = '';
+      var names = m ? daState.sheetOrder.filter(function (n) { return (m[n] || []).length; }) : [];
+      if (!names.length) { tableSel.appendChild(el('option', { value: '' }, ['(load data in Section 1 first)'])); tableSel.setAttribute('disabled', 'true'); return; }
+      tableSel.removeAttribute('disabled');
+      names.forEach(function (n) { tableSel.appendChild(el('option', { value: n }, [n + ' (' + (m[n] || []).length + ' rows)'])); });
+      if (names.indexOf(prev) >= 0) tableSel.value = prev;
+      else if (names.indexOf('Responses') >= 0) tableSel.value = 'Responses';
+      else tableSel.value = names[0];
+    }
+    function resetTemplate() {
+      if (running) return;
+      var tpl = daState.lang === 'python' ? DA_PY_TEMPLATE : DA_R_TEMPLATE;
+      daState.code[daState.lang] = tpl; editor.value = tpl; saveCode();
+    }
+    function saveCode() { try { localStorage.setItem(daState.lang === 'python' ? 'aa-da:py' : 'aa-da:r', daState.code[daState.lang]); } catch (e) {} }
+    function pushLine(line) {
+      outText += line + '\n';
+      if (!flushQueued) { flushQueued = true; requestAnimationFrame(function () { flushQueued = false; if (outPre) outPre.textContent = outText; }); }
+    }
+    function setStatus(s) { statusEl.textContent = s || ''; }
+    function run() {
+      if (running) return;
+      // Cross-render guard: a run started under an earlier render (before the user
+      // switched tabs and back) shares the one Pyodide/WebR runtime, so never start
+      // a second concurrent run against it.
+      if (daState.running) { toast('A run is already in progress — please wait for it to finish.'); return; }
+      var m = daState.sheetMap;
+      if (!m) { toast('Load data in Section 1 first.'); return; }
+      var name = tableSel.value;
+      var rows = name && m[name] ? m[name] : [];
+      if (!rows.length) { toast('The selected table is empty — pick another or load data.'); return; }
+      running = true; daState.running = true; runBtn.setAttribute('disabled', 'true'); resetBtn.setAttribute('disabled', 'true');
+      outText = ''; plots.innerHTML = ''; outWrap.innerHTML = '';
+      outPre = el('pre', { class: 'aa-out', text: '' }); outWrap.appendChild(outPre);
+      setStatus('Preparing…');
+      var lang = daState.lang, code = editor.value;
+      daState.code[lang] = code; saveCode();
+      ensureXLSX().then(function (X) {
+        var csv = X.utils.sheet_to_csv(X.utils.json_to_sheet(rows));
+        return lang === 'python'
+          ? daRunPython(code, { dataCsv: csv, onStdout: pushLine, onStatus: setStatus })
+          : daRunR(code, { dataCsv: csv, onOutput: pushLine, onStatus: setStatus });
+      }).then(function (result) {
+        var finalOut = outText || (result && (result.stdout || result.output)) || '';
+        var imgs = (result && result.images) || [];
+        if (result && !result.ok && result.error) finalOut = (finalOut ? finalOut + '\n' : '') + '⚠ ' + result.error;
+        if (outPre) outPre.textContent = finalOut || '(no output)';
+        // Plots live in the Insights section (each beside its explanation), so here
+        // we only point there rather than duplicating the figures.
+        if (imgs.length) {
+          plots.appendChild(el('p', { class: 'aa-note', html: '📊 <b>' + imgs.length + ' figure' + (imgs.length === 1 ? '' : 's') + '</b> rendered — see the <b>“Insights gained”</b> section below, where each plot is shown with an explanation of how to read it.' }));
+        }
+        setStatus(imgs.length ? (imgs.length + ' figure' + (imgs.length === 1 ? '' : 's') + ' rendered — shown in “Insights gained” below.') : (result && result.ok ? 'Done.' : ''));
+        // Snapshot the run so the Insights section can render its INSIGHTS block + plots.
+        daState.lastRun = { output: finalOut, images: imgs, lang: lang, ok: !!(result && result.ok) };
+        if (daRefs.updateInsights) daRefs.updateInsights();
+      }).catch(function (err) {
+        if (outPre) outPre.textContent = (outText ? outText + '\n' : '') + '⚠ ' + ((err && err.message) || err);
+        setStatus('');
+      }).then(function () {
+        running = false; daState.running = false; runBtn.removeAttribute('disabled'); resetBtn.removeAttribute('disabled');
+      });
+    }
+    return card;
+  }
+
+  /* ---- Section 4: insights gained ---- */
+  function buildDaSection4() {
+    var card = el('div', { class: 'aa-card' });
+    card.appendChild(el('div', { class: 'aa-sechead' }, [el('span', { class: 'aa-secnum', text: '4' }), el('h3', { text: 'Insights gained', style: 'margin:0;' })]));
+    card.appendChild(el('p', { class: 'aa-note', html: 'A readable write-up of what the Section 3 analysis found — the answer to <b>“do participants prefer a model, or are they indifferent?”</b>, plus the by-task and 2×2 breakdowns. <b>Every plot is shown here</b>, each one dropped in right under the paragraph that explains how to read it. It all comes from the <code>INSIGHTS</code> block the script prints, so editing the script changes it.' }));
+    var body = el('div', {});
+    card.appendChild(body);
+    daRefs.updateInsights = render;
+    render();
+    function render() {
+      body.innerHTML = '';
+      var run = daState.lastRun;
+      if (!run) { body.appendChild(el('p', { class: 'aa-note', text: 'Run the analysis in Section 3 first — the insights and plots appear here.' })); return; }
+      var text = daParseInsights(run.output);
+      var images = (run.images || []).slice();
+      var placed = [];               // image indices already dropped under a "Figure N" heading
+      if (text) {
+        var ul = null;
+        text.split('\n').forEach(function (raw) {
+          var t = raw.replace(/\s+$/, '');
+          if (/^\s*##\s+/.test(t)) {
+            ul = null;
+            var head = t.replace(/^\s*##\s+/, '');
+            body.appendChild(el('h4', { class: 'aa-insh', text: head }));
+            // A "Figure N …" heading pulls its plot in right here, so each figure
+            // sits with the paragraph that explains how to read it.
+            var fm = head.match(/^Figure\s+(\d+)\b/i);
+            if (fm) {
+              var idx = parseInt(fm[1], 10) - 1;
+              if (idx >= 0 && idx < images.length && placed.indexOf(idx) < 0) {
+                body.appendChild(el('img', { src: images[idx], class: 'aa-insimg', alt: head }));
+                placed.push(idx);
+              }
+            }
+          }
+          else if (/^\s*[-•*]\s+/.test(t)) { if (!ul) { ul = el('ul', { class: 'aa-insul' }); body.appendChild(ul); } ul.appendChild(el('li', { html: daInlineBold(t.replace(/^\s*[-•*]\s+/, '')) })); }
+          else if (t.trim() === '') { ul = null; }
+          else { ul = null; body.appendChild(el('p', { class: 'aa-insp', html: daInlineBold(t) })); }
+        });
+      } else {
+        body.appendChild(el('p', { class: 'aa-note', text: run.ok
+          ? 'The last run printed no INSIGHTS block. Add one to your script (a line "INSIGHTS" followed by the write-up), or read the full console output in Section 3.'
+          : 'The last run did not finish — see the error in Section 3.' }));
+      }
+      // Any plots not matched to a "Figure N" heading (e.g. a user's custom script)
+      // are shown at the end so nothing is ever silently dropped.
+      var leftover = images.filter(function (_, i) { return placed.indexOf(i) < 0; });
+      if (leftover.length) {
+        body.appendChild(el('div', { class: 'aa-sub', style: 'margin:14px 0 4px;', text: placed.length ? 'More figures' : 'Figures' }));
+        leftover.forEach(function (src) { body.appendChild(el('img', { src: src, class: 'aa-insimg', alt: 'figure' })); });
+      }
+    }
+    return card;
+  }
+  // Pull the plain-language INSIGHTS block out of a run's console output: the
+  // scripts print a line "INSIGHTS" (optionally banner-wrapped) then the write-up
+  // to the end, so we return everything after that marker, trimmed of banner/Done.
+  function daParseInsights(output) {
+    if (!output) return '';
+    var lines = String(output).split('\n');
+    var start = -1;
+    for (var i = 0; i < lines.length; i++) { if (/^\s*#*\s*INSIGHTS\s*$/i.test(lines[i])) { start = i; break; } }
+    if (start < 0) return '';
+    var body = lines.slice(start + 1);
+    while (body.length && /^[=\-\s]*$/.test(body[0])) body.shift();
+    while (body.length && (/^[=\-\s]*$/.test(body[body.length - 1]) || /^\s*Done\.?\s*$/i.test(body[body.length - 1]))) body.pop();
+    return body.join('\n');
+  }
+  // Render **bold** spans (after HTML-escaping) inside an insight line.
+  function daInlineBold(s) { return esc(s).replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>'); }
+
+  /* =====================================================================
+     In-browser runtimes: Pyodide (Python) + WebR (R).
+     Ported from the ideasearchlab Data Analytics page. Each loads lazily
+     from jsDelivr on first Run and is then reused across runs.
+     ===================================================================== */
+  var DA_PYODIDE_VERSIONS = ['314.0.1', '0.29.4', '0.28.3'];
+  // Only the packages the bundled template needs. statsmodels is deliberately NOT
+  // here: it is a large, sometimes-unavailable Pyodide build, and requiring it used
+  // to make Python fail to start ("R works, Python doesn't"). The template does its
+  // own regressions with numpy, so numpy/pandas/scipy/matplotlib are enough.
+  var DA_PY_PACKAGES = ['numpy', 'pandas', 'scipy', 'matplotlib'];
+  var _pyodidePromise = null;
+  function daPyScriptUrl(v) { return 'https://cdn.jsdelivr.net/pyodide/v' + v + '/full/pyodide.js'; }
+  function daPyBaseUrl(v) { return 'https://cdn.jsdelivr.net/pyodide/v' + v + '/full/'; }
+  function daInjectScript(url) {
+    return new Promise(function (resolve, reject) {
+      var existing = document.querySelector('script[data-pyodide-src="' + url + '"]');
+      if (existing) {
+        if (existing.dataset.loaded === '1' && typeof globalThis.loadPyodide === 'function') return resolve();
+        if (existing.dataset.loaded === '1') { existing.remove(); }
+        else { existing.addEventListener('load', function () { resolve(); }); existing.addEventListener('error', function () { reject(new Error('Failed to load ' + url)); }); return; }
+      }
+      var s = document.createElement('script');
+      s.src = url; s.async = true; s.crossOrigin = 'anonymous'; s.dataset.pyodideSrc = url;
+      s.onload = function () { s.dataset.loaded = '1'; resolve(); };
+      s.onerror = function () { reject(new Error('Failed to load ' + url + ' (CDN / network / CSP?)')); };
+      document.head.appendChild(s);
+    });
+  }
+  function daGetPyodide(onStatus) {
+    if (_pyodidePromise) return _pyodidePromise;
+    _pyodidePromise = (async function () {
+      var lastErr = null;
+      for (var i = 0; i < DA_PYODIDE_VERSIONS.length; i++) {
+        var v = DA_PYODIDE_VERSIONS[i];
+        try {
+          if (onStatus) onStatus('Loading Python runtime (Pyodide v' + v + ')…');
+          await daInjectScript(daPyScriptUrl(v));
+          var pyodide = await globalThis.loadPyodide({ indexURL: daPyBaseUrl(v) });
+          if (onStatus) onStatus('Loading data-science packages (numpy, pandas, scipy, matplotlib)…');
+          await daEnsurePyPackages(pyodide);
+          if (onStatus) onStatus('');
+          return pyodide;
+        } catch (err) {
+          lastErr = err;
+          try { delete globalThis.loadPyodide; } catch (e) { /* non-configurable */ }
+          var stale = document.querySelector('script[data-pyodide-src="' + daPyScriptUrl(v) + '"]');
+          if (stale) stale.remove();
+        }
+      }
+      throw lastErr || new Error('Pyodide failed to load from all candidate versions.');
+    })();
+    _pyodidePromise.catch(function () { _pyodidePromise = null; });
+    return _pyodidePromise;
+  }
+  async function daEnsurePyPackages(pyodide) {
+    try { await pyodide.loadPackage(DA_PY_PACKAGES); return; } catch (e) { /* isolate below */ }
+    var fallback = [];
+    for (var i = 0; i < DA_PY_PACKAGES.length; i++) {
+      try { await pyodide.loadPackage(DA_PY_PACKAGES[i]); } catch (e) { fallback.push(DA_PY_PACKAGES[i]); }
+    }
+    if (fallback.length) {
+      // Best effort via micropip; a package that still can't be installed is
+      // SKIPPED (non-fatal) so one unavailable package never blocks Python startup.
+      try {
+        await pyodide.loadPackage('micropip');
+        var micropip = pyodide.pyimport('micropip');
+        for (var j = 0; j < fallback.length; j++) {
+          try { await micropip.install(fallback[j]); } catch (e2) { if (window.console) console.warn('[Arena analytics] could not install ' + fallback[j], e2); }
+        }
+      } catch (e3) { if (window.console) console.warn('[Arena analytics] micropip unavailable', e3); }
+    }
+  }
+  var DA_MPL_BACKEND = '\nimport os as __os\n__os.environ.setdefault("MPLBACKEND", "Agg")\ntry:\n    import matplotlib\n    matplotlib.use("Agg", force=True)\nexcept Exception:\n    pass\n';
+  var DA_FIG_HARVEST = '\ndef __collect_figures():\n    import io, base64\n    try:\n        import matplotlib\n        import matplotlib.pyplot as plt\n    except Exception:\n        return []\n    out = []\n    for num in plt.get_fignums():\n        fig = plt.figure(num)\n        buf = io.BytesIO()\n        fig.savefig(buf, format="png", dpi=110, bbox_inches="tight")\n        buf.seek(0)\n        out.append("data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii"))\n        buf.close()\n    plt.close("all")\n    return out\n\n__pyo_images = __collect_figures()\n';
+  async function daRunPython(code, opts) {
+    opts = opts || {};
+    var pyodide = await daGetPyodide(opts.onStatus);
+    var collected = [];
+    var emit = function (chunk) {
+      var text = String(chunk); collected.push(text);
+      if (typeof opts.onStdout === 'function') { var parts = text.split('\n'); for (var i = 0; i < parts.length; i++) opts.onStdout(parts[i]); }
+    };
+    pyodide.setStdout({ batched: emit });
+    pyodide.setStderr({ batched: emit });
+    pyodide.globals.set('DATA_CSV', opts.dataCsv || '');
+    var ok = true, error = null, images = [];
+    try {
+      await pyodide.runPythonAsync(DA_MPL_BACKEND + '\n' + code + '\n' + DA_FIG_HARVEST);
+      var pyImages = pyodide.globals.get('__pyo_images');
+      if (pyImages) { try { images = pyImages.toJs(); } finally { pyImages.destroy(); } }
+    } catch (e) {
+      ok = false; error = e && e.message ? e.message : String(e); emit(error);
+    } finally {
+      pyodide.setStdout(); pyodide.setStderr();
+      try { pyodide.runPython("for __n in ('DATA_CSV','__pyo_images'):\n    globals().pop(__n, None)\n"); } catch (e) { /* ignore */ }
+    }
+    return { ok: ok, stdout: collected.join('\n'), images: images, error: error };
+  }
+
+  var DA_WEBR_VERSIONS = ['0.6.0', '0.5.9', '0.4.4'];
+  var _webRPromise = null;
+  function daWebrEsmUrl(v) { return 'https://cdn.jsdelivr.net/npm/webr@' + v + '/dist/webr.mjs'; }
+  function daWebrBaseUrl(v) { return 'https://cdn.jsdelivr.net/npm/webr@' + v + '/dist/'; }
+  function daGetWebR(onStatus) {
+    if (_webRPromise) return _webRPromise;
+    _webRPromise = (async function () {
+      var lastErr = null;
+      for (var i = 0; i < DA_WEBR_VERSIONS.length; i++) {
+        var v = DA_WEBR_VERSIONS[i], webR;
+        try {
+          if (onStatus) onStatus('Loading R runtime (WebR v' + v + ')… this is a large one-time download.');
+          var mod = await import(daWebrEsmUrl(v));
+          var WebR = mod.WebR || (mod.default && mod.default.WebR);
+          if (!WebR) throw new Error('WebR export not found in module');
+          webR = new WebR({ baseUrl: daWebrBaseUrl(v) });
+          await webR.init();
+          if (onStatus) onStatus('');
+          return webR;
+        } catch (err) {
+          lastErr = err;
+          if (webR && typeof webR.close === 'function') { try { webR.close(); } catch (e) { /* ignore */ } }
+        }
+      }
+      throw lastErr || new Error('WebR failed to load from all candidate versions.');
+    })();
+    _webRPromise.catch(function () { _webRPromise = null; });
+    return _webRPromise;
+  }
+  async function daBitmapToPng(bitmap) {
+    var w = bitmap.width, h = bitmap.height;
+    if (typeof OffscreenCanvas !== 'undefined') {
+      var off = new OffscreenCanvas(w, h);
+      off.getContext('2d').drawImage(bitmap, 0, 0);
+      var blob = await off.convertToBlob({ type: 'image/png' });
+      return await new Promise(function (res, rej) { var fr = new FileReader(); fr.onload = function () { res(fr.result); }; fr.onerror = rej; fr.readAsDataURL(blob); });
+    }
+    var canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(bitmap, 0, 0);
+    return canvas.toDataURL('image/png');
+  }
+  async function daRunR(code, opts) {
+    opts = opts || {};
+    var csvPath = '/tmp/data.csv';
+    var lines = [], buffer = '';
+    var push = function (text) {
+      if (text == null) return; buffer += text; var idx;
+      while ((idx = buffer.indexOf('\n')) !== -1) { var line = buffer.slice(0, idx); buffer = buffer.slice(idx + 1); lines.push(line); if (typeof opts.onOutput === 'function') opts.onOutput(line); }
+    };
+    var flush = function () { if (buffer.length) { lines.push(buffer); if (typeof opts.onOutput === 'function') opts.onOutput(buffer); buffer = ''; } };
+    var webR, shelter, images = [];
+    try {
+      webR = await daGetWebR(opts.onStatus);
+      if (typeof opts.dataCsv === 'string') {
+        try { await webR.FS.mkdir('/tmp'); } catch (e) { /* exists */ }
+        await webR.FS.writeFile(csvPath, new TextEncoder().encode(opts.dataCsv));
+      }
+      shelter = await new webR.Shelter();
+      var capture = await shelter.captureR(code, { withAutoprint: true, captureGraphics: true });
+      var out = capture.output || [];
+      for (var i = 0; i < out.length; i++) { var evt = out[i]; if (evt && (evt.type === 'stdout' || evt.type === 'stderr')) push(evt.data + '\n'); }
+      flush();
+      if (Array.isArray(capture.images)) {
+        for (var k = 0; k < capture.images.length; k++) { var bmp = capture.images[k]; images.push(await daBitmapToPng(bmp)); if (bmp && typeof bmp.close === 'function') bmp.close(); }
+      }
+      return { ok: true, output: lines.join('\n'), images: images, error: null };
+    } catch (err) {
+      flush();
+      return { ok: false, output: lines.join('\n'), images: images, error: err && err.message ? err.message : String(err) };
+    } finally {
+      if (shelter) { try { await shelter.purge(); } catch (e) { /* ignore */ } }
+    }
+  }
+
+  /* ---- default Python / R templates (edit-and-Run) ---- */
+  var DA_PY_TEMPLATE = [
+    '"""',
+    '================================================================================',
+    'ANSWER ARENA - which model do users prefer: Haiku 4.5 or Opus 4.8?',
+    '================================================================================',
+    'Design. For each of 30 tasks (real user needs) the same prompt was sent to Haiku',
+    '(the BASELINE) and to Opus (the FRONTIER); both answers were shown to students',
+    'WITHOUT labels. Each student said which answer resolved the task better - Haiku,',
+    'Opus, or "equivalent" - and then graded HOW MUCH they preferred it. Each student',
+    'saw a random subset of 15 of the 30 tasks, so different tasks got different',
+    'numbers of responses (this matters for the confidence intervals below).',
+    '',
+    'Data. The selected table (Section 3) is handed in as the string DATA_CSV, one row',
+    'per comparison. Columns used here:',
+    '  account_id        the student (repeated measures -> we cluster on this)',
+    '  task_id           the task / user need (join key to complexity + domain below)',
+    '  chosen_model      baseline (Haiku) | frontier (Opus) | tie',
+    '  preference_model  graded preference, -3..+3, MODEL frame: <0 Haiku, 0 equal,',
+    '                    >0 Opus. This is the main outcome; 0 = "Haiku baseline, no',
+    '                    preference", the null hypothesis we test throughout.',
+    '  submitted         \'yes\' for a real (non-draft) answer',
+    '',
+    'What it prints, in order:',
+    '  1. Summary statistics per task, per domain, and per task type (Simple/Complex).',
+    '  2. The main hypothesis test: is Opus equally preferred to the Haiku baseline,',
+    '     or do users prefer one? (two ways, both accounting for the design).',
+    '  3. A per-task recommendation (which model wins each task, with a p-value).',
+    '  4. By task type and 5. by domain, each vs the baseline + comparisons between',
+    '     groups, with CONFIDENCE INTERVALS THAT WEIGHT EACH TASK EQUALLY so that',
+    '     tasks with more responses do not dominate (the fix for unequal response n).',
+    '  6. Regressions of preference on complexity and on domain (cluster-robust SEs).',
+    '  Then plots, then a plain-language INSIGHTS block.',
+    '',
+    'Method note. This Python version uses numpy / pandas / scipy (its own idiomatic',
+    'tools); the R version computes the SAME quantities with base R (lm, t.test, aov,',
+    'tapply). The two are built to agree numerically. No statsmodels is needed.',
+    '"""',
+    '',
+    '# ── Imports (only lightweight, always-available scientific packages) ──────────',
+    'import io                              # wrap the DATA_CSV string as a file for pandas',
+    'import numpy as np                     # arrays + the manual regression algebra',
+    'import pandas as pd                    # the data frame, group-bys, pretty tables',
+    'import matplotlib                      # plotting; force a headless backend first',
+    'matplotlib.use("Agg")                  # "Agg" renders to an in-memory PNG (no screen)',
+    'import matplotlib.pyplot as plt        # the page harvests the open figures afterwards',
+    'from scipy import stats as st          # t / F distributions + exact binomial test',
+    '',
+    '# ── Task metadata: task_id -> (complexity, domain), from the study\'s task list ─',
+    '# Injected so the analysis can group by task type and domain even when the export',
+    '# did not carry those columns. (If the data DOES carry task_complexity/task_domain,',
+    '# those non-blank values win - see the coalesce step below.)',
+    'TASK_META = {',
+    '    "T075": ("Simple", "Creative & Marketing"), "T080": ("Simple", "Creative & Marketing"),',
+    '    "T083": ("Simple", "Customer Support"), "T086": ("Simple", "Customer Support"),',
+    '    "T051": ("Simple", "Data Analysis"), "T064": ("Simple", "Extraction & Classification"),',
+    '    "T022": ("Simple", "Knowledge Q&A"), "T025": ("Simple", "Knowledge Q&A"),',
+    '    "T067": ("Simple", "Planning & Strategy"), "T073": ("Simple", "Planning & Strategy"),',
+    '    "T099": ("Simple", "Review & QA"), "T013": ("Simple", "Summarization"),',
+    '    "T016": ("Simple", "Summarization"), "T001": ("Simple", "Writing"),',
+    '    "T005": ("Simple", "Writing"), "T082": ("Complex", "Creative & Marketing"),',
+    '    "T085": ("Complex", "Customer Support"), "T054": ("Complex", "Data Analysis"),',
+    '    "T056": ("Complex", "Data Analysis"), "T065": ("Complex", "Extraction & Classification"),',
+    '    "T026": ("Complex", "Knowledge Q&A"), "T029": ("Complex", "Knowledge Q&A"),',
+    '    "T046": ("Complex", "Math & Reasoning"), "T048": ("Complex", "Math & Reasoning"),',
+    '    "T071": ("Complex", "Planning & Strategy"), "T098": ("Complex", "Review & QA"),',
+    '    "T018": ("Complex", "Summarization"), "T019": ("Complex", "Summarization"),',
+    '    "T002": ("Complex", "Writing"), "T009": ("Complex", "Writing"),',
+    '}',
+    '',
+    '# Two systems compared; never shown to students. o1/baseline = Haiku, o2/frontier = Opus.',
+    'OPUS, HAIKU = "frontier", "baseline"',
+    '',
+    '',
+    '# ── Small statistics helpers (each documented) ───────────────────────────────',
+    'def mean_ci(x, conf=0.95):',
+    '    """Mean and a t-based confidence interval for a 1-D sample `x`.',
+    '    Returns (n, mean, sd, se, lo, hi). Uses the Student-t critical value with',
+    '    n-1 degrees of freedom, so the interval is WIDER when there are FEWER',
+    '    observations - exactly what we want for tasks with fewer responses.',
+    '    With n<2 the spread is undefined, so SD/SE/CI come back as NaN."""',
+    '    x = np.asarray(x, float)            # coerce to a float numpy array',
+    '    x = x[~np.isnan(x)]                 # drop missing values',
+    '    n = len(x)                          # sample size',
+    '    if n == 0:                          # nothing to summarise',
+    '        return (0, np.nan, np.nan, np.nan, np.nan, np.nan)',
+    '    m = float(np.mean(x))               # the sample mean',
+    '    if n < 2:                           # SD/CI undefined for a single point',
+    '        return (n, m, np.nan, np.nan, np.nan, np.nan)',
+    '    sd = float(np.std(x, ddof=1))       # sample SD (n-1 denominator)',
+    '    se = sd / np.sqrt(n)                # standard error of the mean',
+    '    tc = float(st.t.ppf(0.5 + conf / 2, n - 1))  # two-sided t critical value',
+    '    return (n, m, sd, se, m - tc * se, m + tc * se)',
+    '',
+    '',
+    'def onesample_t(x, mu=0.0):',
+    '    """Two-sided one-sample t-test of sample `x` against `mu` (default 0 = the',
+    '    \'no preference / Haiku baseline\' null). Returns (t, p, df). NaN if n<2.',
+    '    Constant samples (sd=0, where the t statistic is 0/0) get an explicit',
+    '    convention: every value == mu -> t=0, p=1 (the data are EXACTLY the null,',
+    '    i.e. no evidence against it - NOT \'too little data\'); every value == some',
+    '    other constant -> t=+/-inf, p=0 (scipy\'s own convention)."""',
+    '    x = np.asarray(x, float); x = x[~np.isnan(x)]',
+    '    if len(x) < 2:',
+    '        return (np.nan, np.nan, np.nan)',
+    '    if float(np.std(x)) == 0.0:         # constant sample: t would be 0/0',
+    '        if float(np.mean(x)) == mu:     # exactly the null everywhere',
+    '            return (0.0, 1.0, len(x) - 1)',
+    '        return (np.inf if float(np.mean(x)) > mu else -np.inf, 0.0, len(x) - 1)',
+    '    r = st.ttest_1samp(x, mu)           # scipy does the t-statistic + p-value',
+    '    return (float(np.ravel(r.statistic)[0]), float(np.ravel(r.pvalue)[0]), len(x) - 1)',
+    '',
+    '',
+    'def binom_two_sided(k, n):',
+    '    """Exact two-sided binomial test p-value for k \'successes\' out of n trials',
+    '    against a fair 50/50 coin - used on the decisive (non-tie) choices."""',
+    '    if n <= 0:',
+    '        return np.nan',
+    '    return float(st.binomtest(int(k), int(n), 0.5).pvalue)',
+    '',
+    '',
+    'def ols_robust(y, X, groups=None):',
+    '    """Ordinary least squares with a ROBUST covariance matrix, done by hand so',
+    '    no statsmodels is required. `X` already includes an intercept column.',
+    '    If `groups` (e.g. the participant id) has more than one distinct value we use',
+    '    CLUSTER-ROBUST (CR1) standard errors, which allow a participant\'s repeated',
+    '    answers to be correlated; otherwise we fall back to HC3 heteroscedasticity-',
+    '    robust errors. p-values use G-1 degrees of freedom when clustered (the',
+    '    cluster-robust standard), else the usual n-k (both matching the R version).',
+    '    Returns a dict with the coefficient vector and per-coefficient se / t / p."""',
+    '    y = np.asarray(y, float); X = np.asarray(X, float)   # to float arrays',
+    '    n, k = X.shape                                        # observations, parameters',
+    '    XtX_inv = np.linalg.inv(X.T @ X)                      # (X\'X)^-1, the "bread"',
+    '    beta = XtX_inv @ (X.T @ y)                            # OLS coefficient estimates',
+    '    resid = y - X @ beta                                  # residuals',
+    '    if groups is not None and len(np.unique(groups)) > 1:  # cluster-robust branch',
+    '        g = np.asarray(groups); uniq = np.unique(g); G = len(uniq)',
+    '        meat = np.zeros((k, k))                           # sum over clusters of s s\'',
+    '        for gi in uniq:                                   # accumulate each cluster',
+    '            m = g == gi                                   # rows in this cluster',
+    '            s = X[m].T @ resid[m]                         # cluster score vector',
+    '            meat += np.outer(s, s)                        # its outer product',
+    '        adj = (G / (G - 1.0)) * ((n - 1.0) / (n - k))     # CR1 small-sample factor',
+    '        V = XtX_inv @ (adj * meat) @ XtX_inv              # sandwich covariance',
+    '        dfree = max(G - 1, 1)                             # G-1 df: the cluster-robust standard',
+    '        clustered = True',
+    '    else:                                                 # HC3 fallback (no clusters)',
+    '        h = np.sum((X @ XtX_inv) * X, axis=1)             # leverages (hat diagonal)',
+    '        V = XtX_inv @ (X.T @ (X * (resid ** 2 / (1 - h) ** 2)[:, None])) @ XtX_inv',
+    '        dfree = max(n - k, 1)                             # usual residual df',
+    '        clustered = False',
+    '    se = np.sqrt(np.diag(V))                              # coefficient standard errors',
+    '    with np.errstate(divide="ignore", invalid="ignore"):',
+    '        t = beta / se                                     # t statistics',
+    '    # zero-SE convention (a perfectly-fit constant outcome): estimate 0 -> t=0',
+    '    # (p=1, no evidence against 0); a non-zero estimate keeps +/-inf (p=0).',
+    '    t = np.where((se == 0) & (beta == 0), 0.0, t)',
+    '    p = 2 * st.t.sf(np.abs(t), dfree)                     # two-sided p-values',
+    '    return {"beta": beta, "se": se, "t": t, "p": p, "n": n, "df": dfree, "clustered": clustered}',
+    '',
+    '',
+    'def design(frame, cat_col):',
+    '    """Build a regression design matrix [intercept | dummy columns] from a',
+    '    categorical column, dropping the alphabetically-first level as the reference',
+    '    (so the intercept = that reference group). Matches R\'s default factor coding,',
+    '    which keeps the Python and R regressions identical. Returns (X, names)."""',
+    '    d = pd.get_dummies(frame[cat_col].astype(str), drop_first=True)  # k-1 dummies',
+    '    d = d.reindex(sorted(d.columns), axis=1)             # alphabetical, like R',
+    '    X = np.column_stack([np.ones(len(frame))] + [d[c].values.astype(float) for c in d.columns])',
+    '    return X, ["Intercept"] + list(d.columns)',
+    '',
+    '',
+    '# collect the plain-language insight lines; printed after a banner at the end',
+    'INS = []',
+    'def note(s=""):',
+    '    INS.append(s)',
+    '',
+    '',
+    '# ── Load the data and keep only real (submitted) comparisons ──────────────────',
+    'df = pd.read_csv(io.StringIO(DATA_CSV), keep_default_na=False)  # literal "None"/"" kept as text',
+    'if "submitted" in df.columns:                                   # drop unfinished drafts',
+    '    # A BLANK value counts as submitted (imported third-party tables often have',
+    '    # no real submitted flag) - the same rule the Section-2 charts use, so the',
+    '    # charts and this script always analyse the same rows. Drafts stay excluded.',
+    '    df = df[df["submitted"].astype(str).str.strip().str.lower().isin(["yes", ""])].copy()',
+    '# Each column is optional-safe: a table without it just yields empty values',
+    '# instead of crashing (e.g. running the script on the Events sheet).',
+    'df["pref"] = pd.to_numeric(df["preference_model"], errors="coerce") if "preference_model" in df.columns else np.nan  # numeric outcome',
+    'df["chosen"] = df["chosen_model"].astype(str).str.strip().str.lower() if "chosen_model" in df.columns else ""  # baseline/frontier/tie',
+    'df["task_id"] = df["task_id"].astype(str).str.strip() if "task_id" in df.columns else ""   # join key as trimmed text',
+    '',
+    '# Attach complexity + domain from TASK_META, then let any non-blank values that',
+    '# were exported in the data itself override the built-in map.',
+    'df["complexity"] = df["task_id"].map(lambda t: TASK_META.get(t, ("(unknown)", "(unknown)"))[0])',
+    'df["domain"] = df["task_id"].map(lambda t: TASK_META.get(t, ("(unknown)", "(unknown)"))[1])',
+    'for col, src in [("complexity", "task_complexity"), ("domain", "task_domain")]:',
+    '    if src in df.columns:                                       # export carried this column?',
+    '        good = df[src].astype(str).str.strip()                  # trimmed data value',
+    '        mask = good.str.len().gt(0) & ~good.str.lower().isin(["nan", "none", ""])',
+    '        df.loc[mask, col] = good[mask]                          # override where non-blank',
+    '',
+    'n = len(df)                                                     # total comparisons',
+    'n_part = df["account_id"].nunique() if "account_id" in df.columns else float("nan")',
+    'n_task = df["task_id"].nunique()',
+    'print("=" * 74)',
+    'print("ANSWER ARENA - Haiku 4.5 (baseline) vs Opus 4.8 (frontier), blind preference")',
+    'print("=" * 74)',
+    'print("Comparisons: %d   Students: %s   Tasks: %d" % (n, n_part, n_task))',
+    '',
+    '# Usable = a graded preference or a recognised choice; a table with neither',
+    '# (e.g. the Events sheet) gets a clear message instead of a cryptic crash.',
+    'usable = int(df["pref"].notna().sum()) + int(df["chosen"].isin([OPUS, HAIKU, "tie"]).sum())',
+    'if n == 0 or usable == 0:',
+    '    print("\\nNo comparisons in the selected table - pick the Responses table (one row per comparison) in Section 3.")',
+    'else:',
+    '    # =====================================================================',
+    '    # 1. SUMMARY STATISTICS  (per task, per domain, per task type)',
+    '    # =====================================================================',
+    '    # Per-task table: how many responses, how many chose each side, the mean and',
+    '    # SD of the graded preference, and the Opus win-rate among decisive choices.',
+    '    def per_task_table():',
+    '        rows = []',
+    '        for t, g in df.groupby("task_id"):                     # one group per task',
+    '            nn, m, sd, se, lo, hi = mean_ci(g["pref"])          # mean + CI for this task',
+    '            opus = int((g["chosen"] == OPUS).sum())             # chose Opus',
+    '            haiku = int((g["chosen"] == HAIKU).sum())           # chose Haiku',
+    '            ties = int((g["chosen"] == "tie").sum())            # equivalent',
+    '            dec = opus + haiku                                  # decisive (non-tie) count',
+    '            rows.append({"task_id": t, "complexity": g["complexity"].iloc[0],',
+    '                         "domain": g["domain"].iloc[0], "n": nn, "opus": opus,',
+    '                         "haiku": haiku, "tie": ties,',
+    '                         "opus_win_pct": (100 * opus / dec) if dec else np.nan,',
+    '                         "mean_pref": m, "sd": sd, "ci_lo": lo, "ci_hi": hi})',
+    '        return pd.DataFrame(rows).sort_values("mean_pref", ascending=False)',
+    '',
+    '    task_tbl = per_task_table()',
+    '    print("\\n" + "-" * 74)',
+    '    print("1. SUMMARY STATISTICS")',
+    '    print("-" * 74)',
+    '    print("\\n1a. Per task (sorted by mean preference; >0 favours Opus):")',
+    '    print(task_tbl.to_string(index=False, float_format=lambda x: "%.2f" % x))',
+    '',
+    '    # Figure: responses per task - HOW BALANCED is the sample? Each student saw a',
+    '    # random 15-of-30 subset, so tasks get different response counts; the dashed',
+    '    # line marks the mean count. This is why the CIs later weight tasks equally.',
+    '    rc = task_tbl.sort_values("n")                          # ascending by count',
+    '    figR, axR = plt.subplots(figsize=(9, max(4, 0.30 * len(rc) + 1)))',
+    '    axR.barh(range(len(rc)), rc["n"].values, color="#4a6fa5")   # one bar per task',
+    '    axR.set_yticks(range(len(rc))); axR.set_yticklabels(rc["task_id"].values, fontsize=8)',
+    '    axR.axvline(rc["n"].mean(), color="#e67e22", ls="--", lw=2)  # mean-count reference',
+    '    for i, v in enumerate(rc["n"].values):                 # annotate each count',
+    '        axR.text(v, i, " %d" % v, va="center", fontsize=8)',
+    '    axR.set_xlabel("number of responses")',
+    '    axR.set_title("Responses per task (sample balance; dashed = mean %.1f)" % rc["n"].mean())',
+    '    figR.tight_layout()',
+    '',
+    '    # A reusable grouped-summary: mean/SD of the graded preference AND the Opus',
+    '    # win-rate, computed at the RESPONSE level, for any grouping column.',
+    '    def group_summary(col):',
+    '        out = []',
+    '        for key, g in df.groupby(col):',
+    '            nn, m, sd, se, lo, hi = mean_ci(g["pref"])',
+    '            opus = int((g["chosen"] == OPUS).sum()); haiku = int((g["chosen"] == HAIKU).sum())',
+    '            dec = opus + haiku',
+    '            out.append({col: key, "n_tasks": g["task_id"].nunique(), "n_resp": nn,',
+    '                        "mean_pref": m, "sd": sd, "opus_win_pct": (100 * opus / dec) if dec else np.nan})',
+    '        return pd.DataFrame(out)',
+    '',
+    '    print("\\n1b. Per task type (response level):")',
+    '    print(group_summary("complexity").to_string(index=False, float_format=lambda x: "%.2f" % x))',
+    '    print("\\n1c. Per domain (response level):")',
+    '    print(group_summary("domain").sort_values("mean_pref", ascending=False).to_string(index=False, float_format=lambda x: "%.2f" % x))',
+    '',
+    '    # =====================================================================',
+    '    # 2. THE MAIN HYPOTHESIS TEST  (Haiku baseline: equally preferred or not?)',
+    '    # =====================================================================',
+    '    # H0: mean graded preference = 0  (Opus is judged EQUAL to the Haiku baseline).',
+    '    # H1: mean != 0                    (students prefer one model). Sign = winner.',
+    '    # We test it two ways that both respect the design:',
+    '    #   (A) TASK-LEVEL: average within each task, then one-sample t-test of the 30',
+    '    #       task means. Each task counts once, so unequal response counts do NOT',
+    '    #       bias the estimate - this is the headline "average across tasks" answer.',
+    '    #   (B) RESPONSE-LEVEL: intercept-only regression on all responses with SEs',
+    '    #       clustered on the student (handles repeated measures).',
+    '    task_means = df.groupby("task_id")["pref"].mean()           # one mean per task',
+    '    kA, mA, sdA, seA, loA, hiA = mean_ci(task_means.values)     # across-task summary',
+    '    tA, pA, dfA = onesample_t(task_means.values)                # task-level t-test vs 0',
+    '',
+    '    # Cluster ids from the GRADED rows only (the rows the regression uses):',
+    '    # deciding on the full table could claim clustering when the graded subset',
+    '    # has a single student and ols_robust silently fell back to HC3.',
+    '    n_gr = int(df["pref"].notna().sum())                         # graded (non-missing) responses',
+    '    grpB = None',
+    '    if "account_id" in df.columns and n_gr > 0:',
+    '        gsub = df.loc[df["pref"].notna(), "account_id"]',
+    '        if gsub.nunique() > 1:',
+    '            grpB = gsub.values',
+    '    if n_gr > 0:                                                 # guard: an empty regression is singular',
+    '        rB = ols_robust(df["pref"].dropna().values,',
+    '                        np.ones((n_gr, 1)),',
+    '                        grpB)',
+    '        mB, seB, pB = float(rB["beta"][0]), float(rB["se"][0]), float(rB["p"][0])',
+    '        tcB = float(st.t.ppf(0.975, rB["df"]))                   # t critical value, same df as the test',
+    '        loB, hiB = mB - tcB * seB, mB + tcB * seB',
+    '    else:                                                        # no graded data at all',
+    '        rB = {"n": 0}; mB = seB = pB = loB = hiB = np.nan',
+    '',
+    '    # Decisive-choice win-rate and its exact binomial test (ties excluded).',
+    '    opus_all = int((df["chosen"] == OPUS).sum()); haiku_all = int((df["chosen"] == HAIKU).sum())',
+    '    ties_all = int((df["chosen"] == "tie").sum()); dec_all = opus_all + haiku_all',
+    '    n_cls = opus_all + ties_all + haiku_all                      # rows with a recognised choice',
+    '    win_all = opus_all / dec_all if dec_all else np.nan',
+    '    p_win = binom_two_sided(opus_all, dec_all)',
+    '',
+    '    print("\\n" + "-" * 74)',
+    '    print("2. MAIN TEST - is Opus equally preferred to the Haiku baseline?")',
+    '    print("-" * 74)',
+    '    print("   H0: mean graded preference = 0 (equal to baseline).  H1: != 0.")',
+    '    # Label (B) honestly: with a single student in the graded rows the fit fell',
+    '    # back to HC3, so do not claim the SEs were clustered.',
+    '    lblB = "(B) response-level, clustered on student" if rB.get("clustered") else "(B) response-level (HC3 robust; no repeated students)"',
+    '    main_tbl = pd.DataFrame({',
+    '        "test": ["(A) task-level (each task = 1 obs)", lblB],',
+    '        "n": ["%d tasks" % kA, "%d responses" % rB["n"]],',
+    '        "mean_pref": [mA, mB],',
+    '        "CI95": ["[%.3f, %.3f]" % (loA, hiA), "[%.3f, %.3f]" % (loB, hiB)],',
+    '        "p_H0": [pA, pB]})',
+    '    print(main_tbl.to_string(index=False, float_format=lambda x: "%.4f" % x))',
+    '    print("\\n   Decisive choices (ties dropped): Opus %d vs Haiku %d = %.1f%% Opus win-rate;"',
+    '          % (opus_all, haiku_all, 100 * win_all if dec_all else float("nan")))',
+    '    # Denominator = rows with a recognised choice (an imported table may hold',
+    '    # unclassifiable chosen_model values that must not dilute the tie share).',
+    '    print("   exact binomial test vs 50/50: p = %.4g   (ties were %.0f%% of the classified answers)."',
+    '          % (p_win, (100 * ties_all / n_cls) if n_cls else float("nan")))',
+    '',
+    '    # =====================================================================',
+    '    # 3. PER-TASK RECOMMENDATION  (which model wins each question?)',
+    '    # =====================================================================',
+    '    # For every task we test its own responses against 0 and turn the result into',
+    '    # a recommendation: a model "wins" a task only if the mean clearly leans that',
+    '    # way AND the one-sample t-test is significant (p<0.05); otherwise the task is',
+    '    # "no clear preference" (statistically indistinguishable from the baseline).',
+    '    def recommend(row_pref):',
+    '        t, p, dfree = onesample_t(row_pref)                    # test this task vs 0',
+    '        m = float(np.nanmean(row_pref)) if len(row_pref) else np.nan',
+    '        if np.isnan(p):',
+    '            rec = "n/a (too few)"',
+    '        elif p < 0.05 and m > 0:',
+    '            rec = "Opus"',
+    '        elif p < 0.05 and m < 0:',
+    '            rec = "Haiku"',
+    '        else:',
+    '            rec = "no clear preference"',
+    '        return p, rec',
+    '',
+    '    rec_rows = []',
+    '    for t, g in df.groupby("task_id"):',
+    '        p, rec = recommend(g["pref"].values)',
+    '        rec_rows.append({"task_id": t, "complexity": g["complexity"].iloc[0],',
+    '                         "domain": g["domain"].iloc[0], "n": int(g["pref"].notna().sum()),',
+    '                         "mean_pref": float(np.nanmean(g["pref"])), "p_value": p, "recommendation": rec})',
+    '    rec_tbl = pd.DataFrame(rec_rows).sort_values("mean_pref", ascending=False)',
+    '    n_opus_tasks = int((rec_tbl["recommendation"] == "Opus").sum())',
+    '    n_haiku_tasks = int((rec_tbl["recommendation"] == "Haiku").sum())',
+    '    n_none_tasks = int((rec_tbl["recommendation"] == "no clear preference").sum())',
+    '    n_na_tasks = int((rec_tbl["recommendation"] == "n/a (too few)").sum())',
+    '    # keep the arithmetic honest: opus + haiku + none + na = all tasks',
+    '    na_txt = (", and %d had too little graded data to test" % n_na_tasks) if n_na_tasks else ""',
+    '    print("\\n" + "-" * 74)',
+    '    print("3. PER-TASK RECOMMENDATION  (one-sample t-test of each task vs baseline)")',
+    '    print("-" * 74)',
+    '    print(rec_tbl.to_string(index=False, float_format=lambda x: "%.3f" % x))',
+    '    print("\\n   Significant winners: Opus on %d tasks, Haiku on %d; %d show no clear preference%s."',
+    '          % (n_opus_tasks, n_haiku_tasks, n_none_tasks, na_txt))',
+    '',
+    '    # =====================================================================',
+    '    # 4. BY TASK TYPE  (Simple vs Complex) - CIs weight each task equally',
+    '    # =====================================================================',
+    '    # To respect unequal responses per task we work with the 30 TASK MEANS: within',
+    '    # each type we t-test the task means vs 0 (is that type\'s preference non-zero?)',
+    '    # and then compare the two types with a Welch two-sample t-test on task means.',
+    '    tm = df.groupby("task_id").agg(pref=("pref", "mean"), complexity=("complexity", "first"),',
+    '                                   domain=("domain", "first")).reset_index()',
+    '    tm = tm.dropna(subset=["pref"])                      # drop tasks with no graded responses',
+    '    clip3 = lambda v: v if np.isnan(v) else max(-3.0, min(3.0, v))   # keep CIs on-scale',
+    '    def by_group(frame, col):',
+    '        out = []',
+    '        for key, g in frame.groupby(col):',
+    '            nn, m, sd, se, lo, hi = mean_ci(g["pref"].values)   # task-level mean + CI',
+    '            t, p, dfree = onesample_t(g["pref"].values)         # is it != 0 ?',
+    '            # The preference scale is bounded [-3, +3], so a CI cannot meaningfully',
+    '            # extend past it; clip the displayed interval (a domain with only 2 tasks',
+    '            # has 1 degree of freedom and would otherwise show absurd whiskers).',
+    '            out.append({col: key, "n_tasks": nn, "mean_pref": m, "sd": sd,',
+    '                        "ci_lo": clip3(lo), "ci_hi": clip3(hi), "p_vs_baseline": p})',
+    '        # explicit columns so an EMPTY frame (no graded data) still sorts/filters',
+    '        return pd.DataFrame(out, columns=[col, "n_tasks", "mean_pref", "sd", "ci_lo", "ci_hi", "p_vs_baseline"])',
+    '',
+    '    type_tbl = by_group(tm, "complexity")',
+    '    print("\\n" + "-" * 74)',
+    '    print("4. BY TASK TYPE  (task-level: each task weighted equally, so unequal")',
+    '    print("   response counts do not bias the estimate)")',
+    '    print("-" * 74)',
+    '    print(type_tbl.to_string(index=False, float_format=lambda x: "%.4f" % x))',
+    '    simp = tm.loc[tm["complexity"] == "Simple", "pref"].values',
+    '    comp = tm.loc[tm["complexity"] == "Complex", "pref"].values',
+    '    p_sc = np.nan',
+    '    if len(simp) >= 2 and len(comp) >= 2:',
+    '        w = st.ttest_ind(comp, simp, equal_var=False)          # Welch: Complex - Simple',
+    '        p_sc = float(np.ravel(w.pvalue)[0])',
+    '        print("\\n   Complex vs Simple (Welch two-sample t-test on task means): "',
+    '              "difference = %+.3f, p = %.4g" % (float(np.mean(comp) - np.mean(simp)), p_sc))',
+    '',
+    '    # =====================================================================',
+    '    # 5. BY DOMAIN  - each domain vs baseline + an ANOVA across domains',
+    '    # =====================================================================',
+    '    dom_tbl = by_group(tm, "domain").sort_values("mean_pref", ascending=False)',
+    '    print("\\n" + "-" * 74)',
+    '    print("5. BY DOMAIN  (task-level; sorted by mean preference)")',
+    '    print("-" * 74)',
+    '    print(dom_tbl.to_string(index=False, float_format=lambda x: "%.4f" % x))',
+    '    # One-way ANOVA: do the domains differ in their (task-level) mean preference?',
+    '    dom_groups = [g["pref"].values for _, g in tm.groupby("domain") if len(g) >= 2]',
+    '    p_anova = np.nan',
+    '    if len(dom_groups) >= 2:',
+    '        fA = st.f_oneway(*dom_groups)                          # classic equal-variance ANOVA',
+    '        p_anova = float(np.ravel(fA.pvalue)[0])',
+    '        print("\\n   One-way ANOVA across the %d domains with >=2 tasks (of %d domains): F = %.3f, p = %.4g"',
+    '              % (len(dom_groups), tm["domain"].nunique(), float(np.ravel(fA.statistic)[0]), p_anova))',
+    '',
+    '    # =====================================================================',
+    '    # 6. REGRESSIONS  (preference on complexity, and on domain)',
+    '    # =====================================================================',
+    '    # Response-level OLS with SEs clustered on the student. The intercept is the',
+    '    # reference group\'s mean preference (its p-value tests "= baseline"); each',
+    '    # slope is that group\'s difference from the reference.',
+    '    reg = df.dropna(subset=["pref"]).copy()',
+    '    gcl = reg["account_id"].values if ("account_id" in reg.columns and reg["account_id"].nunique() > 1) else None',
+    '    print("\\n" + "-" * 74)',
+    '    print("6. REGRESSIONS  (response level; %s)"',
+    '          % ("SEs clustered on student" if gcl is not None else "HC3 robust SEs - no repeated students"))',
+    '    print("-" * 74)',
+    '    for label, col in [("pref ~ complexity", "complexity"), ("pref ~ domain", "domain")]:',
+    '        if reg[col].nunique() < 2:',
+    '            continue',
+    '        ref = sorted(reg[col].astype(str).unique())[0]         # dropped level = reference',
+    '        X, names = design(reg, col)                            # design matrix + coef names',
+    '        r = ols_robust(reg["pref"].values, X, gcl)             # cluster-robust fit',
+    '        ct = pd.DataFrame({"coef": r["beta"], "robust_SE": r["se"], "t": r["t"], "p": r["p"]}, index=names)',
+    '        print("\\n   %s   (Intercept = reference group \'%s\'; slopes are differences from it):" % (label, ref))',
+    '        print(ct.to_string(float_format=lambda x: "%.4f" % x))',
+    '',
+    '    # =====================================================================',
+    '    # PLOTS',
+    '    # =====================================================================',
+    '    col_for = lambda v: "#e67e22" if v > 0 else ("#3d7bd6" if v < 0 else "#9a978f")  # Opus/Haiku/tie colours',
+    '',
+    '    # Figure 1: distribution of the 7-point graded preference + outcome shares.',
+    '    fig1, ax = plt.subplots(1, 2, figsize=(11, 4.3))',
+    '    pv = df["pref"].dropna()',
+    '    # Snap to the -3..3 scale before counting so a non-integer value from an',
+    '    # imported table still shows in the histogram (means/tests use it as-is).',
+    '    pvi = pv.round().clip(-3, 3)',
+    '    counts = [int((pvi == v).sum()) for v in range(-3, 4)]      # count at each integer',
+    '    ax[0].bar(range(-3, 4), counts, color=[col_for(v) for v in range(-3, 4)])',
+    '    ax[0].set_xticks(range(-3, 4)); ax[0].set_xlabel("graded preference (-3 Haiku .. +3 Opus)")',
+    '    ax[0].set_ylabel("responses"); ax[0].set_title("How strongly, and for whom")',
+    '    if len(pv):',
+    '        ax[0].axvline(pv.mean(), color="#111", ls="--", lw=2)   # overall mean line',
+    '    ax[1].bar(["Opus", "Tie", "Haiku"], [opus_all, ties_all, haiku_all], color=["#e67e22", "#9a978f", "#3d7bd6"])',
+    '    ax[1].set_ylabel("responses"); ax[1].set_title("Who was preferred (n=%d)" % n_cls)',
+    '    fig1.tight_layout()',
+    '',
+    '    # Figure 2: per-task mean +/- 95% CI (sorted). The CI whiskers are WIDER for',
+    '    # tasks with fewer responses - the visual proof we account for unequal n.',
+    '    ts = task_tbl.sort_values("mean_pref")',
+    '    fig2, ax2 = plt.subplots(figsize=(9, max(4, 0.32 * len(ts) + 1)))',
+    '    yy = np.arange(len(ts))',
+    '    ax2.errorbar(ts["mean_pref"].values, yy,',
+    '                 xerr=[ts["mean_pref"].values - ts["ci_lo"].values, ts["ci_hi"].values - ts["mean_pref"].values],',
+    '                 fmt="o", ecolor="#888", elinewidth=1, capsize=3,',
+    '                 mfc="none", mec="#333")',
+    '    ax2.set_yticks(yy); ax2.set_yticklabels(ts["task_id"].values, fontsize=8)',
+    '    ax2.axvline(0, color="#111", lw=1)',
+    '    ax2.set_xlabel("mean graded preference +/- 95% CI (>0 favours Opus)")',
+    '    ax2.set_title("Per-task preference (CI widens when a task got fewer responses)")',
+    '    fig2.tight_layout()',
+    '',
+    '    # Figure 2b: WHICH MODEL EACH TASK\'S USERS PREFER, ranked Haiku (top) ->',
+    '    # indifferent (middle) -> Opus (bottom). The winner is the per-task',
+    '    # recommendation from Section 3 (the one-sample t-test): "Haiku" / "Opus" when',
+    '    # the lean is significant, else "no clear preference" (indifferent). The bar is',
+    '    # the mean graded preference and the colour is the winner.',
+    '    from matplotlib.patches import Patch                # legend swatches',
+    '    rank_of = {"Haiku": 0, "no clear preference": 1, "n/a (too few)": 1, "Opus": 2}',
+    '    col_of = {"Haiku": "#3d7bd6", "no clear preference": "#9a978f", "n/a (too few)": "#9a978f", "Opus": "#e67e22"}',
+    '    rw = rec_tbl.copy()                                 # per-task recommendation table',
+    '    rw["rank"] = rw["recommendation"].map(lambda r: rank_of.get(r, 1))',
+    '    rw = rw.sort_values(["rank", "mean_pref"])          # Haiku block first; strongest within each block',
+    '    figW, axW = plt.subplots(figsize=(9, max(4, 0.32 * len(rw) + 1)))',
+    '    yw = np.arange(len(rw))',
+    '    axW.barh(yw, rw["mean_pref"].values, color=[col_of.get(c, "#9a978f") for c in rw["recommendation"]])',
+    '    axW.set_yticks(yw); axW.set_yticklabels(rw["task_id"].values, fontsize=8)',
+    '    axW.invert_yaxis()                                  # first sorted row (Haiku) at the TOP',
+    '    axW.axvline(0, color="#111", lw=1)',
+    '    axW.set_xlabel("mean graded preference (<0 Haiku .. >0 Opus)")',
+    '    axW.set_title("What each task\'s users prefer  (Haiku -> indifferent -> Opus)")',
+    '    axW.legend(handles=[Patch(color="#3d7bd6", label="Haiku"), Patch(color="#9a978f", label="Indifferent"),',
+    '                        Patch(color="#e67e22", label="Opus")], loc="lower right", fontsize=9)',
+    '    figW.tight_layout()',
+    '',
+    '    # Figure 2c: CONFIDENT per-task provisioning. Classify each task\'s CHOICES as',
+    '    # over- (chose Opus) / indifferent (tie) / under-provision (chose Haiku) by the',
+    '    # DOMINANT category, but keep it ONLY when that category is significantly larger',
+    '    # than the runner-up — an EXACT binomial test on the top-two counts: under H0',
+    '    # the leading choice and the runner-up are equally likely, so among the responses',
+    '    # picking either the split is 50/50. Exact, so small or lopsided tasks are not',
+    '    # over-called (a normal z-test here is far too eager with few responses, e.g.',
+    '    # 5-0-0 would come out "certain"). Tasks that don\'t clear p<0.05 are dropped',
+    '    # ("not enough data"). Because the top beats the runner-up, it also beats the',
+    '    # third, so this is "significant and different from the other two".',
+    '    prov_cat = [("under", "#3d7bd6", "Under-provision (Haiku)"),',
+    '                ("ind", "#9a978f", "Indifferent"), ("over", "#e67e22", "Over-provision (Opus)")]',
+    '    conf = []',
+    '    for _, r in task_tbl.iterrows():',
+    '        cnt = {"over": int(r["opus"]), "ind": int(r["tie"]), "under": int(r["haiku"])}',
+    '        nn = cnt["over"] + cnt["ind"] + cnt["under"]                  # all classified choices',
+    '        if nn == 0:',
+    '            continue',
+    '        srt = sorted(cnt, key=lambda kk: cnt[kk], reverse=True)       # top, runner-up, third',
+    '        top, run = srt[0], srt[1]',
+    '        if cnt[top] == cnt[run]:                                      # tie for the lead -> not confident',
+    '            continue',
+    '        p = binom_two_sided(cnt[top], cnt[top] + cnt[run])            # exact two-sided p, top vs runner-up',
+    '        if p < 0.05:',
+    '            conf.append({"task": r["task_id"], "cat": top, "share": 100 * cnt[top] / nn, "p": p})',
+    '    figC, axC = plt.subplots(figsize=(9, max(3, 0.34 * max(1, len(conf)) + 1)))',
+    '    if conf:',
+    '        cdf = pd.DataFrame(conf)',
+    '        cdf["rank"] = cdf["cat"].map({"under": 0, "ind": 1, "over": 2})',
+    '        cdf = cdf.sort_values(["rank", "share"])                      # under block -> ind -> over',
+    '        cmap = {c[0]: c[1] for c in prov_cat}',
+    '        yc = np.arange(len(cdf))',
+    '        axC.barh(yc, cdf["share"].values, color=[cmap[c] for c in cdf["cat"]])',
+    '        axC.set_yticks(yc); axC.set_yticklabels(cdf["task"].values, fontsize=8)',
+    '        axC.invert_yaxis(); axC.set_xlim(0, 100)',
+    '        axC.set_xlabel("share of responses for the dominant (winning) choice (%)")',
+    '        axC.set_title("Confidently-classified tasks (95%%): under -> indifferent -> over  (%d of %d)" % (len(cdf), n_task))',
+    '        axC.legend(handles=[Patch(color=c[1], label=c[2]) for c in prov_cat], loc="lower right", fontsize=9)',
+    '    else:',
+    '        axC.text(0.5, 0.5, "No task reaches a 95%-confident\\nover / indifferent / under classification\\nwith the current data.",',
+    '                 ha="center", va="center", fontsize=12); axC.axis("off")',
+    '    figC.tight_layout()',
+    '',
+    '    # Figure 3: by domain and by type, task-level means +/- 95% CI.',
+    '    fig3, ax3 = plt.subplots(1, 2, figsize=(12, 4.6))',
+    '    d = dom_tbl.iloc[::-1]                                      # smallest at bottom',
+    '    yy3 = np.arange(len(d))',
+    '    ax3[0].errorbar(d["mean_pref"].values, yy3,',
+    '                    xerr=[d["mean_pref"].values - d["ci_lo"].values, d["ci_hi"].values - d["mean_pref"].values],',
+    '                    fmt="s", ecolor="#888", capsize=4, mfc="#e67e22", mec="#333")',
+    '    ax3[0].set_yticks(yy3); ax3[0].set_yticklabels(d["domain"].values, fontsize=9)',
+    '    ax3[0].axvline(0, color="#111", lw=1); ax3[0].set_title("By domain (task-level mean +/- 95% CI)")',
+    '    ax3[0].set_xlabel("mean graded preference"); ax3[0].set_xlim(-3.2, 3.2)  # scale bounds',
+    '    tt = type_tbl',
+    '    xx = np.arange(len(tt))',
+    '    ax3[1].bar(xx, tt["mean_pref"].values,',
+    '               yerr=[tt["mean_pref"].values - tt["ci_lo"].values, tt["ci_hi"].values - tt["mean_pref"].values],',
+    '               capsize=8, color="#e67e22")',
+    '    ax3[1].set_xticks(xx); ax3[1].set_xticklabels(tt["complexity"].values)',
+    '    ax3[1].axhline(0, color="#111", lw=1); ax3[1].set_title("By task type (task-level mean +/- 95% CI)")',
+    '    ax3[1].set_ylabel("mean graded preference")',
+    '    fig3.tight_layout()',
+    '',
+    '    # =====================================================================',
+    '    # INSIGHTS  (plain language; rendered by the Insights section)',
+    '    # =====================================================================',
+    '    def verdict(mean, p):',
+    '        """Turn a (mean, p) pair into a one-word recommendation."""',
+    '        if np.isnan(p):',
+    '            return "not enough data"',
+    '        if p >= 0.05:',
+    '            return "no clear preference (indifferent)"',
+    '        return "prefer Opus" if mean > 0 else "prefer Haiku"',
+    '',
+    '    overall = verdict(mA, pA)',
+    '    print("\\n\\nINSIGHTS")',
+    '    print("=" * 74)',
+    '    note("## Overall recommendation")',
+    '    if np.isnan(mA):',
+    '        note("- Not enough graded data to draw a conclusion yet.")',
+    '    else:',
+    '        note("- Testing Haiku as the baseline, the **overall verdict is: %s.** Averaging across "',
+    '             "the %d tasks the mean graded preference is **%+.2f** (95%% CI [%.2f, %.2f]; >0 favours "',
+    '             "Opus), and a task-level t-test vs 0 gives **p = %.3g**." % (overall, kA, mA, loA, hiA, pA))',
+    '        # Only compare the two tests when both produced a p-value: with NaN the',
+    '        # comparison is meaningless (it used to print a spurious "(agrees)").',
+    '        if np.isnan(pA) or np.isnan(pB):',
+    '            agree_txt = " (too little data to compare the two tests)"',
+    '        else:',
+    '            agree_txt = " (agrees)" if ((pB < 0.05) == (pA < 0.05)) else " (note: differs from the task-level test)"',
+    '        note("- Cross-check on all %d responses (clustered on student): mean **%+.2f**, p = %.3g%s."',
+    '             % (rB["n"], mB, pB, agree_txt))',
+    '        if dec_all:',
+    '            note("- Head-to-head, ignoring ties: **Opus won %.0f%%** of the %d decisive comparisons "',
+    '                 "(binomial p = %.3g)." % (100 * win_all, dec_all, p_win))',
+    '        else:',
+    '            note("- Head-to-head: every answer so far is a tie - there are no decisive comparisons yet.")',
+    '    note("")',
+    '    note("## By task type (Simple vs Complex)")',
+    '    for _, r in type_tbl.iterrows():',
+    '        note("- **%s** tasks: mean **%+.2f** (95%% CI [%.2f, %.2f]) -> %s."',
+    '             % (r["complexity"], r["mean_pref"], r["ci_lo"], r["ci_hi"], verdict(r["mean_pref"], r["p_vs_baseline"])))',
+    '    if not np.isnan(p_sc):',
+    '        note("- The Simple-vs-Complex gap is **%s** (Welch p = %.3g)."',
+    '             % ("significant" if p_sc < 0.05 else "not significant", p_sc))',
+    '    note("")',
+    '    note("## By domain")',
+    '    sig_dom = dom_tbl[dom_tbl["p_vs_baseline"] < 0.05]',
+    '    if len(sig_dom):',
+    '        for _, r in sig_dom.iterrows():',
+    '            note("- **%s**: mean **%+.2f** -> %s (p = %.3g)."',
+    '                 % (r["domain"], r["mean_pref"], "Opus" if r["mean_pref"] > 0 else "Haiku", r["p_vs_baseline"]))',
+    '    else:',
+    '        note("- No single domain reaches significance on its own (small task counts per domain).")',
+    '    if not np.isnan(p_anova):',
+    '        note("- Domains **%s** differ overall (ANOVA p = %.3g)."',
+    '             % ("do" if p_anova < 0.05 else "do not clearly", p_anova))',
+    '    note("")',
+    '    note("## Per-task picture")',
+    '    note("- Of the %d tasks, **Opus is the clear winner on %d** and **Haiku on %d**; "',
+    '         "**%d show no clear preference**%s. So the right answer is task-dependent - see the per-task "',
+    '         "table and the CI plot (whiskers widen where fewer students responded)."',
+    '         % (n_task, n_opus_tasks, n_haiku_tasks, n_none_tasks, na_txt))',
+    '',
+    '    # ---- The figures, each with a plain-language guide (the Insights section',
+    '    # ---- drops the matching plot in right under each "## Figure N" heading). ----',
+    '    n_over = sum(1 for c in conf if c["cat"] == "over")     # confident Opus tasks',
+    '    n_under = sum(1 for c in conf if c["cat"] == "under")   # confident Haiku tasks',
+    '    n_ind = sum(1 for c in conf if c["cat"] == "ind")       # confident tie tasks',
+    '    note("")',
+    '    note("## How to read the figures below")',
+    '    note("All six figures come from the analysis above - nothing new is computed. Each one is shown "',
+    '         "here with a short guide to reading it, so the plots live in one place with their explanation.")',
+    '    note("")',
+    '    note("## Figure 1 - Sample balance: how many students answered each task")',
+    '    note("- One bar per task = the number of real (submitted) responses it got; the dashed line is the "',
+    '         "average. Because each student saw a random 15 of the 30 tasks, the bars are uneven. **This is "',
+    '         "exactly why the confidence intervals below are task-weighted and why some are wider than "',
+    '         "others** - a task with fewer responses carries less certainty.")',
+    '    note("")',
+    '    note("## Figure 2 - Overall: how strongly, and who was preferred")',
+    '    note("- Left: the spread of the -3..+3 graded preference across every response (negative = Haiku, "',
+    '         "0 = equivalent, positive = Opus); the dashed line is the overall mean. Right: the raw count of "',
+    '         "responses that picked Opus, called it a tie, or picked Haiku. Read them together - a mean near "',
+    '         "0 with many -3 and +3 votes means students *disagreed strongly*, not that everyone was "',
+    '         "indifferent.")',
+    '    note("")',
+    '    note("## Figure 3 - Per-task preference with 95% confidence intervals")',
+    '    note("- Each dot is one task\'s mean graded preference; the whisker is its 95% confidence interval. "',
+    '         "A task whose whisker **crosses the 0 line has no statistically clear preference**; one whose "',
+    '         "whisker sits entirely on one side does. Whiskers widen for tasks with fewer responses "',
+    '         "(Figure 1) - that is the correct handling of unequal response counts.")',
+    '    note("")',
+    '    note("## Figure 4 - What each task\'s users prefer (Haiku -> indifferent -> Opus)")',
+    '    note("- **Two different things are drawn here - do not confuse them.** The **bar length** is the "',
+    '         "task\'s *average* graded preference (left = leaned Haiku, right = leaned Opus). The **colour** "',
+    '         "is the *statistical verdict* (same test as Figure 3): blue = students significantly preferred "',
+    '         "Haiku, orange = significantly preferred Opus, **grey = no statistically clear preference** "',
+    '         "(its 95% interval still includes 0, i.e. its Figure-3 whisker crosses zero).")',
+    '    note("- That is why a **long grey bar** can appear (a task whose average is sizeable yet still "',
+    '         "grey): on average those students leaned one way, but either few of them answered or they "',
+    '         "disagreed a lot, so we cannot rule out that the true preference is zero. **Grey does NOT mean "',
+    '         "everyone clicked \\"equivalent\\"** - it means \\"not distinguishable from indifference at 95% "',
+    '         "confidence.\\" A task turns grey either because opinions genuinely split (some strongly Opus, "',
+    '         "some strongly Haiku, cancelling out in the average) OR because too few students answered to be "',
+    '         "sure. In short: **the bar shows the direction and size of the average; the colour shows "',
+    '         "whether we are confident about it.**")',
+    '    note("")',
+    '    note("## Figure 5 - Tasks we can classify with 95% confidence (over / indifferent / under-provisioning)")',
+    '    note("- In the provisioning frame: **over-provisioning = students preferred Opus** (the larger "',
+    '         "model), **under-provisioning = students preferred Haiku** (the smaller model), **indifferent "',
+    '         "= a genuine tie**. A task appears here **only if one of the three categories is statistically "',
+    '         "dominant** - an exact binomial test shows the leading choice significantly beats the runner-up "',
+    '         "(and therefore the third) at 95%. Tasks that do not clear that bar are omitted as \\"not enough "',
+    '         "evidence to classify.\\"")',
+    '    if conf:',
+    '        note("- Of the %d tasks, **%d clear the bar**: %d over-provisioning (Opus), %d under-provisioning "',
+    '             "(Haiku), %d indifferent. Each bar\'s length is the winning choice\'s share of that task\'s "',
+    '             "responses." % (n_task, len(conf), n_over, n_under, n_ind))',
+    '    else:',
+    '        note("- **No task clears the bar with the current data**, so the figure says so rather than "',
+    '             "showing a classification we are not sure of. More responses per task would resolve the "',
+    '             "borderline ones.")',
+    '    note("- Figures 4 and 5 ask *different* questions and can disagree. Figure 4 tests whether a task\'s "',
+    '         "**average strength** of preference (on the -3..+3 scale) differs from 0; Figure 5 tests whether "',
+    '         "one of the three **choice categories** (Opus / tie / Haiku) is a significant plurality of the "',
+    '         "picks. So a task can be grey in Figure 4 yet still be confidently classified in Figure 5, or "',
+    '         "the reverse - the two views are complementary, not a contradiction.")',
+    '    note("")',
+    '    note("## Figure 6 - By domain and by task type, with confidence intervals")',
+    '    note("- Left: each domain\'s task-weighted mean preference with its 95% interval; right: the same for "',
+    '         "Simple vs Complex tasks. A bar/whisker that clears the 0 line marks a group that reliably leans "',
+    '         "to one model. This is the aggregated view behind the \\"By task type\\" and \\"By domain\\" "',
+    '         "bullets above.")',
+    '    for line in INS:',
+    '        print(line)',
+    '    print("\\nDone.")'
+  ].join('\n');
+
+  var DA_R_TEMPLATE = [
+    '# =============================================================================',
+    '# ANSWER ARENA - which model do users prefer: Haiku 4.5 or Opus 4.8?',
+    '# =============================================================================',
+    '# Design. For each of 30 tasks (real user needs) the same prompt was sent to Haiku',
+    '# (the BASELINE) and to Opus (the FRONTIER); both answers were shown to students',
+    '# WITHOUT labels. Each student said which answer resolved the task better - Haiku,',
+    '# Opus, or "equivalent" - then graded HOW MUCH they preferred it. Each student saw',
+    '# a random subset of 15 of the 30 tasks, so tasks got different numbers of',
+    '# responses (which is why the confidence intervals below weight each task equally).',
+    '#',
+    '# Data. The selected table is mounted at /tmp/data.csv, one row per comparison:',
+    '#   account_id       the student (repeated measures -> we cluster on this)',
+    '#   task_id          the task / user need (join key to complexity + domain)',
+    '#   chosen_model     baseline (Haiku) | frontier (Opus) | tie',
+    '#   preference_model graded preference -3..+3, MODEL frame: <0 Haiku, 0 equal, >0 Opus',
+    '#   submitted        \'yes\' for a real (non-draft) answer',
+    '#',
+    '# This R version computes the SAME quantities as the Python version, but with base',
+    '# R\'s own tools (t.test, lm, aov/anova, tapply, binom.test) - no extra packages.',
+    '',
+    '# -- Task metadata: task_id -> complexity + domain (from the study\'s task list) --',
+    'TASK_META <- data.frame(',
+    '  task_id = c("T075","T080","T083","T086","T051","T064","T022","T025","T067","T073","T099",',
+    '  "T013","T016","T001","T005","T082","T085","T054","T056","T065","T026","T029","T046",',
+    '  "T048","T071","T098","T018","T019","T002","T009"),',
+    '  complexity = c("Simple","Simple","Simple","Simple","Simple","Simple","Simple","Simple",',
+    '  "Simple","Simple","Simple","Simple","Simple","Simple","Simple","Complex","Complex",',
+    '  "Complex","Complex","Complex","Complex","Complex","Complex","Complex","Complex","Complex",',
+    '  "Complex","Complex","Complex","Complex"),',
+    '  domain = c("Creative & Marketing","Creative & Marketing","Customer Support",',
+    '  "Customer Support","Data Analysis","Extraction & Classification","Knowledge Q&A",',
+    '  "Knowledge Q&A","Planning & Strategy","Planning & Strategy","Review & QA","Summarization",',
+    '  "Summarization","Writing","Writing","Creative & Marketing","Customer Support",',
+    '  "Data Analysis","Data Analysis","Extraction & Classification","Knowledge Q&A",',
+    '  "Knowledge Q&A","Math & Reasoning","Math & Reasoning","Planning & Strategy","Review & QA",',
+    '  "Summarization","Summarization","Writing","Writing"),',
+    '  stringsAsFactors = FALSE)',
+    '',
+    'OPUS <- "frontier"; HAIKU <- "baseline"   # never shown to students',
+    '',
+    '# -- Statistics helpers (each documented) ------------------------------------',
+    '# Mean + t-based confidence interval; the interval widens as n shrinks (so tasks',
+    '# with fewer responses get wider CIs). Returns a list; NA spread when n < 2.',
+    'mean_ci <- function(x, conf = 0.95) {',
+    '  x <- x[!is.na(x)]; n <- length(x)                      # drop NAs, count',
+    '  if (n == 0) return(list(n = 0, mean = NA, sd = NA, se = NA, lo = NA, hi = NA))',
+    '  m <- mean(x)                                           # sample mean',
+    '  if (n < 2) return(list(n = n, mean = m, sd = NA, se = NA, lo = NA, hi = NA))',
+    '  sdv <- sd(x); se <- sdv / sqrt(n)                      # sample SD and its SE',
+    '  tc <- qt(0.5 + conf / 2, n - 1)                        # two-sided t critical value',
+    '  list(n = n, mean = m, sd = sdv, se = se, lo = m - tc * se, hi = m + tc * se)',
+    '}',
+    '# Two-sided one-sample t-test of x against mu (0 = "no preference / Haiku baseline").',
+    'onesample_t <- function(x, mu = 0) {',
+    '  x <- x[!is.na(x)]; if (length(x) < 2) return(list(t = NA, p = NA, df = NA))',
+    '  if (sd(x) == 0) {                                      # zero-variance: t.test would ERROR',
+    '    # ("data are essentially constant"). Explicit convention instead of crashing:',
+    '    # every answer identical and == mu -> t = 0, p = 1 (the data are EXACTLY the',
+    '    # null - no evidence against it, NOT "too little data"); identical and != mu',
+    '    # -> t = +/-Inf, p = 0 (scipy\'s convention). Same rule as the Python version.',
+    '    if (mean(x) == mu) return(list(t = 0, p = 1, df = length(x) - 1))',
+    '    return(list(t = sign(mean(x) - mu) * Inf, p = 0, df = length(x) - 1))',
+    '  }',
+    '  r <- t.test(x, mu = mu)                                # base R does the work',
+    '  list(t = unname(r$statistic), p = r$p.value, df = unname(r$parameter))',
+    '}',
+    '# Exact two-sided binomial test p-value: k Opus wins out of n decisive choices vs 50/50.',
+    'binom_two_sided <- function(k, n) if (n <= 0) NA else binom.test(k, n, 0.5)$p.value',
+    '# Keep a CI on the bounded [-3,3] preference scale (2-task domains overflow it).',
+    'clip3 <- function(v) ifelse(is.na(v), v, pmax(-3, pmin(3, v)))',
+    '# Round a data frame\'s numeric columns for DISPLAY only. The tables below keep',
+    '# their unrounded values for every reuse (sorts, p<0.05 filters, verdicts and',
+    '# plots) - rounding p to 4 dp BEFORE the p<0.05 filter could flip a borderline',
+    '# verdict relative to the Python version, which never rounds its stored values.',
+    'round_df <- function(d, digits) { for (nm in names(d)) if (is.numeric(d[[nm]])) d[[nm]] <- round(d[[nm]], digits); d }',
+    '',
+    '# OLS with a ROBUST covariance done by hand (mirrors the Python helper): CR1',
+    '# cluster-robust SEs when `groups` varies (repeated measures), else HC3; p-values',
+    '# use G-1 df when clustered (the cluster-robust standard), else the usual n-k.',
+    '# `X` already includes an intercept column.',
+    'ols_robust <- function(y, X, groups = NULL) {',
+    '  y <- as.numeric(y); X <- as.matrix(X); n <- nrow(X); k <- ncol(X)',
+    '  XtXinv <- solve(t(X) %*% X)                            # (X\'X)^-1 ("bread")',
+    '  beta <- as.numeric(XtXinv %*% (t(X) %*% y))            # OLS coefficients',
+    '  resid <- as.numeric(y - X %*% beta)                    # residuals (plain vector)',
+    '  if (!is.null(groups) && length(unique(groups)) > 1) {  # cluster-robust branch',
+    '    g <- as.factor(groups); G <- nlevels(g); meat <- matrix(0, k, k)',
+    '    for (lv in levels(g)) {                              # sum score outer products',
+    '      m <- g == lv; s <- t(X[m, , drop = FALSE]) %*% resid[m]; meat <- meat + s %*% t(s)',
+    '    }',
+    '    adj <- (G / (G - 1)) * ((n - 1) / (n - k))           # CR1 small-sample factor',
+    '    V <- XtXinv %*% (adj * meat) %*% XtXinv              # sandwich covariance',
+    '    dfree <- max(G - 1, 1)                               # G-1 df: the cluster-robust standard',
+    '    clustered <- TRUE',
+    '  } else {                                               # HC3 fallback',
+    '    h <- rowSums((X %*% XtXinv) * X)                      # leverages',
+    '    V <- XtXinv %*% (t(X) %*% (X * (resid^2 / (1 - h)^2))) %*% XtXinv',
+    '    dfree <- max(n - k, 1)                               # usual residual df',
+    '    clustered <- FALSE',
+    '  }',
+    '  se <- sqrt(diag(V))                                    # coefficient SEs',
+    '  tval <- beta / se                                      # t stats (0/0 -> NaN below)',
+    '  # zero-SE convention (a perfectly-fit constant outcome): estimate 0 -> t=0',
+    '  # (p=1, no evidence against 0); a non-zero estimate keeps +/-Inf (p=0).',
+    '  tval[se == 0 & beta == 0] <- 0',
+    '  p <- 2 * pt(-abs(tval), dfree)                         # two-sided p',
+    '  list(beta = beta, se = se, t = tval, p = p, n = n, df = dfree, clustered = clustered)',
+    '}',
+    '# Design matrix [intercept | dummies] with the alphabetically-first level as the',
+    '# reference (matches R\'s factor default AND the Python get_dummies, so the two',
+    '# regressions are identical). Returns the matrix + tidy coefficient names.',
+    'design_R <- function(frame, col) {',
+    '  f <- factor(frame[[col]])                              # levels sorted alphabetically',
+    '  X <- model.matrix(~ f)                                 # intercept + k-1 dummies',
+    '  list(X = X, names = c("Intercept", levels(f)[-1]))',
+    '}',
+    '',
+    'INS <- character(0); add <- function(s = "") INS <<- c(INS, s)   # insight lines',
+    '',
+    '# -- Load and keep only real (submitted) comparisons -------------------------',
+    'df <- read.csv("/tmp/data.csv", stringsAsFactors = FALSE, check.names = FALSE)',
+    '# A BLANK/NA value counts as submitted (imported third-party tables often have',
+    '# no real submitted flag) - the same rule the Section-2 charts use, so the',
+    '# charts and this script always analyse the same rows. Drafts stay excluded.',
+    '# %in% (not ==) so an NA in the column can never poison the row filter.',
+    'if ("submitted" %in% names(df)) {',
+    '  sub_ <- tolower(trimws(as.character(df$submitted)))',
+    '  df <- df[is.na(sub_) | sub_ %in% c("yes", ""), , drop = FALSE]',
+    '}',
+    '# Each column is optional-safe: a table without it just yields empty values',
+    '# instead of crashing (e.g. running the script on the Events sheet).',
+    'df$pref <- if ("preference_model" %in% names(df)) suppressWarnings(as.numeric(as.character(df$preference_model))) else rep(NA_real_, nrow(df))  # numeric outcome',
+    'df$chosen <- if ("chosen_model" %in% names(df)) tolower(trimws(as.character(df$chosen_model))) else rep("", nrow(df))   # baseline/frontier/tie',
+    'df$task_id <- if ("task_id" %in% names(df)) trimws(as.character(df$task_id)) else rep("", nrow(df))             # join key as trimmed text',
+    '# NA -> "" on the two keys (read.csv turns blanks in a numeric column, or a',
+    '# literal "NA", into real NA): an NA task_id would silently VANISH from every',
+    '# split()/tapply() task-level analysis while staying in the response-level',
+    '# one, and an NA chosen would poison the choice counts (sum(NA)=NA). Python',
+    '# reads the same cells as "" (keep_default_na=False), so this keeps parity.',
+    'df$task_id[is.na(df$task_id)] <- ""; df$chosen[is.na(df$chosen)] <- ""',
+    '',
+    '# Attach complexity + domain from TASK_META, then let any non-blank exported',
+    '# task_complexity/task_domain override the built-in map.',
+    'idx <- match(df$task_id, TASK_META$task_id)              # row of each task in the map',
+    'df$complexity <- TASK_META$complexity[idx]               # mapped complexity',
+    'df$domain <- TASK_META$domain[idx]                       # mapped domain',
+    'df$complexity[is.na(df$complexity)] <- "(unknown)"; df$domain[is.na(df$domain)] <- "(unknown)"',
+    'for (cs in list(c("complexity", "task_complexity"), c("domain", "task_domain"))) {',
+    '  if (cs[2] %in% names(df)) {                            # export carried this column?',
+    '    good <- trimws(as.character(df[[cs[2]]]))            # trimmed data value',
+    '    # !is.na first: read.csv turns an ALL-blank column into logical NA, and an NA',
+    '    # inside `ok` would crash the subscripted assignment below.',
+    '    ok <- !is.na(good) & nchar(good) > 0 & !tolower(good) %in% c("nan", "none", "")',
+    '    df[[cs[1]]][ok] <- good[ok]                          # override where non-blank',
+    '  }',
+    '}',
+    '',
+    'n <- nrow(df)',
+    'np <- if ("account_id" %in% names(df)) length(unique(df$account_id)) else NA',
+    'nt <- length(unique(df$task_id))',
+    'cat(strrep("=", 74), "\\n")',
+    'cat("ANSWER ARENA - Haiku 4.5 (baseline) vs Opus 4.8 (frontier), blind preference\\n")',
+    'cat(strrep("=", 74), "\\n")',
+    'cat(sprintf("Comparisons: %d   Students: %s   Tasks: %d\\n", n, as.character(np), nt))',
+    '',
+    '# Usable = a graded preference or a recognised choice; a table with neither',
+    '# (e.g. the Events sheet) gets a clear message instead of a cryptic crash.',
+    'usable <- sum(!is.na(df$pref)) + sum(df$chosen %in% c(OPUS, HAIKU, "tie"))',
+    'if (n == 0 || usable == 0) {',
+    '  cat("\\nNo comparisons in the selected table - pick the Responses table (one row per comparison) in Section 3.\\n")',
+    '} else {',
+    '  # ===========================================================================',
+    '  # 1. SUMMARY STATISTICS (per task, per domain, per task type)',
+    '  # ===========================================================================',
+    '  # Per-task table: counts of each choice, mean/SD/CI of the graded preference,',
+    '  # and the Opus win-rate among decisive (non-tie) choices.',
+    '  per_task <- do.call(rbind, lapply(split(df, df$task_id), function(g) {',
+    '    ci <- mean_ci(g$pref)',
+    '    opus <- sum(g$chosen == OPUS); haiku <- sum(g$chosen == HAIKU); ties <- sum(g$chosen == "tie")',
+    '    dec <- opus + haiku',
+    '    data.frame(task_id = g$task_id[1], complexity = g$complexity[1], domain = g$domain[1],',
+    '               n = ci$n, opus = opus, haiku = haiku, tie = ties,',
+    '               opus_win_pct = ifelse(dec > 0, 100 * opus / dec, NA),',
+    '               mean_pref = ci$mean, sd = ci$sd,',
+    '               ci_lo = ci$lo, ci_hi = ci$hi, stringsAsFactors = FALSE)',
+    '  }))',
+    '  per_task <- per_task[order(-per_task$mean_pref), ]',
+    '  cat("\\n", strrep("-", 74), "\\n1. SUMMARY STATISTICS\\n", strrep("-", 74), "\\n", sep = "")',
+    '  cat("\\n1a. Per task (sorted by mean preference; >0 favours Opus):\\n")',
+    '  print(round_df(per_task, 2), row.names = FALSE)   # 2 dp display, like Python',
+    '',
+    '  # Figure: responses per task - HOW BALANCED is the sample? Each student saw a',
+    '  # random 15-of-30 subset, so tasks get different response counts; the dashed line',
+    '  # marks the mean count. This is why the CIs later weight tasks equally.',
+    '  rc <- per_task[order(per_task$n), ]                      # ascending by count',
+    '  opR <- par(mar = c(4.5, 5, 3, 1))',
+    '  bpR <- barplot(rc$n, names.arg = rc$task_id, horiz = TRUE, las = 1, col = "#4a6fa5",',
+    '                 cex.names = 0.6, xlab = "number of responses",',
+    '                 main = sprintf("Responses per task (sample balance; dashed = mean %.1f)", mean(rc$n)))',
+    '  text(rc$n, bpR, labels = rc$n, pos = 2, cex = 0.6, col = "white")   # annotate counts',
+    '  abline(v = mean(rc$n), col = "#e67e22", lty = 2, lwd = 2)           # mean reference',
+    '  par(opR)',
+    '',
+    '  # Response-level summary for any grouping column (mean/SD + Opus win-rate).',
+    '  group_summary <- function(col) {',
+    '    do.call(rbind, lapply(split(df, df[[col]]), function(g) {',
+    '      ci <- mean_ci(g$pref); opus <- sum(g$chosen == OPUS); haiku <- sum(g$chosen == HAIKU); dec <- opus + haiku',
+    '      d <- data.frame(key = g[[col]][1], n_tasks = length(unique(g$task_id)), n_resp = ci$n,',
+    '                      mean_pref = round(ci$mean, 2), sd = round(ci$sd, 2),',
+    '                      opus_win_pct = ifelse(dec > 0, round(100 * opus / dec, 1), NA), stringsAsFactors = FALSE)',
+    '      names(d)[1] <- col; d',
+    '    }))',
+    '  }',
+    '  cat("\\n1b. Per task type (response level):\\n"); print(group_summary("complexity"), row.names = FALSE)',
+    '  ds <- group_summary("domain"); cat("\\n1c. Per domain (response level):\\n")',
+    '  print(ds[order(-ds$mean_pref), ], row.names = FALSE)',
+    '',
+    '  # ===========================================================================',
+    '  # 2. MAIN HYPOTHESIS TEST (Haiku baseline: equally preferred, or not?)',
+    '  # ===========================================================================',
+    '  # H0: mean graded preference = 0.  H1: != 0 (sign = the winner). Two ways:',
+    '  #   (A) TASK-LEVEL: average within each task, then one-sample t-test of the 30',
+    '  #       task means (each task counts once -> unequal response n does not bias it).',
+    '  #   (B) RESPONSE-LEVEL: intercept-only regression, SEs clustered on the student.',
+    '  task_means <- tapply(df$pref, df$task_id, mean, na.rm = TRUE)     # one mean per task',
+    '  ciA <- mean_ci(as.numeric(task_means)); tA <- onesample_t(as.numeric(task_means))',
+    '  regdat <- df[!is.na(df$pref), , drop = FALSE]',
+    '  # Cluster ids as characters with NA -> "": as.factor() would DROP NA rows',
+    '  # from the cluster sums and silently turn every clustered SE/t/p into NA',
+    '  # (pandas reads the same blanks as "", a normal cluster - keep parity).',
+    '  gcl0 <- if ("account_id" %in% names(regdat)) { g0 <- as.character(regdat$account_id); g0[is.na(g0)] <- ""; g0 } else NULL',
+    '  gcl <- if (!is.null(gcl0) && length(unique(gcl0)) > 1) gcl0 else NULL',
+    '  if (nrow(regdat) > 0) {                              # guard: an empty regression is singular',
+    '    rB <- ols_robust(regdat$pref, matrix(1, nrow(regdat), 1), gcl)',
+    '    mB <- rB$beta[1]; seB <- rB$se[1]; pB <- rB$p[1]',
+    '    tcB <- qt(0.975, rB$df)                            # t critical value, same df as the test',
+    '    loB <- mB - tcB * seB; hiB <- mB + tcB * seB',
+    '  } else {                                             # no graded data at all',
+    '    rB <- list(n = 0); mB <- NA; seB <- NA; pB <- NA; loB <- NA; hiB <- NA',
+    '  }',
+    '  opus_all <- sum(df$chosen == OPUS); haiku_all <- sum(df$chosen == HAIKU); ties_all <- sum(df$chosen == "tie")',
+    '  n_cls <- opus_all + ties_all + haiku_all               # rows with a recognised choice',
+    '  dec_all <- opus_all + haiku_all; win_all <- if (dec_all) opus_all / dec_all else NA',
+    '  p_win <- binom_two_sided(opus_all, dec_all)',
+    '  cat("\\n", strrep("-", 74), "\\n2. MAIN TEST - is Opus equally preferred to the Haiku baseline?\\n", strrep("-", 74), "\\n", sep = "")',
+    '  cat("   H0: mean graded preference = 0 (equal to baseline).  H1: != 0.\\n")',
+    '  # Label (B) honestly: with a single student in the graded rows the fit fell',
+    '  # back to HC3, so do not claim the SEs were clustered.',
+    '  lblB <- if (isTRUE(rB$clustered)) "(B) response-level, clustered on student" else "(B) response-level (HC3 robust; no repeated students)"',
+    '  main_tbl <- data.frame(',
+    '    test = c("(A) task-level (each task = 1 obs)", lblB),',
+    '    n = c(sprintf("%d tasks", ciA$n), sprintf("%d responses", rB$n)),',
+    '    mean_pref = round(c(ciA$mean, mB), 4),',
+    '    CI95 = c(sprintf("[%.3f, %.3f]", ciA$lo, ciA$hi), sprintf("[%.3f, %.3f]", loB, hiB)),',
+    '    p_H0 = round(c(tA$p, pB), 4), stringsAsFactors = FALSE)',
+    '  print(main_tbl, row.names = FALSE)',
+    '  cat(sprintf("\\n   Decisive choices (ties dropped): Opus %d vs Haiku %d = %.1f%% Opus win-rate;\\n", opus_all, haiku_all, 100 * win_all))',
+    '  # Denominator = rows with a recognised choice (an imported table may hold',
+    '  # unclassifiable chosen_model values that must not dilute the tie share).',
+    '  cat(sprintf("   exact binomial test vs 50/50: p = %.4g   (ties were %.0f%% of the classified answers).\\n", p_win, if (n_cls > 0) 100 * ties_all / n_cls else NA))',
+    '',
+    '  # ===========================================================================',
+    '  # 3. PER-TASK RECOMMENDATION (which model wins each question?)',
+    '  # ===========================================================================',
+    '  # A model "wins" a task only if its mean clearly leans that way AND the one-sample',
+    '  # t-test is significant (p<0.05); otherwise "no clear preference".',
+    '  rec <- do.call(rbind, lapply(split(df, df$task_id), function(g) {',
+    '    ot <- onesample_t(g$pref); m <- mean(g$pref, na.rm = TRUE)',
+    '    r <- if (is.na(ot$p)) "n/a (too few)" else if (ot$p < 0.05 && m > 0) "Opus" else if (ot$p < 0.05 && m < 0) "Haiku" else "no clear preference"',
+    '    data.frame(task_id = g$task_id[1], complexity = g$complexity[1], domain = g$domain[1],',
+    '               n = sum(!is.na(g$pref)), mean_pref = m, p_value = ot$p,',
+    '               recommendation = r, stringsAsFactors = FALSE)',
+    '  }))',
+    '  rec <- rec[order(-rec$mean_pref), ]',
+    '  n_opus <- sum(rec$recommendation == "Opus"); n_haiku <- sum(rec$recommendation == "Haiku")',
+    '  n_none <- sum(rec$recommendation == "no clear preference")',
+    '  n_na <- sum(rec$recommendation == "n/a (too few)")',
+    '  # keep the arithmetic honest: opus + haiku + none + na = all tasks',
+    '  na_txt <- if (n_na > 0) sprintf(", and %d had too little graded data to test", n_na) else ""',
+    '  cat("\\n", strrep("-", 74), "\\n3. PER-TASK RECOMMENDATION  (one-sample t-test of each task vs baseline)\\n", strrep("-", 74), "\\n", sep = "")',
+    '  print(round_df(rec, 3), row.names = FALSE)         # 3 dp display, like Python',
+    '  cat(sprintf("\\n   Significant winners: Opus on %d tasks, Haiku on %d; %d show no clear preference%s.\\n", n_opus, n_haiku, n_none, na_txt))',
+    '',
+    '  # ===========================================================================',
+    '  # 4. BY TASK TYPE (Simple vs Complex) - task-level CIs (weight tasks equally)',
+    '  # ===========================================================================',
+    '  # Work from the 30 task means: within each type, t-test vs 0, and compare the two',
+    '  # types with a Welch two-sample t-test on the task means.',
+    '  tm <- do.call(rbind, lapply(split(df, df$task_id), function(g)',
+    '    data.frame(task_id = g$task_id[1], pref = mean(g$pref, na.rm = TRUE),',
+    '               complexity = g$complexity[1], domain = g$domain[1], stringsAsFactors = FALSE)))',
+    '  tm <- tm[!is.na(tm$pref), , drop = FALSE]            # drop tasks with no graded responses',
+    '  by_group <- function(frame, col) {',
+    '    # Values stored UNROUNDED - the p<0.05 filters/verdicts below and the plots',
+    '    # reuse them; rounding happens only in the print calls (round_df).',
+    '    out <- do.call(rbind, lapply(split(frame, frame[[col]]), function(g) {',
+    '      ci <- mean_ci(g$pref); ot <- onesample_t(g$pref)',
+    '      d <- data.frame(key = g[[col]][1], n_tasks = ci$n, mean_pref = ci$mean,',
+    '                      sd = ci$sd, ci_lo = clip3(ci$lo),',
+    '                      ci_hi = clip3(ci$hi), p_vs_baseline = ot$p, stringsAsFactors = FALSE)',
+    '      names(d)[1] <- col; d',
+    '    }))',
+    '    if (is.null(out)) {                                # EMPTY input (no graded data):',
+    '      out <- data.frame(key = character(0), n_tasks = integer(0), mean_pref = numeric(0),',
+    '                        sd = numeric(0), ci_lo = numeric(0), ci_hi = numeric(0),',
+    '                        p_vs_baseline = numeric(0), stringsAsFactors = FALSE)',
+    '      names(out)[1] <- col                             # 0-row frame, columns intact',
+    '    }',
+    '    out',
+    '  }',
+    '  type_tbl <- by_group(tm, "complexity")',
+    '  cat("\\n", strrep("-", 74), "\\n4. BY TASK TYPE  (task-level: each task weighted equally, so unequal\\n   response counts do not bias the estimate)\\n", strrep("-", 74), "\\n", sep = "")',
+    '  print(round_df(type_tbl, 4), row.names = FALSE)    # 4 dp display, like Python',
+    '  simp <- tm$pref[tm$complexity == "Simple"]; comp <- tm$pref[tm$complexity == "Complex"]',
+    '  p_sc <- NA',
+    '  if (length(simp) >= 2 && length(comp) >= 2) {',
+    '    # tryCatch: t.test errors on zero-variance input; degrade to NA, not a crash.',
+    '    p_sc <- tryCatch(t.test(comp, simp, var.equal = FALSE)$p.value, error = function(e) NA)  # Welch: Complex - Simple',
+    '    if (!is.na(p_sc)) cat(sprintf("\\n   Complex vs Simple (Welch two-sample t-test on task means): difference = %+.3f, p = %.4g\\n",',
+    '                mean(comp) - mean(simp), p_sc))',
+    '  }',
+    '',
+    '  # ===========================================================================',
+    '  # 5. BY DOMAIN - each domain vs baseline + a one-way ANOVA across domains',
+    '  # ===========================================================================',
+    '  dom_tbl <- by_group(tm, "domain"); dom_tbl <- dom_tbl[order(-dom_tbl$mean_pref), ]',
+    '  cat("\\n", strrep("-", 74), "\\n5. BY DOMAIN  (task-level; sorted by mean preference)\\n", strrep("-", 74), "\\n", sep = "")',
+    '  print(round_df(dom_tbl, 4), row.names = FALSE)     # 4 dp display, like Python',
+    '  # One-way ANOVA on the task means (domains with >=2 tasks), matching Python\'s f_oneway.',
+    '  dcount <- table(tm$domain); keep <- names(dcount)[dcount >= 2]',
+    '  p_anova <- NA',
+    '  if (length(keep) >= 2) {',
+    '    sub <- tm[tm$domain %in% keep, ]',
+    '    aov_fit <- anova(lm(pref ~ factor(domain), data = sub))       # classic equal-variance ANOVA',
+    '    p_anova <- aov_fit[["Pr(>F)"]][1]',
+    '    cat(sprintf("\\n   One-way ANOVA across the %d domains with >=2 tasks (of %d domains): F = %.3f, p = %.4g\\n", length(keep), length(dcount), aov_fit[["F value"]][1], p_anova))',
+    '  }',
+    '',
+    '  # ===========================================================================',
+    '  # 6. REGRESSIONS (preference on complexity, and on domain)',
+    '  # ===========================================================================',
+    '  # Response-level OLS, SEs clustered on the student. Intercept = reference group\'s',
+    '  # mean preference (its p tests "= baseline"); slopes = differences from reference.',
+    '  cat("\\n", strrep("-", 74), "\\n6. REGRESSIONS  (response level; SEs clustered on student)\\n", strrep("-", 74), "\\n", sep = "")',
+    '  for (spec in list(c("pref ~ complexity", "complexity"), c("pref ~ domain", "domain"))) {',
+    '    col <- spec[2]; if (length(unique(regdat[[col]])) < 2) next',
+    '    ref <- sort(unique(as.character(regdat[[col]])))[1]          # dropped level = reference',
+    '    dz <- design_R(regdat, col); r <- ols_robust(regdat$pref, dz$X, gcl)',
+    '    ct <- data.frame(coef = round(r$beta, 4), robust_SE = round(r$se, 4), t = round(r$t, 4), p = round(r$p, 4))',
+    '    rownames(ct) <- dz$names',
+    '    cat(sprintf("\\n   %s   (Intercept = reference group \'%s\'; slopes are differences from it):\\n", spec[1], ref))',
+    '    print(ct)',
+    '  }',
+    '',
+    '  # ===========================================================================',
+    '  # PLOTS',
+    '  # ===========================================================================',
+    '  colf <- function(v) ifelse(v > 0, "#e67e22", ifelse(v < 0, "#3d7bd6", "#9a978f"))',
+    '  # Figure 1: distribution of graded preference + who-was-preferred shares.',
+    '  op <- par(mfrow = c(1, 2))',
+    '  # Snap to the -3..3 scale before counting so a non-integer value from an',
+    '  # imported table still shows in the histogram (means/tests use it as-is).',
+    '  pv <- df$pref[!is.na(df$pref)]; cnt <- sapply(-3:3, function(v) sum(pmax(-3, pmin(3, round(pv))) == v))',
+    '  bp1 <- barplot(cnt, names.arg = -3:3, col = colf(-3:3), xlab = "graded preference (-3 Haiku .. +3 Opus)",',
+    '          ylab = "responses", main = "How strongly, and for whom")',
+    '  # Dashed overall-mean line (the Figure-2 guide promises it). A barplot\'s x-axis',
+    '  # is bar midpoints, not the -3..3 scale, so interpolate the mean onto them.',
+    '  if (length(pv)) abline(v = approx(-3:3, bp1, xout = mean(pv))$y, col = "#111111", lty = 2, lwd = 2)',
+    '  barplot(c(opus_all, ties_all, haiku_all), names.arg = c("Opus", "Tie", "Haiku"),',
+    '          col = c("#e67e22", "#9a978f", "#3d7bd6"), ylab = "responses", main = sprintf("Who was preferred (n=%d)", n_cls))',
+    '  par(op)',
+    '  # Figure 2: per-task mean +/- 95% CI (sorted); whiskers widen with fewer responses.',
+    '  ts <- per_task[order(per_task$mean_pref), ]',
+    '  op2 <- par(mar = c(4.5, 5, 3, 1))',
+    '  # x-range covers every CI whisker (a fixed range used to clip wide ones).',
+    '  xl <- range(c(ts$ci_lo, ts$ci_hi, ts$mean_pref, -1, 1), na.rm = TRUE, finite = TRUE)',
+    '  plot(ts$mean_pref, seq_len(nrow(ts)), xlim = xl, pch = 19, col = colf(ts$mean_pref),',
+    '       yaxt = "n", ylab = "", xlab = "mean graded preference +/- 95% CI (>0 favours Opus)",',
+    '       main = "Per-task preference (CI widens when fewer students responded)")',
+    '  axis(2, at = seq_len(nrow(ts)), labels = ts$task_id, las = 1, cex.axis = 0.6)',
+    '  segments(ts$ci_lo, seq_len(nrow(ts)), ts$ci_hi, seq_len(nrow(ts)), col = "#888888")',
+    '  abline(v = 0, col = "#111111"); par(op2)',
+    '  # Figure 2b: WHICH MODEL EACH TASK\'S USERS PREFER, ranked Haiku (top) ->',
+    '  # indifferent (middle) -> Opus (bottom). The winner is the per-task recommendation',
+    '  # from Section 3 (the one-sample t-test): "Haiku"/"Opus" when the lean is',
+    '  # significant, else "no clear preference". Bar = mean preference, colour = winner.',
+    '  rankw <- ifelse(rec$recommendation == "Haiku", 0, ifelse(rec$recommendation == "Opus", 2, 1))',
+    '  colw <- ifelse(rec$recommendation == "Haiku", "#3d7bd6", ifelse(rec$recommendation == "Opus", "#e67e22", "#9a978f"))',
+    '  ow <- order(rankw, rec$mean_pref)                     # Haiku block first; strongest within each block',
+    '  rw <- rec[ow, ]; cw <- colw[ow]',
+    '  ri <- rev(seq_len(nrow(rw)))                          # barplot draws the first bar at the BOTTOM -> reverse so Haiku is on top',
+    '  opW <- par(mar = c(4.5, 5, 3, 1))',
+    '  # Explicit finite xlim: with choices-only data every mean_pref is NA and',
+    '  # barplot would otherwise crash ("need finite \'xlim\' values").',
+    '  barplot(rw$mean_pref[ri], names.arg = rw$task_id[ri], horiz = TRUE, las = 1, col = cw[ri],',
+    '          xlim = range(c(rw$mean_pref, -1, 1), na.rm = TRUE, finite = TRUE),',
+    '          cex.names = 0.6, xlab = "mean graded preference (<0 Haiku .. >0 Opus)",',
+    '          main = "What each task\'s users prefer (Haiku -> indifferent -> Opus)")',
+    '  abline(v = 0)',
+    '  legend("bottomright", legend = c("Haiku", "Indifferent", "Opus"), fill = c("#3d7bd6", "#9a978f", "#e67e22"), cex = 0.8)',
+    '  par(opW)',
+    '  # Figure 2c: CONFIDENT per-task provisioning. Classify each task\'s CHOICES as',
+    '  # over- (chose Opus) / indifferent (tie) / under-provision (chose Haiku) by the',
+    '  # DOMINANT category, keeping it ONLY when that category is significantly larger',
+    '  # than the runner-up — an EXACT binomial test on the top-two counts: under H0 the',
+    '  # leading choice and the runner-up are equally likely, so among the responses',
+    '  # picking either the split is 50/50. Exact, so small or lopsided tasks are not',
+    '  # over-called (a normal z-test here is far too eager with few responses, e.g.',
+    '  # 5-0-0 would come out "certain"). The top beats the runner-up (and so the third',
+    '  # too), i.e. it is significant and different from the other two. Tasks that',
+    '  # don\'t clear p<0.05 are dropped ("not enough data").',
+    '  cf_task <- c(); cf_cat <- c(); cf_share <- c()',
+    '  for (i in seq_len(nrow(per_task))) {',
+    '    ro <- per_task[i, ]',
+    '    counts <- c(over = ro$opus, ind = ro$tie, under = ro$haiku)',
+    '    nn <- sum(counts)                                               # all classified choices',
+    '    if (nn == 0) next',
+    '    o <- order(counts, decreasing = TRUE); top <- names(counts)[o[1]]; run <- names(counts)[o[2]]',
+    '    if (counts[[top]] == counts[[run]]) next                        # tie for the lead -> not confident',
+    '    p <- binom_two_sided(counts[[top]], counts[[top]] + counts[[run]])  # exact two-sided p, top vs runner-up',
+    '    if (p < 0.05) { cf_task <- c(cf_task, ro$task_id); cf_cat <- c(cf_cat, top); cf_share <- c(cf_share, 100 * counts[[top]] / nn) }',
+    '  }',
+    '  colmap <- c(under = "#3d7bd6", ind = "#9a978f", over = "#e67e22")',
+    '  opC <- par(mar = c(4.5, 5, 3, 1))',
+    '  if (length(cf_task)) {',
+    '    rk <- c(under = 0, ind = 1, over = 2)[cf_cat]',
+    '    oc <- order(rk, cf_share)                                       # under block -> ind -> over',
+    '    tt2 <- cf_task[oc]; cc2 <- cf_cat[oc]; sh2 <- cf_share[oc]',
+    '    ri <- rev(seq_len(length(tt2)))                                 # barplot draws first at bottom -> reverse so \'under\' is on top',
+    '    barplot(sh2[ri], names.arg = tt2[ri], horiz = TRUE, las = 1, col = colmap[cc2[ri]], cex.names = 0.6,',
+    '            xlim = c(0, 100), xlab = "share of responses for the dominant (winning) choice (%)",',
+    '            main = sprintf("Confidently-classified tasks (95%%): under -> indifferent -> over  (%d of %d)", length(tt2), nt))',
+    '    legend("bottomright", legend = c("Under-provision (Haiku)", "Indifferent", "Over-provision (Opus)"),',
+    '           fill = c("#3d7bd6", "#9a978f", "#e67e22"), cex = 0.8)',
+    '  } else {',
+    '    plot.new(); text(0.5, 0.5, "No task reaches a 95%-confident\\nover / indifferent / under classification\\nwith the current data.", cex = 1.1)',
+    '  }',
+    '  par(opC)',
+    '  # Figure 3: by domain (horizontal) and by task type, task-level mean +/- 95% CI.',
+    '  # Each panel is guarded: with no graded data it says so instead of erroring.',
+    '  op3 <- par(mfrow = c(1, 2), mar = c(4.5, 10, 3, 1))',
+    '  dd <- dom_tbl[order(dom_tbl$mean_pref), ]',
+    '  if (nrow(dd) > 0) {',
+    '    plot(dd$mean_pref, seq_len(nrow(dd)), xlim = c(-3, 3), pch = 15, col = "#e67e22", yaxt = "n",',
+    '         ylab = "", xlab = "mean graded preference", main = "By domain (task-level +/- 95% CI)")',
+    '    axis(2, at = seq_len(nrow(dd)), labels = dd$domain, las = 1, cex.axis = 0.7)',
+    '    segments(dd$ci_lo, seq_len(nrow(dd)), dd$ci_hi, seq_len(nrow(dd)), col = "#888888"); abline(v = 0, col = "#111111")',
+    '  } else { plot.new(); text(0.5, 0.5, "No graded data by domain.") }',
+    '  par(mar = c(4.5, 5, 3, 1))',
+    '  if (nrow(type_tbl) > 0) {',
+    '    # NA-safe y-range (a group with 1 task has NA CIs) that also covers the bars.',
+    '    yl <- suppressWarnings(c(min(-0.1, min(c(type_tbl$ci_lo, type_tbl$mean_pref), na.rm = TRUE)),',
+    '                             max(0.1, max(c(type_tbl$ci_hi, type_tbl$mean_pref), na.rm = TRUE))))',
+    '    bp <- barplot(type_tbl$mean_pref, names.arg = type_tbl$complexity, col = "#e67e22",',
+    '                  ylim = yl,',
+    '                  ylab = "mean graded preference", main = "By task type (task-level +/- 95% CI)")',
+    '    arrows(bp, type_tbl$ci_lo, bp, type_tbl$ci_hi, angle = 90, code = 3, length = 0.06); abline(h = 0)',
+    '  } else { plot.new(); text(0.5, 0.5, "No graded data by task type.") }',
+    '  par(op3)',
+    '',
+    '  # ===========================================================================',
+    '  # INSIGHTS',
+    '  # ===========================================================================',
+    '  verdict <- function(m, p) if (is.na(p)) "not enough data" else if (p >= 0.05) "no clear preference (indifferent)" else if (m > 0) "prefer Opus" else "prefer Haiku"',
+    '  overall <- verdict(ciA$mean, tA$p)',
+    '  cat("\\n\\nINSIGHTS\\n"); cat(strrep("=", 74), "\\n")',
+    '  add("## Overall recommendation")',
+    '  if (is.na(ciA$mean)) {',
+    '    add("- Not enough graded data to draw a conclusion yet.")',
+    '  } else {',
+    '    add(sprintf("- Testing Haiku as the baseline, the **overall verdict is: %s.** Averaging across the %d tasks the mean graded preference is **%+.2f** (95%% CI [%.2f, %.2f]; >0 favours Opus), and a task-level t-test vs 0 gives **p = %.3g**.", overall, ciA$n, ciA$mean, ciA$lo, ciA$hi, tA$p))',
+    '    # NA-safe: with an NA p-value the comparison `if (NA == ...)` would CRASH R',
+    '    # ("missing value where TRUE/FALSE needed"), e.g. when every answer is a tie.',
+    '    agree_txt <- if (is.na(pB) || is.na(tA$p)) " (too little data to compare the two tests)" else if ((pB < 0.05) == (tA$p < 0.05)) " (agrees)" else " (note: differs from the task-level test)"',
+    '    add(sprintf("- Cross-check on all %d responses (clustered on student): mean **%+.2f**, p = %.3g%s.", rB$n, mB, pB, agree_txt))',
+    '    if (dec_all > 0) {',
+    '      add(sprintf("- Head-to-head, ignoring ties: **Opus won %.0f%%** of the %d decisive comparisons (binomial p = %.3g).", 100 * win_all, dec_all, p_win))',
+    '    } else {',
+    '      add("- Head-to-head: every answer so far is a tie - there are no decisive comparisons yet.")',
+    '    }',
+    '  }',
+    '  add(""); add("## By task type (Simple vs Complex)")',
+    '  for (i in seq_len(nrow(type_tbl))) {',
+    '    rr <- type_tbl[i, ]',
+    '    add(sprintf("- **%s** tasks: mean **%+.2f** (95%% CI [%.2f, %.2f]) -> %s.", rr$complexity, rr$mean_pref, rr$ci_lo, rr$ci_hi, verdict(rr$mean_pref, rr$p_vs_baseline)))',
+    '  }',
+    '  if (!is.na(p_sc)) add(sprintf("- The Simple-vs-Complex gap is **%s** (Welch p = %.3g).", if (p_sc < 0.05) "significant" else "not significant", p_sc))',
+    '  add(""); add("## By domain")',
+    '  sig_dom <- dom_tbl[!is.na(dom_tbl$p_vs_baseline) & dom_tbl$p_vs_baseline < 0.05, ]',
+    '  if (nrow(sig_dom)) {',
+    '    for (i in seq_len(nrow(sig_dom))) { rr <- sig_dom[i, ]',
+    '      add(sprintf("- **%s**: mean **%+.2f** -> %s (p = %.3g).", rr$domain, rr$mean_pref, if (rr$mean_pref > 0) "Opus" else "Haiku", rr$p_vs_baseline)) }',
+    '  } else add("- No single domain reaches significance on its own (small task counts per domain).")',
+    '  if (!is.na(p_anova)) add(sprintf("- Domains **%s** differ overall (ANOVA p = %.3g).", if (p_anova < 0.05) "do" else "do not clearly", p_anova))',
+    '  add(""); add("## Per-task picture")',
+    '  add(sprintf("- Of the %d tasks, **Opus is the clear winner on %d** and **Haiku on %d**; **%d show no clear preference**%s. So the right answer is task-dependent - see the per-task table and the CI plot (whiskers widen where fewer students responded).", nt, n_opus, n_haiku, n_none, na_txt))',
+    '',
+    '  # ---- The figures, each with a plain-language guide (the Insights section',
+    '  # ---- drops the matching plot in right under each "## Figure N" heading). ----',
+    '  n_over <- sum(cf_cat == "over"); n_under <- sum(cf_cat == "under"); n_ind <- sum(cf_cat == "ind")',
+    '  add(""); add("## How to read the figures below")',
+    '  add("All six figures come from the analysis above - nothing new is computed. Each one is shown here with a short guide to reading it, so the plots live in one place with their explanation.")',
+    '  add(""); add("## Figure 1 - Sample balance: how many students answered each task")',
+    '  add("- One bar per task = the number of real (submitted) responses it got; the dashed line is the average. Because each student saw a random 15 of the 30 tasks, the bars are uneven. **This is exactly why the confidence intervals below are task-weighted and why some are wider than others** - a task with fewer responses carries less certainty.")',
+    '  add(""); add("## Figure 2 - Overall: how strongly, and who was preferred")',
+    '  add("- Left: the spread of the -3..+3 graded preference across every response (negative = Haiku, 0 = equivalent, positive = Opus); the dashed line is the overall mean. Right: the raw count of responses that picked Opus, called it a tie, or picked Haiku. Read them together - a mean near 0 with many -3 and +3 votes means students *disagreed strongly*, not that everyone was indifferent.")',
+    '  add(""); add("## Figure 3 - Per-task preference with 95% confidence intervals")',
+    '  add("- Each dot is one task\'s mean graded preference; the whisker is its 95% confidence interval. A task whose whisker **crosses the 0 line has no statistically clear preference**; one whose whisker sits entirely on one side does. Whiskers widen for tasks with fewer responses (Figure 1) - that is the correct handling of unequal response counts.")',
+    '  add(""); add("## Figure 4 - What each task\'s users prefer (Haiku -> indifferent -> Opus)")',
+    '  add("- **Two different things are drawn here - do not confuse them.** The **bar length** is the task\'s *average* graded preference (left = leaned Haiku, right = leaned Opus). The **colour** is the *statistical verdict* (same test as Figure 3): blue = students significantly preferred Haiku, orange = significantly preferred Opus, **grey = no statistically clear preference** (its 95% interval still includes 0, i.e. its Figure-3 whisker crosses zero).")',
+    '  add("- That is why a **long grey bar** can appear (a task whose average is sizeable yet still grey): on average those students leaned one way, but either few of them answered or they disagreed a lot, so we cannot rule out that the true preference is zero. **Grey does NOT mean everyone clicked \\"equivalent\\"** - it means \\"not distinguishable from indifference at 95% confidence.\\" A task turns grey either because opinions genuinely split (some strongly Opus, some strongly Haiku, cancelling out in the average) OR because too few students answered to be sure. In short: **the bar shows the direction and size of the average; the colour shows whether we are confident about it.**")',
+    '  add(""); add("## Figure 5 - Tasks we can classify with 95% confidence (over / indifferent / under-provisioning)")',
+    '  add("- In the provisioning frame: **over-provisioning = students preferred Opus** (the larger model), **under-provisioning = students preferred Haiku** (the smaller model), **indifferent = a genuine tie**. A task appears here **only if one of the three categories is statistically dominant** - an exact binomial test shows the leading choice significantly beats the runner-up (and therefore the third) at 95%. Tasks that do not clear that bar are omitted as \\"not enough evidence to classify.\\"")',
+    '  if (length(cf_task)) {',
+    '    add(sprintf("- Of the %d tasks, **%d clear the bar**: %d over-provisioning (Opus), %d under-provisioning (Haiku), %d indifferent. Each bar\'s length is the winning choice\'s share of that task\'s responses.", nt, length(cf_task), n_over, n_under, n_ind))',
+    '  } else {',
+    '    add("- **No task clears the bar with the current data**, so the figure says so rather than showing a classification we are not sure of. More responses per task would resolve the borderline ones.")',
+    '  }',
+    '  add("- Figures 4 and 5 ask *different* questions and can disagree. Figure 4 tests whether a task\'s **average strength** of preference (on the -3..+3 scale) differs from 0; Figure 5 tests whether one of the three **choice categories** (Opus / tie / Haiku) is a significant plurality of the picks. So a task can be grey in Figure 4 yet still be confidently classified in Figure 5, or the reverse - the two views are complementary, not a contradiction.")',
+    '  add(""); add("## Figure 6 - By domain and by task type, with confidence intervals")',
+    '  add("- Left: each domain\'s task-weighted mean preference with its 95% interval; right: the same for Simple vs Complex tasks. A bar/whisker that clears the 0 line marks a group that reliably leans to one model. This is the aggregated view behind the \\"By task type\\" and \\"By domain\\" bullets above.")',
+    '  for (s in INS) cat(s, "\\n")',
+    '  cat("\\nDone.\\n")',
+    '}'
+  ].join('\n');
+
   /* ---- bootstrap ---- */
   function init() {
     injectStyles();
     root = el('div', { id: 'aa-root' }, [el('div', { class: 'aa-wrap' }, [el('div', { class: 'aa-card' }, [el('p', { text: 'Connecting...' })])])]);
     document.body.appendChild(root);
     applyTheme(currentTheme());
+    // Back/forward between the Admin and Data-analytics tabs (their URLs differ).
+    window.addEventListener('popstate', function () {
+      if (!user || !Store.isAdminEmail(user.email)) return;
+      var v = viewFromUrl();
+      if (v !== currentView) { currentView = v; renderShell(); }
+    });
     if (cachedAdmin()) { /* render after config loads */ }
     if (!Store) { clearRoot(); root.appendChild(el('div', { class: 'aa-wrap' }, [el('div', { class: 'aa-card' }, [el('p', { class: 'aa-err', text: 'arena-store.js failed to load.' })])])); return; }
     Store.init().then(function () {

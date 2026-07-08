@@ -103,11 +103,13 @@
     this.loadConfig = function () { return Promise.resolve(clone(db().config) || {}); };
     this.saveConfig = function (partial) { var d = db(); d.config = Object.assign({}, d.config, partial); write(d); return Promise.resolve(); };
 
-    this.loadActiveTasks = function () {
-      var d = db(), cfg = d.config || {}, id = cfg.activeTaskSetId;
-      if (id && d.taskSets[id]) return Promise.resolve(clone(d.taskSets[id]));
+    // Load a specific task set by id (built-in default when the id is empty or the
+    // set is gone). Used for BOTH the active set and a session's snapshotted set.
+    this.loadTaskSet = function (id) {
+      if (id && db().taskSets[id]) return Promise.resolve(clone(db().taskSets[id]));
       return Promise.resolve({ id: 'builtin', name: 'Built-in default', tasks: clone(DEFAULTS.defaultTasks || []) });
     };
+    this.loadActiveTasks = function () { return this.loadTaskSet((db().config || {}).activeTaskSetId); };
     this.saveTaskSet = function (set) {
       var d = db(), id = set.id || ('ts_' + uid());
       d.taskSets[id] = Object.assign({ id: id, createdAt: Date.now() }, set);

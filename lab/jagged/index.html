@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trust the AI? A Jagged Intelligence Game</title>
+  <meta name="description" content="A simple interactive game about Artificial Jagged Intelligence: an AI knows scattered points and interpolates between them, looking equally confident everywhere. Decide when to trust its answer and when to check it yourself." />
+  <meta name="keywords" content="artificial jagged intelligence, AJI, interpolation, extrapolation, AI reliability, calibration, trust, spatial search, exploration" />
+  <meta name="robots" content="noindex,nofollow" />
+  <link rel="canonical" href="https://www.stouras.com/lab/jagged/" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="stouras.com" />
+  <meta property="og:title" content="Trust the AI? A Jagged Intelligence Game" />
+  <meta property="og:description" content="An AI knows scattered points and interpolates between them. It looks confident everywhere, but it is only reliable near what it knows. Decide when to trust it and when to check." />
+  <meta property="og:url" content="https://www.stouras.com/lab/jagged/" />
+
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%236f42c1'/%3E%3Cpolyline points='4,20 10,11 14,22 20,7 25,17 28,12' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E" />
+
+  <style>
+    :root{
+      --blue:#2780e3; --blue-d:#1f6cc4;
+      --green:#3fb618; --green-d:#349612;
+      --purple:#6f42c1;
+      --red:#e41a1c;
+      --teal:#26a69a;
+      --ink:#2b2b2b; --muted:#6a6f76; --line:#e0e0e0; --bg:#ffffff; --panel:#f6f7f9;
+    }
+    *{box-sizing:border-box;}
+    html,body{margin:0;padding:0;}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; color:var(--ink); background:var(--bg); line-height:1.5; font-size:16px;}
+    a{color:var(--blue);}
+    .nav{display:flex; align-items:center; justify-content:space-between; padding:12px 22px; border-bottom:1px solid var(--line); background:#fff; position:sticky; top:0; z-index:40;}
+    .brand{font-weight:700; font-size:20px;}
+    .brand .dot{color:var(--purple);}
+    .nav-right{display:flex; gap:10px; align-items:center;}
+    .btn{display:inline-block; border:none; cursor:pointer; font-weight:600; padding:10px 20px; border-radius:26px; font-size:15px; color:#fff; transition:background .15s, transform .05s; box-shadow:0 1px 3px rgba(0,0,0,.12);}
+    .btn:active{transform:translateY(1px);}
+    .btn:disabled{opacity:.45; cursor:not-allowed;}
+    .btn-blue{background:var(--blue);} .btn-blue:hover:not(:disabled){background:var(--blue-d);}
+    .btn-green{background:var(--green);} .btn-green:hover:not(:disabled){background:var(--green-d);}
+    .btn-amber{background:#e8963d;} .btn-amber:hover:not(:disabled){background:#d3812b;}
+    .btn-purple{background:transparent; color:var(--purple); border:1.5px solid var(--purple); box-shadow:none; padding:8px 16px;}
+    .btn-purple:hover{background:var(--purple); color:#fff;}
+    .btn-ghost{background:#eef0f3; color:var(--ink); box-shadow:none;}
+    .btn-ghost:hover{background:#e3e6ea;}
+    .btn-sm{padding:7px 15px; font-size:14px;}
+    .wrap{max-width:1040px; margin:0 auto; padding:22px 20px 60px;}
+    h1{font-size:26px; margin:.2em 0 .4em;} h2{font-size:22px;} h3{font-size:19px; margin:.2em 0 .4em;}
+    p{margin:.5em 0;} hr{border:none; border-top:1px solid var(--line); margin:16px 0;}
+    .muted{color:var(--muted);} .small{font-size:13.5px;} .center{text-align:center;} .right{text-align:right;}
+    .screen{display:none;} .screen.active{display:block; animation:fade .25s ease;}
+    @keyframes fade{from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;}}
+    .card{background:#fff; border:1px solid var(--line); border-radius:12px; padding:22px 24px; margin:14px 0;}
+    .note{background:#fbf7ff; border:1px solid #e6d9fb; border-radius:10px; padding:12px 16px; font-size:14px; color:#4a3d63;}
+
+    /* game layout */
+    .game-top{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:6px;}
+    .rounds-rem{font-weight:700; font-size:17px;}
+    .game-grid{display:grid; grid-template-columns:215px 1fr 235px; gap:18px; align-items:start;}
+    .stat-label{font-size:13.5px; color:var(--muted); margin-top:14px;}
+    .stat-val{font-size:22px; font-weight:600; text-indent:12px;}
+    .plot-wrap{border:1px solid var(--line); border-radius:10px; padding:8px 6px 2px; background:#fff;}
+    .plot-svg{width:100%; height:auto; display:block;}
+    .axt{font-size:12px; fill:#555;} .axtitle{font-size:14px; fill:#333; font-weight:600;}
+    .legend{display:flex; gap:16px; justify-content:center; flex-wrap:wrap; font-size:12.5px; color:var(--muted); margin-top:6px;}
+    .legend span{display:inline-flex; align-items:center; gap:5px;}
+    .swatch{width:13px; height:13px; border-radius:3px; display:inline-block;}
+    .ask{font-size:15px; margin-top:6px;}
+    .ai-answer{font-size:20px; font-weight:700; color:var(--blue); text-indent:12px;}
+    .feedback{margin-top:14px; border-radius:10px; padding:11px 13px; font-size:14px; display:none;}
+    .feedback.show{display:block;}
+    .feedback.good{background:#eef8e9; border:1px solid #cfe8c2;}
+    .feedback.bad{background:#fdeeee; border:1px solid #f3c9c9;}
+    .feedback.neutral{background:var(--panel); border:1px solid var(--line);}
+
+    /* start screen */
+    .toggle-row{display:flex; gap:22px; flex-wrap:wrap; margin:14px 0;}
+    .toggle{border:1px solid var(--line); border-radius:10px; padding:12px 14px; background:var(--panel); min-width:250px;}
+    .toggle .tlabel{font-weight:600; font-size:14px; margin-bottom:8px;}
+    .seg{display:inline-flex; border:1px solid #c9ced4; border-radius:8px; overflow:hidden;}
+    .seg button{border:none; background:#fff; padding:7px 14px; font-size:14px; cursor:pointer; color:var(--ink);}
+    .seg button.on{background:var(--purple); color:#fff;}
+
+    /* results */
+    .bars{margin:14px 0;}
+    .bar-row{display:grid; grid-template-columns:150px 1fr 60px; align-items:center; gap:10px; margin:7px 0; font-size:14px;}
+    .bar-track{background:var(--panel); border:1px solid var(--line); border-radius:6px; height:20px; overflow:hidden;}
+    .bar-fill{height:100%; border-radius:6px 0 0 6px;}
+
+    .overlay{position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; z-index:70; padding:20px;}
+    .overlay.show{display:flex;}
+    .modal{background:#fff; border-radius:14px; max-width:620px; width:100%; max-height:86vh; overflow:auto; padding:24px 26px; box-shadow:0 20px 60px rgba(0,0,0,.3);}
+    .modal-foot{display:flex; justify-content:flex-end; margin-top:16px;}
+    .footer-note{margin-top:34px; padding-top:16px; border-top:1px solid var(--line); color:var(--muted); font-size:13px;}
+
+    @media (max-width:780px){ .game-grid{grid-template-columns:1fr;} .stat-val{text-indent:0;} }
+  </style>
+</head>
+<body>
+  <div class="nav">
+    <div class="brand">Trust the AI? <span class="dot">&bull;</span> <span class="muted" style="font-weight:400; font-size:14px;">A Jagged Intelligence Game</span></div>
+    <div class="nav-right">
+      <button class="btn btn-purple btn-sm" id="btn-help"><span aria-hidden="true">&#9432;</span> How it works</button>
+      <button class="btn btn-ghost btn-sm" id="btn-restart">&#8635; Restart</button>
+    </div>
+  </div>
+
+  <div class="wrap">
+
+    <!-- ============ START ============ -->
+    <section class="screen active" id="s-start">
+      <h1>Trust the AI? <span style="font-weight:400;">An exploration vs.&nbsp;interpolation trade-off</span></h1>
+      <p>AI knowledge is <i>jagged</i>. An AI model can be brilliant on one question and confidently wrong on an almost
+      identical one. <a href="https://x.com/karpathy/status/1816531576228053133" target="_blank" rel="noreferrer noopener">Karpathy</a>
+      called this &ldquo;jagged intelligence,&rdquo; and <a href="https://pubsonline.informs.org/doi/10.1287/orsc.2025.21838" target="_blank" rel="noreferrer noopener">Dell&rsquo;Acqua et&nbsp;al. (2026)</a> the
+      &ldquo;jagged frontier.&rdquo; The reason is simple: a model reliably knows the answers it has actually seen, and
+      for every other question it <b>interpolates</b> from those, guessing by filling in between what it knows.
+      Near its knowledge it is accurate; far from it, in the gaps, its answer is a confident-looking guess that can be
+      badly off. The map below is a <b>conceptual model</b> of this, and of how a user searches such a
+      model for correct answers.</p>
+
+      <h3 style="margin-top:18px;">What the map shows</h3>
+      <ul>
+        <li><b>x&#8209;axis:</b> the question, <i>x</i> &isin; [0,&nbsp;100]. A one&#8209;dimensional map of every question you could ask
+        (numbered 1&ndash;100). Questions that sit close together are <i>similar</i>, so their answers are related.</li>
+        <li><b>y&#8209;axis:</b> the answer, <i>y</i>(<i>x</i>) &isin; [0,&nbsp;1]. The correct answer to that question.</li>
+        <li><span class="swatch" style="background:#e41a1c"></span> <b>Red curve:</b> the truth. The correct
+        answer to every question. It is rough (neighbouring questions differ a little) and is <b>hidden from you</b>
+        while you play.</li>
+        <li><span class="swatch" style="background:#2780e3"></span> <b>Blue dots:</b> what the AI actually knows.
+        The questions it has learned exactly: its training data, or &ldquo;knowledge points.&rdquo;</li>
+        <li><b>Blue line:</b> the AI&rsquo;s answer everywhere. It simply connects its dots and reports that
+        value. Notice it looks equally confident across the whole space, yet it only hugs the truth near its dots and
+        drifts away in the wide gaps.</li>
+      </ul>
+
+      <div class="card" style="padding:14px;">
+        <div id="demo-plot"></div>
+        <div class="legend">
+          <span><span class="swatch" style="background:#2780e3"></span> AI&rsquo;s known points &amp; interpolated answer</span>
+          <span><span class="swatch" style="background:#e41a1c"></span> the true answer (hidden from you)</span>
+        </div>
+        <div class="small muted center" style="margin-top:6px;">x = the space of questions (similar questions sit near each other) &nbsp;&middot;&nbsp; y = the correct answer (0&ndash;1)</div>
+      </div>
+
+      <h3 style="margin-top:18px;">Your task</h3>
+      <p>You are a user querying this AI for correct answers. You face <b>15 questions</b>. They can land anywhere on
+      the map, so you will often fall in the AI&rsquo;s blind gaps. Each time you decide whether the AI&rsquo;s
+      confident answer can be trusted <i>here</i>, or whether to pay to check it. That is the trade-off between
+      <b>interpolating</b> (relying on what the model already &ldquo;knows&rdquo;) and <b>exploring</b> (spending to
+      find out).</p>
+
+      <h3 style="margin-top:18px;">How points are scored</h3>
+      <div class="note small">
+        Each question you pick one of two actions:
+        <ul style="margin:8px 0;">
+          <li><b>Trust the AI</b> (free): you submit the AI&rsquo;s answer as your own and are paid for accuracy.
+          You get <b>+100</b> if it is exactly right, and lose <b>2 points for every 0.01</b> the AI is off.
+          (Formula: <b>100 &minus; 200&times;error</b>, where <i>error</i> is the distance between the AI&rsquo;s answer
+          and the truth on the 0&ndash;1 scale. It can go negative in a bad gap, down to &minus;40.)</li>
+          <li><b>Verify</b> (&minus;20): you pay 20 to look up the true answer and submit that, so you are right, a guaranteed <b>+80</b>.</li>
+        </ul>
+        Because verifying locks in +80, <b>trusting is the better bet only when you expect the AI to be off by less
+        than 0.10</b> (that is where 100 &minus; 200&times;error = 80). In-game, a green <b>&ldquo;trust zone&rdquo;</b>
+        of &plusmn;0.10 is drawn around the AI&rsquo;s answer: if the hidden truth turns out to lie inside it, trusting
+        won; outside it, you should have verified.
+        <div style="margin-top:10px; padding:9px 11px; background:#fff; border:1px solid var(--line); border-radius:8px;">
+          <b>Example.</b> The AI answers <b>0.60</b>.
+          If the truth is 0.55 (off by 0.05) &rarr; Trust scores 100 &minus; 200&times;0.05 = <b>+90</b>, which beats +80, so trust.
+          If the truth is 0.80 (off by 0.20) &rarr; Trust scores 100 &minus; 200&times;0.20 = <b>+60</b>, below +80, so you should have verified.
+        </div>
+      </div>
+
+      <h3 style="margin-top:22px;">Experimental conditions</h3>
+      <p>These three switches are the levers of the model, and together they frame a defining question of the AI era:
+      what turns raw model capability into value people can actually use? A model can score well on average yet stay
+      jagged and opaque, so whether it truly helps depends on three things: how much it has learned
+      (<b>coverage</b>, i.e. scaling), whether you can tell where it is reliable (<b>visibility</b>, i.e. calibration
+      and discoverability), and whether using it makes it better (<b>shared learning</b>, i.e. a data flywheel). Flip
+      the switches below to reshape your playing environment. The plot updates to show what you would face, so you can
+      study when scaling, transparency, or user-generated data is what closes the gap between a high benchmark score
+      and real usefulness on the task in front of you.</p>
+
+      <div class="toggle-row">
+        <div class="toggle">
+          <div class="tlabel">How much has the AI learned?</div>
+          <div class="seg" id="seg-cov">
+            <button data-v="sparse" class="on">Sparse (little data)</button>
+            <button data-v="dense">Dense (lots of data)</button>
+          </div>
+          <div class="small muted" style="margin-top:8px;">More data = denser dots = safer to trust (the effect of AI &ldquo;scaling&rdquo;).</div>
+        </div>
+        <div class="toggle">
+          <div class="tlabel">What can you see about reliability?</div>
+          <div class="seg" id="seg-band">
+            <button data-v="blind">Blind</button>
+            <button data-v="shown" class="on">Band</button>
+          </div>
+          <div class="small muted" style="margin-top:8px;"><b>Blind</b> = only the AI&rsquo;s answer, no map (a truly blind user). <b>Band</b> = you see the AI&rsquo;s known points, the line it interpolates, and a shaded band for where it is unsure (a calibrated user). The band is roughly a 95% range, so the true answer can occasionally fall outside it.</div>
+        </div>
+        <div class="toggle" style="min-width:100%;">
+          <div class="tlabel">Shared learning: your checks train the AI</div>
+          <div class="seg" id="seg-share">
+            <button data-v="off" class="on">Off</button>
+            <button data-v="on">On</button>
+          </div>
+          <div class="small muted" style="margin-top:8px;">When on, every knowledge point you verify is added to the AI&rsquo;s model: its line bends to pass through that point, and its blind gaps shrink where you searched. This is a data flywheel, where user data (not just bigger models) improves the AI. The improvement is endogenous, and targeted at the spots users probe. It lets you study whether verifying becomes an investment that pays off on later nearby questions rather than a pure cost, whether usage fills the widest gaps first and reduces jaggedness faster than uniform scaling, and the externality that your checks improve the model for everyone (a public-good problem in a multi-user version).</div>
+        </div>
+      </div>
+
+      <div style="font-weight:600; font-size:14px; margin:16px 0 4px;">Your playing environment under these conditions</div>
+      <div class="plot-wrap"><div id="preview-plot"></div></div>
+      <div class="small muted center" id="preview-caption" style="margin-top:6px;"></div>
+
+      <div class="right"><button class="btn btn-green" id="btn-start">Start (15 questions)</button></div>
+    </section>
+
+    <!-- ============ GAME ============ -->
+    <section class="screen" id="s-game">
+      <div class="game-top">
+        <div style="width:120px;"></div>
+        <div class="rounds-rem" id="q-remaining"></div>
+        <div style="width:120px;"></div>
+      </div>
+      <div class="game-grid">
+        <!-- left: scoreboard -->
+        <div>
+          <div class="stat-label">Correct answer:</div>
+          <div class="stat-val" style="color:var(--green)">+100</div>
+          <div class="stat-label">Verify costs:</div>
+          <div class="stat-val" style="color:var(--red)">&minus;20</div>
+          <div class="stat-label">Your score:</div>
+          <div class="stat-val" id="st-score">0</div>
+          <div class="stat-label">Question:</div>
+          <div class="stat-val" id="st-progress">1 of 15</div>
+        </div>
+        <!-- center: plot -->
+        <div>
+          <div class="plot-wrap"><div id="plot"></div></div>
+          <div class="legend">
+            <span id="lg-known"><span class="swatch" style="background:#2780e3"></span> AI knows</span>
+            <span id="lg-line"><span class="swatch" style="background:#2780e3;opacity:.5"></span> AI&rsquo;s answer</span>
+            <span id="lg-band" style="display:none;"><span class="swatch" style="background:#bcd6f5"></span> AI&rsquo;s uncertainty</span>
+            <span><span class="swatch" style="background:#3fb618;opacity:.45"></span> trust zone (&plusmn;0.10)</span>
+            <span><span class="swatch" style="background:#e41a1c"></span> true answer (revealed)</span>
+          </div>
+        </div>
+        <!-- right: decision -->
+        <div>
+          <div class="stat-label">This question:</div>
+          <div class="stat-val" id="st-question">&mdash;</div>
+          <div class="stat-label">The AI&rsquo;s answer here:</div>
+          <div class="ai-answer" id="st-aians">&mdash;</div>
+          <div class="ask">Do you trust it?</div>
+          <div style="display:flex; gap:10px; margin-top:8px; flex-wrap:wrap;">
+            <button class="btn btn-blue" id="btn-trust">Trust the AI</button>
+            <button class="btn btn-amber" id="btn-verify">Verify (&minus;20)</button>
+          </div>
+          <div class="feedback" id="feedback"></div>
+          <div style="margin-top:12px; display:none;" id="next-wrap">
+            <button class="btn btn-green" id="btn-next">Next question &#8594;</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ DONE ============ -->
+    <section class="screen" id="s-done">
+      <div class="card">
+        <h3>Round complete</h3>
+        <p>Your score: <b id="final-score" style="font-size:20px;">0</b> out of a possible <span id="final-oracle">0</span>.</p>
+        <p id="insight" class="muted"></p>
+
+        <h4>How you compared</h4>
+        <div class="bars" id="bars"></div>
+
+        <h4 style="margin-top:18px;">What the AI actually didn&rsquo;t know</h4>
+        <p class="small muted">Blue = the AI&rsquo;s answer everywhere. Red = the true curve. The AI is accurate at its
+        dots and drifts away from the truth in the gaps, while looking just as confident.</p>
+        <div class="plot-wrap"><div id="reveal-plot"></div></div>
+
+        <div class="right" style="margin-top:16px;"><button class="btn btn-green" id="btn-again">Play again</button></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- how-it-works modal -->
+  <div class="overlay" id="ov-help">
+    <div class="modal">
+      <h3>How it works</h3>
+      <p>The AI has learned the true answer at the <b>blue dots</b>. Everywhere else it draws the straight line
+      between neighbouring dots (it <b>interpolates</b>) and reports that value, confidently.</p>
+      <ul>
+        <li><b>Trust the AI</b> (free): submit the AI&rsquo;s answer. Score = <b>100 &minus; 200&times;(how far the AI is off)</b>
+        : +100 if spot-on, less as the error grows, and negative in a bad gap.</li>
+        <li><b>Verify</b> (&minus;20): pay to reveal the true answer and submit it, for a guaranteed <b>+80</b>.</li>
+      </ul>
+      <p>Setting the two equal, <b>trusting beats verifying exactly when the AI&rsquo;s error is below 0.10</b>. The green
+      <b>&ldquo;trust zone&rdquo;</b> drawn around the AI&rsquo;s answer marks that &plusmn;0.10 window: if the hidden truth lands
+      inside it, trusting was the better call; if outside, you should have verified. You must judge that <i>before</i>
+      seeing the truth, from how close the question sits to the AI&rsquo;s known dots. This is the tension between
+      <b>interpolation</b> and <b>exploration</b>.</p>
+      <div class="modal-foot"><button class="btn btn-blue" id="btn-help-close">Got it</button></div>
+    </div>
+  </div>
+
+<script>
+"use strict";
+/* ==========================================================================
+   Trust the AI? A clean game about Artificial Jagged Intelligence (AJI).
+   One hidden "truth" curve; an AI that knows scattered
+   points and interpolates between them; you decide Trust vs Verify.
+   Self-contained, no backend, no data collection.
+   ========================================================================== */
+
+// ---- constants ----
+var N_POS = 100;      // questions 1..100
+var N_Q = 15;         // questions per round
+var CORRECT = 100;    // points for a correct answer
+var VERIFY_FEE = 20;  // cost to verify (verified answer scores CORRECT - FEE)
+var PEN = 200;        // trust penalty slope (points lost per unit error)
+var FLOOR = -40;      // worst trust outcome
+var STEP_SD = 0.05;   // roughness of the hidden truth (Brownian step std, in [0,1] units)
+var K_SPARSE = 6, K_DENSE = 14;
+var GOOD_ERR = 0.10;  // error below which trusting beats verifying
+
+// ---- helpers ----
+function clamp(x,a,b){ return Math.max(a, Math.min(b, x)); }
+function round2(x){ return Math.round(x*100)/100; }
+function randint(a,b){ return a + Math.floor(Math.random()*(b-a+1)); }
+function gauss(){ // Box-Muller
+  var u=0,v=0; while(u===0)u=Math.random(); while(v===0)v=Math.random();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+}
+function $(id){ return document.getElementById(id); }
+
+// ---- state ----
+var state = {};
+function newState(){
+  state = { coverage:'sparse', band:'shown', shared:'off', truth:[], known:[], ai:[], sd:[],
+            questions:[], qi:0, score:0, records:[] };
+}
+newState();
+
+// ---- landscape generation ----
+// One rough truth curve; AI knows a subset of points exactly and interpolates.
+// AI's answer everywhere from its known points: linear interpolation between
+// neighbours, flat extrapolation past the ends; sd is the Brownian-bridge std.
+function computeInterp(truth, known){
+  var ai=new Array(N_POS+1), sd=new Array(N_POS+1), first=known[0], last=known[known.length-1], i, xx;
+  for(i=0;i<known.length-1;i++){
+    var lo=known[i], hi=known[i+1], ylo=truth[lo], yhi=truth[hi];
+    for(xx=lo; xx<=hi; xx++){ var t=(xx-lo)/(hi-lo); ai[xx]=ylo+t*(yhi-ylo); sd[xx]=STEP_SD*Math.sqrt((xx-lo)*(hi-xx)/(hi-lo)); }
+  }
+  for(var xl=1; xl<first; xl++){ ai[xl]=truth[first]; sd[xl]=STEP_SD*Math.sqrt(first-xl); }
+  for(var xr=last+1; xr<=N_POS; xr++){ ai[xr]=truth[last]; sd[xr]=STEP_SD*Math.sqrt(xr-last); }
+  return {ai:ai, sd:sd};
+}
+function buildLandscape(){
+  var truth = new Array(N_POS+1);
+  truth[1] = 0.5;
+  for(var x=2;x<=N_POS;x++){
+    var v = truth[x-1] + STEP_SD*gauss();
+    if(v<0) v=-v; if(v>1) v=2-v;            // reflect into [0,1]
+    truth[x] = clamp(v,0,1);
+  }
+  // knowledge points: K distinct positions (endpoints kept interior so the
+  // edges are genuine extrapolation zones)
+  var K = (state.coverage==='dense') ? K_DENSE : K_SPARSE;
+  var pts = {};
+  while(Object.keys(pts).length < K){ pts[randint(4, N_POS-3)] = 1; }
+  var known = Object.keys(pts).map(Number).sort(function(a,b){return a-b;});
+
+  // AI answer everywhere from its known points
+  state.truth=truth; state.known=known;
+  var it=computeInterp(truth, known); state.ai=it.ai; state.sd=it.sd;
+
+  // question sequence: distinct non-known positions, drawn uniformly (inspection paradox)
+  var isKnown={}; known.forEach(function(k){isKnown[k]=1;});
+  var qs={}, seq=[];
+  while(seq.length < N_Q){
+    var q = randint(1,N_POS);
+    if(isKnown[q] || qs[q]) continue;
+    qs[q]=1; seq.push(q);
+  }
+  state.questions=seq;
+}
+
+// ---- plot ----
+var VB={L:54,R:702,T:14,B:338,W:720,H:380};
+var HEADER=104; // reserved band ABOVE the plot for the annotated callout boxes (start screen only)
+function xco(p){ return VB.L + (p-1)/(N_POS-1)*(VB.R-VB.L); }
+function yco(v){ return VB.B - v*(VB.B-VB.T); }
+function polyline(arr, from, to){
+  var pts=[]; for(var x=from;x<=to;x++){ pts.push(xco(x)+','+yco(arr[x])); } return pts.join(' ');
+}
+// opts: {band, current, revealed:[x..], showTruth}
+// One annotation callout: a labelled box + a connector line with an arrowhead at the anchor.
+function calloutSVG(o){
+  var lh=18, pad=9, H=pad*2 + o.lines.length*lh;
+  var marker = (o.color==='#e41a1c') ? 'ar-red' : 'ar-blue';
+  var s='';
+  var arrows = o.arrows || [{sx:o.sx, sy:o.sy, ax:o.ax, ay:o.ay}];
+  for(var a=0;a<arrows.length;a++){
+    var ar=arrows[a];
+    s+='<line x1="'+ar.sx+'" y1="'+ar.sy+'" x2="'+ar.ax+'" y2="'+ar.ay+'" stroke="'+o.color+'" stroke-width="1.8" marker-end="url(#'+marker+')"/>';
+    s+='<circle cx="'+ar.ax+'" cy="'+ar.ay+'" r="3.4" fill="'+o.color+'"/>';
+  }
+  s+='<rect x="'+o.boxX+'" y="'+o.boxY+'" width="'+o.W+'" height="'+H+'" rx="8" fill="#ffffff" stroke="'+o.color+'" stroke-width="1.4" opacity="0.97"/>';
+  for(var i=0;i<o.lines.length;i++){
+    var ln=o.lines[i];
+    s+='<text x="'+(o.boxX+pad)+'" y="'+(o.boxY+pad+(i+1)*lh-5)+'" font-family="-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,Arial,sans-serif" '+
+       'font-size="13.5" font-weight="'+(ln.b?'700':'400')+'" fill="'+(ln.b?o.color:'#2b2b2b')+'">'+ln.t+'</text>';
+  }
+  return s;
+}
+function drawPlot(target, opts){
+  opts = opts||{};
+  var g='', i, x;
+  g+='<defs>'+
+     '<marker id="ar-red" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="#e41a1c"/></marker>'+
+     '<marker id="ar-blue" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="#2780e3"/></marker>'+
+     '</defs>';
+  // grid + y labels
+  [0,0.25,0.5,0.75,1].forEach(function(v){
+    g+='<line x1="'+VB.L+'" y1="'+yco(v)+'" x2="'+VB.R+'" y2="'+yco(v)+'" stroke="#ececec"/>';
+    g+='<text x="'+(VB.L-8)+'" y="'+(yco(v)+4)+'" text-anchor="end" class="axt">'+v.toFixed(2)+'</text>';
+  });
+  [25,50,75,100].forEach(function(p){
+    g+='<text x="'+xco(p)+'" y="'+(VB.B+20)+'" text-anchor="middle" class="axt">'+p+'</text>';
+  });
+  g+='<line x1="'+VB.L+'" y1="'+VB.T+'" x2="'+VB.L+'" y2="'+VB.B+'" stroke="#bbb"/>';
+  g+='<line x1="'+VB.L+'" y1="'+VB.B+'" x2="'+VB.R+'" y2="'+VB.B+'" stroke="#bbb"/>';
+
+  var showMap = (opts.mode !== 'blind'); // 'blind' hides the AI's line and its known dots
+  // uncertainty band (calibrated view)
+  if(opts.mode==='shown'){
+    var top=[], bot=[];
+    for(x=1;x<=N_POS;x++){ top.push(xco(x)+','+yco(clamp(state.ai[x]+2*state.sd[x],0,1))); }
+    for(x=N_POS;x>=1;x--){ bot.push(xco(x)+','+yco(clamp(state.ai[x]-2*state.sd[x],0,1))); }
+    g+='<polygon points="'+top.concat(bot).join(' ')+'" fill="#bcd6f5" opacity="0.5" stroke="none"/>';
+  }
+  // AI interpolated line
+  if(showMap){
+    g+='<polyline points="'+polyline(state.ai,1,N_POS)+'" fill="none" stroke="#2780e3" stroke-width="2"/>';
+  }
+  // true curve (reveal only)
+  if(opts.showTruth){
+    g+='<polyline points="'+polyline(state.truth,1,N_POS)+'" fill="none" stroke="#e41a1c" stroke-width="2" opacity="0.85"/>';
+  }
+  // AI knowledge points
+  if(showMap){ state.known.forEach(function(k){
+    g+='<circle cx="'+xco(k)+'" cy="'+yco(state.truth[k])+'" r="4.6" fill="#2780e3"/>';
+  }); }
+  // revealed truths
+  (opts.revealed||[]).forEach(function(x){
+    g+='<circle cx="'+xco(x)+'" cy="'+yco(state.truth[x])+'" r="3.6" fill="#e41a1c" opacity="0.7"/>';
+  });
+  // current question
+  if(opts.current){
+    var cx=xco(opts.current);
+    // "trust zone": if the hidden truth lands within AI answer +/- GOOD_ERR, trusting beats verifying
+    var zTop=yco(clamp(state.ai[opts.current]+GOOD_ERR,0,1));
+    var zBot=yco(clamp(state.ai[opts.current]-GOOD_ERR,0,1));
+    g+='<rect x="'+(cx-7)+'" y="'+zTop+'" width="14" height="'+(zBot-zTop)+'" fill="#3fb618" opacity="0.16" rx="3"/>';
+    g+='<line x1="'+(cx-10)+'" y1="'+zTop+'" x2="'+(cx+10)+'" y2="'+zTop+'" stroke="#3fb618" stroke-width="1.5" opacity="0.7"/>';
+    g+='<line x1="'+(cx-10)+'" y1="'+zBot+'" x2="'+(cx+10)+'" y2="'+zBot+'" stroke="#3fb618" stroke-width="1.5" opacity="0.7"/>';
+    var my=yco(state.ai[opts.current]); // the AI's answer marker
+    g+='<line x1="'+cx+'" y1="'+VB.B+'" x2="'+cx+'" y2="'+my+'" stroke="#e41a1c" stroke-width="1.5" stroke-dasharray="6 5"/>'; // up from the x-axis to the marker (reads the question)
+    g+='<line x1="'+VB.L+'" y1="'+my+'" x2="'+cx+'" y2="'+my+'" stroke="#e41a1c" stroke-width="1.5" stroke-dasharray="6 5"/>'; // across to the y-axis (reads the answer)
+    g+='<circle cx="'+cx+'" cy="'+my+'" r="6" fill="#fff" stroke="#2780e3" stroke-width="2.4"/>';
+    if(opts.showAnswerTruth){
+      g+='<line x1="'+cx+'" y1="'+yco(state.ai[opts.current])+'" x2="'+cx+'" y2="'+yco(state.truth[opts.current])+'" stroke="#e41a1c" stroke-width="2"/>';
+      g+='<circle cx="'+cx+'" cy="'+yco(state.truth[opts.current])+'" r="5.5" fill="#e41a1c"/>';
+    }
+  }
+  // start-screen callouts live in the header band above the plot (never overlap the curve);
+  // arrows drop down into the plot. Blue points to two knowledge dots (ordered left->right so
+  // they cannot cross); red points to a right-side spot where the truth rises above the AI (so
+  // the red arrow stays above the blue line and does not cross it).
+  if(opts.annotate){
+    var kn = state.known, i2, dv;
+    var d1=kn[0]; for(i2=0;i2<kn.length;i2++){ if(Math.abs(kn[i2]-15)<Math.abs(d1-15)) d1=kn[i2]; }
+    var d2=-1;    for(i2=0;i2<kn.length;i2++){ if(kn[i2]!==d1 && (d2<0 || Math.abs(kn[i2]-42)<Math.abs(d2-42))) d2=kn[i2]; }
+    if(d2<0) d2=d1;
+    var lo=Math.min(d1,d2), hi=Math.max(d1,d2);
+    g += calloutSVG({ color:'#2780e3', boxX:64, boxY:-96, W:252,
+      lines:[{t:'What the AI knows:',b:true},{t:'its knowledge points (dots) and'},{t:'its interpolated answer (line)'}],
+      arrows:[ {sx:clamp(xco(lo),80,175), sy:-22, ax:xco(lo), ay:yco(state.truth[lo])},
+               {sx:clamp(xco(hi),205,305), sy:-22, ax:xco(hi), ay:yco(state.truth[hi])} ] });
+    var rx=70, rb=-1; for(i2=52;i2<=95;i2++){ dv=state.truth[i2]-state.ai[i2]; if(dv>rb){rb=dv; rx=i2;} }
+    if(rb<=0){ for(i2=52;i2<=95;i2++){ dv=Math.abs(state.truth[i2]-state.ai[i2]); if(dv>rb){rb=dv; rx=i2;} } }
+    g += calloutSVG({ color:'#e41a1c', boxX:452, boxY:-96, W:246,
+      lines:[{t:'The true answer:',b:true},{t:'the correct answer to every'},{t:'question, hidden from you'}],
+      arrows:[ {sx:clamp(xco(rx),470,690), sy:-22, ax:xco(rx), ay:yco(state.truth[rx])} ] });
+  }
+  g+='<text x="'+((VB.L+VB.R)/2)+'" y="'+(VB.H-6)+'" text-anchor="middle" class="axtitle">Question</text>';
+  g+='<text x="16" y="'+((VB.T+VB.B)/2)+'" text-anchor="middle" class="axtitle" transform="rotate(-90 16 '+((VB.T+VB.B)/2)+')">Answer</text>';
+  var vbTop = opts.annotate ? -HEADER : 0;
+  var vbH   = opts.annotate ? (VB.H+HEADER) : VB.H;
+  $(target).innerHTML='<svg viewBox="0 '+vbTop+' '+VB.W+' '+vbH+'" class="plot-svg" preserveAspectRatio="xMidYMid meet">'+g+'</svg>';
+}
+
+// ---- scoring ----
+function trustPoints(err){ return clamp(Math.round(CORRECT - PEN*err), FLOOR, CORRECT); }
+function verifyPoints(){ return CORRECT - VERIFY_FEE; }
+
+// ---- game flow ----
+function startRound(){
+  buildLandscape();
+  state.qi=0; state.score=0; state.records=[];
+  var mapVisible = (state.band !== 'blind');
+  $('lg-known').style.display = mapVisible ? 'inline-flex' : 'none';
+  $('lg-line').style.display  = mapVisible ? 'inline-flex' : 'none';
+  $('lg-band').style.display  = (state.band==='shown') ? 'inline-flex' : 'none';
+  showScreen('s-game');
+  renderQuestion();
+}
+function revealedSoFar(){ return state.records.map(function(r){ return r.x; }); }
+
+function renderQuestion(){
+  var q = state.questions[state.qi];
+  $('st-score').textContent = state.score;
+  $('st-progress').textContent = (state.qi+1)+' of '+N_Q;
+  $('q-remaining').textContent = 'Question '+(state.qi+1)+' of '+N_Q;
+  $('st-question').textContent = '#'+q;
+  $('st-aians').textContent = round2(state.ai[q]).toFixed(2);
+  $('btn-trust').disabled=false; $('btn-verify').disabled=false;
+  $('feedback').className='feedback'; $('feedback').innerHTML='';
+  $('next-wrap').style.display='none';
+  drawPlot('plot', { mode: state.band, current:q, revealed:revealedSoFar() });
+}
+
+function decide(choice){
+  var q = state.questions[state.qi];
+  var ai = round2(state.ai[q]), truth = round2(state.truth[q]); // use the shown 2-decimal values
+  var err = round2(Math.abs(ai - truth));                       // so "off by" matches (AI answer - truth)
+  var earned = (choice==='trust') ? trustPoints(err) : verifyPoints();
+  state.score += earned;
+  state.records.push({ x:q, err:err, choice:choice, earned:earned });
+
+  // shared learning: a verified point is added to the AI's knowledge, so it re-interpolates
+  var trained = false;
+  if(choice==='verify' && state.shared==='on' && state.known.indexOf(q)===-1){
+    state.known.push(q); state.known.sort(function(a,b){return a-b;});
+    var it=computeInterp(state.truth, state.known); state.ai=it.ai; state.sd=it.sd;
+    trained = true;
+  }
+
+  $('btn-trust').disabled=true; $('btn-verify').disabled=true;
+  $('st-score').textContent = state.score;
+  drawPlot('plot', { mode: state.band, current:q, revealed:revealedSoFar(), showAnswerTruth:true });
+
+  var tp = trustPoints(err), vp = verifyPoints();
+  var best = Math.max(tp, vp), optimal = (earned >= best);
+  var inZone = err <= GOOD_ERR;
+  var fb=$('feedback');
+  fb.className = 'feedback show ' + (optimal ? 'good' : 'bad');
+  var head = 'The AI said <b>'+ai.toFixed(2)+'</b>; the truth was <b>'+truth.toFixed(2)+'</b> '+
+             '(off by '+err.toFixed(2)+'), '+(inZone?'<b>inside</b>':'<b>outside</b>')+
+             ' the &plusmn;'+GOOD_ERR.toFixed(2)+' trust zone.';
+  var scores = 'Trust would score '+(tp>=0?'+':'')+tp+'; Verify +'+vp+'.';
+  var choiceName = (choice==='trust') ? 'Trust' : 'Verify';
+  var verdict;
+  if(optimal){
+    verdict = 'You chose <b>'+choiceName+'</b> for <b>'+(earned>=0?'+':'')+earned+'</b>, the better call here. &#10003;';
+  } else {
+    verdict = 'You chose <b>'+choiceName+'</b> for <b>'+(earned>=0?'+':'')+earned+'</b>; '+
+              (choice==='trust'?'verifying':'trusting')+' would have given <b>+'+best+'</b> ('+(best-earned)+' more).';
+  }
+  if(trained) verdict += ' The AI just learned position '+q+', so later questions near it get more reliable.';
+  fb.innerHTML = head + '<br>' + scores + '<br>' + verdict;
+  $('next-wrap').style.display='block';
+}
+
+function nextQuestion(){
+  state.qi++;
+  if(state.qi >= N_Q){ finish(); return; }
+  renderQuestion();
+}
+
+function finish(){
+  var alwaysTrust=0, alwaysVerify=0, oracle=0, badTrust=0, overVerify=0;
+  state.records.forEach(function(r){
+    var tp=trustPoints(r.err), vp=verifyPoints();
+    alwaysTrust+=tp; alwaysVerify+=vp; oracle+=Math.max(tp,vp);
+    if(r.choice==='trust' && r.err>GOOD_ERR) badTrust++;
+    if(r.choice==='verify' && r.err<=GOOD_ERR) overVerify++;
+  });
+  $('final-score').textContent = state.score;
+  $('final-oracle').textContent = oracle;
+
+  var ins = 'On the questions you <b>trusted</b>, the AI was clearly off ('+'>'+GOOD_ERR.toFixed(2)+') on <b>'+badTrust+'</b> of them';
+  ins += ' (over-trusting the gaps). You <b>paid to verify</b> when the AI was actually fine on <b>'+overVerify+'</b> (over-checking).';
+  ins += ' A perfectly calibrated player, trusting near the dots and checking in the gaps, would have scored '+oracle+'.';
+  $('insight').innerHTML = ins;
+
+  // comparison bars
+  var rows=[['You', state.score, '#6f42c1'],
+            ['Always trust', alwaysTrust, '#2780e3'],
+            ['Always verify', alwaysVerify, '#e8963d'],
+            ['Perfect play', oracle, '#3fb618']];
+  var maxV = Math.max.apply(null, rows.map(function(r){return r[1];}).concat([oracle,1]));
+  var minV = Math.min.apply(null, rows.map(function(r){return r[1];}).concat([0]));
+  var span = Math.max(1, maxV - minV);
+  var html='';
+  rows.forEach(function(r){
+    var pct = Math.round((r[1]-minV)/span*100);
+    html += '<div class="bar-row"><div>'+r[0]+'</div>'+
+            '<div class="bar-track"><div class="bar-fill" style="width:'+pct+'%; background:'+r[2]+'"></div></div>'+
+            '<div class="right"><b>'+r[1]+'</b></div></div>';
+  });
+  $('bars').innerHTML=html;
+
+  drawPlot('reveal-plot', { mode:'hidden', revealed:revealedSoFar(), showTruth:true });
+  showScreen('s-done');
+}
+
+// ---- screens & wiring ----
+function showScreen(id){
+  var all=document.querySelectorAll('.screen');
+  for(var i=0;i<all.length;i++) all[i].classList.remove('active');
+  $(id).classList.add('active');
+  window.scrollTo(0,0);
+}
+function segWire(segId, key){
+  var seg=$(segId);
+  seg.addEventListener('click', function(e){
+    var b=e.target.closest('button'); if(!b) return;
+    Array.prototype.forEach.call(seg.querySelectorAll('button'), function(x){ x.classList.remove('on'); });
+    b.classList.add('on'); state[key]=b.getAttribute('data-v');
+    if(segId==='seg-cov'){ drawDemo(); genPreviewBase(); } // coverage reshuffles both illustrations
+    drawPreview(); // every condition updates the "playing environment" preview
+  });
+}
+// Annotated start-screen illustration. It is dynamic: a fresh random landscape
+// at the current coverage (Sparse/Dense), so toggling redraws it with fewer/more
+// dots. Only the arrows and legend are added on top; the game plot has neither.
+function drawDemo(){
+  var saved = { truth:state.truth, known:state.known, ai:state.ai, sd:state.sd };
+  var truth=new Array(N_POS+1); truth[1]=0.5;
+  for(var x=2;x<=N_POS;x++){ var v=truth[x-1]+STEP_SD*gauss(); if(v<0)v=-v; if(v>1)v=2-v; truth[x]=clamp(v,0,1); }
+  var K=(state.coverage==='dense')?K_DENSE:K_SPARSE, pts={};
+  while(Object.keys(pts).length<K){ pts[randint(4,N_POS-3)]=1; }
+  var known=Object.keys(pts).map(Number).sort(function(a,b){return a-b;});
+  var it=computeInterp(truth, known);
+  state.truth=truth; state.known=known; state.ai=it.ai; state.sd=it.sd;
+  drawPlot('demo-plot', { showTruth:true, annotate:true });
+  state.truth=saved.truth; state.known=saved.known; state.ai=saved.ai; state.sd=saved.sd;
+}
+
+// A stable base landscape for the "Experimental conditions" preview. Regenerated only when
+// coverage changes; reliability and shared-learning toggles re-render the SAME landscape so
+// their effect is a clean comparison.
+function genPreviewBase(){
+  var truth=new Array(N_POS+1); truth[1]=0.5;
+  for(var x=2;x<=N_POS;x++){ var v=truth[x-1]+STEP_SD*gauss(); if(v<0)v=-v; if(v>1)v=2-v; truth[x]=clamp(v,0,1); }
+  var K=(state.coverage==='dense')?K_DENSE:K_SPARSE, pts={};
+  while(Object.keys(pts).length<K){ pts[randint(4,N_POS-3)]=1; }
+  var base=Object.keys(pts).map(Number).sort(function(a,b){return a-b;});
+  var extra=[], guard=0; // points a player might verify (shown when Shared learning is On)
+  while(extra.length<3 && guard++<300){ var e=randint(6,N_POS-5); if(pts[e]) continue; pts[e]=1; extra.push(e); }
+  extra.sort(function(a,b){return a-b;});
+  var q=50, wid=-1; // sample question: midpoint of the widest gap (a risky spot)
+  for(var i=0;i<base.length-1;i++){ var w=base[i+1]-base[i]; if(w>wid){ wid=w; q=Math.round((base[i]+base[i+1])/2); } }
+  state._pvTruth=truth; state._pvBase=base; state._pvExtra=extra; state._pvQ=q;
+}
+function drawPreview(){
+  if(!state._pvTruth) genPreviewBase();
+  var saved={truth:state.truth,known:state.known,ai:state.ai,sd:state.sd};
+  var known=state._pvBase.slice(), revealed=[];
+  if(state.shared==='on'){ known=known.concat(state._pvExtra).sort(function(a,b){return a-b;}); revealed=state._pvExtra.slice(); }
+  var it=computeInterp(state._pvTruth, known);
+  state.truth=state._pvTruth; state.known=known; state.ai=it.ai; state.sd=it.sd;
+  drawPlot('preview-plot', { mode: state.band, current: state._pvQ, revealed: revealed });
+  state.truth=saved.truth; state.known=saved.known; state.ai=saved.ai; state.sd=saved.sd;
+  var cov = (state.coverage==='dense')
+    ? '<b>Dense coverage</b>: many dots, small gaps, usually safe to trust.'
+    : '<b>Sparse coverage</b>: few dots, wide gaps, often better to verify.';
+  var vis = (state.band==='blind') ? '<b>Blind</b>: you see only the AI’s answer and the trust zone, no map.'
+          : '<b>Band</b>: the AI’s points, the line it interpolates, and a shaded ~95% uncertainty band.';
+  var shr = (state.shared==='on')
+    ? '<b>Shared learning ON</b>: knowledge points you verify become new dots (shown), so the map fills in where you search.'
+    : '<b>Shared learning OFF</b>: the AI’s knowledge is fixed.';
+  $('preview-caption').innerHTML = cov+' &nbsp;&middot;&nbsp; '+vis+' &nbsp;&middot;&nbsp; '+shr;
+}
+
+document.addEventListener('DOMContentLoaded', function(){
+  segWire('seg-cov','coverage');
+  segWire('seg-band','band');
+  segWire('seg-share','shared');
+  $('btn-start').addEventListener('click', startRound);
+  $('btn-trust').addEventListener('click', function(){ decide('trust'); });
+  $('btn-verify').addEventListener('click', function(){ decide('verify'); });
+  $('btn-next').addEventListener('click', nextQuestion);
+  $('btn-again').addEventListener('click', function(){ showScreen('s-start'); drawDemo(); drawPreview(); });
+  $('btn-restart').addEventListener('click', function(){ newState(); resetSegs(); showScreen('s-start'); drawDemo(); drawPreview(); });
+  $('btn-help').addEventListener('click', function(){ $('ov-help').classList.add('show'); });
+  $('btn-help-close').addEventListener('click', function(){ $('ov-help').classList.remove('show'); });
+
+  function resetSegs(){
+    [['seg-cov','sparse'],['seg-band','shown'],['seg-share','off']].forEach(function(pair){
+      Array.prototype.forEach.call($(pair[0]).querySelectorAll('button'), function(b){
+        b.classList.toggle('on', b.getAttribute('data-v')===pair[1]);
+      });
+    });
+  }
+  window.__resetSegs = resetSegs;
+  drawDemo();
+  drawPreview();
+});
+</script>
+</body>
+</html>

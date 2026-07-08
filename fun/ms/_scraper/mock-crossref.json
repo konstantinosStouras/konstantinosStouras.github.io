@@ -1,0 +1,50 @@
+{ "message": { "items": [
+  {
+    "DOI": "10.1287/mnsc.2023.4711",
+    "type": "journal-article",
+    "title": ["A <i>Dynamic</i> Model of Inventory & Pricing"],
+    "author": [
+      { "given": "Jane Q.", "family": "Doe", "ORCID": "https://orcid.org/0000-0001-0000-0001", "affiliation": [{ "name": "MIT Sloan School of Management" }] },
+      { "given": "John", "family": "Smith", "affiliation": [{ "name": "Stanford Graduate School of Business" }] }
+    ],
+    "issued": { "date-parts": [[2023]] },
+    "volume": "69", "issue": "5", "page": "2500-2519",
+    "abstract": "<jats:p>We study inventory dynamics. This paper was accepted by Charles Corbett, operations management.</jats:p>",
+    "is-referenced-by-count": 12
+  },
+  {
+    "DOI": "10.1287/mnsc.2024.9001",
+    "type": "journal-article",
+    "title": ["Learning in Platform Markets"],
+    "author": [
+      { "given": "Renée", "family": "Adams", "affiliation": [{ "name": "MIT Sloan School of Management" }] }
+    ],
+    "issued": { "date-parts": [[2024]] },
+    "page": "",
+    "abstract": "This paper was accepted by Gérard P. Cachon, finance.",
+    "is-referenced-by-count": 0
+  },
+  {
+    "DOI": "10.1287/mnsc.2025.5555",
+    "type": "journal-article",
+    "title": ["Editor Only in Assertions"],
+    "author": [ { "given": "Ada", "family": "Lovelace", "affiliation": [{ "name": "University of Cambridge" }] } ],
+    "issued": { "date-parts": [[2025]] },
+    "abstract": "An abstract with no acceptance sentence. Funding: none.",
+    "assertion": [ { "name": "accepted_by", "label": "Accepting Editor", "value": "Gustavo Manso" } ]
+  },
+  {
+    "DOI": "10.1287/mnsc.1.1.1",
+    "type": "journal-article",
+    "title": ["The Nature of Management Science"],
+    "author": [ { "name": "C. West Churchman" } ],
+    "issued": { "date-parts": [[1954]] },
+    "volume": "1", "issue": "1", "page": "1-3"
+  },
+  {
+    "DOI": "10.1287/mnsc.editorial",
+    "type": "editorial",
+    "title": ["From the Editor"],
+    "issued": { "date-parts": [[2020]] }
+  }
+] } }

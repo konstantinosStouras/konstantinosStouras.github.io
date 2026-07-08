@@ -207,21 +207,36 @@
   /* ===================== REGISTRATION / LOGIN ===================== */
   function buildField(q) {
     var field = el('div', { class: 'a-field' });
-    field.appendChild(el('label', { text: q.label + (q.required ? ' *' : '') }));
+    var isCheck = q.type === 'checkbox';
+    // A consent-style checkbox carries its (often long) label next to the box,
+    // so don't also print it as the field's top label.
+    if (!isCheck) field.appendChild(el('label', { text: q.label + (q.required ? ' *' : '') }));
     if (q.help) field.appendChild(el('div', { class: 'a-help', text: q.help }));
     var input;
-    if (q.type === 'select') {
-      input = el('select', {}, [el('option', { value: '' }, ['Please select...'])].concat((q.options || []).map(function (o) { return el('option', { value: o }, [o]); })));
+    if (q.type === 'select' || q.type === 'country') {
+      // 'country' shares the select rendering but pulls the shared built-in
+      // 195-country list instead of the question's own options.
+      var opts = (q.type === 'country') ? (window.ARENA_COUNTRIES || []) : (q.options || []);
+      input = el('select', {}, [el('option', { value: '' }, ['Please select...'])].concat(opts.map(function (o) { return el('option', { value: o }, [o]); })));
     } else if (q.type === 'radio') {
       input = el('div', { class: 'a-radio' });
       (q.options || []).forEach(function (o) { input.appendChild(el('label', {}, [el('input', { type: 'radio', name: q.id, value: o }), o])); });
+    } else if (isCheck) {
+      input = el('div', { class: 'a-check' });
+      input.appendChild(el('label', {}, [el('input', { type: 'checkbox', value: 'Yes' }), q.label + (q.required ? ' *' : '')]));
     } else if (q.type === 'textarea') {
       input = el('textarea', { rows: '3' });
     } else {
-      input = el('input', { type: q.type || 'text', autocomplete: q.system === 'email' ? 'username' : (q.system === 'password' ? 'new-password' : 'off') });
+      var attrs = { type: q.type || 'text', autocomplete: q.system === 'email' ? 'username' : (q.system === 'password' ? 'new-password' : 'off') };
+      if (q.type === 'number') { if (q.min != null) attrs.min = String(q.min); if (q.max != null) attrs.max = String(q.max); attrs.step = String(q.step != null ? q.step : 1); }
+      input = el('input', attrs);
     }
     field.appendChild(input);
-    return { q: q, node: input, read: function () { if (q.type === 'radio') { var s = input.querySelector('input:checked'); return s ? s.value : ''; } return (input.value || '').trim(); } };
+    return { q: q, node: input, read: function () {
+      if (q.type === 'radio') { var s = input.querySelector('input:checked'); return s ? s.value : ''; }
+      if (isCheck) { var cb = input.querySelector('input'); return cb && cb.checked ? 'Yes' : ''; }
+      return (input.value || '').trim();
+    } };
   }
 
   function showRegister() {
@@ -242,7 +257,18 @@
       var answers = {}, participantId = '';
       for (var i = 0; i < fields.length; i++) {
         var f = fields[i], v = f.read();
-        if (f.q.required && !v) { err.textContent = 'Please complete: ' + f.q.label; return; }
+        if (f.q.required && !v) {
+          err.textContent = (f.q.type === 'checkbox') ? 'Please tick the box to continue.' : ('Please complete: ' + f.q.label);
+          return;
+        }
+        if (f.q.type === 'number' && v !== '') {
+          var num = Number(v);
+          if (isNaN(num) || (f.q.min != null && num < f.q.min) || (f.q.max != null && num > f.q.max)) {
+            var range = (f.q.min != null && f.q.max != null) ? (' (' + f.q.min + '-' + f.q.max + ')') : '';
+            err.textContent = 'Please enter a valid number for: ' + f.q.label + range;
+            return;
+          }
+        }
         if (f.q.system === 'participantId') participantId = v;
         else answers[f.q.id] = v;
       }
@@ -280,13 +306,12 @@
     // Firestore default-deny: the participant signed in anonymously fine, but the
     // write to their participant doc was refused because the security rules have
     // not been deployed (or the database is still locked). Nothing the participant
-    // typed is at fault - the session code and Participant ID are both optional. So
-    // don't surface the raw "Missing or insufficient permissions." string (which
-    // reads like a form error); show a clear message and log a precise fix hint for
-    // the organiser instead.
+    // typed is at fault. So don't surface the raw "Missing or insufficient
+    // permissions." string (which reads like a form error); show a clear message
+    // and log a precise fix hint for the organiser instead.
     if (c.indexOf('permission-denied') >= 0 || /insufficient permissions/i.test(msg)) {
       if (window.console) console.error('[Arena] Firestore write denied (permission-denied). Deploy the security rules: from _lab-arena-firebase/ run `firebase deploy --only firestore:rules` (and make sure the Anonymous sign-in provider is enabled). See _lab-arena-firebase/README.md section C.');
-      return "We couldn't start your session - the study isn't accepting responses just yet. This is a setup issue on our side, not anything you entered (the session code and Participant ID are both optional). Please let the study organiser know, or try again a little later.";
+      return "We couldn't start your session - the study isn't accepting responses just yet. This is a setup issue on our side, not anything you entered. Please let the study organiser know, or try again a little later.";
     }
     return msg || 'Something went wrong. Please try again.';
   }
@@ -328,7 +353,15 @@
     S.phase = 'main';
     if (S.tasks.length && S.order.length) { renderComparison(); return; }
     setScreen(overlayWrap(card(t('mainTitle', 'Your comparisons'), [el('p', { text: 'Preparing your comparisons...' })])));
-    Store.loadActiveTasks().then(function (set) {
+    // Honor the session's snapshotted task set so a session keeps the comparisons
+    // it was built with even if the admin changes the global active set later
+    // (matching how comparisonsPerUser/randomizeOrder are snapshotted). Older
+    // sessions without a snapshot, and the default no-code play, use the active
+    // set; an empty/deleted snapshot degrades to the built-in default inside the
+    // store, so this never dead-ends anyone.
+    var sessSet = S.session && S.session.taskSetId;
+    var loadTasks = (sessSet && Store.loadTaskSet) ? Store.loadTaskSet(sessSet) : Store.loadActiveTasks();
+    loadTasks.then(function (set) {
       S.tasks = (set && set.tasks) || [];
       // Build a fresh, freshly-shuffled set every time the participant enters the
       // comparisons. Past progress is intentionally NOT resumed - each play
@@ -343,8 +376,20 @@
       var rnd = (sess.randomizeOrder != null) ? (sess.randomizeOrder !== false) : (cfg.settings.randomizeOrder !== false);
       var n = S.tasks.length;
       var idxs = []; for (var i = 0; i < n; i++) idxs.push(i);
-      if (rnd) shuffle(idxs);
-      if (lim > 0 && lim < idxs.length) idxs = idxs.slice(0, lim);
+      // 1) SELECT the per-participant subset at random. When comparisonsPerUser
+      //    (lim) is below the pool size, every participant gets a DIFFERENT random
+      //    sample of `lim` questions out of the whole sheet. This random selection
+      //    is intentionally INDEPENDENT of the display-order toggle below, so a
+      //    large sheet is always sub-sampled at random even if the order is left
+      //    fixed (otherwise everyone would get the same first `lim` rows).
+      if (lim > 0 && lim < n) { shuffle(idxs); idxs = idxs.slice(0, lim); }
+      // 2) ORDER: randomize the chosen subset per participant when enabled;
+      //    otherwise present it in the sheet's original order (the selection step
+      //    above may have shuffled the indices, so sort to restore that order).
+      if (rnd) shuffle(idxs); else idxs.sort(function (a, b) { return a - b; });
+      // 3) Randomize which side (left/right) each answer is shown on, per
+      //    comparison, so outputA (Haiku) and outputB (Opus) are equally likely
+      //    to appear on either side - independent of the ordering above.
       S.order = idxs; S.flips = idxs.map(function () { return Math.random() < 0.5; }); S.idx = 0;
       // Cost transparency: the running US$ cost is reset for this play, and the
       // top-bar "Spent so far" meter is shown only to participants in the
@@ -359,7 +404,12 @@
       // those still on it or who finished it).
       var played = Object.assign({}, (S.p && S.p.playedSessions) || {});
       if (!played[curSid()]) played[curSid()] = nowStamp();
-      persist({ order: S.order, flips: S.flips, idx: 0, status: 'playing', playedSessions: played });
+      // Start clean: drop any leftover draftResponse from an earlier, abandoned
+      // play. Progress is never resumed (a fresh shuffle starts at comparison 1),
+      // so a stale draft would otherwise export as a phantom row with an idx/
+      // taskId that no longer matches this play's order.
+      S.draft = null;
+      persist({ order: S.order, flips: S.flips, idx: 0, status: 'playing', playedSessions: played, draftResponse: null });
       if (!S.order.length) { showThankYou(); return; }
       renderComparison();
     }).catch(function (e) {

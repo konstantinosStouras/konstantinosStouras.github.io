@@ -1,0 +1,1304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Management Science Paper Browser · 1954–present</title>
+
+<!-- SEO -->
+<meta name="description" content="Browse and filter all Management Science (INFORMS) articles from 1954–present. Search by editor, area, year, or author. Export BibTeX citations.">
+<meta name="keywords" content="Management Science, INFORMS, academic papers, research browser, BibTeX, journal articles, operations research, finance, marketing, accounting">
+<meta name="author" content="Konstantinos Stouras">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://stouras.com/fun/ms/">
+
+<!-- Open Graph (Facebook, LinkedIn, WhatsApp) -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Management Science — Paper Browser">
+<meta property="og:description" content="Browse and filter all Management Science articles from 1954–present. Search by editor, area, year, or author.">
+<meta property="og:url" content="https://stouras.com/fun/ms/">
+<meta property="og:image" content="https://stouras.com/fun/ms/og-image.jpg">
+<meta property="og:image:width" content="840">
+<meta property="og:image:height" content="350">
+<meta property="og:site_name" content="stouras.com">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Management Science — Paper Browser">
+<meta name="twitter:description" content="Browse and filter all Management Science articles from 1954–present. Search by editor, area, year, or author.">
+<meta name="twitter:image" content="https://stouras.com/fun/ms/og-image.jpg">
+
+<!-- Favicon (reuse INFORMS-style) -->
+<meta name="theme-color" content="#003087">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #003087;
+    --navy-dark: #001f5c;
+    --navy-light: #e8eef7;
+    --accent: #c4a052;
+    --accent-light: #f5f0e3;
+    --text: #1a1a2e;
+    --text-muted: #5a6070;
+    --bg: #f6f7fb;
+    --white: #ffffff;
+    --border: #dce1ea;
+    --green: #2a7d4f;
+    --red: #b33a3a;
+    --shadow-sm: 0 1px 3px rgba(0,48,135,0.06);
+    --shadow-md: 0 4px 16px rgba(0,48,135,0.08);
+    --shadow-lg: 0 8px 32px rgba(0,48,135,0.12);
+    --radius: 8px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh; }
+
+  .header { background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%); position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow-lg); }
+  .header-inner { max-width: 1280px; margin: 0 auto; padding: 24px 32px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+  .header h1 { font-family: 'Playfair Display', serif; color: white; font-size: 28px; font-weight: 400; letter-spacing: -0.5px; }
+  .header h1 em { font-style: italic; color: var(--accent); }
+  .header-meta { color: rgba(255,255,255,0.6); font-size: 13px; text-align: right; }
+  .header-meta strong { color: rgba(255,255,255,0.9); font-weight: 500; }
+
+  .filters-bar { background: var(--white); border-bottom: 1px solid var(--border); padding: 20px 0; position: sticky; top: 76px; z-index: 90; box-shadow: var(--shadow-sm); }
+  .filters-inner { max-width: 1280px; margin: 0 auto; padding: 0 32px; }
+  .filters-row { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+  .filter-group { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 170px; }
+  .filter-group label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); }
+  .filter-group select, .filter-group input { padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 20px; color: var(--text); background: var(--white); transition: border-color 0.2s, box-shadow 0.2s; height: 50px; }
+  .filter-group select { -webkit-appearance: none; -moz-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%235a6070' stroke-width='1.5' fill='none'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; cursor: pointer; display: none; }
+  .filter-group select:focus, .filter-group input:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(0,48,135,0.1); }
+
+  /* Custom dropdown */
+  .custom-select { position: relative; }
+  .custom-select-trigger { padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 18px; color: var(--text-muted); background: var(--white); height: 50px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; transition: border-color 0.2s, box-shadow 0.2s; user-select: none; }
+  .custom-select-trigger:hover { border-color: #b0b8c8; }
+  .custom-select-trigger.open { border-color: var(--navy); box-shadow: 0 0 0 3px rgba(0,48,135,0.1); border-radius: 6px 6px 0 0; }
+  .custom-select-trigger::after { content: '▾'; font-size: 14px; color: var(--text-muted); }
+  .custom-select-dropdown { display: none; position: absolute; top: 100%; left: 0; right: 0; background: var(--white); border: 1.5px solid var(--navy); border-top: none; border-radius: 0 0 6px 6px; max-height: 350px; overflow-y: auto; z-index: 200; box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+  .custom-select-dropdown.open { display: block; }
+  .custom-select-search { width: 100%; padding: 10px 14px; border: none; border-bottom: 1px solid var(--border); font-family: 'DM Sans', sans-serif; font-size: 16px; color: var(--text); outline: none; }
+  .custom-select-item { padding: 12px 14px; font-size: 18px; color: var(--text); cursor: pointer; transition: background 0.1s; }
+  .custom-select-item:hover { background: var(--navy-light); }
+  .custom-select-item.hidden { display: none; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 6px; font-size: 13px; font-weight: 500; animation: chipIn 0.15s ease-out; }
+  .chip-editor { background: var(--accent-light); color: #8a7032; }
+  .chip-area { background: #e8f5ee; color: var(--green); }
+  .chip-year { background: var(--navy-light); color: var(--navy); }
+  .chip-title { background: #f0e8f7; color: #6b3fa0; }
+  .chip-author { background: #e8eef7; color: #2d5f8a; }
+  .chip-affiliation { background: #fef3e2; color: #b5651d; }
+  .chip-x { cursor: pointer; font-size: 15px; font-weight: 700; opacity: 0.5; margin-left: 2px; line-height: 1; }
+  .chip-x:hover { opacity: 1; }
+  @keyframes chipIn { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .filter-actions { display: flex; gap: 8px; align-items: flex-start; padding-top: 20px; }
+  .btn { padding: 13px 20px; border: none; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; white-space: nowrap; height: 50px; }
+  .btn-primary { background: var(--navy); color: white; }
+  .btn-primary:hover { background: var(--navy-dark); box-shadow: var(--shadow-md); }
+  .btn-secondary { background: var(--navy-light); color: var(--navy); }
+  .btn-secondary:hover { background: #d6dff0; }
+
+  .results-bar { max-width: 1280px; margin: 0 auto; padding: 20px 32px 8px; display: flex; justify-content: space-between; align-items: center; }
+  .results-count { font-size: 14px; color: var(--text-muted); }
+  .results-count strong { color: var(--navy); font-weight: 600; }
+  .sort-control { font-size: 18px; color: var(--text-muted); display: flex; align-items: center; gap: 8px; }
+  .sort-control select { border: 1px solid var(--border); padding: 10px 14px; border-radius: 4px; font-family: 'DM Sans', sans-serif; font-size: 18px; color: var(--text); }
+
+  .papers-list { max-width: 1280px; margin: 0 auto; padding: 8px 32px 60px; display: flex; flex-direction: column; }
+  .paper-card { background: var(--white); border: 1px solid var(--border); border-bottom: none; padding: 20px 24px; transition: background 0.15s; }
+  .paper-card:first-child { border-radius: var(--radius) var(--radius) 0 0; }
+  .paper-card:last-child { border-bottom: 1px solid var(--border); border-radius: 0 0 var(--radius) var(--radius); }
+  .paper-card:only-child { border-bottom: 1px solid var(--border); border-radius: var(--radius); }
+  .paper-card:hover { background: var(--navy-light); }
+
+  .paper-title { font-family: 'Playfair Display', serif; font-size: 18px; font-weight: 400; color: var(--navy); margin-bottom: 6px; line-height: 1.35; }
+  .paper-title a { color: inherit; text-decoration: none; }
+  .paper-title a:hover { text-decoration: underline; }
+  .paper-authors { font-size: 14px; color: var(--text); margin-bottom: 8px; }
+  .paper-author-link { cursor: pointer; transition: color 0.1s; }
+  .paper-author-link:hover { color: var(--navy); text-decoration: underline; }
+  .paper-meta { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 12.5px; color: var(--text-muted); }
+  .tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 100px; font-size: 11.5px; font-weight: 500; }
+  .tag-vol { background: var(--navy-light); color: var(--navy); cursor: pointer; }
+  .tag-vol:hover { background: #d0d9ec; }
+  .tag-editor { background: var(--accent-light); color: #8a7032; cursor: pointer; }
+  .tag-editor:hover { background: #ece5d0; }
+  .tag-area { background: #e8f5ee; color: var(--green); cursor: pointer; }
+  .tag-area:hover { background: #d4edde; }
+  .tag-other { background: #fce8e8; color: var(--red); }
+  .tag-aia { background: #fff3e0; color: #b36b00; }
+
+  .paper-abstract-toggle { margin-top: 8px; font-size: 12px; color: var(--navy); cursor: pointer; font-weight: 500; user-select: none; display: inline-block; }
+  .paper-abstract-toggle:hover { text-decoration: underline; }
+  .paper-bibtex-toggle { margin-top: 8px; margin-left: 14px; font-size: 12px; color: var(--green); cursor: pointer; font-weight: 500; user-select: none; display: inline-block; }
+  .paper-bibtex-toggle:hover { text-decoration: underline; }
+  .paper-abstract { display: none; margin-top: 10px; padding: 14px 16px; background: #fafbfd; border-radius: 6px; font-size: 13.5px; line-height: 1.65; color: var(--text-muted); border-left: 3px solid var(--navy-light); }
+  .paper-abstract.open { display: block; }
+  .paper-bibtex { display: none; margin-top: 10px; padding: 14px 16px; background: #f5f7f5; border-radius: 6px; font-size: 12.5px; line-height: 1.5; color: var(--text); border-left: 3px solid var(--green); font-family: 'Courier New', monospace; white-space: pre-wrap; word-break: break-all; position: relative; }
+  .paper-bibtex.open { display: block; }
+  .bib-copy { position: absolute; top: 8px; right: 8px; padding: 4px 12px; background: var(--green); color: #fff; border: none; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; }
+  .bib-copy:hover { background: #1f6b3f; }
+
+  .pagination { max-width: 1280px; margin: 0 auto; padding: 0 32px 60px; display: flex; justify-content: center; align-items: center; gap: 6px; }
+  .pagination button { padding: 8px 14px; border: 1px solid var(--border); background: var(--white); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 13px; cursor: pointer; transition: all 0.15s; color: var(--text); }
+  .pagination button:hover:not(:disabled) { background: var(--navy-light); border-color: var(--navy); color: var(--navy); }
+  .pagination button:disabled { opacity: 0.4; cursor: default; }
+  .pagination button.active { background: var(--navy); color: white; border-color: var(--navy); }
+  .page-info { font-size: 13px; color: var(--text-muted); padding: 0 6px; }
+
+  .loading { text-align: center; padding: 80px 32px; color: var(--text-muted); font-size: 16px; }
+  .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--navy); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .empty-state { text-align: center; padding: 60px 32px; color: var(--text-muted); }
+  .empty-state h3 { font-family: 'Playfair Display', serif; font-size: 22px; color: var(--text); margin-bottom: 8px; font-weight: 400; }
+
+  .footer { text-align: center; padding: 24px 32px; color: var(--text-muted); font-size: 12px; border-top: 1px solid var(--border); background: var(--white); }
+  .footer a { color: var(--navy); }
+
+  @media (max-width: 768px) {
+    .header-inner { padding: 16px 20px; flex-direction: column; align-items: flex-start; gap: 8px; }
+    .header h1 { font-size: 22px; }
+    .filters-inner { padding: 0 20px; }
+    .filters-row { flex-direction: column; gap: 10px; }
+    .filter-group { min-width: 100%; }
+    .results-bar, .papers-list, .pagination { padding-left: 20px; padding-right: 20px; }
+    .paper-card { padding: 16px 18px; }
+    .paper-title { font-size: 16px; }
+    .filters-bar { top: auto; position: relative; }
+  }
+
+  /* Summary tabs */
+  .summary-tabs { max-width: 1280px; margin: 0 auto; padding: 0 32px; }
+  .summary-tab-btns { display: flex; gap: 8px; margin-bottom: 12px; }
+  .summary-tab-btn { padding: 8px 18px; border: 1.5px solid var(--border); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; background: var(--white); color: var(--text-muted); transition: all 0.15s; }
+  .summary-tab-btn.active { background: var(--navy); color: white; border-color: var(--navy); }
+  .summary-tab-btn:hover:not(.active) { background: var(--navy-light); color: var(--navy); border-color: var(--navy); }
+  .summary-content { display: none; padding: 16px 0 8px; }
+  .summary-content.active { display: block; }
+  .summary-list { column-count: 2; column-gap: 2rem; font-size: 14px; line-height: 2.1; }
+  .summary-item { break-inside: avoid; cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: background 0.1s; }
+  .summary-item:hover { background: var(--navy-light); }
+  .summary-count { color: var(--text-muted); font-size: 13px; margin-right: 4px; display: inline-block; min-width: 32px; text-align: right; }
+  .summary-author-link:hover { text-decoration: underline; color: var(--navy); }
+  .summary-area-link:hover { text-decoration: underline; }
+  @media (max-width: 768px) {
+    .summary-tabs { padding-left: 20px; padding-right: 20px; }
+    .summary-list { column-count: 1; }
+  }
+</style>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebApplication","name":"Management Science Paper Browser","description":"Browse and filter all Management Science (INFORMS) articles from 1954–present.","url":"https://stouras.com/fun/ms/","applicationCategory":"ReferenceApplication","author":{"@type":"Person","name":"Konstantinos Stouras","url":"https://stouras.com"},"provider":{"@type":"Organization","name":"INFORMS","url":"https://pubsonline.informs.org/journal/mnsc"}}
+</script>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <h1><em>Management Science</em> — Paper Browser</h1>
+    <div class="header-meta">Data from <strong>INFORMS</strong> via Crossref · <span id="yearRange">1954–present</span></div>
+  </div>
+</header>
+
+<div class="filters-bar">
+  <div class="filters-inner">
+    <div class="filters-row">
+      <div class="filter-group">
+        <label title="Some authors may appear under different name variants. ORCID-based disambiguation is not yet available for all authors.">Search Authors &#9432;</label>
+        <input id="filterAuthors" placeholder="Author..." type="search" oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('author','filterAuthors');event.preventDefault();}">
+        <div id="chipsAuthor" class="chips"></div>
+      </div>
+      <div class="filter-group">
+        <label>Search Title</label>
+        <input id="filterSearch" placeholder="Paper title..." type="search" oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('title','filterSearch');event.preventDefault();}">
+        <div id="chipsTitle" class="chips"></div>
+      </div>
+      <div class="filter-group">
+        <label title="Affiliation names are not standardized across papers. Duplicates may exist despite ongoing deduplication efforts.">Search Affiliations &#9432;</label>
+        <input id="filterAffiliations" placeholder="Affiliation..." type="search" oninput="debounceAffSearch()" onkeydown="if(event.key==='Enter'){addTextChip('affiliation','filterAffiliations');event.preventDefault();}">
+        <div id="chipsAffiliation" class="chips"></div>
+      </div>
+      <div class="filter-group">
+        <label>Year</label>
+        <div class="custom-select" id="csYear" data-type="year">
+          <div class="custom-select-trigger" onclick="toggleDrop('csYear')">All years</div>
+          <div class="custom-select-dropdown"><input class="custom-select-search" placeholder="Type to filter..." oninput="filterDrop('csYear',this.value)"><div class="custom-select-items"></div></div>
+        </div>
+        <div id="chipsYear" class="chips"></div>
+      </div>
+      <div class="filter-group">
+        <label>Accepting Editor</label>
+        <div class="custom-select" id="csEditor" data-type="editor">
+          <div class="custom-select-trigger" onclick="toggleDrop('csEditor')">All editors</div>
+          <div class="custom-select-dropdown"><input class="custom-select-search" placeholder="Type to filter..." oninput="filterDrop('csEditor',this.value)"><div class="custom-select-items"></div></div>
+        </div>
+        <div id="chipsEditor" class="chips"></div>
+      </div>
+      <div class="filter-group">
+        <label>Area</label>
+        <div class="custom-select" id="csArea" data-type="area">
+          <div class="custom-select-trigger" onclick="toggleDrop('csArea')">All areas</div>
+          <div class="custom-select-dropdown"><input class="custom-select-search" placeholder="Type to filter..." oninput="filterDrop('csArea',this.value)"><div class="custom-select-items"></div></div>
+        </div>
+        <div id="chipsArea" class="chips"></div>
+      </div>
+      <div class="filter-actions">
+        <button class="btn btn-secondary" onclick="clearFilters()">Clear</button>
+      </div>
+    </div>
+    <div class="summary-tab-btns" style="margin-top:12px;">
+      <button class="summary-tab-btn" onclick="toggleSummary('editors')">Editors</button>
+      <button class="summary-tab-btn" onclick="toggleSummary('areas')">Areas</button>
+      <button class="summary-tab-btn" onclick="toggleSummary('authors')" title="Some authors may appear under different name variants. ORCID-based disambiguation is not yet available for all authors.">Authors (beta)</button>
+      <button class="summary-tab-btn" onclick="toggleSummary('affiliations')" title="Affiliation names are not standardized across papers. Duplicates may exist despite ongoing deduplication efforts.">Affiliations (alpha)</button>
+    </div>
+  </div>
+</div>
+
+<div class="summary-tabs" id="summaryTabs">
+  <div id="summaryEditors" class="summary-content">
+    <div id="summaryEditorsList" class="summary-list"></div>
+  </div>
+  <div id="summaryAreas" class="summary-content">
+    <div id="summaryAreasList" class="summary-list"></div>
+  </div>
+  <div id="summaryAuthors" class="summary-content">
+    <div id="summaryAuthorsList" class="summary-list"></div>
+  </div>
+  <div id="summaryAffiliations" class="summary-content">
+    <div id="summaryAffiliationsList" class="summary-list"></div>
+  </div>
+</div>
+
+<div class="results-bar">
+  <div class="results-count" id="resultsCount"></div>
+  <div class="sort-control">
+    Sort:
+    <select id="sortBy" onchange="applyFilters()">
+      <option value="year-desc">Year ↓</option>
+      <option value="year-asc">Year ↑</option>
+      <option value="title">Title A-Z</option>
+      <option value="editor">Editor A-Z</option>
+    </select>
+  </div>
+</div>
+
+<div id="papersList" class="papers-list">
+  <div class="empty-state"><h3>Select a filter to get started</h3><p>Filter by editor, area, year, or search by title or author name.</p></div>
+</div>
+<!-- PAGINATION DISABLED — uncomment to re-enable
+<div id="pagination" class="pagination" style="display:none"></div>
+-->
+
+<footer class="footer">
+  <div>Built as a personal project to enable filtering of <em>Management Science</em> articles by editorial department.</div>
+  <div>Note that this is only possible for papers published at or after 2011; still, all available metadata from papers published since 1954 are collected and shown for completeness.</div>
+  <div>All metadata are publicly available and were collected via the <a href="https://www.crossref.org/documentation/retrieve-metadata/rest-api/" target="_blank">Crossref API</a> of <a href="https://pubsonline.informs.org/journal/mnsc" target="_blank">Management Science (INFORMS)</a>.</div>
+  <div>Feedback and suggestions are welcome. Any errors are my own. <a href="https://www.stouras.com" target="_blank">Konstantinos I. Stouras</a></div>
+</footer>
+
+<script>
+const SHEET_ID = '11MKt6uzfnxTNTbK4Kb1jwW32cEsKZcBRncubV2omJzQ';
+const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Data`;
+const AUTHORS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Authors`;
+const AFFILIATIONS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Affiliations_Merged`;
+const AFFILIATIONS_FALLBACK_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Affiliations`;
+const PER_PAGE = 20;
+let allPapers = [], filtered = [], currentPage = 1;
+let authorData = []; // pre-computed from Authors tab
+let affiliationData = []; // pre-computed from Affiliations tab
+
+// Multi-select state
+const sel = { editor: new Set(), area: new Set(), year: new Set(), title: new Set(), author: new Set(), affiliation: new Set() };
+
+// Text chip management (for title/author search)
+function addTextChip(type, inputId) {
+  const input = document.getElementById(inputId);
+  const val = input.value.trim();
+  if (!val) return;
+  if (sel[type].has(val.toLowerCase())) return;
+  sel[type].add(val.toLowerCase());
+  input.value = '';
+  renderChips(type);
+  applyFilters();
+}
+
+function addAuthorChip(name) {
+  var val = name.trim().toLowerCase();
+  if (!val || sel.author.has(val)) return;
+  sel.author.add(val);
+  renderChips('author');
+  applyFilters();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function addYearChip(year) {
+  if (!year || sel.year.has(year)) return;
+  sel.year.add(year);
+  renderChips('year');
+  applyFilters();
+}
+
+// Chip management
+function removeChip(type, val) {
+  sel[type].delete(val);
+  renderChips(type);
+  applyFilters();
+}
+
+function renderChips(type) {
+  const idMap = {editor:'chipsEditor', area:'chipsArea', year:'chipsYear', title:'chipsTitle', author:'chipsAuthor', affiliation:'chipsAffiliation'};
+  const container = document.getElementById(idMap[type]);
+  const cssClass = 'chip chip-' + type;
+  container.innerHTML = [...sel[type]].map(v =>
+    `<span class="${cssClass}">${esc(v)} <span class="chip-x" onclick="removeChip('${type}','${escAttr(v)}')">×</span></span>`
+  ).join('');
+}
+
+function addChipFromCard(type, val) {
+  if (sel[type].has(val)) return;
+  sel[type].add(val);
+  renderChips(type);
+  applyFilters();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function loadData() {
+  try {
+    const [resp, authResp, affResp] = await Promise.all([
+      fetch(CSV_URL),
+      fetch(AUTHORS_CSV_URL).catch(function() { return null; }),
+      fetch(AFFILIATIONS_CSV_URL).catch(function() { return null; })
+    ]);
+    const text = await resp.text();
+    allPapers = parseCSV(text);
+    allPapers.forEach(normalizeEditors);
+    fuzzyMergeEditors();
+    fuzzyMergeAreas();
+    // Load pre-computed author data from Authors tab
+    if (authResp && authResp.ok) {
+      var authText = await authResp.text();
+      authorData = parseCSV(authText, 'Author');
+    }
+    // Load affiliation data — try Affiliations_Merged, fallback to Affiliations
+    async function tryLoadAff(url, label) {
+      try {
+        var r = await fetch(url);
+        if (!r || !r.ok) return [];
+        var t = await r.text();
+        if (t.trim().charAt(0) === '<') return []; // got HTML error page, not CSV
+        var parsed = parseCSV(t, 'Affiliation');
+        if (parsed.length > 0) console.log('Loaded ' + parsed.length + ' affiliations from ' + label);
+        return parsed;
+      } catch(e) { return []; }
+    }
+    affiliationData = await tryLoadAff(AFFILIATIONS_CSV_URL, 'Affiliations_Merged');
+    if (affiliationData.length === 0) {
+      affiliationData = await tryLoadAff(AFFILIATIONS_FALLBACK_URL, 'Affiliations');
+    }
+    buildFilterOptions();
+    // Update year range in header
+    var years = allPapers.map(function(p) { return parseInt(p['Year']); }).filter(function(y) { return !isNaN(y); });
+    if (years.length > 0) {
+      var minY = Math.min.apply(null, years);
+      var el = document.getElementById('yearRange');
+      if (el) el.textContent = minY + '–present';
+    }
+  } catch (e) {
+    setTimeout(loadData, 3000);
+  }
+}
+
+// ── Editor cleaning & normalization ──
+const EDITOR_ALIASES = {
+  // Accent variants
+  'renée adams': 'Renee Adams', 'renee adams': 'Renee Adams', 'adams': 'Renee Adams',
+  'gérard p. cachon': 'Gerard P. Cachon', 'gerard p. cachon': 'Gerard P. Cachon', 'gérard cachon': 'Gerard P. Cachon', 'gerard cachon': 'Gerard P. Cachon',
+  'jesper sørensen': 'Jesper Sorensen', 'jesper sorensen': 'Jesper Sorensen', 'jesper sørensen. organizations': 'Jesper Sorensen',
+  'jérôme detemple': 'Jerome Detemple', 'jerome b. detemple': 'Jerome Detemple', 'jerome detemple': 'Jerome Detemple',
+  'dorothea kübler': 'Dorothea Kubler', 'dorothea kubler': 'Dorothea Kubler',
+  'aurélien baillon': 'Aurelien Baillon',
+  'bariş ata': 'Baris Ata', 'baris ata': 'Baris Ata',
+  // Victor Martinez variants
+  'victor martínez-de-albéniz': 'Victor Martinez-de-Albeniz', 'victor martinez-de-albeniz': 'Victor Martinez-de-Albeniz',
+  'victor martínez de albéniz': 'Victor Martinez-de-Albeniz', 'victor martinez de albeniz': 'Victor Martinez-de-Albeniz',
+  'victor martinez de albéniz': 'Victor Martinez-de-Albeniz', 'víctor martínez-de-albéniz': 'Victor Martinez-de-Albeniz',
+  'martínez-de-albéniz victor': 'Victor Martinez-de-Albeniz',
+  'yuval victor martinez de albeniz': 'Victor Martinez-de-Albeniz',
+  // Typos
+  'brain bushee': 'Brian Bushee', 'duncan semester': 'Duncan Simester',
+  'karl deither': 'Karl Diether', 'manell baucells': 'Manel Baucells',
+  'suraj srinivassan': 'Suraj Srinivasan', 'toby suart': 'Toby Stuart',
+  'tylor shumway': 'Tyler Shumway', 'vishaul gaur': 'Vishal Gaur',
+  'yossiv aviv': 'Yossi Aviv', 'victoria ivanisha': 'Victoria Ivashina',
+  'mathew shum': 'Matthew Shum', 'lucas schmid': 'Lukas Schmid',
+  'loana popescu': 'Ioana Popescu', 'ioana popescu': 'Ioana Popescu',
+  'sameer srivastava': 'Sameer Srivastava',
+  // Middle names / initials → canonical
+  'brad m. barber': 'Brad Barber', 'barrie r. nault': 'Barrie Nault',
+  'carri w. chan': 'Carri Chan', 'charles j. corbett': 'Charles Corbett',
+  'lorin m. hitt': 'Lorin Hitt', 'mary e. barth': 'Mary Barth',
+  'pradeep k. chintagunta': 'Pradeep Chintagunta',
+  'jagmohan s. raju': 'Jagmohan Raju', 'paul h. zipkin': 'Paul Zipkin',
+  'candace a. yano': 'Candace Yano',
+  // Name consolidation
+  'david simchi-levi': 'David Simchi-Levi', 'david simchi levi': 'David Simchi-Levi', 'david simchi\u2010levi': 'David Simchi-Levi', 'david simchi\u2011levi': 'David Simchi-Levi', 'david simchi\u2012levi': 'David Simchi-Levi', 'david simchi\u2013levi': 'David Simchi-Levi',
+  'chung piaw teo': 'Chung-Piaw Teo', 'chung-piaw teo': 'Chung-Piaw Teo',
+  'teck ho': 'Teck-Hua Ho', 'teck-hua ho': 'Teck-Hua Ho',
+  'yinyu-ye': 'Yinyu Ye', 'yinyu ye': 'Yinyu Ye',
+  'd. j. wu': 'D.J. Wu', 'd.j. wu': 'D.J. Wu', 'dj wu': 'D.J. Wu', 'dongjun wu': 'D.J. Wu',
+  'will cong': 'Will Cong', 'william cong': 'Will Cong', 'william lin cong': 'Will Cong', 'lin william cong': 'Will Cong',
+  'shivaram rajgopal': 'Shivaram Rajgopal', 'shiva rajgopal': 'Shivaram Rajgopal', 'rajgopal shiva': 'Shivaram Rajgopal',
+  'jay swaminathan': 'Jayashankar Swaminathan', 'jayashankar swaminathan': 'Jayashankar Swaminathan', 'swaminathan': 'Jayashankar Swaminathan',
+  'matt shum': 'Matthew Shum', 'matthew shum': 'Matthew Shum',
+  'george shanthikumar': 'J. George Shanthikumar', 'george j. shanthikumar': 'J. George Shanthikumar', 'j. george shanthikumar': 'J. George Shanthikumar',
+  'jean-pierre dube': 'Jean-Pierre Dube',
+  'sendil ethiraj': 'Sendil Ethiraj',
+  'sampath rajagopalan': 'Sampath Rajagopalan',
+  'maria claire villeval': 'Marie Claire Villeval', 'marie-claire villeval': 'Marie Claire Villeval', 'marie claire villeval': 'Marie Claire Villeval',
+  'chen yan': 'Yan Chen', 'prof. yan chen': 'Yan Chen', 'yan chen': 'Yan Chen',
+  'prof. ranjani krishnan': 'Ranjani Krishnan', 'ranjani krishnan': 'Ranjani Krishnan',
+  'professor bruno biais': 'Bruno Biais',
+  'erica plambeck': 'Erica Plambeck', 'caroline flammer': 'Caroline Flammer',
+  'giesecke kay': 'Kay Giesecke', 'kay giesecke': 'Kay Giesecke',
+  'yu (jeffrey) hu': 'Jeffrey Hu',
+  'dmitry kuksov': 'Dmitri Kuksov', 'dmitri kuksov': 'Dmitri Kuksov',
+  'shiva rajagopal': 'Shivaram Rajgopal',
+  'nicolas stier': 'Nicolas Stier-Moses', 'nicolas stier-moses': 'Nicolas Stier-Moses',
+  'manuel baucells': 'Manel Baucells',
+  'kay gieseke': 'Kay Giesecke',
+  'suraj srinivisan': 'Suraj Srinivasan', 'suraj srinivassan': 'Suraj Srinivasan',
+  'scholtes stefan': 'Stefan Scholtes', 'stefan sholtes': 'Stefan Scholtes',
+  'lukas schmidt': 'Lukas Schmid',
+  'alfonso gambardello': 'Alfonso Gambardella',
+  'carrie chan': 'Carri Chan',
+  'ranjani ananthakrishnan': 'Ranjani Krishnan',
+  'anita carson': 'Anita McGahan',
+  'raphael thomadsen': 'Raphael Thomadsen',
+  'ray reagans': 'Ray Reagans',
+  'uday rajan': 'Uday Rajan',
+  'melvyn sim': 'Melvyn Sim', 'michael fu': 'Michael Fu', 'peng sun': 'Peng Sun',
+  'glen dowell': 'Glen Dowell', 'greg shaffer': 'Greg Shaffer',
+  'jan bouwens': 'Jan Bouwens', 'haitao li': 'Haitao Li',
+  'eric bradlow': 'Eric Bradlow',
+  'anita mcgahan': 'Anita McGahan',
+};
+
+// Junk editor values to discard entirely
+const EDITOR_JUNK = ['stakeholders. here', 'stakeholders'];
+
+const AREA_ALIASES = {
+  // Capitalization
+  'finance': 'finance', 'Finance': 'finance',
+  'Behavioral Economics and Decision Analysis': 'behavioral economics and decision analysis',
+  'Optimization <div data-widget-def': 'optimization', 'optimization': 'optimization',
+  // HTML junk
+  'accounting <div data-widget-def="ux': 'accounting',
+  'marketing <div data-widget-def="': 'marketing',
+  'healthcare management.conflict of interest statement: e': 'healthcare management',
+  // Typos
+  'behavioral economics and decisions analysis': 'behavioral economics and decision analysis',
+  'behavioral economics & decision analysis': 'behavioral economics and decision analysis',
+  'behavioral economics &amp; decision analysis': 'behavioral economics and decision analysis',
+  'behavioral economics and data analysis': 'behavioral economics and decision analysis',
+  'behavioral analysis': 'behavioral economics and decision analysis',
+  'behavioral economics and decision analysis–fast track': 'behavioral economics and decision analysis',
+  'entepreneurship and innovation': 'entrepreneurship and innovation',
+  'entrepreneurship': 'entrepreneurship and innovation',
+  // Consolidation
+  'information science': 'information systems', 'information system': 'information systems',
+  'information systems division': 'information systems',
+  'stochastic models': 'stochastic models and simulation',
+  'stochastic models & simulation': 'stochastic models and simulation',
+  'stochastic models &amp; simulation': 'stochastic models and simulation',
+  'stochastic models and systems': 'stochastic models and simulation',
+  'big data and analytics': 'big data analytics',
+  'operations and supply chain management': 'operations management',
+  'strategy': 'business strategy',
+  'revenue management and market analytics department': 'revenue management and market analytics',
+  'revenue management and analytics': 'revenue management and market analytics',
+  'r&amp;d and product development': 'R&D and product development',
+  'r&d and product development': 'R&D and product development',
+  'organizations and social networks': 'organizations',
+  'organization': 'organizations',
+  'optimization and decision analytics': 'optimization',
+  'finance department': 'finance',
+  'health': 'healthcare management',
+  'sustainability': 'business strategy',
+  'information science': 'information systems',
+};
+
+// Junk area values to discard
+const AREA_JUNK = [
+  'we report seven sets of studies',
+  'focused issue editor', 'guest department editor', 'guest editor',
+  'special issue editors',
+];
+
+function normalizeEditorName(name) {
+  var t = name.trim();
+  if (!t) return '';
+  // Strip "Prof." / "Professor" prefix
+  t = t.replace(/^(prof\.?|professor)\s+/i, '');
+  // Normalize Unicode hyphens to regular hyphen
+  t = t.replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\uFE58\uFE63\uFF0D]/g, '-');
+  // Normalize accents for lookup
+  var key = t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if (EDITOR_ALIASES[key]) return EDITOR_ALIASES[key];
+  var keyLower = t.toLowerCase();
+  if (EDITOR_ALIASES[keyLower]) return EDITOR_ALIASES[keyLower];
+  // Check junk
+  for (var j = 0; j < EDITOR_JUNK.length; j++) { if (key.indexOf(EDITOR_JUNK[j]) !== -1) return ''; }
+  return t;
+}
+
+function cleanEditorField(raw) {
+  if (!raw) return [];
+  var s = raw;
+  // Fix junk containing "accepted by"
+  var ai = s.indexOf('This paper was accepted by');
+  if (ai === -1) ai = s.indexOf('accepted by');
+  if (ai !== -1) {
+    var after = s.substring(ai);
+    var m = after.match(/accepted by\s+([^.]+)/i);
+    s = m ? m[1].trim() : '';
+  }
+  s = s.replace(/\.\s*$/, '').trim();
+  if (!s) return [];
+  // Split "Editor1 and Editor2"
+  return s.split(/\s+and\s+/i).map(function(e) { return normalizeEditorName(e.trim()); }).filter(Boolean);
+}
+
+function normalizeArea(raw) {
+  if (!raw) return '';
+  var s = raw.trim();
+  // Truncate at HTML tags
+  var htmlIdx = s.indexOf('<');
+  if (htmlIdx > 0) s = s.substring(0, htmlIdx).trim();
+  // Truncate at junk suffixes (case-insensitive)
+  s = s.replace(/\.?\s*funding:.*/i, '').trim();
+  s = s.replace(/\.?\s*supplemental material:.*/i, '').trim();
+  s = s.replace(/\.?\s*conflict.*/i, '').trim();
+  s = s.replace(/\.?\s*https?:\/\/.*/i, '').trim();
+  s = s.replace(/\.here.*/i, '').trim();
+  // Remove trailing period
+  s = s.replace(/\.\s*$/, '').trim();
+  // Fix spacing around colons: " :" → ":"
+  s = s.replace(/\s+:/g, ':');
+  var key = s.toLowerCase();
+  // Check aliases
+  if (AREA_ALIASES[key]) return AREA_ALIASES[key];
+  if (AREA_ALIASES[s]) return AREA_ALIASES[s];
+  // Check junk
+  for (var j = 0; j < AREA_JUNK.length; j++) { if (key.indexOf(AREA_JUNK[j]) !== -1) return ''; }
+  // Extract area from junk like "Renee, finance" or "Jayashankar, operations management"
+  var commaMatch = key.match(/^[a-z]+,\s*(.+)$/);
+  if (commaMatch) {
+    var extracted = commaMatch[1].trim();
+    return AREA_ALIASES[extracted] || extracted;
+  }
+  return s.toLowerCase();
+}
+
+function normalizeEditors(p) {
+  p._editors = cleanEditorField(p['Accepting Editor'] || '');
+  p._area = normalizeArea(p['Area'] || '');
+}
+
+// ── Fuzzy matching: auto-merge rare editor names that are typos of common ones ──
+
+function levenshtein(a, b) {
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  var matrix = [];
+  for (var i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (var j = 0; j <= a.length; j++) matrix[0][j] = j;
+  for (var i = 1; i <= b.length; i++) {
+    for (var j = 1; j <= a.length; j++) {
+      if (b.charAt(i-1) === a.charAt(j-1)) matrix[i][j] = matrix[i-1][j-1];
+      else matrix[i][j] = Math.min(matrix[i-1][j-1]+1, matrix[i][j-1]+1, matrix[i-1][j]+1);
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
+function reverseName(name) {
+  var parts = name.split(/\s+/);
+  if (parts.length < 2) return name;
+  return parts[parts.length-1] + ' ' + parts.slice(0, -1).join(' ');
+}
+
+function stripAccentsLower(s) {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+function fuzzyMergeEditors() {
+  // Count papers per editor after first normalization pass
+  var counts = {};
+  allPapers.forEach(function(p) {
+    (p._editors || []).forEach(function(e) { counts[e] = (counts[e] || 0) + 1; });
+  });
+
+  // Separate rare (≤3 papers) from common (>3 papers) editors
+  var rare = [], common = [];
+  Object.keys(counts).forEach(function(name) {
+    if (counts[name] <= 3) rare.push(name);
+    else common.push(name);
+  });
+
+  // For each rare name, find best match among common names
+  var dynamicAliases = {};
+  rare.forEach(function(rName) {
+    var rKey = stripAccentsLower(rName);
+    var rReversed = stripAccentsLower(reverseName(rName));
+    var bestMatch = null, bestDist = Infinity;
+
+    common.forEach(function(cName) {
+      var cKey = stripAccentsLower(cName);
+      // Direct Levenshtein
+      var dist = levenshtein(rKey, cKey);
+      // Also check reversed name order
+      var distRev = levenshtein(rReversed, cKey);
+      var minDist = Math.min(dist, distRev);
+
+      // Also check last-name match with close first name
+      var rParts = rKey.split(/\s+/), cParts = cKey.split(/\s+/);
+      if (rParts.length >= 2 && cParts.length >= 2) {
+        var rLast = rParts[rParts.length-1], cLast = cParts[cParts.length-1];
+        if (rLast === cLast || levenshtein(rLast, cLast) <= 1) {
+          var firstDist = levenshtein(rParts.slice(0,-1).join(' '), cParts.slice(0,-1).join(' '));
+          if (firstDist <= 2) minDist = Math.min(minDist, firstDist);
+        }
+      }
+
+      if (minDist < bestDist) { bestDist = minDist; bestMatch = cName; }
+    });
+
+    // Threshold: distance ≤ 2 for names ≥ 8 chars, ≤ 1 for shorter
+    var threshold = rKey.length >= 8 ? 2 : 1;
+    if (bestMatch && bestDist <= threshold) {
+      dynamicAliases[rName] = bestMatch;
+    }
+  });
+
+  // Apply dynamic aliases
+  if (Object.keys(dynamicAliases).length > 0) {
+    console.log('Fuzzy editor merges:', dynamicAliases);
+    allPapers.forEach(function(p) {
+      p._editors = p._editors.map(function(e) { return dynamicAliases[e] || e; });
+    });
+  }
+}
+
+function fuzzyMergeAreas() {
+  // Count papers per area after first normalization pass
+  var counts = {};
+  allPapers.forEach(function(p) {
+    if (p._area) counts[p._area] = (counts[p._area] || 0) + 1;
+  });
+
+  var rare = [], common = [];
+  Object.keys(counts).forEach(function(name) {
+    if (counts[name] <= 3) rare.push(name);
+    else common.push(name);
+  });
+
+  var dynamicAliases = {};
+  rare.forEach(function(rName) {
+    var rKey = rName.toLowerCase();
+    var bestMatch = null, bestDist = Infinity;
+
+    common.forEach(function(cName) {
+      var cKey = cName.toLowerCase();
+      var dist = levenshtein(rKey, cKey);
+
+      // Also check singular/plural: "organization" ↔ "organizations"
+      if (rKey + 's' === cKey || cKey + 's' === rKey) dist = 0;
+      // Check with trailing 's' removed from both
+      var rTrim = rKey.replace(/s$/, ''), cTrim = cKey.replace(/s$/, '');
+      var distTrim = levenshtein(rTrim, cTrim);
+      dist = Math.min(dist, distTrim);
+
+      // Check if one is a substring of the other (e.g., "behavioral economics" vs "behavioral economics and decision analysis")
+      // Don't merge these — they're genuinely different areas
+
+      if (dist < bestDist) { bestDist = dist; bestMatch = cName; }
+    });
+
+    // Threshold: distance ≤ 2 for areas ≥ 10 chars, ≤ 1 for shorter
+    var threshold = rKey.length >= 10 ? 2 : 1;
+    if (bestMatch && bestDist <= threshold) {
+      dynamicAliases[rName] = bestMatch;
+    }
+  });
+
+  if (Object.keys(dynamicAliases).length > 0) {
+    console.log('Fuzzy area merges:', dynamicAliases);
+    allPapers.forEach(function(p) {
+      if (p._area && dynamicAliases[p._area]) p._area = dynamicAliases[p._area];
+    });
+  }
+}
+
+function parseCSV(text, requiredField) {
+  var reqField = requiredField || 'Title';
+  const lines = text.split('\n');
+  if (lines.length < 2) return [];
+  const headers = parseLine(lines[0]);
+  const papers = [];
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const vals = parseLine(line);
+    const obj = {};
+    headers.forEach((h, idx) => { obj[clean(h)] = clean(vals[idx] || ''); });
+    if (obj[reqField]) papers.push(obj);
+  }
+  return papers;
+}
+
+function parseLine(line) {
+  const r = []; let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') { if (inQ && line[i+1] === '"') { cur += '"'; i++; } else inQ = !inQ; }
+    else if (c === ',' && !inQ) { r.push(cur); cur = ''; }
+    else cur += c;
+  }
+  r.push(cur);
+  return r;
+}
+
+function clean(s) { return (s || '').replace(/^"|"$/g, '').trim(); }
+
+function buildFilterOptions() {
+  const editorCounts = {}, areaCounts = {}, yearCounts = {};
+  allPapers.forEach(p => {
+    (p._editors || []).forEach(e => { editorCounts[e] = (editorCounts[e] || 0) + 1; });
+    if (p._area) { areaCounts[p._area] = (areaCounts[p._area] || 0) + 1; }
+    if (p['Year']) { yearCounts[p['Year']] = (yearCounts[p['Year']] || 0) + 1; }
+  });
+  fillCustomSelect('csEditor', Object.keys(editorCounts).sort(), editorCounts);
+  fillCustomSelect('csArea', Object.keys(areaCounts).sort(), areaCounts);
+  fillCustomSelect('csYear', Object.keys(yearCounts).sort().reverse(), yearCounts);
+  buildSummaryTabs(editorCounts, areaCounts);
+}
+
+function buildSummaryTabs(editorCounts, areaCounts) {
+  // Editors: sorted by count descending
+  var edSorted = Object.keys(editorCounts).sort(function(a,b) { return editorCounts[b] - editorCounts[a]; });
+  document.getElementById('summaryEditorsList').innerHTML = edSorted.map(function(e) {
+    return '<div class="summary-item" onclick="filterByEditor(\'' + escAttr(e) + '\')"><span class="summary-count">' + editorCounts[e] + '</span> papers accepted by ' + esc(e) + '</div>';
+  }).join('');
+
+  // Areas: sorted by count descending
+  var arSorted = Object.keys(areaCounts).sort(function(a,b) { return areaCounts[b] - areaCounts[a]; });
+  document.getElementById('summaryAreasList').innerHTML = arSorted.map(function(a) {
+    return '<div class="summary-item" onclick="filterByArea(\'' + escAttr(a) + '\')"><span class="summary-count">' + areaCounts[a] + '</span> papers in ' + esc(a) + '</div>';
+  }).join('');
+
+  // Authors: use pre-computed data from Authors tab
+  var auList = document.getElementById('summaryAuthorsList');
+  if (authorData.length > 0) {
+    // authorData has columns: Papers, Author, Areas
+    // Already sorted by paper count from GAS
+    window._authorAreaLookup = {};
+    auList.innerHTML = authorData.map(function(a) {
+      var count = parseInt(a['Papers']) || 0;
+      var name = a['Author'] || '';
+      var areasStr = a['Areas'] || '';
+      var areaArr = areasStr ? areasStr.split(',').map(function(x) { return x.trim(); }).filter(Boolean) : [];
+      var areaCount = areaArr.length;
+      window._authorAreaLookup[name] = areaArr;
+      return '<div class="summary-item">' +
+        '<span class="summary-count">' + count + '</span> ' +
+        '<span class="summary-author-link" onclick="addAuthorChip(\'' + escAttr(name) + '\')" style="cursor:pointer">' +
+          'papers written by ' + esc(name) +
+        '</span>' +
+        (areaCount > 0 ? ' <span class="summary-area-link" onclick="filterByAuthorAreas(\'' + escAttr(name) + '\')" style="cursor:pointer;color:var(--green);font-style:italic"> across ' + areaCount + ' area' + (areaCount !== 1 ? 's' : '') + '</span>' : '') +
+      '</div>';
+    }).join('');
+  } else {
+    auList.innerHTML = '<div style="padding:12px;color:var(--text-muted)">No Authors tab found. Run "5. Build Authors tab" in the Google Sheet script.</div>';
+  }
+}
+
+function filterByAuthorAreas(authorName) {
+  var areas = window._authorAreaLookup && window._authorAreaLookup[authorName];
+  if (!areas || !areas.length) return;
+  sel.area.clear();
+  areas.forEach(function(a) { sel.area.add(a); });
+  renderChips('area');
+  applyFilters();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// Author normalization is done server-side in Google Apps Script (menu item 5).
+
+// ── Affiliation normalization & merging ──
+
+function buildAffiliationsSummary() {
+  var affList = document.getElementById('summaryAffiliationsList');
+  if (affiliationData.length === 0) {
+    affList.innerHTML = '<div style="padding:12px;color:var(--text-muted);font-style:italic">Under construction.</div>';
+    return;
+  }
+  window._affItems = affiliationData;
+  renderAffiliationsList(affiliationData);
+}
+
+function renderAffiliationsList(items) {
+  var affList = document.getElementById('summaryAffiliationsList');
+  affList.innerHTML = items.map(function(a) {
+    var count = a['Papers'] || '';
+    var name = a['Affiliation'] || '';
+    var areasRaw = a['Areas'] || '';
+    var areaCount = parseInt(a['Area_Count']) || 0;
+    if (!areaCount && areasRaw) {
+      areaCount = areasRaw.split(',').filter(function(x) { return x.trim(); }).length;
+    }
+    return '<div class="summary-item">' +
+      '<span class="summary-count">' + esc(String(count)) + '</span> ' +
+      '<span class="summary-author-link" onclick="searchAffiliation(\'' + escAttr(name) + '\')" style="cursor:pointer">' +
+        'papers from ' + esc(name) +
+      '</span>' +
+      (areaCount > 0 ? ' <span class="summary-area-link" onclick="showAffAreas(\'' + escAttr(name) + '\')" style="cursor:pointer;color:var(--green);font-style:italic"> across ' + areaCount + ' area' + (areaCount !== 1 ? 's' : '') + '</span>' : '') +
+    '</div>';
+  }).join('');
+}
+
+function filterAffiliationsList() {
+  var q = (document.getElementById('filterAffiliations').value || '').toLowerCase();
+  if (!window._affItems) return;
+  if (!q) { renderAffiliationsList(window._affItems); return; }
+  var filtered = window._affItems.filter(function(a) {
+    return ((a['Affiliation'] || '').toLowerCase()).indexOf(q) !== -1;
+  });
+  renderAffiliationsList(filtered);
+}
+
+function searchAffiliation(name) {
+  sel.affiliation.clear();
+  sel.affiliation.add(name.toLowerCase());
+  renderChips('affiliation');
+  document.getElementById('filterAffiliations').value = '';
+  closeSummaryTabs();
+  applyFilters();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function showAffAreas(name) {
+  var item = (window._affItems || []).find(function(a) {
+    return (a['Affiliation'] || '') === name;
+  });
+  if (!item) return;
+  var areasRaw = item['Areas'] || '';
+  var areas = areasRaw.split(',').map(function(a) { return a.trim(); }).filter(Boolean);
+  if (areas.length === 0) return;
+  sel.area.clear();
+  areas.forEach(function(a) { sel.area.add(a); });
+  renderChips('area');
+  closeSummaryTabs();
+  applyFilters();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function toggleSummary(tab) {
+  var edEl = document.getElementById('summaryEditors');
+  var arEl = document.getElementById('summaryAreas');
+  var auEl = document.getElementById('summaryAuthors');
+  var afEl = document.getElementById('summaryAffiliations');
+  var btns = document.querySelectorAll('.summary-tab-btn');
+  var els = [edEl, arEl, auEl, afEl];
+  var idx = tab === 'editors' ? 0 : tab === 'areas' ? 1 : tab === 'authors' ? 2 : 3;
+  var isOpen = els[idx].classList.contains('active');
+  els.forEach(function(el) { el.className = 'summary-content'; });
+  btns.forEach(function(b) { b.className = 'summary-tab-btn'; });
+  if (!isOpen) {
+    els[idx].className = 'summary-content active';
+    btns[idx].className = 'summary-tab-btn active';
+    // Lazy-build affiliations on first open
+    if (tab === 'affiliations' && !window._affBuilt) {
+      buildAffiliationsSummary();
+      window._affBuilt = true;
+    }
+  }
+}
+
+function closeSummaryTabs() {
+  document.getElementById('summaryEditors').className = 'summary-content';
+  document.getElementById('summaryAreas').className = 'summary-content';
+  document.getElementById('summaryAuthors').className = 'summary-content';
+  document.getElementById('summaryAffiliations').className = 'summary-content';
+  document.querySelectorAll('.summary-tab-btn').forEach(function(b) { b.className = 'summary-tab-btn'; });
+}
+
+// Cascading filters: update dropdown options based on cross-filtered results
+function updateDropdownOptions() {
+  // For each dropdown, compute available options from papers filtered by ALL OTHER filters
+  var search = document.getElementById('filterSearch').value.trim().toLowerCase();
+  var searchAuth = document.getElementById('filterAuthors').value.trim().toLowerCase();
+  var searchAff = document.getElementById('filterAffiliations').value.trim().toLowerCase();
+
+  function crossFilter(excludeType) {
+    return allPapers.filter(function(p) {
+      if (excludeType !== 'editor' && sel.editor.size > 0 && !(p._editors || []).some(function(e) { return sel.editor.has(e); })) return false;
+      if (excludeType !== 'area' && sel.area.size > 0 && !sel.area.has(p._area)) return false;
+      if (excludeType !== 'year' && sel.year.size > 0 && !sel.year.has(p['Year'])) return false;
+      var titleText = (p['Title']||'').toLowerCase();
+      if (search && !titleText.includes(search)) return false;
+      for (var t of sel.title) { if (!titleText.includes(t)) return false; }
+      var authText = (p['Authors']||'').toLowerCase();
+      if (searchAuth && !authText.includes(searchAuth)) return false;
+      for (var a of sel.author) { if (!authText.includes(a)) return false; }
+      var affText = (p['Affiliations']||'').toLowerCase();
+      if (searchAff && !affText.includes(searchAff)) return false;
+      for (var af of sel.affiliation) { if (!affText.includes(af)) return false; }
+      return true;
+    });
+  }
+
+  // Editor dropdown
+  var edPapers = crossFilter('editor');
+  var edCounts = {};
+  edPapers.forEach(function(p) { (p._editors || []).forEach(function(e) { edCounts[e] = (edCounts[e] || 0) + 1; }); });
+  fillCustomSelect('csEditor', Object.keys(edCounts).sort(), edCounts);
+
+  // Area dropdown
+  var arPapers = crossFilter('area');
+  var arCounts = {};
+  arPapers.forEach(function(p) { if (p._area) arCounts[p._area] = (arCounts[p._area] || 0) + 1; });
+  fillCustomSelect('csArea', Object.keys(arCounts).sort(), arCounts);
+
+  // Year dropdown
+  var yrPapers = crossFilter('year');
+  var yrCounts = {};
+  yrPapers.forEach(function(p) { if (p['Year']) yrCounts[p['Year']] = (yrCounts[p['Year']] || 0) + 1; });
+  fillCustomSelect('csYear', Object.keys(yrCounts).sort().reverse(), yrCounts);
+
+  // Update summary tabs with filtered counts
+  buildSummaryTabs(edCounts, arCounts);
+}
+
+function fillCustomSelect(csId, items, counts) {
+  const cs = document.getElementById(csId);
+  const container = cs.querySelector('.custom-select-items');
+  const type = cs.dataset.type;
+  container.innerHTML = items.map(i =>
+    `<div class="custom-select-item" onclick="selectItem('${csId}','${type}','${escAttr(i)}')">${esc(i)}${counts ? ' <span style="opacity:0.45">('+counts[i]+')</span>' : ''}</div>`
+  ).join('');
+  // Reapply search filter if dropdown is open
+  var searchInput = cs.querySelector('.custom-select-search');
+  if (searchInput && searchInput.value) filterDrop(csId, searchInput.value);
+}
+
+function toggleDrop(csId) {
+  // Close all others first
+  document.querySelectorAll('.custom-select').forEach(cs => {
+    if (cs.id !== csId) {
+      cs.querySelector('.custom-select-trigger').classList.remove('open');
+      cs.querySelector('.custom-select-dropdown').classList.remove('open');
+    }
+  });
+  const cs = document.getElementById(csId);
+  const trigger = cs.querySelector('.custom-select-trigger');
+  const drop = cs.querySelector('.custom-select-dropdown');
+  const isOpen = trigger.classList.toggle('open');
+  drop.classList.toggle('open');
+  if (isOpen) {
+    const searchInput = cs.querySelector('.custom-select-search');
+    searchInput.value = '';
+    searchInput.focus();
+    filterDrop(csId, '');
+  }
+}
+
+function filterDrop(csId, query) {
+  const cs = document.getElementById(csId);
+  const items = cs.querySelectorAll('.custom-select-item');
+  const q = query.toLowerCase();
+  items.forEach(item => {
+    item.classList.toggle('hidden', q && !item.textContent.toLowerCase().includes(q));
+  });
+}
+
+function selectItem(csId, type, val) {
+  const cs = document.getElementById(csId);
+  cs.querySelector('.custom-select-trigger').classList.remove('open');
+  cs.querySelector('.custom-select-dropdown').classList.remove('open');
+  if (sel[type].has(val)) return;
+  sel[type].add(val);
+  renderChips(type);
+  applyFilters();
+}
+
+// Close dropdowns when clicking outside
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.custom-select')) {
+    document.querySelectorAll('.custom-select-trigger').forEach(t => t.classList.remove('open'));
+    document.querySelectorAll('.custom-select-dropdown').forEach(d => d.classList.remove('open'));
+  }
+});
+
+function applyFilters() {
+  const search = document.getElementById('filterSearch').value.trim().toLowerCase();
+  const searchAuth = document.getElementById('filterAuthors').value.trim().toLowerCase();
+  const searchAff = document.getElementById('filterAffiliations').value.trim().toLowerCase();
+  const sort = document.getElementById('sortBy').value;
+
+  // If no filters active, show welcome state
+  if (sel.editor.size === 0 && sel.area.size === 0 && sel.year.size === 0 && sel.title.size === 0 && sel.author.size === 0 && sel.affiliation.size === 0 && !search && !searchAuth && !searchAff) {
+    document.getElementById('resultsCount').innerHTML = '';
+    document.getElementById('papersList').innerHTML = '<div class="empty-state"><h3>Select a filter to get started</h3><p>Filter by editor, area, year, or search by title or author name.</p></div>';
+    buildFilterOptions();
+    return;
+  }
+
+  filtered = allPapers.filter(p => {
+    if (sel.editor.size > 0 && !(p._editors || []).some(e => sel.editor.has(e))) return false;
+    if (sel.area.size > 0 && !sel.area.has(p._area)) return false;
+    if (sel.year.size > 0 && !sel.year.has(p['Year'])) return false;
+
+    // Title: live typed text AND all chips must match (AND logic)
+    const titleText = (p['Title']||'').toLowerCase();
+    if (search && !titleText.includes(search)) return false;
+    for (const t of sel.title) { if (!titleText.includes(t)) return false; }
+
+    // Authors: live typed text AND all chips must match (AND logic for co-author search)
+    const authText = (p['Authors']||'').toLowerCase();
+    if (searchAuth && !authText.includes(searchAuth)) return false;
+    for (const a of sel.author) { if (!authText.includes(a)) return false; }
+
+    // Affiliations: live typed text AND all chips must match
+    const affText = (p['Affiliations']||'').toLowerCase();
+    if (searchAff && !affText.includes(searchAff)) return false;
+    for (const af of sel.affiliation) { if (!affText.includes(af)) return false; }
+
+    return true;
+  });
+
+  filtered.sort((a, b) => {
+    switch(sort) {
+      case 'year-desc': return (b['Year']||'').localeCompare(a['Year']||'') || (b['Volume']||'').localeCompare(a['Volume']||'');
+      case 'year-asc': return (a['Year']||'').localeCompare(b['Year']||'');
+      case 'title': return (a['Title']||'').localeCompare(b['Title']||'');
+      case 'editor': return (a['Accepting Editor']||'zzz').localeCompare(b['Accepting Editor']||'zzz');
+    }
+    return 0;
+  });
+
+  currentPage = 1;
+  renderPage();
+  updateDropdownOptions();
+}
+
+function clearFilters() {
+  sel.editor.clear(); sel.area.clear(); sel.year.clear(); sel.title.clear(); sel.author.clear(); sel.affiliation.clear();
+  document.getElementById('chipsEditor').innerHTML = '';
+  document.getElementById('chipsArea').innerHTML = '';
+  document.getElementById('chipsYear').innerHTML = '';
+  document.getElementById('chipsTitle').innerHTML = '';
+  document.getElementById('chipsAuthor').innerHTML = '';
+  document.getElementById('chipsAffiliation').innerHTML = '';
+  ['filterSearch','filterAuthors','filterAffiliations'].forEach(id => document.getElementById(id).value = '');
+  closeSummaryTabs();
+  applyFilters();
+}
+
+function filterByEditor(name) {
+  addChipFromCard('editor', name);
+}
+
+function filterByArea(name) {
+  addChipFromCard('area', name);
+}
+
+function renderPage() {
+  /* PAGINATION DISABLED — showing all results on one page
+  const totalPages = Math.ceil(filtered.length / PER_PAGE);
+  const start = (currentPage - 1) * PER_PAGE;
+  const page = filtered.slice(start, start + PER_PAGE);
+  */
+  const start = 0;
+  const page = filtered;
+
+  const countEl = document.getElementById('resultsCount');
+  countEl.innerHTML = filtered.length === allPapers.length
+    ? `<strong>${allPapers.length.toLocaleString()}</strong> papers`
+    : `<strong>${filtered.length.toLocaleString()}</strong> of ${allPapers.length.toLocaleString()} papers`;
+
+  const list = document.getElementById('papersList');
+  if (!page.length) {
+    list.innerHTML = '<div class="empty-state"><h3>No papers found</h3><p>Try adjusting your filters.</p></div>';
+    return;
+  }
+
+  list.innerHTML = page.map((p, idx) => {
+    const doi = p['DOI'] || '';
+    const link = doi.startsWith('http') ? doi : doi ? 'https://doi.org/' + doi : '';
+    const aid = 'a' + (start + idx);
+    const absClean = cleanAbstract(p['Abstract'] || '');
+    const hasAbs = absClean.length > 10;
+
+    return `<div class="paper-card">
+      <div class="paper-title">${link ? `<a href="${link}" target="_blank">${esc(p['Title'])}</a>` : esc(p['Title'])}</div>
+      <div class="paper-authors">${(p['Authors']||'').split(',').map(function(a){var t=a.trim();return t?'<span class="paper-author-link" onclick="addAuthorChip(\''+escAttr(t)+'\')">'+esc(t)+'</span>':'';}).filter(Boolean).join(', ')}</div>
+      <div class="paper-meta">
+        ${p['Volume'] && p['Issue'] ? `<span class="tag tag-vol" onclick="addYearChip('${esc(p['Year'])}')">${esc(p['Year'])} · Vol. ${esc(p['Volume'])} No. ${esc(p['Issue'])}${p['Page'] ? ', pp. '+esc(p['Page']) : ''}</span>` : p['Year'] ? `<span class="tag tag-vol" onclick="addYearChip('${esc(p['Year'])}')">${esc(p['Year'])}</span>` : ''}
+        ${(p._editors||[]).map(e => `<span class="tag tag-editor" onclick="filterByEditor('${escAttr(e)}')">✎ ${esc(e)}</span>`).join('')}
+        ${p._area ? `<span class="tag tag-area" onclick="filterByArea('${escAttr(p._area)}')">${esc(p._area)}</span>` : ''}
+        ${p['Status']==='Other' ? '<span class="tag tag-other">Other</span>' : ''}
+        ${p['Status']==='Articles in Advance' ? '<span class="tag tag-aia">Articles in Advance</span>' : ''}
+      </div>
+      ${hasAbs ? `<span class="paper-abstract-toggle" onclick="togAbs('${aid}',this)">▸ Abstract</span>` : ''}
+      <span class="paper-bibtex-toggle" onclick="togBib('bib${start+idx}',this,${start+idx})">▸ BibTeX</span>
+      ${hasAbs ? `<div id="${aid}" class="paper-abstract">${esc(absClean)}</div>` : ''}
+      <div id="bib${start+idx}" class="paper-bibtex"></div>
+    </div>`;
+  }).join('');
+
+  /* PAGINATION DISABLED
+  document.getElementById('pagination').style.display = totalPages > 1 ? '' : 'none';
+  renderPag(totalPages);
+  */
+}
+
+function togAbs(id, btn) {
+  const el = document.getElementById(id);
+  const open = el.classList.toggle('open');
+  btn.textContent = open ? '▾ Hide abstract' : '▸ Abstract';
+}
+
+function togBib(id, btn, idx) {
+  const el = document.getElementById(id);
+  const open = el.classList.toggle('open');
+  btn.textContent = open ? '▾ Hide BibTeX' : '▸ BibTeX';
+  if (open && !el.dataset.filled) {
+    const p = filtered[idx];
+    const bibStr = makeBib(p);
+    el.innerHTML = '<button class="bib-copy" onclick="copyBib(this,\'' + id + '\')">Copy</button>' + esc(bibStr);
+    el.dataset.filled = '1';
+  }
+}
+
+function makeBib(p) {
+  const authors = (p['Authors'] || '').split(',').map(a => a.trim()).filter(Boolean);
+  // Format authors as "LastName, FirstName and ..."
+  const bibAuthors = authors.map(a => {
+    const parts = a.trim().split(/\s+/);
+    if (parts.length < 2) return a;
+    const last = parts.pop();
+    return last + ', ' + parts.join(' ');
+  }).join(' and ');
+
+  const lastName = (authors[0] || 'Unknown').split(/\s+/).pop();
+  const year = p['Year'] || '';
+  const words = (p['Title'] || '').split(/\s+/).slice(0, 2).map(w => w.replace(/[^a-zA-Z]/g, '')).filter(Boolean).join('');
+  const key = lastName + '_' + year + '_' + words;
+
+  // Use Page column directly
+  let pages = (p['Page'] || '').replace(/-/g, '--');
+
+  let b = '@article{' + key + ',\n';
+  b += '  title={' + bibTitle(p['Title'] || '') + '},\n';
+  b += '  author={' + bibAuthors + '},\n';
+  b += '  journal={Management Science},\n';
+  if (p['Volume']) b += '  volume={' + p['Volume'] + '},\n';
+  if (p['Issue']) b += '  number={' + p['Issue'] + '},\n';
+  if (pages) b += '  pages={' + pages + '},\n';
+  b += '  year={' + year + '},\n';
+  b += '  publisher={INFORMS}\n';
+  b += '}';
+  return b;
+}
+
+// Protect capital letters in BibTeX title (skip the very first character)
+function bibTitle(t) {
+  if (!t) return '';
+  return t.charAt(0) + t.slice(1).replace(/[A-Z]/g, function(ch) { return '{' + ch + '}'; });
+}
+
+function copyBib(btn, id) {
+  const el = document.getElementById(id);
+  const text = el.textContent.replace('Copy', '').trim();
+  navigator.clipboard.writeText(text).then(function() {
+    btn.textContent = 'Copied!';
+    setTimeout(function() { btn.textContent = 'Copy'; }, 1500);
+  });
+}
+
+/* PAGINATION DISABLED — uncomment to re-enable
+function renderPag(total) {
+  const p = document.getElementById('pagination');
+  let h = `<button ${currentPage===1?'disabled':''} onclick="goPage(${currentPage-1})">‹ Prev</button>`;
+  let s = Math.max(1, currentPage - 3), e = Math.min(total, s + 6);
+  if (e - s < 6) s = Math.max(1, e - 6);
+  if (s > 1) { h += `<button onclick="goPage(1)">1</button>`; if (s > 2) h += `<span class="page-info">…</span>`; }
+  for (let i = s; i <= e; i++) h += `<button class="${i===currentPage?'active':''}" onclick="goPage(${i})">${i}</button>`;
+  if (e < total) { if (e < total-1) h += `<span class="page-info">…</span>`; h += `<button onclick="goPage(${total})">${total}</button>`; }
+  h += `<button ${currentPage===total?'disabled':''} onclick="goPage(${currentPage+1})">Next ›</button>`;
+  p.innerHTML = h;
+}
+
+function goPage(n) { currentPage = n; renderPage(); window.scrollTo({ top: 280, behavior: 'smooth' }); }
+*/
+
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function escAttr(s) { return (s||'').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+
+function cleanAbstract(s) {
+  if (!s) return '';
+  // Remove everything from "This paper was accepted by" onwards
+  var idx = s.indexOf('This paper was accepted');
+  if (idx === -1) idx = s.indexOf('This work was accepted');
+  if (idx > 0) {
+    // Go back to the last period before it
+    var before = s.substring(0, idx).trimEnd();
+    // If it ends with a period, keep it; otherwise find last period
+    if (!before.endsWith('.')) {
+      var lastDot = before.lastIndexOf('.');
+      if (lastDot > 0) before = before.substring(0, lastDot + 1);
+    }
+    s = before;
+  }
+  // Remove other trailing junk patterns
+  var junk = ['Funding:', 'Supplemental Material:', 'Conflict of Interest', 'The online appendix', 'Data and the online appendix', 'History:', 'Disclaimer/Publisher'];
+  for (var i = 0; i < junk.length; i++) {
+    var ji = s.indexOf(junk[i]);
+    if (ji > 0) {
+      var b = s.substring(0, ji).trimEnd();
+      if (!b.endsWith('.')) { var ld = b.lastIndexOf('.'); if (ld > 0) b = b.substring(0, ld + 1); }
+      s = b;
+    }
+  }
+  // Remove trailing DOI URLs
+  s = s.replace(/\s*https?:\/\/doi\.org\/\S+\s*\.?\s*$/, '');
+  return s.trim();
+}
+
+let searchTimer;
+function debounceSearch() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(function() {
+    if (allPapers.length > 0) applyFilters();
+  }, 150);
+}
+
+var affSearchTimer;
+function debounceAffSearch() {
+  clearTimeout(affSearchTimer);
+  affSearchTimer = setTimeout(function() {
+    // Filter the affiliations summary list if open
+    var afEl = document.getElementById('summaryAffiliations');
+    if (afEl.classList.contains('active')) {
+      filterAffiliationsList();
+    }
+    // Also filter papers live (like author search)
+    if (allPapers.length > 0) applyFilters();
+  }, 150);
+}
+
+loadData();
+</script>
+</body>
+</html>

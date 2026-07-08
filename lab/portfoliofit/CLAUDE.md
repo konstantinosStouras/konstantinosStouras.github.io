@@ -8,6 +8,7 @@ built. It explains the *philosophy* and the *structure*, not just the code.
 - **Live (join a session directly):** https://www.stouras.com/lab/portfoliofit/?session=CODE
 - **Live (original plain game):** https://www.stouras.com/lab/portfoliofit/?classic
 - **Live (admin):** https://www.stouras.com/lab/portfoliofit/?admin
+- **Live (admin · data analytics):** https://www.stouras.com/lab/portfoliofit/?admin=data-analytics
 - **Repo:** github.com/konstantinosStouras/konstantinosStouras.github.io → `lab/portfoliofit/`
 - **Backend (not web-served):** repo root `_portfoliofit-lab-firebase/`
 
@@ -97,7 +98,7 @@ Served app (`lab/portfoliofit/`):
 | `index.html` | The whole **game**: markup + CSS + the game engine (an IIFE). Also hosts the shared "snake" Account login widget and a localStorage `AppStats` block (legacy). Exposes `window.PFGame`, emits events via `window.PF.onGameEvent`, and reads the `window.PF_EXPERIMENT` / `window.PF_ADMIN` flags set by a tiny inline script. Loads the three layer scripts (deferred). |
 | `pf-defaults.js` | Sets `window.PF_DEFAULTS` = `{ texts, settings, registrationQuestions, surveyQuestions, defaultPuzzles }`. Loaded **before** the other two. |
 | `experiment.js` | The **participant experiment** layer. Activates only on `?exp=1`. Phase state machine, Firebase (named app), auth/registration, event logging, per-round summaries, survey, onboarding tour, movable/resizable boxes. |
-| `admin.js` | The **admin CMS**. Activates only on `?admin`. Login gate, content/question/settings/puzzle editors, participants table + Excel export, theme. |
+| `admin.js` | The **admin CMS**. Activates only on `?admin`. Login gate, content/question/settings/puzzle editors, participants table + Excel export, theme. Also hosts the **Data analytics** view (`?admin=data-analytics`) — see §6. |
 | `404.html` | Redirects to `/`. |
 | `og-image.jpg`, `portfoliofit-difficulty.pdf`, `portfoliofit-difficulty.makepdf.py` | Social card + the κ methodology note (PDF + its generator). |
 
@@ -143,7 +144,9 @@ publish it; versioned in the repo, deployed manually to the lab project):
     set reaches on this square). Easy returns the first qualifying board; Hard scans
     for the hardest and stops at the ceiling.
 - **KPIs (live):** Net Value, Total Value, Resource Cost (empty-cell penalty),
-  Value/Resource (ROI), Coverage %, Portfolio Fitness (net ÷ best). Hover
+  Value/Resource (ROI), Coverage %, Portfolio Fitness (a **geometric
+  compactness** score: occupied cells ÷ fillable cells inside their convex
+  hull, 0–100 — NOT net ÷ best; see `computeFitness`). Hover
   tooltips explain each.
 - **Tools:** a calculator and a notes pad — **puzzle-specific**: `resetTools()`
   (called from `startRound`) clears the calculator input/history and the notes
@@ -269,9 +272,18 @@ publish it; versioned in the repo, deployed manually to the lab project):
 
 ## 6. The admin panel (`admin.js`)
 
-- **Activation:** `?admin`; requires the `admin@admin.com` account. Caches the
-  admin auth so a refresh shows the panel immediately (no login flash). Dark/
-  light theme.
+- **Activation:** `?admin` (a value is allowed — `index.html`'s flag script
+  tests `/[?&]admin([=&]|$)/`, so `?admin=data-analytics` also counts as admin
+  and keeps the participant experiment off); requires the `admin@admin.com`
+  account. Caches the admin auth so a refresh shows the panel immediately (no
+  login flash). Dark/light theme.
+- **Top-right nav** (`headerRow()`): two views — **Admin** (the tabbed CMS
+  below) and **Data analytics** — mirroring the answerarena admin.
+  `currentView` (`'admin'|'analytics'`) drives `renderShell()`;
+  `viewFromUrl()`/`setViewUrl()` make the analytics view directly linkable
+  (`?admin=data-analytics`, also accepting `?admin=analytics` /
+  `?admin&view=analytics` / `#data-analytics`) and keep the address bar
+  canonical; a `popstate` listener makes browser Back/Forward switch views.
 - **Tabs:**
   - **Content** — collapsible per-page text editors (welcome/training/registration/
     game/stats/survey/thank-you), each pre-filled with the current effective text.
@@ -307,11 +319,13 @@ publish it; versioned in the repo, deployed manually to the lab project):
     `deleteParticipantDeep`). Per row: **⬇ Excel** (that one player's data) and
     **delete**.
 - **Excel export (`exportWorkbook`)** — SheetJS (xlsx) via CDN. One reusable
-  builder powers three entry points — **all participants** (`exportExcel`),
-  **one participant** (`exportParticipant`), and **one whole session**
-  (`exportSession`, aggregating every player tagged with that `sessionId` into a
-  single file, using that session's own question order). Sheets, each with
-  intuitive headings and ordered to follow the simulation:
+  builder (`buildSheetMap`, which returns the whole export as a
+  `{sheetName: rows[]}` map in `SHEET_ORDER` — also reused verbatim by the Data
+  analytics view's Load) powers three entry points — **all participants**
+  (`exportExcel`), **one participant** (`exportParticipant`), and **one whole
+  session** (`exportSession`, aggregating every player tagged with that
+  `sessionId` into a single file, using that session's own question order).
+  Sheets, each with intuitive headings and ordered to follow the simulation:
   - **Play log** — the google-sheet-style single tab collecting *every brick
     move* across all included players: Player, UCD Student ID, Session, Puzzle,
     Difficulty, Move # (counts 1,2,3… **within each puzzle**; the start row is
@@ -343,6 +357,145 @@ publish it; versioned in the repo, deployed manually to the lab project):
   do the same write with different wording) and **Restore built-in default**
   (revert to `PF_DEFAULTS`). Each uses `withFeedback` so the button itself
   confirms — it presses, shows "Saving…", then flashes green "✓ Saved".
+
+### The Data analytics view (`?admin=data-analytics`)
+
+Ported from the answerarena admin's Data analytics tab. All state lives in the
+module-level `daState`, so leaving and returning to the view preserves loaded
+data, ticked sources, edited code and the last run. Everything runs **entirely
+in the browser** — no data is uploaded, no Cloud Function or Firestore-rules
+change. Four sections:
+
+1. **Data source** (`buildDaSection1`). Every session — active and completed —
+   is a checkbox row (with participant count + created date); you can also
+   **Import Excel / CSV** (a per-session / per-player / all-data export from
+   this admin, or any workbook; a bare CSV becomes one `Rounds` sheet).
+   **Load** fetches the ticked sessions' participants and builds the aggregate
+   through the **same** export builder (`buildSheetMap`), so the in-memory
+   aggregate is exactly the multi-tab shape of the Excel export; ticked
+   imports are then stacked on by case-insensitive sheet name
+   (`mergeBookIntoSheetMap`, unmatched sheets become their own tab).
+   **Download consolidated Excel** writes the whole aggregate as one workbook
+   (`SHEET_ORDER` first, then imported extras; names via `safeSheetName`).
+2. **Aggregate data** (`buildDaSection2`, numbers from `daAggStats`). Stat
+   boxes from the aggregate **Rounds** sheet (one row per completed puzzle),
+   with tolerant case/spacing-insensitive header matching (`daPickKey`) so
+   imported files work too: users played, easy/hard puzzles completed,
+   **average time to complete** a puzzle of each difficulty (each user's own
+   mean is taken first, then averaged, so a heavy player cannot dominate), the
+   **% of users who reached the maximum** — Net Value ≥ Best Value — and the %
+   who got **within 5% / within 10%** of the maximum Net Value at least once
+   (Net Value ≥ 95% / 90% of Best Value; cumulative, so a user at the maximum
+   also counts as within 5% and 10%). Rows missing Net or Best Value are
+   excluded (never use Fitness % here: it is a geometric **compactness**
+   score, not net ÷ best). Plus a per-puzzle breakdown table (plays, avg time,
+   share of plays at max / within 5% / within 10%).
+3. **Process with Python or R** (`buildDaSection3`). Edit the pre-filled
+   script, **Run**. The code always receives THREE tables: the table picked in
+   the selector (default **Play log**) as the string `DATA_CSV` (Python) / the
+   file `/tmp/data.csv` (R), plus — regardless of the selector — the **Play
+   log** and **Rounds** sheets as `PLAYLOG_CSV` / `ROUNDS_CSV` (Python) and
+   `/tmp/playlog.csv` / `/tmp/rounds.csv` (R; files are rewritten — empty when
+   absent — on every run so a previous run's data never leaks). Python
+   compiles in-browser via **Pyodide** (numpy/pandas/scipy/matplotlib — a
+   package that fails to load is skipped, non-fatal) and R via **WebR** (base
+   R; base-graphics captured as PNGs) — both loaded lazily from jsDelivr on
+   first Run (~10–30 s, needs network). **Any valid Python or R works**; text
+   output prints below the editor, the **plots render in §4 Insights gained**
+   (Section 3 only shows an "N figures rendered" pointer).
+
+   The bundled templates (`DA_PY_TEMPLATE` / `DA_R_TEMPLATE`) are heavily
+   commented, ignore `DATA_CSV` and analyse the **Play log joined to Rounds**
+   (the inner join on Player|Session + Puzzle also drops training-phase moves,
+   which have no Rounds row; the Play log's *(before)* KPI columns are also
+   required, for the per-move deltas). They answer three questions and are
+   **verified to print byte-identical output** in the two languages:
+   - **Heuristics.** "Top player" = touched the puzzle's maximum net value at
+     least once *during play* (any move, not just the final board); relaxed
+     definition = came within 5% of it. Six behavioural markers per
+     player-puzzle (moves made, removal share, mean $/cell of the first 3
+     bricks, board coverage after 3 moves, seconds per move, when the own peak
+     was first hit), averaged to player level and compared top-vs-rest per
+     difficulty (Welch t) **under both definitions** (Cohen's-d fingerprints:
+     Figure 1 strict, Figure 2 within-5%), plus an easy-vs-hard table and
+     regressions **R1/R1b** (LPM of reached-max / within-5% on standardised
+     markers, player-clustered CR1 SEs).
+   - **Balanced-KPI hypothesis (H1).** The six on-screen KPIs collapse to
+     three independent objectives; each is scored **relative to its optimal
+     value**: `s_net = (Net+16)/(Best+16)`, `s_cov = Coverage/100`,
+     `s_fit = Fitness/100` (compactness). `kpi_avg` = their mean = the
+     balanced-KPI score per move (1 = every KPI at its optimum), averaged
+     move → puzzle → player, then average-top-user vs average-non-top-user
+     per difficulty under both definitions; move-level regressions **R2–R5**
+     (strict / relaxed / excluding at-max moves / evenness outcome
+     `kpi_even = 1 − SD`) with the `s_net` level as control and
+     player-clustered SEs (`ols_cluster`, SVD pseudoinverse with a shared
+     1e-10 tolerance so both languages behave identically even under
+     collinearity). Trajectories at fifth- AND tenth-of-play resolution
+     (printed tables + Figures 3/4/5), plus three extra decile views under
+     alternative objective scores — net value only (Fig 6), 50% net + 50%
+     ROI (Fig 7), 1/3 net + 1/3 ROI + 1/3 fitness (Fig 8) — where ROI
+     attainment = Total Value / (Total Value + Resource Cost) =
+     ROI/(1+ROI), bounded 0–1 and defined at full coverage.
+   - **Focused or diversified (revealed objective).** Candidate objectives =
+     net value only, net+coverage, net+compactness, all three (each = the
+     mean of its KPIs' attainment scores). Because every placement raises
+     Net Value and Coverage *mechanically* (net rises by brick value + cells
+     saved), improvement yes/no flags cannot separate candidates — so the
+     test compares each candidate's **per-move climb rate** (points/move,
+     averaged move → puzzle → player). **FOCUS GAP** = net-only climb minus
+     all-three climb (positive = net-focused, negative = diversified), tested
+     vs 0 within each group and top-vs-rest, under both definitions
+     (Figure 11).
+   - **The opening vs the approach to the peak.** Two windows per play — the
+     OPENING (first 10 moves) and the APPROACH (the last 10 moves up to and
+     including the move where the player FIRST hit their own maximum net
+     value; repeated maxima count only the first time, via `peak_move`) —
+     with five window metrics (balanced-KPI score, net climb, removal share,
+     $/cell placed, seconds/move) compared top-vs-rest under both
+     definitions, and Figure 12: the two windows move by move, the opening
+     aligned at move 1 and the approach aligned at the peak (x = −9…0).
+   - **The within-5% playbook.** A deep dive under the relaxed definition:
+     the six markers pooled to one value per player and compared top-vs-rest
+     (means, Cohen's d, Welch p) plus a plain-language profile sentence per
+     group; a "which habits pay" ranking — for each marker, the within-5%
+     success rate among players on the top group's side of the all-player
+     median vs the others (two-proportion z), ranked by lift; a one-number
+     heuristic **style score** (all six markers z-scored, oriented towards
+     the top group, averaged) correlated with each player's closest approach
+     to the maximum (Pearson). Figures 13 (dumbbell profile), 14 (habit
+     success-rate bars) and 15 (style-vs-outcome scatter with the 95% bar).
+
+   Fifteen figures, created and displayed in strictly increasing numerical
+   order, + a data-driven `INSIGHTS` block (`## Figure N` headings
+   anchor each plot in §4), which **ends with a computed verdict** —
+   BALANCED / FOCUSED BUT EFFECTIVE / PARTLY BALANCED / MORE EVEN, NOT
+   CLOSER / NO CLEAR SIGNAL — answering "are the best players focused on one
+   KPI or balancing across KPIs?" from each group's per-KPI profile
+   (strongest/weakest KPI + spread), the evenness and balanced-score gaps
+   with p-values, and an OBJECTIVE TEST line from the focus gap. (Figure 5's
+   caption spells out that its $/cell is a per-brick price density, not the
+   Value/Resource ROI KPI, and that "completing the board" means geometric
+   fit, not the Portfolio Fitness compactness KPI.)
+
+   Edited code persists to localStorage (`pfa-da:py` / `pfa-da:r`); when
+   changing the bundled templates bump `PF_DA_TPL_VERSION` so stale saved
+   scripts are dropped (`daMigrateTemplates`). Gotchas: matplotlib ≥ 3.9
+   removed `boxplot(labels=)` (use `set_xticks` + `set_xticklabels`); R
+   rejects 3-digit hex colours (use `#888888`); a top-level R `if`/`else`
+   split across lines needs braces; R's `t.test` errors on constant data
+   (both templates guard with an sd > 1e-12 check).
+4. **Insights gained** (`buildDaSection4`). A readable write-up of the last
+   run **and the home of every plot**: `daParseInsights()` extracts the
+   script's `INSIGHTS` block (the text after a line reading `INSIGHTS`) and
+   renders it with `## ` headings, `- ` bullets and `**bold**`
+   (`daInlineBold`). A heading matching `^Figure N` drops the Nth harvested
+   image right under it; unmatched images are appended at the end so a custom
+   script never silently loses a plot. `run()` snapshots each run into
+   `daState.lastRun` and calls `daRefs.updateInsights()`. The bundled
+   templates print the INSIGHTS text with **computed values interpolated**
+   (player counts, marker gaps, the balanced-KPI comparison with p-values), so
+   the write-up reflects the loaded data, not canned prose.
 
 ## 7. Firebase backend
 

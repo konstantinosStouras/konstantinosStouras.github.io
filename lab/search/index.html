@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Search Game &mdash; Space Exploration (EC 2026)</title>
+  <meta name="description" content="An interactive replica of the online experiment for “Space Exploration” (EC 2026) by Suraj Malladi, Alejandro Martínez-Marquina &amp; Ilya Morozov: reveal hidden prizes across 100 positions, pay a fee per reveal, and decide when to stop. Five treatments (Unrestricted, High/Low Variability, Sweet Spot, Known Maximum)." />
+  <meta name="keywords" content="sequential search, spatial search, experiment, Pandora, optimal stopping, Space Exploration, EC 2026, Malladi, Martínez-Marquina, Morozov, search costs, Kellogg" />
+  <meta name="robots" content="index,follow" />
+  <link rel="canonical" href="https://www.stouras.com/lab/search/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="stouras.com" />
+  <meta property="og:title" content="Search Game — Space Exploration (EC 2026)" />
+  <meta property="og:description" content="An interactive replica of the online experiment for “Space Exploration” (EC 2026) by Malladi, Martínez-Marquina &amp; Morozov: reveal hidden prizes across 100 positions, pay a fee per reveal, and decide when to stop." />
+  <meta property="og:url" content="https://www.stouras.com/lab/search/" />
+
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%236f42c1'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='22' font-weight='bold' text-anchor='middle' fill='white'%3EK%3C/text%3E%3C/svg%3E" />
+
+  <style>
+    :root{
+      --blue:#2780e3; --blue-d:#1f6cc4;
+      --green:#3fb618; --green-d:#349612;
+      --purple:#6f42c1; --purple-d:#5c36a4;
+      --red:#e41a1c; --red-d:#c1161c;
+      --teal:#26a69a;
+      --ink:#2b2b2b; --muted:#6a6f76; --line:#e0e0e0; --bg:#ffffff; --panel:#f6f7f9;
+    }
+    *{box-sizing:border-box;}
+    html,body{margin:0;padding:0;}
+    body{
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Lato",sans-serif;
+      color:var(--ink); background:var(--bg); line-height:1.5; font-size:16px;
+    }
+    a{color:var(--blue);}
+    .nav{
+      display:flex; align-items:center; justify-content:space-between;
+      padding:12px 22px; border-bottom:1px solid var(--line); background:#fff;
+      position:sticky; top:0; z-index:40;
+    }
+    .brand{font-weight:700; font-size:20px; letter-spacing:.2px;}
+    .brand .dot{color:var(--purple);}
+    .nav-right{display:flex; gap:10px; align-items:center;}
+    .pill{font-size:12px; color:var(--muted); border:1px solid var(--line); border-radius:20px; padding:3px 12px;}
+    .wrap{max-width:1080px; margin:0 auto; padding:22px 20px 60px;}
+
+    h1{font-size:26px; margin:.2em 0 .5em;}
+    h2{font-size:22px; margin:.2em 0 .5em;}
+    h3{font-size:19px; margin:.2em 0 .4em;}
+    h4{font-size:16px; margin:.6em 0 .3em;}
+    p{margin:.5em 0;}
+    hr{border:none; border-top:1px solid var(--line); margin:16px 0;}
+    ul,ol{padding-left:22px;}
+    li{margin:.25em 0;}
+    .muted{color:var(--muted);}
+    .small{font-size:13px;}
+    .center{text-align:center;}
+    .right{text-align:right;}
+
+    .btn{
+      display:inline-block; border:none; cursor:pointer; font-weight:600;
+      padding:10px 20px; border-radius:26px; font-size:15px; color:#fff;
+      transition:background .15s, box-shadow .15s, transform .05s;
+      box-shadow:0 1px 3px rgba(0,0,0,.12);
+    }
+    .btn:active{transform:translateY(1px);}
+    .btn:disabled{opacity:.5; cursor:not-allowed;}
+    .btn-blue{background:var(--blue);} .btn-blue:hover{background:var(--blue-d);}
+    .btn-green{background:var(--green);} .btn-green:hover{background:var(--green-d);}
+    .btn-purple{background:transparent; color:var(--purple); border:1.5px solid var(--purple); box-shadow:none; border-radius:26px; padding:8px 16px;}
+    .btn-purple:hover{background:var(--purple); color:#fff;}
+    .btn-red{background:var(--red);} .btn-red:hover{background:var(--red-d);}
+    .btn-ghost{background:#eef0f3; color:var(--ink); box-shadow:none;}
+    .btn-ghost:hover{background:#e3e6ea;}
+    .btn-sm{padding:7px 15px; font-size:14px;}
+
+    .screen{display:none;}
+    .screen.active{display:block; animation:fade .25s ease;}
+    @keyframes fade{from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;}}
+
+    .card{background:#fff; border:1px solid var(--line); border-radius:12px; padding:22px 24px; margin:14px 0;}
+    .note{background:#fbf7ff; border:1px solid #e6d9fb; border-radius:10px; padding:12px 16px; font-size:14px; color:#4a3d63;}
+
+    /* consent */
+    .consent-box{max-height:340px; overflow:auto; border:1px solid var(--line); border-radius:10px; padding:16px 20px; background:var(--panel); font-size:14.5px;}
+    .consent-box h4{margin-top:14px;}
+    .checkopt{display:flex; align-items:flex-start; gap:10px; padding:8px 12px; border:1px solid var(--line); border-radius:8px; margin:8px 0; background:var(--panel); cursor:pointer;}
+    .checkopt input{margin-top:4px;}
+    .field{margin:14px 0;}
+    .field label{display:block; font-weight:600; margin-bottom:6px;}
+    .field input[type=text], .field select{
+      width:100%; max-width:420px; padding:9px 11px; border:1px solid #c9ced4; border-radius:8px; font-size:15px; background:#fff;
+    }
+
+    /* instructions */
+    .ins-head{display:flex; align-items:baseline; justify-content:space-between; gap:12px;}
+    .ins-step{color:var(--purple); font-weight:700;}
+    .qwrap{border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin:14px 0; background:var(--panel);}
+    .qwrap.bad{border-color:var(--red); background:#fff5f5;}
+    .qprompt{font-weight:600; margin-bottom:8px;}
+    .opt{display:block; padding:9px 12px; border:1px solid #d5d9de; border-radius:8px; margin:7px 0; background:#fff; cursor:pointer;}
+    .opt:hover{border-color:var(--blue);}
+    .opt input{margin-right:9px;}
+    .numrow{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+    .numrow input{width:90px; padding:8px 10px; border:1px solid #c9ced4; border-radius:8px; font-size:15px; text-align:center;}
+    .qerr{display:none; color:var(--red); font-size:13px; margin-top:8px; font-weight:600;}
+    .ins-foot{display:flex; justify-content:space-between; margin-top:18px;}
+
+    /* game */
+    .game-top{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:6px;}
+    .rounds-rem{font-weight:700; font-size:17px;}
+    .game-grid{display:grid; grid-template-columns:210px 1fr 210px; gap:18px; align-items:start;}
+    .stat-label{font-size:13.5px; color:var(--muted); margin-top:14px;}
+    .stat-val{font-size:22px; font-weight:600; text-indent:12px;}
+    .plot-wrap{border:1px solid var(--line); border-radius:10px; padding:8px 6px 2px; background:#fff;}
+    .plot-svg{width:100%; height:auto; display:block;}
+    .axt{font-size:12px; fill:#555;}
+    .axtitle{font-size:14px; fill:#333; font-weight:600;}
+    .slider-area{margin-top:8px; padding:4px 30px 8px;}
+    .pos-label{text-align:center; font-weight:600; color:#333;}
+    .posbox{width:66px; text-align:center; margin:4px auto 8px; display:block; padding:5px 6px; border:1px solid #c9ced4; border-radius:7px; font-size:15px;}
+    input[type=range]{
+      -webkit-appearance:none; appearance:none; width:100%; height:14px; border-radius:8px;
+      background:#dfe3e6; outline:none; cursor:pointer;
+    }
+    input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; appearance:none; width:20px; height:24px; border-radius:5px; background:#fff; border:1px solid #b9bec4; box-shadow:0 1px 3px rgba(0,0,0,.25); cursor:grab;}
+    input[type=range]::-moz-range-thumb{width:20px; height:24px; border-radius:5px; background:#fff; border:1px solid #b9bec4; box-shadow:0 1px 3px rgba(0,0,0,.25); cursor:grab;}
+    .reveal-list{margin-top:18px; border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:13.5px; background:var(--panel); max-height:170px; overflow:auto;}
+    .reveal-list-title{font-size:13.5px; color:var(--muted); font-weight:600; padding:2px 4px 6px;}
+    .reveal-list.hidden{display:none;}
+    .reveal-list table{width:100%; border-collapse:collapse;}
+    .reveal-list td{padding:2px 4px;}
+
+    input[type=number]{-moz-appearance:textfield; appearance:textfield;}
+    input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none; margin:0;}
+
+    /* toast + modal */
+    #toast{position:fixed; left:50%; bottom:34px; transform:translateX(-50%) translateY(20px); background:#222; color:#fff; padding:12px 20px; border-radius:10px; font-weight:600; opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; z-index:80; box-shadow:0 6px 20px rgba(0,0,0,.25);}
+    #toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+    .overlay{position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; z-index:70; padding:20px;}
+    .overlay.show{display:flex;}
+    .modal{background:#fff; border-radius:14px; max-width:640px; width:100%; max-height:86vh; overflow:auto; padding:24px 26px; box-shadow:0 20px 60px rgba(0,0,0,.3);}
+    .modal h3{margin-top:0;}
+    .modal-foot{display:flex; justify-content:flex-end; gap:10px; margin-top:18px;}
+
+    .footer-note{margin-top:34px; padding-top:16px; border-top:1px solid var(--line); color:var(--muted); font-size:13px;}
+
+    @media (max-width:760px){
+      .game-grid{grid-template-columns:1fr;}
+      .stat-val{text-indent:0;}
+      .slider-area{padding:4px 6px 8px;}
+    }
+  </style>
+</head>
+<body>
+  <div class="nav">
+    <div class="brand">Search Game <span class="dot">&bull;</span> <span class="muted" style="font-weight:400; font-size:14px;">Space Exploration</span></div>
+    <div class="nav-right">
+      <span class="pill" id="stage-pill">Consent</span>
+      <button class="btn btn-ghost btn-sm" id="restart">&#8635; Restart</button>
+    </div>
+  </div>
+
+  <div class="wrap">
+
+    <!-- ===================== CONSENT / ID ===================== -->
+    <section class="screen active" id="s-consent">
+      <h2>Consent to Participate in Research</h2>
+      <div class="small muted" style="margin-bottom:10px;">
+        <b>Title:</b> Searching the Unknown &nbsp;&middot;&nbsp;
+        <b>Principal Investigator:</b> Ilya Morozov &nbsp;&middot;&nbsp;
+        <b>Co-Investigator:</b> Suraj Malladi &nbsp;&middot;&nbsp;
+        Supported by the Kellogg School of Management, Northwestern University.
+      </div>
+      <div class="consent-box">
+        <h4>Key information about this research study</h4>
+        <ul>
+          <li>The purpose of this study is to investigate how people make choices in complex environments.</li>
+          <li>If you choose to be in the study, you will complete a survey. We expect it to take about 15 minutes.</li>
+          <li>We expect final payments to vary from $3 to $5. You must pass the comprehension test at the beginning in order to receive compensation. Once you pass it, your payment can never fall below $3.</li>
+          <li>You will perform a series of search tasks. In each task you reveal hidden monetary prizes at positions you choose. Your goal is to find the position with the largest prize, but you pay a fixed cost for revealing each prize &mdash; so find the best prize you can without revealing too many.</li>
+          <li>The survey is anonymous. Being in this study is voluntary; you may stop at any time. This is a minimal-risk study.</li>
+        </ul>
+        <h4>What should I know about participating?</h4>
+        <ul>
+          <li>Whether or not you take part is up to you, and you can change your mind later.</li>
+          <li>You are not required to answer any question you do not want to answer.</li>
+        </ul>
+        <h4>Who can I talk to?</h4>
+        <p class="small">Questions may be directed to Prof. Ilya Morozov (ilya.morozov@kellogg.northwestern.edu) and Prof. Suraj Malladi (suraj.malladi@kellogg.northwestern.edu). This research has been reviewed by an IRB, reachable at (312) 503-9338 or irb@northwestern.edu.</p>
+      </div>
+
+      <div class="note" style="margin-top:16px;">
+        This is a <b>public, static replica</b> of the experiment app hosted on <a href="https://www.stouras.com/">stouras.com</a> for demonstration and teaching. It runs entirely in your browser &mdash; <b>no data is collected, stored, or transmitted</b>, and no payment is made.
+      </div>
+
+      <div style="margin-top:16px;">
+        <label class="checkopt"><input type="checkbox" id="consent-yes"><span>I agree (I consent to participate in this study).</span></label>
+        <label class="checkopt"><input type="checkbox" id="consent-no"><span>I disagree (I do not consent to participate in this study).</span></label>
+      </div>
+
+      <div class="field">
+        <label for="pid">Before continuing, please write down your Prolific ID:</label>
+        <input type="text" id="pid" placeholder="e.g. your Prolific ID, or any text" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" />
+        <div id="pid-hint" class="small" style="margin-top:6px; min-height:18px;"></div>
+      </div>
+      <div class="note small">
+        <b>Treatment codes (optional).</b> By default you are randomly assigned to one of five treatments. To access a specific treatment, enter one of these codes as your ID:
+        <code>Unrestricted</code>, <code>High_Variability</code>, <code>Low_Variability</code>, <code>Sweet_Spot</code>, <code>Known_Maximum</code>.
+        Capitalization, spaces, and hyphens don&rsquo;t matter (e.g. <code>sweet spot</code> also works).
+      </div>
+
+      <p class="muted" style="margin-top:14px;">We will start with a brief instruction period. As you read, you will be asked questions to check your comprehension.</p>
+      <div class="right">
+        <button class="btn btn-green" id="btn-consent-next">Next</button>
+      </div>
+    </section>
+
+    <!-- ===================== INSTRUCTIONS ===================== -->
+    <section class="screen" id="s-ins">
+      <div class="card">
+        <div class="ins-head">
+          <h3 id="ins-title">What do I need to do?</h3>
+          <span class="ins-step" id="ins-step">(1/7)</span>
+        </div>
+        <hr/>
+        <div id="ins-body"></div>
+        <div class="ins-foot">
+          <button class="btn btn-ghost" id="ins-back">&#8592; Back</button>
+          <button class="btn btn-green" id="ins-next">Next &#8594;</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== GAME ===================== -->
+    <section class="screen" id="s-game">
+      <div class="game-top">
+        <div style="width:120px;"></div>
+        <div class="rounds-rem" id="rounds-rem">You have 25 rounds remaining.</div>
+        <div><button class="btn btn-purple btn-sm" id="btn-instr"><span aria-hidden="true">&#9432;</span> Instructions</button></div>
+      </div>
+      <div class="game-grid">
+        <!-- LEFT -->
+        <div>
+          <div class="stat-label">Fee to reveal each prize:</div>
+          <div class="stat-val">$0.05</div>
+          <div class="stat-label">Best Prize discovered so far:</div>
+          <div class="stat-val" id="st-best">$0.00</div>
+          <div class="stat-label">Total fees for revealing prizes:</div>
+          <div class="stat-val" id="st-fees">$0.00</div>
+          <div class="stat-label">Your Payoff if you quit now:</div>
+          <div class="stat-val" id="st-payoff">$0.00</div>
+          <div class="reveal-list hidden" id="reveal-list"></div>
+        </div>
+        <!-- CENTER -->
+        <div>
+          <div class="plot-wrap"><div id="plot"></div></div>
+          <div class="slider-area">
+            <div class="pos-label">Position</div>
+            <input type="number" class="posbox" id="posbox" min="1" max="100" step="1" value="50" />
+            <input type="range" id="slider" min="1" max="100" step="1" value="50" />
+          </div>
+        </div>
+        <!-- RIGHT -->
+        <div>
+          <div class="stat-label">You have selected position:</div>
+          <div class="stat-val" id="sel-pos">50</div>
+          <div class="stat-label">Would you like to reveal its prize?</div>
+          <button class="btn btn-blue" id="btn-submit" style="margin-top:6px;">Submit</button>
+          <div class="stat-label">Would you like to accept your payout?</div>
+          <button class="btn btn-blue" id="btn-quit" style="margin-top:6px;">Accept Payout</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== PAYOUT ACCEPTED ===================== -->
+    <section class="screen" id="s-payout">
+      <div class="card">
+        <h3>Accepted Payout</h3>
+        <p>You have accepted the payout. Please continue to the next round.</p>
+        <p class="stat-val" id="payout-rem" style="font-size:18px; text-indent:0;"></p>
+        <div class="right"><button class="btn btn-green" id="btn-next-round">Continue to Next Round</button></div>
+      </div>
+    </section>
+
+    <!-- ===================== PART II ===================== -->
+    <section class="screen" id="s-part2">
+      <div class="card">
+        <h3>Continue to Part II</h3>
+        <p>You have completed the 13 rounds in Part I of the study. Now you will proceed to Part II, where you will complete 12 more rounds.</p>
+        <p>The rules are the same as before. However, this time you will see that <b>several prizes have already been revealed</b> (for free). You must decide whether to reveal additional prizes at other positions or accept the current payoff by clicking &ldquo;Accept Payout.&rdquo;</p>
+        <p>If you choose to reveal additional prizes, you will do so one at a time at the positions you select, just as before. Recall that it costs you 5 cents from your current earnings to reveal a prize.</p>
+        <div class="right"><button class="btn btn-green" id="btn-to-part2">Continue to Part II</button></div>
+      </div>
+    </section>
+
+    <!-- ===================== COMPLETE / LOTTERY ===================== -->
+    <section class="screen" id="s-complete">
+      <div class="card">
+        <h3>Thank you for participating!</h3>
+        <p>You have completed all required rounds. As promised in the instructions, we have randomly selected two rounds for payment.</p>
+        <div id="lottery"></div>
+        <p><b>To complete the demo, click &ldquo;Next&rdquo; to answer a short exit survey.</b></p>
+        <div class="right"><button class="btn btn-green" id="btn-to-survey">Next</button></div>
+      </div>
+    </section>
+
+    <!-- ===================== SURVEY ===================== -->
+    <section class="screen" id="s-survey">
+      <h3>Exit Survey</h3>
+      <hr/>
+      <div class="field">
+        <label>What is your sex?</label>
+        <label class="opt" style="display:inline-block; margin-right:8px;"><input type="radio" name="sex" value="Male">Male</label>
+        <label class="opt" style="display:inline-block; margin-right:8px;"><input type="radio" name="sex" value="Female">Female</label>
+        <label class="opt" style="display:inline-block;"><input type="radio" name="sex" value="NA">Prefer not to answer</label>
+      </div>
+      <div class="field">
+        <label for="age">How old are you (in years)?</label>
+        <select id="age"><option value="">No selection</option></select>
+      </div>
+      <div class="field">
+        <label for="edu">Highest level of education completed</label>
+        <select id="edu">
+          <option value="">No selection</option>
+          <option>High school or equivalent</option>
+          <option>Some college</option>
+          <option>Associate's Degree (2 year)</option>
+          <option>Bachelor's Degree (4 year)</option>
+          <option>Master's Degree</option>
+          <option>Doctoral Degree (PhD)</option>
+          <option>Professional Degree (MD, JD, etc.)</option>
+          <option>Prefer not to answer</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="unclear">Was anything in this study unclear or confusing to you?</label>
+        <input type="text" id="unclear" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="comments">Any comments or suggestions?</label>
+        <input type="text" id="comments" autocomplete="off" />
+      </div>
+      <div class="right"><button class="btn btn-green" id="btn-submit-survey">Submit</button></div>
+    </section>
+
+    <!-- ===================== DONE ===================== -->
+    <section class="screen" id="s-done">
+      <div class="card center">
+        <h3>All done &mdash; thank you!</h3>
+        <p>Your responses in this demo were <b>not</b> recorded or transmitted anywhere.</p>
+        <p class="muted">In the real study, your completion code would be:</p>
+        <p class="stat-val" id="done-code" style="text-indent:0;"></p>
+        <p id="done-treatment" class="muted"></p>
+        <div class="right center" style="margin-top:14px;"><button class="btn btn-blue" id="btn-play-again">Play again</button></div>
+      </div>
+    </section>
+
+    <div class="footer-note">
+      Replica of the online experiment app for <a href="https://sites.google.com/view/surajm/home" target="_blank" rel="noreferrer noopener"><i>&ldquo;Space Exploration&rdquo;</i> (EC 2026)</a> by Suraj Malladi, Alejandro Mart&iacute;nez-Marquina &amp; Ilya Morozov.
+      Rebuilt as a self-contained, client-side page for <a href="https://www.stouras.com/">stouras.com</a>. Demonstration only &mdash; no data collection, no payment.
+    </div>
+  </div>
+
+  <!-- toast -->
+  <div id="toast"></div>
+
+  <!-- instructions summary modal -->
+  <div class="overlay" id="ov-instr">
+    <div class="modal">
+      <h3>Instructions Summary</h3>
+      <div id="instr-summary"></div>
+      <div class="modal-foot"><button class="btn btn-blue" id="close-instr">Got it</button></div>
+    </div>
+  </div>
+
+  <!-- confirm modal -->
+  <div class="overlay" id="ov-confirm">
+    <div class="modal">
+      <h3 id="confirm-title">Please confirm</h3>
+      <div id="confirm-msg"></div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" id="confirm-cancel">Cancel</button>
+        <button class="btn btn-green" id="confirm-ok">Yes</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+"use strict";
+/* ============================================================
+   Search Game — client-side replica of the online experiment for
+   "Space Exploration" (EC 2026) by Suraj Malladi, Alejandro
+   Martinez-Marquina & Ilya Morozov. No backend, no data collection.
+   ============================================================ */
+
+// ---------- constants ----------
+var FEE = 0.05;
+var N_POS = 100;
+var PART1_ROUNDS = 13;
+var TOTAL_ROUNDS = 25;
+var PART2_PREREVEAL = 3;
+var TREATMENTS = ['Unrestricted','High_Variability','Low_Variability','Sweet_Spot','Known_Maximum'];
+var TREATMENT_LABEL = {
+  Unrestricted:'Unrestricted', High_Variability:'High Variability', Low_Variability:'Low Variability',
+  Sweet_Spot:'Sweet Spot', Known_Maximum:'Known Maximum'
+};
+
+// ---------- helpers ----------
+function uni(a,b){ return a + (b-a)*Math.random(); }
+function randint(a,b){ return a + Math.floor(Math.random()*(b-a+1)); }
+function clamp01(x){ return Math.max(0, Math.min(1, x)); }
+function round2(x){ return Math.round(x*100)/100; }
+function fmt(x){ return x.toFixed(2); }
+function pickDistinct(k,a,b){
+  var s={}, out=[];
+  while(out.length<k){ var r=randint(a,b); if(!s[r]){ s[r]=1; out.push(r); } }
+  return out;
+}
+function $(id){ return document.getElementById(id); }
+
+// ---------- prize generation (per treatment, Section IV) ----------
+// Prizes are in dollars (0..1), rounded to the nearest cent.
+// genPrizesRaw() implements Sections IV.I–IV.IV literally. The paper's IV.V
+// (pool-level comparability rejection) governs offline construction of the
+// mapping pool and is not reproduced here; genPrizes() adds only a light,
+// treatment-neutral guard that discards degenerate rounds (nothing worth
+// finding, or a perfectly flat map) so each round is playable.
+function genPrizesRaw(t){
+  var q = new Array(N_POS+1).fill(0); // 1-indexed
+  var j;
+  if(t==='Unrestricted'){
+    for(j=1;j<=N_POS;j++) q[j]=round2(Math.random()); // q_j ~ U[0,1]
+    return q;
+  }
+  // Correlated random walk from a random peak position y.
+  var y = randint(1,N_POS);
+  var L = (t==='Low_Variability') ? 0.05 : 0.10;  // High / Sweet Spot / Known Maximum use L=0.10
+  var qy;
+  if(t==='Known_Maximum')      qy = 1.00;                       // peak pinned to $1
+  else if(t==='Sweet_Spot')    qy = uni(0.50,1.00);             // q_y ~ U[50,100] cents
+  else                         qy = (Math.random()<0.5) ? uni(0.20,0.80) : uni(0.80,1.00); // High/Low Variability
+  q[y]=qy;
+  function step(){
+    if(t==='Sweet_Spot'){ return (Math.random()<0.80) ? 0 : uni(-L,0); } // mass at 0; downward shocks -> quasiconcave
+    return uni(-L,L);
+  }
+  for(j=y+1;j<=N_POS;j++) q[j]=clamp01(q[j-1]+step());
+  for(j=y-1;j>=1;  j--)   q[j]=clamp01(q[j+1]+step());
+  for(j=1;j<=N_POS;j++)   q[j]=round2(q[j]);
+  return q;
+}
+function genPrizes(t){
+  var q;
+  for(var tries=0; tries<60; tries++){
+    q = genPrizesRaw(t);
+    var mx=q[1], mn=q[1];
+    for(var j=2;j<=N_POS;j++){ if(q[j]>mx) mx=q[j]; if(q[j]<mn) mn=q[j]; }
+    if(mx>=0.45 && (mx-mn)>=0.15) return q; // something worth finding + some spread
+  }
+  return q; // fallback: keep last draw
+}
+
+// ---------- state ----------
+var state = {};
+function resetState(){
+  state = {
+    pid:'', treatment:'', round:0, part:1,
+    roundPayoffs:{},   // round -> payoff
+    q:[], revealed:{}, order:[], fees:0, best:0, selected:50
+  };
+}
+resetState();
+
+// ---------- screens ----------
+var STAGE = {
+  's-consent':'Consent', 's-ins':'Instructions', 's-game':'Game',
+  's-payout':'Payout', 's-part2':'Part II', 's-complete':'Complete',
+  's-survey':'Survey', 's-done':'Done'
+};
+function showScreen(id){
+  var all = document.querySelectorAll('.screen');
+  for(var i=0;i<all.length;i++) all[i].classList.remove('active');
+  $(id).classList.add('active');
+  $('stage-pill').textContent = STAGE[id] || '';
+  window.scrollTo(0,0);
+}
+
+// ---------- treatment assignment ----------
+// A typed treatment code selects that treatment; anything else -> random.
+// Matching is forgiving about case, spaces, hyphens, and underscores so the
+// documented codes work even when a keyboard autocapitalizes or autocorrects.
+function matchTreatmentCode(id){
+  if(!id) return null;
+  var norm = id.trim().toLowerCase().replace(/[\s_-]+/g,''); // "Sweet_Spot","sweet spot","SWEET-SPOT" -> "sweetspot"
+  var map = {
+    unrestricted:'Unrestricted', highvariability:'High_Variability', lowvariability:'Low_Variability',
+    sweetspot:'Sweet_Spot', knownmaximum:'Known_Maximum'
+  };
+  return map[norm] || null;
+}
+function assignTreatment(id){
+  var coded = matchTreatmentCode(id);
+  if(coded) return coded;
+  return TREATMENTS[Math.floor(Math.random()*TREATMENTS.length)];
+}
+
+// ============================================================
+//  INSTRUCTIONS
+// ============================================================
+function maxInfo(t){
+  if(t==='Known_Maximum')
+    return 'The computer will assign a <b>$1.00</b> prize to one randomly selected position. All other positions will hold lower prizes.';
+  if(t==='Sweet_Spot')
+    return 'The computer will assign a maximum prize to one randomly selected position. The maximum prize can be anywhere between $0 and $1, and there is <b>no guarantee</b> it will be as high as $1. All other positions will hold lower prizes.'
+      + '<br><br>Prizes are shaped like a <b>mountain</b>: the peak is at the position with the maximum prize, and the farther left or right from the peak you reveal a prize, the lower it will be. The peak can be at any position between 1 and 100.';
+  return 'The computer will assign a maximum prize to one randomly selected position. The maximum prize can be anywhere between $0 and $1, and there is <b>no guarantee</b> it will be as high as $1. All other positions will hold lower prizes.';
+}
+function maxQ(t){
+  if(t==='Known_Maximum')
+    return {kind:'radio', prompt:'In each round, what is the highest possible prize?',
+      options:['Exactly $1.00, placed at one position','Unknown &mdash; it could be well below $1.00','Always $0.50','There is no maximum prize'], correct:0};
+  return {kind:'radio', prompt:'In each round, the maximum prize is:',
+    options:['Somewhere between $0 and $1 &mdash; and possibly well below $1','Guaranteed to be exactly $1.00','Always above $0.80','Always $0.00'], correct:0};
+}
+function spatialInfo(t){
+  if(t==='Unrestricted')
+    return 'The prize you find in one position does <b>not</b> tell you anything about the prize you will find in any other position.';
+  if(t==='Low_Variability')
+    return 'Prizes at nearby positions cannot be too different. Prizes at adjacent positions, such as 50 and 51, can differ by no more than <b>5 cents</b>. For positions one step farther apart, like 50 and 52, the difference can be up to 10 cents. And so on.';
+  var base = 'Prizes at nearby positions cannot be too different. Prizes at adjacent positions, such as 50 and 51, can differ by no more than <b>10 cents</b>. For positions one step farther apart, like 50 and 52, the difference can be up to 20 cents. And so on.';
+  if(t==='Sweet_Spot')
+    base += '<br><br>Because prizes form a mountain, a position farther from the peak can never have a higher prize than a position closer to the peak.';
+  return base;
+}
+function spatialQ(t){
+  if(t==='Unrestricted')
+    return {kind:'radio', prompt:'Does revealing a prize at one position tell you about prizes at other positions?',
+      options:['No &mdash; positions are unrelated','Yes &mdash; neighbours are always identical','Yes &mdash; it reveals the entire map'], correct:0};
+  if(t==='Low_Variability')
+    return {kind:'radio', prompt:'Adjacent positions (e.g., 50 and 51) can differ by at most:',
+      options:['5 cents','10 cents','50 cents','They can differ by any amount'], correct:0};
+  return {kind:'radio', prompt:'Adjacent positions (e.g., 50 and 51) can differ by at most:',
+    options:['10 cents','5 cents','50 cents','They can differ by any amount'], correct:0};
+}
+
+var miniPlot =
+  '<div style="text-align:center;margin:14px 0;">'+
+  '<svg viewBox="0 0 480 200" style="width:100%;max-width:460px;height:auto;border:1px solid #eee;border-radius:8px;">'+
+  '<line x1="46" y1="14" x2="46" y2="168" stroke="#bbb"/><line x1="46" y1="168" x2="466" y2="168" stroke="#bbb"/>'+
+  '<line x1="250" y1="14" x2="250" y2="168" stroke="#e41a1c" stroke-width="1.5" stroke-dasharray="6 5"/>'+
+  '<circle cx="150" cy="96" r="5" fill="#e41a1c"/><circle cx="250" cy="70" r="5" fill="#e41a1c"/><circle cx="330" cy="130" r="5" fill="#e41a1c"/>'+
+  '<text x="256" y="196" class="axtitle">Position &rarr;</text>'+
+  '<text x="14" y="94" class="axtitle" transform="rotate(-90 14 94)">Prize (in $)</text>'+
+  '</svg></div>';
+
+var CARDS = [];
+function buildCards(t){
+  var C = [
+    { step:'1/7', title:'What do I need to do?',
+      html:'<p>In each of several rounds, you will search for the best prize that you can find.</p>'+
+           '<p>There are <b>100 positions</b>, numbered 1 to 100. Each position contains a hidden monetary prize between <b>$0 and $1</b>.</p>'+miniPlot,
+      questions:[{kind:'radio', prompt:'How many positions are there in each round?',
+        options:['50 positions, numbered from 1 to 50','200 positions, numbered from 1 to 200','100 positions, numbered from 1 to 100','25 positions, numbered from 1 to 25'], correct:2}] },
+
+    { step:'2/7', title:'What do I need to do?',
+      html:'<p>You will reveal prizes one at a time at the positions you choose, and you will decide when to stop.</p>'+
+           '<p>To reveal a prize, use the slider at the bottom to choose a position and click <b>Submit</b>. You will immediately learn the hidden monetary prize in that position.</p>',
+      questions:[{kind:'radio', prompt:'When do you learn the hidden monetary prize at some position?',
+        options:['At the end of the study','Right after you select it and click &ldquo;Submit&rdquo;','All prizes are known at the beginning of each round','You never learn the hidden monetary prize'], correct:1}] },
+
+    { step:'3/7', title:'What do I need to do?',
+      html:'<p>Revealing prizes costs money.</p>'+
+           '<p>It will cost you <b>5 cents</b> from your current earnings to reveal a prize at some position.</p>',
+      questions:[{kind:'radio', prompt:'What does it cost to reveal a prize at any position?',
+        options:['A total fee of $0.05 regardless of how many prizes you reveal','A fee of $0.05 per prize from your current earnings','A fee of $0.10 per prize from your current earnings','Revealing prizes is free'], correct:1}] },
+
+    { step:'4/7', title:'What do I need to do?',
+      html:'<p>You can stop revealing prizes by clicking the button <b>Accept Payout</b>.</p>'+
+           '<p>Your payoff in each round is: the <b>BEST PRIZE</b> you found at the time of acceptance <b>MINUS</b> the <b>TOTAL FEES</b> for revealing prizes.</p>'+
+           '<p class="muted">Recall that it costs you 5 cents to reveal a prize. Suppose you reveal only two prizes before clicking &ldquo;Accept Payout&rdquo;, and the prizes are <b>30 cents</b> and <b>75 cents</b>.</p>',
+      questions:[
+        {kind:'num', prompt:'What is your best prize?', pre:'The best prize is', suf:'cents.', correct:75},
+        {kind:'num', prompt:'What is the total fee for revealing these two prizes?', pre:'The total fee is', suf:'cents.', correct:10},
+        {kind:'num', prompt:'What is the payoff for that round?', pre:'The payoff is', suf:'cents.', correct:65}
+      ] },
+
+    { step:'5/7', title:'About the prizes', html:'<p>'+maxInfo(t)+'</p>', questions:[maxQ(t)] },
+
+    { step:'6/7', title:'About the prizes', html:'<p>'+spatialInfo(t)+'</p>', questions:[spatialQ(t)] },
+
+    { step:'7/7', title:'Almost ready',
+      html:'<p>After each round, prizes reset and may be different. There are <b>25 rounds</b>, and you must finish all of them to get paid.</p>'+
+           '<p>We will randomly select <b>two rounds</b> for payment, and you will be paid based on your performance in those two rounds.</p>'+
+           '<p>Under no circumstance will you end the experiment being paid less than your guaranteed participation fee.</p>'+
+           '<p class="muted"><i>When you are ready, click the button below to proceed to round 1.</i></p>',
+      questions:null, isFinal:true }
+  ];
+  // assign unique ids to questions
+  for(var i=0;i<C.length;i++){
+    if(C[i].questions){ for(var k=0;k<C[i].questions.length;k++){ C[i].questions[k]._id = 'c'+i+'q'+k; } }
+  }
+  return C;
+}
+
+var insIdx = 0;
+function renderCard(){
+  var card = CARDS[insIdx];
+  $('ins-title').textContent = card.title;
+  $('ins-step').textContent = '('+card.step+')';
+  var html = card.html;
+  if(card.questions){
+    for(var i=0;i<card.questions.length;i++){
+      var q = card.questions[i];
+      html += '<div class="qwrap" id="qwrap-'+q._id+'"><div class="qprompt">'+q.prompt+'</div>';
+      if(q.kind==='radio'){
+        for(var o=0;o<q.options.length;o++){
+          html += '<label class="opt"><input type="radio" name="'+q._id+'" value="'+o+'">'+q.options[o]+'</label>';
+        }
+      } else {
+        html += '<div class="numrow"><span>'+q.pre+'</span>'+
+                '<input type="number" id="num-'+q._id+'" min="0" max="100" step="0.01"><span>'+q.suf+'</span></div>';
+      }
+      html += '<div class="qerr">That is not correct &mdash; please try again to continue.</div></div>';
+    }
+  }
+  $('ins-body').innerHTML = html;
+  $('ins-back').style.visibility = (insIdx===0) ? 'hidden' : 'visible';
+  $('ins-next').textContent = card.isFinal ? 'Proceed to Round 1' : 'Next →';
+}
+function insBack(){ if(insIdx>0){ insIdx--; renderCard(); } }
+function insNext(){
+  var card = CARDS[insIdx];
+  if(card.questions){
+    for(var i=0;i<card.questions.length;i++){
+      var q = card.questions[i], ok=false;
+      var wrap = $('qwrap-'+q._id);
+      if(q.kind==='radio'){
+        var sel = document.querySelector('input[name="'+q._id+'"]:checked');
+        ok = sel && (parseInt(sel.value,10)===q.correct);
+      } else {
+        var v = parseFloat($('num-'+q._id).value);
+        ok = !isNaN(v) && Math.abs(v-q.correct)<0.001;
+      }
+      if(!ok){
+        wrap.classList.add('bad');
+        wrap.querySelector('.qerr').style.display='block';
+        wrap.scrollIntoView({behavior:'smooth', block:'center'});
+        return;
+      } else {
+        wrap.classList.remove('bad');
+        wrap.querySelector('.qerr').style.display='none';
+      }
+    }
+  }
+  if(card.isFinal){ startRound(); return; }
+  insIdx++; renderCard();
+}
+
+// ============================================================
+//  GAME
+// ============================================================
+function startRound(){
+  state.round++;
+  state.part = (state.round>PART1_ROUNDS) ? 2 : 1;
+  state.q = genPrizes(state.treatment);
+  state.revealed = {}; state.order = []; state.fees = 0; state.best = 0; state.selected = 50;
+  if(state.part===2){
+    var pre = pickDistinct(PART2_PREREVEAL, 1, N_POS);
+    for(var i=0;i<pre.length;i++){
+      var p = pre[i];
+      state.revealed[p] = state.q[p];
+      state.order.push(p);
+      if(state.q[p] > state.best) state.best = state.q[p];
+    }
+  }
+  showScreen('s-game');
+  syncSlider(); renderPlot(); updateStats(); renderRevealList();
+}
+
+function updateStats(){
+  $('st-best').textContent   = '$'+fmt(state.best);
+  $('st-fees').textContent   = '$'+fmt(state.fees);
+  $('st-payoff').textContent = '$'+fmt(round2(state.best - state.fees));
+  $('sel-pos').textContent   = state.selected;
+  var rem = TOTAL_ROUNDS - state.round + 1;
+  $('rounds-rem').textContent = 'You have '+rem+' round'+(rem===1?'':'s')+' remaining.';
+}
+
+function syncSlider(){
+  var s = $('slider');
+  s.value = state.selected;
+  var pct = ((state.selected-1)/(N_POS-1))*100;
+  s.style.background = 'linear-gradient(to right,#26a69a 0%,#26a69a '+pct+'%,#dfe3e6 '+pct+'%,#dfe3e6 100%)';
+  $('posbox').value = state.selected;
+}
+
+function renderPlot(){
+  var L=54,R=702,T=14,B=338,W=720,H=380;
+  function x(p){ return L+(p-1)/(N_POS-1)*(R-L); }
+  function y(v){ return B - v*(B-T); }
+  var g='', i;
+  var yt=[0,0.25,0.5,0.75,1];
+  for(i=0;i<yt.length;i++){
+    g+='<line x1="'+L+'" y1="'+y(yt[i])+'" x2="'+R+'" y2="'+y(yt[i])+'" stroke="#e6e6e6"/>';
+    g+='<text x="'+(L-8)+'" y="'+(y(yt[i])+4)+'" text-anchor="end" class="axt">'+yt[i].toFixed(2)+'</text>';
+  }
+  var xt=[25,50,75,100];
+  for(i=0;i<xt.length;i++){
+    g+='<line x1="'+x(xt[i])+'" y1="'+T+'" x2="'+x(xt[i])+'" y2="'+B+'" stroke="#f0f0f0"/>';
+    g+='<text x="'+x(xt[i])+'" y="'+(B+20)+'" text-anchor="middle" class="axt">'+xt[i]+'</text>';
+  }
+  g+='<line x1="'+L+'" y1="'+T+'" x2="'+L+'" y2="'+B+'" stroke="#bbb"/>';
+  g+='<line x1="'+L+'" y1="'+B+'" x2="'+R+'" y2="'+B+'" stroke="#bbb"/>';
+  // selected position (dashed red)
+  g+='<line x1="'+x(state.selected)+'" y1="'+T+'" x2="'+x(state.selected)+'" y2="'+B+'" stroke="#e41a1c" stroke-width="1.6" stroke-dasharray="6 5"/>';
+  // revealed dots
+  for(var p in state.revealed){ if(state.revealed.hasOwnProperty(p)){
+    var pp=parseInt(p,10);
+    g+='<circle cx="'+x(pp)+'" cy="'+y(state.revealed[p])+'" r="4.6" fill="#e41a1c"/>';
+  }}
+  g+='<text x="'+((L+R)/2)+'" y="'+(H-6)+'" text-anchor="middle" class="axtitle">Position</text>';
+  g+='<text x="16" y="'+((T+B)/2)+'" text-anchor="middle" class="axtitle" transform="rotate(-90 16 '+((T+B)/2)+')">Prize (in $)</text>';
+  $('plot').innerHTML = '<svg viewBox="0 0 '+W+' '+H+'" class="plot-svg" preserveAspectRatio="xMidYMid meet">'+g+'</svg>';
+}
+
+function renderRevealList(){
+  var box=$('reveal-list');
+  if(state.order.length===0){ box.classList.add('hidden'); box.innerHTML=''; return; } // show only after >=1 prize
+  box.classList.remove('hidden');
+  var rows='<div class="reveal-list-title">Revealed prizes</div><table>';
+  for(var i=0;i<state.order.length;i++){
+    var p=state.order[i];
+    var free=(state.part===2 && i<PART2_PREREVEAL);
+    rows+='<tr><td>Position <b>'+p+'</b></td><td>$'+fmt(state.revealed[p])+'</td><td class="muted">'+(free?'free':'')+'</td></tr>';
+  }
+  rows+='</table>';
+  box.innerHTML=rows;
+}
+
+function submitReveal(){
+  var p = state.selected;
+  if(state.revealed.hasOwnProperty(p)){
+    toast('Position '+p+' is already revealed &mdash; $'+fmt(state.revealed[p])+'.');
+    return;
+  }
+  state.fees = round2(state.fees + FEE);
+  state.revealed[p] = state.q[p];
+  state.order.push(p);
+  if(state.q[p] > state.best) state.best = state.q[p];
+  renderPlot(); updateStats(); renderRevealList();
+  toast('Position '+p+' &rarr; $'+fmt(state.q[p]));
+}
+
+function acceptPayout(){
+  var payoff = round2(state.best - state.fees);
+  askConfirm(
+    'Accept payout?',
+    'You will accept a payoff of <b>$'+fmt(payoff)+'</b> for this round (best prize $'+fmt(state.best)+' minus fees $'+fmt(state.fees)+') and end the round.',
+    'Accept Payout',
+    function(){
+      state.roundPayoffs[state.round] = payoff;
+      if(state.round===TOTAL_ROUNDS){ finishExperiment(); return; }
+      if(state.round===PART1_ROUNDS){ showScreen('s-part2'); return; }
+      var rem = TOTAL_ROUNDS - state.round;
+      $('payout-rem').textContent = 'You have '+rem+' round'+(rem===1?'':'s')+' remaining.';
+      showScreen('s-payout');
+    }
+  );
+}
+
+function finishExperiment(){
+  var rounds = pickDistinct(2, 1, TOTAL_ROUNDS);
+  var a=rounds[0], b=rounds[1];
+  var pa = state.roundPayoffs[a] || 0, pb = state.roundPayoffs[b] || 0;
+  var total = Math.max(3, 3 + pa + pb);
+  $('lottery').innerHTML =
+    '<div class="card" style="background:var(--panel);">'+
+    '<p>The two randomly selected rounds are <b>Round '+a+'</b> and <b>Round '+b+'</b>.</p>'+
+    '<table style="width:100%;max-width:360px;">'+
+    '<tr><td>Payoff in Round '+a+':</td><td class="right"><b>$'+fmt(pa)+'</b></td></tr>'+
+    '<tr><td>Payoff in Round '+b+':</td><td class="right"><b>$'+fmt(pb)+'</b></td></tr>'+
+    '<tr><td>Participation fee:</td><td class="right"><b>$3.00</b></td></tr>'+
+    '<tr><td style="border-top:1px solid #ccc;padding-top:6px;">Total payment (floored at $3.00):</td>'+
+    '<td class="right" style="border-top:1px solid #ccc;padding-top:6px;"><b>$'+fmt(total)+'</b></td></tr>'+
+    '</table></div>';
+  showScreen('s-complete');
+}
+
+// ============================================================
+//  MODALS / TOAST
+// ============================================================
+var toastTimer;
+function toast(msg){
+  var t=$('toast'); t.innerHTML=msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(function(){ t.classList.remove('show'); }, 2200);
+}
+var confirmCb=null;
+function askConfirm(title,msg,okLabel,cb){
+  $('confirm-title').textContent=title;
+  $('confirm-msg').innerHTML=msg;
+  $('confirm-ok').textContent=okLabel||'Yes';
+  confirmCb=cb;
+  $('ov-confirm').classList.add('show');
+}
+function closeConfirm(){ $('ov-confirm').classList.remove('show'); confirmCb=null; }
+
+function summaryHTML(t){
+  var max6 = (t==='Known_Maximum')
+    ? 'The computer will assign a <b>$1</b> prize to one randomly selected position. All other positions will hold lower prizes.'
+    : 'The computer will assign a maximum prize to one randomly selected position. The maximum prize can be anywhere between $0 and $1 and there is no guarantee it will be as high as $1. All other positions will hold lower prizes.';
+  var s7;
+  if(t==='Unrestricted') s7='The prize you find in one position does not tell you anything about the prize you will find in any other position.';
+  else if(t==='Low_Variability') s7='Prizes at adjacent positions (e.g., 50 and 51) are at most 5 cents apart. This means prizes at positions 50 and 52 are at most 10 cents apart, and so on.';
+  else s7='Prizes at adjacent positions (e.g., 50 and 51) are at most 10 cents apart. This means prizes at positions 50 and 52 are at most 20 cents apart, and so on.';
+  var extra = (t==='Sweet_Spot')
+    ? '<li><b>Extra.</b> Prizes are shaped like a mountain. The peak is at the position with the maximum prize. The farther left or right from the peak you reveal a prize, the lower it will be.</li>' : '';
+  return '<ol>'+
+    '<li>There are 100 positions numbered from 1 to 100. Each position contains a hidden monetary prize between $0 and $1.</li>'+
+    '<li>You reveal prizes one at a time at the positions you choose, and you decide when to stop. To reveal a prize, use the slider to choose a position and click &ldquo;Submit&rdquo;.</li>'+
+    '<li>It costs 5 cents from your current earnings to reveal a prize.</li>'+
+    '<li>You can stop revealing prizes by clicking &ldquo;Accept Payout&rdquo;.</li>'+
+    '<li>Your payoff in each round is: the <b>BEST PRIZE</b> you found at the time of acceptance <b>MINUS</b> the <b>TOTAL FEES</b> for revealing prizes.</li>'+
+    '<li>'+max6+'</li>'+
+    '<li>'+s7+'</li>'+ extra +
+    '<li>After each round, prizes reset and may be different.</li>'+
+    '<li>There are 25 rounds, and you must finish all of them to get paid.</li>'+
+    '<li>We will randomly select two rounds for payment.</li>'+
+  '</ol>';
+}
+
+// ============================================================
+//  WIRING
+// ============================================================
+function beginStudy(){
+  var yes=$('consent-yes').checked, no=$('consent-no').checked;
+  var pid=$('pid').value.trim();
+  if(!yes){ toast('Please check &ldquo;I agree&rdquo; to continue, or close this page.'); return; }
+  if(no){ toast('You selected &ldquo;I disagree.&rdquo; Uncheck it to continue.'); return; }
+  if(!pid){ toast('Please enter your Prolific ID (any text works in this demo).'); return; }
+  state.pid = pid;
+  state.treatment = assignTreatment(pid);
+  CARDS = buildCards(state.treatment);
+  insIdx = 0; renderCard();
+  showScreen('s-ins');
+}
+
+document.addEventListener('DOMContentLoaded', function(){
+  // consent checkboxes mutually exclusive
+  $('consent-yes').addEventListener('change', function(){ if(this.checked) $('consent-no').checked=false; });
+  $('consent-no').addEventListener('change', function(){ if(this.checked) $('consent-yes').checked=false; });
+  $('btn-consent-next').addEventListener('click', beginStudy);
+
+  // live treatment-code feedback under the Prolific ID field
+  $('pid').addEventListener('input', function(){
+    var hint = $('pid-hint');
+    var coded = matchTreatmentCode(this.value);
+    if(coded){ hint.style.color='#349612'; hint.innerHTML='&#10003; You will play the <b>'+TREATMENT_LABEL[coded]+'</b> treatment.'; }
+    else if(this.value.trim()){ hint.style.color='#6a6f76'; hint.innerHTML='A treatment will be randomly assigned.'; }
+    else { hint.innerHTML=''; }
+  });
+
+  // instructions
+  $('ins-back').addEventListener('click', insBack);
+  $('ins-next').addEventListener('click', insNext);
+
+  // game controls
+  $('slider').addEventListener('input', function(){
+    state.selected = parseInt(this.value,10);
+    syncSlider(); renderPlot(); $('sel-pos').textContent=state.selected;
+  });
+  $('posbox').addEventListener('change', function(){
+    var v = parseInt(this.value,10);
+    if(isNaN(v)) v=state.selected;
+    v = Math.max(1, Math.min(N_POS, v));
+    state.selected = v; syncSlider(); renderPlot(); $('sel-pos').textContent=v;
+  });
+  $('btn-submit').addEventListener('click', submitReveal);
+  $('btn-quit').addEventListener('click', acceptPayout);
+
+  // in-game instructions modal
+  $('btn-instr').addEventListener('click', function(){
+    $('instr-summary').innerHTML = summaryHTML(state.treatment);
+    $('ov-instr').classList.add('show');
+  });
+  $('close-instr').addEventListener('click', function(){ $('ov-instr').classList.remove('show'); });
+
+  // confirm modal
+  $('confirm-cancel').addEventListener('click', closeConfirm);
+  $('confirm-ok').addEventListener('click', function(){ var cb=confirmCb; closeConfirm(); if(cb) cb(); });
+
+  // interstitials
+  $('btn-next-round').addEventListener('click', startRound);
+  $('btn-to-part2').addEventListener('click', startRound);
+  $('btn-to-survey').addEventListener('click', function(){ showScreen('s-survey'); });
+
+  // survey
+  $('btn-submit-survey').addEventListener('click', function(){
+    var code = 'STK-' + Math.random().toString(36).slice(2,8).toUpperCase();
+    $('done-code').textContent = code;
+    $('done-treatment').innerHTML = 'For your reference, you played the <b>'+TREATMENT_LABEL[state.treatment]+'</b> treatment.';
+    showScreen('s-done');
+  });
+
+  // restart / play again
+  function restart(){ resetState(); $('pid').value=''; $('pid-hint').innerHTML=''; $('consent-yes').checked=false; $('consent-no').checked=false; showScreen('s-consent'); }
+  $('restart').addEventListener('click', restart);
+  $('btn-play-again').addEventListener('click', restart);
+
+  // age dropdown
+  var ageSel=$('age');
+  for(var a=18;a<=70;a++){ var o=document.createElement('option'); o.value=a; o.textContent=a; ageSel.appendChild(o); }
+  var o71=document.createElement('option'); o71.value='71+'; o71.textContent='71+'; ageSel.appendChild(o71);
+  var ona=document.createElement('option'); ona.value='NA'; ona.textContent='Prefer not to answer'; ageSel.appendChild(ona);
+
+  showScreen('s-consent');
+});
+</script>
+</body>
+</html>

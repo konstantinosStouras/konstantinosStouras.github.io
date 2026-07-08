@@ -11,7 +11,7 @@
 #     • Deterministic/objective (3.1): det_novelty / det_distinctiveness / det_score (0–1)
 #   One table column per available KPI, so conditions can be compared on every
 #   measure side by side:
-#     T3 KPI level ~ Any AY;  T4 KPI level ~ Solo+Group+Both
+#     T3 KPI level ~ Any AI;  T4 KPI level ~ Solo+Group+Both
 #     T5 P(top 5/5) ~ Any AI; T6 P(top 5/5) ~ Solo+Group+Both  (1–5 KPIs only)
 #   Then the planned AI-timing contrast (Solo−Group) per KPI, an INSIGHTS read-out,
 #   plots, and a machine-readable copy (between BEGIN/END markers) the page turns
@@ -22,7 +22,8 @@
 #   ALL ideas that entered the group phase). Conditions have different n; KPIs differ in
 #   coverage (e.g. AI scored but not evaluator-rated). Each KPI's models are fitted
 #   on the rows that HAVE that KPI, with HC3 robust SEs; a condition with < MIN_CELL
-#   ideas for a KPI (or an absent None baseline) is dropped and shown as "—".
+#   ideas for a KPI (or an absent None baseline) is dropped from that KPI's split
+#   models (dummy AND rows, so it cannot pool into the baseline) and shown as "—".
 #
 # DATA: the page mounts the scored dataset at /tmp/data.csv (one row per idea):
 #   idea_id, session, condition, phase, group_id, author_id, the KPI columns above,
@@ -145,6 +146,16 @@ collapsed_term <- function(sub) {
   if (sum(sub$condition != REFERENCE) >= MIN_CELL) "ai" else character(0)
 }
 
+# For a SPLIT model, keep only the reference rows plus the rows of conditions whose
+# dummy made it into the model. Without this, a condition with < MIN_CELL ideas
+# would keep its rows with all dummies = 0 and silently pool into the None
+# baseline, biasing the intercept and every coefficient. (Matches the Python tab.)
+TERM_LEVEL <- c(solo = "Solo", group = "Group", both = "Both")
+restrict_to_terms <- function(sub, terms) {
+  keep <- c(REFERENCE, unname(TERM_LEVEL[intersect(terms, names(TERM_LEVEL))]))
+  sub[sub$condition %in% keep, , drop = FALSE]
+}
+
 # ── 2. Fit one OLS / LPM on a KPI's subset; returns list(m, ct) or NULL ───────
 fit_one <- function(sub, dv, treatment_terms, controls) {
   if (length(treatment_terms) == 0) return(NULL)
@@ -182,6 +193,9 @@ build_table <- function(dat, num, title, sub_desc, dvs, split, controls) {
   for (dv in keys) {
     s <- dat[!is.na(dat[[dv]]), , drop = FALSE]
     terms <- if (split) split_terms(s) else collapsed_term(s)
+    # Split models drop the ROWS of any condition whose dummy was excluded
+    # (< MIN_CELL ideas), so they cannot leak into the None baseline.
+    if (split) s <- restrict_to_terms(s, terms)
     f0 <- fit_one(s, dv, terms, controls)            # list(m, ct) or NULL
     fits[[dv]] <- list(m = if (is.null(f0)) NULL else f0$m,
                        ct = if (is.null(f0)) NULL else f0$ct, sub = s, terms = terms)
@@ -290,8 +304,10 @@ make_plots <- function(dat, kpis, present_levels, means_fits) {
     mu <- tapply(sub[[k]], f, mean); s <- tapply(sub[[k]], f, sd); n <- tapply(sub[[k]], f, length)
     tc <- mapply(function(nn) if (!is.na(nn) && nn > 1) qt(0.975, nn - 1) else NA_real_, n)
     ci <- tc * s / sqrt(n); mu_p <- ifelse(is.na(mu), 0, mu)
+    # Show the full rating scale (5.2 / 1.05 headroom) and never clip a CI whisker
+    # (same rule as the Python tab, so the two tabs' charts read identically).
     top <- if (isTRUE(KPI_SCALE5[[k]])) 5.2 else 1.05
-    yr <- c(0, max(c(mu_p + ifelse(is.na(ci), 0, ci), top * 0.2), na.rm = TRUE) * 1.15)
+    yr <- c(0, max(c(top, max(mu_p + ifelse(is.na(ci), 0, ci), na.rm = TRUE) * 1.12)))
     nlab <- paste0(present_levels, "\n(n=", ifelse(is.na(n), 0, n), ")")
     bp <- barplot(mu_p, names.arg = nlab, col = cond_col[present_levels], border = NA, ylim = yr, las = 1,
                   main = paste0("Mean ", KPI_LABELS[[k]]), ylab = KPI_LABELS[[k]], xlab = "")
@@ -323,6 +339,7 @@ make_plots <- function(dat, kpis, present_levels, means_fits) {
     points(est, yy, pch = 19, cex = 2, col = ifelse(sig, "#D62728", "#1F77B4"))
     text(est, yy, labels = sprintf("%+.2f%s", est, ifelse(sig, "*", "")), pos = 3, offset = 0.7, cex = 1.05, font = 2, xpd = NA)
   }
+  cat("Generated figure: condition effects vs baseline.\n")
 }
 
 # ── 8. Insights ───────────────────────────────────────────────────────────────
@@ -388,7 +405,8 @@ insights <- function(dat, kpis, means_fits) {
       cat(sprintf("  AI timing (%s vs %s): %s scores %.2f higher, %s (p = %.3f).\n",
                   PRIMARY_CONTRAST[1], PRIMARY_CONTRAST[2], winner, abs(pc$estimate), how, pc$p_value))
     }
-    cat(sprintf("  => Best on %s: '%s'.  Worst: '%s'.\n", label, names(ranked)[1], names(ranked)[length(ranked)]))
+    if (length(ranked) > 0)
+      cat(sprintf("  => Best on %s: '%s'.  Worst: '%s'.\n", label, names(ranked)[1], names(ranked)[length(ranked)]))
   }
 
   cat("\n", paste(rep("-", 78), collapse = ""), "\n", sep = "")
@@ -414,6 +432,13 @@ if (nrow(dat) == 0) {
     cat("WARNING: no KPI columns have any values yet. Score ideas in Step 3 first.\n")
   } else {
     present_levels <- COND_LEVELS[sapply(COND_LEVELS, function(c) any(dat$condition == c))]
+
+    # The page reads this exact line for the "N ideas analysed" header (Step 6/PDF).
+    # Count only rows that carry at least one present KPI — a row with no KPI at all
+    # enters no model, so it must not inflate the headline N.
+    n_used <- sum(Reduce(`|`, lapply(kpis, function(k) !is.na(dat[[k]]))))
+    cat(sprintf("rows used for analysis: %d\n\n", n_used))
+
     level_dvs <- setNames(as.list(KPI_LABELS[kpis]), kpis)
     # Top KPIs: 1–5 scale, top variable present with variation.
     top_keys <- kpis[sapply(kpis, function(k) {
@@ -471,8 +496,12 @@ if (nrow(dat) == 0) {
     }
     cat("\n")
 
+    # No-controls condition-means models per KPI (for insights + plots). Same rule
+    # as the split tables: rows of a dropped (< MIN_CELL) condition are excluded.
     means_fits <- setNames(lapply(kpis, function(k) {
-      s <- dat[!is.na(dat[[k]]), , drop = FALSE]; fit_one(s, k, split_terms(s), character(0))
+      s <- dat[!is.na(dat[[k]]), , drop = FALSE]
+      terms <- split_terms(s)
+      fit_one(restrict_to_terms(s, terms), k, terms, character(0))
     }), kpis)
     insights(dat, kpis, means_fits)
 

@@ -63,7 +63,7 @@ Served (`lab/answerarena/`):
 | --- | --- |
 | `index.html` | Shell: SEO, all participant CSS, `#arena-top` + `#arena-screen`, loads the scripts in order. |
 | `arena-config.js` | Public Firebase web config (placeholder until filled) + `ARENA_FB_READY`. Edit this after creating the Firebase project. |
-| `arena-data.js` | `window.ARENA_DEFAULTS`: texts, tourSteps, settings (incl. `twoByTwo`), registration/survey questions, practiceTask, `defaultTasks` (20 placeholders). |
+| `arena-data.js` | `window.ARENA_DEFAULTS`: texts, tourSteps, settings (incl. `twoByTwo`), registration/survey questions, practiceTask, `defaultTasks` (20 placeholders). Also `window.ARENA_COUNTRIES` (195+ list shared by the two `country` registration fields). |
 | `arena-store.js` | `window.ArenaStore`: Firebase + local backends behind one API. |
 | `arena-app.js` | Participant phase machine, comparison UI, 2x2 assignment, session join, resume. |
 | `admin.js` | Admin panel (`?admin`): Sessions, Tasks (Excel upload), Content, Registration, Survey, 2x2 & Settings, Participants + Excel export. |
@@ -109,12 +109,25 @@ reason - removed in favour of the single graded preference.) These columns ride
 along in the admin Excel export (Responses sheet: `preference`, `preference_AB`,
 `preference_model`). `settings.comparisonsPerUser` (0 = whole set) caps how
 many comparisons each participant sees: when it is below the active-set size the
-participant gets that many **randomly chosen** task pairs. **Each session
-snapshots `comparisonsPerUser` and `randomizeOrder` at creation** (alongside the
-2x2 `condition`), and `startMain` prefers the session's snapshot over the live
-global settings (older sessions with no snapshot fall back to global) - so a
-session keeps the count it was built with even if the global setting changes
-later. The admin **Setup summary** shows this as e.g. "2 of 100 (random subset)"
+participant gets that many **randomly chosen** task pairs. `startMain` picks the
+subset in three independent random steps so the exposure is statistically clean:
+(1) a uniform **simple random sample without replacement** of `comparisonsPerUser`
+tasks from the whole set (unbiased Fisher-Yates `shuffle` + `slice`), so every task
+has an equal `lim/N` chance of being shown to any participant and each task's
+**expected number of responses is identical** (`P·lim/N` across `P` participants) -
+this selection is **independent of `randomizeOrder`** (a fixed display order still
+gets a random subset, not the first `lim` rows); (2) the chosen subset is shown in
+**random order** per participant when `randomizeOrder` is on, else in the sheet's
+original order; (3) each comparison independently flips **left/right** 50/50 so
+outputA (Haiku) and outputB (Opus) are equally likely on either side. **Each session
+snapshots `comparisonsPerUser`, `randomizeOrder` and `taskSetId` at creation**
+(alongside the 2x2 `condition`), and `startMain` prefers the session's snapshot
+over the live global settings (older sessions with no snapshot fall back to
+global) - so a session keeps the count **and the exact task set** it was built
+with even if the global active set changes later. The task set is loaded via
+`Store.loadTaskSet(session.taskSetId)` (falling back to `loadActiveTasks()` for a
+no-code play or a session with no snapshot; an empty/deleted snapshot degrades to
+the built-in default inside the store, so it never dead-ends anyone). The admin **Setup summary** shows this as e.g. "2 of 100 (random subset)"
 and auto-refreshes (via
 the `summaryRefresh` hook) whenever a card that feeds it is saved - the
 Comparison-flow, 2x2 and Long-list cards (in each `saveConfig().then` **after**
@@ -182,7 +195,15 @@ hypothetical cost is analysable too; only the `translated` group sees the meter.
 
 Admin creates sessions from the **"Create a session"** card at the bottom of the
 left column (a "Create Session" button + a **setup summary** of the saved
-parameters a new session will use). Every session is **created open**; there is
+parameters a new session will use). The card has an optional **Session name** and
+an optional **Session ID** (custom code), mirroring the ideasearchlab admin: the
+code input live-normalises to a single word of capital letters and digits
+(`.toUpperCase().replace(/[^A-Z0-9]/g,'')`), is validated `^[A-Z0-9]{3,40}$`, and
+is checked for uniqueness via `Store.getSessionByCode()` before creating; a blank
+ID falls back to the auto-generated 6-char `code6()`. On success a vivid dashed
+**code box** (`.aa-codebox`) shows the session code (custom or auto) with a share
+hint. `Store.createSession` already honours a passed `data.code` (both backends
+fall back to `code6()` when it is blank). Every session is **created open**; there is
 no status picker. The right column has two cards: **Active sessions** and a
 separate **Closed sessions** card (shown only when there are closed ones). Each
 card shows a session's code + status, participant count + **2x2 conditions**
@@ -223,13 +244,28 @@ participant currently in or having completed that session.
 ts }`), so the time of each decision - and of each change to a new option - is
 recorded. Both the all-users export ("Export to Excel") and the per-session
 export ("Export data" on a session card) produce a workbook with sheets:
-**Conventions** (documents every column), **Participants**, **Responses**,
-**Events**, **Survey**. Columns use self-explanatory snake_case names
-(`participant_id`, `shown_order`, `left_model`/`right_model`,
-`satisfaction_answer_A/B`, `cost_transparency`/`firm_pay` (per-participant 2x2
-group as 1/0 via `condBit()`; blank if that factor was not varied), ...);
-the Conventions sheet (built by `buildConventions()`, including each
-registration/survey question label) is the source of truth - keep it in sync
+**Conventions** (documents every sheet/column + the join keys), **Sessions**
+(one row per session play - status, snapshotted 2x2/flow settings, participant
+count), **Participants** (one per person, incl. `comparisons_assigned` /
+`comparisons_submitted` so a **drop-out** is visible at a glance - fewer submitted
+than assigned while `status` = playing), **Tasks** (one per task pair = the
+unit of analysis: full description + both model answers + costs), **Task
+summary** (per-task aggregates: n, baseline/frontier/tie counts,
+`frontier_win_rate`, `mean_preference_model`, `mean_response_ms`), **Responses**
+(one per comparison), **Events** (one per click/change), **Survey**. **Join keys:
+`account_id`** (the Firebase anonymous UID) is the unique participant key present
+on *every* sheet - `participant_id`/`email` are optional/legacy and usually blank
+for anonymous players, so never join on them; **`task_id`** joins Responses /
+Events / Task summary to Tasks; **`session_id`** (+ human `session_code`) joins to
+Sessions. Task text is resolved from the active set **merged with each in-scope
+session's pinned task set** (what participants actually saw wins), so a per-session
+export shows the right descriptions even after the active set changed; long model
+outputs are capped at ~32,000 chars (`cellCap()`) so one huge answer can't break
+the write. Columns use self-explanatory snake_case names
+(`shown_order`, `left_model`/`right_model`, `cost_transparency`/`firm_pay`
+(per-participant 2x2 group as 1/0 via `condBit()`; blank if that factor was not
+varied), ...); the Conventions sheet (built by `buildConventions()`, including
+each registration/survey question label) is the source of truth - keep it in sync
 when columns change.
 
 **Nothing is lost on an abrupt close.** Each comparison is written one-by-one as
@@ -240,6 +276,20 @@ Responses row with `submitted = no (draft)`.
 
 ## 7. Gotchas to carry forward
 
+- **The registration form mirrors the ideasearchlab admin's registration form**
+  (same questions + dropdown options): UCD Student ID, Age, Gender (optional),
+  Nationality, Country of residence, Level of Study, Work Experience (0-50),
+  Occupation, English Fluency, then two consent checkboxes. To support it,
+  `buildField()` (arena-app.js) and the admin question editor (admin.js
+  `QUESTION_TYPES`) handle two extra field types beyond `select`/`radio`/
+  `text`/`number`/`textarea`: **`country`** (a `select` populated from the shared
+  `window.ARENA_COUNTRIES` list - the editor shows a "built-in country list" note
+  instead of an options box) and **`checkbox`** (a single required consent tick;
+  the label sits beside the box, not as a top label). `number` fields honour
+  optional `min`/`max` (rendered + validated; editable via the "Number range"
+  inputs in the admin). The **UCD Student ID keeps `system: 'participantId'`** so
+  it still stores into the participant-doc `participantId` slot / export column -
+  but it is now **required** (unlike the old optional Participant ID).
 - Keep model identities out of anything the participant sees.
 - Anonymous play needs the **Anonymous** sign-in provider enabled in the
   Firebase console; otherwise `Store.signInAnonymously()` fails
@@ -274,3 +324,184 @@ Responses row with `submitted = no (draft)`.
   `firebase deploy --only firestore:rules` (and enable the Anonymous sign-in
   provider). `authError()` now shows a clear message + logs this hint instead of
   the raw Firebase string.
+
+## 8. Data analytics tab (admin)
+
+The admin has a **top nav** (`headerRow()` in `admin.js`) with two views —
+**Admin** (the two-column panel) and **Data analytics** — mirroring the
+ideasearchlab admin. `currentView` (`'admin'|'analytics'`) drives `renderShell()`,
+which dispatches to `renderAnalytics()`. All analytics state lives in the
+module-level `daState` object, so leaving and returning to the tab preserves the
+loaded data, selections and edited code. Everything runs **entirely in the
+browser** — no data is uploaded, no Cloud Function or Firestore-rules change.
+
+**The Data-analytics tab is directly linkable** (like ideasearchlab's
+`/admin/data-analytics`): `?admin=data-analytics` opens straight on it, plain
+`?admin` opens the Admin panel. `viewFromUrl()` reads the initial tab (also
+accepts `?admin=analytics` / `?admin&view=analytics` / `#data-analytics`),
+`setViewUrl()` keeps the address bar in sync as you switch tabs (canonical
+`?admin` / `?admin=data-analytics`, preserving other params), and a `popstate`
+listener makes the browser Back/Forward switch tabs. The top-of-file guard still
+activates on `/[?&]admin\b/`, which matches `?admin=data-analytics`.
+
+Four sections:
+
+1. **Data source** (`buildDaSection1`). Lists every session (with participant
+   count + condition) as a checkbox; you can also **Import Excel / CSV** (a
+   per-session or all-data export from this admin, or any table). Imported files
+   are queued as their own ticked rows (parsed into `{name, rows}` per sheet; a
+   CSV becomes one sheet named `Responses`). Pressing **Load** pulls the ticked
+   sessions' data into memory: it fetches the participants who played any ticked
+   session and calls `collectAggregateSheets(parts, ids)` — a thin wrapper over
+   the **same** export builder (`exportExcel`/`buildWorkbook` with
+   `opts.sessionIds` = a `{id:true}` map and `opts.returnSheets`), so the
+   aggregate is byte-for-byte the same multi-tab shape as the per-session export.
+   Ticked imported workbooks are then stacked onto the map by sheet name
+   (`mergeBookIntoSheetMap`, case-insensitive; unmatched sheets added as their
+   own tab).
+
+2. **Aggregate data** (`buildDaSection2`). Shows stat boxes (responses,
+   participants, sessions, tasks-with-data) and a **Download aggregate Excel**
+   button that writes the in-memory sheet map (`daState.sheetMap`) as one
+   workbook — tabs `Conventions · Sessions · Participants · Tasks · Task summary ·
+   Responses · Events · Survey` plus any imported extras, each source stacked
+   within every tab. Sheet names are sanitised/deduped for Excel's rules
+   (`safeSheetName`).
+   - **Model-provisioning charts** (`renderProvisioning` + `daProvChart`). Below
+     the stats, three inline-SVG grouped-bar charts computed from the aggregate
+     **Responses** sheet: preferring **Opus** = **over-provisioning**, a **tie** =
+     **indifference**, preferring **Haiku** = **under-provisioning**. **Per task**
+     (sorted by over-provision rate) shows the % in each with **Wilson** 95% CIs
+     (so a task with fewer responses gets a wider whisker); **by task type** and
+     **by domain** show the **average of the per-task rates** (each task weighted
+     equally) with a CI from the **delta method** (`daGroupRate`): SE =
+     `sqrt(Σ per-task Agresti-Coull variance) / k`. This is the correct CI because
+     the 30 tasks are the **whole study** (fixed, not sampled), so only the finite
+     student responses carry error — a t-interval *across tasks* (an earlier
+     version) added spurious task-sampling variance and, with only 2–4 tasks per
+     domain, blew the interval out to span 0–100%; the delta method keeps the same
+     equal-weight mean but gives an informative CI (e.g. Data Analysis over ≈ 58%
+     `[44, 72]` instead of `[10, 100]`). It still "accounts for unequal responses
+     per task" — each task weighted equally in the mean, and a task with fewer
+     responses contributes more variance. (Caveat, stated in the on-page note:
+     these descriptive CIs treat responses as independent across tasks, though
+     the same student answers several tasks in a group; the Section-3 tests
+     additionally cluster on the student.) Task complexity/domain come from the
+     exported `task_complexity`/`task_domain` columns when present, else the
+     built-in `DA_TASK_META` map (the 30-task list). Helpers: `daWilson`
+     (per-task proportion CI), `daGroupRate` (equal-weight mean + delta-method CI),
+     `svgEl` (SVG builder — `var()` colours go via `style`, not attributes).
+
+3. **Process with Python or R** (`buildDaSection3`). Pick a table from the
+   aggregate (default **Responses** = one row per comparison, the analysis unit),
+   edit the pre-filled **Python** or **R** script, and **Run**. The chosen table
+   is serialised to CSV (`XLSX.utils.sheet_to_csv(json_to_sheet(rows))`) and
+   handed to the code as the string `DATA_CSV` (Python) / the file
+   `/tmp/data.csv` (R). Python compiles in-browser via **Pyodide**
+   (`daRunPython`, loads numpy/pandas/scipy/matplotlib) and R via
+   **WebR** (`daRunR`, base R; base-graphics captured as PNGs) — both ported from
+   the ideasearchlab Data Analytics page and loaded lazily from jsDelivr on first
+   Run. Console output streams below; the **plots do not render here** — they are
+   shown in **Insights gained** (§4), each beside the paragraph that explains it,
+   so Section 3 only prints a "N figures rendered — see Insights gained" pointer.
+   Edited code auto-persists to `localStorage` (`aa-da:py` / `aa-da:r`); **Reset
+   template** restores the bundled default. A `DA_TPL_VERSION` stamp
+   (`aa-da:ver`) is checked by `daMigrateTemplates()` on load: when the bundled
+   templates change we bump the version and **drop the saved code**, so a stale
+   saved script from an older version can't shadow the current template (that was
+   the "Python won't run" symptom — an old saved script erroring on new data).
+
+   The default templates (`DA_PY_TEMPLATE` / `DA_R_TEMPLATE`) answer the study's
+   core question — *given a task (a user need) and two blind answers (Haiku 4.5 =
+   baseline, Opus 4.8 = frontier), do students **prefer a model or are they
+   indifferent**?* — and are **heavily commented line-by-line** so a non-coder can
+   read them. Both embed a `TASK_META` map (task_id → **complexity** Simple/Complex
+   + **domain**, the 30-task study list) and join it onto each row (a non-blank
+   exported `task_complexity`/`task_domain` overrides it). They then print, in
+   order: **(1) summary statistics** per task, per domain and per task type
+   (mean/SD/n + Opus win-rate); **(2) the main hypothesis test** with Haiku as the
+   baseline (H0: mean graded preference = 0) two ways — task-level (each task = one
+   observation, so unequal response counts don't bias it) and response-level with
+   SEs **clustered on the student** — plus the decisive-choice binomial test;
+   **(3) a per-task recommendation** (one-sample t-test of each task → Opus / Haiku
+   / no clear preference, with p-values); **(4) by task type** and **(5) by domain**
+   using **task-level means so each task is weighted equally** (this is how the CIs
+   "account for unequal responses per task" — the random 15-of-30 subset per
+   student), each group tested vs baseline, a Welch Simple-vs-Complex test and a
+   one-way ANOVA across domains; **(6) regressions** of preference on complexity and
+   on domain (cluster-robust). **Six figures**, in this order (the harvest order the
+   Insights section relies on): **(1)** responses-per-task (sample balance);
+   **(2)** the preference distribution + outcome shares; **(3)** per-task means ±
+   95% CI (whiskers widen where fewer students responded); **(4)** *"what each
+   task's users prefer"* — a ranked bar chart (Haiku → indifferent → Opus) whose
+   **bar length is the task's mean preference** and whose **colour is the
+   statistical verdict** (blue Haiku / orange Opus when the per-task t-test is
+   significant, **grey = no clear preference**, i.e. its CI still includes 0 — so a
+   long grey bar means "leaned one way on average but not distinguishable from
+   indifference"); **(5)** the tasks classifiable **with 95% confidence** into
+   over- / indifferent / under-provisioning (an **exact binomial test** on the
+   top-two choice counts — under H0 the leading category and the runner-up are
+   equally likely — keeps only tasks where the leader significantly beats the
+   runner-up, hence the other two; exact, so small/lopsided tasks are not
+   over-called the way the earlier z-test was, e.g. 5-0-0 came out "certain";
+   empty → a "not enough data" note);
+   **(6)** by-domain / by-type means ± 95% CI. A plain-language **`INSIGHTS`** block
+   ends each script and now also contains a **`## Figure N — …` heading + guide for
+   every figure**, so each plot is explained in words next to it (§4).
+
+   The Python version uses numpy / pandas / scipy; the R version computes the
+   **same numbers** with base R (`t.test`, `lm`, `anova`, `tapply`, `binom.test`);
+   they are verified to agree. **Neither needs statsmodels** — the cluster-robust
+   vcov (CR1, else HC3) is done by hand (`ols_robust` in Python, the same algebra
+   in R), matching to 4 dp, with **G−1 degrees of freedom when clustered** (the
+   cluster-robust standard; n−k for HC3) and the response-level CI using the same
+   t critical value; statsmodels was dropped because it made Python fail to
+   start on some Pyodide builds, so the auto-loaded packages are now just
+   numpy/pandas/scipy/matplotlib and any missing one is non-fatal
+   (`daEnsurePyPackages`). Note: R rejects 3-digit hex colours (`#888`), so the
+   templates use 6-digit (`#888888`). Both are defensive about missing columns /
+   small n (verified by running both against the same synthetic exports): a
+   table without the preference/choice columns gets a clear "pick the Responses
+   table" message; an all-blank `task_complexity`/`task_domain` column, a
+   zero-variance task, and a no-graded-data load all degrade gracefully
+   instead of crashing; a domain with only 2 tasks has a very wide CI, clipped
+   to the bounded [-3, +3] preference scale for display. **Constant-data
+   convention (both languages, R's `t.test` errors on it):** every value equal
+   to the null (e.g. all ties) → t=0, **p=1** — reported as *no clear
+   preference*, NOT "too little data"; every value equal to some other constant
+   → t=±Inf, p=0 (scipy's own convention). The same rule covers a zero-SE
+   coefficient in `ols_robust`. Other alignment rules shared by the charts and
+   both templates: a **blank/missing `submitted`** counts as submitted (only
+   real drafts are dropped), `task_id`/`chosen_model` are **trimmed and
+   NA-safe** (R maps NA keys and NA cluster ids to `""` the way pandas reads
+   those cells — otherwise `split()`/`as.factor()` silently drop the rows and
+   the clustered SEs go NA), rows with
+   an unrecognised `chosen_model` are excluded from the choice counts (and from
+   the provisioning charts entirely), and the tie share is reported over the
+   **classified** answers. The R tables store **unrounded** statistics and round
+   only when printing (2/3/4 dp like Python's display) — rounding p to 4 dp
+   before the p<0.05 filters could flip a borderline verdict vs Python. When the
+   graded rows hold a single student, the response-level test/regressions are
+   labelled **"(HC3 robust; no repeated students)"** instead of claiming
+   clustering. Section 1's Load warns when a ticked session also appears in an
+   imported workbook (rows would stack twice and every CI would silently
+   shrink — there is deliberately no dedup).
+
+4. **Insights gained** (`buildDaSection4`). A readable write-up of the last run
+   **and the home of every plot**: `daParseInsights()` extracts the script's
+   `INSIGHTS` block (the text after a line reading `INSIGHTS`) and renders it with
+   `## ` headings, `- ` bullets and `**bold**` (`daInlineBold`). A heading matching
+   `^Figure N` **drops the Nth harvested image (`run.images[N-1]`) in right under
+   it**, so each plot sits with its explanation; any image not matched to a
+   `Figure N` heading is appended at the end (so a user's custom script never
+   silently loses a plot). `run()` snapshots each run into `daState.lastRun`
+   (`{output, images, lang, ok}`) and calls `daRefs.updateInsights()`. Editing the
+   script's `INSIGHTS` prose (or the `## Figure N` headings) changes what shows and
+   where the plots land.
+
+**Gotchas:** the runtimes need network access to jsDelivr on first Run (blocked
+in some sandboxes → a visible "Failed to load … (CDN / network / CSP?)" error,
+not a crash). `SHEET_ORDER` is the single source of truth for the tab order,
+shared by the export and the aggregate. The export refactor kept the single/all
+export behaviour identical — `keep()` and `buildSessionRows(sessions, parts,
+keep)` now take an in-scope predicate instead of a single `only` id.
