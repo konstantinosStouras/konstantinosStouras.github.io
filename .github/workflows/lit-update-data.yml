@@ -1,0 +1,107 @@
+name: lit — update multi-journal data
+
+# Builds the static JSON dataset for stouras.com/fun/lit/ (Management Science,
+# Operations Research, Marketing Science, M&SOM, ISR, POM, five PNAS sections,
+# and the ACM EC conference) by pulling from the Crossref API and friends, then
+# commits the refreshed files in fun/lit/data/ back to the branch. This is the
+# *entire* backend for the page — no server, no database.
+# See fun/lit/_HOW-IT-WORKS.md.
+
+on:
+  schedule:
+    # Daily, 05:30 UTC (offset from the ms build so the two never race a
+    # Pages deploy). Nothing is committed on days with no changes.
+    - cron: '30 5 * * *'
+  workflow_dispatch: {}      # run on demand from the Actions tab
+  push:
+    # Run once whenever the pipeline itself changes, so a new branch seeds its
+    # data immediately instead of waiting for the daily schedule.
+    paths:
+      - '.github/workflows/lit-update-data.yml'
+      - 'fun/lit/_scraper/build-data.mjs'
+      - 'fun/lit/_scraper/ec-pages.mjs'
+      - 'fun/lit/_scraper/pnas-crawl.mjs'
+      - 'fun/lit/_scraper/informs-editors.mjs'
+      - 'fun/lit/data/_pnas-concepts.json'
+      - 'fun/lit/data/_informs-editors.json'
+
+# Never let two data builds race; let a running one finish.
+concurrency:
+  group: lit-update-data-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write            # needed to commit the refreshed data back
+  pages: write               # needed to request a Pages rebuild if a deploy fails
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build data (Crossref + sigecom + OpenAlex/DBLP/S2)
+        env:
+          LIT_MAILTO: kstouras@gmail.com   # Crossref/OpenAlex "polite pool" contact
+        run: node fun/lit/_scraper/build-data.mjs
+
+      - name: Commit refreshed data
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add fun/lit/data
+          if git diff --cached --quiet; then
+            echo "No data changes — nothing to commit."
+          else
+            git commit -m "lit: refresh multi-journal data"
+            git pull --rebase origin ${{ github.ref_name }} || true
+            git push origin HEAD:${{ github.ref_name }}
+          fi
+
+      # A committed dataset is not enough: the GitHub Pages deploy that follows
+      # the push can fail transiently, silently serving stale data. Poll the
+      # live site; if the deploy didn't land, request a rebuild and poll again.
+      - name: Verify the live site serves this dataset (self-heal a failed deploy)
+        if: github.ref == 'refs/heads/master'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LIVE_META: https://www.stouras.com/fun/lit/data/meta.json
+        run: |
+          want=$(jq -r .lastPull fun/lit/data/meta.json)
+          echo "Committed dataset lastPull: $want"
+          poll() {  # poll <tries> — succeed once live lastPull >= committed lastPull
+            for i in $(seq 1 "$1"); do
+              live=$(curl -sf --max-time 20 "$LIVE_META?nc=${GITHUB_RUN_ID}-${RANDOM}" | jq -r .lastPull || echo "unreachable")
+              echo "  try $i/$1: live lastPull = $live"
+              if [ "$live" != "unreachable" ] && [ ! "$live" \< "$want" ]; then return 0; fi
+              sleep 60
+            done
+            return 1
+          }
+          if poll 8; then echo "Live site is serving the current dataset."; exit 0; fi
+          echo "Live site still stale — requesting a GitHub Pages rebuild..."
+          curl -sf -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/pages/builds" \
+            || echo "WARNING: Pages rebuild request failed (check token permissions)."
+          if poll 10; then echo "Live site recovered after the rebuild request."; exit 0; fi
+          echo "::error::Live site is still serving stale lit data (wanted lastPull >= $want). Re-run this workflow or the pages-build-deployment workflow."
+          exit 1
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### lit data build" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f fun/lit/data/meta.json ]; then
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat fun/lit/data/meta.json >> "$GITHUB_STEP_SUMMARY"
+            echo '' >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
