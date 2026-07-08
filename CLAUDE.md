@@ -91,6 +91,11 @@ constants near the top of the `<script>` (`FEE`, `PART1_ROUNDS`, `TOTAL_ROUNDS`,
 
 ## `/lab/jagged` — self-contained "Trust the AI?" jagged-intelligence game
 
+**Currently unlisted / not yet public:** the app is served but deliberately not
+announced — it is not linked from the homepage (or anywhere else on the site)
+and its page carries `<meta name="robots" content="noindex,nofollow">`. Do not
+add links to it or flip it back to `index,follow` until it is ready to launch.
+
 `lab/jagged/index.html` is a **single, self-contained** static page (no build
 step, no backend, no external CDN) — a clean teaching game inspired by Joshua
 Gans, *"A Model of Artificial Jagged Intelligence"* (2026, arXiv:2601.07573). One
