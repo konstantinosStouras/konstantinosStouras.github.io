@@ -91,6 +91,16 @@ transmitted.** The plot is drawn as inline SVG. To change behavior, edit the
 constants near the top of the `<script>` (`FEE`, `PART1_ROUNDS`, `TOTAL_ROUNDS`,
 `PART2_PREREVEAL`) or the treatment logic in `genPrizesRaw`.
 
+**Currently in QUICK-TEST MODE:** the consent/Prolific-ID page and the
+comprehension-checked instruction pages are commented out (both the HTML
+sections and their JS wiring, all marked `RESTORE WITH CONSENT/INSTRUCTIONS`
+in `lab/search/index.html`); the page instead opens on a minimal start screen
+with a treatment picker, like `/lab/jagged`. The game screen also carries a
+test-only **"Show hidden prizes"** checkbox (default on) that draws the true
+prize map as a red line on the plot — participants must never see it. To
+restore the full study flow, follow the numbered steps in the comment on the
+consent section and remove the checkbox and its `renderPlot` block.
+
 ## `/lab/jagged` — self-contained "Trust the AI?" jagged-intelligence game
 
 **Currently unlisted / not yet public:** the app is served but deliberately not
