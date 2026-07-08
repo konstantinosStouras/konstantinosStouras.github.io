@@ -9,7 +9,7 @@ on:
   push:
     branches: ['claude/multi-journal-paper-search-3rxgi7']
     paths:
-      - 'fun/lit/_scraper/probe-sources.mjs'
+      - 'fun/lit/_scraper/probe-pnas-browser.mjs'
       - '.github/workflows/lit-probe.yml'
 
 concurrency:
@@ -27,8 +27,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Probe sources
-        run: node fun/lit/_scraper/probe-sources.mjs
+      - name: Probe sources (browser probe for pnas.org)
+        run: |
+          npm install --no-save playwright-core
+          xvfb-run --auto-servernum node fun/lit/_scraper/probe-pnas-browser.mjs
       - name: Commit fixtures
         run: |
           git config user.name  "github-actions[bot]"
