@@ -417,7 +417,7 @@ change. Four sections:
      bricks, board coverage after 3 moves, seconds per move, when the own peak
      was first hit), averaged to player level and compared top-vs-rest per
      difficulty (Welch t) **under both definitions** (Cohen's-d fingerprints:
-     Figure 1 strict, Figure 7 within-5%), plus an easy-vs-hard table and
+     Figure 1 strict, Figure 2 within-5%), plus an easy-vs-hard table and
      regressions **R1/R1b** (LPM of reached-max / within-5% on standardised
      markers, player-clustered CR1 SEs).
    - **Balanced-KPI hypothesis (H1).** The six on-screen KPIs collapse to
@@ -432,7 +432,11 @@ change. Four sections:
      player-clustered SEs (`ols_cluster`, SVD pseudoinverse with a shared
      1e-10 tolerance so both languages behave identically even under
      collinearity). Trajectories at fifth- AND tenth-of-play resolution
-     (printed tables + Figures 2/3/6).
+     (printed tables + Figures 3/4/5), plus three extra decile views under
+     alternative objective scores — net value only (Fig 6), 50% net + 50%
+     ROI (Fig 7), 1/3 net + 1/3 ROI + 1/3 fitness (Fig 8) — where ROI
+     attainment = Total Value / (Total Value + Resource Cost) =
+     ROI/(1+ROI), bounded 0–1 and defined at full coverage.
    - **Focused or diversified (revealed objective).** Candidate objectives =
      net value only, net+coverage, net+compactness, all three (each = the
      mean of its KPIs' attainment scores). Because every placement raises
@@ -442,14 +446,14 @@ change. Four sections:
      averaged move → puzzle → player). **FOCUS GAP** = net-only climb minus
      all-three climb (positive = net-focused, negative = diversified), tested
      vs 0 within each group and top-vs-rest, under both definitions
-     (Figure 8).
+     (Figure 11).
    - **The opening vs the approach to the peak.** Two windows per play — the
      OPENING (first 10 moves) and the APPROACH (the last 10 moves up to and
      including the move where the player FIRST hit their own maximum net
      value; repeated maxima count only the first time, via `peak_move`) —
      with five window metrics (balanced-KPI score, net climb, removal share,
      $/cell placed, seconds/move) compared top-vs-rest under both
-     definitions, and Figure 9: the two windows move by move, the opening
+     definitions, and Figure 12: the two windows move by move, the opening
      aligned at move 1 and the approach aligned at the peak (x = −9…0).
    - **The within-5% playbook.** A deep dive under the relaxed definition:
      the six markers pooled to one value per player and compared top-vs-rest
@@ -459,10 +463,11 @@ change. Four sections:
      median vs the others (two-proportion z), ranked by lift; a one-number
      heuristic **style score** (all six markers z-scored, oriented towards
      the top group, averaged) correlated with each player's closest approach
-     to the maximum (Pearson). Figures 10 (dumbbell profile), 11 (habit
-     success-rate bars) and 12 (style-vs-outcome scatter with the 95% bar).
+     to the maximum (Pearson). Figures 13 (dumbbell profile), 14 (habit
+     success-rate bars) and 15 (style-vs-outcome scatter with the 95% bar).
 
-   Twelve figures + a data-driven `INSIGHTS` block (`## Figure N` headings
+   Fifteen figures, created and displayed in strictly increasing numerical
+   order, + a data-driven `INSIGHTS` block (`## Figure N` headings
    anchor each plot in §4), which **ends with a computed verdict** —
    BALANCED / FOCUSED BUT EFFECTIVE / PARTLY BALANCED / MORE EVEN, NOT
    CLOSER / NO CLEAR SIGNAL — answering "are the best players focused on one
