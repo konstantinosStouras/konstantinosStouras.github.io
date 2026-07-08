@@ -383,7 +383,10 @@ Four sections:
      equal-weight mean but gives an informative CI (e.g. Data Analysis over ≈ 58%
      `[44, 72]` instead of `[10, 100]`). It still "accounts for unequal responses
      per task" — each task weighted equally in the mean, and a task with fewer
-     responses contributes more variance. Task complexity/domain come from the
+     responses contributes more variance. (Caveat, stated in the on-page note:
+     these descriptive CIs treat responses as independent across tasks, though
+     the same student answers several tasks in a group; the Section-3 tests
+     additionally cluster on the student.) Task complexity/domain come from the
      exported `task_complexity`/`task_domain` columns when present, else the
      built-in `DA_TASK_META` map (the 30-task list). Helpers: `daWilson`
      (per-task proportion CI), `daGroupRate` (equal-weight mean + delta-method CI),
@@ -460,10 +463,29 @@ Four sections:
    small n (verified by running both against the same synthetic exports): a
    table without the preference/choice columns gets a clear "pick the Responses
    table" message; an all-blank `task_complexity`/`task_domain` column, a
-   zero-variance task (R's `t.test` errors on constant data — mapped to scipy's
-   ±Inf/p=0 convention), and a no-graded-data load all degrade gracefully
+   zero-variance task, and a no-graded-data load all degrade gracefully
    instead of crashing; a domain with only 2 tasks has a very wide CI, clipped
-   to the bounded [-3, +3] preference scale for display.
+   to the bounded [-3, +3] preference scale for display. **Constant-data
+   convention (both languages, R's `t.test` errors on it):** every value equal
+   to the null (e.g. all ties) → t=0, **p=1** — reported as *no clear
+   preference*, NOT "too little data"; every value equal to some other constant
+   → t=±Inf, p=0 (scipy's own convention). The same rule covers a zero-SE
+   coefficient in `ols_robust`. Other alignment rules shared by the charts and
+   both templates: a **blank/missing `submitted`** counts as submitted (only
+   real drafts are dropped), `task_id`/`chosen_model` are **trimmed and
+   NA-safe** (R maps NA keys and NA cluster ids to `""` the way pandas reads
+   those cells — otherwise `split()`/`as.factor()` silently drop the rows and
+   the clustered SEs go NA), rows with
+   an unrecognised `chosen_model` are excluded from the choice counts (and from
+   the provisioning charts entirely), and the tie share is reported over the
+   **classified** answers. The R tables store **unrounded** statistics and round
+   only when printing (2/3/4 dp like Python's display) — rounding p to 4 dp
+   before the p<0.05 filters could flip a borderline verdict vs Python. When the
+   graded rows hold a single student, the response-level test/regressions are
+   labelled **"(HC3 robust; no repeated students)"** instead of claiming
+   clustering. Section 1's Load warns when a ticked session also appears in an
+   imported workbook (rows would stack twice and every CI would silently
+   shrink — there is deliberately no dedup).
 
 4. **Insights gained** (`buildDaSection4`). A readable write-up of the last run
    **and the home of every plot**: `daParseInsights()` extracts the script's
