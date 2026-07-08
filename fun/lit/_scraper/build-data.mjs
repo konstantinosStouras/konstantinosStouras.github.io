@@ -100,7 +100,30 @@ const JOURNALS = [
   { key: 'pom',  name: 'Production and Operations Management',          issns: ['1059-1478', '1937-5956'], publisher: 'SAGE', aia: true },
 ];
 const PNAS = { key: 'pnas', name: 'PNAS', issns: ['0027-8424', '1091-6490'], publisher: 'National Academy of Sciences' };
-const EC = { key: 'ec', name: 'ACM EC', publisher: 'ACM', firstYear: 2020 };
+// ACM EC: founded 1999 as the "ACM Conference on Electronic Commerce" (no
+// conference in 2002), renamed "Economics and Computation" with the 15th
+// edition in 2014. Years < sigecomFirstYear come from DBLP's per-year tables
+// of contents (ACM's Crossref container titles are too inconsistent pre-2020
+// to query by name); 2020+ from Crossref + the sigecom.org accepted lists.
+const EC = { key: 'ec', name: 'ACM EC', publisher: 'ACM', firstYear: 1999, sigecomFirstYear: 2020 };
+
+function ecEditionNumber(year) {
+  // 1999→1st, 2000→2nd, 2001→3rd, (no 2002), 2003→4th … 2020→21st …
+  return year <= 2001 ? year - 1998 : year - 1999;
+}
+function ecSeriesName(year) {
+  return year >= 2014 ? 'ACM Conference on Economics and Computation'
+                      : 'ACM Conference on Electronic Commerce';
+}
+export function ecBooktitle(year) {
+  return `Proceedings of the ${ordSuffix(ecEditionNumber(year))} ${ecSeriesName(year)} (EC '${String(year).slice(2)})`;
+}
+function ordSuffix(n) {
+  const s = (n % 10 === 1 && n % 100 !== 11) ? 'st'
+    : (n % 10 === 2 && n % 100 !== 12) ? 'nd'
+    : (n % 10 === 3 && n % 100 !== 13) ? 'rd' : 'th';
+  return `${n}${s}`;
+}
 
 // One-time import of MS editor/area data collected by the old Google-Sheet
 // pipeline from sources that don't exist on Crossref. Shared with fun/ms.
@@ -443,15 +466,10 @@ function applyPnasSections(papers, cache) {
 
 // ── ACM EC ──────────────────────────────────────────────────────────────────
 
-function ecOrdinal(year) {
-  const n = year - 1999; // EC 2020 was the 21st
-  const suffix = (n % 10 === 1 && n % 100 !== 11) ? 'st'
-    : (n % 10 === 2 && n % 100 !== 12) ? 'nd'
-    : (n % 10 === 3 && n % 100 !== 13) ? 'rd' : 'th';
-  return `${n}${suffix}`;
-}
+// Exact Crossref container title — reliable for 2020+ only (earlier ACM
+// deposits use spelled-out ordinals, year-based names and varying case).
 export function ecContainerTitle(year) {
-  return `Proceedings of the ${ecOrdinal(year)} ACM Conference on Economics and Computation`;
+  return `Proceedings of the ${ordSuffix(ecEditionNumber(year))} ACM Conference on Economics and Computation`;
 }
 
 async function fetchEcCrossref(years) {
@@ -506,7 +524,66 @@ async function fetchSigecomPages(years) {
   return out;
 }
 
-function buildEcRows(crossrefItems, sigecomByYear) {
+// Historical proceedings (1999-2019) from DBLP's per-year tables of contents:
+// clean titles, authors, pages and DOIs. Abstracts and PDF links are attached
+// afterwards by the same OpenAlex/S2 enrichment as the modern years.
+async function fetchEcDblpHistory(years) {
+  if (MOCK) return [];
+  const rows = [];
+  for (const y of years) {
+    let hits = [];
+    for (const key of [`sigecom${y}`, `sigecom${String(y).slice(2)}`]) {
+      try {
+        const url = `https://dblp.org/search/publ/api?q=${encodeURIComponent(`toc:db/conf/sigecom/${key}.bht:`)}&h=500&format=json`;
+        const j = await fetchJson(url);
+        hits = [].concat(j?.result?.hits?.hit || []);
+        if (hits.length) break;
+      } catch (e) {
+        console.warn(`  dblp ec ${y} (${key}): ${e.message}`);
+      }
+      await sleep(600);
+    }
+    let added = 0;
+    for (const hit of hits) {
+      const info = hit.info || {};
+      if (info.type && info.type !== 'Conference and Workshop Papers') continue;
+      const title = String(info.title || '').replace(/\.\s*$/, '').replace(/\s+/g, ' ').trim();
+      if (!title) continue;
+      const authors = [].concat(info.authors?.author || [])
+        .map(a => String(a && a.text !== undefined ? a.text : a).replace(/\s+\d{4}$/, '').replace(/,/g, ' ').replace(/\s+/g, ' ').trim())
+        .filter(Boolean);
+      let doi = String(info.doi || '').toLowerCase();
+      if (!doi) {
+        const m = String(info.ee || '').match(/doi\.org\/(10\.\d{4,}\/[^\s"']+)/i);
+        if (m) doi = m[1].toLowerCase();
+      }
+      const pageStart = parseInt(String(info.pages || '').split(/[-–]/)[0], 10) || 0;
+      rows.push({
+        Title: title,
+        Authors: authors.join(', '),
+        Affiliations: '',
+        DOI: doi ? 'https://doi.org/' + doi : '',
+        Volume: '', Issue: '',
+        Page: info.pages || '',
+        Year: String(info.year || y),
+        Status: '',
+        Abstract: '',
+        'Accepting Editor': '', Area: '',
+        Journal: EC.name, JKey: EC.key,
+        Booktitle: ecBooktitle(parseInt(info.year, 10) || y),
+        _doi: doi,
+        _orcids: [],
+        _rank: (parseInt(info.year, 10) || y) * 1e9 + Math.min(pageStart, 999),
+      });
+      added++;
+    }
+    console.log(`  ec ${y} (dblp): ${added} papers`);
+    await sleep(1200);
+  }
+  return rows;
+}
+
+function buildEcRows(crossrefItems, sigecomByYear, dblpRows) {
   const rows = [];
   const byTitle = new Map(); // normTitle -> row (from Crossref)
   const seen = new Set();
@@ -522,7 +599,18 @@ function buildEcRows(crossrefItems, sigecomByYear) {
     // published proceedings papers must not outrank everything, so drop it.
     if (row._rank >= 1e13) row._rank -= 1e13;
     row.Volume = ''; row.Issue = '';
+    const yr = parseInt(row.Year, 10);
+    if (yr) row.Booktitle = ecBooktitle(yr);
     perYear[row.Year] = (perYear[row.Year] || 0) + 1;
+    byTitle.set(normTitle(row.Title), row);
+    rows.push(row);
+  }
+  // Historical years from DBLP (no overlap with the Crossref era, but dedupe
+  // by DOI and title anyway).
+  for (const row of dblpRows || []) {
+    if (row._doi && seen.has(row._doi)) continue;
+    if (byTitle.has(normTitle(row.Title))) continue;
+    if (row._doi) seen.add(row._doi);
     byTitle.set(normTitle(row.Title), row);
     rows.push(row);
   }
@@ -888,11 +976,14 @@ async function main() {
   // 3. ACM EC.
   console.log('ACM EC:');
   const thisYear = parseInt(PULL_DATE.slice(0, 4), 10);
-  const years = [];
-  for (let y = EC.firstYear; y <= thisYear + 1; y++) years.push(y);
-  const ecItems = await fetchEcCrossref(years);
-  const sigecom = await fetchSigecomPages(years);
-  const ecRows = buildEcRows(ecItems, sigecom);
+  const sigYears = [];
+  for (let y = EC.sigecomFirstYear; y <= thisYear + 1; y++) sigYears.push(y);
+  const dblpYears = [];
+  for (let y = EC.firstYear; y < EC.sigecomFirstYear; y++) if (y !== 2002) dblpYears.push(y);
+  const ecItems = await fetchEcCrossref(sigYears);
+  const sigecom = await fetchSigecomPages(sigYears);
+  const dblpRows = await fetchEcDblpHistory(dblpYears);
+  const ecRows = buildEcRows(ecItems, sigecom, dblpRows);
   const extras = await loadJsonIfExists(join(DATA_DIR, '_ec-extras.json'), {});
   await enrichEc(ecRows, extras);
   if (!MOCK) await writeJson('_ec-extras.json', extras);

@@ -34,7 +34,7 @@ keep that in mind if a change there is warranted.
 `fun/lit/` extends the `/fun/ms/` architecture to eight sources: Management
 Science (with editors/areas, exactly like `/fun/ms/`), Operations Research,
 Marketing Science, M&SOM, Information Systems Research, POM, PNAS (five topic
-sections only), and the ACM EC conference (2020–present, incl. each year's
+sections only), and the ACM EC conference (1999–present, incl. each year's
 accepted-papers list from `ec<YY>.sigecom.org` with arXiv/SSRN/OA PDF links via
 OpenAlex/DBLP/Semantic Scholar). Data is static JSON in `fun/lit/data/` (one
 `papers-<src>.json` per source + `sources.json` manifest), built by
