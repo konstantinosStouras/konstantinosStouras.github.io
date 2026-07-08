@@ -12,7 +12,7 @@
 | `isre` | Information Systems Research (INFORMS)              | Crossref, ISSN 1047-7047 |
 | `pom`  | Production and Operations Management (Wiley→SAGE)   | Crossref, ISSN 1059-1478 |
 | `pnas` | PNAS — five sections only (Computer Sciences, Sustainability Science, Environmental Sciences, Social Sciences, Economic Sciences) | Crossref (metadata) + pnas.org's own topic index (section labels; see below) |
-| `ec`   | ACM EC conference, 2020–present                     | Crossref (published proceedings) + `ec<YY>.sigecom.org/program/accepted-papers/` (accepted lists) + OpenAlex/DBLP/Semantic Scholar (PDF links & abstracts) |
+| `ec`   | ACM EC conference, 1999–present                     | 1999–2019 (the "Electronic Commerce" era; renamed 2014, no conference in 2002): DBLP per-year tables of contents. 2020+: Crossref (published proceedings) + `ec<YY>.sigecom.org/program/accepted-papers/` (accepted lists). PDF links & abstracts for all years via OpenAlex/DBLP/Semantic Scholar |
 
 > The underscore in this filename (and in `_scraper/`) tells GitHub Pages'
 > Jekyll build **not** to publish them. The `data/` folder has no underscore,
@@ -35,11 +35,14 @@ search and BibTeX export in the browser.
 - **Journals filter** (new vs. `/fun/ms/`): a multi-select of the six
   journals, the five PNAS sections (a PNAS paper can belong to several), and
   ACM EC. Nothing selected = search everything.
-- **Editors & Areas are Management Science only.** With MS in scope (no
-  journal selected, or MS selected) the page behaves exactly like
-  `/fun/ms/` — Accepting Editor / Area filters, Editors/Areas summary tabs,
-  editor & area tags on cards. Deselect MS and those controls disappear;
-  other journals contribute plain records (including "Articles in Advance").
+- **Editors & Areas are Management Science only.** When MS is explicitly
+  selected in the journal filter (alone or with other journals) the page
+  behaves exactly like `/fun/ms/` — Accepting Editor / Area filters,
+  Editors/Areas summary tabs, editor & area tags on cards. On the default
+  all-journals landing (and for e.g. an MSOM-only search) those controls stay
+  hidden. Other journals contribute plain records; the "Articles in Advance"
+  status appears only for the six journals that publish such a stage (never
+  for PNAS or ACM EC).
 - **Senior/Associate Editors for ISR & Marketing Science.** Selecting
   *Information Systems Research* reveals Senior Editor and Associate Editor
   filters (Marketing Science: Senior Editor only), and ISR/MkSc cards carry

@@ -6,7 +6,7 @@
 <title>The Lit · Research Paper Browser — Management Science, OR, Marketing Science, M&amp;SOM, POM, ISR, PNAS &amp; ACM EC</title>
 
 <!-- SEO -->
-<meta name="description" content="Search and filter research papers across Management Science, Operations Research, Marketing Science, M&SOM, POM, Information Systems Research, five PNAS sections, and the ACM EC conference (2020–present). Filter by journal, year, author, or affiliation. Export BibTeX citations.">
+<meta name="description" content="Search and filter research papers across Management Science, Operations Research, Marketing Science, M&SOM, POM, Information Systems Research, five PNAS sections, and the ACM EC conference (1999–present). Filter by journal, year, author, or affiliation. Export BibTeX citations.">
 <meta name="keywords" content="Management Science, Operations Research, Marketing Science, MSOM, POM, Information Systems Research, PNAS, ACM EC, Economics and Computation, academic papers, research browser, BibTeX, journal articles, INFORMS">
 <meta name="author" content="Konstantinos Stouras">
 
@@ -551,7 +551,7 @@
     <a href="https://journals.sagepub.com/home/pao" target="_blank">POM</a>,
     <a href="https://pubsonline.informs.org/journal/isre" target="_blank">Information Systems Research</a>,
     <a href="https://www.pnas.org" target="_blank">PNAS</a> (Computer Sciences, Sustainability Science, Environmental Sciences, Social Sciences &amp; Economic Sciences), and the
-    <a href="https://www.sigecom.org" target="_blank">ACM EC conference</a> (2020–present) — in one place.</div>
+    <a href="https://www.sigecom.org" target="_blank">ACM EC conference</a> (1999–present) — in one place.</div>
   <div>Editors and editorial areas are shown for <em>Management Science</em> papers (2011+), exactly as on <a href="/fun/ms/">the MS-only browser</a>. Other sources contribute their published papers and Articles in Advance. ACM EC papers link to an arXiv/SSRN/open-access PDF where one could be found.</div>
   <div>All metadata are publicly available, collected via the <a href="https://www.crossref.org/documentation/retrieve-metadata/rest-api/" target="_blank">Crossref API</a> (with OpenAlex, DBLP and Semantic Scholar assisting for EC PDF links, and pnas.org's own topic index for PNAS sections).</div>
   <div>Feedback and suggestions are welcome. Any errors are my own. <a href="https://www.stouras.com" target="_blank">Konstantinos I. Stouras</a></div>
@@ -605,7 +605,7 @@ const JOURNAL_OPTIONS = [
   { key: 'pnas-env',  label: 'PNAS · Environmental Sciences' },
   { key: 'pnas-soc',  label: 'PNAS · Social Sciences' },
   { key: 'pnas-econ', label: 'PNAS · Economic Sciences' },
-  { key: 'ec',   label: 'ACM EC (2020–present)' },
+  { key: 'ec',   label: 'ACM EC (1999–present)' },
 ];
 const JOURNAL_LABEL = {};
 JOURNAL_OPTIONS.forEach(function(o) { JOURNAL_LABEL[o.key] = o.label; });
@@ -2021,7 +2021,9 @@ function makeBib(p) {
     let b = '@inproceedings{' + key + ',\n';
     b += '  title={' + bibTitle(p['Title'] || '') + '},\n';
     b += '  author={' + bibAuthors + '},\n';
-    b += '  booktitle={Proceedings of the ' + (yr ? ordinalWord(yr - 1999) + ' ' : '') + 'ACM Conference on Economics and Computation (EC~\'' + String(year).slice(2) + ')},\n';
+    // Booktitle comes from the data (historically correct: "Electronic
+    // Commerce" through 2013, "Economics and Computation" from 2014).
+    b += '  booktitle={' + (p['Booktitle'] || ('Proceedings of the ' + (yr ? ordinalWord(yr - 1999) + ' ' : '') + 'ACM Conference on Economics and Computation (EC~\'' + String(year).slice(2) + ')')) + '},\n';
     if (pages) b += '  pages={' + pages + '},\n';
     b += '  year={' + year + '},\n';
     b += '  publisher={ACM}\n';
