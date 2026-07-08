@@ -451,8 +451,18 @@ change. Four sections:
      $/cell placed, seconds/move) compared top-vs-rest under both
      definitions, and Figure 9: the two windows move by move, the opening
      aligned at move 1 and the approach aligned at the peak (x = −9…0).
+   - **The within-5% playbook.** A deep dive under the relaxed definition:
+     the six markers pooled to one value per player and compared top-vs-rest
+     (means, Cohen's d, Welch p) plus a plain-language profile sentence per
+     group; a "which habits pay" ranking — for each marker, the within-5%
+     success rate among players on the top group's side of the all-player
+     median vs the others (two-proportion z), ranked by lift; a one-number
+     heuristic **style score** (all six markers z-scored, oriented towards
+     the top group, averaged) correlated with each player's closest approach
+     to the maximum (Pearson). Figures 10 (dumbbell profile), 11 (habit
+     success-rate bars) and 12 (style-vs-outcome scatter with the 95% bar).
 
-   Nine figures + a data-driven `INSIGHTS` block (`## Figure N` headings
+   Twelve figures + a data-driven `INSIGHTS` block (`## Figure N` headings
    anchor each plot in §4), which **ends with a computed verdict** —
    BALANCED / FOCUSED BUT EFFECTIVE / PARTLY BALANCED / MORE EVEN, NOT
    CLOSER / NO CLEAR SIGNAL — answering "are the best players focused on one
