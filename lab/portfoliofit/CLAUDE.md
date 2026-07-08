@@ -443,8 +443,16 @@ change. Four sections:
      all-three climb (positive = net-focused, negative = diversified), tested
      vs 0 within each group and top-vs-rest, under both definitions
      (Figure 8).
+   - **The opening vs the approach to the peak.** Two windows per play — the
+     OPENING (first 10 moves) and the APPROACH (the last 10 moves up to and
+     including the move where the player FIRST hit their own maximum net
+     value; repeated maxima count only the first time, via `peak_move`) —
+     with five window metrics (balanced-KPI score, net climb, removal share,
+     $/cell placed, seconds/move) compared top-vs-rest under both
+     definitions, and Figure 9: the two windows move by move, the opening
+     aligned at move 1 and the approach aligned at the peak (x = −9…0).
 
-   Eight figures + a data-driven `INSIGHTS` block (`## Figure N` headings
+   Nine figures + a data-driven `INSIGHTS` block (`## Figure N` headings
    anchor each plot in §4), which **ends with a computed verdict** —
    BALANCED / FOCUSED BUT EFFECTIVE / PARTLY BALANCED / MORE EVEN, NOT
    CLOSER / NO CLEAR SIGNAL — answering "are the best players focused on one
