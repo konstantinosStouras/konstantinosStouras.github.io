@@ -83,15 +83,23 @@ const PULL_DATE = process.env.LIT_PULL_DATE || new Date().toISOString().slice(0,
 // parsed from the Crossref abstract when present, otherwise joined from the
 // committed cache data/_informs-editors.json built by informs-editors-local.mjs
 // (pubsonline.informs.org blocks cloud IPs, like pnas.org).
+// issns: print + online ISSN for every journal (some Crossref deposits are
+// registered under only one of them), plus predecessor titles — Operations
+// Research's first volumes (1952-1955) appeared as the "Journal of the
+// Operations Research Society of America" under its own ISSN. Records from
+// all ISSNs of a source are merged and deduped by DOI.
+// aia: the journal publishes "Articles in Advance" (INFORMS) / OnlineFirst
+// (SAGE), so a record without volume+issue is a genuine advance article.
+// PNAS and ACM EC have no such stage — their rows never carry that status.
 const JOURNALS = [
-  { key: 'ms',   name: 'Management Science',                            issn: '0025-1909', publisher: 'INFORMS', editors: true },
-  { key: 'opre', name: 'Operations Research',                           issn: '0030-364X', publisher: 'INFORMS' },
-  { key: 'mksc', name: 'Marketing Science',                             issn: '0732-2399', publisher: 'INFORMS', seEditors: true },
-  { key: 'msom', name: 'Manufacturing & Service Operations Management', issn: '1523-4614', publisher: 'INFORMS' },
-  { key: 'isre', name: 'Information Systems Research',                  issn: '1047-7047', publisher: 'INFORMS', seEditors: true, aeEditors: true },
-  { key: 'pom',  name: 'Production and Operations Management',          issn: '1059-1478', publisher: 'SAGE' },
+  { key: 'ms',   name: 'Management Science',                            issns: ['0025-1909', '1526-5501'], publisher: 'INFORMS', aia: true, editors: true },
+  { key: 'opre', name: 'Operations Research',                           issns: ['0030-364X', '1526-5463', '0096-3984'], publisher: 'INFORMS', aia: true },
+  { key: 'mksc', name: 'Marketing Science',                             issns: ['0732-2399', '1526-548X'], publisher: 'INFORMS', aia: true, seEditors: true },
+  { key: 'msom', name: 'Manufacturing & Service Operations Management', issns: ['1523-4614', '1526-5498'], publisher: 'INFORMS', aia: true },
+  { key: 'isre', name: 'Information Systems Research',                  issns: ['1047-7047', '1526-5536'], publisher: 'INFORMS', aia: true, seEditors: true, aeEditors: true },
+  { key: 'pom',  name: 'Production and Operations Management',          issns: ['1059-1478', '1937-5956'], publisher: 'SAGE', aia: true },
 ];
-const PNAS = { key: 'pnas', name: 'PNAS', issn: '0027-8424', publisher: 'National Academy of Sciences' };
+const PNAS = { key: 'pnas', name: 'PNAS', issns: ['0027-8424', '1091-6490'], publisher: 'National Academy of Sciences' };
 const EC = { key: 'ec', name: 'ACM EC', publisher: 'ACM', firstYear: 2020 };
 
 // One-time import of MS editor/area data collected by the old Google-Sheet
@@ -268,7 +276,7 @@ function mapWork(item, src) {
 
   const volume = item.volume || '';
   const issue = item.issue || '';
-  const status = (!volume && !issue) ? 'Articles in Advance' : '';
+  const status = (src.aia && !volume && !issue) ? 'Articles in Advance' : '';
   const doi = item.DOI ? 'https://doi.org/' + item.DOI : '';
 
   const row = {
@@ -340,24 +348,36 @@ async function fetchJournalWorks(src) {
     console.log(`  [mock] ${src.key}: ${items.length} items`);
     return items;
   }
-  const base = `https://api.crossref.org/journals/${src.issn}/works`;
-  let cursor = '*';
   const all = [];
-  let page = 0;
-  for (;;) {
-    const url = `${base}?rows=${ROWS}&cursor=${encodeURIComponent(cursor)}` +
-      `&select=${encodeURIComponent(SELECT)}&mailto=${encodeURIComponent(MAILTO)}`;
-    const body = await fetchJson(url);
-    const items = body.message.items || [];
-    all.push(...items);
-    page++;
-    if (page % 10 === 0 || !items.length) {
-      console.log(`  ${src.key} page ${page}: running total ${all.length}/${body.message['total-results']}`);
+  for (let i = 0; i < src.issns.length; i++) {
+    const issn = src.issns[i];
+    const before = all.length;
+    try {
+      const base = `https://api.crossref.org/journals/${issn}/works`;
+      let cursor = '*';
+      let page = 0;
+      for (;;) {
+        const url = `${base}?rows=${ROWS}&cursor=${encodeURIComponent(cursor)}` +
+          `&select=${encodeURIComponent(SELECT)}&mailto=${encodeURIComponent(MAILTO)}`;
+        const body = await fetchJson(url);
+        const items = body.message.items || [];
+        all.push(...items);
+        page++;
+        if (page % 10 === 0 || !items.length) {
+          console.log(`  ${src.key}/${issn} page ${page}: running total ${all.length}/${body.message['total-results']}`);
+        }
+        cursor = body.message['next-cursor'];
+        if (!items.length || !cursor) break;
+      }
+      console.log(`  ${src.key}/${issn}: +${all.length - before} records`);
+    } catch (e) {
+      // The primary ISSN must succeed; secondary/predecessor ISSNs are
+      // best-effort (a 404 there must not sink the whole build).
+      if (i === 0) throw e;
+      console.warn(`  ${src.key}/${issn}: skipped (${e.message})`);
     }
-    cursor = body.message['next-cursor'];
-    if (!items.length || !cursor) break;
   }
-  return all;
+  return all; // mapJournal dedupes by DOI across ISSNs
 }
 
 function mapJournal(rawWorks, src) {
@@ -843,7 +863,7 @@ async function main() {
 
   // 1. The six journals.
   for (const src of JOURNALS) {
-    console.log(`${src.name} (${src.issn}):`);
+    console.log(`${src.name} (${src.issns.join(', ')}):`);
     const raw = await fetchJournalWorks(src);
     bySource[src.key] = mapJournal(raw, src);
     console.log(`  ${src.key}: ${bySource[src.key].length} papers`);
