@@ -1,7 +1,8 @@
 # MS Paper Browser, accounts setup (one time, ~5 minutes)
 
 The Management Science Paper Browser (`fun/ms/index.html`) now supports optional
-sign-in (email/password and Google), so a logged-in visitor can:
+sign-in (email/password, Google, Microsoft, and optionally Apple/GitHub), so a
+logged-in visitor can:
 
 - **Star** papers to save them for later
 - Add a **private note** to any saved paper (only they can see it)
@@ -24,13 +25,39 @@ live site changes until you paste the config in step 4 and commit.
 2. Name it something like `ms-paper-browser`. Google Analytics is optional (you
    can skip it).
 
-## 2. Enable the two sign-in methods
+## 2. Enable the sign-in methods
 
 In the project, open **Build -> Authentication -> Get started**, then under the
-**Sign-in method** tab enable:
+**Sign-in method** tab enable the methods you want. The page shows a button for
+each provider listed in the `AUTH_PROVIDERS` array (next to `FB_CONFIG` in
+`fun/ms/index.html`, default `['google', 'microsoft']`) — keep that list in sync
+with what you actually enable, and add `'apple'` / `'github'` there if you set
+those up too.
 
-- **Email/Password** (toggle on, Save).
-- **Google** (toggle on, pick a support email, Save).
+- **Email/Password** (toggle on, Save) — powers the register/sign-in form.
+- **Google** (toggle on, pick a support email, Save) — covers all Gmail /
+  Google-account users. Nothing else needed.
+- **Microsoft** (optional but recommended: covers university & work Microsoft
+  365 accounts). Firebase shows a **redirect URI** like
+  `https://<project>.firebaseapp.com/__/auth/handler` when you toggle it on.
+  Register an app in **Microsoft Entra ID** (portal.azure.com -> App
+  registrations -> New registration; supported account types: "Accounts in any
+  organizational directory and personal Microsoft accounts"; paste the redirect
+  URI as a **Web** redirect). Copy the **Application (client) ID** and create a
+  **client secret** (Certificates & secrets), then paste both into the Firebase
+  Microsoft provider form and Save.
+- **Apple** (optional; requires a paid Apple Developer account). Create a
+  Services ID + key at developer.apple.com per the form's instructions, then
+  fill them into the Firebase Apple provider and add `'apple'` to
+  `AUTH_PROVIDERS`.
+- **GitHub** (optional). Create an OAuth app at github.com -> Settings ->
+  Developer settings -> OAuth Apps with the same redirect URI, paste its Client
+  ID/secret into the Firebase GitHub provider, and add `'github'` to
+  `AUTH_PROVIDERS`.
+
+If a visitor clicks a provider button you have not enabled yet, the modal shows
+"This sign-in method is not enabled in the Firebase console yet." — nothing
+breaks.
 
 ## 3. Authorize the live domain
 
