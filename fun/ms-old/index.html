@@ -9,17 +9,16 @@
 <meta name="description" content="Browse and filter all Management Science (INFORMS) articles from 1954–present. Search by editor, area, year, or author. Export BibTeX citations.">
 <meta name="keywords" content="Management Science, INFORMS, academic papers, research browser, BibTeX, journal articles, operations research, finance, marketing, accounting">
 <meta name="author" content="Konstantinos Stouras">
-
-<meta name="robots" content="index, follow">
-<link rel="canonical" href="https://stouras.com/fun/ms/">
+<meta name="robots" content="noindex, nofollow">
+<link rel="canonical" href="https://stouras.com/fun/ms-old/">
 
 <!-- Open Graph (Facebook, LinkedIn, WhatsApp) -->
 <meta property="og:type" content="website">
 <meta property="og:title" content="Management Science — Paper Browser">
 <meta property="og:description" content="Browse and filter all Management Science articles from 1954–present. Search by editor, area, year, or author.">
-<meta property="og:url" content="https://www.stouras.com/fun/ms/">
-<meta property="og:image" content="https://www.stouras.com/fun/ms/og-image.jpg">
-<meta property="og:image:secure_url" content="https://www.stouras.com/fun/ms/og-image.jpg">
+<meta property="og:url" content="https://www.stouras.com/fun/ms-old/">
+<meta property="og:image" content="https://www.stouras.com/fun/ms-old/og-image.jpg">
+<meta property="og:image:secure_url" content="https://www.stouras.com/fun/ms-old/og-image.jpg">
 <meta property="og:image:type" content="image/jpeg">
 <meta property="og:image:width" content="840">
 <meta property="og:image:height" content="350">
@@ -29,7 +28,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Management Science — Paper Browser">
 <meta name="twitter:description" content="Browse and filter all Management Science articles from 1954–present. Search by editor, area, year, or author.">
-<meta name="twitter:image" content="https://www.stouras.com/fun/ms/og-image.jpg">
+<meta name="twitter:image" content="https://www.stouras.com/fun/ms-old/og-image.jpg">
 
 <!-- Favicon: inline SVG "MS" monogram (navy/gold journal style), no external file needed -->
 <link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%23003087'/%3E%3Ctext%20x='50'%20y='68'%20font-family='Georgia,serif'%20font-size='54'%20font-style='italic'%20font-weight='bold'%20fill='%23c4a052'%20text-anchor='middle'%3EMS%3C/text%3E%3C/svg%3E">
@@ -505,17 +504,15 @@
 </footer>
 
 <script>
-// ── Data source: static JSON, no Google Sheets ───────────────────────────────
-// These files are built directly from the Crossref API by a scheduled GitHub
-// Action (fun/ms/_scraper/build-data.mjs) and committed into fun/ms/data/.
-// GitHub Pages serves them from its CDN, same origin as this page, so a visitor
-// never touches Google. To point the page at a different dataset, change only
-// these paths. See fun/ms/_HOW-IT-WORKS.md for the full picture.
-const PAPERS_URL = './data/papers.json';
-const AUTHORS_URL = './data/authors.json';
-const AFFILIATIONS_URL = './data/affiliations.json';
-const META_URL = './data/meta.json';
-const RECENT_URL = './data/recent.json';
+const SHEET_ID = '11MKt6uzfnxTNTbK4Kb1jwW32cEsKZcBRncubV2omJzQ';
+const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Data`;
+const AUTHORS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Authors`;
+const EDITORS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Editors`;
+const AREAS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Areas`;
+const AFFILIATIONS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Affiliations_Merged`;
+const AFFILIATIONS_FALLBACK_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Affiliations`;
+const META_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Meta`;
+const RECENT_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=RecentlyAdded`;
 const PER_PAGE = 20;
 let allPapers = [], filtered = [], currentPage = 1;
 let authorData = []; // pre-computed from Authors tab (ORCID-resolved)
@@ -618,55 +615,63 @@ function addChipFromCard(type, val) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// Load the whole paper set from the static papers.json built by the GitHub
-// Action. It arrives already as an array of objects with the same keys the CSV
-// version produced (Title, Authors, Year, DOI, Abstract, Accepting Editor,
-// Area, ...), so the rest of the pipeline is unchanged.
 async function loadData() {
   try {
-    const resp = await fetch(PAPERS_URL, { cache: 'no-cache' });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    const data = await resp.json();
-    allPapers = Array.isArray(data) ? data : [];
+    const resp = await fetch(CSV_URL);
+    const text = await resp.text();
+    allPapers = parseCSV(text);
     allPapers.forEach(normalizeEditors);
     fuzzyMergeEditors();
     fuzzyMergeAreas();
-    // Affiliation aggregates come from their own small JSON file.
-    try {
-      const r = await fetch(AFFILIATIONS_URL, { cache: 'no-cache' });
-      if (r.ok) { var a = await r.json(); affiliationData = Array.isArray(a) ? a : []; }
-    } catch (e) { affiliationData = []; }
-    // Render whatever filters were set while loading; with none, this builds the
-    // dropdowns/summary lists and shows the welcome state. If the user opened the
-    // "Recently added" view before data arrived, fill it in now.
+    // Load affiliation data — try Affiliations_Merged, fallback to Affiliations
+    async function tryLoadAff(url, label) {
+      try {
+        var r = await fetch(url);
+        if (!r || !r.ok) return [];
+        var t = await r.text();
+        if (t.trim().charAt(0) === '<') return []; // got HTML error page, not CSV
+        var parsed = parseCSV(t, 'Affiliation');
+        if (parsed.length > 0) console.log('Loaded ' + parsed.length + ' affiliations from ' + label);
+        return parsed;
+      } catch(e) { return []; }
+    }
+    affiliationData = await tryLoadAff(AFFILIATIONS_CSV_URL, 'Affiliations_Merged');
+    if (affiliationData.length === 0) {
+      affiliationData = await tryLoadAff(AFFILIATIONS_FALLBACK_URL, 'Affiliations');
+    }
+    // Render results for any filters set while loading (e.g. a click on the
+    // pre-computed Editors/Areas lists); with no filters this builds the
+    // dropdowns and shows the welcome state. If the user opened the "Recently
+    // added papers" view before the data finished loading, fill it in now.
     if (recentMode) renderRecent(); else applyFilters();
-    // Update the year range shown in the header.
+    // Update year range in header
     var years = allPapers.map(function(p) { return parseInt(p['Year']); }).filter(function(y) { return !isNaN(y); });
     if (years.length > 0) {
       var minY = Math.min.apply(null, years);
       var el = document.getElementById('yearRange');
       if (el) el.textContent = minY + '–present';
     }
-    if (!allPapers.length) console.warn('papers.json is empty — the data pipeline has not run yet.');
   } catch (e) {
-    // Only retry on a genuine network/parse failure (an empty-but-valid file is fine).
     setTimeout(loadData, 3000);
   }
 }
 
-// Authors are pre-aggregated (paper counts, areas, name variants, ORCID identity)
-// in authors.json by the build step, so the Authors panel is ready without
-// waiting for every paper since 1954 to download and parse.
+// Authors are pre-computed in the sheet's Authors tab by the weekly pipeline
+// (ORCID-resolved, with paper counts, areas and name variants). Load and
+// render them independently of the much larger Data CSV, so the Authors
+// panel is ready as soon as its own small CSV arrives instead of waiting for
+// every paper + abstract since 1954 to download and parse.
 async function loadAuthors() {
-  // Paint instantly from the previous visit's cache, then refresh from network.
-  var cached = lsGet('ms2_authors');
-  if (cached) { try { authorData = JSON.parse(cached); if (authorData.length) renderAuthorsSummary(); } catch (e) {} }
+  // Paint instantly from the previous visit's cached CSV, then refresh.
+  var cached = lsGet('ms_csv_authors');
+  if (cached) { try { authorData = parseCSV(cached, 'Author'); if (authorData.length) renderAuthorsSummary(); } catch (e) {} }
   try {
-    var r = await fetch(AUTHORS_URL, { cache: 'no-cache' });
+    var r = await fetch(AUTHORS_CSV_URL);
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    var data = await r.json();
-    authorData = Array.isArray(data) ? data : [];
-    lsSet('ms2_authors', JSON.stringify(authorData));
+    var t = await r.text();
+    if (t.trim().charAt(0) === '<') throw new Error('not CSV'); // HTML error page
+    lsSet('ms_csv_authors', t);
+    authorData = parseCSV(t, 'Author');
     renderAuthorsSummary();
   } catch (e) {
     if (!authorData.length) setTimeout(loadAuthors, 3000);
@@ -677,13 +682,52 @@ async function loadAuthors() {
 function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 
-// The Editors and Areas summary lists are derived live from the papers by
-// buildSummaryTabs() as soon as papers.json is parsed, so ms2 needs no separate
-// pre-computed tabs for them. (loadSummaries is intentionally gone.)
+// The Editors and Areas summary lists are pre-computed in the sheet's
+// Editors/Areas tabs by the weekly pipeline (same alias/junk/fuzzy-merge
+// normalization the browser applies). They change only ~weekly, so cache the
+// raw CSV in localStorage and paint the panels instantly from the last visit,
+// then refresh from the network (stale-while-revalidate). Once the full Data
+// CSV is parsed, buildSummaryTabs() takes over with live (filter-aware) counts.
+async function loadSummaries() {
+  renderSummaryCSVs(lsGet('ms_csv_editors'), lsGet('ms_csv_areas'));
+  async function tryTab(url, cacheKey) {
+    try {
+      var r = await fetch(url);
+      if (!r.ok) return null;
+      var t = await r.text();
+      if (t.trim().charAt(0) === '<') return null; // HTML error page, not CSV
+      lsSet(cacheKey, t);
+      return t;
+    } catch (e) { return null; }
+  }
+  var results = await Promise.all([
+    tryTab(EDITORS_CSV_URL, 'ms_csv_editors'),
+    tryTab(AREAS_CSV_URL, 'ms_csv_areas')
+  ]);
+  renderSummaryCSVs(results[0], results[1]);
+}
 
-// Show when the pipeline last pulled from Crossref (meta.json). Cached so it
-// paints instantly on repeat visits, then refreshes in the background.
-var LAST_PULL_CACHE_KEY = 'ms2_lastPull';
+// Render the Editors/Areas panels from raw CSV text (cached or freshly fetched).
+// No-op once the Data CSV has loaded — buildSummaryTabs() then owns these lists.
+function renderSummaryCSVs(edText, arText) {
+  if (allPapers.length > 0) return;
+  if (edText) {
+    var eds = parseCSV(edText, 'Editor');
+    // Pipeline emits the Editors tab already sorted by paper count descending.
+    if (eds.length) renderEditorsSummary(eds.map(function(e) { return { label: e['Editor'], count: e['Papers'] }; }));
+  }
+  if (arText) {
+    var ars = parseCSV(arText, 'Area');
+    if (ars.length) document.getElementById('summaryAreasList').innerHTML = ars.map(function(a) {
+      return '<div class="summary-item" onclick="filterByArea(\'' + escAttr(a['Area']) + '\')"><span class="summary-count">' + esc(a['Papers']) + '</span> papers in ' + esc(a['Area']) + '</div>';
+    }).join('');
+  }
+}
+
+// Show when the pipeline last checked Crossref for new papers (Meta tab).
+// The value changes only ~weekly, so show the cached value instantly on load
+// (no late pop-in) and refresh it in the background.
+var LAST_PULL_CACHE_KEY = 'ms_lastPull';
 function setLastPullText(date) {
   var el = document.getElementById('lastPull');
   if (el && date) el.textContent = 'Last publication data pull: ' + date;
@@ -693,11 +737,19 @@ function loadLastPull() {
     var cached = localStorage.getItem(LAST_PULL_CACHE_KEY);
     if (cached) setLastPullText(cached);
   } catch (e) {}
-  fetch(META_URL, { cache: 'no-cache' }).then(function(r) { return r && r.ok ? r.json() : null; }).then(function(meta) {
-    var date = meta && meta.lastPull;
-    if (date) {
-      setLastPullText(date);
-      try { localStorage.setItem(LAST_PULL_CACHE_KEY, date); } catch (e) {}
+  fetch(META_CSV_URL).then(function(r) { return r && r.ok ? r.text() : null; }).then(function(txt) {
+    if (!txt || txt.trim().charAt(0) === '<') return; // not CSV (error page)
+    var lines = txt.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      var cols = parseLine(lines[i]);
+      if (cols.length >= 2 && clean(cols[0]) === 'Last Publication Data Pull') {
+        var date = clean(cols[1]);
+        if (date) {
+          setLastPullText(date);
+          try { localStorage.setItem(LAST_PULL_CACHE_KEY, date); } catch (e) {}
+        }
+        return;
+      }
     }
   }).catch(function() {});
 }
@@ -1555,23 +1607,23 @@ function toggleRecent() {
   }
 }
 
-// Pre-fetch the small recent.json (papers first seen recently) at page load so
-// the "Recently added" view opens instantly. If the file is missing we fall back
-// to scanning the full Data set; a transient network error retries a few times.
+// Pre-fetch the small RecentlyAdded tab at page load (like the Editors/Areas/
+// Authors tabs) so the view opens instantly. A genuinely missing tab falls back
+// to scanning the Data set; a transient network error retries a few times.
 async function loadRecent(attempt) {
   recentFetched = true;
   recentLoading = true;
   try {
-    var r = await fetch(RECENT_URL, { cache: 'no-cache' });
-    if (r.status === 404) { // file not generated yet -> fall back to scanning allPapers
+    var r = await fetch(RECENT_CSV_URL);
+    if (!r.ok) throw new Error('HTTP ' + r.status); // transient -> retry below
+    var t = await r.text();
+    if (t.trim().charAt(0) === '<') { // HTML error page = tab missing -> fall back
       recentData = null;
       recentLoading = false;
       if (recentMode) renderRecent();
       return;
     }
-    if (!r.ok) throw new Error('HTTP ' + r.status); // transient -> retry below
-    var rows = await r.json();
-    if (!Array.isArray(rows)) rows = [];
+    var rows = parseCSV(t, 'Title');
     rows.forEach(normalizeEditors); // populate _editors / _area so the tags render
     recentData = rows; // authoritative once loaded, even if empty
   } catch (e) {
@@ -1875,10 +1927,11 @@ window.addEventListener('scroll', scheduleCompact, { passive: true });
 if (compactSticky.addEventListener) compactSticky.addEventListener('change', applyCompact);
 else if (compactSticky.addListener) compactSticky.addListener(applyCompact);
 
-loadLastPull(); // small + cached: render the last-pull date first, before the big papers.json
+loadLastPull(); // small + cached: render the last-pull date first, before the big Data CSV
 loadData();
 loadAuthors();
-loadRecent(); // pre-fetch the small recent.json so the "Recently added" view opens instantly
+loadSummaries();
+loadRecent(); // pre-fetch the small RecentlyAdded tab so the view opens instantly
 </script>
 
 <!-- ── Accounts: sign in / register modal ─────────────────────────────────── -->

@@ -28,21 +28,26 @@ keep that in mind if a change there is warranted.
 
 ## Current /fun/ apps
 `portfoliofitgame` · `capitals` · `nomoi` · `rooks` · `sudoku` · `snake` · `ms` ·
-`ms2` · `mnsc_scraper-to-use-locally`
+`ms-old` · `mnsc_scraper-to-use-locally` (plus a redirect stub at `fun/ms2/`)
 
-## `/fun/ms2` — the Google-free (v2) Management Science browser
-`fun/ms2/` is an experimental rebuild of `fun/ms/` that uses **no Google Sheets**.
-Its data lives as static JSON in `fun/ms2/data/` (`papers.json`, `authors.json`,
+## `/fun/ms` — the Google-free Management Science browser
+`fun/ms/` is the Management Science paper browser. It uses **no Google Sheets**:
+its data lives as static JSON in `fun/ms/data/` (`papers.json`, `authors.json`,
 `affiliations.json`, `recent.json`, `meta.json`), built directly from the Crossref
-API by `fun/ms2/_scraper/build-data.mjs` and refreshed by the GitHub Action
-`.github/workflows/ms2-update-data.yml` (daily + manual), which commits the
+API by `fun/ms/_scraper/build-data.mjs` and refreshed by the GitHub Action
+`.github/workflows/ms-update-data.yml` (daily + manual), which commits the
 refreshed files back to the repo and then verifies the live site serves them
-(self-healing a transiently failed Pages deploy by requesting a rebuild). The page (`fun/ms2/index.html`) reads those
+(self-healing a transiently failed Pages deploy by requesting a rebuild). The page (`fun/ms/index.html`) reads those
 files with `fetch()` — GitHub Pages serves them from its CDN, same origin. To
 change the dataset, edit only the `*_URL` constants near the top of its `<script>`.
 The `_scraper/` folder and `_HOW-IT-WORKS.md` are underscore-prefixed so Jekyll
 does not publish them; `data/` (no underscore) IS published and must stay served.
-See `fun/ms2/_HOW-IT-WORKS.md`.
+See `fun/ms/_HOW-IT-WORKS.md`.
+
+This app was developed at `fun/ms2/` (that path now holds a redirect stub to
+`/fun/ms/`) and replaced the original Google-Sheets-backed version, which is
+retired-but-served at `fun/ms-old/` (noindex; its data still comes from the
+"ManSci Metadata" Google Sheet at runtime).
 
 ## `/lab/ideasearchlab` — self-contained, built from this repo
 

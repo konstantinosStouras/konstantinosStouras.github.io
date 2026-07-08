@@ -1,7 +1,7 @@
-# ms2 — how it works (the Google-free Management Science browser)
+# fun/ms — how it works (the Google-free Management Science browser)
 
-`stouras.com/fun/ms2/` is an experiment: the **same** paper browser as
-`stouras.com/fun/ms/`, but with **no Google Sheet anywhere**. This file explains
+`stouras.com/fun/ms/` is the **same** paper browser as the original
+(now retired to `stouras.com/fun/ms-old/`), but with **no Google Sheet anywhere**. This file explains
 where the data lives, how a visitor gets it, and how it stays up to date.
 
 > The underscore in this filename (and in `_scraper/`) tells GitHub Pages' Jekyll
@@ -24,8 +24,8 @@ opens the page, their browser talks only to stouras.com. Google is never involve
 ## The pieces
 
 ```
-fun/ms2/
-├─ index.html              ← the page (a copy of /fun/ms/ wired to local JSON)
+fun/ms/
+├─ index.html              ← the page (the old /fun/ms/ UI wired to local JSON)
 ├─ data/                   ← the "database": static JSON, served to visitors
 │  ├─ papers.json          ← every paper (the main dataset)
 │  ├─ authors.json         ← per-author counts / areas / name variants
@@ -38,7 +38,7 @@ fun/ms2/
 │  └─ mock-crossref.json   ← a tiny fake feed for local testing
 └─ _HOW-IT-WORKS.md        ← this file
 
-.github/workflows/ms2-update-data.yml   ← runs the scraper on a schedule
+.github/workflows/ms-update-data.yml   ← runs the scraper on a schedule
 ```
 
 ## How the data flows
@@ -47,14 +47,14 @@ fun/ms2/
    affiliations, volume/issue/page, year, abstract, and — for 2011+ papers — the
    "This paper was accepted by …" editor sentence) is fetched from
    `https://api.crossref.org/journals/0025-1909/works`. That is the same public
-   source the original `/fun/ms/` pipeline ultimately draws from.
+   source the original Sheets pipeline (now at `/fun/ms-old/`) ultimately draws from.
 
 2. **Build step: `build-data.mjs`.** It pages through all ~13,000 records, maps each
    into the exact field shape the page expects, derives the author/affiliation
    summaries, tracks which DOIs are new (so "Recently added" works), and writes the
    six JSON files into `data/`. It needs nothing installed — plain Node 20.
 
-3. **Automation: the GitHub Action.** `.github/workflows/ms2-update-data.yml` runs
+3. **Automation: the GitHub Action.** `.github/workflows/ms-update-data.yml` runs
    `build-data.mjs` **every day at 05:00 UTC** (and whenever you click *Run workflow*, and
    once whenever the scraper code changes). If the data changed, it commits the new
    JSON back to the repo. GitHub Actions runners have open internet, so they can
@@ -64,7 +64,7 @@ fun/ms2/
    dataset**. GitHub Pages deploys occasionally fail with a transient error (it
    happened on 2026-07-03 and 2026-07-06), which used to mean the site silently kept
    serving stale data until the next unrelated commit. Now the workflow polls
-   `stouras.com/fun/ms2/data/meta.json`, requests a fresh Pages build via the API if
+   `stouras.com/fun/ms/data/meta.json`, requests a fresh Pages build via the API if
    the deploy didn't land, and fails the run loudly if the site is still stale — so
    a broken deploy shows up as a red ✗ in the Actions tab instead of going unnoticed.
 
@@ -75,7 +75,7 @@ fun/ms2/
 ## Updating the data yourself
 
 - **Automatic:** nothing to do — it refreshes weekly.
-- **On demand:** GitHub → **Actions** tab → *ms2 — update Management Science data*
+- **On demand:** GitHub → **Actions** tab → *ms — update Management Science data*
   → **Run workflow**.
 - **Change what's collected:** edit `_scraper/build-data.mjs`, commit; the next run
   picks it up. To point the page at a different data location, change only the
@@ -86,27 +86,27 @@ fun/ms2/
 Node 20+; no install needed. The mock feed avoids hitting the network:
 
 ```bash
-cd fun/ms2/_scraper
+cd fun/ms/_scraper
 MS2_MOCK=./mock-crossref.json node build-data.mjs   # writes sample data/*.json
 ```
 
-Then open `fun/ms2/index.html` through any static server and browse.
+Then open `fun/ms/index.html` through any static server and browse.
 
-## Honest limitations (vs. the Sheets version at /fun/ms/)
+## Honest limitations (vs. the old Sheets version at /fun/ms-old/)
 
 - **Editors and research areas exist only for ~2011+ papers**, because they are
   parsed from the "This paper was accepted by …" sentence in the abstract. This is
-  the same limitation the original has. Special-issue sentences ("accepted by X for
+  the same limitation the old version has. Special-issue sentences ("accepted by X for
   the Special Issue on Y") split like the sheet does: X is the editor, the
   special-issue title is the area. On top of that, `_scraper/editor-overrides.json`
   carries a one-time import of the editors the sheet collected from sources that
   don't exist on Crossref (INFORMS page scrapes and a hand-curated tab); the build
-  uses it whenever Crossref itself yields no editor, so ms2's per-editor counts
-  match /fun/ms/ (and exceed it slightly where the abstract names an editor the
+  uses it whenever Crossref itself yields no editor, so this page's per-editor counts
+  match the sheet-backed version (and exceed it slightly where the abstract names an editor the
   sheet missed). If the sheet gains more hand-collected editors before it retires,
   regenerate the file with `_scraper/make-editor-overrides.mjs`.
 - **Author and affiliation cleanup is lighter.** The Sheets pipeline has years of
-  hand-tuned name-merging and ORCID resolution. ms2 does a reasonable automatic
+  hand-tuned name-merging and ORCID resolution. this pipeline does a reasonable automatic
   version (ORCID when Crossref provides it, otherwise name-based), so a few authors
   may appear under more than one spelling.
 - **"Recently added" is seeded on the first run.** The very first build stamps the
