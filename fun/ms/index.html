@@ -1935,16 +1935,19 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
 (function () {
   'use strict';
 
-  // ↓↓↓ PASTE YOUR FIREBASE WEB CONFIG HERE (see fun/ms/_ACCOUNTS-SETUP.md) ↓↓↓
+  // Web config of the dedicated "ms-paper-browser" Firebase project (see
+  // fun/ms/_ACCOUNTS-SETUP.md). These values are not secrets — every Firebase
+  // web app ships them to the browser; access is enforced by the Firestore
+  // security rules in fun/ms/_firestore.rules.
   var FB_CONFIG = {
-    apiKey: "PASTE_API_KEY",
-    authDomain: "PASTE_PROJECT.firebaseapp.com",
-    projectId: "PASTE_PROJECT_ID",
-    storageBucket: "PASTE_PROJECT.appspot.com",
-    messagingSenderId: "PASTE_SENDER_ID",
-    appId: "PASTE_APP_ID"
+    apiKey: "AIzaSyDJSZ20yUnSx8kkI_FocTxWVZOjc6dhBM4",
+    authDomain: "ms-paper-browser.firebaseapp.com",
+    projectId: "ms-paper-browser",
+    storageBucket: "ms-paper-browser.firebasestorage.app",
+    messagingSenderId: "784267873924",
+    appId: "1:784267873924:web:3766507c09c59c32c2fcd1",
+    measurementId: "G-L8Y2WLPJRS"
   };
-  // ↑↑↑ ─────────────────────────────────────────────────────────────────── ↑↑↑
 
   // Third-party sign-in buttons, in display order. List a provider here ONLY
   // after enabling it in Firebase console → Authentication → Sign-in method
