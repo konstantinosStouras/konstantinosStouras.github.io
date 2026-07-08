@@ -88,13 +88,16 @@ const PULL_DATE = process.env.LIT_PULL_DATE || new Date().toISOString().slice(0,
 // Research's first volumes (1952-1955) appeared as the "Journal of the
 // Operations Research Society of America" under its own ISSN. Records from
 // all ISSNs of a source are merged and deduped by DOI.
+// aia: the journal publishes "Articles in Advance" (INFORMS) / OnlineFirst
+// (SAGE), so a record without volume+issue is a genuine advance article.
+// PNAS and ACM EC have no such stage — their rows never carry that status.
 const JOURNALS = [
-  { key: 'ms',   name: 'Management Science',                            issns: ['0025-1909', '1526-5501'], publisher: 'INFORMS', editors: true },
-  { key: 'opre', name: 'Operations Research',                           issns: ['0030-364X', '1526-5463', '0096-3984'], publisher: 'INFORMS' },
-  { key: 'mksc', name: 'Marketing Science',                             issns: ['0732-2399', '1526-548X'], publisher: 'INFORMS', seEditors: true },
-  { key: 'msom', name: 'Manufacturing & Service Operations Management', issns: ['1523-4614', '1526-5498'], publisher: 'INFORMS' },
-  { key: 'isre', name: 'Information Systems Research',                  issns: ['1047-7047', '1526-5536'], publisher: 'INFORMS', seEditors: true, aeEditors: true },
-  { key: 'pom',  name: 'Production and Operations Management',          issns: ['1059-1478', '1937-5956'], publisher: 'SAGE' },
+  { key: 'ms',   name: 'Management Science',                            issns: ['0025-1909', '1526-5501'], publisher: 'INFORMS', aia: true, editors: true },
+  { key: 'opre', name: 'Operations Research',                           issns: ['0030-364X', '1526-5463', '0096-3984'], publisher: 'INFORMS', aia: true },
+  { key: 'mksc', name: 'Marketing Science',                             issns: ['0732-2399', '1526-548X'], publisher: 'INFORMS', aia: true, seEditors: true },
+  { key: 'msom', name: 'Manufacturing & Service Operations Management', issns: ['1523-4614', '1526-5498'], publisher: 'INFORMS', aia: true },
+  { key: 'isre', name: 'Information Systems Research',                  issns: ['1047-7047', '1526-5536'], publisher: 'INFORMS', aia: true, seEditors: true, aeEditors: true },
+  { key: 'pom',  name: 'Production and Operations Management',          issns: ['1059-1478', '1937-5956'], publisher: 'SAGE', aia: true },
 ];
 const PNAS = { key: 'pnas', name: 'PNAS', issns: ['0027-8424', '1091-6490'], publisher: 'National Academy of Sciences' };
 const EC = { key: 'ec', name: 'ACM EC', publisher: 'ACM', firstYear: 2020 };
@@ -273,7 +276,7 @@ function mapWork(item, src) {
 
   const volume = item.volume || '';
   const issue = item.issue || '';
-  const status = (!volume && !issue) ? 'Articles in Advance' : '';
+  const status = (src.aia && !volume && !issue) ? 'Articles in Advance' : '';
   const doi = item.DOI ? 'https://doi.org/' + item.DOI : '';
 
   const row = {

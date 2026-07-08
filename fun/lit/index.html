@@ -447,7 +447,7 @@
         </div>
         <div id="chipsYear" class="chips"></div>
       </div>
-      <div class="filter-group" id="groupEditor" title="Editorial data is available for Management Science papers only.">
+      <div class="filter-group" id="groupEditor" style="display:none" title="Editorial data is available for Management Science papers only.">
         <label>Accepting Editor (Mgmt Science)</label>
         <div class="custom-select" id="csEditor" data-type="editor">
           <div class="custom-select-trigger" onclick="toggleDrop('csEditor')">All editors</div>
@@ -455,7 +455,7 @@
         </div>
         <div id="chipsEditor" class="chips"></div>
       </div>
-      <div class="filter-group" id="groupArea" title="Editorial areas are available for Management Science papers only.">
+      <div class="filter-group" id="groupArea" style="display:none" title="Editorial areas are available for Management Science papers only.">
         <label>Area (Mgmt Science)</label>
         <div class="custom-select" id="csArea" data-type="area">
           <div class="custom-select-trigger" onclick="toggleDrop('csArea')">All areas</div>
@@ -484,8 +484,8 @@
       </div>
     </div>
     <div class="summary-tab-btns" style="margin-top:12px;">
-      <button class="summary-tab-btn" id="tabBtnEditors" onclick="toggleSummary('editors')" title="Accepting editors are collected for Management Science papers only.">Editors <span style="font-weight:400;opacity:.65">(MS)</span></button>
-      <button class="summary-tab-btn" id="tabBtnAreas" onclick="toggleSummary('areas')" title="Editorial areas are collected for Management Science papers only.">Areas <span style="font-weight:400;opacity:.65">(MS)</span></button>
+      <button class="summary-tab-btn" id="tabBtnEditors" style="display:none" onclick="toggleSummary('editors')" title="Accepting editors are collected for Management Science papers only.">Editors <span style="font-weight:400;opacity:.65">(MS)</span></button>
+      <button class="summary-tab-btn" id="tabBtnAreas" style="display:none" onclick="toggleSummary('areas')" title="Editorial areas are collected for Management Science papers only.">Areas <span style="font-weight:400;opacity:.65">(MS)</span></button>
       <button class="summary-tab-btn" onclick="toggleSummary('authors')" title="Authors are resolved by ORCID where available; authors with a single paper are not listed.">Authors</button>
       <button class="recent-tab-btn" id="recentBtn" onclick="toggleRecent()" title="Papers added to the database in the last 4 weeks, newest first.">Recently added papers</button>
     </div>
@@ -653,9 +653,10 @@ function matchesJournal(p) {
 }
 
 // Editors/Areas exist for Management Science only: those two filter groups and
-// summary tabs appear only while MS is in scope (no journal selected, or MS /
-// "all PNAS…" no — specifically 'ms' selected).
-function msInScope() { return sel.journal.size === 0 || sel.journal.has('ms'); }
+// summary tabs appear only when the user explicitly selects MS in the journal
+// filter (alone or together with other journals) — never on the default
+// all-journals landing, and never for e.g. an MSOM-only search.
+function msInScope() { return sel.journal.has('ms'); }
 function updateMsScopeUI() {
   var show = msInScope();
   ['groupEditor', 'groupArea', 'tabBtnEditors', 'tabBtnAreas'].forEach(function(id) {
