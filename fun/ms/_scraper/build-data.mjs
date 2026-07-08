@@ -1,14 +1,14 @@
 /*
- * build-data.mjs — the ms2 data pipeline (Google-free).
+ * build-data.mjs — the fun/ms data pipeline (Google-free).
  * ===========================================================================
- * This is the *entire* backend for stouras.com/fun/ms2/. It runs on a GitHub
- * Actions runner (see .github/workflows/ms2-update-data.yml), talks directly to
+ * This is the *entire* backend for stouras.com/fun/ms/. It runs on a GitHub
+ * Actions runner (see .github/workflows/ms-update-data.yml), talks directly to
  * the public Crossref REST API, and writes a handful of static JSON files into
- * fun/ms2/data/. GitHub Pages then serves those JSON files from its CDN, and the
- * ms2 page reads them with plain fetch(). There is no database and no Google
+ * fun/ms/data/. GitHub Pages then serves those JSON files from its CDN, and the
+ * page reads them with plain fetch(). There is no database and no Google
  * Sheet anywhere in the path a visitor touches.
  *
- * What it produces in fun/ms2/data/:
+ * What it produces in fun/ms/data/:
  *   papers.json        every Management Science article (the main dataset)
  *   authors.json       per-author aggregates (paper counts, areas, name variants)
  *   affiliations.json  per-affiliation aggregates
@@ -42,7 +42,7 @@ const TOP_AFFILIATIONS = 1500;     // cap the affiliations file so it stays smal
 // The date we stamp newly seen papers with. Overridable so a re-run is reproducible.
 const PULL_DATE = process.env.MS2_PULL_DATE || new Date().toISOString().slice(0, 10);
 
-// One-time import of the editor/area data the /fun/ms/ Google Sheet collected
+// One-time import of the editor/area data the old /fun/ms-old/ Google Sheet collected
 // from sources that don't exist on Crossref (INFORMS page scrapes + a manually
 // curated tab). Used only when a paper's Crossref record yields no editor.
 // Built by make-editor-overrides.mjs; { "<doi>": { editor, area? } }.
@@ -62,7 +62,7 @@ const SELECT = [
 async function fetchJson(url, attempt = 0) {
   try {
     const res = await fetch(url, {
-      headers: { 'User-Agent': `ms2-scraper/1.0 (mailto:${MAILTO})` },
+      headers: { 'User-Agent': `ms-scraper/1.0 (mailto:${MAILTO})` },
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
@@ -102,7 +102,7 @@ async function fetchAllWorks() {
   return all;
 }
 
-// ── Mapping a Crossref record to a ms2 paper row ────────────────────────────
+// ── Mapping a Crossref record to a paper row ────────────────────────────
 
 function stripJats(s) {
   if (!s) return '';
@@ -135,7 +135,7 @@ function authorName(a) {
 // defends itself with the same list (normalizeArea), but cleaning at the
 // source keeps the derived files (per-author/affiliation area lists, the
 // Areas dropdown vocabulary) clean too — the Sheets pipeline stored areas
-// already cleaned, so this restores parity with /fun/ms/.
+// already cleaned, so this restores parity with the sheet.
 function stripTrailers(s) {
   return s
     .replace(/\.?\s*(funding|supplemental material|history|data|acknowledgments?|conflicts?[^:]{0,30}|epub)\s*:.*$/i, '')
@@ -193,8 +193,8 @@ function normArea(s) {
 
 // Some papers carry the accepting editor in Crossref's structured `assertion`
 // metadata instead of (or before it appears in) the abstract sentence. The
-// Google-Sheets pipeline behind /fun/ms/ reads this field first
-// (Assertion_Editor), so without it ms2 under-counted several editors. The
+// Google-Sheets pipeline behind /fun/ms-old/ reads this field first
+// (Assertion_Editor), so without it this pipeline under-counted several editors. The
 // value is a bare name ("Gustavo Manso"); wrap it in the canonical sentence so
 // the page's cleanEditorField() parses it exactly like the abstract-sourced ones.
 function assertionEditor(item) {
@@ -443,7 +443,7 @@ function publicRow(p) {
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log(`ms2 build: pull date ${PULL_DATE}`);
+  console.log(`ms data build: pull date ${PULL_DATE}`);
   await mkdir(DATA_DIR, { recursive: true });
 
   const rawWorks = await fetchAllWorks();

@@ -1,28 +1,27 @@
-name: ms2 — update Management Science data
+name: ms — update Management Science data
 
-# Builds the static JSON dataset for stouras.com/fun/ms2/ by pulling directly
-# from the Crossref API, then commits the refreshed files in fun/ms2/data/ back
-# to the branch. This is the *entire* backend for ms2 — no server, no database,
-# no Google Sheet. See fun/ms2/_HOW-IT-WORKS.md.
+# Builds the static JSON dataset for stouras.com/fun/ms/ by pulling directly
+# from the Crossref API, then commits the refreshed files in fun/ms/data/ back
+# to the branch. This is the *entire* backend for the page — no server, no
+# database, no Google Sheet. See fun/ms/_HOW-IT-WORKS.md.
 
 on:
   schedule:
-    # Daily, 05:00 UTC — the same cadence as the /fun/ms/ Google Sheet's
-    # update trigger, so the two apps never drift apart by more than a day
-    # while both are live. Nothing is committed (and no Pages deploy happens)
-    # on days when Crossref has nothing new, so the extra runs are free.
+    # Daily, 05:00 UTC — keeps the dataset within a day of Crossref. Nothing
+    # is committed (and no Pages deploy happens) on days when Crossref has
+    # nothing new, so the extra runs are free.
     - cron: '0 5 * * *'
   workflow_dispatch: {}      # let me run it on demand from the Actions tab
   push:
     # Run once whenever the pipeline itself changes, so a new branch seeds its
-    # data immediately instead of waiting for the weekly schedule.
+    # data immediately instead of waiting for the daily schedule.
     paths:
-      - '.github/workflows/ms2-update-data.yml'
-      - 'fun/ms2/_scraper/**'
+      - '.github/workflows/ms-update-data.yml'
+      - 'fun/ms/_scraper/**'
 
 # Never let two data builds race; let a running one finish.
 concurrency:
-  group: ms2-update-data-${{ github.ref }}
+  group: ms-update-data-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
@@ -44,17 +43,17 @@ jobs:
       - name: Build data from Crossref
         env:
           MS2_MAILTO: kstouras@gmail.com   # Crossref "polite pool" contact
-        run: node fun/ms2/_scraper/build-data.mjs
+        run: node fun/ms/_scraper/build-data.mjs
 
       - name: Commit refreshed data
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add fun/ms2/data
+          git add fun/ms/data
           if git diff --cached --quiet; then
             echo "No data changes — nothing to commit."
           else
-            git commit -m "ms2: refresh Management Science data from Crossref"
+            git commit -m "ms: refresh Management Science data from Crossref"
             git push origin HEAD:${{ github.ref_name }}
           fi
 
@@ -69,9 +68,9 @@ jobs:
         if: github.ref == 'refs/heads/master'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          LIVE_META: https://www.stouras.com/fun/ms2/data/meta.json
+          LIVE_META: https://www.stouras.com/fun/ms/data/meta.json
         run: |
-          want=$(jq -r .lastPull fun/ms2/data/meta.json)
+          want=$(jq -r .lastPull fun/ms/data/meta.json)
           echo "Committed dataset lastPull: $want"
           poll() {  # poll <tries> — succeed once live lastPull >= committed lastPull
             for i in $(seq 1 "$1"); do
@@ -90,16 +89,16 @@ jobs:
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/pages/builds" \
             || echo "WARNING: Pages rebuild request failed (check token permissions)."
           if poll 10; then echo "Live site recovered after the rebuild request."; exit 0; fi
-          echo "::error::Live site is still serving stale ms2 data (wanted lastPull >= $want). Re-run this workflow or the pages-build-deployment workflow."
+          echo "::error::Live site is still serving stale ms data (wanted lastPull >= $want). Re-run this workflow or the pages-build-deployment workflow."
           exit 1
 
       - name: Summary
         if: always()
         run: |
-          echo "### ms2 data build" >> "$GITHUB_STEP_SUMMARY"
-          if [ -f fun/ms2/data/meta.json ]; then
+          echo "### ms data build" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f fun/ms/data/meta.json ]; then
             echo '```json' >> "$GITHUB_STEP_SUMMARY"
-            cat fun/ms2/data/meta.json >> "$GITHUB_STEP_SUMMARY"
+            cat fun/ms/data/meta.json >> "$GITHUB_STEP_SUMMARY"
             echo '' >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
           fi

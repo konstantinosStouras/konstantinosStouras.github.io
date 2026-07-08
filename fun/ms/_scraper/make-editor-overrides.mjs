@@ -2,7 +2,7 @@
  * make-editor-overrides.mjs — one-time import of the ms Google Sheet's
  * hand-collected editor/area data.
  * ===========================================================================
- * The Sheets pipeline behind stouras.com/fun/ms/ accumulated accepting-editor
+ * The Sheets pipeline behind the retired stouras.com/fun/ms-old/ accumulated accepting-editor
  * names (and areas) from sources that do not exist on Crossref: scraping the
  * INFORMS article pages and a manually curated mnsc_articles_editors tab.
  * Crossref abstracts carry the "This paper was accepted by …" sentence for
