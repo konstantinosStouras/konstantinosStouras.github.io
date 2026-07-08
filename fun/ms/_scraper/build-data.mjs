@@ -188,7 +188,13 @@ function acceptance(abstractText) {
 }
 
 function normArea(s) {
-  return (s || '').replace(/<[^>]+>/g, '').replace(/\.\s*$/, '').trim().toLowerCase();
+  const a = (s || '').replace(/<[^>]+>/g, '').replace(/\.\s*$/, '').trim().toLowerCase();
+  // The Digital Finance special issue appears under several sentence spellings
+  // ("Special Issue on Digital Finance", "Virtual Special Issue on Digital
+  // Finance", "finance and will be included in the Virtual Special Issue on
+  // Digital Finance", …). They are one area.
+  if (/special issue on (the )?digital finance/.test(a)) return 'special issue on the digital finance';
+  return a;
 }
 
 // Some papers carry the accepting editor in Crossref's structured `assertion`
