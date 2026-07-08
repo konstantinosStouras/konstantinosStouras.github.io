@@ -47,7 +47,9 @@ See `fun/ms/_HOW-IT-WORKS.md`.
 This app was developed at `fun/ms2/` (that path now holds a redirect stub to
 `/fun/ms/`) and replaced the original Google-Sheets-backed version, which is
 retired-but-served at `fun/ms-old/` (noindex; its data still comes from the
-"ManSci Metadata" Google Sheet at runtime).
+"ManSci Metadata" Google Sheet at runtime). `ms-old` is **deliberately unlisted**:
+it has no card on `fun/index.html` and should not get one — it stays reachable
+only by direct URL. It is the intended exception to the keep-in-sync rule above.
 
 ## `/lab/ideasearchlab` — self-contained, built from this repo
 
