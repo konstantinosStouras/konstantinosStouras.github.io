@@ -221,6 +221,16 @@
 
   // ======================================================================
   //  QUIZ  (verbatim; all correct to pass; randomized option order)
+  // ----------------------------------------------------------------------
+  //  QUICK-TEST ANSWER KEY  (the "Quick check" screen — get all right to play)
+  //    Q1  "highest possible value at position 52"      -> 60
+  //    Q2  "what do you earn" (reveals 30 & 62)         -> 52
+  //    Q3  (Arm B) "ask the assistant about position 90"-> It says it has no data there
+  //    Q4  (Arm B) "the assistant's answer at 50 is"    -> An estimate that can be wrong
+  //  To breeze through while testing, open the app in debug mode and these are
+  //  PRE-SELECTED for you (just click Submit):
+  //    https://www.stouras.com/lab/search-v2/?arm=B&debug=1&key=stouras
+  //  (debug also overlays the true landscape + assistant dots + stratum/id.)
   // ======================================================================
   var Q_COMMON = [
     { id: 'q1', prompt: 'Position 50 shows 40 cents. What is the highest possible value at position 52?',
@@ -250,6 +260,21 @@
     }
     $('quiz-body').innerHTML = html;
     $('quiz-feedback').style.display = 'none';
+    // Debug/testing only: pre-select the correct answers and show a hint, so a
+    // tester can click Submit and get into the game immediately. Gated on the
+    // debug key, so real subjects never see this.
+    if (DEBUG) {
+      for (var qi = 0; qi < qs.length; qi++) {
+        var correct = qs[qi].options.filter(function (o) { return o.correct; })[0].t;
+        var inputs = document.getElementsByName(qs[qi].id);
+        for (var j = 0; j < inputs.length; j++) if (inputs[j].value === correct) inputs[j].checked = true;
+      }
+      var hint = document.createElement('div');
+      hint.className = 'note';
+      hint.style.marginTop = '10px';
+      hint.textContent = 'Debug: correct answers are pre-selected — just click Submit. (Answers: Q1=60, Q2=52' + (arm === 'B' ? ', Q3=has no data there, Q4=an estimate that can be wrong' : '') + '.)';
+      $('quiz-body').appendChild(hint);
+    }
     show('s-quiz');
   }
 
