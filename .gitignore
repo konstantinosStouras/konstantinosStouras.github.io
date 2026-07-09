@@ -5,3 +5,7 @@ Rplots.pdf
 fun/ft50/_scraper/_mock-out/
 fun/ft50/_scraper/_ft50-check-summary.md
 fun/lit/_scraper/_mock-out/
+
+# search-v2: plain (un-obfuscated) analysis pool + node deps for its tools
+lab/search-v2/tools/pool_plain.json
+node_modules/

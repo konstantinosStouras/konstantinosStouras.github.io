@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Search for Knowledge — Admin</title>
+  <meta name="robots" content="noindex,nofollow" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232b2b2b'/%3E%3Cpath d='M9 22V10m7 12V14m7 8v-6' stroke='white' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="../styles.css" />
+  <style>
+    .admin-wrap{max-width:1120px;}
+    .tabs{display:flex; gap:6px; border-bottom:1px solid var(--line); margin:8px 0 18px;}
+    .tab{border:none; background:none; padding:10px 16px; font-size:15px; font-weight:600; color:var(--muted); cursor:pointer; border-bottom:2px solid transparent;}
+    .tab.on{color:var(--ink); border-bottom-color:var(--blue);}
+    .field{margin:12px 0;}
+    .field label{display:block; font-weight:600; font-size:14px; margin-bottom:5px;}
+    .field input[type=text], .field input[type=password]{width:100%; max-width:420px; padding:9px 11px; border:1px solid var(--line); border-radius:8px; font-size:15px;}
+    .seg{display:inline-flex; border:1px solid #c9ced4; border-radius:8px; overflow:hidden;}
+    .seg button{border:none; background:#fff; padding:8px 14px; font-size:14px; cursor:pointer; color:var(--ink);}
+    .seg button.on{background:var(--blue); color:#fff;}
+    .switch-row{display:flex; align-items:center; gap:10px;}
+    .stat-grid{display:flex; gap:14px; flex-wrap:wrap; margin:12px 0;}
+    .stat-box{border:1px solid var(--line); border-radius:10px; padding:12px 16px; min-width:130px;}
+    .stat-box .n{font-size:26px; font-weight:700;}
+    .stat-box .l{font-size:12.5px; color:var(--muted);}
+    .data-table{width:100%; border-collapse:collapse; font-size:12.5px; margin-top:10px;}
+    .data-table th,.data-table td{border:1px solid var(--line); padding:5px 7px; text-align:left; white-space:nowrap;}
+    .data-table th{background:var(--panel); position:sticky; top:0;}
+    .table-scroll{max-height:460px; overflow:auto; border:1px solid var(--line); border-radius:8px;}
+    .banner{border-radius:10px; padding:11px 14px; font-size:14px; margin:10px 0;}
+    .banner.info{background:#eef6ff; border:1px solid #cfe2fb; color:#1f4e79;}
+    .banner.warn{background:#fff7ed; border:1px solid #f4d5a8; color:#8a5a12;}
+    .banner.ok{background:#eef8e9; border:1px solid #cfe8c2; color:#2e7d32;}
+    .steps{counter-reset:s;}
+    .steps li{margin:9px 0;}
+    code.k{background:var(--panel); border:1px solid var(--line); border-radius:5px; padding:1px 5px; font-size:13px;}
+  </style>
+</head>
+<body>
+  <div class="nav">
+    <div class="brand">Search for Knowledge <span class="muted" style="font-weight:400; font-size:14px;">· Admin</span></div>
+    <div class="nav-right">
+      <span class="muted small" id="who"></span>
+      <button class="btn btn-ghost btn-sm" id="btn-signout" style="display:none;">Sign out</button>
+    </div>
+  </div>
+
+  <div class="wrap admin-wrap">
+
+    <!-- LOGIN -->
+    <section class="screen active" id="a-login">
+      <h1>Admin sign in</h1>
+      <div id="login-banner"></div>
+      <div class="card" id="login-card" style="max-width:420px;">
+        <div class="field"><label>Email</label><input type="text" id="in-email" autocomplete="username" /></div>
+        <div class="field"><label>Password</label><input type="password" id="in-pass" autocomplete="current-password" /></div>
+        <div class="right"><button class="btn btn-blue" id="btn-login">Sign in</button></div>
+        <div class="feedback bad" id="login-err" style="display:none;"></div>
+      </div>
+    </section>
+
+    <!-- DASHBOARD -->
+    <section class="screen" id="a-dash">
+      <div id="dash-banner"></div>
+      <div class="tabs">
+        <button class="tab on" data-tab="conditions">Conditions &amp; codes</button>
+        <button class="tab" data-tab="data">Data</button>
+        <button class="tab" data-tab="setup">Setup</button>
+      </div>
+
+      <!-- CONDITIONS -->
+      <div class="tab-panel" id="tab-conditions">
+        <h2>Study conditions &amp; session codes</h2>
+        <p class="muted small">These are read live by the participant app (from the <code class="k">config/study</code> document). Changes affect participants who start <b>after</b> you save; people already in progress keep their assignment.</p>
+        <div class="card">
+          <div class="field">
+            <label>Study status</label>
+            <div class="switch-row"><span class="seg" id="seg-open">
+              <button data-v="open" class="on">Open</button><button data-v="closed">Closed</button>
+            </span><span class="muted small">Closed turns away new participants (in-progress subjects still finish).</span></div>
+          </div>
+          <div class="field">
+            <label>Arm assignment</label>
+            <span class="seg" id="seg-arm">
+              <button data-v="url" class="on">From link (?arm)</button>
+              <button data-v="A">Force A (human only)</button>
+              <button data-v="B">Force B (AI assisted)</button>
+              <button data-v="random">Random 50/50</button>
+            </span>
+            <div class="muted small" style="margin-top:6px;">“From link” uses <code class="k">?arm=A</code>/<code class="k">?arm=B</code> and falls back to random.</div>
+          </div>
+          <div class="field"><label>Completion code (shared, both arms)</label><input type="text" id="in-code" placeholder="e.g. C1A2B3C4" /></div>
+          <div class="field"><label>Completion code — Arm A only (optional, overrides shared)</label><input type="text" id="in-codeA" placeholder="optional" /></div>
+          <div class="field"><label>Completion code — Arm B only (optional, overrides shared)</label><input type="text" id="in-codeB" placeholder="optional" /></div>
+          <div class="field"><label>Logging endpoint URL (optional Apps Script, in addition to Firestore)</label><input type="text" id="in-endpoint" placeholder="https://script.google.com/…/exec" /></div>
+          <div class="right"><button class="btn btn-green" id="btn-save">Save conditions</button></div>
+          <div class="feedback" id="save-msg" style="display:none;"></div>
+        </div>
+      </div>
+
+      <!-- DATA -->
+      <div class="tab-panel" id="tab-data" style="display:none;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+          <h2 style="margin:0;">Collected data</h2>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn btn-ghost btn-sm" id="btn-refresh">↻ Refresh</button>
+            <button class="btn btn-ghost btn-sm" id="btn-dl-csv">Download CSV</button>
+            <button class="btn btn-ghost btn-sm" id="btn-dl-json">Download JSON</button>
+          </div>
+        </div>
+        <div id="data-source" class="muted small" style="margin-top:4px;"></div>
+        <div class="stat-grid" id="stat-grid"></div>
+        <h3>Per-session summary</h3>
+        <div class="table-scroll"><table class="data-table" id="sessions-table"></table></div>
+        <h3 style="margin-top:18px;">Events <span class="muted small" id="events-count"></span></h3>
+        <div class="table-scroll"><table class="data-table" id="events-table"></table></div>
+      </div>
+
+      <!-- SETUP -->
+      <div class="tab-panel" id="tab-setup" style="display:none;">
+        <h2>Firebase setup (one time)</h2>
+        <div id="setup-body"></div>
+      </div>
+    </section>
+  </div>
+
+  <script src="../firebase-config.js"></script>
+  <script src="../firebase.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>

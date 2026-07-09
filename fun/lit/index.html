@@ -489,7 +489,7 @@
     <div class="summary-tab-btns" style="margin-top:12px;">
       <button class="summary-tab-btn" id="tabBtnEditors" style="display:none" onclick="toggleSummary('editors')" title="Accepting editors are collected for Management Science papers only.">Editors <span style="font-weight:400;opacity:.65">(MS)</span></button>
       <button class="summary-tab-btn" id="tabBtnAreas" style="display:none" onclick="toggleSummary('areas')" title="Editorial areas are collected for Management Science papers only.">Areas <span style="font-weight:400;opacity:.65">(MS)</span></button>
-      <button class="summary-tab-btn" onclick="toggleSummary('authors')" title="Authors are resolved by ORCID where available; authors with a single paper are not listed.">Authors</button>
+      <button class="summary-tab-btn" id="tabBtnAuthors" style="display:none" onclick="toggleSummary('authors')" title="Authors are resolved by ORCID where available; authors with a single paper are not listed. Per-author editorial areas are collected for Management Science papers only.">Authors</button>
       <button class="recent-tab-btn" id="recentBtn" onclick="toggleRecent()" title="Papers added to the database in the last 4 weeks, newest first.">Recently added papers</button>
     </div>
   </div>
@@ -658,11 +658,13 @@ function matchesJournal(p) {
 // Editors/Areas exist for Management Science only: those two filter groups and
 // summary tabs appear only when the user explicitly selects MS in the journal
 // filter (alone or together with other journals) — never on the default
-// all-journals landing, and never for e.g. an MSOM-only search.
+// all-journals landing, and never for e.g. an MSOM-only search. The Authors
+// tab is gated the same way because its per-author area breakdown ("across N
+// areas") is MS-specific.
 function msInScope() { return sel.journal.has('ms'); }
 function updateMsScopeUI() {
   var show = msInScope();
-  ['groupEditor', 'groupArea', 'tabBtnEditors', 'tabBtnAreas'].forEach(function(id) {
+  ['groupEditor', 'groupArea', 'tabBtnEditors', 'tabBtnAreas', 'tabBtnAuthors'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.style.display = show ? '' : 'none';
   });
@@ -672,7 +674,8 @@ function updateMsScopeUI() {
     if (sel.area.size) { sel.area.clear(); renderChips('area'); }
     var ed = document.getElementById('summaryEditors');
     var ar = document.getElementById('summaryAreas');
-    if ((ed && ed.classList.contains('active')) || (ar && ar.classList.contains('active'))) closeSummaryTabs();
+    var au = document.getElementById('summaryAuthors');
+    if ((ed && ed.classList.contains('active')) || (ar && ar.classList.contains('active')) || (au && au.classList.contains('active'))) closeSummaryTabs();
   }
   // Senior/Associate Editor groups: shown only when the user explicitly
   // selects a journal that has them (ISR both, Marketing Science SE only) —
@@ -719,6 +722,8 @@ function addYearChip(year) {
 function removeChip(type, val) {
   sel[type].delete(val);
   renderChips(type);
+  // Journal-chip changes keep the "Recently added papers" view, re-scoped.
+  if (type === 'journal' && recentMode) { renderRecent(); return; }
   applyFilters();
 }
 
@@ -738,7 +743,8 @@ function addJournalChip(key) {
   if (!key || sel.journal.has(key)) return;
   sel.journal.add(key);
   renderChips('journal');
-  applyFilters();
+  // Journal-chip changes keep the "Recently added papers" view, re-scoped.
+  if (recentMode) renderRecent(); else applyFilters();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -1661,6 +1667,9 @@ function selectItem(csId, type, val) {
   if (sel[type].has(val)) return;
   sel[type].add(val);
   renderChips(type);
+  // Changing the journal scope while viewing "Recently added papers" re-scopes
+  // that view rather than dropping back to the normal papers list.
+  if (type === 'journal' && recentMode) { renderRecent(); return; }
   applyFilters();
 }
 
@@ -1732,9 +1741,11 @@ function applyFilters() {
 }
 
 // Clear all filter selections, chips and search inputs without re-rendering.
-function resetFilterState() {
-  sel.journal.clear(); sel.editor.clear(); sel.area.clear(); sel.se.clear(); sel.ae.clear(); sel.year.clear(); sel.title.clear(); sel.author.clear(); sel.authorIdentity = {}; sel.affiliation.clear();
-  document.getElementById('chipsJournal').innerHTML = '';
+// Pass keepJournals=true to preserve the journal selection (used by the
+// "Recently added papers" view, which is scoped to the selected journals).
+function resetFilterState(keepJournals) {
+  if (!keepJournals) { sel.journal.clear(); document.getElementById('chipsJournal').innerHTML = ''; }
+  sel.editor.clear(); sel.area.clear(); sel.se.clear(); sel.ae.clear(); sel.year.clear(); sel.title.clear(); sel.author.clear(); sel.authorIdentity = {}; sel.affiliation.clear();
   document.getElementById('chipsEditor').innerHTML = '';
   document.getElementById('chipsArea').innerHTML = '';
   document.getElementById('chipsSE').innerHTML = '';
@@ -1790,8 +1801,10 @@ function toggleRecent() {
   recentMode = !recentMode;
   updateRecentButton();
   if (recentMode) {
-    // Standalone view: drop any active filters and close summary panels.
-    resetFilterState();
+    // Standalone view scoped to the selected journal(s): keep the journal
+    // chips (renderRecent filters by them; no selection = all journals) but
+    // drop every other filter, and close summary panels.
+    resetFilterState(true);
     closeSummaryTabs();
     if (!recentFetched) loadRecent(); // fast pre-computed tab; re-renders when ready
     renderRecent();                   // immediate (spinner, fallback, or data)
@@ -1856,7 +1869,9 @@ function renderRecent() {
   cutoff.setHours(0, 0, 0, 0);
   cutoff.setDate(cutoff.getDate() - RECENT_DAYS);
 
+  // Scoped to the selected journal(s); with no selection, all journals show.
   var recent = source
+    .filter(matchesJournal)
     .map(function(p) { return { p: p, d: getAddedDate(p) }; })
     .filter(function(x) { return x.d && x.d >= cutoff; })
     .sort(function(a, b) { return b.d - a.d; })
@@ -1867,10 +1882,13 @@ function renderRecent() {
   currentPage = 1;
 
   var weeks = Math.round(RECENT_DAYS / 7);
-  countEl.innerHTML = '<strong>' + recent.length.toLocaleString() + '</strong> paper' + (recent.length === 1 ? '' : 's') + ' added in the last ' + weeks + ' weeks';
+  var scopeTxt = sel.journal.size
+    ? ' in ' + esc([...sel.journal].map(function(k) { return JOURNAL_LABEL[k] || k; }).join(', '))
+    : '';
+  countEl.innerHTML = '<strong>' + recent.length.toLocaleString() + '</strong> paper' + (recent.length === 1 ? '' : 's') + ' added in the last ' + weeks + ' weeks' + scopeTxt;
 
   if (!recent.length) {
-    list.innerHTML = '<div class="empty-state"><h3>No recently added papers</h3><p>No papers were added to the database in the last ' + weeks + ' weeks.</p></div>';
+    list.innerHTML = '<div class="empty-state"><h3>No recently added papers</h3><p>No papers were added to the database in the last ' + weeks + ' weeks' + scopeTxt + '.</p></div>';
     return;
   }
 
