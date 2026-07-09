@@ -51,8 +51,17 @@ window.SVFirebase = (function () {
   }
 
   // ---- participant side ----------------------------------------------------
+  // Ensure there IS a session, but never replace an existing one. This is
+  // critical on the admin page: it signs in with email/password, and calling
+  // signInAnonymously there would clobber the admin session (bouncing the admin
+  // back to the login screen). Participants have no session yet, so they get an
+  // anonymous one.
+  function ensureAuth() {
+    if (auth.currentUser) return Promise.resolve(auth.currentUser);
+    return sdk.auth.signInAnonymously(auth);
+  }
   function signInAnon() {
-    return init().then(function () { return sdk.auth.signInAnonymously(auth); });
+    return init().then(ensureAuth);
   }
   // Idempotent per (session, seq): a retry or a resumed session overwrites the
   // same document instead of creating a duplicate.
@@ -66,10 +75,12 @@ window.SVFirebase = (function () {
   function getStudyConfig() {
     if (!configured) return Promise.resolve(null);
     var timeout = new Promise(function (r) { setTimeout(function () { r(null); }, 4000); });
-    // Reading config/study requires an authenticated session (see firestore.rules),
-    // so sign in anonymously first; this also warms the session for event writes.
+    // Reading config/study requires an authenticated session (see firestore.rules).
+    // ensureAuth() keeps an existing session (admin email/password) and only signs
+    // in anonymously when there is none (participants) — so this never logs the
+    // admin out. It also warms the session for event writes.
     var fetchCfg = init()
-      .then(function () { return sdk.auth.signInAnonymously(auth); })
+      .then(ensureAuth)
       .then(function () { return sdk.fs.getDoc(configRef()); })
       .then(function (snap) { return snap.exists() ? snap.data() : null; })
       .catch(function () { return null; });

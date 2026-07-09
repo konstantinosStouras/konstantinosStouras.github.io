@@ -315,6 +315,54 @@ async function main() {
       await ctx.close();
     }
 
+    // ---------------- TEST 12: Admin login is not clobbered (Firebase mock) ----------------
+    // Regression guard: getStudyConfig() must NOT sign in anonymously when an admin
+    // is already signed in, or it would replace the admin session and bounce them
+    // back to the login screen. Uses the REAL firebase-config.js (configured mode)
+    // with a mocked Firebase SDK routed in for the gstatic imports.
+    console.log('\nTest 12 · Admin login survives getStudyConfig (no anon clobber)');
+    {
+      const MOCK_APP = `export function initializeApp(cfg){ if(!globalThis.__fb) globalThis.__fb={user:null,listeners:[],docs:{},anonCount:0}; return { cfg }; }`;
+      const MOCK_AUTH = `const S=()=>globalThis.__fb;
+function notify(){ S().listeners.slice().forEach(cb=>{try{cb(S().user)}catch(e){}}); }
+export function getAuth(){ return { get currentUser(){ return S().user; } }; }
+export function signInAnonymously(){ S().anonCount++; S().user={uid:'anon'+S().anonCount,email:null,isAnonymous:true}; notify(); return Promise.resolve({user:S().user}); }
+export function signInWithEmailAndPassword(a,email,pw){ if(pw==='bad') return Promise.reject({code:'auth/wrong-password'}); S().user={uid:'admin1',email:email,isAnonymous:false}; notify(); return Promise.resolve({user:S().user}); }
+export function onAuthStateChanged(a,cb){ S().listeners.push(cb); Promise.resolve().then(()=>cb(S().user)); return ()=>{}; }
+export function signOut(){ S().user=null; notify(); return Promise.resolve(); }`;
+      const MOCK_FS = `const S=()=>globalThis.__fb;
+export function getFirestore(){ return {}; }
+export function doc(db,col,id){ return { path: col+'/'+id }; }
+export function getDoc(ref){ const d=S().docs[ref.path]; return Promise.resolve({ exists:()=>!!d, data:()=>d }); }
+export function setDoc(ref,data){ S().docs[ref.path]=Object.assign({}, S().docs[ref.path]||{}, data); return Promise.resolve(); }
+export function collection(db,name){ return { name }; }
+export function query(col){ return { col }; }
+export function orderBy(){ return {}; }
+export function limit(){ return {}; }
+export function getDocs(){ const rows=Object.entries(S().docs).filter(([k])=>k.startsWith('events/')).map(([k,v])=>({data:()=>v})); return Promise.resolve({ forEach:f=>rows.forEach(f) }); }`;
+      // Real config (configured mode) — do NOT use newCtx() here (it stubs the
+      // config to a placeholder); the committed firebase-config.js loads as-is.
+      const ctx = await browser.newContext();
+      await ctx.route('**/firebase-app.js', r => r.fulfill({ contentType: 'application/javascript', body: MOCK_APP }));
+      await ctx.route('**/firebase-auth.js', r => r.fulfill({ contentType: 'application/javascript', body: MOCK_AUTH }));
+      await ctx.route('**/firebase-firestore.js', r => r.fulfill({ contentType: 'application/javascript', body: MOCK_FS }));
+      const page = await ctx.newPage();
+      await page.goto(APP + 'admin/', { waitUntil: 'domcontentloaded' });
+      const gotLogin = await page.waitForSelector('#a-login.active', { timeout: 8000 }).then(() => true).catch(() => false);
+      ok('configured admin shows the sign-in screen', gotLogin);
+      await page.fill('#in-email', 'admin@admin.com');
+      await page.fill('#in-pass', 'goodpass');
+      await page.click('#btn-login');
+      await sleep(1200); // onAuth -> enterAdmin -> loadConditions(getStudyConfig) -> loadData
+      ok('admin reaches the dashboard after sign-in', await page.isVisible('#a-dash'));
+      ok('admin is NOT bounced back to the login screen', !(await page.isVisible('#a-login')));
+      ok('getStudyConfig did not sign the admin in anonymously',
+        (await page.evaluate(() => globalThis.__fb && globalThis.__fb.anonCount)) === 0);
+      ok('admin session preserved (still the admin email)',
+        (await page.evaluate(() => globalThis.__fb && globalThis.__fb.user && globalThis.__fb.user.email)) === 'admin@admin.com');
+      await ctx.close();
+    }
+
   } finally {
     await browser.close();
     server.kill('SIGKILL');
