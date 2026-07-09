@@ -210,9 +210,11 @@ async function main() {
       ok('upload_ok/upload_fail are NOT uploaded to the endpoint',
         uploaded.every(e => e.event !== 'upload_ok' && e.event !== 'upload_fail'));
       ok('upload_ok IS recorded in the local mirror', types.includes('upload_ok'));
-      // no duplicate rows: each uploaded non-meta event id (t+event+position) appears once
-      const seen = new Set(), keyOf = e => e.t + '|' + e.event + '|' + e.position + '|' + e.round;
-      let dup = 0; uploaded.forEach(e => { const k = keyOf(e); if (seen.has(k)) dup++; seen.add(k); });
+      // no duplicate rows: a real re-send (the beacon bug) uploads a byte-identical
+      // event object twice, so key on the full event (distinct events never match:
+      // they differ in qid/position/counters/t, and selects/reveals can't repeat).
+      const seen = new Set();
+      let dup = 0; uploaded.forEach(e => { const k = JSON.stringify(e); if (seen.has(k)) dup++; seen.add(k); });
       ok('no duplicate events uploaded', dup === 0, dup + ' dups');
       // rt_ms of a subject action is not clobbered by a meta event (meta events carry rt but
       // do not advance the subject clock): every reveal has a positive/def rt_ms
@@ -240,6 +242,59 @@ async function main() {
       await page.waitForSelector('#upload-note', { state: 'visible', timeout: 12000 }).catch(() => {});
       const noteVisible = await page.isVisible('#upload-note');
       ok('fallback download note appears when endpoint unreachable', noteVisible);
+      await ctx.close();
+    }
+
+    // ---------------- TEST 10: Debug pre-fills the quiz answers ----------------
+    console.log('\nTest 10 · Debug mode pre-selects correct quiz answers');
+    {
+      const ctx = await browser.newContext();
+      const page = await ctx.newPage();
+      await page.goto(APP + '?arm=B&debug=1&key=stouras&SESSION_ID=smokeDbg', { waitUntil: 'networkidle' });
+      await page.waitForSelector('#s-consent.active');
+      await page.check('#consent-box'); await page.click('#btn-consent');
+      await page.waitForSelector('#s-instructions.active'); await page.click('#btn-instructions');
+      await page.waitForSelector('#s-quiz.active');
+      ok('all quiz questions are pre-answered in debug', (await page.locator('input[type=radio]:checked').count()) === 4);
+      // submit WITHOUT manually selecting anything -> should pass straight into the round
+      await page.click('#btn-quiz');
+      await page.waitForSelector('#s-round.active', { timeout: 6000 }).catch(() => {});
+      ok('submitting the pre-filled quiz passes into the game', await page.isVisible('#s-round'));
+      // and a real subject (no debug) gets NO pre-filled answers
+      const ctx2 = await browser.newContext();
+      const p2 = await ctx2.newPage();
+      await p2.goto(APP + '?arm=B&SESSION_ID=smokeNoDbg', { waitUntil: 'networkidle' });
+      await p2.waitForSelector('#s-consent.active');
+      await p2.check('#consent-box'); await p2.click('#btn-consent');
+      await p2.waitForSelector('#s-instructions.active'); await p2.click('#btn-instructions');
+      await p2.waitForSelector('#s-quiz.active');
+      ok('non-debug subject sees no pre-selected answers', (await p2.locator('input[type=radio]:checked').count()) === 0);
+      await ctx.close(); await ctx2.close();
+    }
+
+    // ---------------- TEST 11: Admin panel (local-preview mode) ----------------
+    console.log('\nTest 11 · Admin panel renders in local mode + reads local data');
+    {
+      const ctx = await browser.newContext();
+      const page = await ctx.newPage();
+      // play a short session so this origin has local log data for the admin to show
+      await page.goto(APP + '?arm=A&SESSION_ID=smokeAdmin', { waitUntil: 'networkidle' });
+      await consentInstructionsQuiz(page, 'A');
+      await playRound(page, 1); // practice
+      await playRound(page, 2); // round 1
+      // now open the admin panel in the SAME origin/context
+      await page.goto(APP + 'admin/', { waitUntil: 'networkidle' });
+      ok('admin opens straight to the dashboard when Firebase is unconfigured', await page.isVisible('#a-dash'));
+      ok('admin shows the local-preview banner', /local preview/i.test(await page.innerText('#dash-banner')));
+      ok('conditions Save is disabled in local mode', await page.locator('#btn-save').isDisabled());
+      // Data tab
+      await page.click('.tab[data-tab="data"]');
+      ok('data tab shows a stat grid', (await page.locator('#stat-grid .stat-box').count()) >= 3);
+      ok('data tab lists at least one session', (await page.locator('#sessions-table tbody tr').count()) >= 1);
+      ok('data tab lists events', (await page.locator('#events-table tbody tr').count()) >= 1);
+      // Setup tab has the Firebase steps
+      await page.click('.tab[data-tab="setup"]');
+      ok('setup tab documents Firebase steps', /firebase/i.test(await page.innerText('#setup-body')));
       await ctx.close();
     }
 

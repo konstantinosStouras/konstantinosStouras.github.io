@@ -23,6 +23,9 @@
   var arm = 'A';
   var DEBUG = false;
   var lastSelectLogT = 0;
+  var STUDY_CLOSED = false;    // set from the admin-controlled config/study doc
+  var STUDY_ARM_MODE = 'url';  // 'url' | 'A' | 'B' | 'random' (admin-controlled)
+  var STUDY_CFG = null;        // raw admin config/study doc (for arm-specific codes)
 
   // ---- tiny seeded PRNG + string hash (session-deterministic) --------------
   function mulberry32(a) {
@@ -100,13 +103,47 @@
     S.pid = pr.PROLIFIC_PID || S.pid || null;
     S.study = pr.STUDY_ID || S.study || null;
 
-    // arm: URL wins; else persisted; else random 50/50 (persisted immediately)
-    if (pr.arm === 'A' || pr.arm === 'B') S.arm = pr.arm;
-    if (S.arm !== 'A' && S.arm !== 'B') S.arm = (Math.random() < 0.5 ? 'A' : 'B');
+    // If Firebase is configured, read the admin-controlled study config first
+    // (completion code, open/closed, arm mode); otherwise proceed immediately.
+    if (window.SVFirebase && SVFirebase.isConfigured()) {
+      SVFirebase.getStudyConfig().then(function (scfg) { applyStudyConfig(scfg); finishBoot(pr); });
+    } else {
+      finishBoot(pr);
+    }
+  }
+
+  function applyStudyConfig(scfg) {
+    STUDY_CFG = scfg || null;
+    if (!scfg) return;
+    if (scfg.endpointUrl && !CFG.ENDPOINT_URL) CFG.ENDPOINT_URL = scfg.endpointUrl;
+    if (scfg.armMode) STUDY_ARM_MODE = scfg.armMode;
+    STUDY_CLOSED = (scfg.studyOpen === false);
+  }
+
+  function finishBoot(pr) {
+    // Arm assignment. A persisted arm wins (never flip a subject mid-study).
+    // Otherwise the admin arm mode decides: force A/B, force random, or (default
+    // 'url') honour ?arm= and fall back to random.
+    if (S.arm !== 'A' && S.arm !== 'B') {
+      if (STUDY_ARM_MODE === 'A' || STUDY_ARM_MODE === 'B') S.arm = STUDY_ARM_MODE;
+      else if (STUDY_ARM_MODE === 'random') S.arm = (Math.random() < 0.5 ? 'A' : 'B');
+      else if (pr.arm === 'A' || pr.arm === 'B') S.arm = pr.arm;
+      else S.arm = (Math.random() < 0.5 ? 'A' : 'B');
+    }
     arm = S.arm;
-    save(); // lock in arm + ids before any async work, so a refresh keeps the same arm
+    save(); // lock in arm + ids before any async work
+
+    // completion code: arm-specific (each arm is its own Prolific study) else shared
+    if (STUDY_CFG) {
+      var code = (arm === 'A' && STUDY_CFG.completionCodeA) || (arm === 'B' && STUDY_CFG.completionCodeB) || STUDY_CFG.completionCode;
+      if (code) CFG.COMPLETION_CODE = code;
+    }
 
     if (DEBUG) { $('nav-arm').textContent = 'Arm ' + arm + (S.round ? ' · ' + (S.round.mappingId || '') : ''); $('btn-restart').style.display = ''; }
+
+    // Study closed: only turn away subjects who have not started (in-progress and
+    // finished subjects are always let through so they can finish / see the code).
+    if (STUDY_CLOSED && !S.completed && (!S.phase || S.phase === 'consent')) { show('s-closed'); return; }
 
     // logger base fields
     L.init({
@@ -114,6 +151,7 @@
       ua: navigator.userAgent, vw: window.innerWidth, vh: window.innerHeight,
       appVersion: CFG.APP_VERSION
     });
+    startFirebaseSync();
 
     loadAssistantIfNeeded(function () {
       fetch('data/mappings.json', { cache: 'no-store' })
@@ -121,6 +159,23 @@
         .then(onPool)
         .catch(function () { $('s-loading').innerHTML = '<p class="center" style="margin-top:40px;color:#a12a2a;">Could not load the study data. Please refresh.</p>'; });
     });
+  }
+
+  // Mirror every logged event into Firestore (when configured), idempotently by
+  // sequence so resumes/retries overwrite rather than duplicate. A backlog replay
+  // after anonymous sign-in covers events logged before auth completed.
+  function startFirebaseSync() {
+    if (!(window.SVFirebase && SVFirebase.isConfigured())) return;
+    var key = 'searchv2:fbsynced:' + S.session;
+    function mark(seq) { try { var cur = parseInt(localStorage.getItem(key) || '-1', 10); if (seq > cur) localStorage.setItem(key, String(seq)); } catch (e) {} }
+    L.onEvent(function (ev, seq) { SVFirebase.writeEvent(ev, seq).then(function (ok) { if (ok) mark(seq); }); });
+    SVFirebase.signInAnon().then(function () {
+      var synced = parseInt(localStorage.getItem(key) || '-1', 10);
+      var evs = L.getEvents();
+      for (var i = synced + 1; i < evs.length; i++) {
+        (function (idx) { SVFirebase.writeEvent(evs[idx], idx).then(function (ok) { if (ok) mark(idx); }); })(i);
+      }
+    }).catch(function () {});
   }
 
   // Arm B loads assistant.js at runtime; Arm A never references it (isolation).
@@ -221,6 +276,16 @@
 
   // ======================================================================
   //  QUIZ  (verbatim; all correct to pass; randomized option order)
+  // ----------------------------------------------------------------------
+  //  QUICK-TEST ANSWER KEY  (the "Quick check" screen — get all right to play)
+  //    Q1  "highest possible value at position 52"      -> 60
+  //    Q2  "what do you earn" (reveals 30 & 62)         -> 52
+  //    Q3  (Arm B) "ask the assistant about position 90"-> It says it has no data there
+  //    Q4  (Arm B) "the assistant's answer at 50 is"    -> An estimate that can be wrong
+  //  To breeze through while testing, open the app in debug mode and these are
+  //  PRE-SELECTED for you (just click Submit):
+  //    https://www.stouras.com/lab/search-v2/?arm=B&debug=1&key=stouras
+  //  (debug also overlays the true landscape + assistant dots + stratum/id.)
   // ======================================================================
   var Q_COMMON = [
     { id: 'q1', prompt: 'Position 50 shows 40 cents. What is the highest possible value at position 52?',
@@ -250,6 +315,21 @@
     }
     $('quiz-body').innerHTML = html;
     $('quiz-feedback').style.display = 'none';
+    // Debug/testing only: pre-select the correct answers and show a hint, so a
+    // tester can click Submit and get into the game immediately. Gated on the
+    // debug key, so real subjects never see this.
+    if (DEBUG) {
+      for (var qi = 0; qi < qs.length; qi++) {
+        var correct = qs[qi].options.filter(function (o) { return o.correct; })[0].t;
+        var inputs = document.getElementsByName(qs[qi].id);
+        for (var j = 0; j < inputs.length; j++) if (inputs[j].value === correct) inputs[j].checked = true;
+      }
+      var hint = document.createElement('div');
+      hint.className = 'note';
+      hint.style.marginTop = '10px';
+      hint.textContent = 'Debug: correct answers are pre-selected — just click Submit. (Answers: Q1=60, Q2=52' + (arm === 'B' ? ', Q3=has no data there, Q4=an estimate that can be wrong' : '') + '.)';
+      $('quiz-body').appendChild(hint);
+    }
     show('s-quiz');
   }
 
