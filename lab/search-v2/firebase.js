@@ -95,9 +95,20 @@ window.SVFirebase = (function () {
   function fetchEvents(max) {
     return init().then(function () {
       var col = sdk.fs.collection(db, PATHS.events);
-      var q = sdk.fs.query(col, sdk.fs.orderBy('t', 'asc'), sdk.fs.limit(max || 10000));
+      // Read the collection with a plain cap and sort client-side (below).
+      // A server-side orderBy('t') is avoided on purpose: it silently drops any
+      // event document missing a `t` field and, on some Firestore projects, made
+      // getDocs() reject the whole read with `invalid-argument` — which showed up
+      // in the admin panel as "Could not read events from Firestore". A capped,
+      // unordered read is robust; the admin UI only needs the events time-ordered
+      // for display, which the sort here provides.
+      var q = sdk.fs.query(col, sdk.fs.limit(max || 10000));
       return sdk.fs.getDocs(q);
-    }).then(function (qs) { var out = []; qs.forEach(function (d) { out.push(d.data()); }); return out; });
+    }).then(function (qs) {
+      var out = []; qs.forEach(function (d) { out.push(d.data()); });
+      out.sort(function (a, b) { return (a.t || 0) - (b.t || 0); });
+      return out;
+    });
   }
 
   return {
