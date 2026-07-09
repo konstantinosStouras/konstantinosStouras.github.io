@@ -323,6 +323,7 @@
 
   /* Star + per-card account panel */
   body.ms-accounts .paper-title { padding-right: 30px; }
+  body.ms-accounts .paper-card { position: relative; } /* anchors the absolute star to its card */
   .acct-star { position: absolute; top: 14px; right: 16px; font-size: 22px; line-height: 1; cursor: pointer; color: #c9cfdb; user-select: none; transition: transform .1s, color .15s; }
   .acct-star:hover { transform: scale(1.15); color: var(--accent); }
   .acct-star.on { color: var(--accent); }

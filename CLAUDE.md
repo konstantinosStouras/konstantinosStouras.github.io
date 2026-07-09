@@ -49,7 +49,11 @@ names (`fun/lit/data/_informs-editors.json`) come from
 `fun/lit/_scraper/informs-editors-local.mjs` run locally (pubsonline blocks
 cloud IPs too). Editors/Areas UI shows only when Management Science is in
 scope; SE/AE filters show when ISR/MkSc are selected. See
-`fun/lit/_HOW-IT-WORKS.md`.
+`fun/lit/_HOW-IT-WORKS.md`. Like `/fun/ms/`, the page carries the optional
+sign-in feature (star/notes/lists/tags, private per user, dedicated Firebase
+project); it stays inert until a web config is pasted into `FB_CONFIG` in
+`fun/lit/index.html` — setup steps in `fun/lit/_ACCOUNTS-SETUP.md`, security
+rules in `fun/lit/_firestore.rules`.
 
 ## `/fun/ms` — the Google-free Management Science browser
 `fun/ms/` is the Management Science paper browser. It uses **no Google Sheets**:
