@@ -528,7 +528,9 @@ async function fetchSigecomPages(years) {
 // clean titles, authors, pages and DOIs. Abstracts and PDF links are attached
 // afterwards by the same OpenAlex/S2 enrichment as the modern years.
 async function fetchEcDblpHistory(years) {
-  if (MOCK) return [];
+  const eeByTitle = new Map(); // normTitle -> [ee urls], reused by enrichEc so
+                               // the tocs are not fetched twice (DBLP rate-limits)
+  if (MOCK) return { rows: [], eeByTitle };
   const rows = [];
   for (const y of years) {
     let hits = [];
@@ -541,11 +543,12 @@ async function fetchEcDblpHistory(years) {
       } catch (e) {
         console.warn(`  dblp ec ${y} (${key}): ${e.message}`);
       }
-      await sleep(600);
+      await sleep(1500);
     }
     let added = 0;
     for (const hit of hits) {
       const info = hit.info || {};
+      if (info.title) eeByTitle.set(normTitle(info.title), [].concat(info.ee || []));
       if (info.type && info.type !== 'Conference and Workshop Papers') continue;
       const title = String(info.title || '').replace(/\.\s*$/, '').replace(/\s+/g, ' ').trim();
       if (!title) continue;
@@ -578,9 +581,9 @@ async function fetchEcDblpHistory(years) {
       added++;
     }
     console.log(`  ec ${y} (dblp): ${added} papers`);
-    await sleep(1200);
+    await sleep(2500);
   }
-  return rows;
+  return { rows, eeByTitle };
 }
 
 function buildEcRows(crossrefItems, sigecomByYear, dblpRows) {
@@ -671,7 +674,7 @@ function pickPdf(cands) {
       || list[0] || '';
 }
 
-async function enrichEc(rows, extras) {
+async function enrichEc(rows, extras, dblpPrefetched) {
   if (MOCK) return; // offline: covered by the seed run on the Actions runner
 
   const keyOf = (r) => r._doi || ('t:' + normTitle(r.Title));
@@ -707,9 +710,13 @@ async function enrichEc(rows, extras) {
     await sleep(400);
   }
 
-  // 2. DBLP per-year toc: arXiv/SSRN "ee" links matched by title.
-  const years = [...new Set(rows.map(r => parseInt(r.Year, 10)).filter(Boolean))].sort();
-  const dblp = new Map(); // normTitle -> [ee urls]
+  // 2. DBLP per-year toc: arXiv/SSRN "ee" links matched by title. Historical
+  //    years were already fetched by fetchEcDblpHistory (reused here — DBLP
+  //    rate-limits aggressively when the tocs are pulled twice per build), so
+  //    only the modern years are fetched.
+  const dblp = new Map(dblpPrefetched || []); // normTitle -> [ee urls]
+  const years = [...new Set(rows.map(r => parseInt(r.Year, 10)).filter(Boolean))]
+    .filter(y => y >= EC.sigecomFirstYear).sort();
   for (const y of years) {
     try {
       const url = `https://dblp.org/search/publ/api?q=${encodeURIComponent(`toc:db/conf/sigecom/sigecom${y}.bht:`)}&h=500&format=json`;
@@ -722,7 +729,7 @@ async function enrichEc(rows, extras) {
     } catch (e) {
       console.warn(`  dblp ${y} failed (non-fatal):`, e.message);
     }
-    await sleep(1200);
+    await sleep(2500);
   }
   for (const r of rows) {
     const k = keyOf(r);
@@ -982,10 +989,10 @@ async function main() {
   for (let y = EC.firstYear; y < EC.sigecomFirstYear; y++) if (y !== 2002) dblpYears.push(y);
   const ecItems = await fetchEcCrossref(sigYears);
   const sigecom = await fetchSigecomPages(sigYears);
-  const dblpRows = await fetchEcDblpHistory(dblpYears);
-  const ecRows = buildEcRows(ecItems, sigecom, dblpRows);
+  const dblpHistory = await fetchEcDblpHistory(dblpYears);
+  const ecRows = buildEcRows(ecItems, sigecom, dblpHistory.rows);
   const extras = await loadJsonIfExists(join(DATA_DIR, '_ec-extras.json'), {});
-  await enrichEc(ecRows, extras);
+  await enrichEc(ecRows, extras, dblpHistory.eeByTitle);
   if (!MOCK) await writeJson('_ec-extras.json', extras);
   bySource.ec = ecRows;
   console.log(`  ec: ${ecRows.length} papers (${ecItems.length} from ACM DL via Crossref)`);
