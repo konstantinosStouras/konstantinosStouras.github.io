@@ -14,6 +14,7 @@
     <div class="brand">Search for Knowledge</div>
     <div class="nav-right">
       <span class="muted small" id="nav-arm"></span>
+      <button class="btn btn-ghost btn-sm" id="btn-logout" style="display:none;" title="Log out and clear this study on this device">Log out</button>
       <button class="btn btn-ghost btn-sm" id="btn-restart" style="display:none;">&#8635; Restart</button>
     </div>
   </div>
@@ -32,6 +33,27 @@
         <p class="muted">Thank you for your interest. Recruitment for this study is
         paused or complete right now. If you reached this page from a study listing,
         please return to the platform — no action is needed.</p>
+      </div>
+    </section>
+
+    <!-- ============ SESSION CODE ============ -->
+    <!-- Gate: nobody plays without a session code. Real participants arrive from
+         their recruitment platform with SESSION_ID in the URL (auto-filled, so
+         they never see this); anyone else must type a code here. app.js never
+         invents a code, so an empty landing can no longer start the game. -->
+    <section class="screen" id="s-code">
+      <div class="card center" style="max-width:520px; margin:48px auto;">
+        <h2>Enter your session code</h2>
+        <p class="muted">To take part you need a session code. If you arrived from a
+        study listing (for example Prolific), please open the study using the link
+        you were given &mdash; your code is filled in automatically and you will not
+        see this screen. Otherwise, enter your session code below.</p>
+        <div class="code-entry">
+          <input type="text" id="code-input" placeholder="Session code"
+                 autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
+          <button class="btn btn-green" id="btn-code" disabled>Continue</button>
+        </div>
+        <p class="feedback bad" id="code-feedback" style="display:none;">Please enter your session code to continue.</p>
       </div>
     </section>
 

@@ -215,6 +215,26 @@ https://stouras.com/lab/search-v2/?arm=B&PROLIFIC_PID={{%PROLIFIC_PID%}}&STUDY_I
 If `arm` is absent the app randomizes 50/50 and persists it. Re-entry after
 completion is blocked (the completion code is shown again).
 
+### Session code required (the entry gate)
+
+**Nobody can play without a session code.** The code is the study link's
+`SESSION_ID` — Prolific fills it in automatically, so real participants go
+straight to consent and never see the gate. If someone opens the bare URL with no
+`SESSION_ID`, the app **does not invent a session** (it used to auto-generate a
+random one); instead it shows an **"Enter your session code"** screen and refuses
+to start until a code is typed. The entered code is persisted, so a refresh
+resumes the same session. In debug mode (`?debug=1&key=stouras`) a fixed `debug`
+code is used so local testing needs no gate, and the admin **preview** link
+(`?preview=1&debug=1&key=…`) bypasses the gate the same way (a throwaway
+session). Note the admin **session/wave** code (`?code=WAVE1`) is unrelated to
+this gate — real launch links carry both `code` and `SESSION_ID`.
+
+A small **"Log out"** control appears in the header once you are in a session. It
+erases every trace of the study on that device (state, event log, sync markers,
+saved code) and returns to the code gate — useful for clearing a stuck or shared
+browser. On the live site the authoritative data is already in Firestore, so
+logging out never loses collected research data.
+
 ---
 
 ## Event schema
@@ -279,3 +299,4 @@ Automated in `tools/selftest.js` (Node) and `tools/smoke.mjs` (browser):
 | 8 | resume mid-round (state restored, no double-logging) | smoke |
 | 9 | logging completeness + endpoint-failure download fallback | smoke |
 | 10 | payment draw seeded + reproducible | selftest |
+| 17 | session-code gate (no code → no play; code → play; log out) | smoke |
