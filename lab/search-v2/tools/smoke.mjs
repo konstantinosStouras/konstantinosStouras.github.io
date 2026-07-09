@@ -360,6 +360,49 @@ export function getDocs(){ const rows=Object.entries(S().docs).filter(([k])=>k.s
       await ctx.close();
     }
 
+    // ---------------- TEST 13: Admin won't overwrite conditions it failed to load ----------------
+    // Regression guard: if the config/study read FAILS (not "doc absent"), the admin
+    // must warn and DISABLE Save, so it never clobbers the real settings with the
+    // defaults the form would otherwise show. Same mock, but getDoc(config/study) rejects.
+    console.log('\nTest 13 · Admin refuses to overwrite conditions it could not load');
+    {
+      const MOCK_APP = `export function initializeApp(cfg){ if(!globalThis.__fb) globalThis.__fb={user:null,listeners:[],docs:{},anonCount:0}; return { cfg }; }`;
+      const MOCK_AUTH = `const S=()=>globalThis.__fb;
+function notify(){ S().listeners.slice().forEach(cb=>{try{cb(S().user)}catch(e){}}); }
+export function getAuth(){ return { get currentUser(){ return S().user; } }; }
+export function signInAnonymously(){ S().anonCount++; S().user={uid:'anon'+S().anonCount,email:null,isAnonymous:true}; notify(); return Promise.resolve({user:S().user}); }
+export function signInWithEmailAndPassword(a,email,pw){ S().user={uid:'admin1',email:email,isAnonymous:false}; notify(); return Promise.resolve({user:S().user}); }
+export function onAuthStateChanged(a,cb){ S().listeners.push(cb); Promise.resolve().then(()=>cb(S().user)); return ()=>{}; }
+export function signOut(){ S().user=null; notify(); return Promise.resolve(); }`;
+      // getDoc rejects specifically for config/study (a read error, not an absent doc).
+      const MOCK_FS_ERR = `const S=()=>globalThis.__fb;
+export function getFirestore(){ return {}; }
+export function doc(db,col,id){ return { path: col+'/'+id }; }
+export function getDoc(ref){ if(ref.path==='config/study') return Promise.reject({code:'unavailable'}); const d=S().docs[ref.path]; return Promise.resolve({ exists:()=>!!d, data:()=>d }); }
+export function setDoc(ref,data){ S().docs[ref.path]=Object.assign({}, S().docs[ref.path]||{}, data); return Promise.resolve(); }
+export function collection(db,name){ return { name }; }
+export function query(col){ return { col }; }
+export function orderBy(){ return {}; }
+export function limit(){ return {}; }
+export function getDocs(){ const rows=Object.entries(S().docs).filter(([k])=>k.startsWith('events/')).map(([k,v])=>({data:()=>v})); return Promise.resolve({ forEach:f=>rows.forEach(f) }); }`;
+      const ctx = await browser.newContext();
+      await ctx.route('**/firebase-app.js', r => r.fulfill({ contentType: 'application/javascript', body: MOCK_APP }));
+      await ctx.route('**/firebase-auth.js', r => r.fulfill({ contentType: 'application/javascript', body: MOCK_AUTH }));
+      await ctx.route('**/firebase-firestore.js', r => r.fulfill({ contentType: 'application/javascript', body: MOCK_FS_ERR }));
+      const page = await ctx.newPage();
+      await page.goto(APP + 'admin/', { waitUntil: 'domcontentloaded' });
+      await page.waitForSelector('#a-login.active', { timeout: 8000 }).catch(() => {});
+      await page.fill('#in-email', 'admin@admin.com');
+      await page.fill('#in-pass', 'goodpass');
+      await page.click('#btn-login');
+      await sleep(1200);
+      ok('admin still reaches the dashboard when the conditions read fails', await page.isVisible('#a-dash'));
+      ok('a warning about not overwriting conditions is shown',
+        /not overwritten|could not load the current study conditions/i.test(await page.innerText('#dash-banner')));
+      ok('Save is disabled after a failed conditions read', await page.locator('#btn-save').isDisabled());
+      await ctx.close();
+    }
+
   } finally {
     await browser.close();
     server.kill('SIGKILL');

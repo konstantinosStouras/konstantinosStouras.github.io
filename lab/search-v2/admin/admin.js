@@ -124,7 +124,19 @@
     };
   }
   function loadConditions() {
-    FB.getStudyConfig().then(function (cfg) { fillConditions(cfg || DEFAULT_CFG); });
+    // Load the live conditions honestly. If the read FAILS we must NOT fill the
+    // form with defaults — saving those would overwrite the real (unread) config.
+    // Instead, warn and disable Save until a reload succeeds. A null result means
+    // the doc genuinely doesn't exist yet (first run), which is safe to default.
+    FB.adminLoadStudyConfig().then(function (cfg) {
+      fillConditions(cfg || DEFAULT_CFG);
+      $('btn-save').disabled = false;
+    }).catch(function (err) {
+      banner($('dash-banner'), 'warn',
+        'Could not load the current study conditions (' + esc(err && err.code ? err.code : String(err)) +
+        '). Saving is disabled so your existing settings are not overwritten — reload the page to retry.');
+      $('btn-save').disabled = true;
+    });
   }
   function saveConditions() {
     var msg = $('save-msg'), cfg = collectConditions();
