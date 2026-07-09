@@ -27,7 +27,7 @@
     ['pnas-soc',  '500085', 'Social Sciences'],
     ['pnas-econ', '500068', 'Economic Sciences'],
   ];
-  const PAGE_SIZE = 100, MAX_PAGES = 400, DELAY = 800;
+  const PAGE_SIZE = 100, MAX_PAGES = 400, DELAY = 2000;
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const map = {};
   const add = (doi, key) => {
@@ -35,31 +35,39 @@
   };
 
   for (const [key, concept, name] of SECTIONS) {
-    let total = null, seen = 0;
+    let total = null, loggedTotal = false;
+    const mine = new Set();
+    let retries = 0;
     for (let p = 0; p < MAX_PAGES; p++) {
       const url = `/action/doSearch?SeriesKey=pnas&ConceptID=${concept}&startPage=${p}&pageSize=${PAGE_SIZE}`;
       const res = await fetch(url, { credentials: 'include' });
+      if (res.status === 429) {                        // rate limited: wait & retry
+        if (++retries > 8) { console.error(`${name}: still rate-limited after 8 waits — partial results kept.`); break; }
+        console.log(`  ${name}: server says slow down — waiting 30s (page ${p})…`);
+        await sleep(30000); p--; continue;
+      }
       const html = await res.text();
       if (res.status !== 200 || /just a moment|cf_chl_opt/i.test(html.slice(0, 4000))) {
-        console.error(`${name}: blocked on page ${p} — reload this tab (pass any check) and paste the script again; already-collected pages are kept only within one run, so a clean rerun is safest.`);
-        return;
+        console.error(`${name}: blocked on page ${p} — reload the tab and paste the script again.`);
+        break;
       }
+      retries = 0;
       if (total === null) {
-        const m = html.match(/([\d,]+)\s*results?/i);
-        total = m ? parseInt(m[1].replace(/,/g, ''), 10) : null;
-        console.log(`${name}: ~${total ?? '?'} results`);
+        const m = html.match(/([\d,]+)\s*results?/i) || html.match(/of\s+([\d,]+)/i) || html.match(/"totalResults"\s*:\s*(\d+)/);
+        if (m) total = parseInt(m[1].replace(/,/g, ''), 10);
+        if (!loggedTotal) { console.log(`${name}: ${total ? '~' + total : 'unknown #'} results`); loggedTotal = true; }
       }
-      const dois = new Set();
+      let fresh = 0;
       for (const m of html.matchAll(/\/doi\/(?:abs\/|full\/|epdf\/|pdf\/|suppl\/)?(10\.1073\/[a-zA-Z0-9._\-()/]+)/g)) {
-        dois.add(m[1].replace(/\/+$/, '').toLowerCase());
+        const d = m[1].replace(/\/+$/, '').toLowerCase();
+        if (!mine.has(d)) { mine.add(d); add(d, key); fresh++; }
       }
-      dois.forEach(d => add(d, key));
-      seen += dois.size;
-      if (p % 10 === 9) console.log(`  ${name}: page ${p + 1}, ${seen} collected…`);
-      if (!dois.size || (total !== null && seen >= total)) break;
+      if (p % 10 === 9) console.log(`  ${name}: page ${p + 1}, ${mine.size} collected…`);
+      if (!fresh) break;                               // ran off the end
+      if (total !== null && mine.size >= total) break;
       await sleep(DELAY);
     }
-    console.log(`${name}: done — ${seen} DOIs`);
+    console.log(`${name}: done — ${mine.size} DOIs`);
   }
 
   // deterministic output, same shape the data pipeline expects
