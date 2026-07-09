@@ -58,7 +58,6 @@
     wireTabs();
     wireForm();
     wireData();
-    renderSetup();
     $('btn-signout').addEventListener('click', function () { if (configured) FB.adminSignOut().then(reload); else reload(); });
     $('btn-analytics-nav').addEventListener('click', function () { selectTab('analytics'); });
 
@@ -93,7 +92,7 @@
   function enterLocalMode() {
     $('who').textContent = 'local preview';
     show('a-dash');
-    banner($('dash-banner'), 'warn', '<b>Firebase is not configured</b> — local preview (this browser only). Creating sessions needs Firebase; see the <b>Setup</b> tab. Data/Analytics below use this browser’s test sessions.');
+    banner($('dash-banner'), 'warn', '<b>Firebase is not configured</b> — local preview (this browser only). Creating sessions needs Firebase (see <code class="k">lab/search-v2/README.md</code> → “Admin panel &amp; Firebase setup”). Data/Analytics below use this browser’s test sessions.');
     fillForm(null, BUILTIN_SETTINGS);
     $('btn-save').disabled = true; $('btn-makedefault').disabled = true;
     $('active-list').innerHTML = '<p class="muted small">Sessions require Firebase.</p>';
@@ -123,7 +122,7 @@
   function selectTab(name) {
     var tabs = document.querySelectorAll('.tab');
     for (var j = 0; j < tabs.length; j++) tabs[j].classList.toggle('on', tabs[j].getAttribute('data-tab') === name);
-    ['sessions', 'data', 'analytics', 'setup'].forEach(function (t) { $('tab-' + t).style.display = (t === name) ? '' : 'none'; });
+    ['sessions', 'data', 'analytics'].forEach(function (t) { $('tab-' + t).style.display = (t === name) ? '' : 'none'; });
     if (name === 'analytics') renderAnalytics();
     if (name === 'data') renderData();
   }
@@ -439,16 +438,5 @@
     var blob = new Blob([text], { type: mime }), url = URL.createObjectURL(blob), a = document.createElement('a');
     a.href = url; a.download = name; document.body.appendChild(a); a.click();
     setTimeout(function () { document.body.removeChild(a); URL.revokeObjectURL(url); }, 0);
-  }
-
-  function renderSetup() {
-    $('setup-body').innerHTML =
-      '<p class="muted">One-time Firebase setup enables central data collection, sessions, and cross-device admin.</p>' +
-      '<div class="card"><ol>' +
-      '<li>Firebase console → <b>Add project</b> → enable <b>Firestore</b> (Production mode).</li>' +
-      '<li><b>Authentication → Get started</b>: enable <b>Anonymous</b> (participants) and <b>Email/Password</b> (you); add your admin user (e.g. <code class="k">admin@admin.com</code>).</li>' +
-      '<li>Copy the web-app <code class="k">firebaseConfig</code> into <code class="k">lab/search-v2/firebase-config.js</code> and set <code class="k">ADMIN_EMAILS</code>. Commit &amp; push.</li>' +
-      '<li>Publish <code class="k">lab/search-v2/firestore.rules</code> in Firestore → <b>Rules</b> (admin email must match).</li>' +
-      '</ol></div>';
   }
 })();
