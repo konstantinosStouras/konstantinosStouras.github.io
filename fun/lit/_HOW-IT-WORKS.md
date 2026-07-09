@@ -104,6 +104,16 @@ node pnas-concepts-local.mjs          # first run: full crawl (~15–30 min)
 # …then commit & push fun/lit/data/_pnas-concepts.json
 ```
 
+If the plain script is blocked by Cloudflare even with the `LIT_CF_COOKIE`
+fallback (strict mode also fingerprints the HTTP client), use the variant
+that drives your real Chrome/Edge — it cannot be told apart from you
+browsing:
+
+```bash
+npm install --no-save playwright-core   # once
+node pnas-concepts-browser-local.mjs    # a browser window opens and crawls
+```
+
 Later runs are incremental (about a minute); re-run it every month or so to
 pick up newly published PNAS papers. Everything else — including joining that
 index with fresh Crossref metadata — happens automatically in the daily
