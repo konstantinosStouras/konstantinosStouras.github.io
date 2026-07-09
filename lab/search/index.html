@@ -157,14 +157,56 @@
   <div class="nav">
     <div class="brand">Search Game <span class="dot">&bull;</span> <span class="muted" style="font-weight:400; font-size:14px;">Space Exploration</span></div>
     <div class="nav-right">
-      <span class="pill" id="stage-pill">Consent</span>
+      <span class="pill" id="stage-pill">Start</span>
       <button class="btn btn-ghost btn-sm" id="restart">&#8635; Restart</button>
     </div>
   </div>
 
   <div class="wrap">
 
+    <!-- ===================== QUICK-TEST START (temporary) ===================== -->
+    <!-- Minimal start screen (like /lab/jagged) used while the consent and
+         instructions pages below are switched off for testing. Remove this
+         section when restoring the full study flow. -->
+    <section class="screen active" id="s-start">
+      <h2>Search Game &mdash; quick test</h2>
+      <div class="card">
+        <h3>How it works</h3>
+        <ul>
+          <li>Each round hides a monetary prize between <b>$0 and $1</b> at each of <b>100 positions</b>.</li>
+          <li>Pick a position with the slider and click <b>Submit</b> to reveal its prize &mdash; each reveal costs <b>$0.05</b>.</li>
+          <li>Stop whenever you like with <b>Accept Payout</b>: your round payoff is the <b>best prize found minus total fees</b>.</li>
+          <li>There are <b>25 rounds</b> &mdash; Part I has 13, Part II has 12 with a few prizes pre-revealed for free &mdash; and two randomly chosen rounds would count for payment.</li>
+        </ul>
+        <div class="field" style="margin-top:18px;">
+          <label for="treat-sel">Treatment</label>
+          <select id="treat-sel">
+            <option value="">Random (as in the real study)</option>
+            <option value="Unrestricted">Unrestricted</option>
+            <option value="High_Variability">High Variability</option>
+            <option value="Low_Variability">Low Variability</option>
+            <option value="Sweet_Spot">Sweet Spot</option>
+            <option value="Known_Maximum">Known Maximum</option>
+          </select>
+        </div>
+        <div class="right"><button class="btn btn-green" id="btn-start">Start Round 1</button></div>
+      </div>
+      <div class="note">
+        <b>Quick-test mode.</b> The consent form, Prolific-ID entry, and the comprehension-checked
+        instruction pages are temporarily switched off so the game starts right away (they are
+        preserved in the page source, ready to be reactivated). In the game, the <b>&#9432; Instructions</b>
+        button shows the full instructions summary for your treatment, and the
+        <b>&ldquo;Show hidden prizes&rdquo;</b> checkbox draws the true prize map as a red line
+        &mdash; participants would never see it; it is here only to verify what is being simulated.
+        Everything runs in your browser &mdash; <b>no data is collected, stored, or transmitted</b>.
+      </div>
+    </section>
+
     <!-- ===================== CONSENT / ID ===================== -->
+    <!-- TEMPORARILY DISABLED for quick testing. To restore the full study flow:
+         1) unwrap this section and the INSTRUCTIONS section below from their comments;
+         2) in the <script>, restore the blocks marked "RESTORE WITH CONSENT/INSTRUCTIONS";
+         3) remove the QUICK-TEST START section above and its wiring.
     <section class="screen active" id="s-consent">
       <h2>Consent to Participate in Research</h2>
       <div class="small muted" style="margin-bottom:10px;">
@@ -216,8 +258,12 @@
         <button class="btn btn-green" id="btn-consent-next">Next</button>
       </div>
     </section>
+    END TEMPORARILY DISABLED (consent / ID) -->
 
     <!-- ===================== INSTRUCTIONS ===================== -->
+    <!-- TEMPORARILY DISABLED for quick testing (comprehension-checked
+         instruction pages, 7 screens). See the note on the consent section
+         above for how to restore the full study flow.
     <section class="screen" id="s-ins">
       <div class="card">
         <div class="ins-head">
@@ -232,11 +278,17 @@
         </div>
       </div>
     </section>
+    END TEMPORARILY DISABLED (instructions) -->
 
     <!-- ===================== GAME ===================== -->
     <section class="screen" id="s-game">
       <div class="game-top">
-        <div style="width:120px;"></div>
+        <!-- Test-only control: draws the full hidden prize map on the plot
+             (like the red truth curve in /lab/jagged). Participants must
+             never see this — remove it when restoring the full study flow. -->
+        <label class="small muted" style="cursor:pointer; user-select:none;">
+          <input type="checkbox" id="show-truth" checked> Show hidden prizes <span style="color:#e41a1c;">(red line, testing only)</span>
+        </label>
         <div class="rounds-rem" id="rounds-rem">You have 25 rounds remaining.</div>
         <div><button class="btn btn-purple btn-sm" id="btn-instr"><span aria-hidden="true">&#9432;</span> Instructions</button></div>
       </div>
@@ -393,6 +445,14 @@
    Search Game — client-side replica of the online experiment for
    "Space Exploration" (EC 2026) by Suraj Malladi, Alejandro
    Martinez-Marquina & Ilya Morozov. No backend, no data collection.
+
+   QUICK-TEST MODE (temporary): the consent/Prolific-ID page and the
+   comprehension-checked instruction pages are commented out in the
+   HTML above, and their wiring is commented out below, so the game
+   starts immediately from a minimal start screen (like /lab/jagged).
+   A test-only "Show hidden prizes" checkbox draws the true prize map
+   on the plot. Search for "RESTORE WITH CONSENT/INSTRUCTIONS" to
+   bring the full study flow back.
    ============================================================ */
 
 // ---------- constants ----------
@@ -475,6 +535,7 @@ resetState();
 
 // ---------- screens ----------
 var STAGE = {
+  's-start':'Start',
   's-consent':'Consent', 's-ins':'Instructions', 's-game':'Game',
   's-payout':'Payout', 's-part2':'Part II', 's-complete':'Complete',
   's-survey':'Survey', 's-done':'Done'
@@ -715,6 +776,15 @@ function renderPlot(){
   g+='<line x1="'+L+'" y1="'+B+'" x2="'+R+'" y2="'+B+'" stroke="#bbb"/>';
   // selected position (dashed red)
   g+='<line x1="'+x(state.selected)+'" y1="'+T+'" x2="'+x(state.selected)+'" y2="'+B+'" stroke="#e41a1c" stroke-width="1.6" stroke-dasharray="6 5"/>';
+  // TEST ONLY: full hidden prize map as a red line (like /lab/jagged's truth
+  // curve). Participants must never see this; drawn only while the
+  // "Show hidden prizes" checkbox (quick-test mode) is checked.
+  var truthEl = $('show-truth');
+  if(truthEl && truthEl.checked && state.q.length){
+    var pts='';
+    for(i=1;i<=N_POS;i++) pts+=(i>1?' ':'')+x(i).toFixed(1)+','+y(state.q[i]).toFixed(1);
+    g+='<polyline points="'+pts+'" fill="none" stroke="#e41a1c" stroke-width="2" opacity="0.65"/>';
+  }
   // revealed dots
   for(var p in state.revealed){ if(state.revealed.hasOwnProperty(p)){
     var pp=parseInt(p,10);
@@ -847,6 +917,18 @@ function beginStudy(){
 }
 
 document.addEventListener('DOMContentLoaded', function(){
+  // quick-test start screen: pick a treatment (or random) and jump to round 1
+  $('btn-start').addEventListener('click', function(){
+    state.treatment = $('treat-sel').value || assignTreatment('');
+    CARDS = buildCards(state.treatment); // kept in sync for when instructions are restored
+    toast('Treatment: <b>'+TREATMENT_LABEL[state.treatment]+'</b>');
+    startRound();
+  });
+
+  // test-only: toggle the hidden prize map on the plot
+  $('show-truth').addEventListener('change', renderPlot);
+
+  /* RESTORE WITH CONSENT/INSTRUCTIONS — consent-screen wiring
   // consent checkboxes mutually exclusive
   $('consent-yes').addEventListener('change', function(){ if(this.checked) $('consent-no').checked=false; });
   $('consent-no').addEventListener('change', function(){ if(this.checked) $('consent-yes').checked=false; });
@@ -864,6 +946,7 @@ document.addEventListener('DOMContentLoaded', function(){
   // instructions
   $('ins-back').addEventListener('click', insBack);
   $('ins-next').addEventListener('click', insNext);
+  END RESTORE */
 
   // game controls
   $('slider').addEventListener('input', function(){
@@ -903,8 +986,11 @@ document.addEventListener('DOMContentLoaded', function(){
     showScreen('s-done');
   });
 
-  // restart / play again
+  // restart / play again (quick-test mode: back to the start screen)
+  function restart(){ resetState(); $('treat-sel').value=''; showScreen('s-start'); }
+  /* RESTORE WITH CONSENT/INSTRUCTIONS — original restart
   function restart(){ resetState(); $('pid').value=''; $('pid-hint').innerHTML=''; $('consent-yes').checked=false; $('consent-no').checked=false; showScreen('s-consent'); }
+  END RESTORE */
   $('restart').addEventListener('click', restart);
   $('btn-play-again').addEventListener('click', restart);
 
@@ -914,7 +1000,7 @@ document.addEventListener('DOMContentLoaded', function(){
   var o71=document.createElement('option'); o71.value='71+'; o71.textContent='71+'; ageSel.appendChild(o71);
   var ona=document.createElement('option'); ona.value='NA'; ona.textContent='Prefer not to answer'; ageSel.appendChild(ona);
 
-  showScreen('s-consent');
+  showScreen('s-start'); // RESTORE WITH CONSENT/INSTRUCTIONS: showScreen('s-consent')
 });
 </script>
 </body>

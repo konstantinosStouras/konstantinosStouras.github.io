@@ -1,0 +1,2704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Lit · Research Paper Browser — Management Science, OR, Marketing Science, M&amp;SOM, POM, ISR, PNAS &amp; ACM EC</title>
+
+<!-- SEO -->
+<meta name="description" content="Search and filter research papers across Management Science, Operations Research, Marketing Science, M&SOM, POM, Information Systems Research, five PNAS sections, and the ACM EC conference (1999–present). Filter by journal, year, author, or affiliation. Export BibTeX citations.">
+<meta name="keywords" content="Management Science, Operations Research, Marketing Science, MSOM, POM, Information Systems Research, PNAS, ACM EC, Economics and Computation, academic papers, research browser, BibTeX, journal articles, INFORMS">
+<meta name="author" content="Konstantinos Stouras">
+
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://stouras.com/fun/lit/">
+
+<!-- Open Graph (Facebook, LinkedIn, WhatsApp) -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="The Lit — Research Paper Browser">
+<meta property="og:description" content="Search papers across Management Science, OR, Marketing Science, M&SOM, POM, ISR, five PNAS sections, and ACM EC — in one place.">
+<meta property="og:url" content="https://www.stouras.com/fun/lit/">
+<meta property="og:image" content="https://www.stouras.com/fun/lit/og-image.jpg">
+<meta property="og:image:secure_url" content="https://www.stouras.com/fun/lit/og-image.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="840">
+<meta property="og:image:height" content="350">
+<meta property="og:site_name" content="stouras.com">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="The Lit — Research Paper Browser">
+<meta name="twitter:description" content="Search papers across Management Science, OR, Marketing Science, M&SOM, POM, ISR, five PNAS sections, and ACM EC — in one place.">
+<meta name="twitter:image" content="https://www.stouras.com/fun/lit/og-image.jpg">
+
+<!-- Favicon: inline SVG "Lit" monogram (navy/gold journal style), no external file needed -->
+<link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%23003087'/%3E%3Ctext%20x='50'%20y='66'%20font-family='Georgia,serif'%20font-size='46'%20font-style='italic'%20font-weight='bold'%20fill='%23c4a052'%20text-anchor='middle'%3ELit%3C/text%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%23003087'/%3E%3Ctext%20x='50'%20y='66'%20font-family='Georgia,serif'%20font-size='46'%20font-style='italic'%20font-weight='bold'%20fill='%23c4a052'%20text-anchor='middle'%3ELit%3C/text%3E%3C/svg%3E">
+<meta name="theme-color" content="#003087">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #003087;
+    --navy-dark: #001f5c;
+    --navy-light: #e8eef7;
+    --accent: #c4a052;
+    --accent-light: #f5f0e3;
+    --text: #1a1a2e;
+    --text-muted: #5a6070;
+    --bg: #f6f7fb;
+    --white: #ffffff;
+    --border: #dce1ea;
+    --green: #2a7d4f;
+    --red: #b33a3a;
+    --shadow-sm: 0 1px 3px rgba(0,48,135,0.06);
+    --shadow-md: 0 4px 16px rgba(0,48,135,0.08);
+    --shadow-lg: 0 8px 32px rgba(0,48,135,0.12);
+    --radius: 8px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+  .header { background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%); z-index: 100; box-shadow: var(--shadow-lg); }
+  .header-inner { max-width: 1280px; margin: 0 auto; padding: 24px 32px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+  .header h1 { font-family: 'Playfair Display', serif; color: white; font-size: 28px; font-weight: 400; letter-spacing: -0.5px; }
+  .header h1 em { font-style: italic; color: var(--accent); }
+  .header-meta { color: rgba(255,255,255,0.6); font-size: 13px; text-align: right; }
+  .header-meta strong { color: rgba(255,255,255,0.9); font-weight: 500; }
+
+  /* Sticky, self-condensing top bar (navy header + filters + tab buttons). */
+  .topbar { position: sticky; top: 0; z-index: 100; }
+  .header-inner { transition: padding 0.2s ease; }
+  .header h1 { transition: font-size 0.2s ease; }
+  .filter-group input, .custom-select-trigger { transition: all 0.18s ease; }
+  body.compact .header-inner { padding-top: 8px; padding-bottom: 8px; }
+  body.compact .header h1 { font-size: 18px; }
+  body.compact .header-meta { display: none; }
+  body.compact .filters-bar { padding: 8px 0; }
+  body.compact .filter-group label { display: none; }
+  body.compact .filter-group input,
+  body.compact .custom-select-trigger,
+  body.compact .filter-group select,
+  body.compact .btn { height: 40px; font-size: 15px; padding-top: 8px; padding-bottom: 8px; }
+  body.compact .filter-actions { padding-top: 0; }
+  body.compact .filters-row { gap: 8px; }
+  body.compact .summary-tab-btns { margin-top: 8px !important; }
+  body.compact .summary-tab-btn,
+  body.compact .recent-tab-btn { padding: 6px 14px; font-size: 13px; }
+  @media (max-width: 768px) { .topbar { position: static; } }
+
+  .filters-bar { background: var(--white); border-bottom: 1px solid var(--border); padding: 20px 0; box-shadow: var(--shadow-sm); transition: padding 0.2s ease; }
+  .filters-inner { max-width: 1280px; margin: 0 auto; padding: 0 32px; }
+  .filters-row { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+  .filter-group { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 170px; }
+  .filter-group label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .filter-group select, .filter-group input { padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 20px; color: var(--text); background: var(--white); transition: border-color 0.2s, box-shadow 0.2s; height: 50px; }
+  .filter-group select { -webkit-appearance: none; -moz-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%235a6070' stroke-width='1.5' fill='none'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; cursor: pointer; display: none; }
+  .filter-group select:focus, .filter-group input:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(0,48,135,0.1); }
+
+  /* Custom dropdown */
+  .custom-select { position: relative; }
+  .custom-select-trigger { padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 18px; color: var(--text-muted); background: var(--white); height: 50px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; transition: border-color 0.2s, box-shadow 0.2s; user-select: none; }
+  .custom-select-trigger:hover { border-color: #b0b8c8; }
+  .custom-select-trigger.open { border-color: var(--navy); box-shadow: 0 0 0 3px rgba(0,48,135,0.1); border-radius: 6px 6px 0 0; }
+  .custom-select-trigger::after { content: '▾'; font-size: 14px; color: var(--text-muted); }
+  .custom-select-dropdown { display: none; position: absolute; top: 100%; left: 0; right: 0; background: var(--white); border: 1.5px solid var(--navy); border-top: none; border-radius: 0 0 6px 6px; max-height: 350px; overflow-y: auto; z-index: 200; box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+  .custom-select-dropdown.open { display: block; }
+  .custom-select-search { width: 100%; padding: 10px 14px; border: none; border-bottom: 1px solid var(--border); font-family: 'DM Sans', sans-serif; font-size: 16px; color: var(--text); outline: none; }
+  .custom-select-item { padding: 12px 14px; font-size: 18px; color: var(--text); cursor: pointer; transition: background 0.1s; }
+  .custom-select-item:hover { background: var(--navy-light); }
+  .custom-select-item.hidden { display: none; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 6px; font-size: 13px; font-weight: 500; animation: chipIn 0.15s ease-out; max-width: 100%; overflow-wrap: anywhere; }
+  .chip-editor { background: var(--accent-light); color: #8a7032; }
+  .chip-area { background: #e8f5ee; color: var(--green); }
+  .chip-year { background: var(--navy-light); color: var(--navy); }
+  .chip-title { background: #f0e8f7; color: #6b3fa0; }
+  .chip-author { background: #e8eef7; color: #2d5f8a; }
+  .chip-affiliation { background: #fef3e2; color: #b5651d; }
+  .chip-x { cursor: pointer; font-size: 15px; font-weight: 700; opacity: 0.5; margin-left: 2px; line-height: 1; }
+  .chip-x:hover { opacity: 1; }
+  @keyframes chipIn { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .filter-actions { display: flex; gap: 8px; align-items: flex-start; padding-top: 20px; }
+  .btn { padding: 13px 20px; border: none; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; white-space: nowrap; height: 50px; }
+  .btn-primary { background: var(--navy); color: white; }
+  .btn-primary:hover { background: var(--navy-dark); box-shadow: var(--shadow-md); }
+  .btn-secondary { background: var(--navy-light); color: var(--navy); }
+  .btn-secondary:hover { background: #d6dff0; }
+
+  .results-bar { max-width: 1280px; margin: 0 auto; padding: 20px 32px 8px; display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; align-items: center; }
+  .results-count { font-size: 14px; color: var(--text-muted); }
+  .results-count strong { color: var(--navy); font-weight: 600; }
+  .sort-control { font-size: 18px; color: var(--text-muted); display: flex; align-items: center; gap: 8px; }
+  .sort-control select { border: 1px solid var(--border); padding: 10px 14px; border-radius: 4px; font-family: 'DM Sans', sans-serif; font-size: 18px; color: var(--text); }
+
+  .papers-list { max-width: 1280px; margin: 0 auto; padding: 8px 32px 60px; display: flex; flex-direction: column; }
+  .paper-card { background: var(--white); border: 1px solid var(--border); border-bottom: none; padding: 20px 24px; transition: background 0.15s; }
+  .paper-card:first-child { border-radius: var(--radius) var(--radius) 0 0; }
+  .paper-card:last-child { border-bottom: 1px solid var(--border); border-radius: 0 0 var(--radius) var(--radius); }
+  .paper-card:only-child { border-bottom: 1px solid var(--border); border-radius: var(--radius); }
+  .paper-card:hover { background: var(--navy-light); }
+  /* "Show more" row: visually closes the card list it sits under */
+  .show-more-wrap { background: var(--white); border: 1px solid var(--border); border-top: 1px dashed var(--border); border-radius: 0 0 var(--radius) var(--radius); padding: 16px; text-align: center; }
+  .show-more-wrap .btn { height: auto; padding: 11px 22px; }
+
+  .paper-title { font-family: 'Playfair Display', serif; font-size: 18px; font-weight: 400; color: var(--navy); margin-bottom: 6px; line-height: 1.35; overflow-wrap: anywhere; }
+  .paper-title a { color: inherit; text-decoration: none; }
+  .paper-title a:hover { text-decoration: underline; }
+  .paper-authors { font-size: 14px; color: var(--text); margin-bottom: 8px; }
+  .paper-author-link { cursor: pointer; transition: color 0.1s; }
+  .paper-author-link:hover { color: var(--navy); text-decoration: underline; }
+  .paper-meta { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 12.5px; color: var(--text-muted); }
+  .tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 100px; font-size: 11.5px; font-weight: 500; max-width: 100%; overflow-wrap: anywhere; }
+  .tag-vol { background: var(--navy-light); color: var(--navy); cursor: pointer; }
+  .tag-vol:hover { background: #d0d9ec; }
+  .tag-editor { background: var(--accent-light); color: #8a7032; cursor: pointer; }
+  .tag-editor:hover { background: #ece5d0; }
+  .tag-area { background: #e8f5ee; color: var(--green); cursor: pointer; }
+  .tag-area:hover { background: #d4edde; }
+  .tag-other { background: #fce8e8; color: var(--red); }
+  .tag-aia { background: #fff3e0; color: #b36b00; }
+  .tag-added { background: #e0f2f1; color: #00796b; cursor: default; font-weight: 600; }
+
+  /* Per-source journal tags (one muted pastel per source) + PDF link tag */
+  .tag-journal { cursor: pointer; font-weight: 600; }
+  .jk-ms   { background: #e8eef7; color: #003087; }
+  .jk-opre { background: #e6f0ec; color: #1f5c40; }
+  .jk-mksc { background: #f7e8ee; color: #8a2b52; }
+  .jk-msom { background: #eeeaf7; color: #4b3a8a; }
+  .jk-isre { background: #e6f2f5; color: #1a5f70; }
+  .jk-pom  { background: #f7f0e4; color: #7a5b1d; }
+  .jk-pnas { background: #fdeee4; color: #a34c17; }
+  .jk-ec   { background: #eaf3e6; color: #3d6b1f; }
+  .tag-pdf { background: var(--green); color: #fff; text-decoration: none; font-weight: 700; }
+  .tag-pdf:hover { background: #1f6b3f; }
+  .chip-journal { background: #e8eef7; color: var(--navy); }
+  /* Senior/Associate Editor (ISR & Marketing Science) tags + chips */
+  .tag-se { background: var(--accent-light); color: #8a7032; cursor: pointer; }
+  .tag-se:hover { background: #ece5d0; }
+  .tag-ae { background: #e6eef9; color: #2d5f8a; cursor: pointer; }
+  .tag-ae:hover { background: #d5e3f5; }
+  .chip-se { background: var(--accent-light); color: #8a7032; }
+  .chip-ae { background: #e6eef9; color: #2d5f8a; }
+
+  .paper-abstract-toggle { margin-top: 8px; font-size: 12px; color: var(--navy); cursor: pointer; font-weight: 500; user-select: none; display: inline-block; }
+  .paper-abstract-toggle:hover { text-decoration: underline; }
+  .paper-bibtex-toggle { margin-top: 8px; margin-left: 14px; font-size: 12px; color: var(--green); cursor: pointer; font-weight: 500; user-select: none; display: inline-block; }
+  .paper-bibtex-toggle:hover { text-decoration: underline; }
+  .paper-abstract { display: none; margin-top: 10px; padding: 14px 16px; background: #fafbfd; border-radius: 6px; font-size: 13.5px; line-height: 1.65; color: var(--text-muted); border-left: 3px solid var(--navy-light); }
+  .paper-abstract.open { display: block; }
+  .paper-bibtex { display: none; margin-top: 10px; padding: 14px 16px; background: #f5f7f5; border-radius: 6px; font-size: 12.5px; line-height: 1.5; color: var(--text); border-left: 3px solid var(--green); font-family: 'Courier New', monospace; white-space: pre-wrap; word-break: break-all; position: relative; }
+  .paper-bibtex.open { display: block; }
+  .bib-copy { position: absolute; top: 8px; right: 8px; padding: 4px 12px; background: var(--green); color: #fff; border: none; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; }
+  .bib-copy:hover { background: #1f6b3f; }
+
+  .pagination { max-width: 1280px; margin: 0 auto; padding: 0 32px 60px; display: flex; justify-content: center; align-items: center; gap: 6px; }
+  .pagination button { padding: 8px 14px; border: 1px solid var(--border); background: var(--white); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 13px; cursor: pointer; transition: all 0.15s; color: var(--text); }
+  .pagination button:hover:not(:disabled) { background: var(--navy-light); border-color: var(--navy); color: var(--navy); }
+  .pagination button:disabled { opacity: 0.4; cursor: default; }
+  .pagination button.active { background: var(--navy); color: white; border-color: var(--navy); }
+  .page-info { font-size: 13px; color: var(--text-muted); padding: 0 6px; }
+
+  .loading { text-align: center; padding: 80px 32px; color: var(--text-muted); font-size: 16px; }
+  .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--navy); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .empty-state { text-align: center; padding: 60px 32px; color: var(--text-muted); }
+  .empty-state h3 { font-family: 'Playfair Display', serif; font-size: 22px; color: var(--text); margin-bottom: 8px; font-weight: 400; }
+
+  .footer { text-align: center; padding: 24px 32px; color: var(--text-muted); font-size: 12px; border-top: 1px solid var(--border); background: var(--white); }
+  .footer a { color: var(--navy); }
+
+  @media (max-width: 768px) {
+    .header-inner { padding: 16px 20px; flex-direction: column; align-items: flex-start; gap: 8px; }
+    .header h1 { font-size: 22px; }
+    .filters-inner { padding: 0 20px; }
+    .filters-row { flex-direction: column; gap: 10px; }
+    .filter-group { min-width: 100%; }
+    .results-bar, .papers-list, .pagination { padding-left: 20px; padding-right: 20px; }
+    .paper-card { padding: 16px 18px; }
+    .paper-title { font-size: 16px; }
+    .filters-bar { top: auto; position: relative; }
+    .header-inner > div { text-align: left; }
+    .summary-tab-btn, .recent-tab-btn { padding: 7px 13px; font-size: 13px; }
+    .results-bar { padding-top: 14px; }
+    .sort-control, .sort-control select { font-size: 15px; }
+  }
+
+  /* Summary tabs */
+  .summary-tabs { max-width: 1280px; margin: 0 auto; padding: 0 32px; }
+  .summary-tab-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .summary-tab-btn { padding: 8px 18px; border: 1.5px solid var(--border); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; background: var(--white); color: var(--text-muted); transition: all 0.15s; }
+  .summary-tab-btn.active { background: var(--navy); color: white; border-color: var(--navy); }
+  .summary-tab-btn:hover:not(.active) { background: var(--navy-light); color: var(--navy); border-color: var(--navy); }
+  /* "Recently added papers" button: same look as the summary tabs, but kept on
+     its own class because it drives the papers list, not a summary panel. */
+  .recent-tab-btn { padding: 8px 18px; border: 1.5px solid var(--border); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; background: var(--white); color: var(--text-muted); transition: all 0.15s; }
+  .recent-tab-btn.active { background: var(--navy); color: white; border-color: var(--navy); }
+  .recent-tab-btn:hover:not(.active) { background: var(--navy-light); color: var(--navy); border-color: var(--navy); }
+  .summary-content { display: none; padding: 16px 0 8px; }
+  .summary-content.active { display: block; }
+  .summary-list { column-count: 2; column-gap: 2rem; font-size: 14px; line-height: 2.1; }
+  .summary-list.cols-3 { column-count: 3; }
+  .summary-item { break-inside: avoid; cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: background 0.1s; overflow-wrap: anywhere; }
+  .summary-item:hover { background: var(--navy-light); }
+  .summary-count { color: var(--text-muted); font-size: 13px; margin-right: 4px; display: inline-block; min-width: 32px; text-align: right; }
+  .summary-author-link:hover { text-decoration: underline; color: var(--navy); }
+  .summary-area-link:hover { text-decoration: underline; }
+  @media (max-width: 768px) {
+    .summary-tabs { padding-left: 20px; padding-right: 20px; }
+    .summary-list, .summary-list.cols-3 { column-count: 1; }
+  }
+  #authorsPagination button, #editorsPagination button { padding: 8px 14px; border: 1px solid var(--border); background: var(--white); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 13px; cursor: pointer; transition: all 0.15s; color: var(--text); }
+  #authorsPagination button:hover:not(:disabled), #editorsPagination button:hover:not(:disabled) { background: var(--navy-light); border-color: var(--navy); color: var(--navy); }
+  #authorsPagination button:disabled, #editorsPagination button:disabled { opacity: 0.4; cursor: default; }
+  #authorsPagination button.active, #editorsPagination button.active { background: var(--navy); color: white; border-color: var(--navy); }
+
+  /* ── Responsive refinements: tablet + small-phone tuning ─────────────────────
+     The layout already has a 768px phone breakpoint above; these add a tablet
+     range, a small-phone range, and a couple of cross-device safety rules so the
+     UI re-adjusts smoothly from a wide monitor down to a narrow phone. */
+
+  /* Tablets / small laptops (iPad landscape, etc.): trim the generous desktop
+     gutters and the large control fonts so nothing feels cramped or oversized. */
+  @media (min-width: 769px) and (max-width: 1024px) {
+    .header-inner, .filters-inner, .summary-tabs,
+    .results-bar, .papers-list, .pagination { padding-left: 24px; padding-right: 24px; }
+    .header h1 { font-size: 25px; }
+    .filter-group input, .custom-select-trigger { font-size: 17px; }
+    .custom-select-item { font-size: 16px; }
+    .sort-control, .sort-control select { font-size: 16px; }
+  }
+
+  /* Phones: keep inputs at >=16px so iOS does not zoom on focus — including when
+     the sticky bar condenses on scroll (the .compact rules above drop to 15px). */
+  @media (max-width: 768px) {
+    .filter-group input, .custom-select-trigger { font-size: 16px; height: 48px; }
+    .custom-select-item, .custom-select-search { font-size: 16px; }
+    body.compact .filter-group input,
+    body.compact .custom-select-trigger,
+    body.compact .filter-group select,
+    body.compact .btn { font-size: 16px; height: 44px; }
+    .summary-list { column-gap: 1.25rem; }
+    .results-bar { gap: 6px 12px; }
+  }
+
+  /* Small phones: tighter gutters, smaller heading and tab buttons. */
+  @media (max-width: 480px) {
+    .header-inner { padding: 14px 16px; }
+    .header h1 { font-size: 19px; line-height: 1.25; }
+    .filters-inner { padding: 0 16px; }
+    .results-bar, .papers-list, .pagination, .summary-tabs { padding-left: 16px; padding-right: 16px; }
+    .paper-card { padding: 14px 15px; }
+    .paper-title { font-size: 15.5px; }
+    .summary-tab-btn, .recent-tab-btn { padding: 7px 12px; font-size: 12.5px; }
+  }
+
+  /* ── Accounts: sign-in, saved papers, notes, lists, tags ──────────────────
+     All of this is inert until a Firebase project is configured (see
+     _ACCOUNTS-SETUP.md). The account control renders into the header top-right;
+     a star + an inline "Notes, tags & lists" panel attach to each paper card. */
+  .header-right { display: flex; align-items: center; gap: 18px; }
+  .acct-control { display: flex; align-items: center; }
+  .acct-control:empty { display: none; } /* no layout shift before accounts are configured */
+  .acct-btn { font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; border-radius: 6px; padding: 9px 16px; border: 1.5px solid rgba(255,255,255,0.5); background: rgba(255,255,255,0.08); color: #fff; transition: all .15s; white-space: nowrap; }
+  .acct-btn:hover { background: rgba(255,255,255,0.18); border-color: #fff; }
+  .acct-user { display: flex; align-items: center; gap: 8px; max-width: 220px; }
+  .acct-uname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .acct-avatar { width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--navy-dark); font-weight: 700; font-size: 12px; display: flex; align-items: center; justify-content: center; text-transform: uppercase; flex: none; }
+  .acct-wrap { position: relative; }
+  .acct-menu { display: none; position: absolute; right: 0; top: calc(100% + 8px); background: #fff; color: var(--text); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow-lg); min-width: 240px; z-index: 300; overflow: hidden; }
+  .acct-menu.open { display: block; }
+  .acct-menu-head { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-muted); }
+  .acct-menu-head strong { display: block; color: var(--text); font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; margin-top: 2px; }
+  .acct-menu-item { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 10px 16px; font-size: 13.5px; cursor: pointer; transition: background .1s; color: var(--text); }
+  .acct-menu-item:hover { background: var(--navy-light); }
+  .acct-badge { font-size: 12px; color: var(--navy); background: var(--navy-light); border-radius: 100px; padding: 1px 9px; font-weight: 600; }
+  .acct-menu-sep { height: 1px; background: var(--border); }
+  .acct-menu-item.danger { color: var(--red); }
+  .acct-menu-item.danger:hover { background: #fdeaea; }
+
+  /* Auth modal */
+  .acct-overlay { display: none; position: fixed; inset: 0; background: rgba(8,15,40,0.55); z-index: 1000; align-items: flex-start; justify-content: center; padding: 56px 16px; overflow-y: auto; }
+  .acct-overlay.open { display: flex; }
+  .acct-modal { position: relative; background: #fff; border-radius: 12px; width: 100%; max-width: 400px; box-shadow: var(--shadow-lg); }
+  .acct-modal-x { position: absolute; top: 12px; right: 14px; font-size: 22px; line-height: 1; color: var(--text-muted); cursor: pointer; border: none; background: none; }
+  .acct-modal-x:hover { color: var(--text); }
+  .acct-modal-head { padding: 24px 24px 6px; }
+  .acct-modal-head h2 { font-family: 'Playfair Display', serif; font-weight: 400; font-size: 23px; color: var(--navy); }
+  .acct-modal-head p { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+  .acct-modal-body { padding: 14px 24px 24px; display: flex; flex-direction: column; gap: 12px; }
+  .acct-google { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 11px; border: 1.5px solid var(--border); border-radius: 8px; background: #fff; font-weight: 600; font-size: 14px; cursor: pointer; color: var(--text); font-family: inherit; transition: all .15s; }
+  .acct-google:hover { background: #f6f7fb; border-color: #b0b8c8; }
+  .acct-google svg { width: 18px; height: 18px; flex: none; }
+  .acct-or { display: flex; align-items: center; gap: 10px; color: var(--text-muted); font-size: 12px; }
+  .acct-or::before, .acct-or::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+  .acct-field { display: flex; flex-direction: column; gap: 5px; }
+  .acct-field label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .6px; color: var(--text-muted); }
+  .acct-field input { padding: 11px 13px; border: 1.5px solid var(--border); border-radius: 8px; font-family: inherit; font-size: 16px; color: var(--text); }
+  .acct-field input:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(0,48,135,.1); }
+  .acct-primary { padding: 12px; background: var(--navy); color: #fff; border: none; border-radius: 8px; font-weight: 600; font-size: 14.5px; cursor: pointer; font-family: inherit; }
+  .acct-primary:hover { background: var(--navy-dark); }
+  .acct-primary:disabled { opacity: .6; cursor: default; }
+  .acct-error { color: var(--red); font-size: 13px; min-height: 17px; line-height: 1.35; }
+  .acct-switch { font-size: 13px; color: var(--text-muted); text-align: center; }
+  .acct-link { color: var(--navy); cursor: pointer; font-weight: 600; }
+  .acct-link:hover { text-decoration: underline; }
+  .acct-forgot { font-size: 12.5px; text-align: right; margin-top: -4px; }
+
+  /* Star + per-card account panel */
+  body.ms-accounts .paper-title { padding-right: 30px; }
+  .acct-star { position: absolute; top: 14px; right: 16px; font-size: 22px; line-height: 1; cursor: pointer; color: #c9cfdb; user-select: none; transition: transform .1s, color .15s; }
+  .acct-star:hover { transform: scale(1.15); color: var(--accent); }
+  .acct-star.on { color: var(--accent); }
+  .paper-acct-toggle { margin-top: 8px; margin-left: 14px; font-size: 12px; color: #b08a2e; cursor: pointer; font-weight: 600; user-select: none; display: none; }
+  body.ms-signed-in .paper-acct-toggle { display: inline-block; }
+  .paper-acct-toggle:hover { text-decoration: underline; }
+  .paper-acct-panel { display: none; margin-top: 10px; padding: 14px 16px; background: #fbfaf4; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; }
+  .paper-acct-panel.open { display: block; }
+  .acct-panel-row { margin-bottom: 13px; }
+  .acct-panel-row > label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--text-muted); margin-bottom: 6px; }
+  .acct-note { width: 100%; min-height: 72px; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 6px; font-family: inherit; font-size: 13.5px; line-height: 1.5; color: var(--text); resize: vertical; }
+  .acct-note:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(0,48,135,.08); }
+  .acct-taglist { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .acct-tag { display: inline-flex; align-items: center; gap: 5px; background: #e8f5ee; color: var(--green); border-radius: 6px; padding: 3px 9px; font-size: 12.5px; font-weight: 500; }
+  .acct-tag .x { cursor: pointer; font-weight: 700; opacity: .5; font-size: 14px; line-height: 1; }
+  .acct-tag .x:hover { opacity: 1; }
+  .acct-tag-input { border: 1px dashed #c4ccda; border-radius: 6px; padding: 4px 9px; font-size: 12.5px; font-family: inherit; min-width: 120px; }
+  .acct-tag-input:focus { outline: none; border-color: var(--navy); }
+  .acct-listrow { display: flex; align-items: center; gap: 8px; font-size: 13.5px; margin-bottom: 5px; cursor: pointer; }
+  .acct-listrow input[type=checkbox] { accent-color: var(--navy); width: 15px; height: 15px; cursor: pointer; }
+  .acct-newlist { display: flex; gap: 6px; margin-top: 8px; }
+  .acct-newlist input { flex: 1; padding: 7px 10px; border: 1.5px solid var(--border); border-radius: 6px; font-family: inherit; font-size: 13px; }
+  .acct-newlist input:focus { outline: none; border-color: var(--navy); }
+  .acct-save-row { display: flex; align-items: center; gap: 12px; margin-top: 6px; }
+  .acct-save-btn { padding: 9px 20px; background: var(--navy); color: #fff; border: none; border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer; font-family: inherit; }
+  .acct-save-btn:hover { background: var(--navy-dark); }
+  .acct-save-status { font-size: 12.5px; color: var(--green); font-weight: 600; }
+  .acct-mini { padding: 7px 13px; background: var(--navy-light); color: var(--navy); border: none; border-radius: 6px; font-weight: 600; font-size: 12.5px; cursor: pointer; font-family: inherit; }
+  .acct-mini:hover { background: #d6dff0; }
+
+  /* Library view (reuses the papers list, driven by a private library bar) */
+  .library-bar { display: none; max-width: 1280px; margin: 0 auto; padding: 18px 32px 4px; }
+  .library-bar.open { display: block; }
+  .library-bar h2 { font-family: 'Playfair Display', serif; font-weight: 400; font-size: 23px; color: var(--navy); display: flex; align-items: center; gap: 12px; justify-content: space-between; }
+  .library-sub { font-size: 13px; color: var(--text-muted); margin: 4px 0 12px; }
+  .library-search { width: 100%; max-width: 460px; padding: 10px 13px; border: 1.5px solid var(--border); border-radius: 8px; font-family: inherit; font-size: 14px; margin-bottom: 6px; display: block; }
+  .library-search:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(0,48,135,.1); }
+  .library-section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--text-muted); margin: 14px 0 7px; }
+  .library-chips { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+  .lib-chip { border: 1.5px solid var(--border); background: #fff; border-radius: 100px; padding: 5px 13px; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text-muted); transition: all .12s; display: inline-flex; align-items: center; gap: 7px; }
+  .lib-chip:hover { border-color: var(--navy); color: var(--navy); }
+  .lib-chip.active { background: var(--navy); color: #fff; border-color: var(--navy); }
+  .lib-chip.tag.active { background: var(--green); border-color: var(--green); }
+  .lib-chip .cnt { opacity: .65; font-weight: 500; }
+  .lib-chip .del { opacity: .5; font-weight: 700; font-size: 14px; line-height: 1; }
+  .lib-chip .del:hover { opacity: 1; color: var(--red); }
+  @media (max-width: 768px) { .library-bar { padding-left: 20px; padding-right: 20px; } }
+  @media (max-width: 480px) { .library-bar { padding-left: 16px; padding-right: 16px; } .acct-user { max-width: 150px; } }
+</style>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebApplication","name":"The Lit — Research Paper Browser","description":"Search and filter research papers across Management Science, Operations Research, Marketing Science, M&SOM, POM, Information Systems Research, five PNAS sections, and the ACM EC conference.","url":"https://stouras.com/fun/lit/","applicationCategory":"ReferenceApplication","author":{"@type":"Person","name":"Konstantinos Stouras","url":"https://stouras.com"}}
+</script>
+</head>
+<body>
+
+<div class="topbar">
+<header class="header">
+  <div class="header-inner">
+    <h1><em>The Lit</em> — Research Paper Browser</h1>
+    <div class="header-right">
+      <div style="text-align:right;line-height:1.35">
+        <div class="header-meta"><strong id="sourceCount">8 sources</strong> via Crossref · <span id="yearRange">1954–present</span></div>
+        <div class="header-meta" id="lastPull" style="font-size:12px;opacity:0.75;margin-top:1px"></div>
+      </div>
+      <div id="acctControl" class="acct-control"></div>
+    </div>
+  </div>
+</header>
+
+<div class="filters-bar">
+  <div class="filters-inner">
+    <div class="filters-row">
+      <div class="filter-group">
+        <label title="Choose one or more journals/sources. With none selected, all sources are searched.">Journals</label>
+        <div class="custom-select" id="csJournal" data-type="journal">
+          <div class="custom-select-trigger" onclick="toggleDrop('csJournal')">All journals</div>
+          <div class="custom-select-dropdown"><input class="custom-select-search" placeholder="Type to filter..." oninput="filterDrop('csJournal',this.value)"><div class="custom-select-items"></div></div>
+        </div>
+        <div id="chipsJournal" class="chips"></div>
+      </div>
+      <div class="filter-group">
+        <label title="Some authors may appear under different name variants. ORCID-based disambiguation is not yet available for all authors.">Search Authors &#9432;</label>
+        <input id="filterAuthors" name="ms-filter-author" placeholder="Author..." type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('author','filterAuthors');event.preventDefault();}">
+        <div id="chipsAuthor" class="chips"></div>
+      </div>
+      <div class="filter-group">
+        <label>Search Title</label>
+        <input id="filterSearch" name="ms-filter-title" placeholder="Paper title..." type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('title','filterSearch');event.preventDefault();}">
+        <div id="chipsTitle" class="chips"></div>
+      </div>
+      <div class="filter-group">
+        <label title="Affiliation names are not standardized across papers. Duplicates may exist despite ongoing deduplication efforts.">Search Affiliations &#9432;</label>
+        <input id="filterAffiliations" name="ms-filter-affiliation" placeholder="Affiliation..." type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore oninput="debounceAffSearch()" onkeydown="if(event.key==='Enter'){addTextChip('affiliation','filterAffiliations');event.preventDefault();}">
+        <div id="chipsAffiliation" class="chips"></div>
+      </div>
+      <div class="filter-group">
+        <label>Year</label>
+        <div class="custom-select" id="csYear" data-type="year">
+          <div class="custom-select-trigger" onclick="toggleDrop('csYear')">All years</div>
+          <div class="custom-select-dropdown"><input class="custom-select-search" placeholder="Type to filter..." oninput="filterDrop('csYear',this.value)"><div class="custom-select-items"></div></div>
+        </div>
+        <div id="chipsYear" class="chips"></div>
+      </div>
+      <div class="filter-group" id="groupEditor" style="display:none" title="Editorial data is available for Management Science papers only.">
+        <label>Accepting Editor (MS)</label>
+        <div class="custom-select" id="csEditor" data-type="editor">
+          <div class="custom-select-trigger" onclick="toggleDrop('csEditor')">All editors</div>
+          <div class="custom-select-dropdown"><input class="custom-select-search" placeholder="Type to filter..." oninput="filterDrop('csEditor',this.value)"><div class="custom-select-items"></div></div>
+        </div>
+        <div id="chipsEditor" class="chips"></div>
+      </div>
+      <div class="filter-group" id="groupArea" style="display:none" title="Editorial areas are available for Management Science papers only.">
+        <label>Area (MS)</label>
+        <div class="custom-select" id="csArea" data-type="area">
+          <div class="custom-select-trigger" onclick="toggleDrop('csArea')">All areas</div>
+          <div class="custom-select-dropdown"><input class="custom-select-search" placeholder="Type to filter..." oninput="filterDrop('csArea',this.value)"><div class="custom-select-items"></div></div>
+        </div>
+        <div id="chipsArea" class="chips"></div>
+      </div>
+      <div class="filter-group" id="groupSE" style="display:none" title="Senior Editors are extracted from the History line of Information Systems Research and Marketing Science papers, where available.">
+        <label>Senior Editor</label>
+        <div class="custom-select" id="csSE" data-type="se">
+          <div class="custom-select-trigger" onclick="toggleDrop('csSE')">All editors</div>
+          <div class="custom-select-dropdown"><input class="custom-select-search" placeholder="Type to filter..." oninput="filterDrop('csSE',this.value)"><div class="custom-select-items"></div></div>
+        </div>
+        <div id="chipsSE" class="chips"></div>
+      </div>
+      <div class="filter-group" id="groupAE" style="display:none" title="Associate Editors are extracted from the History line of Information Systems Research papers, where available.">
+        <label>Associate Editor</label>
+        <div class="custom-select" id="csAE" data-type="ae">
+          <div class="custom-select-trigger" onclick="toggleDrop('csAE')">All editors</div>
+          <div class="custom-select-dropdown"><input class="custom-select-search" placeholder="Type to filter..." oninput="filterDrop('csAE',this.value)"><div class="custom-select-items"></div></div>
+        </div>
+        <div id="chipsAE" class="chips"></div>
+      </div>
+      <div class="filter-actions">
+        <button class="btn btn-secondary" onclick="clearFilters()">Clear</button>
+      </div>
+    </div>
+    <div class="summary-tab-btns" style="margin-top:12px;">
+      <button class="summary-tab-btn" id="tabBtnEditors" style="display:none" onclick="toggleSummary('editors')" title="Accepting editors are collected for Management Science papers only.">Editors <span style="font-weight:400;opacity:.65">(MS)</span></button>
+      <button class="summary-tab-btn" id="tabBtnAreas" style="display:none" onclick="toggleSummary('areas')" title="Editorial areas are collected for Management Science papers only.">Areas <span style="font-weight:400;opacity:.65">(MS)</span></button>
+      <button class="summary-tab-btn" onclick="toggleSummary('authors')" title="Authors are resolved by ORCID where available; authors with a single paper are not listed.">Authors</button>
+      <button class="recent-tab-btn" id="recentBtn" onclick="toggleRecent()" title="Papers added to the database in the last 4 weeks, newest first.">Recently added papers</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="summary-tabs" id="summaryTabs">
+  <div id="summaryEditors" class="summary-content">
+    <div id="summaryEditorsList" class="summary-list"><div style="padding:12px;color:var(--text-muted)">Loading editors...</div></div>
+    <div id="editorsPagination" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:14px 0 4px"></div>
+  </div>
+  <div id="summaryAreas" class="summary-content">
+    <div id="summaryAreasList" class="summary-list"><div style="padding:12px;color:var(--text-muted)">Loading areas...</div></div>
+  </div>
+  <div id="summaryAuthors" class="summary-content">
+    <div id="summaryAuthorsList" class="summary-list"><div style="padding:12px;color:var(--text-muted)">Loading authors...</div></div>
+    <div id="authorsPagination" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:14px 0 4px"></div>
+  </div>
+  <div id="summaryAffiliations" class="summary-content">
+    <div id="summaryAffiliationsList" class="summary-list"></div>
+  </div>
+</div>
+
+<!-- Private library view (signed-in users): saved papers, notes, lists, tags.
+     Hidden until opened from the account menu; it drives the papers list below. -->
+<div id="libraryBar" class="library-bar">
+  <h2><span>★ My Library</span> <span class="acct-link" style="font-size:13px;font-weight:600" onclick="acctExitLibrary()">Exit library</span></h2>
+  <div class="library-sub">Your private saved papers, notes, lists and tags. Only you can see these.</div>
+  <input id="libSearch" name="ms-lib-search" class="library-search" placeholder="Search my notes, titles, authors, tags…" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore oninput="acctLibSearch(this.value)">
+  <div class="library-section-label">Lists &amp; views</div>
+  <div class="library-chips" id="libListChips"></div>
+  <div class="library-section-label" id="libTagsLabel">Tags</div>
+  <div class="library-chips" id="libTagChips"></div>
+</div>
+
+<div class="results-bar">
+  <div class="results-count" id="resultsCount"></div>
+  <div class="sort-control">
+    Sort:
+    <select id="sortBy" onchange="applyFilters()">
+      <option value="year-desc">Year ↓</option>
+      <option value="year-asc">Year ↑</option>
+      <option value="title">Title A-Z</option>
+      <option value="editor">Editor A-Z</option>
+    </select>
+  </div>
+</div>
+
+<div id="papersList" class="papers-list">
+  <div class="empty-state"><h3>Select a filter to get started</h3><p>Pick one or more journals, filter by year, or search by title, author, or affiliation. Everything is searched when no journal is selected.</p></div>
+</div>
+<!-- PAGINATION DISABLED — uncomment to re-enable
+<div id="pagination" class="pagination" style="display:none"></div>
+-->
+
+<footer class="footer">
+  <div>Built as a personal project to search papers across
+    <a href="https://pubsonline.informs.org/journal/mnsc" target="_blank">Management Science</a>,
+    <a href="https://pubsonline.informs.org/journal/opre" target="_blank">Operations Research</a>,
+    <a href="https://pubsonline.informs.org/journal/mksc" target="_blank">Marketing Science</a>,
+    <a href="https://pubsonline.informs.org/journal/msom" target="_blank">M&amp;SOM</a>,
+    <a href="https://journals.sagepub.com/home/pao" target="_blank">POM</a>,
+    <a href="https://pubsonline.informs.org/journal/isre" target="_blank">Information Systems Research</a>,
+    <a href="https://www.pnas.org" target="_blank">PNAS</a> (Computer Sciences, Sustainability Science, Environmental Sciences, Social Sciences &amp; Economic Sciences), and the
+    <a href="https://www.sigecom.org" target="_blank">ACM EC conference</a> (1999–present) — in one place.</div>
+  <div>Editors and editorial areas are shown for <em>Management Science</em> papers (2011+), exactly as on <a href="/fun/ms/">the MS-only browser</a>. Other sources contribute their published papers and Articles in Advance. ACM EC papers link to an arXiv/SSRN/open-access PDF where one could be found.</div>
+  <div>All metadata are publicly available, collected via the <a href="https://www.crossref.org/documentation/retrieve-metadata/rest-api/" target="_blank">Crossref API</a> (with OpenAlex, DBLP and Semantic Scholar assisting for EC PDF links). PNAS section labels come from pnas.org's own topic index where available, and are otherwise approximated from each paper's <a href="https://openalex.org" target="_blank">OpenAlex</a> primary topic.</div>
+  <div>Feedback and suggestions are welcome. Any errors are my own. <a href="https://www.stouras.com" target="_blank">Konstantinos I. Stouras</a></div>
+</footer>
+
+<script>
+// ── Data source: static JSON, no Google Sheets ───────────────────────────────
+// These files are built from public APIs (Crossref + friends) by a scheduled
+// GitHub Action (fun/lit/_scraper/build-data.mjs) and committed into
+// fun/lit/data/ — one papers file per source, listed in sources.json.
+// GitHub Pages serves them from its CDN, same origin as this page. To point
+// the page at a different dataset, change only these paths.
+// See fun/lit/_HOW-IT-WORKS.md for the full picture.
+const SOURCES_URL = './data/sources.json';
+const AUTHORS_URL = './data/authors.json';
+const AFFILIATIONS_URL = './data/affiliations.json';
+const META_URL = './data/meta.json';
+const RECENT_URL = './data/recent.json';
+const DATA_BASE = './data/';
+
+// Display config per source key. Sections are PNAS's five topic sections; a
+// PNAS paper can belong to several and matches a filter on any of them.
+const SRC = {
+  ms:   { name: 'Management Science',   publisher: 'INFORMS' },
+  opre: { name: 'Operations Research',  publisher: 'INFORMS' },
+  mksc: { name: 'Marketing Science',    publisher: 'INFORMS' },
+  msom: { name: 'Manufacturing & Service Operations Management', publisher: 'INFORMS' },
+  isre: { name: 'Information Systems Research', publisher: 'INFORMS' },
+  pom:  { name: 'Production and Operations Management', publisher: 'SAGE' },
+  pnas: { name: 'PNAS', publisher: 'National Academy of Sciences' },
+  ec:   { name: 'ACM EC', publisher: 'ACM' },
+};
+const PNAS_SECTION_KEYS = {
+  'Computer Sciences': 'pnas-cs',
+  'Sustainability Science': 'pnas-sust',
+  'Environmental Sciences': 'pnas-env',
+  'Social Sciences': 'pnas-soc',
+  'Economic Sciences': 'pnas-econ',
+};
+// The journal filter's selectable entries, in display order.
+const JOURNAL_OPTIONS = [
+  { key: 'ms',   label: 'Management Science' },
+  { key: 'opre', label: 'Operations Research' },
+  { key: 'mksc', label: 'Marketing Science' },
+  { key: 'msom', label: 'M&SOM' },
+  { key: 'isre', label: 'Information Systems Research' },
+  { key: 'pom',  label: 'POM' },
+  { key: 'pnas', label: 'PNAS (all five sections)' },
+  { key: 'pnas-cs',   label: 'PNAS · Computer Sciences' },
+  { key: 'pnas-sust', label: 'PNAS · Sustainability Science' },
+  { key: 'pnas-env',  label: 'PNAS · Environmental Sciences' },
+  { key: 'pnas-soc',  label: 'PNAS · Social Sciences' },
+  { key: 'pnas-econ', label: 'PNAS · Economic Sciences' },
+  { key: 'ec',   label: 'ACM EC (1999–present)' },
+];
+const JOURNAL_LABEL = {};
+JOURNAL_OPTIONS.forEach(function(o) { JOURNAL_LABEL[o.key] = o.label; });
+
+const PER_PAGE = 20;
+let allPapers = [], filtered = [], currentPage = 1;
+let sourcesManifest = [];  // from sources.json (per-source counts/files)
+let authorData = []; // pre-computed from Authors tab (ORCID-resolved)
+let affiliationData = []; // pre-computed from Affiliations tab
+
+// "Recently added papers" view: when on, the papers list shows only papers added
+// to the database within RECENT_DAYS, newest addition first, each with its date.
+let recentMode = false;
+const RECENT_DAYS = 28; // last 4 weeks
+// Pre-computed RecentlyAdded tab (small, fast). Pre-fetched at page load so the
+// view opens instantly; if it is missing we fall back to scanning the full Data
+// set for the Date Added column.
+let recentData = null;      // parsed rows from the RecentlyAdded tab (null = absent/failed)
+let recentFetched = false;  // whether we've attempted to load that tab
+let recentLoading = false;  // whether that fetch is currently in flight
+
+// Multi-select state. authorIdentity maps a display label -> array of that
+// author's name variants (from the Authors tab Name_Variants column), so a
+// click matches every spelling of one ORCID-resolved person. journal holds
+// source keys (see JOURNAL_OPTIONS); empty means "all journals".
+const sel = { journal: new Set(), editor: new Set(), area: new Set(), se: new Set(), ae: new Set(), year: new Set(), title: new Set(), author: new Set(), authorIdentity: {}, affiliation: new Set() };
+
+// The journal keys a paper matches: its own source key, plus (for PNAS) the
+// parent 'pnas' key and one key per section it belongs to.
+function computeJkeys(p) {
+  var keys = [p.JKey || ''];
+  if (p.JKey === 'pnas') {
+    (p.Sections || []).forEach(function(s) { var k = PNAS_SECTION_KEYS[s]; if (k) keys.push(k); });
+  }
+  p._jkeys = keys.filter(Boolean);
+  // Senior/Associate Editor names (ISR & Marketing Science History lines);
+  // multiple names arrive "; "-joined.
+  p._se = (p['Senior Editor'] || '').split(';').map(function(s) { return s.trim(); }).filter(Boolean);
+  p._ae = (p['Associate Editor'] || '').split(';').map(function(s) { return s.trim(); }).filter(Boolean);
+}
+
+function matchesJournal(p) {
+  if (sel.journal.size === 0) return true;
+  return (p._jkeys || []).some(function(k) { return sel.journal.has(k); });
+}
+
+// Editors/Areas exist for Management Science only: those two filter groups and
+// summary tabs appear only when the user explicitly selects MS in the journal
+// filter (alone or together with other journals) — never on the default
+// all-journals landing, and never for e.g. an MSOM-only search.
+function msInScope() { return sel.journal.has('ms'); }
+function updateMsScopeUI() {
+  var show = msInScope();
+  ['groupEditor', 'groupArea', 'tabBtnEditors', 'tabBtnAreas'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = show ? '' : 'none';
+  });
+  if (!show) {
+    // Leaving MS scope: editor/area selections can no longer match anything.
+    if (sel.editor.size) { sel.editor.clear(); renderChips('editor'); }
+    if (sel.area.size) { sel.area.clear(); renderChips('area'); }
+    var ed = document.getElementById('summaryEditors');
+    var ar = document.getElementById('summaryAreas');
+    if ((ed && ed.classList.contains('active')) || (ar && ar.classList.contains('active'))) closeSummaryTabs();
+  }
+  // Senior/Associate Editor groups: shown only when the user explicitly
+  // selects a journal that has them (ISR both, Marketing Science SE only) —
+  // the default all-journals landing keeps the filter bar uncluttered.
+  var showSE = sel.journal.has('isre') || sel.journal.has('mksc');
+  var showAE = sel.journal.has('isre');
+  var g = document.getElementById('groupSE');
+  if (g) g.style.display = showSE ? '' : 'none';
+  g = document.getElementById('groupAE');
+  if (g) g.style.display = showAE ? '' : 'none';
+  if (!showSE && sel.se.size) { sel.se.clear(); renderChips('se'); }
+  if (!showAE && sel.ae.size) { sel.ae.clear(); renderChips('ae'); }
+}
+
+// Text chip management (for title/author search)
+function addTextChip(type, inputId) {
+  const input = document.getElementById(inputId);
+  const val = input.value.trim();
+  if (!val) return;
+  if (sel[type].has(val.toLowerCase())) return;
+  sel[type].add(val.toLowerCase());
+  input.value = '';
+  renderChips(type);
+  applyFilters();
+}
+
+function addAuthorChip(name) {
+  var val = name.trim().toLowerCase();
+  if (!val || sel.author.has(val)) return;
+  sel.author.add(val);
+  renderChips('author');
+  applyFilters();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function addYearChip(year) {
+  if (!year || sel.year.has(year)) return;
+  sel.year.add(year);
+  renderChips('year');
+  applyFilters();
+}
+
+// Chip management
+function removeChip(type, val) {
+  sel[type].delete(val);
+  renderChips(type);
+  applyFilters();
+}
+
+function renderChips(type) {
+  if (type === 'author') { renderAuthorChips(); return; }
+  const idMap = {journal:'chipsJournal', editor:'chipsEditor', area:'chipsArea', se:'chipsSE', ae:'chipsAE', year:'chipsYear', title:'chipsTitle', author:'chipsAuthor', affiliation:'chipsAffiliation'};
+  const container = document.getElementById(idMap[type]);
+  const cssClass = 'chip chip-' + type;
+  container.innerHTML = [...sel[type]].map(v => {
+    const label = type === 'journal' ? (JOURNAL_LABEL[v] || v) : v;
+    return `<span class="${cssClass}">${esc(label)} <span class="chip-x" onclick="removeChip('${type}','${escAttr(v)}')">×</span></span>`;
+  }).join('');
+  if (type === 'journal') updateMsScopeUI();
+}
+
+function addJournalChip(key) {
+  if (!key || sel.journal.has(key)) return;
+  sel.journal.add(key);
+  renderChips('journal');
+  applyFilters();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// Author chips = free-text substring chips (sel.author) + ORCID-identity chips
+// (sel.authorIdentity, which match any of a person's name variants).
+function renderAuthorChips() {
+  const container = document.getElementById('chipsAuthor');
+  var html = [...sel.author].map(function(v) {
+    return '<span class="chip chip-author">' + esc(v) + ' <span class="chip-x" onclick="removeChip(\'author\',\'' + escAttr(v) + '\')">×</span></span>';
+  });
+  Object.keys(sel.authorIdentity).forEach(function(label) {
+    html.push('<span class="chip chip-author">' + esc(label) + ' <span class="chip-x" onclick="removeAuthorIdentity(\'' + escAttr(label) + '\')">×</span></span>');
+  });
+  container.innerHTML = html.join('');
+}
+
+function addAuthorIdentityChip(label, variants) {
+  if (!label || sel.authorIdentity[label]) return;
+  sel.authorIdentity[label] = (variants && variants.length) ? variants : [label.toLowerCase()];
+  renderAuthorChips();
+  closeSummaryTabs();
+  applyFilters();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function removeAuthorIdentity(label) {
+  delete sel.authorIdentity[label];
+  renderAuthorChips();
+  applyFilters();
+}
+
+function addChipFromCard(type, val) {
+  if (sel[type].has(val)) return;
+  sel[type].add(val);
+  renderChips(type);
+  applyFilters();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// Load the paper set: sources.json lists one static JSON file per source
+// (papers-ms.json, papers-opre.json, …). All files are fetched in parallel and
+// rendered progressively as they arrive, so the first journals are searchable
+// while the bigger files are still downloading.
+let sourcesLoaded = 0, sourcesTotal = 0;
+
+function afterSourceArrived() {
+  // Re-render whatever view is active with the data loaded so far.
+  if (recentMode) renderRecent(); else applyFilters();
+  // A loop, not Math.min.apply — engines cap apply() around 65k-124k args and
+  // the combined corpus can exceed that.
+  var minY = Infinity;
+  for (var i = 0; i < allPapers.length; i++) {
+    var y = parseInt(allPapers[i]['Year']);
+    if (!isNaN(y) && y < minY) minY = y;
+  }
+  if (minY < Infinity) {
+    var el = document.getElementById('yearRange');
+    if (el) el.textContent = minY + '–present';
+  }
+  var sc = document.getElementById('sourceCount');
+  if (sc) sc.textContent = sourcesLoaded < sourcesTotal
+    ? 'Loading sources… ' + sourcesLoaded + '/' + sourcesTotal
+    : sourcesTotal + ' sources';
+}
+
+async function loadData() {
+  try {
+    const resp = await fetch(SOURCES_URL, { cache: 'no-cache' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    sourcesManifest = await resp.json();
+    if (!Array.isArray(sourcesManifest)) sourcesManifest = [];
+  } catch (e) {
+    setTimeout(loadData, 3000);
+    return;
+  }
+  sourcesTotal = sourcesManifest.length;
+  buildJournalSelect();
+
+  // Affiliation aggregates come from their own small JSON file.
+  fetch(AFFILIATIONS_URL, { cache: 'no-cache' })
+    .then(function(r) { return r.ok ? r.json() : []; })
+    .then(function(a) { affiliationData = Array.isArray(a) ? a : []; })
+    .catch(function() { affiliationData = []; });
+
+  await Promise.all(sourcesManifest.map(async function(src) {
+    for (var attempt = 0; attempt < 4; attempt++) {
+      try {
+        var r = await fetch(DATA_BASE + src.file, { cache: 'no-cache' });
+        if (r.status === 404) break; // not built yet (e.g. empty PNAS cache)
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        var rows = await r.json();
+        if (!Array.isArray(rows)) rows = [];
+        rows.forEach(function(p) { normalizeEditors(p); computeJkeys(p); });
+        if (src.key === 'ms') {
+          allPapers = allPapers.concat(rows);
+          // Editor/area cleanup only applies to MS rows (others have none).
+          fuzzyMergeEditors();
+          fuzzyMergeAreas();
+        } else {
+          allPapers = allPapers.concat(rows);
+        }
+        break;
+      } catch (e) {
+        await new Promise(function(res) { setTimeout(res, 2500 * (attempt + 1)); });
+      }
+    }
+    sourcesLoaded++;
+    afterSourceArrived();
+  }));
+
+  if (!allPapers.length) console.warn('No paper files found — the data pipeline has not run yet.');
+}
+
+// Authors are pre-aggregated (paper counts, areas, name variants, ORCID identity)
+// in authors.json by the build step, so the Authors panel is ready without
+// waiting for every paper since 1954 to download and parse.
+async function loadAuthors() {
+  // Paint instantly from the previous visit's cache, then refresh from network.
+  var cached = lsGet('lit_authors');
+  if (cached) { try { authorData = JSON.parse(cached); if (authorData.length) renderAuthorsSummary(); } catch (e) {} }
+  try {
+    var r = await fetch(AUTHORS_URL, { cache: 'no-cache' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    var data = await r.json();
+    authorData = Array.isArray(data) ? data : [];
+    lsSet('lit_authors', JSON.stringify(authorData));
+    renderAuthorsSummary();
+  } catch (e) {
+    if (!authorData.length) setTimeout(loadAuthors, 3000);
+  }
+}
+
+// localStorage helpers (guarded: private mode / quota can throw).
+function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+// The Editors and Areas summary lists are derived live from the papers by
+// buildSummaryTabs() as soon as papers.json is parsed, so ms2 needs no separate
+// pre-computed tabs for them. (loadSummaries is intentionally gone.)
+
+// Show when the pipeline last pulled from Crossref (meta.json). Cached so it
+// paints instantly on repeat visits, then refreshes in the background.
+var LAST_PULL_CACHE_KEY = 'lit_lastPull';
+function setLastPullText(date) {
+  var el = document.getElementById('lastPull');
+  if (el && date) el.textContent = 'Last publication data pull: ' + date;
+}
+function loadLastPull() {
+  try {
+    var cached = localStorage.getItem(LAST_PULL_CACHE_KEY);
+    if (cached) setLastPullText(cached);
+  } catch (e) {}
+  fetch(META_URL, { cache: 'no-cache' }).then(function(r) { return r && r.ok ? r.json() : null; }).then(function(meta) {
+    var date = meta && meta.lastPull;
+    if (date) {
+      setLastPullText(date);
+      try { localStorage.setItem(LAST_PULL_CACHE_KEY, date); } catch (e) {}
+    }
+  }).catch(function() {});
+}
+
+// ── Editor cleaning & normalization ──
+const EDITOR_ALIASES = {
+  // Accent variants
+  'renée adams': 'Renee Adams', 'renee adams': 'Renee Adams', 'adams': 'Renee Adams',
+  'gérard p. cachon': 'Gerard P. Cachon', 'gerard p. cachon': 'Gerard P. Cachon', 'gérard cachon': 'Gerard P. Cachon', 'gerard cachon': 'Gerard P. Cachon',
+  'jesper sørensen': 'Jesper Sorensen', 'jesper sorensen': 'Jesper Sorensen', 'jesper sørensen. organizations': 'Jesper Sorensen',
+  'jérôme detemple': 'Jerome Detemple', 'jerome b. detemple': 'Jerome Detemple', 'jerome detemple': 'Jerome Detemple',
+  'dorothea kübler': 'Dorothea Kubler', 'dorothea kubler': 'Dorothea Kubler',
+  'aurélien baillon': 'Aurelien Baillon',
+  'bariş ata': 'Baris Ata', 'baris ata': 'Baris Ata',
+  // Victor Martinez variants
+  'victor martínez-de-albéniz': 'Victor Martinez-de-Albeniz', 'victor martinez-de-albeniz': 'Victor Martinez-de-Albeniz',
+  'victor martínez de albéniz': 'Victor Martinez-de-Albeniz', 'victor martinez de albeniz': 'Victor Martinez-de-Albeniz',
+  'victor martinez de albéniz': 'Victor Martinez-de-Albeniz', 'víctor martínez-de-albéniz': 'Victor Martinez-de-Albeniz',
+  'martínez-de-albéniz victor': 'Victor Martinez-de-Albeniz',
+  'yuval victor martinez de albeniz': 'Victor Martinez-de-Albeniz',
+  // Typos
+  'brain bushee': 'Brian Bushee', 'duncan semester': 'Duncan Simester',
+  'karl deither': 'Karl Diether', 'manell baucells': 'Manel Baucells',
+  'suraj srinivassan': 'Suraj Srinivasan', 'toby suart': 'Toby Stuart',
+  'tylor shumway': 'Tyler Shumway', 'vishaul gaur': 'Vishal Gaur',
+  'yossiv aviv': 'Yossi Aviv', 'victoria ivanisha': 'Victoria Ivashina',
+  'mathew shum': 'Matthew Shum', 'lucas schmid': 'Lukas Schmid',
+  'loana popescu': 'Ioana Popescu', 'ioana popescu': 'Ioana Popescu',
+  'sameer srivastava': 'Sameer Srivastava',
+  // Middle names / initials → canonical
+  'brad m. barber': 'Brad Barber', 'barrie r. nault': 'Barrie Nault',
+  'carri w. chan': 'Carri Chan', 'charles j. corbett': 'Charles Corbett',
+  'lorin m. hitt': 'Lorin Hitt', 'mary e. barth': 'Mary Barth',
+  'pradeep k. chintagunta': 'Pradeep Chintagunta',
+  'jagmohan s. raju': 'Jagmohan Raju', 'paul h. zipkin': 'Paul Zipkin',
+  'candace a. yano': 'Candace Yano',
+  // Name consolidation
+  'david simchi-levi': 'David Simchi-Levi', 'david simchi levi': 'David Simchi-Levi', 'david simchi‐levi': 'David Simchi-Levi', 'david simchi‑levi': 'David Simchi-Levi', 'david simchi‒levi': 'David Simchi-Levi', 'david simchi–levi': 'David Simchi-Levi',
+  'chung piaw teo': 'Chung-Piaw Teo', 'chung-piaw teo': 'Chung-Piaw Teo',
+  'teck ho': 'Teck-Hua Ho', 'teck-hua ho': 'Teck-Hua Ho',
+  'yinyu-ye': 'Yinyu Ye', 'yinyu ye': 'Yinyu Ye',
+  'd. j. wu': 'D.J. Wu', 'd.j. wu': 'D.J. Wu', 'dj wu': 'D.J. Wu', 'dongjun wu': 'D.J. Wu',
+  'will cong': 'Will Cong', 'william cong': 'Will Cong', 'william lin cong': 'Will Cong', 'lin william cong': 'Will Cong',
+  'shivaram rajgopal': 'Shivaram Rajgopal', 'shiva rajgopal': 'Shivaram Rajgopal', 'rajgopal shiva': 'Shivaram Rajgopal',
+  'jay swaminathan': 'Jayashankar Swaminathan', 'jayashankar swaminathan': 'Jayashankar Swaminathan', 'swaminathan': 'Jayashankar Swaminathan',
+  'matt shum': 'Matthew Shum', 'matthew shum': 'Matthew Shum',
+  'george shanthikumar': 'J. George Shanthikumar', 'george j. shanthikumar': 'J. George Shanthikumar', 'j. george shanthikumar': 'J. George Shanthikumar',
+  'jean-pierre dube': 'Jean-Pierre Dube',
+  'sendil ethiraj': 'Sendil Ethiraj',
+  'sampath rajagopalan': 'Sampath Rajagopalan',
+  'maria claire villeval': 'Marie Claire Villeval', 'marie-claire villeval': 'Marie Claire Villeval', 'marie claire villeval': 'Marie Claire Villeval',
+  'chen yan': 'Yan Chen', 'prof. yan chen': 'Yan Chen', 'yan chen': 'Yan Chen',
+  'prof. ranjani krishnan': 'Ranjani Krishnan', 'ranjani krishnan': 'Ranjani Krishnan',
+  'professor bruno biais': 'Bruno Biais',
+  'erica plambeck': 'Erica Plambeck', 'caroline flammer': 'Caroline Flammer',
+  'giesecke kay': 'Kay Giesecke', 'kay giesecke': 'Kay Giesecke',
+  'yu (jeffrey) hu': 'Jeffrey Hu',
+  'dmitry kuksov': 'Dmitri Kuksov', 'dmitri kuksov': 'Dmitri Kuksov',
+  'shiva rajagopal': 'Shivaram Rajgopal',
+  'nicolas stier': 'Nicolas Stier-Moses', 'nicolas stier-moses': 'Nicolas Stier-Moses',
+  'manuel baucells': 'Manel Baucells',
+  'kay gieseke': 'Kay Giesecke',
+  'suraj srinivisan': 'Suraj Srinivasan', 'suraj srinivassan': 'Suraj Srinivasan',
+  'scholtes stefan': 'Stefan Scholtes', 'stefan sholtes': 'Stefan Scholtes',
+  'lukas schmidt': 'Lukas Schmid',
+  'alfonso gambardello': 'Alfonso Gambardella',
+  'carrie chan': 'Carri Chan',
+  'ranjani ananthakrishnan': 'Ranjani Krishnan',
+  'anita carson': 'Anita McGahan',
+  'raphael thomadsen': 'Raphael Thomadsen',
+  'ray reagans': 'Ray Reagans',
+  'uday rajan': 'Uday Rajan',
+  'melvyn sim': 'Melvyn Sim', 'michael fu': 'Michael Fu', 'peng sun': 'Peng Sun',
+  'glen dowell': 'Glen Dowell', 'greg shaffer': 'Greg Shaffer',
+  'jan bouwens': 'Jan Bouwens', 'haitao li': 'Haitao Li',
+  'eric bradlow': 'Eric Bradlow',
+  'anita mcgahan': 'Anita McGahan',
+};
+
+// Junk editor values to discard entirely
+const EDITOR_JUNK = ['stakeholders. here', 'stakeholders'];
+
+const AREA_ALIASES = {
+  // Capitalization
+  'finance': 'finance', 'Finance': 'finance',
+  'Behavioral Economics and Decision Analysis': 'behavioral economics and decision analysis',
+  'Optimization <div data-widget-def': 'optimization', 'optimization': 'optimization',
+  // HTML junk
+  'accounting <div data-widget-def="ux': 'accounting',
+  'marketing <div data-widget-def="': 'marketing',
+  'healthcare management.conflict of interest statement: e': 'healthcare management',
+  // Typos
+  'behavioral economics and decisions analysis': 'behavioral economics and decision analysis',
+  'behavioral economics & decision analysis': 'behavioral economics and decision analysis',
+  'behavioral economics &amp; decision analysis': 'behavioral economics and decision analysis',
+  'behavioral economics and data analysis': 'behavioral economics and decision analysis',
+  'behavioral analysis': 'behavioral economics and decision analysis',
+  'behavioral economics and decision analysis–fast track': 'behavioral economics and decision analysis',
+  'entepreneurship and innovation': 'entrepreneurship and innovation',
+  'entrepreneurship': 'entrepreneurship and innovation',
+  // Consolidation
+  'information science': 'information systems', 'information system': 'information systems',
+  'information systems division': 'information systems',
+  'stochastic models': 'stochastic models and simulation',
+  'stochastic models & simulation': 'stochastic models and simulation',
+  'stochastic models &amp; simulation': 'stochastic models and simulation',
+  'stochastic models and systems': 'stochastic models and simulation',
+  'big data and analytics': 'big data analytics',
+  'operations and supply chain management': 'operations management',
+  'strategy': 'business strategy',
+  'revenue management and market analytics department': 'revenue management and market analytics',
+  'revenue management and analytics': 'revenue management and market analytics',
+  'r&amp;d and product development': 'R&D and product development',
+  'r&d and product development': 'R&D and product development',
+  'organizations and social networks': 'organizations',
+  'organization': 'organizations',
+  'optimization and decision analytics': 'optimization',
+  'finance department': 'finance',
+  'health': 'healthcare management',
+  'sustainability': 'business strategy',
+  'information science': 'information systems',
+};
+
+// Junk area values to discard
+const AREA_JUNK = [
+  'we report seven sets of studies',
+  'focused issue editor', 'guest department editor', 'guest editor',
+  'special issue editors',
+];
+
+function normalizeEditorName(name) {
+  var t = name.trim();
+  if (!t) return '';
+  // Strip "Prof." / "Professor" prefix
+  t = t.replace(/^(prof\.?|professor)\s+/i, '');
+  // Normalize Unicode hyphens to regular hyphen
+  t = t.replace(/[‐‑‒–—―﹘﹣－]/g, '-');
+  // Normalize accents for lookup
+  var key = t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  if (EDITOR_ALIASES[key]) return EDITOR_ALIASES[key];
+  var keyLower = t.toLowerCase();
+  if (EDITOR_ALIASES[keyLower]) return EDITOR_ALIASES[keyLower];
+  // Check junk
+  for (var j = 0; j < EDITOR_JUNK.length; j++) { if (key.indexOf(EDITOR_JUNK[j]) !== -1) return ''; }
+  return t;
+}
+
+function cleanEditorField(raw) {
+  if (!raw) return [];
+  var s = raw;
+  // Fix junk containing "accepted by"
+  var ai = s.indexOf('This paper was accepted by');
+  if (ai === -1) ai = s.indexOf('accepted by');
+  if (ai !== -1) {
+    var after = s.substring(ai);
+    // Capture the full acceptance sentence (allowing multi-initial names like
+    // "D. J. Wu"), then keep the editor name part before the area comma.
+    var m = after.match(/accepted by\s+([^.]+(?:\.[^.]{0,5})*[^.]*)\./i);
+    var rest = m ? m[1] : after.replace(/^.*?accepted by\s+/i, '');
+    s = rest.split(',')[0].trim();
+  }
+  s = s.replace(/\.\s*$/, '').trim();
+  if (!s) return [];
+  // Split "Editor1 and Editor2"
+  return s.split(/\s+and\s+/i).map(function(e) { return normalizeEditorName(e.trim()); }).filter(Boolean);
+}
+
+function normalizeArea(raw) {
+  if (!raw) return '';
+  var s = raw.trim();
+  // Truncate at HTML tags
+  var htmlIdx = s.indexOf('<');
+  if (htmlIdx > 0) s = s.substring(0, htmlIdx).trim();
+  // Truncate at junk suffixes (case-insensitive)
+  s = s.replace(/\.?\s*funding:.*/i, '').trim();
+  s = s.replace(/\.?\s*supplemental material:.*/i, '').trim();
+  s = s.replace(/\.?\s*conflict.*/i, '').trim();
+  s = s.replace(/\.?\s*https?:\/\/.*/i, '').trim();
+  s = s.replace(/\.here.*/i, '').trim();
+  // Remove trailing period
+  s = s.replace(/\.\s*$/, '').trim();
+  // Fix spacing around colons: " :" → ":"
+  s = s.replace(/\s+:/g, ':');
+  var key = s.toLowerCase();
+  // Check aliases
+  if (AREA_ALIASES[key]) return AREA_ALIASES[key];
+  if (AREA_ALIASES[s]) return AREA_ALIASES[s];
+  // Check junk
+  for (var j = 0; j < AREA_JUNK.length; j++) { if (key.indexOf(AREA_JUNK[j]) !== -1) return ''; }
+  // Extract area from junk like "Renee, finance" or "Jayashankar, operations management"
+  var commaMatch = key.match(/^[a-z]+,\s*(.+)$/);
+  if (commaMatch) {
+    var extracted = commaMatch[1].trim();
+    return AREA_ALIASES[extracted] || extracted;
+  }
+  return s.toLowerCase();
+}
+
+function normalizeEditors(p) {
+  p._editors = cleanEditorField(p['Accepting Editor'] || '');
+  p._area = normalizeArea(p['Area'] || '');
+}
+
+// ── Fuzzy matching: auto-merge rare editor names that are typos of common ones ──
+
+function levenshtein(a, b) {
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  var matrix = [];
+  for (var i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (var j = 0; j <= a.length; j++) matrix[0][j] = j;
+  for (var i = 1; i <= b.length; i++) {
+    for (var j = 1; j <= a.length; j++) {
+      if (b.charAt(i-1) === a.charAt(j-1)) matrix[i][j] = matrix[i-1][j-1];
+      else matrix[i][j] = Math.min(matrix[i-1][j-1]+1, matrix[i][j-1]+1, matrix[i-1][j]+1);
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
+function reverseName(name) {
+  var parts = name.split(/\s+/);
+  if (parts.length < 2) return name;
+  return parts[parts.length-1] + ' ' + parts.slice(0, -1).join(' ');
+}
+
+function stripAccentsLower(s) {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+function fuzzyMergeEditors() {
+  // Count papers per editor after first normalization pass
+  var counts = {};
+  allPapers.forEach(function(p) {
+    (p._editors || []).forEach(function(e) { counts[e] = (counts[e] || 0) + 1; });
+  });
+
+  // Separate rare (≤3 papers) from common (>3 papers) editors
+  var rare = [], common = [];
+  Object.keys(counts).forEach(function(name) {
+    if (counts[name] <= 3) rare.push(name);
+    else common.push(name);
+  });
+
+  // For each rare name, find best match among common names
+  var dynamicAliases = {};
+  rare.forEach(function(rName) {
+    var rKey = stripAccentsLower(rName);
+    var rReversed = stripAccentsLower(reverseName(rName));
+    var bestMatch = null, bestDist = Infinity;
+
+    common.forEach(function(cName) {
+      var cKey = stripAccentsLower(cName);
+      // Direct Levenshtein
+      var dist = levenshtein(rKey, cKey);
+      // Also check reversed name order
+      var distRev = levenshtein(rReversed, cKey);
+      var minDist = Math.min(dist, distRev);
+
+      // Also check last-name match with close first name
+      var rParts = rKey.split(/\s+/), cParts = cKey.split(/\s+/);
+      if (rParts.length >= 2 && cParts.length >= 2) {
+        var rLast = rParts[rParts.length-1], cLast = cParts[cParts.length-1];
+        if (rLast === cLast || levenshtein(rLast, cLast) <= 1) {
+          var firstDist = levenshtein(rParts.slice(0,-1).join(' '), cParts.slice(0,-1).join(' '));
+          if (firstDist <= 2) minDist = Math.min(minDist, firstDist);
+        }
+      }
+
+      if (minDist < bestDist) { bestDist = minDist; bestMatch = cName; }
+    });
+
+    // Threshold: distance ≤ 2 for names ≥ 8 chars, ≤ 1 for shorter
+    var threshold = rKey.length >= 8 ? 2 : 1;
+    if (bestMatch && bestDist <= threshold) {
+      dynamicAliases[rName] = bestMatch;
+    }
+  });
+
+  // Apply dynamic aliases
+  if (Object.keys(dynamicAliases).length > 0) {
+    console.log('Fuzzy editor merges:', dynamicAliases);
+    allPapers.forEach(function(p) {
+      p._editors = p._editors.map(function(e) { return dynamicAliases[e] || e; });
+    });
+  }
+}
+
+function fuzzyMergeAreas() {
+  // Count papers per area after first normalization pass
+  var counts = {};
+  allPapers.forEach(function(p) {
+    if (p._area) counts[p._area] = (counts[p._area] || 0) + 1;
+  });
+
+  var rare = [], common = [];
+  Object.keys(counts).forEach(function(name) {
+    if (counts[name] <= 3) rare.push(name);
+    else common.push(name);
+  });
+
+  var dynamicAliases = {};
+  rare.forEach(function(rName) {
+    var rKey = rName.toLowerCase();
+    var bestMatch = null, bestDist = Infinity;
+
+    common.forEach(function(cName) {
+      var cKey = cName.toLowerCase();
+      var dist = levenshtein(rKey, cKey);
+
+      // Also check singular/plural: "organization" ↔ "organizations"
+      if (rKey + 's' === cKey || cKey + 's' === rKey) dist = 0;
+      // Check with trailing 's' removed from both
+      var rTrim = rKey.replace(/s$/, ''), cTrim = cKey.replace(/s$/, '');
+      var distTrim = levenshtein(rTrim, cTrim);
+      dist = Math.min(dist, distTrim);
+
+      // Check if one is a substring of the other (e.g., "behavioral economics" vs "behavioral economics and decision analysis")
+      // Don't merge these — they're genuinely different areas
+
+      if (dist < bestDist) { bestDist = dist; bestMatch = cName; }
+    });
+
+    // Threshold: distance ≤ 2 for areas ≥ 10 chars, ≤ 1 for shorter
+    var threshold = rKey.length >= 10 ? 2 : 1;
+    if (bestMatch && bestDist <= threshold) {
+      dynamicAliases[rName] = bestMatch;
+    }
+  });
+
+  if (Object.keys(dynamicAliases).length > 0) {
+    console.log('Fuzzy area merges:', dynamicAliases);
+    allPapers.forEach(function(p) {
+      if (p._area && dynamicAliases[p._area]) p._area = dynamicAliases[p._area];
+    });
+  }
+}
+
+function parseCSV(text, requiredField) {
+  var reqField = requiredField || 'Title';
+  const lines = text.split('\n');
+  if (lines.length < 2) return [];
+  const headers = parseLine(lines[0]);
+  const papers = [];
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const vals = parseLine(line);
+    const obj = {};
+    headers.forEach((h, idx) => { obj[clean(h)] = clean(vals[idx] || ''); });
+    if (obj[reqField]) papers.push(obj);
+  }
+  return papers;
+}
+
+function parseLine(line) {
+  const r = []; let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') { if (inQ && line[i+1] === '"') { cur += '"'; i++; } else inQ = !inQ; }
+    else if (c === ',' && !inQ) { r.push(cur); cur = ''; }
+    else cur += c;
+  }
+  r.push(cur);
+  return r;
+}
+
+function clean(s) { return (s || '').replace(/^"|"$/g, '').trim(); }
+
+// The journal dropdown: fixed entry list, with live counts (from the current
+// cross-filter when provided, else the totals in sources.json).
+function buildJournalSelect(liveCounts) {
+  var cs = document.getElementById('csJournal');
+  if (!cs) return;
+  var container = cs.querySelector('.custom-select-items');
+  var manifestCounts = {};
+  sourcesManifest.forEach(function(s) {
+    manifestCounts[s.key] = s.count;
+    (s.sections || []).forEach(function(sec) { manifestCounts[sec.key] = sec.count; });
+  });
+  container.innerHTML = JOURNAL_OPTIONS.map(function(o) {
+    var n = liveCounts ? (liveCounts[o.key] || 0) : manifestCounts[o.key];
+    return '<div class="custom-select-item" onclick="selectItem(\'csJournal\',\'journal\',\'' + escAttr(o.key) + '\')">' +
+      esc(o.label) + (n !== undefined ? ' <span style="opacity:0.45">(' + n + ')</span>' : '') + '</div>';
+  }).join('');
+  var searchInput = cs.querySelector('.custom-select-search');
+  if (searchInput && searchInput.value) filterDrop('csJournal', searchInput.value);
+}
+
+function buildFilterOptions() {
+  const editorCounts = {}, areaCounts = {}, yearCounts = {}, seCounts = {}, aeCounts = {};
+  allPapers.forEach(p => {
+    (p._editors || []).forEach(e => { editorCounts[e] = (editorCounts[e] || 0) + 1; });
+    if (p._area) { areaCounts[p._area] = (areaCounts[p._area] || 0) + 1; }
+    (p._se || []).forEach(e => { seCounts[e] = (seCounts[e] || 0) + 1; });
+    (p._ae || []).forEach(e => { aeCounts[e] = (aeCounts[e] || 0) + 1; });
+    if (p['Year']) { yearCounts[p['Year']] = (yearCounts[p['Year']] || 0) + 1; }
+  });
+  buildJournalSelect(null);
+  fillCustomSelect('csEditor', Object.keys(editorCounts).sort(), editorCounts);
+  fillCustomSelect('csArea', Object.keys(areaCounts).sort(), areaCounts);
+  fillCustomSelect('csSE', Object.keys(seCounts).sort(), seCounts);
+  fillCustomSelect('csAE', Object.keys(aeCounts).sort(), aeCounts);
+  fillCustomSelect('csYear', Object.keys(yearCounts).sort().reverse(), yearCounts);
+  buildSummaryTabs(editorCounts, areaCounts);
+}
+
+function buildSummaryTabs(editorCounts, areaCounts) {
+  // Editors: sorted by count descending, then paginated (the list is long).
+  var edSorted = Object.keys(editorCounts).sort(function(a,b) { return editorCounts[b] - editorCounts[a]; });
+  renderEditorsSummary(edSorted.map(function(e) { return { label: e, count: editorCounts[e] }; }));
+
+  // Areas: sorted by count descending
+  var arSorted = Object.keys(areaCounts).sort(function(a,b) { return areaCounts[b] - areaCounts[a]; });
+  document.getElementById('summaryAreasList').innerHTML = arSorted.map(function(a) {
+    return '<div class="summary-item" onclick="filterByArea(\'' + escAttr(a) + '\')"><span class="summary-count">' + areaCounts[a] + '</span> papers in ' + esc(a) + '</div>';
+  }).join('');
+
+  // Authors are built once and paginated separately — see renderAuthorsSummary().
+}
+
+// Editors list: long (150+ entries), so paginate it like the Authors panel
+// instead of dumping every editor at once. Built either from live filter-aware
+// counts (buildSummaryTabs) or, before the Data CSV loads, from the Editors tab.
+const EDITORS_PER_PAGE = 30;
+
+function renderEditorsSummary(list) {
+  // `list`: [{ label, count }, ...] already sorted by count descending.
+  window._editorsList = list || [];
+  if (!window._editorsPage) window._editorsPage = 1;
+  renderEditorsPage(window._editorsPage);
+}
+
+function renderEditorsPage(page) {
+  var list = window._editorsList || [];
+  var totalPages = Math.max(1, Math.ceil(list.length / EDITORS_PER_PAGE));
+  page = Math.min(Math.max(1, page), totalPages);
+  window._editorsPage = page;
+  var start = (page - 1) * EDITORS_PER_PAGE;
+  var pageItems = list.slice(start, start + EDITORS_PER_PAGE);
+
+  var el = document.getElementById('summaryEditorsList');
+  if (!el) return;
+  el.className = 'summary-list cols-3';   // 3 columns × 10 rows per page, like Authors
+  el.innerHTML = pageItems.map(function(e) {
+    return '<div class="summary-item" onclick="filterByEditor(\'' + escAttr(e.label) + '\')">' +
+      '<span class="summary-count">' + esc(String(e.count)) + '</span> papers accepted by ' + esc(e.label) +
+    '</div>';
+  }).join('');
+
+  renderEditorsPagination(page, totalPages);
+}
+
+function renderEditorsPagination(page, total) {
+  var pg = document.getElementById('editorsPagination');
+  if (!pg) return;
+  if (total <= 1) { pg.innerHTML = ''; return; }
+  var h = '<button ' + (page === 1 ? 'disabled' : '') + ' onclick="renderEditorsPage(' + (page - 1) + ')">‹ Prev</button>';
+  var s = Math.max(1, page - 3), e = Math.min(total, s + 6);
+  if (e - s < 6) s = Math.max(1, e - 6);
+  if (s > 1) { h += '<button onclick="renderEditorsPage(1)">1</button>'; if (s > 2) h += '<span class="page-info">…</span>'; }
+  for (var i = s; i <= e; i++) h += '<button class="' + (i === page ? 'active' : '') + '" onclick="renderEditorsPage(' + i + ')">' + i + '</button>';
+  if (e < total) { if (e < total - 1) h += '<span class="page-info">…</span>'; h += '<button onclick="renderEditorsPage(' + total + ')">' + total + '</button>'; }
+  h += '<button ' + (page === total ? 'disabled' : '') + ' onclick="renderEditorsPage(' + (page + 1) + ')">Next ›</button>';
+  pg.innerHTML = h;
+}
+
+// Authors list: built once from the ORCID-resolved Authors tab (independent of
+// the editor/area/year filters), shown 30 per page in 3 columns.
+const AUTHORS_PER_PAGE = 30;
+
+function renderAuthorsSummary() {
+  var auList = document.getElementById('summaryAuthorsList');
+  var pg = document.getElementById('authorsPagination');
+  if (!auList) return;
+  if (!authorData || authorData.length === 0) {
+    auList.innerHTML = '<div style="padding:12px;color:var(--text-muted)">No Authors tab found. Run the Authors rebuild in the pipeline.</div>';
+    if (pg) pg.innerHTML = '';
+    return;
+  }
+  // All aggregated authors are listed (the pipeline already trims one-paper
+  // authors); the "across N areas" link appears for those with MS-area papers.
+  window._authorAreaLookup = {};
+  window._authorVariants = {};
+  window._authorsList = authorData;
+  window._authorsList.forEach(function(a) {
+    var name = a['Author'] || '';
+    var areaArr = (a['Areas'] || '').split(',').map(function(x) { return x.trim(); }).filter(Boolean);
+    window._authorAreaLookup[name] = areaArr;
+    var variants = (a['Name_Variants'] || name).split(';').map(function(x) { return x.trim().toLowerCase(); }).filter(Boolean);
+    window._authorVariants[name] = variants.length ? variants : [name.toLowerCase()];
+  });
+  if (!window._authorsPage) window._authorsPage = 1;
+  renderAuthorsPage(window._authorsPage);
+}
+
+function renderAuthorsPage(page) {
+  var list = window._authorsList || [];
+  var totalPages = Math.max(1, Math.ceil(list.length / AUTHORS_PER_PAGE));
+  page = Math.min(Math.max(1, page), totalPages);
+  window._authorsPage = page;
+  var start = (page - 1) * AUTHORS_PER_PAGE;
+  var pageItems = list.slice(start, start + AUTHORS_PER_PAGE);
+
+  var auList = document.getElementById('summaryAuthorsList');
+  auList.className = 'summary-list cols-3';
+  auList.innerHTML = pageItems.map(function(a) {
+    var count = parseInt(a['Papers']) || 0;
+    var name = a['Author'] || '';
+    var areaCount = (window._authorAreaLookup[name] || []).length;
+    return '<div class="summary-item">' +
+      '<span class="summary-count">' + count + '</span> ' +
+      '<span class="summary-author-link" onclick="addAuthorIdentityChip(\'' + escAttr(name) + '\', window._authorVariants[\'' + escAttr(name) + '\'])" style="cursor:pointer">' +
+        'papers written by ' + esc(name) +
+      '</span>' +
+      (areaCount > 0 ? ' <span class="summary-area-link" onclick="filterByAuthorAreas(\'' + escAttr(name) + '\')" style="cursor:pointer;color:var(--green);font-style:italic"> across ' + areaCount + ' area' + (areaCount !== 1 ? 's' : '') + '</span>' : '') +
+    '</div>';
+  }).join('');
+
+  renderAuthorsPagination(page, totalPages);
+}
+
+function renderAuthorsPagination(page, total) {
+  var pg = document.getElementById('authorsPagination');
+  if (!pg) return;
+  if (total <= 1) { pg.innerHTML = ''; return; }
+  var h = '<button ' + (page === 1 ? 'disabled' : '') + ' onclick="renderAuthorsPage(' + (page - 1) + ')">‹ Prev</button>';
+  var s = Math.max(1, page - 3), e = Math.min(total, s + 6);
+  if (e - s < 6) s = Math.max(1, e - 6);
+  if (s > 1) { h += '<button onclick="renderAuthorsPage(1)">1</button>'; if (s > 2) h += '<span class="page-info">…</span>'; }
+  for (var i = s; i <= e; i++) h += '<button class="' + (i === page ? 'active' : '') + '" onclick="renderAuthorsPage(' + i + ')">' + i + '</button>';
+  if (e < total) { if (e < total - 1) h += '<span class="page-info">…</span>'; h += '<button onclick="renderAuthorsPage(' + total + ')">' + total + '</button>'; }
+  h += '<button ' + (page === total ? 'disabled' : '') + ' onclick="renderAuthorsPage(' + (page + 1) + ')">Next ›</button>';
+  pg.innerHTML = h;
+}
+
+function filterByAuthorAreas(authorName) {
+  var areas = window._authorAreaLookup && window._authorAreaLookup[authorName];
+  if (!areas || !areas.length) return;
+  sel.area.clear();
+  areas.forEach(function(a) { sel.area.add(a); });
+  renderChips('area');
+  applyFilters();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ── Affiliation normalization & merging ──
+
+function buildAffiliationsSummary() {
+  var affList = document.getElementById('summaryAffiliationsList');
+  if (affiliationData.length === 0) {
+    affList.innerHTML = '<div style="padding:12px;color:var(--text-muted);font-style:italic">Under construction.</div>';
+    return;
+  }
+  window._affItems = affiliationData;
+  renderAffiliationsList(affiliationData);
+}
+
+function renderAffiliationsList(items) {
+  var affList = document.getElementById('summaryAffiliationsList');
+  affList.innerHTML = items.map(function(a) {
+    var count = a['Papers'] || '';
+    var name = a['Affiliation'] || '';
+    var areasRaw = a['Areas'] || '';
+    var areaCount = parseInt(a['Area_Count']) || 0;
+    if (!areaCount && areasRaw) {
+      areaCount = areasRaw.split(',').filter(function(x) { return x.trim(); }).length;
+    }
+    return '<div class="summary-item">' +
+      '<span class="summary-count">' + esc(String(count)) + '</span> ' +
+      '<span class="summary-author-link" onclick="searchAffiliation(\'' + escAttr(name) + '\')" style="cursor:pointer">' +
+        'papers from ' + esc(name) +
+      '</span>' +
+      (areaCount > 0 ? ' <span class="summary-area-link" onclick="showAffAreas(\'' + escAttr(name) + '\')" style="cursor:pointer;color:var(--green);font-style:italic"> across ' + areaCount + ' area' + (areaCount !== 1 ? 's' : '') + '</span>' : '') +
+    '</div>';
+  }).join('');
+}
+
+function filterAffiliationsList() {
+  var q = (document.getElementById('filterAffiliations').value || '').toLowerCase();
+  if (!window._affItems) return;
+  if (!q) { renderAffiliationsList(window._affItems); return; }
+  var filtered = window._affItems.filter(function(a) {
+    return ((a['Affiliation'] || '').toLowerCase()).indexOf(q) !== -1;
+  });
+  renderAffiliationsList(filtered);
+}
+
+function searchAffiliation(name) {
+  sel.affiliation.clear();
+  sel.affiliation.add(name.toLowerCase());
+  renderChips('affiliation');
+  document.getElementById('filterAffiliations').value = '';
+  closeSummaryTabs();
+  applyFilters();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function showAffAreas(name) {
+  var item = (window._affItems || []).find(function(a) {
+    return (a['Affiliation'] || '') === name;
+  });
+  if (!item) return;
+  var areasRaw = item['Areas'] || '';
+  var areas = areasRaw.split(',').map(function(a) { return a.trim(); }).filter(Boolean);
+  if (areas.length === 0) return;
+  sel.area.clear();
+  areas.forEach(function(a) { sel.area.add(a); });
+  renderChips('area');
+  closeSummaryTabs();
+  applyFilters();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function toggleSummary(tab) {
+  // Opening a summary panel leaves the "Recently added papers" view, so its
+  // button must not stay highlighted and its list must be cleared. applyFilters
+  // resets recentMode + the button and restores the normal papers list.
+  if (recentMode) applyFilters();
+  var edEl = document.getElementById('summaryEditors');
+  var arEl = document.getElementById('summaryAreas');
+  var auEl = document.getElementById('summaryAuthors');
+  var afEl = document.getElementById('summaryAffiliations');
+  var btns = document.querySelectorAll('.summary-tab-btn');
+  var els = [edEl, arEl, auEl, afEl];
+  var idx = tab === 'editors' ? 0 : tab === 'areas' ? 1 : tab === 'authors' ? 2 : 3;
+  var isOpen = els[idx].classList.contains('active');
+  els.forEach(function(el) { el.className = 'summary-content'; });
+  btns.forEach(function(b) { b.className = 'summary-tab-btn'; });
+  if (!isOpen) {
+    els[idx].className = 'summary-content active';
+    btns[idx].className = 'summary-tab-btn active';
+    // Lazy-build affiliations on first open
+    if (tab === 'affiliations' && !window._affBuilt) {
+      buildAffiliationsSummary();
+      window._affBuilt = true;
+    }
+    // If the user is scrolled into the paper list, bring the just-opened list
+    // into view (it sits right under the sticky top bar).
+    if (window.scrollY > 200) window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+}
+
+function closeSummaryTabs() {
+  document.getElementById('summaryEditors').className = 'summary-content';
+  document.getElementById('summaryAreas').className = 'summary-content';
+  document.getElementById('summaryAuthors').className = 'summary-content';
+  document.getElementById('summaryAffiliations').className = 'summary-content';
+  document.querySelectorAll('.summary-tab-btn').forEach(function(b) { b.className = 'summary-tab-btn'; });
+}
+
+// Cascading filters: update dropdown options based on cross-filtered results
+function updateDropdownOptions() {
+  // For each dropdown, compute available options from papers filtered by ALL OTHER filters
+  var search = document.getElementById('filterSearch').value.trim().toLowerCase();
+  var searchAuth = document.getElementById('filterAuthors').value.trim().toLowerCase();
+  var searchAff = document.getElementById('filterAffiliations').value.trim().toLowerCase();
+
+  function crossFilter(excludeType) {
+    return allPapers.filter(function(p) {
+      if (excludeType !== 'journal' && !matchesJournal(p)) return false;
+      if (excludeType !== 'editor' && sel.editor.size > 0 && !(p._editors || []).some(function(e) { return sel.editor.has(e); })) return false;
+      if (excludeType !== 'area' && sel.area.size > 0 && !sel.area.has(p._area)) return false;
+      if (excludeType !== 'se' && sel.se.size > 0 && !(p._se || []).some(function(e) { return sel.se.has(e); })) return false;
+      if (excludeType !== 'ae' && sel.ae.size > 0 && !(p._ae || []).some(function(e) { return sel.ae.has(e); })) return false;
+      if (excludeType !== 'year' && sel.year.size > 0 && !sel.year.has(p['Year'])) return false;
+      var titleText = (p['Title']||'').toLowerCase();
+      if (search && !titleText.includes(search)) return false;
+      for (var t of sel.title) { if (!titleText.includes(t)) return false; }
+      var authText = (p['Authors']||'').toLowerCase();
+      if (searchAuth && !authText.includes(searchAuth)) return false;
+      for (var a of sel.author) { if (!authText.includes(a)) return false; }
+      for (var lbl in sel.authorIdentity) { var vs = sel.authorIdentity[lbl]; if (!vs.some(function(v){ return authText.includes(v); })) return false; }
+      var affText = (p['Affiliations']||'').toLowerCase();
+      if (searchAff && !affText.includes(searchAff)) return false;
+      for (var af of sel.affiliation) { if (!affText.includes(af)) return false; }
+      return true;
+    });
+  }
+
+  // Journal dropdown (live counts per source under the other active filters)
+  var jPapers = crossFilter('journal');
+  var jCounts = {};
+  jPapers.forEach(function(p) { (p._jkeys || []).forEach(function(k) { jCounts[k] = (jCounts[k] || 0) + 1; }); });
+  buildJournalSelect(jCounts);
+
+  // Editor dropdown
+  var edPapers = crossFilter('editor');
+  var edCounts = {};
+  edPapers.forEach(function(p) { (p._editors || []).forEach(function(e) { edCounts[e] = (edCounts[e] || 0) + 1; }); });
+  fillCustomSelect('csEditor', Object.keys(edCounts).sort(), edCounts);
+
+  // Senior/Associate Editor dropdowns (ISR & Marketing Science)
+  var seCounts = {};
+  crossFilter('se').forEach(function(p) { (p._se || []).forEach(function(e) { seCounts[e] = (seCounts[e] || 0) + 1; }); });
+  fillCustomSelect('csSE', Object.keys(seCounts).sort(), seCounts);
+  var aeCounts = {};
+  crossFilter('ae').forEach(function(p) { (p._ae || []).forEach(function(e) { aeCounts[e] = (aeCounts[e] || 0) + 1; }); });
+  fillCustomSelect('csAE', Object.keys(aeCounts).sort(), aeCounts);
+
+  // Area dropdown
+  var arPapers = crossFilter('area');
+  var arCounts = {};
+  arPapers.forEach(function(p) { if (p._area) arCounts[p._area] = (arCounts[p._area] || 0) + 1; });
+  fillCustomSelect('csArea', Object.keys(arCounts).sort(), arCounts);
+
+  // Year dropdown
+  var yrPapers = crossFilter('year');
+  var yrCounts = {};
+  yrPapers.forEach(function(p) { if (p['Year']) yrCounts[p['Year']] = (yrCounts[p['Year']] || 0) + 1; });
+  fillCustomSelect('csYear', Object.keys(yrCounts).sort().reverse(), yrCounts);
+
+  // Update summary tabs with filtered counts
+  buildSummaryTabs(edCounts, arCounts);
+}
+
+function fillCustomSelect(csId, items, counts) {
+  const cs = document.getElementById(csId);
+  const container = cs.querySelector('.custom-select-items');
+  const type = cs.dataset.type;
+  container.innerHTML = items.map(i =>
+    `<div class="custom-select-item" onclick="selectItem('${csId}','${type}','${escAttr(i)}')">${esc(i)}${counts ? ' <span style="opacity:0.45">('+counts[i]+')</span>' : ''}</div>`
+  ).join('');
+  // Reapply search filter if dropdown is open
+  var searchInput = cs.querySelector('.custom-select-search');
+  if (searchInput && searchInput.value) filterDrop(csId, searchInput.value);
+}
+
+function toggleDrop(csId) {
+  // Close all others first
+  document.querySelectorAll('.custom-select').forEach(cs => {
+    if (cs.id !== csId) {
+      cs.querySelector('.custom-select-trigger').classList.remove('open');
+      cs.querySelector('.custom-select-dropdown').classList.remove('open');
+    }
+  });
+  const cs = document.getElementById(csId);
+  const trigger = cs.querySelector('.custom-select-trigger');
+  const drop = cs.querySelector('.custom-select-dropdown');
+  const isOpen = trigger.classList.toggle('open');
+  drop.classList.toggle('open');
+  if (isOpen) {
+    const searchInput = cs.querySelector('.custom-select-search');
+    searchInput.value = '';
+    searchInput.focus();
+    filterDrop(csId, '');
+  }
+}
+
+function filterDrop(csId, query) {
+  const cs = document.getElementById(csId);
+  const items = cs.querySelectorAll('.custom-select-item');
+  const q = query.toLowerCase();
+  items.forEach(item => {
+    item.classList.toggle('hidden', q && !item.textContent.toLowerCase().includes(q));
+  });
+}
+
+function selectItem(csId, type, val) {
+  const cs = document.getElementById(csId);
+  cs.querySelector('.custom-select-trigger').classList.remove('open');
+  cs.querySelector('.custom-select-dropdown').classList.remove('open');
+  if (sel[type].has(val)) return;
+  sel[type].add(val);
+  renderChips(type);
+  applyFilters();
+}
+
+// Close dropdowns when clicking outside
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.custom-select')) {
+    document.querySelectorAll('.custom-select-trigger').forEach(t => t.classList.remove('open'));
+    document.querySelectorAll('.custom-select-dropdown').forEach(d => d.classList.remove('open'));
+  }
+});
+
+function applyFilters() {
+  // Any normal filter interaction exits the "Recently added papers" view.
+  if (recentMode) { recentMode = false; updateRecentButton(); }
+  const search = document.getElementById('filterSearch').value.trim().toLowerCase();
+  const searchAuth = document.getElementById('filterAuthors').value.trim().toLowerCase();
+  const searchAff = document.getElementById('filterAffiliations').value.trim().toLowerCase();
+  const sort = document.getElementById('sortBy').value;
+
+  // If no filters active, show welcome state
+  if (sel.journal.size === 0 && sel.editor.size === 0 && sel.area.size === 0 && sel.se.size === 0 && sel.ae.size === 0 && sel.year.size === 0 && sel.title.size === 0 && sel.author.size === 0 && Object.keys(sel.authorIdentity).length === 0 && sel.affiliation.size === 0 && !search && !searchAuth && !searchAff) {
+    document.getElementById('resultsCount').innerHTML = '';
+    document.getElementById('papersList').innerHTML = '<div class="empty-state"><h3>Select a filter to get started</h3><p>Pick one or more journals, filter by year, or search by title, author, or affiliation. Everything is searched when no journal is selected.</p></div>';
+    buildFilterOptions();
+    return;
+  }
+
+  filtered = allPapers.filter(p => {
+    if (!matchesJournal(p)) return false;
+    if (sel.editor.size > 0 && !(p._editors || []).some(e => sel.editor.has(e))) return false;
+    if (sel.area.size > 0 && !sel.area.has(p._area)) return false;
+    if (sel.se.size > 0 && !(p._se || []).some(e => sel.se.has(e))) return false;
+    if (sel.ae.size > 0 && !(p._ae || []).some(e => sel.ae.has(e))) return false;
+    if (sel.year.size > 0 && !sel.year.has(p['Year'])) return false;
+
+    // Title: live typed text AND all chips must match (AND logic)
+    const titleText = (p['Title']||'').toLowerCase();
+    if (search && !titleText.includes(search)) return false;
+    for (const t of sel.title) { if (!titleText.includes(t)) return false; }
+
+    // Authors: live typed text, substring chips, and ORCID-identity chips (each
+    // identity matches any of the person's name variants).
+    const authText = (p['Authors']||'').toLowerCase();
+    if (searchAuth && !authText.includes(searchAuth)) return false;
+    for (const a of sel.author) { if (!authText.includes(a)) return false; }
+    for (const lbl in sel.authorIdentity) { const vs = sel.authorIdentity[lbl]; if (!vs.some(v => authText.includes(v))) return false; }
+
+    // Affiliations: live typed text AND all chips must match
+    const affText = (p['Affiliations']||'').toLowerCase();
+    if (searchAff && !affText.includes(searchAff)) return false;
+    for (const af of sel.affiliation) { if (!affText.includes(af)) return false; }
+
+    return true;
+  });
+
+  filtered.sort((a, b) => {
+    switch(sort) {
+      case 'year-desc': return (b['Year']||'').localeCompare(a['Year']||'') || (b['Volume']||'').localeCompare(a['Volume']||'');
+      case 'year-asc': return (a['Year']||'').localeCompare(b['Year']||'');
+      case 'title': return (a['Title']||'').localeCompare(b['Title']||'');
+      case 'editor': return (a['Accepting Editor']||'zzz').localeCompare(b['Accepting Editor']||'zzz');
+    }
+    return 0;
+  });
+
+  currentPage = 1;
+  renderPage();
+  updateDropdownOptions();
+}
+
+// Clear all filter selections, chips and search inputs without re-rendering.
+function resetFilterState() {
+  sel.journal.clear(); sel.editor.clear(); sel.area.clear(); sel.se.clear(); sel.ae.clear(); sel.year.clear(); sel.title.clear(); sel.author.clear(); sel.authorIdentity = {}; sel.affiliation.clear();
+  document.getElementById('chipsJournal').innerHTML = '';
+  document.getElementById('chipsEditor').innerHTML = '';
+  document.getElementById('chipsArea').innerHTML = '';
+  document.getElementById('chipsSE').innerHTML = '';
+  document.getElementById('chipsAE').innerHTML = '';
+  document.getElementById('chipsYear').innerHTML = '';
+  document.getElementById('chipsTitle').innerHTML = '';
+  document.getElementById('chipsAuthor').innerHTML = '';
+  document.getElementById('chipsAffiliation').innerHTML = '';
+  ['filterSearch','filterAuthors','filterAffiliations'].forEach(id => document.getElementById(id).value = '');
+  updateMsScopeUI();
+}
+
+function clearFilters() {
+  resetFilterState();
+  closeSummaryTabs();
+  applyFilters();
+}
+
+// ── "Recently added papers" view ──
+
+// Parse a "Date Added" cell into a Date. Handles ISO (YYYY-MM-DD[ HH:MM]),
+// US slash (M/D/YYYY) and anything the native Date parser understands. Date-only
+// values are built in local time to avoid timezone off-by-one shifts.
+function parseAddedDate(s) {
+  if (!s) return null;
+  s = String(s).trim();
+  if (!s) return null;
+  var m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+  if (m) return new Date(+m[1], +m[2]-1, +m[3], +(m[4]||0), +(m[5]||0), +(m[6]||0));
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:[ ,]+(\d{1,2}):(\d{1,2}))?/);
+  if (m) { var yr = +m[3]; if (yr < 100) yr += 2000; return new Date(yr, +m[1]-1, +m[2], +(m[4]||0), +(m[5]||0)); }
+  var d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+var ADDED_KEYS = ['Date Added', 'DateAdded', 'Date_Added', 'Added', 'Added On', 'Added Date'];
+function getAddedDate(p) {
+  for (var i = 0; i < ADDED_KEYS.length; i++) { if (p[ADDED_KEYS[i]]) { var d = parseAddedDate(p[ADDED_KEYS[i]]); if (d) return d; } }
+  return null;
+}
+
+var ADD_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function formatAddedDate(d) {
+  return d.getDate() + ' ' + ADD_MONTHS[d.getMonth()] + ' ' + d.getFullYear();
+}
+
+function updateRecentButton() {
+  var btn = document.getElementById('recentBtn');
+  if (btn) btn.className = 'recent-tab-btn' + (recentMode ? ' active' : '');
+}
+
+function toggleRecent() {
+  recentMode = !recentMode;
+  updateRecentButton();
+  if (recentMode) {
+    // Standalone view: drop any active filters and close summary panels.
+    resetFilterState();
+    closeSummaryTabs();
+    if (!recentFetched) loadRecent(); // fast pre-computed tab; re-renders when ready
+    renderRecent();                   // immediate (spinner, fallback, or data)
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } else {
+    applyFilters();
+  }
+}
+
+// Pre-fetch the small recent.json (papers first seen recently) at page load so
+// the "Recently added" view opens instantly. If the file is missing we fall back
+// to scanning the full Data set; a transient network error retries a few times.
+async function loadRecent(attempt) {
+  recentFetched = true;
+  recentLoading = true;
+  try {
+    var r = await fetch(RECENT_URL, { cache: 'no-cache' });
+    if (r.status === 404) { // file not generated yet -> fall back to scanning allPapers
+      recentData = null;
+      recentLoading = false;
+      if (recentMode) renderRecent();
+      return;
+    }
+    if (!r.ok) throw new Error('HTTP ' + r.status); // transient -> retry below
+    var rows = await r.json();
+    if (!Array.isArray(rows)) rows = [];
+    rows.forEach(function(p) { normalizeEditors(p); computeJkeys(p); }); // so tags render
+    recentData = rows; // authoritative once loaded, even if empty
+  } catch (e) {
+    attempt = (attempt || 0) + 1;
+    if (attempt <= 4) { setTimeout(function() { loadRecent(attempt); }, 3000); return; }
+    recentData = null; // give up -> fall back to scanning allPapers
+  }
+  recentLoading = false;
+  if (recentMode) renderRecent();
+}
+
+function renderRecent() {
+  var countEl = document.getElementById('resultsCount');
+  var list = document.getElementById('papersList');
+
+  // While the fast pre-computed tab is still loading, wait for it.
+  if (recentLoading && recentData === null) {
+    countEl.innerHTML = '';
+    list.innerHTML = '<div class="loading"><div class="spinner"></div>Loading recently added papers…</div>';
+    return;
+  }
+
+  // Prefer the pre-computed tab (authoritative if it loaded); otherwise fall
+  // back to scanning the full Data set for the Date Added column.
+  var usePrecomputed = recentData !== null;
+  var source = usePrecomputed ? recentData : allPapers;
+
+  // No tab and the Data CSV hasn't arrived yet: keep waiting.
+  if (!usePrecomputed && !allPapers.length) {
+    countEl.innerHTML = '';
+    list.innerHTML = '<div class="loading"><div class="spinner"></div>Loading recently added papers…</div>';
+    return;
+  }
+
+  var cutoff = new Date();
+  cutoff.setHours(0, 0, 0, 0);
+  cutoff.setDate(cutoff.getDate() - RECENT_DAYS);
+
+  var recent = source
+    .map(function(p) { return { p: p, d: getAddedDate(p) }; })
+    .filter(function(x) { return x.d && x.d >= cutoff; })
+    .sort(function(a, b) { return b.d - a.d; })
+    .map(function(x) { return x.p; });
+
+  // Set the global `filtered` so the Abstract/BibTeX toggles resolve correctly.
+  filtered = recent;
+  currentPage = 1;
+
+  var weeks = Math.round(RECENT_DAYS / 7);
+  countEl.innerHTML = '<strong>' + recent.length.toLocaleString() + '</strong> paper' + (recent.length === 1 ? '' : 's') + ' added in the last ' + weeks + ' weeks';
+
+  if (!recent.length) {
+    list.innerHTML = '<div class="empty-state"><h3>No recently added papers</h3><p>No papers were added to the database in the last ' + weeks + ' weeks.</p></div>';
+    return;
+  }
+
+  renderCardList(list, recent, true);
+}
+
+function filterByEditor(name) {
+  addChipFromCard('editor', name);
+}
+
+function filterByArea(name) {
+  addChipFromCard('area', name);
+}
+
+// ── Incremental card rendering ────────────────────────────────────────────
+// Building a card for every result at once froze phones and tablets on big
+// selections (Management Science alone is 12k+ cards). Only the first chunk
+// is rendered; a "Show more" button appends the rest in slices. Card indices
+// stay equal to their position in `filtered`, so the Abstract/BibTeX toggles
+// keep resolving correctly on appended cards.
+const RENDER_FIRST = 250;
+const RENDER_MORE = 500;
+
+function showMoreButtonHTML(remaining) {
+  return '<div id="showMoreWrap" class="show-more-wrap"><button class="btn btn-secondary" onclick="showMoreCards()">Show ' +
+    Math.min(RENDER_MORE, remaining).toLocaleString() + ' more (' + remaining.toLocaleString() + ' remaining)</button></div>';
+}
+
+function renderCardList(listEl, rows, showAdded) {
+  window._cardRows = rows;
+  window._cardShowAdded = !!showAdded;
+  var first = rows.slice(0, RENDER_FIRST);
+  var html = first.map(function(p, i) { return paperCardHTML(p, i, showAdded); }).join('');
+  if (rows.length > first.length) html += showMoreButtonHTML(rows.length - first.length);
+  listEl.innerHTML = html;
+  window._renderedCount = first.length;
+}
+
+function showMoreCards() {
+  var rows = window._cardRows || [];
+  var start = window._renderedCount || 0;
+  var wrap = document.getElementById('showMoreWrap');
+  if (!wrap) return;
+  var chunk = rows.slice(start, start + RENDER_MORE);
+  wrap.insertAdjacentHTML('beforebegin',
+    chunk.map(function(p, i) { return paperCardHTML(p, start + i, window._cardShowAdded); }).join(''));
+  window._renderedCount = start + chunk.length;
+  var remaining = rows.length - window._renderedCount;
+  if (remaining <= 0) wrap.remove();
+  else wrap.querySelector('button').textContent =
+    'Show ' + Math.min(RENDER_MORE, remaining).toLocaleString() + ' more (' + remaining.toLocaleString() + ' remaining)';
+  if (typeof acctDecorate === 'function') acctDecorate();
+}
+
+function renderPage() {
+  const countEl = document.getElementById('resultsCount');
+  countEl.innerHTML = filtered.length === allPapers.length
+    ? `<strong>${allPapers.length.toLocaleString()}</strong> papers`
+    : `<strong>${filtered.length.toLocaleString()}</strong> of ${allPapers.length.toLocaleString()} papers`;
+
+  const list = document.getElementById('papersList');
+  if (!filtered.length) {
+    list.innerHTML = '<div class="empty-state"><h3>No papers found</h3><p>Try adjusting your filters.</p></div>';
+    return;
+  }
+
+  renderCardList(list, filtered, false);
+}
+
+// Clickable source tag(s) for a paper: its journal, or one tag per PNAS
+// section it belongs to (each selects that section in the journal filter).
+function journalTagsHTML(p) {
+  var jk = p['JKey'] || '';
+  if (!jk) return '';
+  if (jk === 'pnas') {
+    var secs = p['Sections'] || [];
+    if (!secs.length) return '<span class="tag tag-journal jk-pnas" onclick="addJournalChip(\'pnas\')">PNAS</span>';
+    return secs.map(function(s) {
+      var key = PNAS_SECTION_KEYS[s] || 'pnas';
+      return '<span class="tag tag-journal jk-pnas" onclick="addJournalChip(\'' + escAttr(key) + '\')">PNAS · ' + esc(s) + '</span>';
+    }).join('');
+  }
+  var label = jk === 'ec' ? 'ACM EC' : ((SRC[jk] && SRC[jk].name) || p['Journal'] || jk);
+  return '<span class="tag tag-journal jk-' + escAttr(jk) + '" onclick="addJournalChip(\'' + escAttr(jk) + '\')">' + esc(label) + '</span>';
+}
+
+// Markup for one paper card. `idx` is the index into the global `filtered`
+// array (so the Abstract/BibTeX toggles resolve to the right paper). When
+// `showAdded` is true, a tag with the paper's database-insertion date is shown.
+function paperCardHTML(p, idx, showAdded) {
+  const doi = p['DOI'] || '';
+  const link = doi.startsWith('http') ? doi : doi ? 'https://doi.org/' + doi : '';
+  const aid = 'a' + idx;
+  const absClean = cleanAbstract(p['Abstract'] || '');
+  const hasAbs = absClean.length > 10;
+  let addedTag = '';
+  if (showAdded) {
+    const added = getAddedDate(p);
+    if (added) addedTag = `<span class="tag tag-added">Added ${esc(formatAddedDate(added))}</span>`;
+  }
+
+  return `<div class="paper-card">
+    ${typeof acctStarHTML === 'function' ? acctStarHTML(p) : ''}
+    <div class="paper-title">${link ? `<a href="${link}" target="_blank">${esc(p['Title'])}</a>` : esc(p['Title'])}</div>
+    <div class="paper-authors">${(p['Authors']||'').split(',').map(function(a){var t=a.trim();return t?'<span class="paper-author-link" onclick="addAuthorChip(\''+escAttr(t)+'\')">'+esc(t)+'</span>':'';}).filter(Boolean).join(', ')}</div>
+    <div class="paper-meta">
+      ${journalTagsHTML(p)}
+      ${p['Volume'] && p['Issue'] ? `<span class="tag tag-vol" onclick="addYearChip('${esc(p['Year'])}')">${esc(p['Year'])} · Vol. ${esc(p['Volume'])} No. ${esc(p['Issue'])}${p['Page'] ? ', pp. '+esc(p['Page']) : ''}</span>` : p['Year'] ? `<span class="tag tag-vol" onclick="addYearChip('${esc(p['Year'])}')">${esc(p['Year'])}</span>` : ''}
+      ${(p._editors||[]).map(e => `<span class="tag tag-editor" onclick="filterByEditor('${escAttr(e)}')">✎ ${esc(e)}</span>`).join('')}
+      ${p._area ? `<span class="tag tag-area" onclick="filterByArea('${escAttr(p._area)}')">${esc(p._area)}</span>` : ''}
+      ${(p._se||[]).map(e => `<span class="tag tag-se" onclick="addChipFromCard('se','${escAttr(e)}')" title="Senior Editor — click to see other papers this editor accepted">✎ SE: ${esc(e)}</span>`).join('')}
+      ${(p._ae||[]).map(e => `<span class="tag tag-ae" onclick="addChipFromCard('ae','${escAttr(e)}')" title="Associate Editor — click to see other papers this editor handled">AE: ${esc(e)}</span>`).join('')}
+      ${p['Status']==='Other' ? '<span class="tag tag-other">Other</span>' : ''}
+      ${p['Status'] && p['Status']!=='Other' ? `<span class="tag tag-aia">${esc(p['Status'])}</span>` : ''}
+      ${safeUrl(p['PDF']) ? `<a class="tag tag-pdf" href="${safeUrl(p['PDF'])}" target="_blank" rel="noopener" title="Open-access PDF (arXiv/SSRN where available)">PDF ↗</a>` : ''}
+      ${addedTag}
+    </div>
+    ${hasAbs ? `<span class="paper-abstract-toggle" onclick="togAbs('${aid}',this)">▸ Abstract</span>` : ''}
+    <span class="paper-bibtex-toggle" onclick="togBib('bib${idx}',this,${idx})">▸ BibTeX</span>
+    ${typeof acctToggleHTML === 'function' ? acctToggleHTML(p) : ''}
+    ${hasAbs ? `<div id="${aid}" class="paper-abstract">${esc(absClean)}</div>` : ''}
+    <div id="bib${idx}" class="paper-bibtex"></div>
+  </div>`;
+}
+
+function togAbs(id, btn) {
+  const el = document.getElementById(id);
+  const open = el.classList.toggle('open');
+  btn.textContent = open ? '▾ Hide abstract' : '▸ Abstract';
+}
+
+function togBib(id, btn, idx) {
+  const el = document.getElementById(id);
+  const open = el.classList.toggle('open');
+  btn.textContent = open ? '▾ Hide BibTeX' : '▸ BibTeX';
+  if (open && !el.dataset.filled) {
+    const p = filtered[idx];
+    const bibStr = makeBib(p);
+    el.innerHTML = '<button class="bib-copy" onclick="copyBib(this,\'' + id + '\')">Copy</button>' + esc(bibStr);
+    el.dataset.filled = '1';
+  }
+}
+
+function makeBib(p) {
+  const authors = (p['Authors'] || '').split(',').map(a => a.trim()).filter(Boolean);
+  // Format authors as "LastName, FirstName and ..."
+  const bibAuthors = authors.map(a => {
+    const parts = a.trim().split(/\s+/);
+    if (parts.length < 2) return a;
+    const last = parts.pop();
+    return last + ', ' + parts.join(' ');
+  }).join(' and ');
+
+  const lastName = (authors[0] || 'Unknown').split(/\s+/).pop();
+  const year = p['Year'] || '';
+  const words = (p['Title'] || '').split(/\s+/).slice(0, 2).map(w => w.replace(/[^a-zA-Z]/g, '')).filter(Boolean).join('');
+  const key = lastName + '_' + year + '_' + words;
+
+  // Use Page column directly
+  let pages = (p['Page'] || '').replace(/-/g, '--');
+
+  const jk = p['JKey'] || '';
+  const publisher = (SRC[jk] && SRC[jk].publisher) || '';
+  const journal = p['Journal'] || (SRC[jk] && SRC[jk].name) || '';
+
+  // ACM EC: conference paper (or accepted-not-yet-published).
+  if (jk === 'ec') {
+    const yr = parseInt(year, 10);
+    if (!p['DOI']) {
+      let u = '@unpublished{' + key + ',\n';
+      u += '  title={' + bibTitle(p['Title'] || '') + '},\n';
+      u += '  author={' + bibAuthors + '},\n';
+      u += '  note={Accepted at the ' + (yr ? ordinalWord(yr - 1999) + ' ' : '') + 'ACM Conference on Economics and Computation (EC~\'' + String(year).slice(2) + ')},\n';
+      u += '  year={' + year + '}\n';
+      u += '}';
+      return u;
+    }
+    let b = '@inproceedings{' + key + ',\n';
+    b += '  title={' + bibTitle(p['Title'] || '') + '},\n';
+    b += '  author={' + bibAuthors + '},\n';
+    // Booktitle comes from the data (historically correct: "Electronic
+    // Commerce" through 2013, "Economics and Computation" from 2014).
+    b += '  booktitle={' + (p['Booktitle'] || ('Proceedings of the ' + (yr ? ordinalWord(yr - 1999) + ' ' : '') + 'ACM Conference on Economics and Computation (EC~\'' + String(year).slice(2) + ')')) + '},\n';
+    if (pages) b += '  pages={' + pages + '},\n';
+    b += '  year={' + year + '},\n';
+    b += '  publisher={ACM}\n';
+    b += '}';
+    return b;
+  }
+
+  let b = '@article{' + key + ',\n';
+  b += '  title={' + bibTitle(p['Title'] || '') + '},\n';
+  b += '  author={' + bibAuthors + '},\n';
+  b += '  journal={' + (jk === 'pnas' ? 'Proceedings of the National Academy of Sciences' : journal) + '},\n';
+  if (p['Volume']) b += '  volume={' + p['Volume'] + '},\n';
+  if (p['Issue']) b += '  number={' + p['Issue'] + '},\n';
+  if (pages) b += '  pages={' + pages + '},\n';
+  b += '  year={' + year + '}' + (publisher ? ',\n  publisher={' + publisher + '}\n' : '\n');
+  b += '}';
+  return b;
+}
+
+function ordinalWord(n) {
+  const suffix = (n % 10 === 1 && n % 100 !== 11) ? 'st'
+    : (n % 10 === 2 && n % 100 !== 12) ? 'nd'
+    : (n % 10 === 3 && n % 100 !== 13) ? 'rd' : 'th';
+  return n + suffix;
+}
+
+// Protect capital letters in BibTeX title (skip the very first character)
+function bibTitle(t) {
+  if (!t) return '';
+  return t.charAt(0) + t.slice(1).replace(/[A-Z]/g, function(ch) { return '{' + ch + '}'; });
+}
+
+function copyBib(btn, id) {
+  const el = document.getElementById(id);
+  const text = el.textContent.replace('Copy', '').trim();
+  navigator.clipboard.writeText(text).then(function() {
+    btn.textContent = 'Copied!';
+    setTimeout(function() { btn.textContent = 'Copy'; }, 1500);
+  });
+}
+
+/* PAGINATION DISABLED — uncomment to re-enable
+function renderPag(total) {
+  const p = document.getElementById('pagination');
+  let h = `<button ${currentPage===1?'disabled':''} onclick="goPage(${currentPage-1})">‹ Prev</button>`;
+  let s = Math.max(1, currentPage - 3), e = Math.min(total, s + 6);
+  if (e - s < 6) s = Math.max(1, e - 6);
+  if (s > 1) { h += `<button onclick="goPage(1)">1</button>`; if (s > 2) h += `<span class="page-info">…</span>`; }
+  for (let i = s; i <= e; i++) h += `<button class="${i===currentPage?'active':''}" onclick="goPage(${i})">${i}</button>`;
+  if (e < total) { if (e < total-1) h += `<span class="page-info">…</span>`; h += `<button onclick="goPage(${total})">${total}</button>`; }
+  h += `<button ${currentPage===total?'disabled':''} onclick="goPage(${currentPage+1})">Next ›</button>`;
+  p.innerHTML = h;
+}
+
+function goPage(n) { currentPage = n; renderPage(); window.scrollTo({ top: 280, behavior: 'smooth' }); }
+*/
+
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function escAttr(s) { return (s||'').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+// URL destined for an href attribute: http(s) only (third-party metadata must
+// not smuggle javascript:), quotes percent-encoded so the attribute can't break.
+function safeUrl(u) {
+  u = String(u || '');
+  if (!/^https?:\/\//i.test(u)) return '';
+  return u.replace(/"/g, '%22').replace(/'/g, '%27').replace(/</g, '%3C').replace(/>/g, '%3E');
+}
+
+function cleanAbstract(s) {
+  if (!s) return '';
+  // Remove everything from "This paper was accepted by" onwards
+  var idx = s.indexOf('This paper was accepted');
+  if (idx === -1) idx = s.indexOf('This work was accepted');
+  if (idx > 0) {
+    // Go back to the last period before it
+    var before = s.substring(0, idx).trimEnd();
+    // If it ends with a period, keep it; otherwise find last period
+    if (!before.endsWith('.')) {
+      var lastDot = before.lastIndexOf('.');
+      if (lastDot > 0) before = before.substring(0, lastDot + 1);
+    }
+    s = before;
+  }
+  // Remove other trailing junk patterns
+  var junk = ['Funding:', 'Supplemental Material:', 'Conflict of Interest', 'The online appendix', 'Data and the online appendix', 'History:', 'Disclaimer/Publisher'];
+  for (var i = 0; i < junk.length; i++) {
+    var ji = s.indexOf(junk[i]);
+    if (ji > 0) {
+      var b = s.substring(0, ji).trimEnd();
+      if (!b.endsWith('.')) { var ld = b.lastIndexOf('.'); if (ld > 0) b = b.substring(0, ld + 1); }
+      s = b;
+    }
+  }
+  // Remove trailing DOI URLs
+  s = s.replace(/\s*https?:\/\/doi\.org\/\S+\s*\.?\s*$/, '');
+  return s.trim();
+}
+
+let searchTimer;
+function debounceSearch() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(function() {
+    if (allPapers.length > 0) applyFilters();
+  }, 150);
+}
+
+var affSearchTimer;
+function debounceAffSearch() {
+  clearTimeout(affSearchTimer);
+  affSearchTimer = setTimeout(function() {
+    // Filter the affiliations summary list if open
+    var afEl = document.getElementById('summaryAffiliations');
+    if (afEl.classList.contains('active')) {
+      filterAffiliationsList();
+    }
+    // Also filter papers live (like author search)
+    if (allPapers.length > 0) applyFilters();
+  }, 150);
+}
+
+// Condense the sticky top bar once the user has scrolled past it, freeing screen
+// space for the papers list. Two safeguards stop this from making the page
+// "shake" (the bar flickering between full and condensed, frame after frame):
+//
+//   1. Hysteresis. The top bar is in normal flow, so condensing it shrinks the
+//      whole page by ~100px. With a single threshold, that height drop can pull
+//      the scroll position back across the line, which un-condenses, which grows
+//      the page, which crosses the line again, an endless toggle/reflow loop.
+//      Separate add/remove thresholds, with a gap wider than the height the
+//      condense removes, mean a height-driven scroll change can never cross both
+//      edges of the band, so the class always settles.
+//   2. The toggle only runs where the bar is actually sticky (wide viewports).
+//      On phones the bar is `position: static`, so condensing it as it scrolls
+//      out of view frees no space yet still shrinks the page, pure downside.
+//
+// Reads are coalesced into one layout write per frame via requestAnimationFrame.
+var compactSticky = window.matchMedia('(min-width: 769px)');
+var COMPACT_ON = 180;   // add `compact` only well below the full-height bar
+var COMPACT_OFF = 40;   // and drop it only after scrolling back near the top
+var compactScheduled = false;
+function applyCompact() {
+  compactScheduled = false;
+  if (!compactSticky.matches) { document.body.classList.remove('compact'); return; }
+  var y = window.scrollY || window.pageYOffset || 0;
+  if (document.body.classList.contains('compact')) {
+    if (y < COMPACT_OFF) document.body.classList.remove('compact');
+  } else if (y > COMPACT_ON) {
+    document.body.classList.add('compact');
+  }
+}
+function scheduleCompact() {
+  if (!compactScheduled) { compactScheduled = true; requestAnimationFrame(applyCompact); }
+}
+window.addEventListener('scroll', scheduleCompact, { passive: true });
+// Re-evaluate when crossing the sticky/static breakpoint (e.g. device rotation).
+if (compactSticky.addEventListener) compactSticky.addEventListener('change', applyCompact);
+else if (compactSticky.addListener) compactSticky.addListener(applyCompact);
+
+loadLastPull(); // small + cached: render the last-pull date first, before the big papers.json
+loadData();
+loadAuthors();
+loadRecent(); // pre-fetch the small recent.json so the "Recently added" view opens instantly
+</script>
+
+<!-- ── Accounts: sign in / register modal ─────────────────────────────────── -->
+<div id="acctOverlay" class="acct-overlay" onclick="if(event.target===this)acctCloseAuth()">
+  <div class="acct-modal">
+    <button class="acct-modal-x" onclick="acctCloseAuth()" aria-label="Close">×</button>
+    <div class="acct-modal-head">
+      <h2 id="acctAuthTitle">Sign in</h2>
+      <p>Save papers, add private notes, build lists and tag your reading. Optional, and only you can see your library.</p>
+    </div>
+    <div class="acct-modal-body">
+      <button class="acct-google" onclick="acctGoogle()">
+        <svg viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.71-1.57 2.68-3.89 2.68-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.02-3.7H.96v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.98 10.72a5.4 5.4 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.02-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58A9 9 0 0 0 9 0 9 9 0 0 0 .96 4.95l3.02 2.33C4.68 5.16 6.66 3.58 9 3.58z"/></svg>
+        Continue with Google
+      </button>
+      <div class="acct-or">or with email</div>
+      <div class="acct-field">
+        <label for="acctEmail">Email</label>
+        <input id="acctEmail" type="email" autocomplete="username" placeholder="you@example.com" onkeydown="if(event.key==='Enter')acctSubmitAuth()">
+      </div>
+      <div class="acct-field">
+        <label for="acctPassword">Password</label>
+        <input id="acctPassword" type="password" autocomplete="current-password" placeholder="••••••••" onkeydown="if(event.key==='Enter')acctSubmitAuth()">
+      </div>
+      <div class="acct-forgot" id="acctForgotRow"><span class="acct-link" onclick="acctForgot()">Forgot password?</span></div>
+      <div class="acct-error" id="acctErr"></div>
+      <button class="acct-primary" id="acctPrimaryBtn" onclick="acctSubmitAuth()">Sign in</button>
+      <div class="acct-switch" id="acctSwitch"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase (compat build, loaded from the CDN so the page stays a single
+     static file with no build step). The account logic below stays inert until
+     a real Firebase project is configured in FB_CONFIG. -->
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<script>
+/* ── Accounts: optional sign-in + private saved papers / notes / lists / tags ──
+ *
+ * SETUP: create a Firebase project, enable Email/Password and Google sign-in,
+ * add stouras.com + www.stouras.com as authorized domains, then paste the web
+ * config below. See fun/ms/_ACCOUNTS-SETUP.md for the full step-by-step and the
+ * Firestore security rules. Until the config is filled in, none of this runs and
+ * the page behaves exactly as before (no Sign in button, no stars).
+ *
+ * Data model (all private, under the user's own document, see _firestore.rules):
+ *   users/{uid}/papers/{docId}  -> { doi, title, authors, year,
+ *                                    starred, note, tags[], lists[lid], updatedAt }
+ *   users/{uid}/lists/{lid}     -> { name, createdAt }
+ * A paper's docId is derived from its DOI (or title+year when no DOI).
+ */
+(function () {
+  'use strict';
+
+  // ↓↓↓ PASTE YOUR FIREBASE WEB CONFIG HERE (see fun/ms/_ACCOUNTS-SETUP.md) ↓↓↓
+  var FB_CONFIG = {
+    apiKey: "PASTE_API_KEY",
+    authDomain: "PASTE_PROJECT.firebaseapp.com",
+    projectId: "PASTE_PROJECT_ID",
+    storageBucket: "PASTE_PROJECT.appspot.com",
+    messagingSenderId: "PASTE_SENDER_ID",
+    appId: "PASTE_APP_ID"
+  };
+  // ↑↑↑ ─────────────────────────────────────────────────────────────────── ↑↑↑
+
+  var ACCOUNTS_ENABLED = !!(FB_CONFIG.apiKey
+    && FB_CONFIG.apiKey.indexOf('PASTE_') === -1
+    && window.firebase && firebase.auth && firebase.firestore);
+  if (!ACCOUNTS_ENABLED) return; // page works exactly as before until configured
+
+  document.body.classList.add('ms-accounts');
+
+  firebase.initializeApp(FB_CONFIG);
+  var auth = firebase.auth();
+  var db = firebase.firestore();
+  try { auth.useDeviceLanguage(); } catch (e) {}
+  var FV = firebase.firestore.FieldValue;
+  var serverTime = function () { return FV.serverTimestamp(); };
+
+  var state = { user: null, papers: {}, lists: {} };
+  var meta = {};               // docId -> snapshot of {doi,title,authors,year} for rendering
+  var unsubPapers = null, unsubLists = null;
+  var libraryMode = false, libFilter = { type: 'all', id: null }, libQuery = '';
+  var doiIndex = null, doiIndexLen = -1;
+
+  // ── helpers: per-paper keys / metadata ──────────────────────────────────
+  function normDoi(d) { return String(d || '').trim().replace(/^https?:\/\/(dx\.)?doi\.org\//i, '').toLowerCase(); }
+  function rawKey(p) {
+    var d = normDoi(p['DOI']);
+    if (d) return 'doi:' + d;
+    return 'ttl:' + String(p['Title'] || '').trim().toLowerCase() + '|' + String(p['Year'] || '').trim();
+  }
+  function docIdFor(p) { return 'p_' + encodeURIComponent(rawKey(p)).replace(/%/g, '~'); }
+  function registerMeta(p, id) {
+    meta[id] = { doi: p['DOI'] || '', title: p['Title'] || '', authors: p['Authors'] || '', year: p['Year'] || '' };
+  }
+  function mergeMeta(id, obj) {
+    var m = meta[id] || {};
+    if (m.doi !== undefined) { obj.doi = m.doi; obj.title = m.title; obj.authors = m.authors; obj.year = m.year; }
+    return obj;
+  }
+  function papersCol() { return db.collection('users').doc(state.user.uid).collection('papers'); }
+  function listsCol() { return db.collection('users').doc(state.user.uid).collection('lists'); }
+  function isSaved(r) {
+    return !!(r && (r.starred || (r.note && r.note.trim()) || (r.tags && r.tags.length) || (r.lists && r.lists.length)));
+  }
+
+  // ── markup injected into each paper card (called from paperCardHTML) ─────
+  window.acctStarHTML = function (p) {
+    var id = docIdFor(p); registerMeta(p, id);
+    return '<span class="acct-star" data-pk="' + escAttr(id) + '" onclick="acctStar(this)" title="Save to my library">☆</span>';
+  };
+  window.acctToggleHTML = function (p) {
+    var id = docIdFor(p); registerMeta(p, id);
+    return '<span class="paper-acct-toggle" data-pk="' + escAttr(id) + '" onclick="acctTogglePanel(this)">▸ Notes, tags &amp; lists</span>';
+  };
+
+  // ── decorate stars after every render of the papers list ────────────────
+  window.acctDecorate = function () {
+    var stars = document.querySelectorAll('.acct-star');
+    for (var i = 0; i < stars.length; i++) {
+      var rec = state.papers[stars[i].dataset.pk];
+      var on = !!(rec && rec.starred);
+      stars[i].textContent = on ? '★' : '☆';
+      stars[i].classList.toggle('on', on);
+    }
+  };
+  // Patch the list renderers so stars get their saved state after each draw,
+  // and so using the normal filters/tabs leaves the library view.
+  if (typeof renderPage === 'function') { var _rp = renderPage; window.renderPage = function () { _rp.apply(null, arguments); acctDecorate(); }; }
+  if (typeof renderRecent === 'function') { var _rr = renderRecent; window.renderRecent = function () { _rr.apply(null, arguments); acctDecorate(); }; }
+  ['applyFilters', 'toggleSummary', 'toggleRecent'].forEach(function (name) {
+    if (typeof window[name] === 'function') { var orig = window[name]; window[name] = function () { libExitQuiet(); return orig.apply(this, arguments); }; }
+  });
+
+  // ── DOI -> live paper index (so saved papers show full metadata/abstract) ─
+  function buildDoiIndex() {
+    doiIndex = {};
+    if (typeof allPapers === 'undefined') return;
+    for (var i = 0; i < allPapers.length; i++) { var d = normDoi(allPapers[i]['DOI']); if (d) doiIndex[d] = allPapers[i]; }
+    doiIndexLen = allPapers.length;
+  }
+  function paperByDoi(doi) {
+    var d = normDoi(doi); if (!d) return null;
+    if (doiIndex === null || (typeof allPapers !== 'undefined' && doiIndexLen !== allPapers.length)) buildDoiIndex();
+    return doiIndex[d] || null;
+  }
+  function synth(r) { return { 'Title': r.title || '(untitled)', 'Authors': r.authors || '', 'Year': r.year || '', 'DOI': r.doi || '' }; }
+
+  // ── star quick-action ───────────────────────────────────────────────────
+  window.acctStar = function (el) {
+    if (!state.user) { acctOpenAuth(); return; }
+    var id = el.dataset.pk, rec = state.papers[id], ref = papersCol().doc(id);
+    if (rec && rec.starred) {
+      if ((rec.note && rec.note.trim()) || (rec.tags && rec.tags.length) || (rec.lists && rec.lists.length)) {
+        ref.set({ starred: false, updatedAt: serverTime() }, { merge: true });
+      } else { ref.delete(); }
+    } else {
+      ref.set(mergeMeta(id, {
+        starred: true,
+        note: (rec && rec.note) || '',
+        tags: (rec && rec.tags) || [],
+        lists: (rec && rec.lists) || [],
+        updatedAt: serverTime()
+      }), { merge: true });
+    }
+    // optimistic flip; the snapshot will confirm
+    if (!rec || !rec.starred) { el.textContent = '★'; el.classList.add('on'); }
+    else { el.textContent = '☆'; el.classList.remove('on'); }
+  };
+
+  // ── per-card panel: note + tags + lists ─────────────────────────────────
+  window.acctTogglePanel = function (el) {
+    if (!state.user) { acctOpenAuth(); return; }
+    var card = el.closest('.paper-card');
+    var panel = card.querySelector('.paper-acct-panel');
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.className = 'paper-acct-panel';
+      panel.dataset.pk = el.dataset.pk;
+      panel.innerHTML = panelHTML(el.dataset.pk);
+      card.appendChild(panel);
+    }
+    var open = panel.classList.toggle('open');
+    el.innerHTML = open ? '▾ Hide notes, tags & lists' : '▸ Notes, tags &amp; lists';
+  };
+  function panelHTML(id) {
+    var rec = state.papers[id] || {};
+    var tags = rec.tags || [], inLists = rec.lists || [];
+    var lids = Object.keys(state.lists);
+    var listsHTML = lids.length
+      ? lids.map(function (lid) {
+          return '<label class="acct-listrow"><input type="checkbox" data-lid="' + escAttr(lid) + '"' + (inLists.indexOf(lid) >= 0 ? ' checked' : '') + '> ' + esc(state.lists[lid].name) + '</label>';
+        }).join('')
+      : '<div class="acct-nolists" style="font-size:12.5px;color:var(--text-muted)">No lists yet. Create one below.</div>';
+    return '' +
+      '<div class="acct-panel-row"><label>Private note</label>' +
+        '<textarea class="acct-note" placeholder="Only you can see this…">' + esc(rec.note || '') + '</textarea></div>' +
+      '<div class="acct-panel-row"><label>Tags</label><div class="acct-taglist">' +
+        tags.map(tagChip).join('') +
+        '<input class="acct-tag-input" placeholder="add tag + Enter" onkeydown="acctTagKey(event,this)"></div></div>' +
+      '<div class="acct-panel-row"><label>Lists</label>' + listsHTML +
+        '<div class="acct-newlist"><input placeholder="New list name…" onkeydown="if(event.key===\'Enter\'){acctNewListInline(this);event.preventDefault();}">' +
+        '<button class="acct-mini" onclick="acctNewListInline(this.previousElementSibling)">Create</button></div></div>' +
+      '<div class="acct-save-row"><button class="acct-save-btn" onclick="acctSavePanel(this)">Save</button>' +
+        '<span class="acct-save-status"></span>' +
+        '<span class="acct-link" style="margin-left:auto" onclick="acctRemovePaper(this)">Remove from library</span></div>';
+  }
+  function tagChip(t) { return '<span class="acct-tag" data-tag="' + escAttr(t) + '">' + esc(t) + '<span class="x" onclick="acctRemoveTag(this)">×</span></span>'; }
+
+  window.acctTagKey = function (e, inp) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    var v = inp.value.trim(); if (!v) return;
+    var wrap = inp.parentNode;
+    var dup = Array.prototype.some.call(wrap.querySelectorAll('.acct-tag'), function (c) { return c.dataset.tag.toLowerCase() === v.toLowerCase(); });
+    if (!dup) { var tmp = document.createElement('div'); tmp.innerHTML = tagChip(v); wrap.insertBefore(tmp.firstChild, inp); }
+    inp.value = '';
+  };
+  window.acctRemoveTag = function (x) { var c = x.closest('.acct-tag'); c.parentNode.removeChild(c); };
+
+  window.acctNewListInline = function (inp) {
+    var name = inp.value.trim(); if (!name) return; inp.value = '';
+    createList(name).then(function (lid) {
+      var row = inp.closest('.acct-panel-row');
+      var ph = row.querySelector('.acct-nolists'); if (ph) ph.parentNode.removeChild(ph);
+      var label = document.createElement('label'); label.className = 'acct-listrow';
+      label.innerHTML = '<input type="checkbox" data-lid="' + escAttr(lid) + '" checked> ' + esc(name);
+      row.insertBefore(label, row.querySelector('.acct-newlist'));
+    });
+  };
+  function createList(name) {
+    return listsCol().add({ name: name, createdAt: serverTime() }).then(function (ref) { return ref.id; });
+  }
+
+  window.acctSavePanel = function (btn) {
+    var panel = btn.closest('.paper-acct-panel'), id = panel.dataset.pk;
+    var note = panel.querySelector('.acct-note').value;
+    var tags = Array.prototype.map.call(panel.querySelectorAll('.acct-tag'), function (c) { return c.dataset.tag; });
+    var lists = Array.prototype.filter.call(panel.querySelectorAll('input[type=checkbox][data-lid]'), function (c) { return c.checked; })
+      .map(function (c) { return c.dataset.lid; });
+    var rec = state.papers[id];
+    var data = mergeMeta(id, { note: note, tags: tags, lists: lists, starred: rec ? !!rec.starred : false, updatedAt: serverTime() });
+    var status = panel.querySelector('.acct-save-status');
+    status.style.color = 'var(--text-muted)'; status.textContent = 'Saving…';
+    papersCol().doc(id).set(data, { merge: true }).then(function () {
+      status.style.color = 'var(--green)'; status.textContent = 'Saved ✓';
+      setTimeout(function () { status.textContent = ''; }, 2200);
+    }).catch(function (e) { status.style.color = 'var(--red)'; status.textContent = friendly(e); });
+  };
+
+  window.acctRemovePaper = function (link) {
+    var panel = link.closest('.paper-acct-panel'), id = panel.dataset.pk;
+    papersCol().doc(id).delete();
+    panel.classList.remove('open');
+    var card = panel.closest('.paper-card'); var tog = card && card.querySelector('.paper-acct-toggle');
+    if (tog) tog.innerHTML = '▸ Notes, tags &amp; lists';
+  };
+
+  // ── account control (header top-right) + menu ───────────────────────────
+  function uniqueTags() {
+    var s = {}; Object.keys(state.papers).forEach(function (k) { (state.papers[k].tags || []).forEach(function (t) { s[t] = 1; }); });
+    return Object.keys(s);
+  }
+  function acctRenderControl() {
+    var el = document.getElementById('acctControl'); if (!el) return;
+    if (!state.user) {
+      el.innerHTML = '<button class="acct-btn" onclick="acctOpenAuth()">Sign in</button>';
+      return;
+    }
+    var u = state.user;
+    var name = u.displayName || (u.email ? u.email.split('@')[0] : 'Account');
+    var initial = (name || '?').charAt(0);
+    var saved = Object.keys(state.papers).filter(function (k) { return isSaved(state.papers[k]); }).length;
+    el.innerHTML =
+      '<div class="acct-wrap">' +
+        '<button class="acct-btn acct-user" onclick="acctToggleMenu(event)"><span class="acct-avatar">' + esc(initial) + '</span><span class="acct-uname">' + esc(name) + '</span></button>' +
+        '<div class="acct-menu" id="acctMenu">' +
+          '<div class="acct-menu-head">Signed in as<strong>' + esc(u.email || name) + '</strong></div>' +
+          '<div class="acct-menu-item" onclick="acctOpenLibrary()">★ My library <span class="acct-badge">' + saved + '</span></div>' +
+          '<div class="acct-menu-item" onclick="acctOpenLibrary()">🗂 My lists <span class="acct-badge">' + Object.keys(state.lists).length + '</span></div>' +
+          '<div class="acct-menu-item" onclick="acctOpenLibrary()">🏷 My tags <span class="acct-badge">' + uniqueTags().length + '</span></div>' +
+          '<div class="acct-menu-item" onclick="acctOpenLibrary(\'search\')">🔍 Search my notes</div>' +
+          '<div class="acct-menu-sep"></div>' +
+          '<div class="acct-menu-item danger" onclick="acctSignOut()">Sign out</div>' +
+        '</div>' +
+      '</div>';
+  }
+  window.acctToggleMenu = function (e) { if (e) e.stopPropagation(); var m = document.getElementById('acctMenu'); if (m) m.classList.toggle('open'); };
+  function acctCloseMenu() { var m = document.getElementById('acctMenu'); if (m) m.classList.remove('open'); }
+  document.addEventListener('click', function (e) { if (!e.target.closest('.acct-wrap')) acctCloseMenu(); });
+
+  // ── library view ────────────────────────────────────────────────────────
+  window.acctOpenLibrary = function (focus) {
+    if (!state.user) { acctOpenAuth(); return; }
+    libraryMode = true;
+    if (typeof recentMode !== 'undefined' && recentMode) { recentMode = false; if (typeof updateRecentButton === 'function') updateRecentButton(); }
+    if (typeof closeSummaryTabs === 'function') closeSummaryTabs();
+    acctCloseMenu();
+    document.getElementById('libraryBar').classList.add('open');
+    renderLibraryBar();
+    renderLibrary();
+    if (focus === 'search') { var s = document.getElementById('libSearch'); if (s) s.focus(); }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  window.acctExitLibrary = function () {
+    libExitQuiet();
+    if (typeof applyFilters === 'function') applyFilters(); // restores the normal list / welcome state
+  };
+  function libExitQuiet() {
+    if (!libraryMode) return;
+    libraryMode = false;
+    var bar = document.getElementById('libraryBar'); if (bar) bar.classList.remove('open');
+  }
+  window.acctLibSearch = function (v) { libQuery = v; renderLibrary(); };
+  window.acctSetLibFilter = function (type, id) { libFilter = { type: type, id: id }; renderLibraryBar(); renderLibrary(); };
+  window.acctDeleteList = function (ev, lid) {
+    ev.stopPropagation();
+    if (!confirm('Delete this list? Papers stay in your library, only the list is removed.')) return;
+    var batch = db.batch();
+    Object.keys(state.papers).forEach(function (k) {
+      if ((state.papers[k].lists || []).indexOf(lid) >= 0) batch.update(papersCol().doc(k), { lists: FV.arrayRemove(lid) });
+    });
+    batch.delete(listsCol().doc(lid));
+    batch.commit();
+    if (libFilter.type === 'list' && libFilter.id === lid) libFilter = { type: 'all', id: null };
+  };
+
+  function recordsFor(type, id) {
+    return Object.keys(state.papers).map(function (k) { return state.papers[k]; }).filter(function (r) {
+      if (!isSaved(r)) return false;
+      if (type === 'list') return (r.lists || []).indexOf(id) >= 0;
+      if (type === 'tag') return (r.tags || []).indexOf(id) >= 0;
+      return true;
+    });
+  }
+  function renderLibraryBar() {
+    var listChips = document.getElementById('libListChips');
+    var tagChips = document.getElementById('libTagChips');
+    if (!listChips) return;
+    var allActive = libFilter.type === 'all' ? ' active' : '';
+    var html = '<span class="lib-chip' + allActive + '" onclick="acctSetLibFilter(\'all\',null)">All saved <span class="cnt">' + recordsFor('all').length + '</span></span>';
+    Object.keys(state.lists).sort(function (a, b) { return (state.lists[a].name || '').localeCompare(state.lists[b].name || ''); }).forEach(function (lid) {
+      var act = (libFilter.type === 'list' && libFilter.id === lid) ? ' active' : '';
+      html += '<span class="lib-chip list' + act + '" onclick="acctSetLibFilter(\'list\',\'' + escAttr(lid) + '\')">' + esc(state.lists[lid].name) +
+        ' <span class="cnt">' + recordsFor('list', lid).length + '</span>' +
+        '<span class="del" title="Delete list" onclick="acctDeleteList(event,\'' + escAttr(lid) + '\')">×</span></span>';
+    });
+    listChips.innerHTML = html;
+
+    var tags = uniqueTags().sort(function (a, b) { return a.toLowerCase().localeCompare(b.toLowerCase()); });
+    document.getElementById('libTagsLabel').style.display = tags.length ? '' : 'none';
+    tagChips.style.display = tags.length ? '' : 'none';
+    tagChips.innerHTML = tags.map(function (t) {
+      var act = (libFilter.type === 'tag' && libFilter.id === t) ? ' active' : '';
+      return '<span class="lib-chip tag' + act + '" onclick="acctSetLibFilter(\'tag\',\'' + escAttr(t) + '\')">🏷 ' + esc(t) + ' <span class="cnt">' + recordsFor('tag', t).length + '</span></span>';
+    }).join('');
+  }
+  function renderLibrary() {
+    if (!libraryMode) return;
+    var recs = recordsFor(libFilter.type, libFilter.id);
+    if (libQuery) {
+      var q = libQuery.toLowerCase();
+      recs = recs.filter(function (r) {
+        return (r.note || '').toLowerCase().indexOf(q) >= 0 ||
+               (r.title || '').toLowerCase().indexOf(q) >= 0 ||
+               (r.authors || '').toLowerCase().indexOf(q) >= 0 ||
+               (r.tags || []).join(' ').toLowerCase().indexOf(q) >= 0;
+      });
+    }
+    recs.sort(function (a, b) { return (b.updatedAt || 0) - (a.updatedAt || 0); });
+    var papers = recs.map(function (r) { return paperByDoi(r.doi) || synth(r); });
+    if (typeof filtered !== 'undefined') filtered = papers;
+
+    var countEl = document.getElementById('resultsCount');
+    var list = document.getElementById('papersList');
+    var scope = libFilter.type === 'list' ? (' in “' + esc(listName(libFilter.id)) + '”')
+              : libFilter.type === 'tag' ? (' tagged “' + esc(libFilter.id) + '”') : '';
+    var qnote = libQuery ? (' matching “' + esc(libQuery) + '”') : '';
+    countEl.innerHTML = '<strong>' + papers.length.toLocaleString() + '</strong> saved paper' + (papers.length === 1 ? '' : 's') + scope + qnote;
+    if (!papers.length) {
+      list.innerHTML = '<div class="empty-state"><h3>Nothing here yet</h3><p>Star papers from the list to save them, then add notes, tags and lists. Your library is private to you.</p></div>';
+      return;
+    }
+    list.innerHTML = papers.map(function (p, idx) { return paperCardHTML(p, idx, false); }).join('');
+    acctDecorate();
+  }
+  function listName(lid) { return (state.lists[lid] && state.lists[lid].name) || 'list'; }
+
+  // ── auth modal ──────────────────────────────────────────────────────────
+  var authMode = 'signin';
+  window.acctOpenAuth = function () {
+    document.getElementById('acctOverlay').classList.add('open');
+    setAuthMode('signin');
+    setTimeout(function () { var e = document.getElementById('acctEmail'); if (e) e.focus(); }, 40);
+  };
+  window.acctCloseAuth = function () { document.getElementById('acctOverlay').classList.remove('open'); acctErr(''); };
+  function setAuthMode(m) {
+    authMode = m;
+    document.getElementById('acctAuthTitle').textContent = m === 'signin' ? 'Sign in' : 'Create account';
+    document.getElementById('acctPrimaryBtn').textContent = m === 'signin' ? 'Sign in' : 'Create account';
+    document.getElementById('acctSwitch').innerHTML = m === 'signin'
+      ? 'New here? <span class="acct-link" onclick="acctSwitchMode()">Create an account</span>'
+      : 'Already have an account? <span class="acct-link" onclick="acctSwitchMode()">Sign in</span>';
+    document.getElementById('acctForgotRow').style.display = m === 'signin' ? 'block' : 'none';
+    document.getElementById('acctPassword').setAttribute('autocomplete', m === 'signin' ? 'current-password' : 'new-password');
+    acctErr('');
+  }
+  window.acctSwitchMode = function () { setAuthMode(authMode === 'signin' ? 'create' : 'signin'); };
+  window.acctSubmitAuth = function () {
+    var email = document.getElementById('acctEmail').value.trim();
+    var pw = document.getElementById('acctPassword').value;
+    if (!email || !pw) { acctErr('Enter your email and password.'); return; }
+    var btn = document.getElementById('acctPrimaryBtn'); btn.disabled = true;
+    var pr = authMode === 'signin'
+      ? auth.signInWithEmailAndPassword(email, pw)
+      : auth.createUserWithEmailAndPassword(email, pw);
+    pr.then(function () { acctCloseAuth(); })
+      .catch(function (e) { acctErr(friendly(e)); })
+      .then(function () { btn.disabled = false; });
+  };
+  window.acctGoogle = function () {
+    auth.signInWithPopup(new firebase.auth.GoogleAuthProvider())
+      .then(function () { acctCloseAuth(); })
+      .catch(function (e) { if (e && (e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request')) return; acctErr(friendly(e)); });
+  };
+  window.acctForgot = function () {
+    var email = document.getElementById('acctEmail').value.trim();
+    if (!email) { acctErr('Enter your email above first, then click reset.'); return; }
+    auth.sendPasswordResetEmail(email).then(function () {
+      var el = document.getElementById('acctErr'); el.style.color = 'var(--green)'; el.textContent = 'Password reset email sent.';
+    }).catch(function (e) { acctErr(friendly(e)); });
+  };
+  window.acctSignOut = function () {
+    acctCloseMenu();
+    if (libraryMode) acctExitLibrary();
+    auth.signOut();
+  };
+  function acctErr(m) { var el = document.getElementById('acctErr'); if (el) { el.style.color = 'var(--red)'; el.textContent = m || ''; } }
+  function friendly(e) {
+    var c = e && e.code || '';
+    if (c === 'auth/invalid-email') return 'That email address looks invalid.';
+    if (c === 'auth/missing-password' || c === 'auth/weak-password') return 'Password must be at least 6 characters.';
+    if (c === 'auth/email-already-in-use') return 'An account already exists for this email. Try signing in.';
+    if (c === 'auth/invalid-credential' || c === 'auth/wrong-password' || c === 'auth/user-not-found') return 'Email or password is incorrect.';
+    if (c === 'auth/too-many-requests') return 'Too many attempts. Please try again later.';
+    if (c === 'auth/unauthorized-domain') return 'This domain is not authorized in the Firebase console yet.';
+    if (c === 'auth/operation-not-allowed') return 'This sign-in method is not enabled in the Firebase console yet.';
+    if (c === 'permission-denied') return 'Permission denied. The Firestore security rules may not be deployed yet.';
+    return (e && e.message) || 'Something went wrong. Please try again.';
+  }
+
+  // ── auth state + live data subscriptions ────────────────────────────────
+  function onData() {
+    acctDecorate();
+    acctRenderControl();
+    if (libraryMode) { renderLibraryBar(); renderLibrary(); }
+  }
+  auth.onAuthStateChanged(function (user) {
+    state.user = user;
+    document.body.classList.toggle('ms-signed-in', !!user);
+    if (unsubPapers) { unsubPapers(); unsubPapers = null; }
+    if (unsubLists) { unsubLists(); unsubLists = null; }
+    state.papers = {}; state.lists = {};
+    if (user) {
+      unsubPapers = papersCol().onSnapshot(function (snap) {
+        var m = {};
+        snap.forEach(function (d) { var x = d.data() || {}; x.id = d.id; if (x.updatedAt && x.updatedAt.toMillis) x.updatedAt = x.updatedAt.toMillis(); m[d.id] = x; });
+        state.papers = m; onData();
+      }, function (err) { console.warn('papers listener:', err && err.code); });
+      unsubLists = listsCol().onSnapshot(function (snap) {
+        var m = {}; snap.forEach(function (d) { var x = d.data() || {}; m[d.id] = { name: x.name || '(untitled)', createdAt: x.createdAt }; });
+        state.lists = m; onData();
+      }, function (err) { console.warn('lists listener:', err && err.code); });
+    } else {
+      if (libraryMode) acctExitLibrary();
+      onData();
+    }
+  });
+
+  acctRenderControl(); // show the Sign in button immediately, before auth resolves
+})();
+</script>
+</body>
+</html>

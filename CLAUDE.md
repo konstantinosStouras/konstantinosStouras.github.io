@@ -27,8 +27,29 @@ The homepage's "Fun Projects" section (in the root site) may also link apps —
 keep that in mind if a change there is warranted.
 
 ## Current /fun/ apps
-`portfoliofitgame` · `capitals` · `nomoi` · `rooks` · `sudoku` · `snake` · `ms` ·
-`ms-old` · `mnsc_scraper-to-use-locally` (plus a redirect stub at `fun/ms2/`)
+`lit` · `portfoliofitgame` · `capitals` · `nomoi` · `rooks` · `sudoku` · `snake` ·
+`ms` · `ms-old` · `mnsc_scraper-to-use-locally` (plus a redirect stub at `fun/ms2/`)
+
+## `/fun/lit` — "The Lit", the multi-journal research paper browser
+`fun/lit/` extends the `/fun/ms/` architecture to eight sources: Management
+Science (with editors/areas, exactly like `/fun/ms/`), Operations Research,
+Marketing Science, M&SOM, Information Systems Research, POM, PNAS (five topic
+sections only), and the ACM EC conference (1999–present, incl. each year's
+accepted-papers list from `ec<YY>.sigecom.org` with arXiv/SSRN/OA PDF links via
+OpenAlex/DBLP/Semantic Scholar). Data is static JSON in `fun/lit/data/` (one
+`papers-<src>.json` per source + `sources.json` manifest), built by
+`fun/lit/_scraper/build-data.mjs` and refreshed daily by
+`.github/workflows/lit-update-data.yml` (same self-healing live-site check as
+the ms workflow). **PNAS caveat:** the DOI→section index
+`fun/lit/data/_pnas-concepts.json` must be (re)built occasionally by running
+`fun/lit/_scraper/pnas-concepts-local.mjs` on a personal machine, because
+pnas.org's search is Cloudflare-blocked for cloud IPs. **ISR/MkSc caveat:**
+likewise, ISR Senior/Associate Editor and Marketing Science Senior Editor
+names (`fun/lit/data/_informs-editors.json`) come from
+`fun/lit/_scraper/informs-editors-local.mjs` run locally (pubsonline blocks
+cloud IPs too). Editors/Areas UI shows only when Management Science is in
+scope; SE/AE filters show when ISR/MkSc are selected. See
+`fun/lit/_HOW-IT-WORKS.md`.
 
 ## `/fun/ms` — the Google-free Management Science browser
 `fun/ms/` is the Management Science paper browser. It uses **no Google Sheets**:
@@ -90,6 +111,16 @@ High-Variability walk with the peak pinned to $1. **No data is collected or
 transmitted.** The plot is drawn as inline SVG. To change behavior, edit the
 constants near the top of the `<script>` (`FEE`, `PART1_ROUNDS`, `TOTAL_ROUNDS`,
 `PART2_PREREVEAL`) or the treatment logic in `genPrizesRaw`.
+
+**Currently in QUICK-TEST MODE:** the consent/Prolific-ID page and the
+comprehension-checked instruction pages are commented out (both the HTML
+sections and their JS wiring, all marked `RESTORE WITH CONSENT/INSTRUCTIONS`
+in `lab/search/index.html`); the page instead opens on a minimal start screen
+with a treatment picker, like `/lab/jagged`. The game screen also carries a
+test-only **"Show hidden prizes"** checkbox (default on) that draws the true
+prize map as a red line on the plot — participants must never see it. To
+restore the full study flow, follow the numbered steps in the comment on the
+consent section and remove the checkbox and its `renderPlot` block.
 
 ## `/lab/jagged` — self-contained "Trust the AI?" jagged-intelligence game
 
