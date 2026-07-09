@@ -38,6 +38,12 @@
     .field input[type=text], .field input[type=password], .field textarea{width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:8px; font-size:15px; font-family:inherit;}
     .field textarea{min-height:120px; resize:vertical; line-height:1.45;}
     .field .hint{font-size:12.5px; color:var(--muted); margin-top:4px;}
+    .help{display:inline-block; width:15px; height:15px; line-height:14px; text-align:center; font-size:11px; font-weight:700;
+      color:var(--muted); border:1px solid var(--line); border-radius:50%; cursor:help; vertical-align:middle;}
+    .field[title]:hover .help, h3[title]:hover .help{color:var(--blue); border-color:var(--blue);}
+    .howto{border:1px solid var(--line); border-radius:10px; background:var(--panel); padding:12px 14px; margin:8px 0 16px; font-size:13.5px;}
+    .howto summary{cursor:pointer; font-weight:600;}
+    .howto ol{margin:8px 0 0; padding-left:20px;} .howto li{margin:4px 0;}
     .row2{display:flex; gap:10px; flex-wrap:wrap;} .row2 .field{flex:1; min-width:150px;}
     .seg{display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; flex-wrap:wrap;}
     .seg button{border:none; background:#fff; padding:8px 13px; font-size:13.5px; cursor:pointer; color:var(--ink);}
@@ -100,9 +106,9 @@
     <div class="brand">Search for Knowledge <span class="muted" style="font-weight:400; font-size:14px;">· Admin</span></div>
     <div class="nav-right">
       <span class="muted small" id="who"></span>
-      <button class="icon-btn" id="btn-theme" title="Toggle dark / light">☾</button>
-      <button class="btn btn-ghost btn-sm" id="btn-analytics-nav" style="display:none;">Data Analytics</button>
-      <button class="btn btn-ghost btn-sm" id="btn-signout" style="display:none;">Sign out</button>
+      <button class="icon-btn" id="btn-theme" title="Switch between light and dark appearance">☾</button>
+      <button class="btn btn-ghost btn-sm" id="btn-analytics-nav" style="display:none;" title="Jump to the Analytics tab (Arm A vs Arm B results)">Data Analytics</button>
+      <button class="btn btn-ghost btn-sm" id="btn-signout" style="display:none;" title="Sign out of the admin panel">Sign out</button>
     </div>
   </div>
 
@@ -124,13 +130,23 @@
     <section class="screen" id="a-dash">
       <div id="dash-banner"></div>
       <div class="tabs">
-        <button class="tab on" data-tab="sessions">Sessions</button>
-        <button class="tab" data-tab="data">Data</button>
-        <button class="tab" data-tab="analytics">Analytics</button>
+        <button class="tab on" data-tab="sessions" title="Create and manage sessions (runs of the study), and edit what participants see">Sessions</button>
+        <button class="tab" data-tab="data" title="Raw collected data per participant, with CSV/JSON export">Data</button>
+        <button class="tab" data-tab="analytics" title="Summary results comparing Arm A (human only) vs Arm B (AI assisted)">Analytics</button>
       </div>
 
       <!-- SESSIONS TAB: create/edit (left) + active/completed (right) -->
       <div class="tab-panel" id="tab-sessions">
+        <details class="howto">
+          <summary>How this works — click to expand</summary>
+          <ol>
+            <li><b>Create a session</b> (left): give it a name + code, choose the arm assignment and how many rounds participants play, and optionally reword any page. Hover the <span class="help">?</span> on any field for help.</li>
+            <li><b>Save.</b> You'll get two participant links (<code class="k">?code=…&amp;arm=A</code> and <code class="k">…&amp;arm=B</code>) and a <b>▶ Test</b> link that lets you play it yourself (intro skipped, no data saved).</li>
+            <li><b>Share</b> the appropriate link with participants (via Prolific). Their data is tagged with this session's code.</li>
+            <li>Watch progress under <b>Active sessions</b> (right); <b>mark completed</b> when done. See results on the <b>Data</b> and <b>Analytics</b> tabs.</li>
+          </ol>
+          <p class="small muted" style="margin:8px 0 0;">The game: each participant searches a hidden line of 100 prizes, paying 5¢ to reveal any position, and keeps the best prize minus reveal costs. Arm B additionally gets a free AI assistant that estimates prizes between positions 30–70.</p>
+        </details>
         <div class="cols">
           <!-- LEFT: create / edit form -->
           <div class="card">
@@ -138,34 +154,53 @@
             <p class="muted small">A session is one run of the study with its own code, settings, and page text. Share its launch link with participants; data is grouped by session.</p>
 
             <div class="row2">
-              <div class="field"><label>Session name</label><input type="text" id="f-name" placeholder="e.g. Prolific wave 1" /></div>
-              <div class="field"><label>Session code</label>
-                <div class="code-row"><input type="text" id="f-code" placeholder="AUTO or custom (A–Z, 0–9)" /><button class="btn btn-ghost btn-sm" id="btn-gencode">Auto</button></div>
+              <div class="field" title="A label for this run of the study, shown only to you (in the sessions list and data). Participants never see it.">
+                <label>Session name <span class="help">?</span></label><input type="text" id="f-name" placeholder="e.g. Prolific wave 1" /></div>
+              <div class="field" title="The code that ties participants and their data to THIS session. It goes in the participant link as ?code=CODE. Click Auto to generate one, or type your own (capital letters + digits).">
+                <label>Session code <span class="help">?</span></label>
+                <div class="code-row"><input type="text" id="f-code" placeholder="AUTO or custom (A–Z, 0–9)" /><button class="btn btn-ghost btn-sm" id="btn-gencode" title="Generate a random unused code">Auto</button></div>
                 <div class="hint">Single word, capital letters + digits. Used in the participant link.</div>
               </div>
             </div>
 
-            <div class="field"><label>Arm assignment</label>
+            <div class="field" title="Which arm (condition) each participant is placed in. Arm A = human searches alone. Arm B = human + a free AI assistant that estimates prizes inside positions 30–70. 'From link' honours ?arm=A/?arm=B in the URL (else random); Force A/B puts everyone in one arm; Random splits 50/50.">
+              <label>Arm assignment <span class="help">?</span></label>
               <span class="seg" id="seg-arm">
-                <button data-v="url" class="on">From link (?arm)</button>
-                <button data-v="A">Force A (human only)</button>
-                <button data-v="B">Force B (AI assisted)</button>
-                <button data-v="random">Random 50/50</button>
+                <button data-v="url" class="on" title="Use ?arm=A / ?arm=B from the link; fall back to random">From link (?arm)</button>
+                <button data-v="A" title="Everyone searches alone, no AI">Force A (human only)</button>
+                <button data-v="B" title="Everyone gets the AI assistant">Force B (AI assisted)</button>
+                <button data-v="random" title="Randomly assign each participant to A or B">Random 50/50</button>
               </span>
             </div>
-            <div class="row2">
-              <div class="field"><label>Completion code (shared)</label><input type="text" id="f-code-shared" placeholder="e.g. C1A2B3C4" /></div>
-              <div class="field"><label>Arm A code (optional)</label><input type="text" id="f-codeA" placeholder="overrides shared" /></div>
-              <div class="field"><label>Arm B code (optional)</label><input type="text" id="f-codeB" placeholder="overrides shared" /></div>
-            </div>
-            <div class="field"><label>Extra logging endpoint URL (optional)</label><input type="text" id="f-endpoint" placeholder="https://script.google.com/…/exec" /></div>
 
-            <h3 style="margin-top:16px;">Page text &amp; content</h3>
-            <p class="muted small">Edit what participants see on each page. Leave a box blank to use the built-in default. Use <code class="k">**bold**</code> and blank lines for paragraphs.</p>
+            <div class="field" title="How many rounds each participant plays. Real rounds are paid-eligible; a subset of them (Paid rounds) is drawn at random at the end and paid as a bonus. The practice round is unpaid and can be turned off.">
+              <label>Rounds each participant plays <span class="help">?</span></label>
+              <div class="row2">
+                <div class="field" title="Number of real (paid-eligible) rounds each participant plays. Default 10. Each round is a fresh hidden landscape.">
+                  <label>Real rounds</label><input type="number" id="f-ntasks" min="1" max="120" value="10" /></div>
+                <div class="field" title="How many of the real rounds are drawn at random at the end and paid to the participant as a bonus. Must be ≤ real rounds. Default 2.">
+                  <label>Paid rounds (drawn at end)</label><input type="number" id="f-paid" min="0" max="120" value="2" /></div>
+                <div class="field" title="Whether participants play one unpaid practice round before the real rounds.">
+                  <label>Practice round</label>
+                  <span class="seg" id="seg-practice"><button data-v="1" class="on">On</button><button data-v="0">Off</button></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="row2">
+              <div class="field" title="The Prolific completion code participants copy back at the end to be paid. Used for both arms unless you set an arm-specific code below.">
+                <label>Completion code (shared) <span class="help">?</span></label><input type="text" id="f-code-shared" placeholder="e.g. C1A2B3C4" /></div>
+              <div class="field" title="Optional: a completion code shown only to Arm A participants (overrides the shared code). Use this if each arm is a separate Prolific study.">
+                <label>Arm A code (optional)</label><input type="text" id="f-codeA" placeholder="overrides shared" /></div>
+              <div class="field" title="Optional: a completion code shown only to Arm B participants (overrides the shared code).">
+                <label>Arm B code (optional)</label><input type="text" id="f-codeB" placeholder="overrides shared" /></div>
+            </div>
+            <h3 style="margin-top:16px;" title="Override the wording participants see on each screen. Leave a box blank to keep the built-in text. Tokens like {nTasks}, {paidTasks}, {fee} and {rounds} are filled in automatically.">Page text &amp; content <span class="help">?</span></h3>
+            <p class="muted small">Edit what participants see on each page. Leave a box blank to use the built-in default. Use <code class="k">**bold**</code>, blank lines for paragraphs, and tokens <code class="k">{nTasks}</code>, <code class="k">{paidTasks}</code>, <code class="k">{fee}</code>, <code class="k">{rounds}</code>.</p>
             <div id="content-editors"><!-- accordions injected by admin.js --></div>
 
             <div class="actions3">
-              <button class="btn btn-green" id="btn-save">Create session</button>
+              <button class="btn btn-green" id="btn-save" title="Save this session to the database (creates it, or saves your edits)">Create session</button>
               <button class="btn btn-ghost btn-sm" id="btn-cancel" style="display:none;">Cancel edit</button>
               <button class="btn btn-ghost btn-sm" id="btn-makedefault" title="Save these settings as the starting point for new sessions">Make this the default</button>
               <button class="btn btn-ghost btn-sm" id="btn-restore" title="Reset the form to the built-in defaults">Restore built-in default</button>

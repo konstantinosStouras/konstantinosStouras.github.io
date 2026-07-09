@@ -146,8 +146,10 @@ The **admin panel** at **`/lab/search-v2/admin/`** lets you, from any browser
   right column lists **Active** and **Completed** sessions (open / mark
   completed / reopen / delete).
 - **control the conditions** — per session: the **arm assignment mode** (from the
-  `?arm` link · force A · force B · random 50/50), the Prolific **completion code**
-  (shared, or a separate code per arm), and an optional Apps-Script endpoint.
+  `?arm` link · force A · force B · random 50/50), the **number of rounds** each
+  participant plays (real rounds, paid rounds drawn at the end, and whether a
+  practice round is shown), and the Prolific **completion code** (shared, or a
+  separate code per arm). Every field has a hover tooltip.
 - **edit every participant page** — consent, instructions (both arms + the Arm-B
   addendum), the finish page, and the study-closed page. Blank = built-in default;
   `**bold**` and blank lines are supported. **Save**, **Make this the default**
