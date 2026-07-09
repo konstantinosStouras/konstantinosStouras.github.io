@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Search for Knowledge</title>
+  <meta name="description" content="A short online decision experiment: search a hidden line of prizes for the best value." />
+  <meta name="robots" content="noindex,nofollow" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232780e3'/%3E%3Cpolyline points='4,22 12,10 18,18 24,6 28,14' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="nav">
+    <div class="brand">Search for Knowledge</div>
+    <div class="nav-right">
+      <span class="muted small" id="nav-arm"></span>
+      <button class="btn btn-ghost btn-sm" id="btn-restart" style="display:none;">&#8635; Restart</button>
+    </div>
+  </div>
+
+  <div class="wrap">
+
+    <!-- ============ LOADING ============ -->
+    <section class="screen active" id="s-loading">
+      <p class="muted center" style="margin-top:40px;">Loading&hellip;</p>
+    </section>
+
+    <!-- ============ CONSENT ============ -->
+    <section class="screen" id="s-consent">
+      <h1>Before you begin</h1>
+      <div class="card">
+        <p><b>What this is.</b> This is a short decision-making study. You will play a
+        simple game in which you search a hidden line of positions for the highest value.
+        The whole study takes about <b>15 minutes</b>.</p>
+        <p><b>Payment.</b> You receive the base payment for participating. In addition,
+        two rounds of the game are chosen at random at the end and paid to you as a
+        <b>bonus</b>, based on how well you did in those rounds.</p>
+        <p><b>Anonymity.</b> We record only your choices in the game (which positions you
+        reveal, when you stop, and your answers to a few questions). We do not collect any
+        personally identifying information beyond the anonymous IDs your recruitment
+        platform provides. Your data are used only for research.</p>
+        <p><b>Voluntary.</b> Participation is voluntary and you may stop at any time by
+        closing the window.</p>
+        <label class="consent-line">
+          <input type="checkbox" id="consent-box" />
+          <span>I have read the above and I agree to take part.</span>
+        </label>
+        <div class="right" style="margin-top:14px;">
+          <button class="btn btn-green" id="btn-consent" disabled>Continue</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ INSTRUCTIONS ============ -->
+    <section class="screen" id="s-instructions">
+      <h1>Instructions</h1>
+      <div class="card" id="instructions-body"><!-- filled by app.js (arm-specific) --></div>
+      <div class="right"><button class="btn btn-green" id="btn-instructions">Continue to a quick check</button></div>
+    </section>
+
+    <!-- ============ QUIZ ============ -->
+    <section class="screen" id="s-quiz">
+      <h1>Quick check</h1>
+      <p class="muted">Please answer these to make sure the instructions are clear. You
+      need all answers correct to continue.</p>
+      <div id="quiz-body"><!-- filled by app.js --></div>
+      <div class="feedback bad" id="quiz-feedback" style="display:none;">Not quite, re-read the instructions.</div>
+      <div class="right" style="margin-top:14px;"><button class="btn btn-green" id="btn-quiz">Submit answers</button></div>
+    </section>
+
+    <!-- ============ ROUND ============ -->
+    <section class="screen" id="s-round">
+      <div class="round-head">
+        <div class="round-label" id="round-label">Practice</div>
+        <div class="counters">
+          <div class="counter"><span class="c-label">Reveals</span><span class="c-val" id="c-reveals">0</span></div>
+          <div class="counter"><span class="c-label">Cost</span><span class="c-val" id="c-cost">0&cent;</span></div>
+          <div class="counter"><span class="c-label">Best so far</span><span class="c-val" id="c-best">&mdash;</span></div>
+          <div class="counter"><span class="c-label">Net so far</span><span class="c-val" id="c-net">0&cent;</span></div>
+        </div>
+      </div>
+
+      <div class="round-grid" id="round-grid">
+        <div class="chart-col">
+          <div class="plot-wrap"><div id="plot"></div></div>
+          <div class="legend" id="legend"><!-- filled by app.js --></div>
+
+          <div class="controls">
+            <div class="pos-picker">
+              <span class="small muted">Position</span>
+              <button class="btn btn-ghost btn-sm arrow" id="btn-left" title="Previous position">&#8592;</button>
+              <input type="number" id="pos-input" min="1" max="100" value="50" />
+              <button class="btn btn-ghost btn-sm arrow" id="btn-right" title="Next position">&#8594;</button>
+            </div>
+            <div class="action-btns">
+              <button class="btn btn-blue" id="btn-reveal">Reveal (costs 5&cent;)</button>
+              <button class="btn btn-amber" id="btn-stop">Stop this round</button>
+            </div>
+          </div>
+          <div class="note warn" id="warn-negative" style="display:none;">Your net for this round is now 0 or negative.</div>
+        </div>
+
+        <div class="aux-col" id="aux-panel"><!-- side panel (Arm B only) injected by app.js --></div>
+      </div>
+    </section>
+
+    <!-- ============ INTERSTITIAL ============ -->
+    <section class="screen" id="s-interstitial">
+      <div class="card center" style="max-width:520px; margin:40px auto;">
+        <h3 id="inter-title">Round complete</h3>
+        <div id="inter-body"></div>
+        <div style="margin-top:18px;"><button class="btn btn-green" id="btn-continue">Continue</button></div>
+      </div>
+    </section>
+
+    <!-- ============ FINISH ============ -->
+    <section class="screen" id="s-finish">
+      <h1>All done &mdash; thank you!</h1>
+      <div class="card">
+        <div id="finish-body"></div>
+        <div class="code-box">
+          <div class="small muted">Your completion code</div>
+          <div class="code" id="completion-code">SET-ME</div>
+          <div class="small muted">Copy this code back into the recruitment platform to be paid.</div>
+        </div>
+        <div class="note" id="upload-note" style="display:none; margin-top:14px;"></div>
+        <div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="btn btn-ghost btn-sm" id="btn-dl-json">Download my session data (JSON)</button>
+          <button class="btn btn-ghost btn-sm" id="btn-dl-csv">Download my session data (CSV)</button>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- stop-confirm modal -->
+  <div class="overlay" id="ov-stop">
+    <div class="modal">
+      <h3>Stop this round?</h3>
+      <p id="stop-msg">You will end this round with a net of X cents. Stop?</p>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" id="btn-stop-cancel">Keep going</button>
+        <button class="btn btn-amber" id="btn-stop-ok">Yes, stop</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="logger.js"></script>
+  <script src="chart.js"></script>
+  <!-- The Arm-B side-panel module is loaded by app.js at runtime only in Arm B,
+       so an Arm-A document contains no reference to it (strict arm isolation). -->
+  <script src="app.js"></script>
+</body>
+</html>
