@@ -429,17 +429,17 @@
         <div id="chipsJournal" class="chips"></div>
       </div>
       <div class="filter-group">
-        <label title="Some authors may appear under different name variants. ORCID-based disambiguation is not yet available for all authors.">Search Authors &#9432;</label>
+        <label title='Some authors may appear under different name variants. ORCID-based disambiguation is not yet available for all authors. Tip: wrap a term in double quotes for an exact-word match.'>Search Authors &#9432;</label>
         <input id="filterAuthors" name="ms-filter-author" placeholder="Author..." type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('author','filterAuthors');event.preventDefault();}">
         <div id="chipsAuthor" class="chips"></div>
       </div>
       <div class="filter-group">
-        <label>Search Title</label>
-        <input id="filterSearch" name="ms-filter-title" placeholder="Paper title..." type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('title','filterSearch');event.preventDefault();}">
+        <label title='Substring match by default (e.g. "market" also finds "marketing"). Wrap a word in double quotes — "search" — to match that exact word only, so it will not match inside "research".'>Search Title &#9432;</label>
+        <input id="filterSearch" name="ms-filter-title" placeholder='Paper title, or "exact word"' type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('title','filterSearch');event.preventDefault();}">
         <div id="chipsTitle" class="chips"></div>
       </div>
       <div class="filter-group">
-        <label title="Affiliation names are not standardized across papers. Duplicates may exist despite ongoing deduplication efforts.">Search Affiliations &#9432;</label>
+        <label title='Affiliation names are not standardized across papers. Duplicates may exist despite ongoing deduplication efforts. Tip: wrap a term in double quotes for an exact-word match.'>Search Affiliations &#9432;</label>
         <input id="filterAffiliations" name="ms-filter-affiliation" placeholder="Affiliation..." type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore oninput="debounceAffSearch()" onkeydown="if(event.key==='Enter'){addTextChip('affiliation','filterAffiliations');event.preventDefault();}">
         <div id="chipsAffiliation" class="chips"></div>
       </div>
@@ -1562,15 +1562,15 @@ function updateDropdownOptions() {
       if (excludeType !== 'ae' && sel.ae.size > 0 && !(p._ae || []).some(function(e) { return sel.ae.has(e); })) return false;
       if (excludeType !== 'year' && sel.year.size > 0 && !sel.year.has(p['Year'])) return false;
       var titleText = (p['Title']||'').toLowerCase();
-      if (search && !titleText.includes(search)) return false;
-      for (var t of sel.title) { if (!titleText.includes(t)) return false; }
+      if (search && !textMatch(titleText, search)) return false;
+      for (var t of sel.title) { if (!textMatch(titleText, t)) return false; }
       var authText = (p['Authors']||'').toLowerCase();
-      if (searchAuth && !authText.includes(searchAuth)) return false;
-      for (var a of sel.author) { if (!authText.includes(a)) return false; }
+      if (searchAuth && !textMatch(authText, searchAuth)) return false;
+      for (var a of sel.author) { if (!textMatch(authText, a)) return false; }
       for (var lbl in sel.authorIdentity) { var vs = sel.authorIdentity[lbl]; if (!vs.some(function(v){ return authText.includes(v); })) return false; }
       var affText = (p['Affiliations']||'').toLowerCase();
-      if (searchAff && !affText.includes(searchAff)) return false;
-      for (var af of sel.affiliation) { if (!affText.includes(af)) return false; }
+      if (searchAff && !textMatch(affText, searchAff)) return false;
+      for (var af of sel.affiliation) { if (!textMatch(affText, af)) return false; }
       return true;
     });
   }
@@ -1698,22 +1698,23 @@ function applyFilters() {
     if (sel.ae.size > 0 && !(p._ae || []).some(e => sel.ae.has(e))) return false;
     if (sel.year.size > 0 && !sel.year.has(p['Year'])) return false;
 
-    // Title: live typed text AND all chips must match (AND logic)
+    // Title: live typed text AND all chips must match (AND logic). Substring by
+    // default; a "quoted" query matches that exact word only (see textMatch).
     const titleText = (p['Title']||'').toLowerCase();
-    if (search && !titleText.includes(search)) return false;
-    for (const t of sel.title) { if (!titleText.includes(t)) return false; }
+    if (search && !textMatch(titleText, search)) return false;
+    for (const t of sel.title) { if (!textMatch(titleText, t)) return false; }
 
     // Authors: live typed text, substring chips, and ORCID-identity chips (each
     // identity matches any of the person's name variants).
     const authText = (p['Authors']||'').toLowerCase();
-    if (searchAuth && !authText.includes(searchAuth)) return false;
-    for (const a of sel.author) { if (!authText.includes(a)) return false; }
+    if (searchAuth && !textMatch(authText, searchAuth)) return false;
+    for (const a of sel.author) { if (!textMatch(authText, a)) return false; }
     for (const lbl in sel.authorIdentity) { const vs = sel.authorIdentity[lbl]; if (!vs.some(v => authText.includes(v))) return false; }
 
     // Affiliations: live typed text AND all chips must match
     const affText = (p['Affiliations']||'').toLowerCase();
-    if (searchAff && !affText.includes(searchAff)) return false;
-    for (const af of sel.affiliation) { if (!affText.includes(af)) return false; }
+    if (searchAff && !textMatch(affText, searchAff)) return false;
+    for (const af of sel.affiliation) { if (!textMatch(affText, af)) return false; }
 
     return true;
   });
@@ -2124,6 +2125,21 @@ function goPage(n) { currentPage = n; renderPage(); window.scrollTo({ top: 280, 
 
 function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 function escAttr(s) { return (s||'').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+
+// Free-text matching for the Title / Authors / Affiliations search boxes.
+// Default is substring, so "market" still finds "marketing". Wrap the query in
+// double quotes — "search" — to require that exact word/phrase (word-boundary
+// match), so it no longer matches inside "research". `query` is already trimmed
+// and lowercased by the callers; `haystack` is the lowercased field text.
+function escRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+function textMatch(haystack, query) {
+  if (!query) return true;
+  var m = query.match(/^"(.*)"$/);
+  if (!m) return haystack.indexOf(query) !== -1;   // unquoted → substring match
+  var phrase = m[1].trim();
+  if (!phrase) return true;                         // empty quotes → ignore
+  return new RegExp('\\b' + escRegex(phrase) + '\\b').test(haystack);
+}
 // URL destined for an href attribute: http(s) only (third-party metadata must
 // not smuggle javascript:), quotes percent-encoded so the attribute can't break.
 function safeUrl(u) {
