@@ -138,6 +138,9 @@
   .paper-card:last-child { border-bottom: 1px solid var(--border); border-radius: 0 0 var(--radius) var(--radius); }
   .paper-card:only-child { border-bottom: 1px solid var(--border); border-radius: var(--radius); }
   .paper-card:hover { background: var(--navy-light); }
+  /* "Show more" row: visually closes the card list it sits under */
+  .show-more-wrap { background: var(--white); border: 1px solid var(--border); border-top: 1px dashed var(--border); border-radius: 0 0 var(--radius) var(--radius); padding: 16px; text-align: center; }
+  .show-more-wrap .btn { height: auto; padding: 11px 22px; }
 
   .paper-title { font-family: 'Playfair Display', serif; font-size: 18px; font-weight: 400; color: var(--navy); margin-bottom: 6px; line-height: 1.35; overflow-wrap: anywhere; }
   .paper-title a { color: inherit; text-decoration: none; }
@@ -1871,7 +1874,7 @@ function renderRecent() {
     return;
   }
 
-  list.innerHTML = recent.map(function(p, idx) { return paperCardHTML(p, idx, true); }).join('');
+  renderCardList(list, recent, true);
 }
 
 function filterByEditor(name) {
@@ -1882,32 +1885,59 @@ function filterByArea(name) {
   addChipFromCard('area', name);
 }
 
-function renderPage() {
-  /* PAGINATION DISABLED — showing all results on one page
-  const totalPages = Math.ceil(filtered.length / PER_PAGE);
-  const start = (currentPage - 1) * PER_PAGE;
-  const page = filtered.slice(start, start + PER_PAGE);
-  */
-  const start = 0;
-  const page = filtered;
+// ── Incremental card rendering ────────────────────────────────────────────
+// Building a card for every result at once froze phones and tablets on big
+// selections (Management Science alone is 12k+ cards). Only the first chunk
+// is rendered; a "Show more" button appends the rest in slices. Card indices
+// stay equal to their position in `filtered`, so the Abstract/BibTeX toggles
+// keep resolving correctly on appended cards.
+const RENDER_FIRST = 250;
+const RENDER_MORE = 500;
 
+function showMoreButtonHTML(remaining) {
+  return '<div id="showMoreWrap" class="show-more-wrap"><button class="btn btn-secondary" onclick="showMoreCards()">Show ' +
+    Math.min(RENDER_MORE, remaining).toLocaleString() + ' more (' + remaining.toLocaleString() + ' remaining)</button></div>';
+}
+
+function renderCardList(listEl, rows, showAdded) {
+  window._cardRows = rows;
+  window._cardShowAdded = !!showAdded;
+  var first = rows.slice(0, RENDER_FIRST);
+  var html = first.map(function(p, i) { return paperCardHTML(p, i, showAdded); }).join('');
+  if (rows.length > first.length) html += showMoreButtonHTML(rows.length - first.length);
+  listEl.innerHTML = html;
+  window._renderedCount = first.length;
+}
+
+function showMoreCards() {
+  var rows = window._cardRows || [];
+  var start = window._renderedCount || 0;
+  var wrap = document.getElementById('showMoreWrap');
+  if (!wrap) return;
+  var chunk = rows.slice(start, start + RENDER_MORE);
+  wrap.insertAdjacentHTML('beforebegin',
+    chunk.map(function(p, i) { return paperCardHTML(p, start + i, window._cardShowAdded); }).join(''));
+  window._renderedCount = start + chunk.length;
+  var remaining = rows.length - window._renderedCount;
+  if (remaining <= 0) wrap.remove();
+  else wrap.querySelector('button').textContent =
+    'Show ' + Math.min(RENDER_MORE, remaining).toLocaleString() + ' more (' + remaining.toLocaleString() + ' remaining)';
+  if (typeof acctDecorate === 'function') acctDecorate();
+}
+
+function renderPage() {
   const countEl = document.getElementById('resultsCount');
   countEl.innerHTML = filtered.length === allPapers.length
     ? `<strong>${allPapers.length.toLocaleString()}</strong> papers`
     : `<strong>${filtered.length.toLocaleString()}</strong> of ${allPapers.length.toLocaleString()} papers`;
 
   const list = document.getElementById('papersList');
-  if (!page.length) {
+  if (!filtered.length) {
     list.innerHTML = '<div class="empty-state"><h3>No papers found</h3><p>Try adjusting your filters.</p></div>';
     return;
   }
 
-  list.innerHTML = page.map((p, idx) => paperCardHTML(p, start + idx, false)).join('');
-
-  /* PAGINATION DISABLED
-  document.getElementById('pagination').style.display = totalPages > 1 ? '' : 'none';
-  renderPag(totalPages);
-  */
+  renderCardList(list, filtered, false);
 }
 
 // Clickable source tag(s) for a paper: its journal, or one tag per PNAS
