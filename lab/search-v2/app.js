@@ -106,6 +106,10 @@
   // ======================================================================
   //  BOOT
   // ======================================================================
+  // The participant's entry code (their session id), persisted for resume. This
+  // is distinct from SESSION_CODE (the admin "wave" code from ?code=).
+  var ENTRY_KEY = 'searchv2:entrycode';
+
   function boot() {
     var pr = params();
     DEBUG = (pr.debug === '1' && pr.key === CFG.DEBUG_KEY);
@@ -116,14 +120,48 @@
     if (DEBUG && pr.endpoint) CFG.ENDPOINT_URL = pr.endpoint;
     SESSION_CODE = pr.code || null; // admin "session" (wave) code from the launch link
 
-    // stable session id (Prolific SESSION_ID if given, else persisted uuid).
-    // Preview uses a throwaway id so it never resumes/pollutes a real session.
-    var session = PREVIEW ? ('preview-' + (pr.code || 'x')) : (pr.SESSION_ID || localStorage.getItem('searchv2:sid'));
-    if (!session) {
-      session = (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
-        : 'sid-' + Date.now() + '-' + Math.floor(Math.random() * 1e9);
-      localStorage.setItem('searchv2:sid', session);
+    // Admin preview uses a throwaway id (never resumes/pollutes a real session)
+    // and bypasses the code gate — the admin is testing.
+    if (PREVIEW) { startSession(pr, 'preview-' + (pr.code || 'x')); return; }
+
+    // A session code is REQUIRED to play. It comes from the study link's
+    // SESSION_ID (Prolific fills this in automatically) or from a code the
+    // participant entered here earlier (persisted). We NEVER invent one — an
+    // empty landing shows the code gate and cannot start the game. Debug uses a
+    // fixed code so local testing needs no gate.
+    var code = ((pr.SESSION_ID || '').trim()) || ((localStorage.getItem(ENTRY_KEY) || '').trim());
+    if (!code && DEBUG) code = 'debug';
+    if (!code) { showCodeGate(pr); return; }
+
+    startSession(pr, code);
+  }
+
+  // Gate: ask for a session code and refuse to start without one. This is the
+  // only path when a participant arrives with no code in the URL and none saved.
+  function showCodeGate(pr) {
+    var input = $('code-input'), btn = $('btn-code'), fb = $('code-feedback');
+    function sync() { btn.disabled = !input.value.trim(); if (input.value.trim()) fb.style.display = 'none'; }
+    function submit() {
+      var code = input.value.trim();
+      if (!code) { fb.style.display = 'block'; return; }
+      startSession(pr, code);
     }
+    input.value = '';
+    input.addEventListener('input', sync);
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
+    btn.addEventListener('click', submit);
+    sync();
+    show('s-code');
+    try { input.focus(); } catch (e) {}
+  }
+
+  // Start (or resume) the session identified by `session` (the entry code, or a
+  // throwaway id in preview). Reached only once a code exists (URL, storage, or
+  // the gate) — or immediately in preview.
+  function startSession(pr, session) {
+    // Persist the entry code so a refresh resumes the same session (not in
+    // preview, whose id is a throwaway).
+    if (!PREVIEW) { try { localStorage.setItem(ENTRY_KEY, session); } catch (e) {} }
 
     // load or init state (preview always starts fresh)
     var saved = null;
@@ -133,6 +171,10 @@
     S.session = session;
     S.pid = pr.PROLIFIC_PID || S.pid || null;
     S.study = pr.STUDY_ID || S.study || null;
+
+    // Reveal the log-out control now that we are in a session (wired directly so
+    // it works even if the study data never loads). Not in preview (throwaway).
+    if (!PREVIEW) { var lo = $('btn-logout'); if (lo) { lo.style.display = ''; lo.onclick = logout; } }
 
     // If Firebase is configured, load the admin settings first: a specific
     // session (wave) when ?code= is present, otherwise the legacy config/study.
@@ -144,6 +186,22 @@
     } else {
       finishBoot(pr);
     }
+  }
+
+  // Log out: erase every trace of this study on this device (state, event log,
+  // sync markers, saved entry code, legacy ids) and drop the URL params (incl.
+  // SESSION_ID) so the reload lands cleanly on the code gate.
+  function logout() {
+    if (!confirm('Log out and clear this study on this device? Your progress on this device will be erased.')) return;
+    try {
+      var kill = [];
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf('searchv2:') === 0) kill.push(k);
+      }
+      for (var j = 0; j < kill.length; j++) localStorage.removeItem(kill[j]);
+    } catch (e) {}
+    location.href = location.pathname;
   }
 
   // Apply a config/study doc (legacy single-study mode).
@@ -710,7 +768,13 @@
 
     $('btn-restart').addEventListener('click', function () {
       if (!confirm('Restart and erase this session? (debug only)')) return;
-      try { localStorage.removeItem(stateKey()); localStorage.removeItem('searchv2:log:' + S.session); localStorage.removeItem('searchv2:sid'); } catch (e) {}
+      try {
+        localStorage.removeItem(stateKey());
+        localStorage.removeItem('searchv2:log:' + S.session);
+        localStorage.removeItem('searchv2:log:' + S.session + ':lastT');
+        localStorage.removeItem('searchv2:sid');
+        localStorage.removeItem(ENTRY_KEY);
+      } catch (e) {}
       location.href = location.pathname + location.search;
     });
 

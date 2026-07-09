@@ -465,6 +465,49 @@ async function main() {
       await ctx.close();
     }
 
+    // ---------------- TEST 17: Session-code gate ----------------
+    // No SESSION_ID and no debug -> the app must NOT invent a session: it shows
+    // the code gate and cannot reach consent or the round. A typed code proceeds
+    // (and persists across a refresh); Log out clears it and returns to the gate.
+    console.log('\nTest 17 · Session-code gate (no code → no play; code → play; log out)');
+    {
+      const ctx = await newCtx(browser);
+      const page = await ctx.newPage();
+      await page.goto(APP + '?arm=A', { waitUntil: 'networkidle' });
+      await page.waitForSelector('#s-code.active', { timeout: 8000 });
+      ok('no session code shows the code gate', await page.isVisible('#s-code'));
+      ok('code gate hides the consent screen', !(await page.isVisible('#s-consent')));
+      ok('code gate hides the round', !(await page.isVisible('#s-round')));
+      ok('Continue is disabled with an empty code', await page.locator('#btn-code').isDisabled());
+      ok('log-out control is hidden at the gate', !(await page.isVisible('#btn-logout')));
+      // typing a code enables Continue and proceeds to consent
+      await page.fill('#code-input', 'MYCODE1');
+      await page.dispatchEvent('#code-input', 'input');
+      ok('Continue enables once a code is typed', !(await page.locator('#btn-code').isDisabled()));
+      await page.click('#btn-code');
+      await page.waitForSelector('#s-consent.active', { timeout: 8000 });
+      ok('entering a code proceeds past the gate', await page.isVisible('#s-consent'));
+      ok('log-out control is visible once in a session', await page.isVisible('#btn-logout'));
+      ok('the typed code became the session id',
+        (await page.evaluate(() => window.Logger.getEvents()[0] && window.Logger.getEvents()[0].session)) === 'MYCODE1');
+      // a refresh resumes with the stored code (no re-gate)
+      await page.reload({ waitUntil: 'networkidle' });
+      await page.waitForSelector('#s-consent.active', { timeout: 8000 }).catch(() => {});
+      ok('refresh resumes with the stored code (no re-gate)',
+        (await page.isVisible('#s-consent')) && !(await page.isVisible('#s-code')));
+      // Log out clears everything and returns to the gate
+      page.once('dialog', d => d.accept());
+      await page.click('#btn-logout');
+      await page.waitForSelector('#s-code.active', { timeout: 8000 });
+      ok('log out returns to the code gate', await page.isVisible('#s-code'));
+      ok('log out cleared the stored code', await page.evaluate(() => !localStorage.getItem('searchv2:entrycode')));
+      ok('log out cleared all searchv2 keys', await page.evaluate(() => {
+        for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.indexOf('searchv2:') === 0) return false; }
+        return true;
+      }));
+      await ctx.close();
+    }
+
   } finally {
     await browser.close();
     server.kill('SIGKILL');
