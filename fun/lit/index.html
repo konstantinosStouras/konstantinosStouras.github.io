@@ -91,7 +91,7 @@
   .filters-inner { max-width: 1280px; margin: 0 auto; padding: 0 32px; }
   .filters-row { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
   .filter-group { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 170px; }
-  .filter-group label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); }
+  .filter-group label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .filter-group select, .filter-group input { padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 20px; color: var(--text); background: var(--white); transition: border-color 0.2s, box-shadow 0.2s; height: 50px; }
   .filter-group select { -webkit-appearance: none; -moz-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%235a6070' stroke-width='1.5' fill='none'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; cursor: pointer; display: none; }
   .filter-group select:focus, .filter-group input:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(0,48,135,0.1); }
@@ -448,7 +448,7 @@
         <div id="chipsYear" class="chips"></div>
       </div>
       <div class="filter-group" id="groupEditor" style="display:none" title="Editorial data is available for Management Science papers only.">
-        <label>Accepting Editor (Mgmt Science)</label>
+        <label>Accepting Editor (MS)</label>
         <div class="custom-select" id="csEditor" data-type="editor">
           <div class="custom-select-trigger" onclick="toggleDrop('csEditor')">All editors</div>
           <div class="custom-select-dropdown"><input class="custom-select-search" placeholder="Type to filter..." oninput="filterDrop('csEditor',this.value)"><div class="custom-select-items"></div></div>
@@ -456,7 +456,7 @@
         <div id="chipsEditor" class="chips"></div>
       </div>
       <div class="filter-group" id="groupArea" style="display:none" title="Editorial areas are available for Management Science papers only.">
-        <label>Area (Mgmt Science)</label>
+        <label>Area (MS)</label>
         <div class="custom-select" id="csArea" data-type="area">
           <div class="custom-select-trigger" onclick="toggleDrop('csArea')">All areas</div>
           <div class="custom-select-dropdown"><input class="custom-select-search" placeholder="Type to filter..." oninput="filterDrop('csArea',this.value)"><div class="custom-select-items"></div></div>
@@ -464,17 +464,17 @@
         <div id="chipsArea" class="chips"></div>
       </div>
       <div class="filter-group" id="groupSE" style="display:none" title="Senior Editors are extracted from the History line of Information Systems Research and Marketing Science papers, where available.">
-        <label>Senior Editor (ISR &amp; Mktg Sci)</label>
+        <label>Senior Editor</label>
         <div class="custom-select" id="csSE" data-type="se">
-          <div class="custom-select-trigger" onclick="toggleDrop('csSE')">All senior editors</div>
+          <div class="custom-select-trigger" onclick="toggleDrop('csSE')">All editors</div>
           <div class="custom-select-dropdown"><input class="custom-select-search" placeholder="Type to filter..." oninput="filterDrop('csSE',this.value)"><div class="custom-select-items"></div></div>
         </div>
         <div id="chipsSE" class="chips"></div>
       </div>
       <div class="filter-group" id="groupAE" style="display:none" title="Associate Editors are extracted from the History line of Information Systems Research papers, where available.">
-        <label>Associate Editor (ISR)</label>
+        <label>Associate Editor</label>
         <div class="custom-select" id="csAE" data-type="ae">
-          <div class="custom-select-trigger" onclick="toggleDrop('csAE')">All associate editors</div>
+          <div class="custom-select-trigger" onclick="toggleDrop('csAE')">All editors</div>
           <div class="custom-select-dropdown"><input class="custom-select-search" placeholder="Type to filter..." oninput="filterDrop('csAE',this.value)"><div class="custom-select-items"></div></div>
         </div>
         <div id="chipsAE" class="chips"></div>
