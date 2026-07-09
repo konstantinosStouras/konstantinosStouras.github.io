@@ -55,6 +55,47 @@ async function newCtx(browser) {
   return ctx;
 }
 
+// ---- in-memory Firebase SDK mock (for the CONFIGURED code paths) ----------
+// Lets us exercise admin login, session CRUD, join-by-code, preview, and content
+// overrides deterministically without a live Firebase project. State lives in
+// globalThis.__fb (per page); seed docs via globalThis.__fbSeed (addInitScript).
+const FB_MOCK_APP = `export function initializeApp(){ if(!globalThis.__fb) globalThis.__fb={user:null,listeners:[],docs:(globalThis.__fbSeed||{}),anonCount:0,addCount:0,writes:[]}; return {}; }`;
+const FB_MOCK_AUTH = `const S=()=>globalThis.__fb;
+function notify(){ S().listeners.slice().forEach(cb=>{try{cb(S().user)}catch(e){}}); }
+export function getAuth(){ return { get currentUser(){ return S().user; } }; }
+export function signInAnonymously(){ S().anonCount++; S().user={uid:'anon'+S().anonCount,email:null,isAnonymous:true}; notify(); return Promise.resolve({user:S().user}); }
+export function signInWithEmailAndPassword(a,email,pw){ if(pw==='bad') return Promise.reject({code:'auth/wrong-password'}); S().user={uid:'admin1',email:email,isAnonymous:false}; notify(); return Promise.resolve({user:S().user}); }
+export function onAuthStateChanged(a,cb){ S().listeners.push(cb); Promise.resolve().then(()=>cb(S().user)); return ()=>{}; }
+export function signOut(){ S().user=null; notify(); return Promise.resolve(); }`;
+const FB_MOCK_FS = `const S=()=>globalThis.__fb;
+export function getFirestore(){ return {}; }
+export function doc(db,col,id){ return { path: col+'/'+id }; }
+export function collection(db,name){ return { __col:name }; }
+export function where(f,op,v){ return { __w:[f,op,v] }; }
+export function orderBy(){ return { __o:1 }; }
+export function limit(){ return { __l:1 }; }
+export function query(col){ var c={ __col:col.__col, wheres:[] }; for(var i=1;i<arguments.length;i++){ var a=arguments[i]; if(a&&a.__w) c.wheres.push(a.__w); } return c; }
+export function getDoc(ref){ var d=S().docs[ref.path]; return Promise.resolve({ exists:()=>!!d, data:()=>d, id:(ref.path||'').split('/').pop() }); }
+export function setDoc(ref,data,opts){ S().docs[ref.path]=(opts&&opts.merge)?Object.assign({},S().docs[ref.path]||{},data):data; S().writes.push(ref.path); return Promise.resolve(); }
+export function addDoc(col,data){ var id='auto'+(++S().addCount); S().docs[col.__col+'/'+id]=data; S().writes.push(col.__col+'/'+id); return Promise.resolve({ id:id }); }
+export function deleteDoc(ref){ delete S().docs[ref.path]; return Promise.resolve(); }
+export function getDocs(q){ var name=q.__col||''; var wheres=(q&&q.wheres)||[]; var rows=Object.keys(S().docs).filter(k=>k.indexOf(name+'/')===0).map(k=>({id:k.split('/').pop(),d:S().docs[k]})).filter(r=>wheres.every(w=>r.d[w[0]]===w[2])); var out=rows.map(r=>({id:r.id,data:()=>r.d})); return Promise.resolve({ forEach:f=>out.forEach(f), size:out.length }); }`;
+async function fbCtx(browser, seed) {
+  const ctx = await browser.newContext();
+  await ctx.route('**/firebase-app.js', r => r.fulfill({ contentType: 'application/javascript', body: FB_MOCK_APP }));
+  await ctx.route('**/firebase-auth.js', r => r.fulfill({ contentType: 'application/javascript', body: FB_MOCK_AUTH }));
+  await ctx.route('**/firebase-firestore.js', r => r.fulfill({ contentType: 'application/javascript', body: FB_MOCK_FS }));
+  if (seed) await ctx.addInitScript(s => { globalThis.__fbSeed = s; }, seed);
+  return ctx;
+}
+async function adminLogin(page) {
+  await page.waitForSelector('#a-login.active', { timeout: 8000 });
+  await page.fill('#in-email', 'admin@admin.com');
+  await page.fill('#in-pass', 'goodpass');
+  await page.click('#btn-login');
+  await page.waitForSelector('#a-dash.active', { timeout: 8000 });
+}
+
 // ---- flow helpers ----------------------------------------------------------
 const CORRECT = { q1: '60', q2: '52', q3: 'It says it has no data there', q4: 'An estimate that can be wrong' };
 
@@ -322,44 +363,82 @@ async function main() {
     // with a mocked Firebase SDK routed in for the gstatic imports.
     console.log('\nTest 12 · Admin login survives getStudyConfig (no anon clobber)');
     {
-      const MOCK_APP = `export function initializeApp(cfg){ if(!globalThis.__fb) globalThis.__fb={user:null,listeners:[],docs:{},anonCount:0}; return { cfg }; }`;
-      const MOCK_AUTH = `const S=()=>globalThis.__fb;
-function notify(){ S().listeners.slice().forEach(cb=>{try{cb(S().user)}catch(e){}}); }
-export function getAuth(){ return { get currentUser(){ return S().user; } }; }
-export function signInAnonymously(){ S().anonCount++; S().user={uid:'anon'+S().anonCount,email:null,isAnonymous:true}; notify(); return Promise.resolve({user:S().user}); }
-export function signInWithEmailAndPassword(a,email,pw){ if(pw==='bad') return Promise.reject({code:'auth/wrong-password'}); S().user={uid:'admin1',email:email,isAnonymous:false}; notify(); return Promise.resolve({user:S().user}); }
-export function onAuthStateChanged(a,cb){ S().listeners.push(cb); Promise.resolve().then(()=>cb(S().user)); return ()=>{}; }
-export function signOut(){ S().user=null; notify(); return Promise.resolve(); }`;
-      const MOCK_FS = `const S=()=>globalThis.__fb;
-export function getFirestore(){ return {}; }
-export function doc(db,col,id){ return { path: col+'/'+id }; }
-export function getDoc(ref){ const d=S().docs[ref.path]; return Promise.resolve({ exists:()=>!!d, data:()=>d }); }
-export function setDoc(ref,data){ S().docs[ref.path]=Object.assign({}, S().docs[ref.path]||{}, data); return Promise.resolve(); }
-export function collection(db,name){ return { name }; }
-export function query(col){ return { col }; }
-export function orderBy(){ return {}; }
-export function limit(){ return {}; }
-export function getDocs(){ const rows=Object.entries(S().docs).filter(([k])=>k.startsWith('events/')).map(([k,v])=>({data:()=>v})); return Promise.resolve({ forEach:f=>rows.forEach(f) }); }`;
-      // Real config (configured mode) — do NOT use newCtx() here (it stubs the
-      // config to a placeholder); the committed firebase-config.js loads as-is.
-      const ctx = await browser.newContext();
-      await ctx.route('**/firebase-app.js', r => r.fulfill({ contentType: 'application/javascript', body: MOCK_APP }));
-      await ctx.route('**/firebase-auth.js', r => r.fulfill({ contentType: 'application/javascript', body: MOCK_AUTH }));
-      await ctx.route('**/firebase-firestore.js', r => r.fulfill({ contentType: 'application/javascript', body: MOCK_FS }));
+      const ctx = await fbCtx(browser);
       const page = await ctx.newPage();
       await page.goto(APP + 'admin/', { waitUntil: 'domcontentloaded' });
-      const gotLogin = await page.waitForSelector('#a-login.active', { timeout: 8000 }).then(() => true).catch(() => false);
-      ok('configured admin shows the sign-in screen', gotLogin);
-      await page.fill('#in-email', 'admin@admin.com');
-      await page.fill('#in-pass', 'goodpass');
-      await page.click('#btn-login');
-      await sleep(1200); // onAuth -> enterAdmin -> loadConditions(getStudyConfig) -> loadData
+      ok('configured admin shows the sign-in screen',
+        await page.waitForSelector('#a-login.active', { timeout: 8000 }).then(() => true).catch(() => false));
+      await adminLogin(page);
+      await sleep(600);
       ok('admin reaches the dashboard after sign-in', await page.isVisible('#a-dash'));
       ok('admin is NOT bounced back to the login screen', !(await page.isVisible('#a-login')));
-      ok('getStudyConfig did not sign the admin in anonymously',
-        (await page.evaluate(() => globalThis.__fb && globalThis.__fb.anonCount)) === 0);
-      ok('admin session preserved (still the admin email)',
-        (await page.evaluate(() => globalThis.__fb && globalThis.__fb.user && globalThis.__fb.user.email)) === 'admin@admin.com');
+      ok('no anonymous sign-in clobbered the admin', (await page.evaluate(() => globalThis.__fb.anonCount)) === 0);
+      ok('admin session preserved', (await page.evaluate(() => globalThis.__fb.user && globalThis.__fb.user.email)) === 'admin@admin.com');
+      await ctx.close();
+    }
+
+    // ---------------- TEST 13: Admin creates a session ----------------
+    console.log('\nTest 13 · Admin creates a session (name, code, settings)');
+    {
+      const ctx = await fbCtx(browser);
+      const page = await ctx.newPage();
+      await page.goto(APP + 'admin/', { waitUntil: 'domcontentloaded' });
+      await adminLogin(page);
+      await page.fill('#f-name', 'Wave One');
+      await page.fill('#f-code', 'wave 1!'); // gets normalised to WAVE1
+      await page.click('#seg-arm button[data-v="B"]');
+      await page.fill('#f-code-shared', 'DONE7');
+      await page.click('#btn-save');
+      await sleep(700);
+      const doc = await page.evaluate(() => {
+        const d = globalThis.__fb.docs; const k = Object.keys(d).find(k => k.indexOf('sessions/') === 0);
+        return k ? d[k] : null;
+      });
+      ok('session document created in Firestore', !!doc);
+      ok('code normalised to A–Z0–9 (WAVE1)', doc && doc.code === 'WAVE1', doc && doc.code);
+      ok('session stores name + active status', doc && doc.name === 'Wave One' && doc.status === 'active');
+      ok('session stores arm-mode B + completion code', doc && doc.settings.armMode === 'B' && doc.settings.completionCode === 'DONE7');
+      ok('Active sessions list shows the new session', /Wave One/.test(await page.innerText('#active-list')));
+      ok('launch links + preview button appear', await page.isVisible('#launch-box'));
+      await ctx.close();
+    }
+
+    // ---------------- TEST 14: Participant joins by code, gets wave settings ----------------
+    console.log('\nTest 14 · Participant ?code= loads the session settings + content');
+    {
+      const seed = { 'sessions/w1': { code: 'WAVE1', name: 'Wave One', status: 'active',
+        settings: { armMode: 'B', completionCode: 'DONE7', content: { consent: '**Custom consent** please agree to continue.' } } } };
+      const ctx = await fbCtx(browser, seed);
+      const page = await ctx.newPage();
+      await page.goto(APP + '?code=WAVE1&SESSION_ID=joinCheck', { waitUntil: 'networkidle' });
+      await page.waitForSelector('#s-consent.active', { timeout: 8000 });
+      ok('consent shows the admin custom text', /Custom consent/.test(await page.innerText('#consent-body')));
+      await page.check('#consent-box'); await page.click('#btn-consent');
+      await page.waitForSelector('#s-instructions.active');
+      ok('arm forced to B (instructions include the assistant addendum)',
+        /assistant/i.test(await page.innerText('#instructions-body')));
+      const stamped = await page.evaluate(() => (window.Logger.getEvents().find(e => e.event === 'session_start') || {}).sessionCode);
+      ok('events are stamped with the session code', stamped === 'WAVE1', stamped);
+      const wroteEvent = await page.evaluate(() => Object.keys(globalThis.__fb.docs).some(k => k.indexOf('events/') === 0));
+      ok('participant events written to Firestore', wroteEvent);
+      await ctx.close();
+    }
+
+    // ---------------- TEST 15: Preview skips the intro & never writes to Firestore ----------------
+    console.log('\nTest 15 · Preview link skips intro, no Firestore writes, applies code');
+    {
+      const seed = { 'sessions/w1': { code: 'WAVE1', name: 'Wave One', status: 'active',
+        settings: { armMode: 'A', completionCode: 'DONE7', content: {} } } };
+      const ctx = await fbCtx(browser, seed);
+      const page = await ctx.newPage();
+      await page.goto(APP + '?code=WAVE1&arm=A&preview=1&debug=1&key=stouras', { waitUntil: 'networkidle' });
+      const gotRound = await page.waitForSelector('#s-round.active', { timeout: 8000 }).then(() => true).catch(() => false);
+      ok('preview drops straight into the game (intro skipped)', gotRound);
+      for (let r = 0; r < 11; r++) await playRound(page, 1);
+      await page.waitForSelector('#s-finish.active', { timeout: 10000 });
+      ok('preview finish shows the session completion code', (await page.innerText('#completion-code')).trim() === 'DONE7');
+      const eventWrites = await page.evaluate(() => globalThis.__fb.writes.filter(p => p.indexOf('events/') === 0).length);
+      ok('preview wrote NO participant events to Firestore', eventWrites === 0, 'writes=' + eventWrites);
       await ctx.close();
     }
 

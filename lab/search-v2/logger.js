@@ -16,7 +16,7 @@ window.Logger = (function () {
   // the second block holds a few event-specific extras (quiz answers, the two
   // round_end nets, and a free-form info payload for e.g. paid_rounds_drawn).
   var FIELDS = [
-    'session', 'pid', 'study', 'arm', 'event', 't', 'rt_ms',
+    'session', 'sessionCode', 'sessionName', 'pid', 'study', 'arm', 'event', 't', 'rt_ms',
     'round', 'mapping', 'stratum', 'position', 'value', 'estimate', 'refused',
     'reveals', 'cost', 'best', 'net',
     'qid', 'choice', 'correct', 'rawNet', 'flooredNet', 'info',

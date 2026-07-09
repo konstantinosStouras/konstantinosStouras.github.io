@@ -8,32 +8,91 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232b2b2b'/%3E%3Cpath d='M9 22V10m7 12V14m7 8v-6' stroke='white' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="../styles.css" />
   <style>
-    .admin-wrap{max-width:1120px;}
-    .tabs{display:flex; gap:6px; border-bottom:1px solid var(--line); margin:8px 0 18px;}
+    .admin-wrap{max-width:1180px;}
+    /* ---- dark mode (admin page only; set via data-theme on <html>) ---- */
+    :root[data-theme="dark"]{ --ink:#e7e9ec; --muted:#9aa0a6; --line:#2d3138; --bg:#15171a; --panel:#1d2025; }
+    :root[data-theme="dark"] body{ background:#15171a; }
+    :root[data-theme="dark"] .nav{ background:#1a1d21; border-bottom-color:#2d3138; }
+    :root[data-theme="dark"] .card,
+    :root[data-theme="dark"] .table-scroll,
+    :root[data-theme="dark"] .sess-card{ background:#1d2025; border-color:#2d3138; }
+    :root[data-theme="dark"] .btn-ghost{ background:#2a2e34; color:#e7e9ec; }
+    :root[data-theme="dark"] .btn-ghost:hover:not(:disabled){ background:#333941; }
+    :root[data-theme="dark"] input, :root[data-theme="dark"] textarea, :root[data-theme="dark"] select{ background:#15171a; color:#e7e9ec; border-color:#2d3138; }
+    :root[data-theme="dark"] .data-table th{ background:#23262c; }
+    :root[data-theme="dark"] .seg button{ background:#23262c; color:#e7e9ec; }
+    :root[data-theme="dark"] .stat-box, :root[data-theme="dark"] .summary, :root[data-theme="dark"] .acc-head{ background:#1d2025; border-color:#2d3138; }
+    :root[data-theme="dark"] .code-box{ background:#1a2230; }
+
+    .tabs{display:flex; gap:6px; border-bottom:1px solid var(--line); margin:8px 0 18px; flex-wrap:wrap;}
     .tab{border:none; background:none; padding:10px 16px; font-size:15px; font-weight:600; color:var(--muted); cursor:pointer; border-bottom:2px solid transparent;}
     .tab.on{color:var(--ink); border-bottom-color:var(--blue);}
+    .icon-btn{border:1px solid var(--line); background:transparent; color:var(--ink); border-radius:50%; width:34px; height:34px; cursor:pointer; font-size:15px; line-height:1;}
+    .icon-btn:hover{background:var(--panel);}
+
+    .cols{display:grid; grid-template-columns:1fr 400px; gap:20px; align-items:start;}
+    @media (max-width:900px){ .cols{grid-template-columns:1fr;} }
+
     .field{margin:12px 0;}
     .field label{display:block; font-weight:600; font-size:14px; margin-bottom:5px;}
-    .field input[type=text], .field input[type=password]{width:100%; max-width:420px; padding:9px 11px; border:1px solid var(--line); border-radius:8px; font-size:15px;}
-    .seg{display:inline-flex; border:1px solid #c9ced4; border-radius:8px; overflow:hidden;}
-    .seg button{border:none; background:#fff; padding:8px 14px; font-size:14px; cursor:pointer; color:var(--ink);}
+    .field input[type=text], .field input[type=password], .field textarea{width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:8px; font-size:15px; font-family:inherit;}
+    .field textarea{min-height:120px; resize:vertical; line-height:1.45;}
+    .field .hint{font-size:12.5px; color:var(--muted); margin-top:4px;}
+    .row2{display:flex; gap:10px; flex-wrap:wrap;} .row2 .field{flex:1; min-width:150px;}
+    .seg{display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; flex-wrap:wrap;}
+    .seg button{border:none; background:#fff; padding:8px 13px; font-size:13.5px; cursor:pointer; color:var(--ink);}
     .seg button.on{background:var(--blue); color:#fff;}
-    .switch-row{display:flex; align-items:center; gap:10px;}
-    .stat-grid{display:flex; gap:14px; flex-wrap:wrap; margin:12px 0;}
-    .stat-box{border:1px solid var(--line); border-radius:10px; padding:12px 16px; min-width:130px;}
-    .stat-box .n{font-size:26px; font-weight:700;}
-    .stat-box .l{font-size:12.5px; color:var(--muted);}
-    .data-table{width:100%; border-collapse:collapse; font-size:12.5px; margin-top:10px;}
+    .code-row{display:flex; gap:8px;}
+    .code-row input{flex:1;}
+
+    .accordion{border:1px solid var(--line); border-radius:10px; margin:8px 0; overflow:hidden;}
+    .acc-head{width:100%; text-align:left; border:none; background:var(--panel); padding:11px 14px; font-weight:600; font-size:14px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; color:var(--ink);}
+    .acc-body{padding:12px 14px; display:none;}
+    .accordion.open .acc-body{display:block;}
+    .acc-head .chev{transition:transform .15s;}
+    .accordion.open .acc-head .chev{transform:rotate(180deg);}
+
+    .actions3{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:12px;}
+    .flash{color:var(--green-d); font-weight:600; font-size:13px; opacity:0; transition:opacity .2s;}
+    .flash.show{opacity:1;}
+
+    .summary{border:1px solid var(--line); border-radius:10px; padding:14px 16px; background:var(--panel); margin-top:14px;}
+    .summary h3{margin:0 0 8px;}
+    .sum-row{display:grid; grid-template-columns:130px 1fr; gap:8px; font-size:14px; padding:4px 0; border-top:1px solid var(--line);}
+    .sum-row:first-of-type{border-top:none;}
+    .sum-row .v{font-weight:600; text-align:right;}
+
+    .code-box{margin-top:14px; padding:14px; border:1px dashed var(--blue); border-radius:12px; background:#f3f8ff;}
+    .launch{font-family:ui-monospace,Menlo,monospace; font-size:12px; word-break:break-all; background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:7px 9px; margin:6px 0;}
+
+    .sess-card{border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin:10px 0; background:#fff;}
+    .sess-card .sc-top{display:flex; justify-content:space-between; align-items:baseline; gap:8px;}
+    .sess-card .sc-name{font-weight:700; font-size:16px;}
+    .sc-code{font-family:ui-monospace,Menlo,monospace; font-size:12px; color:var(--muted);}
+    .pill{font-size:11px; font-weight:700; padding:2px 7px; border-radius:20px; text-transform:uppercase;}
+    .pill.active{background:#eef8e9; color:#2e7d32;} .pill.completed{background:#eef0f3; color:#666;}
+    :root[data-theme="dark"] .pill.completed{background:#2a2e34; color:#aaa;}
+    .sc-meta{font-size:12.5px; color:var(--muted); margin:6px 0;}
+    .sc-actions{display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;}
+    .link-btn{border:none; background:none; color:var(--blue); cursor:pointer; font-size:13.5px; padding:4px 2px;}
+    .link-btn.danger{color:var(--red);}
+
+    .stat-grid{display:flex; gap:12px; flex-wrap:wrap; margin:12px 0;}
+    .stat-box{border:1px solid var(--line); border-radius:10px; padding:12px 16px; min-width:120px; background:#fff;}
+    .stat-box .n{font-size:24px; font-weight:700;} .stat-box .l{font-size:12.5px; color:var(--muted);}
+    .data-table{width:100%; border-collapse:collapse; font-size:12.5px;}
     .data-table th,.data-table td{border:1px solid var(--line); padding:5px 7px; text-align:left; white-space:nowrap;}
     .data-table th{background:var(--panel); position:sticky; top:0;}
-    .table-scroll{max-height:460px; overflow:auto; border:1px solid var(--line); border-radius:8px;}
+    .table-scroll{max-height:440px; overflow:auto; border:1px solid var(--line); border-radius:8px; background:#fff;}
     .banner{border-radius:10px; padding:11px 14px; font-size:14px; margin:10px 0;}
     .banner.info{background:#eef6ff; border:1px solid #cfe2fb; color:#1f4e79;}
     .banner.warn{background:#fff7ed; border:1px solid #f4d5a8; color:#8a5a12;}
-    .banner.ok{background:#eef8e9; border:1px solid #cfe8c2; color:#2e7d32;}
-    .steps{counter-reset:s;}
-    .steps li{margin:9px 0;}
     code.k{background:var(--panel); border:1px solid var(--line); border-radius:5px; padding:1px 5px; font-size:13px;}
+    .bars{margin:10px 0;} .bar-row{display:grid; grid-template-columns:180px 1fr 90px; gap:10px; align-items:center; margin:7px 0; font-size:13.5px;}
+    .bar-track{background:var(--panel); border:1px solid var(--line); border-radius:6px; height:22px; overflow:hidden;}
+    .bar-fill{height:100%; background:var(--blue);} .bar-fill.b{background:var(--green);}
+    .an-grid{display:grid; grid-template-columns:1fr 1fr; gap:18px;} @media(max-width:800px){.an-grid{grid-template-columns:1fr;}}
+    select.sess-filter{padding:8px 10px; border:1px solid var(--line); border-radius:8px; font-size:14px;}
   </style>
 </head>
 <body>
@@ -41,6 +100,8 @@
     <div class="brand">Search for Knowledge <span class="muted" style="font-weight:400; font-size:14px;">· Admin</span></div>
     <div class="nav-right">
       <span class="muted small" id="who"></span>
+      <button class="icon-btn" id="btn-theme" title="Toggle dark / light">☾</button>
+      <button class="btn btn-ghost btn-sm" id="btn-analytics-nav" style="display:none;">Data Analytics</button>
       <button class="btn btn-ghost btn-sm" id="btn-signout" style="display:none;">Sign out</button>
     </div>
   </div>
@@ -63,46 +124,82 @@
     <section class="screen" id="a-dash">
       <div id="dash-banner"></div>
       <div class="tabs">
-        <button class="tab on" data-tab="conditions">Conditions &amp; codes</button>
+        <button class="tab on" data-tab="sessions">Sessions</button>
         <button class="tab" data-tab="data">Data</button>
+        <button class="tab" data-tab="analytics">Analytics</button>
         <button class="tab" data-tab="setup">Setup</button>
       </div>
 
-      <!-- CONDITIONS -->
-      <div class="tab-panel" id="tab-conditions">
-        <h2>Study conditions &amp; session codes</h2>
-        <p class="muted small">These are read live by the participant app (from the <code class="k">config/study</code> document). Changes affect participants who start <b>after</b> you save; people already in progress keep their assignment.</p>
-        <div class="card">
-          <div class="field">
-            <label>Study status</label>
-            <div class="switch-row"><span class="seg" id="seg-open">
-              <button data-v="open" class="on">Open</button><button data-v="closed">Closed</button>
-            </span><span class="muted small">Closed turns away new participants (in-progress subjects still finish).</span></div>
+      <!-- SESSIONS TAB: create/edit (left) + active/completed (right) -->
+      <div class="tab-panel" id="tab-sessions">
+        <div class="cols">
+          <!-- LEFT: create / edit form -->
+          <div class="card">
+            <h2 id="form-title">Create a session</h2>
+            <p class="muted small">A session is one run of the study with its own code, settings, and page text. Share its launch link with participants; data is grouped by session.</p>
+
+            <div class="row2">
+              <div class="field"><label>Session name</label><input type="text" id="f-name" placeholder="e.g. Prolific wave 1" /></div>
+              <div class="field"><label>Session code</label>
+                <div class="code-row"><input type="text" id="f-code" placeholder="AUTO or custom (A–Z, 0–9)" /><button class="btn btn-ghost btn-sm" id="btn-gencode">Auto</button></div>
+                <div class="hint">Single word, capital letters + digits. Used in the participant link.</div>
+              </div>
+            </div>
+
+            <div class="field"><label>Arm assignment</label>
+              <span class="seg" id="seg-arm">
+                <button data-v="url" class="on">From link (?arm)</button>
+                <button data-v="A">Force A (human only)</button>
+                <button data-v="B">Force B (AI assisted)</button>
+                <button data-v="random">Random 50/50</button>
+              </span>
+            </div>
+            <div class="row2">
+              <div class="field"><label>Completion code (shared)</label><input type="text" id="f-code-shared" placeholder="e.g. C1A2B3C4" /></div>
+              <div class="field"><label>Arm A code (optional)</label><input type="text" id="f-codeA" placeholder="overrides shared" /></div>
+              <div class="field"><label>Arm B code (optional)</label><input type="text" id="f-codeB" placeholder="overrides shared" /></div>
+            </div>
+            <div class="field"><label>Extra logging endpoint URL (optional)</label><input type="text" id="f-endpoint" placeholder="https://script.google.com/…/exec" /></div>
+
+            <h3 style="margin-top:16px;">Page text &amp; content</h3>
+            <p class="muted small">Edit what participants see on each page. Leave a box blank to use the built-in default. Use <code class="k">**bold**</code> and blank lines for paragraphs.</p>
+            <div id="content-editors"><!-- accordions injected by admin.js --></div>
+
+            <div class="actions3">
+              <button class="btn btn-green" id="btn-save">Create session</button>
+              <button class="btn btn-ghost btn-sm" id="btn-cancel" style="display:none;">Cancel edit</button>
+              <button class="btn btn-ghost btn-sm" id="btn-makedefault" title="Save these settings as the starting point for new sessions">Make this the default</button>
+              <button class="btn btn-ghost btn-sm" id="btn-restore" title="Reset the form to the built-in defaults">Restore built-in default</button>
+              <span class="flash" id="form-flash"></span>
+            </div>
+            <div class="feedback bad" id="form-err" style="display:none;"></div>
+
+            <!-- launch links + preview (shown after create/select) -->
+            <div id="launch-box" style="display:none;"></div>
+            <!-- settings summary -->
+            <div class="summary" id="settings-summary"></div>
           </div>
-          <div class="field">
-            <label>Arm assignment</label>
-            <span class="seg" id="seg-arm">
-              <button data-v="url" class="on">From link (?arm)</button>
-              <button data-v="A">Force A (human only)</button>
-              <button data-v="B">Force B (AI assisted)</button>
-              <button data-v="random">Random 50/50</button>
-            </span>
-            <div class="muted small" style="margin-top:6px;">“From link” uses <code class="k">?arm=A</code>/<code class="k">?arm=B</code> and falls back to random.</div>
+
+          <!-- RIGHT: active + completed sessions -->
+          <div>
+            <div class="card">
+              <div style="display:flex; justify-content:space-between; align-items:baseline;"><h2 style="margin:0;">Active sessions</h2><span class="muted small" id="active-count"></span></div>
+              <div id="active-list"><p class="muted small">Loading…</p></div>
+            </div>
+            <div class="card">
+              <div style="display:flex; justify-content:space-between; align-items:baseline;"><h2 style="margin:0;">Completed sessions</h2><span class="muted small" id="completed-count"></span></div>
+              <div id="completed-list"></div>
+            </div>
           </div>
-          <div class="field"><label>Completion code (shared, both arms)</label><input type="text" id="in-code" placeholder="e.g. C1A2B3C4" /></div>
-          <div class="field"><label>Completion code — Arm A only (optional, overrides shared)</label><input type="text" id="in-codeA" placeholder="optional" /></div>
-          <div class="field"><label>Completion code — Arm B only (optional, overrides shared)</label><input type="text" id="in-codeB" placeholder="optional" /></div>
-          <div class="field"><label>Logging endpoint URL (optional Apps Script, in addition to Firestore)</label><input type="text" id="in-endpoint" placeholder="https://script.google.com/…/exec" /></div>
-          <div class="right"><button class="btn btn-green" id="btn-save">Save conditions</button></div>
-          <div class="feedback" id="save-msg" style="display:none;"></div>
         </div>
       </div>
 
-      <!-- DATA -->
+      <!-- DATA TAB -->
       <div class="tab-panel" id="tab-data" style="display:none;">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
           <h2 style="margin:0;">Collected data</h2>
-          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <select class="sess-filter" id="data-filter"></select>
             <button class="btn btn-ghost btn-sm" id="btn-refresh">↻ Refresh</button>
             <button class="btn btn-ghost btn-sm" id="btn-dl-csv">Download CSV</button>
             <button class="btn btn-ghost btn-sm" id="btn-dl-json">Download JSON</button>
@@ -110,15 +207,26 @@
         </div>
         <div id="data-source" class="muted small" style="margin-top:4px;"></div>
         <div class="stat-grid" id="stat-grid"></div>
-        <h3>Per-session summary</h3>
+        <h3>Per-participant sessions</h3>
         <div class="table-scroll"><table class="data-table" id="sessions-table"></table></div>
         <h3 style="margin-top:18px;">Events <span class="muted small" id="events-count"></span></h3>
         <div class="table-scroll"><table class="data-table" id="events-table"></table></div>
       </div>
 
-      <!-- SETUP -->
+      <!-- ANALYTICS TAB -->
+      <div class="tab-panel" id="tab-analytics" style="display:none;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+          <h2 style="margin:0;">Data analytics</h2>
+          <select class="sess-filter" id="an-filter"></select>
+        </div>
+        <p class="muted small">Arm A (human only) vs Arm B (AI assisted), computed from completed participants.</p>
+        <div class="stat-grid" id="an-stats"></div>
+        <div id="an-body"></div>
+      </div>
+
+      <!-- SETUP TAB -->
       <div class="tab-panel" id="tab-setup" style="display:none;">
-        <h2>Firebase setup (one time)</h2>
+        <h2>Firebase setup</h2>
         <div id="setup-body"></div>
       </div>
     </section>

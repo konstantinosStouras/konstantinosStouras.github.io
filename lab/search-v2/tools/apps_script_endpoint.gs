@@ -22,7 +22,7 @@ var SHEET_NAME = 'events'; // tab name; created if missing
 
 // Keep in sync with logger.js FIELDS.
 var FIELDS = [
-  'session', 'pid', 'study', 'arm', 'event', 't', 'rt_ms',
+  'session', 'sessionCode', 'sessionName', 'pid', 'study', 'arm', 'event', 't', 'rt_ms',
   'round', 'mapping', 'stratum', 'position', 'value', 'estimate', 'refused',
   'reveals', 'cost', 'best', 'net',
   'qid', 'choice', 'correct', 'rawNet', 'flooredNet', 'info',

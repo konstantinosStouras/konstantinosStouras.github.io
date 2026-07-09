@@ -26,9 +26,19 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Admin-controlled study conditions & completion codes. Readable by the app
-    // (anonymous participants) so it can apply them; writable only by the admin.
+    // Admin-controlled study conditions & completion codes, and the saved
+    // defaults for new sessions (config/study, config/defaults). Readable by the
+    // app (anonymous participants) so it can apply them; writable only by admin.
     match /config/{docId} {
+      allow read:  if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Study "sessions" (waves) the admin creates. A participant reads the one
+    // whose code matches their ?code= launch link to load its settings; only the
+    // admin may create/edit/delete. (Sessions hold no secrets — the completion
+    // codes are shown to participants at the end anyway.)
+    match /sessions/{sessionId} {
       allow read:  if isSignedIn();
       allow write: if isAdmin();
     }

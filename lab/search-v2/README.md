@@ -137,19 +137,34 @@ launch.
 
 ## Admin panel & Firebase setup (optional but recommended)
 
-The **admin panel** at **`/lab/search-v2/admin/`** lets you, from any browser:
+The **admin panel** at **`/lab/search-v2/admin/`** lets you, from any browser
+(with a **dark / light** toggle):
 
-- **control the conditions** — study **open/closed**, and the **arm assignment
-  mode** (from the `?arm` link · force A · force B · random 50/50);
-- **set session codes** — the Prolific **completion code** (shared, or a separate
-  code per arm), and optionally an Apps-Script endpoint URL;
-- **see the data** — a live per-session summary and event table, with CSV/JSON
-  export.
+- **create named sessions** — each *session* is one run of the study with its own
+  **name**, **code**, settings, and page text. Participants join a session via its
+  code (`?code=WAVE1` in the launch link); all data is grouped by session. The
+  right column lists **Active** and **Completed** sessions (open / mark
+  completed / reopen / delete).
+- **control the conditions** — per session: the **arm assignment mode** (from the
+  `?arm` link · force A · force B · random 50/50), the Prolific **completion code**
+  (shared, or a separate code per arm), and an optional Apps-Script endpoint.
+- **edit every participant page** — consent, instructions (both arms + the Arm-B
+  addendum), the finish page, and the study-closed page. Blank = built-in default;
+  `**bold**` and blank lines are supported. **Save**, **Make this the default**
+  (seed new sessions), and **Restore built-in default** controls, plus a **Settings
+  summary**.
+- **test immediately** — each session has a **▶ Test this session** link that opens
+  the app with the intro (consent/instructions/quiz) **skipped, just for you**
+  (gated on the debug key; real participants always see consent). Preview never
+  writes to Firestore.
+- **see the data & analytics** — a per-session data table (CSV/JSON export) and an
+  **Analytics** tab comparing **Arm A vs Arm B** (net, reveals, best found per
+  round) over completed participants.
 
 These are backed by **Firebase (Firestore + Auth)**. Until you configure it, the
-admin panel still opens in a **local preview** (showing only the current browser’s
-test sessions) and the experiment runs exactly as before. Nothing about the
-participant experience changes until you paste a real config.
+admin panel opens in a **local preview** (this browser’s test sessions only) and
+the experiment runs exactly as before. Every logged event is stamped with
+`sessionCode` and `sessionName`.
 
 ### One-time Firebase setup (with a dedicated account)
 
@@ -209,6 +224,7 @@ Every event is one flat JSON object. Columns (CSV / Sheet order):
 | field | meaning |
 |---|---|
 | `session`,`pid`,`study`,`arm` | identifiers (from URL) |
+| `sessionCode`,`sessionName` | the admin session (wave) this participant belongs to |
 | `event` | event type (below) |
 | `t` | epoch ms |
 | `rt_ms` | ms since this subject's previous event |
