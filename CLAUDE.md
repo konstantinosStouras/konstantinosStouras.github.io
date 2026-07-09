@@ -27,8 +27,35 @@ The homepage's "Fun Projects" section (in the root site) may also link apps —
 keep that in mind if a change there is warranted.
 
 ## Current /fun/ apps
-`lit` · `portfoliofitgame` · `capitals` · `nomoi` · `rooks` · `sudoku` · `snake` ·
+`ft50` · `lit` · `portfoliofitgame` · `capitals` · `nomoi` · `rooks` · `sudoku` · `snake` ·
 `ms` · `ms-old` · `mnsc_scraper-to-use-locally` (plus a redirect stub at `fun/ms2/`)
+
+## `/fun/ft50` — the FT50 research paper browser
+`fun/ft50/` extends the `/fun/lit/` architecture to **all 50 journals of the
+Financial Times FT50 research rank**. The journal list is data-driven:
+`fun/ft50/_scraper/journals.json` (key, name, ISSNs, publisher, capability
+flags per journal). Data is static JSON in `fun/ft50/data/` (one
+`papers-<key>.json` per journal + `sources.json` manifest), built by
+`fun/ft50/_scraper/build-data.mjs` from Crossref and refreshed daily by
+`.github/workflows/ft50-update-data.yml` (same hardened commit + self-healing
+live-site check as the lit workflow). A second, yearly workflow
+(`.github/workflows/ft50-check-list.yml`, 3 Jan) runs
+`_scraper/check-ft50-list.mjs`, which re-checks the list against
+ft.com/ft50-journals (Wikipedia fallback), auto-adds new journals (ISSNs
+resolved via Crossref), marks removed ones `retired` (their data files are
+deleted on the next build), and opens a GitHub issue describing any change.
+Because 50 journals are a couple hundred MB of JSON, **the page lazy-loads
+per-journal files** (selection-driven; searching with nothing selected streams
+all of them) — unlike lit, which eager-loads everything. Filter UI is
+capability-driven from `sources.json`: Editors/Areas only when Management
+Science is selected (exactly like `/fun/ms/`), SE/AE filters for ISR/MkSc; HBR
+and MIT SMR are flagged `limitedCoverage` (thin Crossref deposits). The
+**"Recently added papers" view respects the journal selection** (a deliberate
+difference from lit, whose recent view clears filters). Optional per-user
+accounts (stars/notes/lists/tags) mirror `/fun/ms/` but use a **separate
+dedicated Firebase project** — inert until `FB_CONFIG` in `fun/ft50/index.html`
+is filled per `fun/ft50/_ACCOUNTS-SETUP.md` (rules in `fun/ft50/_firestore.rules`).
+See `fun/ft50/_HOW-IT-WORKS.md`.
 
 ## `/fun/lit` — "The Lit", the multi-journal research paper browser
 `fun/lit/` extends the `/fun/ms/` architecture to eight sources: Management
