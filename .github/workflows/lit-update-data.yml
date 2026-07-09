@@ -71,9 +71,13 @@ jobs:
               echo "Pushed on attempt $i."
               exit 0
             fi
-            echo "Push rejected (concurrent data commit?) — re-committing on the new tip…"
+            echo "Push rejected (concurrent commit?) — re-committing the data on the new tip…"
             git fetch origin ${{ github.ref_name }}
-            git reset --soft origin/${{ github.ref_name }}
+            # Mixed reset + re-add of ONLY the data dir: a soft reset would keep
+            # this run's whole tree staged and silently revert any code commit
+            # that landed on the branch while this build was running.
+            git reset origin/${{ github.ref_name }}
+            git add fun/lit/data
             if git diff --cached --quiet; then
               echo "The concurrent commit already contains this dataset — nothing left to push."
               exit 0

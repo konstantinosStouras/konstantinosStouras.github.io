@@ -451,16 +451,96 @@ async function refreshPnasConcepts() {
   return cache;
 }
 
-function applyPnasSections(papers, cache) {
+// ── PNAS fallback classifier: OpenAlex primary topics ───────────────────────
+// pnas.org's own section index (the committed _pnas-concepts.json, built
+// locally) is authoritative. For papers it does not cover, OpenAlex — which
+// cloud runners CAN reach — supplies an approximation: each work's primary
+// topic carries a field/subfield that maps onto the five sections. Content-
+// based rather than editorial, so it over/under-includes at the margins; an
+// official label always wins the moment the local crawl provides one.
+function classifyOpenAlexTopic(pt) {
+  const keys = new Set();
+  const field = pt?.field?.display_name || '';
+  const subfield = pt?.subfield?.display_name || '';
+  const topic = pt?.display_name || '';
+  if (field === 'Computer Science') keys.add('pnas-cs');
+  if (field === 'Economics, Econometrics and Finance') { keys.add('pnas-econ'); keys.add('pnas-soc'); }
+  if (field === 'Environmental Science') keys.add('pnas-env');
+  if (field === 'Social Sciences' || field === 'Psychology') keys.add('pnas-soc');
+  if (subfield === 'Renewable Energy, Sustainability and the Environment' || /sustainab/i.test(topic)) keys.add('pnas-sust');
+  return [...keys].sort();
+}
+
+async function refreshPnasApprox(officialCount) {
+  const path = join(DATA_DIR, '_pnas-approx.json');
+  let cache = await loadJsonIfExists(path, { map: {} });
+  if (MOCK || process.env.LIT_PNAS_APPROX === '0') return cache;
+  try {
+    const haveFull = !!cache.full;
+    // Full backfill once; afterwards only recent publications are re-checked.
+    const filter = 'locations.source.issn:0027-8424'
+      + (haveFull ? `,from_publication_date:${new Date(new Date(PULL_DATE).getTime() - 90 * 864e5).toISOString().slice(0, 10)}` : '');
+    console.log(`  pnas approx (OpenAlex): ${haveFull ? 'incremental' : 'FULL backfill'} crawl…`);
+    let cursor = '*', pages = 0, seen = 0;
+    while (cursor) {
+      const url = `https://api.openalex.org/works?filter=${encodeURIComponent(filter)}` +
+        `&select=doi,primary_topic&per-page=200&cursor=${encodeURIComponent(cursor)}&mailto=${encodeURIComponent(MAILTO)}`;
+      const j = await fetchJson(url);
+      for (const w of j.results || []) {
+        const doi = String(w.doi || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase();
+        if (!doi) continue;
+        seen++;
+        const keys = classifyOpenAlexTopic(w.primary_topic);
+        if (keys.length) cache.map[doi] = keys;
+        else delete cache.map[doi]; // reclassified away from our sections
+      }
+      cursor = j.meta && j.meta.next_cursor;
+      pages++;
+      if (pages % 50 === 0) console.log(`    …page ${pages}, ${seen} works scanned, ${Object.keys(cache.map).length} matched`);
+      if (!j.results || !j.results.length) break;
+      await sleep(250);
+    }
+    const sorted = {};
+    for (const k of Object.keys(cache.map).sort()) sorted[k] = cache.map[k];
+    cache = { updated: PULL_DATE, full: true, map: sorted };
+    await writeJson('_pnas-approx.json', cache);
+    console.log(`  pnas approx: ${Object.keys(cache.map).length} DOIs mapped (${pages} pages)` +
+      (officialCount ? `; official index covers ${officialCount} and always wins` : ''));
+  } catch (e) {
+    console.warn('  PNAS approx refresh failed (non-fatal):', e.message);
+  }
+  return cache;
+}
+
+function applyPnasSections(papers, cache, approx) {
   const secName = Object.fromEntries(PNAS_SECTIONS.map(s => [s.key, s.name]));
   const out = [];
+  let official = 0, approximate = 0;
+  // Once a FULL official crawl exists, it is authoritative for everything
+  // published up to its crawl year: a DOI absent from it is genuinely not in
+  // any of the five sections, so the approximation must not resurrect it.
+  // The approximation then only covers the fresh tail the crawl hasn't seen
+  // yet (papers from the crawl year onward). Re-running the local script
+  // therefore corrects BOTH wrong labels and wrongly included papers.
+  const officialCutoffYear = (cache.full && cache.updated)
+    ? parseInt(String(cache.updated).slice(0, 4), 10)
+    : -Infinity; // no full official index yet: approximation covers everything
   for (const p of papers) {
-    const keys = cache.map[p._doi];
+    let keys = cache.map[p._doi];
+    if (keys && keys.length) official++;
+    else {
+      const y = parseInt(p.Year, 10) || 0;
+      const approxAllowed = !(cache.full && cache.updated) || y >= officialCutoffYear;
+      keys = approxAllowed && approx && approx.map ? approx.map[p._doi] : null;
+      if (keys && keys.length) approximate++;
+    }
     if (!keys || !keys.length) continue;   // only papers in the five sections
     p.Sections = keys.map(k => secName[k]).filter(Boolean);
     p._secKeys = keys;
     out.push(p);
   }
+  console.log(`  pnas sections: ${official} from pnas.org's index, ${approximate} approximated from OpenAlex topics` +
+    (officialCutoffYear > 0 ? ` (approximation limited to papers from ${officialCutoffYear} on)` : ''));
   return out;
 }
 
@@ -531,8 +611,19 @@ async function fetchEcDblpHistory(years) {
   const eeByTitle = new Map(); // normTitle -> [ee urls], reused by enrichEc so
                                // the tocs are not fetched twice (DBLP rate-limits)
   if (MOCK) return { rows: [], eeByTitle };
+  // Historical tables of contents never change, so successfully fetched years
+  // are kept in a committed cache — a night when DBLP throttles a year no
+  // longer makes that year's papers vanish from the dataset until re-fetched.
+  const cache = await loadJsonIfExists(join(DATA_DIR, '_ec-dblp.json'), {});
   const rows = [];
+  let cacheDirty = false;
   for (const y of years) {
+    const cached = cache[String(y)];
+    if (cached && Array.isArray(cached.rows) && cached.rows.length) {
+      rows.push(...cached.rows);
+      for (const [k, v] of cached.ee || []) eeByTitle.set(k, v);
+      continue;
+    }
     let hits = [];
     for (const key of [`sigecom${y}`, `sigecom${String(y).slice(2)}`]) {
       try {
@@ -545,10 +636,15 @@ async function fetchEcDblpHistory(years) {
       }
       await sleep(1500);
     }
-    let added = 0;
+    const yearRows = [];
+    const yearEe = [];
     for (const hit of hits) {
       const info = hit.info || {};
-      if (info.title) eeByTitle.set(normTitle(info.title), [].concat(info.ee || []));
+      if (info.title) {
+        const ee = [].concat(info.ee || []);
+        yearEe.push([normTitle(info.title), ee]);
+        eeByTitle.set(normTitle(info.title), ee);
+      }
       if (info.type && info.type !== 'Conference and Workshop Papers') continue;
       const title = String(info.title || '').replace(/\.\s*$/, '').replace(/\s+/g, ' ').trim();
       if (!title) continue;
@@ -561,7 +657,7 @@ async function fetchEcDblpHistory(years) {
         if (m) doi = m[1].toLowerCase();
       }
       const pageStart = parseInt(String(info.pages || '').split(/[-–]/)[0], 10) || 0;
-      rows.push({
+      yearRows.push({
         Title: title,
         Authors: authors.join(', '),
         Affiliations: '',
@@ -578,11 +674,16 @@ async function fetchEcDblpHistory(years) {
         _orcids: [],
         _rank: (parseInt(info.year, 10) || y) * 1e9 + Math.min(pageStart, 999),
       });
-      added++;
     }
-    console.log(`  ec ${y} (dblp): ${added} papers`);
+    console.log(`  ec ${y} (dblp): ${yearRows.length} papers`);
+    if (yearRows.length) {
+      cache[String(y)] = { rows: yearRows, ee: yearEe };
+      cacheDirty = true;
+      rows.push(...yearRows);
+    }
     await sleep(2500);
   }
+  if (cacheDirty) await writeJson('_ec-dblp.json', cache);
   return { rows, eeByTitle };
 }
 
@@ -965,19 +1066,22 @@ async function main() {
   }
   await applyInformsEditors(bySource);
 
-  // 2. PNAS, filtered to the five topic sections.
+  // 2. PNAS, filtered to the five topic sections. Official pnas.org labels
+  // (local crawl) win; OpenAlex-derived approximations fill the gaps.
   console.log('PNAS:');
   const concepts = await refreshPnasConcepts();
   const nConcepts = Object.keys(concepts.map || {}).length;
-  if (nConcepts) {
+  const approx = await refreshPnasApprox(nConcepts);
+  const nApprox = Object.keys(approx.map || {}).length;
+  if (nConcepts || nApprox) {
     const raw = await fetchJournalWorks(PNAS);
     const all = mapJournal(raw, PNAS);
-    bySource.pnas = applyPnasSections(all, concepts);
-    console.log(`  pnas: ${bySource.pnas.length} papers across the 5 sections (cache: ${nConcepts} DOIs)`);
+    bySource.pnas = applyPnasSections(all, concepts, approx);
+    console.log(`  pnas: ${bySource.pnas.length} papers across the 5 sections ` +
+      `(official index: ${nConcepts} DOIs, OpenAlex approx: ${nApprox})`);
   } else {
     bySource.pnas = [];
-    console.log('  pnas: section cache empty — skipping the Crossref pull. ' +
-      'Run fun/lit/_scraper/pnas-concepts-local.mjs on your own machine to seed it.');
+    console.log('  pnas: no section index available — skipping the Crossref pull.');
   }
 
   // 3. ACM EC.
