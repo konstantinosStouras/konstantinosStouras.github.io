@@ -170,7 +170,12 @@
     switch (S.phase) {
       case 'instructions': showInstructions(); break;
       case 'quiz': showQuiz(); break;
-      case 'round': startRound(S.roundNum, true); break;
+      case 'round':
+        // A finished-but-not-advanced round resumes its result screen, not the round.
+        if (S.round && S.round.ended) { S.phase = 'interstitial'; save(); showInterstitial(); }
+        else startRound(S.roundNum, true);
+        break;
+      case 'interstitial': showInterstitial(); break;
       case 'finish': finish(); break;
       default: showConsent();
     }
@@ -226,7 +231,7 @@
   var Q_B = [
     { id: 'q3', prompt: 'You ask the assistant about position 90. What happens?',
       options: [{ t: 'It tells you the exact value' }, { t: 'It gives you an estimate' }, { t: 'It says it has no data there', correct: true }, { t: 'It reveals the position for free' }] },
-    { id: 'q4', prompt: 'The assistant’s answer at position 50 is:',
+    { id: 'q4', prompt: 'The assistant\'s answer at position 50 is:',
       options: [{ t: 'Always exactly correct' }, { t: 'An estimate that can be wrong', correct: true }] }
   ];
   function quizQuestions() { return arm === 'B' ? Q_COMMON.concat(Q_B) : Q_COMMON; }
@@ -424,6 +429,9 @@
 
   function confirmStop() {
     closeStop();
+    // Guard against scoring the same round twice (double-click, or a refresh that
+    // somehow lands back here): a round is scored exactly once.
+    if (S.round.ended) { showInterstitial(); return; }
     var reveals = S.round.reveals;
     var rawNet = reveals.length ? bestOf(reveals) - costOf(reveals) : 0;
     var flooredNet = Math.max(0, rawNet);
@@ -435,16 +443,25 @@
       S.results.push({ round: S.roundNum, mapping: S.round.mappingId, stratum: S.round.stratum,
         reveals: reveals.length, best: bestOf(reveals), cost: costOf(reveals), rawNet: rawNet, flooredNet: flooredNet });
     }
+    // Mark the round ended and move to a distinct persisted phase, so a refresh
+    // on the result screen resumes the interstitial — never the finished round.
+    S.round.ended = true;
+    S.phase = 'interstitial';
     L.clearRoundContext();
     save();
-    showInterstitial(rawNet, flooredNet, reveals.length);
+    showInterstitial();
   }
 
-  function showInterstitial(rawNet, flooredNet, nReveals) {
+  // Recomputes the just-finished round's result from S.round (no params), so it
+  // renders identically whether reached from confirmStop or a resume/refresh.
+  function showInterstitial() {
+    var reveals = S.round.reveals;
+    var nReveals = reveals.length;
+    var rawNet = nReveals ? bestOf(reveals) - costOf(reveals) : 0;
     var practice = (S.roundNum === 0);
     $('inter-title').textContent = practice ? 'Practice complete' : 'Round ' + S.roundNum + ' complete';
     var b = '<div class="res-line">Reveals: <b>' + nReveals + '</b></div>' +
-            '<div class="res-line">Best value found: <b>' + (nReveals ? bestOf(S.round.reveals) + '¢' : '—') + '</b></div>' +
+            '<div class="res-line">Best value found: <b>' + (nReveals ? bestOf(reveals) + '¢' : '—') + '</b></div>' +
             '<div class="res-line">Net this round: <b class="res-big">' + rawNet + '¢</b></div>';
     if (practice) b += '<p class="muted small">This was practice and was not paid. The real rounds start now.</p>';
     $('inter-body').innerHTML = b;

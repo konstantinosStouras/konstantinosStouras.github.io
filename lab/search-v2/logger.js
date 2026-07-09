@@ -27,10 +27,16 @@ window.Logger = (function () {
   var ctx = {};             // round/mapping/stratum/reveals/cost/best/net
   var queue = [];           // events awaiting upload
   var mirror = [];          // full event log (backup + export)
-  var lastEventT = null;    // for rt_ms
+  var lastEventT = null;    // for rt_ms (subject actions only)
   var uploading = false;
+  var inFlight = 0;         // # of queued events currently inside an in-flight POST
   var timer = null;
   var LOG_KEY = '';         // localStorage key, set in init
+
+  // Meta events are client-side telemetry: they are mirrored + downloadable but
+  // never enqueued for upload (that would loop: every upload logs one, which the
+  // timer would re-upload forever) and never advance the subject clock (rt_ms).
+  function isMeta(event) { return event === 'upload_ok' || event === 'upload_fail'; }
 
   function nowMs() { return Date.now(); }
 
@@ -72,7 +78,7 @@ window.Logger = (function () {
   function build(event, extra) {
     var t = nowMs();
     var rt = lastEventT == null ? null : (t - lastEventT);
-    lastEventT = t;
+    if (!isMeta(event)) lastEventT = t; // meta events don't reset the subject clock
     var e = {};
     for (var i = 0; i < FIELDS.length; i++) e[FIELDS[i]] = null;
     // layer: base -> context -> per-event extra -> computed
@@ -82,15 +88,16 @@ window.Logger = (function () {
     return e;
   }
 
-  // Log one event. Meta events (upload_ok/upload_fail) never trigger an
-  // immediate size-flush (that would recurse), only the timer/beacon carry them.
+  // Log one event. Real events go to both the mirror and the upload queue; meta
+  // events go to the mirror only (see isMeta) so uploads never self-perpetuate.
   function log(event, extra) {
     var e = build(event, extra);
-    queue.push(e);
     mirror.push(e);
     saveMirror();
-    var meta = (event === 'upload_ok' || event === 'upload_fail');
-    if (!meta && queue.length >= CFG.BATCH_SIZE) flush();
+    if (!isMeta(event)) {
+      queue.push(e);
+      if (queue.length >= CFG.BATCH_SIZE) flush();
+    }
     return e;
   }
 
@@ -109,6 +116,7 @@ window.Logger = (function () {
     if (!queue.length) return Promise.resolve();
     uploading = true;
     var batch = queue.slice();
+    inFlight = batch.length; // front `inFlight` events are owned by this POST
     var body = JSON.stringify({ events: batch });
     var attempt = 0;
     function tryPost() {
@@ -121,6 +129,7 @@ window.Logger = (function () {
         if (!res.ok) throw new Error('HTTP ' + res.status);
         // drop the uploaded events from the queue (they may have grown meanwhile)
         queue = queue.slice(batch.length);
+        inFlight = 0;
         uploading = false;
         log('upload_ok', { value: batch.length });
       }).catch(function (err) {
@@ -128,6 +137,7 @@ window.Logger = (function () {
         if (attempt <= CFG.UPLOAD_MAX_RETRIES) {
           return delay(CFG.UPLOAD_BACKOFF_MS * Math.pow(2, attempt - 1)).then(tryPost);
         }
+        inFlight = 0; // give up: leave the batch in the queue for beacon/next flush
         uploading = false;
         log('upload_fail', { value: batch.length });
       });
@@ -135,13 +145,17 @@ window.Logger = (function () {
     return tryPost();
   }
 
-  // Fire-and-forget tail flush that survives page unload.
+  // Fire-and-forget tail flush that survives page unload. Sends only events that
+  // are NOT already inside an in-flight POST (which fetch keepalive will deliver),
+  // so an unload mid-upload never duplicates rows.
   function beaconFlush() {
-    if (!CFG.ENDPOINT_URL || !queue.length) return;
+    if (!CFG.ENDPOINT_URL) return;
+    var tail = queue.slice(inFlight);
+    if (!tail.length) return;
     try {
-      var blob = new Blob([JSON.stringify({ events: queue })], { type: 'text/plain;charset=UTF-8' });
+      var blob = new Blob([JSON.stringify({ events: tail })], { type: 'text/plain;charset=UTF-8' });
       if (navigator.sendBeacon && navigator.sendBeacon(CFG.ENDPOINT_URL, blob)) {
-        queue = [];
+        queue = queue.slice(0, inFlight); // keep only the in-flight batch
       }
     } catch (e) { /* ignore */ }
   }

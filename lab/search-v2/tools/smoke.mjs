@@ -151,6 +151,21 @@ async function main() {
         after.filter(e => e.event === 'round_start').length === startsBefore, 'starts=' + after.filter(e => e.event === 'round_start').length);
       ok('resume does not duplicate reveals',
         after.filter(e => e.event === 'reveal').length === revealsBefore, 'reveals=' + after.filter(e => e.event === 'reveal').length);
+
+      // 8b: refresh on the interstitial must NOT re-enter/re-score the finished round
+      await page.click('#btn-stop'); await page.waitForSelector('#ov-stop.show'); await page.click('#btn-stop-ok');
+      await page.waitForSelector('#s-interstitial.active');
+      const endsBefore = (await getEvents(page)).filter(e => e.event === 'round_end').length;
+      await page.reload({ waitUntil: 'networkidle' });
+      await page.waitForSelector('#s-interstitial.active', { timeout: 8000 }).catch(() => {});
+      ok('refresh on interstitial stays on the interstitial (not the round)',
+        await page.isVisible('#s-interstitial') && !(await page.isVisible('#s-round')));
+      const endsAfter = (await getEvents(page)).filter(e => e.event === 'round_end').length;
+      ok('refresh on interstitial does not duplicate round_end', endsAfter === endsBefore, 'ends ' + endsBefore + '->' + endsAfter);
+      await page.click('#btn-continue');
+      await page.waitForSelector('#s-round.active');
+      ok('continue after interstitial-refresh advances to the next round',
+        (await page.innerText('#round-label')).includes('Round 1'));
       await ctx.close();
     }
 
@@ -191,6 +206,18 @@ async function main() {
       ok('upload delivered events to the endpoint', uploaded.length > 0, 'got ' + uploaded.length);
       const upTs = uploaded.map(e => e.t);
       ok('uploaded events are in order', upTs.every((t, i) => i === 0 || t >= upTs[i - 1]));
+      // meta events are mirrored locally but NEVER uploaded (no self-perpetuating loop)
+      ok('upload_ok/upload_fail are NOT uploaded to the endpoint',
+        uploaded.every(e => e.event !== 'upload_ok' && e.event !== 'upload_fail'));
+      ok('upload_ok IS recorded in the local mirror', types.includes('upload_ok'));
+      // no duplicate rows: each uploaded non-meta event id (t+event+position) appears once
+      const seen = new Set(), keyOf = e => e.t + '|' + e.event + '|' + e.position + '|' + e.round;
+      let dup = 0; uploaded.forEach(e => { const k = keyOf(e); if (seen.has(k)) dup++; seen.add(k); });
+      ok('no duplicate events uploaded', dup === 0, dup + ' dups');
+      // rt_ms of a subject action is not clobbered by a meta event (meta events carry rt but
+      // do not advance the subject clock): every reveal has a positive/def rt_ms
+      ok('reveal events carry rt_ms (subject clock intact)',
+        ev.filter(e => e.event === 'reveal').every(e => e.rt_ms === null || typeof e.rt_ms === 'number'));
       // CSV export works
       const csv = await page.evaluate(() => window.Logger.toCSV());
       ok('CSV export has header + one row per event', csv.split('\n').length >= ev.length + 1);

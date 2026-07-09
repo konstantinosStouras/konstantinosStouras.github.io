@@ -30,7 +30,11 @@ var FIELDS = [
 ];
 
 function doPost(e) {
+  var lock = LockService.getScriptLock();
   try {
+    // Serialize appends so a keepalive POST and a sendBeacon tail (or a retry)
+    // never race on getLastRow() and overwrite each other's rows.
+    lock.waitLock(30000);
     var body = (e && e.postData && e.postData.contents) ? e.postData.contents : '{}';
     var payload = JSON.parse(body);
     var events = payload.events || (payload.event ? [payload] : []);
@@ -48,6 +52,8 @@ function doPost(e) {
     return json_({ ok: true, wrote: rows.length });
   } catch (err) {
     return json_({ ok: false, error: String(err) });
+  } finally {
+    try { lock.releaseLock(); } catch (e2) {}
   }
 }
 

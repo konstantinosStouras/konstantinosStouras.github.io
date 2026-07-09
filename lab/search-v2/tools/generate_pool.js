@@ -156,7 +156,6 @@ const practice = makePractice();
 // Main loop with POOR-acceptance relaxation safety valve.
 let sinceRelaxConsidered = 0, poorAcceptCheckpoint = 0;
 while (rich.length < PER_STRATUM || poor.length < PER_STRATUM) {
-  const beforePoor = poor.length;
   tryOne();
   sinceRelaxConsidered++;
   // If POOR is starving badly, relax POOR_INTERIOR_MAX upward in steps of 5.
