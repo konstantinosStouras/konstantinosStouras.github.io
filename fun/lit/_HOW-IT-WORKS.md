@@ -138,6 +138,12 @@ full backfill, later runs only re-check recent publications). This is a
 sets differ at the margins; an official label from the local crawl always
 wins per-DOI. The build log prints how many papers used each source.
 
+A **partial** official crawl is always safe to push: its labels win for the
+papers it covers and the approximation keeps covering the rest. Only an index
+that is both marked complete *and* plausibly sized (at least half the size of
+the approximation) is trusted to also *exclude* papers it doesn't list — a
+truncated crawl can therefore never shrink the dataset.
+
 ## The ISR/Marketing Science editors wrinkle (same idea)
 
 Senior/Associate Editor names live in each article's "History:" line on

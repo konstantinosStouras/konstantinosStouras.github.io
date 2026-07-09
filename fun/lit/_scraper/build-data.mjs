@@ -522,15 +522,28 @@ function applyPnasSections(papers, cache, approx) {
   // The approximation then only covers the fresh tail the crawl hasn't seen
   // yet (papers from the crawl year onward). Re-running the local script
   // therefore corrects BOTH wrong labels and wrongly included papers.
-  const officialCutoffYear = (cache.full && cache.updated)
+  // Safety valve: pnas.org's search can paginate short (rate limits, anonymous
+  // caps), yielding a crawl that carries full=true but lists only a fraction
+  // of the corpus; trusting it would silently drop every paper it missed.
+  // Only honor the flag when the official index is at least half the size of
+  // the approximation it would be allowed to overrule.
+  const nOfficial = Object.keys(cache.map || {}).length;
+  const nApprox = approx && approx.map ? Object.keys(approx.map).length : 0;
+  const fullTrusted = !!(cache.full && cache.updated) && nOfficial >= nApprox / 2;
+  if (cache.full && cache.updated && !fullTrusted) {
+    console.warn(`  pnas official index is marked full but holds only ${nOfficial} DOIs ` +
+      `(OpenAlex approximation: ${nApprox}) — treating it as PARTIAL: its labels win ` +
+      'per-paper, but no papers are dropped for being absent from it.');
+  }
+  const officialCutoffYear = fullTrusted
     ? parseInt(String(cache.updated).slice(0, 4), 10)
-    : -Infinity; // no full official index yet: approximation covers everything
+    : -Infinity; // no trusted full official index: approximation covers everything
   for (const p of papers) {
     let keys = cache.map[p._doi];
     if (keys && keys.length) official++;
     else {
       const y = parseInt(p.Year, 10) || 0;
-      const approxAllowed = !(cache.full && cache.updated) || y >= officialCutoffYear;
+      const approxAllowed = !fullTrusted || y >= officialCutoffYear;
       keys = approxAllowed && approx && approx.map ? approx.map[p._doi] : null;
       if (keys && keys.length) approximate++;
     }
