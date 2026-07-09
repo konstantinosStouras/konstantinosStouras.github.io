@@ -27,7 +27,7 @@
 
     <!-- ============ STUDY CLOSED ============ -->
     <section class="screen" id="s-closed">
-      <div class="card center" style="max-width:560px; margin:48px auto;">
+      <div class="card center" style="max-width:560px; margin:48px auto;" id="closed-body">
         <h2>This study is not currently open</h2>
         <p class="muted">Thank you for your interest. Recruitment for this study is
         paused or complete right now. If you reached this page from a study listing,
@@ -39,18 +39,7 @@
     <section class="screen" id="s-consent">
       <h1>Before you begin</h1>
       <div class="card">
-        <p><b>What this is.</b> This is a short decision-making study. You will play a
-        simple game in which you search a hidden line of positions for the highest value.
-        The whole study takes about <b>15 minutes</b>.</p>
-        <p><b>Payment.</b> You receive the base payment for participating. In addition,
-        two rounds of the game are chosen at random at the end and paid to you as a
-        <b>bonus</b>, based on how well you did in those rounds.</p>
-        <p><b>Anonymity.</b> We record only your choices in the game (which positions you
-        reveal, when you stop, and your answers to a few questions). We do not collect any
-        personally identifying information beyond the anonymous IDs your recruitment
-        platform provides. Your data are used only for research.</p>
-        <p><b>Voluntary.</b> Participation is voluntary and you may stop at any time by
-        closing the window.</p>
+        <div id="consent-body"><!-- filled by app.js (admin-editable, with a built-in default) --></div>
         <label class="consent-line">
           <input type="checkbox" id="consent-box" />
           <span>I have read the above and I agree to take part.</span>

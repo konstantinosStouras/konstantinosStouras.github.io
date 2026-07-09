@@ -25,7 +25,33 @@
   var lastSelectLogT = 0;
   var STUDY_CLOSED = false;    // set from the admin-controlled config/study doc
   var STUDY_ARM_MODE = 'url';  // 'url' | 'A' | 'B' | 'random' (admin-controlled)
-  var STUDY_CFG = null;        // raw admin config/study doc (for arm-specific codes)
+  var STUDY_CFG = null;        // raw settings (config/study or a session's settings)
+  var SESSION_CODE = null;     // admin "session" (wave) code from ?code= (stamped on data)
+  var SESSION_NAME = null;     // its human name
+  var CONTENT = {};            // admin content overrides { consent, instructions, instructionsB, finish, closed }
+  var PREVIEW = false;         // admin preview: skip intro, don't write to Firestore
+
+  // Built-in default participant-facing copy (used when the admin hasn't overridden it).
+  var BUILTIN = {
+    consent:
+      "**What this is.** This is a short decision-making study. You will play a simple game in which you search a hidden line of positions for the highest value. The whole study takes about **15 minutes**.\n\n" +
+      "**Payment.** You receive the base payment for participating. In addition, two rounds of the game are chosen at random at the end and paid to you as a **bonus**, based on how well you did in those rounds.\n\n" +
+      "**Anonymity.** We record only your choices in the game (which positions you reveal, when you stop, and your answers to a few questions). We do not collect any personally identifying information beyond the anonymous IDs your recruitment platform provides. Your data are used only for research.\n\n" +
+      "**Voluntary.** Participation is voluntary and you may stop at any time by closing the window.",
+    instructions:
+      "In each round you will see 100 positions on a line. Each position hides a value between 0 and 100 cents.\n\n" +
+      "Values at adjacent positions differ by at most 10 cents. So positions two apart differ by at most 20 cents, and so on.\n\n" +
+      "You can reveal the value at any position. Each reveal costs 5 cents. You can stop whenever you want.\n\n" +
+      "Your earnings for the round are the highest value you revealed, minus 5 cents for each reveal. If you reveal nothing, you earn 0 for the round.\n\n" +
+      "After each round the values reset and will be different. There is 1 practice round and 10 real rounds. Two of the 10 real rounds will be picked at random and paid to you as a bonus.",
+    instructionsB:
+      "You also have a free assistant.\n\n" +
+      "The assistant was trained on data about some positions between 30 and 70. You cannot see its data. If you ask about a position between 30 and 70, it gives you its best estimate: a straight line between its two nearest data points. Its estimates are usually close, but they are not guaranteed.\n\n" +
+      "If you ask about any position outside 30 to 70, the assistant has no data and will tell you so.\n\n" +
+      "Asking the assistant is free and unlimited. The assistant does not learn from your reveals in this study.",
+    finish: "",
+    closed: ""
+  };
 
   // ---- tiny seeded PRNG + string hash (session-deterministic) --------------
   function mulberry32(a) {
@@ -83,41 +109,66 @@
   function boot() {
     var pr = params();
     DEBUG = (pr.debug === '1' && pr.key === CFG.DEBUG_KEY);
+    // Admin preview: skip the intro and never write to Firestore. Gated on the
+    // debug key so real participants can never bypass consent.
+    PREVIEW = (pr.preview === '1' && DEBUG);
     // Debug-only: override the logging endpoint from the URL (for local testing).
     if (DEBUG && pr.endpoint) CFG.ENDPOINT_URL = pr.endpoint;
+    SESSION_CODE = pr.code || null; // admin "session" (wave) code from the launch link
 
-    // stable session id (Prolific SESSION_ID if given, else persisted uuid)
-    var session = pr.SESSION_ID || localStorage.getItem('searchv2:sid');
+    // stable session id (Prolific SESSION_ID if given, else persisted uuid).
+    // Preview uses a throwaway id so it never resumes/pollutes a real session.
+    var session = PREVIEW ? ('preview-' + (pr.code || 'x')) : (pr.SESSION_ID || localStorage.getItem('searchv2:sid'));
     if (!session) {
       session = (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
         : 'sid-' + Date.now() + '-' + Math.floor(Math.random() * 1e9);
       localStorage.setItem('searchv2:sid', session);
     }
 
-    // load or init state
+    // load or init state (preview always starts fresh)
     var saved = null;
-    try { saved = JSON.parse(localStorage.getItem('searchv2:state:' + session)); } catch (e) {}
+    if (!PREVIEW) { try { saved = JSON.parse(localStorage.getItem('searchv2:state:' + session)); } catch (e) {} }
     S = saved || {};
     S.version = CFG.APP_VERSION;
     S.session = session;
     S.pid = pr.PROLIFIC_PID || S.pid || null;
     S.study = pr.STUDY_ID || S.study || null;
 
-    // If Firebase is configured, read the admin-controlled study config first
-    // (completion code, open/closed, arm mode); otherwise proceed immediately.
+    // If Firebase is configured, load the admin settings first: a specific
+    // session (wave) when ?code= is present, otherwise the legacy config/study.
     if (window.SVFirebase && SVFirebase.isConfigured()) {
-      SVFirebase.getStudyConfig().then(function (scfg) { applyStudyConfig(scfg); finishBoot(pr); });
+      var loader = SESSION_CODE
+        ? SVFirebase.getSessionByCode(SESSION_CODE).then(applyWave)
+        : SVFirebase.getStudyConfig().then(applyStudyConfig);
+      loader.then(function () { finishBoot(pr); });
     } else {
       finishBoot(pr);
     }
   }
 
+  // Apply a config/study doc (legacy single-study mode).
   function applyStudyConfig(scfg) {
     STUDY_CFG = scfg || null;
     if (!scfg) return;
     if (scfg.endpointUrl && !CFG.ENDPOINT_URL) CFG.ENDPOINT_URL = scfg.endpointUrl;
     if (scfg.armMode) STUDY_ARM_MODE = scfg.armMode;
+    if (scfg.content) CONTENT = scfg.content;
     STUDY_CLOSED = (scfg.studyOpen === false);
+  }
+
+  // Apply a specific admin-created session (wave). A missing/unreachable session
+  // does NOT block the participant (never strand a paid subject on a network blip);
+  // a session explicitly marked completed does close.
+  function applyWave(sess) {
+    if (!sess) return; // bad code or transient error → proceed with built-in defaults
+    SESSION_NAME = sess.name || null;
+    if (sess.code) SESSION_CODE = sess.code;
+    if (sess.status === 'completed') STUDY_CLOSED = true;
+    var s = sess.settings || {};
+    STUDY_CFG = s;
+    if (s.endpointUrl && !CFG.ENDPOINT_URL) CFG.ENDPOINT_URL = s.endpointUrl;
+    if (s.armMode) STUDY_ARM_MODE = s.armMode;
+    if (s.content) CONTENT = s.content;
   }
 
   function finishBoot(pr) {
@@ -139,19 +190,21 @@
       if (code) CFG.COMPLETION_CODE = code;
     }
 
-    if (DEBUG) { $('nav-arm').textContent = 'Arm ' + arm + (S.round ? ' · ' + (S.round.mappingId || '') : ''); $('btn-restart').style.display = ''; }
+    if (DEBUG) { $('nav-arm').textContent = (PREVIEW ? 'PREVIEW · ' : '') + 'Arm ' + arm + (SESSION_CODE ? ' · ' + SESSION_CODE : ''); $('btn-restart').style.display = ''; }
 
     // Study closed: only turn away subjects who have not started (in-progress and
     // finished subjects are always let through so they can finish / see the code).
-    if (STUDY_CLOSED && !S.completed && (!S.phase || S.phase === 'consent')) { show('s-closed'); return; }
+    // Preview always proceeds (the admin is testing).
+    if (STUDY_CLOSED && !PREVIEW && !S.completed && (!S.phase || S.phase === 'consent')) { renderClosed(); show('s-closed'); return; }
 
-    // logger base fields
+    // logger base fields (stamp the admin session code/name on every event)
     L.init({
-      session: S.session, pid: S.pid, study: S.study, arm: arm,
+      session: S.session, sessionCode: SESSION_CODE, sessionName: SESSION_NAME,
+      pid: S.pid, study: S.study, arm: arm,
       ua: navigator.userAgent, vw: window.innerWidth, vh: window.innerHeight,
       appVersion: CFG.APP_VERSION
     });
-    startFirebaseSync();
+    if (!PREVIEW) startFirebaseSync(); // preview never writes to Firestore
 
     loadAssistantIfNeeded(function () {
       fetch('data/mappings.json', { cache: 'no-store' })
@@ -222,6 +275,10 @@
   // resume to the right screen
   function route() {
     if (S.completed) { renderFinish(); show('s-finish'); return; }
+    // Preview (admin testing): skip consent/instructions/quiz, drop into practice.
+    if (PREVIEW && (!S.phase || S.phase === 'consent' || S.phase === 'instructions' || S.phase === 'quiz')) {
+      startRound(0, false); return;
+    }
     switch (S.phase) {
       case 'instructions': showInstructions(); break;
       case 'quiz': showQuiz(); break;
@@ -239,32 +296,33 @@
   // ======================================================================
   //  CONSENT
   // ======================================================================
+  // Render admin-editable prose: escape HTML, blank line => paragraph, **bold**.
+  function renderProse(text) {
+    return String(text || '').split(/\n\s*\n/).map(function (para) {
+      var safe = esc(para.trim()).replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
+      return safe ? '<p>' + safe + '</p>' : '';
+    }).join('');
+  }
+  function content(key) { return (CONTENT && CONTENT[key]) ? CONTENT[key] : BUILTIN[key]; }
+
   function showConsent() {
     S.phase = 'consent'; save();
+    $('consent-body').innerHTML = renderProse(content('consent'));
     show('s-consent');
     $('consent-box').checked = false;
     $('btn-consent').disabled = true;
   }
 
+  function renderClosed() {
+    if (CONTENT && CONTENT.closed) $('closed-body').innerHTML = renderProse(CONTENT.closed);
+  }
+
   // ======================================================================
-  //  INSTRUCTIONS  (verbatim, arm-specific)
+  //  INSTRUCTIONS  (admin-editable; built-in default is the verbatim study text)
   // ======================================================================
   function instructionsHTML() {
-    var h =
-      '<blockquote>' +
-      '<p>In each round you will see 100 positions on a line. Each position hides a value between 0 and 100 cents.</p>' +
-      '<p>Values at adjacent positions differ by at most 10 cents. So positions two apart differ by at most 20 cents, and so on.</p>' +
-      '<p>You can reveal the value at any position. Each reveal costs 5 cents. You can stop whenever you want.</p>' +
-      '<p>Your earnings for the round are the highest value you revealed, minus 5 cents for each reveal. If you reveal nothing, you earn 0 for the round.</p>' +
-      '<p>After each round the values reset and will be different. There is 1 practice round and 10 real rounds. Two of the 10 real rounds will be picked at random and paid to you as a bonus.</p>';
-    if (arm === 'B') {
-      h +=
-        '<hr>' +
-        '<p>You also have a free assistant.</p>' +
-        '<p>The assistant was trained on data about some positions between 30 and 70. You cannot see its data. If you ask about a position between 30 and 70, it gives you its best estimate: a straight line between its two nearest data points. Its estimates are usually close, but they are not guaranteed.</p>' +
-        '<p>If you ask about any position outside 30 to 70, the assistant has no data and will tell you so.</p>' +
-        '<p>Asking the assistant is free and unlimited. The assistant does not learn from your reveals in this study.</p>';
-    }
+    var h = '<blockquote>' + renderProse(content('instructions'));
+    if (arm === 'B') h += '<hr>' + renderProse(content('instructionsB'));
     h += '</blockquote>';
     return h;
   }
@@ -610,10 +668,13 @@
               '<td>' + res.rawNet + '¢</td>' +
               '<td>' + (picked ? '✔ paid' : '') + '</td></tr>';
     }
+    var intro = (CONTENT && CONTENT.finish)
+      ? renderProse(CONTENT.finish)
+      : '<p>Thank you for taking part. Below are your 10 real rounds. The two rounds marked ' +
+        '<b>paid</b> were selected at random; your bonus is the sum of their earnings ' +
+        '(a round counts as 0 if it was negative).</p>';
     $('finish-body').innerHTML =
-      '<p>Thank you for taking part. Below are your 10 real rounds. The two rounds marked ' +
-      '<b>paid</b> were selected at random; your bonus is the sum of their earnings ' +
-      '(a round counts as 0 if it was negative).</p>' +
+      intro +
       '<table class="paid-table"><thead><tr><th>Round</th><th>Reveals</th><th>Best</th><th>Net</th><th></th></tr></thead>' +
       '<tbody>' + rows + '</tbody></table>' +
       '<p class="res-line">Your bonus: <b class="res-big">$' + bonus + '</b></p>';

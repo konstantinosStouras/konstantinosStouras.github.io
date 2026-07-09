@@ -87,6 +87,19 @@ window.SVFirebase = (function () {
     return Promise.race([fetchCfg, timeout]);
   }
 
+  // Participant: look up the study "session" (wave) they were sent to by its code
+  // (from ?code=… in the launch URL). Returns { id, ...data } or null.
+  function getSessionByCode(code) {
+    if (!configured || !code) return Promise.resolve(null);
+    var timeout = new Promise(function (r) { setTimeout(function () { r(null); }, 4000); });
+    var fetchIt = init().then(ensureAuth).then(function () {
+      var col = sdk.fs.collection(db, 'sessions');
+      return sdk.fs.getDocs(sdk.fs.query(col, sdk.fs.where('code', '==', code), sdk.fs.limit(1)));
+    }).then(function (qs) { var r = null; qs.forEach(function (d) { if (!r) r = Object.assign({ id: d.id }, d.data()); }); return r; })
+      .catch(function () { return null; });
+    return Promise.race([fetchIt, timeout]);
+  }
+
   // ---- admin side ----------------------------------------------------------
   // Admin-only, honest read of config/study. Resolves the doc data, or null if
   // the document does not exist yet (a legitimate first-run state → safe to show
@@ -123,12 +136,50 @@ window.SVFirebase = (function () {
     });
   }
 
+  // ---- admin: sessions (waves) CRUD ---------------------------------------
+  function listSessions() {
+    return init().then(function () {
+      return sdk.fs.getDocs(sdk.fs.collection(db, 'sessions'));
+    }).then(function (qs) { var out = []; qs.forEach(function (d) { out.push(Object.assign({ id: d.id }, d.data())); }); return out; });
+  }
+  function createSession(obj) {
+    return init().then(function () { return sdk.fs.addDoc(sdk.fs.collection(db, 'sessions'), obj); })
+      .then(function (ref) { return ref.id; });
+  }
+  function updateSession(id, obj) {
+    return init().then(function () { return sdk.fs.setDoc(sdk.fs.doc(db, 'sessions', id), obj, { merge: true }); });
+  }
+  function deleteSession(id) {
+    return init().then(function () { return sdk.fs.deleteDoc(sdk.fs.doc(db, 'sessions', id)); });
+  }
+  function codeExists(code) {
+    return init().then(function () {
+      return sdk.fs.getDocs(sdk.fs.query(sdk.fs.collection(db, 'sessions'), sdk.fs.where('code', '==', code), sdk.fs.limit(1)));
+    }).then(function (qs) { var n = 0; qs.forEach(function () { n++; }); return n > 0; });
+  }
+
+  // ---- admin: saved defaults for new sessions (config/defaults) ------------
+  function defaultsRef() { return sdk.fs.doc(db, 'config', 'defaults'); }
+  // Honest admin read (like adminLoadStudyConfig): resolves the doc, or null when
+  // it genuinely doesn't exist (first run), and REJECTS on a real read error — so
+  // the admin never seeds the form with built-ins after a failed read and then
+  // clobbers the saved defaults via "Make this the default".
+  function getDefaults() {
+    return init().then(function () { return sdk.fs.getDoc(defaultsRef()); })
+      .then(function (s) { return s.exists() ? s.data() : null; });
+  }
+  function saveDefaults(obj) { return init().then(function () { return sdk.fs.setDoc(defaultsRef(), obj, { merge: false }); }); }
+
   return {
     isConfigured: isConfigured, init: init,
     signInAnon: signInAnon, writeEvent: writeEvent, getStudyConfig: getStudyConfig,
+    getSessionByCode: getSessionByCode,
     adminSignIn: adminSignIn, adminSignOut: adminSignOut, onAuth: onAuth,
     adminLoadStudyConfig: adminLoadStudyConfig,
     saveStudyConfig: saveStudyConfig, fetchEvents: fetchEvents,
+    listSessions: listSessions, createSession: createSession, updateSession: updateSession,
+    deleteSession: deleteSession, codeExists: codeExists,
+    getDefaults: getDefaults, saveDefaults: saveDefaults,
     adminEmails: window.ADMIN_EMAILS || [], paths: PATHS
   };
 })();
