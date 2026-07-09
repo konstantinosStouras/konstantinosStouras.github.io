@@ -52,6 +52,12 @@ jobs:
         run: node fun/lit/_scraper/build-data.mjs
 
       - name: Commit refreshed data
+        # Only the default branch carries the committed dataset. Feature
+        # branches (e.g. a PR that changes the scraper) still run the full
+        # build above as a check, but must NOT commit data back to themselves:
+        # that put auto-generated JSON in PR diffs and conflicted with master's
+        # own refresh commits. Data is rebuilt and committed on master post-merge.
+        if: github.ref == 'refs/heads/master'
         # If another run pushed data while this one was building, a plain
         # rebase would conflict on the one-line JSON files and a naive push
         # would silently no-op (this lost a dataset once). Instead: on a
