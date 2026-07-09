@@ -1,0 +1,41 @@
+rules_version = '2';
+// ==========================================================================
+// search-v2 · Firestore security rules
+// Deploy these in Firebase console → Firestore Database → Rules → Publish.
+// REPLACE the admin email(s) below with your own (must match ADMIN_EMAILS in
+// firebase-config.js and the Email/Password user you created in Firebase Auth).
+// ==========================================================================
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() { return request.auth != null; }
+
+    // Admin allow-list. Add more emails to the list if you have co-admins.
+    function isAdmin() {
+      return isSignedIn()
+        && request.auth.token.email in ['admin@stouras.com'];
+    }
+
+    // Participant events: anyone signed in (participants sign in anonymously)
+    // may CREATE their own event documents. Only the admin may read or modify
+    // them, so one participant can never read another's data.
+    match /events/{eventId} {
+      allow create: if isSignedIn();
+      allow read:   if isAdmin();
+      allow update: if isAdmin();   // the app overwrites the same doc on retry/resume (idempotent)
+      allow delete: if isAdmin();
+    }
+
+    // Admin-controlled study conditions & completion codes. Readable by the app
+    // (anonymous participants) so it can apply them; writable only by the admin.
+    match /config/{docId} {
+      allow read:  if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Deny everything else by default.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

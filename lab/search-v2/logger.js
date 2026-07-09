@@ -88,16 +88,25 @@ window.Logger = (function () {
     return e;
   }
 
+  // Optional per-event sinks (e.g. Firestore). Each is called synchronously with
+  // (event, seq) where seq is the event's stable index in the session log, so a
+  // sink can write idempotently (resume/retry overwrites, never duplicates).
+  var sinks = [];
+  function onEvent(fn) { if (typeof fn === 'function') sinks.push(fn); }
+  function eventCount() { return mirror.length; }
+
   // Log one event. Real events go to both the mirror and the upload queue; meta
   // events go to the mirror only (see isMeta) so uploads never self-perpetuate.
   function log(event, extra) {
     var e = build(event, extra);
     mirror.push(e);
+    var seq = mirror.length - 1;
     saveMirror();
     if (!isMeta(event)) {
       queue.push(e);
       if (queue.length >= CFG.BATCH_SIZE) flush();
     }
+    for (var i = 0; i < sinks.length; i++) { try { sinks[i](e, seq); } catch (err) { /* isolate */ } }
     return e;
   }
 
@@ -202,6 +211,8 @@ window.Logger = (function () {
     setContext: setContext,
     clearRoundContext: clearRoundContext,
     log: log,
+    onEvent: onEvent,
+    eventCount: eventCount,
     flush: flush,
     pending: pending,
     getEvents: getEvents,

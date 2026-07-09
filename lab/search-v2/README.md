@@ -30,6 +30,11 @@ lab/search-v2/
   chart.js              inline-SVG chart (axes, selection, dots, diamonds, debug)
   assistant.js          interpolation + refusal + query log (loaded only in Arm B)
   logger.js             event queue, batching, sendBeacon, localStorage, CSV/JSON
+  firebase-config.js    OPTIONAL: paste your Firebase project config here
+  firebase.js           OPTIONAL Firestore/Auth integration (inert until configured)
+  firestore.rules       security rules to deploy in the Firebase console
+  admin/index.html      admin panel (conditions, session codes, data) — /admin/
+  admin/admin.js        admin panel logic
   data/mappings.json    SHIPPED landscape pool (obfuscated), loaded by both arms
   tools/generate_pool.js  offline seeded pool generator → data/mappings.json
   tools/apps_script_endpoint.gs  paste-ready Google Apps Script logging endpoint
@@ -127,6 +132,59 @@ hide. Each event becomes one row in the sheet, in the column order below.
 
 Also set `COMPLETION_CODE` in `config.js` to your Prolific completion code before
 launch.
+
+---
+
+## Admin panel & Firebase setup (optional but recommended)
+
+The **admin panel** at **`/lab/search-v2/admin/`** lets you, from any browser:
+
+- **control the conditions** — study **open/closed**, and the **arm assignment
+  mode** (from the `?arm` link · force A · force B · random 50/50);
+- **set session codes** — the Prolific **completion code** (shared, or a separate
+  code per arm), and optionally an Apps-Script endpoint URL;
+- **see the data** — a live per-session summary and event table, with CSV/JSON
+  export.
+
+These are backed by **Firebase (Firestore + Auth)**. Until you configure it, the
+admin panel still opens in a **local preview** (showing only the current browser’s
+test sessions) and the experiment runs exactly as before. Nothing about the
+participant experience changes until you paste a real config.
+
+### One-time Firebase setup (with a dedicated account)
+
+1. **Dedicated account.** Create/great a Google account just for this study (e.g. a
+   new Gmail), so the research data lives separately from personal projects. Sign
+   into the [Firebase console](https://console.firebase.google.com) with it.
+2. **Create a project** — *Add project*, name it e.g. `search-v2` (Analytics
+   optional).
+3. **Firestore** — *Build → Firestore Database → Create database*, **Production
+   mode**, pick a region near your subjects.
+4. **Authentication** — *Build → Authentication → Get started*; enable
+   **Anonymous** (participants) and **Email/Password** (you). Under *Users → Add
+   user*, create your admin login (e.g. `admin@stouras.com` + a strong password).
+5. **Web app config** — *Project settings → General → Your apps → Web (`</>`)*,
+   register an app, and copy the `firebaseConfig` object.
+6. **Paste config** — put that object into `lab/search-v2/firebase-config.js` (over
+   the `PASTE_…` placeholders) and set `ADMIN_EMAILS` to your admin email. Commit &
+   push.
+7. **Deploy rules** — copy `lab/search-v2/firestore.rules` into Firestore →
+   **Rules**, replace `admin@stouras.com` with your admin email, and **Publish**.
+8. **Use it** — open `/lab/search-v2/admin/`, sign in with your admin account, set
+   the conditions, and watch data arrive on the **Data** tab as participants play.
+
+### How it fits together
+
+- Participants **sign in anonymously** and each logged event is written to the
+  Firestore **`events`** collection, keyed by `session__<sequence>` so a resume or
+  retry **overwrites** rather than duplicates. (localStorage mirror + the optional
+  Apps-Script endpoint keep working in parallel.)
+- The app reads the admin-controlled **`config/study`** document on load and
+  applies it (arm mode, open/closed, completion code). The security rules let
+  anyone signed in *read* `config/study` but only your admin email *write* it, and
+  only the admin can *read* the `events` collection — so one participant can never
+  read another’s data.
+- Free-tier Firestore (Spark plan) is ample for a study of this size.
 
 ---
 

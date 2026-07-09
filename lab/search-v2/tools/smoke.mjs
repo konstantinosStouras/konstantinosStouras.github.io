@@ -272,6 +272,32 @@ async function main() {
       await ctx.close(); await ctx2.close();
     }
 
+    // ---------------- TEST 11: Admin panel (local-preview mode) ----------------
+    console.log('\nTest 11 · Admin panel renders in local mode + reads local data');
+    {
+      const ctx = await browser.newContext();
+      const page = await ctx.newPage();
+      // play a short session so this origin has local log data for the admin to show
+      await page.goto(APP + '?arm=A&SESSION_ID=smokeAdmin', { waitUntil: 'networkidle' });
+      await consentInstructionsQuiz(page, 'A');
+      await playRound(page, 1); // practice
+      await playRound(page, 2); // round 1
+      // now open the admin panel in the SAME origin/context
+      await page.goto(APP + 'admin/', { waitUntil: 'networkidle' });
+      ok('admin opens straight to the dashboard when Firebase is unconfigured', await page.isVisible('#a-dash'));
+      ok('admin shows the local-preview banner', /local preview/i.test(await page.innerText('#dash-banner')));
+      ok('conditions Save is disabled in local mode', await page.locator('#btn-save').isDisabled());
+      // Data tab
+      await page.click('.tab[data-tab="data"]');
+      ok('data tab shows a stat grid', (await page.locator('#stat-grid .stat-box').count()) >= 3);
+      ok('data tab lists at least one session', (await page.locator('#sessions-table tbody tr').count()) >= 1);
+      ok('data tab lists events', (await page.locator('#events-table tbody tr').count()) >= 1);
+      // Setup tab has the Firebase steps
+      await page.click('.tab[data-tab="setup"]');
+      ok('setup tab documents Firebase steps', /firebase/i.test(await page.innerText('#setup-body')));
+      await ctx.close();
+    }
+
   } finally {
     await browser.close();
     server.kill('SIGKILL');
