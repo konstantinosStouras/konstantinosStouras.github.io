@@ -1,2 +1,6 @@
 !lab/knapsack-with-dependencies/
 Rplots.pdf
+
+# search-v2: plain (un-obfuscated) analysis pool + node deps for its tools
+lab/search-v2/tools/pool_plain.json
+node_modules/
