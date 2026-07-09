@@ -114,6 +114,12 @@ npm install --no-save playwright-core   # once
 node pnas-concepts-browser-local.mjs    # a browser window opens and crawls
 ```
 
+And if even that is challenged (Cloudflare also detects automated browsers),
+the guaranteed path is `_scraper/pnas-concepts-console.js`: paste its whole
+contents into DevTools → Console on any www.pnas.org tab — it crawls inside
+your normal browsing session and downloads a ready `_pnas-concepts.json` to
+drop into `fun/lit/data/` and push.
+
 Later runs are incremental (about a minute); re-run it every month or so to
 pick up newly published PNAS papers. Everything else — including joining that
 index with fresh Crossref metadata — happens automatically in the daily
