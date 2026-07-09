@@ -439,6 +439,32 @@ async function main() {
       await ctx.close();
     }
 
+    // ---------------- TEST 16: Admin won't clobber saved defaults it failed to load ----------------
+    // Regression guard (adapted from #446 to the multi-session model): if the
+    // config/defaults read FAILS (not "doc absent"), the admin must warn and
+    // DISABLE "Make this the default" so it never overwrites the real saved
+    // defaults with the built-ins the form falls back to showing.
+    console.log('\nTest 16 · Admin refuses to overwrite defaults it could not load');
+    {
+      // Same mock family as fbCtx, but getDoc(config/defaults) rejects.
+      const FS_ERR = FB_MOCK_FS.replace(
+        'export function getDoc(ref){ var d=S().docs[ref.path];',
+        "export function getDoc(ref){ if(ref.path==='config/defaults') return Promise.reject({code:'unavailable'}); var d=S().docs[ref.path];");
+      const ctx = await browser.newContext();
+      await ctx.route('**/firebase-app.js', r => r.fulfill({ contentType: 'application/javascript', body: FB_MOCK_APP }));
+      await ctx.route('**/firebase-auth.js', r => r.fulfill({ contentType: 'application/javascript', body: FB_MOCK_AUTH }));
+      await ctx.route('**/firebase-firestore.js', r => r.fulfill({ contentType: 'application/javascript', body: FS_ERR }));
+      const page = await ctx.newPage();
+      await page.goto(APP + 'admin/', { waitUntil: 'domcontentloaded' });
+      await page.waitForSelector('#a-login.active', { timeout: 8000 }).catch(() => {});
+      await page.fill('#in-email', 'admin@admin.com'); await page.fill('#in-pass', 'goodpass'); await page.click('#btn-login');
+      await sleep(1200);
+      ok('admin still reaches the dashboard when the defaults read fails', await page.isVisible('#a-dash'));
+      ok('a warning about not overwriting defaults is shown', /not overwritten|could not load saved defaults/i.test(await page.innerText('#dash-banner')));
+      ok('"Make this the default" is disabled after a failed defaults read', await page.locator('#btn-makedefault').isDisabled());
+      await ctx.close();
+    }
+
   } finally {
     await browser.close();
     server.kill('SIGKILL');

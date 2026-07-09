@@ -85,7 +85,14 @@
     $('btn-signout').style.display = '';
     $('btn-analytics-nav').style.display = '';
     show('a-dash');
-    FB.getDefaults().then(function (d) { fillForm(null, d || BUILTIN_SETTINGS); renderSummary(); });
+    // Seed the new-session form from the saved defaults. On a real read error we
+    // do NOT silently fall back to built-ins (that plus "Make this the default"
+    // would overwrite the real saved defaults) — warn and disable that button.
+    FB.getDefaults().then(function (d) { _defaults = d || BUILTIN_SETTINGS; fillForm(null, _defaults); renderSummary(); })
+      .catch(function (err) {
+        banner($('dash-banner'), 'warn', 'Could not load saved defaults (' + esc(err && err.code ? err.code : String(err)) + '); showing built-ins. “Make this the default” is disabled so your saved defaults are not overwritten — reload to retry.');
+        fillForm(null, BUILTIN_SETTINGS); renderSummary(); $('btn-makedefault').disabled = true;
+      });
     loadSessions();
     loadData();
   }

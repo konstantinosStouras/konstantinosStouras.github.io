@@ -101,6 +101,18 @@ window.SVFirebase = (function () {
   }
 
   // ---- admin side ----------------------------------------------------------
+  // Admin-only, honest read of config/study. Resolves the doc data, or null if
+  // the document does not exist yet (a legitimate first-run state → safe to show
+  // defaults), and REJECTS on a real read error. Unlike getStudyConfig() (which
+  // swallows errors to null so a participant's game never blocks), the admin must
+  // distinguish "no doc yet" from "read failed" — otherwise a failed read would
+  // populate the form with defaults that a subsequent Save clobbers over the real
+  // settings. The admin is already signed in when this runs, so no ensureAuth().
+  function adminLoadStudyConfig() {
+    return init()
+      .then(function () { return sdk.fs.getDoc(configRef()); })
+      .then(function (snap) { return snap.exists() ? snap.data() : null; });
+  }
   function adminSignIn(email, pw) { return init().then(function () { return sdk.auth.signInWithEmailAndPassword(auth, email, pw); }); }
   function adminSignOut() { return init().then(function () { return sdk.auth.signOut(auth); }); }
   function onAuth(cb) { init().then(function () { sdk.auth.onAuthStateChanged(auth, cb); }).catch(function () { cb(null); }); }
@@ -148,9 +160,13 @@ window.SVFirebase = (function () {
 
   // ---- admin: saved defaults for new sessions (config/defaults) ------------
   function defaultsRef() { return sdk.fs.doc(db, 'config', 'defaults'); }
+  // Honest admin read (like adminLoadStudyConfig): resolves the doc, or null when
+  // it genuinely doesn't exist (first run), and REJECTS on a real read error — so
+  // the admin never seeds the form with built-ins after a failed read and then
+  // clobbers the saved defaults via "Make this the default".
   function getDefaults() {
     return init().then(function () { return sdk.fs.getDoc(defaultsRef()); })
-      .then(function (s) { return s.exists() ? s.data() : null; }).catch(function () { return null; });
+      .then(function (s) { return s.exists() ? s.data() : null; });
   }
   function saveDefaults(obj) { return init().then(function () { return sdk.fs.setDoc(defaultsRef(), obj, { merge: false }); }); }
 
@@ -159,6 +175,7 @@ window.SVFirebase = (function () {
     signInAnon: signInAnon, writeEvent: writeEvent, getStudyConfig: getStudyConfig,
     getSessionByCode: getSessionByCode,
     adminSignIn: adminSignIn, adminSignOut: adminSignOut, onAuth: onAuth,
+    adminLoadStudyConfig: adminLoadStudyConfig,
     saveStudyConfig: saveStudyConfig, fetchEvents: fetchEvents,
     listSessions: listSessions, createSession: createSession, updateSession: updateSession,
     deleteSession: deleteSession, codeExists: codeExists,
