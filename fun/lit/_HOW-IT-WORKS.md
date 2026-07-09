@@ -131,18 +131,24 @@ cookie fallback.)
 **Approximation fallback (automatic):** for PNAS papers the official index
 does not cover — including the whole journal before the local crawl ever
 runs — the build classifies papers into the five sections from their
-**OpenAlex primary topic** (field/subfield → section mapping in
-`classifyOpenAlexTopic`, cached in `data/_pnas-approx.json`; first run does a
-full backfill, later runs only re-check recent publications). This is a
-*content-based approximation*, not PNAS's editorial assignment, so the paper
-sets differ at the margins; an official label from the local crawl always
-wins per-DOI. The build log prints how many papers used each source.
-
-A **partial** official crawl is always safe to push: its labels win for the
-papers it covers and the approximation keeps covering the rest. Only an index
-that is both marked complete *and* plausibly sized (at least half the size of
-the approximation) is trusted to also *exclude* papers it doesn't list — a
-truncated crawl can therefore never shrink the dataset.
+**OpenAlex primary topic** (the paper's actual main subject): its
+field/subfield → section via `classifyOneTopic` / `classifyOpenAlexWork`,
+cached in `data/_pnas-approx.json`. It is deliberately **primary-topic only**.
+An earlier version also counted strong secondary topics to widen recall, but
+OpenAlex's field taxonomy doesn't line up with PNAS's editorial sections, so a
+tangential co-topic mislabelled clearly off-section papers (an antibody-
+delivery study or lunar-sample geochemistry as *Environmental Sciences*,
+molecular biology as *Computer Sciences*). For a curated browser precision
+beats recall, and the accurate way to recover genuine cross-field papers is
+the official pnas.org index below, not stretching OpenAlex topics. The field
+map is additive and conservative (only fields that map cleanly onto the five
+sections). The cache carries a `version` (`PNAS_APPROX_VERSION`); **bump it
+whenever the field-map rules change** and the next run re-classifies the
+*whole* corpus (a one-off full backfill) instead of only recent publications,
+so a rule change applies retroactively to old papers. This is a *content-based
+approximation*, not PNAS's editorial assignment, so the paper sets differ at
+the margins; an official label from the local crawl always wins per-DOI. The
+build log prints how many papers used each source.
 
 ## The ISR/Marketing Science editors wrinkle (same idea)
 

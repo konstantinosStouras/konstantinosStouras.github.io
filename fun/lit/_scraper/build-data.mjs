@@ -451,24 +451,51 @@ async function refreshPnasConcepts() {
   return cache;
 }
 
-// ── PNAS fallback classifier: OpenAlex primary topics ───────────────────────
+// ── PNAS fallback classifier: OpenAlex primary topic ────────────────────────
 // pnas.org's own section index (the committed _pnas-concepts.json, built
 // locally) is authoritative. For papers it does not cover, OpenAlex — which
-// cloud runners CAN reach — supplies an approximation: each work's primary
+// cloud runners CAN reach — supplies an approximation: each work's PRIMARY
 // topic carries a field/subfield that maps onto the five sections. Content-
 // based rather than editorial, so it over/under-includes at the margins; an
 // official label always wins the moment the local crawl provides one.
-function classifyOpenAlexTopic(pt) {
+//
+// We classify from the PRIMARY topic ONLY — the paper's actual main subject.
+// An earlier attempt also counted strong SECONDARY topics (score ≥ 0.5) to
+// widen recall, but OpenAlex's field taxonomy does not line up with PNAS's
+// editorial sections, so a tangential co-topic dragged in clearly off-section
+// papers — e.g. an antibody-delivery study or lunar-sample geochemistry
+// labelled "Environmental Sciences", molecular biology labelled "Computer
+// Sciences". Precision matters more than recall for a curated browser, and
+// the accurate way to recover genuine cross-field papers is the official
+// pnas.org section index, not stretching OpenAlex topics.
+//
+// The field map below is additive and deliberately conservative: only fields
+// that map cleanly onto the five PNAS sections. Bump PNAS_APPROX_VERSION
+// whenever these rules change — refreshPnasApprox treats a version mismatch as
+// "cache stale" and re-classifies the WHOLE corpus, so a rule change is
+// applied retroactively to old papers, not just to the recent tail.
+const PNAS_APPROX_VERSION = 3;
+
+// One OpenAlex topic object → the set of section keys it implies.
+export function classifyOneTopic(t) {
   const keys = new Set();
-  const field = pt?.field?.display_name || '';
-  const subfield = pt?.subfield?.display_name || '';
-  const topic = pt?.display_name || '';
+  if (!t) return keys;
+  const field = t.field?.display_name || '';
+  const subfield = t.subfield?.display_name || '';
+  const topic = t.display_name || '';
   if (field === 'Computer Science') keys.add('pnas-cs');
   if (field === 'Economics, Econometrics and Finance') { keys.add('pnas-econ'); keys.add('pnas-soc'); }
+  if (field === 'Business, Management and Accounting') keys.add('pnas-econ');
   if (field === 'Environmental Science') keys.add('pnas-env');
   if (field === 'Social Sciences' || field === 'Psychology') keys.add('pnas-soc');
-  if (subfield === 'Renewable Energy, Sustainability and the Environment' || /sustainab/i.test(topic)) keys.add('pnas-sust');
-  return [...keys].sort();
+  if (subfield === 'Renewable Energy, Sustainability and the Environment'
+      || /sustainab/i.test(topic) || /sustainab/i.test(subfield)) keys.add('pnas-sust');
+  return keys;
+}
+
+// A whole work → section keys, from its primary topic alone.
+export function classifyOpenAlexWork(w) {
+  return [...classifyOneTopic(w.primary_topic)].sort();
 }
 
 async function refreshPnasApprox(officialCount) {
@@ -476,11 +503,14 @@ async function refreshPnasApprox(officialCount) {
   let cache = await loadJsonIfExists(path, { map: {} });
   if (MOCK || process.env.LIT_PNAS_APPROX === '0') return cache;
   try {
-    const haveFull = !!cache.full;
-    // Full backfill once; afterwards only recent publications are re-checked.
+    // A full backfill runs once; afterwards only recent publications are
+    // re-checked. A PNAS_APPROX_VERSION mismatch (i.e. the topic→section rules
+    // changed) invalidates the cache, so the next run re-classifies the WHOLE
+    // corpus — that is what retroactively fills gaps for older papers.
+    const haveFull = !!cache.full && cache.version === PNAS_APPROX_VERSION;
     const filter = 'locations.source.issn:0027-8424'
       + (haveFull ? `,from_publication_date:${new Date(new Date(PULL_DATE).getTime() - 90 * 864e5).toISOString().slice(0, 10)}` : '');
-    console.log(`  pnas approx (OpenAlex): ${haveFull ? 'incremental' : 'FULL backfill'} crawl…`);
+    console.log(`  pnas approx (OpenAlex): ${haveFull ? 'incremental' : `FULL backfill (classifier v${PNAS_APPROX_VERSION})`} crawl…`);
     let cursor = '*', pages = 0, seen = 0;
     while (cursor) {
       const url = `https://api.openalex.org/works?filter=${encodeURIComponent(filter)}` +
@@ -490,7 +520,7 @@ async function refreshPnasApprox(officialCount) {
         const doi = String(w.doi || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase();
         if (!doi) continue;
         seen++;
-        const keys = classifyOpenAlexTopic(w.primary_topic);
+        const keys = classifyOpenAlexWork(w);
         if (keys.length) cache.map[doi] = keys;
         else delete cache.map[doi]; // reclassified away from our sections
       }
@@ -502,7 +532,7 @@ async function refreshPnasApprox(officialCount) {
     }
     const sorted = {};
     for (const k of Object.keys(cache.map).sort()) sorted[k] = cache.map[k];
-    cache = { updated: PULL_DATE, full: true, map: sorted };
+    cache = { updated: PULL_DATE, full: true, version: PNAS_APPROX_VERSION, map: sorted };
     await writeJson('_pnas-approx.json', cache);
     console.log(`  pnas approx: ${Object.keys(cache.map).length} DOIs mapped (${pages} pages)` +
       (officialCount ? `; official index covers ${officialCount} and always wins` : ''));
@@ -522,28 +552,15 @@ function applyPnasSections(papers, cache, approx) {
   // The approximation then only covers the fresh tail the crawl hasn't seen
   // yet (papers from the crawl year onward). Re-running the local script
   // therefore corrects BOTH wrong labels and wrongly included papers.
-  // Safety valve: pnas.org's search can paginate short (rate limits, anonymous
-  // caps), yielding a crawl that carries full=true but lists only a fraction
-  // of the corpus; trusting it would silently drop every paper it missed.
-  // Only honor the flag when the official index is at least half the size of
-  // the approximation it would be allowed to overrule.
-  const nOfficial = Object.keys(cache.map || {}).length;
-  const nApprox = approx && approx.map ? Object.keys(approx.map).length : 0;
-  const fullTrusted = !!(cache.full && cache.updated) && nOfficial >= nApprox / 2;
-  if (cache.full && cache.updated && !fullTrusted) {
-    console.warn(`  pnas official index is marked full but holds only ${nOfficial} DOIs ` +
-      `(OpenAlex approximation: ${nApprox}) — treating it as PARTIAL: its labels win ` +
-      'per-paper, but no papers are dropped for being absent from it.');
-  }
-  const officialCutoffYear = fullTrusted
+  const officialCutoffYear = (cache.full && cache.updated)
     ? parseInt(String(cache.updated).slice(0, 4), 10)
-    : -Infinity; // no trusted full official index: approximation covers everything
+    : -Infinity; // no full official index yet: approximation covers everything
   for (const p of papers) {
     let keys = cache.map[p._doi];
     if (keys && keys.length) official++;
     else {
       const y = parseInt(p.Year, 10) || 0;
-      const approxAllowed = !fullTrusted || y >= officialCutoffYear;
+      const approxAllowed = !(cache.full && cache.updated) || y >= officialCutoffYear;
       keys = approxAllowed && approx && approx.map ? approx.map[p._doi] : null;
       if (keys && keys.length) approximate++;
     }
