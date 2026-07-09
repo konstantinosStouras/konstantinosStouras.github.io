@@ -21,6 +21,14 @@
  *
  * Then commit + push the updated fun/lit/data/_pnas-concepts.json.
  *
+ * Until this has run, the site fills the PNAS sections with an APPROXIMATION
+ * (each paper's OpenAlex primary topic). The index this script writes is
+ * authoritative and CORRECTS the approximation on the next data build:
+ * wrongly labeled papers get PNAS's own section, and papers the approximation
+ * wrongly placed in a section (but which PNAS lists in none of the five) are
+ * removed — the approximation stays in use only for papers newer than this
+ * crawl, until you re-run it.
+ *
  * If YOUR connection is also challenged ("blocked by Cloudflare" below):
  *   1. open https://www.pnas.org in your browser and pass the check once,
  *   2. copy the cf_clearance cookie (DevTools → Application → Cookies),
@@ -87,5 +95,6 @@ console.log('\nNext: commit and push the updated file, e.g.');
 console.log('  git add fun/lit/data/_pnas-concepts.json');
 console.log('  git commit -m "lit: refresh PNAS section index"');
 console.log('  git push');
-console.log('The next scheduled data build will fold the PNAS papers in automatically');
-console.log('(or trigger "lit — update data" manually from the GitHub Actions tab).');
+console.log('The push itself triggers the data build, which replaces the OpenAlex');
+console.log('approximation with these official labels for everything this crawl covered');
+console.log('(papers newer than this crawl keep the approximation until you re-run).');

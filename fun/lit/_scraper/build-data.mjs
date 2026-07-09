@@ -516,11 +516,22 @@ function applyPnasSections(papers, cache, approx) {
   const secName = Object.fromEntries(PNAS_SECTIONS.map(s => [s.key, s.name]));
   const out = [];
   let official = 0, approximate = 0;
+  // Once a FULL official crawl exists, it is authoritative for everything
+  // published up to its crawl year: a DOI absent from it is genuinely not in
+  // any of the five sections, so the approximation must not resurrect it.
+  // The approximation then only covers the fresh tail the crawl hasn't seen
+  // yet (papers from the crawl year onward). Re-running the local script
+  // therefore corrects BOTH wrong labels and wrongly included papers.
+  const officialCutoffYear = (cache.full && cache.updated)
+    ? parseInt(String(cache.updated).slice(0, 4), 10)
+    : -Infinity; // no full official index yet: approximation covers everything
   for (const p of papers) {
     let keys = cache.map[p._doi];
     if (keys && keys.length) official++;
     else {
-      keys = approx && approx.map ? approx.map[p._doi] : null;
+      const y = parseInt(p.Year, 10) || 0;
+      const approxAllowed = !(cache.full && cache.updated) || y >= officialCutoffYear;
+      keys = approxAllowed && approx && approx.map ? approx.map[p._doi] : null;
       if (keys && keys.length) approximate++;
     }
     if (!keys || !keys.length) continue;   // only papers in the five sections
@@ -528,7 +539,8 @@ function applyPnasSections(papers, cache, approx) {
     p._secKeys = keys;
     out.push(p);
   }
-  console.log(`  pnas sections: ${official} from pnas.org's index, ${approximate} approximated from OpenAlex topics`);
+  console.log(`  pnas sections: ${official} from pnas.org's index, ${approximate} approximated from OpenAlex topics` +
+    (officialCutoffYear > 0 ? ` (approximation limited to papers from ${officialCutoffYear} on)` : ''));
   return out;
 }
 
