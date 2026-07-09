@@ -52,17 +52,37 @@ jobs:
         run: node fun/lit/_scraper/build-data.mjs
 
       - name: Commit refreshed data
+        # If another run pushed data while this one was building, a plain
+        # rebase would conflict on the one-line JSON files and a naive push
+        # would silently no-op (this lost a dataset once). Instead: on a
+        # rejected push, re-commit OUR tree (the freshest complete build) on
+        # top of whatever landed, and fail loudly if that still cannot push.
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add fun/lit/data
           if git diff --cached --quiet; then
             echo "No data changes — nothing to commit."
-          else
-            git commit -m "lit: refresh multi-journal data"
-            git pull --rebase origin ${{ github.ref_name }} || true
-            git push origin HEAD:${{ github.ref_name }}
+            exit 0
           fi
+          git commit -m "lit: refresh multi-journal data"
+          for i in 1 2 3; do
+            if git push origin HEAD:${{ github.ref_name }}; then
+              echo "Pushed on attempt $i."
+              exit 0
+            fi
+            echo "Push rejected (concurrent data commit?) — re-committing on the new tip…"
+            git fetch origin ${{ github.ref_name }}
+            git reset --soft origin/${{ github.ref_name }}
+            if git diff --cached --quiet; then
+              echo "The concurrent commit already contains this dataset — nothing left to push."
+              exit 0
+            fi
+            git commit -m "lit: refresh multi-journal data"
+            sleep 5
+          done
+          echo "::error::Could not push the refreshed data after 3 attempts."
+          exit 1
 
       # A committed dataset is not enough: the GitHub Pages deploy that follows
       # the push can fail transiently, silently serving stale data. Poll the
