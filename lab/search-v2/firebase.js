@@ -66,7 +66,11 @@ window.SVFirebase = (function () {
   function getStudyConfig() {
     if (!configured) return Promise.resolve(null);
     var timeout = new Promise(function (r) { setTimeout(function () { r(null); }, 4000); });
-    var fetchCfg = init().then(function () { return sdk.fs.getDoc(configRef()); })
+    // Reading config/study requires an authenticated session (see firestore.rules),
+    // so sign in anonymously first; this also warms the session for event writes.
+    var fetchCfg = init()
+      .then(function () { return sdk.auth.signInAnonymously(auth); })
+      .then(function () { return sdk.fs.getDoc(configRef()); })
       .then(function (snap) { return snap.exists() ? snap.data() : null; })
       .catch(function () { return null; });
     return Promise.race([fetchCfg, timeout]);
