@@ -107,11 +107,20 @@ node pnas-concepts-local.mjs          # first run: full crawl (~15–30 min)
 Later runs are incremental (about a minute); re-run it every month or so to
 pick up newly published PNAS papers. Everything else — including joining that
 index with fresh Crossref metadata — happens automatically in the daily
-Action. Until the index is seeded the site simply shows zero PNAS papers.
-(Each daily build also *tries* the crawl itself and will take over
+Action. (Each daily build also *tries* the crawl itself and will take over
 automatically if Cloudflare ever stops challenging the runner. If your own
 connection is challenged too, the script explains the `LIT_CF_COOKIE`
 cookie fallback.)
+
+**Approximation fallback (automatic):** for PNAS papers the official index
+does not cover — including the whole journal before the local crawl ever
+runs — the build classifies papers into the five sections from their
+**OpenAlex primary topic** (field/subfield → section mapping in
+`classifyOpenAlexTopic`, cached in `data/_pnas-approx.json`; first run does a
+full backfill, later runs only re-check recent publications). This is a
+*content-based approximation*, not PNAS's editorial assignment, so the paper
+sets differ at the margins; an official label from the local crawl always
+wins per-DOI. The build log prints how many papers used each source.
 
 ## The ISR/Marketing Science editors wrinkle (same idea)
 
