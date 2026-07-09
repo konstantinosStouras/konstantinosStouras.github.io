@@ -38,6 +38,23 @@ function startServer() {
   return p;
 }
 
+// The committed firebase-config.js may hold a real project, which would flip the
+// app + admin into configured mode (needs live Firebase). These acceptance tests
+// validate the deterministic UNCONFIGURED code paths, so every context serves a
+// placeholder firebase-config.js. (The real config is exercised on the live site.)
+const PLACEHOLDER_FBCONFIG =
+  "window.FIREBASE_CONFIG={apiKey:'PASTE_API_KEY',projectId:'PASTE_PROJECT'};" +
+  "window.ADMIN_EMAILS=['admin@example.com'];" +
+  "window.FIREBASE_PATHS={events:'events',configDoc:'config/study'};" +
+  "window.FIREBASE_SDK_VERSION='10.12.2';";
+async function newCtx(browser) {
+  const ctx = await browser.newContext();
+  await ctx.route('**/firebase-config.js', function (route) {
+    route.fulfill({ status: 200, contentType: 'application/javascript', body: PLACEHOLDER_FBCONFIG });
+  });
+  return ctx;
+}
+
 // ---- flow helpers ----------------------------------------------------------
 const CORRECT = { q1: '60', q2: '52', q3: 'It says it has no data there', q4: 'An estimate that can be wrong' };
 
@@ -84,7 +101,7 @@ async function main() {
     // ---------------- TEST 4: Arm A isolation ----------------
     console.log('\nTest 4 · Arm isolation (Arm A live DOM)');
     {
-      const ctx = await browser.newContext();
+      const ctx = await newCtx(browser);
       const page = await ctx.newPage();
       await page.goto(APP + '?arm=A&SESSION_ID=smokeA', { waitUntil: 'networkidle' });
       await consentInstructionsQuiz(page, 'A');
@@ -104,7 +121,7 @@ async function main() {
     // ---------------- TEST 4b + Arm B behaviour ----------------
     console.log('\nTest 4b · Arm B panel, estimate, refusal');
     {
-      const ctx = await browser.newContext();
+      const ctx = await newCtx(browser);
       const page = await ctx.newPage();
       await page.goto(APP + '?arm=B&SESSION_ID=smokeB', { waitUntil: 'networkidle' });
       await consentInstructionsQuiz(page, 'B');
@@ -130,7 +147,7 @@ async function main() {
     // ---------------- TEST 8: Resume mid-round ----------------
     console.log('\nTest 8 · Resume mid-round (no double-logging)');
     {
-      const ctx = await browser.newContext();
+      const ctx = await newCtx(browser);
       const page = await ctx.newPage();
       await page.goto(APP + '?arm=B&SESSION_ID=smokeResume', { waitUntil: 'networkidle' });
       await consentInstructionsQuiz(page, 'B');
@@ -172,7 +189,7 @@ async function main() {
     // ---------------- TEST 9: Full playthrough + upload success ----------------
     console.log('\nTest 9 · Full playthrough, one event/action, upload in order');
     {
-      const ctx = await browser.newContext();
+      const ctx = await newCtx(browser);
       const page = await ctx.newPage();
       const received = [];
       await page.route('**/__collect*', async route => {
@@ -229,7 +246,7 @@ async function main() {
     // ---------------- TEST 9b: Endpoint failure -> download fallback ----------------
     console.log('\nTest 9b · Endpoint failure → download fallback note');
     {
-      const ctx = await browser.newContext();
+      const ctx = await newCtx(browser);
       const page = await ctx.newPage();
       await page.route('**/__collect*', route => route.abort());
       const ep = encodeURIComponent(`http://localhost:${PORT}/__collect`);
@@ -248,7 +265,7 @@ async function main() {
     // ---------------- TEST 10: Debug pre-fills the quiz answers ----------------
     console.log('\nTest 10 · Debug mode pre-selects correct quiz answers');
     {
-      const ctx = await browser.newContext();
+      const ctx = await newCtx(browser);
       const page = await ctx.newPage();
       await page.goto(APP + '?arm=B&debug=1&key=stouras&SESSION_ID=smokeDbg', { waitUntil: 'networkidle' });
       await page.waitForSelector('#s-consent.active');
@@ -261,7 +278,7 @@ async function main() {
       await page.waitForSelector('#s-round.active', { timeout: 6000 }).catch(() => {});
       ok('submitting the pre-filled quiz passes into the game', await page.isVisible('#s-round'));
       // and a real subject (no debug) gets NO pre-filled answers
-      const ctx2 = await browser.newContext();
+      const ctx2 = await newCtx(browser);
       const p2 = await ctx2.newPage();
       await p2.goto(APP + '?arm=B&SESSION_ID=smokeNoDbg', { waitUntil: 'networkidle' });
       await p2.waitForSelector('#s-consent.active');
@@ -275,7 +292,7 @@ async function main() {
     // ---------------- TEST 11: Admin panel (local-preview mode) ----------------
     console.log('\nTest 11 · Admin panel renders in local mode + reads local data');
     {
-      const ctx = await browser.newContext();
+      const ctx = await newCtx(browser);
       const page = await ctx.newPage();
       // play a short session so this origin has local log data for the admin to show
       await page.goto(APP + '?arm=A&SESSION_ID=smokeAdmin', { waitUntil: 'networkidle' });

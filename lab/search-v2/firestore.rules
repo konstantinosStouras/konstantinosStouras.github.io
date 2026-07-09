@@ -13,7 +13,7 @@ service cloud.firestore {
     // Admin allow-list. Add more emails to the list if you have co-admins.
     function isAdmin() {
       return isSignedIn()
-        && request.auth.token.email in ['admin@stouras.com'];
+        && request.auth.token.email in ['admin@admin.com'];
     }
 
     // Participant events: anyone signed in (participants sign in anonymously)

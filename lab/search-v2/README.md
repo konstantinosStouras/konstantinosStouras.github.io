@@ -153,7 +153,7 @@ participant experience changes until you paste a real config.
 
 ### One-time Firebase setup (with a dedicated account)
 
-1. **Dedicated account.** Create/great a Google account just for this study (e.g. a
+1. **Dedicated account.** Create a Google account just for this study (e.g. a
    new Gmail), so the research data lives separately from personal projects. Sign
    into the [Firebase console](https://console.firebase.google.com) with it.
 2. **Create a project** — *Add project*, name it e.g. `search-v2` (Analytics
@@ -162,14 +162,14 @@ participant experience changes until you paste a real config.
    mode**, pick a region near your subjects.
 4. **Authentication** — *Build → Authentication → Get started*; enable
    **Anonymous** (participants) and **Email/Password** (you). Under *Users → Add
-   user*, create your admin login (e.g. `admin@stouras.com` + a strong password).
+   user*, create your admin login (e.g. `admin@admin.com` + a strong password).
 5. **Web app config** — *Project settings → General → Your apps → Web (`</>`)*,
    register an app, and copy the `firebaseConfig` object.
 6. **Paste config** — put that object into `lab/search-v2/firebase-config.js` (over
    the `PASTE_…` placeholders) and set `ADMIN_EMAILS` to your admin email. Commit &
    push.
 7. **Deploy rules** — copy `lab/search-v2/firestore.rules` into Firestore →
-   **Rules**, replace `admin@stouras.com` with your admin email, and **Publish**.
+   **Rules**, replace `admin@admin.com` with your admin email, and **Publish**.
 8. **Use it** — open `/lab/search-v2/admin/`, sign in with your admin account, set
    the conditions, and watch data arrive on the **Data** tab as participants play.
 

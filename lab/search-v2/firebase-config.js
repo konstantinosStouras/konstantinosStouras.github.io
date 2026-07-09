@@ -1,28 +1,30 @@
 /* ==========================================================================
    search-v2  ·  firebase-config.js
-   PASTE YOUR FIREBASE PROJECT CONFIG HERE to enable central data collection
-   and the admin panel (/lab/search-v2/admin/). Until you do, the experiment
-   runs exactly as before — fully client-side, no network, no Firebase loaded —
-   and the admin panel falls back to showing the current browser's local data.
+   Firebase project config for central data collection + the admin panel
+   (/lab/search-v2/admin/). This file being filled in is what turns Firebase ON;
+   with the PASTE_… placeholders it stays OFF (fully client-side, admin shows
+   local data only). See README.md → "Admin panel & Firebase setup".
 
-   How to fill this in: see README.md → "Admin panel & Firebase setup".
-   In short: Firebase console → create project → add a Web app → copy its
-   firebaseConfig object over FIREBASE_CONFIG below; enable Anonymous auth and
-   Email/Password auth; create your admin user; and add your admin email(s) to
-   ADMIN_EMAILS. Then deploy firestore.rules.
+   Project: search-with-ai-456d7
+   NOTE: this apiKey is a public client identifier, not a secret — access is
+   controlled by firestore.rules (admin reads gated to ADMIN_EMAILS). Google
+   Analytics is intentionally NOT loaded on the participant page.
    ========================================================================== */
 window.FIREBASE_CONFIG = {
-  apiKey:            'PASTE_API_KEY',
-  authDomain:        'PASTE_PROJECT.firebaseapp.com',
-  projectId:         'PASTE_PROJECT',
-  storageBucket:     'PASTE_PROJECT.appspot.com',
-  messagingSenderId: 'PASTE_SENDER_ID',
-  appId:             'PASTE_APP_ID'
+  apiKey:            'AIzaSyB5uF8XwqI8fyTuIBwQ_OPkg-VqU98H0uc',
+  authDomain:        'search-with-ai-456d7.firebaseapp.com',
+  projectId:         'search-with-ai-456d7',
+  storageBucket:     'search-with-ai-456d7.firebasestorage.app',
+  messagingSenderId: '9761548035',
+  appId:             '1:9761548035:web:13d1cda30bbe35aeec2b36',
+  measurementId:     'G-28GL8PRTNV'
 };
 
-// Email addresses allowed into the admin panel (must match Firebase Auth users
-// AND the isAdmin() allow-list in firestore.rules).
-window.ADMIN_EMAILS = ['admin@stouras.com'];
+// Email addresses allowed into the admin panel. Each MUST be a Firebase Auth
+// Email/Password user (Authentication → Users → Add user) AND appear in the
+// isAdmin() allow-list in firestore.rules. Change this to whichever address you
+// will sign in with.
+window.ADMIN_EMAILS = ['admin@admin.com'];
 
 // Firestore collection/doc names (rarely need changing).
 window.FIREBASE_PATHS = {
@@ -30,6 +32,5 @@ window.FIREBASE_PATHS = {
   configDoc: 'config/study' // admin-controlled study conditions & codes
 };
 
-// Version of the Firebase JS SDK to load from the CDN (only loaded when the
-// config above is real; the base experiment never loads it otherwise).
+// Version of the Firebase JS SDK to load from the CDN.
 window.FIREBASE_SDK_VERSION = '10.12.2';
