@@ -2301,7 +2301,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   // after enabling it in Firebase console → Authentication → Sign-in method
   // (per-provider steps in fun/lit/_ACCOUNTS-SETUP.md). Supported keys:
   // 'google', 'microsoft', 'apple', 'github'.
-  var AUTH_PROVIDERS = ['google', 'microsoft'];
+  var AUTH_PROVIDERS = ['google'];
 
   var ACCOUNTS_ENABLED = !!(FB_CONFIG.apiKey
     && FB_CONFIG.apiKey.indexOf('PASTE_') === -1
