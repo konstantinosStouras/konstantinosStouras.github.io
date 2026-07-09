@@ -2471,15 +2471,26 @@ loadRecent();   // pre-fetch the small recent.json so the "Recently added" view 
 
   window.acctSavePanel = function (btn) {
     var panel = btn.closest('.paper-acct-panel'), id = panel.dataset.pk;
-    var note = panel.querySelector('.acct-note').value;
-    var tags = Array.prototype.map.call(panel.querySelectorAll('.acct-tag'), function (c) { return c.dataset.tag; });
-    var lists = Array.prototype.filter.call(panel.querySelectorAll('input[type=checkbox][data-lid]'), function (c) { return c.checked; })
-      .map(function (c) { return c.dataset.lid; });
-    var rec = state.papers[id];
-    var data = mergeMeta(id, { note: note, tags: tags, lists: lists, starred: rec ? !!rec.starred : false, updatedAt: serverTime() });
+    // Commit a tag typed into the box but not yet added with Enter, so it isn't silently dropped on Save.
+    var tagInput = panel.querySelector('.acct-tag-input');
+    if (tagInput && tagInput.value.trim()) acctTagKey({ key: 'Enter', preventDefault: function () {} }, tagInput);
     var status = panel.querySelector('.acct-save-status');
     status.style.color = 'var(--text-muted)'; status.textContent = 'Saving…';
-    papersCol().doc(id).set(data, { merge: true }).then(function () {
+    // Commit a list name typed into the box but not yet created with Enter/Create, then include its id.
+    var listInput = panel.querySelector('.acct-newlist input');
+    var pendingList = listInput && listInput.value.trim();
+    var ready = pendingList
+      ? createList(pendingList).then(function (lid) { listInput.value = ''; return [lid]; })
+      : Promise.resolve([]);
+    ready.then(function (extraLists) {
+      var note = panel.querySelector('.acct-note').value;
+      var tags = Array.prototype.map.call(panel.querySelectorAll('.acct-tag'), function (c) { return c.dataset.tag; });
+      var lists = Array.prototype.filter.call(panel.querySelectorAll('input[type=checkbox][data-lid]'), function (c) { return c.checked; })
+        .map(function (c) { return c.dataset.lid; }).concat(extraLists);
+      var rec = state.papers[id];
+      var data = mergeMeta(id, { note: note, tags: tags, lists: lists, starred: rec ? !!rec.starred : false, updatedAt: serverTime() });
+      return papersCol().doc(id).set(data, { merge: true });
+    }).then(function () {
       status.style.color = 'var(--green)'; status.textContent = 'Saved ✓';
       setTimeout(function () { status.textContent = ''; }, 2200);
     }).catch(function (e) { status.style.color = 'var(--red)'; status.textContent = friendly(e); });
