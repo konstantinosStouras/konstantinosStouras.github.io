@@ -7,8 +7,9 @@
  * cannot tell it apart from you clicking through search pages, because it
  * uses the very same session. Nothing to install, no cookies to copy.
  *
- * It crawls the five section listings (~5-10 minutes, progress in the
- * console) and then DOWNLOADS a file named `_pnas-concepts.json`.
+ * It walks the five section listings page by page, following the site's own
+ * pagination (~10–20 minutes, progress in the console), and then DOWNLOADS a
+ * file named `_pnas-concepts.json`.
  *
  * Afterwards:
  *   1. move the downloaded file into  fun/lit/data/  (replace the old one),
@@ -29,6 +30,9 @@
   ];
   const PAGE_SIZE = 100, MAX_PAGES = 400, DELAY = 2000;
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const parser = new DOMParser();
+  // Page-template links, not papers: the journal's ISSN entry, podcast episodes.
+  const junk = (d) => /^10\.1073\/(e?issn|pc\.)/i.test(d);
   const map = {};
   const add = (doi, key) => {
     (map[doi] = map[doi] || []).includes(key) || map[doi].push(key);
@@ -36,11 +40,13 @@
 
   const sectionComplete = {};
   for (const [key, concept, name] of SECTIONS) {
-    let total = null;
     const mine = new Set();
-    let retries = 0, emptyStreak = 0;
+    let retries = 0, complete = false;
     for (let p = 0; p < MAX_PAGES; p++) {
-      const url = `/action/doSearch?SeriesKey=pnas&ConceptID=${concept}&startPage=${p}&pageSize=${PAGE_SIZE}`;
+      // sortBy pins a stable order: the default relevance sort reshuffles
+      // between requests, making consecutive pages overlap (verified — that's
+      // what truncated earlier crawls to a page or two per section).
+      const url = `/action/doSearch?SeriesKey=pnas&ConceptID=${concept}&pageSize=${PAGE_SIZE}&sortBy=Earliest&startPage=${p}`;
       const res = await fetch(url, { credentials: 'include' });
       if (res.status === 429) {                        // rate limited: wait & retry
         if (++retries > 8) { console.error(`${name}: still rate-limited after 8 waits — partial results kept.`); break; }
@@ -53,27 +59,33 @@
         break;
       }
       retries = 0;
-      if (total === null) {
-        const m = html.match(/([\d,]+)\s*results?/i) || html.match(/of\s+([\d,]+)/i)
-          || html.match(/"totalResults"\s*:\s*(\d+)/) || html.match(/result__count[^>]*>\s*([\d,]+)/i);
-        if (m) total = parseInt(m[1].replace(/,/g, ''), 10);
-        console.log(`${name}: ${total !== null ? total : 'unknown #'} results according to the page`);
-      }
-      const items = (html.match(/issue-item|search__item|searchResultItem/gi) || []).length;
+      const doc = parser.parseFromString(html, 'text/html');
+      // Each paper in the result list carries one .hlFld-Title (verified:
+      // exactly 100 per full page) whose enclosing link holds the DOI. The
+      // raw-HTML regex is only a fallback for a future markup change.
+      const titles = [...doc.querySelectorAll('.hlFld-Title')];
       let fresh = 0;
-      for (const m of html.matchAll(/\/doi\/(?:abs\/|full\/|epdf\/|pdf\/|suppl\/)?(10\.1073\/[a-zA-Z0-9._\-()/]+)/g)) {
-        const d = m[1].replace(/\/+$/, '').toLowerCase();
-        if (!mine.has(d)) { mine.add(d); add(d, key); fresh++; }
+      const harvest = (d) => {
+        d = d.replace(/\/+$/, '').toLowerCase();
+        if (junk(d) || mine.has(d)) return;
+        mine.add(d); add(d, key); fresh++;
+      };
+      for (const t of titles) {
+        const a = t.closest('a') || t.querySelector('a');
+        const m = a && (a.getAttribute('href') || '').match(/10\.1073\/[a-zA-Z0-9._\-()/]+/);
+        if (m) harvest(m[0]);
       }
-      console.log(`  ${name}: page ${p + 1} — ${fresh} new DOIs (${items} result markers), ${mine.size} so far`);
-      // Two consecutive pages with nothing new = really off the end (a single
-      // empty page can be a transient hiccup and must not end the section).
-      if (!fresh) { if (++emptyStreak >= 2) break; }
-      else emptyStreak = 0;
-      if (total !== null && mine.size >= total) break;
+      if (!titles.length) {
+        for (const m of html.matchAll(/\/doi\/(?:abs\/|full\/|epdf\/|pdf\/|suppl\/)?(10\.1073\/[a-zA-Z0-9._\-()/]+)/g)) harvest(m[1]);
+      }
+      // The listing is finished when the site's own pagination offers no link
+      // to the next page — the pages themselves never state a result total.
+      const hasNext = !!doc.querySelector(`a[href*="startPage=${p + 1}"]`);
+      console.log(`  ${name}: page ${p + 1} — ${titles.length} results, ${fresh} new, ${mine.size} so far${hasNext ? '' : ' (last page)'}`);
+      if (!hasNext) { complete = true; break; }
       await sleep(DELAY);
     }
-    sectionComplete[key] = total !== null && mine.size >= total;
+    sectionComplete[key] = complete && mine.size > 0;
     console.log(`${name}: done — ${mine.size} DOIs ${sectionComplete[key] ? '(complete)' : '(NOT confirmed complete)'}`);
   }
 
@@ -83,11 +95,11 @@
   const counts = {};
   for (const [key] of SECTIONS) counts[key] = 0;
   Object.values(sorted).forEach(keys => keys.forEach(k => counts[k]++));
-  // Claim completeness ONLY when every section verifiably reached the result
-  // count the site itself reported. A partial file is still safe to push: the
-  // build lets official labels win per-paper and keeps the OpenAlex
-  // approximation for everything the crawl didn't cover — it only ever
-  // *excludes* papers on the strength of a genuinely full index.
+  // Claim completeness ONLY when every section walked to its last pagination
+  // page. A partial file is still safe to push: the build lets official
+  // labels win per-paper and keeps the OpenAlex approximation for everything
+  // the crawl didn't cover — it only ever *excludes* papers on the strength
+  // of a genuinely full index.
   const allComplete = SECTIONS.every(([k]) => sectionComplete[k]);
   const out = {
     updated: new Date().toISOString().slice(0, 10),
