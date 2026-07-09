@@ -30,13 +30,13 @@
     closed: "(Built-in) This study is not currently open. Thank you for your interest."
   };
   var CONTENT_KEYS = [
-    { k: 'consent', label: 'Consent page' },
-    { k: 'instructions', label: 'Instructions (both arms)' },
-    { k: 'instructionsB', label: 'Instructions — Arm B addendum' },
-    { k: 'finish', label: 'Finish page (intro text)' },
-    { k: 'closed', label: 'Study-closed page' }
+    { k: 'consent', label: 'Consent page', help: 'The consent text on the very first screen (before the game). Participants tick a box to agree.' },
+    { k: 'instructions', label: 'Instructions (both arms)', help: 'The task instructions shown to everyone. Tokens {nTasks}, {paidTasks}, {fee}, {rounds} are auto-filled.' },
+    { k: 'instructionsB', label: 'Instructions — Arm B addendum', help: 'Extra instructions appended only for Arm B, explaining the AI assistant.' },
+    { k: 'finish', label: 'Finish page (intro text)', help: 'The message above the results table on the final screen (before the completion code).' },
+    { k: 'closed', label: 'Study-closed page', help: 'What people see if they open a session that is marked completed.' }
   ];
-  var BUILTIN_SETTINGS = { armMode: 'url', completionCode: '', completionCodeA: '', completionCodeB: '', endpointUrl: '', content: {} };
+  var BUILTIN_SETTINGS = { armMode: 'url', nTasks: 10, paidTasks: 2, nPractice: 1, completionCode: '', completionCodeA: '', completionCodeB: '', endpointUrl: '', content: {} };
 
   function $(id) { return document.getElementById(id); }
   function show(id) { var s = document.querySelectorAll('.screen'); for (var i = 0; i < s.length; i++) s[i].classList.toggle('active', s[i].id === id); }
@@ -138,7 +138,7 @@
   function buildContentEditors() {
     var html = '';
     CONTENT_KEYS.forEach(function (c) {
-      html += '<div class="accordion" data-k="' + c.k + '">' +
+      html += '<div class="accordion" data-k="' + c.k + '" title="' + esc(c.help || '') + '">' +
         '<button type="button" class="acc-head">' + esc(c.label) + '<span class="chev">▾</span></button>' +
         '<div class="acc-body"><textarea id="ce-' + c.k + '" placeholder="' + esc(BUILTIN[c.k]) + '"></textarea>' +
         '<div class="hint">Blank = built-in default. **bold**, blank line = new paragraph.</div></div></div>';
@@ -149,14 +149,16 @@
   }
 
   // ============================================================= form (settings)
+  var segPractice;
   function wireForm() {
     segArm = segSetup('seg-arm');
+    segPractice = segSetup('seg-practice');
     $('btn-gencode').addEventListener('click', function () { $('f-code').value = genCode(); renderSummary(); });
     $('btn-save').addEventListener('click', saveSession);
     $('btn-cancel').addEventListener('click', function () { fillForm(null, currentDefaults()); renderSummary(); });
     $('btn-makedefault').addEventListener('click', makeDefault);
     $('btn-restore').addEventListener('click', function () { fillSettings(BUILTIN_SETTINGS); renderSummary(); flash($('form-flash')); });
-    ['f-name', 'f-code', 'f-code-shared', 'f-codeA', 'f-codeB', 'f-endpoint'].forEach(function (id) {
+    ['f-name', 'f-code', 'f-code-shared', 'f-codeA', 'f-codeB', 'f-ntasks', 'f-paid'].forEach(function (id) {
       $(id).addEventListener('input', renderSummary);
     });
   }
@@ -176,22 +178,26 @@
   function fillSettings(s) {
     s = s || BUILTIN_SETTINGS;
     segArm.set(s.armMode || 'url');
+    segPractice.set(s.nPractice === 0 ? '0' : '1');
+    $('f-ntasks').value = (s.nTasks != null ? s.nTasks : 10);
+    $('f-paid').value = (s.paidTasks != null ? s.paidTasks : 2);
     $('f-code-shared').value = s.completionCode || '';
     $('f-codeA').value = s.completionCodeA || '';
     $('f-codeB').value = s.completionCodeB || '';
-    $('f-endpoint').value = s.endpointUrl || '';
     var content = s.content || {};
     CONTENT_KEYS.forEach(function (c) { $('ce-' + c.k).value = content[c.k] || ''; });
   }
   function collectSettings() {
     var content = {};
     CONTENT_KEYS.forEach(function (c) { var v = $('ce-' + c.k).value.trim(); if (v) content[c.k] = v; });
+    var nTasks = Math.max(1, Math.min(120, parseInt($('f-ntasks').value, 10) || 10));
+    var paid = Math.max(0, Math.min(nTasks, parseInt($('f-paid').value, 10) || 0));
     return {
       armMode: segArm.get(),
+      nTasks: nTasks, paidTasks: paid, nPractice: segPractice.get() === '0' ? 0 : 1,
       completionCode: $('f-code-shared').value.trim(),
       completionCodeA: $('f-codeA').value.trim(),
       completionCodeB: $('f-codeB').value.trim(),
-      endpointUrl: $('f-endpoint').value.trim(),
       content: content
     };
   }
@@ -274,8 +280,8 @@
       ['Code', esc($('f-code').value || '—')],
       ['Status', editingId ? statusOf(editingId) : 'new (active on create)'],
       ['Arm assignment', esc(armLabel)],
+      ['Rounds', (s.nPractice ? '1 practice + ' : 'no practice, ') + s.nTasks + ' real (' + s.paidTasks + ' paid)'],
       ['Completion code', esc($('f-code-shared').value || '—') + (s.completionCodeA || s.completionCodeB ? ' (A/B overrides set)' : '')],
-      ['Extra endpoint', esc(s.endpointUrl || '—')],
       ['Custom page text', custom.length ? esc(custom.join(', ')) : 'all built-in']
     ];
     $('settings-summary').innerHTML = '<h3>Settings summary</h3>' +
@@ -290,7 +296,15 @@
       SESSIONS = list.sort(function (a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
       renderSessions();
       fillSessionFilters();
-    }).catch(function (e) { banner($('dash-banner'), 'warn', 'Could not load sessions: ' + esc(e && e.code ? e.code : String(e))); });
+    }).catch(function (e) {
+      var code = e && e.code ? e.code : String(e);
+      var extra = /permission/i.test(code)
+        ? ' This usually means the Firestore security rules need re-publishing. In the Firebase console → Firestore → Rules, paste the contents of lab/search-v2/firestore.rules (it must include the “sessions” collection) and Publish.'
+        : '';
+      banner($('dash-banner'), 'warn', 'Could not load sessions: ' + esc(code) + '.' + extra);
+      $('active-list').innerHTML = '<p class="muted small">Could not load — see the message above.</p>';
+      $('completed-list').innerHTML = '';
+    });
   }
   function renderSessions() {
     var active = SESSIONS.filter(function (s) { return s.status !== 'completed'; });

@@ -404,7 +404,7 @@ async function main() {
     console.log('\nTest 14 · Participant ?code= loads the session settings + content');
     {
       const seed = { 'sessions/w1': { code: 'WAVE1', name: 'Wave One', status: 'active',
-        settings: { armMode: 'B', completionCode: 'DONE7', content: { consent: '**Custom consent** please agree to continue.' } } } };
+        settings: { armMode: 'B', completionCode: 'DONE7', nTasks: 7, paidTasks: 3, content: { consent: '**Custom consent** please agree to continue.' } } } };
       const ctx = await fbCtx(browser, seed);
       const page = await ctx.newPage();
       await page.goto(APP + '?code=WAVE1&SESSION_ID=joinCheck', { waitUntil: 'networkidle' });
@@ -414,6 +414,8 @@ async function main() {
       await page.waitForSelector('#s-instructions.active');
       ok('arm forced to B (instructions include the assistant addendum)',
         /assistant/i.test(await page.innerText('#instructions-body')));
+      ok('instructions reflect the admin round counts ({rounds} token)',
+        /7 real rounds/.test(await page.innerText('#instructions-body')) && /3 of the 7/.test(await page.innerText('#instructions-body')));
       const stamped = await page.evaluate(() => (window.Logger.getEvents().find(e => e.event === 'session_start') || {}).sessionCode);
       ok('events are stamped with the session code', stamped === 'WAVE1', stamped);
       const wroteEvent = await page.evaluate(() => Object.keys(globalThis.__fb.docs).some(k => k.indexOf('events/') === 0));
@@ -505,6 +507,27 @@ async function main() {
         for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.indexOf('searchv2:') === 0) return false; }
         return true;
       }));
+      await ctx.close();
+    }
+
+    // ---------------- TEST 18: Admin-configurable round count ----------------
+    // A session set to 4 real rounds, no practice, 1 paid → the participant plays
+    // exactly 4 rounds starting at "Round 1 of 4" (no practice), and the finish
+    // table has 4 rows. Uses preview (skips intro) with the reduced-round session.
+    console.log('\nTest 18 · Admin sets the number of rounds each participant plays');
+    {
+      const seed = { 'sessions/w4': { code: 'WAVE4', name: 'Short', status: 'active',
+        settings: { armMode: 'A', completionCode: 'RND4', nTasks: 4, paidTasks: 1, nPractice: 0, content: {} } } };
+      const ctx = await fbCtx(browser, seed);
+      const page = await ctx.newPage();
+      await page.goto(APP + '?code=WAVE4&preview=1&debug=1&key=stouras', { waitUntil: 'networkidle' });
+      await page.waitForSelector('#s-round.active', { timeout: 8000 });
+      ok('starts at "Round 1 of 4" (round count applied, practice off)',
+        /Round 1 of 4/.test(await page.innerText('#round-label')));
+      for (let r = 0; r < 4; r++) await playRound(page, 1);
+      await page.waitForSelector('#s-finish.active', { timeout: 10000 });
+      ok('finish table has exactly 4 round rows', (await page.locator('.paid-table tbody tr').count()) === 4);
+      ok('finish shows the session completion code', (await page.innerText('#completion-code')).trim() === 'RND4');
       await ctx.close();
     }
 

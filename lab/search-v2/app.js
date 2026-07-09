@@ -7,8 +7,20 @@
 (function () {
   'use strict';
   var CFG = window.CONFIG, L = window.Logger, A = null; // A set once assistant.js loads (Arm B)
-  var N_POS = CFG.N_POSITIONS, N_TASKS = CFG.N_TASKS, COST = CFG.REVEAL_COST;
+  var N_POS = CFG.N_POSITIONS, COST = CFG.REVEAL_COST;
   var KEY = CFG.OBFUSCATION_KEY;
+  // Round counts — defaults from config, but the admin can override them per
+  // session (see applyRounds). These are the live values the app uses.
+  var N_TASKS = CFG.N_TASKS, PAID_TASKS = CFG.PAID_TASKS, N_PRACTICE = CFG.N_PRACTICE;
+  // Apply admin round overrides from a settings object; clamp to sane bounds.
+  function applyRounds(s) {
+    if (!s) return;
+    if (s.nTasks != null && +s.nTasks >= 1) N_TASKS = Math.min(120, Math.floor(+s.nTasks));
+    if (s.nPractice != null) N_PRACTICE = (+s.nPractice > 0) ? 1 : 0;
+    if (s.paidTasks != null && +s.paidTasks >= 0) PAID_TASKS = Math.floor(+s.paidTasks);
+    if (PAID_TASKS > N_TASKS) PAID_TASKS = N_TASKS;
+  }
+  function firstRound() { return N_PRACTICE > 0 ? 0 : 1; } // roundNum to start the game at
 
   // ---- closure-only per-round secrets (NEVER on window/DOM) ----------------
   var truth = null;   // decoded value array for the current round
@@ -35,7 +47,7 @@
   var BUILTIN = {
     consent:
       "**What this is.** This is a short decision-making study. You will play a simple game in which you search a hidden line of positions for the highest value. The whole study takes about **15 minutes**.\n\n" +
-      "**Payment.** You receive the base payment for participating. In addition, two rounds of the game are chosen at random at the end and paid to you as a **bonus**, based on how well you did in those rounds.\n\n" +
+      "**Payment.** You receive the base payment for participating. In addition, {paidTasks} rounds of the game are chosen at random at the end and paid to you as a **bonus**, based on how well you did in those rounds.\n\n" +
       "**Anonymity.** We record only your choices in the game (which positions you reveal, when you stop, and your answers to a few questions). We do not collect any personally identifying information beyond the anonymous IDs your recruitment platform provides. Your data are used only for research.\n\n" +
       "**Voluntary.** Participation is voluntary and you may stop at any time by closing the window.",
     instructions:
@@ -43,7 +55,7 @@
       "Values at adjacent positions differ by at most 10 cents. So positions two apart differ by at most 20 cents, and so on.\n\n" +
       "You can reveal the value at any position. Each reveal costs 5 cents. You can stop whenever you want.\n\n" +
       "Your earnings for the round are the highest value you revealed, minus 5 cents for each reveal. If you reveal nothing, you earn 0 for the round.\n\n" +
-      "After each round the values reset and will be different. There is 1 practice round and 10 real rounds. Two of the 10 real rounds will be picked at random and paid to you as a bonus.",
+      "After each round the values reset and will be different. {rounds}",
     instructionsB:
       "You also have a free assistant.\n\n" +
       "The assistant was trained on data about some positions between 30 and 70. You cannot see its data. If you ask about a position between 30 and 70, it gives you its best estimate: a straight line between its two nearest data points. Its estimates are usually close, but they are not guaranteed.\n\n" +
@@ -211,6 +223,7 @@
     if (scfg.endpointUrl && !CFG.ENDPOINT_URL) CFG.ENDPOINT_URL = scfg.endpointUrl;
     if (scfg.armMode) STUDY_ARM_MODE = scfg.armMode;
     if (scfg.content) CONTENT = scfg.content;
+    applyRounds(scfg);
     STUDY_CLOSED = (scfg.studyOpen === false);
   }
 
@@ -227,6 +240,7 @@
     if (s.endpointUrl && !CFG.ENDPOINT_URL) CFG.ENDPOINT_URL = s.endpointUrl;
     if (s.armMode) STUDY_ARM_MODE = s.armMode;
     if (s.content) CONTENT = s.content;
+    applyRounds(s);
   }
 
   function finishBoot(pr) {
@@ -310,11 +324,14 @@
     }
     POOL = { byId: byId, richIds: richIds, poorIds: poorIds };
 
-    // seeded per-subject task order (5 RICH + 5 POOR, shuffled)
+    // Seeded per-subject task order: N_TASKS landscapes, split ~half RICH / half
+    // POOR (derived from the admin-set round count), shuffled. Capped at the pool.
     if (!S.taskOrder) {
       var rng = mulberry32(hashSeed(S.session + ':tasks'));
-      var r = shuffle(richIds.slice(), rng).slice(0, CFG.SAMPLE_RICH);
-      var p = shuffle(poorIds.slice(), rng).slice(0, CFG.SAMPLE_POOR);
+      var nRich = Math.min(Math.ceil(N_TASKS / 2), richIds.length);
+      var nPoor = Math.min(N_TASKS - nRich, poorIds.length);
+      var r = shuffle(richIds.slice(), rng).slice(0, nRich);
+      var p = shuffle(poorIds.slice(), rng).slice(0, nPoor);
       S.taskOrder = shuffle(r.concat(p), rng);
     }
 
@@ -335,7 +352,7 @@
     if (S.completed) { renderFinish(); show('s-finish'); return; }
     // Preview (admin testing): skip consent/instructions/quiz, drop into practice.
     if (PREVIEW && (!S.phase || S.phase === 'consent' || S.phase === 'instructions' || S.phase === 'quiz')) {
-      startRound(0, false); return;
+      startRound(firstRound(), false); return;
     }
     switch (S.phase) {
       case 'instructions': showInstructions(); break;
@@ -361,7 +378,18 @@
       return safe ? '<p>' + safe + '</p>' : '';
     }).join('');
   }
-  function content(key) { return (CONTENT && CONTENT[key]) ? CONTENT[key] : BUILTIN[key]; }
+  // Expand round/fee tokens so both built-in and admin-edited copy stays accurate
+  // when the admin changes the round counts. Tokens: {nTasks} {paidTasks}
+  // {nPractice} {fee} {nPositions} and {rounds} (a full ready-made sentence).
+  function subTokens(text) {
+    var roundsSentence = (N_PRACTICE > 0 ? 'There is a practice round and ' + N_TASKS + ' real rounds. ' : 'There are ' + N_TASKS + ' rounds. ') +
+      PAID_TASKS + ' of the ' + N_TASKS + ' real rounds will be picked at random and paid to you as a bonus.';
+    return String(text || '')
+      .replace(/\{rounds\}/g, roundsSentence)
+      .replace(/\{nTasks\}/g, N_TASKS).replace(/\{paidTasks\}/g, PAID_TASKS)
+      .replace(/\{nPractice\}/g, N_PRACTICE).replace(/\{fee\}/g, COST).replace(/\{nPositions\}/g, N_POS);
+  }
+  function content(key) { return subTokens((CONTENT && CONTENT[key]) ? CONTENT[key] : BUILTIN[key]); }
 
   function showConsent() {
     S.phase = 'consent'; save();
@@ -462,7 +490,7 @@
     }
     if (allCorrect) {
       S.quizPassed = true; save();
-      startRound(0, false); // practice
+      startRound(firstRound(), false); // practice (or round 1 if practice disabled)
     } else {
       $('quiz-feedback').style.display = 'block';
       showQuiz(); // reshuffle + clear selections for a fresh retry
@@ -678,7 +706,7 @@
     var rng = mulberry32(hashSeed(S.session + ':paid'));
     var idxs = []; for (var i = 1; i <= N_TASKS; i++) idxs.push(i);
     shuffle(idxs, rng);
-    S.paidRounds = idxs.slice(0, CFG.PAID_TASKS).sort(function (a, b) { return a - b; });
+    S.paidRounds = idxs.slice(0, PAID_TASKS).sort(function (a, b) { return a - b; });
     return S.paidRounds;
   }
   function resultOf(round) {
@@ -727,9 +755,10 @@
               '<td>' + (picked ? '✔ paid' : '') + '</td></tr>';
     }
     var intro = (CONTENT && CONTENT.finish)
-      ? renderProse(CONTENT.finish)
-      : '<p>Thank you for taking part. Below are your 10 real rounds. The two rounds marked ' +
-        '<b>paid</b> were selected at random; your bonus is the sum of their earnings ' +
+      ? renderProse(subTokens(CONTENT.finish))
+      : '<p>Thank you for taking part. Below are your ' + N_TASKS + ' real rounds. The ' +
+        (PAID_TASKS === 1 ? 'round' : PAID_TASKS + ' rounds') + ' marked ' +
+        '<b>paid</b> ' + (PAID_TASKS === 1 ? 'was' : 'were') + ' selected at random; your bonus is the sum of their earnings ' +
         '(a round counts as 0 if it was negative).</p>';
     $('finish-body').innerHTML =
       intro +
