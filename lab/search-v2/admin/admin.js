@@ -31,7 +31,6 @@
     wireTabs();
     wireConditions();
     wireData();
-    renderSetup();
     $('btn-signout').addEventListener('click', function () { if (configured) FB.adminSignOut().then(reload); else reload(); });
 
     if (!configured) { enterLocalMode(); return; }
@@ -68,7 +67,7 @@
     show('a-dash');
     banner($('dash-banner'), 'warn',
       '<b>Firebase is not configured</b>, so this is a local preview showing only <i>this browser’s</i> test sessions. ' +
-      'Saving conditions is disabled until you set up Firebase — see the <b>Setup</b> tab.');
+      'Saving conditions is disabled until you set up Firebase (see <code class="k">lab/search-v2/README.md</code> → “Admin panel &amp; Firebase setup”).');
     // populate the conditions form from a local draft so it can be previewed
     fillConditions(readLocalCfg());
     $('btn-save').disabled = true;
@@ -83,7 +82,6 @@
       var t = this.getAttribute('data-tab');
       $('tab-conditions').style.display = t === 'conditions' ? '' : 'none';
       $('tab-data').style.display = t === 'data' ? '' : 'none';
-      $('tab-setup').style.display = t === 'setup' ? '' : 'none';
     });
   }
 
@@ -232,20 +230,4 @@
     setTimeout(function () { document.body.removeChild(a); URL.revokeObjectURL(url); }, 0);
   }
 
-  // -------------------------------------------------------------- setup tab
-  function renderSetup() {
-    $('setup-body').innerHTML =
-      '<p class="muted">Do this once to enable central data collection and cross-device admin. The participant experiment keeps working without it (local + optional Google-Sheet endpoint).</p>' +
-      '<div class="card"><ol class="steps">' +
-      '<li>Create a Google account for the study (e.g. a dedicated Gmail), then open the <b>Firebase console</b> (console.firebase.google.com) and <b>Add project</b> (name it e.g. <code class="k">search-v2</code>). Analytics optional.</li>' +
-      '<li>In the project, <b>Build → Firestore Database → Create database</b> (Production mode, a region near your subjects).</li>' +
-      '<li><b>Build → Authentication → Get started</b>, then enable <b>Anonymous</b> (participants) and <b>Email/Password</b> (you).</li>' +
-      '<li>In Authentication → <b>Users → Add user</b>, create your admin login (e.g. <code class="k">admin@admin.com</code> + a strong password).</li>' +
-      '<li><b>Project settings → General → Your apps → Web (&lt;/&gt;)</b>, register an app, and copy the <code class="k">firebaseConfig</code> object.</li>' +
-      '<li>Paste it into <code class="k">lab/search-v2/firebase-config.js</code> (over the <code class="k">PASTE_…</code> placeholders) and put your admin email in <code class="k">ADMIN_EMAILS</code>. Commit &amp; push.</li>' +
-      '<li>Deploy the security rules: copy <code class="k">lab/search-v2/firestore.rules</code> into Firestore → <b>Rules</b> (replace <code class="k">admin@admin.com</code> with your admin email) and <b>Publish</b>.</li>' +
-      '<li>Reload this page — you’ll get a sign-in box. Sign in with your admin account. Set conditions on the first tab; data appears on the Data tab as participants play.</li>' +
-      '</ol></div>' +
-      '<p class="small muted">Free-tier Firestore (Spark plan) is ample for a study of this size. Events are one document each; the admin reads are gated to your admin email by the security rules.</p>';
-  }
 })();

@@ -309,9 +309,6 @@ async function main() {
       ok('data tab shows a stat grid', (await page.locator('#stat-grid .stat-box').count()) >= 3);
       ok('data tab lists at least one session', (await page.locator('#sessions-table tbody tr').count()) >= 1);
       ok('data tab lists events', (await page.locator('#events-table tbody tr').count()) >= 1);
-      // Setup tab has the Firebase steps
-      await page.click('.tab[data-tab="setup"]');
-      ok('setup tab documents Firebase steps', /firebase/i.test(await page.innerText('#setup-body')));
       await ctx.close();
     }
 
