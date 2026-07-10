@@ -91,18 +91,14 @@ window.Chart = (function () {
         for (var i = 0; i < st.truth.length; i++) d += (i ? 'L' : 'M') + xOf(i + 1).toFixed(1) + ' ' + yOf(st.truth[i]).toFixed(1) + ' ';
         parts.push('<path class="dbg-line" d="' + d + '"/>');
       }
-      // --- AI interpolation line: the piecewise-linear estimate the assistant
-      //     computes between its training points, drawn separately within each
-      //     coverage patch (never bridging the gaps between patches) ---
-      if (st.showInterp && st.dots && st.dots.length && st.coverage) {
-        for (var pi = 0; pi < st.coverage.length; pi++) {
-          var pa = st.coverage[pi][0], pb = st.coverage[pi][1], seg = '';
-          for (var si = 0; si < st.dots.length; si++) {
-            var sp = st.dots[si][0];
-            if (sp >= pa && sp <= pb) seg += (seg ? 'L' : 'M') + xOf(sp).toFixed(1) + ' ' + yOf(st.dots[si][1]).toFixed(1) + ' ';
-          }
-          if (seg) parts.push('<path class="interp-line" d="' + seg + '"/>');
-        }
+      // --- AI estimate line: what the assistant would answer at EVERY position —
+      //     piecewise-linear interpolation between its training points, and flat
+      //     extrapolation (holding the nearest point) beyond the outermost ones. ---
+      if (st.showInterp && st.dots && st.dots.length) {
+        var ds = st.dots, seg = 'M' + xOf(1).toFixed(1) + ' ' + yOf(ds[0][1]).toFixed(1) + ' ';
+        for (var si = 0; si < ds.length; si++) seg += 'L' + xOf(ds[si][0]).toFixed(1) + ' ' + yOf(ds[si][1]).toFixed(1) + ' ';
+        seg += 'L' + xOf(N).toFixed(1) + ' ' + yOf(ds[ds.length - 1][1]).toFixed(1) + ' ';
+        parts.push('<path class="interp-line" d="' + seg + '"/>');
       }
       // --- AI training points ---
       if (st.showDots && st.dots) {

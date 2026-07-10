@@ -102,14 +102,13 @@
       "After each round the values reset and will be different. {rounds}",
     instructionsB:
       "You also have a free assistant.\n\n" +
-      "The assistant was trained on data about some positions, in a few ranges ({coverage}). You cannot see its data. If you ask about a position inside one of those ranges, it gives you its best estimate: a straight line between its two nearest data points. Its estimates are usually close, but they are not guaranteed.\n\n" +
-      "If you ask about any position outside those ranges, the assistant has no data and will tell you so.\n\n" +
+      "You can ask the assistant about any position, and it gives you its best estimate of the value there — a guess based on data it was trained on. Its estimates are usually close but not guaranteed, and it always gives an answer, even for positions where it is unsure.\n\n" +
       "Asking the assistant is free and unlimited. The assistant does not learn from your reveals in this study.",
     // Shown at the start of a later phase when a within-subjects session moves the
     // subject INTO the With-AI condition (a free assistant becomes available).
     phaseIntroB:
       "**Next part: you now have a free AI assistant.**\n\n" +
-      "For the rounds in this part you also have a free assistant. It was trained on data about some positions, in a few ranges ({coverage}), and when you ask about a position inside one of those ranges it gives its best estimate — a straight line between its two nearest data points. Its estimates are usually close but not guaranteed, and outside those ranges it has no data.\n\n" +
+      "For the rounds in this part you also have a free assistant. You can ask it about any position and it gives its best estimate of the value there — a guess based on data it was trained on. Its estimates are usually close but not guaranteed, and it always gives an answer, even where it is unsure.\n\n" +
       "Asking is free and unlimited. Everything else about the game is exactly the same.",
     // Shown at the start of a later phase when a within-subjects session moves the
     // subject INTO the Without-AI (human-only) condition (no assistant).
@@ -484,15 +483,7 @@
       .replace(/\{rounds\}/g, roundsSentence)
       .replace(/\{nTasks\}/g, N_TASKS).replace(/\{paidTasks\}/g, PAID_TASKS)
       .replace(/\{nPractice\}/g, N_PRACTICE).replace(/\{fee\}/g, COST).replace(/\{nPositions\}/g, N_POS)
-      .replace(/\{totalRounds\}/g, totalReal).replace(/\{nPhases\}/g, nPhases)
-      .replace(/\{coverage\}/g, coverageText());
-  }
-  // The assistant's training patches as human-readable text, e.g. "25–45 and
-  // 55–75". Read from config so copy never drifts from the actual coverage.
-  function coverageText() {
-    var ps = CFG.COVERAGE_PATCHES || [], out = [];
-    for (var i = 0; i < ps.length; i++) out.push(ps[i][0] + '–' + ps[i][1]);
-    return out.join(' and ');
+      .replace(/\{totalRounds\}/g, totalReal).replace(/\{nPhases\}/g, nPhases);
   }
   function content(key) { return subTokens((CONTENT && CONTENT[key]) ? CONTENT[key] : BUILTIN[key]); }
 
@@ -539,7 +530,7 @@
   //  QUICK-TEST ANSWER KEY  (the "Quick check" screen — get all right to play)
   //    Q1  "highest possible value at position 52"      -> 60
   //    Q2  "what do you earn" (reveals 30 & 62)         -> 52
-  //    Q3  (Arm B) "ask the assistant about position 90"-> It says it has no data there
+  //    Q3  (Arm B) "ask about a position it wasn't trained near" -> Still an estimate, may be off
   //    Q4  (Arm B) "the assistant's answer at 40 is"    -> An estimate that can be wrong
   //  To breeze through while testing, open the app in debug mode and these are
   //  PRE-SELECTED for you (just click Submit):
@@ -553,8 +544,8 @@
       options: [{ t: '62' }, { t: '52', correct: true }, { t: '92' }, { t: '30' }] }
   ];
   var Q_B = [
-    { id: 'q3', prompt: 'You ask the assistant about position 90. What happens?',
-      options: [{ t: 'It tells you the exact value' }, { t: 'It gives you an estimate' }, { t: 'It says it has no data there', correct: true }, { t: 'It reveals the position for free' }] },
+    { id: 'q3', prompt: 'You ask the assistant about a position far from the data it was trained on. What happens?',
+      options: [{ t: 'It tells you it has no data there' }, { t: 'It still gives an estimate, which may be inaccurate', correct: true }, { t: 'It gives you the exact value' }, { t: 'It reveals the position for free' }] },
     { id: 'q4', prompt: 'The assistant\'s answer at position 40 is:',
       options: [{ t: 'Always exactly correct' }, { t: 'An estimate that can be wrong', correct: true }] }
   ];
@@ -602,7 +593,7 @@
       var keyBits = [];
       if (ids.indexOf('q1') >= 0) keyBits.push('Q1=60');
       if (ids.indexOf('q2') >= 0) keyBits.push('Q2=52');
-      if (ids.indexOf('q3') >= 0) keyBits.push('Q3=has no data there');
+      if (ids.indexOf('q3') >= 0) keyBits.push('Q3=still an estimate, may be inaccurate');
       if (ids.indexOf('q4') >= 0) keyBits.push('Q4=an estimate that can be wrong');
       var hint = document.createElement('div');
       hint.className = 'note';
@@ -698,7 +689,7 @@
     if (aux.getAttribute('data-built') === '1') { renderAiLog(); return; }
     aux.innerHTML =
       '<h3>Assistant</h3>' +
-      '<p class="small muted">Free and unlimited. It has data only for positions ' + coverageText() + '.</p>' +
+      '<p class="small muted">Free and unlimited. Ask it about any position for its best estimate.</p>' +
       '<div class="ask-row"><span class="small">Position</span>' +
       '<input type="number" id="ai-pos" min="1" max="100" value="' + S.round.selected + '">' +
       '<button class="btn btn-blue btn-sm" id="btn-ask">Ask assistant (free)</button></div>' +
@@ -776,7 +767,13 @@
     save();
     renderRound();
   }
-  function onChartSelect(pos) { selectPos(pos); }
+  // Clicking a position on the plot reveals it directly (click-to-reveal), so a
+  // participant can reveal several points by clicking around the space. Clicking
+  // an already-revealed point just moves the cursor there.
+  function onChartSelect(pos) {
+    selectPos(pos);
+    if (!isRevealed(pos)) doReveal();
+  }
 
   function doReveal() {
     var pos = S.round.selected;

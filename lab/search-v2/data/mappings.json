@@ -4,12 +4,8 @@
   "L_STEP": 10,
   "coveragePatches": [
     [
-      25,
-      45
-    ],
-    [
-      55,
-      75
+      30,
+      70
     ]
   ],
   "obfuscation": {
@@ -20,848 +16,848 @@
   "practice": {
     "id": "practice_1",
     "v": "RUZAS1ZQSlRTXVJTWlpaWltaXFVfXlhRSEZFRkd/RUV+cnRxeH55RHl4eXdyeEBDentEe0Z+fHZvdnB/fHp4ekxGRH96cnVodnNrcHlzd25uanFyan1/RHp4cn19dW9qfUV/dA==",
-    "dots": "Q0h6RX94d3JtfGR6HXURaw=="
+    "dots": "RH9/eHB4a3pgdhxy"
   },
   "mappings": [
     {
       "id": "R001",
       "stratum": "RICH",
-      "seed": 4099574006,
-      "v": "d3B8cHhzdmp9eXBoYGJubGluYmNvbmJhHhplHx8dFhMXCRYIDQodGh8XHWVkbGVsbnR2cXV3dnN3f3RrbnB5eXhHREV5R0RDRXp5QXl2bmp3dG1gb2tganxHQ1VcWlxRV1FWXw==",
-      "dots": "Qx54CXdkbXZmaxJDEXk="
+      "seed": 121271191,
+      "v": "Rk5MVFdOTk1PREFPV09DQUlPQnp6fXV1dHJqa3VzdG1lb2IYERhkYBkYG2EeGRkSFQsODhQJAAsOFx5mbWJqaGtxfkZ/dnF5eER/dHxzekR4eXl/dnN3fHB1d2l1b21uamNvbA==",
+      "dots": "RHN/EWoSbAkYcRx2"
     },
     {
       "id": "R002",
       "stratum": "RICH",
-      "seed": 2160618423,
-      "v": "and2c3xwc3p/fHN5fnBpd3F/R3hza2p2dnBxa2IYYG9kHhQJFh0UFA0JDwAIExtmY2dkbmZkbWZmbnVtanB4c2twfHJzf3RwamJub2J1cmpya2ppan12cHF/fXdzfXhHf0ZAQw==",
-      "dots": "Q3Z6b3IUdwhtbRhwEW4="
+      "seed": 1086174678,
+      "v": "RklXX19TUFdXU1FQSl1LV1VOSElDen50b2ltZRoZZBtnGRwWEBALAgAFAA8IExkabG9ucHR+f0V5fnB8eEN6f3J4cH55cXZubHd/RklVTkRFQElMTklCQ0lQVUpRSlZfXFJRTw==",
+      "dots": "RBl7Z3MAdBNob2FwHHE="
     },
     {
       "id": "R003",
       "stratum": "RICH",
-      "seed": 3405086415,
-      "v": "dXJ5QE5WTEF5fnZ4enN9R0ZFQkxEQExUTldJQEtPTk1DeHN8dHx/cGhqdHNqdW1mHxgdEQ8XCQc+Oj4+Pj4BOz4FBgkTHxMaY2BpYm91aHVjbXV8cn19RHJ9ekF4Q0xNent4RA==",
-      "dots": "Q05+fHdqbQkZBhFp"
+      "seed": 282830703,
+      "v": "DhUIEhgeHGdhbGxhZR4ZERcXCgMVHBpjYmxjZx4eHhYJCAoACBcVEhxlGWUTCBQTEB9mbnB4QHpHQUxJVlNWUFFcUUtXU1ldV01FRU9ARUxOVEJEQU9CT0JNQ0FEen9GeEN4Rg==",
+      "dots": "RB5zHHcTaB9kUxxT"
     },
     {
       "id": "R004",
       "stratum": "RICH",
-      "seed": 1563752509,
-      "v": "f397cH5zcHF1bG5pYmZtGmNuZmMZHxsTH2djaGNlZRITCQ0NChEcZRhmaHV9RHhzanF9RX57cnF5R0RERHt/dnl7QU5KU0hMTVVCe39yc3R0d3ZvYmdsZh8SGRgdHWdibm1uYw==",
-      "dots": "Qx9EZXMYd31tchh7EUI="
+      "seed": 1370173784,
+      "v": "V1JSUlJLQkRyeEV9cmtqYmh0YmxjY2QeZRsdZRoeG2FkHBEfZWZlGB8QGR0KDAcCAhUSGGBpanN3fnpBQkVHQ0pCRkxXXFBWV0hWWFpaW1hQWlNSX1VLSl1aWlpTXlpbWlpSUw==",
+      "dots": "RB5/ZXEZbGkYQhxc"
     },
     {
       "id": "R005",
       "stratum": "RICH",
-      "seed": 3104619852,
-      "v": "enhzc2pydHRzf0RARkNLU1taUF5RUlJSUFBTVF9RSkNCQUFMen5GTXtwd25saW1nGWFhZRkQEhMUDQU+AQICBg8LExEcZm5hYG1vYGljZBJlYnV1bmxnHBxkYGlhbmNqdHF1Yg==",
-      "dots": "Q1BFSnJNd2xtEhgLEW8="
+      "seed": 3538814271,
+      "v": "Ymtydnl/cHhGRXlHQUd5fnpATkZ+f3RvdGhjGBwRFw4CAwsDBw0PDQoKFhhmZGVmHxpjbGprcH56e35+RXxHT0tRSE5RSVdSXFxfXVpaWllSUVVOTlFVUEtQVEtOR39+fXBpbA==",
+      "dots": "RBF8DXEWdGRjemdFHEk="
     },
     {
       "id": "R006",
       "stratum": "RICH",
-      "seed": 155286571,
-      "v": "WlpaWFpaW19aWlpTV1ZLSkpKTUVGQkd5RE1GTUVHf3p5cHJ0f316fHV8e0BGeXp6fHFqbmpoYGFkHxAIDgkPFxMRHhhmGB0VAgc+BQ0LCAsDOgQCDBUcERIREQsSGRsfHRMICg==",
-      "dots": "Q0RFf3B8d0ZtYGQJGxMRPg=="
+      "seed": 1323576936,
+      "v": "Y2h1dmhpbWBgY2t0bGAbZW1jGhITFRIYHBobZmAYZBxlGh5nYWdjZhkSHRUPFxMVFR8aYxkRHhMfZG9mbWFjb2Ngb3Fud35zeUd8fX1+eENCRkBPS1RfUU5QW1lfWVpSU1BXUw==",
+      "dots": "RBhyZmgfYW8cdw=="
     },
     {
       "id": "R007",
       "stratum": "RICH",
-      "seed": 796266471,
-      "v": "GWBiaWliZhsaEhATFwwWGWdsb2hsYBsbGxMVFRcNFRAWHxlmGmYfFREcHRhja31FTUdAQklKU1xTXFJZXVRTXFpeUE5GRkhNQUlLUU9AQktPS09JTEJHTkdNekN6TUVASExCRg==",
-      "dots": "QxtFFX8ad2NtUxheEUs="
+      "seed": 2924228146,
+      "v": "TktOTElAeXJyand1bXRwfnxHeUF5RkdDQ0ZBfkRGQ0dGekZ/c3FraW9sb2cfEwkQEhATEQsCDwsXGRcZYGpqcWl2bGt0dnB3aXN7e3tzdmtqaWNkGhMYHxhmHGZib3Rpb2BiGg==",
+      "dots": "REZ9a3cfaRNkahx2"
     },
     {
       "id": "R008",
       "stratum": "RICH",
-      "seed": 1544533408,
-      "v": "WlpaWlpaXVJaXVpTWl5dVFNfWVBTWVZeX1FLV1NaWlpeUFNUVFRMVkpNRUN6cnh+dmpiZmJgGWVsZBgRHxcPAQcADgc+ATsDFQ4XCwgKAwA7AT4+ODgBCQoIFA4GBQc+Bzk+Pg==",
-      "dots": "Q195U3d6bRkZDhEX"
+      "seed": 912296054,
+      "v": "Z2dmZBhgbnBqcXBucXVxfnF8RUR4REdAeHZ5RUd8RH1/cW51aW0bHhYJDBQQDgwXEBEWEhYdGRtibnFobmRvYGtsa3VuYmhuY2tta2p0aGx0fHh4ek1FQEtCSlVdVExFcnZ9RQ==",
+      "dots": "RHx7f3YUaxBtGWZoHGI="
     },
     {
       "id": "R009",
       "stratum": "RICH",
-      "seed": 10390409,
-      "v": "S0hQX1RSUlBRXVhQX1ZLTHpFQEBOVklKV0xXSlJUS1ZLSUxMREZJUFBJSUF7e0dCQ0lATUhKS0lBfnRsZRkRHBMKDQA7AQ8MFB8UHRoYHxcKEhhkbWMbZm10aWBhZGJvdG5qaQ==",
-      "dots": "Q1d5THd7bUtkGR4AERQ="
+      "seed": 3270516473,
+      "v": "a3F/RX1qaWNoY2tvdWh3dHR9e3hzdXZxa29oYRodGRELDwkQFx0SZRMeGRgTHBNlZWRsYGBhZWBpb2p9a3Nxa2hibnF+R09NQ0NMRnlERUBNSEF5c3B9eUZ7Q3p8REJ6QkZ+ew==",
+      "dots": "RB14D3wddhhpbGdrHEc="
     },
     {
       "id": "R010",
       "stratum": "RICH",
-      "seed": 3915836046,
-      "v": "fnN6R0BPRkBNQ0d4e315dmpycWhhGRMICRQLDRUVCxMZZR8eYGwaZmlvb2xsdHx1bW10cH5xbmhqb2lrc3B+RkdDT0F5dnJzeXFycWtoYWh2dnF2bmJlZ2dudn9BTk1XX1dVVA==",
-      "dots": "QwlHFX0ad2xtbmZrGEMRcg=="
+      "seed": 2915882326,
+      "v": "Wl1VXVdZWlpZUV9VUVdKVk5BTEB+eHx6fH1zd31+dHN9a2ltZ2Jgb29iYGltZGQYEBweHxAcGRwXDw07OQQ+BAANCxYTFxMLEhMXHWQaYmEaZ250an1wdHRsd3FvanFudnFzdw==",
+      "dots": "RH5/Z3NvdGRvEGQEHBc="
     },
     {
       "id": "R011",
       "stratum": "RICH",
-      "seed": 162457524,
-      "v": "G2NkHmRlZW11dnN8REJIUl9aWFFYU1JZUlhcUldcVFJTSklDe3h9amlqcXhzcGlmGm1hZWdmG2ceGGdlG2QeERQSHR0bZRwXFQ0OEBYWFREUEB4ZYWVnbG10c2t1cnZsYmQbHw==",
-      "dots": "Q1J5SXdzbRsaEREO"
+      "seed": 441419749,
+      "v": "XFVJSE9XT0JLVVBdSklXSFdXSVZORnlxfGpwcH9zcXViGxhgGxlmZR4XDwkUFw4LChMYZmhraWx2dWtiaWlrcHRwf0V+cXB9amJ1b21sbGpsY2pubmxocn17fHZ1fHducX94ew==",
+      "dots": "RHNzHnUOYmwZfxxx"
     },
     {
       "id": "R012",
       "stratum": "RICH",
-      "seed": 483512486,
-      "v": "U1VCQ0FMSUlLV0pJT1ZKUlpbXVdOQExCQEREfHRsYGQZZ2FmaXBoYW5jYWlrYGQeERAICQoVHxcVFgsPCxcQHRgcERxmYnVoaG5pbW5tZGJrc3h2b2x3bG5sb2dibmxoYRgYHg==",
-      "dots": "Q0B7GXdrbR9lEBFp"
+      "seed": 69004914,
+      "v": "UF9aWlNKQlVNenlDSFFfWF5ZWltdWlpaWlxaW1xUQnt4fHdpb2ZlGx4fFxUUHx5gGmMbHRtjGxobHRsRFQwJFxYdEBwWFA4KChxlb29iYW5udm51YmxjYWVmZxtnYWJlHxllbA==",
+      "dots": "RFR4fHxmdxRqYGxjZAwcFA=="
     },
     {
       "id": "R013",
       "stratum": "RICH",
-      "seed": 1604340810,
-      "v": "DxQVExUQFBILCAYEBz47Pgc5Oz45Bz4+PgUGDBQWEBlnYWh3cXJEQ0BAT09IS0BISUtJQU1AT09VSE9JVFxbUFxcUVRRWFhfVVBUVFBRTk5WSUNETUdOT0JAeX1xdmthb2l1aA==",
-      "dots": "Qz54YXdIbU8YXBFU"
+      "seed": 2258818587,
+      "v": "dWp2dXF3cn93aWBuYBofFxUMAgwPFQwLFA4NBwE+PjoFDQkTHBkaYBhgb2ZsdnxxaHFydm5kGB0bZml2fXx+fkdHSUJ7TU9BT1VCQ0xKV09GeX97RkhSUVNYX1dQXVJKSEtKTA==",
+      "dots": "RD5wYGtoZ30cTQ=="
     },
     {
       "id": "R014",
       "stratum": "RICH",
-      "seed": 1324862510,
-      "v": "QH58dXViGxscGhwQFxAWFhEZGRMIEQsXDwIEAggDODsCDAsSZGZkYml3dHFpcGhobGhpZ25gb2FiZGFhaXFqcX9Ecnh4QUJMTktNS05VSFVdWVNXT0tWU1ldWlpaXVRCeHN2aA==",
-      "dots": "Qw94DHdpbW9naRlyEU0="
+      "seed": 3677558954,
+      "v": "Qk9VSENNSkhKT0JGRkZPR3p4eH18f353aHBzeURBQkBFeX9Hf31yfn5wdnJ3bndrdG11dmhhYmQcHhwVChYJFBQQCA8LFRAZHmdgY2tweHpNRk9ATkRHeEBIVl9dUF1aU0tNVQ==",
+      "dots": "REFzfm9oZBYcFQ=="
     },
     {
       "id": "R015",
       "stratum": "RICH",
-      "seed": 4028011006,
-      "v": "SldKSUtUVExEQElJQ0JDTkhKVUpPQklDT0ZHR0BBeX10amltbWl1aGptZGYbHR8WDAEICA0DFRISGxAeExAaGRAWCwINOj45BAwKExMVERtgaXZ8fkRHf3lFQUxXVU1Ff39HQw==",
-      "dots": "Q096fXlpdxttFRsQEQo="
+      "seed": 3699526400,
+      "v": "fXBqaGxgGhkbEQoSERkdGmAYYxkRERMTHhYWDwgJCwA4Pj4BCBEVDA0ACBUcGR8THhlgZ2Fib2ljYGtwaGhibmFubml3fnt7R0lQWVpaWl5RX1RVX19aW1paXl9RTkhOS1FeWQ==",
+      "dots": "RAl9FXQZbW9mcBx+"
     },
     {
       "id": "R016",
       "stratum": "RICH",
-      "seed": 3939088460,
-      "v": "aHZ0dH19an1ycnxya2lrd2psdnx9fH9ER3lEf3pARkNEQExFfXx7cn1ydX12aHB7QURGeHpzc2tqYxsYZRIdZB8YZ2UeFBYUDxEcZWxjGRpmY2tubWxsYG9gZ2AYZGdkHRocHg==",
-      "dots": "Q0dGf317d3ZtcxgYERw="
+      "seed": 1994235856,
+      "v": "f3R1fX98dmpqfHFxeH19cW5xdHd8e3NyfX9wd352cXdobW1lGmVlZWVtaGMaZRweZB8RDwwUFRMKHR4SChETGBttG2BrfXF8eUBERkR+Rk5PR0lJSUJFeXlBQU9DT1dJVUtUUg==",
+      "dots": "RHZyZXFobwxlExx9"
     },
     {
       "id": "R017",
       "stratum": "RICH",
-      "seed": 3767405453,
-      "v": "EhIUFRMaGB8ZHBQIDAgMChMTFAICCg0CAxUUEBhnZBtkGm1ja2BvaWEabWh2c3ByfH9GTk1MS01ITFRKV19WXlxWSlddWlpeWFpbWFpcVVZSUV9bWlpaWFFfWl9aX1hTSEpITQ==",
-      "dots": "QwN5bXd2bUsaXhFb"
+      "seed": 298418107,
+      "v": "e319eXp+cGlmYxgYEBJlHRwbGxMTGRMSGWEbHhcXFAICDAAPDRQSGB8aEh5lb2BpZmdgbWlmb2hobGt2cnp/fHx/f3p6QkhRV1FQX1taWlpfWFlaX1dXTktJSUhQSVVNTU1PQw==",
+      "dots": "RBd7An8Ndh5oZ2NoZHocQg=="
     },
     {
       "id": "R018",
       "stratum": "RICH",
-      "seed": 83138932,
-      "v": "Pj44BgINAT4+BgYMFxUMCQc6ADs+Pj4+Oz4+OD4HDwgRFhISEmUbYBgcZWJoa3FxcHBwc3p5fX5BekZOUV9YWltaU1JQXVtbWlpZXFBKQkF7REZ5QENLVF5WS0hIUlNcXlpSUg==",
-      "dots": "QztGOHJgd2htfRtbEVk="
+      "seed": 3420132074,
+      "v": "SUFDQExJUFpdV1RRVUJJSlRKTUBNR0d4QnpEeXB8cG5gYWQcFQwHBQUHPj4EDhQREmUdEB0ZER4aGB4fHhxlHGUaZxwaYmJvd3Zwf3Zqbmx3cnN0bW5tbGtyeHpET1VDREN6Rg==",
+      "dots": "RHx4YX8VcgVqEW8dYh4YGhxi"
     },
     {
       "id": "R019",
       "stratum": "RICH",
-      "seed": 2915882326,
-      "v": "Wl1VXVdZWlpZUV9VUVdKVk5BTEB+eHx6fH1zd31+dHN9a2ltZ2Jgb29iYGltZGQYEBweHxAcGRwXDw07OQQ+BAANCxYTFxMLEhMXHWQaYmEaZ250an1wdHRsd3FvanFudnFzdw==",
-      "dots": "Q3x6c35td21tGWY7GQsRFw=="
+      "seed": 2541718006,
+      "v": "W15aWVNaXlhQVVdXSFBaWVxdWVNaWlpZWlpaW1hQXVpdV1dXSUpXUlRQX1VUSEBHRUREQX59ampjZxkaEhIXDQ8GPj47Ajs4PgUDCwEMCRULCRcXEggUDhYREx9kZGVnZGNgaQ==",
+      "dots": "RFB/SWtFYmpkEhwC"
     },
     {
       "id": "R020",
       "stratum": "RICH",
-      "seed": 2568957813,
-      "v": "YnVyf3Z0fH1qY2poa3J0bnB/e310bGNgGR9mHBQQCgMPFQsCFRwbExUMCQ4RHBIRHxlnGmxgYGVmaXN1fHJ6RU1AT0JMR0JNVEtMVF9UQkxNRH57fnlHRENEf3x/R3l9RX5ARA==",
-      "dots": "Qxl6A34CdxFtYBtNEUw="
+      "seed": 177928943,
+      "v": "VFdRTkpJTUlCe0JNVU5QUE5CQUlWSUpTWlpfWF1USUJ7eENEQktLS11LQ0Z+dnxwdH98dH19eXZ1c3Nrb2MYFg8PBz4+BQMBAAsODQw6AjoEPj47BwcMFQ0XHWVkbRptYGhuag==",
+      "dots": "RFRwS3V8YHMcBQ=="
     },
     {
       "id": "R021",
       "stratum": "RICH",
-      "seed": 1739028447,
-      "v": "am9vY2t3d3N6Q0xBQnt9a3ZsZWBgGBIUCg8ADgcBOQQCDAYACQ8DDAAPFggNFBMWEwgQHmZvaWtwaXZ8ekBAeUFLUVhTS0NAQ0tPRUVDQkhJVE16R0VARX94fHt/RUNNSldQUQ==",
-      "dots": "Qwp7AncNbWkbQRFP"
+      "seed": 2741302800,
+      "v": "R09OSUN4f0ZJQEJ6Rnl8fXFxdmpqd3x1d2hsZRILAAMJERAbHR0cZRxnHBxnbnRwc2l1bGBmaHZ/RExJTEhITENOR35ye0B+cHZpYRgZFx0aExEdHxkRFh4YYW9iaHFzfX14Qw==",
+      "dots": "RAt7CX0cdXRhTBx7"
     },
     {
       "id": "R022",
       "stratum": "RICH",
-      "seed": 1545666376,
-      "v": "VFVPQEBEQkpLVEhLVU9CVFZZUldISElIUlhaWlpbX1FJSVBcUFRPR0xATUB6fXx9c3pHf3duZ2JgZBwRFRQdFhAKEBcIDQQHPj45BDs+Pj4+Pj4HPj4+Pj4+AQ8KFxMfHhMVEQ==",
-      "dots": "Q1J7SXd6bWcbEBE5"
+      "seed": 1729802226,
+      "v": "T1ZdXltaW1JUTERDekF5RUBFfH9ydHZxfHhza2BpanBxfXZucXNyenx1b2lgGhAQHhMTHh9kH2ZgGB0cFAwXCwELERhkY2Fib2FucX5GQX54R39/f3d9d395e31HRHl/fHJqaQ==",
+      "dots": "RGl4fXxzd2BuHmAYHGM="
     },
     {
       "id": "R023",
       "stratum": "RICH",
-      "seed": 1854456861,
-      "v": "aXFydHJ/RX13dm9pa3V0a312eUV6eHx/cHB8cnF8eENAQkRNQUJER0d8f0d9e310fH1zd2lhGGZnGBwUAhUTGGVmbHd8fnl9fn1zfX5HeHh+R0xUUltQXllQWVNWXFpYUVZZXQ==",
-      "dots": "Q3B7QHd9bRhkFRhmEXM="
+      "seed": 354669385,
+      "v": "Q0d/eHZ/f3ZvYxgREmViaHVvdXFpbm5xaGIYERQPBDsHBAcODwMPDA0HBg4UFhEKHRpga2h2f0VEQkFOQkZMRkNHTUVDen94eXJodWpwfXRze0dDQEtVSExXT0RMR0d5fn98dA==",
+      "dots": "RA9wB3QWbmtkRhx6"
     },
     {
       "id": "R024",
       "stratum": "RICH",
-      "seed": 1198475413,
-      "v": "V0tJTUNERH57QEZ+Rn9ER3p/fHZvaHZwf31rbRsTCxcTCxMQFRQSFQwPDwMCDxQWFxxlYGttZBpiaWtye3Nwd3lBTEBNRUZEQk9NREZ4eXhzfHNob3dqan17R0BNQERBSU1VXQ==",
-      "dots": "Q395E3cCbWQZTBFN"
+      "seed": 2553818541,
+      "v": "T01NR39+fX1FRkZHfGpxb2JpbHZvbWAbHRUPCggJDgYBOwQNCwsLAQsNDAoJAzg+Oz4+OAMABQcPFxASChAabGt0c3J2fkZ6QlVcWlpYX1JfXlpfUVlaWFpaW1JZWVpeV0xBSQ==",
+      "dots": "RAl4O3cJaztuOGIHZRocfg=="
     },
     {
       "id": "R025",
       "stratum": "RICH",
-      "seed": 3118647608,
-      "v": "WVheWl1ZVk5JSFZMSU5XVVROQE9MSUhQUV5eUVJQVVxdWFheWlpaXUpcV1BKQ0d8RHt5eX58dXZoaGJgZBkWFQ4LFggIAAYAAAU7BwEFBgMLCAEIDgsVHQodCw8LCg4UExAYHQ==",
-      "dots": "Q1F5WHdKbXVhYh4IETs="
+      "seed": 1728807306,
+      "v": "eEVASkN6fXxFQXpwcnx8e31/dm92eHlwfXN9cWlgYWUcHBcLAwIBBQ07BQMDDwINAgwUCxITGh8SCxIabXV9fn1+QU9OVF9aWl9XVU5XXFdTVktCRklTXVpYVlxdUFdXUlpaXg==",
+      "dots": "RGB/A3cDaRRnbRxU"
     },
     {
       "id": "R026",
       "stratum": "RICH",
-      "seed": 1200532872,
-      "v": "Xl9aWlpeWl5eU1BYXF1aW1BSXlhaWlpbWVhYUFpeU1peWl5UTElBekF5eXJrbm9nYxsQHxEfHBAKDBQUCQwBOwQNDgIKAA4HPj4+PjoGDwwUFQsLDQIFDQIBDhUWDAgMDQwLFg==",
-      "dots": "Q1lEXnJ6d2ttHGAMGwQRPg=="
+      "seed": 2644177588,
+      "v": "WllWXlddVUlCTkdOVE5WX1ZXSk1FeURFQ0lRT0JFRUR4cHN1cXdwanRuZmViY250b2FgZRMLCAwBCAwXH2QYZWBnHmUfZW0abW9lGxhkYGpudn92fXdzd2h0c35xfXJ6Q0hNSQ==",
+      "dots": "REVwbmp0YAgcZQ=="
     },
     {
       "id": "R027",
       "stratum": "RICH",
-      "seed": 3194457802,
-      "v": "FRUOFAsIDQkBBwI6AQE+Pj45OD4+Pj4+BT4+OT4FBgwOERAeGGVsbGJtbXdyc3F0f3pBQEZIQH54RE9GQ01IU15aWlpbWlpcV1VcX1tdWlpaWlpaWFJRW15cWlpaWl1dX1haWw==",
-      "dots": "QwVEBX4ed3JtQGZGZUgRXA=="
+      "seed": 3402430224,
+      "v": "CQANCQkVHBYJAjgEDQ0JFgsNDAsOAgIEBz47Pj4BPgYEOAcMCggSHWVjanR+cHtHTUNAQnhCQU5OS1FcWV9dW1NKU0lUSU9MSUN7RUZ5Rkx6f0FCQUhWS0BOVE5BTkRPVU5KSQ==",
+      "dots": "RAFyHXRwaENkXxxJ"
     },
     {
       "id": "R028",
       "stratum": "RICH",
-      "seed": 2761081760,
-      "v": "VlVJTEVBSU5PTldWTk9KQnp8R3x2fn9xcnFwaWAYYGAeERkSCggVDQAICxIYGBMTCQsJExAQChYWFhlkYWh1c3tGSEpTUVVIS09DSEFEQkhLTE1FRERDT0xVTkFIS1dUUUlWUw==",
-      "dots": "Q3J/CncYbQphGRt7EUM="
+      "seed": 3386358479,
+      "v": "QkpUSU9CSUFCQUB+dnF4QE9DRUVNSVdWVl1eWlxUSVRKQ3hyRUB7cXx3dHdxaWthHhMdHQoQHBcMAwoLERsaGRkQFx5lZx1nGGZmb3Z+cX5+RXN2cW5iYWRhYGt1bWtqYxgbYA==",
+      "dots": "RFR4Q3N8d3FrHmwQGhkcZw=="
     },
     {
       "id": "R029",
       "stratum": "RICH",
-      "seed": 2358682588,
-      "v": "WlhSXlpaWlpaWllaW1pbWlpZXVRfVkhAek1JTERDQUJFRUNMTlFUTE1PRHtDRnh7fHZ0cX13fXx/d3V1amxmZR4WCgsQFgkGPgc+Pjg6DBcSG2BlGmYYYW1lZ29pdW9gZxhmHw==",
-      "dots": "Q3p5Q3dDbX0ZChE+"
+      "seed": 931830394,
+      "v": "e3FrYmNra2hgY2JoaHZrbWp1aW1nbmhxfHF9fWtgYmAYHBURFwwCCgwXFxMSZBgeFxcICBAbZmFjbHdsaG93dXNrc2hze0V8c3BzfWpzek1NRXtEQEhUTkpUTU16RUR8eHNqcg==",
+      "dots": "RGB7GHIKcRdsG2BsHHs="
     },
     {
       "id": "R030",
       "stratum": "RICH",
-      "seed": 3139654262,
-      "v": "WVZdWlpYUEhWU1pfVUxEeEN7RHJ5fX1qamJvZxkaYBtlbWZkZ21odnlwcGp0cn18am9mYGAaExYXHhJlEgoCAQsTGWUYYm9vYWRnb3F+RkRFQkhCTEd5cHZwcGlxd3NoY2hvbw==",
-      "dots": "Q2pFYHlmd3RtExkZEWc="
+      "seed": 2031569691,
+      "v": "bGFlHBATER4QFx8aGGBnYWJ1f319RER5RXl2fH5/c3J5dmhzdnNqc3x8am1iGxkTER8eHBMVHRgaGRYVDwwVDhYfZ2lpZmUfExlgbWlxfnt6eHFzeURNT0tSV1ZLUlVCSFJZUA==",
+      "dots": "RH98c3QbbR1nDxxm"
     },
     {
       "id": "R031",
       "stratum": "RICH",
-      "seed": 4198900713,
-      "v": "UlpZXVxaUlhZWVFQWlpaWl9USFFQUlFYWlpYU1xZW1NaWVpaWllcX1ZIQUZ/dmpqbWEZHxAUCRcUCQgLAQAJBwAHADo4OT45ATg5BA0CCRELFh4RCg8DDgMODQoNAQgACBIIFg==",
-      "dots": "Q1p/Wnd/bQlmCxkAETk="
+      "seed": 1690502324,
+      "v": "PgU5OAE+PjoGDhEQExMfZWNqYGQfGRMYExtjanBzd3Zpd2xvYBofEwoCOD4+Pj4+BQIPFBIYZmx1fHt4REd6TUJBRkZISlRJU15XXFpaWlpaW1paWltQWVpfXUpCRH91bWpudQ==",
+      "dots": "RHN5bHY+awVmeBxK"
     },
     {
       "id": "R032",
       "stratum": "RICH",
-      "seed": 1617271970,
-      "v": "eHJ4RH17fHpGTVVLVFBRUUpDeEFAeXBpbWBsa2FsZh8REQsOAwUHPjgBDRQUFBUUCQIJDRQLChYJER0cHGcfGm1pc31EQEtWX1NdWVhSU1taWlpaWlpeWlpaWlpdXlJaU1NUSw==",
-      "dots": "Q217EXcUbQobbRFd"
+      "seed": 2648592618,
+      "v": "REBCS1dZWlleX1taXlBXUlRLVVdVSkhNTkZ+dmhiaGNgYmBmGBMeFwgXDwkVDAsWGGVtb3V9c39/eERBQkB7cXFqanJxeUZPVF9YUV9SV0xJTkd7f3h6Rk9AeX1FQXhxam1kGQ==",
+      "dots": "RGJ9HnQMbm8acRx5"
     },
     {
       "id": "R033",
       "stratum": "RICH",
-      "seed": 2844608127,
-      "v": "fn5HR0V6R3tATXtHR0d6c3B+Rk5OUUlMQkhJQkpSWlhcVEJ7QkZ5cndxdG9nZRsdHhASFQ4IDAcODQQBAwsSHGRtGxkfGGZtaGl2dW1kZWZobnR1aWxpYG1mZGdtYWh1aHd2ag==",
-      "dots": "Q0J/QndnbQxhBBtkEXY="
+      "seed": 2744591911,
+      "v": "d2t2dnhFRUJDSEFCQkhCRE5LQlRCVElJT0x6cHJ9f3B3bWxpY2YeHQsLDAwKCBMaZmFhGBgSGxplYmdhYGJrY2NkZmJraW5ud3N4fnd0fXB/dnRxcntEQ0tdXltaWlpaWl5aXQ==",
+      "dots": "RH15bHMLdgxqGmBiHGk="
     },
     {
       "id": "R034",
       "stratum": "RICH",
-      "seed": 273003292,
-      "v": "EBEUDwIEADsFBQEMAwMGOD4+Pj4+Pjk5Pgc+Pj4+OD4+AQQBAwoXHBJlYRhhGGFkb2Fua2psdX99fntNTktKVElWXl1UUVxZVlxaXF9QW1taWlpaW19QWFleWlpeWl1cWl5QXw==",
-      "dots": "Qz56PnIcd2FtdWZNHFERWg=="
+      "seed": 3441689083,
+      "v": "anVvb2pibGFmYWxjY25xfkd6QElMSlROSlxcX1pdWlNUS0BEeXN5cHRwa3VrbmpqYGYeHhwYHR4RDgsIDBYZZBtjYWxucG50b2MbG2FhGmFvdG5pZ2l0a29tZm1tYmNjb3FqfQ==",
+      "dots": "RF1/eXJwdG5uHmAOHHA="
     },
     {
       "id": "R035",
       "stratum": "RICH",
-      "seed": 393707652,
-      "v": "UF5aWl5eWlpcW1taWlJXXFBaWlpdU1hQUVBYWlpaXlBKTkxDQ0BDenhHRExGfnpFfWpsYR5kHR4QHxIfFhERDgoODQQ+OT47BTg6AgUHBzkADAIGBjg+OjoNCwkXDRUNCg8UDQ==",
-      "dots": "Q1F/Q3dGbR1gHxw5ETo="
+      "seed": 316518487,
+      "v": "X1xZWFBXVE1BRnx1a2Jjb2EYZm9lHhARChxlZhweGGZpZmAZEwsWDAMDDQMPCAgKFxUWGRIbYGZsd39GfH5He0BIS1NZWlpaUlVQSk5PVV1eWlpSWl5QVExDQE1XWVpaWlpaWg==",
+      "dots": "RB54ZnENbBsbQBxa"
     },
     {
       "id": "R036",
       "stratum": "RICH",
-      "seed": 4286766803,
-      "v": "YGdtbm0aHBcWEB9kHxcfFhlmb3d2f3dwdH93am5hHxMYEAgBCREdFB4abGYYYmJqYGBucX10dGhqdXd2aWhrcXB+RX5EfkRFQUF6f0FIUFRXXlFZWVpaWlpeU1paX19VSFNeVg==",
-      "dots": "Q3RGan8JdxhtdBtwEXo="
+      "seed": 4287109197,
+      "v": "TEZHRXhAR3t/dGlxfkdGQ0hOTEBHf0FHRkZGenJ7en52aXB0dGprYxkYGRYSEhEVAgsABg4UH2FodnNoaXd5c310YmFgZmJrdnN2aHR/Rnl3aW13f0VAQkZ7Qk5RUEpJUUlQSw==",
+      "dots": "RHt9a3YWawJgdhxm"
     },
     {
       "id": "R037",
       "stratum": "RICH",
-      "seed": 1426977934,
-      "v": "UU5KUl1aWVhcU1dLSVRPRHhGf0R+c3V3bnZubmQcZh8WCQMIEBlhbWBpaGJtGm1sY2FkZm9oYmpycn1FRXlxa3ZobmBpdn9zf3dxeX52fHdqYxgQCwoKCBcQEBYZZGJjYmJpdQ==",
-      "dots": "Q254CXdtbWIYaBFx"
+      "seed": 3406266513,
+      "v": "QEtUUFFVUlVPSUxMTUFNTkNJRkJ4Rnt9cn1wf3B/dWxsYWFvZ2xjZRISCgM4Pj4ADgMJEBQWGBYXFR8RGRpnZ2IaY292fXB/R3hHSUpRVEtUSVBYXllaWVpbWlpbWlNTV0lPTQ==",
+      "dots": "RH98bGgDYxcbYhx9"
     },
     {
       "id": "R038",
       "stratum": "RICH",
-      "seed": 1967602266,
-      "v": "c3Vyf3J3aW1lEgoLCw8XFRAYEBobZGEeHxkTCgwVHR1kbnF9eUFBe0RMQ0N6Qk16RkJETFRRWVpQUFBLTUhBQEpWXVpaWVpaU0pJVklBQk5QUE5VTUJ7QklNSUpOUVdUTEpCeg==",
-      "dots": "Qx94bnd6bVkZXRFJ"
+      "seed": 591089309,
+      "v": "eH96RH5FRk1IVlBWTk1LS1JaWlpaXltbWlpcXF1fWltaWlpaXFNSUFRIQER9fnBpYWNlExtmGmQfFwsIEBEQFA8EBz4+BQwVFA8DCBAXCAAFPgQFBwQNDRcfEhIbYWwaYWxgGg==",
+      "dots": "RF97WnxTamlgFxwF"
     },
     {
       "id": "R039",
       "stratum": "RICH",
-      "seed": 1015391776,
-      "v": "XFJKTE9XXFBTUlVWXEpLVl5fWFpaWl9TWllfXlJKQ0RGfkVBTUNBen90dXRqaGxhHhEYGmFkGRwVCAwIAQQODw0ODwoJAhQdZB4TZR8RFQMNFRxnbG5nbmFudG5maWBvaWlhaQ==",
-      "dots": "Q1pGXn5Bd2ptGWAIGA4REw=="
+      "seed": 525334398,
+      "v": "WlJQW19ZUlZVUUtPQUxGSUxLU19aWlpZUFxaWl9QSVZQUElJTlRJSlVRUktOT0R+d2hpZmcbY2dkZmJvZGJgGBkXCw8UHhYZGGcfExpmYm5gZGZmGm1oYhtkbGAYGx0fGmJsdA==",
+      "dots": "RFB8VGt3bmZlYBwe"
     },
     {
       "id": "R040",
       "stratum": "RICH",
-      "seed": 1905610413,
-      "v": "fkRBeERMS0BIVlBZWlpaWlpaWl5SXVVOTUV4QUBDe3J0fXN5enJ6cHZ5eHhGTUJ7RkJEeXlHT1dMR0xFeEd/cW5nZBhhGR0KDAYIEBcNDA4AAggRER9kHRtib2pwdH5xfXZvdA==",
-      "dots": "Q01HQHt0d0ZtT2ZFGnERCA=="
+      "seed": 2724277643,
+      "v": "cXRyf39HTU9WS0JPR39Ee0RMekZHRUBDQkJ7eHp7fHpBf0RPQkxHRUBCSEZ/RkF7fHViZRILCAMNDg0IFBARCBYZZx8WHBsTGRtlYGFsb2ZiaWtwfXxzeERBfn5zfnt9c3BpdQ==",
+      "dots": "RHtzQHd/aHVvEmcUHBw="
     },
     {
       "id": "R041",
       "stratum": "RICH",
-      "seed": 3518793023,
-      "v": "SVVPQH5wekJAR0JHeENBREdFf399fX1wfER9f3Nrd394eH5GfnBqb2pjanN+RExPQkFNQkdDT0F+e0d5cXB4fXFvZxgeHhEJBgkCCwsVFQgOBg8WFRUQG2UcEhIbGGVgYWUYEw==",
-      "dots": "Q3xEa3t4d35tT2Z5G3ERAg=="
+      "seed": 941902067,
+      "v": "WlpYXlpSXFBaWVhSUlVOV1xaWFpaWV9UTEZDQXp9d3Z2amNiYWhiGmdtYBoeERQWEAkDOT4+OwIJFBUJBw8EBjsEBQAGBw8VExYfEREbYmNob3Z+dnNyf3l+fkFHfnhDT0xNRg==",
+      "dots": "RH1+YmoWbz5jCWQPHAc="
     },
     {
       "id": "R042",
       "stratum": "RICH",
-      "seed": 3182671594,
-      "v": "R016QHt7c3lGekJIQEdHTk5OVFJZWlpcWlpaU0pUSU9JVk9XSEtOQHpGeX54ekBOQ0R4eX52fGppdXVvZhsdFAINCRATGhIUCBcWHRocHmFiaGhrcG5qdn90dX14R3x/cX59cg==",
-      "dots": "Q1pFSXN6d3htfBsCERY="
+      "seed": 2968642132,
+      "v": "dHFwdWNkZ2YaYm52fHpycWtvYmhjGx8VCw4RHhYPFxAKHWcdFB0QFh4XFx4QHxJkYmpvcXZpaHR3cXNzdHFyanF9cXhyeHF+REVDREFJQkZ6enx1YnVoaGh0f0FCTEhTXVpeWg==",
+      "dots": "RA9zHnUSb3Zlchx4"
     },
     {
       "id": "R043",
       "stratum": "RICH",
-      "seed": 2902252785,
-      "v": "RnpwdXF9cn1xaHV8Rn52dG9jZBpibm0aE2UdGGVnbnF3d3N2amBsYBgSCgALFxMeGWdtbGBqc3p4entCTUpITkdOS1dNVEJVS1RKSkhTU1JTWV1WSE1CRX15Q01HQnh5eHl8fQ==",
-      "dots": "QxNGGHh3dwttc2RKHFQRSg=="
+      "seed": 1666250447,
+      "v": "QHlFTXt6TUNAeXdxaGNpYmxvZBsaExYQHWcbEhUTFAkMFQsSHRlhbm1uYnVzc3d+RUNPT01GSUN6QExLT1RQU11aWVlbXlNRX19eWFNSWlpaWllaXVRNR01DRntwd29nbmp1aw==",
+      "dots": "RBNwbmxGYUwcXg=="
     },
     {
       "id": "R044",
       "stratum": "RICH",
-      "seed": 363555670,
-      "v": "SUxXSUhRVlZXXlpZUU5IVEtPVU5BQ0ZIQ0xFeH1zcHd9cnN0dmp8fHh6Q0F7enh5cXVxeHZ8fHVsYGcZGxobGxkaZhgQCAsOBgwCDQsJDw8JDAYNCQkTHRtnH2Fob2pgZmUTFg==",
-      "dots": "Q0NEc3t9d3ttfBgaEQI="
+      "seed": 3113473249,
+      "v": "dn5EeH12fnR3am9qbGBiZRtkZmZmHmBibm1jGGRkbmAeEBMTFAIBPgEBDwgJEx0bYmhub3ZocHVsaGxtbm5rfXpHTUtUX1BfXF9RTk9JSlVcXVNXU1xWTkFAS0JDRkF4fn97fA==",
+      "dots": "RGR8AmhoYGgcXw=="
     },
     {
       "id": "R045",
       "stratum": "RICH",
-      "seed": 4225777864,
-      "v": "DBcdHRcUEhJkHhEWCAoTGhkWFhUCDA8VAzoMAQMOBwwOCRYXGRASFB5lZBthYmMaYmJuaGt1aHBpc3p4QUxAR0xJR0BHQkhNVEpRXVZJTEpJTU1OS1BQS1FRXl1LV09XUktOTA==",
-      "dots": "QwN6DHBld2FtaGBzZ0EcQhFR"
+      "seed": 3497971093,
+      "v": "VlxZX1ZPSU9NREV7TVVTVUhVTkNNQkhTVl9aWlNWU1RQVUlHQXp8fHpCTEBJRnx5fnBrYGUaY2BkYGEbEQ4PAgY+OgEHDhQNDxYYYWdgGBIeZmUSFggCCxUQCQIBCwsWFw8LFQ==",
+      "dots": "RFZ8emp5b2VmGxwO"
     },
     {
       "id": "R046",
       "stratum": "RICH",
-      "seed": 2513198819,
-      "v": "HBQSHxtibmxkGx4YYxkYER4fFw8PCQgPDAkADwoREh0ZYGtodG1jZmFvaHd1fXB1Y21idXd8RkZGT05VQkpOVVFcVlhaX1tTWVpdVUxOUVlcUFlaWlpaWlpaWlpaWlpaWlBXSg==",
-      "dots": "QwxEEXBvd3VtRmdCGFwRXQ=="
+      "seed": 2874870217,
+      "v": "ekRHeXx/fHN5RERPT1RLUEpCTk9VXF9XXFtTS1NZV11KUFZPVEJOQ3pzanVubmluZ2UZGh0VCwELAAkPERcfEwsWDw4UHBkdGBgaYWZpbGRvcW5ibGtubnZvd3N7ekRATFVITw==",
+      "dots": "RFlyQ2tnbhpnERwc"
     },
     {
       "id": "R047",
       "stratum": "RICH",
-      "seed": 2721609478,
-      "v": "UVxZUFNRVldRWVlaWFpaWFpaUl5bUFhSUEhMSktKSU1Ee3l6e3l8c311a2lgZ2UfZGUTCBEICwMLCBMaHhlgZm5ocWpwc3tyfHhHfEdBfnF3f3tyenpEfnB8dGhuYGxga20aHw==",
-      "dots": "Q1B/e3dgbQtgCB5qEUc="
+      "seed": 2218125742,
+      "v": "e0ZJSldXSk5KQkZFfUdBTkd7cGtiYmpubWFpdXVzenN1Y2t1bGhtbW90bWJubRoQCAMCCwkIChIcH2ZpdXB3eXNxaW1qcHN/dnJ5eHFya3Nzekd8fnZxaG1vand9cnV3fn1ycw==",
+      "dots": "RHN8aGsIbgtgHxxw"
     },
     {
       "id": "R048",
       "stratum": "RICH",
-      "seed": 4122220281,
-      "v": "bmxjbWlqY29tbnVycH9Ge390a2NmGmAbEhUDCBUcHxIWGR8ZYRhjaW1vYmFhZBtkGGJtbnd3aXFvamp9RH5xdX1yeUdPQEFOQElXVFVOSVBISUNLU1laWltaWlxaWlpcWlpaWg==",
-      "dots": "QxJ6En9hd2FtaWZ9GHIRVw=="
+      "seed": 2556509929,
+      "v": "RHxGSUBIVFVLT0Z/cGl0bHZ8cXRycHl/cXJ0aGhhZWdud2hqY2hjGhgaGx4RERMLERUJDwsKFhgcZB4ZZm5gaWcbGB4ZZ2QZGmRnb3d/eUdDQEFNVV9XUltaUlxWVVVJSlJdUA==",
+      "dots": "RGF5aHIadh5tFhgbHGc="
     },
     {
       "id": "R049",
       "stratum": "RICH",
-      "seed": 392116849,
-      "v": "GRELAggUDwsWFA0CFAwLFhIfEBwcERkQCQkICgILDhYQCxQRGGZjZmdlExlhZBkfH2Zud3VrcGlxdGhwfkdPQ0tXXVtaUltaWlpcWVpfU1xaWF1ZWlldWlBaWlpZU0pQWVhdVg==",
-      "dots": "Qwl/GHdhbXBmcB9aEVw="
+      "seed": 811661962,
+      "v": "UktRV11QU1paXFpSVk9NQ0hNT05USk5LVklMSUJIVUhDQ05GfER7c3F9d2t2b2JqYm1lZmQaGWUZHRQVCQAIEh5gGmJkbHZ8f3hGfHlHR3hwanF1bGEeFxcKEh0VHxobYmthaA==",
+      "dots": "REh/fHd2bRlkABxs"
     },
     {
       "id": "R050",
       "stratum": "RICH",
-      "seed": 3948226947,
-      "v": "WlpaWlpaX1NaW15aWF9SVFVCSkBFeUV4Q0NCSk16R3hBeXZudHx8fXFycXN3b3Rwa2trbWUcFQwUCxYeFgoUHmUdGRpiGxEVHRAeER1nbGBhaGx1f39yd39/dnN7eXh7eEV+eQ==",
-      "dots": "Q0N6eHNxd3dtFRgdER4="
+      "seed": 969823809,
+      "v": "SlNRU1BYWVxQSUJFf3FrbXRwaHZzanF2aXF3dX9/e3x7f3tyfXFpdWJnbBpjZ2ceZR8cGmVnH2FiaWNkEhYIAT4+Pj45OgMCDRQdG2YaGGVgGGBsdn5/fnFwfkZ/en1ETEJIUg==",
+      "dots": "RH95e3J1aRxmZBw6"
     },
     {
       "id": "R051",
       "stratum": "RICH",
-      "seed": 2597133409,
-      "v": "RkR4R3pFeHt6cnJ5RUBCSlxVSVRJTUhKQ01IRnp5R0B5RXxxfXd2eXB+eHJ3aGpzenJqbmFnZR0LFwgMDgM6Pj45PgAPAAsIAw4KEh0aHRcfZW1pbXV3bm9xc3J8cG5mb3Rycg==",
-      "dots": "Q0NEeXhFd3dtZWU6EQo="
+      "seed": 3655079767,
+      "v": "AQMPDxUcGhMbY2FmHB0LDQgCBDs6DToEPj4+Pjs+PgYCAwoQHQoXHBlmYm1qdnF4REdDQUV/eX97entBRkFDeEFMR0JPS0NAT1RISlNdWFpaWlpaU1VOVE5UX19aWlpaWVpQSg==",
+      "dots": "RD59F3VxbXkYTBxL"
     },
     {
       "id": "R052",
       "stratum": "RICH",
-      "seed": 1402506656,
-      "v": "dnB9c3l+fn5HTk5WXlhdXFNbUVdPS0pTWl5eXlhZWlpaX1dKV1JaW1heUVRLT01ITEtNRE9JRk9BRER4dmluaWpxfGpiG2MYEwsPChAXEhUTFBccGh0cGBllHxgaGR5hZm9ocg==",
-      "dots": "Q1pHWHpafVp3S21GYUQeahEP"
+      "seed": 272846348,
+      "v": "U1pZU1peW1JeV1VSUktWXFpdSkpATEF5fXRpZmliYmIaYGlqYmQeZRpiZ2YfHRYTFg4EDxcLER0SCggIEBsYHGduaWlnG211cGhwcn54en5FQUxLQHl5cHx4ekVydGtpYm11Yw==",
+      "dots": "RGJyZWgObRFkGxwb"
     },
     {
       "id": "R053",
       "stratum": "RICH",
-      "seed": 1032427114,
-      "v": "GRwZH2QeZ2ljaWxpcWp2aG5mHmQSHGQfGxMQHxEUFRQXDAQMAxULFQgQCxMXHRpkYW1ocH98fXNwentHTFdJSU5CSUNMVl1LTEZAS1NfWFpaXlpYWlhcVEtBR0FPVElTXVJTXg==",
-      "dots": "Qxt4DHcXbX0bThFA"
+      "seed": 3019883667,
+      "v": "amNvanZ/R0ZIV1xaWlhaXVpaWl5aWltdUVZdWFpaX1ZPTUJCREZ6e3lzdWxsZhgTCwkOCgsJBjk+BA4RHhlgZWFlEhEQGBtnZmdtaGJgZ2QYHxgWEB8WDwkKDggPCRMQCw4DDg==",
+      "dots": "RFp4TXN5dGZgBBwY"
     },
     {
       "id": "R054",
       "stratum": "RICH",
-      "seed": 2594144446,
-      "v": "XVxVQkVMenl4dnBrdWtye0N7fnN+ekVHQkhDeHpAeHlyfXJ7Rk5JUVNTVlxaWl9SSk1Ae0V6c2tsaGIYGRIVDAAIDQM4BA0OFAoADgMDDgQPCh0aYG1mZml2fHF/dH94R0RyfA==",
-      "dots": "Q0J7cndabXNhYhoMEQA="
+      "seed": 4172676470,
+      "v": "aHZyeEJCen18cH1qcHtwekBPUU5GeUZ5eX55fHBpd2tqd2t3dXR/fHViaHRrdGlud2psbGRsYmpsbWcfFAoJDxYcHRpgYGhqb3RwcXVyf3pDQ3h6f354c3d2cXFweUBPSFVfUQ==",
+      "dots": "RGlzdWlsbGxlCRxg"
     },
     {
       "id": "R055",
       "stratum": "RICH",
-      "seed": 723017883,
-      "v": "Oj4+Pj45AQUNCwkOAAENBD4FAjg+Pj47PgU5AwMIER4eZWYaYmNlbWpjZRlmZWNocHpMSFNLV05RU0hCe0RPT0R4RkBAS0NDTUxLUkhIT1dWV1ZZWlxTW15TWlpaWlhcWF9bUw==",
-      "dots": "Qz5GA3oeeWZ3Zm1XGk8RSw=="
+      "seed": 2221426475,
+      "v": "WlpaWFJUQlRUSE5ISU1MSEZPT0dNVEtVVFdRVUlXTEB5RX52cHRqd3N0b2dlYhsTHhYdHR0QExwXDxUTGBxkGmNnaXF4fH1Hfn5BSUB5eXtCR3tEeXZydHNxbnB8dWpqYmhpYQ==",
+      "dots": "RFd+dndlYhxnGBx8"
     },
     {
       "id": "R056",
       "stratum": "RICH",
-      "seed": 164508921,
-      "v": "SU9HQnpzfXR2f0RHRHlxfXF9dWtobHVsaGEfFxEODRQeHxIbZm5hZBptZ21obW5idXNqdnRiYxtlZRIaZWRlbXRucHdraGBjbG5idH1weEJVUkhKTE5ATU5WS0xJSVVMTVRfWg==",
-      "dots": "Q2h5EndobWMYbhFi"
+      "seed": 542841967,
+      "v": "QEVDT0d8R0JEekZJVlROQ0lWTExLSUZ5cndod291fHh9dG5idXR3bmFvYhoaZB0RHR8WCxAdCwICCh0bYG1nbHdrdmxkbWl3aWpjYnRucXZ8amtubWBta3J5fHRuYmJsaXVwfg==",
+      "dots": "RHVzYWgfbxBjAht3HG0="
     },
     {
       "id": "R057",
       "stratum": "RICH",
-      "seed": 684518991,
-      "v": "YGNoaWt3b3F4Rn98cH9wdnRtdGp3dH54fn1ERkFBRkFMTEJKSFBLTEJFfnN1fHVvd290dn5wbmxnZx0TFRwcHxAJBgkJAgsTH2ZlHx0cG2NnbGZuYWhyaGJobmNnG21pb2pjGQ==",
-      "dots": "Q35/SHd1bW5gZx4JEWU="
+      "seed": 3316074804,
+      "v": "T09LQkNNRX9+fHRwc3ZoYWRgGREJBj47Pj4+OAc+Pj46ADoFPgEOCxNlb211dHN/R0Z5fnlycnJqcXxqdHZye35xeUFAQnh6RkxMenxEfHl8f39/fHF/REBLQHtNSEBPR0x6RQ==",
+      "dots": "RD5yC2p/bn5kdhxC"
     },
     {
       "id": "R058",
       "stratum": "RICH",
-      "seed": 764567554,
-      "v": "Zmxrdn15c3VuYWEZZh4cFggOFB4UCA0XHRcWCw4IEBMXFwsPCQYCCw4ABwQ4AAMKER4ZGh9kb3d8R3pCSFBSS1NUXlZfVUlGRE9IUlFLUUtSV1dNTEV7e3xqcnN+QUNLS1VMQA==",
-      "dots": "Qx14F3c4bW9nSB5WEUg="
+      "seed": 279240665,
+      "v": "fn5wf396cnt7fEZ7c3ZxdWlgZ2QeEBgTExQSCAA+Pjg+PgEHOw0VHWcfZBoaYmpjb3Fyd2htbWl1d3Z3b2NiamN1fER/cXB4Q05RTlBSV0hBTlBIS1dISlVDT0FHR0Z7c3d9fg==",
+      "dots": "RD55AXNnaXJkYxxx"
     },
     {
       "id": "R059",
       "stratum": "RICH",
-      "seed": 2249955023,
-      "v": "GRsZEhILCxMUCwwNCgsKFQMJDwkOFw8JFggIFwoKDQAEOw0UER1kbW52fEdETUVDRHx/dnZ9fkZ6QUhQVVBbWl1cV0lHQ0hLS0JOSE16eX59dn1+RERHent5RUJUX1BSX1paXQ==",
-      "dots": "QxZ+FHdEbX4YXBFO"
+      "seed": 294536118,
+      "v": "FxUdEhMKCxMTGGcdFxUfEggXFR1kHxMZGmZobm0bHxAXFhwWDgwUH2RjaWhyRUdGRX98dG1iZmNgYm5nbGp1dHJ5fkRMTldLQElMQkBAQ0tVT0BHekxOUFJYUlBXTlZOR01CTA==",
+      "dots": "RBtyH2pGYGIcTg=="
     },
     {
       "id": "R060",
       "stratum": "RICH",
-      "seed": 122225969,
-      "v": "X1ldXVpaWlNVQ0VHSUdJRnpFRkNATkdHe3tycHFudnRzcGtiGxpiGmQdEAkNFRcLCxIREQodERkfHx0dHhoZEx4aZGNsZWBgZWBod3Zwd3V3anNzaHJ+d3V2bHZ9RUR+dnRsYQ==",
-      "dots": "Q3t+YncNbREbHhFo"
+      "seed": 1120659655,
+      "v": "S1RTSVdOVk9PTEJVQ0JCT0hTXVxYW1BfV1xaW1laWlpcXFNLQkJ6fXVobGZlGxEPCQEHAAkGOz46DQkVFxQUEh0YYBtiaW9jGREUFhIeZmFoYGMYExhkG2FiZWYfGRASFwkAAA==",
+      "dots": "RFp5U316aAFiPhoSHGk="
     },
     {
       "id": "P001",
       "stratum": "POOR",
-      "seed": 1528935996,
-      "v": "FggSFAgDODg+OAYJCh1nbGx3dHN8dn1ycXRweUZAQUNIUFRRVVVdWlJLTEtLV0pQV19aWFpdX1paWlJaWlxXUVRUVV1aWlpTUV1QUVlfWlJXS09OTlFOQXh6Q0RDRXp5fnJ9ew==",
-      "dots": "Q3F7SHdLbV8aURFQ"
+      "seed": 895735216,
+      "v": "Bj4HBz4+Pj4BCAA6AwYOFA0VExpsYxphY2JiaGBoc0VDSEtJSE1FQUdFfXxGRk5KSEJASU9XXVNSS09ISlZPQEFBT1FdUl1bUlJdXVZSVUlGRkN7en5zfnBxa3RxaWJrYG5hZw==",
+      "dots": "RGhwRXRGbFdkVhxS"
     },
     {
       "id": "P002",
       "stratum": "POOR",
-      "seed": 3528776605,
-      "v": "TkNGf3F4cH5HeUZFQ0JOQUNPVVZPTEhQU1xZW1JaWltaWlheWlxcV0pDQEtSWFtcWFtZX1NVXFReXlpcWlpSUU5NQkpdXlZPRHxycmpiZxkcERwUDAY5OAQNCAY5OQUBOgU+Pg==",
-      "dots": "Q1N7WndSbVwaURFy"
+      "seed": 496147922,
+      "v": "ExwaYWx0bWcdFAwKChAZZGxuYGFrc2hxd2x3bGx2cX5/eUR8fH1rcHlBTk9XUEtARU9NV05DSkB5ekVNTElTVkpITkJKTUxVSEhBQU5BT0NETU9DTUV9c3BramMZZWZtGmZmYQ==",
+      "dots": "RHZ/fHN5aU1jeWZNHE0="
     },
     {
       "id": "P003",
       "stratum": "POOR",
-      "seed": 4167383159,
-      "v": "PjoHDQ0EDwgCDwsRCgMBDhQSEh5mYmhsdHJzckROSl1cVUJ7Rk5UUVFOS1JKS1RKV0tNTEF5R313c3h4dmlzfHJ4eXd9dHR1c39+cHlGRn93bGQeExwfHxoaZ2JtGh8cZ2Rvdw==",
-      "dots": "Q3RFSnxOd0ptRxh4EX4="
+      "seed": 1031948412,
+      "v": "Ex0bYGJ1d39/cnF4RkdPV1NIVUN4eENARHJ9f3F2anByen56fXN1cXZze358fn5wcWlwaWp2cHR0bmxrb21ub2hzf3R3dnN3dXN0a2NlGBYOEQgUEgodHh8cFQoDAQMIEhpgZA==",
+      "dots": "RHZ4end8Y3Qabxx2"
     },
     {
       "id": "P004",
       "stratum": "POOR",
-      "seed": 1941801823,
-      "v": "aHNraHR0d3Rya3V9REd7QkZEf3d/R0F5f3B5eHJra3Fyd2hsa2p3ckVHRkROQkVGfEdERUZHe0NGf3JxcWh0f3Rye31xbmp3f3duZG5kbGVlHmBpdXx8dW9qYBkeGBgQCwMDDA==",
-      "dots": "Q39Fa3xqd05texl7EW4="
+      "seed": 592061359,
+      "v": "DAgOFBMfZWZtb2BjY2ZvdXZ1bmxqfHh7cHx8RX59RE9AekNIVFFJQENDTFRVUFBJT1RJQk9OV1lcXlhaU1paWl5XTEtAQXhCRk5XT0lITE5NR35Ae3JFTVVcVU1PTk17cGpiZg==",
+      "dots": "RH19SXFMbE5lWhxB"
     },
     {
       "id": "P005",
       "stratum": "POOR",
-      "seed": 1162904573,
-      "v": "U0pKUlVUSUFOSVBKVF1cX1NVVUNARnlFQHtGQkRMQ0N6eXtHek1OV1xSVlVMVk5NRHlFcnx+fX1wcnpGTXp5cXd+eXF2dX16f359e3JqYm1nGREOBgQDBQc5OwEMBwMODwwHAQ==",
-      "dots": "Q0BETH5Hd0xtfWZGZXkRfQ=="
+      "seed": 1080222169,
+      "v": "QE5AQlReXlNfV11aWlhaXFtdS1RcXVBaWl9WT0JPQkZMT0dDSE9CTk5OTEdAS1ZVT1VcX1dPQkd5fHNxf3p9ekNAenxzcmtjYmdkGRhnHhIWChQLDhYQHRMVExcJDw4JDAIVFw==",
+      "dots": "RE97THdAb1dlfRxy"
     },
     {
       "id": "P006",
       "stratum": "POOR",
-      "seed": 1763542312,
-      "v": "UlVTU1paXVpQVVFLT0NOR0F6ekxMVEJVV1FeXlRSVFBVUFNRWVtaWV5RUFdZU1xQWVhaXllZX1RJSUd/eH59anVta3F3f3xwd35GRUN4cGtydHJyaGEYExgQEQoVCRMKEwkMFg==",
-      "dots": "Q1d+UXdZbV9gSWV9EUY="
+      "seed": 3487947090,
+      "v": "CwsJDxYLCBYSHB8YYW50d3ZqaXFwfkBITEhTXFpaX1xaWlpTVVJLTFdIU1xVXF1aWFZVTlBITUR6R3l+ekR5cH59cnhASkpDQkVDQEpARUB5QH5GQ0JFTXp6Q0pTWVhQXFlTSw==",
+      "dots": "RFp4WndVbEhgRxxK"
     },
     {
       "id": "P007",
       "stratum": "POOR",
-      "seed": 2132861297,
-      "v": "f3dzf0RCSlNdV15bU1tQSFdPQHpBQEJIQ3tGSUF7R0FBR0NDSklVSEFCQkJJUEpVVlBQWlpaXlpZWlxSVVdWSEJFfHB4QUZ8c3t/c2pgZG9ob25wd3dtZWNnGR8bHBAIAwUEAQ==",
-      "dots": "Q0NEe39Kd0ltXmRXH3gRfw=="
+      "seed": 1134535597,
+      "v": "T01VVklRU1pbX1taW1NdUlZdWlhcWV9aWl5WX1paU11aWFpaWlpfXFdRUlVXTFdeXVNSUFVcUFVORn5+cWtxd2lwcnB9dW5oaGJlYGcZExUPFA0DCA8AAwQHOgYMCgkOBgwLDQ==",
+      "dots": "RFp+WndXYlVhfhx1"
     },
     {
       "id": "P008",
       "stratum": "POOR",
-      "seed": 2531756228,
-      "v": "QUNGQUFMSVVWT1RXTERBf3l+cXRsdH14f3h6fkZ6f3hBSEJPQHl5QU9JTkhPUVNKT0dMQ0ZPV1FLTXpCTkFDeXp5RHh/R0VDR0NGfnF8cW51dG9hZhkXHBMRCQ0GBAYNCA4GDg==",
-      "dots": "Q39+T3dPbVdmQht6EUY="
+      "seed": 2038530028,
+      "v": "EhcIAg8OCREcExMRHxgaYmBtb3V0dW1pdHJ4f3R+RkJAeHtDRUJHSVNcU0pKQ09DTEJBR0B5ekVDT0FHTE9KSFZdVEtIQHh5fHVsa3ZpZhtkbWFjaGAZExYfGR8YHxIYHhkWCw==",
+      "dots": "RH58QnBcdENtehlUHEA="
     },
     {
       "id": "P009",
       "stratum": "POOR",
-      "seed": 916863800,
-      "v": "YRoZZ2ZiG2VtYm9ocW93eXtDeXN6QExVU0tSWltfU1FTVlNfXVpbWllfX1RSXVxaWltaWlhZUU5CT0FOTktPQEFORkBMVUJATE9NR0R+dnFvbWRtaWhubmNlHB0RCAoNOwUDDQ==",
-      "dots": "Q1NEX3Jad1JtURlGEU0="
+      "seed": 2738054103,
+      "v": "BwQDChQOAzo+OQU5OzoNDw8VFQsIBggOCxUSGGZsbHRzcHdoa3Rza3B4cXt9d3J8fHt/e35HR05WUFFeWlpeUU9AQ3tHenlEQURyREJVSkNAQ0BAT1FKXVBYWltdWV5bXF1cUA==",
+      "dots": "RGx5d3VybEdjVhpRHHo="
     },
     {
       "id": "P010",
       "stratum": "POOR",
-      "seed": 829978554,
-      "v": "TUFPRHx2c2prbWx3eXhye3lwckVGR01PTk9KUFJQUlpZXVZXSU9CRHlFQ0ZBQU5ATXpwfXt/en1FRX9/eXJ/cXVwfH50dnR9en1qbWFpZmFhbmliYR4UFw8NDQ8BDQYGDgQEPg==",
-      "dots": "Q05/SXdBbXoacRFq"
+      "seed": 455163774,
+      "v": "cnt5cGltdHFzandua2h1aWh2a2tgbHV2amJrdm9oc3F+dn5wcX1/fUdFTU5Cen52a253dnx8dnl2dW5sbmtoanB+Rk5LTE9DRn52a3d3aWBrYhobZh8RDwkVFBUIAw0UCgsWFw==",
+      "dots": "RGh5fn1/aXdjdmRrHEw="
     },
     {
       "id": "P011",
       "stratum": "POOR",
-      "seed": 3120442669,
-      "v": "Ajs+OwcPCxIaYmRhb2FvZmVmbGFmY2txeH14f3lARkV4R0xPSk5WUUpdXltaWltSXFVQX1laWlpeVlZfVEpTW1paXFpSXVlfUFZPQkZMQElRXV1VQkJ6eHB1dnRqdX9+cnFraQ==",
-      "dots": "Q3h+T3dabVoYWhFP"
+      "seed": 2613922916,
+      "v": "CQMNAgAIDQE+Pjk+BgwJDQgMDxYfGmBjYWxvdHdxe0V5e0VCRHhHQkdMV15TVUhIQUNOT0NDekJVVFNYWlteWl9aXFFVUEhSVF9aWlpSX1dcUlZPVV1cWFpaUlpaWlhaWlpYWg==",
+      "dots": "RHF8eHBMdFVpTmJCZlgcUA=="
     },
     {
       "id": "P012",
       "stratum": "POOR",
-      "seed": 2155168827,
-      "v": "Rn55RXh4cGt1bWZhGGJgand+fHxHeXdub3V8fXB5RkxXTkpNR392cX95e0NGfkV9c396cnN+Rk1HTkBPV01KQ0V5f3Z5f3V0f0d+fWp2b25tZRsZZR8THmQcFAoDAwUHBQE+Pg==",
-      "dots": "Q294TndGbUZgTh95EX4="
+      "seed": 3829492861,
+      "v": "YmxjGh8WDAQNDwoUER1nb2NpYGxrc3B0f3lHe3pwd2h1c3h+R09KUlpYXFpZVldVUlpbU1hTS1dXV0lQUlJXU1paUlBaX1BXXVpaWF5XV0tPQE1KS0pOS0pLU0tPT0Z/fnhyaw==",
+      "dots": "RHB7dX1KaVtgVxxf"
     },
     {
       "id": "P013",
       "stratum": "POOR",
-      "seed": 3937536603,
-      "v": "WVpeWlpaWlpaWlhdVlhaW1NJUFxaWlpaWFhQXUtSXlZPT0FERk9KQkF6TEJMRURFfHZ0aW9panB3fkVGR05AeHN6fX90bW5oc3Zsam9hGRkTGRATCRQVCAEDBD4+PgEDOgELDg==",
-      "dots": "Q1h5QXdMbWpnRxtzEWw="
+      "seed": 1038048972,
+      "v": "QExAS1RNekFNSlRVVVdUTUFJQEBIQkF/REdARkFOVU1BS0B7Q0V/dG92cHV2cnpNQ3pFc39EQE1JTU9HfH9xfEZJQXlxd25jb3dsZRpnGRAJCRUXCQoKCwE5OAY6AgI7Pj4+Pg==",
+      "dots": "RE5/Q3NvdHJsRBp8HHc="
     },
     {
       "id": "P014",
       "stratum": "POOR",
-      "seed": 1148069254,
-      "v": "U11USEB6RXhxdnJyeHhHeUR5fHlFQ0ZCVUxMT1dWV1ZYWlpaWlJRSUpKQ0VyeEdETFdQX1RRXVpcWVlaWlpZV0lUT0xHRH1zanV1YxoTCxMaZ2AYHmFpdnF4cHV9dW1lHxAJAA==",
-      "dots": "Q1VFV3BKd3JtXWdaHkwRdQ=="
+      "seed": 1763542312,
+      "v": "UlVTU1paXVpQVVFLT0NOR0F6ekxMVEJVV1FeXlRSVFBVUFNRWVtaWV5RUFdZU1xQWVhaXllZX1RJSUd/eH59anVta3F3f3xwd35GRUN4cGtydHJyaGEYExgQEQoVCRMKEwkMFg==",
+      "dots": "RFJzXnZXa1lneBx/"
     },
     {
       "id": "P015",
       "stratum": "POOR",
-      "seed": 378282211,
-      "v": "FxEJBj4EPgQNDAoUH2RiaHZzaXRyfXFyf0ROSEhTVVxXXV5aWlpaXlpSSk5XUlpYU1JfUUlQVU9DQkRATUZFTE5DeHhASkxLS0BFQEJPSEpXU15SWl1dWVhaWl9XTERDenpzfA==",
-      "dots": "Q395XndXbVUbThFF"
+      "seed": 1054955475,
+      "v": "HBthYWh2f3F8R0d/R3t/e0RGQk1FT0NBe0FGRkVDREd6fH9waHN4RUREe0dFTHpGe0R7fHBpaXRudHB3fkZOVVFTUUpJTkxHe0BOQUFJRn98fHx7cXNpdHRuZmEbEhASFhIKDw==",
+      "dots": "RENwRHRMa3thcBxO"
     },
     {
       "id": "P016",
       "stratum": "POOR",
-      "seed": 3613150509,
-      "v": "DQodG2ZuanRtZmdiY2NocHx4RUxGSUtQXF1RUlZTUFFOTkRHT05CR0R+enB5cn9/dn11f31FfXtASUxDeEB5QUREf3F/RntzdnRsY25xe3JqcG5qdn90cmpobG1mbWUcHmRmbQ==",
-      "dots": "Q1xFUH1Cd3ltfWV5EWw="
+      "seed": 2489686281,
+      "v": "bG9pcHh9fnJETExNSVBKU1tSWlpcUFlSS1BKSlxaWVxeWFBUV1xYWlhfWl9aWlpaWl5QVUhAQktCS0lCeERFeEJITER7cmhhbGJkGRIdEQkOAQ8HOwENCAkBDhEdHRhnGmxjaQ==",
+      "dots": "RFp8XHZfaF5iSxp4HHI="
     },
     {
       "id": "P017",
       "stratum": "POOR",
-      "seed": 4245997375,
-      "v": "CQIACxAcERsfZhttb25vbXR3fHVqb25idXdod2h1fWptbGtoaGt1dHJ4RXt6QE5LVllWUVlTW1BbWlJLQH5za3ZvdnF9d2pwfnt5eXFqbmNgG2RgGxMKEB9naWBvd3Nqbmh0aA==",
-      "dots": "Q3VEdXttd3ptWxl2EXk="
+      "seed": 703719112,
+      "v": "BAAFBwEPFxwRGWVsGhlgYmZjand+eHJ7QHpNS1dMVFVVU1BeWlpaU1dLUV9eVllTUFlfU1RdXlpTWl1aUl1aWlpaWlpfVE1AenN7c2t1aXRudm9qc3dva2hvZ2JtYmlxam1qfQ==",
+      "dots": "REx4U3dea1BhXRxU"
     },
     {
       "id": "P018",
       "stratum": "POOR",
-      "seed": 2786477527,
-      "v": "BQIICBYYEmQcFxQNFRAaEx0dHmdud350d35xf0V6fkBET0pdUl1XUUhVTEhDRkBATUJASUxGTk9ITHpDeHl7QXlAQ0FLXVpYWl1aU1FOQEZNR01VUlpaXFROV0lCVUNKVFNXTg==",
-      "dots": "Q3d4T3dDbU5gTBlDEVo="
+      "seed": 3910655328,
+      "v": "EAgCFQsUHBofEB4cZRITHxISFh5hZWBuanR3fnZxd3BwfXVtaHN+e3N5R0xOTUd7Rnx/fHRxd350cmpoanNyfnN3f35xdXVwd355eXNob3Vwamx3fnZzf3h5cX5xfXhCVVRNSg==",
+      "dots": "RHF7cHNzb3Rnahx1"
     },
     {
       "id": "P019",
       "stratum": "POOR",
-      "seed": 353305694,
-      "v": "VlxcUlpdX1ROVkhUXFpaX1NWVktCQk9LQ01UTExCRnh+R3lATUJUQkVNQXpGRUVNTkhSS1FeUkpTS1BQXV1fWlpdSlVMTktISkN5RH9wanVpbGlgGmcfGxkWEBAJBw4XGWUcZw==",
-      "dots": "Q0NHTHl5d0ZtUmBLGF0ReQ=="
+      "seed": 861478566,
+      "v": "dGlubGEeZWJiaWNocHR9fnhzd3x/eH19RE5IUEtIVl9YWlpYUlJcUFpTXV9fUFRWSUJ7Qk5CVVZPTkF6RUZPV1VITEN5R39wa2loYWUTCw4PBj4+Pj45OAU6AgIBPj47AAMIEw==",
+      "dots": "REh4WnFdb05gThxH"
     },
     {
       "id": "P020",
       "stratum": "POOR",
-      "seed": 1744683127,
-      "v": "PgcJCww6ADoNCh0XHxgZZh4bY250cX9Fc31/eHl2eUBPQE17Q0JEQUR7enN3cHJwc393fXt/ekVEQk9NQ0JNekFFTENIUF5QUlpYWl9aX1xeVF9aWlpaWlpcVExOUEhCRk1JVQ==",
-      "dots": "Q3N5TXd3bXplTRFY"
+      "seed": 3379839460,
+      "v": "bnZxdWlrYmBoaWpxaWp1Y2hgb213fXV8dnx4Q0hQXlNYW1NdSklOV1dUT0F+cHhDTE1NV1FUX1NLUVdUSEBAQUF7e3N9anZpZmcdGRtmZG9gZWdlHhoaZhgcFQIPDAwIEQoXEA==",
+      "dots": "RFB/SnRwa0xmVBxq"
     },
     {
       "id": "P021",
       "stratum": "POOR",
-      "seed": 2607752734,
-      "v": "BwwWCw8OAgINAA8BCxQXHhQSGWBiYmptdWhwfn9/cn17c3p7Rnlyd3l7fH5EREVHTU1UVExNS1FRXVNVTkpWVVZPSFFVUV1RWVpaWl1fUV9aXVxaXlxaW1pTXFBOUV5aXVpaUw==",
-      "dots": "Q3V/RndEbUsaVRFa"
+      "seed": 2873075118,
+      "v": "G2EZFggABAY+ODk+Pj47BTsCFRIaGR1nZm5gaWxuaGt3dXdqc355cG5oc3N2f35xdGlqfX5yf3h/R0V8R0d5QEF5fHh5f3d9eHtAT0hKV016fnN2cn9/RkV/d3VqfXB7Q3h/ew==",
+      "dots": "RG59eWpxbX8aQBx/"
     },
     {
       "id": "P022",
       "stratum": "POOR",
-      "seed": 1146065923,
-      "v": "Pj4+AQkOFxIbbWNqdXZweEF5QElTVFZLQUtQWV1SXFpaWlpcW1JTVElBTU9WUFlQUU5WSl1aWlhaWlpaX1pZWlpcV0pTS0lQVEJDeXN8dHVsYGdhZ2N1dG5odmprc3VtZB4aZA==",
-      "dots": "Q0F5WndWbVpgWhhcEUM="
+      "seed": 3216680464,
+      "v": "fURFfkF/e3lyeEBDSVBQWlldW1JTWlpaWlxeWlpYUVhZWlpaWlpaWlpbUF1dWl9fWlxYU0tPSU5BR09OTUhIV09CRXJ9fndocXBxbmhvbWMaYmUbEBkaHQoAAQ4XHQoSEx8eGg==",
+      "dots": "RFh4WnddbE9mThx+"
     },
     {
       "id": "P023",
       "stratum": "POOR",
-      "seed": 2598377636,
-      "v": "RHh8fX52fERAQkNNVV1SU1NXTEF6QU9KXFlXUlhWUFNXTUBDVVFLSExVU1pSWllaW11VQ0lMT05ATXpEfnl9RX9xfHFwfXVobm9tb2hwfHdsaWtrb2xoYxsSChELFw0DBD44BQ==",
-      "dots": "Q1x5QHdSbU8bfxFt"
+      "seed": 936419122,
+      "v": "b3dtYRhlZWJ1bWhzdG5gZ250fn98cnpFfHJ4ekJNTklNRHhzcXF8R0NOV15aWlNbWlpaXVBSXVpaWlpdV1RCQ3t7fnZ3c3BxdH13c2pqY2xoaWFsZBgTGGccFAwEPj4HDgcHOQ==",
+      "dots": "RE1yR2laYlplQhxz"
     },
     {
       "id": "P024",
       "stratum": "POOR",
-      "seed": 3266383109,
-      "v": "SVddWlxaWlpaWlpYXlJKS1JUXFdTXVRdWlpdXldLVVVOTUR7QkFIQXt8fXNzf3J0aGh2fX5FRX5wf0Z/eHtFfXh/Rn5xdX19cXFpc2hhYWQSExpkZxkTFw8MBAQFDwcOFhIQFw==",
-      "dots": "Q1p5RHdzbUVlRRFp"
+      "seed": 3788168679,
+      "v": "VVNaU11aWlNVUV1RVlNWUFldWlhTU0hOS0BIRnl9fXp8dn9GSEBGQkNBTExPQEVyfnhAeXtwaHNFe3p7f3J0bWtwf3VxaWtgGRETHRMUCwADDgkCBDsBBwIKFhllHGUfEB8cGw==",
+      "dots": "RH1wQW97Y0Vkchxp"
     },
     {
       "id": "P025",
       "stratum": "POOR",
-      "seed": 2722491869,
-      "v": "W1JaWllZWl5bXllSWlpbWVpaWltcUVFSUlZLQ0tTXUpVVExIRkJASVdWUFRTWlhcUF5eWlpfU11fVkpLTUFJQnh8RXtyeHJycHVycmp3bm53dGxhHhAJAAwLDhQfFxALFhMVDg==",
-      "dots": "Q1JHS35Id1NtU2RBGUURcg=="
+      "seed": 4227916130,
+      "v": "AAc+Bw0XH2ducXRocHdvam92f31ERX5wf3xEfHtFQUhNVFVXXVZUQkxKS1ZJS09IS0xLS09DTEd8RnhAS1VJQU1VU19QV1RWTEhIS0tVUlZXXFlaWl5QV1BVVVVITkd4fHt+eA==",
+      "dots": "REV4VHBKd0lqSGBGHFc="
     },
     {
       "id": "P026",
       "stratum": "POOR",
-      "seed": 2062378862,
-      "v": "SFdQUUpAQXlHQ09OVFVPVlRMQlVVSEtDenB9R05Ne313c3J8f0Z7TUFPQ0J6R0ZCQkR4Q0dBRkVDT0FNT0JVT0pdVlNWXFVPSkJCRHh8dW9sZG5kY21ja2tgGBwVFQ8KEBcWEQ==",
-      "dots": "Q3p+fHd6bUYbShFC"
+      "seed": 4024805027,
+      "v": "RXl/RkFFR0ZPTlRQTkdFQXpyRUFBQURDR01LS0lITUpXSVFOS0lMTUBHRH5FQ0dNRH5zdnxFeHl9dW93am52eHtATUFLVlZJQkZFRkNHSUd4cnVqbGZgGBEIFBUMCRYUFA8ODA==",
+      "dots": "REh/S3BHaH5hbxxW"
     },
     {
       "id": "P027",
       "stratum": "POOR",
-      "seed": 2373244,
-      "v": "WlJaWFhQXlZLV19WU15SVUNLVUJVSkJISElPSFZIQk1HRkR5RH97c3t+QHp4cHtASU9BSU5AeHlEfnF8fkFHQXhFf3d0an1wc392d3Jra2BiYWcdGBMRFRMRFA4KChQNDgQOFg==",
-      "dots": "Q0h+eXd4bXhhcRxqEXY="
+      "seed": 2395085920,
+      "v": "XVpaWltaX1paWltTSFNXUUtOVl5fWlpeUldMTENIUlxeUVtcU1paWVZUUV5WVUJJV1RJQnp7RkVFQE1VXVBdWFJVVVZVTUN6cnp6eHlAenx9amNkGRAXEAkGAAA6BT4+Pgc6AQ==",
+      "dots": "REh4UXJZaUlkUBxN"
     },
     {
       "id": "P028",
       "stratum": "POOR",
-      "seed": 660146253,
-      "v": "eXJ0bm1raXZpaHRqcnJzd3xHQU5ERklNSUF/dm9td250cXt4Q0xDSElKSE5XT1RVQ0JEfHtASEhARX9GQXpNSENDT0hORkhBfkZFfH5xdWhrbm1jGxIWDgELFwwCBgY4BgMCBw==",
-      "dots": "Q0lGdn54d1dtSGR6H04RRQ=="
+      "seed": 2725361867,
+      "v": "Pj4HPj4+OAMAPgUMCwkJFhAcEBIZZ2JrdnZyf0R9a2lqc3J9R0VBRHlwdWtta2lqdnhGRUxAQ0BMRXx5R3lxdn5yd31FQHpCSk9ATkN7QUtVV09AQkVCT0pXXFpaWlpbWlpaWQ==",
+      "dots": "RH1yRHF1aUZtQxl3HEA="
     },
     {
       "id": "P029",
       "stratum": "POOR",
-      "seed": 3635566060,
-      "v": "DwM7AwIKDQUNCBIbHh4aHGcfZGJob3ZyfEZCSUxEentBSFJRWV1aW1paXldcWlxRX1JQVVRLVU9WSUtIVllQX1lcWlpbWlpaWlpaXFhSV0xXXVBfXlpaWl5XVFZIUVZOSE1Meg==",
-      "dots": "Q3x6e35Rd1xtVRlaEVo="
+      "seed": 659275091,
+      "v": "TEpdW1paWlpbU0pTV1ZeXVNIUlpaWVhTVEpLT01MSlNaWlpZUlVQV1dXTkxFQERBQkhAQEpMRH1ydW11dHx/f3p7fXF1bWlvbWZlGxtkYGhjamIbYmUdZWJgZR0eHxMIDQE7Pg==",
+      "dots": "RExwV29KZHwcbQ=="
     },
     {
       "id": "P030",
       "stratum": "POOR",
-      "seed": 39326428,
-      "v": "CQsNAw4MDgkAOwcFAgsSGBkabXRwe0JBRkhLUF1TV0lIRkJPSlFKTkBCe0REe0ZJVlFbXVRRXVJaW1paUF9cVllaWlhRUl1WWVBWSFJZWVpaU1VdUlVdWlNeW1JUV1FZW1laWg==",
-      "dots": "Q0ZGUH5Pd0RtXWRfH1ERVg=="
+      "seed": 819105129,
+      "v": "BQcCAw0PDQUFAA8WFB8eHGVnY2RiaW5vYRtnbW1tdHJ/ekFJTkpXVFBQU1xWWFJdVlNcVUxPQXhDS0pSWlpcXlBLVlNfXVZLQ0pKVV1aWlBIT09LVFJTXF9XXUpXXlNIVklPSg==",
+      "dots": "RG1/TnVSaFNvTGNDZlIcXQ=="
     },
     {
       "id": "P031",
       "stratum": "POOR",
-      "seed": 834952968,
-      "v": "BQwGDwoADQsJDwwXGR9nZ21saW5qbGhwfXpASE1KUlhaWlxaW1paX11TUl9aXVRQX1paWlxYWlpaWlNaWl5TV1lXV0lKQktWVU9Ff0RFcnB5ekVDQ0hPVEpPVVVOSEpVVVFITw==",
-      "dots": "Q31+WndabVplUxFF"
+      "seed": 2137906181,
+      "v": "OAEIChIQCBcJEB8aExptamJkHh1lZmlrbnV8eXpCe0JUQkFJVlZLSlRLQ3lHTUtCe39yRE9NT0lASVVWVEhQV0tKS11YX1BKUVleWVlSWlpaXlRJS05NT0F+eX10aG5qbWxmGg==",
+      "dots": "REJ4Qn9Wa3tsTWdUHF8="
     },
     {
       "id": "P032",
       "stratum": "POOR",
-      "seed": 2314647521,
-      "v": "Bg0IERYRGx8aHhYPERweEmUSFh0bY2pocH56f0FIVFNVVklCQUZ+cn14QEhIQ0tIVkhWU11aWlxWTkdFQnpHTkxHRUFAQEd7QURDRHp9cGttYxsZZ2QaGmJpaXB/enB8dXZ+fw==",
-      "dots": "Q3B6U35Cd0htWmZFGUURQw=="
+      "seed": 678957035,
+      "v": "dXF1aG1qcXlEQntDTUZAR0ZBSFdWX1ZIS11eV1xTUlVTWlpYWl5ZXlpcVU9Bf0dCTUNBQk1MR3hxaXZ/eUd+eEV9am13aHFyenhycmtiZhkQCxQXEhEOBgAIDQkLERYeGWUaYg==",
+      "dots": "RFN4WnNaa01tR2RHHGg="
     },
     {
       "id": "P033",
       "stratum": "POOR",
-      "seed": 750174856,
-      "v": "Pj44AQAADAMMDgAADg0FOAM6DBUTH2ZsaHN4cH94QUNFQ01GSFVdWlpeWlpZVkhCRHh/Rkd8R0R4fER/cn1wf0Z5cH11a2pvdX17QktSV1NRVUtXU1FUT1ZWXFVVUktCTlBQXw==",
-      "dots": "Q2hFQXBed1ltR2dyEm8Rew=="
+      "seed": 3560124191,
+      "v": "UlBTU1JbXVpaXVNaWlhaX1NaXlpfWVpaXlpaWltaUlVfUFNdXVBVQnt9dnl/cHtAfnpya2tzdm9xamppcXdocG5ub3F4fGpidGpib2YeEwsADwkHDwAOChMQHxAVHB8aGx0WEw==",
+      "dots": "RFp5U3d/aHpvaxpwHHw="
     },
     {
       "id": "P034",
       "stratum": "POOR",
-      "seed": 3004609360,
-      "v": "DA4JFhQeFhwaGmNvZGMbYWIabWt1c3x4eHtGT0pMSU9LQ0hDRU1XUUhVU1NYXlJaXV9TSkJFRUBKQE1PTUZ4RkV4fnlFfXpDSU1HQk9FTU9OVFBSWllSS0pQW1paU1tTXVJTWQ==",
-      "dots": "Q3h5SHdYbUUaRhFH"
+      "seed": 2588970038,
+      "v": "WlpaW1BIRkhGTUd6REdCSUpPQX52bmxhaWN1fX55cXd9d3J4cn5we0dOVlZSUVxTS09CVVxWT1VJVUJ6cn96e0RGR3hzam9gGGZhGx0REx4fZWBsZWYYEAgQHAodEh4SERcMAg==",
+      "dots": "RHlye3ZWaE9kfxxq"
     },
     {
       "id": "P035",
       "stratum": "POOR",
-      "seed": 2547633260,
-      "v": "BQANAwwBDBcREmUeHhwUHmdmG2FgZmBvanR8d315QX9xdml0ampwcnp6fERNSFdPQX5Hf3t8cHdwfUV9c3pCQk5KQ0hJTFROQH52b2ZhG2cbGWRgbHd1aHd+fX1/enJ2d2pwdg==",
-      "dots": "Q2pGd3h2d01tcGFFHVQRdg=="
+      "seed": 660355131,
+      "v": "S1JZUEpVS0NATXt9f3l+dn15cG5rc3J+e0N6RE9KUVNaWF9XUldRTkBNVUpPQ0d/R0xPTUlVTFdZUF9UQkN7QUFHTVRNe3t4eER5RX19cXx0bWNvZxgeHhgYHxQUCAwABwEICA==",
+      "dots": "REp/UmtHYFAcew=="
     },
     {
       "id": "P036",
       "stratum": "POOR",
-      "seed": 218649250,
-      "v": "VVReU1paU1VdVlBaWlpaWlpaXVpeWlpcVUxCR0BDR3lHRk1KQ0VMS1dZU1pfWlpaWVlTVUhBT0NNRk9RT1VCQklWVUlNQX9wdWxobWUTChIQEQ8ABD4+BAcEBAwNBAEACAEOFA==",
-      "dots": "Q1VFR35Kd19tT2FPHEERaA=="
+      "seed": 527078962,
+      "v": "dm9uaGMYZx9mb3ZwfXdwdHx9RExPUVdTUEpMS0hLT0tXUVZKSU5CSE1PRkxPTENGQ0NJVUJLS0N6eEV/cn97fXx0cnlBeHt4cWh2d2xqY25nb2BhbWYaExMcExULDQkJFxwYEQ==",
+      "dots": "REt5VnNNdkxvQhp9HHg="
     },
     {
       "id": "P037",
       "stratum": "POOR",
-      "seed": 505879760,
-      "v": "U1pfWVpaWlpaX1tYWl5UTUZORn98eXJ2c3N6R35Ffnt+en15eUdPTUNERkRFQENPSkJBQElLU0lIQUxFe0BGenxzcXZodnd2dmhsdXF/f0Vyam9kZmdnZRwZHhEOAjo+BwcDCA==",
-      "dots": "Q3NFfnxHd0VtUxhzEWw="
+      "seed": 2832001327,
+      "v": "SE1PTUxIV1BJUVFeUlxaWlpfWFNXVVNJSEFNQkR8RUZJTE9XT1VSU1pdVU5HSVZYXV9cVUxHTU9XX1BXSkpLS09AeUZBQXp5eUFGRn9/fEdGeUR+cGpodWx3d2lmGxEREBcMCA==",
+      "dots": "RHx7SXFVaF9mVxxB"
     },
     {
       "id": "P038",
       "stratum": "POOR",
-      "seed": 166970608,
-      "v": "cnVsamh3cGhuZmhweHh6fX97ekJMekFFeXFrcX9GeEFPUVhQVVNZWlpaWlpfUVlRX1pdWl5QU1VSUFpaWFNZXVtaXFJSVE9FenJrbWdhZRplEhocFBQJAQkJDg0HOAcJFx8UHw==",
-      "dots": "Q3l4UXdfbVNkUxxUEWs="
+      "seed": 4013646777,
+      "v": "Pj4GAAsQGBAXFRYKHRUJCQ4MCxUTGhkaZG1udn9Ee01NTUV/cGpwf3hDe3hGf3xHREBEe3p+f0ZIV1xWVUJ6QElTW15aWV9QVlJRVVdPTUR/fUVHekd8cnZyRENVXVNLU1pbUw==",
+      "dots": "RERyf2hAYFccWQ=="
     },
     {
       "id": "P039",
       "stratum": "POOR",
-      "seed": 3391714416,
-      "v": "DgkRGRMVCQENFB9mb2lnbHd8ekxJVF1ZUlpaXVJVXFJSWlpaXldQUFZSWllcXlFISkJNT0ZMS0FNS1JUSUpQVFBaWlpTVF9cU1RUXFdeWl9YVk9GQEZ4e395dnZ9cnp5cX1qfQ==",
-      "dots": "Q1J7UndcbUsZWhFU"
+      "seed": 2117920537,
+      "v": "WlpaWlpaX1NfXFZXSExPRnt/d31qa3N5QENJUFRUXlZTW11aXllWXFFPT0FFfXhweXtwa3Nza3JyeXl8fnNpc2tpb253cWpoaW9kYmt0aW9sYhtlHRgZZh4RCA8RFBwXHhwbHA==",
+      "dots": "RFRwT2lwbWtmfBxx"
     },
     {
       "id": "P040",
       "stratum": "POOR",
-      "seed": 2338685333,
-      "v": "fEZ7QX5HQENGQkFJSlFJTEJ6f3lGTlRUS0NCQUhASFRdUVtSXldWVFFeVExDQkRCT0F6f0dMQkdGeEBDQ0Z+QUVDTEpRUFxWXFFXTEBDRn5Hf0d4cnR2dH9xbmAZHhEOAQMFPg==",
-      "dots": "Q0t6VHxXd0NtQmV+EVc="
+      "seed": 712345611,
+      "v": "Pj4+PgUAOwMDBAwUHRhja2hjZ2Fpb3RqcH5+R09NQHl8cXZyfH5EQkN6Qk5OTEFGTkFGTkFJSUlPTVROQEV6e3hDe0d5QEZERHhHT0xLQ09GeHl6fXpya3dsaHRvbXVidXR0dA==",
+      "dots": "RE1wenVBb0FgTRxA"
     },
     {
       "id": "P041",
       "stratum": "POOR",
-      "seed": 1981255495,
-      "v": "Bw0BPgE6OgcNCREZYGhuZGViam1kbnF5d3lATFVNSUxCSElOR05DQXtGeXlGeEdHRnt7cH9FfEVHfnJ1cnV3fEd8cndzfXZ+d3ZxfHFwaW93aGhwf3N9dmhudGlpYmQfGB4bGA==",
-      "dots": "Q3dETXJBd0ZtfGB+G0cRcQ=="
+      "seed": 1227604377,
+      "v": "CREJDgIIEBQXFhwbGmAYZx9mGhAcZm92fHN9amhwdnhEf3F/eH5HeERHT1FSWl9aWlpaWl1TUFZMTUtDQ09JSlNXSkBPRH16cnR8cHFocWlwaHBxdXRrfXpNQntBSE9PVEJVSA==",
+      "dots": "RHB/eHNEaVpsU2NMZE8cRA=="
     },
     {
       "id": "P042",
       "stratum": "POOR",
-      "seed": 539908285,
-      "v": "AT4+OT44OwQCChYPAD4GBgkXFBxnbnZ2dn12fXZ+dn1/dnB4Q3tHe0V/fXFzeHtHT0JJSVRKSUpWWVhRXUpUXlhWX1NQTk9HTkFJS0BCREF+QUJUX1peWFpfXlhTSFdeXVpeUQ==",
-      "dots": "Q3ZFdnlwd3NtSWVUEUk="
+      "seed": 1395941479,
+      "v": "VFxaWlpaWlpfVF5cX1pfWlhaXlxaXFRPSUFNRklOT0lLTkBBRntHeXN7f3x+fHN/RkdATUBOT0dJTEtMRXJFRHt5f0F7fXBqb2caYmVkGxMZFgkGDAYIFxUMFA0DBz4FPgQBBg==",
+      "dots": "RE5we2p/aUBlRRx9"
     },
     {
       "id": "P043",
       "stratum": "POOR",
-      "seed": 479334641,
-      "v": "BQ0MCgwACQICDxYZHhtjaXdxcHlHRH13fHhASVFISk9VTUd4fHlFQExNV05LVUJKQEBCTk1Ff39FTUJNen9ye0FLT0JLTE1BTUpSWlpaWltZWllaWlpaUltdX1dLQ3hEf310Yg==",
-      "dots": "Q3x6T354d0ttf2R/H0sRUg=="
+      "seed": 277489817,
+      "v": "QEN7fEZ5cHxye0VMTkJBe3lAT0lVUVdJUEhQUlVIV1ZdXFtaWlxKVElCTlRMSUNGe3NxfXJzc2tqfHpARXtFf3lzcnV1amlwaHVoYW52d3VuYR4RCQYIFRwdHx0ZZm1qdXNwaw==",
+      "dots": "REh8XHVDaHNia2VFHGo="
     },
     {
       "id": "P044",
       "stratum": "POOR",
-      "seed": 4288154150,
-      "v": "CQcACwIPAAwWER5mbW13fnh/RXlxcXxHfHd2fXN9fHx/f0dHR317R0BMRXJycXh/cXJFQXlFQ0NFfnhEQEFDe3FyfkB4f3t/c2pwfkFDQEJ6cGhgG2dlGWdkbXVyeEB+cHdqdQ==",
-      "dots": "Q3xHc3h/d3JtQxtxEXA="
+      "seed": 2111976573,
+      "v": "SlVQWlpaW1pTVlVKUVdMSUlIVlVLSE9CR3tGfkVGRkd8d39EeXxHTFVMSUdOSEJIVk9ARHxweHp8e3lAQ3tARHxyd3J6RH1zc3NoY210a29qY2YaHxwYYmUSFx0aHBUUCRYPBA==",
+      "dots": "REZ7fHdOa1ZvfGZAHEQ="
     },
     {
       "id": "P045",
       "stratum": "POOR",
-      "seed": 711189865,
-      "v": "RUJKUUhQWVBdWlhdWl9aX1paXltTUFtSS1RWVFFQXlRPTFRMSFZUVEtMRn5yeXlyfnt+fEdMRX9FTEZ5QX55cnlycnp8cX5/dWx0c3hHfnBoaWNlYGQbHhgQERYUCgIHBgYDBA==",
-      "dots": "Q0t6VH1Ud3JtRWV5EXQ="
+      "seed": 3986884762,
+      "v": "eUZCQ3lzfnhFQkBIVlleWlpaWlpbWllTVVROQkZ8dH97fntARUdFfHpAQ1VDRENPVVRcX1BITUlGRkhJQ0d8eUNFekBAR3xqdn5+eX13d2loYmBnbG1pbWlsbW9mGhIdEQsCOA==",
+      "dots": "RHx4fn9FdUNvUGZJHEc="
     },
     {
       "id": "P046",
       "stratum": "POOR",
-      "seed": 3139068929,
-      "v": "FRcVHBATFAsPCQkRCRQTGmcaGWFobmNjaWp2fH57c3dua3d2dnJyeEZJSlZUSUxGQ0lTUElIUUlMV1xUVlJLV15fX1BeX15aWlpYXVFWTlZeUFBRW1JbXFZVUVtaWllaW19SXw==",
-      "dots": "Q2l7bndUbVFnVh9eEVg="
+      "seed": 2860152428,
+      "v": "AQsSGB0bHB4XEx4ZEhxlbHRxfnpFfkd6e0ZGTkBGeXN5fHRocXtBeURyfEV9RURDRkFNR0V+f3tzcn96TUtARExXSE5BQkF+QU1DQXhxbmpwfGp2dHN+d391aG9nYm5gYW51cg==",
+      "dots": "REZ7eX9xcXxsfmdNHEI="
     },
     {
       "id": "P047",
       "stratum": "POOR",
-      "seed": 964434453,
-      "v": "Z29idXV2cnF4QU1IVEtVUktAQExLVEpXU11aWlNQW1paWltaWlNRXl9aWVlaWlpaWlJfWlhaXFxKXFBOTk1KUktOTUV5fEd7cnF3dm5iG2YZERIKDQQ5PgEFPj4+PgQADQgXHA==",
-      "dots": "Q1NEUHxTd1ptXBpSEXc="
+      "seed": 1087037110,
+      "v": "WltaWlpSWlpcV19QSE5LQ0ZOSVBeXlFRV09WVVRISUdPSkJMQEVFe0JNSUlDRUdJQExJSUpXUEtOR3lxaml2cGhsaHJ4cnN/c2tjZx0ZEQoUHxISHRUDDQMVCgsMCAgIEx4bYg==",
+      "dots": "REh9RXZJaUlkaRxy"
     },
     {
       "id": "P048",
       "stratum": "POOR",
-      "seed": 1570321668,
-      "v": "AQQ6Pj4FDBYLCQwPATsFOAQMFR1nZ2dtbnZ5f398f3RzdnR/RnhARExOUVxSVVJKUFJeWlpaWlpSWl9RW1pcVlxWS1ReUFJVVExCVFNZWFpdWl9bUFFXXV9dVVddUl1bWlpaWg==",
-      "dots": "Q25/RndSbVoaVhFC"
+      "seed": 556106429,
+      "v": "WFpbXVpaWl9fVFJaWl5ZVl1aWVZXSFNKUVZTSkhVU1VCTkBCS0hJSEJASFVNTUxHRnhBfnp5RkN5fXJ/ekBGQkR9f0ZERH9xa2FiG2dlYxsQERUKAAECOg0VEmRgbmAeGWZlHg==",
+      "dots": "RFVySHFIdE1ufmVGHEQ="
     },
     {
       "id": "P049",
       "stratum": "POOR",
-      "seed": 2155344928,
-      "v": "T0RBS0NBQH55fH58fXpFf0ZAekB5fXJ7ckVEQXpBT0NBRE9JTk5XXFpaWlpeU1VUVUJHTXpGekV+QUN6REZ7enB/f3d+cnd0a3N7fnF5f390bGFkYRphYBkWDw4UDQ0IAAsCDQ==",
-      "dots": "Q3J5T3debXpkRhl/EXs="
+      "seed": 678358642,
+      "v": "CQ0HDg4WEAsRFQ0JEQsIExcfHGQbYG9oa3B9R0NNQ0pAR01KTUxMSUF+cn9Gf3VrdHFudndzekNPSU1OQUNAS0hLT0tIUVhYWlpaWlpSXlpaWl5aXVdXVExCVVxfVVNUSFNYWg==",
+      "dots": "RE15TXNBaW5temZOHFE="
     },
     {
       "id": "P050",
       "stratum": "POOR",
-      "seed": 4032319406,
-      "v": "bW9obnV9d3x5RUN7RkZ+cXdxcGpocHFye35ETUlITEd8d2lwcHZycH93bHV2f3d2fUVEcnh4e0JCQUNNQklOUVRMSFRWXlpZWV9aX1ZUTkhGenJqa20aZRMVFhUMDhQWGRAJDQ==",
-      "dots": "Q3t/cHd2bXthQxhMEVo="
+      "seed": 3913433111,
+      "v": "Pj46BgAACxIeYWEbEBYZExlhGBlhYmJsaHZpcXVydHFzamtvandzandpaWhrcXhDQkBOQk1HQ05DTkNCVUxOS05BeENDR3h+eXl2eEZ/f0dBe3x+eURAeXJzfn59R3p5cXhETQ==",
+      "dots": "RHJ5a3x3aEBsR2BOHEc="
     },
     {
       "id": "P051",
       "stratum": "POOR",
-      "seed": 2727136215,
-      "v": "SklBQE9Ef3J+d39yamtpZ2YbZG91anF2dHZydXJ5QUJPR3t/Rk1JUFpaWlpaWlxfU1NUS0pXXl1KUFRWVEtRVkpDQXt9c3p9c2t1aWNmaW5maG5xbmFtbG0aGxgWDwMFOgMCFQ==",
-      "dots": "Q3R5e3dabV5hVBhDEXU="
+      "seed": 2110699198,
+      "v": "Fg8LFhgZHx4WEAoIFhUXEQkADA0LExpgZmNqfHhDSklOUVNYWlpYUl1KV1BeWlpaWFFTUUlPTEpTVktTVU1KVU1KVVxWSEpRV1leWVpQX1xWWVpaWFFSXVZZUFZIUllZWlpTVQ==",
+      "dots": "REN5U3dea1hnVRxI"
     },
     {
       "id": "P052",
       "stratum": "POOR",
-      "seed": 3909078673,
-      "v": "AAEHBwUMCBQcHB1lZW90fHB+fnZ+ckVyeEVAeEV+fXt5fXB5eUVDT05LUktVSkpIVl1aU0pcWlpaWlpdXFVMVUxJUF9aU1VOR09IV01MQEZ4f0FFTVdTWVpcSkhOSUZGenp6TA==",
-      "dots": "Q3h7eXdVbVpgWmVMEUg="
+      "seed": 2660689605,
+      "v": "Ojs+BDk+Pj4+BQwIChJlGWFvanB8R3hxcnV1b3ZzeXx/enlHTUlDQ0NATU9MRExUSlRVQkFPRkJAenN2fXVoaHZ+c31+dnV9dW5td2x0bHVwfnFzeX5ze0d4RU16e3pEeXB1aA==",
+      "dots": "RHN7f3BAaVVhcxx2"
     },
     {
       "id": "P053",
       "stratum": "POOR",
-      "seed": 73743544,
-      "v": "XVFLQE5DTkpTWlpYVl9aWVlWUFBdXVlQUVtaWFBaW1paWlxeU11WWF1aWFJVUlxfVE5HeHh5cXh4R3h4Q0V9c3Z1cnd/eXh/c3JqcHd1b2NkbGIaHRcUEAoWDgwBDQoWCww6Ow==",
-      "dots": "Q1F4WndVbXFnQxh1EWo="
+      "seed": 280277368,
+      "v": "c2l2d3F3dHFxcWlvaXVra3V9d3BrdG1iaHN+fH53d3N9REZHeH5xf3Zsa3RyfXx3f3RydnZ3dGpxc3d+dnlGeXt5fHZoaW1jGmceFwwICBEfEhEOAAsXHmRtZWNvd3Z1dmh3aQ==",
+      "dots": "RHd7fXFrandsdxt7HGk="
     },
     {
       "id": "P054",
       "stratum": "POOR",
-      "seed": 634377795,
-      "v": "RkxHfnx0c3ZuaGtvcXN2a3RoYWFjbm5pbGtyRU9WTkhMQUR7QntweXpET0ZBRH9EeUZOUFJaWltdW1BfUEtOVFNQVE9PTEBHT0NEfX53amMYZ2YcFAoVAwAEBg8DOwUEPj4GDg==",
-      "dots": "Q2x7THdBbVpgWxhQEUQ="
+      "seed": 2832566390,
+      "v": "GhITChAVEwoPAg0XCBMTExITCwEPCxYYG2QdGmx0c3d8e0FIVFBcWFBVVFxWWFZJVEpRS1NfWlpaWlpaX1pTWVdLTEVDSk1GR3lHQ0BHQkxVXFpaXlpdWlpaWlpaWlBWXVVTWg==",
+      "dots": "RHR4e3ZcaVFsX2RaHEo="
     },
     {
       "id": "P055",
       "stratum": "POOR",
-      "seed": 3841898877,
-      "v": "cGhze35FTUBLUFpbWlhZV1NdWlhaXldNek1PR3xETElXVk5KSlVWVF1aWl9dVEpMVlheXlpZWlpZU1tfUFNSX1lQVUtVTkBISEZ+c2hoYBodGx4TFhQMOj4+OT47AA8BDAU7Ow==",
-      "dots": "Q3p+SnddbVpgUxhQEX4="
+      "seed": 3563265304,
+      "v": "bnVzfH5ze0B4cHN/QUxVUUhDT01NREVye0JBfnB+RkZGTkhBR0Z6cHN5fkZ8fnZ/e319fn54R3h5ek1ASE9ISkpVSUlGfHBrbmYeFgkNAg8HOD4EOj4+PgU4AzoHPjs5Bj45Pg==",
+      "dots": "RH5+QXd8bHgYVRx8"
     },
     {
       "id": "P056",
       "stratum": "POOR",
-      "seed": 545161880,
-      "v": "CxQCBz4+Pj45AQ8LEhUSGhseGWFsaXV8eXtycX99c3V0fHd0cmpsdX91cHB7e35HT0Z7QkNETU9HTktCSkhUV05MR3p+f0d7en52eUdDQER6e0ZOV1FdWlNRX11RSUNJSFdWTw==",
-      "dots": "Q3l4fHd7bU0bThF2"
+      "seed": 3214882032,
+      "v": "ZRgbGR4WHBUWDgAAOwYMCQ0IFgoICwoSHhASZWBpa3drcnlDQHlwe3tHT0NLSldQVEpMR3tCS1VXSVZLSUhOR3lBTk1UUUlKVV1TS1NWXVJdUlpaWFFSS0JOV1ZKQklQVktXXA==",
+      "dots": "RGlwR2pQZkscUQ=="
     },
     {
       "id": "P057",
       "stratum": "POOR",
-      "seed": 2427395885,
-      "v": "Fx8eZWVnb2MbGRYXHxcPCBUXCxIbZ2Nrc3xwfHl+fkB7f0VMR0ZDekBLVVRWTkB7QXhGTkNETkJARHx/cH9Fe3J5en17QHpzcXhEf3R2dmpydWxoYGNtb21pbWVhY29vZGNmYw==",
-      "dots": "Q3NEfnNAd1ZtThh5EUQ="
+      "seed": 4013829439,
+      "v": "AwIABwYDCA8OERxlHx8ZGGAaZ2IbGGNoYGdkYm1oaXVzaXd2dnJ5RHx4RExUT0FPUUtCekB5cHJ3fHh/cXhycnZxeURATE9XUU5KTUxHeHxER3hCe3x7RHp+Rn54f0d5fXV1cw==",
+      "dots": "RGhweGhLZ3EcTA=="
     },
     {
       "id": "P058",
       "stratum": "POOR",
-      "seed": 3081027857,
-      "v": "PjoEOgMBCRAYYmNvanNzd3Nyf0ZJQUNFQ01Aek1HRU1GREZOTUN7QXt/dH18enhHR0V6Q0RFfXRzfn1FTUFHTENGSU1DekFITlRISVZRSlJSUFlTWVhaWl5XVlZORn5Hf3N2fA==",
-      "dots": "Q0N4RHd8bX0aTBFI"
+      "seed": 2265056965,
+      "v": "PjgBDxYWGWFmGGFrcHVsYGFkYnV1bBpkb25rcnFzaHRyRXhycnJERkV8RERGeH9xdXJ6RXpCRHx/R0N4QUNFQU5XSU5HTU9ERXx0d2lwf3V1bGVsZBgZZmhta29xd3V0bWcabA==",
+      "dots": "RHN8cmhyZEMcTQ=="
     },
     {
       "id": "P059",
       "stratum": "POOR",
-      "seed": 723792385,
-      "v": "amp3dmhuaW9gbXRpYWBkGxhhZG11bWhubXRraXB3a3F4eHl+fURGe3pHeUV7QkxNRUR8R35zcnZpc3l9fXR0cnh5RE1CVEtXSldIQ0B+fkV8cmp1d2tqcG5sbW5gYRsTCgsABA==",
-      "dots": "Q21/fXd7bXJheR1LEUg="
+      "seed": 1539364234,
+      "v": "GWEYEBQMDgM4Bw0ABwMEBwkQEx9nY25vYWVtaGtrcn93d311f3tFTEd8cHl8fXF5fnh6entASFFcWlpaX1xZWlpaWlxcWl1YUVdRVEhWVktLTFRLU1NIS0hMTEpMTUFDSE5KUA==",
+      "dots": "RGtzR2h4YlEbWhxa"
     },
     {
       "id": "P060",
       "stratum": "POOR",
-      "seed": 3580907841,
-      "v": "b2pwcnJ/dHR8eUFPV1xaWV5aWlhTUlpSVU1BeUBIS1JSSFBOSUlLQHpHeHhBRExJS0hJTXpNRkZMTE1JT0tRVVBcUFtaWl9RSUBBTUR8dGhgGB5mYxljGxpgYWUfHRwXDg8HAQ==",
-      "dots": "Q1VESHhId0FtRmZJHV8RQQ=="
+      "seed": 1495439890,
+      "v": "CQE6OwA5AxUQEhthYWhqc357RE1VV0hQVUJCRn93fkZ/RUB6QUxDVVBQUElOR0N7RHt9RE9AeHN/cn5EfHJ5RXx+fkdDQX53dH90a2xiZmBsZB4TG2JvamIYHh4cHBgeZGQaHg==",
+      "dots": "RHdwUGtEb09jf2ZEHEE="
     }
   ]
 }

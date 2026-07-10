@@ -10,10 +10,14 @@ for the best prize, paying 5¢ per reveal. The study runs in one or more
 
 - **Without AI (human only, arm `A`)** — the subject searches alone.
 - **With AI (AI assisted, arm `B`)** — the subject additionally has a free
-  assistant that is "trained on" a fixed **set of coverage patches** (positions
-  25–45 and 55–75), like an LLM's patchy training data. It interpolates between
-  its own hidden data points within each patch and refuses in the gaps between /
-  outside them.
+  assistant: a conceptual model of an LLM. It is "trained on" hidden data points
+  inside one fixed interval (`COVERAGE_PATCHES`, default `[30,70]`) and **always
+  answers, for any position, with the same confident wording** — it never says
+  "I don't know". Between its points it **interpolates** (accurate, since the
+  true curve is locally smooth); beyond them it **flat-extrapolates** (holds the
+  nearest known value — confident but increasingly wrong). So it is reliable only
+  near its training data, and the participant is **not told where that is** — they
+  must calibrate by verifying with their own reveals.
 
 The admin chooses **which phases to include and the order** participants move
 through them (in the `/admin/` panel → **Phases**). Include one phase for a

@@ -28,8 +28,8 @@
   var BUILTIN = {
     consent: "**What this is.** This is a short decision-making study… (built-in default).\n\n**Payment.** … **Anonymity.** … **Voluntary.** …",
     instructions: "In each round you will see 100 positions on a line. Each position hides a value between 0 and 100 cents.\n\nValues at adjacent positions differ by at most 10 cents…\n\nYou can reveal the value at any position. Each reveal costs 5 cents…\n\nYour earnings for the round are the highest value you revealed, minus 5 cents for each reveal…\n\nThere is 1 practice round and 10 real rounds. Two of the 10 real rounds will be picked at random and paid to you as a bonus.",
-    instructionsB: "You also have a free assistant.\n\nThe assistant was trained on data about some positions, in a few ranges ({coverage})…\n\nIf you ask about any position outside those ranges, the assistant has no data…\n\nAsking the assistant is free and unlimited.",
-    phaseIntroB: "Next part: you now have a free AI assistant that estimates positions in a few ranges ({coverage})… (built-in default). Everything else about the game is the same.",
+    instructionsB: "You also have a free assistant.\n\nAsk it about any position for its best estimate. Its estimates are usually close but not guaranteed, and it always answers even where it is unsure…\n\nAsking the assistant is free and unlimited.",
+    phaseIntroB: "Next part: you now have a free AI assistant that gives its best estimate for any position (usually close, not guaranteed)… (built-in default). Everything else about the game is the same.",
     phaseIntroA: "Next part: you search on your own — the AI assistant is no longer available… (built-in default). Everything else about the game is the same.",
     finish: "(Built-in) Thank you for taking part. Below are your real rounds; the ones marked paid were selected at random.",
     closed: "(Built-in) This study is not currently open. Thank you for your interest."
