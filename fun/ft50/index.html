@@ -2224,6 +2224,28 @@ loadRecent();   // pre-fetch the small recent.json so the "Recently added" view 
         Continue with Google
       </button>
       <div class="acct-or">or with email</div>
+      <!-- Extra profile fields shown only when creating an account (toggled in
+           setAuthMode). All are editable later from the "My profile" modal. -->
+      <div id="acctCreateFields" style="display:none;flex-direction:column;gap:12px">
+        <div style="display:flex;gap:12px">
+          <div class="acct-field" style="flex:1">
+            <label for="acctFirstName">First name</label>
+            <input id="acctFirstName" type="text" autocomplete="given-name" placeholder="Jane" onkeydown="if(event.key==='Enter')acctSubmitAuth()">
+          </div>
+          <div class="acct-field" style="flex:1">
+            <label for="acctLastName">Last name</label>
+            <input id="acctLastName" type="text" autocomplete="family-name" placeholder="Doe" onkeydown="if(event.key==='Enter')acctSubmitAuth()">
+          </div>
+        </div>
+        <div class="acct-field">
+          <label for="acctAffiliation">Affiliation</label>
+          <input id="acctAffiliation" type="text" autocomplete="organization" placeholder="University or company" onkeydown="if(event.key==='Enter')acctSubmitAuth()">
+        </div>
+        <div class="acct-field">
+          <label for="acctWebsite">Website <span style="text-transform:none;font-weight:400;color:var(--text-muted)">(optional)</span></label>
+          <input id="acctWebsite" type="url" autocomplete="url" placeholder="https://…" onkeydown="if(event.key==='Enter')acctSubmitAuth()">
+        </div>
+      </div>
       <div class="acct-field">
         <label for="acctEmail">Email</label>
         <input id="acctEmail" type="email" autocomplete="username" placeholder="you@example.com" onkeydown="if(event.key==='Enter')acctSubmitAuth()">
@@ -2236,6 +2258,44 @@ loadRecent();   // pre-fetch the small recent.json so the "Recently added" view 
       <div class="acct-error" id="acctErr"></div>
       <button class="acct-primary" id="acctPrimaryBtn" onclick="acctSubmitAuth()">Sign in</button>
       <div class="acct-switch" id="acctSwitch"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Accounts: edit-profile modal (signed-in users) ─────────────────────── -->
+<div id="acctProfileOverlay" class="acct-overlay" onclick="if(event.target===this)acctCloseProfile()">
+  <div class="acct-modal">
+    <button class="acct-modal-x" onclick="acctCloseProfile()" aria-label="Close">×</button>
+    <div class="acct-modal-head">
+      <h2>My profile</h2>
+      <p>These details are saved privately to your account — only you can see them. Edit them any time.</p>
+    </div>
+    <div class="acct-modal-body">
+      <div style="display:flex;gap:12px">
+        <div class="acct-field" style="flex:1">
+          <label for="pfFirstName">First name</label>
+          <input id="pfFirstName" type="text" autocomplete="given-name" placeholder="Jane" onkeydown="if(event.key==='Enter')acctSaveProfile()">
+        </div>
+        <div class="acct-field" style="flex:1">
+          <label for="pfLastName">Last name</label>
+          <input id="pfLastName" type="text" autocomplete="family-name" placeholder="Doe" onkeydown="if(event.key==='Enter')acctSaveProfile()">
+        </div>
+      </div>
+      <div class="acct-field">
+        <label for="pfAffiliation">Affiliation</label>
+        <input id="pfAffiliation" type="text" autocomplete="organization" placeholder="University or company" onkeydown="if(event.key==='Enter')acctSaveProfile()">
+      </div>
+      <div class="acct-field">
+        <label for="pfWebsite">Website <span style="text-transform:none;font-weight:400;color:var(--text-muted)">(optional)</span></label>
+        <input id="pfWebsite" type="url" autocomplete="url" placeholder="https://…" onkeydown="if(event.key==='Enter')acctSaveProfile()">
+      </div>
+      <div class="acct-field">
+        <label for="pfEmail">Email</label>
+        <input id="pfEmail" type="email" autocomplete="email" placeholder="you@example.com" onkeydown="if(event.key==='Enter')acctSaveProfile()">
+      </div>
+      <div class="acct-error" id="pfErr"></div>
+      <button class="acct-primary" id="pfSaveBtn" onclick="acctSaveProfile()">Save profile</button>
+      <div class="acct-switch" id="pfStatus"></div>
     </div>
   </div>
 </div>
@@ -2259,6 +2319,8 @@ loadRecent();   // pre-fetch the small recent.json so the "Recently added" view 
  *   users/{uid}/papers/{docId}  -> { doi, title, authors, year,
  *                                    starred, note, tags[], lists[lid], updatedAt }
  *   users/{uid}/lists/{lid}     -> { name, createdAt }
+ *   users/{uid}/profile/main    -> { firstName, lastName, affiliation,
+ *                                    website, email, updatedAt }
  * A paper's docId is derived from its DOI (or title+year when no DOI).
  */
 (function () {
@@ -2290,9 +2352,9 @@ loadRecent();   // pre-fetch the small recent.json so the "Recently added" view 
   var FV = firebase.firestore.FieldValue;
   var serverTime = function () { return FV.serverTimestamp(); };
 
-  var state = { user: null, papers: {}, lists: {} };
+  var state = { user: null, papers: {}, lists: {}, profile: null };
   var meta = {};               // docId -> snapshot of {doi,title,authors,year} for rendering
-  var unsubPapers = null, unsubLists = null;
+  var unsubPapers = null, unsubLists = null, unsubProfile = null;
   var libraryMode = false, libFilter = { type: 'all', id: null }, libQuery = '';
   var doiIndex = null, doiIndexLen = -1;
 
@@ -2314,6 +2376,7 @@ loadRecent();   // pre-fetch the small recent.json so the "Recently added" view 
   }
   function papersCol() { return db.collection('users').doc(state.user.uid).collection('papers'); }
   function listsCol() { return db.collection('users').doc(state.user.uid).collection('lists'); }
+  function profileDoc() { return db.collection('users').doc(state.user.uid).collection('profile').doc('main'); }
   function isSaved(r) {
     return !!(r && (r.starred || (r.note && r.note.trim()) || (r.tags && r.tags.length) || (r.lists && r.lists.length)));
   }
@@ -2516,7 +2579,9 @@ loadRecent();   // pre-fetch the small recent.json so the "Recently added" view 
       return;
     }
     var u = state.user;
-    var name = u.displayName || (u.email ? u.email.split('@')[0] : 'Account');
+    var prof = state.profile || {};
+    var fullName = ((prof.firstName || '') + ' ' + (prof.lastName || '')).trim();
+    var name = fullName || u.displayName || (u.email ? u.email.split('@')[0] : 'Account');
     var initial = (name || '?').charAt(0);
     var saved = Object.keys(state.papers).filter(function (k) { return isSaved(state.papers[k]); }).length;
     el.innerHTML =
@@ -2528,6 +2593,7 @@ loadRecent();   // pre-fetch the small recent.json so the "Recently added" view 
           '<div class="acct-menu-item" onclick="acctOpenLibrary()">🗂 My lists <span class="acct-badge">' + Object.keys(state.lists).length + '</span></div>' +
           '<div class="acct-menu-item" onclick="acctOpenLibrary()">🏷 My tags <span class="acct-badge">' + uniqueTags().length + '</span></div>' +
           '<div class="acct-menu-item" onclick="acctOpenLibrary(\'search\')">🔍 Search my notes</div>' +
+          '<div class="acct-menu-item" onclick="acctOpenProfile()">👤 Edit profile</div>' +
           '<div class="acct-menu-sep"></div>' +
           '<div class="acct-menu-item danger" onclick="acctSignOut()">Sign out</div>' +
         '</div>' +
@@ -2652,6 +2718,7 @@ loadRecent();   // pre-fetch the small recent.json so the "Recently added" view 
       : 'Already have an account? <span class="acct-link" onclick="acctSwitchMode()">Sign in</span>';
     document.getElementById('acctForgotRow').style.display = m === 'signin' ? 'block' : 'none';
     document.getElementById('acctPassword').setAttribute('autocomplete', m === 'signin' ? 'current-password' : 'new-password');
+    var cf = document.getElementById('acctCreateFields'); if (cf) cf.style.display = m === 'signin' ? 'none' : 'flex';
     acctErr('');
   }
   window.acctSwitchMode = function () { setAuthMode(authMode === 'signin' ? 'create' : 'signin'); };
@@ -2660,10 +2727,39 @@ loadRecent();   // pre-fetch the small recent.json so the "Recently added" view 
     var pw = document.getElementById('acctPassword').value;
     if (!email || !pw) { acctErr('Enter your email and password.'); return; }
     var btn = document.getElementById('acctPrimaryBtn'); btn.disabled = true;
-    var pr = authMode === 'signin'
-      ? auth.signInWithEmailAndPassword(email, pw)
-      : auth.createUserWithEmailAndPassword(email, pw);
-    pr.then(function () { acctCloseAuth(); })
+    if (authMode === 'signin') {
+      auth.signInWithEmailAndPassword(email, pw)
+        .then(function () { acctCloseAuth(); })
+        .catch(function (e) { acctErr(friendly(e)); })
+        .then(function () { btn.disabled = false; });
+      return;
+    }
+    // Creating an account: capture the profile fields entered above and save
+    // them to users/{uid}/profile/main. They stay editable from "My profile".
+    var prof = {
+      firstName: document.getElementById('acctFirstName').value.trim(),
+      lastName: document.getElementById('acctLastName').value.trim(),
+      affiliation: document.getElementById('acctAffiliation').value.trim(),
+      website: document.getElementById('acctWebsite').value.trim(),
+      email: email
+    };
+    if (!prof.firstName || !prof.lastName) { acctErr('Please enter your first and last name.'); btn.disabled = false; return; }
+    auth.createUserWithEmailAndPassword(email, pw)
+      .then(function (cred) {
+        var user = cred && cred.user;
+        var display = (prof.firstName + ' ' + prof.lastName).trim();
+        var tasks = [];
+        if (user) {
+          tasks.push(db.collection('users').doc(user.uid).collection('profile').doc('main').set({
+            firstName: prof.firstName, lastName: prof.lastName,
+            affiliation: prof.affiliation, website: prof.website, email: prof.email,
+            updatedAt: serverTime()
+          }, { merge: true }));
+          if (display) tasks.push(user.updateProfile({ displayName: display }));
+        }
+        return Promise.all(tasks);
+      })
+      .then(function () { acctCloseAuth(); })
       .catch(function (e) { acctErr(friendly(e)); })
       .then(function () { btn.disabled = false; });
   };
@@ -2698,6 +2794,48 @@ loadRecent();   // pre-fetch the small recent.json so the "Recently added" view 
     return (e && e.message) || 'Something went wrong. Please try again.';
   }
 
+  // ── profile: view / edit the signed-in user's details ───────────────────
+  window.acctOpenProfile = function () {
+    if (!state.user) { acctOpenAuth(); return; }
+    acctCloseMenu();
+    var p = state.profile || {};
+    document.getElementById('pfFirstName').value = p.firstName || '';
+    document.getElementById('pfLastName').value = p.lastName || '';
+    document.getElementById('pfAffiliation').value = p.affiliation || '';
+    document.getElementById('pfWebsite').value = p.website || '';
+    document.getElementById('pfEmail').value = p.email || (state.user && state.user.email) || '';
+    var st = document.getElementById('pfStatus'); if (st) st.textContent = '';
+    var er = document.getElementById('pfErr'); if (er) er.textContent = '';
+    document.getElementById('acctProfileOverlay').classList.add('open');
+    setTimeout(function () { var e = document.getElementById('pfFirstName'); if (e) e.focus(); }, 40);
+  };
+  window.acctCloseProfile = function () { document.getElementById('acctProfileOverlay').classList.remove('open'); };
+  window.acctSaveProfile = function () {
+    if (!state.user) { acctOpenAuth(); return; }
+    var prof = {
+      firstName: document.getElementById('pfFirstName').value.trim(),
+      lastName: document.getElementById('pfLastName').value.trim(),
+      affiliation: document.getElementById('pfAffiliation').value.trim(),
+      website: document.getElementById('pfWebsite').value.trim(),
+      email: document.getElementById('pfEmail').value.trim()
+    };
+    var er = document.getElementById('pfErr'); er.style.color = 'var(--red)'; er.textContent = '';
+    if (!prof.firstName || !prof.lastName) { er.textContent = 'Please enter your first and last name.'; return; }
+    var btn = document.getElementById('pfSaveBtn'); btn.disabled = true;
+    var display = (prof.firstName + ' ' + prof.lastName).trim();
+    prof.updatedAt = serverTime();
+    var tasks = [ profileDoc().set(prof, { merge: true }) ];
+    if (display && state.user.displayName !== display) tasks.push(state.user.updateProfile({ displayName: display }));
+    Promise.all(tasks)
+      .then(function () {
+        var st = document.getElementById('pfStatus'); if (st) { st.style.color = 'var(--green)'; st.textContent = 'Saved.'; }
+        acctRenderControl();
+        setTimeout(acctCloseProfile, 700);
+      })
+      .catch(function (e) { er.textContent = friendly(e); })
+      .then(function () { btn.disabled = false; });
+  };
+
   // ── auth state + live data subscriptions ────────────────────────────────
   function onData() {
     acctDecorate();
@@ -2709,8 +2847,13 @@ loadRecent();   // pre-fetch the small recent.json so the "Recently added" view 
     document.body.classList.toggle('ms-signed-in', !!user);
     if (unsubPapers) { unsubPapers(); unsubPapers = null; }
     if (unsubLists) { unsubLists(); unsubLists = null; }
-    state.papers = {}; state.lists = {};
+    if (unsubProfile) { unsubProfile(); unsubProfile = null; }
+    state.papers = {}; state.lists = {}; state.profile = null;
     if (user) {
+      unsubProfile = profileDoc().onSnapshot(function (d) {
+        state.profile = d.exists ? (d.data() || {}) : {};
+        onData();
+      }, function (err) { console.warn('profile listener:', err && err.code); });
       unsubPapers = papersCol().onSnapshot(function (snap) {
         var m = {};
         snap.forEach(function (d) { var x = d.data() || {}; x.id = d.id; if (x.updatedAt && x.updatedAt.toMillis) x.updatedAt = x.updatedAt.toMillis(); m[d.id] = x; });
