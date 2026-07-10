@@ -383,7 +383,9 @@ async function main() {
       await adminLogin(page);
       await page.fill('#f-name', 'Wave One');
       await page.fill('#f-code', 'wave 1!'); // gets normalised to WAVE1
-      await page.click('#seg-arm button[data-v="B"]');
+      // Toggle OFF the Without-AI phase → a single "With AI" session. The checkbox
+      // is a visually zero-size styled switch, so drive its change handler directly.
+      await page.evaluate(() => { var c = document.getElementById('ph-A'); c.checked = false; c.dispatchEvent(new Event('change', { bubbles: true })); });
       await page.fill('#f-code-shared', 'DONE7');
       await page.click('#btn-save');
       await sleep(700);
@@ -394,7 +396,9 @@ async function main() {
       ok('session document created in Firestore', !!doc);
       ok('code normalised to A–Z0–9 (WAVE1)', doc && doc.code === 'WAVE1', doc && doc.code);
       ok('session stores name + active status', doc && doc.name === 'Wave One' && doc.status === 'active');
-      ok('session stores arm-mode B + completion code', doc && doc.settings.armMode === 'B' && doc.settings.completionCode === 'DONE7');
+      ok('session stores the With-AI phase + completion code',
+        doc && doc.settings.phases && doc.settings.phases.join(',') === 'B' && doc.settings.completionCode === 'DONE7',
+        doc && JSON.stringify(doc.settings.phases));
       ok('Active sessions list shows the new session', /Wave One/.test(await page.innerText('#active-list')));
       ok('launch links + preview button appear', await page.isVisible('#launch-box'));
       await ctx.close();
@@ -528,6 +532,50 @@ async function main() {
       await page.waitForSelector('#s-finish.active', { timeout: 10000 });
       ok('finish table has exactly 4 round rows', (await page.locator('.paid-table tbody tr').count()) === 4);
       ok('finish shows the session completion code', (await page.innerText('#completion-code')).trim() === 'RND4');
+      await ctx.close();
+    }
+
+    // ---------------- TEST 19: Within-subjects phases (Without AI → With AI) ----
+    // A session with both phases: the participant plays a block of Without-AI
+    // rounds, sees a transition screen, then a block of With-AI rounds (assistant
+    // appears). The finish table spans both phases (a Part column, 2×N rows), and
+    // events carry the active arm + phase ordinal, with a phase_start at the switch.
+    console.log('\nTest 19 · Within-subjects phases: Without AI → transition → With AI');
+    {
+      const seed = { 'sessions/w19': { code: 'WAVE19', name: 'Both', status: 'active',
+        settings: { phases: ['A', 'B'], counterbalance: false, completionCode: 'BOTH9', nTasks: 2, paidTasks: 2, nPractice: 0, content: {} } } };
+      const ctx = await fbCtx(browser, seed);
+      const page = await ctx.newPage();
+      await page.goto(APP + '?code=WAVE19&preview=1&debug=1&key=stouras', { waitUntil: 'networkidle' });
+      await page.waitForSelector('#s-round.active', { timeout: 8000 });
+      ok('phase 1 starts at Round 1 of 2', /Round 1 of 2/.test(await page.innerText('#round-label')));
+      ok('phase 1 label names the Without AI phase', (await page.innerText('#round-label')).includes('Without AI'));
+      ok('phase 1 (Without AI) shows no assistant panel', (await page.locator('#btn-ask').count()) === 0);
+      await playRound(page, 1); // round 1 → lands on round 2
+      // round 2 (last of phase 1) — inspect the interstitial before continuing
+      await page.waitForSelector('#s-round.active');
+      await page.fill('#pos-input', '45'); await page.dispatchEvent('#pos-input', 'change'); await page.click('#btn-reveal');
+      await page.click('#btn-stop'); await page.waitForSelector('#ov-stop.show'); await page.click('#btn-stop-ok');
+      await page.waitForSelector('#s-interstitial.active');
+      ok('end of phase 1 interstitial reads "Part 1 complete"', /Part 1 complete/.test(await page.innerText('#inter-title')));
+      await page.click('#btn-continue');
+      await page.waitForSelector('#s-phase-intro.active', { timeout: 8000 });
+      ok('a phase transition screen appears between phases', await page.isVisible('#s-phase-intro'));
+      ok('transition screen shows "Part 2 of 2"', /Part 2 of 2/.test(await page.innerText('#phase-intro-title')));
+      await page.click('#btn-phase-intro');
+      await page.waitForSelector('#s-round.active');
+      ok('phase 2 label names the With AI phase', (await page.innerText('#round-label')).includes('With AI'));
+      ok('phase 2 (With AI) shows the assistant panel', (await page.locator('#btn-ask').count()) === 1);
+      await playRound(page, 1);
+      await playRound(page, 1);
+      await page.waitForSelector('#s-finish.active', { timeout: 10000 });
+      ok('finish table has a Part column', /Part/.test(await page.innerText('.paid-table thead')));
+      ok('finish table has 4 rows (2 phases × 2 rounds)', (await page.locator('.paid-table tbody tr').count()) === 4);
+      ok('finish shows the shared completion code', (await page.innerText('#completion-code')).trim() === 'BOTH9');
+      const evs = await getEvents(page);
+      ok('a phase_start event marks the second phase (arm B)', evs.some(e => e.event === 'phase_start' && e.arm === 'B'));
+      ok('round_end events exist for BOTH arms', evs.some(e => e.event === 'round_end' && e.arm === 'A') && evs.some(e => e.event === 'round_end' && e.arm === 'B'));
+      ok('events carry the phase ordinal (1 and 2)', evs.some(e => e.event === 'round_end' && e.phase === 1) && evs.some(e => e.event === 'round_end' && e.phase === 2));
       await ctx.close();
     }
 

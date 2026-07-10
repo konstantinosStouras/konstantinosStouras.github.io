@@ -20,7 +20,36 @@
     if (s.paidTasks != null && +s.paidTasks >= 0) PAID_TASKS = Math.floor(+s.paidTasks);
     if (PAID_TASKS > N_TASKS) PAID_TASKS = N_TASKS;
   }
-  function firstRound() { return N_PRACTICE > 0 ? 0 : 1; } // roundNum to start the game at
+  // roundNum to start the current phase at. Practice (round 0) is played only
+  // once, at the very start (phase 0); later phases jump straight to round 1.
+  function firstRound() { return (S && S.phaseIdx === 0 && N_PRACTICE > 0) ? 0 : 1; }
+
+  // Resolve the ordered list of phases (arms) this subject plays, from the admin
+  // settings. New model: settings.phases is an ordered array of 'A'/'B'
+  // (optionally counterbalanced per subject). Legacy fallback: the old single-arm
+  // settings.armMode ('url'|'A'|'B'|'random') → a one-phase session, preserving
+  // the previous between-subjects behavior for sessions saved before this change.
+  function resolvePhases(cfg, pr) {
+    if (cfg && Object.prototype.toString.call(cfg.phases) === '[object Array]' && cfg.phases.length) {
+      var list = [];
+      for (var i = 0; i < cfg.phases.length; i++) if (cfg.phases[i] === 'A' || cfg.phases[i] === 'B') list.push(cfg.phases[i]);
+      if (!list.length) list = ['A'];
+      if (cfg.counterbalance && list.length === 2 && Math.random() < 0.5) list = [list[1], list[0]];
+      return list;
+    }
+    var mode = (cfg && cfg.armMode) || STUDY_ARM_MODE || 'url';
+    var a;
+    if (mode === 'A' || mode === 'B') a = mode;
+    else if (mode === 'random') a = (Math.random() < 0.5 ? 'A' : 'B');
+    else if (pr.arm === 'A' || pr.arm === 'B') a = pr.arm;
+    else a = (Math.random() < 0.5 ? 'A' : 'B');
+    return [a];
+  }
+  function takeWrap(arr, start, count) {
+    var out = []; if (!arr.length) return out;
+    for (var i = 0; i < count; i++) out.push(arr[(start + i) % arr.length]);
+    return out;
+  }
 
   // ---- closure-only per-round secrets (NEVER on window/DOM) ----------------
   var truth = null;   // decoded value array for the current round
@@ -32,16 +61,22 @@
   var COVERAGE = null;
   var chart = null;
   var S = null;       // persisted session state
-  var arm = 'A';
+  var arm = 'A';      // the arm of the CURRENT phase ('A' human-only | 'B' AI-assisted)
   var DEBUG = false;
   var lastSelectLogT = 0;
   var STUDY_CLOSED = false;    // set from the admin-controlled config/study doc
-  var STUDY_ARM_MODE = 'url';  // 'url' | 'A' | 'B' | 'random' (admin-controlled)
+  var STUDY_ARM_MODE = 'url';  // legacy single-arm mode: 'url'|'A'|'B'|'random' (admin-controlled)
   var STUDY_CFG = null;        // raw settings (config/study or a session's settings)
   var SESSION_CODE = null;     // admin "session" (wave) code from ?code= (stamped on data)
   var SESSION_NAME = null;     // its human name
-  var CONTENT = {};            // admin content overrides { consent, instructions, instructionsB, finish, closed }
+  var CONTENT = {};            // admin content overrides { consent, instructions, instructionsB, finish, closed, phaseIntroB, phaseIntroA }
   var PREVIEW = false;         // admin preview: skip intro, don't write to Firestore
+
+  // Participant-facing names for the two phases (arms). A phase is a block of
+  // rounds played in one condition; a within-subjects session runs several in a
+  // chosen order. Keep these in sync with admin/admin.js PHASE_LABEL.
+  var PHASE_LABEL = { A: 'Without AI', B: 'With AI' };
+  function phaseLabel(a) { return PHASE_LABEL[a] || a; }
 
   // Built-in default participant-facing copy (used when the admin hasn't overridden it).
   var BUILTIN = {
@@ -61,6 +96,17 @@
       "The assistant was trained on data about some positions between 30 and 70. You cannot see its data. If you ask about a position between 30 and 70, it gives you its best estimate: a straight line between its two nearest data points. Its estimates are usually close, but they are not guaranteed.\n\n" +
       "If you ask about any position outside 30 to 70, the assistant has no data and will tell you so.\n\n" +
       "Asking the assistant is free and unlimited. The assistant does not learn from your reveals in this study.",
+    // Shown at the start of a later phase when a within-subjects session moves the
+    // subject INTO the With-AI condition (a free assistant becomes available).
+    phaseIntroB:
+      "**Next part: you now have a free AI assistant.**\n\n" +
+      "For the rounds in this part you also have a free assistant. It was trained on data about some positions between 30 and 70 and, when you ask about a position in that range, gives its best estimate — a straight line between its two nearest data points. Its estimates are usually close but not guaranteed, and outside 30 to 70 it has no data.\n\n" +
+      "Asking is free and unlimited. Everything else about the game is exactly the same.",
+    // Shown at the start of a later phase when a within-subjects session moves the
+    // subject INTO the Without-AI (human-only) condition (no assistant).
+    phaseIntroA:
+      "**Next part: you search on your own.**\n\n" +
+      "For the rounds in this part the AI assistant is no longer available. Everything else about the game is exactly the same.",
     finish: "",
     closed: ""
   };
@@ -244,35 +290,41 @@
   }
 
   function finishBoot(pr) {
-    // Arm assignment. A persisted arm wins (never flip a subject mid-study).
-    // Otherwise the admin arm mode decides: force A/B, force random, or (default
-    // 'url') honour ?arm= and fall back to random.
-    if (S.arm !== 'A' && S.arm !== 'B') {
-      if (STUDY_ARM_MODE === 'A' || STUDY_ARM_MODE === 'B') S.arm = STUDY_ARM_MODE;
-      else if (STUDY_ARM_MODE === 'random') S.arm = (Math.random() < 0.5 ? 'A' : 'B');
-      else if (pr.arm === 'A' || pr.arm === 'B') S.arm = pr.arm;
-      else S.arm = (Math.random() < 0.5 ? 'A' : 'B');
+    // Phase sequence. A persisted sequence wins (never re-randomise a subject
+    // mid-study). A legacy in-progress subject has only S.arm → one-phase session.
+    // Otherwise resolvePhases() applies the admin settings (new phases model or the
+    // legacy armMode fallback).
+    if (Object.prototype.toString.call(S.phases) !== '[object Array]' || !S.phases.length) {
+      if (S.arm === 'A' || S.arm === 'B') S.phases = [S.arm];
+      else S.phases = resolvePhases(STUDY_CFG, pr);
     }
-    arm = S.arm;
-    save(); // lock in arm + ids before any async work
+    if (S.phaseIdx == null) S.phaseIdx = 0;
+    if (S.phaseIdx > S.phases.length - 1) S.phaseIdx = S.phases.length - 1;
+    arm = S.phases[S.phaseIdx];
+    S.arm = arm;    // keep the logged arm in sync with the active phase
+    save();         // lock in phases + ids before any async work
 
-    // completion code: arm-specific (each arm is its own Prolific study) else shared
+    // Completion code. For a single-phase session an arm-specific code may apply
+    // (each arm is its own Prolific study); a multi-phase subject plays every
+    // condition, so only the shared code makes sense.
     if (STUDY_CFG) {
-      var code = (arm === 'A' && STUDY_CFG.completionCodeA) || (arm === 'B' && STUDY_CFG.completionCodeB) || STUDY_CFG.completionCode;
+      var code = STUDY_CFG.completionCode;
+      if (S.phases.length === 1) code = (arm === 'A' && STUDY_CFG.completionCodeA) || (arm === 'B' && STUDY_CFG.completionCodeB) || STUDY_CFG.completionCode;
       if (code) CFG.COMPLETION_CODE = code;
     }
 
-    if (DEBUG) { $('nav-arm').textContent = (PREVIEW ? 'PREVIEW · ' : '') + 'Arm ' + arm + (SESSION_CODE ? ' · ' + SESSION_CODE : ''); $('btn-restart').style.display = ''; }
+    if (DEBUG) { $('nav-arm').textContent = (PREVIEW ? 'PREVIEW · ' : '') + navPhaseLabel() + (SESSION_CODE ? ' · ' + SESSION_CODE : ''); $('btn-restart').style.display = ''; }
 
     // Study closed: only turn away subjects who have not started (in-progress and
     // finished subjects are always let through so they can finish / see the code).
     // Preview always proceeds (the admin is testing).
     if (STUDY_CLOSED && !PREVIEW && !S.completed && (!S.phase || S.phase === 'consent')) { renderClosed(); show('s-closed'); return; }
 
-    // logger base fields (stamp the admin session code/name on every event)
+    // logger base fields (stamp the admin session code/name on every event). `arm`
+    // and `phase` track the ACTIVE phase and are updated by advancePhase().
     L.init({
       session: S.session, sessionCode: SESSION_CODE, sessionName: SESSION_NAME,
-      pid: S.pid, study: S.study, arm: arm,
+      pid: S.pid, study: S.study, arm: arm, phase: S.phaseIdx + 1,
       ua: navigator.userAgent, vw: window.innerWidth, vh: window.innerHeight,
       appVersion: CFG.APP_VERSION
     });
@@ -303,9 +355,18 @@
     }).catch(function () {});
   }
 
-  // Arm B loads assistant.js at runtime; Arm A never references it (isolation).
+  // A short nav label for the debug overlay: the active arm, plus the phase
+  // position when the subject plays more than one phase.
+  function navPhaseLabel() {
+    var base = 'Arm ' + arm;
+    if (S && S.phases && S.phases.length > 1) base += ' · phase ' + (S.phaseIdx + 1) + '/' + S.phases.length;
+    return base;
+  }
+
+  // assistant.js is loaded once if ANY phase in this session uses the AI (arm B);
+  // a pure human-only (arm A) session never references it (strict arm isolation).
   function loadAssistantIfNeeded(cb) {
-    if (arm !== 'B') { cb(); return; }
+    if (!S.phases || S.phases.indexOf('B') < 0) { cb(); return; }
     if (window.Assistant) { A = window.Assistant; cb(); return; }
     var s = document.createElement('script');
     s.src = 'assistant.js';
@@ -324,20 +385,34 @@
     }
     POOL = { byId: byId, richIds: richIds, poorIds: poorIds };
 
-    // Seeded per-subject task order: N_TASKS landscapes, split ~half RICH / half
-    // POOR (derived from the admin-set round count), shuffled. Capped at the pool.
-    if (!S.taskOrder) {
-      var rng = mulberry32(hashSeed(S.session + ':tasks'));
-      var nRich = Math.min(Math.ceil(N_TASKS / 2), richIds.length);
-      var nPoor = Math.min(N_TASKS - nRich, poorIds.length);
-      var r = shuffle(richIds.slice(), rng).slice(0, nRich);
-      var p = shuffle(poorIds.slice(), rng).slice(0, nPoor);
-      S.taskOrder = shuffle(r.concat(p), rng);
+    // Seeded per-subject task orders: one block of N_TASKS landscapes PER PHASE,
+    // each split ~half RICH / half POOR (from the admin-set round count) and
+    // shuffled. Blocks are drawn from a single shuffled pool so a subject does not
+    // see the same landscape twice across phases (wrapping only if the pool is
+    // smaller than the total demand). One-phase legacy state (S.taskOrder) is
+    // migrated forward so an in-progress subject keeps their landscapes.
+    if (!S.taskOrders) {
+      if (S.taskOrder && S.phases.length === 1) {
+        S.taskOrders = [S.taskOrder];
+      } else {
+        var rng = mulberry32(hashSeed(S.session + ':tasks'));
+        var richShuf = shuffle(richIds.slice(), rng);
+        var poorShuf = shuffle(poorIds.slice(), rng);
+        var nRich = Math.min(Math.ceil(N_TASKS / 2), richIds.length);
+        var nPoor = Math.min(N_TASKS - nRich, poorIds.length);
+        S.taskOrders = [];
+        var ri = 0, pi = 0;
+        for (var ph = 0; ph < S.phases.length; ph++) {
+          var r = takeWrap(richShuf, ri, nRich); ri += nRich;
+          var p = takeWrap(poorShuf, pi, nPoor); pi += nPoor;
+          S.taskOrders.push(shuffle(r.concat(p), rng));
+        }
+      }
     }
 
     // session_start (once)
     if (!S.sessionStarted) {
-      L.log('session_start', { info: 'taskOrder=' + S.taskOrder.join(',') });
+      L.log('session_start', { info: 'phases=' + S.phases.join(',') + ';tasks=' + S.taskOrders.map(function (t) { return t.join('|'); }).join(' / ') });
       S.sessionStarted = true;
     }
     save();
@@ -355,6 +430,7 @@
       startRound(firstRound(), false); return;
     }
     switch (S.phase) {
+      case 'phaseIntro': showPhaseIntro(); break;
       case 'instructions': showInstructions(); break;
       case 'quiz': showQuiz(); break;
       case 'round':
@@ -382,12 +458,22 @@
   // when the admin changes the round counts. Tokens: {nTasks} {paidTasks}
   // {nPractice} {fee} {nPositions} and {rounds} (a full ready-made sentence).
   function subTokens(text) {
-    var roundsSentence = (N_PRACTICE > 0 ? 'There is a practice round and ' + N_TASKS + ' real rounds. ' : 'There are ' + N_TASKS + ' rounds. ') +
-      PAID_TASKS + ' of the ' + N_TASKS + ' real rounds will be picked at random and paid to you as a bonus.';
+    var nPhases = (S && S.phases) ? S.phases.length : 1;
+    var totalReal = N_TASKS * nPhases;
+    var roundsSentence;
+    if (nPhases > 1) {
+      roundsSentence = 'You play ' + N_TASKS + ' rounds in each of ' + nPhases + ' parts' +
+        (N_PRACTICE > 0 ? ' (after one practice round)' : '') + ', ' + totalReal + ' rounds in total. ' +
+        PAID_TASKS + ' of the ' + totalReal + ' rounds will be picked at random and paid to you as a bonus.';
+    } else {
+      roundsSentence = (N_PRACTICE > 0 ? 'There is a practice round and ' + N_TASKS + ' real rounds. ' : 'There are ' + N_TASKS + ' rounds. ') +
+        PAID_TASKS + ' of the ' + N_TASKS + ' real rounds will be picked at random and paid to you as a bonus.';
+    }
     return String(text || '')
       .replace(/\{rounds\}/g, roundsSentence)
       .replace(/\{nTasks\}/g, N_TASKS).replace(/\{paidTasks\}/g, PAID_TASKS)
-      .replace(/\{nPractice\}/g, N_PRACTICE).replace(/\{fee\}/g, COST).replace(/\{nPositions\}/g, N_POS);
+      .replace(/\{nPractice\}/g, N_PRACTICE).replace(/\{fee\}/g, COST).replace(/\{nPositions\}/g, N_POS)
+      .replace(/\{totalRounds\}/g, totalReal).replace(/\{nPhases\}/g, nPhases);
   }
   function content(key) { return subTokens((CONTENT && CONTENT[key]) ? CONTENT[key] : BUILTIN[key]); }
 
@@ -419,6 +505,16 @@
   }
 
   // ======================================================================
+  //  PHASE TRANSITION  (within-subjects: shown at the start of a later phase)
+  // ======================================================================
+  function showPhaseIntro() {
+    S.phase = 'phaseIntro'; save();
+    $('phase-intro-title').textContent = 'Part ' + (S.phaseIdx + 1) + ' of ' + S.phases.length;
+    $('phase-intro-body').innerHTML = renderProse(content(arm === 'B' ? 'phaseIntroB' : 'phaseIntroA'));
+    show('s-phase-intro');
+  }
+
+  // ======================================================================
   //  QUIZ  (verbatim; all correct to pass; randomized option order)
   // ----------------------------------------------------------------------
   //  QUICK-TEST ANSWER KEY  (the "Quick check" screen — get all right to play)
@@ -443,11 +539,26 @@
     { id: 'q4', prompt: 'The assistant\'s answer at position 50 is:',
       options: [{ t: 'Always exactly correct' }, { t: 'An estimate that can be wrong', correct: true }] }
   ];
-  function quizQuestions() { return arm === 'B' ? Q_COMMON.concat(Q_B) : Q_COMMON; }
+  // The quiz questions still OWED at the start of the current phase: the common
+  // task questions once, and the assistant questions the first time the subject
+  // enters an AI (arm B) phase. Returns [] when nothing new needs checking (e.g.
+  // a human-only phase after the common check has already been passed), in which
+  // case the quiz screen is skipped entirely.
+  function phaseQuizQuestions() {
+    var qs = [];
+    if (!S.commonQuizPassed) qs = qs.concat(Q_COMMON);
+    if (arm === 'B' && !S.bQuizPassed) qs = qs.concat(Q_B);
+    return qs;
+  }
+  // After instructions or a phase transition: quiz if anything is owed, else play.
+  function proceedToQuizOrRound() {
+    if (!PREVIEW && phaseQuizQuestions().length) showQuiz();
+    else startRound(firstRound(), false);
+  }
 
   function showQuiz() {
     S.phase = 'quiz'; save();
-    var qs = quizQuestions(), html = '';
+    var qs = phaseQuizQuestions(), html = '';
     for (var i = 0; i < qs.length; i++) {
       var q = qs[i];
       var opts = shuffle(q.options.slice(), Math.random); // display-order only
@@ -468,17 +579,23 @@
         var inputs = document.getElementsByName(qs[qi].id);
         for (var j = 0; j < inputs.length; j++) if (inputs[j].value === correct) inputs[j].checked = true;
       }
+      var ids = qs.map(function (q) { return q.id; });
+      var keyBits = [];
+      if (ids.indexOf('q1') >= 0) keyBits.push('Q1=60');
+      if (ids.indexOf('q2') >= 0) keyBits.push('Q2=52');
+      if (ids.indexOf('q3') >= 0) keyBits.push('Q3=has no data there');
+      if (ids.indexOf('q4') >= 0) keyBits.push('Q4=an estimate that can be wrong');
       var hint = document.createElement('div');
       hint.className = 'note';
       hint.style.marginTop = '10px';
-      hint.textContent = 'Debug: correct answers are pre-selected — just click Submit. (Answers: Q1=60, Q2=52' + (arm === 'B' ? ', Q3=has no data there, Q4=an estimate that can be wrong' : '') + '.)';
+      hint.textContent = 'Debug: correct answers are pre-selected — just click Submit. (Answers: ' + keyBits.join(', ') + '.)';
       $('quiz-body').appendChild(hint);
     }
     show('s-quiz');
   }
 
   function submitQuiz() {
-    var qs = quizQuestions(), allCorrect = true;
+    var qs = phaseQuizQuestions(), allCorrect = true;
     for (var i = 0; i < qs.length; i++) {
       var q = qs[i];
       var sel = document.querySelector('input[name="' + q.id + '"]:checked');
@@ -489,7 +606,10 @@
       L.log('quiz_attempt', { qid: q.id, choice: choice, correct: ok });
     }
     if (allCorrect) {
-      S.quizPassed = true; save();
+      // Mark whichever checks were just cleared so later phases don't re-ask them.
+      S.commonQuizPassed = true;
+      if (arm === 'B') S.bQuizPassed = true;
+      save();
       startRound(firstRound(), false); // practice (or round 1 if practice disabled)
     } else {
       $('quiz-feedback').style.display = 'block';
@@ -516,7 +636,8 @@
 
   function startRound(roundNum, resume) {
     S.roundNum = roundNum; S.phase = 'round';
-    var mapId = roundNum === 0 ? PRACTICE.id : S.taskOrder[roundNum - 1];
+    var order = S.taskOrders[S.phaseIdx] || [];
+    var mapId = roundNum === 0 ? PRACTICE.id : order[roundNum - 1];
     var rec = roundNum === 0 ? PRACTICE : POOL.byId[mapId];
     truth = decodeInts(rec.v);
     dots = decodePairs(rec.dots);
@@ -524,16 +645,19 @@
       S.round = { mappingId: mapId, stratum: roundNum === 0 ? 'practice' : rec.stratum,
         reveals: [], estimates: [], queries: [], warned: false, selected: 50 };
     }
+    // round_start is logged once per (phase, round) — rounds 1..N repeat in every
+    // phase, so the guard is keyed by both, not the round number alone.
     if (!S.roundStartedLogged) S.roundStartedLogged = {};
+    var rkey = S.phaseIdx + ':' + roundNum;
     pushContext();
-    if (!S.roundStartedLogged[roundNum]) { L.log('round_start'); S.roundStartedLogged[roundNum] = true; }
+    if (!S.roundStartedLogged[rkey]) { L.log('round_start'); S.roundStartedLogged[rkey] = true; }
     save();
 
     // build arm-specific chrome
     $('round-grid').classList.toggle('arm-b', arm === 'B');
     buildLegend();
     buildAuxPanel();
-    if (DEBUG) $('nav-arm').textContent = 'Arm ' + arm + ' · ' + mapId + ' · ' + S.round.stratum;
+    if (DEBUG) $('nav-arm').textContent = navPhaseLabel() + ' · ' + mapId + ' · ' + S.round.stratum;
 
     show('s-round');
     renderRound();
@@ -566,7 +690,8 @@
   }
 
   function renderRound() {
-    $('round-label').textContent = S.roundNum === 0 ? 'Practice (not paid)' : 'Round ' + S.roundNum + ' of ' + N_TASKS;
+    $('round-label').textContent = (S.roundNum === 0 ? 'Practice (not paid)' : 'Round ' + S.roundNum + ' of ' + N_TASKS) +
+      (S.phases.length > 1 ? ' · ' + phaseLabel(arm) : '');
     var reveals = S.round.reveals;
     $('c-reveals').textContent = reveals.length;
     $('c-cost').innerHTML = costOf(reveals) + '&cent;';
@@ -664,7 +789,7 @@
 
     if (S.roundNum >= 1) {
       if (!S.results) S.results = [];
-      S.results.push({ round: S.roundNum, mapping: S.round.mappingId, stratum: S.round.stratum,
+      S.results.push({ phase: S.phaseIdx, arm: arm, round: S.roundNum, mapping: S.round.mappingId, stratum: S.round.stratum,
         reveals: reveals.length, best: bestOf(reveals), cost: costOf(reveals), rawNet: rawNet, flooredNet: flooredNet });
     }
     // Mark the round ended and move to a distinct persisted phase, so a refresh
@@ -683,45 +808,94 @@
     var nReveals = reveals.length;
     var rawNet = nReveals ? bestOf(reveals) - costOf(reveals) : 0;
     var practice = (S.roundNum === 0);
-    $('inter-title').textContent = practice ? 'Practice complete' : 'Round ' + S.roundNum + ' complete';
+    // The last real round of a non-final phase heads into a phase transition next.
+    var lastOfPhase = (!practice && S.roundNum >= N_TASKS && S.phaseIdx < S.phases.length - 1);
+    $('inter-title').textContent = practice ? 'Practice complete'
+      : lastOfPhase ? 'Part ' + (S.phaseIdx + 1) + ' complete'
+      : 'Round ' + S.roundNum + ' complete';
     var b = '<div class="res-line">Reveals: <b>' + nReveals + '</b></div>' +
             '<div class="res-line">Best value found: <b>' + (nReveals ? bestOf(reveals) + '¢' : '—') + '</b></div>' +
             '<div class="res-line">Net this round: <b class="res-big">' + rawNet + '¢</b></div>';
     if (practice) b += '<p class="muted small">This was practice and was not paid. The real rounds start now.</p>';
+    else if (lastOfPhase) b += '<p class="muted small">That completes this part. The next part starts when you continue.</p>';
     $('inter-body').innerHTML = b;
     show('s-interstitial');
   }
 
   function nextRound() {
-    if (S.roundNum === 0) { startRound(1, false); return; }
-    if (S.roundNum >= N_TASKS) { finish(); return; }
+    if (S.roundNum === 0) { startRound(1, false); return; }        // practice → round 1
+    if (S.roundNum >= N_TASKS) {                                    // phase complete
+      if (S.phaseIdx < S.phases.length - 1) { advancePhase(); return; }
+      finish(); return;
+    }
     startRound(S.roundNum + 1, false);
+  }
+
+  // Move a within-subjects subject into the next phase: switch the active arm,
+  // re-stamp the logger, and show the transition screen (then quiz-if-owed → play).
+  function advancePhase() {
+    S.phaseIdx++;
+    arm = S.phases[S.phaseIdx];
+    S.arm = arm;
+    L.setBase({ arm: arm, phase: S.phaseIdx + 1 });
+    L.clearRoundContext();
+    L.log('phase_start', { info: 'idx=' + (S.phaseIdx + 1) + ';arm=' + arm });
+    S.phase = 'phaseIntro';
+    save();
+    showPhaseIntro();
   }
 
   // ======================================================================
   //  FINISH
   // ======================================================================
+  // Every paid-eligible round across all phases, as {phase, round} pairs.
+  function allRealRounds() {
+    var list = [];
+    for (var ph = 0; ph < S.phases.length; ph++)
+      for (var r = 1; r <= N_TASKS; r++) list.push({ phase: ph, round: r });
+    return list;
+  }
   function drawPaid() {
-    if (S.paidRounds) return S.paidRounds;
+    if (S.paidRounds) {
+      // Migrate a legacy int[] draw (single-phase, pre-phases) to {phase,round}.
+      if (S.paidRounds.length && typeof S.paidRounds[0] === 'number') {
+        S.paidRounds = S.paidRounds.map(function (r) { return { phase: 0, round: r }; });
+      }
+      return S.paidRounds;
+    }
     var rng = mulberry32(hashSeed(S.session + ':paid'));
-    var idxs = []; for (var i = 1; i <= N_TASKS; i++) idxs.push(i);
-    shuffle(idxs, rng);
-    S.paidRounds = idxs.slice(0, PAID_TASKS).sort(function (a, b) { return a - b; });
+    var all = allRealRounds();
+    shuffle(all, rng);
+    var picked = all.slice(0, Math.min(PAID_TASKS, all.length));
+    picked.sort(function (a, b) { return (a.phase - b.phase) || (a.round - b.round); });
+    S.paidRounds = picked;
     return S.paidRounds;
   }
-  function resultOf(round) {
-    for (var i = 0; i < (S.results || []).length; i++) if (S.results[i].round === round) return S.results[i];
-    return { round: round, rawNet: 0, flooredNet: 0, reveals: 0, best: null };
+  function resultOf(phase, round) {
+    var res = S.results || [];
+    for (var i = 0; i < res.length; i++) {
+      var rp = (res[i].phase == null ? 0 : res[i].phase); // legacy rows had no phase
+      if (rp === phase && res[i].round === round) return res[i];
+    }
+    return { phase: phase, round: round, rawNet: 0, flooredNet: 0, reveals: 0, best: null };
+  }
+  function isPaid(phase, round) {
+    var p = drawPaid();
+    for (var i = 0; i < p.length; i++) if (p[i].phase === phase && p[i].round === round) return true;
+    return false;
   }
 
   function finish() {
     S.phase = 'finish';
     var paid = drawPaid();
     if (!S.finishedLogged) {
-      var sum = 0, raw = 0;
-      for (var i = 0; i < paid.length; i++) { var r = resultOf(paid[i]); sum += r.flooredNet; raw += r.rawNet; }
+      var sum = 0, raw = 0, tags = [];
+      for (var i = 0; i < paid.length; i++) {
+        var r = resultOf(paid[i].phase, paid[i].round); sum += r.flooredNet; raw += r.rawNet;
+        tags.push('p' + (paid[i].phase + 1) + 'r' + paid[i].round);
+      }
       L.clearRoundContext();
-      L.log('paid_rounds_drawn', { value: sum, info: 'rounds=' + paid.join(',') + ';bonusCents=' + sum + ';rawSumCents=' + raw });
+      L.log('paid_rounds_drawn', { value: sum, info: 'rounds=' + tags.join(',') + ';bonusCents=' + sum + ';rawSumCents=' + raw });
       L.log('session_end', { value: sum });
       S.finishedLogged = true; S.completed = true;
     }
@@ -742,27 +916,34 @@
   function renderFinish() {
     var paid = drawPaid();
     var bonusCents = 0;
-    for (var i = 0; i < paid.length; i++) bonusCents += resultOf(paid[i]).flooredNet;
+    for (var i = 0; i < paid.length; i++) bonusCents += resultOf(paid[i].phase, paid[i].round).flooredNet;
     var bonus = (bonusCents / 100).toFixed(2);
+    var multi = S.phases.length > 1;
+    var totalReal = N_TASKS * S.phases.length;
 
     var rows = '';
-    for (var r = 1; r <= N_TASKS; r++) {
-      var res = resultOf(r);
-      var picked = paid.indexOf(r) >= 0;
-      rows += '<tr class="' + (picked ? 'picked' : '') + '"><td>' + r + '</td><td>' + res.reveals + '</td>' +
-              '<td>' + (res.best == null ? '—' : res.best + '¢') + '</td>' +
-              '<td>' + res.rawNet + '¢</td>' +
-              '<td>' + (picked ? '✔ paid' : '') + '</td></tr>';
+    for (var ph = 0; ph < S.phases.length; ph++) {
+      for (var r = 1; r <= N_TASKS; r++) {
+        var res = resultOf(ph, r);
+        var picked = isPaid(ph, r);
+        rows += '<tr class="' + (picked ? 'picked' : '') + '">' +
+                (multi ? '<td>' + esc(phaseLabel(S.phases[ph])) + '</td>' : '') +
+                '<td>' + r + '</td><td>' + res.reveals + '</td>' +
+                '<td>' + (res.best == null ? '—' : res.best + '¢') + '</td>' +
+                '<td>' + res.rawNet + '¢</td>' +
+                '<td>' + (picked ? '✔ paid' : '') + '</td></tr>';
+      }
     }
     var intro = (CONTENT && CONTENT.finish)
       ? renderProse(subTokens(CONTENT.finish))
-      : '<p>Thank you for taking part. Below are your ' + N_TASKS + ' real rounds. The ' +
+      : '<p>Thank you for taking part. Below are your ' + totalReal + ' real rounds' +
+        (multi ? ' across ' + S.phases.length + ' parts' : '') + '. The ' +
         (PAID_TASKS === 1 ? 'round' : PAID_TASKS + ' rounds') + ' marked ' +
         '<b>paid</b> ' + (PAID_TASKS === 1 ? 'was' : 'were') + ' selected at random; your bonus is the sum of their earnings ' +
         '(a round counts as 0 if it was negative).</p>';
     $('finish-body').innerHTML =
       intro +
-      '<table class="paid-table"><thead><tr><th>Round</th><th>Reveals</th><th>Best</th><th>Net</th><th></th></tr></thead>' +
+      '<table class="paid-table"><thead><tr>' + (multi ? '<th>Part</th>' : '') + '<th>Round</th><th>Reveals</th><th>Best</th><th>Net</th><th></th></tr></thead>' +
       '<tbody>' + rows + '</tbody></table>' +
       '<p class="res-line">Your bonus: <b class="res-big">$' + bonus + '</b></p>';
 
@@ -779,7 +960,8 @@
       S.consented = true; L.log('consent', { correct: true }); save();
       showInstructions();
     });
-    $('btn-instructions').addEventListener('click', showQuiz);
+    $('btn-instructions').addEventListener('click', proceedToQuizOrRound);
+    $('btn-phase-intro').addEventListener('click', proceedToQuizOrRound);
     $('btn-quiz').addEventListener('click', submitQuiz);
 
     $('btn-reveal').addEventListener('click', doReveal);

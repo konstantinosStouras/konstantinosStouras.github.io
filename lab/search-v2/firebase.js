@@ -118,21 +118,25 @@ window.SVFirebase = (function () {
   function onAuth(cb) { init().then(function () { sdk.auth.onAuthStateChanged(auth, cb); }).catch(function () { cb(null); }); }
   function saveStudyConfig(obj) { return init().then(function () { return sdk.fs.setDoc(configRef(), obj, { merge: true }); }); }
   function fetchEvents(max) {
+    var cap = max || 20000;
     return init().then(function () {
-      var col = sdk.fs.collection(db, PATHS.events);
-      // Read the collection with a plain cap and sort client-side (below).
-      // A server-side orderBy('t') is avoided on purpose: it silently drops any
-      // event document missing a `t` field and, on some Firestore projects, made
-      // getDocs() reject the whole read with `invalid-argument` — which showed up
-      // in the admin panel as "Could not read events from Firestore". A capped,
-      // unordered read is robust; the admin UI only needs the events time-ordered
-      // for display, which the sort here provides.
-      var q = sdk.fs.query(col, sdk.fs.limit(max || 10000));
-      return sdk.fs.getDocs(q);
+      // Read the events collection with NO query constraints — exactly the shape
+      // of listSessions() (getDocs(collection(...))), which reads reliably.
+      //
+      // History of this read: it started as query(col, orderBy('t'), limit(N)),
+      // which threw `invalid-argument`; a prior fix dropped the orderBy but KEPT
+      // limit(N) — and the error came back. The server accepts collection+limit
+      // (verified over REST), so this is a browser WebChannel quirk where the
+      // limit() constraint is the one thing that differs from the working sessions
+      // read. Dropping it too makes this read structurally identical to the
+      // known-good one. Ordering by `t` and capping to `max` happen on the client
+      // below (all the admin Data/Analytics/CSV views need).
+      return sdk.fs.getDocs(sdk.fs.collection(db, PATHS.events));
     }).then(function (qs) {
       var out = []; qs.forEach(function (d) { out.push(d.data()); });
       out.sort(function (a, b) { return (a.t || 0) - (b.t || 0); });
-      return out;
+      // Keep the most recent `cap` events (the tail, since they're sorted ascending).
+      return out.length > cap ? out.slice(out.length - cap) : out;
     });
   }
 

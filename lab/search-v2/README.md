@@ -5,12 +5,23 @@ A self-contained behavioral experiment, served as static files on GitHub Pages a
 CDNs — vanilla HTML/CSS/JS with relative URLs only.
 
 Subjects search a hidden landscape of 100 positions (each hiding a value 0–100¢)
-for the best prize, paying 5¢ per reveal. Two arms differ in exactly one thing:
+for the best prize, paying 5¢ per reveal. The study runs in one or more
+**phases**, which differ in exactly one thing:
 
-- **Arm A (human only)** — the subject searches alone.
-- **Arm B (AI assisted)** — the subject additionally has a free assistant that
-  interpolates between its own hidden data points inside a fixed coverage region
-  (positions 30–70) and refuses outside it.
+- **Without AI (human only, arm `A`)** — the subject searches alone.
+- **With AI (AI assisted, arm `B`)** — the subject additionally has a free
+  assistant that interpolates between its own hidden data points inside a fixed
+  coverage region (positions 30–70) and refuses outside it.
+
+The admin chooses **which phases to include and the order** participants move
+through them (in the `/admin/` panel → **Phases**). Include one phase for a
+single-condition study, or both for a **within-subjects** design where every
+participant plays each condition as its own block of rounds — in a fixed order,
+or **counterbalanced** (random order per participant) to control for order
+effects. Each event is stamped with the active `arm` and a 1-based `phase`
+ordinal, so both designs analyse cleanly. (Internally the two phases are still
+arms `A`/`B`; the older per-arm `armMode` on a saved session is still honoured as
+a one-phase fallback.)
 
 Design provenance (not shown in the app): the task/payoff/landscape replicate the
 High-Variability treatment of Malladi, Martínez-Marquina & Morozov, *"Space
@@ -33,8 +44,10 @@ lab/search-v2/
   firebase-config.js    OPTIONAL: paste your Firebase project config here
   firebase.js           OPTIONAL Firestore/Auth integration (inert until configured)
   firestore.rules       security rules to deploy in the Firebase console
-  admin/index.html      admin panel (conditions, session codes, data) — /admin/
+  admin/index.html      admin panel (phases, session codes, data) — /admin/
   admin/admin.js        admin panel logic
+  og-image.png          1200×630 social/link-preview card (Open Graph / Twitter)
+  icon-180.png          apple-touch-icon
   data/mappings.json    SHIPPED landscape pool (obfuscated), loaded by both arms
   tools/generate_pool.js  offline seeded pool generator → data/mappings.json
   tools/apps_script_endpoint.gs  paste-ready Google Apps Script logging endpoint
@@ -145,13 +158,15 @@ The **admin panel** at **`/lab/search-v2/admin/`** lets you, from any browser
   code (`?code=WAVE1` in the launch link); all data is grouped by session. The
   right column lists **Active** and **Completed** sessions (open / mark
   completed / reopen / delete).
-- **control the conditions** — per session: the **arm assignment mode** (from the
-  `?arm` link · force A · force B · random 50/50), the **number of rounds** each
-  participant plays (real rounds, paid rounds drawn at the end, and whether a
-  practice round is shown), and the Prolific **completion code** (shared, or a
-  separate code per arm). Every field has a hover tooltip.
-- **edit every participant page** — consent, instructions (both arms + the Arm-B
-  addendum), the finish page, and the study-closed page. Blank = built-in default;
+- **control the conditions** — per session: the **phases** (which conditions to
+  include — Without AI and/or With AI — and the order, incl. counterbalanced),
+  the **number of rounds** each participant plays *per phase* (real rounds, paid
+  rounds drawn across all phases at the end, and whether a practice round is
+  shown), and the Prolific **completion code** (shared, or a phase-specific code
+  for single-phase sessions). Every field has a hover tooltip.
+- **edit every participant page** — consent, instructions (all phases + the
+  With-AI addendum), the between-phase transition screens, the finish page, and
+  the study-closed page. Blank = built-in default;
   `**bold**` and blank lines are supported. **Save**, **Make this the default**
   (seed new sessions), and **Restore built-in default** controls, plus a **Settings
   summary**.
@@ -160,8 +175,9 @@ The **admin panel** at **`/lab/search-v2/admin/`** lets you, from any browser
   (gated on the debug key; real participants always see consent). Preview never
   writes to Firestore.
 - **see the data & analytics** — a per-session data table (CSV/JSON export) and an
-  **Analytics** tab comparing **Arm A vs Arm B** (net, reveals, best found per
-  round) over completed participants.
+  **Analytics** tab comparing **Without AI vs With AI** (net, reveals, best found
+  per round) over completed participants. In a within-subjects session each
+  participant contributes to both, aggregated per `(participant, phase)`.
 
 These are backed by **Firebase (Firestore + Auth)**. Until you configure it, the
 admin panel opens in a **local preview** (this browser’s test sessions only) and
@@ -207,15 +223,18 @@ the experiment runs exactly as before. Every logged event is stamped with
 
 ## Prolific launch URLs
 
-Give Prolific two study links (one per arm). Prolific substitutes the ID macros:
+Each admin session has **one** participant link — the phases (and their order)
+come from the session settings, so no `?arm` is needed. Prolific substitutes the
+ID macros:
 
 ```
-https://stouras.com/lab/search-v2/?arm=A&PROLIFIC_PID={{%PROLIFIC_PID%}}&STUDY_ID={{%STUDY_ID%}}&SESSION_ID={{%SESSION_ID%}}
-https://stouras.com/lab/search-v2/?arm=B&PROLIFIC_PID={{%PROLIFIC_PID%}}&STUDY_ID={{%STUDY_ID%}}&SESSION_ID={{%SESSION_ID%}}
+https://stouras.com/lab/search-v2/?code=WAVE1&PROLIFIC_PID={{%PROLIFIC_PID%}}&STUDY_ID={{%STUDY_ID%}}&SESSION_ID={{%SESSION_ID%}}
 ```
 
-If `arm` is absent the app randomizes 50/50 and persists it. Re-entry after
-completion is blocked (the completion code is shown again).
+Re-entry after completion is blocked (the completion code is shown again).
+`?arm=A`/`?arm=B` is still honoured as a **legacy fallback** for sessions saved
+before the phases model (or a bare link with no session settings), where it
+forces a single-phase run and otherwise randomises 50/50.
 
 ### Session code required (the entry gate)
 
@@ -245,12 +264,13 @@ Every event is one flat JSON object. Columns (CSV / Sheet order):
 
 | field | meaning |
 |---|---|
-| `session`,`pid`,`study`,`arm` | identifiers (from URL) |
+| `session`,`pid`,`study`,`arm` | identifiers (`arm` = the active phase's condition, `A`/`B`) |
+| `phase` | 1-based phase ordinal (1 for a single-phase session; 1 then 2 within-subjects) |
 | `sessionCode`,`sessionName` | the admin session (wave) this participant belongs to |
 | `event` | event type (below) |
 | `t` | epoch ms |
 | `rt_ms` | ms since this subject's previous event |
-| `round` | 0 = practice, 1..10 = real |
+| `round` | 0 = practice, 1..N = real, **per phase** (rounds restart at 1 in each phase — use `phase`+`round` together) |
 | `mapping` | landscape id (e.g. `R012`, `P004`, `practice_1`) |
 | `stratum` | `RICH` / `POOR` / `practice` |
 | `position` | position acted on |
@@ -264,14 +284,16 @@ Every event is one flat JSON object. Columns (CSV / Sheet order):
 | `ua`,`vw`,`vh` | user agent + viewport |
 | `appVersion` | stamped from `config.js` |
 
-**Event types:** `session_start`, `consent`, `quiz_attempt`, `round_start`,
-`select` (throttled ≤1/s), `reveal`, `ai_query`, `warn_negative`, `stop_confirm`,
-`round_end`, `paid_rounds_drawn`, `session_end`, `upload_ok`, `upload_fail`.
+**Event types:** `session_start`, `phase_start` (each phase after the first),
+`consent`, `quiz_attempt`, `round_start`, `select` (throttled ≤1/s), `reveal`,
+`ai_query`, `warn_negative`, `stop_confirm`, `round_end`, `paid_rounds_drawn`,
+`session_end`, `upload_ok`, `upload_fail`.
 
 **Payoff.** Round net = highest revealed value − 5¢ × reveals (0 if no reveals).
-At the end, `PAID_TASKS = 2` of the 10 real rounds are drawn uniformly at random
-(seeded by session id, so a refresh reproduces the same draw); the bonus is the
-sum of their nets, each floored at 0 for payment (the raw value is logged too).
+At the end, `PAID_TASKS` rounds are drawn uniformly at random from **all** real
+rounds across **all** phases (seeded by session id, so a refresh reproduces the
+same draw); the bonus is the sum of their nets, each floored at 0 for payment
+(the raw value is logged too).
 
 ---
 
@@ -302,3 +324,5 @@ Automated in `tools/selftest.js` (Node) and `tools/smoke.mjs` (browser):
 | 9 | logging completeness + endpoint-failure download fallback | smoke |
 | 10 | payment draw seeded + reproducible | selftest |
 | 17 | session-code gate (no code → no play; code → play; log out) | smoke |
+| 18 | admin-configurable round count | smoke |
+| 19 | within-subjects phases (Without AI → transition → With AI; per-phase rounds; `phase`/`arm` on events) | smoke |

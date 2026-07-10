@@ -14,29 +14,36 @@
   var DEBUG_KEY = 'stouras'; // must match config.js DEBUG_KEY (for preview links)
 
   var FIELDS = [
-    'session', 'sessionCode', 'sessionName', 'pid', 'study', 'arm', 'event', 't', 'rt_ms',
+    'session', 'sessionCode', 'sessionName', 'pid', 'study', 'arm', 'phase', 'event', 't', 'rt_ms',
     'round', 'mapping', 'stratum', 'position', 'value', 'estimate', 'refused',
     'reveals', 'cost', 'best', 'net',
     'qid', 'choice', 'correct', 'rawNet', 'flooredNet', 'info',
     'ua', 'vw', 'vh', 'appVersion'
   ];
 
+  // Participant-facing names for the two phases (arms). Keep in sync with app.js.
+  var PHASE_LABEL = { A: 'Without AI', B: 'With AI' };
+
   // Built-in participant copy — MUST mirror app.js BUILTIN (shown as placeholders).
   var BUILTIN = {
     consent: "**What this is.** This is a short decision-making study… (built-in default).\n\n**Payment.** … **Anonymity.** … **Voluntary.** …",
     instructions: "In each round you will see 100 positions on a line. Each position hides a value between 0 and 100 cents.\n\nValues at adjacent positions differ by at most 10 cents…\n\nYou can reveal the value at any position. Each reveal costs 5 cents…\n\nYour earnings for the round are the highest value you revealed, minus 5 cents for each reveal…\n\nThere is 1 practice round and 10 real rounds. Two of the 10 real rounds will be picked at random and paid to you as a bonus.",
     instructionsB: "You also have a free assistant.\n\nThe assistant was trained on data about some positions between 30 and 70…\n\nIf you ask about any position outside 30 to 70, the assistant has no data…\n\nAsking the assistant is free and unlimited.",
-    finish: "(Built-in) Thank you for taking part. Below are your 10 real rounds; the two marked paid were selected at random.",
+    phaseIntroB: "Next part: you now have a free AI assistant that estimates positions between 30 and 70… (built-in default). Everything else about the game is the same.",
+    phaseIntroA: "Next part: you search on your own — the AI assistant is no longer available… (built-in default). Everything else about the game is the same.",
+    finish: "(Built-in) Thank you for taking part. Below are your real rounds; the ones marked paid were selected at random.",
     closed: "(Built-in) This study is not currently open. Thank you for your interest."
   };
   var CONTENT_KEYS = [
     { k: 'consent', label: 'Consent page', help: 'The consent text on the very first screen (before the game). Participants tick a box to agree.' },
-    { k: 'instructions', label: 'Instructions (both arms)', help: 'The task instructions shown to everyone. Tokens {nTasks}, {paidTasks}, {fee}, {rounds} are auto-filled.' },
-    { k: 'instructionsB', label: 'Instructions — Arm B addendum', help: 'Extra instructions appended only for Arm B, explaining the AI assistant.' },
+    { k: 'instructions', label: 'Instructions (all phases)', help: 'The task instructions shown to everyone at the start. Tokens {nTasks}, {paidTasks}, {fee}, {rounds} are auto-filled.' },
+    { k: 'instructionsB', label: 'Instructions — With-AI addendum', help: 'Extra instructions appended when the first phase is With AI, explaining the assistant.' },
+    { k: 'phaseIntroB', label: 'Phase transition — into With AI', help: 'Shown between phases when a within-subjects participant moves INTO the With-AI phase.' },
+    { k: 'phaseIntroA', label: 'Phase transition — into Without AI', help: 'Shown between phases when a within-subjects participant moves INTO the Without-AI phase.' },
     { k: 'finish', label: 'Finish page (intro text)', help: 'The message above the results table on the final screen (before the completion code).' },
     { k: 'closed', label: 'Study-closed page', help: 'What people see if they open a session that is marked completed.' }
   ];
-  var BUILTIN_SETTINGS = { armMode: 'url', nTasks: 10, paidTasks: 2, nPractice: 1, completionCode: '', completionCodeA: '', completionCodeB: '', endpointUrl: '', content: {} };
+  var BUILTIN_SETTINGS = { phases: ['A', 'B'], counterbalance: false, nTasks: 10, paidTasks: 2, nPractice: 1, completionCode: '', completionCodeA: '', completionCodeB: '', endpointUrl: '', content: {} };
 
   function $(id) { return document.getElementById(id); }
   function show(id) { var s = document.querySelectorAll('.screen'); for (var i = 0; i < s.length; i++) s[i].classList.toggle('active', s[i].id === id); }
@@ -48,7 +55,7 @@
   var editingId = null;   // session id being edited, or null (creating)
   var SESSIONS = [];      // cached session list
   var EVENTS = [];        // cached events
-  var segArm;
+  var phasesCtl;          // PHASES include-toggles + order controller (see phasesSetup)
 
   // ==================================================================== boot
   window.addEventListener('DOMContentLoaded', function () {
@@ -151,7 +158,7 @@
   // ============================================================= form (settings)
   var segPractice;
   function wireForm() {
-    segArm = segSetup('seg-arm');
+    phasesCtl = phasesSetup();
     segPractice = segSetup('seg-practice');
     $('btn-gencode').addEventListener('click', function () { $('f-code').value = genCode(); renderSummary(); });
     $('btn-save').addEventListener('click', saveSession);
@@ -173,11 +180,74 @@
       set: function (v) { for (var k = 0; k < btns.length; k++) btns[k].classList.toggle('on', btns[k].getAttribute('data-v') === (v || 'url')); }
     };
   }
+
+  // PHASES control: two include-toggles (Without AI / With AI) + an order dropdown.
+  // get() → { phases:[…ordered…], counterbalance:bool }; set(settings) fills the UI
+  // from a new-model {phases,counterbalance} or a legacy {armMode} (best-effort).
+  function phasesSetup() {
+    var chkA = $('ph-A'), chkB = $('ph-B'), sel = $('f-phase-order'), err = $('phase-err');
+    var LA = PHASE_LABEL.A, LB = PHASE_LABEL.B;
+    function rebuildOrder(preferred) {
+      var a = chkA.checked, b = chkB.checked, opts;
+      if (a && b) opts = [
+        { v: 'AB', t: LA + ' first, then ' + LB },
+        { v: 'BA', t: LB + ' first, then ' + LA },
+        { v: 'counter', t: 'Counterbalanced (random order per participant)' }
+      ];
+      else if (a) opts = [{ v: 'A', t: LA + ' only' }];
+      else if (b) opts = [{ v: 'B', t: LB + ' only' }];
+      else opts = [{ v: '', t: '— include at least one phase —' }];
+      var want = preferred != null ? preferred : sel.value;
+      sel.innerHTML = opts.map(function (o) { return '<option value="' + o.v + '">' + esc(o.t) + '</option>'; }).join('');
+      var vals = opts.map(function (o) { return o.v; });
+      sel.value = vals.indexOf(want) >= 0 ? want : opts[0].v;
+      sel.disabled = !(a && b);
+      $('phase-order-row').classList.toggle('hidden', !(a || b));
+      err.style.display = (a || b) ? 'none' : 'block';
+    }
+    chkA.addEventListener('change', function () { rebuildOrder(); renderSummary(); });
+    chkB.addEventListener('change', function () { rebuildOrder(); renderSummary(); });
+    sel.addEventListener('change', renderSummary);
+    return {
+      rebuild: rebuildOrder,
+      get: function () {
+        var a = chkA.checked, b = chkB.checked, v = sel.value;
+        if (a && b) {
+          if (v === 'BA') return { phases: ['B', 'A'], counterbalance: false };
+          if (v === 'counter') return { phases: ['A', 'B'], counterbalance: true };
+          return { phases: ['A', 'B'], counterbalance: false };
+        }
+        if (a) return { phases: ['A'], counterbalance: false };
+        if (b) return { phases: ['B'], counterbalance: false };
+        return { phases: [], counterbalance: false };
+      },
+      set: function (s) {
+        var phases, counter = false;
+        if (s && Object.prototype.toString.call(s.phases) === '[object Array]' && s.phases.length) {
+          phases = s.phases.filter(function (x) { return x === 'A' || x === 'B'; });
+          counter = !!s.counterbalance;
+        } else {
+          // Legacy armMode → best-effort mapping (participants still honour armMode
+          // directly; this is only how an old session shows in the edit form).
+          var m = s && s.armMode;
+          if (m === 'A') phases = ['A'];
+          else if (m === 'B') phases = ['B'];
+          else if (m === 'random') { phases = ['A', 'B']; counter = true; }
+          else phases = ['A', 'B']; // 'url' or absent → built-in default
+        }
+        if (!phases.length) phases = ['A', 'B'];
+        chkA.checked = phases.indexOf('A') >= 0;
+        chkB.checked = phases.indexOf('B') >= 0;
+        var order = phases.length === 2 ? (counter ? 'counter' : (phases[0] === 'B' ? 'BA' : 'AB')) : phases[0];
+        rebuildOrder(order);
+      }
+    };
+  }
   function genCode() { var s = '', a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; for (var i = 0; i < 6; i++) s += a[Math.floor(Math.random() * a.length)]; return s; }
 
   function fillSettings(s) {
     s = s || BUILTIN_SETTINGS;
-    segArm.set(s.armMode || 'url');
+    phasesCtl.set(s);
     segPractice.set(s.nPractice === 0 ? '0' : '1');
     $('f-ntasks').value = (s.nTasks != null ? s.nTasks : 10);
     $('f-paid').value = (s.paidTasks != null ? s.paidTasks : 2);
@@ -192,8 +262,9 @@
     CONTENT_KEYS.forEach(function (c) { var v = $('ce-' + c.k).value.trim(); if (v) content[c.k] = v; });
     var nTasks = Math.max(1, Math.min(120, parseInt($('f-ntasks').value, 10) || 10));
     var paid = Math.max(0, Math.min(nTasks, parseInt($('f-paid').value, 10) || 0));
+    var ph = phasesCtl.get();
     return {
-      armMode: segArm.get(),
+      phases: ph.phases, counterbalance: ph.counterbalance,
       nTasks: nTasks, paidTasks: paid, nPractice: segPractice.get() === '0' ? 0 : 1,
       completionCode: $('f-code-shared').value.trim(),
       completionCodeA: $('f-codeA').value.trim(),
@@ -222,6 +293,7 @@
     if (!/^[A-Z0-9]{3,40}$/.test(code)) { err.textContent = 'Code must be 3–40 letters/digits, no spaces.'; err.style.display = 'block'; return; }
     $('f-code').value = code;
     var settings = collectSettings();
+    if (!settings.phases.length) { err.textContent = 'Include at least one phase (Without AI and/or With AI).'; err.style.display = 'block'; return; }
     $('btn-save').disabled = true;
     // uniqueness only for a NEW code (or a changed code)
     var editing = editingId ? SESSIONS.filter(function (s) { return s.id === editingId; })[0] : null;
@@ -251,19 +323,19 @@
   // ============================================================= launch + summary
   function renderLaunch(sess) {
     var base = appBase(), code = sess.code;
-    var a = base + '?code=' + code + '&arm=A';
-    var b = base + '?code=' + code + '&arm=B';
-    var prev = base + '?code=' + code + '&arm=A&preview=1&debug=1&key=' + DEBUG_KEY;
+    // One participant link per session: the phases (and their order) come from the
+    // session settings, so no ?arm= is needed. (?arm still works as a legacy
+    // fallback for sessions saved before the phases model.)
+    var link = base + '?code=' + code;
+    var prev = base + '?code=' + code + '&preview=1&debug=1&key=' + DEBUG_KEY;
     var box = $('launch-box');
     box.style.display = 'block';
     box.className = 'code-box';
     box.innerHTML =
-      '<div class="small muted">Participant launch links for <b>' + esc(sess.name || code) + '</b> (code <b>' + esc(code) + '</b>):</div>' +
-      '<div class="launch">' + esc(a) + '</div>' +
-      '<div class="launch">' + esc(b) + '</div>' +
+      '<div class="small muted">Participant launch link for <b>' + esc(sess.name || code) + '</b> (code <b>' + esc(code) + '</b>):</div>' +
+      '<div class="launch">' + esc(link) + '</div>' +
       '<div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">' +
-        '<button class="btn btn-ghost btn-sm" data-copy="' + esc(a) + '">Copy Arm A link</button>' +
-        '<button class="btn btn-ghost btn-sm" data-copy="' + esc(b) + '">Copy Arm B link</button>' +
+        '<button class="btn btn-ghost btn-sm" data-copy="' + esc(link) + '">Copy participant link</button>' +
         '<a class="btn btn-blue btn-sm" href="' + esc(prev) + '" target="_blank" rel="noopener">▶ Test this session (skips intro)</a>' +
       '</div>';
     var cbtns = box.querySelectorAll('[data-copy]');
@@ -271,16 +343,27 @@
       var t = this.getAttribute('data-copy'); if (navigator.clipboard) navigator.clipboard.writeText(t); this.textContent = 'Copied ✓';
     });
   }
+  // A short human description of a phases config, e.g. "Without AI → With AI" or
+  // "Counterbalanced: Without AI / With AI" or "With AI only".
+  function phasesDescription(settings) {
+    var phases = (settings && settings.phases) || [];
+    if (!phases.length) return '—';
+    var names = phases.map(function (p) { return PHASE_LABEL[p] || p; });
+    if (phases.length === 1) return names[0] + ' only';
+    if (settings.counterbalance) return 'Counterbalanced: ' + names.join(' / ');
+    return names.join(' → ');
+  }
   function renderSummary() {
     var s = collectSettings();
-    var armLabel = { url: 'From link (?arm)', A: 'Force A (human only)', B: 'Force B (AI assisted)', random: 'Random 50/50' }[s.armMode] || s.armMode;
+    var nPhases = s.phases.length || 1;
     var custom = CONTENT_KEYS.filter(function (c) { return s.content[c.k]; }).map(function (c) { return c.label; });
     var rows = [
       ['Name', esc($('f-name').value || '—')],
       ['Code', esc($('f-code').value || '—')],
       ['Status', editingId ? statusOf(editingId) : 'new (active on create)'],
-      ['Arm assignment', esc(armLabel)],
-      ['Rounds', (s.nPractice ? '1 practice + ' : 'no practice, ') + s.nTasks + ' real (' + s.paidTasks + ' paid)'],
+      ['Phases', esc(phasesDescription(s))],
+      ['Rounds', (s.nPractice ? '1 practice + ' : 'no practice, ') + s.nTasks + ' real per phase' +
+        (nPhases > 1 ? ' (' + (s.nTasks * nPhases) + ' total)' : '') + ', ' + s.paidTasks + ' paid'],
       ['Completion code', esc($('f-code-shared').value || '—') + (s.completionCodeA || s.completionCodeB ? ' (A/B overrides set)' : '')],
       ['Custom page text', custom.length ? esc(custom.join(', ')) : 'all built-in']
     ];
@@ -384,26 +467,30 @@
     var by = {};
     evs.forEach(function (e) {
       var s = e.session || '(none)';
-      var r = by[s] || (by[s] = { session: s, code: e.sessionCode, pid: e.pid, arm: e.arm, n: 0, first: e.t, last: e.t, completed: false, bonusCents: null });
-      r.n++; r.pid = r.pid || e.pid; r.arm = r.arm || e.arm; r.code = r.code || e.sessionCode;
+      var r = by[s] || (by[s] = { session: s, code: e.sessionCode, pid: e.pid, armSeq: [], armSet: {}, n: 0, first: e.t, last: e.t, completed: false, bonusCents: null });
+      r.n++; r.pid = r.pid || e.pid; r.code = r.code || e.sessionCode;
+      // A within-subjects participant plays several phases; record the arms in
+      // the order they first appear (e.g. A then B).
+      if ((e.arm === 'A' || e.arm === 'B') && !r.armSet[e.arm]) { r.armSet[e.arm] = true; r.armSeq.push(e.arm); }
       if (e.t < r.first) r.first = e.t; if (e.t > r.last) r.last = e.t;
       if (e.event === 'session_end') r.completed = true;
       if (e.event === 'paid_rounds_drawn' && e.value != null) r.bonusCents = e.value;
     });
     var sessions = Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) { return (b.last || 0) - (a.last || 0); });
     var completes = sessions.filter(function (s) { return s.completed; }).length;
+    var playedA = sessions.filter(function (s) { return s.armSet.A; }).length;
+    var playedB = sessions.filter(function (s) { return s.armSet.B; }).length;
     $('stat-grid').innerHTML = box(sessions.length, 'participants') + box(completes, 'completed') +
-      box(sessions.filter(function (s) { return s.arm === 'A'; }).length, 'Arm A') +
-      box(sessions.filter(function (s) { return s.arm === 'B'; }).length, 'Arm B') + box(evs.length, 'events');
+      box(playedA, 'played ' + PHASE_LABEL.A) + box(playedB, 'played ' + PHASE_LABEL.B) + box(evs.length, 'events');
 
-    var sh = '<thead><tr><th>Participant</th><th>Session</th><th>PID</th><th>Arm</th><th>Events</th><th>Completed</th><th>Bonus</th><th>Last activity</th></tr></thead><tbody>';
+    var sh = '<thead><tr><th>Participant</th><th>Session</th><th>PID</th><th>Phases</th><th>Events</th><th>Completed</th><th>Bonus</th><th>Last activity</th></tr></thead><tbody>';
     sessions.forEach(function (x) {
-      sh += '<tr><td>' + esc(shortId(x.session)) + '</td><td>' + esc(x.code || '') + '</td><td>' + esc(x.pid) + '</td><td>' + esc(x.arm) + '</td>' +
+      sh += '<tr><td>' + esc(shortId(x.session)) + '</td><td>' + esc(x.code || '') + '</td><td>' + esc(x.pid) + '</td><td>' + esc(x.armSeq.join('→') || '—') + '</td>' +
         '<td>' + x.n + '</td><td>' + (x.completed ? '✔' : '') + '</td><td>' + (x.bonusCents == null ? '' : '$' + (x.bonusCents / 100).toFixed(2)) + '</td><td>' + esc(fmtTime(x.last)) + '</td></tr>';
     });
     $('sessions-table').innerHTML = sh + '</tbody>';
 
-    var cols = ['t', 'sessionCode', 'session', 'arm', 'event', 'round', 'position', 'value', 'estimate', 'refused', 'reveals', 'net'];
+    var cols = ['t', 'sessionCode', 'session', 'arm', 'phase', 'event', 'round', 'position', 'value', 'estimate', 'refused', 'reveals', 'net'];
     var eh = '<thead><tr>' + cols.map(function (c) { return '<th>' + c + '</th>'; }).join('') + '</tr></thead><tbody>';
     filteredEvents($('data-filter').value).slice(-800).reverse().forEach(function (e) {
       eh += '<tr>' + cols.map(function (f) { return '<td>' + esc(f === 't' ? fmtTime(e[f]) : (f === 'session' ? shortId(e[f]) : e[f])) + '</td>'; }).join('') + '</tr>';
@@ -415,36 +502,46 @@
   // ============================================================= analytics
   function renderAnalytics() {
     var evs = filteredEvents($('an-filter').value);
-    // per-participant aggregates over real rounds (round>=1), completed subjects only
-    var byS = {};
+    // Aggregate real-round (round>=1) performance per (participant, arm). A
+    // within-subjects participant contributes one data point to EACH phase they
+    // played; a single-phase participant contributes to just one. Completion is
+    // per participant (session_end).
+    var completedSessions = {}, byKey = {};
+    function agg(session, arm) {
+      var k = session + '|' + arm;
+      return byKey[k] || (byKey[k] = { session: session, arm: arm, reveals: 0, net: 0, best: 0, rounds: 0, queries: 0 });
+    }
     evs.forEach(function (e) {
-      var s = byS[e.session] || (byS[e.session] = { arm: e.arm, completed: false, reveals: 0, net: 0, best: 0, rounds: 0, queries: 0 });
-      s.arm = s.arm || e.arm;
-      if (e.event === 'session_end') s.completed = true;
-      if (e.event === 'round_end' && e.round >= 1) { s.rounds++; s.reveals += (+e.reveals || 0); s.net += (+e.rawNet || 0); s.best += (e.best == null ? 0 : +e.best); }
-      if (e.event === 'ai_query' && e.round >= 1) s.queries++;
+      if (e.event === 'session_end') completedSessions[e.session] = true;
+      if ((e.arm === 'A' || e.arm === 'B') && e.round >= 1) {
+        if (e.event === 'round_end') { var a = agg(e.session, e.arm); a.rounds++; a.reveals += (+e.reveals || 0); a.net += (+e.rawNet || 0); a.best += (e.best == null ? 0 : +e.best); }
+        else if (e.event === 'ai_query' && e.arm === 'B') agg(e.session, 'B').queries++;
+      }
     });
-    var A = [], B = [];
-    Object.keys(byS).forEach(function (k) { var s = byS[k]; if (s.completed && s.rounds > 0) (s.arm === 'B' ? B : A).push(s); });
+    var A = [], B = [], doneSet = {};
+    Object.keys(byKey).forEach(function (k) {
+      var a = byKey[k];
+      if (completedSessions[a.session] && a.rounds > 0) { (a.arm === 'B' ? B : A).push(a); doneSet[a.session] = true; }
+    });
     function mean(arr, f) { return arr.length ? arr.reduce(function (a, s) { return a + f(s); }, 0) / arr.length : 0; }
     var mA = { n: A.length, rev: mean(A, function (s) { return s.reveals / s.rounds; }), net: mean(A, function (s) { return s.net / s.rounds; }), best: mean(A, function (s) { return s.best / s.rounds; }) };
     var mB = { n: B.length, rev: mean(B, function (s) { return s.reveals / s.rounds; }), net: mean(B, function (s) { return s.net / s.rounds; }), best: mean(B, function (s) { return s.best / s.rounds; }), q: mean(B, function (s) { return s.queries / s.rounds; }) };
 
-    $('an-stats').innerHTML = box(A.length + B.length, 'completed') + box(A.length, 'Arm A') + box(B.length, 'Arm B') +
-      box(mB.q.toFixed(1), 'Arm B queries/round');
+    $('an-stats').innerHTML = box(Object.keys(doneSet).length, 'completed') + box(A.length, PHASE_LABEL.A + ' blocks') + box(B.length, PHASE_LABEL.B + ' blocks') +
+      box(mB.q.toFixed(1), PHASE_LABEL.B + ' queries/round');
 
     if (!A.length && !B.length) { $('an-body').innerHTML = '<p class="muted">No completed participants yet' + ($('an-filter').value ? ' for this session.' : '.') + '</p>'; return; }
     function cmp(label, va, vb, fmt) {
       var mx = Math.max(va, vb, 0.0001);
-      return '<div class="bar-row"><div>' + label + ' — Arm A</div><div class="bar-track"><div class="bar-fill" style="width:' + (va / mx * 100) + '%"></div></div><div class="right">' + fmt(va) + '</div></div>' +
-        '<div class="bar-row"><div>' + label + ' — Arm B</div><div class="bar-track"><div class="bar-fill b" style="width:' + (vb / mx * 100) + '%"></div></div><div class="right">' + fmt(vb) + '</div></div>';
+      return '<div class="bar-row"><div>' + label + ' — ' + esc(PHASE_LABEL.A) + '</div><div class="bar-track"><div class="bar-fill" style="width:' + (va / mx * 100) + '%"></div></div><div class="right">' + fmt(va) + '</div></div>' +
+        '<div class="bar-row"><div>' + label + ' — ' + esc(PHASE_LABEL.B) + '</div><div class="bar-track"><div class="bar-fill b" style="width:' + (vb / mx * 100) + '%"></div></div><div class="right">' + fmt(vb) + '</div></div>';
     }
     var c = function (v) { return v.toFixed(1) + '¢'; }, n1 = function (v) { return v.toFixed(1); };
     $('an-body').innerHTML = '<div class="bars">' +
       cmp('Avg net / round', mA.net, mB.net, c) +
       cmp('Avg reveals / round', mA.rev, mB.rev, n1) +
       cmp('Avg best found / round', mA.best, mB.best, c) +
-      '</div><p class="small muted">Net = best value found − 5¢ × reveals, per round. Higher net is better search performance.</p>';
+      '</div><p class="small muted">Net = best value found − 5¢ × reveals, per round. Higher net is better search performance. In a within-subjects session each participant appears in both bars.</p>';
   }
 
   // ============================================================= helpers

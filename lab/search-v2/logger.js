@@ -16,7 +16,7 @@ window.Logger = (function () {
   // the second block holds a few event-specific extras (quiz answers, the two
   // round_end nets, and a free-form info payload for e.g. paid_rounds_drawn).
   var FIELDS = [
-    'session', 'sessionCode', 'sessionName', 'pid', 'study', 'arm', 'event', 't', 'rt_ms',
+    'session', 'sessionCode', 'sessionName', 'pid', 'study', 'arm', 'phase', 'event', 't', 'rt_ms',
     'round', 'mapping', 'stratum', 'position', 'value', 'estimate', 'refused',
     'reveals', 'cost', 'best', 'net',
     'qid', 'choice', 'correct', 'rawNet', 'flooredNet', 'info',
@@ -65,6 +65,13 @@ window.Logger = (function () {
       if (document.visibilityState === 'hidden') beaconFlush();
     });
     window.addEventListener('pagehide', beaconFlush);
+  }
+
+  // Update the persistent base fields mid-session (e.g. the active phase/arm when
+  // a within-subjects subject moves from one phase to the next). Only known
+  // FIELDS are merged, so subsequent events carry the new values.
+  function setBase(partial) {
+    if (partial) for (var k in partial) if (Object.prototype.hasOwnProperty.call(partial, k)) base[k] = partial[k];
   }
 
   // Round-level context shared by subsequent events (set by the app).
@@ -208,6 +215,7 @@ window.Logger = (function () {
   return {
     FIELDS: FIELDS,
     init: init,
+    setBase: setBase,
     setContext: setContext,
     clearRoundContext: clearRoundContext,
     log: log,
