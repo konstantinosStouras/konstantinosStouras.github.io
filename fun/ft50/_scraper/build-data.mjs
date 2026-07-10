@@ -94,6 +94,25 @@ const MS_OVERRIDES = existsSync(MS_OVERRIDES_PATH)
   ? JSON.parse(await readFile(MS_OVERRIDES_PATH, 'utf8'))
   : {};
 
+// Curated volume/issue fixups (keyed by DOI, shared across journals) for
+// advance-access records that Crossref froze without a volume/issue — otherwise
+// they read as "Articles in Advance" forever. { "<doi>": { volume, issue, page?,
+// year? } }. Filled only when Crossref itself still returns none.
+const AIA_FIXUPS_PATH = MOCK ? join(MOCK_DIR, 'aia-fixups.json') : join(DATA_DIR, '_aia-fixups.json');
+const AIA_FIXUPS = existsSync(AIA_FIXUPS_PATH)
+  ? JSON.parse(await readFile(AIA_FIXUPS_PATH, 'utf8'))
+  : {};
+
+// Forthcoming papers a publisher lists on its "Articles in Advance" page but
+// Crossref has not indexed yet. Built on a personal machine by
+// _scraper/informs-aia-local.mjs (some publisher sites block cloud IPs) and
+// committed here; each entry names its source ("jkey"). Merged in main().
+// { "<doi>": { jkey, Title, Authors?, Affiliations?, Abstract?, 'Accepting Editor'?, Area?, Year? } }.
+const AIA_SUPPLEMENT_PATH = MOCK ? join(MOCK_DIR, 'informs-aia.json') : join(DATA_DIR, '_informs-aia.json');
+const AIA_SUPPLEMENT = existsSync(AIA_SUPPLEMENT_PATH)
+  ? JSON.parse(await readFile(AIA_SUPPLEMENT_PATH, 'utf8'))
+  : {};
+
 // ── Generic fetch helpers ───────────────────────────────────────────────────
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -251,9 +270,21 @@ function mapWork(item, src) {
     if (src.aeEditors) ae = ed.ae;
   }
 
-  const volume = item.volume || '';
-  const issue = item.issue || '';
-  const status = (src.aia && !volume && !issue) ? 'Articles in Advance' : '';
+  let volume = item.volume || '';
+  let issue = item.issue || '';
+  let page = item.page || '';
+  let year = yearOf(item);
+  // Fill a frozen advance-access record's real issue from the curated fixups so
+  // it reads as published, not perpetually "Articles in Advance". Crossref wins
+  // whenever it actually carries a volume/issue.
+  const fx = AIA_FIXUPS[(item.DOI || '').toLowerCase()];
+  if (fx) {
+    if (!volume && fx.volume != null && fx.volume !== '') volume = String(fx.volume);
+    if (!issue && fx.issue != null && fx.issue !== '') issue = String(fx.issue);
+    if (!page && fx.page) page = String(fx.page);
+    if (fx.year) year = String(fx.year);
+  }
+  const status = src.aia ? forthcomingStatus(volume, issue, year, PULL_DATE) : '';
   const doi = item.DOI ? 'https://doi.org/' + item.DOI : '';
 
   const row = {
@@ -263,8 +294,8 @@ function mapWork(item, src) {
     DOI: doi,
     Volume: String(volume),
     Issue: String(issue),
-    Page: item.page || '',
-    Year: yearOf(item),
+    Page: page,
+    Year: year,
     Status: status,
     Abstract: abstract,
     'Accepting Editor': editor,
@@ -274,7 +305,7 @@ function mapWork(item, src) {
     // internal, dropped before writing:
     _doi: (item.DOI || '').toLowerCase(),
     _orcids: authorPairs.map(x => x.orcid),
-    _rank: pubRank(yearOf(item), volume, issue, item.page, status),
+    _rank: pubRank(year, volume, issue, page, status),
   };
   if (src.seEditors) row['Senior Editor'] = se;
   if (src.aeEditors) row['Associate Editor'] = ae;
@@ -312,6 +343,16 @@ function pubRank(year, volume, issue, page, status) {
   const iss = parseInt(issue, 10) || 0;
   const p = parseInt(String(page || '').split(/[-–]/)[0], 10) || 0;
   return aia * 1e13 + y * 1e9 + v * 1e6 + Math.min(iss, 999) * 1e3 + Math.min(p, 999);
+}
+
+// A no-volume/no-issue article counts as "Articles in Advance" only if it is
+// recent; an older one is a published paper whose Crossref record was frozen at
+// the advance stage (fill its issue via _aia-fixups.json), not a forthcoming one.
+function forthcomingStatus(volume, issue, year, pullDate) {
+  if (volume || issue) return '';
+  const py = parseInt(String(pullDate).slice(0, 4), 10) || 0;
+  const y = parseInt(year, 10) || 0;
+  return (y && y >= py - 3) ? 'Articles in Advance' : '';
 }
 
 // registry key: DOI when there is one, else a title|year key
@@ -594,6 +635,47 @@ function publicRow(p) {
   return rest;
 }
 
+// Add forthcoming papers a publisher lists but Crossref hasn't indexed yet (from
+// the committed _informs-aia.json). Only DOIs Crossref did not already return
+// are added, into their named source, so Crossref silently supersedes the entry
+// once it catches up. New rows flow through the registry, so they also appear in
+// the "Recently added papers" view.
+function mergeSupplement(bySource) {
+  const seen = new Set();
+  for (const k of Object.keys(bySource)) for (const p of bySource[k] || []) if (p._doi) seen.add(p._doi);
+  let added = 0;
+  for (const [rawDoi, s] of Object.entries(AIA_SUPPLEMENT)) {
+    const doi = (rawDoi || '').toLowerCase();
+    if (!doi || seen.has(doi) || !s || !s.Title) continue;
+    const src = JOURNALS.find(j => j.key === s.jkey && j.aia);
+    if (!src || !bySource[src.key]) continue; // only known, non-retired, advance-publishing sources
+    seen.add(doi);
+    const year = String(s.Year || PULL_DATE.slice(0, 4));
+    const row = {
+      Title: stripJats(s.Title),
+      Authors: s.Authors || '',
+      Affiliations: s.Affiliations || '',
+      DOI: 'https://doi.org/' + rawDoi,
+      Volume: '', Issue: '', Page: '',
+      Year: year,
+      Status: 'Articles in Advance',
+      Abstract: s.Abstract ? stripJats(s.Abstract) : '',
+      'Accepting Editor': s['Accepting Editor'] || '',
+      Area: normArea(s.Area || ''),
+      Journal: src.name,
+      JKey: src.key,
+      _doi: doi,
+      _orcids: [],
+      _rank: pubRank(year, '', '', '', 'Articles in Advance'),
+    };
+    if (src.seEditors) row['Senior Editor'] = s['Senior Editor'] || '';
+    if (src.aeEditors) row['Associate Editor'] = s['Associate Editor'] || '';
+    bySource[src.key].push(row);
+    added++;
+  }
+  if (added) console.log(`  merged ${added} forthcoming papers from the advance-articles supplement`);
+}
+
 // ── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -611,6 +693,7 @@ async function main() {
     if (!MOCK) await sleep(JOURNAL_PAUSE_MS);
   }
   await applyInformsEditors(bySource);
+  mergeSupplement(bySource);
 
   // 2. Journals dropped from the FT50 list: their data files are removed and
   // they disappear from the manifest (check-ft50-list.mjs marks them retired).

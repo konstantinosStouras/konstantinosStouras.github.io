@@ -55,7 +55,9 @@ difference from lit, whose recent view clears filters). Optional per-user
 accounts (stars/notes/lists/tags) mirror `/fun/ms/` but use a **separate
 dedicated Firebase project** — inert until `FB_CONFIG` in `fun/ft50/index.html`
 is filled per `fun/ft50/_ACCOUNTS-SETUP.md` (rules in `fun/ft50/_firestore.rules`).
-See `fun/ft50/_HOW-IT-WORKS.md`.
+See `fun/ft50/_HOW-IT-WORKS.md`. Articles-in-Advance handling matches `/fun/ms`
+and `/fun/lit` (`forthcomingStatus` guard + `data/_aia-fixups.json` +
+`data/_informs-aia.json`, refreshed locally via `informs-aia-local.mjs --app ft50`).
 
 ## `/fun/lit` — "The Lit", the multi-journal research paper browser
 `fun/lit/` extends the `/fun/ms/` architecture to eight sources: Management
@@ -75,7 +77,11 @@ likewise, ISR Senior/Associate Editor and Marketing Science Senior Editor
 names (`fun/lit/data/_informs-editors.json`) come from
 `fun/lit/_scraper/informs-editors-local.mjs` run locally (pubsonline blocks
 cloud IPs too). Editors/Areas UI shows only when Management Science is in
-scope; SE/AE filters show when ISR/MkSc are selected. See
+scope; SE/AE filters show when ISR/MkSc are selected. **Articles-in-Advance
+caveat:** a no-volume/no-issue record is tagged forthcoming only when recent
+(`forthcomingStatus`); `data/_aia-fixups.json` supplies the real issue for older
+frozen records and `data/_informs-aia.json` adds forthcoming papers Crossref
+misses, both refreshed locally by `fun/lit/_scraper/informs-aia-local.mjs`. See
 `fun/lit/_HOW-IT-WORKS.md`. Like `/fun/ms/`, the page carries the optional
 sign-in feature (star/notes/lists/tags, private per user, dedicated Firebase
 project); it stays inert until a web config is pasted into `FB_CONFIG` in
@@ -94,7 +100,14 @@ files with `fetch()` — GitHub Pages serves them from its CDN, same origin. To
 change the dataset, edit only the `*_URL` constants near the top of its `<script>`.
 The `_scraper/` folder and `_HOW-IT-WORKS.md` are underscore-prefixed so Jekyll
 does not publish them; `data/` (no underscore) IS published and must stay served.
-See `fun/ms/_HOW-IT-WORKS.md`.
+See `fun/ms/_HOW-IT-WORKS.md`. **Articles in Advance:** a no-volume/no-issue paper
+is tagged forthcoming only when recent (`forthcomingStatus` in `build-data.mjs`),
+so years-old frozen records aren't mislabeled; their real issue comes from
+`data/_aia-fixups.json`, and forthcoming papers Crossref hasn't indexed yet come
+from `data/_informs-aia.json` — both refreshed **locally** (pubsonline blocks cloud
+IPs) by `fun/lit/_scraper/informs-aia-local.mjs --app ms`, same pattern as the local
+editors/PNAS scripts. This applies identically to `/fun/lit` and `/fun/ft50` (shared
+`_aia-fixups.json`; run the scraper with `--app lit` / `--app ft50`).
 
 This app was developed at `fun/ms2/` (that path now holds a redirect stub to
 `/fun/ms/`) and replaced the original Google-Sheets-backed version, which is

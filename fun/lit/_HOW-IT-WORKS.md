@@ -169,6 +169,45 @@ It processes newest papers first and resumes across sittings, so partial runs
 are useful immediately. Editors found in Crossref abstracts are picked up by
 the daily Action with no local run needed.
 
+## Articles in Advance (forthcoming papers)
+
+A record with **no volume and no issue** is a forthcoming ("Articles in
+Advance" / OnlineFirst) paper — but only if it is **recent**. `forthcomingStatus()`
+in `build-data.mjs` requires the year to be within the last few years of the
+pull; an older no-volume/no-issue record is a published paper whose Crossref
+entry was simply frozen at the advance stage, so it is shown as published, not
+mislabeled forthcoming. (Before this guard, ~hundreds of years-old papers across
+the INFORMS journals wrongly wore the "Articles in Advance" badge.)
+
+Two committed files patch the gaps Crossref leaves:
+
+- **`data/_aia-fixups.json`** — `{ "<doi>": { volume, issue, page?, year? } }`.
+  The real issue for older records Crossref never updated (e.g. 47 Management
+  Science papers stuck at the advance stage). The build fills these in **only
+  when Crossref itself still returns no volume/issue**, so they read as published.
+- **`data/_informs-aia.json`** — `{ "<doi>": { jkey, Title, Authors?, … } }`.
+  Forthcoming papers INFORMS lists on its advance pages
+  (`pubsonline.informs.org/toc/<code>/0/0`) that **Crossref has not indexed
+  yet**. `mergeSupplement()` adds any DOI Crossref didn't return, into its named
+  source; each shows up in the paper list *and* the "Recently added papers" view,
+  and is silently superseded once Crossref catches up.
+
+Both files are refreshed by running **on your own machine** (pubsonline blocks
+cloud IPs, like the editors index above):
+
+```bash
+cd fun/lit/_scraper
+node informs-aia-local.mjs                 # fun/lit — all INFORMS journals
+node informs-aia-local.mjs --app ms        # fun/ms
+node informs-aia-local.mjs --app ft50      # fun/ft50
+# …then commit & push the two files it writes into that app's data/ dir
+```
+
+It reads each `toc/<code>/0/0` page for forthcoming DOIs, fetches each article's
+`citation_*` metadata (title/authors, or volume/issue if it turns out to be
+published), and is resume-safe via `data/_aia-cache.json`. Nothing here runs in
+CI; the daily Action just folds the committed files in.
+
 ## ACM EC: how accepted papers get their PDFs
 
 1. Published proceedings (2020→) come from Crossref with exact container

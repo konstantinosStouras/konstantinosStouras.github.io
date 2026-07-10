@@ -51,6 +51,28 @@ const OVERRIDES = existsSync(OVERRIDES_PATH)
   ? JSON.parse(await readFile(OVERRIDES_PATH, 'utf8'))
   : {};
 
+// Volume/issue fixups for older INFORMS articles whose Crossref record is frozen
+// at the advance-access stage (no volume/issue). Without this they get labeled
+// "Articles in Advance" forever even though they were published years ago. Shape:
+// { "<doi>": { volume, issue, page?, year? } }. Curated once (these numbers never
+// change) via _scraper/informs-aia-local.mjs or by hand; the build fills the gap
+// only when Crossref itself still returns no volume/issue. See _HOW-IT-WORKS.md.
+const FIXUPS_PATH = join(DATA_DIR, '_aia-fixups.json');
+const AIA_FIXUPS = existsSync(FIXUPS_PATH)
+  ? JSON.parse(await readFile(FIXUPS_PATH, 'utf8'))
+  : {};
+
+// Forthcoming papers that INFORMS lists on pubsonline.informs.org/toc/mnsc/0/0
+// but Crossref has not indexed yet. Built on a personal machine by
+// _scraper/informs-aia-local.mjs (pubsonline blocks cloud/datacenter IPs, so CI
+// cannot fetch it) and committed here; merged in below so the newest forthcoming
+// papers show up before Crossref catches up. Shape:
+// { "<doi>": { Title, Authors?, Affiliations?, Abstract?, 'Accepting Editor'?, Area?, Year? } }.
+const SUPPLEMENT_PATH = join(DATA_DIR, '_informs-aia.json');
+const AIA_SUPPLEMENT = existsSync(SUPPLEMENT_PATH)
+  ? JSON.parse(await readFile(SUPPLEMENT_PATH, 'utf8'))
+  : {};
+
 // ── Crossref fetch ─────────────────────────────────────────────────────────
 
 const SELECT = [
@@ -238,9 +260,21 @@ function mapWork(item) {
   const area = normArea(acceptedArea) || normArea(ov && ov.area) ||
     normArea(groupTitle) || normArea(subject) || '';
 
-  const volume = item.volume || '';
-  const issue = item.issue || '';
-  const status = (!volume && !issue) ? 'Articles in Advance' : '';
+  let volume = item.volume || '';
+  let issue = item.issue || '';
+  let page = item.page || '';
+  let year = yearOf(item);
+  // Fill a frozen advance-access record's real issue from the curated fixups so
+  // it reads as published, not perpetually "Articles in Advance". Crossref wins
+  // whenever it actually carries a volume/issue.
+  const fx = AIA_FIXUPS[(item.DOI || '').toLowerCase()];
+  if (fx) {
+    if (!volume && fx.volume != null && fx.volume !== '') volume = String(fx.volume);
+    if (!issue && fx.issue != null && fx.issue !== '') issue = String(fx.issue);
+    if (!page && fx.page) page = String(fx.page);
+    if (fx.year) year = String(fx.year); // the issue year beats the online-first year
+  }
+  const status = forthcomingStatus(volume, issue, year, PULL_DATE);
   const doi = item.DOI ? 'https://doi.org/' + item.DOI : '';
 
   return {
@@ -250,8 +284,8 @@ function mapWork(item) {
     DOI: doi,
     Volume: String(volume),
     Issue: String(issue),
-    Page: item.page || '',
-    Year: yearOf(item),
+    Page: page,
+    Year: year,
     Status: status,
     Abstract: abstract,
     'Accepting Editor': editor,
@@ -259,14 +293,27 @@ function mapWork(item) {
     // internal, dropped before writing papers.json:
     _doi: (item.DOI || '').toLowerCase(),
     _orcids: (item.author || []).map(a => (a.ORCID || '').replace(/^https?:\/\/orcid\.org\//, '')),
-    _rank: pubRank(item, volume, issue, status),
+    _rank: pubRank(item, volume, issue, status, year),
   };
 }
 
+// A no-volume/no-issue article is genuinely "Articles in Advance" only if it is
+// recent. A paper that lacks a volume/issue yet is several years old is almost
+// always a published article whose Crossref record was frozen at the advance
+// stage (its real issue is filled from _aia-fixups.json) — not a forthcoming one,
+// so it must not carry the forthcoming label. Keyed off the pull year so it needs
+// no hard-coded "current year".
+function forthcomingStatus(volume, issue, year, pullDate) {
+  if (volume || issue) return '';
+  const py = parseInt(String(pullDate).slice(0, 4), 10) || 0;
+  const y = parseInt(year, 10) || 0;
+  return (y && y >= py - 3) ? 'Articles in Advance' : '';
+}
+
 // One sortable number, higher = more recent. Articles in Advance rank highest.
-function pubRank(item, volume, issue, status) {
+function pubRank(item, volume, issue, status, year) {
   const aia = status === 'Articles in Advance' ? 1 : 0;
-  const y = parseInt(yearOf(item), 10) || 0;
+  const y = parseInt(year != null ? year : yearOf(item), 10) || 0;
   const v = parseInt(volume, 10) || 0;
   const iss = parseInt(issue, 10) || 0;
   const p = parseInt(String(item.page || '').split(/[-–]/)[0], 10) || 0;
@@ -446,6 +493,38 @@ function publicRow(p) {
   return rest;
 }
 
+// Add the forthcoming papers INFORMS lists but Crossref has not indexed yet
+// (from the committed _informs-aia.json supplement). Only DOIs Crossref did not
+// already return are added, so once Crossref catches up the supplement entry is
+// silently superseded. New rows flow through the registry like any other, so
+// they also show up in the "Recently added papers" view.
+function mergeSupplement(papers, seen) {
+  let added = 0;
+  for (const [rawDoi, s] of Object.entries(AIA_SUPPLEMENT)) {
+    const doi = (rawDoi || '').toLowerCase();
+    if (!doi || seen.has(doi) || !s || !s.Title) continue;
+    seen.add(doi);
+    const year = String(s.Year || PULL_DATE.slice(0, 4));
+    papers.push({
+      Title: stripJats(s.Title),
+      Authors: s.Authors || '',
+      Affiliations: s.Affiliations || '',
+      DOI: 'https://doi.org/' + rawDoi,
+      Volume: '', Issue: '', Page: '',
+      Year: year,
+      Status: 'Articles in Advance',
+      Abstract: s.Abstract ? stripJats(s.Abstract) : '',
+      'Accepting Editor': s['Accepting Editor'] || '',
+      Area: normArea(s.Area || ''),
+      _doi: doi,
+      _orcids: [],
+      _rank: pubRank({}, '', '', 'Articles in Advance', year),
+    });
+    added++;
+  }
+  if (added) console.log(`merged ${added} forthcoming papers from the INFORMS supplement`);
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -466,6 +545,8 @@ async function main() {
     papers.push(row);
   }
   console.log(`mapped ${papers.length} papers`);
+
+  mergeSupplement(papers, seen);
 
   // Deterministic total order (rank desc, then DOI) BEFORE anything derives from
   // it. Crossref returns pages in a varying order and many papers share a rank
