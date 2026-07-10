@@ -42,8 +42,15 @@ window.Chart = (function () {
       var p = Math.round(1 + frac * (N - 1));
       return Math.max(1, Math.min(N, p));
     }
+    // Single click / mouse move only move the cursor; a double click reveals.
     if (opts.onSelect) {
       svg.addEventListener('click', function (ev) { opts.onSelect(posFromEvent(ev)); });
+    }
+    if (opts.onReveal) {
+      svg.addEventListener('dblclick', function (ev) { opts.onReveal(posFromEvent(ev)); });
+    }
+    if (opts.onHover) {
+      svg.addEventListener('mousemove', function (ev) { opts.onHover(posFromEvent(ev)); });
     }
 
     function render(st) {
