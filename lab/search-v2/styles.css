@@ -63,10 +63,29 @@ p{margin:.6em 0;}
 /* round header */
 .round-head{display:flex; align-items:center; justify-content:space-between; gap:14px; margin:4px 0 14px; flex-wrap:wrap;}
 .round-label{font-weight:700; font-size:19px;}
-.counters{display:flex; gap:20px; flex-wrap:wrap;}
-.counter{display:flex; flex-direction:column; align-items:flex-end;}
+.counters{display:flex; gap:20px; flex-wrap:wrap; align-items:stretch;}
+.counter{display:flex; flex-direction:column; align-items:flex-end; justify-content:center;}
 .c-label{font-size:12px; color:var(--muted);}
 .c-val{font-size:20px; font-weight:600;}
+/* Best so far is the headline metric — shown first and boxed. Cost (what you
+   spend) is red; Net (what you keep) is a calm green. */
+.counter[title]{cursor:help;}
+.counter.boxed{align-items:center; border:1.5px solid var(--blue); border-radius:10px;
+  padding:5px 16px; background:var(--panel);}
+.counter.boxed .c-label{color:var(--ink); font-weight:600;}
+.counter.cost .c-label, .counter.cost .c-val{color:var(--red);}
+.counter.net .c-label, .counter.net .c-val{color:var(--green-d);}
+
+/* Fast custom tooltips (see tooltip.js) — the browser's native `title` popup
+   only appears after a long built-in delay that CSS/JS can't shorten, so we show
+   this styled bubble almost instantly on hover instead. Shared by both pages. */
+.tip-pop{position:fixed; z-index:9999; max-width:320px; pointer-events:none;
+  background:#1d2025; color:#f4f6f8; border:1px solid #3a3f47; border-radius:8px;
+  padding:8px 11px; font-size:12.5px; line-height:1.5; white-space:pre-line;
+  box-shadow:0 6px 22px rgba(0,0,0,.28);
+  opacity:0; transform:translateY(2px); transition:opacity .07s ease, transform .07s ease;}
+.tip-pop.show{opacity:1; transform:none;}
+:root[data-theme="dark"] .tip-pop{background:#0d0f12; border-color:#3a3f47;}
 
 /* round layout */
 .round-grid{display:grid; grid-template-columns:1fr; gap:18px; align-items:start;}

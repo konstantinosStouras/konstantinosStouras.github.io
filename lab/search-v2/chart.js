@@ -56,10 +56,12 @@ window.Chart = (function () {
       var parts = [];
 
       // --- gridlines + axis ticks ---
+      // Values are stored 0..100 (cents) but shown on a [0,1] scale, which reads
+      // more intuitively as a fraction of the max prize.
       for (var gv = 0; gv <= 100; gv += 20) {
         var yy = yOf(gv);
         parts.push('<line class="grid" x1="' + PAD_L + '" y1="' + yy + '" x2="' + (VW - PAD_R) + '" y2="' + yy + '"/>');
-        parts.push('<text class="axt" x="' + (PAD_L - 8) + '" y="' + (yy + 4) + '" text-anchor="end">' + gv + '</text>');
+        parts.push('<text class="axt" x="' + (PAD_L - 8) + '" y="' + (yy + 4) + '" text-anchor="end">' + (gv / 100).toFixed(1) + '</text>');
       }
       for (var gp = 1; gp <= N; gp += (gp === 1 ? 19 : 20)) { // 1,20,40,60,80,100
         var xx = xOf(gp);
@@ -67,7 +69,7 @@ window.Chart = (function () {
         parts.push('<text class="axt" x="' + xx + '" y="' + (VH - PAD_B + 18) + '" text-anchor="middle">' + gp + '</text>');
       }
       parts.push('<text class="axtitle" x="' + (PAD_L + PW / 2) + '" y="' + (VH - 4) + '" text-anchor="middle">position</text>');
-      parts.push('<text class="axtitle" transform="translate(14 ' + (PAD_T + PH / 2) + ') rotate(-90)" text-anchor="middle">value (cents)</text>');
+      parts.push('<text class="axtitle" transform="translate(14 ' + (PAD_T + PH / 2) + ') rotate(-90)" text-anchor="middle">value</text>');
 
       // --- assistant coverage band (Arm B only) ---
       if (arm === 'B' && st.coverage) {
@@ -103,10 +105,11 @@ window.Chart = (function () {
       }
 
       // --- revealed truth dots + value labels ---
+      // Labels use the same [0,1] scale as the y-axis they sit on.
       for (var v = 0; v < revealed.length; v++) {
         var rx = xOf(revealed[v].pos), ry = yOf(revealed[v].val);
         parts.push('<circle class="rev-dot" cx="' + rx + '" cy="' + ry + '" r="4.5"/>');
-        parts.push('<text class="rev-lbl" x="' + rx + '" y="' + (ry - 8) + '" text-anchor="middle">' + revealed[v].val + '</text>');
+        parts.push('<text class="rev-lbl" x="' + rx + '" y="' + (ry - 8) + '" text-anchor="middle">' + (revealed[v].val / 100).toFixed(2) + '</text>');
       }
 
       svg.innerHTML = parts.join('');
