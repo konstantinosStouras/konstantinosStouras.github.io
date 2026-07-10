@@ -24,14 +24,21 @@
     PAID_TASKS: 2,      // rounds drawn for payment at the end
 
     // ---- assistant (Arm B only) ------------------------------------------
-    COVERAGE: [30, 70], // inclusive position range the assistant can estimate in
-    K_DOTS: 7,          // assistant hidden training points per landscape
+    // The assistant is "trained on" a SET of disjoint position ranges (patches),
+    // like an LLM's patchy training data — not one contiguous band. It
+    // interpolates within each patch (between its two nearest training points)
+    // and, in the gaps between/outside patches, has no data and refuses. Fixed
+    // across all rounds. Each patch gets its own training dots (endpoints + a few
+    // interior points), so "interior"/coverage below means the UNION of patches.
+    COVERAGE_PATCHES: [[25, 45], [55, 75]], // inclusive ranges the assistant can estimate in
+    K_DOTS: 7,          // (reference) legacy single-band dot count; dots are now
+                        // placed per patch by gap size, so this is not used directly
 
     // ---- landscape pool (offline generation) -----------------------------
     POOL_PER_STRATUM: 60, // landscapes generated per stratum
-    RICH_INTERIOR_MIN: 85, // RICH: max value on 30..70 must be >= this
-    POOR_INTERIOR_MAX: 55, // POOR: max value on 30..70 must be <= this
-    POOR_OUTSIDE_MIN: 85,  // POOR: max value outside 30..70 must be >= this
+    RICH_INTERIOR_MIN: 85, // RICH: max value inside the coverage patches must be >= this
+    POOR_INTERIOR_MAX: 55, // POOR: max value inside the coverage patches must be <= this
+    POOR_OUTSIDE_MIN: 85,  // POOR: max value outside all coverage patches must be >= this
     MEAN_MIN: 25,          // soft comparability screen: mean of all 100 values...
     MEAN_MAX: 50,          // ...must fall in [MEAN_MIN, MEAN_MAX]
     SAMPLE_RICH: 5,        // RICH landscapes drawn per subject (of N_TASKS)

@@ -37,8 +37,8 @@ const GENERATED_AT = typeof args.stamp === 'string' ? args.stamp : '1970-01-01T0
 // ---- constants (from the single shared config) -----------------------------
 const N = CONFIG.N_POSITIONS;                 // 100
 const L_STEP = CONFIG.L_STEP;                 // 10
-const [C0, C1] = CONFIG.COVERAGE;             // 30, 70
-const K_DOTS = CONFIG.K_DOTS;                 // 7
+const PATCHES = CONFIG.COVERAGE_PATCHES;      // e.g. [[25,45],[55,75]]
+const inAnyPatch = p => PATCHES.some(([a, b]) => p >= a && p <= b);
 const PER_STRATUM = CONFIG.POOL_PER_STRATUM;  // 60
 const RICH_INTERIOR_MIN = CONFIG.RICH_INTERIOR_MIN; // 85
 let   POOR_INTERIOR_MAX = CONFIG.POOR_INTERIOR_MAX;  // 55 (may relax upward)
@@ -75,21 +75,42 @@ function makeWalk() {
 }
 function clamp(x) { return x < 0 ? 0 : x > 100 ? 100 : x; }
 
-// ---- assistant training dots (spec 3.2) ------------------------------------
-// 7 dot positions in [30,70]: endpoints 30 & 70 plus 5 interior. The six
-// adjacent gaps each in [3,12], at least one gap <=5 and at least one gap >=9.
-function makeDots(values) {
+// ---- assistant training dots (spec 3.2, per patch) -------------------------
+// Each coverage patch [a,b] gets its OWN training points: the two endpoints plus
+// a few interior ones, with adjacent gaps in [3,12] cents apart. The assistant
+// interpolates within a patch between its two nearest points; it has no points
+// in the gaps between patches (and refuses there). Returns the dots for all
+// patches, sorted by position, as [pos, trueValue] pairs.
+function dotsForPatch(values, a, b) {
+  const span = b - a;
   for (let attempt = 0; attempt < 2000; attempt++) {
     const gaps = [];
-    for (let i = 0; i < K_DOTS - 1; i++) gaps.push(randint(3, 12)); // 6 gaps
-    if (gaps.reduce((a, b) => a + b, 0) !== C1 - C0) continue;      // must span 30->70 (=40)
-    if (!gaps.some(g => g <= 5)) continue;                          // at least one narrow gap
-    if (!gaps.some(g => g >= 9)) continue;                          // at least one wide gap
-    const pos = [C0];
-    for (const g of gaps) pos.push(pos[pos.length - 1] + g);        // ends exactly at 70
-    return pos.map(p => [p, values[p - 1]]);                        // [pos, trueValue]
+    let sum = 0, ok = true;
+    while (sum < span) {
+      const rem = span - sum;
+      if (rem <= 12) {                       // close the patch
+        if (rem < 3) { ok = false; break; }  // can't land on b with a valid gap
+        gaps.push(rem); sum += rem; break;
+      }
+      const g = randint(3, 12);
+      gaps.push(g); sum += g;
+    }
+    if (!ok || sum !== span || gaps.length < 1) continue;
+    const pos = [a];
+    for (const g of gaps) pos.push(pos[pos.length - 1] + g);  // ends exactly at b
+    return pos;
   }
   return null; // extremely unlikely; caller rejects the landscape
+}
+function makeDots(values) {
+  const all = [];
+  for (const [a, b] of PATCHES) {
+    const pos = dotsForPatch(values, a, b);
+    if (!pos) return null;
+    for (const p of pos) all.push([p, values[p - 1]]);
+  }
+  all.sort((d1, d2) => d1[0] - d2[0]);
+  return all;
 }
 
 // ---- strata classification (spec 3.3) --------------------------------------
@@ -99,7 +120,7 @@ function stats(values) {
     const v = values[p - 1];
     sum += v;
     if (v > gmax) { gmax = v; argmax = p; }
-    if (p >= C0 && p <= C1) { if (v > interiorMax) interiorMax = v; }
+    if (inAnyPatch(p)) { if (v > interiorMax) interiorMax = v; }
     else { if (v > outsideMax) outsideMax = v; }
   }
   return { interiorMax, outsideMax, argmax, mean: sum / N };
@@ -209,7 +230,7 @@ const shipped = {
   generatedAt: GENERATED_AT,
   generatorSeed: GENERATOR_SEED,
   L_STEP,
-  coverage: [C0, C1],
+  coveragePatches: PATCHES,
   obfuscation: { scheme: 'xor-base64', key: KEY, note: 'decode: base64->bytes->XOR key. Deters casual peeking only.' },
   practice: { id: practice.id, v: encodeValues(practice.values), dots: encodeDots(practice.dots) },
   mappings: allReal.map(shippedMapping)
@@ -219,7 +240,7 @@ const shipped = {
 const plain = {
   generatedAt: GENERATED_AT,
   generatorSeed: GENERATOR_SEED,
-  L_STEP, coverage: [C0, C1],
+  L_STEP, coveragePatches: PATCHES,
   finalPoorInteriorMax: POOR_INTERIOR_MAX,
   practice: { id: practice.id, seed: practice.seed, values: practice.values, aiDots: practice.dots,
               interiorMax: practice.interiorMax, outsideMax: practice.outsideMax, argmax: practice.argmax },

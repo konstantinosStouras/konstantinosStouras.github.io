@@ -93,14 +93,14 @@
       "After each round the values reset and will be different. {rounds}",
     instructionsB:
       "You also have a free assistant.\n\n" +
-      "The assistant was trained on data about some positions between 30 and 70. You cannot see its data. If you ask about a position between 30 and 70, it gives you its best estimate: a straight line between its two nearest data points. Its estimates are usually close, but they are not guaranteed.\n\n" +
-      "If you ask about any position outside 30 to 70, the assistant has no data and will tell you so.\n\n" +
+      "The assistant was trained on data about some positions, in a few ranges ({coverage}). You cannot see its data. If you ask about a position inside one of those ranges, it gives you its best estimate: a straight line between its two nearest data points. Its estimates are usually close, but they are not guaranteed.\n\n" +
+      "If you ask about any position outside those ranges, the assistant has no data and will tell you so.\n\n" +
       "Asking the assistant is free and unlimited. The assistant does not learn from your reveals in this study.",
     // Shown at the start of a later phase when a within-subjects session moves the
     // subject INTO the With-AI condition (a free assistant becomes available).
     phaseIntroB:
       "**Next part: you now have a free AI assistant.**\n\n" +
-      "For the rounds in this part you also have a free assistant. It was trained on data about some positions between 30 and 70 and, when you ask about a position in that range, gives its best estimate — a straight line between its two nearest data points. Its estimates are usually close but not guaranteed, and outside 30 to 70 it has no data.\n\n" +
+      "For the rounds in this part you also have a free assistant. It was trained on data about some positions, in a few ranges ({coverage}), and when you ask about a position inside one of those ranges it gives its best estimate — a straight line between its two nearest data points. Its estimates are usually close but not guaranteed, and outside those ranges it has no data.\n\n" +
       "Asking is free and unlimited. Everything else about the game is exactly the same.",
     // Shown at the start of a later phase when a within-subjects session moves the
     // subject INTO the Without-AI (human-only) condition (no assistant).
@@ -376,7 +376,7 @@
   }
 
   function onPool(data) {
-    COVERAGE = data.coverage;
+    COVERAGE = data.coveragePatches;
     PRACTICE = data.practice;
     var byId = {}, richIds = [], poorIds = [];
     for (var i = 0; i < data.mappings.length; i++) {
@@ -473,7 +473,15 @@
       .replace(/\{rounds\}/g, roundsSentence)
       .replace(/\{nTasks\}/g, N_TASKS).replace(/\{paidTasks\}/g, PAID_TASKS)
       .replace(/\{nPractice\}/g, N_PRACTICE).replace(/\{fee\}/g, COST).replace(/\{nPositions\}/g, N_POS)
-      .replace(/\{totalRounds\}/g, totalReal).replace(/\{nPhases\}/g, nPhases);
+      .replace(/\{totalRounds\}/g, totalReal).replace(/\{nPhases\}/g, nPhases)
+      .replace(/\{coverage\}/g, coverageText());
+  }
+  // The assistant's training patches as human-readable text, e.g. "25–45 and
+  // 55–75". Read from config so copy never drifts from the actual coverage.
+  function coverageText() {
+    var ps = CFG.COVERAGE_PATCHES || [], out = [];
+    for (var i = 0; i < ps.length; i++) out.push(ps[i][0] + '–' + ps[i][1]);
+    return out.join(' and ');
   }
   function content(key) { return subTokens((CONTENT && CONTENT[key]) ? CONTENT[key] : BUILTIN[key]); }
 
@@ -521,7 +529,7 @@
   //    Q1  "highest possible value at position 52"      -> 60
   //    Q2  "what do you earn" (reveals 30 & 62)         -> 52
   //    Q3  (Arm B) "ask the assistant about position 90"-> It says it has no data there
-  //    Q4  (Arm B) "the assistant's answer at 50 is"    -> An estimate that can be wrong
+  //    Q4  (Arm B) "the assistant's answer at 40 is"    -> An estimate that can be wrong
   //  To breeze through while testing, open the app in debug mode and these are
   //  PRE-SELECTED for you (just click Submit):
   //    https://www.stouras.com/lab/search-v2/?arm=B&debug=1&key=stouras
@@ -536,7 +544,7 @@
   var Q_B = [
     { id: 'q3', prompt: 'You ask the assistant about position 90. What happens?',
       options: [{ t: 'It tells you the exact value' }, { t: 'It gives you an estimate' }, { t: 'It says it has no data there', correct: true }, { t: 'It reveals the position for free' }] },
-    { id: 'q4', prompt: 'The assistant\'s answer at position 50 is:',
+    { id: 'q4', prompt: 'The assistant\'s answer at position 40 is:',
       options: [{ t: 'Always exactly correct' }, { t: 'An estimate that can be wrong', correct: true }] }
   ];
   // The quiz questions still OWED at the start of the current phase: the common
@@ -667,7 +675,7 @@
     var h = '<span class="lg"><span class="swatch dot"></span> revealed value</span>';
     if (arm === 'B') {
       h += '<span class="lg"><span class="swatch diamond"></span> assistant estimate (not guaranteed)</span>';
-      h += '<span class="lg"><span class="swatch band"></span> assistant coverage (30–70)</span>';
+      h += '<span class="lg"><span class="swatch band"></span> assistant coverage (' + coverageText() + ')</span>';
     }
     $('legend').innerHTML = h;
   }
@@ -678,7 +686,7 @@
     if (aux.getAttribute('data-built') === '1') { renderAiLog(); return; }
     aux.innerHTML =
       '<h3>Assistant</h3>' +
-      '<p class="small muted">Free and unlimited. It has data only for positions 30–70.</p>' +
+      '<p class="small muted">Free and unlimited. It has data only for positions ' + coverageText() + '.</p>' +
       '<div class="ask-row"><span class="small">Position</span>' +
       '<input type="number" id="ai-pos" min="1" max="100" value="' + S.round.selected + '">' +
       '<button class="btn btn-blue btn-sm" id="btn-ask">Ask assistant (free)</button></div>' +

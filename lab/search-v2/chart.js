@@ -1,7 +1,7 @@
 /* ==========================================================================
    search-v2  ·  chart.js
    Inline-SVG landscape chart: axes, gridlines, selection highlight, revealed
-   truth dots, (Arm B) assistant coverage band + estimate diamonds, and a
+   truth dots, (Arm B) assistant coverage bands + estimate diamonds, and a
    debug overlay (true line + dots), gated by the app.
 
    The chart is a pure renderer: every render() call receives ONLY values the
@@ -71,11 +71,15 @@ window.Chart = (function () {
       parts.push('<text class="axtitle" x="' + (PAD_L + PW / 2) + '" y="' + (VH - 4) + '" text-anchor="middle">position</text>');
       parts.push('<text class="axtitle" transform="translate(14 ' + (PAD_T + PH / 2) + ') rotate(-90)" text-anchor="middle">value</text>');
 
-      // --- assistant coverage band (Arm B only) ---
-      if (arm === 'B' && st.coverage) {
-        var bx = xOf(st.coverage[0]), bx2 = xOf(st.coverage[1]);
-        parts.push('<rect class="cov-band" x="' + bx + '" y="' + PAD_T + '" width="' + (bx2 - bx) + '" height="' + PH + '"/>');
-        parts.push('<text class="cov-label" x="' + ((bx + bx2) / 2) + '" y="' + (PAD_T + 13) + '" text-anchor="middle">assistant coverage</text>');
+      // --- assistant coverage bands (Arm B only) ---
+      // st.coverage is a list of patches [[a,b],...]; shade each one.
+      if (arm === 'B' && st.coverage && st.coverage.length) {
+        for (var ci = 0; ci < st.coverage.length; ci++) {
+          var cb = xOf(st.coverage[ci][0]), cb2 = xOf(st.coverage[ci][1]);
+          parts.push('<rect class="cov-band" x="' + cb + '" y="' + PAD_T + '" width="' + (cb2 - cb) + '" height="' + PH + '"/>');
+        }
+        var f = st.coverage[0], fmid = (xOf(f[0]) + xOf(f[1])) / 2;
+        parts.push('<text class="cov-label" x="' + fmid + '" y="' + (PAD_T + 13) + '" text-anchor="middle">assistant coverage</text>');
       }
 
       // --- debug: faint true line + assistant dots + labels ---
