@@ -107,6 +107,31 @@ p{margin:.6em 0;}
 .dbg-line{fill:none; stroke:var(--red); stroke-width:1.2; opacity:.35;}
 .dbg-dot{fill:var(--est); opacity:.7;}
 .dbg-txt{font-size:12px; fill:#999;}
+.interp-line{fill:none; stroke:var(--est); stroke-width:1.6; stroke-dasharray:4 3; opacity:.85;}
+
+/* testing-only overlay controls on the round screen (debug/Test link only) */
+.testview{display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; margin:8px 0 2px;
+  padding:8px 12px; border:1px dashed var(--amber); border-radius:8px; background:#fff8ef; font-size:13px;}
+.testview .tv-title{font-weight:700; color:var(--amber-d);}
+.testview label{display:inline-flex; align-items:center; gap:5px; cursor:pointer;}
+.testview input{transform:scale(1.05);}
+
+/* end-of-study comparison (two plots) + exit survey */
+.cmp-grid{display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:start;}
+@media(max-width:820px){ .cmp-grid{grid-template-columns:1fr;} }
+.cmp-col{border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:#fff;}
+.cmp-col h3{margin:0 0 8px;}
+.cmp-stats{display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;}
+.cmp-stats .s{flex:1; min-width:80px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:7px 10px; text-align:center;}
+.cmp-stats .s b{display:block; font-size:18px;} .cmp-stats .s span{font-size:11.5px; color:var(--muted);}
+.cmp-legend{font-size:12.5px; color:var(--muted); margin-top:8px; line-height:1.7;}
+.cmp-legend i{display:inline-block; width:22px; height:0; border-top-width:2px; vertical-align:middle; margin-right:4px;}
+.survey-q{margin:14px 0; padding:12px 14px; border:1px solid var(--line); border-radius:10px; background:#fff;}
+.survey-q .sq-prompt{font-weight:600; margin-bottom:8px;}
+.likert{display:flex; gap:4px; flex-wrap:wrap;}
+.likert label{display:inline-flex; flex-direction:column-reverse; align-items:center; gap:3px; font-size:11.5px; color:var(--muted); cursor:pointer; min-width:62px; text-align:center;}
+.likert input{transform:scale(1.15);}
+.survey-q textarea{width:100%; min-height:70px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; font-family:inherit; font-size:14px;}
 
 .legend{display:flex; gap:16px; justify-content:center; flex-wrap:wrap; font-size:12.5px; color:var(--muted); margin-top:6px;}
 .legend span.lg{display:inline-flex; align-items:center; gap:5px;}

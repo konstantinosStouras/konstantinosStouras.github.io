@@ -52,7 +52,6 @@ window.Chart = (function () {
       var sel = st.selected;
       var revealed = st.revealed || [];
       var estimates = st.estimates || [];
-      var dbg = st.debug || null;
       var parts = [];
 
       // --- gridlines + axis ticks ---
@@ -71,9 +70,13 @@ window.Chart = (function () {
       parts.push('<text class="axtitle" x="' + (PAD_L + PW / 2) + '" y="' + (VH - 4) + '" text-anchor="middle">position</text>');
       parts.push('<text class="axtitle" transform="translate(14 ' + (PAD_T + PH / 2) + ') rotate(-90)" text-anchor="middle">value</text>');
 
-      // --- assistant coverage bands (Arm B only) ---
-      // st.coverage is a list of patches [[a,b],...]; shade each one.
-      if (arm === 'B' && st.coverage && st.coverage.length) {
+      // Every overlay below is opt-in via an explicit flag. The AI region /
+      // training points / interpolation line / ground truth are TESTING or
+      // end-of-study DEBRIEF only — the app never sets these flags for a real
+      // participant mid-play.
+
+      // --- assistant coverage bands (patches [[a,b],...]) ---
+      if (st.showCoverage && st.coverage && st.coverage.length) {
         for (var ci = 0; ci < st.coverage.length; ci++) {
           var cb = xOf(st.coverage[ci][0]), cb2 = xOf(st.coverage[ci][1]);
           parts.push('<rect class="cov-band" x="' + cb + '" y="' + PAD_T + '" width="' + (cb2 - cb) + '" height="' + PH + '"/>');
@@ -82,16 +85,34 @@ window.Chart = (function () {
         parts.push('<text class="cov-label" x="' + fmid + '" y="' + (PAD_T + 13) + '" text-anchor="middle">assistant coverage</text>');
       }
 
-      // --- debug: faint true line + assistant dots + labels ---
-      if (dbg && dbg.truth) {
+      // --- ground-truth line ---
+      if (st.showTruth && st.truth) {
         var d = '';
-        for (var i = 0; i < dbg.truth.length; i++) d += (i ? 'L' : 'M') + xOf(i + 1).toFixed(1) + ' ' + yOf(dbg.truth[i]).toFixed(1) + ' ';
+        for (var i = 0; i < st.truth.length; i++) d += (i ? 'L' : 'M') + xOf(i + 1).toFixed(1) + ' ' + yOf(st.truth[i]).toFixed(1) + ' ';
         parts.push('<path class="dbg-line" d="' + d + '"/>');
-        if (dbg.dots) for (var k = 0; k < dbg.dots.length; k++) {
-          parts.push('<circle class="dbg-dot" cx="' + xOf(dbg.dots[k][0]) + '" cy="' + yOf(dbg.dots[k][1]) + '" r="4"/>');
+      }
+      // --- AI interpolation line: the piecewise-linear estimate the assistant
+      //     computes between its training points, drawn separately within each
+      //     coverage patch (never bridging the gaps between patches) ---
+      if (st.showInterp && st.dots && st.dots.length && st.coverage) {
+        for (var pi = 0; pi < st.coverage.length; pi++) {
+          var pa = st.coverage[pi][0], pb = st.coverage[pi][1], seg = '';
+          for (var si = 0; si < st.dots.length; si++) {
+            var sp = st.dots[si][0];
+            if (sp >= pa && sp <= pb) seg += (seg ? 'L' : 'M') + xOf(sp).toFixed(1) + ' ' + yOf(st.dots[si][1]).toFixed(1) + ' ';
+          }
+          if (seg) parts.push('<path class="interp-line" d="' + seg + '"/>');
         }
-        parts.push('<text class="dbg-txt" x="' + (VW - PAD_R) + '" y="' + (PAD_T + 12) + '" text-anchor="end">' +
-                   esc(dbg.id) + ' · ' + esc(dbg.stratum) + '</text>');
+      }
+      // --- AI training points ---
+      if (st.showDots && st.dots) {
+        for (var k = 0; k < st.dots.length; k++) {
+          parts.push('<circle class="dbg-dot" cx="' + xOf(st.dots[k][0]) + '" cy="' + yOf(st.dots[k][1]) + '" r="4"/>');
+        }
+      }
+      // --- corner tag (testing: mapping id · stratum) ---
+      if (st.tag) {
+        parts.push('<text class="dbg-txt" x="' + (VW - PAD_R) + '" y="' + (PAD_T + 12) + '" text-anchor="end">' + esc(st.tag) + '</text>');
       }
 
       // --- selection highlight ---
