@@ -161,6 +161,12 @@
     phasesCtl = phasesSetup();
     segPractice = segSetup('seg-practice');
     $('btn-gencode').addEventListener('click', function () { $('f-code').value = genCode(); renderSummary(); });
+    // Live-normalise the session code to capital letters + digits as you type
+    // (matches the participant-link format and the ideasearchlab admin).
+    $('f-code').addEventListener('input', function () {
+      var s = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (s !== this.value) this.value = s;
+    });
     $('btn-save').addEventListener('click', saveSession);
     $('btn-cancel').addEventListener('click', function () { fillForm(null, currentDefaults()); renderSummary(); });
     $('btn-makedefault').addEventListener('click', makeDefault);
@@ -397,6 +403,35 @@
     $('active-list').innerHTML = active.length ? active.map(sessCard).join('') : '<p class="muted small">No active sessions yet. Create one on the left.</p>';
     $('completed-list').innerHTML = done.length ? done.map(sessCard).join('') : '<p class="muted small">None yet.</p>';
     wireSessCards();
+    renderParticipants();
+  }
+
+  // Right-column "Participants" panel: everyone who has any logged data, across
+  // all sessions. Participants are anonymous (no accounts) — each is one entry
+  // (its throwaway session id) with its wave code, Prolific id, phases and state.
+  function renderParticipants() {
+    var list = $('participants-list'); if (!list) return;
+    var by = {};
+    (EVENTS || []).forEach(function (e) {
+      var s = e.session || '(none)';
+      var r = by[s] || (by[s] = { session: s, code: e.sessionCode, pid: e.pid, armSeq: [], armSet: {}, n: 0, last: e.t, completed: false });
+      r.n++; r.pid = r.pid || e.pid; r.code = r.code || e.sessionCode;
+      if ((e.arm === 'A' || e.arm === 'B') && !r.armSet[e.arm]) { r.armSet[e.arm] = true; r.armSeq.push(e.arm); }
+      if ((e.t || 0) > (r.last || 0)) r.last = e.t;
+      if (e.event === 'session_end') r.completed = true;
+    });
+    var ps = Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) { return (b.last || 0) - (a.last || 0); });
+    $('participants-count').textContent = ps.length + ' total';
+    if (!ps.length) { list.innerHTML = '<p class="muted small">No participants yet.</p>'; return; }
+    list.innerHTML = ps.map(function (p) {
+      return '<div class="part-row">' +
+        '<div class="pr-top"><span class="pr-id">' + esc(shortId(p.session)) + '</span>' +
+        '<span class="pill ' + (p.completed ? 'completed' : 'active') + '">' + (p.completed ? 'done' : 'in progress') + '</span></div>' +
+        '<div class="sc-meta">' + (p.pid ? 'PID ' + esc(p.pid) + ' · ' : '') + 'session ' + esc(p.code || '—') +
+          ' · ' + esc(p.armSeq.join('→') || '—') + ' · ' + p.n + ' event' + (p.n === 1 ? '' : 's') + '</div>' +
+        '<div class="sc-meta" style="margin:0;">last active ' + esc(fmtTime(p.last)) + '</div>' +
+        '</div>';
+    }).join('');
   }
   function sessCard(s) {
     var n = EVENTS.filter(function (e) { return e.sessionCode === s.code && e.event === 'session_start'; }).length;
@@ -449,7 +484,7 @@
       });
     } else {
       $('data-source').textContent = 'Source: this browser’s localStorage (local preview)';
-      EVENTS = readLocalEvents(); renderData();
+      EVENTS = readLocalEvents(); renderData(); renderParticipants();
     }
   }
   function readLocalEvents() {
