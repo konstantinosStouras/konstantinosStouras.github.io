@@ -425,7 +425,7 @@
     }
     save();
 
-    chart = window.Chart.create($('plot'), { onSelect: onChartSelect });
+    chart = window.Chart.create($('plot'), { onSelect: onChartSelect, onReveal: onChartReveal, onHover: onChartHover });
     wireGlobalHandlers();
     route();
   }
@@ -700,7 +700,7 @@
     renderAiLog();
   }
 
-  function renderRound() {
+  function renderRound(fromHover) {
     $('round-label').textContent = (S.roundNum === 0 ? 'Practice (not paid)' : 'Round ' + S.roundNum + ' of ' + N_TASKS) +
       (S.phases.length > 1 ? ' · ' + phaseLabel(arm) : '');
     var reveals = S.round.reveals;
@@ -716,7 +716,9 @@
     rb.disabled = revealed;
     rb.innerHTML = revealed ? 'Already revealed' : 'Reveal (costs 5&cent;)';
 
-    if (arm === 'B' && $('ai-pos')) $('ai-pos').value = S.round.selected;
+    // Keep the AI panel's position in step with the cursor on deliberate moves,
+    // but not while merely hovering (so it never clobbers a value being typed).
+    if (!fromHover && arm === 'B' && $('ai-pos')) $('ai-pos').value = S.round.selected;
 
     if (DEBUG) buildTestView();
     chart.render({
@@ -768,11 +770,16 @@
     renderRound();
   }
   // Clicking a position on the plot reveals it directly (click-to-reveal), so a
-  // participant can reveal several points by clicking around the space. Clicking
-  // an already-revealed point just moves the cursor there.
-  function onChartSelect(pos) {
-    selectPos(pos);
-    if (!isRevealed(pos)) doReveal();
+  // A single click, or moving the mouse over the plot, only moves the dotted
+  // cursor line — it does NOT reveal a prize. A DOUBLE click reveals the prize at
+  // that position (revealing costs 5¢, so it must be a deliberate double click).
+  function onChartSelect(pos) { selectPos(pos); }
+  function onChartReveal(pos) { selectPos(pos); if (!isRevealed(pos)) doReveal(); }
+  function onChartHover(pos) {
+    pos = Math.max(1, Math.min(N_POS, pos | 0));
+    if (!S.round || S.round.ended || S.round.selected === pos) return;
+    S.round.selected = pos;   // follow the mouse with the cursor line only —
+    renderRound(true);        // no reveal, no logging, no save, no AI-input sync
   }
 
   function doReveal() {
