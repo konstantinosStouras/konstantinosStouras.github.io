@@ -30,6 +30,11 @@
   // settings.armMode ('url'|'A'|'B'|'random') → a one-phase session, preserving
   // the previous between-subjects behavior for sessions saved before this change.
   function resolvePhases(cfg, pr) {
+    // Debug-only override (needs the debug key), so a tester can force a phase
+    // sequence locally, e.g. ?phases=AB. Never available to real participants.
+    if (DEBUG && pr && typeof pr.phases === 'string' && /^[AB]+$/.test(pr.phases)) {
+      return pr.phases.split('');
+    }
     if (cfg && Object.prototype.toString.call(cfg.phases) === '[object Array]' && cfg.phases.length) {
       var list = [];
       for (var i = 0; i < cfg.phases.length; i++) if (cfg.phases[i] === 'A' || cfg.phases[i] === 'B') list.push(cfg.phases[i]);
@@ -63,6 +68,10 @@
   var S = null;       // persisted session state
   var arm = 'A';      // the arm of the CURRENT phase ('A' human-only | 'B' AI-assisted)
   var DEBUG = false;
+  // Testing-only overlay toggles (debug/Test link only). NEVER shown to a real
+  // participant: the AI region / training points / interpolation line and the
+  // ground-truth line are revealed only when the tester ticks these.
+  var TESTVIEW = { truth: false, region: false, dots: false, interp: false };
   var lastSelectLogT = 0;
   var STUDY_CLOSED = false;    // set from the admin-controlled config/study doc
   var STUDY_ARM_MODE = 'url';  // legacy single-arm mode: 'url'|'A'|'B'|'random' (admin-controlled)
@@ -439,6 +448,8 @@
         else startRound(S.roundNum, true);
         break;
       case 'interstitial': showInterstitial(); break;
+      case 'compare': showCompare(); break;
+      case 'survey': showSurvey(); break;
       case 'finish': finish(); break;
       default: showConsent();
     }
@@ -674,8 +685,9 @@
   function buildLegend() {
     var h = '<span class="lg"><span class="swatch dot"></span> revealed value</span>';
     if (arm === 'B') {
+      // The coverage band / training points are TESTING-only, so they are not
+      // advertised in the participant legend — only the estimate the AI returns.
       h += '<span class="lg"><span class="swatch diamond"></span> assistant estimate (not guaranteed)</span>';
-      h += '<span class="lg"><span class="swatch band"></span> assistant coverage (' + coverageText() + ')</span>';
     }
     $('legend').innerHTML = h;
   }
@@ -715,12 +727,45 @@
 
     if (arm === 'B' && $('ai-pos')) $('ai-pos').value = S.round.selected;
 
+    if (DEBUG) buildTestView();
     chart.render({
       arm: arm, coverage: COVERAGE, selected: S.round.selected,
       revealed: reveals.map(function (r) { return { pos: r.pos, val: r.val }; }),
       estimates: arm === 'B' ? S.round.estimates.map(function (e) { return { pos: e.pos, val: e.val }; }) : [],
-      debug: DEBUG ? { truth: truth, dots: dots, stratum: S.round.stratum, id: S.round.mappingId } : null
+      // Overlays below are TESTING-only (guarded by DEBUG); a real participant
+      // never sees the region, training points, interpolation, or ground truth.
+      truth: truth, dots: dots,
+      tag: DEBUG ? (S.round.mappingId + ' · ' + S.round.stratum) : null,
+      showTruth: DEBUG && TESTVIEW.truth,
+      showCoverage: DEBUG && arm === 'B' && TESTVIEW.region,
+      showDots: DEBUG && arm === 'B' && TESTVIEW.dots,
+      showInterp: DEBUG && arm === 'B' && TESTVIEW.interp
     });
+  }
+
+  // Testing-only overlay controls (debug/Test link). Built once, then the
+  // AI-specific toggles are shown only in the With-AI phase.
+  function buildTestView() {
+    var bar = $('testview');
+    if (!bar) return;
+    if (bar.getAttribute('data-built') !== '1') {
+      bar.innerHTML =
+        '<span class="tv-title">Testing view</span>' +
+        '<label><input type="checkbox" id="tv-truth"> Ground truth</label>' +
+        '<label class="tv-ai"><input type="checkbox" id="tv-region"> AI region</label>' +
+        '<label class="tv-ai"><input type="checkbox" id="tv-dots"> AI data points</label>' +
+        '<label class="tv-ai"><input type="checkbox" id="tv-interp"> AI interpolation</label>';
+      var wire = function (id, key) {
+        $(id).checked = TESTVIEW[key];
+        $(id).addEventListener('change', function () { TESTVIEW[key] = this.checked; renderRound(); });
+      };
+      wire('tv-truth', 'truth'); wire('tv-region', 'region');
+      wire('tv-dots', 'dots'); wire('tv-interp', 'interp');
+      bar.setAttribute('data-built', '1');
+    }
+    bar.style.display = '';
+    var ai = bar.querySelectorAll('.tv-ai');
+    for (var i = 0; i < ai.length; i++) ai[i].style.display = (arm === 'B') ? '' : 'none';
   }
 
   function selectPos(pos) {
@@ -795,7 +840,9 @@
     if (S.roundNum >= 1) {
       if (!S.results) S.results = [];
       S.results.push({ phase: S.phaseIdx, arm: arm, round: S.roundNum, mapping: S.round.mappingId, stratum: S.round.stratum,
-        reveals: reveals.length, best: bestOf(reveals), cost: costOf(reveals), rawNet: rawNet, flooredNet: flooredNet });
+        reveals: reveals.length, best: bestOf(reveals), cost: costOf(reveals), rawNet: rawNet, flooredNet: flooredNet,
+        // searched positions (for the end-of-study debrief plots)
+        path: reveals.map(function (r) { return [r.pos, r.val]; }) });
     }
     // Mark the round ended and move to a distinct persisted phase, so a refresh
     // on the result screen resumes the interstitial — never the finished round.
@@ -815,6 +862,7 @@
     var practice = (S.roundNum === 0);
     // The last real round of a non-final phase heads into a phase transition next.
     var lastOfPhase = (!practice && S.roundNum >= N_TASKS && S.phaseIdx < S.phases.length - 1);
+    var lastOverall = (!practice && S.roundNum >= N_TASKS && S.phaseIdx >= S.phases.length - 1);
     $('inter-title').textContent = practice ? 'Practice complete'
       : lastOfPhase ? 'Part ' + (S.phaseIdx + 1) + ' complete'
       : 'Round ' + S.roundNum + ' complete';
@@ -823,6 +871,7 @@
             '<div class="res-line">Net this round: <b class="res-big">' + rawNet + '¢</b></div>';
     if (practice) b += '<p class="muted small">This was practice and was not paid. The real rounds start now.</p>';
     else if (lastOfPhase) b += '<p class="muted small">That completes this part. The next part starts when you continue.</p>';
+    else if (lastOverall) b += '<p class="muted small">That was the last round. Continue to see your results.</p>';
     $('inter-body').innerHTML = b;
     show('s-interstitial');
   }
@@ -831,7 +880,7 @@
     if (S.roundNum === 0) { startRound(1, false); return; }        // practice → round 1
     if (S.roundNum >= N_TASKS) {                                    // phase complete
       if (S.phaseIdx < S.phases.length - 1) { advancePhase(); return; }
-      finish(); return;
+      showCompare(); return;    // all phases done → debrief → survey → finish
     }
     startRound(S.roundNum + 1, false);
   }
@@ -848,6 +897,119 @@
     S.phase = 'phaseIntro';
     save();
     showPhaseIntro();
+  }
+
+  // ======================================================================
+  //  END-OF-STUDY DEBRIEF (comparison) + SURVEY
+  // ======================================================================
+  // A round to visualise for a phase: prefer one of its paid rounds (the ones
+  // that actually counted), else its last round.
+  function representativeRound(phaseIdx) {
+    var paid = drawPaid();
+    for (var i = 0; i < paid.length; i++) if (paid[i].phase === phaseIdx) return paid[i].round;
+    return N_TASKS;
+  }
+  // Aggregate stats across all real rounds of a phase.
+  function phaseStats(phaseIdx) {
+    var res = S.results || [], n = 0, net = 0, rev = 0, best = 0, bestN = 0;
+    for (var i = 0; i < res.length; i++) {
+      var rp = (res[i].phase == null ? 0 : res[i].phase);
+      if (rp !== phaseIdx) continue;
+      n++; net += res[i].rawNet || 0; rev += res[i].reveals || 0;
+      if (res[i].best != null) { best += res[i].best; bestN++; }
+    }
+    return { avgNet: n ? net / n : 0, avgRev: n ? rev / n : 0, avgBest: bestN ? best / bestN : 0 };
+  }
+
+  // Debrief: two plots (one representative round per phase) revealing the true
+  // curve + the positions searched, plus per-phase stats. In the With-AI phase
+  // the AI region / training points / interpolation line are ALSO revealed here
+  // (the study is over, so it's fine to show what was hidden during play).
+  function showCompare() { S.phase = 'compare'; S.completed = false; save(); renderCompare(); show('s-compare'); }
+
+  function renderCompare() {
+    var multi = S.phases.length > 1;
+    $('compare-intro').textContent = multi
+      ? 'Below is one round from each part, showing the true prize curve (hidden while you played) and the positions you revealed — so you can compare searching without vs. with the AI.'
+      : 'Below is one of your rounds, showing the true prize curve (hidden while you played) and the positions you revealed.';
+
+    var cols = '';
+    for (var ph = 0; ph < S.phases.length; ph++) {
+      var st = phaseStats(ph);
+      cols += '<div class="cmp-col"><h3>' + esc(phaseLabel(S.phases[ph])) + '</h3>' +
+        '<div class="plot-wrap"><div id="cmp-plot-' + ph + '"></div></div>' +
+        '<div class="cmp-stats">' +
+          '<div class="s"><b>' + (st.avgNet / 100).toFixed(2) + '</b><span>avg net / round</span></div>' +
+          '<div class="s"><b>' + st.avgRev.toFixed(1) + '</b><span>avg reveals</span></div>' +
+          '<div class="s"><b>' + (st.avgBest / 100).toFixed(2) + '</b><span>avg best found</span></div>' +
+        '</div></div>';
+    }
+    $('compare-body').innerHTML = '<div class="cmp-grid">' + cols + '</div>' +
+      '<div class="cmp-legend">' +
+        '<i style="border-top-style:solid;border-color:var(--red);opacity:.5;"></i> true prize curve (was hidden) &nbsp;&nbsp;' +
+        '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--ink);vertical-align:middle;margin-right:4px;"></span> positions you revealed' +
+      '</div>';
+
+    for (var p = 0; p < S.phases.length; p++) {
+      var a = S.phases[p];
+      var res = resultOf(p, representativeRound(p));
+      var rec = res.mapping ? (POOL.byId[res.mapping] || null) : null;
+      var host = $('cmp-plot-' + p);
+      if (!rec || !host) continue;
+      var revd = (res.path || []).map(function (pr) { return { pos: pr[0], val: pr[1] }; });
+      Chart.create(host).render({
+        arm: a, coverage: COVERAGE, selected: null, revealed: revd, estimates: [],
+        truth: decodeInts(rec.v), dots: decodePairs(rec.dots),
+        showTruth: true, showCoverage: a === 'B', showDots: a === 'B', showInterp: a === 'B', tag: null
+      });
+    }
+  }
+
+  // ---- exit survey (anonymous; responses logged as `survey` events) ----------
+  function surveyQuestions() {
+    var qs = [
+      { id: 'strategy', type: 'likert', prompt: 'I had a clear strategy for which positions to reveal.' },
+      { id: 'difficult', type: 'likert', prompt: 'The task was difficult.' }
+    ];
+    if (S.phases.indexOf('B') >= 0) {
+      qs.push({ id: 'ai_helpful', type: 'likert', prompt: 'The AI assistant’s estimates were helpful.' });
+      qs.push({ id: 'ai_trust', type: 'likert', prompt: 'I trusted the AI assistant’s estimates.' });
+    }
+    qs.push({ id: 'comments', type: 'text', prompt: 'Anything else about how you searched? (optional)' });
+    return qs;
+  }
+  function showSurvey() { S.phase = 'survey'; save(); renderSurvey(); show('s-survey'); }
+  function renderSurvey() {
+    var qs = surveyQuestions();
+    var labels = ['Strongly disagree', 'Disagree', 'Neutral', 'Agree', 'Strongly agree'];
+    var h = '';
+    for (var i = 0; i < qs.length; i++) {
+      var q = qs[i];
+      h += '<div class="survey-q"><div class="sq-prompt">' + esc(q.prompt) + '</div>';
+      if (q.type === 'likert') {
+        h += '<div class="likert">';
+        for (var v = 1; v <= 5; v++) h += '<label><input type="radio" name="sq-' + q.id + '" value="' + v + '"><span>' + labels[v - 1] + '</span></label>';
+        h += '</div>';
+      } else {
+        h += '<textarea id="sq-' + q.id + '" rows="3"></textarea>';
+      }
+      h += '</div>';
+    }
+    $('survey-body').innerHTML = h;
+  }
+  function submitSurvey() {
+    var qs = surveyQuestions();
+    for (var i = 0; i < qs.length; i++) {
+      var q = qs[i];
+      if (q.type === 'likert') {
+        var sel = document.querySelector('input[name="sq-' + q.id + '"]:checked');
+        L.log('survey', { qid: q.id, choice: sel ? parseInt(sel.value, 10) : null });
+      } else {
+        var ta = $('sq-' + q.id);
+        L.log('survey', { qid: q.id, info: ta ? ta.value.trim().slice(0, 2000) : '' });
+      }
+    }
+    finish();
   }
 
   // ======================================================================
@@ -974,6 +1136,8 @@
     $('btn-stop-cancel').addEventListener('click', closeStop);
     $('btn-stop-ok').addEventListener('click', confirmStop);
     $('btn-continue').addEventListener('click', nextRound);
+    $('btn-compare-next').addEventListener('click', showSurvey);
+    $('btn-survey-submit').addEventListener('click', submitSurvey);
 
     $('btn-left').addEventListener('click', function () { selectPos(S.round.selected - 1); });
     $('btn-right').addEventListener('click', function () { selectPos(S.round.selected + 1); });

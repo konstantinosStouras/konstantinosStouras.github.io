@@ -137,6 +137,7 @@
         <div class="chart-col">
           <div class="plot-wrap"><div id="plot"></div></div>
           <div class="legend" id="legend"><!-- filled by app.js --></div>
+          <div class="testview" id="testview" style="display:none;"><!-- testing-only overlay toggles (debug), injected by app.js --></div>
 
           <div class="controls">
             <div class="pos-picker">
@@ -163,6 +164,24 @@
         <h3 id="inter-title">Round complete</h3>
         <div id="inter-body"></div>
         <div style="margin-top:18px;"><button class="btn btn-green" id="btn-continue">Continue</button></div>
+      </div>
+    </section>
+
+    <!-- ============ COMPARISON (end-of-study debrief) ============ -->
+    <section class="screen" id="s-compare">
+      <h1>Your results</h1>
+      <p class="muted" id="compare-intro"></p>
+      <div id="compare-body"><!-- plots + stats injected by app.js --></div>
+      <div class="right" style="margin-top:18px;"><button class="btn btn-green" id="btn-compare-next">Next</button></div>
+    </section>
+
+    <!-- ============ SURVEY ============ -->
+    <section class="screen" id="s-survey">
+      <h1>One last thing</h1>
+      <p class="muted">A few quick questions before you finish. Your answers are anonymous.</p>
+      <div class="card">
+        <div id="survey-body"><!-- questions injected by app.js --></div>
+        <div class="right" style="margin-top:8px;"><button class="btn btn-green" id="btn-survey-submit">Submit &amp; finish</button></div>
       </div>
     </section>
 

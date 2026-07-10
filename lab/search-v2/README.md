@@ -25,6 +25,20 @@ ordinal, so both designs analyse cleanly. (Internally the two phases are still
 arms `A`/`B`; the older per-arm `armMode` on a saved session is still honoured as
 a one-phase fallback.)
 
+After the last round the participant sees an **end-of-study debrief** — one
+representative (paid) round per phase drawn with its true prize curve, the
+positions they revealed and, for the With-AI phase, the AI's region / training
+points / interpolation line (all hidden during play) — plus per-phase summary
+stats. **Next** leads to a short anonymous **exit survey** (Likert + free text,
+logged as `survey` events), then the finish/completion-code page.
+
+**Testing view.** On a debug/Test link only (`?debug=1&key=…`), the round screen
+shows a "Testing view" checkbox bar to toggle the ground-truth line and, in the
+With-AI phase, the AI region / training points / interpolation line. These
+overlays are **never shown to a real participant** — during play they only see
+the prizes they reveal and the estimates they ask for. Debug links also accept
+`?phases=AB` to force a phase sequence for local testing.
+
 Design provenance (not shown in the app): the task/payoff/landscape replicate the
 High-Variability treatment of Malladi, Martínez-Marquina & Morozov, *"Space
 Exploration"*; the assistant implements the interpolation-only AI of Gans,
