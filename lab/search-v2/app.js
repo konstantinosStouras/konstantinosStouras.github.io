@@ -750,12 +750,9 @@
     x = Math.max(1, Math.min(N_POS, x));
     var res = A.estimate(dots, x);
     S.round.queries.push({ position: res.position, estimate: res.estimate, refused: res.refused, text: res.text });
-    if (!res.refused) {
-      // one live diamond per position (repeat asks refresh, don't stack)
-      var found = false;
-      for (var i = 0; i < S.round.estimates.length; i++) if (S.round.estimates[i].pos === res.position) { S.round.estimates[i].val = res.estimate; found = true; break; }
-      if (!found) S.round.estimates.push({ pos: res.position, val: res.estimate });
-    }
+    // Show only the CURRENT estimate: a new ask replaces the last diamond, and an
+    // ask with no data (refused) clears it — never stack past estimates.
+    S.round.estimates = res.refused ? [] : [{ pos: res.position, val: res.estimate }];
     pushContext();
     L.log('ai_query', { position: res.position, estimate: res.estimate, refused: res.refused });
     save();

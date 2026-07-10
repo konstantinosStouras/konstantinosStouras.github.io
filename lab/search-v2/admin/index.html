@@ -59,7 +59,9 @@
     .field .hint{font-size:12.5px; color:var(--muted); margin-top:4px;}
     .help{display:inline-block; width:15px; height:15px; line-height:14px; text-align:center; font-size:11px; font-weight:700;
       color:var(--muted); border:1px solid var(--line); border-radius:50%; cursor:help; vertical-align:middle;}
-    .field[title]:hover .help, h3[title]:hover .help{color:var(--blue); border-color:var(--blue);}
+    .field[title]:hover .help, .field[data-tip]:hover .help,
+    h3[title]:hover .help, h3[data-tip]:hover .help{color:var(--blue); border-color:var(--blue);}
+    /* Fast tooltip bubble (.tip-pop) styles live in the shared styles.css. */
     .howto{border:1px solid var(--line); border-radius:10px; background:var(--panel); padding:12px 14px; margin:8px 0 16px; font-size:13.5px;}
     .howto summary{cursor:pointer; font-weight:600;}
     .howto ol{margin:8px 0 0; padding-left:20px;} .howto li{margin:4px 0;}
@@ -224,8 +226,8 @@
             <div class="field" title="How many rounds each participant plays. Real rounds are paid-eligible; a subset of them (Paid rounds) is drawn at random at the end and paid as a bonus. The practice round is unpaid and can be turned off.">
               <label>Rounds each participant plays <span class="help">?</span></label>
               <div class="row2">
-                <div class="field" title="Number of real (paid-eligible) rounds each participant plays. Default 10. Each round is a fresh hidden landscape.">
-                  <label>Real rounds</label><input type="number" id="f-ntasks" min="1" max="120" value="10" /></div>
+                <div class="field" title="This means half of them are the rounds played in each condition. Number of real (paid-eligible) rounds each participant plays. Default 10. Each round is a fresh hidden landscape.">
+                  <label>Total rounds <span class="help">?</span></label><input type="number" id="f-ntasks" min="1" max="120" value="10" /></div>
                 <div class="field" title="How many of the real rounds are drawn at random at the end and paid to the participant as a bonus. Must be ≤ real rounds. Default 2.">
                   <label>Paid rounds (drawn at end)</label><input type="number" id="f-paid" min="0" max="120" value="2" /></div>
                 <div class="field" title="Whether participants play one unpaid practice round before the real rounds.">
@@ -311,5 +313,6 @@
   <script src="../firebase-config.js"></script>
   <script src="../firebase.js"></script>
   <script src="admin.js"></script>
+  <script src="../tooltip.js"></script>
 </body>
 </html>
