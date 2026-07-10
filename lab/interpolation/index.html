@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Interpolation &amp; Extrapolation on a Brownian Motion</title>
+  <meta name="description" content="An interactive demo: a blue Brownian motion over x in [0,100] with a few red sample points. Reveal what a linear interpolation predicts between the points, and how extrapolation behaves beyond them, with the formula for each shown live." />
+  <meta name="keywords" content="linear interpolation, extrapolation, Brownian motion, random walk, numerical methods, teaching demo, piecewise linear, formula" />
+  <link rel="canonical" href="https://www.stouras.com/lab/interpolation/" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="stouras.com" />
+  <meta property="og:title" content="Interpolation &amp; Extrapolation on a Brownian Motion" />
+  <meta property="og:description" content="A blue Brownian motion and a few red points. Click to see what linear interpolation predicts between the points and what extrapolation gives beyond them, with the formulae shown live." />
+  <meta property="og:url" content="https://www.stouras.com/lab/interpolation/" />
+
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232780e3'/%3E%3Cpolyline points='3,22 8,13 13,17 19,8 24,19 29,12' fill='none' stroke='white' stroke-width='2.2' stroke-linejoin='round' stroke-linecap='round'/%3E%3Ccircle cx='8' cy='13' r='2.4' fill='%23e41a1c'/%3E%3Ccircle cx='19' cy='8' r='2.4' fill='%23e41a1c'/%3E%3Ccircle cx='29' cy='12' r='2.4' fill='%23e41a1c'/%3E%3C/svg%3E" />
+
+  <style>
+    :root{
+      --blue:#2780e3; --blue-d:#1f6cc4;
+      --green:#3fb618; --green-d:#349612;
+      --amber:#e8963d; --amber-d:#d3812b;
+      --red:#e41a1c;
+      --purple:#6f42c1;
+      --ink:#2b2b2b; --muted:#6a6f76; --line:#e0e0e0; --bg:#ffffff; --panel:#f6f7f9;
+    }
+    *{box-sizing:border-box;}
+    html,body{margin:0;padding:0;}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; color:var(--ink); background:var(--bg); line-height:1.5; font-size:16px;}
+    a{color:var(--blue);}
+    .nav{display:flex; align-items:center; justify-content:space-between; padding:12px 22px; border-bottom:1px solid var(--line); background:#fff; position:sticky; top:0; z-index:40;}
+    .brand{font-weight:700; font-size:20px;}
+    .brand .dot{color:var(--blue);}
+    .nav-right{display:flex; gap:10px; align-items:center;}
+    .btn{display:inline-block; border:none; cursor:pointer; font-weight:600; padding:10px 20px; border-radius:26px; font-size:15px; color:#fff; transition:background .15s, transform .05s; box-shadow:0 1px 3px rgba(0,0,0,.12);}
+    .btn:active{transform:translateY(1px);}
+    .btn:disabled{opacity:.45; cursor:not-allowed;}
+    .btn-blue{background:var(--blue);} .btn-blue:hover:not(:disabled){background:var(--blue-d);}
+    .btn-ghost{background:#eef0f3; color:var(--ink); box-shadow:none;}
+    .btn-ghost:hover{background:#e3e6ea;}
+    .btn-outline{background:transparent; color:var(--blue); border:1.5px solid var(--blue); box-shadow:none; padding:8px 16px;}
+    .btn-outline:hover{background:var(--blue); color:#fff;}
+    .btn-sm{padding:7px 15px; font-size:14px;}
+    .wrap{max-width:1000px; margin:0 auto; padding:22px 20px 60px;}
+    h1{font-size:26px; margin:.2em 0 .35em;} h2{font-size:21px; margin:1em 0 .3em;} h3{font-size:18px; margin:.2em 0 .4em;}
+    p{margin:.55em 0;} hr{border:none; border-top:1px solid var(--line); margin:18px 0;}
+    .muted{color:var(--muted);} .small{font-size:13.5px;}
+    .card{background:#fff; border:1px solid var(--line); border-radius:12px; padding:20px 22px; margin:16px 0;}
+    .note{background:#eef5fd; border:1px solid #cfe3fb; border-radius:10px; padding:12px 16px; font-size:14px; color:#274a6d;}
+
+    /* plot */
+    .plot-wrap{border:1px solid var(--line); border-radius:10px; padding:8px 6px 2px; background:#fff;}
+    .plot-svg{width:100%; height:auto; display:block; touch-action:none;}
+    .axt{font-size:12px; fill:#555;} .axtitle{font-size:13.5px; fill:#333; font-weight:600;}
+
+    .legend{display:flex; gap:18px; justify-content:center; flex-wrap:wrap; font-size:13px; color:var(--muted); margin:8px 0 2px;}
+    .legend span{display:inline-flex; align-items:center; gap:6px;}
+    .lg-line{width:20px; height:0; border-top:3px solid; border-radius:2px;}
+    .lg-dash{width:20px; height:0; border-top:3px dashed;}
+    .lg-dot{width:11px; height:11px; border-radius:50%; display:inline-block;}
+
+    /* layer toggles */
+    .chips{display:flex; gap:10px; flex-wrap:wrap; margin:14px 0 4px;}
+    .chip{display:inline-flex; align-items:center; gap:8px; border:1.5px solid var(--line); border-radius:24px; padding:8px 15px; font-size:14px; font-weight:600; cursor:pointer; background:#fff; color:var(--muted); user-select:none; transition:.12s;}
+    .chip .sw{width:16px; height:0; border-top:3px solid currentColor; border-radius:2px;}
+    .chip .swd{border-top-style:dashed;}
+    .chip .swc{width:12px; height:12px; border-radius:50%; border:none; background:currentColor;}
+    .chip.on.c-truth{color:var(--blue); border-color:var(--blue); background:#eef5fd;}
+    .chip.on.c-pts{color:var(--red); border-color:var(--red); background:#fdeeee;}
+    .chip.on.c-interp{color:var(--green-d); border-color:var(--green); background:#eef8e9;}
+    .chip.on.c-extrap{color:var(--amber-d); border-color:var(--amber); background:#fdf3e8;}
+    .chip .box{display:inline-flex; width:15px; height:15px; border:2px solid currentColor; border-radius:4px; align-items:center; justify-content:center; font-size:11px; line-height:1;}
+    .chip.on .box::after{content:"\2713";}
+
+    /* controls row */
+    .controls{display:flex; gap:22px; flex-wrap:wrap; align-items:flex-end; margin-top:14px;}
+    .ctrl{display:flex; flex-direction:column; gap:6px;}
+    .ctrl .lab{font-size:13px; color:var(--muted); font-weight:600;}
+    .seg{display:inline-flex; border:1px solid #c9ced4; border-radius:8px; overflow:hidden; width:max-content;}
+    .seg button{border:none; background:#fff; padding:7px 15px; font-size:14px; cursor:pointer; color:var(--ink);}
+    .seg button.on{background:var(--blue); color:#fff;}
+    input[type=range]{width:260px; accent-color:var(--blue);}
+    .qrow{display:flex; align-items:center; gap:12px; flex-wrap:wrap;}
+    .qval{font-weight:700; font-size:15px; min-width:52px;}
+
+    /* readout tiles */
+    .tiles{display:flex; gap:14px; flex-wrap:wrap; margin-top:6px;}
+    .tile{flex:1 1 150px; border:1px solid var(--line); border-radius:10px; padding:11px 14px; background:var(--panel);}
+    .tile .t-lab{font-size:12.5px; color:var(--muted); font-weight:600;}
+    .tile .t-val{font-size:23px; font-weight:700; margin-top:2px;}
+    .tile.est .t-val{color:var(--green-d);} .tile.est.extrap .t-val{color:var(--amber-d);}
+    .tile.truth .t-val{color:var(--blue);}
+    .tile.err .t-val{color:var(--ink);}
+    .mode-badge{display:inline-block; font-size:12px; font-weight:700; padding:2px 9px; border-radius:12px; margin-left:8px; vertical-align:middle;}
+    .mode-badge.interp{background:#eef8e9; color:var(--green-d); border:1px solid #cfe8c2;}
+    .mode-badge.extrap{background:#fdf3e8; color:var(--amber-d); border:1px solid #f2d9b8;}
+
+    /* formulae */
+    .formula{font-size:17px; line-height:2.1; overflow-x:auto; padding:4px 2px;}
+    .frac{display:inline-flex; flex-direction:column; vertical-align:middle; text-align:center; margin:0 .18em;}
+    .frac .num{border-bottom:1.6px solid currentColor; padding:0 .35em;}
+    .frac .den{padding:0 .35em;}
+    .formula .hl{color:var(--red); font-weight:700;}
+    .formula .res{font-weight:700;}
+    .fdef{margin:2px 0 10px;}
+    .fdef .cap{font-size:13.5px; color:var(--muted); font-weight:600; margin-bottom:2px;}
+    .work{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 16px; margin-top:10px;}
+
+    .footer-note{margin-top:34px; padding-top:16px; border-top:1px solid var(--line); color:var(--muted); font-size:13px;}
+    .overlay{position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; z-index:70; padding:20px;}
+    .overlay.show{display:flex;}
+    .modal{background:#fff; border-radius:14px; max-width:640px; width:100%; max-height:86vh; overflow:auto; padding:24px 26px; box-shadow:0 20px 60px rgba(0,0,0,.3);}
+    .modal-foot{display:flex; justify-content:flex-end; margin-top:16px;}
+
+    @media (max-width:640px){ input[type=range]{width:200px;} .formula{font-size:15px;} }
+  </style>
+</head>
+<body>
+  <div class="nav">
+    <div class="brand">Interpolation <span class="dot">&bull;</span> <span class="muted" style="font-weight:400; font-size:14px;">&amp; Extrapolation on a Brownian motion</span></div>
+    <div class="nav-right">
+      <button class="btn btn-outline btn-sm" id="btn-help"><span aria-hidden="true">&#9432;</span> How it works</button>
+      <button class="btn btn-ghost btn-sm" id="btn-new">&#8635; New motion</button>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <h1>What does interpolation predict &mdash; and what happens when you extrapolate?</h1>
+    <p>The <span style="color:var(--blue); font-weight:600;">blue curve</span> is a <b>Brownian motion</b> (a random walk) over
+    <i>x</i>&nbsp;&isin;&nbsp;[0,&nbsp;100], with values <i>y</i>(<i>x</i>)&nbsp;&isin;&nbsp;[0,&nbsp;1]. Pretend you can only measure it at a
+    few places: the <span style="color:var(--red); font-weight:600;">red points</span>. Everywhere else the value is unknown.
+    <b>Linear interpolation</b> guesses the in-between values by drawing straight lines from one red point to the next.
+    <b>Extrapolation</b> continues that straight line <i>past</i> the outermost points, into places you never measured &mdash;
+    where the guess and the true curve tend to drift apart. Use the buttons to reveal each layer, then drag the probe to
+    read the predicted value at any <i>x</i>.</p>
+
+    <div class="plot-wrap">
+      <svg id="plot" class="plot-svg" viewBox="0 0 760 400" role="img" aria-label="Brownian motion with sample points, interpolation and extrapolation"></svg>
+    </div>
+    <div class="legend">
+      <span><i class="lg-line" style="border-color:var(--blue)"></i> Brownian truth</span>
+      <span><i class="lg-dot" style="background:var(--red)"></i> Sample points</span>
+      <span><i class="lg-line" style="border-color:var(--green)"></i> Linear interpolation</span>
+      <span><i class="lg-dash" style="border-color:var(--amber)"></i> Extrapolation</span>
+    </div>
+
+    <!-- layer toggles -->
+    <div class="chips" id="chips">
+      <div class="chip on c-truth"  data-layer="truth"><span class="box"></span><span class="sw"></span>Brownian truth</div>
+      <div class="chip on c-pts"    data-layer="pts"><span class="box"></span><span class="swc"></span>Sample points</div>
+      <div class="chip c-interp"    data-layer="interp"><span class="box"></span><span class="sw"></span>Linear interpolation</div>
+      <div class="chip c-extrap"    data-layer="extrap"><span class="box"></span><span class="sw swd"></span>Extrapolation</div>
+    </div>
+
+    <div class="controls">
+      <div class="ctrl">
+        <span class="lab">Number of sample points</span>
+        <div class="seg" id="seg-k">
+          <button data-k="3">3</button><button data-k="5" class="on">5</button><button data-k="8">8</button>
+        </div>
+      </div>
+      <div class="ctrl" style="flex:1 1 300px;">
+        <span class="lab">Probe point &nbsp;<i>x</i> &nbsp;(drag the slider, or click on the chart)</span>
+        <div class="qrow">
+          <input type="range" id="q" min="0" max="100" step="1" value="50" />
+          <span class="qval"><i>x</i> = <span id="qtxt">50</span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- readouts -->
+    <div class="tiles">
+      <div class="tile est" id="tile-est">
+        <div class="t-lab">Estimate &nbsp;<span id="mode-badge" class="mode-badge interp">interpolation</span></div>
+        <div class="t-val"><span id="est-val">&mdash;</span></div>
+      </div>
+      <div class="tile truth" id="tile-truth">
+        <div class="t-lab">True value &nbsp;<span class="muted small">y(x)</span></div>
+        <div class="t-val"><span id="truth-val">&mdash;</span></div>
+      </div>
+      <div class="tile err">
+        <div class="t-lab">Error &nbsp;<span class="muted small">|estimate &minus; truth|</span></div>
+        <div class="t-val"><span id="err-val">&mdash;</span></div>
+      </div>
+    </div>
+
+    <!-- formulae -->
+    <div class="card">
+      <h2 style="margin-top:0;">The formulae</h2>
+      <p class="small muted" style="margin-top:0;">Sample points are labelled left&#8209;to&#8209;right
+        (<i>x</i><sub>0</sub>,&nbsp;<i>y</i><sub>0</sub>), (<i>x</i><sub>1</sub>,&nbsp;<i>y</i><sub>1</sub>),&nbsp;&hellip;,
+        (<i>x</i><sub>n</sub>,&nbsp;<i>y</i><sub>n</sub>), where <i>y<sub>i</sub></i>&nbsp;=&nbsp;<i>y</i>(<i>x<sub>i</sub></i>).</p>
+
+      <div class="fdef">
+        <div class="cap">Linear interpolation &mdash; for <i>x</i> between two neighbouring samples <i>x<sub>i</sub></i> &le; <i>x</i> &le; <i>x</i><sub>i+1</sub></div>
+        <div class="formula">
+          &#375;(<i>x</i>) = <i>y<sub>i</sub></i> +
+          <span class="frac"><span class="num"><i>y</i><sub>i+1</sub> &minus; <i>y<sub>i</sub></i></span><span class="den"><i>x</i><sub>i+1</sub> &minus; <i>x<sub>i</sub></i></span></span>
+          <span>(<i>x</i> &minus; <i>x<sub>i</sub></i>)</span>
+        </div>
+      </div>
+
+      <div class="fdef">
+        <div class="cap">Linear extrapolation &mdash; for <i>x</i> beyond the samples, continuing the nearest edge segment through (<i>x<sub>a</sub></i>,&nbsp;<i>y<sub>a</sub></i>) and (<i>x<sub>b</sub></i>,&nbsp;<i>y<sub>b</sub></i>)</div>
+        <div class="formula">
+          &#375;(<i>x</i>) = <i>y</i><sub>anchor</sub> +
+          <span class="frac"><span class="num"><i>y<sub>b</sub></i> &minus; <i>y<sub>a</sub></i></span><span class="den"><i>x<sub>b</sub></i> &minus; <i>x<sub>a</sub></i></span></span>
+          <span>(<i>x</i> &minus; <i>x</i><sub>anchor</sub>)</span>
+        </div>
+      </div>
+
+      <div class="work" id="work">
+        <div class="small muted" id="work-cap" style="margin-bottom:6px;">Worked example at the probe point</div>
+        <div class="formula" id="work-formula">&mdash;</div>
+      </div>
+      <p class="small muted" style="margin-bottom:0;">Both formulae are the same idea: take the straight line through the two
+      relevant red points and evaluate it at <i>x</i>. It is exact <i>on</i> the red points and is a straight&#8209;line guess
+      in between; the further <i>x</i> sits from the data, the less the straight line has to do with the wiggly truth.</p>
+    </div>
+  </div>
+
+  <!-- how it works -->
+  <div class="overlay" id="ov-help">
+    <div class="modal">
+      <h2 style="margin-top:0;">How it works</h2>
+      <p>This is a small teaching demo &mdash; there is no data collection and nothing is sent anywhere.</p>
+      <ul>
+        <li>The <b>blue curve</b> is a fresh <b>Brownian motion</b>: start at <i>y</i>&nbsp;=&nbsp;0.5 and add a small random
+        step at each of the 100 positions, reflecting back whenever it would leave&nbsp;[0,&nbsp;1]. Press
+        <b>New motion</b> for a different one.</li>
+        <li>The <b>red points</b> are the values you are allowed to see. Change how many with the <b>3&nbsp;/&nbsp;5&nbsp;/&nbsp;8</b>
+        selector &mdash; more points means the straight&#8209;line guess hugs the truth more closely.</li>
+        <li><b>Linear interpolation</b> (green) connects consecutive red points with straight segments. Between two points it
+        is a weighted average of their heights.</li>
+        <li><b>Extrapolation</b> (amber, dashed) extends the first and last segments <i>outside</i> the measured range. The
+        shaded bands mark those regions &mdash; notice how the dashed line and the blue truth part ways.</li>
+        <li>The <b>probe</b> (drag the slider or click the chart) drops a vertical marker at <i>x</i>. The diamond is the
+        estimate &#375;(<i>x</i>), the blue dot is the truth <i>y</i>(<i>x</i>), and the tiles read off both plus the error.
+        The formula panel shows the exact calculation for that <i>x</i>.</li>
+      </ul>
+      <div class="modal-foot"><button class="btn btn-blue" id="btn-help-close">Got it</button></div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="footer-note">A <a href="https://www.stouras.com/">stouras.com</a> lab demo &middot; self&#8209;contained, no backend, no tracking.</div>
+  </div>
+
+<script>
+"use strict";
+/* ==========================================================================
+   Interpolation & Extrapolation on a Brownian motion.
+   One hidden-ish "truth" random walk (shown in blue), a few red sample points,
+   and the piecewise-linear interpolant / linear extrapolant built from them.
+   A draggable probe reads the predicted value at any x and shows the formula.
+   Self-contained, no backend, no data collection.
+   ========================================================================== */
+
+// ---- constants ----
+var N = 100;          // positions 0..100 (101 samples of the walk)
+var STEP_SD = 0.045;  // Brownian step std, in [0,1] units
+var PT_LO = 10, PT_HI = 90;  // sample points live in [10,90] -> extrapolation zones at both ends
+
+// ---- helpers ----
+function clamp(x,a,b){ return Math.max(a, Math.min(b, x)); }
+function randint(a,b){ return a + Math.floor(Math.random()*(b-a+1)); }
+function gauss(){ var u=0,v=0; while(u===0)u=Math.random(); while(v===0)v=Math.random();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+function $(id){ return document.getElementById(id); }
+function f2(x){ return x.toFixed(2); }
+
+// ---- state ----
+var state = { K:5, truth:[], pts:[], query:50,
+              showTruth:true, showPts:true, showInterp:false, showExtrap:false };
+
+// ---- landscape ----
+function buildTruth(){
+  var t = new Array(N+1);
+  t[0] = clamp(0.5 + 0.15*gauss(), 0.25, 0.75);
+  for(var x=1;x<=N;x++){
+    var v = t[x-1] + STEP_SD*gauss();
+    if(v<0) v=-v; if(v>1) v=2-v;      // reflect into [0,1]
+    t[x] = clamp(v,0,1);
+  }
+  state.truth = t;
+}
+// K distinct sample positions, ~evenly spread across [PT_LO,PT_HI] with jitter.
+function pickPoints(K){
+  state.K = K;
+  var used={}, arr=[];
+  for(var i=0;i<K;i++){
+    var base = Math.round(PT_LO + i*(PT_HI-PT_LO)/(K-1));
+    var j = clamp(base + randint(-4,4), 6, 94);
+    while(used[j]) j = clamp(j+1, 6, 94);
+    used[j]=1; arr.push(j);
+  }
+  arr.sort(function(a,b){return a-b;});
+  state.pts = arr.map(function(x){ return {x:x, y:state.truth[x]}; });
+}
+function newMotion(){ buildTruth(); pickPoints(state.K); }
+
+// ---- the estimator: value the interpolant/extrapolant gives at x ----
+// Returns the two points defining the straight line (increasing x), the anchor
+// used in the formula, the slope, the estimate, and the mode.
+function estimateAt(x){
+  var p = state.pts, n = p.length, first = p[0], last = p[n-1];
+  var xi,yi,xj,yj,ax,ay,mode;
+  if(x < first.x){                       // extrapolate off the left edge
+    xi=p[0].x; yi=p[0].y; xj=p[1].x; yj=p[1].y; ax=xi; ay=yi; mode='extrap';
+  } else if(x > last.x){                  // extrapolate off the right edge
+    xi=p[n-2].x; yi=p[n-2].y; xj=p[n-1].x; yj=p[n-1].y; ax=xj; ay=yj; mode='extrap';
+  } else {                                // interpolate between bracketing samples
+    var i=0; while(i<n-1 && !(p[i].x<=x && x<=p[i+1].x)) i++;
+    xi=p[i].x; yi=p[i].y; xj=p[i+1].x; yj=p[i+1].y; ax=xi; ay=yi; mode='interp';
+  }
+  var m = (yj-yi)/(xj-xi);
+  return { y: ay + m*(x-ax), mode:mode, xi:xi, yi:yi, xj:xj, yj:yj, ax:ax, ay:ay, m:m };
+}
+
+// ==========================================================================
+//  Plot
+// ==========================================================================
+var VB = {L:56, R:726, T:22, B:360};
+function xco(p){ return VB.L + p/N*(VB.R-VB.L); }
+function yco(v){ return VB.B - v*(VB.B-VB.T); }
+function line(x1,y1,x2,y2,stroke,w,dash){
+  return '<line x1="'+x1.toFixed(1)+'" y1="'+y1.toFixed(1)+'" x2="'+x2.toFixed(1)+'" y2="'+y2.toFixed(1)+
+         '" stroke="'+stroke+'" stroke-width="'+w+'"'+(dash?' stroke-dasharray="'+dash+'"':'')+'/>';
+}
+function poly(arr,from,to,stroke,w,dash){
+  var pts=[]; for(var x=from;x<=to;x++){ pts.push(xco(x).toFixed(1)+','+yco(arr[x]).toFixed(1)); }
+  return '<polyline points="'+pts.join(' ')+'" fill="none" stroke="'+stroke+'" stroke-width="'+w+'"'+
+         (dash?' stroke-dasharray="'+dash+'"':'')+' stroke-linejoin="round"/>';
+}
+
+function render(){
+  var p = state.pts, n = p.length, first = p[0], last = p[n-1], g='', x;
+
+  // clip so extrapolation lines that leave [0,1] are cut at the plot edge
+  g += '<defs><clipPath id="pc"><rect x="'+VB.L+'" y="'+VB.T+'" width="'+(VB.R-VB.L)+'" height="'+(VB.B-VB.T)+'"/></clipPath></defs>';
+
+  // extrapolation-zone shading (only when the layer is on)
+  if(state.showExtrap){
+    g += '<rect x="'+xco(0)+'" y="'+VB.T+'" width="'+(xco(first.x)-xco(0))+'" height="'+(VB.B-VB.T)+'" fill="#fbe4cf" opacity="0.45"/>';
+    g += '<rect x="'+xco(last.x)+'" y="'+VB.T+'" width="'+(xco(N)-xco(last.x))+'" height="'+(VB.B-VB.T)+'" fill="#fbe4cf" opacity="0.45"/>';
+    g += '<text x="'+((xco(0)+xco(first.x))/2)+'" y="'+(VB.T+14)+'" text-anchor="middle" font-size="11" fill="#b5721f">extrapolation</text>';
+    g += '<text x="'+((xco(last.x)+xco(N))/2)+'" y="'+(VB.T+14)+'" text-anchor="middle" font-size="11" fill="#b5721f">extrapolation</text>';
+  }
+
+  // grid + axes
+  [0,0.25,0.5,0.75,1].forEach(function(v){
+    g += line(VB.L, yco(v), VB.R, yco(v), '#ececec', 1);
+    g += '<text x="'+(VB.L-8)+'" y="'+(yco(v)+4)+'" text-anchor="end" class="axt">'+v.toFixed(2)+'</text>';
+  });
+  [0,25,50,75,100].forEach(function(pp){
+    g += line(xco(pp), VB.T, xco(pp), VB.B, '#f3f3f3', 1);
+    g += '<text x="'+xco(pp)+'" y="'+(VB.B+20)+'" text-anchor="middle" class="axt">'+pp+'</text>';
+  });
+  g += line(VB.L, VB.T, VB.L, VB.B, '#bbb', 1);
+  g += line(VB.L, VB.B, VB.R, VB.B, '#bbb', 1);
+  g += '<text transform="translate(16 '+((VB.T+VB.B)/2)+') rotate(-90)" text-anchor="middle" class="axtitle">y ( x )</text>';
+  g += '<text x="'+((VB.L+VB.R)/2)+'" y="'+(VB.B+38)+'" text-anchor="middle" class="axtitle">x</text>';
+
+  // truth (blue)
+  if(state.showTruth){ g += poly(state.truth, 0, N, '#2780e3', 2.4); }
+
+  g += '<g clip-path="url(#pc)">';
+  // extrapolation (amber dashed): extend first & last segments outward
+  if(state.showExtrap){
+    var mL = (p[1].y-p[0].y)/(p[1].x-p[0].x);
+    var yL0 = p[0].y + mL*(0 - p[0].x);
+    g += line(xco(0), yco(yL0), xco(first.x), yco(first.y), '#e8963d', 2.6, '7 5');
+    var mR = (p[n-1].y-p[n-2].y)/(p[n-1].x-p[n-2].x);
+    var yR1 = p[n-1].y + mR*(N - p[n-1].x);
+    g += line(xco(last.x), yco(last.y), xco(N), yco(yR1), '#e8963d', 2.6, '7 5');
+  }
+  // interpolation (green): connect consecutive samples
+  if(state.showInterp){
+    var seg=[]; for(var k=0;k<n;k++){ seg.push(xco(p[k].x).toFixed(1)+','+yco(p[k].y).toFixed(1)); }
+    g += '<polyline points="'+seg.join(' ')+'" fill="none" stroke="#3fb618" stroke-width="2.6" stroke-linejoin="round"/>';
+  }
+  g += '</g>';
+
+  // probe marker
+  var q = state.query, e = estimateAt(q), trueY = state.truth[q];
+  var estClamped = clamp(e.y, 0, 1);
+  var qx = xco(q);
+  g += line(qx, VB.T, qx, VB.B, '#9aa0a6', 1.4, '4 4');
+  // error connector (truth <-> estimate) when both shown
+  if(state.showTruth){
+    g += line(qx, yco(trueY), qx, yco(estClamped), '#9aa0a6', 1.4, '2 3');
+    g += '<circle cx="'+qx+'" cy="'+yco(trueY)+'" r="5" fill="#2780e3"/>';
+  }
+  // estimate diamond, coloured by mode
+  var col = (e.mode==='extrap') ? '#e8963d' : '#3fb618';
+  var ey = yco(estClamped), r=6.5;
+  g += '<path d="M'+qx+' '+(ey-r)+'L'+(qx+r)+' '+ey+'L'+qx+' '+(ey+r)+'L'+(qx-r)+' '+ey+'Z" fill="'+col+'" stroke="#fff" stroke-width="1.4"/>';
+  g += '<text x="'+qx+'" y="'+(VB.T-6)+'" text-anchor="middle" font-size="12.5" font-weight="700" fill="'+col+'">'+f2(e.y)+'</text>';
+
+  // sample points (red) on top
+  if(state.showPts){
+    for(var s=0;s<n;s++){
+      var sx=xco(p[s].x), sy=yco(p[s].y);
+      g += '<circle cx="'+sx+'" cy="'+sy+'" r="5" fill="#e41a1c" stroke="#fff" stroke-width="1.3"/>';
+    }
+  }
+
+  $('plot').innerHTML = g;
+}
+
+// ==========================================================================
+//  Readouts + formula
+// ==========================================================================
+function fracHTML(num, den){ return '<span class="frac"><span class="num">'+num+'</span><span class="den">'+den+'</span></span>'; }
+// signed additive term "+ v" / "&minus; |v|"
+function signed(v){ return (v<0 ? '&minus; '+f2(-v) : '+ '+f2(v)); }
+
+function updateReadouts(){
+  var q = state.query, e = estimateAt(q), trueY = state.truth[q];
+  $('qtxt').textContent = q;
+  $('est-val').textContent = f2(e.y) + (e.y<0||e.y>1 ? '' : '');
+  $('truth-val').textContent = f2(trueY);
+  $('err-val').textContent = f2(Math.abs(e.y - trueY));
+
+  var isX = (e.mode==='extrap');
+  var tile = $('tile-est'); tile.classList.toggle('extrap', isX);
+  var badge = $('mode-badge');
+  badge.textContent = isX ? 'extrapolation' : 'interpolation';
+  badge.className = 'mode-badge ' + (isX ? 'extrap' : 'interp');
+
+  // worked example
+  var m = e.m;
+  var cap = isX
+    ? 'Worked example &mdash; x = '+q+' is outside the sampled range, so this is <b>extrapolation</b> along the nearest edge segment:'
+    : 'Worked example &mdash; x = '+q+' sits between samples ('+e.xi+', '+f2(e.yi)+') and ('+e.xj+', '+f2(e.yj)+'), so this is <b>interpolation</b>:';
+  $('work-cap').innerHTML = cap;
+
+  var html =
+    '&#375;(<span class="hl">'+q+'</span>) = '+f2(e.ay)+' + ' +
+    fracHTML(f2(e.yj)+' &minus; '+f2(e.yi), e.xj+' &minus; '+e.xi) +
+    ' (<span class="hl">'+q+'</span> &minus; '+e.ax+')' +
+    ' = '+f2(e.ay)+' '+signed(m*(q-e.ax))+
+    ' = <span class="res">'+f2(e.y)+'</span>';
+  $('work-formula').innerHTML = html;
+}
+
+// ==========================================================================
+//  Wiring
+// ==========================================================================
+function refresh(){ render(); updateReadouts(); }
+
+function syncChips(){
+  var map = {truth:'showTruth', pts:'showPts', interp:'showInterp', extrap:'showExtrap'};
+  [].forEach.call(document.querySelectorAll('#chips .chip'), function(c){
+    c.classList.toggle('on', !!state[map[c.getAttribute('data-layer')]]);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', function(){
+  newMotion();
+  refresh();
+  syncChips();
+
+  // layer toggles
+  document.querySelectorAll('#chips .chip').forEach(function(c){
+    c.addEventListener('click', function(){
+      var map = {truth:'showTruth', pts:'showPts', interp:'showInterp', extrap:'showExtrap'};
+      var key = map[c.getAttribute('data-layer')];
+      state[key] = !state[key];
+      syncChips(); refresh();
+    });
+  });
+
+  // sample-point count (rebuild points on the SAME truth so you can compare)
+  document.querySelectorAll('#seg-k button').forEach(function(b){
+    b.addEventListener('click', function(){
+      document.querySelectorAll('#seg-k button').forEach(function(x){x.classList.remove('on');});
+      b.classList.add('on');
+      pickPoints(parseInt(b.getAttribute('data-k'),10));
+      refresh();
+    });
+  });
+
+  // probe slider
+  $('q').addEventListener('input', function(){ state.query = parseInt(this.value,10); refresh(); });
+
+  // click / drag on the chart sets the probe
+  var svg = $('plot'), dragging=false;
+  function posFromEvent(ev){
+    var rect = svg.getBoundingClientRect();
+    var cx = (ev.touches ? ev.touches[0].clientX : ev.clientX);
+    var sx = (cx - rect.left) / rect.width * 760;       // to viewBox units
+    var frac = (sx - VB.L) / (VB.R - VB.L);
+    return clamp(Math.round(frac*N), 0, N);
+  }
+  function setFromEvent(ev){ var q = posFromEvent(ev); state.query = q; $('q').value = q; refresh(); }
+  svg.addEventListener('mousedown', function(ev){ dragging=true; setFromEvent(ev); });
+  window.addEventListener('mousemove', function(ev){ if(dragging) setFromEvent(ev); });
+  window.addEventListener('mouseup', function(){ dragging=false; });
+  svg.addEventListener('touchstart', function(ev){ setFromEvent(ev); ev.preventDefault(); }, {passive:false});
+  svg.addEventListener('touchmove', function(ev){ setFromEvent(ev); ev.preventDefault(); }, {passive:false});
+
+  // new motion
+  $('btn-new').addEventListener('click', function(){ newMotion(); refresh(); });
+
+  // help modal
+  $('btn-help').addEventListener('click', function(){ $('ov-help').classList.add('show'); });
+  $('btn-help-close').addEventListener('click', function(){ $('ov-help').classList.remove('show'); });
+  $('ov-help').addEventListener('click', function(ev){ if(ev.target===this) this.classList.remove('show'); });
+});
+</script>
+</body>
+</html>
