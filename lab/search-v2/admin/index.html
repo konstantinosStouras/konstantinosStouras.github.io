@@ -185,7 +185,7 @@
             <li><b>Share</b> the appropriate link with participants (via Prolific). Their data is tagged with this session's code.</li>
             <li>Watch progress under <b>Active sessions</b> (right); <b>mark completed</b> when done. See results on the <b>Data</b> and <b>Analytics</b> tabs.</li>
           </ol>
-          <p class="small muted" style="margin:8px 0 0;">The game: each participant searches a hidden line of 100 prizes, paying 5¢ to reveal any position, and keeps the best prize minus reveal costs. In the <b>With AI</b> phase they also get a free AI assistant that estimates prizes between positions 30–70; in the <b>Without AI</b> phase they search alone.</p>
+          <p class="small muted" style="margin:8px 0 0;">The game: each participant searches a hidden line of 100 prizes, paying 5¢ to reveal any position, and keeps the best prize minus reveal costs. In the <b>With AI</b> phase they also get a free AI assistant that estimates prizes in a few position ranges (25–45 and 55–75); in the <b>Without AI</b> phase they search alone.</p>
         </details>
         <div class="cols">
           <!-- LEFT: create / edit form -->
@@ -203,7 +203,7 @@
               </div>
             </div>
 
-            <div class="field" title="A phase is a block of rounds played in one condition. 'Without AI' = the participant searches alone; 'With AI' = the participant also has a free assistant that estimates prizes inside positions 30–70. Turn a phase on to include it, and choose the order participants move through them. Include one phase for a single-condition study, or both for a within-subjects design where everyone plays both.">
+            <div class="field" title="A phase is a block of rounds played in one condition. 'Without AI' = the participant searches alone; 'With AI' = the participant also has a free assistant that estimates prizes in a few position ranges (25–45 and 55–75), interpolating within each and refusing outside them. Turn a phase on to include it, and choose the order participants move through them. Include one phase for a single-condition study, or both for a within-subjects design where everyone plays both.">
               <label>Phases <span class="help">?</span></label>
               <div class="hint" style="margin:0 0 8px;">Select which phases to include and the order participants move through them. Each included phase is played as its own block of the rounds set above.</div>
               <div class="phase-toggles" id="phase-toggles">
@@ -211,7 +211,7 @@
                   <span class="pt-label">Without AI <span class="muted small">· human only</span></span>
                   <span class="pt-switch"><input type="checkbox" id="ph-A" data-ph="A"><span class="pt-sw"></span></span>
                 </label>
-                <label class="phase-toggle" title="Include a block of rounds where the participant also has the free AI assistant (estimates positions 30–70).">
+                <label class="phase-toggle" title="Include a block of rounds where the participant also has the free AI assistant (estimates positions in a few ranges: 25–45 and 55–75).">
                   <span class="pt-label">With AI <span class="muted small">· AI assisted</span></span>
                   <span class="pt-switch"><input type="checkbox" id="ph-B" data-ph="B"><span class="pt-sw"></span></span>
                 </label>
@@ -245,8 +245,8 @@
               <div class="field" title="Optional: a completion code used only when the whole session is the single With-AI phase (overrides the shared code).">
                 <label>With AI code (optional)</label><input type="text" id="f-codeB" placeholder="single-phase only" /></div>
             </div>
-            <h3 style="margin-top:16px;" title="Override the wording participants see on each screen. Leave a box blank to keep the built-in text. Tokens like {nTasks}, {paidTasks}, {fee} and {rounds} are filled in automatically.">Page text &amp; content <span class="help">?</span></h3>
-            <p class="muted small">Edit what participants see on each page. Leave a box blank to use the built-in default. Use <code class="k">**bold**</code>, blank lines for paragraphs, and tokens <code class="k">{nTasks}</code>, <code class="k">{paidTasks}</code>, <code class="k">{fee}</code>, <code class="k">{rounds}</code>.</p>
+            <h3 style="margin-top:16px;" title="Override the wording participants see on each screen. Leave a box blank to keep the built-in text. Tokens like {nTasks}, {paidTasks}, {fee}, {rounds} and {coverage} (the assistant's position ranges) are filled in automatically.">Page text &amp; content <span class="help">?</span></h3>
+            <p class="muted small">Edit what participants see on each page. Leave a box blank to use the built-in default. Use <code class="k">**bold**</code>, blank lines for paragraphs, and tokens <code class="k">{nTasks}</code>, <code class="k">{paidTasks}</code>, <code class="k">{fee}</code>, <code class="k">{rounds}</code>, <code class="k">{coverage}</code>.</p>
             <div id="content-editors"><!-- accordions injected by admin.js --></div>
 
             <div class="actions3">

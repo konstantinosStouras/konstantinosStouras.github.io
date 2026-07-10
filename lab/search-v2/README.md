@@ -10,8 +10,10 @@ for the best prize, paying 5¢ per reveal. The study runs in one or more
 
 - **Without AI (human only, arm `A`)** — the subject searches alone.
 - **With AI (AI assisted, arm `B`)** — the subject additionally has a free
-  assistant that interpolates between its own hidden data points inside a fixed
-  coverage region (positions 30–70) and refuses outside it.
+  assistant that is "trained on" a fixed **set of coverage patches** (positions
+  25–45 and 55–75), like an LLM's patchy training data. It interpolates between
+  its own hidden data points within each patch and refuses in the gaps between /
+  outside them.
 
 The admin chooses **which phases to include and the order** participants move
 through them (in the `/admin/` panel → **Phases**). Include one phase for a
@@ -120,8 +122,8 @@ It writes:
   *would* have said).
 
 Two strata (60 landscapes each) + 1 practice landscape:
-- **RICH** — global best is inside coverage (`interiorMax ≥ 85`, `outsideMax ≤ interiorMax`).
-- **POOR** — global best is outside coverage (`interiorMax ≤ 55`, `outsideMax ≥ 85`).
+- **RICH** — global best is inside the coverage patches (`interiorMax ≥ 85`, `outsideMax ≤ interiorMax`).
+- **POOR** — global best is outside all coverage patches (`interiorMax ≤ 55`, `outsideMax ≥ 85`).
 - Both pass a comparability screen (mean of all 100 values in [25, 50]).
 
 Each subject is served 5 RICH + 5 POOR, shuffled (seeded by session id).
@@ -300,7 +302,7 @@ same draw); the bonus is the sum of their nets, each floored at 0 for payment
 ## Config (`config.js`)
 
 All tunables live in one object: `N_POSITIONS`, `L_STEP`, `REVEAL_COST`,
-`N_TASKS`, `N_PRACTICE`, `PAID_TASKS`, `COVERAGE`, `K_DOTS`, `POOL_PER_STRATUM`,
+`N_TASKS`, `N_PRACTICE`, `PAID_TASKS`, `COVERAGE_PATCHES`, `K_DOTS`, `POOL_PER_STRATUM`,
 `RICH_INTERIOR_MIN`, `POOR_INTERIOR_MAX`, `POOR_OUTSIDE_MIN`, `ENDPOINT_URL`,
 `COMPLETION_CODE`, `APP_VERSION`, `OBFUSCATION_KEY`, `DEBUG_KEY`. `config.js` is
 loaded by both the browser and the Node tools, so the two never disagree.

@@ -1,25 +1,37 @@
 /* ==========================================================================
    search-v2  ·  assistant.js   (Arm B only)
    The interpolation-only "assistant" (Gans, jagged-intelligence AI).
-   It knows K_DOTS hidden training points inside COVERAGE and answers with the
-   straight line between the two nearest ones. Outside COVERAGE it refuses.
-   It NEVER uses the subject's reveals — only its own dots.
+   It is "trained on" a SET of disjoint patches (COVERAGE_PATCHES) — like an
+   LLM's patchy training data. Inside a patch it answers with the straight line
+   between its two nearest training points; in the gaps between/outside patches
+   it has no data and refuses. It NEVER uses the subject's reveals — only its
+   own dots.
    ========================================================================== */
 window.Assistant = (function () {
   'use strict';
   var CFG = window.CONFIG;
-  var C0 = CFG.COVERAGE[0], C1 = CFG.COVERAGE[1];
+  var PATCHES = CFG.COVERAGE_PATCHES;
 
-  function inCoverage(x) { return x >= C0 && x <= C1; }
+  function inCoverage(x) {
+    for (var i = 0; i < PATCHES.length; i++) if (x >= PATCHES[i][0] && x <= PATCHES[i][1]) return true;
+    return false;
+  }
+  // Human-readable list of the patches, e.g. "25–45 and 55–75".
+  function patchesText() {
+    var parts = [];
+    for (var i = 0; i < PATCHES.length; i++) parts.push(PATCHES[i][0] + '–' + PATCHES[i][1]);
+    return parts.join(' and ');
+  }
 
-  // dots: array of [pos, value], sorted ascending by pos, endpoints C0 & C1.
+  // dots: array of [pos, value], sorted ascending by pos; each patch contributes
+  // its own endpoints so bracketing an in-patch x stays within that patch.
   // Returns { position, refused:Boolean, estimate:Number|null, text }.
   function estimate(dots, x) {
     x = Math.round(x);
     if (!inCoverage(x)) {
       return {
         position: x, refused: true, estimate: null,
-        text: 'I only have data for positions ' + C0 + ' to ' + C1 +
+        text: 'I only have data for positions ' + patchesText() +
               '. I have no data at position ' + x + '.'
       };
     }
@@ -66,5 +78,5 @@ window.Assistant = (function () {
     el.scrollTop = el.scrollHeight;
   }
 
-  return { inCoverage: inCoverage, estimate: estimate, renderLog: renderLog, C0: C0, C1: C1 };
+  return { inCoverage: inCoverage, estimate: estimate, renderLog: renderLog, patches: PATCHES, patchesText: patchesText };
 })();

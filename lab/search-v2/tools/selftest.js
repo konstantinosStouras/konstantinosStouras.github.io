@@ -32,12 +32,12 @@ function decodePairs(b64) {
   for (let i = 0; i < flat.length; i += 2) out.push([flat[i], flat[i + 1]]);
   return out;
 }
+const inAnyPatch = p => CONFIG.COVERAGE_PATCHES.some(([a, b]) => p >= a && p <= b);
 function statsOf(values) {
-  const C0 = CONFIG.COVERAGE[0], C1 = CONFIG.COVERAGE[1];
   let iMax = -1, oMax = -1, sum = 0;
   values.forEach((v, i) => {
     const p = i + 1; sum += v;
-    if (p >= C0 && p <= C1) iMax = Math.max(iMax, v); else oMax = Math.max(oMax, v);
+    if (inAnyPatch(p)) iMax = Math.max(iMax, v); else oMax = Math.max(oMax, v);
   });
   return { iMax, oMax, mean: sum / values.length };
 }
@@ -75,7 +75,7 @@ section('Test 2 · Stratum validity (every mapping satisfies its filters)');
 }
 
 // ==========================================================================
-section('Test 3 · Assistant math (dot=truth · midpoint=interp · 29/71 refuse)');
+section('Test 3 · Assistant math (dot=truth · midpoint=interp · gap/outside refuse)');
 {
   global.window = { CONFIG: CONFIG };
   require('../assistant.js');
@@ -96,11 +96,11 @@ section('Test 3 · Assistant math (dot=truth · midpoint=interp · 29/71 refuse)
   }
   ok('reply at every dot equals the true value (' + dotOK + ' dots)', dotBad === 0, dotBad + ' bad');
   ok('reply at a gap midpoint equals rounded linear interpolation', midBad === 0, midBad + ' bad');
-  ok('query at 29 refuses', A.estimate(decodePairs(shipped.mappings[0].dots), 29).refused === true);
-  ok('query at 71 refuses', A.estimate(decodePairs(shipped.mappings[0].dots), 71).refused === true);
-  ok('query at 30 and 70 (coverage endpoints) do NOT refuse',
-    A.estimate(decodePairs(shipped.mappings[0].dots), 30).refused === false &&
-    A.estimate(decodePairs(shipped.mappings[0].dots), 70).refused === false);
+  const dots0 = decodePairs(shipped.mappings[0].dots);
+  ok('query at 50 (gap between patches) refuses', A.estimate(dots0, 50).refused === true);
+  ok('query at 90 (outside all patches) refuses', A.estimate(dots0, 90).refused === true);
+  ok('queries at the patch endpoints (25, 45, 55, 75) do NOT refuse',
+    [25, 45, 55, 75].every(p => A.estimate(dots0, p).refused === false));
 }
 
 // ==========================================================================
