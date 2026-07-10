@@ -123,6 +123,13 @@
     .sc-actions{display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;}
     .link-btn{border:none; background:none; color:var(--blue); cursor:pointer; font-size:13.5px; padding:4px 2px;}
     .link-btn.danger{color:var(--red);}
+    /* Participants panel (right column of the Sessions tab) */
+    .part-scroll{max-height:420px; overflow:auto;}
+    .part-row{border:1px solid var(--line); border-radius:9px; padding:9px 12px; margin:8px 0; background:#fff;}
+    :root[data-theme="dark"] .part-row{ background:#1d2025; border-color:#2d3138; }
+    .part-row .pr-top{display:flex; justify-content:space-between; align-items:baseline; gap:8px;}
+    .part-row .pr-id{font-weight:600; font-size:14px; font-family:ui-monospace,Menlo,monospace;}
+    :root[data-theme="dark"] .part-row .pill.active{background:#243026; color:#7bd88f;}
 
     .stat-grid{display:flex; gap:12px; flex-wrap:wrap; margin:12px 0;}
     .stat-box{border:1px solid var(--line); border-radius:10px; padding:12px 16px; min-width:120px; background:#fff;}
@@ -192,17 +199,7 @@
           <!-- LEFT: create / edit form -->
           <div class="card">
             <h2 id="form-title">Create a session</h2>
-            <p class="muted small">A session is one run of the study with its own code, settings, and page text. Share its launch link with participants; data is grouped by session.</p>
-
-            <div class="row2">
-              <div class="field" title="A label for this run of the study, shown only to you (in the sessions list and data). Participants never see it.">
-                <label>Session name <span class="help">?</span></label><input type="text" id="f-name" placeholder="e.g. Prolific wave 1" /></div>
-              <div class="field" title="The code that ties participants and their data to THIS session. It goes in the participant link as ?code=CODE. Click Auto to generate one, or type your own (capital letters + digits).">
-                <label>Session code <span class="help">?</span></label>
-                <div class="code-row"><input type="text" id="f-code" placeholder="AUTO or custom (A–Z, 0–9)" /><button class="btn btn-ghost btn-sm" id="btn-gencode" title="Generate a random unused code">Auto</button></div>
-                <div class="hint">Single word, capital letters + digits. Used in the participant link.</div>
-              </div>
-            </div>
+            <p class="muted small">A session is one run of the study with its own code, settings, and page text. Configure it below, then name it and give it a code at the bottom before creating it. Share its launch link with participants; data is grouped by session.</p>
 
             <div class="field" title="A phase is a block of rounds played in one condition. 'Without AI' = the participant searches alone; 'With AI' = the participant also has a free assistant that gives its best estimate for any position — interpolating between the points it was trained on (accurate) and flat-extrapolating beyond them (unreliable), never refusing. Participants are not told where it is reliable. Turn a phase on to include it, and choose the order participants move through them. Include one phase for a single-condition study, or both for a within-subjects design where everyone plays both.">
               <label>Phases <span class="help">?</span></label>
@@ -250,6 +247,17 @@
             <p class="muted small">Edit what participants see on each page. Leave a box blank to use the built-in default. Use <code class="k">**bold**</code>, blank lines for paragraphs, and tokens <code class="k">{nTasks}</code>, <code class="k">{paidTasks}</code>, <code class="k">{fee}</code>, <code class="k">{rounds}</code>.</p>
             <div id="content-editors"><!-- accordions injected by admin.js --></div>
 
+            <h3 style="margin-top:16px;" title="How this run of the study is identified. The name is for you only; the code ties participants and their data to this session and goes in the participant link.">Session details <span class="help">?</span></h3>
+            <div class="row2">
+              <div class="field" title="A label for this run of the study, shown only to you (in the sessions list and data). Participants never see it.">
+                <label>Session name <span class="help">?</span></label><input type="text" id="f-name" placeholder="e.g. Prolific wave 1" /></div>
+              <div class="field" title="The code that ties participants and their data to THIS session. It goes in the participant link as ?code=CODE. Click Auto to generate one, or type your own (capital letters + digits).">
+                <label>Session code <span class="help">?</span></label>
+                <div class="code-row"><input type="text" id="f-code" placeholder="AUTO or custom (A–Z, 0–9)" /><button class="btn btn-ghost btn-sm" id="btn-gencode" title="Generate a random unused code">Auto</button></div>
+                <div class="hint">Single word, capital letters + digits. Used in the participant link.</div>
+              </div>
+            </div>
+
             <div class="actions3">
               <button class="btn btn-green" id="btn-save" title="Save this session to the database (creates it, or saves your edits)">Create session</button>
               <button class="btn btn-ghost btn-sm" id="btn-cancel" style="display:none;">Cancel edit</button>
@@ -274,6 +282,11 @@
             <div class="card">
               <div style="display:flex; justify-content:space-between; align-items:baseline;"><h2 style="margin:0;">Completed sessions</h2><span class="muted small" id="completed-count"></span></div>
               <div id="completed-list"></div>
+            </div>
+            <div class="card">
+              <div style="display:flex; justify-content:space-between; align-items:baseline;"><h2 style="margin:0;">Participants</h2><span class="muted small" id="participants-count"></span></div>
+              <p class="muted small" style="margin:6px 0 10px;">Everyone who has taken part, across all sessions. Participants join anonymously via a session link (no user accounts), so each is identified by its session code and Prolific ID.</p>
+              <div id="participants-list" class="part-scroll"><p class="muted small">Loading…</p></div>
             </div>
           </div>
         </div>
