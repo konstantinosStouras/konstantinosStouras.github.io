@@ -75,12 +75,12 @@ function makeWalk() {
 }
 function clamp(x) { return x < 0 ? 0 : x > 100 ? 100 : x; }
 
-// ---- assistant training dots (spec 3.2, per patch) -------------------------
-// Each coverage patch [a,b] gets its OWN training points: the two endpoints plus
-// a few interior ones, with adjacent gaps in [3,12] cents apart. The assistant
-// interpolates within a patch between its two nearest points; it has no points
-// in the gaps between patches (and refuses there). Returns the dots for all
-// patches, sorted by position, as [pos, trueValue] pairs.
+// ---- assistant training dots (spec 3.2) ------------------------------------
+// Each coverage interval [a,b] gets training points: the two endpoints plus a
+// few interior ones, with adjacent gaps in [3,12] cents apart. At run time the
+// assistant interpolates between its two nearest points and flat-extrapolates
+// beyond the outermost ones (it always answers; see assistant.js). Returns the
+// dots for every interval, sorted by position, as [pos, trueValue] pairs.
 function dotsForPatch(values, a, b) {
   const span = b - a;
   for (let attempt = 0; attempt < 2000; attempt++) {

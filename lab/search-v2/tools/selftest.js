@@ -75,32 +75,35 @@ section('Test 2 · Stratum validity (every mapping satisfies its filters)');
 }
 
 // ==========================================================================
-section('Test 3 · Assistant math (dot=truth · midpoint=interp · gap/outside refuse)');
+section('Test 3 · Assistant math (dot=truth · interp · flat extrapolation · never refuses)');
 {
   global.window = { CONFIG: CONFIG };
   require('../assistant.js');
   const A = global.window.Assistant;
-  let dotOK = 0, dotBad = 0, midOK = 0, midBad = 0;
+  let dotOK = 0, dotBad = 0, midOK = 0, midBad = 0, neverRefuse = true, flatBad = 0;
   for (const m of shipped.mappings) {
     const dots = decodePairs(m.dots);
-    // at a dot position the reply equals the true dot value
+    const first = dots[0], last = dots[dots.length - 1];
+    // at a known point the reply equals the true value
     for (const [p, val] of dots) {
       const r = A.estimate(dots, p);
       if (!r.refused && r.estimate === val) dotOK++; else dotBad++;
     }
-    // midpoint of the first gap equals the rounded linear interpolation
-    const a = dots[0], b = dots[1], mid = Math.round((a[0] + b[0]) / 2);
-    const expect = Math.round(a[1] + (mid - a[0]) / (b[0] - a[0]) * (b[1] - a[1]));
+    // midpoint between the first two points = rounded linear interpolation
+    const mid = Math.round((first[0] + dots[1][0]) / 2);
+    const expect = Math.round(first[1] + (mid - first[0]) / (dots[1][0] - first[0]) * (dots[1][1] - first[1]));
     const r = A.estimate(dots, mid);
     if (!r.refused && r.estimate === expect) midOK++; else midBad++;
+    // it always answers, everywhere
+    for (const p of [1, 20, 50, 80, 100]) if (A.estimate(dots, p).refused !== false) neverRefuse = false;
+    // beyond the outermost points it flat-extrapolates (holds the nearest value)
+    if (first[0] > 1 && A.estimate(dots, 1).estimate !== first[1]) flatBad++;
+    if (last[0] < 100 && A.estimate(dots, 100).estimate !== last[1]) flatBad++;
   }
-  ok('reply at every dot equals the true value (' + dotOK + ' dots)', dotBad === 0, dotBad + ' bad');
-  ok('reply at a gap midpoint equals rounded linear interpolation', midBad === 0, midBad + ' bad');
-  const dots0 = decodePairs(shipped.mappings[0].dots);
-  ok('query at 50 (gap between patches) refuses', A.estimate(dots0, 50).refused === true);
-  ok('query at 90 (outside all patches) refuses', A.estimate(dots0, 90).refused === true);
-  ok('queries at the patch endpoints (25, 45, 55, 75) do NOT refuse',
-    [25, 45, 55, 75].every(p => A.estimate(dots0, p).refused === false));
+  ok('reply at every known point equals the true value (' + dotOK + ' points)', dotBad === 0, dotBad + ' bad');
+  ok('reply between two points equals rounded linear interpolation', midBad === 0, midBad + ' bad');
+  ok('the assistant NEVER refuses (answers at 1,20,50,80,100)', neverRefuse);
+  ok('beyond its outermost points it flat-extrapolates (holds nearest value)', flatBad === 0, flatBad + ' bad');
 }
 
 // ==========================================================================

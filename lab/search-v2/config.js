@@ -24,15 +24,17 @@
     PAID_TASKS: 2,      // rounds drawn for payment at the end
 
     // ---- assistant (Arm B only) ------------------------------------------
-    // The assistant is "trained on" a SET of disjoint position ranges (patches),
-    // like an LLM's patchy training data — not one contiguous band. It
-    // interpolates within each patch (between its two nearest training points)
-    // and, in the gaps between/outside patches, has no data and refuses. Fixed
-    // across all rounds. Each patch gets its own training dots (endpoints + a few
-    // interior points), so "interior"/coverage below means the UNION of patches.
-    COVERAGE_PATCHES: [[25, 45], [55, 75]], // inclusive ranges the assistant can estimate in
-    K_DOTS: 7,          // (reference) legacy single-band dot count; dots are now
-                        // placed per patch by gap size, so this is not used directly
+    // The single interval where the assistant's training data lives. It is
+    // ACCURATE here (it interpolates between its nearest training points) and it
+    // ALWAYS answers everywhere else too (flat-extrapolating beyond its points —
+    // confident but unreliable), never refusing. See assistant.js. This region is
+    // NOT revealed to participants; it only drives where training points are
+    // placed, the RICH/POOR strata, and the admin/debrief overlays. Kept as a
+    // one-element list of [start,end] so the (multi-interval-capable) machinery
+    // still works — set two entries here if you ever want disjoint regions again.
+    COVERAGE_PATCHES: [[30, 70]], // inclusive interval the assistant is "trained on"
+    K_DOTS: 7,          // (reference) training-point count guide; dots are placed
+                        // by gap size, so this is not used directly
 
     // ---- landscape pool (offline generation) -----------------------------
     POOL_PER_STRATUM: 60, // landscapes generated per stratum
