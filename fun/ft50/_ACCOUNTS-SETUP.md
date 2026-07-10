@@ -1,14 +1,16 @@
 # FT50 Paper Browser, accounts setup (one time, ~5 minutes)
 
 The FT50 Paper Browser (`fun/ft50/index.html`) ships the same optional sign-in
-system as `/fun/ms/` (email/password, Google, Microsoft, and optionally
-Apple/GitHub), so a logged-in visitor can:
+system as `/fun/ms/` (email/password and Google; Apple, GitHub and Microsoft are
+supported too but are off by default), so a logged-in visitor can:
 
 - **Star** papers to save them for later
 - Add a **private note** to any saved paper (only they can see it)
 - Create **lists** (e.g. "Job market") and add papers to them
 - Add **user-defined tags** and browse their papers by tag
 - **Search across their own notes** (and titles, authors, tags)
+- Fill in a **profile** (first/last name, affiliation, website, email) when they
+  register and **edit it any time** from the account menu → "Edit profile"
 
 All of this is **private per user** and uses its **own dedicated Firebase
 project** — a SEPARATE Firestore database from the one behind `/fun/ms/`
@@ -33,22 +35,22 @@ live site changes until you paste the config in step 4 and commit.
 In the project, open **Build -> Authentication -> Get started**, then under the
 **Sign-in method** tab enable the methods you want. The page shows a button for
 each provider listed in the `AUTH_PROVIDERS` array (next to `FB_CONFIG` in
-`fun/ft50/index.html`, default `['google', 'microsoft']`) — keep that list in
-sync with what you actually enable, and add `'apple'` / `'github'` there if you
+`fun/ft50/index.html`, default `['google']`) — keep that list in sync with what
+you actually enable, and add `'microsoft'` / `'apple'` / `'github'` there if you
 set those up too.
 
 - **Email/Password** (toggle on, Save) — powers the register/sign-in form.
 - **Google** (toggle on, pick a support email, Save) — covers all Gmail /
   Google-account users. Nothing else needed.
-- **Microsoft** (optional but recommended: covers university & work Microsoft
-  365 accounts). Firebase shows a **redirect URI** like
-  `https://<project>.firebaseapp.com/__/auth/handler` when you toggle it on.
-  Register an app in **Microsoft Entra ID** (portal.azure.com -> App
+- **Microsoft** (optional; **not enabled by default** — covers university & work
+  Microsoft 365 accounts). To turn it on later: toggle it in Firebase (which
+  shows a **redirect URI** like `https://<project>.firebaseapp.com/__/auth/handler`),
+  register an app in **Microsoft Entra ID** (portal.azure.com -> App
   registrations -> New registration; supported account types: "Accounts in any
   organizational directory and personal Microsoft accounts"; paste the redirect
-  URI as a **Web** redirect). Copy the **Application (client) ID** and create a
-  **client secret** (Certificates & secrets), then paste both into the Firebase
-  Microsoft provider form and Save.
+  URI as a **Web** redirect), copy the **Application (client) ID**, create a
+  **client secret** (Certificates & secrets), paste both into the Firebase
+  Microsoft provider form and Save, then add `'microsoft'` to `AUTH_PROVIDERS`.
 - **Apple** / **GitHub** (optional) — same procedure as described in
   `fun/ms/_ACCOUNTS-SETUP.md`.
 
