@@ -4,9 +4,28 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Search for Knowledge</title>
-  <meta name="description" content="A short online decision experiment: search a hidden line of prizes for the best value." />
+  <meta name="description" content="A short online decision experiment: search a hidden line of prizes for the best value, with and without AI." />
   <meta name="robots" content="noindex,nofollow" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232780e3'/%3E%3Cpolyline points='4,22 12,10 18,18 24,6 28,14' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <link rel="apple-touch-icon" href="icon-180.png" />
+  <!-- Social / link-preview metadata (Open Graph + Twitter Card). Read by
+       messaging apps (Messenger, WhatsApp, iMessage, Slack, …); shown even though
+       the page is noindex for search engines. -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="stouras.com/lab" />
+  <meta property="og:title" content="Search for Knowledge — with and without AI" />
+  <meta property="og:description" content="A short online decision experiment: search a hidden line of prizes for the best value, with and without AI." />
+  <meta property="og:url" content="https://www.stouras.com/lab/search-v2/" />
+  <meta property="og:image" content="https://www.stouras.com/lab/search-v2/og-image.png" />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Search for Knowledge — an online decision experiment" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Search for Knowledge — with and without AI" />
+  <meta name="twitter:description" content="A short online decision experiment: search a hidden line of prizes for the best value, with and without AI." />
+  <meta name="twitter:image" content="https://www.stouras.com/lab/search-v2/og-image.png" />
+  <meta name="theme-color" content="#2780e3" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -87,6 +106,15 @@
       <div id="quiz-body"><!-- filled by app.js --></div>
       <div class="feedback bad" id="quiz-feedback" style="display:none;">Not quite, re-read the instructions.</div>
       <div class="right" style="margin-top:14px;"><button class="btn btn-green" id="btn-quiz">Submit answers</button></div>
+    </section>
+
+    <!-- ============ PHASE TRANSITION ============ -->
+    <!-- Shown between phases in a within-subjects session (e.g. "Without AI" then
+         "With AI"). Content is admin-editable (phaseIntroA / phaseIntroB). -->
+    <section class="screen" id="s-phase-intro">
+      <h1 id="phase-intro-title">Next part</h1>
+      <div class="card" id="phase-intro-body"><!-- filled by app.js --></div>
+      <div class="right"><button class="btn btn-green" id="btn-phase-intro">Continue</button></div>
     </section>
 
     <!-- ============ ROUND ============ -->
