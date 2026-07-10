@@ -80,6 +80,13 @@
     .seg{display:inline-flex; border:1px solid #c9ced4; border-radius:8px; overflow:hidden; width:max-content;}
     .seg button{border:none; background:#fff; padding:7px 15px; font-size:14px; cursor:pointer; color:var(--ink);}
     .seg button.on{background:var(--blue); color:#fff;}
+    .seg button:disabled{opacity:.4; cursor:not-allowed;}
+    .switch{display:inline-flex; align-items:center; gap:10px; cursor:pointer; user-select:none; font-size:14px; font-weight:600; padding:5px 0;}
+    .switch input{position:absolute; opacity:0; width:0; height:0;}
+    .switch .track{width:44px; height:24px; border-radius:14px; background:#c9ced4; position:relative; transition:.15s; flex:0 0 auto;}
+    .switch .track::after{content:""; position:absolute; top:2px; left:2px; width:20px; height:20px; border-radius:50%; background:#fff; transition:.15s; box-shadow:0 1px 2px rgba(0,0,0,.3);}
+    .switch input:checked + .track{background:var(--blue);}
+    .switch input:checked + .track::after{transform:translateX(20px);}
     input[type=range]{width:260px; accent-color:var(--blue);}
     .qrow{display:flex; align-items:center; gap:12px; flex-wrap:wrap;}
     .qval{font-weight:700; font-size:15px; min-width:52px;}
@@ -132,8 +139,10 @@
     few places: the <span style="color:var(--red); font-weight:600;">red points</span>. Everywhere else the value is unknown.
     <b>Linear interpolation</b> guesses the in-between values by drawing straight lines from one red point to the next.
     <b>Extrapolation</b> continues that straight line <i>past</i> the outermost points, into places you never measured &mdash;
-    where the guess and the true curve tend to drift apart. Use the buttons to reveal each layer, then drag the probe to
-    read the predicted value at any <i>x</i>.</p>
+    where the guess and the true curve tend to drift apart. Flip <b>&ldquo;Two intervals&rdquo;</b> to split the data into two
+    separate clusters of unequal width in different parts of the plot: two interpolation regions with a gap between them, where
+    each side can only <i>extrapolate</i> toward the other. Use the buttons to reveal each layer, then drag the probe to read
+    the predicted value at any <i>x</i>.</p>
 
     <div class="plot-wrap">
       <svg id="plot" class="plot-svg" viewBox="0 0 760 400" role="img" aria-label="Brownian motion with sample points, interpolation and extrapolation"></svg>
@@ -154,6 +163,10 @@
     </div>
 
     <div class="controls">
+      <div class="ctrl">
+        <span class="lab">Interpolation regions</span>
+        <label class="switch"><input type="checkbox" id="two-regions"><span class="track"></span><span id="regions-txt">One interval</span></label>
+      </div>
       <div class="ctrl">
         <span class="lab">Number of sample points</span>
         <div class="seg" id="seg-k">
@@ -235,6 +248,10 @@
         is a weighted average of their heights.</li>
         <li><b>Extrapolation</b> (amber, dashed) extends the first and last segments <i>outside</i> the measured range. The
         shaded bands mark those regions &mdash; notice how the dashed line and the blue truth part ways.</li>
+        <li><b>Two intervals</b> splits the red points into two clusters of unequal width, dropped into two arbitrary parts of
+        the plot. Each cluster is its own interpolation region; the <b>gap</b> between them becomes an extrapolation zone, where
+        the estimate comes from whichever cluster is nearer &mdash; the two clusters' guesses meet in the middle and usually
+        disagree.</li>
         <li>The <b>probe</b> (drag the slider or click the chart) drops a vertical marker at <i>x</i>. The diamond is the
         estimate &#375;(<i>x</i>), the blue dot is the truth <i>y</i>(<i>x</i>), and the tiles read off both plus the error.
         The formula panel shows the exact calculation for that <i>x</i>.</li>
@@ -271,7 +288,9 @@ function $(id){ return document.getElementById(id); }
 function f2(x){ return x.toFixed(2); }
 
 // ---- state ----
-var state = { K:5, truth:[], pts:[], query:50,
+// Sample points live in `groups`: one array of {x,y} per interpolation interval
+// (one group in single-interval mode, two in two-interval mode).
+var state = { K:5, regions:1, truth:[], groups:[], query:50,
               showTruth:true, showPts:true, showInterp:false, showExtrap:false };
 
 // ---- landscape ----
@@ -285,37 +304,97 @@ function buildTruth(){
   }
   state.truth = t;
 }
-// K distinct sample positions, ~evenly spread across [PT_LO,PT_HI] with jitter.
-function pickPoints(K){
-  state.K = K;
-  var used={}, arr=[];
-  for(var i=0;i<K;i++){
-    var base = Math.round(PT_LO + i*(PT_HI-PT_LO)/(K-1));
-    var j = clamp(base + randint(-4,4), 6, 94);
-    while(used[j]) j = clamp(j+1, 6, 94);
+// n distinct integer positions spread across [lo,hi] with a little jitter.
+function spread(n, lo, hi){
+  var used={}, arr=[], guard;
+  for(var i=0;i<n;i++){
+    var base = Math.round(lo + (n===1 ? 0.5 : i/(n-1))*(hi-lo));
+    var j = clamp(base + randint(-3,3), lo, hi);
+    guard=0; while(used[j] && guard++<300){ j = (j+1>hi ? lo : j+1); }
     used[j]=1; arr.push(j);
   }
   arr.sort(function(a,b){return a-b;});
-  state.pts = arr.map(function(x){ return {x:x, y:state.truth[x]}; });
+  return arr;
 }
-function newMotion(){ buildTruth(); pickPoints(state.K); }
+function toPts(xs){ return xs.map(function(x){ return {x:x, y:state.truth[x]}; }); }
+
+// One interpolation interval: K points across [PT_LO,PT_HI]; the ends stay open
+// as extrapolation zones.
+function pickOneInterval(K){
+  state.groups = [ toPts(spread(K, PT_LO, PT_HI)) ];
+}
+// Two interpolation intervals of unequal width, one on each side of a randomly
+// placed gap. Each interval keeps >=2 points so it can define its own line.
+function pickTwoIntervals(K){
+  var a = 2 + (K>=6 ? 1 : 0);              // 5->(2,3), 8->(3,5)
+  var n1 = a, n2 = Math.max(2, K-a);
+  if(Math.random()<0.5){ var t=n1; n1=n2; n2=t; }
+  var gapStart = randint(38,50);
+  var gapEnd   = Math.min(72, gapStart + randint(12,22));
+  state.groups = [ toPts(spread(n1, 6, gapStart-2)),
+                   toPts(spread(n2, gapEnd+2, 94)) ];
+}
+function regenPoints(){
+  if(state.regions===2 && state.K<4) state.K = 5;   // guard: 2 intervals need >=4 pts
+  if(state.regions===2) pickTwoIntervals(state.K);
+  else pickOneInterval(state.K);
+}
+function newMotion(){ buildTruth(); regenPoints(); }
 
 // ---- the estimator: value the interpolant/extrapolant gives at x ----
-// Returns the two points defining the straight line (increasing x), the anchor
-// used in the formula, the slope, the estimate, and the mode.
+// Interpolates within a group's interval; otherwise extrapolates along the
+// nearest interval edge. Returns the two points defining the straight line
+// (increasing x), the anchor used in the formula, the slope, estimate and mode.
 function estimateAt(x){
-  var p = state.pts, n = p.length, first = p[0], last = p[n-1];
-  var xi,yi,xj,yj,ax,ay,mode;
-  if(x < first.x){                       // extrapolate off the left edge
-    xi=p[0].x; yi=p[0].y; xj=p[1].x; yj=p[1].y; ax=xi; ay=yi; mode='extrap';
-  } else if(x > last.x){                  // extrapolate off the right edge
-    xi=p[n-2].x; yi=p[n-2].y; xj=p[n-1].x; yj=p[n-1].y; ax=xj; ay=yj; mode='extrap';
-  } else {                                // interpolate between bracketing samples
-    var i=0; while(i<n-1 && !(p[i].x<=x && x<=p[i+1].x)) i++;
-    xi=p[i].x; yi=p[i].y; xj=p[i+1].x; yj=p[i+1].y; ax=xi; ay=yi; mode='interp';
+  var G = state.groups, gi, p, n, i;
+  // inside some interpolation interval -> interpolation
+  for(gi=0; gi<G.length; gi++){
+    p = G[gi]; n = p.length;
+    if(x >= p[0].x && x <= p[n-1].x){
+      i=0; while(i<n-1 && !(p[i].x<=x && x<=p[i+1].x)) i++;
+      var mI = (p[i+1].y-p[i].y)/(p[i+1].x-p[i].x);
+      return { y:p[i].y + mI*(x-p[i].x), mode:'interp',
+               xi:p[i].x, yi:p[i].y, xj:p[i+1].x, yj:p[i+1].y, ax:p[i].x, ay:p[i].y, m:mI };
+    }
   }
-  var m = (yj-yi)/(xj-xi);
-  return { y: ay + m*(x-ax), mode:mode, xi:xi, yi:yi, xj:xj, yj:yj, ax:ax, ay:ay, m:m };
+  // otherwise extrapolate along the nearest interval edge segment
+  var best=null, bd=Infinity;
+  for(gi=0; gi<G.length; gi++){
+    p = G[gi]; n = p.length;
+    if(x < p[0].x){ var dL=p[0].x-x; if(dL<bd){ bd=dL;
+        best={xi:p[0].x, yi:p[0].y, xj:p[1].x, yj:p[1].y, ax:p[0].x, ay:p[0].y}; } }
+    if(x > p[n-1].x){ var dR=x-p[n-1].x; if(dR<bd){ bd=dR;
+        best={xi:p[n-2].x, yi:p[n-2].y, xj:p[n-1].x, yj:p[n-1].y, ax:p[n-1].x, ay:p[n-1].y}; } }
+  }
+  var mE = (best.yj-best.yi)/(best.xj-best.xi);
+  return { y:best.ay + mE*(x-best.ax), mode:'extrap',
+           xi:best.xi, yi:best.yi, xj:best.xj, yj:best.yj, ax:best.ax, ay:best.ay, m:mE };
+}
+
+// Extrapolation geometry: the dashed segments to draw and the zones to shade.
+// Outer regions extend the outermost edges to the plot edges; each gap is split
+// at its midpoint so the two neighbouring clusters each own the nearer half.
+function extrapSegments(){
+  var G = state.groups, segs=[], zones=[], k;
+  function edgeSlope(p, side){ // 'L' uses first two points, 'R' uses last two
+    var n=p.length;
+    return side==='L' ? (p[1].y-p[0].y)/(p[1].x-p[0].x)
+                      : (p[n-1].y-p[n-2].y)/(p[n-1].x-p[n-2].x);
+  }
+  var f = G[0], mL = edgeSlope(f,'L');
+  segs.push({x0:0, y0:f[0].y + mL*(0-f[0].x), x1:f[0].x, y1:f[0].y});
+  zones.push({x0:0, x1:f[0].x});
+  for(k=0; k<G.length-1; k++){
+    var gi=G[k], gj=G[k+1], bi=gi[gi.length-1], ai=gj[0], mid=(bi.x+ai.x)/2;
+    var mR=edgeSlope(gi,'R'), mL2=edgeSlope(gj,'L');
+    segs.push({x0:bi.x, y0:bi.y, x1:mid, y1:bi.y + mR*(mid-bi.x)});
+    segs.push({x0:mid, y0:ai.y + mL2*(mid-ai.x), x1:ai.x, y1:ai.y});
+    zones.push({x0:bi.x, x1:ai.x});
+  }
+  var l = G[G.length-1], mR3 = edgeSlope(l,'R');
+  segs.push({x0:l[l.length-1].x, y0:l[l.length-1].y, x1:N, y1:l[l.length-1].y + mR3*(N-l[l.length-1].x)});
+  zones.push({x0:l[l.length-1].x, x1:N});
+  return {segs:segs, zones:zones};
 }
 
 // ==========================================================================
@@ -335,17 +414,19 @@ function poly(arr,from,to,stroke,w,dash){
 }
 
 function render(){
-  var p = state.pts, n = p.length, first = p[0], last = p[n-1], g='', x;
+  var G = state.groups, g='';
+  var ex = extrapSegments();
 
   // clip so extrapolation lines that leave [0,1] are cut at the plot edge
   g += '<defs><clipPath id="pc"><rect x="'+VB.L+'" y="'+VB.T+'" width="'+(VB.R-VB.L)+'" height="'+(VB.B-VB.T)+'"/></clipPath></defs>';
 
   // extrapolation-zone shading (only when the layer is on)
   if(state.showExtrap){
-    g += '<rect x="'+xco(0)+'" y="'+VB.T+'" width="'+(xco(first.x)-xco(0))+'" height="'+(VB.B-VB.T)+'" fill="#fbe4cf" opacity="0.45"/>';
-    g += '<rect x="'+xco(last.x)+'" y="'+VB.T+'" width="'+(xco(N)-xco(last.x))+'" height="'+(VB.B-VB.T)+'" fill="#fbe4cf" opacity="0.45"/>';
-    g += '<text x="'+((xco(0)+xco(first.x))/2)+'" y="'+(VB.T+14)+'" text-anchor="middle" font-size="11" fill="#b5721f">extrapolation</text>';
-    g += '<text x="'+((xco(last.x)+xco(N))/2)+'" y="'+(VB.T+14)+'" text-anchor="middle" font-size="11" fill="#b5721f">extrapolation</text>';
+    ex.zones.forEach(function(z){
+      if(z.x1 - z.x0 < 0.5) return;
+      g += '<rect x="'+xco(z.x0)+'" y="'+VB.T+'" width="'+(xco(z.x1)-xco(z.x0))+'" height="'+(VB.B-VB.T)+'" fill="#fbe4cf" opacity="0.45"/>';
+      g += '<text x="'+((xco(z.x0)+xco(z.x1))/2)+'" y="'+(VB.T+14)+'" text-anchor="middle" font-size="11" fill="#b5721f">extrapolation</text>';
+    });
   }
 
   // grid + axes
@@ -366,19 +447,18 @@ function render(){
   if(state.showTruth){ g += poly(state.truth, 0, N, '#2780e3', 2.4); }
 
   g += '<g clip-path="url(#pc)">';
-  // extrapolation (amber dashed): extend first & last segments outward
+  // extrapolation (amber dashed): each edge segment continued into its zone
   if(state.showExtrap){
-    var mL = (p[1].y-p[0].y)/(p[1].x-p[0].x);
-    var yL0 = p[0].y + mL*(0 - p[0].x);
-    g += line(xco(0), yco(yL0), xco(first.x), yco(first.y), '#e8963d', 2.6, '7 5');
-    var mR = (p[n-1].y-p[n-2].y)/(p[n-1].x-p[n-2].x);
-    var yR1 = p[n-1].y + mR*(N - p[n-1].x);
-    g += line(xco(last.x), yco(last.y), xco(N), yco(yR1), '#e8963d', 2.6, '7 5');
+    ex.segs.forEach(function(s){
+      g += line(xco(s.x0), yco(s.y0), xco(s.x1), yco(s.y1), '#e8963d', 2.6, '7 5');
+    });
   }
-  // interpolation (green): connect consecutive samples
+  // interpolation (green): connect consecutive samples WITHIN each interval
   if(state.showInterp){
-    var seg=[]; for(var k=0;k<n;k++){ seg.push(xco(p[k].x).toFixed(1)+','+yco(p[k].y).toFixed(1)); }
-    g += '<polyline points="'+seg.join(' ')+'" fill="none" stroke="#3fb618" stroke-width="2.6" stroke-linejoin="round"/>';
+    G.forEach(function(p){
+      var seg=[]; for(var k=0;k<p.length;k++){ seg.push(xco(p[k].x).toFixed(1)+','+yco(p[k].y).toFixed(1)); }
+      g += '<polyline points="'+seg.join(' ')+'" fill="none" stroke="#3fb618" stroke-width="2.6" stroke-linejoin="round"/>';
+    });
   }
   g += '</g>';
 
@@ -400,10 +480,9 @@ function render(){
 
   // sample points (red) on top
   if(state.showPts){
-    for(var s=0;s<n;s++){
-      var sx=xco(p[s].x), sy=yco(p[s].y);
-      g += '<circle cx="'+sx+'" cy="'+sy+'" r="5" fill="#e41a1c" stroke="#fff" stroke-width="1.3"/>';
-    }
+    G.forEach(function(p){ p.forEach(function(pt){
+      g += '<circle cx="'+xco(pt.x)+'" cy="'+yco(pt.y)+'" r="5" fill="#e41a1c" stroke="#fff" stroke-width="1.3"/>';
+    }); });
   }
 
   $('plot').innerHTML = g;
@@ -432,7 +511,7 @@ function updateReadouts(){
   // worked example
   var m = e.m;
   var cap = isX
-    ? 'Worked example &mdash; x = '+q+' is outside the sampled range, so this is <b>extrapolation</b> along the nearest edge segment:'
+    ? 'Worked example &mdash; x = '+q+' lies outside the interpolation interval'+(state.regions===2?'s':'')+', so this is <b>extrapolation</b> from the nearest edge segment:'
     : 'Worked example &mdash; x = '+q+' sits between samples ('+e.xi+', '+f2(e.yi)+') and ('+e.xj+', '+f2(e.yj)+'), so this is <b>interpolation</b>:';
   $('work-cap').innerHTML = cap;
 
@@ -456,11 +535,22 @@ function syncChips(){
     c.classList.toggle('on', !!state[map[c.getAttribute('data-layer')]]);
   });
 }
+function syncK(){
+  document.querySelectorAll('#seg-k button').forEach(function(x){
+    x.classList.toggle('on', parseInt(x.getAttribute('data-k'),10)===state.K);
+  });
+}
+// Two intervals need >=4 points, so the "3" option is disabled in that mode.
+function updateKDisable(){
+  var b3 = document.querySelector('#seg-k button[data-k="3"]');
+  b3.disabled = (state.regions===2);
+}
 
 document.addEventListener('DOMContentLoaded', function(){
   newMotion();
   refresh();
   syncChips();
+  updateKDisable();
 
   // layer toggles
   document.querySelectorAll('#chips .chip').forEach(function(c){
@@ -472,13 +562,20 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   });
 
+  // two-interval toggle: split the data into two interpolation regions
+  $('two-regions').addEventListener('change', function(){
+    state.regions = this.checked ? 2 : 1;
+    $('regions-txt').textContent = this.checked ? 'Two intervals' : 'One interval';
+    if(this.checked){ state.showInterp = true; }   // make the two regions visible at once
+    updateKDisable(); regenPoints(); syncK(); syncChips(); refresh();
+  });
+
   // sample-point count (rebuild points on the SAME truth so you can compare)
   document.querySelectorAll('#seg-k button').forEach(function(b){
     b.addEventListener('click', function(){
-      document.querySelectorAll('#seg-k button').forEach(function(x){x.classList.remove('on');});
-      b.classList.add('on');
-      pickPoints(parseInt(b.getAttribute('data-k'),10));
-      refresh();
+      if(b.disabled) return;
+      state.K = parseInt(b.getAttribute('data-k'),10);
+      regenPoints(); syncK(); refresh();
     });
   });
 
