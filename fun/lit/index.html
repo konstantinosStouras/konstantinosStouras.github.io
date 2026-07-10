@@ -58,8 +58,8 @@
     --radius: 8px;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
-  body { font-family: 'Work Sans', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
+  body { font-family: 'Work Sans', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh; min-height: 100dvh; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 
   .header { background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%); z-index: 100; box-shadow: var(--shadow-lg); }
   .header-inner { max-width: 1280px; margin: 0 auto; padding: 24px 32px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
@@ -100,19 +100,19 @@
 
   /* Custom dropdown */
   .custom-select { position: relative; }
-  .custom-select-trigger { padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 6px; font-family: 'Work Sans', sans-serif; font-size: 18px; color: var(--text-muted); background: var(--white); height: 50px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; transition: border-color 0.2s, box-shadow 0.2s; user-select: none; }
+  .custom-select-trigger { padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 6px; font-family: 'Work Sans', sans-serif; font-size: 18px; color: var(--text-muted); background: var(--white); height: 50px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; transition: border-color 0.2s, box-shadow 0.2s; -webkit-user-select: none; user-select: none; }
   .custom-select-trigger:hover { border-color: #b0b8c8; }
   .custom-select-trigger.open { border-color: var(--navy); box-shadow: 0 0 0 3px rgba(125,29,63,0.1); border-radius: 6px 6px 0 0; }
   .custom-select-trigger::after { content: '▾'; font-size: 14px; color: var(--text-muted); }
-  .custom-select-dropdown { display: none; position: absolute; top: 100%; left: 0; right: 0; background: var(--white); border: 1.5px solid var(--navy); border-top: none; border-radius: 0 0 6px 6px; max-height: 350px; overflow-y: auto; z-index: 200; box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+  .custom-select-dropdown { display: none; position: absolute; top: 100%; left: 0; right: 0; background: var(--white); border: 1.5px solid var(--navy); border-top: none; border-radius: 0 0 6px 6px; max-height: 350px; overflow-y: auto; overscroll-behavior: contain; z-index: 200; box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
   .custom-select-dropdown.open { display: block; }
   .custom-select-search { width: 100%; padding: 10px 14px; border: none; border-bottom: 1px solid var(--border); font-family: 'Work Sans', sans-serif; font-size: 16px; color: var(--text); outline: none; }
   .custom-select-item { padding: 12px 14px; font-size: 18px; color: var(--text); cursor: pointer; transition: background 0.1s; }
   .custom-select-item:hover { background: var(--navy-light); }
   .custom-select-item.hidden { display: none; }
   .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
-  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 6px; font-size: 13px; font-weight: 500; animation: chipIn 0.15s ease-out; max-width: 100%; overflow-wrap: anywhere; }
-  .chip-editor { background: var(--accent-light); color: #8a7032; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 6px; font-size: 13px; font-weight: 500; animation: chipIn 0.15s ease-out; max-width: 100%; overflow-wrap: break-word; }
+  .chip-editor { background: var(--accent-light); color: #6f5827; }
   .chip-area { background: #e8f5ee; color: var(--green); }
   .chip-year { background: var(--navy-light); color: var(--navy); }
   .chip-title { background: #f0e8f7; color: #6b3fa0; }
@@ -144,17 +144,17 @@
   .show-more-wrap { background: var(--white); border: 1px solid var(--border); border-top: 1px dashed var(--border); border-radius: 0 0 var(--radius) var(--radius); padding: 16px; text-align: center; }
   .show-more-wrap .btn { height: auto; padding: 11px 22px; }
 
-  .paper-title { font-family: 'Fraunces', serif; font-size: 18px; font-weight: 400; color: var(--navy); margin-bottom: 6px; line-height: 1.35; overflow-wrap: anywhere; }
+  .paper-title { font-family: 'Fraunces', serif; font-size: 18px; font-weight: 400; color: var(--navy); margin-bottom: 6px; line-height: 1.35; overflow-wrap: break-word; }
   .paper-title a { color: inherit; text-decoration: none; }
   .paper-title a:hover { text-decoration: underline; }
   .paper-authors { font-size: 14px; color: var(--text); margin-bottom: 8px; }
   .paper-author-link { cursor: pointer; transition: color 0.1s; }
   .paper-author-link:hover { color: var(--navy); text-decoration: underline; }
   .paper-meta { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 12.5px; color: var(--text-muted); }
-  .tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 100px; font-size: 11.5px; font-weight: 500; max-width: 100%; overflow-wrap: anywhere; }
+  .tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 100px; font-size: 11.5px; font-weight: 500; max-width: 100%; overflow-wrap: break-word; }
   .tag-vol { background: var(--navy-light); color: var(--navy); cursor: pointer; }
   .tag-vol:hover { background: #e6cdd5; }
-  .tag-editor { background: var(--accent-light); color: #8a7032; cursor: pointer; }
+  .tag-editor { background: var(--accent-light); color: #6f5827; cursor: pointer; }
   .tag-editor:hover { background: #ece5d0; }
   .tag-area { background: #e8f5ee; color: var(--green); cursor: pointer; }
   .tag-area:hover { background: #d4edde; }
@@ -176,20 +176,20 @@
   .tag-pdf:hover { background: #1f6b3f; }
   .chip-journal { background: var(--navy-light); color: var(--navy); }
   /* Senior/Associate Editor (ISR & Marketing Science) tags + chips */
-  .tag-se { background: var(--accent-light); color: #8a7032; cursor: pointer; }
+  .tag-se { background: var(--accent-light); color: #6f5827; cursor: pointer; }
   .tag-se:hover { background: #ece5d0; }
   .tag-ae { background: #e6eef9; color: #2d5f8a; cursor: pointer; }
   .tag-ae:hover { background: #d5e3f5; }
-  .chip-se { background: var(--accent-light); color: #8a7032; }
+  .chip-se { background: var(--accent-light); color: #6f5827; }
   .chip-ae { background: #e6eef9; color: #2d5f8a; }
 
-  .paper-abstract-toggle { margin-top: 8px; font-size: 12px; color: var(--navy); cursor: pointer; font-weight: 500; user-select: none; display: inline-block; }
+  .paper-abstract-toggle { margin-top: 8px; font-size: 12px; color: var(--navy); cursor: pointer; font-weight: 500; -webkit-user-select: none; user-select: none; display: inline-block; }
   .paper-abstract-toggle:hover { text-decoration: underline; }
-  .paper-bibtex-toggle { margin-top: 8px; margin-left: 14px; font-size: 12px; color: var(--green); cursor: pointer; font-weight: 500; user-select: none; display: inline-block; }
+  .paper-bibtex-toggle { margin-top: 8px; margin-left: 14px; font-size: 12px; color: var(--green); cursor: pointer; font-weight: 500; -webkit-user-select: none; user-select: none; display: inline-block; }
   .paper-bibtex-toggle:hover { text-decoration: underline; }
   .paper-abstract { display: none; margin-top: 10px; padding: 14px 16px; background: #fafbfd; border-radius: 6px; font-size: 13.5px; line-height: 1.65; color: var(--text-muted); border-left: 3px solid var(--navy-light); }
   .paper-abstract.open { display: block; }
-  .paper-bibtex { display: none; margin-top: 10px; padding: 14px 16px; background: #f5f7f5; border-radius: 6px; font-size: 12.5px; line-height: 1.5; color: var(--text); border-left: 3px solid var(--green); font-family: 'Courier New', monospace; white-space: pre-wrap; word-break: break-all; position: relative; }
+  .paper-bibtex { display: none; margin-top: 10px; padding: 40px 16px 14px; background: #f5f7f5; border-radius: 6px; font-size: 12.5px; line-height: 1.5; color: var(--text); border-left: 3px solid var(--green); font-family: 'Courier New', monospace; white-space: pre-wrap; word-break: break-all; position: relative; }
   .paper-bibtex.open { display: block; }
   .bib-copy { position: absolute; top: 8px; right: 8px; padding: 4px 12px; background: var(--green); color: #fff; border: none; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; font-family: 'Work Sans', sans-serif; }
   .bib-copy:hover { background: #1f6b3f; }
@@ -241,7 +241,7 @@
   .summary-content.active { display: block; }
   .summary-list { column-count: 2; column-gap: 2rem; font-size: 14px; line-height: 2.1; }
   .summary-list.cols-3 { column-count: 3; }
-  .summary-item { break-inside: avoid; cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: background 0.1s; overflow-wrap: anywhere; }
+  .summary-item { break-inside: avoid; cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: background 0.1s; overflow-wrap: break-word; }
   .summary-item:hover { background: var(--navy-light); }
   .summary-count { color: var(--text-muted); font-size: 13px; margin-right: 4px; display: inline-block; min-width: 32px; text-align: right; }
   .summary-author-link:hover { text-decoration: underline; color: var(--navy); }
@@ -311,7 +311,7 @@
   .acct-menu { display: none; position: absolute; right: 0; top: calc(100% + 8px); background: #fff; color: var(--text); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow-lg); min-width: 240px; z-index: 300; overflow: hidden; }
   .acct-menu.open { display: block; }
   .acct-menu-head { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-muted); }
-  .acct-menu-head strong { display: block; color: var(--text); font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; margin-top: 2px; }
+  .acct-menu-head strong { display: block; color: var(--text); font-size: 13.5px; font-weight: 600; overflow-wrap: break-word; margin-top: 2px; }
   .acct-menu-item { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 10px 16px; font-size: 13.5px; cursor: pointer; transition: background .1s; color: var(--text); }
   .acct-menu-item:hover { background: var(--navy-light); }
   .acct-badge { font-size: 12px; color: var(--navy); background: var(--navy-light); border-radius: 100px; padding: 1px 9px; font-weight: 600; }
@@ -320,7 +320,7 @@
   .acct-menu-item.danger:hover { background: #fdeaea; }
 
   /* Auth modal */
-  .acct-overlay { display: none; position: fixed; inset: 0; background: rgba(8,15,40,0.55); z-index: 1000; align-items: flex-start; justify-content: center; padding: 56px 16px; overflow-y: auto; }
+  .acct-overlay { display: none; position: fixed; inset: 0; background: rgba(8,15,40,0.55); z-index: 1000; align-items: flex-start; justify-content: center; padding: 56px 16px; overflow-y: auto; overscroll-behavior: contain; }
   .acct-overlay.open { display: flex; }
   .acct-modal { position: relative; background: #fff; border-radius: 12px; width: 100%; max-width: 400px; box-shadow: var(--shadow-lg); }
   .acct-modal-x { position: absolute; top: 12px; right: 14px; font-size: 22px; line-height: 1; color: var(--text-muted); cursor: pointer; border: none; background: none; }
@@ -350,10 +350,10 @@
   /* Star + per-card account panel */
   body.ms-accounts .paper-title { padding-right: 30px; }
   body.ms-accounts .paper-card { position: relative; } /* anchors the absolute star to its card */
-  .acct-star { position: absolute; top: 14px; right: 16px; font-size: 22px; line-height: 1; cursor: pointer; color: #c9cfdb; user-select: none; transition: transform .1s, color .15s; }
+  .acct-star { position: absolute; top: 14px; right: 16px; font-size: 22px; line-height: 1; cursor: pointer; color: #c9cfdb; -webkit-user-select: none; user-select: none; transition: transform .1s, color .15s; }
   .acct-star:hover { transform: scale(1.15); color: var(--accent); }
   .acct-star.on { color: var(--accent); }
-  .paper-acct-toggle { margin-top: 8px; margin-left: 14px; font-size: 12px; color: #b08a2e; cursor: pointer; font-weight: 600; user-select: none; display: none; }
+  .paper-acct-toggle { margin-top: 8px; margin-left: 14px; font-size: 12px; color: #b08a2e; cursor: pointer; font-weight: 600; -webkit-user-select: none; user-select: none; display: none; }
   body.ms-accounts .paper-acct-toggle { display: inline-block; }
   .paper-acct-toggle:hover { text-decoration: underline; }
   .paper-acct-panel { display: none; margin-top: 10px; padding: 14px 16px; background: #fbfaf4; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; }
@@ -398,6 +398,21 @@
   .lib-chip .del:hover { opacity: 1; color: var(--red); }
   @media (max-width: 768px) { .library-bar { padding-left: 20px; padding-right: 20px; } }
   @media (max-width: 480px) { .library-bar { padding-left: 16px; padding-right: 16px; } .acct-user { max-width: 150px; } }
+  /* ── Cross-device refinements (appended so they win the cascade) ───────────
+     iOS focus-zoom guards on the remaining <16px controls, larger touch
+     targets, and neutralising sticky :hover on touch/no-hover devices. */
+  @media (max-width: 768px) {
+    .sort-control, .sort-control select,
+    .acct-note, .acct-tag-input, .acct-newlist input, .library-search { font-size: 16px; }
+    .chip-x { padding: 8px 7px; margin: -8px -3px -8px 0; font-size: 16px; }
+    .paper-abstract-toggle, .paper-bibtex-toggle { padding: 7px 2px; }
+  }
+  @media (hover: none) {
+    .paper-card:hover { background: var(--white); }
+    .custom-select-item:hover { background: transparent; }
+    .summary-item:hover { background: transparent; }
+    .acct-menu-item:hover { background: #fff; }
+  }
 </style>
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"WebApplication","name":"The Lit — Research Paper Browser","description":"Search and filter research papers across Management Science, Operations Research, Marketing Science, M&SOM, POM, Information Systems Research, five PNAS sections, and the ACM EC conference.","url":"https://stouras.com/fun/lit/","applicationCategory":"ReferenceApplication","author":{"@type":"Person","name":"Konstantinos Stouras","url":"https://stouras.com"}}
@@ -1675,6 +1690,14 @@ document.addEventListener('click', function(e) {
     document.querySelectorAll('.custom-select-dropdown').forEach(d => d.classList.remove('open'));
   }
 });
+// Escape closes the auth modal (if open) or any open filter dropdown.
+document.addEventListener('keydown', function(e) {
+  if (e.key !== 'Escape') return;
+  var ov = document.getElementById('acctOverlay');
+  if (ov && ov.classList.contains('open')) { if (window.acctCloseAuth) acctCloseAuth(); return; }
+  document.querySelectorAll('.custom-select-trigger.open').forEach(t => t.classList.remove('open'));
+  document.querySelectorAll('.custom-select-dropdown.open').forEach(d => d.classList.remove('open'));
+});
 
 function applyFilters() {
   // Any normal filter interaction exits the "Recently added papers" view.
@@ -2101,12 +2124,24 @@ function bibTitle(t) {
 }
 
 function copyBib(btn, id) {
-  const el = document.getElementById(id);
-  const text = el.textContent.replace('Copy', '').trim();
-  navigator.clipboard.writeText(text).then(function() {
-    btn.textContent = 'Copied!';
-    setTimeout(function() { btn.textContent = 'Copy'; }, 1500);
-  });
+  var el = document.getElementById(id);
+  if (!el) return;
+  var text = el.textContent.replace('Copy', '').trim();
+  var done = function() { btn.textContent = 'Copied!'; setTimeout(function() { btn.textContent = 'Copy'; }, 1500); };
+  var legacy = function() {
+    try {
+      var t = document.createElement('textarea');
+      t.value = text; t.setAttribute('readonly', ''); t.style.position = 'fixed'; t.style.top = '0'; t.style.opacity = '0';
+      document.body.appendChild(t); t.focus(); t.select();
+      var ok = document.execCommand('copy'); document.body.removeChild(t);
+      if (ok) { done(); } else { throw new Error('copy failed'); }
+    } catch (e) { btn.textContent = 'Copy failed'; setTimeout(function() { btn.textContent = 'Copy'; }, 1500); }
+  };
+  // navigator.clipboard is undefined in many in-app webviews and older Safari,
+  // and writeText() can still reject on focus/permission — fall back to execCommand.
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(legacy);
+  } else { legacy(); }
 }
 
 /* PAGINATION DISABLED — uncomment to re-enable
