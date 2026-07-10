@@ -168,3 +168,19 @@ FT50_LIST_FILE=<saved-list.txt> node check-ft50-list.mjs --dry
 - **Author/affiliation identity merging is automatic** (ORCID + name-based),
   so a person may occasionally appear under two spellings; `authors.json`
   keeps authors with ≥2 papers (plus the top slice) to stay a sane size.
+
+## Articles in Advance (forthcoming papers)
+
+A record with **no volume and no issue** counts as forthcoming ("Articles in
+Advance" / OnlineFirst) only if it is **recent** — `forthcomingStatus()` in
+`build-data.mjs` guards on the year, so a years-old no-volume/no-issue record
+(a published paper whose Crossref entry was frozen at the advance stage) reads
+as published instead of wrongly wearing the "Articles in Advance" badge. Two
+committed files patch the gaps: `data/_aia-fixups.json` supplies the real
+volume/issue for such frozen records (filled only when Crossref still returns
+none), and `data/_informs-aia.json` adds forthcoming papers a publisher lists
+but Crossref hasn't indexed yet (merged into their source, and into the "Recently
+added papers" view). Both are refreshed **on your own machine** — some publisher
+sites (pubsonline.informs.org) block cloud IPs — by running, from
+`fun/lit/_scraper`, `node informs-aia-local.mjs --app ft50`; commit the two files
+it writes into `fun/ft50/data/` and the daily Action folds them in.

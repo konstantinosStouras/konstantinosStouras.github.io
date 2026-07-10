@@ -92,6 +92,37 @@ MS2_MOCK=./mock-crossref.json node build-data.mjs   # writes sample data/*.json
 
 Then open `fun/ms/index.html` through any static server and browse.
 
+## Articles in Advance (forthcoming papers)
+
+A paper with **no volume and no issue** is a forthcoming ("Articles in Advance")
+article — but only if it is **recent**. `forthcomingStatus()` in `build-data.mjs`
+requires the year to be within the last few years of the pull; an older
+no-volume/no-issue record is a published paper whose Crossref entry was frozen at
+the advance stage, so it is shown as published rather than mislabeled forthcoming.
+(This fixed ~49 papers from 2016–2024 that wrongly wore the "Articles in Advance"
+badge only because Crossref was missing their volume/issue.)
+
+Two committed files patch what Crossref leaves out:
+
+- **`data/_aia-fixups.json`** — `{ "<doi>": { volume, issue, page?, year? } }`, the
+  real issue for those frozen advance records. The build fills them in **only when
+  Crossref itself still returns none**, so they read as published with correct
+  pages.
+- **`data/_informs-aia.json`** — `{ "<doi>": { Title, Authors?, … } }`, forthcoming
+  papers INFORMS lists on `pubsonline.informs.org/toc/mnsc/0/0` that **Crossref has
+  not indexed yet**. The build merges any DOI Crossref didn't return; each then
+  appears in the paper list *and* the "Recently added papers" view, and is
+  superseded automatically once Crossref catches up.
+
+Refresh both by running **on your own machine** (pubsonline blocks cloud IPs, so
+this can't run in CI — same reason as the lit/PNAS local scripts):
+
+```bash
+cd fun/lit/_scraper
+node informs-aia-local.mjs --app ms      # writes fun/ms/data/_informs-aia.json + _aia-fixups.json
+# …then commit & push those two files; the daily Action folds them in.
+```
+
 ## Honest limitations (vs. the old Sheets version at /fun/ms-old/)
 
 - **Editors and research areas exist only for ~2011+ papers**, because they are
