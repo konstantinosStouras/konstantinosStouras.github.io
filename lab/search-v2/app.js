@@ -847,7 +847,8 @@
         '<label><input type="checkbox" id="tv-truth"> Ground truth</label>' +
         '<label class="tv-ai"><input type="checkbox" id="tv-region"> AI region</label>' +
         '<label class="tv-ai"><input type="checkbox" id="tv-dots"> AI data points</label>' +
-        '<label class="tv-ai"><input type="checkbox" id="tv-interp"> AI interp / extrap</label>';
+        '<label class="tv-ai"><input type="checkbox" id="tv-interp"> AI interp / extrap</label>' +
+        '<div class="tv-opt" id="tv-opt"></div>';
       var wire = function (id, key) {
         $(id).checked = TESTVIEW[key];
         $(id).addEventListener('change', function () { TESTVIEW[key] = this.checked; renderRound(); });
@@ -859,6 +860,28 @@
     bar.style.display = '';
     var ai = bar.querySelectorAll('.tv-ai');
     for (var i = 0; i < ai.length; i++) ai[i].style.display = (arm === 'B') ? '' : 'none';
+    updateOptReadout();
+  }
+
+  // Rational-search benchmark readout (testing/debug only — never shown to a real
+  // participant). Scores this round's reveals against the paper's "search window"
+  // (Malladi–Martínez-Marquina–Morozov, "Space Exploration"): obvious-mistake rate
+  // vs a uniform-random null, whether the stop was optimal, and the i.i.d.
+  // reservation value. Uses the participant's OWN reveals only (no truth leak).
+  function updateOptReadout() {
+    var el = $('tv-opt'); if (!el) return;
+    var s = LS.windowStats((S.round.reveals || []).map(function (r) { return [r.pos, r.val]; }), CFG.L_STEP, N_POS, COST);
+    var pct = function (r) { return Math.round(r * 100) + '%'; };
+    var head = '<b>Rational benchmark</b> <span class="tv-optnote">(test only · Space Exploration search window)</span>: ';
+    if (!s.n) { el.innerHTML = head + 'no reveals yet — the whole line is still in the window.'; return; }
+    var stop = s.windowRemaining === 0
+      ? '<b>window empty → optimal to stop now</b>'
+      : s.windowRemaining + ' cell' + (s.windowRemaining === 1 ? '' : 's') + ' could still beat your best';
+    el.innerHTML = head +
+      s.n + ' reveal' + (s.n === 1 ? '' : 's') +
+      ' · <b>' + s.mistakes + '</b> obvious mistake' + (s.mistakes === 1 ? '' : 's') + ' (' + pct(s.mistakeRate) + ', random ≈ ' + pct(s.randomRate) + ')' +
+      ' · ' + stop +
+      ' · best ' + s.best + '&cent; · i.i.d. reservation ≈ ' + s.reservation + '&cent;';
   }
 
   function selectPos(pos) {
