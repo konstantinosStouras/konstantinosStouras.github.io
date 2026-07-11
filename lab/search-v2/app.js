@@ -910,8 +910,15 @@
     var model = currentModel(), cost = modelCost(model);
     var res = A.estimate(currentGroups(), x);
     S.round.queries.push({ position: res.position, estimate: res.estimate, refused: false, model: model, cost: cost, mode: res.mode, text: res.text });
-    // Show only the CURRENT estimate: a new ask replaces the last diamond.
-    S.round.estimates = [{ pos: res.position, val: res.estimate }];
+    // Keep every AI suggestion on the plot: accumulate one diamond per asked
+    // position (a re-ask updates that position's estimate), so as the participant
+    // searches they build up a picture of how good the AI's suggestions are versus
+    // the prizes they reveal.
+    var placed = false;
+    for (var qi = 0; qi < S.round.estimates.length; qi++) {
+      if (S.round.estimates[qi].pos === res.position) { S.round.estimates[qi].val = res.estimate; placed = true; break; }
+    }
+    if (!placed) S.round.estimates.push({ pos: res.position, val: res.estimate });
     pushContext();
     L.log('ai_query', { position: res.position, estimate: res.estimate, refused: false, info: 'model=' + model + ';mode=' + res.mode + ';fee=' + cost });
     save();
