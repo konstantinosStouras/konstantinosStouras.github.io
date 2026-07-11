@@ -28,6 +28,14 @@
   <link rel="stylesheet" href="../styles.css" />
   <style>
     .admin-wrap{max-width:1180px;}
+    /* Top bar: align its contents with the centered page, and let them reflow
+       (wrap) when the window is narrow or zoomed in, so nothing is pushed off to
+       the far left/right or hidden off-screen. */
+    .nav{padding:12px 20px;}
+    .nav-inner{max-width:1180px; width:100%; margin:0 auto; display:flex; align-items:center;
+      justify-content:space-between; gap:8px 18px; flex-wrap:wrap;}
+    .nav .brand{min-width:0;}
+    .nav .nav-right{flex-wrap:wrap; justify-content:flex-end; row-gap:8px;}
     /* ---- dark mode (admin page only; set via data-theme on <html>) ---- */
     :root[data-theme="dark"]{ --ink:#e7e9ec; --muted:#9aa0a6; --line:#2d3138; --bg:#15171a; --panel:#1d2025; }
     :root[data-theme="dark"] body{ background:#15171a; }
@@ -180,12 +188,14 @@
 </head>
 <body>
   <div class="nav">
-    <div class="brand">Search for Knowledge <span class="muted" style="font-weight:400; font-size:14px;">· Admin</span></div>
-    <div class="nav-right">
-      <span class="muted small" id="who"></span>
-      <button class="icon-btn" id="btn-theme" title="Switch between light and dark appearance">☾</button>
-      <button class="btn btn-ghost btn-sm" id="btn-analytics-nav" style="display:none;" title="Jump to the Analytics tab (Without AI vs With AI results)">Data Analytics</button>
-      <button class="btn btn-ghost btn-sm" id="btn-signout" style="display:none;" title="Sign out of the admin panel">Sign out</button>
+    <div class="nav-inner">
+      <div class="brand">Search for Knowledge <span class="muted" style="font-weight:400; font-size:14px;">· Admin</span></div>
+      <div class="nav-right">
+        <span class="muted small" id="who"></span>
+        <button class="icon-btn" id="btn-theme" title="Switch between light and dark appearance">☾</button>
+        <button class="btn btn-ghost btn-sm" id="btn-analytics-nav" style="display:none;" title="Jump to the Analytics tab (Without AI vs With AI results)">Data Analytics</button>
+        <button class="btn btn-ghost btn-sm" id="btn-signout" style="display:none;" title="Sign out of the admin panel">Sign out</button>
+      </div>
     </div>
   </div>
 
