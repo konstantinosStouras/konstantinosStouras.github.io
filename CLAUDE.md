@@ -47,7 +47,8 @@ deleted on the next build), and opens a GitHub issue describing any change.
 Because 50 journals are a couple hundred MB of JSON, **the page lazy-loads
 per-journal files** (selection-driven; searching with nothing selected streams
 all of them) — unlike lit, which eager-loads its eight native sources (lit
-lazy-loads only the FT50 journals it merges in from this dataset). Filter UI is
+lazy-loads the FT50 journals of its own vendored copy of this pipeline, at
+`fun/lit/data-ft50/` + `fun/lit/_scraper-ft50/`). Filter UI is
 capability-driven from `sources.json`: Editors/Areas only when Management
 Science is selected (exactly like `/fun/ms/`), SE/AE filters for ISR/MkSc; HBR
 and MIT SMR are flagged `limitedCoverage` (thin Crossref deposits). The
@@ -73,14 +74,20 @@ OpenAlex/DBLP/Semantic Scholar). Data is static JSON in `fun/lit/data/` (one
 the ms workflow). **Journal types & the FT50 merge:** a "Journal types"
 filter (left of Journals) offers FT50 / ABS 4/4* / ABS 3; a type chip expands
 to its journal set and unions with the Journals selection. The page merges in
-the whole `/fun/ft50/` catalog at runtime: it fetches
-`fun/ft50/data/sources.json`, appends the 44 FT50-only journals to the
-journal filter, and **lazy-loads** their `papers-<key>.json` from the ft50
-dataset (same origin, nothing duplicated in the repo) only when they enter
-scope — selected directly, via a type chip, or on a broad
-year/title/author/affiliation search with no journal scope; the ft50
-`recent.json` (extras only) joins the recent view. FT50 membership is seeded
-statically in `index.html` and extended from the ft50 manifest (so the yearly
+lit's **own FT50 catalog** at runtime — `fun/lit/data-ft50/` (seeded by
+copying `fun/ft50/data/`, registry included, then maintained independently):
+it fetches `data-ft50/sources.json`, appends the 44 FT50-only journals to the
+journal filter, and **lazy-loads** their `papers-<key>.json` only when they
+enter scope — selected directly, via a type chip, or on a broad
+year/title/author/affiliation search with no journal scope; the
+`data-ft50/recent.json` (extras only) joins the recent view. The dataset is
+built by `fun/lit/_scraper-ft50/` (a vendored copy of the fun/ft50 pipeline;
+journal list in its own `journals.json`), refreshed daily by
+`.github/workflows/lit-ft50-update-data.yml` (07:15 UTC) and checked against
+the FT's list yearly by `lit-ft50-check-list.yml` (4 Jan) — so **lit no
+longer depends on the fun/ft50 app or its data**. AIA fixups for it come from
+`informs-aia-local.mjs --app lit-ft50`. FT50 membership is seeded statically
+in `index.html` and extended from the data-ft50 manifest (so the yearly
 FT-list check flows through); ABS grades (AJG 2024, via journalranking.org)
 live in the `ABS_RATING` map there — PNAS/ACM EC are unrated, and HBR/MIT SMR
 (AJG 2024 "top practitioner" journals) are kept at 3, their last numeric

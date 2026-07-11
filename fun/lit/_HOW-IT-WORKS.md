@@ -35,29 +35,37 @@ search and BibTeX export in the browser.
 - **Journals filter** (new vs. `/fun/ms/`): a multi-select of the six
   journals, the five PNAS sections (a PNAS paper can belong to several), and
   ACM EC — plus, appended alphabetically, every FT50 journal the page merges
-  in from the `/fun/ft50/` dataset (see the "Journal types & the FT50 merge"
-  note below). Nothing selected = search everything.
+  in from its own FT50 dataset in `data-ft50/` (see the "Journal types & the
+  FT50 merge" note below). Nothing selected = search everything.
 - **Journal types filter** (left of Journals): three fixed options — **FT50**
   (all 50 journals of the Financial Times research rank), **ABS 4/4\*** and
   **ABS 3** (Chartered ABS Academic Journal Guide, AJG 2024, as mirrored at
   journalranking.org). A type chip expands to its whole journal set and
   **unions** with any individually selected journals (it broadens, never
-  narrows). The FT50 key set is seeded statically and extended from the ft50
-  manifest at runtime, so the ft50 app's yearly FT-list check flows through;
+  narrows). The FT50 key set is seeded statically and extended from the
+  `data-ft50/sources.json` manifest at runtime, so the yearly FT-list check
+  (below) flows through;
   ABS grades live in the `ABS_RATING` map in `index.html` (PNAS and ACM EC
   are not in the AJG; HBR / MIT SMR — the AJG 2024 "top practitioner"
   journals — are kept at 3, their last numeric grade, so ABS 3 finds them).
-- **The FT50 merge is lazy.** The eight native sources still eager-load as
-  before, but the 44 FT50-only journals (~200 MB of JSON) are fetched from
-  `../ft50/data/papers-<key>.json` (same origin, zero duplication in the
-  repo; the ft50 daily workflow keeps them fresh) only when they enter the
+- **The FT50 merge is lazy — and self-owned.** The eight native sources
+  still eager-load as before, but the 44 FT50-only journals (~200 MB of JSON)
+  are fetched from `./data-ft50/papers-<key>.json` only when they enter the
   view's scope — selecting them directly or via a type chip, or running a
   broad year/title/author/affiliation search with no journal scope, exactly
   like `/fun/ft50/` itself. The results bar counts the files still on their
   way; loaded journals stay in memory for the session. The MS/ISR-specific
   editor filters and the pre-print toggle can't match FT50-extra papers, so
-  those alone never trigger the download; the recent view merges the ft50
-  dataset's own `recent.json` (extras only — natives are already covered).
+  those alone never trigger the download; the recent view merges the
+  `data-ft50/recent.json` (extras only — natives are already covered).
+  `data-ft50/` is **this app's own copy** of the FT50 dataset: it was seeded
+  by copying `fun/ft50/data/` (registry included, so "recently added" history
+  carried over) and is maintained independently by `_scraper-ft50/` — a
+  vendored copy of the fun/ft50 pipeline — via its own daily workflow
+  (`.github/workflows/lit-ft50-update-data.yml`, 07:15 UTC) and its own
+  yearly FT-list check (`lit-ft50-check-list.yml`, 4 Jan). Nothing on this
+  page reads from `fun/ft50/` anymore, so lit works even if that app is
+  changed or retired.
 - **Editors & Areas are Management Science only.** When MS is explicitly
   selected in the journal filter (alone or with other journals) the page
   behaves exactly like `/fun/ms/` — Accepting Editor / Area filters,
@@ -108,9 +116,21 @@ fun/lit/
 │  ├─ pnas-concepts-local.mjs    ← ★ run LOCALLY to (re)build the PNAS index
 │  ├─ informs-editors-local.mjs  ← ★ run LOCALLY to (re)build ISR/MkSc editors
 │  └─ mock/                  ← tiny real-payload fixtures for offline testing
+├─ data-ft50/                ← lit's OWN FT50 dataset (papers-<key>.json × 50,
+│                              sources.json, authors/affiliations/recent/meta,
+│                              _registry.json) — seeded from fun/ft50/data/,
+│                              maintained independently from then on
+├─ _scraper-ft50/            ← vendored copy of the fun/ft50 pipeline:
+│  ├─ build-data.mjs         ← builds everything in data-ft50/
+│  ├─ check-ft50-list.mjs    ← yearly FT50 list check (updates journals.json)
+│  ├─ journals.json          ← the FT50 journal list this app follows
+│  ├─ informs-editors.mjs    ← History-line editor parser (copy)
+│  └─ mock/                  ← offline fixtures (FT50_MOCK=1 smoke test)
 └─ _HOW-IT-WORKS.md          ← this file
 
-.github/workflows/lit-update-data.yml   ← runs the scraper on a schedule
+.github/workflows/lit-update-data.yml       ← runs the native scraper daily
+.github/workflows/lit-ft50-update-data.yml  ← runs the FT50 pipeline daily
+.github/workflows/lit-ft50-check-list.yml   ← yearly FT50 list check
 ```
 
 ## The PNAS wrinkle (one manual step, occasionally)
@@ -223,6 +243,7 @@ cd fun/lit/_scraper
 node informs-aia-local.mjs                 # fun/lit — all INFORMS journals
 node informs-aia-local.mjs --app ms        # fun/ms
 node informs-aia-local.mjs --app ft50      # fun/ft50
+node informs-aia-local.mjs --app lit-ft50  # fun/lit/data-ft50 (lit's own FT50 copy)
 # …then commit & push the two files it writes into that app's data/ dir
 ```
 
@@ -257,20 +278,28 @@ CI; the daily Action just folds the committed files in.
 - **Change what's collected:** edit `_scraper/build-data.mjs` (journal list
   is the `JOURNALS` array at the top; PNAS sections in `pnas-crawl.mjs`),
   commit — the push itself triggers a rebuild.
-- **The merged FT50 journals update on their own pipeline** — the ft50 daily
-  build (06:00 UTC) commits into `fun/ft50/data/`, and this page reads those
-  files at runtime, so new FT50 papers appear here with no lit-side rebuild.
-  The header's "Last publication data pull" shows the **latest** of the two
-  datasets' pulls. When the yearly FT50 list check adds or removes a journal,
-  the journal filter and FT50 chip follow the ft50 manifest automatically;
-  only a **new** journal's ABS grade must be added to `ABS_RATING` in
-  `index.html` (the list-change issue that check opens includes a reminder).
+- **The merged FT50 journals update on their own, lit-owned pipeline** — the
+  *lit — update FT50 (merged catalog) data* workflow (07:15 UTC daily) runs
+  `_scraper-ft50/build-data.mjs` and commits into `fun/lit/data-ft50/`. The
+  header's "Last publication data pull" shows the **latest** of the two
+  datasets' pulls. When the yearly FT-list check
+  (*lit — yearly FT50 list check*, 4 Jan, `_scraper-ft50/check-ft50-list.mjs`)
+  adds or removes a journal, it updates `_scraper-ft50/journals.json`,
+  dispatches the data build, and the journal filter and FT50 chip follow the
+  manifest automatically; only a **new** journal's ABS grade must be added to
+  `ABS_RATING` in `index.html` (the list-change issue includes a reminder).
+- **FT50 Articles-in-Advance fixups:** run
+  `node informs-aia-local.mjs --app lit-ft50` locally (same pattern as
+  `--app ms|lit|ft50`) to refresh `data-ft50/_aia-fixups.json` and
+  `data-ft50/_informs-aia.json` for the INFORMS journals in this dataset.
 
 ## Testing locally (no network needed)
 
 ```bash
 cd fun/lit/_scraper
 LIT_MOCK=1 node build-data.mjs     # builds data/*.json from mock/ fixtures
+cd ../_scraper-ft50
+FT50_MOCK=1 node build-data.mjs    # smoke-tests the FT50 pipeline into _mock-out/
 # then serve the repo with any static server and open fun/lit/
 ```
 

@@ -1,0 +1,125 @@
+name: lit — yearly FT50 list check (merged catalog)
+
+# Once a year, compare fun/lit/_scraper-ft50/journals.json against the live
+# FT50 journal list (ft.com/ft50-journals, falling back to Wikipedia's FT50
+# page). This is fun/lit's own copy of the fun/ft50 check, so the lit page's
+# FT50 merge follows the list independently of the fun/ft50 app. If the
+# Financial Times added or removed journals, check-ft50-list.mjs updates
+# journals.json (added journals get their ISSNs resolved via Crossref; removed
+# ones are marked retired) — the workflow then dispatches the data build, which
+# pulls the new journals and deletes the retired ones' data files. Every change
+# (and every failed check) is surfaced as a GitHub issue so nothing happens
+# silently. See fun/lit/_HOW-IT-WORKS.md.
+
+on:
+  schedule:
+    - cron: '15 6 4 1 *'     # yearly: 4 January, 06:15 UTC (the ft50 app checks on 3 Jan)
+  workflow_dispatch: {}      # run on demand from the Actions tab
+
+concurrency:
+  group: lit-ft50-check-list-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write            # commit the updated journals.json
+  issues: write              # open an issue when the list changed / check failed
+  actions: write             # dispatch the data build (a token push won't trigger it)
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Check the FT50 list
+        id: check
+        env:
+          FT50_MAILTO: kstouras@gmail.com
+        run: |
+          set +e
+          node fun/lit/_scraper-ft50/check-ft50-list.mjs
+          code=$?
+          set -e
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          # 0 = unchanged, 3 = changed (journals.json updated), 2 = could not verify
+          if [ "$code" != 0 ] && [ "$code" != 2 ] && [ "$code" != 3 ]; then exit "$code"; fi
+
+      - name: Commit the updated journal list
+        if: steps.check.outputs.code == '3'
+        id: commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add fun/lit/_scraper-ft50/journals.json
+          if git diff --cached --quiet; then
+            # Advisory (Wikipedia) runs report but don't edit journals.json.
+            echo "No journals.json changes to commit (advisory or already applied)."
+            exit 0
+          fi
+          git commit -m "lit: FT50 journal list changed — update journals.json (merged catalog)"
+          # Hardened push: on a rejected push (a concurrent commit landed), rebase
+          # our single-file change onto the new tip and retry, like the data builds.
+          for i in 1 2 3; do
+            if git push origin HEAD:${{ github.ref_name }}; then
+              echo "Pushed on attempt $i."
+              echo "pushed=1" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "Push rejected (concurrent commit?) — re-committing on the new tip…"
+            git fetch origin ${{ github.ref_name }}
+            git reset origin/${{ github.ref_name }}
+            git add fun/lit/_scraper-ft50/journals.json
+            if git diff --cached --quiet; then
+              echo "The new tip already contains this update."
+              exit 0
+            fi
+            git commit -m "lit: FT50 journal list changed — update journals.json (merged catalog)"
+            sleep 5
+          done
+          echo "::error::Could not push the updated journals.json after 3 attempts."
+          exit 1
+
+      - name: Trigger the data build for the new list
+        # A push made with GITHUB_TOKEN does NOT create new workflow runs, so the
+        # journals.json commit above cannot trigger lit-ft50-update-data.yml on
+        # its own. Dispatch it explicitly (workflow_dispatch via the token IS allowed).
+        if: steps.commit.outputs.pushed == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -sf -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/lit-ft50-update-data.yml/dispatches" \
+            -d "{\"ref\":\"${GITHUB_REF_NAME}\"}" \
+            && echo "Data build dispatched." \
+            || echo "::warning::Could not dispatch the data build — run it manually from the Actions tab."
+
+      - name: Open an issue with the outcome
+        if: steps.check.outputs.code != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title="lit: FT50 list check (merged catalog) — $([ '${{ steps.check.outputs.code }}' = 3 ] && echo 'the journal list changed' || echo 'the check could not run')"
+          body=$(cat fun/lit/_scraper-ft50/_ft50-check-summary.md 2>/dev/null || echo 'No summary was written.')
+          jq -n --arg t "$title" --arg b "$body" '{title: $t, body: $b}' | \
+            curl -sf -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/issues" \
+              -d @- > /dev/null \
+            && echo "Issue opened." \
+            || echo "::warning::Could not open the issue — see the summary below."
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### lit FT50 list check (merged catalog)" >> "$GITHUB_STEP_SUMMARY"
+          cat fun/lit/_scraper-ft50/_ft50-check-summary.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "(no summary written)" >> "$GITHUB_STEP_SUMMARY"

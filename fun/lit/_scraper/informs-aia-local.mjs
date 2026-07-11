@@ -28,6 +28,7 @@
  *   node informs-aia-local.mjs                 # target: fun/lit  (all INFORMS journals)
  *   node informs-aia-local.mjs --app ms        # target: fun/ms   (Management Science)
  *   node informs-aia-local.mjs --app ft50      # target: fun/ft50 (INFORMS FT50 journals)
+ *   node informs-aia-local.mjs --app lit-ft50  # target: fun/lit/data-ft50 (lit's own FT50 copy)
  *   node informs-aia-local.mjs --app ms --journals mnsc     # limit to one journal
  *   node informs-aia-local.mjs --max 300       # bound one session
  *
@@ -84,8 +85,12 @@ async function resolveApp() {
       sources: INFORMS.filter(j => j.litKey).map(j => ({ ...j, key: j.litKey, file: `papers-${j.litKey}.json` })),
     };
   }
-  if (APP === 'ft50') {
-    const jpath = resolve(__dirname, '..', '..', 'ft50', '_scraper', 'journals.json');
+  if (APP === 'ft50' || APP === 'lit-ft50') {
+    // ft50 = the fun/ft50 app; lit-ft50 = fun/lit's own vendored FT50 dataset
+    // (fun/lit/data-ft50, maintained by fun/lit/_scraper-ft50 independently).
+    const jpath = APP === 'ft50'
+      ? resolve(__dirname, '..', '..', 'ft50', '_scraper', 'journals.json')
+      : resolve(__dirname, '..', '_scraper-ft50', 'journals.json');
     const journals = existsSync(jpath) ? JSON.parse(await readFile(jpath, 'utf8')) : [];
     const byIssn = (issn) => journals.find(j => !j.retired && (j.issns || []).includes(issn));
     // Map each INFORMS code to the ft50 journal (by its known primary ISSN).
@@ -95,9 +100,12 @@ async function resolveApp() {
       const entry = byIssn(ISSN[j.code]);
       if (entry && entry.aia) sources.push({ ...j, key: entry.key, file: `papers-${entry.key}.json` });
     }
-    return { dataDir: resolve(__dirname, '..', '..', 'ft50', 'data'), sources };
+    const dataDir = APP === 'ft50'
+      ? resolve(__dirname, '..', '..', 'ft50', 'data')
+      : resolve(__dirname, '..', 'data-ft50');
+    return { dataDir, sources };
   }
-  throw new Error(`unknown --app "${APP}" (expected: ms | lit | ft50)`);
+  throw new Error(`unknown --app "${APP}" (expected: ms | lit | ft50 | lit-ft50)`);
 }
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
