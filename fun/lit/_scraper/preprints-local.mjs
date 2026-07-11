@@ -71,9 +71,17 @@ for (const s of sources) {
 console.log(`loaded ${all.length} papers from ${Object.keys(filesByKey).length} source(s); ` +
   `${Object.keys(cache).length} cache entries`);
 
-// No budgetMs → run to completion (or --cap). Gentle pacing so we stay a good
-// OpenAlex citizen even from a home connection.
-const found = await searchPreprintsByTitle(all, cache, { cap, sleepMs: 150, log: true });
+// No budgetMs → run to completion (or --cap). patient:true rides through
+// OpenAlex rate-limits (waits with escalating backoff and retries the same
+// paper) instead of stopping, and progress checkpoints to _preprints.json
+// every 200 searches so Ctrl+C never loses work. Pacing is gentle (~4 req/s).
+const found = await searchPreprintsByTitle(all, cache, {
+  cap,
+  sleepMs: 250,
+  patient: true,
+  log: true,
+  checkpoint: (c) => writeFile(join(DATA, '_preprints.json'), JSON.stringify(c), 'utf8'),
+});
 console.log(`linked ${found} new pre-print(s) this session`);
 
 // Apply the cache to the rows and write everything back.
