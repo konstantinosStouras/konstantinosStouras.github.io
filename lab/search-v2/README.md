@@ -21,7 +21,10 @@ for the best prize, paying 5¢ per reveal. The study runs in one or more
   can offer two models — a cheaper **baseline** trained on less data and a pricier
   **frontier** trained on more — for the participant to choose between. The AI is
   reliable only near its training data, and the participant is **not told where
-  that is** — they must calibrate by verifying with their own reveals.
+  that is** — they must calibrate by verifying with their own reveals. **Every
+  estimate they ask for stays on the plot** as a diamond (one per asked position),
+  so the accumulated AI suggestions can be compared against the prizes they reveal
+  as they explore.
 
 **Ground truth is deterministic.** Each round's hidden prize curve is a bounded
 random walk generated at runtime (`landscape.js`) from a fixed `(arm, round)`
