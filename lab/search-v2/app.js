@@ -218,6 +218,8 @@
     PREVIEW = (pr.preview === '1' && DEBUG);
     // Debug-only: override the logging endpoint from the URL (for local testing).
     if (DEBUG && pr.endpoint) CFG.ENDPOINT_URL = pr.endpoint;
+    // Debug-only: shorten the idle-nudge delay so it can be exercised quickly.
+    if (DEBUG && pr.idle) { var iv = parseInt(pr.idle, 10); if (iv > 0) IDLE_MS = iv; }
     SESSION_CODE = pr.code || null; // admin "session" (wave) code from the launch link
 
     // Admin preview uses a throwaway id (never resumes/pollutes a real session)
@@ -373,6 +375,7 @@
       appVersion: CFG.APP_VERSION
     });
     if (!PREVIEW) startFirebaseSync(); // preview never writes to Firestore
+    watchAdminMessages();              // live admin messages/nudges for this participant
 
     loadAssistantIfNeeded(initPlay);
   }
@@ -717,6 +720,7 @@
 
     show('s-round');
     renderRound();
+    bumpActivity();   // start the inactivity nudge countdown for this round
   }
 
   function buildLegend() {
@@ -861,6 +865,7 @@
     if (now - lastSelectLogT >= 1000) { L.log('select', { position: pos }); lastSelectLogT = now; }
     save();
     renderRound();
+    bumpActivity();
   }
   // Clicking a position on the plot reveals it directly (click-to-reveal), so a
   // A single click, or moving the mouse over the plot, only moves the dotted
@@ -889,6 +894,7 @@
     }
     save();
     renderRound();
+    bumpActivity();
   }
 
   // ---- assistant (Arm B) ---------------------------------------------------
@@ -908,6 +914,7 @@
     save();
     renderAiLog();
     renderRound();
+    bumpActivity();
   }
   function renderAiLog() { if (arm === 'B' && A) A.renderLog($('ai-log'), S.round.queries); }
 
@@ -925,6 +932,7 @@
 
   function confirmStop() {
     closeStop();
+    stopIdle();   // round is ending — no more inactivity nudges for it
     // Guard against scoring the same round twice (double-click, or a refresh that
     // somehow lands back here): a round is scored exactly once.
     if (S.round.ended) { showInterstitial(); return; }
@@ -1256,6 +1264,7 @@
 
     $('btn-dl-json').addEventListener('click', function () { L.downloadJSON(); });
     $('btn-dl-csv').addEventListener('click', function () { L.downloadCSV(); });
+    $('nudge-close').addEventListener('click', hideNudge);
 
     $('btn-restart').addEventListener('click', function () {
       if (!confirm('Restart and erase this session? (debug only)')) return;
@@ -1278,6 +1287,64 @@
   }
 
   function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+  // ======================================================================
+  //  ENCOURAGEMENT / NUDGES
+  //  Two sources feed one toast: (1) a client-side inactivity nudge shown when a
+  //  participant makes no move for IDLE_MS during a round, and (2) a message the
+  //  admin pushes to this participant from the panel (live via Firestore). Idle
+  //  nudges self-dismiss; admin messages stay until closed (acked in localStorage).
+  // ======================================================================
+  var IDLE_MS = CFG.NUDGE_IDLE_MS || 60000;
+  var idleTimer = null, nudgeHideTimer = null, pendingMsgAckKey = null, pendingMsgId = 0;
+  var ENCOURAGE = [
+    'Still there? Take your time — reveal a few positions to find the highest prize, and stop when you’re happy. Doing your best earns a bigger bonus!',
+    'Keep exploring! Each reveal costs a little, so weigh up a few spots and keep the best one you find.',
+    'Give it your best shot — the closer you get to the highest prize, the more you earn this round.'
+  ];
+  function encouragement() { return ENCOURAGE[Math.floor(Math.random() * ENCOURAGE.length)]; }
+  function nudgeShowing() { var t = $('nudge-toast'); return t && t.style.display !== 'none'; }
+  function showNudge(text, kind) {
+    var t = $('nudge-toast'); if (!t || !text) return;
+    $('nudge-text').textContent = text;
+    t.className = 'nudge-toast' + (kind === 'admin' ? ' admin' : '');
+    t.setAttribute('data-kind', kind || '');
+    t.style.display = 'flex';
+    if (nudgeHideTimer) { clearTimeout(nudgeHideTimer); nudgeHideTimer = null; }
+    if (kind !== 'admin') nudgeHideTimer = setTimeout(hideNudge, 14000);
+    try { L.log('nudge_shown', { info: 'kind=' + (kind || '') }); } catch (e) {}
+  }
+  function hideNudge() {
+    var t = $('nudge-toast'); if (!t) return;
+    if (t.getAttribute('data-kind') === 'admin' && pendingMsgAckKey) {
+      try { localStorage.setItem(pendingMsgAckKey, String(pendingMsgId || Date.now())); } catch (e) {}
+    }
+    t.style.display = 'none'; t.setAttribute('data-kind', '');
+    if (nudgeHideTimer) { clearTimeout(nudgeHideTimer); nudgeHideTimer = null; }
+  }
+  // Reset the inactivity countdown on any deliberate move during a round.
+  function bumpActivity() {
+    if (!$('s-round') || !$('s-round').classList.contains('active')) return;
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(function () {
+      if ($('s-round').classList.contains('active') && S && S.round && !S.round.ended && !nudgeShowing()) showNudge(encouragement(), 'idle');
+    }, IDLE_MS);
+  }
+  function stopIdle() {
+    if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+    var t = $('nudge-toast'); if (t && t.getAttribute('data-kind') === 'idle') hideNudge();
+  }
+  // Live admin messages for this participant (configured Firestore only, not preview).
+  function watchAdminMessages() {
+    if (PREVIEW || !S || !S.session) return;
+    if (!(window.SVFirebase && SVFirebase.isConfigured())) return;
+    var ackKey = 'searchv2:msgack:' + S.session;
+    SVFirebase.watchMessages(S.session, function (msg) {
+      if (!msg || !msg.text) return;
+      var ack = 0; try { ack = parseInt(localStorage.getItem(ackKey) || '0', 10); } catch (e) {}
+      if ((msg.id || 0) > ack) { pendingMsgAckKey = ackKey; pendingMsgId = msg.id || Date.now(); showNudge(msg.text, 'admin'); }
+    });
+  }
 
   // go
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();

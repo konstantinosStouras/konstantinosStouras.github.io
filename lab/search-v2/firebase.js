@@ -140,6 +140,52 @@ window.SVFirebase = (function () {
     });
   }
 
+  // Admin: permanently delete one participant's data — every event document whose
+  // `session` (the participant's anonymous id) matches. Reads the whole collection
+  // and filters client-side (the same known-good shape as fetchEvents, avoiding the
+  // WebChannel query-constraint quirk), then deletes the matching docs by ref.
+  // Resolves with the number of documents removed.
+  function deleteParticipant(session) {
+    if (!configured) return Promise.reject(new Error('firebase not configured'));
+    if (!session) return Promise.resolve(0);
+    return init().then(function () {
+      return sdk.fs.getDocs(sdk.fs.collection(db, PATHS.events));
+    }).then(function (qs) {
+      var dels = [];
+      qs.forEach(function (d) { if ((d.data() || {}).session === session) dels.push(sdk.fs.deleteDoc(d.ref)); });
+      return Promise.all(dels).then(function () { return dels.length; });
+    });
+  }
+
+  // Admin: delete EVERY participant's data (all event documents). Returns the count.
+  function deleteAllParticipants() {
+    if (!configured) return Promise.reject(new Error('firebase not configured'));
+    return init().then(function () { return sdk.fs.getDocs(sdk.fs.collection(db, PATHS.events)); })
+      .then(function (qs) { var dels = []; qs.forEach(function (d) { dels.push(sdk.fs.deleteDoc(d.ref)); }); return Promise.all(dels).then(function () { return dels.length; }); });
+  }
+
+  // ---- admin ↔ participant messages / nudges ------------------------------
+  // Admin writes an encouragement/message doc keyed by the participant's play
+  // session id; the participant live-subscribes to their own and shows it.
+  function sendMessage(session, text) {
+    if (!configured) return Promise.reject(new Error('firebase not configured'));
+    return init().then(function () {
+      return sdk.fs.setDoc(sdk.fs.doc(db, 'messages', session),
+        { session: session, text: String(text || ''), id: Date.now(), from: 'admin' }, { merge: true });
+    });
+  }
+  // Participant: live listener on their own message doc. cb(msgOrNull). Returns an
+  // unsubscribe function. Never signs the caller out (ensureAuth keeps the session).
+  function watchMessages(session, cb) {
+    var stop = function () {};
+    if (!configured || !session) return stop;
+    init().then(ensureAuth).then(function () {
+      stop = sdk.fs.onSnapshot(sdk.fs.doc(db, 'messages', session),
+        function (snap) { cb(snap.exists() ? snap.data() : null); }, function () {});
+    }).catch(function () {});
+    return function () { try { stop(); } catch (e) {} };
+  }
+
   // ---- admin: sessions (waves) CRUD ---------------------------------------
   function listSessions() {
     return init().then(function () {
@@ -155,6 +201,11 @@ window.SVFirebase = (function () {
   }
   function deleteSession(id) {
     return init().then(function () { return sdk.fs.deleteDoc(sdk.fs.doc(db, 'sessions', id)); });
+  }
+  // Admin: delete EVERY session (wave) doc. Collected event rows are untouched.
+  function deleteAllSessions() {
+    return init().then(function () { return sdk.fs.getDocs(sdk.fs.collection(db, 'sessions')); })
+      .then(function (qs) { var dels = []; qs.forEach(function (d) { dels.push(sdk.fs.deleteDoc(d.ref)); }); return Promise.all(dels).then(function () { return dels.length; }); });
   }
   function codeExists(code) {
     return init().then(function () {
@@ -181,8 +232,10 @@ window.SVFirebase = (function () {
     adminSignIn: adminSignIn, adminSignOut: adminSignOut, onAuth: onAuth,
     adminLoadStudyConfig: adminLoadStudyConfig,
     saveStudyConfig: saveStudyConfig, fetchEvents: fetchEvents,
+    deleteParticipant: deleteParticipant, deleteAllParticipants: deleteAllParticipants,
+    sendMessage: sendMessage, watchMessages: watchMessages,
     listSessions: listSessions, createSession: createSession, updateSession: updateSession,
-    deleteSession: deleteSession, codeExists: codeExists,
+    deleteSession: deleteSession, deleteAllSessions: deleteAllSessions, codeExists: codeExists,
     getDefaults: getDefaults, saveDefaults: saveDefaults,
     adminEmails: window.ADMIN_EMAILS || [], paths: PATHS
   };

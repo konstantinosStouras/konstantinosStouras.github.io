@@ -184,6 +184,20 @@ p{margin:.6em 0;}
 .paid-table th{background:var(--panel);}
 .paid-table tr.picked{background:#eef8e9; font-weight:600;}
 
+/* encouragement / admin-message toast */
+.nudge-toast{position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:80;
+  max-width:540px; width:calc(100% - 28px); display:flex; gap:11px; align-items:flex-start;
+  background:#eef6ff; border:1px solid #cfe2fb; color:#1f4e79; border-radius:12px;
+  padding:12px 14px; box-shadow:0 10px 34px rgba(0,0,0,.18); font-size:14px; line-height:1.5;
+  animation:nudgeIn .22s ease;}
+.nudge-toast.admin{background:#f2fbef; border-color:#cfe8c2; color:#2c5d1f;}
+.nudge-ico{font-size:16px; line-height:1.4; flex:0 0 auto;}
+.nudge-text{flex:1;}
+.nudge-x{margin-left:6px; border:none; background:none; color:inherit; font-size:20px; line-height:1;
+  cursor:pointer; padding:0 2px; opacity:.65; flex:0 0 auto;}
+.nudge-x:hover{opacity:1;}
+@keyframes nudgeIn{from{opacity:0; transform:translate(-50%,-6px);} to{opacity:1; transform:translate(-50%,0);}}
+
 /* modal */
 .overlay{position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; z-index:70; padding:20px;}
 .overlay.show{display:flex;}

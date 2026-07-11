@@ -154,13 +154,42 @@
     .sc-actions{display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;}
     .link-btn{border:none; background:none; color:var(--blue); cursor:pointer; font-size:13.5px; padding:4px 2px;}
     .link-btn.danger{color:var(--red);}
-    /* Participants panel (right column of the Sessions tab) */
-    .part-scroll{max-height:420px; overflow:auto;}
-    .part-row{border:1px solid var(--line); border-radius:9px; padding:9px 12px; margin:8px 0; background:#fff;}
-    :root[data-theme="dark"] .part-row{ background:#1d2025; border-color:#2d3138; }
-    .part-row .pr-top{display:flex; justify-content:space-between; align-items:baseline; gap:8px;}
-    .part-row .pr-id{font-weight:600; font-size:14px; font-family:ui-monospace,Menlo,monospace;}
-    :root[data-theme="dark"] .part-row .pill.active{background:#243026; color:#7bd88f;}
+    /* Participants panel (right column of the Sessions tab) — expandable cards */
+    .part-scroll{max-height:520px; overflow:auto;}
+    .part-card{border:1px solid var(--line); border-radius:10px; margin:8px 0; background:#fff; overflow:hidden;}
+    :root[data-theme="dark"] .part-card{ background:#1d2025; border-color:#2d3138; }
+    .pu-head{width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px;
+      background:none; border:none; cursor:pointer; padding:10px 12px; text-align:left; color:var(--ink); font:inherit;}
+    .pu-head:hover{background:var(--panel);}
+    .pu-idwrap{display:flex; flex-direction:column; gap:2px; min-width:0;}
+    .pu-id{font-weight:700; font-size:14px; font-family:ui-monospace,Menlo,monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+    .pu-sub{font-size:12px; color:var(--muted); font-family:ui-monospace,Menlo,monospace;}
+    .pu-right{display:flex; align-items:center; gap:8px; flex:0 0 auto;}
+    .pu-chev{color:var(--muted); font-size:11px; transition:transform .15s;}
+    .part-card.open .pu-chev{transform:rotate(180deg);}
+    :root[data-theme="dark"] .pill.active{background:#243026; color:#7bd88f;}
+    .pu-body{display:none; padding:2px 12px 12px; border-top:1px solid var(--line);}
+    .part-card.open .pu-body{display:block;}
+    .pu-facts{font-size:12.5px; color:var(--muted); margin:10px 0 2px;}
+    .pu-facts .sep{opacity:.55; padding:0 2px;}
+    .pu-rounds{display:flex; flex-direction:column; gap:6px; margin:12px 0 2px;}
+    .pu-round{display:flex; align-items:center; gap:10px; background:var(--panel); border:1px solid var(--line);
+      border-radius:8px; padding:7px 10px; font-size:13px;}
+    .pu-arm{font-weight:600;}
+    .pu-net{margin-left:auto; color:var(--muted); font-variant-numeric:tabular-nums;}
+    .pu-sep{border-top:1px dashed var(--line); margin:14px 0 10px;}
+    .pu-actions{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;}
+    .pu-actions-left{display:flex; align-items:center; gap:14px;}
+    .pu-remove{border:1px solid var(--red); background:transparent; color:var(--red); border-radius:8px;
+      padding:7px 14px; font-size:13px; font-weight:600; cursor:pointer;}
+    .pu-remove:hover:not(:disabled){background:var(--red); color:#fff;}
+    .pu-remove:disabled{opacity:.5; cursor:default;}
+    /* per-participant message composer (revealed by the "Message" link) */
+    .pu-compose{display:none; margin-top:10px; flex-direction:column; gap:8px;}
+    .part-card.composing .pu-compose{display:flex;}
+    .pu-compose textarea{width:100%; min-height:56px; padding:9px 11px; border:1px solid var(--line);
+      border-radius:8px; font-family:inherit; font-size:13.5px; background:var(--bg); color:var(--ink); resize:vertical;}
+    .pu-msg-row{display:flex; align-items:center; gap:12px;}
 
     .stat-grid{display:flex; gap:12px; flex-wrap:wrap; margin:12px 0;}
     .stat-box{border:1px solid var(--line); border-radius:10px; padding:12px 16px; min-width:120px; background:#fff;}
@@ -368,7 +397,13 @@
           <!-- RIGHT: active + completed sessions -->
           <div>
             <div class="card">
-              <div style="display:flex; justify-content:space-between; align-items:baseline;"><h2 style="margin:0;">Active sessions</h2><span class="muted small" id="active-count"></span></div>
+              <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">
+                <h2 style="margin:0;">Active sessions</h2>
+                <div style="display:flex; align-items:baseline; gap:10px;">
+                  <button class="link-btn danger" id="btn-remove-all-sessions" style="display:none;" title="Delete every session (wave). Collected event data is kept.">Remove all sessions</button>
+                  <span class="muted small" id="active-count"></span>
+                </div>
+              </div>
               <div id="active-list"><p class="muted small">Loading…</p></div>
             </div>
             <div class="card">
@@ -376,7 +411,13 @@
               <div id="completed-list"></div>
             </div>
             <div class="card">
-              <div style="display:flex; justify-content:space-between; align-items:baseline;"><h2 style="margin:0;">Participants</h2><span class="muted small" id="participants-count"></span></div>
+              <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">
+                <h2 style="margin:0;">Participants</h2>
+                <div style="display:flex; align-items:baseline; gap:10px;">
+                  <button class="link-btn danger" id="btn-remove-all-parts" style="display:none;" title="Remove every participant and permanently delete all collected event data.">Remove all</button>
+                  <span class="muted small" id="participants-count"></span>
+                </div>
+              </div>
               <p class="muted small" style="margin:6px 0 10px;">Everyone who has taken part, across all sessions. Participants join anonymously via a session link (no user accounts), so each is identified by its session code and Prolific ID.</p>
               <div id="participants-list" class="part-scroll"><p class="muted small">Loading…</p></div>
             </div>

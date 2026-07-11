@@ -43,6 +43,15 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Admin → participant messages / nudges, keyed by the participant's play
+    // session id. Only the admin writes; any signed-in participant may read (the
+    // content is just encouragement, and a participant can't guess another's
+    // session id). Dismissal is tracked client-side, so participants never write.
+    match /messages/{msgId} {
+      allow read:  if isSignedIn();
+      allow write: if isAdmin();
+    }
+
     // Deny everything else by default.
     match /{document=**} {
       allow read, write: if false;

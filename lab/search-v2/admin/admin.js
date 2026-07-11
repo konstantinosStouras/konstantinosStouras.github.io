@@ -71,6 +71,8 @@
     wireTabs();
     wireForm();
     wireData();
+    $('btn-remove-all-parts').addEventListener('click', removeAllParticipants);
+    $('btn-remove-all-sessions').addEventListener('click', removeAllSessions);
     $('btn-signout').addEventListener('click', function () { if (configured) FB.adminSignOut().then(reload); else reload(); });
     $('btn-analytics-nav').addEventListener('click', function () { selectTab('analytics'); });
 
@@ -490,6 +492,7 @@
   function renderSessions() {
     var active = SESSIONS.filter(function (s) { return s.status !== 'completed'; });
     var done = SESSIONS.filter(function (s) { return s.status === 'completed'; });
+    var rmS = $('btn-remove-all-sessions'); if (rmS) rmS.style.display = (configured && SESSIONS.length) ? '' : 'none';
     $('active-count').textContent = active.length + ' active';
     $('completed-count').textContent = done.length + ' total';
     $('active-list').innerHTML = active.length ? active.map(sessCard).join('') : '<p class="muted small">No active sessions yet. Create one on the left.</p>';
@@ -501,29 +504,168 @@
   // Right-column "Participants" panel: everyone who has any logged data, across
   // all sessions. Participants are anonymous (no accounts) — each is one entry
   // (its throwaway session id) with its wave code, Prolific id, phases and state.
-  function renderParticipants() {
-    var list = $('participants-list'); if (!list) return;
+  // Aggregate one row per participant (an anonymous play session id) from the raw
+  // events, with enough detail for the expandable card + Remove action.
+  function participantAgg() {
     var by = {};
     (EVENTS || []).forEach(function (e) {
       var s = e.session || '(none)';
-      var r = by[s] || (by[s] = { session: s, code: e.sessionCode, pid: e.pid, armSeq: [], armSet: {}, n: 0, last: e.t, completed: false });
-      r.n++; r.pid = r.pid || e.pid; r.code = r.code || e.sessionCode;
+      var r = by[s] || (by[s] = { session: s, code: e.sessionCode, pid: e.pid, study: e.study, armSeq: [], armSet: {}, n: 0, first: e.t, last: e.t, completed: false, bonusCents: null, rounds: {} });
+      r.n++; r.pid = r.pid || e.pid; r.code = r.code || e.sessionCode; r.study = r.study || e.study;
       if ((e.arm === 'A' || e.arm === 'B') && !r.armSet[e.arm]) { r.armSet[e.arm] = true; r.armSeq.push(e.arm); }
+      if (e.t != null && (r.first == null || e.t < r.first)) r.first = e.t;
       if ((e.t || 0) > (r.last || 0)) r.last = e.t;
       if (e.event === 'session_end') r.completed = true;
+      if (e.event === 'paid_rounds_drawn' && e.value != null) r.bonusCents = e.value;
+      if (e.event === 'round_end') {
+        var k = (e.phase == null ? 1 : e.phase) + ':' + (e.round == null ? 0 : e.round);
+        r.rounds[k] = { phase: e.phase, arm: e.arm, round: e.round, net: (e.rawNet != null ? e.rawNet : e.net) };
+      }
     });
-    var ps = Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) { return (b.last || 0) - (a.last || 0); });
+    return Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) { return (b.last || 0) - (a.last || 0); });
+  }
+  function phaseName(arm) { return PHASE_LABEL[arm] || arm || '—'; }
+
+  function renderParticipants() {
+    var list = $('participants-list'); if (!list) return;
+    var ps = participantAgg();
     $('participants-count').textContent = ps.length + ' total';
+    var rmAll = $('btn-remove-all-parts'); if (rmAll) rmAll.style.display = ps.length ? '' : 'none';
     if (!ps.length) { list.innerHTML = '<p class="muted small">No participants yet.</p>'; return; }
-    list.innerHTML = ps.map(function (p) {
-      return '<div class="part-row">' +
-        '<div class="pr-top"><span class="pr-id">' + esc(shortId(p.session)) + '</span>' +
-        '<span class="pill ' + (p.completed ? 'completed' : 'active') + '">' + (p.completed ? 'done' : 'in progress') + '</span></div>' +
-        '<div class="sc-meta">' + (p.pid ? 'PID ' + esc(p.pid) + ' · ' : '') + 'session ' + esc(p.code || '—') +
-          ' · ' + esc(p.armSeq.join('→') || '—') + ' · ' + p.n + ' event' + (p.n === 1 ? '' : 's') + '</div>' +
-        '<div class="sc-meta" style="margin:0;">last active ' + esc(fmtTime(p.last)) + '</div>' +
-        '</div>';
-    }).join('');
+    list.innerHTML = ps.map(participantCard).join('');
+    wireParticipantCards();
+  }
+
+  function participantCard(p) {
+    var title = p.pid ? esc(p.pid) : esc(shortId(p.session));
+    var sub = p.pid ? esc(shortId(p.session)) : (p.code ? 'session ' + esc(p.code) : '');
+    var rounds = Object.keys(p.rounds).map(function (k) { return p.rounds[k]; })
+      .sort(function (a, b) { return ((a.phase || 0) - (b.phase || 0)) || ((a.round || 0) - (b.round || 0)); });
+    var roundRows = rounds.length ? rounds.map(function (r) {
+      return '<div class="pu-round"><span class="pu-arm">' + esc(phaseName(r.arm)) + (r.round != null ? ' · Round ' + r.round : '') + '</span>' +
+        '<span class="pill completed">done</span>' +
+        '<span class="pu-net">' + (r.net == null ? '&mdash;' : r.net + '&cent; net') + '</span></div>';
+    }).join('') : '<div class="muted small" style="padding:2px 0;">No completed rounds yet.</div>';
+    var facts2 = [];
+    if (p.pid) facts2.push('Prolific ' + esc(p.pid));
+    facts2.push('session ' + esc(p.code || '—'));
+    facts2.push('played ' + (p.armSeq.map(phaseName).join(' → ') || '—'));
+    facts2.push(p.n + ' event' + (p.n === 1 ? '' : 's'));
+    if (p.bonusCents != null) facts2.push('bonus $' + (p.bonusCents / 100).toFixed(2));
+    return '<div class="part-card" data-id="' + esc(p.session) + '">' +
+      '<button type="button" class="pu-head" data-act="toggle">' +
+        '<span class="pu-idwrap"><span class="pu-id">' + title + '</span>' + (sub ? '<span class="pu-sub">' + sub + '</span>' : '') + '</span>' +
+        '<span class="pu-right"><span class="pill ' + (p.completed ? 'completed' : 'active') + '">' + (p.completed ? 'done' : 'in progress') + '</span><span class="pu-chev">▾</span></span>' +
+      '</button>' +
+      '<div class="pu-body">' +
+        '<div class="pu-facts">Registered ' + esc(fmtTime(p.first)) + ' <span class="sep">·</span> Last active ' + esc(fmtTime(p.last)) + '</div>' +
+        '<div class="pu-facts">' + facts2.join(' <span class="sep">·</span> ') + '</div>' +
+        '<div class="pu-rounds">' + roundRows + '</div>' +
+        '<div class="pu-sep"></div>' +
+        '<div class="pu-actions">' +
+          '<div class="pu-actions-left">' +
+            (configured ? '<button class="link-btn" data-act="message">Message</button>' : '') +
+            '<button class="link-btn" data-act="viewdata">View data</button>' +
+          '</div>' +
+          '<button class="pu-remove" data-act="remove">Remove user</button>' +
+        '</div>' +
+        (configured ?
+          '<div class="pu-compose">' +
+            '<textarea class="pu-msg" rows="2" placeholder="Write an encouraging message… the participant sees it live while they play."></textarea>' +
+            '<div class="pu-msg-row"><button class="btn btn-blue btn-sm" data-act="send">Send message</button>' +
+            '<button class="link-btn" data-act="cancelmsg">Cancel</button>' +
+            '<span class="flash" data-role="msgflash">Sent ✓</span></div>' +
+          '</div>' : '') +
+      '</div>' +
+    '</div>';
+  }
+  function wireParticipantCards() {
+    var cards = $('participants-list').querySelectorAll('.part-card');
+    for (var i = 0; i < cards.length; i++) (function (card) {
+      var id = card.getAttribute('data-id');
+      card.querySelector('[data-act="toggle"]').addEventListener('click', function () { card.classList.toggle('open'); });
+      var vd = card.querySelector('[data-act="viewdata"]');
+      if (vd) vd.addEventListener('click', function () { openParticipantData(id); });
+      var rm = card.querySelector('[data-act="remove"]');
+      if (rm) rm.addEventListener('click', function () { removeParticipant(id, rm); });
+      var msg = card.querySelector('[data-act="message"]');
+      if (msg) msg.addEventListener('click', function () {
+        card.classList.toggle('composing');
+        var ta = card.querySelector('.pu-msg'); if (card.classList.contains('composing') && ta) ta.focus();
+      });
+      var cancel = card.querySelector('[data-act="cancelmsg"]');
+      if (cancel) cancel.addEventListener('click', function () { card.classList.remove('composing'); });
+      var send = card.querySelector('[data-act="send"]');
+      if (send) send.addEventListener('click', function () { sendParticipantMessage(id, card, send); });
+    })(cards[i]);
+  }
+  // Push a live message to one participant (Firestore messages/{session}).
+  function sendParticipantMessage(id, card, btn) {
+    var ta = card.querySelector('.pu-msg'), text = ta ? ta.value.trim() : '';
+    if (!text) { if (ta) ta.focus(); return; }
+    var old = btn.textContent; btn.disabled = true; btn.textContent = 'Sending…';
+    FB.sendMessage(id, text).then(function () {
+      btn.disabled = false; btn.textContent = old;
+      var f = card.querySelector('[data-role="msgflash"]'); if (f) flash(f);
+      if (ta) ta.value = '';
+      setTimeout(function () { card.classList.remove('composing'); }, 900);
+    }).catch(function (err) {
+      btn.disabled = false; btn.textContent = old;
+      banner($('dash-banner'), 'warn', 'Could not send the message: ' + esc(err && err.code ? err.code : String(err)) +
+        '. If this persists, publish the updated lab/search-v2/firestore.rules (it must include the “messages” collection).');
+    });
+  }
+  // "View data": jump to the Data tab filtered to this participant's wave.
+  function openParticipantData(id) {
+    var ev = (EVENTS || []).filter(function (e) { return (e.session || '(none)') === id; })[0];
+    $('data-filter').value = (ev && ev.sessionCode) || '';
+    selectTab('data');
+  }
+  // Remove a participant: permanently delete their collected event rows (Firestore
+  // when configured, else this browser's localStorage log in local preview).
+  function removeParticipant(id, btn) {
+    var n = (EVENTS || []).filter(function (e) { return (e.session || '(none)') === id; }).length;
+    if (!confirm('Remove this participant and permanently delete their ' + n + ' collected event' + (n === 1 ? '' : 's') + '? This cannot be undone.')) return;
+    btn.disabled = true; btn.textContent = 'Removing…';
+    var op = configured ? FB.deleteParticipant(id) : Promise.resolve(deleteLocalParticipant(id));
+    op.then(function () { loadData(); })
+      .catch(function (err) {
+        btn.disabled = false; btn.textContent = 'Remove user';
+        banner($('dash-banner'), 'warn', 'Could not remove participant: ' + esc(err && err.code ? err.code : String(err)));
+      });
+  }
+  function deleteLocalParticipant(session) {
+    try {
+      var kill = [];
+      for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k && k.indexOf('searchv2:log:' + session) === 0) kill.push(k); }
+      kill.forEach(function (k) { localStorage.removeItem(k); });
+    } catch (e) {}
+  }
+  // Remove ALL participants (every collected event). Double-confirmed (destructive).
+  function removeAllParticipants() {
+    var n = participantAgg().length;
+    if (!n) return;
+    if (!confirm('Remove ALL ' + n + ' participant' + (n === 1 ? '' : 's') + ' and permanently delete every collected event? This cannot be undone.')) return;
+    if (!confirm('Are you absolutely sure? This deletes ALL participant data.')) return;
+    var op = configured ? FB.deleteAllParticipants() : Promise.resolve(deleteAllLocalParticipants());
+    op.then(function () { loadData(); })
+      .catch(function (err) { banner($('dash-banner'), 'warn', 'Could not remove all participants: ' + esc(err && err.code ? err.code : String(err))); });
+  }
+  function deleteAllLocalParticipants() {
+    try {
+      var kill = [];
+      for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k && k.indexOf('searchv2:log:') === 0) kill.push(k); }
+      kill.forEach(function (k) { localStorage.removeItem(k); });
+    } catch (e) {}
+  }
+  // Remove ALL sessions (waves). Firebase only; collected event data is kept.
+  function removeAllSessions() {
+    if (!configured) return;
+    var n = SESSIONS.length;
+    if (!n) return;
+    if (!confirm('Delete ALL ' + n + ' session' + (n === 1 ? '' : 's') + ' (waves)? Collected participant/event data is kept. This cannot be undone.')) return;
+    FB.deleteAllSessions().then(function () { loadSessions(); })
+      .catch(function (err) { banner($('dash-banner'), 'warn', 'Could not delete all sessions: ' + esc(err && err.code ? err.code : String(err))); });
   }
   function sessCard(s) {
     var n = EVENTS.filter(function (e) { return e.sessionCode === s.code && e.event === 'session_start'; }).length;
