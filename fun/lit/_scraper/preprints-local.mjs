@@ -34,7 +34,15 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { searchPreprintsByTitle } from './build-data.mjs';
+
+// Local runs identify to OpenAlex as the UCD address — a separate polite-pool
+// identity from the CI build's (kstouras@gmail.com) — so a CI mishap spending
+// its daily quota can never block a local run, and vice versa. LIT_MAILTO
+// still overrides. Must be set BEFORE importing build-data.mjs, which reads
+// it at module load; hence the dynamic import.
+process.env.LIT_MAILTO = process.env.LIT_MAILTO || 'kostas.stouras@ucd.ie';
+const { searchPreprintsByTitle } = await import('./build-data.mjs');
+console.log(`OpenAlex contact (quota identity): ${process.env.LIT_MAILTO}`);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA = join(__dirname, '..', 'data');
