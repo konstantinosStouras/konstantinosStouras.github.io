@@ -219,6 +219,14 @@ The **admin panel** at **`/lab/search-v2/admin/`** lets you, from any browser
   **Analytics** tab comparing **Without AI vs With AI** (net, reveals, best found
   per round) over completed participants. In a within-subjects session each
   participant contributes to both, aggregated per `(participant, phase)`.
+- **manage participants** — the **Participants** panel lists everyone who has taken
+  part (participants are anonymous — no accounts, so each is one play session id).
+  Each card **expands** to show first-seen / last-active, Prolific id, wave code,
+  the phases they played, event count, bonus, and a per-round breakdown (net per
+  round), with **View data** (jump to that wave in the Data tab) and **Remove user**
+  — which **permanently deletes that participant's collected event rows** (Firestore
+  when configured, else this browser's local log). The admin `delete` on `events` is
+  already allowed by `firestore.rules`, so no rules change is needed.
 
 These are backed by **Firebase (Firestore + Auth)**. Until you configure it, the
 admin panel opens in a **local preview** (this browser’s test sessions only) and

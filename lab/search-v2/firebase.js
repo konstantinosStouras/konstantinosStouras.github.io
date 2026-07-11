@@ -140,6 +140,23 @@ window.SVFirebase = (function () {
     });
   }
 
+  // Admin: permanently delete one participant's data — every event document whose
+  // `session` (the participant's anonymous id) matches. Reads the whole collection
+  // and filters client-side (the same known-good shape as fetchEvents, avoiding the
+  // WebChannel query-constraint quirk), then deletes the matching docs by ref.
+  // Resolves with the number of documents removed.
+  function deleteParticipant(session) {
+    if (!configured) return Promise.reject(new Error('firebase not configured'));
+    if (!session) return Promise.resolve(0);
+    return init().then(function () {
+      return sdk.fs.getDocs(sdk.fs.collection(db, PATHS.events));
+    }).then(function (qs) {
+      var dels = [];
+      qs.forEach(function (d) { if ((d.data() || {}).session === session) dels.push(sdk.fs.deleteDoc(d.ref)); });
+      return Promise.all(dels).then(function () { return dels.length; });
+    });
+  }
+
   // ---- admin: sessions (waves) CRUD ---------------------------------------
   function listSessions() {
     return init().then(function () {
@@ -180,7 +197,7 @@ window.SVFirebase = (function () {
     getSessionByCode: getSessionByCode,
     adminSignIn: adminSignIn, adminSignOut: adminSignOut, onAuth: onAuth,
     adminLoadStudyConfig: adminLoadStudyConfig,
-    saveStudyConfig: saveStudyConfig, fetchEvents: fetchEvents,
+    saveStudyConfig: saveStudyConfig, fetchEvents: fetchEvents, deleteParticipant: deleteParticipant,
     listSessions: listSessions, createSession: createSession, updateSession: updateSession,
     deleteSession: deleteSession, codeExists: codeExists,
     getDefaults: getDefaults, saveDefaults: saveDefaults,
