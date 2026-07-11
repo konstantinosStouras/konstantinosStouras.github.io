@@ -90,11 +90,19 @@ SSRN** carries a `Preprint` (+ `PreprintSrc`) field, resolved in `build-data.mjs
 (2) a **title+author search** (`searchPreprintsByTitle`/`matchPreprintWork`,
 newest-first) finds preprints that live as a **separate** OpenAlex/SSRN record
 (own `10.2139/ssrn.*` DOI) — this is what surfaces most SSRN links. It is ONE
-OpenAlex request per paper, which OpenAlex throttles hard on cloud/CI IPs, so
-the **full backfill is run locally** via `fun/lit/_scraper/preprints-local.mjs`
-(same "run it on your machine" pattern as the editors/PNAS scripts; it writes
-`_preprints.json` + the `Preprint` fields, which you commit). In the daily
-build the same pass runs only as a **strictly time-boxed, gentle best-effort**
+OpenAlex request per paper (rate-limited per identity, daily quota resets at
+midnight UTC), so the **backfill runs online in its own scheduled workflow**,
+`.github/workflows/lit-preprints-backfill.yml` (4×/day), which runs
+`fun/lit/_scraper/preprints-ci.mjs`: a bounded (~25 min), quota-aware slice of
+searches per run (waits out throttling; exits cleanly when the day's quota is
+spent) that commits `fun/lit/data/` back — it **shares the
+`lit-update-data-*` concurrency group** with the daily build so the two never
+race a commit, and its push-retry re-applies finds via
+`--apply-only --merge-cache` instead of clobbering a fresher dataset.
+`fun/lit/_scraper/preprints-local.mjs` remains as a faster local alternative
+(unthrottled from a home connection; identifies as a separate `LIT_MAILTO`
+quota identity so CI can never spend the local budget). In the daily build the
+same pass also runs as a **strictly time-boxed, gentle best-effort**
 (`LIT_PREPRINT_SEARCH_MS`, default 6 min; `LIT_PREPRINT_SEARCH_CAP`, default
 2500; single-attempt fetch that backs off and stops on 429s) so it can **never
 hang the build**. Both `pickPreprint` and the matcher are host-validated (real
