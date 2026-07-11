@@ -197,6 +197,10 @@
   .paper-abstract-toggle:hover { text-decoration: underline; }
   .paper-bibtex-toggle { margin-top: 8px; margin-left: 14px; font-size: 12px; color: var(--green); cursor: pointer; font-weight: 500; -webkit-user-select: none; user-select: none; display: inline-block; }
   .paper-bibtex-toggle:hover { text-decoration: underline; }
+  /* Free arXiv/SSRN pre-print link — open-access orange, sits between BibTeX
+     and the (signed-in) "Notes, tags & lists" toggle. */
+  .paper-preprint-link { margin-top: 8px; margin-left: 14px; font-size: 12px; color: #c2410c; font-weight: 600; text-decoration: none; display: inline-block; }
+  .paper-preprint-link:hover { text-decoration: underline; }
   .paper-abstract { display: none; margin-top: 10px; padding: 14px 16px; background: #fafbfd; border-radius: 6px; font-size: 13.5px; line-height: 1.65; color: var(--text-muted); border-left: 3px solid var(--navy-light); }
   .paper-abstract.open { display: block; }
   .paper-bibtex { display: none; margin-top: 10px; padding: 40px 16px 14px; background: #f5f7f5; border-radius: 6px; font-size: 12.5px; line-height: 1.5; color: var(--text); border-left: 3px solid var(--green); font-family: 'Courier New', monospace; white-space: pre-wrap; word-break: break-all; position: relative; }
@@ -415,7 +419,7 @@
     .sort-control, .sort-control select,
     .acct-note, .acct-tag-input, .acct-newlist input, .library-search { font-size: 16px; }
     .chip-x { padding: 8px 7px; margin: -8px -3px -8px 0; font-size: 16px; }
-    .paper-abstract-toggle, .paper-bibtex-toggle { padding: 7px 2px; }
+    .paper-abstract-toggle, .paper-bibtex-toggle, .paper-preprint-link { padding: 7px 2px; }
   }
   @media (hover: none) {
     .paper-card:hover { background: var(--white); }
@@ -2039,11 +2043,12 @@ function paperCardHTML(p, idx, showAdded) {
       ${(p._ae||[]).map(e => `<span class="tag tag-ae" onclick="addChipFromCard('ae','${escAttr(e)}')" title="Associate Editor — click to see other papers this editor handled">AE: ${esc(e)}</span>`).join('')}
       ${p['Status']==='Other' ? '<span class="tag tag-other">Other</span>' : ''}
       ${p['Status'] && p['Status']!=='Other' ? `<span class="tag tag-aia">${esc(p['Status'])}</span>` : ''}
-      ${safeUrl(p['PDF']) ? `<a class="tag tag-pdf" href="${safeUrl(p['PDF'])}" target="_blank" rel="noopener" title="Open-access PDF (arXiv/SSRN where available)">PDF ↗</a>` : ''}
+      ${safeUrl(p['PDF']) && p['PDF'] !== p['Preprint'] ? `<a class="tag tag-pdf" href="${safeUrl(p['PDF'])}" target="_blank" rel="noopener" title="Open-access PDF (arXiv/SSRN where available)">PDF ↗</a>` : ''}
       ${addedTag}
     </div>
     ${hasAbs ? `<span class="paper-abstract-toggle" onclick="togAbs('${aid}',this)">▸ Abstract</span>` : ''}
     <span class="paper-bibtex-toggle" onclick="togBib('bib${idx}',this,${idx})">▸ BibTeX</span>
+    ${safeUrl(p['Preprint']) ? `<a class="paper-preprint-link" href="${safeUrl(p['Preprint'])}" target="_blank" rel="noopener" title="Free author pre-print on ${p['PreprintSrc'] === 'ssrn' ? 'SSRN' : 'arXiv'} — the accepted/working version, which may differ from the final published paper">Pre-print (Open Access) ↗</a>` : ''}
     ${typeof acctToggleHTML === 'function' ? acctToggleHTML(p) : ''}
     ${hasAbs ? `<div id="${aid}" class="paper-abstract">${esc(absClean)}</div>` : ''}
     <div id="bib${idx}" class="paper-bibtex"></div>
