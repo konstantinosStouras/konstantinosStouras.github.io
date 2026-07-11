@@ -67,6 +67,7 @@ const INFORMS = [
   { code: 'msom', litKey: 'msom', name: 'Manufacturing & Service Operations Management' },
   { code: 'isre', litKey: 'isre', name: 'Information Systems Research' },
   { code: 'orsc', litKey: null,   name: 'Organization Science' }, // FT50 only
+  { code: 'ijoc', litKey: null,   name: 'INFORMS Journal on Computing' }, // UTD24 only (lit-ft50 catalog)
 ];
 
 // Resolve the target app: its data/ dir, its INFORMS journals, and the source
@@ -91,7 +92,7 @@ async function resolveApp() {
     const journals = existsSync(jpath) ? JSON.parse(await readFile(jpath, 'utf8')) : [];
     const byIssn = (issn) => journals.find(j => !j.retired && (j.issns || []).includes(issn));
     // Map each INFORMS code to the FT50 journal (by its known primary ISSN).
-    const ISSN = { mnsc: '0025-1909', opre: '0030-364X', mksc: '0732-2399', msom: '1523-4614', isre: '1047-7047', orsc: '1047-7039' };
+    const ISSN = { mnsc: '0025-1909', opre: '0030-364X', mksc: '0732-2399', msom: '1523-4614', isre: '1047-7047', orsc: '1047-7039', ijoc: '1091-9856' };
     const sources = [];
     for (const j of INFORMS) {
       const entry = byIssn(ISSN[j.code]);

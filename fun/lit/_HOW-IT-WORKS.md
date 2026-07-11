@@ -37,17 +37,28 @@ search and BibTeX export in the browser.
   ACM EC — plus, appended alphabetically, every FT50 journal the page merges
   in from its own FT50 dataset in `data-ft50/` (see the "Journal types & the
   FT50 merge" note below). Nothing selected = search everything.
-- **Journal types filter** (left of Journals): three fixed options — **FT50**
-  (all 50 journals of the Financial Times research rank), **ABS 4/4\*** and
-  **ABS 3** (Chartered ABS Academic Journal Guide, AJG 2024, as mirrored at
-  journalranking.org). A type chip expands to its whole journal set and
-  **unions** with any individually selected journals (it broadens, never
-  narrows). The FT50 key set is seeded statically and extended from the
-  `data-ft50/sources.json` manifest at runtime, so the yearly FT-list check
-  (below) flows through;
-  ABS grades live in the `ABS_RATING` map in `index.html` (PNAS and ACM EC
-  are not in the AJG; HBR / MIT SMR — the AJG 2024 "top practitioner"
-  journals — are kept at 3, their last numeric grade, so ABS 3 finds them).
+- **Journal types filter** (left of Journals): four fixed options — **UTD24**
+  (the UT Dallas Top-100 rankings' 24 journals), **FT50** (all 50 journals of
+  the Financial Times research rank), **ABS 4/4\*** and **ABS 3** (Chartered
+  ABS Academic Journal Guide, AJG 2024, as mirrored at journalranking.org). A
+  type chip expands to its whole journal set and **unions** with any
+  individually selected journals (it broadens, never narrows). The UTD24 key
+  set is static (the list is fixed); the FT50 key set is seeded statically
+  and extended from the `data-ft50/sources.json` manifest at runtime —
+  skipping entries flagged `notFT` (journals carried for another list, not
+  the FT's: UTD24's INFORMS Journal on Computing `ijoc`, ABS 4's European
+  Journal of Operational Research `ejor`) — so the yearly FT-list check
+  (below) flows through; ABS grades live in the `ABS_RATING` map in
+  `index.html` (PNAS and ACM EC are not in the AJG; HBR / MIT SMR — the
+  AJG 2024 "top practitioner" journals — are kept at 3, their last numeric
+  grade, so ABS 3 finds them, alongside IJOC).
+- **Journal-type badge on every card.** A small badge left of each paper's
+  title shows the single MOST selective list its journal belongs to
+  (UTD24 > FT50 > ABS 4/4* > ABS 3, the JOURNAL_TYPES order): a UTD24
+  journal's paper is badged `UTD24` only — never additionally FT50 or
+  ABS 4/4*. Display only: an ABS 4/4* *search* still returns every UTD24
+  journal's papers (each shown with its UTD24 badge). Clicking a badge
+  selects that journal type; PNAS and ACM EC papers carry no badge.
 - **The FT50 merge is lazy — and self-owned.** The eight native sources
   still eager-load as before, but the 44 FT50-only journals (~200 MB of JSON)
   are fetched from `./data-ft50/papers-<key>.json` only when they enter the

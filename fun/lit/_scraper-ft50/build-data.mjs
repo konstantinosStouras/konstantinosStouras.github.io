@@ -745,6 +745,10 @@ async function main() {
     if (src.aeEditors) entry.aeEditors = true;
     if (src.aia) entry.aia = true;
     if (src.limitedCoverage) entry.limitedCoverage = true;
+    // Journals carried for another list (e.g. UTD24's INFORMS Journal on
+    // Computing) but NOT on the FT50 list: the page must not count them as
+    // FT50, and the yearly FT-list check must not retire them.
+    if (src.notFT) entry.notFT = true;
     sources.push(entry);
   }
 

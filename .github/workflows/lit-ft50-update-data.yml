@@ -1,8 +1,10 @@
 name: lit — update FT50 (merged catalog) data
 
-# Builds fun/lit's OWN copy of the FT50 dataset (all 50 journals on the
-# Financial Times FT50 research-rank list) by pulling from the Crossref API,
-# then commits the refreshed files in fun/lit/data-ft50/ back to the branch.
+# Builds fun/lit's OWN FT50-and-friends dataset (the 50 journals on the
+# Financial Times FT50 research-rank list, plus notFT extras carried for other
+# lists — UTD24's INFORMS Journal on Computing, ABS 4's EJOR) by pulling from
+# the Crossref API, then commits the refreshed files in fun/lit/data-ft50/
+# back to the branch.
 # This is the pipeline behind the lit page's FT50 merge / "Journal types"
 # filter (originally vendored from the retired fun/ft50 app).
 # The journal list itself lives in fun/lit/_scraper-ft50/journals.json

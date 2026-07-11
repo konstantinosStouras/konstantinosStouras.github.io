@@ -241,7 +241,9 @@ async function main() {
   const liveNorm = new Map(live.map(n => [normName(n), n]));
 
   const added = [...liveNorm.keys()].filter(k => ![...active].some(j => journalMatchers(j).has(k)));
-  const removed = active.filter(j => ![...journalMatchers(j)].some(k => liveNorm.has(k)));
+  // notFT journals (carried for another list, e.g. UTD24's INFORMS Journal on
+  // Computing) are not on the FT's list by design — never retire them from it.
+  const removed = active.filter(j => !j.notFT && ![...journalMatchers(j)].some(k => liveNorm.has(k)));
 
   if (!added.length && !removed.length) {
     console.log('FT50 list unchanged — journals.json is in sync.');

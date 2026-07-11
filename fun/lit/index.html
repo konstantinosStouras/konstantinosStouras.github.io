@@ -6,8 +6,8 @@
 <title>The Lit · Research Paper Browser — Management Science, OR, Marketing Science, M&amp;SOM, POM, ISR, PNAS, ACM EC &amp; the FT50</title>
 
 <!-- SEO -->
-<meta name="description" content="Search and filter research papers across Management Science, Operations Research, Marketing Science, M&SOM, POM, Information Systems Research, five PNAS sections, the ACM EC conference (1999–present), and all 50 journals of the Financial Times FT50 rank. Filter by journal, journal type (FT50, ABS 4/4*, ABS 3), year, author, or affiliation. Export BibTeX citations.">
-<meta name="keywords" content="Management Science, Operations Research, Marketing Science, MSOM, POM, Information Systems Research, PNAS, ACM EC, Economics and Computation, FT50, Financial Times 50, ABS ranking, AJG, Academic Journal Guide, academic papers, research browser, BibTeX, journal articles, INFORMS">
+<meta name="description" content="Search and filter research papers across Management Science, Operations Research, Marketing Science, M&SOM, POM, Information Systems Research, five PNAS sections, the ACM EC conference (1999–present), and all 50 journals of the Financial Times FT50 rank. Filter by journal, journal type (UTD24, FT50, ABS 4/4*, ABS 3), year, author, or affiliation. Export BibTeX citations.">
+<meta name="keywords" content="Management Science, Operations Research, Marketing Science, MSOM, POM, Information Systems Research, PNAS, ACM EC, Economics and Computation, UTD24, UT Dallas journal list, FT50, Financial Times 50, ABS ranking, AJG, Academic Journal Guide, European Journal of Operational Research, INFORMS Journal on Computing, academic papers, research browser, BibTeX, journal articles, INFORMS">
 <meta name="author" content="Konstantinos Stouras">
 
 <meta name="robots" content="index, follow">
@@ -186,6 +186,17 @@
   .tag-pdf:hover { background: #1f6b3f; }
   .chip-journal { background: var(--navy-light); color: var(--navy); }
   .chip-jtype { background: #e0f2f1; color: #00796b; }
+  /* Journal-type badge left of each paper title: the single MOST selective
+     list the journal belongs to (UTD24 > FT50 > ABS 4/4* > ABS 3 — a UTD24
+     journal is not additionally badged FT50/ABS). Click selects that type. */
+  .jtype-badge { display: inline-block; padding: 2px 7px; margin-right: 8px; border-radius: 5px;
+    font-family: 'Work Sans', sans-serif; font-size: 10.5px; font-weight: 700; letter-spacing: 0.4px;
+    vertical-align: 3px; white-space: nowrap; cursor: pointer; }
+  .jtype-badge:hover { filter: brightness(0.93); }
+  .jtype-utd24 { background: #ede7f6; color: #5e35b1; }
+  .jtype-ft50  { background: #fde7ef; color: #ad1457; }
+  .jtype-abs4  { background: #e3ecf7; color: #1a5296; }
+  .jtype-abs3  { background: #eceff1; color: #546e7a; }
   /* Senior/Associate Editor (ISR & Marketing Science) tags + chips */
   .tag-se { background: var(--accent-light); color: #6f5827; cursor: pointer; }
   .tag-se:hover { background: #ece5d0; }
@@ -446,7 +457,7 @@
     <h1><em>The Lit</em> — Research Paper Browser</h1>
     <div class="header-right">
       <div style="text-align:right;line-height:1.35">
-        <div class="header-meta"><strong id="sourceCount">52 sources</strong> via Crossref · <span id="yearRange">1917–present</span></div>
+        <div class="header-meta"><strong id="sourceCount">54 sources</strong> via Crossref · <span id="yearRange">1917–present</span></div>
         <div class="header-meta" id="lastPull" style="font-size:12px;opacity:0.75;margin-top:1px"></div>
       </div>
       <div id="acctControl" class="acct-control"></div>
@@ -458,7 +469,7 @@
   <div class="filters-inner">
     <div class="filters-row filters-row-primary">
       <div class="filter-group">
-        <label title="Filter by journal list or rating: the Financial Times FT50 research rank, or the ABS/AJG rating (Chartered Association of Business Schools Academic Journal Guide, via journalranking.org). A type selects all covered journals of that type, and combines with the Journals filter.">Journal types</label>
+        <label title="Filter by journal list or rating: the UT Dallas Top-100 rankings' 24 journals (UTD24), the Financial Times FT50 research rank, or the ABS/AJG rating (Chartered Association of Business Schools Academic Journal Guide, via journalranking.org). A type selects all covered journals of that type, and combines with the Journals filter.">Journal types</label>
         <div class="custom-select" id="csJType" data-type="jtype">
           <div class="custom-select-trigger" onclick="toggleDrop('csJType')">All types</div>
           <div class="custom-select-dropdown"><input class="custom-select-search" placeholder="Type to filter..." oninput="filterDrop('csJType',this.value)"><div class="custom-select-items"></div></div>
@@ -588,7 +599,7 @@
 </div>
 
 <div id="papersList" class="papers-list">
-  <div class="empty-state"><h3>Select a filter to get started</h3><p>Pick a journal type (FT50, ABS 4/4*, ABS 3) or one or more journals, filter by year, or search by title, author, or affiliation. Everything is searched when no journal is selected (FT50-only journal files download on demand — a first all-journal search fetches the full dataset, so give it a moment).</p></div>
+  <div class="empty-state"><h3>Select a filter to get started</h3><p>Pick a journal type (UTD24, FT50, ABS 4/4*, ABS 3) or one or more journals, filter by year, or search by title, author, or affiliation. Everything is searched when no journal is selected (FT50-only journal files download on demand — a first all-journal search fetches the full dataset, so give it a moment).</p></div>
 </div>
 <!-- PAGINATION DISABLED — uncomment to re-enable
 <div id="pagination" class="pagination" style="display:none"></div>
@@ -597,7 +608,7 @@
 <footer class="footer">
   <div>Built as a personal project to search papers across several journals of my interest in one place.</div>
   <div>Editors and editorial areas are shown for <em>Management Science</em> papers (2011+), exactly as on <a href="/fun/ms/">the MS-only browser</a>. Other sources contribute their published papers and Articles in Advance. ACM EC papers link to an arXiv/SSRN/open-access PDF where one could be found.</div>
-  <div>The <strong>Journal types</strong> filter covers the full <a href="https://www.ft.com/ft50-journals" target="_blank" rel="noopener">FT50 research rank</a> — journals beyond the eight core sources come from this app's own FT50 dataset (refreshed daily, checked against the FT's list yearly), downloaded on demand. ABS ratings follow the Chartered ABS <em>Academic Journal Guide</em> (AJG 2024), as mirrored at <a href="https://journalranking.org/" target="_blank" rel="noopener">journalranking.org</a>; HBR and MIT Sloan Management Review, the AJG's "top practitioner" journals, are listed under ABS 3, their last numeric grade.</div>
+  <div>The <strong>Journal types</strong> filter covers the <a href="https://jsom.utdallas.edu/the-utd-top-100-business-school-research-rankings/list-of-journals" target="_blank" rel="noopener">UTD24 list</a> and the full <a href="https://www.ft.com/ft50-journals" target="_blank" rel="noopener">FT50 research rank</a> — journals beyond the eight core sources come from this app's own dataset (refreshed daily, checked against the FT's list yearly), downloaded on demand. The small badge left of each title shows the single most selective list its journal belongs to (UTD24 &gt; FT50 &gt; ABS 4/4* &gt; ABS 3) — a broader filter still finds the paper, e.g. an ABS 4/4* search includes every UTD24 journal. ABS ratings follow the Chartered ABS <em>Academic Journal Guide</em> (AJG 2024), as mirrored at <a href="https://journalranking.org/" target="_blank" rel="noopener">journalranking.org</a>; HBR and MIT Sloan Management Review, the AJG's "top practitioner" journals, are listed under ABS 3, their last numeric grade.</div>
   <div>All metadata are publicly available, collected via the <a href="https://www.crossref.org/documentation/retrieve-metadata/rest-api/" target="_blank">Crossref API</a> (with OpenAlex, DBLP and Semantic Scholar assisting for EC PDF links). PNAS section labels come from pnas.org's own topic index where available, and are otherwise approximated from each paper's <a href="https://openalex.org" target="_blank">OpenAlex</a> primary topic.</div>
   <div>Feedback and suggestions are welcome. Any errors are my own. <a href="https://www.stouras.com" target="_blank">Konstantinos I. Stouras</a></div>
 </footer>
@@ -667,16 +678,19 @@ const JOURNAL_OPTIONS = [
 const JOURNAL_LABEL = {};
 JOURNAL_OPTIONS.forEach(function(o) { JOURNAL_LABEL[o.key] = o.label; });
 
-// ── Journal types (FT50 membership + ABS/AJG rating buckets) ────────────────
+// ── Journal types (UTD24 / FT50 membership + ABS/AJG rating buckets) ────────
 // The "Journal types" filter selects whole sets of journals at once. FT50
 // membership is seeded from today's list (fun/lit/_scraper-ft50/journals.json)
-// and extended at runtime by the data-ft50 manifest, so the yearly FT50 list
-// check keeps it current without touching this page. ABS grades are the Chartered
-// ABS Academic Journal Guide (AJG 2024) ones, as mirrored at
-// journalranking.org; only journals this page can show are listed (PNAS and
-// the ACM EC conference are not in the guide). HBR and MIT SMR carry the
-// AJG 2024 "top practitioner journal" designation rather than a number — they
-// are kept at 3, their last numeric grade, so the ABS 3 option finds them.
+// and extended at runtime by the data-ft50 manifest (entries flagged notFT —
+// journals carried for another list, like UTD24's INFORMS Journal on
+// Computing — stay out), so the yearly FT50 list check keeps it current
+// without touching this page. UTD24 is the UT Dallas Top-100 rankings' fixed
+// 24-journal list. ABS grades are the Chartered ABS Academic Journal Guide
+// (AJG 2024) ones, as mirrored at journalranking.org; only journals this page
+// can show are listed (PNAS and the ACM EC conference are not in the guide).
+// HBR and MIT SMR carry the AJG 2024 "top practitioner journal" designation
+// rather than a number — they are kept at 3, their last numeric grade, so the
+// ABS 3 option finds them.
 const ABS_RATING = {
   aman: '4*', amj: '4*', amr: '4*', tar: '4*', aos: '4*', asq: '4*',
   aer: '4*', asr: '4*', ecta: '4*', etp: '4*', jae: '4*', jar: '4*',
@@ -686,8 +700,14 @@ const ABS_RATING = {
   qje: '4*', respol: '4*', restud: '4*', rfs: '4*', smj: '4*',
   car: '4', hrm: '4', jfqa: '4', jmis: '4', jms: '4', jams: '4',
   msom: '4', obhdp: '4', pom: '4', psci: '4', rast: '4', rof: '4', sej: '4',
-  hbr: '3', smr: '3',
+  ejor: '4',
+  hbr: '3', smr: '3', ijoc: '3',
 };
+// The UT Dallas Top-100 rankings' 24 journals (jsom.utdallas.edu; mirrored at
+// ceibs.libguides.com). A fixed, curated list — unchanged for many years.
+const UTD24_KEYS = new Set(['tar','jae','jar','jof','jfe','rfs','isre','ijoc',
+  'misq','jcr','jm','jmr','mksc','ms','opre','joom','msom','pom','amj','amr',
+  'asq','orsc','jibs','smj']);
 // Today's FT50 keys (mirrors fun/lit/_scraper-ft50/journals.json); the
 // manifest extends this set at runtime, so a revised FT list flows through.
 const FT50_KEYS = new Set(['aman','amj','amr','tar','aos','asq','aer','asr',
@@ -695,24 +715,41 @@ const FT50_KEYS = new Set(['aman','amj','amr','tar','aos','asq','aer','asr',
   'jof','jfqa','jfe','jibs','jom','jmis','jms','jm','jmr','joom','jpe','jams',
   'ms','msom','mksc','misq','smr','opre','orsc','obhdp','pom','psci','qje',
   'respol','rast','restud','rof','rfs','sej','smj']);
+// Listed most-selective first — the paper-card badge shows only the FIRST
+// type a paper's journal belongs to (UTD24 ⊃-wise the "toughest" list; an
+// FT50 journal is not additionally badged ABS 4/4*, etc.). Filtering is
+// unaffected: an ABS 4/4* search still returns UTD24 journals' papers.
 const JOURNAL_TYPES = [
-  { key: 'ft50', label: 'FT50 (Financial Times Top 50)',
+  { key: 'utd24', label: 'UTD24 (UT Dallas)', badge: 'UTD24',
+    title: 'The 24 journals of the UT Dallas Top-100 Business School Research Rankings list.' },
+  { key: 'ft50', label: 'FT50 (Financial Times Top 50)', badge: 'FT50',
     title: 'All 50 journals of the Financial Times FT50 research rank.' },
-  { key: 'abs4', label: 'ABS 4/4*',
+  { key: 'abs4', label: 'ABS 4/4*', badge: 'ABS 4/4*',
     title: 'Journals rated 4* ("world elite") or 4 ("top") in the Chartered ABS Academic Journal Guide (AJG 2024), via journalranking.org. Only journals covered by this page are included.' },
-  { key: 'abs3', label: 'ABS 3',
-    title: 'Journals rated 3 ("highly regarded") in the Chartered ABS Academic Journal Guide, via journalranking.org — among the journals covered by this page: HBR and MIT Sloan Management Review (the AJG’s top practitioner journals, at their last numeric grade).' },
+  { key: 'abs3', label: 'ABS 3', badge: 'ABS 3',
+    title: 'Journals rated 3 ("highly regarded") in the Chartered ABS Academic Journal Guide, via journalranking.org — among the journals covered by this page: HBR and MIT Sloan Management Review (the AJG’s top practitioner journals, at their last numeric grade) and the INFORMS Journal on Computing.' },
 ];
 const JTYPE_LABEL = {};
 JOURNAL_TYPES.forEach(function(t) { JTYPE_LABEL[t.key] = t.label; });
 
-// The journal keys a type expands to (FT50 list membership or ABS bucket).
+// The journal keys a type expands to (UTD24/FT50 list membership or ABS bucket).
 function journalTypeKeys(t) {
+  if (t === 'utd24') return UTD24_KEYS;
   if (t === 'ft50') return FT50_KEYS;
   var want = t === 'abs4' ? { '4': 1, '4*': 1 } : t === 'abs3' ? { '3': 1 } : {};
   var s = new Set();
   Object.keys(ABS_RATING).forEach(function(k) { if (want[ABS_RATING[k]]) s.add(k); });
   return s;
+}
+
+// The single most-selective type a journal belongs to (JOURNAL_TYPES order) —
+// what the small badge left of each paper title shows. null = untyped (PNAS,
+// ACM EC). Clicking the badge selects that journal type in the filter.
+function topJournalType(jk) {
+  for (var i = 0; i < JOURNAL_TYPES.length; i++) {
+    if (journalTypeKeys(JOURNAL_TYPES[i].key).has(jk)) return JOURNAL_TYPES[i];
+  }
+  return null;
 }
 
 const PER_PAGE = 20;
@@ -875,6 +912,16 @@ function addJournalChip(key) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// Clicking a paper card's journal-type badge selects that type in the filter
+// (same recent-view-preserving semantics as clicking a journal tag).
+function addJTypeChip(key) {
+  if (!key || sel.jtype.has(key)) return;
+  sel.jtype.add(key);
+  renderChips('jtype');
+  if (recentMode) renderRecent(); else applyFilters();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 // Author chips = free-text substring chips (sel.author) + ORCID-identity chips
 // (sel.authorIdentity, which match any of a person's name variants).
 function renderAuthorChips() {
@@ -959,7 +1006,9 @@ async function loadFt50Manifest() {
     }
   }
   ft50Manifest.forEach(function(s) {
-    FT50_KEYS.add(s.key); // self-updating FT50 membership
+    // Self-updating FT50 membership — but notFT entries (journals the catalog
+    // carries for another list, e.g. UTD24's IJOC or ABS 4's EJOR) stay out.
+    if (!s.notFT) FT50_KEYS.add(s.key);
     var y = parseInt(s.firstYear, 10);
     if (y && y < manifestMinYear) manifestMinYear = y;
     if (!SRC[s.key]) {
@@ -2003,7 +2052,7 @@ function applyFilters() {
   // If no filters active, show welcome state
   if (sel.jtype.size === 0 && sel.journal.size === 0 && sel.editor.size === 0 && sel.area.size === 0 && sel.se.size === 0 && sel.ae.size === 0 && sel.year.size === 0 && sel.title.size === 0 && sel.author.size === 0 && Object.keys(sel.authorIdentity).length === 0 && sel.affiliation.size === 0 && !search && !searchAuth && !searchAff && !preprintOnly) {
     document.getElementById('resultsCount').innerHTML = '';
-    document.getElementById('papersList').innerHTML = '<div class="empty-state"><h3>Select a filter to get started</h3><p>Pick a journal type (FT50, ABS 4/4*, ABS 3) or one or more journals, filter by year, or search by title, author, or affiliation. Everything is searched when no journal is selected (FT50-only journal files download on demand — a first all-journal search fetches the full dataset, so give it a moment).</p></div>';
+    document.getElementById('papersList').innerHTML = '<div class="empty-state"><h3>Select a filter to get started</h3><p>Pick a journal type (UTD24, FT50, ABS 4/4*, ABS 3) or one or more journals, filter by year, or search by title, author, or affiliation. Everything is searched when no journal is selected (FT50-only journal files download on demand — a first all-journal search fetches the full dataset, so give it a moment).</p></div>';
     buildFilterOptions();
     return;
   }
@@ -2348,9 +2397,12 @@ function paperCardHTML(p, idx, showAdded) {
     if (added) addedTag = `<span class="tag tag-added">Added ${esc(formatAddedDate(added))}</span>`;
   }
 
+  const jtype = topJournalType(p['JKey'] || '');
+  const badge = jtype ? `<span class="jtype-badge jtype-${escAttr(jtype.key)}" onclick="addJTypeChip('${escAttr(jtype.key)}')" title="${escAttr(jtype.title)} Click to filter by this journal type.">${esc(jtype.badge)}</span>` : '';
+
   return `<div class="paper-card">
     ${typeof acctStarHTML === 'function' ? acctStarHTML(p) : ''}
-    <div class="paper-title">${link ? `<a href="${link}" target="_blank">${esc(p['Title'])}</a>` : esc(p['Title'])}</div>
+    <div class="paper-title">${badge}${link ? `<a href="${link}" target="_blank">${esc(p['Title'])}</a>` : esc(p['Title'])}</div>
     <div class="paper-authors">${(p['Authors']||'').split(',').map(function(a){var t=a.trim();return t?'<span class="paper-author-link" onclick="addAuthorChip(\''+escAttr(t)+'\')">'+esc(t)+'</span>':'';}).filter(Boolean).join(', ')}</div>
     <div class="paper-meta">
       ${journalTagsHTML(p)}

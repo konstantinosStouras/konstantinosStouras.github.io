@@ -52,8 +52,18 @@ OpenAlex/DBLP/Semantic Scholar). Data is static JSON in `fun/lit/data/` (one
 `fun/lit/_scraper/build-data.mjs` and refreshed daily by
 `.github/workflows/lit-update-data.yml` (same self-healing live-site check as
 the ms workflow). **Journal types & the FT50 merge:** a "Journal types"
-filter (left of Journals) offers FT50 / ABS 4/4* / ABS 3; a type chip expands
-to its journal set and unions with the Journals selection. The page merges in
+filter (left of Journals) offers UTD24 / FT50 / ABS 4/4* / ABS 3; a type chip
+expands to its journal set and unions with the Journals selection. Each paper
+card carries a small **badge left of its title** showing the single MOST
+selective list its journal belongs to (UTD24 > FT50 > ABS 4/4* > ABS 3 —
+JOURNAL_TYPES order in `index.html`; a UTD24 journal is never additionally
+badged FT50/ABS); clicking it selects that type. Filtering is unaffected by
+the badge: an ABS 4/4* search still returns UTD24 journals' papers. The
+catalog also carries **notFT extras** — journals on another list but not the
+FT50: UTD24's INFORMS Journal on Computing (`ijoc`) and ABS 4's European
+Journal of Operational Research (`ejor`), flagged `"notFT": true` in
+`journals.json` so the page keeps them out of FT50 membership and the yearly
+FT-list check never retires them. The page merges in
 lit's **own FT50 catalog** at runtime — `fun/lit/data-ft50/` (seeded from the
 retired fun/ft50 app's data, registry included, then maintained here):
 it fetches `data-ft50/sources.json`, appends the 44 FT50-only journals to the
