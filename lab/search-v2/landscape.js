@@ -45,9 +45,9 @@
   function clamp(x, a, b) { return x < a ? a : x > b ? b : x; }
 
   // ---- the walk ------------------------------------------------------------
-  // Deterministic bounded random walk: pick a seed position and value, then walk
-  // outward with steps in [-L_STEP, L_STEP], clamped to [0,100]. Returns 100 ints.
-  function makeWalk(seed) {
+  // One deterministic bounded random walk: pick a seed position and value, then
+  // walk outward with steps in [-L_STEP, L_STEP], clamped to [0,100]. 100 ints.
+  function rawWalk(seed) {
     var rng = mulberry32(seed >>> 0);
     var y = 1 + Math.floor(rng() * N);                  // seed position 1..N
     var q = new Array(N + 1);                            // 1-indexed
@@ -57,6 +57,35 @@
     var v = new Array(N);
     for (var p = 1; p <= N; p++) v[p - 1] = Math.round(q[p]);
     return v;
+  }
+
+  // Does the walk have a single, tie-free global maximum (one clear peak)?
+  function hasUniqueMax(v) {
+    var m = -Infinity, cnt = 0;
+    for (var i = 0; i < v.length; i++) { if (v[i] > m) { m = v[i]; cnt = 1; } else if (v[i] === m) cnt++; }
+    return cnt === 1;
+  }
+
+  // Candidate budget for the unique-peak preference. A single draw is tie-free
+  // only ~1/3 of the time (walks that hit the 100 ceiling plateau), so this makes
+  // the fallback astronomically rare (~1e-12) without ever *enforcing* uniqueness.
+  var UNIQUE_MAX_TRIES = 64;
+
+  // Deterministic bounded walk that PREFERS a unique global maximum (one clean
+  // peak): it draws candidates from a deterministic seed sequence and returns the
+  // first whose top value is tie-free. If none qualifies within the budget
+  // (essentially never), it returns the first candidate — uniqueness is preferred,
+  // never enforced. Still a pure function of `seed`, so every participant of every
+  // session sees the same curve for a given (arm, round).
+  function makeWalk(seed) {
+    var s = seed >>> 0, first = null;
+    for (var t = 0; t < UNIQUE_MAX_TRIES; t++) {
+      var v = rawWalk(s);
+      if (t === 0) first = v;
+      if (hasUniqueMax(v)) return v;
+      s = (s + 0x9E3779B9) >>> 0;   // deterministic next candidate seed
+    }
+    return first;
   }
 
   // ---- assistant training data --------------------------------------------
@@ -154,7 +183,7 @@
 
   return {
     mulberry32: mulberry32, hashSeed: hashSeed,
-    makeWalk: makeWalk, makeDots: makeDots, estimate: estimate, geometry: geometry,
+    makeWalk: makeWalk, hasUniqueMax: hasUniqueMax, makeDots: makeDots, estimate: estimate, geometry: geometry,
     N: N, L_STEP: L_STEP
   };
 });

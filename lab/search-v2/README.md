@@ -143,7 +143,10 @@ demand, and is fully reproducible:
   `hashSeed(TRUTH_SEED + ':' + arm + ':r' + round)`, so the curve is the **same
   for everyone**, **differs** between arm `A` and arm `B`, and is an
   **independent** draw for each round. (The single practice round uses an
-  arm-independent seed.)
+  arm-independent seed.) It also **prefers a single, tie-free peak**: it draws up
+  to 64 candidates from a deterministic seed sequence and keeps the first whose
+  global maximum is unique — preferred, **never enforced** (on the astronomically
+  rare miss it keeps the first candidate).
 - `makeDots(values, patches, density, seed)` places the assistant's training
   points inside each interpolation region — evenly spaced with a little
   deterministic jitter, at a spacing set by the density label (`few` / `standard`

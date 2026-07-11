@@ -37,6 +37,15 @@ section('Test 1 · Deterministic truth (same everywhere · differs by arm · fre
   ok('practice curve is arm-independent', eq(LS.makeWalk(truthSeed('A', 0)), LS.makeWalk(truthSeed('B', 0))));
 }
 
+section('Test 1b · Unique peak preferred (tie-free global maximum, not enforced)');
+{
+  let uniq = 0, sample = 0;
+  for (let r = 1; r <= 60; r++) for (const arm of ['A', 'B']) { sample++; if (LS.hasUniqueMax(LS.makeWalk(truthSeed(arm, r)))) uniq++; }
+  ok('produced curves have a single tie-free peak (' + uniq + '/' + sample + ')', uniq >= Math.ceil(0.99 * sample), uniq + '/' + sample);
+  // still deterministic after the resampling
+  ok('the unique-peak resampler stays deterministic', eq(LS.makeWalk(truthSeed('B', 3)), LS.makeWalk(truthSeed('B', 3))));
+}
+
 section('Test 2 · Walk shape (in range · adjacency ≤ L_STEP · length N)');
 {
   let bad = 0, len = 0;
