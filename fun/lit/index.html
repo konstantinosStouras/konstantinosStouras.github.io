@@ -2287,14 +2287,26 @@ function debounceAffSearch() {
 var compactSticky = window.matchMedia('(min-width: 769px)');
 var COMPACT_ON = 180;   // add `compact` only well below the full-height bar
 var COMPACT_OFF = 40;   // and drop it only after scrolling back near the top
+// Condensing shortens the top bar, which shortens the page. If the page can
+// barely scroll — e.g. when it is heavily zoomed in — that height change snaps
+// the scroll position back across the threshold and the bar flips on/off every
+// frame: the "whole screen shakes" bug. So only condense when there is
+// comfortably more scroll room than the toggle consumes, and expand again if
+// the page becomes too short. The two room thresholds are deliberately far
+// apart (and far apart from the header's own height change) so the guard itself
+// can never oscillate.
+var COMPACT_ROOM_MIN = 440;       // need at least this much scroll range to condense
+var COMPACT_ROOM_MIN_KEEP = 120;  // below this, force-expand even mid-scroll
 var compactScheduled = false;
 function applyCompact() {
   compactScheduled = false;
   if (!compactSticky.matches) { document.body.classList.remove('compact'); return; }
   var y = window.scrollY || window.pageYOffset || 0;
+  var docH = document.documentElement.scrollHeight || document.body.scrollHeight || 0;
+  var maxScroll = docH - window.innerHeight;
   if (document.body.classList.contains('compact')) {
-    if (y < COMPACT_OFF) document.body.classList.remove('compact');
-  } else if (y > COMPACT_ON) {
+    if (y < COMPACT_OFF || maxScroll < COMPACT_ROOM_MIN_KEEP) document.body.classList.remove('compact');
+  } else if (y > COMPACT_ON && maxScroll > COMPACT_ROOM_MIN) {
     document.body.classList.add('compact');
   }
 }
