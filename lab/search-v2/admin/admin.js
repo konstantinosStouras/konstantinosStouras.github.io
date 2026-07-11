@@ -28,8 +28,8 @@
   var BUILTIN = {
     consent: "**What this is.** This is a short decision-making study… (built-in default).\n\n**Payment.** … **Anonymity.** … **Voluntary.** …",
     instructions: "In each round you will see 100 positions on a line. Each position hides a value between 0 and 100 cents.\n\nValues at adjacent positions differ by at most 10 cents…\n\nYou can reveal the value at any position. Each reveal costs 5 cents…\n\nYour earnings for the round are the highest value you revealed, minus 5 cents for each reveal…\n\nThere is 1 practice round and 10 real rounds. Two of the 10 real rounds will be picked at random and paid to you as a bonus.",
-    instructionsB: "You also have a free assistant.\n\nAsk it about any position for its best estimate. Its estimates are usually close but not guaranteed, and it always answers even where it is unsure…\n\nAsking the assistant is free and unlimited.",
-    phaseIntroB: "Next part: you now have a free AI assistant that gives its best estimate for any position (usually close, not guaranteed)… (built-in default). Everything else about the game is the same.",
+    instructionsB: "You also have an AI assistant.\n\nAsk it about any position for its best estimate (usually close, not guaranteed; it always answers even where it is unsure)…\n\nBuilt-in default: the cost per question and any frontier model come from the AI-model settings above.",
+    phaseIntroB: "Next part: you now have an AI assistant that gives its best estimate for any position (usually close, not guaranteed)… (built-in default). Its cost and any frontier option come from the AI-model settings. Everything else about the game is the same.",
     phaseIntroA: "Next part: you search on your own — the AI assistant is no longer available… (built-in default). Everything else about the game is the same.",
     finish: "(Built-in) Thank you for taking part. Below are your real rounds; the ones marked paid were selected at random.",
     closed: "(Built-in) This study is not currently open. Thank you for your interest."
@@ -43,7 +43,13 @@
     { k: 'finish', label: 'Finish page (intro text)', help: 'The message above the results table on the final screen (before the completion code).' },
     { k: 'closed', label: 'Study-closed page', help: 'What people see if they open a session that is marked completed.' }
   ];
-  var BUILTIN_SETTINGS = { phases: ['A', 'B'], counterbalance: false, nTasks: 10, paidTasks: 2, nPractice: 1, completionCode: '', completionCodeA: '', completionCodeB: '', endpointUrl: '', content: {} };
+  var BUILTIN_SETTINGS = {
+    phases: ['A', 'B'], counterbalance: false,
+    nTasks: 1, paidTasks: 2, nPractice: 0,
+    coveragePatches: [[30, 70]],
+    ai: { baselineCost: 2, baselineData: 'few', frontier: false, frontierCost: 4, frontierData: 'lots' },
+    completionCode: '', completionCodeA: '', completionCodeB: '', endpointUrl: '', content: {}
+  };
 
   function $(id) { return document.getElementById(id); }
   function show(id) { var s = document.querySelectorAll('.screen'); for (var i = 0; i < s.length; i++) s[i].classList.toggle('active', s[i].id === id); }
@@ -156,10 +162,16 @@
   }
 
   // ============================================================= form (settings)
-  var segPractice;
+  var segPractice, segBaseData, segFrontData, regionsCtl;
+  function clampPos(v, dflt) { v = Math.round(+v); if (!isFinite(v)) v = dflt; return Math.max(1, Math.min(100, v)); }
+  function syncFrontier() { $('frontier-fields').classList.toggle('off', !$('f-ai-frontier').checked); }
   function wireForm() {
     phasesCtl = phasesSetup();
     segPractice = segSetup('seg-practice');
+    segBaseData = segSetup('seg-base-data');
+    segFrontData = segSetup('seg-front-data');
+    regionsCtl = regionsSetup();
+    $('f-ai-frontier').addEventListener('change', function () { syncFrontier(); renderSummary(); });
     $('btn-gencode').addEventListener('click', function () { $('f-code').value = genCode(); renderSummary(); });
     // Live-normalise the session code to capital letters + digits as you type
     // (matches the participant-link format and the ideasearchlab admin).
@@ -171,9 +183,58 @@
     $('btn-cancel').addEventListener('click', function () { fillForm(null, currentDefaults()); renderSummary(); });
     $('btn-makedefault').addEventListener('click', makeDefault);
     $('btn-restore').addEventListener('click', function () { fillSettings(BUILTIN_SETTINGS); renderSummary(); flash($('form-flash')); });
-    ['f-name', 'f-code', 'f-code-shared', 'f-codeA', 'f-codeB', 'f-ntasks', 'f-paid'].forEach(function (id) {
+    ['f-name', 'f-code', 'f-code-shared', 'f-codeA', 'f-codeB', 'f-ntasks', 'f-paid', 'f-ai-base-cost', 'f-ai-front-cost'].forEach(function (id) {
       $(id).addEventListener('input', renderSummary);
     });
+  }
+  // One or two AI interpolation regions (start/end on the 1–100 line). Mirrors
+  // the phases control: get() → [[a,b],...]; set(patches) fills the UI.
+  function regionsSetup() {
+    var seg = $('seg-regions'), btns = seg.querySelectorAll('button'), r2row = $('region2-row');
+    function count() { var on = seg.querySelector('.on'); return on ? parseInt(on.getAttribute('data-v'), 10) : 1; }
+    function getPatches() {
+      var a1 = clampPos($('f-r1a').value, 30), b1 = clampPos($('f-r1b').value, 70);
+      var r1 = [Math.min(a1, b1), Math.max(a1, b1)];
+      if (count() === 1) return [r1];
+      var a2 = clampPos($('f-r2a').value, 60), b2 = clampPos($('f-r2b').value, 85);
+      var r2 = [Math.min(a2, b2), Math.max(a2, b2)];
+      return [r1, r2].sort(function (x, y) { return x[0] - y[0]; });
+    }
+    function validate() {
+      var w = $('regions-warn'); if (!w) return true;
+      var p = getPatches(), ok = true, msg = '';
+      for (var i = 0; i < p.length; i++) if (p[i][1] - p[i][0] < 4) { ok = false; msg = 'Each region must be at least 4 positions wide.'; }
+      if (ok && p.length === 2 && p[1][0] <= p[0][1]) { ok = false; msg = 'The two regions must not overlap — region 1 must end before region 2 begins.'; }
+      w.textContent = msg; w.classList.toggle('show', !ok);
+      return ok;
+    }
+    function setCount(n, applyDefaults) {
+      for (var i = 0; i < btns.length; i++) btns[i].classList.toggle('on', parseInt(btns[i].getAttribute('data-v'), 10) === n);
+      r2row.style.display = (n === 2) ? '' : 'none';
+      if (applyDefaults) {
+        if (n === 2) { $('f-r1a').value = 15; $('f-r1b').value = 40; $('f-r2a').value = 60; $('f-r2b').value = 85; }
+        else { $('f-r1a').value = 30; $('f-r1b').value = 70; }
+      }
+      validate();
+    }
+    for (var i = 0; i < btns.length; i++) btns[i].addEventListener('click', function () { setCount(parseInt(this.getAttribute('data-v'), 10), true); renderSummary(); });
+    ['f-r1a', 'f-r1b', 'f-r2a', 'f-r2b'].forEach(function (id) { $(id).addEventListener('input', function () { validate(); renderSummary(); }); });
+    return {
+      valid: validate, get: getPatches,
+      set: function (patches) {
+        patches = (patches && patches.length) ? patches : [[30, 70]];
+        if (patches.length >= 2) {
+          setCount(2, false);
+          $('f-r1a').value = patches[0][0]; $('f-r1b').value = patches[0][1];
+          $('f-r2a').value = patches[1][0]; $('f-r2b').value = patches[1][1];
+        } else {
+          setCount(1, false);
+          $('f-r1a').value = patches[0][0]; $('f-r1b').value = patches[0][1];
+          if (!$('f-r2a').value) { $('f-r2a').value = 60; $('f-r2b').value = 85; }
+        }
+        validate();
+      }
+    };
   }
   function segSetup(id) {
     var el = $(id), btns = el.querySelectorAll('button');
@@ -255,8 +316,16 @@
     s = s || BUILTIN_SETTINGS;
     phasesCtl.set(s);
     segPractice.set(s.nPractice === 0 ? '0' : '1');
-    $('f-ntasks').value = (s.nTasks != null ? s.nTasks : 10);
+    $('f-ntasks').value = (s.nTasks != null ? s.nTasks : 1);
     $('f-paid').value = (s.paidTasks != null ? s.paidTasks : 2);
+    regionsCtl.set(s.coveragePatches);
+    var ai = s.ai || BUILTIN_SETTINGS.ai;
+    $('f-ai-base-cost').value = (ai.baselineCost != null ? ai.baselineCost : 2);
+    segBaseData.set(ai.baselineData || 'few');
+    $('f-ai-frontier').checked = !!ai.frontier;
+    $('f-ai-front-cost').value = (ai.frontierCost != null ? ai.frontierCost : 4);
+    segFrontData.set(ai.frontierData || 'lots');
+    syncFrontier();
     $('f-code-shared').value = s.completionCode || '';
     $('f-codeA').value = s.completionCodeA || '';
     $('f-codeB').value = s.completionCodeB || '';
@@ -266,12 +335,24 @@
   function collectSettings() {
     var content = {};
     CONTENT_KEYS.forEach(function (c) { var v = $('ce-' + c.k).value.trim(); if (v) content[c.k] = v; });
-    var nTasks = Math.max(1, Math.min(120, parseInt($('f-ntasks').value, 10) || 10));
-    var paid = Math.max(0, Math.min(nTasks, parseInt($('f-paid').value, 10) || 0));
+    var nTasks = Math.max(1, Math.min(120, parseInt($('f-ntasks').value, 10) || 1));
     var ph = phasesCtl.get();
+    var nPhases = ph.phases.length || 1;
+    // Paid rounds are drawn across ALL phases at the end, so the cap is per-phase
+    // rounds × number of phases.
+    var paid = Math.max(0, Math.min(nTasks * nPhases, parseInt($('f-paid').value, 10) || 0));
+    var baseCost = Math.max(0, Math.min(4, parseInt($('f-ai-base-cost').value, 10) || 0));
+    var fc = parseInt($('f-ai-front-cost').value, 10);
+    if (!isFinite(fc)) fc = baseCost + 2;
+    var frontCost = Math.max(baseCost, Math.min(50, fc));
     return {
       phases: ph.phases, counterbalance: ph.counterbalance,
       nTasks: nTasks, paidTasks: paid, nPractice: segPractice.get() === '0' ? 0 : 1,
+      coveragePatches: regionsCtl.get(),
+      ai: {
+        baselineCost: baseCost, baselineData: segBaseData.get(),
+        frontier: $('f-ai-frontier').checked, frontierCost: frontCost, frontierData: segFrontData.get()
+      },
       completionCode: $('f-code-shared').value.trim(),
       completionCodeA: $('f-codeA').value.trim(),
       completionCodeB: $('f-codeB').value.trim(),
@@ -300,6 +381,7 @@
     $('f-code').value = code;
     var settings = collectSettings();
     if (!settings.phases.length) { err.textContent = 'Include at least one phase (Without AI and/or With AI).'; err.style.display = 'block'; return; }
+    if (!regionsCtl.valid()) { err.textContent = 'Fix the AI interpolation region(s) — see the warning under that field.'; err.style.display = 'block'; return; }
     $('btn-save').disabled = true;
     // uniqueness only for a NEW code (or a changed code)
     var editing = editingId ? SESSIONS.filter(function (s) { return s.id === editingId; })[0] : null;
@@ -359,6 +441,14 @@
     if (settings.counterbalance) return 'Counterbalanced: ' + names.join(' / ');
     return names.join(' → ');
   }
+  function costW(c) { return (+c > 0) ? c + '¢' : 'free'; }
+  function regionsDesc(patches) { return (patches || []).map(function (p) { return p[0] + '–' + p[1]; }).join('  &  ') || '—'; }
+  function aiDesc(ai) {
+    ai = ai || {};
+    var s = 'Baseline ' + costW(ai.baselineCost) + '/q · ' + (ai.baselineData || 'few') + ' data';
+    if (ai.frontier) s += '  ·  Frontier ' + costW(ai.frontierCost) + '/q · ' + (ai.frontierData || 'lots') + ' data';
+    return s;
+  }
   function renderSummary() {
     var s = collectSettings();
     var nPhases = s.phases.length || 1;
@@ -370,6 +460,8 @@
       ['Phases', esc(phasesDescription(s))],
       ['Rounds', (s.nPractice ? '1 practice + ' : 'no practice, ') + s.nTasks + ' real per phase' +
         (nPhases > 1 ? ' (' + (s.nTasks * nPhases) + ' total)' : '') + ', ' + s.paidTasks + ' paid'],
+      ['AI regions', esc(regionsDesc(s.coveragePatches))],
+      ['AI model', esc(aiDesc(s.ai))],
       ['Completion code', esc($('f-code-shared').value || '—') + (s.completionCodeA || s.completionCodeB ? ' (A/B overrides set)' : '')],
       ['Custom page text', custom.length ? esc(custom.join(', ')) : 'all built-in']
     ];

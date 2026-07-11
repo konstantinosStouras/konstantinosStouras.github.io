@@ -9,15 +9,26 @@ for the best prize, paying 5¢ per reveal. The study runs in one or more
 **phases**, which differ in exactly one thing:
 
 - **Without AI (human only, arm `A`)** — the subject searches alone.
-- **With AI (AI assisted, arm `B`)** — the subject additionally has a free
+- **With AI (AI assisted, arm `B`)** — the subject additionally has an AI
   assistant: a conceptual model of an LLM. It is "trained on" hidden data points
-  inside one fixed interval (`COVERAGE_PATCHES`, default `[30,70]`) and **always
-  answers, for any position, with the same confident wording** — it never says
-  "I don't know". Between its points it **interpolates** (accurate, since the
-  true curve is locally smooth); beyond them it **flat-extrapolates** (holds the
-  nearest known value — confident but increasingly wrong). So it is reliable only
-  near its training data, and the participant is **not told where that is** — they
-  must calibrate by verifying with their own reveals.
+  inside one or two **interpolation region(s)** (admin-set, default `[[30,70]]`)
+  and **always answers, for any position, with the same confident wording** — it
+  never says "I don't know". Within a region it **interpolates** between its
+  nearest points (accurate, since the true curve is locally smooth); outside and
+  between regions it **extrapolates** linearly along the nearest edge (confident
+  but increasingly wrong), exactly like the teaching demo at `/lab/interpolation`.
+  Consulting it **costs cents per question** (less than a reveal), and the admin
+  can offer two models — a cheaper **baseline** trained on less data and a pricier
+  **frontier** trained on more — for the participant to choose between. The AI is
+  reliable only near its training data, and the participant is **not told where
+  that is** — they must calibrate by verifying with their own reveals.
+
+**Ground truth is deterministic.** Each round's hidden prize curve is a bounded
+random walk generated at runtime (`landscape.js`) from a fixed `(arm, round)`
+seed: it is **identical for every participant of every session**, **different**
+between the Without-AI and With-AI phases, and an **independent** draw for each
+round within a phase (10 rounds ⇒ 10 different curves). There is no landscape pool
+to ship; change `TRUTH_SEED` in `config.js` to reshuffle every curve at once.
 
 The admin chooses **which phases to include and the order** participants move
 through them (in the `/admin/` panel → **Phases**). Include one phase for a
@@ -38,15 +49,18 @@ logged as `survey` events), then the finish/completion-code page.
 
 **Testing view.** On a debug/Test link only (`?debug=1&key=…`), the round screen
 shows a "Testing view" checkbox bar to toggle the ground-truth line and, in the
-With-AI phase, the AI region / training points / interpolation line. These
-overlays are **never shown to a real participant** — during play they only see
-the prizes they reveal and the estimates they ask for. Debug links also accept
-`?phases=AB` to force a phase sequence for local testing.
+With-AI phase, the AI region / training points / interpolation + extrapolation.
+These overlays are styled like `/lab/interpolation` (blue Brownian truth, red
+training points, green interpolation within the region(s), amber dashed
+extrapolation with shaded zones) and are **never shown to a real participant** —
+during play they only see the prizes they reveal and the estimates they ask for.
+Debug links also accept `?phases=AB` to force a phase sequence for local testing.
 
 Design provenance (not shown in the app): the task/payoff/landscape replicate the
 High-Variability treatment of Malladi, Martínez-Marquina & Morozov, *"Space
-Exploration"*; the assistant implements the interpolation-only AI of Gans,
-*"A Model of Artificial Jagged Intelligence."*
+Exploration"*; the assistant implements the interpolation/extrapolation AI of
+Gans, *"A Model of Artificial Jagged Intelligence,"* rendered like the
+`/lab/interpolation` teaching demo.
 
 ---
 
@@ -57,32 +71,34 @@ lab/search-v2/
   index.html            screens shell (dynamic content injected by app.js)
   styles.css
   config.js             ONE place for every tunable constant (browser + Node)
+  landscape.js          deterministic Brownian truth + AI interp/extrap (browser + Node)
   app.js                state machine: screens, rounds, logging, resume
   chart.js              inline-SVG chart (axes, selection, dots, diamonds, debug)
-  assistant.js          interpolation + refusal + query log (loaded only in Arm B)
+  assistant.js          thin wrapper over landscape.js (loaded only in Arm B)
   logger.js             event queue, batching, sendBeacon, localStorage, CSV/JSON
   firebase-config.js    OPTIONAL: paste your Firebase project config here
   firebase.js           OPTIONAL Firestore/Auth integration (inert until configured)
   firestore.rules       security rules to deploy in the Firebase console
-  admin/index.html      admin panel (phases, session codes, data) — /admin/
+  admin/index.html      admin panel (phases, rounds, AI model, regions, data) — /admin/
   admin/admin.js        admin panel logic
   og-image.png          1200×630 social/link-preview card (Open Graph / Twitter)
   icon-180.png          apple-touch-icon
-  data/mappings.json    SHIPPED landscape pool (obfuscated), loaded by both arms
-  tools/generate_pool.js  offline seeded pool generator → data/mappings.json
   tools/apps_script_endpoint.gs  paste-ready Google Apps Script logging endpoint
-  tools/selftest.js     automatable acceptance tests (Node)
+  tools/selftest.js     Node acceptance tests (deterministic truth, estimate, wiring)
   tools/smoke.mjs        browser acceptance tests (Playwright)
-  tools/pool_plain.json  un-obfuscated pool + strata metadata (gitignored; analysis)
   README.md
 ```
+
+There is **no `data/` directory and no pool generator** anymore: the hidden prize
+curves are generated in the browser at runtime by `landscape.js`, so the served
+page never fetches a landscape file.
 
 ---
 
 ## Local testing
 
-Serve the repo root over HTTP (the app `fetch()`es `data/mappings.json`, so
-`file://` will not work):
+Serve the repo root over HTTP (the optional Firebase SDK is loaded as an ES
+module, so `file://` will not work):
 
 ```bash
 # from the repository root
@@ -92,11 +108,13 @@ python3 -m http.server 8000
 #   http://localhost:8000/lab/search-v2/?arm=B
 ```
 
-**Debug overlay.** Append `&debug=1&key=stouras` to overlay the true landscape as
-a faint line, mark the assistant's hidden dots, and show the stratum + mapping id.
-Debug requires **both** `debug=1` and the key, so subjects can't trigger it by
-accident. In debug you may also override the logging endpoint per-URL with
-`&endpoint=<url>` (used by the smoke test).
+**Debug overlay.** Append `&debug=1&key=stouras` to show the "Testing view" bar,
+which toggles the true Brownian curve, the AI interpolation region(s), its
+training points, and its interpolation/extrapolation — plus the round's `arm-round`
+id (and, in Arm B, the selected model). Debug requires **both** `debug=1` and the
+key, so subjects can't trigger it by accident. In debug you may also override the
+logging endpoint per-URL with `&endpoint=<url>` and force a phase order with
+`&phases=AB` (used by the smoke test).
 
 ```
 http://localhost:8000/lab/search-v2/?arm=B&debug=1&key=stouras
@@ -106,7 +124,7 @@ http://localhost:8000/lab/search-v2/?arm=B&debug=1&key=stouras
 
 ```bash
 cd lab/search-v2
-node tools/selftest.js          # Node acceptance tests (pool, strata, math, draw…)
+node tools/selftest.js          # Node acceptance tests (truth, estimate, geometry, wiring)
 
 # browser acceptance tests (arm isolation, resume, logging) — needs Playwright:
 npm i playwright                 # or point CHROMIUM=/path/to/chrome at an existing build
@@ -115,36 +133,29 @@ CHROMIUM=/path/to/chrome node tools/smoke.mjs
 
 ---
 
-## Regenerating the landscape pool
+## Deterministic ground truth (`landscape.js`)
 
-The pool is generated **offline** and committed; the app never generates
-landscapes at runtime. It is seeded and deterministic — running it twice with the
-same seed produces byte-identical `data/mappings.json`.
+There is **no offline pool** — every curve is generated in the browser, on
+demand, and is fully reproducible:
 
-```bash
-cd lab/search-v2
-node tools/generate_pool.js                # default seed (20260709)
-node tools/generate_pool.js --seed=12345   # choose a seed
-node tools/generate_pool.js --stamp=2026-07-09T00:00:00Z   # set generatedAt
-```
+- `makeWalk(seed)` builds one round's truth: a bounded random walk in cents
+  `[0,100]` with `|Δ| ≤ L_STEP` between neighbours. The seed is
+  `hashSeed(TRUTH_SEED + ':' + arm + ':r' + round)`, so the curve is the **same
+  for everyone**, **differs** between arm `A` and arm `B`, and is an
+  **independent** draw for each round. (The single practice round uses an
+  arm-independent seed.)
+- `makeDots(values, patches, density, seed)` places the assistant's training
+  points inside each interpolation region — evenly spaced with a little
+  deterministic jitter, at a spacing set by the density label (`few` / `standard`
+  / `lots`), so "more data" gives finer interpolation.
+- `estimate(groups, x)` and `geometry(groups)` implement the interval-aware
+  interpolation (within a region) and linear extrapolation (outside/between
+  regions) that both `assistant.js` and the chart overlays consume, matching
+  `/lab/interpolation`.
 
-It writes:
-- `data/mappings.json` — **shipped**. Value arrays are XOR-ed with a fixed byte
-  (`OBFUSCATION_KEY`) and base64-encoded (`v` = the 100 values, `dots` = the 7
-  `[pos,value]` pairs). This only deters casual DevTools peeking. Analysis
-  metadata (`interiorMax`/`outsideMax`/`argmax` and plain arrays) is **not**
-  shipped — it lives in the plain file so the served page leaks as little as
-  possible.
-- `tools/pool_plain.json` — **gitignored**. Plain values, plain `aiDots`, and
-  strata metadata for analysis (including, for Arm A subjects, what the assistant
-  *would* have said).
-
-Two strata (60 landscapes each) + 1 practice landscape:
-- **RICH** — global best is inside the coverage patches (`interiorMax ≥ 85`, `outsideMax ≤ interiorMax`).
-- **POOR** — global best is outside all coverage patches (`interiorMax ≤ 55`, `outsideMax ≥ 85`).
-- Both pass a comparability screen (mean of all 100 values in [25, 50]).
-
-Each subject is served 5 RICH + 5 POOR, shuffled (seeded by session id).
+`landscape.js` loads in the browser (`window.Landscape`) and in Node
+(`require`), so the app and `tools/selftest.js` never disagree. To reshuffle
+every curve at once, change `TRUTH_SEED` in `config.js`.
 
 ---
 
@@ -180,10 +191,17 @@ The **admin panel** at **`/lab/search-v2/admin/`** lets you, from any browser
   completed / reopen / delete).
 - **control the conditions** — per session: the **phases** (which conditions to
   include — Without AI and/or With AI — and the order, incl. counterbalanced),
-  the **number of rounds** each participant plays *per phase* (real rounds, paid
-  rounds drawn across all phases at the end, and whether a practice round is
-  shown), and the Prolific **completion code** (shared, or a phase-specific code
-  for single-phase sessions). Every field has a hover tooltip.
+  the **number of rounds** each participant plays *per phase* (default **1**, real
+  rounds, paid rounds drawn across all phases at the end, and whether a practice
+  round is shown — default **off**), the **AI model parameters** (below), and the
+  Prolific **completion code** (shared, or a phase-specific code for single-phase
+  sessions). Every field has a hover tooltip.
+- **tune the AI** — a dedicated **AI model parameters** section: the
+  **interpolation region(s)** (one or two disjoint intervals on the 1–100 line
+  where the assistant is trained), the **baseline model** (cost per question, kept
+  below the 5¢ reveal cost, and how much training data it has), and an optional
+  **frontier model** the participant can choose per question (costs more, trained
+  on more data). More AI parameters can be added here over time.
 - **edit every participant page** — consent, instructions (all phases + the
   With-AI addendum), the between-phase transition screens, the finish page, and
   the study-closed page. Blank = built-in default;
@@ -291,16 +309,16 @@ Every event is one flat JSON object. Columns (CSV / Sheet order):
 | `t` | epoch ms |
 | `rt_ms` | ms since this subject's previous event |
 | `round` | 0 = practice, 1..N = real, **per phase** (rounds restart at 1 in each phase — use `phase`+`round` together) |
-| `mapping` | landscape id (e.g. `R012`, `P004`, `practice_1`) |
-| `stratum` | `RICH` / `POOR` / `practice` |
+| `mapping` | round id: `A-r1`, `B-r2`, … (arm + round), or `practice` |
+| `stratum` | `practice` for the practice round, else blank (strata were retired with the pool) |
 | `position` | position acted on |
 | `value` | revealed value (reveal); batch size (upload_*); bonus¢ (session_end) |
 | `estimate` | assistant estimate (`ai_query`) |
-| `refused` | `true` if the assistant refused (`ai_query`) |
-| `reveals`,`cost`,`best`,`net` | running round counters |
+| `refused` | always `false` — the assistant never refuses (kept for schema stability) |
+| `reveals`,`cost`,`best`,`net` | running round counters (`cost`/`net` include AI-consultation fees) |
 | `qid`,`choice`,`correct` | quiz answer (`quiz_attempt`) |
 | `rawNet`,`flooredNet` | round earnings, raw and floored-at-0 (`round_end`) |
-| `info` | free-form payload (task order, paid rounds, best) |
+| `info` | free-form payload (phases, interpolation regions, AI config, per-round summary; `ai_query` carries `model=…;mode=interp\|extrap;fee=…`) |
 | `ua`,`vw`,`vh` | user agent + viewport |
 | `appVersion` | stamped from `config.js` |
 
@@ -309,21 +327,24 @@ Every event is one flat JSON object. Columns (CSV / Sheet order):
 `ai_query`, `warn_negative`, `stop_confirm`, `round_end`, `paid_rounds_drawn`,
 `session_end`, `upload_ok`, `upload_fail`.
 
-**Payoff.** Round net = highest revealed value − 5¢ × reveals (0 if no reveals).
-At the end, `PAID_TASKS` rounds are drawn uniformly at random from **all** real
-rounds across **all** phases (seeded by session id, so a refresh reproduces the
-same draw); the bonus is the sum of their nets, each floored at 0 for payment
-(the raw value is logged too).
+**Payoff.** Round net = highest revealed value − 5¢ × reveals − AI-consultation
+fees (0 if the participant did nothing; it can go negative if they only paid the
+AI and revealed no prize). At the end, `PAID_TASKS` rounds are drawn uniformly at
+random from **all** real rounds across **all** phases (seeded by session id, so a
+refresh reproduces the same draw); the bonus is the sum of their nets, each
+floored at 0 for payment (the raw value is logged too).
 
 ---
 
 ## Config (`config.js`)
 
 All tunables live in one object: `N_POSITIONS`, `L_STEP`, `REVEAL_COST`,
-`N_TASKS`, `N_PRACTICE`, `PAID_TASKS`, `COVERAGE_PATCHES`, `K_DOTS`, `POOL_PER_STRATUM`,
-`RICH_INTERIOR_MIN`, `POOR_INTERIOR_MAX`, `POOR_OUTSIDE_MIN`, `ENDPOINT_URL`,
-`COMPLETION_CODE`, `APP_VERSION`, `OBFUSCATION_KEY`, `DEBUG_KEY`. `config.js` is
-loaded by both the browser and the Node tools, so the two never disagree.
+`N_TASKS` (default **1**), `N_PRACTICE` (default **0**), `PAID_TASKS`,
+`TRUTH_SEED` (reshuffles every curve), `COVERAGE_PATCHES` (default interpolation
+region), `AI` (baseline/frontier per-question cost + training-data density),
+`ENDPOINT_URL`, `COMPLETION_CODE`, `APP_VERSION`, `DEBUG_KEY`. These are the
+built-in defaults; the admin panel overrides most of them per session. `config.js`
+is loaded by both the browser and the Node tools, so the two never disagree.
 
 ---
 
@@ -333,16 +354,13 @@ Automated in `tools/selftest.js` (Node) and `tools/smoke.mjs` (browser):
 
 | # | check | where |
 |---|---|---|
-| 1 | pool determinism (byte-identical regen) | selftest |
-| 2 | stratum validity (every mapping passes its filters) | selftest |
-| 3 | assistant math (dot = truth, midpoint = interp, 29/71 refuse) | selftest |
-| 4 | arm isolation (no assistant UI/band/strings in Arm A) | smoke |
-| 5 | same pool for both arms (single data file) | selftest |
-| 6 | payoff math (net, floor-at-0 for pay only) | selftest |
-| 7 | no plaintext leakage in shipped pool | selftest + smoke |
-| 8 | resume mid-round (state restored, no double-logging) | smoke |
-| 9 | logging completeness + endpoint-failure download fallback | smoke |
-| 10 | payment draw seeded + reproducible | selftest |
-| 17 | session-code gate (no code → no play; code → play; log out) | smoke |
-| 18 | admin-configurable round count | smoke |
-| 19 | within-subjects phases (Without AI → transition → With AI; per-phase rounds; `phase`/`arm` on events) | smoke |
+| 1 | deterministic truth (identical for all · differs by arm · fresh per round) | selftest + smoke |
+| 2 | walk shape (in range · adjacency ≤ `L_STEP` · length `N`) | selftest |
+| 3 | assistant math (exact at dots · interpolate inside · extrapolate outside/between) | selftest + smoke |
+| 4 | training-data density (few < standard < lots points) | selftest |
+| 5 | chart geometry (interp polylines + extrap zones; one vs two regions) | selftest + smoke |
+| 6 | app wiring (no pool fetch · runtime truth · AI cost folded into the net) | selftest |
+| 7 | AI economics + defaults (baseline < reveal ≤ frontier; 1 round, no practice) | selftest |
+| 8 | arm-B playthrough (AI question + reveal → cost 7¢, net = best − 7¢) | smoke |
+| 9 | interpolation overlays render (blue truth · green interp · amber extrap + zones · red dots) | smoke |
+| 10 | Arm-A isolation (no assistant DOM/text) | smoke |
