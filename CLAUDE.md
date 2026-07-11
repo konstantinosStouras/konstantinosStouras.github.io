@@ -81,7 +81,15 @@ scope; SE/AE filters show when ISR/MkSc are selected. **Articles-in-Advance
 caveat:** a no-volume/no-issue record is tagged forthcoming only when recent
 (`forthcomingStatus`); `data/_aia-fixups.json` supplies the real issue for older
 frozen records and `data/_informs-aia.json` adds forthcoming papers Crossref
-misses, both refreshed locally by `fun/lit/_scraper/informs-aia-local.mjs`. See
+misses, both refreshed locally by `fun/lit/_scraper/informs-aia-local.mjs`.
+**Pre-print links:** every paper with a free author pre-print on **arXiv or
+SSRN** carries a `Preprint` (+ `PreprintSrc`) field, resolved from OpenAlex by
+DOI in `build-data.mjs` (`resolvePreprints`/`pickPreprint`, host-validated so a
+spoofed domain can't slip into the href) and cached in `data/_preprints.json`
+(incremental — the daily build only queries DOIs it hasn't resolved). The card
+shows it as an open-access **"Pre-print (Open Access)"** link between BibTeX and
+the sign-in "Notes, tags & lists" toggle; EC's existing meta-row PDF tag is
+suppressed when it duplicates the pre-print link. See
 `fun/lit/_HOW-IT-WORKS.md`. Like `/fun/ms/`, the page carries the optional
 sign-in feature (star/notes/lists/tags, private per user, dedicated Firebase
 project); it stays inert until a web config is pasted into `FB_CONFIG` in

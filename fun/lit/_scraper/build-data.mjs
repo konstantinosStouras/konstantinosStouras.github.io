@@ -957,6 +957,82 @@ async function enrichEc(rows, extras, dblpPrefetched) {
   console.log(`  ec extras: ${withPdf}/${rows.length} papers have a PDF link`);
 }
 
+// ── Pre-print (arXiv/SSRN) open-access links, for every source ──────────────
+// Any paper with a free author pre-print on arXiv or SSRN gets a `Preprint`
+// URL (+ `PreprintSrc`), surfaced on the card as an open-access link. Resolved
+// from OpenAlex by DOI — batched exactly like enrichEc — and cached in
+// data/_preprints.json (doi -> {u,s} | {none:1}) so the daily build only
+// queries DOIs it has not resolved before. Non-fatal end to end: a lookup that
+// fails just leaves that paper without a link.
+
+export function pickPreprint(cands) {
+  // http(s) only, and matched on the real hostname (not a substring) so a
+  // spoofed host like arxiv.org.evil.com cannot slip into the href. arXiv wins
+  // over SSRN (the paper asked for "SSRN or arXiv"; arXiv links are stabler).
+  const host = (u) => { try { return new URL(u).hostname.toLowerCase(); } catch { return ''; } };
+  const isArxiv = (h) => h === 'arxiv.org' || h.endsWith('.arxiv.org');
+  const isSsrn = (h) => h === 'ssrn.com' || h.endsWith('.ssrn.com');
+  const list = cands.filter(u => u && /^https?:\/\//i.test(u));
+  const arx = list.find(u => isArxiv(host(u)));
+  if (arx) return { u: arx, s: 'arxiv' };
+  const ssrn = list.find(u => isSsrn(host(u)));
+  if (ssrn) return { u: ssrn, s: 'ssrn' };
+  return null;
+}
+
+async function resolvePreprints(allPapers, cache) {
+  // 1. Seed from links we already resolved (EC's PDF is arXiv/SSRN/OA), so we
+  //    never spend an OpenAlex call on a paper we can already answer.
+  for (const p of allPapers) {
+    if (!p._doi || cache[p._doi]) continue;
+    const pick = pickPreprint([p.PDF]);
+    if (pick) cache[p._doi] = pick;
+  }
+  if (MOCK) return; // offline: no OpenAlex; the seed above still applies.
+
+  // 2. OpenAlex, batched 50 DOIs per request (same shape as enrichEc).
+  const seen = new Set(), need = [];
+  for (const p of allPapers) {
+    if (!p._doi || cache[p._doi] || seen.has(p._doi)) continue;
+    seen.add(p._doi); need.push(p._doi);
+  }
+  console.log(`  preprints: resolving ${need.length} DOIs via OpenAlex…`);
+  for (let i = 0; i < need.length; i += 50) {
+    const batch = need.slice(i, i + 50);
+    const url = 'https://api.openalex.org/works?filter=doi:' + batch.join('|') +
+      '&per-page=50&select=doi,open_access,best_oa_location,locations' +
+      `&mailto=${encodeURIComponent(MAILTO)}`;
+    try {
+      const j = await fetchJson(url);
+      const byDoi = new Map();
+      for (const w of j.results || []) {
+        byDoi.set(String(w.doi || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase(), w);
+      }
+      for (const doi of batch) {
+        const w = byDoi.get(doi);
+        if (!w) { cache[doi] = { none: 1 }; continue; }
+        const cands = (w.locations || []).flatMap(l => [l && l.landing_page_url, l && l.pdf_url]);
+        cands.push(w.best_oa_location && w.best_oa_location.landing_page_url,
+                   w.best_oa_location && w.best_oa_location.pdf_url,
+                   w.open_access && w.open_access.oa_url);
+        cache[doi] = pickPreprint(cands) || { none: 1 };
+      }
+    } catch (e) {
+      console.warn('  openalex preprints batch failed (non-fatal):', e.message);
+    }
+    await sleep(400);
+  }
+}
+
+function applyPreprints(allPapers, cache) {
+  let n = 0;
+  for (const p of allPapers) {
+    const x = p._doi && cache[p._doi];
+    if (x && x.u) { p.Preprint = x.u; p.PreprintSrc = x.s; n++; }
+  }
+  console.log(`  preprints: ${n}/${allPapers.length} papers link to an arXiv/SSRN pre-print`);
+}
+
 // ── Registry (key -> first-seen date) ──────────────────────────────────────
 
 async function loadRegistry() {
@@ -1224,6 +1300,15 @@ async function main() {
   const allPapers = sourceOrder.flatMap(k => bySource[k]);
   // newest-first across sources, so first-run registry seeding is sensible
   const allByRank = [...allPapers].sort((a, b) => (b._rank - a._rank) || cmp(regKey(a), regKey(b)));
+
+  // Pre-print (arXiv/SSRN) open-access links — cached + incremental. Kept
+  // non-fatal so a slow/failed OpenAlex run never aborts the data build; the
+  // cache we already have is still applied.
+  const preprintCache = await loadJsonIfExists(join(DATA_DIR, '_preprints.json'), {});
+  try { await resolvePreprints(allPapers, preprintCache); }
+  catch (e) { console.warn('  preprints resolve failed (non-fatal):', e.message); }
+  if (!MOCK) await writeJson('_preprints.json', preprintCache);
+  applyPreprints(allPapers, preprintCache);
 
   const reg = await loadRegistry();
   const registry = updateRegistry(allByRank, reg);
