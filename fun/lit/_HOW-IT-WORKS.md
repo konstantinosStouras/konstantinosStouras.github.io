@@ -257,6 +257,14 @@ CI; the daily Action just folds the committed files in.
 - **Change what's collected:** edit `_scraper/build-data.mjs` (journal list
   is the `JOURNALS` array at the top; PNAS sections in `pnas-crawl.mjs`),
   commit — the push itself triggers a rebuild.
+- **The merged FT50 journals update on their own pipeline** — the ft50 daily
+  build (06:00 UTC) commits into `fun/ft50/data/`, and this page reads those
+  files at runtime, so new FT50 papers appear here with no lit-side rebuild.
+  The header's "Last publication data pull" shows the **latest** of the two
+  datasets' pulls. When the yearly FT50 list check adds or removes a journal,
+  the journal filter and FT50 chip follow the ft50 manifest automatically;
+  only a **new** journal's ABS grade must be added to `ABS_RATING` in
+  `index.html` (the list-change issue that check opens includes a reminder).
 
 ## Testing locally (no network needed)
 

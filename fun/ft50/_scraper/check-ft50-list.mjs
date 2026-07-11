@@ -337,6 +337,11 @@ async function main() {
     console.log(`added: ${displayName} -> ${key} (${resolved.issns.join(', ')})`);
   }
 
+  lines.push('', 'Reminder: `/fun/lit/` merges this catalog at runtime, so added/removed journals ' +
+    'flow into its journal filter and FT50 journal-type chip automatically — but a **newly added** ' +
+    'journal also needs its ABS/AJG grade in the `ABS_RATING` map (and ideally the static `FT50_KEYS` ' +
+    'seed) in `fun/lit/index.html`, or the ABS 4/4* / ABS 3 journal-type options will not include it.');
+
   lines.push('', `Live list (${live.length}): ${live.join(' · ')}`);
   await writeFile(SUMMARY_PATH, lines.join('\n') + '\n', 'utf8');
 

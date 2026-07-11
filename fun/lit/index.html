@@ -1153,8 +1153,11 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 // buildSummaryTabs() as soon as papers.json is parsed, so ms2 needs no separate
 // pre-computed tabs for them. (loadSummaries is intentionally gone.)
 
-// Show when the pipeline last pulled from Crossref (meta.json). Cached so it
-// paints instantly on repeat visits, then refreshes in the background.
+// Show when the pipelines last pulled from Crossref. The merged catalog spans
+// two datasets on their own daily schedules (this app's meta.json and the
+// FT50 app's), so the header shows the LATEST of the two pulls — the moment
+// any part of the merged data was last refreshed. Cached so it paints
+// instantly on repeat visits, then refreshes in the background.
 var LAST_PULL_CACHE_KEY = 'lit_lastPull';
 function setLastPullText(date) {
   var el = document.getElementById('lastPull');
@@ -1165,13 +1168,20 @@ function loadLastPull() {
     var cached = localStorage.getItem(LAST_PULL_CACHE_KEY);
     if (cached) setLastPullText(cached);
   } catch (e) {}
-  fetch(META_URL, { cache: 'no-cache' }).then(function(r) { return r && r.ok ? r.json() : null; }).then(function(meta) {
-    var date = meta && meta.lastPull;
+  var fetchMeta = function(url) {
+    return fetch(url, { cache: 'no-cache' })
+      .then(function(r) { return r && r.ok ? r.json() : null; })
+      .catch(function() { return null; });
+  };
+  Promise.all([fetchMeta(META_URL), fetchMeta(FT50_DATA_BASE + 'meta.json')]).then(function(metas) {
+    // ISO YYYY-MM-DD dates: a string compare picks the most recent.
+    var date = metas.map(function(m) { return (m && m.lastPull) || ''; })
+      .sort().pop();
     if (date) {
       setLastPullText(date);
       try { localStorage.setItem(LAST_PULL_CACHE_KEY, date); } catch (e) {}
     }
-  }).catch(function() {});
+  });
 }
 
 // ── Editor cleaning & normalization ──
