@@ -57,7 +57,8 @@
     .field label{display:block; font-weight:600; font-size:14px; margin-bottom:5px;}
     .field input[type=text], .field input[type=password], .field input[type=number], .field textarea{
       width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:9px; font-size:15px;
-      font-family:inherit; background:#fff; color:var(--ink); transition:border-color .12s, box-shadow .12s;}
+      font-family:inherit; background:var(--bg); color:var(--ink); transition:border-color .12s, box-shadow .12s;}
+    .field input::placeholder, .field textarea::placeholder{ color:var(--muted); opacity:.8; }
     .field input[type=number]{max-width:190px;}
     .field input:focus, .field textarea:focus, .field select:focus{
       outline:none; border-color:var(--blue); box-shadow:0 0 0 3px rgba(39,128,227,.16);}
