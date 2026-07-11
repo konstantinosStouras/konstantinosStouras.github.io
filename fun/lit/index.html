@@ -195,6 +195,9 @@
 
   .paper-abstract-toggle { margin-top: 8px; font-size: 12px; color: var(--navy); cursor: pointer; font-weight: 500; -webkit-user-select: none; user-select: none; display: inline-block; }
   .paper-abstract-toggle:hover { text-decoration: underline; }
+  /* PNAS "Significance" statement — its own toggle (before Abstract) + box. */
+  .paper-sig-toggle { color: #0f766e; margin-right: 14px; }
+  .paper-significance { border-left-color: #0f766e; background: #f0f7f6; }
   .paper-bibtex-toggle { margin-top: 8px; margin-left: 14px; font-size: 12px; color: var(--green); cursor: pointer; font-weight: 500; -webkit-user-select: none; user-select: none; display: inline-block; }
   .paper-bibtex-toggle:hover { text-decoration: underline; }
   /* Free arXiv/SSRN pre-print link — open-access orange, sits between BibTeX
@@ -2024,6 +2027,9 @@ function paperCardHTML(p, idx, showAdded) {
   const aid = 'a' + idx;
   const absClean = cleanAbstract(p['Abstract'] || '');
   const hasAbs = absClean.length > 10;
+  const sigClean = cleanAbstract(p['Significance'] || '');
+  const hasSig = sigClean.length > 10;
+  const sid = 's' + idx;
   let addedTag = '';
   if (showAdded) {
     const added = getAddedDate(p);
@@ -2046,19 +2052,22 @@ function paperCardHTML(p, idx, showAdded) {
       ${safeUrl(p['PDF']) && p['PDF'] !== p['Preprint'] ? `<a class="tag tag-pdf" href="${safeUrl(p['PDF'])}" target="_blank" rel="noopener" title="Open-access PDF (arXiv/SSRN where available)">PDF ↗</a>` : ''}
       ${addedTag}
     </div>
+    ${hasSig ? `<span class="paper-abstract-toggle paper-sig-toggle" onclick="togAbs('${sid}',this,'Significance')">▸ Significance</span>` : ''}
     ${hasAbs ? `<span class="paper-abstract-toggle" onclick="togAbs('${aid}',this)">▸ Abstract</span>` : ''}
     <span class="paper-bibtex-toggle" onclick="togBib('bib${idx}',this,${idx})">▸ BibTeX</span>
     ${safeUrl(p['Preprint']) ? `<a class="paper-preprint-link" href="${safeUrl(p['Preprint'])}" target="_blank" rel="noopener" title="Free author pre-print on ${p['PreprintSrc'] === 'ssrn' ? 'SSRN' : 'arXiv'} — the accepted/working version, which may differ from the final published paper">Pre-print (Open Access) ↗</a>` : ''}
     ${typeof acctToggleHTML === 'function' ? acctToggleHTML(p) : ''}
+    ${hasSig ? `<div id="${sid}" class="paper-abstract paper-significance">${esc(sigClean)}</div>` : ''}
     ${hasAbs ? `<div id="${aid}" class="paper-abstract">${esc(absClean)}</div>` : ''}
     <div id="bib${idx}" class="paper-bibtex"></div>
   </div>`;
 }
 
-function togAbs(id, btn) {
+function togAbs(id, btn, label) {
   const el = document.getElementById(id);
   const open = el.classList.toggle('open');
-  btn.textContent = open ? '▾ Hide abstract' : '▸ Abstract';
+  label = label || 'Abstract';
+  btn.textContent = open ? '▾ Hide ' + label.toLowerCase() : '▸ ' + label;
 }
 
 function togBib(id, btn, idx) {

@@ -204,6 +204,26 @@ function stripJats(s) {
     .trim();
 }
 
+// PNAS deposits its one-paragraph "Significance" statement inside the Crossref
+// JATS abstract as its own <sec>. Pull that section out (already stripped of
+// tags) and return the abstract with it removed, so the two show separately on
+// the card. Returns {significance:'', rest:<input>} when there is no such
+// section (the common case for non-PNAS journals). No pnas.org fetch needed —
+// the text is already in the Crossref record.
+export function extractSignificance(rawAbstract) {
+  if (!rawAbstract) return { significance: '', rest: rawAbstract || '' };
+  const cut = (m) => rawAbstract.slice(0, m.index) + rawAbstract.slice(m.index + m[0].length);
+  // Primary: a <sec> whose <title> is "Significance".
+  const secRe = /<(?:jats:)?sec\b[^>]*>\s*<(?:jats:)?title>\s*significance\s*<\/(?:jats:)?title>([\s\S]*?)<\/(?:jats:)?sec>/i;
+  let m = rawAbstract.match(secRe);
+  if (m) return { significance: stripJats(m[1]), rest: cut(m) };
+  // Fallback: a bare <title>Significance</title> followed by a single <p>.
+  const pRe = /<(?:jats:)?title>\s*significance\s*<\/(?:jats:)?title>\s*<(?:jats:)?p>([\s\S]*?)<\/(?:jats:)?p>/i;
+  m = rawAbstract.match(pRe);
+  if (m) return { significance: stripJats(m[1]), rest: cut(m) };
+  return { significance: '', rest: rawAbstract };
+}
+
 function yearOf(item) {
   const pick = (d) => d && d['date-parts'] && d['date-parts'][0] && d['date-parts'][0][0];
   return String(
@@ -291,7 +311,17 @@ function mapWork(item, src) {
     if (af && af.name) affSet.add(af.name.replace(/\s+/g, ' ').trim());
   }));
 
-  const abstract = stripJats(item.abstract || '').slice(0, MAX_ABSTRACT);
+  // PNAS: split the "Significance" statement out of the abstract into its own
+  // field (shown as a separate card tab). Other sources have no such section,
+  // so the abstract is unchanged for them.
+  let significance = '';
+  let abstractSrc = item.abstract || '';
+  if (src.key === 'pnas') {
+    const sp = extractSignificance(abstractSrc);
+    significance = sp.significance;
+    abstractSrc = sp.rest;
+  }
+  const abstract = stripJats(abstractSrc).slice(0, MAX_ABSTRACT);
 
   // Editors/Areas: Management Science only (per the page's design).
   let editor = '', area = '';
@@ -356,6 +386,7 @@ function mapWork(item, src) {
   };
   if (src.seEditors) row['Senior Editor'] = se;
   if (src.aeEditors) row['Associate Editor'] = ae;
+  if (significance) row.Significance = significance.slice(0, MAX_ABSTRACT);
   return row;
 }
 
@@ -980,6 +1011,56 @@ export function pickPreprint(cands) {
   return null;
 }
 
+// An SSRN/arXiv preprint record has its own DOI; turn it into a landing URL.
+export function preprintFromDoi(doi) {
+  const d = String(doi || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase();
+  let m = d.match(/^10\.2139\/ssrn\.(\d+)$/);        // SSRN
+  if (m) return { u: `https://papers.ssrn.com/sol3/papers.cfm?abstract_id=${m[1]}`, s: 'ssrn' };
+  m = d.match(/^10\.48550\/arxiv\.(.+)$/);           // arXiv (DataCite DOI)
+  if (m) return { u: `https://arxiv.org/abs/${m[1]}`, s: 'arxiv' };
+  return null;
+}
+
+// Normalized last-name tokens from "First Last" name strings.
+function lastNames(names) {
+  const out = new Set();
+  for (const n of names) {
+    const toks = String(n || '').trim().split(/\s+/);
+    const norm = (toks[toks.length - 1] || '').toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z]/g, '');
+    if (norm.length >= 2) out.add(norm);
+  }
+  return out;
+}
+
+// Among OpenAlex title-search results, find the SAME paper's arXiv/SSRN
+// preprint record. Conservative on purpose (a wrong link is worse than none):
+// requires an exact normalized-title match, a shared author surname, and a
+// plausible year, and only accepts an arXiv/SSRN-hosted location or preprint
+// DOI. Pure → unit-tested.
+export function matchPreprintWork(paper, results) {
+  const nt = normTitle(paper.title || '');
+  if (!nt) return null;
+  const py = parseInt(paper.year, 10);
+  const mine = lastNames(String(paper.authors || '').split(','));
+  for (const w of results || []) {
+    if (normTitle(w.title || '') !== nt) continue;
+    const wn = lastNames((w.authorships || []).map(a => (a.author && a.author.display_name) || ''));
+    let shared = false;
+    for (const x of wn) if (mine.has(x)) { shared = true; break; }
+    if (!shared) continue;
+    const wy = parseInt(w.publication_year, 10);
+    if (py && wy && (wy > py + 1 || wy < py - 12)) continue; // a preprint precedes publication
+    const urls = [];
+    for (const loc of w.locations || []) if (loc) urls.push(loc.landing_page_url, loc.pdf_url);
+    if (w.best_oa_location) urls.push(w.best_oa_location.landing_page_url, w.best_oa_location.pdf_url);
+    if (w.primary_location) urls.push(w.primary_location.landing_page_url, w.primary_location.pdf_url);
+    const pick = pickPreprint(urls) || preprintFromDoi(w.doi);
+    if (pick) return pick;
+  }
+  return null;
+}
+
 async function resolvePreprints(allPapers, cache) {
   // 1. Seed from links we already resolved (EC's PDF is arXiv/SSRN/OA), so we
   //    never spend an OpenAlex call on a paper we can already answer.
@@ -1022,6 +1103,38 @@ async function resolvePreprints(allPapers, cache) {
     }
     await sleep(400);
   }
+
+  // 3. Title+author search for papers the by-DOI scan couldn't link — their
+  //    arXiv/SSRN preprint exists as a SEPARATE OpenAlex record, not attached
+  //    to the published DOI. Bounded per run (newest-first) and marked `ts` in
+  //    the cache so each paper is searched at most once; the backlog clears
+  //    over a few daily builds. This is what surfaces most SSRN preprints.
+  const CAP = parseInt(process.env.LIT_PREPRINT_SEARCH_CAP || '6000', 10);
+  const eligible = allPapers
+    .filter(p => p._doi && cache[p._doi] && cache[p._doi].none && !cache[p._doi].ts &&
+                 p.JKey !== 'pnas' && parseInt(p.Year, 10) >= 2005)
+    .sort((a, b) => (parseInt(b.Year, 10) || 0) - (parseInt(a.Year, 10) || 0));
+  const todo = eligible.slice(0, CAP);
+  console.log(`  preprints: title-searching ${todo.length} of ${eligible.length} unlinked papers…`);
+  let found3 = 0;
+  for (const p of todo) {
+    const q = String(p.Title || '').replace(/[|,]/g, ' ').trim();
+    if (!q) { cache[p._doi] = { none: 1, ts: 1 }; continue; }
+    const url = 'https://api.openalex.org/works?filter=title.search:' + encodeURIComponent(q) +
+      '&per-page=10&select=doi,title,publication_year,authorships,best_oa_location,primary_location,locations' +
+      `&mailto=${encodeURIComponent(MAILTO)}`;
+    try {
+      const j = await fetchJson(url);
+      const pick = matchPreprintWork({ title: p.Title, year: p.Year, authors: p.Authors }, j.results || []);
+      cache[p._doi] = pick || { none: 1, ts: 1 };
+      if (pick) found3++;
+    } catch (e) {
+      // leave the entry without `ts` so a future run retries it.
+      console.warn('  openalex title search failed (non-fatal):', e.message);
+    }
+    await sleep(120);
+  }
+  console.log(`  preprints: title search linked ${found3} more paper(s).`);
 }
 
 function applyPreprints(allPapers, cache) {

@@ -83,13 +83,23 @@ caveat:** a no-volume/no-issue record is tagged forthcoming only when recent
 frozen records and `data/_informs-aia.json` adds forthcoming papers Crossref
 misses, both refreshed locally by `fun/lit/_scraper/informs-aia-local.mjs`.
 **Pre-print links:** every paper with a free author pre-print on **arXiv or
-SSRN** carries a `Preprint` (+ `PreprintSrc`) field, resolved from OpenAlex by
-DOI in `build-data.mjs` (`resolvePreprints`/`pickPreprint`, host-validated so a
-spoofed domain can't slip into the href) and cached in `data/_preprints.json`
-(incremental — the daily build only queries DOIs it hasn't resolved). The card
-shows it as an open-access **"Pre-print (Open Access)"** link between BibTeX and
-the sign-in "Notes, tags & lists" toggle; EC's existing meta-row PDF tag is
-suppressed when it duplicates the pre-print link. See
+SSRN** carries a `Preprint` (+ `PreprintSrc`) field, resolved in `build-data.mjs`
+(`resolvePreprints`) and cached in `data/_preprints.json` (doi → `{u,s}` |
+`{none:1}` | `{none:1,ts:1}`; incremental). Two passes: (1) OpenAlex **by DOI**
+(batched) reads any arXiv/SSRN location already attached to the published record;
+(2) a bounded **title+author search** (`matchPreprintWork`, newest-first, capped
+by `LIT_PREPRINT_SEARCH_CAP`, default 6000/run) finds preprints that live as a
+**separate** OpenAlex/SSRN record (own `10.2139/ssrn.*` DOI) — this is what
+surfaces most SSRN links, and the backlog clears over a few daily builds. Both
+`pickPreprint` and the matcher are host-validated (real `arxiv.org`/`ssrn.com`
+hostname) so a spoofed domain can't slip into the href; the matcher also demands
+an exact normalized-title match + a shared author surname + a plausible year to
+avoid wrong links. The card shows an open-access **"Pre-print (Open Access)"**
+link between BibTeX and the sign-in "Notes, tags & lists" toggle; EC's meta-row
+PDF tag is suppressed when it duplicates it. **PNAS "Significance":** for PNAS,
+the Crossref abstract's JATS `<sec><title>Significance</title>` block is split
+out into a `Significance` field (`extractSignificance`, no pnas.org fetch) and
+shown as a **"Significance"** card toggle before "Abstract". See
 `fun/lit/_HOW-IT-WORKS.md`. Like `/fun/ms/`, the page carries the optional
 sign-in feature (star/notes/lists/tags, private per user, dedicated Firebase
 project); it stays inert until a web config is pasted into `FB_CONFIG` in
