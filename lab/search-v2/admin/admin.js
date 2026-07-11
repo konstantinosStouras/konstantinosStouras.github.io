@@ -709,6 +709,7 @@
       '<div class="sc-actions">' +
         '<button class="link-btn" data-act="edit" data-id="' + s.id + '">Edit</button>' +
         '<button class="link-btn" data-act="data" data-id="' + s.id + '">View data</button>' +
+        '<button class="link-btn" data-act="excel" data-id="' + s.id + '" title="Download this session\'s full dataset as an Excel workbook (settings, participants, rounds, every action with decision times, survey).">⬇ Excel</button>' +
         (s.status === 'completed'
           ? '<button class="link-btn" data-act="reopen" data-id="' + s.id + '">Reopen</button>'
           : '<button class="link-btn" data-act="complete" data-id="' + s.id + '">Mark completed</button>') +
@@ -723,6 +724,7 @@
       if (!sess) return;
       if (act === 'edit') { fillForm(sess, null); renderSummary(); selectTab('sessions'); window.scrollTo(0, 0); }
       else if (act === 'data') { $('data-filter').value = sess.code; selectTab('data'); }
+      else if (act === 'excel') { exportExcel(sess.code); }
       else if (act === 'complete') { FB.updateSession(id, { status: 'completed' }).then(loadSessions); }
       else if (act === 'reopen') { FB.updateSession(id, { status: 'active' }).then(loadSessions); }
       else if (act === 'delete') { if (confirm('Delete session "' + (sess.name || sess.code) + '"? Its collected event rows are kept.')) FB.deleteSession(id).then(loadSessions); }
@@ -739,6 +741,7 @@
     $('btn-refresh').addEventListener('click', loadData);
     $('data-filter').addEventListener('change', renderData);
     $('an-filter').addEventListener('change', renderAnalytics);
+    $('btn-dl-xlsx').addEventListener('click', function () { exportExcel($('data-filter').value); });
     $('btn-dl-csv').addEventListener('click', function () { downloadFile('searchv2_events.csv', toCSV(filteredEvents($('data-filter').value)), 'text/csv'); });
     $('btn-dl-json').addEventListener('click', function () { downloadFile('searchv2_events.json', JSON.stringify(filteredEvents($('data-filter').value), null, 2), 'application/json'); });
   }
@@ -843,6 +846,230 @@
       cmp('Avg reveals / round', mA.rev, mB.rev, n1) +
       cmp('Avg best found / round', mA.best, mB.best, c) +
       '</div><p class="small muted">Net = best value found − 5¢ × reveals, per round. Higher net is better search performance. In a within-subjects session each participant appears in both bars.</p>';
+  }
+
+  // ============================================================= Excel export
+  // One analysis-ready .xlsx per session (or all sessions): the admin-chosen
+  // parameters, one row per participant, per round, per action/decision (with
+  // decision_ms = the time the participant took), and the exit survey. Built by
+  // admin/xlsx.js (dependency-free); everything is derived from the same EVENTS
+  // the Data tab shows, so what you see is what you export.
+  function parseInfo(s) {
+    var out = {};
+    String(s || '').split(';').forEach(function (kv) {
+      var i = kv.indexOf('=');
+      if (i > 0) out[kv.slice(0, i)] = kv.slice(i + 1);
+    });
+    return out;
+  }
+  function isoMs(t) { if (!t) return ''; var d = new Date(t); return isNaN(d) ? '' : d.toISOString().replace('T', ' ').replace('Z', ''); }
+  function num(v) { if (v == null || v === '') return null; v = +v; return isFinite(v) ? v : null; } // null/'' stay empty (never a fake 0)
+  function isMetaEvent(e) { return e.event === 'upload_ok' || e.event === 'upload_fail'; }
+
+  function buildWorkbook(code) {
+    var evs = filteredEvents(code).slice().sort(function (a, b) { return (a.t || 0) - (b.t || 0); });
+    var scopeSessions = code ? SESSIONS.filter(function (s) { return s.code === code; }) : SESSIONS.slice();
+
+    // ---- per-participant + per-round aggregation (one pass, in time order)
+    var parts = {}, partOrder = [], rounds = {}, roundOrder = [];
+    function part(e) {
+      var id = e.session || '(none)';
+      if (!parts[id]) {
+        parts[id] = { id: id, pid: null, code: null, name: null, study: null, first: e.t, last: e.t,
+          phasesSeq: [], phasesSet: {}, consented: 0, quizN: 0, quizOk: 0, roundsDone: 0,
+          reveals: 0, aiQ: 0, aiSpend: 0, netRaw: 0, bonus: null, paid: {}, completed: 0,
+          n: 0, vw: e.vw, vh: e.vh, appVersion: e.appVersion };
+        partOrder.push(id);
+      }
+      return parts[id];
+    }
+    function roundOf(e) {
+      var k = (e.session || '(none)') + '|' + (e.phase == null ? 1 : e.phase) + '|' + e.round;
+      if (!rounds[k]) {
+        rounds[k] = { id: e.session || '(none)', pid: e.pid, code: e.sessionCode, phase: (e.phase == null ? 1 : e.phase),
+          arm: e.arm, round: e.round, startT: null, endT: null, reveals: null, aiQ: 0, aiSpend: 0,
+          cost: null, best: null, rawNet: null, flooredNet: null, mapping: e.mapping };
+        roundOrder.push(k);
+      }
+      return rounds[k];
+    }
+    evs.forEach(function (e) {
+      if (isMetaEvent(e)) return;
+      var p = part(e);
+      p.n++; p.last = e.t;
+      p.pid = p.pid || e.pid; p.code = p.code || e.sessionCode; p.name = p.name || e.sessionName; p.study = p.study || e.study;
+      if ((e.arm === 'A' || e.arm === 'B') && !p.phasesSet[e.arm]) { p.phasesSet[e.arm] = true; p.phasesSeq.push(e.arm); }
+      if (e.event === 'consent') p.consented = 1;
+      if (e.event === 'quiz_attempt') { p.quizN++; if (e.correct) p.quizOk++; }
+      if (e.event === 'reveal') p.reveals++;
+      if (e.event === 'session_end') p.completed = 1;
+      if (e.event === 'paid_rounds_drawn') {
+        if (e.value != null) p.bonus = num(e.value);
+        String(parseInfo(e.info).rounds || '').split(',').forEach(function (tag) { if (tag) p.paid[tag] = true; });
+      }
+      if (e.round == null) return;
+      var r = roundOf(e);
+      if (e.event === 'round_start' && r.startT == null) r.startT = e.t;
+      if (e.event === 'ai_query') {
+        var fee = num(parseInfo(e.info).fee) || 0;
+        r.aiQ++; r.aiSpend += fee;
+        p.aiQ++; p.aiSpend += fee;
+      }
+      if (e.event === 'round_end' && r.endT == null) { // scored exactly once; ignore dupes
+        r.endT = e.t;
+        r.reveals = num(e.reveals); r.cost = num(e.cost); r.best = num(e.best);
+        r.rawNet = num(e.rawNet != null ? e.rawNet : e.net); r.flooredNet = num(e.flooredNet);
+        r.mapping = e.mapping || r.mapping;
+        if (e.round >= 1) { p.roundsDone++; p.netRaw += (r.rawNet || 0); }
+      }
+    });
+
+    var readme = {
+      name: 'ReadMe', filter: false, cols: [{ w: 26 }, { w: 110 }],
+      rows: [
+        ['Search for Knowledge — data export', ''],
+        ['Exported (UTC)', isoMs(Date.now())],
+        ['Scope', code ? 'Session ' + code : 'All sessions'],
+        ['Participants', partOrder.length],
+        ['Events', evs.length],
+        ['', ''],
+        ['Sheet', 'Contents'],
+        ['Sessions', 'One row per session (wave) with every parameter the admin chose: phases and order, rounds, AI regions and model economics, completion codes.'],
+        ['Participants', 'One row per participant: identity, timing, totals across all their rounds, quiz performance, bonus, completion.'],
+        ['Rounds', 'One row per participant × phase × round: duration, reveals, AI questions and fees, best value found, raw and floored net, whether the round was drawn for payment.'],
+        ['Actions', 'Every logged action in time order. decision_ms is the time (ms) the participant took since their previous action — the per-decision response time.'],
+        ['Survey', 'Exit-survey answers: Likert items (1 = strongly disagree … 5 = strongly agree) and free text.'],
+        ['', ''],
+        ['Units & conventions', ''],
+        ['money', 'All money columns are US cents.'],
+        ['time', 'time columns are UTC, YYYY-MM-DD HH:MM:SS.mmm; t_ms is the exact Unix epoch in milliseconds.'],
+        ['decision_ms', 'Milliseconds since this participant\'s previous logged action (their reaction/decision time). Empty on their very first event.'],
+        ['phase / phase_label', 'phase is the 1-based order within the session; phase_label is the condition (Without AI / With AI).'],
+        ['round 0', 'The practice round (never paid). Real rounds are 1..N per phase.'],
+        ['net', 'net_raw = best value found − 5¢ × reveals − AI fees (can be negative); net_floored = max(0, net_raw) and is what a paid round pays.'],
+        ['*_so_far', 'Running totals within the round at the moment of that action.']
+      ]
+    };
+
+    var sessionsSheet = {
+      name: 'Sessions',
+      cols: [{ w: 12 }, { w: 22 }, { w: 10 }, { w: 20 }, { w: 34 }, { w: 15 }, { w: 16 }, { w: 14 }, { w: 11 }, { w: 16 }, { w: 20 }, { w: 16 }, { w: 15 }, { w: 18 }, { w: 14 }, { w: 16 }, { w: 16 }, { w: 16 }, { w: 26 }, { w: 13 }],
+      rows: [[
+        'session_code', 'session_name', 'status', 'created_utc', 'phases', 'counterbalanced',
+        'rounds_per_phase', 'practice_round', 'paid_rounds', 'ai_regions',
+        'ai_baseline_cost_cents', 'ai_baseline_data', 'frontier_enabled', 'frontier_cost_cents', 'frontier_data',
+        'completion_code', 'code_without_ai', 'code_with_ai', 'custom_text_pages', 'participants'
+      ]].concat(scopeSessions.map(function (s) {
+        var st = s.settings || {};
+        var ai = st.ai || {};
+        var patches = decodePatches(st.coveragePatches) || [];
+        var custom = CONTENT_KEYS.filter(function (c) { return (st.content || {})[c.k]; }).map(function (c) { return c.k; });
+        var n = 0, seen = {};
+        evs.forEach(function (e) { if (e.sessionCode === s.code && e.session && !seen[e.session]) { seen[e.session] = 1; n++; } });
+        return [
+          s.code, s.name || '', s.status || 'active', (s.createdAt || '').replace('T', ' ').slice(0, 19),
+          phasesDescription(st), st.counterbalance ? 1 : 0,
+          num(st.nTasks), st.nPractice ? 1 : 0, num(st.paidTasks),
+          patches.map(function (p) { return p[0] + '-' + p[1]; }).join(' & '),
+          num(ai.baselineCost), ai.baselineData || '', ai.frontier ? 1 : 0, num(ai.frontierCost), ai.frontierData || '',
+          st.completionCode || '', st.completionCodeA || '', st.completionCodeB || '',
+          custom.join(', '), n
+        ];
+      }))
+    };
+
+    var participantsSheet = {
+      name: 'Participants',
+      cols: [{ w: 30 }, { w: 26 }, { w: 12 }, { w: 20 }, { w: 22 }, { w: 22 }, { w: 13 }, { w: 15 }, { w: 10 }, { w: 13 }, { w: 12 }, { w: 15 }, { w: 13 }, { w: 12 }, { w: 18 }, { w: 17 }, { w: 12 }, { w: 11 }, { w: 9 }, { w: 12 }, { w: 12 }],
+      rows: [[
+        'participant_id', 'prolific_pid', 'session_code', 'session_name',
+        'first_action_utc', 'last_action_utc', 'duration_min', 'phases_played',
+        'consented', 'quiz_attempts', 'quiz_correct', 'rounds_completed',
+        'total_reveals', 'ai_questions', 'ai_spend_cents', 'net_raw_sum_cents',
+        'bonus_cents', 'completed', 'events', 'viewport', 'app_version'
+      ]].concat(partOrder.map(function (id) {
+        var p = parts[id];
+        return [
+          p.id, p.pid || '', p.code || '', p.name || '',
+          isoMs(p.first), isoMs(p.last),
+          (p.first && p.last) ? Math.round((p.last - p.first) / 600) / 100 : null,
+          p.phasesSeq.map(function (a) { return PHASE_LABEL[a] || a; }).join(' -> '),
+          p.consented, p.quizN, p.quizOk, p.roundsDone,
+          p.reveals, p.aiQ, p.aiSpend, p.netRaw,
+          p.bonus, p.completed, p.n,
+          (p.vw && p.vh) ? p.vw + 'x' + p.vh : '', p.appVersion || ''
+        ];
+      }))
+    };
+
+    roundOrder.sort(function (ka, kb) {
+      var a = rounds[ka], b = rounds[kb];
+      return ((parts[a.id] ? parts[a.id].first : 0) - (parts[b.id] ? parts[b.id].first : 0)) ||
+        (a.id < b.id ? -1 : a.id > b.id ? 1 : 0) || (a.phase - b.phase) || (a.round - b.round);
+    });
+    var roundsSheet = {
+      name: 'Rounds',
+      cols: [{ w: 30 }, { w: 26 }, { w: 12 }, { w: 7 }, { w: 12 }, { w: 7 }, { w: 9 }, { w: 22 }, { w: 22 }, { w: 11 }, { w: 9 }, { w: 13 }, { w: 15 }, { w: 12 }, { w: 11 }, { w: 14 }, { w: 17 }, { w: 12 }],
+      rows: [[
+        'participant_id', 'prolific_pid', 'session_code', 'phase', 'phase_label', 'round', 'practice',
+        'started_utc', 'ended_utc', 'duration_s', 'reveals', 'reveal_cost_cents',
+        'ai_questions', 'ai_fees_cents', 'best_cents', 'net_raw_cents', 'net_floored_cents', 'paid_round'
+      ]].concat(roundOrder.map(function (k) {
+        var r = rounds[k];
+        var p = parts[r.id] || { paid: {} };
+        var practice = r.round === 0 ? 1 : 0;
+        return [
+          r.id, r.pid || '', r.code || '', r.phase, PHASE_LABEL[r.arm] || r.arm || '', r.round, practice,
+          isoMs(r.startT), isoMs(r.endT),
+          (r.startT && r.endT) ? Math.round((r.endT - r.startT) / 100) / 10 : null,
+          // round cost (ctx) = 5¢ × reveals + AI fees, so reveal-only cost is the difference
+          r.reveals, r.cost != null ? r.cost - r.aiSpend : null,
+          r.aiQ, r.aiSpend, r.best, r.rawNet, r.flooredNet,
+          practice ? 0 : (p.paid['p' + r.phase + 'r' + r.round] ? 1 : 0)
+        ];
+      }))
+    };
+
+    var actionsSheet = {
+      name: 'Actions',
+      cols: [{ w: 30 }, { w: 26 }, { w: 12 }, { w: 7 }, { w: 12 }, { w: 7 }, { w: 17 }, { w: 12 }, { w: 24 }, { w: 15 }, { w: 9 }, { w: 12 }, { w: 15 }, { w: 9 }, { w: 9 }, { w: 13 }, { w: 15 }, { w: 19 }, { w: 18 }, { w: 17 }, { w: 11 }, { w: 8 }, { w: 8 }, { w: 46 }],
+      rows: [[
+        'participant_id', 'prolific_pid', 'session_code', 'phase', 'phase_label', 'round', 'event',
+        'decision_ms', 'time_utc', 't_ms', 'position', 'value_cents', 'estimate_cents',
+        'ai_model', 'ai_mode', 'ai_fee_cents', 'reveals_so_far', 'reveal_cost_so_far_cents',
+        'best_so_far_cents', 'net_so_far_cents', 'question', 'choice', 'correct', 'details'
+      ]].concat(evs.filter(function (e) { return !isMetaEvent(e); }).map(function (e) {
+        var ai = e.event === 'ai_query' ? parseInfo(e.info) : {};
+        return [
+          e.session || '(none)', e.pid || '', e.sessionCode || '', e.phase, PHASE_LABEL[e.arm] || e.arm || '', e.round, e.event,
+          num(e.rt_ms), isoMs(e.t), num(e.t), num(e.position), num(e.value), num(e.estimate),
+          ai.model || '', ai.mode || '', num(ai.fee),
+          num(e.reveals), num(e.cost), num(e.best), num(e.net),
+          e.qid || '', (e.choice != null ? e.choice : null), (e.correct == null ? null : (e.correct ? 1 : 0)),
+          e.info || ''
+        ];
+      }))
+    };
+
+    var surveySheet = {
+      name: 'Survey',
+      cols: [{ w: 30 }, { w: 26 }, { w: 12 }, { w: 13 }, { w: 13 }, { w: 60 }, { w: 12 }, { w: 24 }],
+      rows: [[
+        'participant_id', 'prolific_pid', 'session_code', 'question', 'likert_1to5', 'free_text', 'decision_ms', 'time_utc'
+      ]].concat(evs.filter(function (e) { return e.event === 'survey'; }).map(function (e) {
+        return [
+          e.session || '(none)', e.pid || '', e.sessionCode || '', e.qid || '',
+          (e.choice != null ? num(e.choice) : null), e.info || '', num(e.rt_ms), isoMs(e.t)
+        ];
+      }))
+    };
+    return [readme, sessionsSheet, participantsSheet, roundsSheet, actionsSheet, surveySheet];
+  }
+
+  function exportExcel(code) {
+    if (!window.SVXlsx) { banner($('dash-banner'), 'warn', 'Excel export unavailable: xlsx.js failed to load — reload the page.'); return; }
+    var stamp = new Date().toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '-');
+    SVXlsx.download('searchv2_' + (code || 'all-sessions') + '_' + stamp + '.xlsx', buildWorkbook(code));
   }
 
   // ============================================================= helpers
