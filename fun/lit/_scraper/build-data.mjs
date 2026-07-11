@@ -1183,8 +1183,19 @@ export async function searchPreprintsByTitle(papers, cache, opts = {}) {
       throttled++;                                  // leave un-ts so it retries later
       if (throttled >= maxThrottle) { if (opts.log) console.log('  preprints: OpenAlex throttling — stopping title-search for this run.'); break; }
       if (opts.patient) {
-        // Wait it out (retry-after honoured, else 5s→60s escalation) and
-        // retry the SAME paper — a local run should ride through the limit.
+        // A Retry-After of minutes is per-second/burst throttling — wait it
+        // out and retry the SAME paper. A Retry-After of HOURS means the
+        // DAILY quota for this mailto/IP is spent: sleeping on it would just
+        // hang the terminal, so save progress and exit with a clear message.
+        const quotaMs = opts.maxWaitMs || 15 * 60 * 1000;
+        if (r.retryAfter * 1000 > quotaMs) {
+          const h = Math.floor(r.retryAfter / 3600), m = Math.round((r.retryAfter % 3600) / 60);
+          const at = new Date(Date.now() + r.retryAfter * 1000).toISOString().slice(11, 16);
+          if (opts.log) console.log(
+            `  preprints: OpenAlex says the daily request quota is spent — it resets in ~${h}h ${m}m (${at} UTC).\n` +
+            `  Progress is saved; simply re-run this script after that time (or with a different LIT_MAILTO).`);
+          break;
+        }
         const wait = Math.max(r.retryAfter * 1000, Math.min(5000 * Math.pow(2, throttled - 1), 60000));
         if (opts.log) console.log(`  preprints: rate-limited — waiting ${Math.round(wait / 1000)}s…`);
         await sleep(wait);
