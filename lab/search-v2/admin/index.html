@@ -55,9 +55,24 @@
 
     .field{margin:12px 0;}
     .field label{display:block; font-weight:600; font-size:14px; margin-bottom:5px;}
-    .field input[type=text], .field input[type=password], .field textarea{width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:8px; font-size:15px; font-family:inherit;}
+    .field input[type=text], .field input[type=password], .field input[type=number], .field textarea{
+      width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:9px; font-size:15px;
+      font-family:inherit; background:#fff; color:var(--ink); transition:border-color .12s, box-shadow .12s;}
+    .field input[type=number]{max-width:190px;}
+    .field input:focus, .field textarea:focus, .field select:focus{
+      outline:none; border-color:var(--blue); box-shadow:0 0 0 3px rgba(39,128,227,.16);}
     .field textarea{min-height:120px; resize:vertical; line-height:1.45;}
     .field .hint{font-size:12.5px; color:var(--muted); margin-top:4px;}
+    /* deterministic-truth callout + AI-model section */
+    .admin-note{background:#eef6ff; border:1px solid #cfe2fb; border-radius:10px; padding:11px 14px; font-size:13.5px; color:#1f4e79; margin:12px 0;}
+    :root[data-theme="dark"] .admin-note{background:#152232; border-color:#26405e; color:#bcd6f5;}
+    .ai-section{border:1px solid var(--line); border-radius:12px; padding:2px 16px 14px; margin:14px 0; background:var(--panel);}
+    :root[data-theme="dark"] .ai-section{background:#1a1d21;}
+    .regions-inputs .row2{margin-top:6px;}
+    #frontier-fields{border-left:3px solid var(--blue); padding-left:14px; margin-top:8px;}
+    #frontier-fields.off{display:none;}
+    .regions-warn{color:var(--red); font-size:12.5px; margin-top:6px; display:none;}
+    .regions-warn.show{display:block;}
     .help{display:inline-block; width:15px; height:15px; line-height:14px; text-align:center; font-size:11px; font-weight:700;
       color:var(--muted); border:1px solid var(--line); border-radius:50%; cursor:help; vertical-align:middle;}
     .field[title]:hover .help, .field[data-tip]:hover .help,
@@ -224,13 +239,66 @@
             <div class="field" title="How many rounds each participant plays. Real rounds are paid-eligible; a subset of them (Paid rounds) is drawn at random at the end and paid as a bonus. The practice round is unpaid and can be turned off.">
               <label>Rounds each participant plays <span class="help">?</span></label>
               <div class="row2">
-                <div class="field" title="The number of real (paid-eligible) rounds each participant plays IN EACH PHASE. In a within-subjects session with both phases, they play this many rounds without AI and this many with AI — twice this many rounds in total. Default 10. Each round is a fresh hidden landscape.">
-                  <label>Rounds per Phase <span class="help">?</span></label><input type="number" id="f-ntasks" min="1" max="120" value="10" /></div>
-                <div class="field" title="How many of the real rounds are drawn at random at the end and paid to the participant as a bonus. Must be ≤ real rounds. Default 2.">
+                <div class="field" title="The number of real (paid-eligible) rounds each participant plays IN EACH PHASE. In a within-subjects session with both phases, they play this many rounds without AI and this many with AI. Default 1. Each round is a fresh hidden curve.">
+                  <label>Rounds per Phase <span class="help">?</span></label><input type="number" id="f-ntasks" min="1" max="120" value="1" /></div>
+                <div class="field" title="How many of the real rounds (across all phases) are drawn at random at the end and paid to the participant as a bonus. Must be ≤ total real rounds. Default 2.">
                   <label>Paid rounds (drawn at end)</label><input type="number" id="f-paid" min="0" max="120" value="2" /></div>
-                <div class="field" title="Whether participants play one unpaid practice round before the real rounds.">
+                <div class="field" title="Whether participants play one unpaid practice round before the real rounds. Off by default.">
                   <label>Practice round</label>
-                  <span class="seg" id="seg-practice"><button data-v="1" class="on">On</button><button data-v="0">Off</button></span>
+                  <span class="seg" id="seg-practice"><button data-v="1">On</button><button data-v="0" class="on">Off</button></span>
+                </div>
+              </div>
+              <div class="admin-note">
+                <b>Ground truth is fixed.</b> Every participant — in this and every session — sees the
+                <b>same</b> hidden Brownian prize curves, so results are directly comparable. The
+                <b>Without&nbsp;AI</b> and <b>With&nbsp;AI</b> phases use different curves, and each round within a
+                phase is an independent draw (10 rounds ⇒ 10 different curves). Change <code class="k">TRUTH_SEED</code>
+                in <code class="k">config.js</code> to reshuffle every curve at once.
+              </div>
+            </div>
+
+            <div class="ai-section">
+              <h3 style="margin-top:12px;" title="The AI assistant participants can consult in the With-AI phase: where it has training data (the interpolation regions), what a question costs, and how much data it was trained on. More parameters will be added here over time.">AI model parameters <span class="help">?</span></h3>
+              <p class="muted small">Only relevant when the <b>With AI</b> phase is included. Consulting the assistant costs money (but less than revealing a position), and a model trained on more data gives sharper guesses.</p>
+
+              <div class="field" title="Where the assistant has training data. Inside a region it interpolates between its points (accurate); outside and between regions it extrapolates (increasingly wrong). Choose one region or two disjoint regions and set their position on the 1–100 line. Shown to you in the testing view; hidden from participants.">
+                <label>AI interpolation region(s) <span class="help">?</span></label>
+                <div class="hint" style="margin:0 0 8px;">The assistant is trained only inside these region(s): it interpolates within them and extrapolates outside/between them.</div>
+                <span class="seg" id="seg-regions"><button data-v="1" class="on">One region</button><button data-v="2">Two regions</button></span>
+                <div class="regions-inputs" id="regions-inputs">
+                  <div class="row2">
+                    <div class="field"><label>Region 1 — start</label><input type="number" id="f-r1a" min="1" max="100" value="30" /></div>
+                    <div class="field"><label>Region 1 — end</label><input type="number" id="f-r1b" min="1" max="100" value="70" /></div>
+                  </div>
+                  <div class="row2" id="region2-row" style="display:none;">
+                    <div class="field"><label>Region 2 — start</label><input type="number" id="f-r2a" min="1" max="100" value="60" /></div>
+                    <div class="field"><label>Region 2 — end</label><input type="number" id="f-r2b" min="1" max="100" value="85" /></div>
+                  </div>
+                </div>
+                <div class="regions-warn" id="regions-warn"></div>
+              </div>
+
+              <div class="row2">
+                <div class="field" title="What the participant pays each time they ask the baseline model. 0 makes it free. Must be below the 5¢ reveal cost — consulting is cheaper than searching yourself.">
+                  <label>Baseline model — cost / question (¢) <span class="help">?</span></label>
+                  <input type="number" id="f-ai-base-cost" min="0" max="4" value="2" /></div>
+                <div class="field" title="How much data the baseline model is trained on inside the region(s). Fewer points → coarser interpolation.">
+                  <label>Baseline model — training data</label>
+                  <span class="seg" id="seg-base-data"><button data-v="few" class="on">Few</button><button data-v="standard">Standard</button><button data-v="lots">Lots</button></span></div>
+              </div>
+
+              <label class="phase-toggle" title="Offer a second, stronger 'frontier' model alongside the baseline. When on, the participant picks which model to consult for each question." style="margin-top:8px;">
+                <span class="pt-label">Offer a frontier model too <span class="muted small">· participant chooses per question</span></span>
+                <span class="pt-switch"><input type="checkbox" id="f-ai-frontier"><span class="pt-sw"></span></span>
+              </label>
+              <div id="frontier-fields" class="off">
+                <div class="row2">
+                  <div class="field" title="What the participant pays to ask the frontier model. It costs more than the baseline; whether it is above or below the 5¢ reveal cost is your choice.">
+                    <label>Frontier model — cost / question (¢) <span class="help">?</span></label>
+                    <input type="number" id="f-ai-front-cost" min="0" max="50" value="4" /></div>
+                  <div class="field" title="How much data the frontier model is trained on. 'Lots' makes it noticeably sharper than the baseline.">
+                    <label>Frontier model — training data</label>
+                    <span class="seg" id="seg-front-data"><button data-v="few">Few</button><button data-v="standard">Standard</button><button data-v="lots" class="on">Lots</button></span></div>
                 </div>
               </div>
             </div>

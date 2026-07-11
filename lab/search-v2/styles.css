@@ -97,17 +97,23 @@ p{margin:.6em 0;}
 .grid{stroke:#eef0f2; stroke-width:1;}
 .axt{font-size:12px; fill:#666;}
 .axtitle{font-size:13px; fill:#444; font-weight:600;}
-.cov-band{fill:#2780e3; opacity:.06;}
-.cov-label{font-size:12px; fill:#4a6ea8; opacity:.8;}
+.cov-band{fill:#2780e3; opacity:.07;}
+.cov-label{font-size:12px; fill:#4a6ea8; opacity:.85;}
 .sel-line{stroke:#9aa0a6; stroke-width:1.5; stroke-dasharray:4 3;}
 .sel-txt{font-size:12px; fill:#555; font-weight:600;}
 .rev-dot{fill:var(--ink);}
 .rev-lbl{font-size:12px; fill:var(--ink); font-weight:600;}
 .est-diamond{fill:none; stroke:var(--est); stroke-width:2;}
-.dbg-line{fill:none; stroke:var(--red); stroke-width:1.2; opacity:.35;}
-.dbg-dot{fill:var(--est); opacity:.7;}
 .dbg-txt{font-size:12px; fill:#999;}
-.interp-line{fill:none; stroke:var(--est); stroke-width:1.6; stroke-dasharray:4 3; opacity:.85;}
+/* testing / debrief overlays — styled to match /lab/interpolation:
+   blue Brownian truth, red training points, green interpolation, amber dashed
+   extrapolation with shaded zones. Never shown to a real participant mid-play. */
+.gt-line{fill:none; stroke:var(--blue); stroke-width:2.4; stroke-linejoin:round;}
+.extrap-zone{fill:#fbe4cf; opacity:.5;}
+.extrap-label{font-size:11px; fill:#b5721f;}
+.extrap-line{fill:none; stroke:var(--amber); stroke-width:2.6; stroke-dasharray:7 5;}
+.interp-seg{fill:none; stroke:var(--green); stroke-width:2.6; stroke-linejoin:round;}
+.train-dot{fill:var(--red); stroke:#fff; stroke-width:1.3;}
 
 /* testing-only overlay controls on the round screen (debug/Test link only) */
 .testview{display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; margin:8px 0 2px;
@@ -150,6 +156,16 @@ p{margin:.6em 0;}
    so Arm A's empty side slot collapses and shows nothing. */
 .round-grid.arm-b .aux-col{border:1px solid var(--line); border-radius:10px; padding:14px; background:var(--panel);}
 .aux-col h3{margin-top:0;}
+/* AI-model picker (shown only when a frontier model is offered) */
+.ai-models{display:flex; gap:8px; margin:8px 0 4px;}
+.ai-model{flex:1; border:1.5px solid var(--line); background:#fff; border-radius:9px; padding:8px 6px;
+  font-size:13.5px; font-weight:700; cursor:pointer; color:var(--ink); display:flex; flex-direction:column;
+  align-items:center; gap:2px; line-height:1.2; transition:.12s;}
+.ai-model .mc{font-size:11.5px; font-weight:600; color:var(--muted);}
+.ai-model:hover{border-color:#c9ced4;}
+.ai-model.on{border-color:var(--blue); background:#eef5fd; color:var(--blue-d);}
+.ai-model.on .mc{color:var(--blue-d);}
+.ai-spend{margin:8px 0 2px; min-height:18px;}
 .ask-row{display:flex; gap:8px; align-items:center; margin:10px 0;}
 .ask-row input{width:70px; padding:7px; font-size:15px; border:1px solid var(--line); border-radius:8px; text-align:center;}
 .ai-log{margin-top:10px; max-height:280px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;}

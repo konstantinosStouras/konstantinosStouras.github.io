@@ -19,35 +19,42 @@
     N_POSITIONS: 100,   // line length: positions 1..100
     L_STEP: 10,         // max step between adjacent true values, in cents
     REVEAL_COST: 5,     // cents charged per reveal
-    N_TASKS: 10,        // number of real (paid-eligible) rounds
-    N_PRACTICE: 1,      // number of unpaid practice rounds
+    N_TASKS: 1,         // number of real (paid-eligible) rounds PER PHASE (admin-overridable)
+    N_PRACTICE: 0,      // number of unpaid practice rounds (0 or 1; admin-overridable)
     PAID_TASKS: 2,      // rounds drawn for payment at the end
 
+    // ---- deterministic ground truth --------------------------------------
+    // The hidden prize curve is a bounded random walk (Brownian-like) generated
+    // AT RUNTIME (landscape.js), seeded so that it is IDENTICAL for every
+    // participant of every session, DIFFERENT between the Without-AI (arm A) and
+    // With-AI (arm B) phases, and an INDEPENDENT fresh draw for each round within
+    // a phase. Change TRUTH_SEED to reshuffle every curve at once.
+    TRUTH_SEED: 20260711,
+
     // ---- assistant (Arm B only) ------------------------------------------
-    // The single interval where the assistant's training data lives. It is
-    // ACCURATE here (it interpolates between its nearest training points) and it
-    // ALWAYS answers everywhere else too (flat-extrapolating beyond its points —
-    // confident but unreliable), never refusing. See assistant.js. This region is
-    // NOT revealed to participants; it only drives where training points are
-    // placed, the RICH/POOR strata, and the admin/debrief overlays. Kept as a
-    // one-element list of [start,end] so the (multi-interval-capable) machinery
-    // still works — set two entries here if you ever want disjoint regions again.
-    COVERAGE_PATCHES: [[30, 70]], // inclusive interval the assistant is "trained on"
-    K_DOTS: 7,          // (reference) training-point count guide; dots are placed
-                        // by gap size, so this is not used directly
+    // The interval(s) where the assistant's training data lives ("interpolation
+    // regions"). Inside them it INTERPOLATES between its nearest training points
+    // (accurate, the true curve is locally smooth); outside/between them it
+    // EXTRAPOLATES linearly along the nearest edge (confident but increasingly
+    // wrong). Admin-overridable per session (one or two regions); this is the
+    // built-in default. See landscape.js / assistant.js.
+    COVERAGE_PATCHES: [[30, 70]], // inclusive interval(s) the assistant is "trained on"
 
-    // ---- landscape pool (offline generation) -----------------------------
-    POOL_PER_STRATUM: 60, // landscapes generated per stratum
-    RICH_INTERIOR_MIN: 85, // RICH: max value inside the coverage patches must be >= this
-    POOR_INTERIOR_MAX: 55, // POOR: max value inside the coverage patches must be <= this
-    POOR_OUTSIDE_MIN: 85,  // POOR: max value outside all coverage patches must be >= this
-    MEAN_MIN: 25,          // soft comparability screen: mean of all 100 values...
-    MEAN_MAX: 50,          // ...must fall in [MEAN_MIN, MEAN_MAX]
-    SAMPLE_RICH: 5,        // RICH landscapes drawn per subject (of N_TASKS)
-    SAMPLE_POOR: 5,        // POOR landscapes drawn per subject (of N_TASKS)
-
-    // ---- obfuscation (deters casual DevTools peeking only) ---------------
-    OBFUSCATION_KEY: 90,   // fixed byte XOR'd into shipped value arrays (0x5A)
+    // ---- AI model parameters (Arm B) -------------------------------------
+    // A "baseline" model is always available; an optional "frontier" model can be
+    // offered alongside it for the participant to choose from. They differ in the
+    // per-query COST (cents, charged like a reveal) and in how much TRAINING DATA
+    // they have (denser data => finer interpolation). Baseline cost must be below
+    // the reveal cost (consulting is cheaper than searching yourself); the
+    // frontier costs more than the baseline (its position relative to the reveal
+    // cost is the researcher's choice). Density: 'few' | 'standard' | 'lots'.
+    AI: {
+      baselineCost: 2,        // cents per baseline-model query (0..REVEAL_COST-1)
+      baselineData: 'few',    // baseline training-data density
+      frontier: false,        // offer a second, frontier model too?
+      frontierCost: 4,        // cents per frontier-model query (>= baselineCost)
+      frontierData: 'lots'    // frontier training-data density
+    },
 
     // ---- logging ---------------------------------------------------------
     ENDPOINT_URL: '',      // Apps Script web-app URL; '' = local-only logging

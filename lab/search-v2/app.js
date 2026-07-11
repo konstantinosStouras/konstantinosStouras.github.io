@@ -6,19 +6,68 @@
    ========================================================================== */
 (function () {
   'use strict';
-  var CFG = window.CONFIG, L = window.Logger, A = null; // A set once assistant.js loads (Arm B)
+  var CFG = window.CONFIG, L = window.Logger, LS = window.Landscape, A = null; // A set once assistant.js loads (Arm B)
   var N_POS = CFG.N_POSITIONS, COST = CFG.REVEAL_COST;
-  var KEY = CFG.OBFUSCATION_KEY;
   // Round counts — defaults from config, but the admin can override them per
   // session (see applyRounds). These are the live values the app uses.
   var N_TASKS = CFG.N_TASKS, PAID_TASKS = CFG.PAID_TASKS, N_PRACTICE = CFG.N_PRACTICE;
-  // Apply admin round overrides from a settings object; clamp to sane bounds.
+  // The assistant's interpolation region(s) and AI-model parameters, both
+  // admin-overridable per session; these are the live values the app uses.
+  var PATCHES = normalizePatches(CFG.COVERAGE_PATCHES);
+  var AI_CFG = normalizeAI(CFG.AI);
+  // Apply admin overrides from a settings object; clamp to sane bounds.
   function applyRounds(s) {
     if (!s) return;
     if (s.nTasks != null && +s.nTasks >= 1) N_TASKS = Math.min(120, Math.floor(+s.nTasks));
     if (s.nPractice != null) N_PRACTICE = (+s.nPractice > 0) ? 1 : 0;
     if (s.paidTasks != null && +s.paidTasks >= 0) PAID_TASKS = Math.floor(+s.paidTasks);
-    if (PAID_TASKS > N_TASKS) PAID_TASKS = N_TASKS;
+    // Paid rounds are drawn across ALL phases at the end, so the real cap is
+    // N_TASKS × #phases; drawPaid() enforces it once the phase count is known.
+    if (s.coveragePatches) PATCHES = normalizePatches(s.coveragePatches);
+    if (s.ai) AI_CFG = normalizeAI(s.ai);
+  }
+  // Validate 1–2 interpolation regions: rounded, in [1,N], wide enough, ordered
+  // and disjoint. Falls back to the config default on anything unusable.
+  function normalizePatches(patches) {
+    var def = CFG.COVERAGE_PATCHES || [[30, 70]];
+    if (!patches || Object.prototype.toString.call(patches) !== '[object Array]' || !patches.length) return def.slice();
+    var out = [];
+    for (var i = 0; i < patches.length && out.length < 2; i++) {
+      var a = Math.round(+patches[i][0]), b = Math.round(+patches[i][1]);
+      if (!isFinite(a) || !isFinite(b)) continue;
+      if (b < a) { var t = a; a = b; b = t; }
+      a = Math.max(1, Math.min(N_POS, a)); b = Math.max(1, Math.min(N_POS, b));
+      if (b - a < 4) continue;                          // too thin for a couple of points
+      out.push([a, b]);
+    }
+    if (!out.length) return def.slice();
+    out.sort(function (p, q) { return p[0] - q[0]; });
+    if (out.length === 2 && out[1][0] <= out[0][1]) out = [out[0]]; // overlap → one region
+    return out;
+  }
+  function clampInt(v, lo, hi, dflt) { v = Math.round(+v); if (!isFinite(v)) v = dflt; return Math.max(lo, Math.min(hi, v)); }
+  function dataLabel(v, dflt) { return (v === 'few' || v === 'standard' || v === 'lots') ? v : dflt; }
+  // Validate the AI-model parameters. Baseline cost is below the reveal cost
+  // (consulting is cheaper than searching); the frontier costs at least as much
+  // as the baseline (its position vs. the reveal cost is the researcher's call).
+  function normalizeAI(ai) {
+    var d = CFG.AI || {};
+    ai = ai || {};
+    var base = clampInt(ai.baselineCost, 0, COST - 1, d.baselineCost != null ? d.baselineCost : 2);
+    return {
+      baselineCost: base,
+      baselineData: dataLabel(ai.baselineData, d.baselineData || 'few'),
+      frontier: !!ai.frontier,
+      frontierCost: clampInt(ai.frontierCost, base, 50, Math.max(base, d.frontierCost != null ? d.frontierCost : base + 2)),
+      frontierData: dataLabel(ai.frontierData, d.frontierData || 'lots')
+    };
+  }
+  // Deterministic seed for a round's truth: fixed across participants/sessions,
+  // different for Without-AI (A) vs With-AI (B), and independent per round. The
+  // one practice round shares a single arm-independent curve.
+  function truthSeed(a, roundNum) {
+    var tag = (roundNum === 0) ? 'practice' : a;
+    return LS.hashSeed(CFG.TRUTH_SEED + ':' + tag + ':r' + roundNum);
   }
   // roundNum to start the current phase at. Practice (round 0) is played only
   // once, at the very start (phase 0); later phases jump straight to round 1.
@@ -50,20 +99,17 @@
     else a = (Math.random() < 0.5 ? 'A' : 'B');
     return [a];
   }
-  function takeWrap(arr, start, count) {
-    var out = []; if (!arr.length) return out;
-    for (var i = 0; i < count; i++) out.push(arr[(start + i) % arr.length]);
-    return out;
-  }
-
   // ---- closure-only per-round secrets (NEVER on window/DOM) ----------------
-  var truth = null;   // decoded value array for the current round
-  var dots = null;    // decoded assistant dots for the current round
+  var truth = null;         // the current round's true value array (generated at runtime)
+  var groupsByModel = null; // { base:[[pos,val],...][], front:? } — AI training data per model
+
+  // The assistant training data for the model the participant currently has
+  // selected (baseline unless a frontier model is offered and chosen).
+  function currentModel() { return (AI_CFG.frontier && S.round && S.round.aiModel === 'front') ? 'front' : 'base'; }
+  function currentGroups() { return (groupsByModel && groupsByModel[currentModel()]) || (groupsByModel && groupsByModel.base) || []; }
+  function modelCost(model) { return model === 'front' ? AI_CFG.frontierCost : AI_CFG.baselineCost; }
 
   // ---- runtime -------------------------------------------------------------
-  var POOL = null;    // { byId, richIds, poorIds }
-  var PRACTICE = null;
-  var COVERAGE = null;
   var chart = null;
   var S = null;       // persisted session state
   var arm = 'A';      // the arm of the CURRENT phase ('A' human-only | 'B' AI-assisted)
@@ -136,18 +182,6 @@
   function shuffle(arr, rng) {
     for (var i = arr.length - 1; i > 0; i--) { var j = Math.floor(rng() * (i + 1)); var t = arr[i]; arr[i] = arr[j]; arr[j] = t; }
     return arr;
-  }
-
-  // ---- obfuscation decode --------------------------------------------------
-  function decodeInts(b64) {
-    var bin = atob(b64), out = new Array(bin.length);
-    for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i) ^ KEY;
-    return out;
-  }
-  function decodePairs(b64) {
-    var flat = decodeInts(b64), pairs = [];
-    for (var i = 0; i < flat.length; i += 2) pairs.push([flat[i], flat[i + 1]]);
-    return pairs;
   }
 
   // ---- URL params ----------------------------------------------------------
@@ -248,7 +282,9 @@
       var loader = SESSION_CODE
         ? SVFirebase.getSessionByCode(SESSION_CODE).then(applyWave)
         : SVFirebase.getStudyConfig().then(applyStudyConfig);
-      loader.then(function () { finishBoot(pr); });
+      // Never strand a subject on the loading screen if Firestore is unreachable:
+      // proceed with built-in defaults on either resolution or rejection.
+      loader.then(function () { finishBoot(pr); }, function () { finishBoot(pr); });
     } else {
       finishBoot(pr);
     }
@@ -338,12 +374,7 @@
     });
     if (!PREVIEW) startFirebaseSync(); // preview never writes to Firestore
 
-    loadAssistantIfNeeded(function () {
-      fetch('data/mappings.json', { cache: 'no-store' })
-        .then(function (r) { return r.json(); })
-        .then(onPool)
-        .catch(function () { $('s-loading').innerHTML = '<p class="center" style="margin-top:40px;color:#a12a2a;">Could not load the study data. Please refresh.</p>'; });
-    });
+    loadAssistantIfNeeded(initPlay);
   }
 
   // Mirror every logged event into Firestore (when configured), idempotently by
@@ -383,44 +414,13 @@
     document.head.appendChild(s);
   }
 
-  function onPool(data) {
-    COVERAGE = data.coveragePatches;
-    PRACTICE = data.practice;
-    var byId = {}, richIds = [], poorIds = [];
-    for (var i = 0; i < data.mappings.length; i++) {
-      var m = data.mappings[i]; byId[m.id] = m;
-      if (m.stratum === 'RICH') richIds.push(m.id); else poorIds.push(m.id);
-    }
-    POOL = { byId: byId, richIds: richIds, poorIds: poorIds };
-
-    // Seeded per-subject task orders: one block of N_TASKS landscapes PER PHASE,
-    // each split ~half RICH / half POOR (from the admin-set round count) and
-    // shuffled. Blocks are drawn from a single shuffled pool so a subject does not
-    // see the same landscape twice across phases (wrapping only if the pool is
-    // smaller than the total demand). One-phase legacy state (S.taskOrder) is
-    // migrated forward so an in-progress subject keeps their landscapes.
-    if (!S.taskOrders) {
-      if (S.taskOrder && S.phases.length === 1) {
-        S.taskOrders = [S.taskOrder];
-      } else {
-        var rng = mulberry32(hashSeed(S.session + ':tasks'));
-        var richShuf = shuffle(richIds.slice(), rng);
-        var poorShuf = shuffle(poorIds.slice(), rng);
-        var nRich = Math.min(Math.ceil(N_TASKS / 2), richIds.length);
-        var nPoor = Math.min(N_TASKS - nRich, poorIds.length);
-        S.taskOrders = [];
-        var ri = 0, pi = 0;
-        for (var ph = 0; ph < S.phases.length; ph++) {
-          var r = takeWrap(richShuf, ri, nRich); ri += nRich;
-          var p = takeWrap(poorShuf, pi, nPoor); pi += nPoor;
-          S.taskOrders.push(shuffle(r.concat(p), rng));
-        }
-      }
-    }
-
-    // session_start (once)
+  // No pool to fetch anymore: each round's truth is generated at runtime from a
+  // (arm, round) seed, so it is identical for everyone and independent per round.
+  function initPlay() {
     if (!S.sessionStarted) {
-      L.log('session_start', { info: 'phases=' + S.phases.join(',') + ';tasks=' + S.taskOrders.map(function (t) { return t.join('|'); }).join(' / ') });
+      L.log('session_start', { info: 'phases=' + S.phases.join(',') +
+        ';regions=' + PATCHES.map(function (p) { return p[0] + '-' + p[1]; }).join('|') +
+        ';ai=' + (AI_CFG.frontier ? 'base(' + AI_CFG.baselineCost + ')+frontier(' + AI_CFG.frontierCost + ')' : 'base(' + AI_CFG.baselineCost + ')') });
       S.sessionStarted = true;
     }
     save();
@@ -483,9 +483,43 @@
       .replace(/\{rounds\}/g, roundsSentence)
       .replace(/\{nTasks\}/g, N_TASKS).replace(/\{paidTasks\}/g, PAID_TASKS)
       .replace(/\{nPractice\}/g, N_PRACTICE).replace(/\{fee\}/g, COST).replace(/\{nPositions\}/g, N_POS)
+      .replace(/\{aiCost\}/g, AI_CFG.baselineCost).replace(/\{aiFrontierCost\}/g, AI_CFG.frontierCost)
       .replace(/\{totalRounds\}/g, totalReal).replace(/\{nPhases\}/g, nPhases);
   }
-  function content(key) { return subTokens((CONTENT && CONTENT[key]) ? CONTENT[key] : BUILTIN[key]); }
+  // The With-AI copy depends on the AI-model settings, so its built-in default is
+  // computed (kept accurate about cost and how many models are offered). An admin
+  // override wins as usual.
+  function aiCostWord(c) { return c > 0 ? c + ' cents' : 'free'; }
+  function defaultInstructionsB() {
+    if (AI_CFG.frontier) {
+      return "You also have AI assistants.\n\n" +
+        "You can ask an assistant about any position and it gives its best estimate of the value there — a guess based on data it was trained on. Its estimates are usually close but not guaranteed, and it always gives an answer, even where it is unsure.\n\n" +
+        "There are two models. The **Baseline** model costs " + aiCostWord(AI_CFG.baselineCost) + " per question; the **Frontier** model costs " + AI_CFG.frontierCost + " cents per question and is trained on more data, so its guesses tend to be sharper. Revealing a position yourself costs " + COST + " cents.";
+    }
+    if (AI_CFG.baselineCost > 0) {
+      return "You also have an AI assistant.\n\n" +
+        "You can ask it about any position and it gives its best estimate of the value there — a guess based on data it was trained on. Its estimates are usually close but not guaranteed, and it always gives an answer, even where it is unsure.\n\n" +
+        "Each question to the assistant costs " + AI_CFG.baselineCost + " cents — cheaper than revealing a position yourself, which costs " + COST + " cents.";
+    }
+    return BUILTIN.instructionsB;
+  }
+  function defaultPhaseIntroB() {
+    if (AI_CFG.frontier) {
+      return "**Next part: you now have AI assistants.**\n\n" +
+        "For the rounds in this part you can ask an assistant about any position for its best estimate (a guess from data it was trained on — usually close, not guaranteed, always an answer). A **Baseline** model costs " + aiCostWord(AI_CFG.baselineCost) + " per question and a **Frontier** model costs " + AI_CFG.frontierCost + " cents and is trained on more data. Revealing still costs " + COST + " cents. Everything else about the game is the same.";
+    }
+    if (AI_CFG.baselineCost > 0) {
+      return "**Next part: you now have an AI assistant.**\n\n" +
+        "For the rounds in this part you can ask it about any position for its best estimate (a guess from data it was trained on — usually close, not guaranteed, always an answer). Each question costs " + AI_CFG.baselineCost + " cents; revealing a position costs " + COST + " cents. Everything else about the game is the same.";
+    }
+    return BUILTIN.phaseIntroB;
+  }
+  function defaultContent(key) {
+    if (key === 'instructionsB') return defaultInstructionsB();
+    if (key === 'phaseIntroB') return defaultPhaseIntroB();
+    return BUILTIN[key];
+  }
+  function content(key) { return subTokens((CONTENT && CONTENT[key]) ? CONTENT[key] : defaultContent(key)); }
 
   function showConsent() {
     S.phase = 'consent'; save();
@@ -632,29 +666,41 @@
   //  ROUND
   // ======================================================================
   function bestOf(reveals) { var b = null; for (var i = 0; i < reveals.length; i++) if (b === null || reveals[i].val > b) b = reveals[i].val; return b; }
-  function costOf(reveals) { return reveals.length * COST; }
-  function netOf(reveals) { var b = bestOf(reveals); return reveals.length ? b - costOf(reveals) : 0; }
+  function revealCost(round) { return round.reveals.length * COST; }
+  function aiSpend(round) { var c = 0, q = round.queries || []; for (var i = 0; i < q.length; i++) c += (q[i].cost || 0); return c; }
+  function roundCost(round) { return revealCost(round) + aiSpend(round); }
+  // Round net = best revealed prize − reveal fees − AI-consultation fees. Doing
+  // nothing earns 0; asking the AI without revealing can go negative (you paid
+  // the AI but revealed no prize).
+  function roundNet(round) { return (bestOf(round.reveals) || 0) - roundCost(round); }
   function isRevealed(pos) { for (var i = 0; i < S.round.reveals.length; i++) if (S.round.reveals[i].pos === pos) return true; return false; }
 
   function pushContext() {
     L.setContext({
       round: S.roundNum, mapping: S.round.mappingId, stratum: S.round.stratum,
-      reveals: S.round.reveals.length, cost: costOf(S.round.reveals),
-      best: bestOf(S.round.reveals), net: netOf(S.round.reveals)
+      reveals: S.round.reveals.length, cost: roundCost(S.round),
+      best: bestOf(S.round.reveals), net: roundNet(S.round)
     });
+  }
+
+  // Generate the round's truth and per-model AI training data deterministically
+  // from (arm, round). Same for everyone; different per arm and per round.
+  function buildRound(roundNum) {
+    var seed = truthSeed(arm, roundNum);
+    truth = LS.makeWalk(seed);
+    groupsByModel = { base: LS.makeDots(truth, PATCHES, AI_CFG.baselineData, seed) };
+    if (AI_CFG.frontier) groupsByModel.front = LS.makeDots(truth, PATCHES, AI_CFG.frontierData, (seed ^ 0x2545F491) >>> 0);
   }
 
   function startRound(roundNum, resume) {
     S.roundNum = roundNum; S.phase = 'round';
-    var order = S.taskOrders[S.phaseIdx] || [];
-    var mapId = roundNum === 0 ? PRACTICE.id : order[roundNum - 1];
-    var rec = roundNum === 0 ? PRACTICE : POOL.byId[mapId];
-    truth = decodeInts(rec.v);
-    dots = decodePairs(rec.dots);
+    var mapId = (roundNum === 0 ? 'practice' : arm + '-r' + roundNum);
+    buildRound(roundNum);
     if (!resume || !S.round || S.round.mappingId !== mapId) {
-      S.round = { mappingId: mapId, stratum: roundNum === 0 ? 'practice' : rec.stratum,
-        reveals: [], estimates: [], queries: [], warned: false, selected: 50 };
+      S.round = { mappingId: mapId, stratum: roundNum === 0 ? 'practice' : '',
+        reveals: [], estimates: [], queries: [], warned: false, selected: 50, aiModel: 'base' };
     }
+    if (S.round.aiModel == null) S.round.aiModel = 'base';
     // round_start is logged once per (phase, round) — rounds 1..N repeat in every
     // phase, so the guard is keyed by both, not the round number alone.
     if (!S.roundStartedLogged) S.roundStartedLogged = {};
@@ -683,21 +729,65 @@
     $('legend').innerHTML = h;
   }
 
+  function costLabel(c) { return c > 0 ? c + '¢' : 'free'; }
+  function askLabel() {
+    var c = modelCost(currentModel());
+    return 'Ask' + (AI_CFG.frontier ? '' : ' assistant') + ' (' + costLabel(c) + ')';
+  }
+  function auxIntro() {
+    if (AI_CFG.frontier)
+      return 'Choose a model, then ask it about any position for its best estimate. The pricier model is trained on more data, so its guesses tend to be sharper.';
+    return (AI_CFG.baselineCost > 0)
+      ? 'Ask it about any position for its best estimate. Each question costs ' + AI_CFG.baselineCost + '¢ (a reveal costs ' + COST + '¢).'
+      : 'Free and unlimited. Ask it about any position for its best estimate.';
+  }
   function buildAuxPanel() {
     var aux = $('aux-panel');
     if (arm !== 'B') { aux.innerHTML = ''; return; } // Arm A: no assistant DOM at all
-    if (aux.getAttribute('data-built') === '1') { renderAiLog(); return; }
+    if (aux.getAttribute('data-built') === '1') { syncModelPicker(); renderAiLog(); updateAiSpend(); return; }
+    var picker = '';
+    if (AI_CFG.frontier) {
+      picker =
+        '<div class="ai-models" id="ai-models">' +
+          '<button type="button" class="ai-model" data-model="base">Baseline <span class="mc">' + costLabel(AI_CFG.baselineCost) + '</span></button>' +
+          '<button type="button" class="ai-model" data-model="front">Frontier <span class="mc">' + costLabel(AI_CFG.frontierCost) + '</span></button>' +
+        '</div>';
+    }
     aux.innerHTML =
       '<h3>Assistant</h3>' +
-      '<p class="small muted">Free and unlimited. Ask it about any position for its best estimate.</p>' +
+      '<p class="small muted">' + auxIntro() + '</p>' +
+      picker +
       '<div class="ask-row"><span class="small">Position</span>' +
       '<input type="number" id="ai-pos" min="1" max="100" value="' + S.round.selected + '">' +
-      '<button class="btn btn-blue btn-sm" id="btn-ask">Ask assistant (free)</button></div>' +
+      '<button class="btn btn-blue btn-sm" id="btn-ask">' + askLabel() + '</button></div>' +
+      '<div class="ai-spend small muted" id="ai-spend"></div>' +
       '<div class="ai-log" id="ai-log"></div>';
     aux.setAttribute('data-built', '1');
     $('btn-ask').addEventListener('click', askAssistant);
     $('ai-pos').addEventListener('keydown', function (e) { if (e.key === 'Enter') askAssistant(); });
+    if (AI_CFG.frontier) {
+      var mbtns = aux.querySelectorAll('.ai-model');
+      for (var i = 0; i < mbtns.length; i++) mbtns[i].addEventListener('click', function () {
+        S.round.aiModel = this.getAttribute('data-model'); save(); renderRound();
+      });
+    }
+    syncModelPicker();
     renderAiLog();
+    updateAiSpend();
+  }
+  // Reflect the selected model in the picker + the Ask button (panel is built once).
+  function syncModelPicker() {
+    if (!AI_CFG.frontier) return;
+    var aux = $('aux-panel'); if (!aux) return;
+    var mbtns = aux.querySelectorAll('.ai-model');
+    for (var i = 0; i < mbtns.length; i++) mbtns[i].classList.toggle('on', mbtns[i].getAttribute('data-model') === currentModel());
+    if ($('btn-ask')) $('btn-ask').innerHTML = askLabel();
+  }
+  // Running tally of how much the participant has spent consulting the AI this round.
+  function updateAiSpend() {
+    var el = $('ai-spend'); if (!el) return;
+    var q = (S.round.queries || []).length, sp = aiSpend(S.round);
+    el.innerHTML = q ? ('Asked <b>' + q + '</b> time' + (q === 1 ? '' : 's') + ' · spent <b>' + sp + '¢</b> on the assistant this round') : '';
   }
 
   function renderRound(fromHover) {
@@ -705,30 +795,33 @@
       (S.phases.length > 1 ? ' · ' + phaseLabel(arm) : '');
     var reveals = S.round.reveals;
     $('c-reveals').textContent = reveals.length;
-    $('c-cost').innerHTML = costOf(reveals) + '&cent;';
+    $('c-cost').innerHTML = roundCost(S.round) + '&cent;';
     $('c-best').innerHTML = reveals.length ? bestOf(reveals) + '&cent;' : '&mdash;';
-    $('c-net').innerHTML = netOf(reveals) + '&cent;';
+    $('c-net').innerHTML = roundNet(S.round) + '&cent;';
     $('warn-negative').style.display = S.round.warned ? 'block' : 'none';
 
     $('pos-input').value = S.round.selected;
     var revealed = isRevealed(S.round.selected);
     var rb = $('btn-reveal');
     rb.disabled = revealed;
-    rb.innerHTML = revealed ? 'Already revealed' : 'Reveal (costs 5&cent;)';
+    rb.innerHTML = revealed ? 'Already revealed' : 'Reveal (costs ' + COST + '&cent;)';
 
     // Keep the AI panel's position in step with the cursor on deliberate moves,
     // but not while merely hovering (so it never clobbers a value being typed).
     if (!fromHover && arm === 'B' && $('ai-pos')) $('ai-pos').value = S.round.selected;
+    if (arm === 'B') { syncModelPicker(); updateAiSpend(); }
 
+    // The overlays below are TESTING-only (guarded by DEBUG); a real participant
+    // never sees the region, training points, interpolation, or ground truth.
+    var groups = currentGroups();
+    var geo = LS.geometry(groups);
     if (DEBUG) buildTestView();
     chart.render({
-      arm: arm, coverage: COVERAGE, selected: S.round.selected,
+      arm: arm, coverage: PATCHES, selected: S.round.selected,
       revealed: reveals.map(function (r) { return { pos: r.pos, val: r.val }; }),
       estimates: arm === 'B' ? S.round.estimates.map(function (e) { return { pos: e.pos, val: e.val }; }) : [],
-      // Overlays below are TESTING-only (guarded by DEBUG); a real participant
-      // never sees the region, training points, interpolation, or ground truth.
-      truth: truth, dots: dots,
-      tag: DEBUG ? (S.round.mappingId + ' · ' + S.round.stratum) : null,
+      truth: truth, dotGroups: groups, interp: geo.interp, extrap: geo.extrap, zones: geo.zones,
+      tag: DEBUG ? (S.round.mappingId + (arm === 'B' ? ' · ' + currentModel() : '')) : null,
       showTruth: DEBUG && TESTVIEW.truth,
       showCoverage: DEBUG && arm === 'B' && TESTVIEW.region,
       showDots: DEBUG && arm === 'B' && TESTVIEW.dots,
@@ -747,7 +840,7 @@
         '<label><input type="checkbox" id="tv-truth"> Ground truth</label>' +
         '<label class="tv-ai"><input type="checkbox" id="tv-region"> AI region</label>' +
         '<label class="tv-ai"><input type="checkbox" id="tv-dots"> AI data points</label>' +
-        '<label class="tv-ai"><input type="checkbox" id="tv-interp"> AI interpolation</label>';
+        '<label class="tv-ai"><input type="checkbox" id="tv-interp"> AI interp / extrap</label>';
       var wire = function (id, key) {
         $(id).checked = TESTVIEW[key];
         $(id).addEventListener('change', function () { TESTVIEW[key] = this.checked; renderRound(); });
@@ -790,7 +883,7 @@
     pushContext();
     L.log('reveal', { position: pos, value: val });
     // one-time gentle warning when net first drops to <= 0
-    if (!S.round.warned && netOf(S.round.reveals) <= 0) {
+    if (!S.round.warned && roundNet(S.round) <= 0) {
       S.round.warned = true;
       L.log('warn_negative');
     }
@@ -805,13 +898,13 @@
     var x = parseInt(input.value, 10);
     if (isNaN(x)) return;
     x = Math.max(1, Math.min(N_POS, x));
-    var res = A.estimate(dots, x);
-    S.round.queries.push({ position: res.position, estimate: res.estimate, refused: res.refused, text: res.text });
-    // Show only the CURRENT estimate: a new ask replaces the last diamond, and an
-    // ask with no data (refused) clears it — never stack past estimates.
-    S.round.estimates = res.refused ? [] : [{ pos: res.position, val: res.estimate }];
+    var model = currentModel(), cost = modelCost(model);
+    var res = A.estimate(currentGroups(), x);
+    S.round.queries.push({ position: res.position, estimate: res.estimate, refused: false, model: model, cost: cost, mode: res.mode, text: res.text });
+    // Show only the CURRENT estimate: a new ask replaces the last diamond.
+    S.round.estimates = [{ pos: res.position, val: res.estimate }];
     pushContext();
-    L.log('ai_query', { position: res.position, estimate: res.estimate, refused: res.refused });
+    L.log('ai_query', { position: res.position, estimate: res.estimate, refused: false, info: 'model=' + model + ';mode=' + res.mode + ';fee=' + cost });
     save();
     renderAiLog();
     renderRound();
@@ -820,11 +913,11 @@
 
   // ---- stop / round end ----------------------------------------------------
   function openStop() {
-    var reveals = S.round.reveals;
+    var reveals = S.round.reveals, net = roundNet(S.round);
     pushContext();
-    L.log('stop_confirm', { net: netOf(reveals) });
-    $('stop-msg').textContent = reveals.length
-      ? 'You will end this round with a net of ' + netOf(reveals) + ' cents. Stop?'
+    L.log('stop_confirm', { net: net });
+    $('stop-msg').textContent = (reveals.length || aiSpend(S.round))
+      ? 'You will end this round with a net of ' + net + ' cents. Stop?'
       : 'You will earn 0 for this round. Stop?';
     $('ov-stop').classList.add('show');
   }
@@ -836,15 +929,18 @@
     // somehow lands back here): a round is scored exactly once.
     if (S.round.ended) { showInterstitial(); return; }
     var reveals = S.round.reveals;
-    var rawNet = reveals.length ? bestOf(reveals) - costOf(reveals) : 0;
+    var rawNet = roundNet(S.round);
     var flooredNet = Math.max(0, rawNet);
+    var asks = (S.round.queries || []).length, spend = aiSpend(S.round);
     pushContext();
-    L.log('round_end', { net: rawNet, rawNet: rawNet, flooredNet: flooredNet, info: 'best=' + (bestOf(reveals) == null ? 'none' : bestOf(reveals)) });
+    L.log('round_end', { net: rawNet, rawNet: rawNet, flooredNet: flooredNet,
+      info: 'best=' + (bestOf(reveals) == null ? 'none' : bestOf(reveals)) + ';reveals=' + reveals.length + ';aiAsks=' + asks + ';aiSpend=' + spend });
 
     if (S.roundNum >= 1) {
       if (!S.results) S.results = [];
       S.results.push({ phase: S.phaseIdx, arm: arm, round: S.roundNum, mapping: S.round.mappingId, stratum: S.round.stratum,
-        reveals: reveals.length, best: bestOf(reveals), cost: costOf(reveals), rawNet: rawNet, flooredNet: flooredNet,
+        reveals: reveals.length, best: bestOf(reveals), cost: roundCost(S.round),
+        aiAsks: asks, aiSpend: spend, rawNet: rawNet, flooredNet: flooredNet,
         // searched positions (for the end-of-study debrief plots)
         path: reveals.map(function (r) { return [r.pos, r.val]; }) });
     }
@@ -862,7 +958,7 @@
   function showInterstitial() {
     var reveals = S.round.reveals;
     var nReveals = reveals.length;
-    var rawNet = nReveals ? bestOf(reveals) - costOf(reveals) : 0;
+    var rawNet = roundNet(S.round);
     var practice = (S.roundNum === 0);
     // The last real round of a non-final phase heads into a phase transition next.
     var lastOfPhase = (!practice && S.roundNum >= N_TASKS && S.phaseIdx < S.phases.length - 1);
@@ -870,9 +966,11 @@
     $('inter-title').textContent = practice ? 'Practice complete'
       : lastOfPhase ? 'Part ' + (S.phaseIdx + 1) + ' complete'
       : 'Round ' + S.roundNum + ' complete';
-    var b = '<div class="res-line">Reveals: <b>' + nReveals + '</b></div>' +
-            '<div class="res-line">Best value found: <b>' + (nReveals ? bestOf(reveals) + '¢' : '—') + '</b></div>' +
-            '<div class="res-line">Net this round: <b class="res-big">' + rawNet + '¢</b></div>';
+    var b = '<div class="res-line">Reveals: <b>' + nReveals + '</b></div>';
+    if (arm === 'B' && (S.round.queries || []).length)
+      b += '<div class="res-line">AI questions: <b>' + S.round.queries.length + '</b> (spent ' + aiSpend(S.round) + '¢)</div>';
+    b += '<div class="res-line">Best value found: <b>' + (nReveals ? bestOf(reveals) + '¢' : '—') + '</b></div>' +
+         '<div class="res-line">Net this round: <b class="res-big">' + rawNet + '¢</b></div>';
     if (practice) b += '<p class="muted small">This was practice and was not paid. The real rounds start now.</p>';
     else if (lastOfPhase) b += '<p class="muted small">That completes this part. The next part starts when you continue.</p>';
     else if (lastOverall) b += '<p class="muted small">That was the last round. Continue to see your results.</p>';
@@ -948,22 +1046,31 @@
           '<div class="s"><b>' + (st.avgBest / 100).toFixed(2) + '</b><span>avg best found</span></div>' +
         '</div></div>';
     }
+    var hasB = S.phases.indexOf('B') >= 0;
     $('compare-body').innerHTML = '<div class="cmp-grid">' + cols + '</div>' +
       '<div class="cmp-legend">' +
-        '<i style="border-top-style:solid;border-color:var(--red);opacity:.5;"></i> true prize curve (was hidden) &nbsp;&nbsp;' +
+        '<i style="border-top-style:solid;border-color:var(--blue);"></i> true prize curve (was hidden) &nbsp;&nbsp;' +
         '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--ink);vertical-align:middle;margin-right:4px;"></span> positions you revealed' +
+        (hasB ? ' &nbsp;&nbsp;<i style="border-top-style:solid;border-color:var(--green);"></i> AI interpolation &nbsp;&nbsp;' +
+          '<i style="border-top-style:dashed;border-color:var(--amber);"></i> AI extrapolation (unreliable) &nbsp;&nbsp;' +
+          '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--red);vertical-align:middle;margin-right:4px;"></span> AI training data' : '') +
       '</div>';
 
     for (var p = 0; p < S.phases.length; p++) {
       var a = S.phases[p];
-      var res = resultOf(p, representativeRound(p));
-      var rec = res.mapping ? (POOL.byId[res.mapping] || null) : null;
+      var rnd = representativeRound(p);
+      var res = resultOf(p, rnd);
       var host = $('cmp-plot-' + p);
-      if (!rec || !host) continue;
+      if (!host) continue;
+      // Regenerate the exact curve this round used (deterministic by arm+round),
+      // plus the baseline model's training data / interpolation for context.
+      var t = LS.makeWalk(truthSeed(a, rnd));
+      var groups = LS.makeDots(t, PATCHES, AI_CFG.baselineData, truthSeed(a, rnd));
+      var geo = LS.geometry(groups);
       var revd = (res.path || []).map(function (pr) { return { pos: pr[0], val: pr[1] }; });
       Chart.create(host).render({
-        arm: a, coverage: COVERAGE, selected: null, revealed: revd, estimates: [],
-        truth: decodeInts(rec.v), dots: decodePairs(rec.dots),
+        arm: a, coverage: PATCHES, selected: null, revealed: revd, estimates: [],
+        truth: t, dotGroups: groups, interp: geo.interp, extrap: geo.extrap, zones: geo.zones,
         showTruth: true, showCoverage: a === 'B', showDots: a === 'B', showInterp: a === 'B', tag: null
       });
     }

@@ -166,6 +166,38 @@ prize map as a red line on the plot — participants must never see it. To
 restore the full study flow, follow the numbered steps in the comment on the
 consent section and remove the checkbox and its `renderPlot` block.
 
+## `/lab/search-v2` — "Search for Knowledge, with and without AI"
+
+`lab/search-v2/` is a **multi-file** static behavioral experiment (vanilla
+HTML/CSS/JS, relative URLs only, no build step): subjects search a hidden line of
+100 prizes, paying 5¢ per reveal, in a **Without AI** and/or **With AI** phase
+(within-subjects, admin-chosen order; arms `A`/`B`). It has a full **admin panel**
+at `/lab/search-v2/admin/` (create sessions, set phases/rounds/AI, view data),
+backed by an **optional Firebase** project (`search-with-ai-456d7`) that is
+**already configured** in `firebase-config.js`; it degrades gracefully offline.
+See `lab/search-v2/README.md`.
+
+Key design points (keep in sync when editing):
+- **Ground truth is deterministic and generated at runtime** by `landscape.js`
+  (`makeWalk(seed)`), seeded from `(arm, round)` via `config.js` `TRUTH_SEED`: the
+  same curve for **every participant of every session**, **different** between the
+  two phases, and an **independent** draw per round. There is **no landscape pool**
+  (the old `data/mappings.json` + `tools/generate_pool.js` + RICH/POOR strata were
+  retired).
+- The **With-AI assistant** is trained inside one or two admin-set
+  **interpolation regions** (`COVERAGE_PATCHES`); within them it interpolates,
+  outside/between them it extrapolates linearly — same math/look as
+  `/lab/interpolation`. The testing overlays (debug only) render blue truth, red
+  training points, green interpolation, amber dashed extrapolation + shaded zones.
+- **AI-model parameters** (admin, `config.js` `AI`): a **baseline** model (cost/
+  question below the 5¢ reveal cost + a training-data density) and an optional
+  **frontier** model the participant chooses per question (costs more, more data).
+  Consulting the AI is charged per question and folded into the round net.
+- Defaults: **1 round per phase, practice off**. `assistant.js` is a thin wrapper
+  over `landscape.js` and is loaded only in Arm B (strict arm isolation).
+- Tests: `node tools/selftest.js` (Node) and `CHROMIUM=… node tools/smoke.mjs`
+  (Playwright).
+
 ## `/lab/jagged` — self-contained "Trust the AI?" jagged-intelligence game
 
 **Currently unlisted / not yet public:** the app is served but deliberately not

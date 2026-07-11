@@ -61,6 +61,9 @@ window.Chart = (function () {
       var estimates = st.estimates || [];
       var parts = [];
 
+      // clip so a steep extrapolation line is cut at the plot frame
+      parts.push('<defs><clipPath id="plotclip"><rect x="' + PAD_L + '" y="' + PAD_T + '" width="' + PW + '" height="' + PH + '"/></clipPath></defs>');
+
       // --- gridlines + axis ticks ---
       // Values are stored 0..100 (cents) but shown on a [0,1] scale, which reads
       // more intuitively as a fraction of the max prize.
@@ -78,11 +81,23 @@ window.Chart = (function () {
       parts.push('<text class="axtitle" transform="translate(14 ' + (PAD_T + PH / 2) + ') rotate(-90)" text-anchor="middle">value</text>');
 
       // Every overlay below is opt-in via an explicit flag. The AI region /
-      // training points / interpolation line / ground truth are TESTING or
-      // end-of-study DEBRIEF only — the app never sets these flags for a real
-      // participant mid-play.
+      // training points / interpolation / extrapolation / ground truth are
+      // TESTING or end-of-study DEBRIEF only — the app never sets these flags for
+      // a real participant mid-play. The styling mirrors /lab/interpolation:
+      // blue Brownian truth, red training points, green interpolation within the
+      // region(s), amber dashed extrapolation + shaded zones beyond/between them.
 
-      // --- assistant coverage bands (patches [[a,b],...]) ---
+      // --- extrapolation zones (amber shaded bands + label) — with interpolation
+      if (st.showInterp && st.zones && st.zones.length) {
+        for (var zi = 0; zi < st.zones.length; zi++) {
+          var z = st.zones[zi], zx = xOf(z.x0), zx2 = xOf(z.x1);
+          if (zx2 - zx < 2) continue;
+          parts.push('<rect class="extrap-zone" x="' + zx + '" y="' + PAD_T + '" width="' + (zx2 - zx) + '" height="' + PH + '"/>');
+          parts.push('<text class="extrap-label" x="' + ((zx + zx2) / 2) + '" y="' + (PAD_T + 12) + '" text-anchor="middle">extrapolation</text>');
+        }
+      }
+
+      // --- assistant coverage / interpolation region(s) (light blue band) ---
       if (st.showCoverage && st.coverage && st.coverage.length) {
         for (var ci = 0; ci < st.coverage.length; ci++) {
           var cb = xOf(st.coverage[ci][0]), cb2 = xOf(st.coverage[ci][1]);
@@ -92,25 +107,37 @@ window.Chart = (function () {
         parts.push('<text class="cov-label" x="' + fmid + '" y="' + (PAD_T + 13) + '" text-anchor="middle">assistant coverage</text>');
       }
 
-      // --- ground-truth line ---
+      // --- ground-truth line (blue, thick) ---
       if (st.showTruth && st.truth) {
         var d = '';
         for (var i = 0; i < st.truth.length; i++) d += (i ? 'L' : 'M') + xOf(i + 1).toFixed(1) + ' ' + yOf(st.truth[i]).toFixed(1) + ' ';
-        parts.push('<path class="dbg-line" d="' + d + '"/>');
+        parts.push('<path class="gt-line" d="' + d + '"/>');
       }
-      // --- AI estimate line: what the assistant would answer at EVERY position —
-      //     piecewise-linear interpolation between its training points, and flat
-      //     extrapolation (holding the nearest point) beyond the outermost ones. ---
-      if (st.showInterp && st.dots && st.dots.length) {
-        var ds = st.dots, seg = 'M' + xOf(1).toFixed(1) + ' ' + yOf(ds[0][1]).toFixed(1) + ' ';
-        for (var si = 0; si < ds.length; si++) seg += 'L' + xOf(ds[si][0]).toFixed(1) + ' ' + yOf(ds[si][1]).toFixed(1) + ' ';
-        seg += 'L' + xOf(N).toFixed(1) + ' ' + yOf(ds[ds.length - 1][1]).toFixed(1) + ' ';
-        parts.push('<path class="interp-line" d="' + seg + '"/>');
+      // Interp/extrap lines are clipped to the plot so a steep extrapolation that
+      // leaves [0,1] is cut at the frame rather than spilling over the axes.
+      var clip = ' clip-path="url(#plotclip)"';
+      // --- AI extrapolation (amber dashed): edge continuations beyond/between ---
+      if (st.showInterp && st.extrap && st.extrap.length) {
+        for (var ei = 0; ei < st.extrap.length; ei++) {
+          var s = st.extrap[ei];
+          parts.push('<line class="extrap-line" x1="' + xOf(s.x0).toFixed(1) + '" y1="' + yOf(s.y0).toFixed(1) + '" x2="' + xOf(s.x1).toFixed(1) + '" y2="' + yOf(s.y1).toFixed(1) + '"' + clip + '/>');
+        }
       }
-      // --- AI training points ---
-      if (st.showDots && st.dots) {
-        for (var k = 0; k < st.dots.length; k++) {
-          parts.push('<circle class="dbg-dot" cx="' + xOf(st.dots[k][0]) + '" cy="' + yOf(st.dots[k][1]) + '" r="4"/>');
+      // --- AI interpolation (green): consecutive training points WITHIN a region
+      if (st.showInterp && st.interp && st.interp.length) {
+        for (var gi = 0; gi < st.interp.length; gi++) {
+          var pl = st.interp[gi], pts = [];
+          for (var pk = 0; pk < pl.length; pk++) pts.push(xOf(pl[pk][0]).toFixed(1) + ',' + yOf(pl[pk][1]).toFixed(1));
+          if (pts.length) parts.push('<polyline class="interp-seg" points="' + pts.join(' ') + '"' + clip + '/>');
+        }
+      }
+      // --- AI training points (red) ---
+      if (st.showDots && st.dotGroups) {
+        for (var dg = 0; dg < st.dotGroups.length; dg++) {
+          var grp = st.dotGroups[dg];
+          for (var k = 0; k < grp.length; k++) {
+            parts.push('<circle class="train-dot" cx="' + xOf(grp[k][0]) + '" cy="' + yOf(grp[k][1]) + '" r="4.2"/>');
+          }
         }
       }
       // --- corner tag (testing: mapping id · stratum) ---
