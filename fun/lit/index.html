@@ -84,6 +84,7 @@
   body.compact .btn { height: 40px; font-size: 15px; padding-top: 8px; padding-bottom: 8px; }
   body.compact .filter-actions { padding-top: 0; }
   body.compact .filters-row { gap: 8px; }
+  body.compact .filters-row + .filters-row { margin-top: 8px; }
   body.compact .summary-tab-btns { margin-top: 8px !important; }
   body.compact .summary-tab-btn,
   body.compact .recent-tab-btn { padding: 6px 14px; font-size: 13px; }
@@ -92,6 +93,12 @@
   .filters-bar { background: var(--white); border-bottom: 1px solid var(--border); padding: 20px 0; box-shadow: var(--shadow-sm); transition: padding 0.2s ease; }
   .filters-inner { max-width: 1280px; margin: 0 auto; padding: 0 32px; }
   .filters-row { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+  /* Filters are split across three stacked rows (Journals / everything else /
+     the "Recently added papers" button); this adds the gap between them. */
+  .filters-row + .filters-row { margin-top: 12px; }
+  /* Row 1 holds only the Journals filter — keep it a comfortable width rather
+     than stretching the single control across the whole bar. */
+  .filters-row-primary .filter-group { flex: none; width: 320px; max-width: 100%; }
   .filter-group { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 170px; }
   .filter-group label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .filter-group select, .filter-group input { padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 6px; font-family: 'Work Sans', sans-serif; font-size: 20px; color: var(--text); background: var(--white); transition: border-color 0.2s, box-shadow 0.2s; height: 50px; }
@@ -111,7 +118,10 @@
   .custom-select-item:hover { background: var(--navy-light); }
   .custom-select-item.hidden { display: none; }
   .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
-  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 6px; font-size: 13px; font-weight: 500; animation: chipIn 0.15s ease-out; max-width: 100%; overflow-wrap: break-word; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 6px; font-size: 13px; font-weight: 500; animation: chipIn 0.15s ease-out; max-width: 100%; overflow-wrap: break-word; cursor: pointer; }
+  /* The whole chip removes the filter on click (not just the ×). */
+  .chip:hover { filter: brightness(0.94); }
+  .chip:hover .chip-x { opacity: 1; }
   .chip-editor { background: var(--accent-light); color: #6f5827; }
   .chip-area { background: #e8f5ee; color: var(--green); }
   .chip-year { background: var(--navy-light); color: var(--navy); }
@@ -436,7 +446,7 @@
 
 <div class="filters-bar">
   <div class="filters-inner">
-    <div class="filters-row">
+    <div class="filters-row filters-row-primary">
       <div class="filter-group">
         <label title="Choose one or more journals/sources. With none selected, all sources are searched.">Journals</label>
         <div class="custom-select" id="csJournal" data-type="journal">
@@ -445,6 +455,8 @@
         </div>
         <div id="chipsJournal" class="chips"></div>
       </div>
+    </div>
+    <div class="filters-row filters-row-secondary">
       <div class="filter-group">
         <label title='Some authors may appear under different name variants. ORCID-based disambiguation is not yet available for all authors. Tip: wrap a term in double quotes for an exact-word match.'>Search Authors &#9432;</label>
         <input id="filterAuthors" name="ms-filter-author" placeholder="Author..." type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('author','filterAuthors');event.preventDefault();}">
@@ -744,7 +756,7 @@ function renderChips(type) {
   const cssClass = 'chip chip-' + type;
   container.innerHTML = [...sel[type]].map(v => {
     const label = type === 'journal' ? (JOURNAL_LABEL[v] || v) : v;
-    return `<span class="${cssClass}">${esc(label)} <span class="chip-x" onclick="removeChip('${type}','${escAttr(v)}')">×</span></span>`;
+    return `<span class="${cssClass}" onclick="removeChip('${type}','${escAttr(v)}')" title="Click to remove">${esc(label)} <span class="chip-x">×</span></span>`;
   }).join('');
   if (type === 'journal') updateMsScopeUI();
 }
@@ -763,10 +775,10 @@ function addJournalChip(key) {
 function renderAuthorChips() {
   const container = document.getElementById('chipsAuthor');
   var html = [...sel.author].map(function(v) {
-    return '<span class="chip chip-author">' + esc(v) + ' <span class="chip-x" onclick="removeChip(\'author\',\'' + escAttr(v) + '\')">×</span></span>';
+    return '<span class="chip chip-author" onclick="removeChip(\'author\',\'' + escAttr(v) + '\')" title="Click to remove">' + esc(v) + ' <span class="chip-x">×</span></span>';
   });
   Object.keys(sel.authorIdentity).forEach(function(label) {
-    html.push('<span class="chip chip-author">' + esc(label) + ' <span class="chip-x" onclick="removeAuthorIdentity(\'' + escAttr(label) + '\')">×</span></span>');
+    html.push('<span class="chip chip-author" onclick="removeAuthorIdentity(\'' + escAttr(label) + '\')" title="Click to remove">' + esc(label) + ' <span class="chip-x">×</span></span>');
   });
   container.innerHTML = html.join('');
 }
@@ -842,7 +854,12 @@ async function loadData() {
   await Promise.all(sourcesManifest.map(async function(src) {
     for (var attempt = 0; attempt < 4; attempt++) {
       try {
-        var r = await fetch(DATA_BASE + src.file, { cache: 'no-cache' });
+        // Use the browser HTTP cache (GitHub Pages serves these with
+        // Cache-Control: max-age=600 + ETag). 'default' lets a repeat visit
+        // reuse the cached bytes without a revalidation round-trip per file —
+        // a big win over 'no-cache' given these files total ~50 MB — while the
+        // 10-minute freshness window still keeps the daily-refreshed data current.
+        var r = await fetch(DATA_BASE + src.file, { cache: 'default' });
         if (r.status === 404) break; // not built yet (e.g. empty PNAS cache)
         if (!r.ok) throw new Error('HTTP ' + r.status);
         var rows = await r.json();
@@ -876,7 +893,7 @@ async function loadAuthors() {
   var cached = lsGet('lit_authors');
   if (cached) { try { authorData = JSON.parse(cached); if (authorData.length) renderAuthorsSummary(); } catch (e) {} }
   try {
-    var r = await fetch(AUTHORS_URL, { cache: 'no-cache' });
+    var r = await fetch(AUTHORS_URL, { cache: 'default' });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     var data = await r.json();
     authorData = Array.isArray(data) ? data : [];
