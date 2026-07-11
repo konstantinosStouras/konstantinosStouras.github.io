@@ -67,6 +67,12 @@
     COMPLETION_CODE: 'SET-ME', // Prolific completion code shown on the finish page
     APP_VERSION: 'v2.0.0',     // stamped on every logged event
 
+    // ---- encouragement / nudges ------------------------------------------
+    // If a participant makes no move for this many ms during a round, the app
+    // shows a gentle "keep going" nudge (client-side; no server needed). The
+    // admin can also push a message to a specific participant from the panel.
+    NUDGE_IDLE_MS: 60000,
+
     // ---- debug -----------------------------------------------------------
     DEBUG_KEY: 'stouras'   // ?debug=1&key=stouras to enable the debug overlay
   };

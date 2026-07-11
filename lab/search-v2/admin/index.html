@@ -179,10 +179,17 @@
     .pu-net{margin-left:auto; color:var(--muted); font-variant-numeric:tabular-nums;}
     .pu-sep{border-top:1px dashed var(--line); margin:14px 0 10px;}
     .pu-actions{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;}
+    .pu-actions-left{display:flex; align-items:center; gap:14px;}
     .pu-remove{border:1px solid var(--red); background:transparent; color:var(--red); border-radius:8px;
       padding:7px 14px; font-size:13px; font-weight:600; cursor:pointer;}
     .pu-remove:hover:not(:disabled){background:var(--red); color:#fff;}
     .pu-remove:disabled{opacity:.5; cursor:default;}
+    /* per-participant message composer (revealed by the "Message" link) */
+    .pu-compose{display:none; margin-top:10px; flex-direction:column; gap:8px;}
+    .part-card.composing .pu-compose{display:flex;}
+    .pu-compose textarea{width:100%; min-height:56px; padding:9px 11px; border:1px solid var(--line);
+      border-radius:8px; font-family:inherit; font-size:13.5px; background:var(--bg); color:var(--ink); resize:vertical;}
+    .pu-msg-row{display:flex; align-items:center; gap:12px;}
 
     .stat-grid{display:flex; gap:12px; flex-wrap:wrap; margin:12px 0;}
     .stat-box{border:1px solid var(--line); border-radius:10px; padding:12px 16px; min-width:120px; background:#fff;}
@@ -390,7 +397,13 @@
           <!-- RIGHT: active + completed sessions -->
           <div>
             <div class="card">
-              <div style="display:flex; justify-content:space-between; align-items:baseline;"><h2 style="margin:0;">Active sessions</h2><span class="muted small" id="active-count"></span></div>
+              <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">
+                <h2 style="margin:0;">Active sessions</h2>
+                <div style="display:flex; align-items:baseline; gap:10px;">
+                  <button class="link-btn danger" id="btn-remove-all-sessions" style="display:none;" title="Delete every session (wave). Collected event data is kept.">Remove all sessions</button>
+                  <span class="muted small" id="active-count"></span>
+                </div>
+              </div>
               <div id="active-list"><p class="muted small">Loading…</p></div>
             </div>
             <div class="card">
@@ -398,7 +411,13 @@
               <div id="completed-list"></div>
             </div>
             <div class="card">
-              <div style="display:flex; justify-content:space-between; align-items:baseline;"><h2 style="margin:0;">Participants</h2><span class="muted small" id="participants-count"></span></div>
+              <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">
+                <h2 style="margin:0;">Participants</h2>
+                <div style="display:flex; align-items:baseline; gap:10px;">
+                  <button class="link-btn danger" id="btn-remove-all-parts" style="display:none;" title="Remove every participant and permanently delete all collected event data.">Remove all</button>
+                  <span class="muted small" id="participants-count"></span>
+                </div>
+              </div>
               <p class="muted small" style="margin:6px 0 10px;">Everyone who has taken part, across all sessions. Participants join anonymously via a session link (no user accounts), so each is identified by its session code and Prolific ID.</p>
               <div id="participants-list" class="part-scroll"><p class="muted small">Loading…</p></div>
             </div>

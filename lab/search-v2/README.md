@@ -220,13 +220,26 @@ The **admin panel** at **`/lab/search-v2/admin/`** lets you, from any browser
   per round) over completed participants. In a within-subjects session each
   participant contributes to both, aggregated per `(participant, phase)`.
 - **manage participants** — the **Participants** panel lists everyone who has taken
-  part (participants are anonymous — no accounts, so each is one play session id).
-  Each card **expands** to show first-seen / last-active, Prolific id, wave code,
-  the phases they played, event count, bonus, and a per-round breakdown (net per
-  round), with **View data** (jump to that wave in the Data tab) and **Remove user**
-  — which **permanently deletes that participant's collected event rows** (Firestore
-  when configured, else this browser's local log). The admin `delete` on `events` is
-  already allowed by `firestore.rules`, so no rules change is needed.
+  part (anonymous — no accounts, so each is one play session id). Each card
+  **expands** to show first-seen / last-active, Prolific id, wave code, phases
+  played, event count, bonus, and a per-round net breakdown, with per-user actions:
+  - **Message** — push a live message to that participant; it pops up on their
+    screen while they play (Firestore `messages/{session}`; dismissal is tracked
+    client-side, so participants never write).
+  - **View data** — jump to that participant's wave in the Data tab.
+  - **Remove user** — permanently delete that participant's collected event rows.
+  - Panel-level **Remove all** (participants) and **Remove all sessions** (waves),
+    each double-confirmed.
+
+  The admin `delete` on `events` is already allowed by `firestore.rules`; the new
+  **`messages`** collection needs the updated `firestore.rules` **published once** in
+  the Firebase console before admin→participant messaging will work (delete, bulk
+  delete, and the auto-nudge below need no rules change).
+- **auto-nudge inactive players** — if a participant makes no move for
+  `NUDGE_IDLE_MS` (default 60 s) during a round, the app itself shows a gentle
+  "keep going / do your best" encouragement (purely client-side — no server, and it
+  works even without the `messages` rule). The admin's manual messages reuse the
+  same toast; both are logged as `nudge_shown` events.
 
 These are backed by **Firebase (Firestore + Auth)**. Until you configure it, the
 admin panel opens in a **local preview** (this browser’s test sessions only) and
