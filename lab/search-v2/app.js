@@ -28,12 +28,15 @@
   }
   // Validate 1–2 interpolation regions: rounded, in [1,N], wide enough, ordered
   // and disjoint. Falls back to the config default on anything unusable.
+  // Each entry may be an [a,b] pair (config.js, legacy) or an {a,b} map — the
+  // shape admin sessions are stored in, since Firestore rejects nested arrays.
   function normalizePatches(patches) {
     var def = CFG.COVERAGE_PATCHES || [[30, 70]];
     if (!patches || Object.prototype.toString.call(patches) !== '[object Array]' || !patches.length) return def.slice();
     var out = [];
     for (var i = 0; i < patches.length && out.length < 2; i++) {
-      var a = Math.round(+patches[i][0]), b = Math.round(+patches[i][1]);
+      var p = patches[i] || {};
+      var a = Math.round(+(p.length != null ? p[0] : p.a)), b = Math.round(+(p.length != null ? p[1] : p.b));
       if (!isFinite(a) || !isFinite(b)) continue;
       if (b < a) { var t = a; a = b; b = t; }
       a = Math.max(1, Math.min(N_POS, a)); b = Math.max(1, Math.min(N_POS, b));

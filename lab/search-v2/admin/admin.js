@@ -51,6 +51,27 @@
     completionCode: '', completionCodeA: '', completionCodeB: '', endpointUrl: '', content: {}
   };
 
+  // Firestore rejects directly-nested arrays (`invalid-argument`), so the
+  // in-memory coveragePatches [[a,b],…] is stored as [{a,b},…]. Encode right
+  // before every Firestore write; decode accepts both shapes (and the legacy
+  // nested-array form, in case a doc was ever written another way).
+  function encodePatches(patches) {
+    return (patches || []).map(function (p) { return { a: p[0], b: p[1] }; });
+  }
+  function decodePatches(v) {
+    if (!v || !v.length) return null;
+    var out = [];
+    for (var i = 0; i < v.length && out.length < 2; i++) {
+      var p = v[i];
+      if (p && p.length >= 2) out.push([+p[0], +p[1]]);
+      else if (p && p.a != null && p.b != null) out.push([+p.a, +p.b]);
+    }
+    return out.length ? out : null;
+  }
+  function settingsForStore(s) {
+    return Object.assign({}, s, { coveragePatches: encodePatches(s.coveragePatches) });
+  }
+
   function $(id) { return document.getElementById(id); }
   function show(id) { var s = document.querySelectorAll('.screen'); for (var i = 0; i < s.length; i++) s[i].classList.toggle('active', s[i].id === id); }
   function esc(v) { return v == null ? '' : String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -224,7 +245,7 @@
     return {
       valid: validate, get: getPatches,
       set: function (patches) {
-        patches = (patches && patches.length) ? patches : [[30, 70]];
+        patches = decodePatches(patches) || [[30, 70]];
         if (patches.length >= 2) {
           setCount(2, false);
           $('f-r1a').value = patches[0][0]; $('f-r1b').value = patches[0][1];
@@ -390,9 +411,10 @@
     var checkUnique = (editing && editing.code === code) ? Promise.resolve(false) : FB.codeExists(code);
     checkUnique.then(function (exists) {
       if (exists) { err.textContent = 'That code is already used by another session.'; err.style.display = 'block'; $('btn-save').disabled = false; return; }
+      var stored = settingsForStore(settings);
       var op;
-      if (editingId) op = FB.updateSession(editingId, { name: name, code: code, settings: settings });
-      else op = FB.createSession({ name: name, code: code, status: 'active', createdAt: new Date().toISOString(), settings: settings });
+      if (editingId) op = FB.updateSession(editingId, { name: name, code: code, settings: stored });
+      else op = FB.createSession({ name: name, code: code, status: 'active', createdAt: new Date().toISOString(), settings: stored });
       op.then(function (id) {
         $('btn-save').disabled = false;
         flash($('form-flash'));
@@ -403,11 +425,21 @@
           renderSummary();
         });
       }).catch(function (e2) { err.textContent = 'Save failed: ' + (e2 && e2.code ? e2.code : e2); err.style.display = 'block'; $('btn-save').disabled = false; });
+    }).catch(function (e3) {
+      // The code-uniqueness pre-check failed — surface it and re-enable Save
+      // (previously the button stayed disabled with no message).
+      err.textContent = 'Save failed (could not check the code): ' + (e3 && e3.code ? e3.code : e3);
+      err.style.display = 'block'; $('btn-save').disabled = false;
     });
   }
   function makeDefault() {
     if (!configured) return;
-    FB.saveDefaults(collectSettings()).then(function () { _defaults = collectSettings(); flash($('form-flash')); });
+    var s = collectSettings();
+    FB.saveDefaults(settingsForStore(s))
+      .then(function () { _defaults = s; flash($('form-flash')); })
+      .catch(function (err) {
+        banner($('dash-banner'), 'warn', 'Could not save the defaults: ' + esc(err && err.code ? err.code : String(err)));
+      });
   }
 
   // ============================================================= launch + summary
