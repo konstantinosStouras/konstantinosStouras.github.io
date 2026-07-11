@@ -34,7 +34,30 @@ search and BibTeX export in the browser.
 
 - **Journals filter** (new vs. `/fun/ms/`): a multi-select of the six
   journals, the five PNAS sections (a PNAS paper can belong to several), and
-  ACM EC. Nothing selected = search everything.
+  ACM EC — plus, appended alphabetically, every FT50 journal the page merges
+  in from the `/fun/ft50/` dataset (see the "Journal types & the FT50 merge"
+  note below). Nothing selected = search everything.
+- **Journal types filter** (left of Journals): three fixed options — **FT50**
+  (all 50 journals of the Financial Times research rank), **ABS 4/4\*** and
+  **ABS 3** (Chartered ABS Academic Journal Guide, AJG 2024, as mirrored at
+  journalranking.org). A type chip expands to its whole journal set and
+  **unions** with any individually selected journals (it broadens, never
+  narrows). The FT50 key set is seeded statically and extended from the ft50
+  manifest at runtime, so the ft50 app's yearly FT-list check flows through;
+  ABS grades live in the `ABS_RATING` map in `index.html` (PNAS and ACM EC
+  are not in the AJG; HBR / MIT SMR — the AJG 2024 "top practitioner"
+  journals — are kept at 3, their last numeric grade, so ABS 3 finds them).
+- **The FT50 merge is lazy.** The eight native sources still eager-load as
+  before, but the 44 FT50-only journals (~200 MB of JSON) are fetched from
+  `../ft50/data/papers-<key>.json` (same origin, zero duplication in the
+  repo; the ft50 daily workflow keeps them fresh) only when they enter the
+  view's scope — selecting them directly or via a type chip, or running a
+  broad year/title/author/affiliation search with no journal scope, exactly
+  like `/fun/ft50/` itself. The results bar counts the files still on their
+  way; loaded journals stay in memory for the session. The MS/ISR-specific
+  editor filters and the pre-print toggle can't match FT50-extra papers, so
+  those alone never trigger the download; the recent view merges the ft50
+  dataset's own `recent.json` (extras only — natives are already covered).
 - **Editors & Areas are Management Science only.** When MS is explicitly
   selected in the journal filter (alone or with other journals) the page
   behaves exactly like `/fun/ms/` — Accepting Editor / Area filters,
@@ -255,3 +278,10 @@ LIT_MOCK=1 node build-data.mjs     # builds data/*.json from mock/ fixtures
 - **Author/affiliation identity merging is automatic** (ORCID + name-based),
   so a person may occasionally appear under two spellings; `authors.json`
   keeps authors with ≥2 papers to stay a sane size.
+- **The pre-computed Authors / Affiliations panels cover the eight native
+  sources only** — they come from this app's `authors.json` /
+  `affiliations.json`, which the FT50 merge does not touch. Searching or
+  filtering papers by author/affiliation works for the merged FT50 journals
+  (it reads each paper's own fields); only the aggregate panels are
+  native-only. FT50-extra papers also carry no `Preprint` links yet (that
+  backfill runs in this app's pipeline, not ft50's).
