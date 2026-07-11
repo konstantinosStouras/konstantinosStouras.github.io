@@ -87,14 +87,20 @@ SSRN** carries a `Preprint` (+ `PreprintSrc`) field, resolved in `build-data.mjs
 (`resolvePreprints`) and cached in `data/_preprints.json` (doi → `{u,s}` |
 `{none:1}` | `{none:1,ts:1}`; incremental). Two passes: (1) OpenAlex **by DOI**
 (batched) reads any arXiv/SSRN location already attached to the published record;
-(2) a bounded **title+author search** (`matchPreprintWork`, newest-first, capped
-by `LIT_PREPRINT_SEARCH_CAP`, default 6000/run) finds preprints that live as a
-**separate** OpenAlex/SSRN record (own `10.2139/ssrn.*` DOI) — this is what
-surfaces most SSRN links, and the backlog clears over a few daily builds. Both
-`pickPreprint` and the matcher are host-validated (real `arxiv.org`/`ssrn.com`
-hostname) so a spoofed domain can't slip into the href; the matcher also demands
-an exact normalized-title match + a shared author surname + a plausible year to
-avoid wrong links. The card shows an open-access **"Pre-print (Open Access)"**
+(2) a **title+author search** (`searchPreprintsByTitle`/`matchPreprintWork`,
+newest-first) finds preprints that live as a **separate** OpenAlex/SSRN record
+(own `10.2139/ssrn.*` DOI) — this is what surfaces most SSRN links. It is ONE
+OpenAlex request per paper, which OpenAlex throttles hard on cloud/CI IPs, so
+the **full backfill is run locally** via `fun/lit/_scraper/preprints-local.mjs`
+(same "run it on your machine" pattern as the editors/PNAS scripts; it writes
+`_preprints.json` + the `Preprint` fields, which you commit). In the daily
+build the same pass runs only as a **strictly time-boxed, gentle best-effort**
+(`LIT_PREPRINT_SEARCH_MS`, default 6 min; `LIT_PREPRINT_SEARCH_CAP`, default
+2500; single-attempt fetch that backs off and stops on 429s) so it can **never
+hang the build**. Both `pickPreprint` and the matcher are host-validated (real
+`arxiv.org`/`ssrn.com` hostname) so a spoofed domain can't slip into the href;
+the matcher also demands an exact normalized-title match + a shared author
+surname + a plausible year to avoid wrong links. The card shows an open-access **"Pre-print (Open Access)"**
 link between BibTeX and the sign-in "Notes, tags & lists" toggle; EC's meta-row
 PDF tag is suppressed when it duplicates it. **PNAS "Significance":** for PNAS,
 the Crossref abstract's JATS `<sec><title>Significance</title>` block is split
