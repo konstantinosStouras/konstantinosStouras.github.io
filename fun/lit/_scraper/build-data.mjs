@@ -1142,14 +1142,17 @@ async function oaGet(url) {
 // matched conservatively by matchPreprintWork. Cache entries become {u,s}
 // (found) or {none:1,ts:1} (searched, nothing); an errored lookup is left
 // without `ts` so a later run retries it. Bounded by `cap` and, when given, a
-// wall-clock `budgetMs`; on repeated 429/403 throttling it backs off and then
-// stops for this run. Shared by the daily build (small budget) and
-// preprints-local.mjs (no budget — run it on a personal machine). Returns the
-// number newly linked.
+// wall-clock `budgetMs`. Throttling (429/403) is handled two ways:
+//   - default (the daily build): back off briefly, and STOP for this run after
+//     a few consecutive throttles — CI must never sit out a rate-limit.
+//   - opts.patient (preprints-local.mjs): wait it out with escalating backoff
+//     (retry-after honoured, 5s→60s) and RETRY the same paper, because a
+//     personal machine can afford to ride through OpenAlex's rate-limiting.
+// Returns the number newly linked.
 export async function searchPreprintsByTitle(papers, cache, opts = {}) {
   const cap = opts.cap || 6000;
   const sleepMs = opts.sleepMs || 130;
-  const maxThrottle = opts.maxThrottle || 6;
+  const maxThrottle = opts.patient ? 25 : (opts.maxThrottle || 6);
   const deadline = opts.budgetMs ? Date.now() + opts.budgetMs : Infinity;
   const eligible = papers
     .filter(p => p._doi && cache[p._doi] && cache[p._doi].none && !cache[p._doi].ts &&
@@ -1158,7 +1161,8 @@ export async function searchPreprintsByTitle(papers, cache, opts = {}) {
   const todo = eligible.slice(0, cap);
   if (opts.log) console.log(`  preprints: title-searching up to ${todo.length} of ${eligible.length} unlinked papers…`);
   let found = 0, searched = 0, throttled = 0;
-  for (const p of todo) {
+  for (let i = 0; i < todo.length; i++) {
+    const p = todo[i];
     if (Date.now() > deadline) { if (opts.log) console.log('  preprints: title-search time budget reached — resuming next run.'); break; }
     const q = String(p.Title || '').replace(/[^\w\s'-]/g, ' ').replace(/\s+/g, ' ').trim();
     if (!q) { cache[p._doi] = { none: 1, ts: 1 }; continue; }
@@ -1171,11 +1175,23 @@ export async function searchPreprintsByTitle(papers, cache, opts = {}) {
       const pick = matchPreprintWork({ title: p.Title, year: p.Year, authors: p.Authors }, (r.json && r.json.results) || []);
       cache[p._doi] = pick || { none: 1, ts: 1 };
       if (pick) found++;
+      if (opts.log && searched % 500 === 0) console.log(`  preprints: …${searched} searched, ${found} linked so far`);
+      // Periodic save so a long local run can be interrupted without losing work.
+      if (opts.checkpoint && searched % 200 === 0) await opts.checkpoint(cache);
       await sleep(sleepMs);
     } else if (r.status === 429 || r.status === 403) {
       throttled++;                                  // leave un-ts so it retries later
-      await sleep(Math.min(Math.max(r.retryAfter, 2) * 1000, 10000));
       if (throttled >= maxThrottle) { if (opts.log) console.log('  preprints: OpenAlex throttling — stopping title-search for this run.'); break; }
+      if (opts.patient) {
+        // Wait it out (retry-after honoured, else 5s→60s escalation) and
+        // retry the SAME paper — a local run should ride through the limit.
+        const wait = Math.max(r.retryAfter * 1000, Math.min(5000 * Math.pow(2, throttled - 1), 60000));
+        if (opts.log) console.log(`  preprints: rate-limited — waiting ${Math.round(wait / 1000)}s…`);
+        await sleep(wait);
+        i--;
+      } else {
+        await sleep(Math.min(Math.max(r.retryAfter, 2) * 1000, 10000));
+      }
     } else {
       await sleep(500);                             // transient error: brief pause, keep going
     }
