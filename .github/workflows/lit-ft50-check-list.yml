@@ -2,8 +2,8 @@ name: lit — yearly FT50 list check (merged catalog)
 
 # Once a year, compare fun/lit/_scraper-ft50/journals.json against the live
 # FT50 journal list (ft.com/ft50-journals, falling back to Wikipedia's FT50
-# page). This is fun/lit's own copy of the fun/ft50 check, so the lit page's
-# FT50 merge follows the list independently of the fun/ft50 app. If the
+# page). This is fun/lit's own FT50 list check (originally vendored from the
+# retired fun/ft50 app), so the lit page's FT50 merge follows the list. If the
 # Financial Times added or removed journals, check-ft50-list.mjs updates
 # journals.json (added journals get their ISSNs resolved via Crossref; removed
 # ones are marked retired) — the workflow then dispatches the data build, which
@@ -13,7 +13,7 @@ name: lit — yearly FT50 list check (merged catalog)
 
 on:
   schedule:
-    - cron: '15 6 4 1 *'     # yearly: 4 January, 06:15 UTC (the ft50 app checks on 3 Jan)
+    - cron: '15 6 4 1 *'     # yearly: 4 January, 06:15 UTC
   workflow_dispatch: {}      # run on demand from the Actions tab
 
 concurrency:

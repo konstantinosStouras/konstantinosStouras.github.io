@@ -597,7 +597,7 @@
 <footer class="footer">
   <div>Built as a personal project to search papers across several journals of my interest in one place.</div>
   <div>Editors and editorial areas are shown for <em>Management Science</em> papers (2011+), exactly as on <a href="/fun/ms/">the MS-only browser</a>. Other sources contribute their published papers and Articles in Advance. ACM EC papers link to an arXiv/SSRN/open-access PDF where one could be found.</div>
-  <div>The <strong>Journal types</strong> filter covers the full <a href="/fun/ft50/">FT50 research rank</a> — journals beyond the eight core sources come from this app's own FT50 dataset (refreshed daily, checked against the FT's list yearly), downloaded on demand. ABS ratings follow the Chartered ABS <em>Academic Journal Guide</em> (AJG 2024), as mirrored at <a href="https://journalranking.org/" target="_blank" rel="noopener">journalranking.org</a>; HBR and MIT Sloan Management Review, the AJG's "top practitioner" journals, are listed under ABS 3, their last numeric grade.</div>
+  <div>The <strong>Journal types</strong> filter covers the full <a href="https://www.ft.com/ft50-journals" target="_blank" rel="noopener">FT50 research rank</a> — journals beyond the eight core sources come from this app's own FT50 dataset (refreshed daily, checked against the FT's list yearly), downloaded on demand. ABS ratings follow the Chartered ABS <em>Academic Journal Guide</em> (AJG 2024), as mirrored at <a href="https://journalranking.org/" target="_blank" rel="noopener">journalranking.org</a>; HBR and MIT Sloan Management Review, the AJG's "top practitioner" journals, are listed under ABS 3, their last numeric grade.</div>
   <div>All metadata are publicly available, collected via the <a href="https://www.crossref.org/documentation/retrieve-metadata/rest-api/" target="_blank">Crossref API</a> (with OpenAlex, DBLP and Semantic Scholar assisting for EC PDF links). PNAS section labels come from pnas.org's own topic index where available, and are otherwise approximated from each paper's <a href="https://openalex.org" target="_blank">OpenAlex</a> primary topic.</div>
   <div>Feedback and suggestions are welcome. Any errors are my own. <a href="https://www.stouras.com" target="_blank">Konstantinos I. Stouras</a></div>
 </footer>
@@ -618,10 +618,10 @@ const RECENT_URL = './data/recent.json';
 const DATA_BASE = './data/';
 
 // This app maintains its OWN dataset for all 50 journals of the Financial
-// Times FT50 research rank, in fun/lit/data-ft50/ — seeded from the fun/ft50
-// app's data and independently refreshed daily by fun/lit/_scraper-ft50/
-// (.github/workflows/lit-ft50-update-data.yml), so the FT50 merge does not
-// depend on the fun/ft50 app. The catalog is merged in at runtime: FT50
+// Times FT50 research rank, in fun/lit/data-ft50/ — seeded from the retired
+// fun/ft50 app's data and independently refreshed daily by
+// fun/lit/_scraper-ft50/ (.github/workflows/lit-ft50-update-data.yml).
+// The catalog is merged in at runtime: FT50
 // journals that are not among the eight native sources are added to the
 // journal filter, and their papers files are fetched lazily only when they
 // enter the view's scope.
@@ -688,7 +688,7 @@ const ABS_RATING = {
   msom: '4', obhdp: '4', pom: '4', psci: '4', rast: '4', rof: '4', sej: '4',
   hbr: '3', smr: '3',
 };
-// Today's FT50 keys (mirrors fun/ft50/_scraper/journals.json); the ft50
+// Today's FT50 keys (mirrors fun/lit/_scraper-ft50/journals.json); the
 // manifest extends this set at runtime, so a revised FT list flows through.
 const FT50_KEYS = new Set(['aman','amj','amr','tar','aos','asq','aer','asr',
   'car','ecta','etp','hbr','hrm','isre','jae','jar','jap','jbv','jcp','jcr',
@@ -919,7 +919,8 @@ let sourcesLoaded = 0, sourcesTotal = 0;
 
 // ── Lazily loaded FT50 journals (beyond the eight native sources) ───────────
 // The 44 FT50-only journals are a couple hundred MB of JSON, far too much to
-// eager-load like the native sources. Mirroring /fun/ft50: each extra
+// eager-load like the native sources. Mirroring the retired /fun/ft50 app:
+// each extra
 // papers-<key>.json is fetched from the ft50 dataset only when the view first
 // needs it — selecting the journal (directly or via a journal-type chip)
 // loads that journal; filtering/searching with no journal scope loads
@@ -931,7 +932,7 @@ const extraState = {};      // key -> 'pending' | 'loading' | 'done' | 'missing'
 const extraPromise = {};    // key -> in-flight fetch promise (idempotence)
 let manifestMinYear = Infinity; // earliest firstYear across the ft50 manifest
 
-// One muted pastel per extra source (same golden-angle palette as /fun/ft50),
+// One muted pastel per extra source (golden-angle palette),
 // injected as .jk-<key> rules so journalTagsHTML colors extras like natives.
 function extraColorCSS() {
   var css = Object.keys(EXTRA_SRC).sort().map(function(key, i) {

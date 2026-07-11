@@ -52,20 +52,19 @@ search and BibTeX export in the browser.
   still eager-load as before, but the 44 FT50-only journals (~200 MB of JSON)
   are fetched from `./data-ft50/papers-<key>.json` only when they enter the
   view's scope — selecting them directly or via a type chip, or running a
-  broad year/title/author/affiliation search with no journal scope, exactly
-  like `/fun/ft50/` itself. The results bar counts the files still on their
+  broad year/title/author/affiliation search with no journal scope. The
+  results bar counts the files still on their
   way; loaded journals stay in memory for the session. The MS/ISR-specific
   editor filters and the pre-print toggle can't match FT50-extra papers, so
   those alone never trigger the download; the recent view merges the
   `data-ft50/recent.json` (extras only — natives are already covered).
   `data-ft50/` is **this app's own copy** of the FT50 dataset: it was seeded
-  by copying `fun/ft50/data/` (registry included, so "recently added" history
-  carried over) and is maintained independently by `_scraper-ft50/` — a
-  vendored copy of the fun/ft50 pipeline — via its own daily workflow
+  by copying the retired fun/ft50 app's data (registry included, so "recently
+  added" history carried over) and is maintained by `_scraper-ft50/` — that
+  app's pipeline, vendored here — via its own daily workflow
   (`.github/workflows/lit-ft50-update-data.yml`, 07:15 UTC) and its own
-  yearly FT-list check (`lit-ft50-check-list.yml`, 4 Jan). Nothing on this
-  page reads from `fun/ft50/` anymore, so lit works even if that app is
-  changed or retired.
+  yearly FT-list check (`lit-ft50-check-list.yml`, 4 Jan). The old
+  `/fun/ft50/` URL is now a redirect stub to this page.
 - **Editors & Areas are Management Science only.** When MS is explicitly
   selected in the journal filter (alone or with other journals) the page
   behaves exactly like `/fun/ms/` — Accepting Editor / Area filters,
@@ -118,9 +117,10 @@ fun/lit/
 │  └─ mock/                  ← tiny real-payload fixtures for offline testing
 ├─ data-ft50/                ← lit's OWN FT50 dataset (papers-<key>.json × 50,
 │                              sources.json, authors/affiliations/recent/meta,
-│                              _registry.json) — seeded from fun/ft50/data/,
-│                              maintained independently from then on
-├─ _scraper-ft50/            ← vendored copy of the fun/ft50 pipeline:
+│                              _registry.json) — seeded from the retired
+│                              fun/ft50 app's data, then maintained here
+├─ _scraper-ft50/            ← the FT50 pipeline (vendored from the retired
+│                              fun/ft50 app):
 │  ├─ build-data.mjs         ← builds everything in data-ft50/
 │  ├─ check-ft50-list.mjs    ← yearly FT50 list check (updates journals.json)
 │  ├─ journals.json          ← the FT50 journal list this app follows
@@ -242,8 +242,7 @@ cloud IPs, like the editors index above):
 cd fun/lit/_scraper
 node informs-aia-local.mjs                 # fun/lit — all INFORMS journals
 node informs-aia-local.mjs --app ms        # fun/ms
-node informs-aia-local.mjs --app ft50      # fun/ft50
-node informs-aia-local.mjs --app lit-ft50  # fun/lit/data-ft50 (lit's own FT50 copy)
+node informs-aia-local.mjs --app lit-ft50  # fun/lit/data-ft50 (the FT50 catalog)
 # …then commit & push the two files it writes into that app's data/ dir
 ```
 

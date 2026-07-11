@@ -4,17 +4,16 @@ name: lit — update FT50 (merged catalog) data
 # Financial Times FT50 research-rank list) by pulling from the Crossref API,
 # then commits the refreshed files in fun/lit/data-ft50/ back to the branch.
 # This is the pipeline behind the lit page's FT50 merge / "Journal types"
-# filter — vendored from fun/ft50 so lit does not depend on that app's
-# dataset. The journal list itself lives in fun/lit/_scraper-ft50/journals.json
+# filter (originally vendored from the retired fun/ft50 app).
+# The journal list itself lives in fun/lit/_scraper-ft50/journals.json
 # and is checked against ft.com once a year by lit-ft50-check-list.yml.
 # See fun/lit/_HOW-IT-WORKS.md.
 
 on:
   schedule:
     # Daily, 07:15 UTC (offset from the ms build at 05:00, the lit build at
-    # 05:30, the preprints backfill at 06:45 and the ft50 build at 06:00 so no
-    # two data builds race a Pages deploy — and so Crossref isn't hit by two
-    # full FT50 walks at once). Nothing is committed on days with no changes.
+    # 05:30 and the preprints backfill at 06:45 so no two data builds race a
+    # Pages deploy). Nothing is committed on days with no changes.
     - cron: '15 7 * * *'
   workflow_dispatch: {}      # run on demand from the Actions tab
   push:

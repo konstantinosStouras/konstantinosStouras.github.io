@@ -27,39 +27,19 @@ The homepage's "Fun Projects" section (in the root site) may also link apps —
 keep that in mind if a change there is warranted.
 
 ## Current /fun/ apps
-`ft50` · `lit` · `portfoliofitgame` · `capitals` · `nomoi` · `rooks` · `sudoku` · `snake` ·
-`ms` · `ms-old` · `mnsc_scraper-to-use-locally` (plus a redirect stub at `fun/ms2/`)
+`lit` · `portfoliofitgame` · `capitals` · `nomoi` · `rooks` · `sudoku` · `snake` ·
+`ms` · `ms-old` · `mnsc_scraper-to-use-locally` (plus redirect stubs at `fun/ms2/`
+and `fun/ft50/` — the retired FT50 browser now redirects to `/fun/lit/`)
 
-## `/fun/ft50` — the FT50 research paper browser
-`fun/ft50/` extends the `/fun/lit/` architecture to **all 50 journals of the
-Financial Times FT50 research rank**. The journal list is data-driven:
-`fun/ft50/_scraper/journals.json` (key, name, ISSNs, publisher, capability
-flags per journal). Data is static JSON in `fun/ft50/data/` (one
-`papers-<key>.json` per journal + `sources.json` manifest), built by
-`fun/ft50/_scraper/build-data.mjs` from Crossref and refreshed daily by
-`.github/workflows/ft50-update-data.yml` (same hardened commit + self-healing
-live-site check as the lit workflow). A second, yearly workflow
-(`.github/workflows/ft50-check-list.yml`, 3 Jan) runs
-`_scraper/check-ft50-list.mjs`, which re-checks the list against
-ft.com/ft50-journals (Wikipedia fallback), auto-adds new journals (ISSNs
-resolved via Crossref), marks removed ones `retired` (their data files are
-deleted on the next build), and opens a GitHub issue describing any change.
-Because 50 journals are a couple hundred MB of JSON, **the page lazy-loads
-per-journal files** (selection-driven; searching with nothing selected streams
-all of them) — unlike lit, which eager-loads its eight native sources (lit
-lazy-loads the FT50 journals of its own vendored copy of this pipeline, at
-`fun/lit/data-ft50/` + `fun/lit/_scraper-ft50/`). Filter UI is
-capability-driven from `sources.json`: Editors/Areas only when Management
-Science is selected (exactly like `/fun/ms/`), SE/AE filters for ISR/MkSc; HBR
-and MIT SMR are flagged `limitedCoverage` (thin Crossref deposits). The
-**"Recently added papers" view respects the journal selection** (a deliberate
-difference from lit, whose recent view clears filters). Optional per-user
-accounts (stars/notes/lists/tags) mirror `/fun/ms/` but use a **separate
-dedicated Firebase project** — inert until `FB_CONFIG` in `fun/ft50/index.html`
-is filled per `fun/ft50/_ACCOUNTS-SETUP.md` (rules in `fun/ft50/_firestore.rules`).
-See `fun/ft50/_HOW-IT-WORKS.md`. Articles-in-Advance handling matches `/fun/ms`
-and `/fun/lit` (`forthcomingStatus` guard + `data/_aia-fixups.json` +
-`data/_informs-aia.json`, refreshed locally via `informs-aia-local.mjs --app ft50`).
+## `/fun/ft50` — RETIRED (redirect stub only)
+The standalone FT50 research paper browser was removed: `/fun/lit/` is a
+superset (its "Journal types" filter covers all 50 FT50 journals from lit's
+own `fun/lit/data-ft50/` dataset — see the lit section below). `fun/ft50/`
+now holds only a noindex redirect stub to `/fun/lit/` (like `fun/ms2/`), so
+old links keep working; do not add a card for it on `fun/index.html`. The
+app's data (~190 MB), scraper and its two workflows (`ft50-update-data.yml`,
+`ft50-check-list.yml`) were deleted — the pipeline lives on, vendored at
+`fun/lit/_scraper-ft50/` with its own `lit-ft50-*` workflows.
 
 ## `/fun/lit` — "The Lit", the multi-journal research paper browser
 `fun/lit/` extends the `/fun/ms/` architecture to eight sources: Management
@@ -74,18 +54,18 @@ OpenAlex/DBLP/Semantic Scholar). Data is static JSON in `fun/lit/data/` (one
 the ms workflow). **Journal types & the FT50 merge:** a "Journal types"
 filter (left of Journals) offers FT50 / ABS 4/4* / ABS 3; a type chip expands
 to its journal set and unions with the Journals selection. The page merges in
-lit's **own FT50 catalog** at runtime — `fun/lit/data-ft50/` (seeded by
-copying `fun/ft50/data/`, registry included, then maintained independently):
+lit's **own FT50 catalog** at runtime — `fun/lit/data-ft50/` (seeded from the
+retired fun/ft50 app's data, registry included, then maintained here):
 it fetches `data-ft50/sources.json`, appends the 44 FT50-only journals to the
 journal filter, and **lazy-loads** their `papers-<key>.json` only when they
 enter scope — selected directly, via a type chip, or on a broad
 year/title/author/affiliation search with no journal scope; the
 `data-ft50/recent.json` (extras only) joins the recent view. The dataset is
-built by `fun/lit/_scraper-ft50/` (a vendored copy of the fun/ft50 pipeline;
-journal list in its own `journals.json`), refreshed daily by
+built by `fun/lit/_scraper-ft50/` (the retired fun/ft50 app's pipeline,
+vendored; journal list in its own `journals.json`), refreshed daily by
 `.github/workflows/lit-ft50-update-data.yml` (07:15 UTC) and checked against
-the FT's list yearly by `lit-ft50-check-list.yml` (4 Jan) — so **lit no
-longer depends on the fun/ft50 app or its data**. AIA fixups for it come from
+the FT's list yearly by `lit-ft50-check-list.yml` (4 Jan). AIA fixups for it
+come from
 `informs-aia-local.mjs --app lit-ft50`. FT50 membership is seeded statically
 in `index.html` and extended from the data-ft50 manifest (so the yearly
 FT-list check flows through); ABS grades (AJG 2024, via journalranking.org)
@@ -161,8 +141,9 @@ so years-old frozen records aren't mislabeled; their real issue comes from
 `data/_aia-fixups.json`, and forthcoming papers Crossref hasn't indexed yet come
 from `data/_informs-aia.json` — both refreshed **locally** (pubsonline blocks cloud
 IPs) by `fun/lit/_scraper/informs-aia-local.mjs --app ms`, same pattern as the local
-editors/PNAS scripts. This applies identically to `/fun/lit` and `/fun/ft50` (shared
-`_aia-fixups.json`; run the scraper with `--app lit` / `--app ft50`).
+editors/PNAS scripts. This applies identically to `/fun/lit` and its FT50
+catalog (shared `_aia-fixups.json`; run the scraper with `--app lit` /
+`--app lit-ft50`).
 
 This app was developed at `fun/ms2/` (that path now holds a redirect stub to
 `/fun/ms/`) and replaced the original Google-Sheets-backed version, which is

@@ -341,9 +341,7 @@ async function main() {
   lines.push('', 'Reminder: this is `/fun/lit/`\u2019s own FT50 catalog, so added/removed journals ' +
     'flow into its journal filter and FT50 journal-type chip automatically — but a **newly added** ' +
     'journal also needs its ABS/AJG grade in the `ABS_RATING` map (and ideally the static `FT50_KEYS` ' +
-    'seed) in `fun/lit/index.html`, or the ABS 4/4* / ABS 3 journal-type options will not include it. ' +
-    'The sibling list at `fun/ft50/_scraper/journals.json` (the /fun/ft50 app) is maintained by its ' +
-    'own yearly check and may need the same change.');
+    'seed) in `fun/lit/index.html`, or the ABS 4/4* / ABS 3 journal-type options will not include it.');
 
   lines.push('', `Live list (${live.length}): ${live.join(' · ')}`);
   await writeFile(SUMMARY_PATH, lines.join('\n') + '\n', 'utf8');
