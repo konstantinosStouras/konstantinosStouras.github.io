@@ -164,6 +164,12 @@
     .banner{border-radius:10px; padding:11px 14px; font-size:14px; margin:10px 0;}
     .banner.info{background:#eef6ff; border:1px solid #cfe2fb; color:#1f4e79;}
     .banner.warn{background:#fff7ed; border:1px solid #f4d5a8; color:#8a5a12;}
+    /* On the sign-in screen the banner sat full-width above a 420px card; keep it
+       card-width, and give the banners a muted on-theme colour in dark mode. */
+    #login-banner{max-width:420px;}
+    #login-banner .banner{margin:14px 0 0;}
+    :root[data-theme="dark"] .banner.info{background:#182233; border-color:#28405e; color:#c2d6f0;}
+    :root[data-theme="dark"] .banner.warn{background:#2a2113; border-color:#5a4a1f; color:#f0d9a8;}
     code.k{background:var(--panel); border:1px solid var(--line); border-radius:5px; padding:1px 5px; font-size:13px;}
     .bars{margin:10px 0;} .bar-row{display:grid; grid-template-columns:180px 1fr 90px; gap:10px; align-items:center; margin:7px 0; font-size:13.5px;}
     .bar-track{background:var(--panel); border:1px solid var(--line); border-radius:6px; height:22px; overflow:hidden;}
