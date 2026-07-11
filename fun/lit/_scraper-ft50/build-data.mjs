@@ -91,6 +91,12 @@ const JOURNALS_PATH = join(__dirname, 'journals.json');
 const ALL_JOURNALS = JSON.parse(await readFile(JOURNALS_PATH, 'utf8'));
 const JOURNALS = ALL_JOURNALS.filter(j => !j.retired);
 const RETIRED = ALL_JOURNALS.filter(j => j.retired);
+// Sharded journals live on satellite data sites (their own repo + GitHub
+// Pages + pipeline, for growing past this repo's 1 GB Pages limit): this
+// build neither pulls nor writes them — it only forwards their manifest
+// entry (key/name/base/flags), so the page knows where to fetch their file.
+const LOCAL_JOURNALS = JOURNALS.filter(j => !j.base);
+const SHARDED_JOURNALS = JOURNALS.filter(j => j.base);
 
 // One-time import of MS editor/area data collected by the old Google-Sheet
 // pipeline from sources that don't exist on Crossref. Shared with fun/ms & lit.
@@ -690,8 +696,9 @@ async function main() {
 
   const bySource = {}; // key -> rows (internal shape)
 
-  // 1. Pull all journals, sequentially (politeness + bounded memory).
-  for (const src of JOURNALS) {
+  // 1. Pull all locally-hosted journals, sequentially (politeness + bounded
+  // memory). Sharded journals are pulled by their own satellite pipelines.
+  for (const src of LOCAL_JOURNALS) {
     console.log(`${src.name} (${src.issns.join(', ')}):`);
     bySource[src.key] = await pullJournal(src);
     console.log(`  ${src.key}: ${bySource[src.key].length} papers`);
@@ -711,10 +718,10 @@ async function main() {
   }
 
   // 3. Deterministic order per source, then combined order for aggregates.
-  for (const src of JOURNALS) {
+  for (const src of LOCAL_JOURNALS) {
     bySource[src.key].sort((a, b) => (b._rank - a._rank) || cmp(regKey(a), regKey(b)));
   }
-  const allPapers = JOURNALS.flatMap(s => bySource[s.key]);
+  const allPapers = LOCAL_JOURNALS.flatMap(s => bySource[s.key]);
 
   const reg = await loadRegistry();
   const registry = updateRegistry(bySource, reg);
@@ -727,7 +734,7 @@ async function main() {
   // the page can adapt its filters per journal without hardcoding keys).
   const sources = [];
   let total = 0;
-  for (const src of JOURNALS) {
+  for (const src of LOCAL_JOURNALS) {
     const rows = bySource[src.key].map(publicRow);
     const file = `papers-${src.key}.json`;
     await writeJson(file, rows);
@@ -748,6 +755,18 @@ async function main() {
     // Journals carried for another list (e.g. UTD24's INFORMS Journal on
     // Computing) but NOT on the FT50 list: the page must not count them as
     // FT50, and the yearly FT-list check must not retire them.
+    if (src.notFT) entry.notFT = true;
+    sources.push(entry);
+  }
+
+  // Sharded journals: manifest entry only (their papers file is built and
+  // committed by the satellite repo's own pipeline; the page fetches
+  // entry.base + entry.file — GitHub Pages sends Access-Control-Allow-Origin:
+  // * so a cross-origin data site works). No count: the satellite owns it.
+  for (const src of SHARDED_JOURNALS) {
+    const entry = { key: src.key, name: src.name, short: src.short || src.name, publisher: src.publisher, file: `papers-${src.key}.json`, base: src.base };
+    if (src.aia) entry.aia = true;
+    if (src.limitedCoverage) entry.limitedCoverage = true;
     if (src.notFT) entry.notFT = true;
     sources.push(entry);
   }

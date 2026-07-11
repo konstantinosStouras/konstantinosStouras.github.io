@@ -457,7 +457,7 @@
     <h1><em>The Lit</em> — Research Paper Browser</h1>
     <div class="header-right">
       <div style="text-align:right;line-height:1.35">
-        <div class="header-meta"><strong id="sourceCount">54 sources</strong> via Crossref · <span id="yearRange">1917–present</span></div>
+        <div class="header-meta"><strong id="sourceCount">56 sources</strong> via Crossref · <span id="yearRange">1886–present</span></div>
         <div class="header-meta" id="lastPull" style="font-size:12px;opacity:0.75;margin-top:1px"></div>
       </div>
       <div id="acctControl" class="acct-control"></div>
@@ -599,7 +599,7 @@
 </div>
 
 <div id="papersList" class="papers-list">
-  <div class="empty-state"><h3>Select a filter to get started</h3><p>Pick a journal type (UTD24, FT50, ABS 4/4*, ABS 3) or one or more journals, filter by year, or search by title, author, or affiliation. Everything is searched when no journal is selected (FT50-only journal files download on demand — a first all-journal search fetches the full dataset, so give it a moment).</p></div>
+  <div class="empty-state"><h3>Select a filter to get started</h3><p>Pick a journal type (UTD24, FT50, ABS 4/4*, ABS 3) or one or more journals, filter by year, or search by title, author, or affiliation. Everything is searched when no journal is selected (journal files download on demand — a first all-journal search fetches the full dataset, so give it a moment).</p></div>
 </div>
 <!-- PAGINATION DISABLED — uncomment to re-enable
 <div id="pagination" class="pagination" style="display:none"></div>
@@ -698,6 +698,7 @@ const ABS_RATING = {
   jibs: '4*', jom: '4*', jm: '4*', jmr: '4*', joom: '4*', jpe: '4*',
   ms: '4*', mksc: '4*', misq: '4*', isre: '4*', opre: '4*', orsc: '4*',
   qje: '4*', respol: '4*', restud: '4*', rfs: '4*', smj: '4*',
+  ajps: '4*', apsr: '4*',
   car: '4', hrm: '4', jfqa: '4', jmis: '4', jms: '4', jams: '4',
   msom: '4', obhdp: '4', pom: '4', psci: '4', rast: '4', rof: '4', sej: '4',
   ejor: '4',
@@ -964,10 +965,9 @@ function addChipFromCard(type, val) {
 // while the bigger files are still downloading.
 let sourcesLoaded = 0, sourcesTotal = 0;
 
-// ── Lazily loaded FT50 journals (beyond the eight native sources) ───────────
-// The 44 FT50-only journals are a couple hundred MB of JSON, far too much to
-// eager-load like the native sources. Mirroring the retired /fun/ft50 app:
-// each extra
+// ── Lazily loaded FT50-catalog journals (beyond the eight native sources) ───
+// The FT50-catalog-only journals are a couple hundred MB of JSON. Like the
+// native sources (and mirroring the retired /fun/ft50 app), each extra
 // papers-<key>.json is fetched from the ft50 dataset only when the view first
 // needs it — selecting the journal (directly or via a journal-type chip)
 // loads that journal; filtering/searching with no journal scope loads
@@ -1045,7 +1045,11 @@ function loadExtraSource(key) {
   extraPromise[key] = (async function() {
     for (var attempt = 0; attempt < 4; attempt++) {
       try {
-        var r = await fetch(FT50_DATA_BASE + src.file, { cache: 'default' });
+        // Shard-ready: a manifest entry may carry an absolute `base` URL
+        // (e.g. a satellite GitHub Pages data site — Pages serves everything
+        // with Access-Control-Allow-Origin: *), so the catalog can outgrow
+        // this repo's 1 GB Pages limit without the page changing.
+        var r = await fetch((src.base || FT50_DATA_BASE) + src.file, { cache: 'default' });
         if (r.status === 404) break; // not built yet
         if (!r.ok) throw new Error('HTTP ' + r.status);
         var rows = await r.json();
@@ -1070,15 +1074,21 @@ function loadExtraSource(key) {
 // affiliation — anything FT50 papers could match) runs with no journal scope.
 // The MS/ISR-specific editor filters and the pre-print toggle can never match
 // an FT50-extra paper, so on their own they don't trigger the download.
-function neededExtraKeys() {
-  var keys = Object.keys(EXTRA_SRC);
-  if (journalScope) return keys.filter(function(k) { return journalScope.has(k); });
-  var broad = sel.year.size || sel.title.size || sel.author.size ||
+// A filter any journal's papers could match (year / title / author /
+// affiliation, typed or chipped) is active with no journal scope — the
+// "search everything" case that streams every catalog file.
+function broadFilterActive() {
+  return !!(sel.year.size || sel.title.size || sel.author.size ||
     Object.keys(sel.authorIdentity).length || sel.affiliation.size ||
     document.getElementById('filterSearch').value.trim() ||
     document.getElementById('filterAuthors').value.trim() ||
-    document.getElementById('filterAffiliations').value.trim();
-  return broad ? keys : [];
+    document.getElementById('filterAffiliations').value.trim());
+}
+
+function neededExtraKeys() {
+  var keys = Object.keys(EXTRA_SRC);
+  if (journalScope) return keys.filter(function(k) { return journalScope.has(k); });
+  return broadFilterActive() ? keys : [];
 }
 
 function ensureExtraSources() { neededExtraKeys().forEach(loadExtraSource); }
@@ -1091,11 +1101,11 @@ function extraPendingCount() {
 }
 
 function updateSourceCountText() {
+  // With every source lazy-loaded, a "loading x/y" counter is meaningless
+  // here — the results bar reports in-flight files. Show the catalog size.
   var sc = document.getElementById('sourceCount');
-  if (!sc) return;
-  sc.textContent = sourcesLoaded < sourcesTotal
-    ? 'Loading sources… ' + sourcesLoaded + '/' + sourcesTotal
-    : (sourcesTotal + Object.keys(EXTRA_SRC).length) + ' sources';
+  if (!sc || !sourcesTotal) return;
+  sc.textContent = (sourcesTotal + Object.keys(EXTRA_SRC).length) + ' sources';
 }
 
 function updateYearRangeText(loadedMinYear) {
@@ -1123,6 +1133,17 @@ function afterSourceArrived() {
   updateSourceCountText();
 }
 
+// ── Lazy native sources ──────────────────────────────────────────────────────
+// The landing screen renders no papers until a filter is chosen, so nothing
+// justifies eagerly downloading ~60 MB of native JSON on every visit (the old
+// behavior). Like the FT50 extras, each native papers-<src>.json is fetched
+// only when the view first needs it: selecting the journal (directly, via a
+// PNAS section, or via a journal-type chip) loads that journal; filtering or
+// searching with no journal scope loads all natives. First paint is now a few
+// hundred KB (page + manifests + recent.json), fast on any connection.
+const nativeState = {};    // key -> 'pending' | 'loading' | 'done' | 'missing'
+const nativePromise = {};  // key -> in-flight fetch promise (idempotence)
+
 async function loadData() {
   try {
     const resp = await fetch(SOURCES_URL, { cache: 'no-cache' });
@@ -1134,8 +1155,12 @@ async function loadData() {
     return;
   }
   sourcesTotal = sourcesManifest.length;
+  sourcesManifest.forEach(function(s) {
+    if (nativeState[s.key] === undefined) nativeState[s.key] = 'pending';
+  });
   buildJournalSelect();
   buildJTypeSelect();
+  updateSourceCountText();
   loadFt50Manifest(); // async: registers the FT50-only journals as lazy sources
 
   // Affiliation aggregates come from their own small JSON file.
@@ -1144,7 +1169,20 @@ async function loadData() {
     .then(function(a) { affiliationData = Array.isArray(a) ? a : []; })
     .catch(function() { affiliationData = []; });
 
-  await Promise.all(sourcesManifest.map(async function(src) {
+  // A filter set before the manifest arrived (unlikely but possible) starts
+  // its downloads now.
+  refreshJournalScope();
+  ensureScopeSources();
+}
+
+// Fetch one native source's papers file (idempotent, like loadExtraSource).
+function loadNativeSource(key) {
+  var src = null;
+  for (var i = 0; i < sourcesManifest.length; i++) if (sourcesManifest[i].key === key) src = sourcesManifest[i];
+  if (!src) return Promise.resolve();
+  if (nativePromise[key]) return nativePromise[key];
+  nativeState[key] = 'loading';
+  nativePromise[key] = (async function() {
     for (var attempt = 0; attempt < 4; attempt++) {
       try {
         // Use the browser HTTP cache (GitHub Pages serves these with
@@ -1158,33 +1196,70 @@ async function loadData() {
         var rows = await r.json();
         if (!Array.isArray(rows)) rows = [];
         rows.forEach(function(p) { normalizeEditors(p); computeJkeys(p); });
-        if (src.key === 'ms') {
-          allPapers = allPapers.concat(rows);
-          // Editor/area cleanup only applies to MS rows (others have none).
-          fuzzyMergeEditors();
-          fuzzyMergeAreas();
-        } else {
-          allPapers = allPapers.concat(rows);
-        }
-        break;
+        allPapers = allPapers.concat(rows);
+        // Editor/area cleanup only applies to MS rows (others have none).
+        if (src.key === 'ms') { fuzzyMergeEditors(); fuzzyMergeAreas(); }
+        nativeState[key] = 'done';
+        sourcesLoaded++;
+        afterSourceArrived();
+        return;
       } catch (e) {
         await new Promise(function(res) { setTimeout(res, 2500 * (attempt + 1)); });
       }
     }
-    sourcesLoaded++;
+    nativeState[key] = 'missing';
     afterSourceArrived();
-  }));
+  })();
+  return nativePromise[key];
+}
 
-  if (!allPapers.length) console.warn('No paper files found — the data pipeline has not run yet.');
+// The native sources the current filter state needs: those in the effective
+// journal scope (a PNAS section key needs the parent 'pnas' file), or all of
+// them when any filter native papers could match runs with no journal scope —
+// including the MS/ISR editor filters and the pre-print toggle, which (unlike
+// the FT50 extras) CAN match native papers.
+function neededNativeKeys() {
+  var keys = sourcesManifest.map(function(s) { return s.key; });
+  if (journalScope) {
+    return keys.filter(function(k) {
+      if (journalScope.has(k)) return true;
+      if (k !== 'pnas') return false;
+      for (var x of journalScope) { if (x.indexOf('pnas-') === 0) return true; }
+      return false;
+    });
+  }
+  var broad = broadFilterActive() || preprintOnly ||
+    sel.editor.size || sel.area.size || sel.se.size || sel.ae.size;
+  return broad ? keys : [];
+}
+
+// Kick off every download the current view needs (natives + FT50 extras).
+function ensureScopeSources() {
+  neededNativeKeys().forEach(loadNativeSource);
+  ensureExtraSources();
+}
+
+// How many files (native + extra) the current view is still waiting on.
+function viewPendingCount() {
+  var n = neededNativeKeys().filter(function(k) {
+    return nativeState[k] === 'loading' || nativeState[k] === 'pending';
+  }).length;
+  return n + extraPendingCount();
 }
 
 // Authors are pre-aggregated (paper counts, areas, name variants, ORCID identity)
 // in authors.json by the build step, so the Authors panel is ready without
-// waiting for every paper since 1954 to download and parse.
-async function loadAuthors() {
-  // Paint instantly from the previous visit's cache, then refresh from network.
+// waiting for every paper since 1954 to download and parse. The network fetch
+// is deferred to the first open of the Authors tab (the panel is MS-gated and
+// most visits never open it); a previous visit's localStorage copy still
+// paints it instantly.
+let authorsRequested = false;
+function loadAuthorsFromCache() {
   var cached = lsGet('lit_authors');
   if (cached) { try { authorData = JSON.parse(cached); if (authorData.length) renderAuthorsSummary(); } catch (e) {} }
+}
+async function loadAuthors() {
+  authorsRequested = true;
   try {
     var r = await fetch(AUTHORS_URL, { cache: 'default' });
     if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -1643,7 +1718,10 @@ function buildJTypeSelect() {
 
 function buildFilterOptions() {
   const editorCounts = {}, areaCounts = {}, yearCounts = {}, seCounts = {}, aeCounts = {};
-  allPapers.forEach(p => {
+  // Before any journal file has been fetched (lazy loading), seed the year
+  // dropdown from the pre-fetched recent.json so it isn't empty.
+  const basis = allPapers.length ? allPapers : (recentData || []);
+  basis.forEach(p => {
     (p._editors || []).forEach(e => { editorCounts[e] = (editorCounts[e] || 0) + 1; });
     if (p._area) { areaCounts[p._area] = (areaCounts[p._area] || 0) + 1; }
     (p._se || []).forEach(e => { seCounts[e] = (seCounts[e] || 0) + 1; });
@@ -1884,6 +1962,9 @@ function toggleSummary(tab) {
   if (!isOpen) {
     els[idx].className = 'summary-content active';
     btns[idx].className = 'summary-tab-btn active';
+    // Lazy-fetch authors.json on first open (the localStorage copy of a
+    // previous visit may already be painting the panel).
+    if (tab === 'authors' && !authorsRequested) loadAuthors();
     // Lazy-build affiliations on first open
     if (tab === 'affiliations' && !window._affBuilt) {
       buildAffiliationsSummary();
@@ -2052,14 +2133,15 @@ function applyFilters() {
   // If no filters active, show welcome state
   if (sel.jtype.size === 0 && sel.journal.size === 0 && sel.editor.size === 0 && sel.area.size === 0 && sel.se.size === 0 && sel.ae.size === 0 && sel.year.size === 0 && sel.title.size === 0 && sel.author.size === 0 && Object.keys(sel.authorIdentity).length === 0 && sel.affiliation.size === 0 && !search && !searchAuth && !searchAff && !preprintOnly) {
     document.getElementById('resultsCount').innerHTML = '';
-    document.getElementById('papersList').innerHTML = '<div class="empty-state"><h3>Select a filter to get started</h3><p>Pick a journal type (UTD24, FT50, ABS 4/4*, ABS 3) or one or more journals, filter by year, or search by title, author, or affiliation. Everything is searched when no journal is selected (FT50-only journal files download on demand — a first all-journal search fetches the full dataset, so give it a moment).</p></div>';
+    document.getElementById('papersList').innerHTML = '<div class="empty-state"><h3>Select a filter to get started</h3><p>Pick a journal type (UTD24, FT50, ABS 4/4*, ABS 3) or one or more journals, filter by year, or search by title, author, or affiliation. Everything is searched when no journal is selected (journal files download on demand — a first all-journal search fetches the full dataset, so give it a moment).</p></div>';
     buildFilterOptions();
     return;
   }
 
-  // Lazy loading: make sure the FT50 journal files this view needs are (being)
-  // fetched; afterSourceArrived() re-runs this function as each one lands.
-  ensureExtraSources();
+  // Lazy loading: make sure the journal files this view needs (native and
+  // FT50-extra) are being fetched; afterSourceArrived() re-runs this function
+  // as each one lands.
+  ensureScopeSources();
 
   filtered = allPapers.filter(p => {
     if (!matchesJournal(p)) return false;
@@ -2255,8 +2337,11 @@ function renderRecent() {
   var usePrecomputed = recentData !== null;
   var source = usePrecomputed ? recentData.concat(recentExtraRows || []) : allPapers;
 
-  // No tab and the Data CSV hasn't arrived yet: keep waiting.
+  // No pre-computed tab (missing/404, or retries exhausted): fall back to
+  // scanning the papers themselves — with lazy loading that means kicking off
+  // the native downloads first (rare path; recent.json normally exists).
   if (!usePrecomputed && !allPapers.length) {
+    sourcesManifest.forEach(function(src) { loadNativeSource(src.key); });
     countEl.innerHTML = '';
     list.innerHTML = '<div class="loading"><div class="spinner"></div>Loading recently added papers…</div>';
     return;
@@ -2342,8 +2427,8 @@ function showMoreCards() {
 
 function renderPage() {
   const countEl = document.getElementById('resultsCount');
-  // Lazily loaded FT50 journal files still on their way for this view.
-  const pending = extraPendingCount();
+  // Lazily loaded journal files (native + FT50) still on their way.
+  const pending = viewPendingCount();
   let countHtml = filtered.length === allPapers.length
     ? `<strong>${allPapers.length.toLocaleString()}</strong> papers`
     : `<strong>${filtered.length.toLocaleString()}</strong> of ${allPapers.length.toLocaleString()} papers`;
@@ -2683,9 +2768,9 @@ window.addEventListener('scroll', scheduleCompact, { passive: true });
 if (compactSticky.addEventListener) compactSticky.addEventListener('change', applyCompact);
 else if (compactSticky.addListener) compactSticky.addListener(applyCompact);
 
-loadLastPull(); // small + cached: render the last-pull date first, before the big papers.json
-loadData();
-loadAuthors();
+loadLastPull(); // small + cached: render the last-pull date first
+loadData();     // manifests only — papers files download when a filter needs them
+loadAuthorsFromCache(); // authors.json itself is fetched on first Authors-tab open
 loadRecent(); // pre-fetch the small recent.json so the "Recently added" view opens instantly
 </script>
 

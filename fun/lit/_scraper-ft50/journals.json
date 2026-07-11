@@ -36,6 +36,32 @@
     "aia": true
   },
   {
+    "key": "ajps",
+    "name": "American Journal of Political Science",
+    "short": "AJPS",
+    "issns": [
+      "0092-5853",
+      "1540-5907"
+    ],
+    "publisher": "Wiley",
+    "aia": true,
+    "notFT": true,
+    "addedBy": "abs4star-extra"
+  },
+  {
+    "key": "apsr",
+    "name": "American Political Science Review",
+    "short": "APSR",
+    "issns": [
+      "0003-0554",
+      "1537-5943"
+    ],
+    "publisher": "Cambridge University Press",
+    "aia": true,
+    "notFT": true,
+    "addedBy": "abs4star-extra"
+  },
+  {
     "key": "tar",
     "name": "The Accounting Review",
     "short": "Accounting Review",

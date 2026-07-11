@@ -60,10 +60,19 @@ JOURNAL_TYPES order in `index.html`; a UTD24 journal is never additionally
 badged FT50/ABS); clicking it selects that type. Filtering is unaffected by
 the badge: an ABS 4/4* search still returns UTD24 journals' papers. The
 catalog also carries **notFT extras** — journals on another list but not the
-FT50: UTD24's INFORMS Journal on Computing (`ijoc`) and ABS 4's European
-Journal of Operational Research (`ejor`), flagged `"notFT": true` in
-`journals.json` so the page keeps them out of FT50 membership and the yearly
-FT-list check never retires them. The page merges in
+FT50: UTD24's INFORMS Journal on Computing (`ijoc`), ABS 4's European
+Journal of Operational Research (`ejor`), and the two AJG 2024 4* additions
+American Journal of Political Science (`ajps`) / American Political Science
+Review (`apsr`) — flagged `"notFT": true` in `journals.json` so the page
+keeps them out of FT50 membership and the yearly FT-list check never retires
+them. (Full ABS 3 coverage — ~330 journals, ~1 GB — would exceed GitHub
+Pages' 1 GB site limit; ABS 3 therefore means the 3-graded journals among
+the covered lists. `sources.json` entries support an absolute `base` URL for
+future satellite data repos/Pages sites if the catalog must outgrow this
+repo.) **Everything loads lazily:** no papers file (native or catalog)
+downloads until a filter needs it — first paint is a few hundred KB
+(manifests + recent.json; authors.json fetched on first Authors-tab open),
+where the page previously eager-fetched ~60 MB per visit. The page merges in
 lit's **own FT50 catalog** at runtime — `fun/lit/data-ft50/` (seeded from the
 retired fun/ft50 app's data, registry included, then maintained here):
 it fetches `data-ft50/sources.json`, appends the 44 FT50-only journals to the

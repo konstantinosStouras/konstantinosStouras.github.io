@@ -27,8 +27,9 @@ APIs above, writes one static JSON file per source into `fun/lit/data/`
 (`papers-ms.json`, `papers-opre.json`, …, listed in `sources.json`), plus
 shared `authors.json` / `affiliations.json` / `recent.json` / `meta.json`,
 and commits whatever changed. The page (`index.html`) `fetch()`es those files
-— all sources in parallel, rendering progressively — and does every filter,
-search and BibTeX export in the browser.
+lazily — a source downloads the first time a filter needs it, rendering
+progressively — and does every filter, search and BibTeX export in the
+browser.
 
 ## How the page behaves (by design)
 
@@ -59,13 +60,20 @@ search and BibTeX export in the browser.
   ABS 4/4*. Display only: an ABS 4/4* *search* still returns every UTD24
   journal's papers (each shown with its UTD24 badge). Clicking a badge
   selects that journal type; PNAS and ACM EC papers carry no badge.
-- **The FT50 merge is lazy — and self-owned.** The eight native sources
-  still eager-load as before, but the 44 FT50-only journals (~200 MB of JSON)
-  are fetched from `./data-ft50/papers-<key>.json` only when they enter the
-  view's scope — selecting them directly or via a type chip, or running a
-  broad year/title/author/affiliation search with no journal scope. The
-  results bar counts the files still on their
-  way; loaded journals stay in memory for the session. The MS/ISR-specific
+- **Everything is lazy — first paint is a few hundred KB.** No papers file
+  downloads until a filter needs it: the landing screen renders from the
+  manifests + the small `recent.json`, so the page is fast on any connection
+  (it used to eager-fetch ~60 MB of native JSON on every visit). Each native
+  `data/papers-<src>.json` and each catalog `data-ft50/papers-<key>.json`
+  is fetched only when its journal enters the view's scope — selected
+  directly (a PNAS section loads the parent `pnas` file), via a type chip, or
+  on a broad search with no journal scope, which streams everything;
+  `authors.json` is fetched on the first Authors-tab open. The results bar
+  counts the files still on their way; loaded journals stay in memory for
+  the session. The manifest also supports a per-journal absolute `base` URL,
+  so future journals can live on satellite GitHub Pages data sites (Pages
+  sends `Access-Control-Allow-Origin: *`) — room to grow past this repo's
+  1 GB Pages limit without touching the page. The MS/ISR-specific
   editor filters and the pre-print toggle can't match FT50-extra papers, so
   those alone never trigger the download; the recent view merges the
   `data-ft50/recent.json` (extras only — natives are already covered).
