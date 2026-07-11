@@ -219,6 +219,20 @@ The **admin panel** at **`/lab/search-v2/admin/`** lets you, from any browser
   **Analytics** tab comparing **Without AI vs With AI** (net, reveals, best found
   per round) over completed participants. In a within-subjects session each
   participant contributes to both, aggregated per `(participant, phase)`.
+- **download an analysis-ready Excel workbook** — the **⬇ Download Excel (.xlsx)**
+  button on the Data tab (honours the session filter) and the **⬇ Excel** action on
+  every session card (handy once a session is completed) export one workbook with
+  six sheets: **ReadMe** (column dictionary + units), **Sessions** (every parameter
+  the admin chose for the wave), **Participants** (one row per person: timing,
+  totals, quiz, bonus, completion), **Rounds** (one row per participant × phase ×
+  round: duration, reveals, AI questions/fees, best, raw/floored net, whether the
+  round was drawn for payment), **Actions** (every logged action in time order,
+  with `decision_ms` — the milliseconds the participant took since their previous
+  action, i.e. the per-decision response time — plus running within-round totals),
+  and **Survey** (Likert + free-text answers). Money is in cents, times are UTC
+  with milliseconds. The workbook is generated fully client-side by
+  `admin/xlsx.js`, a dependency-free OOXML writer (no CDN), and derives everything
+  from the same events the Data tab shows.
 - **manage participants** — the **Participants** panel lists everyone who has taken
   part (anonymous — no accounts, so each is one play session id). Each card
   **expands** to show first-seen / last-active, Prolific id, wave code, phases

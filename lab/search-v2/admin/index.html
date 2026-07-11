@@ -432,6 +432,7 @@
           <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
             <select class="sess-filter" id="data-filter"></select>
             <button class="btn btn-ghost btn-sm" id="btn-refresh">↻ Refresh</button>
+            <button class="btn btn-blue btn-sm" id="btn-dl-xlsx" title="One analysis-ready Excel workbook for the selected session (or all sessions): the admin-chosen parameters, one row per participant, per round, and per action/decision with response times, plus the exit survey.">⬇ Download Excel (.xlsx)</button>
             <button class="btn btn-ghost btn-sm" id="btn-dl-csv">Download CSV</button>
             <button class="btn btn-ghost btn-sm" id="btn-dl-json">Download JSON</button>
           </div>
@@ -459,6 +460,7 @@
 
   <script src="../firebase-config.js"></script>
   <script src="../firebase.js"></script>
+  <script src="xlsx.js"></script>
   <script src="admin.js"></script>
   <script src="../tooltip.js"></script>
 </body>

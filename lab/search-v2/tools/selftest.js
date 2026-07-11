@@ -121,5 +121,25 @@ section('Test 7 · AI-model economics + defaults');
   ok('defaults: 1 round per phase, no practice', CONFIG.N_TASKS === 1 && CONFIG.N_PRACTICE === 0);
 }
 
+section('Test 8 · Excel export writer (admin/xlsx.js)');
+{
+  const XL = require('../admin/xlsx.js');
+  const bytes = XL.build([
+    { name: 'Data', cols: [{ w: 20 }], rows: [['id', 'net_cents', 'note'], ['p1', 42, 'a & "b" <c>'], ['p2', -7, null]] },
+    { name: 'ReadMe', filter: false, rows: [['k', 'v'], ['money', 'cents']] }
+  ]);
+  ok('build() returns zip bytes (PK magic)', bytes instanceof Uint8Array && bytes[0] === 0x50 && bytes[1] === 0x4B);
+  const raw = Buffer.from(bytes).toString('latin1');
+  ok('workbook has the OOXML parts', ['[Content_Types].xml', '_rels/.rels', 'xl/workbook.xml', 'xl/styles.xml', 'xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml'].every(p => raw.includes(p)));
+  // STORE zip → sheet XML is readable in the raw bytes
+  ok('numbers are numeric cells, strings inline', raw.includes('<v>42</v>') && raw.includes('<v>-7</v>') && raw.includes('<t>p1</t>'));
+  ok('XML special characters are escaped', raw.includes('a &amp; &quot;b&quot; &lt;c&gt;') && !raw.includes('"b" <c>'));
+  ok('header row is styled + auto-filtered, ReadMe is not', raw.includes('s="1" t="inlineStr"><is><t>id</t>') && raw.split('<autoFilter').length === 2);
+  // EOCD entry count matches the parts we expect (5 skeleton + 2 sheets)
+  const eocd = bytes.length - 22;
+  const entries = bytes[eocd + 10] | (bytes[eocd + 11] << 8);
+  ok('zip central directory lists all 7 entries', entries === 7, String(entries));
+}
+
 console.log('\n' + (fail === 0 ? 'ALL PASS' : (fail + ' FAILED')) + '  (' + pass + ' passed)');
 process.exit(fail === 0 ? 0 : 1);

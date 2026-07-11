@@ -204,10 +204,15 @@ consent section and remove the checkbox and its `renderPlot` block.
 HTML/CSS/JS, relative URLs only, no build step): subjects search a hidden line of
 100 prizes, paying 5¢ per reveal, in a **Without AI** and/or **With AI** phase
 (within-subjects, admin-chosen order; arms `A`/`B`). It has a full **admin panel**
-at `/lab/search-v2/admin/` (create sessions, set phases/rounds/AI, view data),
-backed by an **optional Firebase** project (`search-with-ai-456d7`) that is
-**already configured** in `firebase-config.js`; it degrades gracefully offline.
-See `lab/search-v2/README.md`.
+at `/lab/search-v2/admin/` (create sessions, set phases/rounds/AI, view data, and
+export an analysis-ready multi-sheet **.xlsx** — sessions' admin-chosen parameters,
+participants, rounds, every action with per-decision response times, survey —
+generated client-side by the dependency-free writer `admin/xlsx.js`), backed by an
+**optional Firebase** project (`search-with-ai-456d7`) that is **already
+configured** in `firebase-config.js`; it degrades gracefully offline. Firestore
+cannot store nested arrays, so session settings persist `coveragePatches` as
+`[{a,b},…]` maps (admin encodes/decodes; `app.js` `normalizePatches` accepts both
+shapes). See `lab/search-v2/README.md`.
 
 Key design points (keep in sync when editing):
 - **Ground truth is deterministic and generated at runtime** by `landscape.js`
