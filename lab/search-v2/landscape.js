@@ -181,9 +181,62 @@
     return { interp: interp, extrap: extrap, zones: zones };
   }
 
+  // ---- rational-search benchmark (after Malladi–Martínez-Marquina–Morozov,
+  //      "Space Exploration", Theorem 1: the "search window") -----------------
+  // Given a reveal sequence (in the order the participant revealed them), score
+  // it against the rational benchmark for a ±L-Lipschitz line. `reveals` is an
+  // array of [pos, value] pairs (values in cents, 0..100). Returns:
+  //   n              – number of reveals
+  //   mistakes       – "obvious mistakes": revealing a cell already capped ≤ the
+  //                    best found so far (its best-possible value, given the ±L
+  //                    ceilings from earlier reveals, can't beat what you have)
+  //   mistakeRate    – mistakes / n
+  //   randomRate     – expected obvious-mistake rate of uniform-random search
+  //                    (the paper's null: at each step, fraction of unrevealed
+  //                    cells that are outside the window), averaged over steps
+  //   windowRemaining– at the stop, how many unrevealed cells could still beat
+  //                    the best (0 ⇒ stopping was optimal; nothing left can win)
+  //   best           – best value revealed (cents)
+  //   reservation    – the i.i.d. (uncorrelated) reservation value in cents,
+  //                    solving cost = (100−R)²/200 → R = 100 − √(200·cost)
+  // Everything is derived from the ±L bounds and the reveal order — no truth leak.
+  function windowStats(reveals, L, n, cost) {
+    L = L || L_STEP; n = n || N; cost = (cost == null ? 5 : cost);
+    var out = { n: reveals.length, mistakes: 0, mistakeRate: 0, randomRate: 0, windowRemaining: 0,
+      best: 0, reservation: Math.max(0, Math.round(100 - Math.sqrt(200 * cost))) };
+    if (!reveals.length) return out;
+    // max feasible value at position x given the first k reveals (±L ceilings).
+    function ceilAt(x, k) {
+      if (!k) return 100;
+      var m = 100;
+      for (var i = 0; i < k; i++) { var c = reveals[i][1] + L * Math.abs(x - reveals[i][0]); if (c < m) m = c; }
+      return m;
+    }
+    var placed = {}, best = 0, randSum = 0, randSteps = 0;
+    for (var t = 0; t < reveals.length; t++) {
+      var px = reveals[t][0];
+      if (t > 0 && ceilAt(px, t) <= best) out.mistakes++;         // revealed a capped-out cell
+      if (t > 0) {                                                // uniform-random null at this step
+        var outside = 0, tot = 0;
+        for (var x = 1; x <= n; x++) { if (placed[x]) continue; tot++; if (ceilAt(x, t) <= best) outside++; }
+        if (tot) { randSum += outside / tot; randSteps++; }
+      }
+      placed[px] = true;
+      if (reveals[t][1] > best) best = reveals[t][1];
+    }
+    out.best = best;
+    out.mistakeRate = out.mistakes / out.n;
+    out.randomRate = randSteps ? randSum / randSteps : 0;
+    var wr = 0, K = reveals.length;
+    for (var x2 = 1; x2 <= n; x2++) { if (placed[x2]) continue; if (ceilAt(x2, K) > best) wr++; }
+    out.windowRemaining = wr;
+    return out;
+  }
+
   return {
     mulberry32: mulberry32, hashSeed: hashSeed,
     makeWalk: makeWalk, hasUniqueMax: hasUniqueMax, makeDots: makeDots, estimate: estimate, geometry: geometry,
+    windowStats: windowStats,
     N: N, L_STEP: L_STEP
   };
 });
