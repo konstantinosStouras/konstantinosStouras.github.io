@@ -181,7 +181,9 @@ Key design points (keep in sync when editing):
 - **Ground truth is deterministic and generated at runtime** by `landscape.js`
   (`makeWalk(seed)`), seeded from `(arm, round)` via `config.js` `TRUTH_SEED`: the
   same curve for **every participant of every session**, **different** between the
-  two phases, and an **independent** draw per round. There is **no landscape pool**
+  two phases, and an **independent** draw per round. `makeWalk` deterministically
+  resamples (up to 64 candidates) to **prefer a single tie-free peak** (preferred,
+  not enforced). There is **no landscape pool**
   (the old `data/mappings.json` + `tools/generate_pool.js` + RICH/POOR strata were
   retired).
 - The **With-AI assistant** is trained inside one or two admin-set
