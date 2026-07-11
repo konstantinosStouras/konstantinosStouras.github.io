@@ -57,14 +57,23 @@ These overlays are styled like `/lab/interpolation` (blue Brownian truth, red
 training points, green interpolation within the region(s), amber dashed
 extrapolation with shaded zones) and are **never shown to a real participant** —
 during play they only see the prizes they reveal and the estimates they ask for.
-The testing bar also shows a **rational-search benchmark** readout (test only):
-per round it scores the participant's own reveals against the "search window" of
-Malladi–Martínez-Marquina–Morozov, *"Space Exploration"* (Theorem 1) —
-`landscape.js` `windowStats` reports the **obvious-mistake rate** (revealing a cell
-already capped ≤ your best under the ±`L_STEP` bounds) vs. a uniform-random null,
-how many cells could still beat your best at the stop (0 ⇒ stopping was optimal),
-and the i.i.d. **reservation value** (≈68¢ at a 5¢ fee). It uses only the
-participant's reveals (no truth leak) and is **hidden from real participants**.
+The testing bar also carries a **rational-search benchmark** (test only), scoring
+the participant's own reveals against the "search window" of
+Malladi–Martínez-Marquina–Morozov, *"Space Exploration"* (Theorem 1):
+- a live **readout** — `landscape.js` `windowStats` reports the **obvious-mistake
+  rate** (revealing a cell already capped ≤ your best under the ±`L_STEP` bounds)
+  vs. a uniform-random null, how many cells could still beat your best at the stop
+  (0 ⇒ stopping was optimal), and the i.i.d. **reservation value** (≈68¢ at a 5¢ fee);
+- a **"Search window" overlay** toggle — `windowEnvelope` draws the max-feasible
+  ceiling M(x) (teal), the best-so-far acceptance line, and shaded **dead zones**
+  where M(x) ≤ best (revealing there is an obvious mistake), so you can *see* the
+  window. Both use only the participant's reveals (no truth leak) and are **hidden
+  from real participants**.
+
+The same scorer runs **post-hoc in the admin Data tab** (a "Rational-search
+benchmark" panel): it reconstructs each real round's reveal sequence from the
+logged `reveal` events and aggregates the obvious-mistake rate, optimal-stop share,
+avg reveals, and reservation across the filtered data, plus a per-participant table.
 Debug links also accept `?phases=AB` to force a phase sequence for local testing.
 
 Design provenance (not shown in the app): the task/payoff/landscape replicate the

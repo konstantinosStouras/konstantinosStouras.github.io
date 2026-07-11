@@ -233,10 +233,27 @@
     return out;
   }
 
+  // The window "ceiling" M(x) for every position 1..N given the reveals so far:
+  // the max feasible value at x under the ±L bounds (min of the upward cones from
+  // each reveal, capped at 100), plus the current best. Cells with M(x) > best are
+  // in the search window; the rest are "dead" (can't beat your best). Used by the
+  // testing overlay to VISUALISE the window (chart.js), never shown to players.
+  function windowEnvelope(reveals, L, n) {
+    L = L || L_STEP; n = n || N;
+    var ceil = new Array(n), best = 0, i, x;
+    for (i = 0; i < reveals.length; i++) if (reveals[i][1] > best) best = reveals[i][1];
+    for (x = 1; x <= n; x++) {
+      var m = 100;
+      for (i = 0; i < reveals.length; i++) { var c = reveals[i][1] + L * Math.abs(x - reveals[i][0]); if (c < m) m = c; }
+      ceil[x - 1] = reveals.length ? m : 100;
+    }
+    return { ceiling: ceil, best: best };
+  }
+
   return {
     mulberry32: mulberry32, hashSeed: hashSeed,
     makeWalk: makeWalk, hasUniqueMax: hasUniqueMax, makeDots: makeDots, estimate: estimate, geometry: geometry,
-    windowStats: windowStats,
+    windowStats: windowStats, windowEnvelope: windowEnvelope,
     N: N, L_STEP: L_STEP
   };
 });
