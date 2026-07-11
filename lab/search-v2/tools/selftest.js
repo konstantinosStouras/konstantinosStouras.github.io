@@ -126,6 +126,10 @@ section('Test 6b · Rational-search benchmark (Space Exploration "search window"
   const ws2 = LS.windowStats([[50, 80], [51, 70]], 10, 100, 5);
   ok('revealing next to the best is inside the window (not a mistake)', ws2.mistakes === 0);
   ok('windowRemaining=0 means every unrevealed cell is capped ≤ best', LS.windowStats([[50, 100]], 10, 100, 5).windowRemaining >= 0);
+  // window envelope: ceiling passes through the reveal and rises ±L away, capped 100
+  const env = LS.windowEnvelope([[50, 80]], 10, 100);
+  ok('envelope ceiling equals the revealed value at that position', env.ceiling[49] === 80 && env.best === 80);
+  ok('envelope ceiling rises by L per step and caps at 100', env.ceiling[50] === 90 && env.ceiling[60] === 100);
 }
 
 section('Test 7 · AI-model economics + defaults');

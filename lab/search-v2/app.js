@@ -120,7 +120,7 @@
   // Testing-only overlay toggles (debug/Test link only). NEVER shown to a real
   // participant: the AI region / training points / interpolation line and the
   // ground-truth line are revealed only when the tester ticks these.
-  var TESTVIEW = { truth: false, region: false, dots: false, interp: false };
+  var TESTVIEW = { truth: false, region: false, dots: false, interp: false, window: false };
   var lastSelectLogT = 0;
   var STUDY_CLOSED = false;    // set from the admin-controlled config/study doc
   var STUDY_ARM_MODE = 'url';  // legacy single-arm mode: 'url'|'A'|'B'|'random' (admin-controlled)
@@ -822,17 +822,21 @@
     // never sees the region, training points, interpolation, or ground truth.
     var groups = currentGroups();
     var geo = LS.geometry(groups);
+    var showWin = DEBUG && TESTVIEW.window;
+    var win = showWin ? LS.windowEnvelope(reveals.map(function (r) { return [r.pos, r.val]; }), CFG.L_STEP, N_POS) : null;
     if (DEBUG) buildTestView();
     chart.render({
       arm: arm, coverage: PATCHES, selected: S.round.selected,
       revealed: reveals.map(function (r) { return { pos: r.pos, val: r.val }; }),
       estimates: arm === 'B' ? S.round.estimates.map(function (e) { return { pos: e.pos, val: e.val }; }) : [],
       truth: truth, dotGroups: groups, interp: geo.interp, extrap: geo.extrap, zones: geo.zones,
+      windowCeiling: win ? win.ceiling : null, windowBest: win ? win.best : 0,
       tag: DEBUG ? (S.round.mappingId + (arm === 'B' ? ' · ' + currentModel() : '')) : null,
       showTruth: DEBUG && TESTVIEW.truth,
       showCoverage: DEBUG && arm === 'B' && TESTVIEW.region,
       showDots: DEBUG && arm === 'B' && TESTVIEW.dots,
-      showInterp: DEBUG && arm === 'B' && TESTVIEW.interp
+      showInterp: DEBUG && arm === 'B' && TESTVIEW.interp,
+      showWindow: showWin
     });
   }
 
@@ -845,6 +849,7 @@
       bar.innerHTML =
         '<span class="tv-title">Testing view</span>' +
         '<label><input type="checkbox" id="tv-truth"> Ground truth</label>' +
+        '<label><input type="checkbox" id="tv-window"> Search window</label>' +
         '<label class="tv-ai"><input type="checkbox" id="tv-region"> AI region</label>' +
         '<label class="tv-ai"><input type="checkbox" id="tv-dots"> AI data points</label>' +
         '<label class="tv-ai"><input type="checkbox" id="tv-interp"> AI interp / extrap</label>' +
@@ -853,7 +858,7 @@
         $(id).checked = TESTVIEW[key];
         $(id).addEventListener('change', function () { TESTVIEW[key] = this.checked; renderRound(); });
       };
-      wire('tv-truth', 'truth'); wire('tv-region', 'region');
+      wire('tv-truth', 'truth'); wire('tv-window', 'window'); wire('tv-region', 'region');
       wire('tv-dots', 'dots'); wire('tv-interp', 'interp');
       bar.setAttribute('data-built', '1');
     }

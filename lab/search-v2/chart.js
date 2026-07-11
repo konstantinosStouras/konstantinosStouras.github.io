@@ -140,6 +140,26 @@ window.Chart = (function () {
           }
         }
       }
+      // --- search-window overlay (testing): shaded "dead zones" where the max
+      //     feasible value M(x) <= best (revealing there is an obvious mistake),
+      //     the ceiling M(x), and the best-so-far acceptance line. ---
+      if (st.showWindow && st.windowCeiling && st.windowCeiling.length) {
+        var wc = st.windowCeiling, wb = st.windowBest || 0, half = (PW / (N - 1)) / 2, rs = -1;
+        for (var wp = 1; wp <= N + 1; wp++) {
+          var wdead = wp <= N && wc[wp - 1] <= wb;
+          if (wdead && rs < 0) rs = wp;
+          if (!wdead && rs >= 0) {
+            var wxa = xOf(rs) - half, wxb = xOf(wp - 1) + half;
+            parts.push('<rect class="win-dead" x="' + wxa.toFixed(1) + '" y="' + PAD_T + '" width="' + Math.max(1, wxb - wxa).toFixed(1) + '" height="' + PH + '"/>');
+            rs = -1;
+          }
+        }
+        parts.push('<line class="win-best" x1="' + PAD_L + '" y1="' + yOf(wb).toFixed(1) + '" x2="' + (VW - PAD_R) + '" y2="' + yOf(wb).toFixed(1) + '"/>');
+        var wceil = '';
+        for (var wj = 0; wj < wc.length; wj++) wceil += (wj ? 'L' : 'M') + xOf(wj + 1).toFixed(1) + ' ' + yOf(wc[wj]).toFixed(1) + ' ';
+        parts.push('<path class="win-ceil" d="' + wceil + '"/>');
+        parts.push('<text class="win-lbl" x="' + (VW - PAD_R - 2) + '" y="' + (yOf(wb) - 4).toFixed(1) + '" text-anchor="end">best-so-far · window ceiling</text>');
+      }
       // --- corner tag (testing: mapping id · stratum) ---
       if (st.tag) {
         parts.push('<text class="dbg-txt" x="' + (VW - PAD_R) + '" y="' + (PAD_T + 12) + '" text-anchor="end">' + esc(st.tag) + '</text>');
