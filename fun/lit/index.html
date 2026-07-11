@@ -254,6 +254,8 @@
   .recent-tab-btn { padding: 8px 18px; border: 1.5px solid var(--border); border-radius: 6px; font-family: 'Work Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; background: var(--white); color: var(--text-muted); transition: all 0.15s; }
   .recent-tab-btn.active { background: var(--navy); color: white; border-color: var(--navy); }
   .recent-tab-btn:hover:not(.active) { background: var(--navy-light); color: var(--navy); border-color: var(--navy); }
+  /* The pre-print filter button goes open-access orange when active. */
+  #preprintBtn.active { background: #c2410c; border-color: #c2410c; color: white; }
   .summary-content { display: none; padding: 16px 0 8px; }
   .summary-content.active { display: block; }
   .summary-list { column-count: 2; column-gap: 2rem; font-size: 14px; line-height: 2.1; }
@@ -528,6 +530,7 @@
       <button class="summary-tab-btn" id="tabBtnAreas" style="display:none" onclick="toggleSummary('areas')" title="Editorial areas are collected for Management Science papers only.">Areas <span style="font-weight:400;opacity:.65">(MS)</span></button>
       <button class="summary-tab-btn" id="tabBtnAuthors" style="display:none" onclick="toggleSummary('authors')" title="Authors are resolved by ORCID where available; authors with a single paper are not listed. Per-author editorial areas are collected for Management Science papers only.">Authors</button>
       <button class="recent-tab-btn" id="recentBtn" onclick="toggleRecent()" title="Papers added to the database in the last 4 weeks, newest first.">Recently added papers</button>
+      <button class="recent-tab-btn" id="preprintBtn" onclick="togglePreprintOnly()" title="Only papers with a free author pre-print on arXiv or SSRN. Coverage grows daily as the backfill runs.">Pre-print (Open Access) papers</button>
     </div>
   </div>
 </div>
@@ -664,6 +667,17 @@ let recentLoading = false;  // whether that fetch is currently in flight
 // click matches every spelling of one ORCID-resolved person. journal holds
 // source keys (see JOURNAL_OPTIONS); empty means "all journals".
 const sel = { journal: new Set(), editor: new Set(), area: new Set(), se: new Set(), ae: new Set(), year: new Set(), title: new Set(), author: new Set(), authorIdentity: {}, affiliation: new Set() };
+
+// "Pre-print (Open Access) papers" toggle: restrict results to papers that
+// carry a free arXiv/SSRN pre-print link. Counts as an active filter, so
+// enabling it alone lists every linked paper across all sources.
+let preprintOnly = false;
+function togglePreprintOnly() {
+  preprintOnly = !preprintOnly;
+  var btn = document.getElementById('preprintBtn');
+  if (btn) btn.className = 'recent-tab-btn' + (preprintOnly ? ' active' : '');
+  applyFilters();
+}
 
 // The journal keys a paper matches: its own source key, plus (for PNAS) the
 // parent 'pnas' key and one key per section it belongs to.
@@ -1732,7 +1746,7 @@ function applyFilters() {
   const sort = document.getElementById('sortBy').value;
 
   // If no filters active, show welcome state
-  if (sel.journal.size === 0 && sel.editor.size === 0 && sel.area.size === 0 && sel.se.size === 0 && sel.ae.size === 0 && sel.year.size === 0 && sel.title.size === 0 && sel.author.size === 0 && Object.keys(sel.authorIdentity).length === 0 && sel.affiliation.size === 0 && !search && !searchAuth && !searchAff) {
+  if (sel.journal.size === 0 && sel.editor.size === 0 && sel.area.size === 0 && sel.se.size === 0 && sel.ae.size === 0 && sel.year.size === 0 && sel.title.size === 0 && sel.author.size === 0 && Object.keys(sel.authorIdentity).length === 0 && sel.affiliation.size === 0 && !search && !searchAuth && !searchAff && !preprintOnly) {
     document.getElementById('resultsCount').innerHTML = '';
     document.getElementById('papersList').innerHTML = '<div class="empty-state"><h3>Select a filter to get started</h3><p>Pick one or more journals, filter by year, or search by title, author, or affiliation. Everything is searched when no journal is selected.</p></div>';
     buildFilterOptions();
@@ -1741,6 +1755,7 @@ function applyFilters() {
 
   filtered = allPapers.filter(p => {
     if (!matchesJournal(p)) return false;
+    if (preprintOnly && !safeUrl(p['Preprint'])) return false;
     if (sel.editor.size > 0 && !(p._editors || []).some(e => sel.editor.has(e))) return false;
     if (sel.area.size > 0 && !sel.area.has(p._area)) return false;
     if (sel.se.size > 0 && !(p._se || []).some(e => sel.se.has(e))) return false;
@@ -1798,6 +1813,9 @@ function resetFilterState(keepJournals) {
   document.getElementById('chipsAuthor').innerHTML = '';
   document.getElementById('chipsAffiliation').innerHTML = '';
   ['filterSearch','filterAuthors','filterAffiliations'].forEach(id => document.getElementById(id).value = '');
+  preprintOnly = false;
+  var ppBtn = document.getElementById('preprintBtn');
+  if (ppBtn) ppBtn.className = 'recent-tab-btn';
   updateMsScopeUI();
 }
 
