@@ -89,13 +89,15 @@ window.SVFirebase = (function () {
 
   // Participant: look up the study "session" (wave) they were sent to by its code
   // (from ?code=… in the launch URL). Returns { id, ...data } or null.
+  // Reads the whole (small) sessions collection and matches client-side — the
+  // same known-good shape as fetchEvents/listSessions, avoiding the WebChannel
+  // quirk where query constraints (where/limit) throw `invalid-argument`.
   function getSessionByCode(code) {
     if (!configured || !code) return Promise.resolve(null);
     var timeout = new Promise(function (r) { setTimeout(function () { r(null); }, 4000); });
     var fetchIt = init().then(ensureAuth).then(function () {
-      var col = sdk.fs.collection(db, 'sessions');
-      return sdk.fs.getDocs(sdk.fs.query(col, sdk.fs.where('code', '==', code), sdk.fs.limit(1)));
-    }).then(function (qs) { var r = null; qs.forEach(function (d) { if (!r) r = Object.assign({ id: d.id }, d.data()); }); return r; })
+      return sdk.fs.getDocs(sdk.fs.collection(db, 'sessions'));
+    }).then(function (qs) { var r = null; qs.forEach(function (d) { if (!r && (d.data() || {}).code === code) r = Object.assign({ id: d.id }, d.data()); }); return r; })
       .catch(function () { return null; });
     return Promise.race([fetchIt, timeout]);
   }
@@ -207,10 +209,12 @@ window.SVFirebase = (function () {
     return init().then(function () { return sdk.fs.getDocs(sdk.fs.collection(db, 'sessions')); })
       .then(function (qs) { var dels = []; qs.forEach(function (d) { dels.push(sdk.fs.deleteDoc(d.ref)); }); return Promise.all(dels).then(function () { return dels.length; }); });
   }
+  // Same unconstrained-read shape as listSessions (see the WebChannel note in
+  // fetchEvents) — the collection is small, so client-side matching is cheap.
   function codeExists(code) {
     return init().then(function () {
-      return sdk.fs.getDocs(sdk.fs.query(sdk.fs.collection(db, 'sessions'), sdk.fs.where('code', '==', code), sdk.fs.limit(1)));
-    }).then(function (qs) { var n = 0; qs.forEach(function () { n++; }); return n > 0; });
+      return sdk.fs.getDocs(sdk.fs.collection(db, 'sessions'));
+    }).then(function (qs) { var n = 0; qs.forEach(function (d) { if ((d.data() || {}).code === code) n++; }); return n > 0; });
   }
 
   // ---- admin: saved defaults for new sessions (config/defaults) ------------
