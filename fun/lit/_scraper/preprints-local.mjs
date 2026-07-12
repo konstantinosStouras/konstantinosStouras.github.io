@@ -3,15 +3,18 @@
  * ===========================================================================
  * Backfills fun/lit/data/_preprints.json (and writes the Preprint / PreprintSrc
  * fields into papers-<key>.json) by finding each paper's free author pre-print
- * on arXiv or SSRN.
+ * on arXiv, SSRN, bioRxiv/medRxiv, NBER or OSF.
  *
- * Why local? The link is found with an OpenAlex title.search — one request
- * per paper, plus a second Crossref query on an OpenAlex miss (many SSRN
- * working papers exist only as Crossref 10.2139 records). Across ~30k papers
- * OpenAlex throttles GitHub's shared runner IPs hard, so the daily build only
- * does a small, time-boxed best-effort pass. From a normal home/university
- * connection the same search runs at full speed. Same "run it locally" pattern
- * as informs-editors-local.mjs / pnas-concepts-local.mjs.
+ * The search runs the same three engines as the scheduled CI backfill
+ * (preprints-ci.mjs): OpenAlex title.search as a quota-permitting bonus leg
+ * (OpenAlex cuts an identity off after ~100 title searches/day — when its
+ * quota dies the run keeps going), Crossref (SSRN/bioRxiv/medRxiv/NBER/OSF
+ * all mint their DOIs through Crossref), and arXiv's own API (paced at
+ * ~1 request/3 s). Why still run locally? A home/university connection gets
+ * its own OpenAlex quota (separate from CI's, see below) and no runner time
+ * limits — useful for burning through a large backlog in one sitting. Same
+ * "run it locally" pattern as informs-editors-local.mjs /
+ * pnas-concepts-local.mjs.
  *
  * Usage (Node 20+, no npm install needed):
  *   cd fun/lit/_scraper

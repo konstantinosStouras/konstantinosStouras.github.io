@@ -1,18 +1,22 @@
 /*
  * preprints-ci.mjs — the ONLINE pre-print backfill for this dataset.
  * ===========================================================================
- * Incrementally links each paper's free arXiv/SSRN pre-print by OpenAlex
- * title-search, straight from the committed dataset — adapted from
- * fun/lit/_scraper/preprints-ci.mjs (see that header for the full story).
- * Driven by .github/workflows/lit-ft50-preprints-backfill.yml, which runs it a few times a day and commits the
- * refreshed data back. Never-searched papers go first, newest first within each class.
+ * Incrementally links each paper's free pre-print (arXiv/SSRN/bioRxiv/
+ * medRxiv/NBER/OSF) by title+author search, straight from the committed
+ * dataset — adapted from fun/lit/_scraper/preprints-ci.mjs (see that header
+ * for the full story). Driven by
+ * .github/workflows/lit-ft50-preprints-backfill.yml, which runs it every
+ * couple of hours and commits the refreshed data back. Never-searched papers
+ * go first, newest first within each class.
  *
- * Each run is bounded (FT50_PREPRINT_BACKFILL_MS, default 25 min of
- * searching) and quota-aware: OpenAlex rate-limits are waited out politely,
- * and when it signals the DAY's request quota is spent the run saves
- * progress and exits cleanly — the next scheduled run resumes from the
- * _preprints.json cache. The workflow pins FT50_MAILTO to this dataset's own
- * OpenAlex quota identity so parallel backfills never starve each other.
+ * Each run first soaks up whatever OpenAlex quota the day has with the cheap
+ * batched by-DOI pass (seedPreprintsByDoi), then title-searches across three
+ * engines: OpenAlex (bonus net, quota-permitting), Crossref and arXiv's own
+ * API. Each run is bounded (FT50_PREPRINT_BACKFILL_MS, default 40 min of
+ * searching) and saves progress to the _preprints.json cache, so the next
+ * scheduled run resumes where it stopped. The workflow pins FT50_MAILTO to
+ * this dataset's own OpenAlex quota identity so parallel backfills never
+ * starve each other.
  *
  * Flags (used by the workflow's push-retry path):
  *   --apply-only              skip searching; just apply the cache to the
@@ -28,7 +32,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { canonPreprint, searchPreprintsByTitle, TS_VER } from './build-data.mjs';
+import { canonPreprint, searchPreprintsByTitle, seedPreprintsByDoi, TS_VER } from './build-data.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA = process.env.FT50_DATA_DIR || join(__dirname, '..', 'data-ft50');
@@ -50,12 +54,16 @@ const sources = await loadJson(join(DATA, 'sources.json'), []);
 const cache = await loadJson(join(DATA, '_preprints.json'), {});
 
 // Overlay a saved cache from an interrupted/raced run. A found link ({u})
-// already in the repo cache is never downgraded by the overlay.
+// already in the repo cache is never downgraded by the overlay, and a
+// searched-miss stamp is never regressed to our snapshot's OLDER state (the
+// concurrent run may have searched papers our snapshot predates).
 if (mergeArg) {
   const ours = await loadJson(mergeArg.split('=').slice(1).join('='), {});
   let merged = 0;
   for (const [doi, entry] of Object.entries(ours)) {
-    if (cache[doi] && cache[doi].u) continue;
+    const cur = cache[doi];
+    if (cur && cur.u) continue;
+    if (!entry.u && cur && (cur.ts || 0) >= (entry.ts || 0)) continue;
     cache[doi] = entry; merged++;
   }
   console.log(`merged ${merged} cache entr(ies) from ${mergeArg.split('=')[1]}`);
@@ -79,15 +87,24 @@ console.log(`loaded ${all.length} papers from ${Object.keys(filesByKey).length} 
   `${Object.keys(cache).length} cache entries`);
 
 if (!applyOnly) {
-  // patient:true rides out per-second throttling (and exits cleanly on daily-
-  // quota exhaustion); budgetMs bounds the run so the job always finishes.
+  const checkpoint = (c) => writeFile(join(DATA, '_preprints.json'), JSON.stringify(c), 'utf8');
+  // Cheap batched by-DOI seeding first (bounded by batches AND wall clock;
+  // stops itself on quota) — 50 papers per OpenAlex call vs 1 per title search.
+  await seedPreprintsByDoi(all, cache, {
+    maxBatches: parseInt(process.env.FT50_PREPRINT_DOI_BATCHES || '200', 10),
+    budgetMs: 6 * 60 * 1000,
+    checkpoint,
+  });
+  // patient:true rides out OpenAlex per-second throttling before handing the
+  // search to Crossref+arXiv; budgetMs bounds the run so the job always
+  // finishes.
   const found = await searchPreprintsByTitle(all, cache, {
     cap: parseInt(process.env.FT50_PREPRINT_BACKFILL_CAP || '100000', 10),
-    budgetMs: parseInt(process.env.FT50_PREPRINT_BACKFILL_MS || String(25 * 60 * 1000), 10),
-    sleepMs: 400,   // gently: ~2 req/s, well under OpenAlex's ceiling
+    budgetMs: parseInt(process.env.FT50_PREPRINT_BACKFILL_MS || String(40 * 60 * 1000), 10),
+    sleepMs: 400,   // gently: ~2 req/s on the fast legs
     patient: true,
     log: true,
-    checkpoint: (c) => writeFile(join(DATA, '_preprints.json'), JSON.stringify(c), 'utf8'),
+    checkpoint,
   });
   console.log(`linked ${found} new pre-print(s) this run`);
 }
@@ -108,6 +125,6 @@ await writeFile(join(DATA, '_preprints.json'), JSON.stringify(cache), 'utf8');
 const remaining = all.filter(p => {
   const doi = (p.DOI || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase();
   const c = cache[doi];
-  return doi && c && c.none && (c.ts || 0) < TS_VER && parseInt(p.Year, 10) >= 1991;
+  return doi && parseInt(p.Year, 10) >= 1991 && (!c || (c.none && (c.ts || 0) < TS_VER));
 }).length;
 console.log(`${withLink} papers carry a pre-print link; backlog remaining: ${remaining}`);

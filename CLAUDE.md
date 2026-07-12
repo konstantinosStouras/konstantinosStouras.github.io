@@ -120,30 +120,44 @@ SSRN, bioRxiv/medRxiv, NBER or OSF** carries a `Preprint` (+ `PreprintSrc`)
 field, resolved in `build-data.mjs`
 (`resolvePreprints`) and cached in `data/_preprints.json` (doi → `{u,s}` |
 `{none:1}` | `{none:1,ts:N}`; incremental). Two passes: (1) OpenAlex **by DOI**
-(batched) reads any pre-print location already attached to the published record;
-(2) a **title+author search** (`searchPreprintsByTitle`/`matchPreprintWork`,
-newest-first) finds preprints that live as a **separate** OpenAlex/SSRN record
-(own `10.2139/ssrn.*` DOI); when OpenAlex misses, a **second engine queries
-Crossref with `filter=prefix:10.2139`** (`searchSsrnViaCrossref`/
-`matchCrossrefPreprint`) — OpenAlex's SSRN coverage is patchy, but SSRN mints
-its DOIs through Crossref, so Crossref has every one (a transient Crossref
-failure leaves the paper un-stamped so a later run retries — never recorded
-as a miss). Titles match exactly or by **prefix** (≥14 collapsed chars —
-working papers often gain/lose a subtitle on publication; guarded against
-same-team sequels, see below), always with the author check. The
+(`seedPreprintsByDoi`, batched 50/call, bounded by `LIT_PREPRINT_DOI_BATCHES`
+and OPTIONAL — it stops itself on quota/throttle) reads any pre-print location
+already attached to the published record;
+(2) a **title+author search** (`searchPreprintsByTitle`, newest-first) across
+**three engines sharing one conservative matcher**: OpenAlex title.search
+(`matchPreprintWork`) is the widest net but only a **quota-permitting bonus
+leg** — OpenAlex cuts an identity off after **~100 title searches/day**, and
+on its quota signal the run just drops that leg; the backbone is **Crossref**
+(`searchCrossrefPreprints`/`matchCrossrefPreprint`,
+`filter=prefix:10.2139,prefix:10.1101,prefix:10.3386,prefix:10.31219` — same-name
+filters OR together; SSRN, bioRxiv/medRxiv,
+NBER and OSF all mint their DOIs through Crossref, so it has every one of
+their records even where OpenAlex has none) plus **arXiv's own API**
+(`searchArxivPreprint`/`matchArxivFeed`/`parseArxivAtom`,
+`export.arxiv.org/api/query` with `ti:"…" AND au:"…"` — the host Crossref
+can't see; free, paced at ~1 req/3 s via `axSleepMs`, and skipped when the
+OpenAlex leg ran, since OpenAlex indexes arXiv). A find from any engine wins;
+a **miss is stamped `{none:1,ts:TS_VER}` only when the required legs
+(Crossref always, arXiv when OpenAlex didn't run) concluded cleanly** — a
+transient failure leaves the paper un-stamped so a later run retries, and
+papers with **no cache entry at all are directly eligible** (the by-DOI pass
+is an optimisation, not a prerequisite — this is what lets a fresh
+250k-paper catalog backfill immediately). Titles match exactly or by
+**prefix** (≥14 collapsed chars — working papers often gain/lose a subtitle
+on publication; guarded against same-team sequels, see below), always with
+the author check. The
 search covers **every paper from 1991 on (arXiv's first year), PNAS
 included**; `ts` records WHICH search version last missed (`TS_VER` in the
 block — **bump it whenever the matcher or host coverage expands** and every
-old miss is retried with the wider net, never-searched papers first). arXiv
+old miss is retried with the wider net, never-searched papers first;
+currently v4). arXiv
 links are canonicalised to the **unversioned `/abs/<id>`** form
 (`canonArxiv`/`canonPreprint`, applied on every apply) so they always resolve
-to the LATEST version. It is ONE
-OpenAlex request per paper (rate-limited per identity, daily quota resets at
-midnight UTC), so the **backfill runs online in its own scheduled workflow**,
-`.github/workflows/lit-preprints-backfill.yml` (4×/day), which runs
-`fun/lit/_scraper/preprints-ci.mjs`: a bounded (~25 min), quota-aware slice of
-searches per run (waits out throttling; exits cleanly when the day's quota is
-spent) that commits `fun/lit/data/` back — it **shares the
+to the LATEST version. The **backfill runs online in its own scheduled
+workflow**, `.github/workflows/lit-preprints-backfill.yml` (every 2 h), which
+runs `fun/lit/_scraper/preprints-ci.mjs`: the bounded by-DOI seeding, then a
+bounded (~40 min) slice of title searches per run,
+committing `fun/lit/data/` back — it **shares the
 `lit-update-data-*` concurrency group** with the daily build so the two never
 race a commit, and its push-retry re-applies finds via
 `--apply-only --merge-cache` instead of clobbering a fresher dataset.
@@ -152,7 +166,8 @@ race a commit, and its push-retry re-applies finds via
 quota identity so CI can never spend the local budget). In the daily build the
 same pass also runs as a **strictly time-boxed, gentle best-effort**
 (`LIT_PREPRINT_SEARCH_MS`, default 6 min; `LIT_PREPRINT_SEARCH_CAP`, default
-2500; single-attempt fetch that backs off and stops on 429s) so it can **never
+2500; single-attempt fetch that drops the OpenAlex leg on quota/throttle and
+stops only when Crossref or arXiv are unavailable too) so it can **never
 hang the build**. **The same machinery is replicated in every other dataset's
 pipeline** (near-verbatim block in each `build-data.mjs`; env names
 `FT50_PREPRINT_SEARCH_*`, and the matcher uses a local `matchNorm` — the
@@ -191,10 +206,11 @@ stable landing URLs, so an endpoint change needs only those helpers updated;
 applied to both the Pre-print link and EC's PDF tag (link tooltip names the
 host via the `PREPRINT_HOST` map).
 **DOI-less EC accepted papers** (each year's fresh sigecom.org list, e.g.
-EC '26) can't be reached by any by-DOI pass, so `enrichEc` runs an OpenAlex
+EC '26) can't be reached by any by-DOI pass, so `enrichEc` runs a
 title-search pass for them (newest first, `LIT_EC_TITLE_CAP` default 350/run,
-same gentle fetch + conservative matcher as the preprint search; versioned
-`oat` cache marker in `_ec-extras.json`), and a pre-print find is surfaced as
+same three engines + gentle fetch + conservative matcher as the preprint
+search; versioned `oat` cache marker — `OAT_VER` — in `_ec-extras.json`), and
+a pre-print find is surfaced as
 both their `PDF` and their `Preprint` (the DOI-keyed `_preprints.json` can't
 serve them). **PNAS "Significance":** for PNAS,
 the Crossref abstract's JATS `<sec><title>Significance</title>` block is split

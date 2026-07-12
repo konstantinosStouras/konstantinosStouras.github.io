@@ -626,11 +626,13 @@ function titlesMatch(a, b) {
   return 'prefix';
 }
 
-// Second search engine, SSRN via Crossref: OpenAlex's SSRN coverage is
-// patchy — many working papers that live on SSRN have no OpenAlex record at
-// all — but SSRN mints its DOIs THROUGH Crossref, so Crossref has every one
-// (prefix 10.2139). Same conservative matching as matchPreprintWork; the
-// pure matcher is split out for unit tests.
+// Second search engine, Crossref: OpenAlex's coverage of the pre-print
+// servers is patchy — many working papers that live on SSRN have no OpenAlex
+// record at all — but the pre-print servers mint their DOIs THROUGH Crossref
+// (SSRN 10.2139, bioRxiv/medRxiv 10.1101, NBER 10.3386, OSF 10.31219), so
+// Crossref has every one. arXiv is the one host NOT here (its DOIs are
+// DataCite's) — searchArxivPreprint covers it. Same conservative matching as
+// matchPreprintWork; the pure matcher is split out for unit tests.
 export function matchCrossrefPreprint(paper, items) {
   const nt = matchNorm(paper.title || '');
   if (!nt) return null;
@@ -655,11 +657,17 @@ export function matchCrossrefPreprint(paper, items) {
   return null;
 }
 
-async function searchSsrnViaCrossref(p) {
+async function searchCrossrefPreprints(p) {
   const q = String(p.Title || '').replace(/[^\w\s'-]/g, ' ').replace(/\s+/g, ' ').trim();
   if (!q) return null;
+  // Same-name filters OR together, so one call covers every Crossref-minted
+  // pre-print home. Deliberately NO query.author term: Crossref field
+  // queries can EXCLUDE records (they are match queries, not mere ranking
+  // boosts), and a name-form mismatch would permanently stamp a false miss —
+  // the matcher already verifies authors from the returned metadata.
   const url = 'https://api.crossref.org/works?query.bibliographic=' + encodeURIComponent(q) +
-    '&filter=prefix:10.2139&rows=8&select=DOI,title,author,issued' +
+    '&filter=prefix:10.2139,prefix:10.1101,prefix:10.3386,prefix:10.31219' +
+    '&rows=12&select=DOI,title,author,issued' +
     `&mailto=${encodeURIComponent(MAILTO)}`;
   const r = await oaGet(url);
   // A transient failure (429/timeout/outage) must NOT read as 'searched, no
@@ -667,6 +675,128 @@ async function searchSsrnViaCrossref(p) {
   if (!r.ok) return { err: 1 };
   return matchCrossrefPreprint({ title: p.Title, year: p.Year, authors: p.Authors },
     (r.json && r.json.message && r.json.message.items) || []);
+}
+
+// Third search engine, arXiv's own API: OpenAlex indexes arXiv but its
+// title.search is heavily quota-limited (a CI runner burns the day's OpenAlex
+// allowance in minutes), and Crossref cannot see arXiv at all (arXiv DOIs are
+// DataCite's). export.arxiv.org/api/query is free and unmetered (guidance:
+// ~1 request every 3 s — the caller paces itself with axSleepMs), so the
+// backfill keeps finding arXiv pre-prints with OpenAlex out of budget. Atom
+// XML, parsed dependency-free; parser + matcher are pure → unit-tested.
+export function parseArxivAtom(xml) {
+  const dec = (s) => String(s || '')
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)))
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+    .replace(/\s+/g, ' ').trim();
+  const out = [];
+  for (const m of String(xml || '').matchAll(/<entry>[\s\S]*?<\/entry>/g)) {
+    const e = m[0];
+    const id = (e.match(/<id>\s*([^<\s]+)\s*<\/id>/) || [])[1] || '';
+    const title = dec((e.match(/<title[^>]*>([\s\S]*?)<\/title>/) || [])[1]);
+    const year = parseInt((e.match(/<published>\s*(\d{4})/) || [])[1], 10) || 0;
+    const authors = [...e.matchAll(/<name>([^<]*)<\/name>/g)].map(x => dec(x[1]));
+    if (id && title) out.push({ id, title, year, authors });
+  }
+  return out;
+}
+
+// Among arXiv API results, find the SAME paper's arXiv record — the exact
+// conservative contract of matchPreprintWork (titlesMatch + shared author
+// surnames + a plausible year; <published> is the v1 date, which precedes
+// publication). Pure → unit-tested.
+export function matchArxivFeed(paper, entries) {
+  const nt = matchNorm(paper.title || '');
+  if (!nt) return null;
+  const py = parseInt(paper.year, 10);
+  const mine = lastNames(String(paper.authors || '').split(','));
+  for (const e of entries || []) {
+    const tm = titlesMatch(nt, matchNorm(e.title || ''));
+    if (!tm) continue;
+    const wn = lastNames(e.authors || []);
+    if (!mine.size || !wn.size) continue;
+    const need = Math.min(2, mine.size, wn.size);
+    let shared = 0;
+    for (const x of wn) if (mine.has(x)) shared++;
+    if (shared < need) continue;
+    if (py && e.year && (e.year > py + 1 || e.year < py - (tm === 'exact' ? 12 : 6))) continue;
+    const u = canonArxiv(e.id);
+    if (/^https?:\/\/arxiv\.org\/abs\//i.test(u)) return { u, s: 'arxiv' };
+  }
+  return null;
+}
+
+async function searchArxivPreprint(p) {
+  // arXiv's Lucene query: quoted ti: phrase. Possessives are dropped whole
+  // ("Platform's" → "Platform" — Lucene strips 's at indexing, so the
+  // "platform s" a bare strip would leave breaks the phrase), accents are
+  // folded (a non-ASCII char would otherwise leave a broken token), then
+  // everything else non-word becomes a space (hyphens/quotes/colons are
+  // operators there).
+  const axQ = (t) => String(t || '')
+    .replace(/['’]s\b/gi, '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const q = axQ(p.Title);
+  if (!q) return null;
+  // AND a surname for precision — the first author whose folded surname is a
+  // single plain token (hyphenated/apostrophe surnames tokenize
+  // unpredictably in Lucene and would zero out the whole AND query).
+  let au = '';
+  for (const name of String(p.Authors || '').split(',')) {
+    const toks = name.trim().split(/\s+/);
+    const last = (toks[toks.length - 1] || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+    if (/^[A-Za-z]{2,}$/.test(last)) { au = last.toLowerCase(); break; }
+  }
+  const ask = async (phrase) => {
+    const query = `ti:"${phrase}"` + (au ? ` AND au:"${au}"` : '');
+    const r = await axGet('https://export.arxiv.org/api/query?search_query=' +
+      encodeURIComponent(query) + '&max_results=20');
+    if (!r.ok) return { err: 1 };
+    const entries = parseArxivAtom(r.text);
+    // An HTTP-200 body can still be a glitch: arXiv intermittently serves an
+    // empty feed (or an error entry) for queries that normally match. Only a
+    // feed that either has entries or explicitly says totalResults=0 is a
+    // CLEAN conclusion — anything else must read as a transient failure, or
+    // the caller would stamp {none:1,ts:TS_VER} and never retry the paper.
+    if (entries.some(e => /\/api\/errors/i.test(e.id))) return { err: 1 };
+    if (!entries.length &&
+        !/<opensearch:totalResults[^>]*>\s*0\s*</i.test(r.text)) return { err: 1 };
+    return matchArxivFeed({ title: p.Title, year: p.Year, authors: p.Authors }, entries);
+  };
+  let pick = await ask(q);
+  if (pick) return pick;                     // a find, or {err:1} — both final
+  // A working paper often GAINED the published subtitle: retry the pre-colon
+  // stem (a phrase matches anywhere inside a longer arXiv title, so the
+  // reverse — a paper that LOST its subtitle — is covered by the full query;
+  // the matcher's prefix rules still gate what the stem may link to).
+  const stem = axQ(String(p.Title || '').split(':')[0]);
+  if (stem && stem !== q && stem.replace(/[^A-Za-z0-9]/g, '').length >= 14) {
+    await sleep(3100);                       // keep arXiv's 1-request/3s pace
+    pick = await ask(stem);
+  }
+  return pick;
+}
+
+// oaGet's text-returning twin, for the arXiv Atom feed: one gentle attempt
+// with a hard timeout, no retry stacking.
+async function axGet(url) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 20000);
+  try {
+    const res = await fetch(url, { headers: { 'User-Agent': `lit-scraper/1.0 (mailto:${MAILTO})` }, signal: ctrl.signal });
+    if (!res.ok) {
+      const ra = parseInt(res.headers.get('retry-after') || '', 10);
+      return { ok: false, status: res.status, retryAfter: isNaN(ra) ? 0 : ra };
+    }
+    return { ok: true, status: 200, text: await res.text() };
+  } catch {
+    return { ok: false, status: 0, retryAfter: 0 };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function resolvePreprints(allPapers, cache) {
@@ -679,38 +809,11 @@ async function resolvePreprints(allPapers, cache) {
   }
   if (MOCK) return; // offline: no OpenAlex; the seed above still applies.
 
-  // 2. OpenAlex, batched 50 DOIs per request (same shape as enrichEc).
-  const seen = new Set(), need = [];
-  for (const p of allPapers) {
-    if (!p._doi || cache[p._doi] || seen.has(p._doi)) continue;
-    seen.add(p._doi); need.push(p._doi);
-  }
-  console.log(`  preprints: resolving ${need.length} DOIs via OpenAlex…`);
-  for (let i = 0; i < need.length; i += 50) {
-    const batch = need.slice(i, i + 50);
-    const url = 'https://api.openalex.org/works?filter=doi:' + batch.join('|') +
-      '&per-page=50&select=doi,open_access,best_oa_location,locations' +
-      `&mailto=${encodeURIComponent(MAILTO)}`;
-    try {
-      const j = await fetchJson(url);
-      const byDoi = new Map();
-      for (const w of j.results || []) {
-        byDoi.set(String(w.doi || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase(), w);
-      }
-      for (const doi of batch) {
-        const w = byDoi.get(doi);
-        if (!w) { cache[doi] = { none: 1 }; continue; }
-        const cands = (w.locations || []).flatMap(l => [l && l.landing_page_url, l && l.pdf_url]);
-        cands.push(w.best_oa_location && w.best_oa_location.landing_page_url,
-                   w.best_oa_location && w.best_oa_location.pdf_url,
-                   w.open_access && w.open_access.oa_url);
-        cache[doi] = pickPreprint(cands) || { none: 1 };
-      }
-    } catch (e) {
-      console.warn('  openalex preprints batch failed (non-fatal):', e.message);
-    }
-    await sleep(400);
-  }
+  // 2. OpenAlex by DOI, batched — bounded, and optional (see the helper).
+  await seedPreprintsByDoi(allPapers, cache, {
+    maxBatches: parseInt(process.env.FT50_PREPRINT_DOI_BATCHES || '400', 10),
+    budgetMs: 15 * 60 * 1000,
+  });
 
   // 3. Title+author search for papers the by-DOI scan couldn't link — their
   //    arXiv/SSRN preprint exists as a SEPARATE OpenAlex record (own
@@ -723,6 +826,66 @@ async function resolvePreprints(allPapers, cache) {
     budgetMs: parseInt(process.env.FT50_PREPRINT_SEARCH_MS || '360000', 10), // 6-minute hard ceiling
     log: true,
   });
+}
+
+// The OpenAlex by-DOI pass, batched 50 DOIs per request: reads any pre-print
+// location already attached to the published records — 50× cheaper per
+// OpenAlex call than a title search, so it runs first and soaks up whatever
+// quota the day has. It is OPTIONAL: the title search no longer needs its
+// {none:1} stamps (papers with no cache entry are directly eligible), so on
+// quota exhaustion it just stops. Bounded by maxBatches AND a wall-clock
+// budgetMs (a slow-but-not-failing OpenAlex would otherwise stretch the pass
+// past the CI job timeout) so a first full-catalog run (250k DOIs = 5,000
+// batches) can never eat a build.
+export async function seedPreprintsByDoi(allPapers, cache, opts = {}) {
+  const maxBatches = opts.maxBatches ?? 400;
+  const deadline = opts.budgetMs ? Date.now() + opts.budgetMs : Infinity;
+  const seen = new Set(), need = [];
+  for (const p of allPapers) {
+    if (!p._doi || cache[p._doi] || seen.has(p._doi)) continue;
+    seen.add(p._doi); need.push(p._doi);
+  }
+  const capped = need.slice(0, maxBatches * 50);
+  if (!need.length) return;
+  console.log(`  preprints: resolving ${capped.length} of ${need.length} DOIs via OpenAlex…`);
+  let fails = 0;
+  for (let i = 0; i < capped.length; i += 50) {
+    if (Date.now() > deadline) {
+      console.log('  preprints: by-DOI time budget reached — the title search covers the rest.');
+      break;
+    }
+    const batch = capped.slice(i, i + 50);
+    const url = 'https://api.openalex.org/works?filter=doi:' + batch.join('|') +
+      '&per-page=50&select=doi,open_access,best_oa_location,locations' +
+      `&mailto=${encodeURIComponent(MAILTO)}`;
+    const r = await oaGet(url);
+    if (!r.ok) {
+      // Quota/throttle (or a persistent outage): stop the pass — whatever is
+      // left unstamped is picked up by the title search or the next run.
+      if (r.status === 429 || r.status === 403 || ++fails >= 6) {
+        console.log('  preprints: OpenAlex quota/throttle — stopping the by-DOI pass (the title search covers the rest).');
+        break;
+      }
+      await sleep(2000);
+      continue;
+    }
+    fails = 0;
+    const byDoi = new Map();
+    for (const w of r.json.results || []) {
+      byDoi.set(String(w.doi || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase(), w);
+    }
+    for (const doi of batch) {
+      const w = byDoi.get(doi);
+      if (!w) { cache[doi] = { none: 1 }; continue; }
+      const cands = (w.locations || []).flatMap(l => [l && l.landing_page_url, l && l.pdf_url]);
+      cands.push(w.best_oa_location && w.best_oa_location.landing_page_url,
+                 w.best_oa_location && w.best_oa_location.pdf_url,
+                 w.open_access && w.open_access.oa_url);
+      cache[doi] = pickPreprint(cands) || { none: 1 };
+    }
+    if (opts.checkpoint && (i / 50) % 100 === 99) await opts.checkpoint(cache);
+    await sleep(400);
+  }
 }
 
 // A single, gentle OpenAlex GET — one attempt with a hard timeout, NO retry
@@ -754,92 +917,131 @@ async function oaGet(url) {
 // year, instead of 2005).
 // v3: SSRN-via-Crossref second engine, prefix-tolerant title match (working
 // papers often gain/lose a subtitle on publication), OpenAlex per-page 25.
-export const TS_VER = 3;
+// v4: arXiv-API third engine, Crossref filter widened to every pre-print
+// prefix it mints (bioRxiv/medRxiv, NBER, OSF alongside SSRN), and the
+// OpenAlex leg demoted to an optional bonus net (OpenAlex now cuts CI off
+// after ~100 title searches/day, so misses are stamped once Crossref+arXiv
+// conclude — a future TS_VER bump re-sweeps with all engines).
+export const TS_VER = 4;
 
-// Find each unlinked paper's arXiv/SSRN pre-print via an OpenAlex title.search,
-// matched conservatively by matchPreprintWork. Cache entries become {u,s}
-// (found) or {none:1,ts:TS_VER} (searched, nothing — re-eligible whenever
-// TS_VER is bumped); an errored lookup is left
-// without `ts` so a later run retries it. Bounded by `cap` and, when given, a
-// wall-clock `budgetMs`. Throttling (429/403) is handled two ways:
-//   - default (the daily build): back off briefly, and STOP for this run after
-//     a few consecutive throttles — CI must never sit out a rate-limit.
-//   - opts.patient (preprints-local.mjs): wait it out with escalating backoff
-//     (retry-after honoured, 5s→60s) and RETRY the same paper, because a
-//     personal machine can afford to ride through OpenAlex's rate-limiting.
+// Find each unlinked paper's free pre-print by title+author search across
+// THREE engines, all matched by the same conservative rules:
+//   1. OpenAlex title.search — the widest net (covers every host at once),
+//      but quota-limited, so it is a BONUS leg: when OpenAlex throttles or
+//      its daily quota dies, the run keeps going on the other two.
+//   2. Crossref (backbone) — SSRN/bioRxiv/medRxiv/NBER/OSF all mint their
+//      DOIs through Crossref, so this one call covers every host but arXiv.
+//   3. arXiv's own API (backbone) — the host Crossref can't see; paced at
+//      ~1 request/3 s per arXiv's guidance, and skipped when the OpenAlex
+//      leg ran (OpenAlex indexes arXiv comprehensively).
+// Cache entries become {u,s} (found, by any engine) or {none:1,ts:TS_VER}
+// (searched, nothing — re-eligible whenever TS_VER is bumped). A miss is
+// stamped only when the legs REQUIRED for this paper (Crossref always, arXiv
+// when OpenAlex didn't run) concluded cleanly — an errored leg leaves the
+// entry alone so a later run retries with the full net. Papers with NO cache
+// entry are directly eligible (the by-DOI seeding is an optimisation, not a
+// prerequisite — this is what lets this catalog's 250k papers backfill
+// without waiting for a 5,000-batch by-DOI pass).
+// Bounded by `cap` and, when given, a wall-clock `budgetMs`. opts.patient
+// (preprints-ci.mjs) additionally rides out OpenAlex per-second throttling
+// with escalating backoff (up to maxThrottle consecutive waits, ~3-4 min —
+// an OpenAlex that stays down that long is treated as out for the run)
+// before giving the leg up.
 // Returns the number newly linked.
 export async function searchPreprintsByTitle(papers, cache, opts = {}) {
   const cap = opts.cap || 6000;
   const sleepMs = opts.sleepMs || 130;
-  const maxThrottle = opts.patient ? 25 : (opts.maxThrottle || 6);
+  const axSleepMs = opts.axSleepMs || 3100;         // arXiv asks for ~1 request/3 s
+  const maxThrottle = opts.maxThrottle || 6;
   const deadline = opts.budgetMs ? Date.now() + opts.budgetMs : Infinity;
+  const dedup = new Set();
   const eligible = papers
-    .filter(p => p._doi && cache[p._doi] && cache[p._doi].none &&
-                 (cache[p._doi].ts || 0) < TS_VER && parseInt(p.Year, 10) >= 1991)
+    .filter(p => {
+      if (!p._doi || dedup.has(p._doi) || !(parseInt(p.Year, 10) >= 1991)) return false;
+      dedup.add(p._doi);
+      const c = cache[p._doi];
+      return !c || (c.none && (c.ts || 0) < TS_VER);
+    })
     .sort((a, b) =>
-      ((cache[a._doi].ts ? 1 : 0) - (cache[b._doi].ts ? 1 : 0)) ||
+      (((cache[a._doi] || {}).ts ? 1 : 0) - ((cache[b._doi] || {}).ts ? 1 : 0)) ||
       ((parseInt(b.Year, 10) || 0) - (parseInt(a.Year, 10) || 0)));
   const todo = eligible.slice(0, cap);
   if (opts.log) console.log(`  preprints: title-searching up to ${todo.length} of ${eligible.length} unlinked papers…`);
-  let found = 0, searched = 0, throttled = 0, crFails = 0;
+  let found = 0, searched = 0, oaBad = 0, crFails = 0, axFails = 0;
+  let oaAlive = true, axAlive = true;
   for (let i = 0; i < todo.length; i++) {
     const p = todo[i];
     if (Date.now() > deadline) { if (opts.log) console.log('  preprints: title-search time budget reached — resuming next run.'); break; }
+    // Without arXiv AND without OpenAlex only Crossref-hosted finds remain
+    // and no miss could be stamped — stop instead of half-searching.
+    if (!oaAlive && !axAlive) { if (opts.log) console.log('  preprints: OpenAlex and arXiv both unavailable — stopping title-search for this run.'); break; }
     const q = String(p.Title || '').replace(/[^\w\s'-]/g, ' ').replace(/\s+/g, ' ').trim();
     if (!q) { cache[p._doi] = { none: 1, ts: TS_VER }; continue; }
-    const url = 'https://api.openalex.org/works?filter=title.search:' + encodeURIComponent(q) +
-      '&per-page=25&select=doi,title,publication_year,authorships,best_oa_location,primary_location,locations' +
-      `&mailto=${encodeURIComponent(MAILTO)}`;
-    const r = await oaGet(url);
-    if (r.ok) {
-      throttled = 0; searched++;
-      let pick = matchPreprintWork({ title: p.Title, year: p.Year, authors: p.Authors }, (r.json && r.json.results) || []);
-      let crErr = false;
-      if (!pick) {
-        const cr = await searchSsrnViaCrossref(p);        // second engine: SSRN lives in Crossref
-        if (cr && cr.err) crErr = true; else pick = cr;
-      }
-      if (crErr) {
-        // Crossref leg failed: leave the entry un-stamped so a later run
-        // re-runs BOTH engines for this paper (same contract as an errored
-        // OpenAlex lookup); a persistently failing Crossref stops the run.
-        if (++crFails >= 6) { if (opts.log) console.log('  preprints: Crossref failing — stopping title-search for this run.'); break; }
+    let pick = null, oaRan = false, axFired = false;
+
+    // Leg 1 (bonus, quota-permitting): OpenAlex title.search.
+    if (oaAlive) {
+      const url = 'https://api.openalex.org/works?filter=title.search:' + encodeURIComponent(q) +
+        '&per-page=25&select=doi,title,publication_year,authorships,best_oa_location,primary_location,locations' +
+        `&mailto=${encodeURIComponent(MAILTO)}`;
+      const r = await oaGet(url);
+      if (r.ok) {
+        oaBad = 0; oaRan = true;
+        pick = matchPreprintWork({ title: p.Title, year: p.Year, authors: p.Authors }, (r.json && r.json.results) || []);
       } else {
-        crFails = 0;
-        cache[p._doi] = pick || { none: 1, ts: TS_VER };
-        if (pick) found++;
-      }
-      if (opts.log && searched % 500 === 0) console.log(`  preprints: …${searched} searched, ${found} linked so far`);
-      // Periodic save so a long local run can be interrupted without losing work.
-      if (opts.checkpoint && searched % 200 === 0) await opts.checkpoint(cache);
-      await sleep(sleepMs);
-    } else if (r.status === 429 || r.status === 403) {
-      throttled++;                                  // leave un-ts so it retries later
-      if (throttled >= maxThrottle) { if (opts.log) console.log('  preprints: OpenAlex throttling — stopping title-search for this run.'); break; }
-      if (opts.patient) {
-        // A Retry-After of minutes is per-second/burst throttling — wait it
-        // out and retry the SAME paper. A Retry-After of HOURS means the
-        // DAILY quota for this mailto/IP is spent: sleeping on it would just
-        // hang the terminal, so save progress and exit with a clear message.
-        const quotaMs = opts.maxWaitMs || 15 * 60 * 1000;
-        if (r.retryAfter * 1000 > quotaMs) {
-          const h = Math.floor(r.retryAfter / 3600), m = Math.round((r.retryAfter % 3600) / 60);
-          const at = new Date(Date.now() + r.retryAfter * 1000).toISOString().slice(11, 16);
-          if (opts.log) console.log(
-            `  preprints: OpenAlex says the daily request quota is spent — it resets in ~${h}h ${m}m (${at} UTC).\n` +
-            `  Progress is saved; simply re-run this script after that time (or with a different FT50_MAILTO).`);
-          break;
+        oaBad++;
+        const throttle = r.status === 429 || r.status === 403;
+        if (throttle && opts.patient && oaBad < maxThrottle &&
+            r.retryAfter * 1000 <= (opts.maxWaitMs || 15 * 60 * 1000)) {
+          // Per-second/burst throttling: wait it out and retry the SAME paper
+          // — but never wait PAST the run's deadline (the wait would
+          // otherwise straddle the budget and blow the CI job timeout).
+          const wait = Math.max(r.retryAfter * 1000, Math.min(5000 * Math.pow(2, oaBad - 1), 60000));
+          if (Date.now() + wait > deadline) { if (opts.log) console.log('  preprints: title-search time budget reached — resuming next run.'); break; }
+          if (opts.log) console.log(`  preprints: OpenAlex rate-limited — waiting ${Math.round(wait / 1000)}s…`);
+          await sleep(wait);
+          i--; continue;
         }
-        const wait = Math.max(r.retryAfter * 1000, Math.min(5000 * Math.pow(2, throttled - 1), 60000));
-        if (opts.log) console.log(`  preprints: rate-limited — waiting ${Math.round(wait / 1000)}s…`);
-        await sleep(wait);
-        i--;
-      } else {
-        await sleep(Math.min(Math.max(r.retryAfter, 2) * 1000, 10000));
+        if ((throttle && r.retryAfter > 3600) || oaBad >= maxThrottle) {
+          // A Retry-After of hours means the DAY's quota is spent (OpenAlex
+          // allows only ~100 title searches/day); persistent failures read
+          // the same. The other engines carry the search from here.
+          oaAlive = false;
+          if (opts.log) console.log('  preprints: OpenAlex quota spent or unavailable — continuing with Crossref+arXiv only.');
+        }
       }
-    } else {
-      await sleep(500);                             // transient error: brief pause, keep going
     }
+
+    // Leg 2 (backbone): Crossref — every pre-print home it mints DOIs for.
+    let crOk = false;
+    if (!pick) {
+      const cr = await searchCrossrefPreprints(p);
+      if (cr && cr.err) {
+        if (++crFails >= 6) { if (opts.log) console.log('  preprints: Crossref failing — stopping title-search for this run.'); break; }
+      } else { crFails = 0; crOk = true; pick = cr; }
+    }
+
+    // Leg 3 (backbone): arXiv's own API, when OpenAlex didn't cover it.
+    let axOk = false;
+    if (!pick && !oaRan && axAlive) {
+      axFired = true;
+      const ax = await searchArxivPreprint(p);
+      if (ax && ax.err) {
+        if (++axFails >= 6) { axAlive = false; if (opts.log) console.log('  preprints: arXiv API failing — dropping the arXiv leg for this run.'); }
+      } else { axFails = 0; axOk = true; pick = ax; }
+    }
+
+    searched++;
+    if (pick) {
+      cache[p._doi] = pick; found++;
+    } else if (crOk && (oaRan || axOk)) {
+      cache[p._doi] = { none: 1, ts: TS_VER };
+    } // else: a required leg failed — leave un-stamped so a later run retries.
+
+    if (opts.log && searched % 500 === 0) console.log(`  preprints: …${searched} searched, ${found} linked so far`);
+    // Periodic save so a long run can be interrupted without losing work.
+    if (opts.checkpoint && searched % 200 === 0) await opts.checkpoint(cache);
+    await sleep(axFired ? axSleepMs : sleepMs);
   }
   if (opts.log) console.log(`  preprints: title search linked ${found} more (searched ${searched}).`);
   return found;
