@@ -337,9 +337,15 @@ CI; the daily Action just folds the committed files in.
   bounded (~25 min), quota-aware slice of OpenAlex title-searches 4×/day and
   commits the results (cache: `_preprints.json` in each data dir). The search
   covers every paper from 1991 on (PNAS included) and accepts pre-prints on
-  arXiv, SSRN, bioRxiv/medRxiv, NBER and OSF, verified by an exact
-  normalized-title match plus two shared author surnames (one for
-  single-author records) and a plausible year; arXiv links are canonicalised
+  arXiv, SSRN, bioRxiv/medRxiv, NBER and OSF, verified by a normalized-title
+  match (exact, or prefix ≥14 chars — working papers often gain or lose a
+  subtitle on publication; a prefix match must be near-contemporaneous and
+  never a comment/reply/corrigendum sibling, so a same-team sequel can't
+  steal the link) plus two shared author surnames (one for single-author
+  records) and a plausible year. When OpenAlex misses, a second
+  engine searches SSRN via Crossref (`filter=prefix:10.2139`) — SSRN mints
+  its DOIs through Crossref, so Crossref has every SSRN record even where
+  OpenAlex has none; arXiv links are canonicalised
   to the unversioned form so they always resolve to the latest version. A
   `TS_VER` marker versions each searched-miss, so expanding the matcher or
   hosts (bump it) re-queues earlier misses behind the never-searched backlog. Natives:

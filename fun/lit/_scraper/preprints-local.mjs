@@ -5,9 +5,9 @@
  * fields into papers-<key>.json) by finding each paper's free author pre-print
  * on arXiv or SSRN.
  *
- * Why local? The link is found with an OpenAlex title.search — ONE request per
- * paper (the pre-print is a separate OpenAlex record with its own
- * 10.2139/ssrn.* DOI, not attached to the published DOI). Across ~30k papers
+ * Why local? The link is found with an OpenAlex title.search — one request
+ * per paper, plus a second Crossref query on an OpenAlex miss (many SSRN
+ * working papers exist only as Crossref 10.2139 records). Across ~30k papers
  * OpenAlex throttles GitHub's shared runner IPs hard, so the daily build only
  * does a small, time-boxed best-effort pass. From a normal home/university
  * connection the same search runs at full speed. Same "run it locally" pattern
