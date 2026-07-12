@@ -197,11 +197,28 @@ serve them). **PNAS "Significance":** for PNAS,
 the Crossref abstract's JATS `<sec><title>Significance</title>` block is split
 out into a `Significance` field (`extractSignificance`, no pnas.org fetch) and
 shown as a **"Significance"** card toggle before "Abstract". See
-`fun/lit/_HOW-IT-WORKS.md`. Like `/fun/ms/`, the page carries the optional
-sign-in feature (star/notes/lists/tags, private per user, dedicated Firebase
-project); it stays inert until a web config is pasted into `FB_CONFIG` in
-`fun/lit/index.html` — setup steps in `fun/lit/_ACCOUNTS-SETUP.md`, security
-rules in `fun/lit/_firestore.rules`.
+`fun/lit/_HOW-IT-WORKS.md`. **Citation counts:** every paper carries a
+`CitedBy` field — Crossref's `is-referenced-by-count`, harvested for free in
+the same batched Crossref requests the build already makes (added to the
+`SELECT` array in `build-data.mjs`; set in `mapWork` only when the count is a
+positive integer, so it never bloats the papers files or shows a "Cited by 0"
+badge). The card renders it as a **"Cited by N · Crossref"** tag next to the
+PDF tag, linking (via `scholarSearchUrl` in `index.html`) to a Google Scholar
+**title search** (`scholar.google.com/scholar?q=<title>`) — the exact title
+lands the paper as the top hit so the user reaches its live GS "Cited by"
+count and citing works. Deliberately NOT Google Scholar's own number: there is
+no Scholar API, and its exact `?cites=<cluster-id>` link isn't derivable from a
+DOI/title, so the count is labelled honestly as Crossref's (a different, lower
+metric — GS also counts preprints/theses/working papers). The FT50 catalog's
+`_scraper-ft50/build-data.mjs` carries the identical change; the satellite
+shard repos (`lit-data-abs4`, `lit-data-abs3-omecon`, `lit-data-abs3-rest`)
+need the same one-line `SELECT` addition applied in their own vendored
+`build-data.mjs` to surface counts for shard papers (the page's renderer
+already shows the tag for any paper that carries `CitedBy`). Like `/fun/ms/`,
+the page carries the optional sign-in feature (star/notes/lists/tags, private
+per user, dedicated Firebase project); it stays inert until a web config is
+pasted into `FB_CONFIG` in `fun/lit/index.html` — setup steps in
+`fun/lit/_ACCOUNTS-SETUP.md`, security rules in `fun/lit/_firestore.rules`.
 
 ## `/fun/ms` — the Google-free Management Science browser
 `fun/ms/` is the Management Science paper browser. It uses **no Google Sheets**:

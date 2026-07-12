@@ -184,6 +184,8 @@
   .jk-ec   { background: #eaf3e6; color: #3d6b1f; }
   .tag-pdf { background: var(--green); color: #fff; text-decoration: none; font-weight: 700; }
   .tag-pdf:hover { background: #1f6b3f; }
+  .tag-cited { background: #eef2fb; color: #33507d; text-decoration: none; cursor: pointer; font-weight: 600; }
+  .tag-cited:hover { background: #dde6f6; }
   .chip-journal { background: var(--navy-light); color: var(--navy); }
   .chip-jtype { background: #e0f2f1; color: #00796b; }
   /* Journal-type badge(s) left of each paper title: the single MOST selective
@@ -2565,6 +2567,15 @@ function journalTagsHTML(p) {
   return '<span class="tag tag-journal jk-' + escAttr(jk) + '" onclick="addJournalChip(\'' + escAttr(jk) + '\')">' + esc(label) + '</span>';
 }
 
+// Google Scholar title search — the exact title lands the paper as the top hit,
+// showing its live "Cited by N" and its citing works. We can't build Scholar's
+// exact ?cites=<cluster-id> cited-by link (that ID lives only inside Scholar and
+// isn't derivable from a DOI/title), so a title search is the clean, ToS-safe
+// route to the same destination.
+function scholarSearchUrl(title) {
+  return 'https://scholar.google.com/scholar?hl=en&q=' + encodeURIComponent(String(title || '').trim());
+}
+
 // Markup for one paper card. `idx` is the index into the global `filtered`
 // array (so the Abstract/BibTeX toggles resolve to the right paper). When
 // `showAdded` is true, a tag with the paper's database-insertion date is shown.
@@ -2600,6 +2611,7 @@ function paperCardHTML(p, idx, showAdded) {
       ${p['Status']==='Other' ? '<span class="tag tag-other">Other</span>' : ''}
       ${p['Status'] && p['Status']!=='Other' ? `<span class="tag tag-aia">${esc(p['Status'])}</span>` : ''}
       ${safeUrl(p['PDF']) && preprintPdfUrl(safeUrl(p['PDF'])) !== preprintPdfUrl(safeUrl(p['Preprint'])) ? `<a class="tag tag-pdf" href="${preprintPdfUrl(safeUrl(p['PDF']))}" target="_blank" rel="noopener" title="Open-access PDF (arXiv/SSRN where available)">PDF ↗</a>` : ''}
+      ${Number(p['CitedBy']) > 0 ? `<a class="tag tag-cited" href="${scholarSearchUrl(p['Title'])}" target="_blank" rel="noopener" title="Crossref citation count — a different, lower metric than Google Scholar's, which also counts preprints, theses and working papers. Click to look this paper up on Google Scholar for its live 'Cited by' count and the citing works.">Cited by ${esc(String(p['CitedBy']))} · Crossref ↗</a>` : ''}
       ${addedTag}
     </div>
     ${hasSig ? `<span class="paper-abstract-toggle paper-sig-toggle" onclick="togAbs('${sid}',this,'Significance')">▸ Significance</span>` : ''}
