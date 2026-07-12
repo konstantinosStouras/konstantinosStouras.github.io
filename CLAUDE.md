@@ -112,14 +112,22 @@ caveat:** a no-volume/no-issue record is tagged forthcoming only when recent
 (`forthcomingStatus`); `data/_aia-fixups.json` supplies the real issue for older
 frozen records and `data/_informs-aia.json` adds forthcoming papers Crossref
 misses, both refreshed locally by `fun/lit/_scraper/informs-aia-local.mjs`.
-**Pre-print links:** every paper with a free author pre-print on **arXiv or
-SSRN** carries a `Preprint` (+ `PreprintSrc`) field, resolved in `build-data.mjs`
+**Pre-print links:** every paper with a free author pre-print on **arXiv,
+SSRN, bioRxiv/medRxiv, NBER or OSF** carries a `Preprint` (+ `PreprintSrc`)
+field, resolved in `build-data.mjs`
 (`resolvePreprints`) and cached in `data/_preprints.json` (doi → `{u,s}` |
-`{none:1}` | `{none:1,ts:1}`; incremental). Two passes: (1) OpenAlex **by DOI**
-(batched) reads any arXiv/SSRN location already attached to the published record;
+`{none:1}` | `{none:1,ts:N}`; incremental). Two passes: (1) OpenAlex **by DOI**
+(batched) reads any pre-print location already attached to the published record;
 (2) a **title+author search** (`searchPreprintsByTitle`/`matchPreprintWork`,
 newest-first) finds preprints that live as a **separate** OpenAlex/SSRN record
-(own `10.2139/ssrn.*` DOI) — this is what surfaces most SSRN links. It is ONE
+(own `10.2139/ssrn.*` DOI) — this is what surfaces most SSRN links. The
+search covers **every paper from 1991 on (arXiv's first year), PNAS
+included**; `ts` records WHICH search version last missed (`TS_VER` in the
+block — **bump it whenever the matcher or host coverage expands** and every
+old miss is retried with the wider net, never-searched papers first). arXiv
+links are canonicalised to the **unversioned `/abs/<id>`** form
+(`canonArxiv`/`canonPreprint`, applied on every apply) so they always resolve
+to the LATEST version. It is ONE
 OpenAlex request per paper (rate-limited per identity, daily quota resets at
 midnight UTC), so the **backfill runs online in its own scheduled workflow**,
 `.github/workflows/lit-preprints-backfill.yml` (4×/day), which runs
@@ -150,23 +158,28 @@ shards `+abs4`/`+abs3om`/`+abs3rest` (their daily builds use the same
 identity) — so the five parallel backfills never starve each other. Because
 extras now carry `Preprint` fields, the page's pre-print toggle counts as a
 broad trigger in `neededExtraKeys()` (like it always did for natives). Both `pickPreprint` and the matcher are host-validated (real
-`arxiv.org`/`ssrn.com` hostname) so a spoofed domain can't slip into the href;
-the matcher also demands an exact normalized-title match + a shared author
-surname + a plausible year to avoid wrong links. The card shows an open-access **"Pre-print (Open Access)"**
+`arxiv.org`/`ssrn.com`/`biorxiv.org`/`medrxiv.org`/`nber.org`/`osf.io`
+hostname) so a spoofed domain can't slip into the href; the matcher demands
+an exact normalized-title match + **two shared author surnames** (one only
+for single-author records) + a plausible year to avoid wrong links. The card shows an open-access **"Pre-print (Open Access)"**
 link between BibTeX and the sign-in "Notes, tags & lists" toggle; EC's meta-row
 PDF tag is suppressed when it duplicates it. **Pre-print links open the PDF
-directly:** at render time `preprintPdfUrl()` in `index.html` rewrites
-landing-page hrefs to the PDF itself — SSRN abstract pages
+directly, latest version:** at render time `preprintPdfUrl()` in `index.html`
+rewrites landing-page hrefs to the PDF itself — SSRN abstract pages
 (`papers.cfm?abstract_id=N` / `ssrn.com/abstract=N`) to SSRN's
-`Delivery.cfm?abstractid=N&mirid=1` download endpoint (`ssrnPdfUrl`), and
-arXiv `/abs/<id>` to `/pdf/<id>` (`arxivPdfUrl`). Href-only — the datasets
-keep the stable landing URLs, so an endpoint change needs only those helpers
-updated; applied to both the Pre-print link and EC's PDF tag.
+`Delivery.cfm?abstractid=N&mirid=1` download endpoint (`ssrnPdfUrl`); arXiv
+`/abs|pdf/<id>[vN]` to unversioned `/pdf/<id>` = the latest version
+(`arxivPdfUrl`); versioned bioRxiv/medRxiv content URLs to `.full.pdf`
+(`biorxivPdfUrl`); NBER `/papers/wN` to its direct-PDF path (`nberPdfUrl`);
+OSF ids to `/download` (`osfPdfUrl`). Href-only — the datasets keep the
+stable landing URLs, so an endpoint change needs only those helpers updated;
+applied to both the Pre-print link and EC's PDF tag (link tooltip names the
+host via the `PREPRINT_HOST` map).
 **DOI-less EC accepted papers** (each year's fresh sigecom.org list, e.g.
 EC '26) can't be reached by any by-DOI pass, so `enrichEc` runs an OpenAlex
 title-search pass for them (newest first, `LIT_EC_TITLE_CAP` default 350/run,
-same gentle fetch + conservative matcher as the preprint search; `oat: 1`
-cache marker in `_ec-extras.json`), and an arXiv/SSRN find is surfaced as
+same gentle fetch + conservative matcher as the preprint search; versioned
+`oat` cache marker in `_ec-extras.json`), and a pre-print find is surfaced as
 both their `PDF` and their `Preprint` (the DOI-keyed `_preprints.json` can't
 serve them). **PNAS "Significance":** for PNAS,
 the Crossref abstract's JATS `<sec><title>Significance</title>` block is split

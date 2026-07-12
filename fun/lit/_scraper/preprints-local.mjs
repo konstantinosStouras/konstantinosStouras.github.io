@@ -20,8 +20,10 @@
  *   node preprints-local.mjs --source=ms,opre # only these sources
  *
  * It is resume-safe: results are cached in _preprints.json (doi -> {u,s} |
- * {none:1,ts:1}), so each paper is title-searched at most once. Run it in as
- * many sittings as you like (newest papers first). Then commit + push
+ * {none:1,ts:TS_VER}), so each paper is title-searched at most once per
+ * search version (a TS_VER bump in build-data.mjs re-queues old misses
+ * behind the never-searched backlog). Run it in as many sittings as you
+ * like (never-searched first, newest within each class). Then commit + push
  * fun/lit/data/_preprints.json + the papers-*.json it updated; the daily build
  * re-applies the cache, so the links persist across rebuilds.
  *
@@ -41,7 +43,7 @@ import { fileURLToPath } from 'node:url';
 // still overrides. Must be set BEFORE importing build-data.mjs, which reads
 // it at module load; hence the dynamic import.
 process.env.LIT_MAILTO = process.env.LIT_MAILTO || 'kostas.stouras@ucd.ie';
-const { searchPreprintsByTitle } = await import('./build-data.mjs');
+const { canonPreprint, searchPreprintsByTitle } = await import('./build-data.mjs');
 console.log(`OpenAlex contact (quota identity): ${process.env.LIT_MAILTO}`);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -72,7 +74,7 @@ for (const s of sources) {
   filesByKey[s.key] = rows;
   for (const r of rows) {
     r._doi = (r.DOI || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase();
-    r.JKey = r.JKey || s.key;                 // searchPreprintsByTitle skips pnas / <2005
+    r.JKey = r.JKey || s.key;                 // searchPreprintsByTitle skips pre-1991
     all.push(r);
   }
 }
@@ -97,7 +99,7 @@ let updated = 0;
 for (const [key, rows] of Object.entries(filesByKey)) {
   for (const r of rows) {
     const x = cache[r._doi];
-    if (x && x.u) { r.Preprint = x.u; r.PreprintSrc = x.s; updated++; }
+    if (x && x.u) { r.Preprint = canonPreprint(x.u); r.PreprintSrc = x.s; updated++; }
     delete r._doi;                            // strip the helper field before writing
   }
   const s = sources.find(x => x.key === key);
