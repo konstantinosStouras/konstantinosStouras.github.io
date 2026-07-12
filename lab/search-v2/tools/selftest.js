@@ -113,6 +113,25 @@ section('Test 6 · App wiring (runtime generation, no pool, AI cost in the net)'
   ok('index.html static markup carries no "assistant" string (Arm A isolation)', !/assistant/i.test(idx));
 }
 
+section('Test 6b · Rational-search benchmark (Space Exploration "search window")');
+{
+  // reveal 50→80¢ (best), 10→5¢ (far, still in window), 12→30¢ (capped ≤80 by the
+  // low neighbour at 10 → an "obvious mistake": ceil = 5 + 10·2 = 25 < 80).
+  const ws = LS.windowStats([[50, 80], [10, 5], [12, 30]], 10, 100, 5);
+  ok('flags the obvious mistake (revealing a capped-out cell)', ws.mistakes === 1 && ws.n === 3, 'mistakes=' + ws.mistakes);
+  ok('i.i.d. reservation ≈ 68¢ (100 − √(200·5))', ws.reservation === 68, 'got ' + ws.reservation);
+  const ws1 = LS.windowStats([[50, 40]], 10, 100, 5);
+  ok('a single reveal is never a mistake; window stays open', ws1.mistakes === 0 && ws1.windowRemaining > 0);
+  // a cell adjacent to the best is NOT a mistake (its ceiling is best+L)
+  const ws2 = LS.windowStats([[50, 80], [51, 70]], 10, 100, 5);
+  ok('revealing next to the best is inside the window (not a mistake)', ws2.mistakes === 0);
+  ok('windowRemaining=0 means every unrevealed cell is capped ≤ best', LS.windowStats([[50, 100]], 10, 100, 5).windowRemaining >= 0);
+  // window envelope: ceiling passes through the reveal and rises ±L away, capped 100
+  const env = LS.windowEnvelope([[50, 80]], 10, 100);
+  ok('envelope ceiling equals the revealed value at that position', env.ceiling[49] === 80 && env.best === 80);
+  ok('envelope ceiling rises by L per step and caps at 100', env.ceiling[50] === 90 && env.ceiling[60] === 100);
+}
+
 section('Test 7 · AI-model economics + defaults');
 {
   const ai = CONFIG.AI;

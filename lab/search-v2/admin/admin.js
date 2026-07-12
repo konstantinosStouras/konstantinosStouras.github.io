@@ -801,6 +801,63 @@
     });
     $('events-table').innerHTML = eh + '</tbody>';
     $('events-count').textContent = '(recent ' + Math.min(800, evs.length) + ' of ' + evs.length + ')';
+
+    renderOptimality(evs);
+  }
+
+  // ===================================================== rational-search benchmark
+  // Post-hoc "search window" scorer (Malladi–Martínez-Marquina–Morozov, "Space
+  // Exploration"): reconstructs each real round's reveal sequence from the logged
+  // `reveal` events, scores it with landscape.js windowStats, and aggregates the
+  // obvious-mistake rate, optimal-stop share, and reservation across the filtered data.
+  function renderOptimality(evs) {
+    var grid = $('opt-stat-grid'), tbl = $('opt-table');
+    if (!grid || !tbl) return;
+    var LS = window.Landscape;
+    if (!LS || !LS.windowStats) { grid.innerHTML = '<p class="muted small">Scorer unavailable (landscape.js not loaded).</p>'; tbl.innerHTML = ''; return; }
+    var L = (LS.L_STEP || 10), N = (LS.N || 100), COST = 5;
+    // group reveal events by (participant, phase, round), in time order
+    var rounds = {};
+    evs.forEach(function (e) {
+      if (e.event !== 'reveal' || e.position == null || e.value == null) return;
+      if (e.round === 0) return; // skip the unpaid practice round
+      var key = (e.session || '') + '|' + (e.phase == null ? 1 : e.phase) + '|' + (e.round == null ? 0 : e.round);
+      var r = rounds[key] || (rounds[key] = { session: e.session, code: e.sessionCode, pid: e.pid, arm: e.arm, reveals: [] });
+      r.reveals.push([+e.position, +e.value, +e.t || 0]);
+    });
+    var byPart = {}, totRounds = 0, totReveals = 0, totMistakes = 0, randSum = 0, optStops = 0, resSum = 0;
+    Object.keys(rounds).forEach(function (k) {
+      var r = rounds[k];
+      if (!r.reveals.length) return;
+      r.reveals.sort(function (a, b) { return a[2] - b[2]; });
+      var s = LS.windowStats(r.reveals.map(function (x) { return [x[0], x[1]]; }), L, N, COST);
+      totRounds++; totReveals += s.n; totMistakes += s.mistakes; randSum += s.randomRate;
+      resSum += s.reservation; if (s.windowRemaining === 0) optStops++;
+      var p = byPart[r.session] || (byPart[r.session] = { session: r.session, code: r.code, pid: r.pid, arms: {}, rounds: 0, reveals: 0, mistakes: 0, optStops: 0, bestSum: 0 });
+      if (r.arm === 'A' || r.arm === 'B') p.arms[r.arm] = true;
+      p.rounds++; p.reveals += s.n; p.mistakes += s.mistakes; if (s.windowRemaining === 0) p.optStops++; p.bestSum += s.best;
+    });
+    if (!totRounds) { grid.innerHTML = '<p class="muted small">No revealed rounds to score yet.</p>'; tbl.innerHTML = ''; return; }
+    var mrate = totReveals ? totMistakes / totReveals : 0, rrate = totRounds ? randSum / totRounds : 0;
+    grid.innerHTML = box(totRounds, 'rounds scored') +
+      box((mrate * 100).toFixed(1) + '%', 'obvious-mistake rate') +
+      box((rrate * 100).toFixed(1) + '%', 'random-search null') +
+      box(Math.round(optStops / totRounds * 100) + '%', 'optimal stops') +
+      box((totReveals / totRounds).toFixed(1), 'avg reveals/round') +
+      box(Math.round(resSum / totRounds) + '¢', 'reservation (i.i.d.)');
+    var rows = Object.keys(byPart).map(function (k) { return byPart[k]; })
+      .sort(function (a, b) { return (b.mistakes / (b.reveals || 1)) - (a.mistakes / (a.reveals || 1)); });
+    var h = '<thead><tr><th>Participant</th><th>Session</th><th>Phases</th><th>Rounds</th><th>Reveals</th><th>Obvious mistakes</th><th>Optimal stops</th><th>Avg best</th></tr></thead><tbody>';
+    rows.forEach(function (p) {
+      var mr = p.reveals ? (p.mistakes / p.reveals * 100).toFixed(0) + '%' : '—';
+      h += '<tr><td>' + esc(shortId(p.session)) + '</td><td>' + esc(p.code || '') + '</td>' +
+        '<td>' + esc(Object.keys(p.arms).map(function (a) { return PHASE_LABEL[a] || a; }).join(', ') || '—') + '</td>' +
+        '<td>' + p.rounds + '</td><td>' + p.reveals + '</td>' +
+        '<td>' + p.mistakes + ' (' + mr + ')</td>' +
+        '<td>' + Math.round(p.optStops / p.rounds * 100) + '%</td>' +
+        '<td>' + (p.rounds ? Math.round(p.bestSum / p.rounds) : '—') + '¢</td></tr>';
+    });
+    tbl.innerHTML = h + '</tbody>';
   }
 
   // ============================================================= analytics

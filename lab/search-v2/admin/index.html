@@ -441,6 +441,12 @@
         <div class="stat-grid" id="stat-grid"></div>
         <h3>Per-participant sessions</h3>
         <div class="table-scroll"><table class="data-table" id="sessions-table"></table></div>
+
+        <h3 style="margin-top:18px;" title="Scores each real round's reveals against the rational 'search window' of Malladi–Martínez-Marquina–Morozov, Space Exploration. An 'obvious mistake' is revealing a cell whose best-possible value (given the ±10¢ bounds and earlier reveals) is already ≤ your best. 'Optimal stops' = rounds ended with an empty window (nothing left could beat you). Uses participants' reveals only; respects the session filter above.">Rational-search benchmark <span class="muted small">· Space Exploration search window <span class="help">?</span></span></h3>
+        <p class="muted small" style="margin:2px 0 8px;">How close participants come to optimal search: obvious-mistake rate (vs a uniform-random null), share of rounds stopped optimally, and the i.i.d. reservation (≈68¢). Real rounds only.</p>
+        <div class="stat-grid" id="opt-stat-grid"></div>
+        <div class="table-scroll" style="margin-top:8px;"><table class="data-table" id="opt-table"></table></div>
+
         <h3 style="margin-top:18px;">Events <span class="muted small" id="events-count"></span></h3>
         <div class="table-scroll"><table class="data-table" id="events-table"></table></div>
       </div>
@@ -458,6 +464,8 @@
     </section>
   </div>
 
+  <script src="../config.js"></script>
+  <script src="../landscape.js"></script>
   <script src="../firebase-config.js"></script>
   <script src="../firebase.js"></script>
   <script src="xlsx.js"></script>

@@ -120,7 +120,7 @@
   // Testing-only overlay toggles (debug/Test link only). NEVER shown to a real
   // participant: the AI region / training points / interpolation line and the
   // ground-truth line are revealed only when the tester ticks these.
-  var TESTVIEW = { truth: false, region: false, dots: false, interp: false };
+  var TESTVIEW = { truth: false, region: false, dots: false, interp: false, window: false };
   var lastSelectLogT = 0;
   var STUDY_CLOSED = false;    // set from the admin-controlled config/study doc
   var STUDY_ARM_MODE = 'url';  // legacy single-arm mode: 'url'|'A'|'B'|'random' (admin-controlled)
@@ -822,17 +822,21 @@
     // never sees the region, training points, interpolation, or ground truth.
     var groups = currentGroups();
     var geo = LS.geometry(groups);
+    var showWin = DEBUG && TESTVIEW.window;
+    var win = showWin ? LS.windowEnvelope(reveals.map(function (r) { return [r.pos, r.val]; }), CFG.L_STEP, N_POS) : null;
     if (DEBUG) buildTestView();
     chart.render({
       arm: arm, coverage: PATCHES, selected: S.round.selected,
       revealed: reveals.map(function (r) { return { pos: r.pos, val: r.val }; }),
       estimates: arm === 'B' ? S.round.estimates.map(function (e) { return { pos: e.pos, val: e.val }; }) : [],
       truth: truth, dotGroups: groups, interp: geo.interp, extrap: geo.extrap, zones: geo.zones,
+      windowCeiling: win ? win.ceiling : null, windowBest: win ? win.best : 0,
       tag: DEBUG ? (S.round.mappingId + (arm === 'B' ? ' · ' + currentModel() : '')) : null,
       showTruth: DEBUG && TESTVIEW.truth,
       showCoverage: DEBUG && arm === 'B' && TESTVIEW.region,
       showDots: DEBUG && arm === 'B' && TESTVIEW.dots,
-      showInterp: DEBUG && arm === 'B' && TESTVIEW.interp
+      showInterp: DEBUG && arm === 'B' && TESTVIEW.interp,
+      showWindow: showWin
     });
   }
 
@@ -845,20 +849,44 @@
       bar.innerHTML =
         '<span class="tv-title">Testing view</span>' +
         '<label><input type="checkbox" id="tv-truth"> Ground truth</label>' +
+        '<label><input type="checkbox" id="tv-window"> Search window</label>' +
         '<label class="tv-ai"><input type="checkbox" id="tv-region"> AI region</label>' +
         '<label class="tv-ai"><input type="checkbox" id="tv-dots"> AI data points</label>' +
-        '<label class="tv-ai"><input type="checkbox" id="tv-interp"> AI interp / extrap</label>';
+        '<label class="tv-ai"><input type="checkbox" id="tv-interp"> AI interp / extrap</label>' +
+        '<div class="tv-opt" id="tv-opt"></div>';
       var wire = function (id, key) {
         $(id).checked = TESTVIEW[key];
         $(id).addEventListener('change', function () { TESTVIEW[key] = this.checked; renderRound(); });
       };
-      wire('tv-truth', 'truth'); wire('tv-region', 'region');
+      wire('tv-truth', 'truth'); wire('tv-window', 'window'); wire('tv-region', 'region');
       wire('tv-dots', 'dots'); wire('tv-interp', 'interp');
       bar.setAttribute('data-built', '1');
     }
     bar.style.display = '';
     var ai = bar.querySelectorAll('.tv-ai');
     for (var i = 0; i < ai.length; i++) ai[i].style.display = (arm === 'B') ? '' : 'none';
+    updateOptReadout();
+  }
+
+  // Rational-search benchmark readout (testing/debug only — never shown to a real
+  // participant). Scores this round's reveals against the paper's "search window"
+  // (Malladi–Martínez-Marquina–Morozov, "Space Exploration"): obvious-mistake rate
+  // vs a uniform-random null, whether the stop was optimal, and the i.i.d.
+  // reservation value. Uses the participant's OWN reveals only (no truth leak).
+  function updateOptReadout() {
+    var el = $('tv-opt'); if (!el) return;
+    var s = LS.windowStats((S.round.reveals || []).map(function (r) { return [r.pos, r.val]; }), CFG.L_STEP, N_POS, COST);
+    var pct = function (r) { return Math.round(r * 100) + '%'; };
+    var head = '<b>Rational benchmark</b> <span class="tv-optnote">(test only · Space Exploration search window)</span>: ';
+    if (!s.n) { el.innerHTML = head + 'no reveals yet — the whole line is still in the window.'; return; }
+    var stop = s.windowRemaining === 0
+      ? '<b>window empty → optimal to stop now</b>'
+      : s.windowRemaining + ' cell' + (s.windowRemaining === 1 ? '' : 's') + ' could still beat your best';
+    el.innerHTML = head +
+      s.n + ' reveal' + (s.n === 1 ? '' : 's') +
+      ' · <b>' + s.mistakes + '</b> obvious mistake' + (s.mistakes === 1 ? '' : 's') + ' (' + pct(s.mistakeRate) + ', random ≈ ' + pct(s.randomRate) + ')' +
+      ' · ' + stop +
+      ' · best ' + s.best + '&cent; · i.i.d. reservation ≈ ' + s.reservation + '&cent;';
   }
 
   function selectPos(pos) {
