@@ -1080,8 +1080,9 @@ function registerExtraSources(rows, base) {
   updateSourceCountText();
   updateYearRangeText(NaN);
   // If the user set a scope before this manifest arrived, re-run the active
-  // view so the newly registered journals start downloading.
-  if (recentMode) renderRecent(); else if (sel.jtype.size || sel.journal.size || broadFilterActive()) applyFilters();
+  // view so the newly registered journals start downloading. Mirror every
+  // broad trigger of neededExtraKeys() — including the pre-print toggle.
+  if (recentMode) renderRecent(); else if (sel.jtype.size || sel.journal.size || broadFilterActive() || preprintOnly) applyFilters();
 }
 
 async function fetchManifest(url) {
@@ -1159,9 +1160,11 @@ function loadExtraSource(key) {
 
 // The extra journals the current filter state needs: those in the effective
 // journal scope, or all of them when a broad filter (year/title/author/
-// affiliation — anything FT50 papers could match) runs with no journal scope.
-// The MS/ISR-specific editor filters and the pre-print toggle can never match
-// an FT50-extra paper, so on their own they don't trigger the download.
+// affiliation/pre-print — anything FT50-extra papers could match) runs with
+// no journal scope. Extras carry Preprint links too (each catalog has its own
+// backfill workflow), so the pre-print toggle is a broad trigger; only the
+// MS/ISR-specific editor filters can never match an extra paper and don't
+// trigger the download on their own.
 // A filter any journal's papers could match (year / title / author /
 // affiliation, typed or chipped) is active with no journal scope — the
 // "search everything" case that streams every catalog file.
@@ -1176,7 +1179,7 @@ function broadFilterActive() {
 function neededExtraKeys() {
   var keys = Object.keys(EXTRA_SRC);
   if (journalScope) return keys.filter(function(k) { return journalScope.has(k); });
-  return broadFilterActive() ? keys : [];
+  return (broadFilterActive() || preprintOnly) ? keys : [];
 }
 
 function ensureExtraSources() { neededExtraKeys().forEach(loadExtraSource); }
@@ -1305,8 +1308,8 @@ function loadNativeSource(key) {
 // The native sources the current filter state needs: those in the effective
 // journal scope (a PNAS section key needs the parent 'pnas' file), or all of
 // them when any filter native papers could match runs with no journal scope —
-// including the MS/ISR editor filters and the pre-print toggle, which (unlike
-// the FT50 extras) CAN match native papers.
+// including the pre-print toggle (a broad trigger for extras too) and the
+// MS/ISR editor filters, which unlike the extras CAN match native papers.
 function neededNativeKeys() {
   var keys = sourcesManifest.map(function(s) { return s.key; });
   if (journalScope) {
@@ -2596,13 +2599,13 @@ function paperCardHTML(p, idx, showAdded) {
       ${(p._ae||[]).map(e => `<span class="tag tag-ae" onclick="addChipFromCard('ae','${escAttr(e)}')" title="Associate Editor — click to see other papers this editor handled">AE: ${esc(e)}</span>`).join('')}
       ${p['Status']==='Other' ? '<span class="tag tag-other">Other</span>' : ''}
       ${p['Status'] && p['Status']!=='Other' ? `<span class="tag tag-aia">${esc(p['Status'])}</span>` : ''}
-      ${safeUrl(p['PDF']) && p['PDF'] !== p['Preprint'] ? `<a class="tag tag-pdf" href="${safeUrl(p['PDF'])}" target="_blank" rel="noopener" title="Open-access PDF (arXiv/SSRN where available)">PDF ↗</a>` : ''}
+      ${safeUrl(p['PDF']) && p['PDF'] !== p['Preprint'] ? `<a class="tag tag-pdf" href="${ssrnPdfUrl(safeUrl(p['PDF'])) || safeUrl(p['PDF'])}" target="_blank" rel="noopener" title="Open-access PDF (arXiv/SSRN where available)">PDF ↗</a>` : ''}
       ${addedTag}
     </div>
     ${hasSig ? `<span class="paper-abstract-toggle paper-sig-toggle" onclick="togAbs('${sid}',this,'Significance')">▸ Significance</span>` : ''}
     ${hasAbs ? `<span class="paper-abstract-toggle" onclick="togAbs('${aid}',this)">▸ Abstract</span>` : ''}
     <span class="paper-bibtex-toggle" onclick="togBib('bib${idx}',this,${idx})">▸ BibTeX</span>
-    ${safeUrl(p['Preprint']) ? `<a class="paper-preprint-link" href="${safeUrl(p['Preprint'])}" target="_blank" rel="noopener" title="Free author pre-print on ${p['PreprintSrc'] === 'ssrn' ? 'SSRN' : 'arXiv'} — the accepted/working version, which may differ from the final published paper">Pre-print (Open Access) ↗</a>` : ''}
+    ${safeUrl(p['Preprint']) ? `<a class="paper-preprint-link" href="${ssrnPdfUrl(safeUrl(p['Preprint'])) || safeUrl(p['Preprint'])}" target="_blank" rel="noopener" title="Free author pre-print on ${p['PreprintSrc'] === 'ssrn' ? 'SSRN (opens the PDF directly)' : 'arXiv'} — the accepted/working version, which may differ from the final published paper">Pre-print (Open Access) ↗</a>` : ''}
     ${typeof acctToggleHTML === 'function' ? acctToggleHTML(p) : ''}
     ${hasSig ? `<div id="${sid}" class="paper-abstract paper-significance">${esc(sigClean)}</div>` : ''}
     ${hasAbs ? `<div id="${aid}" class="paper-abstract">${esc(absClean)}</div>` : ''}
@@ -2781,6 +2784,18 @@ function safeUrl(u) {
   u = String(u || '');
   if (!/^https?:\/\//i.test(u)) return '';
   return u.replace(/"/g, '%22').replace(/'/g, '%27').replace(/</g, '%3C').replace(/>/g, '%3E');
+}
+
+// A stored SSRN link points at the abstract LANDING page (papers.cfm?
+// abstract_id=N / ssrn.com/abstract=N). Rewrite it at render time to SSRN's
+// direct-PDF "Download This Paper" endpoint so one click opens the PDF
+// itself. Href-only: the datasets keep the stable landing URL (the abstract
+// id is the identity; the delivery endpoint is the one SSRN could change,
+// and then only this helper needs updating). Non-SSRN and already-direct
+// (Delivery.cfm) URLs return '' — callers fall back to the stored URL.
+function ssrnPdfUrl(u) {
+  var m = String(u || '').match(/^https?:\/\/(?:[a-z0-9-]+\.)*ssrn\.com\/(?:sol3\/papers\.cfm\?abstract_?id=|abstract_?id=|abstract=)(\d+)/i);
+  return m ? 'https://papers.ssrn.com/sol3/Delivery.cfm?abstractid=' + m[1] + '&mirid=1' : '';
 }
 
 function cleanAbstract(s) {

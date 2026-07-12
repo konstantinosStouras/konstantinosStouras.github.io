@@ -943,6 +943,47 @@ async function enrichEc(rows, extras, dblpPrefetched) {
     if (pdf) extras[k] = { ...(extras[k] || {}), pdf, src: 'dblp' };
   }
 
+  // 2b. OpenAlex title search for rows with NO DOI — a fresh year's
+  //     accepted-papers list (e.g. EC '26) lives only on sigecom.org, so the
+  //     by-DOI pass can't cover it and DBLP has no toc until the ACM DL
+  //     publishes the proceedings. Semantic Scholar (pass 3) rate-limits
+  //     cloud runners into uselessness (the cache has never held a single
+  //     title-keyed hit), so this pass is what actually links a new year's
+  //     accepted papers to their arXiv/SSRN pre-prints. Same gentle fetch and
+  //     conservative matcher as the preprint title-search (exact normalized
+  //     title + shared author surname + plausible year). `oat: 1` marks a
+  //     searched-but-unlinked title so the next run spends its budget on new
+  //     rows; DBLP/S2 can still fill those in later.
+  let oatLeft = parseInt(process.env.LIT_EC_TITLE_CAP || '350', 10), oatThrottle = 0;
+  const noDoi = rows.filter(r => !r._doi)
+    .sort((a, b) => (parseInt(b.Year, 10) || 0) - (parseInt(a.Year, 10) || 0));
+  for (const r of noDoi) {
+    if (oatLeft <= 0 || oatThrottle >= 6) break;
+    const k = keyOf(r);
+    const cur = extras[k];
+    if (cur && (cur.pdf || cur.oat || cur.none)) continue;
+    const q = String(r.Title || '').replace(/[^\w\s'-]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!q) { extras[k] = { ...(cur || {}), oat: 1 }; continue; }
+    oatLeft--;
+    const url = 'https://api.openalex.org/works?filter=title.search:' + encodeURIComponent(q) +
+      '&per-page=10&select=doi,title,publication_year,authorships,best_oa_location,primary_location,locations' +
+      `&mailto=${encodeURIComponent(MAILTO)}`;
+    const oa = await oaGet(url);
+    if (oa.ok) {
+      oatThrottle = 0;
+      const pick = matchPreprintWork({ title: r.Title, year: r.Year, authors: r.Authors },
+        (oa.json && oa.json.results) || []);
+      extras[k] = pick ? { ...(cur || {}), pdf: pick.u, src: 'openalex-title' }
+                       : { ...(cur || {}), oat: 1 };
+      await sleep(300);
+    } else if (oa.status === 429 || oa.status === 403) {
+      oatThrottle++;                       // not marked oat — a later run retries
+      await sleep(Math.min(Math.max(oa.retryAfter, 2) * 1000, 10000));
+    } else {
+      await sleep(500);
+    }
+  }
+
   // 3. Semantic Scholar title match for whatever still has no PDF. Capped per
   //    run (public rate limits); the cache makes this resume across runs.
   let s2Left = S2_CAP, s2Errors = 0;
@@ -969,7 +1010,7 @@ async function enrichEc(rows, extras, dblpPrefetched) {
         const pdf = pickPdf([arx ? `https://arxiv.org/abs/${arx}` : '',
           hit.openAccessPdf && hit.openAccessPdf.url]);
         const abs = (cur && cur.abs) || String(hit.abstract || '').slice(0, MAX_ABSTRACT);
-        extras[k] = pdf || abs ? { pdf, abs, src: 's2' } : { none: true };
+        extras[k] = pdf || abs ? { ...(cur || {}), pdf, abs, src: 's2' } : { ...(cur || {}), none: true };
       }
     } catch (e) {
       s2Errors++;
@@ -984,6 +1025,14 @@ async function enrichEc(rows, extras, dblpPrefetched) {
     if (!x) continue;
     if (x.pdf) { r.PDF = x.pdf; withPdf++; }
     if (!r.Abstract && x.abs) r.Abstract = x.abs;
+    // A DOI-less accepted paper can never receive a Preprint link from the
+    // DOI-keyed _preprints.json cache — surface its arXiv/SSRN copy directly.
+    // (The card then shows the Pre-print link and suppresses the duplicate
+    // PDF tag; applyPreprints leaves DOI-less rows untouched.)
+    if (!r._doi && r.PDF && !r.Preprint) {
+      const pk = pickPreprint([r.PDF]);
+      if (pk) { r.Preprint = pk.u; r.PreprintSrc = pk.s; }
+    }
   }
   console.log(`  ec extras: ${withPdf}/${rows.length} papers have a PDF link`);
 }

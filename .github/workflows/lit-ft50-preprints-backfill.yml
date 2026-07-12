@@ -1,0 +1,82 @@
+name: lit-ft50 — backfill pre-print links
+
+# Incrementally links arXiv/SSRN pre-prints for lit's FT50 catalog
+# (fun/lit/data-ft50/) by running fun/lit/_scraper-ft50/preprints-ci.mjs a few
+# times a day: each run does a bounded (~25 min), quota-aware slice of OpenAlex
+# title-searches and commits the refreshed data back. The first-deploy backlog
+# clears over a few days; after that each run is a cheap near-no-op that covers
+# newly added papers. Twin of lit-preprints-backfill.yml (which covers lit's
+# native eight sources) — see the header of preprints-ci.mjs.
+
+on:
+  schedule:
+    # Four slices a day, offset from the 07:15 daily catalog build and from
+    # lit-preprints-backfill.yml's 00:45/06:45/12:45/18:45 runs. This dataset
+    # has its own OpenAlex quota identity (FT50_MAILTO below), so the two
+    # backfills never starve each other.
+    - cron: '5 2,8,14,20 * * *'
+  workflow_dispatch: {}      # run on demand from the Actions tab
+
+# SAME concurrency group as lit-ft50-update-data.yml — both workflows commit
+# fun/lit/data-ft50, so they must queue behind each other, never race.
+concurrency:
+  group: lit-ft50-update-data-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write            # needed to commit the refreshed data back
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50      # hard backstop: search budget is 25 min + apply/commit
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Backfill pre-print links (OpenAlex title-search, bounded)
+        env:
+          FT50_MAILTO: kstouras+litft50@gmail.com   # this dataset's own OpenAlex quota identity
+        run: node fun/lit/_scraper-ft50/preprints-ci.mjs
+
+      - name: Commit refreshed data
+        if: github.ref == 'refs/heads/master'
+        # Same hardened push as lit-ft50-update-data.yml, with one difference:
+        # on a rejected push this run's tree may be STALER than what landed
+        # (e.g. a daily refresh with new papers), so instead of re-committing
+        # our tree we take the new tip's data and re-apply ONLY our cache finds
+        # onto it (preprints-ci.mjs --apply-only --merge-cache).
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add fun/lit/data-ft50
+          if git diff --cached --quiet; then
+            echo "No data changes — nothing to commit."
+            exit 0
+          fi
+          cp fun/lit/data-ft50/_preprints.json /tmp/lit-ft50-preprints-ours.json
+          git commit -m "lit-ft50: backfill pre-print links"
+          for i in 1 2 3; do
+            if git push origin HEAD:${{ github.ref_name }}; then
+              echo "Pushed on attempt $i."
+              exit 0
+            fi
+            echo "Push rejected (concurrent commit?) — re-applying our finds on the new tip…"
+            git fetch origin ${{ github.ref_name }}
+            git reset --hard origin/${{ github.ref_name }}
+            node fun/lit/_scraper-ft50/preprints-ci.mjs --apply-only --merge-cache=/tmp/lit-ft50-preprints-ours.json
+            git add fun/lit/data-ft50
+            if git diff --cached --quiet; then
+              echo "The concurrent commit already contains these links — nothing left to push."
+              exit 0
+            fi
+            git commit -m "lit-ft50: backfill pre-print links"
+            sleep 5
+          done
+          echo "::error::Could not push the backfilled data after 3 attempts."
+          exit 1
