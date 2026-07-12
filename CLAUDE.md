@@ -210,11 +210,12 @@ count and citing works. Deliberately NOT Google Scholar's own number: there is
 no Scholar API, and its exact `?cites=<cluster-id>` link isn't derivable from a
 DOI/title, so the count is labelled honestly as Crossref's (a different, lower
 metric — GS also counts preprints/theses/working papers). The FT50 catalog's
-`_scraper-ft50/build-data.mjs` carries the identical change; the satellite
-shard repos (`lit-data-abs4`, `lit-data-abs3-omecon`, `lit-data-abs3-rest`)
-need the same one-line `SELECT` addition applied in their own vendored
-`build-data.mjs` to surface counts for shard papers (the page's renderer
-already shows the tag for any paper that carries `CitedBy`). Like `/fun/ms/`,
+`_scraper-ft50/build-data.mjs` and each satellite shard repo
+(`lit-data-abs4`, `lit-data-abs3-omecon`, `lit-data-abs3-rest`) carry the
+identical two-line change in their own vendored `build-data.mjs` (the `SELECT`
+addition plus the `mapWork` `CitedBy` line), so counts surface for every
+dataset; the page's renderer shows the tag for any paper that carries
+`CitedBy`. Like `/fun/ms/`,
 the page carries the optional sign-in feature (star/notes/lists/tags, private
 per user, dedicated Firebase project); it stays inert until a web config is
 pasted into `FB_CONFIG` in `fun/lit/index.html` — setup steps in
