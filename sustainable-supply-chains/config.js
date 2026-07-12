@@ -123,6 +123,11 @@
   /* ---- Default session settings (everything the admin can tune) ----------- */
   var DEFAULT_SETTINGS = {
     rounds: 8,
+    // Async practice mode: every firm plays its OWN self-paced game against
+    // optimal (Nash-equilibrium) bots — no instructor pacing needed. Great as
+    // homework before the live class game.
+    asyncMode: false,
+    asyncBots: 3,               // opponents per firm in async mode (1–5)
     startingCash: 500000,
     factoryCapacity: 800,       // units a firm can assemble per round
     startingComponents: 400,    // units of EACH component on hand at start (so round 1 can produce)

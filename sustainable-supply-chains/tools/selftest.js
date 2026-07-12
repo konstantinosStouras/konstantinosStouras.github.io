@@ -236,6 +236,70 @@ var taxed = makeSession({ carbonTaxPerTon: 80, carbonTaxFromRound: 1 });
 var rTax = E.resolveRound(taxed, [firmA], { fa: E.initFirmState(taxed, firmA) }, { fa: decOff }, 1);
 ok(rTax.results.fa.costs.carbonTax > 0, 'carbon tax charged on gross CO2');
 
+/* ---- Nash-equilibrium bots (async practice opponents) -------------------------- */
+console.log('· Nash-equilibrium bots');
+function nashParts(n) {
+  var out = [];
+  for (var i = 0; i < n; i++) out.push({ firmId: 'p' + i, hub: 'easia', green: 50, brand: 50 });
+  return out;
+}
+var eq2 = E.nashPrices(sess, nashParts(2), 1), eq5 = E.nashPrices(sess, nashParts(5), 1);
+var kitEA = E.cheapestKit(sess, 'easia', 1).kitCost + sess.catalog.product.assemblyCost;
+ok(eq2.prices.p0.easia > eq5.prices.p0.easia, 'equilibrium price falls with more competitors (' +
+   eq2.prices.p0.easia + ' → ' + eq5.prices.p0.easia + ')');
+ok(eq5.prices.p0.easia > kitEA, 'equilibrium price stays above marginal cost');
+
+function playMixed(code, naiveIds, nashIds, allFirms) {
+  sessMixed = { code: code, settings: JSON.parse(JSON.stringify(CONFIG.DEFAULT_SETTINGS)),
+                catalog: JSON.parse(JSON.stringify(CONFIG.CATALOG)) };
+  var st2 = {};
+  allFirms.forEach(function (f) { st2[f.id] = E.initFirmState(sessMixed, f); });
+  for (var r5 = 1; r5 <= 8; r5++) {
+    var ds2 = {};
+    allFirms.forEach(function (f) {
+      if (naiveIds.indexOf(f.id) !== -1) ds2[f.id] = E.botDecision(sessMixed, f, st2[f.id], r5, allFirms.length, null);
+    });
+    var nd = E.nashDecisions(sessMixed, allFirms, st2, r5, nashIds);
+    nashIds.forEach(function (id) { ds2[id] = nd[id]; });
+    st2 = E.resolveRound(sessMixed, allFirms, st2, ds2, r5).states;
+  }
+  return st2;
+}
+var sessMixed;
+var NF = [{ id: 'a', name: 'NashA', hub: 'easia' }, { id: 'b', name: 'NashB', hub: 'europe' },
+          { id: 'c', name: 'NashC', hub: 'namerica' }, { id: 'd', name: 'NashD', hub: 'seasia' }];
+var stAllNash = playMixed('NASHALL', [], ['a', 'b', 'c', 'd'], NF);
+NF.forEach(function (f) {
+  ok(stAllNash[f.id].cum.profit > 0, f.name + ' (all-Nash game) is profitable (' + Math.round(stAllNash[f.id].cum.profit) + ')');
+  var pipeEnd = stAllNash[f.id].pipeline.reduce(function (acc, e) { return acc + e.qty; }, 0);
+  ok(pipeEnd === 0, f.name + ' strands nothing in the pipeline at game end');
+});
+// decisions respect supplier capacity (no inflated requests) and sanitize cleanly
+var ndCheck = E.nashDecisions(sessMixed, NF, (function () {
+  var o = {}; NF.forEach(function (f) { o[f.id] = E.initFirmState(sessMixed, f); }); return o;
+})(), 1, ['a', 'b']);
+var capOk = true;
+sessMixed.catalog.components.forEach(function (c) {
+  c.suppliers.forEach(function (sup) {
+    ['a', 'b'].forEach(function (id) {
+      var o = ndCheck[id].orders[c.id][sup.id];
+      if (o && o.qty > sup.capacity) capOk = false;
+    });
+  });
+});
+ok(capOk, "nash orders never exceed a supplier's capacity");
+// nash bots beat naive bots head to head
+var MF = [{ id: 'n1', name: 'Naive1', hub: 'easia' }, { id: 'n2', name: 'Naive2', hub: 'namerica' },
+          { id: 'q1', name: 'Nash1', hub: 'easia' }, { id: 'q2', name: 'Nash2', hub: 'europe' }];
+var stMix = playMixed('NASHMIX', ['n1', 'n2'], ['q1', 'q2'], MF);
+var naiveAvg = (stMix.n1.cum.profit + stMix.n2.cum.profit) / 2;
+var nashAvg = (stMix.q1.cum.profit + stMix.q2.cum.profit) / 2;
+console.log('    naive avg profit ' + Math.round(naiveAvg) + ' vs nash avg ' + Math.round(nashAvg));
+ok(nashAvg > naiveAvg, 'nash bots out-earn naive bots head to head');
+// deterministic
+var stAllNash2 = playMixed('NASHALL', [], ['a', 'b', 'c', 'd'], NF);
+ok(JSON.stringify(stAllNash) === JSON.stringify(stAllNash2), 'nash game reproducible');
+
 /* ---- xlsx writer builds a workbook (shared with the admin panel) --------------- */
 console.log('· xlsx writer');
 try {

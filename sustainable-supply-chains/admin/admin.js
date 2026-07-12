@@ -117,6 +117,14 @@
     A.formCatalog = cat;
     var html = '';
 
+    html += '<div class="section"><div class="sub-title">Play mode</div>' +
+      toggleIn('f-async', 'Async practice — self-paced vs optimal (Nash) bots', !!s.asyncMode,
+        'OFF (live): you pace the rounds and all firms compete in one shared market. ON (async): every firm plays its OWN private game against computer opponents that price at the Nash equilibrium and run an optimal ordering policy — students play anytime, you watch progress in the control room. Ideal as homework before the live game.') +
+      '<div class="grid3">' +
+      field('Bot opponents per firm (async)', numIn('f-asyncbots', s.asyncBots || 3, 1, 5),
+        'Only used in async mode. The bots anticipate demand shifts and tariff schedules — beating them takes real supply-chain discipline.') +
+      '</div></div>';
+
     html += '<div class="section"><div class="sub-title">Game structure</div><div class="grid3">' +
       field('Rounds', numIn('f-rounds', s.rounds, 2, 30), null, 'How many decision rounds the class plays. 6–10 works well in a 90-minute slot.') +
       field('Starting cash ($)', numIn('f-cash', s.startingCash, 0)) +
@@ -212,6 +220,8 @@
     s.startingComponents = Math.max(0, nv('f-startcomp', s.startingComponents));
     s.startingFinished = Math.max(0, nv('f-startfg', s.startingFinished));
     s.scoreWeightProfit = Math.min(100, Math.max(0, nv('f-scorew', s.scoreWeightProfit)));
+    s.asyncMode = $('#f-async').checked;
+    s.asyncBots = Math.max(1, Math.min(5, Math.round(nv('f-asyncbots', 3))));
     s.markets = U.$all('.mkt-check').filter(function (c) { return c.checked; }).map(function (c) { return c.dataset.m; });
     s.demandPattern = $('#f-pattern').value;
     s.stepRound = nv('f-steporound', s.stepRound);
@@ -382,11 +392,14 @@
   }
   function sessCard(s, isDone) {
     var card = U.el('div', { class: 'sess-card' });
-    var phase = s.phase === 'lobby' ? 'lobby — waiting to start' :
+    var async = s.settings && s.settings.asyncMode;
+    var phase = async ? 'self-paced practice vs optimal bots' :
+      s.phase === 'lobby' ? 'lobby — waiting to start' :
       s.phase === 'decisions' ? 'round ' + s.round + ' — decisions open' :
       s.phase === 'resolved' ? 'round ' + s.round + ' resolved' : 'finished';
     card.innerHTML = '<div class="sess-top"><span class="sess-name">' + esc(s.name || s.code) + '</span>' +
-      '<span class="pill ' + (isDone ? 'pill-plain' : 'pill-green') + '">' + (isDone ? 'done' : 'active') + '</span></div>' +
+      '<span>' + (async ? '<span class="pill pill-blue">async</span> ' : '') +
+      '<span class="pill ' + (isDone ? 'pill-plain' : 'pill-green') + '">' + (isDone ? 'done' : 'active') + '</span></span></div>' +
       '<div class="sess-meta"><span class="sess-code">' + esc(s.code) + '</span> · ' + esc(phase) +
       ' · ' + s.settings.rounds + ' rounds</div>';
     var act = U.el('div', { class: 'sess-actions' });
@@ -432,12 +445,13 @@
     A.ctrlId = id;
     fillSelect($('#ctrl-select'), id);
     A.ctrl.unsubs.forEach(function (u) { u(); });
-    A.ctrl = { session: null, firms: [], decisions: [], results: [], markets: [], unsubs: [] };
+    A.ctrl = { session: null, firms: [], decisions: [], results: [], markets: [], asyncs: [], unsubs: [] };
     A.ctrl.unsubs.push(ST.watchSession(id, function (d) { A.ctrl.session = d; renderCtrl(); paintSessionLists(); }));
     A.ctrl.unsubs.push(ST.watchFirms(id, function (d) { A.ctrl.firms = d || []; renderCtrl(); }));
     A.ctrl.unsubs.push(ST.watchDecisions(id, function (d) { A.ctrl.decisions = d || []; renderCtrl(); }));
     A.ctrl.unsubs.push(ST.watchResults(id, function (d) { A.ctrl.results = d || []; renderCtrl(); }));
     A.ctrl.unsubs.push(ST.watchMarkets(id, function (d) { A.ctrl.markets = d || []; renderCtrl(); }));
+    A.ctrl.unsubs.push(ST.watchAsyncAll(id, function (d) { A.ctrl.asyncs = d || []; renderCtrl(); }));
   }
   function ctrlStates() {
     var out = {};
@@ -475,8 +489,15 @@
        sess.phase === 'resolved' ? '<span class="pill pill-blue">round ' + sess.round + ' resolved</span>' :
        '<span class="pill pill-plain">finished</span>') + '</div></div>';
 
+    var isAsyncSess = !!(s.asyncMode);
     html += '<div class="flex-row mt16">';
-    if (sess.phase === 'lobby') {
+    if (isAsyncSess) {
+      html += '<span class="pill pill-blue">async practice — self-paced</span>' +
+        '<span class="muted small">Each firm plays its own private game vs ' + (s.asyncBots || 3) +
+        ' optimal (Nash) bots, at its own pace. Watch progress below; no round control needed.</span>' +
+        (sess.archived ? '<span class="pill pill-plain">archived</span>'
+          : '<button class="btn-ghost btn-sm" id="c-archive" title="End the practice window: the code stops working and the session moves to Completed. Existing data is kept.">End practice window</button>');
+    } else if (sess.phase === 'lobby') {
       html += '<button class="btn" id="c-start"' + (firms.length ? '' : ' disabled') + '>▶ Start round 1</button>' +
         '<span class="muted small">' + (firms.length ? firms.length + ' firm(s) ready.' : 'Waiting for firms to join — or add bot firms below.') + '</span>';
     } else if (sess.phase === 'decisions') {
@@ -493,8 +514,37 @@
     }
     html += '</div></div>';
 
+    // --- async monitor (async sessions)
+    if (isAsyncSess) {
+      html += '<div class="columns"><div class="card"><div class="card-title">Progress — every firm\'s own game</div>';
+      if (!A.ctrl.asyncs.length) html += '<p class="muted small">No firm has started yet. Share the link/code — each firm begins round 1 the moment it joins.</p>';
+      else {
+        html += '<div class="tbl-scroll"><table class="tbl tbl-tight"><thead><tr><th>Firm</th><th class="r">Round</th><th>Status</th>' +
+          '<th class="r">Cum. profit</th><th class="r">Green</th><th class="r">Brand</th><th class="r">Bullwhip</th><th class="r">Last activity</th></tr></thead><tbody>';
+        A.ctrl.asyncs.slice().sort(function (a, b) { return (b.updatedAt || 0) - (a.updatedAt || 0); }).forEach(function (inst) {
+          var f = firms.find(function (x) { return x.id === inst.firmId; });
+          var st = inst.states && inst.states[inst.firmId];
+          if (!st) return;
+          var mins = inst.updatedAt ? Math.round((Date.now() - inst.updatedAt) / 60000) : null;
+          html += '<tr><td>' + esc(f ? f.name : inst.firmId) + '</td>' +
+            '<td class="r">' + Math.min(inst.round, s.rounds) + '/' + s.rounds + '</td>' +
+            '<td>' + (inst.phase === 'final' ? '<span class="pill pill-green">finished</span>' : esc(inst.phase)) + '</td>' +
+            '<td class="r ' + U.posneg(st.cum.profit) + '">' + fmtM(st.cum.profit) + '</td>' +
+            '<td class="r">' + st.green + '</td><td class="r">' + st.brand + '</td>' +
+            '<td class="r">' + (E.bullwhipRatio(st) != null ? '×' + E.bullwhipRatio(st) : '–') + '</td>' +
+            '<td class="r muted">' + (mins == null ? '–' : (mins < 1 ? 'now' : mins < 60 ? mins + 'm ago' : Math.round(mins / 60) + 'h ago')) + '</td></tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+      html += '<div class="card"><div class="card-title">Message all firms</div>' +
+        '<p class="card-subtitle">Shows as a banner for every firm, whenever they next open their game.</p>' +
+        '<textarea class="input" id="c-bc" placeholder="e.g. Finish your practice game before Thursday\'s class."></textarea>' +
+        '<button class="btn btn-sm" id="c-bc-send" style="margin-top:8px;">Send</button></div></div>';
+    }
+
     // --- world this round (admin eyes only)
-    if (sess.phase === 'decisions' || sess.phase === 'resolved') {
+    if (!isAsyncSess && (sess.phase === 'decisions' || sess.phase === 'resolved')) {
       var news = E.newsFor(sess, sess.round);
       html += '<div class="columns"><div class="card"><div class="card-title">World — round ' + sess.round + ' <span class="pill pill-plain">admin eyes only</span></div>' +
         '<div class="tbl-scroll"><table class="tbl tbl-tight"><thead><tr><th>Market</th><th class="r">True demand this round</th></tr></thead><tbody>' +
@@ -513,9 +563,11 @@
 
     // --- firms
     html += '<div class="card"><div class="row-between"><div class="card-title" style="margin:0;">Firms</div>' +
-      '<div class="flex-row"><select class="input input-sm" id="c-botprofile" style="width:auto;">' +
-      '<option value="">Bot: cost-focused</option><option value="green">Bot: green-focused</option></select>' +
-      '<button class="btn-ghost btn-sm" id="c-addbot">+ Add bot firm</button></div></div>';
+      (isAsyncSess ? '<span class="muted small">bots live inside each firm\'s own game</span>'
+        : '<div class="flex-row"><select class="input input-sm" id="c-botprofile" style="width:auto;">' +
+          '<option value="">Bot: cost-focused</option><option value="green">Bot: green-focused</option>' +
+          '<option value="nash">Bot: optimal (Nash)</option></select>' +
+          '<button class="btn-ghost btn-sm" id="c-addbot">+ Add bot firm</button></div>') + '</div>';
     if (!firms.length) html += '<p class="muted small">No firms yet. Students join at the link above.</p>';
     else {
       var states = ctrlStates();
@@ -538,8 +590,8 @@
     }
     html += '</div>';
 
-    // --- standings + bullwhip
-    if (A.ctrl.results.length) {
+    // --- standings + bullwhip (live sessions; async has its own monitor)
+    if (!isAsyncSess && A.ctrl.results.length) {
       var lb = E.leaderboard(sess, firms, ctrlStates());
       html += '<div class="card"><div class="card-title">Standings</div><div class="tbl-scroll"><table class="tbl tbl-tight"><thead><tr>' +
         '<th>#</th><th>Firm</th><th class="r">Profit</th><th class="r">Green</th><th class="r">CO2/unit</th><th class="r">Sold</th><th class="r">Bullwhip</th><th class="r">Score</th></tr></thead><tbody>' +
@@ -562,6 +614,10 @@
     }
 
     // wire up
+    if ($('#c-archive')) $('#c-archive').addEventListener('click', function () {
+      if (!confirm('End the practice window? The join code stops working and the session moves to Completed. All data is kept.')) return;
+      ST.updateSession(sess.id, { archived: true, status: 'done', endedAt: Date.now() });
+    });
     if ($('#c-start')) $('#c-start').addEventListener('click', function () {
       ST.updateSession(sess.id, { phase: 'decisions', round: 1, status: 'live', startedAt: Date.now() });
     });
@@ -635,9 +691,13 @@
     try {
       var states = ctrlStates();
       var decisions = {}, botSaves = [];
+      var nashIds = firms.filter(function (f) { return f.isBot && f.botProfile === 'nash'; })
+        .map(function (f) { return f.id; });
+      var nashDecs = nashIds.length ? E.nashDecisions(sess, firms, states, sess.round, nashIds) : {};
       firms.forEach(function (f) {
         if (f.isBot) {
-          var bd = E.botDecision(sess, f, states[f.id], sess.round, firms.length, f.botProfile);
+          var bd = f.botProfile === 'nash' ? nashDecs[f.id]
+            : E.botDecision(sess, f, states[f.id], sess.round, firms.length, f.botProfile);
           decisions[f.id] = bd;
           botSaves.push(ST.saveDecision(sess.id, f.id, sess.round, bd));
         } else {
@@ -665,21 +725,39 @@
     A.dataId = id;
     fillSelect($('#data-select'), id);
     A.data.unsubs.forEach(function (u) { u(); });
-    A.data = { session: null, firms: [], decisions: [], results: [], markets: [], unsubs: [] };
+    A.data = { session: null, firms: [], decisions: [], results: [], markets: [], asyncs: [], unsubs: [] };
     A.data.unsubs.push(ST.watchSession(id, function (d) { A.data.session = d; renderData(); }));
+    A.data.unsubs.push(ST.watchAsyncAll(id, function (d) { A.data.asyncs = d || []; renderData(); }));
     A.data.unsubs.push(ST.watchFirms(id, function (d) { A.data.firms = d || []; renderData(); }));
     A.data.unsubs.push(ST.watchDecisions(id, function (d) { A.data.decisions = d || []; renderData(); }));
     A.data.unsubs.push(ST.watchResults(id, function (d) { A.data.results = d || []; renderData(); }));
     A.data.unsubs.push(ST.watchMarkets(id, function (d) { A.data.markets = d || []; renderData(); }));
   }
+  // In async sessions the authoritative results live inside each firm's
+  // instance doc; the export keeps only the STUDENT firm's rows (its private
+  // bot opponents would be noise across instances).
+  function dataResults() {
+    var sess = A.data.session;
+    if (sess && sess.settings && sess.settings.asyncMode) {
+      var out = [];
+      (A.data.asyncs || []).forEach(function (inst) {
+        (inst.results || []).forEach(function (r) { if (r.firmId === inst.firmId) out.push(r); });
+      });
+      return out;
+    }
+    return A.data.results.slice();
+  }
   function renderData() {
     if ($('#tab-data').style.display === 'none') return;
     var sess = A.data.session, box = $('#data-root');
     if (!sess) { box.innerHTML = '<p class="muted" style="margin-top:16px;">Select a session.</p>'; return; }
-    var res = A.data.results.slice().sort(function (a, b) { return a.round - b.round || String(a.firmId).localeCompare(String(b.firmId)); });
+    var res = dataResults().sort(function (a, b) { return a.round - b.round || String(a.firmId).localeCompare(String(b.firmId)); });
     var html = '<div class="stat-grid">' +
       '<div class="stat-box"><div class="n">' + A.data.firms.length + '</div><div class="l">Firms</div></div>' +
-      '<div class="stat-box"><div class="n">' + (sess.phase === 'lobby' ? 0 : (sess.phase === 'decisions' ? sess.round - 1 : Math.min(sess.round, sess.settings.rounds))) + '</div><div class="l">Rounds resolved</div></div>' +
+      '<div class="stat-box"><div class="n">' + (sess.settings.asyncMode
+        ? (A.data.asyncs || []).filter(function (i2) { return i2.phase === 'final'; }).length + '/' + (A.data.asyncs || []).length
+        : (sess.phase === 'lobby' ? 0 : (sess.phase === 'decisions' ? sess.round - 1 : Math.min(sess.round, sess.settings.rounds)))) +
+      '</div><div class="l">' + (sess.settings.asyncMode ? 'Firms finished / started' : 'Rounds resolved') + '</div></div>' +
       '<div class="stat-box"><div class="n">' + A.data.decisions.length + '</div><div class="l">Decision records</div></div>' +
       '<div class="stat-box"><div class="n">' + res.length + '</div><div class="l">Result rows</div></div></div>';
     if (res.length) {
@@ -693,7 +771,7 @@
             '<td class="r">' + fmtI(sumSold(r.sold)) + '</td><td class="r">' + fmtI(r.lost) + '</td><td class="r">' + fmtI(r.cut) + '</td>' +
             '<td class="r">' + fmtI(r.produced) + '</td><td class="r">' + fmtM(r.revenue) + '</td>' +
             '<td class="r ' + U.posneg(r.profit) + '">' + fmtM(r.profit) + '</td><td class="r">' + U.fmtCO2(r.co2.gross) + '</td>' +
-            '<td class="r">' + r.green + '</td><td class="r">' + r.brand + '</td><td class="r">' + fmtM(r.endState.cash) + '</td></tr>';
+            '<td class="r">' + r.green + '</td><td class="r">' + r.brand + '</td><td class="r">' + (r.endState ? fmtM(r.endState.cash) : '–') + '</td></tr>';
         }).join('') + '</tbody></table></div>';
     } else html += '<p class="muted small">No rounds resolved yet.</p>';
     box.innerHTML = html;
@@ -711,7 +789,8 @@
   $('#btn-xlsx').addEventListener('click', function () {
     var sess = A.data.session;
     if (!sess) return;
-    var firms = A.data.firms, res = A.data.results, mkts = A.data.markets;
+    var isAsyncSess = !!(sess.settings && sess.settings.asyncMode);
+    var firms = A.data.firms, res = dataResults(), mkts = A.data.markets;
     function firmName(id) { var f = firms.find(function (x) { return x.id === id; }); return f ? f.name : id; }
 
     var about = [['Sustainable Supply Chains — session export'], [],
@@ -740,7 +819,7 @@
         r.costs.outFreight, r.costs.outTariff, r.costs.holding, r.costs.overhead, r.costs.carbonTax,
         r.costs.offsets, r.costs.investments, r.costs.interest, r.profit,
         r.co2.components, r.co2.inFreight, r.co2.assembly, r.co2.outFreight, r.co2.gross, r.co2.offsets,
-        r.green, r.brand, r.scandal ? 1 : 0, r.endState.cash]);
+        r.green, r.brand, r.scandal ? 1 : 0, r.endState ? r.endState.cash : null]);
     });
 
     var lineRows = [['Round', 'Firm', 'Component', 'Supplier', 'Mode', 'Requested', 'Allocated', 'Cut',
@@ -767,6 +846,11 @@
     var lb = E.leaderboard(sess, firms, (function () {
       var out = {};
       firms.forEach(function (f) {
+        if (isAsyncSess) {
+          var inst = (A.data.asyncs || []).find(function (i2) { return i2.firmId === f.id; });
+          out[f.id] = inst && inst.states && inst.states[f.id] ? inst.states[f.id] : E.initFirmState(sess, f);
+          return;
+        }
         var rs = res.filter(function (r) { return r.firmId === f.id; }).sort(function (a, b) { return a.round - b.round; });
         out[f.id] = rs.length ? rs[rs.length - 1].endState : E.initFirmState(sess, f);
       });
@@ -783,14 +867,15 @@
       settingsRows.push([k, typeof v === 'object' ? JSON.stringify(v) : v]);
     });
 
-    window.SSCXlsx.download('ssc_' + sess.code + '_data.xlsx', [
+    var sheets = [
       { name: 'About', rows: about, filter: false, cols: [{ w: 40 }, { w: 60 }] },
       { name: 'Settings', rows: settingsRows, cols: [{ w: 26 }, { w: 60 }] },
       { name: 'Firms', rows: firmsRows, cols: [{ w: 12 }, { w: 22 }, { w: 12 }, { w: 6 }, { w: 10 }, { w: 30 }] },
       { name: 'Rounds', rows: roundRows },
-      { name: 'OrderLines', rows: lineRows },
-      { name: 'Markets', rows: mktRows },
-      { name: 'Standings', rows: lbRows }
-    ]);
+      { name: 'OrderLines', rows: lineRows }
+    ];
+    if (!isAsyncSess) sheets.push({ name: 'Markets', rows: mktRows });
+    sheets.push({ name: 'Standings', rows: lbRows });
+    window.SSCXlsx.download('ssc_' + sess.code + '_data.xlsx', sheets);
   });
 })();
