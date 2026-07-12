@@ -150,6 +150,9 @@ try {
   await admin.click('#btn-login');
   await admin.waitForSelector('#a-dash.active', { timeout: 15000 }).catch(() => fail('admin email/password sign-in failed'));
   console.log('· admin signed in (email/password)');
+  await admin.waitForFunction(() => { var b = document.querySelector('#conn-banner'); return b && /connected/i.test(b.textContent); }, null, { timeout: 15000 })
+    .catch(() => fail('admin connection self-check did not go green'));
+  console.log('· admin connection self-check green (ping round-trip through sscSessionCodes)');
   await admin.fill('#f-code', 'FBLIVE');
   await admin.fill('#f-rounds', '2');
   await admin.click('#btn-save-session');

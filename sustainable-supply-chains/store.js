@@ -117,6 +117,8 @@ window.SSCStore = (function () {
       return Promise.resolve();
     },
     uid: function () { return Promise.resolve(demoUid()); },
+    ping: function () { return Promise.resolve({ ok: true, backend: 'demo' }); },
+    ensureCode: function () { return Promise.resolve(); },
     // -- sessions
     listSessions: function () {
       var db = dbRead();
@@ -385,6 +387,27 @@ window.SSCStore = (function () {
     backend: 'firebase',
     ready: init(),
     uid: function () { return init().then(ensureAuth).then(function (u) { return u.uid; }); },
+    // Admin connection self-check: round-trips a probe through the same
+    // sscSessionCodes path students read to join, so it proves auth + rules +
+    // the join lookup all work. Rejects with a helpful error otherwise.
+    ping: function () {
+      return init().then(function () {
+        var probe = codeRef('ZZ_PING_CHECK');
+        return sdk.fs.setDoc(probe, { sessionId: 'ZZ_PING_CHECK', t: Date.now() })
+          .then(function () { return sdk.fs.getDoc(probe); })
+          .then(function (snap) {
+            if (!snap.exists()) throw new Error('probe write did not persist');
+            return sdk.fs.deleteDoc(probe).catch(function () {});
+          })
+          .then(function () { return { ok: true, backend: 'firebase' }; });
+      });
+    },
+    // Idempotently (re)write a session's code→id lookup doc. Used to backfill
+    // any session whose lookup is missing (e.g. created before rules were live).
+    ensureCode: function (code, id) {
+      if (!code || !id) return Promise.resolve();
+      return init().then(function () { return sdk.fs.setDoc(codeRef(code), { sessionId: id }); });
+    },
     listSessions: function () {
       return init().then(ensureAuth).then(function () {
         return sdk.fs.getDocs(sdk.fs.collection(db, PATHS.sessions));
