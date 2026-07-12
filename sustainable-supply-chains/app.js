@@ -129,7 +129,17 @@
 
   /* ---- boot ----------------------------------------------------------------- */
   U.themeInit($('#btn-theme'));
-  if (ST.backend === 'demo') $('#mode-pill').style.display = '';
+  // Test mode (?preview=1): store.js runs on an isolated sandbox store, so this
+  // whole play-through writes no data anywhere. Show a constant reminder ribbon.
+  var PREVIEW = /(?:^|[?&])preview=1(?:&|$)/.test(location.search);
+  if (PREVIEW) {
+    document.body.classList.add('preview-mode');
+    var pv = document.createElement('div');
+    pv.className = 'preview-ribbon';
+    pv.innerHTML = '🧪 <b>Test mode</b> — you are in a private sandbox. Nothing you do here is saved.';
+    document.body.appendChild(pv);
+  }
+  if (!PREVIEW && ST.backend === 'demo') $('#mode-pill').style.display = '';
   ST.uid().then(function (u) { S.uid = u; });
   var urlCode = new URLSearchParams(location.search).get('code');
   if (urlCode) { $('#in-code').value = urlCode.toUpperCase(); }

@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
-import { doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore'
-import { db } from '../firebase'
+import { doc, onSnapshot, updateDoc, serverTimestamp, db } from '../utils/db'
 import { useAuth } from '../context/AuthContext'
 import styles from './NudgeBanner.module.css'
 

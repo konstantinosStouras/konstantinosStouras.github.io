@@ -18,6 +18,7 @@ import AISettings from './pages/AISettings'
 import DataAnalytics from './pages/DataAnalytics'
 import AdminSession from './pages/AdminSession'
 import AdminBroadcast from './components/AdminBroadcast'
+import PreviewRibbon from './components/PreviewRibbon'
 
 // Wraps session pages with SessionProvider using the :sessionId param.
 // AdminBroadcast rides along so an instructor's group message / removal notice
@@ -35,6 +36,7 @@ function SessionWrapper({ children }) {
 export default function App() {
   return (
     <AuthProvider>
+      <PreviewRibbon />
       <Routes>
         {/* Guest only */}
         <Route path="/login" element={<RequireGuest><Login /></RequireGuest>} />

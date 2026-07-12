@@ -1,6 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { doc, onSnapshot } from 'firebase/firestore'
-import { db } from '../firebase'
+import { doc, onSnapshot, db } from '../utils/db'
 
 const SessionContext = createContext(null)
 

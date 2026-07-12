@@ -31,6 +31,15 @@ window.SSCStore = (function () {
   var configured = !!(cfg.apiKey && cfg.apiKey.indexOf('PASTE_') !== 0 &&
                       cfg.projectId && cfg.projectId.indexOf('PASTE_') !== 0);
 
+  // Test-mode ("preview") sandbox: when a page is opened with ?preview=1 the
+  // whole game runs on an ISOLATED, throwaway store — its own localStorage
+  // namespace that is NEVER Firebase, never the real session list, and never
+  // reaches exports/analytics. It lets the instructor rehearse a full round
+  // without logging any data. It reuses the demo backend (so the entire
+  // admin+student game works cross-tab in one browser) but keys apart and can
+  // be reset to a clean slate on launch. Preview always wins over Firebase.
+  var PREVIEW = /(?:^|[?&])preview=1(?:&|$)/.test((window.location && window.location.search) || '');
+
   function rid(n) {
     var a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', s = '';
     for (var i = 0; i < (n || 10); i++) s += a[Math.floor(Math.random() * a.length)];
@@ -38,9 +47,11 @@ window.SSCStore = (function () {
   }
 
   /* =====================================================================
-     DEMO backend (localStorage)
+     DEMO backend (localStorage) — preview uses a separate, resettable namespace
      ===================================================================== */
-  var LS_DB = 'ssc-db-v1', LS_REV = 'ssc-db-rev', LS_UID = 'ssc-uid';
+  var LS_DB = PREVIEW ? 'ssc-preview-db-v1' : 'ssc-db-v1',
+      LS_REV = PREVIEW ? 'ssc-preview-db-rev' : 'ssc-db-rev',
+      LS_UID = PREVIEW ? 'ssc-preview-uid' : 'ssc-uid';
 
   function demoUid() {
     var u = localStorage.getItem(LS_UID);
@@ -94,8 +105,17 @@ window.SSCStore = (function () {
   }
 
   var demo = {
-    backend: 'demo',
+    backend: PREVIEW ? 'preview' : 'demo',
+    isPreview: PREVIEW,
     ready: Promise.resolve(true),
+    // Wipe the sandbox to a clean slate (preview only). Used when the admin
+    // launches a fresh test round so no leftovers from a previous rehearsal
+    // linger. A no-op namespace clear — nothing here was ever real data.
+    resetPreview: function () {
+      try { localStorage.removeItem(LS_DB); localStorage.removeItem(LS_REV); } catch (e) {}
+      pokeWatchers();
+      return Promise.resolve();
+    },
     uid: function () { return Promise.resolve(demoUid()); },
     // -- sessions
     listSessions: function () {
@@ -277,6 +297,7 @@ window.SSCStore = (function () {
     onAdminAuth: function (cb) { setTimeout(function () { cb({ email: 'demo' }); }, 0); }
   };
 
+  if (PREVIEW) return demo;   // ?preview=1 → isolated sandbox, never Firebase
   if (!configured) return demo;
 
   /* =====================================================================

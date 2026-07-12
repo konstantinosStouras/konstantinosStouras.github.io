@@ -16,6 +16,15 @@
   var U = window.SSCUI, E = window.SSCEngine, ST = window.SSCStore, C = window.SSC_CONFIG;
   var $ = U.$, esc = U.esc, fmtM = U.fmtMoney, fmtI = U.fmtInt;
 
+  // Test-mode ("preview") sandbox. ?preview=1 makes store.js return an isolated,
+  // throwaway store (never Firebase, never the real session list/exports), so
+  // the instructor can rehearse a whole round without logging any data.
+  // ?fresh=1 additionally wipes the sandbox and seeds it from a real session's
+  // settings (handed over via localStorage) so the test opens ready to play.
+  var PREVIEW = /(?:^|[?&])preview=1(?:&|$)/.test(location.search);
+  var FRESH = /(?:^|[?&])fresh=1(?:&|$)/.test(location.search);
+  var SEED_KEY = 'ssc-preview-seed';
+
   var A = {
     sessions: [],
     editingId: null,
@@ -30,7 +39,41 @@
 
   /* ---- boot & auth ------------------------------------------------------------ */
   U.themeInit($('#btn-theme'));
-  if (ST.backend === 'demo') {
+  if (PREVIEW) {
+    // Sandbox: no sign-in, a loud "nothing is saved" banner, and (when launched
+    // fresh from a real session) a ready-to-run test session seeded from it.
+    document.body.classList.add('preview-mode');
+    $('#mode-pill').style.display = 'none';
+    var pv = document.createElement('div');
+    pv.className = 'preview-ribbon';
+    pv.innerHTML = '🧪 <b>Test mode</b> — this admin sandbox saves nothing. Close the tab and it is gone.';
+    document.body.appendChild(pv);
+    $('#dash-banner').innerHTML = '<div class="banner banner-warn"><b>🧪 Test mode — nothing is saved.</b> ' +
+      'This is a private sandbox for rehearsing a round: it runs the whole game exactly like the real thing, ' +
+      'but everything lives only in this browser tab and never reaches your real sessions, exports, analytics, ' +
+      'or any server. Open <a href="../?preview=1" target="_blank">the student page (test mode)</a> in another ' +
+      'tab, join with the code below, add bot firms, and play it through. Close the tabs and the test is gone.</div>';
+    var seededCtrl = null;
+    var boot = Promise.resolve();
+    if (FRESH) {
+      boot = (ST.resetPreview ? ST.resetPreview() : Promise.resolve()).then(function () {
+        var seed = null;
+        try { seed = JSON.parse(localStorage.getItem(SEED_KEY) || 'null'); } catch (e) {}
+        try { localStorage.removeItem(SEED_KEY); } catch (e) {}
+        if (!seed || !seed.settings || !seed.catalog) return;
+        var code = seed.code || genCode();
+        return ST.createSession({
+          code: code, name: seed.name || ('Test round · ' + code), createdAt: Date.now(),
+          status: 'setup', round: 0, phase: 'lobby',
+          settings: seed.settings, catalog: seed.catalog, broadcasts: []
+        }).then(function (id) { seededCtrl = id; });
+      });
+    }
+    boot.then(function () {
+      showDash();
+      if (seededCtrl) { gotoTab('control'); selectCtrl(seededCtrl); }
+    });
+  } else if (ST.backend === 'demo') {
     $('#mode-pill').style.display = '';
     $('#dash-banner').innerHTML = '<div class="banner banner-info"><b>Demo mode</b> — no Firebase configured, so ' +
       'sessions live in this browser only. Perfect for trying the game: create a session here, then open ' +
@@ -94,7 +137,21 @@
   }
   function studentLink(code) {
     var base = location.href.replace(/admin\/?(index\.html)?(\?.*)?$/, '');
-    return base + '?code=' + code;
+    return base + '?code=' + code + (PREVIEW ? '&preview=1' : '');
+  }
+
+  // Launch a throwaway test round: stash a session's config, then open the admin
+  // in an isolated sandbox tab (?preview=1&fresh=1) that wipes any old sandbox,
+  // seeds this config, and drops straight into the control room. Nothing the
+  // instructor does there is ever saved (see the PREVIEW boot branch above).
+  function openSandbox(seed) {
+    try { localStorage.setItem(SEED_KEY, JSON.stringify(seed || {})); } catch (e) {}
+    var base = location.pathname.replace(/\?.*$/, '');
+    window.open(base + '?preview=1&fresh=1', '_blank');
+  }
+  function seedFromSession(s) {
+    return { name: 'Test round · ' + (s.name || s.code), code: s.code,
+             settings: s.settings, catalog: s.catalog };
   }
 
   /* ================= SESSION FORM ================================================ */
@@ -373,6 +430,16 @@
   $('#btn-restore-defaults').addEventListener('click', function () {
     buildForm(freshSettings(), freshCatalog(), { name: '', code: '' });
   });
+  // "Test round" — rehearse the current (possibly unsaved) settings in the
+  // sandbox. Hidden inside the sandbox itself (no nested test tabs).
+  if (PREVIEW) { $('#btn-test-round').style.display = 'none'; }
+  else $('#btn-test-round').addEventListener('click', function () {
+    var out = readForm(), err = $('#form-err');
+    err.style.display = 'none';
+    if (out.err) { err.textContent = out.err; err.style.display = ''; return; }
+    openSandbox({ name: 'Test round', code: out.code || genCode(),
+                  settings: out.settings, catalog: out.catalog });
+  });
   $('#btn-cancel-edit').addEventListener('click', cancelEdit);
   function cancelEdit() {
     A.editingId = null;
@@ -455,6 +522,12 @@
       bCopy.textContent = 'Copied ✓'; setTimeout(function () { bCopy.textContent = 'Copy link'; }, 1500);
     });
     act.appendChild(bCopy);
+    if (!PREVIEW) {
+      var bTest = U.el('button', { class: 'btn-ghost btn-sm', text: '🧪 Test',
+        title: 'Rehearse this session in a private sandbox — nothing is saved.' });
+      bTest.addEventListener('click', function () { openSandbox(seedFromSession(s)); });
+      act.appendChild(bTest);
+    }
     var bDel = U.el('button', { class: 'link-btn danger', text: 'Delete' });
     bDel.addEventListener('click', function () {
       if (!confirm('Delete session ' + s.code + ' and ALL its data (firms, decisions, results)?')) return;

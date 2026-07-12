@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { doc, onSnapshot, updateDoc } from 'firebase/firestore'
-import { db } from '../firebase'
+import { doc, onSnapshot, updateDoc, db } from '../utils/db'
 import { useAuth } from '../context/AuthContext'
 import styles from './AdminBroadcast.module.css'
 

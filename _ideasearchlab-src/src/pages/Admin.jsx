@@ -13,9 +13,19 @@ import { DEFAULT_CONTENT, CONTENT_SCHEMA, getContent, getEffectiveDefaults } fro
 import { DEFAULT_REGISTRATION, DEFAULT_SURVEY_QUESTIONS, getRegistration, getSurveyQuestions } from '../data/formDefaults'
 import RichTextEditor from '../components/RichTextEditor'
 import { RegistrationBuilder, SurveyBuilder } from '../components/FormBuilder'
+import { previewLaunchUrl, PREVIEW_CONFIG_KEY } from '../utils/preview'
 import styles from './Admin.module.css'
 
 const ADMIN_EMAIL = 'admin@admin.com'
+
+// Open a session's exact configuration in a throwaway TEST sandbox (a new tab
+// running ?preview=1): the whole participant flow works end to end but reads and
+// writes nothing — no Firestore, no Cloud Functions, no AI cost, nothing saved.
+// The chosen session's config is handed over via localStorage.
+function launchTestRound(session) {
+  try { localStorage.setItem(PREVIEW_CONFIG_KEY, JSON.stringify(session || {})) } catch (e) {}
+  window.open(previewLaunchUrl(), '_blank', 'noopener')
+}
 
 function generateCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase()
@@ -1187,6 +1197,14 @@ function SessionCard({ session, participantCount, onOpen, onEdit, onClose, onDel
       {createdStr && <div className={styles.sessionDate}>Created {createdStr}</div>}
       <div className={styles.sessionCardActions}>
         <button className="btn-primary" style={{ padding: '6px 18px', fontSize: 13 }} onClick={onOpen}>Open</button>
+        <button
+          className="btn-ghost"
+          style={{ padding: '6px 18px', fontSize: 13 }}
+          onClick={() => launchTestRound(session)}
+          title="Play this session's whole participant flow in a private sandbox. Nothing is saved: no participant records, no AI cost, no data logged."
+        >
+          🧪 Test round
+        </button>
         {canEdit && <button className="btn-ghost" style={{ padding: '6px 18px', fontSize: 13 }} onClick={onEdit}>Edit</button>}
         {onClose && <button className={styles.closeBtn} onClick={onClose}>Close Session</button>}
         <button className={styles.deleteBtn} onClick={onDelete}>Delete</button>
