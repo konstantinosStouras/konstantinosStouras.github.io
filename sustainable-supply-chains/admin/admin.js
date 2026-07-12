@@ -408,7 +408,7 @@
       '<span>' + (async ? '<span class="pill pill-blue">async</span> ' : '') +
       '<span class="pill ' + (isDone ? 'pill-plain' : 'pill-green') + '">' + (isDone ? 'done' : 'active') + '</span></span></div>' +
       '<div class="sess-meta"><span class="sess-code">' + esc(s.code) + '</span> · ' + esc(phase) +
-      ' · ' + s.settings.rounds + ' rounds</div>';
+      ' · ' + ((s.settings || {}).rounds || '?') + ' rounds</div>';
     var act = U.el('div', { class: 'sess-actions' });
     var bCtrl = U.el('button', { class: 'btn btn-sm', text: 'Control room' });
     bCtrl.addEventListener('click', function () { gotoTab('control'); selectCtrl(s.id); });
@@ -477,7 +477,7 @@
   function renderCtrl() {
     var sess = A.ctrl.session, box = $('#ctrl-root');
     if (!sess) { box.innerHTML = '<p class="muted" style="margin-top:16px;">Select a session above.</p>'; return; }
-    var firms = A.ctrl.firms, s = sess.settings;
+    var firms = A.ctrl.firms, s = sess.settings || {};
     // the control room re-renders on every live snapshot — preserve the
     // admin's in-progress broadcast text, bot-profile choice and focus
     var keepBc = $('#c-bc') ? $('#c-bc').value : '';

@@ -108,26 +108,37 @@ browser's localStorage, cross-tab live sync. Open the admin panel and the
 student page in the same browser to play a full game (with bots) — ideal for
 testing parameters before class.
 
-For a **real class** (many devices), create a Firebase project:
+For a **real class** (many devices), the code side is DONE and verified: the
+entire Firebase path — anonymous students, email/password admin, the
+code-lookup join flow, firms/decisions/results/messages/async instances, and
+every security rule — is exercised end-to-end against the official Firebase
+emulator by `tools/smoke-firebase.mjs` (including six hostile-write denial
+checks). **Your remaining steps (~10 minutes, all in the Firebase console):**
 
-1. console.firebase.google.com → Add project (no Analytics needed).
-2. **Build → Firestore Database** → Create (production mode).
-3. **Build → Authentication → Sign-in method**: enable **Anonymous** and
-   **Email/Password**. Under Users, add your admin account
-   (e.g. `admin@admin.com` + password).
-4. Project settings → Your apps → **Web app** → register; copy the config
-   object into `firebase-config.js` (replacing the `PASTE_…` placeholders),
-   and put your admin email in `SSC_ADMIN_EMAILS`.
-5. Firestore → **Rules**: paste `firestore.rules` (keep the email list in its
-   `isAdmin()` in sync). The rules enforce real ownership: each firm doc
-   carries a `memberUids` array, and only those members (or you) can update
-   the firm or read/write its decision documents — teams cannot see or forge
-   each other's pending moves. Students resolve a join code via the
-   `sscSessionCodes` lookup collection, so they never list your sessions.
-6. Commit & push. The admin panel now asks you to sign in; students join
-   anonymously from any device. Teams on several devices are kept in sync:
-   the decide form live-follows the firm's latest saved decision, so the
-   newest save (or submit) wins visibly on every teammate's screen.
+1. [console.firebase.google.com](https://console.firebase.google.com) →
+   **Add project** (any name, e.g. `ssc-class`; Analytics not needed).
+2. **Build → Firestore Database → Create database** → production mode →
+   a region near your class (e.g. `europe-west1`).
+3. **Build → Authentication → Get started → Sign-in method**: enable
+   **Anonymous** and **Email/Password**. Then **Users → Add user**:
+   `kstouras@gmail.com` + a password (this is the admin login; it's already
+   the default in `firebase-config.js` and `firestore.rules` — if you use a
+   different email, change it in BOTH files).
+4. Project overview → **⚙ Project settings → Your apps → Web app (</>)** →
+   register (no hosting) → copy the `firebaseConfig` values into
+   `firebase-config.js`, replacing the `PASTE_…` placeholders (apiKey,
+   authDomain, projectId, storageBucket, messagingSenderId, appId).
+5. **Firestore → Rules**: paste the full contents of `firestore.rules` →
+   Publish. (The rules enforce real ownership: only a firm's members can
+   touch its decisions/instance; students can't list your sessions, forge
+   results, or spoof message senders — all verified by the emulator test.)
+6. Commit & push the edited `firebase-config.js`. Done: the admin panel asks
+   you to sign in, students join anonymously from any device, and demo mode
+   switches off automatically.
+
+To re-verify the whole Firebase path locally at any time (needs Java +
+`npm i firebase firebase-tools` somewhere):
+`FIREBASE_BIN=… FIREBASE_SDK_DIR=… node sustainable-supply-chains/tools/smoke-firebase.mjs`
 
 Round resolution runs in the instructor's browser through the same
 deterministic engine students see (`engine.js`) — seeded RNG per

@@ -14,7 +14,7 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function isAdmin() {
       return request.auth != null &&
-        request.auth.token.email in ['admin@admin.com'];   // ← keep in sync with SSC_ADMIN_EMAILS
+        request.auth.token.email in ['kstouras@gmail.com'];   // ← keep in sync with SSC_ADMIN_EMAILS
     }
 
     // code → sessionId lookup docs (maintained by the admin panel): a student

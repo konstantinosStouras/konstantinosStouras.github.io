@@ -267,6 +267,14 @@ window.SSCStore = (function () {
       app = s.app.initializeApp(cfg);
       auth = s.auth.getAuth(app);
       db = s.fs.getFirestore(app);
+      // Optional local-emulator wiring (tools/smoke-firebase.mjs): a config
+      // with cfg.emulators = { auth: 'http://127.0.0.1:9199',
+      // firestoreHost: '127.0.0.1', firestorePort: 8181 } runs the REAL
+      // Firebase code path against the Firebase Emulator Suite.
+      if (cfg.emulators) {
+        s.auth.connectAuthEmulator(auth, cfg.emulators.auth, { disableWarnings: true });
+        s.fs.connectFirestoreEmulator(db, cfg.emulators.firestoreHost, cfg.emulators.firestorePort);
+      }
       return true;
     });
     return readyP;
