@@ -1,0 +1,724 @@
+/* ==========================================================================
+   Sustainable Supply Chains — admin/admin.js
+   Instructor panel: create/configure sessions (left form + session cards,
+   in the ideasearchlab admin mould), run the game live from the Control room
+   (start rounds, monitor submissions, resolve, bots, broadcasts), and export
+   everything as a multi-sheet .xlsx / JSON from Data & export.
+
+   Round resolution runs HERE, in the instructor's browser, through the same
+   engine.js the students see — deterministic, so any device recomputes the
+   identical result. resolveRound() reads all decisions (bots decide on the
+   spot), then saveResolution() publishes results/market/news and flips the
+   session phase.
+   ========================================================================== */
+(function () {
+  'use strict';
+  var U = window.SSCUI, E = window.SSCEngine, ST = window.SSCStore, C = window.SSC_CONFIG;
+  var $ = U.$, esc = U.esc, fmtM = U.fmtMoney, fmtI = U.fmtInt;
+
+  var A = {
+    sessions: [],
+    editingId: null,
+    ctrlId: null,
+    ctrl: { session: null, firms: [], decisions: [], results: [], markets: [], unsubs: [] },
+    dataId: null,
+    data: { session: null, firms: [], decisions: [], results: [], markets: [], unsubs: [] },
+    resolving: false
+  };
+  var BOT_NAMES = ['Atlas Cycles', 'Borealis Mobility', 'Cardinal Wheels', 'Verde Velo',
+                   'Nimbus Rides', 'Quanta Bikes', 'Zephyr Cycleworks', 'Solstice Mobility'];
+
+  /* ---- boot & auth ------------------------------------------------------------ */
+  U.themeInit($('#btn-theme'));
+  if (ST.backend === 'demo') {
+    $('#mode-pill').style.display = '';
+    $('#dash-banner').innerHTML = '<div class="banner banner-info"><b>Demo mode</b> — no Firebase configured, so ' +
+      'sessions live in this browser only. Perfect for trying the game: create a session here, then open ' +
+      '<a href="../" target="_blank">the student page</a> in another tab (same browser), join with the code, and add ' +
+      'bot firms for competition. For a real class on many devices, set up Firebase (see the README on GitHub).</div>';
+    showDash();
+  } else {
+    ST.onAdminAuth(function (user) {
+      var allowed = window.SSC_ADMIN_EMAILS || [];
+      if (user && user.email && allowed.indexOf(user.email) !== -1) {
+        $('#who').textContent = user.email;
+        $('#btn-signout').style.display = '';
+        showDash();
+      } else {
+        if (user && user.email) ST.adminSignOut();
+        show('a-login');
+      }
+    });
+  }
+  $('#btn-login').addEventListener('click', function () {
+    $('#login-err').style.display = 'none';
+    ST.adminSignIn($('#in-email').value.trim(), $('#in-pass').value).catch(function (e) {
+      $('#login-err').textContent = e.message; $('#login-err').style.display = '';
+    });
+  });
+  $('#btn-signout').addEventListener('click', function () { ST.adminSignOut().then(function () { location.reload(); }); });
+  function show(id) {
+    U.$all('.screen').forEach(function (s) { s.classList.remove('active'); });
+    $('#' + id).classList.add('active');
+  }
+  function showDash() {
+    show('a-dash');
+    buildForm(freshSettings(), freshCatalog(), { name: '', code: '' });
+    refreshSessions();
+  }
+
+  U.$all('.tabs .tab').forEach(function (t) {
+    t.addEventListener('click', function () {
+      U.$all('.tabs .tab').forEach(function (x) { x.classList.toggle('on', x === t); });
+      U.$all('.tab-panel').forEach(function (p) { p.style.display = 'none'; });
+      $('#tab-' + t.dataset.tab).style.display = '';
+      if (t.dataset.tab === 'data') renderData();
+    });
+  });
+  function gotoTab(name) {
+    U.$all('.tabs .tab').forEach(function (x) { x.classList.toggle('on', x.dataset.tab === name); });
+    U.$all('.tab-panel').forEach(function (p) { p.style.display = 'none'; });
+    $('#tab-' + name).style.display = '';
+  }
+
+  function freshSettings() { return JSON.parse(JSON.stringify(C.DEFAULT_SETTINGS)); }
+  function freshCatalog() { return JSON.parse(JSON.stringify(C.CATALOG)); }
+  function genCode() {
+    var a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', s = '';
+    for (var i = 0; i < 7; i++) s += a[Math.floor(Math.random() * a.length)];
+    return s;
+  }
+  function studentLink(code) {
+    var base = location.href.replace(/admin\/?(index\.html)?(\?.*)?$/, '');
+    return base + '?code=' + code;
+  }
+
+  /* ================= SESSION FORM ================================================ */
+  function field(label, inner, hint, title) {
+    return '<div class="field"' + (title ? ' title="' + esc(title) + '"' : '') + '><label>' + label +
+      (title ? ' <span class="help">?</span>' : '') + '</label>' + inner +
+      (hint ? '<span class="tiny muted">' + hint + '</span>' : '') + '</div>';
+  }
+  function numIn(id, val, min, max, step) {
+    return '<input type="number" class="input" id="' + id + '" value="' + val + '"' +
+      (min != null ? ' min="' + min + '"' : '') + (max != null ? ' max="' + max + '"' : '') +
+      (step ? ' step="' + step + '"' : '') + ' />';
+  }
+  function toggleIn(id, label, on, hint) {
+    return '<label class="toggle"' + (hint ? ' title="' + esc(hint) + '"' : '') + '><span class="toggle-label">' + label +
+      '</span><input type="checkbox" id="' + id + '"' + (on ? ' checked' : '') + ' /><span class="toggle-track"><span class="toggle-thumb"></span></span></label>';
+  }
+
+  function buildForm(s, catalog, meta) {
+    var cat = freshCatalog(); // market/region lists for pickers come from the built-in catalog
+    var html = '';
+
+    html += '<div class="section"><div class="sub-title">Game structure</div><div class="grid3">' +
+      field('Rounds', numIn('f-rounds', s.rounds, 2, 30), null, 'How many decision rounds the class plays. 6–10 works well in a 90-minute slot.') +
+      field('Starting cash ($)', numIn('f-cash', s.startingCash, 0)) +
+      field('Factory capacity (units/round)', numIn('f-capacity', s.factoryCapacity, 1)) +
+      field('Starting components (each)', numIn('f-startcomp', s.startingComponents, 0), null, 'Units of each component every firm holds at kickoff, so round 1 can produce.') +
+      field('Starting finished goods', numIn('f-startfg', s.startingFinished, 0)) +
+      field('Score weight on profit (%)', numIn('f-scorew', s.scoreWeightProfit, 0, 100), 'The rest weighs the sustainability (green) rank.') +
+      '</div></div>';
+
+    html += '<div class="section"><div class="sub-title">Markets open for selling</div><div class="grid3">' +
+      cat.markets.map(function (m) {
+        var on = s.markets.indexOf(m.id) !== -1;
+        return '<label class="checkline"><input type="checkbox" class="mkt-check" data-m="' + m.id + '"' + (on ? ' checked' : '') + '/><span>' +
+          esc(m.name) + ' <span class="tiny muted">(~' + fmtI(m.size) + ' u/round, ref ' + fmtM(m.refPrice) + ')</span></span></label>';
+      }).join('') + '</div></div>';
+
+    html += '<div class="section"><div class="sub-title">Demand</div><div class="grid3">' +
+      field('Pattern', '<select class="input" id="f-pattern">' + C.DEMAND_PATTERNS.map(function (p) {
+        return '<option value="' + p.id + '"' + (s.demandPattern === p.id ? ' selected' : '') + '>' + p.name + ' — ' + p.hint + '</option>';
+      }).join('') + '</select>', 'Students never see the pattern — they experience it through their sales. A step or seasonal pattern is what makes the bullwhip bite.') +
+      field('Step at round', numIn('f-steporound', s.stepRound, 1), 'step pattern only') +
+      field('Step factor', numIn('f-stepfactor', s.stepFactor, 0.2, 5, 0.1), 'e.g. 1.5 = demand jumps +50%') +
+      field('Noise (±fraction)', numIn('f-noise', s.demandNoise, 0, 1, 0.01)) +
+      field('Demand scale', numIn('f-dscale', s.demandScale || 1, 0.1, 10, 0.1), 'Multiply all market sizes. Rough guide: 1.0 fits ~4–6 firms; scale up for bigger classes.') +
+      '</div><div class="grid3">' +
+      toggleIn('f-intel', 'Market intelligence', s.marketIntel, 'Firms see last round\'s total demand and average price per market.') +
+      toggleIn('f-standings', 'Live leaderboard', s.showStandings, 'Firms can watch the standings during the game (final debrief always shows them).') +
+      toggleIn('f-events', 'World events', s.eventsOn, 'Seeded supply disruptions, port congestion and ESG scandal risk.') +
+      '</div></div>';
+
+    html += '<div class="section"><div class="sub-title">Tariffs</div>' +
+      '<p class="section-hint">Base tariff charged on the customs value of anything imported into a region — components into a firm\'s hub, finished goods into a market. Schedule shocks to change rates mid-game (announced shocks appear in the news one round ahead, so firms can front-run them).</p>' +
+      '<div class="grid3">' + Object.keys(cat.regions).map(function (rid) {
+        return field('Into ' + cat.regions[rid].name + ' (%)', numIn('tariff-' + rid, (s.tariffBase || {})[rid] || 0, 0, 200));
+      }).join('') + '</div>' +
+      '<div class="sub-title" style="margin-top:10px;">Tariff shocks</div><div id="shock-rows"></div>' +
+      '<button class="btn-ghost btn-sm" id="btn-add-shock">+ Add tariff shock</button></div>';
+
+    html += '<div class="section"><div class="sub-title">Sustainability levers</div><div class="grid3">' +
+      field('Carbon tax ($/tonne gross CO2)', numIn('f-ctax', s.carbonTaxPerTon, 0), '0 = no tax') +
+      field('Carbon tax from round', numIn('f-ctaxround', s.carbonTaxFromRound, 1)) +
+      field('Consumer green sensitivity ×', numIn('f-gsens', s.greenSensitivity, 0, 5, 0.1), 'Scales how much every market rewards green firms.') +
+      field('Offset price ($/tonne)', numIn('f-offsetp', s.offsetPricePerTon, 0)) +
+      field('Renewable plant capex ($)', numIn('f-renewcapex', s.renewableCapex, 0)) +
+      field('Supplier audit cost ($)', numIn('f-auditcost', s.auditCost, 0)) +
+      '</div></div>';
+
+    html += '<div class="section"><details><summary class="sub-title" style="cursor:pointer; display:list-item;">Advanced: product &amp; supplier catalog (JSON)</summary>' +
+      '<p class="section-hint">The product, components, suppliers (cost / CO2 / ESG / capacity), regions, distances, transport modes and markets. Edit for a custom game; leave as-is otherwise.</p>' +
+      '<textarea class="input" id="f-catalog" spellcheck="false" style="min-height:220px; font-family:ui-monospace,Menlo,monospace; font-size:12px;"></textarea>' +
+      '<button class="btn-ghost btn-sm" id="btn-catalog-reset" style="margin-top:6px;">Reset catalog to default</button></details></div>';
+
+    html += '<div class="section"><div class="sub-title">Session details</div><div class="grid2">' +
+      field('Session name (only you see it)', '<input class="input" id="f-name" value="' + esc(meta.name || '') + '" placeholder="e.g. MBA Ops — Spring 2027" />') +
+      field('Session code', '<div class="flex-row"><input class="input" id="f-code" value="' + esc(meta.code || '') + '" placeholder="AUTO" style="text-transform:uppercase; font-family:ui-monospace,Menlo,monospace;" />' +
+        '<button class="btn-ghost btn-sm" id="btn-gencode">Auto</button></div>', 'Single word, A–Z and digits. Students join with this.') +
+      '</div></div>';
+
+    $('#form-root').innerHTML = html;
+    $('#f-catalog').value = JSON.stringify(catalog, null, 1);
+    (s.tariffShocks || []).forEach(addShockRow);
+    $('#btn-add-shock').addEventListener('click', function () { addShockRow({ round: 4, importer: 'namerica', from: '', rate: 25, announce: true }); });
+    $('#btn-gencode').addEventListener('click', function () { $('#f-code').value = genCode(); });
+    $('#btn-catalog-reset').addEventListener('click', function () { $('#f-catalog').value = JSON.stringify(freshCatalog(), null, 1); });
+  }
+
+  function addShockRow(sh) {
+    var cat = freshCatalog();
+    var row = U.el('div', { class: 'flex-row', style: 'margin:6px 0; gap:6px;' });
+    function regionSel(cls, val, anyLabel) {
+      return '<select class="input input-sm ' + cls + '" style="width:auto;">' +
+        (anyLabel ? '<option value="">' + anyLabel + '</option>' : '') +
+        Object.keys(cat.regions).map(function (rid) {
+          return '<option value="' + rid + '"' + (val === rid ? ' selected' : '') + '>' + cat.regions[rid].name + '</option>';
+        }).join('') + '</select>';
+    }
+    row.innerHTML = '<span class="tiny muted">round</span><input type="number" class="input input-sm sh-round" value="' + (sh.round || 1) + '" min="1" style="width:64px;"/>' +
+      '<span class="tiny muted">into</span>' + regionSel('sh-importer', sh.importer) +
+      '<span class="tiny muted">from</span>' + regionSel('sh-from', sh.from || '', 'anywhere') +
+      '<input type="number" class="input input-sm sh-rate" value="' + (sh.rate || 0) + '" min="0" max="500" style="width:70px;"/><span class="tiny muted">%</span>' +
+      '<label class="checkline" style="margin:0;"><input type="checkbox" class="sh-announce"' + (sh.announce ? ' checked' : '') + '/><span class="tiny">announce a round ahead</span></label>' +
+      '<button class="link-btn danger sh-del">remove</button>';
+    row.querySelector('.sh-del').addEventListener('click', function () { row.remove(); });
+    $('#shock-rows').appendChild(row);
+  }
+
+  function readForm() {
+    var s = freshSettings();
+    function nv(id, d) { var v = Number(($('#' + id) || {}).value); return isFinite(v) ? v : d; }
+    s.rounds = Math.max(1, Math.round(nv('f-rounds', s.rounds)));
+    s.startingCash = nv('f-cash', s.startingCash);
+    s.factoryCapacity = Math.max(1, nv('f-capacity', s.factoryCapacity));
+    s.startingComponents = Math.max(0, nv('f-startcomp', s.startingComponents));
+    s.startingFinished = Math.max(0, nv('f-startfg', s.startingFinished));
+    s.scoreWeightProfit = Math.min(100, Math.max(0, nv('f-scorew', s.scoreWeightProfit)));
+    s.markets = U.$all('.mkt-check').filter(function (c) { return c.checked; }).map(function (c) { return c.dataset.m; });
+    s.demandPattern = $('#f-pattern').value;
+    s.stepRound = nv('f-steporound', s.stepRound);
+    s.stepFactor = nv('f-stepfactor', s.stepFactor);
+    s.demandNoise = nv('f-noise', s.demandNoise);
+    s.demandScale = nv('f-dscale', 1);
+    s.marketIntel = $('#f-intel').checked;
+    s.showStandings = $('#f-standings').checked;
+    s.eventsOn = $('#f-events').checked;
+    s.tariffBase = {};
+    Object.keys(freshCatalog().regions).forEach(function (rid) { s.tariffBase[rid] = nv('tariff-' + rid, 0); });
+    s.tariffShocks = U.$all('#shock-rows > div').map(function (row) {
+      return {
+        round: Number(row.querySelector('.sh-round').value) || 1,
+        importer: row.querySelector('.sh-importer').value,
+        from: row.querySelector('.sh-from').value || null,
+        rate: Number(row.querySelector('.sh-rate').value) || 0,
+        announce: row.querySelector('.sh-announce').checked
+      };
+    });
+    s.carbonTaxPerTon = nv('f-ctax', 0);
+    s.carbonTaxFromRound = nv('f-ctaxround', 1);
+    s.greenSensitivity = nv('f-gsens', 1);
+    s.offsetPricePerTon = nv('f-offsetp', s.offsetPricePerTon);
+    s.renewableCapex = nv('f-renewcapex', s.renewableCapex);
+    s.auditCost = nv('f-auditcost', s.auditCost);
+    var catalog;
+    try { catalog = JSON.parse($('#f-catalog').value); }
+    catch (e) { return { err: 'Catalog JSON is invalid: ' + e.message }; }
+    if (!catalog.components || !catalog.markets || !catalog.regions) return { err: 'Catalog must keep its components / markets / regions structure.' };
+    if (!s.markets.length) return { err: 'Open at least one market.' };
+    var code = ($('#f-code').value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    return { settings: s, catalog: catalog, name: $('#f-name').value.trim(), code: code };
+  }
+
+  $('#btn-save-session').addEventListener('click', function () {
+    var out = readForm(), err = $('#form-err');
+    err.style.display = 'none';
+    if (out.err) { err.textContent = out.err; err.style.display = ''; return; }
+    var code = out.code || genCode();
+    var clash = A.sessions.some(function (x) { return x.code === code && x.id !== A.editingId && !x.archived; });
+    if (clash) { err.textContent = 'Code ' + code + ' is already used by another session.'; err.style.display = ''; return; }
+    var btn = $('#btn-save-session');
+    btn.disabled = true;
+    if (A.editingId) {
+      ST.updateSession(A.editingId, { name: out.name, code: code, settings: out.settings, catalog: out.catalog })
+        .then(function () { btn.disabled = false; cancelEdit(); flash('Saved'); refreshSessions(); });
+    } else {
+      var doc = { code: code, name: out.name || ('Session ' + code), createdAt: Date.now(),
+                  status: 'setup', round: 0, phase: 'lobby',
+                  settings: out.settings, catalog: out.catalog, broadcasts: [] };
+      ST.createSession(doc).then(function (id) {
+        btn.disabled = false;
+        flash('Created');
+        $('#created-box').innerHTML = '<div class="code-box"><p class="small" style="margin:0 0 4px;">Session created — students join with this code:</p>' +
+          '<div class="code-big">' + esc(code) + '</div>' +
+          '<div class="launch-link">' + esc(studentLink(code)) + '</div>' +
+          '<div class="flex-row"><button class="btn-ghost btn-sm" id="btn-copylink">Copy student link</button>' +
+          '<button class="btn btn-sm" id="btn-goto-ctrl">Open control room →</button></div></div>';
+        $('#btn-copylink').addEventListener('click', function () { navigator.clipboard.writeText(studentLink(code)); });
+        $('#btn-goto-ctrl').addEventListener('click', function () { gotoTab('control'); selectCtrl(id); });
+        refreshSessions();
+      });
+    }
+  });
+  $('#btn-restore-defaults').addEventListener('click', function () {
+    buildForm(freshSettings(), freshCatalog(), { name: '', code: '' });
+  });
+  $('#btn-cancel-edit').addEventListener('click', cancelEdit);
+  function cancelEdit() {
+    A.editingId = null;
+    $('#form-title').childNodes[0].textContent = 'Create a session ';
+    $('#edit-badge').style.display = 'none';
+    $('#btn-save-session').textContent = 'Create session';
+    $('#btn-cancel-edit').style.display = 'none';
+    buildForm(freshSettings(), freshCatalog(), { name: '', code: '' });
+  }
+  function flash(text) {
+    var f = $('#form-flash');
+    f.textContent = text; f.classList.add('show');
+    setTimeout(function () { f.classList.remove('show'); }, 1800);
+  }
+
+  /* ================= SESSION LISTS ================================================ */
+  function refreshSessions() {
+    ST.listSessions().then(function (list) {
+      A.sessions = list;
+      paintSessionLists();
+      fillSelect($('#ctrl-select'), A.ctrlId);
+      fillSelect($('#data-select'), A.dataId);
+      if (!A.ctrlId && list.length) selectCtrl(list[0].id);
+      if (!A.dataId && list.length) selectData(list[0].id);
+    });
+  }
+  function fillSelect(sel, current) {
+    var opts = A.sessions.map(function (s) {
+      return '<option value="' + s.id + '"' + (s.id === current ? ' selected' : '') + '>' +
+        esc((s.name || s.code) + ' · ' + s.code) + '</option>';
+    }).join('');
+    sel.innerHTML = opts || '<option value="">— no sessions —</option>';
+  }
+  $('#ctrl-select').addEventListener('change', function () { selectCtrl(this.value); });
+  $('#data-select').addEventListener('change', function () { selectData(this.value); });
+
+  function paintSessionLists() {
+    var active = A.sessions.filter(function (s) { return s.status !== 'done'; });
+    var done = A.sessions.filter(function (s) { return s.status === 'done'; });
+    $('#active-count').textContent = active.length ? active.length + ' session' + (active.length > 1 ? 's' : '') : '';
+    $('#done-count').textContent = done.length || '';
+    $('#active-list').innerHTML = active.length ? '' : '<p class="muted small">None yet — create one on the left.</p>';
+    $('#done-list').innerHTML = done.length ? '' : '<p class="muted small">None yet.</p>';
+    active.forEach(function (s) { $('#active-list').appendChild(sessCard(s, false)); });
+    done.forEach(function (s) { $('#done-list').appendChild(sessCard(s, true)); });
+  }
+  function sessCard(s, isDone) {
+    var card = U.el('div', { class: 'sess-card' });
+    var phase = s.phase === 'lobby' ? 'lobby — waiting to start' :
+      s.phase === 'decisions' ? 'round ' + s.round + ' — decisions open' :
+      s.phase === 'resolved' ? 'round ' + s.round + ' resolved' : 'finished';
+    card.innerHTML = '<div class="sess-top"><span class="sess-name">' + esc(s.name || s.code) + '</span>' +
+      '<span class="pill ' + (isDone ? 'pill-plain' : 'pill-green') + '">' + (isDone ? 'done' : 'active') + '</span></div>' +
+      '<div class="sess-meta"><span class="sess-code">' + esc(s.code) + '</span> · ' + esc(phase) +
+      ' · ' + s.settings.rounds + ' rounds</div>';
+    var act = U.el('div', { class: 'sess-actions' });
+    var bCtrl = U.el('button', { class: 'btn btn-sm', text: 'Control room' });
+    bCtrl.addEventListener('click', function () { gotoTab('control'); selectCtrl(s.id); });
+    act.appendChild(bCtrl);
+    if (s.phase === 'lobby') {
+      var bEdit = U.el('button', { class: 'btn-ghost btn-sm', text: 'Edit' });
+      bEdit.addEventListener('click', function () {
+        A.editingId = s.id;
+        $('#form-title').childNodes[0].textContent = 'Edit session ';
+        $('#edit-badge').style.display = '';
+        $('#btn-save-session').textContent = 'Save changes';
+        $('#btn-cancel-edit').style.display = '';
+        buildForm(s.settings, s.catalog, { name: s.name, code: s.code });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+      act.appendChild(bEdit);
+    }
+    var bCopy = U.el('button', { class: 'btn-ghost btn-sm', text: 'Copy link' });
+    bCopy.addEventListener('click', function () {
+      navigator.clipboard.writeText(studentLink(s.code));
+      bCopy.textContent = 'Copied ✓'; setTimeout(function () { bCopy.textContent = 'Copy link'; }, 1500);
+    });
+    act.appendChild(bCopy);
+    var bDel = U.el('button', { class: 'link-btn danger', text: 'Delete' });
+    bDel.addEventListener('click', function () {
+      if (!confirm('Delete session ' + s.code + ' and ALL its data (firms, decisions, results)?')) return;
+      ST.deleteSession(s.id).then(function () {
+        if (A.ctrlId === s.id) A.ctrlId = null;
+        if (A.dataId === s.id) A.dataId = null;
+        refreshSessions();
+      });
+    });
+    act.appendChild(bDel);
+    card.appendChild(act);
+    return card;
+  }
+
+  /* ================= CONTROL ROOM ================================================== */
+  function selectCtrl(id) {
+    if (!id) return;
+    A.ctrlId = id;
+    fillSelect($('#ctrl-select'), id);
+    A.ctrl.unsubs.forEach(function (u) { u(); });
+    A.ctrl = { session: null, firms: [], decisions: [], results: [], markets: [], unsubs: [] };
+    A.ctrl.unsubs.push(ST.watchSession(id, function (d) { A.ctrl.session = d; renderCtrl(); paintSessionLists(); }));
+    A.ctrl.unsubs.push(ST.watchFirms(id, function (d) { A.ctrl.firms = d || []; renderCtrl(); }));
+    A.ctrl.unsubs.push(ST.watchDecisions(id, function (d) { A.ctrl.decisions = d || []; renderCtrl(); }));
+    A.ctrl.unsubs.push(ST.watchResults(id, function (d) { A.ctrl.results = d || []; renderCtrl(); }));
+    A.ctrl.unsubs.push(ST.watchMarkets(id, function (d) { A.ctrl.markets = d || []; renderCtrl(); }));
+  }
+  function ctrlStates() {
+    var out = {};
+    A.ctrl.firms.forEach(function (f) {
+      var rs = A.ctrl.results.filter(function (r) { return r.firmId === f.id; })
+        .sort(function (a, b) { return a.round - b.round; });
+      out[f.id] = rs.length ? rs[rs.length - 1].endState : E.initFirmState(A.ctrl.session, f);
+    });
+    return out;
+  }
+  function decisionOf(fid, round) {
+    return A.ctrl.decisions.find(function (d) { return d.firmId === fid && d.round === round; }) || null;
+  }
+
+  function renderCtrl() {
+    var sess = A.ctrl.session, box = $('#ctrl-root');
+    if (!sess) { box.innerHTML = '<p class="muted" style="margin-top:16px;">Select a session above.</p>'; return; }
+    var firms = A.ctrl.firms, s = sess.settings;
+    var html = '';
+
+    // --- header / phase actions
+    var submitted = firms.filter(function (f) { return f.isBot || (decisionOf(f.id, sess.round) || {}).submitted; }).length;
+    html += '<div class="card"><div class="row-between"><div>' +
+      '<div class="card-title" style="margin-bottom:0;">' + esc(sess.name || sess.code) +
+      ' <span class="sess-code">' + esc(sess.code) + '</span></div>' +
+      '<p class="card-subtitle" style="margin:2px 0 0;">Student link: <span class="launch-link" style="display:inline-block; margin:0;">' + esc(studentLink(sess.code)) + '</span></p></div>' +
+      '<div class="flex-row">' +
+      (sess.phase === 'lobby' ? '<span class="pill pill-amber">lobby</span>' :
+       sess.phase === 'decisions' ? '<span class="pill pill-green">round ' + sess.round + ' · decisions open</span>' :
+       sess.phase === 'resolved' ? '<span class="pill pill-blue">round ' + sess.round + ' resolved</span>' :
+       '<span class="pill pill-plain">finished</span>') + '</div></div>';
+
+    html += '<div class="flex-row mt16">';
+    if (sess.phase === 'lobby') {
+      html += '<button class="btn" id="c-start"' + (firms.length ? '' : ' disabled') + '>▶ Start round 1</button>' +
+        '<span class="muted small">' + (firms.length ? firms.length + ' firm(s) ready.' : 'Waiting for firms to join — or add bot firms below.') + '</span>';
+    } else if (sess.phase === 'decisions') {
+      html += '<button class="btn" id="c-resolve"' + (A.resolving ? ' disabled' : '') + '>⚙ Resolve round ' + sess.round + '</button>' +
+        '<span class="muted small">' + submitted + ' of ' + firms.length + ' firms submitted (bots decide automatically). Resolving locks the round for everyone.</span>';
+    } else if (sess.phase === 'resolved') {
+      html += '<button class="btn" id="c-next">▶ Open round ' + (sess.round + 1) + ' of ' + s.rounds + '</button>' +
+        '<span class="muted small">Give teams a minute on their results first.</span>';
+    } else {
+      html += '<span class="pill pill-plain">Game over — students see the debrief.</span>';
+    }
+    if (sess.phase !== 'final' && sess.phase !== 'lobby') {
+      html += '<button class="btn-ghost btn-sm" id="c-end" title="End the game now: current standings become final and students get the debrief.">End game now</button>';
+    }
+    html += '</div></div>';
+
+    // --- world this round (admin eyes only)
+    if (sess.phase === 'decisions' || sess.phase === 'resolved') {
+      var news = E.newsFor(sess, sess.round);
+      html += '<div class="columns"><div class="card"><div class="card-title">World — round ' + sess.round + ' <span class="pill pill-plain">admin eyes only</span></div>' +
+        '<div class="tbl-scroll"><table class="tbl tbl-tight"><thead><tr><th>Market</th><th class="r">True demand this round</th></tr></thead><tbody>' +
+        E.activeMarkets(sess).map(function (m) {
+          return '<tr><td>' + esc(m.name) + '</td><td class="r">' + fmtI(E.demandFor(sess, m.id, sess.round)) + '</td></tr>';
+        }).join('') + '</tbody></table></div>' +
+        (news.length ? '<div class="mt16">' + news.map(function (n) { return '<div class="news-item"><span>' + esc(n.text) + '</span></div>'; }).join('') + '</div>' : '<p class="tiny muted mt16">No world events this round.</p>') +
+        '</div>';
+
+      // broadcast composer
+      html += '<div class="card"><div class="card-title">Message all firms</div>' +
+        '<p class="card-subtitle">Shows as a banner on every student screen (and in their news feed). Use it for hints, warnings, or theatre — “rumours of a tariff announcement…”.</p>' +
+        '<textarea class="input" id="c-bc" placeholder="e.g. Reminder: 5 minutes left to submit round ' + sess.round + ' decisions."></textarea>' +
+        '<button class="btn btn-sm" id="c-bc-send" style="margin-top:8px;">Send</button></div></div>';
+    }
+
+    // --- firms
+    html += '<div class="card"><div class="row-between"><div class="card-title" style="margin:0;">Firms</div>' +
+      '<div class="flex-row"><select class="input input-sm" id="c-botprofile" style="width:auto;">' +
+      '<option value="">Bot: cost-focused</option><option value="green">Bot: green-focused</option></select>' +
+      '<button class="btn-ghost btn-sm" id="c-addbot">+ Add bot firm</button></div></div>';
+    if (!firms.length) html += '<p class="muted small">No firms yet. Students join at the link above.</p>';
+    else {
+      var states = ctrlStates();
+      html += '<div class="tbl-scroll"><table class="tbl"><thead><tr><th>Firm</th><th>Hub</th><th>Team</th>' +
+        '<th class="r">Submitted</th><th class="r">Cash</th><th class="r">Cum. profit</th><th class="r">Green</th><th class="r">Brand</th><th></th></tr></thead><tbody>';
+      firms.forEach(function (f) {
+        var st = states[f.id];
+        var dec = decisionOf(f.id, sess.round);
+        var sub = f.isBot ? '🤖 auto' : (dec && dec.submitted ? '✔' : (dec ? 'draft' : '—'));
+        html += '<tr><td>' + esc(f.name) + (f.isBot ? ' <span class="pill pill-plain">bot</span>' : '') + '</td>' +
+          '<td>' + esc(sess.catalog.regions[f.hub].name) + '</td>' +
+          '<td class="small muted">' + esc((f.members || []).map(function (m) { return m.name; }).join(', ')) + '</td>' +
+          '<td class="r">' + (sess.phase === 'decisions' ? sub : '·') + '</td>' +
+          '<td class="r ' + U.posneg(st.cash) + '">' + fmtM(st.cash) + '</td>' +
+          '<td class="r ' + U.posneg(st.cum.profit) + '">' + fmtM(st.cum.profit) + '</td>' +
+          '<td class="r">' + st.green + '</td><td class="r">' + st.brand + '</td>' +
+          '<td><button class="link-btn danger c-kick" data-f="' + f.id + '">remove</button></td></tr>';
+      });
+      html += '</tbody></table></div>';
+    }
+    html += '</div>';
+
+    // --- standings + bullwhip
+    if (A.ctrl.results.length) {
+      var lb = E.leaderboard(sess, firms, ctrlStates());
+      html += '<div class="card"><div class="card-title">Standings</div><div class="tbl-scroll"><table class="tbl tbl-tight"><thead><tr>' +
+        '<th>#</th><th>Firm</th><th class="r">Profit</th><th class="r">Green</th><th class="r">CO2/unit</th><th class="r">Sold</th><th class="r">Bullwhip</th><th class="r">Score</th></tr></thead><tbody>' +
+        lb.map(function (r, i) {
+          return '<tr><td>' + (i + 1) + '</td><td>' + esc(r.name) + '</td><td class="r ' + U.posneg(r.profit) + '">' + fmtM(r.profit) + '</td>' +
+            '<td class="r">' + r.green + '</td><td class="r">' + (r.co2PerUnit != null ? r.co2PerUnit : '–') + '</td>' +
+            '<td class="r">' + fmtI(r.sold) + '</td><td class="r">' + (r.bullwhip != null ? '×' + r.bullwhip : '–') + '</td>' +
+            '<td class="r"><b>' + r.score + '</b></td></tr>';
+        }).join('') + '</tbody></table></div>' +
+        '<div class="chart-box"><h4>Demand vs orders (class average per round)</h4>' + classBullwhipChart(sess) + '</div></div>';
+    }
+
+    box.innerHTML = html;
+
+    // wire up
+    if ($('#c-start')) $('#c-start').addEventListener('click', function () {
+      ST.updateSession(sess.id, { phase: 'decisions', round: 1, status: 'live', startedAt: Date.now() });
+    });
+    if ($('#c-resolve')) $('#c-resolve').addEventListener('click', function () { doResolve(sess); });
+    if ($('#c-next')) $('#c-next').addEventListener('click', function () {
+      ST.updateSession(sess.id, { phase: 'decisions', round: sess.round + 1 });
+    });
+    if ($('#c-end')) $('#c-end').addEventListener('click', function () {
+      if (!confirm('End the game now? Current standings become final.')) return;
+      ST.updateSession(sess.id, { phase: 'final', status: 'done', endedAt: Date.now() });
+    });
+    if ($('#c-addbot')) $('#c-addbot').addEventListener('click', function () {
+      var used = firms.map(function (f) { return f.name; });
+      var name = BOT_NAMES.find(function (n) { return used.indexOf(n) === -1; }) || ('Bot ' + (firms.length + 1));
+      var profile = $('#c-botprofile').value || null;
+      var hubs = Object.keys(sess.catalog.regions);
+      var hub = profile === 'green' ? 'europe' : hubs[firms.length % hubs.length];
+      var fid = 'bot' + Math.random().toString(36).slice(2, 8);
+      ST.setFirm(sess.id, fid, { id: fid, name: name, hub: hub, members: [], isBot: true,
+                                 botProfile: profile, createdAt: Date.now() });
+    });
+    if ($('#c-bc-send')) $('#c-bc-send').addEventListener('click', function () {
+      var text = $('#c-bc').value.trim();
+      if (!text) return;
+      var bcs = (sess.broadcasts || []).concat([{ id: Date.now(), text: text, round: sess.round }]).slice(-25);
+      ST.updateSession(sess.id, { broadcasts: bcs }).then(function () { $('#c-bc').value = ''; });
+    });
+    U.$all('.c-kick').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var f = firms.find(function (x) { return x.id === b.dataset.f; });
+        if (!f || !confirm('Remove firm "' + f.name + '" from the game?')) return;
+        ST.deleteFirm(sess.id, f.id);
+      });
+    });
+  }
+
+  function classBullwhipChart(sess) {
+    var rounds = [];
+    for (var r = 1; r <= sess.round; r++) rounds.push(r);
+    var states = ctrlStates();
+    function avg(key) {
+      return rounds.map(function (r2) {
+        var vals = [];
+        A.ctrl.firms.forEach(function (f) {
+          var h = (states[f.id].hist || []).find(function (x) { return x.round === r2; });
+          if (h) vals.push(h[key]);
+        });
+        return vals.length ? vals.reduce(function (a, b) { return a + b; }, 0) / vals.length : null;
+      });
+    }
+    return U.lineChart({ labels: rounds.map(function (r2) { return 'R' + r2; }), series: [
+      { name: 'Avg consumer demand faced', values: avg('demand') },
+      { name: 'Avg component sets ordered', color: '#1f5f8b', values: avg('ordered') }
+    ] }) + U.legendHtml([{ name: 'Avg consumer demand faced' }, { name: 'Avg component sets ordered', color: '#1f5f8b' }]);
+  }
+
+  /* ---- round resolution -------------------------------------------------------------- */
+  function doResolve(sess) {
+    if (A.resolving) return;
+    var firms = A.ctrl.firms;
+    if (!firms.length) return;
+    var humansPending = firms.filter(function (f) { return !f.isBot && !(decisionOf(f.id, sess.round) || {}).submitted; });
+    if (humansPending.length &&
+        !confirm(humansPending.length + ' firm(s) have not submitted (' +
+          humansPending.map(function (f) { return f.name; }).join(', ') +
+          ').\nResolve anyway? Their current draft (or a do-nothing plan) will be used.')) return;
+    A.resolving = true;
+    renderCtrl();
+    try {
+      var states = ctrlStates();
+      var decisions = {}, botSaves = [];
+      firms.forEach(function (f) {
+        if (f.isBot) {
+          var bd = E.botDecision(sess, f, states[f.id], sess.round, firms.length, f.botProfile);
+          decisions[f.id] = bd;
+          botSaves.push(ST.saveDecision(sess.id, f.id, sess.round, bd));
+        } else {
+          decisions[f.id] = decisionOf(f.id, sess.round);
+        }
+      });
+      var out = E.resolveRound(sess, firms, states, decisions, sess.round);
+      out.market.news = out.news;
+      var last = sess.round >= sess.settings.rounds;
+      var patch = last ? { phase: 'final', status: 'done', endedAt: Date.now() } : { phase: 'resolved' };
+      Promise.all(botSaves).then(function () {
+        return ST.saveResolution(sess.id, sess.round, { results: out.results, market: out.market, sessionPatch: patch });
+      }).then(function () { A.resolving = false; })
+        .catch(function (e) { A.resolving = false; alert('Resolve failed: ' + e.message); renderCtrl(); });
+    } catch (e) {
+      A.resolving = false;
+      alert('Resolve failed: ' + e.message);
+      renderCtrl();
+    }
+  }
+
+  /* ================= DATA & EXPORT ================================================== */
+  function selectData(id) {
+    if (!id) return;
+    A.dataId = id;
+    fillSelect($('#data-select'), id);
+    A.data.unsubs.forEach(function (u) { u(); });
+    A.data = { session: null, firms: [], decisions: [], results: [], markets: [], unsubs: [] };
+    A.data.unsubs.push(ST.watchSession(id, function (d) { A.data.session = d; renderData(); }));
+    A.data.unsubs.push(ST.watchFirms(id, function (d) { A.data.firms = d || []; renderData(); }));
+    A.data.unsubs.push(ST.watchDecisions(id, function (d) { A.data.decisions = d || []; renderData(); }));
+    A.data.unsubs.push(ST.watchResults(id, function (d) { A.data.results = d || []; renderData(); }));
+    A.data.unsubs.push(ST.watchMarkets(id, function (d) { A.data.markets = d || []; renderData(); }));
+  }
+  function renderData() {
+    if ($('#tab-data').style.display === 'none') return;
+    var sess = A.data.session, box = $('#data-root');
+    if (!sess) { box.innerHTML = '<p class="muted" style="margin-top:16px;">Select a session.</p>'; return; }
+    var res = A.data.results.slice().sort(function (a, b) { return a.round - b.round || String(a.firmId).localeCompare(String(b.firmId)); });
+    var html = '<div class="stat-grid">' +
+      '<div class="stat-box"><div class="n">' + A.data.firms.length + '</div><div class="l">Firms</div></div>' +
+      '<div class="stat-box"><div class="n">' + (sess.phase === 'lobby' ? 0 : (sess.phase === 'decisions' ? sess.round - 1 : Math.min(sess.round, sess.settings.rounds))) + '</div><div class="l">Rounds resolved</div></div>' +
+      '<div class="stat-box"><div class="n">' + A.data.decisions.length + '</div><div class="l">Decision records</div></div>' +
+      '<div class="stat-box"><div class="n">' + res.length + '</div><div class="l">Result rows</div></div></div>';
+    if (res.length) {
+      html += '<h3>Firm-round results</h3><div class="tbl-scroll" style="max-height:420px;"><table class="tbl tbl-tight"><thead><tr>' +
+        '<th>R</th><th>Firm</th><th class="r">Demand</th><th class="r">Sold</th><th class="r">Lost</th><th class="r">Cut</th>' +
+        '<th class="r">Produced</th><th class="r">Revenue</th><th class="r">Profit</th><th class="r">CO2 gross</th><th class="r">Green</th><th class="r">Brand</th><th class="r">Cash</th></tr></thead><tbody>' +
+        res.map(function (r) {
+          var f = A.data.firms.find(function (x) { return x.id === r.firmId; }) || { name: r.firmId };
+          var demand = sumSold(r.sold) + r.lost;
+          return '<tr><td>' + r.round + '</td><td>' + esc(f.name) + '</td><td class="r">' + fmtI(demand) + '</td>' +
+            '<td class="r">' + fmtI(sumSold(r.sold)) + '</td><td class="r">' + fmtI(r.lost) + '</td><td class="r">' + fmtI(r.cut) + '</td>' +
+            '<td class="r">' + fmtI(r.produced) + '</td><td class="r">' + fmtM(r.revenue) + '</td>' +
+            '<td class="r ' + U.posneg(r.profit) + '">' + fmtM(r.profit) + '</td><td class="r">' + U.fmtCO2(r.co2.gross) + '</td>' +
+            '<td class="r">' + r.green + '</td><td class="r">' + r.brand + '</td><td class="r">' + fmtM(r.endState.cash) + '</td></tr>';
+        }).join('') + '</tbody></table></div>';
+    } else html += '<p class="muted small">No rounds resolved yet.</p>';
+    box.innerHTML = html;
+  }
+  function sumSold(o) { var t = 0; Object.keys(o || {}).forEach(function (k) { t += o[k]; }); return t; }
+
+  $('#btn-json').addEventListener('click', function () {
+    if (!A.data.session) return;
+    U.download('ssc_' + A.data.session.code + '.json', JSON.stringify({
+      session: A.data.session, firms: A.data.firms, decisions: A.data.decisions,
+      results: A.data.results, markets: A.data.markets
+    }, null, 1), 'application/json');
+  });
+
+  $('#btn-xlsx').addEventListener('click', function () {
+    var sess = A.data.session;
+    if (!sess) return;
+    var firms = A.data.firms, res = A.data.results, mkts = A.data.markets;
+    function firmName(id) { var f = firms.find(function (x) { return x.id === id; }); return f ? f.name : id; }
+
+    var about = [['Sustainable Supply Chains — session export'], [],
+      ['Session', sess.name || ''], ['Code', sess.code], ['Rounds', sess.settings.rounds],
+      ['Status', sess.status + ' / ' + sess.phase], ['Product', sess.catalog.product.name],
+      ['Markets open', sess.settings.markets.join(', ')],
+      ['Demand pattern', sess.settings.demandPattern], ['Carbon tax $/t', sess.settings.carbonTaxPerTon],
+      ['Score weight profit %', sess.settings.scoreWeightProfit], [],
+      ['Sheets: Firms · Rounds (one row per firm-round) · OrderLines (every supplier order line, with pro-rata cuts) · Markets (true demand & per-firm sales) · Standings']];
+
+    var firmsRows = [['Firm ID', 'Name', 'Hub', 'Bot', 'Bot profile', 'Team members']];
+    firms.forEach(function (f) {
+      firmsRows.push([f.id, f.name, f.hub, f.isBot ? 1 : 0, f.botProfile || '',
+        (f.members || []).map(function (m) { return m.name; }).join(', ')]);
+    });
+
+    var roundRows = [['Round', 'Firm', 'Hub', 'Demand faced', 'Units sold', 'Lost sales', 'Order units cut',
+      'Produced', 'Revenue', 'Purchases', 'Inbound freight', 'Import tariffs', 'Production cost',
+      'Outbound freight', 'Export tariffs', 'Holding', 'Overhead', 'Carbon tax', 'Offsets cost',
+      'Investments', 'Interest', 'Profit', 'CO2 components', 'CO2 inbound freight', 'CO2 assembly',
+      'CO2 outbound freight', 'CO2 gross', 'Offset kg', 'Green score', 'Brand', 'Scandal', 'Cash end']];
+    res.slice().sort(function (a, b) { return a.round - b.round; }).forEach(function (r) {
+      var f = firms.find(function (x) { return x.id === r.firmId; }) || {};
+      roundRows.push([r.round, firmName(r.firmId), f.hub || '', sumSold(r.sold) + r.lost, sumSold(r.sold), r.lost,
+        r.cut, r.produced, r.revenue, r.costs.purchase, r.costs.inFreight, r.costs.inTariff, r.costs.production,
+        r.costs.outFreight, r.costs.outTariff, r.costs.holding, r.costs.overhead, r.costs.carbonTax,
+        r.costs.offsets, r.costs.investments, r.costs.interest, r.profit,
+        r.co2.components, r.co2.inFreight, r.co2.assembly, r.co2.outFreight, r.co2.gross, r.co2.offsets,
+        r.green, r.brand, r.scandal ? 1 : 0, r.endState.cash]);
+    });
+
+    var lineRows = [['Round', 'Firm', 'Component', 'Supplier', 'Mode', 'Requested', 'Allocated', 'Cut',
+      'Lead (rounds)', 'Landed cost', 'CO2 kg']];
+    res.slice().sort(function (a, b) { return a.round - b.round; }).forEach(function (r) {
+      (r.orderLines || []).forEach(function (l) {
+        var comp = E.findComponent(sess.catalog, l.compId);
+        var sup = comp ? E.findSupplier(comp, l.supplierId) : null;
+        lineRows.push([r.round, firmName(r.firmId), comp ? comp.name : l.compId,
+          sup ? sup.name : l.supplierId, l.mode, l.requested, l.qty, l.cut, l.lead,
+          Math.round(l.cost), Math.round(l.co2)]);
+      });
+    });
+
+    var mktRows = [['Round', 'Market', 'True demand', 'Avg price'].concat(firms.map(function (f) { return 'Sold: ' + f.name; }))];
+    mkts.slice().sort(function (a, b) { return a.round - b.round; }).forEach(function (m) {
+      Object.keys(m.demand).forEach(function (mid) {
+        var mk = E.findMarket(sess.catalog, mid);
+        mktRows.push([m.round, mk ? mk.name : mid, m.demand[mid], m.avgPrice[mid]]
+          .concat(firms.map(function (f) { return (m.sales[mid] || {})[f.id] || 0; })));
+      });
+    });
+
+    var lb = E.leaderboard(sess, firms, (function () {
+      var out = {};
+      firms.forEach(function (f) {
+        var rs = res.filter(function (r) { return r.firmId === f.id; }).sort(function (a, b) { return a.round - b.round; });
+        out[f.id] = rs.length ? rs[rs.length - 1].endState : E.initFirmState(sess, f);
+      });
+      return out;
+    })());
+    var lbRows = [['Rank', 'Firm', 'Hub', 'Cumulative profit', 'Green score', 'CO2/unit', 'Units sold', 'Scandals', 'Bullwhip ratio', 'Score']];
+    lb.forEach(function (r, i) {
+      lbRows.push([i + 1, r.name, r.hub, r.profit, r.green, r.co2PerUnit, r.sold, r.scandals, r.bullwhip, r.score]);
+    });
+
+    var settingsRows = [['Setting', 'Value']];
+    Object.keys(sess.settings).forEach(function (k) {
+      var v = sess.settings[k];
+      settingsRows.push([k, typeof v === 'object' ? JSON.stringify(v) : v]);
+    });
+
+    window.SSCXlsx.download('ssc_' + sess.code + '_data.xlsx', [
+      { name: 'About', rows: about, filter: false, cols: [{ w: 40 }, { w: 60 }] },
+      { name: 'Settings', rows: settingsRows, cols: [{ w: 26 }, { w: 60 }] },
+      { name: 'Firms', rows: firmsRows, cols: [{ w: 12 }, { w: 22 }, { w: 12 }, { w: 6 }, { w: 10 }, { w: 30 }] },
+      { name: 'Rounds', rows: roundRows },
+      { name: 'OrderLines', rows: lineRows },
+      { name: 'Markets', rows: mktRows },
+      { name: 'Standings', rows: lbRows }
+    ]);
+  });
+})();
