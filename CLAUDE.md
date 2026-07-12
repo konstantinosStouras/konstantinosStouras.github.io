@@ -67,9 +67,9 @@ Journal of Operational Research (`ejor`) — flagged `"notFT": true` in
 FT-list check never retires them. **ABS field scope (deliberate):** the
 FT50 and UTD24 lists are covered in full (all fields), but ABS 4/4*/3
 coverage beyond them extends ONLY to Operations / Supply Chain / Economics /
-Computer Science-related journals — other fields' ABS journals are neither
-harvested nor listed (AJPS/APSR, 4* political science, were retired under
-this rule). The catalog grows past this repo's 1 GB Pages limit via
+Computer Science / Project Management / Innovation-related journals — other
+fields' ABS journals are neither harvested nor listed (AJPS/APSR, 4*
+political science, were retired under this rule). The catalog grows past this repo's 1 GB Pages limit via
 **satellite data shards** — sibling repos `lit-data-abs4`,
 `lit-data-abs3-omecon`, `lit-data-abs3-rest`, each with its own Pages site,
 vendored pipeline and curated `_scraper/journals.json` (grades in an `abs`

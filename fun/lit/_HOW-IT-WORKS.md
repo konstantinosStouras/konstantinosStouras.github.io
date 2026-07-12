@@ -55,8 +55,9 @@ browser.
   grade, so ABS 3 finds them, alongside IJOC). **ABS field scope:** FT50 and
   UTD24 are covered in full, all fields; ABS coverage beyond those lists is
   deliberately limited to Operations / Supply Chain / Economics / Computer
-  Science-related journals (in this repo's catalog and in the satellite
-  shards alike) — other fields' ABS journals are neither harvested nor shown.
+  Science / Project Management / Innovation-related journals (in this repo's
+  catalog and in the satellite shards alike) — other fields' ABS journals
+  are neither harvested nor shown.
 - **Journal-type badge on every card.** A small badge left of each paper's
   title shows the single MOST selective list its journal belongs to
   (UTD24 > FT50 > ABS 4/4* > ABS 3, the JOURNAL_TYPES order) — with one
