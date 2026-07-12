@@ -1,0 +1,44 @@
+rules_version = '2';
+// Sustainable Supply Chains — Firestore security rules.
+// Paste into Firebase console → Firestore → Rules (or `firebase deploy --only firestore:rules`).
+//
+// Model: students are anonymous-auth users; the instructor signs in with an
+// email/password account listed in isAdmin(). Within a session, signed-in
+// users can read everything (it's a shared class game: results and standings
+// are public to the class) and write firms/decisions; only the admin can
+// create/modify sessions and publish results.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isAdmin() {
+      return request.auth != null &&
+        request.auth.token.email in ['admin@admin.com'];   // ← keep in sync with SSC_ADMIN_EMAILS
+    }
+
+    match /sscSessions/{sessionId} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+
+      match /firms/{firmId} {
+        allow read: if signedIn();
+        // students create their own firm and update it (joining adds a member);
+        // deletion (kicking) is the instructor's call
+        allow create, update: if signedIn();
+        allow delete: if isAdmin();
+      }
+      match /decisions/{decId} {
+        allow read: if signedIn();
+        allow create, update: if signedIn();
+        allow delete: if isAdmin();
+      }
+      match /results/{resId} {
+        allow read: if signedIn();
+        allow write: if isAdmin();
+      }
+      match /markets/{mktId} {
+        allow read: if signedIn();
+        allow write: if isAdmin();
+      }
+    }
+  }
+}

@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sustainable Supply Chains — Global Sourcing Simulation</title>
+  <meta name="description" content="A class simulation of global supply chains: student teams run competing firms — sourcing components worldwide, managing logistics and inventory, and balancing profit against CO2 and ESG under tariffs and disruptions." />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23c8562a'/%3E%3Cpath d='M7 21c3-6 6-2 9-7s6-3 9-6' stroke='%23fff' stroke-width='2.2' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='7' cy='21' r='2.4' fill='%23fff'/%3E%3Ccircle cx='25' cy='8' r='2.4' fill='%23fff'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="topbar">
+    <span class="wordmark">Sustainable Supply Chains <span class="thin">· Global Sourcing Simulation</span></span>
+    <div class="topbar-right">
+      <span id="mode-pill" style="display:none;" class="pill pill-amber" title="No Firebase project is configured, so all data stays in this browser. Open the admin panel in another tab of this same browser to run a full local game.">Demo mode</span>
+      <span id="firm-pill" style="display:none;" class="pill pill-blue"></span>
+      <button class="theme-btn" id="btn-theme" title="Toggle light/dark">☾</button>
+    </div>
+  </div>
+
+  <!-- JOIN -->
+  <section class="screen active" id="s-join">
+    <div class="wrap wrap-narrow">
+      <div class="hero">
+        <div class="globe">🌍</div>
+        <h1>Sustainable Supply Chains</h1>
+        <p>Your team runs a firm assembling and selling <b>e-bikes</b> worldwide. Source components
+           from suppliers across the globe, choose sea or air freight, set prices in each market —
+           and balance <b>profit</b> against <b>CO2 and ESG</b> while tariffs, disruptions and your
+           competitors keep moving.</p>
+      </div>
+      <div class="card">
+        <div class="field">
+          <label for="in-code">Session code from your instructor</label>
+          <div class="flex-row">
+            <input class="input" id="in-code" placeholder="e.g. GREENBIKE" autocomplete="off"
+                   style="max-width:260px; text-transform:uppercase; font-family:ui-monospace,Menlo,monospace; letter-spacing:0.1em;" />
+            <button class="btn" id="btn-join">Enter</button>
+          </div>
+          <div class="err-msg" id="join-err" style="display:none;"></div>
+        </div>
+      </div>
+      <p class="small muted center">Instructor? <a href="admin/">Open the admin panel</a>.</p>
+    </div>
+  </section>
+
+  <!-- FIRM SETUP -->
+  <section class="screen" id="s-firm">
+    <div class="wrap">
+      <h1 id="firm-title">Join the game</h1>
+      <p class="muted" id="firm-sub"></p>
+      <div class="columns">
+        <div class="card">
+          <div class="card-title">Found a new firm</div>
+          <p class="card-subtitle">Pick a name and — most importantly — where your assembly plant (hub) is.
+            Components ship from suppliers to your hub; finished e-bikes ship from your hub to each market.
+            The hub is fixed for the whole game.</p>
+          <div class="field"><label>Firm name</label>
+            <input class="input" id="in-firmname" placeholder="e.g. Velocity Works" maxlength="30" /></div>
+          <div class="field"><label>Assembly hub</label>
+            <select class="input" id="in-hub" style="max-width:280px;"></select></div>
+          <div id="hub-hint" class="section-hint"></div>
+          <div class="field"><label>Your name(s) — the team members on this device</label>
+            <input class="input" id="in-members" placeholder="e.g. Maria, Kwame, Li" maxlength="120" /></div>
+          <button class="btn" id="btn-create-firm">Found firm</button>
+          <div class="err-msg" id="firm-err" style="display:none;"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">…or join an existing firm</div>
+          <p class="card-subtitle">Team members on different devices: one of you founds the firm, the rest join it here.</p>
+          <div class="field"><label>Your name</label>
+            <input class="input" id="in-joinname" placeholder="Your name" maxlength="60" /></div>
+          <div id="firm-list"><p class="muted small">No firms yet — be the first.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LOBBY -->
+  <section class="screen" id="s-lobby">
+    <div class="wrap wrap-narrow">
+      <div class="card center">
+        <h2 id="lobby-title">Waiting for the instructor to start…</h2>
+        <p class="muted small">You're in. The game begins when your instructor opens round&nbsp;1.</p>
+        <div id="lobby-firm" class="banner banner-good" style="display:none;"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Firms in this game</div>
+        <div id="lobby-firms"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- GAME -->
+  <section class="screen" id="s-game">
+    <div class="wrap">
+      <div class="row-between">
+        <h1 style="font-size:24px;" id="g-title"></h1>
+        <div class="flex-row" id="g-chips"></div>
+      </div>
+      <div class="stat-grid" id="g-stats"></div>
+      <div id="g-banner"></div>
+      <div class="tabs" id="g-tabs">
+        <button class="tab on" data-tab="decide">Decide</button>
+        <button class="tab" data-tab="chain">Supply chain</button>
+        <button class="tab" data-tab="results">Results</button>
+        <button class="tab" data-tab="news">Market news</button>
+        <button class="tab" data-tab="standings">Standings</button>
+        <button class="tab" data-tab="debrief" id="tab-debrief-btn" style="display:none;">Debrief</button>
+      </div>
+      <div class="tab-panel" id="tp-decide"></div>
+      <div class="tab-panel" id="tp-chain" style="display:none;"></div>
+      <div class="tab-panel" id="tp-results" style="display:none;"></div>
+      <div class="tab-panel" id="tp-news" style="display:none;"></div>
+      <div class="tab-panel" id="tp-standings" style="display:none;"></div>
+      <div class="tab-panel" id="tp-debrief" style="display:none;"></div>
+    </div>
+  </section>
+
+  <!-- FIRM REMOVED / SESSION GONE -->
+  <section class="screen" id="s-gone">
+    <div class="wrap wrap-narrow">
+      <div class="card center">
+        <h2 id="gone-title">This session has ended</h2>
+        <p class="muted" id="gone-msg"></p>
+        <button class="btn-ghost" onclick="location.href=location.pathname">Back to start</button>
+      </div>
+    </div>
+  </section>
+
+  <script src="config.js"></script>
+  <script src="engine.js"></script>
+  <script src="shared.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="store.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

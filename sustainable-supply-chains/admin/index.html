@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sustainable Supply Chains — Admin</title>
+  <meta name="description" content="Instructor panel for the Sustainable Supply Chains class simulation: create sessions, control rounds, monitor firms, and export data." />
+  <meta name="robots" content="noindex,nofollow" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230f0e0c'/%3E%3Cpath d='M7 21c3-6 6-2 9-7s6-3 9-6' stroke='%23e8784f' stroke-width='2.2' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='7' cy='21' r='2.4' fill='%23e8784f'/%3E%3Ccircle cx='25' cy='8' r='2.4' fill='%23e8784f'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body>
+  <div class="topbar">
+    <span class="wordmark">Sustainable Supply Chains <span class="thin">· Admin</span></span>
+    <div class="topbar-right">
+      <span class="role-badge">Instructor</span>
+      <span id="mode-pill" style="display:none;" class="pill pill-amber" title="No Firebase project configured: sessions live in this browser only. Open the student page in another tab of this browser to play. See README for real-class setup.">Demo mode</span>
+      <span class="muted small" id="who"></span>
+      <button class="theme-btn" id="btn-theme" title="Toggle light/dark">☾</button>
+      <button class="btn-ghost btn-sm" id="btn-signout" style="display:none;">Sign out</button>
+    </div>
+  </div>
+
+  <!-- LOGIN (Firebase mode only) -->
+  <section class="screen" id="a-login">
+    <div class="wrap wrap-narrow">
+      <h1>Admin sign in</h1>
+      <div class="card" style="max-width:420px;">
+        <div class="field"><label>Email</label><input class="input" type="text" id="in-email" autocomplete="username" /></div>
+        <div class="field"><label>Password</label><input class="input" type="password" id="in-pass" autocomplete="current-password" /></div>
+        <button class="btn" id="btn-login">Sign in</button>
+        <div class="err-msg" id="login-err" style="display:none;"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DASHBOARD -->
+  <section class="screen" id="a-dash">
+    <div class="wrap">
+      <div id="dash-banner"></div>
+      <div class="tabs">
+        <button class="tab on" data-tab="sessions">Sessions</button>
+        <button class="tab" data-tab="control">Control room</button>
+        <button class="tab" data-tab="data">Data &amp; export</button>
+      </div>
+
+      <!-- SESSIONS -->
+      <div class="tab-panel" id="tab-sessions">
+        <div class="columns columns-wide-left">
+          <div class="card" id="create-card">
+            <div class="card-title" id="form-title">Create a session <span class="pill pill-amber" id="edit-badge" style="display:none;">editing</span></div>
+            <p class="card-subtitle">A session is one run of the game for one class. Student teams are competing
+              e-bike firms: they source components worldwide, manage logistics and inventory, price in each market,
+              and balance profit against CO2/ESG — through tariffs, disruptions and demand shifts you control below.</p>
+            <div id="form-root"></div>
+            <div class="flex-row mt16">
+              <button class="btn" id="btn-save-session">Create session</button>
+              <button class="btn-ghost btn-sm" id="btn-cancel-edit" style="display:none;">Cancel edit</button>
+              <button class="btn-ghost btn-sm" id="btn-restore-defaults" title="Reset every field to the built-in defaults">Restore defaults</button>
+              <span class="ok-flash" id="form-flash"></span>
+            </div>
+            <div class="err-msg" id="form-err" style="display:none;"></div>
+            <div id="created-box"></div>
+          </div>
+          <div>
+            <div class="card">
+              <div class="row-between"><h2 style="margin:0;">Active sessions</h2><span class="muted small" id="active-count"></span></div>
+              <div id="active-list"><p class="muted small">Loading…</p></div>
+            </div>
+            <div class="card">
+              <div class="row-between"><h2 style="margin:0;">Completed sessions</h2><span class="muted small" id="done-count"></span></div>
+              <div id="done-list"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CONTROL ROOM -->
+      <div class="tab-panel" id="tab-control" style="display:none;">
+        <div class="flex-row"><label class="small muted">Session</label>
+          <select class="input" id="ctrl-select" style="max-width:340px;"></select></div>
+        <div id="ctrl-root"><p class="muted" style="margin-top:16px;">Create a session first, then run the game from here.</p></div>
+      </div>
+
+      <!-- DATA -->
+      <div class="tab-panel" id="tab-data" style="display:none;">
+        <div class="flex-row"><label class="small muted">Session</label>
+          <select class="input" id="data-select" style="max-width:340px;"></select>
+          <button class="btn btn-sm" id="btn-xlsx">⬇ Download Excel (.xlsx)</button>
+          <button class="btn-ghost btn-sm" id="btn-json">Download JSON</button></div>
+        <div id="data-root"></div>
+      </div>
+    </div>
+  </section>
+
+  <script src="../config.js"></script>
+  <script src="../engine.js"></script>
+  <script src="../shared.js"></script>
+  <script src="../firebase-config.js"></script>
+  <script src="../store.js"></script>
+  <script src="xlsx.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>
