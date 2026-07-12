@@ -58,6 +58,30 @@ control room. In the debrief, the bots are excluded from the order-amplification
 chart — they pre-position for demand shifts they rationally anticipate, so
 their order variability is anticipation, not bullwhip.
 
+## Coaching & messaging (both modes, admin toggles)
+
+**Automatic coaching** (`coachOn`, default on) — a rule-based coach built into
+the engine (`coachDecision` / `coachResult`, deterministic and testable):
+
+- *While deciding*: up to four live nudges on the current draft — pricing
+  below unit cost, thin supply lines vs lead times, heavy over-ordering
+  (holding costs + rationing), orders that would arrive after the game ends,
+  air freight without stockout pressure, announced tariff changes, unaudited
+  low-ESG exposure, idle production while demand went unserved, deep
+  overdraft, and the offsets-don't-cut-gross reminder.
+- *After each round*: "Coach's notes" on the Results tab explain what
+  happened and what to try — stockouts with the margin they cost, rationing
+  cuts, **pricing vs the competitive (Nash) benchmark for that firm's costs
+  and reputation**, sourcing premium (praised when it buys a green score,
+  flagged when it buys nothing), unnecessary air premium, scandals — plus
+  explicit praise for lean-and-reliable operations and near-optimal pricing.
+
+**Messaging** (`chatOn`, default on) — a Messages tab for students: write to
+the instructor or to any other firm (negotiate, coordinate, bluff…). The
+control room shows **all** traffic — firm↔firm included, which the student UI
+states plainly — and lets the instructor reply to a single firm (broadcasts
+to everyone remain separate). Unread messages badge the student tab.
+
 ## How a class session runs (live mode)
 
 1. **Admin panel → Sessions**: create a session (rounds, markets, demand

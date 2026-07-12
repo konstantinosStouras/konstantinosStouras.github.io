@@ -364,6 +364,12 @@ The async instance lives in the `async/{firmId}` subcollection and is resolved
 in the student's browser; the admin control room becomes a progress monitor.
 'nash' is also a bot profile for live sessions; the debrief excludes nash bots
 from the order-amplification chart (their variability is anticipation).
+Automatic coaching (`settings.coachOn`): engine-level `coachDecision`
+(decision-time nudges) + `coachResult` (post-round feedback benchmarked
+against Nash pricing and order-up-to coverage). Messaging
+(`settings.chatOn`): firm↔instructor and firm↔firm messages in a `messages`
+subcollection — all traffic is visible in the admin control room (stated in
+the student UI).
 
 Key structure (see its README.md for the full model):
 - `engine.js` — pure deterministic engine (seeded per session code + round;

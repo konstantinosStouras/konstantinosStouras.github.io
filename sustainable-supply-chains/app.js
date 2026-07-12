@@ -13,7 +13,7 @@
   var S = {
     uid: null,
     sessionId: null, session: null,
-    firms: [], results: [], markets: [],
+    firms: [], results: [], markets: [], messages: [],
     myFirmId: null,
     draft: null, draftRound: null, submitted: false, saveTimer: null,
     decideRoundRendered: null, resultsRound: null,
@@ -181,6 +181,77 @@
     S.unsubs.push(ST.watchFirms(sessionId, function (firms) { S.firms = firms || []; route(); }));
     S.unsubs.push(ST.watchResults(sessionId, function (res) { S.results = res || []; route(); }));
     S.unsubs.push(ST.watchMarkets(sessionId, function (m) { S.markets = m || []; route(); }));
+    S.unsubs.push(ST.watchMessages(sessionId, function (m) {
+      S.messages = m || [];
+      paintMsgBadge();
+      if (S.activeTab === 'messages' && $('#s-game').classList.contains('active')) renderMessages();
+    }));
+  }
+
+  /* ---- messaging ---------------------------------------------------------------- */
+  function msgSeenKey() { return 'ssc-msgseen-' + S.sessionId; }
+  function myInbox() {
+    var mine = S.myFirmId;
+    return (S.messages || []).filter(function (m) { return m.from === mine || m.to === mine; });
+  }
+  function paintMsgBadge() {
+    var badge = $('#msg-badge');
+    if (!badge || !S.myFirmId) return;
+    var seen = 0;
+    try { seen = Number(localStorage.getItem(msgSeenKey())) || 0; } catch (e) {}
+    var unread = (S.messages || []).filter(function (m) { return m.to === S.myFirmId && (m.at || 0) > seen; }).length;
+    badge.style.display = unread ? '' : 'none';
+    badge.textContent = unread;
+  }
+  function renderMessages() {
+    var box = $('#tp-messages'), sess = V(), mine = myFirm();
+    if (!box || !mine) return;
+    try { localStorage.setItem(msgSeenKey(), String(Date.now())); } catch (e) {}
+    paintMsgBadge();
+    if (!sess.settings.chatOn) {
+      box.innerHTML = '<div class="card"><p class="muted">Messaging is switched off for this session.</p></div>';
+      return;
+    }
+    var others = S.firms.filter(function (f) { return f.id !== mine.id && !f.isBot; });
+    var html = '<div class="card"><div class="card-title">Send a message</div>' +
+      '<p class="card-subtitle">Talk to the instructor, or to another firm — negotiate, coordinate, bluff… ' +
+      '<b>The instructor can see every message.</b></p>' +
+      '<div class="flex-row"><select class="input input-sm" id="msg-to" style="width:auto; min-width:180px;">' +
+      '<option value="admin">Instructor</option>' +
+      others.map(function (f) { return '<option value="' + f.id + '">' + esc(f.name) + '</option>'; }).join('') +
+      '</select></div>' +
+      '<textarea class="input" id="msg-text" maxlength="500" placeholder="Your message…" style="margin-top:8px;"></textarea>' +
+      '<button class="btn btn-sm" id="msg-send" style="margin-top:8px;">Send</button></div>';
+    html += '<div class="card"><div class="card-title">Your conversations</div>';
+    var inbox = myInbox();
+    if (!inbox.length) html += '<p class="muted small">No messages yet.</p>';
+    else {
+      html += inbox.slice(-100).map(function (m) {
+        var fromMe = m.from === mine.id;
+        var who = fromMe ? 'You → ' + esc(m.to === 'admin' ? 'Instructor' : m.toName || firmName(m.to))
+                         : esc(m.from === 'admin' ? '📣 Instructor' : (m.fromName || firmName(m.from))) + ' → you';
+        return '<div class="news-item"><span class="news-round">R' + (m.round || '·') + '</span>' +
+          '<span><b class="' + (fromMe ? 'muted' : '') + '">' + who + ':</b> ' + esc(m.text) + '</span></div>';
+      }).join('');
+    }
+    box.innerHTML = html + '</div>';
+    $('#msg-send').addEventListener('click', function () {
+      var text = $('#msg-text').value.trim();
+      if (!text) return;
+      var to = $('#msg-to').value;
+      var toF = S.firms.find(function (f) { return f.id === to; });
+      $('#msg-send').disabled = true;
+      ST.saveMessage(S.sessionId, {
+        from: mine.id, fromName: mine.name, to: to,
+        toName: to === 'admin' ? 'Instructor' : (toF ? toF.name : to),
+        text: text.slice(0, 500), round: V().round, at: Date.now()
+      }).then(function () { $('#msg-text').value = ''; $('#msg-send').disabled = false; })
+        .catch(function (e) { $('#msg-send').disabled = false; alert('Send failed: ' + e.message); });
+    });
+  }
+  function firmName(id) {
+    var f = S.firms.find(function (x) { return x.id === id; });
+    return f ? f.name : id;
   }
 
   function showGone(msg, title) {
@@ -398,6 +469,7 @@
       if (S.activeTab === 'chain') renderChain(mine, st);
       if (S.activeTab === 'results') renderResults(mine);
       if (S.activeTab === 'news') renderNews();
+      if (S.activeTab === 'messages') renderMessages();
       if (S.activeTab === 'standings') renderStandings();
       if (S.activeTab === 'debrief') renderDebrief(mine);
     }
@@ -492,6 +564,7 @@
       html += '<div class="banner banner-warn"><b>This round:</b><br>' +
         news.map(function (n) { return '• ' + esc(n.text); }).join('<br>') + '</div>';
     }
+    html += '<div id="coach-nudges"></div>';
 
     // --- sourcing ---
     html += '<div class="card"><div class="card-title">1 · Source components</div>' +
@@ -698,6 +771,22 @@
       (co2PerKit != null ? '<div class="row muted small"><span>Ordered ~' + fmtI(kitsOrdered) + ' component sets · embodied + inbound CO2</span><b>' + co2PerKit + ' kg/set</b></div>' : '') +
       (capWarn ? '<div class="row small" style="color:var(--amber);"><span>⚠ Some orders exceed a supplier\'s shared capacity — expect pro-rata cuts if other firms order too.</span></div>' : '') +
       (pv.cashAfterSpend < 0 ? '<div class="row small" style="color:var(--red);"><span>Negative cash pays ' + Math.round(sess.settings.overdraftRate * 100) + '%/round overdraft interest.</span></div>' : '');
+    paintNudges(mine, st, d);
+  }
+
+  // Automatic coaching nudges (engine.coachDecision): live checks on the
+  // current draft — thin pipelines, over-ordering, below-cost prices, air
+  // waste, scandal exposure, horizon waste… capped and priority-ordered.
+  function paintNudges(mine, st, d) {
+    var box = $('#coach-nudges');
+    if (!box) return;
+    var sess = V();
+    if (!sess.settings.coachOn || sess.phase !== 'decisions') { box.innerHTML = ''; return; }
+    var tips = E.coachDecision(sess, mine, st, d, sess.round, gameFirms().length);
+    box.innerHTML = tips.map(function (t) {
+      var cls = t.level === 'warn' ? 'banner-warn' : (t.level === 'good' ? 'banner-good' : 'banner-info');
+      return '<div class="banner ' + cls + '" style="padding:8px 12px; font-size:12.5px; margin:6px 0;">🎓 ' + esc(t.text) + '</div>';
+    }).join('');
   }
 
   function paintSubmitState() {
@@ -844,6 +933,28 @@
       (r.co2.intensity != null ? '<tr><td>Per unit produced</td><td class="r">' + r.co2.intensity + ' kg</td></tr>' : '') +
       '</tbody></table></div>' +
       '<p class="tiny muted">Green score now: <b>' + r.green + '</b> · brand: <b>' + r.brand + '</b></p></div></div></div>';
+
+    // coach's notes for this round
+    if (s.coachOn) {
+      var prevRs = resultsFor(mine.id).filter(function (x) { return x.round < sel; });
+      var prevState = prevRs.length ? prevRs[prevRs.length - 1].endState : E.initFirmState(sess, mine);
+      if (prevState) {
+        var statesNow = statesAll();
+        var parts = gameFirms().map(function (f) {
+          var st2 = statesNow[f.id] || {};
+          return { firmId: f.id, hub: f.hub, green: st2.green != null ? st2.green : 50, brand: st2.brand != null ? st2.brand : 50 };
+        });
+        var notes = E.coachResult(sess, mine, prevState, r, parts, sel);
+        if (notes.length) {
+          html += '<div class="card"><div class="card-title">\ud83c\udf93 Coach\u2019s notes \u2014 round ' + sel + '</div>' +
+            '<p class="card-subtitle">Automatic feedback on your round: benchmarked against competitive pricing for your costs &amp; reputation, and an order-up-to inventory policy.</p>' +
+            notes.map(function (t) {
+              var cls = t.level === 'warn' ? 'banner-warn' : (t.level === 'good' ? 'banner-good' : 'banner-info');
+              return '<div class="banner ' + cls + '" style="padding:8px 12px; font-size:13px; margin:6px 0;">' + esc(t.text) + '</div>';
+            }).join('') + '</div>';
+        }
+      }
+    }
 
     // charts over rounds
     var st = stateOf(mine.id);
