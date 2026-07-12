@@ -331,11 +331,18 @@ CI; the daily Action just folds the committed files in.
   `node informs-aia-local.mjs --app lit-ft50` locally (same pattern as
   `--app ms|lit|ft50`) to refresh `data-ft50/_aia-fixups.json` and
   `data-ft50/_informs-aia.json` for the INFORMS journals in this dataset.
-- **Pre-print (arXiv/SSRN) links backfill per dataset.** Every dataset runs
+- **Pre-print links backfill per dataset.** Every dataset runs
   the same two-part machinery: a strictly time-boxed best-effort pass inside
   its daily build, plus a dedicated scheduled backfill workflow that runs a
   bounded (~25 min), quota-aware slice of OpenAlex title-searches 4×/day and
-  commits the results (cache: `_preprints.json` in each data dir). Natives:
+  commits the results (cache: `_preprints.json` in each data dir). The search
+  covers every paper from 1991 on (PNAS included) and accepts pre-prints on
+  arXiv, SSRN, bioRxiv/medRxiv, NBER and OSF, verified by an exact
+  normalized-title match plus two shared author surnames (one for
+  single-author records) and a plausible year; arXiv links are canonicalised
+  to the unversioned form so they always resolve to the latest version. A
+  `TS_VER` marker versions each searched-miss, so expanding the matcher or
+  hosts (bump it) re-queues earlier misses behind the never-searched backlog. Natives:
   `lit-preprints-backfill.yml` → `_scraper/preprints-ci.mjs`. FT50 catalog:
   `lit-ft50-preprints-backfill.yml` → `_scraper-ft50/preprints-ci.mjs`
   (commits `data-ft50/`). Each shard repo: its own `preprints-backfill.yml`

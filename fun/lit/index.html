@@ -2599,13 +2599,13 @@ function paperCardHTML(p, idx, showAdded) {
       ${(p._ae||[]).map(e => `<span class="tag tag-ae" onclick="addChipFromCard('ae','${escAttr(e)}')" title="Associate Editor — click to see other papers this editor handled">AE: ${esc(e)}</span>`).join('')}
       ${p['Status']==='Other' ? '<span class="tag tag-other">Other</span>' : ''}
       ${p['Status'] && p['Status']!=='Other' ? `<span class="tag tag-aia">${esc(p['Status'])}</span>` : ''}
-      ${safeUrl(p['PDF']) && p['PDF'] !== p['Preprint'] ? `<a class="tag tag-pdf" href="${preprintPdfUrl(safeUrl(p['PDF']))}" target="_blank" rel="noopener" title="Open-access PDF (arXiv/SSRN where available)">PDF ↗</a>` : ''}
+      ${safeUrl(p['PDF']) && preprintPdfUrl(safeUrl(p['PDF'])) !== preprintPdfUrl(safeUrl(p['Preprint'])) ? `<a class="tag tag-pdf" href="${preprintPdfUrl(safeUrl(p['PDF']))}" target="_blank" rel="noopener" title="Open-access PDF (arXiv/SSRN where available)">PDF ↗</a>` : ''}
       ${addedTag}
     </div>
     ${hasSig ? `<span class="paper-abstract-toggle paper-sig-toggle" onclick="togAbs('${sid}',this,'Significance')">▸ Significance</span>` : ''}
     ${hasAbs ? `<span class="paper-abstract-toggle" onclick="togAbs('${aid}',this)">▸ Abstract</span>` : ''}
     <span class="paper-bibtex-toggle" onclick="togBib('bib${idx}',this,${idx})">▸ BibTeX</span>
-    ${safeUrl(p['Preprint']) ? `<a class="paper-preprint-link" href="${preprintPdfUrl(safeUrl(p['Preprint']))}" target="_blank" rel="noopener" title="Free author pre-print PDF on ${p['PreprintSrc'] === 'ssrn' ? 'SSRN' : 'arXiv'} (opens the PDF directly) — the accepted/working version, which may differ from the final published paper">Pre-print (Open Access) ↗</a>` : ''}
+    ${safeUrl(p['Preprint']) ? `<a class="paper-preprint-link" href="${preprintPdfUrl(safeUrl(p['Preprint']))}" target="_blank" rel="noopener" title="Free author pre-print on ${PREPRINT_HOST[p['PreprintSrc']] || 'an open repository'} — opens the latest version, PDF direct where the host allows it. The accepted/working version may differ from the final published paper">Pre-print (Open Access) ↗</a>` : ''}
     ${typeof acctToggleHTML === 'function' ? acctToggleHTML(p) : ''}
     ${hasSig ? `<div id="${sid}" class="paper-abstract paper-significance">${esc(sigClean)}</div>` : ''}
     ${hasAbs ? `<div id="${aid}" class="paper-abstract">${esc(absClean)}</div>` : ''}
@@ -2799,18 +2799,48 @@ function ssrnPdfUrl(u) {
 }
 
 // Same idea for arXiv: /abs/<id> is the landing page; /pdf/<id> serves the
-// PDF itself (works for modern 2403.01386, versioned …v2 and old-style
-// cond-mat/9901234 ids alike — no .pdf suffix needed).
+// PDF itself (works for modern 2403.01386 and old-style cond-mat/9901234 ids
+// alike — no .pdf suffix needed). A pinned version suffix (…v2) is stripped
+// so the link always opens the LATEST version of the paper.
 function arxivPdfUrl(u) {
-  var m = String(u || '').match(/^https?:\/\/(?:www\.|export\.)?arxiv\.org\/abs\/([^?#]+)/i);
-  return m ? 'https://arxiv.org/pdf/' + m[1] : '';
+  var m = String(u || '').match(/^https?:\/\/(?:www\.|export\.)?arxiv\.org\/(?:abs|pdf)\/([^?#]+)/i);
+  if (!m) return '';
+  var id = m[1].replace(/\.pdf$/i, '').replace(/v\d+$/i, '');
+  return 'https://arxiv.org/pdf/' + id;
 }
 
-// Every pre-print href goes through this: landing-page URLs on SSRN or arXiv
-// are rewritten to the direct PDF; anything else is returned as-is.
-function preprintPdfUrl(u) {
-  return ssrnPdfUrl(u) || arxivPdfUrl(u) || u;
+// bioRxiv/medRxiv: a versioned content URL gets its .full.pdf form (the PDF
+// itself); an unversioned one is left alone — it redirects to the latest
+// version's landing page, which a .full.pdf suffix would break.
+function biorxivPdfUrl(u) {
+  var m = String(u || '').match(/^https?:\/\/(?:www\.)?(bio|med)rxiv\.org\/content\/([^?#]+?v\d+)(?:\.full(?:\.pdf)?)?$/i);
+  return m ? 'https://www.' + m[1].toLowerCase() + 'rxiv.org/content/' + m[2] + '.full.pdf' : '';
 }
+
+// NBER working papers: /papers/wNNNNN -> the stable direct-PDF path.
+function nberPdfUrl(u) {
+  var m = String(u || '').match(/^https?:\/\/(?:www\.)?nber\.org\/papers\/(w\d+)\/?$/i);
+  return m ? 'https://www.nber.org/system/files/working_papers/' + m[1].toLowerCase() + '/' + m[1].toLowerCase() + '.pdf' : '';
+}
+
+// OSF preprints: /download serves the newest uploaded file. Only short guids
+// and /preprints/ pages are rewritten (the pipelines only store those) — the
+// tight {4,6} guid keeps path words like "download" from matching.
+function osfPdfUrl(u) {
+  var m = String(u || '').match(/^https?:\/\/(?:www\.)?osf\.io\/((?:preprints\/[a-z0-9_-]+\/)?\w{4,6})\/?$/i);
+  return m ? 'https://osf.io/' + m[1] + '/download' : '';
+}
+
+// Every pre-print href goes through this: landing-page URLs on a known
+// pre-print host are rewritten to the direct PDF; anything else as-is.
+function preprintPdfUrl(u) {
+  return ssrnPdfUrl(u) || arxivPdfUrl(u) || biorxivPdfUrl(u) || nberPdfUrl(u) || osfPdfUrl(u) || u;
+}
+
+// Human name of the repository a Preprint link points at (PreprintSrc).
+// 'cshl' = a bioRxiv/medRxiv DOI resolved via doi.org (the DOI alone can't
+// say which of the two rxivs hosts it).
+var PREPRINT_HOST = { arxiv: 'arXiv', ssrn: 'SSRN', biorxiv: 'bioRxiv', medrxiv: 'medRxiv', cshl: 'bioRxiv/medRxiv', nber: 'NBER', osf: 'OSF' };
 
 function cleanAbstract(s) {
   if (!s) return '';
