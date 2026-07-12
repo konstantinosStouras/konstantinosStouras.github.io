@@ -683,21 +683,24 @@ const PNAS_SECTION_KEYS = {
   'Social Sciences': 'pnas-soc',
   'Economic Sciences': 'pnas-econ',
 };
-// The journal filter's selectable entries, in display order.
+// The journal filter's selectable entries, in display order: Management
+// Science, M&SOM, ACM EC, PNAS (with its section sub-entries), POM,
+// Marketing Science, then the rest (FT50/shard extras append after these,
+// alphabetically, in registerExtraSources).
 const JOURNAL_OPTIONS = [
   { key: 'ms',   label: 'Management Science' },
-  { key: 'opre', label: 'Operations Research' },
-  { key: 'mksc', label: 'Marketing Science' },
   { key: 'msom', label: 'M&SOM' },
-  { key: 'isre', label: 'Information Systems Research' },
-  { key: 'pom',  label: 'POM' },
+  { key: 'ec',   label: 'ACM EC (1999–present)' },
   { key: 'pnas', label: 'PNAS (all five sections)' },
   { key: 'pnas-cs',   label: 'PNAS · Computer Sciences' },
   { key: 'pnas-sust', label: 'PNAS · Sustainability Science' },
   { key: 'pnas-env',  label: 'PNAS · Environmental Sciences' },
   { key: 'pnas-soc',  label: 'PNAS · Social Sciences' },
   { key: 'pnas-econ', label: 'PNAS · Economic Sciences' },
-  { key: 'ec',   label: 'ACM EC (1999–present)' },
+  { key: 'pom',  label: 'POM' },
+  { key: 'mksc', label: 'Marketing Science' },
+  { key: 'opre', label: 'Operations Research' },
+  { key: 'isre', label: 'Information Systems Research' },
 ];
 const JOURNAL_LABEL = {};
 JOURNAL_OPTIONS.forEach(function(o) { JOURNAL_LABEL[o.key] = o.label; });
