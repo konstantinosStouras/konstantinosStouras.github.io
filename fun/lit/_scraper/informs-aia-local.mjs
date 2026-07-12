@@ -27,7 +27,7 @@
  *   cd fun/lit/_scraper
  *   node informs-aia-local.mjs                 # target: fun/lit  (all INFORMS journals)
  *   node informs-aia-local.mjs --app ms        # target: fun/ms   (Management Science)
- *   node informs-aia-local.mjs --app ft50      # target: fun/ft50 (INFORMS FT50 journals)
+ *   node informs-aia-local.mjs --app lit-ft50  # target: fun/lit/data-ft50 (the FT50 catalog)
  *   node informs-aia-local.mjs --app ms --journals mnsc     # limit to one journal
  *   node informs-aia-local.mjs --max 300       # bound one session
  *
@@ -67,6 +67,7 @@ const INFORMS = [
   { code: 'msom', litKey: 'msom', name: 'Manufacturing & Service Operations Management' },
   { code: 'isre', litKey: 'isre', name: 'Information Systems Research' },
   { code: 'orsc', litKey: null,   name: 'Organization Science' }, // FT50 only
+  { code: 'ijoc', litKey: null,   name: 'INFORMS Journal on Computing' }, // UTD24 only (lit-ft50 catalog)
 ];
 
 // Resolve the target app: its data/ dir, its INFORMS journals, and the source
@@ -84,20 +85,22 @@ async function resolveApp() {
       sources: INFORMS.filter(j => j.litKey).map(j => ({ ...j, key: j.litKey, file: `papers-${j.litKey}.json` })),
     };
   }
-  if (APP === 'ft50') {
-    const jpath = resolve(__dirname, '..', '..', 'ft50', '_scraper', 'journals.json');
+  if (APP === 'lit-ft50') {
+    // lit-ft50 = fun/lit's FT50 dataset (fun/lit/data-ft50, maintained by
+    // fun/lit/_scraper-ft50 — vendored from the retired fun/ft50 app).
+    const jpath = resolve(__dirname, '..', '_scraper-ft50', 'journals.json');
     const journals = existsSync(jpath) ? JSON.parse(await readFile(jpath, 'utf8')) : [];
     const byIssn = (issn) => journals.find(j => !j.retired && (j.issns || []).includes(issn));
-    // Map each INFORMS code to the ft50 journal (by its known primary ISSN).
-    const ISSN = { mnsc: '0025-1909', opre: '0030-364X', mksc: '0732-2399', msom: '1523-4614', isre: '1047-7047', orsc: '1047-7039' };
+    // Map each INFORMS code to the FT50 journal (by its known primary ISSN).
+    const ISSN = { mnsc: '0025-1909', opre: '0030-364X', mksc: '0732-2399', msom: '1523-4614', isre: '1047-7047', orsc: '1047-7039', ijoc: '1091-9856' };
     const sources = [];
     for (const j of INFORMS) {
       const entry = byIssn(ISSN[j.code]);
       if (entry && entry.aia) sources.push({ ...j, key: entry.key, file: `papers-${entry.key}.json` });
     }
-    return { dataDir: resolve(__dirname, '..', '..', 'ft50', 'data'), sources };
+    return { dataDir: resolve(__dirname, '..', 'data-ft50'), sources };
   }
-  throw new Error(`unknown --app "${APP}" (expected: ms | lit | ft50)`);
+  throw new Error(`unknown --app "${APP}" (expected: ms | lit | lit-ft50)`);
 }
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));

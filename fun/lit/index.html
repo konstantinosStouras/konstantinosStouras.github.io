@@ -6,8 +6,8 @@
 <title>The Lit · Research Paper Browser — Management Science, OR, Marketing Science, M&amp;SOM, POM, ISR, PNAS, ACM EC &amp; the FT50</title>
 
 <!-- SEO -->
-<meta name="description" content="Search and filter research papers across Management Science, Operations Research, Marketing Science, M&SOM, POM, Information Systems Research, five PNAS sections, the ACM EC conference (1999–present), and all 50 journals of the Financial Times FT50 rank. Filter by journal, journal type (FT50, ABS 4/4*, ABS 3), year, author, or affiliation. Export BibTeX citations.">
-<meta name="keywords" content="Management Science, Operations Research, Marketing Science, MSOM, POM, Information Systems Research, PNAS, ACM EC, Economics and Computation, FT50, Financial Times 50, ABS ranking, AJG, Academic Journal Guide, academic papers, research browser, BibTeX, journal articles, INFORMS">
+<meta name="description" content="Search and filter research papers across Management Science, Operations Research, Marketing Science, M&SOM, POM, Information Systems Research, five PNAS sections, the ACM EC conference (1999–present), and all 50 journals of the Financial Times FT50 rank. Filter by journal, journal type (UTD24, FT50, ABS 4/4*, ABS 3), year, author, or affiliation. Export BibTeX citations.">
+<meta name="keywords" content="Management Science, Operations Research, Marketing Science, MSOM, POM, Information Systems Research, PNAS, ACM EC, Economics and Computation, UTD24, UT Dallas journal list, FT50, Financial Times 50, ABS ranking, AJG, Academic Journal Guide, European Journal of Operational Research, INFORMS Journal on Computing, academic papers, research browser, BibTeX, journal articles, INFORMS">
 <meta name="author" content="Konstantinos Stouras">
 
 <meta name="robots" content="index, follow">
@@ -186,6 +186,17 @@
   .tag-pdf:hover { background: #1f6b3f; }
   .chip-journal { background: var(--navy-light); color: var(--navy); }
   .chip-jtype { background: #e0f2f1; color: #00796b; }
+  /* Journal-type badge left of each paper title: the single MOST selective
+     list the journal belongs to (UTD24 > FT50 > ABS 4/4* > ABS 3 — a UTD24
+     journal is not additionally badged FT50/ABS). Click selects that type. */
+  .jtype-badge { display: inline-block; padding: 2px 7px; margin-right: 8px; border-radius: 5px;
+    font-family: 'Work Sans', sans-serif; font-size: 10.5px; font-weight: 700; letter-spacing: 0.4px;
+    vertical-align: 3px; white-space: nowrap; cursor: pointer; }
+  .jtype-badge:hover { filter: brightness(0.93); }
+  .jtype-utd24 { background: #ede7f6; color: #5e35b1; }
+  .jtype-ft50  { background: #fde7ef; color: #ad1457; }
+  .jtype-abs4  { background: #e3ecf7; color: #1a5296; }
+  .jtype-abs3  { background: #eceff1; color: #546e7a; }
   /* Senior/Associate Editor (ISR & Marketing Science) tags + chips */
   .tag-se { background: var(--accent-light); color: #6f5827; cursor: pointer; }
   .tag-se:hover { background: #ece5d0; }
@@ -446,7 +457,7 @@
     <h1><em>The Lit</em> — Research Paper Browser</h1>
     <div class="header-right">
       <div style="text-align:right;line-height:1.35">
-        <div class="header-meta"><strong id="sourceCount">52 sources</strong> via Crossref · <span id="yearRange">1917–present</span></div>
+        <div class="header-meta"><strong id="sourceCount">56 sources</strong> via Crossref · <span id="yearRange">1886–present</span></div>
         <div class="header-meta" id="lastPull" style="font-size:12px;opacity:0.75;margin-top:1px"></div>
       </div>
       <div id="acctControl" class="acct-control"></div>
@@ -458,7 +469,7 @@
   <div class="filters-inner">
     <div class="filters-row filters-row-primary">
       <div class="filter-group">
-        <label title="Filter by journal list or rating: the Financial Times FT50 research rank, or the ABS/AJG rating (Chartered Association of Business Schools Academic Journal Guide, via journalranking.org). A type selects all covered journals of that type, and combines with the Journals filter.">Journal types</label>
+        <label title="Filter by journal list or rating: the UT Dallas Top-100 rankings' 24 journals (UTD24), the Financial Times FT50 research rank, or the ABS/AJG rating (Chartered Association of Business Schools Academic Journal Guide, via journalranking.org). A type selects all covered journals of that type, and combines with the Journals filter.">Journal types</label>
         <div class="custom-select" id="csJType" data-type="jtype">
           <div class="custom-select-trigger" onclick="toggleDrop('csJType')">All types</div>
           <div class="custom-select-dropdown"><input class="custom-select-search" placeholder="Type to filter..." oninput="filterDrop('csJType',this.value)"><div class="custom-select-items"></div></div>
@@ -588,7 +599,7 @@
 </div>
 
 <div id="papersList" class="papers-list">
-  <div class="empty-state"><h3>Select a filter to get started</h3><p>Pick a journal type (FT50, ABS 4/4*, ABS 3) or one or more journals, filter by year, or search by title, author, or affiliation. Everything is searched when no journal is selected (FT50-only journal files download on demand — a first all-journal search fetches the full dataset, so give it a moment).</p></div>
+  <div class="empty-state"><h3>Select a filter to get started</h3><p>Pick a journal type (UTD24, FT50, ABS 4/4*, ABS 3) or one or more journals, filter by year, or search by title, author, or affiliation. Everything is searched when no journal is selected (journal files download on demand — a first all-journal search fetches the full dataset, so give it a moment).</p></div>
 </div>
 <!-- PAGINATION DISABLED — uncomment to re-enable
 <div id="pagination" class="pagination" style="display:none"></div>
@@ -597,7 +608,7 @@
 <footer class="footer">
   <div>Built as a personal project to search papers across several journals of my interest in one place.</div>
   <div>Editors and editorial areas are shown for <em>Management Science</em> papers (2011+), exactly as on <a href="/fun/ms/">the MS-only browser</a>. Other sources contribute their published papers and Articles in Advance. ACM EC papers link to an arXiv/SSRN/open-access PDF where one could be found.</div>
-  <div>The <strong>Journal types</strong> filter covers the full <a href="/fun/ft50/">FT50 research rank</a> — journals beyond the eight core sources are merged in from the FT50 browser's dataset, downloaded on demand. ABS ratings follow the Chartered ABS <em>Academic Journal Guide</em> (AJG 2024), as mirrored at <a href="https://journalranking.org/" target="_blank" rel="noopener">journalranking.org</a>; HBR and MIT Sloan Management Review, the AJG's "top practitioner" journals, are listed under ABS 3, their last numeric grade.</div>
+  <div>The <strong>Journal types</strong> filter covers the <a href="https://jsom.utdallas.edu/the-utd-top-100-business-school-research-rankings/list-of-journals" target="_blank" rel="noopener">UTD24 list</a> and the full <a href="https://www.ft.com/ft50-journals" target="_blank" rel="noopener">FT50 research rank</a> — journals beyond the eight core sources come from this app's own dataset (refreshed daily, checked against the FT's list yearly), downloaded on demand. The small badge left of each title shows the single most selective list its journal belongs to (UTD24 &gt; FT50 &gt; ABS 4/4* &gt; ABS 3) — a broader filter still finds the paper, e.g. an ABS 4/4* search includes every UTD24 journal. ABS ratings follow the Chartered ABS <em>Academic Journal Guide</em> (AJG 2024), as mirrored at <a href="https://journalranking.org/" target="_blank" rel="noopener">journalranking.org</a>; HBR and MIT Sloan Management Review, the AJG's "top practitioner" journals, are listed under ABS 3, their last numeric grade.</div>
   <div>All metadata are publicly available, collected via the <a href="https://www.crossref.org/documentation/retrieve-metadata/rest-api/" target="_blank">Crossref API</a> (with OpenAlex, DBLP and Semantic Scholar assisting for EC PDF links). PNAS section labels come from pnas.org's own topic index where available, and are otherwise approximated from each paper's <a href="https://openalex.org" target="_blank">OpenAlex</a> primary topic.</div>
   <div>Feedback and suggestions are welcome. Any errors are my own. <a href="https://www.stouras.com" target="_blank">Konstantinos I. Stouras</a></div>
 </footer>
@@ -617,15 +628,17 @@ const META_URL = './data/meta.json';
 const RECENT_URL = './data/recent.json';
 const DATA_BASE = './data/';
 
-// The FT50 companion app (fun/ft50/) maintains a daily-refreshed dataset for
-// all 50 journals of the Financial Times FT50 research rank, in exactly this
-// page's format. Its catalog is merged in at runtime: FT50 journals that are
-// not among the eight native sources are added to the journal filter, and
-// their papers files are fetched lazily from the ft50 dataset (same origin —
-// nothing is duplicated in the repo) only when they enter the view's scope.
-const FT50_SOURCES_URL = '../ft50/data/sources.json';
-const FT50_DATA_BASE = '../ft50/data/';
-const FT50_RECENT_URL = '../ft50/data/recent.json';
+// This app maintains its OWN dataset for all 50 journals of the Financial
+// Times FT50 research rank, in fun/lit/data-ft50/ — seeded from the retired
+// fun/ft50 app's data and independently refreshed daily by
+// fun/lit/_scraper-ft50/ (.github/workflows/lit-ft50-update-data.yml).
+// The catalog is merged in at runtime: FT50
+// journals that are not among the eight native sources are added to the
+// journal filter, and their papers files are fetched lazily only when they
+// enter the view's scope.
+const FT50_SOURCES_URL = './data-ft50/sources.json';
+const FT50_DATA_BASE = './data-ft50/';
+const FT50_RECENT_URL = './data-ft50/recent.json';
 
 // Display config per source key. Sections are PNAS's five topic sections; a
 // PNAS paper can belong to several and matches a filter on any of them.
@@ -665,16 +678,19 @@ const JOURNAL_OPTIONS = [
 const JOURNAL_LABEL = {};
 JOURNAL_OPTIONS.forEach(function(o) { JOURNAL_LABEL[o.key] = o.label; });
 
-// ── Journal types (FT50 membership + ABS/AJG rating buckets) ────────────────
+// ── Journal types (UTD24 / FT50 membership + ABS/AJG rating buckets) ────────
 // The "Journal types" filter selects whole sets of journals at once. FT50
-// membership is seeded from today's list (fun/ft50/_scraper/journals.json) and
-// extended at runtime by the ft50 manifest, so the yearly FT50 list check
-// keeps it current without touching this page. ABS grades are the Chartered
-// ABS Academic Journal Guide (AJG 2024) ones, as mirrored at
-// journalranking.org; only journals this page can show are listed (PNAS and
-// the ACM EC conference are not in the guide). HBR and MIT SMR carry the
-// AJG 2024 "top practitioner journal" designation rather than a number — they
-// are kept at 3, their last numeric grade, so the ABS 3 option finds them.
+// membership is seeded from today's list (fun/lit/_scraper-ft50/journals.json)
+// and extended at runtime by the data-ft50 manifest (entries flagged notFT —
+// journals carried for another list, like UTD24's INFORMS Journal on
+// Computing — stay out), so the yearly FT50 list check keeps it current
+// without touching this page. UTD24 is the UT Dallas Top-100 rankings' fixed
+// 24-journal list. ABS grades are the Chartered ABS Academic Journal Guide
+// (AJG 2024) ones, as mirrored at journalranking.org; only journals this page
+// can show are listed (PNAS and the ACM EC conference are not in the guide).
+// HBR and MIT SMR carry the AJG 2024 "top practitioner journal" designation
+// rather than a number — they are kept at 3, their last numeric grade, so the
+// ABS 3 option finds them.
 const ABS_RATING = {
   aman: '4*', amj: '4*', amr: '4*', tar: '4*', aos: '4*', asq: '4*',
   aer: '4*', asr: '4*', ecta: '4*', etp: '4*', jae: '4*', jar: '4*',
@@ -682,35 +698,73 @@ const ABS_RATING = {
   jibs: '4*', jom: '4*', jm: '4*', jmr: '4*', joom: '4*', jpe: '4*',
   ms: '4*', mksc: '4*', misq: '4*', isre: '4*', opre: '4*', orsc: '4*',
   qje: '4*', respol: '4*', restud: '4*', rfs: '4*', smj: '4*',
+  ajps: '4*', apsr: '4*',
   car: '4', hrm: '4', jfqa: '4', jmis: '4', jms: '4', jams: '4',
   msom: '4', obhdp: '4', pom: '4', psci: '4', rast: '4', rof: '4', sej: '4',
-  hbr: '3', smr: '3',
+  ejor: '4',
+  hbr: '3', smr: '3', ijoc: '3',
 };
-// Today's FT50 keys (mirrors fun/ft50/_scraper/journals.json); the ft50
+// The UT Dallas Top-100 rankings' 24 journals (jsom.utdallas.edu; mirrored at
+// ceibs.libguides.com). A fixed, curated list — unchanged for many years.
+const UTD24_KEYS = new Set(['tar','jae','jar','jof','jfe','rfs','isre','ijoc',
+  'misq','jcr','jm','jmr','mksc','ms','opre','joom','msom','pom','amj','amr',
+  'asq','orsc','jibs','smj']);
+// Today's FT50 keys (mirrors fun/lit/_scraper-ft50/journals.json); the
 // manifest extends this set at runtime, so a revised FT list flows through.
 const FT50_KEYS = new Set(['aman','amj','amr','tar','aos','asq','aer','asr',
   'car','ecta','etp','hbr','hrm','isre','jae','jar','jap','jbv','jcp','jcr',
   'jof','jfqa','jfe','jibs','jom','jmis','jms','jm','jmr','joom','jpe','jams',
   'ms','msom','mksc','misq','smr','opre','orsc','obhdp','pom','psci','qje',
   'respol','rast','restud','rof','rfs','sej','smj']);
+// Listed most-selective first — the paper-card badge shows only the FIRST
+// type a paper's journal belongs to (UTD24 ⊃-wise the "toughest" list; an
+// FT50 journal is not additionally badged ABS 4/4*, etc.). Filtering is
+// unaffected: an ABS 4/4* search still returns UTD24 journals' papers.
 const JOURNAL_TYPES = [
-  { key: 'ft50', label: 'FT50 (Financial Times Top 50)',
+  { key: 'utd24', label: 'UTD24 (UT Dallas)', badge: 'UTD24',
+    title: 'The 24 journals of the UT Dallas Top-100 Business School Research Rankings list.' },
+  { key: 'ft50', label: 'FT50 (Financial Times Top 50)', badge: 'FT50',
     title: 'All 50 journals of the Financial Times FT50 research rank.' },
-  { key: 'abs4', label: 'ABS 4/4*',
+  { key: 'abs4', label: 'ABS 4/4*', badge: 'ABS 4/4*',
     title: 'Journals rated 4* ("world elite") or 4 ("top") in the Chartered ABS Academic Journal Guide (AJG 2024), via journalranking.org. Only journals covered by this page are included.' },
-  { key: 'abs3', label: 'ABS 3',
-    title: 'Journals rated 3 ("highly regarded") in the Chartered ABS Academic Journal Guide, via journalranking.org — among the journals covered by this page: HBR and MIT Sloan Management Review (the AJG’s top practitioner journals, at their last numeric grade).' },
+  { key: 'abs3', label: 'ABS 3', badge: 'ABS 3',
+    title: 'Journals rated 3 ("highly regarded") in the Chartered ABS Academic Journal Guide, via journalranking.org — among the journals covered by this page: HBR and MIT Sloan Management Review (the AJG’s top practitioner journals, at their last numeric grade) and the INFORMS Journal on Computing.' },
 ];
 const JTYPE_LABEL = {};
 JOURNAL_TYPES.forEach(function(t) { JTYPE_LABEL[t.key] = t.label; });
 
-// The journal keys a type expands to (FT50 list membership or ABS bucket).
+// ABS grades can also arrive at runtime: satellite data shards carry each
+// journal's grade in their sources.json (`abs` field), so adding a journal
+// to a shard needs no edit here. Static ABS_RATING wins on conflicts.
+const MANIFEST_ABS = {};   // journal key -> grade, from ingested manifests
+let _absSets = null;       // cached {abs4, abs3} key sets; reset on ingest
+function absSets() {
+  if (_absSets) return _absSets;
+  var s4 = new Set(), s3 = new Set();
+  var add = function(k, g) { if (g === '4' || g === '4*') s4.add(k); else if (g === '3') s3.add(k); };
+  Object.keys(MANIFEST_ABS).forEach(function(k) { add(k, MANIFEST_ABS[k]); });
+  Object.keys(ABS_RATING).forEach(function(k) { add(k, ABS_RATING[k]); });
+  _absSets = { abs4: s4, abs3: s3 };
+  return _absSets;
+}
+
+// The journal keys a type expands to (UTD24/FT50 list membership or ABS bucket).
 function journalTypeKeys(t) {
+  if (t === 'utd24') return UTD24_KEYS;
   if (t === 'ft50') return FT50_KEYS;
-  var want = t === 'abs4' ? { '4': 1, '4*': 1 } : t === 'abs3' ? { '3': 1 } : {};
-  var s = new Set();
-  Object.keys(ABS_RATING).forEach(function(k) { if (want[ABS_RATING[k]]) s.add(k); });
-  return s;
+  if (t === 'abs4') return absSets().abs4;
+  if (t === 'abs3') return absSets().abs3;
+  return new Set();
+}
+
+// The single most-selective type a journal belongs to (JOURNAL_TYPES order) —
+// what the small badge left of each paper title shows. null = untyped (PNAS,
+// ACM EC). Clicking the badge selects that journal type in the filter.
+function topJournalType(jk) {
+  for (var i = 0; i < JOURNAL_TYPES.length; i++) {
+    if (journalTypeKeys(JOURNAL_TYPES[i].key).has(jk)) return JOURNAL_TYPES[i];
+  }
+  return null;
 }
 
 const PER_PAGE = 20;
@@ -729,7 +783,7 @@ const RECENT_DAYS = 28; // last 4 weeks
 let recentData = null;      // parsed rows from the RecentlyAdded tab (null = absent/failed)
 let recentFetched = false;  // whether we've attempted to load that tab
 let recentLoading = false;  // whether that fetch is currently in flight
-let recentExtraRows = null; // recently added FT50-extra papers (../ft50/data/recent.json)
+let recentExtraRows = null; // recently added FT50-extra papers (./data-ft50/recent.json)
 
 // Multi-select state. authorIdentity maps a display label -> array of that
 // author's name variants (from the Authors tab Name_Variants column), so a
@@ -873,6 +927,16 @@ function addJournalChip(key) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// Clicking a paper card's journal-type badge selects that type in the filter
+// (same recent-view-preserving semantics as clicking a journal tag).
+function addJTypeChip(key) {
+  if (!key || sel.jtype.has(key)) return;
+  sel.jtype.add(key);
+  renderChips('jtype');
+  if (recentMode) renderRecent(); else applyFilters();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 // Author chips = free-text substring chips (sel.author) + ORCID-identity chips
 // (sel.authorIdentity, which match any of a person's name variants).
 function renderAuthorChips() {
@@ -915,71 +979,112 @@ function addChipFromCard(type, val) {
 // while the bigger files are still downloading.
 let sourcesLoaded = 0, sourcesTotal = 0;
 
-// ── Lazily loaded FT50 journals (beyond the eight native sources) ───────────
-// The 44 FT50-only journals are a couple hundred MB of JSON, far too much to
-// eager-load like the native sources. Mirroring /fun/ft50: each extra
+// ── Lazily loaded FT50-catalog journals (beyond the eight native sources) ───
+// The FT50-catalog-only journals are a couple hundred MB of JSON. Like the
+// native sources (and mirroring the retired /fun/ft50 app), each extra
 // papers-<key>.json is fetched from the ft50 dataset only when the view first
 // needs it — selecting the journal (directly or via a journal-type chip)
 // loads that journal; filtering/searching with no journal scope loads
 // everything, progressively, with a note in the results bar. Once loaded, a
 // journal stays in memory for the session.
-let ft50Manifest = [];      // ../ft50/data/sources.json, once fetched
-const EXTRA_SRC = {};       // key -> ft50 manifest entry (journals not native here)
+let ft50Manifest = [];      // ./data-ft50/sources.json, once fetched
+const EXTRA_SRC = {};       // key -> manifest entry (journals not native here)
 const extraState = {};      // key -> 'pending' | 'loading' | 'done' | 'missing'
 const extraPromise = {};    // key -> in-flight fetch promise (idempotence)
-let manifestMinYear = Infinity; // earliest firstYear across the ft50 manifest
+let manifestMinYear = Infinity; // earliest firstYear across ingested manifests
 
-// One muted pastel per extra source (same golden-angle palette as /fun/ft50),
-// injected as .jk-<key> rules so journalTagsHTML colors extras like natives.
-function extraColorCSS() {
-  var css = Object.keys(EXTRA_SRC).sort().map(function(key, i) {
-    var hue = Math.round(i * 137.508) % 360;
-    return '.jk-' + key + ' { background: hsl(' + hue + ',52%,92%); color: hsl(' + hue + ',65%,28%); }';
+// Satellite data shards: sibling repos, each with its own GitHub Pages site,
+// pipeline and journal list, publishing the same data layout as data-ft50/.
+// Project Pages sites are served under this account's custom domain, so the
+// bases are same-origin root-relative paths (see the shard repos' READMEs).
+// A shard that is absent / not yet built just 404s and is skipped.
+const SHARDS = [
+  { base: '/lit-data-abs4/data/' },          // ABS 4/4* beyond FT50/UTD24
+  { base: '/lit-data-abs3-omecon/data/' },   // ABS 3 — Operations/OR & Economics
+  { base: '/lit-data-abs3-rest/data/' },     // ABS 3 — remaining fields
+];
+
+// One muted pastel per extra source, injected as .jk-<key> rules so
+// journalTagsHTML colors extras like natives. Hue is hashed from the key so
+// a journal keeps its color regardless of which manifest arrives first.
+function extraColorCSS(keys) {
+  var css = keys.map(function(key) {
+    var h = 0;
+    for (var i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) % 360;
+    return '.jk-' + key + ' { background: hsl(' + h + ',52%,92%); color: hsl(' + h + ',65%,28%); }';
   }).join('\n');
   var style = document.createElement('style');
   style.textContent = css;
   document.head.appendChild(style);
 }
 
-async function loadFt50Manifest() {
-  for (var attempt = 0; attempt < 4; attempt++) {
-    try {
-      var r = await fetch(FT50_SOURCES_URL, { cache: 'no-cache' });
-      if (r.status === 404) return; // ft50 app absent — degrade to native sources
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      var rows = await r.json();
-      ft50Manifest = Array.isArray(rows) ? rows : [];
-      break;
-    } catch (e) {
-      if (attempt === 3) return;
-      await new Promise(function(res) { setTimeout(res, 2500 * (attempt + 1)); });
-    }
-  }
-  ft50Manifest.forEach(function(s) {
-    FT50_KEYS.add(s.key); // self-updating FT50 membership
+// Register one manifest's journals as lazy extra sources (used by the local
+// data-ft50 catalog and by every satellite shard). First registration of a
+// key wins; ABS grades flow into the type buckets via MANIFEST_ABS.
+function registerExtraSources(rows, base) {
+  var added = [];
+  rows.forEach(function(s) {
+    if (s.abs && !ABS_RATING[s.key] && !MANIFEST_ABS[s.key]) { MANIFEST_ABS[s.key] = s.abs; _absSets = null; }
     var y = parseInt(s.firstYear, 10);
     if (y && y < manifestMinYear) manifestMinYear = y;
-    if (!SRC[s.key]) {
-      EXTRA_SRC[s.key] = s;
-      if (extraState[s.key] === undefined) extraState[s.key] = 'pending';
-    }
+    if (SRC[s.key] || EXTRA_SRC[s.key]) return;
+    var entry = base && !s.base ? Object.assign({ base: base }, s) : s;
+    EXTRA_SRC[s.key] = entry;
+    if (extraState[s.key] === undefined) extraState[s.key] = 'pending';
+    added.push(entry);
   });
-  // Append the extra journals (alphabetical) below the native entries.
-  Object.keys(EXTRA_SRC).map(function(k) { return EXTRA_SRC[k]; })
-    .sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); })
+  // Append the new journals (alphabetical) below the existing entries.
+  added.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); })
     .forEach(function(s) {
       JOURNAL_OPTIONS.push({ key: s.key, label: s.name + (s.limitedCoverage ? ' — limited coverage' : '') });
       JOURNAL_LABEL[s.key] = s.name;
     });
-  extraColorCSS();
+  extraColorCSS(added.map(function(s) { return s.key; }));
   buildJournalSelect();
   buildJTypeSelect();
   updateSourceCountText();
   updateYearRangeText(NaN);
-  loadRecentExtras();
-  // If the user scoped to an FT50 set before this manifest arrived, re-run the
-  // active view so the newly registered journals start downloading.
-  if (recentMode) renderRecent(); else if (sel.jtype.size || sel.journal.size) applyFilters();
+  // If the user set a scope before this manifest arrived, re-run the active
+  // view so the newly registered journals start downloading.
+  if (recentMode) renderRecent(); else if (sel.jtype.size || sel.journal.size || broadFilterActive()) applyFilters();
+}
+
+async function fetchManifest(url) {
+  for (var attempt = 0; attempt < 4; attempt++) {
+    try {
+      var r = await fetch(url, { cache: 'no-cache' });
+      if (r.status === 404) return null; // dataset absent / not built yet
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      var rows = await r.json();
+      return Array.isArray(rows) ? rows : [];
+    } catch (e) {
+      if (attempt === 3) return null;
+      await new Promise(function(res) { setTimeout(res, 2500 * (attempt + 1)); });
+    }
+  }
+  return null;
+}
+
+async function loadFt50Manifest() {
+  var rows = await fetchManifest(FT50_SOURCES_URL);
+  if (!rows) return;
+  ft50Manifest = rows;
+  ft50Manifest.forEach(function(s) {
+    // Self-updating FT50 membership — but notFT entries (journals the catalog
+    // carries for another list, e.g. UTD24's IJOC or ABS 4's EJOR) stay out.
+    if (!s.notFT) FT50_KEYS.add(s.key);
+  });
+  registerExtraSources(ft50Manifest, null); // files carry no base -> FT50_DATA_BASE
+  loadDatasetRecent(FT50_RECENT_URL);
+}
+
+function loadShardManifests() {
+  SHARDS.forEach(async function(shard) {
+    var rows = await fetchManifest(shard.base + 'sources.json');
+    if (!rows || !rows.length) return;
+    registerExtraSources(rows, shard.base);
+    loadDatasetRecent(shard.base + 'recent.json');
+  });
 }
 
 // Fetch one extra journal's papers file (idempotent: repeated calls return
@@ -993,7 +1098,11 @@ function loadExtraSource(key) {
   extraPromise[key] = (async function() {
     for (var attempt = 0; attempt < 4; attempt++) {
       try {
-        var r = await fetch(FT50_DATA_BASE + src.file, { cache: 'default' });
+        // Shard-ready: a manifest entry may carry an absolute `base` URL
+        // (e.g. a satellite GitHub Pages data site — Pages serves everything
+        // with Access-Control-Allow-Origin: *), so the catalog can outgrow
+        // this repo's 1 GB Pages limit without the page changing.
+        var r = await fetch((src.base || FT50_DATA_BASE) + src.file, { cache: 'default' });
         if (r.status === 404) break; // not built yet
         if (!r.ok) throw new Error('HTTP ' + r.status);
         var rows = await r.json();
@@ -1018,15 +1127,21 @@ function loadExtraSource(key) {
 // affiliation — anything FT50 papers could match) runs with no journal scope.
 // The MS/ISR-specific editor filters and the pre-print toggle can never match
 // an FT50-extra paper, so on their own they don't trigger the download.
-function neededExtraKeys() {
-  var keys = Object.keys(EXTRA_SRC);
-  if (journalScope) return keys.filter(function(k) { return journalScope.has(k); });
-  var broad = sel.year.size || sel.title.size || sel.author.size ||
+// A filter any journal's papers could match (year / title / author /
+// affiliation, typed or chipped) is active with no journal scope — the
+// "search everything" case that streams every catalog file.
+function broadFilterActive() {
+  return !!(sel.year.size || sel.title.size || sel.author.size ||
     Object.keys(sel.authorIdentity).length || sel.affiliation.size ||
     document.getElementById('filterSearch').value.trim() ||
     document.getElementById('filterAuthors').value.trim() ||
-    document.getElementById('filterAffiliations').value.trim();
-  return broad ? keys : [];
+    document.getElementById('filterAffiliations').value.trim());
+}
+
+function neededExtraKeys() {
+  var keys = Object.keys(EXTRA_SRC);
+  if (journalScope) return keys.filter(function(k) { return journalScope.has(k); });
+  return broadFilterActive() ? keys : [];
 }
 
 function ensureExtraSources() { neededExtraKeys().forEach(loadExtraSource); }
@@ -1039,11 +1154,11 @@ function extraPendingCount() {
 }
 
 function updateSourceCountText() {
+  // With every source lazy-loaded, a "loading x/y" counter is meaningless
+  // here — the results bar reports in-flight files. Show the catalog size.
   var sc = document.getElementById('sourceCount');
-  if (!sc) return;
-  sc.textContent = sourcesLoaded < sourcesTotal
-    ? 'Loading sources… ' + sourcesLoaded + '/' + sourcesTotal
-    : (sourcesTotal + Object.keys(EXTRA_SRC).length) + ' sources';
+  if (!sc || !sourcesTotal) return;
+  sc.textContent = (sourcesTotal + Object.keys(EXTRA_SRC).length) + ' sources';
 }
 
 function updateYearRangeText(loadedMinYear) {
@@ -1071,6 +1186,17 @@ function afterSourceArrived() {
   updateSourceCountText();
 }
 
+// ── Lazy native sources ──────────────────────────────────────────────────────
+// The landing screen renders no papers until a filter is chosen, so nothing
+// justifies eagerly downloading ~60 MB of native JSON on every visit (the old
+// behavior). Like the FT50 extras, each native papers-<src>.json is fetched
+// only when the view first needs it: selecting the journal (directly, via a
+// PNAS section, or via a journal-type chip) loads that journal; filtering or
+// searching with no journal scope loads all natives. First paint is now a few
+// hundred KB (page + manifests + recent.json), fast on any connection.
+const nativeState = {};    // key -> 'pending' | 'loading' | 'done' | 'missing'
+const nativePromise = {};  // key -> in-flight fetch promise (idempotence)
+
 async function loadData() {
   try {
     const resp = await fetch(SOURCES_URL, { cache: 'no-cache' });
@@ -1082,9 +1208,14 @@ async function loadData() {
     return;
   }
   sourcesTotal = sourcesManifest.length;
+  sourcesManifest.forEach(function(s) {
+    if (nativeState[s.key] === undefined) nativeState[s.key] = 'pending';
+  });
   buildJournalSelect();
   buildJTypeSelect();
-  loadFt50Manifest(); // async: registers the FT50-only journals as lazy sources
+  updateSourceCountText();
+  loadFt50Manifest();   // async: registers the FT50-catalog journals as lazy sources
+  loadShardManifests(); // async: registers each satellite shard's journals
 
   // Affiliation aggregates come from their own small JSON file.
   fetch(AFFILIATIONS_URL, { cache: 'no-cache' })
@@ -1092,7 +1223,20 @@ async function loadData() {
     .then(function(a) { affiliationData = Array.isArray(a) ? a : []; })
     .catch(function() { affiliationData = []; });
 
-  await Promise.all(sourcesManifest.map(async function(src) {
+  // A filter set before the manifest arrived (unlikely but possible) starts
+  // its downloads now.
+  refreshJournalScope();
+  ensureScopeSources();
+}
+
+// Fetch one native source's papers file (idempotent, like loadExtraSource).
+function loadNativeSource(key) {
+  var src = null;
+  for (var i = 0; i < sourcesManifest.length; i++) if (sourcesManifest[i].key === key) src = sourcesManifest[i];
+  if (!src) return Promise.resolve();
+  if (nativePromise[key]) return nativePromise[key];
+  nativeState[key] = 'loading';
+  nativePromise[key] = (async function() {
     for (var attempt = 0; attempt < 4; attempt++) {
       try {
         // Use the browser HTTP cache (GitHub Pages serves these with
@@ -1106,33 +1250,70 @@ async function loadData() {
         var rows = await r.json();
         if (!Array.isArray(rows)) rows = [];
         rows.forEach(function(p) { normalizeEditors(p); computeJkeys(p); });
-        if (src.key === 'ms') {
-          allPapers = allPapers.concat(rows);
-          // Editor/area cleanup only applies to MS rows (others have none).
-          fuzzyMergeEditors();
-          fuzzyMergeAreas();
-        } else {
-          allPapers = allPapers.concat(rows);
-        }
-        break;
+        allPapers = allPapers.concat(rows);
+        // Editor/area cleanup only applies to MS rows (others have none).
+        if (src.key === 'ms') { fuzzyMergeEditors(); fuzzyMergeAreas(); }
+        nativeState[key] = 'done';
+        sourcesLoaded++;
+        afterSourceArrived();
+        return;
       } catch (e) {
         await new Promise(function(res) { setTimeout(res, 2500 * (attempt + 1)); });
       }
     }
-    sourcesLoaded++;
+    nativeState[key] = 'missing';
     afterSourceArrived();
-  }));
+  })();
+  return nativePromise[key];
+}
 
-  if (!allPapers.length) console.warn('No paper files found — the data pipeline has not run yet.');
+// The native sources the current filter state needs: those in the effective
+// journal scope (a PNAS section key needs the parent 'pnas' file), or all of
+// them when any filter native papers could match runs with no journal scope —
+// including the MS/ISR editor filters and the pre-print toggle, which (unlike
+// the FT50 extras) CAN match native papers.
+function neededNativeKeys() {
+  var keys = sourcesManifest.map(function(s) { return s.key; });
+  if (journalScope) {
+    return keys.filter(function(k) {
+      if (journalScope.has(k)) return true;
+      if (k !== 'pnas') return false;
+      for (var x of journalScope) { if (x.indexOf('pnas-') === 0) return true; }
+      return false;
+    });
+  }
+  var broad = broadFilterActive() || preprintOnly ||
+    sel.editor.size || sel.area.size || sel.se.size || sel.ae.size;
+  return broad ? keys : [];
+}
+
+// Kick off every download the current view needs (natives + FT50 extras).
+function ensureScopeSources() {
+  neededNativeKeys().forEach(loadNativeSource);
+  ensureExtraSources();
+}
+
+// How many files (native + extra) the current view is still waiting on.
+function viewPendingCount() {
+  var n = neededNativeKeys().filter(function(k) {
+    return nativeState[k] === 'loading' || nativeState[k] === 'pending';
+  }).length;
+  return n + extraPendingCount();
 }
 
 // Authors are pre-aggregated (paper counts, areas, name variants, ORCID identity)
 // in authors.json by the build step, so the Authors panel is ready without
-// waiting for every paper since 1954 to download and parse.
-async function loadAuthors() {
-  // Paint instantly from the previous visit's cache, then refresh from network.
+// waiting for every paper since 1954 to download and parse. The network fetch
+// is deferred to the first open of the Authors tab (the panel is MS-gated and
+// most visits never open it); a previous visit's localStorage copy still
+// paints it instantly.
+let authorsRequested = false;
+function loadAuthorsFromCache() {
   var cached = lsGet('lit_authors');
   if (cached) { try { authorData = JSON.parse(cached); if (authorData.length) renderAuthorsSummary(); } catch (e) {} }
+}
+async function loadAuthors() {
+  authorsRequested = true;
   try {
     var r = await fetch(AUTHORS_URL, { cache: 'default' });
     if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -1154,10 +1335,11 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 // pre-computed tabs for them. (loadSummaries is intentionally gone.)
 
 // Show when the pipelines last pulled from Crossref. The merged catalog spans
-// two datasets on their own daily schedules (this app's meta.json and the
-// FT50 app's), so the header shows the LATEST of the two pulls — the moment
-// any part of the merged data was last refreshed. Cached so it paints
-// instantly on repeat visits, then refreshes in the background.
+// several datasets on their own daily schedules (this app's meta.json, the
+// data-ft50 catalog's, and each satellite shard's), so the header shows the
+// LATEST of all pulls — the moment any part of the merged data was last
+// refreshed. Cached so it paints instantly on repeat visits, then refreshes
+// in the background.
 var LAST_PULL_CACHE_KEY = 'lit_lastPull';
 function setLastPullText(date) {
   var el = document.getElementById('lastPull');
@@ -1173,7 +1355,9 @@ function loadLastPull() {
       .then(function(r) { return r && r.ok ? r.json() : null; })
       .catch(function() { return null; });
   };
-  Promise.all([fetchMeta(META_URL), fetchMeta(FT50_DATA_BASE + 'meta.json')]).then(function(metas) {
+  var metaUrls = [META_URL, FT50_DATA_BASE + 'meta.json']
+    .concat(SHARDS.map(function(sh) { return sh.base + 'meta.json'; }));
+  Promise.all(metaUrls.map(fetchMeta)).then(function(metas) {
     // ISO YYYY-MM-DD dates: a string compare picks the most recent.
     var date = metas.map(function(m) { return (m && m.lastPull) || ''; })
       .sort().pop();
@@ -1591,7 +1775,10 @@ function buildJTypeSelect() {
 
 function buildFilterOptions() {
   const editorCounts = {}, areaCounts = {}, yearCounts = {}, seCounts = {}, aeCounts = {};
-  allPapers.forEach(p => {
+  // Before any journal file has been fetched (lazy loading), seed the year
+  // dropdown from the pre-fetched recent.json so it isn't empty.
+  const basis = allPapers.length ? allPapers : (recentData || []);
+  basis.forEach(p => {
     (p._editors || []).forEach(e => { editorCounts[e] = (editorCounts[e] || 0) + 1; });
     if (p._area) { areaCounts[p._area] = (areaCounts[p._area] || 0) + 1; }
     (p._se || []).forEach(e => { seCounts[e] = (seCounts[e] || 0) + 1; });
@@ -1832,6 +2019,9 @@ function toggleSummary(tab) {
   if (!isOpen) {
     els[idx].className = 'summary-content active';
     btns[idx].className = 'summary-tab-btn active';
+    // Lazy-fetch authors.json on first open (the localStorage copy of a
+    // previous visit may already be painting the panel).
+    if (tab === 'authors' && !authorsRequested) loadAuthors();
     // Lazy-build affiliations on first open
     if (tab === 'affiliations' && !window._affBuilt) {
       buildAffiliationsSummary();
@@ -2000,14 +2190,15 @@ function applyFilters() {
   // If no filters active, show welcome state
   if (sel.jtype.size === 0 && sel.journal.size === 0 && sel.editor.size === 0 && sel.area.size === 0 && sel.se.size === 0 && sel.ae.size === 0 && sel.year.size === 0 && sel.title.size === 0 && sel.author.size === 0 && Object.keys(sel.authorIdentity).length === 0 && sel.affiliation.size === 0 && !search && !searchAuth && !searchAff && !preprintOnly) {
     document.getElementById('resultsCount').innerHTML = '';
-    document.getElementById('papersList').innerHTML = '<div class="empty-state"><h3>Select a filter to get started</h3><p>Pick a journal type (FT50, ABS 4/4*, ABS 3) or one or more journals, filter by year, or search by title, author, or affiliation. Everything is searched when no journal is selected (FT50-only journal files download on demand — a first all-journal search fetches the full dataset, so give it a moment).</p></div>';
+    document.getElementById('papersList').innerHTML = '<div class="empty-state"><h3>Select a filter to get started</h3><p>Pick a journal type (UTD24, FT50, ABS 4/4*, ABS 3) or one or more journals, filter by year, or search by title, author, or affiliation. Everything is searched when no journal is selected (journal files download on demand — a first all-journal search fetches the full dataset, so give it a moment).</p></div>';
     buildFilterOptions();
     return;
   }
 
-  // Lazy loading: make sure the FT50 journal files this view needs are (being)
-  // fetched; afterSourceArrived() re-runs this function as each one lands.
-  ensureExtraSources();
+  // Lazy loading: make sure the journal files this view needs (native and
+  // FT50-extra) are being fetched; afterSourceArrived() re-runs this function
+  // as each one lands.
+  ensureScopeSources();
 
   filtered = allPapers.filter(p => {
     if (!matchesJournal(p)) return false;
@@ -2163,23 +2354,29 @@ async function loadRecent(attempt) {
   if (recentMode) renderRecent();
 }
 
-// The FT50 dataset keeps its own recent.json; rows for journals this page
-// lazy-loads from there (i.e. not the native sources, which the native
-// recent.json already covers — no duplicates) join the recent view. Called
-// once the ft50 manifest has registered EXTRA_SRC.
-async function loadRecentExtras(attempt) {
+// Each extra dataset (the local data-ft50 catalog and every satellite shard)
+// keeps its own recent.json; rows for journals this page lazy-loads from it
+// (i.e. not the native sources, which the native recent.json already covers)
+// join the recent view. Called once that dataset's manifest has registered
+// its journals in EXTRA_SRC; datasets' key sets are disjoint, so appending
+// cannot duplicate.
+var _recentUrlsFetched = {};
+async function loadDatasetRecent(url, attempt) {
+  if (_recentUrlsFetched[url]) return;
+  _recentUrlsFetched[url] = true;
   try {
-    var r = await fetch(FT50_RECENT_URL, { cache: 'no-cache' });
+    var r = await fetch(url, { cache: 'no-cache' });
     if (r.status === 404) return; // not built yet
     if (!r.ok) throw new Error('HTTP ' + r.status);
     var rows = await r.json();
     if (!Array.isArray(rows)) rows = [];
     rows = rows.filter(function(p) { return EXTRA_SRC[p.JKey]; });
     rows.forEach(function(p) { normalizeEditors(p); computeJkeys(p); }); // so tags render
-    recentExtraRows = rows;
+    recentExtraRows = (recentExtraRows || []).concat(rows);
   } catch (e) {
     attempt = (attempt || 0) + 1;
-    if (attempt <= 4) setTimeout(function() { loadRecentExtras(attempt); }, 3000);
+    delete _recentUrlsFetched[url];
+    if (attempt <= 4) setTimeout(function() { loadDatasetRecent(url, attempt); }, 3000);
     return;
   }
   if (recentMode) renderRecent();
@@ -2203,8 +2400,11 @@ function renderRecent() {
   var usePrecomputed = recentData !== null;
   var source = usePrecomputed ? recentData.concat(recentExtraRows || []) : allPapers;
 
-  // No tab and the Data CSV hasn't arrived yet: keep waiting.
+  // No pre-computed tab (missing/404, or retries exhausted): fall back to
+  // scanning the papers themselves — with lazy loading that means kicking off
+  // the native downloads first (rare path; recent.json normally exists).
   if (!usePrecomputed && !allPapers.length) {
+    sourcesManifest.forEach(function(src) { loadNativeSource(src.key); });
     countEl.innerHTML = '';
     list.innerHTML = '<div class="loading"><div class="spinner"></div>Loading recently added papers…</div>';
     return;
@@ -2290,8 +2490,8 @@ function showMoreCards() {
 
 function renderPage() {
   const countEl = document.getElementById('resultsCount');
-  // Lazily loaded FT50 journal files still on their way for this view.
-  const pending = extraPendingCount();
+  // Lazily loaded journal files (native + FT50) still on their way.
+  const pending = viewPendingCount();
   let countHtml = filtered.length === allPapers.length
     ? `<strong>${allPapers.length.toLocaleString()}</strong> papers`
     : `<strong>${filtered.length.toLocaleString()}</strong> of ${allPapers.length.toLocaleString()} papers`;
@@ -2345,9 +2545,12 @@ function paperCardHTML(p, idx, showAdded) {
     if (added) addedTag = `<span class="tag tag-added">Added ${esc(formatAddedDate(added))}</span>`;
   }
 
+  const jtype = topJournalType(p['JKey'] || '');
+  const badge = jtype ? `<span class="jtype-badge jtype-${escAttr(jtype.key)}" onclick="addJTypeChip('${escAttr(jtype.key)}')" title="${escAttr(jtype.title)} Click to filter by this journal type.">${esc(jtype.badge)}</span>` : '';
+
   return `<div class="paper-card">
     ${typeof acctStarHTML === 'function' ? acctStarHTML(p) : ''}
-    <div class="paper-title">${link ? `<a href="${link}" target="_blank">${esc(p['Title'])}</a>` : esc(p['Title'])}</div>
+    <div class="paper-title">${badge}${link ? `<a href="${link}" target="_blank">${esc(p['Title'])}</a>` : esc(p['Title'])}</div>
     <div class="paper-authors">${(p['Authors']||'').split(',').map(function(a){var t=a.trim();return t?'<span class="paper-author-link" onclick="addAuthorChip(\''+escAttr(t)+'\')">'+esc(t)+'</span>':'';}).filter(Boolean).join(', ')}</div>
     <div class="paper-meta">
       ${journalTagsHTML(p)}
@@ -2628,9 +2831,9 @@ window.addEventListener('scroll', scheduleCompact, { passive: true });
 if (compactSticky.addEventListener) compactSticky.addEventListener('change', applyCompact);
 else if (compactSticky.addListener) compactSticky.addListener(applyCompact);
 
-loadLastPull(); // small + cached: render the last-pull date first, before the big papers.json
-loadData();
-loadAuthors();
+loadLastPull(); // small + cached: render the last-pull date first
+loadData();     // manifests only — papers files download when a filter needs them
+loadAuthorsFromCache(); // authors.json itself is fetched on first Authors-tab open
 loadRecent(); // pre-fetch the small recent.json so the "Recently added" view opens instantly
 </script>
 
