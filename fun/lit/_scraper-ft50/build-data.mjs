@@ -41,7 +41,11 @@
  *   authors.json         per-author aggregates across all journals (≥2 papers)
  *   affiliations.json    per-affiliation aggregates
  *   recent.json          papers first seen in the last RECENT_WINDOW_DAYS
- *   meta.json            { lastPull, paperCount, journalCount, perSource }
+ *   meta.json            { lastPull, paperCount, authorCount,
+ *                        authorCountExtras, journalCount, perSource }
+ *                        (authorCounts = distinct authors pre-trim — full
+ *                        dataset / excluding the lit page's native six
+ *                        journals — for the page's header stat)
  *   _registry.json       internal: DOI/title-key -> date first seen
  *
  * Resilience with 50 journals: a failed Crossref pull for one journal (or a
@@ -971,8 +975,9 @@ function buildAuthors(papers) {
   out.sort((a, b) => (b.Papers - a.Papers) || cmp(a.Author, b.Author) || cmp(a.id, b.id));
   // Across 50 journals the full set would be enormous; keep multi-paper
   // authors (plus everyone in the top slice) so the file stays a sane size.
+  // The full pre-trim distinct count still goes out via meta.json (header stat).
   const trimmed = out.filter((a, i) => a.Papers >= 2 || i < 5000);
-  return trimmed.map(({ id, ...rest }) => rest);
+  return { rows: trimmed.map(({ id, ...rest }) => rest), distinct: out.length };
 }
 
 function buildAffiliations(papers) {
@@ -1118,6 +1123,13 @@ async function main() {
   const registry = updateRegistry(bySource, reg);
 
   const authors = buildAuthors(allPapers);
+  // The lit page layers this catalog on top of its native eight sources; the
+  // authors of the journals shared with them (the INFORMS/SAGE six) are
+  // already counted by fun/lit/data/meta.json, so also publish an extras-only
+  // distinct count for the page's merged "papers from N authors" header stat.
+  const LIT_NATIVE_KEYS = new Set(['ms', 'opre', 'mksc', 'msom', 'isre', 'pom']);
+  const authorCountExtras =
+    buildAuthors(allPapers.filter(p => !LIT_NATIVE_KEYS.has(p.JKey))).distinct;
   const affiliations = buildAffiliations(allPapers);
   const recent = buildRecent(allPapers, registry);
 
@@ -1165,20 +1177,23 @@ async function main() {
   const meta = {
     lastPull: PULL_DATE,
     paperCount: total,
+    authorCount: authors.distinct,
+    authorCountExtras,
     journalCount: JOURNALS.length,
     perSource: Object.fromEntries(sources.map(s => [s.key, s.count])),
     source: 'Crossref REST API, one pull per FT50 journal (list checked yearly against ft.com/ft50-journals)',
   };
 
   await writeJson('sources.json', sources);
-  await writeJson('authors.json', authors);
+  await writeJson('authors.json', authors.rows);
   await writeJson('affiliations.json', affiliations);
   await writeJson('recent.json', recent);
   await writeJson('meta.json', meta);
   await writeJson('_registry.json', registry);
 
   console.log(`done: ${total} papers (${sources.map(s => `${s.key}:${s.count}`).join(' ')}), ` +
-    `${authors.length} authors, ${affiliations.length} affiliations, ${recent.length} recent`);
+    `${authors.distinct} authors (${authors.rows.length} listed), ` +
+    `${affiliations.length} affiliations, ${recent.length} recent`);
 }
 
 async function writeJson(name, data) {

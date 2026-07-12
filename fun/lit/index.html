@@ -479,7 +479,7 @@
     <h1><em>The Lit</em> — Research Paper Browser</h1>
     <div class="header-right">
       <div style="text-align:right;line-height:1.35">
-        <div class="header-meta"><strong id="sourceCount">56 sources</strong> via Crossref · <span id="yearRange">1886–present</span></div>
+        <div class="header-meta"><strong id="corpusStat" title="Merged across every catalog this page loads; authors are de-duplicated within each catalog">260,640 papers from 186,933 authors</strong> via Crossref · <span id="yearRange">1886–present</span></div>
         <div class="header-meta" id="lastPull" style="font-size:12px;opacity:0.75;margin-top:1px"></div>
       </div>
       <div id="acctControl" class="acct-control"></div>
@@ -629,9 +629,9 @@
 
 <footer class="footer">
   <div class="footer-inner">
-    <div class="footer-lead">Built as a personal project to search papers across several journals of my interest in one place.</div>
+    <div class="footer-lead">Built as a personal project to search papers efficiently across journals in Operations, Supply Chain, Economics, Computer Science, Project Management and Innovation — all in one place.</div>
     <div>Editors and editorial areas are shown for <em>Management Science</em> papers (2011+), exactly as on <a href="/fun/ms/">the MS-only browser</a>. Other sources contribute their published papers and Articles in Advance. ACM EC papers link to an arXiv/SSRN/open-access PDF where one could be found.</div>
-    <div>The <strong>Journal types</strong> filter covers the <a href="https://jsom.utdallas.edu/the-utd-top-100-business-school-research-rankings/list-of-journals" target="_blank" rel="noopener">UTD24 list</a> and the full <a href="https://www.ft.com/ft50-journals" target="_blank" rel="noopener">FT50 research rank</a> — journals beyond the eight core sources come from this app's own dataset (refreshed daily, checked against the FT's list yearly), downloaded on demand. The small badge left of each title shows the most selective list its journal belongs to (UTD24 &gt; FT50 &gt; ABS 4/4* &gt; ABS 3; a journal on both UTD24 and FT50 shows both tags) — a broader filter still finds the paper, e.g. an ABS 4/4* search includes every UTD24 journal. ABS ratings follow the Chartered ABS <em>Academic Journal Guide</em> (AJG 2024), as mirrored at <a href="https://journalranking.org/" target="_blank" rel="noopener">journalranking.org</a>; beyond the FT50/UTD24 lists, ABS coverage is deliberately limited to Operations, Supply Chain, Economics, Computer Science, Project Management and Innovation-related journals. HBR and MIT Sloan Management Review, the AJG's "top practitioner" journals, are listed under ABS 3, their last numeric grade.</div>
+    <div>The <strong>Journal types</strong> filter covers the <a href="https://jsom.utdallas.edu/the-utd-top-100-business-school-research-rankings/list-of-journals" target="_blank" rel="noopener">UTD24 list</a> and the full <a href="https://www.ft.com/ft50-journals" target="_blank" rel="noopener">FT50 research rank</a> — journals beyond the eight core sources come from this app's own dataset (refreshed daily, checked against the FT's list yearly), downloaded on demand. The small badge left of each title shows the most selective list its journal belongs to (UTD24 &gt; FT50 &gt; ABS 4/4* &gt; ABS 3; a journal on both UTD24 and FT50 shows both tags) — a broader filter still finds the paper, e.g. an ABS 4/4* search includes every UTD24 journal. ABS ratings follow the Chartered ABS <em>Academic Journal Guide</em> (AJG 2024), as mirrored at <a href="https://journalranking.org/" target="_blank" rel="noopener">journalranking.org</a>; beyond the FT50/UTD24 lists, ABS coverage is deliberately limited to Operations, Supply Chain, Economics, Computer Science, Project Management and Innovation-related journals. HBR and MIT Sloan Management Review (the AJG's "top practitioner" journals) are FT50 journals and badged as such; since the AJG gives them no number, they also keep their last numeric grade, so the ABS 3 filter still finds them.</div>
     <div>All metadata are publicly available, collected via the <a href="https://www.crossref.org/documentation/retrieve-metadata/rest-api/" target="_blank">Crossref API</a> (with OpenAlex, DBLP and Semantic Scholar assisting for EC PDF links). PNAS section labels come from pnas.org's own topic index where available, and are otherwise approximated from each paper's <a href="https://openalex.org" target="_blank">OpenAlex</a> primary topic.</div>
     <div>Feedback and suggestions are welcome. Any errors are my own. <a href="https://www.stouras.com" target="_blank">Konstantinos I. Stouras</a></div>
   </div>
@@ -1071,7 +1071,15 @@ function registerExtraSources(rows, base) {
     if (s.abs && !ABS_RATING[s.key] && !MANIFEST_ABS[s.key]) { MANIFEST_ABS[s.key] = s.abs; _absSets = null; }
     var y = parseInt(s.firstYear, 10);
     if (y && y < manifestMinYear) manifestMinYear = y;
-    if (SRC[s.key] || EXTRA_SRC[s.key]) return;
+    if (SRC[s.key]) return;
+    if (EXTRA_SRC[s.key]) {
+      // A journal can be announced twice: by the FT50 manifest as a
+      // count-less pointer into a shard, and by that shard's own manifest
+      // with its count. Keep the first registration, adopt the count so the
+      // header's paper total stays complete.
+      if (EXTRA_SRC[s.key].count === undefined && s.count !== undefined) EXTRA_SRC[s.key].count = s.count;
+      return;
+    }
     var entry = base && !s.base ? Object.assign({ base: base }, s) : s;
     EXTRA_SRC[s.key] = entry;
     if (extraState[s.key] === undefined) extraState[s.key] = 'pending';
@@ -1086,7 +1094,7 @@ function registerExtraSources(rows, base) {
   extraColorCSS(added.map(function(s) { return s.key; }));
   buildJournalSelect();
   buildJTypeSelect();
-  updateSourceCountText();
+  updateHeaderStats();
   updateYearRangeText(NaN);
   // If the user set a scope before this manifest arrived, re-run the active
   // view so the newly registered journals start downloading. Mirror every
@@ -1200,12 +1208,24 @@ function extraPendingCount() {
   }).length;
 }
 
-function updateSourceCountText() {
-  // With every source lazy-loaded, a "loading x/y" counter is meaningless
-  // here — the results bar reports in-flight files. Show the catalog size.
-  var sc = document.getElementById('sourceCount');
-  if (!sc || !sourcesTotal) return;
-  sc.textContent = (sourcesTotal + Object.keys(EXTRA_SRC).length) + ' sources';
+var authorsTotal = 0; // summed distinct-author counts from the datasets' meta.json
+
+function updateHeaderStats() {
+  // Header stat, merged across every ingested manifest: papers from the
+  // per-journal counts (native + FT50 catalog + shards — EXTRA_SRC already
+  // dedups journals by key), authors from the datasets' meta.json counts
+  // (harvested in loadLastPull). With every source lazy-loaded, a "loading
+  // x/y" counter is meaningless here — the results bar reports in-flight
+  // files; this is the catalog size.
+  var el = document.getElementById('corpusStat');
+  if (!el || !sourcesTotal) return;
+  var papers = 0;
+  sourcesManifest.forEach(function(s) { papers += s.count || 0; });
+  Object.keys(EXTRA_SRC).forEach(function(k) { papers += EXTRA_SRC[k].count || 0; });
+  if (!papers) return;
+  var txt = papers.toLocaleString('en-US') + ' papers';
+  if (authorsTotal) txt += ' from ' + authorsTotal.toLocaleString('en-US') + ' authors';
+  el.textContent = txt;
 }
 
 function updateYearRangeText(loadedMinYear) {
@@ -1230,7 +1250,7 @@ function afterSourceArrived() {
     if (!isNaN(y) && y < minY) minY = y;
   }
   updateYearRangeText(minY);
-  updateSourceCountText();
+  updateHeaderStats();
 }
 
 // ── Lazy native sources ──────────────────────────────────────────────────────
@@ -1260,7 +1280,7 @@ async function loadData() {
   });
   buildJournalSelect();
   buildJTypeSelect();
-  updateSourceCountText();
+  updateHeaderStats();
   loadFt50Manifest();   // async: registers the FT50-catalog journals as lazy sources
   loadShardManifests(); // async: registers each satellite shard's journals
 
@@ -1388,6 +1408,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 // refreshed. Cached so it paints instantly on repeat visits, then refreshes
 // in the background.
 var LAST_PULL_CACHE_KEY = 'lit_lastPull';
+var AUTHORS_CACHE_KEY = 'lit_authorsTotal';
 function setLastPullText(date) {
   var el = document.getElementById('lastPull');
   if (el && date) el.textContent = 'Last publication data pull: ' + date;
@@ -1396,6 +1417,10 @@ function loadLastPull() {
   try {
     var cached = localStorage.getItem(LAST_PULL_CACHE_KEY);
     if (cached) setLastPullText(cached);
+    // Last visit's author total keeps the header stat complete while the
+    // fresh meta.json fetches are in flight.
+    var a = parseInt(localStorage.getItem(AUTHORS_CACHE_KEY), 10);
+    if (a > 0) authorsTotal = a;
   } catch (e) {}
   var fetchMeta = function(url) {
     return fetch(url, { cache: 'no-cache' })
@@ -1411,6 +1436,23 @@ function loadLastPull() {
     if (date) {
       setLastPullText(date);
       try { localStorage.setItem(LAST_PULL_CACHE_KEY, date); } catch (e) {}
+    }
+    // Each dataset publishes its distinct-author count in its meta.json. The
+    // FT50 catalog also publishes an extras-only count (its journals shared
+    // with the native eight are already inside the native count) — prefer it
+    // so those authors aren't counted twice. Shards' authors join the sum
+    // once their vendored pipelines publish authorCount; an author active in
+    // several catalogs is de-duplicated only within each one.
+    var total = 0;
+    metas.forEach(function(m) {
+      if (!m) return;
+      var n = (m.authorCountExtras != null) ? m.authorCountExtras : m.authorCount;
+      if (n > 0) total += n;
+    });
+    if (total > 0) {
+      authorsTotal = total;
+      updateHeaderStats();
+      try { localStorage.setItem(AUTHORS_CACHE_KEY, String(total)); } catch (e) {}
     }
   });
 }
