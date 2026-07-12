@@ -56,8 +56,9 @@ filter (left of Journals) offers UTD24 / FT50 / ABS 4/4* / ABS 3; a type chip
 expands to its journal set and unions with the Journals selection. Each paper
 card carries a small **badge left of its title** showing the single MOST
 selective list its journal belongs to (UTD24 > FT50 > ABS 4/4* > ABS 3 —
-JOURNAL_TYPES order in `index.html`; a UTD24 journal is never additionally
-badged FT50/ABS); clicking it selects that type. Filtering is unaffected by
+JOURNAL_TYPES order in `index.html`), with ONE exception: a journal on both
+the UTD24 and FT50 lists shows both tags (`journalBadges`; ABS tags never
+stack onto a listed journal). Clicking a badge selects that type. Filtering is unaffected by
 the badge: an ABS 4/4* search still returns UTD24 journals' papers. The
 catalog also carries **notFT extras** — journals on another list but not the
 FT50: UTD24's INFORMS Journal on Computing (`ijoc`) and ABS 4's European

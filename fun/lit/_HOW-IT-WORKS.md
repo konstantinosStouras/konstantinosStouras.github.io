@@ -59,9 +59,10 @@ browser.
   shards alike) — other fields' ABS journals are neither harvested nor shown.
 - **Journal-type badge on every card.** A small badge left of each paper's
   title shows the single MOST selective list its journal belongs to
-  (UTD24 > FT50 > ABS 4/4* > ABS 3, the JOURNAL_TYPES order): a UTD24
-  journal's paper is badged `UTD24` only — never additionally FT50 or
-  ABS 4/4*. Display only: an ABS 4/4* *search* still returns every UTD24
+  (UTD24 > FT50 > ABS 4/4* > ABS 3, the JOURNAL_TYPES order) — with one
+  exception: a journal on BOTH the UTD24 and FT50 lists shows both tags
+  (`UTD24` `FT50`). ABS tags never stack onto a listed journal: an FT50
+  journal is not additionally badged ABS 4/4*. Display only: an ABS 4/4* *search* still returns every UTD24
   journal's papers (each shown with its UTD24 badge). Clicking a badge
   selects that journal type; PNAS and ACM EC papers carry no badge.
 - **Everything is lazy — first paint is a few hundred KB.** No papers file
