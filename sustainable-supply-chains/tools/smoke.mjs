@@ -21,10 +21,20 @@ const { chromium } = await import(PW);
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml' };
+// Force DEMO mode: override firebase-config.js with placeholders so this test
+// exercises the localStorage backend regardless of whether the shipped config
+// has been filled in with a real project.
+const DEMO_CONFIG = `window.SSC_FIREBASE_CONFIG = { apiKey: 'PASTE_API_KEY', projectId: 'PASTE_PROJECT_ID' };
+window.SSC_ADMIN_EMAILS = ['admin@admin.com'];
+window.SSC_PATHS = { sessions: 'sscSessions', codes: 'sscSessionCodes' };
+window.SSC_FIREBASE_SDK_VERSION = '10.12.2';\n`;
 const server = createServer(async (req, res) => {
   try {
     let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
     if (p.endsWith('/')) p += 'index.html';
+    if (/\/sustainable-supply-chains\/firebase-config\.js$/.test(p)) {
+      res.writeHead(200, { 'content-type': 'text/javascript' }); res.end(DEMO_CONFIG); return;
+    }
     const data = await readFile(join(ROOT, p));
     res.writeHead(200, { 'content-type': MIME[extname(p)] || 'application/octet-stream' });
     res.end(data);

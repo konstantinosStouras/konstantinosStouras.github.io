@@ -97,7 +97,12 @@
       var d = decisions[mine.id];
       d.submitted = true; d.submittedAt = Date.now(); d.savedAt = Date.now();
       S.lastWriteStamp = d.savedAt;
-      ST.saveAsync(S.sessionId, mine.id, inst);
+      ST.saveAsync(S.sessionId, mine.id, inst).catch(function (e) {
+        if (/stale-async/.test(e.message)) {
+          alert('A teammate already advanced this game on another device — syncing to their state.');
+          S.instance = null; // the watcher delivers the newer instance
+        }
+      });
       ST.saveDecision(S.sessionId, mine.id, round, d);
       logEv('round_resolved', { async: 1, round: round, secs: secsSinceRoundOpen() });
       if (inst.phase === 'final') logEv('game_ended', { async: 1 });
@@ -212,6 +217,9 @@
   function renderMessages() {
     var box = $('#tp-messages'), sess = V(), mine = myFirm();
     if (!box || !mine) return;
+    var keepText = $('#msg-text') ? $('#msg-text').value : '';
+    var keepTo = $('#msg-to') ? $('#msg-to').value : '';
+    var keepFocus = document.activeElement && document.activeElement.id === 'msg-text';
     try { localStorage.setItem(msgSeenKey(), String(Date.now())); } catch (e) {}
     paintMsgBadge();
     if (!sess.settings.chatOn) {
@@ -234,13 +242,19 @@
     else {
       html += inbox.slice(-100).map(function (m) {
         var fromMe = m.from === mine.id;
-        var who = fromMe ? 'You → ' + esc(m.to === 'admin' ? 'Instructor' : m.toName || firmName(m.to))
-                         : esc(m.from === 'admin' ? '📣 Instructor' : (m.fromName || firmName(m.from))) + ' → you';
+        var who = fromMe ? 'You → ' + esc(m.to === 'admin' ? 'Instructor' : firmName(m.to))
+                         : esc(m.from === 'admin' ? '📣 Instructor' : firmName(m.from)) + ' → you';
         return '<div class="news-item"><span class="news-round">R' + (m.round || '·') + '</span>' +
           '<span><b class="' + (fromMe ? 'muted' : '') + '">' + who + ':</b> ' + esc(m.text) + '</span></div>';
       }).join('');
     }
     box.innerHTML = html + '</div>';
+    if ($('#msg-text') && keepText) $('#msg-text').value = keepText;
+    if ($('#msg-to') && keepTo) $('#msg-to').value = keepTo;
+    if (keepFocus && $('#msg-text')) {
+      var mt = $('#msg-text');
+      mt.focus(); mt.setSelectionRange(mt.value.length, mt.value.length);
+    }
     $('#msg-send').addEventListener('click', function () {
       var text = $('#msg-text').value.trim();
       if (!text) return;
@@ -268,7 +282,7 @@
   function secsSinceRoundOpen() {
     var vs = V();
     var t = vs && vs.roundOpenedAt;
-    return t ? Math.round((Date.now() - t) / 1000) : null;
+    return t ? Math.max(0, Math.round((Date.now() - t) / 1000)) : null;
   }
   function logEv(type, d) {
     if (!S.sessionId) return;
@@ -307,6 +321,14 @@
     if (!sess) return;
     var mine = myFirm();
     S.myFirmId = mine ? mine.id : null;
+    // a firm change (kicked → founded a new one) must drop ALL per-firm state
+    if (S.gameFirmId !== (mine ? mine.id : null)) {
+      S.gameFirmId = mine ? mine.id : null;
+      S.decideRoundRendered = null; S.draft = null; S.submitted = false;
+      if (S.decisionUnsub) { S.decisionUnsub(); S.decisionUnsub = null; }
+      if (S.asyncUnsub) { S.asyncUnsub(); S.asyncUnsub = null; }
+      S.asyncWatching = false; S.instance = null; S.creatingInstance = false;
+    }
     if (!mine) { renderFirmSetup(); show('s-firm'); return; }
     if (isAsync()) {
       // self-paced: no lobby, no instructor pacing — straight into the game.
@@ -323,12 +345,19 @@
           }
           if (!S.instance && !S.creatingInstance) {
             S.creatingInstance = true;
-            S.instance = makeInstance(mine);
-            ST.saveAsync(S.sessionId, mine.id, S.instance).then(function () {
-              S.creatingInstance = false;
-              logEv('async_started', { bots: S.instance.botFirms.length });
+            // authoritative re-check first: a cached/offline null snapshot or a
+            // teammate's concurrent create must never be overwritten
+            ST.getAsync(S.sessionId, mine.id).then(function (existing) {
+              if (existing) { S.instance = existing; S.creatingInstance = false; setTimeout(route, 0); return; }
+              S.instance = makeInstance(mine);
+              return ST.saveAsync(S.sessionId, mine.id, S.instance).then(function () {
+                S.creatingInstance = false;
+                logEv('async_started', { bots: S.instance.botFirms.length });
+                setTimeout(route, 0);
+              }).catch(function () { // lost the race: adopt whatever exists
+                S.instance = null; S.creatingInstance = false;
+              });
             });
-            setTimeout(route, 0);
           }
         });
       }
@@ -388,6 +417,9 @@
       '. Component imports into your hub pay that region\'s tariff too. Tariffs can change mid-game.';
   }
   function createFirm() {
+    if (!isAsync() && S.session && S.session.phase !== 'lobby') {
+      alert('The game has already started — ask the instructor to pause or add you.'); return;
+    }
     var name = $('#in-firmname').value.trim();
     var membersRaw = $('#in-members').value.trim();
     var err = $('#firm-err');
@@ -413,6 +445,9 @@
     });
   }
   function joinFirm(f) {
+    if (!isAsync() && S.session && S.session.phase === 'final') {
+      alert('This game has finished.'); return;
+    }
     var name = $('#in-joinname').value.trim();
     if (!name) { alert('Enter your name first (left of the Join button).'); return; }
     // atomic append in the store (arrayUnion / re-read inside the write), so
@@ -550,6 +585,9 @@
     // start from the saved draft for this round, else an empty decision
     S.draft = null; S.submitted = false; S.draftRound = sess.round;
     ST.getDecision(S.sessionId, mine.id, sess.round).then(function (saved) {
+      var now = V();
+      if (!now || now.phase !== 'decisions' || now.round !== sess.round ||
+          S.decideRoundRendered !== sess.round || S.myFirmId !== mine.id) return;
       var d = E.sanitizeDecision(sess, mine.id, sess.round, saved);
       S.draft = d;
       S.submitted = !!(saved && saved.submitted);
@@ -1084,7 +1122,7 @@
     var st = stateOf(mine.id);
     var hist = st.hist || [];
     var labels = hist.map(function (h) { return 'R' + h.round; });
-    var lb = E.leaderboard(sess, S.firms, statesAll());
+    var lb = E.leaderboard(sess, gameFirms(), statesAll());
     var myBw = E.bullwhipRatio(st);
 
     var html = leaderboardHtml(true);

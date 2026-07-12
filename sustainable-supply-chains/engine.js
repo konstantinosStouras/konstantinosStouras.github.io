@@ -244,7 +244,12 @@
     });
     out.offsetTons = clamp(Math.round(num(d.offsetTons, 0)), 0, 100000);
     out.buyRenewable = !!d.buyRenewable;
-    out.auditSuppliers = Array.isArray(d.auditSuppliers) ? d.auditSuppliers.slice(0, 40) : [];
+    var validSup = {};
+    session.catalog.components.forEach(function (c2) {
+      c2.suppliers.forEach(function (sp) { validSup[sp.id] = true; });
+    });
+    out.auditSuppliers = (Array.isArray(d.auditSuppliers) ? d.auditSuppliers : [])
+      .filter(function (id, i2, arr) { return validSup[id] && arr.indexOf(id) === i2; }).slice(0, 40);
     out.submitted = !!d.submitted;
     return out;
   }
@@ -528,11 +533,12 @@
 
       // ESG scandal: unaudited low-ESG spend can blow up (seeded)
       var riskSpend = 0;
-      cat.components.forEach(function (c) {
-        c.suppliers.forEach(function (sup) {
-          var o = d.orders[c.id] && d.orders[c.id][sup.id];
-          if (o && o.qty && effectiveEsg(sup, st.audits) < 60) riskSpend += o.qty * sup.cost;
-        });
+      (w.ord.lines || []).forEach(function (l) {
+        var comp = findComponent(cat, l.compId);
+        var sup = comp && findSupplier(comp, l.supplierId);
+        // allocated units only — same basis as w.ord.purchase, so the risk
+        // share is a true 0..1 fraction even under rationing cuts
+        if (sup && l.qty > 0 && effectiveEsg(sup, st.audits) < 60) riskSpend += l.qty * sup.cost;
       });
       var scandal = null;
       if (session.settings.eventsOn && w.ord.purchase > 0) {
@@ -727,7 +733,7 @@
   // martingale so its forecast is the current level.
   function expectedDemandFactor(session, futureRound, nowRound) {
     var p = session.settings.demandPattern || 'stable';
-    if (p === 'walk') return demandFactor(session, Math.min(futureRound, nowRound));
+    if (p === 'walk') return demandFactor(session, Math.min(futureRound, Math.max(1, nowRound - 1)));
     return demandFactor(session, futureRound);
   }
   function expectedDemand(session, marketId, futureRound, nowRound) {
@@ -793,7 +799,9 @@
         var fr = freightPerUnit(cat, cat.product.weightKg, pt.hub, m.region, 'surface');
         return { pt: pt,
                  c0: kits[pt.hub] + cat.product.assemblyCost + fr.cost,
-                 tau: 0.6 * tariffRate(session, m.region, pt.hub, round),
+                 // clamp: an export tariff share >= 1 would flip the markup
+                 // formula's sign and price the bot at the floor at a loss
+                 tau: Math.min(0.9, 0.6 * tariffRate(session, m.region, pt.hub, round)),
                  p: m.refPrice };
       });
       for (var it = 0; it < 40; it++) {
@@ -933,6 +941,12 @@
           var fair = Math.ceil(ranked[k].sup.capacity * 1.25 / nFirms);
           var take = Math.min(need, fair, ranked[k].sup.capacity);
           if (take > 0) { d.orders[comp.id][ranked[k].sup.id] = { qty: take, mode: 'surface' }; need -= take; }
+        }
+        // single-supplier catalogs: the air expedite occupies the only order
+        // slot — top it up rather than starving replenishment forever
+        if (need > 0 && round + 1 <= R) {
+          var pl = d.orders[comp.id][primary.sup.id];
+          if (pl) pl.qty = Math.min(pl.qty + need, primary.sup.capacity);
         }
       });
 
@@ -1101,12 +1115,18 @@
     var kitCheap = cheapestKit(session, prevState.hub, round).kitCost;
     var unitCost = kitCheap + cat.product.assemblyCost;
     var avgPrice = sold > 0 ? result.revenue / sold : null;
-    var margin = avgPrice != null ? Math.max(60, avgPrice - unitCost) : 250;
+    var margin = avgPrice != null ? avgPrice - unitCost : 250;
 
-    // stockouts, with the money attached
+    // total blackout: no stock at all = no sales AND no demand signal — the
+    // severest stockout must not read as perfect service
+    if (demand === 0 && (prevState.fg || 0) === 0 && result.produced === 0) {
+      out.push({ pri: 1, level: 'warn', text: 'You had nothing to sell this round — with zero finished goods you earn nothing, learn nothing about demand, and your brand takes the stockout hit. Get components flowing and produce every round.' });
+    }
+    // stockouts, with the money attached (only quantified when the margin was real)
     if (demand > 0 && fill < 0.9) {
-      out.push({ pri: 1, level: 'warn', text: 'Stockout: ' + result.lost + ' units of demand went unserved — roughly ' +
-        fmtMoneyish(result.lost * margin) + ' of margin lost, plus a brand hit that lowers future demand. With your lead times, cover ~lead+1 rounds of expected demand in on-hand + on-order stock.' });
+      out.push({ pri: 1, level: 'warn', text: 'Stockout: ' + result.lost + ' units of demand went unserved — ' +
+        (margin > 0 ? 'roughly ' + fmtMoneyish(result.lost * margin) + ' of margin lost, plus' : 'and while your average price was at or below unit cost (fix pricing first), it still means') +
+        ' a brand hit that lowers future demand. With your lead times, cover ~lead+1 rounds of expected demand in on-hand + on-order stock.' });
     } else if (demand > 0 && fill >= 0.97) {
       var endKits = kitsAvailable(session, result.endState || prevState);
       var cover = endKits / Math.max(1, demand);
@@ -1142,12 +1162,15 @@
     }
     // sourcing premium (deliberate green vs accidental expensive)
     var lines = result.orderLines || [];
-    var bought = 0, paid = 0;
-    lines.forEach(function (l) { bought += l.qty; paid += l.cost; });
-    if (bought > 50) {
-      var kitsBought = bought / Math.max(1, cat.components.length);
-      var perKit = paid / Math.max(1, kitsBought);
-      var premium = (perKit - kitCheap) / kitCheap;
+    var bought = 0, paid = 0, baseline = 0;
+    var plan = cheapestKit(session, prevState.hub, round).plan;
+    lines.forEach(function (l) {
+      bought += l.qty; paid += l.cost;
+      var rk = plan[l.compId];
+      if (rk && rk.length) baseline += l.qty * rk[0].landed; // per-component cheapest, so unbalanced orders don't fabricate a premium
+    });
+    if (bought > 50 && baseline > 0) {
+      var premium = (paid - baseline) / baseline;
       if (premium > 0.12 && (result.green || 50) >= 58) {
         out.push({ pri: 5, level: 'good', text: '✔ You paid ~' + Math.round(premium * 100) + '% over the cheapest landed mix — and it shows in a green score of ' +
           result.green + ', which wins share in sustainability-sensitive markets and half the final score.' });
@@ -1159,7 +1182,7 @@
     // air premium without need
     var airSpend = 0;
     lines.forEach(function (l) { if (l.mode === 'air') airSpend += l.cost; });
-    if (airSpend > 8000 && result.lost === 0 && fill >= 0.99) {
+    if (airSpend > 8000 && demand > 0 && result.lost === 0 && fill >= 0.99) {
       out.push({ pri: 4, level: 'info', text: 'You air-freighted ' + fmtMoneyish(airSpend) + ' of components in a round with zero stockout pressure — sea plus one round of patience is ~80× cheaper and ~30× cleaner.' });
     }
     // scandal

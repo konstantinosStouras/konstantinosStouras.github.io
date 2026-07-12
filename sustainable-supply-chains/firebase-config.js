@@ -1,27 +1,26 @@
 /* ==========================================================================
    Sustainable Supply Chains — firebase-config.js
    Firebase project config for running REAL class sessions (many devices).
-   Filling this in is what turns Firebase ON; with the PASTE_… placeholders
-   the app runs in DEMO MODE: everything works, but data lives only in this
-   browser's localStorage (open the student page and the admin panel in the
-   same browser to try the whole game). See README.md → "Firebase setup".
+   CONFIGURED for the live class project 'sustainable-supplychains'.
+   (Restoring PASTE_… placeholders would switch the app back to the
+   localStorage DEMO MODE.) See README.md → "Firebase setup".
 
    NOTE: a Firebase apiKey is a public client identifier, not a secret —
    access is controlled by firestore.rules.
    ========================================================================== */
 window.SSC_FIREBASE_CONFIG = {
-  apiKey:            'PASTE_API_KEY',
-  authDomain:        'PASTE_PROJECT.firebaseapp.com',
-  projectId:         'PASTE_PROJECT_ID',
-  storageBucket:     'PASTE_PROJECT.appspot.com',
-  messagingSenderId: 'PASTE_SENDER_ID',
-  appId:             'PASTE_APP_ID'
+  apiKey:            'AIzaSyD_Gbv6PkUuixxb4i28jPv_0ACjkmWplZs',
+  authDomain:        'sustainable-supplychains.firebaseapp.com',
+  projectId:         'sustainable-supplychains',
+  storageBucket:     'sustainable-supplychains.firebasestorage.app',
+  messagingSenderId: '465004185871',
+  appId:             '1:465004185871:web:560fa651958511513d567a'
 };
 
 // Email addresses allowed into the admin panel. Each MUST be a Firebase Auth
 // Email/Password user (Authentication → Users → Add user) AND appear in the
 // isAdmin() allow-list in firestore.rules (keep the two lists identical).
-window.SSC_ADMIN_EMAILS = ['kstouras@gmail.com'];
+window.SSC_ADMIN_EMAILS = ['admin@admin.com'];
 
 // Firestore root collections (rarely need changing): game sessions, and the
 // code → sessionId lookup docs students use to join without listing sessions.

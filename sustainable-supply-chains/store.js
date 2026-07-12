@@ -51,6 +51,9 @@ window.SSCStore = (function () {
     try { return JSON.parse(localStorage.getItem(LS_DB)) || { sessions: {} }; }
     catch (e) { return { sessions: {} }; }
   }
+  // NOTE: demo writes are whole-blob read-modify-write; two tabs writing in
+  // the SAME instant can drop one write (inherent to localStorage — no locks).
+  // Acceptable for single-browser practice; real classes use Firebase.
   function dbWrite(db) {
     localStorage.setItem(LS_DB, JSON.stringify(db));
     localStorage.setItem(LS_REV, String((Number(localStorage.getItem(LS_REV)) || 0) + 1));
@@ -216,9 +219,17 @@ window.SSCStore = (function () {
     saveAsync: function (id, firmId, doc) {
       var db = dbRead(), slot = sessSlot(db, id);
       if (!slot.async) slot.async = {};
+      var cur = slot.async[firmId];
+      if (cur && ((cur.round || 0) > (doc.round || 0) ||
+                  ((cur.results || []).length) > ((doc.results || []).length))) {
+        return Promise.reject(new Error('stale-async'));
+      }
       slot.async[firmId] = doc;
       dbWrite(db);
       return Promise.resolve();
+    },
+    getAsync: function (id, firmId) {
+      return Promise.resolve(((dbRead().sessions[id] || {}).async || {})[firmId] || null);
     },
     watchAsync: function (id, firmId, cb) {
       return addWatcher(function () {
@@ -306,11 +317,19 @@ window.SSCStore = (function () {
   // would see null and signInAnonymously would REPLACE the instructor's
   // persisted admin session (e.g. when they open the student link in the same
   // browser mid-class). authStateReady() exists since SDK 10.7.
+  var signInP = null;
   function ensureAuth() {
     var settled = auth.authStateReady ? auth.authStateReady() : Promise.resolve();
     return settled.then(function () {
       if (auth.currentUser) return auth.currentUser;
-      return sdk.auth.signInAnonymously(auth).then(function (c) { return c.user; });
+      // memoized: concurrent boot-time callers must share ONE anonymous
+      // sign-in, or S.uid and the authed uid can end up as different users
+      if (!signInP) {
+        signInP = sdk.auth.signInAnonymously(auth)
+          .then(function (c) { return c.user; })
+          .finally(function () { signInP = null; });
+      }
+      return signInP;
     });
   }
   function sessRef(id) { return sdk.fs.doc(db, PATHS.sessions, id); }
@@ -385,7 +404,10 @@ window.SSCStore = (function () {
       });
     },
     updateSession: function (id, patch) {
-      return init().then(function () { return sdk.fs.setDoc(sessRef(id), patch, { merge: true }); })
+      // updateDoc replaces top-level fields (matching the demo backend's
+      // Object.assign) — setDoc merge would deep-merge nested maps and keep
+      // keys the admin deleted from settings/catalog
+      return init().then(function () { return sdk.fs.updateDoc(sessRef(id), patch); })
         .then(function () {
           return patch && patch.code ? sdk.fs.setDoc(codeRef(patch.code), { sessionId: id }) : null;
         });
@@ -395,10 +417,17 @@ window.SSCStore = (function () {
       return init().then(function () {
         return sdk.fs.getDoc(sessRef(id)).then(function (snap) {
           var code = snap.exists() ? (snap.data() || {}).code : null;
-          return code ? sdk.fs.deleteDoc(codeRef(code)).catch(function () {}) : null;
+          if (!code) return null;
+          // a later session may have reused this code — never break its join
+          return sdk.fs.getDoc(codeRef(code)).then(function (cs) {
+            if (cs.exists() && (cs.data() || {}).sessionId === id) {
+              return sdk.fs.deleteDoc(codeRef(code)).catch(function () {});
+            }
+            return null;
+          });
         });
       }).then(function () {
-        var subs = ['firms', 'decisions', 'results', 'markets'];
+        var subs = ['firms', 'decisions', 'results', 'markets', 'async', 'events', 'messages'];
         return Promise.all(subs.map(function (s2) {
           return sdk.fs.getDocs(subCol(id, s2)).then(function (qs) {
             var dels = [];
@@ -482,10 +511,31 @@ window.SSCStore = (function () {
     watchMessages: function (id, cb) {
       return deferWatch(function () { return watchCol(subCol(id, 'messages'), cb, 'at'); });
     },
+    // stale-guarded: a device holding an older instance (fewer resolved
+    // rounds) must never clobber a teammate's newer game. read-then-write
+    // (not a transaction: the emulator/WebChannel resets transaction and
+    // getDocFromServer transport in-browser) — the tiny TOCTOU window is
+    // covered by the watcher re-syncing both devices to the newest doc.
     saveAsync: function (id, firmId, doc) {
       return init().then(ensureAuth).then(function () {
-        return sdk.fs.setDoc(sdk.fs.doc(db, PATHS.sessions, id, 'async', firmId), doc);
+        var ref = sdk.fs.doc(db, PATHS.sessions, id, 'async', firmId);
+        return sdk.fs.getDoc(ref).then(function (snap) {
+          if (snap.exists()) {
+            var cur = snap.data() || {};
+            if ((cur.round || 0) > (doc.round || 0) ||
+                ((cur.results || []).length) > ((doc.results || []).length)) {
+              return Promise.reject(new Error('stale-async'));
+            }
+          }
+          return sdk.fs.setDoc(ref, doc);
+        });
       });
+    },
+    getAsync: function (id, firmId) {
+      return init().then(ensureAuth).then(function () {
+        return sdk.fs.getDoc(sdk.fs.doc(db, PATHS.sessions, id, 'async', firmId));
+      }).then(function (snap) { return snap.exists() ? snap.data() : null; })
+        .catch(function () { return null; });
     },
     watchAsync: function (id, firmId, cb) {
       return deferWatch(function () {
@@ -505,16 +555,16 @@ window.SSCStore = (function () {
       return deferWatch(function () { return watchCol(subCol(id, 'markets'), cb); });
     },
     saveResolution: function (id, round, payload) {
+      // one atomic batch: results, market and the phase flip commit together,
+      // so a mid-write failure can never leave a half-resolved round
       return init().then(function () {
-        var writes = Object.keys(payload.results).map(function (fid) {
-          return sdk.fs.setDoc(sdk.fs.doc(db, PATHS.sessions, id, 'results', fid + '_' + round),
-            payload.results[fid]);
+        var batch = sdk.fs.writeBatch(db);
+        Object.keys(payload.results).forEach(function (fid) {
+          batch.set(sdk.fs.doc(db, PATHS.sessions, id, 'results', fid + '_' + round), payload.results[fid]);
         });
-        writes.push(sdk.fs.setDoc(sdk.fs.doc(db, PATHS.sessions, id, 'markets', 'r' + round), payload.market));
-        return Promise.all(writes);
-      }).then(function () {
-        // session patch last: when phase flips, everything else is in place
-        return sdk.fs.setDoc(sessRef(id), payload.sessionPatch || {}, { merge: true });
+        batch.set(sdk.fs.doc(db, PATHS.sessions, id, 'markets', 'r' + round), payload.market);
+        batch.set(sessRef(id), payload.sessionPatch || {}, { merge: true });
+        return batch.commit();
       });
     },
     adminSignIn: function (email, pw) {

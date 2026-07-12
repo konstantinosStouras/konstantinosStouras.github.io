@@ -222,7 +222,12 @@
 
   function readForm() {
     var s = freshSettings();
-    function nv(id, d) { var v = Number(($('#' + id) || {}).value); return isFinite(v) ? v : d; }
+    function nv(id, d) {
+      var raw = ($('#' + id) || {}).value;
+      if (raw == null || String(raw).trim() === '') return d; // blank keeps the default, not 0
+      var v = Number(raw);
+      return isFinite(v) ? v : d;
+    }
     s.rounds = Math.max(1, Math.round(nv('f-rounds', s.rounds)));
     s.startingCash = nv('f-cash', s.startingCash);
     s.factoryCapacity = Math.max(1, nv('f-capacity', s.factoryCapacity));
@@ -332,13 +337,26 @@
     var btn = $('#btn-save-session');
     btn.disabled = true;
     if (A.editingId) {
-      ST.updateSession(A.editingId, { name: out.name, code: code, settings: out.settings, catalog: out.catalog })
-        .then(function () { btn.disabled = false; cancelEdit(); flash('Saved'); refreshSessions(); });
+      // an async session already in play, or a catalog that orphans an
+      // existing firm's hub, must not be saved over a running game
+      ST.fetchAll(A.editingId).then(function (pack) {
+        var isA = pack.session && (pack.session.settings || {}).asyncMode;
+        if ((isA || out.settings.asyncMode) && pack.asyncs.length) {
+          throw new Error('practice already started (' + pack.asyncs.length + ' firm(s) playing) — settings are locked. Archive it and create a new session instead.');
+        }
+        var orphan = pack.firms.find(function (f) { return !out.catalog.regions[f.hub]; });
+        if (orphan) throw new Error('firm "' + orphan.name + '" uses hub "' + orphan.hub + '", which the new catalog removes.');
+        return ST.updateSession(A.editingId, { name: out.name, code: code, settings: out.settings, catalog: out.catalog });
+      }).then(function () { btn.disabled = false; cancelEdit(); flash('Saved'); refreshSessions(); })
+        .catch(function (e) { btn.disabled = false; err.textContent = 'Not saved: ' + e.message; err.style.display = ''; });
     } else {
       var doc = { code: code, name: out.name || ('Session ' + code), createdAt: Date.now(),
                   status: 'setup', round: 0, phase: 'lobby',
                   settings: out.settings, catalog: out.catalog, broadcasts: [] };
-      ST.createSession(doc).then(function (id) {
+      ST.createSession(doc).catch(function (e) {
+        btn.disabled = false; err.textContent = 'Create failed: ' + e.message; err.style.display = '';
+        throw e;
+      }).then(function (id) {
         btn.disabled = false;
         flash('Created');
         $('#created-box').innerHTML = '<div class="code-box"><p class="small" style="margin:0 0 4px;">Session created — students join with this code:</p>' +
@@ -443,6 +461,7 @@
       ST.deleteSession(s.id).then(function () {
         if (A.ctrlId === s.id) A.ctrlId = null;
         if (A.dataId === s.id) A.dataId = null;
+        if (A.editingId === s.id) cancelEdit();
         refreshSessions();
       });
     });
@@ -466,11 +485,12 @@
     A.ctrl.unsubs.push(ST.watchAsyncAll(id, function (d) { A.ctrl.asyncs = d || []; renderCtrl(); }));
     A.ctrl.unsubs.push(ST.watchMessages(id, function (d) { A.ctrl.messages = d || []; renderCtrl(); }));
   }
-  function ctrlStates() {
+  function ctrlStates(beforeRound) {
     var out = {};
     A.ctrl.firms.forEach(function (f) {
-      var rs = A.ctrl.results.filter(function (r) { return r.firmId === f.id; })
-        .sort(function (a, b) { return a.round - b.round; });
+      var rs = A.ctrl.results.filter(function (r) {
+        return r.firmId === f.id && (beforeRound == null || r.round < beforeRound);
+      }).sort(function (a, b) { return a.round - b.round; });
       out[f.id] = rs.length ? rs[rs.length - 1].endState : E.initFirmState(A.ctrl.session, f);
     });
     return out;
@@ -594,7 +614,7 @@
         var dec = decisionOf(f.id, sess.round);
         var sub = f.isBot ? '🤖 auto' : (dec && dec.submitted ? '✔' : (dec ? 'draft' : '—'));
         html += '<tr><td>' + esc(f.name) + (f.isBot ? ' <span class="pill pill-plain">bot</span>' : '') + '</td>' +
-          '<td>' + esc(sess.catalog.regions[f.hub].name) + '</td>' +
+          '<td>' + esc((sess.catalog.regions[f.hub] || { name: f.hub }).name) + '</td>' +
           '<td class="small muted">' + esc((f.members || []).map(function (m) { return m.name; }).join(', ')) + '</td>' +
           '<td class="r">' + (sess.phase === 'decisions' ? sub : '·') + '</td>' +
           '<td class="r ' + U.posneg(st.cash) + '">' + fmtM(st.cash) + '</td>' +
@@ -615,8 +635,10 @@
       if (!msgs.length) html += '<p class="muted small">No messages yet.</p>';
       else {
         html += '<div style="max-height:260px; overflow:auto;">' + msgs.map(function (m) {
-          var from = m.from === 'admin' ? 'You' : esc(m.fromName || m.from);
-          var to = m.to === 'admin' ? 'you' : esc(m.toName || m.to);
+          var fFrom = firms.find(function (x) { return x.id === m.from; });
+          var fTo = firms.find(function (x) { return x.id === m.to; });
+          var from = m.from === 'admin' ? 'You' : esc(fFrom ? fFrom.name : m.from);
+          var to = m.to === 'admin' ? 'you' : esc(fTo ? fTo.name : m.to);
           return '<div class="news-item"><span class="news-round">R' + (m.round || '·') + '</span>' +
             '<span><b>' + from + ' → ' + to + ':</b> ' + esc(m.text) + '</span></div>';
         }).join('') + '</div>';
@@ -743,10 +765,14 @@
         !confirm(humansPending.length + ' firm(s) have not submitted (' +
           humansPending.map(function (f) { return f.name; }).join(', ') +
           ').\nResolve anyway? Their current draft (or a do-nothing plan) will be used.')) return;
+    if (A.ctrl.results.some(function (r) { return r.round === sess.round; })) {
+      alert('Round ' + sess.round + ' already has results (resolved elsewhere?). Refresh before resolving again.');
+      return;
+    }
     A.resolving = true;
     renderCtrl();
     try {
-      var states = ctrlStates();
+      var states = ctrlStates(sess.round);
       var decisions = {}, botSaves = [];
       var nashIds = firms.filter(function (f) { return f.isBot && f.botProfile === 'nash'; })
         .map(function (f) { return f.id; });
@@ -842,10 +868,9 @@
 
   $('#btn-json').addEventListener('click', function () {
     if (!A.data.session) return;
-    U.download('ssc_' + A.data.session.code + '.json', JSON.stringify({
-      session: A.data.session, firms: A.data.firms, decisions: A.data.decisions,
-      results: A.data.results, markets: A.data.markets
-    }, null, 1), 'application/json');
+    ST.fetchAll(A.data.session.id).then(function (pack) {
+      U.download('ssc_' + A.data.session.code + '.json', JSON.stringify(pack, null, 1), 'application/json');
+    });
   });
 
   $('#btn-xlsx').addEventListener('click', function () {
@@ -957,7 +982,7 @@
           byFR[k].saves++;
           if (!byFR[k].firstSave) byFR[k].firstSave = e.at;
         }
-        if (e.type === 'decision_submitted') { byFR[k].submit = e.at; byFR[k].secs = e.d && e.d.secs; }
+        if (e.type === 'decision_submitted' || (e.type === 'round_resolved' && e.d && e.d.async)) { byFR[k].submit = e.at; byFR[k].secs = e.d && e.d.secs; }
       });
       Object.keys(byFR).map(function (k) { return byFR[k]; })
         .sort(function (a, b) { return a.round - b.round || String(a.firmId).localeCompare(String(b.firmId)); })
@@ -1010,20 +1035,23 @@
     var hist = st.hist || [];
     var demand = 0, sold = 0, cuts = 0;
     hist.forEach(function (h) { demand += h.demand; sold += h.sold; cuts += (h.cut || 0); });
-    var holding = 0, freight = 0, tariffs = 0, lineCost = 0, lineUnits = 0, airCost = 0;
+    var holding = 0, freight = 0, tariffs = 0, lineCost = 0, lineUnits = 0, airCost = 0, baseline = 0;
     res.forEach(function (r) {
       holding += r.costs.holding; freight += r.costs.inFreight + r.costs.outFreight;
       tariffs += r.costs.inTariff + r.costs.outTariff;
+      var plan = E.cheapestKit(sess, st.hub, r.round).plan; // per-round: tariff shocks move the benchmark
       (r.orderLines || []).forEach(function (l) {
         lineCost += l.cost; lineUnits += l.qty;
         if (l.mode === 'air') airCost += l.cost;
+        var rk = plan[l.compId];
+        if (rk && rk.length) baseline += l.qty * rk[0].landed;
       });
     });
-    var nComp = sess.catalog.components.length;
-    var kitsBought = lineUnits / Math.max(1, nComp);
-    var cheap = E.cheapestKit(sess, st.hub, 1).kitCost;
-    var premium = kitsBought > 20 ? Math.round(((lineCost / kitsBought) - cheap) / cheap * 1000) / 10 : null;
-    var subs = pack.events.filter(function (e) { return e.type === 'decision_submitted' && e.firmId === firm.id && e.d && e.d.secs != null; });
+    var premium = lineUnits > 60 && baseline > 0 ? Math.round((lineCost - baseline) / baseline * 1000) / 10 : null;
+    var subs = pack.events.filter(function (e) {
+      return (e.type === 'decision_submitted' || (e.type === 'round_resolved' && e.d && e.d.async)) &&
+             e.firmId === firm.id && e.d && e.d.secs != null;
+    });
     var saves = pack.events.filter(function (e) { return e.type === 'decision_saved' && e.firmId === firm.id; }).length;
     var avgSecs = subs.length ? Math.round(subs.reduce(function (a, e) { return a + e.d.secs; }, 0) / subs.length) : null;
     return {
