@@ -186,9 +186,10 @@
   .tag-pdf:hover { background: #1f6b3f; }
   .chip-journal { background: var(--navy-light); color: var(--navy); }
   .chip-jtype { background: #e0f2f1; color: #00796b; }
-  /* Journal-type badge left of each paper title: the single MOST selective
-     list the journal belongs to (UTD24 > FT50 > ABS 4/4* > ABS 3 — a UTD24
-     journal is not additionally badged FT50/ABS). Click selects that type. */
+  /* Journal-type badge(s) left of each paper title: the single MOST selective
+     list the journal belongs to (UTD24 > FT50 > ABS 4/4* > ABS 3), except
+     that a journal on BOTH UTD24 and FT50 shows both tags (ABS tags never
+     stack onto a listed journal). Click selects that type. */
   .jtype-badge { display: inline-block; padding: 2px 7px; margin-right: 8px; border-radius: 5px;
     font-family: 'Work Sans', sans-serif; font-size: 10.5px; font-weight: 700; letter-spacing: 0.4px;
     vertical-align: 3px; white-space: nowrap; cursor: pointer; }
@@ -487,7 +488,7 @@
     </div>
     <div class="filters-row filters-row-secondary">
       <div class="filter-group">
-        <label title='Some authors may appear under different name variants. ORCID-based disambiguation is not yet available for all authors. Tip: wrap a term in double quotes for an exact-word match.'>Search Authors &#9432;</label>
+        <label title='Matches from the START of a name: "helet" finds Heletjé but not Bachelet. Wrap a term in double quotes for an exact full-word match. Some authors may appear under different name variants; ORCID-based disambiguation is not yet available for all authors.'>Search Authors &#9432;</label>
         <input id="filterAuthors" name="ms-filter-author" placeholder="Author..." type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('author','filterAuthors');event.preventDefault();}">
         <div id="chipsAuthor" class="chips"></div>
       </div>
@@ -608,7 +609,7 @@
 <footer class="footer">
   <div>Built as a personal project to search papers across several journals of my interest in one place.</div>
   <div>Editors and editorial areas are shown for <em>Management Science</em> papers (2011+), exactly as on <a href="/fun/ms/">the MS-only browser</a>. Other sources contribute their published papers and Articles in Advance. ACM EC papers link to an arXiv/SSRN/open-access PDF where one could be found.</div>
-  <div>The <strong>Journal types</strong> filter covers the <a href="https://jsom.utdallas.edu/the-utd-top-100-business-school-research-rankings/list-of-journals" target="_blank" rel="noopener">UTD24 list</a> and the full <a href="https://www.ft.com/ft50-journals" target="_blank" rel="noopener">FT50 research rank</a> — journals beyond the eight core sources come from this app's own dataset (refreshed daily, checked against the FT's list yearly), downloaded on demand. The small badge left of each title shows the single most selective list its journal belongs to (UTD24 &gt; FT50 &gt; ABS 4/4* &gt; ABS 3) — a broader filter still finds the paper, e.g. an ABS 4/4* search includes every UTD24 journal. ABS ratings follow the Chartered ABS <em>Academic Journal Guide</em> (AJG 2024), as mirrored at <a href="https://journalranking.org/" target="_blank" rel="noopener">journalranking.org</a>; beyond the FT50/UTD24 lists, ABS coverage is deliberately limited to Operations, Supply Chain, Economics and Computer Science-related journals. HBR and MIT Sloan Management Review, the AJG's "top practitioner" journals, are listed under ABS 3, their last numeric grade.</div>
+  <div>The <strong>Journal types</strong> filter covers the <a href="https://jsom.utdallas.edu/the-utd-top-100-business-school-research-rankings/list-of-journals" target="_blank" rel="noopener">UTD24 list</a> and the full <a href="https://www.ft.com/ft50-journals" target="_blank" rel="noopener">FT50 research rank</a> — journals beyond the eight core sources come from this app's own dataset (refreshed daily, checked against the FT's list yearly), downloaded on demand. The small badge left of each title shows the most selective list its journal belongs to (UTD24 &gt; FT50 &gt; ABS 4/4* &gt; ABS 3; a journal on both UTD24 and FT50 shows both tags) — a broader filter still finds the paper, e.g. an ABS 4/4* search includes every UTD24 journal. ABS ratings follow the Chartered ABS <em>Academic Journal Guide</em> (AJG 2024), as mirrored at <a href="https://journalranking.org/" target="_blank" rel="noopener">journalranking.org</a>; beyond the FT50/UTD24 lists, ABS coverage is deliberately limited to Operations, Supply Chain, Economics and Computer Science-related journals. HBR and MIT Sloan Management Review, the AJG's "top practitioner" journals, are listed under ABS 3, their last numeric grade.</div>
   <div>All metadata are publicly available, collected via the <a href="https://www.crossref.org/documentation/retrieve-metadata/rest-api/" target="_blank">Crossref API</a> (with OpenAlex, DBLP and Semantic Scholar assisting for EC PDF links). PNAS section labels come from pnas.org's own topic index where available, and are otherwise approximated from each paper's <a href="https://openalex.org" target="_blank">OpenAlex</a> primary topic.</div>
   <div>Feedback and suggestions are welcome. Any errors are my own. <a href="https://www.stouras.com" target="_blank">Konstantinos I. Stouras</a></div>
 </footer>
@@ -759,14 +760,28 @@ function journalTypeKeys(t) {
   return new Set();
 }
 
-// The single most-selective type a journal belongs to (JOURNAL_TYPES order) —
-// what the small badge left of each paper title shows. null = untyped (PNAS,
-// ACM EC). Clicking the badge selects that journal type in the filter.
+// The single most-selective type a journal belongs to (JOURNAL_TYPES order).
+// null = untyped (PNAS, ACM EC).
 function topJournalType(jk) {
   for (var i = 0; i < JOURNAL_TYPES.length; i++) {
     if (journalTypeKeys(JOURNAL_TYPES[i].key).has(jk)) return JOURNAL_TYPES[i];
   }
   return null;
+}
+
+// The badge(s) left of a paper title: normally just the single MOST selective
+// list, EXCEPT that a journal on both the UTD24 and FT50 lists shows both
+// tags. Only that pair stacks — ABS tags are never added to a listed journal.
+// Clicking a badge selects that journal type in the filter.
+function journalBadges(jk) {
+  var top = topJournalType(jk);
+  if (!top) return [];
+  if (top.key === 'utd24' && FT50_KEYS.has(jk)) {
+    for (var i = 0; i < JOURNAL_TYPES.length; i++) {
+      if (JOURNAL_TYPES[i].key === 'ft50') return [top, JOURNAL_TYPES[i]];
+    }
+  }
+  return [top];
 }
 
 const PER_PAGE = 20;
@@ -2063,8 +2078,8 @@ function updateDropdownOptions() {
       if (search && !textMatch(titleText, search)) return false;
       for (var t of sel.title) { if (!textMatch(titleText, t)) return false; }
       var authText = (p['Authors']||'').toLowerCase();
-      if (searchAuth && !textMatch(authText, searchAuth)) return false;
-      for (var a of sel.author) { if (!textMatch(authText, a)) return false; }
+      if (searchAuth && !authorMatch(authText, searchAuth)) return false;
+      for (var a of sel.author) { if (!authorMatch(authText, a)) return false; }
       for (var lbl in sel.authorIdentity) { var vs = sel.authorIdentity[lbl]; if (!vs.some(function(v){ return authText.includes(v); })) return false; }
       var affText = (p['Affiliations']||'').toLowerCase();
       if (searchAff && !textMatch(affText, searchAff)) return false;
@@ -2220,8 +2235,8 @@ function applyFilters() {
     // Authors: live typed text, substring chips, and ORCID-identity chips (each
     // identity matches any of the person's name variants).
     const authText = (p['Authors']||'').toLowerCase();
-    if (searchAuth && !textMatch(authText, searchAuth)) return false;
-    for (const a of sel.author) { if (!textMatch(authText, a)) return false; }
+    if (searchAuth && !authorMatch(authText, searchAuth)) return false;
+    for (const a of sel.author) { if (!authorMatch(authText, a)) return false; }
     for (const lbl in sel.authorIdentity) { const vs = sel.authorIdentity[lbl]; if (!vs.some(v => authText.includes(v))) return false; }
 
     // Affiliations: live typed text AND all chips must match
@@ -2547,8 +2562,8 @@ function paperCardHTML(p, idx, showAdded) {
     if (added) addedTag = `<span class="tag tag-added">Added ${esc(formatAddedDate(added))}</span>`;
   }
 
-  const jtype = topJournalType(p['JKey'] || '');
-  const badge = jtype ? `<span class="jtype-badge jtype-${escAttr(jtype.key)}" onclick="addJTypeChip('${escAttr(jtype.key)}')" title="${escAttr(jtype.title)} Click to filter by this journal type.">${esc(jtype.badge)}</span>` : '';
+  const badge = journalBadges(p['JKey'] || '').map(t =>
+    `<span class="jtype-badge jtype-${escAttr(t.key)}" onclick="addJTypeChip('${escAttr(t.key)}')" title="${escAttr(t.title)} Click to filter by this journal type.">${esc(t.badge)}</span>`).join('');
 
   return `<div class="paper-card">
     ${typeof acctStarHTML === 'function' ? acctStarHTML(p) : ''}
@@ -2722,6 +2737,25 @@ function textMatch(haystack, query) {
   var phrase = m[1].trim();
   if (!phrase) return true;                         // empty quotes → ignore
   return new RegExp('\\b' + escRegex(phrase) + '\\b').test(haystack);
+}
+
+// Author-name matching. Titles want substring matching ("market" should find
+// "marketing"), but inside NAMES a mid-word hit is noise: "helet" must find
+// "Heletjé van Staden", not "Bachelet" or "Daxhelet". An unquoted term
+// therefore matches only at the START of a name part (start of string, or
+// preceded by a non-letter: space, comma, hyphen, period). Quoted terms keep
+// the exact-word behavior of textMatch. The letter test includes Latin
+// accents, so "van Staden, Heletjé" and hyphenated names behave.
+function authorMatch(haystack, query) {
+  if (!query) return true;
+  if (query.charAt(0) === '"') return textMatch(haystack, query);
+  var idx = 0;
+  while ((idx = haystack.indexOf(query, idx)) !== -1) {
+    var prev = idx === 0 ? '' : haystack.charAt(idx - 1);
+    if (!prev || !/[a-zà-ɏ]/i.test(prev)) return true;
+    idx += 1;
+  }
+  return false;
 }
 // URL destined for an href attribute: http(s) only (third-party metadata must
 // not smuggle javascript:), quotes percent-encoded so the attribute can't break.
