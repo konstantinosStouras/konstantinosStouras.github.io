@@ -110,7 +110,11 @@
   }
 
   function buildForm(s, catalog, meta) {
-    var cat = freshCatalog(); // market/region lists for pickers come from the built-in catalog
+    // market/region pickers come from the catalog BEING EDITED (a session may
+    // carry a custom catalog with different markets/regions); if you change
+    // regions/markets inside the JSON below, the pickers re-sync on save/edit.
+    var cat = (catalog && catalog.markets && catalog.regions) ? catalog : freshCatalog();
+    A.formCatalog = cat;
     var html = '';
 
     html += '<div class="section"><div class="sub-title">Game structure</div><div class="grid3">' +
@@ -180,7 +184,7 @@
   }
 
   function addShockRow(sh) {
-    var cat = freshCatalog();
+    var cat = A.formCatalog || freshCatalog();
     var row = U.el('div', { class: 'flex-row', style: 'margin:6px 0; gap:6px;' });
     function regionSel(cls, val, anyLabel) {
       return '<select class="input input-sm ' + cls + '" style="width:auto;">' +
@@ -218,7 +222,7 @@
     s.showStandings = $('#f-standings').checked;
     s.eventsOn = $('#f-events').checked;
     s.tariffBase = {};
-    Object.keys(freshCatalog().regions).forEach(function (rid) { s.tariffBase[rid] = nv('tariff-' + rid, 0); });
+    Object.keys((A.formCatalog || freshCatalog()).regions).forEach(function (rid) { s.tariffBase[rid] = nv('tariff-' + rid, 0); });
     s.tariffShocks = U.$all('#shock-rows > div').map(function (row) {
       return {
         round: Number(row.querySelector('.sh-round').value) || 1,
@@ -237,10 +241,64 @@
     var catalog;
     try { catalog = JSON.parse($('#f-catalog').value); }
     catch (e) { return { err: 'Catalog JSON is invalid: ' + e.message }; }
-    if (!catalog.components || !catalog.markets || !catalog.regions) return { err: 'Catalog must keep its components / markets / regions structure.' };
-    if (!s.markets.length) return { err: 'Open at least one market.' };
+    var catErr = validateCatalog(catalog);
+    if (catErr) return { err: 'Catalog: ' + catErr };
+    // reconcile against the FINAL catalog (the JSON may have been edited):
+    // open markets must exist there; tariff base covers exactly its regions
+    var mktIds = catalog.markets.map(function (m) { return m.id; });
+    s.markets = s.markets.filter(function (mid) { return mktIds.indexOf(mid) !== -1; });
+    if (!s.markets.length) return { err: 'Open at least one market that exists in the catalog.' };
+    var tb = {};
+    Object.keys(catalog.regions).forEach(function (rid) { tb[rid] = s.tariffBase[rid] != null ? s.tariffBase[rid] : 0; });
+    s.tariffBase = tb;
+    s.tariffShocks = s.tariffShocks.filter(function (sh) { return catalog.regions[sh.importer]; });
     var code = ($('#f-code').value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
     return { settings: s, catalog: catalog, name: $('#f-name').value.trim(), code: code };
+  }
+
+  // A broken pasted catalog must never reach a session doc — the game would
+  // crash at first preview/resolve. Checks structure, required numeric fields,
+  // and that every supplier/market region id actually exists.
+  function validateCatalog(cat) {
+    function bad(msg) { return msg; }
+    if (!cat || typeof cat !== 'object') return bad('not an object.');
+    if (!cat.regions || !Object.keys(cat.regions).length) return bad('needs a non-empty "regions" map.');
+    var p = cat.product;
+    if (!p) return bad('needs a "product".');
+    var pk = ['weightKg', 'assemblyCost', 'assemblyCO2', 'assemblyCO2Renewable', 'co2Baseline'];
+    for (var i = 0; i < pk.length; i++) if (typeof p[pk[i]] !== 'number') return bad('product.' + pk[i] + ' must be a number.');
+    if (!cat.modes || !cat.modes.surface || !cat.modes.air) return bad('needs "modes" with surface and air.');
+    var mk = ['costPerKgMm', 'co2PerKgMm'];
+    for (var m2 = 0; m2 < mk.length; m2++) {
+      if (typeof cat.modes.surface[mk[m2]] !== 'number' || typeof cat.modes.air[mk[m2]] !== 'number')
+        return bad('modes.surface/air need numeric ' + mk[m2] + '.');
+    }
+    if (!cat.distances || typeof cat.distances !== 'object') return bad('needs a "distances" map.');
+    if (typeof cat.sameRegionDist !== 'number') return bad('needs numeric "sameRegionDist".');
+    if (!Array.isArray(cat.components) || !cat.components.length) return bad('needs a non-empty "components" array.');
+    for (var c = 0; c < cat.components.length; c++) {
+      var comp = cat.components[c];
+      if (!comp.id || typeof comp.qty !== 'number' || typeof comp.weightKg !== 'number')
+        return bad('component ' + (comp.id || c) + ' needs id, numeric qty and weightKg.');
+      if (!Array.isArray(comp.suppliers) || !comp.suppliers.length)
+        return bad('component ' + comp.id + ' needs at least one supplier.');
+      for (var s2 = 0; s2 < comp.suppliers.length; s2++) {
+        var sup = comp.suppliers[s2];
+        if (!sup.id || typeof sup.cost !== 'number' || typeof sup.co2 !== 'number' ||
+            typeof sup.esg !== 'number' || typeof sup.capacity !== 'number')
+          return bad('supplier ' + (sup.id || '?') + ' needs id and numeric cost/co2/esg/capacity.');
+        if (!cat.regions[sup.region]) return bad('supplier ' + sup.id + ' region "' + sup.region + '" is not in regions.');
+      }
+    }
+    if (!Array.isArray(cat.markets) || !cat.markets.length) return bad('needs a non-empty "markets" array.');
+    for (var m3 = 0; m3 < cat.markets.length; m3++) {
+      var mkt = cat.markets[m3];
+      if (!mkt.id || typeof mkt.size !== 'number' || typeof mkt.refPrice !== 'number' ||
+          typeof mkt.priceBeta !== 'number' || typeof mkt.greenBeta !== 'number' || typeof mkt.brandBeta !== 'number')
+        return bad('market ' + (mkt.id || m3) + ' needs id and numeric size/refPrice/priceBeta/greenBeta/brandBeta.');
+      if (!cat.regions[mkt.region]) return bad('market ' + mkt.id + ' region "' + mkt.region + '" is not in regions.');
+    }
+    return null;
   }
 
   $('#btn-save-session').addEventListener('click', function () {
@@ -267,7 +325,7 @@
           '<div class="launch-link">' + esc(studentLink(code)) + '</div>' +
           '<div class="flex-row"><button class="btn-ghost btn-sm" id="btn-copylink">Copy student link</button>' +
           '<button class="btn btn-sm" id="btn-goto-ctrl">Open control room →</button></div></div>';
-        $('#btn-copylink').addEventListener('click', function () { navigator.clipboard.writeText(studentLink(code)); });
+        $('#btn-copylink').addEventListener('click', function () { U.copyText(studentLink(code)); });
         $('#btn-goto-ctrl').addEventListener('click', function () { gotoTab('control'); selectCtrl(id); });
         refreshSessions();
       });
@@ -350,7 +408,7 @@
     }
     var bCopy = U.el('button', { class: 'btn-ghost btn-sm', text: 'Copy link' });
     bCopy.addEventListener('click', function () {
-      navigator.clipboard.writeText(studentLink(s.code));
+      U.copyText(studentLink(s.code));
       bCopy.textContent = 'Copied ✓'; setTimeout(function () { bCopy.textContent = 'Copy link'; }, 1500);
     });
     act.appendChild(bCopy);
@@ -398,6 +456,11 @@
     var sess = A.ctrl.session, box = $('#ctrl-root');
     if (!sess) { box.innerHTML = '<p class="muted" style="margin-top:16px;">Select a session above.</p>'; return; }
     var firms = A.ctrl.firms, s = sess.settings;
+    // the control room re-renders on every live snapshot — preserve the
+    // admin's in-progress broadcast text, bot-profile choice and focus
+    var keepBc = $('#c-bc') ? $('#c-bc').value : '';
+    var keepProfile = $('#c-botprofile') ? $('#c-botprofile').value : '';
+    var keepFocus = document.activeElement && document.activeElement.id === 'c-bc';
     var html = '';
 
     // --- header / phase actions
@@ -490,6 +553,13 @@
     }
 
     box.innerHTML = html;
+    if ($('#c-bc') && keepBc) $('#c-bc').value = keepBc;
+    if ($('#c-botprofile') && keepProfile) $('#c-botprofile').value = keepProfile;
+    if (keepFocus && $('#c-bc')) {
+      var bc = $('#c-bc');
+      bc.focus();
+      bc.setSelectionRange(bc.value.length, bc.value.length);
+    }
 
     // wire up
     if ($('#c-start')) $('#c-start').addEventListener('click', function () {
@@ -508,7 +578,9 @@
       var name = BOT_NAMES.find(function (n) { return used.indexOf(n) === -1; }) || ('Bot ' + (firms.length + 1));
       var profile = $('#c-botprofile').value || null;
       var hubs = Object.keys(sess.catalog.regions);
-      var hub = profile === 'green' ? 'europe' : hubs[firms.length % hubs.length];
+      // custom catalogs may not have a 'europe' region — never hardcode a hub id
+      var hub = (profile === 'green' && sess.catalog.regions.europe) ? 'europe'
+              : hubs[firms.length % hubs.length];
       var fid = 'bot' + Math.random().toString(36).slice(2, 8);
       ST.setFirm(sess.id, fid, { id: fid, name: name, hub: hub, members: [], isBot: true,
                                  botProfile: profile, createdAt: Date.now() });

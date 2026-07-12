@@ -17,6 +17,7 @@
     myFirmId: null,
     draft: null, draftRound: null, submitted: false, saveTimer: null,
     decideRoundRendered: null, resultsRound: null,
+    decisionUnsub: null, lastWriteStamp: null, lastRemoteStamp: null,
     activeTab: 'decide', unsubs: []
   };
 
@@ -71,6 +72,7 @@
   function attach(sessionId) {
     S.sessionId = sessionId;
     S.unsubs.forEach(function (u) { u(); }); S.unsubs = [];
+    if (S.decisionUnsub) { S.decisionUnsub(); S.decisionUnsub = null; }
     S.unsubs.push(ST.watchSession(sessionId, function (doc) {
       var prev = S.session;
       S.session = doc;
@@ -178,6 +180,7 @@
       id: fid, name: name, hub: $('#in-hub').value,
       members: members.length ? members.map(function (n) { return { uid: S.uid, name: n }; })
                               : [{ uid: S.uid, name: 'Founder' }],
+      memberUids: [S.uid],
       isBot: false, createdAt: Date.now()
     };
     ST.setFirm(S.sessionId, fid, firm).then(function () { rememberFirm(fid); route(); });
@@ -185,9 +188,11 @@
   function joinFirm(f) {
     var name = $('#in-joinname').value.trim();
     if (!name) { alert('Enter your name first (left of the Join button).'); return; }
-    var members = (f.members || []).slice();
-    members.push({ uid: S.uid, name: name });
-    ST.setFirm(S.sessionId, f.id, { members: members }).then(function () { rememberFirm(f.id); route(); });
+    // atomic append in the store (arrayUnion / re-read inside the write), so
+    // two teammates joining at the same moment never drop a membership
+    ST.addFirmMember(S.sessionId, f.id, { uid: S.uid, name: name })
+      .then(function () { rememberFirm(f.id); route(); })
+      .catch(function (e) { alert('Could not join: ' + e.message); });
   }
 
   /* ---- lobby ------------------------------------------------------------------- */
@@ -303,7 +308,37 @@
       var d = E.sanitizeDecision(sess, mine.id, sess.round, saved);
       S.draft = d;
       S.submitted = !!(saved && saved.submitted);
+      S.lastRemoteStamp = saved ? saved.savedAt : null;
       buildDecideForm(mine, st, d);
+      watchTeamDecision(mine, sess.round);
+    });
+  }
+
+  // Teammate sync: teams may edit from several devices. We live-watch the
+  // firm's decision doc for the open round; when a save arrives that isn't our
+  // own echo, the newest save wins VISIBLY — the form reloads from it (with a
+  // note) instead of a stale tab silently clobbering a submitted plan later.
+  function watchTeamDecision(mine, round) {
+    if (S.decisionUnsub) S.decisionUnsub();
+    S.decisionUnsub = ST.watchDecision(S.sessionId, mine.id, round, function (doc) {
+      if (!doc || !S.session || S.session.phase !== 'decisions') return;
+      if (S.session.round !== round || doc.round !== round) return;
+      if (doc.savedAt == null || doc.savedAt === S.lastRemoteStamp) return;
+      if (doc.savedAt === S.lastWriteStamp) { S.lastRemoteStamp = doc.savedAt; return; } // our own write
+      S.lastRemoteStamp = doc.savedAt;
+      clearTimeout(S.saveTimer); // never flush a stale draft over the teammate's newer save
+      S.draft = E.sanitizeDecision(S.session, mine.id, round, doc);
+      S.submitted = !!doc.submitted;
+      S.decideRoundRendered = null;
+      renderDecide(mine, stateOf(mine.id));
+      if (S.activeTab === 'decide') {
+        var note = U.el('div', { class: 'banner banner-info', id: 'team-sync-note' },
+          '↺ Updated with your teammate\'s latest ' + (doc.submitted ? 'submitted decisions.' : 'draft.'));
+        var old = $('#team-sync-note'); if (old) old.remove();
+        var tp = $('#tp-decide');
+        if (tp.firstChild) tp.insertBefore(note, tp.firstChild);
+        setTimeout(function () { if (note.parentNode) note.remove(); }, 6000);
+      }
     });
   }
 
@@ -353,11 +388,7 @@
 
     // --- production ---
     var kitsNow = E.kitsAvailable(sess, st);
-    var stArr = E.clone(st);
-    (stArr.pipeline || []).forEach(function (e2) {
-      if (e2.eta <= sess.round) stArr.comp[e2.compId] = (stArr.comp[e2.compId] || 0) + e2.qty;
-    });
-    var kitsWithArrivals = E.kitsAvailable(sess, stArr);
+    var kitsWithArrivals = E.kitsAvailable(sess, E.withArrivals(sess, st, sess.round));
     html += '<div class="card"><div class="card-title">2 · Produce</div>' +
       '<p class="card-subtitle">Assembly at your ' + esc(cat.regions[mine.hub].name) + ' plant costs $' +
       cat.product.assemblyCost + '/unit (' + (st.renewable ? cat.product.assemblyCO2Renewable : cat.product.assemblyCO2) +
@@ -479,6 +510,8 @@
     clearTimeout(S.saveTimer);
     S.saveTimer = setTimeout(function () {
       if (!S.draft || S.session.phase !== 'decisions' || S.draft.round !== S.session.round) return;
+      S.draft.savedAt = Date.now();
+      S.lastWriteStamp = S.draft.savedAt;
       ST.saveDecision(S.sessionId, mine.id, S.draft.round, S.draft).then(function () {
         var fl = $('#save-flash');
         if (fl) { fl.classList.add('show'); setTimeout(function () { fl.classList.remove('show'); }, 1200); }
@@ -533,6 +566,8 @@
     var d = flag && S.draft ? S.draft : collectDecision(mine);
     d.submitted = flag;
     d.submittedAt = Date.now();
+    d.savedAt = Date.now();
+    S.lastWriteStamp = d.savedAt;
     S.draft = d;
     ST.saveDecision(S.sessionId, mine.id, S.session.round, d).then(paintSubmitState);
   }

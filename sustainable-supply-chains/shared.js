@@ -158,6 +158,25 @@ window.SSCUI = (function () {
     return out;
   }
 
+  // Clipboard with a fallback for browsers/contexts where the async Clipboard
+  // API is unavailable (older Safari, some embedded webviews).
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).catch(function () { return legacyCopy(text); });
+    }
+    return Promise.resolve(legacyCopy(text));
+  }
+  function legacyCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed'; ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select(); ta.setSelectionRange(0, text.length);
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+
   function download(filename, text, type) {
     var blob = new Blob([text], { type: type || 'text/plain' });
     var url = URL.createObjectURL(blob);
@@ -169,7 +188,7 @@ window.SSCUI = (function () {
 
   return { $: $, $all: $all, esc: esc, el: el,
            fmtInt: fmtInt, fmtMoney: fmtMoney, fmtPct: fmtPct, fmtCO2: fmtCO2,
-           esgClass: esgClass, posneg: posneg, themeInit: themeInit,
+           esgClass: esgClass, posneg: posneg, themeInit: themeInit, copyText: copyText,
            lineChart: lineChart, barChart: barChart, legendHtml: legendHtml,
            palette: PALETTE, download: download };
 })();

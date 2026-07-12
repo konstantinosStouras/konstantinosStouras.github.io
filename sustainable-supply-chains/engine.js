@@ -106,20 +106,26 @@
   }
 
   /* ---- tariffs --------------------------------------------------------------
-     Base rate per importing region + scheduled shocks (a shock replaces the
-     rate for its importer/from pair from its round onward; 'from' omitted =
-     all origins). No tariff on domestic (same-region) flows. Returns a
-     fraction (0.35 = 35%). */
+     Base rate per importing region + scheduled shocks. A shock REPLACES the
+     rate for its importer/from pair from its round onward (so a shock can cut
+     a tariff too — trade deals happen). Among applicable shocks, the latest
+     round wins; on a tie, an origin-specific shock beats an 'anywhere' one.
+     'from' omitted = all origins. No tariff on domestic (same-region) flows.
+     Returns a fraction (0.35 = 35%). */
   function tariffRate(session, importer, from, round) {
     if (importer === from) return 0;
     var s = session.settings;
     var rate = num((s.tariffBase || {})[importer], 0);
     var shocks = s.tariffShocks || [];
+    var best = null;
     for (var i = 0; i < shocks.length; i++) {
       var sh = shocks[i];
-      if (round >= num(sh.round, 1) && sh.importer === importer &&
-          (!sh.from || sh.from === from)) rate = Math.max(rate, num(sh.rate, 0));
+      if (round < num(sh.round, 1) || sh.importer !== importer) continue;
+      if (sh.from && sh.from !== from) continue;
+      if (!best || num(sh.round, 1) > num(best.round, 1) ||
+          (num(sh.round, 1) === num(best.round, 1) && sh.from && !best.from)) best = sh;
     }
+    if (best) rate = num(best.rate, 0);
     return rate / 100;
   }
 
@@ -318,6 +324,17 @@
     return out;
   }
 
+  // State with this round's due arrivals landed — what production can really
+  // draw on when the round resolves. Used by the preview and the bots so both
+  // match resolveRound exactly.
+  function withArrivals(session, state, round) {
+    var st = clone(state);
+    (st.pipeline || []).forEach(function (e) {
+      if (e.eta <= round) st.comp[e.compId] = (st.comp[e.compId] || 0) + e.qty;
+    });
+    return st;
+  }
+
   /* ---- preview (student UI): what this decision costs before submitting ----- */
   function previewDecision(session, state, decision, round) {
     var s = session.settings, cat = session.catalog;
@@ -325,7 +342,7 @@
     var invest = (decision.buyRenewable && !state.renewable ? num(s.renewableCapex, 0) : 0) +
       (decision.auditSuppliers || []).filter(function (id) { return state.audits.indexOf(id) === -1; }).length * num(s.auditCost, 0) +
       decision.offsetTons * num(s.offsetPricePerTon, 25);
-    var availKits = kitsAvailable(session, state);
+    var availKits = kitsAvailable(session, withArrivals(session, state, round));
     var produce = Math.min(decision.production, num(s.factoryCapacity, 500), availKits);
     var prodCost = produce * cat.product.assemblyCost;
     return {
@@ -661,12 +678,8 @@
     });
     // production plan counts on-hand kits PLUS arrivals due this round (the
     // pipeline ETAs are known); the engine caps at true availability anyway
-    var stWithArrivals = clone(state);
-    stWithArrivals.pipeline.forEach(function (e) {
-      if (e.eta <= round) stWithArrivals.comp[e.compId] = (stWithArrivals.comp[e.compId] || 0) + e.qty;
-    });
     d.production = Math.round(Math.min(num(s.factoryCapacity, 500), forecast * 1.05,
-                                       kitsAvailable(session, stWithArrivals)));
+                                       kitsAvailable(session, withArrivals(session, state, round))));
     mkts.forEach(function (m) {
       var f = profile === 'green' ? 1.04 : 0.97;
       d.prices[m.id] = Math.round(m.refPrice * f * (0.98 + 0.04 * rand([session.code, 'botp', firm.id, m.id, round])));
@@ -686,7 +699,8 @@
     findComponent: findComponent, findSupplier: findSupplier, findMarket: findMarket,
     activeMarkets: activeMarkets, effectiveEsg: effectiveEsg,
     initFirmState: initFirmState, emptyDecision: emptyDecision, sanitizeDecision: sanitizeDecision,
-    kitsAvailable: kitsAvailable, computeOrders: computeOrders, allocationRatios: allocationRatios,
+    kitsAvailable: kitsAvailable, withArrivals: withArrivals,
+    computeOrders: computeOrders, allocationRatios: allocationRatios,
     previewDecision: previewDecision,
     resolveRound: resolveRound, bullwhipRatio: bullwhipRatio, leaderboard: leaderboard,
     botDecision: botDecision

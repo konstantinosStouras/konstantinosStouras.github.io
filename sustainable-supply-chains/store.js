@@ -143,6 +143,18 @@ window.SSCStore = (function () {
       dbWrite(db);
       return Promise.resolve();
     },
+    // Atomic join: re-reads inside the write so two teammates joining close
+    // together never drop a membership (read-modify-write happens here, not
+    // against a stale UI snapshot).
+    addFirmMember: function (id, firmId, member) {
+      var db = dbRead(), slot = sessSlot(db, id);
+      var f = slot.firms[firmId];
+      if (!f) return Promise.reject(new Error('firm gone'));
+      f.members = (f.members || []).concat([member]);
+      f.memberUids = (f.memberUids || []).concat(f.memberUids && f.memberUids.indexOf(member.uid) !== -1 ? [] : [member.uid]);
+      dbWrite(db);
+      return Promise.resolve();
+    },
     watchFirms: function (id, cb) {
       return addWatcher(function () { return objToArr((dbRead().sessions[id] || {}).firms); }, cb);
     },
@@ -156,6 +168,12 @@ window.SSCStore = (function () {
     getDecision: function (id, firmId, round) {
       var db = dbRead();
       return Promise.resolve(((db.sessions[id] || {}).decisions || {})[firmId + '_' + round] || null);
+    },
+    // live view of ONE firm-round decision (teammate sync on shared drafts)
+    watchDecision: function (id, firmId, round, cb) {
+      return addWatcher(function () {
+        return ((dbRead().sessions[id] || {}).decisions || {})[firmId + '_' + round] || null;
+      }, cb);
     },
     watchDecisions: function (id, cb) {
       return addWatcher(function () {
@@ -219,13 +237,24 @@ window.SSCStore = (function () {
     return readyP;
   }
   // Keep an existing session (the admin's email/password session) — only sign
-  // in anonymously when there is none. Same guard as search-v2.
+  // in anonymously when there is none. Crucially, WAIT for the SDK to finish
+  // restoring any persisted session first: checking auth.currentUser too early
+  // would see null and signInAnonymously would REPLACE the instructor's
+  // persisted admin session (e.g. when they open the student link in the same
+  // browser mid-class). authStateReady() exists since SDK 10.7.
   function ensureAuth() {
-    if (auth.currentUser) return Promise.resolve(auth.currentUser);
-    return sdk.auth.signInAnonymously(auth).then(function (c) { return c.user; });
+    var settled = auth.authStateReady ? auth.authStateReady() : Promise.resolve();
+    return settled.then(function () {
+      if (auth.currentUser) return auth.currentUser;
+      return sdk.auth.signInAnonymously(auth).then(function (c) { return c.user; });
+    });
   }
   function sessRef(id) { return sdk.fs.doc(db, PATHS.sessions, id); }
   function subCol(id, name) { return sdk.fs.collection(db, PATHS.sessions, id, name); }
+  // code → sessionId lookup docs, so students resolve a join code with two
+  // point reads instead of listing the whole sessions collection (which the
+  // rules therefore no longer need to allow for students).
+  function codeRef(code) { return sdk.fs.doc(db, PATHS.codes || 'sscSessionCodes', code); }
 
   function watchDoc(ref, cb) {
     return sdk.fs.onSnapshot(ref, function (snap) {
@@ -262,27 +291,49 @@ window.SSCStore = (function () {
         return out;
       });
     },
-    // Unconstrained read + client-side match (query constraints have a known
-    // WebChannel quirk; the sessions collection is small).
+    // Two point reads via the code-lookup doc: no collection listing needed,
+    // so students can't enumerate other sessions. A stale lookup (code later
+    // changed) fails the code-match verification and returns null.
     getSessionByCode: function (code) {
       code = String(code || '').trim().toUpperCase();
-      return fb.listSessions().then(function (list) {
-        return list.find(function (s) { return s.code === code && !s.archived; }) || null;
+      if (!code) return Promise.resolve(null);
+      return init().then(ensureAuth).then(function () {
+        return sdk.fs.getDoc(codeRef(code));
+      }).then(function (snap) {
+        var sid = snap.exists() ? (snap.data() || {}).sessionId : null;
+        if (!sid) return null;
+        return sdk.fs.getDoc(sessRef(sid)).then(function (s2) {
+          if (!s2.exists()) return null;
+          var doc = Object.assign({ id: s2.id }, s2.data());
+          return doc.code === code && !doc.archived ? doc : null;
+        });
       });
     },
     createSession: function (data) {
       return init().then(function () {
         return sdk.fs.addDoc(sdk.fs.collection(db, PATHS.sessions), data);
       }).then(function (ref) {
-        return sdk.fs.setDoc(ref, { id: ref.id }, { merge: true }).then(function () { return ref.id; });
+        return sdk.fs.setDoc(ref, { id: ref.id }, { merge: true })
+          .then(function () {
+            return data.code ? sdk.fs.setDoc(codeRef(data.code), { sessionId: ref.id }) : null;
+          })
+          .then(function () { return ref.id; });
       });
     },
     updateSession: function (id, patch) {
-      return init().then(function () { return sdk.fs.setDoc(sessRef(id), patch, { merge: true }); });
+      return init().then(function () { return sdk.fs.setDoc(sessRef(id), patch, { merge: true }); })
+        .then(function () {
+          return patch && patch.code ? sdk.fs.setDoc(codeRef(patch.code), { sessionId: id }) : null;
+        });
     },
     deleteSession: function (id) {
-      // delete subcollection docs first (Firestore doesn't cascade)
+      // delete subcollection docs + the code lookup first (Firestore doesn't cascade)
       return init().then(function () {
+        return sdk.fs.getDoc(sessRef(id)).then(function (snap) {
+          var code = snap.exists() ? (snap.data() || {}).code : null;
+          return code ? sdk.fs.deleteDoc(codeRef(code)).catch(function () {}) : null;
+        });
+      }).then(function () {
         var subs = ['firms', 'decisions', 'results', 'markets'];
         return Promise.all(subs.map(function (s2) {
           return sdk.fs.getDocs(subCol(id, s2)).then(function (qs) {
@@ -307,6 +358,15 @@ window.SSCStore = (function () {
         return sdk.fs.deleteDoc(sdk.fs.doc(db, PATHS.sessions, id, 'firms', firmId));
       });
     },
+    // arrayUnion: concurrent joins from different devices never drop a member
+    addFirmMember: function (id, firmId, member) {
+      return init().then(ensureAuth).then(function () {
+        return sdk.fs.updateDoc(sdk.fs.doc(db, PATHS.sessions, id, 'firms', firmId), {
+          members: sdk.fs.arrayUnion(member),
+          memberUids: sdk.fs.arrayUnion(member.uid)
+        });
+      });
+    },
     watchFirms: function (id, cb) {
       return deferWatch(function () { return watchCol(subCol(id, 'firms'), cb, 'createdAt'); });
     },
@@ -319,6 +379,11 @@ window.SSCStore = (function () {
       return init().then(ensureAuth).then(function () {
         return sdk.fs.getDoc(sdk.fs.doc(db, PATHS.sessions, id, 'decisions', firmId + '_' + round));
       }).then(function (snap) { return snap.exists() ? snap.data() : null; });
+    },
+    watchDecision: function (id, firmId, round, cb) {
+      return deferWatch(function () {
+        return watchDoc(sdk.fs.doc(db, PATHS.sessions, id, 'decisions', firmId + '_' + round), cb);
+      });
     },
     watchDecisions: function (id, cb) {
       return deferWatch(function () { return watchCol(subCol(id, 'decisions'), cb); });
