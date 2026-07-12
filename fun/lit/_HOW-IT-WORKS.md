@@ -304,9 +304,9 @@ CI; the daily Action just folds the committed files in.
    conservative matcher as the pre-print search), since no by-DOI lookup can
    reach them and Semantic Scholar rate-limits CI runners. An arXiv/SSRN find
    becomes both the paper's PDF tag and its "Pre-print (Open Access)" link.
-   SSRN links site-wide are rewritten at render time to SSRN's direct-PDF
-   download endpoint, so one click opens the PDF rather than the abstract
-   page.
+   Pre-print links site-wide are rewritten at render time to the PDF itself
+   (SSRN's direct-download endpoint; arXiv `/abs/` → `/pdf/`), so one click
+   opens the PDF rather than a landing page.
 
 ## Updating the data
 
