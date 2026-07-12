@@ -147,9 +147,63 @@ try {
   if (!xlsxOk) fail('xlsx build failed in browser');
   await shot(admin, '7-admin-data.png');
 
+  /* ---- async practice session: self-paced vs optimal (Nash) bots ------------------ */
+  await admin.click('.tabs [data-tab="sessions"]');
+  await admin.fill('#f-code', 'ASYNCGAME');
+  await admin.fill('#f-rounds', '2');
+  await admin.evaluate(() => {
+    const el = document.querySelector('#f-async');
+    el.checked = true;
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await admin.click('#btn-save-session');
+  await admin.waitForSelector('#btn-goto-ctrl', { timeout: 5000 }).catch(() => fail('async session was not created'));
+
+  const stu2 = await ctx.newPage(); watch(stu2, 'async-student');
+  await stu2.goto(BASE + '/?code=ASYNCGAME', { waitUntil: 'load' });
+  await stu2.waitForSelector('#s-firm.active', { timeout: 8000 }).catch(() => fail('async: firm setup did not open'));
+  await stu2.fill('#in-firmname', 'Async Crew');
+  await stu2.selectOption('#in-hub', 'easia');
+  await stu2.click('#btn-create-firm');
+  // straight into the game — no lobby, End-round button present
+  await stu2.waitForSelector('#btn-endround', { timeout: 9000 }).catch(() => fail('async: game did not start immediately'));
+  await stu2.fill('#qty-battery-bat_szn', '300');
+  await stu2.fill('#qty-frame-frm_tai', '300');
+  await stu2.fill('#qty-drive-drv_szn', '300');
+  await stu2.fill('#qty-electronics-ele_szn', '300');
+  await stu2.fill('#f-production', '300');
+  await stu2.click('#btn-endround');
+  await stu2.waitForSelector('#btn-nextround-res', { timeout: 8000 }).catch(() => fail('async: round 1 did not resolve locally'));
+  const standTxt = await stu2.evaluate(() => {
+    document.querySelector('#g-tabs [data-tab="standings"]').click();
+    return document.querySelector('#tp-standings').textContent;
+  });
+  if (!/Equilibrium Cycles|OptiChain/.test(standTxt)) fail('async: optimal bots missing from standings');
+  await stu2.click('#g-tabs [data-tab="results"]');
+  await stu2.click('#btn-nextround-res');
+  await stu2.waitForSelector('#btn-endround', { timeout: 8000 }).catch(() => fail('async: round 2 did not open'));
+  await stu2.click('#btn-endround'); // final round → debrief
+  await stu2.waitForFunction(() => /Final standings/.test(document.querySelector('#tp-debrief').textContent), null, { timeout: 8000 })
+    .catch(() => fail('async: debrief did not render after the final round'));
+  await shot(stu2, '8-async-debrief.png');
+
+  // instructor monitor shows the finished firm
+  await admin.click('.tabs [data-tab="control"]');
+  await admin.evaluate(() => {
+    const sel = document.querySelector('#ctrl-select');
+    const opt = Array.from(sel.options).find(o => /ASYNCGAME/.test(o.textContent));
+    sel.value = opt.value;
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await admin.waitForFunction(() => /Async Crew/.test(document.querySelector('#ctrl-root').textContent) &&
+                                    /finished/.test(document.querySelector('#ctrl-root').textContent),
+                              null, { timeout: 8000 })
+    .catch(() => fail('async: instructor monitor does not show the finished firm'));
+  await shot(admin, '9-async-monitor.png');
+
   const benign = problems.filter(p => !/net::ERR|favicon|fonts\.g/i.test(p));
   if (benign.length) fail('console/page errors:\n' + benign.join('\n'));
-  console.log('SMOKE OK — full demo game played end-to-end (4 rounds, 2 bots + 1 human firm).');
+  console.log('SMOKE OK — live game (4 rounds, teammate sync) + async practice vs Nash bots (2 rounds to debrief).');
 } finally {
   await browser.close();
   server.close();

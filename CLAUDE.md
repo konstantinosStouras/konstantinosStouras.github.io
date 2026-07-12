@@ -352,10 +352,18 @@ e-bike firms sourcing components worldwide) with an instructor panel at
 `/sustainable-supply-chains/admin/` in the ideasearchlab admin look. Vanilla
 HTML/JS, no build step. Designed to teach: bullwhip (lead times + hidden demand
 patterns + pro-rata supplier rationing + service-loyalty brand; measured per
-firm), logistics (sea/air cost–CO2–lead tradeoffs), competition (per-market
-logit on price/green/brand), tariffs (base rates + scheduled shocks), sourcing,
-and CO2/ESG sourcing (embodied CO2, supplier ESG + audits + scandals, carbon
-tax, offsets — net vs gross).
+firm over the steady middle of the game), logistics (sea/air cost–CO2–lead
+tradeoffs), competition (per-market logit on price/green/brand), tariffs (base
+rates + scheduled shocks), sourcing, and CO2/ESG sourcing (embodied CO2,
+supplier ESG + audits + scandals, carbon tax, offsets — net vs gross).
+Two play modes: **live** (instructor-paced shared market) and **async
+practice** (`settings.asyncMode`): each firm plays its own private self-paced
+game vs `asyncBots` optimal opponents — Nash-equilibrium logit pricing +
+base-stock ordering under rational expectations (`nashDecisions` in engine.js).
+The async instance lives in the `async/{firmId}` subcollection and is resolved
+in the student's browser; the admin control room becomes a progress monitor.
+'nash' is also a bot profile for live sessions; the debrief excludes nash bots
+from the order-amplification chart (their variability is anticipation).
 
 Key structure (see its README.md for the full model):
 - `engine.js` — pure deterministic engine (seeded per session code + round;

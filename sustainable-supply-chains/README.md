@@ -21,7 +21,44 @@ keep moving under their feet.
 | **(e) Sourcing decisions** | Per-component supplier mix across 6 world regions: cost / CO2 / ESG / shared capacity / lead-time tradeoffs, hub location choice, disruption events. |
 | **(f) CO2 & ESG sourcing** | Components carry embodied CO2; suppliers carry ESG ratings (unaudited low-ESG sourcing risks scandals); transport mode drives freight CO2; carbon tax on gross emissions; offsets reduce **net** only. The green score feeds consumer demand and half the final score. |
 
-## How a class session runs
+## Two play modes
+
+**Live (default)** — the instructor paces the rounds and all firms compete in
+one shared market (everything below).
+
+**Async practice** — toggle "Async practice" when creating the session: every
+firm that joins plays its **own private game against optimal bot opponents**,
+entirely at its own pace (join anytime, end each round yourself, results are
+immediate). Perfect as homework before the live class game. The instructor's
+control room becomes a live progress monitor (round reached, profit, green
+score, bullwhip, last activity), and the Excel export collects every firm's
+trajectory.
+
+The **optimal bots** play, each period, the rational-equilibrium strategy of
+the stage game (an exact dynamic Nash equilibrium of the full game is
+intractable; this is the standard rational decomposition, computed fresh every
+round):
+
+- **Nash pricing** — the multinomial-logit Bertrand equilibrium: best-response
+  iteration on the markup condition `p = c/(1−τ) + 1/(b(1−s))` given every
+  firm's current green score, brand and landed costs.
+- **Optimal ordering** — order-up-to (base-stock) at the newsvendor critical
+  fractile over the true replenishment lead time, under rational expectations
+  of the demand process (they know the step/season schedule and anticipate it;
+  the random walk is forecast at its current level; noise draws are never
+  peeked at), with order smoothing, fair-share expectations at rationed
+  suppliers, air expediting only when the margin covers the premium, and
+  end-of-horizon tapering (they never strand inventory).
+- **Rational sourcing & investment** — cheapest landed cost including
+  scheduled tariff shocks; renewable/audits only when the payback is there;
+  never offsets (no tax relief, tiny score weight).
+
+They also exist in live sessions: add a "Bot: optimal (Nash)" firm from the
+control room. In the debrief, the bots are excluded from the order-amplification
+chart — they pre-position for demand shifts they rationally anticipate, so
+their order variability is anticipation, not bullwhip.
+
+## How a class session runs (live mode)
 
 1. **Admin panel → Sessions**: create a session (rounds, markets, demand
    pattern, tariffs & shocks, carbon tax, scoring weights; the full

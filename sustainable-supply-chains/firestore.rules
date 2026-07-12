@@ -65,6 +65,17 @@ service cloud.firestore {
         allow delete: if isAdmin();
       }
 
+      // async practice mode: each firm's private game vs the optimal bots,
+      // resolved in the students' own browser. Private to the firm + admin.
+      match /async/{firmId} {
+        allow get: if isAdmin() ||
+          (signedIn() && (resource == null || request.auth.uid in firmMemberUids(firmId)));
+        allow list: if isAdmin();
+        allow create, update: if isAdmin() ||
+          (signedIn() && request.auth.uid in firmMemberUids(firmId));
+        allow delete: if isAdmin();
+      }
+
       match /results/{resId} {
         allow read: if signedIn();
         allow write: if isAdmin();

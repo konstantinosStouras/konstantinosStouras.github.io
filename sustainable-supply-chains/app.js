@@ -18,8 +18,103 @@
     draft: null, draftRound: null, submitted: false, saveTimer: null,
     decideRoundRendered: null, resultsRound: null,
     decisionUnsub: null, lastWriteStamp: null, lastRemoteStamp: null,
+    instance: null, asyncUnsub: null, creatingInstance: false, resolvingAsync: false,
     activeTab: 'decide', unsubs: []
   };
+
+  /* ---- async practice mode ----------------------------------------------------
+     In async sessions every firm plays its OWN private game against optimal
+     (Nash-equilibrium) bots, at its own pace: the round/phase live in the
+     firm's instance doc, not the session doc. V() is the "virtual session"
+     the game screens render — identical to the real session in live mode,
+     round/phase overridden from the instance in async mode. */
+  var ASYNC_BOT_DEFS = [
+    { name: 'Equilibrium Cycles', hub: 'easia' },
+    { name: 'OptiChain Corp', hub: 'europe' },
+    { name: 'Rational Rides', hub: 'namerica' },
+    { name: 'MaxProfit Mobility', hub: 'seasia' },
+    { name: 'Clairvoyant Cycles', hub: 'latam' }
+  ];
+  function isAsync() { return !!(S.session && S.session.settings && S.session.settings.asyncMode); }
+  function V() {
+    if (!S.session) return null;
+    if (!isAsync()) return S.session;
+    var inst = S.instance;
+    return Object.assign({}, S.session,
+      { round: inst ? inst.round : 1, phase: inst ? inst.phase : 'decisions' });
+  }
+  function gameFirms() {
+    if (!isAsync()) return S.firms;
+    var mine = myFirm();
+    if (!mine) return [];
+    return [mine].concat(S.instance ? S.instance.botFirms : []);
+  }
+  function makeInstance(mine) {
+    var sess = S.session;
+    var n = Math.max(1, Math.min(5, Math.round(Number(sess.settings.asyncBots) || 3)));
+    var regionIds = Object.keys(sess.catalog.regions);
+    var bots = ASYNC_BOT_DEFS.slice(0, n).map(function (b, i) {
+      return { id: mine.id + '-b' + (i + 1), name: b.name,
+               hub: sess.catalog.regions[b.hub] ? b.hub : regionIds[i % regionIds.length],
+               isBot: true, botProfile: 'nash', createdAt: i };
+    });
+    var states = {};
+    [mine].concat(bots).forEach(function (f) { states[f.id] = E.initFirmState(sess, f); });
+    return { firmId: mine.id, round: 1, phase: 'decisions', botFirms: bots, states: states,
+             results: [], markets: [], createdAt: Date.now(), updatedAt: Date.now() };
+  }
+  // Resolve the firm's own round locally: bots decide via the Nash engine,
+  // the same deterministic resolveRound runs, and the instance is saved so
+  // teammates (and the instructor's monitor) see it live.
+  function endAsyncRound(mine) {
+    if (S.resolvingAsync) return;
+    var inst = S.instance, sess = V();
+    if (!inst || inst.phase !== 'decisions') return;
+    S.resolvingAsync = true;
+    try {
+      var round = inst.round;
+      var firms = gameFirms();
+      var decisions = {};
+      decisions[mine.id] = S.draft || collectDecision(mine);
+      var botIds = inst.botFirms.map(function (b) { return b.id; });
+      var nash = E.nashDecisions(sess, firms, inst.states, round, botIds);
+      botIds.forEach(function (id) { decisions[id] = nash[id]; });
+      var out = E.resolveRound(sess, firms, inst.states, decisions, round);
+      out.market.news = out.news;
+      var resDocs = Object.keys(out.results).map(function (fid) {
+        var r = out.results[fid];
+        if (fid !== mine.id) { r = E.clone(r); delete r.endState; delete r.orderLines; }
+        return r;
+      });
+      inst.results = inst.results.concat(resDocs);
+      inst.markets = inst.markets.concat([out.market]);
+      inst.states = out.states;
+      inst.phase = round >= sess.settings.rounds ? 'final' : 'resolved';
+      inst.updatedAt = Date.now();
+      S.instance = inst;
+      var d = decisions[mine.id];
+      d.submitted = true; d.submittedAt = Date.now(); d.savedAt = Date.now();
+      S.lastWriteStamp = d.savedAt;
+      ST.saveAsync(S.sessionId, mine.id, inst);
+      ST.saveDecision(S.sessionId, mine.id, round, d);
+      S.resolvingAsync = false;
+      S.resultsRound = round;
+      setTab(inst.phase === 'final' ? 'debrief' : 'results');
+    } catch (e) {
+      S.resolvingAsync = false;
+      alert('Could not resolve the round: ' + e.message);
+    }
+  }
+  function startNextAsyncRound() {
+    var inst = S.instance;
+    if (!inst || inst.phase !== 'resolved') return;
+    inst.round += 1;
+    inst.phase = 'decisions';
+    inst.updatedAt = Date.now();
+    S.instance = inst;
+    ST.saveAsync(S.sessionId, S.myFirmId, inst);
+    setTab('decide');
+  }
 
   /* ---- boot ----------------------------------------------------------------- */
   U.themeInit($('#btn-theme'));
@@ -73,6 +168,9 @@
     S.sessionId = sessionId;
     S.unsubs.forEach(function (u) { u(); }); S.unsubs = [];
     if (S.decisionUnsub) { S.decisionUnsub(); S.decisionUnsub = null; }
+    if (S.asyncUnsub) { S.asyncUnsub(); S.asyncUnsub = null; }
+    S.asyncWatching = false;
+    S.instance = null;
     S.unsubs.push(ST.watchSession(sessionId, function (doc) {
       var prev = S.session;
       S.session = doc;
@@ -114,6 +212,32 @@
     var mine = myFirm();
     S.myFirmId = mine ? mine.id : null;
     if (!mine) { renderFirmSetup(); show('s-firm'); return; }
+    if (isAsync()) {
+      // self-paced: no lobby, no instructor pacing — straight into the game.
+      // NOTE: demo-mode watchers fire SYNCHRONOUSLY during subscription, so
+      // guard with a flag set beforehand and defer the re-route, or route()
+      // would re-enter itself and recurse.
+      if (!S.asyncWatching) {
+        S.asyncWatching = true;
+        S.asyncUnsub = ST.watchAsync(S.sessionId, mine.id, function (doc) {
+          if (doc) {
+            S.instance = doc; S.creatingInstance = false;
+            setTimeout(route, 0);
+            return;
+          }
+          if (!S.instance && !S.creatingInstance) {
+            S.creatingInstance = true;
+            S.instance = makeInstance(mine);
+            ST.saveAsync(S.sessionId, mine.id, S.instance).then(function () { S.creatingInstance = false; });
+            setTimeout(route, 0);
+          }
+        });
+      }
+      if (!S.instance) return; // waiting for the first snapshot
+      show('s-game');
+      renderGame();
+      return;
+    }
     if (sess.phase === 'lobby') { renderLobby(mine); show('s-lobby'); return; }
     show('s-game');
     renderGame();
@@ -209,10 +333,16 @@
 
   /* ---- state reconstruction ------------------------------------------------------ */
   function resultsFor(firmId) {
-    return S.results.filter(function (r) { return r.firmId === firmId; })
+    var src = isAsync() ? (S.instance ? S.instance.results : []) : S.results;
+    return src.filter(function (r) { return r.firmId === firmId; })
       .sort(function (a, b) { return a.round - b.round; });
   }
   function stateOf(firmId) {
+    if (isAsync()) {
+      if (S.instance && S.instance.states[firmId]) return S.instance.states[firmId];
+      var f0 = gameFirms().find(function (x) { return x.id === firmId; });
+      return f0 ? E.initFirmState(S.session, f0) : null;
+    }
     var rs = resultsFor(firmId);
     if (rs.length) return rs[rs.length - 1].endState;
     var f = S.firms.find(function (x) { return x.id === firmId; });
@@ -220,16 +350,17 @@
   }
   function statesAll() {
     var out = {};
-    S.firms.forEach(function (f) { out[f.id] = stateOf(f.id); });
+    gameFirms().forEach(function (f) { out[f.id] = stateOf(f.id); });
     return out;
   }
   function marketDoc(round) {
-    return S.markets.find(function (m) { return m.round === round; }) || null;
+    var src = isAsync() ? (S.instance ? S.instance.markets : []) : S.markets;
+    return src.find(function (m) { return m.round === round; }) || null;
   }
 
   /* ---- game shell ------------------------------------------------------------------ */
   function renderGame(tabOnly) {
-    var sess = S.session, mine = myFirm();
+    var sess = V(), mine = myFirm();
     if (!mine) { showGone('Your firm was removed from this session by the instructor.', 'Firm removed'); return; }
     var st = stateOf(mine.id);
     $('#g-title').textContent = mine.name;
@@ -238,10 +369,14 @@
 
     var phaseChip =
       sess.phase === 'decisions' ? '<span class="pill pill-green">Round ' + sess.round + ' — decisions open</span>' :
-      sess.phase === 'resolved' ? '<span class="pill pill-amber">Round ' + sess.round + ' resolved — waiting for the instructor</span>' :
+      sess.phase === 'resolved' ? (isAsync()
+        ? '<span class="pill pill-amber">Round ' + sess.round + ' resolved — start the next when ready</span>'
+        : '<span class="pill pill-amber">Round ' + sess.round + ' resolved — waiting for the instructor</span>') :
       '<span class="pill pill-blue">Game over — final results</span>';
     $('#g-chips').innerHTML = '<span class="pill pill-plain">Round ' + Math.min(sess.round, sess.settings.rounds) +
       ' of ' + sess.settings.rounds + '</span>' + phaseChip +
+      (isAsync() ? '<span class="pill pill-blue" title="Self-paced practice: you play at your own pace against computer firms that price at the Nash equilibrium and run an optimal ordering policy.">vs ' +
+        (S.instance ? S.instance.botFirms.length : '') + ' optimal bots</span>' : '') +
       '<span class="pill pill-plain">Hub: ' + esc(sess.catalog.regions[mine.hub].name) + '</span>';
 
     var kitsNow = E.kitsAvailable(sess, st);
@@ -289,13 +424,19 @@
 
   /* ---- DECIDE tab -------------------------------------------------------------------- */
   function renderDecide(mine, st) {
-    var sess = S.session, box = $('#tp-decide');
+    var sess = V(), box = $('#tp-decide');
     if (sess.phase !== 'decisions') {
       box.innerHTML = '<div class="card"><h2>' +
         (sess.phase === 'final' ? 'The game is over' : 'Round ' + sess.round + ' has been resolved') +
         '</h2><p class="muted">' + (sess.phase === 'final' ? 'See the Debrief tab for the final standings.' :
-        'Check the <b>Results</b> tab to see how you did. The instructor will open the next round shortly.') +
-        '</p></div>';
+        (isAsync() ? 'Check the <b>Results</b> tab, then start the next round whenever your team is ready.' :
+         'Check the <b>Results</b> tab to see how you did. The instructor will open the next round shortly.')) +
+        '</p>' +
+        (isAsync() && sess.phase === 'resolved'
+          ? '<button class="btn" id="btn-nextround">▶ Start round ' + (sess.round + 1) + ' of ' + sess.settings.rounds + '</button>'
+          : '') +
+        '</div>';
+      if ($('#btn-nextround')) $('#btn-nextround').addEventListener('click', startNextAsyncRound);
       S.decideRoundRendered = null;
       return;
     }
@@ -321,13 +462,14 @@
   function watchTeamDecision(mine, round) {
     if (S.decisionUnsub) S.decisionUnsub();
     S.decisionUnsub = ST.watchDecision(S.sessionId, mine.id, round, function (doc) {
-      if (!doc || !S.session || S.session.phase !== 'decisions') return;
-      if (S.session.round !== round || doc.round !== round) return;
+      var vs = V();
+      if (!doc || !vs || vs.phase !== 'decisions') return;
+      if (vs.round !== round || doc.round !== round) return;
       if (doc.savedAt == null || doc.savedAt === S.lastRemoteStamp) return;
       if (doc.savedAt === S.lastWriteStamp) { S.lastRemoteStamp = doc.savedAt; return; } // our own write
       S.lastRemoteStamp = doc.savedAt;
       clearTimeout(S.saveTimer); // never flush a stale draft over the teammate's newer save
-      S.draft = E.sanitizeDecision(S.session, mine.id, round, doc);
+      S.draft = E.sanitizeDecision(V(), mine.id, round, doc);
       S.submitted = !!doc.submitted;
       S.decideRoundRendered = null;
       renderDecide(mine, stateOf(mine.id));
@@ -343,7 +485,7 @@
   }
 
   function buildDecideForm(mine, st, d) {
-    var sess = S.session, cat = sess.catalog, s = sess.settings, box = $('#tp-decide');
+    var sess = V(), cat = sess.catalog, s = sess.settings, box = $('#tp-decide');
     var news = E.newsFor(sess, sess.round);
     var html = '';
     if (news.length) {
@@ -442,13 +584,20 @@
     });
     html += '</div></div></div>';
 
-    // --- preview + submit ---
-    html += '<div class="preview-box" id="plan-preview"></div>' +
-      '<div class="flex-row"><button class="btn" id="btn-submit">Submit decisions for round ' + sess.round + '</button>' +
-      '<button class="btn-ghost" id="btn-reopen" style="display:none;">Reopen &amp; edit</button>' +
-      '<span class="ok-flash" id="save-flash">draft saved</span></div>' +
-      '<p class="tiny muted">Your draft autosaves. Decisions lock in when the instructor resolves the round — ' +
-      'anything not submitted is taken as-is (an empty form means: order nothing, produce nothing, keep reference prices).</p>';
+    // --- preview + submit / end-round ---
+    html += '<div class="preview-box" id="plan-preview"></div>';
+    if (isAsync()) {
+      html += '<div class="flex-row"><button class="btn" id="btn-endround">⚙ End round ' + sess.round + ' — resolve &amp; see results</button>' +
+        '<span class="ok-flash" id="save-flash">draft saved</span></div>' +
+        '<p class="tiny muted">Self-paced practice: ending the round resolves it immediately against your ' +
+        (S.instance ? S.instance.botFirms.length : '') + ' computer rivals — they price at the Nash equilibrium and run an optimal ordering policy. Your draft autosaves, so a teammate on another device sees it too.</p>';
+    } else {
+      html += '<div class="flex-row"><button class="btn" id="btn-submit">Submit decisions for round ' + sess.round + '</button>' +
+        '<button class="btn-ghost" id="btn-reopen" style="display:none;">Reopen &amp; edit</button>' +
+        '<span class="ok-flash" id="save-flash">draft saved</span></div>' +
+        '<p class="tiny muted">Your draft autosaves. Decisions lock in when the instructor resolves the round — ' +
+        'anything not submitted is taken as-is (an empty form means: order nothing, produce nothing, keep reference prices).</p>';
+    }
 
     box.innerHTML = html;
 
@@ -457,15 +606,19 @@
       inp.addEventListener('input', onDecideChange);
       inp.addEventListener('change', onDecideChange);
     });
-    $('#btn-submit').addEventListener('click', function () { submitDecision(true); });
-    $('#btn-reopen').addEventListener('click', function () { submitDecision(false); });
+    if ($('#btn-submit')) $('#btn-submit').addEventListener('click', function () { submitDecision(true); });
+    if ($('#btn-reopen')) $('#btn-reopen').addEventListener('click', function () { submitDecision(false); });
+    if ($('#btn-endround')) $('#btn-endround').addEventListener('click', function () {
+      S.draft = collectDecision(mine);
+      endAsyncRound(mine);
+    });
     paintLeads(mine);
     updatePreview(mine, st);
     paintSubmitState();
   }
 
   function paintLeads(mine) {
-    var sess = S.session;
+    var sess = V();
     sess.catalog.components.forEach(function (c) {
       c.suppliers.forEach(function (sup) {
         var modeEl = $('#mode-' + c.id + '-' + sup.id);
@@ -478,7 +631,7 @@
   }
 
   function collectDecision(mine) {
-    var sess = S.session;
+    var sess = V();
     var d = E.emptyDecision(sess, mine.id, sess.round);
     sess.catalog.components.forEach(function (c) {
       c.suppliers.forEach(function (sup) {
@@ -509,7 +662,8 @@
     updatePreview(mine, st);
     clearTimeout(S.saveTimer);
     S.saveTimer = setTimeout(function () {
-      if (!S.draft || S.session.phase !== 'decisions' || S.draft.round !== S.session.round) return;
+      var vs = V();
+      if (!S.draft || !vs || vs.phase !== 'decisions' || S.draft.round !== vs.round) return;
       S.draft.savedAt = Date.now();
       S.lastWriteStamp = S.draft.savedAt;
       ST.saveDecision(S.sessionId, mine.id, S.draft.round, S.draft).then(function () {
@@ -522,7 +676,7 @@
   function updatePreview(mine, st) {
     var box = $('#plan-preview');
     if (!box) return;
-    var sess = S.session;
+    var sess = V();
     var d = S.draft || E.emptyDecision(sess, mine.id, sess.round);
     var pv = E.previewDecision(sess, st, d, sess.round);
     var kitsOrdered = Math.round(pv.orders.kitsOrdered);
@@ -555,13 +709,13 @@
     var existing = $('#submitted-banner');
     if (S.submitted && !existing) {
       var b = U.el('div', { class: 'banner banner-good', id: 'submitted-banner' },
-        '✔ Decisions submitted for round ' + S.session.round + '. You can still reopen and edit until the instructor resolves the round.');
+        '✔ Decisions submitted for round ' + V().round + '. You can still reopen and edit until the instructor resolves the round.');
       $('#tp-decide').insertBefore(b, $('#tp-decide').firstChild);
     } else if (!S.submitted && existing) existing.remove();
   }
 
   function submitDecision(flag) {
-    var mine = myFirm(); if (!mine) return;
+    var mine = myFirm(); if (!mine || isAsync()) return;
     S.submitted = flag;
     var d = flag && S.draft ? S.draft : collectDecision(mine);
     d.submitted = flag;
@@ -569,12 +723,12 @@
     d.savedAt = Date.now();
     S.lastWriteStamp = d.savedAt;
     S.draft = d;
-    ST.saveDecision(S.sessionId, mine.id, S.session.round, d).then(paintSubmitState);
+    ST.saveDecision(S.sessionId, mine.id, V().round, d).then(paintSubmitState);
   }
 
   /* ---- SUPPLY CHAIN tab -------------------------------------------------------------- */
   function renderChain(mine, st) {
-    var sess = S.session, cat = sess.catalog;
+    var sess = V(), cat = sess.catalog;
     var html = '<div class="columns">';
     html += '<div><div class="card"><div class="card-title">Inventory at your hub</div><div class="tbl-scroll"><table class="tbl"><thead><tr><th>Item</th><th class="r">Units on hand</th></tr></thead><tbody>';
     cat.components.forEach(function (c) {
@@ -629,7 +783,7 @@
     S.resultsRound = sel;
     var r = rs.find(function (x) { return x.round === sel; });
     var mkt = marketDoc(sel);
-    var sess = S.session, s = sess.settings;
+    var sess = V(), s = sess.settings;
 
     var html = '<div class="flex-row" style="margin-bottom:10px;"><span class="sub-title" style="margin:0;">Round</span>';
     rs.forEach(function (x) {
@@ -638,6 +792,10 @@
     });
     html += '</div>';
 
+    if (isAsync() && sess.phase === 'resolved' && sel === sess.round) {
+      html += '<div class="banner banner-good row-between"><span>Round ' + sel + ' resolved — take your time here, then continue.</span>' +
+        '<button class="btn btn-sm" id="btn-nextround-res">▶ Start round ' + (sess.round + 1) + '</button></div>';
+    }
     if (r.scandal) html += '<div class="banner banner-bad">🔎 ' + esc(r.scandal) + '</div>';
     if (r.cut > 0) html += '<div class="banner banner-warn">✂ Suppliers were oversubscribed: ' + fmtI(r.cut) +
       ' ordered component units were cut pro-rata (you were not charged for them). Everyone ordering more than they need makes this worse — classic rationing.</div>';
@@ -705,6 +863,7 @@
     U.$all('#tp-results [data-r]').forEach(function (b) {
       b.addEventListener('click', function () { S.resultsRound = Number(b.dataset.r); renderResults(mine); });
     });
+    if ($('#btn-nextround-res')) $('#btn-nextround-res').addEventListener('click', startNextAsyncRound);
   }
   function plRow(label, v, boldPos) {
     return '<tr><td>' + label + '</td><td class="r ' + (v < 0 ? '' : 'pos') + '">' + fmtM(v) + '</td></tr>';
@@ -713,12 +872,13 @@
 
   /* ---- NEWS tab ------------------------------------------------------------------------- */
   function renderNews() {
-    var sess = S.session, box = $('#tp-news');
+    var sess = V(), box = $('#tp-news');
     var items = [];
     if (sess.phase === 'decisions') {
       E.newsFor(sess, sess.round).forEach(function (n) { items.push({ round: sess.round, text: n.text, now: true }); });
     }
-    S.markets.slice().sort(function (a, b) { return b.round - a.round; }).forEach(function (m) {
+    (isAsync() ? (S.instance ? S.instance.markets : []) : S.markets).slice()
+      .sort(function (a, b) { return b.round - a.round; }).forEach(function (m) {
       (m.news || []).forEach(function (n) { items.push({ round: m.round, text: n.text }); });
     });
     (sess.broadcasts || []).slice().reverse().forEach(function (b) {
@@ -736,20 +896,21 @@
 
   /* ---- STANDINGS tab ---------------------------------------------------------------------- */
   function renderStandings() {
-    var sess = S.session, box = $('#tp-standings');
+    var sess = V(), box = $('#tp-standings');
     if (!sess.settings.showStandings && sess.phase !== 'final') {
       box.innerHTML = '<div class="card"><p class="muted">The instructor is keeping the leaderboard hidden until the end. 🙈</p></div>';
       return;
     }
-    if (!S.results.length) {
+    var anyResults = isAsync() ? !!(S.instance && S.instance.results.length) : !!S.results.length;
+    if (!anyResults) {
       box.innerHTML = '<div class="card"><p class="muted">Standings appear after the first round is resolved.</p></div>';
       return;
     }
     box.innerHTML = leaderboardHtml(false);
   }
   function leaderboardHtml(final) {
-    var sess = S.session;
-    var lb = E.leaderboard(sess, S.firms, statesAll());
+    var sess = V();
+    var lb = E.leaderboard(sess, gameFirms(), statesAll());
     var w = sess.settings.scoreWeightProfit;
     var html = '<div class="card"><div class="card-title">' + (final ? 'Final standings' : 'Standings so far') + '</div>' +
       '<p class="card-subtitle">Score = ' + w + '% profit rank + ' + (100 - w) + '% sustainability rank (green score).</p>' +
@@ -772,7 +933,7 @@
 
   /* ---- DEBRIEF tab ---------------------------------------------------------------------------- */
   function renderDebrief(mine) {
-    var sess = S.session, box = $('#tp-debrief');
+    var sess = V(), box = $('#tp-debrief');
     if (sess.phase !== 'final') { box.innerHTML = '<div class="card"><p class="muted">The debrief unlocks when the game ends.</p></div>'; return; }
     var st = stateOf(mine.id);
     var hist = st.hist || [];
@@ -790,10 +951,16 @@
         { name: 'Consumer demand', values: hist.map(function (h) { return h.demand; }) },
         { name: 'Your component orders', color: '#1f5f8b', values: hist.map(function (h) { return h.ordered; }) }
       ] }) + U.legendHtml([{ name: 'Consumer demand' }, { name: 'Your component orders', color: '#1f5f8b' }]) + '</div>' +
-      '<div class="chart-box"><h4>Order amplification across the class</h4>' +
-      U.barChart({ items: lb.map(function (r) { return { label: r.name, value: r.bullwhip || 0, color: r.firmId === mine.id ? '#c8562a' : '#1f5f8b' }; }),
+      '<div class="chart-box"><h4>Order amplification' + (isAsync() ? '' : ' across the class') + '</h4>' +
+      U.barChart({ items: lb.filter(function (r) {
+                     var f2 = gameFirms().find(function (x) { return x.id === r.firmId; });
+                     return !(f2 && f2.isBot && f2.botProfile === 'nash');
+                   }).map(function (r) { return { label: r.name, value: r.bullwhip || 0, color: r.firmId === mine.id ? '#c8562a' : '#1f5f8b' }; }),
                    fmt: function (v) { return '×' + v; } }) +
-      '<p class="tiny muted">Ratio of order variability to demand variability (CV²). Lee, Padmanabhan &amp; Whang\'s four causes were all in this game: demand-signal processing, order batching, price/cost changes (tariffs), and rationing &amp; shortage gaming.</p></div></div>';
+      '<p class="tiny muted">Ratio of order variability to demand variability (CV², measured over the steady middle of the game). Lee, Padmanabhan &amp; Whang\'s four causes were all in this game: demand-signal processing, order batching, price/cost changes (tariffs), and rationing &amp; shortage gaming.' +
+      (gameFirms().some(function (f2) { return f2.isBot && f2.botProfile === 'nash'; })
+        ? ' The optimal bots are excluded from this chart: they pre-position inventory for demand shifts they rationally anticipate, so their order variability is anticipation, not amplification.' : '') +
+      '</p></div></div>';
 
     html += '<div class="card"><div class="card-title">Profit vs planet</div>' +
       '<p class="card-subtitle">Two rankings, one supply chain. Compare where firms landed on each — and what their sourcing map looked like.</p>' +

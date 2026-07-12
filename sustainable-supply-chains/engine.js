@@ -585,10 +585,15 @@
 
   /* ---- bullwhip metric ---------------------------------------------------------
      CV²(component orders) / CV²(consumer demand seen). >1 = the firm amplified
-     demand variability upstream — the bullwhip effect, measured per firm. */
+     demand variability upstream — the bullwhip effect, measured per firm.
+     Measured over the STEADY MIDDLE of the game: the first round (rational
+     pipeline start-up) and the last two (rational end-of-horizon wind-down)
+     are excluded once there is enough data, so the metric captures true
+     amplification rather than finite-horizon effects. */
   function bullwhipRatio(state) {
     var h = (state && state.hist) || [];
     if (h.length < 3) return null;
+    if (h.length >= 6) h = h.slice(1, h.length - 2);
     var d = h.map(function (r) { return r.demand; });
     var o = h.map(function (r) { return r.ordered; });
     function cv2(a) {
@@ -692,6 +697,273 @@
     return d;
   }
 
+  /* =====================================================================
+     "Optimal" (Nash-equilibrium) bots — self-paced practice opponents.
+
+     Exact dynamic equilibrium of this game is intractable, so the bots play
+     the standard rational decomposition, recomputed every period:
+
+     · PRICING — the stage-game Nash equilibrium of logit price competition:
+       iterate best responses p_f = c_f/(1−τ) + 1/(b·(1−s_f))  (multinomial-
+       logit markup with an outside good; b = priceBeta/refPrice, τ = the
+       ad-valorem export-tariff share of price), given every firm's current
+       green score and brand. The fixed point is a contraction — a few dozen
+       iterations converge.
+     · ORDERING — the optimal order-up-to (base-stock) policy at the
+       newsvendor critical fractile over the actual replenishment lead time,
+       under RATIONAL EXPECTATIONS of the demand process: bots know the
+       demand pattern (step/season schedules are public structure; the random
+       walk is forecast at its current level) but never the noise draws.
+     · SOURCING — cheapest landed cost (price + freight + tariffs, including
+       already-scheduled tariff shocks), re-optimized every round; air is
+       used only to expedite a genuine projected stockout when the margin
+       covers the premium.
+     · INVESTMENT — renewable/audits only when the payback is there;
+       offsets never (they don't reduce the carbon tax base or gross CO2).
+     ===================================================================== */
+
+  // Expected demand factor for a FUTURE round, from the perspective of
+  // `nowRound` — pattern structure is known, noise is not; the walk is a
+  // martingale so its forecast is the current level.
+  function expectedDemandFactor(session, futureRound, nowRound) {
+    var p = session.settings.demandPattern || 'stable';
+    if (p === 'walk') return demandFactor(session, Math.min(futureRound, nowRound));
+    return demandFactor(session, futureRound);
+  }
+  function expectedDemand(session, marketId, futureRound, nowRound) {
+    var m = findMarket(session.catalog, marketId);
+    if (!m) return 0;
+    return m.size * (num(session.settings.demandScale, 1) || 1) *
+           expectedDemandFactor(session, futureRound, nowRound);
+  }
+
+  // Acklam's rational approximation of the standard normal inverse CDF —
+  // plenty for safety-stock z-values.
+  function invNorm(p) {
+    p = clamp(p, 0.001, 0.999);
+    var a = [-39.6968302866538, 220.946098424521, -275.928510446969, 138.357751867269, -30.6647980661472, 2.50662827745924];
+    var b = [-54.4760987982241, 161.585836858041, -155.698979859887, 66.8013118877197, -13.2806815528857];
+    var c = [-0.00778489400243029, -0.322396458041136, -2.40075827716184, -2.54973253934373, 4.37466414146497, 2.93816398269878];
+    var d = [0.00778469570904146, 0.32246712907004, 2.445134137143, 3.75440866190742];
+    var q, r;
+    if (p < 0.02425) {
+      q = Math.sqrt(-2 * Math.log(p));
+      return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) /
+             ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+    }
+    if (p > 0.97575) {
+      q = Math.sqrt(-2 * Math.log(1 - p));
+      return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) /
+             ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+    }
+    q = p - 0.5; r = q * q;
+    return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q /
+           (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
+  }
+
+  // Cheapest landed sourcing plan per component for a hub at a given round:
+  // suppliers ranked by unit landed cost (price + surface freight + import
+  // tariff), so scheduled tariff shocks re-rank suppliers automatically.
+  function cheapestKit(session, hub, round) {
+    var cat = session.catalog, plan = {}, kitCost = 0;
+    cat.components.forEach(function (comp) {
+      var ranked = comp.suppliers.map(function (sup) {
+        var fr = freightPerUnit(cat, comp.weightKg, sup.region, hub, 'surface');
+        var landed = sup.cost * (1 + tariffRate(session, hub, sup.region, round)) + fr.cost;
+        return { sup: sup, landed: landed, lead: leadTime(session, sup.region, hub, 'surface', round) };
+      }).sort(function (x, y) { return x.landed - y.landed; });
+      plan[comp.id] = ranked;
+      kitCost += ranked[0].landed * comp.qty;
+    });
+    return { plan: plan, kitCost: kitCost };
+  }
+
+  /* Stage-game Nash prices per market for a set of participants
+     [{firmId, hub, green, brand}]. Returns {prices:{fid:{mid:p}}, shares:{fid:{mid:s}}}. */
+  function nashPrices(session, parts, round) {
+    var cat = session.catalog, gs = num(session.settings.greenSensitivity, 1);
+    var mkts = activeMarkets(session);
+    var kits = {};
+    parts.forEach(function (pt) { if (!kits[pt.hub]) kits[pt.hub] = cheapestKit(session, pt.hub, round).kitCost; });
+    var prices = {}, shares = {};
+    parts.forEach(function (pt) { prices[pt.firmId] = {}; shares[pt.firmId] = {}; });
+    mkts.forEach(function (m) {
+      var b = m.priceBeta / m.refPrice;
+      var econ = parts.map(function (pt) {
+        var fr = freightPerUnit(cat, cat.product.weightKg, pt.hub, m.region, 'surface');
+        return { pt: pt,
+                 c0: kits[pt.hub] + cat.product.assemblyCost + fr.cost,
+                 tau: 0.6 * tariffRate(session, m.region, pt.hub, round),
+                 p: m.refPrice };
+      });
+      for (var it = 0; it < 40; it++) {
+        var utils = econ.map(function (e) {
+          var u = m.priceBeta * (m.refPrice - e.p) / m.refPrice +
+                  m.greenBeta * gs * (e.pt.green - 50) / 50 +
+                  m.brandBeta * (e.pt.brand - 50) / 50;
+          return Math.exp(clamp(u, -8, 8));
+        });
+        var denom = 1 + sum(utils);
+        econ.forEach(function (e, i) {
+          var s = utils[i] / denom;
+          var target = e.c0 / (1 - e.tau) + 1 / (b * (1 - s) * (1 - e.tau));
+          e.p = clamp(0.5 * e.p + 0.5 * target, m.refPrice * 0.3, m.refPrice * 3);
+          e.s = s;
+        });
+      }
+      econ.forEach(function (e) {
+        prices[e.pt.firmId][m.id] = Math.round(e.p);
+        shares[e.pt.firmId][m.id] = e.s;
+        e.pt['margin_' + m.id] = e.p * (1 - e.tau) - e.c0;
+      });
+    });
+    return { prices: prices, shares: shares };
+  }
+
+  /* Equilibrium decisions for the firms listed in nashIds (computed jointly —
+     the pricing equilibrium involves everyone, students included, at their
+     observed green/brand states). */
+  function nashDecisions(session, firms, states, round, nashIds) {
+    var s = session.settings, cat = session.catalog;
+    var mkts = activeMarkets(session);
+    var parts = firms.map(function (f) {
+      var st = states[f.id];
+      return { firmId: f.id, hub: st.hub || f.hub, green: st ? st.green : 50, brand: st ? st.brand : 50 };
+    });
+    var eq = nashPrices(session, parts, round);
+    var noiseSd = num(s.demandNoise, 0) / Math.sqrt(3) + (s.demandPattern === 'walk' ? 0.07 : 0);
+    var out = {};
+    nashIds.forEach(function (fid) {
+      var f = firms.find(function (x) { return x.id === fid; });
+      var st = states[fid];
+      var d = emptyDecision(session, fid, round);
+      d.prices = {};
+      mkts.forEach(function (m) { d.prices[m.id] = eq.prices[fid][m.id]; });
+
+      // Expected own units per round. The equilibrium share is only the
+      // PRIOR (round 1): rivals may not play equilibrium (students rarely
+      // do), so once the bot has observed its own realized demand it
+      // forecasts from that — rescaled by the known demand-pattern factor,
+      // which is how it still anticipates a step or season it hasn't felt
+      // yet. Stockout rounds (observed demand 0 with no stock) carry no
+      // information and are ignored.
+      var eqNow = 0;
+      mkts.forEach(function (m) { eqNow += eq.shares[fid][m.id] * expectedDemand(session, m.id, round, round); });
+      var hobs = (st.hist || []).filter(function (r3) { return r3.demand > 0; });
+      var baseU, obsRound;
+      if (!hobs.length) { baseU = eqNow; obsRound = round; }
+      else {
+        var lastH = hobs[hobs.length - 1], prevH = hobs.length > 1 ? hobs[hobs.length - 2] : lastH;
+        baseU = (2 * lastH.demand + prevH.demand) / 3;
+        obsRound = lastH.round;
+      }
+      var obsFactor = Math.max(0.2, expectedDemandFactor(session, obsRound, round));
+      // effective demand is capped by what the factory can actually build —
+      // buying components you can never assemble is money on a shelf
+      var capUnits = num(s.factoryCapacity, 500);
+      function U(r2) {
+        if (r2 > num(s.rounds, 8)) return 0; // nothing sells after the horizon
+        return Math.min(capUnits, baseU * expectedDemandFactor(session, r2, round) / obsFactor);
+      }
+      // margin & critical fractile → safety factor
+      var margin = 0, wsum = 0;
+      var pt = parts.find(function (x) { return x.firmId === fid; });
+      mkts.forEach(function (m) {
+        var w = eq.shares[fid][m.id];
+        margin += (pt['margin_' + m.id] || 0) * w; wsum += w;
+      });
+      margin = Math.max(50, wsum > 0 ? margin / wsum : 100);
+      var cf = margin / (margin + num(s.holdingComp, 3) * 2);
+      var z = clamp(invNorm(cf), 0, 2.5);
+
+      var kit = cheapestKit(session, st.hub, round);
+      var R = num(s.rounds, 8);
+      var nFirms = Math.max(1, firms.length);
+      cat.components.forEach(function (comp) {
+        var ranked = kit.plan[comp.id];
+        var primary = ranked[0];
+        var L = primary.lead;
+        // base-stock target over lead + review, clipped to the finite horizon
+        var eDemand = 0;
+        for (var i = 0; i <= L; i++) eDemand += U(round + i);
+        var sigma = z * noiseSd * Math.sqrt(L + 1) * U(round + 1);
+        var target = (eDemand + sigma) * comp.qty;
+        // never hold more than the game can still sell (end-game tapering)
+        var restNeed = 0;
+        for (var r4 = round; r4 <= R; r4++) restNeed += U(r4);
+        var position = (st.comp[comp.id] || 0);
+        (st.pipeline || []).forEach(function (e) { if (e.compId === comp.id) position += e.qty; });
+        target = Math.min(target, restNeed * comp.qty * 1.05);
+
+        // 1) rational expediting FIRST: if what lands by NEXT round can't
+        //    cover next round's expected sales (surface is too slow) and the
+        //    margin clears the air premium, air-freight the gap now
+        if (L >= 2 && round + 1 <= R) {
+          var byNext = (st.comp[comp.id] || 0);
+          (st.pipeline || []).forEach(function (e) { if (e.compId === comp.id && e.eta <= round + 1) byNext += e.qty; });
+          var gap = Math.round(U(round + 1) * comp.qty - byNext);
+          var airFr = freightPerUnit(cat, comp.weightKg, primary.sup.region, st.hub, 'air').cost;
+          if (gap > 0 && margin > 2 * airFr) {
+            var airQty = Math.min(gap, Math.ceil(primary.sup.capacity / nFirms));
+            d.orders[comp.id][primary.sup.id] = { qty: airQty, mode: 'air' };
+            position += airQty;
+          }
+        }
+        // 2) then order-up-to by sea, cheapest landed first — with ORDER
+        //    SMOOTHING: order next round's expected consumption plus a
+        //    fraction of the remaining position gap, instead of gulping the
+        //    whole gap at once. Smoothing is a textbook bullwhip remedy: it
+        //    keeps the bots' order stream nearly as steady as the demand they
+        //    face (and is what the debrief holds students against). Also skip
+        //    lanes whose arrival would miss the horizon, and request only ~a
+        //    fair share of each supplier's shared capacity (inflating a
+        //    rationed order just feeds the cut).
+        var consume = U(round + 1) * comp.qty;
+        var gap = target - position;
+        // rate limit at 1.6× consumption: pipeline fill is spread over several
+        // rounds instead of gulped, so the order stream stays steady even for
+        // far (3-round-lead) sourcing in a short game
+        var smoothed = Math.min(gap, consume + 0.4 * Math.max(0, gap - consume), consume * 1.6);
+        // …but never build position beyond what the rest of the game can sell
+        var hardCap = Math.max(0, restNeed * comp.qty * 1.05 - position);
+        var need = Math.max(0, Math.round(Math.min(smoothed, hardCap)));
+        for (var k = 0; k < ranked.length && need > 0; k++) {
+          if (d.orders[comp.id][ranked[k].sup.id]) continue;
+          if (round + ranked[k].lead > R) continue;
+          var fair = Math.ceil(ranked[k].sup.capacity * 1.25 / nFirms);
+          var take = Math.min(need, fair, ranked[k].sup.capacity);
+          if (take > 0) { d.orders[comp.id][ranked[k].sup.id] = { qty: take, mode: 'surface' }; need -= take; }
+        }
+      });
+
+      // produce to expected sales this round + a small finished-goods buffer
+      var eNow = U(round);
+      d.production = Math.round(clamp(eNow + 0.5 * z * noiseSd * eNow - st.fg,
+                                      0, num(s.factoryCapacity, 500)));
+
+      // investments with payback
+      var roundsLeft = num(s.rounds, 8) - round + 1;
+      if (!st.renewable && round <= 2) {
+        var avgGreenBeta = sum(mkts.map(function (m) { return m.greenBeta; })) / Math.max(1, mkts.length);
+        if (num(s.carbonTaxPerTon, 0) > 0 ||
+            (num(s.greenSensitivity, 1) * avgGreenBeta >= 0.6 && roundsLeft >= 5)) d.buyRenewable = true;
+      }
+      if (roundsLeft >= 3) {
+        cat.components.forEach(function (comp) {
+          comp.suppliers.forEach(function (sup) {
+            var o = d.orders[comp.id][sup.id];
+            if (o && o.qty > 0 && effectiveEsg(sup, st.audits) < 60 &&
+                st.audits.indexOf(sup.id) === -1 &&
+                d.auditSuppliers.indexOf(sup.id) === -1) d.auditSuppliers.push(sup.id);
+          });
+        });
+      }
+      d.submitted = true;
+      out[fid] = sanitizeDecision(session, fid, round, d);
+    });
+    return out;
+  }
+
   return {
     hashStr: hashStr, mulberry32: mulberry32, rand: rand, clamp: clamp, clone: clone,
     distMm: distMm, leadTime: leadTime, freightPerUnit: freightPerUnit, tariffRate: tariffRate,
@@ -703,6 +975,8 @@
     computeOrders: computeOrders, allocationRatios: allocationRatios,
     previewDecision: previewDecision,
     resolveRound: resolveRound, bullwhipRatio: bullwhipRatio, leaderboard: leaderboard,
-    botDecision: botDecision
+    botDecision: botDecision,
+    expectedDemand: expectedDemand, invNorm: invNorm, cheapestKit: cheapestKit,
+    nashPrices: nashPrices, nashDecisions: nashDecisions
   };
 });

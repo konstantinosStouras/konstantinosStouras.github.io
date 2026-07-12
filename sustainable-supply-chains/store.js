@@ -175,6 +175,25 @@ window.SSCStore = (function () {
         return ((dbRead().sessions[id] || {}).decisions || {})[firmId + '_' + round] || null;
       }, cb);
     },
+    // -- async practice instances (one private game per firm)
+    saveAsync: function (id, firmId, doc) {
+      var db = dbRead(), slot = sessSlot(db, id);
+      if (!slot.async) slot.async = {};
+      slot.async[firmId] = doc;
+      dbWrite(db);
+      return Promise.resolve();
+    },
+    watchAsync: function (id, firmId, cb) {
+      return addWatcher(function () {
+        return ((dbRead().sessions[id] || {}).async || {})[firmId] || null;
+      }, cb);
+    },
+    watchAsyncAll: function (id, cb) {
+      return addWatcher(function () {
+        var o = (dbRead().sessions[id] || {}).async || {};
+        return Object.keys(o).map(function (k) { return o[k]; });
+      }, cb);
+    },
     watchDecisions: function (id, cb) {
       return addWatcher(function () {
         var o = (dbRead().sessions[id] || {}).decisions || {};
@@ -384,6 +403,19 @@ window.SSCStore = (function () {
       return deferWatch(function () {
         return watchDoc(sdk.fs.doc(db, PATHS.sessions, id, 'decisions', firmId + '_' + round), cb);
       });
+    },
+    saveAsync: function (id, firmId, doc) {
+      return init().then(ensureAuth).then(function () {
+        return sdk.fs.setDoc(sdk.fs.doc(db, PATHS.sessions, id, 'async', firmId), doc);
+      });
+    },
+    watchAsync: function (id, firmId, cb) {
+      return deferWatch(function () {
+        return watchDoc(sdk.fs.doc(db, PATHS.sessions, id, 'async', firmId), cb);
+      });
+    },
+    watchAsyncAll: function (id, cb) {
+      return deferWatch(function () { return watchCol(subCol(id, 'async'), cb, 'createdAt'); });
     },
     watchDecisions: function (id, cb) {
       return deferWatch(function () { return watchCol(subCol(id, 'decisions'), cb); });
