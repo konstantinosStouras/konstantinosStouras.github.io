@@ -964,6 +964,224 @@
     return out;
   }
 
+  /* =====================================================================
+     The COACH — automatic, rule-based guidance for students.
+     coachDecision() looks at the CURRENT draft while a round is open and
+     nudges toward sound supply-chain behavior; coachResult() reviews a
+     RESOLVED round and explains what went well, what it cost, and what to
+     try — benchmarked with the same rational machinery the optimal bots
+     use. Deterministic and engine-level, so it's testable in Node and
+     identical for every student. Each item: {level: 'warn'|'info'|'good',
+     text}. Lists come back priority-ordered and capped.
+     ===================================================================== */
+
+  // The student's own demand estimate: recent realized demand, else a rough
+  // fair-share prior. Everything coach-side is labeled as approximate.
+  function coachExpDemand(session, state, nFirms) {
+    var h = (state.hist || []).filter(function (r) { return r.demand > 0; });
+    if (h.length >= 2) return (2 * h[h.length - 1].demand + h[h.length - 2].demand) / 3;
+    if (h.length === 1) return h[0].demand;
+    var total = sum(activeMarkets(session).map(function (m) {
+      return m.size * (num(session.settings.demandScale, 1) || 1);
+    }));
+    return total / Math.max(2, (nFirms || 4) + 1);
+  }
+
+  function coachDecision(session, firm, state, decision, round, nFirms) {
+    var out = [], s = session.settings, cat = session.catalog;
+    var R = num(s.rounds, 8);
+    var expD = coachExpDemand(session, state, nFirms);
+    var pv = previewDecision(session, state, decision, round);
+    var lastH = (state.hist || []).length ? state.hist[state.hist.length - 1] : null;
+
+    // component position coverage (on hand + entire pipeline + this draft)
+    var minCover = Infinity, horizonWaste = [];
+    var airCost = 0, surfaceAltCost = 0;
+    cat.components.forEach(function (c) {
+      var pos = state.comp[c.id] || 0;
+      (state.pipeline || []).forEach(function (e) { if (e.compId === c.id) pos += e.qty; });
+      var ordered = 0;
+      c.suppliers.forEach(function (sup) {
+        var o = decision.orders[c.id] && decision.orders[c.id][sup.id];
+        if (!o || !o.qty) return;
+        ordered += o.qty;
+        var lead = leadTime(session, sup.region, state.hub, o.mode, round);
+        if (round + lead > R) horizonWaste.push(o.qty + '× ' + c.name + ' from ' + sup.name);
+        if (o.mode === 'air') {
+          airCost += freightPerUnit(cat, c.weightKg, sup.region, state.hub, 'air').cost * o.qty;
+          surfaceAltCost += freightPerUnit(cat, c.weightKg, sup.region, state.hub, 'surface').cost * o.qty;
+        }
+      });
+      minCover = Math.min(minCover, (pos + ordered) / Math.max(1, expD * c.qty));
+    });
+    if (!isFinite(minCover)) minCover = 0;
+
+    // 1 · pricing below unit cost — the costliest mistake there is
+    var kit = cheapestKit(session, state.hub, round).kitCost + cat.product.assemblyCost;
+    activeMarkets(session).forEach(function (m) {
+      var p = decision.prices[m.id];
+      if (p != null && p < kit) {
+        out.push({ pri: 0, level: 'warn', text: 'Your ' + m.name + ' price (' + Math.round(p) +
+          ') is BELOW your unit cost (≈$' + Math.round(kit) + ' components + assembly, before freight/tariffs). Every sale there loses money.' });
+      }
+    });
+    // 2 · thin pipeline → stockouts given lead times
+    if (round < R && minCover < 1.6) {
+      out.push({ pri: 1, level: 'warn', text: 'Thin supply line: components on hand + on order cover only ~' +
+        (Math.round(minCover * 10) / 10) + ' rounds of your recent demand (~' + Math.round(expD) +
+        ' units/round). With 1–3 round lead times, what you order now is what you can sell later — stockouts also dent your brand.' });
+    }
+    // 3 · massive over-ordering → holding costs + rationing
+    var maxLead = 3;
+    if (expD > 0 && minCover > (maxLead + 3)) {
+      out.push({ pri: 2, level: 'warn', text: 'Heavy ordering: your position would cover ~' + Math.round(minCover) +
+        ' rounds of demand. Excess stock costs ' + fmtMoneyish(num(s.holdingComp, 3)) + '/unit/round to hold, and over-ordering at popular suppliers deepens everyone\'s rationing cuts (including yours).' });
+    }
+    // 4 · orders that arrive after the game ends
+    if (horizonWaste.length) {
+      out.push({ pri: 1, level: 'warn', text: 'Arriving too late: ' + horizonWaste.slice(0, 2).join('; ') +
+        (horizonWaste.length > 2 ? ' (+' + (horizonWaste.length - 2) + ' more)' : '') +
+        ' would land AFTER round ' + R + ' — money spent on inventory the game never sells. Ship faster or skip it.' });
+    }
+    // 5 · air freight without stockout pressure
+    if (airCost > 3000 && minCover - 0 > 2 && (!lastH || lastH.lost === 0)) {
+      out.push({ pri: 3, level: 'info', text: 'Air freight adds ~' + fmtMoneyish(airCost - surfaceAltCost) +
+        ' vs sea on this plan (and ~30× the CO2). You aren\'t under stockout pressure — sea + ordering one round earlier does the same job.' });
+    }
+    // 6 · announced tariff (or carbon tax) next round
+    (s.tariffShocks || []).forEach(function (sh) {
+      if (sh.announce && round === num(sh.round, 1) - 1) {
+        out.push({ pri: 2, level: 'info', text: 'A tariff change is ANNOUNCED for next round. Orders you place THIS round are charged at today\'s rates — is your sourcing mix (or a stockpile) positioned for it?' });
+      }
+    });
+    // 7 · scandal exposure
+    var riskSpend = 0, spend = 0;
+    cat.components.forEach(function (c) {
+      c.suppliers.forEach(function (sup) {
+        var o = decision.orders[c.id] && decision.orders[c.id][sup.id];
+        if (!o || !o.qty) return;
+        spend += o.qty * sup.cost;
+        if (effectiveEsg(sup, state.audits.concat(decision.auditSuppliers || [])) < 60) riskSpend += o.qty * sup.cost;
+      });
+    });
+    if (spend > 0 && riskSpend / spend > 0.3) {
+      out.push({ pri: 2, level: 'warn', text: Math.round(100 * riskSpend / spend) +
+        '% of this round\'s component spend goes to unaudited suppliers with ESG below 60 — real scandal risk (brand −12). An audit (' +
+        fmtMoneyish(num(s.auditCost, 8000)) + ', one-time) removes it.' });
+    }
+    // 8 · producing less than you can while demand went unserved
+    var canMake = Math.min(num(s.factoryCapacity, 500), kitsAvailable(session, withArrivals(session, state, round)));
+    if (lastH && lastH.lost > 0 && decision.production < Math.min(canMake, Math.round(expD))) {
+      out.push({ pri: 1, level: 'warn', text: 'Last round you lost ' + lastH.lost +
+        ' sales, and this plan produces ' + decision.production + ' of the ' + canMake +
+        ' units you could assemble. Unless you expect demand to fall, that\'s margin left on the table.' });
+    }
+    // 9 · deep overdraft
+    if (pv.cashAfterSpend < -0.3 * num(s.startingCash, 500000)) {
+      out.push({ pri: 2, level: 'warn', text: 'This plan pushes you deep into overdraft (' +
+        fmtMoneyish(pv.cashAfterSpend) + ' before revenue) at ' + Math.round(num(s.overdraftRate, 0.05) * 100) + '%/round interest.' });
+    }
+    // 10 · offsets misconception
+    if (decision.offsetTons > 0) {
+      out.push({ pri: 4, level: 'info', text: 'Offsets reduce your NET CO2 (small green-score help) but never your gross footprint' +
+        (num(s.carbonTaxPerTon, 0) > 0 ? ' — and the carbon tax is charged on GROSS, so offsets don\'t reduce it.' : '.') });
+    }
+    out.sort(function (a, b) { return a.pri - b.pri; });
+    return out.slice(0, 4).map(function (x) { return { level: x.level, text: x.text }; });
+  }
+
+  /* Post-round feedback. parts = [{firmId, hub, green, brand}] for everyone in
+     the game (rivals at their current observed states), used for the
+     equilibrium-price benchmark. prevState = the firm's state BEFORE the round. */
+  function coachResult(session, firm, prevState, result, parts, round) {
+    var out = [], s = session.settings, cat = session.catalog;
+    var sold = 0; Object.keys(result.sold || {}).forEach(function (k) { sold += result.sold[k]; });
+    var demand = sold + (result.lost || 0);
+    var fill = demand > 0 ? sold / demand : 1;
+    var kitCheap = cheapestKit(session, prevState.hub, round).kitCost;
+    var unitCost = kitCheap + cat.product.assemblyCost;
+    var avgPrice = sold > 0 ? result.revenue / sold : null;
+    var margin = avgPrice != null ? Math.max(60, avgPrice - unitCost) : 250;
+
+    // stockouts, with the money attached
+    if (demand > 0 && fill < 0.9) {
+      out.push({ pri: 1, level: 'warn', text: 'Stockout: ' + result.lost + ' units of demand went unserved — roughly ' +
+        fmtMoneyish(result.lost * margin) + ' of margin lost, plus a brand hit that lowers future demand. With your lead times, cover ~lead+1 rounds of expected demand in on-hand + on-order stock.' });
+    } else if (demand > 0 && fill >= 0.97) {
+      var endKits = kitsAvailable(session, result.endState || prevState);
+      var cover = endKits / Math.max(1, demand);
+      if (cover <= 2.5) out.push({ pri: 6, level: 'good', text: '✔ Strong service (' + Math.round(fill * 100) + '% of demand served) on lean inventory — exactly the balance the game rewards.' });
+    }
+    // rationing cuts
+    if (result.cut > 200) {
+      out.push({ pri: 3, level: 'info', text: 'Suppliers cut ' + result.cut + ' of your ordered units (shared capacity, pro-rata). Piling onto the one cheapest supplier is what everyone does — spreading across suppliers or ordering steadily gets you more actual units.' });
+    }
+    // pricing vs the competitive equilibrium
+    if (parts && parts.length > 1) {
+      var eq = nashPrices(session, parts, round);
+      var mine = eq.prices[firm.id];
+      if (mine) {
+        var worst = null;
+        activeMarkets(session).forEach(function (m) {
+          var p = (result.prices || {})[m.id];
+          if (p == null) return;
+          var diff = (p - mine[m.id]) / mine[m.id];
+          if (worst == null || Math.abs(diff) > Math.abs(worst.diff)) worst = { m: m, p: p, star: mine[m.id], diff: diff };
+        });
+        if (worst && worst.diff < -0.08) {
+          out.push({ pri: 2, level: 'warn', text: 'Pricing: in ' + worst.m.name + ' you charged ' + fmtMoneyish(worst.p) +
+            ' vs a competitive benchmark of ≈' + fmtMoneyish(worst.star) + ' for your costs and reputation' +
+            (fill < 0.95 ? ' — and you stocked out anyway. When supply is short, a higher price converts scarce units into more profit.' : ' — you likely bought share more cheaply than needed.') });
+        } else if (worst && worst.diff > 0.15) {
+          out.push({ pri: 3, level: 'info', text: 'Pricing: your ' + worst.m.name + ' price (' + fmtMoneyish(worst.p) +
+            ') sits well above the ≈' + fmtMoneyish(worst.star) + ' benchmark for your green score and brand — premium prices need the reputation to carry them.' });
+        } else if (worst && Math.abs(worst.diff) <= 0.08 && sold > 0) {
+          out.push({ pri: 7, level: 'good', text: '✔ Pricing close to the competitive optimum for your cost and reputation position.' });
+        }
+      }
+    }
+    // sourcing premium (deliberate green vs accidental expensive)
+    var lines = result.orderLines || [];
+    var bought = 0, paid = 0;
+    lines.forEach(function (l) { bought += l.qty; paid += l.cost; });
+    if (bought > 50) {
+      var kitsBought = bought / Math.max(1, cat.components.length);
+      var perKit = paid / Math.max(1, kitsBought);
+      var premium = (perKit - kitCheap) / kitCheap;
+      if (premium > 0.12 && (result.green || 50) >= 58) {
+        out.push({ pri: 5, level: 'good', text: '✔ You paid ~' + Math.round(premium * 100) + '% over the cheapest landed mix — and it shows in a green score of ' +
+          result.green + ', which wins share in sustainability-sensitive markets and half the final score.' });
+      } else if (premium > 0.12) {
+        out.push({ pri: 2, level: 'warn', text: 'Sourcing: your component mix cost ~' + Math.round(premium * 100) +
+          '% more than the cheapest landed alternative, without a green score to show for it (' + result.green + '). Either buy cheaper or buy cleaner — paying more for neither is the one losing move.' });
+      }
+    }
+    // air premium without need
+    var airSpend = 0;
+    lines.forEach(function (l) { if (l.mode === 'air') airSpend += l.cost; });
+    if (airSpend > 8000 && result.lost === 0 && fill >= 0.99) {
+      out.push({ pri: 4, level: 'info', text: 'You air-freighted ' + fmtMoneyish(airSpend) + ' of components in a round with zero stockout pressure — sea plus one round of patience is ~80× cheaper and ~30× cleaner.' });
+    }
+    // scandal
+    if (result.scandal) {
+      out.push({ pri: 1, level: 'warn', text: 'The ESG scandal cost you 12 brand points — that is future demand. Unaudited suppliers with ESG below 60 carry this risk every round you buy from them; one audit each removes it for good.' });
+    }
+    // idle production while demand exists
+    if (result.lost > 0 && result.produced < num(s.factoryCapacity, 500)) {
+      var kitsHad = kitsAvailable(session, withArrivals(session, prevState, round));
+      if (result.produced < kitsHad) {
+        out.push({ pri: 2, level: 'warn', text: 'You produced ' + result.produced + ' units while ' + kitsHad +
+          ' component sets were available and ' + result.lost + ' units of demand went unserved — production below demand wastes both.' });
+      }
+    }
+    out.sort(function (a, b) { return a.pri - b.pri; });
+    return out.slice(0, 5).map(function (x) { return { level: x.level, text: x.text }; });
+  }
+  function fmtMoneyish(n) {
+    var v = Math.round(n);
+    return (v < 0 ? '−$' : '$') + Math.abs(v).toLocaleString('en-US');
+  }
+
   return {
     hashStr: hashStr, mulberry32: mulberry32, rand: rand, clamp: clamp, clone: clone,
     distMm: distMm, leadTime: leadTime, freightPerUnit: freightPerUnit, tariffRate: tariffRate,
@@ -977,6 +1195,7 @@
     resolveRound: resolveRound, bullwhipRatio: bullwhipRatio, leaderboard: leaderboard,
     botDecision: botDecision,
     expectedDemand: expectedDemand, invNorm: invNorm, cheapestKit: cheapestKit,
-    nashPrices: nashPrices, nashDecisions: nashDecisions
+    nashPrices: nashPrices, nashDecisions: nashDecisions,
+    coachDecision: coachDecision, coachResult: coachResult
   };
 });

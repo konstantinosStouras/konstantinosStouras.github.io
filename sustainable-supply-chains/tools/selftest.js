@@ -300,6 +300,34 @@ ok(nashAvg > naiveAvg, 'nash bots out-earn naive bots head to head');
 var stAllNash2 = playMixed('NASHALL', [], ['a', 'b', 'c', 'd'], NF);
 ok(JSON.stringify(stAllNash) === JSON.stringify(stAllNash2), 'nash game reproducible');
 
+/* ---- the coach: automatic nudges + post-round feedback -------------------------- */
+console.log('· coach');
+var cSess = makeSession();
+var cFirm = { id: 'cf', name: 'Coach Test', hub: 'europe' };
+var cSt = E.initFirmState(cSess, cFirm);
+cSt.comp = { battery: 0, frame: 0, drive: 0, electronics: 0 }; cSt.fg = 0;
+cSt.hist.push({ round: 1, demand: 900, sold: 700, lost: 200, ordered: 100, produced: 0,
+                profit: 0, revenue: 0, co2Gross: 0, green: 50, brand: 50, cash: 0, cut: 0 });
+var cDec = E.emptyDecision(cSess, 'cf', 2);
+var tips = E.coachDecision(cSess, cFirm, cSt, cDec, 2, 4);
+ok(tips.some(function (t) { return /Thin supply/.test(t.text); }), 'coach flags a thin pipeline');
+cDec.prices.europe = 350;
+tips = E.coachDecision(cSess, cFirm, cSt, cDec, 2, 4);
+ok(tips.some(function (t) { return /BELOW your unit cost/.test(t.text); }), 'coach flags below-cost pricing');
+var cDecLate = E.emptyDecision(cSess, 'cf', 8);
+cDecLate.orders.battery.bat_szn = { qty: 200, mode: 'surface' }; // 3-round lead: lands after round 8
+tips = E.coachDecision(cSess, cFirm, cSt, cDecLate, 8, 4);
+ok(tips.some(function (t) { return /Arriving too late/.test(t.text); }), 'coach flags orders landing after the horizon');
+// post-round: a firm that sells out its tiny stock and loses the rest of demand
+var oneS = makeSession({});
+var f1 = { id: 'f1', name: 'Solo', hub: 'europe' };
+var st1 = E.initFirmState(oneS, f1);
+var out1 = E.resolveRound(oneS, [f1], { f1: st1 }, { f1: E.emptyDecision(oneS, 'f1', 1) }, 1);
+ok(out1.results.f1.lost > 0, 'coach scenario: the solo firm did stock out');
+var notes = E.coachResult(oneS, f1, st1, out1.results.f1,
+  [{ firmId: 'f1', hub: 'europe', green: 50, brand: 50 }], 1);
+ok(notes.some(function (n) { return /Stockout/.test(n.text); }), 'coach explains the stockout and its cost');
+
 /* ---- xlsx writer builds a workbook (shared with the admin panel) --------------- */
 console.log('· xlsx writer');
 try {

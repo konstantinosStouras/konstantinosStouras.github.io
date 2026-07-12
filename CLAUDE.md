@@ -364,6 +364,12 @@ The async instance lives in the `async/{firmId}` subcollection and is resolved
 in the student's browser; the admin control room becomes a progress monitor.
 'nash' is also a bot profile for live sessions; the debrief excludes nash bots
 from the order-amplification chart (their variability is anticipation).
+Automatic coaching (`settings.coachOn`): engine-level `coachDecision`
+(decision-time nudges) + `coachResult` (post-round feedback benchmarked
+against Nash pricing and order-up-to coverage). Messaging
+(`settings.chatOn`): firm↔instructor and firm↔firm messages in a `messages`
+subcollection — all traffic is visible in the admin control room (stated in
+the student UI).
 
 Key structure (see its README.md for the full model):
 - `engine.js` — pure deterministic engine (seeded per session code + round;
@@ -378,10 +384,13 @@ Key structure (see its README.md for the full model):
   via each firm doc's `memberUids`; keep its `isAdmin()` email list in sync
   with `SSC_ADMIN_EMAILS` in `firebase-config.js`.
 - Tests that must stay green: `node sustainable-supply-chains/tools/selftest.js`
-  (engine, 55+ checks incl. a full bot game) and
+  (engine, 75+ checks incl. full bot/Nash games and the coach) and
   `node sustainable-supply-chains/tools/smoke.mjs` (Playwright, plays a whole
   demo game across admin + student tabs; container paths overridable via
-  `PW`/`CHROMIUM`).
+  `PW`/`CHROMIUM`). `tools/smoke-firebase.mjs` additionally verifies the REAL
+  Firebase path + firestore.rules against the Firebase emulator (needs Java,
+  firebase-tools and the npm `firebase` bundles via `FIREBASE_BIN`/
+  `FIREBASE_SDK_DIR`) — run it whenever store.js or the rules change.
 
 The app is at the repo root (NOT under `/fun/`), so the fun-landing-page card
 rule does not apply; it is deliberately not linked from the homepage yet.

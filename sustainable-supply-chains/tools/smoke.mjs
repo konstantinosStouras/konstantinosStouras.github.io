@@ -92,6 +92,7 @@ try {
   await stu.fill('#price-europe', '1200');
   const preview = await stu.textContent('#plan-preview');
   if (!/Cash after/.test(preview)) fail('plan preview did not compute');
+  await stu.waitForSelector('#coach-nudges .banner', { timeout: 5000 }).catch(() => fail('coach nudges did not render'));
   await shot(stu, '3-student-decide.png');
   await stu.click('#btn-submit');
   await stu.waitForSelector('#submitted-banner', { timeout: 5000 }).catch(() => fail('submit did not register'));
@@ -147,6 +148,27 @@ try {
   if (!xlsxOk) fail('xlsx build failed in browser');
   await shot(admin, '7-admin-data.png');
 
+  /* ---- messaging: firm -> instructor -> firm ---------------------------------------- */
+  await stu.click('[data-tab="messages"]');
+  await stu.waitForSelector('#msg-send', { timeout: 5000 }).catch(() => fail('messages tab did not render'));
+  await stu.fill('#msg-text', 'Can we get a hint on tariffs?');
+  await stu.click('#msg-send');
+  await admin.click('.tabs [data-tab="control"]');
+  await admin.evaluate(() => {
+    const sel = document.querySelector('#ctrl-select');
+    const opt = Array.from(sel.options).find(o => /TESTGAME/.test(o.textContent));
+    sel.value = opt.value;
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await admin.waitForFunction(() => /hint on tariffs/.test(document.querySelector('#ctrl-root').textContent),
+                              null, { timeout: 8000 })
+    .catch(() => fail('student message did not reach the control room'));
+  await admin.fill('#c-dm-text', 'Watch round 4.');
+  await admin.click('#c-dm-send');
+  await stu.waitForFunction(() => /Watch round 4/.test(document.querySelector('#tp-messages').textContent),
+                            null, { timeout: 8000 })
+    .catch(() => fail('instructor reply did not reach the student'));
+
   /* ---- async practice session: self-paced vs optimal (Nash) bots ------------------ */
   await admin.click('.tabs [data-tab="sessions"]');
   await admin.fill('#f-code', 'ASYNCGAME');
@@ -174,6 +196,8 @@ try {
   await stu2.fill('#f-production', '300');
   await stu2.click('#btn-endround');
   await stu2.waitForSelector('#btn-nextround-res', { timeout: 8000 }).catch(() => fail('async: round 1 did not resolve locally'));
+  const resTxt = await stu2.textContent('#tp-results');
+  if (!/Coach/.test(resTxt)) fail('async: coach notes missing from round results');
   const standTxt = await stu2.evaluate(() => {
     document.querySelector('#g-tabs [data-tab="standings"]').click();
     return document.querySelector('#tp-standings').textContent;

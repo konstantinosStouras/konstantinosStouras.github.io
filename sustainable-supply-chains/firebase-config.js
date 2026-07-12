@@ -20,8 +20,8 @@ window.SSC_FIREBASE_CONFIG = {
 
 // Email addresses allowed into the admin panel. Each MUST be a Firebase Auth
 // Email/Password user (Authentication → Users → Add user) AND appear in the
-// isAdmin() allow-list in firestore.rules.
-window.SSC_ADMIN_EMAILS = ['admin@admin.com'];
+// isAdmin() allow-list in firestore.rules (keep the two lists identical).
+window.SSC_ADMIN_EMAILS = ['kstouras@gmail.com'];
 
 // Firestore root collections (rarely need changing): game sessions, and the
 // code → sessionId lookup docs students use to join without listing sessions.

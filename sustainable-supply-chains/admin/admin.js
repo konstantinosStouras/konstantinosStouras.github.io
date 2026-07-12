@@ -153,6 +153,11 @@
       toggleIn('f-intel', 'Market intelligence', s.marketIntel, 'Firms see last round\'s total demand and average price per market.') +
       toggleIn('f-standings', 'Live leaderboard', s.showStandings, 'Firms can watch the standings during the game (final debrief always shows them).') +
       toggleIn('f-events', 'World events', s.eventsOn, 'Seeded supply disruptions, port congestion and ESG scandal risk.') +
+      '</div><div class="grid3">' +
+      toggleIn('f-coach', 'Automatic coaching', s.coachOn !== false,
+        'Rule-based nudges while teams decide (thin pipeline, over-ordering, below-cost prices, air-freight waste, scandal exposure…) plus post-round feedback benchmarked against competitive pricing and an order-up-to policy.') +
+      toggleIn('f-chat', 'Messaging', s.chatOn !== false,
+        'Firms can message you and each other (negotiation, coordination, bluffing — all visible to you in the control room).') +
       '</div></div>';
 
     html += '<div class="section"><div class="sub-title">Tariffs</div>' +
@@ -221,6 +226,8 @@
     s.startingFinished = Math.max(0, nv('f-startfg', s.startingFinished));
     s.scoreWeightProfit = Math.min(100, Math.max(0, nv('f-scorew', s.scoreWeightProfit)));
     s.asyncMode = $('#f-async').checked;
+    s.coachOn = $('#f-coach').checked;
+    s.chatOn = $('#f-chat').checked;
     s.asyncBots = Math.max(1, Math.min(5, Math.round(nv('f-asyncbots', 3))));
     s.markets = U.$all('.mkt-check').filter(function (c) { return c.checked; }).map(function (c) { return c.dataset.m; });
     s.demandPattern = $('#f-pattern').value;
@@ -401,7 +408,7 @@
       '<span>' + (async ? '<span class="pill pill-blue">async</span> ' : '') +
       '<span class="pill ' + (isDone ? 'pill-plain' : 'pill-green') + '">' + (isDone ? 'done' : 'active') + '</span></span></div>' +
       '<div class="sess-meta"><span class="sess-code">' + esc(s.code) + '</span> · ' + esc(phase) +
-      ' · ' + s.settings.rounds + ' rounds</div>';
+      ' · ' + ((s.settings || {}).rounds || '?') + ' rounds</div>';
     var act = U.el('div', { class: 'sess-actions' });
     var bCtrl = U.el('button', { class: 'btn btn-sm', text: 'Control room' });
     bCtrl.addEventListener('click', function () { gotoTab('control'); selectCtrl(s.id); });
@@ -445,13 +452,14 @@
     A.ctrlId = id;
     fillSelect($('#ctrl-select'), id);
     A.ctrl.unsubs.forEach(function (u) { u(); });
-    A.ctrl = { session: null, firms: [], decisions: [], results: [], markets: [], asyncs: [], unsubs: [] };
+    A.ctrl = { session: null, firms: [], decisions: [], results: [], markets: [], asyncs: [], messages: [], unsubs: [] };
     A.ctrl.unsubs.push(ST.watchSession(id, function (d) { A.ctrl.session = d; renderCtrl(); paintSessionLists(); }));
     A.ctrl.unsubs.push(ST.watchFirms(id, function (d) { A.ctrl.firms = d || []; renderCtrl(); }));
     A.ctrl.unsubs.push(ST.watchDecisions(id, function (d) { A.ctrl.decisions = d || []; renderCtrl(); }));
     A.ctrl.unsubs.push(ST.watchResults(id, function (d) { A.ctrl.results = d || []; renderCtrl(); }));
     A.ctrl.unsubs.push(ST.watchMarkets(id, function (d) { A.ctrl.markets = d || []; renderCtrl(); }));
     A.ctrl.unsubs.push(ST.watchAsyncAll(id, function (d) { A.ctrl.asyncs = d || []; renderCtrl(); }));
+    A.ctrl.unsubs.push(ST.watchMessages(id, function (d) { A.ctrl.messages = d || []; renderCtrl(); }));
   }
   function ctrlStates() {
     var out = {};
@@ -469,12 +477,15 @@
   function renderCtrl() {
     var sess = A.ctrl.session, box = $('#ctrl-root');
     if (!sess) { box.innerHTML = '<p class="muted" style="margin-top:16px;">Select a session above.</p>'; return; }
-    var firms = A.ctrl.firms, s = sess.settings;
+    var firms = A.ctrl.firms, s = sess.settings || {};
     // the control room re-renders on every live snapshot — preserve the
     // admin's in-progress broadcast text, bot-profile choice and focus
     var keepBc = $('#c-bc') ? $('#c-bc').value : '';
+    var keepDm = $('#c-dm-text') ? $('#c-dm-text').value : '';
+    var keepDmTo = $('#c-dm-to') ? $('#c-dm-to').value : '';
     var keepProfile = $('#c-botprofile') ? $('#c-botprofile').value : '';
-    var keepFocus = document.activeElement && document.activeElement.id === 'c-bc';
+    var keepFocusId = document.activeElement && (document.activeElement.id === 'c-bc' || document.activeElement.id === 'c-dm-text')
+      ? document.activeElement.id : null;
     var html = '';
 
     // --- header / phase actions
@@ -590,6 +601,27 @@
     }
     html += '</div>';
 
+    // --- messages: instructor <-> firm and firm <-> firm (all visible here)
+    if (s.chatOn !== false) {
+      var realFirms = firms.filter(function (f) { return !f.isBot; });
+      html += '<div class="card"><div class="card-title">Messages</div>' +
+        '<p class="card-subtitle">Everything firms write — to you or to each other — appears here. Reply to one firm below (use the broadcast box above for everyone).</p>';
+      var msgs = (A.ctrl.messages || []).slice(-80);
+      if (!msgs.length) html += '<p class="muted small">No messages yet.</p>';
+      else {
+        html += '<div style="max-height:260px; overflow:auto;">' + msgs.map(function (m) {
+          var from = m.from === 'admin' ? 'You' : esc(m.fromName || m.from);
+          var to = m.to === 'admin' ? 'you' : esc(m.toName || m.to);
+          return '<div class="news-item"><span class="news-round">R' + (m.round || '·') + '</span>' +
+            '<span><b>' + from + ' → ' + to + ':</b> ' + esc(m.text) + '</span></div>';
+        }).join('') + '</div>';
+      }
+      html += '<div class="flex-row" style="margin-top:10px;"><select class="input input-sm" id="c-dm-to" style="width:auto; min-width:170px;">' +
+        realFirms.map(function (f) { return '<option value="' + f.id + '">' + esc(f.name) + '</option>'; }).join('') +
+        '</select><input class="input input-sm" id="c-dm-text" maxlength="500" placeholder="Message to this firm…" style="flex:1; min-width:200px;"/>' +
+        '<button class="btn btn-sm" id="c-dm-send"' + (realFirms.length ? '' : ' disabled') + '>Send</button></div></div>';
+    }
+
     // --- standings + bullwhip (live sessions; async has its own monitor)
     if (!isAsyncSess && A.ctrl.results.length) {
       var lb = E.leaderboard(sess, firms, ctrlStates());
@@ -606,11 +638,13 @@
 
     box.innerHTML = html;
     if ($('#c-bc') && keepBc) $('#c-bc').value = keepBc;
+    if ($('#c-dm-text') && keepDm) $('#c-dm-text').value = keepDm;
+    if ($('#c-dm-to') && keepDmTo) $('#c-dm-to').value = keepDmTo;
     if ($('#c-botprofile') && keepProfile) $('#c-botprofile').value = keepProfile;
-    if (keepFocus && $('#c-bc')) {
-      var bc = $('#c-bc');
-      bc.focus();
-      bc.setSelectionRange(bc.value.length, bc.value.length);
+    if (keepFocusId && $('#' + keepFocusId)) {
+      var foc = $('#' + keepFocusId);
+      foc.focus();
+      foc.setSelectionRange(foc.value.length, foc.value.length);
     }
 
     // wire up
@@ -640,6 +674,16 @@
       var fid = 'bot' + Math.random().toString(36).slice(2, 8);
       ST.setFirm(sess.id, fid, { id: fid, name: name, hub: hub, members: [], isBot: true,
                                  botProfile: profile, createdAt: Date.now() });
+    });
+    if ($('#c-dm-send')) $('#c-dm-send').addEventListener('click', function () {
+      var text = $('#c-dm-text').value.trim();
+      var to = $('#c-dm-to').value;
+      if (!text || !to) return;
+      var toF = firms.find(function (f) { return f.id === to; });
+      ST.saveMessage(sess.id, { from: 'admin', fromName: 'Instructor', to: to,
+        toName: toF ? toF.name : to, text: text.slice(0, 500),
+        round: sess.round || 0, at: Date.now() })
+        .then(function () { if ($('#c-dm-text')) $('#c-dm-text').value = ''; });
     });
     if ($('#c-bc-send')) $('#c-bc-send').addEventListener('click', function () {
       var text = $('#c-bc').value.trim();

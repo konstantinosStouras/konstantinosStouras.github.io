@@ -14,7 +14,7 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function isAdmin() {
       return request.auth != null &&
-        request.auth.token.email in ['admin@admin.com'];   // ← keep in sync with SSC_ADMIN_EMAILS
+        request.auth.token.email in ['kstouras@gmail.com'];   // ← keep in sync with SSC_ADMIN_EMAILS
     }
 
     // code → sessionId lookup docs (maintained by the admin panel): a student
@@ -83,6 +83,19 @@ service cloud.firestore {
       match /markets/{mktId} {
         allow read: if signedIn();
         allow write: if isAdmin();
+      }
+      // messages: instructor ↔ firm and firm ↔ firm. Class-readable by design
+      // (the student UI shows each firm its own threads, and the app states
+      // plainly that the instructor sees all traffic — this is a competition
+      // game, not private correspondence). Senders can't impersonate: a firm
+      // message must come from a firm the sender belongs to.
+      match /messages/{msgId} {
+        allow read: if signedIn();
+        allow create: if isAdmin() ||
+          (signedIn() && request.resource.data.from != 'admin' &&
+           request.auth.uid in firmMemberUids(request.resource.data.from));
+        allow update: if false;
+        allow delete: if isAdmin();
       }
     }
   }

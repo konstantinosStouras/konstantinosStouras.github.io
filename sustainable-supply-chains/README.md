@@ -58,6 +58,30 @@ control room. In the debrief, the bots are excluded from the order-amplification
 chart — they pre-position for demand shifts they rationally anticipate, so
 their order variability is anticipation, not bullwhip.
 
+## Coaching & messaging (both modes, admin toggles)
+
+**Automatic coaching** (`coachOn`, default on) — a rule-based coach built into
+the engine (`coachDecision` / `coachResult`, deterministic and testable):
+
+- *While deciding*: up to four live nudges on the current draft — pricing
+  below unit cost, thin supply lines vs lead times, heavy over-ordering
+  (holding costs + rationing), orders that would arrive after the game ends,
+  air freight without stockout pressure, announced tariff changes, unaudited
+  low-ESG exposure, idle production while demand went unserved, deep
+  overdraft, and the offsets-don't-cut-gross reminder.
+- *After each round*: "Coach's notes" on the Results tab explain what
+  happened and what to try — stockouts with the margin they cost, rationing
+  cuts, **pricing vs the competitive (Nash) benchmark for that firm's costs
+  and reputation**, sourcing premium (praised when it buys a green score,
+  flagged when it buys nothing), unnecessary air premium, scandals — plus
+  explicit praise for lean-and-reliable operations and near-optimal pricing.
+
+**Messaging** (`chatOn`, default on) — a Messages tab for students: write to
+the instructor or to any other firm (negotiate, coordinate, bluff…). The
+control room shows **all** traffic — firm↔firm included, which the student UI
+states plainly — and lets the instructor reply to a single firm (broadcasts
+to everyone remain separate). Unread messages badge the student tab.
+
 ## How a class session runs (live mode)
 
 1. **Admin panel → Sessions**: create a session (rounds, markets, demand
@@ -84,26 +108,37 @@ browser's localStorage, cross-tab live sync. Open the admin panel and the
 student page in the same browser to play a full game (with bots) — ideal for
 testing parameters before class.
 
-For a **real class** (many devices), create a Firebase project:
+For a **real class** (many devices), the code side is DONE and verified: the
+entire Firebase path — anonymous students, email/password admin, the
+code-lookup join flow, firms/decisions/results/messages/async instances, and
+every security rule — is exercised end-to-end against the official Firebase
+emulator by `tools/smoke-firebase.mjs` (including six hostile-write denial
+checks). **Your remaining steps (~10 minutes, all in the Firebase console):**
 
-1. console.firebase.google.com → Add project (no Analytics needed).
-2. **Build → Firestore Database** → Create (production mode).
-3. **Build → Authentication → Sign-in method**: enable **Anonymous** and
-   **Email/Password**. Under Users, add your admin account
-   (e.g. `admin@admin.com` + password).
-4. Project settings → Your apps → **Web app** → register; copy the config
-   object into `firebase-config.js` (replacing the `PASTE_…` placeholders),
-   and put your admin email in `SSC_ADMIN_EMAILS`.
-5. Firestore → **Rules**: paste `firestore.rules` (keep the email list in its
-   `isAdmin()` in sync). The rules enforce real ownership: each firm doc
-   carries a `memberUids` array, and only those members (or you) can update
-   the firm or read/write its decision documents — teams cannot see or forge
-   each other's pending moves. Students resolve a join code via the
-   `sscSessionCodes` lookup collection, so they never list your sessions.
-6. Commit & push. The admin panel now asks you to sign in; students join
-   anonymously from any device. Teams on several devices are kept in sync:
-   the decide form live-follows the firm's latest saved decision, so the
-   newest save (or submit) wins visibly on every teammate's screen.
+1. [console.firebase.google.com](https://console.firebase.google.com) →
+   **Add project** (any name, e.g. `ssc-class`; Analytics not needed).
+2. **Build → Firestore Database → Create database** → production mode →
+   a region near your class (e.g. `europe-west1`).
+3. **Build → Authentication → Get started → Sign-in method**: enable
+   **Anonymous** and **Email/Password**. Then **Users → Add user**:
+   `kstouras@gmail.com` + a password (this is the admin login; it's already
+   the default in `firebase-config.js` and `firestore.rules` — if you use a
+   different email, change it in BOTH files).
+4. Project overview → **⚙ Project settings → Your apps → Web app (</>)** →
+   register (no hosting) → copy the `firebaseConfig` values into
+   `firebase-config.js`, replacing the `PASTE_…` placeholders (apiKey,
+   authDomain, projectId, storageBucket, messagingSenderId, appId).
+5. **Firestore → Rules**: paste the full contents of `firestore.rules` →
+   Publish. (The rules enforce real ownership: only a firm's members can
+   touch its decisions/instance; students can't list your sessions, forge
+   results, or spoof message senders — all verified by the emulator test.)
+6. Commit & push the edited `firebase-config.js`. Done: the admin panel asks
+   you to sign in, students join anonymously from any device, and demo mode
+   switches off automatically.
+
+To re-verify the whole Firebase path locally at any time (needs Java +
+`npm i firebase firebase-tools` somewhere):
+`FIREBASE_BIN=… FIREBASE_SDK_DIR=… node sustainable-supply-chains/tools/smoke-firebase.mjs`
 
 Round resolution runs in the instructor's browser through the same
 deterministic engine students see (`engine.js`) — seeded RNG per

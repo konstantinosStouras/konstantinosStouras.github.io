@@ -128,6 +128,8 @@
     // homework before the live class game.
     asyncMode: false,
     asyncBots: 3,               // opponents per firm in async mode (1–5)
+    coachOn: true,              // automatic decision nudges + post-round feedback
+    chatOn: true,               // firm ↔ firm and firm ↔ instructor messaging
     startingCash: 500000,
     factoryCapacity: 800,       // units a firm can assemble per round
     startingComponents: 400,    // units of EACH component on hand at start (so round 1 can produce)
