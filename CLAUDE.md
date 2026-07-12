@@ -97,7 +97,10 @@ in `index.html` and extended from the data-ft50 manifest (so the yearly
 FT-list check flows through); ABS grades (AJG 2024, via journalranking.org)
 live in the `ABS_RATING` map there — PNAS/ACM EC are unrated, and HBR/MIT SMR
 (AJG 2024 "top practitioner" journals) are kept at 3, their last numeric
-grade. The pre-computed Authors/Affiliations panels remain
+grade. The full AJG 2024/2021/2018 grade table is **vendored** at
+`fun/lit/_scraper/_abs-ajg2024.json` (journalranking.org is Cloudflare-blocked
+for cloud IPs, like the PNAS/editors local scrapers) — it is the offline
+reference for auditing every ABS grade the page and the satellite shards use. The pre-computed Authors/Affiliations panels remain
 native-eight-sources only (the pre-print backfill, by contrast, covers every
 dataset — see below). **PNAS caveat:** the DOI→section index
 `fun/lit/data/_pnas-concepts.json` must be (re)built occasionally by running
