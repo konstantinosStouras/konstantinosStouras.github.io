@@ -133,7 +133,10 @@ fun/lit/
 │  ├─ authors.json           ← per-author aggregates (authors with ≥2 papers)
 │  ├─ affiliations.json      ← per-affiliation aggregates
 │  ├─ recent.json            ← papers first seen in the last few weeks
-│  ├─ meta.json              ← { lastPull, paperCount, perSource }
+│  ├─ meta.json              ← { lastPull, paperCount, authorCount, perSource }
+│  │                           (authorCount: distinct authors, pre-trim; the
+│  │                           header's "N papers from M authors" sums it with
+│  │                           the FT50 catalog's authorCountExtras + shards)
 │  ├─ _registry.json         ← bookkeeping: which paper was first seen when
 │  ├─ _pnas-concepts.json    ← DOI → PNAS section keys (see PNAS note below)
 │  ├─ _informs-editors.json  ← DOI → ISR/MkSc Senior/Associate Editor names

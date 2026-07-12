@@ -38,7 +38,9 @@
  *   authors.json         per-author aggregates across all sources (≥2 papers)
  *   affiliations.json    per-affiliation aggregates
  *   recent.json          papers first seen in the last RECENT_WINDOW_DAYS
- *   meta.json            { lastPull, paperCount, perSource }
+ *   meta.json            { lastPull, paperCount, authorCount, perSource }
+ *                        (authorCount = distinct authors pre-trim, for the
+ *                        page's header stat)
  *   _registry.json       internal: DOI/title-key -> date first seen
  *   _ec-extras.json      internal: cached PDF/abstract lookups for EC papers
  *   (_pnas-concepts.json is written by the PNAS crawl, see above)
@@ -1749,9 +1751,10 @@ function buildAuthors(papers) {
   }
   out.sort((a, b) => (b.Papers - a.Papers) || cmp(a.Author, b.Author) || cmp(a.id, b.id));
   // Across ~12 sources this would be enormous; keep multi-paper authors (plus
-  // everyone in the top slice) so the file stays a sane size.
+  // everyone in the top slice) so the file stays a sane size. The full
+  // pre-trim distinct count still goes out via meta.json (header stat).
   const trimmed = out.filter((a, i) => a.Papers >= 2 || i < 5000);
-  return trimmed.map(({ id, ...rest }) => rest);
+  return { rows: trimmed.map(({ id, ...rest }) => rest), distinct: out.length };
 }
 
 function buildAffiliations(papers) {
@@ -1944,19 +1947,21 @@ async function main() {
   const meta = {
     lastPull: PULL_DATE,
     paperCount: total,
+    authorCount: authors.distinct,
     perSource: Object.fromEntries(sources.map(s => [s.key, s.count])),
     source: 'Crossref REST API (+ sigecom.org, OpenAlex, DBLP, Semantic Scholar for ACM EC; pnas.org section index)',
   };
 
   await writeJson('sources.json', sources);
-  await writeJson('authors.json', authors);
+  await writeJson('authors.json', authors.rows);
   await writeJson('affiliations.json', affiliations);
   await writeJson('recent.json', recent);
   await writeJson('meta.json', meta);
   await writeJson('_registry.json', registry);
 
   console.log(`done: ${total} papers (${sources.map(s => `${s.key}:${s.count}`).join(' ')}), ` +
-    `${authors.length} authors, ${affiliations.length} affiliations, ${recent.length} recent`);
+    `${authors.distinct} authors (${authors.rows.length} listed), ` +
+    `${affiliations.length} affiliations, ${recent.length} recent`);
 }
 
 async function writeJson(name, data) {
