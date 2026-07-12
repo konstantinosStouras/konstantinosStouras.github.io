@@ -84,6 +84,16 @@ service cloud.firestore {
         allow read: if signedIn();
         allow write: if isAdmin();
       }
+      // append-only action log for analytics/timing: any signed-in player may
+      // append (their own actions), nobody can rewrite history, only the
+      // instructor reads it.
+      match /events/{evId} {
+        allow read: if isAdmin();
+        allow create: if signedIn();
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
+
       // messages: instructor ↔ firm and firm ↔ firm. Class-readable by design
       // (the student UI shows each firm its own threads, and the app states
       // plainly that the instructor sees all traffic — this is a competition

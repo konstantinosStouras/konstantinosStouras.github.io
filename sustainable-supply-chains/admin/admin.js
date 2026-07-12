@@ -88,6 +88,10 @@
     for (var i = 0; i < 7; i++) s += a[Math.floor(Math.random() * a.length)];
     return s;
   }
+  function logEvA(sessId, type, round, d) {
+    ST.logEvent(sessId, { at: Date.now(), type: type, round: round || 0, firmId: 'admin',
+                          uid: 'admin', member: null, d: d || {} }).catch(function () {});
+  }
   function studentLink(code) {
     var base = location.href.replace(/admin\/?(index\.html)?(\?.*)?$/, '');
     return base + '?code=' + code;
@@ -371,6 +375,7 @@
     ST.listSessions().then(function (list) {
       A.sessions = list;
       paintSessionLists();
+      paintAnalyticsPicker();
       fillSelect($('#ctrl-select'), A.ctrlId);
       fillSelect($('#data-select'), A.dataId);
       if (!A.ctrlId && list.length) selectCtrl(list[0].id);
@@ -653,15 +658,20 @@
       ST.updateSession(sess.id, { archived: true, status: 'done', endedAt: Date.now() });
     });
     if ($('#c-start')) $('#c-start').addEventListener('click', function () {
-      ST.updateSession(sess.id, { phase: 'decisions', round: 1, status: 'live', startedAt: Date.now() });
+      ST.updateSession(sess.id, { phase: 'decisions', round: 1, status: 'live',
+                                  startedAt: Date.now(), roundOpenedAt: Date.now() });
+      logEvA(sess.id, 'session_started', 1);
+      logEvA(sess.id, 'round_opened', 1);
     });
     if ($('#c-resolve')) $('#c-resolve').addEventListener('click', function () { doResolve(sess); });
     if ($('#c-next')) $('#c-next').addEventListener('click', function () {
-      ST.updateSession(sess.id, { phase: 'decisions', round: sess.round + 1 });
+      ST.updateSession(sess.id, { phase: 'decisions', round: sess.round + 1, roundOpenedAt: Date.now() });
+      logEvA(sess.id, 'round_opened', sess.round + 1);
     });
     if ($('#c-end')) $('#c-end').addEventListener('click', function () {
       if (!confirm('End the game now? Current standings become final.')) return;
       ST.updateSession(sess.id, { phase: 'final', status: 'done', endedAt: Date.now() });
+      logEvA(sess.id, 'game_ended', sess.round, { forced: 1 });
     });
     if ($('#c-addbot')) $('#c-addbot').addEventListener('click', function () {
       var used = firms.map(function (f) { return f.name; });
@@ -674,6 +684,7 @@
       var fid = 'bot' + Math.random().toString(36).slice(2, 8);
       ST.setFirm(sess.id, fid, { id: fid, name: name, hub: hub, members: [], isBot: true,
                                  botProfile: profile, createdAt: Date.now() });
+      logEvA(sess.id, 'bot_added', sess.round, { name: name, profile: profile || 'cost' });
     });
     if ($('#c-dm-send')) $('#c-dm-send').addEventListener('click', function () {
       var text = $('#c-dm-text').value.trim();
@@ -690,12 +701,14 @@
       if (!text) return;
       var bcs = (sess.broadcasts || []).concat([{ id: Date.now(), text: text, round: sess.round }]).slice(-25);
       ST.updateSession(sess.id, { broadcasts: bcs }).then(function () { $('#c-bc').value = ''; });
+      logEvA(sess.id, 'broadcast', sess.round);
     });
     U.$all('.c-kick').forEach(function (b) {
       b.addEventListener('click', function () {
         var f = firms.find(function (x) { return x.id === b.dataset.f; });
         if (!f || !confirm('Remove firm "' + f.name + '" from the game?')) return;
         ST.deleteFirm(sess.id, f.id);
+        logEvA(sess.id, 'firm_removed', sess.round, { name: f.name });
       });
     });
   }
@@ -754,7 +767,12 @@
       var patch = last ? { phase: 'final', status: 'done', endedAt: Date.now() } : { phase: 'resolved' };
       Promise.all(botSaves).then(function () {
         return ST.saveResolution(sess.id, sess.round, { results: out.results, market: out.market, sessionPatch: patch });
-      }).then(function () { A.resolving = false; })
+      }).then(function () {
+        A.resolving = false;
+        logEvA(sess.id, 'round_resolved', sess.round,
+          { secs: sess.roundOpenedAt ? Math.round((Date.now() - sess.roundOpenedAt) / 1000) : null });
+        if (last) logEvA(sess.id, 'game_ended', sess.round);
+      })
         .catch(function (e) { A.resolving = false; alert('Resolve failed: ' + e.message); renderCtrl(); });
     } catch (e) {
       A.resolving = false;
@@ -920,6 +938,257 @@
     ];
     if (!isAsyncSess) sheets.push({ name: 'Markets', rows: mktRows });
     sheets.push({ name: 'Standings', rows: lbRows });
-    window.SSCXlsx.download('ssc_' + sess.code + '_data.xlsx', sheets);
+    // raw action log + per-firm-round decision timing, fetched fresh
+    ST.fetchAll(sess.id).then(function (pack) {
+      function iso(t) { return t ? new Date(t).toISOString().replace('T', ' ').slice(0, 19) : ''; }
+      var evRows = [['Time (UTC)', 'Epoch ms', 'Type', 'Round', 'Firm', 'Member', 'UID', 'Details']];
+      pack.events.forEach(function (e) {
+        evRows.push([iso(e.at), e.at, e.type, e.round,
+          e.firmId === 'admin' ? 'admin' : firmName(e.firmId), e.member || '', e.uid || '',
+          JSON.stringify(e.d || {})]);
+      });
+      var tRows = [['Firm', 'Round', 'First save (UTC)', 'Draft saves', 'Submitted (UTC)', 'Seconds open→submit']];
+      var byFR = {};
+      pack.events.forEach(function (e) {
+        if (!e.firmId || e.firmId === 'admin') return;
+        var k = e.firmId + '|' + e.round;
+        if (!byFR[k]) byFR[k] = { firmId: e.firmId, round: e.round, saves: 0, firstSave: null, submit: null, secs: null };
+        if (e.type === 'decision_saved') {
+          byFR[k].saves++;
+          if (!byFR[k].firstSave) byFR[k].firstSave = e.at;
+        }
+        if (e.type === 'decision_submitted') { byFR[k].submit = e.at; byFR[k].secs = e.d && e.d.secs; }
+      });
+      Object.keys(byFR).map(function (k) { return byFR[k]; })
+        .sort(function (a, b) { return a.round - b.round || String(a.firmId).localeCompare(String(b.firmId)); })
+        .forEach(function (t) {
+          tRows.push([firmName(t.firmId), t.round, iso(t.firstSave), t.saves, iso(t.submit), t.secs]);
+        });
+      var dur = sess.startedAt && sess.endedAt ? Math.round((sess.endedAt - sess.startedAt) / 60000) : null;
+      sheets[0].rows.push([], ['Session started', iso(sess.startedAt)], ['Session ended', iso(sess.endedAt)],
+        ['Duration (minutes)', dur]);
+      sheets.push({ name: 'Timing', rows: tRows });
+      sheets.push({ name: 'Events', rows: evRows, cols: [{ w: 20 }, { w: 14 }, { w: 18 }, { w: 7 }, { w: 20 }, { w: 14 }, { w: 16 }, { w: 40 }] });
+      window.SSCXlsx.download('ssc_' + sess.code + '_data.xlsx', sheets);
+    }).catch(function () {
+      window.SSCXlsx.download('ssc_' + sess.code + '_data.xlsx', sheets);
+    });
+  });
+
+  /* ================= ANALYTICS (cross-session KPIs) ============================== */
+  A.an = { rows: [], sessions: [], loaded: false };
+
+  function paintAnalyticsPicker() {
+    var box = $('#an-picker');
+    if (!box) return;
+    if (!A.sessions.length) { box.innerHTML = '<p class="muted small">No sessions yet.</p>'; return; }
+    box.innerHTML = A.sessions.map(function (s2) {
+      return '<label class="checkline"><input type="checkbox" class="an-pick" data-id="' + s2.id + '"/><span>' +
+        esc(s2.name || s2.code) + ' <span class="sess-code">' + esc(s2.code) + '</span>' +
+        ((s2.settings || {}).asyncMode ? ' <span class="pill pill-blue">async</span>' : '') +
+        ' <span class="tiny muted">· ' + (s2.status || '') + '</span></span></label>';
+    }).join('');
+  }
+
+  function sessionDuration(sess, events) {
+    var start = sess.startedAt || null, end = sess.endedAt || null;
+    if (!start && events.length) start = events[0].at;
+    if (!end && events.length) end = events[events.length - 1].at;
+    return start && end && end > start ? Math.round((end - start) / 60000) : null;
+  }
+
+  // one KPI row per firm per session
+  function firmKPIs(pack, firm) {
+    var sess = pack.session, isA = !!(sess.settings || {}).asyncMode;
+    var inst = isA ? pack.asyncs.find(function (i2) { return i2.firmId === firm.id; }) : null;
+    var res = (isA ? (inst ? inst.results : []) : pack.results)
+      .filter(function (r) { return r.firmId === firm.id; })
+      .sort(function (a, b) { return a.round - b.round; });
+    var st = isA ? (inst && inst.states[firm.id]) :
+      (res.length ? res[res.length - 1].endState : null);
+    if (!st) return null;
+    var hist = st.hist || [];
+    var demand = 0, sold = 0, cuts = 0;
+    hist.forEach(function (h) { demand += h.demand; sold += h.sold; cuts += (h.cut || 0); });
+    var holding = 0, freight = 0, tariffs = 0, lineCost = 0, lineUnits = 0, airCost = 0;
+    res.forEach(function (r) {
+      holding += r.costs.holding; freight += r.costs.inFreight + r.costs.outFreight;
+      tariffs += r.costs.inTariff + r.costs.outTariff;
+      (r.orderLines || []).forEach(function (l) {
+        lineCost += l.cost; lineUnits += l.qty;
+        if (l.mode === 'air') airCost += l.cost;
+      });
+    });
+    var nComp = sess.catalog.components.length;
+    var kitsBought = lineUnits / Math.max(1, nComp);
+    var cheap = E.cheapestKit(sess, st.hub, 1).kitCost;
+    var premium = kitsBought > 20 ? Math.round(((lineCost / kitsBought) - cheap) / cheap * 1000) / 10 : null;
+    var subs = pack.events.filter(function (e) { return e.type === 'decision_submitted' && e.firmId === firm.id && e.d && e.d.secs != null; });
+    var saves = pack.events.filter(function (e) { return e.type === 'decision_saved' && e.firmId === firm.id; }).length;
+    var avgSecs = subs.length ? Math.round(subs.reduce(function (a, e) { return a + e.d.secs; }, 0) / subs.length) : null;
+    return {
+      session: sess.code, mode: isA ? 'async' : 'live', firm: firm.name, hub: st.hub,
+      bot: firm.isBot ? (firm.botProfile || 'cost') : '',
+      rounds: hist.length,
+      profit: Math.round(st.cum.profit), revenue: Math.round(st.cum.revenue), sold: sold,
+      fill: demand > 0 ? Math.round(sold / demand * 1000) / 10 : null,
+      bullwhip: E.bullwhipRatio(st),
+      green: st.green, brand: st.brand,
+      co2PerUnit: st.cum.produced > 0 ? Math.round(st.cum.prodCO2 / st.cum.produced) : null,
+      holding: Math.round(holding), freight: Math.round(freight), tariffs: Math.round(tariffs),
+      airSharePct: lineCost > 0 ? Math.round(airCost / lineCost * 1000) / 10 : 0,
+      sourcingPremiumPct: premium, cuts: cuts, scandals: st.cum.scandals,
+      submits: subs.length, avgSecsToSubmit: avgSecs, saves: saves
+    };
+  }
+
+  var KPI_COLS = [
+    ['profit', 'Profit $'], ['revenue', 'Revenue $'], ['fill', 'Fill rate %'],
+    ['bullwhip', 'Bullwhip ×'], ['green', 'Green'], ['co2PerUnit', 'CO2/unit kg'],
+    ['holding', 'Holding $'], ['freight', 'Freight $'], ['tariffs', 'Tariffs $'],
+    ['airSharePct', 'Air share %'], ['sourcingPremiumPct', 'Sourcing premium %'],
+    ['cuts', 'Units cut'], ['scandals', 'Scandals'], ['avgSecsToSubmit', 'Avg secs to submit'],
+    ['saves', 'Draft saves']
+  ];
+  function statsOf(vals) {
+    var v = vals.filter(function (x) { return x != null && isFinite(x); }).sort(function (a, b) { return a - b; });
+    if (!v.length) return null;
+    var mean = v.reduce(function (a, b) { return a + b; }, 0) / v.length;
+    var med = v[Math.floor((v.length - 1) / 2)];
+    var sd = Math.sqrt(v.reduce(function (a, b) { return a + (b - mean) * (b - mean); }, 0) / v.length);
+    function r2(x) { return Math.round(x * 100) / 100; }
+    return { n: v.length, mean: r2(mean), median: r2(med), sd: r2(sd), min: r2(v[0]), max: r2(v[v.length - 1]) };
+  }
+
+  $('#an-load').addEventListener('click', function () {
+    var ids = U.$all('.an-pick').filter(function (c) { return c.checked; }).map(function (c) { return c.dataset.id; });
+    if (!ids.length) { $('#an-root').innerHTML = '<p class="muted" style="margin-top:12px;">Tick at least one session.</p>'; return; }
+    $('#an-load').disabled = true;
+    Promise.all(ids.map(function (id) { return ST.fetchAll(id); })).then(function (packs) {
+      $('#an-load').disabled = false;
+      var withBots = $('#an-bots').checked;
+      var rows = [], sessRows = [];
+      packs.forEach(function (pack) {
+        if (!pack.session) return;
+        var fr = [];
+        pack.firms.forEach(function (f) {
+          if (f.isBot && !withBots) return;
+          var row = firmKPIs(pack, f);
+          if (row) fr.push(row);
+        });
+        rows = rows.concat(fr);
+        sessRows.push({
+          session: pack.session.code, name: pack.session.name || '',
+          mode: (pack.session.settings || {}).asyncMode ? 'async' : 'live',
+          firms: fr.length, roundsPlanned: (pack.session.settings || {}).rounds,
+          durationMin: sessionDuration(pack.session, pack.events),
+          events: pack.events.length, messages: pack.messages.length,
+          avgProfit: statsOf(fr.map(function (r) { return r.profit; })),
+          avgFill: statsOf(fr.map(function (r) { return r.fill; }))
+        });
+      });
+      A.an = { rows: rows, sessions: sessRows, loaded: true };
+      $('#an-xlsx').style.display = ''; $('#an-csv').style.display = '';
+      renderAnalytics();
+    }).catch(function (e) { $('#an-load').disabled = false; alert('Load failed: ' + e.message); });
+  });
+
+  function renderAnalytics() {
+    var box = $('#an-root'), rows = A.an.rows;
+    if (!rows.length) { box.innerHTML = '<p class="muted" style="margin-top:12px;">No firms in the selected sessions (or only bots — tick “include bot firms”).</p>'; return; }
+    var html = '<div class="stat-grid">' +
+      '<div class="stat-box"><div class="n">' + A.an.sessions.length + '</div><div class="l">Sessions</div></div>' +
+      '<div class="stat-box"><div class="n">' + rows.length + '</div><div class="l">Firms</div></div>' +
+      '<div class="stat-box"><div class="n">' + (statsOf(rows.map(function (r) { return r.profit; })) || {}).mean + '</div><div class="l">Mean profit $</div></div>' +
+      '<div class="stat-box"><div class="n">' + ((statsOf(rows.map(function (r) { return r.fill; })) || {}).mean || '–') + '</div><div class="l">Mean fill %</div></div>' +
+      '<div class="stat-box"><div class="n">' + ((statsOf(rows.map(function (r) { return r.bullwhip; })) || {}).median || '–') + '</div><div class="l">Median bullwhip ×</div></div>' +
+      '<div class="stat-box"><div class="n">' + ((statsOf(A.an.sessions.map(function (r) { return r.durationMin; })) || {}).mean || '–') + '</div><div class="l">Mean duration min</div></div></div>';
+
+    // per-firm KPI table
+    html += '<div class="card"><div class="card-title">Firm KPIs</div><div class="tbl-scroll" style="max-height:420px;"><table class="tbl tbl-tight"><thead><tr>' +
+      '<th>Session</th><th>Firm</th><th>Hub</th><th>Bot</th><th class="r">Rounds</th>' +
+      KPI_COLS.map(function (c) { return '<th class="r">' + c[1] + '</th>'; }).join('') + '</tr></thead><tbody>' +
+      rows.map(function (r) {
+        return '<tr><td>' + esc(r.session) + ' <span class="tiny muted">' + r.mode + '</span></td><td>' + esc(r.firm) + '</td>' +
+          '<td>' + esc(r.hub) + '</td><td>' + esc(r.bot) + '</td><td class="r">' + r.rounds + '</td>' +
+          KPI_COLS.map(function (c) {
+            var v = r[c[0]];
+            var cls = c[0] === 'profit' ? U.posneg(v) : '';
+            return '<td class="r ' + cls + '">' + (v == null ? '–' : (c[0] === 'profit' || c[0] === 'revenue' || c[0] === 'holding' || c[0] === 'freight' || c[0] === 'tariffs' ? fmtI(v) : v)) + '</td>';
+          }).join('') + '</tr>';
+      }).join('') + '</tbody></table></div></div>';
+
+    // summary statistics
+    html += '<div class="card"><div class="card-title">Summary statistics (across firms)</div><div class="tbl-scroll"><table class="tbl tbl-tight"><thead><tr>' +
+      '<th>KPI</th><th class="r">n</th><th class="r">Mean</th><th class="r">Median</th><th class="r">SD</th><th class="r">Min</th><th class="r">Max</th></tr></thead><tbody>' +
+      KPI_COLS.map(function (c) {
+        var st = statsOf(rows.map(function (r) { return r[c[0]]; }));
+        if (!st) return '';
+        return '<tr><td>' + c[1] + '</td><td class="r">' + st.n + '</td><td class="r">' + fmtI2(st.mean) + '</td>' +
+          '<td class="r">' + fmtI2(st.median) + '</td><td class="r">' + fmtI2(st.sd) + '</td>' +
+          '<td class="r">' + fmtI2(st.min) + '</td><td class="r">' + fmtI2(st.max) + '</td></tr>';
+      }).join('') + '</tbody></table></div></div>';
+
+    // per-session comparison
+    html += '<div class="card"><div class="card-title">Session comparison</div><div class="tbl-scroll"><table class="tbl tbl-tight"><thead><tr>' +
+      '<th>Session</th><th>Mode</th><th class="r">Firms</th><th class="r">Duration min</th><th class="r">Mean profit $</th><th class="r">Mean fill %</th><th class="r">Events</th><th class="r">Messages</th></tr></thead><tbody>' +
+      A.an.sessions.map(function (r) {
+        return '<tr><td>' + esc(r.session) + (r.name ? ' <span class="tiny muted">' + esc(r.name) + '</span>' : '') + '</td>' +
+          '<td>' + r.mode + '</td><td class="r">' + r.firms + '</td><td class="r">' + (r.durationMin != null ? r.durationMin : '–') + '</td>' +
+          '<td class="r">' + (r.avgProfit ? fmtI(r.avgProfit.mean) : '–') + '</td><td class="r">' + (r.avgFill ? r.avgFill.mean : '–') + '</td>' +
+          '<td class="r">' + r.events + '</td><td class="r">' + r.messages + '</td></tr>';
+      }).join('') + '</tbody></table></div></div>';
+
+    // charts
+    function label(r) { return r.firm + ' (' + r.session + ')'; }
+    html += '<div class="columns"><div class="chart-box"><h4>Cumulative profit by firm</h4>' +
+      U.barChart({ items: rows.map(function (r) { return { label: label(r), value: r.profit, color: r.bot ? '#4a4f55' : '#c8562a' }; }),
+                   fmt: function (v) { return fmtM(v); }, padL: 170 }) + '</div>' +
+      '<div class="chart-box"><h4>Bullwhip ratio by firm (steady middle)</h4>' +
+      U.barChart({ items: rows.map(function (r) { return { label: label(r), value: r.bullwhip || 0, color: r.bot ? '#4a4f55' : '#1f5f8b' }; }),
+                   fmt: function (v) { return '×' + v; }, padL: 170 }) + '</div></div>' +
+      '<div class="columns"><div class="chart-box"><h4>Service level (fill %) by firm</h4>' +
+      U.barChart({ items: rows.map(function (r) { return { label: label(r), value: r.fill || 0, color: r.bot ? '#4a4f55' : '#2e7d32' }; }), padL: 170 }) + '</div>' +
+      '<div class="chart-box"><h4>Avg seconds to submit a round</h4>' +
+      U.barChart({ items: rows.filter(function (r) { return r.avgSecsToSubmit != null; })
+        .map(function (r) { return { label: label(r), value: r.avgSecsToSubmit, color: '#8e5bc0' }; }), padL: 170 }) + '</div></div>';
+
+    box.innerHTML = html;
+  }
+  function fmtI2(v) { return v == null ? '–' : (Math.abs(v) >= 1000 ? fmtI(v) : v); }
+
+  var AN_HEADERS = ['Session', 'Mode', 'Firm', 'Hub', 'Bot', 'Rounds'].concat(KPI_COLS.map(function (c) { return c[1]; }));
+  function anMatrix() {
+    return [AN_HEADERS].concat(A.an.rows.map(function (r) {
+      return [r.session, r.mode, r.firm, r.hub, r.bot, r.rounds].concat(KPI_COLS.map(function (c) { return r[c[0]]; }));
+    }));
+  }
+  $('#an-xlsx').addEventListener('click', function () {
+    if (!A.an.loaded) return;
+    var summary = [['KPI', 'n', 'Mean', 'Median', 'SD', 'Min', 'Max']];
+    KPI_COLS.forEach(function (c) {
+      var st = statsOf(A.an.rows.map(function (r) { return r[c[0]]; }));
+      if (st) summary.push([c[1], st.n, st.mean, st.median, st.sd, st.min, st.max]);
+    });
+    var sessSheet = [['Session', 'Name', 'Mode', 'Firms', 'Planned rounds', 'Duration min', 'Events', 'Messages', 'Mean profit', 'Mean fill %']]
+      .concat(A.an.sessions.map(function (r) {
+        return [r.session, r.name, r.mode, r.firms, r.roundsPlanned, r.durationMin, r.events, r.messages,
+                r.avgProfit ? r.avgProfit.mean : null, r.avgFill ? r.avgFill.mean : null];
+      }));
+    window.SSCXlsx.download('ssc_analytics.xlsx', [
+      { name: 'FirmKPIs', rows: anMatrix() },
+      { name: 'Summary', rows: summary },
+      { name: 'Sessions', rows: sessSheet }
+    ]);
+  });
+  $('#an-csv').addEventListener('click', function () {
+    if (!A.an.loaded) return;
+    var csv = anMatrix().map(function (row) {
+      return row.map(function (v) {
+        var t = v == null ? '' : String(v);
+        return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+      }).join(',');
+    }).join('\n');
+    U.download('ssc_analytics.csv', csv, 'text/csv');
   });
 })();

@@ -175,6 +175,27 @@ window.SSCStore = (function () {
         return ((dbRead().sessions[id] || {}).decisions || {})[firmId + '_' + round] || null;
       }, cb);
     },
+    // -- append-only action/event log (analytics & timing)
+    logEvent: function (id, ev) {
+      var db = dbRead(), slot = sessSlot(db, id);
+      if (!slot.events) slot.events = {};
+      ev.id = 'e' + rid(12);
+      slot.events[ev.id] = ev;
+      dbWrite(db);
+      return Promise.resolve();
+    },
+    // one-shot load of EVERYTHING in a session (admin analytics)
+    fetchAll: function (id) {
+      var db = dbRead(), slot = db.sessions[id] || {};
+      function arr(o) { return Object.keys(o || {}).map(function (k) { return o[k]; }); }
+      return Promise.resolve({
+        session: slot.doc || null, firms: objToArr(slot.firms),
+        decisions: arr(slot.decisions), results: arr(slot.results),
+        markets: arr(slot.markets), asyncs: arr(slot.async),
+        events: arr(slot.events).sort(function (a, b) { return (a.at || 0) - (b.at || 0); }),
+        messages: arr(slot.messages).sort(function (a, b) { return (a.at || 0) - (b.at || 0); })
+      });
+    },
     // -- messages (instructor ↔ firm and firm ↔ firm)
     saveMessage: function (id, msg) {
       var db = dbRead(), slot = sessSlot(db, id);
@@ -426,6 +447,31 @@ window.SSCStore = (function () {
     watchDecision: function (id, firmId, round, cb) {
       return deferWatch(function () {
         return watchDoc(sdk.fs.doc(db, PATHS.sessions, id, 'decisions', firmId + '_' + round), cb);
+      });
+    },
+    logEvent: function (id, ev) {
+      return init().then(ensureAuth).then(function () {
+        return sdk.fs.addDoc(subCol(id, 'events'), ev);
+      }).then(function () {});
+    },
+    fetchAll: function (id) {
+      return init().then(ensureAuth).then(function () {
+        var subs = ['firms', 'decisions', 'results', 'markets', 'async', 'events', 'messages'];
+        return Promise.all([sdk.fs.getDoc(sessRef(id))].concat(subs.map(function (s2) {
+          return sdk.fs.getDocs(subCol(id, s2));
+        })));
+      }).then(function (res) {
+        function arr(qs, sortKey) {
+          var out = [];
+          qs.forEach(function (d) { out.push(Object.assign({ id: d.id }, d.data())); });
+          if (sortKey) out.sort(function (a, b) { return (a[sortKey] || 0) - (b[sortKey] || 0); });
+          return out;
+        }
+        return {
+          session: res[0].exists() ? Object.assign({ id: res[0].id }, res[0].data()) : null,
+          firms: arr(res[1], 'createdAt'), decisions: arr(res[2]), results: arr(res[3]),
+          markets: arr(res[4]), asyncs: arr(res[5]), events: arr(res[6], 'at'), messages: arr(res[7], 'at')
+        };
       });
     },
     saveMessage: function (id, msg) {
