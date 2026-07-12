@@ -1,20 +1,25 @@
 name: lit-ft50 — backfill pre-print links
 
-# Incrementally links arXiv/SSRN pre-prints for lit's FT50 catalog
-# (fun/lit/data-ft50/) by running fun/lit/_scraper-ft50/preprints-ci.mjs a few
-# times a day: each run does a bounded (~25 min), quota-aware slice of OpenAlex
-# title-searches and commits the refreshed data back. The first-deploy backlog
-# clears over a few days; after that each run is a cheap near-no-op that covers
-# newly added papers. Twin of lit-preprints-backfill.yml (which covers lit's
-# native eight sources) — see the header of preprints-ci.mjs.
+# Incrementally links free pre-prints (arXiv/SSRN/bioRxiv/medRxiv/NBER/OSF)
+# for lit's FT50 catalog (fun/lit/data-ft50/) by running
+# fun/lit/_scraper-ft50/preprints-ci.mjs every couple of hours: each run does
+# a bounded (~40 min) slice of title+author searches across three engines —
+# OpenAlex (bonus net; it cuts an identity off after ~100 title searches/day),
+# Crossref (which mints every non-arXiv pre-print host's DOIs) and arXiv's
+# own API — and commits the refreshed data back. The first-deploy backlog
+# (~150k papers) clears over a couple of weeks; after that each run is a
+# cheap near-no-op that covers newly added papers. Twin of
+# lit-preprints-backfill.yml (which covers lit's native eight sources) — see
+# the header of preprints-ci.mjs.
 
 on:
   schedule:
-    # Four slices a day, offset from the 07:15 daily catalog build and from
-    # lit-preprints-backfill.yml's 00:45/06:45/12:45/18:45 runs. This dataset
-    # has its own OpenAlex quota identity (FT50_MAILTO below), so the two
-    # backfills never starve each other.
-    - cron: '5 2,8,14,20 * * *'
+    # Twelve slices a day (even hours at :15 — never the 07:15 daily catalog
+    # build, which is an odd hour; an overlap would only queue anyway, same
+    # concurrency group). Offset from lit-preprints-backfill.yml's even-hour
+    # :45 runs; this dataset also has its own OpenAlex quota identity
+    # (FT50_MAILTO below), so the parallel backfills never starve each other.
+    - cron: '15 */2 * * *'
   workflow_dispatch: {}      # run on demand from the Actions tab
 
 # SAME concurrency group as lit-ft50-update-data.yml — both workflows commit
@@ -29,7 +34,9 @@ permissions:
 jobs:
   backfill:
     runs-on: ubuntu-latest
-    timeout-minutes: 50      # hard backstop: search budget is 25 min + apply/commit
+    # Hard backstop with real headroom: 6-min by-DOI seeding + 40-min search
+    # budget (whose last patient wait is deadline-capped) + apply/commit.
+    timeout-minutes: 75
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,13 +46,16 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Backfill pre-print links (OpenAlex title-search, bounded)
+      - name: Backfill pre-print links (OpenAlex+Crossref+arXiv title-search, bounded)
         env:
           FT50_MAILTO: kstouras+litft50@gmail.com   # this dataset's own OpenAlex quota identity
         run: node fun/lit/_scraper-ft50/preprints-ci.mjs
 
       - name: Commit refreshed data
-        if: github.ref == 'refs/heads/master'
+        # always(): if the search step is killed (timeout/transient), commit
+        # whatever the checkpointed cache already holds — finds are monotonic
+        # and losing a whole run's links to a late kill would waste the slot.
+        if: always() && github.ref == 'refs/heads/master'
         # Same hardened push as lit-ft50-update-data.yml, with one difference:
         # on a rejected push this run's tree may be STALER than what landed
         # (e.g. a daily refresh with new papers), so instead of re-committing

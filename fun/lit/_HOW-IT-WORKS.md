@@ -299,9 +299,10 @@ CI; the daily Action just folds the committed files in.
    grows across daily runs without hitting rate limits). Preference order for
    the link: arXiv → SSRN → any other open-access copy.
 4. **DOI-less accepted papers** — a fresh year's list (e.g. EC '26) before
-   the ACM DL publishes the proceedings — additionally get an **OpenAlex
-   title-search** pass (newest first, `LIT_EC_TITLE_CAP` per run, the same
-   conservative matcher as the pre-print search), since no by-DOI lookup can
+   the ACM DL publishes the proceedings — additionally get a
+   **title-search** pass (newest first, `LIT_EC_TITLE_CAP` per run, the same
+   three engines — OpenAlex/Crossref/arXiv — and conservative matcher as the
+   pre-print search), since no by-DOI lookup can
    reach them and Semantic Scholar rate-limits CI runners. An arXiv/SSRN find
    becomes both the paper's PDF tag and its "Pre-print (Open Access)" link.
    Pre-print links site-wide are rewritten at render time to the PDF itself
@@ -334,7 +335,7 @@ CI; the daily Action just folds the committed files in.
 - **Pre-print links backfill per dataset.** Every dataset runs
   the same two-part machinery: a strictly time-boxed best-effort pass inside
   its daily build, plus a dedicated scheduled backfill workflow that runs a
-  bounded (~25 min), quota-aware slice of OpenAlex title-searches 4×/day and
+  bounded (~40 min) slice of title+author searches every 2 hours and
   commits the results (cache: `_preprints.json` in each data dir). The search
   covers every paper from 1991 on (PNAS included) and accepts pre-prints on
   arXiv, SSRN, bioRxiv/medRxiv, NBER and OSF, verified by a normalized-title
@@ -342,13 +343,24 @@ CI; the daily Action just folds the committed files in.
   subtitle on publication; a prefix match must be near-contemporaneous and
   never a comment/reply/corrigendum sibling, so a same-team sequel can't
   steal the link) plus two shared author surnames (one for single-author
-  records) and a plausible year. When OpenAlex misses, a second
-  engine searches SSRN via Crossref (`filter=prefix:10.2139`) — SSRN mints
-  its DOIs through Crossref, so Crossref has every SSRN record even where
-  OpenAlex has none; arXiv links are canonicalised
+  records) and a plausible year. **Three engines share that one matcher.**
+  OpenAlex title.search is the widest net but now cuts an identity off after
+  ~100 title searches/day, so it is only a quota-permitting bonus leg (each
+  run also spends the quota first on the 50-papers-per-call by-DOI seeding
+  pass, `seedPreprintsByDoi`). The backbone is (1) **Crossref** — SSRN,
+  bioRxiv/medRxiv, NBER and OSF all mint their DOIs through Crossref
+  (`filter=prefix:10.2139,prefix:10.1101,prefix:10.3386,prefix:10.31219` —
+  same-name filters OR together), so Crossref has every
+  one of their records even where OpenAlex has none — and (2) **arXiv's own
+  API** (`export.arxiv.org/api/query`, `ti:"…" AND au:"…"`), the host
+  Crossref can't see (arXiv DOIs are DataCite's), free and paced at
+  ~1 request/3 s. A find from any engine wins; a miss is stamped only when
+  the required legs concluded cleanly. arXiv links are canonicalised
   to the unversioned form so they always resolve to the latest version. A
   `TS_VER` marker versions each searched-miss, so expanding the matcher or
-  hosts (bump it) re-queues earlier misses behind the never-searched backlog. Natives:
+  hosts (bump it) re-queues earlier misses behind the never-searched backlog
+  (papers with no cache entry at all are directly eligible — a fresh dataset
+  needs no by-DOI pass before its backfill starts finding links). Natives:
   `lit-preprints-backfill.yml` → `_scraper/preprints-ci.mjs`. FT50 catalog:
   `lit-ft50-preprints-backfill.yml` → `_scraper-ft50/preprints-ci.mjs`
   (commits `data-ft50/`). Each shard repo: its own `preprints-backfill.yml`
