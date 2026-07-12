@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import {
-  collection, addDoc, onSnapshot, orderBy, query, serverTimestamp
-} from 'firebase/firestore'
-import { httpsCallable } from 'firebase/functions'
+  collection, addDoc, onSnapshot, orderBy, query, serverTimestamp,
+  httpsCallable, db, functions
+} from '../utils/db'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import { db, functions } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import styles from './AIChat.module.css'
 

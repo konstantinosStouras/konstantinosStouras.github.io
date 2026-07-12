@@ -263,6 +263,24 @@ the app, edit `_ideasearchlab-src/`, then run `ideasearchlab-deploy-update.bat`
 `_ideasearchlab-src/README-SELF-CONTAINED.md`. The old standalone
 `github.com/konstantinosStouras/ideasearchlab` repo is retired and safe to delete.
 
+**Admin "Test round" (no data logged).** Every session card in `/admin` has a
+**🧪 Test round** button that opens the whole participant flow (Welcome →
+Registration → Individual → Group → Survey → Done) in a throwaway sandbox tab
+using that session's exact config — writing **nothing**: no Firestore, no Cloud
+Functions, no LLM cost, no participant records. It is gated by
+`?preview=1&key=stouras` (`src/utils/preview.js`); the flag is resolved ONCE from
+the initial URL and cached (SPA navigations drop the query). A small façade
+`src/utils/db.js` re-exports either the real `firebase/firestore`+`functions`
+primitives or, in preview, an in-memory reactive store `src/utils/previewDb.js`
+that emulates the ~10 participant-flow files' reads/writes plus the Cloud
+Functions they call (`joinSession`, `sendAIMessage` → canned reply) and the one
+server trigger that isn't already client-driven (individual → next phase). It is
+a **solo** run (group of one, `groupSize` forced to 1 — like search-v2's
+single-participant preview); `AuthContext` supplies a synthetic user, the session
+config is handed over via `localStorage`, and `<PreviewRibbon/>` shows a constant
+"nothing is saved" banner. All participant pages import Firestore/Functions from
+`../utils/db` instead of directly, so the swap is transparent in normal use.
+
 The retired static prototype `lab/brainstorming/` (an older Google-Sheets-backed
 version of the same Ideation Challenge, superseded by `lab/ideasearchlab/`) was
 removed.
@@ -425,6 +443,19 @@ Key structure (see its README.md for the full model):
   Firebase path + firestore.rules against the Firebase emulator (needs Java,
   firebase-tools and the npm `firebase` bundles via `FIREBASE_BIN`/
   `FIREBASE_SDK_DIR`) — run it whenever store.js or the rules change.
+
+**Test round (no data logged).** The admin's create form has a **🧪 Test round
+(nothing saved)** button, and every session card a **🧪 Test** button, that open
+a private sandbox tab at `?preview=1` (`&fresh=1` seeds it from that session's
+settings). In preview, `store.js` returns an **isolated** copy of the demo
+backend keyed to a separate, resettable `ssc-preview-*` localStorage namespace —
+never Firebase, never the real session list/exports/analytics — so the whole
+game (admin control room + student tabs, cross-tab synced, bots and all) runs
+end to end and writes no real data. A constant `.preview-ribbon` banner and a
+`banner-warn` note make the sandbox obvious. `resetPreview()` wipes it on each
+fresh launch. Verified by `tools/smoke.mjs` (unchanged normal game) plus an
+isolation check that the sandbox wins over a configured Firebase and never
+touches `ssc-db-v1`.
 
 The app is at the repo root (NOT under `/fun/`), so the fun-landing-page card
 rule does not apply; it is deliberately not linked from the homepage yet.

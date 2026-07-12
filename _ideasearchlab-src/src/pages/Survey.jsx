@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { doc, updateDoc, onSnapshot, serverTimestamp } from 'firebase/firestore'
-import { db } from '../firebase'
+import { doc, updateDoc, onSnapshot, serverTimestamp, db } from '../utils/db'
 import { useAuth } from '../context/AuthContext'
 import { useSession, useSessionEnded } from '../context/SessionContext'
 import { getContent } from '../data/defaultContent'

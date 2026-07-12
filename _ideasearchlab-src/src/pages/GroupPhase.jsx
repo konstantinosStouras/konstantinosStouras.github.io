@@ -2,9 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   collection, addDoc, onSnapshot, query, where, orderBy,
-  serverTimestamp, doc, updateDoc
-} from 'firebase/firestore'
-import { db } from '../firebase'
+  serverTimestamp, doc, updateDoc, db
+} from '../utils/db'
 import { useAuth } from '../context/AuthContext'
 import { useSession, useSessionEnded, useAIModelLabel } from '../context/SessionContext'
 import SplitLayout from '../components/SplitLayout'
