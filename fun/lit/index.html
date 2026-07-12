@@ -733,14 +733,28 @@ const JOURNAL_TYPES = [
 const JTYPE_LABEL = {};
 JOURNAL_TYPES.forEach(function(t) { JTYPE_LABEL[t.key] = t.label; });
 
+// ABS grades can also arrive at runtime: satellite data shards carry each
+// journal's grade in their sources.json (`abs` field), so adding a journal
+// to a shard needs no edit here. Static ABS_RATING wins on conflicts.
+const MANIFEST_ABS = {};   // journal key -> grade, from ingested manifests
+let _absSets = null;       // cached {abs4, abs3} key sets; reset on ingest
+function absSets() {
+  if (_absSets) return _absSets;
+  var s4 = new Set(), s3 = new Set();
+  var add = function(k, g) { if (g === '4' || g === '4*') s4.add(k); else if (g === '3') s3.add(k); };
+  Object.keys(MANIFEST_ABS).forEach(function(k) { add(k, MANIFEST_ABS[k]); });
+  Object.keys(ABS_RATING).forEach(function(k) { add(k, ABS_RATING[k]); });
+  _absSets = { abs4: s4, abs3: s3 };
+  return _absSets;
+}
+
 // The journal keys a type expands to (UTD24/FT50 list membership or ABS bucket).
 function journalTypeKeys(t) {
   if (t === 'utd24') return UTD24_KEYS;
   if (t === 'ft50') return FT50_KEYS;
-  var want = t === 'abs4' ? { '4': 1, '4*': 1 } : t === 'abs3' ? { '3': 1 } : {};
-  var s = new Set();
-  Object.keys(ABS_RATING).forEach(function(k) { if (want[ABS_RATING[k]]) s.add(k); });
-  return s;
+  if (t === 'abs4') return absSets().abs4;
+  if (t === 'abs3') return absSets().abs3;
+  return new Set();
 }
 
 // The single most-selective type a journal belongs to (JOURNAL_TYPES order) —
@@ -973,65 +987,104 @@ let sourcesLoaded = 0, sourcesTotal = 0;
 // loads that journal; filtering/searching with no journal scope loads
 // everything, progressively, with a note in the results bar. Once loaded, a
 // journal stays in memory for the session.
-let ft50Manifest = [];      // ../ft50/data/sources.json, once fetched
-const EXTRA_SRC = {};       // key -> ft50 manifest entry (journals not native here)
+let ft50Manifest = [];      // ./data-ft50/sources.json, once fetched
+const EXTRA_SRC = {};       // key -> manifest entry (journals not native here)
 const extraState = {};      // key -> 'pending' | 'loading' | 'done' | 'missing'
 const extraPromise = {};    // key -> in-flight fetch promise (idempotence)
-let manifestMinYear = Infinity; // earliest firstYear across the ft50 manifest
+let manifestMinYear = Infinity; // earliest firstYear across ingested manifests
 
-// One muted pastel per extra source (golden-angle palette),
-// injected as .jk-<key> rules so journalTagsHTML colors extras like natives.
-function extraColorCSS() {
-  var css = Object.keys(EXTRA_SRC).sort().map(function(key, i) {
-    var hue = Math.round(i * 137.508) % 360;
-    return '.jk-' + key + ' { background: hsl(' + hue + ',52%,92%); color: hsl(' + hue + ',65%,28%); }';
+// Satellite data shards: sibling repos, each with its own GitHub Pages site,
+// pipeline and journal list, publishing the same data layout as data-ft50/.
+// Project Pages sites are served under this account's custom domain, so the
+// bases are same-origin root-relative paths (see the shard repos' READMEs).
+// A shard that is absent / not yet built just 404s and is skipped.
+const SHARDS = [
+  { base: '/lit-data-abs4/data/' },          // ABS 4/4* beyond FT50/UTD24
+  { base: '/lit-data-abs3-omecon/data/' },   // ABS 3 — Operations/OR & Economics
+  { base: '/lit-data-abs3-rest/data/' },     // ABS 3 — remaining fields
+];
+
+// One muted pastel per extra source, injected as .jk-<key> rules so
+// journalTagsHTML colors extras like natives. Hue is hashed from the key so
+// a journal keeps its color regardless of which manifest arrives first.
+function extraColorCSS(keys) {
+  var css = keys.map(function(key) {
+    var h = 0;
+    for (var i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) % 360;
+    return '.jk-' + key + ' { background: hsl(' + h + ',52%,92%); color: hsl(' + h + ',65%,28%); }';
   }).join('\n');
   var style = document.createElement('style');
   style.textContent = css;
   document.head.appendChild(style);
 }
 
-async function loadFt50Manifest() {
-  for (var attempt = 0; attempt < 4; attempt++) {
-    try {
-      var r = await fetch(FT50_SOURCES_URL, { cache: 'no-cache' });
-      if (r.status === 404) return; // ft50 app absent — degrade to native sources
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      var rows = await r.json();
-      ft50Manifest = Array.isArray(rows) ? rows : [];
-      break;
-    } catch (e) {
-      if (attempt === 3) return;
-      await new Promise(function(res) { setTimeout(res, 2500 * (attempt + 1)); });
-    }
-  }
-  ft50Manifest.forEach(function(s) {
-    // Self-updating FT50 membership — but notFT entries (journals the catalog
-    // carries for another list, e.g. UTD24's IJOC or ABS 4's EJOR) stay out.
-    if (!s.notFT) FT50_KEYS.add(s.key);
+// Register one manifest's journals as lazy extra sources (used by the local
+// data-ft50 catalog and by every satellite shard). First registration of a
+// key wins; ABS grades flow into the type buckets via MANIFEST_ABS.
+function registerExtraSources(rows, base) {
+  var added = [];
+  rows.forEach(function(s) {
+    if (s.abs && !ABS_RATING[s.key] && !MANIFEST_ABS[s.key]) { MANIFEST_ABS[s.key] = s.abs; _absSets = null; }
     var y = parseInt(s.firstYear, 10);
     if (y && y < manifestMinYear) manifestMinYear = y;
-    if (!SRC[s.key]) {
-      EXTRA_SRC[s.key] = s;
-      if (extraState[s.key] === undefined) extraState[s.key] = 'pending';
-    }
+    if (SRC[s.key] || EXTRA_SRC[s.key]) return;
+    var entry = base && !s.base ? Object.assign({ base: base }, s) : s;
+    EXTRA_SRC[s.key] = entry;
+    if (extraState[s.key] === undefined) extraState[s.key] = 'pending';
+    added.push(entry);
   });
-  // Append the extra journals (alphabetical) below the native entries.
-  Object.keys(EXTRA_SRC).map(function(k) { return EXTRA_SRC[k]; })
-    .sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); })
+  // Append the new journals (alphabetical) below the existing entries.
+  added.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); })
     .forEach(function(s) {
       JOURNAL_OPTIONS.push({ key: s.key, label: s.name + (s.limitedCoverage ? ' — limited coverage' : '') });
       JOURNAL_LABEL[s.key] = s.name;
     });
-  extraColorCSS();
+  extraColorCSS(added.map(function(s) { return s.key; }));
   buildJournalSelect();
   buildJTypeSelect();
   updateSourceCountText();
   updateYearRangeText(NaN);
-  loadRecentExtras();
-  // If the user scoped to an FT50 set before this manifest arrived, re-run the
-  // active view so the newly registered journals start downloading.
-  if (recentMode) renderRecent(); else if (sel.jtype.size || sel.journal.size) applyFilters();
+  // If the user set a scope before this manifest arrived, re-run the active
+  // view so the newly registered journals start downloading.
+  if (recentMode) renderRecent(); else if (sel.jtype.size || sel.journal.size || broadFilterActive()) applyFilters();
+}
+
+async function fetchManifest(url) {
+  for (var attempt = 0; attempt < 4; attempt++) {
+    try {
+      var r = await fetch(url, { cache: 'no-cache' });
+      if (r.status === 404) return null; // dataset absent / not built yet
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      var rows = await r.json();
+      return Array.isArray(rows) ? rows : [];
+    } catch (e) {
+      if (attempt === 3) return null;
+      await new Promise(function(res) { setTimeout(res, 2500 * (attempt + 1)); });
+    }
+  }
+  return null;
+}
+
+async function loadFt50Manifest() {
+  var rows = await fetchManifest(FT50_SOURCES_URL);
+  if (!rows) return;
+  ft50Manifest = rows;
+  ft50Manifest.forEach(function(s) {
+    // Self-updating FT50 membership — but notFT entries (journals the catalog
+    // carries for another list, e.g. UTD24's IJOC or ABS 4's EJOR) stay out.
+    if (!s.notFT) FT50_KEYS.add(s.key);
+  });
+  registerExtraSources(ft50Manifest, null); // files carry no base -> FT50_DATA_BASE
+  loadDatasetRecent(FT50_RECENT_URL);
+}
+
+function loadShardManifests() {
+  SHARDS.forEach(async function(shard) {
+    var rows = await fetchManifest(shard.base + 'sources.json');
+    if (!rows || !rows.length) return;
+    registerExtraSources(rows, shard.base);
+    loadDatasetRecent(shard.base + 'recent.json');
+  });
 }
 
 // Fetch one extra journal's papers file (idempotent: repeated calls return
@@ -1161,7 +1214,8 @@ async function loadData() {
   buildJournalSelect();
   buildJTypeSelect();
   updateSourceCountText();
-  loadFt50Manifest(); // async: registers the FT50-only journals as lazy sources
+  loadFt50Manifest();   // async: registers the FT50-catalog journals as lazy sources
+  loadShardManifests(); // async: registers each satellite shard's journals
 
   // Affiliation aggregates come from their own small JSON file.
   fetch(AFFILIATIONS_URL, { cache: 'no-cache' })
@@ -1281,10 +1335,11 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 // pre-computed tabs for them. (loadSummaries is intentionally gone.)
 
 // Show when the pipelines last pulled from Crossref. The merged catalog spans
-// two datasets on their own daily schedules (this app's meta.json and the
-// FT50 app's), so the header shows the LATEST of the two pulls — the moment
-// any part of the merged data was last refreshed. Cached so it paints
-// instantly on repeat visits, then refreshes in the background.
+// several datasets on their own daily schedules (this app's meta.json, the
+// data-ft50 catalog's, and each satellite shard's), so the header shows the
+// LATEST of all pulls — the moment any part of the merged data was last
+// refreshed. Cached so it paints instantly on repeat visits, then refreshes
+// in the background.
 var LAST_PULL_CACHE_KEY = 'lit_lastPull';
 function setLastPullText(date) {
   var el = document.getElementById('lastPull');
@@ -1300,7 +1355,9 @@ function loadLastPull() {
       .then(function(r) { return r && r.ok ? r.json() : null; })
       .catch(function() { return null; });
   };
-  Promise.all([fetchMeta(META_URL), fetchMeta(FT50_DATA_BASE + 'meta.json')]).then(function(metas) {
+  var metaUrls = [META_URL, FT50_DATA_BASE + 'meta.json']
+    .concat(SHARDS.map(function(sh) { return sh.base + 'meta.json'; }));
+  Promise.all(metaUrls.map(fetchMeta)).then(function(metas) {
     // ISO YYYY-MM-DD dates: a string compare picks the most recent.
     var date = metas.map(function(m) { return (m && m.lastPull) || ''; })
       .sort().pop();
@@ -2297,23 +2354,29 @@ async function loadRecent(attempt) {
   if (recentMode) renderRecent();
 }
 
-// The FT50 dataset keeps its own recent.json; rows for journals this page
-// lazy-loads from there (i.e. not the native sources, which the native
-// recent.json already covers — no duplicates) join the recent view. Called
-// once the ft50 manifest has registered EXTRA_SRC.
-async function loadRecentExtras(attempt) {
+// Each extra dataset (the local data-ft50 catalog and every satellite shard)
+// keeps its own recent.json; rows for journals this page lazy-loads from it
+// (i.e. not the native sources, which the native recent.json already covers)
+// join the recent view. Called once that dataset's manifest has registered
+// its journals in EXTRA_SRC; datasets' key sets are disjoint, so appending
+// cannot duplicate.
+var _recentUrlsFetched = {};
+async function loadDatasetRecent(url, attempt) {
+  if (_recentUrlsFetched[url]) return;
+  _recentUrlsFetched[url] = true;
   try {
-    var r = await fetch(FT50_RECENT_URL, { cache: 'no-cache' });
+    var r = await fetch(url, { cache: 'no-cache' });
     if (r.status === 404) return; // not built yet
     if (!r.ok) throw new Error('HTTP ' + r.status);
     var rows = await r.json();
     if (!Array.isArray(rows)) rows = [];
     rows = rows.filter(function(p) { return EXTRA_SRC[p.JKey]; });
     rows.forEach(function(p) { normalizeEditors(p); computeJkeys(p); }); // so tags render
-    recentExtraRows = rows;
+    recentExtraRows = (recentExtraRows || []).concat(rows);
   } catch (e) {
     attempt = (attempt || 0) + 1;
-    if (attempt <= 4) setTimeout(function() { loadRecentExtras(attempt); }, 3000);
+    delete _recentUrlsFetched[url];
+    if (attempt <= 4) setTimeout(function() { loadDatasetRecent(url, attempt); }, 3000);
     return;
   }
   if (recentMode) renderRecent();

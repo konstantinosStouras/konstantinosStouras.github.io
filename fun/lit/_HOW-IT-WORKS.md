@@ -70,10 +70,15 @@ browser.
   on a broad search with no journal scope, which streams everything;
   `authors.json` is fetched on the first Authors-tab open. The results bar
   counts the files still on their way; loaded journals stay in memory for
-  the session. The manifest also supports a per-journal absolute `base` URL,
-  so future journals can live on satellite GitHub Pages data sites (Pages
-  sends `Access-Control-Allow-Origin: *`) — room to grow past this repo's
-  1 GB Pages limit without touching the page. The MS/ISR-specific
+  the session. **Satellite data shards:** the catalog can outgrow this
+  repo's 1 GB Pages limit — the page also merges the manifests of the shard
+  repos listed in `SHARDS` (`lit-data-abs4`, `lit-data-abs3-omecon`,
+  `lit-data-abs3-rest`; each a sibling repo with its own Pages site,
+  pipeline and curated journal list, served same-origin under
+  `stouras.com/<repo>/data/`). A shard's `sources.json` carries each
+  journal's ABS grade (`abs` field), which flows into the ABS 4/4* / ABS 3
+  buckets and badges via `MANIFEST_ABS` — adding a journal to a shard needs
+  no edit to this page. Absent or not-yet-built shards 404 and are skipped. The MS/ISR-specific
   editor filters and the pre-print toggle can't match FT50-extra papers, so
   those alone never trigger the download; the recent view merges the
   `data-ft50/recent.json` (extras only — natives are already covered).

@@ -67,9 +67,14 @@ Review (`apsr`) — flagged `"notFT": true` in `journals.json` so the page
 keeps them out of FT50 membership and the yearly FT-list check never retires
 them. (Full ABS 3 coverage — ~330 journals, ~1 GB — would exceed GitHub
 Pages' 1 GB site limit; ABS 3 therefore means the 3-graded journals among
-the covered lists. `sources.json` entries support an absolute `base` URL for
-future satellite data repos/Pages sites if the catalog must outgrow this
-repo.) **Everything loads lazily:** no papers file (native or catalog)
+the covered lists. The catalog grows past this repo's 1 GB Pages limit via
+**satellite data shards** — sibling repos `lit-data-abs4`,
+`lit-data-abs3-omecon`, `lit-data-abs3-rest`, each with its own Pages site,
+vendored pipeline and curated `_scraper/journals.json` (grades in an `abs`
+field that flows into the page's ABS buckets/badges via `MANIFEST_ABS`);
+the page merges their `data/sources.json` manifests at runtime (`SHARDS`
+list in `index.html`) and lazy-loads their papers files same-origin from
+`stouras.com/<repo>/data/`. Missing shards 404 and are skipped.) **Everything loads lazily:** no papers file (native or catalog)
 downloads until a filter needs it — first paint is a few hundred KB
 (manifests + recent.json; authors.json fetched on first Authors-tab open),
 where the page previously eager-fetched ~60 MB per visit. The page merges in
