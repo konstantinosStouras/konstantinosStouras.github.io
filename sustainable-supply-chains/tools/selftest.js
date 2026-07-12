@@ -300,6 +300,30 @@ ok(nashAvg > naiveAvg, 'nash bots out-earn naive bots head to head');
 var stAllNash2 = playMixed('NASHALL', [], ['a', 'b', 'c', 'd'], NF);
 ok(JSON.stringify(stAllNash) === JSON.stringify(stAllNash2), 'nash game reproducible');
 
+/* ---- audit regressions: extreme tariff, scandal basis ------------------------- */
+console.log('· audit regressions');
+// C1: a 200% tariff must NOT make the Nash bot price at the floor and self-bankrupt
+var hiTar = makeSession({ tariffBase: { europe: 5, namerica: 200, easia: 3, seasia: 3, sasia: 5, latam: 8 },
+  markets: ['namerica'] });
+var hf = [{ id: 'q', name: 'Q', hub: 'easia' }, { id: 'r', name: 'R', hub: 'namerica' }];
+var hst = {}; hf.forEach(function (f) { hst[f.id] = E.initFirmState(hiTar, f); });
+for (var hr = 1; hr <= 6; hr++) { hst = E.resolveRound(hiTar, hf, hst, E.nashDecisions(hiTar, hf, hst, hr, ['q', 'r']), hr).states; }
+// C1 bug: the sign-flipped markup priced the bot at the 0.3x floor and sold
+// every unit at a guaranteed loss (audit measured -683k/round). Now an
+// importer facing a punishing export tariff rationally prices HIGH.
+var qAvgPrice = hst.q.cum.sold > 0 ? hst.q.cum.revenue / hst.q.cum.sold : Infinity;
+ok(qAvgPrice > hiTar.catalog.markets[0].refPrice, 'importer prices ABOVE reference under a 200% export tariff (the pre-fix bug sold at the 0.3x floor)');
+var eqHi = E.nashPrices(hiTar, [{ firmId: 'q', hub: 'easia', green: 50, brand: 50 }], 1);
+ok(eqHi.prices.q.namerica >= hiTar.catalog.markets[0].refPrice, 'equilibrium price rises above reference under an extreme tariff (never floored)');
+var shockS = makeSession({});
+var sf = [{ id: 'a', name: 'A', hub: 'easia' }, { id: 'b', name: 'B', hub: 'europe' }, { id: 'c', name: 'C', hub: 'namerica' }];
+var sst = {}; sf.forEach(function (f) { sst[f.id] = E.initFirmState(shockS, f); });
+for (var sr = 1; sr <= 8; sr++) { sst = E.resolveRound(shockS, sf, sst, E.nashDecisions(shockS, sf, sst, sr, ['a', 'b', 'c']), sr).states; }
+ok(sf.every(function (f) { return sst[f.id].cum.profit > 0; }), 'Nash bots profitable through the default tariff shock');
+// C18: junk audit-supplier ids are dropped by sanitize (no phantom audit charge)
+var sd = E.sanitizeDecision(sess, 'x', 1, { auditSuppliers: ['bat_szn', 'NON_EXISTENT', 'bat_szn'] });
+ok(sd.auditSuppliers.length === 1 && sd.auditSuppliers[0] === 'bat_szn', 'sanitize drops unknown + duplicate audit ids');
+
 /* ---- the coach: automatic nudges + post-round feedback -------------------------- */
 console.log('· coach');
 var cSess = makeSession();
