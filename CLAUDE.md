@@ -120,7 +120,14 @@ field, resolved in `build-data.mjs`
 (batched) reads any pre-print location already attached to the published record;
 (2) a **title+author search** (`searchPreprintsByTitle`/`matchPreprintWork`,
 newest-first) finds preprints that live as a **separate** OpenAlex/SSRN record
-(own `10.2139/ssrn.*` DOI) — this is what surfaces most SSRN links. The
+(own `10.2139/ssrn.*` DOI); when OpenAlex misses, a **second engine queries
+Crossref with `filter=prefix:10.2139`** (`searchSsrnViaCrossref`/
+`matchCrossrefPreprint`) — OpenAlex's SSRN coverage is patchy, but SSRN mints
+its DOIs through Crossref, so Crossref has every one (a transient Crossref
+failure leaves the paper un-stamped so a later run retries — never recorded
+as a miss). Titles match exactly or by **prefix** (≥14 collapsed chars —
+working papers often gain/lose a subtitle on publication; guarded against
+same-team sequels, see below), always with the author check. The
 search covers **every paper from 1991 on (arXiv's first year), PNAS
 included**; `ts` records WHICH search version last missed (`TS_VER` in the
 block — **bump it whenever the matcher or host coverage expands** and every
@@ -161,7 +168,12 @@ broad trigger in `neededExtraKeys()` (like it always did for natives). Both `pic
 `arxiv.org`/`ssrn.com`/`biorxiv.org`/`medrxiv.org`/`nber.org`/`osf.io`
 hostname) so a spoofed domain can't slip into the href; the matcher demands
 an exact normalized-title match + **two shared author surnames** (one only
-for single-author records) + a plausible year to avoid wrong links. The card shows an open-access **"Pre-print (Open Access)"**
+for single-author records) + a plausible year to avoid wrong links.
+Titles may also match by prefix (≥14 collapsed chars) to catch working
+papers that gained/lost a subtitle — but a prefix match must be
+near-contemporaneous (≤6y older, vs 12 for exact) and never a comment/
+reply/corrigendum sibling (`titlesMatch`), or a same-team title-stem SEQUEL
+would link the wrong paper's pre-print. The card shows an open-access **"Pre-print (Open Access)"**
 link between BibTeX and the sign-in "Notes, tags & lists" toggle; EC's meta-row
 PDF tag is suppressed when it duplicates it. **Pre-print links open the PDF
 directly, latest version:** at render time `preprintPdfUrl()` in `index.html`
