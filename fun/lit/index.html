@@ -316,6 +316,19 @@
     .results-bar { gap: 6px 12px; }
   }
 
+  /* Phones: the secondary filters become a 2-column grid so the filter bar
+     takes half the vertical space (7 stacked full-width controls previously
+     filled more than one screen before any results); the Clear button spans
+     the row. Dropdown panels grow to most of the viewport for easy scrolling. */
+  @media (max-width: 768px) {
+    .filters-row-secondary { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .filters-row-secondary .filter-group { min-width: 0; }
+    .filter-group label { white-space: normal; overflow: visible; }
+    .filter-actions { grid-column: 1 / -1; padding-top: 0; }
+    .filter-actions .btn { width: 100%; }
+    .custom-select-dropdown { max-height: 55vh; }
+  }
+
   /* Small phones: tighter gutters, smaller heading and tab buttons. */
   @media (max-width: 480px) {
     .header-inner { padding: 14px 16px; }
@@ -325,6 +338,10 @@
     .paper-card { padding: 14px 15px; }
     .paper-title { font-size: 15.5px; }
     .summary-tab-btn, .recent-tab-btn { padding: 7px 12px; font-size: 12.5px; }
+    .jtype-badge { font-size: 9.5px; padding: 2px 6px; margin-right: 6px; vertical-align: 2px; }
+    .chip { font-size: 12px; padding: 4px 8px; }
+    .tag { font-size: 10.5px; padding: 3px 8px; }
+    .paper-meta { gap: 6px; }
   }
 
   /* ── Accounts: sign-in, saved papers, notes, lists, tags ──────────────────
@@ -609,7 +626,7 @@
 <footer class="footer">
   <div>Built as a personal project to search papers across several journals of my interest in one place.</div>
   <div>Editors and editorial areas are shown for <em>Management Science</em> papers (2011+), exactly as on <a href="/fun/ms/">the MS-only browser</a>. Other sources contribute their published papers and Articles in Advance. ACM EC papers link to an arXiv/SSRN/open-access PDF where one could be found.</div>
-  <div>The <strong>Journal types</strong> filter covers the <a href="https://jsom.utdallas.edu/the-utd-top-100-business-school-research-rankings/list-of-journals" target="_blank" rel="noopener">UTD24 list</a> and the full <a href="https://www.ft.com/ft50-journals" target="_blank" rel="noopener">FT50 research rank</a> — journals beyond the eight core sources come from this app's own dataset (refreshed daily, checked against the FT's list yearly), downloaded on demand. The small badge left of each title shows the most selective list its journal belongs to (UTD24 &gt; FT50 &gt; ABS 4/4* &gt; ABS 3; a journal on both UTD24 and FT50 shows both tags) — a broader filter still finds the paper, e.g. an ABS 4/4* search includes every UTD24 journal. ABS ratings follow the Chartered ABS <em>Academic Journal Guide</em> (AJG 2024), as mirrored at <a href="https://journalranking.org/" target="_blank" rel="noopener">journalranking.org</a>; beyond the FT50/UTD24 lists, ABS coverage is deliberately limited to Operations, Supply Chain, Economics and Computer Science-related journals. HBR and MIT Sloan Management Review, the AJG's "top practitioner" journals, are listed under ABS 3, their last numeric grade.</div>
+  <div>The <strong>Journal types</strong> filter covers the <a href="https://jsom.utdallas.edu/the-utd-top-100-business-school-research-rankings/list-of-journals" target="_blank" rel="noopener">UTD24 list</a> and the full <a href="https://www.ft.com/ft50-journals" target="_blank" rel="noopener">FT50 research rank</a> — journals beyond the eight core sources come from this app's own dataset (refreshed daily, checked against the FT's list yearly), downloaded on demand. The small badge left of each title shows the most selective list its journal belongs to (UTD24 &gt; FT50 &gt; ABS 4/4* &gt; ABS 3; a journal on both UTD24 and FT50 shows both tags) — a broader filter still finds the paper, e.g. an ABS 4/4* search includes every UTD24 journal. ABS ratings follow the Chartered ABS <em>Academic Journal Guide</em> (AJG 2024), as mirrored at <a href="https://journalranking.org/" target="_blank" rel="noopener">journalranking.org</a>; beyond the FT50/UTD24 lists, ABS coverage is deliberately limited to Operations, Supply Chain, Economics, Computer Science, Project Management and Innovation-related journals. HBR and MIT Sloan Management Review, the AJG's "top practitioner" journals, are listed under ABS 3, their last numeric grade.</div>
   <div>All metadata are publicly available, collected via the <a href="https://www.crossref.org/documentation/retrieve-metadata/rest-api/" target="_blank">Crossref API</a> (with OpenAlex, DBLP and Semantic Scholar assisting for EC PDF links). PNAS section labels come from pnas.org's own topic index where available, and are otherwise approximated from each paper's <a href="https://openalex.org" target="_blank">OpenAlex</a> primary topic.</div>
   <div>Feedback and suggestions are welcome. Any errors are my own. <a href="https://www.stouras.com" target="_blank">Konstantinos I. Stouras</a></div>
 </footer>
@@ -693,8 +710,9 @@ JOURNAL_OPTIONS.forEach(function(o) { JOURNAL_LABEL[o.key] = o.label; });
 // rather than a number — they are kept at 3, their last numeric grade, so the
 // ABS 3 option finds them. SCOPE: beyond the FT50/UTD24 lists (which are
 // covered in full, all fields), ABS 4/4*/3 coverage deliberately extends only
-// to Operations / Supply Chain / Economics / Computer Science-related
-// journals — other fields' ABS journals are neither harvested nor listed.
+// to Operations / Supply Chain / Economics / Computer Science / Project
+// Management / Innovation-related journals — other fields' ABS journals are
+// neither harvested nor listed.
 const ABS_RATING = {
   aman: '4*', amj: '4*', amr: '4*', tar: '4*', aos: '4*', asq: '4*',
   aer: '4*', asr: '4*', ecta: '4*', etp: '4*', jae: '4*', jar: '4*',
@@ -729,9 +747,9 @@ const JOURNAL_TYPES = [
   { key: 'ft50', label: 'FT50 (Financial Times Top 50)', badge: 'FT50',
     title: 'All 50 journals of the Financial Times FT50 research rank.' },
   { key: 'abs4', label: 'ABS 4/4*', badge: 'ABS 4/4*',
-    title: 'Journals rated 4* ("world elite") or 4 ("top") in the Chartered ABS Academic Journal Guide (AJG 2024), via journalranking.org. Covers every FT50/UTD24 journal plus Operations, Supply Chain, Economics and Computer Science-related journals; other fields are deliberately out of scope.' },
+    title: 'Journals rated 4* ("world elite") or 4 ("top") in the Chartered ABS Academic Journal Guide (AJG 2024), via journalranking.org. Covers every FT50/UTD24 journal plus Operations, Supply Chain, Economics, Computer Science, Project Management and Innovation-related journals; other fields are deliberately out of scope.' },
   { key: 'abs3', label: 'ABS 3', badge: 'ABS 3',
-    title: 'Journals rated 3 ("highly regarded") in the Chartered ABS Academic Journal Guide, via journalranking.org. Coverage: Operations, Supply Chain, Economics and Computer Science-related journals, plus the covered lists’ own 3s (HBR and MIT SMR — the AJG’s top practitioner journals, at their last numeric grade — and the INFORMS Journal on Computing).' },
+    title: 'Journals rated 3 ("highly regarded") in the Chartered ABS Academic Journal Guide, via journalranking.org. Coverage: Operations, Supply Chain, Economics, Computer Science, Project Management and Innovation-related journals, plus the covered lists’ own 3s (HBR and MIT SMR — the AJG’s top practitioner journals, at their last numeric grade — and the INFORMS Journal on Computing).' },
 ];
 const JTYPE_LABEL = {};
 JOURNAL_TYPES.forEach(function(t) { JTYPE_LABEL[t.key] = t.label; });
