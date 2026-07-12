@@ -3,10 +3,12 @@ rules_version = '2';
 // Paste into Firebase console → Firestore → Rules (or `firebase deploy --only firestore:rules`).
 //
 // Model: students are anonymous-auth users; the instructor signs in with an
-// email/password account listed in isAdmin(). Within a session, signed-in
-// users can read everything (it's a shared class game: results and standings
-// are public to the class) and write firms/decisions; only the admin can
-// create/modify sessions and publish results.
+// email/password account listed in isAdmin(). Firms carry a `memberUids`
+// array (written by the app) — it is the ownership anchor for firm updates
+// and for that firm's decision documents, so one team can never read or
+// forge another team's pending moves. Results, markets and firm rosters are
+// readable by the whole class (it's a shared game); sessions are fetched one
+// at a time via the sscSessionCodes lookup, so students never list them all.
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
@@ -15,22 +17,54 @@ service cloud.firestore {
         request.auth.token.email in ['admin@admin.com'];   // ← keep in sync with SSC_ADMIN_EMAILS
     }
 
+    // code → sessionId lookup docs (maintained by the admin panel): a student
+    // joining resolves their code with one point read.
+    match /sscSessionCodes/{code} {
+      allow get: if signedIn();
+      allow list, write: if isAdmin();
+    }
+
     match /sscSessions/{sessionId} {
-      allow read: if signedIn();
+      // point reads for anyone signed in; enumerating all sessions is admin-only
+      allow get: if signedIn();
+      allow list: if isAdmin();
       allow create, update, delete: if isAdmin();
+
+      function firmMemberUids(firmId) {
+        return get(/databases/$(database)/documents/sscSessions/$(sessionId)/firms/$(firmId)).data.memberUids;
+      }
 
       match /firms/{firmId} {
         allow read: if signedIn();
-        // students create their own firm and update it (joining adds a member);
-        // deletion (kicking) is the instructor's call
-        allow create, update: if signedIn();
+        // founders must list themselves as a member of the firm they create
+        allow create: if isAdmin() ||
+          (signedIn() && request.auth.uid in request.resource.data.memberUids);
+        // existing members may update their firm; a joining student may add
+        // themself (they appear in the AFTER-write memberUids)
+        allow update: if isAdmin() ||
+          (signedIn() && (request.auth.uid in resource.data.memberUids ||
+                          request.auth.uid in request.resource.data.memberUids));
         allow delete: if isAdmin();
       }
+
       match /decisions/{decId} {
-        allow read: if signedIn();
-        allow create, update: if signedIn();
+        // decisions are PRIVATE to the owning firm until the round resolves
+        // (results docs are what the class sees) — read and write both require
+        // membership of the firm named in the document. resource == null =
+        // reading a not-yet-created doc (every round before the first
+        // autosave) — that must succeed and leaks nothing.
+        allow get, list: if isAdmin() ||
+          (signedIn() && (resource == null ||
+                          request.auth.uid in firmMemberUids(resource.data.firmId)));
+        allow create: if isAdmin() ||
+          (signedIn() && request.auth.uid in firmMemberUids(request.resource.data.firmId) &&
+           decId == request.resource.data.firmId + '_' + string(request.resource.data.round));
+        allow update: if isAdmin() ||
+          (signedIn() && request.auth.uid in firmMemberUids(request.resource.data.firmId) &&
+           request.resource.data.firmId == resource.data.firmId);
         allow delete: if isAdmin();
       }
+
       match /results/{resId} {
         allow read: if signedIn();
         allow write: if isAdmin();

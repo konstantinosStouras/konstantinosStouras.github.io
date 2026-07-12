@@ -23,8 +23,9 @@ window.SSC_FIREBASE_CONFIG = {
 // isAdmin() allow-list in firestore.rules.
 window.SSC_ADMIN_EMAILS = ['admin@admin.com'];
 
-// Firestore root collection for game sessions (rarely needs changing).
-window.SSC_PATHS = { sessions: 'sscSessions' };
+// Firestore root collections (rarely need changing): game sessions, and the
+// code → sessionId lookup docs students use to join without listing sessions.
+window.SSC_PATHS = { sessions: 'sscSessions', codes: 'sscSessionCodes' };
 
 // Version of the Firebase JS SDK to load from the CDN (only when configured).
 window.SSC_FIREBASE_SDK_VERSION = '10.12.2';

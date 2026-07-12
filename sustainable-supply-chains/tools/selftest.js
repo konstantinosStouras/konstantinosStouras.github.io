@@ -49,6 +49,14 @@ ok(E.tariffRate(sess, 'namerica', 'easia', 4) === 0.35, 'tariff shock kicks in a
 ok(E.tariffRate(sess, 'namerica', 'namerica', 4) === 0, 'no tariff on domestic flows');
 ok(E.tariffRate(sess, 'namerica', 'europe', 4) === 0.10, 'shock scoped to its origin region');
 
+// a later shock REPLACES the rate — including lowering it (trade deal)
+var deal = makeSession({ tariffShocks: [
+  { round: 3, importer: 'namerica', from: 'easia', rate: 35 },
+  { round: 6, importer: 'namerica', from: 'easia', rate: 2 }
+] });
+ok(E.tariffRate(deal, 'namerica', 'easia', 4) === 0.35, 'shock raises rate from its round');
+ok(E.tariffRate(deal, 'namerica', 'easia', 6) === 0.02, 'later shock can LOWER the rate (replace, not max)');
+
 // demand: step pattern jumps at stepRound; deterministic
 var d3 = E.demandFor(sess, 'europe', 3), d5 = E.demandFor(sess, 'europe', 5);
 ok(d5 > d3 * 1.15, 'step demand jumps after stepRound (' + d3 + ' → ' + d5 + ')');
@@ -98,6 +106,18 @@ ok(rImp.results.fa.costs.inTariff === Math.round(100 * 240 * 0.05), 'import tari
 // determinism: identical inputs → identical outputs
 var r2b = E.resolveRound(sess0, [firmA], r1.states, { fa: d2 }, 2);
 ok(JSON.stringify(r2) === JSON.stringify(r2b), 'resolveRound is deterministic');
+
+// preview counts arrivals due this round, exactly like resolution
+var stPrev = E.initFirmState(sess0, firmA);
+stPrev.pipeline.push({ eta: 2, compId: 'battery', supplierId: 'bat_gda', qty: 80, mode: 'surface', placed: 1 });
+stPrev.pipeline.push({ eta: 2, compId: 'frame', supplierId: 'frm_por', qty: 80, mode: 'surface', placed: 1 });
+stPrev.pipeline.push({ eta: 2, compId: 'drive', supplierId: 'drv_stu', qty: 80, mode: 'surface', placed: 1 });
+stPrev.pipeline.push({ eta: 2, compId: 'electronics', supplierId: 'ele_ein', qty: 80, mode: 'surface', placed: 1 });
+var decPrev = E.emptyDecision(sess0, 'fa', 2); decPrev.production = 80;
+var pv = E.previewDecision(sess0, stPrev, decPrev, 2);
+var rPrev = E.resolveRound(sess0, [firmA], { fa: stPrev }, { fa: decPrev }, 2);
+ok(pv.produce === 80 && rPrev.results.fa.produced === 80, 'preview production matches resolution when arrivals land');
+ok(pv.prodCost === rPrev.results.fa.costs.production, 'preview production cost matches resolution');
 
 /* ---- sea vs air: air lands next round, sea later ---------------------------- */
 console.log('· logistics');

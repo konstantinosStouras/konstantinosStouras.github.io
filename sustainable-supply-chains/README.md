@@ -58,9 +58,15 @@ For a **real class** (many devices), create a Firebase project:
    object into `firebase-config.js` (replacing the `PASTE_…` placeholders),
    and put your admin email in `SSC_ADMIN_EMAILS`.
 5. Firestore → **Rules**: paste `firestore.rules` (keep the email list in its
-   `isAdmin()` in sync).
+   `isAdmin()` in sync). The rules enforce real ownership: each firm doc
+   carries a `memberUids` array, and only those members (or you) can update
+   the firm or read/write its decision documents — teams cannot see or forge
+   each other's pending moves. Students resolve a join code via the
+   `sscSessionCodes` lookup collection, so they never list your sessions.
 6. Commit & push. The admin panel now asks you to sign in; students join
-   anonymously from any device.
+   anonymously from any device. Teams on several devices are kept in sync:
+   the decide form live-follows the firm's latest saved decision, so the
+   newest save (or submit) wins visibly on every teammate's screen.
 
 Round resolution runs in the instructor's browser through the same
 deterministic engine students see (`engine.js`) — seeded RNG per

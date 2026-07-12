@@ -96,6 +96,21 @@ try {
   await stu.click('#btn-submit');
   await stu.waitForSelector('#submitted-banner', { timeout: 5000 }).catch(() => fail('submit did not register'));
 
+  /* ---- teammate on a second device: sees the submit, reopen syncs back -------------- */
+  const mate = await ctx.newPage(); watch(mate, 'teammate');
+  await mate.goto(BASE + '/?code=TESTGAME', { waitUntil: 'load' });
+  await mate.waitForSelector('#s-game.active', { timeout: 8000 }).catch(() => fail('teammate did not rejoin the firm by uid'));
+  await mate.waitForSelector('#submitted-banner', { timeout: 8000 }).catch(() => fail('teammate does not see the submitted state'));
+  await mate.click('#btn-reopen');
+  // first tab must adopt the teammate's reopen instead of clobbering it later
+  await stu.waitForSelector('#submitted-banner', { state: 'detached', timeout: 8000 })
+    .catch(() => fail('first tab did not sync the teammate reopen'));
+  await stu.waitForSelector('#btn-submit', { state: 'visible', timeout: 5000 });
+  await stu.click('#btn-submit');
+  await stu.waitForSelector('#submitted-banner', { timeout: 5000 }).catch(() => fail('re-submit after sync failed'));
+  await mate.waitForSelector('#submitted-banner', { timeout: 8000 }).catch(() => fail('teammate did not sync the re-submit'));
+  await mate.close();
+
   /* ---- admin: resolve all rounds --------------------------------------------------- */
   admin.on('dialog', d => d.accept());
   for (let r = 1; r <= 4; r++) {

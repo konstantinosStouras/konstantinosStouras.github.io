@@ -344,3 +344,36 @@ the player to always-trust / always-verify / perfect-play. **No data is collecte
 or transmitted.** The plot is inline SVG. To change behavior, edit the constants
 near the top of the `<script>` (`N_Q`, `CORRECT`, `VERIFY_FEE`, `PEN`, `STEP_SD`,
 `K_SPARSE`, `K_DENSE`) or `buildLandscape`.
+
+## `/sustainable-supply-chains` — global sourcing class simulation
+
+`sustainable-supply-chains/` is a class simulation (student teams = competing
+e-bike firms sourcing components worldwide) with an instructor panel at
+`/sustainable-supply-chains/admin/` in the ideasearchlab admin look. Vanilla
+HTML/JS, no build step. Designed to teach: bullwhip (lead times + hidden demand
+patterns + pro-rata supplier rationing + service-loyalty brand; measured per
+firm), logistics (sea/air cost–CO2–lead tradeoffs), competition (per-market
+logit on price/green/brand), tariffs (base rates + scheduled shocks), sourcing,
+and CO2/ESG sourcing (embodied CO2, supplier ESG + audits + scandals, carbon
+tax, offsets — net vs gross).
+
+Key structure (see its README.md for the full model):
+- `engine.js` — pure deterministic engine (seeded per session code + round;
+  also runs in Node). ALL game math lives here; the admin browser resolves
+  rounds with it. `config.js` holds the default catalog/settings copied into
+  each session (admin-editable per session, incl. the catalog JSON).
+- `store.js` — one storage API, two backends: Firebase (lazy CDN SDK v10;
+  anonymous students + email/password admin; sessions under `sscSessions`,
+  code→id lookups under `sscSessionCodes`) or a zero-setup localStorage DEMO
+  mode with cross-tab sync (active while `firebase-config.js` holds `PASTE_…`
+  placeholders — the current state). `firestore.rules` enforces firm ownership
+  via each firm doc's `memberUids`; keep its `isAdmin()` email list in sync
+  with `SSC_ADMIN_EMAILS` in `firebase-config.js`.
+- Tests that must stay green: `node sustainable-supply-chains/tools/selftest.js`
+  (engine, 55+ checks incl. a full bot game) and
+  `node sustainable-supply-chains/tools/smoke.mjs` (Playwright, plays a whole
+  demo game across admin + student tabs; container paths overridable via
+  `PW`/`CHROMIUM`).
+
+The app is at the repo root (NOT under `/fun/`), so the fun-landing-page card
+rule does not apply; it is deliberately not linked from the homepage yet.
