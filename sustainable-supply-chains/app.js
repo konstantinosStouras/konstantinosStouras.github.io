@@ -162,15 +162,19 @@
     ST.getSessionByCode(code).then(function (sess) {
       $('#btn-join').disabled = false;
       if (!sess) {
-        $('#join-err').textContent = 'No session found with that code' +
-          (ST.backend === 'demo' ? ' in this browser (demo mode — the session must be created in this same browser\'s admin panel).' : '.');
+        $('#join-err').textContent = ST.backend === 'demo'
+          ? 'No session found with that code in this browser (demo mode — the session must be created in this same browser\'s admin panel).'
+          : 'No session found with that code. Check it with your instructor — codes are not case-sensitive, and the session must be created and its code shared before you join.';
         $('#join-err').style.display = '';
         return;
       }
       attach(sess.id);
     }).catch(function (e) {
       $('#btn-join').disabled = false;
-      $('#join-err').textContent = 'Could not reach the game server: ' + e.message;
+      var msg = String((e && e.message) || e);
+      if (/operation-not-allowed/.test(msg)) msg = 'this game is not fully set up yet (anonymous sign-in is off). Please tell your instructor.';
+      else if (/permission/i.test(msg)) msg = 'the game server rejected the request (security rules may not be published yet). Please tell your instructor.';
+      $('#join-err').textContent = 'Could not join: ' + msg;
       $('#join-err').style.display = '';
     });
   }

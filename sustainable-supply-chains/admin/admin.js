@@ -65,6 +65,25 @@
     show('a-dash');
     buildForm(freshSettings(), freshCatalog(), { name: '', code: '' });
     refreshSessions();
+    if (ST.backend === 'firebase') runConnCheck();
+  }
+  // Prove the live path students use to join (auth + rules + code lookup) and
+  // tell the instructor precisely what's wrong if it fails.
+  function runConnCheck() {
+    var box = $('#dash-banner');
+    box.innerHTML = '<div class="banner banner-info" id="conn-banner">Checking your Firebase connection…</div>';
+    ST.ping().then(function () {
+      var b = $('#conn-banner');
+      if (b) { b.className = 'banner banner-good'; b.innerHTML = '✓ Firebase connected — security rules and the join lookup are working. Students can join.'; }
+    }).catch(function (e) {
+      var msg = String((e && (e.code || e.message)) || e);
+      var hint;
+      if (/permission/i.test(msg)) hint = 'Your <b>Firestore security rules</b> are blocking writes. In the Firebase console → Firestore → <b>Rules</b>, paste the contents of <code>firestore.rules</code> from the repo and click <b>Publish</b> — and make sure the admin email in <code>isAdmin()</code> matches your sign-in (' + esc((window.SSC_ADMIN_EMAILS || [])[0] || '') + ').';
+      else if (/unavailable|network|offline/i.test(msg)) hint = 'Could not reach Firestore (network). Check your connection and that the project ID in <code>firebase-config.js</code> is correct.';
+      else hint = 'Unexpected error. Check that Firestore is created and <code>firestore.rules</code> is published.';
+      var b = $('#conn-banner');
+      if (b) { b.className = 'banner banner-bad'; b.innerHTML = '<b>Setup issue — students cannot join yet.</b> ' + hint + '<br><span class="tiny muted">Technical detail: ' + esc(msg) + '</span>'; }
+    });
   }
 
   U.$all('.tabs .tab').forEach(function (t) {
@@ -392,6 +411,11 @@
   function refreshSessions() {
     ST.listSessions().then(function (list) {
       A.sessions = list;
+      // self-heal: make sure every active session has its code→id lookup doc
+      // (a session created before the rules were live may be missing it)
+      list.forEach(function (s2) {
+        if (s2 && s2.code && !s2.archived) ST.ensureCode(s2.code, s2.id).catch(function () {});
+      });
       paintSessionLists();
       paintAnalyticsPicker();
       fillSelect($('#ctrl-select'), A.ctrlId);
