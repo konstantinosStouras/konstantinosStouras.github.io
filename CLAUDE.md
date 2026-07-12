@@ -60,14 +60,15 @@ JOURNAL_TYPES order in `index.html`; a UTD24 journal is never additionally
 badged FT50/ABS); clicking it selects that type. Filtering is unaffected by
 the badge: an ABS 4/4* search still returns UTD24 journals' papers. The
 catalog also carries **notFT extras** — journals on another list but not the
-FT50: UTD24's INFORMS Journal on Computing (`ijoc`), ABS 4's European
-Journal of Operational Research (`ejor`), and the two AJG 2024 4* additions
-American Journal of Political Science (`ajps`) / American Political Science
-Review (`apsr`) — flagged `"notFT": true` in `journals.json` so the page
-keeps them out of FT50 membership and the yearly FT-list check never retires
-them. (Full ABS 3 coverage — ~330 journals, ~1 GB — would exceed GitHub
-Pages' 1 GB site limit; ABS 3 therefore means the 3-graded journals among
-the covered lists. The catalog grows past this repo's 1 GB Pages limit via
+FT50: UTD24's INFORMS Journal on Computing (`ijoc`) and ABS 4's European
+Journal of Operational Research (`ejor`) — flagged `"notFT": true` in
+`journals.json` so the page keeps them out of FT50 membership and the yearly
+FT-list check never retires them. **ABS field scope (deliberate):** the
+FT50 and UTD24 lists are covered in full (all fields), but ABS 4/4*/3
+coverage beyond them extends ONLY to Operations / Supply Chain / Economics /
+Computer Science-related journals — other fields' ABS journals are neither
+harvested nor listed (AJPS/APSR, 4* political science, were retired under
+this rule). The catalog grows past this repo's 1 GB Pages limit via
 **satellite data shards** — sibling repos `lit-data-abs4`,
 `lit-data-abs3-omecon`, `lit-data-abs3-rest`, each with its own Pages site,
 vendored pipeline and curated `_scraper/journals.json` (grades in an `abs`

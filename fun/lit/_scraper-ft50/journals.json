@@ -46,7 +46,10 @@
     "publisher": "Wiley",
     "aia": true,
     "notFT": true,
-    "addedBy": "abs4star-extra"
+    "addedBy": "abs4star-extra",
+    "retired": true,
+    "retiredDate": "2026-07-12",
+    "retiredReason": "out of catalog scope: ABS coverage beyond FT50/UTD24 is limited to Operations/SCM/Economics/CS fields"
   },
   {
     "key": "apsr",
@@ -59,7 +62,10 @@
     "publisher": "Cambridge University Press",
     "aia": true,
     "notFT": true,
-    "addedBy": "abs4star-extra"
+    "addedBy": "abs4star-extra",
+    "retired": true,
+    "retiredDate": "2026-07-12",
+    "retiredReason": "out of catalog scope: ABS coverage beyond FT50/UTD24 is limited to Operations/SCM/Economics/CS fields"
   },
   {
     "key": "tar",
