@@ -97,8 +97,9 @@ in `index.html` and extended from the data-ft50 manifest (so the yearly
 FT-list check flows through); ABS grades (AJG 2024, via journalranking.org)
 live in the `ABS_RATING` map there — PNAS/ACM EC are unrated, and HBR/MIT SMR
 (AJG 2024 "top practitioner" journals) are kept at 3, their last numeric
-grade. The pre-computed Authors/Affiliations panels and the pre-print
-backfill remain native-eight-sources only. **PNAS caveat:** the DOI→section index
+grade. The pre-computed Authors/Affiliations panels remain
+native-eight-sources only (the pre-print backfill, by contrast, covers every
+dataset — see below). **PNAS caveat:** the DOI→section index
 `fun/lit/data/_pnas-concepts.json` must be (re)built occasionally by running
 `fun/lit/_scraper/pnas-concepts-local.mjs` on a personal machine, because
 pnas.org's search is Cloudflare-blocked for cloud IPs. **ISR/MkSc caveat:**
@@ -134,12 +135,38 @@ quota identity so CI can never spend the local budget). In the daily build the
 same pass also runs as a **strictly time-boxed, gentle best-effort**
 (`LIT_PREPRINT_SEARCH_MS`, default 6 min; `LIT_PREPRINT_SEARCH_CAP`, default
 2500; single-attempt fetch that backs off and stops on 429s) so it can **never
-hang the build**. Both `pickPreprint` and the matcher are host-validated (real
+hang the build**. **The same machinery is replicated in every other dataset's
+pipeline** (near-verbatim block in each `build-data.mjs`; env names
+`FT50_PREPRINT_SEARCH_*`, and the matcher uses a local `matchNorm` — the
+reference's fully-collapsing title norm — NOT those files' registry
+`normTitle`): the FT50 catalog backfills via
+`lit-ft50-preprints-backfill.yml` → `fun/lit/_scraper-ft50/preprints-ci.mjs`
+(commits `fun/lit/data-ft50/`, shares the `lit-ft50-update-data-*`
+concurrency group), and each shard repo has its own `preprints-backfill.yml`
+→ `_scraper/preprints-ci.mjs` (shares that repo's `update-data-*` group).
+Every workflow pins a distinct OpenAlex quota identity via mailto
+plus-addressing — natives `kstouras@gmail.com`, FT50 catalog `+litft50`,
+shards `+abs4`/`+abs3om`/`+abs3rest` (their daily builds use the same
+identity) — so the five parallel backfills never starve each other. Because
+extras now carry `Preprint` fields, the page's pre-print toggle counts as a
+broad trigger in `neededExtraKeys()` (like it always did for natives). Both `pickPreprint` and the matcher are host-validated (real
 `arxiv.org`/`ssrn.com` hostname) so a spoofed domain can't slip into the href;
 the matcher also demands an exact normalized-title match + a shared author
 surname + a plausible year to avoid wrong links. The card shows an open-access **"Pre-print (Open Access)"**
 link between BibTeX and the sign-in "Notes, tags & lists" toggle; EC's meta-row
-PDF tag is suppressed when it duplicates it. **PNAS "Significance":** for PNAS,
+PDF tag is suppressed when it duplicates it. **SSRN links open the PDF
+directly:** at render time `ssrnPdfUrl()` in `index.html` rewrites an SSRN
+abstract-page href (`papers.cfm?abstract_id=N` / `ssrn.com/abstract=N`) to
+SSRN's `Delivery.cfm?abstractid=N&mirid=1` download endpoint (href-only — the
+datasets keep the stable landing URL, so an SSRN endpoint change needs only
+that helper updated); applied to both the Pre-print link and EC's PDF tag.
+**DOI-less EC accepted papers** (each year's fresh sigecom.org list, e.g.
+EC '26) can't be reached by any by-DOI pass, so `enrichEc` runs an OpenAlex
+title-search pass for them (newest first, `LIT_EC_TITLE_CAP` default 350/run,
+same gentle fetch + conservative matcher as the preprint search; `oat: 1`
+cache marker in `_ec-extras.json`), and an arXiv/SSRN find is surfaced as
+both their `PDF` and their `Preprint` (the DOI-keyed `_preprints.json` can't
+serve them). **PNAS "Significance":** for PNAS,
 the Crossref abstract's JATS `<sec><title>Significance</title>` block is split
 out into a `Significance` field (`extractSignificance`, no pnas.org fetch) and
 shown as a **"Significance"** card toggle before "Abstract". See

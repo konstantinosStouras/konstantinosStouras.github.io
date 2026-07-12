@@ -85,9 +85,10 @@ browser.
   journal's ABS grade (`abs` field), which flows into the ABS 4/4* / ABS 3
   buckets and badges via `MANIFEST_ABS` — adding a journal to a shard needs
   no edit to this page. Absent or not-yet-built shards 404 and are skipped. The MS/ISR-specific
-  editor filters and the pre-print toggle can't match FT50-extra papers, so
-  those alone never trigger the download; the recent view merges the
-  `data-ft50/recent.json` (extras only — natives are already covered).
+  editor filters can't match FT50-extra papers, so those alone never trigger
+  the download (the pre-print toggle DOES: extras carry `Preprint` links too,
+  each dataset backfilling its own — see "Updating the data"); the recent view
+  merges the `data-ft50/recent.json` (extras only — natives are already covered).
   `data-ft50/` is **this app's own copy** of the FT50 dataset: it was seeded
   by copying the retired fun/ft50 app's data (registry included, so "recently
   added" history carried over) and is maintained by `_scraper-ft50/` — that
@@ -297,6 +298,15 @@ CI; the daily Action just folds the committed files in.
    (title match; capped per run and cached in `_ec-extras.json`, so coverage
    grows across daily runs without hitting rate limits). Preference order for
    the link: arXiv → SSRN → any other open-access copy.
+4. **DOI-less accepted papers** — a fresh year's list (e.g. EC '26) before
+   the ACM DL publishes the proceedings — additionally get an **OpenAlex
+   title-search** pass (newest first, `LIT_EC_TITLE_CAP` per run, the same
+   conservative matcher as the pre-print search), since no by-DOI lookup can
+   reach them and Semantic Scholar rate-limits CI runners. An arXiv/SSRN find
+   becomes both the paper's PDF tag and its "Pre-print (Open Access)" link.
+   SSRN links site-wide are rewritten at render time to SSRN's direct-PDF
+   download endpoint, so one click opens the PDF rather than the abstract
+   page.
 
 ## Updating the data
 
@@ -321,6 +331,21 @@ CI; the daily Action just folds the committed files in.
   `node informs-aia-local.mjs --app lit-ft50` locally (same pattern as
   `--app ms|lit|ft50`) to refresh `data-ft50/_aia-fixups.json` and
   `data-ft50/_informs-aia.json` for the INFORMS journals in this dataset.
+- **Pre-print (arXiv/SSRN) links backfill per dataset.** Every dataset runs
+  the same two-part machinery: a strictly time-boxed best-effort pass inside
+  its daily build, plus a dedicated scheduled backfill workflow that runs a
+  bounded (~25 min), quota-aware slice of OpenAlex title-searches 4×/day and
+  commits the results (cache: `_preprints.json` in each data dir). Natives:
+  `lit-preprints-backfill.yml` → `_scraper/preprints-ci.mjs`. FT50 catalog:
+  `lit-ft50-preprints-backfill.yml` → `_scraper-ft50/preprints-ci.mjs`
+  (commits `data-ft50/`). Each shard repo: its own `preprints-backfill.yml`
+  → `_scraper/preprints-ci.mjs`. Each backfill shares its dataset's
+  update-data concurrency group (never races the daily build's commit; a
+  rejected push re-applies only the run's finds via
+  `--apply-only --merge-cache`) and pins its own OpenAlex quota identity
+  (`LIT_MAILTO`/`FT50_MAILTO` plus-addresses: `+litft50`, `+abs4`, `+abs3om`,
+  `+abs3rest`), so the five parallel backfills never starve each other and
+  local runs keep a separate budget.
 
 ## Testing locally (no network needed)
 
@@ -349,5 +374,5 @@ FT50_MOCK=1 node build-data.mjs    # smoke-tests the FT50 pipeline into _mock-ou
   `affiliations.json`, which the FT50 merge does not touch. Searching or
   filtering papers by author/affiliation works for the merged FT50 journals
   (it reads each paper's own fields); only the aggregate panels are
-  native-only. FT50-extra papers also carry no `Preprint` links yet (that
-  backfill runs in this app's pipeline, not ft50's).
+  native-only. (`Preprint` links, by contrast, cover every dataset — the FT50
+  catalog and the shards run their own backfill workflows.)

@@ -53,7 +53,7 @@ jobs:
 
       - name: Build data (Crossref, one pull per FT50 journal)
         env:
-          FT50_MAILTO: kstouras@gmail.com   # Crossref "polite pool" contact
+          FT50_MAILTO: kstouras+litft50@gmail.com   # Crossref contact + this dataset's OpenAlex quota identity
           NODE_OPTIONS: --max-old-space-size=6144
         run: node fun/lit/_scraper-ft50/build-data.mjs
 
