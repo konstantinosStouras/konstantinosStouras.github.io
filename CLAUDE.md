@@ -154,12 +154,14 @@ broad trigger in `neededExtraKeys()` (like it always did for natives). Both `pic
 the matcher also demands an exact normalized-title match + a shared author
 surname + a plausible year to avoid wrong links. The card shows an open-access **"Pre-print (Open Access)"**
 link between BibTeX and the sign-in "Notes, tags & lists" toggle; EC's meta-row
-PDF tag is suppressed when it duplicates it. **SSRN links open the PDF
-directly:** at render time `ssrnPdfUrl()` in `index.html` rewrites an SSRN
-abstract-page href (`papers.cfm?abstract_id=N` / `ssrn.com/abstract=N`) to
-SSRN's `Delivery.cfm?abstractid=N&mirid=1` download endpoint (href-only — the
-datasets keep the stable landing URL, so an SSRN endpoint change needs only
-that helper updated); applied to both the Pre-print link and EC's PDF tag.
+PDF tag is suppressed when it duplicates it. **Pre-print links open the PDF
+directly:** at render time `preprintPdfUrl()` in `index.html` rewrites
+landing-page hrefs to the PDF itself — SSRN abstract pages
+(`papers.cfm?abstract_id=N` / `ssrn.com/abstract=N`) to SSRN's
+`Delivery.cfm?abstractid=N&mirid=1` download endpoint (`ssrnPdfUrl`), and
+arXiv `/abs/<id>` to `/pdf/<id>` (`arxivPdfUrl`). Href-only — the datasets
+keep the stable landing URLs, so an endpoint change needs only those helpers
+updated; applied to both the Pre-print link and EC's PDF tag.
 **DOI-less EC accepted papers** (each year's fresh sigecom.org list, e.g.
 EC '26) can't be reached by any by-DOI pass, so `enrichEc` runs an OpenAlex
 title-search pass for them (newest first, `LIT_EC_TITLE_CAP` default 350/run,
