@@ -45,6 +45,7 @@
         <button class="tab on" data-tab="sessions">Sessions</button>
         <button class="tab" data-tab="control">Control room</button>
         <button class="tab" data-tab="data">Data &amp; export</button>
+        <button class="tab" data-tab="analytics">Analytics</button>
       </div>
 
       <!-- SESSIONS -->
@@ -92,6 +93,24 @@
           <button class="btn btn-sm" id="btn-xlsx">⬇ Download Excel (.xlsx)</button>
           <button class="btn-ghost btn-sm" id="btn-json">Download JSON</button></div>
         <div id="data-root"></div>
+      </div>
+
+      <!-- ANALYTICS -->
+      <div class="tab-panel" id="tab-analytics" style="display:none;">
+        <div class="card">
+          <div class="card-title">Cross-session analytics</div>
+          <p class="card-subtitle">Pick any set of sessions (live and async mix fine), load them, and study play
+            through efficiency KPIs: profit, service level, bullwhip, inventory &amp; freight spend, sourcing-cost
+            efficiency, CO2, decision speed. Export the full analytics dataset for your own analysis.</p>
+          <div id="an-picker"></div>
+          <div class="flex-row mt16">
+            <button class="btn" id="an-load">Load selected sessions</button>
+            <label class="checkline" style="margin:0;"><input type="checkbox" id="an-bots"/><span>include bot firms</span></label>
+            <button class="btn-ghost btn-sm" id="an-xlsx" style="display:none;">⬇ Excel (.xlsx)</button>
+            <button class="btn-ghost btn-sm" id="an-csv" style="display:none;">CSV</button>
+          </div>
+        </div>
+        <div id="an-root"></div>
       </div>
     </div>
   </section>

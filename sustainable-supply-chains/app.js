@@ -41,7 +41,8 @@
     if (!isAsync()) return S.session;
     var inst = S.instance;
     return Object.assign({}, S.session,
-      { round: inst ? inst.round : 1, phase: inst ? inst.phase : 'decisions' });
+      { round: inst ? inst.round : 1, phase: inst ? inst.phase : 'decisions',
+        roundOpenedAt: inst ? inst.roundOpenedAt : null });
   }
   function gameFirms() {
     if (!isAsync()) return S.firms;
@@ -61,7 +62,8 @@
     var states = {};
     [mine].concat(bots).forEach(function (f) { states[f.id] = E.initFirmState(sess, f); });
     return { firmId: mine.id, round: 1, phase: 'decisions', botFirms: bots, states: states,
-             results: [], markets: [], createdAt: Date.now(), updatedAt: Date.now() };
+             results: [], markets: [], createdAt: Date.now(), updatedAt: Date.now(),
+             roundOpenedAt: Date.now() };
   }
   // Resolve the firm's own round locally: bots decide via the Nash engine,
   // the same deterministic resolveRound runs, and the instance is saved so
@@ -97,6 +99,8 @@
       S.lastWriteStamp = d.savedAt;
       ST.saveAsync(S.sessionId, mine.id, inst);
       ST.saveDecision(S.sessionId, mine.id, round, d);
+      logEv('round_resolved', { async: 1, round: round, secs: secsSinceRoundOpen() });
+      if (inst.phase === 'final') logEv('game_ended', { async: 1 });
       S.resolvingAsync = false;
       S.resultsRound = round;
       setTab(inst.phase === 'final' ? 'debrief' : 'results');
@@ -111,8 +115,10 @@
     inst.round += 1;
     inst.phase = 'decisions';
     inst.updatedAt = Date.now();
+    inst.roundOpenedAt = Date.now();
     S.instance = inst;
     ST.saveAsync(S.sessionId, S.myFirmId, inst);
+    logEv('round_opened', { async: 1 });
     setTab('decide');
   }
 
@@ -254,6 +260,25 @@
     return f ? f.name : id;
   }
 
+  /* ---- action telemetry (append-only; instructor-only reads) -------------------- */
+  function myMemberName(mine) {
+    var m = mine && (mine.members || []).find(function (x) { return x.uid === S.uid; });
+    return m ? m.name : null;
+  }
+  function secsSinceRoundOpen() {
+    var vs = V();
+    var t = vs && vs.roundOpenedAt;
+    return t ? Math.round((Date.now() - t) / 1000) : null;
+  }
+  function logEv(type, d) {
+    if (!S.sessionId) return;
+    var mine = myFirm();
+    ST.logEvent(S.sessionId, {
+      at: Date.now(), type: type, round: V() ? V().round : 0,
+      firmId: mine ? mine.id : null, uid: S.uid, member: myMemberName(mine), d: d || {}
+    }).catch(function () {});
+  }
+
   function showGone(msg, title) {
     $('#gone-title').textContent = title || 'This session has ended';
     $('#gone-msg').textContent = msg || '';
@@ -299,7 +324,10 @@
           if (!S.instance && !S.creatingInstance) {
             S.creatingInstance = true;
             S.instance = makeInstance(mine);
-            ST.saveAsync(S.sessionId, mine.id, S.instance).then(function () { S.creatingInstance = false; });
+            ST.saveAsync(S.sessionId, mine.id, S.instance).then(function () {
+              S.creatingInstance = false;
+              logEv('async_started', { bots: S.instance.botFirms.length });
+            });
             setTimeout(route, 0);
           }
         });
@@ -378,7 +406,11 @@
       memberUids: [S.uid],
       isBot: false, createdAt: Date.now()
     };
-    ST.setFirm(S.sessionId, fid, firm).then(function () { rememberFirm(fid); route(); });
+    ST.setFirm(S.sessionId, fid, firm).then(function () {
+      rememberFirm(fid);
+      logEv('firm_created', { name: name, hub: firm.hub });
+      route();
+    });
   }
   function joinFirm(f) {
     var name = $('#in-joinname').value.trim();
@@ -386,7 +418,7 @@
     // atomic append in the store (arrayUnion / re-read inside the write), so
     // two teammates joining at the same moment never drop a membership
     ST.addFirmMember(S.sessionId, f.id, { uid: S.uid, name: name })
-      .then(function () { rememberFirm(f.id); route(); })
+      .then(function () { rememberFirm(f.id); logEv('member_joined', { name: name }); route(); })
       .catch(function (e) { alert('Could not join: ' + e.message); });
   }
 
@@ -743,6 +775,8 @@
         var fl = $('#save-flash');
         if (fl) { fl.classList.add('show'); setTimeout(function () { fl.classList.remove('show'); }, 1200); }
       });
+      logEv('decision_saved', { round: S.draft.round, units: Math.round(S.draft.production || 0),
+        secs: secsSinceRoundOpen() });
     }, 700);
   }
 
@@ -813,6 +847,7 @@
     S.lastWriteStamp = d.savedAt;
     S.draft = d;
     ST.saveDecision(S.sessionId, mine.id, V().round, d).then(paintSubmitState);
+    logEv(flag ? 'decision_submitted' : 'decision_reopened', { round: d.round, secs: secsSinceRoundOpen() });
   }
 
   /* ---- SUPPLY CHAIN tab -------------------------------------------------------------- */

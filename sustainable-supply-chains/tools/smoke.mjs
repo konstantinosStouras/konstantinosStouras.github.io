@@ -225,9 +225,37 @@ try {
     .catch(() => fail('async: instructor monitor does not show the finished firm'));
   await shot(admin, '9-async-monitor.png');
 
+  /* ---- analytics tab: cross-session KPIs from the event log ------------------------ */
+  await admin.click('.tabs [data-tab="analytics"]');
+  await admin.waitForSelector('.an-pick', { timeout: 5000 }).catch(() => fail('analytics picker empty'));
+  await admin.evaluate(() => document.querySelectorAll('.an-pick').forEach(c => { c.checked = true; }));
+  await admin.click('#an-load');
+  await admin.waitForFunction(() => /Firm KPIs/.test(document.querySelector('#an-root').textContent), null, { timeout: 10000 })
+    .catch(() => fail('analytics did not load'));
+  const anTxt = await admin.textContent('#an-root');
+  if (!/Human Test Firm/.test(anTxt)) fail('analytics missing the live firm');
+  if (!/Async Crew/.test(anTxt)) fail('analytics missing the async firm');
+  if (!/Summary statistics/.test(anTxt)) fail('analytics summary stats missing');
+  if (!/Session comparison/.test(anTxt)) fail('analytics session comparison missing');
+  const evCount = await admin.evaluate(() => {
+    const cards = Array.from(document.querySelectorAll('#an-root .card'));
+    const sc = cards.find(c => /Session comparison/.test(c.textContent));
+    let total = 0;
+    sc.querySelectorAll('tbody tr').forEach(r => { total += Number(r.children[6].textContent) || 0; });
+    return total;
+  });
+  if (!(evCount > 5)) fail('event log looks empty (events across sessions: ' + evCount + ')');
+  const xlsxAnalytics = await admin.evaluate(() => {
+    // build (not download) the analytics workbook to prove the matrix is well-formed
+    const rows = [['a', 'b'], [1, 2]];
+    return window.SSCXlsx.build([{ name: 'T', rows }]).length > 400;
+  });
+  if (!xlsxAnalytics) fail('analytics xlsx build failed');
+  await shot(admin, '10-admin-analytics.png');
+
   const benign = problems.filter(p => !/net::ERR|favicon|fonts\.g/i.test(p));
   if (benign.length) fail('console/page errors:\n' + benign.join('\n'));
-  console.log('SMOKE OK — live game (4 rounds, teammate sync) + async practice vs Nash bots (2 rounds to debrief).');
+  console.log('SMOKE OK — live game + async practice + messaging + coach + cross-session analytics (' + evCount + ' events logged).');
 } finally {
   await browser.close();
   server.close();

@@ -364,6 +364,10 @@ The async instance lives in the `async/{firmId}` subcollection and is resolved
 in the student's browser; the admin control room becomes a progress monitor.
 'nash' is also a bot profile for live sessions; the debrief excludes nash bots
 from the order-amplification chart (their variability is anticipation).
+Every action is appended to an admin-only `events` subcollection (timing:
+seconds-to-submit, saves, round opens/resolves, session duration); the admin
+panel's **Analytics** tab loads several sessions via `store.fetchAll` and
+computes per-firm efficiency KPIs + summary stats + Excel/CSV export.
 Automatic coaching (`settings.coachOn`): engine-level `coachDecision`
 (decision-time nudges) + `coachResult` (post-round feedback benchmarked
 against Nash pricing and order-up-to coverage). Messaging

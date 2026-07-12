@@ -82,6 +82,27 @@ control room shows **all** traffic — firm↔firm included, which the student U
 states plainly — and lets the instructor reply to a single firm (broadcasts
 to everyone remain separate). Unread messages badge the student tab.
 
+## Action tracking, timing & the Analytics tab
+
+Every meaningful action is appended to a per-session **event log** (visible
+only to the instructor): firms founding/joining (with member names), every
+draft autosave, submits/reopens with **seconds since the round opened**,
+round opens/resolutions, async rounds, bots, kicks, broadcasts. Sessions and
+rounds carry start/end timestamps, so session duration and per-round pace are
+measurable. The per-session Excel export gains two sheets: **Events** (the
+raw log) and **Timing** (per firm-round: first save, number of saves,
+submitted at, seconds from round open to submit), plus session duration in
+About.
+
+The admin's **Analytics** tab loads ANY set of sessions (live + async mix)
+and computes per-firm efficiency KPIs — profit, revenue, fill rate (service
+level), bullwhip, green score, CO2/unit, holding / freight / tariff spend,
+air share of freight, sourcing premium vs the cheapest landed mix, rationing
+cuts, scandals, decision speed (avg seconds to submit, draft-save counts) —
+with summary statistics (n/mean/median/SD/min/max), a session comparison
+table (duration, events, messages), KPI charts, and one-click **Excel/CSV**
+export of the full firm-level dataset for regressions in R/Python/Stata.
+
 ## How a class session runs (live mode)
 
 1. **Admin panel → Sessions**: create a session (rounds, markets, demand
