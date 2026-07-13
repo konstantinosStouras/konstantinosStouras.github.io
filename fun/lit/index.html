@@ -524,7 +524,7 @@
      stay put. */
   .acct-modal.wide { max-width: 680px; display: flex; flex-direction: column; max-height: calc(100vh - 112px); }
   .acct-modal.wide .acct-modal-head { flex: 0 0 auto; }
-  .acct-modal.wide .acct-modal-head p { max-width: 60ch; }
+  .acct-modal.wide .acct-modal-head p { text-align: justify; }
 
   /* About / Feedback prose. The body scrolls on its own when it outgrows the
      capped modal; paragraphs are justified for clean flush-both-sides text. */
@@ -3629,7 +3629,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       <span class="acct-avatar acct-avatar-lg" id="pfAvatar" aria-hidden="true"></span>
       <div>
         <h2>My profile</h2>
-        <p>Your name personalizes your account and is how you appear in the menu. Take a minute to complete your profile — a name and affiliation make it yours.</p>
+        <p style="text-align:justify">Your name personalizes your account and is how you appear in the menu. Take a minute to complete your profile: a name and affiliation make it yours.</p>
       </div>
     </div>
     <div class="acct-modal-body">

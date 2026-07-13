@@ -316,9 +316,26 @@
           <div id="byjChart"></div>
         </div>
         <div class="card">
+          <h3>Citation impact by journal</h3>
+          <div class="csub" id="citeImpactSub">Average citations per paper, within scope</div>
+          <div id="citeImpactChart"></div>
+        </div>
+        <div class="card">
           <h3>Open-access pre-print availability</h3>
           <div class="csub">Share of papers with a free author pre-print, by year</div>
           <div id="preChart"></div>
+        </div>
+        <div class="card wide" id="shareCard">
+          <h3>Journal share over time</h3>
+          <div class="csub" id="shareSub">Each journal's share of the selected papers, by year</div>
+          <div id="shareChart"></div>
+          <div class="legend" id="shareLegend"></div>
+        </div>
+        <div class="card wide" id="areaTrendCard" style="display:none">
+          <h3>Editorial area trends</h3>
+          <div class="csub" id="areaTrendSub">Management Science papers per year, by editorial area</div>
+          <div id="areaTrendChart"></div>
+          <div class="legend" id="areaTrendLegend"></div>
         </div>
         <div class="card wide">
           <h3>Most-cited papers in scope</h3>
@@ -610,7 +627,10 @@
     renderCoauthors(agg);
     renderTeam(agg);
     renderByJournal(agg);
+    renderCitationImpact(keys);
     renderPreprint(agg);
+    renderShareOverTime(keys);
+    renderAreaTrends(keys);
     renderCited(keys);
     renderDims(keys);
   }
@@ -774,6 +794,93 @@
     var pts = years.map(function (y) { var r = agg.perYear[y]; return r && r.n ? [y, r.p / r.n] : null; }).filter(Boolean);
     if (!pts.length) { $('preChart').innerHTML = '<div class="chart-empty">No data in the selected scope.</div>'; return; }
     $('preChart').innerHTML = lineChart([{ name: 'preprint', color: '#2a7f8f', pts: pts }], { years: [pts[0][0], pts[pts.length - 1][0]], pctAxis: true, area: true });
+  }
+
+  // Average citations per paper, by journal — impact normalized for output size
+  // (not just totals), so a small high-impact journal isn't buried under a large one.
+  function renderCitationImpact(keys) {
+    var items = keys.map(function (k) {
+      var j = JMAP[k], n = 0, c = 0;
+      for (var y in j.years) { var yy = +y; if (yy < S.yMin || yy > S.yMax) continue; n += j.years[y].n; c += j.years[y].c; }
+      return { label: j.name, avg: n ? c / n : 0, n: n, top: (j.types || [])[0] };
+    }).filter(function (it) { return it.n > 0 && it.avg > 0; })
+      .sort(function (a, b) { return b.avg - a.avg; })
+      .map(function (it) { return { label: it.label, value: it.avg, color: it.top ? typeColor(it.top) : NAVY }; });
+    $('citeImpactSub').textContent = 'Average citations per paper, within scope' + (items.length > 14 ? ' — top 14 shown' : '');
+    $('citeImpactChart').innerHTML = items.length
+      ? barsH(items, { limit: 14, fmt: function (v) { return v.toFixed(1); } })
+      : '<div class="chart-empty">No citation data in the selected scope.</div>';
+  }
+
+  // Journal share over time: each journal's share of the selected papers, per
+  // year, as a 100% stacked area. With many journals the top few are shown and
+  // the remaining in-scope journals are folded into one neutral band.
+  function renderShareOverTime(keys) {
+    var card = $('shareCard'), years = yearAxis();
+    var tot = keys.map(function (k) {
+      var j = JMAP[k], n = 0;
+      for (var y in j.years) { var yy = +y; if (yy < S.yMin || yy > S.yMax) continue; n += j.years[y].n; }
+      return { key: k, name: j.name, n: n, top: (j.types || [])[0] };
+    }).filter(function (t) { return t.n > 0; }).sort(function (a, b) { return b.n - a.n; });
+    if (tot.length < 2) { card.style.display = 'none'; return; }   // needs >=2 journals to compare shares
+    card.style.display = '';
+    var MAXB = 8, bands = tot.slice(0, MAXB), rest = tot.slice(MAXB);
+    var yearTotal = {};
+    keys.forEach(function (k) { var ys = JMAP[k].years; for (var y in ys) { var yy = +y; if (yy < S.yMin || yy > S.yMax) continue; yearTotal[yy] = (yearTotal[yy] || 0) + ys[y].n; } });
+    // Distinct per-band colours (not by type) so adjacent journal bands read apart.
+    var layers = bands.map(function (b, i) { return { keys: [b.key], color: SERIES[i % SERIES.length], name: b.name }; });
+    if (rest.length) layers.push({ keys: rest.map(function (r) { return r.key; }), color: '#c9c2c6', name: 'Rest of scope (' + rest.length + ')' });
+    $('shareChart').innerHTML = stackedAreaPct(layers, yearTotal, years);
+    $('shareLegend').innerHTML = layers.map(function (l) { return '<span class="li"><span class="sw" style="background:' + l.color + '"></span>' + esc(l.name) + '</span>'; }).join('');
+    $('shareSub').textContent = "Each journal's share of the selected papers, by year" + (rest.length ? ' — top ' + bands.length + ' journals + the rest of scope' : '');
+  }
+  function stackedAreaPct(layers, yearTotal, years) {
+    if (years.length < 2) return '<div class="chart-empty">No data in the selected scope.</div>';
+    var W = 760, H = 300, L = 40, R = 16, T = 14, B = 34;
+    var x0 = years[0], x1 = years[years.length - 1], span = Math.max(1, x1 - x0);
+    var px = function (yr) { return L + (yr - x0) / span * (W - L - R); };
+    var py = function (f) { return T + (1 - f) * (H - T - B); };
+    var svg = svgEl(W, H);
+    [0, .25, .5, .75, 1].forEach(function (f) {
+      var yy = py(f);
+      svg += '<line x1="' + L + '" y1="' + yy.toFixed(1) + '" x2="' + (W - R) + '" y2="' + yy.toFixed(1) + '" stroke="' + GRID + '"/>';
+      svg += '<text x="' + (L - 6) + '" y="' + (yy + 4).toFixed(1) + '" text-anchor="end" font-size="11" fill="' + MUTED + '">' + Math.round(f * 100) + '%</text>';
+    });
+    var step = Math.max(1, Math.round(span / 6));
+    for (var yr = x0; yr <= x1; yr += step) svg += '<text x="' + px(yr).toFixed(1) + '" y="' + (H - 12) + '" text-anchor="middle" font-size="11" fill="' + MUTED + '">' + yr + '</text>';
+    var cum = {}; years.forEach(function (y) { cum[y] = 0; });
+    layers.forEach(function (layer) {
+      var up = [], lo = [];
+      years.forEach(function (y) {
+        var tt = yearTotal[y] || 0, n = 0;
+        if (tt) layer.keys.forEach(function (k) { var r = JMAP[k].years[y]; if (r) n += r.n; });
+        var lower = cum[y], upper = lower + (tt ? n / tt : 0);
+        cum[y] = upper; up.push([y, upper]); lo.push([y, lower]);
+      });
+      var d = 'M' + up.map(function (p) { return px(p[0]).toFixed(1) + ' ' + py(p[1]).toFixed(1); }).join(' L') +
+        ' L' + lo.slice().reverse().map(function (p) { return px(p[0]).toFixed(1) + ' ' + py(p[1]).toFixed(1); }).join(' L') + ' Z';
+      svg += '<path d="' + d + '" fill="' + layer.color + '" opacity="0.85"/>';
+    });
+    return svg + '</svg>';
+  }
+
+  // Editorial area trends: Management Science papers per year for its top
+  // editorial areas. Hidden unless MS (the area dimension) is in scope.
+  function renderAreaTrends(keys) {
+    var card = $('areaTrendCard'), areaYears = {}, areaTot = {};
+    keys.forEach(function (k) {
+      var j = JMAP[k]; if (!j.dims || !j.dims.area) return;
+      var dm = j.dims.area;
+      for (var a in dm) { var ys = dm[a].years; for (var y in ys) { var yy = +y; if (yy < S.yMin || yy > S.yMax) continue; (areaYears[a] || (areaYears[a] = {}))[yy] = (areaYears[a][yy] || 0) + ys[y].n; areaTot[a] = (areaTot[a] || 0) + ys[y].n; } }
+    });
+    var areas = Object.keys(areaTot).sort(function (a, b) { return areaTot[b] - areaTot[a]; });
+    if (areas.length < 2) { card.style.display = 'none'; return; }
+    card.style.display = '';
+    var top = areas.slice(0, 6), years = yearAxis();
+    var series = top.map(function (a, i) { return { name: a, color: SERIES[i % SERIES.length], pts: years.map(function (y) { return [y, (areaYears[a] && areaYears[a][y]) || 0]; }) }; });
+    $('areaTrendChart').innerHTML = lineChart(series, { years: years });
+    $('areaTrendLegend').innerHTML = series.map(function (s) { return '<span class="li"><span class="sw" style="background:' + s.color + '"></span>' + esc(s.name) + '</span>'; }).join('');
+    $('areaTrendSub').textContent = 'Management Science papers per year, by editorial area' + (areas.length > top.length ? ' (top ' + top.length + ' of ' + areas.length + ')' : '');
   }
 
   function renderCited(keys) {
