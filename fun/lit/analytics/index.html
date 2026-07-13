@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Analytics · The Lit — Research Paper Browser</title>
+
+<!-- This page is a placeholder for summary statistics of The Lit database.
+     It is intentionally kept out of search indexes until it has real content. -->
+<meta name="description" content="Summary statistics for The Lit research paper database — coming soon.">
+<meta name="robots" content="noindex, follow">
+<link rel="canonical" href="https://stouras.com/fun/lit/analytics/">
+<meta name="author" content="Konstantinos Stouras">
+<meta name="theme-color" content="#7d1d3f">
+
+<!-- Favicon: the same inline "Lit" monogram as the main browser. -->
+<link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%237d1d3f'/%3E%3Ctext%20x='50'%20y='66'%20font-family='Georgia,serif'%20font-size='46'%20font-style='italic'%20font-weight='bold'%20fill='%23c9a24b'%20text-anchor='middle'%3ELit%3C/text%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%237d1d3f'/%3E%3Ctext%20x='50'%20y='66'%20font-family='Georgia,serif'%20font-size='46'%20font-style='italic'%20font-weight='bold'%20fill='%23c9a24b'%20text-anchor='middle'%3ELit%3C/text%3E%3C/svg%3E">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..600&family=Work+Sans:ital,wght@0,300..700;1,300..600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #7d1d3f;
+    --navy-dark: #591428;
+    --navy-light: #f4e6ea;
+    --accent: #c9a24b;
+    --accent-light: #f6edda;
+    --text: #241a1e;
+    --text-muted: #6a5a60;
+    --bg: #f7f4ef;
+    --white: #ffffff;
+    --border: #dce1ea;
+    --shadow-sm: 0 1px 3px rgba(125,29,63,0.06);
+    --shadow-md: 0 4px 16px rgba(125,29,63,0.08);
+    --shadow-lg: 0 8px 32px rgba(125,29,63,0.12);
+    --radius: 8px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  body { font-family: 'Work Sans', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh; min-height: 100dvh; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+  .header { background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%); box-shadow: var(--shadow-lg); }
+  .header-inner { max-width: 1080px; margin: 0 auto; padding: 22px 32px; display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  .header h1 { font-family: 'Fraunces', serif; color: #fff; font-size: 26px; font-weight: 400; letter-spacing: -0.5px; }
+  .header h1 em { font-style: italic; color: var(--accent); }
+  .header h1 .sub { display: block; font-family: 'Work Sans', sans-serif; font-size: 13px; font-weight: 400; color: rgba(255,255,255,0.7); letter-spacing: 0; margin-top: 3px; }
+  .back-link { font-size: 13px; font-weight: 600; color: #fff; text-decoration: none; border: 1.5px solid rgba(255,255,255,0.5); background: rgba(255,255,255,0.08); border-radius: 6px; padding: 9px 15px; transition: all .15s; white-space: nowrap; }
+  .back-link:hover { background: rgba(255,255,255,0.18); border-color: #fff; }
+
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 40px 32px 60px; }
+
+  .hero { text-align: center; padding: 30px 20px 10px; }
+  .hero .badge { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--accent); background: var(--accent-light); border-radius: 100px; padding: 5px 14px; margin-bottom: 16px; }
+  .hero h2 { font-family: 'Fraunces', serif; font-weight: 400; font-size: 34px; color: var(--navy); margin-bottom: 12px; }
+  .hero p { font-size: 15px; color: var(--text-muted); max-width: 60ch; margin: 0 auto; line-height: 1.7; }
+
+  /* Placeholder skeleton cards, dimmed to read as "coming soon". */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; margin-top: 40px; }
+  .stat-card { background: var(--white); border: 1px solid var(--border); border-radius: 12px; padding: 22px 22px 24px; box-shadow: var(--shadow-sm); opacity: .78; }
+  .stat-card .label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .7px; color: var(--text-muted); }
+  .stat-card .value { font-family: 'Fraunces', serif; font-size: 30px; color: var(--navy); margin-top: 10px; letter-spacing: 1px; }
+  .stat-card .bar { height: 8px; border-radius: 100px; background: linear-gradient(90deg, var(--navy-light), var(--accent-light)); margin-top: 16px; }
+  .stat-card .bar.short { width: 60%; }
+  .stat-card .bar.mid { width: 80%; }
+
+  .note { margin-top: 40px; text-align: center; font-size: 14px; color: var(--text-muted); background: var(--white); border: 1px dashed var(--border); border-radius: 12px; padding: 26px 24px; line-height: 1.7; }
+  .note strong { color: var(--text); }
+  .note a { color: var(--navy); font-weight: 600; }
+
+  .footer { padding: 26px 32px 40px; color: var(--text-muted); font-size: 12px; text-align: center; }
+  .footer a { color: var(--navy); }
+
+  @media (max-width: 600px) {
+    .header-inner, .wrap { padding-left: 20px; padding-right: 20px; }
+    .hero h2 { font-size: 27px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <h1><em>The Lit</em> — Data Analytics<span class="sub">Summary statistics for the research paper database</span></h1>
+    <a class="back-link" href="/fun/lit/">← Back to The Lit</a>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="hero">
+    <span class="badge">Coming soon</span>
+    <h2>Summary statistics</h2>
+    <p>This page will present summary statistics for The Lit database — coverage by journal, publication trends over time, open-access pre-print availability, most-cited work, and more. It is still being built.</p>
+  </div>
+
+  <!-- Placeholder tiles: intentionally blank until real figures are wired in. -->
+  <div class="stats-grid" aria-hidden="true">
+    <div class="stat-card"><div class="label">Papers indexed</div><div class="value">—</div><div class="bar mid"></div></div>
+    <div class="stat-card"><div class="label">Journals &amp; sources</div><div class="value">—</div><div class="bar short"></div></div>
+    <div class="stat-card"><div class="label">Authors</div><div class="value">—</div><div class="bar"></div></div>
+    <div class="stat-card"><div class="label">With open-access pre-print</div><div class="value">—</div><div class="bar short"></div></div>
+    <div class="stat-card"><div class="label">Year range</div><div class="value">—</div><div class="bar mid"></div></div>
+    <div class="stat-card"><div class="label">Added this month</div><div class="value">—</div><div class="bar short"></div></div>
+  </div>
+
+  <div class="note">
+    <strong>Nothing to see here yet.</strong> Summary statistics for the database will appear on this page soon.<br>
+    In the meantime, explore and filter every paper on <a href="/fun/lit/">The Lit</a>.
+  </div>
+</div>
+
+<footer class="footer">
+  <a href="/fun/lit/">The Lit — Research Paper Browser</a> · <a href="https://www.stouras.com" target="_blank" rel="noopener">Konstantinos I. Stouras</a>
+</footer>
+
+</body>
+</html>

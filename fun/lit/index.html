@@ -466,6 +466,104 @@
     .summary-item:hover { background: transparent; }
     .acct-menu-item:hover { background: #fff; }
   }
+
+  /* ── Top navigation: About / E-mail alerts / Data Analytics / Feedback ─────
+     A small button group in the claret header (left of the corpus meta and the
+     account control). Ghost buttons matching the existing .acct-btn look. */
+  .header-right { flex-wrap: wrap; row-gap: 10px; justify-content: flex-end; }
+  .lit-nav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .lit-nav-btn { font-family: 'Work Sans', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; border-radius: 6px; padding: 9px 14px; border: 1.5px solid rgba(255,255,255,0.5); background: rgba(255,255,255,0.08); color: #fff; transition: all .15s; white-space: nowrap; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; line-height: 1; }
+  .lit-nav-btn:hover { background: rgba(255,255,255,0.18); border-color: #fff; }
+  .lit-nav-btn .ico { font-size: 14px; line-height: 1; }
+  body.compact .lit-nav-btn { padding: 7px 11px; font-size: 12px; }
+  @media (max-width: 768px) { .lit-nav { width: 100%; } }
+
+  /* ── Wider modal variant for About / E-mail alerts / Feedback ──────────────
+     Reuses the account modal shell (.acct-overlay / .acct-modal). */
+  .acct-modal.wide { max-width: 680px; }
+  .acct-modal.wide .acct-modal-head p { max-width: 60ch; }
+
+  /* About / Feedback prose */
+  .info-body { padding: 6px 26px 26px; font-size: 14px; color: var(--text); line-height: 1.7; }
+  .info-body h3 { font-family: 'Fraunces', serif; font-weight: 500; color: var(--navy); font-size: 16.5px; margin: 20px 0 6px; }
+  .info-body h3:first-child { margin-top: 4px; }
+  .info-body p { margin-bottom: 11px; }
+  .info-body a { color: var(--navy); font-weight: 500; }
+  .info-body ul { margin: 2px 0 12px 4px; list-style: none; }
+  .info-body ul li { position: relative; padding-left: 20px; margin-bottom: 7px; }
+  .info-body ul li::before { content: '›'; position: absolute; left: 4px; top: -1px; color: var(--accent); font-weight: 700; }
+  .info-note { font-size: 12.5px; color: var(--text-muted); border-top: 1px solid var(--border); margin-top: 16px; padding-top: 12px; }
+
+  /* Feedback contact rows */
+  .contact-grid { display: flex; flex-direction: column; gap: 2px; margin: 10px 0 6px; }
+  .contact-row { display: flex; align-items: center; gap: 12px; padding: 11px 12px; border: 1px solid var(--border); border-radius: 8px; text-decoration: none; color: var(--text); transition: all .12s; background: #fff; }
+  .contact-row:hover { border-color: var(--navy); background: var(--navy-light); }
+  .contact-row .c-ico { width: 34px; height: 34px; flex: none; border-radius: 8px; background: var(--navy-light); color: var(--navy); display: flex; align-items: center; justify-content: center; font-size: 16px; }
+  .contact-row .c-txt { display: flex; flex-direction: column; line-height: 1.3; min-width: 0; }
+  .contact-row .c-txt b { font-size: 13.5px; font-weight: 600; }
+  .contact-row .c-txt span { font-size: 12.5px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; }
+
+  /* ── E-mail alerts builder ─────────────────────────────────────────────── */
+  .alerts-body { padding: 4px 26px 26px; }
+  .alerts-scroll { }
+  .alert-signin { text-align: center; padding: 18px 8px 8px; }
+  .alert-signin p { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.6; }
+  .alert-block { margin-top: 16px; }
+  .alert-block-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--text-muted); margin: 0 0 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .alert-block-label .hint { text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 12px; color: var(--accent); }
+  .alert-crit { border: 1px solid var(--border); border-radius: 10px; padding: 14px 15px; background: #fbfaf7; }
+  .alert-row { margin-bottom: 14px; }
+  .alert-row:last-child { margin-bottom: 0; }
+  .alert-row > label { display: block; font-size: 11.5px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; }
+  .alert-typegrid { display: flex; flex-wrap: wrap; gap: 7px; }
+  .alert-typechip { display: inline-flex; align-items: center; gap: 7px; border: 1.5px solid var(--border); background: #fff; border-radius: 100px; padding: 6px 13px; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text-muted); transition: all .12s; -webkit-user-select: none; user-select: none; }
+  .alert-typechip:hover { border-color: var(--navy); color: var(--navy); }
+  .alert-typechip.on { background: var(--navy); color: #fff; border-color: var(--navy); }
+  .alert-addrow { display: flex; gap: 8px; }
+  .alert-addrow input { flex: 1; min-width: 0; padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-family: inherit; font-size: 14px; color: var(--text); background: #fff; }
+  .alert-addrow input:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(125,29,63,.08); }
+  .alert-addrow .alert-add-btn { flex: none; padding: 9px 15px; background: var(--navy-light); color: var(--navy); border: none; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; font-family: inherit; }
+  .alert-addrow .alert-add-btn:hover { background: #ecd7dd; }
+  .alert-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .alert-chips:empty { display: none; }
+  .alert-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--navy-light); color: var(--navy); border-radius: 6px; padding: 5px 10px; font-size: 12.5px; font-weight: 500; }
+  .alert-chip.k-author { background: #e8eef7; color: #2d5f8a; }
+  .alert-chip.k-title { background: #f0e8f7; color: #6b3fa0; }
+  .alert-chip.k-abstract { background: #eaf3ee; color: var(--green); }
+  .alert-chip.k-affiliation { background: #fef3e2; color: #b5651d; }
+  .alert-chip.k-year { background: var(--accent-light); color: #6f5827; }
+  .alert-chip .x { cursor: pointer; font-weight: 700; opacity: .55; font-size: 14px; line-height: 1; }
+  .alert-chip .x:hover { opacity: 1; }
+  .alert-toggle { display: flex; align-items: center; gap: 9px; font-size: 13.5px; cursor: pointer; -webkit-user-select: none; user-select: none; }
+  .alert-toggle input { accent-color: var(--navy); width: 16px; height: 16px; cursor: pointer; }
+  .alert-empty-hint { font-size: 12.5px; color: var(--text-muted); font-style: italic; }
+  .alert-delivery { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .alert-delivery .acct-field.full { grid-column: 1 / -1; }
+  .alert-delivery select { padding: 11px 13px; border: 1.5px solid var(--border); border-radius: 8px; font-family: inherit; font-size: 14px; color: var(--text); background: #fff; }
+  .alert-delivery select:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(125,29,63,.1); }
+  .alert-save-row { display: flex; align-items: center; gap: 14px; margin-top: 18px; flex-wrap: wrap; }
+  .alert-save-status { font-size: 13px; font-weight: 600; }
+  .alert-existing { margin-top: 22px; border-top: 1px solid var(--border); padding-top: 16px; }
+  .alert-existing:empty { display: none; }
+  .alert-card { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; background: #fff; }
+  .alert-card.off { opacity: .62; }
+  .alert-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .alert-card-name { font-weight: 600; font-size: 14.5px; color: var(--text); }
+  .alert-card-sum { font-size: 12.5px; color: var(--text-muted); margin-top: 3px; line-height: 1.5; }
+  .alert-card-meta { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+  .alert-card-actions { display: flex; align-items: center; gap: 6px; flex: none; }
+  .alert-icon-btn { border: none; background: var(--navy-light); color: var(--navy); border-radius: 6px; padding: 6px 10px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .alert-icon-btn:hover { background: #ecd7dd; }
+  .alert-icon-btn.danger { background: #fdeaea; color: var(--red); }
+  .alert-icon-btn.danger:hover { background: #f8d7d7; }
+  /* small on/off switch */
+  .alert-switch { position: relative; width: 40px; height: 22px; flex: none; cursor: pointer; }
+  .alert-switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+  .alert-switch .track { position: absolute; inset: 0; background: #cbd2dd; border-radius: 100px; transition: background .15s; }
+  .alert-switch .knob { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; background: #fff; border-radius: 50%; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+  .alert-switch input:checked + .track { background: var(--green); }
+  .alert-switch input:checked + .track + .knob { transform: translateX(18px); }
+  @media (max-width: 560px) { .alert-delivery { grid-template-columns: 1fr; } }
 </style>
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"WebApplication","name":"The Lit — Research Paper Browser","description":"Search and filter research papers across Management Science, Operations Research, Marketing Science, M&SOM, POM, Information Systems Research, five PNAS sections, the ACM EC conference, and all 50 journals of the Financial Times FT50 rank (with FT50 and ABS/AJG journal-type filters).","url":"https://stouras.com/fun/lit/","applicationCategory":"ReferenceApplication","author":{"@type":"Person","name":"Konstantinos Stouras","url":"https://stouras.com"}}
@@ -478,6 +576,12 @@
   <div class="header-inner">
     <h1><em>The Lit</em> — Research Paper Browser</h1>
     <div class="header-right">
+      <nav class="lit-nav" aria-label="The Lit — sections">
+        <button type="button" class="lit-nav-btn" onclick="litAboutOpen()" title="What The Lit is and how it works"><span class="ico">ⓘ</span>About</button>
+        <button type="button" class="lit-nav-btn" onclick="litAlertsOpen()" title="Get an e-mail when new papers match your filters"><span class="ico">✉</span>E-mail alerts</button>
+        <a class="lit-nav-btn" href="analytics/" title="Summary statistics for the database"><span class="ico">📊</span>Data Analytics</a>
+        <button type="button" class="lit-nav-btn" onclick="litFeedbackOpen()" title="Send feedback and suggestions"><span class="ico">💬</span>Feedback</button>
+      </nav>
       <div style="text-align:right;line-height:1.35">
         <div class="header-meta"><strong id="corpusStat" title="Merged across every catalog this page loads; authors are de-duplicated within each catalog">260,640 papers from 186,933 authors</strong> via Crossref · <span id="yearRange">1886–present</span></div>
         <div class="header-meta" id="lastPull" style="font-size:12px;opacity:0.75;margin-top:1px"></div>
@@ -2276,11 +2380,12 @@ document.addEventListener('click', function(e) {
     document.querySelectorAll('.custom-select-dropdown').forEach(d => d.classList.remove('open'));
   }
 });
-// Escape closes the auth modal (if open) or any open filter dropdown.
+// Escape closes the top-most open modal overlay (About / Feedback / E-mail
+// alerts / sign-in / profile), or otherwise any open filter dropdown.
 document.addEventListener('keydown', function(e) {
   if (e.key !== 'Escape') return;
-  var ov = document.getElementById('acctOverlay');
-  if (ov && ov.classList.contains('open')) { if (window.acctCloseAuth) acctCloseAuth(); return; }
+  var overlays = document.querySelectorAll('.acct-overlay.open');
+  if (overlays.length) { overlays[overlays.length - 1].classList.remove('open'); return; }
   document.querySelectorAll('.custom-select-trigger.open').forEach(t => t.classList.remove('open'));
   document.querySelectorAll('.custom-select-dropdown.open').forEach(d => d.classList.remove('open'));
 });
@@ -3136,6 +3241,139 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   </div>
 </div>
 
+<!-- ── About modal ────────────────────────────────────────────────────────── -->
+<div id="litAboutOverlay" class="acct-overlay" onclick="if(event.target===this)litAboutClose()">
+  <div class="acct-modal wide">
+    <button class="acct-modal-x" onclick="litAboutClose()" aria-label="Close">×</button>
+    <div class="acct-modal-head">
+      <h2>About <em style="font-style:italic;color:var(--accent)">The Lit</em></h2>
+      <p>A fast, one-place browser for research papers across the leading journals in Operations, Management, Marketing, Information Systems, Economics and Computer Science.</p>
+    </div>
+    <div class="info-body">
+      <h3>What it covers</h3>
+      <p>The Lit merges eight core sources — <strong>Management Science</strong>, <strong>Operations Research</strong>, <strong>Marketing Science</strong>, <strong>M&amp;SOM</strong>, <strong>Information Systems Research</strong>, <strong>Production &amp; Operations Management</strong>, five <strong>PNAS</strong> topic sections, and the <strong>ACM EC</strong> conference (1999–present) — with this app's own catalogs for the full <strong>Financial Times FT50</strong> rank and the ABS/AJG-rated journals in its fields. That is a few hundred thousand papers, searchable in one place.</p>
+
+      <h3>How to search</h3>
+      <ul>
+        <li><strong>Journal types</strong> — UTD24, FT50, ABS 4/4* and ABS 3 lists; a type expands to its whole set of journals and combines with the Journals filter.</li>
+        <li><strong>Journals</strong>, <strong>Year</strong>, and free-text search over <strong>Authors</strong>, <strong>Titles</strong>, <strong>Abstracts</strong> and <strong>Affiliations</strong>.</li>
+        <li>For <em>Management Science</em>, the accepting <strong>Editor</strong> and editorial <strong>Area</strong>; for ISR &amp; Marketing Science, the <strong>Senior/Associate Editor</strong>.</li>
+        <li>All filters chain together (AND), and the results bar shows the share of the journal-scope corpus that matches.</li>
+      </ul>
+
+      <h3>On every paper card</h3>
+      <ul>
+        <li>A <strong>badge</strong> for the single most-selective list the journal belongs to (UTD24 &gt; FT50 &gt; ABS 4/4* &gt; ABS 3).</li>
+        <li>One-click <strong>BibTeX</strong>, and — where one can be found — a free <strong>open-access pre-print</strong> link (arXiv, SSRN, NBER, OSF, bioRxiv/medRxiv).</li>
+        <li>A <strong>Cited by</strong> count (Crossref) linking to the paper on Google Scholar, and, for PNAS, the article's <strong>Significance</strong> statement.</li>
+      </ul>
+
+      <h3>Make it yours</h3>
+      <ul>
+        <li><strong>Recently added papers</strong> and <strong>Pre-print (Open Access)</strong> quick views.</li>
+        <li>An optional, private <strong>library</strong> when you sign in — star papers, add notes, build lists and tag your reading.</li>
+        <li><strong>E-mail alerts</strong> — get notified when new papers matching your filters are added to the database.</li>
+      </ul>
+
+      <h3>Data &amp; provenance</h3>
+      <p>Editors and editorial areas are shown for <em>Management Science</em> papers (2011+), exactly as on <a href="/fun/ms/">the MS-only browser</a>. Other sources contribute their published papers and Articles in Advance. ACM EC papers link to an arXiv/SSRN/open-access PDF where one could be found.</p>
+      <p>The <strong>Journal types</strong> filter covers the <a href="https://jsom.utdallas.edu/the-utd-top-100-business-school-research-rankings/list-of-journals" target="_blank" rel="noopener">UTD24 list</a> and the full <a href="https://www.ft.com/ft50-journals" target="_blank" rel="noopener">FT50 research rank</a> — journals beyond the eight core sources come from this app's own dataset (refreshed daily, checked against the FT's list yearly), downloaded on demand. The small badge left of each title shows the most selective list its journal belongs to (UTD24 &gt; FT50 &gt; ABS 4/4* &gt; ABS 3; a journal on both UTD24 and FT50 shows both tags) — a broader filter still finds the paper, e.g. an ABS 4/4* search includes every UTD24 journal. ABS ratings follow the Chartered ABS <em>Academic Journal Guide</em> (AJG 2024), as mirrored at <a href="https://journalranking.org/" target="_blank" rel="noopener">journalranking.org</a>; beyond the FT50/UTD24 lists, ABS coverage is deliberately limited to Operations, Supply Chain, Economics, Computer Science, Project Management and Innovation-related journals. HBR and MIT Sloan Management Review (the AJG's "top practitioner" journals) are FT50 journals and badged as such; since the AJG gives them no number, they keep their last numeric grade, so the ABS 3 filter still finds them.</p>
+      <p>All metadata are publicly available, collected via the <a href="https://www.crossref.org/documentation/retrieve-metadata/rest-api/" target="_blank" rel="noopener">Crossref API</a> (with OpenAlex, DBLP and Semantic Scholar assisting for EC PDF links). PNAS section labels come from pnas.org's own topic index where available, and are otherwise approximated from each paper's <a href="https://openalex.org" target="_blank" rel="noopener">OpenAlex</a> primary topic.</p>
+
+      <div class="info-note">Built as a personal project to search papers efficiently across journals — all in one place. Feedback and suggestions are welcome via the <a href="#" onclick="litAboutClose();litFeedbackOpen();return false;">Feedback</a> tab. Any errors are my own. — <a href="https://www.stouras.com" target="_blank" rel="noopener">Konstantinos I. Stouras</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Feedback modal ─────────────────────────────────────────────────────── -->
+<div id="litFeedbackOverlay" class="acct-overlay" onclick="if(event.target===this)litFeedbackClose()">
+  <div class="acct-modal wide">
+    <button class="acct-modal-x" onclick="litFeedbackClose()" aria-label="Close">×</button>
+    <div class="acct-modal-head">
+      <h2>Feedback</h2>
+      <p>The Lit is a personal project and a work in progress. I warmly welcome any feedback, corrections or suggestions to improve it — please reach out through any of the channels below.</p>
+    </div>
+    <div class="info-body">
+      <div class="contact-grid">
+        <a class="contact-row" href="mailto:kostas.stouras@ucd.ie?subject=The%20Lit%20%E2%80%94%20feedback">
+          <span class="c-ico">✉</span>
+          <span class="c-txt"><b>E-mail</b><span>kostas.stouras@ucd.ie</span></span>
+        </a>
+        <a class="contact-row" href="https://x.com/stourask" target="_blank" rel="noopener">
+          <span class="c-ico">𝕏</span>
+          <span class="c-txt"><b>X (Twitter)</b><span>@stourask</span></span>
+        </a>
+        <a class="contact-row" href="https://scholar.google.com/citations?user=FzyFf3kAAAAJ" target="_blank" rel="noopener">
+          <span class="c-ico">🎓</span>
+          <span class="c-txt"><b>Google Scholar</b><span>Konstantinos I. Stouras</span></span>
+        </a>
+        <a class="contact-row" href="https://orcid.org/0000-0002-2398-9566" target="_blank" rel="noopener">
+          <span class="c-ico">🆔</span>
+          <span class="c-txt"><b>ORCID</b><span>0000-0002-2398-9566</span></span>
+        </a>
+        <a class="contact-row" href="https://www.stouras.com" target="_blank" rel="noopener">
+          <span class="c-ico">🌐</span>
+          <span class="c-txt"><b>Website</b><span>www.stouras.com</span></span>
+        </a>
+      </div>
+      <div class="info-note">Konstantinos I. Stouras · University College Dublin. Thank you for helping make The Lit better.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── E-mail alerts modal ────────────────────────────────────────────────────
+     Registered users can subscribe to an e-mail when new papers matching a set
+     of filters (journal types, journals, authors, title/abstract/affiliation
+     terms, years, pre-prints) are added to the database. Criteria are pre-filled
+     from the page's current search filters and are editable here. The body is
+     rendered by JS (litAlertsRender) since it depends on sign-in state and the
+     user's saved alerts. Delivery is handled by the alert mailer described in
+     fun/lit/_EMAIL-ALERTS-SETUP.md. -->
+<div id="litAlertsOverlay" class="acct-overlay" onclick="if(event.target===this)litAlertsClose()">
+  <div class="acct-modal wide">
+    <button class="acct-modal-x" onclick="litAlertsClose()" aria-label="Close">×</button>
+    <div class="acct-modal-head">
+      <h2>E-mail alerts</h2>
+      <p>Get an e-mail when new papers matching your filters are added to The Lit. Alerts are private to your account; sent from and to your own e-mail (or any address you choose).</p>
+    </div>
+    <div class="alerts-body" id="litAlertsBody"></div>
+  </div>
+</div>
+
+<script>
+/* ── Top-nav modals: About, Feedback, and the E-mail alerts entry point ──────
+ * About and Feedback are static and need no backend. E-mail alerts needs the
+ * (optional) accounts system: the real builder is installed by the accounts
+ * script below when Firebase is configured; until then this stub explains that
+ * an account is required. */
+(function () {
+  function openOverlay(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    // Never stack modals — close any other open one first.
+    var open = document.querySelectorAll('.acct-overlay.open');
+    for (var i = 0; i < open.length; i++) { if (open[i] !== el) open[i].classList.remove('open'); }
+    el.classList.add('open');
+  }
+  function closeOverlay(id) { var el = document.getElementById(id); if (el) el.classList.remove('open'); }
+
+  window.litOpenOverlay = openOverlay; // reused by the accounts script's alerts builder
+  window.litAboutOpen = function () { openOverlay('litAboutOverlay'); };
+  window.litAboutClose = function () { closeOverlay('litAboutOverlay'); };
+  window.litFeedbackOpen = function () { openOverlay('litFeedbackOverlay'); };
+  window.litFeedbackClose = function () { closeOverlay('litFeedbackOverlay'); };
+  window.litAlertsClose = function () { closeOverlay('litAlertsOverlay'); };
+
+  // Fallback until the accounts script installs the real builder (i.e. when
+  // Firebase is not configured). The accounts script overrides litAlertsOpen.
+  window.litAlertsOpen = function () {
+    var body = document.getElementById('litAlertsBody');
+    if (body) body.innerHTML = '<div class="alert-signin"><p>E-mail alerts need an account so your criteria can be saved and delivered.<br>Accounts are not enabled on this page yet — please check back soon.</p></div>';
+    openOverlay('litAlertsOverlay');
+  };
+})();
+</script>
+
 <!-- Firebase (compat build, loaded from the CDN so the page stays a single
      static file with no build step). The account logic below stays inert until
      a real Firebase project is configured in FB_CONFIG. -->
@@ -3197,9 +3435,9 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   var FV = firebase.firestore.FieldValue;
   var serverTime = function () { return FV.serverTimestamp(); };
 
-  var state = { user: null, papers: {}, lists: {}, profile: null };
+  var state = { user: null, papers: {}, lists: {}, profile: null, alerts: {} };
   var meta = {};               // docId -> snapshot of {doi,title,authors,year} for rendering
-  var unsubPapers = null, unsubLists = null, unsubProfile = null;
+  var unsubPapers = null, unsubLists = null, unsubProfile = null, unsubAlerts = null;
   var libraryMode = false, libFilter = { type: 'all', id: null }, libQuery = '';
   var doiIndex = null, doiIndexLen = -1;
 
@@ -3222,6 +3460,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   function papersCol() { return db.collection('users').doc(state.user.uid).collection('papers'); }
   function listsCol() { return db.collection('users').doc(state.user.uid).collection('lists'); }
   function profileDoc() { return db.collection('users').doc(state.user.uid).collection('profile').doc('main'); }
+  function alertsCol() { return db.collection('users').doc(state.user.uid).collection('alerts'); }
   function isSaved(r) {
     return !!(r && (r.starred || (r.note && r.note.trim()) || (r.tags && r.tags.length) || (r.lists && r.lists.length)));
   }
@@ -3692,11 +3931,320 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       .then(function () { btn.disabled = false; });
   };
 
+  // ── E-mail alerts: subscribe to new papers matching a set of filters ──────
+  // Registered users save one or more alerts. Each alert stores a `criteria`
+  // object mirroring the page's search filters (journal types, journals,
+  // authors, title/abstract/affiliation/year terms, MS editors/areas, ISR/MkSc
+  // senior/associate editors, and a pre-print-only flag). Criteria are
+  // pre-filled from the page's current filters and edited here. The actual
+  // e-mail is produced by the alert mailer (a scheduled backend job that reads
+  // each user's alerts and the freshly added papers) — see
+  // fun/lit/_EMAIL-ALERTS-SETUP.md. Firestore model:
+  //   users/{uid}/alerts/{alertId} -> {
+  //     name, recipient, from, frequency, enabled, criteria{...}, createdAt, updatedAt }
+  var CRIT_KEYS = ['jtype','journal','author','title','abstract','affiliation','year','editor','area','se','ae'];
+  var JL  = (typeof JOURNAL_LABEL !== 'undefined') ? JOURNAL_LABEL : {};
+  var JTL = (typeof JTYPE_LABEL   !== 'undefined') ? JTYPE_LABEL   : {};
+  var JTY = (typeof JOURNAL_TYPES !== 'undefined') ? JOURNAL_TYPES : [];
+  var alertDraft = null;                                   // criteria being edited
+  var alertEditId = null;                                  // id when editing, else null
+  var alertForm = { name: '', recipient: '', freq: 'weekly' }; // delivery inputs
+
+  function emptyCriteria() {
+    var d = { preprintOnly: false };
+    CRIT_KEYS.forEach(function (k) { d[k] = []; });
+    return d;
+  }
+  // Snapshot of the page's live search filters (globals from the main script).
+  function captureCurrentFilters() {
+    var g = (typeof sel !== 'undefined' && sel) ? sel : {};
+    var arr = function (s) { return (s && typeof s.forEach === 'function') ? Array.from(s) : []; };
+    var d = emptyCriteria();
+    d.jtype = arr(g.jtype); d.journal = arr(g.journal);
+    d.author = arr(g.author).concat(Object.keys(g.authorIdentity || {}));
+    d.title = arr(g.title); d.abstract = arr(g.abstract);
+    d.affiliation = arr(g.affiliation); d.year = arr(g.year);
+    d.editor = arr(g.editor); d.area = arr(g.area); d.se = arr(g.se); d.ae = arr(g.ae);
+    d.preprintOnly = (typeof preprintOnly !== 'undefined') ? !!preprintOnly : false;
+    return d;
+  }
+  function fromCriteria(c) {
+    c = c || {}; var d = emptyCriteria();
+    CRIT_KEYS.forEach(function (k) { d[k] = Array.isArray(c[k]) ? c[k].slice() : []; });
+    d.preprintOnly = !!c.preprintOnly;
+    return d;
+  }
+  function normalizeCriteria(d) {
+    var out = { preprintOnly: !!d.preprintOnly };
+    CRIT_KEYS.forEach(function (k) {
+      var seen = {}, list = [];
+      (d[k] || []).forEach(function (v) { v = ('' + v).trim(); if (v && !seen[v]) { seen[v] = 1; list.push(v); } });
+      out[k] = list;
+    });
+    return out;
+  }
+  function critCount(d) {
+    var n = d.preprintOnly ? 1 : 0;
+    CRIT_KEYS.forEach(function (k) { n += (d[k] || []).length; });
+    return n;
+  }
+  function critLabelList(c) {
+    var p = [];
+    (c.jtype || []).forEach(function (t) { p.push(JTL[t] || t); });
+    (c.journal || []).forEach(function (k) { p.push(JL[k] || k); });
+    if ((c.author || []).length)      p.push('authors: ' + c.author.join(', '));
+    if ((c.title || []).length)       p.push('title: ' + c.title.join(', '));
+    if ((c.abstract || []).length)    p.push('abstract: ' + c.abstract.join(', '));
+    if ((c.affiliation || []).length) p.push('affiliation: ' + c.affiliation.join(', '));
+    if ((c.year || []).length)        p.push('year: ' + c.year.join(', '));
+    if ((c.editor || []).length)      p.push('editor: ' + c.editor.join(', '));
+    if ((c.area || []).length)        p.push('area: ' + c.area.join(', '));
+    if ((c.se || []).length)          p.push('SE: ' + c.se.join(', '));
+    if ((c.ae || []).length)          p.push('AE: ' + c.ae.join(', '));
+    if (c.preprintOnly)               p.push('pre-prints only');
+    return p;
+  }
+  function describeCriteria(c) { var p = critLabelList(c); return p.length ? p.join(' · ') : 'All new papers'; }
+  function defaultAlertName(c) {
+    var p = critLabelList(c); if (!p.length) return 'All new papers';
+    var s = p.slice(0, 3).join(' · '); if (p.length > 3) s += ' +' + (p.length - 3);
+    return s.length > 64 ? s.slice(0, 61) + '…' : s;
+  }
+  function journalKeyByLabel(label) {
+    var t = ('' + (label || '')).trim().toLowerCase(); if (!t) return null;
+    var keys = Object.keys(JL);
+    for (var i = 0; i < keys.length; i++) { if (('' + (JL[keys[i]] || '')).toLowerCase() === t) return keys[i]; }
+    if (JL[t]) return t;   // typed the raw key
+    return null;
+  }
+
+  function alertChipText(key, v) {
+    if (key === 'journal') return JL[v] || v;
+    if (key === 'jtype')   return JTL[v] || v;
+    return v;
+  }
+  function renderAlertChips(key) {
+    var c = document.getElementById('litAlertChips-' + key); if (!c) return;
+    var cls = { author: 'k-author', title: 'k-title', abstract: 'k-abstract', affiliation: 'k-affiliation', year: 'k-year' }[key] || '';
+    c.innerHTML = ((alertDraft && alertDraft[key]) || []).map(function (v) {
+      return '<span class="alert-chip ' + cls + '">' + esc(alertChipText(key, v)) +
+             ' <span class="x" onclick="litAlertRemove(\'' + key + '\',\'' + escAttr(v) + '\')" title="Remove">×</span></span>';
+    }).join('');
+  }
+  function syncTypeChips() {
+    JTY.forEach(function (jt) {
+      var el = document.getElementById('litAlertType-' + jt.key);
+      if (el) el.classList.toggle('on', (alertDraft.jtype || []).indexOf(jt.key) >= 0);
+    });
+  }
+  function readAlertForm() {
+    var n = document.getElementById('litAlertName'); if (n) alertForm.name = n.value;
+    var r = document.getElementById('litAlertRecipient'); if (r) alertForm.recipient = r.value;
+    var f = document.getElementById('litAlertFreq'); if (f) alertForm.freq = f.value;
+  }
+
+  window.litAlertRemove = function (key, v) {
+    if (!alertDraft) return;
+    alertDraft[key] = (alertDraft[key] || []).filter(function (x) { return x !== v; });
+    renderAlertChips(key);
+  };
+  window.litAlertToggleType = function (t) {
+    var i = (alertDraft.jtype || []).indexOf(t);
+    if (i >= 0) alertDraft.jtype.splice(i, 1); else alertDraft.jtype.push(t);
+    syncTypeChips();
+  };
+  window.litAlertAddText = function (key, inputId) {
+    var inp = document.getElementById(inputId); if (!inp) return;
+    var v = inp.value.trim(); if (!v) return;
+    if (key === 'year') { v = v.replace(/[^0-9]/g, ''); if (!v) return; }
+    else v = v.toLowerCase();
+    if ((alertDraft[key] || []).indexOf(v) < 0) { alertDraft[key].push(v); renderAlertChips(key); }
+    inp.value = ''; inp.focus();
+  };
+  window.litAlertAddJournal = function (inputId) {
+    var inp = document.getElementById(inputId); if (!inp) return;
+    var key = journalKeyByLabel(inp.value);
+    if (!key) { inp.style.borderColor = 'var(--red)'; return; }
+    inp.style.borderColor = '';
+    if (alertDraft.journal.indexOf(key) < 0) { alertDraft.journal.push(key); renderAlertChips('journal'); }
+    inp.value = ''; inp.focus();
+  };
+  window.litAlertSetPreprint = function (on) { if (alertDraft) alertDraft.preprintOnly = !!on; };
+  window.litAlertReload = function () { readAlertForm(); alertDraft = captureCurrentFilters(); litAlertsRenderForm(); };
+  window.litAlertCancelEdit = function () {
+    alertEditId = null; alertForm = { name: '', recipient: (state.user && state.user.email) || '', freq: 'weekly' };
+    alertDraft = captureCurrentFilters(); litAlertsRenderForm();
+  };
+  window.litAlertEdit = function (id) {
+    var a = state.alerts[id]; if (!a) return;
+    alertEditId = id;
+    alertForm = { name: a.name || '', recipient: a.recipient || (state.user && state.user.email) || '', freq: a.frequency || 'weekly' };
+    alertDraft = fromCriteria(a.criteria);
+    litAlertsRenderForm();
+    var ov = document.getElementById('litAlertsOverlay'); if (ov) ov.scrollTop = 0;
+  };
+  window.litAlertToggle = function (id, on) {
+    if (!state.user) return;
+    alertsCol().doc(id).set({ enabled: !!on, updatedAt: serverTime() }, { merge: true })
+      .catch(function (e) { console.warn('alert toggle:', e && e.code); });
+  };
+  window.litAlertDelete = function (id) {
+    if (!state.user) return;
+    if (!confirm('Delete this alert? You will stop receiving its e-mails.')) return;
+    alertsCol().doc(id).delete().catch(function (e) { console.warn('alert delete:', e && e.code); });
+    if (alertEditId === id) window.litAlertCancelEdit();
+  };
+  window.litAlertSave = function () {
+    if (!state.user) { acctOpenAuth(); return; }
+    readAlertForm();
+    var statusEl = document.getElementById('litAlertSaveStatus');
+    var setStatus = function (msg, color) { if (statusEl) { statusEl.style.color = color; statusEl.textContent = msg; } };
+    if (!critCount(alertDraft)) { setStatus('Add at least one filter (journal type, journal, author, …).', 'var(--red)'); return; }
+    var name = (alertForm.name || '').trim() || defaultAlertName(alertDraft);
+    var recipient = (alertForm.recipient || '').trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(recipient)) { setStatus('Enter a valid recipient e-mail address.', 'var(--red)'); return; }
+    var payload = {
+      name: name, recipient: recipient, from: (state.user.email || ''),
+      frequency: alertForm.freq || 'weekly', enabled: true,
+      criteria: normalizeCriteria(alertDraft), updatedAt: serverTime()
+    };
+    var btn = document.getElementById('litAlertSaveBtn'); if (btn) btn.disabled = true;
+    setStatus('Saving…', 'var(--text-muted)');
+    var editing = !!alertEditId;
+    var p = editing ? alertsCol().doc(alertEditId).set(payload, { merge: true })
+                    : alertsCol().add(Object.assign({ createdAt: serverTime() }, payload));
+    p.then(function () {
+      alertEditId = null; alertDraft = emptyCriteria();
+      alertForm = { name: '', recipient: recipient, freq: alertForm.freq || 'weekly' };
+      litAlertsRenderForm();
+      var s = document.getElementById('litAlertSaveStatus');
+      if (s) { s.style.color = 'var(--green)'; s.textContent = editing ? 'Alert updated ✓' : 'Alert saved ✓ — you will be notified of new matches.'; }
+    }).catch(function (e) {
+      setStatus(friendly(e), 'var(--red)');
+    }).then(function () { if (btn) btn.disabled = false; });
+  };
+
+  function alertTextRow(key, label, ph) {
+    return '<div class="alert-row"><label>' + esc(label) + '</label>' +
+      '<div class="alert-addrow"><input id="litAlertInput-' + key + '" placeholder="' + escAttr(ph) + '" autocomplete="off" ' +
+        'onkeydown="if(event.key===\'Enter\'){event.preventDefault();litAlertAddText(\'' + key + '\',\'litAlertInput-' + key + '\');}">' +
+        '<button type="button" class="alert-add-btn" onclick="litAlertAddText(\'' + key + '\',\'litAlertInput-' + key + '\')">Add</button></div>' +
+      '<div class="alert-chips" id="litAlertChips-' + key + '"></div></div>';
+  }
+  function litAlertsRenderForm() {
+    var wrap = document.getElementById('litAlertsForm'); if (!wrap || !state.user) return;
+    if (!alertDraft) alertDraft = captureCurrentFilters();
+    var d = alertDraft, editing = !!alertEditId;
+    var journalOpts = Object.keys(JL).map(function (k) { return '<option value="' + escAttr(JL[k]) + '">'; }).join('');
+    var typeChips = JTY.map(function (jt) {
+      return '<span class="alert-typechip" id="litAlertType-' + jt.key + '" onclick="litAlertToggleType(\'' + jt.key + '\')" title="' + escAttr(jt.title || jt.label) + '">' + esc(jt.badge || jt.label) + '</span>';
+    }).join('');
+    var advanced = ['editor', 'area', 'se', 'ae'].some(function (k) { return (d[k] || []).length; });
+    var freqOpt = function (v, label) { return '<option value="' + v + '"' + (alertForm.freq === v ? ' selected' : '') + '>' + esc(label) + '</option>'; };
+    wrap.innerHTML =
+      '<div class="alert-block-label">' + (editing ? 'Edit alert' : 'New alert') +
+        ' <span class="hint" onclick="litAlertReload()" title="Copy the filters currently set on the page into this alert">↻ Use current page filters</span></div>' +
+      '<div class="alert-crit">' +
+        '<div class="alert-row"><label>Journal types</label><div class="alert-typegrid">' + typeChips + '</div></div>' +
+        '<div class="alert-row"><label>Journals</label>' +
+          '<div class="alert-addrow"><input id="litAlertJournalInput" list="litAlertJournalList" placeholder="Type a journal name…" autocomplete="off" ' +
+            'onkeydown="if(event.key===\'Enter\'){event.preventDefault();litAlertAddJournal(\'litAlertJournalInput\');}">' +
+            '<button type="button" class="alert-add-btn" onclick="litAlertAddJournal(\'litAlertJournalInput\')">Add</button></div>' +
+          '<datalist id="litAlertJournalList">' + journalOpts + '</datalist>' +
+          '<div class="alert-chips" id="litAlertChips-journal"></div></div>' +
+        alertTextRow('author', 'Authors', 'Author name…') +
+        alertTextRow('title', 'Title contains', 'Word or phrase in the title…') +
+        alertTextRow('abstract', 'Abstract contains', 'Word or phrase in the abstract…') +
+        alertTextRow('affiliation', 'Affiliation', 'Institution…') +
+        alertTextRow('year', 'Year', 'e.g. 2026') +
+        (advanced ? ('<div class="alert-row"><label>Also carried over from your current filters</label>' +
+          '<div class="alert-chips" id="litAlertChips-editor"></div><div class="alert-chips" id="litAlertChips-area"></div>' +
+          '<div class="alert-chips" id="litAlertChips-se"></div><div class="alert-chips" id="litAlertChips-ae"></div></div>') : '') +
+        '<div class="alert-row" style="margin-bottom:0"><label class="alert-toggle"><input type="checkbox" id="litAlertPreprint"' + (d.preprintOnly ? ' checked' : '') +
+          ' onchange="litAlertSetPreprint(this.checked)"> Only papers with a free open-access pre-print</label></div>' +
+      '</div>' +
+      '<div class="alert-block-label" style="margin-top:16px">Delivery</div>' +
+      '<div class="alert-delivery">' +
+        '<div class="acct-field"><label for="litAlertName">Alert name</label><input id="litAlertName" type="text" placeholder="' + escAttr(defaultAlertName(d)) + '" value="' + escAttr(alertForm.name || '') + '"></div>' +
+        '<div class="acct-field"><label for="litAlertFreq">Frequency</label><select id="litAlertFreq">' +
+          freqOpt('immediate', 'As papers are added') + freqOpt('daily', 'Daily digest') + freqOpt('weekly', 'Weekly digest') +
+        '</select></div>' +
+        '<div class="acct-field full"><label for="litAlertRecipient">Send to</label><input id="litAlertRecipient" type="email" placeholder="you@example.com" value="' + escAttr(alertForm.recipient || '') + '"></div>' +
+      '</div>' +
+      '<div class="alert-save-row"><button class="acct-primary" id="litAlertSaveBtn" onclick="litAlertSave()" style="padding:11px 22px">' + (editing ? 'Update alert' : 'Create alert') + '</button>' +
+        (editing ? '<button type="button" class="alert-icon-btn" onclick="litAlertCancelEdit()">Cancel</button>' : '') +
+        '<span class="alert-save-status" id="litAlertSaveStatus"></span></div>' +
+      '<div class="info-note" style="margin-top:8px">Sent from your account e-mail (<strong>' + esc(state.user.email || '') + '</strong>) to the address above. New papers are matched when the database refreshes — delivery is handled by the alert mailer (see the setup notes). No e-mail is sent from your browser.</div>';
+    CRIT_KEYS.forEach(renderAlertChips);
+    syncTypeChips();
+  }
+  function renderExistingAlerts() {
+    var wrap = document.getElementById('litAlertsExisting'); if (!wrap) return;
+    var ids = Object.keys(state.alerts || {});
+    if (!ids.length) { wrap.innerHTML = ''; return; }
+    ids.sort(function (a, b) {
+      var ca = state.alerts[a].createdAt, cb = state.alerts[b].createdAt;
+      var ma = ca && ca.toMillis ? ca.toMillis() : 0, mb = cb && cb.toMillis ? cb.toMillis() : 0;
+      return mb - ma;
+    });
+    var FREQ = { immediate: 'As added', daily: 'Daily', weekly: 'Weekly' };
+    var html = '<div class="alert-block-label">Your alerts <span class="hint">' + ids.length + '</span></div>';
+    html += ids.map(function (id) {
+      var a = state.alerts[id], on = a.enabled !== false;
+      return '<div class="alert-card' + (on ? '' : ' off') + '">' +
+        '<div class="alert-card-top">' +
+          '<div style="min-width:0">' +
+            '<div class="alert-card-name">' + esc(a.name || 'Alert') + '</div>' +
+            '<div class="alert-card-sum">' + esc(describeCriteria(a.criteria || {})) + '</div>' +
+            '<div class="alert-card-meta">' + esc(FREQ[a.frequency] || 'Weekly') + ' · to ' + esc(a.recipient || (state.user && state.user.email) || '') + '</div>' +
+          '</div>' +
+          '<div class="alert-card-actions">' +
+            '<label class="alert-switch" title="' + (on ? 'Enabled — click to pause' : 'Paused — click to enable') + '"><input type="checkbox"' + (on ? ' checked' : '') + ' onchange="litAlertToggle(\'' + escAttr(id) + '\',this.checked)"><span class="track"></span><span class="knob"></span></label>' +
+            '<button type="button" class="alert-icon-btn" onclick="litAlertEdit(\'' + escAttr(id) + '\')">Edit</button>' +
+            '<button type="button" class="alert-icon-btn danger" onclick="litAlertDelete(\'' + escAttr(id) + '\')" title="Delete">✕</button>' +
+          '</div>' +
+        '</div></div>';
+    }).join('');
+    wrap.innerHTML = html;
+  }
+  function litAlertsRender() {
+    var body = document.getElementById('litAlertsBody'); if (!body) return;
+    if (!state.user) {
+      body.innerHTML = '<div class="alert-signin"><p>Sign in to create e-mail alerts. Your criteria are saved privately to your account, and alerts are sent to your own e-mail (or any address you choose).</p>' +
+        '<button class="acct-primary" onclick="acctOpenAuth()">Sign in / Create account</button></div>';
+      return;
+    }
+    if (!alertDraft) alertDraft = captureCurrentFilters();
+    if (!alertForm.recipient) alertForm.recipient = state.user.email || '';
+    body.innerHTML = '<div id="litAlertsForm"></div><div class="alert-existing" id="litAlertsExisting"></div>';
+    litAlertsRenderForm();
+    renderExistingAlerts();
+  }
+  function refreshAlertsModalIfOpen() {
+    var ov = document.getElementById('litAlertsOverlay');
+    if (!ov || !ov.classList.contains('open')) return;
+    if (state.user && !document.getElementById('litAlertsForm')) litAlertsRender(); // e.g. just signed in from the prompt
+    else if (!state.user) litAlertsRender();                                        // e.g. just signed out
+    else renderExistingAlerts();
+  }
+  // The real E-mail alerts entry point (overrides the pre-Firebase stub).
+  window.litAlertsOpen = function () {
+    if (window.litOpenOverlay) window.litOpenOverlay('litAlertsOverlay');
+    else { var ov = document.getElementById('litAlertsOverlay'); if (ov) ov.classList.add('open'); }
+    if (state.user) {
+      alertEditId = null;
+      alertDraft = captureCurrentFilters();
+      alertForm = { name: '', recipient: state.user.email || '', freq: 'weekly' };
+    }
+    litAlertsRender();
+  };
+
   // ── auth state + live data subscriptions ────────────────────────────────
   function onData() {
     acctDecorate();
     acctRenderControl();
     if (libraryMode) { renderLibraryBar(); renderLibrary(); }
+    refreshAlertsModalIfOpen();
   }
   auth.onAuthStateChanged(function (user) {
     state.user = user;
@@ -3704,7 +4252,8 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (unsubPapers) { unsubPapers(); unsubPapers = null; }
     if (unsubLists) { unsubLists(); unsubLists = null; }
     if (unsubProfile) { unsubProfile(); unsubProfile = null; }
-    state.papers = {}; state.lists = {}; state.profile = null;
+    if (unsubAlerts) { unsubAlerts(); unsubAlerts = null; }
+    state.papers = {}; state.lists = {}; state.profile = null; state.alerts = {};
     if (user) {
       unsubProfile = profileDoc().onSnapshot(function (d) {
         state.profile = d.exists ? (d.data() || {}) : {};
@@ -3719,6 +4268,10 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         var m = {}; snap.forEach(function (d) { var x = d.data() || {}; m[d.id] = { name: x.name || '(untitled)', createdAt: x.createdAt }; });
         state.lists = m; onData();
       }, function (err) { console.warn('lists listener:', err && err.code); });
+      unsubAlerts = alertsCol().onSnapshot(function (snap) {
+        var m = {}; snap.forEach(function (d) { var x = d.data() || {}; x.id = d.id; m[d.id] = x; });
+        state.alerts = m; refreshAlertsModalIfOpen();
+      }, function (err) { console.warn('alerts listener:', err && err.code); });
     } else {
       if (libraryMode) acctExitLibrary();
       onData();
