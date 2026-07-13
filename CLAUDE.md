@@ -266,6 +266,28 @@ the page carries the optional sign-in feature (star/notes/lists/tags, private
 per user, dedicated Firebase project); it stays inert until a web config is
 pasted into `FB_CONFIG` in `fun/lit/index.html` — setup steps in
 `fun/lit/_ACCOUNTS-SETUP.md`, security rules in `fun/lit/_firestore.rules`.
+**Top navigation (in the claret header):** four buttons — **About** (a modal
+describing what the browser covers, how to search, and the full data/provenance
+notes, mirroring the footer text), **E-mail alerts**, **Data Analytics** (a
+link to the sub-page `fun/lit/analytics/`, currently a branded blank placeholder
+for future summary statistics — a sub-page, so NOT a `fun/index.html` card), and
+**Feedback** (a modal with the maintainer's contact links: e-mail
+kostas.stouras@ucd.ie, X `@stourask`, Google Scholar, ORCID, website). About and
+Feedback are static; the Data Analytics page is standalone. **E-mail alerts**
+lets a signed-in user subscribe to an e-mail when new papers matching a set of
+filters are added: opening the modal **pre-fills the alert criteria from the
+page's current search filters** (journal types, journals, authors, title /
+abstract / affiliation terms, years, MS editors/areas, ISR/MkSc SE/AE, and the
+pre-print toggle — the same `sel` shape), editable in-modal, plus an alert name,
+recipient e-mail (default = account e-mail, sent *from* the user's own e-mail),
+and frequency. Alerts are stored privately at `users/{uid}/alerts/{alertId}`
+(covered by the existing `_firestore.rules` wildcard) and managed from the modal
+(enable/pause switch, edit, delete). The page only writes subscriptions — actual
+delivery needs a scheduled backend "alert mailer" (a static Pages site cannot
+send e-mail); its data model and design are documented in
+`fun/lit/_EMAIL-ALERTS-SETUP.md`. All of the alerts logic lives inside the
+accounts IIFE (`window.litAlerts*`); About/Feedback are top-level
+(`window.litAbout*` / `window.litFeedback*`).
 
 ## `/fun/ms` — the Google-free Management Science browser
 `fun/ms/` is the Management Science paper browser. It uses **no Google Sheets**:

@@ -2,7 +2,11 @@ rules_version = '2';
 
 // Firestore security rules for The Lit paper-browser accounts.
 // Every signed-in user can read and write ONLY their own data subtree, so each
-// person's saved papers, notes, lists and tags are private to them. Deploy with:
+// person's saved papers, notes, lists, tags and e-mail alerts are private to
+// them. The recursive wildcard below already covers the alerts subcollection
+// (users/{uid}/alerts/*), so no extra rule is needed for E-mail alerts. The
+// alert mailer (see _EMAIL-ALERTS-SETUP.md) reads alerts server-side with the
+// Admin SDK, which bypasses these rules. Deploy with:
 //   firebase deploy --only firestore:rules
 // (or paste into Firebase console -> Firestore Database -> Rules -> Publish).
 
