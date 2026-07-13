@@ -304,6 +304,13 @@ catalog again and the next user's own defaults aren't blocked by leftovers.
 Auto-applying a catalog (FT50/shard) journal before its lazy manifest arrives is
 fine: `registerExtraSources()` re-applies and refreshes the chip label (and the
 open modal's list) once the journal registers.
+**Keep the About modal in sync:** the **About** modal (`#litAboutOverlay` in
+`index.html`) is the user-facing tour of what The Lit does. **Whenever you add or
+materially change a user-facing `/fun/lit` feature, update the About modal's copy
+in the same change** (e.g. a new journal type, a new filter, a sign-in/library
+capability, an alerts option, a Data Analytics view) so it never drifts from what
+actually ships — the same keep-in-sync discipline as the `fun/index.html`
+landing-page cards.
 **Top navigation (in the claret header):** four buttons — **About** (a modal
 describing what the browser covers, how to search, and the full data/provenance
 notes, mirroring the footer text), **E-mail alerts**, **Data Analytics** (a
