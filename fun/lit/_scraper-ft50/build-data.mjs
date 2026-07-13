@@ -974,7 +974,14 @@ export async function searchPreprintsByTitle(papers, cache, opts = {}) {
   const todo = eligible.slice(0, cap);
   if (opts.log) console.log(`  preprints: title-searching up to ${todo.length} of ${eligible.length} unlinked papers…`);
   let found = 0, searched = 0, oaBad = 0, crFails = 0, axFails = 0;
-  let oaAlive = true, axAlive = true;
+  // opts.noArxiv: start with the arXiv leg off. For the FT50 catalog
+  // (finance/economics/accounting/management/marketing) papers live on
+  // SSRN/NBER, essentially never arXiv, so arXiv's 1-req/3s pacing on every
+  // MISS was the dominant cost. With it off, misses are stamped Crossref-only
+  // (`naxiv:1`, re-checked later), and the run flies through the catalog on
+  // Crossref (~0.4s/paper) instead of ~3.8s. The daily build keeps all engines.
+  let oaAlive = true, axAlive = !opts.noArxiv;
+  if (opts.noArxiv && opts.log) console.log('  preprints: arXiv leg disabled for this run — Crossref-only misses (naxiv), re-checked when a later run re-enables arXiv.');
   for (let i = 0; i < todo.length; i++) {
     const p = todo[i];
     if (Date.now() > deadline) { if (opts.log) console.log('  preprints: title-search time budget reached — resuming next run.'); break; }

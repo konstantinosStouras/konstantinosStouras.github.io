@@ -103,6 +103,12 @@ if (!applyOnly) {
     budgetMs: parseInt(process.env.FT50_PREPRINT_BACKFILL_MS || String(40 * 60 * 1000), 10),
     sleepMs: 400,   // gently: ~2 req/s on the fast legs
     patient: true,
+    // This catalog is finance/economics/accounting/management/marketing —
+    // SSRN/NBER, essentially never arXiv — so skip the arXiv leg whose
+    // 1-req/3s pacing on every miss otherwise caps the run at ~600 papers.
+    // Misses are stamped Crossref-only (naxiv) and re-checked if a future run
+    // re-enables arXiv; set FT50_PREPRINT_ARXIV=1 to restore the arXiv leg.
+    noArxiv: process.env.FT50_PREPRINT_ARXIV !== '1',
     log: true,
     checkpoint,
   });
