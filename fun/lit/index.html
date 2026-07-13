@@ -388,7 +388,8 @@
   .acct-google svg { width: 18px; height: 18px; flex: none; }
   .acct-or { display: flex; align-items: center; gap: 10px; color: var(--text-muted); font-size: 12px; }
   .acct-or::before, .acct-or::after { content: ''; flex: 1; height: 1px; background: var(--border); }
-  .acct-field { display: flex; flex-direction: column; gap: 5px; }
+  .acct-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .acct-field input { width: 100%; }
   .acct-field label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .6px; color: var(--text-muted); }
   .acct-field input { padding: 11px 13px; border: 1.5px solid var(--border); border-radius: 8px; font-family: inherit; font-size: 16px; color: var(--text); }
   .acct-field input:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(125,29,63,.1); }
@@ -2040,7 +2041,14 @@ function buildJTypeSelect() {
   var cs = document.getElementById('csJType');
   if (!cs) return;
   var container = cs.querySelector('.custom-select-items');
-  container.innerHTML = JOURNAL_TYPES.map(function(t) {
+  // Show Working Papers at the TOP of the dropdown (it is its own category, not a
+  // published-journal list). JOURNAL_TYPES itself keeps its badge-precedence order
+  // (UTD24 > FT50 > ABS 4/4* > ABS 3) for topJournalType(); wp's keys are disjoint
+  // from the published lists, so this reordering is display-only and can't change
+  // any published paper's badge.
+  var ordered = JOURNAL_TYPES.filter(function(t) { return t.key === 'wp'; })
+    .concat(JOURNAL_TYPES.filter(function(t) { return t.key !== 'wp'; }));
+  container.innerHTML = ordered.map(function(t) {
     var n = 0;
     journalTypeKeys(t.key).forEach(function(k) { if (SRC[k] || EXTRA_SRC[k]) n++; });
     // Working Papers is hidden until its archive is built (no repositories yet).
@@ -3464,7 +3472,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     <button class="acct-modal-x" onclick="acctCloseProfile()" aria-label="Close">×</button>
     <div class="acct-modal-head">
       <h2>My profile</h2>
-      <p>These details are saved privately to your account — only you can see them. Edit them any time.</p>
+      <p>Your name personalizes your account and is how you appear in the menu. Everything here is optional and private to you; edit or remove it any time.</p>
     </div>
     <div class="acct-modal-body">
       <div style="display:flex;gap:12px">

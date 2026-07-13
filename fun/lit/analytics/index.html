@@ -105,9 +105,11 @@
   .fscope .txt { font-size: 13.5px; color: var(--text-muted); }
   .fscope .txt strong { color: var(--navy); font-weight: 700; }
   .fscope .selchips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-  .selpill { font-size: 11.5px; font-weight: 600; background: var(--navy-light); color: var(--navy); border-radius: 100px; padding: 3px 8px 3px 10px; display: inline-flex; align-items: center; gap: 6px; }
-  .selpill button { border: none; background: none; color: var(--navy); cursor: pointer; font-size: 14px; line-height: 1; padding: 0; opacity: .6; }
-  .selpill button:hover { opacity: 1; }
+  .selpill { font-size: 11.5px; font-weight: 600; background: var(--navy-light); color: var(--navy); border-radius: 100px; padding: 3px 8px 3px 10px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; max-width: 100%; transition: background .13s; }
+  .selpill:hover { background: #ecd7dd; }
+  .selpill .lbl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .selpill .x { color: var(--navy); font-size: 14px; line-height: 1; opacity: .55; flex: 0 0 auto; }
+  .selpill:hover .x { opacity: 1; }
   .resetbtn { font-size: 12.5px; font-weight: 600; color: var(--navy); background: none; border: 1.5px solid var(--border); border-radius: 8px; padding: 7px 14px; cursor: pointer; white-space: nowrap; }
   .resetbtn:hover { border-color: var(--navy); }
 
@@ -466,7 +468,10 @@
     opts = opts || {};
     if (!items.length) return '<div class="chart-empty">No data in the selected scope.</div>';
     items = items.slice(0, opts.limit || 14);
-    var rowH = 26, gap = 8, L = 150, R = 54, T = 6, W = 760;
+    // L is the left label column; wide enough that a trunc(…,26) journal name
+    // fits without clipping at the chart's left edge (e.g. "Manufacturing &
+    // Service O…") — the whole SVG scales to the card, so bars keep their share.
+    var rowH = 26, gap = 8, L = 194, R = 54, T = 6, W = 760;
     var H = T * 2 + items.length * rowH + (items.length - 1) * gap;
     var maxV = 0; items.forEach(function (it) { if (it.value > maxV) maxV = it.value; });
     maxV = maxV || 1;
@@ -753,13 +758,15 @@
     var pills = [];
     chosenTypes.forEach(function (t) {
       var lab = DATA.types.filter(function (x) { return x.key === t; })[0].badge;
-      pills.push('<span class="selpill">' + esc(lab) + '<button data-rt="' + t + '">×</button></span>');
+      pills.push('<span class="selpill" data-rt="' + esc(t) + '" title="Click to remove"><span class="lbl">' + esc(lab) + '</span><span class="x">×</span></span>');
     });
     chosenJ.forEach(function (k) {
-      pills.push('<span class="selpill">' + esc(JMAP[k].name) + '<button data-rj="' + k + '">×</button></span>');
+      pills.push('<span class="selpill" data-rj="' + esc(k) + '" title="Click to remove"><span class="lbl">' + esc(JMAP[k].name) + '</span><span class="x">×</span></span>');
     });
     $('selChips').innerHTML = pills.join('');
-    Array.prototype.forEach.call($('selChips').querySelectorAll('button'), function (b) {
+    // Clicking anywhere on a scope pill removes that journal/type (like the main
+    // browser's filter chips), not just the × glyph.
+    Array.prototype.forEach.call($('selChips').querySelectorAll('.selpill'), function (b) {
       b.onclick = function () {
         if (b.getAttribute('data-rt')) S.types[b.getAttribute('data-rt')] = false;
         if (b.getAttribute('data-rj')) S.journals[b.getAttribute('data-rj')] = false;
