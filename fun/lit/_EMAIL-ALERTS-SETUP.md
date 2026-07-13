@@ -20,7 +20,7 @@ beyond the Firebase project that already powers accounts (`FB_CONFIG` in
   journals and types, add text terms, toggle pre-prints) or click **"↻ Use
   current page filters"** to re-copy the live filters.
 - Delivery settings: an **alert name**, a **frequency** (immediate / daily /
-  weekly), and a **recipient e-mail** (defaulting to the account e-mail, but the
+  weekly / monthly), and a **recipient e-mail** (defaulting to the account e-mail, but the
   user can send to any address). The UI states clearly that the alert is sent
   *from* the user's own account e-mail.
 - A **"Send me a test e-mail"** button next to *Create alert* delivers a one-off
@@ -42,7 +42,7 @@ users/{uid}/alerts/{alertId} = {
   name:       string,                 // display name for the alert
   recipient:  string,                 // where to send it (any e-mail)
   from:       string,                 // the user's account e-mail (informational)
-  frequency:  'immediate'|'daily'|'weekly',
+  frequency:  'immediate'|'daily'|'weekly'|'monthly',
   enabled:    boolean,                // paused alerts are kept but not sent
   criteria: {                         // mirrors the page's search filters
     jtype:       string[],            // 'utd24' | 'ft50' | 'abs4' | 'abs3'
@@ -154,8 +154,10 @@ configured" and exits 0), so it never fails before you set up. To turn it on:
    Password** (Google Account → Security → 2-Step Verification → App passwords)
    and add secrets **`SMTP_USER`** (e.g. `kstouras@gmail.com`) and
    **`SMTP_PASS`** (the app password). Optional: `SMTP_HOST` (default
-   `smtp.gmail.com`), `SMTP_PORT` (default `465`), `ALERTS_FROM` (default
-   `SMTP_USER`), `ALERTS_FROM_NAME` (default `The Lit`). Any provider that
+   `smtp.gmail.com`), `SMTP_PORT` (default `465`), `SMTP_SECURE` (default: on
+   when `SMTP_PORT` is `465`; set to the string `true` to force TLS on another
+   port), `ALERTS_FROM` (default `SMTP_USER`), `ALERTS_FROM_NAME` (default
+   `The Lit`). Any provider that
    offers SMTP (Resend / SendGrid / Amazon SES / Postmark) works too — just set
    `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS` accordingly.
 3. **Test.** Run the workflow from the Actions tab with **dry-run** checked
@@ -200,9 +202,12 @@ daily run gates on `hasPaperIntent`).
 ### Coverage note
 
 The mailer scans the eight native sources plus the FT50 catalog (the two
-`recent.json` files in this repo). The ABS satellite shards (`lit-data-abs4`,
-`lit-data-abs3-omecon`, `lit-data-abs3-rest`) are separate repos and are not
-scanned yet; extending coverage means pulling their `recent.json` too. Also
-`recent.json` is capped (newest ~1,000, last ~90 days), which is ample for a
+`recent.json` files in this repo) **and the ABS satellite shards**
+(`lit-data-abs4`, `lit-data-abs3-omecon`, `lit-data-abs3-rest`). The shards live
+in separate repos, so their `recent.json` and manifests are fetched over HTTP at
+run time (`loadShards`) — each shard's `sources.json` also carries the journals'
+ABS grades, so an `abs4`/`abs3` type alert matches shard journals too. A shard
+that is offline or not yet deployed just 404s and is skipped. Also `recent.json`
+is capped (newest ~1,000, last ~90 days), which is ample for a
 daily/weekly/monthly digest but means a brand-new alert's first e-mail looks
 back at most ~31 days.

@@ -32,8 +32,9 @@
  * MATCHING FIDELITY: the journal-list sets and the textMatch/authorMatch
  * helpers below are vendored copies of the ones in fun/lit/index.html — keep
  * them in sync if the page's filtering changes. Coverage is the eight native
- * sources + the FT50 catalog (the two recent.json files in this repo). The ABS
- * satellite shards (separate repos) are not scanned here yet.
+ * sources + the FT50 catalog (the two recent.json files in this repo) PLUS the
+ * ABS satellite shards, whose recent.json + manifests are fetched over HTTP at
+ * run time (loadShards) — missing shards 404 and are skipped.
  *
  * Env / secrets (all via the workflow):
  *   FIREBASE_SERVICE_ACCOUNT   JSON of a Firebase service-account key (or set
@@ -60,6 +61,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR  = path.join(__dirname, '..', 'data');
 const FT50_DIR  = path.join(__dirname, '..', 'data-ft50');
 const SITE_URL  = 'https://stouras.com/fun/lit/';
+// The ABS satellite shards live in sibling repos, each served from its own Pages
+// site at stouras.com/<repo>/data/. They are fetched over HTTP at run time (they
+// are NOT in this checkout); missing shards 404 and are skipped, exactly like the
+// page's own runtime merge.
+const SHARD_BASE  = 'https://stouras.com/';
+const SHARD_REPOS = ['lit-data-abs4', 'lit-data-abs3-omecon', 'lit-data-abs3-rest'];
 // Maintainer contact surfaced in every alert e-mail (help / feedback, and the
 // List-Unsubscribe mailto). Keep in sync with the Feedback modal in index.html.
 const CONTACT_EMAIL = 'kostas.stouras@ucd.ie';
@@ -169,7 +176,9 @@ function makeCtx() {
     for (const t of (c.jtype || [])) for (const k of jtypeKeys(t)) s.add(k);
     return s;
   };
-  return { jtypeKeys, scopeFor };
+  // abs4/abs3/ft50 are exposed (not just closed over) so loadShards() can extend
+  // them at runtime with the ABS grades the satellite shards publish.
+  return { jtypeKeys, scopeFor, abs4: abs.abs4, abs3: abs.abs3, ft50 };
 }
 
 // True if a paper satisfies an alert's criteria. Mirrors applyFilters():
@@ -238,7 +247,7 @@ function parseAdded(s) {
   const d = new Date(String(s) + (String(s).length <= 10 ? 'T00:00:00Z' : ''));
   return isNaN(d) ? null : d;
 }
-function loadRecentPapers() {
+function loadRecentPapers(extraRows) {
   const rows = [];
   for (const f of [path.join(DATA_DIR, 'recent.json'), path.join(FT50_DIR, 'recent.json')]) {
     try {
@@ -246,7 +255,8 @@ function loadRecentPapers() {
       if (Array.isArray(arr)) for (const p of arr) { p._added = parseAdded(p['Date Added']); if (p._added) rows.push(p); }
     } catch { /* missing file → skip */ }
   }
-  // De-dup by DOI (a paper should not appear in both files, but be safe).
+  if (Array.isArray(extraRows)) for (const p of extraRows) if (p && p._added) rows.push(p);
+  // De-dup by DOI (a paper should not appear in more than one file, but be safe).
   const seen = new Set(), out = [];
   for (const p of rows) {
     const k = (p.DOI || (p.Title + '|' + p.Year)).toLowerCase();
@@ -254,6 +264,37 @@ function loadRecentPapers() {
   }
   out.sort((a, b) => b._added - a._added);
   return out;
+}
+
+// Fetch the ABS satellite shards' recent papers over HTTP, and extend the ctx's
+// ABS grade sets from each shard's own manifest so an abs4/abs3 jtype alert can
+// match shard journals too. Best-effort: any shard that is missing (404) or
+// errors is silently skipped, so a run never breaks when a shard is offline or
+// not yet deployed. Needs network (GitHub Actions runners have it); the offline
+// --selftest / --scan paths never call it.
+async function fetchJson(url) {
+  const res = await fetch(url, { headers: { accept: 'application/json' } });
+  if (!res.ok) throw new Error(url + ' -> ' + res.status);
+  return res.json();
+}
+async function loadShards(ctx) {
+  const rows = [];
+  for (const repo of SHARD_REPOS) {
+    try {
+      const man = await fetchJson(SHARD_BASE + repo + '/data/sources.json');
+      for (const s of (Array.isArray(man) ? man : [])) {
+        if (!s || !s.key) continue;
+        const g = String(s.abs || '');
+        if (g === '4' || g === '4*') ctx.abs4.add(s.key);
+        else if (g === '3') ctx.abs3.add(s.key);
+      }
+    } catch { /* no shard manifest → its jtype grades just won't extend */ }
+    try {
+      const arr = await fetchJson(SHARD_BASE + repo + '/data/recent.json');
+      if (Array.isArray(arr)) for (const p of arr) { p._added = parseAdded(p['Date Added']); if (p._added) rows.push(p); }
+    } catch { /* no shard recent.json → skip this shard */ }
+  }
+  return rows;
 }
 
 // ── E-mail rendering ──────────────────────────────────────────────────────────
@@ -450,9 +491,10 @@ async function run({ dryRun }) {
   }
 
   const ctx = makeCtx();
-  const papers = loadRecentPapers();
+  const shardRows = await loadShards(ctx);   // best-effort HTTP; also extends ctx ABS grades
+  const papers = loadRecentPapers(shardRows);
   const now = new Date();
-  console.log(`Loaded ${papers.length} recently-added papers. now=${now.toISOString()} dryRun=${dryRun}`);
+  console.log(`Loaded ${papers.length} recently-added papers${shardRows.length ? ` (incl. ${shardRows.length} from ABS shards)` : ''}. now=${now.toISOString()} dryRun=${dryRun}`);
 
   const { default: admin } = await import('firebase-admin');
   if (!admin.apps.length) {
