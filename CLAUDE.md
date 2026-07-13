@@ -319,7 +319,18 @@ where-they-publish, the latter greying journals outside the current scope).
 Refreshed daily by `.github/workflows/lit-analytics.yml` (08:10 UTC, after the
 native and FT50 data builds), which commits `analytics/*.json` on master only.
 The generation date mirrors the native `meta.json` `lastPull`, never
-`Date.now()`, so re-runs on an unchanged dataset are a no-op. **E-mail alerts**
+`Date.now()`, so re-runs on an unchanged dataset are a no-op. The page also
+shows one **live community figure — the number of registered users** (a tile in
+the Community band, separate from the corpus stats). Firebase Auth has no
+client-side user count and each account's Firestore subtree is private, so the
+count comes from a **public** `registeredUsers/{uid}` collection: one contentless
+per-account doc holding just a coarse `t` timestamp (no e-mail/name), written
+once per signed-in session by the main page's `auth.onAuthStateChanged` and read
+here via a `count()` aggregation (one billed read per visit). Its rule in
+`_firestore.rules` is public-read + owner-only, `t`-only writes, no delete; the
+tile hides itself if that rule isn't deployed. The count reflects accounts that
+have signed in since the tally launched (converges to the true total as users
+return; the exact all-time total is in Firebase console → Authentication). **E-mail alerts**
 lets a signed-in user subscribe to an e-mail when new papers matching a set of
 filters are added: opening the modal **pre-fills the alert criteria from the
 page's current search filters** (journal types, journals, authors, title /

@@ -3398,6 +3398,8 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
  *   users/{uid}/lists/{lid}     -> { name, createdAt }
  *   users/{uid}/profile/main    -> { firstName, lastName, affiliation,
  *                                    website, email, updatedAt }
+ *   registeredUsers/{uid}       -> { t }   PUBLIC, contentless per-account marker
+ *                                    counted by fun/lit/analytics/ (no private data)
  * A paper's docId is derived from its DOI (or title+year when no DOI).
  */
 (function () {
@@ -3443,6 +3445,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   var unsubPapers = null, unsubLists = null, unsubProfile = null, unsubAlerts = null;
   var libraryMode = false, libFilter = { type: 'all', id: null }, libQuery = '';
   var doiIndex = null, doiIndexLen = -1;
+  var lastMarkedUid = null;    // guards the once-per-session registered-users tally write
 
   // ── helpers: per-paper keys / metadata ──────────────────────────────────
   function normDoi(d) { return String(d || '').trim().replace(/^https?:\/\/(dx\.)?doi\.org\//i, '').toLowerCase(); }
@@ -4258,6 +4261,21 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (unsubAlerts) { unsubAlerts(); unsubAlerts = null; }
     state.papers = {}; state.lists = {}; state.profile = null; state.alerts = {};
     if (user) {
+      // Public registered-users tally (read by fun/lit/analytics/). Each account
+      // owns ONE contentless doc — just a coarse "last seen" timestamp, no e-mail
+      // or name — in the top-level `registeredUsers` collection, so that page can
+      // COUNT accounts without touching any private data. Owner-only writes +
+      // public read are enforced in _firestore.rules. Best-effort and once per
+      // signed-in uid: if the (updated) rules aren't deployed yet this just fails
+      // silently and nothing else on the page is affected.
+      if (lastMarkedUid !== user.uid) {
+        lastMarkedUid = user.uid;
+        try {
+          db.collection('registeredUsers').doc(user.uid)
+            .set({ t: serverTime() }, { merge: true })
+            .catch(function (err) { console.warn('registry mark:', err && err.code); });
+        } catch (e) {}
+      }
       unsubProfile = profileDoc().onSnapshot(function (d) {
         state.profile = d.exists ? (d.data() || {}) : {};
         onData();

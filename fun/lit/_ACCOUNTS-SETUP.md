@@ -141,11 +141,32 @@ construction (see `_firestore.rules`):
 users/{uid}/papers/{docId}   { doi, title, authors, year,
                                starred, note, tags[], lists[listId], updatedAt }
 users/{uid}/lists/{listId}   { name, createdAt }
+registeredUsers/{uid}        { t }   ← PUBLIC, one contentless doc per account
 ```
 
 `docId` is derived from the paper's DOI (or title + year when a DOI is missing),
 so the same paper maps to one record per user — across every journal The Lit
 covers.
+
+### Registered-users tally (powers `fun/lit/analytics/`)
+
+`registeredUsers/{uid}` is a small **public** collection used only so the
+[Data Analytics page](analytics/) can display how many people have signed up.
+Each account owns exactly one doc, keyed by its uid, holding only a coarse
+"last seen" server timestamp `t` — **no e-mail, name or any private data**. The
+main page writes it once per signed-in session (`auth.onAuthStateChanged`), and
+the analytics page runs a `count()` aggregation over the collection (one billed
+read per visit, nothing else downloaded). Its rule in `_firestore.rules` is:
+public `read`, owner-only `create/update` pinned to just the `t` field, no
+`delete`.
+
+> **Re-deploy the rules after this change.** If you set accounts up before this
+> tally existed, re-publish `_firestore.rules` (step 6 above) so the public
+> `read` on `registeredUsers` is live — otherwise the analytics page can't count
+> it and just hides the figure (everything else keeps working). The count
+> reflects accounts that have signed in since the tally launched, so it converges
+> to the true total as returning users sign in again; the exact all-time total is
+> always in **Firebase console → Authentication**.
 
 ## Notes
 

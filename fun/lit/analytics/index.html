@@ -170,6 +170,17 @@
     .header-inner, .wrap { padding-left: 18px; padding-right: 18px; }
     .header h1 { font-size: 22px; }
   }
+
+  /* ── Community band: live registered-users figure (independent of the corpus
+        dashboard below; loads from Firebase and hides itself on any error) ─── */
+  .community { margin-bottom: 22px; }
+  .cstat { display: flex; align-items: center; gap: 24px; background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%); color: #fff; border-radius: 14px; box-shadow: var(--shadow-md); padding: 20px 26px; }
+  .cstat .cnum { font-family: 'Fraunces', serif; font-size: 46px; line-height: 1; letter-spacing: 1px; flex: none; }
+  .cstat .cnum[data-state="loading"] { opacity: .5; }
+  .cstat .clabel { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); }
+  .cstat .clabel .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #57c98a; margin-left: 7px; vertical-align: middle; }
+  .cstat .cdesc { font-size: 13.5px; color: rgba(255,255,255,0.82); line-height: 1.55; margin-top: 4px; max-width: 66ch; }
+  @media (max-width: 560px) { .cstat { flex-direction: column; align-items: flex-start; gap: 8px; padding: 18px 20px; } .cstat .cnum { font-size: 40px; } }
 </style>
 </head>
 <body>
@@ -182,6 +193,21 @@
 </header>
 
 <div class="wrap">
+
+  <!-- Live community figure: number of registered accounts on The Lit. Populated
+       by the Firebase script at the foot of the page (a count() over the public
+       `registeredUsers` collection); stays hidden until/unless that read
+       succeeds, so it never shows a broken state and is independent of the
+       corpus dashboard's own data load below. -->
+  <section class="community" id="community" style="display:none">
+    <div class="cstat">
+      <div class="cnum" id="statUsers" data-state="loading">—</div>
+      <div>
+        <div class="clabel">Registered users<span class="dot" title="Updated live from The Lit's sign-in database"></span></div>
+        <div class="cdesc">People who have created an account to star papers, keep private notes &amp; lists, and set up e-mail alerts on The Lit.</div>
+      </div>
+    </div>
+  </section>
 
   <div id="boot" class="loading"><span class="spinner"></span>Loading the database summary…</div>
 
@@ -834,6 +860,66 @@
     $('boot').style.display = 'none';
     $('failed').style.display = '';
   });
+})();
+</script>
+
+<!-- Firebase (compat): app + Firestore only. No Auth is loaded — the registered-
+     users tally is a PUBLIC collection, so counting it needs no sign-in. This is
+     wholly separate from the corpus dashboard above. -->
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  // Same PUBLIC web config as fun/lit/index.html (these values are not secrets;
+  // access is governed by fun/lit/_firestore.rules). Keep in sync with that file.
+  var FB_CONFIG = {
+    apiKey: "AIzaSyDUh6qKU42CiJf6yCsQ-znmH8Y9zo95u04",
+    authDomain: "lit-paper-browser.firebaseapp.com",
+    projectId: "lit-paper-browser",
+    storageBucket: "lit-paper-browser.firebasestorage.app",
+    messagingSenderId: "336217663944",
+    appId: "1:336217663944:web:219da7d213d1005625f8fd",
+    measurementId: "G-2E1BTF9SSD"
+  };
+
+  var section = document.getElementById('community');
+  var elValue = document.getElementById('statUsers');
+  function show(n) {
+    if (!elValue || !section) return;
+    elValue.textContent = Number(n).toLocaleString();
+    elValue.setAttribute('data-state', 'ok');
+    section.style.display = '';   // reveal only once we have a real number
+  }
+
+  if (!window.firebase || !firebase.firestore || FB_CONFIG.apiKey.indexOf('PASTE_') !== -1) return;
+
+  var db;
+  try { firebase.initializeApp(FB_CONFIG); db = firebase.firestore(); }
+  catch (e) { return; }
+
+  var col = db.collection('registeredUsers');
+
+  // Read all docs and use snapshot.size (one read per user) — fallback for any
+  // SDK without the count() aggregation.
+  function fallbackGet() {
+    col.get()
+      .then(function (snap) { show(snap.size); })
+      .catch(function (err) { console.warn('registeredUsers get:', err && err.code); });
+  }
+
+  // Preferred: a server-side count() aggregation — one billed read regardless of
+  // how many accounts exist, downloading no per-user documents.
+  try {
+    if (typeof col.count === 'function') {
+      col.count().get()
+        .then(function (agg) { show(agg.data().count); })
+        .catch(function (err) { console.warn('registeredUsers count():', err && err.code); fallbackGet(); });
+    } else {
+      fallbackGet();
+    }
+  } catch (e) { fallbackGet(); }
 })();
 </script>
 
