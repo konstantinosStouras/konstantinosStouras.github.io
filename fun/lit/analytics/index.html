@@ -374,6 +374,17 @@
   // journal's `dims` only when we collect them: MS editors/areas, ISR/MkSc SE/AE).
   var DIM_ORDER = ['area', 'editor', 'se', 'ae'];
   var DIM_LABEL = { editor: 'Accepting editor', area: 'Editorial area', se: 'Senior editor', ae: 'Associate editor' };
+  // MS "accepting editor" values are stored as the whole acceptance sentence
+  // ("This paper was accepted by NAME, area."). Show just the editor's name on
+  // the chart while keeping the raw value as the filter key. Idempotent, so it
+  // also passes through already-clean names once the data is rebuilt.
+  function cleanEditorName(v) {
+    var s = String(v == null ? '' : v);
+    var m = s.match(/accepted by\s+([^.]+(?:\.[^.]{0,5})*[^.]*)\./i);
+    var name = (m ? m[1] : s.replace(/^.*?accepted by\s+/i, '')).split(',')[0].replace(/\.\s*$/, '').trim();
+    return name || s;
+  }
+  function dimDisplay(name, v) { return name === 'editor' ? cleanEditorName(v) : v; }
   function activeDimVals() { return S.dim.name ? Object.keys(S.dim.vals).filter(function (v) { return S.dim.vals[v]; }) : []; }
   var YEAR_LO = 0, YEAR_HI = 0;
 
@@ -548,7 +559,7 @@
     items.forEach(function (it, i) {
       var y = T + i * (rowH + gap);
       var w = (it.value / maxV) * (W - L - R);
-      var row = '<text x="' + (L - 10) + '" y="' + (y + rowH / 2 + 4) + '" text-anchor="end" font-size="12.5" fill="' + '#241a1e' + '">' + esc(trunc(it.label, 26)) + '</text>' +
+      var row = '<text x="' + (L - 10) + '" y="' + (y + rowH / 2 + 4) + '" text-anchor="end" font-size="12.5" fill="' + '#241a1e' + '">' + esc(trunc(it.display != null ? it.display : it.label, 26)) + '</text>' +
         '<rect x="' + L + '" y="' + y + '" width="' + Math.max(1, w).toFixed(1) + '" height="' + rowH + '" rx="4" fill="' + (it.color || NAVY) + '"/>' +
         '<text x="' + (L + Math.max(1, w) + 8).toFixed(1) + '" y="' + (y + rowH / 2 + 4) + '" font-size="12" fill="' + MUTED + '" font-weight="600">' + (opts.fmt ? opts.fmt(it.value) : fmt(it.value)) + '</text>';
       // Click-to-filter: a transparent full-row hit target wraps the row.
@@ -618,7 +629,7 @@
       if (!items.length) return '';
       var sel = (S.dim.name === name) ? S.dim.vals : {};
       items = items.slice(0, 14).map(function (it) {
-        return { label: it.label, value: it.value, color: sel[it.label] ? 'var(--accent)' : 'var(--navy)' };
+        return { label: it.label, display: dimDisplay(name, it.label), value: it.value, color: sel[it.label] ? 'var(--accent)' : 'var(--navy)' };
       });
       var sub = (S.dim.name === name && activeDimVals().length)
         ? ('Filtering by ' + activeDimVals().length + ' selected — click again to remove')
@@ -939,7 +950,7 @@
       pills.push('<span class="selpill" data-rj="' + esc(k) + '" title="Click to remove"><span class="lbl">' + esc(JMAP[k].name) + '</span><span class="x">×</span></span>');
     });
     dimVals.forEach(function (v) {
-      pills.push('<span class="selpill dim" data-rd="' + esc(v) + '" title="Click to remove"><span class="lbl">' + esc(DIM_LABEL[S.dim.name] + ': ' + v) + '</span><span class="x">×</span></span>');
+      pills.push('<span class="selpill dim" data-rd="' + esc(v) + '" title="Click to remove"><span class="lbl">' + esc(DIM_LABEL[S.dim.name] + ': ' + dimDisplay(S.dim.name, v)) + '</span><span class="x">×</span></span>');
     });
     $('selChips').innerHTML = pills.join('');
     // Clicking anywhere on a scope pill removes that journal/type/dimension value
