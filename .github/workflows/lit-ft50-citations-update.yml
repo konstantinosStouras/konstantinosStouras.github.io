@@ -1,0 +1,88 @@
+name: lit-ft50 — refresh citation counts
+
+# Refreshes the FT50 catalog's CitedBy counts (fun/lit/data-ft50/) from
+# OpenAlex (cited_by_count) and Semantic Scholar (citationCount) — both much
+# closer to Google Scholar's number than Crossref's is-referenced-by-count,
+# which the daily build keeps as the floor. Runs
+# fun/lit/_scraper-ft50/citations-ci.mjs once a day: a bounded (~45 min)
+# oldest-first sweep into data-ft50/_citations.json, then applies the cache to
+# the papers files and commits fun/lit/data-ft50/ back. The ~200k-DOI catalog
+# converges to an every-couple-of-days refresh cadence. See the header of
+# citations-ci.mjs.
+
+on:
+  schedule:
+    # Daily at 02:50 UTC — clear of the 07:15 daily build; an overlap with an
+    # every-2h preprint slice simply queues behind it (same concurrency group).
+    - cron: '50 2 * * *'
+  workflow_dispatch: {}      # run on demand from the Actions tab
+
+# SAME concurrency group as lit-ft50-update-data.yml and
+# lit-ft50-preprints-backfill.yml — all three commit fun/lit/data-ft50, so
+# they must queue, never race.
+concurrency:
+  group: lit-ft50-update-data-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write            # needed to commit the refreshed data back
+
+jobs:
+  citations:
+    runs-on: ubuntu-latest
+    # Headroom over the 45-min sweep budget + apply/commit.
+    timeout-minutes: 65
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Refresh citation counts (OpenAlex+Semantic Scholar, bounded)
+        env:
+          # Own OpenAlex quota identity — never starves the preprint
+          # backfill's (kstouras+litft50@gmail.com) or the other datasets'.
+          FT50_MAILTO: kstouras+litft50cite@gmail.com
+        run: node fun/lit/_scraper-ft50/citations-ci.mjs
+
+      - name: Commit refreshed data
+        # always(): if the sweep step is killed (timeout/transient), commit
+        # whatever the checkpointed cache already holds — counts are refreshed
+        # monotonically and losing a whole run's sweep to a late kill would
+        # waste the slot.
+        if: always() && github.ref == 'refs/heads/master'
+        # Same hardened push as lit-ft50-preprints-backfill.yml: on a rejected
+        # push, take the new tip's data and re-apply ONLY our cache counts
+        # onto it (citations-ci.mjs --apply-only --merge-cache).
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add fun/lit/data-ft50
+          if git diff --cached --quiet; then
+            echo "No data changes — nothing to commit."
+            exit 0
+          fi
+          cp fun/lit/data-ft50/_citations.json /tmp/lit-ft50-citations-ours.json
+          git commit -m "lit-ft50: refresh citation counts"
+          for i in 1 2 3; do
+            if git push origin HEAD:${{ github.ref_name }}; then
+              echo "Pushed on attempt $i."
+              exit 0
+            fi
+            echo "Push rejected (concurrent commit?) — re-applying our counts on the new tip…"
+            git fetch origin ${{ github.ref_name }}
+            git reset --hard origin/${{ github.ref_name }}
+            node fun/lit/_scraper-ft50/citations-ci.mjs --apply-only --merge-cache=/tmp/lit-ft50-citations-ours.json
+            git add fun/lit/data-ft50
+            if git diff --cached --quiet; then
+              echo "The concurrent commit already contains these counts — nothing left to push."
+              exit 0
+            fi
+            git commit -m "lit-ft50: refresh citation counts"
+            sleep 5
+          done
+          echo "::error::Could not push the refreshed data after 3 attempts."
+          exit 1
