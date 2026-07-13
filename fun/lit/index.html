@@ -360,7 +360,9 @@
   .acct-btn:hover { background: rgba(255,255,255,0.18); border-color: #fff; }
   .acct-user { display: flex; align-items: center; gap: 8px; max-width: 220px; }
   .acct-uname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .acct-avatar { width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--navy-dark); font-weight: 700; font-size: 12px; display: flex; align-items: center; justify-content: center; text-transform: uppercase; flex: none; }
+  .acct-avatar { width: 24px; height: 24px; border-radius: 50%; background: var(--accent) center/cover no-repeat; color: var(--navy-dark); font-weight: 700; font-size: 12px; display: flex; align-items: center; justify-content: center; text-transform: uppercase; flex: none; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.07); }
+  .acct-avatar-lg { width: 52px; height: 52px; font-size: 22px; }
+  .acct-head-avatar { display: flex; align-items: flex-start; gap: 14px; }
   .acct-wrap { position: relative; }
   .acct-menu { display: none; position: absolute; right: 0; top: calc(100% + 8px); background: #fff; color: var(--text); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow-lg); min-width: 240px; z-index: 300; overflow: hidden; }
   .acct-menu.open { display: block; }
@@ -3491,9 +3493,12 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
 <div id="acctProfileOverlay" class="acct-overlay" onclick="if(event.target===this)acctCloseProfile()">
   <div class="acct-modal">
     <button class="acct-modal-x" onclick="acctCloseProfile()" aria-label="Close">×</button>
-    <div class="acct-modal-head">
-      <h2>My profile</h2>
-      <p>Your name personalizes your account and is how you appear in the menu. Everything here is optional and private to you; edit or remove it any time.</p>
+    <div class="acct-modal-head acct-head-avatar">
+      <span class="acct-avatar acct-avatar-lg" id="pfAvatar" aria-hidden="true"></span>
+      <div>
+        <h2>My profile</h2>
+        <p>Your name personalizes your account and is how you appear in the menu. Take a minute to complete your profile — a name and affiliation make it yours.</p>
+      </div>
     </div>
     <div class="acct-modal-body">
       <div style="display:flex;gap:12px">
@@ -3958,6 +3963,39 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     var s = {}; Object.keys(state.papers).forEach(function (k) { (state.papers[k].tags || []).forEach(function (t) { s[t] = 1; }); });
     return Object.keys(s);
   }
+
+  // ── per-user avatar ──────────────────────────────────────────────────────
+  // Every account gets its own avatar: a compact, GitHub-style identicon drawn
+  // as an inline SVG data-URI and seeded from the user's stable uid, so it looks
+  // random yet stays identical across sessions and devices. Fully self-contained
+  // — no external avatar service (Gravatar/DiceBear/etc.) is ever contacted.
+  function acctHash(s) {
+    var h = 2166136261 >>> 0;                       // FNV-1a
+    for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+    return h >>> 0;
+  }
+  function acctAvatarSeed() { var u = state.user || {}; return u.uid || u.email || 'anon'; }
+  function acctAvatarUrl(seed) {
+    var h = acctHash(String(seed || 'anon'));
+    var hue = h % 360;
+    var fg = 'hsl(' + hue + ',55%,45%)';
+    var bg = 'hsl(' + ((hue + 45) % 360) + ',46%,94%)';
+    var rng = (h ^ 0x9e3779b9) >>> 0;
+    function bit() { rng = (Math.imul(rng, 1103515245) + 12345) >>> 0; return (rng >>> 17) & 1; }
+    var cells = '';
+    for (var y = 0; y < 5; y++) {                    // 5×5 grid, mirrored left→right
+      for (var x = 0; x < 3; x++) {
+        if (bit()) {
+          cells += '<rect x="' + (x * 20) + '" y="' + (y * 20) + '" width="20" height="20"/>';
+          if (x < 2) cells += '<rect x="' + ((4 - x) * 20) + '" y="' + (y * 20) + '" width="20" height="20"/>';
+        }
+      }
+    }
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" shape-rendering="crispEdges">' +
+              '<rect width="100" height="100" fill="' + bg + '"/><g fill="' + fg + '">' + cells + '</g></svg>';
+    return 'data:image/svg+xml,' + encodeURIComponent(svg);
+  }
+
   function acctRenderControl() {
     var el = document.getElementById('acctControl'); if (!el) return;
     if (!state.user) {
@@ -3968,13 +4006,13 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     var prof = state.profile || {};
     var fullName = ((prof.firstName || '') + ' ' + (prof.lastName || '')).trim();
     var name = fullName || u.displayName || (u.email ? u.email.split('@')[0] : 'Account');
-    var initial = (name || '?').charAt(0);
+    var avatar = acctAvatarUrl(acctAvatarSeed());
     var saved = Object.keys(state.papers).filter(function (k) { return isSaved(state.papers[k]); }).length;
     var defs = savedDefaults();
     var defCount = defs.journals.length + defs.jtypes.length;
     el.innerHTML =
       '<div class="acct-wrap">' +
-        '<button class="acct-btn acct-user" onclick="acctToggleMenu(event)"><span class="acct-avatar">' + esc(initial) + '</span><span class="acct-uname">' + esc(name) + '</span></button>' +
+        '<button class="acct-btn acct-user" onclick="acctToggleMenu(event)"><span class="acct-avatar" style="background-image:url(\'' + avatar + '\')"></span><span class="acct-uname">' + esc(name) + '</span></button>' +
         '<div class="acct-menu" id="acctMenu">' +
           '<div class="acct-menu-head">Signed in as<strong>' + esc(u.email || name) + '</strong></div>' +
           '<div class="acct-menu-item" onclick="acctOpenLibrary()">★ My library <span class="acct-badge">' + saved + '</span></div>' +
@@ -4223,6 +4261,8 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (!state.user) { acctOpenAuth(); return; }
     acctCloseMenu();
     var p = state.profile || {};
+    var pfAv = document.getElementById('pfAvatar');
+    if (pfAv) pfAv.style.backgroundImage = "url('" + acctAvatarUrl(acctAvatarSeed()) + "')";
     document.getElementById('pfFirstName').value = p.firstName || '';
     document.getElementById('pfLastName').value = p.lastName || '';
     document.getElementById('pfAffiliation').value = p.affiliation || '';
