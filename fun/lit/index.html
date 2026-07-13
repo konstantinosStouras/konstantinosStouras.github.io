@@ -519,6 +519,11 @@
         <div id="chipsTitle" class="chips"></div>
       </div>
       <div class="filter-group">
+        <label title='Searches the full text of paper abstracts. Substring match by default (e.g. "network" also finds "networks"). Wrap a word or phrase in double quotes — "machine learning" — to match that exact word/phrase only. Multiple terms combine (Enter adds a chip; all chips must match). Not every paper has an abstract on record, so abstract-only searches skip those.'>Search Abstracts &#9432;</label>
+        <input id="filterAbstracts" name="ms-filter-abstract" placeholder="Abstract..." type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('abstract','filterAbstracts');event.preventDefault();}">
+        <div id="chipsAbstract" class="chips"></div>
+      </div>
+      <div class="filter-group">
         <label title='Affiliation names are not standardized across papers. Duplicates may exist despite ongoing deduplication efforts. Tip: wrap a term in double quotes for an exact-word match.'>Search Affiliations &#9432;</label>
         <input id="filterAffiliations" name="ms-filter-affiliation" placeholder="Affiliation..." type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore oninput="debounceAffSearch()" onkeydown="if(event.key==='Enter'){addTextChip('affiliation','filterAffiliations');event.preventDefault();}">
         <div id="chipsAffiliation" class="chips"></div>
@@ -838,7 +843,7 @@ let recentExtraRows = null; // recently added FT50-extra papers (./data-ft50/rec
 // author's name variants (from the Authors tab Name_Variants column), so a
 // click matches every spelling of one ORCID-resolved person. journal holds
 // source keys (see JOURNAL_OPTIONS); empty means "all journals".
-const sel = { jtype: new Set(), journal: new Set(), editor: new Set(), area: new Set(), se: new Set(), ae: new Set(), year: new Set(), title: new Set(), author: new Set(), authorIdentity: {}, affiliation: new Set() };
+const sel = { jtype: new Set(), journal: new Set(), editor: new Set(), area: new Set(), se: new Set(), ae: new Set(), year: new Set(), title: new Set(), author: new Set(), authorIdentity: {}, affiliation: new Set(), abstract: new Set() };
 
 // "Pre-print (Open Access) papers" toggle: restrict results to papers that
 // carry a free arXiv/SSRN pre-print link. Counts as an active filter, so
@@ -957,7 +962,7 @@ function removeChip(type, val) {
 
 function renderChips(type) {
   if (type === 'author') { renderAuthorChips(); return; }
-  const idMap = {jtype:'chipsJType', journal:'chipsJournal', editor:'chipsEditor', area:'chipsArea', se:'chipsSE', ae:'chipsAE', year:'chipsYear', title:'chipsTitle', author:'chipsAuthor', affiliation:'chipsAffiliation'};
+  const idMap = {jtype:'chipsJType', journal:'chipsJournal', editor:'chipsEditor', area:'chipsArea', se:'chipsSE', ae:'chipsAE', year:'chipsYear', title:'chipsTitle', author:'chipsAuthor', affiliation:'chipsAffiliation', abstract:'chipsAbstract'};
   const container = document.getElementById(idMap[type]);
   const cssClass = 'chip chip-' + type;
   container.innerHTML = [...sel[type]].map(v => {
@@ -1188,14 +1193,15 @@ function loadExtraSource(key) {
 // MS/ISR-specific editor filters can never match an extra paper and don't
 // trigger the download on their own.
 // A filter any journal's papers could match (year / title / author /
-// affiliation, typed or chipped) is active with no journal scope — the
-// "search everything" case that streams every catalog file.
+// affiliation / abstract, typed or chipped) is active with no journal scope —
+// the "search everything" case that streams every catalog file.
 function broadFilterActive() {
   return !!(sel.year.size || sel.title.size || sel.author.size ||
-    Object.keys(sel.authorIdentity).length || sel.affiliation.size ||
+    Object.keys(sel.authorIdentity).length || sel.affiliation.size || sel.abstract.size ||
     document.getElementById('filterSearch').value.trim() ||
     document.getElementById('filterAuthors').value.trim() ||
-    document.getElementById('filterAffiliations').value.trim());
+    document.getElementById('filterAffiliations').value.trim() ||
+    document.getElementById('filterAbstracts').value.trim());
 }
 
 function neededExtraKeys() {
@@ -2142,6 +2148,7 @@ function updateDropdownOptions() {
   var search = document.getElementById('filterSearch').value.trim().toLowerCase();
   var searchAuth = document.getElementById('filterAuthors').value.trim().toLowerCase();
   var searchAff = document.getElementById('filterAffiliations').value.trim().toLowerCase();
+  var searchAbs = document.getElementById('filterAbstracts').value.trim().toLowerCase();
 
   function crossFilter(excludeType) {
     return allPapers.filter(function(p) {
@@ -2164,6 +2171,9 @@ function updateDropdownOptions() {
       var affText = (p['Affiliations']||'').toLowerCase();
       if (searchAff && !textMatch(affText, searchAff)) return false;
       for (var af of sel.affiliation) { if (!textMatch(affText, af)) return false; }
+      var absText = (p['Abstract']||'').toLowerCase();
+      if (searchAbs && !textMatch(absText, searchAbs)) return false;
+      for (var ab of sel.abstract) { if (!textMatch(absText, ab)) return false; }
       return true;
     });
   }
@@ -2282,12 +2292,13 @@ function applyFilters() {
   const search = document.getElementById('filterSearch').value.trim().toLowerCase();
   const searchAuth = document.getElementById('filterAuthors').value.trim().toLowerCase();
   const searchAff = document.getElementById('filterAffiliations').value.trim().toLowerCase();
+  const searchAbs = document.getElementById('filterAbstracts').value.trim().toLowerCase();
   const sort = document.getElementById('sortBy').value;
 
   // If no filters active, show welcome state
-  if (sel.jtype.size === 0 && sel.journal.size === 0 && sel.editor.size === 0 && sel.area.size === 0 && sel.se.size === 0 && sel.ae.size === 0 && sel.year.size === 0 && sel.title.size === 0 && sel.author.size === 0 && Object.keys(sel.authorIdentity).length === 0 && sel.affiliation.size === 0 && !search && !searchAuth && !searchAff && !preprintOnly) {
+  if (sel.jtype.size === 0 && sel.journal.size === 0 && sel.editor.size === 0 && sel.area.size === 0 && sel.se.size === 0 && sel.ae.size === 0 && sel.year.size === 0 && sel.title.size === 0 && sel.author.size === 0 && Object.keys(sel.authorIdentity).length === 0 && sel.affiliation.size === 0 && sel.abstract.size === 0 && !search && !searchAuth && !searchAff && !searchAbs && !preprintOnly) {
     document.getElementById('resultsCount').innerHTML = '';
-    document.getElementById('papersList').innerHTML = '<div class="empty-state"><h3>Select a filter to get started</h3><p>Pick a journal type (UTD24, FT50, ABS 4/4*, ABS 3) or one or more journals, filter by year, or search by title, author, or affiliation. Everything is searched when no journal is selected (journal files download on demand — a first all-journal search fetches the full dataset, so give it a moment).</p></div>';
+    document.getElementById('papersList').innerHTML = '<div class="empty-state"><h3>Select a filter to get started</h3><p>Pick a journal type (UTD24, FT50, ABS 4/4*, ABS 3) or one or more journals, filter by year, or search by title, author, affiliation, or abstract. Everything is searched when no journal is selected (journal files download on demand — a first all-journal search fetches the full dataset, so give it a moment).</p></div>';
     buildFilterOptions();
     return;
   }
@@ -2326,6 +2337,13 @@ function applyFilters() {
     if (searchAff && !textMatch(affText, searchAff)) return false;
     for (const af of sel.affiliation) { if (!textMatch(affText, af)) return false; }
 
+    // Abstracts: full-text search over the paper abstract, same substring/
+    // quoted-word rules as the title search (a paper with no abstract on
+    // record can never match, so an abstract query filters it out).
+    const absText = (p['Abstract']||'').toLowerCase();
+    if (searchAbs && !textMatch(absText, searchAbs)) return false;
+    for (const ab of sel.abstract) { if (!textMatch(absText, ab)) return false; }
+
     return true;
   });
   scopeCount = inScope;
@@ -2354,7 +2372,7 @@ function resetFilterState(keepJournals) {
     sel.journal.clear(); document.getElementById('chipsJournal').innerHTML = '';
     sel.jtype.clear(); document.getElementById('chipsJType').innerHTML = '';
   }
-  sel.editor.clear(); sel.area.clear(); sel.se.clear(); sel.ae.clear(); sel.year.clear(); sel.title.clear(); sel.author.clear(); sel.authorIdentity = {}; sel.affiliation.clear();
+  sel.editor.clear(); sel.area.clear(); sel.se.clear(); sel.ae.clear(); sel.year.clear(); sel.title.clear(); sel.author.clear(); sel.authorIdentity = {}; sel.affiliation.clear(); sel.abstract.clear();
   document.getElementById('chipsEditor').innerHTML = '';
   document.getElementById('chipsArea').innerHTML = '';
   document.getElementById('chipsSE').innerHTML = '';
@@ -2363,7 +2381,8 @@ function resetFilterState(keepJournals) {
   document.getElementById('chipsTitle').innerHTML = '';
   document.getElementById('chipsAuthor').innerHTML = '';
   document.getElementById('chipsAffiliation').innerHTML = '';
-  ['filterSearch','filterAuthors','filterAffiliations'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('chipsAbstract').innerHTML = '';
+  ['filterSearch','filterAuthors','filterAffiliations','filterAbstracts'].forEach(id => document.getElementById(id).value = '');
   preprintOnly = false;
   var ppBtn = document.getElementById('preprintBtn');
   if (ppBtn) ppBtn.className = 'recent-tab-btn';

@@ -60,6 +60,12 @@ JOURNAL_TYPES order in `index.html`), with ONE exception: a journal on both
 the UTD24 and FT50 lists shows both tags (`journalBadges`; ABS tags never
 stack onto a listed journal). Clicking a badge selects that type. Filtering is unaffected by
 the badge: an ABS 4/4* search still returns UTD24 journals' papers.
+**Text-search filters** are Authors, Title, **Abstracts** (full-text over each
+paper's `Abstract`), and Affiliations — each a live input plus Enter-to-chip,
+sharing `textMatch` (substring by default; a `"quoted"` term is an exact
+word/phrase, word-boundary match) except Authors, which uses `authorMatch`
+(prefix-of-a-name-part). All are `sel.<type>` Sets chained AND with every other
+filter; a paper with no abstract on record can't match an abstract query.
 **Filters chain (AND) and their counts stay connected:** the results bar's
 "X (P%) of Y" denominator is the journal-scope corpus (`scopeCount`, counted
 per applyFilters pass), NOT `allPapers.length` — with FT50 selected, chaining
