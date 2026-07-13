@@ -433,6 +433,28 @@ network). Migration to a satellite repo is one constant: `WP_DATA_BASE`
 egress policy blocks the scholarly APIs (OpenAlex/Crossref/arXiv return 403), so
 the archive can only be populated by the GitHub Actions runners — it is EMPTY
 until the first workflow run on `master` post-merge.
+**Range-served SQLite search (`?db=1`, opt-in):** the page can answer
+native-journal-scoped filters from a single range-served SQLite DB
+(`fun/lit/data/db/lit.db.*` chunks + `lit-db.json` manifest, sql.js-httpvfs
+vendored at `fun/lit/sqlite/`) instead of downloading + filtering JSON, fetching
+only the DB pages a query touches. STRICTLY ADDITIVE — the default JSON path is
+unchanged, and any query the DB can't fully answer falls through to it. It
+answers **OR / POM / ACM EC / PNAS** (native journals without the MS/ISR/MkSc
+editor UIs) with text/year/pre-print filters and the default year-desc sort;
+MS/ISR/MkSc, journal *types*, all-journal searches, non-default sorts and the
+recent/library views use JSON. The DB is built by `fun/lit/_scraper/emit-db.mjs`
+(narrow `papers` + `papers_abs` side table + contentless FTS5 trigram; rows
+inserted in the page's exact sort order so `id` = newest-first rank; membership
+read from `index.html`) and chunked by `chunk-db.mjs` under the 100 MB per-file
+Pages limit; the query builder is `fun/lit/sqlite/lit-query.js`, the wiring is
+the `?db=1` block in `index.html`. It needs NO COOP/COEP (sync-XHR reads in a
+Worker). **The committed `data/db/` is a point-in-time snapshot — the daily
+workflow is deliberately NOT wired to commit the ~209 MB DB (git-history bloat);
+rebuild it with the two scripts, or move it to LFS/a Release/a shard repo to
+automate.** FT50-catalog/ABS-shard DBs (for types/all-journal) and MS/ISR/MkSc
+editor columns are follow-ups. Tests: `node fun/lit/_scraper/sqlite-parity.mjs`
+(28/28 semantic parity) and `sqlite-bench.mjs` (payload/latency). See
+`fun/lit/_SQLITE-POC.md`.
 
 ## `/fun/ms` — the Google-free Management Science browser
 `fun/ms/` is the Management Science paper browser. It uses **no Google Sheets**:

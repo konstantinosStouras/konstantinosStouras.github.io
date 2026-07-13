@@ -74,16 +74,23 @@ JTYPES.forEach(([k,l]) => { const c=document.createElement('span'); c.className=
 let DB = null, FILE_LEN = 0;
 
 async function makeWorker() {
+  const BASE = '/fun/lit/data/';
+  let cfg = null;
+  // Prefer chunked mode (data/db/lit-db.json manifest) — required on Pages,
+  // where a single > 100 MB .db can't be committed. Fall back to a single-file
+  // lit.db in full mode if there's no manifest.
+  try {
+    const m = await fetch(BASE + 'db/lit-db.json');
+    if (m.ok) {
+      const mf = await m.json();
+      cfg = { serverMode: 'chunked', urlPrefix: BASE + 'db/' + mf.base, serverChunkSize: mf.serverChunkSize, databaseLengthBytes: mf.databaseLengthBytes, suffixLength: mf.suffixLength, requestChunkSize: 8192 };
+    }
+  } catch (e) {}
+  if (!cfg) cfg = { serverMode: 'full', url: BASE + 'lit.db', requestChunkSize: 8192, fileLength: FILE_LEN };
   const qp = new URLSearchParams(location.search);
-  const cfg = { serverMode: 'full', url: '/fun/lit/data/lit.db', requestChunkSize: 8192, fileLength: FILE_LEN };
   if (qp.has('heads')) cfg.maxReadHeads = parseInt(qp.get('heads'));
   if (qp.has('speed')) cfg.maxReadSpeed = parseInt(qp.get('speed'));
-  const w = await createDbWorker(
-    [{ from: 'inline', config: cfg }],
-    '/fun/lit/sqlite/sqlite.worker.js',
-    '/fun/lit/sqlite/sql-wasm.wasm'
-  );
-  return w;
+  return await createDbWorker([{ from: 'inline', config: cfg }], '/fun/lit/sqlite/sqlite.worker.js', '/fun/lit/sqlite/sql-wasm.wasm');
 }
 
 async function init() {
