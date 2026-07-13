@@ -287,6 +287,23 @@ the page carries the optional sign-in feature (star/notes/lists/tags, private
 per user, dedicated Firebase project); it stays inert until a web config is
 pasted into `FB_CONFIG` in `fun/lit/index.html` — setup steps in
 `fun/lit/_ACCOUNTS-SETUP.md`, security rules in `fun/lit/_firestore.rules`.
+Signed-in users can also save **default filters** (account menu →
+"Default filters"): a preferred subset of journals and/or journal types,
+**auto-applied on sign-in** so they land on their subset instead of the full
+catalog (distinct from E-mail alerts, which saves filters to get *e-mailed*
+about new matches — this pre-applies them to the *page* on entry). It's stored
+on the profile doc (`defaultJournals[]`, `defaultJTypes[]`, `autoApplyFilters`;
+written with `{merge:true}`, no rules change) and applied by
+`maybeAutoApplyPrefs()` in the accounts script — guarded by `prefsAutoApplied`
+so it runs once per session (latched at first profile load, so a "not now"
+decision — user mid-browse, or a Save whose write echoes a snapshot back — is
+also final) and **never overrides filters the user set themselves** (applies
+only when their live selection is still empty). It is undone on sign-out
+(`autoAppliedActive` → `clearFilters()`), so a signed-out visitor sees the full
+catalog again and the next user's own defaults aren't blocked by leftovers.
+Auto-applying a catalog (FT50/shard) journal before its lazy manifest arrives is
+fine: `registerExtraSources()` re-applies and refreshes the chip label (and the
+open modal's list) once the journal registers.
 **Top navigation (in the claret header):** four buttons — **About** (a modal
 describing what the browser covers, how to search, and the full data/provenance
 notes, mirroring the footer text), **E-mail alerts**, **Data Analytics** (a

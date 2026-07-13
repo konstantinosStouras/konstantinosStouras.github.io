@@ -433,6 +433,28 @@
   .acct-mini { padding: 7px 13px; background: var(--navy-light); color: var(--navy); border: none; border-radius: 6px; font-weight: 600; font-size: 12.5px; cursor: pointer; font-family: inherit; }
   .acct-mini:hover { background: #ecd7dd; }
 
+  /* Default search filters ("your default view") modal */
+  .pref-sec { display: flex; flex-direction: column; gap: 8px; }
+  .pref-sec > .pref-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--text-muted); }
+  .pref-jtypes { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pref-jtype { display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; cursor: pointer; -webkit-user-select: none; user-select: none; color: var(--text); }
+  .pref-jtype input { accent-color: var(--navy); width: 15px; height: 15px; cursor: pointer; }
+  .pref-jtype.on { border-color: var(--navy); background: var(--navy-light); color: var(--navy); font-weight: 600; }
+  .pref-jsearch { padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-family: inherit; font-size: 14px; color: var(--text); }
+  .pref-jsearch:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(125,29,63,.08); }
+  .pref-jlist { max-height: 232px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 6px; overscroll-behavior: contain; }
+  .pref-jrow { display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 6px; font-size: 13.5px; cursor: pointer; color: var(--text); }
+  .pref-jrow:hover { background: var(--navy-light); }
+  .pref-jrow input { accent-color: var(--navy); width: 15px; height: 15px; cursor: pointer; flex: 0 0 auto; }
+  .pref-selected { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pref-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--navy-light); color: var(--navy); border-radius: 6px; padding: 4px 9px; font-size: 12.5px; font-weight: 600; }
+  .pref-chip .x { cursor: pointer; opacity: .55; font-weight: 700; font-size: 14px; line-height: 1; }
+  .pref-chip .x:hover { opacity: 1; }
+  .pref-auto { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--text); cursor: pointer; }
+  .pref-auto input { accent-color: var(--navy); width: 16px; height: 16px; cursor: pointer; }
+  .pref-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .pref-empty { font-size: 12.5px; color: var(--text-muted); line-height: 1.45; }
+
   /* Library view (reuses the papers list, driven by a private library bar) */
   .library-bar { display: none; max-width: 1280px; margin: 0 auto; padding: 18px 32px 4px; }
   .library-bar.open { display: block; }
@@ -1209,6 +1231,13 @@ function registerExtraSources(rows, base) {
   buildJTypeSelect();
   updateHeaderStats();
   updateYearRangeText(NaN);
+  // A journal chip auto-applied from a saved default (see maybeAutoApplyPrefs)
+  // may have rendered with its raw key because the label only exists now that
+  // this manifest registered — refresh the journal chips so it reads properly.
+  if (sel.journal.size) renderChips('journal');
+  // Likewise refresh the "Default filters" modal if it is open, so its journal
+  // list picks up the newly registered catalog journals.
+  if (typeof acctRefreshDefaultsModal === 'function') acctRefreshDefaultsModal();
   // If the user set a scope before this manifest arrived, re-run the active
   // view so the newly registered journals start downloading. Mirror every
   // broad trigger of neededExtraKeys() — including the pre-print toggle.
@@ -2954,7 +2983,7 @@ function goPage(n) { currentPage = n; renderPage(); window.scrollTo({ top: 280, 
 */
 
 function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-function escAttr(s) { return (s||'').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+function escAttr(s) { return (s||'').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
 
 // Free-text matching for the Title / Authors / Affiliations search boxes.
 // Default is substring, so "market" still finds "marketing". Wrap the query in
@@ -3247,6 +3276,49 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       <div class="acct-error" id="pfErr"></div>
       <button class="acct-primary" id="pfSaveBtn" onclick="acctSaveProfile()">Save profile</button>
       <div class="acct-switch" id="pfStatus"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Accounts: default search filters ("your default view") modal ────────────
+     Signed-in users pre-pick the journals / journal types they care about; the
+     page auto-applies them the moment they sign in, so they land on their own
+     subset instead of the full catalog. Saved on the profile doc (see the
+     accounts script) so it rides the existing subscription + security rules.
+     Distinct from "E-mail alerts": that saves filters to get e-mailed about new
+     matches; this pre-applies filters to the page on entry. -->
+<div id="acctDefaultsOverlay" class="acct-overlay" onclick="if(event.target===this)acctCloseDefaults()">
+  <div class="acct-modal wide">
+    <button class="acct-modal-x" onclick="acctCloseDefaults()" aria-label="Close">×</button>
+    <div class="acct-modal-head">
+      <h2>My default filters</h2>
+      <p>Pick the journals and journal types you care about. We’ll pre-apply them every time you sign in, so you land straight on your subset — you can still change or clear the filters afterwards.</p>
+    </div>
+    <div class="acct-modal-body">
+      <div class="pref-sec">
+        <div class="pref-label">Journal types</div>
+        <div class="pref-jtypes" id="prefJTypes"></div>
+      </div>
+      <div class="pref-sec">
+        <div class="pref-label">Journals</div>
+        <input id="prefJSearch" class="pref-jsearch" placeholder="Search journals…" type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore oninput="renderPrefJournalList(this.value)">
+        <div class="pref-jlist" id="prefJList"></div>
+      </div>
+      <div class="pref-sec">
+        <div class="pref-label">Selected (<span id="prefSelCount">0</span>)</div>
+        <div class="pref-selected" id="prefSelected"></div>
+      </div>
+      <label class="pref-auto"><input type="checkbox" id="prefAuto" checked> Apply these automatically when I sign in</label>
+      <div class="acct-error" id="prefErr"></div>
+      <div class="pref-actions">
+        <button class="acct-primary" id="prefSaveBtn" style="flex:1" onclick="acctSaveDefaults()">Save default</button>
+        <button class="acct-mini" onclick="acctApplyDefaultsNow()">Apply now</button>
+      </div>
+      <div class="pref-actions">
+        <span class="acct-link" onclick="acctPrefUseCurrent()">Use my current filter selection</span>
+        <span class="acct-link" style="margin-left:auto;color:var(--red)" onclick="acctClearDefaults()">Clear saved default</span>
+      </div>
+      <div class="acct-switch" id="prefStatus"></div>
     </div>
   </div>
 </div>
@@ -3651,6 +3723,8 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     var name = fullName || u.displayName || (u.email ? u.email.split('@')[0] : 'Account');
     var initial = (name || '?').charAt(0);
     var saved = Object.keys(state.papers).filter(function (k) { return isSaved(state.papers[k]); }).length;
+    var defs = savedDefaults();
+    var defCount = defs.journals.length + defs.jtypes.length;
     el.innerHTML =
       '<div class="acct-wrap">' +
         '<button class="acct-btn acct-user" onclick="acctToggleMenu(event)"><span class="acct-avatar">' + esc(initial) + '</span><span class="acct-uname">' + esc(name) + '</span></button>' +
@@ -3660,6 +3734,8 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
           '<div class="acct-menu-item" onclick="acctOpenLibrary()">🗂 My lists <span class="acct-badge">' + Object.keys(state.lists).length + '</span></div>' +
           '<div class="acct-menu-item" onclick="acctOpenLibrary()">🏷 My tags <span class="acct-badge">' + uniqueTags().length + '</span></div>' +
           '<div class="acct-menu-item" onclick="acctOpenLibrary(\'search\')">🔍 Search my notes</div>' +
+          '<div class="acct-menu-sep"></div>' +
+          '<div class="acct-menu-item" onclick="acctOpenDefaults()">⚙️ Default filters' + (defCount ? ' <span class="acct-badge">' + defCount + '</span>' : '') + '</div>' +
           '<div class="acct-menu-item" onclick="acctOpenProfile()">👤 Edit profile</div>' +
           '<div class="acct-menu-sep"></div>' +
           '<div class="acct-menu-item danger" onclick="acctSignOut()">Sign out</div>' +
@@ -4245,10 +4321,225 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     litAlertsRender();
   };
 
+  // ── default search filters: the journals / journal types a user wants to see
+  //    the moment they sign in. Stored on the profile doc (merge) so it rides the
+  //    existing profile subscription + security rules — no new collection. Data
+  //    model (added to users/{uid}/profile/main):
+  //      defaultJournals: [journalKey, …]   defaultJTypes: [typeKey, …]
+  //      autoApplyFilters: bool             (default true; false = never auto-apply)
+  //    Distinct from E-mail alerts: that saves criteria to get e-mailed about new
+  //    matches; this pre-applies a filter subset to the page on entry.
+  var prefDraftJ = null, prefDraftT = null;   // Sets: the modal's working selection
+  var prefsAutoApplied = false;               // guard: auto-apply at most once per session
+  var autoAppliedActive = false;              // did THIS session's filters come from a default?
+
+  function savedDefaults() {
+    var p = state.profile || {};
+    return {
+      journals: Array.isArray(p.defaultJournals) ? p.defaultJournals : [],
+      jtypes: Array.isArray(p.defaultJTypes) ? p.defaultJTypes : [],
+      autoApply: p.autoApplyFilters !== false   // default on
+    };
+  }
+
+  // Push a set of journal / journal-type keys into the LIVE filter UI (used by
+  // both auto-apply-on-sign-in and the modal's "Apply now"). Mirrors selectItem:
+  // set the Sets, redraw the chips, run the filter (which lazy-loads the files).
+  function applyDefaultFilters(journals, jtypes) {
+    if (typeof sel === 'undefined') return;
+    if (libraryMode) libExitQuiet();
+    sel.journal = new Set(journals);
+    sel.jtype = new Set(jtypes);
+    if (typeof renderChips === 'function') { renderChips('journal'); renderChips('jtype'); }
+    if (typeof applyFilters === 'function') applyFilters();
+    autoAppliedActive = true;   // so we can undo it on sign-out (see onAuthStateChanged)
+  }
+
+  // On sign-in (or on load when already signed in) apply the user's saved default
+  // filters — but only if they asked us to, actually saved some, and haven't
+  // already started filtering / browsing their library. Safe to call repeatedly:
+  // it no-ops until the profile is loaded, then makes ONE landing-time decision.
+  // (Applying before the manifests arrive is fine — applyFilters lazy-loads what
+  // it needs and registerExtraSources re-applies as catalog journals register.)
+  function maybeAutoApplyPrefs() {
+    if (prefsAutoApplied) return;
+    if (!state.user || !state.profile) return;          // profile snapshot not in yet — wait
+    // The profile is loaded: this is our single landing-time decision. Latch the
+    // guard NOW, before the eligibility checks, so a "not right now" (the user is
+    // mid-browse, or already filtering, or is Saving — whose write echoes a
+    // snapshot straight back here) is also final for the session. Otherwise a
+    // later background snapshot (e.g. starring a paper) would re-trigger auto-apply
+    // and narrow the view while the user is already browsing.
+    prefsAutoApplied = true;
+    var d = savedDefaults();
+    if (!d.autoApply || !(d.journals.length || d.jtypes.length)) return;
+    if (libraryMode || (typeof recentMode !== 'undefined' && recentMode)) return;
+    var untouched = typeof sel !== 'undefined'
+      && sel.journal.size === 0 && sel.jtype.size === 0
+      && (typeof broadFilterActive !== 'function' || !broadFilterActive())
+      && (typeof preprintOnly === 'undefined' || !preprintOnly);
+    if (!untouched) return;                             // never override a user's own filters
+    applyDefaultFilters(d.journals, d.jtypes);
+  }
+  window.maybeAutoApplyPrefs = maybeAutoApplyPrefs;
+
+  // ── the modal ──
+  window.acctOpenDefaults = function () {
+    if (!state.user) { acctOpenAuth(); return; }
+    acctCloseMenu();
+    var d = savedDefaults();
+    prefDraftJ = new Set(d.journals);
+    prefDraftT = new Set(d.jtypes);
+    var auto = document.getElementById('prefAuto'); if (auto) auto.checked = d.autoApply;
+    var st = document.getElementById('prefStatus'); if (st) st.textContent = '';
+    var er = document.getElementById('prefErr'); if (er) er.textContent = '';
+    var s = document.getElementById('prefJSearch'); if (s) s.value = '';
+    renderPrefJTypes();
+    renderPrefJournalList('');
+    renderPrefSelected();
+    document.getElementById('acctDefaultsOverlay').classList.add('open');
+  };
+  window.acctCloseDefaults = function () { var o = document.getElementById('acctDefaultsOverlay'); if (o) o.classList.remove('open'); };
+
+  // Re-render the OPEN defaults modal when a catalog (FT50/shard) manifest lands,
+  // so a user who opened it before those journals registered sees them appear in
+  // the list (and any saved catalog-journal chips get their real labels). Called
+  // from registerExtraSources() in the main script.
+  window.acctRefreshDefaultsModal = function () {
+    var o = document.getElementById('acctDefaultsOverlay');
+    if (!o || !o.classList.contains('open') || !prefDraftJ) return;
+    var s = document.getElementById('prefJSearch');
+    renderPrefJournalList(s ? s.value : '');
+    renderPrefSelected();
+  };
+
+  function renderPrefJTypes() {
+    var box = document.getElementById('prefJTypes');
+    if (!box || typeof JOURNAL_TYPES === 'undefined' || !prefDraftT) return;
+    box.innerHTML = JOURNAL_TYPES.map(function (t) {
+      var on = prefDraftT.has(t.key);
+      return '<label class="pref-jtype' + (on ? ' on' : '') + '" title="' + escAttr(t.title || '') + '">' +
+        '<input type="checkbox"' + (on ? ' checked' : '') + ' onchange="acctPrefToggleJType(\'' + escAttr(t.key) + '\')"> ' + esc(t.label) + '</label>';
+    }).join('');
+  }
+  window.acctPrefToggleJType = function (key) {
+    if (!prefDraftT) return;
+    if (prefDraftT.has(key)) prefDraftT.delete(key); else prefDraftT.add(key);
+    renderPrefJTypes(); renderPrefSelected();
+  };
+
+  function renderPrefJournalList(query) {
+    var box = document.getElementById('prefJList');
+    if (!box || typeof JOURNAL_OPTIONS === 'undefined' || !prefDraftJ) return;
+    var q = (query || '').trim().toLowerCase();
+    var rows = JOURNAL_OPTIONS.filter(function (o) {
+      return !q || (o.label || '').toLowerCase().indexOf(q) >= 0 || String(o.key).toLowerCase().indexOf(q) >= 0;
+    });
+    if (!rows.length) { box.innerHTML = '<div class="pref-empty" style="padding:8px">No journals match “' + esc(query) + '”.</div>'; return; }
+    box.innerHTML = rows.map(function (o) {
+      var on = prefDraftJ.has(o.key);
+      return '<label class="pref-jrow"><input type="checkbox"' + (on ? ' checked' : '') + ' onchange="acctPrefToggleJournal(\'' + escAttr(o.key) + '\')"> ' + esc(o.label) + '</label>';
+    }).join('');
+  }
+  window.renderPrefJournalList = renderPrefJournalList;
+  window.acctPrefToggleJournal = function (key) {
+    if (!prefDraftJ) return;
+    if (prefDraftJ.has(key)) prefDraftJ.delete(key); else prefDraftJ.add(key);
+    renderPrefSelected();   // the row's own checkbox already reflects the click
+  };
+
+  function renderPrefSelected() {
+    var box = document.getElementById('prefSelected'); if (!box || !prefDraftJ || !prefDraftT) return;
+    var cnt = document.getElementById('prefSelCount');
+    var chips = [];
+    prefDraftT.forEach(function (k) { chips.push({ t: 'jtype', k: k, label: (typeof JTYPE_LABEL !== 'undefined' && JTYPE_LABEL[k]) || k }); });
+    prefDraftJ.forEach(function (k) { chips.push({ t: 'journal', k: k, label: (typeof JOURNAL_LABEL !== 'undefined' && JOURNAL_LABEL[k]) || k }); });
+    if (cnt) cnt.textContent = String(chips.length);
+    if (!chips.length) {
+      box.innerHTML = '<div class="pref-empty">Nothing selected yet — pick journal types above or search journals. With nothing selected, every journal is searched (the current default).</div>';
+      return;
+    }
+    box.innerHTML = chips.map(function (c) {
+      return '<span class="pref-chip">' + esc(c.label) + '<span class="x" title="Remove" onclick="acctPrefRemove(\'' + c.t + '\',\'' + escAttr(c.k) + '\')">×</span></span>';
+    }).join('');
+  }
+  window.acctPrefRemove = function (t, k) {
+    if (t === 'jtype') { if (prefDraftT) prefDraftT.delete(k); } else { if (prefDraftJ) prefDraftJ.delete(k); }
+    renderPrefJTypes();
+    var s = document.getElementById('prefJSearch'); renderPrefJournalList(s ? s.value : '');
+    renderPrefSelected();
+  };
+
+  // Copy whatever is selected in the main filter panel right now into the draft.
+  window.acctPrefUseCurrent = function () {
+    if (typeof sel === 'undefined' || !prefDraftJ || !prefDraftT) return;
+    sel.journal.forEach(function (k) { prefDraftJ.add(k); });
+    sel.jtype.forEach(function (k) { prefDraftT.add(k); });
+    renderPrefJTypes();
+    var s = document.getElementById('prefJSearch'); renderPrefJournalList(s ? s.value : '');
+    renderPrefSelected();
+    var st = document.getElementById('prefStatus'); if (st) { st.style.color = 'var(--text-muted)'; st.textContent = 'Imported your current filter selection — remember to Save.'; }
+  };
+
+  window.acctSaveDefaults = function () {
+    if (!state.user) { acctOpenAuth(); return; }
+    if (!prefDraftJ || !prefDraftT) return;
+    var autoEl = document.getElementById('prefAuto');
+    var autoApply = autoEl ? !!autoEl.checked : true;
+    var btn = document.getElementById('prefSaveBtn'); if (btn) btn.disabled = true;
+    var st = document.getElementById('prefStatus'); if (st) { st.style.color = 'var(--text-muted)'; st.textContent = 'Saving…'; }
+    var er = document.getElementById('prefErr'); if (er) er.textContent = '';
+    // Saving is an explicit choice this session — set the guard BEFORE the write so
+    // Firestore's latency-compensated snapshot echo (which fires onData ->
+    // maybeAutoApplyPrefs before .then runs) can't auto-apply the just-saved
+    // filters and yank the current view. "Apply now" is the deliberate way to
+    // apply. (Usually already true — maybeAutoApplyPrefs latches at first profile
+    // load — but this closes the tiny window of saving before that snapshot lands.)
+    prefsAutoApplied = true;
+    profileDoc().set({
+      defaultJournals: Array.from(prefDraftJ),
+      defaultJTypes: Array.from(prefDraftT),
+      autoApplyFilters: autoApply,
+      updatedAt: serverTime()
+    }, { merge: true })
+      .then(function () {
+        if (st) { st.style.color = 'var(--green)'; st.textContent = autoApply
+          ? 'Saved ✓ — this is what you’ll see next time you sign in.'
+          : 'Saved ✓ — auto-apply is off, so use “Apply now” when you want it.'; }
+      })
+      .catch(function (e) { if (er) { er.style.color = 'var(--red)'; er.textContent = friendly(e); } if (st) st.textContent = ''; })
+      .then(function () { if (btn) btn.disabled = false; });
+  };
+
+  // Apply the draft to the live filters immediately (without needing to save).
+  window.acctApplyDefaultsNow = function () {
+    if (!prefDraftJ || !prefDraftT) return;
+    prefsAutoApplied = true;   // an explicit apply counts as this session's auto-apply
+    applyDefaultFilters(Array.from(prefDraftJ), Array.from(prefDraftT));
+    acctCloseDefaults();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  window.acctClearDefaults = function () {
+    if (!state.user) { acctOpenAuth(); return; }
+    prefDraftJ = new Set(); prefDraftT = new Set();
+    var auto = document.getElementById('prefAuto'); if (auto) auto.checked = true;
+    renderPrefJTypes();
+    var s = document.getElementById('prefJSearch'); renderPrefJournalList(s ? s.value : '');
+    renderPrefSelected();
+    var st = document.getElementById('prefStatus'); if (st) { st.style.color = 'var(--text-muted)'; st.textContent = 'Clearing…'; }
+    profileDoc().set({
+      defaultJournals: [], defaultJTypes: [], autoApplyFilters: false, updatedAt: serverTime()
+    }, { merge: true })
+      .then(function () { if (st) { st.style.color = 'var(--green)'; st.textContent = 'Cleared. No filters will be pre-applied on sign-in.'; } })
+      .catch(function (e) { var er = document.getElementById('prefErr'); if (er) { er.style.color = 'var(--red)'; er.textContent = friendly(e); } if (st) st.textContent = ''; });
+  };
+
   // ── auth state + live data subscriptions ────────────────────────────────
   function onData() {
     acctDecorate();
     acctRenderControl();
+    maybeAutoApplyPrefs();
     if (libraryMode) { renderLibraryBar(); renderLibrary(); }
     refreshAlertsModalIfOpen();
   }
@@ -4260,6 +4551,16 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (unsubProfile) { unsubProfile(); unsubProfile = null; }
     if (unsubAlerts) { unsubAlerts(); unsubAlerts = null; }
     state.papers = {}; state.lists = {}; state.profile = null; state.alerts = {};
+    prefsAutoApplied = false;   // re-arm auto-apply for whoever signs in next
+    // Default filters belong to the session that signed in. Clear them on any
+    // auth change so a signed-out visitor sees the full catalog again, and the
+    // NEXT user's saved defaults aren't blocked by the leftover selection (the
+    // "untouched" guard can't tell an auto-applied leftover from a hand-picked
+    // filter). Only clears when the current filters actually came from a default.
+    if (autoAppliedActive) {
+      autoAppliedActive = false;
+      if (typeof clearFilters === 'function') clearFilters();
+    }
     if (user) {
       // Public registered-users tally (read by fun/lit/analytics/). Each account
       // owns ONE contentless doc — just a coarse "last seen" timestamp, no e-mail
