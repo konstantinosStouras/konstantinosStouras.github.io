@@ -1538,6 +1538,11 @@ export async function searchPreprintsByTitle(papers, cache, opts = {}) {
   const axSleepMs = opts.axSleepMs || 3100;         // arXiv asks for ~1 request/3 s
   const maxThrottle = opts.maxThrottle || 6;
   const deadline = opts.budgetMs ? Date.now() + opts.budgetMs : Infinity;
+  // opts.priorityKeys: journal keys whose papers are searched FIRST (all years,
+  // all authors), ahead of the newest-first backlog — so a caller can surface a
+  // named set of journals' pre-prints without waiting for the whole catalog.
+  const priorityKeys = opts.priorityKeys;
+  const pk = (k) => (priorityKeys && priorityKeys.has(k)) ? 0 : 1;
   const dedup = new Set();
   const eligible = papers
     .filter(p => {
@@ -1549,6 +1554,7 @@ export async function searchPreprintsByTitle(papers, cache, opts = {}) {
       return !c || (c.none && ((c.ts || 0) < TS_VER || c.naxiv));
     })
     .sort((a, b) =>
+      (pk(a.JKey) - pk(b.JKey)) ||
       (((cache[a._doi] || {}).ts ? 1 : 0) - ((cache[b._doi] || {}).ts ? 1 : 0)) ||
       ((parseInt(b.Year, 10) || 0) - (parseInt(a.Year, 10) || 0)));
   const todo = eligible.slice(0, cap);

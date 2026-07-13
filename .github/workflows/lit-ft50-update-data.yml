@@ -77,11 +77,20 @@ jobs:
               echo "Pushed on attempt $i."
               exit 0
             fi
-            echo "Push rejected (concurrent commit?) — re-committing the data on the new tip…"
+            echo "Push rejected (concurrent commit?) — merging the tip's pre-print links into our build so none are clobbered…"
             git fetch origin ${{ github.ref_name }}
-            # Mixed reset + re-add of ONLY the data dir: a soft reset would keep
-            # this run's whole tree staged and silently revert any code commit
-            # that landed on the branch while this build was running.
+            # A concurrent commit is almost always a pre-print backfill that
+            # added free-pre-print links. Our freshly-harvested tree carries an
+            # OLDER _preprints.json, so re-committing it as-is would downgrade
+            # those links back to {none} (a published paper's pre-print never
+            # changes, so a found link must never be lost). Overlay the tip's
+            # _preprints.json onto our build — a found {u} is kept from whichever
+            # side has it — and re-apply it to our papers, so we keep BOTH our
+            # fresh harvest AND every pre-print link. Then MIXED-reset to the tip
+            # and re-add ONLY the data dir (a hard reset would drop code commits
+            # that landed on the branch; a soft reset would silently revert them).
+            git show origin/${{ github.ref_name }}:fun/lit/data-ft50/_preprints.json > /tmp/lit-ft50-tip-preprints.json || echo '{}' > /tmp/lit-ft50-tip-preprints.json
+            node fun/lit/_scraper-ft50/preprints-ci.mjs --apply-only --merge-cache=/tmp/lit-ft50-tip-preprints.json
             git reset origin/${{ github.ref_name }}
             git add fun/lit/data-ft50
             if git diff --cached --quiet; then

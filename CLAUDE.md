@@ -59,7 +59,19 @@ selective list its journal belongs to (UTD24 > FT50 > ABS 4/4* > ABS 3 —
 JOURNAL_TYPES order in `index.html`), with ONE exception: a journal on both
 the UTD24 and FT50 lists shows both tags (`journalBadges`; ABS tags never
 stack onto a listed journal). Clicking a badge selects that type. Filtering is unaffected by
-the badge: an ABS 4/4* search still returns UTD24 journals' papers. The
+the badge: an ABS 4/4* search still returns UTD24 journals' papers.
+**Text-search filters** are Authors, Title, **Abstracts** (full-text over each
+paper's `Abstract`), and Affiliations — each a live input plus Enter-to-chip,
+sharing `textMatch` (substring by default; a `"quoted"` term is an exact
+word/phrase, word-boundary match) except Authors, which uses `authorMatch`
+(prefix-of-a-name-part). All are `sel.<type>` Sets chained AND with every other
+filter; a paper with no abstract on record can't match an abstract query.
+**Filters chain (AND) and their counts stay connected:** the results bar's
+"X (P%) of Y" denominator is the journal-scope corpus (`scopeCount`, counted
+per applyFilters pass), NOT `allPapers.length` — with FT50 selected, chaining
+the pre-print toggle or a search reads "2,787 (1.21%) of 230,089" even when an
+earlier broad search left the whole catalog in memory; and `crossFilter()` (dropdown
+counts + summary tabs) applies the pre-print toggle like every other filter. The
 catalog also carries **notFT extras** — journals on another list but not the
 FT50: UTD24's INFORMS Journal on Computing (`ijoc`) and ABS 4's European
 Journal of Operational Research (`ejor`) — flagged `"notFT": true` in
@@ -169,7 +181,13 @@ bounded (~40 min) slice of title searches per run,
 committing `fun/lit/data/` back — it **shares the
 `lit-update-data-*` concurrency group** with the daily build so the two never
 race a commit, and its push-retry re-applies finds via
-`--apply-only --merge-cache` instead of clobbering a fresher dataset.
+`--apply-only --merge-cache` instead of clobbering a fresher dataset. **The
+daily builds (`lit-update-data.yml`, `lit-ft50-update-data.yml`) do the same on
+a rejected push** — they overlay the tip's `_preprints.json` onto their fresh
+harvest (`--apply-only --merge-cache`) so a concurrent backfill's pre-print
+links are never downgraded back to `{none}`; a found `{u}` link is FROZEN
+(a published paper's pre-print never changes) — never re-searched (the by-DOI
+and title-search passes both skip `{u}`) and never clobbered at commit time.
 `fun/lit/_scraper/preprints-local.mjs` remains as a faster local alternative
 (unthrottled from a home connection; identifies as a separate `LIT_MAILTO`
 quota identity so CI can never spend the local budget). In the daily build the
