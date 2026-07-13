@@ -63,7 +63,7 @@
 
   .header { background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%); z-index: 100; box-shadow: var(--shadow-lg); }
   .header-inner { max-width: 1280px; margin: 0 auto; padding: 24px 32px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
-  .header h1 { font-family: 'Fraunces', serif; color: white; font-size: 28px; font-weight: 400; letter-spacing: -0.5px; }
+  .header h1 { font-family: 'Fraunces', serif; color: white; font-size: 28px; font-weight: 400; letter-spacing: -0.5px; white-space: nowrap; }
   .header h1 em { font-style: italic; color: var(--accent); }
   .header-meta { color: rgba(255,255,255,0.6); font-size: 13px; text-align: right; }
   .header-meta strong { color: rgba(255,255,255,0.9); font-weight: 500; }
@@ -246,7 +246,7 @@
 
   @media (max-width: 768px) {
     .header-inner { padding: 16px 20px; flex-direction: column; align-items: flex-start; gap: 8px; }
-    .header h1 { font-size: 22px; }
+    .header h1 { font-size: 22px; white-space: normal; }
     .filters-inner { padding: 0 20px; }
     .filters-row { flex-direction: column; gap: 10px; }
     .filter-group { min-width: 100%; }
@@ -574,7 +574,7 @@
 <div class="topbar">
 <header class="header">
   <div class="header-inner">
-    <h1><em>The Lit</em> — Research Paper Browser</h1>
+    <h1><em>The Lit</em>: A research paper browser</h1>
     <div class="header-right">
       <nav class="lit-nav" aria-label="The Lit — sections">
         <button type="button" class="lit-nav-btn" onclick="litAboutOpen()" title="What The Lit is and how it works"><span class="ico">ⓘ</span>About</button>
@@ -739,10 +739,9 @@
 <footer class="footer">
   <div class="footer-inner">
     <div class="footer-lead">Built as a personal project to search papers efficiently across journals in Operations, Supply Chain, Economics, Computer Science, Project Management and Innovation — all in one place.</div>
-    <div>Editors and editorial areas are shown for <em>Management Science</em> papers (2011+), exactly as on <a href="/fun/ms/">the MS-only browser</a>. Other sources contribute their published papers and Articles in Advance. ACM EC papers link to an arXiv/SSRN/open-access PDF where one could be found.</div>
-    <div>The <strong>Journal types</strong> filter covers the <a href="https://jsom.utdallas.edu/the-utd-top-100-business-school-research-rankings/list-of-journals" target="_blank" rel="noopener">UTD24 list</a> and the full <a href="https://www.ft.com/ft50-journals" target="_blank" rel="noopener">FT50 research rank</a> — journals beyond the eight core sources come from this app's own dataset (refreshed daily, checked against the FT's list yearly), downloaded on demand. The small badge left of each title shows the most selective list its journal belongs to (UTD24 &gt; FT50 &gt; ABS 4/4* &gt; ABS 3; a journal on both UTD24 and FT50 shows both tags) — a broader filter still finds the paper, e.g. an ABS 4/4* search includes every UTD24 journal. ABS ratings follow the Chartered ABS <em>Academic Journal Guide</em> (AJG 2024), as mirrored at <a href="https://journalranking.org/" target="_blank" rel="noopener">journalranking.org</a>; beyond the FT50/UTD24 lists, ABS coverage is deliberately limited to Operations, Supply Chain, Economics, Computer Science, Project Management and Innovation-related journals. HBR and MIT Sloan Management Review (the AJG's "top practitioner" journals) are FT50 journals and badged as such; since the AJG gives them no number, they also keep their last numeric grade, so the ABS 3 filter still finds them.</div>
-    <div>All metadata are publicly available, collected via the <a href="https://www.crossref.org/documentation/retrieve-metadata/rest-api/" target="_blank">Crossref API</a> (with OpenAlex, DBLP and Semantic Scholar assisting for EC PDF links). PNAS section labels come from pnas.org's own topic index where available, and are otherwise approximated from each paper's <a href="https://openalex.org" target="_blank">OpenAlex</a> primary topic.</div>
-    <div>Feedback and suggestions are welcome. Any errors are my own. <a href="https://www.stouras.com" target="_blank">Konstantinos I. Stouras</a></div>
+    <!-- The data/provenance paragraphs live in the About modal (top nav) to avoid
+         duplicating them here — see the "Data & provenance" section of #litAboutOverlay. -->
+    <div>See <span class="acct-link" onclick="litAboutOpen()">About</span> for what this covers and how the data are collected. <span class="acct-link" onclick="litFeedbackOpen()">Feedback</span> and suggestions are welcome. Any errors are my own. <a href="https://www.stouras.com" target="_blank">Konstantinos I. Stouras</a></div>
   </div>
 </footer>
 
@@ -3250,37 +3249,26 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       <p>A fast, one-place browser for research papers across the leading journals in Operations, Management, Marketing, Information Systems, Economics and Computer Science.</p>
     </div>
     <div class="info-body">
+      <p>I built The Lit because I wanted one place to search papers across the journals I follow, instead of jumping between publisher sites. It is a personal project, and it keeps growing.</p>
+
       <h3>What it covers</h3>
-      <p>The Lit merges eight core sources — <strong>Management Science</strong>, <strong>Operations Research</strong>, <strong>Marketing Science</strong>, <strong>M&amp;SOM</strong>, <strong>Information Systems Research</strong>, <strong>Production &amp; Operations Management</strong>, five <strong>PNAS</strong> topic sections, and the <strong>ACM EC</strong> conference (1999–present) — with this app's own catalogs for the full <strong>Financial Times FT50</strong> rank and the ABS/AJG-rated journals in its fields. That is a few hundred thousand papers, searchable in one place.</p>
+      <p>It brings together eight core sources: Management Science, Operations Research, Marketing Science, M&amp;SOM, Information Systems Research, Production &amp; Operations Management, five PNAS topic sections, and the ACM EC conference (1999 to today). On top of that it carries its own catalogs for the full Financial Times FT50 list and the ABS/AJG-rated journals in these fields, which adds up to a few hundred thousand papers.</p>
 
       <h3>How to search</h3>
-      <ul>
-        <li><strong>Journal types</strong> — UTD24, FT50, ABS 4/4* and ABS 3 lists; a type expands to its whole set of journals and combines with the Journals filter.</li>
-        <li><strong>Journals</strong>, <strong>Year</strong>, and free-text search over <strong>Authors</strong>, <strong>Titles</strong>, <strong>Abstracts</strong> and <strong>Affiliations</strong>.</li>
-        <li>For <em>Management Science</em>, the accepting <strong>Editor</strong> and editorial <strong>Area</strong>; for ISR &amp; Marketing Science, the <strong>Senior/Associate Editor</strong>.</li>
-        <li>All filters chain together (AND), and the results bar shows the share of the journal-scope corpus that matches.</li>
-      </ul>
+      <p>You can filter by journal type (UTD24, FT50, ABS 4/4*, ABS 3), by journal, or by year, and search the text of authors, titles, abstracts and affiliations. For Management Science you can also filter by the accepting editor and editorial area, and for ISR and Marketing Science by senior and associate editor. Filters stack, so everything you pick is combined, and the results bar tells you what share of the journals in scope actually matched.</p>
 
-      <h3>On every paper card</h3>
-      <ul>
-        <li>A <strong>badge</strong> for the single most-selective list the journal belongs to (UTD24 &gt; FT50 &gt; ABS 4/4* &gt; ABS 3).</li>
-        <li>One-click <strong>BibTeX</strong>, and — where one can be found — a free <strong>open-access pre-print</strong> link (arXiv, SSRN, NBER, OSF, bioRxiv/medRxiv).</li>
-        <li>A <strong>Cited by</strong> count (Crossref) linking to the paper on Google Scholar, and, for PNAS, the article's <strong>Significance</strong> statement.</li>
-      </ul>
+      <h3>On every paper</h3>
+      <p>Each paper carries a small badge for the most selective list its journal is on (UTD24, then FT50, then ABS 4/4*, then ABS 3). You also get one-click BibTeX, a link to a free open-access pre-print whenever I could find one (arXiv, SSRN, NBER, OSF, bioRxiv or medRxiv), and a Crossref "cited by" count that links through to the paper on Google Scholar. PNAS papers show their Significance statement too.</p>
 
-      <h3>Make it yours</h3>
-      <ul>
-        <li><strong>Recently added papers</strong> and <strong>Pre-print (Open Access)</strong> quick views.</li>
-        <li>An optional, private <strong>library</strong> when you sign in — star papers, add notes, build lists and tag your reading.</li>
-        <li><strong>E-mail alerts</strong> — get notified when new papers matching your filters are added to the database.</li>
-      </ul>
+      <h3>A few extras</h3>
+      <p>There are quick views for recently added papers and for papers that have an open-access pre-print. If you sign in you get a private library, where you can star papers, add notes, build lists and tag your reading. You can also set up e-mail alerts and hear about new papers that match your filters.</p>
 
-      <h3>Data &amp; provenance</h3>
-      <p>Editors and editorial areas are shown for <em>Management Science</em> papers (2011+), exactly as on <a href="/fun/ms/">the MS-only browser</a>. Other sources contribute their published papers and Articles in Advance. ACM EC papers link to an arXiv/SSRN/open-access PDF where one could be found.</p>
-      <p>The <strong>Journal types</strong> filter covers the <a href="https://jsom.utdallas.edu/the-utd-top-100-business-school-research-rankings/list-of-journals" target="_blank" rel="noopener">UTD24 list</a> and the full <a href="https://www.ft.com/ft50-journals" target="_blank" rel="noopener">FT50 research rank</a> — journals beyond the eight core sources come from this app's own dataset (refreshed daily, checked against the FT's list yearly), downloaded on demand. The small badge left of each title shows the most selective list its journal belongs to (UTD24 &gt; FT50 &gt; ABS 4/4* &gt; ABS 3; a journal on both UTD24 and FT50 shows both tags) — a broader filter still finds the paper, e.g. an ABS 4/4* search includes every UTD24 journal. ABS ratings follow the Chartered ABS <em>Academic Journal Guide</em> (AJG 2024), as mirrored at <a href="https://journalranking.org/" target="_blank" rel="noopener">journalranking.org</a>; beyond the FT50/UTD24 lists, ABS coverage is deliberately limited to Operations, Supply Chain, Economics, Computer Science, Project Management and Innovation-related journals. HBR and MIT Sloan Management Review (the AJG's "top practitioner" journals) are FT50 journals and badged as such; since the AJG gives them no number, they keep their last numeric grade, so the ABS 3 filter still finds them.</p>
-      <p>All metadata are publicly available, collected via the <a href="https://www.crossref.org/documentation/retrieve-metadata/rest-api/" target="_blank" rel="noopener">Crossref API</a> (with OpenAlex, DBLP and Semantic Scholar assisting for EC PDF links). PNAS section labels come from pnas.org's own topic index where available, and are otherwise approximated from each paper's <a href="https://openalex.org" target="_blank" rel="noopener">OpenAlex</a> primary topic.</p>
+      <h3>Where the data come from</h3>
+      <p>Editors and editorial areas are shown for <em>Management Science</em> papers from 2011 onwards, exactly as on <a href="/fun/ms/">the MS-only browser</a>. The other sources contribute their published papers and Articles in Advance. ACM EC papers link out to an arXiv, SSRN or open-access PDF wherever one exists.</p>
+      <p>The Journal types filter covers the <a href="https://jsom.utdallas.edu/the-utd-top-100-business-school-research-rankings/list-of-journals" target="_blank" rel="noopener">UTD24 list</a> and the full <a href="https://www.ft.com/ft50-journals" target="_blank" rel="noopener">FT50 research rank</a>. Journals beyond the eight core sources come from this app's own dataset, which is refreshed daily, checked against the FT's list once a year, and downloaded only when you need it. The badge to the left of a title shows the single most selective list a journal belongs to, with one exception: a journal that sits on both the UTD24 and FT50 lists shows both. A broader filter still finds the paper, so an ABS 4/4* search includes every UTD24 journal. ABS ratings follow the Chartered ABS <em>Academic Journal Guide</em> (AJG 2024), as mirrored at <a href="https://journalranking.org/" target="_blank" rel="noopener">journalranking.org</a>. Beyond the FT50 and UTD24 lists I have kept ABS coverage to Operations, Supply Chain, Economics, Computer Science, Project Management and Innovation. HBR and MIT Sloan Management Review are FT50 journals and badged as such; the guide gives them no number, so they keep their last numeric grade and the ABS 3 filter still finds them.</p>
+      <p>All of the metadata is public, collected through the <a href="https://www.crossref.org/documentation/retrieve-metadata/rest-api/" target="_blank" rel="noopener">Crossref API</a>, with OpenAlex, DBLP and Semantic Scholar helping fill in the EC PDF links. PNAS section labels come from pnas.org's own topic index where it has one, and are otherwise approximated from each paper's <a href="https://openalex.org" target="_blank" rel="noopener">OpenAlex</a> topic.</p>
 
-      <div class="info-note">Built as a personal project to search papers efficiently across journals — all in one place. Feedback and suggestions are welcome via the <a href="#" onclick="litAboutClose();litFeedbackOpen();return false;">Feedback</a> tab. Any errors are my own. — <a href="https://www.stouras.com" target="_blank" rel="noopener">Konstantinos I. Stouras</a></div>
+      <div class="info-note">This is a personal project, so please forgive any rough edges. Feedback and suggestions are always welcome through the <a href="#" onclick="litAboutClose();litFeedbackOpen();return false;">Feedback</a> tab, and any mistakes are my own. <a href="https://www.stouras.com" target="_blank" rel="noopener">Konstantinos I. Stouras</a></div>
     </div>
   </div>
 </div>
@@ -3291,7 +3279,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     <button class="acct-modal-x" onclick="litFeedbackClose()" aria-label="Close">×</button>
     <div class="acct-modal-head">
       <h2>Feedback</h2>
-      <p>The Lit is a personal project and a work in progress. I warmly welcome any feedback, corrections or suggestions to improve it — please reach out through any of the channels below.</p>
+      <p>The Lit is a personal project and still a work in progress. I would love to hear any feedback, corrections or suggestions you have. You can reach me through any of the channels below.</p>
     </div>
     <div class="info-body">
       <div class="contact-grid">
