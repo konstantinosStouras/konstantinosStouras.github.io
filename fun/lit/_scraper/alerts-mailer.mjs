@@ -57,6 +57,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR  = path.join(__dirname, '..', 'data');
 const FT50_DIR  = path.join(__dirname, '..', 'data-ft50');
 const SITE_URL  = 'https://stouras.com/fun/lit/';
+// Maintainer contact surfaced in every alert e-mail (help / feedback, and the
+// List-Unsubscribe mailto). Keep in sync with the Feedback modal in index.html.
+const CONTACT_EMAIL = 'kostas.stouras@ucd.ie';
 
 // ── Vendored journal-list constants (keep in sync with fun/lit/index.html) ────
 const UTD24_KEYS = new Set(['tar','jae','jar','jof','jfe','rfs','isre','ijoc',
@@ -269,8 +272,10 @@ Criteria: ${describeCriteria(alert.criteria || {})}
 ${lineText}${more > 0 ? `\n\n…and ${more} more. See them all on ${SITE_URL}` : ''}
 
 —
-You're receiving this because you set up an e-mail alert on The Lit (${SITE_URL}).
-Manage or delete this alert from the "E-mail alerts" panel on that page.`;
+You set up this e-mail alert on The Lit (${SITE_URL}).
+· Update it (journals, filters, frequency): open the "E-mail alerts" panel there.
+· Unsubscribe: open "E-mail alerts" and pause or delete this alert.
+· Questions, help or feedback: ${CONTACT_EMAIL}`;
 
   const items = shown.map(p => {
     const bits = [p.Journal, p.Year, p.Status].filter(Boolean).filter(x => x).map(esc).join(' · ');
@@ -294,9 +299,12 @@ Manage or delete this alert from the "E-mail alerts" panel on that page.`;
     <ul style="list-style:none;padding:0;margin:0">${items}</ul>
     ${more > 0 ? `<p style="font-size:13px;margin:14px 0 0">…and ${more} more. <a href="${esc(SITE_URL)}" style="color:#7d1d3f">See them all on The Lit</a>.</p>` : ''}
     <hr style="border:none;border-top:1px solid #dce1ea;margin:20px 0 12px">
-    <p style="color:#6a5a60;font-size:11.5px;margin:0">You're receiving this because you set up an e-mail alert on
-      <a href="${esc(SITE_URL)}" style="color:#7d1d3f">The Lit</a>. Manage or delete this alert from the
-      "E-mail alerts" panel on that page.</p>
+    <p style="color:#6a5a60;font-size:11.5px;margin:0 0 6px">You set up this e-mail alert on
+      <a href="${esc(SITE_URL)}" style="color:#7d1d3f">The Lit</a>.</p>
+    <p style="color:#6a5a60;font-size:11.5px;margin:0;line-height:1.8">
+      <a href="${esc(SITE_URL)}" style="color:#7d1d3f;font-weight:600">Update this alert</a> (journals, filters, frequency) &nbsp;·&nbsp;
+      <a href="${esc(SITE_URL)}" style="color:#7d1d3f;font-weight:600">Unsubscribe</a> (pause or delete it in the “E-mail alerts” panel) &nbsp;·&nbsp;
+      <a href="mailto:${esc(CONTACT_EMAIL)}" style="color:#7d1d3f;font-weight:600">Questions or feedback</a></p>
   </div>
 </div>`;
   return { subject, text, html };
@@ -397,6 +405,11 @@ async function run({ dryRun }) {
         to: recipient,
         replyTo: (alert.from && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(alert.from)) ? alert.from : undefined,
         subject, text, html,
+        // Standards-based unsubscribe (RFC 2369): mail clients surface a native
+        // "Unsubscribe" button — a mailto to the maintainer plus the manage page.
+        headers: {
+          'List-Unsubscribe': `<mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('Unsubscribe from The Lit alert: ' + (alert.name || ''))}>, <${SITE_URL}>`,
+        },
       };
       if (dryRun) {
         console.log(`  [dry-run] would e-mail ${recipient}: "${subject}" (${matches.length} paper(s), window since ${windowStart.toISOString()})`);
@@ -498,6 +511,8 @@ function selftest() {
   ok('html has paper title', em.html.includes('platform markets'));
   ok('html has preprint link', em.html.includes('arxiv.org/abs/2410.13767'));
   ok('text has manage note', em.text.includes('E-mail alerts'));
+  ok('text footer has update/unsubscribe/feedback', /Update it/.test(em.text) && /Unsubscribe/.test(em.text) && em.text.includes(CONTACT_EMAIL));
+  ok('html footer has update/unsubscribe/feedback', /Update this alert/.test(em.html) && /Unsubscribe/.test(em.html) && em.html.includes('mailto:' + CONTACT_EMAIL));
   ok('html escapes', renderEmail({ name: 'x', criteria: {} }, [P({ Title: 'A <b> & "q"' })]).html.includes('A &lt;b&gt; &amp; &quot;q&quot;'));
 
   console.log(`\nselftest: ${pass} passed, ${fail} failed`);

@@ -569,6 +569,14 @@
   .alert-save-status { font-size: 13px; font-weight: 600; }
   .alert-existing { margin-top: 22px; border-top: 1px solid var(--border); padding-top: 16px; }
   .alert-existing:empty { display: none; }
+  /* Example-email preview (mirrors fun/lit/_scraper/alerts-mailer.mjs) */
+  .alert-preview { margin-top: 22px; border-top: 1px solid var(--border); padding-top: 16px; }
+  .alert-preview-mail { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: #fff; }
+  .apm-subject { font-size: 12.5px; color: var(--text); padding: 9px 14px; background: var(--bg, #faf7f2); border-bottom: 1px solid var(--border); }
+  .apm-subject span { text-transform: uppercase; letter-spacing: .5px; font-size: 10px; font-weight: 700; color: var(--text-muted); margin-right: 8px; }
+  .apm-head { background: linear-gradient(135deg, var(--navy), var(--navy-dark)); color: #fff; font-size: 16px; padding: 13px 16px; }
+  .apm-inner { padding: 15px 16px; }
+  .apm-inner ul { list-style: none; }
   .alert-card { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; background: #fff; }
   .alert-card.off { opacity: .62; }
   .alert-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
@@ -4353,19 +4361,19 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   window.litAlertRemove = function (key, v) {
     if (!alertDraft) return;
     alertDraft[key] = (alertDraft[key] || []).filter(function (x) { return x !== v; });
-    renderAlertChips(key);
+    renderAlertChips(key); renderAlertPreview();
   };
   window.litAlertToggleType = function (t) {
     var i = (alertDraft.jtype || []).indexOf(t);
     if (i >= 0) alertDraft.jtype.splice(i, 1); else alertDraft.jtype.push(t);
-    syncTypeChips();
+    syncTypeChips(); renderAlertPreview();
   };
   window.litAlertAddText = function (key, inputId) {
     var inp = document.getElementById(inputId); if (!inp) return;
     var v = inp.value.trim(); if (!v) return;
     if (key === 'year') { v = v.replace(/[^0-9]/g, ''); if (!v) return; }
     else v = v.toLowerCase();
-    if ((alertDraft[key] || []).indexOf(v) < 0) { alertDraft[key].push(v); renderAlertChips(key); }
+    if ((alertDraft[key] || []).indexOf(v) < 0) { alertDraft[key].push(v); renderAlertChips(key); renderAlertPreview(); }
     inp.value = ''; inp.focus();
   };
   window.litAlertAddJournal = function (inputId) {
@@ -4373,10 +4381,10 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     var key = journalKeyByLabel(inp.value);
     if (!key) { inp.style.borderColor = 'var(--red)'; return; }
     inp.style.borderColor = '';
-    if (alertDraft.journal.indexOf(key) < 0) { alertDraft.journal.push(key); renderAlertChips('journal'); }
+    if (alertDraft.journal.indexOf(key) < 0) { alertDraft.journal.push(key); renderAlertChips('journal'); renderAlertPreview(); }
     inp.value = ''; inp.focus();
   };
-  window.litAlertSetPreprint = function (on) { if (alertDraft) alertDraft.preprintOnly = !!on; };
+  window.litAlertSetPreprint = function (on) { if (alertDraft) alertDraft.preprintOnly = !!on; renderAlertPreview(); };
   window.litAlertReload = function () { readAlertForm(); alertDraft = captureCurrentFilters(); litAlertsRenderForm(); };
   window.litAlertCancelEdit = function () {
     alertEditId = null; alertForm = { name: '', recipient: (state.user && state.user.email) || '', freq: 'weekly' };
@@ -4472,7 +4480,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       '</div>' +
       '<div class="alert-block-label" style="margin-top:16px">Delivery</div>' +
       '<div class="alert-delivery">' +
-        '<div class="acct-field"><label for="litAlertName">Alert name</label><input id="litAlertName" type="text" placeholder="' + escAttr(defaultAlertName(d)) + '" value="' + escAttr(alertForm.name || '') + '"></div>' +
+        '<div class="acct-field"><label for="litAlertName">Alert name <span style="text-transform:none;font-weight:400;color:var(--text-muted)">— the subject line of your e-mails</span></label><input id="litAlertName" type="text" placeholder="' + escAttr(defaultAlertName(d)) + '" value="' + escAttr(alertForm.name || '') + '" oninput="litAlertNameInput()"></div>' +
         '<div class="acct-field"><label for="litAlertFreq">Frequency</label><select id="litAlertFreq">' +
           freqOpt('immediate', 'As papers are added') + freqOpt('daily', 'Daily digest') + freqOpt('weekly', 'Weekly digest') + freqOpt('monthly', 'Monthly digest') +
         '</select></div>' +
@@ -4481,9 +4489,58 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       '<div class="alert-save-row"><button class="acct-primary" id="litAlertSaveBtn" onclick="litAlertSave()" style="padding:11px 22px">' + (editing ? 'Update alert' : 'Create alert') + '</button>' +
         (editing ? '<button type="button" class="alert-icon-btn" onclick="litAlertCancelEdit()">Cancel</button>' : '') +
         '<span class="alert-save-status" id="litAlertSaveStatus"></span></div>' +
-      '<div class="info-note" style="margin-top:8px">Sent from your account e-mail (<strong>' + esc(state.user.email || '') + '</strong>) to the address above. New papers are matched when the database refreshes — delivery is handled by the alert mailer (see the setup notes). No e-mail is sent from your browser.</div>';
+      '<div class="info-note" style="margin-top:8px">Sent from your account e-mail (<strong>' + esc(state.user.email || '') + '</strong>) to the address above. New papers are matched when the database refreshes — delivery is handled by the alert mailer (see the setup notes). No e-mail is sent from your browser.</div>' +
+      '<div class="alert-preview" id="litAlertPreview"></div>';
     CRIT_KEYS.forEach(renderAlertChips);
     syncTypeChips();
+    renderAlertPreview();
+  }
+
+  // Live example of the e-mail this alert will send — mirrors the template in
+  // fun/lit/_scraper/alerts-mailer.mjs (renderEmail). Keep the two in sync.
+  function litAlertNameInput() {
+    var n = document.getElementById('litAlertName'); if (n) alertForm.name = n.value;
+    renderAlertPreview();
+  }
+  window.litAlertNameInput = litAlertNameInput;
+  function renderAlertPreview() {
+    var box = document.getElementById('litAlertPreview'); if (!box) return;
+    var d = alertDraft || emptyCriteria();
+    var nm = (alertForm.name || '').trim() || defaultAlertName(d);
+    var crit = describeCriteria(d);
+    var CE = 'kostas.stouras@ucd.ie';
+    // Two illustrative sample papers (not a real match — just to show the shape).
+    var samples = [
+      { t: 'Dispatching and Pricing in Two-Sided Spatial Queues', a: 'Ang Xu, Chiwei Yan', m: 'Operations Research · 2026 · Articles in Advance', pre: true },
+      { t: 'Learning and Information in Dynamic Marketplaces', a: 'A. Researcher, B. Coauthor', m: 'Management Science · 2026', pre: false }
+    ];
+    var items = samples.map(function (p) {
+      return '<li style="margin:0 0 13px;list-style:none">' +
+        '<span style="color:var(--navy);font-weight:600;font-size:14px">' + esc(p.t) + '</span>' +
+        '<div style="color:var(--text);font-size:12.5px;margin-top:2px">' + esc(p.a) + '</div>' +
+        '<div style="color:var(--text-muted);font-size:11.5px;margin-top:2px">' + esc(p.m) + '</div>' +
+        (p.pre ? '<div style="font-size:11.5px;margin-top:2px"><span style="color:#c2410c">Pre-print (open access)</span></div>' : '') +
+        '</li>';
+    }).join('');
+    box.innerHTML =
+      '<div class="alert-block-label">Example e-mail <span class="hint" style="cursor:default">what each alert looks like</span></div>' +
+      '<div class="alert-preview-mail">' +
+        '<div class="apm-subject"><span>Subject</span> The Lit: 2 new papers — ' + esc(nm) + '</div>' +
+        '<div class="apm-body">' +
+          '<div class="apm-head"><span style="color:#c9a24b;font-style:italic">The Lit</span> — new papers</div>' +
+          '<div class="apm-inner">' +
+            '<p style="font-size:13px;margin:0 0 4px"><strong>2 new papers</strong> matching your alert <strong>' + esc(nm) + '</strong> were added to The Lit.</p>' +
+            '<p style="color:var(--text-muted);font-size:11.5px;margin:0 0 12px">Criteria: ' + esc(crit) + '</p>' +
+            '<ul style="padding:0;margin:0">' + items + '</ul>' +
+            '<hr style="border:none;border-top:1px solid var(--border);margin:14px 0 10px">' +
+            '<p style="color:var(--text-muted);font-size:11px;margin:0 0 5px">You set up this e-mail alert on The Lit.</p>' +
+            '<p style="color:var(--text-muted);font-size:11px;margin:0;line-height:1.7">' +
+              '<span style="color:var(--navy);font-weight:600">Update this alert</span> (journals, filters, frequency) · ' +
+              '<span style="color:var(--navy);font-weight:600">Unsubscribe</span> (pause or delete it here) · ' +
+              '<a href="mailto:' + CE + '" style="color:var(--navy);font-weight:600">Questions or feedback</a></p>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
   }
   function renderExistingAlerts() {
     var wrap = document.getElementById('litAlertsExisting'); if (!wrap) return;
