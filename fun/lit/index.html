@@ -813,6 +813,11 @@ function journalBadges(jk) {
 
 const PER_PAGE = 20;
 let allPapers = [], filtered = [], currentPage = 1;
+// Loaded papers inside the current journal scope (all journals when none is
+// selected). The results bar's "X of Y" denominator, so a filter chained onto
+// a journal/type selection reads against that selection's corpus — not
+// against whatever happens to be downloaded. Set by each applyFilters pass.
+let scopeCount = 0;
 let sourcesManifest = [];  // from sources.json (per-source counts/files)
 let authorData = []; // pre-computed from Authors tab (ORCID-resolved)
 let affiliationData = []; // pre-computed from Affiliations tab
@@ -2141,6 +2146,9 @@ function updateDropdownOptions() {
   function crossFilter(excludeType) {
     return allPapers.filter(function(p) {
       if (excludeType !== 'journal' && !matchesJournal(p)) return false;
+      // The pre-print toggle has no dropdown of its own, so every dropdown's
+      // counts honor it (a chained filter counts within the toggled set).
+      if (preprintOnly && !safeUrl(p['Preprint'])) return false;
       if (excludeType !== 'editor' && sel.editor.size > 0 && !(p._editors || []).some(function(e) { return sel.editor.has(e); })) return false;
       if (excludeType !== 'area' && sel.area.size > 0 && !sel.area.has(p._area)) return false;
       if (excludeType !== 'se' && sel.se.size > 0 && !(p._se || []).some(function(e) { return sel.se.has(e); })) return false;
@@ -2289,8 +2297,10 @@ function applyFilters() {
   // as each one lands.
   ensureScopeSources();
 
+  let inScope = 0;
   filtered = allPapers.filter(p => {
     if (!matchesJournal(p)) return false;
+    inScope++;
     if (preprintOnly && !safeUrl(p['Preprint'])) return false;
     if (sel.editor.size > 0 && !(p._editors || []).some(e => sel.editor.has(e))) return false;
     if (sel.area.size > 0 && !sel.area.has(p._area)) return false;
@@ -2318,6 +2328,7 @@ function applyFilters() {
 
     return true;
   });
+  scopeCount = inScope;
 
   filtered.sort((a, b) => {
     switch(sort) {
@@ -2581,9 +2592,13 @@ function renderPage() {
   const countEl = document.getElementById('resultsCount');
   // Lazily loaded journal files (native + FT50) still on their way.
   const pending = viewPendingCount();
-  let countHtml = filtered.length === allPapers.length
-    ? `<strong>${allPapers.length.toLocaleString()}</strong> papers`
-    : `<strong>${filtered.length.toLocaleString()}</strong> of ${allPapers.length.toLocaleString()} papers`;
+  // "X of Y": Y is the journal-scope corpus (scopeCount), not the download
+  // total — with e.g. FT50 selected, chaining the pre-print toggle or a search
+  // reads "2,787 of 230,089" (the FT50 papers), even if the rest of the
+  // catalog happens to be in memory from an earlier broad search.
+  let countHtml = filtered.length === scopeCount
+    ? `<strong>${scopeCount.toLocaleString()}</strong> papers`
+    : `<strong>${filtered.length.toLocaleString()}</strong> of ${scopeCount.toLocaleString()} papers`;
   if (pending) countHtml += ' · <span style="color:var(--navy)">loading ' + pending + ' journal file' + (pending === 1 ? '' : 's') + '…</span>';
   countEl.innerHTML = countHtml;
 
