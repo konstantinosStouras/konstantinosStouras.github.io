@@ -110,6 +110,10 @@
   .selpill .lbl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .selpill .x { color: var(--navy); font-size: 14px; line-height: 1; opacity: .55; flex: 0 0 auto; }
   .selpill:hover .x { opacity: 1; }
+  .selpill.dim { background: #f6ecd6; color: #6b4e12; }
+  .selpill.dim .x { color: #6b4e12; }
+  .dim-lead { font-size: 15px; font-weight: 700; color: var(--navy); margin: 6px 2px 2px; grid-column: 1 / -1; }
+  .dim-lead span { display: block; font-size: 12.5px; font-weight: 400; color: var(--text-muted); margin-top: 3px; line-height: 1.5; }
   .resetbtn { font-size: 12.5px; font-weight: 600; color: var(--navy); background: none; border: 1.5px solid var(--border); border-radius: 8px; padding: 7px 14px; cursor: pointer; white-space: nowrap; }
   .resetbtn:hover { border-color: var(--navy); }
 
@@ -310,6 +314,7 @@
           <div class="tblscroll"><div id="citedTable"></div></div>
         </div>
       </div>
+      <div class="cards" id="dimCards"></div>
     </div>
 
     <!-- ── Author tab ─────────────────────────────────────────────────── -->
@@ -347,7 +352,14 @@
 
   // ── state ───────────────────────────────────────────────────────────────
   var DATA = null, JMAP = {}, AUTHORS = null, authorsState = 'idle';
-  var S = { types: {}, journals: {}, yMin: 0, yMax: 0, tab: 'overview', author: null };
+  // dim = the active editorial breakdown filter (one dimension at a time):
+  //   name ∈ 'editor'|'area'|'se'|'ae', vals = { value: true } of selected values.
+  var S = { types: {}, journals: {}, dim: { name: null, vals: {} }, yMin: 0, yMax: 0, tab: 'overview', author: null };
+  // Editorial dimensions we can break the analytics down by (present in a
+  // journal's `dims` only when we collect them: MS editors/areas, ISR/MkSc SE/AE).
+  var DIM_ORDER = ['area', 'editor', 'se', 'ae'];
+  var DIM_LABEL = { editor: 'Accepting editor', area: 'Editorial area', se: 'Senior editor', ae: 'Associate editor' };
+  function activeDimVals() { return S.dim.name ? Object.keys(S.dim.vals).filter(function (v) { return S.dim.vals[v]; }) : []; }
   var YEAR_LO = 0, YEAR_HI = 0;
 
   // ── small utils ─────────────────────────────────────────────────────────
@@ -385,22 +397,64 @@
       perJournal: {},         // key -> n
       buckets: [0, 0, 0, 0, 0, 0]
     };
+    // When an editorial dimension is active, sum only the selected values'
+    // per-year rows (from each journal that carries the dimension) instead of the
+    // journal's overall per-year rows; otherwise sum the journal totals.
+    var dimName = S.dim.name, vals = activeDimVals(), dimActive = !!(dimName && vals.length);
     keys.forEach(function (k) {
       var j = JMAP[k]; if (!j) return;
+      var srcs = [];
+      if (dimActive) {
+        if (!j.dims || !j.dims[dimName]) return;   // journal lacks the active dim → no contribution
+        vals.forEach(function (v) { var e = j.dims[dimName][v]; if (e) srcs.push(e.years); });
+      } else { srcs.push(j.years); }
       var jn = 0;
-      for (var y in j.years) {
-        var yy = +y; if (yy < S.yMin || yy > S.yMax) continue;
-        var r = j.years[y];
-        jn += r.n;
-        out.n += r.n; out.a += r.a; out.s += r.s; out.p += r.p; out.c += r.c; out.ab += r.ab;
-        var t = out.perYear[y] || (out.perYear[y] = { n: 0, a: 0, s: 0, p: 0, c: 0, ab: 0 });
-        t.n += r.n; t.a += r.a; t.s += r.s; t.p += r.p; t.c += r.c; t.ab += r.ab;
-        if (r.t) for (var i = 0; i < 6; i++) out.buckets[i] += r.t[i];
-      }
+      srcs.forEach(function (ys) {
+        for (var y in ys) {
+          var yy = +y; if (yy < S.yMin || yy > S.yMax) continue;
+          var r = ys[y];
+          jn += r.n;
+          out.n += r.n; out.a += r.a; out.s += r.s; out.p += r.p; out.c += r.c; out.ab += r.ab;
+          var t = out.perYear[y] || (out.perYear[y] = { n: 0, a: 0, s: 0, p: 0, c: 0, ab: 0 });
+          t.n += r.n; t.a += r.a; t.s += r.s; t.p += r.p; t.c += r.c; t.ab += r.ab;
+          if (r.t) for (var i = 0; i < 6; i++) out.buckets[i] += r.t[i];
+        }
+      });
       if (jn) out.perJournal[k] = jn;
     });
     return out;
   }
+
+  // Which editorial dimensions any in-scope journal carries (so we only show a
+  // breakdown/filter for data we actually have).
+  function applicableDims(keys) {
+    var present = {};
+    keys.forEach(function (k) { var j = JMAP[k]; if (j && j.dims) for (var d in j.dims) present[d] = 1; });
+    return DIM_ORDER.filter(function (d) { return present[d]; });
+  }
+  // Per-value paper counts for one dimension, over the in-scope journals and the
+  // year window — drives the breakdown bar charts (and their click-to-filter).
+  function dimValues(name, keys) {
+    var acc = {};
+    keys.forEach(function (k) {
+      var j = JMAP[k]; if (!j || !j.dims || !j.dims[name]) return;
+      var dm = j.dims[name];
+      for (var val in dm) {
+        var n = 0, ys = dm[val].years;
+        for (var y in ys) { var yy = +y; if (yy < S.yMin || yy > S.yMax) continue; n += ys[y].n; }
+        if (n) acc[val] = (acc[val] || 0) + n;
+      }
+    });
+    return Object.keys(acc).map(function (v) { return { label: v, value: acc[v] }; })
+      .sort(function (a, b) { return b.value - a.value; });
+  }
+  // Toggle a dimension value in the filter (one dimension active at a time).
+  window.__toggleDim = function (name, val) {
+    if (S.dim.name !== name) S.dim = { name: name, vals: {} };
+    if (S.dim.vals[val]) delete S.dim.vals[val]; else S.dim.vals[val] = true;
+    if (!Object.keys(S.dim.vals).length) S.dim.name = null;
+    refresh();
+  };
 
   // ── SVG chart primitives ────────────────────────────────────────────────
   function svgEl(w, h) {
@@ -479,12 +533,19 @@
     items.forEach(function (it, i) {
       var y = T + i * (rowH + gap);
       var w = (it.value / maxV) * (W - L - R);
-      svg += '<text x="' + (L - 10) + '" y="' + (y + rowH / 2 + 4) + '" text-anchor="end" font-size="12.5" fill="' + '#241a1e' + '">' + esc(trunc(it.label, 26)) + '</text>';
-      svg += '<rect x="' + L + '" y="' + y + '" width="' + Math.max(1, w).toFixed(1) + '" height="' + rowH + '" rx="4" fill="' + (it.color || NAVY) + '"/>';
-      svg += '<text x="' + (L + Math.max(1, w) + 8).toFixed(1) + '" y="' + (y + rowH / 2 + 4) + '" font-size="12" fill="' + MUTED + '" font-weight="600">' + (opts.fmt ? opts.fmt(it.value) : fmt(it.value)) + '</text>';
+      var row = '<text x="' + (L - 10) + '" y="' + (y + rowH / 2 + 4) + '" text-anchor="end" font-size="12.5" fill="' + '#241a1e' + '">' + esc(trunc(it.label, 26)) + '</text>' +
+        '<rect x="' + L + '" y="' + y + '" width="' + Math.max(1, w).toFixed(1) + '" height="' + rowH + '" rx="4" fill="' + (it.color || NAVY) + '"/>' +
+        '<text x="' + (L + Math.max(1, w) + 8).toFixed(1) + '" y="' + (y + rowH / 2 + 4) + '" font-size="12" fill="' + MUTED + '" font-weight="600">' + (opts.fmt ? opts.fmt(it.value) : fmt(it.value)) + '</text>';
+      // Click-to-filter: a transparent full-row hit target wraps the row.
+      if (opts.click) svg += '<g style="cursor:pointer" onclick="' + opts.click(it.label) + '"><rect x="0" y="' + y + '" width="' + W + '" height="' + rowH + '" fill="transparent"/>' + row + '</g>';
+      else svg += row;
     });
     svg += '</svg>';
     return svg;
+  }
+  // A safe onclick value for a breakdown bar (single-dimension filter toggle).
+  function dimClick(name, label) {
+    return esc("window.__toggleDim('" + name + "','" + String(label).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "')");
   }
   function trunc(s, n) { s = String(s); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
 
@@ -525,13 +586,42 @@
     renderByJournal(agg);
     renderPreprint(agg);
     renderCited(keys);
+    renderDims(keys);
+  }
+
+  // Editorial breakdown: for each dimension any in-scope journal carries (MS
+  // accepting editor / area; ISR & Marketing Science senior / associate editor)
+  // show a bar chart of its top values. Bars are click-to-filter — the whole
+  // dashboard above then reflects the papers under the selected value(s).
+  function renderDims(keys) {
+    var box = document.getElementById('dimCards'); if (!box) return;
+    var dims = applicableDims(keys);
+    if (!dims.length) { box.innerHTML = ''; return; }
+    var html = '<div class="dim-lead">Editorial breakdown <span>— for journals where we collect it (Management Science areas &amp; accepting editors; ISR &amp; Marketing Science senior/associate editors). Click a bar to filter the whole dashboard by it.</span></div>';
+    html += dims.map(function (name) {
+      var items = dimValues(name, keys);
+      if (!items.length) return '';
+      var sel = (S.dim.name === name) ? S.dim.vals : {};
+      items = items.slice(0, 14).map(function (it) {
+        return { label: it.label, value: it.value, color: sel[it.label] ? 'var(--accent)' : 'var(--navy)' };
+      });
+      var sub = (S.dim.name === name && activeDimVals().length)
+        ? ('Filtering by ' + activeDimVals().length + ' selected — click again to remove')
+        : ('Top ' + items.length + ' by paper count · click to filter');
+      return '<div class="card wide"><h3>Papers by ' + esc(DIM_LABEL[name].toLowerCase()) + '</h3>' +
+        '<div class="csub">' + esc(sub) + '</div>' +
+        '<div>' + barsH(items, { limit: 14, click: function (label) { return dimClick(name, label); } }) + '</div></div>';
+    }).join('');
+    box.innerHTML = html;
   }
 
   function renderTiles(agg, keys) {
     var avgCo = agg.n ? agg.a / agg.n : 0;
+    // When a dimension filter is active, only journals carrying it contribute.
+    var jcount = (S.dim.name && activeDimVals().length) ? Object.keys(agg.perJournal).length : keys.length;
     var tiles = [
       { label: 'Papers', value: fmt(agg.n) },
-      { label: 'Journals in scope', value: fmt(keys.length) },
+      { label: 'Journals in scope', value: fmt(jcount) },
       { label: 'Avg. co-authors', value: avgCo.toFixed(2), hint: 'authors per paper' },
       { label: 'Solo-authored', value: agg.n ? pct(agg.s / agg.n) : '—' },
       { label: 'With pre-print', value: agg.n ? pct(agg.p / agg.n) : '—', hint: 'free open-access copy' },
@@ -751,8 +841,10 @@
     var agg = aggregate(keys);
     var chosenTypes = Object.keys(S.types).filter(function (t) { return S.types[t]; });
     var chosenJ = Object.keys(S.journals).filter(function (k) { return S.journals[k]; });
-    var isAll = !chosenTypes.length && !chosenJ.length;
-    $('scopeTxt').innerHTML = '<strong>' + fmt(agg.n) + '</strong> papers · <strong>' + fmt(keys.length) + '</strong> journals · ' + S.yMin + '–' + S.yMax + (isAll ? ' · whole corpus' : '');
+    var dimVals = activeDimVals();
+    var isAll = !chosenTypes.length && !chosenJ.length && !dimVals.length;
+    var jcount = dimVals.length ? Object.keys(agg.perJournal).length : keys.length;
+    $('scopeTxt').innerHTML = '<strong>' + fmt(agg.n) + '</strong> papers · <strong>' + fmt(jcount) + '</strong> journals · ' + S.yMin + '–' + S.yMax + (isAll ? ' · whole corpus' : '');
     $('jbtnCnt').textContent = chosenJ.length ? chosenJ.length : 'All';
 
     var pills = [];
@@ -763,13 +855,17 @@
     chosenJ.forEach(function (k) {
       pills.push('<span class="selpill" data-rj="' + esc(k) + '" title="Click to remove"><span class="lbl">' + esc(JMAP[k].name) + '</span><span class="x">×</span></span>');
     });
+    dimVals.forEach(function (v) {
+      pills.push('<span class="selpill dim" data-rd="' + esc(v) + '" title="Click to remove"><span class="lbl">' + esc(DIM_LABEL[S.dim.name] + ': ' + v) + '</span><span class="x">×</span></span>');
+    });
     $('selChips').innerHTML = pills.join('');
-    // Clicking anywhere on a scope pill removes that journal/type (like the main
-    // browser's filter chips), not just the × glyph.
+    // Clicking anywhere on a scope pill removes that journal/type/dimension value
+    // (like the main browser's filter chips), not just the × glyph.
     Array.prototype.forEach.call($('selChips').querySelectorAll('.selpill'), function (b) {
       b.onclick = function () {
         if (b.getAttribute('data-rt')) S.types[b.getAttribute('data-rt')] = false;
         if (b.getAttribute('data-rj')) S.journals[b.getAttribute('data-rj')] = false;
+        if (b.getAttribute('data-rd')) { delete S.dim.vals[b.getAttribute('data-rd')]; if (!Object.keys(S.dim.vals).length) S.dim.name = null; }
         refresh();
       };
     });
@@ -818,7 +914,7 @@
   }
 
   function resetFilters() {
-    S.types = {}; S.journals = {};
+    S.types = {}; S.journals = {}; S.dim = { name: null, vals: {} };
     $('yrMin').value = YEAR_LO; $('yrMax').value = YEAR_HI; syncSlider();
     renderTypeChips(); renderJournalList(); refresh();
   }

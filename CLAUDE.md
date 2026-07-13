@@ -324,13 +324,23 @@ journal's UTD24/FT50/ABS membership — a byte-for-byte mirror of index.html's
 `ABS_RATING`/`UTD24_KEYS`/`FT50_KEYS` — and its top-cited papers) and
 `analytics/authors.json` (per-author papers/year + papers/journal for authors
 with ≥ 5 papers, canonicalised via the datasets' `Name_Variants`, loaded lazily
-only when the Author tab opens). The page (vanilla JS, inline-SVG charts, no
+only when the Author tab opens). Journals for which we collect **editorial
+metadata** also carry a `dims` block in `data.json` — per-value × per-year
+aggregates (same row shape as `years`) for `editor`/`area` (Management Science's
+accepting editor & area) and `se`/`ae` (ISR & Marketing Science senior/associate
+editors), thresholded (`DIM_MIN_PAPERS`, areas kept in full) so the file stays
+small. The page (vanilla JS, inline-SVG charts, no
 external CDN beyond the shared Google Font) offers filters — **journal types**
 (the same UTD24/FT50/ABS 4/4*/ABS 3 sets, union with the Journals picker),
 **journals**, and a **year-range** slider — driving live tiles (papers, avg
 co-authors, solo %, pre-print %, citations) and charts (publication volume by
 journal over time, avg co-authors/year, co-authorship distribution, papers by
-journal, pre-print availability/year, most-cited table), plus an **Author
+journal, pre-print availability/year, most-cited table). When a journal that
+carries editorial metadata is in scope, an **Editorial breakdown** section shows
+click-to-filter bar charts ("Papers by editorial area / accepting editor /
+senior/associate editor"); clicking a bar filters the *whole* dashboard by that
+value (one dimension at a time, via `aggregate`'s `dims` path — `S.dim`), and a
+removable scope pill shows the active value. There is also an **Author
 spotlight** tab (per-author totals, in-scope counts, publications-per-year, and
 where-they-publish, the latter greying journals outside the current scope).
 Refreshed daily by `.github/workflows/lit-analytics.yml` (08:10 UTC, after the
