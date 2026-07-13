@@ -3455,6 +3455,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
 <script>
 /* ── Accounts: optional sign-in + private saved papers / notes / lists / tags ──
  *
@@ -4601,6 +4602,54 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   });
 
   acctRenderControl(); // show the Sign in button immediately, before auth resolves
+})();
+</script>
+
+<!-- ── Real-time presence: register this visitor as "online" ────────────────
+     Powers the live "Exploring now" figure on fun/lit/analytics/. This page only
+     WRITES presence (it never reads/counts, so there is no per-visitor fan-out);
+     the analytics page does the counting. It runs in a SEPARATE Firebase app
+     ('presence') with its own ANONYMOUS auth, completely isolated from the
+     accounts feature above (default app) — so sign-in state, the account menu and
+     the registered-users tally are all untouched. Anonymous visitors are counted
+     but are NOT written to `registeredUsers`, so they never inflate that count.
+     Entirely INERT until a Realtime Database is created and its URL is pasted
+     below — see fun/lit/_PRESENCE-SETUP.md. -->
+<script>
+(function () {
+  'use strict';
+  var PRESENCE_CFG = {
+    apiKey: "AIzaSyDUh6qKU42CiJf6yCsQ-znmH8Y9zo95u04",
+    authDomain: "lit-paper-browser.firebaseapp.com",
+    projectId: "lit-paper-browser",
+    // ↓↓↓ PASTE the Realtime Database URL here to switch presence ON ↓↓↓
+    databaseURL: "PASTE_DATABASE_URL"
+    // e.g. "https://lit-paper-browser-default-rtdb.europe-west1.firebasedatabase.app"
+    // ↑↑↑ ───────────────────────────────────────────────────────────── ↑↑↑
+  };
+  if (!window.firebase || !firebase.database || !firebase.auth
+      || PRESENCE_CFG.databaseURL.indexOf('PASTE_') !== -1) return;
+
+  var app;
+  try { app = firebase.initializeApp(PRESENCE_CFG, 'presence'); }
+  catch (e) { return; }
+  var auth = app.auth(), db = app.database();
+
+  auth.signInAnonymously().catch(function (err) { console.warn('presence auth:', err && err.code); });
+  auth.onAuthStateChanged(function (u) {
+    if (!u) return;
+    // One child per open connection (tab), grouped under this visitor's uid so
+    // the analytics page can count DISTINCT visitors, not tabs. onDisconnect
+    // removes the child the moment the tab closes or drops offline.
+    var connectedRef = db.ref('.info/connected');
+    var userRef = db.ref('presence/' + u.uid);
+    connectedRef.on('value', function (snap) {
+      if (snap.val() !== true) return;
+      var con = userRef.push();
+      con.onDisconnect().remove();
+      con.set(true);
+    });
+  });
 })();
 </script>
 </body>
