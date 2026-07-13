@@ -139,7 +139,16 @@ can't see; free, paced at ~1 req/3 s via `axSleepMs`, and skipped when the
 OpenAlex leg ran, since OpenAlex indexes arXiv). A find from any engine wins;
 a **miss is stamped `{none:1,ts:TS_VER}` only when the required legs
 (Crossref always, arXiv when OpenAlex didn't run) concluded cleanly** — a
-transient failure leaves the paper un-stamped so a later run retries, and
+transient failure leaves the paper un-stamped so a later run retries.
+**arXiv resilience:** arXiv's API frequently rate-limits GitHub-Actions IPs, so
+after OpenAlex's daily quota is spent the run would otherwise **stop the whole
+title search the moment arXiv drops out** — even though Crossref (the SSRN/NBER
+engine, the point of the finance-heavy FT50 catalog) is still healthy. So when
+arXiv is down the search **keeps going on Crossref** and stamps a Crossref-only
+miss `{none:1,ts:TS_VER,naxiv:1}`; `naxiv` misses stay re-eligible so a later
+arXiv-healthy run re-checks them for an arXiv-only pre-print (they graduate to a
+plain `{none:1,ts:TS_VER}` once arXiv confirms). Without this, a first-deploy
+backfill crawls at ~240 papers/run instead of thousands. Also:
 papers with **no cache entry at all are directly eligible** (the by-DOI pass
 is an optimisation, not a prerequisite — this is what lets a fresh
 250k-paper catalog backfill immediately). Titles match exactly or by

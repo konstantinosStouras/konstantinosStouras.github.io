@@ -1544,7 +1544,9 @@ export async function searchPreprintsByTitle(papers, cache, opts = {}) {
       if (!p._doi || dedup.has(p._doi) || !(parseInt(p.Year, 10) >= 1991)) return false;
       dedup.add(p._doi);
       const c = cache[p._doi];
-      return !c || (c.none && (c.ts || 0) < TS_VER);
+      // naxiv misses (stamped by Crossref alone when arXiv was unreachable) are
+      // always re-eligible, so a later arXiv-healthy run re-checks them.
+      return !c || (c.none && ((c.ts || 0) < TS_VER || c.naxiv));
     })
     .sort((a, b) =>
       (((cache[a._doi] || {}).ts ? 1 : 0) - ((cache[b._doi] || {}).ts ? 1 : 0)) ||
@@ -1556,9 +1558,11 @@ export async function searchPreprintsByTitle(papers, cache, opts = {}) {
   for (let i = 0; i < todo.length; i++) {
     const p = todo[i];
     if (Date.now() > deadline) { if (opts.log) console.log('  preprints: title-search time budget reached — resuming next run.'); break; }
-    // Without arXiv AND without OpenAlex only Crossref-hosted finds remain
-    // and no miss could be stamped — stop instead of half-searching.
-    if (!oaAlive && !axAlive) { if (opts.log) console.log('  preprints: OpenAlex and arXiv both unavailable — stopping title-search for this run.'); break; }
+    // Without arXiv AND without OpenAlex, only Crossref remains — but Crossref
+    // still FINDS SSRN/NBER/bioRxiv/OSF pre-prints (the whole point here), so
+    // keep going instead of stalling. A clean Crossref result now stamps a
+    // `naxiv` miss (below) that a later arXiv-healthy run re-checks; Crossref
+    // itself failing is caught by the crFails backstop.
     const q = String(p.Title || '').replace(/[^\w\s'-]/g, ' ').replace(/\s+/g, ' ').trim();
     if (!q) { cache[p._doi] = { none: 1, ts: TS_VER }; continue; }
     let pick = null, oaRan = false, axFired = false;
@@ -1620,6 +1624,13 @@ export async function searchPreprintsByTitle(papers, cache, opts = {}) {
       cache[p._doi] = pick; found++;
     } else if (crOk && (oaRan || axOk)) {
       cache[p._doi] = { none: 1, ts: TS_VER };
+    } else if (crOk && !axAlive) {
+      // arXiv is out for this run but Crossref concluded cleanly: stamp the
+      // miss so the backfill ADVANCES (Crossref keeps surfacing SSRN/NBER/etc.)
+      // instead of stalling the instant arXiv is unreachable from CI. naxiv:1
+      // keeps it re-eligible for a later run WITH arXiv, which alone can find
+      // an arXiv-only pre-print.
+      cache[p._doi] = { none: 1, ts: TS_VER, naxiv: 1 };
     } // else: a required leg failed — leave un-stamped so a later run retries.
 
     if (opts.log && searched % 500 === 0) console.log(`  preprints: …${searched} searched, ${found} linked so far`);
