@@ -1,1 +1,1 @@
-{"ver":1,"generated":null,"index":{"file":"refs-index.json","count":0},"shards":{},"totals":{"citingPapers":0,"edges":0,"citedPapers":0,"fetched":0,"catalog":0},"source":"Crossref deposited reference lists, intersected with this catalog"}
+{"ver":2,"generated":null,"index":{"file":"refs-index.json","count":0},"shards":{},"totals":{"citingPapers":0,"edges":0,"citedPapers":0,"fetched":0,"catalog":0},"sources":["crossref","openalex","semanticscholar"]}

@@ -502,21 +502,31 @@ each linking to the paper it cites. It is its **own dataset**,
 `fun/lit/data-refs/` (kept separate to stay out of the main size budget and to
 move to a dedicated `lit-data-refs` Pages repo when it nears the 1 GB limit —
 migration is ONE constant, `REFS_DATA_BASE` `'./data-refs/'` →
-`'/lit-data-refs/data/'`, same pattern as `WP_DATA_BASE`). **Data source:**
-Crossref only — one `works?filter=doi:<doi>&select=DOI,reference` request per
-paper reads the DOIs the publisher deposited; the raw cited-DOI list is cached
-(`data-refs/_refs-cache.json`: `doi → {r:[raw cited DOIs], t, v}`, underscore-
-prefixed so unserved) and every build **re-intersects it offline** with the
-CURRENT catalog, so catalog growth adds edges with NO re-fetch. A published
-paper's reference list never changes, so a fetched paper is **frozen** (never
-re-fetched); an empty result is re-checked only when `RF_VER` bumps (e.g. adding
-an OpenAlex leg). Built by the vendored pipeline `fun/lit/_scraper-refs/`
-(`build-refs.mjs`; exports `extractRefDois`/`orderPapers`/`buildOutputs`/
-`loadCatalog`/`tierOf`/`normDoi`), refreshed by
-`.github/workflows/lit-references-backfill.yml` (every 3 h, gently paced ~1 req/
-0.4 s, bounded+resumable, own `lit-references-${{ github.ref }}` concurrency
-group, replays the dir on a rejected push; distinct OpenAlex/Crossref quota
-identity `kstouras+litrefs`). **Served files:** `manifest.json` (which journals
+`'/lit-data-refs/data/'`, same pattern as `WP_DATA_BASE`). **Data sources (three,
+unioned for accuracy):** (1) **Crossref** backbone — one
+`works?filter=doi:<doi>&select=DOI,reference` per paper reads the DOIs the
+publisher deposited (the leg that stamps a paper "done"); (2) **OpenAlex** —
+`works?filter=doi:<50>&select=id,doi,referenced_works` (batched 50/call), a
+generally more-complete reference graph whose `referenced_works` OpenAlex-ids are
+resolved back to catalog DOIs via `data-refs/_oaid.json` (`doi → OpenAlex id`,
+built for free while crawling — each record returns its own id+doi); (3)
+**Semantic Scholar** — `graph/v1/paper/batch?fields=references.externalIds`
+(batched 500/POST), an OPTIONAL bonus leg that drops out on throttle (disable
+with `REFS_S2=0`). Each source's RAW output is cached
+(`data-refs/_refs-cache.json`: `doi → {r:[Crossref+S2 DOIs], o:[OpenAlex ref
+ids], t, v, oa}`, underscore-prefixed so unserved) and every build
+**re-intersects it offline** with the CURRENT catalog + `_oaid.json`, so catalog
+growth (and a fuller id map) adds edges with NO re-fetch. A published paper's
+reference list never changes, so a paper stamped at the current version is
+**frozen** (never re-fetched); a **`RF_VER` bump re-sweeps EVERY paper** with the
+wider net (v1 was Crossref-only; v2 added the OpenAlex + Semantic Scholar legs).
+Built by the vendored pipeline `fun/lit/_scraper-refs/` (`build-refs.mjs`;
+exports `extractRefDois`/`extractOaRefs`/`extractS2Refs`/`shortOaid`/
+`orderPapers`/`buildOutputs`/`loadCatalog`/`tierOf`/`normDoi`), refreshed by
+`.github/workflows/lit-references-backfill.yml` (every 3 h, gently paced,
+bounded+resumable, own `lit-references-${{ github.ref }}` concurrency group,
+replays the dir on a rejected push; distinct OpenAlex/Crossref quota identity
+`kstouras+litrefs`). **Served files:** `manifest.json` (which journals
 have edges), `refs-<jkey>.json` (`{citingDoi:[citedDoi,…]}`, sharded by citing
 journal, only papers with ≥1 in-catalog edge), `refs-index.json`
 (`{citedDoi:[title,jkey,year]}`, so the page renders a cited paper's title
@@ -529,9 +539,10 @@ journal has a shard (`refsShardFor`); `loadRefsIndex()`/`loadRefsShard(jkey)`
 are lazy + idempotent. The dataset **ships EMPTY** (manifest with no shards), so
 the toggle stays hidden until the backfill populates it. Offline test:
 `node fun/lit/_scraper-refs/selftest.mjs` (mock, no network). NOTE: this build
-env's egress blocks Crossref (403), so `data-refs/` can only be populated by the
-GitHub Actions runners — EMPTY until the first workflow run on `master`
-post-merge. See `fun/lit/_scraper-refs/_HOW-IT-WORKS.md`.
+env's egress blocks the scholarly APIs (Crossref/OpenAlex/Semantic Scholar, 403),
+so `data-refs/` can only be populated by the GitHub Actions runners — EMPTY until
+the first workflow run on `master` post-merge. See
+`fun/lit/_scraper-refs/_HOW-IT-WORKS.md`.
 **Range-served SQLite search (`?db=1`, opt-in):** the page can answer
 native-journal-scoped filters from a single range-served SQLite DB
 (`fun/lit/data/db/lit.db.*` chunks + `lit-db.json` manifest, sql.js-httpvfs
