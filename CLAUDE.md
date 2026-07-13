@@ -330,7 +330,22 @@ here via a `count()` aggregation (one billed read per visit). Its rule in
 `_firestore.rules` is public-read + owner-only, `t`-only writes, no delete; the
 tile hides itself if that rule isn't deployed. The count reflects accounts that
 have signed in since the tally launched (converges to the true total as users
-return; the exact all-time total is in Firebase console → Authentication). **E-mail alerts**
+return; the exact all-time total is in Firebase console → Authentication).
+Beside it sits a live **"Exploring now"** figure — the number of visitors
+currently browsing The Lit in real time — built on **Firebase Realtime Database
+presence** with **anonymous auth**, run in a **separate `'presence'` Firebase
+app** so it never touches the accounts sign-in state (and anonymous visitors are
+NOT written to `registeredUsers`). Every page **writes** presence
+(`presence/<uid>/<pushId> = true`, one child per tab with `onDisconnect().remove()`,
+grouped by uid so the count is of DISTINCT visitors); the **main browser only
+writes** (no fan-out) while **only the analytics page reads/counts**
+(`ref('presence').numChildren()`). RTDB rules are in `fun/lit/_database.rules.json`
+(public read of `/presence`, owner-only `true`-valued writes); the whole thing is
+**inert until** a Realtime Database is created and its URL is pasted into the
+`PASTE_DATABASE_URL` placeholder in BOTH `fun/lit/index.html` (bottom presence
+`<script>`) and `fun/lit/analytics/index.html` (`RTDB_URL`) — full steps in
+`fun/lit/_PRESENCE-SETUP.md`. The card stays hidden until presence is configured,
+so it never shows a broken state. **E-mail alerts**
 lets a signed-in user subscribe to an e-mail when new papers matching a set of
 filters are added: opening the modal **pre-fills the alert criteria from the
 page's current search filters** (journal types, journals, authors, title /

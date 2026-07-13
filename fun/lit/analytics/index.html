@@ -171,15 +171,20 @@
     .header h1 { font-size: 22px; }
   }
 
-  /* ── Community band: live registered-users figure (independent of the corpus
-        dashboard below; loads from Firebase and hides itself on any error) ─── */
-  .community { margin-bottom: 22px; }
-  .cstat { display: flex; align-items: center; gap: 24px; background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%); color: #fff; border-radius: 14px; box-shadow: var(--shadow-md); padding: 20px 26px; }
+  /* ── Community band: live figures (registered users + visitors online),
+        independent of the corpus dashboard below. Each card loads from Firebase
+        and stays hidden unless its own read succeeds, so nothing shows broken. ─ */
+  .community { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 22px; }
+  .cstat { flex: 1 1 340px; display: flex; align-items: center; gap: 24px; background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%); color: #fff; border-radius: 14px; box-shadow: var(--shadow-md); padding: 20px 26px; }
+  .cstat.online { background: linear-gradient(135deg, #1f6d54 0%, #14503d 100%); }
   .cstat .cnum { font-family: 'Fraunces', serif; font-size: 46px; line-height: 1; letter-spacing: 1px; flex: none; }
   .cstat .cnum[data-state="loading"] { opacity: .5; }
   .cstat .clabel { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); }
+  .cstat.online .clabel { color: #8fe3bd; }
   .cstat .clabel .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #57c98a; margin-left: 7px; vertical-align: middle; }
-  .cstat .cdesc { font-size: 13.5px; color: rgba(255,255,255,0.82); line-height: 1.55; margin-top: 4px; max-width: 66ch; }
+  .cstat.online .clabel .dot { background: #57c98a; box-shadow: 0 0 0 0 rgba(87,201,138,0.7); animation: livedot 2s ease-out infinite; }
+  @keyframes livedot { 0% { box-shadow: 0 0 0 0 rgba(87,201,138,0.6); } 70%,100% { box-shadow: 0 0 0 7px rgba(87,201,138,0); } }
+  .cstat .cdesc { font-size: 13.5px; color: rgba(255,255,255,0.82); line-height: 1.55; margin-top: 4px; max-width: 60ch; }
   @media (max-width: 560px) { .cstat { flex-direction: column; align-items: flex-start; gap: 8px; padding: 18px 20px; } .cstat .cnum { font-size: 40px; } }
 </style>
 </head>
@@ -194,17 +199,25 @@
 
 <div class="wrap">
 
-  <!-- Live community figure: number of registered accounts on The Lit. Populated
-       by the Firebase script at the foot of the page (a count() over the public
-       `registeredUsers` collection); stays hidden until/unless that read
-       succeeds, so it never shows a broken state and is independent of the
-       corpus dashboard's own data load below. -->
+  <!-- Live community figures, populated by the Firebase script at the foot of the
+       page and independent of the corpus dashboard's own data load below. Each
+       card is revealed only once its own read succeeds, so nothing ever shows a
+       broken state: "Registered users" = a count() over the public
+       `registeredUsers` collection; "Exploring now" = a live Realtime Database
+       presence count (hidden entirely until presence is configured). -->
   <section class="community" id="community" style="display:none">
-    <div class="cstat">
+    <div class="cstat" id="usersStat" style="display:none">
       <div class="cnum" id="statUsers" data-state="loading">—</div>
       <div>
         <div class="clabel">Registered users<span class="dot" title="Updated live from The Lit's sign-in database"></span></div>
         <div class="cdesc">People who have created an account to star papers, keep private notes &amp; lists, and set up e-mail alerts on The Lit.</div>
+      </div>
+    </div>
+    <div class="cstat online" id="onlineStat" style="display:none">
+      <div class="cnum" id="statOnline">—</div>
+      <div>
+        <div class="clabel">Exploring now<span class="dot"></span></div>
+        <div class="cdesc">Visitors browsing The Lit right now, updated live.</div>
       </div>
     </div>
   </section>
@@ -863,11 +876,15 @@
 })();
 </script>
 
-<!-- Firebase (compat): app + Firestore only. No Auth is loaded — the registered-
-     users tally is a PUBLIC collection, so counting it needs no sign-in. This is
-     wholly separate from the corpus dashboard above. -->
+<!-- Firebase (compat), wholly separate from the corpus dashboard above:
+       • app + Firestore  → count the PUBLIC registeredUsers collection (no sign-in).
+       • auth + database   → the live "Exploring now" presence figure (anonymous
+                             auth in a separate 'presence' app; inert until a
+                             Realtime Database URL is set — see _PRESENCE-SETUP.md). -->
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
 <script>
 (function () {
   "use strict";
@@ -885,12 +902,15 @@
   };
 
   var section = document.getElementById('community');
+  var usersStat = document.getElementById('usersStat');
   var elValue = document.getElementById('statUsers');
+  function revealBand() { if (section) section.style.display = ''; }
   function show(n) {
-    if (!elValue || !section) return;
+    if (!elValue || !usersStat) return;
     elValue.textContent = Number(n).toLocaleString();
     elValue.setAttribute('data-state', 'ok');
-    section.style.display = '';   // reveal only once we have a real number
+    usersStat.style.display = '';   // reveal this card only once we have a real number
+    revealBand();
   }
 
   if (!window.firebase || !firebase.firestore || FB_CONFIG.apiKey.indexOf('PASTE_') !== -1) return;
@@ -920,6 +940,52 @@
       fallbackGet();
     }
   } catch (e) { fallbackGet(); }
+
+  // ── Live "Exploring now": real-time visitor presence ────────────────────
+  // Runs in a SEPARATE Firebase app ('presence') with anonymous auth (isolated
+  // from the count above). It both REGISTERS this page's visitor and COUNTS the
+  // distinct visitors currently online across the whole site (main browser
+  // included — every page writes presence). The card is revealed only when a
+  // count arrives, so it stays hidden until a Realtime Database is configured
+  // (RTDB_URL below) and its rules are deployed. See fun/lit/_PRESENCE-SETUP.md.
+  var RTDB_URL = "PASTE_DATABASE_URL";
+  // e.g. "https://lit-paper-browser-default-rtdb.europe-west1.firebasedatabase.app"
+  (function initPresence() {
+    var onlineStat = document.getElementById('onlineStat');
+    var elOnline = document.getElementById('statOnline');
+    if (!onlineStat || !elOnline || !firebase.database || !firebase.auth
+        || RTDB_URL.indexOf('PASTE_') !== -1) return;
+
+    var app;
+    try {
+      app = firebase.initializeApp({
+        apiKey: FB_CONFIG.apiKey, authDomain: FB_CONFIG.authDomain,
+        projectId: FB_CONFIG.projectId, databaseURL: RTDB_URL
+      }, 'presence');
+    } catch (e) { return; }
+    var pAuth = app.auth(), pDb = app.database();
+
+    pAuth.signInAnonymously().catch(function (err) { console.warn('presence auth:', err && err.code); });
+    pAuth.onAuthStateChanged(function (u) {
+      if (!u) return;
+      // Register this tab under our uid (see fun/lit/index.html for the same
+      // register pattern) so this viewer is included in the count too.
+      var connectedRef = pDb.ref('.info/connected');
+      var userRef = pDb.ref('presence/' + u.uid);
+      connectedRef.on('value', function (snap) {
+        if (snap.val() !== true) return;
+        var con = userRef.push();
+        con.onDisconnect().remove();
+        con.set(true);
+      });
+      // Count DISTINCT visitors online (children of /presence are uids), live.
+      pDb.ref('presence').on('value', function (snap) {
+        elOnline.textContent = Number(snap.numChildren()).toLocaleString();
+        onlineStat.style.display = '';
+        revealBand();
+      }, function (err) { console.warn('presence count:', err && err.code); });
+    });
+  })();
 })();
 </script>
 
