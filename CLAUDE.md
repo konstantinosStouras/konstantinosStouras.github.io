@@ -491,11 +491,17 @@ inserted in the page's exact sort order so `id` = newest-first rank; membership
 read from `index.html`) and chunked by `chunk-db.mjs` under the 100 MB per-file
 Pages limit; the query builder is `fun/lit/sqlite/lit-query.js`, the wiring is
 the `?db=1` block in `index.html`. It needs NO COOP/COEP (sync-XHR reads in a
-Worker). **The committed `data/db/` is a point-in-time snapshot — the daily
-workflow is deliberately NOT wired to commit the ~209 MB DB (git-history bloat);
-rebuild it with the two scripts, or move it to LFS/a Release/a shard repo to
-automate.** FT50-catalog/ABS-shard DBs (for types/all-journal) and MS/ISR/MkSc
-editor columns are follow-ups. Tests: `node fun/lit/_scraper/sqlite-parity.mjs`
+Worker). **The DB is deliberately NOT committed** — a built `lit.db` (~200 MB
+chunked) is a range-served *copy* of the `data/papers-<key>.json` (~51 MB) it's
+built from, pure redundancy that would bloat the repo and the deployed Pages
+site. So `data/db/` is absent and `?db=1` **falls back to the JSON path** (the
+manifest 404s, `initLitDb()` catches it) — the site is fully functional either
+way. To activate db-mode, generate the DB (`emit-db.mjs` + `chunk-db.mjs`) and
+serve it from a **dedicated data repo** (like the `lit-data-*` shards) so the
+redundant binary never lives in the main site's history; point `initLitDb()`
+there. (Git LFS won't work — Pages serves the LFS pointer, not the file.)
+FT50-catalog/ABS-shard DBs (for types/all-journal) and MS/ISR/MkSc editor
+columns are follow-ups. Tests: `node fun/lit/_scraper/sqlite-parity.mjs`
 (28/28 semantic parity) and `sqlite-bench.mjs` (payload/latency). See
 `fun/lit/_SQLITE-POC.md`.
 

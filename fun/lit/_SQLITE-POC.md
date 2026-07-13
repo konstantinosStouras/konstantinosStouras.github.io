@@ -1,17 +1,27 @@
 # `/fun/lit` range-served SQLite search
 
-**Status: implemented and opt-in via `?db=1` (default path unchanged).**
+**Status: capability implemented (opt-in `?db=1`); the database is deliberately
+NOT committed to this repo.**
 
-`/fun/lit` can answer native-journal-scoped filters as **indexed SQL queries
+`/fun/lit` *can* answer native-journal-scoped filters as **indexed SQL queries
 against a single `lit.db` fetched over HTTP Range requests**, instead of
 downloading whole `papers-<key>.json` files and filtering them in JavaScript.
-It stays 100% static (no server, no build step for the served site, no runtime
-CDN) — the database and the WASM SQLite are just files on GitHub Pages, and the
-browser fetches only the handful of DB pages a query actually touches.
+It stays 100% static — the DB and WASM SQLite are just files on GitHub Pages,
+and the browser fetches only the handful of DB pages a query touches.
 
-Add `?db=1` to the URL to turn it on. It is **strictly additive**: the normal
-JSON path is byte-for-byte unchanged, and any query the DB can't fully answer
-falls through to it transparently (see "What db-mode covers" below).
+**Why the DB isn't committed:** the built DB (~200 MB across chunks) is a
+range-served *copy* of data already in `data/papers-<key>.json` (~51 MB) — pure
+redundancy that inflates the repo and the deployed Pages site. So `data/db/` is
+not stored here. `?db=1` therefore **falls back to the normal JSON path** (a
+missing `data/db/lit-db.json` 404s and `initLitDb()` catches it), so the site is
+100% functional either way. To *activate* db-mode, generate the DB and serve it
+(see Reproduce), ideally from a **dedicated data repo** rather than this one so
+the redundant binary never lives in the main site's history.
+
+Add `?db=1` to the URL to turn it on **once a DB is served**. It is **strictly
+additive**: the normal JSON path is byte-for-byte unchanged, and any query the
+DB can't fully answer falls through to it transparently (see "What db-mode
+covers" below).
 
 ## How it works
 
@@ -100,12 +110,14 @@ LIT_DB=/tmp/lit.db node fun/lit/_scraper/sqlite-bench.mjs
 
 ## Remaining / follow-ups
 
-1. **DB refresh.** The committed `data/db/` is a **point-in-time snapshot**; the
-   JSON datasets refresh daily, so db-mode results drift until it's rebuilt.
-   The daily workflow is deliberately **not** wired to commit the ~209 MB DB
-   (that would grow git history fast). Options to keep it fresh: run the two
-   build commands periodically, or move the binary to **Git LFS / a GitHub
-   Release / a data-shard repo** and have CI refresh it there.
+1. **Serving the DB (to activate `?db=1`).** The DB isn't committed here (it
+   duplicates the JSON — see above). To turn db-mode on, generate it and serve
+   it from a location the page can range-fetch same-origin — a **dedicated data
+   repo** with its own Pages site (like the existing `lit-data-*` shards) is the
+   right home, so the ~200 MB redundant binary and its daily refresh never touch
+   the main site repo. Point `initLitDb()` at that repo's `data/db/` and have
+   that repo's CI rebuild it. (Git LFS is a non-starter — Pages serves the LFS
+   pointer, not the file.)
 2. **FT50 catalog + ABS shards** → their own `lit.db` (each repo, same builder)
    so *types* and *all-journal* searches also go through the DB. The FT50 DB is
    ~637 MB, so it needs its own repo (this repo's 1 GB Pages budget is nearly
