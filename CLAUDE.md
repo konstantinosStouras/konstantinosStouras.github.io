@@ -181,7 +181,13 @@ bounded (~40 min) slice of title searches per run,
 committing `fun/lit/data/` back — it **shares the
 `lit-update-data-*` concurrency group** with the daily build so the two never
 race a commit, and its push-retry re-applies finds via
-`--apply-only --merge-cache` instead of clobbering a fresher dataset.
+`--apply-only --merge-cache` instead of clobbering a fresher dataset. **The
+daily builds (`lit-update-data.yml`, `lit-ft50-update-data.yml`) do the same on
+a rejected push** — they overlay the tip's `_preprints.json` onto their fresh
+harvest (`--apply-only --merge-cache`) so a concurrent backfill's pre-print
+links are never downgraded back to `{none}`; a found `{u}` link is FROZEN
+(a published paper's pre-print never changes) — never re-searched (the by-DOI
+and title-search passes both skip `{u}`) and never clobbered at commit time.
 `fun/lit/_scraper/preprints-local.mjs` remains as a faster local alternative
 (unthrottled from a home connection; identifies as a separate `LIT_MAILTO`
 quota identity so CI can never spend the local budget). In the daily build the
