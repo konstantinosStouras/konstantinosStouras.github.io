@@ -2484,6 +2484,12 @@ function applyFilters() {
     return;
   }
 
+  // Opt-in (?db=1): answer native-journal-scoped queries from the range-served
+  // SQLite DB instead of downloading + filtering JSON. Anything the DB can't
+  // fully answer (types, all-journal, MS/ISR/MkSc editor UIs, non-default sort)
+  // falls through to the JSON path below unchanged.
+  if (DB_MODE && dbAnswerable()) { applyFiltersDb(); return; }
+
   // Lazy loading: make sure the journal files this view needs (native and
   // FT50-extra) are being fetched; afterSourceArrived() re-runs this function
   // as each one lands.
@@ -2773,6 +2779,7 @@ function renderCardList(listEl, rows, showAdded) {
 }
 
 function showMoreCards() {
+  if (dbPager) { showMoreCardsDb(); return; }
   var rows = window._cardRows || [];
   var start = window._renderedCount || 0;
   var wrap = document.getElementById('showMoreWrap');
@@ -3232,8 +3239,169 @@ window.addEventListener('scroll', scheduleCompact, { passive: true });
 if (compactSticky.addEventListener) compactSticky.addEventListener('change', applyCompact);
 else if (compactSticky.addListener) compactSticky.addListener(applyCompact);
 
+// ── Opt-in range-served SQLite mode (?db=1) ──────────────────────────────────
+// Answers native-journal-scoped filters from data/db/lit.db (chunked, fetched
+// over HTTP Range) instead of downloading papers-<key>.json. Strictly additive:
+// the default path is unchanged, and any query the DB can't fully answer
+// (journal types, all-journal, MS/ISR/MkSc editor UIs, non-year-desc sort,
+// recent/library views) transparently falls through to the JSON path.
+var DB_MODE = new URLSearchParams(location.search).get('db') === '1';
+var litDb = null, litDbReady = false, dbPager = null, _dbSeq = 0, _dbX = 0;
+
+// The DB holds only the 8 native sources; MS/ISR/MkSc carry editor/area/SE/AE
+// UIs whose data isn't in the DB schema, so those (and extras/types) use JSON.
+function dbNativeKey(k) { return k !== 'ms' && k !== 'isre' && k !== 'mksc' && (!!SRC[k] || k.indexOf('pnas-') === 0); }
+function dbAnswerable() {
+  if (!litDbReady || recentMode) return false;
+  if (document.getElementById('sortBy').value !== 'year-desc') return false;
+  if (sel.editor.size || sel.area.size || sel.se.size || sel.ae.size) return false;
+  refreshJournalScope();
+  if (!journalScope || journalScope.size === 0) return false;      // all-journal → JSON
+  for (var k of journalScope) if (!dbNativeKey(k)) return false;    // extras / MS / types → JSON
+  return true;
+}
+
+async function initLitDb() {
+  function load(src) { return new Promise(function (res, rej) { var s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
+  try {
+    await load('/fun/lit/sqlite/lit-query.js');
+    await load('/fun/lit/sqlite/index.js');
+    var mf = await (await fetch('/fun/lit/data/db/lit-db.json')).json();
+    var w = await createDbWorker(
+      [{ from: 'inline', config: { serverMode: 'chunked', urlPrefix: '/fun/lit/data/db/' + mf.base, serverChunkSize: mf.serverChunkSize, databaseLengthBytes: mf.databaseLengthBytes, suffixLength: mf.suffixLength, requestChunkSize: 8192 } }],
+      '/fun/lit/sqlite/sqlite.worker.js', '/fun/lit/sqlite/sql-wasm.wasm');
+    litDb = w.db; litDbReady = true;
+    if (!recentMode) applyFilters();   // re-render current view now the DB is open
+  } catch (e) { DB_MODE = false; console.warn('lit ?db=1 unavailable — using JSON path:', e && e.message); }
+}
+
+// Alias narrow-table + papers_abs columns into the capitalized keys the card
+// renderer reads; recompute the derived _jkeys/_editors/_se/_ae/_area fields.
+var DB_SELECT = 'p.id, p.title AS Title, p.authors AS Authors, p.affiliations AS Affiliations, ' +
+  'p.doi AS DOI, p.journal AS Journal, p.jkey AS JKey, p.sections AS _sec, p.booktitle AS Booktitle, ' +
+  'p.volume AS Volume, p.issue AS Issue, p.page AS Page, p.year_raw AS Year, p.status AS Status, ' +
+  'p.editor AS "Accepting Editor", p.area AS Area, p.senior_ed AS "Senior Editor", p.assoc_ed AS "Associate Editor", ' +
+  'p.preprint AS Preprint, p.preprint_src AS PreprintSrc, p.pdf AS PDF, p.cited_by AS CitedBy, p.cited_by_src AS CitedBySrc, ' +
+  'a.abstract AS Abstract, a.significance AS Significance';
+function shapeDbRow(r) {
+  r.Sections = r._sec ? JSON.parse(r._sec) : []; delete r._sec;
+  if (r.CitedBy != null) r.CitedBy = Number(r.CitedBy);
+  normalizeEditors(r); computeJkeys(r);
+  return r;
+}
+function dbLive() {
+  var lc = function (id) { return document.getElementById(id).value.trim().toLowerCase(); };
+  return { title: lc('filterSearch'), author: lc('filterAuthors'), affiliation: lc('filterAffiliations'), abstract: lc('filterAbstracts') };
+}
+function dbResidualCols(residuals) {
+  var cols = ['p.id'], needAbs = false;
+  residuals.forEach(function (res) { if (res.col === 'abstract' || res.col === 'significance') { cols.push('a.' + res.col); needAbs = true; } else cols.push('p.' + res.col); });
+  return { cols: cols.join(','), absJoin: needAbs ? ' LEFT JOIN papers_abs a ON a.id=p.id ' : '' };
+}
+function dbYearCmp(a, b) { return (b['Year'] || '').localeCompare(a['Year'] || '') || (b['Volume'] || '').localeCompare(a['Volume'] || ''); }
+// Residual verify on DISPLAY rows, which carry capitalized aliases (Title/…),
+// unlike the lowercase-column candidate rows LitQuery.applyResiduals expects.
+var DB_RES_CAP = { title: 'Title', authors: 'Authors', affiliations: 'Affiliations', abstract: 'Abstract', significance: 'Significance' };
+function dbApplyResiduals(rows, residuals) {
+  if (!residuals.length) return rows;
+  return rows.filter(function (row) {
+    return residuals.every(function (res) {
+      var hay = String(row[DB_RES_CAP[res.col]] == null ? '' : row[DB_RES_CAP[res.col]]).toLowerCase();
+      if (res.identity) return res.identity.some(function (v) { return hay.indexOf(v) !== -1; });
+      return res.author ? LitQuery.matchers.authorMatch(hay, res.term) : LitQuery.matchers.textMatch(hay, res.term);
+    });
+  });
+}
+
+// Fetch one display page (RENDER_FIRST rows, with abstracts). Rows are stored in
+// the page's exact app-sort order, so a row's id is its newest-first rank:
+// streaming by id ASC (FTS queries get this from the doclist's natural rowid
+// order) yields precisely the page's top-N with no fetch-all-and-sort. `cursor`
+// (last id seen) keyset-paginates. Returns { rows(shaped), cursor, exhausted }.
+async function dbFetchPage(q, cursor) {
+  var isFts = !!q.joins, where = q.where, params = q.params.slice();
+  if (cursor) { where += ' AND p.id > ?'; params.push(cursor.id); }
+  var order = (isFts ? '' : 'ORDER BY p.id ') + 'LIMIT ' + RENDER_FIRST;
+  var raw = await litDb.query('SELECT ' + DB_SELECT + ' FROM papers p ' + q.joins + ' JOIN papers_abs a ON a.id=p.id WHERE ' + where + ' ' + order, params);
+  var maxId = 0; for (var i = 0; i < raw.length; i++) if (raw[i].id > maxId) maxId = raw[i].id;
+  var exhausted = raw.length < RENDER_FIRST;
+  var rows = dbApplyResiduals(raw, q.residuals).map(shapeDbRow);
+  rows.sort(dbYearCmp);                                                     // id order == app order; this is a safety net
+  return { rows: rows, cursor: raw.length ? { id: maxId } : null, exhausted: exhausted, q: q };
+}
+
+async function applyFiltersDb() {
+  var myseq = ++_dbSeq;
+  sel.preprintOnly = preprintOnly;
+  var live = dbLive();
+  var q = LitQuery.buildFilter(sel, live, {});
+  var sc = LitQuery.buildScope(sel);
+  var Y = (await litDb.query('SELECT COUNT(*) c FROM papers p WHERE ' + (sc.where || '1'), sc.params))[0].c;
+  var X;
+  if (q.residuals.length) {
+    var rc = dbResidualCols(q.residuals);
+    var cand = await litDb.query('SELECT ' + rc.cols + ' FROM papers p ' + q.joins + rc.absJoin + ' WHERE ' + q.where, q.params);
+    X = LitQuery.applyResiduals(cand, q.residuals).length;
+  } else if (q.ftsOnly) {
+    X = (await litDb.query('SELECT COUNT(*) c FROM papers_tri WHERE papers_tri MATCH ?', q.params))[0].c;
+  } else {
+    X = (await litDb.query('SELECT COUNT(*) c FROM papers p ' + q.joins + ' WHERE ' + q.where, q.params))[0].c;
+  }
+  var page = await dbFetchPage(q, null);
+  if (myseq !== _dbSeq) return;                                            // superseded by a newer query
+  scopeCount = Y; _dbX = X; filtered = page.rows; currentPage = 1;
+  renderPageDb(X, Y, page);
+  updateDropdownOptionsDb(live);
+}
+
+function renderPageDb(X, Y, page) {
+  var pct = Y ? ' (' + (X * 100 / Y).toFixed(2) + '%)' : '';
+  document.getElementById('resultsCount').innerHTML = X === Y
+    ? '<strong>' + Y.toLocaleString() + '</strong> papers'
+    : '<strong>' + X.toLocaleString() + '</strong>' + pct + ' of ' + Y.toLocaleString() + ' papers';
+  var list = document.getElementById('papersList');
+  if (!filtered.length) { list.innerHTML = '<div class="empty-state"><h3>No papers found</h3><p>Try adjusting your filters.</p></div>'; dbPager = null; return; }
+  window._cardRows = filtered; window._cardShowAdded = false; window._renderedCount = filtered.length;
+  dbPager = (!page.exhausted && filtered.length < X) ? { q: page.q, cursor: page.cursor } : null;
+  var html = filtered.map(function (p, i) { return paperCardHTML(p, i, false); }).join('');
+  if (dbPager) html += '<div id="showMoreWrap" class="show-more-wrap"><button class="btn btn-secondary" onclick="showMoreCards()">Show ' + Math.min(RENDER_MORE, X - filtered.length).toLocaleString() + ' more (' + (X - filtered.length).toLocaleString() + ' remaining)</button></div>';
+  list.innerHTML = html;
+  if (typeof acctDecorate === 'function') acctDecorate();
+}
+
+async function showMoreCardsDb() {
+  if (!dbPager) return;
+  var wrap = document.getElementById('showMoreWrap'), btn = wrap && wrap.querySelector('button');
+  if (btn) btn.textContent = 'Loading…';
+  var page = await dbFetchPage(dbPager.q, dbPager.cursor);
+  var start = filtered.length;
+  filtered = filtered.concat(page.rows);
+  window._renderedCount = filtered.length; window._cardRows = filtered;
+  if (wrap) wrap.insertAdjacentHTML('beforebegin', page.rows.map(function (p, i) { return paperCardHTML(p, start + i, false); }).join(''));
+  dbPager = (!page.exhausted && filtered.length < _dbX) ? { q: page.q, cursor: page.cursor } : null;
+  if (!dbPager) { if (wrap) wrap.remove(); }
+  else if (btn) btn.textContent = 'Show ' + Math.min(RENDER_MORE, _dbX - filtered.length).toLocaleString() + ' more (' + (_dbX - filtered.length).toLocaleString() + ' remaining)';
+  if (typeof acctDecorate === 'function') acctDecorate();
+}
+
+// Journal + Year dropdown live counts via SQL GROUP BY (cross-filtered, i.e.
+// each excludes its own dimension). Editor/area/SE/AE dropdowns don't apply to
+// db-answerable scopes (those journals route to JSON). Residual (quoted/author)
+// dropdown counts are prefilter-level approximations; the result count is exact.
+async function updateDropdownOptionsDb(live) {
+  var qj = LitQuery.buildFilter(sel, live, { excludeScope: true });
+  var jRows = await litDb.query('SELECT j.jkey k, COUNT(*) n FROM papers p ' + qj.joins + ' JOIN paper_jkey j ON j.paper_id=p.id WHERE ' + qj.where + ' GROUP BY j.jkey', qj.params);
+  var jCounts = {}; jRows.forEach(function (r) { jCounts[r.k] = r.n; });
+  buildJournalSelect(jCounts);
+  var qy = LitQuery.buildFilter(sel, live, { excludeYear: true });
+  var yRows = await litDb.query('SELECT p.year_raw y, COUNT(*) n FROM papers p ' + qy.joins + ' WHERE ' + qy.where + ' GROUP BY p.year_raw', qy.params);
+  var yCounts = {}; yRows.forEach(function (r) { if (r.y) yCounts[r.y] = r.n; });
+  fillCustomSelect('csYear', Object.keys(yCounts).sort().reverse(), yCounts);
+}
+
 loadLastPull(); // small + cached: render the last-pull date first
 loadData();     // manifests only — papers files download when a filter needs them
+if (DB_MODE) initLitDb();  // ?db=1: open the range-served SQLite DB in the background
 loadAuthorsFromCache(); // authors.json itself is fetched on first Authors-tab open
 loadRecent(); // pre-fetch the small recent.json so the "Recently added" view opens instantly
 </script>

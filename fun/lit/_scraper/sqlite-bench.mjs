@@ -14,6 +14,7 @@ import os from 'node:os';
 import url from 'node:url';
 import { createRequire } from 'node:module';
 import { emitDb, membershipFromIndexHtml } from './emit-db.mjs';
+import { chunkDb } from './chunk-db.mjs';
 
 const HERE = path.dirname(url.fileURLToPath(import.meta.url));
 const LIT = path.resolve(HERE, '..');
@@ -26,6 +27,9 @@ if (!DB) {
   process.stderr.write('LIT_DB unset — building test DB…\n');
   emitDb(path.join(LIT, 'data'), JSON.parse(fs.readFileSync(path.join(LIT, 'data', 'sources.json'), 'utf8')), DB, membershipFromIndexHtml(path.join(LIT, 'index.html')));
 }
+// Chunk the DB so the page exercises the same chunked path as production.
+const CHUNK_DIR = path.join(os.tmpdir(), 'lit-bench-db');
+chunkDb(DB, CHUNK_DIR);
 let BROWSER = process.env.BROWSER || process.env.CHROMIUM;
 if (!BROWSER && process.env.PLAYWRIGHT_BROWSERS_PATH) {
   try { const d = fs.readdirSync(process.env.PLAYWRIGHT_BROWSERS_PATH).find((x) => /^chromium-\d/.test(x)); if (d) BROWSER = path.join(process.env.PLAYWRIGHT_BROWSERS_PATH, d, 'chrome-linux', 'chrome'); } catch {}
@@ -41,7 +45,12 @@ const { chromium } = loadPlaywright();
 const PORT = 8799;
 const TYPES = { '.html': 'text/html', '.js': 'application/javascript', '.wasm': 'application/wasm', '.json': 'application/json', '.db': 'application/octet-stream' };
 let dbBytes = 0, dbReqs = 0;
-const resolveUrl = (u) => u === '/fun/lit/data/lit.db' ? DB : u === '/fun/lit/data/lit.db.length' ? DB + '.length' : path.join(REPO, u);
+function resolveUrl(u) {
+  if (u === '/fun/lit/data/lit.db') return DB;
+  if (u === '/fun/lit/data/lit.db.length') return DB + '.length';
+  if (u.startsWith('/fun/lit/data/db/')) return path.join(CHUNK_DIR, u.slice('/fun/lit/data/db/'.length));
+  return path.join(REPO, u);
+}
 const server = http.createServer((req, res) => {
   const u = req.url.split('?')[0];
   if (u === '/__reset') { dbBytes = 0; dbReqs = 0; return res.end('ok'); }
@@ -49,7 +58,7 @@ const server = http.createServer((req, res) => {
   let file = resolveUrl(req.url), st;
   try { st = fs.statSync(file); } catch { res.statusCode = 404; return res.end('nf'); }
   if (st.isDirectory()) { file = path.join(file, 'index.html'); try { st = fs.statSync(file); } catch { res.statusCode = 404; return res.end('nf'); } }
-  const isDb = file === DB;
+  const isDb = file.startsWith(CHUNK_DIR) && /lit\.db\.\d+$/.test(file);
   res.setHeader('content-type', TYPES[path.extname(file)] || 'application/octet-stream');
   res.setHeader('accept-ranges', 'bytes');
   if (req.method === 'HEAD') { res.setHeader('content-length', st.size); return res.end(); }
