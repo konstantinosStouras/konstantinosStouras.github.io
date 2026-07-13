@@ -23,6 +23,11 @@ beyond the Firebase project that already powers accounts (`FB_CONFIG` in
   weekly), and a **recipient e-mail** (defaulting to the account e-mail, but the
   user can send to any address). The UI states clearly that the alert is sent
   *from* the user's own account e-mail.
+- A **"Send me a test e-mail"** button next to *Create alert* delivers a one-off
+  sample of the alert being composed to the recipient address, so the user can
+  see how it looks in a real inbox before saving. The page can't send mail, so it
+  **queues** the request (`users/{uid}/testEmails`) and the mailer delivers it —
+  see *Test e-mails* below.
 - Alerts are listed with an enable/pause switch, Edit and Delete, and are stored
   privately per user in Firestore.
 
@@ -61,6 +66,25 @@ users/{uid}/alerts/{alertId} = {
 The `criteria` object matches the `sel` filter state in `index.html` field for
 field, so the same matching logic the page uses can be reused by the mailer.
 
+A **test-e-mail request** (the "Send me a test e-mail" button) is a transient doc
+under the same private subtree, so it is covered by the same rule:
+
+```
+users/{uid}/testEmails/{reqId} = {
+  name:       string,       // subject-line name of the alert being previewed
+  recipient:  string,       // where to send the test
+  from:       string,       // the user's account e-mail (Reply-To)
+  frequency:  string,       // informational
+  criteria:   { … },        // same shape as an alert's criteria
+  test:       true,
+  createdAt:  serverTimestamp
+}
+```
+
+The mailer delivers each request once and then **deletes** it (a failed send is
+retried a couple of times, then dropped), so the collection stays empty between
+tests.
+
 ## The backend mailer (shipped)
 
 A static GitHub Pages site cannot send e-mail, so delivery is done by a
@@ -83,6 +107,27 @@ writes subscriptions; the mailer reads them and sends. This is now implemented:
      paper is never e-mailed twice.
 - **`.github/workflows/lit-alerts-mail.yml`** — runs it daily (08:30 UTC), after
   the daily data build has committed a fresh `recent.json`.
+
+### Test e-mails ("Send me a test e-mail")
+
+The one-off preview a user requests from the panel is delivered by the same
+mailer, in a separate mode, on a separate (frequent) schedule:
+
+- **`node alerts-mailer.mjs --test-emails`** flushes the `testEmails` queue: it
+  reads every pending request with `collectionGroup('testEmails')`, renders a
+  sample using the **exact same e-mail templates** as real alerts (so the preview
+  is faithful) — with a `[Test]` subject prefix and a banner making clear it is a
+  preview — sends it to the request's recipient, and deletes the request. The
+  sample lists the real recently-added papers that match the criteria, falling
+  back to a couple of built-in sample papers so the format always renders even
+  when nothing matches yet. A **features-only** request shows the "what's new"
+  announcement format instead. Add `--dry-run` to print instead of sending.
+- **`.github/workflows/lit-alerts-test.yml`** — runs `--test-emails` every 15
+  minutes (plus manual `workflow_dispatch`) so a requested test lands within a
+  few minutes. It shares the same secrets and is likewise a no-op until they are
+  set; lower the cron or disable the workflow if you prefer less frequent test
+  delivery. It has its own `concurrency` group so it never overlaps the daily
+  digest run.
 
 **Frequency.** `immediate`, `daily`, `weekly` (≥ ~7 days since the last check),
 `monthly` (≥ ~28 days). With the once-a-day cron, `immediate` and `daily` are
@@ -130,6 +175,9 @@ so it needs no custom index either.
   — previews, against the local `recent.json`, which papers an alert would match.
 - `node fun/lit/_scraper/alerts-mailer.mjs --dry-run` — a real run against
   Firestore that prints instead of sending (needs the Firebase secret).
+- `node fun/lit/_scraper/alerts-mailer.mjs --test-emails [--dry-run]` — flushes
+  the "Send me a test e-mail" queue (needs the Firebase + SMTP secrets; `--dry-run`
+  prints what it would send).
 
 ### Announcing a new feature
 

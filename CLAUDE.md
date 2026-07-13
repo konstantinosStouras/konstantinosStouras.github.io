@@ -398,7 +398,21 @@ and frequency (immediate / daily / weekly / monthly). The modal shows a **live
 example e-mail** at the bottom (`renderAlertPreview` — subject, header, sample
 papers and/or a "what's new" feature note, plus the footnote, updating as the
 user edits name/criteria/toggles); it **mirrors the mailer's `renderEmail` /
-`renderAnnouncement` templates — keep the three in sync**. A save now needs any
+`renderAnnouncement` templates — keep the three in sync**. A **"Send me a test
+e-mail"** button (beside *Create alert*) delivers a one-off sample of the alert
+being composed to the recipient so the user can see how it looks in a real inbox
+before saving (`litAlertSendTest`): the static page can't send mail, so — like
+real alerts — it **queues** the request at `users/{uid}/testEmails/{id}`
+(`{name, recipient, from, frequency, criteria, test:true}`; same private-subtree
+rule) and the mailer's **`--test-emails`** pass delivers + deletes it. That pass
+(`sendTestEmails` → `renderTestEmail`) reuses the very same `renderEmail` /
+`renderAnnouncement` templates (adding a `[Test]` subject prefix + preview
+banner), listing the real recently-added papers that match — falling back to two
+built-in `SAMPLE_PAPERS` (mirroring `renderAlertPreview`'s samples) so the format
+always renders, and showing the "what's new" format for a features-only draft. It
+runs on its own frequent workflow `.github/workflows/lit-alerts-test.yml` (every
+15 min, own concurrency group) so a test lands within minutes, separate from the
+daily digest. A save now needs any
 one intent (`alertHasIntent`: features, allPapers, or a filter). Alerts are stored
 privately at `users/{uid}/alerts/{alertId}` (covered by the existing
 `_firestore.rules` wildcard) and managed from the modal (enable/pause switch,
