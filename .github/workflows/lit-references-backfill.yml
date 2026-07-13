@@ -1,0 +1,93 @@
+name: lit — backfill citation graph
+
+# Grows the citation-graph dataset for stouras.com/fun/lit/ — for every listed
+# paper, the references it cites that ALSO belong to the catalog — by running
+# fun/lit/_scraper-refs/build-refs.mjs on a small, gently paced slice of papers
+# every few hours, then committing fun/lit/data-refs/ back. This is a
+# deliberately SLOW backfill: Crossref is queried ~1 request / 0.4 s, each run
+# fetches a bounded slice (REFS_MAX_PAPERS) and checkpoints as it goes, so the
+# graph fills in over WEEKS without tripping the API's rate limits. Management
+# Science / M&SOM / POM / PNAS (all years) are fetched first, then the UTD24
+# and FT50 journals (newest years first), then the rest. A published paper's
+# reference list never changes, so once fetched a paper is frozen; every run
+# re-intersects the whole cache with the current catalog, so catalog growth
+# surfaces new edges for free. See fun/lit/_scraper-refs/_HOW-IT-WORKS.md.
+
+on:
+  schedule:
+    # Eight slices a day (every 3 h at :40), offset from the daily builds and
+    # the other backfills.
+    - cron: '40 */3 * * *'
+  workflow_dispatch: {}      # run on demand from the Actions tab
+
+# Own concurrency group — only this workflow writes fun/lit/data-refs, so runs
+# just queue behind each other, never race a commit.
+concurrency:
+  group: lit-references-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write            # needed to commit the grown dataset back
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    # A generous slice + gentle pacing; the builder's own wall-clock budget
+    # (REFS_BUDGET_MS) stops it well before this hard backstop.
+    timeout-minutes: 55
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Fetch a slice of papers' references (Crossref, gently paced)
+        env:
+          REFS_MAILTO: kstouras+litrefs@gmail.com   # distinct Crossref/OpenAlex quota identity
+          REFS_MAX_PAPERS: '6000'                    # papers per run (resumable across runs)
+          REFS_BUDGET_MS: '2700000'                  # 45-min fetch ceiling
+          REFS_PACE_MS: '400'                        # ~1 request / 0.4 s — deliberately slow
+        run: node fun/lit/_scraper-refs/build-refs.mjs
+
+      - name: Commit the grown citation graph
+        # always(): even if the fetch is killed mid-run, commit the checkpointed
+        # progress (the crawl cursor + any edges found) so the slot's work is
+        # never lost. Only the default branch carries the committed data.
+        if: always() && github.ref == 'refs/heads/master'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add fun/lit/data-refs
+          if git diff --cached --quiet; then
+            echo "No dataset changes — nothing to commit."
+            exit 0
+          fi
+          git commit -m "lit: backfill citation graph"
+          # Only this workflow writes fun/lit/data-refs, so our copy of that
+          # directory is authoritative. On a rejected push (a concurrent commit
+          # to master touching OTHER files), replay our directory onto the new
+          # tip and retry.
+          cp -r fun/lit/data-refs /tmp/refs-ours
+          for i in 1 2 3; do
+            if git push origin HEAD:${{ github.ref_name }}; then
+              echo "Pushed on attempt $i."
+              exit 0
+            fi
+            echo "Push rejected (concurrent commit?) — replaying our dataset on the new tip…"
+            git fetch origin ${{ github.ref_name }}
+            git reset --hard origin/${{ github.ref_name }}
+            rm -rf fun/lit/data-refs
+            cp -r /tmp/refs-ours fun/lit/data-refs
+            git add fun/lit/data-refs
+            if git diff --cached --quiet; then
+              echo "The tip already carries this dataset state — nothing left to push."
+              exit 0
+            fi
+            git commit -m "lit: backfill citation graph"
+            sleep 5
+          done
+          echo "::error::Could not push the citation graph after 3 attempts."
+          exit 1

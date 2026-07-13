@@ -476,6 +476,46 @@ network). Migration to a satellite repo is one constant: `WP_DATA_BASE`
 egress policy blocks the scholarly APIs (OpenAlex/Crossref/arXiv return 403), so
 the archive can only be populated by the GitHub Actions runners — it is EMPTY
 until the first workflow run on `master` post-merge.
+
+### Citation graph — the references a paper cites that are IN the catalog
+For every listed paper, the pipeline extracts the references it **cites that
+also belong to the catalog** (the intra-catalog out-edges), surfaced on each
+paper card as a **"Cited references in this catalog"** toggle (steel-blue, next
+to BibTeX; `togRefs` in `index.html`) that lazy-loads and lists those papers,
+each linking to the paper it cites. It is its **own dataset**,
+`fun/lit/data-refs/` (kept separate to stay out of the main size budget and to
+move to a dedicated `lit-data-refs` Pages repo when it nears the 1 GB limit —
+migration is ONE constant, `REFS_DATA_BASE` `'./data-refs/'` →
+`'/lit-data-refs/data/'`, same pattern as `WP_DATA_BASE`). **Data source:**
+Crossref only — one `works?filter=doi:<doi>&select=DOI,reference` request per
+paper reads the DOIs the publisher deposited; the raw cited-DOI list is cached
+(`data-refs/_refs-cache.json`: `doi → {r:[raw cited DOIs], t, v}`, underscore-
+prefixed so unserved) and every build **re-intersects it offline** with the
+CURRENT catalog, so catalog growth adds edges with NO re-fetch. A published
+paper's reference list never changes, so a fetched paper is **frozen** (never
+re-fetched); an empty result is re-checked only when `RF_VER` bumps (e.g. adding
+an OpenAlex leg). Built by the vendored pipeline `fun/lit/_scraper-refs/`
+(`build-refs.mjs`; exports `extractRefDois`/`orderPapers`/`buildOutputs`/
+`loadCatalog`/`tierOf`/`normDoi`), refreshed by
+`.github/workflows/lit-references-backfill.yml` (every 3 h, gently paced ~1 req/
+0.4 s, bounded+resumable, own `lit-references-${{ github.ref }}` concurrency
+group, replays the dir on a rejected push; distinct OpenAlex/Crossref quota
+identity `kstouras+litrefs`). **Served files:** `manifest.json` (which journals
+have edges), `refs-<jkey>.json` (`{citingDoi:[citedDoi,…]}`, sharded by citing
+journal, only papers with ≥1 in-catalog edge), `refs-index.json`
+(`{citedDoi:[title,jkey,year]}`, so the page renders a cited paper's title
+without loading its journal file). **Paper priority (per the owner):** MS /
+M&SOM / POM / PNAS (all years) first, then UTD24 ∪ FT50 (newest years first),
+then the rest (`tierOf`; the UTD24/FT50 key sets MIRROR index.html's — keep in
+sync, like build-analytics.mjs). The page merges it at runtime like the FT50
+catalog: `loadRefsManifest()` at load; a card shows the toggle only when its
+journal has a shard (`refsShardFor`); `loadRefsIndex()`/`loadRefsShard(jkey)`
+are lazy + idempotent. The dataset **ships EMPTY** (manifest with no shards), so
+the toggle stays hidden until the backfill populates it. Offline test:
+`node fun/lit/_scraper-refs/selftest.mjs` (mock, no network). NOTE: this build
+env's egress blocks Crossref (403), so `data-refs/` can only be populated by the
+GitHub Actions runners — EMPTY until the first workflow run on `master`
+post-merge. See `fun/lit/_scraper-refs/_HOW-IT-WORKS.md`.
 **Range-served SQLite search (`?db=1`, opt-in):** the page can answer
 native-journal-scoped filters from a single range-served SQLite DB
 (`fun/lit/data/db/lit.db.*` chunks + `lit-db.json` manifest, sql.js-httpvfs

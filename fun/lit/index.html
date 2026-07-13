@@ -226,6 +226,19 @@
   .paper-bibtex.open { display: block; }
   .bib-copy { position: absolute; top: 8px; right: 8px; padding: 4px 12px; background: var(--green); color: #fff; border: none; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; font-family: 'Work Sans', sans-serif; }
   .bib-copy:hover { background: #1f6b3f; }
+  /* "Cited references in this catalog" — the intra-catalog citation graph.
+     Steel-blue, distinct from BibTeX (green) and the pre-print link (orange). */
+  .paper-refs-toggle { margin-top: 8px; margin-left: 14px; font-size: 12px; color: #2b5f8a; cursor: pointer; font-weight: 500; -webkit-user-select: none; user-select: none; display: inline-block; }
+  .paper-refs-toggle:hover { text-decoration: underline; }
+  .paper-refs { display: none; margin-top: 10px; padding: 12px 16px; background: #f6f8fb; border-radius: 6px; border-left: 3px solid #2b5f8a; }
+  .paper-refs.open { display: block; }
+  .paper-refs-head { font-size: 12px; font-weight: 700; color: #2b5f8a; margin-bottom: 8px; letter-spacing: .01em; }
+  .paper-refs-note { font-size: 12.5px; line-height: 1.55; color: var(--text-muted); }
+  .ref-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+  .ref-item { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; font-size: 13px; line-height: 1.45; }
+  .ref-title { color: var(--navy); text-decoration: none; font-weight: 500; }
+  .ref-title:hover { text-decoration: underline; }
+  .ref-src { font-size: 11.5px; color: var(--text-muted); }
 
   .pagination { max-width: 1280px; margin: 0 auto; padding: 0 32px 60px; display: flex; justify-content: center; align-items: center; gap: 6px; }
   .pagination button { padding: 8px 14px; border: 1px solid var(--border); background: var(--white); border-radius: 6px; font-family: 'Work Sans', sans-serif; font-size: 13px; cursor: pointer; transition: all 0.15s; color: var(--text); }
@@ -826,6 +839,24 @@ const WP_DATA_BASE = './data-workingpapers/';
 // the 'wp' journal type (journalTypeKeys) and the opt-in lazy-load rule.
 const WP_KEYS = new Set();
 
+// The citation graph — for every listed paper, the references it cites that
+// ALSO belong to this catalog (intra-catalog out-edges), built by
+// fun/lit/_scraper-refs/ (.github/workflows/lit-references-backfill.yml) into
+// fun/lit/data-refs/ and merged in at runtime: a "Cited references in this
+// catalog" toggle on each paper card, lazy-loading only that paper's shard
+// when the user opens it. Kept in its own dataset so it can move to a
+// dedicated lit-data-refs Pages repo when it nears the 1 GB limit — then
+// REFS_DATA_BASE becomes '/lit-data-refs/data/'. The dataset ships empty
+// (manifest with no shards), so the toggle stays hidden until the backfill
+// populates it. See fun/lit/_scraper-refs/_HOW-IT-WORKS.md.
+const REFS_DATA_BASE = './data-refs/';
+const REFS_MANIFEST_URL = REFS_DATA_BASE + 'manifest.json';
+let refsManifest = null;       // ./data-refs/manifest.json once fetched (null until then)
+const refsShardCache = {};     // jkey -> { citingDoi: [citedDoi,…] } (lazy, per journal)
+const refsShardPromise = {};   // jkey -> in-flight fetch promise (idempotence)
+let refsIndex = null;          // ./data-refs/refs-index.json once fetched
+let refsIndexPromise = null;   // in-flight index fetch (idempotence)
+
 // Display config per source key. Sections are PNAS's five topic sections; a
 // PNAS paper can belong to several and matches a filter on any of them.
 const SRC = {
@@ -1334,6 +1365,59 @@ function loadShardManifests() {
   });
 }
 
+// ── Citation graph (lazy, opt-in per card) ──────────────────────────────────
+// The manifest lists which journals have any in-catalog citing edges; only
+// those journals get a "Cited references in this catalog" toggle on their
+// cards. A paper's cited list (its shard) and the shared title index download
+// only when the user first opens the toggle. Absent / empty dataset → no
+// toggles (the dataset ships empty and fills in online over weeks).
+async function loadRefsManifest() {
+  var mf = null;
+  try {
+    var r = await fetch(REFS_MANIFEST_URL, { cache: 'no-cache' });
+    if (r.ok) mf = await r.json();
+  } catch (e) { mf = null; }
+  refsManifest = (mf && mf.shards) ? mf : null;
+  // If edges exist, re-render the active view so cards pick up the new toggle
+  // (the manifest usually lands before the first search, but not always).
+  if (refsManifest && Object.keys(refsManifest.shards).length) {
+    if (recentMode) renderRecent();
+    else if (sel.jtype.size || sel.journal.size || broadFilterActive() || preprintOnly) applyFilters();
+  }
+}
+
+// The manifest entry (or null) for a journal's citing edges — gates the toggle.
+function refsShardFor(jkey) {
+  return refsManifest && refsManifest.shards && refsManifest.shards[jkey] || null;
+}
+
+function loadRefsIndex() {
+  if (refsIndex) return Promise.resolve(refsIndex);
+  if (refsIndexPromise) return refsIndexPromise;
+  var url = REFS_DATA_BASE + ((refsManifest && refsManifest.index && refsManifest.index.file) || 'refs-index.json');
+  refsIndexPromise = fetch(url, { cache: 'default' })
+    .then(function(r) { return r.ok ? r.json() : {}; })
+    .then(function(j) { refsIndex = j || {}; return refsIndex; })
+    .catch(function() { refsIndex = {}; return refsIndex; });
+  return refsIndexPromise;
+}
+
+function loadRefsShard(jkey) {
+  if (refsShardCache[jkey]) return Promise.resolve(refsShardCache[jkey]);
+  if (refsShardPromise[jkey]) return refsShardPromise[jkey];
+  var entry = refsShardFor(jkey);
+  if (!entry) { refsShardCache[jkey] = {}; return Promise.resolve(refsShardCache[jkey]); }
+  refsShardPromise[jkey] = fetch(REFS_DATA_BASE + entry.file, { cache: 'default' })
+    .then(function(r) { return r.ok ? r.json() : {}; })
+    .then(function(j) { refsShardCache[jkey] = j || {}; return refsShardCache[jkey]; })
+    .catch(function() { refsShardCache[jkey] = {}; return refsShardCache[jkey]; });
+  return refsShardPromise[jkey];
+}
+
+function refsNormDoi(doi) {
+  return String(doi || '').replace(/^https?:\/\/(dx\.)?doi\.org\//i, '').trim().toLowerCase();
+}
+
 // Fetch one extra journal's papers file (idempotent: repeated calls return
 // the same in-flight promise; a journal that failed all retries stays
 // 'missing' for the session rather than re-downloading on every keystroke).
@@ -1487,6 +1571,7 @@ async function loadData() {
   loadFt50Manifest();   // async: registers the FT50-catalog journals as lazy sources
   loadShardManifests(); // async: registers each satellite shard's journals
   loadWorkingPapersManifest(); // async: registers the Working Papers archive (opt-in)
+  loadRefsManifest();   // async: enables the "Cited references in this catalog" card toggle
 
   // Affiliation aggregates come from their own small JSON file.
   fetch(AFFILIATIONS_URL, { cache: 'no-cache' })
@@ -2924,11 +3009,13 @@ function paperCardHTML(p, idx, showAdded) {
     ${hasSig ? `<span class="paper-abstract-toggle paper-sig-toggle" onclick="togAbs('${sid}',this,'Significance')">▸ Significance</span>` : ''}
     ${hasAbs ? `<span class="paper-abstract-toggle" onclick="togAbs('${aid}',this)">▸ Abstract</span>` : ''}
     <span class="paper-bibtex-toggle" onclick="togBib('bib${idx}',this,${idx})">▸ BibTeX</span>
+    ${refsShardFor(p['JKey']) ? `<span class="paper-refs-toggle" onclick="togRefs('refs${idx}',this,${idx})" title="The papers this one cites that are also in The Lit's catalog (from the publisher's deposited reference list).">▸ Cited references in this catalog</span>` : ''}
     ${safeUrl(p['Preprint']) ? `<a class="paper-preprint-link" href="${preprintPdfUrl(safeUrl(p['Preprint']))}" target="_blank" rel="noopener" title="Free author pre-print on ${PREPRINT_HOST[p['PreprintSrc']] || 'an open repository'} — opens the latest version, PDF direct where the host allows it. The accepted/working version may differ from the final published paper">Pre-print (Open Access) ↗</a>` : ''}
     ${typeof acctToggleHTML === 'function' ? acctToggleHTML(p) : ''}
     ${hasSig ? `<div id="${sid}" class="paper-abstract paper-significance">${esc(sigClean)}</div>` : ''}
     ${hasAbs ? `<div id="${aid}" class="paper-abstract">${esc(absClean)}</div>` : ''}
     <div id="bib${idx}" class="paper-bibtex"></div>
+    ${refsShardFor(p['JKey']) ? `<div id="refs${idx}" class="paper-refs"></div>` : ''}
   </div>`;
 }
 
@@ -2949,6 +3036,49 @@ function togBib(id, btn, idx) {
     el.innerHTML = '<button class="bib-copy" onclick="copyBib(this,\'' + id + '\')">Copy</button>' + esc(bibStr);
     el.dataset.filled = '1';
   }
+}
+
+// Open a paper's "Cited references in this catalog" panel: lazy-load the shared
+// title index + this journal's shard, look up the paper's cited DOIs and render
+// each as a link to the paper it cites (badge + title + journal + year).
+function togRefs(id, btn, idx) {
+  const el = document.getElementById(id);
+  const open = el.classList.toggle('open');
+  btn.textContent = open ? '▾ Hide cited references' : '▸ Cited references in this catalog';
+  if (!open || el.dataset.filled) return;
+  el.dataset.filled = '1';
+  el.innerHTML = '<div class="paper-refs-note">Loading…</div>';
+  const p = filtered[idx];
+  const jkey = p['JKey'] || '';
+  const doi = refsNormDoi(p['DOI']);
+  Promise.all([loadRefsIndex(), loadRefsShard(jkey)]).then(function(res) {
+    const index = res[0] || {}, shard = res[1] || {};
+    const cited = (shard[doi] || []).slice();
+    if (!cited.length) {
+      el.innerHTML = '<div class="paper-refs-note">No cited references from this catalog were found for this paper — either it cites nothing else in the catalog, or it hasn’t been indexed yet (the graph fills in over time).</div>';
+      return;
+    }
+    // Newest cited paper first; unknown-year entries sink to the bottom.
+    cited.sort(function(a, b) {
+      return (parseInt((index[b] || [])[2], 10) || 0) - (parseInt((index[a] || [])[2], 10) || 0);
+    });
+    let rows = '';
+    for (const cd of cited) {
+      const meta = index[cd] || [];
+      const title = meta[0] || cd;
+      const jk = meta[1] || '';
+      const yr = meta[2] || '';
+      const badge = journalBadges(jk).map(function(t) {
+        return '<span class="jtype-badge jtype-' + escAttr(t.key) + '" onclick="addJTypeChip(\'' + escAttr(t.key) + '\')" title="' + escAttr(t.title) + ' Click to filter by this journal type.">' + esc(t.badge) + '</span>';
+      }).join('');
+      const jlabel = (typeof JOURNAL_LABEL !== 'undefined' && JOURNAL_LABEL[jk]) || (SRC[jk] && SRC[jk].name) || jk;
+      rows += '<li class="ref-item">' + badge +
+        '<a class="ref-title" href="https://doi.org/' + encodeURI(cd) + '" target="_blank" rel="noopener">' + esc(title) + '</a>' +
+        '<span class="ref-src">' + esc(jlabel) + (yr ? ' · ' + esc(yr) : '') + '</span></li>';
+    }
+    el.innerHTML = '<div class="paper-refs-head">Cites ' + cited.length + ' paper' + (cited.length === 1 ? '' : 's') +
+      ' in this catalog</div><ul class="ref-list">' + rows + '</ul>';
+  });
 }
 
 function makeBib(p) {
@@ -3581,7 +3711,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       <p>You can filter by journal type (UTD24, FT50, ABS 4/4*, ABS 3, or Working Papers — the listed authors' unpublished pre-prints), by journal, or by year, and search the text of authors, titles, abstracts and affiliations. For Management Science you can also filter by the accepting editor and editorial area, and for ISR and Marketing Science by senior and associate editor. Filters stack, so everything you pick is combined, and the results bar tells you what share of the journals in scope actually matched.</p>
 
       <h3>On every paper</h3>
-      <p>Each paper carries a small badge for the most selective list its journal is on (UTD24, then FT50, then ABS 4/4*, then ABS 3). You also get one-click BibTeX, a link to a free open-access pre-print whenever I could find one (arXiv, SSRN, NBER, OSF, bioRxiv or medRxiv), and a Crossref "cited by" count that links through to the paper on Google Scholar. PNAS papers show their Significance statement too.</p>
+      <p>Each paper carries a small badge for the most selective list its journal is on (UTD24, then FT50, then ABS 4/4*, then ABS 3). You also get one-click BibTeX, a link to a free open-access pre-print whenever I could find one (arXiv, SSRN, NBER, OSF, bioRxiv or medRxiv), and a Crossref "cited by" count that links through to the paper on Google Scholar. PNAS papers show their Significance statement too. Many papers also have a "Cited references in this catalog" toggle that lists the other papers they cite which are themselves in The Lit — each one links straight to that paper — so you can walk the citation graph within these journals. That list is built slowly from publishers' deposited references, so its coverage grows over time.</p>
 
       <h3>A few extras</h3>
       <p>There are quick views for recently added papers and for papers that have an open-access pre-print. If you sign in you get a private library, where you can star papers, add notes, build lists and tag your reading. You can save default filters — a preferred set of journals or journal types that the page applies automatically each time you sign in, so you land on your own subset straight away. You can also set up e-mail alerts: about new papers that match your filters, about any new paper added to the database, or about new features on the site — with a preview of exactly what each e-mail will look like.</p>
