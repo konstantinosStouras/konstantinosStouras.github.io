@@ -272,14 +272,16 @@ and each shard repo its own `citations-update.yml` → `_scraper/citations-ci.mj
 OpenAlex mailto quota identity (`+litcite`, `+litft50cite`, `+abs4cite`,
 `+abs3omcite`, `+abs3restcite`). `applyCitations` lifts `CitedBy` to the max
 and stamps **`CitedBySrc`** (`oa` | `s2`; absent = Crossref) — the card's
-`citedByTagHTML` in `index.html` renders **"Cited by N · OpenAlex/Semantic
-Scholar/Crossref"** accordingly, linking (via `scholarSearchUrl`) to a Google
+`citedByTagHTML` in `index.html` renders just **"Cited by N"** (kept
+uncluttered; the source — OpenAlex/Semantic Scholar/Crossref, from
+`CitedBySrc` — is named only in the hover **tooltip**, not the visible
+label), linking (via `scholarSearchUrl`) to a Google
 Scholar **title search** (`scholar.google.com/scholar?q=<title>`) — the exact
 title lands the paper as the top hit so the user reaches its live GS "Cited
 by" count and citing works. Deliberately NOT Google Scholar's own number:
 there is no Scholar API, scraping it is blocked/ToS-barred at any scale, and
 its exact `?cites=<cluster-id>` link isn't derivable from a DOI/title — so
-the tag names its real source honestly and defers to Scholar via the link.
+the tooltip names its real source honestly and defers to Scholar via the link.
 The page shows the tag for any paper that carries `CitedBy`, so older shard
 data (no `CitedBySrc` yet) just renders as Crossref until its pipeline
 catches up. Like `/fun/ms/`,
