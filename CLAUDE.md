@@ -269,11 +269,36 @@ pasted into `FB_CONFIG` in `fun/lit/index.html` — setup steps in
 **Top navigation (in the claret header):** four buttons — **About** (a modal
 describing what the browser covers, how to search, and the full data/provenance
 notes, mirroring the footer text), **E-mail alerts**, **Data Analytics** (a
-link to the sub-page `fun/lit/analytics/`, currently a branded blank placeholder
-for future summary statistics — a sub-page, so NOT a `fun/index.html` card), and
+link to the sub-page `fun/lit/analytics/` — a sub-page, so NOT a
+`fun/index.html` card), and
 **Feedback** (a modal with the maintainer's contact links: e-mail
 kostas.stouras@ucd.ie, X `@stourask`, Google Scholar, ORCID, website). About and
-Feedback are static; the Data Analytics page is standalone. **E-mail alerts**
+Feedback are static; the Data Analytics page is standalone. **Data Analytics
+(`fun/lit/analytics/`)** is an interactive summary-statistics dashboard over the
+whole corpus available in this repo — the eight native sources (`data/`) plus
+the FT50 catalog (`data-ft50/`), deduped with native winning on overlap
+(~260k papers, 53 journals). It never downloads the ~270 MB of raw papers:
+`fun/lit/_scraper/build-analytics.mjs` pre-aggregates everything **offline** into
+two small committed files it fetches on load — `analytics/data.json`
+(per-journal × per-year rows: paper count `n`, summed authors `a`, solo `s`,
+pre-print `p`, citation `c`, abstract `ab`, team-size buckets `t[6]`; plus each
+journal's UTD24/FT50/ABS membership — a byte-for-byte mirror of index.html's
+`ABS_RATING`/`UTD24_KEYS`/`FT50_KEYS` — and its top-cited papers) and
+`analytics/authors.json` (per-author papers/year + papers/journal for authors
+with ≥ 5 papers, canonicalised via the datasets' `Name_Variants`, loaded lazily
+only when the Author tab opens). The page (vanilla JS, inline-SVG charts, no
+external CDN beyond the shared Google Font) offers filters — **journal types**
+(the same UTD24/FT50/ABS 4/4*/ABS 3 sets, union with the Journals picker),
+**journals**, and a **year-range** slider — driving live tiles (papers, avg
+co-authors, solo %, pre-print %, citations) and charts (publication volume by
+journal over time, avg co-authors/year, co-authorship distribution, papers by
+journal, pre-print availability/year, most-cited table), plus an **Author
+spotlight** tab (per-author totals, in-scope counts, publications-per-year, and
+where-they-publish, the latter greying journals outside the current scope).
+Refreshed daily by `.github/workflows/lit-analytics.yml` (08:10 UTC, after the
+native and FT50 data builds), which commits `analytics/*.json` on master only.
+The generation date mirrors the native `meta.json` `lastPull`, never
+`Date.now()`, so re-runs on an unchanged dataset are a no-op. **E-mail alerts**
 lets a signed-in user subscribe to an e-mail when new papers matching a set of
 filters are added: opening the modal **pre-fills the alert criteria from the
 page's current search filters** (journal types, journals, authors, title /
