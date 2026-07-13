@@ -2967,12 +2967,14 @@ function scholarSearchUrl(title) {
 // Which index the shown CitedBy count came from (CitedBySrc, stamped by the
 // pipelines' citation sweep): OpenAlex or Semantic Scholar when their count
 // beats Crossref's is-referenced-by-count floor, Crossref otherwise (no field
-// — also what older shard data serves until its pipeline catches up).
+// — also what older shard data serves until its pipeline catches up). The
+// badge itself reads just "Cited by N" to keep it uncluttered; the source
+// (Crossref / OpenAlex / Semantic Scholar) is named in the hover tooltip only.
 const CITED_SRC = { oa: 'OpenAlex', s2: 'Semantic Scholar' };
 function citedByTagHTML(p) {
   if (!(Number(p['CitedBy']) > 0)) return '';
   const src = CITED_SRC[p['CitedBySrc']] || 'Crossref';
-  return `<a class="tag tag-cited" href="${scholarSearchUrl(p['Title'])}" target="_blank" rel="noopener" title="${src} citation count — the highest of the Crossref, OpenAlex and Semantic Scholar tallies for this paper. Close to, but not exactly, Google Scholar's number (Scholar also counts theses and other unindexed work). Click to look this paper up on Google Scholar for its live 'Cited by' count and the citing works.">Cited by ${esc(String(p['CitedBy']))} · ${src} ↗</a>`;
+  return `<a class="tag tag-cited" href="${scholarSearchUrl(p['Title'])}" target="_blank" rel="noopener" title="${src} citation count — the highest of the Crossref, OpenAlex and Semantic Scholar tallies for this paper. Close to, but not exactly, Google Scholar's number (Scholar also counts theses and other unindexed work). Click to look this paper up on Google Scholar for its live 'Cited by' count and the citing works.">Cited by ${esc(String(p['CitedBy']))} ↗</a>`;
 }
 
 // Markup for one paper card. `idx` is the index into the global `filtered`
@@ -3721,7 +3723,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       <p>You can filter by journal type (UTD24, FT50, ABS 4/4*, ABS 3, or Working Papers — the listed authors' unpublished pre-prints), by journal, or by year, and search the text of authors, titles, abstracts and affiliations. For Management Science you can also filter by the accepting editor and editorial area, and for ISR and Marketing Science by senior and associate editor. Filters stack, so everything you pick is combined, and the results bar tells you what share of the journals in scope actually matched.</p>
 
       <h3>On every paper</h3>
-      <p>Each paper carries a small badge for the most selective list its journal is on (UTD24, then FT50, then ABS 4/4*, then ABS 3). You also get one-click BibTeX, a link to a free open-access pre-print whenever I could find one (arXiv, SSRN, NBER, OSF, bioRxiv or medRxiv), and a Crossref "cited by" count that links through to the paper on Google Scholar. PNAS papers show their Significance statement too. Many papers also have a "Cited references in this catalog" toggle that lists the other papers they cite which are themselves in The Lit — each one links straight to that paper — so you can walk the citation graph within these journals. That list is built slowly from publishers' deposited references, so its coverage grows over time.</p>
+      <p>Each paper carries a small badge for the most selective list its journal is on (UTD24, then FT50, then ABS 4/4*, then ABS 3). You also get one-click BibTeX, a link to a free open-access pre-print whenever I could find one (arXiv, SSRN, NBER, OSF, bioRxiv or medRxiv), and a "cited by" count that links through to the paper on Google Scholar. PNAS papers show their Significance statement too. Many papers also have a "Cited references in this catalog" toggle that lists the other papers they cite which are themselves in The Lit — each one links straight to that paper — so you can walk the citation graph within these journals. That list is built slowly from publishers' deposited references, so its coverage grows over time.</p>
 
       <h3>A few extras</h3>
       <p>There are quick views for recently added papers and for papers that have an open-access pre-print. If you sign in you get a private library, where you can star papers, add notes, build lists and tag your reading. You can save default filters — a preferred set of journals or journal types that the page applies automatically each time you sign in, so you land on your own subset straight away. You can also set up e-mail alerts: about new papers that match your filters, about any new paper added to the database, or about new features on the site — with a preview of exactly what each e-mail will look like.</p>
