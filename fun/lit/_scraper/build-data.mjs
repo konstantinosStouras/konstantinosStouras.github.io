@@ -1657,6 +1657,178 @@ function applyPreprints(allPapers, cache) {
   console.log(`  preprints: ${n}/${allPapers.length} papers link to an arXiv/SSRN pre-print`);
 }
 
+// ── Citation counts (OpenAlex + Semantic Scholar) ───────────────────────────
+//
+// Crossref's is-referenced-by-count (harvested for free in mapWork) is only a
+// FLOOR: it counts just the references Crossref members deposited. OpenAlex
+// and Semantic Scholar index far more citing works (preprints, proceedings,
+// books), so their counts sit much closer to Google Scholar's. This pass
+// batch-reads both — OpenAlex 50 DOIs per call (filter=doi:a|b,
+// select=doi,cited_by_count; NOT a title search, so it draws on the general
+// 100k/day quota, not the ~100/day title-search cut-off) and Semantic Scholar
+// 500 DOIs per POST (graph/v1/paper/batch) — and caches the best count per
+// DOI in data/_citations.json:
+//   { "<doi>": { c: <count>, t: <days-since-epoch last checked>, s2: 1? } }
+// (`c` omitted when 0 so zero-citation papers cost 12 bytes, not a field;
+// `s2:1` marks a count Semantic Scholar won, otherwise OpenAlex did).
+// applyCitations() then lifts each row's CitedBy to max(Crossref, cache) and
+// stamps CitedBySrc ('oa' | 's2') when the cache wins, so the page labels the
+// number's real source. The refresh is ROLLING: never-checked DOIs first (new
+// papers get a count on day one), then stalest-check first; entries checked
+// within minAgeDays (default 2) are skipped, so a full catalog converges to
+// an every-couple-of-days cadence. Both legs are OPTIONAL and drop out
+// independently on quota/persistent failure (Semantic Scholar's anonymous
+// pool 429s freely) — a healthy leg keeps sweeping, a DOI neither leg covered
+// is left un-stamped for the next run, and partial coverage never regresses a
+// previously cached count. The full sweep runs online in its own scheduled
+// workflow (lit-citations-update.yml -> citations-ci.mjs, daily); the daily
+// build runs the same pass strictly time-boxed (LIT_CITATIONS_MS, default
+// 5 min) so it can never hang the build.
+
+// One gentle Semantic Scholar batch call (up to 500 DOIs): a single attempt
+// with a hard timeout plus ONE ridden-out 429 (their anonymous pool throttles
+// in bursts). Returns {ok, arr} | {ok:false, status}.
+async function s2Batch(dois) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 30000);
+    try {
+      const res = await fetch('https://api.semanticscholar.org/graph/v1/paper/batch?fields=citationCount', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'User-Agent': `lit-scraper/1.0 (mailto:${MAILTO})` },
+        body: JSON.stringify({ ids: dois.map(d => 'DOI:' + d) }),
+        signal: ctrl.signal,
+      });
+      if (res.ok) return { ok: true, arr: await res.json() };
+      if (res.status === 429 && attempt === 0) {
+        const ra = parseInt(res.headers.get('retry-after') || '', 10);
+        await sleep(Math.min(isNaN(ra) ? 5 : Math.max(ra, 5), 30) * 1000);
+        continue;
+      }
+      return { ok: false, status: res.status };
+    } catch {
+      return { ok: false, status: 0 };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  return { ok: false, status: 429 };
+}
+
+// Refresh the citations cache for up to `cap` new/stale DOIs, bounded by
+// opts.budgetMs. Works in chunks of 500 (10 OpenAlex calls + 1 Semantic
+// Scholar call, ~10 s), checking the deadline between chunks. Returns the
+// number of DOIs (re)stamped.
+export async function refreshCitations(allPapers, cache, opts = {}) {
+  const cap = opts.cap ?? 500000;
+  const deadline = opts.budgetMs ? Date.now() + opts.budgetMs : Infinity;
+  const minAgeDays = opts.minAgeDays ?? 2;
+  const today = Math.floor(Date.now() / 86400000);
+  const seen = new Set(), eligible = [];
+  for (const p of allPapers) {
+    if (!p._doi || seen.has(p._doi)) continue;
+    seen.add(p._doi);
+    const c = cache[p._doi];
+    if (c && (c.t || 0) > today - minAgeDays) continue;
+    eligible.push(p._doi);
+  }
+  // Never-checked DOIs first (t undefined -> 0), then stalest check first.
+  eligible.sort((a, b) => ((cache[a] || {}).t || 0) - ((cache[b] || {}).t || 0));
+  const todo = eligible.slice(0, cap);
+  if (!todo.length) { console.log('  citations: cache is fresh — nothing to refresh.'); return 0; }
+  console.log(`  citations: refreshing ${todo.length} of ${eligible.length} new/stale DOIs…`);
+  let oaAlive = true, s2Alive = true, oaFails = 0, s2Fails = 0, done = 0;
+  for (let i = 0; i < todo.length && (oaAlive || s2Alive); i += 500) {
+    if (Date.now() > deadline) { console.log('  citations: time budget reached — resuming next run.'); break; }
+    const chunk = todo.slice(i, i + 500);
+    const oaVal = new Map(), s2Val = new Map(), oaDone = new Set();
+
+    // Leg 1: OpenAlex, 50 DOIs per call (like seedPreprintsByDoi).
+    if (oaAlive) {
+      for (let j = 0; j < chunk.length; j += 50) {
+        const batch = chunk.slice(j, j + 50);
+        const url = 'https://api.openalex.org/works?filter=doi:' + batch.join('|') +
+          '&per-page=50&select=doi,cited_by_count' +
+          `&mailto=${encodeURIComponent(MAILTO)}`;
+        const r = await oaGet(url);
+        if (!r.ok) {
+          const throttle = r.status === 429 || r.status === 403;
+          oaFails++;
+          // A Retry-After of hours means the day's quota is spent; six
+          // consecutive failures read the same. Anything else is per-second
+          // burst throttling (shared CI egress IPs 429 freely) or a transient
+          // blip — ride it out with bounded backoff instead of losing the
+          // leg for the whole run on one 429 (the preprint search's patient
+          // mode, same rationale).
+          if ((throttle && r.retryAfter > 3600) || oaFails >= 6) {
+            oaAlive = false;
+            console.log('  citations: OpenAlex quota/throttle — dropping the OpenAlex leg for this run.');
+            break;
+          }
+          const wait = throttle
+            ? Math.max(r.retryAfter * 1000, Math.min(5000 * Math.pow(2, oaFails - 1), 60000))
+            : 2000;
+          if (Date.now() + wait > deadline) break; // run is ending — don't burn the budget waiting
+          await sleep(wait);
+          j -= 50; continue; // retry this batch (bounded by oaFails)
+        }
+        oaFails = 0;
+        for (const w of r.json.results || []) {
+          const doi = String(w.doi || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase();
+          if (typeof w.cited_by_count === 'number') oaVal.set(doi, w.cited_by_count);
+        }
+        // A DOI absent from a SUCCESSFUL batch is simply not in OpenAlex —
+        // that is a concluded zero, unlike a DOI in a failed batch.
+        for (const d of batch) oaDone.add(d);
+        await sleep(400);
+      }
+    }
+
+    // Leg 2: Semantic Scholar, the whole chunk in one POST (bonus leg — its
+    // GS-like count covers citing theses/reports OpenAlex may miss).
+    let s2DoneChunk = false;
+    if (s2Alive) {
+      const r = await s2Batch(chunk);
+      if (r.ok && Array.isArray(r.arr)) {
+        s2Fails = 0; s2DoneChunk = true;
+        r.arr.forEach((rec, k) => {
+          if (rec && typeof rec.citationCount === 'number') s2Val.set(chunk[k], rec.citationCount);
+        });
+      } else if (++s2Fails >= 4) {
+        s2Alive = false;
+        console.log('  citations: Semantic Scholar unavailable — continuing on OpenAlex only.');
+      }
+    }
+
+    // Stamp what concluded. Partial coverage (one leg down) never regresses a
+    // previously cached count — the missing leg's old win is carried forward.
+    for (const d of chunk) {
+      if (!oaDone.has(d) && !s2DoneChunk) continue; // neither leg concluded — retry next run
+      const ov = oaVal.get(d) ?? 0, sv = s2Val.get(d) ?? 0;
+      let c = Math.max(ov, sv), s2 = sv > ov;
+      const prev = cache[d];
+      if (prev && prev.c > c && !(oaDone.has(d) && s2DoneChunk)) { c = prev.c; s2 = !!prev.s2; }
+      const e = { t: today };
+      if (c > 0) { e.c = c; if (s2) e.s2 = 1; }
+      cache[d] = e;
+      done++;
+    }
+    if (opts.checkpoint && (i / 500) % 10 === 9) await opts.checkpoint(cache);
+    if (opts.log && (i / 500) % 25 === 24) console.log(`  citations: …${done} DOIs refreshed so far`);
+  }
+  console.log(`  citations: refreshed ${done} DOI(s) this run.`);
+  return done;
+}
+
+export function applyCitations(allPapers, cache) {
+  let n = 0;
+  for (const p of allPapers) {
+    const x = p._doi && cache[p._doi];
+    if (x && x.c > (p.CitedBy || 0)) { p.CitedBy = x.c; p.CitedBySrc = x.s2 ? 's2' : 'oa'; n++; }
+  }
+  console.log(`  citations: ${n}/${allPapers.length} papers carry an OpenAlex/Semantic Scholar count above Crossref's`);
+}
+
 // ── Registry (key -> first-seen date) ──────────────────────────────────────
 
 async function loadRegistry() {
@@ -1934,6 +2106,23 @@ async function main() {
   catch (e) { console.warn('  preprints resolve failed (non-fatal):', e.message); }
   if (!MOCK) await writeJson('_preprints.json', preprintCache);
   applyPreprints(allPapers, preprintCache);
+
+  // Citation counts above Crossref's floor — same non-fatal contract as the
+  // pre-print pass: the committed cache is always applied even when both
+  // refresh legs are down, and the in-build refresh is strictly time-boxed
+  // (new papers get their count on day one; the full rolling sweep runs
+  // online in lit-citations-update.yml via citations-ci.mjs).
+  const citationsCache = await loadJsonIfExists(join(DATA_DIR, '_citations.json'), {});
+  if (!MOCK) {
+    try {
+      await refreshCitations(allPapers, citationsCache, {
+        cap: parseInt(process.env.LIT_CITATIONS_CAP || '20000', 10),
+        budgetMs: parseInt(process.env.LIT_CITATIONS_MS || '300000', 10), // 5-minute hard ceiling
+      });
+    } catch (e) { console.warn('  citations refresh failed (non-fatal):', e.message); }
+    await writeJson('_citations.json', citationsCache);
+  }
+  applyCitations(allPapers, citationsCache);
 
   const reg = await loadRegistry();
   const registry = updateRegistry(allByRank, reg);

@@ -374,6 +374,31 @@ CI; the daily Action just folds the committed files in.
   (`LIT_MAILTO`/`FT50_MAILTO` plus-addresses: `+litft50`, `+abs4`, `+abs3om`,
   `+abs3rest`), so the five parallel backfills never starve each other and
   local runs keep a separate budget.
+- **Citation counts per dataset.** Every paper's "Cited by N" tag shows the
+  **highest** of three tallies: Crossref's `is-referenced-by-count` (harvested
+  for free in the build's own Crossref requests — the floor), OpenAlex's
+  `cited_by_count` and Semantic Scholar's `citationCount` — the latter two
+  index citing preprints/proceedings/books, so they sit much closer to Google
+  Scholar's number (which has no API; the tag still links to a Scholar title
+  search for the live GS count). The OpenAlex/S2 sweep is the same two-part
+  machinery as the pre-prints: a strictly time-boxed best-effort pass inside
+  each daily build (new papers get their count on day one) plus a dedicated
+  daily workflow running a bounded (~45 min) sweep — OpenAlex batched 50 DOIs
+  per call (general quota, not the title-search cut-off), Semantic Scholar 500
+  per POST (anonymous pool; the leg simply drops out when throttled and
+  OpenAlex carries on) — into each data dir's `_citations.json`
+  (`doi → {c, t, s2?}`, rolling oldest-check-first, entries fresh for 2 days,
+  partial coverage never regresses a cached count). `applyCitations` lifts
+  each row's `CitedBy` to the max and stamps `CitedBySrc` (`oa`/`s2`; absent =
+  Crossref), which the page's `citedByTagHTML` turns into the tag's source
+  label. Natives: `lit-citations-update.yml` → `_scraper/citations-ci.mjs`
+  (01:20 UTC). FT50 catalog: `lit-ft50-citations-update.yml` →
+  `_scraper-ft50/citations-ci.mjs` (02:50 UTC, commits `data-ft50/`). Each
+  shard repo: its own `citations-update.yml` → `_scraper/citations-ci.mjs`.
+  Same concurrency-group and `--apply-only --merge-cache` push-retry rules as
+  the pre-print backfills, and each workflow pins its own OpenAlex quota
+  identity (`+litcite`, `+litft50cite`, `+abs4cite`, `+abs3omcite`,
+  `+abs3restcite`).
 
 ## Testing locally (no network needed)
 

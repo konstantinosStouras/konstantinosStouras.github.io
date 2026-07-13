@@ -244,24 +244,45 @@ the Crossref abstract's JATS `<sec><title>Significance</title>` block is split
 out into a `Significance` field (`extractSignificance`, no pnas.org fetch) and
 shown as a **"Significance"** card toggle before "Abstract". See
 `fun/lit/_HOW-IT-WORKS.md`. **Citation counts:** every paper carries a
-`CitedBy` field — Crossref's `is-referenced-by-count`, harvested for free in
-the same batched Crossref requests the build already makes (added to the
-`SELECT` array in `build-data.mjs`; set in `mapWork` only when the count is a
-positive integer, so it never bloats the papers files or shows a "Cited by 0"
-badge). The card renders it as a **"Cited by N · Crossref"** tag next to the
-PDF tag, linking (via `scholarSearchUrl` in `index.html`) to a Google Scholar
-**title search** (`scholar.google.com/scholar?q=<title>`) — the exact title
-lands the paper as the top hit so the user reaches its live GS "Cited by"
-count and citing works. Deliberately NOT Google Scholar's own number: there is
-no Scholar API, and its exact `?cites=<cluster-id>` link isn't derivable from a
-DOI/title, so the count is labelled honestly as Crossref's (a different, lower
-metric — GS also counts preprints/theses/working papers). The FT50 catalog's
-`_scraper-ft50/build-data.mjs` and each satellite shard repo
-(`lit-data-abs4`, `lit-data-abs3-omecon`, `lit-data-abs3-rest`) carry the
-identical two-line change in their own vendored `build-data.mjs` (the `SELECT`
-addition plus the `mapWork` `CitedBy` line), so counts surface for every
-dataset; the page's renderer shows the tag for any paper that carries
-`CitedBy`. Like `/fun/ms/`,
+`CitedBy` field — the **highest of three tallies**: Crossref's
+`is-referenced-by-count` (harvested for free in the build's own batched
+Crossref requests — the `SELECT` addition + `mapWork` line in
+`build-data.mjs`; the floor, set only when positive so it never bloats the
+papers files or shows a "Cited by 0" badge), OpenAlex's `cited_by_count` and
+Semantic Scholar's `citationCount` — the latter two index citing
+preprints/proceedings/books, so they sit much closer to Google Scholar's
+number. The OpenAlex+S2 sweep (`refreshCitations`/`applyCitations` in
+`build-data.mjs`, replicated near-verbatim like the pre-print machinery) is
+batched — OpenAlex 50 DOIs/call via `filter=doi:` + `select=doi,cited_by_count`
+(general 100k/day quota, NOT the ~100/day title-search cut-off), Semantic
+Scholar 500 DOIs/POST (`graph/v1/paper/batch`; its anonymous pool 429s
+freely, so the leg is optional and drops out while OpenAlex carries on) —
+into each data dir's incremental `_citations.json`
+(`doi → {c, t:<day-checked>, s2:1?}`; `c` omitted when 0). The refresh is
+ROLLING (never-checked DOIs first, then stalest; entries fresh for
+2 days; partial coverage never regresses a cached count) and runs
+two-part like the pre-prints: strictly time-boxed inside each daily build
+(`LIT_CITATIONS_MS`/`FT50_CITATIONS_MS`, default 5 min — new papers get a
+count on day one) plus a dedicated daily ~45-min workflow per dataset —
+natives `lit-citations-update.yml` → `_scraper/citations-ci.mjs`, FT50
+catalog `lit-ft50-citations-update.yml` → `_scraper-ft50/citations-ci.mjs`,
+and each shard repo its own `citations-update.yml` → `_scraper/citations-ci.mjs`
+— each sharing its dataset's update-data concurrency group (push-retry via
+`--apply-only --merge-cache`, newest-check-wins merge) and pinning its own
+OpenAlex mailto quota identity (`+litcite`, `+litft50cite`, `+abs4cite`,
+`+abs3omcite`, `+abs3restcite`). `applyCitations` lifts `CitedBy` to the max
+and stamps **`CitedBySrc`** (`oa` | `s2`; absent = Crossref) — the card's
+`citedByTagHTML` in `index.html` renders **"Cited by N · OpenAlex/Semantic
+Scholar/Crossref"** accordingly, linking (via `scholarSearchUrl`) to a Google
+Scholar **title search** (`scholar.google.com/scholar?q=<title>`) — the exact
+title lands the paper as the top hit so the user reaches its live GS "Cited
+by" count and citing works. Deliberately NOT Google Scholar's own number:
+there is no Scholar API, scraping it is blocked/ToS-barred at any scale, and
+its exact `?cites=<cluster-id>` link isn't derivable from a DOI/title — so
+the tag names its real source honestly and defers to Scholar via the link.
+The page shows the tag for any paper that carries `CitedBy`, so older shard
+data (no `CitedBySrc` yet) just renders as Crossref until its pipeline
+catches up. Like `/fun/ms/`,
 the page carries the optional sign-in feature (star/notes/lists/tags, private
 per user, dedicated Firebase project); it stays inert until a web config is
 pasted into `FB_CONFIG` in `fun/lit/index.html` — setup steps in

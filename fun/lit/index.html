@@ -2764,6 +2764,17 @@ function scholarSearchUrl(title) {
   return 'https://scholar.google.com/scholar?hl=en&q=' + encodeURIComponent(String(title || '').trim());
 }
 
+// Which index the shown CitedBy count came from (CitedBySrc, stamped by the
+// pipelines' citation sweep): OpenAlex or Semantic Scholar when their count
+// beats Crossref's is-referenced-by-count floor, Crossref otherwise (no field
+// — also what older shard data serves until its pipeline catches up).
+const CITED_SRC = { oa: 'OpenAlex', s2: 'Semantic Scholar' };
+function citedByTagHTML(p) {
+  if (!(Number(p['CitedBy']) > 0)) return '';
+  const src = CITED_SRC[p['CitedBySrc']] || 'Crossref';
+  return `<a class="tag tag-cited" href="${scholarSearchUrl(p['Title'])}" target="_blank" rel="noopener" title="${src} citation count — the highest of the Crossref, OpenAlex and Semantic Scholar tallies for this paper. Close to, but not exactly, Google Scholar's number (Scholar also counts theses and other unindexed work). Click to look this paper up on Google Scholar for its live 'Cited by' count and the citing works.">Cited by ${esc(String(p['CitedBy']))} · ${src} ↗</a>`;
+}
+
 // Markup for one paper card. `idx` is the index into the global `filtered`
 // array (so the Abstract/BibTeX toggles resolve to the right paper). When
 // `showAdded` is true, a tag with the paper's database-insertion date is shown.
@@ -2799,7 +2810,7 @@ function paperCardHTML(p, idx, showAdded) {
       ${p['Status']==='Other' ? '<span class="tag tag-other">Other</span>' : ''}
       ${p['Status'] && p['Status']!=='Other' ? `<span class="tag tag-aia">${esc(p['Status'])}</span>` : ''}
       ${safeUrl(p['PDF']) && preprintPdfUrl(safeUrl(p['PDF'])) !== preprintPdfUrl(safeUrl(p['Preprint'])) ? `<a class="tag tag-pdf" href="${preprintPdfUrl(safeUrl(p['PDF']))}" target="_blank" rel="noopener" title="Open-access PDF (arXiv/SSRN where available)">PDF ↗</a>` : ''}
-      ${Number(p['CitedBy']) > 0 ? `<a class="tag tag-cited" href="${scholarSearchUrl(p['Title'])}" target="_blank" rel="noopener" title="Crossref citation count — a different, lower metric than Google Scholar's, which also counts preprints, theses and working papers. Click to look this paper up on Google Scholar for its live 'Cited by' count and the citing works.">Cited by ${esc(String(p['CitedBy']))} · Crossref ↗</a>` : ''}
+      ${citedByTagHTML(p)}
       ${addedTag}
     </div>
     ${hasSig ? `<span class="paper-abstract-toggle paper-sig-toggle" onclick="togAbs('${sid}',this,'Significance')">▸ Significance</span>` : ''}
