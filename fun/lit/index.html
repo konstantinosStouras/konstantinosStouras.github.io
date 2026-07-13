@@ -509,7 +509,7 @@
     </div>
     <div class="filters-row filters-row-secondary">
       <div class="filter-group">
-        <label title='Matches from the START of a name: "helet" finds Heletjé but not Bachelet. Wrap a term in double quotes for an exact full-word match. Some authors may appear under different name variants; ORCID-based disambiguation is not yet available for all authors.'>Search Authors &#9432;</label>
+        <label title='Matches from the START of a name: "stou" finds Stouras but not Christou. Wrap a term in double quotes for an exact full-word match. Some authors may appear under different name variants; ORCID-based disambiguation is not yet available for all authors.'>Search Authors &#9432;</label>
         <input id="filterAuthors" name="ms-filter-author" placeholder="Author..." type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('author','filterAuthors');event.preventDefault();}">
         <div id="chipsAuthor" class="chips"></div>
       </div>
@@ -2838,8 +2838,8 @@ function textMatch(haystack, query) {
 }
 
 // Author-name matching. Titles want substring matching ("market" should find
-// "marketing"), but inside NAMES a mid-word hit is noise: "helet" must find
-// "Heletjé van Staden", not "Bachelet" or "Daxhelet". An unquoted term
+// "marketing"), but inside NAMES a mid-word hit is noise: "stou" must find
+// "Stouras, Konstantinos", not "Christou" or "Anastou". An unquoted term
 // therefore matches only at the START of a name part (start of string, or
 // preceded by a non-letter: space, comma, hyphen, period). Quoted terms keep
 // the exact-word behavior of textMatch. The letter test includes Latin
