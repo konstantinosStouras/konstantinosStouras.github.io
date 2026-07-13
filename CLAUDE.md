@@ -301,14 +301,24 @@ page's current search filters** (journal types, journals, authors, title /
 abstract / affiliation terms, years, MS editors/areas, ISR/MkSc SE/AE, and the
 pre-print toggle — the same `sel` shape), editable in-modal, plus an alert name,
 recipient e-mail (default = account e-mail, sent *from* the user's own e-mail),
-and frequency. Alerts are stored privately at `users/{uid}/alerts/{alertId}`
-(covered by the existing `_firestore.rules` wildcard) and managed from the modal
-(enable/pause switch, edit, delete). The page only writes subscriptions — actual
-delivery needs a scheduled backend "alert mailer" (a static Pages site cannot
-send e-mail); its data model and design are documented in
-`fun/lit/_EMAIL-ALERTS-SETUP.md`. All of the alerts logic lives inside the
-accounts IIFE (`window.litAlerts*`); About/Feedback are top-level
-(`window.litAbout*` / `window.litFeedback*`).
+and frequency (immediate / daily / weekly / monthly). Alerts are stored
+privately at `users/{uid}/alerts/{alertId}` (covered by the existing
+`_firestore.rules` wildcard) and managed from the modal (enable/pause switch,
+edit, delete). The page only writes subscriptions; **delivery is done by the
+mailer** `fun/lit/_scraper/alerts-mailer.mjs`, run daily by
+`.github/workflows/lit-alerts-mail.yml`: it reads the recently-added papers
+(`data/recent.json` + `data-ft50/recent.json`), reads all alerts via
+`collectionGroup('alerts')` with the Admin SDK, matches each with **vendored
+copies of the page's journal-list sets + `textMatch`/`authorMatch`** (keep in
+sync), and e-mails due alerts over SMTP (`To` recipient, `Reply-To` the
+subscriber, `From` = `ALERTS_FROM`/`SMTP_USER`), stamping a per-alert
+`lastCheckedAt`/`lastSentAt` high-water mark so nothing is sent twice. It is a
+no-op until the `FIREBASE_SERVICE_ACCOUNT` + `SMTP_*` secrets are set (so it
+never fails pre-setup); `--selftest`/`--scan`/`--dry-run` modes and the full
+deploy steps are in `fun/lit/_EMAIL-ALERTS-SETUP.md`. No Firestore rule change
+is needed. All of the alerts UI logic lives inside the accounts IIFE
+(`window.litAlerts*`); About/Feedback are top-level (`window.litAbout*` /
+`window.litFeedback*`).
 
 ## `/fun/ms` — the Google-free Management Science browser
 `fun/ms/` is the Management Science paper browser. It uses **no Google Sheets**:
