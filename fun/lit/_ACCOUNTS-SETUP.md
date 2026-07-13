@@ -12,6 +12,12 @@ logged-in visitor can:
 - **Search across their own notes** (and titles, authors, tags)
 - Fill in a **profile** (first/last name, affiliation, website, email) when they
   register and **edit it any time** from the account menu → "Edit profile"
+- Set **default filters** (a preferred subset of journals and/or journal types)
+  from the account menu → "Default filters"; they are **pre-applied
+  automatically on sign-in**, so the user lands on their subset instead of the
+  full catalog (they can still change or clear the filters afterwards). This is
+  separate from **E-mail alerts** (which saves filters to get *e-mailed* about
+  new matching papers); default filters pre-apply to the *page* on entry.
 
 All of this is **private per user** and uses its **own dedicated Firebase
 project** (separate from the ms-paper-browser project, following the same
@@ -141,8 +147,20 @@ construction (see `_firestore.rules`):
 users/{uid}/papers/{docId}   { doi, title, authors, year,
                                starred, note, tags[], lists[listId], updatedAt }
 users/{uid}/lists/{listId}   { name, createdAt }
+users/{uid}/profile/main     { firstName, lastName, affiliation, website, email,
+                               defaultJournals[], defaultJTypes[],
+                               autoApplyFilters, updatedAt }
 registeredUsers/{uid}        { t }   ← PUBLIC, one contentless doc per account
 ```
+
+The **default filters** live on the profile document: `defaultJournals` is an
+array of journal keys, `defaultJTypes` an array of journal-type keys (`utd24` /
+`ft50` / `abs4` / `abs3`), and `autoApplyFilters` (default `true`) decides
+whether they are pre-applied on sign-in. They are plain arrays of strings
+(Firestore's no-nested-arrays limit does not apply), written with
+`{ merge: true }` so they never clobber the name/affiliation fields (and vice
+versa). No security-rules change is needed — `users/{uid}/**` already covers
+this document (the same subtree as the E-mail-alerts `alerts` subcollection).
 
 `docId` is derived from the paper's DOI (or title + year when a DOI is missing),
 so the same paper maps to one record per user — across every journal The Lit
