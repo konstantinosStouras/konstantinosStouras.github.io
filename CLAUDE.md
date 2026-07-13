@@ -59,7 +59,13 @@ selective list its journal belongs to (UTD24 > FT50 > ABS 4/4* > ABS 3 —
 JOURNAL_TYPES order in `index.html`), with ONE exception: a journal on both
 the UTD24 and FT50 lists shows both tags (`journalBadges`; ABS tags never
 stack onto a listed journal). Clicking a badge selects that type. Filtering is unaffected by
-the badge: an ABS 4/4* search still returns UTD24 journals' papers. The
+the badge: an ABS 4/4* search still returns UTD24 journals' papers.
+**Filters chain (AND) and their counts stay connected:** the results bar's
+"X (P%) of Y" denominator is the journal-scope corpus (`scopeCount`, counted
+per applyFilters pass), NOT `allPapers.length` — with FT50 selected, chaining
+the pre-print toggle or a search reads "2,787 (1.21%) of 230,089" even when an
+earlier broad search left the whole catalog in memory; and `crossFilter()` (dropdown
+counts + summary tabs) applies the pre-print toggle like every other filter. The
 catalog also carries **notFT extras** — journals on another list but not the
 FT50: UTD24's INFORMS Journal on Computing (`ijoc`) and ABS 4's European
 Journal of Operational Research (`ejor`) — flagged `"notFT": true` in
