@@ -4155,7 +4155,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       '<div class="alert-delivery">' +
         '<div class="acct-field"><label for="litAlertName">Alert name</label><input id="litAlertName" type="text" placeholder="' + escAttr(defaultAlertName(d)) + '" value="' + escAttr(alertForm.name || '') + '"></div>' +
         '<div class="acct-field"><label for="litAlertFreq">Frequency</label><select id="litAlertFreq">' +
-          freqOpt('immediate', 'As papers are added') + freqOpt('daily', 'Daily digest') + freqOpt('weekly', 'Weekly digest') +
+          freqOpt('immediate', 'As papers are added') + freqOpt('daily', 'Daily digest') + freqOpt('weekly', 'Weekly digest') + freqOpt('monthly', 'Monthly digest') +
         '</select></div>' +
         '<div class="acct-field full"><label for="litAlertRecipient">Send to</label><input id="litAlertRecipient" type="email" placeholder="you@example.com" value="' + escAttr(alertForm.recipient || '') + '"></div>' +
       '</div>' +
@@ -4175,7 +4175,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       var ma = ca && ca.toMillis ? ca.toMillis() : 0, mb = cb && cb.toMillis ? cb.toMillis() : 0;
       return mb - ma;
     });
-    var FREQ = { immediate: 'As added', daily: 'Daily', weekly: 'Weekly' };
+    var FREQ = { immediate: 'As added', daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' };
     var html = '<div class="alert-block-label">Your alerts <span class="hint">' + ids.length + '</span></div>';
     html += ids.map(function (id) {
       var a = state.alerts[id], on = a.enabled !== false;

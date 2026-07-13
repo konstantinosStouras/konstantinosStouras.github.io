@@ -1,0 +1,60 @@
+name: lit — e-mail alerts mailer
+
+# Sends the digest e-mails behind the "E-mail alerts" panel on
+# stouras.com/fun/lit/. Runs once a day, after the daily data build has
+# committed a fresh recent.json, and e-mails each user the new papers that match
+# their saved alerts (per their chosen frequency: immediate / daily / weekly /
+# monthly). See fun/lit/_scraper/alerts-mailer.mjs and
+# fun/lit/_EMAIL-ALERTS-SETUP.md.
+#
+# It stays a clean no-op until the secrets below are configured, so it does not
+# fail before you set things up. Required repo secrets:
+#   FIREBASE_SERVICE_ACCOUNT  – JSON of a Firebase service-account key
+#   SMTP_USER, SMTP_PASS      – SMTP login (e.g. a Gmail address + App Password)
+# Optional: SMTP_HOST (default smtp.gmail.com), SMTP_PORT (default 465),
+#   ALERTS_FROM (default SMTP_USER), ALERTS_FROM_NAME (default "The Lit").
+
+on:
+  schedule:
+    - cron: '30 8 * * *'      # daily 08:30 UTC, safely after the 05:30 lit build
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run — read alerts and print, but send nothing'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read              # reads the committed recent.json; never commits
+
+concurrency:
+  group: lit-alerts-mail
+  cancel-in-progress: false
+
+jobs:
+  mail:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install mailer dependencies
+        run: npm install --no-save firebase-admin@^12 nodemailer@^6
+
+      - name: Send e-mail alerts
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_SECURE: ${{ secrets.SMTP_SECURE }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          ALERTS_FROM: ${{ secrets.ALERTS_FROM }}
+          ALERTS_FROM_NAME: ${{ secrets.ALERTS_FROM_NAME }}
+        run: node fun/lit/_scraper/alerts-mailer.mjs ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '--dry-run' || '' }}

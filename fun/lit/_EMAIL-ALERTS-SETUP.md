@@ -61,43 +61,82 @@ users/{uid}/alerts/{alertId} = {
 The `criteria` object matches the `sel` filter state in `index.html` field for
 field, so the same matching logic the page uses can be reused by the mailer.
 
-## The one backend piece: the alert mailer
+## The backend mailer (shipped)
 
-A static GitHub Pages site cannot send e-mail, so **delivery is done by a
-scheduled backend job** (the "alert mailer"). It is intentionally decoupled from
-the page: the page only writes subscriptions; the mailer reads them and sends.
+A static GitHub Pages site cannot send e-mail, so delivery is done by a
+scheduled job that is intentionally decoupled from the page: the page only
+writes subscriptions; the mailer reads them and sends. This is now implemented:
 
-Recommended shape (any of these works — pick what fits the deployment):
+- **`fun/lit/_scraper/alerts-mailer.mjs`** — the mailer. Each run it:
+  1. Loads the papers **added recently** from the same files the "Recently added
+     papers" view uses (`fun/lit/data/recent.json` and
+     `fun/lit/data-ft50/recent.json`; each row carries a `Date Added`).
+  2. Reads every user's alerts with the Admin SDK
+     (`collectionGroup('alerts')`), which bypasses the Firestore rules.
+  3. Matches new papers against each alert's `criteria`, reusing the page's exact
+     filter semantics (journal-type expansion, `textMatch`/`authorMatch`,
+     pre-print flag, AND/OR per field — the journal-list sets and matchers are
+     vendored copies of the ones in `index.html`, kept in sync).
+  4. For each alert that is **due** for its `frequency` and has new matches,
+     sends one digest e-mail over SMTP (Nodemailer).
+  5. Records a per-alert high-water mark (`lastCheckedAt` / `lastSentAt`) so a
+     paper is never e-mailed twice.
+- **`.github/workflows/lit-alerts-mail.yml`** — runs it daily (08:30 UTC), after
+  the daily data build has committed a fresh `recent.json`.
 
-1. **Firebase Cloud Function on a schedule** (Cloud Scheduler / Pub-Sub), or a
-   **GitHub Actions cron** using the Firebase Admin SDK with a service-account
-   key stored as a secret.
-2. Each run:
-   - Loads the papers **added since the last run** — reuse the same signal the
-     site's "Recently added papers" view uses (`getAddedDate` / `recent.json`
-     produced by the daily `lit-update-data*` builds), across the native,
-     FT50-catalog and shard datasets.
-   - Uses the Admin SDK to read every `users/*/alerts/*` document with
-     `enabled == true` (collection-group query on `alerts`).
-   - For each alert, matches the new papers against `criteria` (port the page's
-     `applyFilters` predicate — journal-scope union of `jtype`+`journal`,
-     AND-chained text filters, pre-print flag).
-   - Batches matches per alert according to `frequency` (`immediate` on every
-     run, `daily`/`weekly` on the due cadence) and sends one digest e-mail.
-3. **"Sent from the user's own e-mail."** Set the message's `From`/`Reply-To`
-   to the alert's `from` address so replies reach the user, and send `To` the
-   `recipient`. Two ways to originate it:
-   - **Transactional service** (SendGrid / Amazon SES / Postmark / Resend) with
-     the user's address as `From` + `Reply-To`. Deliverability is best when the
-     address is verified; otherwise use a verified service address as `From` and
-     keep the user's address as `Reply-To`.
-   - **Gmail API** with the user's OAuth consent (`gmail.send` scope) to send
-     genuinely as the user — only if you collect that consent.
-4. Record a per-alert `lastSentAt` / high-water mark (e.g. under
-   `users/{uid}/alerts/{alertId}` or a private `mailerState` doc) so papers are
-   never e-mailed twice.
+**Frequency.** `immediate`, `daily`, `weekly` (≥ ~7 days since the last check),
+`monthly` (≥ ~28 days). With the once-a-day cron, `immediate` and `daily` are
+the same; run the cron more often to make `immediate` closer to real time.
 
-Nothing in the page needs to change to add the mailer — it is a pure consumer of
-the `alerts` subcollections above. Until the mailer is deployed, subscriptions
-are saved and visible to the user, but no e-mail is sent; the modal says as much
-("delivery is handled by the alert mailer").
+**"Sent from the user's e-mail."** The message is addressed `To` the alert's
+`recipient`, its `Reply-To` is set to the subscriber's own e-mail (`from`), and
+the visible `From` is the sending SMTP account (`ALERTS_FROM` / `SMTP_USER`).
+When that account is **your own address**, the alert is literally sent from your
+e-mail. You cannot send *as* an arbitrary other user without their credentials,
+so for other people's alerts the honest setup is `From:` your address with
+`Reply-To:` theirs. (True per-user "send as them" would need each user's Gmail
+OAuth consent — a bigger project.)
+
+### Deploy it (one-time)
+
+The workflow is a clean **no-op until the secrets exist** (it logs "not
+configured" and exits 0), so it never fails before you set up. To turn it on:
+
+1. **Firebase service-account key.** Firebase console → Project Settings →
+   Service accounts → *Generate new private key*. Add the downloaded JSON as the
+   GitHub Actions secret **`FIREBASE_SERVICE_ACCOUNT`** (paste the whole JSON).
+2. **SMTP sender.** For truly *from your own address*, create a Gmail **App
+   Password** (Google Account → Security → 2-Step Verification → App passwords)
+   and add secrets **`SMTP_USER`** (e.g. `kstouras@gmail.com`) and
+   **`SMTP_PASS`** (the app password). Optional: `SMTP_HOST` (default
+   `smtp.gmail.com`), `SMTP_PORT` (default `465`), `ALERTS_FROM` (default
+   `SMTP_USER`), `ALERTS_FROM_NAME` (default `The Lit`). Any provider that
+   offers SMTP (Resend / SendGrid / Amazon SES / Postmark) works too — just set
+   `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS` accordingly.
+3. **Test.** Run the workflow from the Actions tab with **dry-run** checked
+   (reads alerts and prints what it *would* send, sends nothing). When it looks
+   right, let the daily schedule take over, or run it without dry-run.
+
+**No Firestore rule changes are needed** — the existing `users/{uid}/{document=**}`
+wildcard already covers the `alerts` subcollection, and the mailer's Admin SDK
+bypasses rules regardless. The `collectionGroup('alerts')` query is unfiltered,
+so it needs no custom index either.
+
+### Local / offline helpers
+
+- `node fun/lit/_scraper/alerts-mailer.mjs --selftest` — runs the matching /
+  frequency / rendering self-tests (no network, no deps).
+- `node fun/lit/_scraper/alerts-mailer.mjs --scan --criteria='{"jtype":["ft50"],"preprintOnly":true}' --days=7`
+  — previews, against the local `recent.json`, which papers an alert would match.
+- `node fun/lit/_scraper/alerts-mailer.mjs --dry-run` — a real run against
+  Firestore that prints instead of sending (needs the Firebase secret).
+
+### Coverage note
+
+The mailer scans the eight native sources plus the FT50 catalog (the two
+`recent.json` files in this repo). The ABS satellite shards (`lit-data-abs4`,
+`lit-data-abs3-omecon`, `lit-data-abs3-rest`) are separate repos and are not
+scanned yet; extending coverage means pulling their `recent.json` too. Also
+`recent.json` is capped (newest ~1,000, last ~90 days), which is ample for a
+daily/weekly/monthly digest but means a brand-new alert's first e-mail looks
+back at most ~31 days.
