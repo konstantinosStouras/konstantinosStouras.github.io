@@ -49,11 +49,22 @@ const TOP_CITED_PER_JOURNAL = 12;
 // filterable dimension value (keeps data.json small; areas are kept in full).
 const DIM_MIN_PAPERS = 3;
 const DIMS = [
-  { key: 'editor', field: 'Accepting Editor', multi: false, min: DIM_MIN_PAPERS },
+  { key: 'editor', field: 'Accepting Editor', multi: false, min: DIM_MIN_PAPERS, parse: cleanEditorNames },
   { key: 'area',   field: 'Area',             multi: false, min: 1 },
   { key: 'se',     field: 'Senior Editor',    multi: true,  min: DIM_MIN_PAPERS },
   { key: 'ae',     field: 'Associate Editor', multi: true,  min: DIM_MIN_PAPERS },
 ];
+// MS "Accepting Editor" is stored as the whole acceptance sentence
+// ("This paper was accepted by NAME, area."). Extract the editor name(s) so the
+// dimension is keyed by a readable name, not the sentence (mirrors the page's
+// cleanEditorField). Returns an array — a paper may name "A and B".
+function cleanEditorNames(raw) {
+  var s = String(raw == null ? '' : raw);
+  var m = s.match(/accepted by\s+([^.]+(?:\.[^.]{0,5})*[^.]*)\./i);
+  var name = (m ? m[1] : s.replace(/^.*?accepted by\s+/i, '')).split(',')[0].replace(/\.\s*$/, '').trim();
+  if (!name) return [];
+  return name.split(/\s+and\s+/i).map(function (e) { return e.trim(); }).filter(Boolean);
+}
 // Papers older than this are almost always OCR/metadata noise; the corpus has
 // a handful of stray pre-1900 "years". Clamp the year axis to something sane.
 const MIN_YEAR = 1900;
@@ -215,7 +226,8 @@ for (const meta of journalMeta.values()) {
     for (const d of DIMS) {
       const raw = p[d.field];
       if (!raw) continue;
-      if (d.multi) String(raw).split(';').map(s => s.trim()).filter(Boolean)
+      if (d.parse) d.parse(raw).forEach(v => addDimRow(dimAgg[d.key], v, y, na, hasPre, hasAbs, cites));
+      else if (d.multi) String(raw).split(';').map(s => s.trim()).filter(Boolean)
         .forEach(v => addDimRow(dimAgg[d.key], v, y, na, hasPre, hasAbs, cites));
       else addDimRow(dimAgg[d.key], String(raw).trim(), y, na, hasPre, hasAbs, cites);
     }
