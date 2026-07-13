@@ -389,7 +389,10 @@ is needed. All of the alerts UI logic lives inside the accounts IIFE
 `window.litFeedback*`).
 
 ### Working Papers — the listed authors' UNPUBLISHED work
-A **"Working Papers" journal type** (added last in `JOURNAL_TYPES`, badge
+A **"Working Papers" journal type** (last in `JOURNAL_TYPES` for badge
+precedence, but shown **first** in the Journal-types dropdown — `buildJTypeSelect`
+reorders it to the top for display only, safe because its `WP_KEYS` are disjoint
+from the published lists so no published paper's badge changes; badge
 "Working Paper", green) surfaces the **unpublished working papers / pre-prints
 (SSRN, NBER, arXiv, OSF) of every author already in the catalog** — genuinely
 unpublished work, *excluding* anything whose title is already published in the
