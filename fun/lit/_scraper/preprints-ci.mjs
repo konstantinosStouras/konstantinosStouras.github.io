@@ -101,11 +101,18 @@ if (!applyOnly) {
   // patient:true rides out OpenAlex per-second throttling before handing the
   // search to Crossref+arXiv; budgetMs bounds the run so the job always
   // finishes.
+  // Resolve these journals' pre-prints FIRST (all years, all authors), ahead of
+  // the newest-first backlog. Override with LIT_PREPRINT_PRIORITY (comma keys),
+  // or set it empty to disable.
+  const priority = (process.env.LIT_PREPRINT_PRIORITY ?? 'ms,msom,pom,opre,ec')
+    .split(',').map(s => s.trim()).filter(Boolean);
+  if (priority.length) console.log(`prioritising pre-prints for: ${priority.join(', ')}`);
   const found = await searchPreprintsByTitle(all, cache, {
     cap: parseInt(process.env.LIT_PREPRINT_BACKFILL_CAP || '100000', 10),
     budgetMs: parseInt(process.env.LIT_PREPRINT_BACKFILL_MS || String(40 * 60 * 1000), 10),
     sleepMs: 400,   // gently: ~2 req/s on the fast legs
     patient: true,
+    priorityKeys: new Set(priority),
     log: true,
     checkpoint,
   });
