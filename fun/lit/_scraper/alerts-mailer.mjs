@@ -172,7 +172,19 @@ function makeCtx() {
 // True if a paper satisfies an alert's criteria. Mirrors applyFilters():
 // journal scope + pre-print + year/editor/area/se/ae (OR within field) +
 // title/abstract/affiliation (textMatch, AND) + author (authorMatch, AND).
+// Does this alert's criteria express any intent to match PAPERS? A features-only
+// subscription (features:true, no allPapers, no filters) must not send paper
+// e-mails; "any new paper" (allPapers) and any concrete filter do.
+const PAPER_CRIT_KEYS = ['jtype', 'journal', 'author', 'title', 'abstract', 'affiliation', 'year', 'editor', 'area', 'se', 'ae'];
+function hasPaperIntent(c) {
+  if (!c) return false;
+  if (c.allPapers) return true;
+  if (c.preprintOnly) return true;
+  return PAPER_CRIT_KEYS.some(k => (c[k] || []).length);
+}
+
 function matchesCriteria(p, c, ctx) {
+  if (c && c.allPapers) return true;   // "any new paper" — no filters at all
   const scope = ctx.scopeFor(c);
   if (scope && !paperJKeys(p).some(k => scope.has(k))) return false;
   if (c.preprintOnly && !safeUrl(p.Preprint)) return false;
@@ -199,6 +211,7 @@ function matchesCriteria(p, c, ctx) {
 
 // Human summary of an alert's criteria, for the e-mail body / subject.
 function describeCriteria(c) {
+  if (c && c.allPapers) return 'any new paper';
   const JTL = { utd24: 'UTD24', ft50: 'FT50', abs4: 'ABS 4/4*', abs3: 'ABS 3' };
   const parts = [];
   (c.jtype || []).forEach(t => parts.push(JTL[t] || t));
@@ -252,6 +265,38 @@ function paperUrl(p) {
   if (doi) return 'https://doi.org/' + doi.replace(/^doi:/i, '');
   return SITE_URL;
 }
+// Shared e-mail chrome (claret header + footnote), reused by paper alerts AND
+// feature announcements so the two never drift. The footnote always offers
+// editing preferences + unsubscribing from future e-mails, plus a feedback
+// contact. Mirror any change in index.html's renderAlertPreview.
+function footerText() {
+  return `—
+You subscribed to e-mails from The Lit (${SITE_URL}).
+· Edit your preferences (journals, filters, frequency, feature updates): open the "E-mail alerts" panel there.
+· Unsubscribe from future e-mails: open "E-mail alerts" and pause or delete your subscription.
+· Questions, help or feedback: ${CONTACT_EMAIL}`;
+}
+function footerHtml() {
+  return `<hr style="border:none;border-top:1px solid #dce1ea;margin:20px 0 12px">
+    <p style="color:#6a5a60;font-size:11px;margin:0 0 5px">You subscribed to e-mails from
+      <a href="${esc(SITE_URL)}" style="color:#7d1d3f">The Lit</a>.</p>
+    <p style="color:#6a5a60;font-size:11px;margin:0;line-height:1.8">
+      <a href="${esc(SITE_URL)}" style="color:#7d1d3f;font-weight:600">Edit your preferences</a> &nbsp;·&nbsp;
+      <a href="${esc(SITE_URL)}" style="color:#7d1d3f;font-weight:600">Unsubscribe</a> from future e-mails (pause or delete it in the “E-mail alerts” panel) &nbsp;·&nbsp;
+      <a href="mailto:${esc(CONTACT_EMAIL)}" style="color:#7d1d3f;font-weight:600">Questions or feedback</a></p>`;
+}
+function emailShell(headerLabel, innerHtml) {
+  return `<div style="font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:0 auto;color:#241a1e">
+  <div style="background:linear-gradient(135deg,#7d1d3f,#591428);padding:18px 22px;border-radius:10px 10px 0 0">
+    <div style="color:#fff;font-size:20px"><span style="color:#c9a24b;font-style:italic">The Lit</span> — ${esc(headerLabel)}</div>
+  </div>
+  <div style="border:1px solid #dce1ea;border-top:none;border-radius:0 0 10px 10px;padding:20px 22px">
+    ${innerHtml}
+    ${footerHtml()}
+  </div>
+</div>`;
+}
+
 function renderEmail(alert, papers) {
   const name = alert.name || describeCriteria(alert.criteria || {});
   const n = papers.length;
@@ -271,11 +316,7 @@ Criteria: ${describeCriteria(alert.criteria || {})}
 
 ${lineText}${more > 0 ? `\n\n…and ${more} more. See them all on ${SITE_URL}` : ''}
 
-—
-You set up this e-mail alert on The Lit (${SITE_URL}).
-· Update it (journals, filters, frequency): open the "E-mail alerts" panel there.
-· Unsubscribe: open "E-mail alerts" and pause or delete this alert.
-· Questions, help or feedback: ${CONTACT_EMAIL}`;
+${footerText()}`;
 
   const items = shown.map(p => {
     const bits = [p.Journal, p.Year, p.Status].filter(Boolean).filter(x => x).map(esc).join(' · ');
@@ -287,27 +328,25 @@ You set up this e-mail alert on The Lit (${SITE_URL}).
       ${pre ? `<div style="font-size:12px;margin-top:2px"><a href="${esc(pre)}" style="color:#c2410c">Pre-print (open access)</a></div>` : ''}
     </li>`;
   }).join('');
-  const html =
-`<div style="font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:0 auto;color:#241a1e">
-  <div style="background:linear-gradient(135deg,#7d1d3f,#591428);padding:18px 22px;border-radius:10px 10px 0 0">
-    <div style="color:#fff;font-size:20px"><span style="color:#c9a24b;font-style:italic">The Lit</span> — new papers</div>
-  </div>
-  <div style="border:1px solid #dce1ea;border-top:none;border-radius:0 0 10px 10px;padding:20px 22px">
-    <p style="font-size:14px;margin:0 0 4px"><strong>${n} new paper${n === 1 ? '' : 's'}</strong> matching your alert
+  const inner =
+`<p style="font-size:14px;margin:0 0 4px"><strong>${n} new paper${n === 1 ? '' : 's'}</strong> matching your alert
       <strong>${esc(name)}</strong> ${n === 1 ? 'was' : 'were'} added to The Lit.</p>
     <p style="color:#6a5a60;font-size:12.5px;margin:0 0 16px">Criteria: ${esc(describeCriteria(alert.criteria || {}))}</p>
     <ul style="list-style:none;padding:0;margin:0">${items}</ul>
-    ${more > 0 ? `<p style="font-size:13px;margin:14px 0 0">…and ${more} more. <a href="${esc(SITE_URL)}" style="color:#7d1d3f">See them all on The Lit</a>.</p>` : ''}
-    <hr style="border:none;border-top:1px solid #dce1ea;margin:20px 0 12px">
-    <p style="color:#6a5a60;font-size:11.5px;margin:0 0 6px">You set up this e-mail alert on
-      <a href="${esc(SITE_URL)}" style="color:#7d1d3f">The Lit</a>.</p>
-    <p style="color:#6a5a60;font-size:11.5px;margin:0;line-height:1.8">
-      <a href="${esc(SITE_URL)}" style="color:#7d1d3f;font-weight:600">Update this alert</a> (journals, filters, frequency) &nbsp;·&nbsp;
-      <a href="${esc(SITE_URL)}" style="color:#7d1d3f;font-weight:600">Unsubscribe</a> (pause or delete it in the “E-mail alerts” panel) &nbsp;·&nbsp;
-      <a href="mailto:${esc(CONTACT_EMAIL)}" style="color:#7d1d3f;font-weight:600">Questions or feedback</a></p>
-  </div>
-</div>`;
-  return { subject, text, html };
+    ${more > 0 ? `<p style="font-size:13px;margin:14px 0 0">…and ${more} more. <a href="${esc(SITE_URL)}" style="color:#7d1d3f">See them all on The Lit</a>.</p>` : ''}`;
+  return { subject, text, html: emailShell('new papers', inner) };
+}
+
+// Feature-announcement e-mail: sent by --announce to everyone whose alert opted
+// into feature updates (criteria.features). Content is supplied by the maintainer
+// at send time; the chrome/footnote is the shared one.
+function renderAnnouncement({ subject, bodyText, bodyHtml }) {
+  const subj = subject || 'The Lit: a new feature is available';
+  const text = `${(bodyText || '').trim()}\n\n${footerText()}`;
+  const inner = `<p style="font-size:14px;margin:0 0 12px">Here’s what’s new on <strong>The Lit</strong>:</p>
+    <div style="font-size:14px;line-height:1.6">${bodyHtml || esc(bodyText || '')}</div>
+    <p style="font-size:13px;margin:16px 0 0"><a href="${esc(SITE_URL)}" style="color:#7d1d3f;font-weight:600">Open The Lit →</a></p>`;
+  return { subject: subj, text, html: emailShell('what’s new', inner) };
 }
 
 // ── Frequency gating ──────────────────────────────────────────────────────────
@@ -332,7 +371,10 @@ function evaluateAlert(alert, papers, now, ctx) {
   const elapsedDays = (now - windowStart) / DAY_MS;
   const due = elapsedDays >= (FREQ_MIN_DAYS[freq] - 0.05);   // small slack for cron jitter
   if (!due) return { due: false, matches: [], windowStart };
-  const matches = papers.filter(p => p._added > windowStart && p._added <= now && matchesCriteria(p, alert.criteria || {}, ctx));
+  // A features-only subscription has no paper intent → never matches papers.
+  const matches = hasPaperIntent(alert.criteria || {})
+    ? papers.filter(p => p._added > windowStart && p._added <= now && matchesCriteria(p, alert.criteria || {}, ctx))
+    : [];
   return { due: true, matches, windowStart };
 }
 function toDate(v) {
@@ -511,9 +553,23 @@ function selftest() {
   ok('html has paper title', em.html.includes('platform markets'));
   ok('html has preprint link', em.html.includes('arxiv.org/abs/2410.13767'));
   ok('text has manage note', em.text.includes('E-mail alerts'));
-  ok('text footer has update/unsubscribe/feedback', /Update it/.test(em.text) && /Unsubscribe/.test(em.text) && em.text.includes(CONTACT_EMAIL));
-  ok('html footer has update/unsubscribe/feedback', /Update this alert/.test(em.html) && /Unsubscribe/.test(em.html) && em.html.includes('mailto:' + CONTACT_EMAIL));
+  ok('text footer has edit-prefs/unsubscribe/feedback', /Edit your preferences/.test(em.text) && /Unsubscribe from future/.test(em.text) && em.text.includes(CONTACT_EMAIL));
+  ok('html footer has edit-prefs/unsubscribe/feedback', /Edit your preferences/.test(em.html) && /Unsubscribe/.test(em.html) && em.html.includes('mailto:' + CONTACT_EMAIL));
   ok('html escapes', renderEmail({ name: 'x', criteria: {} }, [P({ Title: 'A <b> & "q"' })]).html.includes('A &lt;b&gt; &amp; &quot;q&quot;'));
+
+  // "any new paper" (allPapers) + features-only (no paper intent)
+  ok('allPapers matches any paper', matchesCriteria(P({ Journal: 'Whatever', Year: '1990' }), { allPapers: true }, ctx));
+  ok('allPapers describe', describeCriteria({ allPapers: true }) === 'any new paper');
+  ok('allPapers has paper intent', hasPaperIntent({ allPapers: true }) === true);
+  ok('features-only has NO paper intent', hasPaperIntent({ features: true }) === false);
+  ok('empty criteria has no paper intent', hasPaperIntent({}) === false);
+  ok('features-only alert matches 0 papers', evaluateAlert(mk({ criteria: { features: true }, lastCheckedAt: new Date('2026-07-12T06:00:00Z') }), recent, now, ctx).matches.length === 0);
+  ok('allPapers alert matches the new paper', evaluateAlert(mk({ criteria: { allPapers: true }, lastCheckedAt: new Date('2026-07-12T06:00:00Z') }), recent, now, ctx).matches.length === 1);
+  // feature announcement e-mail
+  const ann = renderAnnouncement({ subject: 'New: Working Papers', bodyText: 'You can now browse working papers.', bodyHtml: '<p>You can now browse <b>working papers</b>.</p>' });
+  ok('announcement subject', ann.subject === 'New: Working Papers');
+  ok('announcement html has body + shell + footer', /working papers/.test(ann.html) && /what.s new/.test(ann.html) && /Edit your preferences/.test(ann.html));
+  ok('announcement text has footer', /Unsubscribe from future/.test(ann.text) && ann.text.includes(CONTACT_EMAIL));
 
   console.log(`\nselftest: ${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
@@ -538,7 +594,70 @@ function scan(argv) {
   if (hits.length > 15) console.log(`  …and ${hits.length - 15} more`);
 }
 
-export { matchesCriteria, evaluateAlert, renderEmail, describeCriteria, loadRecentPapers, makeCtx };
+// ── Feature announcement (maintainer tool) ────────────────────────────────────
+// Sends a "what's new" e-mail to everyone who opted into feature updates
+// (an alert with criteria.features === true), deduped by recipient. Body is
+// supplied at send time; the chrome/footnote is the shared one.
+//   node alerts-mailer.mjs --announce --subject="New: Working Papers archive" \
+//       --html-file=announce.html [--text-file=announce.txt] [--dry-run]
+async function runAnnounce(argv) {
+  const dryRun = argv.includes('--dry-run');
+  const getArg = (k) => { const a = argv.find(x => x.startsWith(k + '=')); return a ? a.slice(k.length + 1) : ''; };
+  const subject = getArg('--subject') || 'The Lit: a new feature is available';
+  let bodyHtml = getArg('--html'), bodyText = getArg('--text');
+  const htmlFile = getArg('--html-file'), textFile = getArg('--text-file');
+  try { if (htmlFile) bodyHtml = fs.readFileSync(htmlFile, 'utf8'); } catch (e) { console.error('cannot read --html-file:', e.message); process.exit(2); }
+  try { if (textFile) bodyText = fs.readFileSync(textFile, 'utf8'); } catch (e) { console.error('cannot read --text-file:', e.message); process.exit(2); }
+  if (!bodyHtml && !bodyText) { console.error('Announce: provide the body via --html/--text or --html-file/--text-file.'); process.exit(2); }
+  if (!bodyText) bodyText = String(bodyHtml).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+
+  if (!process.env.FIREBASE_SERVICE_ACCOUNT && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    console.log('Announce: no Firebase credentials configured — nothing to do.'); return;
+  }
+  if (!dryRun && !process.env.SMTP_USER) { console.log('Announce: SMTP not configured — nothing to send.'); return; }
+
+  const { default: admin } = await import('firebase-admin');
+  if (!admin.apps.length) {
+    const sa = process.env.FIREBASE_SERVICE_ACCOUNT;
+    if (sa) admin.initializeApp({ credential: admin.credential.cert(JSON.parse(sa)) });
+    else admin.initializeApp();
+  }
+  const db = admin.firestore();
+  let transport = null;
+  if (!dryRun) {
+    const { default: nodemailer } = await import('nodemailer');
+    const port = Number(process.env.SMTP_PORT || 465);
+    transport = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || 'smtp.gmail.com', port,
+      secure: process.env.SMTP_SECURE ? process.env.SMTP_SECURE === 'true' : port === 465,
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    });
+  }
+  const fromName = process.env.ALERTS_FROM_NAME || 'The Lit';
+  const fromAddr = process.env.ALERTS_FROM || process.env.SMTP_USER || '';
+  const { subject: subj, text, html } = renderAnnouncement({ subject, bodyText, bodyHtml });
+
+  const snap = await db.collectionGroup('alerts').get();
+  const seen = new Set(); let sent = 0, skipped = 0, errors = 0;
+  for (const doc of snap.docs) {
+    const a = doc.data() || {};
+    if (a.enabled === false || !a.criteria || a.criteria.features !== true) { skipped++; continue; }
+    const recipient = String(a.recipient || a.from || '').trim();
+    const key = recipient.toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(recipient) || seen.has(key)) { skipped++; continue; }
+    seen.add(key);
+    const msg = {
+      from: fromAddr ? `"${fromName}" <${fromAddr}>` : undefined, to: recipient, subject: subj, text, html,
+      headers: { 'List-Unsubscribe': `<mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('Unsubscribe from The Lit updates')}>, <${SITE_URL}>` },
+    };
+    if (dryRun) { console.log(`  [dry-run] would announce to ${recipient}: "${subj}"`); sent++; continue; }
+    try { await transport.sendMail(msg); console.log(`  announced to ${recipient}`); sent++; }
+    catch (e) { errors++; console.error(`  ERROR announcing to ${recipient}: ${e && e.message}`); }
+  }
+  console.log(`Announce done: ${sent} ${dryRun ? 'would-send' : 'sent'}, ${skipped} skipped, ${errors} errors.`);
+}
+
+export { matchesCriteria, evaluateAlert, renderEmail, renderAnnouncement, describeCriteria, hasPaperIntent, loadRecentPapers, makeCtx };
 
 // ── Entry point (only when run directly, not when imported for tests) ─────────
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
@@ -546,5 +665,6 @@ if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
   const args = new Set(argv);
   if (args.has('--selftest')) { selftest(); }
   else if (args.has('--scan')) { scan(argv); }
+  else if (args.has('--announce')) { runAnnounce(argv).catch(e => { console.error(e); process.exit(1); }); }
   else { run({ dryRun: args.has('--dry-run') }).catch(e => { console.error(e); process.exit(1); }); }
 }

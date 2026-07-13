@@ -131,6 +131,24 @@ so it needs no custom index either.
 - `node fun/lit/_scraper/alerts-mailer.mjs --dry-run` — a real run against
   Firestore that prints instead of sending (needs the Firebase secret).
 
+### Announcing a new feature
+
+Subscribers can opt into **feature updates** (the first toggle in the E-mail
+alerts form → `criteria.features`). When you ship something worth announcing,
+e-mail those subscribers with:
+
+```
+node fun/lit/_scraper/alerts-mailer.mjs --announce \
+  --subject="New on The Lit: the Working Papers archive" \
+  --html-file=announce.html   # or --text="...", --text-file=...  ( add --dry-run to preview )
+```
+
+It reads every alert with `criteria.features === true`, de-dups by recipient,
+and sends a "what's new" e-mail (same header/footnote as paper alerts). It is a
+no-op without the Firebase + SMTP secrets, and `--dry-run` prints the recipients
+instead of sending. Feature-only subscriptions never trigger paper e-mails (the
+daily run gates on `hasPaperIntent`).
+
 ### Coverage note
 
 The mailer scans the eight native sources plus the FT50 catalog (the two

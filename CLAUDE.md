@@ -364,16 +364,23 @@ writes** (no fan-out) while **only the analytics page reads/counts**
 `fun/lit/_PRESENCE-SETUP.md`. The card stays hidden until presence is configured,
 so it never shows a broken state. **E-mail alerts**
 lets a signed-in user subscribe to an e-mail when new papers matching a set of
-filters are added: opening the modal **pre-fills the alert criteria from the
-page's current search filters** (journal types, journals, authors, title /
+filters are added. The form's two top toggles choose *what* to be e-mailed
+about: **New features & updates to the website** (first — `criteria.features`, a
+subscription to product announcements) and **Any new paper added to the
+database** (`criteria.allPapers` — every new paper, no filters, which hides the
+paper-filter editor). Below those, unless "any new paper" is on, the modal
+**pre-fills the alert criteria from the page's current search filters** (journal
+types, journals, authors, title /
 abstract / affiliation terms, years, MS editors/areas, ISR/MkSc SE/AE, and the
 pre-print toggle — the same `sel` shape), editable in-modal, plus an alert name
 (**used as the e-mail subject line** — the field is labelled as such),
 recipient e-mail (default = account e-mail, sent *from* the user's own e-mail),
 and frequency (immediate / daily / weekly / monthly). The modal shows a **live
-example e-mail** at the bottom (`renderAlertPreview` — subject, header, two
-sample papers, and the footer, updating as the user edits name/criteria); it
-**mirrors the mailer's `renderEmail` template — keep the two in sync**. Alerts are stored
+example e-mail** at the bottom (`renderAlertPreview` — subject, header, sample
+papers and/or a "what's new" feature note, plus the footnote, updating as the
+user edits name/criteria/toggles); it **mirrors the mailer's `renderEmail` /
+`renderAnnouncement` templates — keep the three in sync**. A save now needs any
+one intent (`alertHasIntent`: features, allPapers, or a filter). Alerts are stored
 privately at `users/{uid}/alerts/{alertId}` (covered by the existing
 `_firestore.rules` wildcard) and managed from the modal (enable/pause switch,
 edit, delete). The page only writes subscriptions; **delivery is done by the
@@ -384,12 +391,19 @@ mailer** `fun/lit/_scraper/alerts-mailer.mjs`, run daily by
 copies of the page's journal-list sets + `textMatch`/`authorMatch`** (keep in
 sync), and e-mails due alerts over SMTP (`To` recipient, `Reply-To` the
 subscriber, `From` = `ALERTS_FROM`/`SMTP_USER`), stamping a per-alert
-`lastCheckedAt`/`lastSentAt` high-water mark so nothing is sent twice. Every
-e-mail's footer offers **update / unsubscribe / feedback** (the manage panel on
-the site, plus the maintainer `CONTACT_EMAIL` = kostas.stouras@ucd.ie for
-help/feedback) and the message carries a standards-based **`List-Unsubscribe`**
-header (mailto to the maintainer + the manage page) so clients show a native
-unsubscribe. It is a
+`lastCheckedAt`/`lastSentAt` high-water mark so nothing is sent twice.
+`criteria.allPapers` short-circuits `matchesCriteria` to match every new paper;
+`hasPaperIntent` gates paper matching so a **features-only** subscription (no
+`allPapers`, no filter) never sends paper e-mails — those are delivered instead
+by the **maintainer `--announce` mode** (`node alerts-mailer.mjs --announce
+--subject=… --html-file=… [--dry-run]`, `renderAnnouncement`), which e-mails
+everyone with `criteria.features` a "what's new" message (deduped by recipient).
+Every e-mail's footnote offers **edit preferences / unsubscribe from future
+e-mails / feedback** (the manage panel on the site, plus the maintainer
+`CONTACT_EMAIL` = kostas.stouras@ucd.ie) and the message carries a
+standards-based **`List-Unsubscribe`** header so clients show a native
+unsubscribe; the shared chrome (`footerText`/`footerHtml`/`emailShell`) is used
+by both `renderEmail` and `renderAnnouncement`. It is a
 no-op until the `FIREBASE_SERVICE_ACCOUNT` + `SMTP_*` secrets are set (so it
 never fails pre-setup); `--selftest`/`--scan`/`--dry-run` modes and the full
 deploy steps are in `fun/lit/_EMAIL-ALERTS-SETUP.md`. No Firestore rule change

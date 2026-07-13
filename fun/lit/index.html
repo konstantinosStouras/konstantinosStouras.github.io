@@ -535,6 +535,14 @@
   .alert-block { margin-top: 16px; }
   .alert-block-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--text-muted); margin: 0 0 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .alert-block-label .hint { text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 12px; color: var(--accent); }
+  /* Subscription-type toggles (feature updates / any new paper) */
+  .alert-types { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
+  .alert-optrow { display: flex; align-items: flex-start; gap: 10px; padding: 11px 13px; border: 1.5px solid var(--border); border-radius: 9px; cursor: pointer; }
+  .alert-optrow:hover { border-color: var(--navy); }
+  .alert-optrow input { accent-color: var(--navy); width: 16px; height: 16px; cursor: pointer; margin-top: 1px; flex: 0 0 auto; }
+  .alert-optrow strong { display: block; font-size: 13.5px; color: var(--text); }
+  .alert-optrow .sub { display: block; font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .alert-allnote { font-size: 12.5px; color: var(--text-muted); background: #fbfaf7; border: 1px dashed var(--border); border-radius: 9px; padding: 12px 14px; margin-top: 12px; line-height: 1.5; }
   .alert-crit { border: 1px solid var(--border); border-radius: 10px; padding: 14px 15px; background: #fbfaf7; }
   .alert-row { margin-bottom: 14px; }
   .alert-row:last-child { margin-bottom: 0; }
@@ -4266,7 +4274,8 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   var alertForm = { name: '', recipient: '', freq: 'weekly' }; // delivery inputs
 
   function emptyCriteria() {
-    var d = { preprintOnly: false };
+    // allPapers = "any new paper" (no filters); features = "new site features".
+    var d = { preprintOnly: false, allPapers: false, features: false };
     CRIT_KEYS.forEach(function (k) { d[k] = []; });
     return d;
   }
@@ -4287,10 +4296,12 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     c = c || {}; var d = emptyCriteria();
     CRIT_KEYS.forEach(function (k) { d[k] = Array.isArray(c[k]) ? c[k].slice() : []; });
     d.preprintOnly = !!c.preprintOnly;
+    d.allPapers = !!c.allPapers;
+    d.features = !!c.features;
     return d;
   }
   function normalizeCriteria(d) {
-    var out = { preprintOnly: !!d.preprintOnly };
+    var out = { preprintOnly: !!d.preprintOnly, allPapers: !!d.allPapers, features: !!d.features };
     CRIT_KEYS.forEach(function (k) {
       var seen = {}, list = [];
       (d[k] || []).forEach(function (v) { v = ('' + v).trim(); if (v && !seen[v]) { seen[v] = 1; list.push(v); } });
@@ -4319,9 +4330,23 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (c.preprintOnly)               p.push('pre-prints only');
     return p;
   }
-  function describeCriteria(c) { var p = critLabelList(c); return p.length ? p.join(' · ') : 'All new papers'; }
+  function describeCriteria(c) {
+    c = c || {};
+    var p = [];
+    if (c.features) p.push('new site features');
+    if (c.allPapers) p.push('any new paper');
+    else p = p.concat(critLabelList(c));
+    return p.length ? p.join(' · ') : 'All new papers';
+  }
+  // Any subscription intent at all (feature updates, any-new-paper, or a filter).
+  function alertHasIntent(d) { return !!(d && (d.features || d.allPapers || critCount(d) > 0)); }
   function defaultAlertName(c) {
-    var p = critLabelList(c); if (!p.length) return 'All new papers';
+    c = c || {};
+    var lead = [];
+    if (c.features) lead.push('Site updates');
+    if (c.allPapers) lead.push('Any new paper');
+    var p = lead.concat(c.allPapers ? [] : critLabelList(c));
+    if (!p.length) return 'All new papers';
     var s = p.slice(0, 3).join(' · '); if (p.length > 3) s += ' +' + (p.length - 3);
     return s.length > 64 ? s.slice(0, 61) + '…' : s;
   }
@@ -4385,6 +4410,11 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     inp.value = ''; inp.focus();
   };
   window.litAlertSetPreprint = function (on) { if (alertDraft) alertDraft.preprintOnly = !!on; renderAlertPreview(); };
+  // Subscribe to new-feature announcements (independent of the paper filters).
+  window.litAlertToggleFeatures = function (on) { if (alertDraft) alertDraft.features = !!on; renderAlertPreview(); };
+  // "Any new paper": hides the paper-filter editor (criteria become moot), so
+  // re-render the whole form; readAlertForm first so name/frequency/recipient survive.
+  window.litAlertToggleAll = function (on) { if (!alertDraft) return; alertDraft.allPapers = !!on; readAlertForm(); litAlertsRenderForm(); };
   window.litAlertReload = function () { readAlertForm(); alertDraft = captureCurrentFilters(); litAlertsRenderForm(); };
   window.litAlertCancelEdit = function () {
     alertEditId = null; alertForm = { name: '', recipient: (state.user && state.user.email) || '', freq: 'weekly' };
@@ -4414,7 +4444,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     readAlertForm();
     var statusEl = document.getElementById('litAlertSaveStatus');
     var setStatus = function (msg, color) { if (statusEl) { statusEl.style.color = color; statusEl.textContent = msg; } };
-    if (!critCount(alertDraft)) { setStatus('Add at least one filter (journal type, journal, author, …).', 'var(--red)'); return; }
+    if (!alertHasIntent(alertDraft)) { setStatus('Pick what to be e-mailed about — new site features, any new paper, or a filter.', 'var(--red)'); return; }
     var name = (alertForm.name || '').trim() || defaultAlertName(alertDraft);
     var recipient = (alertForm.recipient || '').trim();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(recipient)) { setStatus('Enter a valid recipient e-mail address.', 'var(--red)'); return; }
@@ -4456,9 +4486,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     }).join('');
     var advanced = ['editor', 'area', 'se', 'ae'].some(function (k) { return (d[k] || []).length; });
     var freqOpt = function (v, label) { return '<option value="' + v + '"' + (alertForm.freq === v ? ' selected' : '') + '>' + esc(label) + '</option>'; };
-    wrap.innerHTML =
-      '<div class="alert-block-label">' + (editing ? 'Edit alert' : 'New alert') +
-        ' <span class="hint" onclick="litAlertReload()" title="Copy the filters currently set on the page into this alert">↻ Use current page filters</span></div>' +
+    var critHtml =
       '<div class="alert-crit">' +
         '<div class="alert-row"><label>Journal types</label><div class="alert-typegrid">' + typeChips + '</div></div>' +
         '<div class="alert-row"><label>Journals</label>' +
@@ -4477,7 +4505,18 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
           '<div class="alert-chips" id="litAlertChips-se"></div><div class="alert-chips" id="litAlertChips-ae"></div></div>') : '') +
         '<div class="alert-row" style="margin-bottom:0"><label class="alert-toggle"><input type="checkbox" id="litAlertPreprint"' + (d.preprintOnly ? ' checked' : '') +
           ' onchange="litAlertSetPreprint(this.checked)"> Only papers with a free open-access pre-print</label></div>' +
+      '</div>';
+    wrap.innerHTML =
+      '<div class="alert-block-label">' + (editing ? 'Edit alert' : 'New alert') + '</div>' +
+      '<div class="alert-types">' +
+        '<label class="alert-optrow"><input type="checkbox" id="litAlertFeatures"' + (d.features ? ' checked' : '') + ' onchange="litAlertToggleFeatures(this.checked)"><span><strong>New features &amp; updates to the website</strong><span class="sub">An e-mail whenever a new tool or feature launches on The Lit.</span></span></label>' +
+        '<label class="alert-optrow"><input type="checkbox" id="litAlertAll"' + (d.allPapers ? ' checked' : '') + ' onchange="litAlertToggleAll(this.checked)"><span><strong>Any new paper added to the database</strong><span class="sub">Every new paper, with no filters.</span></span></label>' +
       '</div>' +
+      (d.allPapers
+        ? '<div class="alert-allnote">All new papers will be sent — no filters needed. Untick “Any new paper” to narrow it down by journal type, journal, author, year and more.</div>'
+        : ('<div class="alert-block-label" style="margin-top:14px">Or filter to specific papers ' +
+            '<span class="hint" onclick="litAlertReload()" title="Copy the filters currently set on the page into this alert">↻ Use current page filters</span></div>' +
+           critHtml)) +
       '<div class="alert-block-label" style="margin-top:16px">Delivery</div>' +
       '<div class="alert-delivery">' +
         '<div class="acct-field"><label for="litAlertName">Alert name <span style="text-transform:none;font-weight:400;color:var(--text-muted)">— the subject line of your e-mails</span></label><input id="litAlertName" type="text" placeholder="' + escAttr(defaultAlertName(d)) + '" value="' + escAttr(alertForm.name || '') + '" oninput="litAlertNameInput()"></div>' +
@@ -4509,7 +4548,24 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     var nm = (alertForm.name || '').trim() || defaultAlertName(d);
     var crit = describeCriteria(d);
     var CE = 'kostas.stouras@ucd.ie';
-    // Two illustrative sample papers (not a real match — just to show the shape).
+    // Small footnote — mirrors the mailer's footerHtml (edit prefs / unsubscribe /
+    // feedback), which every alert e-mail carries.
+    var footnote =
+      '<hr style="border:none;border-top:1px solid var(--border);margin:14px 0 10px">' +
+      '<p style="color:var(--text-muted);font-size:11px;margin:0 0 5px">You subscribed to e-mails from The Lit.</p>' +
+      '<p style="color:var(--text-muted);font-size:11px;margin:0;line-height:1.7">' +
+        '<span style="color:var(--navy);font-weight:600">Edit your preferences</span> · ' +
+        '<span style="color:var(--navy);font-weight:600">Unsubscribe</span> from future e-mails · ' +
+        '<a href="mailto:' + CE + '" style="color:var(--navy);font-weight:600">Questions or feedback</a></p>';
+    function mail(subject, headLabel, innerHtml) {
+      return '<div class="alert-preview-mail">' +
+        '<div class="apm-subject"><span>Subject</span> ' + esc(subject) + '</div>' +
+        '<div class="apm-body">' +
+          '<div class="apm-head"><span style="color:#c9a24b;font-style:italic">The Lit</span> — ' + esc(headLabel) + '</div>' +
+          '<div class="apm-inner">' + innerHtml + footnote + '</div>' +
+        '</div>' +
+      '</div>';
+    }
     var samples = [
       { t: 'Dispatching and Pricing in Two-Sided Spatial Queues', a: 'Ang Xu, Chiwei Yan', m: 'Operations Research · 2026 · Articles in Advance', pre: true },
       { t: 'Learning and Information in Dynamic Marketplaces', a: 'A. Researcher, B. Coauthor', m: 'Management Science · 2026', pre: false }
@@ -4522,25 +4578,21 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         (p.pre ? '<div style="font-size:11.5px;margin-top:2px"><span style="color:#c2410c">Pre-print (open access)</span></div>' : '') +
         '</li>';
     }).join('');
+    var blocks = [];
+    if (d.features) {
+      blocks.push(mail('The Lit: a new feature is available', 'what’s new',
+        '<p style="font-size:13px;margin:0 0 8px">Here’s what’s new on <strong>The Lit</strong>:</p>' +
+        '<p style="font-size:13px;margin:0;color:var(--text)">A short note from the maintainer about the latest feature or tool, with a link to try it.</p>'));
+    }
+    if (d.allPapers || critCount(d) > 0 || !d.features) {
+      blocks.push(mail('The Lit: 2 new papers — ' + nm, 'new papers',
+        '<p style="font-size:13px;margin:0 0 4px"><strong>2 new papers</strong> matching your alert <strong>' + esc(nm) + '</strong> were added to The Lit.</p>' +
+        '<p style="color:var(--text-muted);font-size:11.5px;margin:0 0 12px">Criteria: ' + esc(crit) + '</p>' +
+        '<ul style="padding:0;margin:0">' + items + '</ul>'));
+    }
     box.innerHTML =
-      '<div class="alert-block-label">Example e-mail <span class="hint" style="cursor:default">what each alert looks like</span></div>' +
-      '<div class="alert-preview-mail">' +
-        '<div class="apm-subject"><span>Subject</span> The Lit: 2 new papers — ' + esc(nm) + '</div>' +
-        '<div class="apm-body">' +
-          '<div class="apm-head"><span style="color:#c9a24b;font-style:italic">The Lit</span> — new papers</div>' +
-          '<div class="apm-inner">' +
-            '<p style="font-size:13px;margin:0 0 4px"><strong>2 new papers</strong> matching your alert <strong>' + esc(nm) + '</strong> were added to The Lit.</p>' +
-            '<p style="color:var(--text-muted);font-size:11.5px;margin:0 0 12px">Criteria: ' + esc(crit) + '</p>' +
-            '<ul style="padding:0;margin:0">' + items + '</ul>' +
-            '<hr style="border:none;border-top:1px solid var(--border);margin:14px 0 10px">' +
-            '<p style="color:var(--text-muted);font-size:11px;margin:0 0 5px">You set up this e-mail alert on The Lit.</p>' +
-            '<p style="color:var(--text-muted);font-size:11px;margin:0;line-height:1.7">' +
-              '<span style="color:var(--navy);font-weight:600">Update this alert</span> (journals, filters, frequency) · ' +
-              '<span style="color:var(--navy);font-weight:600">Unsubscribe</span> (pause or delete it here) · ' +
-              '<a href="mailto:' + CE + '" style="color:var(--navy);font-weight:600">Questions or feedback</a></p>' +
-          '</div>' +
-        '</div>' +
-      '</div>';
+      '<div class="alert-block-label">Example e-mail' + (blocks.length > 1 ? 's' : '') + ' <span class="hint" style="cursor:default">what you’ll receive</span></div>' +
+      blocks.join('<div style="height:10px"></div>');
   }
   function renderExistingAlerts() {
     var wrap = document.getElementById('litAlertsExisting'); if (!wrap) return;
