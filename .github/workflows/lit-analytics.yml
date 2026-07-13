@@ -1,0 +1,86 @@
+name: lit — update analytics summary
+
+# Pre-aggregates the whole Lit corpus (fun/lit/data/ + fun/lit/data-ft50/) into
+# the two small, committed JSON files the analytics dashboard reads:
+#   fun/lit/analytics/data.json     (per-journal × per-year aggregates, top-cited)
+#   fun/lit/analytics/authors.json  (per-author aggregates)
+# so stouras.com/fun/lit/analytics/ can draw every chart client-side without
+# ever downloading the ~270 MB of raw papers. Purely offline: reads only the
+# static datasets already committed by the lit / lit-ft50 data builds.
+# See fun/lit/_scraper/build-analytics.mjs.
+
+on:
+  schedule:
+    # 08:10 UTC — after both the native lit build (05:30) and the FT50 catalog
+    # build (07:15) have refreshed and committed their data for the day.
+    - cron: '10 8 * * *'
+  workflow_dispatch: {}      # run on demand from the Actions tab
+  push:
+    # Re-run whenever the aggregator or the page itself changes, so a merge
+    # seeds fresh figures immediately instead of waiting for the daily schedule.
+    paths:
+      - '.github/workflows/lit-analytics.yml'
+      - 'fun/lit/_scraper/build-analytics.mjs'
+
+# Never let two analytics builds race each other.
+concurrency:
+  group: lit-analytics-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write            # needed to commit the refreshed summary back
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build analytics summary
+        run: node fun/lit/_scraper/build-analytics.mjs
+
+      - name: Commit refreshed analytics
+        # Only master carries the committed summary. Feature branches (e.g. a PR
+        # that edits the aggregator) still run the build above as a check but do
+        # not commit generated JSON into their own diffs.
+        if: github.ref == 'refs/heads/master'
+        # This workflow only writes fun/lit/analytics/*.json — a disjoint set of
+        # paths from the data builds (fun/lit/data, fun/lit/data-ft50) — so a
+        # concurrent commit never conflicts; a plain rebase-then-push suffices.
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add fun/lit/analytics/data.json fun/lit/analytics/authors.json
+          if git diff --cached --quiet; then
+            echo "No analytics changes — nothing to commit."
+            exit 0
+          fi
+          git commit -m "lit: refresh analytics summary"
+          for i in 1 2 3 4; do
+            if git push origin HEAD:${{ github.ref_name }}; then
+              echo "Pushed on attempt $i."
+              exit 0
+            fi
+            echo "Push rejected (concurrent data commit?) — rebasing onto the tip and retrying…"
+            git fetch origin ${{ github.ref_name }}
+            git rebase origin/${{ github.ref_name }} || { git rebase --abort; exit 1; }
+            sleep 5
+          done
+          echo "::error::Could not push the refreshed analytics after 4 attempts."
+          exit 1
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### lit analytics summary" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f fun/lit/analytics/data.json ]; then
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            node -e 'const d=require("./fun/lit/analytics/data.json");console.log(JSON.stringify({generated:d.generated,years:[d.yearMin,d.yearMax],totals:d.totals},null,2))' >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi

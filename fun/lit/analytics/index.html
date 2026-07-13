@@ -5,9 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Data Analytics · The Lit — Research Paper Browser</title>
 
-<!-- This page is a placeholder for summary statistics of The Lit database.
-     It is intentionally kept out of search indexes until it has real content. -->
-<meta name="description" content="Summary statistics for The Lit research paper database — coming soon.">
+<!-- Interactive summary statistics for The Lit database. Figures are pre-aggregated
+     offline by fun/lit/_scraper/build-analytics.mjs into ./data.json + ./authors.json
+     (see .github/workflows/lit-analytics.yml); the page draws everything client-side. -->
+<meta name="description" content="Interactive summary statistics for The Lit research paper database — filter by journal, journal type, author and year to see publication trends, co-authorship, pre-print availability and the most-cited work.">
 <meta name="robots" content="noindex, follow">
 <link rel="canonical" href="https://stouras.com/fun/lit/analytics/">
 <meta name="author" content="Konstantinos Stouras">
@@ -39,39 +40,135 @@
   body { font-family: 'Work Sans', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh; min-height: 100dvh; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 
   .header { background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%); box-shadow: var(--shadow-lg); }
-  .header-inner { max-width: 1080px; margin: 0 auto; padding: 22px 32px; display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  .header-inner { max-width: 1160px; margin: 0 auto; padding: 22px 32px; display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
   .header h1 { font-family: 'Fraunces', serif; color: #fff; font-size: 26px; font-weight: 400; letter-spacing: -0.5px; }
   .header h1 em { font-style: italic; color: var(--accent); }
   .header h1 .sub { display: block; font-family: 'Work Sans', sans-serif; font-size: 13px; font-weight: 400; color: rgba(255,255,255,0.7); letter-spacing: 0; margin-top: 3px; }
   .back-link { font-size: 13px; font-weight: 600; color: #fff; text-decoration: none; border: 1.5px solid rgba(255,255,255,0.5); background: rgba(255,255,255,0.08); border-radius: 6px; padding: 9px 15px; transition: all .15s; white-space: nowrap; }
   .back-link:hover { background: rgba(255,255,255,0.18); border-color: #fff; }
 
-  .wrap { max-width: 1080px; margin: 0 auto; padding: 40px 32px 60px; }
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 26px 32px 60px; }
 
-  .hero { text-align: center; padding: 30px 20px 10px; }
-  .hero .badge { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--accent); background: var(--accent-light); border-radius: 100px; padding: 5px 14px; margin-bottom: 16px; }
-  .hero h2 { font-family: 'Fraunces', serif; font-weight: 400; font-size: 34px; color: var(--navy); margin-bottom: 12px; }
-  .hero p { font-size: 15px; color: var(--text-muted); max-width: 60ch; margin: 0 auto; line-height: 1.7; }
+  /* ── Filter panel ─────────────────────────────────────────────────────── */
+  .filters { background: var(--white); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-sm); padding: 20px 22px; margin-bottom: 22px; }
+  .filters .frow { display: flex; flex-wrap: wrap; gap: 18px 26px; align-items: flex-start; }
+  .fgroup { min-width: 0; }
+  .fgroup > .flabel { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .7px; color: var(--text-muted); margin-bottom: 8px; display: block; }
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; }
+  .chip { font-size: 12.5px; font-weight: 600; border: 1.5px solid var(--border); background: var(--white); color: var(--text); border-radius: 100px; padding: 6px 13px; cursor: pointer; transition: all .13s; white-space: nowrap; user-select: none; }
+  .chip:hover { border-color: var(--navy); }
+  .chip.on { background: var(--navy); border-color: var(--navy); color: #fff; }
+  .chip.tchip.on { background: var(--accent); border-color: var(--accent); color: #3a2c0a; }
 
-  /* Placeholder skeleton cards, dimmed to read as "coming soon". */
-  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; margin-top: 40px; }
-  .stat-card { background: var(--white); border: 1px solid var(--border); border-radius: 12px; padding: 22px 22px 24px; box-shadow: var(--shadow-sm); opacity: .78; }
-  .stat-card .label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .7px; color: var(--text-muted); }
-  .stat-card .value { font-family: 'Fraunces', serif; font-size: 30px; color: var(--navy); margin-top: 10px; letter-spacing: 1px; }
-  .stat-card .bar { height: 8px; border-radius: 100px; background: linear-gradient(90deg, var(--navy-light), var(--accent-light)); margin-top: 16px; }
-  .stat-card .bar.short { width: 60%; }
-  .stat-card .bar.mid { width: 80%; }
+  .jbtn { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; border: 1.5px solid var(--border); background: var(--white); color: var(--text); border-radius: 8px; padding: 8px 14px; cursor: pointer; transition: all .13s; }
+  .jbtn:hover { border-color: var(--navy); }
+  .jbtn .cnt { font-size: 11px; font-weight: 700; background: var(--navy-light); color: var(--navy); border-radius: 100px; padding: 1px 8px; }
 
-  .note { margin-top: 40px; text-align: center; font-size: 14px; color: var(--text-muted); background: var(--white); border: 1px dashed var(--border); border-radius: 12px; padding: 26px 24px; line-height: 1.7; }
-  .note strong { color: var(--text); }
-  .note a { color: var(--navy); font-weight: 600; }
+  /* Journal picker popover */
+  .jpick { position: relative; }
+  .jpanel { position: absolute; z-index: 40; top: calc(100% + 8px); left: 0; width: 340px; max-width: 86vw; background: var(--white); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-lg); padding: 12px; display: none; }
+  .jpanel.open { display: block; }
+  .jsearch { width: 100%; border: 1.5px solid var(--border); border-radius: 8px; padding: 8px 11px; font: inherit; font-size: 13px; margin-bottom: 8px; }
+  .jsearch:focus { outline: none; border-color: var(--navy); }
+  .jactions { display: flex; gap: 8px; margin-bottom: 8px; }
+  .jactions button { flex: 1; font-size: 12px; font-weight: 600; border: 1px solid var(--border); background: var(--bg); color: var(--text-muted); border-radius: 7px; padding: 6px; cursor: pointer; }
+  .jactions button:hover { border-color: var(--navy); color: var(--navy); }
+  .jlist { max-height: 300px; overflow-y: auto; margin: 0 -4px; }
+  .jrow { display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 7px; cursor: pointer; font-size: 13px; }
+  .jrow:hover { background: var(--bg); }
+  .jrow input { width: 15px; height: 15px; accent-color: var(--navy); flex: none; }
+  .jrow .jn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .jrow .jc { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .jrow .jbadge { font-size: 9.5px; font-weight: 700; border-radius: 4px; padding: 1px 5px; letter-spacing: .3px; }
+  .b-utd24 { background: #ede7f6; color: #5e35b1; }
+  .b-ft50  { background: #e3f0fb; color: #1565a7; }
+  .b-abs4  { background: #e7f4ec; color: #2e7d47; }
+  .b-abs3  { background: #f2efe6; color: #8a7326; }
+  .b-none  { background: #f0eef0; color: #8a7c82; }
 
-  .footer { padding: 26px 32px 40px; color: var(--text-muted); font-size: 12px; text-align: center; }
+  /* Year range */
+  .yearwrap { min-width: 240px; }
+  .yr-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+  .yr-val { font-family: 'Fraunces', serif; font-size: 16px; color: var(--navy); font-variant-numeric: tabular-nums; }
+  .slider { position: relative; height: 30px; }
+  .slider .track { position: absolute; top: 13px; left: 0; right: 0; height: 4px; border-radius: 4px; background: var(--border); }
+  .slider .fill { position: absolute; top: 13px; height: 4px; border-radius: 4px; background: var(--navy); }
+  .slider input[type=range] { position: absolute; top: 0; left: 0; width: 100%; margin: 0; background: none; pointer-events: none; -webkit-appearance: none; appearance: none; height: 30px; }
+  .slider input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--navy); border: 3px solid #fff; box-shadow: var(--shadow-sm); cursor: pointer; pointer-events: auto; margin-top: 0; }
+  .slider input[type=range]::-moz-range-thumb { width: 15px; height: 15px; border-radius: 50%; background: var(--navy); border: 3px solid #fff; box-shadow: var(--shadow-sm); cursor: pointer; pointer-events: auto; }
+  .slider input[type=range]::-webkit-slider-runnable-track { background: none; }
+  .yr-presets { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .yr-presets button { font-size: 11.5px; font-weight: 600; border: 1px solid var(--border); background: var(--white); color: var(--text-muted); border-radius: 100px; padding: 4px 11px; cursor: pointer; }
+  .yr-presets button:hover, .yr-presets button.on { border-color: var(--navy); color: var(--navy); background: var(--navy-light); }
+
+  .fscope { margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--border); display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+  .fscope .txt { font-size: 13.5px; color: var(--text-muted); }
+  .fscope .txt strong { color: var(--navy); font-weight: 700; }
+  .fscope .selchips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .selpill { font-size: 11.5px; font-weight: 600; background: var(--navy-light); color: var(--navy); border-radius: 100px; padding: 3px 8px 3px 10px; display: inline-flex; align-items: center; gap: 6px; }
+  .selpill button { border: none; background: none; color: var(--navy); cursor: pointer; font-size: 14px; line-height: 1; padding: 0; opacity: .6; }
+  .selpill button:hover { opacity: 1; }
+  .resetbtn { font-size: 12.5px; font-weight: 600; color: var(--navy); background: none; border: 1.5px solid var(--border); border-radius: 8px; padding: 7px 14px; cursor: pointer; white-space: nowrap; }
+  .resetbtn:hover { border-color: var(--navy); }
+
+  /* ── Tabs ─────────────────────────────────────────────────────────────── */
+  .tabs { display: flex; gap: 4px; margin-bottom: 18px; border-bottom: 2px solid var(--border); }
+  .tab { font-size: 14px; font-weight: 600; color: var(--text-muted); background: none; border: none; padding: 10px 18px; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; }
+  .tab:hover { color: var(--navy); }
+  .tab.on { color: var(--navy); border-bottom-color: var(--navy); }
+
+  /* ── Stat tiles ───────────────────────────────────────────────────────── */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 14px; margin-bottom: 22px; }
+  .tile { background: var(--white); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px 18px; box-shadow: var(--shadow-sm); }
+  .tile .label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--text-muted); }
+  .tile .value { font-family: 'Fraunces', serif; font-size: 27px; color: var(--navy); margin-top: 7px; letter-spacing: .5px; font-variant-numeric: tabular-nums; }
+  .tile .value.sm { font-size: 22px; }
+  .tile .hint { font-size: 11.5px; color: var(--text-muted); margin-top: 3px; }
+
+  /* ── Chart cards ──────────────────────────────────────────────────────── */
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .card { background: var(--white); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px 22px; box-shadow: var(--shadow-sm); min-width: 0; }
+  .card.wide { grid-column: 1 / -1; }
+  .card h3 { font-family: 'Fraunces', serif; font-weight: 500; font-size: 17px; color: var(--navy); margin-bottom: 2px; }
+  .card .csub { font-size: 12.5px; color: var(--text-muted); margin-bottom: 14px; }
+  .card svg { width: 100%; height: auto; display: block; overflow: visible; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 12px; }
+  .legend .li { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text); }
+  .legend .sw { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+  .chart-empty { color: var(--text-muted); font-size: 13.5px; padding: 30px 6px; text-align: center; }
+
+  /* cited table */
+  table.cited { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.cited th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); font-weight: 700; padding: 7px 10px; border-bottom: 2px solid var(--border); }
+  table.cited td { padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.cited tr:last-child td { border-bottom: none; }
+  table.cited .ti a { color: var(--navy); font-weight: 600; text-decoration: none; }
+  table.cited .ti a:hover { text-decoration: underline; }
+  table.cited .meta { color: var(--text-muted); font-size: 12px; }
+  table.cited .cby { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--navy); text-align: right; white-space: nowrap; }
+  .tblscroll { overflow-x: auto; }
+
+  /* Author spotlight */
+  .author-search { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 18px; }
+  .author-search input { flex: 1; min-width: 220px; border: 1.5px solid var(--border); border-radius: 9px; padding: 11px 14px; font: inherit; font-size: 14.5px; }
+  .author-search input:focus { outline: none; border-color: var(--navy); }
+  .author-hint { font-size: 12.5px; color: var(--text-muted); }
+  .aspot-empty { background: var(--white); border: 1px dashed var(--border); border-radius: 14px; padding: 40px 24px; text-align: center; color: var(--text-muted); }
+  .aname { font-family: 'Fraunces', serif; font-size: 24px; color: var(--navy); font-weight: 500; }
+
+  .loading { text-align: center; color: var(--text-muted); font-size: 14px; padding: 60px 20px; }
+  .spinner { display: inline-block; width: 22px; height: 22px; border: 3px solid var(--navy-light); border-top-color: var(--navy); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: middle; margin-right: 10px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .footer { padding: 30px 32px 40px; color: var(--text-muted); font-size: 12px; text-align: center; }
   .footer a { color: var(--navy); }
 
+  @media (max-width: 820px) {
+    .cards { grid-template-columns: 1fr; }
+  }
   @media (max-width: 600px) {
-    .header-inner, .wrap { padding-left: 20px; padding-right: 20px; }
-    .hero h2 { font-size: 27px; }
+    .header-inner, .wrap { padding-left: 18px; padding-right: 18px; }
+    .header h1 { font-size: 22px; }
   }
 </style>
 </head>
@@ -85,31 +182,660 @@
 </header>
 
 <div class="wrap">
-  <div class="hero">
-    <span class="badge">Coming soon</span>
-    <h2>Summary statistics</h2>
-    <p>This page will present summary statistics for The Lit database — coverage by journal, publication trends over time, open-access pre-print availability, most-cited work, and more. It is still being built.</p>
-  </div>
 
-  <!-- Placeholder tiles: intentionally blank until real figures are wired in. -->
-  <div class="stats-grid" aria-hidden="true">
-    <div class="stat-card"><div class="label">Papers indexed</div><div class="value">—</div><div class="bar mid"></div></div>
-    <div class="stat-card"><div class="label">Journals &amp; sources</div><div class="value">—</div><div class="bar short"></div></div>
-    <div class="stat-card"><div class="label">Authors</div><div class="value">—</div><div class="bar"></div></div>
-    <div class="stat-card"><div class="label">With open-access pre-print</div><div class="value">—</div><div class="bar short"></div></div>
-    <div class="stat-card"><div class="label">Year range</div><div class="value">—</div><div class="bar mid"></div></div>
-    <div class="stat-card"><div class="label">Added this month</div><div class="value">—</div><div class="bar short"></div></div>
-  </div>
+  <div id="boot" class="loading"><span class="spinner"></span>Loading the database summary…</div>
 
-  <div class="note">
-    <strong>Nothing to see here yet.</strong> Summary statistics for the database will appear on this page soon.<br>
-    In the meantime, explore and filter every paper on <a href="/fun/lit/">The Lit</a>.
+  <div id="app" style="display:none">
+
+    <!-- ── Filters ────────────────────────────────────────────────────── -->
+    <div class="filters">
+      <div class="frow">
+        <div class="fgroup">
+          <span class="flabel">Journal types</span>
+          <div class="chips" id="typeChips"></div>
+        </div>
+        <div class="fgroup jpick">
+          <span class="flabel">Journals</span>
+          <button class="jbtn" id="jbtn">Choose journals <span class="cnt" id="jbtnCnt">All</span> ▾</button>
+          <div class="jpanel" id="jpanel">
+            <input class="jsearch" id="jsearch" type="text" placeholder="Filter journals…" autocomplete="off">
+            <div class="jactions">
+              <button id="jAll">Select all shown</button>
+              <button id="jClear">Clear</button>
+            </div>
+            <div class="jlist" id="jlist"></div>
+          </div>
+        </div>
+        <div class="fgroup yearwrap">
+          <span class="flabel">Year range</span>
+          <div class="yr-head"><span class="yr-val" id="yrVal">—</span></div>
+          <div class="slider" id="slider">
+            <div class="track"></div>
+            <div class="fill" id="yrFill"></div>
+            <input type="range" id="yrMin">
+            <input type="range" id="yrMax">
+          </div>
+          <div class="yr-presets" id="yrPresets"></div>
+        </div>
+      </div>
+      <div class="fscope">
+        <div>
+          <div class="txt" id="scopeTxt">—</div>
+          <div class="selchips" id="selChips"></div>
+        </div>
+        <button class="resetbtn" id="resetBtn">Reset filters</button>
+      </div>
+    </div>
+
+    <!-- ── Tabs ───────────────────────────────────────────────────────── -->
+    <div class="tabs">
+      <button class="tab on" data-tab="overview">Corpus overview</button>
+      <button class="tab" data-tab="author">Author spotlight</button>
+    </div>
+
+    <!-- ── Overview tab ───────────────────────────────────────────────── -->
+    <div id="tab-overview">
+      <div class="tiles" id="tiles"></div>
+      <div class="cards">
+        <div class="card wide">
+          <h3>Publication volume over time</h3>
+          <div class="csub" id="evoSub">Papers published per year</div>
+          <div id="evoChart"></div>
+          <div class="legend" id="evoLegend"></div>
+        </div>
+        <div class="card">
+          <h3>Average co-authors per paper</h3>
+          <div class="csub" id="coSub">Mean number of authors, by year</div>
+          <div id="coChart"></div>
+        </div>
+        <div class="card">
+          <h3>Co-authorship distribution</h3>
+          <div class="csub">Share of papers by number of authors, within scope</div>
+          <div id="teamChart"></div>
+        </div>
+        <div class="card">
+          <h3>Papers by journal</h3>
+          <div class="csub" id="byjSub">Within the selected scope</div>
+          <div id="byjChart"></div>
+        </div>
+        <div class="card">
+          <h3>Open-access pre-print availability</h3>
+          <div class="csub">Share of papers with a free author pre-print, by year</div>
+          <div id="preChart"></div>
+        </div>
+        <div class="card wide">
+          <h3>Most-cited papers in scope</h3>
+          <div class="csub">Citation counts from Crossref (<code>is-referenced-by-count</code>). Titles link to their DOI.</div>
+          <div class="tblscroll"><div id="citedTable"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Author tab ─────────────────────────────────────────────────── -->
+    <div id="tab-author" style="display:none">
+      <div class="author-search">
+        <input id="authorInput" list="authorList" type="text" placeholder="Type an author's name…" autocomplete="off">
+        <datalist id="authorList"></datalist>
+        <span class="author-hint" id="authorHint"></span>
+      </div>
+      <div id="authorBody">
+        <div class="aspot-empty">Search for an author above to see their publication record across The Lit —
+          how many papers, in which journals, and how their output has evolved over time.</div>
+      </div>
+    </div>
+
+  </div><!-- /#app -->
+
+  <div id="failed" style="display:none" class="loading">
+    Couldn't load the analytics data. Please try again later, or explore every paper on
+    <a href="/fun/lit/" style="color:var(--navy)">The Lit</a>.
   </div>
 </div>
 
 <footer class="footer">
+  <span id="genline"></span>
   <a href="/fun/lit/">The Lit — Research Paper Browser</a> · <a href="https://www.stouras.com" target="_blank" rel="noopener">Konstantinos I. Stouras</a>
 </footer>
+
+<script>
+"use strict";
+(function () {
+  // ── palette (colour-blind-safe, tuned to the claret/gold theme) ─────────
+  var SERIES = ['#7d1d3f','#c9a24b','#2a7f8f','#3f6098','#8a5a2b','#6a8d3a','#a34a6d','#4c6b74','#b5533a','#5b4b8a'];
+  var NAVY = '#7d1d3f', GOLD = '#c9a24b', MUTED = '#6a5a60', GRID = '#e8e2e4';
+
+  // ── state ───────────────────────────────────────────────────────────────
+  var DATA = null, JMAP = {}, AUTHORS = null, authorsState = 'idle';
+  var S = { types: {}, journals: {}, yMin: 0, yMax: 0, tab: 'overview', author: null };
+  var YEAR_LO = 0, YEAR_HI = 0;
+
+  // ── small utils ─────────────────────────────────────────────────────────
+  function $(id) { return document.getElementById(id); }
+  function el(tag, attrs, kids) {
+    var e = document.createElement(tag);
+    if (attrs) for (var k in attrs) { if (k === 'class') e.className = attrs[k]; else if (k === 'html') e.innerHTML = attrs[k]; else e.setAttribute(k, attrs[k]); }
+    (kids || []).forEach(function (c) { e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
+    return e;
+  }
+  function fmt(n) { return (n || 0).toLocaleString('en-US'); }
+  function pct(x) { return (x * 100).toFixed(x >= 0.1 ? 0 : 1) + '%'; }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function keysHaveType(jk, t) { return (JMAP[jk].types || []).indexOf(t) !== -1; }
+
+  // The journals currently in scope: union of selected types' journals and
+  // explicitly-checked journals. Nothing selected ⇒ the whole corpus.
+  function scopeKeys() {
+    var chosenTypes = Object.keys(S.types).filter(function (t) { return S.types[t]; });
+    var chosenJ = Object.keys(S.journals).filter(function (k) { return S.journals[k]; });
+    if (!chosenTypes.length && !chosenJ.length) return DATA.journals.map(function (j) { return j.key; });
+    var set = {};
+    DATA.journals.forEach(function (j) {
+      if (chosenJ.indexOf(j.key) !== -1) set[j.key] = 1;
+      for (var i = 0; i < chosenTypes.length; i++) if (keysHaveType(j.key, chosenTypes[i])) { set[j.key] = 1; break; }
+    });
+    return Object.keys(set);
+  }
+
+  // Aggregate the per-journal×year tables over a journal set + year window.
+  function aggregate(keys) {
+    var out = {
+      n: 0, a: 0, s: 0, p: 0, c: 0, ab: 0,
+      perYear: {},            // y -> {n,a,s,p,c,ab}
+      perJournal: {},         // key -> n
+      buckets: [0, 0, 0, 0, 0, 0]
+    };
+    keys.forEach(function (k) {
+      var j = JMAP[k]; if (!j) return;
+      var jn = 0;
+      for (var y in j.years) {
+        var yy = +y; if (yy < S.yMin || yy > S.yMax) continue;
+        var r = j.years[y];
+        jn += r.n;
+        out.n += r.n; out.a += r.a; out.s += r.s; out.p += r.p; out.c += r.c; out.ab += r.ab;
+        var t = out.perYear[y] || (out.perYear[y] = { n: 0, a: 0, s: 0, p: 0, c: 0, ab: 0 });
+        t.n += r.n; t.a += r.a; t.s += r.s; t.p += r.p; t.c += r.c; t.ab += r.ab;
+        if (r.t) for (var i = 0; i < 6; i++) out.buckets[i] += r.t[i];
+      }
+      if (jn) out.perJournal[k] = jn;
+    });
+    return out;
+  }
+
+  // ── SVG chart primitives ────────────────────────────────────────────────
+  function svgEl(w, h) {
+    return '<svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="xMidYMid meet" font-family="Work Sans, sans-serif">';
+  }
+  function niceMax(v) {
+    if (v <= 0) return 1;
+    var pow = Math.pow(10, Math.floor(Math.log10(v)));
+    var f = v / pow;
+    var nf = f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10;
+    return nf * pow;
+  }
+  function yTicks(max, n) {
+    var t = []; for (var i = 0; i <= n; i++) t.push(max * i / n); return t;
+  }
+
+  // Multi-series line chart. series: [{name,color,pts:[[year,val]]}]
+  function lineChart(series, opts) {
+    opts = opts || {};
+    var W = 760, H = 300, L = 52, R = 16, T = 14, B = 34;
+    var years = opts.years;                      // array of year ints (x domain)
+    if (!years.length) return '<div class="chart-empty">No data in the selected scope.</div>';
+    var x0 = years[0], x1 = years[years.length - 1];
+    var span = Math.max(1, x1 - x0);
+    var maxV = 0;
+    series.forEach(function (s) { s.pts.forEach(function (p) { if (p[1] > maxV) maxV = p[1]; }); });
+    maxV = niceMax(maxV || (opts.pctAxis ? 1 : 1));
+    if (opts.maxOverride) maxV = opts.maxOverride;
+    var px = function (yr) { return L + (yr - x0) / span * (W - L - R); };
+    var py = function (v) { return T + (1 - v / maxV) * (H - T - B); };
+    var svg = svgEl(W, H);
+    // gridlines + y labels
+    yTicks(maxV, 4).forEach(function (v) {
+      var yy = py(v);
+      svg += '<line x1="' + L + '" y1="' + yy.toFixed(1) + '" x2="' + (W - R) + '" y2="' + yy.toFixed(1) + '" stroke="' + GRID + '" stroke-width="1"/>';
+      svg += '<text x="' + (L - 8) + '" y="' + (yy + 4).toFixed(1) + '" text-anchor="end" font-size="11" fill="' + MUTED + '">' + (opts.pctAxis ? Math.round(v * 100) + '%' : fmtTick(v)) + '</text>';
+    });
+    // x labels (about 6 ticks)
+    var step = Math.max(1, Math.round(span / 6));
+    for (var yr = x0; yr <= x1; yr += step) {
+      svg += '<text x="' + px(yr).toFixed(1) + '" y="' + (H - 12) + '" text-anchor="middle" font-size="11" fill="' + MUTED + '">' + yr + '</text>';
+    }
+    if ((x1 - x0) % step !== 0) svg += '<text x="' + px(x1).toFixed(1) + '" y="' + (H - 12) + '" text-anchor="middle" font-size="11" fill="' + MUTED + '">' + x1 + '</text>';
+    // series paths
+    series.forEach(function (s) {
+      if (!s.pts.length) return;
+      var d = s.pts.map(function (p, i) { return (i ? 'L' : 'M') + px(p[0]).toFixed(1) + ' ' + py(p[1]).toFixed(1); }).join(' ');
+      if (opts.area && series.length === 1) {
+        var area = d + ' L' + px(s.pts[s.pts.length - 1][0]).toFixed(1) + ' ' + py(0).toFixed(1) + ' L' + px(s.pts[0][0]).toFixed(1) + ' ' + py(0).toFixed(1) + ' Z';
+        svg += '<path d="' + area + '" fill="' + s.color + '" opacity="0.12"/>';
+      }
+      svg += '<path d="' + d + '" fill="none" stroke="' + s.color + '" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>';
+    });
+    svg += '</svg>';
+    return svg;
+  }
+  function fmtTick(v) {
+    if (v >= 1e6) return (v / 1e6).toFixed(v % 1e6 ? 1 : 0) + 'M';
+    if (v >= 1e3) return (v / 1e3).toFixed(v % 1e3 ? 1 : 0) + 'k';
+    return String(Math.round(v));
+  }
+
+  // Horizontal bars. items:[{label,value,color}]
+  function barsH(items, opts) {
+    opts = opts || {};
+    if (!items.length) return '<div class="chart-empty">No data in the selected scope.</div>';
+    items = items.slice(0, opts.limit || 14);
+    var rowH = 26, gap = 8, L = 150, R = 54, T = 6, W = 760;
+    var H = T * 2 + items.length * rowH + (items.length - 1) * gap;
+    var maxV = 0; items.forEach(function (it) { if (it.value > maxV) maxV = it.value; });
+    maxV = maxV || 1;
+    var svg = svgEl(W, H);
+    items.forEach(function (it, i) {
+      var y = T + i * (rowH + gap);
+      var w = (it.value / maxV) * (W - L - R);
+      svg += '<text x="' + (L - 10) + '" y="' + (y + rowH / 2 + 4) + '" text-anchor="end" font-size="12.5" fill="' + '#241a1e' + '">' + esc(trunc(it.label, 26)) + '</text>';
+      svg += '<rect x="' + L + '" y="' + y + '" width="' + Math.max(1, w).toFixed(1) + '" height="' + rowH + '" rx="4" fill="' + (it.color || NAVY) + '"/>';
+      svg += '<text x="' + (L + Math.max(1, w) + 8).toFixed(1) + '" y="' + (y + rowH / 2 + 4) + '" font-size="12" fill="' + MUTED + '" font-weight="600">' + (opts.fmt ? opts.fmt(it.value) : fmt(it.value)) + '</text>';
+    });
+    svg += '</svg>';
+    return svg;
+  }
+  function trunc(s, n) { s = String(s); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+
+  // Vertical bars. items:[{label,value,sub}]
+  function barsV(items, opts) {
+    opts = opts || {};
+    if (!items.length || items.every(function (i) { return !i.value; })) return '<div class="chart-empty">No data in the selected scope.</div>';
+    var W = 760, H = 250, L = 40, R = 12, T = 16, B = 42;
+    var n = items.length, slot = (W - L - R) / n, bw = Math.min(opts.maxBar || 70, slot * 0.62);
+    var maxV = 0; items.forEach(function (it) { if (it.value > maxV) maxV = it.value; });
+    maxV = niceMax(maxV || 1);
+    var py = function (v) { return T + (1 - v / maxV) * (H - T - B); };
+    var svg = svgEl(W, H);
+    yTicks(maxV, 4).forEach(function (v) {
+      var yy = py(v);
+      svg += '<line x1="' + L + '" y1="' + yy.toFixed(1) + '" x2="' + (W - R) + '" y2="' + yy.toFixed(1) + '" stroke="' + GRID + '"/>';
+      svg += '<text x="' + (L - 7) + '" y="' + (yy + 4).toFixed(1) + '" text-anchor="end" font-size="11" fill="' + MUTED + '">' + fmtTick(v) + '</text>';
+    });
+    items.forEach(function (it, i) {
+      var cx = L + slot * (i + 0.5), x = cx - bw / 2, h = (it.value / maxV) * (H - T - B);
+      svg += '<rect x="' + x.toFixed(1) + '" y="' + py(it.value).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(0, h).toFixed(1) + '" rx="4" fill="' + (opts.color || NAVY) + '"/>';
+      if (opts.showVal) svg += '<text x="' + cx.toFixed(1) + '" y="' + (py(it.value) - 6).toFixed(1) + '" text-anchor="middle" font-size="11" fill="' + MUTED + '" font-weight="600">' + (opts.fmt ? opts.fmt(it.value) : fmt(it.value)) + '</text>';
+      svg += '<text x="' + cx.toFixed(1) + '" y="' + (H - 24) + '" text-anchor="middle" font-size="11.5" fill="#241a1e">' + esc(it.label) + '</text>';
+      if (it.sub) svg += '<text x="' + cx.toFixed(1) + '" y="' + (H - 10) + '" text-anchor="middle" font-size="10.5" fill="' + MUTED + '">' + esc(it.sub) + '</text>';
+    });
+    svg += '</svg>';
+    return svg;
+  }
+
+  // ── Overview rendering ──────────────────────────────────────────────────
+  function renderOverview() {
+    var keys = scopeKeys();
+    var agg = aggregate(keys);
+    renderTiles(agg, keys);
+    renderEvolution(keys);
+    renderCoauthors(agg);
+    renderTeam(agg);
+    renderByJournal(agg);
+    renderPreprint(agg);
+    renderCited(keys);
+  }
+
+  function renderTiles(agg, keys) {
+    var avgCo = agg.n ? agg.a / agg.n : 0;
+    var tiles = [
+      { label: 'Papers', value: fmt(agg.n) },
+      { label: 'Journals in scope', value: fmt(keys.length) },
+      { label: 'Avg. co-authors', value: avgCo.toFixed(2), hint: 'authors per paper' },
+      { label: 'Solo-authored', value: agg.n ? pct(agg.s / agg.n) : '—' },
+      { label: 'With pre-print', value: agg.n ? pct(agg.p / agg.n) : '—', hint: 'free open-access copy' },
+      { label: 'With abstract', value: agg.n ? pct(agg.ab / agg.n) : '—' },
+      { label: 'Total citations', value: fmt(agg.c), cls: 'sm', hint: 'Crossref, in scope' }
+    ];
+    $('tiles').innerHTML = tiles.map(function (t) {
+      return '<div class="tile"><div class="label">' + t.label + '</div><div class="value ' + (t.cls || '') + '">' + t.value + '</div>' + (t.hint ? '<div class="hint">' + t.hint + '</div>' : '') + '</div>';
+    }).join('');
+  }
+
+  function yearAxis() {
+    var ys = []; for (var y = S.yMin; y <= S.yMax; y++) ys.push(y); return ys;
+  }
+
+  function renderEvolution(keys) {
+    var years = yearAxis();
+    // rank the in-scope journals by paper count; show up to 7 as lines + "Other".
+    var counts = keys.map(function (k) {
+      var j = JMAP[k], tot = 0;
+      for (var y in j.years) { var yy = +y; if (yy >= S.yMin && yy <= S.yMax) tot += j.years[y].n; }
+      return { key: k, name: j.name, tot: tot };
+    }).filter(function (c) { return c.tot > 0; }).sort(function (a, b) { return b.tot - a.tot; });
+
+    var series, legend = [];
+    if (counts.length <= 1) {
+      // single total area
+      var pts = years.map(function (y) { var v = 0; keys.forEach(function (k) { var r = JMAP[k].years[y]; if (r) v += r.n; }); return [y, v]; });
+      series = [{ name: 'Papers', color: NAVY, pts: pts }];
+      $('evoSub').textContent = 'Papers published per year' + (counts.length ? ' — ' + counts[0].name : '');
+    } else {
+      var top = counts.slice(0, 7), rest = counts.slice(7);
+      series = top.map(function (c, i) {
+        var pts = years.map(function (y) { var r = JMAP[c.key].years[y]; return [y, r ? r.n : 0]; });
+        legend.push({ name: c.name, color: SERIES[i % SERIES.length] });
+        return { name: c.name, color: SERIES[i % SERIES.length], pts: pts };
+      });
+      if (rest.length) {
+        var rk = rest.map(function (c) { return c.key; });
+        var pts2 = years.map(function (y) { var v = 0; rk.forEach(function (k) { var r = JMAP[k].years[y]; if (r) v += r.n; }); return [y, v]; });
+        series.push({ name: 'Other', color: '#b9b0b4', pts: pts2 });
+        legend.push({ name: 'Other (' + rest.length + ' journals)', color: '#b9b0b4' });
+      }
+      $('evoSub').textContent = 'Papers per year, by journal (top ' + Math.min(7, counts.length) + ' of ' + counts.length + ' shown)';
+    }
+    $('evoChart').innerHTML = lineChart(series, { years: years, area: series.length === 1 });
+    $('evoLegend').innerHTML = legend.map(function (l) {
+      return '<span class="li"><span class="sw" style="background:' + l.color + '"></span>' + esc(l.name) + '</span>';
+    }).join('');
+  }
+
+  function renderCoauthors(agg) {
+    var years = yearAxis();
+    var pts = years.map(function (y) { var r = agg.perYear[y]; return [y, r && r.n ? r.a / r.n : null]; }).filter(function (p) { return p[1] != null; });
+    var avg = agg.n ? agg.a / agg.n : 0;
+    $('coSub').textContent = 'Mean authors per paper — overall ' + avg.toFixed(2) + ' in scope';
+    if (!pts.length) { $('coChart').innerHTML = '<div class="chart-empty">No data in the selected scope.</div>'; return; }
+    // fill gaps so the line is continuous over the axis
+    var full = years.map(function (y) { var r = agg.perYear[y]; return r && r.n ? [y, r.a / r.n] : null; }).filter(Boolean);
+    var mx = 0; full.forEach(function (p) { if (p[1] > mx) mx = p[1]; });
+    $('coChart').innerHTML = lineChart([{ name: 'avg', color: GOLD, pts: full }], { years: [full[0][0], full[full.length - 1][0]], maxOverride: Math.max(1, Math.ceil(mx)) });
+  }
+
+  function renderTeam(agg) {
+    var labels = ['1', '2', '3', '4', '5', '6+'];
+    var total = agg.buckets.reduce(function (a, b) { return a + b; }, 0);
+    var items = agg.buckets.map(function (v, i) { return { label: labels[i], value: v, sub: total ? Math.round(v / total * 100) + '%' : '' }; });
+    $('teamChart').innerHTML = barsV(items, { color: NAVY, showVal: false, fmt: fmt });
+  }
+
+  function renderByJournal(agg) {
+    var items = Object.keys(agg.perJournal).map(function (k) {
+      var top = (JMAP[k].types || [])[0];
+      return { label: JMAP[k].name, value: agg.perJournal[k], color: top ? typeColor(top) : NAVY };
+    }).sort(function (a, b) { return b.value - a.value; });
+    $('byjSub').textContent = items.length + ' journal' + (items.length === 1 ? '' : 's') + ' in scope' + (items.length > 14 ? ' — top 14 shown' : '');
+    $('byjChart').innerHTML = barsH(items, { limit: 14 });
+  }
+  function typeColor(t) { return { utd24: '#5e35b1', ft50: '#1565a7', abs4: '#2e7d47', abs3: '#8a7326' }[t] || NAVY; }
+
+  function renderPreprint(agg) {
+    var years = yearAxis();
+    var pts = years.map(function (y) { var r = agg.perYear[y]; return r && r.n ? [y, r.p / r.n] : null; }).filter(Boolean);
+    if (!pts.length) { $('preChart').innerHTML = '<div class="chart-empty">No data in the selected scope.</div>'; return; }
+    $('preChart').innerHTML = lineChart([{ name: 'preprint', color: '#2a7f8f', pts: pts }], { years: [pts[0][0], pts[pts.length - 1][0]], pctAxis: true, area: true });
+  }
+
+  function renderCited(keys) {
+    var rows = [];
+    keys.forEach(function (k) {
+      (JMAP[k].topCited || []).forEach(function (p) {
+        var y = +p.y; if (p.y && (y < S.yMin || y > S.yMax)) return;
+        rows.push({ t: p.t, y: p.y, c: p.c, a: p.a, d: p.d, j: JMAP[k].name });
+      });
+    });
+    rows.sort(function (a, b) { return b.c - a.c; });
+    rows = rows.slice(0, 15);
+    if (!rows.length) { $('citedTable').innerHTML = '<div class="chart-empty">No citation data in the selected scope.</div>'; return; }
+    var html = '<table class="cited"><thead><tr><th>Paper</th><th>Journal</th><th>Year</th><th style="text-align:right">Cited by</th></tr></thead><tbody>';
+    rows.forEach(function (r) {
+      var title = r.d ? '<a href="' + esc(r.d) + '" target="_blank" rel="noopener">' + esc(r.t) + '</a>' : esc(r.t);
+      html += '<tr><td class="ti">' + title + '<div class="meta">' + esc(trunc(r.a, 90)) + '</div></td><td class="meta">' + esc(r.j) + '</td><td class="meta">' + esc(r.y) + '</td><td class="cby">' + fmt(r.c) + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    $('citedTable').innerHTML = html;
+  }
+
+  // ── Author spotlight ────────────────────────────────────────────────────
+  var authorsCbs = [];
+  function ensureAuthors(cb) {
+    if (authorsState === 'ready') return cb();
+    authorsCbs.push(cb);                        // run once the index is ready
+    if (authorsState === 'loading') return;
+    authorsState = 'loading';
+    $('authorHint').textContent = 'loading author index…';
+    fetch('./authors.json').then(function (r) { if (!r.ok) throw 0; return r.json(); }).then(function (j) {
+      AUTHORS = {}; j.authors.forEach(function (a) { AUTHORS[a.n.toLowerCase()] = a; });
+      // datalist for autocomplete (cap for browser performance)
+      var dl = $('authorList');
+      var frag = document.createDocumentFragment();
+      j.authors.slice(0, 6000).forEach(function (a) { var o = document.createElement('option'); o.value = a.n; frag.appendChild(o); });
+      dl.appendChild(frag);
+      authorsState = 'ready';
+      $('authorHint').textContent = fmt(j.count) + ' authors with ≥ ' + j.minPapers + ' papers on record';
+      var cbs = authorsCbs; authorsCbs = [];
+      cbs.forEach(function (f) { f(); });
+    }).catch(function () {
+      authorsState = 'idle'; authorsCbs = [];
+      $('authorHint').textContent = 'could not load author data';
+      $('authorBody').innerHTML = '<div class="aspot-empty">Couldn’t load the author index. Please try again later.</div>';
+    });
+  }
+
+  function renderAuthor() {
+    var name = (S.author || '').trim();
+    if (!name) { $('authorBody').innerHTML = '<div class="aspot-empty">Search for an author above to see their publication record across The Lit — how many papers, in which journals, and how their output has evolved over time.</div>'; return; }
+    if (authorsState !== 'ready') $('authorBody').innerHTML = '<div class="loading"><span class="spinner"></span>Loading author records…</div>';
+    ensureAuthors(function () {
+      var a = AUTHORS[name.toLowerCase()];
+      if (!a) {
+        // try a loose contains match on the first hit
+        var lc = name.toLowerCase(), hit = null;
+        for (var kk in AUTHORS) { if (kk.indexOf(lc) !== -1) { hit = AUTHORS[kk]; break; } }
+        a = hit;
+      }
+      if (!a) { $('authorBody').innerHTML = '<div class="aspot-empty">No author matching “' + esc(name) + '” with at least 5 papers on record. Try another spelling, or search their work directly on <a href="/fun/lit/" style="color:var(--navy)">The Lit</a>.</div>'; return; }
+      drawAuthor(a);
+    });
+  }
+
+  function drawAuthor(a) {
+    // respect the year window; journal scope is shown but not restrictive here
+    var years = [];
+    var yrs = Object.keys(a.y).map(Number).sort(function (x, z) { return x - z; });
+    var inRangePapers = 0, allJ = Object.keys(a.j);
+    yrs.forEach(function (y) { if (y >= S.yMin && y <= S.yMax) inRangePapers += a.y[y]; });
+    var firstY = yrs[0], lastY = yrs[yrs.length - 1];
+    var scope = {}; scopeKeys().forEach(function (k) { scope[k] = 1; });
+    var inScope = 0; allJ.forEach(function (k) { if (scope[k]) inScope += a.j[k]; });
+
+    var tiles = [
+      { label: 'Papers (all time)', value: fmt(a.p) },
+      { label: 'In year range', value: fmt(inRangePapers), hint: S.yMin + '–' + S.yMax },
+      { label: 'In current journal scope', value: fmt(inScope) },
+      { label: 'Journals', value: fmt(allJ.length) },
+      { label: 'Active span', value: (lastY - firstY + 1) + ' yrs', hint: firstY + '–' + lastY }
+    ];
+
+    // timeline bars over the selected year range
+    var axis = []; for (var y = S.yMin; y <= S.yMax; y++) axis.push(y);
+    var tItems = axis.map(function (y) { return { label: (y % 10 === 0 || y === S.yMin || y === S.yMax) ? "'" + String(y).slice(2) : '', value: a.y[y] || 0 }; });
+    // collapse to a cleaner bar count if the range is huge: bucket by year still fine (<=~75 bars)
+    var jItems = allJ.map(function (k) {
+      return { label: JMAP[k] ? JMAP[k].name : k, value: a.j[k], color: scope[k] ? NAVY : '#c9b8be' };
+    }).sort(function (x, z) { return z.value - x.value; });
+
+    var html = '';
+    html += '<div style="margin-bottom:16px"><span class="aname">' + esc(a.n) + '</span></div>';
+    html += '<div class="tiles">' + tiles.map(function (t) { return '<div class="tile"><div class="label">' + t.label + '</div><div class="value sm">' + t.value + '</div>' + (t.hint ? '<div class="hint">' + t.hint + '</div>' : '') + '</div>'; }).join('') + '</div>';
+    html += '<div class="cards">';
+    html += '<div class="card wide"><h3>Publications per year</h3><div class="csub">' + esc(a.n) + '’s output across ' + S.yMin + '–' + S.yMax + '</div><div id="aTimeline"></div></div>';
+    html += '<div class="card wide"><h3>Where they publish</h3><div class="csub">Papers per journal — bars in claret are in your current journal scope</div><div id="aJournals"></div></div>';
+    html += '</div>';
+    $('authorBody').innerHTML = html;
+    $('aTimeline').innerHTML = barsV(tItems, { color: GOLD, showVal: false, maxBar: 30 });
+    $('aJournals').innerHTML = barsH(jItems, { limit: 16 });
+  }
+
+  // ── filter UI wiring ────────────────────────────────────────────────────
+  function renderTypeChips() {
+    $('typeChips').innerHTML = DATA.types.map(function (t) {
+      return '<span class="chip tchip' + (S.types[t.key] ? ' on' : '') + '" data-t="' + t.key + '">' + esc(t.badge) + '</span>';
+    }).join('');
+    Array.prototype.forEach.call($('typeChips').querySelectorAll('.chip'), function (c) {
+      c.onclick = function () { var t = c.getAttribute('data-t'); S.types[t] = !S.types[t]; refresh(); };
+    });
+  }
+
+  function renderJournalList() {
+    var q = ($('jsearch').value || '').toLowerCase();
+    var list = DATA.journals.filter(function (j) { return !q || j.name.toLowerCase().indexOf(q) !== -1 || j.key.indexOf(q) !== -1; });
+    $('jlist').innerHTML = list.map(function (j) {
+      var top = (j.types || [])[0] || 'none';
+      var badge = j.types && j.types.length ? DATA.types.filter(function (t) { return t.key === top; })[0].badge : 'other';
+      return '<label class="jrow"><input type="checkbox" data-k="' + j.key + '"' + (S.journals[j.key] ? ' checked' : '') + '>' +
+        '<span class="jn">' + esc(j.name) + '</span>' +
+        '<span class="jbadge b-' + top + '">' + esc(badge) + '</span>' +
+        '<span class="jc">' + fmt(j.papers) + '</span></label>';
+    }).join('');
+    Array.prototype.forEach.call($('jlist').querySelectorAll('input'), function (cb) {
+      cb.onchange = function () { S.journals[cb.getAttribute('data-k')] = cb.checked; refresh(); };
+    });
+  }
+
+  function renderScope() {
+    var keys = scopeKeys();
+    var agg = aggregate(keys);
+    var chosenTypes = Object.keys(S.types).filter(function (t) { return S.types[t]; });
+    var chosenJ = Object.keys(S.journals).filter(function (k) { return S.journals[k]; });
+    var isAll = !chosenTypes.length && !chosenJ.length;
+    $('scopeTxt').innerHTML = '<strong>' + fmt(agg.n) + '</strong> papers · <strong>' + fmt(keys.length) + '</strong> journals · ' + S.yMin + '–' + S.yMax + (isAll ? ' · whole corpus' : '');
+    $('jbtnCnt').textContent = chosenJ.length ? chosenJ.length : 'All';
+
+    var pills = [];
+    chosenTypes.forEach(function (t) {
+      var lab = DATA.types.filter(function (x) { return x.key === t; })[0].badge;
+      pills.push('<span class="selpill">' + esc(lab) + '<button data-rt="' + t + '">×</button></span>');
+    });
+    chosenJ.forEach(function (k) {
+      pills.push('<span class="selpill">' + esc(JMAP[k].name) + '<button data-rj="' + k + '">×</button></span>');
+    });
+    $('selChips').innerHTML = pills.join('');
+    Array.prototype.forEach.call($('selChips').querySelectorAll('button'), function (b) {
+      b.onclick = function () {
+        if (b.getAttribute('data-rt')) S.types[b.getAttribute('data-rt')] = false;
+        if (b.getAttribute('data-rj')) S.journals[b.getAttribute('data-rj')] = false;
+        refresh();
+      };
+    });
+  }
+
+  // year slider
+  function syncSlider() {
+    var lo = $('yrMin'), hi = $('yrMax');
+    if (+lo.value > +hi.value - 0) { /* keep min<=max */ }
+    S.yMin = Math.min(+lo.value, +hi.value);
+    S.yMax = Math.max(+lo.value, +hi.value);
+    $('yrVal').textContent = S.yMin + ' – ' + S.yMax;
+    var span = YEAR_HI - YEAR_LO || 1;
+    var a = (S.yMin - YEAR_LO) / span * 100, b = (S.yMax - YEAR_LO) / span * 100;
+    $('yrFill').style.left = a + '%'; $('yrFill').style.width = (b - a) + '%';
+    Array.prototype.forEach.call(document.querySelectorAll('#yrPresets button'), function (btn) { btn.classList.remove('on'); });
+  }
+
+  function renderPresets() {
+    var now = YEAR_HI;
+    var presets = [
+      { label: 'All years', lo: YEAR_LO },
+      { label: 'Since 2000', lo: 2000 },
+      { label: 'Last 25 yrs', lo: now - 24 },
+      { label: 'Last 10 yrs', lo: now - 9 }
+    ];
+    $('yrPresets').innerHTML = presets.map(function (p, i) { return '<button data-i="' + i + '">' + p.label + '</button>'; }).join('');
+    Array.prototype.forEach.call($('yrPresets').querySelectorAll('button'), function (btn, i) {
+      btn.onclick = function () {
+        var lo = Math.max(YEAR_LO, presets[i].lo);
+        $('yrMin').value = lo; $('yrMax').value = YEAR_HI;
+        syncSlider(); refresh();
+        btn.classList.add('on');
+      };
+    });
+  }
+
+  // ── refresh everything ──────────────────────────────────────────────────
+  var raf = null;
+  function refresh() {
+    renderScope();
+    if (raf) cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(function () {
+      if (S.tab === 'overview') renderOverview(); else renderAuthor();
+    });
+  }
+
+  function resetFilters() {
+    S.types = {}; S.journals = {};
+    $('yrMin').value = YEAR_LO; $('yrMax').value = YEAR_HI; syncSlider();
+    renderTypeChips(); renderJournalList(); refresh();
+  }
+
+  // ── boot ────────────────────────────────────────────────────────────────
+  fetch('./data.json').then(function (r) { if (!r.ok) throw 0; return r.json(); }).then(function (d) {
+    DATA = d;
+    d.journals.forEach(function (j) { JMAP[j.key] = j; });
+    YEAR_LO = d.yearMin || 1950; YEAR_HI = d.yearMax || 2026;
+    S.yMin = YEAR_LO; S.yMax = YEAR_HI;
+
+    // slider bounds
+    ['yrMin', 'yrMax'].forEach(function (id) { var s = $(id); s.min = YEAR_LO; s.max = YEAR_HI; s.step = 1; });
+    $('yrMin').value = YEAR_LO; $('yrMax').value = YEAR_HI;
+    $('yrMin').addEventListener('input', function () { syncSlider(); refresh(); });
+    $('yrMax').addEventListener('input', function () { syncSlider(); refresh(); });
+    syncSlider();
+    renderPresets();
+    renderTypeChips();
+    renderJournalList();
+
+    // journal picker popover
+    $('jbtn').onclick = function (e) { e.stopPropagation(); $('jpanel').classList.toggle('open'); };
+    $('jpanel').onclick = function (e) { e.stopPropagation(); };
+    document.addEventListener('click', function () { $('jpanel').classList.remove('open'); });
+    $('jsearch').addEventListener('input', renderJournalList);
+    $('jAll').onclick = function () {
+      var q = ($('jsearch').value || '').toLowerCase();
+      DATA.journals.forEach(function (j) { if (!q || j.name.toLowerCase().indexOf(q) !== -1) S.journals[j.key] = true; });
+      renderJournalList(); refresh();
+    };
+    $('jClear').onclick = function () { S.journals = {}; renderJournalList(); refresh(); };
+    $('resetBtn').onclick = resetFilters;
+
+    // tabs
+    Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (t) {
+      t.onclick = function () {
+        Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (x) { x.classList.remove('on'); });
+        t.classList.add('on');
+        S.tab = t.getAttribute('data-tab');
+        $('tab-overview').style.display = S.tab === 'overview' ? '' : 'none';
+        $('tab-author').style.display = S.tab === 'author' ? '' : 'none';
+        refresh();
+      };
+    });
+    // author input
+    var ai = $('authorInput');
+    ai.addEventListener('change', function () { S.author = ai.value; renderAuthor(); });
+    ai.addEventListener('keydown', function (e) { if (e.key === 'Enter') { S.author = ai.value; renderAuthor(); } });
+    ai.addEventListener('focus', function () { ensureAuthors(function () {}); });
+
+    // generation line
+    if (d.generated) $('genline').innerHTML = 'Data as of ' + esc(d.generated) + ' · ' + fmt(d.totals.papers) + ' papers · ' + fmt(d.totals.authors) + ' authors · ';
+
+    $('boot').style.display = 'none';
+    $('app').style.display = '';
+    refresh();
+  }).catch(function () {
+    $('boot').style.display = 'none';
+    $('failed').style.display = '';
+  });
+})();
+</script>
 
 </body>
 </html>
