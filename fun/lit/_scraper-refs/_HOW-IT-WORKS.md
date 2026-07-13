@@ -15,11 +15,12 @@ size budget, and so it can move to a dedicated Pages repo when it grows — see
 
 ```
 fun/lit/data-refs/
-  manifest.json        # {ver, shards:{<jkey>:{file,papers,edges}}, index, totals}
+  manifest.json        # {ver, shards:{<jkey>:{file,papers,edges}}, index, totals, sources}
   refs-<jkey>.json     # { "<citing-doi>": ["<cited-doi>", …] } — one per citing journal
   refs-index.json      # { "<cited-doi>": [title, jkey, year] } — every edge target
   meta.json            # small run summary
   _refs-cache.json     # the incremental crawl cache (NOT served — see below)
+  _oaid.json           # doi → OpenAlex id map (NOT served — see below)
 ```
 
 - **`refs-<jkey>.json`** is keyed by the *citing* paper's DOI and holds only the
@@ -28,29 +29,48 @@ fun/lit/data-refs/
 - **`refs-index.json`** lets the page render a cited paper's title/journal/year
   without loading that paper's journal file.
 - **`_refs-cache.json`** is the build's memory: `{"<doi>": {r:[raw cited DOIs],
-  t:"date", v:<ver>}}`. It caches the **raw** Crossref reference DOIs (not just
-  the in-catalog ones), so every build re-intersects with the *current* catalog
-  offline — as the catalog grows, new edges appear with **no re-fetching**. It
-  is underscore-prefixed, so Jekyll does not publish it; it lives in git only as
-  the crawl cursor.
+  o:[raw OpenAlex ref ids], t:"date", v:<ver>, oa:<ver>}}`. It caches each
+  source's **raw** output (not just the in-catalog subset), so every build
+  re-intersects with the *current* catalog offline — as the catalog grows, new
+  edges appear with **no re-fetching**. `v` marks the version the paper was
+  stamped at (its Crossref backbone concluded); `oa` marks the version its
+  OpenAlex leg was attempted at.
+- **`_oaid.json`** is `{"<doi>": "<OpenAlex id>"}`, built for free while crawling
+  (each OpenAlex record returns its own id + doi). It is what lets the build
+  resolve an OpenAlex `referenced_works` id back to a catalog DOI.
+- The underscore files are not published by Jekyll; they live in git only as the
+  crawl state.
 
 ## How it is built
 
-`build-refs.mjs` (Node 20+, no dependencies):
+`build-refs.mjs` (Node 20+, no dependencies). A published paper's reference list
+never changes, so a paper stamped at the current version is **frozen** and never
+re-fetched; only a version bump (`RF_VER`, currently **2**) re-sweeps everyone
+with a wider net.
 
 1. **Catalog** — reads `../data/` and `../data-ft50/` (native + FT50) into a
    `DOI → {title, journal, year}` map and an ordered paper list. (ABS satellite
    shards live in sibling repos; add them via `REFS_CATALOG_DIRS` to resolve
    edges into them — the raw cache means no re-fetch is needed when you do.)
-2. **Fetch** — for each not-yet-fetched paper, one Crossref request
-   (`works?filter=doi:<doi>&select=DOI,reference`) reads the DOIs the publisher
-   deposited in its reference list. A published paper's reference list never
-   changes, so a fetched paper is **frozen** and never re-fetched. Crossref is
-   paced (~1 request / 0.4 s), honours `Retry-After`, backs off on throttling,
-   and each run is bounded (`REFS_MAX_PAPERS`, `REFS_BUDGET_MS`) and checkpoints
-   as it goes — so it fills in over **weeks** without tripping rate limits.
-3. **Apply** — intersects the whole cache with the catalog and writes the shards
-   + index + manifest. This runs every build (cheap, no network).
+2. **Fetch — three sources, unioned for accuracy:**
+   - **Crossref** (backbone) — one `works?filter=doi:<doi>&select=DOI,reference`
+     per paper; the DOIs the publisher deposited. This is the leg that stamps a
+     paper "done".
+   - **OpenAlex** (accuracy) — `works?filter=doi:<50>&select=id,doi,
+     referenced_works` (batched 50/call). OpenAlex's reference graph is generally
+     more complete than deposited references. `referenced_works` are OpenAlex
+     ids; only the ones that are OUR papers are resolved, via `_oaid.json`.
+   - **Semantic Scholar** (bonus) — `graph/v1/paper/batch?fields=references.
+     externalIds` (batched 500/POST); optional, drops out on throttle. Disable
+     with `REFS_S2=0`.
+
+   Everything is paced (~1 req/0.4 s for Crossref; the batched legs lightly),
+   honours `Retry-After`, backs off on throttling, and each run is bounded
+   (`REFS_MAX_PAPERS`, `REFS_BUDGET_MS`) and checkpoints as it goes — so it fills
+   in over **weeks** without tripping rate limits.
+3. **Apply** — intersects the whole cache with the catalog (Crossref/S2 DOIs
+   directly; OpenAlex ids via `_oaid.json`) and writes the shards + index +
+   manifest. This runs every build (cheap, no network).
 
 **Paper priority** (per the site owner): Management Science, M&SOM, POM and PNAS
 (all years) first, then the UTD24 and FT50 journals (newest years first), then
@@ -74,7 +94,8 @@ default branch carries the committed data.
 
 Key env vars: `REFS_MAILTO` (Crossref/OpenAlex quota identity,
 `kstouras+litrefs@gmail.com`), `REFS_MAX_PAPERS`, `REFS_BUDGET_MS`,
-`REFS_PACE_MS`, `REFS_CATALOG_DIRS`, `REFS_DATA_DIR`, `REFS_MOCK`.
+`REFS_PACE_MS`, `REFS_OA_PACE_MS`, `REFS_S2` (`0` to disable Semantic Scholar),
+`REFS_CATALOG_DIRS`, `REFS_DATA_DIR`, `REFS_MOCK`.
 
 ## On the page
 
@@ -101,10 +122,11 @@ FT50 catalog. Nothing else on the page changes.
 
 ## Coverage caveats
 
-- Only references the **publisher deposited to Crossref** are seen, and only
-  those carrying a DOI — so coverage depends on the publisher and is not
-  exhaustive. OpenAlex could be added later as a second leg (bump `RF_VER` to
-  re-sweep the papers that came up empty).
+- Coverage is the **union of Crossref, OpenAlex and Semantic Scholar**, and only
+  references carrying a DOI (or, for OpenAlex, resolving to a catalog paper) can
+  be matched — so it is broad but not exhaustive. Adding another source, or
+  widening the matcher, is a matter of a new leg + bumping `RF_VER` to re-sweep
+  every paper with the wider net.
 - Edges into **ABS satellite-shard-only** papers appear once those dirs are
   added to `REFS_CATALOG_DIRS` (no re-fetch needed — the raw cache already holds
-  the cited DOIs).
+  the cited DOIs and OpenAlex ids).

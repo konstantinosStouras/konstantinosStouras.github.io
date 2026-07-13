@@ -17,24 +17,37 @@
  * index.html) from './data-refs/' to '/lit-data-refs/data/'. See
  * _HOW-IT-WORKS.md.
  *
- * DATA SOURCE.  Crossref. For each paper (identified by DOI) we fetch
- * `works?filter=doi:<doi>&select=DOI,reference` and read the DOIs the
- * publisher deposited in the reference list (reference[].DOI). A published
- * paper's reference list never changes, so once a paper is fetched it is
- * FROZEN and never re-fetched (like the pre-print feature's found links). The
- * raw cited-DOI list is cached in data-refs/_refs-cache.json; every build then
- * intersects it, offline, with the CURRENT catalog — so as the catalog grows,
- * new in-catalog edges appear for free without any re-fetching.
+ * DATA SOURCES (three, unioned for coverage — the more complete the better).
+ * A published paper's reference list never changes, so once a paper has been
+ * fetched at the current version it is FROZEN and never re-fetched; every
+ * build then intersects its cached references, offline, with the CURRENT
+ * catalog — so as the catalog grows, new in-catalog edges appear for free.
+ *   1. Crossref (backbone) — `works?filter=doi:<doi>&select=DOI,reference`
+ *      reads the DOIs the publisher deposited (reference[].DOI). One request
+ *      per paper; the leg that stamps a paper "done".
+ *   2. OpenAlex (accuracy) — `works?filter=doi:<50 dois>&select=id,doi,
+ *      referenced_works` reads OpenAlex's own reference graph, which is
+ *      generally MORE complete than publisher-deposited references (it parses
+ *      PDFs and aggregates sources). referenced_works are OpenAlex IDs; we
+ *      resolve only the ones that are OUR papers, using the doi→OpenAlex-id
+ *      map (_oaid.json) built for free as we crawl (each work returns its own
+ *      id + doi). Batched 50/call, general 100k/day quota.
+ *   3. Semantic Scholar (bonus) — `graph/v1/paper/batch?fields=references.
+ *      externalIds` reads S2's references (externalIds.DOI). Batched 500/POST,
+ *      OPTIONAL: its anonymous pool 429s freely, so it drops out and the run
+ *      carries on. Set REFS_S2=0 to disable.
+ * The cache stores each source's RAW output (Crossref+S2 DOIs in `r`, OpenAlex
+ * ids in `o`); intersection with the catalog happens at build time, so no
+ * re-fetch is needed as the catalog grows or as _oaid.json fills in.
  *
  * HOW IT STAYS POLITE AND SLOW (built to fill over WEEKS, not minutes).
- * Crossref is the only API this pipeline calls. Every request is paced
- * (REFS_PACE_MS, default 400 ms — well under the polite-pool ceiling with a
- * mailto), honours Retry-After, and backs off exponentially on 429/5xx; each
- * scheduled run fetches only a small, bounded slice of papers
+ * Every request is paced (REFS_PACE_MS, default 400 ms for Crossref; OpenAlex/
+ * S2 are batched and lightly paced), honours Retry-After, and backs off on
+ * 429/5xx; each scheduled run fetches only a small, bounded slice of papers
  * (REFS_MAX_PAPERS) and checkpoints as it goes, so the workflow
  * (.github/workflows/lit-references-backfill.yml) grows the graph gently
- * across many runs over weeks. A paper with a cache entry is "done"; a run
- * always resumes on the not-yet-fetched papers.
+ * across many runs over weeks. A paper stamped at the current version is
+ * "done"; a run always resumes on the not-yet-done papers.
  *
  * PAPER PRIORITY (per the site owner): Management Science, M&SOM, POM and PNAS
  * (all years) are fetched FIRST, then the UTD24 and FT50 journals (newest
@@ -67,27 +80,28 @@ const DATA_DIR = process.env.REFS_DATA_DIR
 // this repo; the ABS satellite shards live in sibling repos not checked out
 // here, so an edge into an ABS-shard-only paper is not yet resolved — it
 // appears automatically once those dirs are added to REFS_CATALOG_DIRS (the
-// raw reference lists are cached, so no re-fetch is needed).
+// raw reference lists are cached, so no re-fetch is needed when you do).
 const CATALOG_DIRS = (process.env.REFS_CATALOG_DIRS
   || [resolve(__dirname, '..', 'data'), resolve(__dirname, '..', 'data-ft50')].join(','))
   .split(',').map(s => s.trim()).filter(Boolean);
 
 const MAILTO = process.env.REFS_MAILTO || 'kstouras+litrefs@gmail.com'; // distinct Crossref/OpenAlex quota identity
 const PULL_DATE = process.env.REFS_PULL_DATE || new Date().toISOString().slice(0, 10);
+const USE_S2 = process.env.REFS_S2 !== '0'; // Semantic Scholar bonus leg (default on)
 
-// The cache version. A paper whose cache entry was written under an OLDER
-// version — AND that turned up no in-catalog references — becomes eligible
-// again, so a later coverage expansion (e.g. adding an OpenAlex reference leg)
-// re-sweeps the papers that came up empty. A paper WITH references is frozen
-// forever (a published reference list never changes). Bump when the fetcher's
-// source/coverage expands.
-export const RF_VER = 1;
+// The cache version. A paper whose cache entry predates the current version is
+// re-swept, so a coverage expansion (a new source, a wider matcher) re-checks
+// every paper with the wider net. Bump when the source set or extraction
+// changes. v2: added the OpenAlex referenced_works leg and the Semantic
+// Scholar bonus leg alongside the Crossref backbone (v1 was Crossref only).
+export const RF_VER = 2;
 
 // ── Tunables (every default errs gentle — this is a weeks-long backfill) ─────
 const PACE_MS = parseInt(process.env.REFS_PACE_MS || '400', 10);        // between Crossref calls
+const OA_PACE_MS = parseInt(process.env.REFS_OA_PACE_MS || '200', 10);  // between OpenAlex batches
 const MAX_PAPERS = parseInt(process.env.REFS_MAX_PAPERS || '4000', 10); // papers per run
 const BUDGET_MS = parseInt(process.env.REFS_BUDGET_MS || String(40 * 60 * 1000), 10); // wall-clock ceiling
-const MAX_REFS = parseInt(process.env.REFS_MAX_REFS || '400', 10);      // cap raw cited DOIs per paper
+const MAX_REFS = parseInt(process.env.REFS_MAX_REFS || '500', 10);      // cap raw cited refs per paper per source
 const MAX_THROTTLE = 8;            // consecutive Crossref waits before giving the run up
 
 // ── Journal-type membership (per the owner's priority order) ─────────────────
@@ -123,6 +137,23 @@ export function normDoi(doi) {
   return String(doi || '').replace(/^https?:\/\/(dx\.)?doi\.org\//i, '').trim().toLowerCase();
 }
 
+// The short OpenAlex work id ("W123…") from a full id URL or bare id.
+export function shortOaid(id) {
+  const m = String(id || '').match(/(W\d{4,})/);
+  return m ? m[1] : '';
+}
+
+// Dedup + cap a union of string arrays (preserves first-seen order).
+function unionCap(...arrs) {
+  const out = [], seen = new Set();
+  for (const a of arrs) for (const v of (a || [])) {
+    if (!v || seen.has(v)) continue;
+    seen.add(v); out.push(v);
+    if (out.length >= MAX_REFS) return out;
+  }
+  return out;
+}
+
 // ── The catalog: DOI → {title, jkey, year} + the ordered paper list ──────────
 // Reads each catalog dir's sources.json + papers-*.json once, keeping only the
 // few fields we need (DOI, title, journal key, year). Native (first dir) wins
@@ -152,15 +183,14 @@ export async function loadCatalog(dirs, opts = {}) {
 }
 
 // Crawl order: by priority tier (0 → 1 → 2); within a tier, papers never
-// fetched before come ahead of empty-result re-checks, then newest year first,
-// then DOI for a stable order. Returns at most `limit` papers to fetch.
+// fetched before come ahead of re-checks, then newest year first, then DOI for
+// a stable order. A paper stamped at the current version is done. Returns at
+// most `limit` papers to (re)fetch this run.
 export function orderPapers(papers, cache, limit) {
   const eligible = [];
   for (const p of papers) {
     const c = cache[p.doi];
-    // Frozen: a paper with references cached is never re-fetched. An empty
-    // result is re-checked only when a newer cache version exists.
-    if (c && (c.r && c.r.length || (c.v || 0) >= RF_VER)) continue;
+    if (c && (c.v || 0) >= RF_VER) continue; // done at the current version → frozen
     eligible.push({ p, neverFetched: !c });
   }
   eligible.sort((a, b) =>
@@ -171,10 +201,9 @@ export function orderPapers(papers, cache, limit) {
   return eligible.slice(0, limit).map(x => x.p);
 }
 
-// ── Crossref access (paced, backing off, mockable) ──────────────────────────
-let throttleStreak = 0;
-async function crGet(url) {
-  if (MOCK) return mockCrGet(url);
+// ── Network (paced, backing off, mockable) ──────────────────────────────────
+async function httpGet(url) {
+  if (MOCK) return mockGet(url);
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 30000);
   try {
@@ -194,14 +223,13 @@ async function crGet(url) {
 // One Crossref GET with the polite pacing + patient backoff the weeks-long
 // backfill relies on. Returns the parsed body, or null when Crossref stays
 // unavailable long enough that the run should stop and resume next schedule.
+let throttleStreak = 0;
 async function crGetPatient(url, deadline) {
   for (;;) {
     if (Date.now() > deadline) return null;
-    const r = await crGet(url);
+    const r = await httpGet(url);
     if (r.ok) { throttleStreak = 0; await sleep(PACE_MS); return r.json; }
-    // A hard 404 is a concluded "Crossref doesn't have this DOI" — not a
-    // throttle; treat it as an empty (no references) result, not an outage.
-    if (r.status === 404) { throttleStreak = 0; await sleep(PACE_MS); return { message: {} }; }
+    if (r.status === 404) { throttleStreak = 0; await sleep(PACE_MS); return { message: {} }; } // concluded empty
     throttleStreak++;
     if (throttleStreak > MAX_THROTTLE) return null;
     const backoff = Math.min(r.retryAfter * 1000 || 0, 600000) || Math.min(30000 * 2 ** (throttleStreak - 1), 600000);
@@ -210,69 +238,175 @@ async function crGetPatient(url, deadline) {
   }
 }
 
-// Pull the deposited cited-DOIs out of a Crossref work message. Pure (no
-// network) → unit-tested. Deduped, lowercased, capped at MAX_REFS. References
-// with no deposited DOI are simply absent (we can only match DOI-to-DOI).
+// ── Extractors (pure, unit-tested) ──────────────────────────────────────────
+// Crossref: the deposited cited DOIs (reference[].DOI), deduped + lowercased.
 export function extractRefDois(message) {
-  const out = [];
-  const seen = new Set();
-  const refs = (message && message.reference) || [];
-  for (const r of refs) {
+  const out = [], seen = new Set();
+  for (const r of (message && message.reference) || []) {
     const d = normDoi(r && r.DOI);
     if (!d || seen.has(d)) continue;
-    seen.add(d);
-    out.push(d);
+    seen.add(d); out.push(d);
     if (out.length >= MAX_REFS) break;
   }
   return out;
 }
 
-// Fetch one paper's reference DOIs from Crossref. Returns an array (possibly
-// empty) on success, or null when Crossref went out (leave the paper for the
-// next run instead of recording an empty result).
-async function fetchReferences(doi, deadline) {
+// OpenAlex: the short ids of the works this one references.
+export function extractOaRefs(work) {
+  const out = [], seen = new Set();
+  for (const id of (work && work.referenced_works) || []) {
+    const w = shortOaid(id);
+    if (!w || seen.has(w)) continue;
+    seen.add(w); out.push(w);
+    if (out.length >= MAX_REFS) break;
+  }
+  return out;
+}
+
+// Semantic Scholar: the DOIs of the works this one references.
+export function extractS2Refs(paper) {
+  const out = [], seen = new Set();
+  for (const r of (paper && paper.references) || []) {
+    const d = normDoi(r && r.externalIds && r.externalIds.DOI);
+    if (!d || seen.has(d)) continue;
+    seen.add(d); out.push(d);
+    if (out.length >= MAX_REFS) break;
+  }
+  return out;
+}
+
+// ── Leg 2: OpenAlex referenced_works (batched 50) ───────────────────────────
+// Fills cache[doi].o (referenced OpenAlex ids) + cache[doi].oa = RF_VER (leg
+// attempted, so it isn't re-fetched next run), and records each returned work's
+// own id into oaidMap (doi → OpenAlex id) — the map that lets buildOutputs
+// resolve a reference id back to a catalog DOI. Best-effort: on a quota/throttle
+// signal the leg drops out for the run (Crossref still stamps the paper).
+async function refreshOpenAlexRefs(slice, cache, oaidMap, deadline, opts = {}) {
+  const todo = slice.filter(p => ((cache[p.doi] || {}).oa || 0) < RF_VER);
+  if (!todo.length) return 0;
+  console.log(`  openalex: reading referenced_works for up to ${todo.length} paper(s)…`);
+  let fails = 0, done = 0;
+  for (let i = 0; i < todo.length; i += 50) {
+    if (Date.now() > deadline) break;
+    const batch = todo.slice(i, i + 50);
+    const url = 'https://api.openalex.org/works?filter=doi:' +
+      batch.map(p => encodeURIComponent(p.doi)).join('|') +
+      '&per-page=50&select=id,doi,referenced_works&mailto=' + encodeURIComponent(MAILTO);
+    const r = await httpGet(url);
+    if (!r.ok) {
+      const throttle = r.status === 429 || r.status === 403;
+      fails++;
+      if ((throttle && r.retryAfter > 3600) || fails >= 6) {
+        console.log('  openalex: quota/throttle — dropping the OpenAlex leg for this run.');
+        break;
+      }
+      const wait = throttle ? Math.max(r.retryAfter * 1000, Math.min(5000 * 2 ** (fails - 1), 60000)) : 2000;
+      if (Date.now() + wait > deadline) break;
+      await sleep(wait); i -= 50; continue; // retry this batch (bounded by fails)
+    }
+    fails = 0;
+    const returned = new Set();
+    for (const w of (r.json && r.json.results) || []) {
+      const d = normDoi(w.doi);
+      if (!d) continue;
+      returned.add(d);
+      const oaid = shortOaid(w.id);
+      if (oaid) oaidMap[d] = oaid;
+      const refs = extractOaRefs(w);
+      const e = cache[d] || {};
+      if (refs.length) e.o = unionCap(e.o, refs);
+      e.oa = RF_VER;
+      cache[d] = e;
+    }
+    // A DOI in a SUCCESSFUL batch that OpenAlex didn't return simply isn't in
+    // OpenAlex — mark the leg attempted so we don't retry it forever.
+    for (const p of batch) if (!returned.has(p.doi)) { const e = cache[p.doi] || {}; e.oa = RF_VER; cache[p.doi] = e; }
+    done += batch.length;
+    if (opts.checkpoint && (i / 50) % 20 === 19) await opts.checkpoint();
+    await sleep(OA_PACE_MS);
+  }
+  console.log(`  openalex: attempted ${done} paper(s).`);
+  return done;
+}
+
+// ── Leg 3: Semantic Scholar references (batched 500, optional) ──────────────
+// Returns an in-memory map doi → [cited DOIs]; folded into `r` by the Crossref
+// pass. Drops out entirely on throttle/failure (S2's anonymous pool 429s
+// freely) — it is a pure bonus, never blocks a paper being stamped.
+async function fetchS2Refs(slice, deadline) {
+  if (!USE_S2) return {};
+  const dois = slice.map(p => p.doi);
+  const byDoi = {};
+  for (let i = 0; i < dois.length; i += 500) {
+    if (Date.now() > deadline) break;
+    const batch = dois.slice(i, i + 500);
+    let arr = null;
+    if (MOCK) { arr = await mockS2(batch); }
+    else {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 30000);
+      try {
+        const res = await fetch('https://api.semanticscholar.org/graph/v1/paper/batch?fields=references.externalIds', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'User-Agent': `lit-refs/1.0 (mailto:${MAILTO})` },
+          body: JSON.stringify({ ids: batch.map(d => 'DOI:' + d) }),
+          signal: ctrl.signal,
+        });
+        if (res.ok) arr = await res.json();
+      } catch { arr = null; } finally { clearTimeout(timer); }
+    }
+    if (!Array.isArray(arr)) { console.log('  s2: unavailable — skipping the Semantic Scholar leg this run.'); break; }
+    arr.forEach((rec, k) => { const refs = extractS2Refs(rec); if (refs.length) byDoi[batch[k]] = refs; });
+    await sleep(1500);
+  }
+  const n = Object.keys(byDoi).length;
+  if (n) console.log(`  s2: references for ${n} paper(s).`);
+  return byDoi;
+}
+
+// ── Leg 1: Crossref references (per paper) — the stamping backbone ───────────
+async function fetchCrossrefRefs(doi, deadline) {
   const url = 'https://api.crossref.org/works?filter=doi:' + encodeURIComponent(doi) +
     '&select=DOI,reference&rows=1&mailto=' + encodeURIComponent(MAILTO);
   const body = await crGetPatient(url, deadline);
   if (body === null) return null;
-  // The filter route returns message.items[]; the /works/{doi} route returns
-  // message directly. Tolerate both (the mock uses items).
   const msg = body.message || {};
   const item = Array.isArray(msg.items) ? (msg.items[0] || {}) : msg;
   return extractRefDois(item);
 }
 
-// ── Apply: intersect the cached raw references with the current catalog ──────
-// Rebuilt from scratch every run (cheap, no network), so catalog growth and
-// newly-added dirs surface new edges for free. Produces:
+// ── Apply: intersect the cached references with the current catalog ──────────
+// Rebuilt from scratch every run (cheap, no network), so catalog growth, newly
+// added dirs and a fuller _oaid.json surface new edges for free. Produces:
 //   shards[jkey] = { <citingDoi>: [<citedDoi>, …] }   — only papers with ≥1 edge
 //   index        = { <citedDoi>: [title, jkey, year] } — every edge target
-export function buildOutputs(cache, dbByDoi) {
+// Crossref/S2 DOIs (`r`) intersect the catalog directly; OpenAlex ids (`o`) are
+// resolved to catalog DOIs via oaidMap (reverse-indexed to our papers only).
+export function buildOutputs(cache, dbByDoi, oaidMap = {}) {
+  const oaidToDoi = {};
+  for (const [doi, oaid] of Object.entries(oaidMap)) if (oaid && dbByDoi.has(doi)) oaidToDoi[oaid] = doi;
   const shards = {};
   const indexKeys = new Set();
   let citingWithEdges = 0, edges = 0;
   for (const [citingDoi, entry] of Object.entries(cache)) {
     const meta = dbByDoi.get(citingDoi);
     if (!meta) continue;                    // citing paper no longer in the catalog
-    const inDb = [];
-    for (const cd of entry.r || []) {
-      if (cd !== citingDoi && dbByDoi.has(cd)) { inDb.push(cd); indexKeys.add(cd); }
-    }
-    if (!inDb.length) continue;
-    (shards[meta.j] || (shards[meta.j] = {}))[citingDoi] = inDb;
-    citingWithEdges++; edges += inDb.length;
+    const inDb = new Set();
+    for (const cd of entry.r || []) if (cd !== citingDoi && dbByDoi.has(cd)) inDb.add(cd);
+    for (const oaid of entry.o || []) { const cd = oaidToDoi[oaid]; if (cd && cd !== citingDoi) inDb.add(cd); }
+    if (!inDb.size) continue;
+    (shards[meta.j] || (shards[meta.j] = {}))[citingDoi] = [...inDb];
+    citingWithEdges++; edges += inDb.size;
+    for (const cd of inDb) indexKeys.add(cd);
   }
   const index = {};
-  for (const cd of indexKeys) {
-    const m = dbByDoi.get(cd);
-    index[cd] = [m.t, m.j, m.y];
-  }
+  for (const cd of indexKeys) { const m = dbByDoi.get(cd); index[cd] = [m.t, m.j, m.y]; }
   return { shards, index, totals: { citingWithEdges, edges, cited: indexKeys.size } };
 }
 
 // ── Main ────────────────────────────────────────────────────────────────────
 async function main() {
-  console.log(`lit citation-graph build: ${PULL_DATE}${MOCK ? ' (MOCK)' : ''}; out=${DATA_DIR}`);
+  console.log(`lit citation-graph build (v${RF_VER}): ${PULL_DATE}${MOCK ? ' (MOCK)' : ''}; out=${DATA_DIR}`);
   await mkdir(DATA_DIR, { recursive: true });
   const deadline = Date.now() + BUDGET_MS;
 
@@ -280,88 +414,100 @@ async function main() {
   const { dbByDoi, papers } = await loadCatalog(CATALOG_DIRS, { log: true });
   console.log(`catalog: ${papers.length} papers with a DOI (${dbByDoi.size} distinct)`);
 
-  // 2. The raw-references cache (the crawl cursor).
+  // 2. The caches (crawl cursor + the doi→OpenAlex-id map).
   const cache = await loadJson(join(DATA_DIR, '_refs-cache.json'), {});
-  const fetched = Object.keys(cache).length;
-  console.log(`cache: ${fetched} papers fetched so far`);
+  const oaidMap = await loadJson(join(DATA_DIR, '_oaid.json'), {});
+  console.log(`cache: ${Object.keys(cache).length} papers seen; ${Object.keys(oaidMap).length} OpenAlex ids known`);
 
   // 3. This run's slice (priority + resumable order).
   const slice = orderPapers(papers, cache, MAX_PAPERS);
-  console.log(`fetching references for up to ${slice.length} paper(s) this run (of ${papers.length})`);
-  let done = 0, newEdges = 0, stopped = false;
+  console.log(`processing up to ${slice.length} paper(s) this run (of ${papers.length})`);
 
+  const checkpoint = async () => {
+    await writeFile(join(DATA_DIR, '_refs-cache.json'), JSON.stringify(cache), 'utf8');
+    await writeFile(join(DATA_DIR, '_oaid.json'), JSON.stringify(oaidMap), 'utf8');
+  };
+
+  // 4. Leg 2 (OpenAlex, batched) — bounded to a fraction of the run so the
+  //    Crossref backbone always gets time to stamp papers.
+  const oaDeadline = Math.min(deadline, Date.now() + Math.min(BUDGET_MS * 0.4, 15 * 60 * 1000));
+  await refreshOpenAlexRefs(slice, cache, oaidMap, oaDeadline, { checkpoint });
+  await checkpoint();
+
+  // 5. Leg 3 (Semantic Scholar, batched, optional) — in-memory, folded into r.
+  const s2ByDoi = await fetchS2Refs(slice, Math.min(deadline, Date.now() + 5 * 60 * 1000));
+
+  // 6. Leg 1 (Crossref, per paper) — the stamping backbone.
+  let done = 0, stopped = false;
   for (const p of slice) {
     if (Date.now() > deadline) { console.log('  time budget reached — stopping (resumes next run).'); stopped = true; break; }
-    const refs = await fetchReferences(p.doi, deadline);
+    const c = cache[p.doi];
+    if (c && (c.v || 0) >= RF_VER) continue; // already stamped this version (e.g. re-run)
+    const refs = await fetchCrossrefRefs(p.doi, deadline);
     if (refs === null) { console.log('  crossref unavailable — stopping (resumes next run).'); stopped = true; break; }
-    // Count how many resolve into the catalog right now (for the run log only).
-    for (const cd of refs) if (cd !== p.doi && dbByDoi.has(cd)) newEdges++;
-    cache[p.doi] = { r: refs, t: PULL_DATE, v: RF_VER };
+    const e = cache[p.doi] || {};
+    e.r = unionCap(e.r, refs, s2ByDoi[p.doi]);
+    e.t = PULL_DATE; e.v = RF_VER;
+    cache[p.doi] = e;
     done++;
-    if (done % 100 === 0) { await writeCache(cache); console.log(`  …${done} papers fetched, ${newEdges} in-catalog edges seen`); }
+    if (done % 100 === 0) { await checkpoint(); console.log(`  …${done} papers stamped this run`); }
   }
 
-  // 4. Intersect the whole cache with the catalog and write the served files.
-  const { shards, index, totals } = buildOutputs(cache, dbByDoi);
-
+  // 7. Intersect the whole cache with the catalog and write the served files.
+  const { shards, index, totals } = buildOutputs(cache, dbByDoi, oaidMap);
   const shardMeta = {};
   for (const jkey of Object.keys(shards).sort()) {
     const rows = shards[jkey];
     const file = `refs-${jkey}.json`;
-    await writeJson(file, rows);
+    await writeFile(join(DATA_DIR, file), JSON.stringify(rows), 'utf8');
     const es = Object.values(rows).reduce((n, a) => n + a.length, 0);
     shardMeta[jkey] = { file, papers: Object.keys(rows).length, edges: es };
   }
-  await writeJson('refs-index.json', index);
+  await writeFile(join(DATA_DIR, 'refs-index.json'), JSON.stringify(index), 'utf8');
 
+  const fetched = Object.values(cache).filter(e => (e.v || 0) >= RF_VER).length;
   const manifest = {
     ver: RF_VER,
     generated: PULL_DATE,
     index: { file: 'refs-index.json', count: Object.keys(index).length },
     shards: shardMeta,
-    totals: {
-      citingPapers: totals.citingWithEdges,
-      edges: totals.edges,
-      citedPapers: totals.cited,
-      fetched: Object.keys(cache).length,
-      catalog: papers.length,
-    },
-    source: 'Crossref deposited reference lists, intersected with this catalog',
+    totals: { citingPapers: totals.citingWithEdges, edges: totals.edges, citedPapers: totals.cited, fetched, catalog: papers.length },
+    sources: ['crossref', 'openalex', ...(USE_S2 ? ['semanticscholar'] : [])],
   };
-  await writeJson('manifest.json', manifest);
-  await writeJson('meta.json', {
-    lastPull: PULL_DATE,
-    citingPapers: totals.citingWithEdges,
-    edges: totals.edges,
-    fetched: Object.keys(cache).length,
-    catalog: papers.length,
-  });
-  await writeCache(cache);
+  await writeFile(join(DATA_DIR, 'manifest.json'), JSON.stringify(manifest), 'utf8');
+  await writeFile(join(DATA_DIR, 'meta.json'), JSON.stringify({
+    lastPull: PULL_DATE, citingPapers: totals.citingWithEdges, edges: totals.edges, fetched, catalog: papers.length,
+  }), 'utf8');
+  await checkpoint();
 
   console.log(`done: ${totals.edges} in-catalog edges from ${totals.citingWithEdges} papers ` +
     `across ${Object.keys(shardMeta).length} shard(s); ` +
-    `${Object.keys(cache).length}/${papers.length} papers fetched` +
+    `${fetched}/${papers.length} papers done` +
     `${stopped ? ' (run stopped early — resumes next schedule)' : ''}.`);
 }
 
-async function writeJson(name, data) {
-  await writeFile(join(DATA_DIR, name), JSON.stringify(data), 'utf8');
-}
-async function writeCache(cache) { await writeJson('_refs-cache.json', cache); }
-
 // ── Mock network (offline smoke test) ───────────────────────────────────────
-// Routes Crossref works?filter=doi:<doi> URLs to ./mock/cr-<slug(doi)>.json,
-// each holding one Crossref work message (with a `reference` array). A missing
-// fixture returns an empty reference list.
-async function mockCrGet(rawUrl) {
+// Crossref  works?filter=doi:<doi>          -> mock/cr-<slug>.json   (one message)
+// OpenAlex  works?filter=doi:<d1>|<d2>...   -> mock/oa-<slug>.json    (one work each)
+async function mockGet(rawUrl) {
   const url = decodeURIComponent(rawUrl);
+  const slug = (s) => s.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
   const m = url.match(/filter=doi:([^&]+)/i);
-  if (m) {
-    const slug = m[1].replace(/[^a-z0-9]+/gi, '_').toLowerCase();
-    const j = await loadJson(join(MOCK_DIR, `cr-${slug}.json`), null);
-    return { ok: true, status: 200, json: { message: { items: [j || {}] } } };
+  const dois = m ? m[1].split('|') : [];
+  if (/api\.openalex\.org/.test(url)) {
+    const results = [];
+    for (const d of dois) { const w = await loadJson(join(MOCK_DIR, `oa-${slug(d)}.json`), null); if (w) results.push(w); }
+    return { ok: true, status: 200, json: { results } };
   }
-  return { ok: true, status: 200, json: { message: { items: [{}] } } };
+  // Crossref
+  const j = await loadJson(join(MOCK_DIR, `cr-${slug(dois[0] || '')}.json`), null);
+  return { ok: true, status: 200, json: { message: { items: [j || {}] } } };
+}
+async function mockS2(batch) {
+  const slug = (s) => s.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
+  const out = [];
+  for (const d of batch) out.push(await loadJson(join(MOCK_DIR, `s2-${slug(d)}.json`), null));
+  return out;
 }
 
 if (process.argv[1] && import.meta.url === (await import('node:url')).pathToFileURL(process.argv[1]).href) {
