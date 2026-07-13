@@ -43,9 +43,12 @@
  *   ALERTS_FROM (default SMTP_USER), ALERTS_FROM_NAME (default "The Lit").
  *
  * Modes:
- *   node alerts-mailer.mjs              real run (reads Firestore, sends mail)
- *   node alerts-mailer.mjs --dry-run    reads Firestore, prints instead of sending
- *   node alerts-mailer.mjs --selftest   runs the matching/rendering self-tests
+ *   node alerts-mailer.mjs               real run (reads Firestore, sends mail)
+ *   node alerts-mailer.mjs --dry-run     reads Firestore, prints instead of sending
+ *   node alerts-mailer.mjs --test-emails flushes the one-off "Send me a test
+ *                                        e-mail" queue (users/{uid}/testEmails)
+ *                                        the page writes; add --dry-run to print
+ *   node alerts-mailer.mjs --selftest    runs the matching/rendering self-tests
  *                                        (no network, no deps needed) and exits
  */
 
@@ -285,24 +288,28 @@ function footerHtml() {
       <a href="${esc(SITE_URL)}" style="color:#7d1d3f;font-weight:600">Unsubscribe</a> from future e-mails (pause or delete it in the “E-mail alerts” panel) &nbsp;·&nbsp;
       <a href="mailto:${esc(CONTACT_EMAIL)}" style="color:#7d1d3f;font-weight:600">Questions or feedback</a></p>`;
 }
-function emailShell(headerLabel, innerHtml) {
+function emailShell(headerLabel, innerHtml, bannerHtml) {
   return `<div style="font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:0 auto;color:#241a1e">
   <div style="background:linear-gradient(135deg,#7d1d3f,#591428);padding:18px 22px;border-radius:10px 10px 0 0">
     <div style="color:#fff;font-size:20px"><span style="color:#c9a24b;font-style:italic">The Lit</span> — ${esc(headerLabel)}</div>
   </div>
   <div style="border:1px solid #dce1ea;border-top:none;border-radius:0 0 10px 10px;padding:20px 22px">
-    ${innerHtml}
+    ${bannerHtml || ''}${innerHtml}
     ${footerHtml()}
   </div>
 </div>`;
 }
 
-function renderEmail(alert, papers) {
+// `opts` lets the test-e-mail path reuse this template: subjectPrefix (e.g.
+// "[Test] "), noteText prepended to the plain-text body, and bannerHtml shown
+// above the HTML body. All optional — a normal alert passes nothing.
+function renderEmail(alert, papers, opts) {
+  opts = opts || {};
   const name = alert.name || describeCriteria(alert.criteria || {});
   const n = papers.length;
   const shown = papers.slice(0, MAX_LIST);
   const more = n - shown.length;
-  const subject = `The Lit: ${n} new paper${n === 1 ? '' : 's'} — ${name}`;
+  const subject = `${opts.subjectPrefix || ''}The Lit: ${n} new paper${n === 1 ? '' : 's'} — ${name}`;
 
   const lineText = shown.map((p, i) => {
     const bits = [p.Journal, p.Year, p.Status].filter(Boolean).join(' · ');
@@ -311,7 +318,7 @@ function renderEmail(alert, papers) {
     return s;
   }).join('\n\n');
   const text =
-`${n} new paper${n === 1 ? '' : 's'} matching your alert "${name}" ${n === 1 ? 'was' : 'were'} added to The Lit.
+`${opts.noteText || ''}${n} new paper${n === 1 ? '' : 's'} matching your alert "${name}" ${n === 1 ? 'was' : 'were'} added to The Lit.
 Criteria: ${describeCriteria(alert.criteria || {})}
 
 ${lineText}${more > 0 ? `\n\n…and ${more} more. See them all on ${SITE_URL}` : ''}
@@ -334,19 +341,64 @@ ${footerText()}`;
     <p style="color:#6a5a60;font-size:12.5px;margin:0 0 16px">Criteria: ${esc(describeCriteria(alert.criteria || {}))}</p>
     <ul style="list-style:none;padding:0;margin:0">${items}</ul>
     ${more > 0 ? `<p style="font-size:13px;margin:14px 0 0">…and ${more} more. <a href="${esc(SITE_URL)}" style="color:#7d1d3f">See them all on The Lit</a>.</p>` : ''}`;
-  return { subject, text, html: emailShell('new papers', inner) };
+  return { subject, text, html: emailShell('new papers', inner, opts.bannerHtml) };
 }
 
 // Feature-announcement e-mail: sent by --announce to everyone whose alert opted
 // into feature updates (criteria.features). Content is supplied by the maintainer
 // at send time; the chrome/footnote is the shared one.
-function renderAnnouncement({ subject, bodyText, bodyHtml }) {
-  const subj = subject || 'The Lit: a new feature is available';
-  const text = `${(bodyText || '').trim()}\n\n${footerText()}`;
+function renderAnnouncement({ subject, bodyText, bodyHtml }, opts) {
+  opts = opts || {};
+  const subj = (opts.subjectPrefix || '') + (subject || 'The Lit: a new feature is available');
+  const text = `${opts.noteText || ''}${(bodyText || '').trim()}\n\n${footerText()}`;
   const inner = `<p style="font-size:14px;margin:0 0 12px">Here’s what’s new on <strong>The Lit</strong>:</p>
     <div style="font-size:14px;line-height:1.6">${bodyHtml || esc(bodyText || '')}</div>
     <p style="font-size:13px;margin:16px 0 0"><a href="${esc(SITE_URL)}" style="color:#7d1d3f;font-weight:600">Open The Lit →</a></p>`;
-  return { subject: subj, text, html: emailShell('what’s new', inner) };
+  return { subject: subj, text, html: emailShell('what’s new', inner, opts.bannerHtml) };
+}
+
+// ── Test e-mail (one-off preview a user requests from the page) ────────────────
+// A signed-in user can ask "Send me a test e-mail" from the E-mail alerts panel
+// to see how their alert looks in a real inbox. The page (which can't send mail)
+// queues the request at users/{uid}/testEmails; this renders and delivers it.
+// It reuses the SAME templates as real alerts so the preview is faithful, adds a
+// "[Test]" subject prefix and a banner making clear it is a preview, and shows
+// real recently-added papers that match the criteria — falling back to a couple
+// of sample papers so the format always renders even when nothing matches yet.
+const TEST_SAMPLE_MAX = 3;
+// Fallback papers when no recently-added paper matches the criteria. Mirrors the
+// on-page live preview's samples in index.html (renderAlertPreview) — keep in sync.
+const SAMPLE_PAPERS = [
+  { Title: 'Dispatching and Pricing in Two-Sided Spatial Queues', Authors: 'Ang Xu, Chiwei Yan',
+    Journal: 'Operations Research', Year: '2026', Status: 'Articles in Advance',
+    Preprint: 'https://arxiv.org/abs/2401.00001', DOI: '' },
+  { Title: 'Learning and Information in Dynamic Marketplaces', Authors: 'A. Researcher, B. Coauthor',
+    Journal: 'Management Science', Year: '2026', Status: '', DOI: '' },
+];
+const TEST_NOTE_TEXT =
+  'This is a TEST e-mail so you can preview how your alert looks. No alert has actually ' +
+  'triggered, and the papers shown are examples.\n\n';
+const TEST_BANNER_HTML =
+  '<p style="background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-size:12.5px;' +
+  'border-radius:8px;padding:9px 12px;margin:0 0 14px"><strong>Test e-mail.</strong> ' +
+  'This is a preview of how your alert looks — no alert has actually triggered, and the ' +
+  'papers below are examples.</p>';
+
+function renderTestEmail(req, papers, ctx) {
+  const criteria = (req && req.criteria) || {};
+  const opts = { subjectPrefix: '[Test] ', noteText: TEST_NOTE_TEXT, bannerHtml: TEST_BANNER_HTML };
+  // A features-only request (no paper intent) shows the "what's new" format.
+  if (criteria.features && !hasPaperIntent(criteria)) {
+    return renderAnnouncement({
+      subject: 'The Lit: a new feature is available',
+      bodyText: 'This is a sample of the "what\'s new" e-mail you will receive when a new feature launches on The Lit.',
+      bodyHtml: '<p>This is a sample of the “what’s new” e-mail you will receive when a new feature launches on The Lit.</p>',
+    }, opts);
+  }
+  const matched = (papers || []).filter(p => matchesCriteria(p, criteria, ctx));
+  const sample = (matched.length ? matched : SAMPLE_PAPERS).slice(0, TEST_SAMPLE_MAX);
+  const alert = { name: (req && req.name) || describeCriteria(criteria), criteria };
+  return renderEmail(alert, sample, opts);
 }
 
 // ── Frequency gating ──────────────────────────────────────────────────────────
@@ -477,6 +529,92 @@ async function run({ dryRun }) {
   if (errors) process.exitCode = 1;
 }
 
+// ── Test-e-mail queue ─────────────────────────────────────────────────────────
+// Flushes the one-off preview requests users queue at users/{uid}/testEmails
+// (see renderTestEmail). Run by its own frequent workflow (lit-alerts-test.yml)
+// so a requested test arrives within a few minutes, decoupled from the daily
+// digest run. Each request is delivered once and then DELETED (test e-mails are
+// ephemeral); a send failure keeps the request for a couple of retries then
+// drops it, so a permanently-bad address never loops forever.
+async function sendTestEmails({ dryRun }) {
+  if (!process.env.FIREBASE_SERVICE_ACCOUNT && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    console.log('Test e-mails: no Firebase credentials configured — nothing to do. Add FIREBASE_SERVICE_ACCOUNT to enable.');
+    return;
+  }
+  if (!dryRun && !process.env.SMTP_USER) {
+    console.log('Test e-mails: SMTP not configured (no SMTP_USER) — nothing to send. Add the SMTP_* secrets to enable.');
+    return;
+  }
+
+  const ctx = makeCtx();
+  const papers = loadRecentPapers();
+
+  const { default: admin } = await import('firebase-admin');
+  if (!admin.apps.length) {
+    const sa = process.env.FIREBASE_SERVICE_ACCOUNT;
+    if (sa) admin.initializeApp({ credential: admin.credential.cert(JSON.parse(sa)) });
+    else admin.initializeApp();
+  }
+  const db = admin.firestore();
+
+  let transport = null;
+  if (!dryRun) {
+    const { default: nodemailer } = await import('nodemailer');
+    const port = Number(process.env.SMTP_PORT || 465);
+    transport = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port,
+      secure: process.env.SMTP_SECURE ? process.env.SMTP_SECURE === 'true' : port === 465,
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    });
+  }
+  const fromName = process.env.ALERTS_FROM_NAME || 'The Lit';
+  const fromAddr = process.env.ALERTS_FROM || process.env.SMTP_USER || '';
+
+  const snap = await db.collectionGroup('testEmails').get();
+  console.log(`Test e-mails: ${snap.size} pending request(s). dryRun=${dryRun}`);
+
+  let sent = 0, skipped = 0, errors = 0;
+  for (const doc of snap.docs) {
+    const req = doc.data() || {};
+    const recipient = String(req.recipient || req.from || '').trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(recipient)) {
+      console.log('  skip: invalid recipient'); skipped++;
+      if (!dryRun) { try { await doc.ref.delete(); } catch { /* ignore */ } }
+      continue;
+    }
+    const { subject, text, html } = renderTestEmail(req, papers, ctx);
+    const msg = {
+      from: fromAddr ? `"${fromName}" <${fromAddr}>` : undefined,
+      to: recipient,
+      replyTo: (req.from && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(req.from)) ? req.from : undefined,
+      subject, text, html,
+      headers: {
+        'List-Unsubscribe': `<mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('The Lit alert test')}>, <${SITE_URL}>`,
+      },
+    };
+    if (dryRun) {
+      console.log(`  [dry-run] would send test to ${recipient}: "${subject}"`); sent++; continue;
+    }
+    try {
+      await transport.sendMail(msg);
+      console.log(`  sent test to ${recipient}: "${subject}"`);
+      sent++;
+      try { await doc.ref.delete(); } catch (e) { console.error('  could not delete test request:', e && e.message); }
+    } catch (e) {
+      errors++;
+      console.error(`  ERROR sending test to ${recipient}: ${e && e.message}`);
+      const attempts = (Number(req.attempts) || 0) + 1;
+      try {
+        if (attempts >= 3) await doc.ref.delete();                                   // give up after a few tries
+        else await doc.ref.set({ attempts, lastError: String((e && e.message) || '').slice(0, 200) }, { merge: true });
+      } catch { /* ignore */ }
+    }
+  }
+  console.log(`Test e-mails done: sent=${sent}, skipped=${skipped}, errors=${errors}.`);
+  if (errors) process.exitCode = 1;
+}
+
 // ── Self-test (no network / no deps) ──────────────────────────────────────────
 function selftest() {
   const ctx = makeCtx();
@@ -571,6 +709,22 @@ function selftest() {
   ok('announcement html has body + shell + footer', /working papers/.test(ann.html) && /what.s new/.test(ann.html) && /Edit your preferences/.test(ann.html));
   ok('announcement text has footer', /Unsubscribe from future/.test(ann.text) && ann.text.includes(CONTACT_EMAIL));
 
+  // test e-mail (one-off preview): faithful template + [Test] marker + banner
+  const t1 = renderTestEmail({ name: 'FT50 · pre-prints', criteria: { jtype: ['ft50'], preprintOnly: true } },
+                             [P({ Preprint: 'https://arxiv.org/abs/2401.00001' })], ctx);
+  ok('test subject is prefixed [Test]', /^\[Test\] The Lit: /.test(t1.subject));
+  ok('test html has the preview banner', /Test e-mail\./.test(t1.html));
+  ok('test text has the preview note', /TEST e-mail/.test(t1.text));
+  ok('test html shows a matching paper', t1.html.includes('platform markets'));
+  ok('test html keeps the footer', /Edit your preferences/.test(t1.html));
+  // no recent match → falls back to the built-in sample papers (never empty)
+  const t2 = renderTestEmail({ name: 'Nothing new', criteria: { author: ['zzzznomatch'] } }, [P()], ctx);
+  ok('test falls back to sample papers when nothing matches', /Two-Sided Spatial Queues/.test(t2.html));
+  ok('test with empty recent set still renders', renderTestEmail({ criteria: {} }, [], ctx).html.includes('Two-Sided Spatial Queues'));
+  // features-only test → "what's new" format, still marked [Test]
+  const t3 = renderTestEmail({ name: 'Site updates', criteria: { features: true } }, [P()], ctx);
+  ok('features-only test uses the what\'s-new format', /what.s new/.test(t3.html) && /^\[Test\] /.test(t3.subject));
+
   console.log(`\nselftest: ${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 }
@@ -657,7 +811,7 @@ async function runAnnounce(argv) {
   console.log(`Announce done: ${sent} ${dryRun ? 'would-send' : 'sent'}, ${skipped} skipped, ${errors} errors.`);
 }
 
-export { matchesCriteria, evaluateAlert, renderEmail, renderAnnouncement, describeCriteria, hasPaperIntent, loadRecentPapers, makeCtx };
+export { matchesCriteria, evaluateAlert, renderEmail, renderAnnouncement, renderTestEmail, describeCriteria, hasPaperIntent, loadRecentPapers, makeCtx };
 
 // ── Entry point (only when run directly, not when imported for tests) ─────────
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
@@ -666,5 +820,6 @@ if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
   if (args.has('--selftest')) { selftest(); }
   else if (args.has('--scan')) { scan(argv); }
   else if (args.has('--announce')) { runAnnounce(argv).catch(e => { console.error(e); process.exit(1); }); }
+  else if (args.has('--test-emails')) { sendTestEmails({ dryRun: args.has('--dry-run') }).catch(e => { console.error(e); process.exit(1); }); }
   else { run({ dryRun: args.has('--dry-run') }).catch(e => { console.error(e); process.exit(1); }); }
 }

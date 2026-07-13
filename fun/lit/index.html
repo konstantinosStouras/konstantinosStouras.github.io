@@ -3724,7 +3724,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       <p>Each paper carries a small badge for the most selective list its journal is on (UTD24, then FT50, then ABS 4/4*, then ABS 3). You also get one-click BibTeX, a link to a free open-access pre-print whenever I could find one (arXiv, SSRN, NBER, OSF, bioRxiv or medRxiv), and a Crossref "cited by" count that links through to the paper on Google Scholar. PNAS papers show their Significance statement too. Many papers also have a "Cited references in this catalog" toggle that lists the other papers they cite which are themselves in The Lit — each one links straight to that paper — so you can walk the citation graph within these journals. That list is built slowly from publishers' deposited references, so its coverage grows over time.</p>
 
       <h3>A few extras</h3>
-      <p>There are quick views for recently added papers and for papers that have an open-access pre-print. If you sign in you get a private library, where you can star papers, add notes, build lists and tag your reading. You can save default filters — a preferred set of journals or journal types that the page applies automatically each time you sign in, so you land on your own subset straight away. You can also set up e-mail alerts: about new papers that match your filters, about any new paper added to the database, or about new features on the site — with a preview of exactly what each e-mail will look like.</p>
+      <p>There are quick views for recently added papers and for papers that have an open-access pre-print. If you sign in you get a private library, where you can star papers, add notes, build lists and tag your reading. You can save default filters — a preferred set of journals or journal types that the page applies automatically each time you sign in, so you land on your own subset straight away. You can also set up e-mail alerts: about new papers that match your filters, about any new paper added to the database, or about new features on the site — with a preview of exactly what each e-mail will look like, and a "Send me a test e-mail" button that drops a one-off sample into your own inbox.</p>
       <p>A separate <a href="analytics/">Data Analytics</a> page summarises the whole corpus with interactive charts — publication volume over time, co-authorship, pre-print and citation trends, an author spotlight, and, for the journals where we collect it, an editorial breakdown by accepting editor, area and senior/associate editor that you can click to filter the whole dashboard.</p>
 
       <h3>Where the data come from</h3>
@@ -3921,6 +3921,10 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   function listsCol() { return db.collection('users').doc(state.user.uid).collection('lists'); }
   function profileDoc() { return db.collection('users').doc(state.user.uid).collection('profile').doc('main'); }
   function alertsCol() { return db.collection('users').doc(state.user.uid).collection('alerts'); }
+  // One-off "Send me a test e-mail" requests. The page can't send mail, so (like
+  // real alerts) it queues here and the mailer's --test-emails pass delivers +
+  // deletes them. Covered by the same users/{uid}/** security rule.
+  function testEmailsCol() { return db.collection('users').doc(state.user.uid).collection('testEmails'); }
   function isSaved(r) {
     return !!(r && (r.starred || (r.note && r.note.trim()) || (r.tags && r.tags.length) || (r.lists && r.lists.length)));
   }
@@ -4645,6 +4649,33 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     }).then(function () { if (btn) btn.disabled = false; });
   };
 
+  // Queue a one-off TEST e-mail of the alert being composed, so the user can see
+  // how it looks in their own inbox before saving. Like real alerts, the static
+  // page can't send mail — it writes a request the mailer delivers (the dedicated
+  // test queue, flushed by alerts-mailer.mjs --test-emails within a few minutes).
+  window.litAlertSendTest = function () {
+    if (!state.user) { acctOpenAuth(); return; }
+    readAlertForm();
+    var statusEl = document.getElementById('litAlertSaveStatus');
+    var setStatus = function (msg, color) { if (statusEl) { statusEl.style.color = color; statusEl.textContent = msg; } };
+    var recipient = (alertForm.recipient || '').trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(recipient)) { setStatus('Enter a valid recipient e-mail to send a test.', 'var(--red)'); return; }
+    var name = (alertForm.name || '').trim() || defaultAlertName(alertDraft);
+    var payload = {
+      name: name, recipient: recipient, from: (state.user.email || ''),
+      frequency: alertForm.freq || 'weekly',
+      criteria: normalizeCriteria(alertDraft),
+      test: true, createdAt: serverTime()
+    };
+    var btn = document.getElementById('litAlertTestBtn'); if (btn) btn.disabled = true;
+    setStatus('Sending a test e-mail…', 'var(--text-muted)');
+    testEmailsCol().add(payload).then(function () {
+      setStatus('Test e-mail on its way to ' + recipient + ' ✓ — it usually arrives within a few minutes.', 'var(--green)');
+    }).catch(function (e) {
+      setStatus(friendly(e), 'var(--red)');
+    }).then(function () { if (btn) btn.disabled = false; });
+  };
+
   function alertTextRow(key, label, ph) {
     return '<div class="alert-row"><label>' + esc(label) + '</label>' +
       '<div class="alert-addrow"><input id="litAlertInput-' + key + '" placeholder="' + escAttr(ph) + '" autocomplete="off" ' +
@@ -4703,8 +4734,9 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       '</div>' +
       '<div class="alert-save-row"><button class="acct-primary" id="litAlertSaveBtn" onclick="litAlertSave()" style="padding:11px 22px">' + (editing ? 'Update alert' : 'Create alert') + '</button>' +
         (editing ? '<button type="button" class="alert-icon-btn" onclick="litAlertCancelEdit()">Cancel</button>' : '') +
+        '<button type="button" class="alert-icon-btn" id="litAlertTestBtn" onclick="litAlertSendTest()" title="E-mail a one-off sample of this alert to your address so you can see how it looks in your inbox">✉ Send me a test e-mail</button>' +
         '<span class="alert-save-status" id="litAlertSaveStatus"></span></div>' +
-      '<div class="info-note" style="margin-top:8px">Sent from your account e-mail (<strong>' + esc(state.user.email || '') + '</strong>) to the address above. New papers are matched when the database refreshes — delivery is handled by the alert mailer (see the setup notes). No e-mail is sent from your browser.</div>' +
+      '<div class="info-note" style="margin-top:8px">Sent from your account e-mail (<strong>' + esc(state.user.email || '') + '</strong>) to the address above. New papers are matched when the database refreshes — delivery is handled by the alert mailer (see the setup notes). No e-mail is sent from your browser. Use <strong>Send me a test e-mail</strong> to receive a one-off sample of this alert (it usually arrives within a few minutes).</div>' +
       '<div class="alert-preview" id="litAlertPreview"></div>';
     CRIT_KEYS.forEach(renderAlertChips);
     syncTypeChips();
