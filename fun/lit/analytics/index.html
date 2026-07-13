@@ -136,6 +136,10 @@
   .card { background: var(--white); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px 22px; box-shadow: var(--shadow-sm); min-width: 0; }
   .card.wide { grid-column: 1 / -1; }
   .card h3 { font-family: 'Fraunces', serif; font-weight: 500; font-size: 17px; color: var(--navy); margin-bottom: 2px; }
+  .card-head-row { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+  .cmp-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--text-muted); cursor: pointer; user-select: none; white-space: nowrap; }
+  .cmp-toggle input { width: 14px; height: 14px; accent-color: var(--navy); cursor: pointer; }
+  .cmp-toggle:hover { color: var(--navy); }
   .card .csub { font-size: 12.5px; color: var(--text-muted); margin-bottom: 14px; }
   .card svg { width: 100%; height: auto; display: block; overflow: visible; }
   .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 12px; }
@@ -168,6 +172,9 @@
 
   .footer { padding: 30px 32px 40px; color: var(--text-muted); font-size: 12px; text-align: center; }
   .footer a { color: var(--navy); }
+  .footer-inner { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 11px; line-height: 1.65; }
+  .footer-lead { font-size: 13px; color: var(--text); }
+  .footer-note { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
 
   @media (max-width: 820px) {
     .cards { grid-template-columns: 1fr; }
@@ -283,7 +290,12 @@
       <div class="tiles" id="tiles"></div>
       <div class="cards">
         <div class="card wide">
-          <h3>Publication volume over time</h3>
+          <div class="card-head-row">
+            <h3>Publication volume over time</h3>
+            <label class="cmp-toggle" id="cmpToggleWrap" style="display:none" title="Add a line summing the other journals in the selected type(s) — or the whole corpus if no type is selected — so you can compare your chosen journals against the rest.">
+              <input type="checkbox" id="cmpToggle"> Compare vs. other journals
+            </label>
+          </div>
           <div class="csub" id="evoSub">Papers published per year</div>
           <div id="evoChart"></div>
           <div class="legend" id="evoLegend"></div>
@@ -339,8 +351,11 @@
 </div>
 
 <footer class="footer">
-  <span id="genline"></span>
-  <a href="/fun/lit/">The Lit — Research Paper Browser</a> · <a href="https://www.stouras.com" target="_blank" rel="noopener">Konstantinos I. Stouras</a>
+  <div class="footer-inner">
+    <div class="footer-lead">Built as a personal project to search papers efficiently across journals in Operations, Supply Chain, Economics, Computer Science, Project Management and Innovation — all in one place.</div>
+    <div>See <a href="/fun/lit/">About</a> for what this covers and how the data are collected. <a href="/fun/lit/">Feedback</a> and suggestions are welcome. <span style="white-space:nowrap">Any errors are my own. <a href="https://www.stouras.com" target="_blank" rel="noopener">Konstantinos I. Stouras</a></span></div>
+    <div class="footer-note" id="genline"></div>
+  </div>
 </footer>
 
 <script>
@@ -354,7 +369,7 @@
   var DATA = null, JMAP = {}, AUTHORS = null, authorsState = 'idle';
   // dim = the active editorial breakdown filter (one dimension at a time):
   //   name ∈ 'editor'|'area'|'se'|'ae', vals = { value: true } of selected values.
-  var S = { types: {}, journals: {}, dim: { name: null, vals: {} }, yMin: 0, yMax: 0, tab: 'overview', author: null };
+  var S = { types: {}, journals: {}, dim: { name: null, vals: {} }, yMin: 0, yMax: 0, tab: 'overview', author: null, compareOther: false };
   // Editorial dimensions we can break the analytics down by (present in a
   // journal's `dims` only when we collect them: MS editors/areas, ISR/MkSc SE/AE).
   var DIM_ORDER = ['area', 'editor', 'se', 'ae'];
@@ -639,33 +654,74 @@
 
   function renderEvolution(keys) {
     var years = yearAxis();
-    // rank the in-scope journals by paper count; show up to 7 as lines + "Other".
-    var counts = keys.map(function (k) {
+    var MAX_LINES = 8;
+    var chosenJ = Object.keys(S.journals).filter(function (k) { return S.journals[k] && JMAP[k]; });
+    var chosenTypes = Object.keys(S.types).filter(function (t) { return S.types[t]; });
+
+    // Rank the in-scope journals by paper count in the current year window.
+    var ranked = keys.map(function (k) {
       var j = JMAP[k], tot = 0;
       for (var y in j.years) { var yy = +y; if (yy >= S.yMin && yy <= S.yMax) tot += j.years[y].n; }
       return { key: k, name: j.name, tot: tot };
     }).filter(function (c) { return c.tot > 0; }).sort(function (a, b) { return b.tot - a.tot; });
 
-    var series, legend = [];
-    if (counts.length <= 1) {
-      // single total area
-      var pts = years.map(function (y) { var v = 0; keys.forEach(function (k) { var r = JMAP[k].years[y]; if (r) v += r.n; }); return [y, v]; });
-      series = [{ name: 'Papers', color: NAVY, pts: pts }];
-      $('evoSub').textContent = 'Papers published per year' + (counts.length ? ' — ' + counts[0].name : '');
-    } else {
-      var top = counts.slice(0, 7), rest = counts.slice(7);
-      series = top.map(function (c, i) {
-        var pts = years.map(function (y) { var r = JMAP[c.key].years[y]; return [y, r ? r.n : 0]; });
-        legend.push({ name: c.name, color: SERIES[i % SERIES.length] });
-        return { name: c.name, color: SERIES[i % SERIES.length], pts: pts };
+    // Focus journals = individual lines. If the user picked specific journals we
+    // draw exactly those (largest first); otherwise the largest journals in
+    // scope. We NEVER add an automatic "Other" bucket — that is opt-in below.
+    var pool = chosenJ.length ? ranked.filter(function (c) { return chosenJ.indexOf(c.key) !== -1; }) : ranked;
+    var focus = pool.slice(0, MAX_LINES).map(function (c) { return c.key; });
+    var hidden = pool.length - focus.length;
+
+    // "Other journals" comparison universe: the selected type(s)' journals, or the
+    // whole corpus when no type is selected — minus the focus journals. Offered
+    // only when the user opts in AND there is something left to compare against.
+    var universe;
+    if (chosenTypes.length) {
+      var uset = {};
+      DATA.journals.forEach(function (j) {
+        for (var i = 0; i < chosenTypes.length; i++) if (keysHaveType(j.key, chosenTypes[i])) { uset[j.key] = 1; break; }
       });
-      if (rest.length) {
-        var rk = rest.map(function (c) { return c.key; });
-        var pts2 = years.map(function (y) { var v = 0; rk.forEach(function (k) { var r = JMAP[k].years[y]; if (r) v += r.n; }); return [y, v]; });
-        series.push({ name: 'Other', color: '#b9b0b4', pts: pts2 });
-        legend.push({ name: 'Other (' + rest.length + ' journals)', color: '#b9b0b4' });
+      universe = Object.keys(uset);
+    } else {
+      universe = DATA.journals.map(function (j) { return j.key; });
+    }
+    var fset = {}; focus.forEach(function (k) { fset[k] = 1; });
+    var otherKeys = universe.filter(function (k) { return !fset[k] && JMAP[k]; });
+    var canCompare = focus.length > 0 && otherKeys.length > 0;
+
+    // sync the compare control
+    var wrap = $('cmpToggleWrap'), box = $('cmpToggle');
+    if (wrap) wrap.style.display = canCompare ? '' : 'none';
+    if (box) box.checked = !!S.compareOther;
+    var compareOn = canCompare && S.compareOther;
+
+    var series = [], legend = [];
+    if (!focus.length) {
+      $('evoChart').innerHTML = '<div style="padding:40px 8px;text-align:center;color:var(--text-muted);font-size:13px">No papers in this selection.</div>';
+      $('evoLegend').innerHTML = '';
+      $('evoSub').textContent = 'Papers published per year';
+      return;
+    }
+    if (focus.length === 1 && !compareOn) {
+      // single journal → filled area of its own volume
+      var k0 = focus[0];
+      series = [{ name: JMAP[k0].name, color: NAVY, pts: years.map(function (y) { var r = JMAP[k0].years[y]; return [y, r ? r.n : 0]; }) }];
+      $('evoSub').textContent = 'Papers per year — ' + JMAP[k0].name;
+    } else {
+      focus.forEach(function (k, i) {
+        var col = SERIES[i % SERIES.length];
+        series.push({ name: JMAP[k].name, color: col, pts: years.map(function (y) { var r = JMAP[k].years[y]; return [y, r ? r.n : 0]; }) });
+        legend.push({ name: JMAP[k].name, color: col });
+      });
+      if (compareOn) {
+        series.push({ name: 'Other journals', color: '#b9b0b4', pts: years.map(function (y) { var v = 0; otherKeys.forEach(function (k) { var r = JMAP[k].years[y]; if (r) v += r.n; }); return [y, v]; }) });
+        legend.push({ name: 'Other journals (' + otherKeys.length + ')', color: '#b9b0b4' });
       }
-      $('evoSub').textContent = 'Papers per year, by journal (top ' + Math.min(7, counts.length) + ' of ' + counts.length + ' shown)';
+      var sub = chosenJ.length
+        ? 'Papers per year, by chosen journal' + (hidden ? ' (largest ' + focus.length + ' of ' + pool.length + ' shown)' : '')
+        : 'Papers per year, by journal' + (hidden ? ' (top ' + focus.length + ' of ' + pool.length + ' shown)' : '');
+      if (compareOn) sub += ' vs. other journals in ' + (chosenTypes.length ? 'the selected type' + (chosenTypes.length > 1 ? 's' : '') : 'the corpus');
+      $('evoSub').textContent = sub;
     }
     $('evoChart').innerHTML = lineChart(series, { years: years, area: series.length === 1 });
     $('evoLegend').innerHTML = legend.map(function (l) {
@@ -816,13 +872,40 @@
       return '<span class="chip tchip' + (S.types[t.key] ? ' on' : '') + '" data-t="' + t.key + '">' + esc(t.badge) + '</span>';
     }).join('');
     Array.prototype.forEach.call($('typeChips').querySelectorAll('.chip'), function (c) {
-      c.onclick = function () { var t = c.getAttribute('data-t'); S.types[t] = !S.types[t]; refresh(); };
+      c.onclick = function () { var t = c.getAttribute('data-t'); S.types[t] = !S.types[t]; renderJournalList(); refresh(); };
+    });
+  }
+
+  // Journals offered in the picker, ordered exactly like the main browser's
+  // Journals dropdown: the native sources first, in their canonical order (mirror
+  // of index.html's JOURNAL_OPTIONS — PNAS is one combined source here), then the
+  // catalog journals A→Z by name. When one or more journal TYPES are selected, the
+  // list is restricted to journals on a selected type's list (pick FT50 and only
+  // FT50 journals are offered), matching that type's scope.
+  var JN_NATIVE_ORDER = ['ms', 'msom', 'ec', 'pnas', 'pom', 'mksc', 'opre', 'isre'];
+  function journalPickList() {
+    var chosenTypes = Object.keys(S.types).filter(function (t) { return S.types[t]; });
+    return DATA.journals.filter(function (j) {
+      if (!chosenTypes.length) return true;
+      return (j.types || []).some(function (t) { return chosenTypes.indexOf(t) !== -1; });
+    }).slice().sort(function (a, b) {
+      var ia = JN_NATIVE_ORDER.indexOf(a.key), ib = JN_NATIVE_ORDER.indexOf(b.key);
+      if (ia !== -1 || ib !== -1) {            // at least one is a native source
+        if (ia === -1) return 1;               // native sources sort before catalog
+        if (ib === -1) return -1;
+        return ia - ib;                        // both native → fixed order
+      }
+      return (a.name || '').localeCompare(b.name || ''); // both catalog → alphabetical
     });
   }
 
   function renderJournalList() {
     var q = ($('jsearch').value || '').toLowerCase();
-    var list = DATA.journals.filter(function (j) { return !q || j.name.toLowerCase().indexOf(q) !== -1 || j.key.indexOf(q) !== -1; });
+    var list = journalPickList().filter(function (j) { return !q || j.name.toLowerCase().indexOf(q) !== -1 || j.key.indexOf(q) !== -1; });
+    if (!list.length) {
+      $('jlist').innerHTML = '<div class="jrow" style="cursor:default;color:var(--text-muted);font-size:12.5px">No journals for this selection.</div>';
+      return;
+    }
     $('jlist').innerHTML = list.map(function (j) {
       var top = (j.types || [])[0] || 'none';
       var badge = j.types && j.types.length ? DATA.types.filter(function (t) { return t.key === top; })[0].badge : 'other';
@@ -866,7 +949,7 @@
         if (b.getAttribute('data-rt')) S.types[b.getAttribute('data-rt')] = false;
         if (b.getAttribute('data-rj')) S.journals[b.getAttribute('data-rj')] = false;
         if (b.getAttribute('data-rd')) { delete S.dim.vals[b.getAttribute('data-rd')]; if (!Object.keys(S.dim.vals).length) S.dim.name = null; }
-        refresh();
+        renderJournalList(); refresh();
       };
     });
   }
@@ -914,7 +997,7 @@
   }
 
   function resetFilters() {
-    S.types = {}; S.journals = {}; S.dim = { name: null, vals: {} };
+    S.types = {}; S.journals = {}; S.dim = { name: null, vals: {} }; S.compareOther = false;
     $('yrMin').value = YEAR_LO; $('yrMax').value = YEAR_HI; syncSlider();
     renderTypeChips(); renderJournalList(); refresh();
   }
@@ -943,10 +1026,11 @@
     $('jsearch').addEventListener('input', renderJournalList);
     $('jAll').onclick = function () {
       var q = ($('jsearch').value || '').toLowerCase();
-      DATA.journals.forEach(function (j) { if (!q || j.name.toLowerCase().indexOf(q) !== -1) S.journals[j.key] = true; });
+      journalPickList().forEach(function (j) { if (!q || j.name.toLowerCase().indexOf(q) !== -1 || j.key.indexOf(q) !== -1) S.journals[j.key] = true; });
       renderJournalList(); refresh();
     };
     $('jClear').onclick = function () { S.journals = {}; renderJournalList(); refresh(); };
+    $('cmpToggle').addEventListener('change', function () { S.compareOther = this.checked; renderEvolution(scopeKeys()); });
     $('resetBtn').onclick = resetFilters;
 
     // tabs
@@ -967,7 +1051,7 @@
     ai.addEventListener('focus', function () { ensureAuthors(function () {}); });
 
     // generation line
-    if (d.generated) $('genline').innerHTML = 'Data as of ' + esc(d.generated) + ' · ' + fmt(d.totals.papers) + ' papers · ' + fmt(d.totals.authors) + ' authors · ';
+    if (d.generated) $('genline').textContent = 'Data as of ' + d.generated;
 
     $('boot').style.display = 'none';
     $('app').style.display = '';
