@@ -388,6 +388,52 @@ is needed. All of the alerts UI logic lives inside the accounts IIFE
 (`window.litAlerts*`); About/Feedback are top-level (`window.litAbout*` /
 `window.litFeedback*`).
 
+### Working Papers — the listed authors' UNPUBLISHED work
+A **"Working Papers" journal type** (added last in `JOURNAL_TYPES`, badge
+"Working Paper", green) surfaces the **unpublished working papers / pre-prints
+(SSRN, NBER, arXiv, OSF) of every author already in the catalog** — genuinely
+unpublished work, *excluding* anything whose title is already published in the
+catalog (a paper that later gets published drops out on the next crawl, and the
+published card's own "Pre-print (Open Access)" link takes over). It is its
+**own dataset**, `fun/lit/data-workingpapers/` (kept separate so it can move to
+a dedicated `lit-data-workingpapers` Pages repo when it nears the 1 GB limit —
+see below), built by the vendored pipeline `fun/lit/_scraper-workingpapers/`
+(OpenAlex only: resolves each author's OpenAlex ID from a known catalog DOI,
+enumerates their `type:preprint` works, classifies the host with the pre-print
+feature's own `pickPreprint`/`preprintFromDoi`, drops anything already-published
+or journal-placed, `wpRecordFromWork`). The page **merges it at runtime like the
+FT50 catalog** — `loadWorkingPapersManifest()` registers each repository
+(`wp-ssrn`/`wp-nber`/`wp-arxiv`/`wp-osf`, one `papers-wp-<host>.json` each,
+flagged `"workingPaper": true`) as a lazy `EXTRA_SRC` and records its key in
+`WP_KEYS`; `journalTypeKeys('wp') === WP_KEYS`. Records reuse the published-paper
+shape (+ `"Status":"Working paper"`) so cards render with **no renderer
+changes**: badge, repository tag, clickable **posted-year** chip, **co-authors**,
+and the Pre-print link all come for free. **Opt-in:** `neededExtraKeys()`
+excludes `WP_KEYS` from the "broad filter loads everything" path, so a normal
+search stays published-only — the archive downloads only when the user selects
+the Working Papers type or one of its repositories; working papers are also kept
+out of the header's published "N papers" count, and out of the "Recently added"
+view. `buildJTypeSelect()` **hides the Working Papers type until its archive has
+sources**, so the shipped empty `data-workingpapers/` (valid empty manifest)
+stays dormant until data lands. **The archive is built ONLINE, slowly:** two
+workflows — `lit-workingpapers-backfill.yml` (every 3 h, the growth engine) and
+`lit-workingpapers-update-data.yml` (daily refresh + live-site self-heal) — run
+`build-data.mjs` on a **bounded, gently paced** (`WP_PACE_MS` ~1.5 s,
+`WP_MAX_AUTHORS`, `WP_BUDGET_MS`), **resumable** slice (progress cursor in
+`data-workingpapers/_authors.json`), so it fills in over **weeks** without
+tripping OpenAlex's rate limits; they share the `lit-workingpapers-${{ github.ref }}`
+concurrency group and commit `fun/lit/data-workingpapers/` back (only on
+`master`). **Author priority:** Management Science / M&SOM / POM authors (last
+15 years) are crawled first (`WP_PRIORITY_KEYS`/`WP_PRIORITY_YEARS`), then the
+rest, newest-active first. Distinct OpenAlex quota identity `kstouras+litwp`.
+Offline test: `node fun/lit/_scraper-workingpapers/selftest.mjs` (mock, no
+network). Migration to a satellite repo is one constant: `WP_DATA_BASE`
+`'./data-workingpapers/'` → `'/lit-data-workingpapers/data/'`. See
+`fun/lit/_scraper-workingpapers/_HOW-IT-WORKS.md`. NOTE: this build environment's
+egress policy blocks the scholarly APIs (OpenAlex/Crossref/arXiv return 403), so
+the archive can only be populated by the GitHub Actions runners — it is EMPTY
+until the first workflow run on `master` post-merge.
+
 ## `/fun/ms` — the Google-free Management Science browser
 `fun/ms/` is the Management Science paper browser. It uses **no Google Sheets**:
 its data lives as static JSON in `fun/ms/data/` (`papers.json`, `authors.json`,

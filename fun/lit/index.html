@@ -200,6 +200,7 @@
   .jtype-ft50  { background: #fde7ef; color: #ad1457; }
   .jtype-abs4  { background: #e3ecf7; color: #1a5296; }
   .jtype-abs3  { background: #eceff1; color: #546e7a; }
+  .jtype-wp    { background: #e8f5e9; color: #2e7d32; }
   /* Senior/Associate Editor (ISR & Marketing Science) tags + chips */
   .tag-se { background: var(--accent-light); color: #6f5827; cursor: pointer; }
   .tag-se:hover { background: #ece5d0; }
@@ -794,6 +795,20 @@ const FT50_SOURCES_URL = './data-ft50/sources.json';
 const FT50_DATA_BASE = './data-ft50/';
 const FT50_RECENT_URL = './data-ft50/recent.json';
 
+// The Working Papers archive — the UNPUBLISHED working papers / pre-prints
+// (SSRN, NBER, arXiv, OSF) of every listed author, in fun/lit/data-workingpapers/,
+// built by fun/lit/_scraper-workingpapers/ (own workflows) and merged in at
+// runtime like the FT50 catalog: a "Working Papers" journal type whose
+// repositories lazy-load ONLY when the user opts into them (see
+// neededExtraKeys), so a normal search stays published-only. Kept in its own
+// dataset so it can move to a dedicated lit-data-workingpapers Pages repo when
+// it nears the 1 GB limit — then WP_DATA_BASE becomes '/lit-data-workingpapers/data/'.
+const WP_SOURCES_URL = './data-workingpapers/sources.json';
+const WP_DATA_BASE = './data-workingpapers/';
+// Journal keys that belong to the archive (populated from its manifest); backs
+// the 'wp' journal type (journalTypeKeys) and the opt-in lazy-load rule.
+const WP_KEYS = new Set();
+
 // Display config per source key. Sections are PNAS's five topic sections; a
 // PNAS paper can belong to several and matches a filter on any of them.
 const SRC = {
@@ -889,6 +904,12 @@ const JOURNAL_TYPES = [
     title: 'Journals rated 4* ("world elite") or 4 ("top") in the Chartered ABS Academic Journal Guide (AJG 2024), via journalranking.org. Covers every FT50/UTD24 journal plus Operations, Supply Chain, Economics, Computer Science, Project Management and Innovation-related journals; other fields are deliberately out of scope.' },
   { key: 'abs3', label: 'ABS 3', badge: 'ABS 3',
     title: 'Journals rated 3 ("highly regarded") in the Chartered ABS Academic Journal Guide, via journalranking.org. Coverage: Operations, Supply Chain, Economics, Computer Science, Project Management and Innovation-related journals, plus the covered lists’ own 3s (HBR and MIT SMR — the AJG’s top practitioner journals, at their last numeric grade — and the INFORMS Journal on Computing).' },
+  // Working Papers is not a set of published journals but a category of its
+  // own — the listed authors' UNPUBLISHED work. It backs onto WP_KEYS (from the
+  // data-workingpapers manifest), so it badges/filters through the same
+  // machinery; it stays hidden until the archive has sources (buildJTypeSelect).
+  { key: 'wp', label: 'Working Papers', badge: 'Working Paper',
+    title: 'Unpublished working papers / pre-prints (SSRN, NBER, arXiv, OSF) of the listed authors — genuinely unpublished work, excluding anything already in the published catalog. A separate archive that fills in over time; select it to load and search it (by year posted, author, co-authors, affiliation).' },
 ];
 const JTYPE_LABEL = {};
 JOURNAL_TYPES.forEach(function(t) { JTYPE_LABEL[t.key] = t.label; });
@@ -914,6 +935,7 @@ function journalTypeKeys(t) {
   if (t === 'ft50') return FT50_KEYS;
   if (t === 'abs4') return absSets().abs4;
   if (t === 'abs3') return absSets().abs3;
+  if (t === 'wp') return WP_KEYS;
   return new Set();
 }
 
@@ -1273,6 +1295,19 @@ async function loadFt50Manifest() {
   loadDatasetRecent(FT50_RECENT_URL);
 }
 
+// The Working Papers archive: register its repositories (SSRN/NBER/arXiv/OSF
+// working papers) as lazy extra sources and record their keys in WP_KEYS so
+// the 'wp' journal type expands to them. Absent / empty (the archive builds up
+// online over time) → the loader no-ops and the type stays hidden. Its recent
+// rows are deliberately NOT merged into "Recently added" — that view stays
+// published-only; working papers surface only when the user opts into them.
+async function loadWorkingPapersManifest() {
+  var rows = await fetchManifest(WP_SOURCES_URL);
+  if (!rows || !rows.length) return;
+  rows.forEach(function(s) { if (s.workingPaper) WP_KEYS.add(s.key); });
+  registerExtraSources(rows, WP_DATA_BASE);
+}
+
 function loadShardManifests() {
   SHARDS.forEach(async function(shard) {
     var rows = await fetchManifest(shard.base + 'sources.json');
@@ -1339,7 +1374,13 @@ function broadFilterActive() {
 function neededExtraKeys() {
   var keys = Object.keys(EXTRA_SRC);
   if (journalScope) return keys.filter(function(k) { return journalScope.has(k); });
-  return (broadFilterActive() || preprintOnly) ? keys : [];
+  // A broad filter with no journal scope streams every PUBLISHED catalog file —
+  // but never the Working Papers archive, which is opt-in: its repositories
+  // download only when the user selects the Working Papers type or one of them
+  // directly (journalScope branch above), so a normal search stays
+  // published-only and never pulls the (large, unpublished) working-paper set.
+  return (broadFilterActive() || preprintOnly)
+    ? keys.filter(function(k) { return !WP_KEYS.has(k); }) : [];
 }
 
 function ensureExtraSources() { neededExtraKeys().forEach(loadExtraSource); }
@@ -1364,7 +1405,9 @@ function updateHeaderStats() {
   if (!el || !sourcesTotal) return;
   var papers = 0;
   sourcesManifest.forEach(function(s) { papers += s.count || 0; });
-  Object.keys(EXTRA_SRC).forEach(function(k) { papers += EXTRA_SRC[k].count || 0; });
+  // Working papers are unpublished — keep them out of the headline "N papers"
+  // (published) count; they are reachable via the Working Papers type instead.
+  Object.keys(EXTRA_SRC).forEach(function(k) { if (!WP_KEYS.has(k)) papers += EXTRA_SRC[k].count || 0; });
   if (!papers) return;
   var txt = papers.toLocaleString('en-US') + ' papers';
   if (authorsTotal) txt += ' from ' + authorsTotal.toLocaleString('en-US') + ' authors';
@@ -1426,6 +1469,7 @@ async function loadData() {
   updateHeaderStats();
   loadFt50Manifest();   // async: registers the FT50-catalog journals as lazy sources
   loadShardManifests(); // async: registers each satellite shard's journals
+  loadWorkingPapersManifest(); // async: registers the Working Papers archive (opt-in)
 
   // Affiliation aggregates come from their own small JSON file.
   fetch(AFFILIATIONS_URL, { cache: 'no-cache' })
@@ -1989,8 +2033,9 @@ function buildJournalSelect(liveCounts) {
   if (searchInput && searchInput.value) filterDrop('csJournal', searchInput.value);
 }
 
-// The journal-types dropdown: three fixed entries (FT50 / ABS 4/4* / ABS 3),
-// each labeled with how many of the catalog's journals it covers.
+// The journal-types dropdown: UTD24 / FT50 / ABS 4/4* / ABS 3 and — once its
+// archive has data — Working Papers, each labeled with how many of the
+// catalog's sources it covers.
 function buildJTypeSelect() {
   var cs = document.getElementById('csJType');
   if (!cs) return;
@@ -1998,8 +2043,11 @@ function buildJTypeSelect() {
   container.innerHTML = JOURNAL_TYPES.map(function(t) {
     var n = 0;
     journalTypeKeys(t.key).forEach(function(k) { if (SRC[k] || EXTRA_SRC[k]) n++; });
+    // Working Papers is hidden until its archive is built (no repositories yet).
+    if (t.key === 'wp' && n === 0) return '';
+    var unit = t.key === 'wp' ? 'repositor' + (n === 1 ? 'y' : 'ies') : 'journal' + (n === 1 ? '' : 's');
     return '<div class="custom-select-item" title="' + escAttr(t.title) + '" onclick="selectItem(\'csJType\',\'jtype\',\'' + escAttr(t.key) + '\')">' +
-      esc(t.label) + ' <span style="opacity:0.45">(' + n + ' journal' + (n === 1 ? '' : 's') + ')</span></div>';
+      esc(t.label) + ' <span style="opacity:0.45">(' + n + ' ' + unit + ')</span></div>';
   }).join('');
   var searchInput = cs.querySelector('.custom-select-search');
   if (searchInput && searchInput.value) filterDrop('csJType', searchInput.value);
