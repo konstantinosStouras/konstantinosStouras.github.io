@@ -2592,13 +2592,14 @@ function renderPage() {
   const countEl = document.getElementById('resultsCount');
   // Lazily loaded journal files (native + FT50) still on their way.
   const pending = viewPendingCount();
-  // "X of Y": Y is the journal-scope corpus (scopeCount), not the download
-  // total — with e.g. FT50 selected, chaining the pre-print toggle or a search
-  // reads "2,787 of 230,089" (the FT50 papers), even if the rest of the
-  // catalog happens to be in memory from an earlier broad search.
+  // "X (P%) of Y": Y is the journal-scope corpus (scopeCount), not the
+  // download total — with e.g. FT50 selected, chaining the pre-print toggle or
+  // a search reads "2,787 (1.21%) of 230,089" (the FT50 papers), even if the
+  // rest of the catalog happens to be in memory from an earlier broad search.
+  const pct = scopeCount ? ' (' + (filtered.length * 100 / scopeCount).toFixed(2) + '%)' : '';
   let countHtml = filtered.length === scopeCount
     ? `<strong>${scopeCount.toLocaleString()}</strong> papers`
-    : `<strong>${filtered.length.toLocaleString()}</strong> of ${scopeCount.toLocaleString()} papers`;
+    : `<strong>${filtered.length.toLocaleString()}</strong>${pct} of ${scopeCount.toLocaleString()} papers`;
   if (pending) countHtml += ' · <span style="color:var(--navy)">loading ' + pending + ' journal file' + (pending === 1 ? '' : 's') + '…</span>';
   countEl.innerHTML = countHtml;
 
