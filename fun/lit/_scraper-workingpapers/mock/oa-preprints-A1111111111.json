@@ -1,0 +1,29 @@
+{"meta":{"next_cursor":null},"results":[
+  {"id":"https://openalex.org/W1","doi":"https://doi.org/10.2139/ssrn.9999999","title":"An Unpublished Working Paper on Queues","publication_year":2025,
+   "authorships":[
+     {"author":{"display_name":"Jane Q. Public"},"institutions":[{"display_name":"Test University"}]},
+     {"author":{"display_name":"John Coauthor"},"institutions":[{"display_name":"Other University"}]}],
+   "primary_location":{"landing_page_url":"https://papers.ssrn.com/sol3/papers.cfm?abstract_id=9999999","source":{"type":"repository","display_name":"SSRN Electronic Journal"}},
+   "locations":[{"landing_page_url":"https://papers.ssrn.com/sol3/papers.cfm?abstract_id=9999999","source":{"type":"repository","display_name":"SSRN Electronic Journal"}}],
+   "abstract_inverted_index":{"This":[0],"is":[1],"a":[2],"working":[3],"paper.":[4]},"cited_by_count":3},
+
+  {"id":"https://openalex.org/W2","doi":"https://doi.org/10.2139/ssrn.8888888","title":"Published Paper One","publication_year":2024,
+   "authorships":[{"author":{"display_name":"Jane Q. Public"}}],
+   "primary_location":{"landing_page_url":"https://papers.ssrn.com/sol3/papers.cfm?abstract_id=8888888","source":{"type":"repository","display_name":"SSRN Electronic Journal"}},
+   "locations":[{"landing_page_url":"https://papers.ssrn.com/sol3/papers.cfm?abstract_id=8888888","source":{"type":"repository","display_name":"SSRN Electronic Journal"}}],
+   "abstract_inverted_index":{},"cited_by_count":10},
+
+  {"id":"https://openalex.org/W3","doi":"https://doi.org/10.48550/arxiv.2501.00001","title":"A Fresh arXiv Pre-print","publication_year":2025,
+   "authorships":[{"author":{"display_name":"Jane Q. Public"},"institutions":[{"display_name":"Test University"}]}],
+   "primary_location":{"landing_page_url":"https://arxiv.org/abs/2501.00001","source":{"type":"repository","display_name":"arXiv (Cornell University)"}},
+   "locations":[{"landing_page_url":"https://arxiv.org/abs/2501.00001","source":{"type":"repository","display_name":"arXiv (Cornell University)"}}],
+   "abstract_inverted_index":{"A":[0],"pre-print.":[1]},"cited_by_count":0},
+
+  {"id":"https://openalex.org/W4","doi":"https://doi.org/10.2139/ssrn.7777777","title":"Actually Published Elsewhere","publication_year":2023,
+   "authorships":[{"author":{"display_name":"Jane Q. Public"}}],
+   "primary_location":{"landing_page_url":"https://papers.ssrn.com/sol3/papers.cfm?abstract_id=7777777","source":{"type":"repository","display_name":"SSRN Electronic Journal"}},
+   "locations":[
+     {"landing_page_url":"https://papers.ssrn.com/sol3/papers.cfm?abstract_id=7777777","source":{"type":"repository","display_name":"SSRN Electronic Journal"}},
+     {"landing_page_url":"https://example.com/journal","source":{"type":"journal","display_name":"Journal of Something"}}],
+   "abstract_inverted_index":{},"cited_by_count":1}
+]}

@@ -1,0 +1,127 @@
+name: lit — update working-papers archive
+
+# Daily maintenance pass over the Working Papers archive for stouras.com/fun/lit/
+# (fun/lit/data-workingpapers/): crawls a modest slice of authors — new authors
+# first, then the stalest previously-crawled ones due a refresh (WP_REFRESH_DAYS)
+# so newly-posted working papers get picked up — commits the result, and
+# verifies the live site serves it. The heavy lifting of the initial fill is
+# done by lit-workingpapers-backfill.yml (every 3 h); this keeps the archive
+# fresh once it is built. See fun/lit/_scraper-workingpapers/_HOW-IT-WORKS.md.
+
+on:
+  schedule:
+    # Daily, 06:15 UTC (offset from the ms 05:00 / lit 05:30 / ft50 07:15 builds).
+    - cron: '15 6 * * *'
+  workflow_dispatch: {}      # run on demand from the Actions tab
+  push:
+    # Seed a new branch's archive as soon as the pipeline itself changes.
+    paths:
+      - '.github/workflows/lit-workingpapers-update-data.yml'
+      - 'fun/lit/_scraper-workingpapers/build-data.mjs'
+
+# Never let two working-papers passes race; let a running one finish.
+concurrency:
+  group: lit-workingpapers-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write            # needed to commit the refreshed archive back
+  pages: write               # needed to request a Pages rebuild if a deploy fails
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Refresh the working-papers archive (OpenAlex, gently paced)
+        env:
+          WP_MAILTO: kstouras+litwp@gmail.com
+          WP_MAX_AUTHORS: '250'
+          WP_BUDGET_MS: '2100000'   # 35-min ceiling
+          WP_PACE_MS: '1500'
+        run: node fun/lit/_scraper-workingpapers/build-data.mjs
+
+      - name: Commit refreshed archive
+        if: github.ref == 'refs/heads/master'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add fun/lit/data-workingpapers
+          if git diff --cached --quiet; then
+            echo "No archive changes — nothing to commit."
+            exit 0
+          fi
+          git commit -m "lit: refresh working-papers archive"
+          cp -r fun/lit/data-workingpapers /tmp/wp-ours
+          for i in 1 2 3; do
+            if git push origin HEAD:${{ github.ref_name }}; then
+              echo "Pushed on attempt $i."
+              exit 0
+            fi
+            echo "Push rejected (concurrent commit?) — replaying our archive on the new tip…"
+            git fetch origin ${{ github.ref_name }}
+            git reset --hard origin/${{ github.ref_name }}
+            rm -rf fun/lit/data-workingpapers
+            cp -r /tmp/wp-ours fun/lit/data-workingpapers
+            git add fun/lit/data-workingpapers
+            if git diff --cached --quiet; then
+              echo "The tip already carries this archive state — nothing left to push."
+              exit 0
+            fi
+            git commit -m "lit: refresh working-papers archive"
+            sleep 5
+          done
+          echo "::error::Could not push the working-papers archive after 3 attempts."
+          exit 1
+
+      # A committed archive is not enough: the Pages deploy that follows can fail
+      # transiently. Poll the live site; if it didn't land, request a rebuild.
+      # Skipped while the archive is still empty (nothing meaningful to verify).
+      - name: Verify the live site serves this archive (self-heal a failed deploy)
+        if: github.ref == 'refs/heads/master'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LIVE_META: https://www.stouras.com/fun/lit/data-workingpapers/meta.json
+        run: |
+          count=$(jq -r '.paperCount // 0' fun/lit/data-workingpapers/meta.json)
+          if [ "$count" = "0" ]; then echo "Archive still empty — skipping the live-site check."; exit 0; fi
+          want=$(jq -r .lastPull fun/lit/data-workingpapers/meta.json)
+          echo "Committed archive lastPull: $want"
+          poll() {
+            for i in $(seq 1 "$1"); do
+              live=$(curl -sf --max-time 20 "$LIVE_META?nc=${GITHUB_RUN_ID}-${RANDOM}" | jq -r .lastPull || echo "unreachable")
+              echo "  try $i/$1: live lastPull = $live"
+              if [ "$live" != "unreachable" ] && [ ! "$live" \< "$want" ]; then return 0; fi
+              sleep 60
+            done
+            return 1
+          }
+          if poll 8; then echo "Live site is serving the current archive."; exit 0; fi
+          echo "Live site still stale — requesting a GitHub Pages rebuild..."
+          curl -sf -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/pages/builds" \
+            || echo "WARNING: Pages rebuild request failed (check token permissions)."
+          if poll 10; then echo "Live site recovered after the rebuild request."; exit 0; fi
+          echo "::error::Live site is still serving a stale working-papers archive (wanted lastPull >= $want)."
+          exit 1
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### lit working-papers archive" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f fun/lit/data-workingpapers/meta.json ]; then
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat fun/lit/data-workingpapers/meta.json >> "$GITHUB_STEP_SUMMARY"
+            echo '' >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
