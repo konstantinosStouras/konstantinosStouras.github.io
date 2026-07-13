@@ -503,15 +503,20 @@
   @media (max-width: 768px) { .lit-nav { width: 100%; } }
 
   /* ── Wider modal variant for About / E-mail alerts / Feedback ──────────────
-     Reuses the account modal shell (.acct-overlay / .acct-modal). */
-  .acct-modal.wide { max-width: 680px; }
+     Reuses the account modal shell (.acct-overlay / .acct-modal). The modal is
+     capped to the viewport and laid out as a flex column so a long body (the
+     About tour) scrolls inside its own region while the header + close button
+     stay put. */
+  .acct-modal.wide { max-width: 680px; display: flex; flex-direction: column; max-height: calc(100vh - 112px); }
+  .acct-modal.wide .acct-modal-head { flex: 0 0 auto; }
   .acct-modal.wide .acct-modal-head p { max-width: 60ch; }
 
-  /* About / Feedback prose */
-  .info-body { padding: 6px 26px 26px; font-size: 14px; color: var(--text); line-height: 1.7; }
+  /* About / Feedback prose. The body scrolls on its own when it outgrows the
+     capped modal; paragraphs are justified for clean flush-both-sides text. */
+  .info-body { padding: 6px 26px 26px; font-size: 14px; color: var(--text); line-height: 1.7; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
   .info-body h3 { font-family: 'Fraunces', serif; font-weight: 500; color: var(--navy); font-size: 16.5px; margin: 20px 0 6px; }
   .info-body h3:first-child { margin-top: 4px; }
-  .info-body p { margin-bottom: 11px; }
+  .info-body p { margin-bottom: 11px; text-align: justify; text-justify: inter-word; -webkit-hyphens: auto; hyphens: auto; }
   .info-body a { color: var(--navy); font-weight: 500; }
   .info-body ul { margin: 2px 0 12px 4px; list-style: none; }
   .info-body ul li { position: relative; padding-left: 20px; margin-bottom: 7px; }
@@ -528,7 +533,7 @@
   .contact-row .c-txt span { font-size: 12.5px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; }
 
   /* ── E-mail alerts builder ─────────────────────────────────────────────── */
-  .alerts-body { padding: 4px 26px 26px; }
+  .alerts-body { padding: 4px 26px 26px; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
   .alerts-scroll { }
   .alert-signin { text-align: center; padding: 18px 8px 8px; }
   .alert-signin p { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.6; }
