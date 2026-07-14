@@ -218,6 +218,7 @@
   .disr-note a { color: var(--navy); }
   .disr-two { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 26px; }
   .disr-two > div { min-width: 0; }
+  .dfilter-hint { font-size: 11px; color: var(--text-muted); margin-top: 6px; line-height: 1.4; max-width: 260px; }
   .disr-two .disr-subhead { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; margin: 2px 0 6px; }
   @media (max-width: 720px) { .disr-two { grid-template-columns: 1fr; } }
 </style>
@@ -289,6 +290,18 @@
             <input type="range" id="yrMax">
           </div>
           <div class="yr-presets" id="yrPresets"></div>
+        </div>
+        <div class="fgroup yearwrap" id="disrFilterGroup">
+          <span class="flabel">Disruptiveness index <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted)">(−1 to 1)</span></span>
+          <div class="yr-head"><span class="yr-val" id="dVal">−1.00 – 1.00</span></div>
+          <div class="slider" id="dslider">
+            <div class="track"></div>
+            <div class="fill" id="dFill"></div>
+            <input type="range" id="drMin">
+            <input type="range" id="drMax">
+          </div>
+          <div class="yr-presets" id="drPresets"></div>
+          <div class="dfilter-hint">Filters the <strong>Team-science</strong> figures below — the papers with a computed disruption index.</div>
         </div>
       </div>
       <div class="fscope">
@@ -475,7 +488,11 @@
   var DATA = null, JMAP = {}, AUTHORS = null, authorsState = 'idle';
   // dim = the active editorial breakdown filter (one dimension at a time):
   //   name ∈ 'editor'|'area'|'se'|'ae', vals = { value: true } of selected values.
-  var S = { types: {}, journals: {}, dim: { name: null, vals: {} }, yMin: 0, yMax: 0, tab: 'overview', author: null, compareOther: false };
+  var S = { types: {}, journals: {}, dim: { name: null, vals: {} }, yMin: 0, yMax: 0, dMin: -1, dMax: 1, tab: 'overview', author: null, compareOther: false };
+  // Disruptiveness-index (D) range filter bounds — the slider spans D_LO..D_HI.
+  var D_LO = -1, D_HI = 1, D_STEP = 0.05;
+  function dActive() { return S.dMin > D_LO + 1e-9 || S.dMax < D_HI - 1e-9; }
+  function fmtD(v) { return (v < 0 ? '−' : '') + Math.abs(v).toFixed(2); }
   // Editorial dimensions we can break the analytics down by (present in a
   // journal's `dims` only when we collect them: MS editors/areas, ISR/MkSc SE/AE).
   var DIM_ORDER = ['area', 'editor', 'se', 'ae'];
@@ -1099,7 +1116,9 @@
       var mine = DISR.papers.filter(function (p) { return p.au && p.au.indexOf(id) !== -1 && scope[p.j] && p.y != null && p.y >= S.yMin && p.y <= S.yMax; });
       if (!mine.length) return;
       var ds = mine.map(function (p) { return p.d; }), meanD = mean(ds);
-      var allD = disrInScope().map(function (p) { return p.d; }).sort(function (x, y) { return x - y; });
+      // percentile is against the journal+year population (NOT the D-slider range),
+      // so an author's standing isn't distorted by a narrowed disruptiveness filter.
+      var allD = disrScopeJY().map(function (p) { return p.d; }).sort(function (x, y) { return x - y; });
       var pctile = pctRankSorted(allD, meanD);
       var disrupt = mine.filter(function (p) { return p.d > 0; }).length, dev = mine.filter(function (p) { return p.d < 0; }).length;
       var sorted = mine.slice().sort(function (x, y) { return y.d - x.d; });
@@ -1155,11 +1174,20 @@
   // Scored papers within the current journal + year scope (the disruption dataset
   // carries no editorial-dimension tags, so an active editor/area filter only
   // narrows by that dimension's journals, not by the value — noted in the UI).
-  function disrInScope() {
+  // This does NOT apply the disruptiveness-index (D) range filter — the histogram
+  // and the "of N in scope" denominators use it so the D slider reads as a
+  // selection over the full distribution.
+  function disrScopeJY() {
     if (!DISR || !DISR.papers) return [];
     var scope = {}; scopeKeys().forEach(function (k) { scope[k] = 1; });
     var lo = S.yMin, hi = S.yMax;
     return DISR.papers.filter(function (p) { return scope[p.j] && p.y != null && p.y >= lo && p.y <= hi; });
+  }
+  // Journal + year + the disruptiveness-index range — the working set for every
+  // team-science figure except the distribution histogram.
+  function disrInScope() {
+    var dlo = S.dMin, dhi = S.dMax;
+    return disrScopeJY().filter(function (p) { return p.d >= dlo && p.d <= dhi; });
   }
 
   function showDisrEmpty(msg) {
@@ -1184,16 +1212,22 @@
     // failed (file not generated yet) or empty dataset → hide the section entirely.
     if (disrState === 'failed' || !DISR || !DISR.papers || !DISR.papers.length) { sec.style.display = 'none'; return; }
     sec.style.display = '';
-    var rows = disrInScope();
-    if (!rows.length) {
+    var jy = disrScopeJY();
+    if (!jy.length) {
       showDisrEmpty('No citation-graph data for the selected journals and years yet. This analysis currently covers <strong>' + fmt(DISR.totals.papers) +
         '</strong> papers whose references we’ve mapped (mostly Management Science, M&amp;SOM, POM and PNAS) and grows as the reference graph fills in. Try widening the journal or year filters.');
       return;
     }
+    var rows = disrInScope();
+    if (!rows.length) {
+      showDisrEmpty('None of the <strong>' + fmt(jy.length) + '</strong> scored papers in the selected journals and years have a disruptiveness index between <strong>' +
+        fmtD(S.dMin) + '</strong> and <strong>' + fmtD(S.dMax) + '</strong>. Widen the <em>Disruptiveness index</em> range above.');
+      return;
+    }
     $('disrLoading').style.display = 'none'; $('disrEmpty').style.display = 'none'; $('disrBody').style.display = '';
-    renderDisrTiles(rows);
+    renderDisrTiles(rows, jy);
     renderDisrExplain(rows);
-    renderDisrHist(rows);
+    renderDisrHist(jy);
     renderDisrScissor(rows);
     renderDisrSearch(rows);
     renderDisrRatio(rows);
@@ -1201,12 +1235,15 @@
     renderDisrAuthors(rows);
   }
 
-  function renderDisrTiles(rows) {
+  function renderDisrTiles(rows, jy) {
     var n = rows.length, disrupt = 0, dev = 0, ds = [];
     rows.forEach(function (p) { ds.push(p.d); if (p.d > 0) disrupt++; else if (p.d < 0) dev++; });
     ds.sort(function (a, b) { return a - b; });
+    var scopedHint = dActive()
+      ? ('D ∈ [' + fmtD(S.dMin) + ', ' + fmtD(S.dMax) + '] · ' + pct(n / (jy.length || 1)) + ' of ' + fmt(jy.length))
+      : 'with a defined D, in scope';
     var tiles = [
-      { label: 'Scored papers', value: fmt(n), hint: 'with a defined D, in scope' },
+      { label: 'Scored papers', value: fmt(n), hint: scopedHint },
       { label: 'Disruptive', value: pct(disrupt / n), hint: 'D > 0', cls: 'sm' },
       { label: 'Developing', value: pct(dev / n), hint: 'D < 0', cls: 'sm' },
       { label: 'Mean disruption', value: mean(ds).toFixed(3), cls: 'sm' },
@@ -1239,6 +1276,9 @@
   }
 
   // ── Distribution of D — signed pseudo-log bins, log-scaled bar heights ─────
+  // Drawn over the FULL journal+year distribution; the active disruptiveness-index
+  // range is shown as a highlighted band (out-of-range bins are dimmed), so the
+  // slider reads as a selection over the whole distribution.
   function renderDisrHist(rows) {
     var edges = [-1, -0.5, -0.2, -0.1, -0.05, -0.02, -0.005, 0.005, 0.02, 0.05, 0.1, 0.2, 0.5, 1];
     var nb = edges.length - 1, counts = []; for (var i = 0; i < nb; i++) counts.push(0);
@@ -1252,7 +1292,11 @@
     $('disrHistLegend').innerHTML =
       '<span class="li"><span class="sw" style="background:' + C_DEVELOP + '"></span>Developing (D &lt; 0)</span>' +
       '<span class="li"><span class="sw" style="background:#b8b0b4"></span>≈ 0</span>' +
-      '<span class="li"><span class="sw" style="background:' + C_DISRUPT + '"></span>Disrupting (D &gt; 0)</span>';
+      '<span class="li"><span class="sw" style="background:' + C_DISRUPT + '"></span>Disrupting (D &gt; 0)</span>' +
+      (dActive() ? '<span class="li" style="color:var(--text-muted)">Greyed bars are outside your selected range (' + fmtD(S.dMin) + ' – ' + fmtD(S.dMax) + ')</span>' : '');
+    $('disrHistSub').innerHTML = dActive()
+      ? 'Full distribution of <em>D</em> in scope; the highlighted bars are your selected range <strong>' + fmtD(S.dMin) + ' – ' + fmtD(S.dMax) + '</strong>.'
+      : 'Every scored paper’s <em>D</em>, from developing (<em>D</em>&lt;0) to disrupting (<em>D</em>&gt;0). Most work sits near zero — the paper’s Fig. 1b.';
   }
   function disrHistogram(edges, counts) {
     var nb = counts.length;
@@ -1262,6 +1306,7 @@
     var slot = (W - L - R) / nb, bw = Math.min(46, slot * 0.82);
     var logMax = Math.log(1 + maxC);
     var hOf = function (c) { return c ? (Math.log(1 + c) / logMax) * (H - T - B) : 0; };
+    var active = dActive();
     var svg = svgEl(W, H);
     // zero baseline
     var baseY = H - B;
@@ -1269,9 +1314,11 @@
     counts.forEach(function (c, i) {
       var lo = edges[i], hi = edges[i + 1], mid = (lo + hi) / 2;
       var col = mid < -0.006 ? C_DEVELOP : (mid > 0.006 ? C_DISRUPT : '#b8b0b4');
+      // a bin is "selected" when it overlaps [S.dMin, S.dMax]
+      var inSel = !active || (hi > S.dMin && lo < S.dMax) || (lo <= S.dMin && hi >= S.dMax);
       var cx = L + slot * (i + 0.5), x = cx - bw / 2, h = hOf(c);
-      svg += '<rect x="' + x.toFixed(1) + '" y="' + (baseY - h).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="3" fill="' + col + '"/>';
-      if (c) svg += '<text x="' + cx.toFixed(1) + '" y="' + (baseY - h - 5).toFixed(1) + '" text-anchor="middle" font-size="10.5" fill="' + MUTED + '" font-weight="600">' + fmt(c) + '</text>';
+      svg += '<rect x="' + x.toFixed(1) + '" y="' + (baseY - h).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="3" fill="' + col + '"' + (inSel ? '' : ' opacity="0.26"') + '/>';
+      if (c) svg += '<text x="' + cx.toFixed(1) + '" y="' + (baseY - h - 5).toFixed(1) + '" text-anchor="middle" font-size="10.5" fill="' + MUTED + '"' + (inSel ? ' font-weight="600"' : ' opacity="0.5"') + '>' + fmt(c) + '</text>';
     });
     // sparse magnitude labels under a few bin edges
     var lbl = { '-1': '−1', '-0.1': '−0.1', '-0.005': '', '0.005': '0', '0.1': '0.1', '1': '1' };
@@ -1577,6 +1624,9 @@
     dimVals.forEach(function (v) {
       pills.push('<span class="selpill dim" data-rd="' + esc(v) + '" title="Click to remove"><span class="lbl">' + esc(DIM_LABEL[S.dim.name] + ': ' + dimDisplay(S.dim.name, v)) + '</span><span class="x">×</span></span>');
     });
+    if (dActive()) {
+      pills.push('<span class="selpill dim" data-rdr="1" title="Click to reset the disruptiveness range"><span class="lbl">Disruptiveness ' + fmtD(S.dMin) + ' – ' + fmtD(S.dMax) + '</span><span class="x">×</span></span>');
+    }
     $('selChips').innerHTML = pills.join('');
     // Clicking anywhere on a scope pill removes that journal/type/dimension value
     // (like the main browser's filter chips), not just the × glyph.
@@ -1585,6 +1635,7 @@
         if (b.getAttribute('data-rt')) S.types[b.getAttribute('data-rt')] = false;
         if (b.getAttribute('data-rj')) S.journals[b.getAttribute('data-rj')] = false;
         if (b.getAttribute('data-rd')) { delete S.dim.vals[b.getAttribute('data-rd')]; if (!Object.keys(S.dim.vals).length) S.dim.name = null; }
+        if (b.getAttribute('data-rdr')) { $('drMin').value = D_LO; $('drMax').value = D_HI; syncDSlider(); }
         renderJournalList(); refresh();
       };
     });
@@ -1601,6 +1652,33 @@
     var a = (S.yMin - YEAR_LO) / span * 100, b = (S.yMax - YEAR_LO) / span * 100;
     $('yrFill').style.left = a + '%'; $('yrFill').style.width = (b - a) + '%';
     Array.prototype.forEach.call(document.querySelectorAll('#yrPresets button'), function (btn) { btn.classList.remove('on'); });
+  }
+
+  // ── Disruptiveness-index (D) range slider ───────────────────────────────
+  function syncDSlider() {
+    var lo = $('drMin'), hi = $('drMax');
+    S.dMin = Math.min(+lo.value, +hi.value);
+    S.dMax = Math.max(+lo.value, +hi.value);
+    $('dVal').textContent = fmtD(S.dMin) + ' – ' + fmtD(S.dMax);
+    var span = D_HI - D_LO || 1;
+    var a = (S.dMin - D_LO) / span * 100, b = (S.dMax - D_LO) / span * 100;
+    $('dFill').style.left = a + '%'; $('dFill').style.width = (b - a) + '%';
+    Array.prototype.forEach.call(document.querySelectorAll('#drPresets button'), function (btn) { btn.classList.remove('on'); });
+  }
+  var D_PRESETS = [
+    { label: 'Full range', lo: -1, hi: 1 },
+    { label: 'Disruptive (> 0)', lo: 0, hi: 1 },
+    { label: 'Developing (< 0)', lo: -1, hi: 0 },
+    { label: 'Highly disruptive (≥ 0.3)', lo: 0.3, hi: 1 }
+  ];
+  function renderDPresets() {
+    $('drPresets').innerHTML = D_PRESETS.map(function (p, i) { return '<button data-i="' + i + '">' + esc(p.label) + '</button>'; }).join('');
+    Array.prototype.forEach.call($('drPresets').querySelectorAll('button'), function (btn, i) {
+      btn.onclick = function () {
+        $('drMin').value = D_PRESETS[i].lo; $('drMax').value = D_PRESETS[i].hi;
+        syncDSlider(); refresh(); btn.classList.add('on');
+      };
+    });
   }
 
   function renderPresets() {
@@ -1635,6 +1713,7 @@
   function resetFilters() {
     S.types = {}; S.journals = {}; S.dim = { name: null, vals: {} }; S.compareOther = false;
     $('yrMin').value = YEAR_LO; $('yrMax').value = YEAR_HI; syncSlider();
+    $('drMin').value = D_LO; $('drMax').value = D_HI; syncDSlider();
     renderTypeChips(); renderJournalList(); refresh();
   }
 
@@ -1652,6 +1731,13 @@
     $('yrMax').addEventListener('input', function () { syncSlider(); refresh(); });
     syncSlider();
     renderPresets();
+    // disruptiveness-index slider bounds (fixed −1..1)
+    ['drMin', 'drMax'].forEach(function (id) { var s = $(id); s.min = D_LO; s.max = D_HI; s.step = D_STEP; });
+    $('drMin').value = D_LO; $('drMax').value = D_HI;
+    $('drMin').addEventListener('input', function () { syncDSlider(); refresh(); });
+    $('drMax').addEventListener('input', function () { syncDSlider(); refresh(); });
+    syncDSlider();
+    renderDPresets();
     renderTypeChips();
     renderJournalList();
 

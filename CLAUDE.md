@@ -366,7 +366,15 @@ plus most-disruptive/-developing paper and author tables, and an author-level
 disruption profile in the Author-spotlight tab. It is a **faithful but partial**
 reconstruction (we only have the references harvested within the catalog, not
 the paper's 40M-work network) that **sharpens as `data-refs/` grows**; every
-figure honours the same journal / type / year filters. It is pre-computed
+figure honours the same journal / type / year filters, plus a dedicated
+**Disruptiveness-index range slider** in the filter bar (a dual-thumb −1..1
+control, `S.dMin`/`S.dMax`, with Full-range / Disruptive>0 / Developing<0 /
+Highly-disruptive≥0.3 presets) that keeps only papers whose D is in the chosen
+band — it drives every team-science figure (`disrInScope` = journal+year+D;
+`disrScopeJY` = journal+year only, used for the distribution histogram, which
+shows the whole distribution with the selected band highlighted, and for the
+Author-spotlight percentile so a narrowed D range never distorts an author's
+standing). It is pre-computed
 **offline** by `fun/lit/_scraper/build-disruption.mjs` into a small,
 lazily-loaded `analytics/disruption.json` (one row per paper with a defined D —
 `{j,y,t,d,c,nf,ra?,rp?,au[],ti,doi}` + an author-name index; `nf` = in-catalog
