@@ -1,11 +1,11 @@
 # lit — how it works ("The Lit": the multi-journal research paper browser)
 
-`stouras.com/lit/` extends the Google-free architecture of
-`stouras.com/fun/ms/` from one journal to **eight sources**:
+`stouras.com/lit/` is a Google-free, static-JSON research paper browser
+spanning **eight sources**:
 
 | key    | source                                              | where the data comes from |
 |--------|-----------------------------------------------------|---------------------------|
-| `ms`   | Management Science (INFORMS)                        | Crossref, ISSN 0025-1909 — **with editors/areas**, exactly like `/fun/ms/` |
+| `ms`   | Management Science (INFORMS)                        | Crossref, ISSN 0025-1909 — **with editors/areas** |
 | `opre` | Operations Research (INFORMS)                       | Crossref, ISSN 0030-364X |
 | `mksc` | Marketing Science (INFORMS)                         | Crossref, ISSN 0732-2399 |
 | `msom` | Manufacturing & Service Operations Mgmt (INFORMS)   | Crossref, ISSN 1523-4614 |
@@ -33,7 +33,7 @@ browser.
 
 ## How the page behaves (by design)
 
-- **Journals filter** (new vs. `/fun/ms/`): a multi-select of the six
+- **Journals filter**: a multi-select of the six
   journals, the five PNAS sections (a PNAS paper can belong to several), and
   ACM EC — plus, appended alphabetically, every FT50 journal the page merges
   in from its own FT50 dataset in `data-ft50/` (see the "Journal types & the
@@ -98,7 +98,7 @@ browser.
   `/fun/ft50/` URL is now a redirect stub to this page.
 - **Editors & Areas are Management Science only.** When MS is explicitly
   selected in the journal filter (alone or with other journals) the page
-  behaves exactly like `/fun/ms/` — Accepting Editor / Area filters,
+  behaves with Accepting Editor / Area filters,
   Editors/Areas summary tabs, editor & area tags on cards. On the default
   all-journals landing (and for e.g. an MSOM-only search) those controls stay
   hidden. Other journals contribute plain records; the "Articles in Advance"
@@ -126,7 +126,7 @@ browser.
 
 ```
 lit/
-├─ index.html                ← the page (adapted from /fun/ms/)
+├─ index.html                ← the page
 ├─ data/                     ← the "database": static JSON, served to visitors
 │  ├─ sources.json           ← manifest: keys, files, counts per source
 │  ├─ papers-<src>.json      ← one file per source (8 files)
@@ -275,7 +275,7 @@ cloud IPs, like the editors index above):
 ```bash
 cd lit/_scraper
 node informs-aia-local.mjs                 # lit — all INFORMS journals
-node informs-aia-local.mjs --app ms        # fun/ms
+node informs-aia-local.mjs --app ms        # Management Science
 node informs-aia-local.mjs --app lit-ft50  # lit/data-ft50 (the FT50 catalog)
 # …then commit & push the two files it writes into that app's data/ dir
 ```
@@ -416,7 +416,7 @@ FT50_MOCK=1 node build-data.mjs    # smoke-tests the FT50 pipeline into _mock-ou
   published PNAS papers appear in the dataset only after the index is
   refreshed.
 - **Editors/areas exist for Management Science 2011+ only** — same limitation
-  (and same editor-overrides import) as `/fun/ms/`.
+  (and same editor-overrides import).
 - **EC PDF coverage is best-effort**: papers with no arXiv/SSRN/OA copy get no
   PDF tag (their DOI still links to the ACM DL, which is open access for EC).
 - **Author/affiliation identity merging is automatic** (ORCID + name-based),

@@ -12,7 +12,7 @@
  *       Information Systems Research (INFORMS), and POM (Wiley→SAGE).
  *     Editor/Area extraction (the "This paper was accepted by …" sentence)
  *     runs for Management Science ONLY — the page shows Editors/Areas only
- *     for MS, mirroring stouras.com/fun/ms/.
+ *     for MS.
  *   • PNAS, limited to five topic sections (Computer Sciences, Sustainability
  *     Science, Environmental Sciences, Social Sciences, Economic Sciences).
  *     Metadata comes from Crossref; the DOI→section mapping comes from the
@@ -80,7 +80,7 @@ const PULL_DATE = process.env.LIT_PULL_DATE || new Date().toISOString().slice(0,
 
 // ── Sources ─────────────────────────────────────────────────────────────────
 
-// editors: MS "accepted by" editor/area extraction (as on /fun/ms/).
+// editors: MS "accepted by" editor/area extraction.
 // seEditors/aeEditors: Senior/Associate Editor from the "History:" line —
 // parsed from the Crossref abstract when present, otherwise joined from the
 // committed cache data/_informs-editors.json built by informs-editors-local.mjs
@@ -128,7 +128,7 @@ function ordSuffix(n) {
 }
 
 // One-time import of MS editor/area data collected by the old Google-Sheet
-// pipeline from sources that don't exist on Crossref. Shared with fun/ms.
+// pipeline from sources that don't exist on Crossref.
 const MS_OVERRIDES_PATH = resolve(__dirname, '..', '..', 'ms', '_scraper', 'editor-overrides.json');
 const MS_OVERRIDES = existsSync(MS_OVERRIDES_PATH)
   ? JSON.parse(await readFile(MS_OVERRIDES_PATH, 'utf8'))
@@ -137,7 +137,7 @@ const MS_OVERRIDES = existsSync(MS_OVERRIDES_PATH)
 // Curated volume/issue fixups (keyed by DOI, shared across journals) for
 // advance-access records that Crossref froze without a volume/issue — otherwise
 // they read as "Articles in Advance" forever. { "<doi>": { volume, issue, page?,
-// year? } }. Filled only when Crossref itself still returns none. See fun/ms.
+// year? } }. Filled only when Crossref itself still returns none.
 const AIA_FIXUPS_PATH = MOCK ? join(MOCK_DIR, 'aia-fixups.json') : join(DATA_DIR, '_aia-fixups.json');
 const AIA_FIXUPS = existsSync(AIA_FIXUPS_PATH)
   ? JSON.parse(await readFile(AIA_FIXUPS_PATH, 'utf8'))
@@ -241,7 +241,7 @@ function authorName(a) {
   return nm.replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-// ── Management Science editor/area extraction (ported from fun/ms) ─────────
+// ── Management Science editor/area extraction ─────────
 // Only applied to MS records; the page shows Editors/Areas for MS alone.
 
 function stripTrailers(s) {
@@ -1887,7 +1887,7 @@ function updateRegistry(papers, reg) {
   return reg.map;
 }
 
-// ── Aggregates (ported from fun/ms, source-aware) ───────────────────────────
+// ── Aggregates (source-aware) ───────────────────────────
 
 function stripAccents(s) {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -1911,7 +1911,7 @@ function buildAuthors(papers) {
   const nameSet = new Set();
   for (const p of papers) authorNames(p).forEach(n => nameSet.add(normName(n)));
 
-  // ORCID merging with the same one-paper-misattribution guard as fun/ms.
+  // ORCID merging with the same one-paper-misattribution guard.
   const orcidNames = new Map();
   for (const p of papers) {
     authorNames(p).forEach((name, i) => {

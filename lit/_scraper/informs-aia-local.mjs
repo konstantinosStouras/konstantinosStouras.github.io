@@ -26,7 +26,7 @@
  * Usage (Node 20+, no npm install needed):
  *   cd lit/_scraper
  *   node informs-aia-local.mjs                 # target: lit  (all INFORMS journals)
- *   node informs-aia-local.mjs --app ms        # target: fun/ms   (Management Science)
+ *   node informs-aia-local.mjs --app ms        # Management Science (standalone dataset)
  *   node informs-aia-local.mjs --app lit-ft50  # target: lit/data-ft50 (the FT50 catalog)
  *   node informs-aia-local.mjs --app ms --journals mnsc     # limit to one journal
  *   node informs-aia-local.mjs --max 300       # bound one session
@@ -58,7 +58,7 @@ const ONLY = (argVal('--journals', '') || '').split(',').map(s => s.trim()).filt
 
 // Every INFORMS journal the three apps can show, keyed by its pubsonline toc
 // code (which is also the code in its 10.1287/<code>.… DOIs). `key` is the
-// source key each app uses in its per-source data files (fun/ms is single-source
+// source key each app uses in its per-source data files (the standalone MS dataset is single-source
 // and needs none). ft50's live keys are read from journals.json below.
 const INFORMS = [
   { code: 'mnsc', litKey: 'ms',   name: 'Management Science' },
@@ -277,7 +277,7 @@ for (const [doi, { key }] of candidates) {
     } else if (!known.has(doi)) {
       // Genuinely forthcoming and not yet in Crossref: add to the supplement.
       const entry = { Title: a.title, Authors: a.authors, Year: a.year || String(new Date().getFullYear()) };
-      if (key) entry.jkey = key; // fun/ms is single-source and needs no key
+      if (key) entry.jkey = key; // the standalone MS dataset is single-source and needs no key
       supplement[doi] = entry;
       newForth++;
     }

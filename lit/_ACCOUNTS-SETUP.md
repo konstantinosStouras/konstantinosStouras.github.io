@@ -2,7 +2,7 @@
 
 The Lit research paper browser (`lit/index.html`) supports optional
 sign-in (email/password and Google; Apple, GitHub and Microsoft are supported too
-but are off by default) — the same accounts feature as `/fun/ms/` — so a
+but are off by default) — so a
 logged-in visitor can:
 
 - **Star** papers to save them for later
@@ -20,21 +20,12 @@ logged-in visitor can:
   new matching papers); default filters pre-apply to the *page* on entry.
 
 All of this is **private per user** and uses its **own dedicated Firebase
-project** (separate from the ms-paper-browser project, following the same
-one-project-per-app pattern).
+project**, following the same
+one-project-per-app pattern.
 
 The feature is **inert until you complete the steps below**. Until then the page
 looks and behaves exactly as before (no Sign in button, no stars). Nothing on the
 live site changes until you paste the config in step 4 and commit.
-
-> **Shortcut (shared accounts):** because the saved-paper document IDs are
-> derived from DOIs in both apps, you *could* instead paste the existing
-> `ms-paper-browser` config from `fun/ms/index.html` into `lit/index.html`
-> and skip every console step — sign-in would work immediately and users would
-> share one account and one library across `/fun/ms/` and `/lit/`. The
-> trade-off: papers saved from The Lit's non-MS journals would also show up in
-> the MS-only browser's library. The steps below assume the cleaner dedicated
-> project instead.
 
 ---
 

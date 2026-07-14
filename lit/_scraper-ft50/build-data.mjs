@@ -21,7 +21,7 @@
  *
  * Per-journal capabilities (mirroring lit):
  *   • editors:   Management Science only — the "This paper was accepted by …"
- *     editor/area extraction, exactly as on stouras.com/fun/ms/.
+ *     editor/area extraction.
  *   • seEditors/aeEditors: Senior/Associate Editor names from the INFORMS
  *     "History:" line (ISR both, Marketing Science SE only) — parsed from the
  *     Crossref abstract when deposited there, otherwise joined from the
@@ -103,7 +103,7 @@ const LOCAL_JOURNALS = JOURNALS.filter(j => !j.base);
 const SHARDED_JOURNALS = JOURNALS.filter(j => j.base);
 
 // One-time import of MS editor/area data collected by the old Google-Sheet
-// pipeline from sources that don't exist on Crossref. Shared with fun/ms & lit.
+// pipeline from sources that don't exist on Crossref. Shared with the lit pipeline.
 const MS_OVERRIDES_PATH = resolve(__dirname, '..', '..', 'ms', '_scraper', 'editor-overrides.json');
 const MS_OVERRIDES = existsSync(MS_OVERRIDES_PATH)
   ? JSON.parse(await readFile(MS_OVERRIDES_PATH, 'utf8'))
@@ -187,7 +187,7 @@ function normTitle(t) {
   return String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
-// ── Management Science editor/area extraction (ported from fun/ms & lit) ───
+// ── Management Science editor/area extraction (shared with the lit pipeline) ───
 // Only applied to records of journals with editors:true (MS alone).
 
 function stripTrailers(s) {
@@ -1324,7 +1324,7 @@ function buildAuthors(papers) {
   const nameSet = new Set();
   for (const p of papers) authorNames(p).forEach(n => nameSet.add(normName(n)));
 
-  // ORCID merging with the same one-paper-misattribution guard as fun/ms.
+  // ORCID merging with the same one-paper-misattribution guard.
   const orcidNames = new Map();
   for (const p of papers) {
     authorNames(p).forEach((name, i) => {
