@@ -97,6 +97,8 @@
   .slider input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--navy); border: 3px solid #fff; box-shadow: var(--shadow-sm); cursor: pointer; pointer-events: auto; margin-top: 0; }
   .slider input[type=range]::-moz-range-thumb { width: 15px; height: 15px; border-radius: 50%; background: var(--navy); border: 3px solid #fff; box-shadow: var(--shadow-sm); cursor: pointer; pointer-events: auto; }
   .slider input[type=range]::-webkit-slider-runnable-track { background: none; }
+  .dslider-tips { margin-top: 22px; }
+  .slider .dtip { position: absolute; top: -18px; font-family: 'Fraunces', serif; font-size: 13px; color: var(--navy); font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none; transform: translateX(-50%); }
   .yr-presets { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
   .yr-presets button { font-size: 11.5px; font-weight: 600; border: 1px solid var(--border); background: var(--white); color: var(--text-muted); border-radius: 100px; padding: 4px 11px; cursor: pointer; }
   .yr-presets button:hover, .yr-presets button.on { border-color: var(--navy); color: var(--navy); background: var(--navy-light); }
@@ -216,9 +218,16 @@
   .disr-formula .frac .den { padding: 3px 8px 0; }
   .disr-note { font-size: 12.5px; color: var(--text-muted); background: var(--accent-light); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: 10px 13px; margin-top: 4px; line-height: 1.55; }
   .disr-note a { color: var(--navy); }
+  .disr-fig { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 10px; margin: 2px 0 9px; }
+  .disr-fig .dpanel { border: 1px solid var(--border); border-radius: 10px; padding: 9px 8px 7px; background: #fff; text-align: center; }
+  .disr-fig .dpt { font-size: 12.5px; font-weight: 700; }
+  .disr-fig .dps { font-size: 11px; color: var(--text-muted); margin-bottom: 1px; }
+  .disr-fig svg { width: 100%; height: auto; display: block; }
+  .disr-figleg { font-size: 11.5px; color: var(--text-muted); text-align: center; margin: 0 0 13px; line-height: 1.5; }
+  .disr-figleg b { color: var(--text); }
   .disr-two { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 26px; }
   .disr-two > div { min-width: 0; }
-  .dfilter-hint { font-size: 11px; color: var(--text-muted); margin-top: 6px; line-height: 1.4; max-width: 260px; }
+  .dfilter-hint { font-size: 11px; color: var(--text-muted); margin-top: 6px; line-height: 1.4; max-width: none; }
   .disr-two .disr-subhead { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; margin: 2px 0 6px; }
   @media (max-width: 720px) { .disr-two { grid-template-columns: 1fr; } }
 </style>
@@ -293,12 +302,13 @@
         </div>
         <div class="fgroup yearwrap" id="disrFilterGroup">
           <span class="flabel">Disruptiveness index <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted)">(−1 to 1)</span></span>
-          <div class="yr-head"><span class="yr-val" id="dVal">−1.00 – 1.00</span></div>
-          <div class="slider" id="dslider">
+          <div class="slider dslider-tips" id="dslider">
             <div class="track"></div>
             <div class="fill" id="dFill"></div>
             <input type="range" id="drMin">
             <input type="range" id="drMax">
+            <span class="dtip" id="dTipLo" style="left:0%">−1.00</span>
+            <span class="dtip" id="dTipHi" style="left:100%;transform:translateX(-100%)">1.00</span>
           </div>
           <div class="yr-presets" id="drPresets"></div>
           <div class="dfilter-hint">Filters the <strong>Team-science</strong> figures below — the papers with a computed disruption index.</div>
@@ -353,11 +363,6 @@
           <h3>Citation impact by journal</h3>
           <div class="csub" id="citeImpactSub">Average citations per paper, within scope</div>
           <div id="citeImpactChart"></div>
-        </div>
-        <div class="card">
-          <h3>Open-access pre-print availability</h3>
-          <div class="csub">Share of papers with a free author pre-print, by year</div>
-          <div id="preChart"></div>
         </div>
         <div class="card wide" id="shareCard">
           <h3>Journal share over time</h3>
@@ -741,7 +746,6 @@
     renderTeam(agg);
     renderByJournal(agg);
     renderCitationImpact(keys);
-    renderPreprint(agg);
     renderShareOverTime(keys);
     renderAreaTrends(keys);
     renderCited(keys);
@@ -902,13 +906,6 @@
     $('byjChart').innerHTML = barsH(items, { limit: 14 });
   }
   function typeColor(t) { return { utd24: '#5e35b1', ft50: '#1565a7', abs4: '#2e7d47', abs3: '#8a7326' }[t] || NAVY; }
-
-  function renderPreprint(agg) {
-    var years = yearAxis();
-    var pts = years.map(function (y) { var r = agg.perYear[y]; return r && r.n ? [y, r.p / r.n] : null; }).filter(Boolean);
-    if (!pts.length) { $('preChart').innerHTML = '<div class="chart-empty">No data in the selected scope.</div>'; return; }
-    $('preChart').innerHTML = lineChart([{ name: 'preprint', color: '#2a7f8f', pts: pts }], { years: [pts[0][0], pts[pts.length - 1][0]], pctAxis: true, area: true });
-  }
 
   // Average citations per paper, by journal — impact normalized for output size
   // (not just totals), so a small high-impact journal isn't buried under a large one.
@@ -1266,6 +1263,37 @@
       '<div class="gcard j"><b>n<sub>j</sub> — developing</b><span>Cite the focal paper <em>and</em> at least one work it cited. The focal work is read as an extension of its roots.</span></div>' +
       '<div class="gcard k"><b>n<sub>k</sub> — context</b><span>Cite the focal’s references but not the focal paper itself. Sets the neighbourhood scale.</span></div>' +
       '</div>' +
+      '<div class="disr-fig">' +
+        '<div class="dpanel"><div class="dpt" style="color:#3f6098">Group i</div><div class="dps">cites focal, skips refs</div>' +
+          '<svg viewBox="0 0 190 140" role="img" aria-label="A citing paper cites the focal paper but none of its references">' +
+            '<defs><marker id="ahi" markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" fill="#8a8a8a"/></marker></defs>' +
+            '<line x1="66" y1="42" x2="124" y2="42" stroke="#cdc4bb" stroke-width="1.6" stroke-dasharray="3 3"/>' +
+            '<circle cx="48" cy="42" r="18" fill="#ece7e0" stroke="#cdc4bb" stroke-width="1.5"/><text x="48" y="47" text-anchor="middle" font-size="15" font-weight="700" fill="#b3a89f">R</text>' +
+            '<circle cx="142" cy="42" r="18" fill="#3f6098"/><text x="142" y="47" text-anchor="middle" font-size="15" font-weight="700" fill="#fff">F</text>' +
+            '<line x1="108" y1="101" x2="140" y2="62" stroke="#8a8a8a" stroke-width="2" marker-end="url(#ahi)"/>' +
+            '<rect x="35" y="102" width="120" height="28" rx="8" fill="#3f6098"/><text x="95" y="120" text-anchor="middle" font-size="12" font-weight="600" fill="#fff">Citing paper</text>' +
+          '</svg></div>' +
+        '<div class="dpanel"><div class="dpt" style="color:#a34a6d">Group j</div><div class="dps">cites focal and its refs</div>' +
+          '<svg viewBox="0 0 190 140" role="img" aria-label="A citing paper cites both the focal paper and one of its references">' +
+            '<defs><marker id="ahj" markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" fill="#8a8a8a"/></marker></defs>' +
+            '<line x1="66" y1="42" x2="124" y2="42" stroke="#8a8a8a" stroke-width="1.6" stroke-dasharray="3 3"/>' +
+            '<circle cx="48" cy="42" r="18" fill="#8a8a8a"/><text x="48" y="47" text-anchor="middle" font-size="15" font-weight="700" fill="#fff">R</text>' +
+            '<circle cx="142" cy="42" r="18" fill="#3f6098"/><text x="142" y="47" text-anchor="middle" font-size="15" font-weight="700" fill="#fff">F</text>' +
+            '<line x1="106" y1="101" x2="138" y2="62" stroke="#8a8a8a" stroke-width="2" marker-end="url(#ahj)"/>' +
+            '<line x1="84" y1="101" x2="52" y2="62" stroke="#8a8a8a" stroke-width="2" marker-end="url(#ahj)"/>' +
+            '<rect x="35" y="102" width="120" height="28" rx="8" fill="#a34a6d"/><text x="95" y="120" text-anchor="middle" font-size="12" font-weight="600" fill="#fff">Citing paper</text>' +
+          '</svg></div>' +
+        '<div class="dpanel"><div class="dpt" style="color:#6a5a60">Group k</div><div class="dps">cites refs, not focal</div>' +
+          '<svg viewBox="0 0 190 140" role="img" aria-label="A citing paper cites a reference of the focal paper but not the focal paper itself">' +
+            '<defs><marker id="ahk" markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" fill="#8a8a8a"/></marker></defs>' +
+            '<line x1="66" y1="42" x2="124" y2="42" stroke="#cdc4bb" stroke-width="1.6" stroke-dasharray="3 3"/>' +
+            '<circle cx="48" cy="42" r="18" fill="#8a8a8a"/><text x="48" y="47" text-anchor="middle" font-size="15" font-weight="700" fill="#fff">R</text>' +
+            '<circle cx="142" cy="42" r="18" fill="#ece7e0" stroke="#cdc4bb" stroke-width="1.5"/><text x="142" y="47" text-anchor="middle" font-size="15" font-weight="700" fill="#b3a89f">F</text>' +
+            '<line x1="82" y1="101" x2="50" y2="62" stroke="#8a8a8a" stroke-width="2" marker-end="url(#ahk)"/>' +
+            '<rect x="35" y="102" width="120" height="28" rx="8" fill="#8a8a8a"/><text x="95" y="120" text-anchor="middle" font-size="12" font-weight="600" fill="#fff">Citing paper</text>' +
+          '</svg></div>' +
+      '</div>' +
+      '<div class="disr-figleg"><b>F</b> = focal paper &nbsp;·&nbsp; <b>R</b> = a paper the focal cites (its reference) &nbsp;·&nbsp; <b>i, j, k</b> = how many citing papers fall in each group</div>' +
       '<div class="disr-formula">D&nbsp;=&nbsp;<span class="frac"><span class="num">n<sub>i</sub> &minus; n<sub>j</sub></span><span class="den">n<sub>i</sub> + n<sub>j</sub> + n<sub>k</sub></span></span></div>' +
       '<p><strong>D ranges from &minus;1 to +1.</strong> D&nbsp;&gt;&nbsp;0 means the work <span style="color:' + C_DISRUPT + ';font-weight:600">disrupts</span> — later work cites it on its own, forgetting what it built on. ' +
       'D&nbsp;&lt;&nbsp;0 means it <span style="color:' + C_DEVELOP + ';font-weight:600">develops</span> — it is cited together with its antecedents, as one more step along an established line.</p>' +
@@ -1659,11 +1687,20 @@
     var lo = $('drMin'), hi = $('drMax');
     S.dMin = Math.min(+lo.value, +hi.value);
     S.dMax = Math.max(+lo.value, +hi.value);
-    $('dVal').textContent = fmtD(S.dMin) + ' – ' + fmtD(S.dMax);
     var span = D_HI - D_LO || 1;
     var a = (S.dMin - D_LO) / span * 100, b = (S.dMax - D_LO) / span * 100;
     $('dFill').style.left = a + '%'; $('dFill').style.width = (b - a) + '%';
+    placeDTip($('dTipLo'), a, fmtD(S.dMin));
+    placeDTip($('dTipHi'), b, fmtD(S.dMax));
     Array.prototype.forEach.call(document.querySelectorAll('#drPresets button'), function (btn) { btn.classList.remove('on'); });
+  }
+  // Position a bound label centred over its thumb; clamp the transform at the
+  // ends so the −1.00 / 1.00 labels never clip past the track edges.
+  function placeDTip(el, pct, txt) {
+    if (!el) return;
+    el.textContent = txt;
+    el.style.left = pct + '%';
+    el.style.transform = 'translateX(' + (pct <= 2 ? '0' : pct >= 98 ? '-100%' : '-50%') + ')';
   }
   var D_PRESETS = [
     { label: 'Full range', lo: -1, hi: 1 },
