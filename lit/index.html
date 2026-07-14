@@ -92,6 +92,15 @@
 
   .filters-bar { background: var(--white); border-bottom: 1px solid var(--border); padding: 20px 0; box-shadow: var(--shadow-sm); transition: padding 0.2s ease; }
   .filters-inner { max-width: 1280px; margin: 0 auto; padding: 0 32px; }
+  /* Collapse/minimise the whole filter panel so the results are easier to browse. */
+  .filters-collapse-row { display: flex; justify-content: center; margin-top: 14px; }
+  .filters-collapse-btn { display: inline-flex; align-items: center; gap: 7px; font-family: 'Work Sans', sans-serif; font-size: 12.5px; font-weight: 600; color: var(--text-muted); background: var(--white); border: 1px solid var(--border); border-radius: 100px; padding: 6px 18px; cursor: pointer; transition: all .15s; }
+  .filters-collapse-btn:hover { color: var(--navy); border-color: var(--navy); background: var(--navy-light); }
+  .filters-collapse-btn .fc-ico { font-size: 9px; line-height: 1; }
+  .filters-bar.collapsed { padding-top: 10px; padding-bottom: 6px; }
+  .filters-bar.collapsed .filters-row,
+  .filters-bar.collapsed .summary-tab-btns { display: none !important; }
+  .filters-bar.collapsed .filters-collapse-row { margin-top: 0; }
   .filters-row { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
   /* Filters are split across three stacked rows (Journals / everything else /
      the "Recently added papers" button); this adds the gap between them. */
@@ -101,7 +110,10 @@
   .filters-row-primary .filter-group { flex: none; width: 320px; max-width: 100%; }
   .filter-group { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 170px; }
   .filter-group label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .filter-group select, .filter-group input { padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 6px; font-family: 'Work Sans', sans-serif; font-size: 20px; color: var(--text); background: var(--white); transition: border-color 0.2s, box-shadow 0.2s; height: 50px; }
+  .filter-group select, .filter-group input { padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 6px; font-family: 'Work Sans', sans-serif; font-size: 20px; color: var(--text); background: var(--white); transition: border-color 0.2s, box-shadow 0.2s; height: 50px; min-width: 0; width: 100%; }
+  /* Let the filter controls shrink inside the mobile 2-column grid so nothing
+     spills past the viewport (search inputs otherwise keep an intrinsic width). */
+  .filter-group .custom-select { min-width: 0; }
   .filter-group select { -webkit-appearance: none; -moz-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%235a6070' stroke-width='1.5' fill='none'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; cursor: pointer; display: none; }
   .filter-group select:focus, .filter-group input:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(125,29,63,0.1); }
 
@@ -743,6 +755,9 @@
       <button class="summary-tab-btn" id="tabBtnAuthors" style="display:none" onclick="toggleSummary('authors')" title="Authors are resolved by ORCID where available; authors with a single paper are not listed. Per-author editorial areas are collected for Management Science papers only.">Authors</button>
       <button class="recent-tab-btn" id="recentBtn" onclick="toggleRecent()" title="Papers added to the database in the last 4 weeks, newest first.">Recently added papers</button>
       <button class="recent-tab-btn" id="preprintBtn" onclick="togglePreprintOnly()" title="Only papers with a free author pre-print on arXiv or SSRN. Coverage grows daily as the backfill runs.">Pre-print (Open Access) papers</button>
+    </div>
+    <div class="filters-collapse-row">
+      <button class="filters-collapse-btn" id="filtersToggle" onclick="toggleFilterPanel()" aria-expanded="true" title="Collapse the filters to see more of your results"><span class="fc-ico">▲</span><span class="fc-label">Hide filters</span></button>
     </div>
   </div>
 </div>
@@ -2738,6 +2753,25 @@ function resetFilterState(keepJournals) {
   if (ppBtn) ppBtn.className = 'recent-tab-btn';
   updateMsScopeUI();
 }
+
+// Collapse/expand the whole filter panel so the results are easier to browse.
+// The state is remembered per browser; a visible "Show filters" button restores it.
+function toggleFilterPanel() {
+  var bar = document.querySelector('.filters-bar');
+  if (!bar) return;
+  var collapsed = bar.classList.toggle('collapsed');
+  var btn = document.getElementById('filtersToggle');
+  if (btn) {
+    btn.setAttribute('aria-expanded', String(!collapsed));
+    var ico = btn.querySelector('.fc-ico'), lab = btn.querySelector('.fc-label');
+    if (ico) ico.textContent = collapsed ? '▼' : '▲';
+    if (lab) lab.textContent = collapsed ? 'Show filters' : 'Hide filters';
+  }
+  try { localStorage.setItem('litFiltersCollapsed', collapsed ? '1' : '0'); } catch (e) {}
+}
+(function restoreFilterPanel() {
+  try { if (localStorage.getItem('litFiltersCollapsed') === '1' && document.querySelector('.filters-bar')) toggleFilterPanel(); } catch (e) {}
+})();
 
 function clearFilters() {
   resetFilterState();
