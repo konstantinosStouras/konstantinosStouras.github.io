@@ -359,6 +359,7 @@
           <h3>Average co-authors per paper</h3>
           <div class="csub" id="coSub">Mean number of authors, by year</div>
           <div id="coChart"></div>
+          <div class="legend" id="coLegend"></div>
         </div>
         <div class="card">
           <h3>Co-authorship distribution</h3>
@@ -753,7 +754,7 @@
     var agg = aggregate(keys);
     renderTiles(agg, keys);
     renderEvolution(keys);
-    renderCoauthors(agg);
+    renderCoauthors(agg, keys);
     renderTeam(agg);
     renderByJournal(agg);
     renderCitationImpact(keys);
@@ -889,16 +890,45 @@
     }).join('');
   }
 
-  function renderCoauthors(agg) {
+  // Average co-authors per paper, drawn as ONE LINE PER in-scope journal (the
+  // largest first, capped like the volume chart) so you can compare team size
+  // across the journals you've chosen; the subtitle keeps the overall mean.
+  function renderCoauthors(agg, keys) {
     var years = yearAxis();
-    var pts = years.map(function (y) { var r = agg.perYear[y]; return [y, r && r.n ? r.a / r.n : null]; }).filter(function (p) { return p[1] != null; });
     var avg = agg.n ? agg.a / agg.n : 0;
-    $('coSub').textContent = 'Mean authors per paper — overall ' + avg.toFixed(2) + ' in scope';
-    if (!pts.length) { $('coChart').innerHTML = '<div class="chart-empty">No data in the selected scope.</div>'; return; }
-    // fill gaps so the line is continuous over the axis
-    var full = years.map(function (y) { var r = agg.perYear[y]; return r && r.n ? [y, r.a / r.n] : null; }).filter(Boolean);
-    var mx = 0; full.forEach(function (p) { if (p[1] > mx) mx = p[1]; });
-    $('coChart').innerHTML = lineChart([{ name: 'avg', color: GOLD, pts: full }], { years: [full[0][0], full[full.length - 1][0]], maxOverride: Math.max(1, Math.ceil(mx)) });
+    var empty = function (subtitle) { $('coSub').textContent = subtitle; $('coChart').innerHTML = '<div class="chart-empty">No data in the selected scope.</div>'; $('coLegend').innerHTML = ''; };
+    if (!agg.n) { empty('Mean authors per paper'); return; }
+    var MAX_LINES = 8;
+    var chosenJ = Object.keys(S.journals).filter(function (k) { return S.journals[k] && JMAP[k]; });
+    // Rank in-scope journals by paper count in the window, largest first.
+    var ranked = (keys || []).map(function (k) {
+      var j = JMAP[k]; if (!j) return null;
+      var tot = 0; for (var y in j.years) { var yy = +y; if (yy >= S.yMin && yy <= S.yMax) tot += j.years[y].n; }
+      return { key: k, tot: tot };
+    }).filter(function (c) { return c && c.tot > 0; }).sort(function (a, b) { return b.tot - a.tot; });
+    var pool = chosenJ.length ? ranked.filter(function (c) { return chosenJ.indexOf(c.key) !== -1; }) : ranked;
+    var focus = pool.slice(0, MAX_LINES).map(function (c) { return c.key; });
+    var hidden = pool.length - focus.length;
+    if (!focus.length) { empty('Mean authors per paper — overall ' + avg.toFixed(2) + ' in scope'); return; }
+    // Per journal: mean authors per year (years with no papers left as gaps).
+    var jSeries = function (k, col) {
+      return { name: JMAP[k].name, color: col, pts: years.map(function (y) { var r = JMAP[k].years[y]; return (r && r.n) ? [y, r.a / r.n] : null; }).filter(Boolean) };
+    };
+    var series = [], legend = [], mx = 0;
+    if (focus.length === 1) {
+      series = [jSeries(focus[0], GOLD)];
+      $('coSub').textContent = 'Mean authors per paper — ' + JMAP[focus[0]].name + ' (' + avg.toFixed(2) + ' overall)';
+    } else {
+      focus.forEach(function (k, i) {
+        var col = SERIES[i % SERIES.length];
+        series.push(jSeries(k, col));
+        legend.push({ name: JMAP[k].name, color: col });
+      });
+      $('coSub').textContent = 'Mean authors per paper, by journal — overall ' + avg.toFixed(2) + ' in scope' + (hidden ? ' (top ' + focus.length + ' of ' + pool.length + ' shown)' : '');
+    }
+    series.forEach(function (s) { s.pts.forEach(function (p) { if (p[1] > mx) mx = p[1]; }); });
+    $('coChart').innerHTML = lineChart(series, { years: years, maxOverride: Math.max(1, Math.ceil(mx)) });
+    $('coLegend').innerHTML = legend.map(function (l) { return '<span class="li"><span class="sw" style="background:' + l.color + '"></span>' + esc(l.name) + '</span>'; }).join('');
   }
 
   function renderTeam(agg) {
