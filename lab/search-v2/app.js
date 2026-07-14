@@ -120,7 +120,7 @@
   // Testing-only overlay toggles (debug/Test link only). NEVER shown to a real
   // participant: the AI region / training points / interpolation line and the
   // ground-truth line are revealed only when the tester ticks these.
-  var TESTVIEW = { truth: false, region: false, dots: false, interp: false, window: false };
+  var TESTVIEW = { truth: false, region: false, dots: false, interp: false, window: false, knowledge: false };
   var lastSelectLogT = 0;
   var STUDY_CLOSED = false;    // set from the admin-controlled config/study doc
   var STUDY_ARM_MODE = 'url';  // legacy single-arm mode: 'url'|'A'|'B'|'random' (admin-controlled)
@@ -850,22 +850,25 @@
         '<span class="tv-title">Testing view</span>' +
         '<label><input type="checkbox" id="tv-truth"> Ground truth</label>' +
         '<label><input type="checkbox" id="tv-window"> Search window</label>' +
+        '<label><input type="checkbox" id="tv-knowledge"> Value of knowledge</label>' +
         '<label class="tv-ai"><input type="checkbox" id="tv-region"> AI region</label>' +
         '<label class="tv-ai"><input type="checkbox" id="tv-dots"> AI data points</label>' +
         '<label class="tv-ai"><input type="checkbox" id="tv-interp"> AI interp / extrap</label>' +
-        '<div class="tv-opt" id="tv-opt"></div>';
+        '<div class="tv-opt" id="tv-opt"></div>' +
+        '<div class="tv-opt tv-know" id="tv-know" style="display:none;"></div>';
       var wire = function (id, key) {
         $(id).checked = TESTVIEW[key];
         $(id).addEventListener('change', function () { TESTVIEW[key] = this.checked; renderRound(); });
       };
-      wire('tv-truth', 'truth'); wire('tv-window', 'window'); wire('tv-region', 'region');
-      wire('tv-dots', 'dots'); wire('tv-interp', 'interp');
+      wire('tv-truth', 'truth'); wire('tv-window', 'window'); wire('tv-knowledge', 'knowledge');
+      wire('tv-region', 'region'); wire('tv-dots', 'dots'); wire('tv-interp', 'interp');
       bar.setAttribute('data-built', '1');
     }
     bar.style.display = '';
     var ai = bar.querySelectorAll('.tv-ai');
     for (var i = 0; i < ai.length; i++) ai[i].style.display = (arm === 'B') ? '' : 'none';
     updateOptReadout();
+    updateKnowReadout();
   }
 
   // Rational-search benchmark readout (testing/debug only — never shown to a real
@@ -887,6 +890,42 @@
       ' · <b>' + s.mistakes + '</b> obvious mistake' + (s.mistakes === 1 ? '' : 's') + ' (' + pct(s.mistakeRate) + ', random ≈ ' + pct(s.randomRate) + ')' +
       ' · ' + stop +
       ' · best ' + s.best + '&cent; · i.i.d. reservation ≈ ' + s.reservation + '&cent;';
+  }
+
+  // Value-of-knowledge readout (testing/debug only — never shown to a real
+  // participant). Computes the welfare KPI the paper's searcher maximizes —
+  // v(Fk) = Σ_x max(1 − σ²_x/q, 0), Carnehl & Schneider, ECMA 2025, p.629 — from
+  // this round's reveals, and shows how it GROWS as the search progresses via a
+  // sparkline of v after each reveal. Only rendered when the toggle is on. Uses
+  // the participant's OWN reveals (no truth leak).
+  function updateKnowReadout() {
+    var el = $('tv-know'); if (!el) return;
+    el.style.display = TESTVIEW.knowledge ? '' : 'none';
+    if (!TESTVIEW.knowledge) return;
+    var k = LS.knowledgeValue((S.round.reveals || []).map(function (r) { return [r.pos, r.val]; }), { L: CFG.L_STEP, n: N_POS });
+    var head = '<b>Value of knowledge v(F<sub>k</sub>)</b> <span class="tv-optnote">(test only · Carnehl–Schneider, ECMA 2025 p.629 — the welfare the searcher maximizes)</span>: ';
+    if (!k.series.length) { el.innerHTML = head + 'no reveals yet — v = 0 of ' + N_POS + '.'; return; }
+    el.innerHTML = head +
+      '<b>' + k.v + '</b> of ' + N_POS + ' cells understood (' + k.coverage + '%)' +
+      ' · last reveal added <b>' + (k.marginal >= 0 ? '+' : '') + k.marginal + '</b>' +
+      ' · mean posterior s.d. ' + k.meanStd + '&cent;' +
+      ' · q = ' + Math.round(k.q) + '&cent;&sup2; (dead middle past ~' + k.threshGap + '-wide gaps)' +
+      knowSpark(k.series);
+  }
+  // Inline-SVG sparkline of the value-of-knowledge trajectory (v after each reveal).
+  function knowSpark(series) {
+    if (!series || series.length < 2) return '';
+    var W = 150, H = 30, pad = 3, n = series.length, i, x, y, pts = [];
+    for (i = 0; i < n; i++) {
+      x = pad + (n === 1 ? 0 : i * (W - 2 * pad) / (n - 1));
+      y = H - pad - (Math.max(0, Math.min(N_POS, series[i])) / N_POS) * (H - 2 * pad);
+      pts.push(x.toFixed(1) + ',' + y.toFixed(1));
+    }
+    var last = pts[pts.length - 1].split(',');
+    return ' <svg class="tv-spark" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" aria-hidden="true">' +
+      '<polyline fill="none" stroke="currentColor" stroke-width="1.5" points="' + pts.join(' ') + '"/>' +
+      '<circle r="2.2" cx="' + last[0] + '" cy="' + last[1] + '" fill="currentColor"/>' +
+      '</svg>';
   }
 
   function selectPos(pos) {
