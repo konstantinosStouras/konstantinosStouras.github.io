@@ -46,6 +46,14 @@
   .header h1 .sub { display: block; font-family: 'Work Sans', sans-serif; font-size: 13px; font-weight: 400; color: rgba(255,255,255,0.7); letter-spacing: 0; margin-top: 3px; }
   .back-link { font-size: 13px; font-weight: 600; color: #fff; text-decoration: none; border: 1.5px solid rgba(255,255,255,0.5); background: rgba(255,255,255,0.08); border-radius: 6px; padding: 9px 15px; transition: all .15s; white-space: nowrap; }
   .back-link:hover { background: rgba(255,255,255,0.18); border-color: #fff; }
+  /* Shared page-nav (identical to the About page): logo returns to the database;
+     the active page's own button also returns (toggles the section off). */
+  .brand { text-decoration: none; display: inline-block; }
+  .pnav { display: flex; gap: 10px; flex-wrap: wrap; }
+  .pnav-btn { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: #fff; text-decoration: none; border: 1.5px solid rgba(255,255,255,0.5); background: rgba(255,255,255,0.08); border-radius: 8px; padding: 9px 15px; transition: all .15s; white-space: nowrap; }
+  .pnav-btn:hover { background: rgba(255,255,255,0.18); border-color: #fff; }
+  .pnav-btn.is-active { background: #fff; color: var(--navy); border-color: #fff; }
+  .pnav-btn .ico { font-size: 14px; line-height: 1; }
 
   .wrap { max-width: 1160px; margin: 0 auto; padding: 26px 32px 60px; }
 
@@ -236,8 +244,11 @@
 
 <header class="header">
   <div class="header-inner">
-    <h1><em>The Lit</em> — Data Analytics<span class="sub">Summary statistics for the research paper database</span></h1>
-    <a class="back-link" href="/lit/">← Back to The Lit</a>
+    <a class="brand" href="/lit/" title="Back to The Lit"><h1><em>The Lit</em> — Data Analytics<span class="sub">Summary statistics for the research paper database</span></h1></a>
+    <nav class="pnav">
+      <a class="pnav-btn" href="/lit/about/" title="What The Lit is and how it works"><span class="ico">ⓘ</span>About</a>
+      <a class="pnav-btn is-active" href="/lit/" title="Close Data Analytics — back to the database"><span class="ico">📊</span>Data Analytics</a>
+    </nav>
   </div>
 </header>
 
