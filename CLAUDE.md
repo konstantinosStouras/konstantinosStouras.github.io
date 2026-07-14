@@ -352,8 +352,35 @@ value (one dimension at a time, via `aggregate`'s `dims` path — `S.dim`), and 
 removable scope pill shows the active value. There is also an **Author
 spotlight** tab (per-author totals, in-scope counts, publications-per-year, and
 where-they-publish, the latter greying journals outside the current scope).
+**Team-science / disruption section** (a new block at the bottom of the Corpus
+overview) reproduces the key measures of Wu, Wang & Evans, "Large teams develop
+and small teams disrupt science and technology" (*Nature* 570, 2019) over The
+Lit's **in-catalog citation graph** (`fun/lit/data-refs/`): a per-paper
+**disruption index D** (the CD index, Funk & Owen-Smith 2017 — `n_i−n_j` over
+`n_i+n_j+n_k`; D>0 disrupts, D<0 develops), and, per the owner's clarification,
+an **author's disruptiveness D_j = the mean of D over every paper they wrote or
+co-wrote** (in scope). It draws the paper's signature plots — distribution of D
+(Fig 1b), disruption & citations vs team size (the "scissor", Fig 2), reference
+age & popularity vs team size (Fig 4), and relative-ratio extremes (Fig 2d) —
+plus most-disruptive/-developing paper and author tables, and an author-level
+disruption profile in the Author-spotlight tab. It is a **faithful but partial**
+reconstruction (we only have the references harvested within the catalog, not
+the paper's 40M-work network) that **sharpens as `data-refs/` grows**; every
+figure honours the same journal / type / year filters. It is pre-computed
+**offline** by `fun/lit/_scraper/build-disruption.mjs` into a small,
+lazily-loaded `analytics/disruption.json` (one row per paper with a defined D —
+`{j,y,t,d,c,nf,ra?,rp?,au[],ti,doi}` + an author-name index; `nf` = in-catalog
+forward-citation count, used to gate the highlight tables against degenerate ±1
+one-citation artefacts) — the whole per-paper table ships so the browser
+computes every figure client-side under the live filters. The highlight tables
+merge the thin large-team tail into an "8+" bin. Reference age uses reference
+years; reference popularity uses references' `CitedBy` (a rough proxy while
+citation coverage fills in). Keep the `ABS_RATING`/`UTD24_KEYS`/`FT50_KEYS`
+mirror and the native-wins journal merge in sync with build-analytics.mjs.
 Refreshed daily by `.github/workflows/lit-analytics.yml` (08:10 UTC, after the
-native and FT50 data builds), which commits `analytics/*.json` on master only.
+native and FT50 data builds; runs build-analytics.mjs **and**
+build-disruption.mjs), which commits `analytics/*.json` (incl.
+`disruption.json`) on master only.
 The generation date mirrors the native `meta.json` `lastPull`, never
 `Date.now()`, so re-runs on an unchanged dataset are a no-op. The page also
 shows one **live community figure — the number of registered users** (a tile in
