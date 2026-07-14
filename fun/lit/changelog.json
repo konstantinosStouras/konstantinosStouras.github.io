@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "cited-references-count",
+      "date": "2026-07-14",
+      "title": "Cited-references toggle now shows a count",
+      "summary": "The “Cited references in this catalog” toggle on each paper now displays how many in-catalog references that paper cites — e.g. “Cited references in this catalog (12)” — so you can see the number before expanding it.",
+      "url": "https://stouras.com/fun/lit/"
+    },
+    {
       "id": "disruption-analytics",
       "date": "2026-07-14",
       "title": "Team science: which work disrupts, and which develops",

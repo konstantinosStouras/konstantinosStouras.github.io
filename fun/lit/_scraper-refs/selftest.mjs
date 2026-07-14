@@ -76,6 +76,7 @@ async function main() {
   ok(!out.shards.ms.b, 'B omitted (no in-catalog references)');
   ok(out.index.d && out.index.d[0] === 'D', 'an OpenAlex-only target is indexed');
   ok(out.totals.edges === 2 && out.totals.cited === 2, 'totals count the unioned edges');
+  ok(out.counts && out.counts.a === 2 && !('b' in out.counts), 'counts = in-catalog refs per citing paper (A→2; B omitted)');
 
   console.log('unit: loadCatalog');
   const cat = await loadCatalog([join(__dirname, 'mock', 'catalog')]);
@@ -104,6 +105,12 @@ async function main() {
   ok(index['10.1287/mnsc.2018.0004'] && index['10.1287/mnsc.2018.0004'][0] === 'Paper D — Cited By A Via OpenAlex Only',
      'OpenAlex-only target D is in the title index');
   ok(!index['10.9999/external.1'] && !index['10.9999/ext.s2'], 'out-of-catalog references are not indexed');
+
+  const rcounts = await readOut('refs-counts.json');
+  ok(rcounts['10.1287/mnsc.2020.0001'] === 3, 'refs-counts.json: A cites 3 in-catalog papers');
+  ok(rcounts['10.1287/mnsc.2019.0002'] === 1, 'refs-counts.json: B cites 1 in-catalog paper');
+  ok(manifest.counts && manifest.counts.file === 'refs-counts.json' && manifest.counts.count === Object.keys(rcounts).length,
+     'manifest advertises the counts companion file');
 
   const oaid = await readOut('_oaid.json');
   ok(oaid['10.1287/mnsc.2020.0001'] === 'W1000001', '_oaid.json maps DOI → OpenAlex id (built while crawling)');

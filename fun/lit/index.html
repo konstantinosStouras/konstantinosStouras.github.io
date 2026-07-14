@@ -863,6 +863,13 @@ const refsShardCache = {};     // jkey -> { citingDoi: [citedDoi,…] } (lazy, p
 const refsShardPromise = {};   // jkey -> in-flight fetch promise (idempotence)
 let refsIndex = null;          // ./data-refs/refs-index.json once fetched
 let refsIndexPromise = null;   // in-flight index fetch (idempotence)
+// The per-paper cited-references count (citingDoi -> N) — a tiny companion file
+// so a card can show "(N)" on its toggle WITHOUT downloading the multi-MB
+// per-journal shard. Loaded once, lazily, in the background (never blocks first
+// paint); toggles are annotated in place when it arrives. Grows with the graph
+// and is shardable later like the shards themselves.
+let refsCounts = null;         // ./data-refs/refs-counts.json once fetched
+let refsCountsPromise = null;  // in-flight counts fetch (idempotence)
 
 // Display config per source key. Sections are PNAS's five topic sections; a
 // PNAS paper can belong to several and matches a filter on any of them.
@@ -1386,11 +1393,47 @@ async function loadRefsManifest() {
   } catch (e) { mf = null; }
   refsManifest = (mf && mf.shards) ? mf : null;
   // If edges exist, re-render the active view so cards pick up the new toggle
-  // (the manifest usually lands before the first search, but not always).
+  // (the manifest usually lands before the first search, but not always), and
+  // fetch the tiny counts companion in the background so toggles show "(N)".
   if (refsManifest && Object.keys(refsManifest.shards).length) {
+    loadRefsCounts();
     if (recentMode) renderRecent();
     else if (sel.jtype.size || sel.journal.size || broadFilterActive() || preprintOnly) applyFilters();
   }
+}
+
+// Fetch the per-paper cited-references counts (background, once, idempotent).
+// A manifest without a `counts` entry (pre-feature dataset) still resolves via
+// the conventional filename; a 404 or parse error leaves counts empty and the
+// toggles simply render without a "(N)". On arrival, annotate any toggles that
+// are already on screen.
+function loadRefsCounts() {
+  if (refsCounts) return Promise.resolve(refsCounts);
+  if (refsCountsPromise) return refsCountsPromise;
+  var file = (refsManifest && refsManifest.counts && refsManifest.counts.file) || 'refs-counts.json';
+  refsCountsPromise = fetch(REFS_DATA_BASE + file, { cache: 'default' })
+    .then(function(r) { return r.ok ? r.json() : {}; })
+    .then(function(j) { refsCounts = j || {}; annotateRefsCounts(); return refsCounts; })
+    .catch(function() { refsCounts = {}; return refsCounts; });
+  return refsCountsPromise;
+}
+
+// The closed-state label for a paper's cited-references toggle: append "(N)"
+// when the count is known (>0). The open state is a plain "Hide" label.
+function refsToggleLabel(doi, open) {
+  if (open) return '▾ Hide cited references';
+  var n = refsCounts && refsCounts[doi];
+  return '▸ Cited references in this catalog' + (n ? ' (' + n.toLocaleString() + ')' : '');
+}
+
+// Once the counts arrive, fill "(N)" into every on-screen toggle that is still
+// closed (never clobber one the user has opened, which shows the "Hide" label).
+function annotateRefsCounts() {
+  if (!refsCounts) return;
+  document.querySelectorAll('.paper-refs-toggle[data-refs-doi]').forEach(function(el) {
+    if (el.textContent.charAt(0) === '▾') return; // opened — leave its "Hide" label
+    el.textContent = refsToggleLabel(el.getAttribute('data-refs-doi'), false);
+  });
 }
 
 // The manifest entry (or null) for a journal's citing edges — gates the toggle.
@@ -3018,7 +3061,7 @@ function paperCardHTML(p, idx, showAdded) {
     ${hasSig ? `<span class="paper-abstract-toggle paper-sig-toggle" onclick="togAbs('${sid}',this,'Significance')">▸ Significance</span>` : ''}
     ${hasAbs ? `<span class="paper-abstract-toggle" onclick="togAbs('${aid}',this)">▸ Abstract</span>` : ''}
     <span class="paper-bibtex-toggle" onclick="togBib('bib${idx}',this,${idx})">▸ BibTeX</span>
-    ${refsShardFor(p['JKey']) ? `<span class="paper-refs-toggle" onclick="togRefs('refs${idx}',this,${idx})" title="The papers this one cites that are also in The Lit's catalog (from the publisher's deposited reference list).">▸ Cited references in this catalog</span>` : ''}
+    ${refsShardFor(p['JKey']) ? `<span class="paper-refs-toggle" data-refs-doi="${escAttr(refsNormDoi(p['DOI']))}" onclick="togRefs('refs${idx}',this,${idx})" title="The papers this one cites that are also in The Lit's catalog (from the publisher's deposited reference list). The number is how many.">${refsToggleLabel(refsNormDoi(p['DOI']), false)}</span>` : ''}
     ${safeUrl(p['Preprint']) ? `<a class="paper-preprint-link" href="${preprintPdfUrl(safeUrl(p['Preprint']))}" target="_blank" rel="noopener" title="Free author pre-print on ${PREPRINT_HOST[p['PreprintSrc']] || 'an open repository'} — opens the latest version, PDF direct where the host allows it. The accepted/working version may differ from the final published paper">Pre-print (Open Access) ↗</a>` : ''}
     ${typeof acctToggleHTML === 'function' ? acctToggleHTML(p) : ''}
     ${hasSig ? `<div id="${sid}" class="paper-abstract paper-significance">${esc(sigClean)}</div>` : ''}
@@ -3053,13 +3096,13 @@ function togBib(id, btn, idx) {
 function togRefs(id, btn, idx) {
   const el = document.getElementById(id);
   const open = el.classList.toggle('open');
-  btn.textContent = open ? '▾ Hide cited references' : '▸ Cited references in this catalog';
+  const p = filtered[idx];
+  const jkey = (p && p['JKey']) || '';
+  const doi = refsNormDoi(p && p['DOI']);
+  btn.textContent = refsToggleLabel(doi, open);
   if (!open || el.dataset.filled) return;
   el.dataset.filled = '1';
   el.innerHTML = '<div class="paper-refs-note">Loading…</div>';
-  const p = filtered[idx];
-  const jkey = p['JKey'] || '';
-  const doi = refsNormDoi(p['DOI']);
   Promise.all([loadRefsIndex(), loadRefsShard(jkey)]).then(function(res) {
     const index = res[0] || {}, shard = res[1] || {};
     const cited = (shard[doi] || []).slice();
@@ -3723,7 +3766,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       <p>You can filter by journal type (UTD24, FT50, ABS 4/4*, ABS 3, or Working Papers — the listed authors' unpublished pre-prints), by journal, or by year, and search the text of authors, titles, abstracts and affiliations. For Management Science you can also filter by the accepting editor and editorial area, and for ISR and Marketing Science by senior and associate editor. Filters stack, so everything you pick is combined, and the results bar tells you what share of the journals in scope actually matched.</p>
 
       <h3>On every paper</h3>
-      <p>Each paper carries a small badge for the most selective list its journal is on (UTD24, then FT50, then ABS 4/4*, then ABS 3). You also get one-click BibTeX, a link to a free open-access pre-print whenever I could find one (arXiv, SSRN, NBER, OSF, bioRxiv or medRxiv), and a "cited by" count that links through to the paper on Google Scholar. PNAS papers show their Significance statement too. Many papers also have a "Cited references in this catalog" toggle that lists the other papers they cite which are themselves in The Lit — each one links straight to that paper — so you can walk the citation graph within these journals. That list is built slowly by combining several reference sources (Crossref, OpenAlex and Semantic Scholar), so its coverage grows over time.</p>
+      <p>Each paper carries a small badge for the most selective list its journal is on (UTD24, then FT50, then ABS 4/4*, then ABS 3). You also get one-click BibTeX, a link to a free open-access pre-print whenever I could find one (arXiv, SSRN, NBER, OSF, bioRxiv or medRxiv), and a "cited by" count that links through to the paper on Google Scholar. PNAS papers show their Significance statement too. Many papers also have a "Cited references in this catalog" toggle — with a count of how many — that lists the other papers they cite which are themselves in The Lit, each one linking straight to that paper, so you can walk the citation graph within these journals. That list is built slowly by combining several reference sources (Crossref, OpenAlex and Semantic Scholar), so its coverage grows over time.</p>
 
       <h3>A few extras</h3>
       <p>There are quick views for recently added papers and for papers that have an open-access pre-print. If you sign in you get a private library, where you can star papers, add notes, build lists and tag your reading. You can save default filters — a preferred set of journals or journal types that the page applies automatically each time you sign in, so you land on your own subset straight away. You can also set up e-mail alerts: about new papers that match your filters, about any new paper added to the database, or about new features on the site — with a preview of exactly what each e-mail will look like, and a "Send me a test e-mail" button that drops a one-off sample into your own inbox.</p>
