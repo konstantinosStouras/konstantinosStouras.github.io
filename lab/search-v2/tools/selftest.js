@@ -132,6 +132,28 @@ section('Test 6b · Rational-search benchmark (Space Exploration "search window"
   ok('envelope ceiling rises by L per step and caps at 100', env.ceiling[50] === 90 && env.ceiling[60] === 100);
 }
 
+section('Test 6c · Value-of-knowledge welfare KPI (Carnehl–Schneider, ECMA 2025, p.629)');
+{
+  const one = LS.knowledgeValue([[50, 60]], { L: 10, n: 100 });
+  ok('a single reveal yields a small positive v', one.v > 0 && one.v < 20, 'v=' + one.v);
+  ok('the trajectory has one entry per reveal', one.series.length === 1);
+  // more, well-spread reveals ⇒ strictly more of the line understood than one reveal
+  const many = LS.knowledgeValue([[10, 50], [30, 50], [50, 50], [70, 50], [90, 50]], { L: 10, n: 100 });
+  ok('more, spread-out reveals raise v', many.v > one.v, many.v + ' > ' + one.v);
+  ok('v is bounded by the number of cells', many.v <= 100 && one.v <= 100);
+  ok('coverage = v/N as a % (N=100 → coverage equals v)', many.coverage === many.v, many.coverage + ' vs ' + many.v);
+  // the trajectory is non-decreasing: adding a reveal can only shrink variance
+  let mono = true; for (let i = 1; i < many.series.length; i++) if (many.series[i] < many.series[i - 1] - 1e-9) mono = false;
+  ok('the v-trajectory is non-decreasing as reveals accumulate', mono, JSON.stringify(many.series));
+  // marginal ΔV of the last reveal = the last step of the trajectory
+  const d = Math.round((many.series[many.series.length - 1] - many.series[many.series.length - 2]) * 10) / 10;
+  ok('marginal ΔV equals the last jump in the trajectory', Math.abs(many.marginal - d) < 1e-6, 'marg=' + many.marginal + ' d=' + d);
+  // the dead-middle threshold is the paper's 4q gap width, and q defaults to 4·VAR_STEP
+  ok('default q = 4·VAR_STEP → dead middle past ~16-wide gaps', many.threshGap === 16, 'threshGap=' + many.threshGap);
+  ok('no reveals → empty trajectory, v = 0', LS.knowledgeValue([], { L: 10, n: 100 }).series.length === 0);
+  ok('mean posterior s.d. is a sane cents figure', many.meanStd >= 0 && many.meanStd < 60, 'meanStd=' + many.meanStd);
+}
+
 section('Test 7 · AI-model economics + defaults');
 {
   const ai = CONFIG.AI;

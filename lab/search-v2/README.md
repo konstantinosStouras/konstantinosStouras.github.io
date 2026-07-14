@@ -70,6 +70,25 @@ Malladi–Martínez-Marquina–Morozov, *"Space Exploration"* (Theorem 1):
   window. Both use only the participant's reveals (no truth leak) and are **hidden
   from real participants**.
 
+The testing bar also carries a **"Value of knowledge" toggle** (test only) that
+shows the *other* theory's welfare KPI — the objective the searcher maximizes in
+**Carnehl & Schneider, *"A Quest for Knowledge"* (Econometrica 93(2), 2025,
+p.629)**: `v(Fₖ) = Σₓ max{1 − σ²ₓ/q, 0}`, the value of knowledge. Treating the
+revealed positions as the paper's "existing knowledge" `Fₖ`, `landscape.js`
+`knowledgeValue` computes the Brownian **posterior variance** at every cell — the
+bridge variance `d(X−d)/X` inside a gap, linear growth beyond the frontier
+(Property 2, p.629), scaled to the walk's own per-step variance so it reads in
+cents² — and sums how much of the 100-cell line is "understood" (`σ²ₓ < q`; `q`
+defaults to `4·VAR_STEP`, the paper's `4q` dead-middle threshold ≈ a 16-wide gap).
+The readout shows the current `v` (of 100), the **marginal ΔV** the last reveal
+added (the searcher's per-discovery payoff, p.630), the mean posterior s.d.
+(a `q`-free companion), and a **sparkline of `v` after each reveal** so you can
+watch the welfare KPI evolve *as the search progresses*. Unlike the Malladi
+search-window benchmark (which rewards finding the single max — the app's own
+payoff), this KPI rewards **coverage** (low uncertainty everywhere), so the two
+toggles let you compare a round against both objectives. Uses only the
+participant's reveals (no truth leak) and is **hidden from real participants**.
+
 The same scorer runs **post-hoc in the admin Data tab** (a "Rational-search
 benchmark" panel): it reconstructs each real round's reveal sequence from the
 logged `reveal` events and aggregates the obvious-mistake rate, optimal-stop share,

@@ -250,10 +250,74 @@
     return { ceiling: ceil, best: best };
   }
 
+  // ---- value of knowledge (welfare KPI, Carnehl & Schneider, ECMA 2025) ------
+  // v(Fk) = Σ_x max(1 − σ²_x / q, 0): the decision-maker's welfare in the paper's
+  // model (printed p.629, §2.2) — the extent to which the revealed points (the
+  // "existing knowledge" Fk) let society act well across the WHOLE 1..N line. It
+  // is the level the paper's researcher drives up; her payoff from a single
+  // discovery is the marginal increase ΔV = v(Fk ∪ {x}) − v(Fk) (p.630).
+  //
+  // σ²_x is the Brownian posterior variance at position x given the reveals: the
+  // bridge variance d(X−d)/X inside a gap of width X at distance d, and linear
+  // growth |x − frontier| beyond the outermost reveal (Property 2, p.629) —
+  // scaled to the walk's own per-step variance VAR_STEP = (2L)²/12 so it reads in
+  // cents². q is the decision-maker's variance tolerance (cents²): a cell counts
+  // as "understood" only where σ²_x < q. Default q = 4·VAR_STEP, i.e. the paper's
+  // 4q threshold: a dead middle (σ² > q) appears once a gap exceeds ~16 positions.
+  //
+  // Returns { v, series, marginal, coverage, meanStd, q, varStep, threshGap }:
+  //   v         value of knowledge using ALL reveals (0..N)
+  //   series    v after the first k reveals, in reveal order (the trajectory)
+  //   marginal  ΔV added by the LAST reveal (what the searcher earns on it)
+  //   coverage  v / N as a percentage
+  //   meanStd   mean posterior s.d. across the line (¢) — a q-free companion
+  //   threshGap gap width beyond which a dead middle appears (= 4q / VAR_STEP)
+  // Uses only the participant's own reveals (no truth leak); safe for the overlay.
+  function knowledgeValue(reveals, opts) {
+    opts = opts || {};
+    var L = opts.L || L_STEP, n = opts.n || N;
+    var varStep = (2 * L) * (2 * L) / 12;                 // Var of a Uniform[−L,L] step
+    var q = (opts.q == null ? 4 * varStep : opts.q);      // variance tolerance (cents²)
+    function sig2(x, xs) {                                 // posterior variance (cents²) at x
+      if (!xs.length) return varStep * n;                 // no knowledge
+      var lo = null, hi = null, i;
+      for (i = 0; i < xs.length; i++) {
+        if (xs[i] <= x) lo = xs[i];
+        if (xs[i] >= x) { hi = xs[i]; break; }
+      }
+      if (lo == null) return varStep * (hi - x);          // left of the frontier
+      if (hi == null) return varStep * (x - lo);          // right of the frontier
+      if (lo === hi) return 0;                            // exactly on a reveal
+      var d = x - lo, X = hi - lo;
+      return varStep * (d * (X - d) / X);                 // Brownian bridge inside a gap
+    }
+    function vOf(xs) {
+      var s = 0, x, val;
+      for (x = 1; x <= n; x++) { val = 1 - sig2(x, xs) / q; if (val > 0) s += val; }
+      return s;
+    }
+    var r1 = function (z) { return Math.round(z * 10) / 10; };
+    var xs = [], series = [], k, p;
+    for (k = 0; k < reveals.length; k++) {                // build the trajectory in reveal order
+      p = reveals[k][0];
+      if (xs.indexOf(p) < 0) { xs.push(p); xs.sort(function (a, b) { return a - b; }); }
+      series.push(r1(vOf(xs)));
+    }
+    var v = series.length ? series[series.length - 1] : 0;
+    var prev = series.length > 1 ? series[series.length - 2] : 0;
+    var sumv = 0, x2;
+    for (x2 = 1; x2 <= n; x2++) sumv += sig2(x2, xs);
+    return {
+      v: r1(v), series: series, marginal: r1(v - prev),
+      coverage: r1(v / n * 100), meanStd: Math.round(Math.sqrt(sumv / n)),
+      q: q, varStep: varStep, threshGap: Math.round(4 * q / varStep)
+    };
+  }
+
   return {
     mulberry32: mulberry32, hashSeed: hashSeed,
     makeWalk: makeWalk, hasUniqueMax: hasUniqueMax, makeDots: makeDots, estimate: estimate, geometry: geometry,
-    windowStats: windowStats, windowEnvelope: windowEnvelope,
+    windowStats: windowStats, windowEnvelope: windowEnvelope, knowledgeValue: knowledgeValue,
     N: N, L_STEP: L_STEP
   };
 });
