@@ -199,6 +199,27 @@
   @keyframes livedot { 0% { box-shadow: 0 0 0 0 rgba(87,201,138,0.6); } 70%,100% { box-shadow: 0 0 0 7px rgba(87,201,138,0); } }
   .cstat .cdesc { font-size: 13.5px; color: rgba(255,255,255,0.82); line-height: 1.55; margin-top: 4px; max-width: 60ch; }
   @media (max-width: 560px) { .cstat { flex-direction: column; align-items: flex-start; gap: 8px; padding: 18px 20px; } .cstat .cnum { font-size: 40px; } }
+
+  /* ── Team-science (disruption vs development) section ─────────────────── */
+  .disr-explain { font-size: 13.5px; color: var(--text); line-height: 1.65; }
+  .disr-explain p { margin-bottom: 11px; }
+  .disr-explain .grp { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin: 4px 0 13px; }
+  .disr-explain .gcard { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; background: var(--bg); }
+  .disr-explain .gcard b { display: block; font-size: 13px; margin-bottom: 3px; }
+  .disr-explain .gcard.i b { color: #3f6098; }
+  .disr-explain .gcard.j b { color: #a34a6d; }
+  .disr-explain .gcard.k b { color: var(--text-muted); }
+  .disr-explain .gcard span { font-size: 12.5px; color: var(--text-muted); }
+  .disr-formula { font-family: 'Fraunces', serif; font-size: 20px; color: var(--navy); text-align: center; background: var(--navy-light); border-radius: 10px; padding: 14px 10px; margin: 4px 0 13px; letter-spacing: .3px; }
+  .disr-formula .frac { display: inline-flex; flex-direction: column; vertical-align: middle; text-align: center; margin: 0 4px; }
+  .disr-formula .frac .num { border-bottom: 2px solid var(--navy); padding: 0 8px 3px; }
+  .disr-formula .frac .den { padding: 3px 8px 0; }
+  .disr-note { font-size: 12.5px; color: var(--text-muted); background: var(--accent-light); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: 10px 13px; margin-top: 4px; line-height: 1.55; }
+  .disr-note a { color: var(--navy); }
+  .disr-two { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 26px; }
+  .disr-two > div { min-width: 0; }
+  .disr-two .disr-subhead { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; margin: 2px 0 6px; }
+  @media (max-width: 720px) { .disr-two { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
@@ -344,6 +365,74 @@
         </div>
       </div>
       <div class="cards" id="dimCards"></div>
+
+      <!-- ── Team science: disruption vs development ───────────────────────
+           A new section reproducing the key measures & plots of Wu, Wang &
+           Evans, "Large teams develop and small teams disrupt science and
+           technology" (Nature 570, 2019), computed over the slice of The Lit's
+           in-catalog citation graph we've mapped so far (fun/lit/data-refs/).
+           Loaded lazily from ./disruption.json; every figure honours the top
+           filters (journals / journal types / years) like the rest of the page.
+           Hidden entirely until the disruption dataset is available. -->
+      <div id="disrSection" style="display:none">
+        <div class="dim-lead" style="margin-top:28px">Team science — do small teams disrupt?
+          <span>Reproducing the key measures of Wu, Wang &amp; Evans, “Large teams develop and small teams disrupt science and technology” (<em>Nature</em>&nbsp;570, 2019) over the slice of The&nbsp;Lit's citation graph mapped so far. Every figure below honours the filters at the top of the page, and sharpens as more of the reference graph is built.</span>
+        </div>
+        <div id="disrLoading" class="loading"><span class="spinner"></span>Loading the citation-graph analysis…</div>
+        <div id="disrEmpty" class="aspot-empty" style="display:none"></div>
+        <div id="disrBody" style="display:none">
+          <div class="tiles" id="disrTiles"></div>
+          <div class="cards">
+            <div class="card wide">
+              <h3>How we measure disruption</h3>
+              <div class="csub">The disruption index <em>D</em> (Funk &amp; Owen-Smith 2017) — read straight off the citation network, not the citation count.</div>
+              <div class="disr-explain" id="disrExplain"></div>
+            </div>
+            <div class="card wide">
+              <h3>Distribution of disruption</h3>
+              <div class="csub" id="disrHistSub">Every scored paper's <em>D</em>, from developing (<em>D</em>&lt;0) to disrupting (<em>D</em>&gt;0). Most work sits near zero — the paper's Fig.&nbsp;1b.</div>
+              <div id="disrHist"></div>
+              <div class="legend" id="disrHistLegend"></div>
+            </div>
+            <div class="card wide">
+              <h3>Disruption and impact by team size</h3>
+              <div class="csub" id="disrScissorSub">The signature result: as teams grow, disruption falls while citations rise.</div>
+              <div id="disrScissor"></div>
+              <div class="legend" id="disrScissorLegend"></div>
+            </div>
+            <div class="card wide">
+              <h3>How teams search the literature</h3>
+              <div class="csub" id="disrSearchSub">Small teams reach for older, less-cited work (deep search); large teams build on recent, popular work.</div>
+              <div id="disrSearch"></div>
+              <div class="legend" id="disrSearchLegend"></div>
+            </div>
+            <div class="card wide">
+              <h3>Who lands in the extremes</h3>
+              <div class="csub" id="disrRatioSub">Over- / under-representation by team size among the most-disruptive and the most-cited work (1.0&nbsp;= as expected if spread evenly).</div>
+              <div id="disrRatio"></div>
+              <div class="legend" id="disrRatioLegend"></div>
+            </div>
+            <div class="card">
+              <h3>Most disruptive papers in scope</h3>
+              <div class="csub">Highest <em>D</em> — work later cited on its own, apart from its antecedents.</div>
+              <div class="tblscroll"><div id="disrTopDisrupt"></div></div>
+            </div>
+            <div class="card">
+              <h3>Most developing papers in scope</h3>
+              <div class="csub">Lowest <em>D</em> — work cited alongside the prior art it consolidated and extended.</div>
+              <div class="tblscroll"><div id="disrTopDevelop"></div></div>
+            </div>
+            <div class="card wide">
+              <h3>Most disruptive &amp; most developmental authors</h3>
+              <div class="csub" id="disrAuthorsSub">Each author's <em>D<sub>j</sub></em> — the mean of <em>D</em> over every paper they wrote or co-wrote in scope.</div>
+              <div class="disr-two">
+                <div><div class="disr-subhead" style="color:#3f6098">Most disruptive</div><div id="disrAuthDisrupt"></div></div>
+                <div><div class="disr-subhead" style="color:#a34a6d">Most developmental</div><div id="disrAuthDevelop"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ── Author tab ─────────────────────────────────────────────────── -->
@@ -417,6 +506,13 @@
   function pct(x) { return (x * 100).toFixed(x >= 0.1 ? 0 : 1) + '%'; }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function keysHaveType(jk, t) { return (JMAP[jk].types || []).indexOf(t) !== -1; }
+  // numeric helpers for the disruption analysis
+  function mean(a) { if (!a.length) return 0; var s = 0; for (var i = 0; i < a.length; i++) s += a[i]; return s / a.length; }
+  function median(a) { if (!a.length) return 0; var b = a.slice().sort(function (x, y) { return x - y; }); var m = b.length >> 1; return b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2; }
+  // p-th quantile (0..1) of an ALREADY-SORTED ascending array.
+  function quantileSorted(sorted, p) { if (!sorted.length) return 0; var i = p * (sorted.length - 1); var lo = Math.floor(i), hi = Math.ceil(i); if (lo === hi) return sorted[lo]; return sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo); }
+  // percentile rank (0..100) of value v within an ascending sorted array.
+  function pctRankSorted(sorted, v) { if (!sorted.length) return 0; var lo = 0, hi = sorted.length; while (lo < hi) { var mid = (lo + hi) >> 1; if (sorted[mid] < v) lo = mid + 1; else hi = mid; } return lo / sorted.length * 100; }
 
   // The journals currently in scope: union of selected types' journals and
   // explicitly-checked journals. Nothing selected ⇒ the whole corpus.
@@ -633,6 +729,7 @@
     renderAreaTrends(keys);
     renderCited(keys);
     renderDims(keys);
+    renderDisruption();
   }
 
   // Editorial breakdown: for each dimension any in-scope journal carries (MS
@@ -978,10 +1075,431 @@
     html += '<div class="cards">';
     html += '<div class="card wide"><h3>Publications per year</h3><div class="csub">' + esc(a.n) + '’s output across ' + S.yMin + '–' + S.yMax + '</div><div id="aTimeline"></div></div>';
     html += '<div class="card wide"><h3>Where they publish</h3><div class="csub">Papers per journal — bars in claret are in your current journal scope</div><div id="aJournals"></div></div>';
+    // Disruption profile — populated async from ./disruption.json, revealed only
+    // if this author has scored papers in the current scope (see renderAuthorDisruption).
+    html += '<div class="card wide" id="aDisrupt" style="display:none"><h3>Disruption profile</h3><div id="aDisruptBody"></div></div>';
     html += '</div>';
     $('authorBody').innerHTML = html;
     $('aTimeline').innerHTML = barsV(tItems, { color: GOLD, showVal: false, maxBar: 30 });
     $('aJournals').innerHTML = barsH(jItems, { limit: 16 });
+    renderAuthorDisruption(a);
+  }
+
+  // Author-level disruptiveness for the spotlight: mean of D over every in-scope
+  // paper this author (co-)wrote, plus their most disruptive/developmental work.
+  // Reuses the same scope + year filters as the rest of the dashboard.
+  function renderAuthorDisruption(a) {
+    if (disrState === 'failed') return;
+    ensureDisruption(function () {
+      if (disrState !== 'ready' || !DISR || !disrNameToId) return;
+      var card = $('aDisrupt'); if (!card) return;                 // author view rebuilt since?
+      var id = disrNameToId[String(a.n || '').toLowerCase()];
+      if (id == null) return;                                      // author not in the citation graph
+      var scope = {}; scopeKeys().forEach(function (k) { scope[k] = 1; });
+      var mine = DISR.papers.filter(function (p) { return p.au && p.au.indexOf(id) !== -1 && scope[p.j] && p.y != null && p.y >= S.yMin && p.y <= S.yMax; });
+      if (!mine.length) return;
+      var ds = mine.map(function (p) { return p.d; }), meanD = mean(ds);
+      var allD = disrInScope().map(function (p) { return p.d; }).sort(function (x, y) { return x - y; });
+      var pctile = pctRankSorted(allD, meanD);
+      var disrupt = mine.filter(function (p) { return p.d > 0; }).length, dev = mine.filter(function (p) { return p.d < 0; }).length;
+      var sorted = mine.slice().sort(function (x, y) { return y.d - x.d; });
+      var verdict = meanD > 0.02 ? 'leans disruptive' : (meanD < -0.02 ? 'leans developmental' : 'balanced');
+      var vcol = meanD > 0.02 ? C_DISRUPT : (meanD < -0.02 ? C_DEVELOP : MUTED);
+      var tiles = [
+        { label: 'Mean disruption Dⱼ', value: (meanD > 0 ? '+' : '') + meanD.toFixed(3) },
+        { label: 'Percentile in scope', value: Math.round(pctile) + 'th' },
+        { label: 'Scored papers', value: fmt(mine.length) },
+        { label: 'Disruptive / developing', value: disrupt + ' / ' + dev }
+      ];
+      var pl = function (p) {
+        var url = p.doi ? 'https://doi.org/' + p.doi : '', ti = trunc(p.ti || '(untitled)', 68);
+        return (url ? '<a href="' + esc(url) + '" target="_blank" rel="noopener" style="color:var(--navy)">' + esc(ti) + '</a>' : esc(ti)) +
+          ' <span style="color:var(--text-muted)">(' + (p.d > 0 ? '+' : '') + p.d.toFixed(3) + ')</span>';
+      };
+      var body = '<div class="csub">Mean of <em>D</em> over ' + esc(a.n) + '’s ' + mine.length + ' scored paper' + (mine.length === 1 ? '' : 's') +
+        ' in scope — <strong style="color:' + vcol + '">' + verdict + '</strong>.</div>';
+      body += '<div class="tiles">' + tiles.map(function (t) { return '<div class="tile"><div class="label">' + t.label + '</div><div class="value sm">' + t.value + '</div></div>'; }).join('') + '</div>';
+      body += '<div style="font-size:13.5px;line-height:1.8;margin-top:8px">' +
+        '<div><span style="color:' + C_DISRUPT + ';font-weight:600">Most disruptive:</span> ' + pl(sorted[0]) + '</div>' +
+        '<div><span style="color:' + C_DEVELOP + ';font-weight:600">Most developmental:</span> ' + pl(sorted[sorted.length - 1]) + '</div></div>';
+      $('aDisruptBody').innerHTML = body;
+      card.style.display = '';
+    });
+  }
+
+  // ══ Team science: disruption vs development ═══════════════════════════════
+  // Reproduces Wu, Wang & Evans (Nature 2019) over The Lit's in-catalog citation
+  // graph. The whole per-paper table (./disruption.json) is small enough that
+  // every figure is computed client-side, so all of it honours the top filters.
+  var DISR = null, disrState = 'idle', disrNameToId = null, disrCbs = [];
+  // Disruption blue, developing/citation claret-red, reference-age green, popularity gold.
+  var C_DISRUPT = '#3f6098', C_DEVELOP = '#a34a6d', C_CITE = '#b5533a', C_AGE = '#6a8d3a', C_POP = '#c9a24b';
+  var DISR_CAP = 8;               // team sizes 1..7 individually, 8 = "8+" (tail merged — thin at large teams)
+  var DISR_MIN_BIN = 8;           // a team-size bin needs this many papers to be plotted
+  var DISR_ROBUST_NF = 3;         // min in-catalog forward citations for a paper to head the highlight tables
+
+  function ensureDisruption(cb) {
+    if (disrState === 'ready' || disrState === 'failed') { if (cb) cb(); return; }
+    if (cb) disrCbs.push(cb);
+    if (disrState === 'loading') return;
+    disrState = 'loading';
+    var flush = function () { var cbs = disrCbs; disrCbs = []; cbs.forEach(function (f) { f(); }); };
+    fetch('./disruption.json').then(function (r) { if (!r.ok) throw 0; return r.json(); }).then(function (j) {
+      DISR = j;
+      disrNameToId = {};
+      (j.authors || []).forEach(function (n, i) { disrNameToId[String(n).toLowerCase()] = i; });
+      disrState = 'ready'; flush();
+    }).catch(function () { disrState = 'failed'; flush(); });
+  }
+
+  // Scored papers within the current journal + year scope (the disruption dataset
+  // carries no editorial-dimension tags, so an active editor/area filter only
+  // narrows by that dimension's journals, not by the value — noted in the UI).
+  function disrInScope() {
+    if (!DISR || !DISR.papers) return [];
+    var scope = {}; scopeKeys().forEach(function (k) { scope[k] = 1; });
+    var lo = S.yMin, hi = S.yMax;
+    return DISR.papers.filter(function (p) { return scope[p.j] && p.y != null && p.y >= lo && p.y <= hi; });
+  }
+
+  function showDisrEmpty(msg) {
+    $('disrLoading').style.display = 'none';
+    $('disrBody').style.display = 'none';
+    var e = $('disrEmpty'); e.style.display = ''; e.innerHTML = msg;
+  }
+
+  function renderDisruption() {
+    var sec = $('disrSection'); if (!sec) return;
+    if (disrState === 'idle') {
+      sec.style.display = '';
+      $('disrLoading').style.display = ''; $('disrBody').style.display = 'none'; $('disrEmpty').style.display = 'none';
+      ensureDisruption(function () { if (S.tab === 'overview') renderDisruption(); });
+      return;
+    }
+    if (disrState === 'loading') {
+      sec.style.display = '';
+      $('disrLoading').style.display = ''; $('disrBody').style.display = 'none'; $('disrEmpty').style.display = 'none';
+      return;
+    }
+    // failed (file not generated yet) or empty dataset → hide the section entirely.
+    if (disrState === 'failed' || !DISR || !DISR.papers || !DISR.papers.length) { sec.style.display = 'none'; return; }
+    sec.style.display = '';
+    var rows = disrInScope();
+    if (!rows.length) {
+      showDisrEmpty('No citation-graph data for the selected journals and years yet. This analysis currently covers <strong>' + fmt(DISR.totals.papers) +
+        '</strong> papers whose references we’ve mapped (mostly Management Science, M&amp;SOM, POM and PNAS) and grows as the reference graph fills in. Try widening the journal or year filters.');
+      return;
+    }
+    $('disrLoading').style.display = 'none'; $('disrEmpty').style.display = 'none'; $('disrBody').style.display = '';
+    renderDisrTiles(rows);
+    renderDisrExplain(rows);
+    renderDisrHist(rows);
+    renderDisrScissor(rows);
+    renderDisrSearch(rows);
+    renderDisrRatio(rows);
+    renderDisrTopPapers(rows);
+    renderDisrAuthors(rows);
+  }
+
+  function renderDisrTiles(rows) {
+    var n = rows.length, disrupt = 0, dev = 0, ds = [];
+    rows.forEach(function (p) { ds.push(p.d); if (p.d > 0) disrupt++; else if (p.d < 0) dev++; });
+    ds.sort(function (a, b) { return a - b; });
+    var tiles = [
+      { label: 'Scored papers', value: fmt(n), hint: 'with a defined D, in scope' },
+      { label: 'Disruptive', value: pct(disrupt / n), hint: 'D > 0', cls: 'sm' },
+      { label: 'Developing', value: pct(dev / n), hint: 'D < 0', cls: 'sm' },
+      { label: 'Mean disruption', value: mean(ds).toFixed(3), cls: 'sm' },
+      { label: 'Median disruption', value: median(ds).toFixed(3), cls: 'sm' }
+    ];
+    $('disrTiles').innerHTML = tiles.map(function (t) {
+      return '<div class="tile"><div class="label">' + t.label + '</div><div class="value ' + (t.cls || '') + '">' + t.value + '</div>' + (t.hint ? '<div class="hint">' + t.hint + '</div>' : '') + '</div>';
+    }).join('');
+  }
+
+  function renderDisrExplain(rows) {
+    var t = DISR.totals || {};
+    var dimNote = (S.dim.name && activeDimVals().length)
+      ? '<div class="disr-note">Note: the editorial filter you’ve applied narrows the journals shown, but the disruption dataset isn’t tagged by editor/area, so these figures cover all in-scope papers of those journals.</div>' : '';
+    $('disrExplain').innerHTML =
+      '<p>A citation count tells you how much attention a paper got, not <em>what kind</em> of contribution it made. ' +
+      'The <strong>disruption index D</strong> reads that off the citation network instead. Take every later paper that cites our focal paper, and split them three ways:</p>' +
+      '<div class="grp">' +
+      '<div class="gcard i"><b>n<sub>i</sub> — disrupting</b><span>Cite the focal paper but <em>none</em> of the works it cited. The focal work eclipsed its own roots.</span></div>' +
+      '<div class="gcard j"><b>n<sub>j</sub> — developing</b><span>Cite the focal paper <em>and</em> at least one work it cited. The focal work is read as an extension of its roots.</span></div>' +
+      '<div class="gcard k"><b>n<sub>k</sub> — context</b><span>Cite the focal’s references but not the focal paper itself. Sets the neighbourhood scale.</span></div>' +
+      '</div>' +
+      '<div class="disr-formula">D&nbsp;=&nbsp;<span class="frac"><span class="num">n<sub>i</sub> &minus; n<sub>j</sub></span><span class="den">n<sub>i</sub> + n<sub>j</sub> + n<sub>k</sub></span></span></div>' +
+      '<p><strong>D ranges from &minus;1 to +1.</strong> D&nbsp;&gt;&nbsp;0 means the work <span style="color:' + C_DISRUPT + ';font-weight:600">disrupts</span> — later work cites it on its own, forgetting what it built on. ' +
+      'D&nbsp;&lt;&nbsp;0 means it <span style="color:' + C_DEVELOP + ';font-weight:600">develops</span> — it is cited together with its antecedents, as one more step along an established line.</p>' +
+      '<p><strong>An author’s disruptiveness</strong> is simply <em>D<sub>j</sub></em>&nbsp;=&nbsp;the average of <em>D</em> over every paper they wrote or co-wrote (in scope) — so a scholar who keeps eclipsing the prior art scores high, one who keeps consolidating it scores low.</p>' +
+      '<div class="disr-note"><strong>How this differs from the paper.</strong> Wu, Wang &amp; Evans computed D over a citation network of 40M+ works. Here D is built only from the references we’ve harvested <em>within</em> The Lit so far — currently <strong>' +
+      fmt(t.graphPapers || 0) + '</strong> papers with mapped references and <strong>' + fmt(t.edges || 0) + '</strong> in-catalog citations, giving <strong>' + fmt(t.papers || 0) +
+      '</strong> papers a defined D. It is a faithful but partial reconstruction that sharpens automatically as the <a href="/fun/lit/">reference graph</a> grows. <a href="https://www.nature.com/articles/s41586-019-0941-9" target="_blank" rel="noopener">Read the paper →</a></div>' + dimNote;
+  }
+
+  // ── Distribution of D — signed pseudo-log bins, log-scaled bar heights ─────
+  function renderDisrHist(rows) {
+    var edges = [-1, -0.5, -0.2, -0.1, -0.05, -0.02, -0.005, 0.005, 0.02, 0.05, 0.1, 0.2, 0.5, 1];
+    var nb = edges.length - 1, counts = []; for (var i = 0; i < nb; i++) counts.push(0);
+    rows.forEach(function (p) {
+      var d = p.d, b = nb - 1;
+      for (var k = 0; k < nb; k++) { if (d < edges[k + 1]) { b = k; break; } }
+      if (d <= edges[0]) b = 0;
+      counts[b]++;
+    });
+    $('disrHist').innerHTML = disrHistogram(edges, counts);
+    $('disrHistLegend').innerHTML =
+      '<span class="li"><span class="sw" style="background:' + C_DEVELOP + '"></span>Developing (D &lt; 0)</span>' +
+      '<span class="li"><span class="sw" style="background:#b8b0b4"></span>≈ 0</span>' +
+      '<span class="li"><span class="sw" style="background:' + C_DISRUPT + '"></span>Disrupting (D &gt; 0)</span>';
+  }
+  function disrHistogram(edges, counts) {
+    var nb = counts.length;
+    var W = 760, H = 260, L = 20, R = 20, T = 18, B = 46;
+    var maxC = 0; counts.forEach(function (c) { if (c > maxC) maxC = c; });
+    if (!maxC) return '<div class="chart-empty">No data in the selected scope.</div>';
+    var slot = (W - L - R) / nb, bw = Math.min(46, slot * 0.82);
+    var logMax = Math.log(1 + maxC);
+    var hOf = function (c) { return c ? (Math.log(1 + c) / logMax) * (H - T - B) : 0; };
+    var svg = svgEl(W, H);
+    // zero baseline
+    var baseY = H - B;
+    svg += '<line x1="' + L + '" y1="' + baseY + '" x2="' + (W - R) + '" y2="' + baseY + '" stroke="' + GRID + '"/>';
+    counts.forEach(function (c, i) {
+      var lo = edges[i], hi = edges[i + 1], mid = (lo + hi) / 2;
+      var col = mid < -0.006 ? C_DEVELOP : (mid > 0.006 ? C_DISRUPT : '#b8b0b4');
+      var cx = L + slot * (i + 0.5), x = cx - bw / 2, h = hOf(c);
+      svg += '<rect x="' + x.toFixed(1) + '" y="' + (baseY - h).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="3" fill="' + col + '"/>';
+      if (c) svg += '<text x="' + cx.toFixed(1) + '" y="' + (baseY - h - 5).toFixed(1) + '" text-anchor="middle" font-size="10.5" fill="' + MUTED + '" font-weight="600">' + fmt(c) + '</text>';
+    });
+    // sparse magnitude labels under a few bin edges
+    var lbl = { '-1': '−1', '-0.1': '−0.1', '-0.005': '', '0.005': '0', '0.1': '0.1', '1': '1' };
+    edges.forEach(function (e, i) {
+      var key = String(e);
+      if (lbl[key] === undefined) return;
+      var xpos = L + slot * i;
+      if (e === 0.005) xpos = L + slot * i; // boundary between the two ≈0 edges → mark centre as 0
+      svg += '<text x="' + xpos.toFixed(1) + '" y="' + (baseY + 16) + '" text-anchor="middle" font-size="10.5" fill="' + MUTED + '">' + lbl[key] + '</text>';
+    });
+    svg += '<text x="' + L + '" y="' + (H - 6) + '" text-anchor="start" font-size="11" fill="' + C_DEVELOP + '" font-weight="600">← developing</text>';
+    svg += '<text x="' + (W - R) + '" y="' + (H - 6) + '" text-anchor="end" font-size="11" fill="' + C_DISRUPT + '" font-weight="600">disrupting →</text>';
+    svg += '<text x="' + ((L + W - R) / 2).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle" font-size="10.5" fill="' + MUTED + '">bar height ∝ log(count)</text>';
+    return svg + '</svg>';
+  }
+
+  // ── Per-team-size statistics (1..DISR_CAP, last bin = "CAP+") ──────────────
+  function disrTeamStats(rows) {
+    var b = {}; for (var t = 1; t <= DISR_CAP; t++) b[t] = { t: t, ds: [], cs: [], ras: [], rps: [] };
+    rows.forEach(function (p) {
+      var t = Math.min(Math.max(p.t || 1, 1), DISR_CAP), e = b[t];
+      e.ds.push(p.d); e.cs.push(p.c);
+      if (p.ra != null) e.ras.push(p.ra);
+      if (p.rp != null) e.rps.push(p.rp);
+    });
+    var arr = [];
+    for (var t2 = 1; t2 <= DISR_CAP; t2++) {
+      var e2 = b[t2]; if (!e2.ds.length) continue;
+      arr.push({
+        t: t2, n: e2.ds.length,
+        meanD: mean(e2.ds), medCit: median(e2.cs),
+        refAge: e2.ras.length ? mean(e2.ras) : null,
+        refPop: e2.rps.length ? median(e2.rps) : null
+      });
+    }
+    return arr;
+  }
+
+  // ── Dual-/single-axis categorical line chart over team sizes ──────────────
+  // series: [{name,color,axis:'L'|'R',pts:[num|null]}]; opts: {leftLabel,rightLabel,
+  // leftColor,rightColor,refLine,leftZero,counts:[n]}
+  function catLineChart(cats, series, opts) {
+    opts = opts || {};
+    if (cats.length < 1) return '<div class="chart-empty">Not enough citation-graph data in this slice yet — try widening the filters.</div>';
+    var W = 760, H = 320, L = 56, R = opts.rightLabel ? 58 : 20, T = 18, B = 52;
+    var n = cats.length, slot = (W - L - R) / Math.max(1, n);
+    var cx = function (i) { return L + slot * (i + 0.5); };
+    var lv = [], rv = [];
+    series.forEach(function (s) { s.pts.forEach(function (v) { if (v != null) (s.axis === 'R' ? rv : lv).push(v); }); });
+    var lMin = lv.length ? Math.min.apply(null, lv) : 0, lMax = lv.length ? Math.max.apply(null, lv) : 1;
+    if (opts.refLine != null) { lMin = Math.min(lMin, opts.refLine); lMax = Math.max(lMax, opts.refLine); }
+    if (opts.leftZero) lMin = Math.min(0, lMin);
+    if (lMin === lMax) { lMax = lMin + 1; }
+    var padL = (lMax - lMin) * 0.12 || 0.1; lMin -= padL; lMax += padL;
+    var rMax = rv.length ? niceMax(Math.max.apply(null, rv)) : 1, rMin = 0;
+    var pyL = function (v) { return T + (1 - (v - lMin) / (lMax - lMin)) * (H - T - B); };
+    var pyR = function (v) { return T + (1 - (v - rMin) / (rMax - rMin)) * (H - T - B); };
+    var svg = svgEl(W, H);
+    // left gridlines + ticks
+    var lc = opts.leftColor || NAVY, rc = opts.rightColor || C_CITE;
+    for (var g = 0; g <= 4; g++) {
+      var val = lMin + (lMax - lMin) * g / 4, yy = pyL(val);
+      svg += '<line x1="' + L + '" y1="' + yy.toFixed(1) + '" x2="' + (W - R) + '" y2="' + yy.toFixed(1) + '" stroke="' + GRID + '"/>';
+      svg += '<text x="' + (L - 8) + '" y="' + (yy + 4).toFixed(1) + '" text-anchor="end" font-size="11" fill="' + lc + '">' + (Math.abs(lMax - lMin) < 2 ? val.toFixed(2) : fmtTick(val)) + '</text>';
+    }
+    // right ticks
+    if (opts.rightLabel) {
+      for (var gr = 0; gr <= 4; gr++) {
+        var rval = rMin + (rMax - rMin) * gr / 4, ry = pyR(rval);
+        svg += '<text x="' + (W - R + 8) + '" y="' + (ry + 4).toFixed(1) + '" text-anchor="start" font-size="11" fill="' + rc + '">' + fmtTick(rval) + '</text>';
+      }
+    }
+    // reference line (left axis)
+    if (opts.refLine != null) {
+      var ry0 = pyL(opts.refLine);
+      svg += '<line x1="' + L + '" y1="' + ry0.toFixed(1) + '" x2="' + (W - R) + '" y2="' + ry0.toFixed(1) + '" stroke="' + MUTED + '" stroke-width="1.1" stroke-dasharray="5 4"/>';
+      svg += '<text x="' + (W - R - 2) + '" y="' + (ry0 - 5).toFixed(1) + '" text-anchor="end" font-size="10.5" fill="' + MUTED + '">expected (1.0)</text>';
+    }
+    // x labels + counts
+    cats.forEach(function (c, i) {
+      svg += '<text x="' + cx(i).toFixed(1) + '" y="' + (H - 30) + '" text-anchor="middle" font-size="11.5" fill="#241a1e">' + esc(c) + '</text>';
+      if (opts.counts) svg += '<text x="' + cx(i).toFixed(1) + '" y="' + (H - 16) + '" text-anchor="middle" font-size="10" fill="' + MUTED + '">n=' + fmt(opts.counts[i]) + '</text>';
+    });
+    svg += '<text x="' + ((L + W - R) / 2).toFixed(1) + '" y="' + (H - 2) + '" text-anchor="middle" font-size="11" fill="' + MUTED + '">Team size (authors)</text>';
+    // series
+    series.forEach(function (s) {
+      var py = s.axis === 'R' ? pyR : pyL;
+      var d = '', started = false;
+      s.pts.forEach(function (v, i) {
+        if (v == null) { started = false; return; }
+        d += (started ? 'L' : 'M') + cx(i).toFixed(1) + ' ' + py(v).toFixed(1) + ' '; started = true;
+      });
+      svg += '<path d="' + d + '" fill="none" stroke="' + s.color + '" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>';
+      s.pts.forEach(function (v, i) { if (v != null) svg += '<circle cx="' + cx(i).toFixed(1) + '" cy="' + py(v).toFixed(1) + '" r="3.6" fill="' + s.color + '"/>'; });
+    });
+    // axis captions
+    if (opts.leftLabel) svg += '<text x="' + (L - 40) + '" y="' + (T + (H - T - B) / 2).toFixed(1) + '" transform="rotate(-90 ' + (L - 40) + ' ' + (T + (H - T - B) / 2).toFixed(1) + ')" text-anchor="middle" font-size="11" font-weight="600" fill="' + lc + '">' + esc(opts.leftLabel) + '</text>';
+    if (opts.rightLabel) svg += '<text x="' + (W - R + 44) + '" y="' + (T + (H - T - B) / 2).toFixed(1) + '" transform="rotate(90 ' + (W - R + 44) + ' ' + (T + (H - T - B) / 2).toFixed(1) + ')" text-anchor="middle" font-size="11" font-weight="600" fill="' + rc + '">' + esc(opts.rightLabel) + '</text>';
+    return svg + '</svg>';
+  }
+
+  function teamCats(stats) { return stats.map(function (s) { return s.t >= DISR_CAP ? (DISR_CAP + '+') : String(s.t); }); }
+
+  // Plot B — the scissor: mean D (left) vs median citations (right) by team size.
+  function renderDisrScissor(rows) {
+    var stats = disrTeamStats(rows).filter(function (s) { return s.n >= DISR_MIN_BIN; });
+    if (stats.length < 2) { $('disrScissor').innerHTML = '<div class="chart-empty">Not enough citation-graph data across team sizes in this slice yet.</div>'; $('disrScissorLegend').innerHTML = ''; return; }
+    var cats = teamCats(stats), counts = stats.map(function (s) { return s.n; });
+    var series = [
+      { name: 'Mean disruption D', color: C_DISRUPT, axis: 'L', pts: stats.map(function (s) { return s.meanD; }) },
+      { name: 'Median citations', color: C_CITE, axis: 'R', pts: stats.map(function (s) { return s.medCit; }) }
+    ];
+    $('disrScissor').innerHTML = catLineChart(cats, series, {
+      leftLabel: 'Mean disruption D', rightLabel: 'Median citations',
+      leftColor: C_DISRUPT, rightColor: C_CITE, counts: counts, leftZero: false
+    });
+    $('disrScissorLegend').innerHTML =
+      '<span class="li"><span class="sw" style="background:' + C_DISRUPT + '"></span>Mean disruption D (left)</span>' +
+      '<span class="li"><span class="sw" style="background:' + C_CITE + '"></span>Median citations (right)</span>';
+    $('disrScissorSub').textContent = 'Disruption (blue, left axis) against citation impact (red, right axis) by team size — the paper’s Fig. 2. With today’s partial graph the lines are noisy; they steady as data grows.';
+  }
+
+  // Plot C — reference age (left) vs reference popularity (right) by team size.
+  function renderDisrSearch(rows) {
+    var stats = disrTeamStats(rows).filter(function (s) { return s.n >= DISR_MIN_BIN && (s.refAge != null || s.refPop != null); });
+    if (stats.length < 2) { $('disrSearch').innerHTML = '<div class="chart-empty">Not enough reference data across team sizes in this slice yet.</div>'; $('disrSearchLegend').innerHTML = ''; return; }
+    var cats = teamCats(stats), counts = stats.map(function (s) { return s.n; });
+    var series = [
+      { name: 'Avg reference age', color: C_AGE, axis: 'L', pts: stats.map(function (s) { return s.refAge; }) },
+      { name: 'Median reference popularity', color: C_POP, axis: 'R', pts: stats.map(function (s) { return s.refPop; }) }
+    ];
+    $('disrSearch').innerHTML = catLineChart(cats, series, {
+      leftLabel: 'Avg reference age (years)', rightLabel: 'Median ref. citations',
+      leftColor: C_AGE, rightColor: '#a07d1e', counts: counts, leftZero: true
+    });
+    $('disrSearchLegend').innerHTML =
+      '<span class="li"><span class="sw" style="background:' + C_AGE + '"></span>Average reference age, years (left)</span>' +
+      '<span class="li"><span class="sw" style="background:' + C_POP + '"></span>Median reference popularity, citations (right)</span>';
+    $('disrSearchSub').innerHTML = 'Depth of search by team size — the paper’s Fig. 4. Reference age is how far back a paper reaches; reference popularity is the median citation count of the work it builds on. Popularity is a rough proxy while citation coverage fills in.';
+  }
+
+  // Plot D — relative ratio of the extremes (top-5% D, top-5% cited) by team size.
+  function renderDisrRatio(rows) {
+    var allD = rows.map(function (p) { return p.d; }).sort(function (a, b) { return a - b; });
+    var allC = rows.map(function (p) { return p.c; }).sort(function (a, b) { return a - b; });
+    var dThr = quantileSorted(allD, 0.95), cThr = quantileSorted(allC, 0.95);
+    var stats = disrTeamStats(rows).filter(function (s) { return s.n >= DISR_MIN_BIN; });
+    if (stats.length < 2) { $('disrRatio').innerHTML = '<div class="chart-empty">Not enough citation-graph data across team sizes in this slice yet.</div>'; $('disrRatioLegend').innerHTML = ''; return; }
+    // recompute per-bin shares against the thresholds
+    var byT = {}; stats.forEach(function (s) { byT[s.t] = { nd: 0, nc: 0, n: 0 }; });
+    rows.forEach(function (p) {
+      var t = Math.min(Math.max(p.t || 1, 1), DISR_CAP); if (!byT[t]) return;
+      byT[t].n++; if (p.d >= dThr) byT[t].nd++; if (p.c >= cThr) byT[t].nc++;
+    });
+    var cats = teamCats(stats), counts = stats.map(function (s) { return s.n; });
+    var series = [
+      { name: 'High disruption', color: C_DISRUPT, axis: 'L', pts: stats.map(function (s) { var b = byT[s.t]; return b.n ? (b.nd / b.n) / 0.05 : null; }) },
+      { name: 'High impact', color: C_CITE, axis: 'L', pts: stats.map(function (s) { var b = byT[s.t]; return b.n ? (b.nc / b.n) / 0.05 : null; }) }
+    ];
+    $('disrRatio').innerHTML = catLineChart(cats, series, {
+      leftLabel: 'Relative ratio (observed / expected)', leftColor: NAVY, refLine: 1.0, leftZero: true, counts: counts
+    });
+    $('disrRatioLegend').innerHTML =
+      '<span class="li"><span class="sw" style="background:' + C_DISRUPT + '"></span>Top-5% disruptive (high D)</span>' +
+      '<span class="li"><span class="sw" style="background:' + C_CITE + '"></span>Top-5% cited (high impact)</span>';
+    $('disrRatioSub').innerHTML = 'The paper’s Fig. 2d: small teams should over-produce the most-disruptive work, large teams the most-cited — the two lines crossing the dashed 1.0 line in opposite directions.';
+  }
+
+  function disrPaperTable(list) {
+    if (!list.length) return '<div class="chart-empty">No data in the selected scope.</div>';
+    var html = '<table class="cited"><thead><tr><th>Paper</th><th>Team</th><th style="text-align:right">D</th></tr></thead><tbody>';
+    list.forEach(function (p) {
+      var url = p.doi ? 'https://doi.org/' + p.doi : '';
+      var ti = trunc(p.ti || '(untitled)', 74);
+      var title = url ? '<a href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(ti) + '</a>' : esc(ti);
+      var col = p.d >= 0 ? C_DISRUPT : C_DEVELOP;
+      var nfMeta = p.nf != null ? ' · cited by ' + fmt(p.nf) + ' here' : '';
+      html += '<tr><td class="ti">' + title + '<div class="meta">' + esc(JMAP[p.j] ? JMAP[p.j].name : p.j) + ' · ' + esc(p.y) + nfMeta + '</div></td>' +
+        '<td class="meta">' + fmt(p.t) + '</td>' +
+        '<td class="cby" style="color:' + col + '">' + (p.d > 0 ? '+' : '') + p.d.toFixed(3) + '</td></tr>';
+    });
+    return html + '</tbody></table>';
+  }
+  // Highlight tables gate on a minimum in-catalog citation base so they surface
+  // genuinely disruptive/developing work, not 1-citation ±1 artefacts. Fall back
+  // to the full set if the robust pool is too thin in the current slice.
+  function renderDisrTopPapers(rows) {
+    var robust = rows.filter(function (p) { return (p.nf || 0) >= DISR_ROBUST_NF; });
+    var pool = robust.length >= 12 ? robust : rows;
+    var byD = pool.slice().sort(function (a, b) { return b.d - a.d || b.c - a.c; });
+    $('disrTopDisrupt').innerHTML = disrPaperTable(byD.slice(0, 10));
+    $('disrTopDevelop').innerHTML = disrPaperTable(byD.slice().sort(function (a, b) { return a.d - b.d || b.c - a.c; }).slice(0, 10));
+  }
+
+  // Author disruptiveness: mean D over every in-scope paper an author (co-)wrote.
+  function disrAuthorList(rows, minN) {
+    var agg = {};
+    rows.forEach(function (p) { (p.au || []).forEach(function (id) { var a = agg[id] || (agg[id] = { n: 0, sd: 0 }); a.n++; a.sd += p.d; }); });
+    var list = [];
+    for (var id in agg) { var a = agg[id]; if (a.n >= minN) list.push({ id: +id, name: DISR.authors[id] || '?', n: a.n, meanD: a.sd / a.n }); }
+    return list;
+  }
+  function renderDisrAuthors(rows) {
+    // require ≥3 in-scope scored papers when the slice is rich, else ≥2, else ≥1.
+    var min = 3, list = disrAuthorList(rows, min);
+    if (list.length < 8) { min = 2; list = disrAuthorList(rows, min); }
+    if (list.length < 6) { min = 1; list = disrAuthorList(rows, min); }
+    var disr = list.slice().sort(function (a, b) { return b.meanD - a.meanD || b.n - a.n; }).slice(0, 12);
+    var dev = list.slice().sort(function (a, b) { return a.meanD - b.meanD || b.n - a.n; }).slice(0, 12);
+    $('disrAuthDisrupt').innerHTML = disrAuthorBars(disr, C_DISRUPT);
+    $('disrAuthDevelop').innerHTML = disrAuthorBars(dev, C_DEVELOP);
+    $('disrAuthorsSub').innerHTML = 'Each author’s <em>D<sub>j</sub></em> — the mean of <em>D</em> over every paper they wrote or co-wrote in scope (minimum <strong>' + min + '</strong> scored paper' + (min === 1 ? '' : 's') + ').';
+  }
+  function disrAuthorBars(list, color) {
+    if (!list.length) return '<div class="chart-empty">No authors in scope.</div>';
+    var rowH = 24, gap = 7, L = 168, R = 62, T = 4, W = 760;
+    var H = T * 2 + list.length * rowH + (list.length - 1) * gap;
+    var maxAbs = 0; list.forEach(function (a) { if (Math.abs(a.meanD) > maxAbs) maxAbs = Math.abs(a.meanD); });
+    maxAbs = maxAbs || 1;
+    var svg = svgEl(W, H);
+    list.forEach(function (a, i) {
+      var y = T + i * (rowH + gap);
+      var w = (Math.abs(a.meanD) / maxAbs) * (W - L - R);
+      svg += '<text x="' + (L - 10) + '" y="' + (y + rowH / 2 + 4) + '" text-anchor="end" font-size="12" fill="#241a1e">' + esc(trunc(a.name, 24)) + '</text>' +
+        '<rect x="' + L + '" y="' + y + '" width="' + Math.max(1, w).toFixed(1) + '" height="' + rowH + '" rx="3.5" fill="' + color + '"/>' +
+        '<text x="' + (L + Math.max(1, w) + 7).toFixed(1) + '" y="' + (y + rowH / 2 + 4) + '" font-size="11.5" fill="' + MUTED + '" font-weight="600">' + (a.meanD > 0 ? '+' : '') + a.meanD.toFixed(3) + ' · ' + a.n + '</text>';
+    });
+    return svg + '</svg>';
   }
 
   // ── filter UI wiring ────────────────────────────────────────────────────

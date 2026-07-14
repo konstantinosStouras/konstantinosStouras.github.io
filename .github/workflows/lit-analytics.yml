@@ -1,13 +1,15 @@
 name: lit — update analytics summary
 
 # Pre-aggregates the whole Lit corpus (fun/lit/data/ + fun/lit/data-ft50/) into
-# the two small, committed JSON files the analytics dashboard reads:
-#   fun/lit/analytics/data.json     (per-journal × per-year aggregates, top-cited)
-#   fun/lit/analytics/authors.json  (per-author aggregates)
+# the small, committed JSON files the analytics dashboard reads:
+#   fun/lit/analytics/data.json        (per-journal × per-year aggregates, top-cited)
+#   fun/lit/analytics/authors.json     (per-author aggregates)
+#   fun/lit/analytics/disruption.json  (per-paper disruption index D over the
+#                                       in-catalog citation graph, fun/lit/data-refs/)
 # so stouras.com/fun/lit/analytics/ can draw every chart client-side without
 # ever downloading the ~270 MB of raw papers. Purely offline: reads only the
-# static datasets already committed by the lit / lit-ft50 data builds.
-# See fun/lit/_scraper/build-analytics.mjs.
+# static datasets already committed by the lit / lit-ft50 data + reference builds.
+# See fun/lit/_scraper/build-analytics.mjs and build-disruption.mjs.
 
 on:
   schedule:
@@ -21,6 +23,7 @@ on:
     paths:
       - '.github/workflows/lit-analytics.yml'
       - 'fun/lit/_scraper/build-analytics.mjs'
+      - 'fun/lit/_scraper/build-disruption.mjs'
 
 # Never let two analytics builds race each other.
 concurrency:
@@ -45,6 +48,12 @@ jobs:
       - name: Build analytics summary
         run: node fun/lit/_scraper/build-analytics.mjs
 
+      - name: Build disruption analysis
+        # Team-science measures (disruption index D) over the in-catalog citation
+        # graph (fun/lit/data-refs/). Reads only committed files; grows with the
+        # reference graph. Harmless if data-refs/ is empty (writes 0 papers).
+        run: node fun/lit/_scraper/build-disruption.mjs
+
       - name: Commit refreshed analytics
         # Only master carries the committed summary. Feature branches (e.g. a PR
         # that edits the aggregator) still run the build above as a check but do
@@ -56,7 +65,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add fun/lit/analytics/data.json fun/lit/analytics/authors.json
+          git add fun/lit/analytics/data.json fun/lit/analytics/authors.json fun/lit/analytics/disruption.json
           if git diff --cached --quiet; then
             echo "No analytics changes — nothing to commit."
             exit 0
@@ -82,5 +91,11 @@ jobs:
           if [ -f fun/lit/analytics/data.json ]; then
             echo '```json' >> "$GITHUB_STEP_SUMMARY"
             node -e 'const d=require("./fun/lit/analytics/data.json");console.log(JSON.stringify({generated:d.generated,years:[d.yearMin,d.yearMax],totals:d.totals},null,2))' >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f fun/lit/analytics/disruption.json ]; then
+            echo '**Disruption analysis**' >> "$GITHUB_STEP_SUMMARY"
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            node -e 'const d=require("./fun/lit/analytics/disruption.json");console.log(JSON.stringify(d.totals,null,2))' >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
           fi

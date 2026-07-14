@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "disruption-analytics",
+      "date": "2026-07-14",
+      "title": "Team science: which work disrupts, and which develops",
+      "summary": "The Data Analytics page now reproduces the key measures of Wu, Wang & Evans (Nature 2019): a disruption index D for each paper and author, and how disruption, impact, and search depth change with team size — all filterable by journal, type and year, and sharpening as the citation graph grows.",
+      "url": "https://stouras.com/fun/lit/analytics/"
+    },
+    {
       "id": "citations",
       "date": "2026-05-20",
       "title": "Papers now show their citation counts",
