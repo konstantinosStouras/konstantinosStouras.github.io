@@ -49,6 +49,10 @@
  *   node alerts-mailer.mjs --test-emails flushes the one-off "Send me a test
  *                                        e-mail" queue (users/{uid}/testEmails)
  *                                        the page writes; add --dry-run to print
+ *   node alerts-mailer.mjs --rewind      one-off recovery: clears the high-water
+ *                                        marks on RECENTLY-created alerts so the
+ *                                        next run re-checks them from their
+ *                                        creation day; add --dry-run to preview
  *   node alerts-mailer.mjs --selftest    runs the matching/rendering self-tests
  *                                        (no network, no deps needed) and exits
  */
@@ -530,21 +534,38 @@ function renderTestEmail(req, papers, ctx, changelog) {
 const FREQ_MIN_DAYS = { immediate: 0, daily: 0, weekly: 6.5, monthly: 27.5 };
 const DAY_MS = 86400000;
 
+// Start of the UTC day containing `d` (that day at 00:00:00Z). A paper's
+// "Date Added" and a changelog entry's `date` are calendar days that parseAdded
+// floors to midnight UTC, whereas the high-water marks (lastCheckedAt /
+// createdAt) are precise timestamps. Comparing a midnight-stamped item against a
+// mid-day mark with `>` silently drops everything dated *today* — e.g. a paper
+// added today (00:00Z) is never `>` a mark of today 10:00Z — which is exactly
+// how a subscriber created today, or an alert already checked today, misses
+// today's papers. So the window boundary is floored to a whole day to match the
+// data's day granularity. See parseAdded.
+function dayStart(d) { return new Date(Math.floor(d.getTime() / DAY_MS) * DAY_MS); }
+
+// Day-floored lower bound (exclusive) of an alert's "new since last checked"
+// window, shared by the paper and feature sides so the two stay consistent.
+//  · Already checked before → everything up to and including the last check's
+//    DAY was covered, so the window opens at dayStart(last) and a strictly-later
+//    added-day is new. (An item dated the same day as the last run was sent by
+//    that run, so it is excluded — no duplicates.)
+//  · First-ever evaluation  → look back to the alert's creation DAY *inclusive*
+//    (a subscriber who signs up today still gets items added earlier today),
+//    capped at 31 days so a brand-new alert never blasts a big backlog.
+function windowStartFor(last, created, now) {
+  if (last) return dayStart(last);
+  const capMs = dayStart(now).getTime() - 31 * DAY_MS;
+  const baseMs = created ? dayStart(created).getTime() - DAY_MS : capMs;
+  return new Date(Math.max(baseMs, capMs));
+}
+
 // Compute what to do for one alert given `now` and the recent papers.
 // Returns { due, matches, windowStart }.
 function evaluateAlert(alert, papers, now, ctx) {
   const freq = FREQ_MIN_DAYS[alert.frequency] != null ? alert.frequency : 'weekly';
-  const last = toDate(alert.lastCheckedAt);
-  const created = toDate(alert.createdAt);
-  let windowStart;
-  if (last) windowStart = last;
-  else {
-    // First evaluation: look back from creation, but cap the first window so a
-    // brand-new alert never blasts a big backlog.
-    const base = created || new Date(now.getTime() - 31 * DAY_MS);
-    const cap = new Date(now.getTime() - 31 * DAY_MS);
-    windowStart = base > cap ? base : cap;
-  }
+  const windowStart = windowStartFor(toDate(alert.lastCheckedAt), toDate(alert.createdAt), now);
   const elapsedDays = (now - windowStart) / DAY_MS;
   const due = elapsedDays >= (FREQ_MIN_DAYS[freq] - 0.05);   // small slack for cron jitter
   if (!due) return { due: false, matches: [], windowStart };
@@ -576,14 +597,7 @@ function evaluateFeatures(alert, changelog, now) {
   if (!c.features) return { active: false, due: false, features: [], windowStart: null };
   const freq = FREQ_MIN_DAYS[alert.frequency] != null ? alert.frequency : 'weekly';
   const last = toDate(alert.lastFeatureCheckedAt) || toDate(alert.lastCheckedAt);
-  const created = toDate(alert.createdAt);
-  let windowStart;
-  if (last) windowStart = last;
-  else {
-    const base = created || new Date(now.getTime() - 31 * DAY_MS);
-    const cap = new Date(now.getTime() - 31 * DAY_MS);
-    windowStart = base > cap ? base : cap;
-  }
+  const windowStart = windowStartFor(last, toDate(alert.createdAt), now);
   const elapsedDays = (now - windowStart) / DAY_MS;
   const due = elapsedDays >= (FREQ_MIN_DAYS[freq] - 0.05);   // small slack for cron jitter
   if (!due) return { active: true, due: false, features: [], windowStart };
@@ -808,6 +822,54 @@ async function sendTestEmails({ dryRun }) {
   if (errors) process.exitCode = 1;
 }
 
+// ── Rewind (one-off recovery) ─────────────────────────────────────────────────
+// Clears the paper/feature high-water marks (lastCheckedAt / lastFeatureCheckedAt)
+// on RECENTLY-created alerts so the next normal run re-evaluates them from their
+// creation day. This recovers items that a run advanced a mark past WITHOUT
+// sending — e.g. the day-boundary window bug that dropped everything dated the
+// same day an alert was created/checked. It is scoped to alerts created within
+// REWIND_LOOKBACK_DAYS (so it can never re-blast a long-standing subscriber's
+// back-catalogue) and only ever clears marks, never sends. Add --dry-run to
+// preview. After it runs, a normal run (scheduled or dispatched) delivers.
+const REWIND_LOOKBACK_DAYS = 3;
+async function runRewind({ dryRun }) {
+  if (!process.env.FIREBASE_SERVICE_ACCOUNT && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    console.log('Rewind: no Firebase credentials configured — nothing to do.');
+    return;
+  }
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - REWIND_LOOKBACK_DAYS * DAY_MS);
+
+  const { default: admin } = await import('firebase-admin');
+  if (!admin.apps.length) {
+    const sa = process.env.FIREBASE_SERVICE_ACCOUNT;
+    if (sa) admin.initializeApp({ credential: admin.credential.cert(JSON.parse(sa)) });
+    else admin.initializeApp();
+  }
+  const db = admin.firestore();
+  const FieldValue = admin.firestore.FieldValue;
+
+  const snap = await db.collectionGroup('alerts').get();
+  console.log(`Rewind: scanning ${snap.size} alert(s); resetting marks on those created since ${cutoff.toISOString()}. dryRun=${dryRun}`);
+  let reset = 0, skipped = 0, errors = 0;
+  for (const doc of snap.docs) {
+    const a = doc.data() || {};
+    const created = toDate(a.createdAt);
+    const hasMark = a.lastCheckedAt || a.lastFeatureCheckedAt;
+    // Only touch alerts created recently AND carrying a mark. No createdAt → skip
+    // (can't bound the look-back safely).
+    if (!created || created < cutoff || !hasMark) { skipped++; continue; }
+    console.log(`  ${dryRun ? '[dry-run] would reset' : 'reset'} "${a.name || '(unnamed)'}" (created ${created.toISOString()})`);
+    if (dryRun) { reset++; continue; }
+    try {
+      await doc.ref.set({ lastCheckedAt: FieldValue.delete(), lastFeatureCheckedAt: FieldValue.delete() }, { merge: true });
+      reset++;
+    } catch (e) { errors++; console.error('  reset failed:', e && e.message); }
+  }
+  console.log(`Rewind done: ${dryRun ? 'would reset' : 'reset'}=${reset}, skipped=${skipped}, errors=${errors}. Run the mailer normally next to deliver.`);
+  if (errors) process.exitCode = 1;
+}
+
 // ── Self-test (no network / no deps) ──────────────────────────────────────────
 function selftest() {
   const ctx = makeCtx();
@@ -877,6 +939,26 @@ function selftest() {
   ok('monthly due after 30 days', evaluateAlert(mk({ frequency: 'monthly', lastCheckedAt: new Date('2026-06-13T06:00:00Z') }), recent, now, ctx).due);
   ok('paper before window excluded', (() => { const r = evaluateAlert(mk({ lastCheckedAt: new Date('2026-07-13T03:00:00Z') }), recent, now, ctx); return r.due && r.matches.length === 0; })());
 
+  // ── Same-day window (regression test for the day-boundary bug) ──────────────
+  // A day-only "Date Added" parses to midnight UTC, while createdAt/lastCheckedAt
+  // are mid-day timestamps. An alert CREATED TODAY must still match papers added
+  // today; pre-fix the strict `>` against a mid-day mark dropped them all.
+  const nowSD = new Date('2026-07-14T10:00:00Z');
+  const todayPaper = [P({ _added: new Date('2026-07-14T00:00:00Z') })];   // "Date Added":"2026-07-14"
+  ok('alert created today matches a paper added today (first eval)',
+     evaluateAlert({ frequency: 'immediate', criteria: { allPapers: true }, createdAt: new Date('2026-07-14T09:00:00Z') }, todayPaper, nowSD, ctx).matches.length === 1);
+  // Steady state: the day after a run, today's already-sent paper is NOT re-sent,
+  // but a genuinely new (next-day) paper is.
+  const nowNext = new Date('2026-07-15T10:00:00Z');
+  const mixed = [P({ _added: new Date('2026-07-14T00:00:00Z') }), P({ _added: new Date('2026-07-15T00:00:00Z') })];
+  const nextEval = evaluateAlert({ frequency: 'daily', criteria: { allPapers: true }, lastCheckedAt: new Date('2026-07-14T10:00:00Z') }, mixed, nowNext, ctx);
+  ok('next-day run skips today\'s already-sent paper, keeps the new one',
+     nextEval.matches.length === 1 && nextEval.matches[0]._added.getTime() === new Date('2026-07-15T00:00:00Z').getTime());
+  // The same fix applies to feature updates dated today.
+  const clToday = [{ id: 'x', title: 'Shipped today', summary: '', url: SITE_URL, date: '2026-07-14', _added: new Date('2026-07-14T00:00:00Z') }];
+  ok('feature dated today reaches an alert created today',
+     evaluateFeatures({ criteria: { features: true }, frequency: 'immediate', createdAt: new Date('2026-07-14T09:00:00Z') }, clToday, nowSD).features.length === 1);
+
   // e-mail rendering
   const em = renderEmail({ name: 'FT50 · pre-prints', criteria: { jtype: ['ft50'], preprintOnly: true } },
                          [P({ Preprint: 'https://arxiv.org/abs/2410.13767' })]);
@@ -922,9 +1004,14 @@ function selftest() {
   // existing subscriber with only a PAPER mark → feature window falls back to it (no history blast)
   const fe3 = evaluateFeatures({ criteria: { features: true }, frequency: 'daily', lastCheckedAt: new Date('2026-07-12T06:00:00Z') }, CL, nowF);
   ok('feature window falls back to lastCheckedAt (no back-catalogue blast)', fe3.due && fe3.features.length === 0);
-  // brand-new subscriber (no marks): first window capped at ~31 days, so 05-01 is excluded
+  // brand-new subscriber (no marks): first window includes items dated on/after
+  // the creation DAY (07-01 'refs' and 07-10 'citations'), yet is still capped so
+  // the far-older 05-01 entry is excluded. (Pre-fix the creation-day 07-01 entry
+  // was wrongly dropped because createdAt is compared with `>` at sub-day
+  // precision — this is the same day-boundary bug the fix removes.)
   const fe4 = evaluateFeatures({ criteria: { features: true }, frequency: 'daily', createdAt: new Date('2026-07-01T00:00:00Z') }, CL, nowF);
-  ok('new subscriber first window is capped', fe4.due && fe4.features.length === 1 && fe4.features[0].id === 'citations');
+  ok('new subscriber first window includes creation-day item, excludes far-older',
+     fe4.due && fe4.features.length === 2 && fe4.features.some(f => f.id === 'refs') && !fe4.features.some(f => f.id === 'old'));
   // digest rendering — single vs multi subject, body, footer
   const fd1 = renderFeatureDigest([CL[0]]);
   ok('feature digest single subject names the feature', /new feature — Papers now show citation counts/.test(fd1.subject));
@@ -1053,5 +1140,6 @@ if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
   else if (args.has('--scan')) { scan(argv); }
   else if (args.has('--announce')) { runAnnounce(argv).catch(e => { console.error(e); process.exit(1); }); }
   else if (args.has('--test-emails')) { sendTestEmails({ dryRun: args.has('--dry-run') }).catch(e => { console.error(e); process.exit(1); }); }
+  else if (args.has('--rewind')) { runRewind({ dryRun: args.has('--dry-run') }).catch(e => { console.error(e); process.exit(1); }); }
   else { run({ dryRun: args.has('--dry-run') }).catch(e => { console.error(e); process.exit(1); }); }
 }
