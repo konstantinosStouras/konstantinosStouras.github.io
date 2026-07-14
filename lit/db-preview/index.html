@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>The Lit — SQLite range-served search (proof of concept)</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 15px/1.5 -apple-system, system-ui, sans-serif; margin: 0; padding: 1.2rem; max-width: 1000px; }
+  h1 { font-size: 1.25rem; margin: 0 0 .2rem; }
+  .sub { color: #888; margin: 0 0 1rem; font-size: .85rem; }
+  .panel { border: 1px solid #8884; border-radius: 8px; padding: .8rem 1rem; margin-bottom: 1rem; }
+  label { font-size: .8rem; color: #999; display: block; margin: .3rem 0 .1rem; }
+  input[type=text] { width: 100%; box-sizing: border-box; padding: .35rem .5rem; border: 1px solid #8886; border-radius: 6px; background: transparent; color: inherit; }
+  .row { display: flex; gap: .6rem; flex-wrap: wrap; }
+  .row > div { flex: 1 1 180px; }
+  .chips { display: flex; gap: .4rem; flex-wrap: wrap; margin: .4rem 0; }
+  .chip { padding: .2rem .6rem; border: 1px solid #8886; border-radius: 999px; cursor: pointer; font-size: .8rem; user-select: none; }
+  .chip.on { background: #2d7; border-color: #2d7; color: #012; }
+  button { padding: .4rem .9rem; border: 1px solid #8886; border-radius: 6px; background: #4488ff22; color: inherit; cursor: pointer; font-size: .9rem; }
+  .stat { display: inline-block; margin-right: 1.2rem; }
+  .stat b { font-size: 1.1rem; }
+  .num { color: #2d7; }
+  #status { font-size: .85rem; color: #888; }
+  .res { border-top: 1px solid #8883; padding: .4rem 0; }
+  .res .t { font-weight: 600; }
+  .res .m { font-size: .8rem; color: #999; }
+  code { background: #8882; padding: .05rem .3rem; border-radius: 4px; font-size: .8rem; }
+</style>
+</head>
+<body>
+<h1>The Lit — range-served SQLite search <span style="font-weight:400;color:#888;font-size:.8rem">(proof of concept)</span></h1>
+<p class="sub">Every query below is answered by a single <code>lit.db</code> fetched with HTTP <b>Range</b> requests — only the pages a query touches cross the wire. No papers-*.json is downloaded.</p>
+
+<div class="panel" id="statusPanel"><span id="status">initialising SQLite (WASM) worker…</span></div>
+
+<div class="panel">
+  <label>Journal type</label>
+  <div class="chips" id="jtypes"></div>
+  <div class="row">
+    <div><label>Title contains</label><input type="text" id="fTitle" placeholder='e.g. market  or  "revenue management"'></div>
+    <div><label>Author (prefix of a name)</label><input type="text" id="fAuthor" placeholder="e.g. bertsim"></div>
+  </div>
+  <div class="row">
+    <div><label>Abstract contains</label><input type="text" id="fAbstract" placeholder="e.g. pricing"></div>
+    <div><label>Affiliation contains</label><input type="text" id="fAff" placeholder="e.g. mit"></div>
+    <div style="flex:0 0 auto"><label>Year</label><input type="text" id="fYear" placeholder="2024" style="width:6rem"></div>
+  </div>
+  <div class="chips" style="margin-top:.5rem">
+    <label style="margin:0;display:flex;align-items:center;gap:.3rem"><input type="checkbox" id="fPrep"> has pre-print</label>
+    <button id="go" style="margin-left:auto">Search</button>
+  </div>
+</div>
+
+<div class="panel" id="metrics" style="display:none">
+  <span class="stat">Results <b class="num" id="mX">–</b></span>
+  <span class="stat">of <b id="mY">–</b> in scope</span>
+  <span class="stat">Latency <b class="num" id="mMs">–</b> ms</span>
+  <span class="stat">Bytes over wire <b class="num" id="mBytes">–</b></span>
+  <span class="stat">Range requests <b id="mReqs">–</b></span>
+</div>
+
+<div id="results"></div>
+
+<script src="/lit/sqlite/lit-query.js"></script>
+<script src="/lit/sqlite/index.js"></script>
+<script>
+const JTYPES = [['utd24','UTD24'],['ft50','FT50'],['abs4','ABS 4/4*'],['abs3','ABS 3']];
+const selJtype = new Set();
+const jt = document.getElementById('jtypes');
+JTYPES.forEach(([k,l]) => { const c=document.createElement('span'); c.className='chip'; c.textContent=l; c.onclick=()=>{ c.classList.toggle('on'); selJtype.has(k)?selJtype.delete(k):selJtype.add(k); }; jt.appendChild(c); });
+
+let DB = null, FILE_LEN = 0;
+
+async function makeWorker() {
+  const BASE = '/lit/data/';
+  let cfg = null;
+  // Prefer chunked mode (data/db/lit-db.json manifest) — required on Pages,
+  // where a single > 100 MB .db can't be committed. Fall back to a single-file
+  // lit.db in full mode if there's no manifest.
+  try {
+    const m = await fetch(BASE + 'db/lit-db.json');
+    if (m.ok) {
+      const mf = await m.json();
+      cfg = { serverMode: 'chunked', urlPrefix: BASE + 'db/' + mf.base, serverChunkSize: mf.serverChunkSize, databaseLengthBytes: mf.databaseLengthBytes, suffixLength: mf.suffixLength, requestChunkSize: 8192 };
+    }
+  } catch (e) {}
+  if (!cfg) cfg = { serverMode: 'full', url: BASE + 'lit.db', requestChunkSize: 8192, fileLength: FILE_LEN };
+  const qp = new URLSearchParams(location.search);
+  if (qp.has('heads')) cfg.maxReadHeads = parseInt(qp.get('heads'));
+  if (qp.has('speed')) cfg.maxReadSpeed = parseInt(qp.get('speed'));
+  return await createDbWorker([{ from: 'inline', config: cfg }], '/lit/sqlite/sqlite.worker.js', '/lit/sqlite/sql-wasm.wasm');
+}
+
+async function init() {
+  const st = document.getElementById('status');
+  try {
+    FILE_LEN = parseInt(await (await fetch('/lit/data/lit.db.length')).text()) || undefined;
+  } catch (e) { FILE_LEN = undefined; }
+  const t0 = performance.now();
+  const worker = await makeWorker();
+  DB = worker.db;
+  const n = (await DB.query('SELECT COUNT(*) c FROM papers'))[0].c;
+  st.innerHTML = `ready · <b>${n.toLocaleString()}</b> papers in <code>lit.db</code> · worker init ${(performance.now()-t0|0)} ms · ` +
+    `SharedArrayBuffer: <b>${typeof SharedArrayBuffer==='undefined'?'absent':'present'}</b> · crossOriginIsolated: <b>${!!self.crossOriginIsolated}</b>`;
+  window.__ready = true;
+}
+
+function readSel() {
+  return {
+    journal: [], jtype: [...selJtype],
+    year: document.getElementById('fYear').value.trim() ? [document.getElementById('fYear').value.trim()] : [],
+    title: [], author: [], authorIdentity: {}, affiliation: [], abstract: [],
+    preprintOnly: document.getElementById('fPrep').checked,
+  };
+}
+function readLive() {
+  const lc = (id) => document.getElementById(id).value.trim().toLowerCase();
+  return { title: lc('fTitle'), author: lc('fAuthor'), affiliation: lc('fAff'), abstract: lc('fAbstract') };
+}
+function toSets(o) { return { journal:new Set(o.journal), jtype:new Set(o.jtype), year:new Set(o.year), title:new Set(o.title), author:new Set(o.author), authorIdentity:o.authorIdentity||{}, affiliation:new Set(o.affiliation), abstract:new Set(o.abstract), preprintOnly:!!o.preprintOnly }; }
+
+function residualCols(residuals) {
+  const cols = new Set(['p.id']);
+  let needAbs = false;
+  residuals.forEach(r => {
+    if (r.col === 'abstract' || r.col === 'significance') { cols.add('a.' + r.col); needAbs = true; }
+    else cols.add('p.' + r.col);
+  });
+  return { cols: [...cols].join(','), needAbs };
+}
+// The page's default year-desc comparator: string localeCompare on Year, tie
+// broken by Volume string localeCompare (see applyFilters in index.html).
+function sortDisplay(rows) {
+  return rows.sort((a, b) =>
+    (b.year_raw || '').localeCompare(a.year_raw || '') || (b.volume || '').localeCompare(a.volume || ''));
+}
+
+// Core: run a filter the production way against a given db handle.
+async function runWith(db, selObj, liveObj) {
+  const sel = toSets(selObj), live = liveObj;
+  const q = LitQuery.buildFilter(sel, live, {});
+  const t0 = performance.now();
+  const sc = LitQuery.buildScope(sel);
+  const Y = (await db.query(`SELECT COUNT(*) c FROM papers p WHERE ${sc.where || '1'}`, sc.params))[0].c;
+  // Sort/LIMIT on the INTEGER year (indexed → no table scan / temp sort), then
+  // JS re-sort the small window by the page's exact string comparator.
+  const DISP = 'p.id,p.title,p.authors,p.year_raw,p.volume,p.journal,p.doi';
+  // Rows are stored year-desc, so FTS5's NATURAL rowid-ascending output is
+  // already newest-first. We deliberately add NO `ORDER BY` for FTS queries:
+  // SQLite 3.35 doesn't know the doclist is pre-sorted, so an explicit ORDER BY
+  // forces a TEMP B-TREE that materializes every match (tens of MB). Streaming
+  // `LIMIT 250` off the doclist reads only the first 250; JS re-sorts them into
+  // the page's exact comparator. Facet-only queries use the (flag,year,id) index.
+  const ORDER = q.joins ? 'LIMIT 250' : 'ORDER BY p.year DESC, p.id DESC LIMIT 250';
+  let X, rows;
+  if (q.residuals.length) {
+    // quoted / author terms: fetch candidate text (abstract from papers_abs) and
+    // residual-verify. Candidate sets are small (these terms are selective).
+    const rc = residualCols(q.residuals);
+    const absJoin = rc.needAbs ? ' LEFT JOIN papers_abs a ON a.id=p.id ' : '';
+    const cand = await db.query(`SELECT ${rc.cols} FROM papers p ${q.joins}${absJoin} WHERE ${q.where}`, q.params);
+    const matchedIds = new Set(LitQuery.applyResiduals(cand, q.residuals).map(r => r.id));
+    X = matchedIds.size;
+    const disp = await db.query(`SELECT ${DISP} FROM papers p ${q.joins} WHERE ${q.where} ${ORDER}`, q.params);
+    rows = sortDisplay(disp.filter(r => matchedIds.has(r.id))).slice(0, 50);
+  } else if (q.ftsOnly) {
+    // pure substring: count on the FTS index alone — no join into papers.
+    X = (await db.query('SELECT COUNT(*) c FROM papers_tri WHERE papers_tri MATCH ?', q.params))[0].c;
+    rows = sortDisplay(await db.query(`SELECT ${DISP} FROM papers p ${q.joins} WHERE ${q.where} ${ORDER}`, q.params)).slice(0, 50);
+  } else {
+    X = (await db.query(`SELECT COUNT(*) c FROM papers p ${q.joins} WHERE ${q.where}`, q.params))[0].c;
+    rows = sortDisplay(await db.query(`SELECT ${DISP} FROM papers p ${q.joins} WHERE ${q.where} ${ORDER}`, q.params)).slice(0, 50);
+  }
+  return { X, Y, ms: performance.now() - t0, rows };
+}
+
+// Optional wire-byte accounting: only the local benchmark server answers
+// /__reset and /__bytes. On real GitHub Pages these 404, so we degrade to
+// null (the byte stat shows "—") and search still works normally.
+async function measureReset() { try { const r = await fetch('/__reset'); return r.ok; } catch (e) { return false; } }
+async function measureBytes() { try { const r = await fetch('/__bytes'); return r.ok ? await r.json() : null; } catch (e) { return null; } }
+
+// Warm run against the shared session worker (self-measures wire bytes locally).
+async function run(selObj, liveObj) {
+  const measured = await measureReset();
+  const r = await runWith(DB, selObj, liveObj);
+  const b = measured ? await measureBytes() : null;
+  return { ...r, bytes: b ? b.bytes : null, reqs: b ? b.reqs : null };
+}
+
+// COLD run: fresh worker (empty page cache) so we measure the true per-query
+// wire fetch. Bytes are reset AFTER schema load, isolating the query's fetch
+// from the one-time worker-init cost (reported separately by __initCost).
+window.__freshRun = async (selObj, liveObj) => {
+  const w = await makeWorker();
+  await w.db.query('SELECT COUNT(*) c FROM papers');   // force schema/init pages
+  await fetch('/__reset');
+  const r = await runWith(w.db, selObj, liveObj);
+  const b = await (await fetch('/__bytes')).json();
+  return { ...r, bytes: b.bytes, reqs: b.reqs };
+};
+
+// Measure wire bytes for one raw SQL statement on a fresh worker.
+window.__measureSql = async (sql, params) => {
+  const w = await makeWorker();
+  await w.db.query('SELECT COUNT(*) c FROM papers');
+  await fetch('/__reset');
+  const t = performance.now();
+  const rows = await w.db.query(sql, params || []);
+  const ms = performance.now() - t;
+  const b = await (await fetch('/__bytes')).json();
+  return { n: rows.length, ms, bytes: b.bytes, reqs: b.reqs };
+};
+
+// EXPLAIN QUERY PLAN via the worker (what plan the WASM SQLite actually picks).
+window.__eqp = async (sql, params) => {
+  const rows = await DB.query('EXPLAIN QUERY PLAN ' + sql, params || []);
+  return rows.map(r => r.detail);
+};
+
+// One-time per-session init cost: fresh worker + first COUNT(*).
+window.__initCost = async () => {
+  await fetch('/__reset');
+  const w = await makeWorker();
+  await w.db.query('SELECT COUNT(*) c FROM papers');
+  const b = await (await fetch('/__bytes')).json();
+  return b;
+};
+
+document.getElementById('go').onclick = async () => {
+  if (!DB) return;
+  document.getElementById('go').textContent = '…';
+  const r = await run(readSel(), readLive());
+  document.getElementById('metrics').style.display = '';
+  document.getElementById('mX').textContent = r.X.toLocaleString();
+  document.getElementById('mY').textContent = r.Y.toLocaleString();
+  document.getElementById('mMs').textContent = r.ms.toFixed(0);
+  document.getElementById('mBytes').textContent = r.bytes == null ? '—' : (r.bytes/1024).toFixed(0) + ' KB';
+  document.getElementById('mReqs').textContent = r.reqs == null ? '—' : r.reqs;
+  document.getElementById('results').innerHTML = r.rows.map(x =>
+    `<div class="res"><div class="t">${(x.title||'').replace(/</g,'&lt;')}</div><div class="m">${(x.authors||'').replace(/</g,'&lt;')} · ${x.journal||''} · ${x.year_raw||''}</div></div>`).join('') || '<div class="res m">no matches</div>';
+  document.getElementById('go').textContent = 'Search';
+};
+
+// Benchmark hook for headless driving.
+window.__run = run;
+init().catch(e => {
+  document.getElementById('status').innerHTML =
+    'could not open <code>lit.db</code> — this prototype needs the database built and served at ' +
+    '<code>/lit/data/lit.db</code> (run <code>lit/_scraper/emit-db.mjs</code>; for &gt;100 MB use chunked mode). ' +
+    '<br><small>' + (e && e.message ? e.message : e) + '</small>';
+  console.error(e);
+});
+</script>
+</body>
+</html>

@@ -118,7 +118,7 @@ Refresh both by running **on your own machine** (pubsonline blocks cloud IPs, so
 this can't run in CI — same reason as the lit/PNAS local scripts):
 
 ```bash
-cd fun/lit/_scraper
+cd lit/_scraper
 node informs-aia-local.mjs --app ms      # writes fun/ms/data/_informs-aia.json + _aia-fixups.json
 # …then commit & push those two files; the daily Action folds them in.
 ```

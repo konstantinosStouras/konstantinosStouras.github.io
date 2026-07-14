@@ -1,7 +1,7 @@
 name: lit — e-mail alert test sends
 
 # Delivers the one-off TEST e-mails users request from the "E-mail alerts" panel
-# on stouras.com/fun/lit/ ("Send me a test e-mail"). A static GitHub Pages site
+# on stouras.com/lit/ ("Send me a test e-mail"). A static GitHub Pages site
 # can't send mail, so the page queues each request at users/{uid}/testEmails and
 # this job flushes the queue by running the mailer in --test-emails mode. It runs
 # often so a requested test arrives within a few minutes, separate from the daily
@@ -10,7 +10,7 @@ name: lit — e-mail alert test sends
 # Like the daily mailer it is a clean no-op until the SAME secrets are set
 # (FIREBASE_SERVICE_ACCOUNT + SMTP_USER/SMTP_PASS), so it never fails before
 # setup. Tune or lower the schedule below (or disable this workflow) if you would
-# rather deliver test e-mails less frequently. See fun/lit/_EMAIL-ALERTS-SETUP.md.
+# rather deliver test e-mails less frequently. See lit/_EMAIL-ALERTS-SETUP.md.
 
 on:
   schedule:
@@ -55,4 +55,4 @@ jobs:
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
           ALERTS_FROM: ${{ secrets.ALERTS_FROM }}
           ALERTS_FROM_NAME: ${{ secrets.ALERTS_FROM_NAME }}
-        run: node fun/lit/_scraper/alerts-mailer.mjs --test-emails ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '--dry-run' || '' }}
+        run: node lit/_scraper/alerts-mailer.mjs --test-emails ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '--dry-run' || '' }}

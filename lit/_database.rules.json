@@ -1,0 +1,29 @@
+{
+  "//": [
+    "Realtime Database security rules for The Lit's live 'Exploring now' presence",
+    "counter (lit/analytics/). Presence data is ephemeral and holds NO private",
+    "data: /presence/<uid>/<connectionId> = true, one child per open tab, grouped",
+    "by the visitor's (anonymous) auth uid so the analytics page counts DISTINCT",
+    "visitors, not tabs. onDisconnect() removes each child the moment its tab",
+    "closes. Deploy with:  firebase deploy --only database   (or paste into the",
+    "Firebase console -> Realtime Database -> Rules -> Publish). See",
+    "lit/_PRESENCE-SETUP.md.",
+    "",
+    "Everything else stays locked down: only /presence is readable/writable, a",
+    "visitor may only write under their OWN uid, and node values must be the",
+    "boolean true (no arbitrary payloads)."
+  ],
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "presence": {
+      ".read": true,
+      "$uid": {
+        ".write": "auth != null && auth.uid === $uid",
+        "$conn": {
+          ".validate": "newData.isBoolean() && newData.val() == true"
+        }
+      }
+    }
+  }
+}

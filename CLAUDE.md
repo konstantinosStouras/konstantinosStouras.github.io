@@ -27,29 +27,44 @@ The homepage's "Fun Projects" section (in the root site) may also link apps —
 keep that in mind if a change there is warranted.
 
 ## Current /fun/ apps
-`lit` · `portfoliofitgame` · `capitals` · `nomoi` · `rooks` · `sudoku` · `snake` ·
-`ms` · `ms-old` · `mnsc_scraper-to-use-locally` (plus redirect stubs at `fun/ms2/`
-and `fun/ft50/` — the retired FT50 browser now redirects to `/fun/lit/`)
+`portfoliofitgame` · `capitals` · `nomoi` · `rooks` · `sudoku` · `snake` ·
+`ms` · `ms-old` · `mnsc_scraper-to-use-locally` (plus redirect stubs at `fun/ms2/`,
+`fun/ft50/` and `fun/lit/` — the retired FT50 browser and the graduated Lit both
+now redirect to `/lit/`).
+
+**The Lit moved OUT of `/fun/`.** It was promoted from `fun/lit/` to the
+top-level `/lit/` (served at `stouras.com/lit/`; see its own section below).
+`fun/lit/` now holds only noindex redirect stubs (`fun/lit/index.html` and
+`fun/lit/analytics/index.html`) pointing to `/lit/` and `/lit/analytics/`, so old
+links keep working (like `fun/ms2/`/`fun/ft50/`). It is still featured on the Fun
+landing page — its `fun/index.html` card links to `/lit/` — so it is the one card
+whose target lives outside `/fun/`; keep that card's link pointing to `/lit/`.
 
 ## `/fun/ft50` — RETIRED (redirect stub only)
-The standalone FT50 research paper browser was removed: `/fun/lit/` is a
+The standalone FT50 research paper browser was removed: `/lit/` is a
 superset (its "Journal types" filter covers all 50 FT50 journals from lit's
-own `fun/lit/data-ft50/` dataset — see the lit section below). `fun/ft50/`
-now holds only a noindex redirect stub to `/fun/lit/` (like `fun/ms2/`), so
+own `lit/data-ft50/` dataset — see the lit section below). `fun/ft50/`
+now holds only a noindex redirect stub to `/lit/` (like `fun/ms2/`), so
 old links keep working; do not add a card for it on `fun/index.html`. The
 app's data (~190 MB), scraper and its two workflows (`ft50-update-data.yml`,
 `ft50-check-list.yml`) were deleted — the pipeline lives on, vendored at
-`fun/lit/_scraper-ft50/` with its own `lit-ft50-*` workflows.
+`lit/_scraper-ft50/` with its own `lit-ft50-*` workflows.
 
-## `/fun/lit` — "The Lit", the multi-journal research paper browser
-`fun/lit/` extends the `/fun/ms/` architecture to eight sources: Management
+## `/lit` — "The Lit", the multi-journal research paper browser
+Served at `stouras.com/lit/` (a **top-level** directory, `lit/`, NOT under
+`/fun/`; promoted from the old `fun/lit/`, which is now a redirect stub). The app
+uses **relative** data paths (`./data/`, `./data-ft50/`, …), so it is
+location-independent; only absolute links/meta (canonical, og:image, the `?db=1`
+sqlite loader, `changelog.json` URLs) and the CI workflow paths are pinned to
+`/lit/`.
+`lit/` extends the `/fun/ms/` architecture to eight sources: Management
 Science (with editors/areas, exactly like `/fun/ms/`), Operations Research,
 Marketing Science, M&SOM, Information Systems Research, POM, PNAS (five topic
 sections only), and the ACM EC conference (1999–present, incl. each year's
 accepted-papers list from `ec<YY>.sigecom.org` with arXiv/SSRN/OA PDF links via
-OpenAlex/DBLP/Semantic Scholar). Data is static JSON in `fun/lit/data/` (one
+OpenAlex/DBLP/Semantic Scholar). Data is static JSON in `lit/data/` (one
 `papers-<src>.json` per source + `sources.json` manifest), built by
-`fun/lit/_scraper/build-data.mjs` and refreshed daily by
+`lit/_scraper/build-data.mjs` and refreshed daily by
 `.github/workflows/lit-update-data.yml` (same self-healing live-site check as
 the ms workflow). **Journal types & the FT50 merge:** a "Journal types"
 filter (left of Journals) offers UTD24 / FT50 / ABS 4/4* / ABS 3; a type chip
@@ -92,14 +107,14 @@ list in `index.html`) and lazy-loads their papers files same-origin from
 downloads until a filter needs it — first paint is a few hundred KB
 (manifests + recent.json; authors.json fetched on first Authors-tab open),
 where the page previously eager-fetched ~60 MB per visit. The page merges in
-lit's **own FT50 catalog** at runtime — `fun/lit/data-ft50/` (seeded from the
+lit's **own FT50 catalog** at runtime — `lit/data-ft50/` (seeded from the
 retired fun/ft50 app's data, registry included, then maintained here):
 it fetches `data-ft50/sources.json`, appends the 44 FT50-only journals to the
 journal filter, and **lazy-loads** their `papers-<key>.json` only when they
 enter scope — selected directly, via a type chip, or on a broad
 year/title/author/affiliation search with no journal scope; the
 `data-ft50/recent.json` (extras only) joins the recent view. The dataset is
-built by `fun/lit/_scraper-ft50/` (the retired fun/ft50 app's pipeline,
+built by `lit/_scraper-ft50/` (the retired fun/ft50 app's pipeline,
 vendored; journal list in its own `journals.json`), refreshed daily by
 `.github/workflows/lit-ft50-update-data.yml` (07:15 UTC) and checked against
 the FT's list yearly by `lit-ft50-check-list.yml` (4 Jan). AIA fixups for it
@@ -110,23 +125,23 @@ FT-list check flows through); ABS grades (AJG 2024, via journalranking.org)
 live in the `ABS_RATING` map there — PNAS/ACM EC are unrated, and HBR/MIT SMR
 (AJG 2024 "top practitioner" journals) are kept at 3, their last numeric
 grade. The full AJG 2024/2021/2018 grade table is **vendored** at
-`fun/lit/_scraper/_abs-ajg2024.json` (journalranking.org is Cloudflare-blocked
+`lit/_scraper/_abs-ajg2024.json` (journalranking.org is Cloudflare-blocked
 for cloud IPs, like the PNAS/editors local scrapers) — it is the offline
 reference for auditing every ABS grade the page and the satellite shards use. The pre-computed Authors/Affiliations panels remain
 native-eight-sources only (the pre-print backfill, by contrast, covers every
 dataset — see below). **PNAS caveat:** the DOI→section index
-`fun/lit/data/_pnas-concepts.json` must be (re)built occasionally by running
-`fun/lit/_scraper/pnas-concepts-local.mjs` on a personal machine, because
+`lit/data/_pnas-concepts.json` must be (re)built occasionally by running
+`lit/_scraper/pnas-concepts-local.mjs` on a personal machine, because
 pnas.org's search is Cloudflare-blocked for cloud IPs. **ISR/MkSc caveat:**
 likewise, ISR Senior/Associate Editor and Marketing Science Senior Editor
-names (`fun/lit/data/_informs-editors.json`) come from
-`fun/lit/_scraper/informs-editors-local.mjs` run locally (pubsonline blocks
+names (`lit/data/_informs-editors.json`) come from
+`lit/_scraper/informs-editors-local.mjs` run locally (pubsonline blocks
 cloud IPs too). Editors/Areas UI shows only when Management Science is in
 scope; SE/AE filters show when ISR/MkSc are selected. **Articles-in-Advance
 caveat:** a no-volume/no-issue record is tagged forthcoming only when recent
 (`forthcomingStatus`); `data/_aia-fixups.json` supplies the real issue for older
 frozen records and `data/_informs-aia.json` adds forthcoming papers Crossref
-misses, both refreshed locally by `fun/lit/_scraper/informs-aia-local.mjs`.
+misses, both refreshed locally by `lit/_scraper/informs-aia-local.mjs`.
 **Pre-print links:** every paper with a free author pre-print on **arXiv,
 SSRN, bioRxiv/medRxiv, NBER or OSF** carries a `Preprint` (+ `PreprintSrc`)
 field, resolved in `build-data.mjs`
@@ -176,9 +191,9 @@ links are canonicalised to the **unversioned `/abs/<id>`** form
 (`canonArxiv`/`canonPreprint`, applied on every apply) so they always resolve
 to the LATEST version. The **backfill runs online in its own scheduled
 workflow**, `.github/workflows/lit-preprints-backfill.yml` (every 2 h), which
-runs `fun/lit/_scraper/preprints-ci.mjs`: the bounded by-DOI seeding, then a
+runs `lit/_scraper/preprints-ci.mjs`: the bounded by-DOI seeding, then a
 bounded (~40 min) slice of title searches per run,
-committing `fun/lit/data/` back — it **shares the
+committing `lit/data/` back — it **shares the
 `lit-update-data-*` concurrency group** with the daily build so the two never
 race a commit, and its push-retry re-applies finds via
 `--apply-only --merge-cache` instead of clobbering a fresher dataset. **The
@@ -188,7 +203,7 @@ harvest (`--apply-only --merge-cache`) so a concurrent backfill's pre-print
 links are never downgraded back to `{none}`; a found `{u}` link is FROZEN
 (a published paper's pre-print never changes) — never re-searched (the by-DOI
 and title-search passes both skip `{u}`) and never clobbered at commit time.
-`fun/lit/_scraper/preprints-local.mjs` remains as a faster local alternative
+`lit/_scraper/preprints-local.mjs` remains as a faster local alternative
 (unthrottled from a home connection; identifies as a separate `LIT_MAILTO`
 quota identity so CI can never spend the local budget). In the daily build the
 same pass also runs as a **strictly time-boxed, gentle best-effort**
@@ -200,8 +215,8 @@ pipeline** (near-verbatim block in each `build-data.mjs`; env names
 `FT50_PREPRINT_SEARCH_*`, and the matcher uses a local `matchNorm` — the
 reference's fully-collapsing title norm — NOT those files' registry
 `normTitle`): the FT50 catalog backfills via
-`lit-ft50-preprints-backfill.yml` → `fun/lit/_scraper-ft50/preprints-ci.mjs`
-(commits `fun/lit/data-ft50/`, shares the `lit-ft50-update-data-*`
+`lit-ft50-preprints-backfill.yml` → `lit/_scraper-ft50/preprints-ci.mjs`
+(commits `lit/data-ft50/`, shares the `lit-ft50-update-data-*`
 concurrency group), and each shard repo has its own `preprints-backfill.yml`
 → `_scraper/preprints-ci.mjs` (shares that repo's `update-data-*` group).
 Every workflow pins a distinct OpenAlex quota identity via mailto
@@ -243,7 +258,7 @@ serve them). **PNAS "Significance":** for PNAS,
 the Crossref abstract's JATS `<sec><title>Significance</title>` block is split
 out into a `Significance` field (`extractSignificance`, no pnas.org fetch) and
 shown as a **"Significance"** card toggle before "Abstract". See
-`fun/lit/_HOW-IT-WORKS.md`. **Citation counts:** every paper carries a
+`lit/_HOW-IT-WORKS.md`. **Citation counts:** every paper carries a
 `CitedBy` field — the **highest of three tallies**: Crossref's
 `is-referenced-by-count` (harvested for free in the build's own batched
 Crossref requests — the `SELECT` addition + `mapWork` line in
@@ -294,8 +309,8 @@ data (no `CitedBySrc` yet) just renders as Crossref until its pipeline
 catches up. Like `/fun/ms/`,
 the page carries the optional sign-in feature (star/notes/lists/tags, private
 per user, dedicated Firebase project); it stays inert until a web config is
-pasted into `FB_CONFIG` in `fun/lit/index.html` — setup steps in
-`fun/lit/_ACCOUNTS-SETUP.md`, security rules in `fun/lit/_firestore.rules`.
+pasted into `FB_CONFIG` in `lit/index.html` — setup steps in
+`lit/_ACCOUNTS-SETUP.md`, security rules in `lit/_firestore.rules`.
 Signed-in users can also save **default filters** (account menu →
 "Default filters"): a preferred subset of journals and/or journal types,
 **auto-applied on sign-in** so they land on their subset instead of the full
@@ -315,7 +330,7 @@ fine: `registerExtraSources()` re-applies and refreshes the chip label (and the
 open modal's list) once the journal registers.
 **Keep the About modal in sync:** the **About** modal (`#litAboutOverlay` in
 `index.html`) is the user-facing tour of what The Lit does. **Whenever you add or
-materially change a user-facing `/fun/lit` feature, update the About modal's copy
+materially change a user-facing `/lit` feature, update the About modal's copy
 in the same change** (e.g. a new journal type, a new filter, a sign-in/library
 capability, an alerts option, a Data Analytics view) so it never drifts from what
 actually ships — the same keep-in-sync discipline as the `fun/index.html`
@@ -323,16 +338,16 @@ landing-page cards.
 **Top navigation (in the claret header):** four buttons — **About** (a modal
 describing what the browser covers, how to search, and the full data/provenance
 notes, mirroring the footer text), **E-mail alerts**, **Data Analytics** (a
-link to the sub-page `fun/lit/analytics/` — a sub-page, so NOT a
+link to the sub-page `lit/analytics/` — a sub-page, so NOT a
 `fun/index.html` card), and
 **Feedback** (a modal with the maintainer's contact links: e-mail
 kostas.stouras@ucd.ie, X `@stourask`, Google Scholar, ORCID, website). About and
 Feedback are static; the Data Analytics page is standalone. **Data Analytics
-(`fun/lit/analytics/`)** is an interactive summary-statistics dashboard over the
+(`lit/analytics/`)** is an interactive summary-statistics dashboard over the
 whole corpus available in this repo — the eight native sources (`data/`) plus
 the FT50 catalog (`data-ft50/`), deduped with native winning on overlap
 (~260k papers, 53 journals). It never downloads the ~270 MB of raw papers:
-`fun/lit/_scraper/build-analytics.mjs` pre-aggregates everything **offline** into
+`lit/_scraper/build-analytics.mjs` pre-aggregates everything **offline** into
 two small committed files it fetches on load — `analytics/data.json`
 (per-journal × per-year rows: paper count `n`, summed authors `a`, solo `s`,
 pre-print `p`, citation `c`, abstract `ab`, team-size buckets `t[6]`; plus each
@@ -362,7 +377,7 @@ where-they-publish, the latter greying journals outside the current scope).
 **Team-science / disruption section** (a new block at the bottom of the Corpus
 overview) reproduces the key measures of Wu, Wang & Evans, "Large teams develop
 and small teams disrupt science and technology" (*Nature* 570, 2019) over The
-Lit's **in-catalog citation graph** (`fun/lit/data-refs/`): a per-paper
+Lit's **in-catalog citation graph** (`lit/data-refs/`): a per-paper
 **disruption index D** (the CD index, Funk & Owen-Smith 2017 — `n_i−n_j` over
 `n_i+n_j+n_k`; D>0 disrupts, D<0 develops), and, per the owner's clarification,
 an **author's disruptiveness D_j = the mean of D over every paper they wrote or
@@ -382,7 +397,7 @@ band — it drives every team-science figure (`disrInScope` = journal+year+D;
 shows the whole distribution with the selected band highlighted, and for the
 Author-spotlight percentile so a narrowed D range never distorts an author's
 standing). It is pre-computed
-**offline** by `fun/lit/_scraper/build-disruption.mjs` into a small,
+**offline** by `lit/_scraper/build-disruption.mjs` into a small,
 lazily-loaded `analytics/disruption.json` (one row per paper with a defined D —
 `{j,y,t,d,c,nf,ra?,rp?,au[],ti,doi}` + an author-name index; `nf` = in-catalog
 forward-citation count, used to gate the highlight tables against degenerate ±1
@@ -417,12 +432,12 @@ NOT written to `registeredUsers`). Every page **writes** presence
 (`presence/<uid>/<pushId> = true`, one child per tab with `onDisconnect().remove()`,
 grouped by uid so the count is of DISTINCT visitors); the **main browser only
 writes** (no fan-out) while **only the analytics page reads/counts**
-(`ref('presence').numChildren()`). RTDB rules are in `fun/lit/_database.rules.json`
+(`ref('presence').numChildren()`). RTDB rules are in `lit/_database.rules.json`
 (public read of `/presence`, owner-only `true`-valued writes); the whole thing is
 **inert until** a Realtime Database is created and its URL is pasted into the
-`PASTE_DATABASE_URL` placeholder in BOTH `fun/lit/index.html` (bottom presence
-`<script>`) and `fun/lit/analytics/index.html` (`RTDB_URL`) — full steps in
-`fun/lit/_PRESENCE-SETUP.md`. The card stays hidden until presence is configured,
+`PASTE_DATABASE_URL` placeholder in BOTH `lit/index.html` (bottom presence
+`<script>`) and `lit/analytics/index.html` (`RTDB_URL`) — full steps in
+`lit/_PRESENCE-SETUP.md`. The card stays hidden until presence is configured,
 so it never shows a broken state. **E-mail alerts**
 lets a signed-in user subscribe to an e-mail when new papers matching a set of
 filters are added. The form's two top toggles choose *what* to be e-mailed
@@ -462,7 +477,7 @@ one intent (`alertHasIntent`: features, allPapers, or a filter). Alerts are stor
 privately at `users/{uid}/alerts/{alertId}` (covered by the existing
 `_firestore.rules` wildcard) and managed from the modal (enable/pause switch,
 edit, delete). The page only writes subscriptions; **delivery is done by the
-mailer** `fun/lit/_scraper/alerts-mailer.mjs`, run daily by
+mailer** `lit/_scraper/alerts-mailer.mjs`, run daily by
 `.github/workflows/lit-alerts-mail.yml`: it reads the recently-added papers
 (`data/recent.json` + `data-ft50/recent.json`), reads all alerts via
 `collectionGroup('alerts')` with the Admin SDK, matches each with **vendored
@@ -474,7 +489,7 @@ subscriber, `From` = `ALERTS_FROM`/`SMTP_USER`), stamping a per-alert
 `hasPaperIntent` gates paper matching so a **features-only** subscription (no
 `allPapers`, no filter) never sends paper e-mails. **Feature updates are their
 own automated side of the same run:** the mailer also loads a hand-maintained
-**feature changelog** — `fun/lit/changelog.json` (`{version, updates:[{id, date,
+**feature changelog** — `lit/changelog.json` (`{version, updates:[{id, date,
 title, summary, url}]}`, newest first; served, NOT build output; the single
 source of truth also read by the page for its About-modal *What's new* list and
 the alert preview) — via `loadChangelog()`, and for every `criteria.features`
@@ -502,14 +517,14 @@ unsubscribe; the shared chrome (`footerText`/`footerHtml`/`emailShell`) is used
 by `renderEmail`, `renderFeatureDigest` and `renderAnnouncement`. It is a
 no-op until the `FIREBASE_SERVICE_ACCOUNT` + `SMTP_*` secrets are set (so it
 never fails pre-setup); `--selftest`/`--scan`/`--dry-run` modes and the full
-deploy steps are in `fun/lit/_EMAIL-ALERTS-SETUP.md`. No Firestore rule change
+deploy steps are in `lit/_EMAIL-ALERTS-SETUP.md`. No Firestore rule change
 is needed. All of the alerts UI logic lives inside the accounts IIFE
 (`window.litAlerts*`); About/Feedback are top-level (`window.litAbout*` /
 `window.litFeedback*`). The **About modal also renders a data-driven "What's
 new" list** (`#litWhatsNew` → `renderAboutWhatsNew()` in the top-nav IIFE) from
 the same `changelog.json`, so the changelog is the ONE place to log a feature —
 it feeds the About list, the alert preview and the automated e-mails at once. So:
-**when you ship a user-facing `/fun/lit` feature, add a `changelog.json` entry
+**when you ship a user-facing `/lit` feature, add a `changelog.json` entry
 (dated ~today) in the same change** — that is now part of the keep-in-sync
 discipline alongside updating the About modal copy and the `fun/index.html`
 landing cards.
@@ -524,9 +539,9 @@ from the published lists so no published paper's badge changes; badge
 unpublished work, *excluding* anything whose title is already published in the
 catalog (a paper that later gets published drops out on the next crawl, and the
 published card's own "Pre-print (Open Access)" link takes over). It is its
-**own dataset**, `fun/lit/data-workingpapers/` (kept separate so it can move to
+**own dataset**, `lit/data-workingpapers/` (kept separate so it can move to
 a dedicated `lit-data-workingpapers` Pages repo when it nears the 1 GB limit —
-see below), built by the vendored pipeline `fun/lit/_scraper-workingpapers/`
+see below), built by the vendored pipeline `lit/_scraper-workingpapers/`
 (OpenAlex only: resolves each author's OpenAlex ID from a known catalog DOI,
 enumerates their `type:preprint` works, classifies the host with the pre-print
 feature's own `pickPreprint`/`preprintFromDoi`, drops anything already-published
@@ -551,14 +566,14 @@ workflows — `lit-workingpapers-backfill.yml` (every 3 h, the growth engine) an
 `WP_MAX_AUTHORS`, `WP_BUDGET_MS`), **resumable** slice (progress cursor in
 `data-workingpapers/_authors.json`), so it fills in over **weeks** without
 tripping OpenAlex's rate limits; they share the `lit-workingpapers-${{ github.ref }}`
-concurrency group and commit `fun/lit/data-workingpapers/` back (only on
+concurrency group and commit `lit/data-workingpapers/` back (only on
 `master`). **Author priority:** Management Science / M&SOM / POM authors (last
 15 years) are crawled first (`WP_PRIORITY_KEYS`/`WP_PRIORITY_YEARS`), then the
 rest, newest-active first. Distinct OpenAlex quota identity `kstouras+litwp`.
-Offline test: `node fun/lit/_scraper-workingpapers/selftest.mjs` (mock, no
+Offline test: `node lit/_scraper-workingpapers/selftest.mjs` (mock, no
 network). Migration to a satellite repo is one constant: `WP_DATA_BASE`
 `'./data-workingpapers/'` → `'/lit-data-workingpapers/data/'`. See
-`fun/lit/_scraper-workingpapers/_HOW-IT-WORKS.md`. NOTE: this build environment's
+`lit/_scraper-workingpapers/_HOW-IT-WORKS.md`. NOTE: this build environment's
 egress policy blocks the scholarly APIs (OpenAlex/Crossref/arXiv return 403), so
 the archive can only be populated by the GitHub Actions runners — it is EMPTY
 until the first workflow run on `master` post-merge.
@@ -575,7 +590,7 @@ catalog" (the number woven into the phrase, not parenthesised) — sourced from 
 `refsToggleLabel`/`annotateRefsCounts`) so the number appears WITHOUT
 downloading the multi-MB per-journal shard; the shard still loads lazily only
 when the panel is opened. It is its **own dataset**,
-`fun/lit/data-refs/` (kept separate to stay out of the main size budget and to
+`lit/data-refs/` (kept separate to stay out of the main size budget and to
 move to a dedicated `lit-data-refs` Pages repo when it nears the 1 GB limit —
 migration is ONE constant, `REFS_DATA_BASE` `'./data-refs/'` →
 `'/lit-data-refs/data/'`, same pattern as `WP_DATA_BASE`). **Data sources (three,
@@ -596,7 +611,7 @@ growth (and a fuller id map) adds edges with NO re-fetch. A published paper's
 reference list never changes, so a paper stamped at the current version is
 **frozen** (never re-fetched); a **`RF_VER` bump re-sweeps EVERY paper** with the
 wider net (v1 was Crossref-only; v2 added the OpenAlex + Semantic Scholar legs).
-Built by the vendored pipeline `fun/lit/_scraper-refs/` (`build-refs.mjs`;
+Built by the vendored pipeline `lit/_scraper-refs/` (`build-refs.mjs`;
 exports `extractRefDois`/`extractOaRefs`/`extractS2Refs`/`shortOaid`/
 `orderPapers`/`buildOutputs`/`loadCatalog`/`tierOf`/`normDoi`), refreshed by
 `.github/workflows/lit-references-backfill.yml` (every 3 h, gently paced,
@@ -617,25 +632,25 @@ catalog: `loadRefsManifest()` at load; a card shows the toggle only when its
 journal has a shard (`refsShardFor`); `loadRefsIndex()`/`loadRefsShard(jkey)`
 are lazy + idempotent. The dataset **ships EMPTY** (manifest with no shards), so
 the toggle stays hidden until the backfill populates it. Offline test:
-`node fun/lit/_scraper-refs/selftest.mjs` (mock, no network). NOTE: this build
+`node lit/_scraper-refs/selftest.mjs` (mock, no network). NOTE: this build
 env's egress blocks the scholarly APIs (Crossref/OpenAlex/Semantic Scholar, 403),
 so `data-refs/` can only be populated by the GitHub Actions runners — EMPTY until
 the first workflow run on `master` post-merge. See
-`fun/lit/_scraper-refs/_HOW-IT-WORKS.md`.
+`lit/_scraper-refs/_HOW-IT-WORKS.md`.
 **Range-served SQLite search (`?db=1`, opt-in):** the page can answer
 native-journal-scoped filters from a single range-served SQLite DB
-(`fun/lit/data/db/lit.db.*` chunks + `lit-db.json` manifest, sql.js-httpvfs
-vendored at `fun/lit/sqlite/`) instead of downloading + filtering JSON, fetching
+(`lit/data/db/lit.db.*` chunks + `lit-db.json` manifest, sql.js-httpvfs
+vendored at `lit/sqlite/`) instead of downloading + filtering JSON, fetching
 only the DB pages a query touches. STRICTLY ADDITIVE — the default JSON path is
 unchanged, and any query the DB can't fully answer falls through to it. It
 answers **OR / POM / ACM EC / PNAS** (native journals without the MS/ISR/MkSc
 editor UIs) with text/year/pre-print filters and the default year-desc sort;
 MS/ISR/MkSc, journal *types*, all-journal searches, non-default sorts and the
-recent/library views use JSON. The DB is built by `fun/lit/_scraper/emit-db.mjs`
+recent/library views use JSON. The DB is built by `lit/_scraper/emit-db.mjs`
 (narrow `papers` + `papers_abs` side table + contentless FTS5 trigram; rows
 inserted in the page's exact sort order so `id` = newest-first rank; membership
 read from `index.html`) and chunked by `chunk-db.mjs` under the 100 MB per-file
-Pages limit; the query builder is `fun/lit/sqlite/lit-query.js`, the wiring is
+Pages limit; the query builder is `lit/sqlite/lit-query.js`, the wiring is
 the `?db=1` block in `index.html`. It needs NO COOP/COEP (sync-XHR reads in a
 Worker). **The DB is deliberately NOT committed** — a built `lit.db` (~200 MB
 chunked) is a range-served *copy* of the `data/papers-<key>.json` (~51 MB) it's
@@ -647,9 +662,9 @@ serve it from a **dedicated data repo** (like the `lit-data-*` shards) so the
 redundant binary never lives in the main site's history; point `initLitDb()`
 there. (Git LFS won't work — Pages serves the LFS pointer, not the file.)
 FT50-catalog/ABS-shard DBs (for types/all-journal) and MS/ISR/MkSc editor
-columns are follow-ups. Tests: `node fun/lit/_scraper/sqlite-parity.mjs`
+columns are follow-ups. Tests: `node lit/_scraper/sqlite-parity.mjs`
 (28/28 semantic parity) and `sqlite-bench.mjs` (payload/latency). See
-`fun/lit/_SQLITE-POC.md`.
+`lit/_SQLITE-POC.md`.
 
 ## `/fun/ms` — the Google-free Management Science browser
 `fun/ms/` is the Management Science paper browser. It uses **no Google Sheets**:
@@ -668,8 +683,8 @@ is tagged forthcoming only when recent (`forthcomingStatus` in `build-data.mjs`)
 so years-old frozen records aren't mislabeled; their real issue comes from
 `data/_aia-fixups.json`, and forthcoming papers Crossref hasn't indexed yet come
 from `data/_informs-aia.json` — both refreshed **locally** (pubsonline blocks cloud
-IPs) by `fun/lit/_scraper/informs-aia-local.mjs --app ms`, same pattern as the local
-editors/PNAS scripts. This applies identically to `/fun/lit` and its FT50
+IPs) by `lit/_scraper/informs-aia-local.mjs --app ms`, same pattern as the local
+editors/PNAS scripts. This applies identically to `/lit` and its FT50
 catalog (shared `_aia-fixups.json`; run the scraper with `--app lit` /
 `--app lit-ft50`).
 

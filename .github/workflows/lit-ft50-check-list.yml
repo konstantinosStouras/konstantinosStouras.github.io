@@ -1,15 +1,15 @@
 name: lit — yearly FT50 list check (merged catalog)
 
-# Once a year, compare fun/lit/_scraper-ft50/journals.json against the live
+# Once a year, compare lit/_scraper-ft50/journals.json against the live
 # FT50 journal list (ft.com/ft50-journals, falling back to Wikipedia's FT50
-# page). This is fun/lit's own FT50 list check (originally vendored from the
+# page). This is lit's own FT50 list check (originally vendored from the
 # retired fun/ft50 app), so the lit page's FT50 merge follows the list. If the
 # Financial Times added or removed journals, check-ft50-list.mjs updates
 # journals.json (added journals get their ISSNs resolved via Crossref; removed
 # ones are marked retired) — the workflow then dispatches the data build, which
 # pulls the new journals and deletes the retired ones' data files. Every change
 # (and every failed check) is surfaced as a GitHub issue so nothing happens
-# silently. See fun/lit/_HOW-IT-WORKS.md.
+# silently. See lit/_HOW-IT-WORKS.md.
 
 on:
   schedule:
@@ -44,7 +44,7 @@ jobs:
           FT50_MAILTO: kstouras@gmail.com
         run: |
           set +e
-          node fun/lit/_scraper-ft50/check-ft50-list.mjs
+          node lit/_scraper-ft50/check-ft50-list.mjs
           code=$?
           set -e
           echo "code=$code" >> "$GITHUB_OUTPUT"
@@ -57,7 +57,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add fun/lit/_scraper-ft50/journals.json
+          git add lit/_scraper-ft50/journals.json
           if git diff --cached --quiet; then
             # Advisory (Wikipedia) runs report but don't edit journals.json.
             echo "No journals.json changes to commit (advisory or already applied)."
@@ -75,7 +75,7 @@ jobs:
             echo "Push rejected (concurrent commit?) — re-committing on the new tip…"
             git fetch origin ${{ github.ref_name }}
             git reset origin/${{ github.ref_name }}
-            git add fun/lit/_scraper-ft50/journals.json
+            git add lit/_scraper-ft50/journals.json
             if git diff --cached --quiet; then
               echo "The new tip already contains this update."
               exit 0
@@ -108,7 +108,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           title="lit: FT50 list check (merged catalog) — $([ '${{ steps.check.outputs.code }}' = 3 ] && echo 'the journal list changed' || echo 'the check could not run')"
-          body=$(cat fun/lit/_scraper-ft50/_ft50-check-summary.md 2>/dev/null || echo 'No summary was written.')
+          body=$(cat lit/_scraper-ft50/_ft50-check-summary.md 2>/dev/null || echo 'No summary was written.')
           jq -n --arg t "$title" --arg b "$body" '{title: $t, body: $b}' | \
             curl -sf -X POST \
               -H "Authorization: Bearer $GH_TOKEN" \
@@ -122,4 +122,4 @@ jobs:
         if: always()
         run: |
           echo "### lit FT50 list check (merged catalog)" >> "$GITHUB_STEP_SUMMARY"
-          cat fun/lit/_scraper-ft50/_ft50-check-summary.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "(no summary written)" >> "$GITHUB_STEP_SUMMARY"
+          cat lit/_scraper-ft50/_ft50-check-summary.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "(no summary written)" >> "$GITHUB_STEP_SUMMARY"

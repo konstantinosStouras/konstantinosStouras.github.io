@@ -1,11 +1,11 @@
 name: lit — e-mail alerts mailer
 
 # Sends the digest e-mails behind the "E-mail alerts" panel on
-# stouras.com/fun/lit/. Runs once a day, after the daily data build has
+# stouras.com/lit/. Runs once a day, after the daily data build has
 # committed a fresh recent.json, and e-mails each user the new papers that match
 # their saved alerts (per their chosen frequency: immediate / daily / weekly /
-# monthly). See fun/lit/_scraper/alerts-mailer.mjs and
-# fun/lit/_EMAIL-ALERTS-SETUP.md.
+# monthly). See lit/_scraper/alerts-mailer.mjs and
+# lit/_EMAIL-ALERTS-SETUP.md.
 #
 # It stays a clean no-op until the secrets below are configured, so it does not
 # fail before you set things up. Required repo secrets:
@@ -61,4 +61,4 @@ jobs:
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
           ALERTS_FROM: ${{ secrets.ALERTS_FROM }}
           ALERTS_FROM_NAME: ${{ secrets.ALERTS_FROM_NAME }}
-        run: node fun/lit/_scraper/alerts-mailer.mjs ${{ (github.event_name == 'workflow_dispatch' && inputs.rewind) && '--rewind' || '' }} ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '--dry-run' || '' }}
+        run: node lit/_scraper/alerts-mailer.mjs ${{ (github.event_name == 'workflow_dispatch' && inputs.rewind) && '--rewind' || '' }} ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '--dry-run' || '' }}

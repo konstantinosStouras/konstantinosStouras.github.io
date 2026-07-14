@@ -1,9 +1,9 @@
 name: lit — backfill working-papers archive
 
-# Grows the Working Papers archive for stouras.com/fun/lit/ — the UNPUBLISHED
+# Grows the Working Papers archive for stouras.com/lit/ — the UNPUBLISHED
 # working papers / pre-prints (SSRN, NBER, arXiv, OSF) of every listed author —
-# by running fun/lit/_scraper-workingpapers/build-data.mjs on a small, gently
-# paced slice of authors every few hours, then committing fun/lit/data-workingpapers/
+# by running lit/_scraper-workingpapers/build-data.mjs on a small, gently
+# paced slice of authors every few hours, then committing lit/data-workingpapers/
 # back. This is a deliberately SLOW backfill: OpenAlex is queried ~1 request /
 # 1.5 s, each run does a bounded slice (WP_MAX_AUTHORS) and checkpoints after
 # every author, so the archive fills in over WEEKS without tripping the API's
@@ -17,7 +17,7 @@ on:
   workflow_dispatch: {}      # run on demand from the Actions tab
 
 # SAME concurrency group as the daily working-papers build — both commit
-# fun/lit/data-workingpapers, so they must queue behind each other, never race.
+# lit/data-workingpapers, so they must queue behind each other, never race.
 concurrency:
   group: lit-workingpapers-${{ github.ref }}
   cancel-in-progress: false
@@ -46,7 +46,7 @@ jobs:
           WP_MAX_AUTHORS: '600'                  # authors per run (resumable across runs)
           WP_BUDGET_MS: '3000000'                # 50-min crawl ceiling
           WP_PACE_MS: '1500'                     # ~1 request / 1.5 s — deliberately slow
-        run: node fun/lit/_scraper-workingpapers/build-data.mjs
+        run: node lit/_scraper-workingpapers/build-data.mjs
 
       - name: Commit the grown archive
         # always(): even if the crawl is killed mid-run, commit the checkpointed
@@ -56,17 +56,17 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add fun/lit/data-workingpapers
+          git add lit/data-workingpapers
           if git diff --cached --quiet; then
             echo "No archive changes — nothing to commit."
             exit 0
           fi
           git commit -m "lit: backfill working-papers archive"
-          # Only these two workflows ever write fun/lit/data-workingpapers, and
+          # Only these two workflows ever write lit/data-workingpapers, and
           # they share this concurrency group, so our copy of that directory is
           # authoritative. On a rejected push (a concurrent commit to master
           # touching OTHER files), replay our directory onto the new tip and retry.
-          cp -r fun/lit/data-workingpapers /tmp/wp-ours
+          cp -r lit/data-workingpapers /tmp/wp-ours
           for i in 1 2 3; do
             if git push origin HEAD:${{ github.ref_name }}; then
               echo "Pushed on attempt $i."
@@ -75,9 +75,9 @@ jobs:
             echo "Push rejected (concurrent commit?) — replaying our archive on the new tip…"
             git fetch origin ${{ github.ref_name }}
             git reset --hard origin/${{ github.ref_name }}
-            rm -rf fun/lit/data-workingpapers
-            cp -r /tmp/wp-ours fun/lit/data-workingpapers
-            git add fun/lit/data-workingpapers
+            rm -rf lit/data-workingpapers
+            cp -r /tmp/wp-ours lit/data-workingpapers
+            git add lit/data-workingpapers
             if git diff --cached --quiet; then
               echo "The tip already carries this archive state — nothing left to push."
               exit 0

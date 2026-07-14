@@ -1,15 +1,15 @@
 name: lit — update FT50 (merged catalog) data
 
-# Builds fun/lit's OWN FT50-and-friends dataset (the 50 journals on the
+# Builds lit's OWN FT50-and-friends dataset (the 50 journals on the
 # Financial Times FT50 research-rank list, plus notFT extras carried for other
 # lists — UTD24's INFORMS Journal on Computing, ABS 4's EJOR) by pulling from
-# the Crossref API, then commits the refreshed files in fun/lit/data-ft50/
+# the Crossref API, then commits the refreshed files in lit/data-ft50/
 # back to the branch.
 # This is the pipeline behind the lit page's FT50 merge / "Journal types"
 # filter (originally vendored from the retired fun/ft50 app).
-# The journal list itself lives in fun/lit/_scraper-ft50/journals.json
+# The journal list itself lives in lit/_scraper-ft50/journals.json
 # and is checked against ft.com once a year by lit-ft50-check-list.yml.
-# See fun/lit/_HOW-IT-WORKS.md.
+# See lit/_HOW-IT-WORKS.md.
 
 on:
   schedule:
@@ -23,9 +23,9 @@ on:
     # data immediately instead of waiting for the daily schedule.
     paths:
       - '.github/workflows/lit-ft50-update-data.yml'
-      - 'fun/lit/_scraper-ft50/build-data.mjs'
-      - 'fun/lit/_scraper-ft50/informs-editors.mjs'
-      - 'fun/lit/_scraper-ft50/journals.json'
+      - 'lit/_scraper-ft50/build-data.mjs'
+      - 'lit/_scraper-ft50/informs-editors.mjs'
+      - 'lit/_scraper-ft50/journals.json'
 
 # Never let two data builds race; let a running one finish.
 concurrency:
@@ -55,7 +55,7 @@ jobs:
         env:
           FT50_MAILTO: kstouras+litft50@gmail.com   # Crossref contact + this dataset's OpenAlex quota identity
           NODE_OPTIONS: --max-old-space-size=6144
-        run: node fun/lit/_scraper-ft50/build-data.mjs
+        run: node lit/_scraper-ft50/build-data.mjs
 
       - name: Commit refreshed data
         # If another run pushed data while this one was building, a plain
@@ -66,7 +66,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add fun/lit/data-ft50
+          git add lit/data-ft50
           if git diff --cached --quiet; then
             echo "No data changes — nothing to commit."
             exit 0
@@ -89,10 +89,10 @@ jobs:
             # fresh harvest AND every pre-print link. Then MIXED-reset to the tip
             # and re-add ONLY the data dir (a hard reset would drop code commits
             # that landed on the branch; a soft reset would silently revert them).
-            git show origin/${{ github.ref_name }}:fun/lit/data-ft50/_preprints.json > /tmp/lit-ft50-tip-preprints.json || echo '{}' > /tmp/lit-ft50-tip-preprints.json
-            node fun/lit/_scraper-ft50/preprints-ci.mjs --apply-only --merge-cache=/tmp/lit-ft50-tip-preprints.json
+            git show origin/${{ github.ref_name }}:lit/data-ft50/_preprints.json > /tmp/lit-ft50-tip-preprints.json || echo '{}' > /tmp/lit-ft50-tip-preprints.json
+            node lit/_scraper-ft50/preprints-ci.mjs --apply-only --merge-cache=/tmp/lit-ft50-tip-preprints.json
             git reset origin/${{ github.ref_name }}
-            git add fun/lit/data-ft50
+            git add lit/data-ft50
             if git diff --cached --quiet; then
               echo "The concurrent commit already contains this dataset — nothing left to push."
               exit 0
@@ -110,9 +110,9 @@ jobs:
         if: github.ref == 'refs/heads/master'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          LIVE_META: https://www.stouras.com/fun/lit/data-ft50/meta.json
+          LIVE_META: https://www.stouras.com/lit/data-ft50/meta.json
         run: |
-          want=$(jq -r .lastPull fun/lit/data-ft50/meta.json)
+          want=$(jq -r .lastPull lit/data-ft50/meta.json)
           echo "Committed dataset lastPull: $want"
           poll() {  # poll <tries> — succeed once live lastPull >= committed lastPull
             for i in $(seq 1 "$1"); do
@@ -138,9 +138,9 @@ jobs:
         if: always()
         run: |
           echo "### lit FT50 (merged catalog) data build" >> "$GITHUB_STEP_SUMMARY"
-          if [ -f fun/lit/data-ft50/meta.json ]; then
+          if [ -f lit/data-ft50/meta.json ]; then
             echo '```json' >> "$GITHUB_STEP_SUMMARY"
-            cat fun/lit/data-ft50/meta.json >> "$GITHUB_STEP_SUMMARY"
+            cat lit/data-ft50/meta.json >> "$GITHUB_STEP_SUMMARY"
             echo '' >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
           fi
