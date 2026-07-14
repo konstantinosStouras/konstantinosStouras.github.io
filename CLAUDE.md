@@ -553,7 +553,13 @@ For every listed paper, the pipeline extracts the references it **cites that
 also belong to the catalog** (the intra-catalog out-edges), surfaced on each
 paper card as a **"Cited references in this catalog"** toggle (steel-blue, next
 to BibTeX; `togRefs` in `index.html`) that lazy-loads and lists those papers,
-each linking to the paper it cites. It is its **own dataset**,
+each linking to the paper it cites. The toggle also shows a **count** of how
+many in-catalog references the paper cites — e.g. "Cited references in this
+catalog (12)" — sourced from a tiny `refs-counts.json` companion
+(`{citingDoi:N}`) loaded once in the background (`loadRefsCounts`/`refsCounts`/
+`refsToggleLabel`/`annotateRefsCounts`) so the number appears WITHOUT
+downloading the multi-MB per-journal shard; the shard still loads lazily only
+when the panel is opened. It is its **own dataset**,
 `fun/lit/data-refs/` (kept separate to stay out of the main size budget and to
 move to a dedicated `lit-data-refs` Pages repo when it nears the 1 GB limit —
 migration is ONE constant, `REFS_DATA_BASE` `'./data-refs/'` →
@@ -585,7 +591,9 @@ replays the dir on a rejected push; distinct OpenAlex/Crossref quota identity
 have edges), `refs-<jkey>.json` (`{citingDoi:[citedDoi,…]}`, sharded by citing
 journal, only papers with ≥1 in-catalog edge), `refs-index.json`
 (`{citedDoi:[title,jkey,year]}`, so the page renders a cited paper's title
-without loading its journal file). **Paper priority (per the owner):** MS /
+without loading its journal file), and `refs-counts.json`
+(`{citingDoi:N}`, the tiny per-paper count companion that feeds the toggle
+label). **Paper priority (per the owner):** MS /
 M&SOM / POM / PNAS (all years) first, then UTD24 ∪ FT50 (newest years first),
 then the rest (`tierOf`; the UTD24/FT50 key sets MIRROR index.html's — keep in
 sync, like build-analytics.mjs). The page merges it at runtime like the FT50

@@ -386,6 +386,7 @@ export function buildOutputs(cache, dbByDoi, oaidMap = {}) {
   const oaidToDoi = {};
   for (const [doi, oaid] of Object.entries(oaidMap)) if (oaid && dbByDoi.has(doi)) oaidToDoi[oaid] = doi;
   const shards = {};
+  const counts = {};   // citingDoi -> N in-catalog references (tiny toggle-count companion)
   const indexKeys = new Set();
   let citingWithEdges = 0, edges = 0;
   for (const [citingDoi, entry] of Object.entries(cache)) {
@@ -396,12 +397,13 @@ export function buildOutputs(cache, dbByDoi, oaidMap = {}) {
     for (const oaid of entry.o || []) { const cd = oaidToDoi[oaid]; if (cd && cd !== citingDoi) inDb.add(cd); }
     if (!inDb.size) continue;
     (shards[meta.j] || (shards[meta.j] = {}))[citingDoi] = [...inDb];
+    counts[citingDoi] = inDb.size;
     citingWithEdges++; edges += inDb.size;
     for (const cd of inDb) indexKeys.add(cd);
   }
   const index = {};
   for (const cd of indexKeys) { const m = dbByDoi.get(cd); index[cd] = [m.t, m.j, m.y]; }
-  return { shards, index, totals: { citingWithEdges, edges, cited: indexKeys.size } };
+  return { shards, index, counts, totals: { citingWithEdges, edges, cited: indexKeys.size } };
 }
 
 // ── Main ────────────────────────────────────────────────────────────────────
@@ -454,7 +456,7 @@ async function main() {
   }
 
   // 7. Intersect the whole cache with the catalog and write the served files.
-  const { shards, index, totals } = buildOutputs(cache, dbByDoi, oaidMap);
+  const { shards, index, counts, totals } = buildOutputs(cache, dbByDoi, oaidMap);
   const shardMeta = {};
   for (const jkey of Object.keys(shards).sort()) {
     const rows = shards[jkey];
@@ -464,12 +466,16 @@ async function main() {
     shardMeta[jkey] = { file, papers: Object.keys(rows).length, edges: es };
   }
   await writeFile(join(DATA_DIR, 'refs-index.json'), JSON.stringify(index), 'utf8');
+  // The per-paper count companion — one int per citing paper, so a card shows
+  // "(N)" on its toggle without downloading a shard.
+  await writeFile(join(DATA_DIR, 'refs-counts.json'), JSON.stringify(counts), 'utf8');
 
   const fetched = Object.values(cache).filter(e => (e.v || 0) >= RF_VER).length;
   const manifest = {
     ver: RF_VER,
     generated: PULL_DATE,
     index: { file: 'refs-index.json', count: Object.keys(index).length },
+    counts: { file: 'refs-counts.json', count: Object.keys(counts).length },
     shards: shardMeta,
     totals: { citingPapers: totals.citingWithEdges, edges: totals.edges, citedPapers: totals.cited, fetched, catalog: papers.length },
     sources: ['crossref', 'openalex', ...(USE_S2 ? ['semanticscholar'] : [])],

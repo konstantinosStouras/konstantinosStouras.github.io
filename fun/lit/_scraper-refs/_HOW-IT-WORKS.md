@@ -15,9 +15,10 @@ size budget, and so it can move to a dedicated Pages repo when it grows — see
 
 ```
 fun/lit/data-refs/
-  manifest.json        # {ver, shards:{<jkey>:{file,papers,edges}}, index, totals, sources}
+  manifest.json        # {ver, shards:{<jkey>:{file,papers,edges}}, index, counts, totals, sources}
   refs-<jkey>.json     # { "<citing-doi>": ["<cited-doi>", …] } — one per citing journal
   refs-index.json      # { "<cited-doi>": [title, jkey, year] } — every edge target
+  refs-counts.json     # { "<citing-doi>": N } — in-catalog refs per paper (toggle count)
   meta.json            # small run summary
   _refs-cache.json     # the incremental crawl cache (NOT served — see below)
   _oaid.json           # doi → OpenAlex id map (NOT served — see below)
@@ -28,6 +29,11 @@ fun/lit/data-refs/
   downloads just the one file for a paper's journal, on demand.
 - **`refs-index.json`** lets the page render a cited paper's title/journal/year
   without loading that paper's journal file.
+- **`refs-counts.json`** is a tiny `{"<citing-doi>": N}` companion (one int per
+  citing paper with ≥1 edge) so a card can show the count on its "Cited
+  references in this catalog (N)" toggle without downloading the per-journal
+  shard. The page loads it once in the background; the shard still loads lazily
+  only when a panel is opened.
 - **`_refs-cache.json`** is the build's memory: `{"<doi>": {r:[raw cited DOIs],
   o:[raw OpenAlex ref ids], t:"date", v:<ver>, oa:<ver>}}`. It caches each
   source's **raw** output (not just the in-catalog subset), so every build
@@ -101,7 +107,11 @@ Key env vars: `REFS_MAILTO` (Crossref/OpenAlex quota identity,
 
 `index.html` fetches `data-refs/manifest.json` at load (`loadRefsManifest`). A
 paper card shows the **"Cited references in this catalog"** toggle only when its
-journal has a shard (`refsShardFor`). Opening it lazy-loads `refs-index.json`
+journal has a shard (`refsShardFor`); when the manifest has shards, the page also
+fetches `refs-counts.json` once in the background (`loadRefsCounts`) so each
+toggle can show its count — "Cited references in this catalog (N)" — filled in on
+arrival (`annotateRefsCounts`/`refsToggleLabel`) without downloading any shard.
+Opening it lazy-loads `refs-index.json`
 (once) and the paper's `refs-<jkey>.json` (once per journal), then lists the
 cited papers newest-first, each linking to its DOI (`togRefs`). The dataset
 **ships empty** (a manifest with no shards), so the toggle stays hidden until
