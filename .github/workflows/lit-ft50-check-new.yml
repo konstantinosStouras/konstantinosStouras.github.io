@@ -1,0 +1,112 @@
+name: lit — check for new FT50 catalog papers (incremental)
+
+# The daily lit-ft50-update-data.yml re-pulls all 50 FT50 journals' ENTIRE
+# Crossref back-catalogues, so it can only run once a day. This lighter job runs
+# the same pipeline in --incremental mode for a SMALL configured subset of
+# journals (FT50_INCR_JOURNALS; default: Econometrica): it asks Crossref for only
+# the records it (re)indexed in the last few days (filter=from-index-date),
+# upserts them into the committed papers-<key>.json, and rewrites only the small
+# derived files (recent/meta/sources/registry).
+#
+# Why Econometrica specifically: lit's own fast pass (lit-check-new.yml) already
+# covers the six native INFORMS/SAGE Articles-in-Advance journals. Econometrica
+# is the one journal from that request that lives ONLY in the FT50 catalog, and
+# its publisher assigns an accepted paper straight to a future issue — so Crossref
+# never lists it as a no-volume advance article, and the once-a-day build was
+# otherwise the only thing that ever picked a new Econometrica paper up (up to a
+# day late). Polling it here surfaces new Econometrica papers within minutes of
+# Crossref indexing them, and joins them to "Recently added", exactly like the
+# native journals.
+#
+# It writes NOTHING when nothing new arrived, so it commits (and triggers a Pages
+# redeploy) ONLY on a genuine change — that is what lets it run frequently without
+# degrading. Enrichment (pre-prints, citations) and the heavy authors/affiliations
+# aggregates are left to the daily full build.
+
+on:
+  schedule:
+    # Every 20 minutes. One Crossref call per polled journal; Econometrica's
+    # indexing lag is hours, so this is about the finest useful cadence. Most
+    # runs find nothing and exit without a commit.
+    - cron: '*/20 * * * *'
+  workflow_dispatch: {}      # run on demand from the Actions tab
+  push:
+    # Run once as a check whenever the pipeline itself changes.
+    paths:
+      - '.github/workflows/lit-ft50-check-new.yml'
+      - 'lit/_scraper-ft50/build-data.mjs'
+
+# Share the daily FT50 build's concurrency group: this job must never run while
+# the daily full build, a pre-print backfill or the citations job is committing,
+# or the two could race a papers-<key>.json push / Pages deploy. Overlapping
+# fires simply queue (and coalesce) behind the running one.
+concurrency:
+  group: lit-ft50-update-data-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write            # needed to commit the refreshed data back
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Always runs — on a feature branch / PR this validates the incremental
+      # pass end to end without committing.
+      - name: Incremental check (Crossref from-index-date)
+        env:
+          FT50_MAILTO: kstouras+litft50@gmail.com   # Crossref "polite pool" contact
+        run: node lit/_scraper-ft50/build-data.mjs --incremental
+
+      - name: Commit new/updated papers (master only)
+        # Only master carries the committed dataset. On a rejected push (master
+        # advanced meanwhile — almost always a human merge, since the concurrency
+        # group serializes the CI data writers) we discard our commit, hard-reset
+        # to the new tip and re-run the incremental pass against it: the pass is
+        # idempotent and additive, so this never mis-merges the one-line JSON files
+        # nor loses a concurrent commit's data.
+        if: github.ref == 'refs/heads/master'
+        env:
+          FT50_MAILTO: kstouras+litft50@gmail.com
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for attempt in 1 2 3 4; do
+            git add lit/data-ft50
+            if git diff --cached --quiet; then
+              echo "No new papers this run — nothing to commit."
+              exit 0
+            fi
+            git commit -m "lit: incremental refresh (new Econometrica papers)"
+            if git push origin HEAD:${{ github.ref_name }}; then
+              echo "Pushed on attempt $attempt."
+              exit 0
+            fi
+            echo "Push rejected — syncing to the new tip and re-running the incremental pass."
+            git reset --hard HEAD~1
+            git fetch origin ${{ github.ref_name }}
+            git reset --hard origin/${{ github.ref_name }}
+            node lit/_scraper-ft50/build-data.mjs --incremental
+            sleep 3
+          done
+          echo "::error::Could not push the incremental update after 4 attempts."
+          exit 1
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### lit FT50 incremental check" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f lit/data-ft50/meta.json ]; then
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat lit/data-ft50/meta.json >> "$GITHUB_STEP_SUMMARY"
+            echo '' >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi

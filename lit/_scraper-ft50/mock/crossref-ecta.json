@@ -1,0 +1,55 @@
+{
+  "message": {
+    "items": [
+      {
+        "DOI": "10.3982/ECTA24001",
+        "title": ["Identification and Estimation in a Third New Model"],
+        "author": [
+          { "given": "Ada", "family": "Alpha" },
+          { "given": "Ben", "family": "Beta" }
+        ],
+        "issued": { "date-parts": [[2026, 3, 1]] },
+        "published-online": { "date-parts": [[2026, 3, 1]] },
+        "volume": "94",
+        "issue": "3",
+        "page": "801-834",
+        "type": "journal-article",
+        "container-title": ["Econometrica"],
+        "is-referenced-by-count": 1,
+        "abstract": "<jats:p>We study identification in a canonical setting and propose a new estimator.</jats:p>"
+      },
+      {
+        "DOI": "10.3982/ECTA23002",
+        "title": ["A Robust Test for Weak Instruments Revisited"],
+        "author": [
+          { "given": "Cara", "family": "Gamma" },
+          { "given": "Dan", "family": "Delta" },
+          { "given": "Eve", "family": "Epsilon" }
+        ],
+        "issued": { "date-parts": [[2025, 11, 1]] },
+        "published-online": { "date-parts": [[2025, 11, 1]] },
+        "volume": "93",
+        "issue": "6",
+        "page": "1901-1940",
+        "type": "journal-article",
+        "container-title": ["Econometrica"],
+        "is-referenced-by-count": 12
+      },
+      {
+        "DOI": "10.3982/ECTA22003",
+        "title": ["Dynamic Mechanism Design With Limited Commitment"],
+        "author": [
+          { "given": "Finn", "family": "Zeta" }
+        ],
+        "issued": { "date-parts": [[2024, 7, 1]] },
+        "published-online": { "date-parts": [[2024, 7, 1]] },
+        "volume": "92",
+        "issue": "4",
+        "page": "1201-1250",
+        "type": "journal-article",
+        "container-title": ["Econometrica"],
+        "is-referenced-by-count": 45
+      }
+    ]
+  }
+}

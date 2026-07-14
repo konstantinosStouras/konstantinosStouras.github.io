@@ -128,6 +128,33 @@ const AIA_SUPPLEMENT = existsSync(AIA_SUPPLEMENT_PATH)
   ? JSON.parse(await readFile(AIA_SUPPLEMENT_PATH, 'utf8'))
   : {};
 
+// ── Incremental "new arrivals" pass config (--incremental) ──────────────────
+// The full main() re-pulls all 50 journals' entire Crossref back-catalogues, so
+// it can only run once a day. The lighter incremental pass (incrementalMain,
+// wired by .github/workflows/lit-ft50-check-new.yml) asks Crossref for ONLY the
+// records it (re)indexed in the last few days (filter=from-index-date) for a
+// SMALL configured subset of journals, upserts them into the committed
+// papers-<key>.json, and rewrites only the small derived files. It writes
+// NOTHING when nothing new arrived, so it commits (and redeploys Pages) only on
+// a genuine change.
+//
+// Default subset: Econometrica only. Unlike the six native INFORMS/SAGE journals
+// (which lit's own fast pass already covers and which Crossref lists as
+// no-volume "Articles in Advance"), Econometrica's publisher assigns an accepted
+// paper straight to a future issue, so Crossref never shows it as an advance
+// article — the daily build is otherwise the only thing that ever picks it up,
+// up to a day late. Polling it here surfaces a new Econometrica paper within
+// minutes of Crossref indexing it, exactly like the native journals. Widen with
+// FT50_INCR_JOURNALS=ecta,jf,… if ever needed (one Crossref call per journal).
+const INCR_LOOKBACK_DAYS = parseInt(process.env.FT50_INCR_LOOKBACK_DAYS || '4', 10);
+const INCR_JOURNAL_KEYS = (process.env.FT50_INCR_JOURNALS || 'ecta')
+  .split(',').map(s => s.trim()).filter(Boolean);
+// Only core bibliographic fields are refreshed on a known DOI; enrichment
+// (Preprint/PreprintSrc, an OpenAlex/S2-boosted CitedBy + CitedBySrc, cached
+// SE/AE) is left untouched, exactly as in lit's native incremental pass.
+const INCR_CORE_FIELDS = ['Title', 'Authors', 'Affiliations', 'Volume', 'Issue',
+  'Page', 'Year', 'Status', 'Accepting Editor', 'Area'];
+
 // ── Generic fetch helpers ───────────────────────────────────────────────────
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -397,12 +424,18 @@ function rehydrateRow(row) {
 
 // ── journal pulls ───────────────────────────────────────────────────────────
 
-async function fetchJournalWorks(src) {
+async function fetchJournalWorks(src, opts = {}) {
+  // opts.sinceIndexDate: restrict to records Crossref (re)indexed on/after that
+  // day (filter=from-index-date). Used by the incremental pass so a frequent run
+  // reads only the freshly-indexed tail, not the whole back-catalogue.
+  const sinceFilter = opts.sinceIndexDate
+    ? `filter=${encodeURIComponent(`from-index-date:${opts.sinceIndexDate}`)}&` : '';
   if (MOCK) {
     const raw = await loadJsonIfExists(join(MOCK_DIR, `crossref-${src.key}.json`), null);
     if (!raw) return null; // no fixture -> journal absent from the mock build
     const items = raw.message ? raw.message.items : raw;
-    console.log(`  [mock] ${src.key}: ${items.length} items`);
+    console.log(`  [mock] ${src.key}: ${items.length} items` +
+      (opts.sinceIndexDate ? ` (since ${opts.sinceIndexDate})` : ''));
     return items;
   }
   const all = [];
@@ -414,7 +447,7 @@ async function fetchJournalWorks(src) {
       let cursor = '*';
       let page = 0;
       for (;;) {
-        const url = `${base}?rows=${ROWS}&cursor=${encodeURIComponent(cursor)}` +
+        const url = `${base}?${sinceFilter}rows=${ROWS}&cursor=${encodeURIComponent(cursor)}` +
           `&select=${encodeURIComponent(SELECT)}&mailto=${encodeURIComponent(MAILTO)}`;
         const body = await fetchJson(url);
         const items = body.message.items || [];
@@ -1622,8 +1655,133 @@ async function writeJson(name, data) {
   await writeFile(join(DATA_DIR, name), JSON.stringify(data), 'utf8');
 }
 
+// ── Incremental "new arrivals" pass (--incremental) ─────────────────────────
+// Mirrors lit's native incrementalMain(), but for the FT50 catalog and scoped
+// to a small journal subset (INCR_JOURNAL_KEYS; default: Econometrica). It polls
+// Crossref for only the freshly-indexed tail, upserts into the committed
+// papers-<key>.json (new papers appended; a known DOI has only its core
+// bibliographic fields refreshed, enrichment preserved), and rewrites only the
+// small derived files. Deliberately does NOT rebuild authors/affiliations (left
+// to the daily build, which alone has the ORCID data) nor re-merge the
+// _informs-aia.json forthcoming supplement (also the daily build's job).
+async function incrementalMain() {
+  const sinceDate = new Date(PULL_DATE + 'T00:00:00');
+  sinceDate.setDate(sinceDate.getDate() - INCR_LOOKBACK_DAYS);
+  const since = sinceDate.toISOString().slice(0, 10);
+  const incrJournals = LOCAL_JOURNALS.filter(j => INCR_JOURNAL_KEYS.includes(j.key));
+  const incrKeys = new Set(incrJournals.map(j => j.key));
+  console.log(`ft50 incremental check: records indexed since ${since} for ` +
+    `{${incrJournals.map(j => j.key).join(', ') || 'none'}} (pull date ${PULL_DATE})${MOCK ? ' (MOCK)' : ''}`);
+  await mkdir(DATA_DIR, { recursive: true });
+  if (!incrJournals.length) {
+    console.error(`No FT50 incremental journals resolved from FT50_INCR_JOURNALS="${INCR_JOURNAL_KEYS.join(',')}".`);
+    process.exit(1);
+  }
+
+  // A full build must have run at least once first: the registry is what tells a
+  // genuinely-new paper from a known one, and recent/meta carry the other ~50
+  // journals' state that this narrow pass deliberately does not recompute.
+  const regState = await loadRegistry();
+  if (regState.firstRun) {
+    console.error('No _registry.json yet — run a full build (node build-data.mjs) before the incremental pass.');
+    process.exit(1);
+  }
+  const prevMeta = await loadJsonIfExists(join(DATA_DIR, 'meta.json'), {});
+  const prevSources = await loadJsonIfExists(join(DATA_DIR, 'sources.json'), []);
+  const prevRecent = await loadJsonIfExists(join(DATA_DIR, 'recent.json'), []);
+
+  const bySource = {};
+  const changedSources = new Set();
+
+  for (const src of incrJournals) {
+    const existing = await loadCommitted(src); // rehydrated internal rows
+    const byDoi = new Map(existing.filter(p => p._doi).map(p => [p._doi, p]));
+    const fetched = mapJournal(await fetchJournalWorks(src, { sinceIndexDate: since }) || [], src);
+    let added = 0, updated = 0;
+    for (const nr of fetched) {
+      const cur = nr._doi ? byDoi.get(nr._doi) : null;
+      if (!cur) {                          // genuinely new paper
+        existing.push(nr);
+        if (nr._doi) byDoi.set(nr._doi, nr);
+        added++;
+        continue;
+      }
+      // Known DOI: refresh only core bibliographic fields; leave enrichment intact.
+      let rowChanged = false;
+      for (const f of INCR_CORE_FIELDS) {
+        if (nr[f] === undefined) continue;
+        if (String(nr[f] ?? '') !== String(cur[f] ?? '')) { cur[f] = nr[f]; rowChanged = true; }
+      }
+      // Crossref's citation floor may only rise; never regress an enriched count.
+      if (typeof nr.CitedBy === 'number' && nr.CitedBy > (cur.CitedBy || 0)) {
+        cur.CitedBy = nr.CitedBy; delete cur.CitedBySrc; rowChanged = true;
+      }
+      if (rowChanged) { cur._rank = pubRank(cur.Year, cur.Volume, cur.Issue, cur.Page, cur.Status); updated++; }
+    }
+    if (added || updated) changedSources.add(src.key);
+    existing.sort((a, b) => (b._rank - a._rank) || cmp(regKey(a), regKey(b)));
+    bySource[src.key] = existing;
+    console.log(`  ${src.key}: +${added} new, ${updated} updated (now ${existing.length})`);
+  }
+
+  // Overlay cached Senior/Associate editors onto any new/updated rows (offline;
+  // a no-op unless a polled journal carries SE/AE — Econometrica does not).
+  await applyInformsEditors(bySource);
+
+  // Registry: stamp only genuinely-new keys of the polled journals. Journals
+  // absent from bySource are skipped by updateRegistry, so their entries — and
+  // the onboarding guard's per-source accounting — are left untouched.
+  const registryBefore = Object.keys(regState.map).length;
+  const registry = updateRegistry(bySource, regState);
+  const registryGrew = Object.keys(registry).length > registryBefore;
+
+  if (!changedSources.size && !registryGrew) {
+    console.log('No new or changed papers — nothing to write.');
+    return;
+  }
+
+  // Per-source counts: carry every journal's count from the last full build,
+  // override only the polled ones (no need to load the other ~50 papers files).
+  const counts = { ...(prevMeta.perSource || {}) };
+  for (const src of incrJournals) counts[src.key] = bySource[src.key].length;
+
+  // recent.json: recompute over (the polled journals' fresh rows) ∪ (the last
+  // build's recent rows for every OTHER journal). Since this pass and the daily
+  // build are the only writers of data-ft50 and share a concurrency group, the
+  // polled journals are the only thing that has changed since that recent.json
+  // was written — so this union still contains the true newest-N, and
+  // re-windowing + re-capping it reproduces buildRecent's output without reading
+  // all ~50 papers files.
+  const carriedRecent = (Array.isArray(prevRecent) ? prevRecent : [])
+    .filter(r => !incrKeys.has(r.JKey))
+    .map(r => { const { ['Date Added']: _da, ...rest } = r; return rehydrateRow(rest); });
+  const incrPapers = incrJournals.flatMap(src => bySource[src.key]);
+  const recent = buildRecent([...carriedRecent, ...incrPapers], registry);
+
+  // Rewrite only the changed per-source files.
+  for (const src of incrJournals) {
+    if (changedSources.has(src.key)) await writeJson(`papers-${src.key}.json`, bySource[src.key].map(publicRow));
+  }
+
+  const total = Object.values(counts).reduce((a, b) => a + (b || 0), 0);
+  const sources = (Array.isArray(prevSources) && prevSources.length)
+    ? prevSources.map(s => (incrKeys.has(s.key) ? { ...s, count: counts[s.key] ?? s.count } : s))
+    : null;
+  const meta = { ...prevMeta, lastPull: PULL_DATE, paperCount: total, perSource: counts };
+
+  if (sources) await writeJson('sources.json', sources);
+  await writeJson('recent.json', recent);
+  await writeJson('meta.json', meta);
+  await writeJson('_registry.json', registry);
+
+  const newlyRegistered = Object.keys(registry).length - registryBefore;
+  console.log(`ft50 incremental update: {${[...changedSources].join(', ') || 'none'}} changed, ` +
+    `${newlyRegistered} newly-registered, ${recent.length} recent, ${total} total papers.`);
+}
+
 // Only run when executed directly — importing a helper from this module for a
 // test must not fire the whole network pipeline.
 if (process.argv[1] && import.meta.url === (await import('node:url')).pathToFileURL(process.argv[1]).href) {
-  main().catch(e => { console.error(e); process.exit(1); });
+  const incremental = process.env.FT50_INCREMENTAL === '1' || process.argv.includes('--incremental');
+  (incremental ? incrementalMain() : main()).catch(e => { console.error(e); process.exit(1); });
 }
