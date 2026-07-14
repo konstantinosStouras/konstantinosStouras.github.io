@@ -328,16 +328,24 @@ catalog again and the next user's own defaults aren't blocked by leftovers.
 Auto-applying a catalog (FT50/shard) journal before its lazy manifest arrives is
 fine: `registerExtraSources()` re-applies and refreshes the chip label (and the
 open modal's list) once the journal registers.
-**Keep the About modal in sync:** the **About** modal (`#litAboutOverlay` in
-`index.html`) is the user-facing tour of what The Lit does. **Whenever you add or
-materially change a user-facing `/lit` feature, update the About modal's copy
-in the same change** (e.g. a new journal type, a new filter, a sign-in/library
-capability, an alerts option, a Data Analytics view) so it never drifts from what
-actually ships — the same keep-in-sync discipline as the `fun/index.html`
-landing-page cards.
-**Top navigation (in the claret header):** four buttons — **About** (a modal
-describing what the browser covers, how to search, and the full data/provenance
-notes, mirroring the footer text), **E-mail alerts**, **Data Analytics** (a
+**Keep the About page in sync:** the **About** page (`lit/about/index.html`) is
+the user-facing tour of what The Lit does. It was **promoted from an in-app modal
+to a standalone page** (`stouras.com/lit/about/`) that shares an identical claret
+header with the Data Analytics page (`.brand` logo → back to the database; a
+`.pnav` with an active **About** / **Data Analytics** button — the active one
+toggles back to the database, mirroring the main-page top nav; see `.pnav-btn` in
+both files). **Whenever you add or materially change a user-facing `/lit` feature,
+update the About page's copy in the same change** (e.g. a new journal type, a new
+filter, a sign-in/library capability, an alerts option, a Data Analytics view) so
+it never drifts from what actually ships — the same keep-in-sync discipline as the
+`fun/index.html` landing-page cards. Its "What's new" list is rendered from
+`../changelog.json` (the same single source the main page's alert preview and the
+mailer use). The main page links to it (`about/`) from the top-nav **About**
+button and the footer; the old modal (`#litAboutOverlay`) was removed.
+**Top navigation (in the claret header):** four buttons — **About** (a link to
+the standalone page `lit/about/` describing what the browser covers, how to
+search, and the full data/provenance notes, mirroring the footer text),
+**E-mail alerts**, **Data Analytics** (a
 link to the sub-page `lit/analytics/` — a sub-page, so NOT a
 `fun/index.html` card), and
 **Feedback** (a modal with the maintainer's contact links: e-mail
@@ -519,15 +527,16 @@ no-op until the `FIREBASE_SERVICE_ACCOUNT` + `SMTP_*` secrets are set (so it
 never fails pre-setup); `--selftest`/`--scan`/`--dry-run` modes and the full
 deploy steps are in `lit/_EMAIL-ALERTS-SETUP.md`. No Firestore rule change
 is needed. All of the alerts UI logic lives inside the accounts IIFE
-(`window.litAlerts*`); About/Feedback are top-level (`window.litAbout*` /
-`window.litFeedback*`). The **About modal also renders a data-driven "What's
-new" list** (`#litWhatsNew` → `renderAboutWhatsNew()` in the top-nav IIFE) from
-the same `changelog.json`, so the changelog is the ONE place to log a feature —
-it feeds the About list, the alert preview and the automated e-mails at once. So:
-**when you ship a user-facing `/lit` feature, add a `changelog.json` entry
-(dated ~today) in the same change** — that is now part of the keep-in-sync
-discipline alongside updating the About modal copy and the `fun/index.html`
-landing cards.
+(`window.litAlerts*`); Feedback is top-level (`window.litFeedback*`). The
+**About page renders a data-driven "What's new" list** (`#litWhatsNew`, its own
+inline script in `lit/about/index.html`) from the same `changelog.json` (fetched
+as `../changelog.json`); the main page still loads `changelog.json` into
+`LIT_CHANGELOG` for the alert preview. So the changelog is the ONE place to log a
+feature — it feeds the About page's list, the alert preview and the automated
+e-mails at once. So: **when you ship a user-facing `/lit` feature, add a
+`changelog.json` entry (dated ~today) in the same change** — that is now part of
+the keep-in-sync discipline alongside updating the About page copy and the
+`fun/index.html` landing cards.
 
 ### Working Papers — the listed authors' UNPUBLISHED work
 A **"Working Papers" journal type** (last in `JOURNAL_TYPES` for badge

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>About · The Lit — Research Paper Browser</title>
+
+<!-- The user-facing "About" for The Lit. Static page (promoted from the old
+     in-app modal) that shares its header with the Data Analytics page; the
+     "What's new" list is read from ../changelog.json, the same single source
+     the main page and the alert mailer use. -->
+<meta name="description" content="About The Lit — a fast, one-place browser for research papers across the leading journals in Operations, Management, Marketing, Information Systems, Economics and Computer Science.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://stouras.com/lit/about/">
+<meta name="author" content="Konstantinos Stouras">
+<meta name="theme-color" content="#7d1d3f">
+
+<!-- Favicon: the same inline "Lit" monogram as the main browser. -->
+<link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%237d1d3f'/%3E%3Ctext%20x='50'%20y='66'%20font-family='Georgia,serif'%20font-size='46'%20font-style='italic'%20font-weight='bold'%20fill='%23c9a24b'%20text-anchor='middle'%3ELit%3C/text%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%237d1d3f'/%3E%3Ctext%20x='50'%20y='66'%20font-family='Georgia,serif'%20font-size='46'%20font-style='italic'%20font-weight='bold'%20fill='%23c9a24b'%20text-anchor='middle'%3ELit%3C/text%3E%3C/svg%3E">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..600&family=Work+Sans:ital,wght@0,300..700;1,300..600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #7d1d3f;
+    --navy-dark: #591428;
+    --navy-light: #f4e6ea;
+    --accent: #c9a24b;
+    --accent-light: #f6edda;
+    --text: #241a1e;
+    --text-muted: #6a5a60;
+    --bg: #f7f4ef;
+    --white: #ffffff;
+    --border: #dce1ea;
+    --shadow-sm: 0 1px 3px rgba(125,29,63,0.06);
+    --shadow-lg: 0 8px 32px rgba(125,29,63,0.12);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  body { font-family: 'Work Sans', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh; min-height: 100dvh; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+  /* ── Shared header (identical to the Data Analytics page) ─────────────────
+     The logo returns to the database; the active page's own nav button also
+     returns (toggles the section off), per the top-nav on the main browser. */
+  .header { background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%); box-shadow: var(--shadow-lg); }
+  .header-inner { max-width: 1160px; margin: 0 auto; padding: 22px 32px; display: flex; align-items: center; justify-content: space-between; gap: 16px 20px; flex-wrap: wrap; }
+  .brand { text-decoration: none; display: inline-block; }
+  .brand h1 { font-family: 'Fraunces', serif; color: #fff; font-size: 26px; font-weight: 400; letter-spacing: -0.5px; }
+  .brand h1 em { font-style: italic; color: var(--accent); }
+  .brand .sub { display: block; font-family: 'Work Sans', sans-serif; font-size: 13px; font-weight: 400; color: rgba(255,255,255,0.7); letter-spacing: 0; margin-top: 3px; }
+  .pnav { display: flex; gap: 10px; flex-wrap: wrap; }
+  .pnav-btn { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: #fff; text-decoration: none; border: 1.5px solid rgba(255,255,255,0.5); background: rgba(255,255,255,0.08); border-radius: 8px; padding: 9px 15px; transition: all .15s; white-space: nowrap; }
+  .pnav-btn:hover { background: rgba(255,255,255,0.18); border-color: #fff; }
+  .pnav-btn.is-active { background: #fff; color: var(--navy); border-color: #fff; }
+  .pnav-btn .ico { font-size: 14px; line-height: 1; }
+
+  /* ── About prose ─────────────────────────────────────────────────────────── */
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 30px 32px 64px; }
+  .about-body { max-width: 820px; margin: 0 auto; background: var(--white); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-sm); padding: 30px 34px 34px; }
+  .about-body .lead { font-size: 17px; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px; }
+  .about-body h2 { font-family: 'Fraunces', serif; font-weight: 500; color: var(--navy); font-size: 21px; margin: 28px 0 8px; }
+  .about-body h2:first-of-type { margin-top: 18px; }
+  .about-body p { margin-bottom: 13px; font-size: 15px; line-height: 1.75; text-align: justify; text-justify: inter-word; -webkit-hyphens: auto; hyphens: auto; }
+  .about-body a { color: var(--navy); font-weight: 500; }
+  .about-body ul { list-style: none; margin: 4px 0 14px; padding: 0; }
+  .about-body ul li { position: relative; padding-left: 22px; margin-bottom: 9px; font-size: 15px; line-height: 1.7; }
+  .about-body ul li::before { content: '›'; position: absolute; left: 5px; top: 0; color: var(--accent); font-weight: 700; }
+  .about-body .whats-new { margin: 6px 0 6px; }
+  .about-body .whats-new ul li { padding-left: 12px; margin-bottom: 12px; }
+  .about-body .whats-new ul li::before { content: none; }
+  .about-note { font-size: 13px; color: var(--text-muted); border-top: 1px solid var(--border); margin-top: 24px; padding-top: 16px; line-height: 1.6; }
+  .about-note a { color: var(--navy); }
+
+  @media (max-width: 640px) {
+    .header-inner, .wrap { padding-left: 18px; padding-right: 18px; }
+    .brand h1 { font-size: 22px; }
+    .about-body { padding: 22px 18px 24px; }
+    .about-body p, .about-body ul li { text-align: left; }
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <a class="brand" href="/lit/" title="Back to The Lit"><h1><em>The Lit</em> — About<span class="sub">What it is and how it works</span></h1></a>
+    <nav class="pnav">
+      <a class="pnav-btn is-active" href="/lit/" title="Close About — back to the database"><span class="ico">ⓘ</span>About</a>
+      <a class="pnav-btn" href="/lit/analytics/" title="Summary statistics for the database"><span class="ico">📊</span>Data Analytics</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="about-body">
+    <p class="lead">A fast, one-place browser for research papers across the leading journals in Operations, Management, Marketing, Information Systems, Economics and Computer Science.</p>
+    <p>I built The Lit because I wanted one place to search papers across the journals I follow, instead of jumping between publisher sites. It is a personal project, and it keeps growing.</p>
+
+    <h2>What it covers</h2>
+    <p>It is crawling all papers published in <strong>UTD24</strong>, <strong>FT50</strong> journal lists and then includes all journals within the <strong>ABS 4*</strong>, <strong>ABS 4</strong>, and <strong>ABS 3</strong> lists that publish papers in Operations, Supply Chain, Economics, Computer Science, Project Management and Innovation. (Crawling everything in the last lists is possible but would result in an (even) slower database of collected papers.) In this crawling effort, I have prioritized collecting information from all papers in eight core sources of my interest: <em>Management Science</em>, <em>Operations Research</em>, <em>Marketing Science</em>, <em>M&amp;SOM</em>, <em>Information Systems Research</em>, <em>Production &amp; Operations Management</em>, five <em>PNAS</em> topic sections, and the <em>ACM EC</em> conference (1999 to today). The database built is close to <strong>1GB</strong> and would need a few months of slow crawling to be complete.</p>
+
+    <h2>Key novel features</h2>
+    <ul>
+      <li><strong>Quick views</strong> — one-click "recently added" and "open-access pre-print" filters surface the newest work and the papers you can read for free right now, so you never have to scan the whole catalog or chase a paywalled PDF.</li>
+      <li><strong>Private library</strong> — sign in to star papers, add notes, build lists and tag your reading, all saved to your account, so your reading follows you across visits and devices instead of scattering across browser bookmarks.</li>
+      <li><strong>Saved default filters</strong> — store a preferred set of journals or journal types that load automatically each time you sign in, so you land straight on the subset you care about rather than re-applying the same filters every visit.</li>
+      <li><strong>E-mail alerts</strong> — get an e-mail when new papers match your filters, when any new paper is added, or when the site gains a feature — with a live preview and a "Send me a test e-mail" button — so you keep up with new work without having to check back.</li>
+      <li><strong>Data Analytics dashboard</strong> — a separate <a href="/lit/analytics/">page</a> of interactive charts (publication volume, co-authorship, pre-print and citation trends, an author spotlight and editorial breakdowns) that turns the raw catalog into field-level summary statistics you can read at a glance.</li>
+      <li><strong>Team-science &amp; disruption index</strong> — inside Data Analytics, a reconstruction of Wu, Wang &amp; Evans (<em>Nature</em>, 2019) that reads off the citation network how much a paper — or an author — <em>disrupts</em> its field versus <em>develops</em> it, and how that shifts with team size, so you can gauge the <em>character</em> of research, not just its volume.</li>
+    </ul>
+
+    <h2>How to search</h2>
+    <p>You can filter by <strong>journal type</strong> (UTD24, FT50, ABS 4/4*, ABS 3, or Working Papers — the listed authors' unpublished pre-prints), by <strong>journal</strong>, or by <strong>year</strong>, and search the text of <strong>authors</strong>, <strong>titles</strong>, <strong>abstracts</strong> and <strong>affiliations</strong>. For <em>Management Science</em> you can also filter by the <strong>accepting editor</strong> and <strong>editorial area</strong>, and for <em>Information Systems Research</em> and <em>Marketing Science</em> by <strong>senior and associate editor</strong>. Filters stack, so everything you pick is combined, and the results bar tells you what share of the journals in scope actually matched.</p>
+
+    <h2>On every paper</h2>
+    <p>Each paper carries a small badge for the most selective list its journal is on (UTD24, then FT50, then ABS 4/4*, then ABS 3). You also get one-click BibTeX, a link to a free open-access pre-print whenever I could find one (arXiv, SSRN, NBER, OSF, bioRxiv or medRxiv), and a "cited by" count that links through to the paper on Google Scholar. PNAS papers show their Significance statement too. Many papers also have a "Cited references in this catalog" toggle — with a count of how many — that lists the other papers they cite which are themselves in The Lit, with each reference's authors, and each one linking straight to that paper, so you can walk the citation graph within these journals. That list is built <em>slowly</em> by combining several reference sources (Crossref, OpenAlex and Semantic Scholar), so its coverage grows over time and expected to be complete for all past papers crawled here by October 2026 or so.</p>
+
+    <h2 id="litWhatsNewHead">What's new</h2>
+    <p>The Lit keeps growing. Recent additions are logged below; you can also get them by e-mail — on <a href="/lit/">The Lit</a>, open <strong>E-mail alerts</strong> and turn on <em>New features &amp; updates to the website</em> (daily gets each new update as it lands; weekly or monthly batch them).</p>
+    <div id="litWhatsNew" class="whats-new"><p style="color:var(--text-muted);font-size:13px;margin:0">Loading the latest updates…</p></div>
+
+    <h2>Where the data come from</h2>
+    <p>Editors and editorial areas are shown for <em>Management Science</em> papers from 2011 onwards. The other sources contribute their published papers and Articles in Advance. ACM EC papers link out to an arXiv, SSRN or open-access PDF wherever one exists.</p>
+    <p>The Journal types filter covers the <a href="https://jsom.utdallas.edu/the-utd-top-100-business-school-research-rankings/list-of-journals" target="_blank" rel="noopener">UTD24 list</a> and the full <a href="https://www.ft.com/ft50-journals" target="_blank" rel="noopener">FT50 research rank</a>. Journals beyond the eight core sources come from this app's own dataset, which is refreshed daily, checked against the FT's list once a year, and downloaded only when you need it. The badge to the left of a title shows the single most selective list a journal belongs to, with one exception: a journal that sits on both the UTD24 and FT50 lists shows both. A broader filter still finds the paper, so an ABS 4/4* search includes every UTD24 journal. ABS ratings follow the Chartered ABS <em>Academic Journal Guide</em> (AJG 2024), as mirrored at <a href="https://journalranking.org/" target="_blank" rel="noopener">journalranking.org</a>. Beyond the FT50 and UTD24 lists I have kept ABS coverage to Operations, Supply Chain, Economics, Computer Science, Project Management and Innovation. HBR and MIT Sloan Management Review are FT50 journals and badged as such; the guide gives them no number, so they keep their last numeric grade and the ABS 3 filter still finds them.</p>
+    <p>All of the metadata is public, collected through the <a href="https://www.crossref.org/documentation/retrieve-metadata/rest-api/" target="_blank" rel="noopener">Crossref API</a>, with OpenAlex, DBLP and Semantic Scholar helping fill in the EC PDF links. PNAS section labels come from pnas.org's own topic index where it has one, and are otherwise approximated from each paper's <a href="https://openalex.org" target="_blank" rel="noopener">OpenAlex</a> topic.</p>
+
+    <div class="about-note">This is a personal project, so please forgive any rough edges. Feedback and suggestions are always welcome through the <a href="/lit/">Feedback</a> tab on The Lit, and any mistakes are my own. <a href="https://www.stouras.com" target="_blank" rel="noopener">Konstantinos I. Stouras</a></div>
+  </div>
+</main>
+
+<script>
+  // "What's new" list — read from the shared changelog (../changelog.json), the
+  // same single source the main page's alert preview and the mailer use.
+  (function () {
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+    var box = document.getElementById('litWhatsNew'), head = document.getElementById('litWhatsNewHead');
+    function fmt(d) { try { return new Date(d + 'T00:00:00Z').toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }); } catch (e) { return d; } }
+    function httpUrl(u) { return /^https?:\/\//i.test('' + (u || '')) ? ('' + u) : ''; }
+    function hide() { if (head) head.style.display = 'none'; if (box) box.style.display = 'none'; }
+    function render(cl) {
+      if (!box) return;
+      if (!cl.length) { hide(); return; }
+      box.innerHTML = '<ul style="list-style:none;padding:0;margin:0">' + cl.slice(0, 8).map(function (f) {
+        var url = httpUrl(f.url);
+        return '<li style="margin:0 0 12px;padding-left:12px;border-left:3px solid var(--accent)">' +
+          '<div style="font-size:11.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px">' + esc(fmt(f.date)) + '</div>' +
+          '<div style="font-weight:600;color:var(--text);font-size:15px">' + (url ? '<a href="' + esc(url) + '" style="color:var(--navy);text-decoration:none">' + esc(f.title) + '</a>' : esc(f.title)) + '</div>' +
+          (f.summary ? '<div style="color:var(--text);font-size:13.5px;margin-top:1px;line-height:1.55">' + esc(f.summary) + '</div>' : '') +
+          '</li>';
+      }).join('') + '</ul>';
+    }
+    fetch('../changelog.json', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+      var list = Array.isArray(j) ? j : (j && Array.isArray(j.updates) ? j.updates : []);
+      list = list.filter(function (e) { return e && e.title && e.date; }).sort(function (a, b) { return a.date < b.date ? 1 : (a.date > b.date ? -1 : 0); });
+      render(list);
+    }).catch(hide);
+  })();
+</script>
+</body>
+</html>

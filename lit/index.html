@@ -638,7 +638,7 @@
     <h1><em>The Lit</em>: A research paper browser</h1>
     <div class="header-right">
       <nav class="lit-nav" aria-label="The Lit — sections">
-        <button type="button" class="lit-nav-btn" onclick="litAboutOpen()" title="What The Lit is and how it works"><span class="ico">ⓘ</span>About</button>
+        <a class="lit-nav-btn" href="about/" title="What The Lit is and how it works"><span class="ico">ⓘ</span>About</a>
         <button type="button" class="lit-nav-btn" onclick="litAlertsOpen()" title="Get an e-mail when new papers match your filters"><span class="ico">✉</span>E-mail alerts</button>
         <a class="lit-nav-btn" href="analytics/" title="Summary statistics for the database"><span class="ico">📊</span>Data Analytics</a>
         <button type="button" class="lit-nav-btn" onclick="litFeedbackOpen()" title="Send feedback and suggestions"><span class="ico">💬</span>Feedback</button>
@@ -800,9 +800,9 @@
 <footer class="footer">
   <div class="footer-inner">
     <div class="footer-lead">Built as a personal project to search papers efficiently across journals in Operations, Supply Chain, Economics, Computer Science, Project Management and Innovation — all in one place.</div>
-    <!-- The data/provenance paragraphs live in the About modal (top nav) to avoid
-         duplicating them here — see the "Data & provenance" section of #litAboutOverlay. -->
-    <div>See <span class="acct-link" onclick="litAboutOpen()">About</span> for what this covers and how the data are collected. <span class="acct-link" onclick="litFeedbackOpen()">Feedback</span> and suggestions are welcome. <span style="white-space:nowrap">Any errors are my own. <a href="https://www.stouras.com" target="_blank">Konstantinos I. Stouras</a></span></div>
+    <!-- The data/provenance paragraphs live on the About page (/lit/about/, linked
+         from the top nav) to avoid duplicating them here. -->
+    <div>See <a class="acct-link" href="about/">About</a> for what this covers and how the data are collected. <span class="acct-link" onclick="litFeedbackOpen()">Feedback</span> and suggestions are welcome. <span style="white-space:nowrap">Any errors are my own. <a href="https://www.stouras.com" target="_blank">Konstantinos I. Stouras</a></span></div>
   </div>
 </footer>
 
@@ -3754,50 +3754,6 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   </div>
 </div>
 
-<!-- ── About modal ────────────────────────────────────────────────────────── -->
-<div id="litAboutOverlay" class="acct-overlay" onclick="if(event.target===this)litAboutClose()">
-  <div class="acct-modal wide">
-    <button class="acct-modal-x" onclick="litAboutClose()" aria-label="Close">×</button>
-    <div class="acct-modal-head">
-      <h2>About <em style="font-style:italic;color:var(--accent)">The Lit</em></h2>
-      <p>A fast, one-place browser for research papers across the leading journals in Operations, Management, Marketing, Information Systems, Economics and Computer Science.</p>
-    </div>
-    <div class="info-body">
-      <p>I built The Lit because I wanted one place to search papers across the journals I follow, instead of jumping between publisher sites. It is a personal project, and it keeps growing.</p>
-
-      <h3>What it covers</h3>
-      <p>It is crawling all papers published in <strong>UTD24</strong>, <strong>FT50</strong> journal lists and then includes all journals within the <strong>ABS 4*</strong>, <strong>ABS 4</strong>, and <strong>ABS 3</strong> lists that publish papers in Operations, Supply Chain, Economics, Computer Science, Project Management and Innovation. (Crawling everything in the last lists is possible but would result in an (even) slower database of collected papers.) In this crawling effort, I have prioritized collecting information from all papers in eight core sources of my interest: <em>Management Science</em>, <em>Operations Research</em>, <em>Marketing Science</em>, <em>M&amp;SOM</em>, <em>Information Systems Research</em>, <em>Production &amp; Operations Management</em>, five <em>PNAS</em> topic sections, and the <em>ACM EC</em> conference (1999 to today). The database built is close to <strong>1GB</strong> and would need a few months of slow crawling to be complete.</p>
-
-      <h3>Key novel features</h3>
-      <ul>
-        <li><strong>Quick views</strong> — one-click "recently added" and "open-access pre-print" filters surface the newest work and the papers you can read for free right now, so you never have to scan the whole catalog or chase a paywalled PDF.</li>
-        <li><strong>Private library</strong> — sign in to star papers, add notes, build lists and tag your reading, all saved to your account, so your reading follows you across visits and devices instead of scattering across browser bookmarks.</li>
-        <li><strong>Saved default filters</strong> — store a preferred set of journals or journal types that load automatically each time you sign in, so you land straight on the subset you care about rather than re-applying the same filters every visit.</li>
-        <li><strong>E-mail alerts</strong> — get an e-mail when new papers match your filters, when any new paper is added, or when the site gains a feature — with a live preview and a "Send me a test e-mail" button — so you keep up with new work without having to check back.</li>
-        <li><strong>Data Analytics dashboard</strong> — a separate <a href="analytics/">page</a> of interactive charts (publication volume, co-authorship, pre-print and citation trends, an author spotlight and editorial breakdowns) that turns the raw catalog into field-level summary statistics you can read at a glance.</li>
-        <li><strong>Team-science &amp; disruption index</strong> — inside Data Analytics, a reconstruction of Wu, Wang &amp; Evans (<em>Nature</em>, 2019) that reads off the citation network how much a paper — or an author — <em>disrupts</em> its field versus <em>develops</em> it, and how that shifts with team size, so you can gauge the <em>character</em> of research, not just its volume.</li>
-      </ul>
-
-      <h3>How to search</h3>
-      <p>You can filter by <strong>journal type</strong> (UTD24, FT50, ABS 4/4*, ABS 3, or Working Papers — the listed authors' unpublished pre-prints), by <strong>journal</strong>, or by <strong>year</strong>, and search the text of <strong>authors</strong>, <strong>titles</strong>, <strong>abstracts</strong> and <strong>affiliations</strong>. For <em>Management Science</em> you can also filter by the <strong>accepting editor</strong> and <strong>editorial area</strong>, and for <em>Information Systems Research</em> and <em>Marketing Science</em> by <strong>senior and associate editor</strong>. Filters stack, so everything you pick is combined, and the results bar tells you what share of the journals in scope actually matched.</p>
-
-      <h3>On every paper</h3>
-      <p>Each paper carries a small badge for the most selective list its journal is on (UTD24, then FT50, then ABS 4/4*, then ABS 3). You also get one-click BibTeX, a link to a free open-access pre-print whenever I could find one (arXiv, SSRN, NBER, OSF, bioRxiv or medRxiv), and a "cited by" count that links through to the paper on Google Scholar. PNAS papers show their Significance statement too. Many papers also have a "Cited references in this catalog" toggle — with a count of how many — that lists the other papers they cite which are themselves in The Lit, with each reference's authors, and each one linking straight to that paper, so you can walk the citation graph within these journals. That list is built <em>slowly</em> by combining several reference sources (Crossref, OpenAlex and Semantic Scholar), so its coverage grows over time and expected to be complete for all past papers crawled here by October 2026 or so.</p>
-
-      <h3 id="litWhatsNewHead">What's new</h3>
-      <p>The Lit keeps growing. Recent additions are logged below; you can also get them by e-mail — open <span class="acct-link" onclick="litAboutClose();litAlertsOpen();return false;">E-mail alerts</span> and turn on <em>New features &amp; updates to the website</em> (daily gets each new update as it lands; weekly or monthly batch them).</p>
-      <div id="litWhatsNew" class="whats-new"><p style="color:var(--text-muted);font-size:13px;margin:0">Loading the latest updates…</p></div>
-
-      <h3>Where the data come from</h3>
-      <p>Editors and editorial areas are shown for <em>Management Science</em> papers from 2011 onwards. The other sources contribute their published papers and Articles in Advance. ACM EC papers link out to an arXiv, SSRN or open-access PDF wherever one exists.</p>
-      <p>The Journal types filter covers the <a href="https://jsom.utdallas.edu/the-utd-top-100-business-school-research-rankings/list-of-journals" target="_blank" rel="noopener">UTD24 list</a> and the full <a href="https://www.ft.com/ft50-journals" target="_blank" rel="noopener">FT50 research rank</a>. Journals beyond the eight core sources come from this app's own dataset, which is refreshed daily, checked against the FT's list once a year, and downloaded only when you need it. The badge to the left of a title shows the single most selective list a journal belongs to, with one exception: a journal that sits on both the UTD24 and FT50 lists shows both. A broader filter still finds the paper, so an ABS 4/4* search includes every UTD24 journal. ABS ratings follow the Chartered ABS <em>Academic Journal Guide</em> (AJG 2024), as mirrored at <a href="https://journalranking.org/" target="_blank" rel="noopener">journalranking.org</a>. Beyond the FT50 and UTD24 lists I have kept ABS coverage to Operations, Supply Chain, Economics, Computer Science, Project Management and Innovation. HBR and MIT Sloan Management Review are FT50 journals and badged as such; the guide gives them no number, so they keep their last numeric grade and the ABS 3 filter still finds them.</p>
-      <p>All of the metadata is public, collected through the <a href="https://www.crossref.org/documentation/retrieve-metadata/rest-api/" target="_blank" rel="noopener">Crossref API</a>, with OpenAlex, DBLP and Semantic Scholar helping fill in the EC PDF links. PNAS section labels come from pnas.org's own topic index where it has one, and are otherwise approximated from each paper's <a href="https://openalex.org" target="_blank" rel="noopener">OpenAlex</a> topic.</p>
-
-      <div class="info-note">This is a personal project, so please forgive any rough edges. Feedback and suggestions are always welcome through the <a href="#" onclick="litAboutClose();litFeedbackOpen();return false;">Feedback</a> tab, and any mistakes are my own. <a href="https://www.stouras.com" target="_blank" rel="noopener">Konstantinos I. Stouras</a></div>
-    </div>
-  </div>
-</div>
-
 <!-- ── Feedback modal ─────────────────────────────────────────────────────── -->
 <div id="litFeedbackOverlay" class="acct-overlay" onclick="if(event.target===this)litFeedbackClose()">
   <div class="acct-modal wide">
@@ -3875,8 +3831,6 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   function closeOverlay(id) { var el = document.getElementById(id); if (el) el.classList.remove('open'); }
 
   window.litOpenOverlay = openOverlay; // reused by the accounts script's alerts builder
-  window.litAboutOpen = function () { openOverlay('litAboutOverlay'); };
-  window.litAboutClose = function () { closeOverlay('litAboutOverlay'); };
   window.litFeedbackOpen = function () { openOverlay('litFeedbackOverlay'); };
   window.litFeedbackClose = function () { closeOverlay('litFeedbackOverlay'); };
   window.litAlertsClose = function () { closeOverlay('litAlertsOverlay'); };
