@@ -60,6 +60,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR  = path.join(__dirname, '..', 'data');
 const FT50_DIR  = path.join(__dirname, '..', 'data-ft50');
+// The feature "changelog" catalogue that drives "New features & updates to the
+// website" alerts. Hand-maintained (NOT build output), served at
+// stouras.com/fun/lit/changelog.json, and read here from the checkout. Adding an
+// entry dated ~today makes the next daily run e-mail it to feature subscribers.
+const CHANGELOG_FILE = path.join(__dirname, '..', 'changelog.json');
 const SITE_URL  = 'https://stouras.com/fun/lit/';
 // The ABS satellite shards live in sibling repos, each served from its own Pages
 // site at stouras.com/<repo>/data/. They are fetched over HTTP at run time (they
@@ -266,6 +271,35 @@ function loadRecentPapers(extraRows) {
   return out;
 }
 
+// ── Feature changelog loading ─────────────────────────────────────────────────
+// Reads the hand-maintained feature catalogue (fun/lit/changelog.json). Each
+// entry carries a `date` (YYYY-MM-DD, when the feature went live) that is parsed
+// into `_added` exactly like a paper's "Date Added", so feature-update alerts
+// window by date just like paper alerts. Newest first. Accepts either the
+// `{ version, updates:[…] }` wrapper or a bare array. Missing/broken file → [].
+function loadChangelog() {
+  let raw;
+  try { raw = JSON.parse(fs.readFileSync(CHANGELOG_FILE, 'utf8')); }
+  catch { return []; }
+  const list = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.updates) ? raw.updates : []);
+  const out = [];
+  for (const e of list) {
+    if (!e || !e.title) continue;
+    const added = parseAdded(e.date);
+    if (!added) continue;
+    out.push({
+      id: String(e.id || e.title),
+      title: String(e.title),
+      summary: String(e.summary || ''),
+      url: safeUrl(e.url) || SITE_URL,
+      date: String(e.date || ''),
+      _added: added,
+    });
+  }
+  out.sort((a, b) => b._added - a._added);
+  return out;
+}
+
 // Fetch the ABS satellite shards' recent papers over HTTP, and extend the ctx's
 // ABS grade sets from each shard's own manifest so an abs4/abs3 jtype alert can
 // match shard journals too. Best-effort: any shard that is missing (404) or
@@ -398,6 +432,47 @@ function renderAnnouncement({ subject, bodyText, bodyHtml }, opts) {
   return { subject: subj, text, html: emailShell('what’s new', inner, opts.bannerHtml) };
 }
 
+// Automated feature-digest e-mail: the "New features & updates to the website"
+// alert. Built from one or more changelog entries (see loadChangelog) that fell
+// in the subscriber's window, so it is sent WITHOUT maintainer action — just add
+// an entry to changelog.json. Mirrors the on-page preview (renderAlertPreview's
+// feature block in index.html) — keep the two in sync. Reuses the shared chrome.
+function renderFeatureDigest(features, opts) {
+  opts = opts || {};
+  const list = Array.isArray(features) ? features.filter(Boolean) : [];
+  const n = list.length;
+  const subject = (opts.subjectPrefix || '') + (
+    n === 1 ? `The Lit: new feature — ${list[0].title}`
+    : n > 1  ? `The Lit: ${n} new features & updates`
+    :          'The Lit: a new feature is available');
+
+  const lineText = list.map((f, i) => {
+    let s = `${i + 1}. ${f.title || ''}`;
+    if (f.summary) s += `\n   ${f.summary}`;
+    s += `\n   ${safeUrl(f.url) || SITE_URL}`;
+    return s;
+  }).join('\n\n');
+  const text =
+`${opts.noteText || ''}Here’s what’s new on The Lit:
+
+${lineText || 'A new feature is available on The Lit.'}
+
+${footerText()}`;
+
+  const items = list.map(f => {
+    const url = safeUrl(f.url) || SITE_URL;
+    return `<li style="margin:0 0 16px">
+      <a href="${esc(url)}" style="color:#7d1d3f;font-weight:600;text-decoration:none;font-size:15px">${esc(f.title || '')}</a>
+      ${f.summary ? `<div style="color:#241a1e;font-size:13px;margin-top:2px">${esc(f.summary)}</div>` : ''}
+    </li>`;
+  }).join('');
+  const inner =
+`<p style="font-size:14px;margin:0 0 12px">Here’s what’s new on <strong>The Lit</strong>:</p>
+    <ul style="list-style:none;padding:0;margin:0">${items}</ul>
+    <p style="font-size:13px;margin:16px 0 0"><a href="${esc(SITE_URL)}" style="color:#7d1d3f;font-weight:600">Open The Lit →</a></p>`;
+  return { subject, text, html: emailShell('what’s new', inner, opts.bannerHtml) };
+}
+
 // ── Test e-mail (one-off preview a user requests from the page) ────────────────
 // A signed-in user can ask "Send me a test e-mail" from the E-mail alerts panel
 // to see how their alert looks in a real inbox. The page (which can't send mail)
@@ -416,6 +491,15 @@ const SAMPLE_PAPERS = [
   { Title: 'Learning and Information in Dynamic Marketplaces', Authors: 'A. Researcher, B. Coauthor',
     Journal: 'Management Science', Year: '2026', Status: '', DOI: '' },
 ];
+// Fallback feature entries for a features-only test e-mail when the changelog is
+// empty/unreadable, so the "what's new" preview always renders. Mirrors the
+// on-page preview's feature fallback in index.html (renderAlertPreview).
+const SAMPLE_FEATURES = [
+  { title: 'Papers now show their citation counts',
+    summary: 'Every paper carries a “Cited by” badge that links through to Google Scholar.', url: SITE_URL },
+  { title: 'Walk the citation graph inside the catalog',
+    summary: 'A “Cited references in this catalog” toggle lists the papers a paper cites that are themselves in The Lit.', url: SITE_URL },
+];
 const TEST_NOTE_TEXT =
   'This is a TEST e-mail so you can preview how your alert looks. No alert has actually ' +
   'triggered, and the papers shown are examples.\n\n';
@@ -425,16 +509,16 @@ const TEST_BANNER_HTML =
   'This is a preview of how your alert looks — no alert has actually triggered, and the ' +
   'papers below are examples.</p>';
 
-function renderTestEmail(req, papers, ctx) {
+function renderTestEmail(req, papers, ctx, changelog) {
   const criteria = (req && req.criteria) || {};
   const opts = { subjectPrefix: '[Test] ', noteText: TEST_NOTE_TEXT, bannerHtml: TEST_BANNER_HTML };
-  // A features-only request (no paper intent) shows the "what's new" format.
+  // A features-only request (no paper intent) shows the "what's new" format,
+  // sampling the real most-recent changelog entries (falling back to built-in
+  // samples so it always renders) — exactly what an automated feature digest
+  // looks like.
   if (criteria.features && !hasPaperIntent(criteria)) {
-    return renderAnnouncement({
-      subject: 'The Lit: a new feature is available',
-      bodyText: 'This is a sample of the "what\'s new" e-mail you will receive when a new feature launches on The Lit.',
-      bodyHtml: '<p>This is a sample of the “what’s new” e-mail you will receive when a new feature launches on The Lit.</p>',
-    }, opts);
+    const recent = (Array.isArray(changelog) ? changelog : []).slice(0, 3);
+    return renderFeatureDigest(recent.length ? recent : SAMPLE_FEATURES, opts);
   }
   const matched = (papers || []).filter(p => matchesCriteria(p, criteria, ctx));
   const sample = (matched.length ? matched : SAMPLE_PAPERS).slice(0, TEST_SAMPLE_MAX);
@@ -477,6 +561,38 @@ function toDate(v) {
   const d = new Date(v); return isNaN(d) ? null : d;
 }
 
+// The "New features & updates to the website" side of an alert. Windows the
+// feature changelog by date exactly like evaluateAlert windows papers, but with
+// its OWN high-water mark (`lastFeatureCheckedAt`) so features and papers on the
+// same alert advance independently — a partial send failure only retries its own
+// side. The mark falls back to the PAPER mark (`lastCheckedAt`) for an existing
+// subscriber that has no feature mark yet, so turning this feature on never
+// blasts them the whole back-catalogue; a brand-new alert with no marks caps its
+// first window at ~31 days, same as papers. Returns
+// { active, due, features, windowStart }; `active` is false unless the alert
+// opted into feature updates (criteria.features).
+function evaluateFeatures(alert, changelog, now) {
+  const c = (alert && alert.criteria) || {};
+  if (!c.features) return { active: false, due: false, features: [], windowStart: null };
+  const freq = FREQ_MIN_DAYS[alert.frequency] != null ? alert.frequency : 'weekly';
+  const last = toDate(alert.lastFeatureCheckedAt) || toDate(alert.lastCheckedAt);
+  const created = toDate(alert.createdAt);
+  let windowStart;
+  if (last) windowStart = last;
+  else {
+    const base = created || new Date(now.getTime() - 31 * DAY_MS);
+    const cap = new Date(now.getTime() - 31 * DAY_MS);
+    windowStart = base > cap ? base : cap;
+  }
+  const elapsedDays = (now - windowStart) / DAY_MS;
+  const due = elapsedDays >= (FREQ_MIN_DAYS[freq] - 0.05);   // small slack for cron jitter
+  if (!due) return { active: true, due: false, features: [], windowStart };
+  const features = (Array.isArray(changelog) ? changelog : [])
+    .filter(f => f._added > windowStart && f._added <= now)
+    .sort((a, b) => b._added - a._added);
+  return { active: true, due: true, features, windowStart };
+}
+
 // ── Real run ──────────────────────────────────────────────────────────────────
 async function run({ dryRun }) {
   // Until the secrets are configured, no-op cleanly so the scheduled workflow
@@ -493,8 +609,9 @@ async function run({ dryRun }) {
   const ctx = makeCtx();
   const shardRows = await loadShards(ctx);   // best-effort HTTP; also extends ctx ABS grades
   const papers = loadRecentPapers(shardRows);
+  const changelog = loadChangelog();         // drives the "new features & updates" alerts
   const now = new Date();
-  console.log(`Loaded ${papers.length} recently-added papers${shardRows.length ? ` (incl. ${shardRows.length} from ABS shards)` : ''}. now=${now.toISOString()} dryRun=${dryRun}`);
+  console.log(`Loaded ${papers.length} recently-added papers${shardRows.length ? ` (incl. ${shardRows.length} from ABS shards)` : ''} and ${changelog.length} changelog entr${changelog.length === 1 ? 'y' : 'ies'}. now=${now.toISOString()} dryRun=${dryRun}`);
 
   const { default: admin } = await import('firebase-admin');
   if (!admin.apps.length) {
@@ -522,52 +639,85 @@ async function run({ dryRun }) {
   const snap = await db.collectionGroup('alerts').get();
   console.log(`Found ${snap.size} alert(s) across all users.`);
 
-  let sent = 0, matched = 0, skipped = 0, errors = 0;
+  const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+  let sent = 0, matched = 0, features = 0, skipped = 0, errors = 0;
   for (const doc of snap.docs) {
     const alert = doc.data() || {};
     if (alert.enabled === false) { skipped++; continue; }
     const recipient = String(alert.recipient || alert.from || '').trim();
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(recipient)) { skipped++; continue; }
+    if (!EMAIL_RE.test(recipient)) { skipped++; continue; }
+    const criteria = alert.criteria || {};
 
-    const { due, matches, windowStart } = evaluateAlert(alert, papers, now, ctx);
-    if (!due) { skipped++; continue; }
+    // Two independent sides of one alert: new PAPERS (evaluateAlert, gated by
+    // lastCheckedAt) and new FEATURES (evaluateFeatures, gated by
+    // lastFeatureCheckedAt). Either can be due on its own; each advances only its
+    // own high-water mark, and only when its own send succeeds.
+    const papEval  = hasPaperIntent(criteria) ? evaluateAlert(alert, papers, now, ctx) : { due: false, matches: [] };
+    const featEval = evaluateFeatures(alert, changelog, now);
+    if (!papEval.due && !(featEval.active && featEval.due)) { skipped++; continue; }
 
-    const update = { lastCheckedAt: Timestamp.fromDate(now) };
-    if (matches.length) {
-      matched += matches.length;
-      const { subject, text, html } = renderEmail(alert, matches);
-      const msg = {
-        from: fromAddr ? `"${fromName}" <${fromAddr}>` : undefined,
-        to: recipient,
-        replyTo: (alert.from && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(alert.from)) ? alert.from : undefined,
-        subject, text, html,
-        // Standards-based unsubscribe (RFC 2369): mail clients surface a native
-        // "Unsubscribe" button — a mailto to the maintainer plus the manage page.
-        headers: {
-          'List-Unsubscribe': `<mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('Unsubscribe from The Lit alert: ' + (alert.name || ''))}>, <${SITE_URL}>`,
-        },
-      };
-      if (dryRun) {
-        console.log(`  [dry-run] would e-mail ${recipient}: "${subject}" (${matches.length} paper(s), window since ${windowStart.toISOString()})`);
-      } else {
-        try {
-          await transport.sendMail(msg);
-          console.log(`  sent to ${recipient}: "${subject}" (${matches.length})`);
-          update.lastSentAt = Timestamp.fromDate(now);
-          update.lastSentCount = matches.length;
-          sent++;
-        } catch (e) {
-          errors++;
-          console.error(`  ERROR e-mailing ${recipient}: ${e && e.message}`);
-          continue;   // don't advance lastCheckedAt on send failure — retry next run
+    // Build a message envelope shared by both digest kinds.
+    const mkMsg = (em, unsubSubject) => ({
+      from: fromAddr ? `"${fromName}" <${fromAddr}>` : undefined,
+      to: recipient,
+      replyTo: (alert.from && EMAIL_RE.test(alert.from)) ? alert.from : undefined,
+      subject: em.subject, text: em.text, html: em.html,
+      // Standards-based unsubscribe (RFC 2369): mail clients surface a native
+      // "Unsubscribe" button — a mailto to the maintainer plus the manage page.
+      headers: { 'List-Unsubscribe': `<mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(unsubSubject)}>, <${SITE_URL}>` },
+    });
+    const update = {};
+
+    // ── Papers ──
+    if (papEval.due) {
+      let ok = true;
+      if (papEval.matches.length) {
+        matched += papEval.matches.length;
+        const em = renderEmail(alert, papEval.matches);
+        if (dryRun) {
+          console.log(`  [dry-run] would e-mail ${recipient}: "${em.subject}" (${papEval.matches.length} paper(s), window since ${papEval.windowStart.toISOString()})`);
+        } else {
+          try {
+            await transport.sendMail(mkMsg(em, 'Unsubscribe from The Lit alert: ' + (alert.name || '')));
+            console.log(`  sent to ${recipient}: "${em.subject}" (${papEval.matches.length})`);
+            update.lastSentAt = Timestamp.fromDate(now);
+            update.lastSentCount = papEval.matches.length;
+            sent++;
+          } catch (e) { ok = false; errors++; console.error(`  ERROR e-mailing ${recipient}: ${e && e.message}`); }
         }
+      } else {
+        console.log(`  no new paper matches for "${alert.name || describeCriteria(criteria)}" (${alert.frequency || 'weekly'})`);
       }
-    } else {
-      console.log(`  no new matches for "${alert.name || describeCriteria(alert.criteria || {})}" (${alert.frequency || 'weekly'})`);
+      if (ok) update.lastCheckedAt = Timestamp.fromDate(now);   // advance only on success (or nothing to send)
     }
-    if (!dryRun) { try { await doc.ref.set(update, { merge: true }); } catch (e) { console.error('  state update failed:', e && e.message); } }
+
+    // ── Feature updates ──
+    if (featEval.active && featEval.due) {
+      let ok = true;
+      if (featEval.features.length) {
+        const em = renderFeatureDigest(featEval.features);
+        if (dryRun) {
+          console.log(`  [dry-run] would e-mail ${recipient}: "${em.subject}" (${featEval.features.length} feature(s), window since ${featEval.windowStart.toISOString()})`);
+        } else {
+          try {
+            await transport.sendMail(mkMsg(em, 'Unsubscribe from The Lit updates'));
+            console.log(`  sent feature digest to ${recipient}: "${em.subject}" (${featEval.features.length})`);
+            update.lastFeatureSentAt = Timestamp.fromDate(now);
+            features += featEval.features.length;
+            sent++;
+          } catch (e) { ok = false; errors++; console.error(`  ERROR e-mailing feature digest to ${recipient}: ${e && e.message}`); }
+        }
+      } else {
+        console.log(`  no new site features for "${alert.name || describeCriteria(criteria)}" (${alert.frequency || 'weekly'})`);
+      }
+      if (ok) update.lastFeatureCheckedAt = Timestamp.fromDate(now);
+    }
+
+    if (!dryRun && Object.keys(update).length) {
+      try { await doc.ref.set(update, { merge: true }); } catch (e) { console.error('  state update failed:', e && e.message); }
+    }
   }
-  console.log(`Done. alerts due processed; e-mails sent=${sent}, papers matched=${matched}, skipped=${skipped}, errors=${errors}.`);
+  console.log(`Done. e-mails sent=${sent}, papers matched=${matched}, features sent=${features}, skipped=${skipped}, errors=${errors}.`);
   if (errors) process.exitCode = 1;
 }
 
@@ -590,6 +740,7 @@ async function sendTestEmails({ dryRun }) {
 
   const ctx = makeCtx();
   const papers = loadRecentPapers();
+  const changelog = loadChangelog();
 
   const { default: admin } = await import('firebase-admin');
   if (!admin.apps.length) {
@@ -625,7 +776,7 @@ async function sendTestEmails({ dryRun }) {
       if (!dryRun) { try { await doc.ref.delete(); } catch { /* ignore */ } }
       continue;
     }
-    const { subject, text, html } = renderTestEmail(req, papers, ctx);
+    const { subject, text, html } = renderTestEmail(req, papers, ctx, changelog);
     const msg = {
       from: fromAddr ? `"${fromName}" <${fromAddr}>` : undefined,
       to: recipient,
@@ -745,11 +896,50 @@ function selftest() {
   ok('empty criteria has no paper intent', hasPaperIntent({}) === false);
   ok('features-only alert matches 0 papers', evaluateAlert(mk({ criteria: { features: true }, lastCheckedAt: new Date('2026-07-12T06:00:00Z') }), recent, now, ctx).matches.length === 0);
   ok('allPapers alert matches the new paper', evaluateAlert(mk({ criteria: { allPapers: true }, lastCheckedAt: new Date('2026-07-12T06:00:00Z') }), recent, now, ctx).matches.length === 1);
-  // feature announcement e-mail
+  // feature announcement e-mail (maintainer --announce; free-form body)
   const ann = renderAnnouncement({ subject: 'New: Working Papers', bodyText: 'You can now browse working papers.', bodyHtml: '<p>You can now browse <b>working papers</b>.</p>' });
   ok('announcement subject', ann.subject === 'New: Working Papers');
   ok('announcement html has body + shell + footer', /working papers/.test(ann.html) && /what.s new/.test(ann.html) && /Edit your preferences/.test(ann.html));
   ok('announcement text has footer', /Unsubscribe from future/.test(ann.text) && ann.text.includes(CONTACT_EMAIL));
+
+  // ── Feature changelog + digest (the AUTOMATED "what's new" path) ────────────
+  const CL = [
+    { id: 'citations', title: 'Papers now show citation counts', summary: 'A “Cited by N” badge on every paper.', url: SITE_URL, date: '2026-07-10', _added: new Date('2026-07-10T00:00:00Z') },
+    { id: 'refs',      title: 'Cited references in this catalog', summary: 'Walk the citation graph.',            url: SITE_URL, date: '2026-07-01', _added: new Date('2026-07-01T00:00:00Z') },
+    { id: 'old',       title: 'An older feature',                summary: '',                                    url: SITE_URL, date: '2026-05-01', _added: new Date('2026-05-01T00:00:00Z') },
+  ];
+  const nowF = new Date('2026-07-13T06:00:00Z');
+  // features-only alert, daily, last feature-check 2026-07-09 → sees only the 07-10 entry
+  const fe1 = evaluateFeatures({ criteria: { features: true }, frequency: 'daily', lastFeatureCheckedAt: new Date('2026-07-09T06:00:00Z') }, CL, nowF);
+  ok('feature daily due, 1 new since last feature check', fe1.active && fe1.due && fe1.features.length === 1 && fe1.features[0].id === 'citations');
+  // weekly not due after ~2 days
+  ok('feature weekly not due after 2 days', !evaluateFeatures({ criteria: { features: true }, frequency: 'weekly', lastFeatureCheckedAt: new Date('2026-07-11T06:00:00Z') }, CL, nowF).due);
+  // weekly due after ~18 days → batches every entry in the window (07-10 and 07-01, not 05-01)
+  const fe2 = evaluateFeatures({ criteria: { features: true }, frequency: 'weekly', lastFeatureCheckedAt: new Date('2026-06-25T06:00:00Z') }, CL, nowF);
+  ok('feature weekly due, batches the whole window', fe2.due && fe2.features.length === 2);
+  // a non-features alert is inactive on the feature side
+  ok('non-features alert inactive for features', !evaluateFeatures({ criteria: { journal: ['ms'] }, frequency: 'daily', lastCheckedAt: new Date('2026-07-12T06:00:00Z') }, CL, nowF).active);
+  // existing subscriber with only a PAPER mark → feature window falls back to it (no history blast)
+  const fe3 = evaluateFeatures({ criteria: { features: true }, frequency: 'daily', lastCheckedAt: new Date('2026-07-12T06:00:00Z') }, CL, nowF);
+  ok('feature window falls back to lastCheckedAt (no back-catalogue blast)', fe3.due && fe3.features.length === 0);
+  // brand-new subscriber (no marks): first window capped at ~31 days, so 05-01 is excluded
+  const fe4 = evaluateFeatures({ criteria: { features: true }, frequency: 'daily', createdAt: new Date('2026-07-01T00:00:00Z') }, CL, nowF);
+  ok('new subscriber first window is capped', fe4.due && fe4.features.length === 1 && fe4.features[0].id === 'citations');
+  // digest rendering — single vs multi subject, body, footer
+  const fd1 = renderFeatureDigest([CL[0]]);
+  ok('feature digest single subject names the feature', /new feature — Papers now show citation counts/.test(fd1.subject));
+  ok('feature digest html has title + shell + footer', /citation counts/.test(fd1.html) && /what.s new/.test(fd1.html) && /Edit your preferences/.test(fd1.html));
+  const fd2 = renderFeatureDigest([CL[0], CL[1]]);
+  ok('feature digest multi subject counts', /2 new features/.test(fd2.subject));
+  ok('feature digest lists all entries', /citation counts/.test(fd2.html) && /citation graph/.test(fd2.html));
+  ok('feature digest text has footer', /Unsubscribe from future/.test(fd2.text) && fd2.text.includes(CONTACT_EMAIL));
+  ok('feature digest escapes titles', renderFeatureDigest([{ title: 'A <b> & "q"', summary: '', url: SITE_URL }]).html.includes('A &lt;b&gt; &amp; &quot;q&quot;'));
+  // loadChangelog reads the shipped file; every entry has a parseable date + title
+  const cl = loadChangelog();
+  ok('loadChangelog returns dated entries, newest first', Array.isArray(cl) && cl.length > 0 && cl.every(e => e._added instanceof Date && e.title) && (cl.length < 2 || cl[0]._added >= cl[1]._added));
+  // a features-only test e-mail samples the real changelog (faithful preview)
+  const tf = renderTestEmail({ name: 'Site updates', criteria: { features: true } }, [], ctx, cl);
+  ok('features-only test samples the real changelog', /^\[Test\] /.test(tf.subject) && /what.s new/.test(tf.html) && tf.html.includes(cl[0].title));
 
   // test e-mail (one-off preview): faithful template + [Test] marker + banner
   const t1 = renderTestEmail({ name: 'FT50 · pre-prints', criteria: { jtype: ['ft50'], preprintOnly: true } },
@@ -853,7 +1043,7 @@ async function runAnnounce(argv) {
   console.log(`Announce done: ${sent} ${dryRun ? 'would-send' : 'sent'}, ${skipped} skipped, ${errors} errors.`);
 }
 
-export { matchesCriteria, evaluateAlert, renderEmail, renderAnnouncement, renderTestEmail, describeCriteria, hasPaperIntent, loadRecentPapers, makeCtx };
+export { matchesCriteria, evaluateAlert, evaluateFeatures, renderEmail, renderAnnouncement, renderFeatureDigest, renderTestEmail, describeCriteria, hasPaperIntent, loadRecentPapers, loadChangelog, makeCtx };
 
 // ── Entry point (only when run directly, not when imported for tests) ─────────
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {

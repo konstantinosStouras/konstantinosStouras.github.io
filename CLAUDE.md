@@ -385,7 +385,8 @@ so it never shows a broken state. **E-mail alerts**
 lets a signed-in user subscribe to an e-mail when new papers matching a set of
 filters are added. The form's two top toggles choose *what* to be e-mailed
 about: **New features & updates to the website** (first — `criteria.features`, a
-subscription to product announcements) and **Any new paper added to the
+subscription to site-feature updates, delivered automatically from a **feature
+changelog** — see below) and **Any new paper added to the
 database** (`criteria.allPapers` — every new paper, no filters, which hides the
 paper-filter editor). Below those, unless "any new paper" is on, the modal
 **pre-fills the alert criteria from the page's current search filters** (journal
@@ -396,9 +397,10 @@ pre-print toggle — the same `sel` shape), editable in-modal, plus an alert nam
 recipient e-mail (default = account e-mail, sent *from* the user's own e-mail),
 and frequency (immediate / daily / weekly / monthly). The modal shows a **live
 example e-mail** at the bottom (`renderAlertPreview` — subject, header, sample
-papers and/or a "what's new" feature note, plus the footnote, updating as the
-user edits name/criteria/toggles); it **mirrors the mailer's `renderEmail` /
-`renderAnnouncement` templates — keep the three in sync**. A **"Send me a test
+papers and/or a "what's new" feature digest built from the real latest changelog
+entries, plus the footnote, updating as the user edits name/criteria/toggles); it
+**mirrors the mailer's `renderEmail` / `renderFeatureDigest` / `renderAnnouncement`
+templates — keep them in sync**. A **"Send me a test
 e-mail"** button (beside *Create alert*) delivers a one-off sample of the alert
 being composed to the recipient so the user can see how it looks in a real inbox
 before saving (`litAlertSendTest`): the static page can't send mail, so — like
@@ -406,10 +408,11 @@ real alerts — it **queues** the request at `users/{uid}/testEmails/{id}`
 (`{name, recipient, from, frequency, criteria, test:true}`; same private-subtree
 rule) and the mailer's **`--test-emails`** pass delivers + deletes it. That pass
 (`sendTestEmails` → `renderTestEmail`) reuses the very same `renderEmail` /
-`renderAnnouncement` templates (adding a `[Test]` subject prefix + preview
+`renderFeatureDigest` templates (adding a `[Test]` subject prefix + preview
 banner), listing the real recently-added papers that match — falling back to two
 built-in `SAMPLE_PAPERS` (mirroring `renderAlertPreview`'s samples) so the format
-always renders, and showing the "what's new" format for a features-only draft. It
+always renders, and showing the "what's new" digest of the real latest changelog
+entries (fallback `SAMPLE_FEATURES`) for a features-only draft. It
 runs on its own frequent workflow `.github/workflows/lit-alerts-test.yml` (every
 15 min, own concurrency group) so a test lands within minutes, separate from the
 daily digest. A save now needs any
@@ -427,22 +430,47 @@ subscriber, `From` = `ALERTS_FROM`/`SMTP_USER`), stamping a per-alert
 `lastCheckedAt`/`lastSentAt` high-water mark so nothing is sent twice.
 `criteria.allPapers` short-circuits `matchesCriteria` to match every new paper;
 `hasPaperIntent` gates paper matching so a **features-only** subscription (no
-`allPapers`, no filter) never sends paper e-mails — those are delivered instead
-by the **maintainer `--announce` mode** (`node alerts-mailer.mjs --announce
---subject=… --html-file=… [--dry-run]`, `renderAnnouncement`), which e-mails
-everyone with `criteria.features` a "what's new" message (deduped by recipient).
-Every e-mail's footnote offers **edit preferences / unsubscribe from future
+`allPapers`, no filter) never sends paper e-mails. **Feature updates are their
+own automated side of the same run:** the mailer also loads a hand-maintained
+**feature changelog** — `fun/lit/changelog.json` (`{version, updates:[{id, date,
+title, summary, url}]}`, newest first; served, NOT build output; the single
+source of truth also read by the page for its About-modal *What's new* list and
+the alert preview) — via `loadChangelog()`, and for every `criteria.features`
+alert sends a "what's new" digest (`renderFeatureDigest`) of the changelog
+entries whose `date` falls in that alert's window. `evaluateFeatures` windows the
+changelog by `date` **exactly like** `evaluateAlert` windows papers by
+`Date Added` (daily = each entry the day it lands, weekly/monthly = batched over
+the period), but with its **own** high-water marks (`lastFeatureCheckedAt`/
+`lastFeatureSentAt`, falling back to the paper `lastCheckedAt` for existing
+subscribers so turning it on never blasts the back-catalogue; a brand-new alert's
+first window caps at ~31 days). The paper and feature sides advance
+**independently**, each only when its own send succeeds, so a partial SMTP
+failure retries just that side. **To announce a feature you just add a changelog
+entry** dated ~today; entries dated in the past e-mail nobody (they precede every
+subscriber's window), so seeding historical entries is safe. The **maintainer
+`--announce` mode** (`node alerts-mailer.mjs --announce --subject=… --html-file=…
+[--dry-run]`, `renderAnnouncement`) remains for an **ad-hoc free-form broadcast**
+to `criteria.features` recipients (deduped) that is *not* a changelog entry and
+does not touch the feature high-water mark. Every e-mail's footnote offers
+**edit preferences / unsubscribe from future
 e-mails / feedback** (the manage panel on the site, plus the maintainer
 `CONTACT_EMAIL` = kostas.stouras@ucd.ie) and the message carries a
 standards-based **`List-Unsubscribe`** header so clients show a native
 unsubscribe; the shared chrome (`footerText`/`footerHtml`/`emailShell`) is used
-by both `renderEmail` and `renderAnnouncement`. It is a
+by `renderEmail`, `renderFeatureDigest` and `renderAnnouncement`. It is a
 no-op until the `FIREBASE_SERVICE_ACCOUNT` + `SMTP_*` secrets are set (so it
 never fails pre-setup); `--selftest`/`--scan`/`--dry-run` modes and the full
 deploy steps are in `fun/lit/_EMAIL-ALERTS-SETUP.md`. No Firestore rule change
 is needed. All of the alerts UI logic lives inside the accounts IIFE
 (`window.litAlerts*`); About/Feedback are top-level (`window.litAbout*` /
-`window.litFeedback*`).
+`window.litFeedback*`). The **About modal also renders a data-driven "What's
+new" list** (`#litWhatsNew` → `renderAboutWhatsNew()` in the top-nav IIFE) from
+the same `changelog.json`, so the changelog is the ONE place to log a feature —
+it feeds the About list, the alert preview and the automated e-mails at once. So:
+**when you ship a user-facing `/fun/lit` feature, add a `changelog.json` entry
+(dated ~today) in the same change** — that is now part of the keep-in-sync
+discipline alongside updating the About modal copy and the `fun/index.html`
+landing cards.
 
 ### Working Papers — the listed authors' UNPUBLISHED work
 A **"Working Papers" journal type** (last in `JOURNAL_TYPES` for badge
