@@ -1780,7 +1780,17 @@
 
   // ── refresh everything ──────────────────────────────────────────────────
   var raf = null;
+  // Drop a stale editorial-dimension filter (e.g. a Marketing Science senior
+  // editor) once the journal scope no longer includes any journal that carries
+  // that dimension — so a "Papers by senior/associate editor" chart or scope
+  // pill can't linger over journals like Management Science / M&SOM that have
+  // no senior/associate editors. (SE/AE apply to Marketing Science & ISR;
+  // accepting editor/area apply to Management Science.)
+  function reconcileDim() {
+    if (S.dim.name && applicableDims(scopeKeys()).indexOf(S.dim.name) === -1) S.dim = { name: null, vals: {} };
+  }
   function refresh() {
+    reconcileDim();
     renderScope();
     if (raf) cancelAnimationFrame(raf);
     raf = requestAnimationFrame(function () {
