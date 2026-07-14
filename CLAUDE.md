@@ -933,4 +933,5 @@ isolation check that the sandbox wins over a configured Firebase and never
 touches `ssc-db-v1`.
 
 The app is at the repo root (NOT under `/fun/`), so the fun-landing-page card
-rule does not apply; it is deliberately not linked from the homepage yet.
+rule does not apply. It is linked from the homepage's "Fun Projects" section
+(in the root `index.html`, below the PortfolioFit card).
