@@ -173,7 +173,8 @@ export async function loadCatalog(dirs, opts = {}) {
         if (!doi || dbByDoi.has(doi)) continue; // no DOI → can't fetch/intersect; first dir wins
         const title = String(p.Title || '').replace(/\s+/g, ' ').trim();
         const year = String(p.Year || '');
-        dbByDoi.set(doi, { t: title, j: jkey, y: year });
+        const authors = String(p.Authors || '').replace(/\s+/g, ' ').trim();
+        dbByDoi.set(doi, { t: title, j: jkey, y: year, a: authors });
         papers.push({ doi, jkey, year: parseInt(year, 10) || 0, tier: tierOf(jkey) });
       }
       if (opts.log) console.log(`  catalog: ${dir.split('/').pop()}/${s.key}: ${rows.length} papers`);
@@ -379,7 +380,7 @@ async function fetchCrossrefRefs(doi, deadline) {
 // Rebuilt from scratch every run (cheap, no network), so catalog growth, newly
 // added dirs and a fuller _oaid.json surface new edges for free. Produces:
 //   shards[jkey] = { <citingDoi>: [<citedDoi>, …] }   — only papers with ≥1 edge
-//   index        = { <citedDoi>: [title, jkey, year] } — every edge target
+//   index        = { <citedDoi>: [title, jkey, year, authors?] } — every target
 // Crossref/S2 DOIs (`r`) intersect the catalog directly; OpenAlex ids (`o`) are
 // resolved to catalog DOIs via oaidMap (reverse-indexed to our papers only).
 export function buildOutputs(cache, dbByDoi, oaidMap = {}) {
@@ -402,7 +403,9 @@ export function buildOutputs(cache, dbByDoi, oaidMap = {}) {
     for (const cd of inDb) indexKeys.add(cd);
   }
   const index = {};
-  for (const cd of indexKeys) { const m = dbByDoi.get(cd); index[cd] = [m.t, m.j, m.y]; }
+  // [title, jkey, year, authors?] — authors is appended only when known, so
+  // pre-authors data (a 3-tuple) still renders (the page reads meta[3] safely).
+  for (const cd of indexKeys) { const m = dbByDoi.get(cd); index[cd] = m.a ? [m.t, m.j, m.y, m.a] : [m.t, m.j, m.y]; }
   return { shards, index, counts, totals: { citingWithEdges, edges, cited: indexKeys.size } };
 }
 
