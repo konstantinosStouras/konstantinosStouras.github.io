@@ -94,7 +94,20 @@ PRESERVING enrichment: `Preprint`/`PreprintSrc`, an OpenAlex/S2-boosted `CitedBy
 `CitedBy` only ever rises), then rewrites ONLY the small derived files
 (`recent.json`/`meta.json`/`sources.json`/`_registry.json`) — `authors.json`/
 `affiliations.json` are left to the daily build, which alone has the ORCID data
-for faithful author merging. It **writes nothing when nothing new arrived**, so it
+for faithful author merging. **New-paper enrichment on arrival:** the pass also
+runs a strictly-bounded, non-fatal pre-print + citation lookup **on ONLY the
+just-added rows** (`freshRows` — `resolvePreprints`/`refreshCitations` with tight
+budgets: `LIT_INCR_PREPRINT_MS` 2 min / `LIT_INCR_CITATIONS_MS` 90 s; disable with
+`LIT_INCR_ENRICH=0`), so a new Article in Advance shows its `Preprint` link and
+`CitedBy` count from first appearance instead of waiting for the 2-hourly
+pre-print backfill / daily citations sweep. It reuses the SAME OpenAlex/Crossref/
+arXiv identities (module `MAILTO`) and the same frozen-link / 2-day-freshness
+cache logic, so it adds no quota pressure beyond those few DOIs; the **steady-state
+rolling sweeps stay the coverage engine for the whole corpus** (they are already at
+their effective ceiling — bound by OpenAlex's ~100/day title-search and 100k/day
+general quotas + the 2-day citation-freshness dedup, NOT by schedule, so running
+them more often can't beat a per-day cap and would only starve the shared
+concurrency group). It **writes nothing when nothing new arrived**, so it
 commits (and redeploys Pages) only on a genuine change — that plus **sharing the
 daily build's `lit-update-data-${{ github.ref }}` concurrency group** (so it never
 races a papers-file push/Pages deploy against the daily build, a pre-print backfill

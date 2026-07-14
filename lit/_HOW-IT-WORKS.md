@@ -328,8 +328,11 @@ CI; the daily Action just folds the committed files in.
   (`filter=from-index-date`) for the eight Articles-in-Advance journals and upserts
   new/updated papers into the committed files. It commits only when something new
   actually arrived, shares the daily build's concurrency group so the two never
-  race a commit/deploy, and leaves enrichment + `authors.json`/`affiliations.json`
-  to the daily build. Offline test: `node _scraper/incremental-selftest.mjs`.
+  race a commit/deploy, and enriches ONLY the just-added papers (a strictly-bounded
+  pre-print + citation lookup) so a new paper carries its pre-print link and
+  citation count from first appearance; the whole-corpus enrichment sweeps and
+  `authors.json`/`affiliations.json` stay with the daily build and the dedicated
+  backfill workflows. Offline test: `node _scraper/incremental-selftest.mjs`.
 - **On demand:** GitHub → Actions → *lit — update multi-journal data* → Run
   workflow.
 - **PNAS sections:** the one local script above, occasionally.
