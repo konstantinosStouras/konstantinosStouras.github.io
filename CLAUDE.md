@@ -28,9 +28,9 @@ keep that in mind if a change there is warranted.
 
 ## Current /fun/ apps
 `portfoliofitgame` · `capitals` · `nomoi` · `rooks` · `sudoku` · `snake` ·
-`ms` · `ms-old` · `mnsc_scraper-to-use-locally` (plus redirect stubs at `fun/ms2/`,
-`fun/ft50/` and `fun/lit/` — the retired FT50 browser and the graduated Lit both
-now redirect to `/lit/`).
+`ms-old` · `mnsc_scraper-to-use-locally` (plus redirect stubs at `fun/ms/`,
+`fun/ms2/`, `fun/ft50/` and `fun/lit/` — the retired Management Science browser,
+the retired FT50 browser and the graduated Lit all now redirect to `/lit/`).
 
 **The Lit moved OUT of `/fun/`.** It was promoted from `fun/lit/` to the
 top-level `/lit/` (served at `stouras.com/lit/`; see its own section below).
@@ -675,34 +675,29 @@ columns are follow-ups. Tests: `node lit/_scraper/sqlite-parity.mjs`
 (28/28 semantic parity) and `sqlite-bench.mjs` (payload/latency). See
 `lit/_SQLITE-POC.md`.
 
-## `/fun/ms` — the Google-free Management Science browser
-`fun/ms/` is the Management Science paper browser. It uses **no Google Sheets**:
-its data lives as static JSON in `fun/ms/data/` (`papers.json`, `authors.json`,
-`affiliations.json`, `recent.json`, `meta.json`), built directly from the Crossref
-API by `fun/ms/_scraper/build-data.mjs` and refreshed by the GitHub Action
-`.github/workflows/ms-update-data.yml` (daily + manual), which commits the
-refreshed files back to the repo and then verifies the live site serves them
-(self-healing a transiently failed Pages deploy by requesting a rebuild). The page (`fun/ms/index.html`) reads those
-files with `fetch()` — GitHub Pages serves them from its CDN, same origin. To
-change the dataset, edit only the `*_URL` constants near the top of its `<script>`.
-The `_scraper/` folder and `_HOW-IT-WORKS.md` are underscore-prefixed so Jekyll
-does not publish them; `data/` (no underscore) IS published and must stay served.
-See `fun/ms/_HOW-IT-WORKS.md`. **Articles in Advance:** a no-volume/no-issue paper
-is tagged forthcoming only when recent (`forthcomingStatus` in `build-data.mjs`),
-so years-old frozen records aren't mislabeled; their real issue comes from
-`data/_aia-fixups.json`, and forthcoming papers Crossref hasn't indexed yet come
-from `data/_informs-aia.json` — both refreshed **locally** (pubsonline blocks cloud
-IPs) by `lit/_scraper/informs-aia-local.mjs --app ms`, same pattern as the local
-editors/PNAS scripts. This applies identically to `/lit` and its FT50
-catalog (shared `_aia-fixups.json`; run the scraper with `--app lit` /
-`--app lit-ft50`).
+## `/fun/ms` — RETIRED (redirect stub only)
+The standalone Google-free Management Science browser was removed: `/lit/` is a
+superset — it covers Management Science with the same editors/areas filtering
+(`msInScope`) plus seven more sources, and reads its **own** data
+(`lit/data/papers-ms.json`), so it never depended on this app. `fun/ms/` now
+holds only a noindex redirect stub to `/lit/` (like `fun/ft50/`); its data
+(`fun/ms/data/`), scraper (`fun/ms/_scraper/`) and its
+`.github/workflows/ms-update-data.yml` workflow were deleted. Do not add a card
+for it on `fun/index.html`. The old `fun/ms2/` stub (the graduated v2
+experiment) now also redirects to `/lit/`.
 
-This app was developed at `fun/ms2/` (that path now holds a redirect stub to
-`/fun/ms/`) and replaced the original Google-Sheets-backed version, which is
+**Articles in Advance (still used by /lit):** the `informs-aia-local.mjs` local
+scraper (pubsonline blocks cloud IPs) still feeds `_aia-fixups.json` /
+`_informs-aia.json` for `/lit` and its FT50 catalog — run it with `--app lit` /
+`--app lit-ft50` (`forthcomingStatus` tags a no-volume/no-issue paper forthcoming
+only when recent, so years-old frozen records aren't mislabeled). Its `--app ms`
+target is retired along with this app.
+
+The original Google-Sheets-backed Management Science browser remains
 retired-but-served at `fun/ms-old/` (noindex; its data still comes from the
 "ManSci Metadata" Google Sheet at runtime). `ms-old` is **deliberately unlisted**:
 it has no card on `fun/index.html` and should not get one — it stays reachable
-only by direct URL. It is the intended exception to the keep-in-sync rule above.
+only by direct URL. It is an intended exception to the keep-in-sync rule above.
 
 ## `/lab/ideasearchlab` — self-contained, built from this repo
 
