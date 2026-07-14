@@ -32,6 +32,7 @@ concurrency:
 
 permissions:
   contents: write            # needed to commit the refreshed summary back
+  pages: write               # needed to request a Pages rebuild if a deploy fails
 
 jobs:
   build:
@@ -82,6 +83,40 @@ jobs:
             sleep 5
           done
           echo "::error::Could not push the refreshed analytics after 4 attempts."
+          exit 1
+
+      # A committed summary is not enough: the GitHub Pages deploy that follows
+      # the push can lag or fail transiently, silently serving the OLD analytics
+      # page (missing new files like disruption.json). Poll the live site; if the
+      # fresh summary didn't land, request a rebuild and poll again — the same
+      # self-heal every lit/ms data workflow already does.
+      - name: Verify the live site serves the fresh analytics (self-heal a failed deploy)
+        if: github.ref == 'refs/heads/master'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LIVE_DISR: https://www.stouras.com/fun/lit/analytics/disruption.json
+        run: |
+          want=$(jq -r '.generated // ""' fun/lit/analytics/disruption.json)
+          echo "Committed analytics generated: $want"
+          if [ -z "$want" ]; then echo "No generation date to verify — skipping."; exit 0; fi
+          poll() {  # poll <tries> — succeed once the live disruption.json is generated >= committed
+            for i in $(seq 1 "$1"); do
+              live=$(curl -sf --max-time 25 "$LIVE_DISR?nc=${GITHUB_RUN_ID}-${RANDOM}" | jq -r '.generated // "unreachable"' || echo "unreachable")
+              echo "  try $i/$1: live generated = $live"
+              if [ "$live" != "unreachable" ] && [ -n "$live" ] && [ ! "$live" \< "$want" ]; then return 0; fi
+              sleep 60
+            done
+            return 1
+          }
+          if poll 8; then echo "Live analytics is current (disruption.json served)."; exit 0; fi
+          echo "Live site still stale — requesting a GitHub Pages rebuild..."
+          curl -sf -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/pages/builds" \
+            || echo "WARNING: Pages rebuild request failed (check token permissions)."
+          if poll 10; then echo "Live analytics recovered after the rebuild request."; exit 0; fi
+          echo "::error::Live analytics still stale (wanted generated >= $want). Re-run this workflow or the pages-build-deployment workflow."
           exit 1
 
       - name: Summary
