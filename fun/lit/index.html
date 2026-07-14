@@ -1418,12 +1418,15 @@ function loadRefsCounts() {
   return refsCountsPromise;
 }
 
-// The closed-state label for a paper's cited-references toggle: append "(N)"
-// when the count is known (>0). The open state is a plain "Hide" label.
+// The closed-state label for a paper's cited-references toggle: weave the count
+// into the phrase ("Cited 12 references in this catalog") when it is known (>0),
+// falling back to the generic "Cited references in this catalog" otherwise. The
+// open state is a plain "Hide" label.
 function refsToggleLabel(doi, open) {
   if (open) return '▾ Hide cited references';
   var n = refsCounts && refsCounts[doi];
-  return '▸ Cited references in this catalog' + (n ? ' (' + n.toLocaleString() + ')' : '');
+  var mid = n ? n.toLocaleString() + ' reference' + (n === 1 ? '' : 's') : 'references';
+  return '▸ Cited ' + mid + ' in this catalog';
 }
 
 // Once the counts arrive, fill "(N)" into every on-screen toggle that is still

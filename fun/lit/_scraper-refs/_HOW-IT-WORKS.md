@@ -109,7 +109,7 @@ Key env vars: `REFS_MAILTO` (Crossref/OpenAlex quota identity,
 paper card shows the **"Cited references in this catalog"** toggle only when its
 journal has a shard (`refsShardFor`); when the manifest has shards, the page also
 fetches `refs-counts.json` once in the background (`loadRefsCounts`) so each
-toggle can show its count — "Cited references in this catalog (N)" — filled in on
+toggle can show its count — "Cited N references in this catalog" — filled in on
 arrival (`annotateRefsCounts`/`refsToggleLabel`) without downloading any shard.
 Opening it lazy-loads `refs-index.json`
 (once) and the paper's `refs-<jkey>.json` (once per journal), then lists the

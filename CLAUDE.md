@@ -562,8 +562,8 @@ also belong to the catalog** (the intra-catalog out-edges), surfaced on each
 paper card as a **"Cited references in this catalog"** toggle (steel-blue, next
 to BibTeX; `togRefs` in `index.html`) that lazy-loads and lists those papers,
 each linking to the paper it cites. The toggle also shows a **count** of how
-many in-catalog references the paper cites — e.g. "Cited references in this
-catalog (12)" — sourced from a tiny `refs-counts.json` companion
+many in-catalog references the paper cites — e.g. "Cited 12 references in this
+catalog" (the number woven into the phrase, not parenthesised) — sourced from a tiny `refs-counts.json` companion
 (`{citingDoi:N}`) loaded once in the background (`loadRefsCounts`/`refsCounts`/
 `refsToggleLabel`/`annotateRefsCounts`) so the number appears WITHOUT
 downloading the multi-MB per-journal shard; the shard still loads lazily only
