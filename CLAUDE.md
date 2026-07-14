@@ -253,12 +253,19 @@ Semantic Scholar's `citationCount` — the latter two index citing
 preprints/proceedings/books, so they sit much closer to Google Scholar's
 number. The OpenAlex+S2 sweep (`refreshCitations`/`applyCitations` in
 `build-data.mjs`, replicated near-verbatim like the pre-print machinery) is
-batched — OpenAlex 50 DOIs/call via `filter=doi:` + `select=doi,cited_by_count`
+batched — OpenAlex 50 DOIs/call via `filter=doi:` + `select=doi,cited_by_count,authorships`
 (general 100k/day quota, NOT the ~100/day title-search cut-off), Semantic
 Scholar 500 DOIs/POST (`graph/v1/paper/batch`; its anonymous pool 429s
 freely, so the leg is optional and drops out while OpenAlex carries on) —
 into each data dir's incremental `_citations.json`
-(`doi → {c, t:<day-checked>, s2:1?}`; `c` omitted when 0). The refresh is
+(`doi → {c, t:<day-checked>, s2:1?, au?}`; `c` omitted when 0). **Author
+backfill:** the same OpenAlex call also reads `authorships` for records whose
+**Crossref harvest deposited no authors** (7–9% of the catalog — older DOIs and
+certain publishers, e.g. Econometrica/JPE/JoF) and caches a fallback author
+string in `au`; `applyCitations` fills the empty `Authors` with it (rolling, so
+it self-heals over the sweep's cadence) and **never overwrites** a
+Crossref-provided list. This is what lets the "Cited references in this catalog"
+panel show authors for those papers too. The refresh is
 ROLLING (never-checked DOIs first, then stalest; entries fresh for
 2 days; partial coverage never regresses a cached count) and runs
 two-part like the pre-prints: strictly time-boxed inside each daily build

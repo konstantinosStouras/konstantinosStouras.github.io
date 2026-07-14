@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "author-backfill",
+      "date": "2026-07-14",
+      "title": "Filling in missing author names",
+      "summary": "Some older papers (and certain publishers) arrive from Crossref with no author names; the daily citations sweep now backfills those from OpenAlex, so more cards — and more entries in the “Cited references in this catalog” panel — show who wrote each paper. It fills in gradually over the coming days.",
+      "url": "https://stouras.com/fun/lit/"
+    },
+    {
       "id": "cited-references-authors",
       "date": "2026-07-14",
       "title": "Cited references now show their authors",
