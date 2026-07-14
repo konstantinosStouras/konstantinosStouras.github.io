@@ -314,7 +314,14 @@ CI; the daily Action just folds the committed files in.
 
 ## Updating the data
 
-- **Automatic:** daily at 05:30 UTC.
+- **Automatic:** daily at 05:30 UTC (full rebuild), **plus every 15 minutes** a
+  lightweight incremental check (`lit-check-new.yml` → `build-data.mjs
+  --incremental`) that pulls only Crossref's freshly-indexed tail
+  (`filter=from-index-date`) for the six Articles-in-Advance journals and upserts
+  new/updated papers into the committed files. It commits only when something new
+  actually arrived, shares the daily build's concurrency group so the two never
+  race a commit/deploy, and leaves enrichment + `authors.json`/`affiliations.json`
+  to the daily build. Offline test: `node _scraper/incremental-selftest.mjs`.
 - **On demand:** GitHub → Actions → *lit — update multi-journal data* → Run
   workflow.
 - **PNAS sections:** the one local script above, occasionally.

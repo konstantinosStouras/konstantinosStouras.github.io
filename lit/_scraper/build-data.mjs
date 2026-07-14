@@ -446,11 +446,17 @@ function regKey(row) {
 
 // ── journal pulls ───────────────────────────────────────────────────────────
 
-async function fetchJournalWorks(src) {
+async function fetchJournalWorks(src, opts = {}) {
+  // opts.sinceIndexDate: restrict to records Crossref (re)indexed on/after that
+  // day (filter=from-index-date). Used by the incremental pass so a frequent
+  // run reads only the freshly-indexed tail, not the whole back-catalogue.
+  const sinceFilter = opts.sinceIndexDate
+    ? `filter=${encodeURIComponent(`from-index-date:${opts.sinceIndexDate}`)}&` : '';
   if (MOCK) {
     const raw = await loadJsonIfExists(join(MOCK_DIR, `crossref-${src.key}.json`), null);
     const items = raw ? (raw.message ? raw.message.items : raw) : [];
-    console.log(`  [mock] ${src.key}: ${items.length} items`);
+    console.log(`  [mock] ${src.key}: ${items.length} items` +
+      (opts.sinceIndexDate ? ` (since ${opts.sinceIndexDate})` : ''));
     return items;
   }
   const all = [];
@@ -462,7 +468,7 @@ async function fetchJournalWorks(src) {
       let cursor = '*';
       let page = 0;
       for (;;) {
-        const url = `${base}?rows=${ROWS}&cursor=${encodeURIComponent(cursor)}` +
+        const url = `${base}?${sinceFilter}rows=${ROWS}&cursor=${encodeURIComponent(cursor)}` +
           `&select=${encodeURIComponent(SELECT)}&mailto=${encodeURIComponent(MAILTO)}`;
         const body = await fetchJson(url);
         const items = body.message.items || [];
@@ -2200,8 +2206,157 @@ async function writeJson(name, data) {
   await writeFile(join(DATA_DIR, name), JSON.stringify(data), 'utf8');
 }
 
+// ── Incremental "new arrivals" pass (--incremental) ─────────────────────────
+// The full main() re-pulls every journal's entire Crossref back-catalogue each
+// run (minutes of requests + a Pages redeploy), so it can only run once a day.
+// This lighter pass asks Crossref for ONLY the records it (re)indexed in the
+// last few days (filter=from-index-date) per Articles-in-Advance journal,
+// upserts them into the committed papers-<key>.json, and rewrites only the small
+// derived files (recent/meta/sources/registry). It writes NOTHING when nothing
+// new arrived — so it commits (and redeploys Pages) only on a genuine change and
+// can safely run every ~15 minutes, the finest cadence Crossref's own indexing
+// lag makes useful.
+//
+// Deliberately narrow, to stay cheap and strictly non-degrading:
+//   • Only the six Articles-in-Advance journals are polled. PNAS needs the
+//     Cloudflare-blocked local section index and ACM EC's list is heavy and
+//     rarely changes, so both are carried through untouched and refreshed by the
+//     daily full build (they still take part in recent.json / counts here).
+//   • Enrichment (pre-prints, OpenAlex/S2 citations, PNAS/EC crawls) is NOT run;
+//     each has its own workflow plus the daily build. An existing paper's
+//     enrichment fields (Preprint/PreprintSrc, an OpenAlex/S2-boosted CitedBy +
+//     CitedBySrc, cached Senior/Associate editors) are PRESERVED — this pass only
+//     refreshes core bibliographic fields (the Articles-in-Advance → issue
+//     transition, metadata fixes) and appends genuinely new papers.
+//   • authors.json / affiliations.json are left to the daily full build, which
+//     alone carries the ORCID data needed to merge author identities faithfully.
+const INCR_LOOKBACK_DAYS = parseInt(process.env.LIT_INCR_LOOKBACK_DAYS || '4', 10);
+const INCR_CORE_FIELDS = ['Title', 'Authors', 'Affiliations', 'Volume', 'Issue',
+  'Page', 'Year', 'Status', 'Accepting Editor', 'Area'];
+
+function doiFromField(v) {
+  return String(v || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase();
+}
+
+// Restore the internal _doi/_rank fields the registry/recent/sort helpers need
+// on rows loaded back from a committed papers-<key>.json. Public fields are left
+// untouched, so publicRow() reproduces the original bytes for an unchanged row.
+function reInternalize(rows) {
+  for (const p of rows) {
+    if (p._doi === undefined) p._doi = doiFromField(p.DOI);
+    if (p._rank === undefined) p._rank = pubRank({ page: p.Page }, p.Volume, p.Issue, p.Status, p.Year);
+  }
+  return rows;
+}
+
+async function incrementalMain() {
+  const sinceDate = new Date(PULL_DATE + 'T00:00:00');
+  sinceDate.setDate(sinceDate.getDate() - INCR_LOOKBACK_DAYS);
+  const since = sinceDate.toISOString().slice(0, 10);
+  console.log(`lit incremental check: records indexed since ${since} (pull date ${PULL_DATE})${MOCK ? ' (MOCK)' : ''}`);
+  await mkdir(DATA_DIR, { recursive: true });
+
+  // The registry is what distinguishes a new paper from a known one, so a full
+  // build must have run at least once first.
+  const regState = await loadRegistry();
+  if (regState.firstRun) {
+    console.error('No _registry.json yet — run a full build (node build-data.mjs) before the incremental pass.');
+    process.exit(1);
+  }
+  const prevMeta = await loadJsonIfExists(join(DATA_DIR, 'meta.json'), {});
+  const prevSources = await loadJsonIfExists(join(DATA_DIR, 'sources.json'), []);
+
+  const bySource = {};
+  const changedSources = new Set();
+
+  for (const src of JOURNALS) { // the six Articles-in-Advance journals only
+    const existing = reInternalize(await loadJsonIfExists(join(DATA_DIR, `papers-${src.key}.json`), []));
+    const byDoi = new Map(existing.filter(p => p._doi).map(p => [p._doi, p]));
+    const fetched = mapJournal(await fetchJournalWorks(src, { sinceIndexDate: since }), src);
+    let added = 0, updated = 0;
+    for (const nr of fetched) {
+      const cur = nr._doi ? byDoi.get(nr._doi) : null;
+      if (!cur) {                          // genuinely new paper
+        existing.push(nr);
+        if (nr._doi) byDoi.set(nr._doi, nr);
+        added++;
+        continue;
+      }
+      // Known DOI: refresh only core bibliographic fields (the AIA→issue
+      // transition and metadata corrections); leave enrichment fields intact.
+      let rowChanged = false;
+      for (const f of INCR_CORE_FIELDS) {
+        if (nr[f] === undefined) continue;
+        if (String(nr[f] ?? '') !== String(cur[f] ?? '')) { cur[f] = nr[f]; rowChanged = true; }
+      }
+      // Crossref's citation floor may only rise; never regress an enriched count.
+      if (typeof nr.CitedBy === 'number' && nr.CitedBy > (cur.CitedBy || 0)) {
+        cur.CitedBy = nr.CitedBy; delete cur.CitedBySrc; rowChanged = true;
+      }
+      if (rowChanged) {
+        cur._rank = pubRank({ page: cur.Page }, cur.Volume, cur.Issue, cur.Status, cur.Year);
+        updated++;
+      }
+    }
+    if (added || updated) changedSources.add(src.key);
+    existing.sort((a, b) => (b._rank - a._rank) || cmp(regKey(a), regKey(b)));
+    bySource[src.key] = existing;
+    console.log(`  ${src.key}: +${added} new, ${updated} updated (now ${existing.length})`);
+  }
+
+  // Overlay cached Senior/Associate editors onto any new/updated rows (offline).
+  await applyInformsEditors(bySource);
+
+  // PNAS + ACM EC are carried through unchanged (the daily build refreshes them),
+  // but still take part in recent.json, the registry and the header counts.
+  const pnasRows = reInternalize(await loadJsonIfExists(join(DATA_DIR, 'papers-pnas.json'), []));
+  const ecRows = reInternalize(await loadJsonIfExists(join(DATA_DIR, 'papers-ec.json'), []));
+
+  const allPapers = [...JOURNALS.flatMap(s => bySource[s.key]), ...pnasRows, ...ecRows];
+  const allByRank = [...allPapers].sort((a, b) => (b._rank - a._rank) || cmp(regKey(a), regKey(b)));
+
+  const registryBefore = Object.keys(regState.map).length;
+  const registry = updateRegistry(allByRank, regState);
+  const registryGrew = Object.keys(registry).length > registryBefore;
+
+  if (!changedSources.size && !registryGrew) {
+    console.log('No new or changed papers — nothing to write.');
+    return;
+  }
+
+  // Rewrite only the changed per-source files; count every source for the manifest.
+  const counts = {};
+  for (const src of JOURNALS) {
+    counts[src.key] = bySource[src.key].length;
+    if (changedSources.has(src.key)) {
+      await writeJson(`papers-${src.key}.json`, bySource[src.key].map(publicRow));
+    }
+  }
+  counts.pnas = pnasRows.length;
+  counts.ec = ecRows.length;
+
+  // sources.json: keep each entry's shape (incl. PNAS sections), refresh count.
+  const sources = prevSources.length
+    ? prevSources.map(s => ({ ...s, count: counts[s.key] ?? s.count }))
+    : null;
+
+  const recent = buildRecent(allPapers, registry);
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  const meta = { ...prevMeta, lastPull: PULL_DATE, paperCount: total, perSource: counts };
+
+  if (sources) await writeJson('sources.json', sources);
+  await writeJson('recent.json', recent);
+  await writeJson('meta.json', meta);
+  await writeJson('_registry.json', registry);
+
+  const newlyRegistered = Object.keys(registry).length - registryBefore;
+  console.log(`incremental update: {${[...changedSources].join(', ') || 'none'}} changed, ` +
+    `${newlyRegistered} newly-registered, ${recent.length} recent, ${total} total papers.`);
+}
+
 // Only run when executed directly — importing a helper from this module for a
 // test must not fire the whole network pipeline.
 if (process.argv[1] && import.meta.url === (await import('node:url')).pathToFileURL(process.argv[1]).href) {
-  main().catch(e => { console.error(e); process.exit(1); });
+  const incremental = process.env.LIT_INCREMENTAL === '1' || process.argv.includes('--incremental');
+  (incremental ? incrementalMain() : main()).catch(e => { console.error(e); process.exit(1); });
 }

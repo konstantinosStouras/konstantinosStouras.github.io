@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "faster-new-papers",
+      "date": "2026-07-14",
+      "title": "New papers appear within minutes",
+      "summary": "The six Articles-in-Advance journals (Management Science, Operations Research, Marketing Science, M&SOM, Information Systems Research and POM) are now checked for freshly-published papers every 15 minutes, on top of the full daily rebuild — so a new Article in Advance shows up (and joins “Recently added”) usually within minutes of Crossref indexing it, instead of the next day.",
+      "url": "https://stouras.com/lit/"
+    },
+    {
       "id": "author-backfill",
       "date": "2026-07-14",
       "title": "Filling in missing author names",
