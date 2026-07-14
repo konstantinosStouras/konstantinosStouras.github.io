@@ -104,6 +104,8 @@ async function main() {
   const index = await readOut('refs-index.json');
   ok(index['10.1287/mnsc.2018.0004'] && index['10.1287/mnsc.2018.0004'][0] === 'Paper D — Cited By A Via OpenAlex Only',
      'OpenAlex-only target D is in the title index');
+  ok(index['10.1287/mnsc.2018.0004'] && index['10.1287/mnsc.2018.0004'][3] === 'Grace Hopper',
+     'the index carries the cited paper’s authors (meta[3])');
   ok(!index['10.9999/external.1'] && !index['10.9999/ext.s2'], 'out-of-catalog references are not indexed');
 
   const rcounts = await readOut('refs-counts.json');

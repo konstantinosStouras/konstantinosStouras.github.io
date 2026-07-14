@@ -17,7 +17,7 @@ size budget, and so it can move to a dedicated Pages repo when it grows — see
 fun/lit/data-refs/
   manifest.json        # {ver, shards:{<jkey>:{file,papers,edges}}, index, counts, totals, sources}
   refs-<jkey>.json     # { "<citing-doi>": ["<cited-doi>", …] } — one per citing journal
-  refs-index.json      # { "<cited-doi>": [title, jkey, year] } — every edge target
+  refs-index.json      # { "<cited-doi>": [title, jkey, year, authors?] } — every edge target
   refs-counts.json     # { "<citing-doi>": N } — in-catalog refs per paper (toggle count)
   meta.json            # small run summary
   _refs-cache.json     # the incremental crawl cache (NOT served — see below)
@@ -28,7 +28,9 @@ fun/lit/data-refs/
   cited DOIs that are in the catalog. Sharded by the citing journal so the page
   downloads just the one file for a paper's journal, on demand.
 - **`refs-index.json`** lets the page render a cited paper's title/journal/year
-  without loading that paper's journal file.
+  — and its **authors** (the optional 4th tuple element) — without loading that
+  paper's journal file; the toggle panel shows each cited reference's authors
+  under its title.
 - **`refs-counts.json`** is a tiny `{"<citing-doi>": N}` companion (one int per
   citing paper with ≥1 edge) so a card can show the count on its "Cited
   references in this catalog (N)" toggle without downloading the per-journal

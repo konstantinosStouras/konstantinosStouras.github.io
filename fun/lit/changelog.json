@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "cited-references-authors",
+      "date": "2026-07-14",
+      "title": "Cited references now show their authors",
+      "summary": "In the “Cited references in this catalog” panel, each cited paper now lists its authors under the title, so you can see who wrote it without opening it.",
+      "url": "https://stouras.com/fun/lit/"
+    },
+    {
       "id": "cited-references-count",
       "date": "2026-07-14",
       "title": "Cited-references toggle now shows a count",

@@ -598,8 +598,9 @@ replays the dir on a rejected push; distinct OpenAlex/Crossref quota identity
 `kstouras+litrefs`). **Served files:** `manifest.json` (which journals
 have edges), `refs-<jkey>.json` (`{citingDoi:[citedDoi,…]}`, sharded by citing
 journal, only papers with ≥1 in-catalog edge), `refs-index.json`
-(`{citedDoi:[title,jkey,year]}`, so the page renders a cited paper's title
-without loading its journal file), and `refs-counts.json`
+(`{citedDoi:[title,jkey,year,authors?]}`, so the page renders a cited paper's
+title, journal, year AND authors without loading its journal file — the toggle
+panel lists each cited reference's authors under its title), and `refs-counts.json`
 (`{citingDoi:N}`, the tiny per-paper count companion that feeds the toggle
 label). **Paper priority (per the owner):** MS /
 M&SOM / POM / PNAS (all years) first, then UTD24 ∪ FT50 (newest years first),
