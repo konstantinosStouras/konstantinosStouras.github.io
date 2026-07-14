@@ -23,6 +23,10 @@ on:
         description: 'Dry run — read alerts and print, but send nothing'
         type: boolean
         default: false
+      rewind:
+        description: 'Recovery: clear high-water marks on recently-created alerts (does not send). Run a normal dispatch afterwards to deliver.'
+        type: boolean
+        default: false
 
 permissions:
   contents: read              # reads the committed recent.json; never commits
@@ -57,4 +61,4 @@ jobs:
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
           ALERTS_FROM: ${{ secrets.ALERTS_FROM }}
           ALERTS_FROM_NAME: ${{ secrets.ALERTS_FROM_NAME }}
-        run: node fun/lit/_scraper/alerts-mailer.mjs ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '--dry-run' || '' }}
+        run: node fun/lit/_scraper/alerts-mailer.mjs ${{ (github.event_name == 'workflow_dispatch' && inputs.rewind) && '--rewind' || '' }} ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '--dry-run' || '' }}

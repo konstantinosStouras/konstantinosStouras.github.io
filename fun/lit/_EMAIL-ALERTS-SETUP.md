@@ -202,6 +202,21 @@ so it needs no custom index either.
 - `node fun/lit/_scraper/alerts-mailer.mjs --test-emails [--dry-run]` — flushes
   the "Send me a test e-mail" queue (needs the Firebase + SMTP secrets; `--dry-run`
   prints what it would send).
+- `node fun/lit/_scraper/alerts-mailer.mjs --rewind [--dry-run]` — one-off
+  recovery: clears the `lastCheckedAt` / `lastFeatureCheckedAt` high-water marks on
+  alerts **created in the last few days** so the next normal run re-checks them
+  from their creation day (it never sends). Use it if a run advanced a mark past
+  items it did not actually deliver. It is scoped to recently-created alerts so it
+  can never re-blast a long-standing subscriber, and needs only the Firebase
+  secret. From CI, dispatch the **lit — e-mail alerts mailer** workflow with the
+  `rewind` input checked, then dispatch it again normally to deliver.
+
+**Note on same-day items:** a paper's `Date Added` and a changelog entry's `date`
+are calendar days (they parse to 00:00 UTC), while the alert marks are precise
+timestamps. The window boundary is floored to a whole UTC day (`dayStart` /
+`windowStartFor` in `alerts-mailer.mjs`) so an alert created today — or already
+checked earlier today — still matches items dated today, instead of dropping them
+because midnight is not `>` a mid-day mark.
 
 ### Feature updates (the changelog)
 
