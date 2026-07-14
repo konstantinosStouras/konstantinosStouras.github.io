@@ -373,8 +373,8 @@ external CDN beyond the shared Google Font) offers filters — **journal types**
 (the same UTD24/FT50/ABS 4/4*/ABS 3 sets, union with the Journals picker),
 **journals**, and a **year-range** slider — driving live tiles (papers, avg
 co-authors, solo %, pre-print %, citations) and charts (publication volume by
-journal over time, avg co-authors/year, co-authorship distribution, papers by
-journal, pre-print availability/year, most-cited table). When a journal that
+journal over time, avg co-authors/year by journal, co-authorship distribution,
+papers by journal, most-cited table). When a journal that
 carries editorial metadata is in scope, an **Editorial breakdown** section shows
 click-to-filter bar charts ("Papers by editorial area / accepting editor /
 senior/associate editor"); clicking a bar filters the *whole* dashboard by that
