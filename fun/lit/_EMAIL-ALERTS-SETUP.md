@@ -45,6 +45,8 @@ users/{uid}/alerts/{alertId} = {
   frequency:  'immediate'|'daily'|'weekly'|'monthly',
   enabled:    boolean,                // paused alerts are kept but not sent
   criteria: {                         // mirrors the page's search filters
+    features:    boolean,             // "New features & updates to the website"
+    allPapers:   boolean,             // "Any new paper added to the database"
     jtype:       string[],            // 'utd24' | 'ft50' | 'abs4' | 'abs3'
     journal:     string[],            // journal keys (JOURNAL_LABEL keys)
     author:      string[],            // author name substrings (lower-cased)
@@ -59,9 +61,17 @@ users/{uid}/alerts/{alertId} = {
     preprintOnly: boolean             // only papers with a free pre-print
   },
   createdAt:  serverTimestamp,
-  updatedAt:  serverTimestamp
+  updatedAt:  serverTimestamp,
+  // written by the mailer (not the page): per-side high-water marks
+  lastCheckedAt, lastSentAt, lastSentCount,          // paper digests
+  lastFeatureCheckedAt, lastFeatureSentAt            // feature-update digests
 }
 ```
+
+An alert needs at least one **intent** to be saved: feature updates
+(`features`), any-new-paper (`allPapers`), or a concrete filter. `features` is
+independent of the paper side — an alert can be feature-only, paper-only, or
+both.
 
 The `criteria` object matches the `sel` filter state in `index.html` field for
 field, so the same matching logic the page uses can be reused by the mailer.
@@ -103,8 +113,17 @@ writes subscriptions; the mailer reads them and sends. This is now implemented:
      vendored copies of the ones in `index.html`, kept in sync).
   4. For each alert that is **due** for its `frequency` and has new matches,
      sends one digest e-mail over SMTP (Nodemailer).
-  5. Records a per-alert high-water mark (`lastCheckedAt` / `lastSentAt`) so a
-     paper is never e-mailed twice.
+  5. **Also** reads the feature **changelog** (`fun/lit/changelog.json`) and, for
+     every alert opted into *New features & updates to the website*
+     (`criteria.features`), sends a "what's new" digest of the changelog entries
+     that fell in the subscriber's window — the same frequency windowing as
+     papers (see *Feature updates* below). This side is fully automated: shipping
+     a feature just means adding an entry to the changelog.
+  6. Records per-alert high-water marks so nothing is sent twice —
+     `lastCheckedAt` / `lastSentAt` for papers and `lastFeatureCheckedAt` /
+     `lastFeatureSentAt` for feature updates. The two advance **independently**
+     (each only when its own send succeeds), so a partial failure retries only
+     the side that failed.
 - **`.github/workflows/lit-alerts-mail.yml`** — runs it daily (08:30 UTC), after
   the daily data build has committed a fresh `recent.json`.
 
@@ -131,7 +150,10 @@ mailer, in a separate mode, on a separate (frequent) schedule:
 
 **Frequency.** `immediate`, `daily`, `weekly` (≥ ~7 days since the last check),
 `monthly` (≥ ~28 days). With the once-a-day cron, `immediate` and `daily` are
-the same; run the cron more often to make `immediate` closer to real time.
+the same; run the cron more often to make `immediate` closer to real time. The
+**same windowing applies to feature updates**: a daily subscriber gets each new
+changelog entry the day it lands; a weekly/monthly subscriber gets one digest of
+everything added to the changelog in that period.
 
 **"Sent from the user's e-mail."** The message is addressed `To` the alert's
 `recipient`, its `Reply-To` is set to the subscriber's own e-mail (`from`), and
@@ -181,23 +203,66 @@ so it needs no custom index either.
   the "Send me a test e-mail" queue (needs the Firebase + SMTP secrets; `--dry-run`
   prints what it would send).
 
-### Announcing a new feature
+### Feature updates (the changelog)
 
-Subscribers can opt into **feature updates** (the first toggle in the E-mail
-alerts form → `criteria.features`). When you ship something worth announcing,
-e-mail those subscribers with:
+Subscribers can opt into **New features & updates to the website** (the first
+toggle in the E-mail alerts form → `criteria.features`). This is now
+**automated**: it is driven by a hand-maintained catalogue, so you never have to
+compose a broadcast by hand.
+
+**The catalogue** is `fun/lit/changelog.json` — the single source of truth that
+also powers the *What's new* list in the About modal and the alert **preview** on
+the page, so what a subscriber sees on the site and what they receive by e-mail
+never disagree. It is a plain, served JSON file (not build output). Shape:
+
+```jsonc
+{
+  "version": 1,
+  "updates": [                          // newest first
+    {
+      "id":      "citations",           // unique, stable
+      "date":    "2026-05-20",          // YYYY-MM-DD (UTC) the feature went live
+      "title":   "Papers now show their citation counts",
+      "summary": "One sentence describing it.",
+      "url":     "https://stouras.com/fun/lit/"   // optional deep-link
+    }
+    // …
+  ]
+}
+```
+
+**To announce a feature, just add an entry** (newest first) with the date it
+shipped. On the next daily mailer run, every feature subscriber whose window
+covers that date is e-mailed it — a daily subscriber the day it lands, a
+weekly/monthly subscriber batched with the rest of that period. The mailer reads
+the file with `loadChangelog()`, windows it by `date` exactly like it windows
+papers by `Date Added`, and tracks a separate `lastFeatureCheckedAt` high-water
+mark so nothing is sent twice.
+
+**No retroactive blast.** An entry dated *before* a subscriber's window is never
+sent, and a brand-new subscriber's first window is capped at ~31 days (existing
+subscribers fall back to their paper high-water mark), so seeding the changelog
+with historical entries — as it ships — e-mails nobody. Only entries you add
+going forward, dated around today, trigger e-mails. Feature-only subscriptions
+still never trigger paper e-mails (the paper side gates on `hasPaperIntent`).
+
+**Ad-hoc broadcast (optional).** For a one-off message that is *not* a changelog
+entry (say, a maintenance notice), you can still e-mail feature subscribers
+directly with a free-form body:
 
 ```
 node fun/lit/_scraper/alerts-mailer.mjs --announce \
-  --subject="New on The Lit: the Working Papers archive" \
+  --subject="A quick note from The Lit" \
   --html-file=announce.html   # or --text="...", --text-file=...  ( add --dry-run to preview )
 ```
 
 It reads every alert with `criteria.features === true`, de-dups by recipient,
-and sends a "what's new" e-mail (same header/footnote as paper alerts). It is a
-no-op without the Firebase + SMTP secrets, and `--dry-run` prints the recipients
-instead of sending. Feature-only subscriptions never trigger paper e-mails (the
-daily run gates on `hasPaperIntent`).
+and sends a "what's new" e-mail (same header/footnote as the automated digest).
+It is a no-op without the Firebase + SMTP secrets, and `--dry-run` prints the
+recipients instead of sending. It does **not** touch the changelog high-water
+mark, so it is independent of the automated digests. For routine feature
+launches, prefer adding a changelog entry — it also updates the on-site
+*What's new* list and the alert preview.
 
 ### Coverage note
 

@@ -3729,6 +3729,10 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       <p>There are quick views for recently added papers and for papers that have an open-access pre-print. If you sign in you get a private library, where you can star papers, add notes, build lists and tag your reading. You can save default filters — a preferred set of journals or journal types that the page applies automatically each time you sign in, so you land on your own subset straight away. You can also set up e-mail alerts: about new papers that match your filters, about any new paper added to the database, or about new features on the site — with a preview of exactly what each e-mail will look like, and a "Send me a test e-mail" button that drops a one-off sample into your own inbox.</p>
       <p>A separate <a href="analytics/">Data Analytics</a> page summarises the whole corpus with interactive charts — publication volume over time, co-authorship, pre-print and citation trends, an author spotlight, and, for the journals where we collect it, an editorial breakdown by accepting editor, area and senior/associate editor that you can click to filter the whole dashboard.</p>
 
+      <h3 id="litWhatsNewHead">What's new</h3>
+      <p>The Lit keeps growing. Recent additions are logged below; you can also get them by e-mail — open <span class="acct-link" onclick="litAboutClose();litAlertsOpen();return false;">E-mail alerts</span> and turn on <em>New features &amp; updates to the website</em> (daily gets each new update as it lands; weekly or monthly batch them).</p>
+      <div id="litWhatsNew" class="whats-new"><p style="color:var(--text-muted);font-size:13px;margin:0">Loading the latest updates…</p></div>
+
       <h3>Where the data come from</h3>
       <p>Editors and editorial areas are shown for <em>Management Science</em> papers from 2011 onwards, exactly as on <a href="/fun/ms/">the MS-only browser</a>. The other sources contribute their published papers and Articles in Advance. ACM EC papers link out to an arXiv, SSRN or open-access PDF wherever one exists.</p>
       <p>The Journal types filter covers the <a href="https://jsom.utdallas.edu/the-utd-top-100-business-school-research-rankings/list-of-journals" target="_blank" rel="noopener">UTD24 list</a> and the full <a href="https://www.ft.com/ft50-journals" target="_blank" rel="noopener">FT50 research rank</a>. Journals beyond the eight core sources come from this app's own dataset, which is refreshed daily, checked against the FT's list once a year, and downloaded only when you need it. The badge to the left of a title shows the single most selective list a journal belongs to, with one exception: a journal that sits on both the UTD24 and FT50 lists shows both. A broader filter still finds the paper, so an ABS 4/4* search includes every UTD24 journal. ABS ratings follow the Chartered ABS <em>Academic Journal Guide</em> (AJG 2024), as mirrored at <a href="https://journalranking.org/" target="_blank" rel="noopener">journalranking.org</a>. Beyond the FT50 and UTD24 lists I have kept ABS coverage to Operations, Supply Chain, Economics, Computer Science, Project Management and Innovation. HBR and MIT Sloan Management Review are FT50 journals and badged as such; the guide gives them no number, so they keep their last numeric grade and the ABS 3 filter still finds them.</p>
@@ -3792,7 +3796,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     <button class="acct-modal-x" onclick="litAlertsClose()" aria-label="Close">×</button>
     <div class="acct-modal-head">
       <h2>E-mail alerts</h2>
-      <p>Get an e-mail when new papers matching your filters are added to The Lit. Alerts are private to your account; sent from and to your own e-mail (or any address you choose).</p>
+      <p>Get an e-mail when new papers matching your filters are added to The Lit — or about any new paper, or about new features and updates to the site. Alerts are private to your account; sent from and to your own e-mail (or any address you choose), at the frequency you choose.</p>
     </div>
     <div class="alerts-body" id="litAlertsBody"></div>
   </div>
@@ -3821,6 +3825,41 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   window.litFeedbackOpen = function () { openOverlay('litFeedbackOverlay'); };
   window.litFeedbackClose = function () { closeOverlay('litFeedbackOverlay'); };
   window.litAlertsClose = function () { closeOverlay('litAlertsOverlay'); };
+
+  // ── Feature changelog ("What's new") ──────────────────────────────────────
+  // Single source of truth (fun/lit/changelog.json) shared with the alert mailer
+  // (fun/lit/_scraper/alerts-mailer.mjs): it drives BOTH the "What's new" list in
+  // the About modal and the "New features & updates to the website" alert preview,
+  // so the page never disagrees with the e-mail a subscriber receives. Loaded once;
+  // graceful if the file is missing.
+  window.LIT_CHANGELOG = [];
+  function renderAboutWhatsNew() {
+    var box = document.getElementById('litWhatsNew'); if (!box) return;
+    var cl = window.LIT_CHANGELOG || [];
+    var head = document.getElementById('litWhatsNewHead');
+    if (!cl.length) { box.innerHTML = ''; if (head) head.style.display = 'none'; return; }
+    if (head) head.style.display = '';
+    var fmt = function (d) { try { return new Date(d + 'T00:00:00Z').toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }); } catch (e) { return d; } };
+    var httpUrl = function (u) { return /^https?:\/\//i.test('' + (u || '')) ? ('' + u) : ''; };
+    box.innerHTML = '<ul style="list-style:none;padding:0;margin:0">' + cl.slice(0, 8).map(function (f) {
+      var url = httpUrl(f.url);
+      return '<li style="margin:0 0 12px;padding-left:12px;border-left:3px solid var(--accent)">' +
+        '<div style="font-size:11.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px">' + esc(fmt(f.date)) + '</div>' +
+        '<div style="font-weight:600;color:var(--text);font-size:14px">' + (url ? '<a href="' + escAttr(url) + '" style="color:var(--navy);text-decoration:none">' + esc(f.title) + '</a>' : esc(f.title)) + '</div>' +
+        (f.summary ? '<div style="color:var(--text);font-size:13px;margin-top:1px;line-height:1.5">' + esc(f.summary) + '</div>' : '') +
+        '</li>';
+    }).join('') + '</ul>';
+  }
+  window.renderAboutWhatsNew = renderAboutWhatsNew;
+  fetch('changelog.json', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+    var list = Array.isArray(j) ? j : (j && Array.isArray(j.updates) ? j.updates : []);
+    window.LIT_CHANGELOG = list
+      .filter(function (e) { return e && e.title && e.date; })
+      .sort(function (a, b) { return a.date < b.date ? 1 : (a.date > b.date ? -1 : 0); });
+    renderAboutWhatsNew();
+    // Refresh the alert preview if the alerts modal is already showing it.
+    if (typeof window.litRefreshAlertPreview === 'function') window.litRefreshAlertPreview();
+  }).catch(function () { renderAboutWhatsNew(); });
 
   // Fallback until the accounts script installs the real builder (i.e. when
   // Firebase is not configured). The accounts script overrides litAlertsOpen.
@@ -4718,7 +4757,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     wrap.innerHTML =
       '<div class="alert-block-label">' + (editing ? 'Edit alert' : 'New alert') + '</div>' +
       '<div class="alert-types">' +
-        '<label class="alert-optrow"><input type="checkbox" id="litAlertFeatures"' + (d.features ? ' checked' : '') + ' onchange="litAlertToggleFeatures(this.checked)"><span><strong>New features &amp; updates to the website</strong><span class="sub">An e-mail whenever a new tool or feature launches on The Lit.</span></span></label>' +
+        '<label class="alert-optrow"><input type="checkbox" id="litAlertFeatures"' + (d.features ? ' checked' : '') + ' onchange="litAlertToggleFeatures(this.checked)"><span><strong>New features &amp; updates to the website</strong><span class="sub">An e-mail when a new tool or feature is added to The Lit, at your chosen frequency below — daily sends each update as it lands; weekly or monthly batch that period’s updates together.</span></span></label>' +
         '<label class="alert-optrow"><input type="checkbox" id="litAlertAll"' + (d.allPapers ? ' checked' : '') + ' onchange="litAlertToggleAll(this.checked)"><span><strong>Any new paper added to the database</strong><span class="sub">Every new paper, with no filters.</span></span></label>' +
       '</div>' +
       (d.allPapers
@@ -4752,6 +4791,9 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     renderAlertPreview();
   }
   window.litAlertNameInput = litAlertNameInput;
+  // Let the changelog loader re-render the "what's new" preview once the feature
+  // catalogue arrives (the modal may already be open when the fetch resolves).
+  window.litRefreshAlertPreview = function () { try { renderAlertPreview(); } catch (e) {} };
   function renderAlertPreview() {
     var box = document.getElementById('litAlertPreview'); if (!box) return;
     var d = alertDraft || emptyCriteria();
@@ -4790,9 +4832,25 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     }).join('');
     var blocks = [];
     if (d.features) {
-      blocks.push(mail('The Lit: a new feature is available', 'what’s new',
-        '<p style="font-size:13px;margin:0 0 8px">Here’s what’s new on <strong>The Lit</strong>:</p>' +
-        '<p style="font-size:13px;margin:0;color:var(--text)">A short note from the maintainer about the latest feature or tool, with a link to try it.</p>'));
+      // Mirror the mailer's renderFeatureDigest: sample the real latest changelog
+      // entries so the preview matches the e-mail a subscriber will actually get.
+      var cl = window.LIT_CHANGELOG || [];
+      var latest = cl.slice(0, 2);
+      var featSubject = latest.length === 1 ? 'The Lit: new feature — ' + latest[0].title
+        : latest.length > 1 ? 'The Lit: ' + latest.length + ' new features & updates'
+        : 'The Lit: a new feature is available';
+      var featInner = '<p style="font-size:13px;margin:0 0 8px">Here’s what’s new on <strong>The Lit</strong>:</p>';
+      if (latest.length) {
+        featInner += '<ul style="padding:0;margin:0">' + latest.map(function (f) {
+          return '<li style="margin:0 0 11px;list-style:none">' +
+            '<span style="color:var(--navy);font-weight:600;font-size:14px">' + esc(f.title) + '</span>' +
+            (f.summary ? '<div style="color:var(--text);font-size:12.5px;margin-top:2px">' + esc(f.summary) + '</div>' : '') +
+          '</li>';
+        }).join('') + '</ul>';
+      } else {
+        featInner += '<p style="font-size:13px;margin:0;color:var(--text)">A short note about the latest feature or tool, with a link to try it.</p>';
+      }
+      blocks.push(mail(featSubject, 'what’s new', featInner));
     }
     // The "new papers" example shows only when the alert actually asks for
     // papers — "any new paper" or a paper filter. A features-only subscription
