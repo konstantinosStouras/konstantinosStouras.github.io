@@ -66,7 +66,33 @@ OpenAlex/DBLP/Semantic Scholar). Data is static JSON in `lit/data/` (one
 `papers-<src>.json` per source + `sources.json` manifest), built by
 `lit/_scraper/build-data.mjs` and refreshed daily by
 `.github/workflows/lit-update-data.yml` (same self-healing live-site check as
-the ms workflow). **Journal types & the FT50 merge:** a "Journal types"
+the ms workflow). **Fast new-paper pickup (incremental harvest):** the full
+daily build re-pulls every journal's ENTIRE Crossref back-catalogue, so it can
+only run once a day; on top of it, `build-data.mjs --incremental`
+(`incrementalMain`) runs **every 15 minutes** via
+`.github/workflows/lit-check-new.yml` and asks Crossref for only the records it
+(re)indexed in the last few days (`filter=from-index-date`, `LIT_INCR_LOOKBACK_DAYS`
+default 4) for the **six Articles-in-Advance journals only** (ms/opre/mksc/msom/
+isre/pom — PNAS needs the Cloudflare-blocked local section index and ACM EC's list
+is heavy + rarely changes, so both are carried through unchanged but still counted
+and eligible for `recent.json`). It **upserts** into the committed
+`papers-<key>.json` (appends genuinely-new DOIs; for a known DOI refreshes only
+core bibliographic fields — the Articles-in-Advance→issue transition — while
+PRESERVING enrichment: `Preprint`/`PreprintSrc`, an OpenAlex/S2-boosted `CitedBy`
++ `CitedBySrc`, and cached SE/AE via the offline `applyInformsEditors` overlay;
+`CitedBy` only ever rises), then rewrites ONLY the small derived files
+(`recent.json`/`meta.json`/`sources.json`/`_registry.json`) — `authors.json`/
+`affiliations.json` are left to the daily build, which alone has the ORCID data
+for faithful author merging. It **writes nothing when nothing new arrived**, so it
+commits (and redeploys Pages) only on a genuine change — that plus **sharing the
+daily build's `lit-update-data-${{ github.ref }}` concurrency group** (so it never
+races a papers-file push/Pages deploy against the daily build, a pre-print backfill
+or the citations job — overlapping fires queue and coalesce) is what makes a
+15-minute cadence non-degrading. No live-site self-heal here (the daily build has
+one); a rejected push re-runs the idempotent incremental pass against the fresh
+tip. Offline test: `node lit/_scraper/incremental-selftest.mjs` (mock, no network).
+NOTE: this build env's egress blocks Crossref (403), so the incremental pass only
+does real work on the GitHub Actions runners. **Journal types & the FT50 merge:** a "Journal types"
 filter (left of Journals) offers UTD24 / FT50 / ABS 4/4* / ABS 3; a type chip
 expands to its journal set and unions with the Journals selection. Each paper
 card carries a small **badge left of its title** showing the single MOST
