@@ -37,6 +37,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { forwardDisruption } from '../_scraper-refs/build-citedby.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LIT_DIR = path.resolve(__dirname, '..');            // lit
@@ -49,6 +50,16 @@ const OUT_DIR = path.join(LIT_DIR, 'analytics');
 // expectation — the page tolerates older files, this just documents intent).
 const DISR_VER = 1;
 const MIN_YEAR = 1900;
+// When set, D is computed from the harvested GLOBAL forward-citation sets
+// (lit/data-refs/_citedby-cache.json, built by _scraper-refs/build-citedby.mjs)
+// instead of the catalog-only inversion of the reference shards. That removes
+// the same-field bias of counting only in-catalog citers, giving a CD index
+// much closer to the paper's full-network D. OFF by default: the forward graph
+// ships empty and fills in over weeks, so we keep the consistent (if biased)
+// catalog-inverted D until coverage is broad enough to flip this on — at which
+// point the analytics/disruption.json it writes carries a per-paper `dm` tag
+// ('f' = global forward, 'c' = catalog-inverted fallback) for honest labelling.
+const USE_FORWARD = process.env.DISR_USE_FORWARD === '1';
 // Authors below this many disruption-scored papers are dropped from the author
 // index used for the disruptiveness ranking (keeps that view meaningful; the
 // per-paper author links stay so filtered author stats are always exact).
@@ -161,6 +172,22 @@ for (const [jkey, sh] of Object.entries(manifest.shards || {})) {
   }
 }
 
+// ── optional: harvested GLOBAL forward citations (build-citedby.mjs) ─────────
+// oaidByDoi lets us exclude a focal paper from its own references' citer set
+// (it cites its own refs, so it appears there); fwd maps a paper to the set of
+// OpenAlex ids of works that cite it. Both are read only when USE_FORWARD is on
+// AND the caches exist — otherwise D falls back to the catalog-inverted measure
+// below, unchanged.
+const oaidByDoi = readJson(path.join(REFS_DIR, '_oaid.json'), {}); // doi -> OpenAlex id
+const fwd = new Map();   // doi -> Set(citer OpenAlex ids)
+if (USE_FORWARD) {
+  const cbCache = readJson(path.join(REFS_DIR, '_citedby-cache.json'), {});
+  for (const [doi, e] of Object.entries(cbCache)) {
+    if (e && Array.isArray(e.c) && e.c.length) fwd.set(normDoi(doi), new Set(e.c));
+  }
+  console.log('build-disruption: DISR_USE_FORWARD=1 — forward citations for ' + fwd.size + ' paper(s) loaded.');
+}
+
 // ── disruption index D for one focal paper ──────────────────────────────────
 function disruption(f) {
   const refs = out.get(f);
@@ -190,10 +217,22 @@ function authorId(name) {
   return id;
 }
 
+let forwardScored = 0;
 for (const f of out.keys()) {
   const meta = paper.get(f);
   if (!meta) continue;                    // focal not in the analytics corpus → skip
-  const dd = disruption(f);
+  // Prefer the global-forward CD index when it's available for this focal;
+  // fall back to the catalog-inverted measure otherwise. Same focal set either
+  // way (papers with ≥1 in-catalog reference), so the corpus is unchanged.
+  let dd = null, mode = 'c';
+  if (USE_FORWARD && fwd.size) {
+    const cf = fwd.get(f);
+    if (cf && cf.size) {
+      const fd = forwardDisruption(oaidByDoi[f], cf, out.get(f), fwd);
+      if (fd) { dd = fd; mode = 'f'; forwardScored++; }
+    }
+  }
+  if (!dd) dd = disruption(f);
   if (!dd) continue;                       // no forward citations in-catalog → D undefined
 
   // reference age & popularity from the focal paper's references
@@ -223,6 +262,7 @@ for (const f of out.keys()) {
   if (rp != null) rec.rp = rp;
   rec.ti = meta.ti;
   rec.doi = f;
+  if (USE_FORWARD) rec.dm = mode;          // 'f' global-forward | 'c' catalog-inverted
   records.push(rec);
 }
 
@@ -241,10 +281,13 @@ const disr = ds.filter(d => d > 0).length, dev = ds.filter(d => d < 0).length, z
 const outObj = {
   generated,
   ver: DISR_VER,
-  note: 'Disruption index D computed over The Lit\'s in-catalog citation graph (a growing subset). D>0 disrupts, D<0 develops.',
+  note: (USE_FORWARD && forwardScored)
+    ? 'Disruption index D — computed from harvested global forward citations where available (dm:"f"), else from The Lit\'s in-catalog citation graph (dm:"c"). D>0 disrupts, D<0 develops.'
+    : 'Disruption index D computed over The Lit\'s in-catalog citation graph (a growing subset). D>0 disrupts, D<0 develops.',
   totals: {
     papers: records.length,
     disruptive: disr, developing: dev, neutral: zero,
+    forwardScored,
     edges: edgeCount,
     graphPapers: out.size,
     authors: authorArr.length,
@@ -260,5 +303,7 @@ const kb = (fs.statSync(path.join(OUT_DIR, 'disruption.json')).size / 1024).toFi
 console.log('build-disruption: wrote analytics/disruption.json (' + kb + ' KB)');
 console.log('  scored papers=' + records.length + '  (disruptive=' + disr + ' developing=' + dev + ' neutral=' + zero + ')');
 console.log('  graph: ' + out.size + ' citing papers, ' + edgeCount + ' edges, ' + authorArr.length + ' distinct authors');
+if (USE_FORWARD) console.log('  forward: ' + forwardScored + ' paper(s) scored from global forward citations, ' +
+  (records.length - forwardScored) + ' from catalog inversion');
 console.log('  D range: ' + (ds[0] || 0).toFixed(3) + ' .. ' + (ds[ds.length - 1] || 0).toFixed(3) +
   '  median=' + (median(ds) || 0).toFixed(3));

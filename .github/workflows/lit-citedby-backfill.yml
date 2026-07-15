@@ -1,0 +1,98 @@
+name: lit — backfill forward citations (cited-by)
+
+# Grows the FORWARD side of the citation graph for stouras.com/lit/ — for every
+# listed paper, the works that CITE it ("who cites me") — by running
+# lit/_scraper-refs/build-citedby.mjs on a small, gently paced slice of papers
+# every few hours, then committing lit/data-refs/ back. The COMPANION to
+# lit-references-backfill.yml (which crawls the references a paper cites): this
+# harvests each paper's citing works from OpenAlex (cites:<id>), which SHARPENS
+# the disruption index D on the Data Analytics page (it lets D be counted over a
+# paper's GLOBAL citer set, not just the in-catalog inversion). Like the
+# reference backfill this is a deliberately SLOW fill: OpenAlex is paged gently,
+# each run is bounded (CB_MAX_PAPERS / CB_BUDGET_MS) and checkpoints as it goes,
+# so the forward graph fills in over WEEKS. Unlike a paper's own reference list
+# (frozen once published), forward citations grow, so entries are refreshed on a
+# rolling cadence (CB_TTL_DAYS). It needs each paper's OpenAlex id, which the
+# reference backfill caches for free in _oaid.json — so this piggybacks on it and
+# skips papers whose id isn't known yet. See lit/_scraper-refs/_HOW-IT-WORKS.md.
+
+on:
+  schedule:
+    # Four slices a day (every 6 h at :25), offset from the daily builds, the
+    # reference backfill (:40 every 3 h) and the other backfills.
+    - cron: '25 */6 * * *'
+  workflow_dispatch: {}      # run on demand from the Actions tab
+
+# SHARE the reference backfill's concurrency group: both workflows write
+# lit/data-refs, so they must never run at the same time — overlapping fires
+# queue and coalesce instead of racing a commit to the same directory.
+concurrency:
+  group: lit-references-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write            # needed to commit the grown dataset back
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    # A bounded slice + gentle pacing; the builder's own wall-clock budget
+    # (CB_BUDGET_MS) stops it well before this hard backstop.
+    timeout-minutes: 50
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Harvest a slice of papers' forward citations (OpenAlex, gently paced)
+        env:
+          CB_MAILTO: kstouras+litcitedby@gmail.com   # distinct OpenAlex quota identity
+          CB_MAX_PAPERS: '2500'                       # papers per run (resumable across runs)
+          CB_BUDGET_MS: '2400000'                     # 40-min harvest ceiling
+          CB_OA_PACE_MS: '300'                        # between citation pages — deliberately slow
+          CB_MAX_CITERS: '3000'                       # cap citer ids stored per paper
+        run: node lit/_scraper-refs/build-citedby.mjs
+
+      - name: Commit the grown forward-citation graph
+        # always(): even if the harvest is killed mid-run, commit the checkpointed
+        # progress (the crawl cache) so the slot's work is never lost. Only the
+        # default branch carries the committed data.
+        if: always() && github.ref == 'refs/heads/master'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lit/data-refs
+          if git diff --cached --quiet; then
+            echo "No dataset changes — nothing to commit."
+            exit 0
+          fi
+          git commit -m "lit: backfill forward citations (cited-by)"
+          # Both data-refs workflows share a concurrency group, so nothing else
+          # writes this directory concurrently. On a rejected push (a concurrent
+          # commit to master touching OTHER files), replay our directory onto the
+          # new tip and retry.
+          cp -r lit/data-refs /tmp/refs-ours
+          for i in 1 2 3; do
+            if git push origin HEAD:${{ github.ref_name }}; then
+              echo "Pushed on attempt $i."
+              exit 0
+            fi
+            echo "Push rejected (concurrent commit?) — replaying our dataset on the new tip…"
+            git fetch origin ${{ github.ref_name }}
+            git reset --hard origin/${{ github.ref_name }}
+            rm -rf lit/data-refs
+            cp -r /tmp/refs-ours lit/data-refs
+            git add lit/data-refs
+            if git diff --cached --quiet; then
+              echo "The tip already carries this dataset state — nothing left to push."
+              exit 0
+            fi
+            git commit -m "lit: backfill forward citations (cited-by)"
+            sleep 5
+          done
+          echo "::error::Could not push the forward-citation graph after 3 attempts."
+          exit 1
