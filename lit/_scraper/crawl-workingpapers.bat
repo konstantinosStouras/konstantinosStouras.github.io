@@ -58,8 +58,9 @@ echo ============================================================
 
 call "%~dp0ci-pause-backfills.bat" nopause
 if errorlevel 1 (
-  echo [ABORT] Could not pause CI backfills - NOT starting (so CI can't clobber).
-  echo         Fix gh ^(gh auth login^) or pause the workflows manually, then retry.
+  echo [ABORT] Could not pause CI - NOT starting, else local diverges and cannot push.
+  echo         Fix gh: run  gh auth login  then  gh auth refresh -s workflow
+  echo         - or pause the workflows manually in the Actions tab, then retry.
   goto :end
 )
 
