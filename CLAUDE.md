@@ -143,9 +143,39 @@ year/title/author/affiliation search with no journal scope; the
 built by `lit/_scraper-ft50/` (the retired fun/ft50 app's pipeline,
 vendored; journal list in its own `journals.json`), refreshed daily by
 `.github/workflows/lit-ft50-update-data.yml` (07:15 UTC) and checked against
-the FT's list yearly by `lit-ft50-check-list.yml` (4 Jan). AIA fixups for it
-come from
-`informs-aia-local.mjs --app lit-ft50`. FT50 membership is seeded statically
+the FT's list yearly by `lit-ft50-check-list.yml` (4 Jan). **Fast new-paper
+pickup for the FT50 catalog** works like the native `lit-check-new` pass:
+`_scraper-ft50/build-data.mjs --incremental` (`incrementalMain`) runs **every 20
+minutes** via `.github/workflows/lit-ft50-check-new.yml`, asking Crossref for only
+the records (re)indexed in the last few days (`filter=from-index-date`,
+`FT50_INCR_LOOKBACK_DAYS` default 4) for a **small configured subset**
+(`FT50_INCR_JOURNALS`, default **`ecta`** = Econometrica only). It upserts into
+`papers-ecta.json` (appends new DOIs; for a known DOI refreshes only core
+bibliographic fields, PRESERVING enrichment — `Preprint`/`CitedBy`+`CitedBySrc`),
+then rewrites only the small derived files, doing a **lean recent.json merge** —
+the polled journals' fresh rows unioned with the last build's recent rows for
+every OTHER journal (correct because it and the daily build are the only
+data-ft50 writers and share the `lit-ft50-update-data-${{ github.ref }}`
+concurrency group, so nothing else changed) — instead of reloading all ~50 papers
+files. It **writes nothing when nothing new arrived**. Why only Econometrica:
+lit's own `lit-check-new` already fast-tracks the six native INFORMS/SAGE AIA
+journals, and Econometrica is the one requested journal that lives ONLY in the
+FT50 catalog AND whose publisher assigns an accepted paper straight to a future
+issue — so Crossref never lists it as a no-volume advance article and the daily
+build was otherwise the only thing that ever picked it up (up to a day late).
+Offline test: `node lit/_scraper-ft50/incremental-selftest.mjs` (mock, no
+network; adds an `ecta` fixture, `mock/crossref-ecta.json`). NOTE: this build
+env's egress blocks Crossref (403), so the incremental pass only does real work
+on the GitHub Actions runners. AIA fixups for the catalog come from
+`informs-aia-local.mjs --app lit-ft50`; **Econometrica FORTHCOMING papers**
+(accepted, not yet in an issue — Crossref never shows these) are scraped from the
+Econometric Society's own forthcoming-papers page by the LOCAL
+`lit/_scraper/econometrica-forthcoming-local.mjs` (econometricsociety.org can
+block cloud IPs, like pubsonline/pnas — so it runs locally, reads the standard
+`citation_*` meta the Drupal site emits, and `--dry-run`/`--selftest` guard it),
+which writes `jkey:"ecta"` rows into the shared `data-ft50/_informs-aia.json`
+supplement that the daily build's `mergeSupplement` folds in (superseded by DOI
+once Crossref catches up). FT50 membership is seeded statically
 in `index.html` and extended from the data-ft50 manifest (so the yearly
 FT-list check flows through); ABS grades (AJG 2024, via journalranking.org)
 live in the `ABS_RATING` map there — PNAS/ACM EC are unrated, and HBR/MIT SMR

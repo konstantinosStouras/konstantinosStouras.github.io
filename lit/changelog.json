@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "econometrica-forthcoming",
+      "date": "2026-07-14",
+      "title": "Econometrica forthcoming papers, tracked",
+      "summary": "The Lit now follows Econometrica's Forthcoming Papers page and checks the journal for newly-published work every 20 minutes (on top of the daily rebuild), so accepted-but-not-yet-in-an-issue Econometrica papers show up — and join “Recently added” — soon after they are posted, instead of the next day.",
+      "url": "https://stouras.com/lit/"
+    },
+    {
       "id": "faster-new-papers",
       "date": "2026-07-14",
       "title": "New papers appear within minutes",
