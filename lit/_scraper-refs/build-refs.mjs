@@ -61,12 +61,22 @@
  * ===========================================================================
  */
 
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, rename } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// Atomic write: write a temp file in the SAME dir, then rename over the dest.
+// rename(2) is atomic on one volume (NTFS included), so a power-off / disconnect
+// mid-write can never leave a truncated file for a reader or `git add` to pick
+// up — this is what lets a local run commit its data safely at any moment.
+async function awrite(dest, str) {
+  const tmp = `${dest}.tmp-${process.pid}`;
+  await writeFile(tmp, str, 'utf8');
+  await rename(tmp, dest);
+}
 const MOCK = process.env.REFS_MOCK === '1';
 const MOCK_DIR = join(__dirname, 'mock');
 
@@ -429,8 +439,8 @@ async function main() {
   console.log(`processing up to ${slice.length} paper(s) this run (of ${papers.length})`);
 
   const checkpoint = async () => {
-    await writeFile(join(DATA_DIR, '_refs-cache.json'), JSON.stringify(cache), 'utf8');
-    await writeFile(join(DATA_DIR, '_oaid.json'), JSON.stringify(oaidMap), 'utf8');
+    await awrite(join(DATA_DIR, '_refs-cache.json'), JSON.stringify(cache));
+    await awrite(join(DATA_DIR, '_oaid.json'), JSON.stringify(oaidMap));
   };
 
   // 4. Leg 2 (OpenAlex, batched) — bounded to a fraction of the run so the
@@ -464,14 +474,14 @@ async function main() {
   for (const jkey of Object.keys(shards).sort()) {
     const rows = shards[jkey];
     const file = `refs-${jkey}.json`;
-    await writeFile(join(DATA_DIR, file), JSON.stringify(rows), 'utf8');
+    await awrite(join(DATA_DIR, file), JSON.stringify(rows));
     const es = Object.values(rows).reduce((n, a) => n + a.length, 0);
     shardMeta[jkey] = { file, papers: Object.keys(rows).length, edges: es };
   }
-  await writeFile(join(DATA_DIR, 'refs-index.json'), JSON.stringify(index), 'utf8');
+  await awrite(join(DATA_DIR, 'refs-index.json'), JSON.stringify(index));
   // The per-paper count companion — one int per citing paper, so a card shows
   // "(N)" on its toggle without downloading a shard.
-  await writeFile(join(DATA_DIR, 'refs-counts.json'), JSON.stringify(counts), 'utf8');
+  await awrite(join(DATA_DIR, 'refs-counts.json'), JSON.stringify(counts));
 
   const fetched = Object.values(cache).filter(e => (e.v || 0) >= RF_VER).length;
   const manifest = {
@@ -483,10 +493,10 @@ async function main() {
     totals: { citingPapers: totals.citingWithEdges, edges: totals.edges, citedPapers: totals.cited, fetched, catalog: papers.length },
     sources: ['crossref', 'openalex', ...(USE_S2 ? ['semanticscholar'] : [])],
   };
-  await writeFile(join(DATA_DIR, 'manifest.json'), JSON.stringify(manifest), 'utf8');
-  await writeFile(join(DATA_DIR, 'meta.json'), JSON.stringify({
+  await awrite(join(DATA_DIR, 'manifest.json'), JSON.stringify(manifest));
+  await awrite(join(DATA_DIR, 'meta.json'), JSON.stringify({
     lastPull: PULL_DATE, citingPapers: totals.citingWithEdges, edges: totals.edges, fetched, catalog: papers.length,
-  }), 'utf8');
+  }));
   await checkpoint();
 
   console.log(`done: ${totals.edges} in-catalog edges from ${totals.citingWithEdges} papers ` +

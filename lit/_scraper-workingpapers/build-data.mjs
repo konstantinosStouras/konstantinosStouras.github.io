@@ -52,7 +52,7 @@
  * ===========================================================================
  */
 
-import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, readdir, rename } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -461,7 +461,12 @@ async function main() {
 }
 
 async function writeJson(name, data) {
-  await writeFile(join(DATA_DIR, name), JSON.stringify(data), 'utf8');
+  // Atomic: temp file + rename, so a power-off / disconnect mid-write can never
+  // leave a truncated file for a reader or `git add` to pick up.
+  const dest = join(DATA_DIR, name);
+  const tmp = `${dest}.tmp-${process.pid}`;
+  await writeFile(tmp, JSON.stringify(data), 'utf8');
+  await rename(tmp, dest);
 }
 async function writeCache(cache) { await writeJson('_authors.json', cache); }
 
