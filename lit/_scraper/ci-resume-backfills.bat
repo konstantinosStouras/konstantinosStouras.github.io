@@ -17,6 +17,12 @@ if errorlevel 1 (
   if /i not "%~1"=="nopause" pause
   exit /b 1
 )
+gh auth status >nul 2>nul
+if errorlevel 1 (
+  echo [ERROR] GitHub CLI is not authenticated. Run:  gh auth login
+  if /i not "%~1"=="nopause" pause
+  exit /b 1
+)
 
 echo Re-enabling CI data workflows...
 for %%w in (%WFS%) do call :enable %%w
@@ -25,6 +31,6 @@ if /i not "%~1"=="nopause" pause
 exit /b 0
 
 :enable
-gh workflow enable "%~1" -R %REPO_SLUG% 2>nul
-if errorlevel 1 ( echo   [warn] could not enable %~1 - do it manually in the Actions tab ) else ( echo   resumed %~1 )
+gh workflow enable "%~1" -R %REPO_SLUG% >nul 2>nul
+if errorlevel 1 ( echo   %~1 - already on ) else ( echo   resumed %~1 )
 exit /b 0
