@@ -10,3 +10,12 @@ lit/_scraper-workingpapers/_mock-out/
 # search-v2: plain (un-obfuscated) analysis pool + node deps for its tools
 lab/search-v2/tools/pool_plain.json
 node_modules/
+
+# local-crawler transient files — see lit/_scraper/_LOCAL-CRAWLING.md
+# single-instance run lock (present only while a local crawl loop runs):
+/.crawl-running.lock
+# atomic-write temp files (<dest>.tmp-<pid>) if a crawl is ever killed mid-write:
+lit/data/**/*.tmp-*
+lit/data-ft50/**/*.tmp-*
+lit/data-refs/**/*.tmp-*
+lit/data-workingpapers/**/*.tmp-*

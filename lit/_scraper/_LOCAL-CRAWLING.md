@@ -64,13 +64,16 @@ set a `+…local` gmail explicitly so every crawler is consistent.
 
 ## The scripts (all in `lit\_scraper\`, double-click or run from CMD)
 
-### `run-local-crawlers.bat` — one-click, safe, unattended
-Runs the two safe crawlers and commits/pushes for you:
+### `run-local-crawlers.bat` — resilient, run-and-leave-it
+Loops **forever** over the two safe crawlers, committing + pushing after every
+~20-minute slice:
 1. **Pre-print links** (native `data/`) — the biggest visible win.
 2. **FT50-catalog citations** (`data-ft50/`).
 
-Both merge without clobbering CI, so **no workflow is paused**. Walk away; it
-pushes to `master` when done.
+Both merge without clobbering CI, so **no workflow is paused**. Leave it
+running; it keeps the live database continuously up to date and survives
+disconnects/power-off with minimal loss (see **Resilience** below). To stop,
+close the window or Ctrl+C. Run it again any time to resume.
 
 ### `crawl-blocked-sources.bat` — data CI can never fetch
 Runs the cloud-blocked local scrapers in sequence and pushes:
@@ -85,19 +88,25 @@ papers, then prompts before writing to `data-ft50/` and pushing.
 
 ### `crawl-refs.bat` — citation graph (`data-refs/`) **[pauses CI]**
 ### `crawl-workingpapers.bat` — working papers (`data-workingpapers/`) **[pauses CI]**
-These two datasets are the only ones where a CI backfill firing mid-crawl can
-**overwrite your fuller local data** (their CI push does `git reset --hard` and
-replays its own older copy). So each wrapper:
+Same resilient slice→commit→push loop as above, for the two datasets where a CI
+backfill firing mid-crawl could **overwrite your fuller local data** (their CI
+push does `git reset --hard` and replays its own older copy). So each wrapper:
 1. **Pauses** the clobber-risk CI workflows (`ci-pause-backfills.bat`),
-2. runs the crawler continuously at a safe higher pace,
-3. **Resumes** CI (`ci-resume-backfills.bat`) when it finishes,
-4. offers to commit + push.
+2. loops the crawler in ~20-min slices at a safe higher pace, committing +
+   pushing each slice,
+3. **Resumes** CI (`ci-resume-backfills.bat`) when you stop it cleanly.
 
 > ⚠️ **If you stop the crawler early with Ctrl+C**, Windows asks
 > *"Terminate batch job (Y/N)?"* — press **N** so the script continues and
 > re-enables CI. If in doubt, just run **`ci-resume-backfills.bat`** afterwards;
 > it's safe to run any time. Leaving CI paused isn't destructive — the site
 > simply won't auto-refresh those two datasets until you resume.
+
+### `install-autostart.bat` / `uninstall-autostart.bat` — optional
+Register (or remove) a Windows Scheduled Task that starts
+`run-local-crawlers.bat` at **logon**, so after a reboot / power-off the crawler
+resumes on its own. It only autostarts the safe datasets (no CI pause). Runs in
+the background; stop it via `uninstall-autostart.bat` + closing its process.
 
 ### `ci-pause-backfills.bat` / `ci-resume-backfills.bat` — the safety net
 Disable / re-enable the three clobber-risk workflows
@@ -107,14 +116,53 @@ Disable / re-enable the three clobber-risk workflows
 
 ---
 
+## Resilience — survives disconnects & power-off with minimal loss
+
+The crawlers are built so an interrupted run loses almost nothing and resuming
+is just re-running:
+
+- **Continuous sync.** Each loop does a ~20-minute slice, then commits + pushes,
+  so the live database is at most one slice behind.
+- **Atomic writes.** Every data/cache file is written to a temp file and
+  `rename`d into place (atomic on NTFS). A power-off mid-write can never leave a
+  truncated JSON — a reader (and `git add`) always sees the old complete file or
+  the new complete one. This is what makes auto-commit safe.
+- **Startup flush.** On launch, each loop first commits + pushes anything a
+  previous interrupted run left on disk, so even the un-pushed slice reaches the
+  database — you don't lose the work between the last push and the crash.
+- **Network-drop tolerant.** If a push fails (offline), the commit stays local
+  and is pushed on the next slice; crawling never stops for a connectivity blip.
+- **Resume = re-run.** Each scraper reads its own cache/cursor
+  (`_preprints.json`, `_citations.json`, `_refs-cache.json`, `_authors.json`)
+  and only crawls what isn't done. No progress is repeated.
+- **Auto-resume on reboot** (optional): `install-autostart.bat`.
+
+**Net:** a power-off loses at most the crawler's in-memory work since its last
+checkpoint (seconds–minutes); everything already on disk re-syncs on the next
+run. The permanent-loss window is tiny.
+
+**One loop per clone.** All the loops commit to the same git working tree, so
+run **one at a time** (a `.crawl-running.lock` file guards against accidental
+double-runs — if a run is killed, the next start just offers to take over, or
+delete `.crawl-running.lock`). To crawl several datasets truly in parallel, use
+separate clones of the repo.
+
+---
+
 ## Suggested order
 
-1. **`run-local-crawlers.bat`** overnight, twice — fixes "OA links exist but
+1. **`run-local-crawlers.bat`** — leave it running (optionally
+   `install-autostart.bat` so it survives reboots). Fixes "OA links exist but
    don't show" (the arXiv-blocked papers) and the FT50 citation gap.
 2. **`crawl-blocked-sources.bat`** — editors/AIA/PNAS, data CI can't get.
 3. **`crawl-refs.bat`** for a day — clears the citation graph.
 4. **`crawl-workingpapers.bat`** over a few days — the slowest backfill.
 5. **`crawl-econometrica.bat`** whenever — quick.
+
+Run one loop at a time per clone (see **Resilience** above). A practical
+rhythm: keep `run-local-crawlers.bat` on autostart for the everyday datasets,
+and when you want to burn down the citation graph or working papers, stop it and
+run `crawl-refs.bat` / `crawl-workingpapers.bat` for a day or two.
 
 That collapses the "months on its own" into roughly a weekend of mostly
 hands-off runs.

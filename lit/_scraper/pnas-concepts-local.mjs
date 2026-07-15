@@ -36,8 +36,14 @@
  * ===========================================================================
  */
 
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile, rename } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+// Atomic write (temp + rename): a power-off mid-write can never truncate the file.
+async function awrite(dest, str) {
+  const tmp = `${dest}.tmp-${process.pid}`;
+  await writeFile(tmp, str, 'utf8');
+  await rename(tmp, dest);
+}
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { crawlConcepts, mergeIntoCache } from './pnas-crawl.mjs';
@@ -86,7 +92,7 @@ if (!res.map.size) {
 }
 
 const merged = mergeIntoCache(cache, res.map, { pullDate: PULL_DATE, full: doFull && res.ok });
-await writeFile(CACHE_PATH, JSON.stringify(merged), 'utf8');
+await awrite(CACHE_PATH, JSON.stringify(merged));
 
 console.log('\n✓ Wrote', CACHE_PATH);
 console.log('  Section sizes:', JSON.stringify(merged.counts));

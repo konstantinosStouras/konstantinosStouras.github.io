@@ -30,8 +30,14 @@
  * ===========================================================================
  */
 
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile, rename } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+// Atomic write (temp + rename): a power-off mid-write can never truncate the file.
+async function awrite(dest, str) {
+  const tmp = `${dest}.tmp-${process.pid}`;
+  await writeFile(tmp, str, 'utf8');
+  await rename(tmp, dest);
+}
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseInformsEditors } from './informs-editors.mjs';
@@ -112,7 +118,7 @@ let processed = 0, found = 0, dirty = 0;
 async function saveCache() {
   const sorted = {};
   for (const k of Object.keys(cache).sort()) sorted[k] = cache[k];
-  await writeFile(CACHE_PATH, JSON.stringify(sorted), 'utf8');
+  await awrite(CACHE_PATH, JSON.stringify(sorted));
   dirty = 0;
 }
 

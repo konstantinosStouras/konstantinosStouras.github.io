@@ -39,8 +39,14 @@
  * ===========================================================================
  */
 
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile, rename } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+// Atomic write (temp + rename): a power-off mid-write can never truncate a file.
+async function awrite(dest, str) {
+  const tmp = `${dest}.tmp-${process.pid}`;
+  await writeFile(tmp, str, 'utf8');
+  await rename(tmp, dest);
+}
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isChallenged } from './pnas-crawl.mjs';
@@ -247,9 +253,9 @@ for (const s of staleAia) {
 
 let fetched = 0, newForth = 0, newFix = 0;
 async function save() {
-  await writeFile(CACHE_PATH, JSON.stringify(cache), 'utf8');
-  await writeFile(SUPPLEMENT_PATH, JSON.stringify(sortKeys(supplement), null, 0), 'utf8');
-  await writeFile(FIXUPS_PATH, JSON.stringify(sortKeys(fixups), null, 0), 'utf8');
+  await awrite(CACHE_PATH, JSON.stringify(cache));
+  await awrite(SUPPLEMENT_PATH, JSON.stringify(sortKeys(supplement), null, 0));
+  await awrite(FIXUPS_PATH, JSON.stringify(sortKeys(fixups), null, 0));
 }
 const sortKeys = (o) => Object.fromEntries(Object.keys(o).sort().map(k => [k, o[k]]));
 

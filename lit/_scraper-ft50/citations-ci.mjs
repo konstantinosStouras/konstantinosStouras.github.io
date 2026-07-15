@@ -22,8 +22,15 @@
  * ===========================================================================
  */
 
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile, rename } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+// Atomic write (temp + rename): a power-off / disconnect mid-write can never
+// leave a truncated papers-*.json or _citations.json for `git add` to commit.
+async function awrite(dest, str) {
+  const tmp = `${dest}.tmp-${process.pid}`;
+  await writeFile(tmp, str, 'utf8');
+  await rename(tmp, dest);
+}
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { applyCitations, refreshCitations } from './build-data.mjs';
@@ -72,7 +79,7 @@ console.log(`loaded ${all.length} papers from ${Object.keys(filesByKey).length} 
   `${Object.keys(cache).length} cache entries`);
 
 if (!applyOnly) {
-  const checkpoint = (c) => writeFile(join(DATA, '_citations.json'), JSON.stringify(c), 'utf8');
+  const checkpoint = (c) => awrite(join(DATA, '_citations.json'), JSON.stringify(c));
   await refreshCitations(all, cache, {
     cap: parseInt(process.env.FT50_CITATIONS_BACKFILL_CAP || '500000', 10),
     budgetMs: parseInt(process.env.FT50_CITATIONS_BACKFILL_MS || String(45 * 60 * 1000), 10),
@@ -91,9 +98,9 @@ for (const [key, rows] of Object.entries(filesByKey)) {
     delete r._doi;
   }
   const s = sources.find(x => x.key === key);
-  await writeFile(join(DATA, s.file), JSON.stringify(rows), 'utf8');
+  await awrite(join(DATA, s.file), JSON.stringify(rows));
 }
-await writeFile(join(DATA, '_citations.json'), JSON.stringify(cache), 'utf8');
+await awrite(join(DATA, '_citations.json'), JSON.stringify(cache));
 
 const today = Math.floor(Date.now() / 86400000);
 const minAge = parseInt(process.env.FT50_CITATIONS_MIN_AGE || '2', 10);

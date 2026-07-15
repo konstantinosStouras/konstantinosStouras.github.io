@@ -35,8 +35,15 @@
  * ===========================================================================
  */
 
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile, rename } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+// Atomic write (temp + rename): a power-off / disconnect mid-write can never
+// leave a truncated papers-*.json or _preprints.json for `git add` to commit.
+async function awrite(dest, str) {
+  const tmp = `${dest}.tmp-${process.pid}`;
+  await writeFile(tmp, str, 'utf8');
+  await rename(tmp, dest);
+}
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -93,7 +100,7 @@ const found = await searchPreprintsByTitle(all, cache, {
   sleepMs: 250,
   patient: true,
   log: true,
-  checkpoint: (c) => writeFile(join(DATA, '_preprints.json'), JSON.stringify(c), 'utf8'),
+  checkpoint: (c) => awrite(join(DATA, '_preprints.json'), JSON.stringify(c)),
 });
 console.log(`linked ${found} new pre-print(s) this session`);
 
@@ -106,8 +113,8 @@ for (const [key, rows] of Object.entries(filesByKey)) {
     delete r._doi;                            // strip the helper field before writing
   }
   const s = sources.find(x => x.key === key);
-  await writeFile(join(DATA, s.file), JSON.stringify(rows), 'utf8');
+  await awrite(join(DATA, s.file), JSON.stringify(rows));
 }
-await writeFile(join(DATA, '_preprints.json'), JSON.stringify(cache), 'utf8');
+await awrite(join(DATA, '_preprints.json'), JSON.stringify(cache));
 console.log(`wrote _preprints.json + ${Object.keys(filesByKey).length} papers-*.json ` +
   `(${updated} papers now carry a pre-print link). Commit + push data/ to publish.`);
