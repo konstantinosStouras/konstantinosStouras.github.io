@@ -465,8 +465,16 @@ async function writeJson(name, data) {
   // leave a truncated file for a reader or `git add` to pick up.
   const dest = join(DATA_DIR, name);
   const tmp = `${dest}.tmp-${process.pid}`;
-  await writeFile(tmp, JSON.stringify(data), 'utf8');
-  await rename(tmp, dest);
+  const payload = JSON.stringify(data);
+  await writeFile(tmp, payload, 'utf8');
+  for (let i = 0; i < 10; i++) {
+    try { await rename(tmp, dest); return; }
+    catch (e) {
+      if (!['EPERM', 'EBUSY', 'EACCES', 'ENOTEMPTY', 'EEXIST'].includes(e.code)) throw e;
+      await new Promise(r => setTimeout(r, 200 * (i + 1))); // Dropbox/OneDrive/AV lock — retry
+    }
+  }
+  await writeFile(dest, payload, 'utf8'); // last resort: in-place (non-atomic)
 }
 async function writeCache(cache) { await writeJson('_authors.json', cache); }
 

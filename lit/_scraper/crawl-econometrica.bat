@@ -44,6 +44,9 @@ echo ------------------------------------------------------------
 choice /m "Write the forthcoming papers and push"
 if errorlevel 2 ( echo Skipped - nothing written. & goto :end )
 
+call "%~dp0ci-pause-backfills.bat" nopause
+if errorlevel 1 ( echo [ABORT] Could not pause CI - the push would diverge. & goto :end )
+
 node econometrica-forthcoming-local.mjs
 
 cd /d "%REPO%"
@@ -56,5 +59,7 @@ echo Pushed.
 
 :end
 echo.
+echo Resuming CI...
+call "%~dp0ci-resume-backfills.bat" nopause
 echo Done.
 pause

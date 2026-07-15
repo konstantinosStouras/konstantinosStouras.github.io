@@ -36,19 +36,35 @@ faster clock; for references and working papers it's a real speed-up.
 
 ## Before you run anything
 
+> ### ⚠️ Do NOT run the crawler inside a Dropbox / OneDrive folder
+> A sync client actively fights git: it **locks files** while the crawler
+> renames them (`EPERM: operation not permitted`), and it **rewrites tracked
+> files out of band** across your machines, which shows up as phantom "modified"
+> files and a "diverged" branch that can't push. **Run the crawler from a clone
+> OUTSIDE any synced folder**, e.g.:
+> ```bat
+> git clone https://github.com/konstantinosStouras/konstantinosStouras.github.io C:\dev\lit-crawler
+> cd C:\dev\lit-crawler\lit\_scraper
+> run-local-crawlers.bat
+> ```
+> Keep editing the site in your Dropbox clone if you like — just `git pull` it
+> whenever you want the crawler's pushes. If a clone ever gets scrambled, run
+> **`reset-to-remote.bat`** to snap it back to the live site.
+> (The scrapers now retry the rename to ride out transient locks, but a
+> dedicated non-synced clone avoids the whole class of problems.)
+
 - **Location.** The app lives at the repo's **top-level `lit\`**, not
   `fun\lit\` (that's now just redirect stubs). All scripts here are under
-  `lit\_scraper\`. On your machine that's
-  `C:\Users\LENOVO\Dropbox\Others\GitHub\konstantinosStouras.github.io\lit\_scraper\`.
-  If your local copy still shows the app under `fun\lit\`, you're behind
-  `master` — `git pull` first.
+  `lit\_scraper\`. If your local copy still shows the app under `fun\lit\`,
+  you're behind `master` — `git pull` first.
 - **Be on `master`.** The live site deploys from `master`; data pushed to any
   other branch won't show. The scripts warn you if you're not on `master`.
 - **Node 20+** on your PATH (`node -v`). No `npm install` needed.
-- **GitHub CLI** (`gh`) for the CI pause/resume scripts only. Install from
+- **GitHub CLI** (`gh`) is **required** — every crawl script pauses CI while it
+  runs (so your machine is the sole writer and pushes cleanly). Install from
   <https://cli.github.com/>, then once: `gh auth login` (grant the **workflow**
-  scope). Without `gh` you can still pause/resume manually in the repo's
-  **Actions** tab.
+  scope). Without `gh` a crawl won't start; you can instead pause the 11
+  `lit-*` data workflows by hand in the repo's **Actions** tab.
 
 ## Separate OpenAlex quota identity (`+…local`)
 
@@ -65,54 +81,60 @@ set a `+…local` gmail explicitly so every crawler is consistent.
 ## The scripts (all in `lit\_scraper\`, double-click or run from CMD)
 
 ### `run-local-crawlers.bat` — resilient, run-and-leave-it
-Loops **forever** over the two safe crawlers, committing + pushing after every
-~20-minute slice:
+Loops over the two safe crawlers, committing + pushing after every ~20-minute
+slice:
 1. **Pre-print links** (native `data/`) — the biggest visible win.
 2. **FT50-catalog citations** (`data-ft50/`).
 
-Both merge without clobbering CI, so **no workflow is paused**. Leave it
-running; it keeps the live database continuously up to date and survives
+It **pauses CI's data pipeline** while it runs so your machine is the *sole
+writer* — otherwise CI commits to `master` every few minutes, your commit
+diverges, `git pull --rebase` conflicts on the minified JSON, and **nothing
+pushes**. CI is resumed when you stop. This is a bounded "burn down the backlog"
+session, not 24/7: while it runs, CI's new-paper pickup and daily rebuilds are
+paused. It keeps the live database continuously up to date and survives
 disconnects/power-off with minimal loss (see **Resilience** below). To stop,
 close the window or Ctrl+C. Run it again any time to resume.
+
+### `crawl-refs.bat` — citation graph (`data-refs/`)
+### `crawl-workingpapers.bat` — working papers (`data-workingpapers/`)
+Same resilient slice→commit→push loop as `run-local-crawlers.bat`, for the two
+slow backfills. Like every crawl script they **pause CI** for the session (sole
+writer) and **resume** it when you stop cleanly.
 
 ### `crawl-blocked-sources.bat` — data CI can never fetch
 Runs the cloud-blocked local scrapers in sequence and pushes:
 ISR/MkSc **editors**, **Articles-in-Advance** (native + FT50), **PNAS
-sections**. No CI pause needed (they write separate supplement files the daily
-build folds in). If your home IP hits a Cloudflare challenge, set a cookie
-first (see below).
+sections** — data whose hosts block datacenter IPs. Pauses CI while it runs. If
+your home IP hits a Cloudflare challenge, set a cookie first (see below).
 
 ### `crawl-econometrica.bat` — Econometrica forthcoming
 Runs a `--dry-run` first (writes nothing) so you can confirm the parser found
-papers, then prompts before writing to `data-ft50/` and pushing.
+papers, then prompts before writing to `data-ft50/` and pushing. Pauses CI.
 
-### `crawl-refs.bat` — citation graph (`data-refs/`) **[pauses CI]**
-### `crawl-workingpapers.bat` — working papers (`data-workingpapers/`) **[pauses CI]**
-Same resilient slice→commit→push loop as above, for the two datasets where a CI
-backfill firing mid-crawl could **overwrite your fuller local data** (their CI
-push does `git reset --hard` and replays its own older copy). So each wrapper:
-1. **Pauses** the clobber-risk CI workflows (`ci-pause-backfills.bat`),
-2. loops the crawler in ~20-min slices at a safe higher pace, committing +
-   pushing each slice,
-3. **Resumes** CI (`ci-resume-backfills.bat`) when you stop it cleanly.
-
-> ⚠️ **If you stop the crawler early with Ctrl+C**, Windows asks
+> ⚠️ **If you stop a crawler early with Ctrl+C**, Windows asks
 > *"Terminate batch job (Y/N)?"* — press **N** so the script continues and
 > re-enables CI. If in doubt, just run **`ci-resume-backfills.bat`** afterwards;
 > it's safe to run any time. Leaving CI paused isn't destructive — the site
-> simply won't auto-refresh those two datasets until you resume.
+> simply won't auto-refresh until you resume.
 
 ### `install-autostart.bat` / `uninstall-autostart.bat` — optional
 Register (or remove) a Windows Scheduled Task that starts
 `run-local-crawlers.bat` at **logon**, so after a reboot / power-off the crawler
-resumes on its own. It only autostarts the safe datasets (no CI pause). Runs in
-the background; stop it via `uninstall-autostart.bat` + closing its process.
+resumes on its own. Note it pauses CI while running, so it suits a focused
+backlog-clearing period — **uninstall it once the backlog is cleared** so CI's
+normal cadence takes over.
 
-### `ci-pause-backfills.bat` / `ci-resume-backfills.bat` — the safety net
-Disable / re-enable the three clobber-risk workflows
-(`lit-references-backfill`, `lit-workingpapers-backfill`,
-`lit-workingpapers-update-data`). The wrappers call these for you; run
-`ci-resume-backfills.bat` manually if a crawl was ever hard-killed.
+### `ci-pause-backfills.bat` / `ci-resume-backfills.bat`
+Disable / re-enable the **11 `lit-*` data workflows** (native, FT50, refs and
+working-papers) so a local crawl is the sole writer of the datasets. The crawl
+scripts call these for you; run `ci-resume-backfills.bat` manually if a crawl
+was ever hard-killed and left CI paused.
+
+### `reset-to-remote.bat` — recover a scrambled clone
+Discards all local commits and uncommitted changes and snaps the working tree
+back to `origin/master` (the live site). Use it if `git status` shows the branch
+has *diverged* or lists data files you didn't intend to change (classic Dropbox
+interference). Un-pushed local finds are simply re-found on the next crawl.
 
 ---
 
@@ -121,12 +143,17 @@ Disable / re-enable the three clobber-risk workflows
 The crawlers are built so an interrupted run loses almost nothing and resuming
 is just re-running:
 
+- **Sole writer.** Each crawl pauses CI's data pipeline so your machine is the
+  only thing committing those files, and pushes fast-forward cleanly instead of
+  diverging from CI and failing.
 - **Continuous sync.** Each loop does a ~20-minute slice, then commits + pushes,
   so the live database is at most one slice behind.
-- **Atomic writes.** Every data/cache file is written to a temp file and
-  `rename`d into place (atomic on NTFS). A power-off mid-write can never leave a
-  truncated JSON — a reader (and `git add`) always sees the old complete file or
-  the new complete one. This is what makes auto-commit safe.
+- **Atomic writes (retried).** Every data/cache file is written to a temp file
+  and `rename`d into place (atomic on NTFS), so a power-off mid-write can never
+  leave a truncated JSON for `git add` to commit. If a sync client briefly locks
+  the file (`EPERM`), the rename is retried before falling back to an in-place
+  write — so Dropbox/OneDrive/antivirus can't crash the crawl (though a
+  non-synced clone is still strongly preferred — see the top of this file).
 - **Startup flush.** On launch, each loop first commits + pushes anything a
   previous interrupted run left on disk, so even the un-pushed slice reaches the
   database — you don't lose the work between the last push and the crash.

@@ -45,7 +45,14 @@ import { existsSync } from 'node:fs';
 async function awrite(dest, str) {
   const tmp = `${dest}.tmp-${process.pid}`;
   await writeFile(tmp, str, 'utf8');
-  await rename(tmp, dest);
+  for (let i = 0; i < 10; i++) {
+    try { await rename(tmp, dest); return; }
+    catch (e) {
+      if (!['EPERM', 'EBUSY', 'EACCES', 'ENOTEMPTY', 'EEXIST'].includes(e.code)) throw e;
+      await new Promise(r => setTimeout(r, 200 * (i + 1))); // Dropbox/OneDrive/AV lock — retry
+    }
+  }
+  await writeFile(dest, str, 'utf8'); // last resort: in-place (non-atomic)
 }
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';

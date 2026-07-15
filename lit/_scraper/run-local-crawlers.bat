@@ -1,26 +1,18 @@
 @echo off
 REM ==========================================================================
-REM  run-local-crawlers.bat  -  Resilient, run-and-leave-it local crawler.
+REM  run-local-crawlers.bat  -  Resilient, run-and-leave-it local crawler for
+REM  the two safe datasets: pre-print OA links (lit/data) + FT50 citation counts
+REM  (lit/data-ft50). Loops ~20-min slices, committing + pushing each one.
 REM
-REM  Loops forever over the two merge-safe datasets, committing + pushing after
-REM  every ~20-minute slice:
-REM     * Pre-print OA links    (lit/data)       - the biggest win
-REM     * FT50 citation counts  (lit/data-ft50)
+REM  IMPORTANT - it PAUSES CI's data pipeline while it runs, so your machine is
+REM  the SOLE writer and pushes fast-forward cleanly (otherwise CI commits every
+REM  few minutes, your commit diverges, and nothing pushes). CI is resumed when
+REM  you stop. This is a bounded "burn down the backlog" session; while it runs,
+REM  CI's new-paper pickup and daily rebuilds are paused.
 REM
-REM  WHY IT SURVIVES A DISCONNECT / POWER-OFF WITH MINIMAL LOSS:
-REM   - Each slice is committed + pushed, so the live database is at most one
-REM     slice behind.
-REM   - The scrapers checkpoint their on-disk cache continuously and write every
-REM     file ATOMICALLY (temp + rename), so a power-off can never truncate a
-REM     file. On the next run, startup first flushes whatever the interrupted
-REM     run left on disk, so even the un-pushed slice reaches the database.
-REM   - If the network drops, the push fails but the commit stays LOCAL and is
-REM     pushed on the next slice - crawling never stops for a connectivity blip.
-REM   - Resuming = just run this again; each scraper picks up from its cache.
-REM
-REM  These two datasets merge without clobbering CI, so NO workflow is paused.
-REM  For the citation graph / working papers, use crawl-refs.bat /
-REM  crawl-workingpapers.bat (those pause CI). Run ONE loop per clone.
+REM  BEST PRACTICE: run this from a clone OUTSIDE Dropbox/OneDrive. A sync client
+REM  fights git (locks files -> EPERM, rewrites tracked files out of band). See
+REM  _LOCAL-CRAWLING.md.
 REM
 REM  Usage:  run-local-crawlers.bat            (interactive)
 REM          run-local-crawlers.bat -auto      (unattended; used by autostart)
@@ -36,13 +28,9 @@ set "REPO=%CD%"
 popd
 set "LOCK=%REPO%\.crawl-running.lock"
 
-REM --- single-instance advisory lock (git protects integrity either way) ---
 if exist "%LOCK%" (
-  if "%AUTO%"=="1" (
-    del "%LOCK%" >nul 2>nul
-  ) else (
-    echo [NOTE] A crawl loop may already be running in this clone, or a previous
-    echo        run was closed without cleaning up. Lock file:
+  if "%AUTO%"=="1" ( del "%LOCK%" >nul 2>nul ) else (
+    echo [NOTE] A crawl loop may already be running in this clone. Lock file:
     echo            %LOCK%
     choice /m "Start anyway (choose N if another crawler is running)"
     if errorlevel 2 goto :hardend
@@ -66,11 +54,20 @@ echo ============================================================
 echo   THE LIT - resilient local crawlers  (leave this running)
 echo     * Pre-print links   (lit/data)
 echo     * FT50 citations    (lit/data-ft50)
-echo   Commits + pushes after every ~20-min slice; a disconnect or
-echo   power-off loses at most the current slice, and even that is
-echo   recovered from the on-disk cache next time you run this.
-echo   To stop: close this window or press Ctrl+C.
+echo   Pausing CI's data pipeline so this machine is the sole
+echo   writer; commits + pushes after every ~20-min slice.
+echo   To stop: close this window or press Ctrl+C, then run
+echo   ci-resume-backfills.bat to turn CI back on.
 echo ============================================================
+
+REM --- make this the sole writer, else local diverges from CI and can't push ---
+call "%~dp0ci-pause-backfills.bat" nopause
+if errorlevel 1 (
+  echo [ABORT] Could not pause CI - not starting (local would diverge and fail
+  echo         to push). Fix gh ^(gh auth login^) or pause the 11 lit-* data
+  echo         workflows manually in the Actions tab, then retry.
+  goto :end
+)
 
 REM --- flush anything a previous interrupted run left uncommitted ---
 call :sync "lit/data lit/data-ft50" "resume: flush pending local crawl data"
@@ -102,24 +99,29 @@ call :sync "lit/data lit/data-ft50" "resume: flush pending local crawl data"
   goto :cycle
 
 :end
+echo.
+echo Resuming CI data workflows...
+call "%~dp0ci-resume-backfills.bat" nopause
 if exist "%LOCK%" del "%LOCK%" >nul 2>nul
 :hardend
 echo.
-echo Stopped. (This script never pauses CI.)
+echo Stopped. (If CI might still be paused, run ci-resume-backfills.bat.)
 if "%AUTO%"=="0" pause
 exit /b 0
 
-REM ===== :sync  <dirs>  <message>  -> commit + best-effort push; sets CHANGED ==
+REM ===== :sync  <dirs>  <message>  -> commit + push; sets CHANGED on a commit ==
 :sync
 cd /d "%REPO%"
-git add %~1 2>nul
-git diff --cached --quiet
-if not errorlevel 1 exit /b 0
-git commit -q -m "lit: %~2" 1>nul 2>nul
+git add %~1
+git diff --cached --quiet && exit /b 0
+git commit -q -m "lit: %~2"
+if errorlevel 1 ( echo   [%TIME%] nothing committed & exit /b 0 )
 set "CHANGED=1"
-git pull --rebase origin master 1>nul 2>nul && git push origin master 1>nul 2>nul
+git pull --rebase origin master
+if errorlevel 1 git rebase --abort 1>nul 2>nul
+git push origin master
 if errorlevel 1 (
-  echo   [%TIME%] committed locally ^(offline? - will push next slice^)
+  echo   [%TIME%] push failed - committed locally, will retry next slice
 ) else (
   echo   [%TIME%] pushed to master
 )
