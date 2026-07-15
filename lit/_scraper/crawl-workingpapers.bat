@@ -94,17 +94,19 @@ echo Stopped. (If CI might still be paused, run ci-resume-backfills.bat.)
 if "%AUTO%"=="0" pause
 exit /b 0
 
-REM ===== :sync  <dirs>  <message>  -> commit + best-effort push; sets CHANGED ==
+REM ===== :sync  <dirs>  <message>  -> commit + push; sets CHANGED on a commit ==
 :sync
 cd /d "%REPO%"
-git add %~1 2>nul
-git diff --cached --quiet
-if not errorlevel 1 exit /b 0
-git commit -q -m "lit: %~2" 1>nul 2>nul
+git add %~1
+git diff --cached --quiet && exit /b 0
+git commit -q -m "lit: %~2"
+if errorlevel 1 ( echo   [%TIME%] nothing committed & exit /b 0 )
 set "CHANGED=1"
-git pull --rebase origin master 1>nul 2>nul && git push origin master 1>nul 2>nul
+git pull --rebase origin master
+if errorlevel 1 git rebase --abort 1>nul 2>nul
+git push origin master
 if errorlevel 1 (
-  echo   [%TIME%] committed locally ^(offline? - will push next slice^)
+  echo   [%TIME%] push failed - committed locally, will retry next slice
 ) else (
   echo   [%TIME%] pushed to master
 )

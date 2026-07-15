@@ -5,8 +5,8 @@ REM  fetch, because these publishers block datacenter IPs (Cloudflare/Atypon):
 REM    - ISR / Marketing Science editors   (pubsonline.informs.org)
 REM    - Articles-in-Advance, native + FT50 (pubsonline.informs.org)
 REM    - PNAS section concepts             (pnas.org)
-REM  Only your home machine can do this. They write separate supplement files
-REM  the daily build folds in - no CI pause needed.
+REM  Only your home machine can do this. Best run from a clone OUTSIDE Dropbox
+REM  (see _LOCAL-CRAWLING.md). Pauses CI while it runs so the push is clean.
 REM
 REM  If a source reports a Cloudflare challenge, set a cookie first:
 REM    set "LIT_CF_COOKIE=cf_clearance=<value from browser DevTools>"
@@ -25,7 +25,7 @@ echo     1) ISR/MkSc editors        (pubsonline.informs.org)
 echo     2) Articles-in-Advance     (native /lit)
 echo     3) Articles-in-Advance     (FT50 catalog)
 echo     4) PNAS section concepts   (pnas.org)
-echo   No CI workflow is paused (these write separate files).
+echo   Pauses CI while it runs so the push is clean.
 echo ============================================================
 echo.
 
@@ -36,6 +36,12 @@ if /i not "%BRANCH%"=="master" (
   echo [WARN] You are on branch "%BRANCH%", not master.
   choice /m "Continue anyway"
   if errorlevel 2 goto :end
+)
+
+call "%~dp0ci-pause-backfills.bat" nopause
+if errorlevel 1 (
+  echo [ABORT] Could not pause CI - not starting (the push would diverge^).
+  goto :end
 )
 git pull --rebase origin master
 
@@ -70,5 +76,7 @@ echo Pushed.
 
 :end
 echo.
+echo Resuming CI...
+call "%~dp0ci-resume-backfills.bat" nopause
 echo Done. (For Econometrica forthcoming, run crawl-econometrica.bat.)
 pause
