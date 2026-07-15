@@ -40,7 +40,8 @@ if /i not "%BRANCH%"=="master" (
 
 call "%~dp0ci-pause-backfills.bat" nopause
 if errorlevel 1 (
-  echo [ABORT] Could not pause CI - not starting (the push would diverge^).
+  echo [ABORT] Could not pause CI - not starting, else the push would diverge.
+  echo         Fix gh: run  gh auth login  then  gh auth refresh -s workflow
   goto :end
 )
 git pull --rebase origin master

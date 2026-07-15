@@ -24,27 +24,29 @@ where gh >nul 2>nul
 if errorlevel 1 (
   echo [ERROR] GitHub CLI ^(gh^) is not installed or not on PATH.
   echo         Install it from https://cli.github.com/ then run: gh auth login
-  echo         Or disable these workflows by hand in the repo's Actions tab:
-  echo         %WFS%
+  if /i not "%~1"=="nopause" pause
+  exit /b 1
+)
+
+REM The one real failure mode is "not authenticated". Check it ONCE up front;
+REM after that, an individual "disable" that errors just means the workflow is
+REM already paused - which is fine (idempotent), not a reason to abort.
+gh auth status >nul 2>nul
+if errorlevel 1 (
+  echo [ERROR] GitHub CLI is not authenticated. Run these two commands, then retry:
+  echo             gh auth login
+  echo             gh auth refresh -s workflow
   if /i not "%~1"=="nopause" pause
   exit /b 1
 )
 
 echo Pausing CI data workflows so your local crawl is the sole writer...
-set "FAIL=0"
 for %%w in (%WFS%) do call :disable %%w
-if "%FAIL%"=="1" (
-  echo.
-  echo [ERROR] One or more workflows could not be disabled ^(gh not authed?^).
-  echo         Run: gh auth login   ^(and grant the "workflow" scope^)
-  if /i not "%~1"=="nopause" pause
-  exit /b 1
-)
 echo Done. These stay off until you run ci-resume-backfills.bat.
 if /i not "%~1"=="nopause" pause
 exit /b 0
 
 :disable
-gh workflow disable "%~1" -R %REPO_SLUG% 2>nul
-if errorlevel 1 ( echo   [warn] could not pause %~1 & set "FAIL=1" ) else ( echo   paused %~1 )
+gh workflow disable "%~1" -R %REPO_SLUG% >nul 2>nul
+if errorlevel 1 ( echo   %~1 - already paused ) else ( echo   paused %~1 )
 exit /b 0

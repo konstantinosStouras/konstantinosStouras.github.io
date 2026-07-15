@@ -63,9 +63,10 @@ echo ============================================================
 REM --- make this the sole writer, else local diverges from CI and can't push ---
 call "%~dp0ci-pause-backfills.bat" nopause
 if errorlevel 1 (
-  echo [ABORT] Could not pause CI - not starting (local would diverge and fail
-  echo         to push). Fix gh ^(gh auth login^) or pause the 11 lit-* data
-  echo         workflows manually in the Actions tab, then retry.
+  echo [ABORT] Could not pause CI - not starting, else local diverges from CI
+  echo         and cannot push. Fix gh: run  gh auth login  then
+  echo         gh auth refresh -s workflow  - or pause the 11 lit-* workflows
+  echo         manually in the Actions tab, then retry.
   goto :end
 )
 
