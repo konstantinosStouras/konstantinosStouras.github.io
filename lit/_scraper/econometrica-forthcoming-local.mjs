@@ -51,9 +51,11 @@
  * candidates on a page that clearly lists papers, widen listingCandidates()
  * below (its DOI / detail-link regexes) to match the live markup, then re-run.
  *
- * It is resume-safe: a per-DOI cache (_ecta-forthcoming-cache.json in
- * lit/data-ft50/) records what has been fetched, so you can run it in as many
- * sittings as you like. If Cloudflare challenges your connection, follow the
+ * It is resume-safe: a per-candidate cache (_ecta-forthcoming-cache.json in
+ * lit/data-ft50/, keyed by each candidate's DOI or detail-page URL) records what
+ * has already been resolved, so you can run it in as many sittings as you like;
+ * an un-parseable page is left un-cached and retried next run. If Cloudflare
+ * challenges your connection, follow the
  * LIT_CF_COOKIE hint it prints (same mechanism as the other local scrapers).
  * ===========================================================================
  */
@@ -282,7 +284,11 @@ async function save() {
 outer:
 for (const t of targets) {
   if (fetched >= MAX) break;
-  if (t.doi && (known.has(t.doi) || (cache[t.doi] && cache[t.doi].done))) continue;
+  // Resume-safety: skip a candidate already resolved in a prior run. DOI
+  // candidates key on their DOI; detail-path candidates (t.doi === '') key on
+  // their URL, so they too are skipped once resolved (not re-fetched forever).
+  const key = t.doi || t.url;
+  if ((t.doi && known.has(t.doi)) || (cache[key] && cache[key].done)) continue;
   fetched++;
   try {
     const { status, body } = await fetchPage(t.url);
@@ -290,21 +296,24 @@ for (const t of targets) {
     if (status !== 200) { console.warn(`  ${t.url}: HTTP ${status}`); await sleep(DELAY_MS); continue; }
     const a = parseArticle(body);
     const doi = a.doi || t.doi;
-    if (!doi || !a.title) { if (t.doi) cache[t.doi] = { done: true, none: true }; await sleep(DELAY_MS); continue; }
+    if (!doi || !a.title) {
+      // Couldn't parse a usable record (a transient/partial 200, or a page with
+      // no citation_* meta). Leave it UN-cached so a later healthy run retries —
+      // symmetric with the non-200 path above. --max bounds any re-fetching.
+      await sleep(DELAY_MS); continue;
+    }
     if (a.volume || a.issue) {
       // Already placed in an issue → the daily Crossref build owns it; make sure
       // no stale forthcoming row lingers.
       if (supplement[doi] && supplement[doi].jkey === JKEY) { delete supplement[doi]; pruned++; }
-      cache[doi] = { done: true };
     } else if (!known.has(doi)) {
-      const entry = { jkey: JKEY, Title: a.title, Authors: a.authors, Year: a.year || String(new Date().getFullYear()) };
-      supplement[doi] = entry;
-      cache[doi] = { done: true };
-      newForth++;
+      if (!supplement[doi]) newForth++; // count only genuinely-new supplement rows
+      supplement[doi] = { jkey: JKEY, Title: a.title, Authors: a.authors, Year: a.year || String(new Date().getFullYear()) };
       console.log(`  + forthcoming: ${doi}  ${a.title.slice(0, 70)}${a.authors ? '  — ' + a.authors.slice(0, 60) : ''}`);
-    } else {
-      cache[doi] = { done: true };
     }
+    // Resolved: skip this candidate (by URL and by DOI) on future runs.
+    cache[key] = { done: true };
+    if (doi !== key) cache[doi] = { done: true };
     if (fetched % 25 === 0) await save();
   } catch (e) { console.warn(`  ${t.url}: ${e.message}`); }
   await sleep(DELAY_MS);
