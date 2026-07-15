@@ -20,7 +20,9 @@ lit/data-refs/
   refs-index.json      # { "<cited-doi>": [title, jkey, year, authors?] } — every edge target
   refs-counts.json     # { "<citing-doi>": N } — in-catalog refs per paper (toggle count)
   meta.json            # small run summary
+  citedby-meta.json    # forward-citation (cited-by) run summary  — see "The forward side"
   _refs-cache.json     # the incremental crawl cache (NOT served — see below)
+  _citedby-cache.json  # the forward-citation crawl cache (NOT served — see below)
   _oaid.json           # doi → OpenAlex id map (NOT served — see below)
 ```
 
@@ -104,6 +106,75 @@ Key env vars: `REFS_MAILTO` (Crossref/OpenAlex quota identity,
 `kstouras+litrefs@gmail.com`), `REFS_MAX_PAPERS`, `REFS_BUDGET_MS`,
 `REFS_PACE_MS`, `REFS_OA_PACE_MS`, `REFS_S2` (`0` to disable Semantic Scholar),
 `REFS_CATALOG_DIRS`, `REFS_DATA_DIR`, `REFS_MOCK`.
+
+## The forward side — `build-citedby.mjs` (who cites me)
+
+`build-refs.mjs` crawls the references a paper **cites** (its backward
+out-edges). Its companion `build-citedby.mjs` crawls the works that **cite** each
+catalog paper (its forward in-edges — "who cites me"), completing the citation
+graph in both directions. Two purposes:
+
+1. It records, per catalog paper, the set of citing works (its forward
+   citations) — the "citing references" half of the graph.
+2. It **sharpens the disruption index D** on the Data Analytics page. The CD
+   index (Wu, Wang & Evans 2019) needs, for a focal paper `f`, the works that
+   cite `f` (groups i / j) and the works that cite `f`'s references (groups
+   j / k). Today `build-disruption.mjs` approximates those by **inverting the
+   in-catalog out-edges** — so it only "sees" citers that are themselves in the
+   ~260k-paper catalog, which biases D downward (same-field catalog citers are
+   more likely to co-cite `f`'s roots, inflating group j). Harvesting the
+   **global** citer set removes that bias: groups i / j are counted over every
+   citing work. It stays an approximation of the paper's full-network D (`f`'s
+   *out-of-catalog* references still contribute no citers), but a markedly
+   sharper one that keeps improving as both graphs fill in.
+
+**Source:** OpenAlex only — the one open API that enumerates a work's citing
+works completely and for free:
+`works?filter=cites:<OpenAlex-id>&select=id,doi&per-page=200&cursor=*`, paged to
+the end (or to a generous per-paper cap, `CB_MAX_CITERS`). It needs each focal
+paper's OpenAlex id, which `build-refs.mjs` already caches for free in
+`_oaid.json` — so this **piggybacks** on that map and simply skips a paper whose
+id isn't known yet (picked up once the reference backfill resolves it).
+
+**Freshness:** unlike a reference list (frozen once published), forward citations
+**grow**, so an entry is refreshed on a **rolling** cadence — never-fetched
+first, then the stalest, entries older than `CB_TTL_DAYS` (default 30) re-checked,
+a `CB_VER` bump re-sweeps everyone — same priority tiers as the reference crawl.
+
+**Output** (in the same `data-refs/` dir, sharing the reference backfill's
+concurrency group so they never race a commit):
+- `_citedby-cache.json` — crawl state, **NOT served** (underscore): per catalog
+  DOI, `{ c:[citer OpenAlex ids], n:<count>, t:"date", v:<ver>, cap?:1 }`.
+  `build-disruption.mjs` reads it.
+- `citedby-meta.json` — a tiny served coverage summary.
+
+Nothing large is served: the raw global citer sets exist only to **compute** D,
+they are not shipped to the page. Should `_citedby-cache.json` approach the 1 GB
+Pages limit it lifts out to a dedicated repo exactly like `data-refs/` (see
+Migration below).
+
+**Wiring into D:** `build-disruption.mjs` imports `forwardDisruption()` from here
+and uses it when `DISR_USE_FORWARD=1` **and** the forward cache is present;
+otherwise every paper falls back to the catalog-inverted measure, so the shipped
+analytics is unchanged until the forward graph is broad enough to switch on. When
+on, each `disruption.json` record carries a `dm` tag (`"f"` global-forward,
+`"c"` catalog-inverted fallback) for honest labelling.
+
+```bash
+# Offline smoke test (no network, uses ./mock-cb/ fixtures):
+node lit/_scraper-refs/citedby-selftest.mjs
+
+# A real slice (online; gently paced, resumable; needs _oaid.json populated):
+CB_MAX_PAPERS=2500 CB_BUDGET_MS=2400000 node lit/_scraper-refs/build-citedby.mjs
+```
+
+Online it runs from **`.github/workflows/lit-citedby-backfill.yml`** (every 6 h).
+Key env vars: `CB_MAILTO` (OpenAlex quota identity, `kstouras+litcitedby@gmail.com`),
+`CB_MAX_PAPERS`, `CB_BUDGET_MS`, `CB_OA_PACE_MS`, `CB_MAX_CITERS`, `CB_TTL_DAYS`,
+`CB_CATALOG_DIRS`, `CB_DATA_DIR`, `CB_MOCK`. **NOTE:** this build environment's
+egress blocks OpenAlex (403 for cloud IPs), so real harvesting only happens on
+the GitHub Actions runners — the forward cache is EMPTY until the first workflow
+run on `master`.
 
 ## On the page
 

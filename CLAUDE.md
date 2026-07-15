@@ -702,6 +702,36 @@ env's egress blocks the scholarly APIs (Crossref/OpenAlex/Semantic Scholar, 403)
 so `data-refs/` can only be populated by the GitHub Actions runners — EMPTY until
 the first workflow run on `master` post-merge. See
 `lit/_scraper-refs/_HOW-IT-WORKS.md`.
+**Forward citations — who cites each paper (`build-citedby.mjs`).** The COMPANION
+to `build-refs.mjs`: where that crawls the references a paper CITES (backward
+out-edges), `lit/_scraper-refs/build-citedby.mjs` crawls the works that CITE each
+catalog paper (forward in-edges — "who cites me"), completing the graph in both
+directions. **OpenAlex only** (`works?filter=cites:<id>`, cursor-paged), it
+piggybacks on the `_oaid.json` map build-refs already builds (skips a paper until
+its OpenAlex id is known) and refreshes on a **rolling** cadence (forward
+citations grow, unlike a frozen reference list — never-fetched first, then
+stalest, `CB_TTL_DAYS` re-check, `CB_VER` re-sweep), same priority tiers, bounded
++ resumable + checkpointed. It writes an **unserved** crawl cache
+`data-refs/_citedby-cache.json` (per DOI `{c:[citer OpenAlex ids],n,t,v,cap?}`)
+plus a tiny served `citedby-meta.json`; the raw citer sets exist only to COMPUTE
+D and are never shipped to the page. Refreshed by
+`.github/workflows/lit-citedby-backfill.yml` (every 6 h), which **shares the
+`lit-references-${{ github.ref }}` concurrency group** (both write `data-refs/`,
+so they must never race a commit); distinct OpenAlex quota identity
+`kstouras+litcitedby`. Its purpose is to **sharpen the disruption index D**: the
+CD index needs a focal paper's citers (groups i/j) and its references' citers
+(groups j/k), which build-disruption today approximates by INVERTING the
+in-catalog out-edges — seeing only citers that are themselves in the catalog,
+which biases D downward. `build-disruption.mjs` imports `forwardDisruption()`
+from build-citedby and, **behind `DISR_USE_FORWARD=1`** (default OFF) when the
+forward cache is present, computes D over each paper's GLOBAL citer set instead —
+tagging each `disruption.json` record `dm:"f"` (global-forward) or `dm:"c"`
+(catalog-inverted fallback). Default-off so the shipped analytics is unchanged
+(D values byte-identical) until the forward graph is broad enough to switch on.
+Offline test: `node lit/_scraper-refs/citedby-selftest.mjs` (mock, no network;
+reproduces the paper's D=0.25 worked example end-to-end). NOTE: this build env's
+egress blocks OpenAlex (403), so `_citedby-cache.json` is EMPTY until the first
+Actions run on `master` post-merge. See `lit/_scraper-refs/_HOW-IT-WORKS.md`.
 **Range-served SQLite search (`?db=1`, opt-in):** the page can answer
 native-journal-scoped filters from a single range-served SQLite DB
 (`lit/data/db/lit.db.*` chunks + `lit-db.json` manifest, sql.js-httpvfs
