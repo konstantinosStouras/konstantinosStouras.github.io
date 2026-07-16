@@ -6,7 +6,7 @@
       "id": "analytics-compare-authors-and-cleanup",
       "date": "2026-07-16",
       "title": "Data Analytics: compare authors, cleaner counts, native-first default",
-      "summary": "The Author spotlight now lets you add several authors and compare them side by side (publications per year, key figures, where they publish, disruption). A pre-ticked 'exclude non-research items' switch keeps journal front matter, book reviews, corrigenda, announcements and indices out of every figure (the main database still shows everything). The dashboard also opens on the curated native sources by default, with catalog journals added on selection.",
+      "summary": "The Author spotlight now lets you add several authors and compare them side by side: publications per year, where they publish, and an at-a-glance table with collaboration statistics — average co-authors per paper, how cited their co-authors are, average citations per paper, and mean disruption — each shown both under your current filters and across all their papers in the database. A pre-ticked 'exclude non-research items' switch keeps journal front matter, book reviews, corrigenda, announcements and indices out of every figure (the main database still shows everything). The dashboard also opens on the curated native sources by default, with catalog journals added on selection.",
       "url": "https://stouras.com/lit/analytics/"
     },
     {

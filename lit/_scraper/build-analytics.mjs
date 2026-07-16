@@ -178,9 +178,43 @@ ingestVariants(variantMap, path.join(NATIVE_DIR, 'authors.json'));
 ingestVariants(variantMap, path.join(FT50_DIR, 'authors.json'));
 const canon = name => variantMap.get(name) || name;
 
+// Distinct canonical author names on one paper (order preserved).
+function canonAuthors(authorsField) {
+  if (!authorsField) return [];
+  const seen = new Set(), out = [];
+  for (const nm of authorsField.split(',').map(s => s.trim()).filter(Boolean)) {
+    const c = canon(nm);
+    if (!seen.has(c)) { seen.add(c); out.push(c); }
+  }
+  return out;
+}
+
+// ── pass 1: every author's database-wide total citations ────────────────────
+// Needed before the main pass so each listed author's per-cell "citations of
+// co-authors" sums can be built: a co-author's prominence figure is their TOTAL
+// citations across the whole corpus (research items only, like all author
+// aggregates), regardless of the current page filters. Covers ALL authors —
+// a listed author's co-authors are often below the listing threshold.
+const authorCites = new Map();   // canonicalName -> total CitedBy across the corpus
+for (const meta of journalMeta.values()) {
+  const arr = readJson(path.join(meta.dir, meta.file), []);
+  if (!Array.isArray(arr)) continue;
+  for (const p of arr) {
+    if (isNonArticle(p.Title)) continue;
+    const cites = (typeof p.CitedBy === 'number' && p.CitedBy > 0) ? p.CitedBy : 0;
+    if (!cites || !p.Authors) continue;
+    for (const c of canonAuthors(p.Authors)) authorCites.set(c, (authorCites.get(c) || 0) + cites);
+  }
+}
+
 // ── accumulate ──────────────────────────────────────────────────────────────
 const journals = [];
-const authorAgg = new Map();     // canonicalName -> {p, y:{}, j:{}}
+// canonicalName -> {p, jy:{jkey:{year:[n, coauthorSlots, paperCites, coauthorCiteSum]}}}
+// jy replaces the old y/j marginals (the page derives those on load): the
+// per-(journal,year) cells let the Author-spotlight compare compute paper
+// counts, mean team size, citations per paper AND mean co-author prominence
+// under any journal-scope + year-range filter.
+const authorAgg = new Map();
 let totPapers = 0, totPre = 0, totAbs = 0, totCitations = 0, totCited = 0;
 let yearMin = Infinity, yearMax = -Infinity;
 
@@ -263,19 +297,29 @@ for (const meta of journalMeta.values()) {
       }
     }
 
-    // author aggregation (canonicalised, per year + per journal)
+    // author aggregation (canonicalised, one count per paper per author). Each
+    // (author, journal, year) cell carries [n, coauthorSlots, paperCites,
+    // coauthorCiteSum]: n papers; (team−1) summed so avg co-authors = slots/n;
+    // the papers' citations so avg citations/paper = cites/n; and the summed
+    // database-wide total citations of the OTHER authors on those papers so
+    // avg co-author prominence = coauthorCiteSum/coauthorSlots.
     if (p.Authors) {
-      const names = p.Authors.split(',').map(s => s.trim()).filter(Boolean);
-      const seen = new Set();
-      for (const nm of names) {
-        const c = canon(nm);
-        if (seen.has(c)) continue;                 // one paper counts once per author
-        seen.add(c);
+      const team = canonAuthors(p.Authors);
+      const tsize = team.length;
+      let teamCiteSum = 0;
+      for (const m of team) teamCiteSum += authorCites.get(m) || 0;
+      for (const c of team) {
         let a = authorAgg.get(c);
-        if (!a) { a = { p: 0, y: {}, j: {} }; authorAgg.set(c, a); }
+        if (!a) { a = { p: 0, jy: {} }; authorAgg.set(c, a); }
         a.p++;
-        if (y != null) a.y[y] = (a.y[y] || 0) + 1;
-        a.j[meta.key] = (a.j[meta.key] || 0) + 1;
+        if (y != null) {
+          const jj = a.jy[meta.key] || (a.jy[meta.key] = {});
+          const cell = jj[y] || (jj[y] = [0, 0, 0, 0]);
+          cell[0]++;
+          cell[1] += tsize - 1;
+          cell[2] += cites;
+          cell[3] += teamCiteSum - (authorCites.get(c) || 0);
+        }
       }
     }
   }
@@ -319,7 +363,7 @@ journals.sort((a, b) => b.papers - a.papers);
 const authorsOut = [];
 for (const [name, a] of authorAgg) {
   if (a.p < AUTHOR_MIN_PAPERS) continue;
-  authorsOut.push({ n: name, p: a.p, y: a.y, j: a.j });
+  authorsOut.push({ n: name, p: a.p, jy: a.jy });
 }
 authorsOut.sort((a, b) => b.p - a.p);
 
