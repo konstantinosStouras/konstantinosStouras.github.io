@@ -16,8 +16,8 @@
  *     the "Author spotlight" (loaded on demand).
  *
  * INPUT: the committed datasets already in the repo —
- *   • lit/data/          (the eight native sources: MS, OpRe, MkSc, M&SOM,
- *                             ISR, POM, PNAS, ACM EC)
+ *   • lit/data/          (the nine native sources: MS, OpRe, MkSc, M&SOM,
+ *                             ISR, Strategy Science, POM, PNAS, ACM EC)
  *   • lit/data-ft50/     (the FT50 catalog; its journals that duplicate a
  *                             native source are skipped, native wins)
  * so it can run any time after those builds, reading only static files. It is

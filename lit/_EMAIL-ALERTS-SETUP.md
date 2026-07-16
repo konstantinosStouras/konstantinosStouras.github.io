@@ -281,7 +281,7 @@ launches, prefer adding a changelog entry — it also updates the on-site
 
 ### Coverage note
 
-The mailer scans the eight native sources plus the FT50 catalog (the two
+The mailer scans the nine native sources plus the FT50 catalog (the two
 `recent.json` files in this repo) **and the ABS satellite shards**
 (`lit-data-abs4`, `lit-data-abs3-omecon`, `lit-data-abs3-rest`). The shards live
 in separate repos, so their `recent.json` and manifests are fetched over HTTP at
