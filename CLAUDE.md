@@ -443,9 +443,14 @@ optional `x` sub-row of the same shape holding that year's NON-research subset**
 — see the toggle below; plus each journal's UTD24/FT50/ABS membership — a
 byte-for-byte mirror of index.html's `ABS_RATING`/`UTD24_KEYS`/`FT50_KEYS` — its
 `native` flag & research-only paper count `rp`, and its top-cited papers) and
-`analytics/authors.json` (per-author papers/year + papers/journal for authors
-with ≥ 5 papers, canonicalised via the datasets' `Name_Variants`, loaded lazily
-only when the Author tab opens). Journals for which we collect **editorial
+`analytics/authors.json` (for authors with ≥ 5 papers, canonicalised via the
+datasets' `Name_Variants`, loaded lazily only when the Author tab opens: each
+author carries `jy` — per-(journal, year) cells `[papers, co-author slots,
+paper citations, co-author citation sum]`, from which the page derives the old
+papers/year + papers/journal marginals on load AND computes the compare table's
+collaboration statistics under any filter; the co-author citation sum uses each
+co-author's DATABASE-WIDE total citations, precomputed in a first pass over all
+sources). Journals for which we collect **editorial
 metadata** also carry a `dims` block in `data.json` — per-value × per-year
 aggregates (same row shape as `years`) for `editor`/`area` (Management Science's
 accepting editor & area) and `se`/`ae` (ISR & Marketing Science senior/associate
@@ -495,10 +500,16 @@ spotlight** tab where you **add several authors (chips) and compare them**: one
 author shows the full single-author view (per-author totals, in-scope counts,
 publications-per-year, and where-they-publish, the latter greying journals
 outside the current scope); **two or more** shows a comparison — an overlaid
-publications-per-year line chart, a side-by-side "At a glance" metrics table
-(incl. mean disruption Dⱼ, filled async), and a where-they-publish matrix
-(`S.authors[]`, `drawCompare`/`renderCompareDisruption`). All of it honours the
-year window & journal scope.
+publications-per-year line chart, a side-by-side "At a glance" metrics table,
+and a where-they-publish matrix (`S.authors[]`,
+`drawCompare`/`renderCompareDisruption`). The metrics table carries
+**collaboration statistics in paired in-filters / all-papers rows** (avg
+co-authors per paper; avg citations of co-authors — each co-author's
+database-wide total citations averaged over co-author slots; avg citations per
+paper — from the `jy` cells via `authorJYStats`) plus **two disruption rows**:
+mean Dⱼ over the author's scored papers within the filters, and over ALL their
+scored papers in the database (filled async). "In filters" = journal scope ∩
+year range; editorial-dimension filters don't apply to author aggregates.
 **Team-science / disruption section** (a new block at the bottom of the Corpus
 overview) reproduces the key measures of Wu, Wang & Evans, "Large teams develop
 and small teams disrupt science and technology" (*Nature* 570, 2019) over The
