@@ -98,6 +98,7 @@ const ABS_RATING = {
   car:'4', hrm:'4', jfqa:'4', jmis:'4', jms:'4', jams:'4', msom:'4', obhdp:'4',
   pom:'4', psci:'4', rast:'4', rof:'4', sej:'4', ejor:'4',
   hbr:'3', smr:'3', ijoc:'3',
+  stsc:'3', // Strategy Science (INFORMS) — strategy/innovation, graded ABS 3
 };
 const PNAS_SECTION_KEYS = {
   'Computer Sciences': 'pnas-cs',
