@@ -73,7 +73,13 @@ only re-scraped live inside the **1 May–30 June** window, and only for the
 current/upcoming edition (`sigecomShouldFetchLive`/`EC_SIGECOM_WINDOW_FROM_YEAR`
 in `build-data.mjs`); every other daily run serves the cache instead of polling
 sigecom year-round (an uncached year is fetched once to seed it, so the gate
-never drops an already-captured list). Data is static JSON in `lit/data/` (one
+never drops an already-captured list). **EC PDF enrichment is likewise frozen
+per edition:** each 2020+ DBLP table-of-contents is cached in
+`data/_ec-dblp-modern.json` and only the current/upcoming edition (or an
+uncached year) is re-pulled — a past edition whose papers already carry PDFs
+triggers no DBLP traffic (the per-paper OpenAlex/S2 lookups and the pre-print
+search already skip resolved rows), so a fully-captured past edition is not
+re-fetched. Data is static JSON in `lit/data/` (one
 `papers-<src>.json` per source + `sources.json` manifest), built by
 `lit/_scraper/build-data.mjs` and refreshed daily by
 `.github/workflows/lit-update-data.yml` (same self-healing live-site check as

@@ -50,6 +50,7 @@
  *   _registry.json       internal: DOI/title-key -> date first seen
  *   _ec-extras.json      internal: cached PDF/abstract lookups for EC papers
  *   _ec-sigecom.json     internal: cached EC accepted-papers lists, per year
+ *   _ec-dblp-modern.json internal: cached EC 2020+ DBLP tocs (frozen past yrs)
  *   (_pnas-concepts.json is written by the PNAS crawl, see above)
  *
  * Offline smoke test (no network, uses _scraper/mock/):
@@ -986,26 +987,50 @@ async function enrichEc(rows, extras, dblpPrefetched) {
   }
 
   // 2. DBLP per-year toc: arXiv/SSRN "ee" links matched by title. Historical
-  //    years were already fetched by fetchEcDblpHistory (reused here — DBLP
-  //    rate-limits aggressively when the tocs are pulled twice per build), so
-  //    only the modern years are fetched.
+  //    years were already fetched by fetchEcDblpHistory (reused here via
+  //    dblpPrefetched). For the modern years (2020+), a PAST edition's toc is
+  //    frozen once its proceedings are out, so a successfully-parsed toc is
+  //    cached in _ec-dblp-modern.json and only the current/upcoming edition
+  //    (or a year we have never cached) is re-fetched — every earlier edition
+  //    is served from the cache with no DBLP hit. That is what stops the daily
+  //    build from re-pulling (and rate-limit-failing on) tocs for editions
+  //    whose papers already carry their PDFs; the per-paper OpenAlex pass
+  //    (step 1) and the pre-print search likewise skip already-resolved rows,
+  //    so a fully-captured past edition costs no PDF/pre-print traffic.
   const dblp = new Map(dblpPrefetched || []); // normTitle -> [ee urls]
+  const thisYear = parseInt(PULL_DATE.slice(0, 4), 10);
+  const eeCache = await loadJsonIfExists(join(DATA_DIR, '_ec-dblp-modern.json'), {});
+  let eeDirty = false;
   const years = [...new Set(rows.map(r => parseInt(r.Year, 10)).filter(Boolean))]
     .filter(y => y >= EC.sigecomFirstYear).sort();
   for (const y of years) {
+    const cached = eeCache[String(y)];
+    if (cached && y < thisYear) {           // frozen past edition — use cache, no fetch
+      for (const [t, ee] of cached) dblp.set(t, ee);
+      continue;
+    }
+    let pairs = null;
     try {
       const url = `https://dblp.org/search/publ/api?q=${encodeURIComponent(`toc:db/conf/sigecom/sigecom${y}.bht:`)}&h=500&format=json`;
       const j = await fetchJson(url);
+      pairs = [];
       for (const hit of j?.result?.hits?.hit || []) {
         const info = hit.info || {};
         const ee = [].concat(info.ee || []);
-        if (info.title) dblp.set(normTitle(info.title), ee);
+        if (info.title) pairs.push([normTitle(info.title), ee]);
       }
     } catch (e) {
       console.warn(`  dblp ${y} failed (non-fatal):`, e.message);
     }
+    if (pairs && pairs.length) {            // captured / refreshed this edition's toc
+      for (const [t, ee] of pairs) dblp.set(t, ee);
+      eeCache[String(y)] = pairs; eeDirty = true;
+    } else if (cached) {                    // fetch failed — fall back to the cached toc
+      for (const [t, ee] of cached) dblp.set(t, ee);
+    }
     await sleep(2500);
   }
+  if (eeDirty) await writeJson('_ec-dblp-modern.json', eeCache);
   for (const r of rows) {
     const k = keyOf(r);
     if (extras[k] && extras[k].pdf) continue;
