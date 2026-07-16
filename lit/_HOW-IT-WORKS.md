@@ -308,7 +308,13 @@ CI; the daily Action just folds the committed files in.
    (per-year tables of contents; arXiv links), and **Semantic Scholar**
    (title match; capped per run and cached in `_ec-extras.json`, so coverage
    grows across daily runs without hitting rate limits). Preference order for
-   the link: arXiv → SSRN → any other open-access copy.
+   the link: arXiv → SSRN → any other open-access copy. The per-paper
+   OpenAlex/S2 lookups skip any paper already in `_ec-extras.json`, and the
+   **modern-year DBLP tocs are frozen once captured** — each 2020+ edition's
+   toc is cached in `_ec-dblp-modern.json` and only the current/upcoming
+   edition (or a not-yet-cached year) is re-pulled, so a past edition whose
+   papers already carry their PDFs triggers no DBLP traffic (it was the daily
+   DBLP re-fetch, which rate-limits aggressively, that this avoids).
 4. **DOI-less accepted papers** — a fresh year's list (e.g. EC '26) before
    the ACM DL publishes the proceedings — additionally get a
    **title-search** pass (newest first, `LIT_EC_TITLE_CAP` per run, the same
