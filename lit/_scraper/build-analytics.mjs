@@ -32,6 +32,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isNonArticle } from './_nonarticle.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LIT_DIR = path.resolve(__dirname, '..');            // lit
@@ -44,6 +45,9 @@ const OUT_DIR = path.join(LIT_DIR, 'analytics');
 const AUTHOR_MIN_PAPERS = 5;
 // A journal's most-cited papers to carry, for the "top cited" table.
 const TOP_CITED_PER_JOURNAL = 12;
+// A dimension value's most-cited papers to carry (editor/area/SE/AE), so the
+// "most-cited in scope" table can honour an active editorial filter.
+const DIM_TOP_CITED = 8;
 // Editorial dimensions we aggregate for journals that carry them (accepting
 // editor + area for Management Science; senior/associate editor for ISR and
 // Marketing Science). A value must reach this many papers to be listed as a
@@ -123,6 +127,13 @@ function authorCount(authorsField) {
   return authorsField.split(',').map(s => s.trim()).filter(Boolean).length;
 }
 
+// Accumulate one paper into a per-year aggregate row (n=count, a=summed authors,
+// s=solo, p=pre-print, ab=abstract, c=citations, t=team-size buckets [1..6+]).
+function bump(r, na, hasPre, hasAbs, cites) {
+  r.n++; r.a += na; if (na === 1) r.s++; if (hasPre) r.p++; if (hasAbs) r.ab++;
+  r.c += cites; if (na) r.t[Math.min(na, 6) - 1]++;
+}
+
 function cleanYear(y) {
   const n = parseInt(y, 10);
   if (!Number.isFinite(n) || n < MIN_YEAR || n > 2100) return null;
@@ -184,14 +195,24 @@ for (const meta of journalMeta.values()) {
   // SE/AE); mirrors the per-year row shape so the page aggregates them uniformly.
   const dimAgg = {};
   DIMS.forEach(function (d) { dimAgg[d.key] = {}; });
+  const ensureDimVal = (map, value) => map[value] || (map[value] = { years: {}, cited: [] });
   const addDimRow = (map, value, y, na, hasPre, hasAbs, cites) => {
-    if (!value || y == null) return;
-    const e = map[value] || (map[value] = { years: {} });
+    if (!value) return;
+    const e = ensureDimVal(map, value);
+    if (y == null) return;
     const row = e.years[y] || (e.years[y] = { n: 0, a: 0, s: 0, p: 0, c: 0, ab: 0, t: [0, 0, 0, 0, 0, 0] });
     row.n++; row.a += na; if (na === 1) row.s++; if (hasPre) row.p++; if (hasAbs) row.ab++;
     row.c += cites; if (na) row.t[Math.min(na, 6) - 1]++;
   };
-  let jPapers = 0;
+  // Collect a dimension value's most-cited papers (top-cited per editor / area /
+  // senior / associate editor), so the "most-cited in scope" table can honour an
+  // editorial filter the same way the tiles and charts do. Same shape as the
+  // per-journal topCited rows.
+  const addDimCited = (map, value, rec) => {
+    if (!value) return;
+    ensureDimVal(map, value).cited.push(rec);
+  };
+  let jPapers = 0, jNonArt = 0;
 
   for (const p of arr) {
     jPapers++; totPapers++;
@@ -200,6 +221,8 @@ for (const meta of journalMeta.values()) {
     const hasPre = !!p.Preprint;
     const hasAbs = !!p.Abstract;
     const cites = (typeof p.CitedBy === 'number' && p.CitedBy > 0) ? p.CitedBy : 0;
+    const nonArt = isNonArticle(p.Title);      // Editorial Board / book review / erratum / …
+    if (nonArt) jNonArt++;
 
     if (hasPre) totPre++;
     if (hasAbs) totAbs++;
@@ -208,17 +231,19 @@ for (const meta of journalMeta.values()) {
     if (y != null) {
       if (y < yearMin) yearMin = y;
       if (y > yearMax) yearMax = y;
-      // per-year row; t = team-size buckets [1,2,3,4,5,6+] so the co-authorship
-      // distribution honours the page's year filter like every other chart.
+      // per-year row (ALL records); t = team-size buckets [1,2,3,4,5,6+]. The
+      // non-research subset is accumulated into a parallel `x` sub-row (same
+      // shape) so the page can SUBTRACT it when its "exclude non-research items"
+      // toggle is on (default). Rows with no non-research items carry no `x`.
       const row = years[y] || (years[y] = { n: 0, a: 0, s: 0, p: 0, c: 0, ab: 0, t: [0, 0, 0, 0, 0, 0] });
-      row.n++;
-      row.a += na;
-      if (na === 1) row.s++;
-      if (hasPre) row.p++;
-      if (hasAbs) row.ab++;
-      row.c += cites;
-      if (na) row.t[Math.min(na, 6) - 1]++;
+      bump(row, na, hasPre, hasAbs, cites);
+      if (nonArt) bump(row.x || (row.x = { n: 0, a: 0, s: 0, p: 0, c: 0, ab: 0, t: [0, 0, 0, 0, 0, 0] }), na, hasPre, hasAbs, cites);
     }
+
+    // Everything below is RESEARCH-ONLY: non-research items (front matter, book
+    // reviews, errata, …) never enter the most-cited table, the editorial
+    // breakdown or the author aggregates, regardless of the page toggle.
+    if (nonArt) continue;
 
     if (cites) {
       cited.push({ t: p.Title || '', y: y || '', c: cites, a: p.Authors || '', d: p.DOI || '' });
@@ -228,10 +253,14 @@ for (const meta of journalMeta.values()) {
     for (const d of DIMS) {
       const raw = p[d.field];
       if (!raw) continue;
-      if (d.parse) d.parse(raw).forEach(v => addDimRow(dimAgg[d.key], v, y, na, hasPre, hasAbs, cites));
-      else if (d.multi) String(raw).split(';').map(s => s.trim()).filter(Boolean)
-        .forEach(v => addDimRow(dimAgg[d.key], v, y, na, hasPre, hasAbs, cites));
-      else addDimRow(dimAgg[d.key], String(raw).trim(), y, na, hasPre, hasAbs, cites);
+      let dvals;
+      if (d.parse) dvals = d.parse(raw);
+      else if (d.multi) dvals = String(raw).split(';').map(s => s.trim()).filter(Boolean);
+      else { const t = String(raw).trim(); dvals = t ? [t] : []; }
+      for (const v of dvals) {
+        addDimRow(dimAgg[d.key], v, y, na, hasPre, hasAbs, cites);
+        if (cites) addDimCited(dimAgg[d.key], v, { t: p.Title || '', y: y || '', c: cites, a: p.Authors || '', d: p.DOI || '' });
+      }
     }
 
     // author aggregation (canonicalised, per year + per journal)
@@ -254,14 +283,16 @@ for (const meta of journalMeta.values()) {
   cited.sort((x, z) => z.c - x.c);
 
   // Finalize editorial dimensions: keep values reaching the threshold, stamp a
-  // total, and attach only non-empty dimensions.
+  // total, attach the value's most-cited papers, and keep only non-empty dims.
   const dims = {};
   for (const d of DIMS) {
     const out = {};
     for (const [val, e] of Object.entries(dimAgg[d.key])) {
       let tot = 0; for (const yy in e.years) tot += e.years[yy].n;
       if (tot < d.min) continue;
-      out[val] = { n: tot, years: e.years };
+      const o = { n: tot, years: e.years };
+      if (e.cited.length) { e.cited.sort((x, z) => z.c - x.c); o.tc = e.cited.slice(0, DIM_TOP_CITED); }
+      out[val] = o;
     }
     if (Object.keys(out).length) dims[d.key] = out;
   }
@@ -272,7 +303,9 @@ for (const meta of journalMeta.values()) {
     publisher: meta.publisher,
     types: typesFor(meta.key),
     abs: ABS_RATING[meta.key] || null,
-    papers: jPapers,
+    native: meta.dir === NATIVE_DIR ? 1 : 0,   // one of the 10 curated native sources
+    papers: jPapers,                            // all records
+    rp: jPapers - jNonArt,                      // research-only paper count
     years,
     topCited: cited.slice(0, TOP_CITED_PER_JOURNAL),
   };
@@ -310,6 +343,10 @@ const data = {
     cited: totCited,
   },
   types: JOURNAL_TYPES,
+  // The curated native sources (INFORMS + PNAS + ACM EC) — the page's default
+  // scope when nothing is selected, so it opens on these rather than the whole
+  // corpus (which includes high-volume catalog journals like EJOR).
+  nativeKeys: journals.filter(j => j.native).map(j => j.key),
   journals,
 };
 

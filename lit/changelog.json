@@ -3,6 +3,20 @@
   "version": 1,
   "updates": [
     {
+      "id": "analytics-compare-authors-and-cleanup",
+      "date": "2026-07-16",
+      "title": "Data Analytics: compare authors, cleaner counts, native-first default",
+      "summary": "The Author spotlight now lets you add several authors and compare them side by side (publications per year, key figures, where they publish, disruption). A pre-ticked 'exclude non-research items' switch keeps journal front matter, book reviews, corrigenda, announcements and indices out of every figure (the main database still shows everything). The dashboard also opens on the curated native sources by default, with catalog journals added on selection.",
+      "url": "https://stouras.com/lit/analytics/"
+    },
+    {
+      "id": "analytics-editorial-filters",
+      "date": "2026-07-16",
+      "title": "Editor & area filters in Data Analytics",
+      "summary": "The Data Analytics dashboard now offers the same editorial filters as the main browser: choose Management Science to filter by accepting editor or editorial area (or Information Systems Research / Marketing Science to filter by senior/associate editor), and every tile and chart — publication volume, co-authorship, citations, most-cited — updates to that slice, so you can chart one area's papers over time.",
+      "url": "https://stouras.com/lit/analytics/"
+    },
+    {
       "id": "informs-transactions-education-added",
       "date": "2026-07-16",
       "title": "INFORMS Transactions on Education added",
