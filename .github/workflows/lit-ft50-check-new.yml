@@ -9,7 +9,7 @@ name: lit — check for new FT50 catalog papers (incremental)
 # derived files (recent/meta/sources/registry).
 #
 # Why Econometrica specifically: lit's own fast pass (lit-check-new.yml) already
-# covers the seven native INFORMS/SAGE Articles-in-Advance journals. Econometrica
+# covers the eight native INFORMS/SAGE Articles-in-Advance journals. Econometrica
 # is the one journal from that request that lives ONLY in the FT50 catalog, and
 # its publisher assigns an accepted paper straight to a future issue — so Crossref
 # never lists it as a no-volume advance article, and the once-a-day build was

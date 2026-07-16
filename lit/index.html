@@ -6,8 +6,8 @@
 <title>The Lit · Research Paper Browser — Management Science, OR, Marketing Science, M&amp;SOM, POM, ISR, PNAS, ACM EC &amp; the FT50</title>
 
 <!-- SEO -->
-<meta name="description" content="Search and filter research papers across Management Science, Operations Research, Marketing Science, M&SOM, POM, Information Systems Research, Strategy Science, five PNAS sections, the ACM EC conference (1999–present), and all 50 journals of the Financial Times FT50 rank. Filter by journal, journal type (UTD24, FT50, ABS 4/4*, ABS 3), year, author, or affiliation. Export BibTeX citations.">
-<meta name="keywords" content="Management Science, Operations Research, Marketing Science, MSOM, POM, Information Systems Research, Strategy Science, PNAS, ACM EC, Economics and Computation, UTD24, UT Dallas journal list, FT50, Financial Times 50, ABS ranking, AJG, Academic Journal Guide, European Journal of Operational Research, INFORMS Journal on Computing, academic papers, research browser, BibTeX, journal articles, INFORMS">
+<meta name="description" content="Search and filter research papers across Management Science, Operations Research, Marketing Science, M&SOM, POM, Information Systems Research, Strategy Science, INFORMS Transactions on Education, five PNAS sections, the ACM EC conference (1999–present), and all 50 journals of the Financial Times FT50 rank. Filter by journal, journal type (UTD24, FT50, ABS 4/4*, ABS 3), year, author, or affiliation. Export BibTeX citations.">
+<meta name="keywords" content="Management Science, Operations Research, Marketing Science, MSOM, POM, Information Systems Research, Strategy Science, INFORMS Transactions on Education, PNAS, ACM EC, Economics and Computation, UTD24, UT Dallas journal list, FT50, Financial Times 50, ABS ranking, AJG, Academic Journal Guide, European Journal of Operational Research, INFORMS Journal on Computing, academic papers, research browser, BibTeX, journal articles, INFORMS">
 <meta name="author" content="Konstantinos Stouras">
 
 <meta name="robots" content="index, follow">
@@ -16,7 +16,7 @@
 <!-- Open Graph (Facebook, LinkedIn, WhatsApp) -->
 <meta property="og:type" content="website">
 <meta property="og:title" content="The Lit — Research Paper Browser">
-<meta property="og:description" content="Search papers across Management Science, OR, Marketing Science, M&SOM, POM, ISR, Strategy Science, five PNAS sections, ACM EC, and all 50 FT50 journals — in one place.">
+<meta property="og:description" content="Search papers across Management Science, OR, Marketing Science, M&SOM, POM, ISR, Strategy Science, INFORMS Transactions on Education, five PNAS sections, ACM EC, and all 50 FT50 journals — in one place.">
 <meta property="og:url" content="https://www.stouras.com/lit/">
 <meta property="og:image" content="https://www.stouras.com/lit/og-image.jpg">
 <meta property="og:image:secure_url" content="https://www.stouras.com/lit/og-image.jpg">
@@ -28,7 +28,7 @@
 <!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="The Lit — Research Paper Browser">
-<meta name="twitter:description" content="Search papers across Management Science, OR, Marketing Science, M&SOM, POM, ISR, Strategy Science, five PNAS sections, ACM EC, and all 50 FT50 journals — in one place.">
+<meta name="twitter:description" content="Search papers across Management Science, OR, Marketing Science, M&SOM, POM, ISR, Strategy Science, INFORMS Transactions on Education, five PNAS sections, ACM EC, and all 50 FT50 journals — in one place.">
 <meta name="twitter:image" content="https://www.stouras.com/lit/og-image.jpg">
 
 <!-- Favicon: inline SVG "Lit" monogram (claret/gold literary style), no external file needed -->
@@ -841,7 +841,7 @@ const DATA_BASE = './data/';
 // fun/ft50 app's data and independently refreshed daily by
 // lit/_scraper-ft50/ (.github/workflows/lit-ft50-update-data.yml).
 // The catalog is merged in at runtime: FT50
-// journals that are not among the nine native sources are added to the
+// journals that are not among the ten native sources are added to the
 // journal filter, and their papers files are fetched lazily only when they
 // enter the view's scope.
 const FT50_SOURCES_URL = './data-ft50/sources.json';
@@ -925,6 +925,7 @@ const JOURNAL_OPTIONS = [
   { key: 'opre', label: 'Operations Research' },
   { key: 'isre', label: 'Information Systems Research' },
   { key: 'stsc', label: 'Strategy Science' },
+  { key: 'ited', label: 'INFORMS Transactions on Education' },
 ];
 const JOURNAL_LABEL = {};
 JOURNAL_OPTIONS.forEach(function(o) { JOURNAL_LABEL[o.key] = o.label; });
@@ -1259,7 +1260,7 @@ function addChipFromCard(type, val) {
 // while the bigger files are still downloading.
 let sourcesLoaded = 0, sourcesTotal = 0;
 
-// ── Lazily loaded FT50-catalog journals (beyond the nine native sources) ────
+// ── Lazily loaded FT50-catalog journals (beyond the ten native sources) ─────
 // The FT50-catalog-only journals are a couple hundred MB of JSON. Like the
 // native sources (and mirroring the retired /fun/ft50 app), each extra
 // papers-<key>.json is fetched from the ft50 dataset only when the view first
@@ -3495,7 +3496,7 @@ else if (compactSticky.addListener) compactSticky.addListener(applyCompact);
 var DB_MODE = new URLSearchParams(location.search).get('db') === '1';
 var litDb = null, litDbReady = false, dbPager = null, _dbSeq = 0, _dbX = 0;
 
-// The DB holds only the 9 native sources; MS/ISR/MkSc carry editor/area/SE/AE
+// The DB holds only the 10 native sources; MS/ISR/MkSc carry editor/area/SE/AE
 // UIs whose data isn't in the DB schema, so those (and extras/types) use JSON.
 function dbNativeKey(k) { return k !== 'ms' && k !== 'isre' && k !== 'mksc' && (!!SRC[k] || k.indexOf('pnas-') === 0); }
 function dbAnswerable() {

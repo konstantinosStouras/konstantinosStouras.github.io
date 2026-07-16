@@ -57,11 +57,13 @@ uses **relative** data paths (`./data/`, `./data-ft50/`, …), so it is
 location-independent; only absolute links/meta (canonical, og:image, the `?db=1`
 sqlite loader, `changelog.json` URLs) and the CI workflow paths are pinned to
 `/lit/`.
-`lit/` extends the `/fun/ms/` architecture to nine sources: Management
+`lit/` extends the `/fun/ms/` architecture to ten sources: Management
 Science (with editors/areas, exactly like `/fun/ms/`), Operations Research,
 Marketing Science, M&SOM, Information Systems Research, Strategy Science
 (INFORMS; ISSNs 2333-2050/2333-2077, Articles in Advance, unrated by ABS —
-a native journal like PNAS/ACM EC), POM, PNAS (five topic
+a native journal like PNAS/ACM EC), INFORMS Transactions on Education
+(INFORMS; open-access, eISSN 1532-0545, Articles in Advance, unrated by ABS —
+likewise a native journal), POM, PNAS (five topic
 sections only), and the ACM EC conference (1999–present, incl. each year's
 accepted-papers list from `ec<YY>.sigecom.org` with arXiv/SSRN/OA PDF links via
 OpenAlex/DBLP/Semantic Scholar). Data is static JSON in `lit/data/` (one
@@ -74,8 +76,8 @@ only run once a day; on top of it, `build-data.mjs --incremental`
 (`incrementalMain`) runs **every 15 minutes** via
 `.github/workflows/lit-check-new.yml` and asks Crossref for only the records it
 (re)indexed in the last few days (`filter=from-index-date`, `LIT_INCR_LOOKBACK_DAYS`
-default 4) for the **seven Articles-in-Advance journals only** (ms/opre/mksc/msom/
-isre/stsc/pom — PNAS needs the Cloudflare-blocked local section index and ACM EC's list
+default 4) for the **eight Articles-in-Advance journals only** (ms/opre/mksc/msom/
+isre/stsc/ited/pom — PNAS needs the Cloudflare-blocked local section index and ACM EC's list
 is heavy + rarely changes, so both are carried through unchanged but still counted
 and eligible for `recent.json`). It **upserts** into the committed
 `papers-<key>.json` (appends genuinely-new DOIs; for a known DOI refreshes only
@@ -160,7 +162,7 @@ every OTHER journal (correct because it and the daily build are the only
 data-ft50 writers and share the `lit-ft50-update-data-${{ github.ref }}`
 concurrency group, so nothing else changed) — instead of reloading all ~50 papers
 files. It **writes nothing when nothing new arrived**. Why only Econometrica:
-lit's own `lit-check-new` already fast-tracks the seven native INFORMS/SAGE AIA
+lit's own `lit-check-new` already fast-tracks the eight native INFORMS/SAGE AIA
 journals, and Econometrica is the one requested journal that lives ONLY in the
 FT50 catalog AND whose publisher assigns an accepted paper straight to a future
 issue — so Crossref never lists it as a no-volume advance article and the daily
@@ -410,7 +412,7 @@ link to the sub-page `lit/analytics/` — a sub-page, so NOT a
 kostas.stouras@ucd.ie, X `@stourask`, Google Scholar, ORCID, website). About and
 Feedback are static; the Data Analytics page is standalone. **Data Analytics
 (`lit/analytics/`)** is an interactive summary-statistics dashboard over the
-whole corpus available in this repo — the nine native sources (`data/`) plus
+whole corpus available in this repo — the ten native sources (`data/`) plus
 the FT50 catalog (`data-ft50/`), deduped with native winning on overlap
 (~260k papers, 53 journals). It never downloads the ~270 MB of raw papers:
 `lit/_scraper/build-analytics.mjs` pre-aggregates everything **offline** into

@@ -80,6 +80,7 @@ const INFORMS = [
   { code: 'msom', litKey: 'msom', name: 'Manufacturing & Service Operations Management' },
   { code: 'isre', litKey: 'isre', name: 'Information Systems Research' },
   { code: 'stsc', litKey: 'stsc', name: 'Strategy Science' },
+  { code: 'ited', litKey: 'ited', name: 'INFORMS Transactions on Education' },
   { code: 'orsc', litKey: null,   name: 'Organization Science' }, // FT50 only
   { code: 'ijoc', litKey: null,   name: 'INFORMS Journal on Computing' }, // UTD24 only (lit-ft50 catalog)
 ];

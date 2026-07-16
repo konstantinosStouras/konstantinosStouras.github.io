@@ -7,9 +7,10 @@
  * from its CDN. No server, no database, no Google anywhere.
  *
  * Sources:
- *   • Seven journals, straight from the Crossref REST API by ISSN:
+ *   • Eight journals, straight from the Crossref REST API by ISSN:
  *       Management Science, Operations Research, Marketing Science, M&SOM,
- *       Information Systems Research, Strategy Science (INFORMS), and POM (Wiley→SAGE).
+ *       Information Systems Research, Strategy Science, INFORMS Transactions on
+ *       Education (INFORMS), and POM (Wiley→SAGE).
  *     Editor/Area extraction (the "This paper was accepted by …" sentence)
  *     runs for Management Science ONLY — the page shows Editors/Areas only
  *     for MS.
@@ -100,6 +101,7 @@ const JOURNALS = [
   { key: 'msom', name: 'Manufacturing & Service Operations Management', issns: ['1523-4614', '1526-5498'], publisher: 'INFORMS', aia: true },
   { key: 'isre', name: 'Information Systems Research',                  issns: ['1047-7047', '1526-5536'], publisher: 'INFORMS', aia: true, seEditors: true, aeEditors: true },
   { key: 'stsc', name: 'Strategy Science',                             issns: ['2333-2050', '2333-2077'], publisher: 'INFORMS', aia: true },
+  { key: 'ited', name: 'INFORMS Transactions on Education',            issns: ['1532-0545'], publisher: 'INFORMS', aia: true },
   { key: 'pom',  name: 'Production and Operations Management',          issns: ['1059-1478', '1937-5956'], publisher: 'SAGE', aia: true },
 ];
 const PNAS = { key: 'pnas', name: 'PNAS', issns: ['0027-8424', '1091-6490'], publisher: 'National Academy of Sciences' };
@@ -2074,7 +2076,7 @@ async function main() {
 
   const bySource = {}; // key -> rows (internal shape)
 
-  // 1. The seven journals.
+  // 1. The eight journals.
   for (const src of JOURNALS) {
     console.log(`${src.name} (${src.issns.join(', ')}):`);
     const raw = await fetchJournalWorks(src);
@@ -2219,7 +2221,7 @@ async function writeJson(name, data) {
 // lag makes useful.
 //
 // Deliberately narrow, to stay cheap and strictly non-degrading:
-//   • Only the seven Articles-in-Advance journals are polled. PNAS needs the
+//   • Only the eight Articles-in-Advance journals are polled. PNAS needs the
 //     Cloudflare-blocked local section index and ACM EC's list is heavy and
 //     rarely changes, so both are carried through untouched and refreshed by the
 //     daily full build (they still take part in recent.json / counts here).
@@ -2270,7 +2272,7 @@ async function incrementalMain() {
   const bySource = {};
   const changedSources = new Set();
 
-  for (const src of JOURNALS) { // the seven Articles-in-Advance journals only
+  for (const src of JOURNALS) { // the eight Articles-in-Advance journals only
     const existing = reInternalize(await loadJsonIfExists(join(DATA_DIR, `papers-${src.key}.json`), []));
     const byDoi = new Map(existing.filter(p => p._doi).map(p => [p._doi, p]));
     const fetched = mapJournal(await fetchJournalWorks(src, { sinceIndexDate: since }), src);

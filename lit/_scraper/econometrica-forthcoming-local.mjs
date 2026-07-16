@@ -6,7 +6,7 @@
  * straight from the Econometric Society's own forthcoming-papers page:
  *   https://www.econometricsociety.org/publications/econometrica/forthcoming-papers
  *
- * Why this exists — and why it is separate from the seven INFORMS/SAGE journals:
+ * Why this exists — and why it is separate from the eight INFORMS/SAGE journals:
  * Econometrica lives ONLY in lit's FT50 catalog (lit/data-ft50/), and its
  * publisher (Wiley, for the Econometric Society) assigns an accepted paper
  * straight to a FUTURE issue rather than to a no-volume "Articles in Advance"

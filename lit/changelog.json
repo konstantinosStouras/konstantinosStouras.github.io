@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "informs-transactions-education-added",
+      "date": "2026-07-16",
+      "title": "INFORMS Transactions on Education added",
+      "summary": "The Lit now crawls INFORMS Transactions on Education (INFORMS), the open-access education-science journal for OR/MS/analytics, as a core source. Its full archive and Articles in Advance are searchable with every filter, and new papers are picked up automatically.",
+      "url": "https://stouras.com/lit/"
+    },
+    {
       "id": "strategy-science-added",
       "date": "2026-07-16",
       "title": "Strategy Science added",
