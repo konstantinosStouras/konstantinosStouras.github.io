@@ -24,10 +24,15 @@
  *       – published proceedings from Crossref (exact container-title match,
  *         "Proceedings of the 21st…27th ACM Conference on Economics and
  *         Computation");
- *       – the current year's accepted-papers list scraped from
+ *       – the current edition's accepted-papers list scraped from
  *         ec<YY>.sigecom.org/program/accepted-papers/ (papers not yet in the
  *         ACM DL are listed as forthcoming and upgraded automatically once
- *         their DOI appears);
+ *         their DOI appears). Each edition's list is posted once (≈May–June)
+ *         then frozen, so successfully-parsed lists are cached in
+ *         data/_ec-sigecom.json and — from 2027 on — only re-scraped live in
+ *         that 1 May–30 June window, and only for the current/upcoming edition;
+ *         every other run serves the cache (an uncached year is fetched once to
+ *         seed it);
  *       – PDF links (arXiv > SSRN > any open-access copy) and abstracts via
  *         OpenAlex (batch), DBLP (per-year toc) and Semantic Scholar (capped,
  *         resumes across runs), cached in data/_ec-extras.json.
@@ -44,6 +49,7 @@
  *                        page's header stat)
  *   _registry.json       internal: DOI/title-key -> date first seen
  *   _ec-extras.json      internal: cached PDF/abstract lookups for EC papers
+ *   _ec-sigecom.json     internal: cached EC accepted-papers lists, per year
  *   (_pnas-concepts.json is written by the PNAS crawl, see above)
  *
  * Offline smoke test (no network, uses _scraper/mock/):
@@ -698,9 +704,42 @@ async function fetchEcCrossref(years) {
   return all;
 }
 
+// From this year on, only re-scrape the live sigecom accepted-papers pages
+// inside the annual posting window (below); earlier years are served from the
+// committed cache.
+const EC_SIGECOM_WINDOW_FROM_YEAR = 2027;
+// Should year `y`'s accepted-papers list be fetched live on this run?
+//   • From EC_SIGECOM_WINDOW_FROM_YEAR onward, re-scrape only inside the
+//     1 May – 30 June window, and only the current/upcoming edition — whose
+//     list is still being posted. Every earlier edition is frozen, so its
+//     cached list is reused with no network hit.
+//   • An edition that is not yet cached but has already been posted
+//     (`y <= thisYear`) is fetched once to seed it (any date), so introducing
+//     this gate never drops an already-captured list. A *future* edition
+//     (`y > thisYear`) is NOT polled before its window — its page does not
+//     exist yet, so daily probing would be pointless traffic.
+function sigecomShouldFetchLive(y, cache, thisYear, thisMonth) {
+  const inWindow = thisMonth >= 5 && thisMonth <= 6;  // 1 May – 30 June (incl.)
+  if (thisYear >= EC_SIGECOM_WINDOW_FROM_YEAR && inWindow && y >= thisYear) return true;
+  return !cache[String(y)] && y <= thisYear;          // seed an already-posted edition once
+}
+
 async function fetchSigecomPages(years) {
+  // EC posts each edition's accepted-papers list once (≈May–June) and then
+  // freezes it, so hitting ec<YY>.sigecom.org on every daily build is wasted
+  // traffic. Successful lists are kept in a committed cache and only re-fetched
+  // live inside the posting window (see sigecomShouldFetchLive); MOCK runs
+  // always read their local fixtures and never touch the cache.
+  const cache = MOCK ? {} : await loadJsonIfExists(join(DATA_DIR, '_ec-sigecom.json'), {});
+  const thisYear = parseInt(PULL_DATE.slice(0, 4), 10);
+  const thisMonth = parseInt(PULL_DATE.slice(5, 7), 10);
   const out = {}; // year -> entries[]
+  let cacheDirty = false;
   for (const y of years) {
+    if (!MOCK && !sigecomShouldFetchLive(y, cache, thisYear, thisMonth)) {
+      if (cache[String(y)]) out[y] = cache[String(y)]; // frozen list from cache
+      continue;
+    }
     let html = null;
     if (MOCK) {
       const p = join(MOCK_DIR, `sigecom-ec${y}.html`);
@@ -714,14 +753,28 @@ async function fetchSigecomPages(years) {
         console.warn(`  sigecom ec${y}: ${e.message} (skipping)`);
       }
     }
-    if (!html) continue;
+    if (!html) {
+      // Live fetch failed (or the page is gone) — fall back to a cached copy.
+      if (cache[String(y)]) out[y] = cache[String(y)];
+      if (!MOCK) await sleep(600);
+      continue;
+    }
     const entries = parseAcceptedPapers(html, y);
     // A tiny result usually means the page exists but the list is not up yet
     // (or the format changed) — better to skip than to ingest garbage.
-    if (entries.length >= 20) out[y] = entries;
-    else console.warn(`  sigecom ec${y}: parsed only ${entries.length} entries — ignoring page`);
+    if (entries.length >= 20) {
+      out[y] = entries;
+      if (!MOCK && JSON.stringify(cache[String(y)]) !== JSON.stringify(entries)) {
+        cache[String(y)] = entries;   // capture / refresh the frozen list
+        cacheDirty = true;
+      }
+    } else {
+      console.warn(`  sigecom ec${y}: parsed only ${entries.length} entries — ignoring page`);
+      if (cache[String(y)]) out[y] = cache[String(y)]; // keep the cached list
+    }
     if (!MOCK) await sleep(600);
   }
+  if (cacheDirty) await writeJson('_ec-sigecom.json', cache);
   return out;
 }
 
