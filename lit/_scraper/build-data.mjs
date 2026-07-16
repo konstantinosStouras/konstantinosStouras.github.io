@@ -1445,7 +1445,7 @@ async function axGet(url) {
   }
 }
 
-async function resolvePreprints(allPapers, cache) {
+async function resolvePreprints(allPapers, cache, opts = {}) {
   // 1. Seed from links we already resolved (EC's PDF is arXiv/SSRN/OA), so we
   //    never spend an OpenAlex call on a paper we can already answer.
   for (const p of allPapers) {
@@ -1457,8 +1457,8 @@ async function resolvePreprints(allPapers, cache) {
 
   // 2. OpenAlex by DOI, batched — bounded, and optional (see the helper).
   await seedPreprintsByDoi(allPapers, cache, {
-    maxBatches: parseInt(process.env.LIT_PREPRINT_DOI_BATCHES || '400', 10),
-    budgetMs: 15 * 60 * 1000,
+    maxBatches: opts.doiBatches ?? parseInt(process.env.LIT_PREPRINT_DOI_BATCHES || '400', 10),
+    budgetMs: opts.doiBudgetMs ?? 15 * 60 * 1000,
   });
 
   // 3. Title+author search for papers the by-DOI scan couldn't link — their
@@ -1468,8 +1468,8 @@ async function resolvePreprints(allPapers, cache) {
   //    daily build can never hang if OpenAlex throttles the per-paper query;
   //    the full backfill runs online via preprints-ci.mjs (own workflow).
   await searchPreprintsByTitle(allPapers, cache, {
-    cap: parseInt(process.env.LIT_PREPRINT_SEARCH_CAP || '2500', 10),
-    budgetMs: parseInt(process.env.LIT_PREPRINT_SEARCH_MS || '360000', 10), // 6-minute hard ceiling
+    cap: opts.searchCap ?? parseInt(process.env.LIT_PREPRINT_SEARCH_CAP || '2500', 10),
+    budgetMs: opts.searchMs ?? parseInt(process.env.LIT_PREPRINT_SEARCH_MS || '360000', 10), // 6-minute hard ceiling
     log: true,
   });
 }
@@ -2324,6 +2324,7 @@ async function incrementalMain() {
 
   const bySource = {};
   const changedSources = new Set();
+  const freshRows = [];                    // genuinely-new papers, for enrichment
 
   for (const src of JOURNALS) { // the eight Articles-in-Advance journals only
     const existing = reInternalize(await loadJsonIfExists(join(DATA_DIR, `papers-${src.key}.json`), []));
@@ -2335,6 +2336,7 @@ async function incrementalMain() {
       if (!cur) {                          // genuinely new paper
         existing.push(nr);
         if (nr._doi) byDoi.set(nr._doi, nr);
+        freshRows.push(nr);
         added++;
         continue;
       }
@@ -2378,6 +2380,43 @@ async function incrementalMain() {
   if (!changedSources.size && !registryGrew) {
     console.log('No new or changed papers — nothing to write.');
     return;
+  }
+
+  // Opportunistic enrichment of ONLY the just-added papers, so a new paper
+  // carries its pre-print link + citation count from its first appearance
+  // (within ~15 min) instead of waiting for the next 2-hourly pre-print backfill
+  // or the daily citations sweep. Deliberately scoped to freshRows and strictly
+  // bounded + non-fatal: it uses the SAME OpenAlex/Crossref/arXiv identities as
+  // the daily build (module MAILTO), so it adds no quota pressure beyond the few
+  // new DOIs, and the frozen-link / 2-day-freshness cache logic still governs
+  // everything. The steady-state rolling sweeps (their own workflows + the daily
+  // build) remain the coverage engine for the whole corpus. Skipped in MOCK
+  // (offline) and disable with LIT_INCR_ENRICH=0.
+  if (freshRows.length && !MOCK && process.env.LIT_INCR_ENRICH !== '0') {
+    const nNew = freshRows.length;
+    const preprintCache = await loadJsonIfExists(join(DATA_DIR, '_preprints.json'), {});
+    try {
+      await resolvePreprints(freshRows, preprintCache, {
+        doiBatches: parseInt(process.env.LIT_INCR_PREPRINT_DOI_BATCHES || '8', 10),
+        searchCap: parseInt(process.env.LIT_INCR_PREPRINT_CAP || String(Math.min(nNew, 100)), 10),
+        searchMs: parseInt(process.env.LIT_INCR_PREPRINT_MS || '120000', 10), // 2-minute ceiling
+      });
+    } catch (e) { console.warn('  incremental preprints failed (non-fatal):', e.message); }
+    await writeJson('_preprints.json', preprintCache);
+    applyPreprints(freshRows, preprintCache);
+
+    const citationsCache = await loadJsonIfExists(join(DATA_DIR, '_citations.json'), {});
+    try {
+      await refreshCitations(freshRows, citationsCache, {
+        cap: nNew,
+        budgetMs: parseInt(process.env.LIT_INCR_CITATIONS_MS || '90000', 10), // 90-second ceiling
+      });
+    } catch (e) { console.warn('  incremental citations failed (non-fatal):', e.message); }
+    await writeJson('_citations.json', citationsCache);
+    applyCitations(freshRows, citationsCache);
+    // Enrichment may have appended Preprint/CitedBy fields to a brand-new row,
+    // so make sure its source file is (re)written below.
+    for (const p of freshRows) changedSources.add(p.JKey);
   }
 
   // Rewrite only the changed per-source files; count every source for the manifest.
