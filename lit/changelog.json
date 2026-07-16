@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "analytics-compare-authors-and-cleanup",
+      "date": "2026-07-16",
+      "title": "Data Analytics: compare authors, cleaner counts, native-first default",
+      "summary": "The Author spotlight now lets you add several authors and compare them side by side (publications per year, key figures, where they publish, disruption). A pre-ticked 'exclude non-research items' switch keeps journal front matter, book reviews, corrigenda, announcements and indices out of every figure (the main database still shows everything). The dashboard also opens on the curated native sources by default, with catalog journals added on selection.",
+      "url": "https://stouras.com/lit/analytics/"
+    },
+    {
       "id": "analytics-editorial-filters",
       "date": "2026-07-16",
       "title": "Editor & area filters in Data Analytics",

@@ -136,6 +136,11 @@
   .dim-lead span { display: block; font-size: 12.5px; font-weight: 400; color: var(--text-muted); margin-top: 3px; line-height: 1.5; }
   .resetbtn { font-size: 12.5px; font-weight: 600; color: var(--navy); background: none; border: 1.5px solid var(--border); border-radius: 8px; padding: 7px 14px; cursor: pointer; white-space: nowrap; }
   .resetbtn:hover { border-color: var(--navy); }
+  .excl-toggle { display: inline-flex; align-items: flex-start; gap: 8px; font-size: 13px; font-weight: 600; color: var(--navy); cursor: pointer; user-select: none; margin-bottom: 10px; }
+  .excl-toggle input { width: 15px; height: 15px; accent-color: var(--navy); cursor: pointer; margin-top: 1px; flex: none; }
+  .excl-toggle .sub { font-weight: 400; color: var(--text-muted); }
+  .scope-note { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+  .scope-note a { color: var(--navy); cursor: pointer; text-decoration: underline; }
 
   /* ── Tabs ─────────────────────────────────────────────────────────────── */
   .tabs { display: flex; gap: 4px; margin-bottom: 18px; border-bottom: 2px solid var(--border); }
@@ -183,6 +188,22 @@
   .author-search input { flex: 1; min-width: 220px; border: 1.5px solid var(--border); border-radius: 9px; padding: 11px 14px; font: inherit; font-size: 14.5px; }
   .author-search input:focus { outline: none; border-color: var(--navy); }
   .author-hint { font-size: 12.5px; color: var(--text-muted); }
+  .author-add { font-size: 13px; font-weight: 600; color: #fff; background: var(--navy); border: 1.5px solid var(--navy); border-radius: 9px; padding: 11px 16px; cursor: pointer; white-space: nowrap; }
+  .author-add:hover { background: #6a1836; }
+  .achips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .achip { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; border-radius: 100px; padding: 5px 8px 5px 12px; color: #fff; }
+  .achip .x { cursor: pointer; font-size: 15px; line-height: 1; opacity: .8; }
+  .achip .x:hover { opacity: 1; }
+  .achip .sw { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,.85); flex: none; }
+  /* Author comparison table */
+  table.cmp { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.cmp th, table.cmp td { padding: 9px 12px; border-bottom: 1px solid var(--border); text-align: right; font-variant-numeric: tabular-nums; }
+  table.cmp th:first-child, table.cmp td:first-child { text-align: left; }
+  table.cmp thead th { font-size: 11.5px; text-transform: uppercase; letter-spacing: .4px; color: var(--text-muted); font-weight: 700; border-bottom: 2px solid var(--border); }
+  table.cmp thead th .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  table.cmp tbody tr:last-child td { border-bottom: none; }
+  table.cmp td.metric { color: var(--text-muted); font-weight: 600; text-align: left; }
+  table.cmp td.grey { color: #c9b8be; }
   .aspot-empty { background: var(--white); border: 1px dashed var(--border); border-radius: 14px; padding: 40px 24px; text-align: center; color: var(--text-muted); }
   .aname { font-family: 'Fraunces', serif; font-size: 24px; color: var(--navy); font-weight: 500; }
 
@@ -378,8 +399,13 @@
       </div>
       <div class="fscope">
         <div>
+          <label class="excl-toggle" title="Filters out non-research Crossref records — journal 'Editorial Board' front matter, book reviews, corrigenda/errata, announcements and indices — from every figure on this page. The main database at /lit/ still shows everything.">
+            <input type="checkbox" id="exclNonRes" checked>
+            <span>Exclude non-research items <span class="sub">(editorial board, book reviews, corrigenda/errata, announcements, indices)</span></span>
+          </label>
           <div class="txt" id="scopeTxt">—</div>
           <div class="selchips" id="selChips"></div>
+          <div class="scope-note" id="scopeNote"></div>
         </div>
         <button class="resetbtn" id="resetBtn">Reset filters</button>
       </div>
@@ -519,13 +545,15 @@
     <!-- ── Author tab ─────────────────────────────────────────────────── -->
     <div id="tab-author" style="display:none">
       <div class="author-search">
-        <input id="authorInput" list="authorList" type="text" placeholder="Type an author's name…" autocomplete="off">
+        <input id="authorInput" list="authorList" type="text" placeholder="Add an author to compare…" autocomplete="off">
         <datalist id="authorList"></datalist>
+        <button class="author-add" id="authorAdd">Add author</button>
         <span class="author-hint" id="authorHint"></span>
       </div>
+      <div class="achips" id="authorChips"></div>
       <div id="authorBody">
-        <div class="aspot-empty">Search for an author above to see their publication record across The Lit —
-          how many papers, in which journals, and how their output has evolved over time.</div>
+        <div class="aspot-empty">Add one or more authors above to see their publication record across The Lit — and
+          compare several side by side: how many papers, in which journals, and how their output has evolved over time.</div>
       </div>
     </div>
 
@@ -554,9 +582,15 @@
 
   // ── state ───────────────────────────────────────────────────────────────
   var DATA = null, JMAP = {}, AUTHORS = null, authorsState = 'idle';
+  // The curated native sources (from data.json) — the default scope when nothing
+  // is selected, so the page opens on these rather than the whole corpus.
+  var NATIVE_KEYS = [];
   // dim = the active editorial breakdown filter (one dimension at a time):
   //   name ∈ 'editor'|'area'|'se'|'ae', vals = { value: true } of selected values.
-  var S = { types: {}, journals: {}, dim: { name: null, vals: {} }, yMin: 0, yMax: 0, dMin: -1, dMax: 1, tab: 'overview', author: null, compareOther: false };
+  // excludeNonResearch = filter away non-research items (editorial board / book
+  //   reviews / errata / announcements / indices); ON by default.
+  // authors = the list of authors being compared in the Author-spotlight tab.
+  var S = { types: {}, journals: {}, dim: { name: null, vals: {} }, yMin: 0, yMax: 0, dMin: -1, dMax: 1, tab: 'overview', authors: [], compareOther: false, excludeNonResearch: true };
   // Disruptiveness-index (D) range filter bounds — the slider spans D_LO..D_HI.
   var D_LO = -1, D_HI = 1, D_STEP = 0.05;
   function dActive() { return S.dMin > D_LO + 1e-9 || S.dMax < D_HI - 1e-9; }
@@ -606,13 +640,23 @@
   function scopeKeys() {
     var chosenTypes = Object.keys(S.types).filter(function (t) { return S.types[t]; });
     var chosenJ = Object.keys(S.journals).filter(function (k) { return S.journals[k]; });
-    if (!chosenTypes.length && !chosenJ.length) return DATA.journals.map(function (j) { return j.key; });
+    // Default (nothing selected) = the curated native sources, NOT the whole
+    // corpus — so the page opens on the journals the site curates rather than on
+    // high-volume catalog journals (EJOR, …), which appear once selected.
+    if (!chosenTypes.length && !chosenJ.length) return NATIVE_KEYS.length ? NATIVE_KEYS.slice() : DATA.journals.map(function (j) { return j.key; });
     var set = {};
     DATA.journals.forEach(function (j) {
       if (chosenJ.indexOf(j.key) !== -1) set[j.key] = 1;
       for (var i = 0; i < chosenTypes.length; i++) if (keysHaveType(j.key, chosenTypes[i])) { set[j.key] = 1; break; }
     });
     return Object.keys(set);
+  }
+
+  // Select every journal (natives + catalog) — the "explore the whole corpus"
+  // escape hatch from the default native-sources view.
+  function selectAllJournals() {
+    DATA.journals.forEach(function (j) { S.journals[j.key] = true; });
+    renderJournalList(); refresh();
   }
 
   // Aggregate the per-journal×year tables over a journal set + year window.
@@ -638,7 +682,7 @@
       srcs.forEach(function (ys) {
         for (var y in ys) {
           var yy = +y; if (yy < S.yMin || yy > S.yMax) continue;
-          var r = ys[y];
+          var r = effRow(ys[y]);
           jn += r.n;
           out.n += r.n; out.a += r.a; out.s += r.s; out.p += r.p; out.c += r.c; out.ab += r.ab;
           var t = out.perYear[y] || (out.perYear[y] = { n: 0, a: 0, s: 0, p: 0, c: 0, ab: 0 });
@@ -653,6 +697,19 @@
 
   // Is an editorial-dimension value filter currently active?
   function dimActive() { return !!(S.dim.name && activeDimVals().length); }
+  // One per-year aggregate row, honouring the "exclude non-research items" toggle:
+  // when on (default) and the row carries a non-research sub-total `x` (editorial
+  // board / book reviews / errata / …), subtract it; otherwise the row as-is.
+  // Editorial-dimension rows carry no `x` (they are research-only in the data),
+  // so this is a no-op for them.
+  function effRow(r) {
+    if (!r || !S.excludeNonResearch || !r.x) return r;
+    var x = r.x, t = r.t, xt = x.t || [0, 0, 0, 0, 0, 0];
+    return {
+      n: r.n - x.n, a: r.a - x.a, s: r.s - x.s, p: r.p - x.p, c: r.c - x.c, ab: r.ab - x.ab,
+      t: t ? [t[0] - xt[0], t[1] - xt[1], t[2] - xt[2], t[3] - xt[3], t[4] - xt[4], t[5] - xt[5]] : t
+    };
+  }
   // The per-year rows for ONE journal honouring the active editorial-dimension
   // filter: when a dimension value is selected, sum only that journal's rows for
   // the selected values (a journal that doesn't carry the dimension contributes
@@ -662,7 +719,12 @@
   // aggregate(). Returns a fresh {year:{n,a,s,p,c,ab,t[6]}} map.
   function journalYears(k) {
     var j = JMAP[k]; if (!j) return {};
-    if (!dimActive()) return j.years;
+    if (!dimActive()) {
+      if (!S.excludeNonResearch) return j.years;
+      var out = {};
+      for (var yy in j.years) out[yy] = effRow(j.years[yy]);
+      return out;
+    }
     var name = S.dim.name, vals = activeDimVals();
     if (!j.dims || !j.dims[name]) return {};
     var acc = {};
@@ -1073,14 +1135,14 @@
     if (dimActive()) { card.style.display = 'none'; return; }
     var tot = keys.map(function (k) {
       var j = JMAP[k], n = 0;
-      for (var y in j.years) { var yy = +y; if (yy < S.yMin || yy > S.yMax) continue; n += j.years[y].n; }
+      for (var y in j.years) { var yy = +y; if (yy < S.yMin || yy > S.yMax) continue; n += effRow(j.years[y]).n; }
       return { key: k, name: j.name, n: n, top: (j.types || [])[0] };
     }).filter(function (t) { return t.n > 0; }).sort(function (a, b) { return b.n - a.n; });
     if (tot.length < 2) { card.style.display = 'none'; return; }   // needs >=2 journals to compare shares
     card.style.display = '';
     var MAXB = 8, bands = tot.slice(0, MAXB), rest = tot.slice(MAXB);
     var yearTotal = {};
-    keys.forEach(function (k) { var ys = JMAP[k].years; for (var y in ys) { var yy = +y; if (yy < S.yMin || yy > S.yMax) continue; yearTotal[yy] = (yearTotal[yy] || 0) + ys[y].n; } });
+    keys.forEach(function (k) { var ys = JMAP[k].years; for (var y in ys) { var yy = +y; if (yy < S.yMin || yy > S.yMax) continue; yearTotal[yy] = (yearTotal[yy] || 0) + effRow(ys[y]).n; } });
     // Distinct per-band colours (not by type) so adjacent journal bands read apart.
     var layers = bands.map(function (b, i) { return { keys: [b.key], color: SERIES[i % SERIES.length], name: b.name }; });
     if (rest.length) layers.push({ keys: rest.map(function (r) { return r.key; }), color: '#c9c2c6', name: 'Rest of scope (' + rest.length + ')' });
@@ -1107,7 +1169,7 @@
       var up = [], lo = [];
       years.forEach(function (y) {
         var tt = yearTotal[y] || 0, n = 0;
-        if (tt) layer.keys.forEach(function (k) { var r = JMAP[k].years[y]; if (r) n += r.n; });
+        if (tt) layer.keys.forEach(function (k) { var r = JMAP[k].years[y]; if (r) n += effRow(r).n; });
         var lower = cum[y], upper = lower + (tt ? n / tt : 0);
         cum[y] = upper; up.push([y, upper]); lo.push([y, lower]);
       });
@@ -1203,20 +1265,115 @@
     });
   }
 
-  function renderAuthor() {
-    var name = (S.author || '').trim();
-    if (!name) { $('authorBody').innerHTML = '<div class="aspot-empty">Search for an author above to see their publication record across The Lit — how many papers, in which journals, and how their output has evolved over time.</div>'; return; }
-    if (authorsState !== 'ready') $('authorBody').innerHTML = '<div class="loading"><span class="spinner"></span>Loading author records…</div>';
+  // ── Author spotlight: add several authors, compare them ─────────────────────
+  var AUTHOR_COLORS = ['#7d1d3f', '#2a7f8f', '#c9a24b', '#3f6098', '#8a5a2b', '#6a8d3a'];
+  function authorColor(i) { return AUTHOR_COLORS[i % AUTHOR_COLORS.length]; }
+  // Resolve a typed name to a canonical author record (exact first, then a loose
+  // contains match on the first hit), like the old single-author search.
+  function resolveAuthor(name) {
+    name = (name || '').trim(); if (!name || !AUTHORS) return null;
+    var a = AUTHORS[name.toLowerCase()];
+    if (!a) { var lc = name.toLowerCase(); for (var kk in AUTHORS) { if (kk.indexOf(lc) !== -1) { a = AUTHORS[kk]; break; } } }
+    return a || null;
+  }
+  function addAuthor(name) {
+    name = (name || '').trim(); if (!name) return;
     ensureAuthors(function () {
-      var a = AUTHORS[name.toLowerCase()];
-      if (!a) {
-        // try a loose contains match on the first hit
-        var lc = name.toLowerCase(), hit = null;
-        for (var kk in AUTHORS) { if (kk.indexOf(lc) !== -1) { hit = AUTHORS[kk]; break; } }
-        a = hit;
-      }
-      if (!a) { $('authorBody').innerHTML = '<div class="aspot-empty">No author matching “' + esc(name) + '” with at least 5 papers on record. Try another spelling, or search their work directly on <a href="/lit/" style="color:var(--navy)">The Lit</a>.</div>'; return; }
-      drawAuthor(a);
+      var a = resolveAuthor(name);
+      if (!a) { $('authorHint').textContent = 'No author matching “' + name + '” with ≥ 5 papers on record.'; return; }
+      if (!S.authors.some(function (x) { return x.n === a.n; })) S.authors.push(a);
+      $('authorInput').value = '';
+      renderAuthor();
+    });
+  }
+  function renderAuthorChips() {
+    var box = $('authorChips'); if (!box) return;
+    box.innerHTML = S.authors.map(function (a, i) {
+      return '<span class="achip" style="background:' + authorColor(i) + '"><span class="sw"></span>' + esc(a.n) +
+        '<span class="x" data-i="' + i + '" title="Remove">×</span></span>';
+    }).join('');
+    Array.prototype.forEach.call(box.querySelectorAll('.x'), function (x) {
+      x.onclick = function () { S.authors.splice(+x.getAttribute('data-i'), 1); renderAuthor(); };
+    });
+  }
+  function renderAuthor() {
+    renderAuthorChips();
+    if (!S.authors.length) {
+      $('authorBody').innerHTML = '<div class="aspot-empty">Add one or more authors above to see their publication record across The Lit — and compare several side by side: how many papers, in which journals, and how their output has evolved over time.</div>';
+      return;
+    }
+    if (S.authors.length === 1) drawAuthor(S.authors[0]);
+    else drawCompare(S.authors);
+  }
+
+  // Compare ≥2 authors: overlaid publications-per-year, a side-by-side metrics
+  // table (incl. mean disruption Dⱼ, filled async), and a where-they-publish
+  // matrix. Honours the same year window + journal scope as the single view.
+  function drawCompare(list) {
+    var years = []; for (var y = S.yMin; y <= S.yMax; y++) years.push(y);
+    var scope = {}; scopeKeys().forEach(function (k) { scope[k] = 1; });
+    var series = list.map(function (a, i) {
+      return { name: a.n, color: authorColor(i), pts: years.map(function (yy) { return [yy, a.y[yy] || 0]; }) };
+    });
+    var mets = list.map(function (a) {
+      var yrs = Object.keys(a.y).map(Number).sort(function (x, z) { return x - z; });
+      var inRange = 0; yrs.forEach(function (yy) { if (yy >= S.yMin && yy <= S.yMax) inRange += a.y[yy]; });
+      var allJ = Object.keys(a.j), inScope = 0; allJ.forEach(function (k) { if (scope[k]) inScope += a.j[k]; });
+      return { p: a.p, inRange: inRange, inScope: inScope, nj: allJ.length, span: (yrs[yrs.length - 1] - yrs[0] + 1), first: yrs[0], last: yrs[yrs.length - 1] };
+    });
+    var rows = [
+      ['Papers (all time)', function (m) { return fmt(m.p); }],
+      ['In year range (' + S.yMin + '–' + S.yMax + ')', function (m) { return fmt(m.inRange); }],
+      ['In current journal scope', function (m) { return fmt(m.inScope); }],
+      ['Journals', function (m) { return fmt(m.nj); }],
+      ['Active span', function (m) { return m.span + ' yrs'; }],
+      ['First–last year', function (m) { return m.first + '–' + m.last; }]
+    ];
+    var colHead = function (a, i) { return '<th><span class="sw" style="background:' + authorColor(i) + '"></span>' + esc(a.n) + '</th>'; };
+    var head = '<th>Metric</th>' + list.map(colHead).join('');
+    var tbody = rows.map(function (r) {
+      return '<tr><td class="metric">' + esc(r[0]) + '</td>' + mets.map(function (m) { return '<td>' + r[1](m) + '</td>'; }).join('') + '</tr>';
+    }).join('');
+    tbody += '<tr id="cmpDisrRow"><td class="metric">Mean disruption Dⱼ (in scope)</td>' + list.map(function () { return '<td>—</td>'; }).join('') + '</tr>';
+
+    var jtot = {}; list.forEach(function (a) { for (var k in a.j) jtot[k] = (jtot[k] || 0) + a.j[k]; });
+    var jkeys = Object.keys(jtot).sort(function (x, z) { return jtot[z] - jtot[x]; }).slice(0, 16);
+    var jhead = '<th>Journal</th>' + list.map(function (a, i) { return '<th><span class="sw" style="background:' + authorColor(i) + '"></span>' + esc(trunc(a.n, 16)) + '</th>'; }).join('');
+    var jrows = jkeys.map(function (k) {
+      var nm = JMAP[k] ? JMAP[k].name : k, inS = scope[k];
+      return '<tr><td class="metric' + (inS ? '' : ' grey') + '">' + esc(nm) + '</td>' +
+        list.map(function (a) { return '<td' + (inS ? '' : ' class="grey"') + '>' + (a.j[k] ? fmt(a.j[k]) : '·') + '</td>'; }).join('') + '</tr>';
+    }).join('');
+
+    var html = '<div class="cards">';
+    html += '<div class="card wide"><h3>Publications per year</h3><div class="csub">Comparing ' + list.length + ' authors across ' + S.yMin + '–' + S.yMax + '</div><div id="cmpTimeline"></div><div class="legend" id="cmpLegend"></div></div>';
+    html += '<div class="card wide"><h3>At a glance</h3><div class="csub">Key figures side by side — journal-scope and year filters apply</div><div class="tblscroll"><table class="cmp"><thead><tr>' + head + '</tr></thead><tbody>' + tbody + '</tbody></table></div></div>';
+    html += '<div class="card wide"><h3>Where they publish</h3><div class="csub">Papers per journal (top 16) — journals outside your current scope are greyed</div><div class="tblscroll"><table class="cmp"><thead><tr>' + jhead + '</tr></thead><tbody>' + jrows + '</tbody></table></div></div>';
+    html += '</div>';
+    $('authorBody').innerHTML = html;
+    $('cmpTimeline').innerHTML = lineChart(series, { years: years });
+    $('cmpLegend').innerHTML = series.map(function (s) { return '<span class="li"><span class="sw" style="background:' + s.color + '"></span>' + esc(s.name) + '</span>'; }).join('');
+    renderCompareDisruption(list);
+  }
+  // Fill the compare table's disruption row: each author's mean Dⱼ over their
+  // in-scope, in-year scored papers (same computation as the single-author view).
+  function renderCompareDisruption(list) {
+    if (disrState === 'failed') return;
+    ensureDisruption(function () {
+      if (disrState !== 'ready' || !DISR || !disrNameToId) return;
+      var row = $('cmpDisrRow'); if (!row) return;
+      var scope = {}; scopeKeys().forEach(function (k) { scope[k] = 1; });
+      var cells = row.querySelectorAll('td');
+      list.forEach(function (a, i) {
+        var cell = cells[i + 1]; if (!cell) return;
+        var id = disrNameToId[String(a.n || '').toLowerCase()];
+        if (id == null) { cell.textContent = '—'; return; }
+        var mine = DISR.papers.filter(function (p) { return p.au && p.au.indexOf(id) !== -1 && scope[p.j] && p.y != null && p.y >= S.yMin && p.y <= S.yMax; });
+        if (!mine.length) { cell.textContent = '—'; return; }
+        var md = mean(mine.map(function (p) { return p.d; }));
+        cell.textContent = (md > 0 ? '+' : '') + md.toFixed(3) + ' (' + mine.length + ')';
+        cell.style.color = md > 0.02 ? C_DISRUPT : (md < -0.02 ? C_DEVELOP : '');
+      });
     });
   }
 
@@ -1786,7 +1943,7 @@
       return '<label class="jrow"><input type="checkbox" data-k="' + j.key + '"' + (S.journals[j.key] ? ' checked' : '') + '>' +
         '<span class="jn">' + esc(j.name) + '</span>' +
         '<span class="jbadge b-' + top + '">' + esc(badge) + '</span>' +
-        '<span class="jc">' + fmt(j.papers) + '</span></label>';
+        '<span class="jc">' + fmt(S.excludeNonResearch && j.rp != null ? j.rp : j.papers) + '</span></label>';
     }).join('');
     Array.prototype.forEach.call($('jlist').querySelectorAll('input'), function (cb) {
       cb.onchange = function () { S.journals[cb.getAttribute('data-k')] = cb.checked; refresh(); };
@@ -1850,10 +2007,19 @@
     var chosenTypes = Object.keys(S.types).filter(function (t) { return S.types[t]; });
     var chosenJ = Object.keys(S.journals).filter(function (k) { return S.journals[k]; });
     var dimVals = activeDimVals();
-    var isAll = !chosenTypes.length && !chosenJ.length && !dimVals.length;
+    var isDefault = !chosenTypes.length && !chosenJ.length;
     var jcount = dimVals.length ? Object.keys(agg.perJournal).length : keys.length;
-    $('scopeTxt').innerHTML = '<strong>' + fmt(agg.n) + '</strong> papers · <strong>' + fmt(jcount) + '</strong> journals · ' + S.yMin + '–' + S.yMax + (isAll ? ' · whole corpus' : '');
+    $('scopeTxt').innerHTML = '<strong>' + fmt(agg.n) + '</strong> papers · <strong>' + fmt(jcount) + '</strong> journals · ' + S.yMin + '–' + S.yMax + (isDefault ? ' · native sources' : '');
     $('jbtnCnt').textContent = chosenJ.length ? chosenJ.length : 'All';
+    // Default-scope hint: make clear this is the native core, and how to broaden.
+    var note = $('scopeNote');
+    if (note) {
+      if (isDefault && NATIVE_KEYS.length) {
+        note.innerHTML = 'Showing the ' + NATIVE_KEYS.length + ' native sources by default. Add catalog journals (EJOR, Journal of Finance, …) via <strong>Journal types</strong> or <strong>Journals</strong> above — or <a id="scopeAll">explore the whole corpus</a>.';
+        var all = document.getElementById('scopeAll');
+        if (all) all.onclick = selectAllJournals;
+      } else { note.innerHTML = ''; }
+    }
 
     var pills = [];
     chosenTypes.forEach(function (t) {
@@ -1973,6 +2139,7 @@
 
   function resetFilters() {
     S.types = {}; S.journals = {}; S.dim = { name: null, vals: {} }; S.compareOther = false;
+    S.excludeNonResearch = true; $('exclNonRes').checked = true;
     $('yrMin').value = YEAR_LO; $('yrMax').value = YEAR_HI; syncSlider();
     $('drMin').value = D_LO; $('drMax').value = D_HI; syncDSlider();
     renderTypeChips(); renderJournalList(); refresh();
@@ -1982,6 +2149,7 @@
   fetch('./data.json').then(function (r) { if (!r.ok) throw 0; return r.json(); }).then(function (d) {
     DATA = d;
     d.journals.forEach(function (j) { JMAP[j.key] = j; });
+    NATIVE_KEYS = (d.nativeKeys || []).filter(function (k) { return JMAP[k]; });
     YEAR_LO = d.yearMin || 1950; YEAR_HI = d.yearMax || 2026;
     S.yMin = YEAR_LO; S.yMax = YEAR_HI;
 
@@ -2025,6 +2193,7 @@
     };
     $('jClear').onclick = function () { S.journals = {}; renderJournalList(); refresh(); };
     $('cmpToggle').addEventListener('change', function () { S.compareOther = this.checked; renderEvolution(scopeKeys()); });
+    $('exclNonRes').addEventListener('change', function () { S.excludeNonResearch = this.checked; renderJournalList(); refresh(); });
     $('resetBtn').onclick = resetFilters;
 
     // tabs
@@ -2038,11 +2207,13 @@
         refresh();
       };
     });
-    // author input
+    // author input — add authors (Enter, the Add button, or a datalist pick) and
+    // compare them below.
     var ai = $('authorInput');
-    ai.addEventListener('change', function () { S.author = ai.value; renderAuthor(); });
-    ai.addEventListener('keydown', function (e) { if (e.key === 'Enter') { S.author = ai.value; renderAuthor(); } });
+    ai.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addAuthor(ai.value); } });
+    ai.addEventListener('change', function () { if (ai.value) addAuthor(ai.value); });   // datalist selection
     ai.addEventListener('focus', function () { ensureAuthors(function () {}); });
+    $('authorAdd').onclick = function () { addAuthor(ai.value); };
 
     // generation line
     if (d.generated) $('genline').textContent = 'Data as of ' + d.generated;

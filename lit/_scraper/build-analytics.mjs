@@ -32,6 +32,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isNonArticle } from './_nonarticle.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LIT_DIR = path.resolve(__dirname, '..');            // lit
@@ -126,6 +127,13 @@ function authorCount(authorsField) {
   return authorsField.split(',').map(s => s.trim()).filter(Boolean).length;
 }
 
+// Accumulate one paper into a per-year aggregate row (n=count, a=summed authors,
+// s=solo, p=pre-print, ab=abstract, c=citations, t=team-size buckets [1..6+]).
+function bump(r, na, hasPre, hasAbs, cites) {
+  r.n++; r.a += na; if (na === 1) r.s++; if (hasPre) r.p++; if (hasAbs) r.ab++;
+  r.c += cites; if (na) r.t[Math.min(na, 6) - 1]++;
+}
+
 function cleanYear(y) {
   const n = parseInt(y, 10);
   if (!Number.isFinite(n) || n < MIN_YEAR || n > 2100) return null;
@@ -204,7 +212,7 @@ for (const meta of journalMeta.values()) {
     if (!value) return;
     ensureDimVal(map, value).cited.push(rec);
   };
-  let jPapers = 0;
+  let jPapers = 0, jNonArt = 0;
 
   for (const p of arr) {
     jPapers++; totPapers++;
@@ -213,6 +221,8 @@ for (const meta of journalMeta.values()) {
     const hasPre = !!p.Preprint;
     const hasAbs = !!p.Abstract;
     const cites = (typeof p.CitedBy === 'number' && p.CitedBy > 0) ? p.CitedBy : 0;
+    const nonArt = isNonArticle(p.Title);      // Editorial Board / book review / erratum / …
+    if (nonArt) jNonArt++;
 
     if (hasPre) totPre++;
     if (hasAbs) totAbs++;
@@ -221,17 +231,19 @@ for (const meta of journalMeta.values()) {
     if (y != null) {
       if (y < yearMin) yearMin = y;
       if (y > yearMax) yearMax = y;
-      // per-year row; t = team-size buckets [1,2,3,4,5,6+] so the co-authorship
-      // distribution honours the page's year filter like every other chart.
+      // per-year row (ALL records); t = team-size buckets [1,2,3,4,5,6+]. The
+      // non-research subset is accumulated into a parallel `x` sub-row (same
+      // shape) so the page can SUBTRACT it when its "exclude non-research items"
+      // toggle is on (default). Rows with no non-research items carry no `x`.
       const row = years[y] || (years[y] = { n: 0, a: 0, s: 0, p: 0, c: 0, ab: 0, t: [0, 0, 0, 0, 0, 0] });
-      row.n++;
-      row.a += na;
-      if (na === 1) row.s++;
-      if (hasPre) row.p++;
-      if (hasAbs) row.ab++;
-      row.c += cites;
-      if (na) row.t[Math.min(na, 6) - 1]++;
+      bump(row, na, hasPre, hasAbs, cites);
+      if (nonArt) bump(row.x || (row.x = { n: 0, a: 0, s: 0, p: 0, c: 0, ab: 0, t: [0, 0, 0, 0, 0, 0] }), na, hasPre, hasAbs, cites);
     }
+
+    // Everything below is RESEARCH-ONLY: non-research items (front matter, book
+    // reviews, errata, …) never enter the most-cited table, the editorial
+    // breakdown or the author aggregates, regardless of the page toggle.
+    if (nonArt) continue;
 
     if (cites) {
       cited.push({ t: p.Title || '', y: y || '', c: cites, a: p.Authors || '', d: p.DOI || '' });
@@ -291,7 +303,9 @@ for (const meta of journalMeta.values()) {
     publisher: meta.publisher,
     types: typesFor(meta.key),
     abs: ABS_RATING[meta.key] || null,
-    papers: jPapers,
+    native: meta.dir === NATIVE_DIR ? 1 : 0,   // one of the 10 curated native sources
+    papers: jPapers,                            // all records
+    rp: jPapers - jNonArt,                      // research-only paper count
     years,
     topCited: cited.slice(0, TOP_CITED_PER_JOURNAL),
   };
@@ -329,6 +343,10 @@ const data = {
     cited: totCited,
   },
   types: JOURNAL_TYPES,
+  // The curated native sources (INFORMS + PNAS + ACM EC) — the page's default
+  // scope when nothing is selected, so it opens on these rather than the whole
+  // corpus (which includes high-volume catalog journals like EJOR).
+  nativeKeys: journals.filter(j => j.native).map(j => j.key),
   journals,
 };
 

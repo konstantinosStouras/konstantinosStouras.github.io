@@ -425,9 +425,11 @@ the FT50 catalog (`data-ft50/`), deduped with native winning on overlap
 `lit/_scraper/build-analytics.mjs` pre-aggregates everything **offline** into
 two small committed files it fetches on load — `analytics/data.json`
 (per-journal × per-year rows: paper count `n`, summed authors `a`, solo `s`,
-pre-print `p`, citation `c`, abstract `ab`, team-size buckets `t[6]`; plus each
-journal's UTD24/FT50/ABS membership — a byte-for-byte mirror of index.html's
-`ABS_RATING`/`UTD24_KEYS`/`FT50_KEYS` — and its top-cited papers) and
+pre-print `p`, citation `c`, abstract `ab`, team-size buckets `t[6]`, **plus an
+optional `x` sub-row of the same shape holding that year's NON-research subset**
+— see the toggle below; plus each journal's UTD24/FT50/ABS membership — a
+byte-for-byte mirror of index.html's `ABS_RATING`/`UTD24_KEYS`/`FT50_KEYS` — its
+`native` flag & research-only paper count `rp`, and its top-cited papers) and
 `analytics/authors.json` (per-author papers/year + papers/journal for authors
 with ≥ 5 papers, canonicalised via the datasets' `Name_Variants`, loaded lazily
 only when the Author tab opens). Journals for which we collect **editorial
@@ -443,7 +445,20 @@ external CDN beyond the shared Google Font) offers filters — **journal types**
 **journals**, and a **year-range** slider — driving live tiles (papers, avg
 co-authors, solo %, pre-print %, citations) and charts (publication volume by
 journal over time, avg co-authors/year by journal, co-authorship distribution,
-papers by journal, most-cited table). When a journal that
+papers by journal, most-cited table). **Default scope = the curated native
+sources** (`data.nativeKeys`/`NATIVE_KEYS`): with nothing selected `scopeKeys()`
+returns the ten natives, NOT the whole corpus, so the page opens on the curated
+journals rather than high-volume catalog journals like EJOR (which appear once
+their type/journal is picked; an "explore the whole corpus" link selects all).
+**"Exclude non-research items" toggle (pre-ticked):** a filter-bar checkbox
+(`S.excludeNonResearch`, default ON) filters journal "Editorial Board" front
+matter, book reviews, corrigenda/errata, announcements and indices out of EVERY
+figure — classified offline by `lit/_scraper/_nonarticle.mjs` (`isNonArticle`,
+high-precision title patterns; offline test `nonarticle-selftest.mjs`) whose
+per-year contribution is carried in each row's `x` delta and SUBTRACTED at read
+time by `effRow()` (dims/topCited/authors are already research-only in the data,
+so they're unaffected). This is **analytics-only** — the main browser at `/lit/`
+deliberately still shows everything (no data-pipeline/`build-data` change). When a journal that
 carries editorial metadata is **explicitly** in scope (a journal or type chosen,
 never the default whole-corpus view — mirroring the main browser's `msInScope`),
 the filter bar reveals the **same editorial dropdowns as the main page**:
@@ -463,8 +478,14 @@ another dimension replaces the prior selection; the cross-journal "Journal share
 over time" chart and (for a non-area dim) the "Editorial area trends" chart hide
 under an active editorial filter, and the disruption figures stay journal-wide
 with the existing note. A removable scope pill shows the active value. There is also an **Author
-spotlight** tab (per-author totals, in-scope counts, publications-per-year, and
-where-they-publish, the latter greying journals outside the current scope).
+spotlight** tab where you **add several authors (chips) and compare them**: one
+author shows the full single-author view (per-author totals, in-scope counts,
+publications-per-year, and where-they-publish, the latter greying journals
+outside the current scope); **two or more** shows a comparison — an overlaid
+publications-per-year line chart, a side-by-side "At a glance" metrics table
+(incl. mean disruption Dⱼ, filled async), and a where-they-publish matrix
+(`S.authors[]`, `drawCompare`/`renderCompareDisruption`). All of it honours the
+year window & journal scope.
 **Team-science / disruption section** (a new block at the bottom of the Corpus
 overview) reproduces the key measures of Wu, Wang & Evans, "Large teams develop
 and small teams disrupt science and technology" (*Nature* 570, 2019) over The
