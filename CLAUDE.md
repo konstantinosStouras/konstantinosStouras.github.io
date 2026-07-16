@@ -66,7 +66,14 @@ Marketing Science, M&SOM, Information Systems Research, Strategy Science
 a native journal like PNAS/ACM EC), POM, PNAS (five topic
 sections only), and the ACM EC conference (1999–present, incl. each year's
 accepted-papers list from `ec<YY>.sigecom.org` with arXiv/SSRN/OA PDF links via
-OpenAlex/DBLP/Semantic Scholar). Data is static JSON in `lit/data/` (one
+OpenAlex/DBLP/Semantic Scholar). **EC accepted-papers scraping is cadence-gated:**
+each edition's `ec<YY>.sigecom.org` list is posted once (≈May–June) then frozen,
+so the parsed lists are cached in `data/_ec-sigecom.json` and — from 2027 on —
+only re-scraped live inside the **1 May–30 June** window, and only for the
+current/upcoming edition (`sigecomShouldFetchLive`/`EC_SIGECOM_WINDOW_FROM_YEAR`
+in `build-data.mjs`); every other daily run serves the cache instead of polling
+sigecom year-round (an uncached year is fetched once to seed it, so the gate
+never drops an already-captured list). Data is static JSON in `lit/data/` (one
 `papers-<src>.json` per source + `sources.json` manifest), built by
 `lit/_scraper/build-data.mjs` and refreshed daily by
 `.github/workflows/lit-update-data.yml` (same self-healing live-site check as

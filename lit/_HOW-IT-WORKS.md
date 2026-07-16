@@ -297,6 +297,12 @@ CI; the daily Action just folds the committed files in.
    falls back to trying every known format for future years). Entries not in
    Crossref yet — typically the current year — are added as
    *Accepted (EC 'YY)* with authors/affiliations from the page.
+   Each edition's list is posted once (≈May–June) then frozen, so the parsed
+   lists are cached in `_ec-sigecom.json` and — from 2027 on — only re-scraped
+   live inside the **1 May – 30 June** window, and only for the current/upcoming
+   edition (`sigecomShouldFetchLive` in `build-data.mjs`). Every other run
+   serves the cache, so the daily build stops polling sigecom year-round; a year
+   not yet cached is fetched once to seed it.
 3. PDF links and missing abstracts are found via **OpenAlex** (batched DOI
    lookups; also supplies abstracts ACM doesn't give Crossref), **DBLP**
    (per-year tables of contents; arXiv links), and **Semantic Scholar**
