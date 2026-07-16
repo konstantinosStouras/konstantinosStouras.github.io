@@ -60,10 +60,10 @@ sqlite loader, `changelog.json` URLs) and the CI workflow paths are pinned to
 `lit/` extends the `/fun/ms/` architecture to ten sources: Management
 Science (with editors/areas, exactly like `/fun/ms/`), Operations Research,
 Marketing Science, M&SOM, Information Systems Research, Strategy Science
-(INFORMS; ISSNs 2333-2050/2333-2077, Articles in Advance, unrated by ABS —
-a native journal like PNAS/ACM EC), INFORMS Transactions on Education
+(INFORMS; ISSNs 2333-2050/2333-2077, Articles in Advance, graded ABS 3 in
+`ABS_RATING`), INFORMS Transactions on Education
 (INFORMS; open-access, eISSN 1532-0545, Articles in Advance, unrated by ABS —
-likewise a native journal), POM, PNAS (five topic
+a native journal like PNAS/ACM EC), POM, PNAS (five topic
 sections only), and the ACM EC conference (1999–present, incl. each year's
 accepted-papers list from `ec<YY>.sigecom.org` with arXiv/SSRN/OA PDF links via
 OpenAlex/DBLP/Semantic Scholar). Data is static JSON in `lit/data/` (one

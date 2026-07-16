@@ -83,6 +83,7 @@ const ABS_RATING = {
   msom: '4', obhdp: '4', pom: '4', psci: '4', rast: '4', rof: '4', sej: '4',
   ejor: '4',
   hbr: '3', smr: '3', ijoc: '3',
+  stsc: '3', // Strategy Science (INFORMS) — strategy/innovation, graded ABS 3
 };
 const UTD24_KEYS = new Set(['tar', 'jae', 'jar', 'jof', 'jfe', 'rfs', 'isre', 'ijoc',
   'misq', 'jcr', 'jm', 'jmr', 'mksc', 'ms', 'opre', 'joom', 'msom', 'pom', 'amj', 'amr',
