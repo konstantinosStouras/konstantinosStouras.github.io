@@ -145,12 +145,15 @@
   /* ── Tabs ─────────────────────────────────────────────────────────────── */
   /* View switcher — a prominent segmented control so the two views read as
      obvious, pressable buttons rather than faint underlined text. */
-  .tabs { display: inline-flex; gap: 6px; margin: 4px 0 24px; padding: 6px; background: var(--white); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-sm); max-width: 100%; }
+  .tabnav { text-align: center; margin: 22px 0 40px; }
+  .tabs { display: inline-flex; gap: 6px; margin: 0 auto; padding: 6px; background: var(--white); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-sm); max-width: 100%; }
   .tab { display: inline-flex; align-items: center; justify-content: center; gap: 9px; font-size: 15px; font-weight: 600; color: var(--navy); background: none; border: none; padding: 12px 26px; cursor: pointer; border-radius: 10px; transition: background .15s, color .15s, box-shadow .15s; white-space: nowrap; }
   .tab svg { width: 18px; height: 18px; flex: none; }
   .tab:hover:not(.on) { background: var(--navy-light); }
   .tab.on { background: var(--navy); color: #fff; box-shadow: 0 3px 10px rgba(125,29,63,.28); }
-  .tabs-hint { font-size: 12.5px; color: var(--text-muted); margin: -14px 0 20px 2px; }
+  .tabs-desc { font-size: 13.5px; color: var(--text-muted); max-width: 660px; margin: 16px auto 0; line-height: 1.7; }
+  .tabs-desc strong { color: var(--navy); font-weight: 600; }
+  .tabs-desc em { font-style: italic; color: var(--text); }
   @media (max-width: 560px) {
     .tabs { display: flex; width: 100%; }
     /* Let the two buttons share the row and shrink/wrap instead of overflowing
@@ -426,11 +429,17 @@
     </div>
 
     <!-- ── Tabs ───────────────────────────────────────────────────────── -->
-    <div class="tabs" role="tablist" aria-label="Analytics view">
-      <button class="tab on" data-tab="overview" role="tab" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Corpus overview</button>
-      <button class="tab" data-tab="author" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Author spotlight</button>
+    <div class="tabnav">
+      <div class="tabs" role="tablist" aria-label="Analytics view">
+        <button class="tab on" data-tab="overview" role="tab" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Corpus overview</button>
+        <button class="tab" data-tab="author" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Author spotlight</button>
+      </div>
+      <p class="tabs-desc">
+        <strong>Corpus overview</strong> takes the <em>paper</em> as the unit of analysis — publication volume, co-authorship, citations and team science across journals and years.<br>
+        <strong>Author spotlight</strong> takes the <em>author</em> as the unit of analysis — add several researchers and compare their output, collaboration and impact.<br>
+        Both give rich insights into research productivity, with several ways to slice and compare.
+      </p>
     </div>
-    <div class="tabs-hint">Switch between corpus-wide statistics and per-author comparisons.</div>
 
     <!-- ── Overview tab ───────────────────────────────────────────────── -->
     <div id="tab-overview">
