@@ -3,7 +3,7 @@ name: lit — check for newly-published papers (incremental)
 # The daily lit-update-data.yml re-pulls every journal's ENTIRE Crossref
 # back-catalogue, so it can only run once a day. This lighter job runs the same
 # pipeline in --incremental mode: it asks Crossref for only the records it
-# (re)indexed in the last few days (filter=from-index-date) for the six
+# (re)indexed in the last few days (filter=from-index-date) for the eight
 # Articles-in-Advance journals, upserts them into the committed papers-<key>.json,
 # and rewrites only the small derived files (recent/meta/sources/registry).
 #

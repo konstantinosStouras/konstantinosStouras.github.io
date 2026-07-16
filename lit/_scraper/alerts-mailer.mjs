@@ -31,7 +31,7 @@
  *
  * MATCHING FIDELITY: the journal-list sets and the textMatch/authorMatch
  * helpers below are vendored copies of the ones in lit/index.html — keep
- * them in sync if the page's filtering changes. Coverage is the eight native
+ * them in sync if the page's filtering changes. Coverage is the ten native
  * sources + the FT50 catalog (the two recent.json files in this repo) PLUS the
  * ABS satellite shards, whose recent.json + manifests are fetched over HTTP at
  * run time (loadShards) — missing shards 404 and are skipped.

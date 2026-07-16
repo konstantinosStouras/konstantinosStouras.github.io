@@ -1,7 +1,7 @@
 # lit — how it works ("The Lit": the multi-journal research paper browser)
 
 `stouras.com/lit/` is a Google-free, static-JSON research paper browser
-spanning **eight sources**:
+spanning **ten sources**:
 
 | key    | source                                              | where the data comes from |
 |--------|-----------------------------------------------------|---------------------------|
@@ -10,6 +10,8 @@ spanning **eight sources**:
 | `mksc` | Marketing Science (INFORMS)                         | Crossref, ISSN 0732-2399 |
 | `msom` | Manufacturing & Service Operations Mgmt (INFORMS)   | Crossref, ISSN 1523-4614 |
 | `isre` | Information Systems Research (INFORMS)              | Crossref, ISSN 1047-7047 |
+| `stsc` | Strategy Science (INFORMS)                          | Crossref, ISSN 2333-2050 |
+| `ited` | INFORMS Transactions on Education (INFORMS)         | Crossref, eISSN 1532-0545 |
 | `pom`  | Production and Operations Management (Wiley→SAGE)   | Crossref, ISSN 1059-1478 |
 | `pnas` | PNAS — five sections only (Computer Sciences, Sustainability Science, Environmental Sciences, Social Sciences, Economic Sciences) | Crossref (metadata) + pnas.org's own topic index (section labels; see below) |
 | `ec`   | ACM EC conference, 1999–present                     | 1999–2019 (the "Electronic Commerce" era; renamed 2014, no conference in 2002): DBLP per-year tables of contents. 2020+: Crossref (published proceedings) + `ec<YY>.sigecom.org/program/accepted-papers/` (accepted lists). PDF links & abstracts for all years via OpenAlex/DBLP/Semantic Scholar |
@@ -33,7 +35,7 @@ browser.
 
 ## How the page behaves (by design)
 
-- **Journals filter**: a multi-select of the six
+- **Journals filter**: a multi-select of the eight
   journals, the five PNAS sections (a PNAS paper can belong to several), and
   ACM EC — plus, appended alphabetically, every FT50 journal the page merges
   in from its own FT50 dataset in `data-ft50/` (see the "Journal types & the
@@ -102,7 +104,7 @@ browser.
   Editors/Areas summary tabs, editor & area tags on cards. On the default
   all-journals landing (and for e.g. an MSOM-only search) those controls stay
   hidden. Other journals contribute plain records; the "Articles in Advance"
-  status appears only for the six journals that publish such a stage (never
+  status appears only for the eight journals that publish such a stage (never
   for PNAS or ACM EC).
 - **Senior/Associate Editors for ISR & Marketing Science.** Selecting
   *Information Systems Research* reveals Senior Editor and Associate Editor
@@ -317,7 +319,7 @@ CI; the daily Action just folds the committed files in.
 - **Automatic:** daily at 05:30 UTC (full rebuild), **plus every 15 minutes** a
   lightweight incremental check (`lit-check-new.yml` → `build-data.mjs
   --incremental`) that pulls only Crossref's freshly-indexed tail
-  (`filter=from-index-date`) for the six Articles-in-Advance journals and upserts
+  (`filter=from-index-date`) for the eight Articles-in-Advance journals and upserts
   new/updated papers into the committed files. It commits only when something new
   actually arrived, shares the daily build's concurrency group so the two never
   race a commit/deploy, and leaves enrichment + `authors.json`/`affiliations.json`
@@ -429,7 +431,7 @@ FT50_MOCK=1 node build-data.mjs    # smoke-tests the FT50 pipeline into _mock-ou
 - **Author/affiliation identity merging is automatic** (ORCID + name-based),
   so a person may occasionally appear under two spellings; `authors.json`
   keeps authors with ≥2 papers to stay a sane size.
-- **The pre-computed Authors / Affiliations panels cover the eight native
+- **The pre-computed Authors / Affiliations panels cover the ten native
   sources only** — they come from this app's `authors.json` /
   `affiliations.json`, which the FT50 merge does not touch. Searching or
   filtering papers by author/affiliation works for the merged FT50 journals
