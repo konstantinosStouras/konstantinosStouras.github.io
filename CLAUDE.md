@@ -435,18 +435,34 @@ metadata** also carry a `dims` block in `data.json` — per-value × per-year
 aggregates (same row shape as `years`) for `editor`/`area` (Management Science's
 accepting editor & area) and `se`/`ae` (ISR & Marketing Science senior/associate
 editors), thresholded (`DIM_MIN_PAPERS`, areas kept in full) so the file stays
-small. The page (vanilla JS, inline-SVG charts, no
+small; each value also carries its own `tc` (top-cited papers, `DIM_TOP_CITED`)
+so the most-cited table can honour an editorial filter. The page (vanilla JS,
+inline-SVG charts, no
 external CDN beyond the shared Google Font) offers filters — **journal types**
 (the same UTD24/FT50/ABS 4/4*/ABS 3 sets, union with the Journals picker),
 **journals**, and a **year-range** slider — driving live tiles (papers, avg
 co-authors, solo %, pre-print %, citations) and charts (publication volume by
 journal over time, avg co-authors/year by journal, co-authorship distribution,
 papers by journal, most-cited table). When a journal that
-carries editorial metadata is in scope, an **Editorial breakdown** section shows
-click-to-filter bar charts ("Papers by editorial area / accepting editor /
-senior/associate editor"); clicking a bar filters the *whole* dashboard by that
-value (one dimension at a time, via `aggregate`'s `dims` path — `S.dim`), and a
-removable scope pill shows the active value. There is also an **Author
+carries editorial metadata is **explicitly** in scope (a journal or type chosen,
+never the default whole-corpus view — mirroring the main browser's `msInScope`),
+the filter bar reveals the **same editorial dropdowns as the main page**:
+**Accepting Editor (MS)** + **Area (MS)** when Management Science is in scope, and
+**Senior Editor** / **Associate Editor** when ISR / Marketing Science are — each a
+searchable multi-select of that dimension's values with paper counts
+(`renderEditorialFilters`/`renderEdList`). Picking a value drives the SAME single
+active editorial dimension `S.dim` the **Editorial breakdown** section's
+click-to-filter bars do ("Papers by editorial area / accepting editor /
+senior/associate editor"), so **all figures on the page follow it** — the tiles &
+by-journal chart via `aggregate`'s `dims` path, and the time-series charts
+(volume, co-authors, citation impact) + the most-cited table via the
+`journalYears()` / `tc` helpers, letting you chart e.g. one MS area's papers over
+time. Because the aggregates are **marginal per dimension** (no joint
+editor×area), **one dimension is active at a time** — selecting a value in
+another dimension replaces the prior selection; the cross-journal "Journal share
+over time" chart and (for a non-area dim) the "Editorial area trends" chart hide
+under an active editorial filter, and the disruption figures stay journal-wide
+with the existing note. A removable scope pill shows the active value. There is also an **Author
 spotlight** tab (per-author totals, in-scope counts, publications-per-year, and
 where-they-publish, the latter greying journals outside the current scope).
 **Team-science / disruption section** (a new block at the bottom of the Corpus

@@ -94,6 +94,16 @@
   .b-abs3  { background: #f2efe6; color: #8a7326; }
   .b-none  { background: #f0eef0; color: #8a7c82; }
 
+  /* Editorial-refinement dropdowns (MS accepting editor & area; ISR & Marketing
+     Science senior/associate editor) — same popover mechanics as the journal
+     picker, shown only when a journal carrying the dimension is in scope. */
+  .edbtn { max-width: 240px; }
+  .edbtn .edlbl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .edbtn .car { flex: none; opacity: .7; }
+  .edbtn.on { border-color: var(--accent); background: #fbf4e2; color: #6b4e12; }
+  .edbtn.on:hover { border-color: var(--accent); }
+  .edhint { flex-basis: 100%; font-size: 11.5px; color: var(--text-muted); margin-top: -6px; }
+
   /* Year range */
   .yearwrap { min-width: 240px; }
   .yr-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
@@ -298,6 +308,47 @@
               <button id="jClear">Clear</button>
             </div>
             <div class="jlist" id="jlist"></div>
+          </div>
+        </div>
+        <!-- Editorial refinements — mirror the main browser's editor/area & SE/AE
+             filters. Each appears only when a journal carrying that dimension is in
+             scope (Management Science → accepting editor + area; ISR & Marketing
+             Science → senior/associate editor). They drive the same editorial
+             dimension the "Editorial breakdown" bars below do — one at a time. -->
+        <div class="fgroup jpick edpick" id="edGroup_editor" style="display:none">
+          <span class="flabel">Accepting Editor (MS)</span>
+          <button class="jbtn edbtn" id="edBtn_editor" title="Accepting editors are collected for Management Science papers only."><span class="edlbl" id="edLbl_editor">All editors</span><span class="car">▾</span></button>
+          <div class="jpanel" id="edPanel_editor">
+            <input class="jsearch" id="edSearch_editor" type="text" placeholder="Filter editors…" autocomplete="off">
+            <div class="jactions"><button id="edClear_editor">Clear</button></div>
+            <div class="jlist" id="edList_editor"></div>
+          </div>
+        </div>
+        <div class="fgroup jpick edpick" id="edGroup_area" style="display:none">
+          <span class="flabel">Area (MS)</span>
+          <button class="jbtn edbtn" id="edBtn_area" title="Editorial areas are collected for Management Science papers only."><span class="edlbl" id="edLbl_area">All areas</span><span class="car">▾</span></button>
+          <div class="jpanel" id="edPanel_area">
+            <input class="jsearch" id="edSearch_area" type="text" placeholder="Filter areas…" autocomplete="off">
+            <div class="jactions"><button id="edClear_area">Clear</button></div>
+            <div class="jlist" id="edList_area"></div>
+          </div>
+        </div>
+        <div class="fgroup jpick edpick" id="edGroup_se" style="display:none">
+          <span class="flabel">Senior Editor</span>
+          <button class="jbtn edbtn" id="edBtn_se" title="Senior editors are extracted from the History line of ISR and Marketing Science papers, where available."><span class="edlbl" id="edLbl_se">All editors</span><span class="car">▾</span></button>
+          <div class="jpanel" id="edPanel_se">
+            <input class="jsearch" id="edSearch_se" type="text" placeholder="Filter editors…" autocomplete="off">
+            <div class="jactions"><button id="edClear_se">Clear</button></div>
+            <div class="jlist" id="edList_se"></div>
+          </div>
+        </div>
+        <div class="fgroup jpick edpick" id="edGroup_ae" style="display:none">
+          <span class="flabel">Associate Editor</span>
+          <button class="jbtn edbtn" id="edBtn_ae" title="Associate editors are extracted from the History line of Information Systems Research papers, where available."><span class="edlbl" id="edLbl_ae">All editors</span><span class="car">▾</span></button>
+          <div class="jpanel" id="edPanel_ae">
+            <input class="jsearch" id="edSearch_ae" type="text" placeholder="Filter editors…" autocomplete="off">
+            <div class="jactions"><button id="edClear_ae">Clear</button></div>
+            <div class="jlist" id="edList_ae"></div>
           </div>
         </div>
         <div class="fgroup yearwrap">
@@ -514,6 +565,8 @@
   // journal's `dims` only when we collect them: MS editors/areas, ISR/MkSc SE/AE).
   var DIM_ORDER = ['area', 'editor', 'se', 'ae'];
   var DIM_LABEL = { editor: 'Accepting editor', area: 'Editorial area', se: 'Senior editor', ae: 'Associate editor' };
+  // Default (nothing-selected) label for each editorial dropdown button.
+  var DIM_BTN_ALL = { editor: 'All editors', area: 'All areas', se: 'All editors', ae: 'All editors' };
   // MS "accepting editor" values are stored as the whole acceptance sentence
   // ("This paper was accepted by NAME, area."). Show just the editor's name on
   // the chart while keeping the raw value as the filter key. Idempotent, so it
@@ -598,9 +651,48 @@
     return out;
   }
 
+  // Is an editorial-dimension value filter currently active?
+  function dimActive() { return !!(S.dim.name && activeDimVals().length); }
+  // The per-year rows for ONE journal honouring the active editorial-dimension
+  // filter: when a dimension value is selected, sum only that journal's rows for
+  // the selected values (a journal that doesn't carry the dimension contributes
+  // nothing); otherwise the journal's overall per-year totals. This lets the
+  // time-series charts (volume, co-authors, citations) reflect an editor/area/
+  // SE/AE selection exactly like the tiles & by-journal chart already do via
+  // aggregate(). Returns a fresh {year:{n,a,s,p,c,ab,t[6]}} map.
+  function journalYears(k) {
+    var j = JMAP[k]; if (!j) return {};
+    if (!dimActive()) return j.years;
+    var name = S.dim.name, vals = activeDimVals();
+    if (!j.dims || !j.dims[name]) return {};
+    var acc = {};
+    vals.forEach(function (v) {
+      var e = j.dims[name][v]; if (!e) return;
+      for (var y in e.years) {
+        var r = e.years[y];
+        var t = acc[y] || (acc[y] = { n: 0, a: 0, s: 0, p: 0, c: 0, ab: 0, t: [0, 0, 0, 0, 0, 0] });
+        t.n += r.n; t.a += r.a; t.s += r.s; t.p += r.p; t.c += r.c; t.ab += r.ab;
+        if (r.t) for (var i = 0; i < 6; i++) t.t[i] += r.t[i];
+      }
+    });
+    return acc;
+  }
+  // A short human label for the active editorial filter (for chart subtitles).
+  function dimSummary() {
+    var vals = activeDimVals(); if (!vals.length) return '';
+    var lab = DIM_LABEL[S.dim.name];
+    return lab + ': ' + (vals.length === 1 ? dimDisplay(S.dim.name, vals[0]) : vals.length + ' selected');
+  }
+
   // Which editorial dimensions any in-scope journal carries (so we only show a
-  // breakdown/filter for data we actually have).
+  // breakdown/filter for data we actually have). Offered only once the user has
+  // narrowed scope to specific journals or types — like the main browser, which
+  // reveals the editor/area & SE/AE filters only when MS/ISR/MkSc is chosen, and
+  // never on the default whole-corpus view.
   function applicableDims(keys) {
+    var explicit = Object.keys(S.types).some(function (t) { return S.types[t]; }) ||
+      Object.keys(S.journals).some(function (k) { return S.journals[k]; });
+    if (!explicit) return [];
     var present = {};
     keys.forEach(function (k) { var j = JMAP[k]; if (j && j.dims) for (var d in j.dims) present[d] = 1; });
     return DIM_ORDER.filter(function (d) { return present[d]; });
@@ -819,11 +911,12 @@
     var chosenJ = Object.keys(S.journals).filter(function (k) { return S.journals[k] && JMAP[k]; });
     var chosenTypes = Object.keys(S.types).filter(function (t) { return S.types[t]; });
 
-    // Rank the in-scope journals by paper count in the current year window.
+    // Rank the in-scope journals by paper count in the current year window
+    // (honouring any active editorial-dimension filter via journalYears).
     var ranked = keys.map(function (k) {
-      var j = JMAP[k], tot = 0;
-      for (var y in j.years) { var yy = +y; if (yy >= S.yMin && yy <= S.yMax) tot += j.years[y].n; }
-      return { key: k, name: j.name, tot: tot };
+      var ys = journalYears(k), tot = 0;
+      for (var y in ys) { var yy = +y; if (yy >= S.yMin && yy <= S.yMax) tot += ys[y].n; }
+      return { key: k, name: JMAP[k].name, tot: tot };
     }).filter(function (c) { return c.tot > 0; }).sort(function (a, b) { return b.tot - a.tot; });
 
     // Focus journals = individual lines. If the user picked specific journals we
@@ -848,7 +941,10 @@
     }
     var fset = {}; focus.forEach(function (k) { fset[k] = 1; });
     var otherKeys = universe.filter(function (k) { return !fset[k] && JMAP[k]; });
-    var canCompare = focus.length > 0 && otherKeys.length > 0;
+    // No cross-journal comparison while an editorial-dimension filter is active —
+    // the focus is an editor/area slice within one journal, so "other journals'"
+    // totals aren't a like-for-like comparison.
+    var canCompare = focus.length > 0 && otherKeys.length > 0 && !dimActive();
 
     // sync the compare control
     var wrap = $('cmpToggleWrap'), box = $('cmpToggle');
@@ -863,15 +959,16 @@
       $('evoSub').textContent = 'Papers published per year';
       return;
     }
+    var dsum = dimActive() ? ' · ' + dimSummary() : '';
     if (focus.length === 1 && !compareOn) {
       // single journal → filled area of its own volume
-      var k0 = focus[0];
-      series = [{ name: JMAP[k0].name, color: NAVY, pts: years.map(function (y) { var r = JMAP[k0].years[y]; return [y, r ? r.n : 0]; }) }];
-      $('evoSub').textContent = 'Papers per year — ' + JMAP[k0].name;
+      var k0 = focus[0], ys0 = journalYears(k0);
+      series = [{ name: JMAP[k0].name, color: NAVY, pts: years.map(function (y) { var r = ys0[y]; return [y, r ? r.n : 0]; }) }];
+      $('evoSub').textContent = 'Papers per year — ' + JMAP[k0].name + dsum;
     } else {
       focus.forEach(function (k, i) {
-        var col = SERIES[i % SERIES.length];
-        series.push({ name: JMAP[k].name, color: col, pts: years.map(function (y) { var r = JMAP[k].years[y]; return [y, r ? r.n : 0]; }) });
+        var col = SERIES[i % SERIES.length], ys = journalYears(k);
+        series.push({ name: JMAP[k].name, color: col, pts: years.map(function (y) { var r = ys[y]; return [y, r ? r.n : 0]; }) });
         legend.push({ name: JMAP[k].name, color: col });
       });
       if (compareOn) {
@@ -882,7 +979,7 @@
         ? 'Papers per year, by chosen journal' + (hidden ? ' (largest ' + focus.length + ' of ' + pool.length + ' shown)' : '')
         : 'Papers per year, by journal' + (hidden ? ' (top ' + focus.length + ' of ' + pool.length + ' shown)' : '');
       if (compareOn) sub += ' vs. other journals in ' + (chosenTypes.length ? 'the selected type' + (chosenTypes.length > 1 ? 's' : '') : 'the corpus');
-      $('evoSub').textContent = sub;
+      $('evoSub').textContent = sub + dsum;
     }
     $('evoChart').innerHTML = lineChart(series, { years: years, area: series.length === 1 });
     $('evoLegend').innerHTML = legend.map(function (l) {
@@ -900,10 +997,11 @@
     if (!agg.n) { empty('Mean authors per paper'); return; }
     var MAX_LINES = 8;
     var chosenJ = Object.keys(S.journals).filter(function (k) { return S.journals[k] && JMAP[k]; });
-    // Rank in-scope journals by paper count in the window, largest first.
+    // Rank in-scope journals by paper count in the window, largest first
+    // (honouring any active editorial-dimension filter via journalYears).
     var ranked = (keys || []).map(function (k) {
       var j = JMAP[k]; if (!j) return null;
-      var tot = 0; for (var y in j.years) { var yy = +y; if (yy >= S.yMin && yy <= S.yMax) tot += j.years[y].n; }
+      var ys = journalYears(k), tot = 0; for (var y in ys) { var yy = +y; if (yy >= S.yMin && yy <= S.yMax) tot += ys[y].n; }
       return { key: k, tot: tot };
     }).filter(function (c) { return c && c.tot > 0; }).sort(function (a, b) { return b.tot - a.tot; });
     var pool = chosenJ.length ? ranked.filter(function (c) { return chosenJ.indexOf(c.key) !== -1; }) : ranked;
@@ -912,19 +1010,20 @@
     if (!focus.length) { empty('Mean authors per paper — overall ' + avg.toFixed(2) + ' in scope'); return; }
     // Per journal: mean authors per year (years with no papers left as gaps).
     var jSeries = function (k, col) {
-      return { name: JMAP[k].name, color: col, pts: years.map(function (y) { var r = JMAP[k].years[y]; return (r && r.n) ? [y, r.a / r.n] : null; }).filter(Boolean) };
+      var ys = journalYears(k);
+      return { name: JMAP[k].name, color: col, pts: years.map(function (y) { var r = ys[y]; return (r && r.n) ? [y, r.a / r.n] : null; }).filter(Boolean) };
     };
-    var series = [], legend = [], mx = 0;
+    var series = [], legend = [], mx = 0, dsum = dimActive() ? ' · ' + dimSummary() : '';
     if (focus.length === 1) {
       series = [jSeries(focus[0], GOLD)];
-      $('coSub').textContent = 'Mean authors per paper — ' + JMAP[focus[0]].name + ' (' + avg.toFixed(2) + ' overall)';
+      $('coSub').textContent = 'Mean authors per paper — ' + JMAP[focus[0]].name + ' (' + avg.toFixed(2) + ' overall)' + dsum;
     } else {
       focus.forEach(function (k, i) {
         var col = SERIES[i % SERIES.length];
         series.push(jSeries(k, col));
         legend.push({ name: JMAP[k].name, color: col });
       });
-      $('coSub').textContent = 'Mean authors per paper, by journal — overall ' + avg.toFixed(2) + ' in scope' + (hidden ? ' (top ' + focus.length + ' of ' + pool.length + ' shown)' : '');
+      $('coSub').textContent = 'Mean authors per paper, by journal — overall ' + avg.toFixed(2) + ' in scope' + (hidden ? ' (top ' + focus.length + ' of ' + pool.length + ' shown)' : '') + dsum;
     }
     series.forEach(function (s) { s.pts.forEach(function (p) { if (p[1] > mx) mx = p[1]; }); });
     $('coChart').innerHTML = lineChart(series, { years: years, maxOverride: Math.max(1, Math.ceil(mx)) });
@@ -952,13 +1051,13 @@
   // (not just totals), so a small high-impact journal isn't buried under a large one.
   function renderCitationImpact(keys) {
     var items = keys.map(function (k) {
-      var j = JMAP[k], n = 0, c = 0;
-      for (var y in j.years) { var yy = +y; if (yy < S.yMin || yy > S.yMax) continue; n += j.years[y].n; c += j.years[y].c; }
+      var j = JMAP[k], ys = journalYears(k), n = 0, c = 0;
+      for (var y in ys) { var yy = +y; if (yy < S.yMin || yy > S.yMax) continue; n += ys[y].n; c += ys[y].c; }
       return { label: j.name, avg: n ? c / n : 0, n: n, top: (j.types || [])[0] };
     }).filter(function (it) { return it.n > 0 && it.avg > 0; })
       .sort(function (a, b) { return b.avg - a.avg; })
       .map(function (it) { return { label: it.label, value: it.avg, color: it.top ? typeColor(it.top) : NAVY }; });
-    $('citeImpactSub').textContent = 'Average citations per paper, within scope' + (items.length > 14 ? ' — top 14 shown' : '');
+    $('citeImpactSub').textContent = 'Average citations per paper, within scope' + (dimActive() ? ' · ' + dimSummary() : '') + (items.length > 14 ? ' — top 14 shown' : '');
     $('citeImpactChart').innerHTML = items.length
       ? barsH(items, { limit: 14, fmt: function (v) { return v.toFixed(1); } })
       : '<div class="chart-empty">No citation data in the selected scope.</div>';
@@ -969,6 +1068,9 @@
   // the remaining in-scope journals are folded into one neutral band.
   function renderShareOverTime(keys) {
     var card = $('shareCard'), years = yearAxis();
+    // A journal-share breakdown is not meaningful under an editorial-dimension
+    // filter (it narrows to an editor/area slice within a single journal).
+    if (dimActive()) { card.style.display = 'none'; return; }
     var tot = keys.map(function (k) {
       var j = JMAP[k], n = 0;
       for (var y in j.years) { var yy = +y; if (yy < S.yMin || yy > S.yMax) continue; n += j.years[y].n; }
@@ -1020,12 +1122,20 @@
   // editorial areas. Hidden unless MS (the area dimension) is in scope.
   function renderAreaTrends(keys) {
     var card = $('areaTrendCard'), areaYears = {}, areaTot = {};
+    // A different editorial dimension (editor / SE / AE) can't be crossed with
+    // area from the marginal aggregates, so hide the by-area trend in that case.
+    if (dimActive() && S.dim.name !== 'area') { card.style.display = 'none'; return; }
     keys.forEach(function (k) {
       var j = JMAP[k]; if (!j.dims || !j.dims.area) return;
       var dm = j.dims.area;
       for (var a in dm) { var ys = dm[a].years; for (var y in ys) { var yy = +y; if (yy < S.yMin || yy > S.yMax) continue; (areaYears[a] || (areaYears[a] = {}))[yy] = (areaYears[a][yy] || 0) + ys[y].n; areaTot[a] = (areaTot[a] || 0) + ys[y].n; } }
     });
     var areas = Object.keys(areaTot).sort(function (a, b) { return areaTot[b] - areaTot[a]; });
+    // When the user has filtered to specific areas, trend only those.
+    if (S.dim.name === 'area' && activeDimVals().length) {
+      var pick = {}; activeDimVals().forEach(function (v) { pick[v] = 1; });
+      areas = areas.filter(function (a) { return pick[a]; });
+    }
     if (areas.length < 2) { card.style.display = 'none'; return; }
     card.style.display = '';
     var top = areas.slice(0, 6), years = yearAxis();
@@ -1036,12 +1146,24 @@
   }
 
   function renderCited(keys) {
-    var rows = [];
+    // Under an active editorial filter, draw the most-cited papers of the
+    // selected editor/area/SE/AE values (dims[name][val].tc); otherwise the
+    // per-journal topCited lists. Dedup by DOI/title (a paper can sit under two
+    // selected editors).
+    var rows = [], seen = {}, name = S.dim.name, vals = activeDimVals(), on = dimActive();
+    function push(p, jname) {
+      var y = +p.y; if (p.y && (y < S.yMin || y > S.yMax)) return;
+      var id = p.d || p.t; if (seen[id]) return; seen[id] = 1;
+      rows.push({ t: p.t, y: p.y, c: p.c, a: p.a, d: p.d, j: jname });
+    }
     keys.forEach(function (k) {
-      (JMAP[k].topCited || []).forEach(function (p) {
-        var y = +p.y; if (p.y && (y < S.yMin || y > S.yMax)) return;
-        rows.push({ t: p.t, y: p.y, c: p.c, a: p.a, d: p.d, j: JMAP[k].name });
-      });
+      var j = JMAP[k];
+      if (on) {
+        if (!j.dims || !j.dims[name]) return;
+        vals.forEach(function (v) { var e = j.dims[name][v]; if (e && e.tc) e.tc.forEach(function (p) { push(p, j.name); }); });
+      } else {
+        (j.topCited || []).forEach(function (p) { push(p, j.name); });
+      }
     });
     rows.sort(function (a, b) { return b.c - a.c; });
     rows = rows.slice(0, 15);
@@ -1671,9 +1793,60 @@
     });
   }
 
+  // Close every open filter popover (journal picker + editorial dropdowns).
+  function closeAllPanels() {
+    Array.prototype.forEach.call(document.querySelectorAll('.jpanel.open'), function (p) { p.classList.remove('open'); });
+  }
+
+  // Editorial-refinement dropdowns: show one per dimension any in-scope journal
+  // carries (MS accepting editor + area; ISR & Marketing Science SE/AE), each a
+  // searchable multi-select of that dimension's values with paper counts. They
+  // drive the same single active editorial dimension as the breakdown bars — so
+  // selecting a value in one dimension replaces a selection in another. Called on
+  // every refresh; the fixed shells stay put (so an open popover keeps its
+  // search text and scroll), only their visibility, label and value list update.
+  function renderEditorialFilters(keys) {
+    var dims = applicableDims(keys);
+    DIM_ORDER.forEach(function (name) {
+      var wrap = $('edGroup_' + name); if (!wrap) return;
+      var on = dims.indexOf(name) !== -1;
+      wrap.style.display = on ? '' : 'none';
+      if (!on) { var pn = $('edPanel_' + name); if (pn) pn.classList.remove('open'); return; }
+      renderEdList(name, keys);
+      var selVals = (S.dim.name === name) ? activeDimVals() : [];
+      var lbl = $('edLbl_' + name);
+      lbl.textContent = !selVals.length ? DIM_BTN_ALL[name]
+        : (selVals.length === 1 ? dimDisplay(name, selVals[0]) : selVals.length + ' selected');
+      $('edBtn_' + name).classList.toggle('on', selVals.length > 0);
+    });
+  }
+  // Render (in place) one editorial dropdown's checklist of values, filtered by
+  // its search box and reflecting the current selection.
+  function renderEdList(name, keys) {
+    var host = $('edList_' + name); if (!host) return;
+    var q = ($('edSearch_' + name).value || '').toLowerCase();
+    var items = dimValues(name, keys).filter(function (it) {
+      return !q || dimDisplay(name, it.label).toLowerCase().indexOf(q) !== -1;
+    });
+    if (!items.length) {
+      host.innerHTML = '<div class="jrow" style="cursor:default;color:var(--text-muted);font-size:12.5px">No values in this selection.</div>';
+      return;
+    }
+    var sel = (S.dim.name === name) ? S.dim.vals : {};
+    host.innerHTML = items.map(function (it) {
+      return '<label class="jrow"><input type="checkbox" data-v="' + esc(it.label) + '"' + (sel[it.label] ? ' checked' : '') + '>' +
+        '<span class="jn">' + esc(dimDisplay(name, it.label)) + '</span>' +
+        '<span class="jc">' + fmt(it.value) + '</span></label>';
+    }).join('');
+    Array.prototype.forEach.call(host.querySelectorAll('input'), function (cb) {
+      cb.onchange = function () { window.__toggleDim(name, cb.getAttribute('data-v')); };
+    });
+  }
+
   function renderScope() {
     var keys = scopeKeys();
     var agg = aggregate(keys);
+    renderEditorialFilters(keys);
     var chosenTypes = Object.keys(S.types).filter(function (t) { return S.types[t]; });
     var chosenJ = Object.keys(S.journals).filter(function (k) { return S.journals[k]; });
     var dimVals = activeDimVals();
@@ -1830,10 +2003,21 @@
     renderJournalList();
 
     // journal picker popover
-    $('jbtn').onclick = function (e) { e.stopPropagation(); $('jpanel').classList.toggle('open'); };
+    $('jbtn').onclick = function (e) { e.stopPropagation(); var willOpen = !$('jpanel').classList.contains('open'); closeAllPanels(); if (willOpen) $('jpanel').classList.add('open'); };
     $('jpanel').onclick = function (e) { e.stopPropagation(); };
-    document.addEventListener('click', function () { $('jpanel').classList.remove('open'); });
+    document.addEventListener('click', closeAllPanels);
     $('jsearch').addEventListener('input', renderJournalList);
+
+    // editorial-refinement dropdowns (one per dimension; wired once, shown as
+    // scope makes them applicable). Each toggles its own popover, closing others.
+    DIM_ORDER.forEach(function (name) {
+      var btn = $('edBtn_' + name), panel = $('edPanel_' + name), search = $('edSearch_' + name), clr = $('edClear_' + name);
+      if (!btn || !panel) return;
+      btn.onclick = function (e) { e.stopPropagation(); var willOpen = !panel.classList.contains('open'); closeAllPanels(); if (willOpen) panel.classList.add('open'); };
+      panel.onclick = function (e) { e.stopPropagation(); };
+      if (search) search.addEventListener('input', function () { renderEdList(name, scopeKeys()); });
+      if (clr) clr.onclick = function () { if (S.dim.name === name) S.dim = { name: null, vals: {} }; refresh(); };
+    });
     $('jAll').onclick = function () {
       var q = ($('jsearch').value || '').toLowerCase();
       journalPickList().forEach(function (j) { if (!q || j.name.toLowerCase().indexOf(q) !== -1 || j.key.indexOf(q) !== -1) S.journals[j.key] = true; });
