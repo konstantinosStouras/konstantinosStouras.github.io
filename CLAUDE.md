@@ -454,8 +454,12 @@ stored name, **the `?author=` deep-link chip is widened to the catalog's full
 `Name_Variants`** once authors.json is available (`litUpgradeAuthorDeepLink`;
 the deep-link auto-fetches authors.json) — so ANY author's page finds papers
 credited under any spelling, and clicking the account chip on an `?author=`
-page navigates back to `/lit/` instead of opening the menu
-(`acctUserChipClick`). **Sign-in invariant:** a signed-in user is never shown the
+page pops out the account menu like everywhere else, with a "Back to The Lit"
+link to `stouras.com/lit/` as its first item (`acctUserChipClick`/
+`acctOnAuthorPage`; the chip used to navigate home directly, which read as a
+dead click while the author page's all-journal load kept the main thread
+busy — the mid-restore hint chip, which has no menu, still falls back to
+that home navigation). **Sign-in invariant:** a signed-in user is never shown the
 sign-in modal again — `acctOpenAuth` no-ops when signed in, the header
 paints from the `litAuthHint` localStorage cache while the session restores
 (`authResolved`), and account actions clicked during the restore window

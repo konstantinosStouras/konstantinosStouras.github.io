@@ -409,6 +409,7 @@
   .acct-menu-head { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-muted); }
   .acct-menu-head strong { display: block; color: var(--text); font-size: 13.5px; font-weight: 600; overflow-wrap: break-word; margin-top: 2px; }
   .acct-menu-item { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 10px 16px; font-size: 13.5px; cursor: pointer; transition: background .1s; color: var(--text); }
+  a.acct-menu-item { text-decoration: none; } /* the "Back to The Lit" home link renders like the other items */
   .acct-menu-item:hover { background: var(--navy-light); }
   .acct-badge { font-size: 12px; color: var(--navy); background: var(--navy-light); border-radius: 100px; padding: 1px 9px; font-weight: 600; }
   .acct-menu-sep { height: 1px; background: var(--border); }
@@ -4523,6 +4524,10 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         '<button class="acct-btn acct-user" onclick="acctUserChipClick(event)"><span class="acct-avatar" style="background-image:url(\'' + avatar + '\')"></span><span class="acct-uname">' + esc(name) + '</span></button>' +
         '<div class="acct-menu" id="acctMenu">' +
           '<div class="acct-menu-head">Signed in as<strong>' + esc(u.email || name) + '</strong></div>' +
+          (acctOnAuthorPage()
+            ? '<a class="acct-menu-item" href="https://www.stouras.com/lit/" title="Leave this author page and return to the full database.">🏠 Back to The Lit</a>' +
+              '<div class="acct-menu-sep"></div>'
+            : '') +
           '<div class="acct-menu-item" title="Your starred papers, lists, tags and private notes — everything you have saved." onclick="acctOpenLibrary()">★ My library <span class="acct-badge">' + saved + '</span></div>' +
           (orcidLinked
             ? '<div class="acct-menu-item" title="Every paper of yours in the database, with its citation count (matched from your linked ORCID)." onclick="acctGoMyPublications()">📊 My publications</div>' +
@@ -4538,15 +4543,20 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       '</div>';
   }
   window.acctToggleMenu = function (e) { if (e) e.stopPropagation(); var m = document.getElementById('acctMenu'); if (m) m.classList.toggle('open'); };
-  // The account chip: on an author page (?author=…, e.g. arrived via the
-  // menu's "My publications") clicking it returns to the full database at
-  // ./ (per the owner) — everywhere else it opens the account menu. The
-  // restoring-session hint chip shares this handler, so even mid-restore the
-  // chip takes an author page home instead of doing nothing.
+  // The account chip always pops out the account menu — including on an
+  // ?author= page (e.g. arrived via the menu's "My publications"), where the
+  // menu gains a "Back to The Lit" link to stouras.com/lit/ as its first item
+  // (per the owner: the chip used to navigate home directly, which read as a
+  // dead click while the author page's heavy all-journal load kept the main
+  // thread busy; a popped-out native link is both visible feedback and a
+  // navigation the browser can honour on its own). The restoring-session
+  // hint chip shares this handler but carries no menu, so on an author page
+  // it falls back to that same home navigation.
+  function acctOnAuthorPage() {
+    try { return !!new URLSearchParams(location.search).get('author'); } catch (er) { return false; }
+  }
   window.acctUserChipClick = function (e) {
-    var onAuthorPage = false;
-    try { onAuthorPage = !!new URLSearchParams(location.search).get('author'); } catch (er) {}
-    if (onAuthorPage) { location.assign('./'); return; }
+    if (!document.getElementById('acctMenu') && acctOnAuthorPage()) { location.assign('https://www.stouras.com/lit/'); return; }
     acctToggleMenu(e);
   };
   function acctCloseMenu() { var m = document.getElementById('acctMenu'); if (m) m.classList.remove('open'); }
