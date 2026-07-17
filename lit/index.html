@@ -505,6 +505,23 @@
   .lib-chip .cnt { opacity: .65; font-weight: 500; }
   .lib-chip .del { opacity: .5; font-weight: 700; font-size: 14px; line-height: 1; }
   .lib-chip .del:hover { opacity: 1; color: var(--red); }
+  .lib-chip .share { opacity: .55; font-size: 13px; line-height: 1; }
+  .lib-chip .share:hover { opacity: 1; }
+  .lib-chip .pub { font-size: 11px; line-height: 1; }              /* 🌐 marker on a public list chip */
+  /* Shared-list view (a public list opened via ?list=…) reuses the library bar
+     shell but hides the normal filter bar + sort control, like the library. */
+  body.lit-shared-mode .filters-bar,
+  body.lit-shared-mode .sort-control { display: none; }
+  .shared-owner { font-weight: 600; color: var(--navy); }
+  /* Share-a-list modal: link box + copy button (reuses .acct-modal shell). */
+  .share-linkbox { display: flex; gap: 8px; align-items: stretch; }
+  .share-linkbox input { flex: 1; padding: 9px 11px; border: 1.5px solid var(--border); border-radius: 7px; font-family: inherit; font-size: 13px; background: var(--navy-light); color: var(--text); }
+  .share-linkbox input:focus { outline: none; border-color: var(--navy); }
+  .share-copy { border: 1.5px solid var(--navy); background: var(--navy); color: #fff; border-radius: 7px; padding: 0 14px; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .share-copy:hover { opacity: .9; }
+  .share-toggle-row { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+  .share-toggle-row input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--navy); cursor: pointer; }
+  .share-note { font-size: 12.5px; color: var(--text-muted); line-height: 1.5; }
   @media (max-width: 768px) { .library-bar { padding-left: 20px; padding-right: 20px; } }
   @media (max-width: 480px) { .library-bar { padding-left: 16px; padding-right: 16px; } .acct-user { max-width: 150px; } }
   /* ── Cross-device refinements (appended so they win the cascade) ───────────
@@ -793,6 +810,15 @@
   <div class="library-chips" id="libListChips"></div>
   <div class="library-section-label" id="libTagsLabel">Tags</div>
   <div class="library-chips" id="libTagChips"></div>
+</div>
+
+<!-- Shared public list view: shown when the page is opened with ?list=<shareId>.
+     Read-only snapshot of a list another user made public; anyone (signed in or
+     not) can view it. Only bibliographic fields are shared — never private notes
+     or tags. Reuses the library-bar shell + the papers list below. -->
+<div id="sharedBar" class="library-bar">
+  <h2><span id="sharedTitle">🔗 Shared list</span> <span class="acct-link" style="font-size:13px;font-weight:600" onclick="litExitShared()">Exit shared list</span></h2>
+  <div class="library-sub" id="sharedSub"></div>
 </div>
 
 <div class="results-bar">
@@ -1602,8 +1628,10 @@ function updateYearRangeText(loadedMinYear) {
 }
 
 function afterSourceArrived() {
-  // Re-render whatever view is active with the data loaded so far.
-  if (recentMode) renderRecent(); else applyFilters();
+  // Re-render whatever view is active with the data loaded so far — but never
+  // clobber a read-only shared-list view (?list=…) that a background source
+  // load would otherwise replace with the normal filtered list.
+  if (!window.LIT_SHARED_VIEW) { if (recentMode) renderRecent(); else applyFilters(); }
   // A loop, not Math.min.apply — engines cap apply() around 65k-124k args and
   // the combined corpus can exceed that.
   var minY = Infinity;
@@ -2817,6 +2845,7 @@ function litSelectionIsEmpty() {
 }
 
 function applyLitSiteDefault() {
+  if (window.LIT_SHARED_VIEW) return false;   // a shared-list view (?list=) owns the page
   if (window.litSiteDefaultApplied) return false;
   if (typeof sel === 'undefined' || typeof applyFilters !== 'function') return false;
   if (typeof recentMode !== 'undefined' && recentMode) return false;
@@ -3797,6 +3826,23 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   </div>
 </div>
 
+<!-- ── Accounts: share a list (make it public) modal ───────────────────────────
+     A signed-in user flips one of their lists public and gets a shareable link
+     anyone can open (read-only). Toggling it off deletes the public copy so the
+     old link stops working. Only paper title/authors/year/DOI are shared — never
+     private notes or tags. The public copy lives at publicLists/{shareId}; see
+     the accounts script and _firestore.rules. -->
+<div id="litShareOverlay" class="acct-overlay" onclick="if(event.target===this)litShareClose()">
+  <div class="acct-modal">
+    <button class="acct-modal-x" onclick="litShareClose()" aria-label="Close">×</button>
+    <div class="acct-modal-head">
+      <h2>Share a list</h2>
+      <p id="litShareSub">Make this list public and share it with anyone via a link.</p>
+    </div>
+    <div class="acct-modal-body" id="litShareBody"></div>
+  </div>
+</div>
+
 <!-- ── Accounts: default search filters ("your default view") modal ────────────
      Signed-in users pre-pick the journals / journal types they care about; the
      page auto-applies them the moment they sign in, so they land on their own
@@ -3946,11 +3992,15 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
  * Data model (all private, under the user's own document, see _firestore.rules):
  *   users/{uid}/papers/{docId}  -> { doi, title, authors, year,
  *                                    starred, note, tags[], lists[lid], updatedAt }
- *   users/{uid}/lists/{lid}     -> { name, createdAt }
+ *   users/{uid}/lists/{lid}     -> { name, createdAt, public?, shareId? }
  *   users/{uid}/profile/main    -> { firstName, lastName, affiliation,
  *                                    website, email, updatedAt }
  *   registeredUsers/{uid}       -> { t }   PUBLIC, contentless per-account marker
  *                                    counted by lit/analytics/ (no private data)
+ *   publicLists/{shareId}       -> { ownerUid, owner, name, count, papers[], ... }
+ *                                    PUBLIC read-only snapshot of a list the user
+ *                                    made public (bibliographic fields only — no
+ *                                    private note/tags); shared via ?list=shareId
  * A paper's docId is derived from its DOI (or title+year when no DOI).
  */
 (function () {
@@ -3998,6 +4048,9 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   var meta = {};               // docId -> snapshot of {doi,title,authors,year} for rendering
   var unsubPapers = null, unsubLists = null, unsubProfile = null, unsubAlerts = null;
   var libraryMode = false, libFilter = { type: 'all', id: null }, libQuery = '';
+  var lastSharedSig = {};       // shareId -> last-synced content signature (avoids redundant writes)
+  var sharedActive = false;     // is a ?list= shared-list view currently showing?
+  var shareModalLid = null;     // which list the share modal is editing
   var doiIndex = null, doiIndexLen = -1;
   var lastMarkedUid = null;    // guards the once-per-session registered-users tally write
 
@@ -4019,6 +4072,10 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   }
   function papersCol() { return db.collection('users').doc(state.user.uid).collection('papers'); }
   function listsCol() { return db.collection('users').doc(state.user.uid).collection('lists'); }
+  // Public, shareable copies of lists a user chose to make public. Top-level so
+  // anyone (even signed-out) can read one by its share id; owner-only writes are
+  // enforced in _firestore.rules. Holds only bibliographic fields, never notes.
+  function publicListsCol() { return db.collection('publicLists'); }
   function profileDoc() { return db.collection('users').doc(state.user.uid).collection('profile').doc('main'); }
   function alertsCol() { return db.collection('users').doc(state.user.uid).collection('alerts'); }
   // One-off "Send me a test e-mail" requests. The page can't send mail, so (like
@@ -4054,7 +4111,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   if (typeof renderPage === 'function') { var _rp = renderPage; window.renderPage = function () { _rp.apply(null, arguments); acctDecorate(); }; }
   if (typeof renderRecent === 'function') { var _rr = renderRecent; window.renderRecent = function () { _rr.apply(null, arguments); acctDecorate(); }; }
   ['applyFilters', 'toggleSummary', 'toggleRecent'].forEach(function (name) {
-    if (typeof window[name] === 'function') { var orig = window[name]; window[name] = function () { libExitQuiet(); return orig.apply(this, arguments); }; }
+    if (typeof window[name] === 'function') { var orig = window[name]; window[name] = function () { libExitQuiet(); sharedExitQuiet(); return orig.apply(this, arguments); }; }
   });
 
   // ── DOI -> live paper index (so saved papers show full metadata/abstract) ─
@@ -4306,8 +4363,222 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     });
     batch.delete(listsCol().doc(lid));
     batch.commit();
+    // If it was public, remove the shared copy too so its link stops working.
+    var sid = state.lists[lid] && state.lists[lid].shareId;
+    if (state.lists[lid] && state.lists[lid].public && sid) {
+      publicListsCol().doc(sid).delete().catch(function (err) { console.warn('unshare on delete:', err && err.code); });
+      delete lastSharedSig[sid];
+    }
     if (libFilter.type === 'list' && libFilter.id === lid) libFilter = { type: 'all', id: null };
   };
+
+  // ── public list sharing ─────────────────────────────────────────────────
+  // A user can flip one of their lists public and hand out a link that anyone
+  // (signed in or not) can open read-only. We keep a denormalized snapshot at
+  // publicLists/{shareId} — because a viewer cannot read the owner's private
+  // papers subtree — carrying ONLY bibliographic fields (title/authors/year/DOI),
+  // never the private note or tags. The owner's own lists doc records
+  // { public, shareId } so the library reflects the state and can rebuild the link.
+  function ownerDisplayName() {
+    var p = state.profile || {};
+    var full = ((p.firstName || '') + ' ' + (p.lastName || '')).trim();
+    if (full) return full;
+    var u = state.user || {};
+    return u.displayName || (u.email ? u.email.split('@')[0] : 'A reader');
+  }
+  // The papers currently in a list, as the trimmed public snapshot rows.
+  function listPapersSnapshot(lid) {
+    var rows = Object.keys(state.papers).map(function (k) { return state.papers[k]; })
+      .filter(function (r) { return isSaved(r) && (r.lists || []).indexOf(lid) >= 0; });
+    rows.sort(function (a, b) { return (b.updatedAt || 0) - (a.updatedAt || 0); });
+    return rows.slice(0, 5000).map(function (r) {
+      return { doi: r.doi || '', title: r.title || '', authors: r.authors || '', year: String(r.year || '') };
+    });
+  }
+  // A cheap signature of a public list's shareable content, so syncPublicLists()
+  // only writes when the name, owner name or set of papers actually changed.
+  function sharedSig(name, owner, papers) {
+    return name + '|' + owner + '|' + papers.map(function (p) { return p.doi || p.title; }).join('~');
+  }
+  function shareUrlFor(shareId) {
+    return location.origin + location.pathname + '?list=' + encodeURIComponent(shareId);
+  }
+  function makeShareId() {
+    // A random, unguessable id (Firestore auto-id) that leaks neither uid nor lid.
+    return publicListsCol().doc().id;
+  }
+
+  // Keep every public list's shared copy current as the owner edits it. Runs on
+  // each data snapshot; writes only when a list's content signature changed, so
+  // it never loops (publicLists isn't listened to) or spams writes.
+  function syncPublicLists() {
+    if (!state.user) return;
+    Object.keys(state.lists).forEach(function (lid) {
+      var L = state.lists[lid];
+      if (!L.public || !L.shareId) return;
+      var papers = listPapersSnapshot(lid);
+      var sig = sharedSig(L.name, ownerDisplayName(), papers);
+      if (lastSharedSig[L.shareId] === sig) return;
+      lastSharedSig[L.shareId] = sig;
+      publicListsCol().doc(L.shareId).set({
+        ownerUid: state.user.uid,
+        owner: ownerDisplayName(),
+        name: L.name,
+        count: papers.length,
+        papers: papers,
+        updatedAt: serverTime()
+      }, { merge: true }).catch(function (err) {
+        delete lastSharedSig[L.shareId];   // let a later snapshot retry
+        console.warn('sync public list:', err && err.code);
+      });
+    });
+  }
+
+  window.acctShareList = function (ev, lid) {
+    if (ev) ev.stopPropagation();
+    if (!state.user) { acctOpenAuth(); return; }
+    shareModalLid = lid;
+    document.getElementById('litShareOverlay').classList.add('open');
+    renderShareBody();
+  };
+  window.litShareClose = function () {
+    document.getElementById('litShareOverlay').classList.remove('open');
+    shareModalLid = null;
+  };
+  function renderShareBody() {
+    var body = document.getElementById('litShareBody'); if (!body) return;
+    var lid = shareModalLid, L = state.lists[lid];
+    if (!L) { window.litShareClose(); return; }
+    var n = recordsFor('list', lid).length;
+    document.getElementById('litShareSub').textContent =
+      '“' + L.name + '” — ' + n + ' paper' + (n === 1 ? '' : 's') + '.';
+    var isPub = !!L.public && !!L.shareId;
+    var html =
+      '<label class="share-toggle-row">' +
+        '<input type="checkbox" id="litSharePublic"' + (isPub ? ' checked' : '') +
+          ' onchange="litShareToggle(\'' + escAttr(lid) + '\', this.checked)"> ' +
+        '<span>Make this list public</span>' +
+      '</label>';
+    if (isPub) {
+      var url = shareUrlFor(L.shareId);
+      html +=
+        '<div class="share-linkbox">' +
+          '<input id="litShareUrl" type="text" readonly value="' + escAttr(url) + '" onclick="this.select()">' +
+          '<button class="share-copy" onclick="litCopyShareLink()">Copy link</button>' +
+        '</div>' +
+        '<div class="share-note" id="litShareCopyNote">Anyone with this link can view the list (read-only). ' +
+          'Your private notes and tags are <strong>not</strong> shared — only each paper’s title, authors, year and link.</div>';
+    } else {
+      html += '<div class="share-note">The list stays private until you turn this on. ' +
+        'When public, anyone with the link can view it (read-only); your notes and tags are never shared.</div>';
+    }
+    body.innerHTML = html;
+  }
+  window.litShareToggle = function (lid, makePublic) {
+    var L = state.lists[lid]; if (!L) return;
+    if (makePublic) {
+      var sid = L.shareId || makeShareId();
+      var papers = listPapersSnapshot(lid);
+      lastSharedSig[sid] = sharedSig(L.name, ownerDisplayName(), papers);
+      publicListsCol().doc(sid).set({
+        ownerUid: state.user.uid,
+        owner: ownerDisplayName(),
+        name: L.name,
+        count: papers.length,
+        papers: papers,
+        createdAt: serverTime(),
+        updatedAt: serverTime()
+      }, { merge: true }).then(function () {
+        return listsCol().doc(lid).set({ public: true, shareId: sid }, { merge: true });
+      }).catch(function (err) {
+        delete lastSharedSig[sid];
+        console.warn('publish list:', err && err.code);
+        alert('Sorry — could not make the list public. Please try again.');
+      });
+      // optimistic: reflect in the modal right away (the snapshot will confirm)
+      L.public = true; L.shareId = sid; renderShareBody();
+    } else {
+      var oldSid = L.shareId;
+      if (oldSid) { publicListsCol().doc(oldSid).delete().catch(function (err) { console.warn('unpublish list:', err && err.code); }); delete lastSharedSig[oldSid]; }
+      listsCol().doc(lid).set({ public: false, shareId: FV.delete() }, { merge: true })
+        .catch(function (err) { console.warn('unpublish flag:', err && err.code); });
+      L.public = false; L.shareId = ''; renderShareBody();
+    }
+  };
+  window.litCopyShareLink = function () {
+    var inp = document.getElementById('litShareUrl'); if (!inp) return;
+    var done = function () { var note = document.getElementById('litShareCopyNote'); if (note) { note.textContent = 'Link copied to clipboard.'; setTimeout(renderShareBody, 1800); } };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(inp.value).then(done, function () { inp.select(); document.execCommand('copy'); done(); }); }
+      else { inp.select(); document.execCommand('copy'); done(); }
+    } catch (e) { inp.select(); }
+  };
+
+  // ── viewing a shared public list (?list=<shareId>) ──────────────────────
+  // Works for signed-out visitors too (public read). Renders a read-only view
+  // of another user's list into the papers list, reusing paperCardHTML.
+  function litLoadSharedList(shareId) {
+    window.LIT_SHARED_VIEW = true;   // suppress the site-default / personal-default landing filters
+    publicListsCol().doc(shareId).get().then(function (d) {
+      if (!d.exists) { renderSharedMissing(); return; }
+      renderSharedList(d.data() || {});
+    }).catch(function (err) {
+      console.warn('load shared list:', err && err.code);
+      renderSharedMissing();
+    });
+  }
+  function renderSharedMissing() {
+    sharedActive = true;
+    document.body.classList.add('lit-shared-mode');
+    var bar = document.getElementById('sharedBar'); if (bar) bar.classList.add('open');
+    document.getElementById('sharedTitle').textContent = '🔗 Shared list';
+    document.getElementById('sharedSub').innerHTML = 'This shared list is no longer available.';
+    var list = document.getElementById('papersList');
+    if (list) list.innerHTML = '<div class="empty-state"><h3>List not found</h3><p>The link may be wrong, or the owner made the list private again.</p></div>';
+    var countEl = document.getElementById('resultsCount'); if (countEl) countEl.innerHTML = '';
+  }
+  function renderSharedList(pub) {
+    sharedActive = true;
+    document.body.classList.add('lit-shared-mode');
+    if (typeof recentMode !== 'undefined' && recentMode) { recentMode = false; if (typeof updateRecentButton === 'function') updateRecentButton(); }
+    if (typeof closeSummaryTabs === 'function') closeSummaryTabs();
+    var bar = document.getElementById('sharedBar'); if (bar) bar.classList.add('open');
+    var papersRaw = Array.isArray(pub.papers) ? pub.papers : [];
+    document.getElementById('sharedTitle').textContent = '🔗 ' + (pub.name || 'Shared list');
+    document.getElementById('sharedSub').innerHTML =
+      papersRaw.length.toLocaleString() + ' paper' + (papersRaw.length === 1 ? '' : 's') +
+      (pub.owner ? ' · shared by <span class="shared-owner">' + esc(pub.owner) + '</span>' : '') +
+      ' · read-only';
+    // Enrich with the live catalog where the DOI is loaded (abstracts, tags,
+    // pre-print links); otherwise render from the shared snapshot alone.
+    var papers = papersRaw.map(function (r) { return paperByDoi(r.doi) || synth(r); });
+    if (typeof filtered !== 'undefined') filtered = papers;
+    var countEl = document.getElementById('resultsCount');
+    if (countEl) countEl.innerHTML = '<strong>' + papers.length.toLocaleString() + '</strong> shared paper' + (papers.length === 1 ? '' : 's');
+    var list = document.getElementById('papersList');
+    if (!papers.length) { list.innerHTML = '<div class="empty-state"><h3>Empty list</h3><p>This shared list has no papers yet.</p></div>'; return; }
+    if (typeof renderCardList === 'function') renderCardList(list, papers, false);
+    else list.innerHTML = papers.map(function (p, i) { return paperCardHTML(p, i, false); }).join('');
+    acctDecorate();
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }
+  window.litExitShared = function () {
+    sharedExitQuiet();
+    // strip ?list= so a refresh won't reopen the shared view
+    try {
+      var u = new URL(location.href); u.searchParams.delete('list');
+      history.replaceState(null, '', u.pathname + (u.search ? u.search : '') + u.hash);
+    } catch (e) {}
+    if (typeof applyFilters === 'function') applyFilters();
+    if (typeof window.applyLitSiteDefault === 'function') window.applyLitSiteDefault();
+  };
+  function sharedExitQuiet() {
+    if (!sharedActive) return;
+    sharedActive = false;
+    window.LIT_SHARED_VIEW = false;
+    document.body.classList.remove('lit-shared-mode');
+    var bar = document.getElementById('sharedBar'); if (bar) bar.classList.remove('open');
+  }
 
   function recordsFor(type, id) {
     return Object.keys(state.papers).map(function (k) { return state.papers[k]; }).filter(function (r) {
@@ -4325,8 +4596,11 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     var html = '<span class="lib-chip' + allActive + '" onclick="acctSetLibFilter(\'all\',null)">All saved <span class="cnt">' + recordsFor('all').length + '</span></span>';
     Object.keys(state.lists).sort(function (a, b) { return (state.lists[a].name || '').localeCompare(state.lists[b].name || ''); }).forEach(function (lid) {
       var act = (libFilter.type === 'list' && libFilter.id === lid) ? ' active' : '';
+      var isPub = !!state.lists[lid].public;
       html += '<span class="lib-chip list' + act + '" onclick="acctSetLibFilter(\'list\',\'' + escAttr(lid) + '\')">' + esc(state.lists[lid].name) +
+        (isPub ? ' <span class="pub" title="This list is public — click the share icon to get the link.">🌐</span>' : '') +
         ' <span class="cnt">' + recordsFor('list', lid).length + '</span>' +
+        '<span class="share" title="Share this list" onclick="acctShareList(event,\'' + escAttr(lid) + '\')">🔗</span>' +
         '<span class="del" title="Delete list" onclick="acctDeleteList(event,\'' + escAttr(lid) + '\')">×</span></span>';
     });
     listChips.innerHTML = html;
@@ -5066,6 +5340,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   // (Applying before the manifests arrive is fine — applyFilters lazy-loads what
   // it needs and registerExtraSources re-applies as catalog journals register.)
   function maybeAutoApplyPrefs() {
+    if (window.LIT_SHARED_VIEW) return;   // a shared-list view (?list=) owns the page; don't latch
     if (prefsAutoApplied) return;
     if (!state.user || !state.profile) return;          // profile snapshot not in yet — wait
     // The profile is loaded: this is our single landing-time decision. Latch the
@@ -5258,7 +5533,8 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     acctDecorate();
     acctRenderControl();
     maybeAutoApplyPrefs();
-    if (libraryMode) { renderLibraryBar(); renderLibrary(); }
+    syncPublicLists();   // keep any public lists' shared copies current as the owner edits
+    if (libraryMode) { renderLibraryBar(); renderLibrary(); if (shareModalLid) renderShareBody(); }
     refreshAlertsModalIfOpen();
   }
   auth.onAuthStateChanged(function (user) {
@@ -5269,6 +5545,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (unsubProfile) { unsubProfile(); unsubProfile = null; }
     if (unsubAlerts) { unsubAlerts(); unsubAlerts = null; }
     state.papers = {}; state.lists = {}; state.profile = null; state.alerts = {};
+    lastSharedSig = {};         // shared-list write dedup is per signed-in user
     prefsAutoApplied = false;   // re-arm auto-apply for whoever signs in next
     window.litSiteDefaultApplied = false;  // re-arm the site default too (e.g. after sign-out)
     // Default filters belong to the session that signed in. Clear them on any
@@ -5308,7 +5585,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         state.papers = m; onData();
       }, function (err) { console.warn('papers listener:', err && err.code); });
       unsubLists = listsCol().onSnapshot(function (snap) {
-        var m = {}; snap.forEach(function (d) { var x = d.data() || {}; m[d.id] = { name: x.name || '(untitled)', createdAt: x.createdAt }; });
+        var m = {}; snap.forEach(function (d) { var x = d.data() || {}; m[d.id] = { name: x.name || '(untitled)', createdAt: x.createdAt, public: !!x.public, shareId: x.shareId || '' }; });
         state.lists = m; onData();
       }, function (err) { console.warn('lists listener:', err && err.code); });
       unsubAlerts = alertsCol().onSnapshot(function (snap) {
@@ -5326,6 +5603,14 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   });
 
   acctRenderControl(); // show the Sign in button immediately, before auth resolves
+
+  // Opened with ?list=<shareId>? Show that public shared list read-only, for
+  // signed-in and signed-out visitors alike. This sets LIT_SHARED_VIEW up front
+  // so the personal/site default landing filters stand down while it's showing.
+  try {
+    var _sharedId = new URLSearchParams(location.search).get('list');
+    if (_sharedId) litLoadSharedList(_sharedId);
+  } catch (e) {}
 })();
 </script>
 

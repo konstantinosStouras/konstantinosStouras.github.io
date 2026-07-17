@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "public-list-sharing",
+      "date": "2026-07-17",
+      "title": "Share a saved list with anyone via a link",
+      "summary": "In My Library, each of your lists now has a 🔗 Share button: flip a list public and you get a link you can send to anyone — colleagues, students, co-authors — who can then open a clean, read-only view of the papers in it, no sign-in required. Only each paper's title, authors, year and link are shared; your private notes and tags never are. A public list shows a 🌐 marker, stays in sync automatically as you add or remove papers, and turning it private again immediately disables the old link.",
+      "url": "https://stouras.com/lit/"
+    },
+    {
       "id": "paper-card-tooltips",
       "date": "2026-07-17",
       "title": "Hover tooltips explain the tags on each paper",
