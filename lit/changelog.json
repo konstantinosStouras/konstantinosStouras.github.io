@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "orcid-account-merge",
+      "date": "2026-07-17",
+      "title": "One account per person — merge a duplicate ORCID registration",
+      "summary": "If you registered with ORCID while already having a Lit account (e-mail or Google), you now have a one-click repair: on the duplicate account, open Edit profile → “Merge this account into my main account”. Your saved papers, notes, lists and alerts move into the account you keep, the duplicate sign-in is removed, and you can attach ORCID sign-in to your main account so the ORCID button always brings you back to it. Accounts with a verified ORCID can also enable “Continue with ORCID” directly from Edit profile — preventing duplicates before they happen. Author matching got smarter too: your publications are found under the name your papers are actually credited with (your ORCID Published Name), whatever spelling a link carries.",
+      "url": "https://stouras.com/lit/"
+    },
+    {
       "id": "orcid-register",
       "date": "2026-07-17",
       "title": "Create your Lit account with ORCID",
