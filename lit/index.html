@@ -1658,6 +1658,14 @@ async function loadData() {
   // its downloads now.
   refreshJournalScope();
   ensureScopeSources();
+
+  // Land new visitors on the site default filters. When accounts are ON, the
+  // auth flow decides (anonymous → site default; signed-in → their own defaults
+  // or the site default as a fallback), so we only do it here when accounts are
+  // OFF. (=== false, never a truthy-vs-undefined test, so a signed-in user's
+  // personal defaults are never pre-empted by this path.) Harmless if already
+  // applied — it no-ops unless the selection is still empty.
+  if (window.LIT_ACCOUNTS_ENABLED === false) applyLitSiteDefault();
 }
 
 // Fetch one native source's papers file (idempotent, like loadExtraSource).
@@ -2784,6 +2792,44 @@ function clearFilters() {
   closeSummaryTabs();
   applyFilters();
 }
+
+// ── Site default filters ──────────────────────────────────────────────────
+// The filters every NEW visitor lands on (until they sign in and save their own
+// default filters, which then take precedence). Journal = Management Science,
+// Area (MS) = "entrepreneurship and innovation". Applied once per session, only
+// while the selection is still empty, so it never overrides a filter the user
+// (or their personal defaults) has set. Wired from three places: the accounts
+// script applies it for anonymous visitors and for signed-in users who have no
+// personal defaults; loadData() applies it when the accounts system is off.
+var LIT_SITE_DEFAULT_JOURNALS = ['ms'];
+var LIT_SITE_DEFAULT_AREAS = ['entrepreneurship and innovation'];
+window.litSiteDefaultApplied = false;   // guard: applied once (re-armed on auth change)
+window.litSiteDefaultActive = false;    // did the current filters come from the site default?
+
+function litSelectionIsEmpty() {
+  if (typeof sel === 'undefined') return false;
+  return sel.jtype.size === 0 && sel.journal.size === 0
+    && sel.editor.size === 0 && sel.area.size === 0 && sel.se.size === 0 && sel.ae.size === 0
+    && sel.year.size === 0 && sel.title.size === 0 && sel.author.size === 0
+    && Object.keys(sel.authorIdentity || {}).length === 0
+    && sel.affiliation.size === 0 && sel.abstract.size === 0
+    && (typeof preprintOnly === 'undefined' || !preprintOnly);
+}
+
+function applyLitSiteDefault() {
+  if (window.litSiteDefaultApplied) return false;
+  if (typeof sel === 'undefined' || typeof applyFilters !== 'function') return false;
+  if (typeof recentMode !== 'undefined' && recentMode) return false;
+  if (!litSelectionIsEmpty()) return false;   // user / personal defaults already chose filters
+  window.litSiteDefaultApplied = true;
+  LIT_SITE_DEFAULT_JOURNALS.forEach(function (k) { sel.journal.add(k); });
+  LIT_SITE_DEFAULT_AREAS.forEach(function (a) { sel.area.add(a); });
+  if (typeof renderChips === 'function') { renderChips('journal'); renderChips('area'); }
+  applyFilters();
+  window.litSiteDefaultActive = true;
+  return true;
+}
+window.applyLitSiteDefault = applyLitSiteDefault;
 
 // ── "Recently added papers" view ──
 
@@ -3934,6 +3980,9 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   var ACCOUNTS_ENABLED = !!(FB_CONFIG.apiKey
     && FB_CONFIG.apiKey.indexOf('PASTE_') === -1
     && window.firebase && firebase.auth && firebase.firestore);
+  // Let the main script know whether the auth flow will decide the landing
+  // filters. When accounts are OFF, loadData() applies the site default itself.
+  window.LIT_ACCOUNTS_ENABLED = ACCOUNTS_ENABLED;
   if (!ACCOUNTS_ENABLED) return; // page works exactly as before until configured
 
   document.body.classList.add('ms-accounts');
@@ -5005,8 +5054,14 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     // and narrow the view while the user is already browsing.
     prefsAutoApplied = true;
     var d = savedDefaults();
-    if (!d.autoApply || !(d.journals.length || d.jtypes.length)) return;
+    if (!d.autoApply) return;                           // user opted out of any auto-apply
     if (libraryMode || (typeof recentMode !== 'undefined' && recentMode)) return;
+    if (!(d.journals.length || d.jtypes.length)) {
+      // Signed in but no personal default filters saved → fall back to the
+      // site default (same as an anonymous visitor). Idle-guarded internally.
+      if (typeof window.applyLitSiteDefault === 'function') window.applyLitSiteDefault();
+      return;
+    }
     var untouched = typeof sel !== 'undefined'
       && sel.journal.size === 0 && sel.jtype.size === 0
       && (typeof broadFilterActive !== 'function' || !broadFilterActive())
@@ -5193,13 +5248,16 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (unsubAlerts) { unsubAlerts(); unsubAlerts = null; }
     state.papers = {}; state.lists = {}; state.profile = null; state.alerts = {};
     prefsAutoApplied = false;   // re-arm auto-apply for whoever signs in next
+    window.litSiteDefaultApplied = false;  // re-arm the site default too (e.g. after sign-out)
     // Default filters belong to the session that signed in. Clear them on any
     // auth change so a signed-out visitor sees the full catalog again, and the
     // NEXT user's saved defaults aren't blocked by the leftover selection (the
     // "untouched" guard can't tell an auto-applied leftover from a hand-picked
-    // filter). Only clears when the current filters actually came from a default.
-    if (autoAppliedActive) {
+    // filter). Only clears when the current filters actually came from a default
+    // (a personal default OR the site default).
+    if (autoAppliedActive || window.litSiteDefaultActive) {
       autoAppliedActive = false;
+      window.litSiteDefaultActive = false;
       if (typeof clearFilters === 'function') clearFilters();
     }
     if (user) {
@@ -5238,6 +5296,9 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     } else {
       if (libraryMode) acctExitLibrary();
       onData();
+      // Anonymous visitor: land them on the site default filters (idle-guarded,
+      // so it never overrides filters they've already set this session).
+      if (typeof window.applyLitSiteDefault === 'function') window.applyLitSiteDefault();
     }
   });
 

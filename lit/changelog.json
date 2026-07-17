@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "site-default-filters",
+      "date": "2026-07-17",
+      "title": "The browser opens on a curated default view",
+      "summary": "New visitors now land on a default filter — Management Science papers in the “entrepreneurship and innovation” area — instead of the whole catalogue, so there's something focused to look at right away. Clear the filters to browse everything, and if you sign in you can save your own default filters (journals or journal types), which take over from this one.",
+      "url": "https://stouras.com/lit/"
+    },
+    {
       "id": "feedback-page",
       "date": "2026-07-17",
       "title": "A Feedback page — send screenshots and suggestions",
