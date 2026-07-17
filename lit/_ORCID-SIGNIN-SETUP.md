@@ -7,11 +7,13 @@ Two related, separately-activated features share the one ORCID API client
 1. **Part 1 — "Sign in with ORCID" on the connect stage** (✅ ACTIVE): a
    signed-in Lit user connects their ORCID by authenticating at orcid.org
    instead of copy-pasting their 16-digit iD.
-2. **Part 2 — Register / sign in to The Lit WITH ORCID** (⏳ pending the
-   Firebase console steps below): "Continue with ORCID" on the sign-in /
-   register modal itself, next to "Continue with Google" — an ORCID account
-   *is* the Lit account, and the verified iD is auto-linked to the new
-   profile.
+2. **Part 2 — Register / sign in to The Lit WITH ORCID** (✅ ACTIVE — the
+   project is on Identity Platform with the `oidc.orcid` OIDC provider
+   enabled, and `AUTH_PROVIDERS` lists `'orcid'`): "Continue with ORCID" on
+   the sign-in / register modal itself, next to "Continue with Google" — an
+   ORCID account *is* the Lit account, and the verified iD is auto-linked to
+   the new profile. The console steps below are kept as the record of the
+   setup (and for re-doing it on another project).
 
 ---
 

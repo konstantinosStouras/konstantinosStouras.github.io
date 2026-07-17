@@ -415,11 +415,11 @@ in `PROVIDER_DEFS` (Firebase generic OIDC provider **`oidc.orcid`**) puts
 "Continue with ORCID" on the auth modal; on first sign-in
 `maybeSeedOrcidFromProvider` auto-links the verified iD from the OIDC `sub`
 (= providerData uid), exactly once per account (gated on
-`!orcid && !orcidPromptSeen`, so a later unlink is respected). Inert until
-the Firebase project is upgraded to Identity Platform with an `oidc.orcid`
-OIDC provider (code flow; client secret lives ONLY in the console) AND
-`'orcid'` is added to `AUTH_PROVIDERS` — do the flip together with its
-changelog entry + About copy, per the keep-in-sync discipline.
+`!orcid && !orcidPromptSeen`, so a later unlink is respected). ACTIVE: the
+Firebase project runs Identity Platform with the `oidc.orcid` OIDC provider
+enabled (code flow; client secret lives ONLY in the console) and `'orcid'`
+is in `AUTH_PROVIDERS` (flipped together with its changelog entry + About
+copy, per the keep-in-sync discipline).
 Signed-in users can also save **default filters** (account menu →
 "Default filters"): a preferred subset of journals and/or journal types,
 **auto-applied on sign-in** so they land on their subset instead of the full
