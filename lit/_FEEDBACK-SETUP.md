@@ -33,11 +33,12 @@ submissions are stored in the project's existing Firebase project
    **create** from anyone; **read/update/delete** are allowed ONLY to the
    signed-in maintainer account (`isFeedbackAdmin()` — that's what powers the
    admin dashboard above). The Admin SDK jobs bypass rules as always. Deploy
-   the rules after changing them — from `lit/_functions/`, whose `firebase.json`
-   points at `../_firestore.rules`:
+   the rules after changing them — from `lit/`, whose `firebase.json` points at
+   `_firestore.rules` (the CLI requires the rules file to sit INSIDE the
+   directory holding `firebase.json`, so it cannot live at `lit/_functions/`):
    ```
-   cd lit/_functions
-   firebase deploy --only firestore:rules
+   cd lit
+   firebase deploy --only firestore:rules --project lit-paper-browser
    ```
    (or paste the file into Firebase console → Firestore Database → Rules →
    Publish).

@@ -115,8 +115,8 @@ The rules make each user's data private to them. They live in
 
 - **Console:** Firestore Database -> **Rules** tab, paste the contents of
   `_firestore.rules`, click **Publish**.
-- **CLI:** copy `_firestore.rules` to your Firebase project's `firestore.rules`
-  and run `firebase deploy --only firestore:rules`.
+- **CLI:** from `lit/` (its `firebase.json` points at `_firestore.rules`):
+  `firebase deploy --only firestore:rules --project lit-paper-browser`.
 
 Without this step, reads/writes are denied and saving silently fails (the UI
 shows "Permission denied. The Firestore security rules may not be deployed yet.").

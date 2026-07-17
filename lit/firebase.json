@@ -1,9 +1,9 @@
 {
   "firestore": {
-    "rules": "../_firestore.rules"
+    "rules": "_firestore.rules"
   },
   "functions": {
-    "source": "functions",
+    "source": "_functions/functions",
     "runtime": "nodejs20"
   }
 }
