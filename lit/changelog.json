@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "orcid-sign-in",
+      "date": "2026-07-17",
+      "title": "Connect your ORCID by signing in — no more copy-pasting your iD",
+      "summary": "On the “Connect your ORCID iD” step you can now click “Sign in with ORCID” and authenticate at orcid.org directly, instead of copy-pasting your 16-digit iD. When you come back, your verified iD is linked automatically and your “My publications” view opens. Typing your iD by hand still works as before. Thanks to the reader who suggested this on the Feedback page.",
+      "url": "https://stouras.com/lit/"
+    },
+    {
       "id": "feedback-account-tooltips-and-citing",
       "date": "2026-07-17",
       "title": "Clearer account menu, and “Citing references”",
