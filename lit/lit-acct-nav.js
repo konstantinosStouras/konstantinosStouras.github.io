@@ -76,13 +76,13 @@
         '</button>' +
         '<div class="acct-menu" data-acct-menu>' +
           '<div class="acct-menu-head">Signed in as<strong>' + esc(user.email || name) + '</strong></div>' +
-          '<a class="acct-menu-item" href="' + MAIN + '#lit-library">★ My library</a>' +
+          '<a class="acct-menu-item" title="Your starred papers, lists, tags and private notes — everything you have saved." href="' + MAIN + '#lit-library">★ My library</a>' +
           '<div class="acct-menu-sep"></div>' +
-          '<a class="acct-menu-item" href="' + MAIN + '#lit-alerts">✉️ E-mail alerts</a>' +
-          '<a class="acct-menu-item" href="' + MAIN + '#lit-defaults">⚙️ Default filters</a>' +
-          '<a class="acct-menu-item" href="' + MAIN + '#lit-profile">👤 Edit profile</a>' +
+          '<a class="acct-menu-item" title="Get an e-mail when new papers match your filters, or when the site gains a feature." href="' + MAIN + '#lit-alerts">✉️ E-mail alerts</a>' +
+          '<a class="acct-menu-item" title="A set of journals or types applied automatically each time you sign in." href="' + MAIN + '#lit-defaults">⚙️ Default filters</a>' +
+          '<a class="acct-menu-item" title="Edit your name, affiliation and account details." href="' + MAIN + '#lit-profile">👤 Edit profile</a>' +
           '<div class="acct-menu-sep"></div>' +
-          '<button class="acct-menu-item danger" type="button" data-acct-signout>Sign out</button>' +
+          '<button class="acct-menu-item danger" type="button" title="Sign out of your account on this device." data-acct-signout>Sign out</button>' +
         '</div>' +
       '</div>';
     var toggle = el.querySelector('[data-acct-toggle]');

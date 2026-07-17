@@ -1475,14 +1475,15 @@ function loadRefsCounts() {
 }
 
 // The closed-state label for a paper's cited-references toggle: weave the count
-// into the phrase ("Cited 12 references in this catalog") when it is known (>0),
-// falling back to the generic "Cited references in this catalog" otherwise. The
-// open state is a plain "Hide" label.
+// into the phrase ("Citing 12 references in this catalog") when it is known (>0),
+// falling back to the generic "Citing references in this catalog" otherwise. The
+// open state is a plain "Hide" label. (Wording per Feedback: the paper is
+// actively "Citing" these references, not "Cited".)
 function refsToggleLabel(doi, open) {
-  if (open) return '▾ Hide cited references';
+  if (open) return '▾ Hide references';
   var n = refsCounts && refsCounts[doi];
   var mid = n ? n.toLocaleString() + ' reference' + (n === 1 ? '' : 's') : 'references';
-  return '▸ Cited ' + mid + ' in this catalog';
+  return '▸ Citing ' + mid + ' in this catalog';
 }
 
 // Once the counts arrive, fill "(N)" into every on-screen toggle that is still
@@ -4365,14 +4366,14 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         '<button class="acct-btn acct-user" onclick="acctToggleMenu(event)"><span class="acct-avatar" style="background-image:url(\'' + avatar + '\')"></span><span class="acct-uname">' + esc(name) + '</span></button>' +
         '<div class="acct-menu" id="acctMenu">' +
           '<div class="acct-menu-head">Signed in as<strong>' + esc(u.email || name) + '</strong></div>' +
-          '<div class="acct-menu-item" onclick="acctOpenLibrary()">★ My library <span class="acct-badge">' + saved + '</span></div>' +
-          (orcidLinked ? '<div class="acct-menu-item" onclick="acctOpenPublications()">📊 My publications</div>' : '') +
+          '<div class="acct-menu-item" title="Your starred papers, lists, tags and private notes — everything you have saved." onclick="acctOpenLibrary()">★ My library <span class="acct-badge">' + saved + '</span></div>' +
+          (orcidLinked ? '<div class="acct-menu-item" title="Your own papers in the database, and your author page in Data Analytics (matched from your linked ORCID)." onclick="acctOpenPublications()">📊 My publications</div>' : '') +
           '<div class="acct-menu-sep"></div>' +
-          '<div class="acct-menu-item" onclick="acctOpenAlerts()">✉️ E-mail alerts' + (alertCount ? ' <span class="acct-badge">' + alertCount + '</span>' : '') + '</div>' +
-          '<div class="acct-menu-item" onclick="acctOpenDefaults()">⚙️ Default filters' + (defCount ? ' <span class="acct-badge">' + defCount + '</span>' : '') + '</div>' +
-          '<div class="acct-menu-item" onclick="acctOpenProfile()">👤 Edit profile</div>' +
+          '<div class="acct-menu-item" title="Get an e-mail when new papers match your filters, or when the site gains a feature." onclick="acctOpenAlerts()">✉️ E-mail alerts' + (alertCount ? ' <span class="acct-badge">' + alertCount + '</span>' : '') + '</div>' +
+          '<div class="acct-menu-item" title="A set of journals or types applied automatically each time you sign in." onclick="acctOpenDefaults()">⚙️ Default filters' + (defCount ? ' <span class="acct-badge">' + defCount + '</span>' : '') + '</div>' +
+          '<div class="acct-menu-item" title="Edit your name, affiliation and account details." onclick="acctOpenProfile()">👤 Edit profile</div>' +
           '<div class="acct-menu-sep"></div>' +
-          '<div class="acct-menu-item danger" onclick="acctSignOut()">Sign out</div>' +
+          '<div class="acct-menu-item danger" title="Sign out of your account on this device." onclick="acctSignOut()">Sign out</div>' +
         '</div>' +
       '</div>';
   }
