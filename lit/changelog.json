@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "feedback-account-tooltips-and-citing",
+      "date": "2026-07-17",
+      "title": "Clearer account menu, and “Citing references”",
+      "summary": "Two small tweaks straight from the Feedback page: each item in your account menu (My library, E-mail alerts, Default filters, Edit profile, Sign out) now shows a short hover tooltip explaining what it does, and a paper's references toggle now reads “Citing N references in this catalog” instead of “Cited”.",
+      "url": "https://stouras.com/lit/"
+    },
+    {
       "id": "orcid-my-publications",
       "date": "2026-07-17",
       "title": "Connect your ORCID and see your own publications & metrics",

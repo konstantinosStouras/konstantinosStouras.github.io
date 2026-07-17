@@ -365,7 +365,7 @@ backfill:** the same OpenAlex call also reads `authorships` for records whose
 certain publishers, e.g. Econometrica/JPE/JoF) and caches a fallback author
 string in `au`; `applyCitations` fills the empty `Authors` with it (rolling, so
 it self-heals over the sweep's cadence) and **never overwrites** a
-Crossref-provided list. This is what lets the "Cited references in this catalog"
+Crossref-provided list. This is what lets the "Citing references in this catalog"
 panel show authors for those papers too. The refresh is
 ROLLING (never-checked DOIs first, then stalest; entries fresh for
 2 days; partial coverage never regresses a cached count) and runs
@@ -792,7 +792,7 @@ until the first workflow run on `master` post-merge.
 ### Citation graph — the references a paper cites that are IN the catalog
 For every listed paper, the pipeline extracts the references it **cites that
 also belong to the catalog** (the intra-catalog out-edges), surfaced on each
-paper card as a **"Cited references in this catalog"** toggle (steel-blue, next
+paper card as a **"Citing references in this catalog"** toggle (steel-blue, next
 to BibTeX; `togRefs` in `index.html`) that lazy-loads and lists those papers,
 each linking to the paper it cites. The toggle also shows a **count** of how
 many in-catalog references the paper cites — e.g. "Cited 12 references in this
