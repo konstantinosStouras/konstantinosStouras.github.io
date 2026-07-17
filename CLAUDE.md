@@ -409,11 +409,28 @@ so it runs once per session (latched at first profile load, so a "not now"
 decision — user mid-browse, or a Save whose write echoes a snapshot back — is
 also final) and **never overrides filters the user set themselves** (applies
 only when their live selection is still empty). It is undone on sign-out
-(`autoAppliedActive` → `clearFilters()`), so a signed-out visitor sees the full
-catalog again and the next user's own defaults aren't blocked by leftovers.
-Auto-applying a catalog (FT50/shard) journal before its lazy manifest arrives is
-fine: `registerExtraSources()` re-applies and refreshes the chip label (and the
-open modal's list) once the journal registers.
+(`autoAppliedActive` → `clearFilters()`), so a signed-out visitor sees the
+**site default** again (see below) and the next user's own defaults aren't
+blocked by leftovers. Auto-applying a catalog (FT50/shard) journal before its
+lazy manifest arrives is fine: `registerExtraSources()` re-applies and refreshes
+the chip label (and the open modal's list) once the journal registers.
+**Site default filters (every new visitor):** with no personal defaults, the
+page lands the visitor on a **built-in default filter set** — Journal =
+**Management Science**, Area (MS) = **"entrepreneurship and innovation"**
+(`LIT_SITE_DEFAULT_JOURNALS`/`LIT_SITE_DEFAULT_AREAS` + `applyLitSiteDefault()`
+in the main script, `window.litSiteDefaultApplied`/`litSiteDefaultActive` guards).
+It applies once per session and ONLY while the live selection is empty, so it
+never overrides a user's own filters. Wiring: for an **anonymous** visitor the
+accounts `onAuthStateChanged` else-branch applies it; for a **signed-in** user
+with NO saved personal defaults, `maybeAutoApplyPrefs()` falls back to it (a user
+WITH personal defaults gets theirs; a user who turned `autoApplyFilters` off gets
+neither); when the **accounts system is off** (`window.LIT_ACCOUNTS_ENABLED ===
+false`), `loadData()` applies it directly. It is cleared/re-armed on any auth
+change alongside the personal defaults (`litSiteDefaultActive` joins
+`autoAppliedActive` in the sign-out `clearFilters()` path). So a signed-in user
+overrides it by saving their own **Default filters**; the area part of the
+site default isn't editable via that modal (journals/types only) — to change the
+site default itself, edit the two `LIT_SITE_DEFAULT_*` constants.
 **Keep the About page in sync:** the **About** page (`lit/about/index.html`) is
 the user-facing tour of what The Lit does. It was **promoted from an in-app modal
 to a standalone page** (`stouras.com/lit/about/`) that shares an identical claret
