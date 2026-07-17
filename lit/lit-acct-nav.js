@@ -56,11 +56,37 @@
   injectStyles();
 
   var user = null;
-  auth.onAuthStateChanged(function (u) { user = u || null; render(); });
-  render(); // show the Sign-in button immediately, before auth resolves
+  var resolved = false;   // first onAuthStateChanged seen — until then render() may paint from the litAuthHint cache
+  auth.onAuthStateChanged(function (u) {
+    resolved = true;
+    user = u || null;
+    // Keep the fast-paint hint (shared with the main page) current on every page.
+    try {
+      if (u) localStorage.setItem('litAuthHint', JSON.stringify({
+        n: u.displayName || (u.email ? u.email.split('@')[0] : 'Account'),
+        s: u.uid || ''
+      }));
+      else localStorage.removeItem('litAuthHint');
+    } catch (e) {}
+    render();
+  });
+  render(); // paint immediately — the cached hint or the Sign-in button — before auth resolves
 
   function render() {
     if (!user) {
+      // Session restore hasn't concluded yet: a returning user briefly reading
+      // "Sign in" looks like a sign-out, so paint their chip from the cached
+      // hint until the first auth callback settles it (either way).
+      if (!resolved) {
+        var hint = null;
+        try { hint = JSON.parse(localStorage.getItem('litAuthHint') || 'null'); } catch (e) {}
+        if (hint && hint.s) {
+          el.innerHTML = '<div class="acct-wrap"><button class="acct-btn acct-user" type="button" title="Restoring your session…">' +
+            '<span class="acct-avatar" style="background-image:url(\'' + avatarUrl(hint.s) + '\')"></span>' +
+            '<span class="acct-uname">' + esc(hint.n || 'Account') + '</span></button></div>';
+          return;
+        }
+      }
       // ".../#lit-signin" makes the main page open its full sign-in modal
       // (Google + e-mail/password), so there is ONE sign-in implementation.
       el.innerHTML = '<a class="acct-btn" href="' + MAIN + '#lit-signin">Sign in</a>';
