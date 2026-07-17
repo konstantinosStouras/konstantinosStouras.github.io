@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "orcid-register",
+      "date": "2026-07-17",
+      "title": "Create your Lit account with ORCID",
+      "summary": "The sign-in window now has a “Continue with ORCID” button next to “Continue with Google”: authenticate at orcid.org and your ORCID account becomes your Lit account — no password to invent, and your verified iD is linked automatically, so “My publications” (your papers in the database and your author analytics) works from your very first sign-in. If you already have a Lit account, keep using it and connect your ORCID from your profile instead.",
+      "url": "https://stouras.com/lit/"
+    },
+    {
       "id": "feedback-tickets-and-confirmation",
       "date": "2026-07-17",
       "title": "Feedback now gets a ticket number and an e-mail confirmation",
