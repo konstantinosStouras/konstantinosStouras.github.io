@@ -7,11 +7,20 @@
 
 <!-- Feedback page for The Lit. A standalone page (like /lit/about/ and
      /lit/analytics/) that shares the claret header. Visitors describe a problem
-     or suggestion and can attach screenshots; the submission is stored in the
-     project's existing Firebase Firestore ('feedback' collection) and forwarded
-     to the maintainer by lit/_scraper/feedback-mailer.mjs. Screenshots are
-     compressed client-side and embedded as data URLs so everything lands in one
-     place (one Firestore document per submission). No sign-in is required. -->
+     or suggestion and can attach screenshots; each submission gets a unique
+     ticket number (LIT-YYMMDD-XXXX, generated at submit time) and is stored in
+     the project's existing Firebase Firestore ('feedback' collection), then
+     forwarded to the maintainer by lit/_scraper/feedback-mailer.mjs — which also
+     e-mails the SAME confirmation to the submitter when they left an e-mail
+     (an anonymous submission has no address, so only the maintainer's copy is
+     sent). Screenshots are compressed client-side and embedded as data URLs so
+     everything lands in one place (one Firestore document per submission). No
+     sign-in is required to submit. When the MAINTAINER (kstouras@gmail.com) is
+     signed in, the page additionally shows an admin inbox on top — every
+     submission grouped by day with the screenshots above the message
+     (click-to-enlarge lightbox), plus Mark-complete (records the resolution,
+     closes the ticket, and opens a pre-composed reply e-mail to the submitter)
+     and Delete actions, backed by the isFeedbackAdmin() Firestore rule. -->
 <meta name="description" content="Send feedback, screenshots and suggestions for The Lit — a fast, one-place research paper browser.">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://stouras.com/lit/feedback/">
@@ -113,10 +122,68 @@
   .contact-row .c-txt b { font-size: 13px; font-weight: 600; }
   .contact-row .c-txt span { font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; }
 
+  /* ── Admin inbox (visible only to the signed-in maintainer) ─────────────── */
+  .fb-admin { max-width: 940px; margin: 0 auto 26px; }
+  .fb-admin-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 14px; margin-bottom: 14px; }
+  .fb-admin-head h2 { font-family: 'Fraunces', serif; font-weight: 500; color: var(--navy); font-size: 22px; }
+  .fb-admin-sub { font-size: 13px; color: var(--text-muted); }
+  .fb-admin-tabs { margin-left: auto; display: flex; gap: 6px; }
+  .fb-admin-tabs button { font-family: inherit; font-size: 12.5px; font-weight: 600; color: var(--navy); background: #fff; border: 1.5px solid var(--border); border-radius: 999px; padding: 6px 14px; cursor: pointer; transition: all .12s; }
+  .fb-admin-tabs button:hover { border-color: var(--navy); }
+  .fb-admin-tabs button.is-active { background: var(--navy); color: #fff; border-color: var(--navy); }
+  .fb-admin-empty { background: var(--white); border: 1px dashed var(--border); border-radius: 12px; padding: 28px; text-align: center; color: var(--text-muted); font-size: 14px; }
+  .fb-day { font-family: 'Fraunces', serif; font-size: 15px; font-weight: 600; color: var(--navy); margin: 18px 0 10px; padding-bottom: 5px; border-bottom: 1px solid var(--border); }
+  .fb-day:first-child { margin-top: 0; }
+
+  .fb-item { background: var(--white); border: 1px solid var(--border); border-radius: 13px; box-shadow: var(--shadow-sm); padding: 18px 20px 16px; margin-bottom: 16px; }
+  .fb-item.is-closed { opacity: 0.72; }
+  .fb-item-top { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-bottom: 8px; }
+  .fb-ticket { font-family: 'Fraunces', serif; font-weight: 600; font-size: 15px; color: var(--navy); letter-spacing: 0.3px; }
+  .fb-badge { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; border-radius: 999px; padding: 3px 10px; }
+  .fb-badge.open { background: #fdeec9; color: #8a6100; }
+  .fb-badge.closed { background: #e2f0e6; color: var(--ok); }
+  .fb-when { font-size: 12.5px; color: var(--text-muted); margin-left: auto; }
+  .fb-item-who { font-size: 13px; color: var(--text); margin-bottom: 12px; }
+  .fb-item-who b { font-weight: 600; }
+  .fb-item-who a { color: var(--navy); text-decoration: none; }
+  .fb-item-who a:hover { text-decoration: underline; }
+  .fb-item-who .anon { color: var(--text-muted); font-style: italic; }
+
+  .fb-item-shots { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+  .fb-item-shots img { width: 132px; height: 96px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); cursor: zoom-in; transition: box-shadow .12s, transform .12s; display: block; }
+  .fb-item-shots img:hover { box-shadow: var(--shadow-lg); transform: translateY(-1px); }
+
+  .fb-item-msg { font-size: 14.5px; line-height: 1.6; color: var(--text); white-space: pre-wrap; word-wrap: break-word; border-left: 3px solid var(--accent); padding: 2px 0 2px 13px; margin-bottom: 12px; }
+  .fb-item-msg.empty { color: var(--text-muted); font-style: italic; border-color: var(--border); }
+  .fb-item-meta { font-size: 11.5px; color: var(--text-muted); line-height: 1.55; margin-bottom: 14px; word-break: break-word; }
+  .fb-item-meta code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; background: #f2edee; border-radius: 4px; padding: 1px 5px; }
+
+  .fb-item-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+  .fb-act { font-family: inherit; font-size: 13px; font-weight: 600; border-radius: 8px; padding: 9px 16px; cursor: pointer; border: 1.5px solid var(--border); background: #fff; color: var(--text); transition: all .12s; }
+  .fb-act.complete { border-color: var(--ok); color: var(--ok); }
+  .fb-act.complete:hover { background: var(--ok); color: #fff; }
+  .fb-act.reopen { border-color: #8a6100; color: #8a6100; }
+  .fb-act.reopen:hover { background: #8a6100; color: #fff; }
+  .fb-act.delete { border-color: var(--err); color: var(--err); }
+  .fb-act.delete:hover { background: var(--err); color: #fff; }
+  .fb-act:disabled { opacity: 0.5; cursor: default; }
+
+  /* Screenshot lightbox */
+  .fb-lightbox { position: fixed; inset: 0; background: rgba(20,10,14,0.86); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 32px; cursor: zoom-out; }
+  .fb-lightbox.show { display: flex; }
+  .fb-lightbox img { max-width: 100%; max-height: 100%; border-radius: 8px; box-shadow: 0 12px 48px rgba(0,0,0,0.5); }
+  .fb-lightbox .fb-lb-close { position: absolute; top: 18px; right: 22px; width: 40px; height: 40px; border-radius: 50%; border: none; background: rgba(255,255,255,0.14); color: #fff; font-size: 22px; line-height: 1; cursor: pointer; }
+  .fb-lightbox .fb-lb-close:hover { background: rgba(255,255,255,0.28); }
+
+  .fb-ticket-note { font-size: 14px; color: var(--text); margin: -2px 0 14px; }
+  .fb-ticket-note code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; color: var(--navy); background: var(--navy-light); border-radius: 5px; padding: 2px 8px; }
+
   @media (max-width: 640px) {
     .header-inner, .wrap { padding-left: 18px; padding-right: 18px; }
     .brand h1 { font-size: 22px; }
     .fb-card { padding: 22px 18px 24px; }
+    .fb-admin-tabs { margin-left: 0; }
+    .fb-when { margin-left: 0; }
   }
 </style>
 </head>
@@ -139,12 +206,29 @@
 </header>
 
 <main class="wrap">
+  <!-- Admin inbox — rendered ONLY for the signed-in maintainer (see the admin
+       block in the script below and the isFeedbackAdmin() rule in
+       lit/_firestore.rules). It stays hidden for every other visitor. -->
+  <section class="fb-admin" id="fbAdmin" hidden>
+    <div class="fb-admin-head">
+      <h2>📥 Feedback inbox</h2>
+      <span class="fb-admin-sub" id="fbAdminSub">Loading…</span>
+      <div class="fb-admin-tabs" id="fbAdminTabs">
+        <button type="button" data-tab="open" class="is-active">Open</button>
+        <button type="button" data-tab="closed">Closed</button>
+        <button type="button" data-tab="all">All</button>
+      </div>
+    </div>
+    <div class="fb-admin-list" id="fbAdminList"></div>
+  </section>
+
   <div class="fb-card">
     <!-- Success panel (shown after a submission) -->
     <div class="fb-done" id="fbDone">
       <div class="ico">🙏</div>
       <h2>Thank you!</h2>
       <p>Your feedback has been received. I read every message and it goes straight to my inbox.</p>
+      <p class="fb-ticket-note" id="fbTicketNote"></p>
       <button type="button" class="fb-again" id="fbAgain">Send another</button>
     </div>
 
@@ -269,6 +353,7 @@
         } else {
           $('fbSignedNote').textContent = '';
         }
+        adminMaybeShow(u);
       });
     } catch (e) { CONFIGURED = false; }
   }
@@ -282,7 +367,11 @@
     el.textContent = msg || '';
     el.className = 'fb-status' + (kind ? ' ' + kind : '');
   }
-  function esc(s) { return String(s == null ? '' : s); }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
   function fmtBytes(n) { return n >= 1024 * 1024 ? (n / 1024 / 1024).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB'; }
   function totalBytes() { return shots.reduce(function (a, s) { return a + s.bytes; }, 0); }
 
@@ -358,6 +447,20 @@
   drop.addEventListener('drop', function (e) { if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files); });
 
   // Submit
+  // A short, human-friendly, practically-unique reference for a submission,
+  // e.g. LIT-260717-K3QP. Generated here at submit time and stored on the doc so
+  // the same ticket appears in the confirmation e-mail, the admin dashboard and
+  // the maintainer's inbox. (Uniqueness is date + 4 random base36 chars — plenty
+  // for this volume; the Firestore doc id remains the true primary key.)
+  function genTicket() {
+    var d = new Date();
+    var ymd = String(d.getFullYear()).slice(2) +
+      ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2);
+    var rand = '';
+    while (rand.length < 4) rand += Math.random().toString(36).slice(2).toUpperCase().replace(/[^A-Z0-9]/g, '');
+    return 'LIT-' + ymd + '-' + rand.slice(0, 4);
+  }
+
   $('fbSubmit').onclick = function () {
     if (busy || !CONFIGURED) return;
     var text = ($('fbText').value || '').trim();
@@ -365,12 +468,15 @@
     if (text.length > TEXT_MAX) { setStatus('Please shorten the description a little.', 'err'); return; }
     busy = true; $('fbSubmit').disabled = true; setStatus('Sending…');
 
+    var ticket = genTicket();
+    var email = ($('fbEmail').value || '').trim().slice(0, 200);
     var doc = {
       text: text,
       images: shots.map(function (s) { return s.dataUrl; }),
       name: ($('fbName').value || '').trim().slice(0, 200),
-      email: ($('fbEmail').value || '').trim().slice(0, 200),
+      email: email,
       uid: (currentUser && currentUser.uid) || null,
+      ticket: ticket,
       page: 'feedback',
       url: (document.referrer || '').slice(0, 500),
       ua: (navigator.userAgent || '').slice(0, 400),
@@ -380,6 +486,13 @@
     };
 
     db.collection('feedback').add(doc).then(function () {
+      // Confirm the ticket, and — when they left an e-mail — that a copy is on
+      // its way (the server mailer sends the submitter the same message).
+      var validEmail = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
+      $('fbTicketNote').innerHTML = 'Your reference number is <code>' + esc(ticket) + '</code>. ' +
+        (validEmail
+          ? 'I’ve e-mailed a copy to <b>' + esc(email) + '</b> and will follow up there if needed.'
+          : 'Please keep it if you’d like to follow up — you didn’t leave an e-mail, so I can’t reply directly.');
       $('fbForm').style.display = 'none';
       $('fbDone').classList.add('show');
       // reset for a potential "send another"
@@ -395,8 +508,233 @@
     $('fbForm').style.display = '';
     setStatus('');
   };
+
+  /* ── Admin inbox — visible ONLY to the signed-in maintainer ───────────────
+   * Renders every submission received so far (newest first, grouped by day):
+   * ticket number, status, submitter, screenshots on top (click to enlarge in
+   * the lightbox) and the message below, plus Mark-complete / Delete actions.
+   * The Firestore isFeedbackAdmin() rule (lit/_firestore.rules) is what actually
+   * authorises the reads/updates/deletes — this client check only decides
+   * whether to SHOW the section, so nothing is exposed to other visitors even
+   * if they flip the flag in devtools. */
+  var ADMIN_EMAIL = 'kstouras@gmail.com';
+  var adminItems = [];        // [{ id, data }]
+  var adminTab = 'open';
+  var adminLoaded = false;
+
+  function isAdminUser(u) {
+    return !!(u && u.email && u.email.toLowerCase() === ADMIN_EMAIL && u.emailVerified);
+  }
+
+  function adminMaybeShow(u) {
+    var sec = $('fbAdmin');
+    if (!sec) return;
+    if (!isAdminUser(u)) { sec.hidden = true; return; }
+    sec.hidden = false;
+    if (!adminLoaded) { adminLoaded = true; adminLoad(); }
+  }
+
+  function adminLoad() {
+    $('fbAdminSub').textContent = 'Loading…';
+    db.collection('feedback').orderBy('createdAt', 'desc').get().then(function (snap) {
+      adminItems = snap.docs.map(function (d) { return { id: d.id, data: d.data() }; });
+      adminRender();
+    }).catch(function (err) {
+      $('fbAdminSub').textContent = 'Could not load the inbox (' + (err && err.code ? err.code : 'error') + ') — are the latest Firestore rules deployed?';
+    });
+  }
+
+  function adminFind(id) {
+    for (var i = 0; i < adminItems.length; i++) if (adminItems[i].id === id) return adminItems[i];
+    return null;
+  }
+  function fmtWhen(ts) {
+    var d = ts && typeof ts.toDate === 'function' ? ts.toDate() : null;
+    if (!d) return '—';
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) +
+      ', ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  }
+  function validEmail(s) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(s || '').trim()); }
+
+  function adminRender() {
+    var open = 0, closedN = 0;
+    adminItems.forEach(function (it) { if (it.data.status === 'closed') closedN++; else open++; });
+    $('fbAdminSub').textContent = adminItems.length + ' submission' + (adminItems.length === 1 ? '' : 's') +
+      ' — ' + open + ' open, ' + closedN + ' closed';
+
+    var items = adminItems.filter(function (it) {
+      var isClosed = it.data.status === 'closed';
+      return adminTab === 'all' || (adminTab === 'closed' ? isClosed : !isClosed);
+    });
+    var list = $('fbAdminList');
+    if (!items.length) {
+      list.innerHTML = '<div class="fb-admin-empty">' +
+        (adminItems.length ? 'Nothing in this view.' : 'No feedback yet — when someone submits the form below, it appears here.') +
+        '</div>';
+      return;
+    }
+
+    var html = '', lastDay = '';
+    items.forEach(function (it) {
+      var x = it.data;
+      var d = x.createdAt && typeof x.createdAt.toDate === 'function' ? x.createdAt.toDate() : null;
+      var day = d ? d.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'Date unknown';
+      if (day !== lastDay) { html += '<div class="fb-day">' + esc(day) + '</div>'; lastDay = day; }
+
+      var isClosed = x.status === 'closed';
+      var ticket = x.ticket || it.id;   // older submissions predate tickets — fall back to the doc id
+      var name = String(x.name || '').trim(), email = String(x.email || '').trim();
+      var who = '';
+      if (name) who += '<b>' + esc(name) + '</b>';
+      if (validEmail(email)) who += (who ? ' · ' : '') + '<a href="mailto:' + esc(encodeURIComponent(email)) + '">' + esc(email) + '</a>';
+      if (!who) who = '<span class="anon">anonymous (no e-mail — a reply cannot be sent)</span>';
+
+      var imgs = (Array.isArray(x.images) ? x.images : []).filter(function (u) { return /^data:image\//.test(u); });
+      var shotsHtml = imgs.length
+        ? '<div class="fb-item-shots">' + imgs.map(function (u, i) {
+            return '<img src="' + esc(u) + '" alt="screenshot ' + (i + 1) + '" title="Click to enlarge" data-lb>';
+          }).join('') + '</div>'
+        : '';
+
+      var metaBits = [];
+      if (x.uid) metaBits.push('Signed-in UID <code>' + esc(x.uid) + '</code>');
+      if (x.url) metaBits.push('From page ' + esc(x.url));
+      if (x.ua) metaBits.push('Browser ' + esc(String(x.ua).slice(0, 120)) + (String(x.ua).length > 120 ? '…' : ''));
+      metaBits.push(x.forwarded ? 'E-mailed to me ✓' : 'Not yet e-mailed');
+      metaBits.push('Doc <code>' + esc(it.id) + '</code>');
+      if (isClosed && x.resolution) metaBits.push('<b>Resolution:</b> ' + esc(x.resolution));
+
+      html +=
+        '<article class="fb-item' + (isClosed ? ' is-closed' : '') + '" data-id="' + esc(it.id) + '">' +
+          '<div class="fb-item-top">' +
+            '<span class="fb-ticket">🎫 ' + esc(ticket) + '</span>' +
+            '<span class="fb-badge ' + (isClosed ? 'closed' : 'open') + '">' + (isClosed ? 'Closed' : 'Open') + '</span>' +
+            '<span class="fb-when">' + esc(fmtWhen(x.createdAt)) + '</span>' +
+          '</div>' +
+          '<div class="fb-item-who">From ' + who + '</div>' +
+          shotsHtml +
+          (x.text
+            ? '<div class="fb-item-msg">' + esc(x.text) + '</div>'
+            : '<div class="fb-item-msg empty">(no message — screenshot' + (imgs.length === 1 ? '' : 's') + ' only)</div>') +
+          '<div class="fb-item-meta">' + metaBits.join(' · ') + '</div>' +
+          '<div class="fb-item-actions">' +
+            (isClosed
+              ? '<button type="button" class="fb-act reopen" data-act="reopen">↩ Reopen</button>'
+              : '<button type="button" class="fb-act complete" data-act="complete">✓ Mark complete &amp; reply</button>') +
+            '<button type="button" class="fb-act delete" data-act="delete">🗑 Delete</button>' +
+          '</div>' +
+        '</article>';
+    });
+    list.innerHTML = html;
+
+    Array.prototype.forEach.call(list.querySelectorAll('.fb-item [data-act]'), function (b) {
+      b.onclick = function () {
+        var id = b.closest('.fb-item').getAttribute('data-id');
+        var act = b.getAttribute('data-act');
+        if (act === 'complete') adminComplete(id);
+        else if (act === 'reopen') adminReopen(id);
+        else if (act === 'delete') adminDelete(id);
+      };
+    });
+    Array.prototype.forEach.call(list.querySelectorAll('img[data-lb]'), function (img) {
+      img.onclick = function () { openLightbox(img.src); };
+    });
+  }
+
+  // Mark complete: records the resolution + closes the ticket, then opens a
+  // pre-composed reply e-mail (the admin's own mail client) telling the
+  // submitter their ticket is closed and how it was acted on. An anonymous
+  // submission has no address to reply to, so it is just closed.
+  function adminComplete(id) {
+    var it = adminFind(id); if (!it) return;
+    var x = it.data;
+    var canReply = validEmail(x.email);
+    var action = window.prompt(
+      'How was this feedback acted on? (saved on the ticket' + (canReply ? ' and pre-filled into the reply e-mail' : '') + ')',
+      x.resolution || '');
+    if (action === null) return;   // cancelled
+    action = action.trim().slice(0, 2000);
+    db.collection('feedback').doc(id).update({
+      status: 'closed',
+      resolution: action,
+      closedAt: FV.serverTimestamp()
+    }).then(function () {
+      x.status = 'closed'; x.resolution = action;
+      adminRender();
+      if (canReply) {
+        var t = x.ticket || id;
+        var orig = String(x.text || '').trim() || '(screenshots only)';
+        if (orig.length > 1500) orig = orig.slice(0, 1500) + '…';   // keep the mailto: URL within client limits
+        var subject = 'The Lit — your feedback (ticket ' + t + ') is now closed';
+        var body = 'Dear ' + (String(x.name || '').trim() || 'reader') + ',\n\n' +
+          'Thank you for your feedback on The Lit — ticket ' + t + ' is now closed.\n\n' +
+          'How it was acted on:\n' + (action || '(fill in)') + '\n\n' +
+          '— — —\nYour original message:\n' + orig + '\n\n' +
+          'Thanks again for helping improve the site!\n\nKonstantinos\nhttps://stouras.com/lit/';
+        window.location.href = 'mailto:' + encodeURIComponent(String(x.email).trim()) +
+          '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+      } else {
+        window.alert('Ticket closed. This submission was anonymous (no e-mail), so no reply can be sent.');
+      }
+    }).catch(function (err) {
+      window.alert('Could not update the ticket (' + (err && err.code ? err.code : 'error') + ').');
+    });
+  }
+
+  function adminReopen(id) {
+    var it = adminFind(id); if (!it) return;
+    db.collection('feedback').doc(id).update({ status: 'reopened' }).then(function () {
+      it.data.status = 'reopened';
+      adminRender();
+    }).catch(function (err) {
+      window.alert('Could not reopen (' + (err && err.code ? err.code : 'error') + ').');
+    });
+  }
+
+  function adminDelete(id) {
+    var it = adminFind(id); if (!it) return;
+    var t = it.data.ticket || id;
+    if (!window.confirm('Delete feedback ' + t + ' permanently? This cannot be undone.')) return;
+    db.collection('feedback').doc(id).delete().then(function () {
+      adminItems = adminItems.filter(function (x) { return x.id !== id; });
+      adminRender();
+    }).catch(function (err) {
+      window.alert('Could not delete (' + (err && err.code ? err.code : 'error') + ').');
+    });
+  }
+
+  // Tabs (Open / Closed / All)
+  Array.prototype.forEach.call(document.querySelectorAll('#fbAdminTabs button'), function (b) {
+    b.onclick = function () {
+      adminTab = b.getAttribute('data-tab');
+      Array.prototype.forEach.call(document.querySelectorAll('#fbAdminTabs button'), function (x) {
+        x.classList.toggle('is-active', x === b);
+      });
+      adminRender();
+    };
+  });
+
+  // Lightbox — click a thumbnail to enlarge; click anywhere / press Esc to close
+  function openLightbox(src) {
+    $('fbLbImg').src = src;
+    $('fbLightbox').classList.add('show');
+  }
+  function closeLightbox() {
+    $('fbLightbox').classList.remove('show');
+    $('fbLbImg').src = '';
+  }
+  $('fbLightbox').addEventListener('click', closeLightbox);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && $('fbLightbox').classList.contains('show')) closeLightbox();
+  });
 })();
 </script>
+
+<!-- Screenshot lightbox (used by the admin inbox to enlarge a thumbnail) -->
+<div class="fb-lightbox" id="fbLightbox" role="dialog" aria-modal="true" aria-label="Screenshot">
+  <button type="button" class="fb-lb-close" id="fbLbClose" aria-label="Close">×</button>
+  <img id="fbLbImg" src="" alt="Screenshot (enlarged)">
+</div>
 
 <!-- Shared sign-in / account control in the header (mirrors the main browser).
      Loaded after the block above so it reuses the default Firebase app that

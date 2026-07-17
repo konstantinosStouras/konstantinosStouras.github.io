@@ -2,7 +2,8 @@
 /*
  * E-mail rendering for the instant feedback-forwarding Cloud Function.
  *
- * KEEP IN SYNC with renderFeedbackEmail / dataUrlToAttachment in
+ * KEEP IN SYNC with renderFeedbackEmail / renderSubmitterEmail /
+ * dataUrlToAttachment in
  * lit/_scraper/feedback-mailer.mjs (the every-10-min batch fallback). The logic
  * is duplicated here — not imported — because a deployed Cloud Function bundle
  * only includes files inside its own source directory, so it must be
@@ -43,17 +44,19 @@ function renderFeedbackEmail(doc) {
   const text = String(doc.text || '').trim();
   const name = String(doc.name || '').trim();
   const email = String(doc.email || '').trim();
+  const ticket = String(doc.ticket || '').trim();
   const imgs = Array.isArray(doc.images) ? doc.images : [];
   const attachments = imgs.map(dataUrlToAttachment).filter(Boolean);
 
   const subjLead = firstLine(text, 60) || (attachments.length ? `${attachments.length} screenshot(s)` : 'new message');
-  const subject = `[The Lit feedback] ${subjLead}`;
+  const subject = `[The Lit feedback] ${ticket ? ticket + ' — ' : ''}${subjLead}`;
 
   const whenIso = doc.createdAt && typeof doc.createdAt.toDate === 'function'
     ? doc.createdAt.toDate().toISOString() : (doc.createdAtIso || '');
   const who = [name, email && `<${email}>`].filter(Boolean).join(' ') || 'anonymous';
 
   const metaLines = [
+    ['Ticket', ticket || '—'],
     ['From', who],
     ['Signed-in UID', doc.uid || '—'],
     ['On page', doc.url || '—'],
@@ -79,4 +82,27 @@ function renderFeedbackEmail(doc) {
   return { subject, text: bodyText, html, attachments, replyTo: EMAIL_RE.test(email) ? email : undefined };
 }
 
-module.exports = { renderFeedbackEmail, dataUrlToAttachment };
+// The submitter's confirmation copy — the SAME e-mail the maintainer receives
+// (same subject, body and screenshots), prefixed with a short receipt banner
+// naming their ticket number. Returns null when the submission is anonymous
+// (no valid e-mail on record — nobody to confirm to).
+function renderSubmitterEmail(doc) {
+  const base = renderFeedbackEmail(doc);
+  if (!base.replyTo) return null;    // anonymous — cannot receive a confirmation
+  const ticket = String(doc.ticket || '').trim();
+  const intro = 'Thank you for your feedback on The Lit! This is a copy of what I received' +
+    (ticket ? ` — your reference number is ${ticket}` : '') +
+    '. I read every message, and if a reply is needed it will arrive at this address.';
+  return {
+    to: base.replyTo,
+    subject: base.subject,
+    text: intro + '\n\n— — —\n\n' + base.text,
+    html:
+      '<div style="font-family:Segoe UI,Arial,sans-serif;color:#241a1e;max-width:640px;' +
+      'background:#f4e6ea;border-left:3px solid #7d1d3f;padding:10px 14px;margin:0 0 16px;font-size:13.5px;line-height:1.55">' +
+      htmlEscape(intro) + '</div>' + base.html,
+    attachments: base.attachments,
+  };
+}
+
+module.exports = { renderFeedbackEmail, renderSubmitterEmail, dataUrlToAttachment };

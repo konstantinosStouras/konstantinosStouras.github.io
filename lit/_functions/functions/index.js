@@ -7,6 +7,10 @@
  * which writes a document to the Firestore `feedback` collection. This trigger
  * e-mails that submission to the maintainer within seconds and marks it
  * forwarded — so delivery is instant, not "within the next scheduled run".
+ * When the submitter left a valid e-mail it ALSO sends them the SAME message as
+ * a confirmation copy (receipt banner + their ticket number, marked `ackSent`
+ * so the batch mailer never re-sends it); an anonymous submission has no
+ * address, so only the maintainer's copy goes out.
  *
  * It COMPLEMENTS the batch fallback lit/_scraper/feedback-mailer.mjs
  * (.github/workflows/lit-feedback-mail.yml, every 10 min): both gate on the
@@ -28,7 +32,7 @@ const { defineSecret, defineString } = require('firebase-functions/params');
 const logger = require('firebase-functions/logger');
 const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
-const { renderFeedbackEmail } = require('./feedback-render');
+const { renderFeedbackEmail, renderSubmitterEmail } = require('./feedback-render');
 
 admin.initializeApp();
 
@@ -106,6 +110,32 @@ exports.forwardFeedbackOnCreate = onDocumentCreated(
       // Sent, but couldn't mark. Worst case: the batch mailer sends a duplicate
       // later. Prefer that to losing the message, so we do not rethrow.
       logger.warn('feedback sent but not marked forwarded', { id: snap.id, err: e && e.message });
+    }
+
+    // Confirmation copy back to the submitter — the same message with a receipt
+    // banner and their ticket number. null when anonymous (no e-mail to send
+    // to). Best-effort: a courtesy copy, so a failure is only logged — it never
+    // affects the already-delivered maintainer copy. The `ackSent` mark keeps
+    // the batch mailer from double-sending it if this doc is ever re-processed
+    // (e.g. when the forwarded-mark write above failed).
+    const ack = renderSubmitterEmail(doc);
+    if (ack) {
+      try {
+        await transporter.sendMail({
+          from: fromName ? `"${fromName}" <${fromAddr}>` : fromAddr,
+          to: ack.to,
+          replyTo: FEEDBACK_TO.value(),
+          subject: ack.subject,
+          text: ack.text,
+          html: ack.html,
+          attachments: ack.attachments,
+          headers: { 'X-Lit-Feedback': snap.id },
+        });
+        await snap.ref.update({ ackSent: true, ackAt: admin.firestore.FieldValue.serverTimestamp() });
+        logger.info('confirmation copy sent', { id: snap.id, to: ack.to });
+      } catch (e) {
+        logger.warn('confirmation copy failed (batch mailer will retry)', { id: snap.id, err: e && e.message });
+      }
     }
 
     logger.info('instant-forwarded feedback', { id: snap.id });
