@@ -17,10 +17,16 @@ seconds**, instead of waiting for the batch mailer's schedule.
   `forwarded` flag, so nothing is sent twice, and the batch covers anything the
   trigger ever misses. You can keep both running forever.
 - **Firebase project:** `lit-paper-browser` (the same one used for accounts +
-  feedback; set in `.firebaserc`).
+  feedback; set in `lit/.firebaserc`).
 
-Everything here lives under `lit/_functions/` — the leading `_` keeps Jekyll from
-publishing it, exactly like `lit/_scraper/`.
+The function's source lives under `lit/_functions/` — the leading `_` keeps
+Jekyll from publishing it, exactly like `lit/_scraper/`. The Firebase CLI
+config (`firebase.json` + `.firebaserc`) sits one level up, at **`lit/`**, so
+the ONE config covers both this function and the Firestore rules deploy — the
+CLI requires every referenced path (rules file, functions source) to sit inside
+the directory that holds `firebase.json`, and `lit/` is their common parent.
+Run all `firebase` commands below from `lit/` (or any folder under it — the CLI
+walks up to find the config).
 
 ---
 
@@ -55,7 +61,7 @@ That's all you do in the browser. The rest is two-ish minutes in a terminal.
    ```sh
    cd lit/_functions/functions
    npm install
-   cd ..            # back to lit/_functions (where firebase.json lives)
+   cd ../..         # back up to lit/ (where firebase.json lives)
    ```
 
 3. **Set the SMTP secrets** — use the **same** Gmail address + App Password you
@@ -72,17 +78,18 @@ That's all you do in the browser. The rest is two-ish minutes in a terminal.
    `europe-west1` (**the current default — this project's Firestore is in eur3**);
    `nam5`/US → `us-central1`. A mismatch is the one thing that makes the deploy fail.
 
-5. **Deploy:**
+5. **Deploy** (pin the project explicitly — it protects you if another Firebase
+   project is the active one in your CLI state):
    ```sh
-   firebase deploy --only functions
+   firebase deploy --only functions --project lit-paper-browser
    ```
    First deploy also enables the required Google Cloud APIs — just say yes.
 
-6. **Deploying the Firestore rules** also works from this same directory —
-   `firebase.json` points at `../_firestore.rules`, so whenever the rules file
+6. **Deploying the Firestore rules** works from the same `lit/` directory —
+   its `firebase.json` points at `_firestore.rules`, so whenever the rules file
    changes:
    ```sh
-   firebase deploy --only firestore:rules
+   firebase deploy --only firestore:rules --project lit-paper-browser
    ```
    (equivalent to pasting the file into Firebase console → Firestore Database →
    Rules → Publish).
@@ -97,7 +104,7 @@ delivers it — you won't lose feedback either way.)
 ## Test the rendering offline (no deploy needed)
 
 ```sh
-cd functions && npm run selftest      # or: node selftest.js
+cd _functions/functions && npm run selftest      # or: node selftest.js
 ```
 
 ## Notes / keep in sync

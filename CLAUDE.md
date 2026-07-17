@@ -396,7 +396,11 @@ catches up. Like `/fun/ms/`,
 the page carries the optional sign-in feature (star/notes/lists/tags, private
 per user, dedicated Firebase project); it stays inert until a web config is
 pasted into `FB_CONFIG` in `lit/index.html` — setup steps in
-`lit/_ACCOUNTS-SETUP.md`, security rules in `lit/_firestore.rules`.
+`lit/_ACCOUNTS-SETUP.md`, security rules in `lit/_firestore.rules` (deployed
+from `lit/` — `lit/firebase.json` + `lit/.firebaserc` are the Firebase-CLI
+config for BOTH the rules and the `_functions` Cloud Function; the CLI requires
+every referenced path inside the config's own directory, so the config lives at
+their common parent `lit/`, NOT in `lit/_functions/`).
 Signed-in users can also save **default filters** (account menu →
 "Default filters"): a preferred subset of journals and/or journal types,
 **auto-applied on sign-in** so they land on their subset instead of the full
