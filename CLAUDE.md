@@ -433,8 +433,15 @@ credit-name** (Published Name — how journals actually credit the author;
 given+family can drop a middle initial and match nothing):
 `backfillOrcidAuthorName` fetches it from the public `pub.orcid.org` record
 whenever a linked profile has no explicit `orcidAuthorName` (fill-when-empty,
-per-session per-iD guard; self-heals older links when the "My publications"
-modal opens). **Sign-in invariant:** a signed-in user is never shown the
+per-session per-iD guard; priority credit-name → the catalog's own
+ORCID-resolved canonical spelling via `litCatalogCanonicalName` → given+family
+→ sign-in claims; live-refreshes an open profile card). Independently of the
+stored name, **the `?author=` deep-link chip is widened to the catalog's full
+`Name_Variants`** once authors.json is available (`litUpgradeAuthorDeepLink`;
+the deep-link auto-fetches authors.json) — so ANY author's page finds papers
+credited under any spelling, and clicking the account chip on an `?author=`
+page navigates back to `/lit/` instead of opening the menu
+(`acctUserChipClick`). **Sign-in invariant:** a signed-in user is never shown the
 sign-in modal again — `acctOpenAuth` no-ops when signed in, the header
 paints from the `litAuthHint` localStorage cache while the session restores
 (`authResolved`), and account actions clicked during the restore window
