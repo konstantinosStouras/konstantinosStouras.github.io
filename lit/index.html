@@ -4216,9 +4216,25 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   }
   function synth(r) { return { 'Title': r.title || '(untitled)', 'Authors': r.authors || '', 'Year': r.year || '', 'DOI': r.doi || '' }; }
 
+  // A returning user's session may still be RESTORING when they click an
+  // account action (star, notes panel) — asking them to sign in again would
+  // break the "never re-ask a signed-in user" contract. When the fast-paint
+  // hint says a session exists, queue the action and run it as soon as auth
+  // resolves; only a genuinely signed-out visitor gets the sign-in modal.
+  var pendingAcctAction = null;
+  function acctWhenSignedIn(fn) {
+    if (state.user) { fn(); return; }
+    if (!authResolved) {
+      var hint = null;
+      try { hint = JSON.parse(localStorage.getItem('litAuthHint') || 'null'); } catch (e) {}
+      if (hint && hint.s) { pendingAcctAction = fn; return; }
+    }
+    acctOpenAuth();
+  }
+
   // ── star quick-action ───────────────────────────────────────────────────
   window.acctStar = function (el) {
-    if (!state.user) { acctOpenAuth(); return; }
+    if (!state.user) { acctWhenSignedIn(function () { window.acctStar(el); }); return; }
     var id = el.dataset.pk, rec = state.papers[id], ref = papersCol().doc(id);
     if (rec && rec.starred) {
       if ((rec.note && rec.note.trim()) || (rec.tags && rec.tags.length) || (rec.lists && rec.lists.length)) {
@@ -4240,7 +4256,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
 
   // ── per-card panel: note + tags + lists ─────────────────────────────────
   window.acctTogglePanel = function (el) {
-    if (!state.user) { acctOpenAuth(); return; }
+    if (!state.user) { acctWhenSignedIn(function () { window.acctTogglePanel(el); }); return; }
     var card = el.closest('.paper-card');
     var panel = card.querySelector('.paper-acct-panel');
     if (!panel) {
@@ -4752,6 +4768,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   // ── auth modal ──────────────────────────────────────────────────────────
   var authMode = 'signin';
   window.acctOpenAuth = function () {
+    if (state.user) return;   // never ask a signed-in user to sign in again
     document.getElementById('acctOverlay').classList.add('open');
     setAuthMode('signin');
     setTimeout(function () { var e = document.getElementById('acctEmail'); if (e) e.focus(); }, 40);
@@ -4907,6 +4924,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (c === 'auth/too-many-requests') return 'Too many attempts. Please try again later.';
     if (c === 'auth/unauthorized-domain') return 'This domain is not authorized in the Firebase console yet.';
     if (c === 'auth/operation-not-allowed') return 'This sign-in method is not enabled in the Firebase console yet.';
+    if (c === 'auth/popup-blocked') return 'Your browser blocked the sign-in popup. Allow popups for this site and try again.';
     if (c === 'auth/account-exists-with-different-credential') return 'An account already exists for this email with a different sign-in method — use the method you signed up with.';
     if (c === 'permission-denied') return 'Permission denied. The Firestore security rules may not be deployed yet.';
     return (e && e.message) || 'Something went wrong. Please try again.';
@@ -4953,6 +4971,43 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       || ((p.firstName || '') + ' ' + (p.lastName || '')).trim()
       || (state.user && state.user.displayName) || '';
   }
+  // The name journals CREDIT an author by is ORCID's "Published name"
+  // (credit-name) — given+family alone can drop a middle initial and then
+  // match nothing (e.g. "Konstantinos Stouras" vs the credited
+  // "Konstantinos I. Stouras" on every paper). Whenever a linked profile has
+  // no explicit match name, pull the credit-name from the user's PUBLIC ORCID
+  // record (pub.orcid.org — public, CORS-enabled, no auth) and save it as the
+  // default orcidAuthorName. Fill-when-empty only: a name the user typed
+  // themselves is never overwritten, and a per-iD session guard keeps it to
+  // one fetch.
+  var orcidNameFetched = {};
+  function backfillOrcidAuthorName(orcid, fallbackName) {
+    if (!orcid || !state.user || !state.profile) return;
+    if ((state.profile.orcidAuthorName || '').trim()) return;
+    if (orcidNameFetched[orcid]) return;
+    orcidNameFetched[orcid] = true;
+    fetch('https://pub.orcid.org/v3.0/' + encodeURIComponent(orcid) + '/personal-details', { headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; })
+      .then(function (j) {
+        var n = j && j.name;
+        var credit = n && n['credit-name'] && n['credit-name'].value;
+        var given = n && n['given-names'] && n['given-names'].value;
+        var family = n && n['family-name'] && n['family-name'].value;
+        var name = String(credit || ((given || '') + ' ' + (family || '')).trim() || fallbackName || '').trim();
+        if (!name) return;
+        if (!state.user || !state.profile) return;                    // signed out meanwhile
+        if ((state.profile.orcidAuthorName || '').trim()) return;     // user typed one meanwhile — theirs wins
+        if ((state.profile.orcid || '') !== orcid) return;            // re-linked to a different iD meanwhile
+        saveOrcidProfile(
+          { orcidAuthorName: name, updatedAt: serverTime() },
+          { orcidAuthorName: name },
+          function () {
+            var ov = document.getElementById('litOrcidOverlay');
+            if (ov && ov.classList.contains('open')) renderOrcidBody();
+          });
+      });
+  }
   // Reveal the "show my publications" consent row only once a valid ORCID is typed.
   window.acctOrcidFieldChanged = function () {
     var inp = document.getElementById('pfOrcid'); if (!inp) return;
@@ -4998,6 +5053,9 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       .then(function () {
         var st = document.getElementById('pfStatus'); if (st) { st.style.color = 'var(--green)'; st.textContent = 'Saved.'; }
         acctRenderControl();
+        // A freshly typed iD with no explicit match name: default the match
+        // name from the public ORCID record's credit-name (fill-when-empty).
+        if (orcidRaw && !((state.profile || {}).orcidAuthorName || '').trim()) backfillOrcidAuthorName(orcid, '');
         setTimeout(acctCloseProfile, 700);
       })
       .catch(function (e) { er.textContent = friendly(e); })
@@ -5112,10 +5170,13 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     orcidPromptShown = true;   // signing in also answers the first-run invite
     var patch = { orcid: pend.orcid, orcidLinked: pend.linked, orcidVerified: true, orcidPromptSeen: true, updatedAt: serverTime() };
     var local = { orcid: pend.orcid, orcidLinked: pend.linked, orcidVerified: true, orcidPromptSeen: true };
-    // Seed the match name from ORCID only when the user hasn't set one of their own.
-    var hasName = state.profile.orcidAuthorName && state.profile.orcidAuthorName.trim();
-    if (pend.name && !hasName) { patch.orcidAuthorName = pend.name; local.orcidAuthorName = pend.name; }
-    saveOrcidProfile(patch, local, function () { litOrcidOpen('manage'); });
+    saveOrcidProfile(patch, local, function () {
+      litOrcidOpen('manage');
+      // Default the match name to the credit-name from their public ORCID
+      // record (the sign-in's given+family claims, passed as fallback, can
+      // miss a middle initial the papers carry). Fills only when unset.
+      backfillOrcidAuthorName(pend.orcid, pend.name);
+    });
   }
 
   // A user who REGISTERED (or signs in) with the ORCID provider ('oidc.orcid'
@@ -5141,7 +5202,8 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     orcidPromptShown = true;   // they connected by signing in — no invite needed
     saveOrcidProfile(
       { orcid: orcid, orcidLinked: true, orcidVerified: true, orcidPromptSeen: true, updatedAt: serverTime() },
-      { orcid: orcid, orcidLinked: true, orcidVerified: true, orcidPromptSeen: true });
+      { orcid: orcid, orcidLinked: true, orcidVerified: true, orcidPromptSeen: true },
+      function () { backfillOrcidAuthorName(orcid, ''); });
   }
 
   window.acctOpenPublications = function () {
@@ -5196,6 +5258,10 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       ? 'Your publications and citation metrics from The Lit’s database.'
       : 'Your ORCID is saved. Turn on the association to see your publications and metrics.';
     var name = orcidMatchName(p);
+    // Self-heal accounts linked before the credit-name backfill existed: no
+    // explicit match name on file → default it from the public ORCID record
+    // (the modal re-renders with the name once the lookup lands).
+    if (linked && !(p.orcidAuthorName && p.orcidAuthorName.trim())) backfillOrcidAuthorName(p.orcid, '');
     var html =
       '<div style="font-size:13.5px">ORCID iD: <a class="orcid-id" href="' + orcidUrl(p.orcid) + '" target="_blank" rel="noopener"><span class="oico">iD</span>' + esc(p.orcid) + '</a>' +
         (p.orcidVerified ? ' <span class="orcid-verified" title="Confirmed by signing in at orcid.org">✓ verified</span>' : '') +
@@ -5209,7 +5275,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         '<div class="acct-field">' +
           '<label for="litOrcidName">Name we match your papers by</label>' +
           '<input id="litOrcidName" type="text" value="' + escAttr(name) + '" placeholder="Your name as it appears on your papers">' +
-          '<div style="font-size:11.5px;color:var(--text-muted);margin-top:4px">Our data has no per-paper ORCID, so we match by author name. Adjust this if your papers list you differently, then Save.</div>' +
+          '<div style="font-size:11.5px;color:var(--text-muted);margin-top:4px">Our data has no per-paper ORCID, so we match by author name — pre-filled with the published name from your ORCID record. Adjust it if your papers credit you differently, then Save.</div>' +
         '</div>' +
         '<button class="acct-btn" style="align-self:flex-start;padding:7px 14px" onclick="litOrcidSaveName()">Save name</button>' +
         '<a class="orcid-linkbtn" href="' + dbAuthorLink(name) + '"><span class="ico">📚</span><span>View my publications in the database' +
@@ -6056,6 +6122,11 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       // so it never overrides filters they've already set this session).
       if (typeof window.applyLitSiteDefault === 'function') window.applyLitSiteDefault();
     }
+    // Run an account action clicked while the session was still restoring
+    // (queued by acctWhenSignedIn); if the restore concluded signed-out, the
+    // click becomes an honest sign-in ask.
+    var act = pendingAcctAction; pendingAcctAction = null;
+    if (act) { if (user) act(); else acctOpenAuth(); }
     acctHandleHashLink();   // honour a #lit-<view> deep-link from a sub-page's account menu
   });
 

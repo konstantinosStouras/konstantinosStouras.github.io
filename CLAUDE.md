@@ -419,7 +419,18 @@ in `PROVIDER_DEFS` (Firebase generic OIDC provider **`oidc.orcid`**) puts
 Firebase project runs Identity Platform with the `oidc.orcid` OIDC provider
 enabled (code flow; client secret lives ONLY in the console) and `'orcid'`
 is in `AUTH_PROVIDERS` (flipped together with its changelog entry + About
-copy, per the keep-in-sync discipline).
+copy, per the keep-in-sync discipline). **The match name defaults to ORCID's
+credit-name** (Published Name — how journals actually credit the author;
+given+family can drop a middle initial and match nothing):
+`backfillOrcidAuthorName` fetches it from the public `pub.orcid.org` record
+whenever a linked profile has no explicit `orcidAuthorName` (fill-when-empty,
+per-session per-iD guard; self-heals older links when the "My publications"
+modal opens). **Sign-in invariant:** a signed-in user is never shown the
+sign-in modal again — `acctOpenAuth` no-ops when signed in, the header
+paints from the `litAuthHint` localStorage cache while the session restores
+(`authResolved`), and account actions clicked during the restore window
+(star, notes panel) are queued by `acctWhenSignedIn` and run when auth
+resolves instead of bouncing to the modal.
 Signed-in users can also save **default filters** (account menu →
 "Default filters"): a preferred subset of journals and/or journal types,
 **auto-applied on sign-in** so they land on their subset instead of the full

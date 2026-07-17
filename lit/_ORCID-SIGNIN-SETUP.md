@@ -103,6 +103,16 @@ SDK, same users). Do these once:
   `orcidPromptSeen: true`) exactly **once per account** — it's gated on
   `!orcid && !orcidPromptSeen`, so a user who later chooses *"Turn off /
   remove ORCID association"* is never re-linked against their will.
+- **Match name = ORCID's credit-name (Published Name):** the name journals
+  credit an author by is the record's *Published Name*, not given+family
+  (which can drop a middle initial and then match no papers at all). Whenever
+  a linked profile has no explicit match name, `backfillOrcidAuthorName()`
+  fetches `pub.orcid.org/v3.0/<iD>/personal-details` (public, CORS, no auth)
+  and saves `credit-name` (falling back to given+family, then to the sign-in
+  name claims) as the default `orcidAuthorName` — fill-when-empty only, so a
+  name the user typed themselves always wins. Runs after both OAuth link
+  paths, after a hand-typed link, and self-heals already-linked profiles when
+  the "My publications" modal opens.
 - **No e-mail from ORCID:** ORCID's OIDC does not share the account e-mail
   (unless the user made it public), so an ORCID-registered Firebase account
   may have none. The user can add one under *Edit profile* (used e.g. as the
