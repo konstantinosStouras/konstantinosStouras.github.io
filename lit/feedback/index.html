@@ -301,6 +301,16 @@
   </div>
 </main>
 
+<!-- Screenshot lightbox (used by the admin inbox to enlarge a thumbnail).
+     MUST sit ABOVE the inline script below: the script attaches the lightbox's
+     close handlers (overlay click + Escape) as soon as it runs, so the element
+     has to exist by then — as the bottom of the page, it didn't, the wiring
+     threw on a null element and the ✕ button silently did nothing. -->
+<div class="fb-lightbox" id="fbLightbox" role="dialog" aria-modal="true" aria-label="Screenshot">
+  <button type="button" class="fb-lb-close" id="fbLbClose" aria-label="Close">×</button>
+  <img id="fbLbImg" src="" alt="Screenshot (enlarged)">
+</div>
+
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
@@ -729,12 +739,6 @@
   });
 })();
 </script>
-
-<!-- Screenshot lightbox (used by the admin inbox to enlarge a thumbnail) -->
-<div class="fb-lightbox" id="fbLightbox" role="dialog" aria-modal="true" aria-label="Screenshot">
-  <button type="button" class="fb-lb-close" id="fbLbClose" aria-label="Close">×</button>
-  <img id="fbLbImg" src="" alt="Screenshot (enlarged)">
-</div>
 
 <!-- Shared sign-in / account control in the header (mirrors the main browser).
      Loaded after the block above so it reuses the default Firebase app that
