@@ -469,11 +469,23 @@ external CDN beyond the shared Google Font) offers filters — **journal types**
 **journals**, and a **year-range** slider — driving live tiles (papers, avg
 co-authors, solo %, pre-print %, citations) and charts (publication volume by
 journal over time, avg co-authors/year by journal, co-authorship distribution,
-papers by journal, most-cited table). **Default scope = the curated native
-sources** (`data.nativeKeys`/`NATIVE_KEYS`): with nothing selected `scopeKeys()`
-returns the ten natives, NOT the whole corpus, so the page opens on the curated
-journals rather than high-volume catalog journals like EJOR (which appear once
-their type/journal is picked; an "explore the whole corpus" link selects all).
+papers by journal, most-cited table). **Default scope = the WHOLE database**:
+with nothing selected `scopeKeys()` returns every journal, so the top-line
+statistics describe the entire corpus until the user narrows scope. **Journal-type
+group comparisons:** when specific **journals** are chosen, each chart overlays
+the aggregate behaviour of every journal-type those journals belong to
+(`comparisonGroups()` = union of the chosen journals' `types`: UTD24 / FT50 /
+ABS 4/4* / ABS 3), with **per-plot toggle buttons** below each chart
+(`renderGroupToggles`, `S.groupOff['<plot>|<type>']`). The two time-series line
+charts (publication volume, avg co-authors) draw the groups as dashed overlay
+lines and **auto-trim the x-axis to the non-zero year range of the shown series**
+(so it starts when the shown journals began, not 1900); the volume chart's legend
+is **click-to-hide/show** per line (`S.evoHidden`). The two by-journal bar charts
+compare against the group's average-per-journal (papers) / average citations
+(impact); the co-authorship distribution overlays each group's team-size share as
+a dashed polyline. Groups are suppressed while an editorial dimension is active
+(not like-for-like). The old "Compare vs. other journals" toggle was replaced by
+this system.
 **"Exclude non-research items" toggle (pre-ticked):** a filter-bar checkbox
 (`S.excludeNonResearch`, default ON) filters journal "Editorial Board" front
 matter, book reviews, corrigenda/errata, announcements and indices out of EVERY
