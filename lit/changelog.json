@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "paper-card-tooltips",
+      "date": "2026-07-17",
+      "title": "Hover tooltips explain the tags on each paper",
+      "summary": "Hover over the small tags on a paper — the journal, the year/volume, the accepting editor and area, the publication status (e.g. 'Articles in Advance'), the 'Added' date — and a short pop-up now explains what it is and that you can click it to filter. The Abstract, Significance and BibTeX buttons get the same. Thanks to the reader who suggested this on the Feedback page.",
+      "url": "https://stouras.com/lit/"
+    },
+    {
       "id": "account-menu-every-page",
       "date": "2026-07-17",
       "title": "Your account menu now appears on every page",
