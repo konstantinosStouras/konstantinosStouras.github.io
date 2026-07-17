@@ -3856,17 +3856,27 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       </div>
       <div class="acct-field">
         <label for="pfOrcid">ORCID iD <span style="text-transform:none;font-weight:400;color:var(--text-muted)">(optional)</span></label>
-        <input id="pfOrcid" type="text" inputmode="numeric" placeholder="0000-0002-1825-0097" oninput="acctOrcidFieldChanged()" onkeydown="if(event.key==='Enter')acctSaveProfile()">
-        <div style="font-size:11.5px;color:var(--text-muted);margin-top:4px">Your <a href="https://orcid.org/" target="_blank" rel="noopener" style="color:var(--navy)">ORCID</a> identifies you as a researcher. Link it to see your publications and citation metrics from the database.</div>
-        <button type="button" class="orcid-signin-btn" id="pfOrcidSignin" style="display:none;margin-top:9px" onclick="litOrcidSignIn()"><span class="oico">iD</span>Sign in with ORCID instead</button>
+        <!-- Unlinked: type the iD, or authenticate at orcid.org -->
+        <div id="pfOrcidEntry">
+          <input id="pfOrcid" type="text" inputmode="numeric" placeholder="0000-0002-1825-0097" oninput="acctOrcidFieldChanged()" onkeydown="if(event.key==='Enter')acctSaveProfile()">
+          <div style="font-size:11.5px;color:var(--text-muted);margin-top:4px">Your <a href="https://orcid.org/" target="_blank" rel="noopener" style="color:var(--navy)">ORCID</a> identifies you as a researcher. Link it to see your publications and citation metrics from the database.</div>
+          <button type="button" class="orcid-signin-btn" id="pfOrcidSignin" style="display:none;margin-top:9px" onclick="litOrcidSignIn()"><span class="oico">iD</span>Sign in with ORCID instead</button>
+        </div>
+        <!-- Linked: a connected-account row — the iD chip (+ ✓ verified) and a Disconnect action -->
+        <div id="pfOrcidLinked" style="display:none">
+          <div id="pfOrcidChip" style="font-size:13.5px;margin-top:2px"></div>
+          <div style="font-size:11.5px;color:var(--text-muted);margin-top:5px">Connected to your account. <span class="acct-link" onclick="litOrcidUnlink()">Disconnect</span></div>
+        </div>
+      </div>
+      <div class="acct-field" id="pfOrcidNameField" style="display:none">
+        <label for="pfOrcidName">Name we match your papers by</label>
+        <input id="pfOrcidName" type="text" placeholder="Your name as it appears on your papers" onkeydown="if(event.key==='Enter')acctSaveProfile()">
+        <div style="font-size:11.5px;color:var(--text-muted);margin-top:4px">Pre-filled with the published name from your ORCID record. Adjust it if your papers credit you differently; clear it to go back to the ORCID default.</div>
       </div>
       <label class="share-toggle-row" id="pfOrcidLinkRow" style="display:none">
         <input type="checkbox" id="pfOrcidLink">
         <span>Show my publications &amp; citation metrics from the database on my profile</span>
       </label>
-      <div id="pfOrcidManageRow" style="display:none;font-size:12.5px;margin-top:2px">
-        <span class="acct-link" onclick="acctCloseProfile();acctOpenPublications()">Manage ORCID association (match name, verified status, unlink)</span>
-      </div>
       <div class="acct-error" id="pfErr"></div>
       <button class="acct-primary" id="pfSaveBtn" onclick="acctSaveProfile()">Save profile</button>
       <div class="acct-switch" id="pfStatus"></div>
@@ -4224,20 +4234,30 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   // break the "never re-ask a signed-in user" contract. When the fast-paint
   // hint says a session exists, queue the action and run it as soon as auth
   // resolves; only a genuinely signed-out visitor gets the sign-in modal.
-  var pendingAcctAction = null;
+  var pendingAcctActions = [];
   function acctWhenSignedIn(fn) {
     if (state.user) { fn(); return; }
     if (!authResolved) {
       var hint = null;
       try { hint = JSON.parse(localStorage.getItem('litAuthHint') || 'null'); } catch (e) {}
-      if (hint && hint.s) { pendingAcctAction = fn; return; }
+      if (hint && hint.s) { pendingAcctActions.push(fn); return; }
     }
     acctOpenAuth();
+  }
+  // The heavy-load restore window is exactly when the paper list re-renders as
+  // data streams in, so a queued action must not hold the clicked NODE — it can
+  // be detached by the time it runs. Re-resolve the element by its stable
+  // data-pk instead (falling back to the captured node if it's still attached).
+  function acctFreshEl(selector, el) {
+    var pk = el && el.dataset ? el.dataset.pk : '';
+    var fresh = null;
+    if (pk) { try { fresh = document.querySelector(selector + '[data-pk="' + pk + '"]'); } catch (e) {} }
+    return fresh || el;
   }
 
   // ── star quick-action ───────────────────────────────────────────────────
   window.acctStar = function (el) {
-    if (!state.user) { acctWhenSignedIn(function () { window.acctStar(el); }); return; }
+    if (!state.user) { acctWhenSignedIn(function () { window.acctStar(acctFreshEl('.acct-star', el)); }); return; }
     var id = el.dataset.pk, rec = state.papers[id], ref = papersCol().doc(id);
     if (rec && rec.starred) {
       if ((rec.note && rec.note.trim()) || (rec.tags && rec.tags.length) || (rec.lists && rec.lists.length)) {
@@ -4259,7 +4279,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
 
   // ── per-card panel: note + tags + lists ─────────────────────────────────
   window.acctTogglePanel = function (el) {
-    if (!state.user) { acctWhenSignedIn(function () { window.acctTogglePanel(el); }); return; }
+    if (!state.user) { acctWhenSignedIn(function () { window.acctTogglePanel(acctFreshEl('.paper-acct-toggle', el)); }); return; }
     var card = el.closest('.paper-card');
     var panel = card.querySelector('.paper-acct-panel');
     if (!panel) {
@@ -4842,6 +4862,13 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (!prof.firstName || !prof.lastName) { acctErr('Please enter your first and last name.'); btn.disabled = false; return; }
     auth.createUserWithEmailAndPassword(email, pw)
       .then(function (cred) {
+        // The account exists and the user IS signed in from this point —
+        // close the modal now, not after the profile write: gating the close
+        // on that write left a signed-in user staring at a "failed"
+        // registration (and a retry then says the e-mail is taken). The
+        // profile write is best-effort — on failure they are still signed in
+        // and can complete their details from Edit profile.
+        acctCloseAuth();
         var user = cred && cred.user;
         var display = (prof.firstName + ' ' + prof.lastName).trim();
         var tasks = [];
@@ -4853,9 +4880,8 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
           }, { merge: true }));
           if (display) tasks.push(user.updateProfile({ displayName: display }));
         }
-        return Promise.all(tasks);
+        return Promise.all(tasks).catch(function (e) { console.warn('post-signup profile write:', e && e.code); });
       })
-      .then(function () { acctCloseAuth(); })
       .catch(function (e) { acctErr(friendly(e)); })
       .then(function () { btn.disabled = false; });
   };
@@ -4948,13 +4974,28 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     document.getElementById('pfAffiliation').value = p.affiliation || '';
     document.getElementById('pfWebsite').value = p.website || '';
     document.getElementById('pfEmail').value = p.email || (state.user && state.user.email) || '';
-    document.getElementById('pfOrcid').value = p.orcid || '';
-    document.getElementById('pfOrcidLink').checked = !!p.orcidLinked;
-    var pfSignin = document.getElementById('pfOrcidSignin');
-    if (pfSignin) pfSignin.style.display = orcidOauthEnabled() ? '' : 'none';
-    var pfManage = document.getElementById('pfOrcidManageRow');
-    if (pfManage) pfManage.style.display = p.orcid ? '' : 'none';
-    acctOrcidFieldChanged();   // show/hide the consent row for the current value
+    // ORCID section: a linked account shows the connected-iD row (chip +
+    // ✓ verified + Disconnect) and the match-name field; an unlinked one the
+    // entry input (+ the ORCID sign-in button when configured).
+    var linkedOrcid = !!p.orcid;
+    document.getElementById('pfOrcidEntry').style.display = linkedOrcid ? 'none' : '';
+    document.getElementById('pfOrcidLinked').style.display = linkedOrcid ? '' : 'none';
+    document.getElementById('pfOrcidNameField').style.display = linkedOrcid ? '' : 'none';
+    if (linkedOrcid) {
+      document.getElementById('pfOrcidChip').innerHTML =
+        '<a class="orcid-id" href="' + orcidUrl(p.orcid) + '" target="_blank" rel="noopener"><span class="oico">iD</span>' + esc(p.orcid) + '</a>' +
+        (p.orcidVerified ? ' <span class="orcid-verified" title="Confirmed by signing in at orcid.org">✓ verified</span>' : '');
+      document.getElementById('pfOrcidName').value = orcidMatchName(p);
+      document.getElementById('pfOrcid').value = '';
+      document.getElementById('pfOrcidLink').checked = !!p.orcidLinked;
+      document.getElementById('pfOrcidLinkRow').style.display = '';
+    } else {
+      document.getElementById('pfOrcid').value = '';
+      document.getElementById('pfOrcidLink').checked = false;
+      var pfSignin = document.getElementById('pfOrcidSignin');
+      if (pfSignin) pfSignin.style.display = orcidOauthEnabled() ? '' : 'none';
+      acctOrcidFieldChanged();   // show/hide the consent row for the typed value
+    }
     var st = document.getElementById('pfStatus'); if (st) st.textContent = '';
     var er = document.getElementById('pfErr'); if (er) er.textContent = '';
     document.getElementById('acctProfileOverlay').classList.add('open');
@@ -5035,10 +5076,24 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     };
     var er = document.getElementById('pfErr'); er.style.color = 'var(--red)'; er.textContent = '';
     if (!prof.firstName || !prof.lastName) { er.textContent = 'Please enter your first and last name.'; return; }
-    // ORCID (optional): store the canonical form, or clear it when the field is
-    // emptied. A non-empty value that fails the checksum blocks the save.
-    var orcidRaw = document.getElementById('pfOrcid').value.trim();
-    if (orcidRaw) {
+    // ORCID (optional). Linked mode (connected-iD row visible): the iD and its
+    // verified status are managed by Connect/Disconnect, not this form — save
+    // only the consent toggle and the match name (cleared = back to the
+    // ORCID-record default). Entry mode: store the canonical typed form, or
+    // clear the link when the field is emptied; a non-empty value that fails
+    // the checksum blocks the save.
+    var pfLinkedEl = document.getElementById('pfOrcidLinked');
+    var linkedOrcid = !!(pfLinkedEl && pfLinkedEl.style.display !== 'none');
+    var orcidRaw = linkedOrcid ? '' : document.getElementById('pfOrcid').value.trim();
+    if (linkedOrcid) {
+      prof.orcidLinked = !!document.getElementById('pfOrcidLink').checked;
+      var pfNm = document.getElementById('pfOrcidName').value.trim();
+      if (pfNm) prof.orcidAuthorName = pfNm;
+      else if ((((state.profile || {}).orcidAuthorName) || '').trim()) {
+        prof.orcidAuthorName = FV.delete();
+        delete orcidNameFetched[(state.profile || {}).orcid];   // let the credit-name backfill re-run
+      }
+    } else if (orcidRaw) {
       var orcid = normOrcid(orcidRaw);
       if (!orcid) { er.textContent = 'That ORCID iD looks invalid. It should read like 0000-0002-1825-0097.'; return; }
       prof.orcid = orcid;
@@ -5117,11 +5172,15 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   // modal (which has a #litOrcidConsent checkbox) or the profile modal.
   window.litOrcidSignIn = function () {
     if (!orcidOauthEnabled()) return;
-    var consent = document.getElementById('litOrcidConsent');
+    // Scope the consent lookup to the OPEN connect modal: litOrcidClose only
+    // hides the overlay, so a stale (possibly unchecked) #litOrcidConsent can
+    // linger in the DOM when this is launched from the Edit-profile button.
+    var consent = document.querySelector('#litOrcidOverlay.open #litOrcidConsent');
     var st = orcidRandState();
     try {
       sessionStorage.setItem('litOrcidOAuth', JSON.stringify({
-        state: st, linked: consent ? !!consent.checked : true
+        state: st, linked: consent ? !!consent.checked : true,
+        uid: (state.user && state.user.uid) || ''   // bind the round-trip to the account that started it
       }));
     } catch (e) {}
     var url = orcidAuthBase() + '/oauth/authorize'
@@ -5167,7 +5226,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     }
     var orcid = normOrcid(rawId);
     if (!orcid) return;
-    pendingOrcid = { orcid: orcid, name: (nm || '').trim(), linked: saved.linked !== false };
+    pendingOrcid = { orcid: orcid, name: (nm || '').trim(), linked: saved.linked !== false, uid: saved.uid || '' };
   }
 
   // Save an authenticated "Sign in with ORCID" result once account + profile
@@ -5175,11 +5234,16 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   function maybeApplyOrcidPending() {
     if (!pendingOrcid || !state.user || !state.profile) return;
     var pend = pendingOrcid; pendingOrcid = null;
+    // Apply only to the account that started the round-trip — if the session
+    // changed meanwhile (signed out in another tab, different user signed in
+    // on a shared machine), silently discard rather than link someone else's iD.
+    if (pend.uid && state.user.uid !== pend.uid) return;
     orcidPromptShown = true;   // signing in also answers the first-run invite
     var patch = { orcid: pend.orcid, orcidLinked: pend.linked, orcidVerified: true, orcidPromptSeen: true, updatedAt: serverTime() };
     var local = { orcid: pend.orcid, orcidLinked: pend.linked, orcidVerified: true, orcidPromptSeen: true };
     saveOrcidProfile(patch, local, function () {
-      litOrcidOpen('manage');
+      // Land on the profile card, which now hosts the connected-iD row.
+      window.acctOpenProfile();
       // Default the match name to the credit-name from their public ORCID
       // record (the sign-in's given+family claims, passed as fallback, can
       // miss a middle initial the papers carry). Fills only when unset.
@@ -5336,7 +5400,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     // ✓ verified marker. The input-less "turn on" path (manage mode) keeps it.
     if (inpEl && orcid !== (p.orcid || '')) { patch.orcidVerified = false; local.orcidVerified = false; }
     saveOrcidProfile(patch, local,
-      function () { orcidMode = 'manage'; renderOrcidBody(); });
+      function () { litOrcidClose(); window.acctOpenProfile(); });   // the profile card hosts the linked state now
   };
   window.litOrcidNotNow = function () {
     saveOrcidProfile({ orcidPromptSeen: true, updatedAt: serverTime() }, { orcidPromptSeen: true }, function () { litOrcidClose(); });
@@ -5352,7 +5416,12 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     saveOrcidProfile(
       { orcid: FV.delete(), orcidLinked: false, orcidAuthorName: FV.delete(), orcidVerified: FV.delete(), updatedAt: serverTime() },
       null,
-      function () { litOrcidClose(); });
+      function () {
+        litOrcidClose();
+        // Disconnect now also lives on the profile card — refresh it in place.
+        var po = document.getElementById('acctProfileOverlay');
+        if (po && po.classList.contains('open')) window.acctOpenProfile();
+      });
   };
 
   // First-run invite: prompt a signed-in user once to connect their ORCID.
@@ -6110,6 +6179,14 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       if (typeof clearFilters === 'function') clearFilters();
     }
     if (user) {
+      // The user IS signed in from this instant: close a sign-in modal that a
+      // restore or a cross-tab sign-in may have left open (never ask a
+      // signed-in user to sign in), and repaint the header NOW instead of
+      // waiting for the first Firestore snapshot — if the listeners error
+      // (rules mis-deploy, blocked Firestore) the header would otherwise stay
+      // stuck on the pre-resolve paint with no menu and no way to sign out.
+      acctCloseAuth();
+      acctRenderControl();
       // Public registered-users tally (read by lit/analytics/). Each account
       // owns ONE contentless doc — just a coarse "last seen" timestamp, no e-mail
       // or name — in the top-level `registeredUsers` collection, so that page can
@@ -6149,11 +6226,14 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       // so it never overrides filters they've already set this session).
       if (typeof window.applyLitSiteDefault === 'function') window.applyLitSiteDefault();
     }
-    // Run an account action clicked while the session was still restoring
+    // Run the account actions clicked while the session was still restoring
     // (queued by acctWhenSignedIn); if the restore concluded signed-out, the
-    // click becomes an honest sign-in ask.
-    var act = pendingAcctAction; pendingAcctAction = null;
-    if (act) { if (user) act(); else acctOpenAuth(); }
+    // clicks become one honest sign-in ask.
+    var acts = pendingAcctActions; pendingAcctActions = [];
+    if (acts.length) {
+      if (user) acts.forEach(function (fn) { try { fn(); } catch (e) {} });
+      else acctOpenAuth();
+    }
     acctHandleHashLink();   // honour a #lit-<view> deep-link from a sub-page's account menu
   });
 

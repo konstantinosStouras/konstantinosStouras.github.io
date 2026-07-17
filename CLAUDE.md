@@ -406,9 +406,14 @@ their common parent `lit/`, NOT in `lit/_functions/`).
 modal or Edit profile) and the account menu gains two DIRECT links (no modal
 in between): "My publications" → `./?author=<match name>` and "My author
 analytics" → `analytics/?author=<match name>`
-(`acctGoMyPublications`/`acctGoMyAnalytics`, both via `orcidMatchName`); the
-manage modal (match-name editor, ✓ verified status, unlink) stays reachable
-from Edit profile → "Manage ORCID association" (`acctOpenPublications`); besides typing the iD
+(`acctGoMyPublications`/`acctGoMyAnalytics`, both via `orcidMatchName`);
+ORCID management lives INSIDE the Edit-profile card (connected-account
+pattern): linked accounts show the iD chip + ✓ verified + Disconnect
+(`#pfOrcidLinked`), a "Name we match your papers by" field saved with the
+profile (empty = back to the credit-name default) and the consent toggle,
+while unlinked ones keep the entry input + "Sign in with ORCID" button; the
+old modal now serves only the first-run connect invite, and both connect
+flows land on the profile card; besides typing the iD
 (ISO 7064-validated, `normOrcid`), the connect stage offers **"Sign in with
 ORCID"** — ORCID's OIDC *implicit* flow run wholly client-side
 (`ORCID_OAUTH` config + `litOrcidSignIn`/`readOrcidOAuthResponse`/
