@@ -4964,9 +4964,13 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       if (!orcid) { er.textContent = 'That ORCID iD looks invalid. It should read like 0000-0002-1825-0097.'; return; }
       prof.orcid = orcid;
       prof.orcidLinked = !!document.getElementById('pfOrcidLink').checked;
+      // A hand-typed CHANGE of iD was not authenticated at orcid.org — drop
+      // the ✓ verified marker (kept when the iD is unchanged).
+      if (orcid !== ((state.profile || {}).orcid || '')) prof.orcidVerified = false;
     } else {
       prof.orcid = FV.delete();
       prof.orcidLinked = false;
+      prof.orcidVerified = FV.delete();   // no iD, nothing to be verified
     }
     prof.orcidPromptSeen = true;   // deciding it here counts as answering the prompt
     var btn = document.getElementById('pfSaveBtn'); btn.disabled = true;
@@ -5054,14 +5058,19 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   function readOrcidOAuthResponse() {
     var hash = (location.hash || '').replace(/^#/, '');
     if (!hash || hash.indexOf('state=') < 0) return;   // not an OAuth return
+    var hp = new URLSearchParams(hash);
+    // Only an OAuth response carries state + a token/iD/error; any other
+    // #state=… hash (none today) is left alone.
+    if (!hp.get('access_token') && !hp.get('id_token') && !hp.get('orcid') && !hp.get('error')) return;
+    // Strip the token-bearing fragment from the address bar FIRST — before any
+    // validation below can bail out — so it never lingers in the URL/history
+    // (e.g. when the redirect landed without our sessionStorage nonce).
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
     var saved = null;
     try { saved = JSON.parse(sessionStorage.getItem('litOrcidOAuth') || 'null'); } catch (e) {}
     if (!saved) return;
-    var hp = new URLSearchParams(hash);
     if (hp.get('state') !== saved.state) return;       // stale / forged — ignore
     try { sessionStorage.removeItem('litOrcidOAuth'); } catch (e) {}
-    // Strip the OAuth fragment from the address bar so a refresh won't replay it.
-    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
     if (hp.get('error')) return;                        // user denied / config error
     // ORCID's implicit response carries the iD as `orcid` (+ `name`), and — with
     // the openid scope — an `id_token` JWT whose `sub` is the iD. Prefer the
@@ -5218,9 +5227,12 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (!orcid) { if (er) { er.style.color = 'var(--red)'; er.textContent = 'Please enter a valid ORCID iD (like 0000-0002-1825-0097).'; } return; }
     var consent = document.getElementById('litOrcidConsent');
     var linked = consent ? !!consent.checked : true;
-    saveOrcidProfile(
-      { orcid: orcid, orcidLinked: linked, orcidPromptSeen: true, updatedAt: serverTime() },
-      { orcid: orcid, orcidLinked: linked, orcidPromptSeen: true },
+    var patch = { orcid: orcid, orcidLinked: linked, orcidPromptSeen: true, updatedAt: serverTime() };
+    var local = { orcid: orcid, orcidLinked: linked, orcidPromptSeen: true };
+    // A hand-typed CHANGE of iD was not authenticated at orcid.org — drop the
+    // ✓ verified marker. The input-less "turn on" path (manage mode) keeps it.
+    if (inpEl && orcid !== (p.orcid || '')) { patch.orcidVerified = false; local.orcidVerified = false; }
+    saveOrcidProfile(patch, local,
       function () { orcidMode = 'manage'; renderOrcidBody(); });
   };
   window.litOrcidNotNow = function () {
@@ -5233,9 +5245,9 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   };
   window.litOrcidUnlink = function () {
     if (!confirm('Remove your ORCID association? Your saved papers, notes and lists are unaffected.')) return;
-    if (state.profile) { delete state.profile.orcid; delete state.profile.orcidAuthorName; state.profile.orcidLinked = false; }
+    if (state.profile) { delete state.profile.orcid; delete state.profile.orcidAuthorName; delete state.profile.orcidVerified; state.profile.orcidLinked = false; }
     saveOrcidProfile(
-      { orcid: FV.delete(), orcidLinked: false, orcidAuthorName: FV.delete(), updatedAt: serverTime() },
+      { orcid: FV.delete(), orcidLinked: false, orcidAuthorName: FV.delete(), orcidVerified: FV.delete(), updatedAt: serverTime() },
       null,
       function () { litOrcidClose(); });
   };
