@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "account-menu-every-page",
+      "date": "2026-07-17",
+      "title": "Your account menu now appears on every page",
+      "summary": "The sign-in / account button now sits in the top-right of the About, Data Analytics and Feedback pages too, exactly like the main browser — so you can reach your library, e-mail alerts and default filters (or sign in) from anywhere on The Lit. The account dropdown was tidied to library, alerts, default filters, edit profile and sign out; your lists, tags and notes search still live inside My Library, unchanged. The Feedback page also gained Google Scholar and ORCID links.",
+      "url": "https://stouras.com/lit/about/"
+    },
+    {
       "id": "site-default-filters",
       "date": "2026-07-17",
       "title": "The browser opens on a curated default view",

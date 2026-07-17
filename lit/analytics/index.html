@@ -271,7 +271,7 @@
   .cstat .clabel .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #57c98a; margin-left: 7px; vertical-align: middle; }
   .cstat.online .clabel .dot { background: #57c98a; box-shadow: 0 0 0 0 rgba(87,201,138,0.7); animation: livedot 2s ease-out infinite; }
   @keyframes livedot { 0% { box-shadow: 0 0 0 0 rgba(87,201,138,0.6); } 70%,100% { box-shadow: 0 0 0 7px rgba(87,201,138,0); } }
-  .cstat .cdesc { font-size: 13.5px; color: rgba(255,255,255,0.82); line-height: 1.55; margin-top: 4px; max-width: 60ch; }
+  .cstat .cdesc { font-size: 13.5px; color: rgba(255,255,255,0.82); line-height: 1.55; margin-top: 4px; }
   @media (max-width: 560px) { .cstat { flex-direction: column; align-items: flex-start; gap: 8px; padding: 18px 20px; } .cstat .cnum { font-size: 40px; } }
 
   /* ── Team-science (disruption vs development) section ─────────────────── */
@@ -309,11 +309,16 @@
 <header class="header">
   <div class="header-inner">
     <a class="brand" href="/lit/" title="Back to The Lit"><h1><em>The Lit</em> — Data Analytics<span class="sub">Summary statistics for the research paper database</span></h1></a>
-    <nav class="pnav">
-      <a class="pnav-btn" href="/lit/about/" title="What The Lit is and how it works"><span class="ico">ⓘ</span>About</a>
-      <a class="pnav-btn is-active" href="/lit/" title="Close Data Analytics — back to the database"><span class="ico">📊</span>Data Analytics</a>
-      <a class="pnav-btn" href="/lit/feedback/" title="Send feedback, screenshots and suggestions"><span class="ico">💬</span>Feedback</a>
-    </nav>
+    <div class="header-right">
+      <nav class="pnav">
+        <a class="pnav-btn" href="/lit/about/" title="What The Lit is and how it works"><span class="ico">ⓘ</span>About</a>
+        <a class="pnav-btn is-active" href="/lit/" title="Close Data Analytics — back to the database"><span class="ico">📊</span>Data Analytics</a>
+        <a class="pnav-btn" href="/lit/feedback/" title="Send feedback, screenshots and suggestions"><span class="ico">💬</span>Feedback</a>
+      </nav>
+      <!-- Shared sign-in / account control (same as the main browser's header);
+           populated by ../lit-acct-nav.js once Firebase auth resolves. -->
+      <div id="acctControl" class="acct-control"></div>
+    </div>
   </div>
 </header>
 
@@ -2468,6 +2473,11 @@
   })();
 })();
 </script>
+
+<!-- Shared sign-in / account control in the header (mirrors the main browser).
+     Loaded after the block above so it reuses the default Firebase app that
+     script already initialised (the registered-users count). -->
+<script src="../lit-acct-nav.js"></script>
 
 </body>
 </html>

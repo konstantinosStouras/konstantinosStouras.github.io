@@ -125,11 +125,16 @@
 <header class="header">
   <div class="header-inner">
     <a class="brand" href="/lit/" title="Back to The Lit"><h1><em>The Lit</em> — Feedback<span class="sub">Tell me what to improve</span></h1></a>
-    <nav class="pnav">
-      <a class="pnav-btn" href="/lit/about/" title="What The Lit is and how it works"><span class="ico">ⓘ</span>About</a>
-      <a class="pnav-btn" href="/lit/analytics/" title="Summary statistics for the database"><span class="ico">📊</span>Data Analytics</a>
-      <a class="pnav-btn is-active" href="/lit/" title="Close Feedback — back to the database"><span class="ico">💬</span>Feedback</a>
-    </nav>
+    <div class="header-right">
+      <nav class="pnav">
+        <a class="pnav-btn" href="/lit/about/" title="What The Lit is and how it works"><span class="ico">ⓘ</span>About</a>
+        <a class="pnav-btn" href="/lit/analytics/" title="Summary statistics for the database"><span class="ico">📊</span>Data Analytics</a>
+        <a class="pnav-btn is-active" href="/lit/" title="Close Feedback — back to the database"><span class="ico">💬</span>Feedback</a>
+      </nav>
+      <!-- Shared sign-in / account control (same as the main browser's header);
+           populated by ../lit-acct-nav.js once Firebase auth resolves. -->
+      <div id="acctControl" class="acct-control"></div>
+    </div>
   </div>
 </header>
 
@@ -198,6 +203,14 @@
         <a class="contact-row" href="https://www.linkedin.com/in/stouras/" target="_blank" rel="noopener">
           <span class="c-ico" style="font-weight:800;letter-spacing:-.5px;">in</span>
           <span class="c-txt"><b>LinkedIn</b><span>in/stouras</span></span>
+        </a>
+        <a class="contact-row" href="https://scholar.google.com/citations?user=FzyFf3kAAAAJ" target="_blank" rel="noopener">
+          <span class="c-ico" style="font-weight:800;">G</span>
+          <span class="c-txt"><b>Google Scholar</b><span>Publications &amp; citations</span></span>
+        </a>
+        <a class="contact-row" href="https://orcid.org/0000-0002-2398-9566" target="_blank" rel="noopener">
+          <span class="c-ico">iD</span>
+          <span class="c-txt"><b>ORCID</b><span>0000-0002-2398-9566</span></span>
         </a>
       </div>
     </div>
@@ -384,5 +397,10 @@
   };
 })();
 </script>
+
+<!-- Shared sign-in / account control in the header (mirrors the main browser).
+     Loaded after the block above so it reuses the default Firebase app that
+     script already initialised. -->
+<script src="../lit-acct-nav.js"></script>
 </body>
 </html>
