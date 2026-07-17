@@ -468,7 +468,21 @@ sign-in is present). Delivery is by **`lit/_scraper/feedback-mailer.mjs`**
 `.github/workflows/lit-feedback-mail.yml`: it reads pending (`forwarded==false`)
 submissions, e-mails each to `FEEDBACK_TO` (default `kstouras@gmail.com`) with the
 screenshots **attached** (Reply-To = submitter), and stamps `forwarded:true`.
-So all feedback lands in ONE inbox. Setup: `lit/_FEEDBACK-SETUP.md`. The main
+So all feedback lands in ONE inbox. Setup: `lit/_FEEDBACK-SETUP.md`. Delivery is
+instant when the optional **Firestore `onCreate` Cloud Function** is deployed
+(`lit/_functions/`, project `lit-paper-browser`; `forwardFeedbackOnCreate` e-mails
+a submission within seconds and marks it `forwarded`, complementing the batch
+mailer via the same flag — setup `lit/_functions/README.md`); the batch mailer
+stays the always-on fallback. **Feedback is also mirrored into a PRIVATE GitHub
+repo** by `lit/_scraper/feedback-github-log.mjs`
+(`.github/workflows/lit-feedback-github-log.yml`): it reads new `feedback` docs
+and writes one folder per submission (`feedback/<id>/feedback.md` + `feedback.json`
++ decoded `screenshot-*.jpg`) into a checked-out private log repo, then commits +
+pushes — idempotent (the log repo is the record; no Firestore write). A separate
+PRIVATE repo because this site's repo is public and feedback holds e-mails/
+screenshots. Inert until a `FEEDBACK_LOG_REPO` variable + `FEEDBACK_LOG_TOKEN`
+secret are set; setup `lit/_FEEDBACK-GITHUB-LOG-SETUP.md`. This is what lets the
+feedback be read from GitHub (text + images) independent of e-mail. The main
 page also keeps a couple of **library niceties**: in **My Library** the
 paper-search filter bar is hidden (`body.lit-lib-mode`; the library has its own
 search), and clicking the ACTIVE list/tag chip deactivates it (back to "All

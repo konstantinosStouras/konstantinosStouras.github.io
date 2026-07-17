@@ -1,0 +1,79 @@
+name: lit — feedback → private GitHub log
+
+# Mirrors each Feedback submission (stouras.com/lit/feedback/) into a PRIVATE
+# GitHub repo, so the maintainer's assistant can read it straight from GitHub —
+# message text AND attached screenshots — without the e-mail inbox. Reads the
+# Firestore `feedback` collection with the Admin SDK, writes one folder per
+# submission into the checked-out log repo, then commits + pushes.
+# See lit/_scraper/feedback-github-log.mjs and lit/_FEEDBACK-GITHUB-LOG-SETUP.md.
+#
+# WHY A SEPARATE PRIVATE REPO: this site's own repo is PUBLIC, and feedback can
+# contain the submitter's e-mail + screenshots — that must not be public.
+#
+# Clean no-op until configured. To activate, on THIS repo set:
+#   • Variable  FEEDBACK_LOG_REPO   e.g. "konstantinosStouras/lit-feedback-log" (PRIVATE)
+#   • Secret    FEEDBACK_LOG_TOKEN  a token that can push to that repo (fine-grained PAT, Contents: write)
+#   • Secret    FIREBASE_SERVICE_ACCOUNT  (already set for the feedback mailer)
+
+on:
+  schedule:
+    - cron: '8,23,38,53 * * * *'   # every 15 min, off the busy :00/:15/:30/:45 boundaries
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run — report what would be logged, write nothing'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lit-feedback-github-log
+  cancel-in-progress: false
+
+jobs:
+  log:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # A repository VARIABLE is usable in `if:` (a secret is not), so the job only
+    # runs once the private log repo is configured — a clean no-op otherwise.
+    if: ${{ vars.FEEDBACK_LOG_REPO != '' }}
+    steps:
+      - name: Checkout site repo (has the mirror script)
+        uses: actions/checkout@v4
+
+      - name: Checkout the private feedback-log repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.FEEDBACK_LOG_REPO }}
+          token: ${{ secrets.FEEDBACK_LOG_TOKEN }}
+          path: _feedback-log
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install --no-save firebase-admin@^12
+
+      - name: Mirror new feedback into the log repo
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FEEDBACK_LOG_DIR: _feedback-log
+        run: node lit/_scraper/feedback-github-log.mjs ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '--dry-run' || '' }}
+
+      - name: Commit + push new submissions
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+        working-directory: _feedback-log
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --staged --quiet; then
+            echo "No new feedback to log."
+          else
+            git commit -m "feedback: mirror new submission(s)"
+            git push
+          fi
