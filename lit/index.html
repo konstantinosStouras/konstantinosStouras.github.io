@@ -4137,6 +4137,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   var sharedActive = false;     // is a ?list= shared-list view currently showing?
   var shareModalLid = null;     // which list the share modal is editing
   var orcidPromptShown = false; // guards the once-per-session ORCID connect prompt
+  var authResolved = false;     // set on the first onAuthStateChanged — until then the header may paint from the litAuthHint cache
   var pendingOrcid = null;      // an authenticated ORCID from a "Sign in with ORCID" redirect, awaiting save
   var doiIndex = null, doiIndexLen = -1;
   var lastMarkedUid = null;    // guards the once-per-session registered-users tally write
@@ -4377,6 +4378,21 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   function acctRenderControl() {
     var el = document.getElementById('acctControl'); if (!el) return;
     if (!state.user) {
+      // Until the FIRST onAuthStateChanged fires, a returning user's session is
+      // still being restored — showing "Sign in" then reads as a sign-out
+      // (especially on heavy loads like an ?author= all-journal search, where
+      // restore can lag far behind first paint). Paint their chip from the
+      // cached hint instead; it self-corrects either way once auth resolves.
+      if (!authResolved) {
+        var hint = null;
+        try { hint = JSON.parse(localStorage.getItem('litAuthHint') || 'null'); } catch (e) {}
+        if (hint && hint.s) {
+          el.innerHTML = '<div class="acct-wrap"><button class="acct-btn acct-user" title="Restoring your session…">' +
+            '<span class="acct-avatar" style="background-image:url(\'' + acctAvatarUrl(hint.s) + '\')"></span>' +
+            '<span class="acct-uname">' + esc(hint.n || 'Account') + '</span></button></div>';
+          return;
+        }
+      }
       el.innerHTML = '<button class="acct-btn" onclick="acctOpenAuth()">Sign in</button>';
       return;
     }
@@ -5969,6 +5985,16 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   readOrcidOAuthResponse();
 
   auth.onAuthStateChanged(function (user) {
+    authResolved = true;
+    // Keep the header's fast-paint hint current: set on sign-in, cleared on
+    // sign-out, so the next page load paints the right state instantly.
+    try {
+      if (user) localStorage.setItem('litAuthHint', JSON.stringify({
+        n: user.displayName || (user.email ? user.email.split('@')[0] : 'Account'),
+        s: user.uid || ''
+      }));
+      else localStorage.removeItem('litAuthHint');
+    } catch (e) {}
     state.user = user;
     document.body.classList.toggle('ms-signed-in', !!user);
     if (unsubPapers) { unsubPapers(); unsubPapers = null; }
