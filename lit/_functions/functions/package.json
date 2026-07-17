@@ -1,0 +1,16 @@
+{
+  "name": "lit-feedback-functions",
+  "description": "Instant e-mail forwarding for The Lit's feedback form (Firestore onCreate trigger). Companion to the every-10-min batch fallback lit/_scraper/feedback-mailer.mjs.",
+  "version": "1.0.0",
+  "private": true,
+  "engines": { "node": "20" },
+  "main": "index.js",
+  "scripts": {
+    "selftest": "node selftest.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.6.0",
+    "firebase-functions": "^6.1.0",
+    "nodemailer": "^6.9.15"
+  }
+}

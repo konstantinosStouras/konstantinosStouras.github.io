@@ -3077,15 +3077,15 @@ function journalTagsHTML(p) {
   if (!jk) return '';
   if (jk === 'pnas') {
     var secs = p['Sections'] || [];
-    if (!secs.length) return '<span class="tag tag-journal jk-pnas" onclick="addJournalChip(\'pnas\')">PNAS</span>';
+    if (!secs.length) return '<span class="tag tag-journal jk-pnas" title="Published in PNAS — click to show only PNAS papers." onclick="addJournalChip(\'pnas\')">PNAS</span>';
     return secs.map(function(s) {
       var key = PNAS_SECTION_KEYS[s] || 'pnas';
-      return '<span class="tag tag-journal jk-pnas" onclick="addJournalChip(\'' + escAttr(key) + '\')">PNAS · ' + esc(s) + '</span>';
+      return '<span class="tag tag-journal jk-pnas" title="PNAS topic section — click to show only papers from this section." onclick="addJournalChip(\'' + escAttr(key) + '\')">PNAS · ' + esc(s) + '</span>';
     }).join('');
   }
   var s = SRC[jk] || EXTRA_SRC[jk];
   var label = jk === 'ec' ? 'ACM EC' : ((s && s.name) || p['Journal'] || jk);
-  return '<span class="tag tag-journal jk-' + escAttr(jk) + '" onclick="addJournalChip(\'' + escAttr(jk) + '\')">' + esc(label) + '</span>';
+  return '<span class="tag tag-journal jk-' + escAttr(jk) + '" title="Journal — click to show only papers from this journal." onclick="addJournalChip(\'' + escAttr(jk) + '\')">' + esc(label) + '</span>';
 }
 
 // Google Scholar title search — the exact title lands the paper as the top hit,
@@ -3125,7 +3125,7 @@ function paperCardHTML(p, idx, showAdded) {
   let addedTag = '';
   if (showAdded) {
     const added = getAddedDate(p);
-    if (added) addedTag = `<span class="tag tag-added">Added ${esc(formatAddedDate(added))}</span>`;
+    if (added) addedTag = `<span class="tag tag-added" title="When this paper was added to The Lit's database.">Added ${esc(formatAddedDate(added))}</span>`;
   }
 
   const badge = journalBadges(p['JKey'] || '').map(t =>
@@ -3137,20 +3137,20 @@ function paperCardHTML(p, idx, showAdded) {
     <div class="paper-authors">${(p['Authors']||'').split(',').map(function(a){var t=a.trim();return t?'<span class="paper-author-link" onclick="addAuthorChip(\''+escAttr(t)+'\')">'+esc(t)+'</span>':'';}).filter(Boolean).join(', ')}</div>
     <div class="paper-meta">
       ${journalTagsHTML(p)}
-      ${p['Volume'] && p['Issue'] ? `<span class="tag tag-vol" onclick="addYearChip('${esc(p['Year'])}')">${esc(p['Year'])} · Vol. ${esc(p['Volume'])} No. ${esc(p['Issue'])}${p['Page'] ? ', pp. '+esc(p['Page']) : ''}</span>` : p['Year'] ? `<span class="tag tag-vol" onclick="addYearChip('${esc(p['Year'])}')">${esc(p['Year'])}</span>` : ''}
-      ${(p._editors||[]).map(e => `<span class="tag tag-editor" onclick="filterByEditor('${escAttr(e)}')">✎ ${esc(e)}</span>`).join('')}
-      ${p._area ? `<span class="tag tag-area" onclick="filterByArea('${escAttr(p._area)}')">${esc(p._area)}</span>` : ''}
+      ${p['Volume'] && p['Issue'] ? `<span class="tag tag-vol" title="Year (and volume/issue) of publication — click the year to filter to it." onclick="addYearChip('${esc(p['Year'])}')">${esc(p['Year'])} · Vol. ${esc(p['Volume'])} No. ${esc(p['Issue'])}${p['Page'] ? ', pp. '+esc(p['Page']) : ''}</span>` : p['Year'] ? `<span class="tag tag-vol" title="Year (and volume/issue) of publication — click the year to filter to it." onclick="addYearChip('${esc(p['Year'])}')">${esc(p['Year'])}</span>` : ''}
+      ${(p._editors||[]).map(e => `<span class="tag tag-editor" title="Accepting editor (Management Science) — click to see other papers this editor accepted." onclick="filterByEditor('${escAttr(e)}')">✎ ${esc(e)}</span>`).join('')}
+      ${p._area ? `<span class="tag tag-area" title="Editorial area (Management Science) — click to see other papers in this area." onclick="filterByArea('${escAttr(p._area)}')">${esc(p._area)}</span>` : ''}
       ${(p._se||[]).map(e => `<span class="tag tag-se" onclick="addChipFromCard('se','${escAttr(e)}')" title="Senior Editor — click to see other papers this editor accepted">✎ SE: ${esc(e)}</span>`).join('')}
       ${(p._ae||[]).map(e => `<span class="tag tag-ae" onclick="addChipFromCard('ae','${escAttr(e)}')" title="Associate Editor — click to see other papers this editor handled">AE: ${esc(e)}</span>`).join('')}
-      ${p['Status']==='Other' ? '<span class="tag tag-other">Other</span>' : ''}
-      ${p['Status'] && p['Status']!=='Other' ? `<span class="tag tag-aia">${esc(p['Status'])}</span>` : ''}
+      ${p['Status']==='Other' ? '<span class="tag tag-other" title="Item type: other — not a standard journal research article (e.g. an editorial, note or front matter).">Other</span>' : ''}
+      ${p['Status'] && p['Status']!=='Other' ? `<span class="tag tag-aia" title="Publication status — e.g. 'Articles in Advance' (peer-reviewed and published online, not yet assigned to a print issue) or 'Forthcoming'.">${esc(p['Status'])}</span>` : ''}
       ${safeUrl(p['PDF']) && preprintPdfUrl(safeUrl(p['PDF'])) !== preprintPdfUrl(safeUrl(p['Preprint'])) ? `<a class="tag tag-pdf" href="${preprintPdfUrl(safeUrl(p['PDF']))}" target="_blank" rel="noopener" title="Open-access PDF (arXiv/SSRN where available)">PDF ↗</a>` : ''}
       ${citedByTagHTML(p)}
       ${addedTag}
     </div>
-    ${hasSig ? `<span class="paper-abstract-toggle paper-sig-toggle" onclick="togAbs('${sid}',this,'Significance')">▸ Significance</span>` : ''}
-    ${hasAbs ? `<span class="paper-abstract-toggle" onclick="togAbs('${aid}',this)">▸ Abstract</span>` : ''}
-    <span class="paper-bibtex-toggle" onclick="togBib('bib${idx}',this,${idx})">▸ BibTeX</span>
+    ${hasSig ? `<span class="paper-abstract-toggle paper-sig-toggle" title="Show the PNAS ‘Significance’ statement — a plain-language summary of why the work matters." onclick="togAbs('${sid}',this,'Significance')">▸ Significance</span>` : ''}
+    ${hasAbs ? `<span class="paper-abstract-toggle" title="Show the paper’s abstract." onclick="togAbs('${aid}',this)">▸ Abstract</span>` : ''}
+    <span class="paper-bibtex-toggle" title="Show a BibTeX citation for this paper that you can copy." onclick="togBib('bib${idx}',this,${idx})">▸ BibTeX</span>
     ${refsShardFor(p['JKey']) ? `<span class="paper-refs-toggle" data-refs-doi="${escAttr(refsNormDoi(p['DOI']))}" onclick="togRefs('refs${idx}',this,${idx})" title="The papers this one cites that are also in The Lit's catalog (from the publisher's deposited reference list). The number is how many.">${refsToggleLabel(refsNormDoi(p['DOI']), false)}</span>` : ''}
     ${safeUrl(p['Preprint']) ? `<a class="paper-preprint-link" href="${preprintPdfUrl(safeUrl(p['Preprint']))}" target="_blank" rel="noopener" title="Free author pre-print on ${PREPRINT_HOST[p['PreprintSrc']] || 'an open repository'} — opens the latest version, PDF direct where the host allows it. The accepted/working version may differ from the final published paper">Pre-print (Open Access) ↗</a>` : ''}
     ${typeof acctToggleHTML === 'function' ? acctToggleHTML(p) : ''}
