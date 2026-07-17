@@ -432,10 +432,24 @@ copy, per the keep-in-sync discipline). **The match name defaults to ORCID's
 credit-name** (Published Name — how journals actually credit the author;
 given+family can drop a middle initial and match nothing):
 `backfillOrcidAuthorName` fetches it from the public `pub.orcid.org` record
-whenever a linked profile has no explicit `orcidAuthorName` (fill-when-empty,
-per-session per-iD guard; priority credit-name → the catalog's own
-ORCID-resolved canonical spelling via `litCatalogCanonicalName` → given+family
-→ sign-in claims; live-refreshes an open profile card). Independently of the
+whenever a linked profile's match name isn't user-owned (auto names carry
+`orcidNameAuto: true` and stay upgradeable — a legacy stored given+family
+form is healed to the credit-name; a user-typed name is marked
+`orcidNameAuto: false` and never overwritten; priority credit-name → the
+catalog's own ORCID-resolved canonical spelling via `litCatalogCanonicalName`
+→ given+family → sign-in claims; live-refreshes an open profile card). The
+analytics page's `resolveAuthor` matches name-parts too (unique hit only), so
+`analytics/?author=Konstantinos Stouras` finds the credited
+"Konstantinos I. Stouras". **Duplicate-account merge:** an ORCID-only
+registration by someone who already had an e-mail/Google account is repaired
+from the duplicate's Edit profile → "Merge this account into my main account"
+(`acctStartMerge` exports library/lists/alerts/profile, unpublishes its public
+lists, deletes the duplicate sign-in, then `maybeApplyMergeStash` imports into
+whichever account signs in next — papers union starred/tags/lists/notes,
+profile fill-empty, ORCID fields only on no-iD-or-same-iD); prevention is
+provider LINKING — a verified-ORCID account attaches `oidc.orcid` via
+`acctLinkOrcidProvider` (Edit profile) so "Continue with ORCID" reaches it
+directly. Independently of the
 stored name, **the `?author=` deep-link chip is widened to the catalog's full
 `Name_Variants`** once authors.json is available (`litUpgradeAuthorDeepLink`;
 the deep-link auto-fetches authors.json) — so ANY author's page finds papers

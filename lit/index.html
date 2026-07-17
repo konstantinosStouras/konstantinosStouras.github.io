@@ -3934,6 +3934,18 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         <input type="checkbox" id="pfOrcidLink">
         <span>Show my publications &amp; citation metrics from the database on my profile</span>
       </label>
+      <!-- Verified-ORCID accounts that can't yet SIGN IN with ORCID: one click
+           attaches the oidc.orcid provider, so the ORCID button on the sign-in
+           screen reaches THIS account instead of creating a duplicate. -->
+      <div id="pfOrcidProviderRow" style="display:none;font-size:12.5px;margin-top:2px">
+        <span class="acct-link" onclick="acctLinkOrcidProvider()">Enable “Continue with ORCID” sign-in for this account</span>
+        <div style="font-size:11.5px;color:var(--text-muted);margin-top:3px">You'll sign in to this same account by authenticating at orcid.org — and the ORCID button on the sign-in screen can never create a duplicate account for you.</div>
+      </div>
+      <!-- Duplicate-account repair: shown on ORCID-only registrations. -->
+      <div id="pfMergeRow" style="display:none;font-size:12.5px;margin-top:2px">
+        <div style="font-size:11.5px;color:var(--text-muted)">Did you already have a Lit account (e-mail or Google) before registering with ORCID? Then this is a duplicate.</div>
+        <span class="acct-link" onclick="acctStartMerge()">Merge this account into my main account…</span>
+      </div>
       <div class="acct-error" id="pfErr"></div>
       <button class="acct-primary" id="pfSaveBtn" onclick="acctSaveProfile()">Save profile</button>
       <div class="acct-switch" id="pfStatus"></div>
@@ -4203,6 +4215,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   var meta = {};               // docId -> snapshot of {doi,title,authors,year} for rendering
   var unsubPapers = null, unsubLists = null, unsubProfile = null, unsubAlerts = null;
   var libraryMode = false, libFilter = { type: 'all', id: null }, libQuery = '';
+  var papersSnapshotSeen = false, listsSnapshotSeen = false;  // first-snapshot latches (merge import waits for both)
   var lastSharedSig = {};       // shareId -> last-synced content signature (avoids redundant writes)
   var sharedActive = false;     // is a ?list= shared-list view currently showing?
   var shareModalLid = null;     // which list the share modal is editing
@@ -5026,6 +5039,9 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (c === 'auth/operation-not-allowed') return 'This sign-in method is not enabled in the Firebase console yet.';
     if (c === 'auth/popup-blocked') return 'Your browser blocked the sign-in popup. Allow popups for this site and try again.';
     if (c === 'auth/account-exists-with-different-credential') return 'An account already exists for this email with a different sign-in method — use the method you signed up with.';
+    if (c === 'auth/credential-already-in-use') return 'This ORCID sign-in belongs to another account. Sign in with ORCID and use “Merge this account into my main account” from Edit profile first.';
+    if (c === 'auth/provider-already-linked') return 'ORCID sign-in is already enabled for this account.';
+    if (c === 'auth/requires-recent-login') return 'For security, this needs a fresh sign-in — sign out, sign back in, and retry.';
     if (c === 'permission-denied') return 'Permission denied. The Firestore security rules may not be deployed yet.';
     return (e && e.message) || 'Something went wrong. Please try again.';
   }
@@ -5064,6 +5080,10 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       if (pfSignin) pfSignin.style.display = orcidOauthEnabled() ? '' : 'none';
       acctOrcidFieldChanged();   // show/hide the consent row for the typed value
     }
+    var provRow = document.getElementById('pfOrcidProviderRow');
+    if (provRow) provRow.style.display = (linkedOrcid && p.orcidVerified && !acctHasProvider('oidc.orcid')) ? '' : 'none';
+    var mergeRow = document.getElementById('pfMergeRow');
+    if (mergeRow) mergeRow.style.display = acctIsOrcidOnlyAccount() ? '' : 'none';
     var st = document.getElementById('pfStatus'); if (st) st.textContent = '';
     var er = document.getElementById('pfErr'); if (er) er.textContent = '';
     document.getElementById('acctProfileOverlay').classList.add('open');
@@ -5100,7 +5120,11 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   var orcidNameFetched = {};
   function backfillOrcidAuthorName(orcid, fallbackName) {
     if (!orcid || !state.user || !state.profile) return;
-    if ((state.profile.orcidAuthorName || '').trim()) return;
+    // A name the user typed themselves (orcidNameAuto === false) is never
+    // touched. An AUTO name (or a legacy one from before the marker existed)
+    // stays eligible so a stale given+family seeding can be healed to the
+    // record's credit-name — decided after the fetch, below.
+    if ((state.profile.orcidAuthorName || '').trim() && state.profile.orcidNameAuto === false) return;
     if (orcidNameFetched[orcid]) return;
     orcidNameFetched[orcid] = true;
     fetch('https://pub.orcid.org/v3.0/' + encodeURIComponent(orcid) + '/personal-details', { headers: { 'Accept': 'application/json' } })
@@ -5122,11 +5146,19 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
           || String(fallbackName || '').trim();
         if (!name) return;
         if (!state.user || !state.profile) return;                    // signed out meanwhile
-        if ((state.profile.orcidAuthorName || '').trim()) return;     // user typed one meanwhile — theirs wins
         if ((state.profile.orcid || '') !== orcid) return;            // re-linked to a different iD meanwhile
+        // Write when the stored name is empty, marked auto, or is exactly the
+        // record's given+family form (the legacy auto-seed value — e.g.
+        // "Konstantinos Stouras" stored while papers credit
+        // "Konstantinos I. Stouras"); anything else is user-owned and wins.
+        var stored = (state.profile.orcidAuthorName || '').trim();
+        var healable = !stored
+          || state.profile.orcidNameAuto === true
+          || (gf && stored.toLowerCase() === gf.toLowerCase());
+        if (!healable || name === stored) return;
         saveOrcidProfile(
-          { orcidAuthorName: name, updatedAt: serverTime() },
-          { orcidAuthorName: name },
+          { orcidAuthorName: name, orcidNameAuto: true, updatedAt: serverTime() },
+          { orcidAuthorName: name, orcidNameAuto: true },
           function () {
             var ov = document.getElementById('litOrcidOverlay');
             if (ov && ov.classList.contains('open')) renderOrcidBody();
@@ -5157,6 +5189,198 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     }
     return '';
   }
+
+  // ── Duplicate-account merge (same person, two accounts) ───────────────────
+  // Registering with ORCID creates a SEPARATE Firebase account from an
+  // existing e-mail/Google one (ORCID shares no e-mail to auto-match on), so
+  // the same researcher can end up with two Lit accounts. The repair is a
+  // user-initiated, two-sided-proof flow: signed in as the ORCID-only
+  // duplicate they (1) export its library/lists/alerts/profile, (2) delete
+  // that sign-in (ownership of the duplicate proven), (3) sign in to the
+  // account they keep — e-mail, password or Google (ownership of the target
+  // proven) — where the stash is imported and merged. Finally the oidc.orcid
+  // provider can be LINKED to the kept account (acctLinkOrcidProvider), so
+  // "Continue with ORCID" reaches it forever after and the duplicate can
+  // never re-form. ORCID-match rule: the duplicate's ORCID fields transfer
+  // only when the kept account has no iD or the SAME iD.
+  var MERGE_STASH_KEY = 'litMergeStash';
+  function acctHasProvider(pid) {
+    var pd = (state.user && state.user.providerData) || [];
+    for (var i = 0; i < pd.length; i++) { if (pd[i] && pd[i].providerId === pid) return true; }
+    return false;
+  }
+  function acctIsOrcidOnlyAccount() {
+    if (!state.user) return false;
+    var pd = state.user.providerData || [], sawOrcid = false;
+    for (var i = 0; i < pd.length; i++) {
+      if (!pd[i]) continue;
+      if (pd[i].providerId === 'oidc.orcid') sawOrcid = true;
+      else return false;                       // any other provider → not a pure duplicate
+    }
+    return sawOrcid;
+  }
+
+  // Snapshot this account's data for the merge, unpublishing its public lists
+  // first (their shared copies belong to THIS uid and would become
+  // unmanageable once the account is gone).
+  function exportAccountData() {
+    var out = { profile: {}, papers: {}, lists: {}, alerts: {} };
+    var p = state.profile || {};
+    ['firstName', 'lastName', 'affiliation', 'website', 'email',
+     'orcid', 'orcidLinked', 'orcidVerified', 'orcidAuthorName', 'orcidNameAuto'].forEach(function (k) {
+      if (p[k] !== undefined && p[k] !== null && p[k] !== '') out.profile[k] = p[k];
+    });
+    Object.keys(state.papers).forEach(function (id) {
+      var r = state.papers[id];
+      out.papers[id] = {
+        starred: !!r.starred, note: r.note || '', tags: r.tags || [], lists: r.lists || [],
+        doi: r.doi || '', title: r.title || '', authors: r.authors || '', year: r.year || ''
+      };
+    });
+    var tasks = [];
+    Object.keys(state.lists).forEach(function (lid) {
+      var li = state.lists[lid];
+      out.lists[lid] = { name: li.name || '(untitled)' };
+      if (li.public && li.shareId) tasks.push(publicListsCol().doc(li.shareId).delete().catch(function () {}));
+    });
+    Object.keys(state.alerts).forEach(function (id) {
+      var a = state.alerts[id];
+      out.alerts[id] = {
+        name: a.name || '', recipient: a.recipient || '', from: a.from || '',
+        frequency: a.frequency || 'weekly', enabled: a.enabled !== false, criteria: a.criteria || {}
+      };
+    });
+    return Promise.all(tasks).then(function () { return out; });
+  }
+
+  function deleteCurrentAccount() {
+    var u = state.user;
+    return u.delete().catch(function (e) {
+      if (e && e.code === 'auth/requires-recent-login') {
+        // Deleting an account needs a fresh sign-in — re-prove it at orcid.org.
+        return u.reauthenticateWithPopup(new firebase.auth.OAuthProvider('oidc.orcid'))
+          .then(function () { return u.delete(); });
+      }
+      throw e;
+    });
+  }
+
+  window.acctStartMerge = function () {
+    if (!state.user || !acctIsOrcidOnlyAccount()) return;
+    if (!confirm('Merge this ORCID sign-in into your main Lit account?\n\nThis will:\n  1. take everything saved on THIS account (library, notes, lists, alerts),\n  2. remove this duplicate sign-in,\n  3. ask you to sign in to the account you KEEP (e-mail or Google) — everything moves over there automatically.\n\nContinue?')) return;
+    acctCloseProfile();
+    exportAccountData().then(function (data) {
+      var stash = { fromUid: state.user.uid, orcid: (state.profile && state.profile.orcid) || '', data: data };
+      try {
+        localStorage.setItem(MERGE_STASH_KEY, JSON.stringify(stash));
+        if (!localStorage.getItem(MERGE_STASH_KEY)) throw new Error('stash');
+      } catch (e) { alert('Could not prepare the merge (browser storage unavailable). Nothing was changed.'); return; }
+      return deleteCurrentAccount().then(function () {
+        alert('This duplicate sign-in was removed.\n\nNow sign in to the account you want to KEEP — your saved papers, lists and alerts will move over automatically.');
+        acctOpenAuth();
+      }).catch(function (e) {
+        try { localStorage.removeItem(MERGE_STASH_KEY); } catch (e2) {}
+        alert('Could not remove this account: ' + friendly(e) + '\nNothing was moved.');
+      });
+    }).catch(function (e) { alert('Merge failed before any change was made: ' + friendly(e)); });
+  };
+
+  // Import a pending merge stash into the CURRENT account. Runs from onData
+  // once the profile + papers + lists snapshots have all landed (so merging
+  // sees the target's existing data). On write failure the stash is restored
+  // for a retry on the next sign-in/load.
+  var mergeStashAppliedUid = null;
+  function maybeApplyMergeStash() {
+    if (!state.user || !state.profile || !papersSnapshotSeen || !listsSnapshotSeen) return;
+    if (mergeStashAppliedUid === state.user.uid) return;
+    var stash = null;
+    try { stash = JSON.parse(localStorage.getItem(MERGE_STASH_KEY) || 'null'); } catch (e) {}
+    if (!stash || !stash.data || stash.fromUid === state.user.uid) return;
+    mergeStashAppliedUid = state.user.uid;
+    try { localStorage.removeItem(MERGE_STASH_KEY); } catch (e) {}
+    var d = stash.data, writes = [];
+    // Papers: union with any copy the kept account already has.
+    Object.keys(d.papers || {}).forEach(function (id) {
+      var b = d.papers[id], a = state.papers[id] || {};
+      var merged = {
+        starred: !!(a.starred || b.starred),
+        tags: Array.from(new Set([].concat(a.tags || [], b.tags || []))),
+        lists: Array.from(new Set([].concat(a.lists || [], b.lists || []))),
+        note: (a.note && b.note && a.note.trim() !== b.note.trim()) ? (a.note + '\n\n' + b.note) : (a.note || b.note || ''),
+        doi: a.doi || b.doi || '', title: a.title || b.title || '',
+        authors: a.authors || b.authors || '', year: a.year || b.year || '',
+        updatedAt: serverTime()
+      };
+      writes.push(papersCol().doc(id).set(merged, { merge: true }));
+    });
+    // Lists: same ids carry over (papers' `lists` arrays reference them);
+    // an id the kept account already has is left as-is.
+    Object.keys(d.lists || {}).forEach(function (lid) {
+      if (state.lists[lid]) return;
+      writes.push(listsCol().doc(lid).set({ name: d.lists[lid].name || '(untitled)', createdAt: serverTime(), public: false, shareId: '' }));
+    });
+    // Alerts: copied fresh — high-water marks are dropped so the mailer
+    // re-baselines them (a new alert's first window is capped anyway).
+    Object.keys(d.alerts || {}).forEach(function (id) {
+      if (state.alerts[id]) return;
+      var al = d.alerts[id];
+      writes.push(alertsCol().doc(id).set({
+        name: al.name, recipient: al.recipient, from: al.from, frequency: al.frequency,
+        enabled: al.enabled !== false, criteria: al.criteria || {}, createdAt: serverTime(), updatedAt: serverTime()
+      }));
+    });
+    // Profile: fill-empty only — the kept account's own details always win.
+    // ORCID-match rule: the duplicate's ORCID fields transfer only when the
+    // kept account has no iD on file or the very same iD.
+    var pa = state.profile || {}, patch = {};
+    ['firstName', 'lastName', 'affiliation', 'website', 'email'].forEach(function (k) {
+      if (!(pa[k] && String(pa[k]).trim()) && d.profile[k]) patch[k] = d.profile[k];
+    });
+    var sameOrEmpty = !pa.orcid || (stash.orcid && pa.orcid === stash.orcid);
+    if (sameOrEmpty && stash.orcid) {
+      if (!pa.orcid) patch.orcid = stash.orcid;
+      if (d.profile.orcidVerified && !pa.orcidVerified) patch.orcidVerified = true;
+      if (d.profile.orcidLinked !== undefined && pa.orcidLinked === undefined) patch.orcidLinked = !!d.profile.orcidLinked;
+      if (!(pa.orcidAuthorName && pa.orcidAuthorName.trim()) && d.profile.orcidAuthorName) {
+        patch.orcidAuthorName = d.profile.orcidAuthorName;
+        if (d.profile.orcidNameAuto !== undefined) patch.orcidNameAuto = d.profile.orcidNameAuto;
+      }
+    }
+    if (Object.keys(patch).length) { patch.updatedAt = serverTime(); writes.push(profileDoc().set(patch, { merge: true })); }
+    Promise.all(writes).then(function () {
+      var n = Object.keys(d.papers || {}).length;
+      var msg = 'Accounts merged: ' + n + ' saved paper' + (n === 1 ? '' : 's') + ', ' +
+        Object.keys(d.lists || {}).length + ' list(s) and ' + Object.keys(d.alerts || {}).length +
+        ' alert(s) moved into this account.';
+      if (sameOrEmpty && stash.orcid && !acctHasProvider('oidc.orcid')) {
+        if (confirm(msg + '\n\nAlso enable "Continue with ORCID" sign-in for THIS account now, so the ORCID button always brings you here?')) {
+          window.acctLinkOrcidProvider();
+          return;
+        }
+      } else { alert(msg); }
+    }).catch(function (e) {
+      try { localStorage.setItem(MERGE_STASH_KEY, JSON.stringify(stash)); } catch (e2) {}
+      mergeStashAppliedUid = null;
+      alert('The merge could not finish (' + friendly(e) + '). It will be retried the next time you sign in.');
+    });
+  }
+
+  // Attach the oidc.orcid provider to the CURRENT account so "Continue with
+  // ORCID" signs in to it directly (duplicate prevention; also offered right
+  // after a merge). Requires authenticating at orcid.org in a popup.
+  window.acctLinkOrcidProvider = function () {
+    if (!state.user) { acctOpenAuth(); return; }
+    state.user.linkWithPopup(new firebase.auth.OAuthProvider('oidc.orcid'))
+      .then(function () {
+        alert('Done — "Continue with ORCID" now signs in to this account.');
+        var po = document.getElementById('acctProfileOverlay');
+        if (po && po.classList.contains('open')) window.acctOpenProfile();
+      })
+      .catch(function (e) {
+        if (e && (e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request')) return;
+        alert(friendly(e));
+      });
+  };
   // Reveal the "show my publications" consent row only once a valid ORCID is typed.
   window.acctOrcidFieldChanged = function () {
     var inp = document.getElementById('pfOrcid'); if (!inp) return;
@@ -5188,9 +5412,12 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (linkedOrcid) {
       prof.orcidLinked = !!document.getElementById('pfOrcidLink').checked;
       var pfNm = document.getElementById('pfOrcidName').value.trim();
-      if (pfNm) prof.orcidAuthorName = pfNm;
-      else if ((((state.profile || {}).orcidAuthorName) || '').trim()) {
+      if (pfNm) {
+        prof.orcidAuthorName = pfNm;
+        if (pfNm !== (((state.profile || {}).orcidAuthorName) || '').trim()) prof.orcidNameAuto = false;  // typed → user-owned
+      } else if ((((state.profile || {}).orcidAuthorName) || '').trim()) {
         prof.orcidAuthorName = FV.delete();
+        prof.orcidNameAuto = FV.delete();
         delete orcidNameFetched[(state.profile || {}).orcid];   // let the credit-name backfill re-run
       }
     } else if (orcidRaw) {
@@ -5508,7 +5735,17 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   window.litOrcidSaveName = function () {
     var nameEl = document.getElementById('litOrcidName'); if (!nameEl) return;
     var nm = nameEl.value.trim();
-    saveOrcidProfile({ orcidAuthorName: nm, updatedAt: serverTime() }, { orcidAuthorName: nm }, function () { renderOrcidBody(); });
+    var cur = ((state.profile || {}).orcidAuthorName || '').trim();
+    var patch, local;
+    if (nm) {
+      patch = { orcidAuthorName: nm, updatedAt: serverTime() }; local = { orcidAuthorName: nm };
+      if (nm !== cur) { patch.orcidNameAuto = false; local.orcidNameAuto = false; }  // typed → user-owned
+    } else {
+      patch = { orcidAuthorName: FV.delete(), orcidNameAuto: FV.delete(), updatedAt: serverTime() };
+      local = { orcidAuthorName: '', orcidNameAuto: undefined };
+      delete orcidNameFetched[(state.profile || {}).orcid];  // cleared → re-eligible for the credit-name default
+    }
+    saveOrcidProfile(patch, local, function () { renderOrcidBody(); });
   };
   window.litOrcidUnlink = function () {
     if (!confirm('Remove your ORCID association? Your saved papers, notes and lists are unaffected.')) return;
@@ -6229,12 +6466,13 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     maybeAutoApplyPrefs();
     maybeApplyOrcidPending();  // save an authenticated "Sign in with ORCID" result, if any
     maybeSeedOrcidFromProvider();  // auto-link the iD of a user who registered via the ORCID provider
-    // Linked profile with no explicit match name: default it from the public
-    // ORCID record's credit-name NOW (per-iD session guard inside), so the
-    // menu's direct My publications / My author analytics links carry the
-    // name the papers are actually credited under.
+    // Linked profile whose match name isn't user-owned: default/heal it from
+    // the public ORCID record's credit-name NOW (per-iD session guard inside),
+    // so the menu's direct My publications / My author analytics links carry
+    // the name the papers are actually credited under.
     if (state.profile && state.profile.orcid && state.profile.orcidLinked
-        && !((state.profile.orcidAuthorName || '').trim())) backfillOrcidAuthorName(state.profile.orcid, '');
+        && state.profile.orcidNameAuto !== false) backfillOrcidAuthorName(state.profile.orcid, '');
+    maybeApplyMergeStash();  // finish a pending duplicate-account merge, if one is stashed
     maybeOrcidPrompt();  // first-run: invite the user to connect their ORCID
     syncPublicLists();   // keep any public lists' shared copies current as the owner edits
     if (libraryMode) { renderLibraryBar(); renderLibrary(); if (shareModalLid) renderShareBody(); }
@@ -6264,6 +6502,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (unsubProfile) { unsubProfile(); unsubProfile = null; }
     if (unsubAlerts) { unsubAlerts(); unsubAlerts = null; }
     state.papers = {}; state.lists = {}; state.profile = null; state.alerts = {};
+    papersSnapshotSeen = false; listsSnapshotSeen = false;
     lastSharedSig = {};         // shared-list write dedup is per signed-in user
     prefsAutoApplied = false;   // re-arm auto-apply for whoever signs in next
     window.litSiteDefaultApplied = false;  // re-arm the site default too (e.g. after sign-out)
@@ -6309,11 +6548,11 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       unsubPapers = papersCol().onSnapshot(function (snap) {
         var m = {};
         snap.forEach(function (d) { var x = d.data() || {}; x.id = d.id; if (x.updatedAt && x.updatedAt.toMillis) x.updatedAt = x.updatedAt.toMillis(); m[d.id] = x; });
-        state.papers = m; onData();
+        state.papers = m; papersSnapshotSeen = true; onData();
       }, function (err) { console.warn('papers listener:', err && err.code); });
       unsubLists = listsCol().onSnapshot(function (snap) {
         var m = {}; snap.forEach(function (d) { var x = d.data() || {}; m[d.id] = { name: x.name || '(untitled)', createdAt: x.createdAt, public: !!x.public, shareId: x.shareId || '' }; });
-        state.lists = m; onData();
+        state.lists = m; listsSnapshotSeen = true; onData();
       }, function (err) { console.warn('lists listener:', err && err.code); });
       unsubAlerts = alertsCol().onSnapshot(function (snap) {
         var m = {}; snap.forEach(function (d) { var x = d.data() || {}; x.id = d.id; m[d.id] = x; });

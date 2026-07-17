@@ -120,6 +120,25 @@ SDK, same users). Do these once:
   automatically matched to an existing e-mail/Google account — someone who
   already has a Lit account should link ORCID from the connect stage
   (Part 1) instead of registering afresh.
+- **Duplicate-account merge (repair) + provider linking (prevention):** when
+  the duplicate DOES happen (an ORCID-only registration by someone who
+  already had an e-mail/Google account), the duplicate's *Edit profile*
+  offers **"Merge this account into my main account"** (`acctStartMerge`):
+  it exports that account's papers/notes/lists/alerts/profile (unpublishing
+  its public lists), deletes the duplicate sign-in (ownership proven), then
+  has the user sign in to the account they keep, where
+  `maybeApplyMergeStash` imports and unions everything (papers merge
+  starred/tags/lists/notes; profile is fill-empty; the duplicate's ORCID
+  fields transfer only when the kept account has no iD or the SAME iD).
+  Orphaned Firestore docs under the deleted uid are unreadable and harmless
+  (an admin can purge them). Prevention: any account with a verified
+  connected ORCID can attach the `oidc.orcid` provider from Edit profile
+  (`acctLinkOrcidProvider`, `linkWithPopup`) so "Continue with ORCID" signs
+  in to THAT account — after which no duplicate can form.
+- **Match name lifecycle:** auto-derived match names are marked
+  `orcidNameAuto: true` and stay upgradeable (a legacy stored given+family
+  form is healed to the record's credit-name); a name the user typed
+  themselves is marked `orcidNameAuto: false` and never overwritten.
 - `friendly()` already maps `auth/operation-not-allowed` (provider not yet
   enabled in the console) to a clear message, so a premature flip fails
   gracefully — but don't: keep the flip for after the console steps.

@@ -1340,8 +1340,26 @@
   // contains match on the first hit), like the old single-author search.
   function resolveAuthor(name) {
     name = (name || '').trim(); if (!name || !AUTHORS) return null;
-    var a = AUTHORS[name.toLowerCase()];
-    if (!a) { var lc = name.toLowerCase(); for (var kk in AUTHORS) { if (kk.indexOf(lc) !== -1) { a = AUTHORS[kk]; break; } } }
+    var lc = name.toLowerCase();
+    var a = AUTHORS[lc];
+    if (!a) { for (var kk in AUTHORS) { if (kk.indexOf(lc) !== -1) { a = AUTHORS[kk]; break; } } }
+    if (!a) {
+      // Name-part match: every queried part must appear as a whole part of the
+      // author's canonical name — so "Konstantinos Stouras" resolves to the
+      // credited "Konstantinos I. Stouras" even though the query lacks the
+      // middle initial (the ORCID given+family form vs the published name).
+      // Only a UNIQUE hit counts, so a short query can't grab the wrong person.
+      var qt = lc.replace(/\./g, ' ').split(/\s+/).filter(Boolean);
+      if (qt.length >= 2) {
+        var hit = null, hits = 0;
+        for (var k2 in AUTHORS) {
+          var at = k2.replace(/\./g, ' ').split(/\s+/).filter(Boolean);
+          var all = qt.every(function (t) { return at.indexOf(t) !== -1; });
+          if (all) { hits++; hit = AUTHORS[k2]; if (hits > 1) { hit = null; break; } }
+        }
+        if (hit) a = hit;
+      }
+    }
     return a || null;
   }
   function addAuthor(name) {
