@@ -50,9 +50,10 @@ const ALERTS_FROM_NAME = defineString('ALERTS_FROM_NAME', { default: 'The Lit' }
 //    deploy. Check it in the Firebase console → Firestore Database (the location
 //    is shown at the top, e.g. "nam5 (United States)" or "eur3 (Europe)").
 //    Map:  nam5 / us-*  → 'us-central1'    eur3 / europe-* → 'europe-west1'
-//    (any single us/eu region in the same continent works). Default below suits
-//    a US (nam5) database; change the ONE line if yours is elsewhere.
-const REGION = 'us-central1';
+//    (any single us/eu region in the same continent works). This project's
+//    Firestore is in eur3 (Europe), so the default is europe-west1; change the
+//    ONE line if your database is elsewhere (US nam5 → us-central1).
+const REGION = 'europe-west1';
 
 setGlobalOptions({ region: REGION, maxInstances: 5 });
 

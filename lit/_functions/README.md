@@ -64,9 +64,9 @@ That's all you do in the browser. The rest is two-ish minutes in a terminal.
    `FEEDBACK_TO=you@example.com` — the defaults already match the batch mailer.)
 
 4. **Match the region to your Firestore location** (from Part A, step 1). Open
-   `functions/index.js` and set the single `REGION` line:
-   `nam5`/US → `us-central1` (the default); `eur3`/Europe → `europe-west1`.
-   A mismatch is the one thing that makes the deploy fail.
+   `functions/index.js` and set the single `REGION` line: `eur3`/Europe →
+   `europe-west1` (**the current default — this project's Firestore is in eur3**);
+   `nam5`/US → `us-central1`. A mismatch is the one thing that makes the deploy fail.
 
 5. **Deploy:**
    ```sh
