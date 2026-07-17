@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "orcid-my-publications",
+      "date": "2026-07-17",
+      "title": "Connect your ORCID and see your own publications & metrics",
+      "summary": "Add your ORCID iD to your account and — if you opt in — a new “My publications” view appears in your account menu. From there, one click takes you to your papers in the database (each showing its citation count) and to your author page in the Data Analytics spotlight (publications per year, where you publish, collaboration and disruption metrics). Everything stays private to you; your work is matched by your name, since the database has no per-paper ORCID.",
+      "url": "https://stouras.com/lit/"
+    },
+    {
       "id": "public-list-sharing",
       "date": "2026-07-17",
       "title": "Share a saved list with anyone via a link",

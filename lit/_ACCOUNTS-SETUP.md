@@ -140,7 +140,9 @@ users/{uid}/papers/{docId}   { doi, title, authors, year,
 users/{uid}/lists/{listId}   { name, createdAt, public?, shareId? }
 users/{uid}/profile/main     { firstName, lastName, affiliation, website, email,
                                defaultJournals[], defaultJTypes[],
-                               autoApplyFilters, updatedAt }
+                               autoApplyFilters, updatedAt,
+                               orcid?, orcidLinked?, orcidAuthorName?,
+                               orcidPromptSeen? }
 registeredUsers/{uid}        { t }   ← PUBLIC, one contentless doc per account
 publicLists/{shareId}        { ownerUid, owner, name, count, papers[],
                                createdAt, updatedAt }   ← PUBLIC read-only
@@ -158,6 +160,20 @@ this document (the same subtree as the E-mail-alerts `alerts` subcollection).
 `docId` is derived from the paper's DOI (or title + year when a DOI is missing),
 so the same paper maps to one record per user — across every journal The Lit
 covers.
+
+The **ORCID association** also lives on the profile document: `orcid` (canonical
+`0000-0000-0000-0000` form, validated with the ISO 7064 MOD 11-2 checksum before
+saving), `orcidLinked` (the user opted in to seeing their publications),
+`orcidAuthorName` (the name their papers are matched by — defaults to their full
+name, editable, because our datasets carry no per-paper ORCID so association is
+by author name), and `orcidPromptSeen` (so the one-time connect prompt never
+reappears). Signed-in users are invited once to connect their ORCID; once linked,
+an account-menu **"📊 My publications"** entry opens a hub that deep-links to the
+main database filtered to their name (`/lit/?author=<name>`, showing each paper's
+citation count) and to the Data Analytics author spotlight
+(`/lit/analytics/?author=<name>`). All of it is private to the user — nothing is
+made public — and it is covered by the existing `users/{uid}/**` rule, so **no
+security-rules change is needed**.
 
 ### Registered-users tally (powers `lit/analytics/`)
 
