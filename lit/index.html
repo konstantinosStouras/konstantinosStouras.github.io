@@ -4251,9 +4251,6 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         '<div class="acct-menu" id="acctMenu">' +
           '<div class="acct-menu-head">Signed in as<strong>' + esc(u.email || name) + '</strong></div>' +
           '<div class="acct-menu-item" onclick="acctOpenLibrary()">★ My library <span class="acct-badge">' + saved + '</span></div>' +
-          '<div class="acct-menu-item" onclick="acctOpenLibrary()">🗂 My lists <span class="acct-badge">' + Object.keys(state.lists).length + '</span></div>' +
-          '<div class="acct-menu-item" onclick="acctOpenLibrary()">🏷 My tags <span class="acct-badge">' + uniqueTags().length + '</span></div>' +
-          '<div class="acct-menu-item" onclick="acctOpenLibrary(\'search\')">🔍 Search my notes</div>' +
           '<div class="acct-menu-sep"></div>' +
           '<div class="acct-menu-item" onclick="acctOpenAlerts()">✉️ E-mail alerts' + (alertCount ? ' <span class="acct-badge">' + alertCount + '</span>' : '') + '</div>' +
           '<div class="acct-menu-item" onclick="acctOpenDefaults()">⚙️ Default filters' + (defCount ? ' <span class="acct-badge">' + defCount + '</span>' : '') + '</div>' +
@@ -4381,6 +4378,31 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     setTimeout(function () { var e = document.getElementById('acctEmail'); if (e) e.focus(); }, 40);
   };
   window.acctCloseAuth = function () { document.getElementById('acctOverlay').classList.remove('open'); acctErr(''); };
+
+  // Deep-links from the sub-pages' shared account menu (lit-acct-nav.js on
+  // About / Data Analytics / Feedback): those pages carry the same account
+  // button but the actual views live here, so each of their menu items links to
+  // /lit/#lit-<view>. On load we open the matching view once, then strip the
+  // hash so a refresh won't reopen it. Called after the first auth resolution so
+  // the openers have the signed-in user + data (each view opener already falls
+  // back to the sign-in modal when nobody is signed in).
+  var hashLinkHandled = false;
+  function acctHandleHashLink() {
+    if (hashLinkHandled) return;
+    var h = (location.hash || '').toLowerCase();
+    if (h.indexOf('#lit-') !== 0) return;    // not one of ours — leave it alone
+    hashLinkHandled = true;
+    try { history.replaceState(null, '', location.pathname + location.search); }
+    catch (e) { try { location.hash = ''; } catch (e2) {} }
+    var opener = null;
+    if (h === '#lit-signin') { if (!state.user) opener = window.acctOpenAuth; }
+    else if (h === '#lit-library') opener = window.acctOpenLibrary;
+    else if (h === '#lit-alerts') opener = window.acctOpenAlerts;
+    else if (h === '#lit-defaults') opener = window.acctOpenDefaults;
+    else if (h === '#lit-profile') opener = window.acctOpenProfile;
+    if (typeof opener === 'function') { try { opener(); } catch (e) {} }
+  }
+
   function setAuthMode(m) {
     authMode = m;
     document.getElementById('acctAuthTitle').textContent = m === 'signin' ? 'Sign in' : 'Create account';
@@ -5300,6 +5322,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       // so it never overrides filters they've already set this session).
       if (typeof window.applyLitSiteDefault === 'function') window.applyLitSiteDefault();
     }
+    acctHandleHashLink();   // honour a #lit-<view> deep-link from a sub-page's account menu
   });
 
   acctRenderControl(); // show the Sign in button immediately, before auth resolves

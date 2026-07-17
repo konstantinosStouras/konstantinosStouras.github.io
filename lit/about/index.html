@@ -83,11 +83,16 @@
 <header class="header">
   <div class="header-inner">
     <a class="brand" href="/lit/" title="Back to The Lit"><h1><em>The Lit</em> — About<span class="sub">What it is and how it works</span></h1></a>
-    <nav class="pnav">
-      <a class="pnav-btn is-active" href="/lit/" title="Close About — back to the database"><span class="ico">ⓘ</span>About</a>
-      <a class="pnav-btn" href="/lit/analytics/" title="Summary statistics for the database"><span class="ico">📊</span>Data Analytics</a>
-      <a class="pnav-btn" href="/lit/feedback/" title="Send feedback, screenshots and suggestions"><span class="ico">💬</span>Feedback</a>
-    </nav>
+    <div class="header-right">
+      <nav class="pnav">
+        <a class="pnav-btn is-active" href="/lit/" title="Close About — back to the database"><span class="ico">ⓘ</span>About</a>
+        <a class="pnav-btn" href="/lit/analytics/" title="Summary statistics for the database"><span class="ico">📊</span>Data Analytics</a>
+        <a class="pnav-btn" href="/lit/feedback/" title="Send feedback, screenshots and suggestions"><span class="ico">💬</span>Feedback</a>
+      </nav>
+      <!-- Shared sign-in / account control (same as the main browser's header);
+           populated by ../lit-acct-nav.js once Firebase auth resolves. -->
+      <div id="acctControl" class="acct-control"></div>
+    </div>
   </div>
 </header>
 
@@ -159,5 +164,12 @@
     }).catch(hide);
   })();
 </script>
+
+<!-- Shared sign-in / account control in the header (mirrors the main browser).
+     Needs the Firebase compat SDK (app + auth); lit-acct-nav.js reuses the
+     signed-in session that persists per-project across stouras.com. -->
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script src="../lit-acct-nav.js"></script>
 </body>
 </html>
