@@ -403,8 +403,17 @@ every referenced path inside the config's own directory, so the config lives at
 their common parent `lit/`, NOT in `lit/_functions/`).
 **ORCID (two features, one ORCID API client — `lit/_ORCID-SIGNIN-SETUP.md`):**
 (1) *Connect your ORCID* — a signed-in user links their iD (first-run invite
-modal or Edit profile) to get a private "My publications" view (their papers +
-Data Analytics author page, matched by name); besides typing the iD
+modal or Edit profile) and the account menu gains two DIRECT links (no modal
+in between): "My publications" → `./?author=<match name>` and "My author
+analytics" → `analytics/?author=<match name>`
+(`acctGoMyPublications`/`acctGoMyAnalytics`, both via `orcidMatchName`);
+ORCID management lives INSIDE the Edit-profile card (connected-account
+pattern): linked accounts show the iD chip + ✓ verified + Disconnect
+(`#pfOrcidLinked`), a "Name we match your papers by" field saved with the
+profile (empty = back to the credit-name default) and the consent toggle,
+while unlinked ones keep the entry input + "Sign in with ORCID" button; the
+old modal now serves only the first-run connect invite, and both connect
+flows land on the profile card; besides typing the iD
 (ISO 7064-validated, `normOrcid`), the connect stage offers **"Sign in with
 ORCID"** — ORCID's OIDC *implicit* flow run wholly client-side
 (`ORCID_OAUTH` config + `litOrcidSignIn`/`readOrcidOAuthResponse`/
@@ -419,7 +428,18 @@ in `PROVIDER_DEFS` (Firebase generic OIDC provider **`oidc.orcid`**) puts
 Firebase project runs Identity Platform with the `oidc.orcid` OIDC provider
 enabled (code flow; client secret lives ONLY in the console) and `'orcid'`
 is in `AUTH_PROVIDERS` (flipped together with its changelog entry + About
-copy, per the keep-in-sync discipline).
+copy, per the keep-in-sync discipline). **The match name defaults to ORCID's
+credit-name** (Published Name — how journals actually credit the author;
+given+family can drop a middle initial and match nothing):
+`backfillOrcidAuthorName` fetches it from the public `pub.orcid.org` record
+whenever a linked profile has no explicit `orcidAuthorName` (fill-when-empty,
+per-session per-iD guard; self-heals older links when the "My publications"
+modal opens). **Sign-in invariant:** a signed-in user is never shown the
+sign-in modal again — `acctOpenAuth` no-ops when signed in, the header
+paints from the `litAuthHint` localStorage cache while the session restores
+(`authResolved`), and account actions clicked during the restore window
+(star, notes panel) are queued by `acctWhenSignedIn` and run when auth
+resolves instead of bouncing to the modal.
 Signed-in users can also save **default filters** (account menu →
 "Default filters"): a preferred subset of journals and/or journal types,
 **auto-applied on sign-in** so they land on their subset instead of the full
