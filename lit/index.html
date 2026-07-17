@@ -530,6 +530,15 @@
   .orcid-linkbtn .ico { font-size: 18px; }
   .orcid-linkbtn .sub { display: block; font-size: 12px; font-weight: 400; color: var(--text-muted); margin-top: 1px; }
   .orcid-linkbtn:hover .sub { color: var(--navy); }
+  /* "Sign in with ORCID" (OAuth) button + "or" divider on the connect stage */
+  .orcid-signin-btn { display: flex; align-items: center; justify-content: center; gap: 9px; width: 100%; padding: 11px 14px; border: 1.5px solid #a6ce39; border-radius: 9px; background: #fff; color: #2e2e2e; font-size: 14px; font-weight: 700; cursor: pointer; transition: all .12s; font-family: inherit; }
+  .orcid-signin-btn:hover { background: #a6ce39; color: #fff; }
+  .orcid-signin-btn .oico { display: inline-block; width: 18px; height: 18px; border-radius: 50%; background: #a6ce39; color: #fff; font-size: 10px; font-weight: 800; line-height: 18px; text-align: center; font-family: 'Work Sans', sans-serif; flex: 0 0 auto; }
+  .orcid-signin-btn:hover .oico { background: #fff; color: #a6ce39; }
+  .orcid-or { display: flex; align-items: center; text-align: center; color: var(--text-muted); font-size: 11.5px; margin: 12px 0 2px; }
+  .orcid-or::before, .orcid-or::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  .orcid-or span { padding: 0 10px; }
+  .orcid-verified { color: #2e7d32; font-weight: 600; font-size: 12px; white-space: nowrap; }
   @media (max-width: 768px) { .library-bar { padding-left: 20px; padding-right: 20px; } }
   @media (max-width: 480px) { .library-bar { padding-left: 16px; padding-right: 16px; } .acct-user { max-width: 150px; } }
   /* ── Cross-device refinements (appended so they win the cascade) ───────────
@@ -3849,6 +3858,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         <label for="pfOrcid">ORCID iD <span style="text-transform:none;font-weight:400;color:var(--text-muted)">(optional)</span></label>
         <input id="pfOrcid" type="text" inputmode="numeric" placeholder="0000-0002-1825-0097" oninput="acctOrcidFieldChanged()" onkeydown="if(event.key==='Enter')acctSaveProfile()">
         <div style="font-size:11.5px;color:var(--text-muted);margin-top:4px">Your <a href="https://orcid.org/" target="_blank" rel="noopener" style="color:var(--navy)">ORCID</a> identifies you as a researcher. Link it to see your publications and citation metrics from the database.</div>
+        <button type="button" class="orcid-signin-btn" id="pfOrcidSignin" style="display:none;margin-top:9px" onclick="litOrcidSignIn()"><span class="oico">iD</span>Sign in with ORCID instead</button>
       </div>
       <label class="share-toggle-row" id="pfOrcidLinkRow" style="display:none">
         <input type="checkbox" id="pfOrcidLink">
@@ -4084,6 +4094,23 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   // 'google', 'apple', 'github'.
   var AUTH_PROVIDERS = ['google'];
 
+  // ── "Sign in with ORCID" (optional) ──────────────────────────────────────
+  // Lets users connect their ORCID by authenticating at orcid.org instead of
+  // copy-pasting their 16-digit iD. Uses ORCID's OpenID Connect *implicit*
+  // flow, so it runs entirely from this static page — NO backend, NO client
+  // secret: ORCID redirects back with the authenticated iD (and, when the user
+  // grants it, their name) in the URL fragment. Inert until you register a
+  // PUBLIC ORCID API client and paste its client-id below (and add this page's
+  // URL as a redirect URI in the ORCID developer tools). When unset, the
+  // connect stage shows manual iD entry exactly as before. Setup steps:
+  // lit/_ORCID-SIGNIN-SETUP.md
+  var ORCID_OAUTH = {
+    clientId: 'PASTE_ORCID_CLIENT_ID',   // e.g. 'APP-XXXXXXXXXXXXXXXX' (public client)
+    environment: 'production',           // 'production' | 'sandbox'
+    redirectUri: '',                     // '' = this page's URL (origin + path)
+    responseType: 'token'                // ORCID's implicit flow (returns id_token + orcid)
+  };
+
   var ACCOUNTS_ENABLED = !!(FB_CONFIG.apiKey
     && FB_CONFIG.apiKey.indexOf('PASTE_') === -1
     && window.firebase && firebase.auth && firebase.firestore);
@@ -4109,6 +4136,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   var sharedActive = false;     // is a ?list= shared-list view currently showing?
   var shareModalLid = null;     // which list the share modal is editing
   var orcidPromptShown = false; // guards the once-per-session ORCID connect prompt
+  var pendingOrcid = null;      // an authenticated ORCID from a "Sign in with ORCID" redirect, awaiting save
   var doiIndex = null, doiIndexLen = -1;
   var lastMarkedUid = null;    // guards the once-per-session registered-users tally write
 
@@ -4871,6 +4899,8 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     document.getElementById('pfEmail').value = p.email || (state.user && state.user.email) || '';
     document.getElementById('pfOrcid').value = p.orcid || '';
     document.getElementById('pfOrcidLink').checked = !!p.orcidLinked;
+    var pfSignin = document.getElementById('pfOrcidSignin');
+    if (pfSignin) pfSignin.style.display = orcidOauthEnabled() ? '' : 'none';
     acctOrcidFieldChanged();   // show/hide the consent row for the current value
     var st = document.getElementById('pfStatus'); if (st) st.textContent = '';
     var er = document.getElementById('pfErr'); if (er) er.textContent = '';
@@ -4954,6 +4984,104 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   function dbAuthorLink(name)  { return './?author=' + encodeURIComponent(name); }
   function anaAuthorLink(name) { return 'analytics/?author=' + encodeURIComponent(name); }
 
+  // ── "Sign in with ORCID" (OpenID Connect implicit flow) ───────────────────
+  // Configured via ORCID_OAUTH above; a no-op (button hidden, manual entry
+  // unchanged) until a public ORCID client-id is pasted there.
+  function orcidOauthEnabled() {
+    return !!(ORCID_OAUTH && ORCID_OAUTH.clientId && ORCID_OAUTH.clientId.indexOf('PASTE_') === -1);
+  }
+  function orcidAuthBase() {
+    return ORCID_OAUTH.environment === 'sandbox' ? 'https://sandbox.orcid.org' : 'https://orcid.org';
+  }
+  function orcidRedirectUri() {
+    return (ORCID_OAUTH.redirectUri && ORCID_OAUTH.redirectUri.trim()) || (location.origin + location.pathname);
+  }
+  function orcidRandState() {
+    try {
+      var a = new Uint8Array(16); (window.crypto || window.msCrypto).getRandomValues(a);
+      return Array.prototype.map.call(a, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+    } catch (e) { return 'o' + String(Math.random()).slice(2) + String(Math.random()).slice(2); }
+  }
+  // Decode the payload of a JWT (id_token) WITHOUT verifying its signature. We
+  // only read it to learn the user's own ORCID iD / name for their own private
+  // view — no security boundary is crossed (the iD merely picks which author
+  // name their private stats are shown under). The iD arrives over a redirect
+  // from orcid.org that we started with a CSRF `state` nonce we validate.
+  function decodeJwtPayload(tok) {
+    try {
+      var seg = String(tok).split('.')[1]; if (!seg) return null;
+      seg = seg.replace(/-/g, '+').replace(/_/g, '/'); while (seg.length % 4) seg += '=';
+      return JSON.parse(decodeURIComponent(escape(atob(seg))));
+    } catch (e) { return null; }
+  }
+
+  // Kick off the redirect to ORCID. Remember the consent choice + a CSRF nonce
+  // across the round-trip in sessionStorage. Works from either the connect
+  // modal (which has a #litOrcidConsent checkbox) or the profile modal.
+  window.litOrcidSignIn = function () {
+    if (!orcidOauthEnabled()) return;
+    var consent = document.getElementById('litOrcidConsent');
+    var st = orcidRandState();
+    try {
+      sessionStorage.setItem('litOrcidOAuth', JSON.stringify({
+        state: st, linked: consent ? !!consent.checked : true
+      }));
+    } catch (e) {}
+    var url = orcidAuthBase() + '/oauth/authorize'
+      + '?client_id=' + encodeURIComponent(ORCID_OAUTH.clientId)
+      + '&response_type=' + encodeURIComponent(ORCID_OAUTH.responseType || 'token')
+      + '&scope=' + encodeURIComponent('openid')
+      + '&redirect_uri=' + encodeURIComponent(orcidRedirectUri())
+      + '&state=' + encodeURIComponent(st)
+      + '&nonce=' + encodeURIComponent(st);
+    location.assign(url);
+  };
+
+  // On return from ORCID, pull the authenticated iD (+ name) out of the URL
+  // fragment, validate the `state` nonce, and stash it for maybeApplyOrcidPending
+  // to save once the signed-in profile is ready. Cleans the fragment either way.
+  function readOrcidOAuthResponse() {
+    var hash = (location.hash || '').replace(/^#/, '');
+    if (!hash || hash.indexOf('state=') < 0) return;   // not an OAuth return
+    var saved = null;
+    try { saved = JSON.parse(sessionStorage.getItem('litOrcidOAuth') || 'null'); } catch (e) {}
+    if (!saved) return;
+    var hp = new URLSearchParams(hash);
+    if (hp.get('state') !== saved.state) return;       // stale / forged — ignore
+    try { sessionStorage.removeItem('litOrcidOAuth'); } catch (e) {}
+    // Strip the OAuth fragment from the address bar so a refresh won't replay it.
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    if (hp.get('error')) return;                        // user denied / config error
+    // ORCID's implicit response carries the iD as `orcid` (+ `name`), and — with
+    // the openid scope — an `id_token` JWT whose `sub` is the iD. Prefer the
+    // explicit params, fall back to the token.
+    var rawId = hp.get('orcid') || '';
+    var nm = hp.get('name') || '';
+    var tok = hp.get('id_token');
+    if ((!rawId || !nm) && tok) {
+      var pl = decodeJwtPayload(tok) || {};
+      if (!rawId && pl.sub) rawId = pl.sub;
+      if (!nm) nm = [pl.given_name, pl.family_name].filter(Boolean).join(' ').trim() || pl.name || '';
+    }
+    var orcid = normOrcid(rawId);
+    if (!orcid) return;
+    pendingOrcid = { orcid: orcid, name: (nm || '').trim(), linked: saved.linked !== false };
+  }
+
+  // Save an authenticated "Sign in with ORCID" result once account + profile
+  // are ready, then open the manage view so the user sees their publications.
+  function maybeApplyOrcidPending() {
+    if (!pendingOrcid || !state.user || !state.profile) return;
+    var pend = pendingOrcid; pendingOrcid = null;
+    orcidPromptShown = true;   // signing in also answers the first-run invite
+    var patch = { orcid: pend.orcid, orcidLinked: pend.linked, orcidVerified: true, orcidPromptSeen: true, updatedAt: serverTime() };
+    var local = { orcid: pend.orcid, orcidLinked: pend.linked, orcidVerified: true, orcidPromptSeen: true };
+    // Seed the match name from ORCID only when the user hasn't set one of their own.
+    var hasName = state.profile.orcidAuthorName && state.profile.orcidAuthorName.trim();
+    if (pend.name && !hasName) { patch.orcidAuthorName = pend.name; local.orcidAuthorName = pend.name; }
+    saveOrcidProfile(patch, local, function () { litOrcidOpen('manage'); });
+  }
+
   window.acctOpenPublications = function () {
     if (!state.user) { acctOpenAuth(); return; }
     acctCloseMenu();
@@ -4976,7 +5104,12 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (orcidMode === 'prompt' || !p.orcid) {
       titleEl.textContent = 'Connect your ORCID iD';
       subEl.textContent = 'Link your ORCID and we can show you your publications and citation metrics that appear in The Lit’s database.';
+      var signIn = orcidOauthEnabled()
+        ? '<button class="orcid-signin-btn" onclick="litOrcidSignIn()"><span class="oico">iD</span>Sign in with ORCID</button>' +
+          '<div class="orcid-or"><span>or enter your iD manually</span></div>'
+        : '';
       body.innerHTML =
+        signIn +
         '<div class="acct-field">' +
           '<label for="litOrcidInput">ORCID iD</label>' +
           '<input id="litOrcidInput" type="text" inputmode="numeric" placeholder="0000-0002-1825-0097" value="' + escAttr(p.orcid || '') + '">' +
@@ -5002,7 +5135,9 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       : 'Your ORCID is saved. Turn on the association to see your publications and metrics.';
     var name = orcidMatchName(p);
     var html =
-      '<div style="font-size:13.5px">ORCID iD: <a class="orcid-id" href="' + orcidUrl(p.orcid) + '" target="_blank" rel="noopener"><span class="oico">iD</span>' + esc(p.orcid) + '</a></div>';
+      '<div style="font-size:13.5px">ORCID iD: <a class="orcid-id" href="' + orcidUrl(p.orcid) + '" target="_blank" rel="noopener"><span class="oico">iD</span>' + esc(p.orcid) + '</a>' +
+        (p.orcidVerified ? ' <span class="orcid-verified" title="Confirmed by signing in at orcid.org">✓ verified</span>' : '') +
+      '</div>';
     if (!linked) {
       html += '<label class="share-toggle-row"><input type="checkbox" id="litOrcidConsent"> ' +
         '<span>Associate my profile with my publications in the database</span></label>' +
@@ -5771,6 +5906,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     acctDecorate();
     acctRenderControl();
     maybeAutoApplyPrefs();
+    maybeApplyOrcidPending();  // save an authenticated "Sign in with ORCID" result, if any
     maybeOrcidPrompt();  // first-run: invite the user to connect their ORCID
     syncPublicLists();   // keep any public lists' shared copies current as the owner edits
     if (libraryMode) { renderLibraryBar(); renderLibrary(); if (shareModalLid) renderShareBody(); }
@@ -5778,6 +5914,10 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (orcOv && orcOv.classList.contains('open')) renderOrcidBody();
     refreshAlertsModalIfOpen();
   }
+  // Returning from a "Sign in with ORCID" redirect? Capture the authenticated
+  // iD from the URL fragment now; it's saved once the profile snapshot lands.
+  readOrcidOAuthResponse();
+
   auth.onAuthStateChanged(function (user) {
     state.user = user;
     document.body.classList.toggle('ms-signed-in', !!user);
