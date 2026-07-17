@@ -522,6 +522,14 @@
   .share-toggle-row { display: flex; align-items: center; gap: 10px; font-size: 14px; }
   .share-toggle-row input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--navy); cursor: pointer; }
   .share-note { font-size: 12.5px; color: var(--text-muted); line-height: 1.5; }
+  /* ORCID / "My publications" modal */
+  .orcid-id { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; color: var(--navy); text-decoration: none; }
+  .orcid-id .oico { display: inline-block; width: 15px; height: 15px; border-radius: 50%; background: #a6ce39; color: #fff; font-size: 9px; font-weight: 800; line-height: 15px; text-align: center; font-family: 'Work Sans', sans-serif; }
+  .orcid-linkbtn { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 9px; text-decoration: none; color: var(--text); font-size: 14px; font-weight: 600; transition: all .12s; }
+  .orcid-linkbtn:hover { border-color: var(--navy); background: var(--navy-light); color: var(--navy); }
+  .orcid-linkbtn .ico { font-size: 18px; }
+  .orcid-linkbtn .sub { display: block; font-size: 12px; font-weight: 400; color: var(--text-muted); margin-top: 1px; }
+  .orcid-linkbtn:hover .sub { color: var(--navy); }
   @media (max-width: 768px) { .library-bar { padding-left: 20px; padding-right: 20px; } }
   @media (max-width: 480px) { .library-bar { padding-left: 16px; padding-right: 16px; } .acct-user { max-width: 150px; } }
   /* ── Cross-device refinements (appended so they win the cascade) ───────────
@@ -2845,7 +2853,7 @@ function litSelectionIsEmpty() {
 }
 
 function applyLitSiteDefault() {
-  if (window.LIT_SHARED_VIEW) return false;   // a shared-list view (?list=) owns the page
+  if (window.LIT_SHARED_VIEW || window.LIT_AUTHOR_DEEPLINK) return false;   // a shared-list / author deep-link view owns the page
   if (window.litSiteDefaultApplied) return false;
   if (typeof sel === 'undefined' || typeof applyFilters !== 'function') return false;
   if (typeof recentMode !== 'undefined' && recentMode) return false;
@@ -3731,6 +3739,23 @@ loadData();     // manifests only — papers files download when a filter needs 
 if (DB_MODE) initLitDb();  // ?db=1: open the range-served SQLite DB in the background
 loadAuthorsFromCache(); // authors.json itself is fetched on first Authors-tab open
 loadRecent(); // pre-fetch the small recent.json so the "Recently added" view opens instantly
+
+// Author deep-link (?author=Name): pre-apply an author filter so a link can land
+// straight on one person's publications — used by the ORCID "My publications"
+// hub, and shareable on its own. Setting LIT_AUTHOR_DEEPLINK stands the
+// site/personal default filters down (like the shared-list view) so they don't
+// fight the author scope; the author chip itself also makes the selection
+// non-empty. Applying it triggers an all-journal load, exactly as typing the
+// author would.
+(function applyAuthorDeepLink() {
+  try {
+    var nm = new URLSearchParams(location.search).get('author');
+    if (!nm) return;
+    nm = nm.trim(); if (!nm) return;
+    window.LIT_AUTHOR_DEEPLINK = true;
+    if (typeof addAuthorIdentityChip === 'function') addAuthorIdentityChip(nm, [nm.toLowerCase()]);
+  } catch (e) {}
+})();
 </script>
 
 <!-- ── Accounts: sign in / register modal ─────────────────────────────────── -->
@@ -3819,10 +3844,39 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         <label for="pfEmail">Email</label>
         <input id="pfEmail" type="email" autocomplete="email" placeholder="you@example.com" onkeydown="if(event.key==='Enter')acctSaveProfile()">
       </div>
+      <div class="acct-field">
+        <label for="pfOrcid">ORCID iD <span style="text-transform:none;font-weight:400;color:var(--text-muted)">(optional)</span></label>
+        <input id="pfOrcid" type="text" inputmode="numeric" placeholder="0000-0002-1825-0097" oninput="acctOrcidFieldChanged()" onkeydown="if(event.key==='Enter')acctSaveProfile()">
+        <div style="font-size:11.5px;color:var(--text-muted);margin-top:4px">Your <a href="https://orcid.org/" target="_blank" rel="noopener" style="color:var(--navy)">ORCID</a> identifies you as a researcher. Link it to see your publications and citation metrics from the database.</div>
+      </div>
+      <label class="share-toggle-row" id="pfOrcidLinkRow" style="display:none">
+        <input type="checkbox" id="pfOrcidLink">
+        <span>Show my publications &amp; citation metrics from the database on my profile</span>
+      </label>
       <div class="acct-error" id="pfErr"></div>
       <button class="acct-primary" id="pfSaveBtn" onclick="acctSaveProfile()">Save profile</button>
       <div class="acct-switch" id="pfStatus"></div>
     </div>
+  </div>
+</div>
+
+<!-- ── Accounts: ORCID / "My publications" modal ───────────────────────────────
+     Two modes, both rendered into #litOrcidBody by renderOrcidBody():
+       • "prompt"  — shown once after sign-in to invite the user to connect their
+                     ORCID iD and opt in to seeing their publications.
+       • "manage"  — once linked: their ORCID, the name we match their papers by,
+                     and links to their publications in the database + the Data
+                     Analytics author area.
+     Stored on the profile doc (orcid / orcidLinked / orcidAuthorName /
+     orcidPromptSeen); no Firestore rules change (users/{uid}/** covers it). -->
+<div id="litOrcidOverlay" class="acct-overlay" onclick="if(event.target===this)litOrcidClose()">
+  <div class="acct-modal">
+    <button class="acct-modal-x" onclick="litOrcidClose()" aria-label="Close">×</button>
+    <div class="acct-modal-head">
+      <h2 id="litOrcidTitle">My publications</h2>
+      <p id="litOrcidSub"></p>
+    </div>
+    <div class="acct-modal-body" id="litOrcidBody"></div>
   </div>
 </div>
 
@@ -3994,7 +4048,9 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
  *                                    starred, note, tags[], lists[lid], updatedAt }
  *   users/{uid}/lists/{lid}     -> { name, createdAt, public?, shareId? }
  *   users/{uid}/profile/main    -> { firstName, lastName, affiliation,
- *                                    website, email, updatedAt }
+ *                                    website, email, updatedAt,
+ *                                    orcid?, orcidLinked?, orcidAuthorName?,
+ *                                    orcidPromptSeen? }
  *   registeredUsers/{uid}       -> { t }   PUBLIC, contentless per-account marker
  *                                    counted by lit/analytics/ (no private data)
  *   publicLists/{shareId}       -> { ownerUid, owner, name, count, papers[], ... }
@@ -4051,6 +4107,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   var lastSharedSig = {};       // shareId -> last-synced content signature (avoids redundant writes)
   var sharedActive = false;     // is a ?list= shared-list view currently showing?
   var shareModalLid = null;     // which list the share modal is editing
+  var orcidPromptShown = false; // guards the once-per-session ORCID connect prompt
   var doiIndex = null, doiIndexLen = -1;
   var lastMarkedUid = null;    // guards the once-per-session registered-users tally write
 
@@ -4302,12 +4359,14 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     var defs = savedDefaults();
     var defCount = defs.journals.length + defs.jtypes.length;
     var alertCount = Object.keys(state.alerts || {}).length;
+    var orcidLinked = !!(prof.orcid && prof.orcidLinked);
     el.innerHTML =
       '<div class="acct-wrap">' +
         '<button class="acct-btn acct-user" onclick="acctToggleMenu(event)"><span class="acct-avatar" style="background-image:url(\'' + avatar + '\')"></span><span class="acct-uname">' + esc(name) + '</span></button>' +
         '<div class="acct-menu" id="acctMenu">' +
           '<div class="acct-menu-head">Signed in as<strong>' + esc(u.email || name) + '</strong></div>' +
           '<div class="acct-menu-item" onclick="acctOpenLibrary()">★ My library <span class="acct-badge">' + saved + '</span></div>' +
+          (orcidLinked ? '<div class="acct-menu-item" onclick="acctOpenPublications()">📊 My publications</div>' : '') +
           '<div class="acct-menu-sep"></div>' +
           '<div class="acct-menu-item" onclick="acctOpenAlerts()">✉️ E-mail alerts' + (alertCount ? ' <span class="acct-badge">' + alertCount + '</span>' : '') + '</div>' +
           '<div class="acct-menu-item" onclick="acctOpenDefaults()">⚙️ Default filters' + (defCount ? ' <span class="acct-badge">' + defCount + '</span>' : '') + '</div>' +
@@ -4809,10 +4868,39 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     document.getElementById('pfAffiliation').value = p.affiliation || '';
     document.getElementById('pfWebsite').value = p.website || '';
     document.getElementById('pfEmail').value = p.email || (state.user && state.user.email) || '';
+    document.getElementById('pfOrcid').value = p.orcid || '';
+    document.getElementById('pfOrcidLink').checked = !!p.orcidLinked;
+    acctOrcidFieldChanged();   // show/hide the consent row for the current value
     var st = document.getElementById('pfStatus'); if (st) st.textContent = '';
     var er = document.getElementById('pfErr'); if (er) er.textContent = '';
     document.getElementById('acctProfileOverlay').classList.add('open');
     setTimeout(function () { var e = document.getElementById('pfFirstName'); if (e) e.focus(); }, 40);
+  };
+  // ── ORCID: normalise + validate (ISO 7064 MOD 11-2 checksum) ──────────────
+  function normOrcid(s) {
+    var m = String(s || '').trim().match(/(\d{4})-?(\d{4})-?(\d{4})-?(\d{3}[\dxX])/);
+    if (!m) return '';
+    var d = (m[1] + m[2] + m[3] + m[4]).toUpperCase();
+    var total = 0;
+    for (var i = 0; i < 15; i++) { var c = d.charCodeAt(i) - 48; if (c < 0 || c > 9) return ''; total = (total + c) * 2; }
+    var chk = (12 - (total % 11)) % 11; chk = chk === 10 ? 'X' : String(chk);
+    if (chk !== d[15]) return '';
+    return d.slice(0, 4) + '-' + d.slice(4, 8) + '-' + d.slice(8, 12) + '-' + d.slice(12, 16);
+  }
+  // The name we match a user's publications by (our data has no per-paper ORCID,
+  // so association is by author name): their chosen match name, else full name.
+  function orcidMatchName(p) {
+    p = p || state.profile || {};
+    return (p.orcidAuthorName && p.orcidAuthorName.trim())
+      || ((p.firstName || '') + ' ' + (p.lastName || '')).trim()
+      || (state.user && state.user.displayName) || '';
+  }
+  // Reveal the "show my publications" consent row only once a valid ORCID is typed.
+  window.acctOrcidFieldChanged = function () {
+    var inp = document.getElementById('pfOrcid'); if (!inp) return;
+    var ok = !!normOrcid(inp.value);
+    var row = document.getElementById('pfOrcidLinkRow'); if (row) row.style.display = ok ? '' : 'none';
+    if (!ok) { var cb = document.getElementById('pfOrcidLink'); if (cb) cb.checked = false; }
   };
   window.acctCloseProfile = function () { document.getElementById('acctProfileOverlay').classList.remove('open'); };
   window.acctSaveProfile = function () {
@@ -4826,6 +4914,19 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     };
     var er = document.getElementById('pfErr'); er.style.color = 'var(--red)'; er.textContent = '';
     if (!prof.firstName || !prof.lastName) { er.textContent = 'Please enter your first and last name.'; return; }
+    // ORCID (optional): store the canonical form, or clear it when the field is
+    // emptied. A non-empty value that fails the checksum blocks the save.
+    var orcidRaw = document.getElementById('pfOrcid').value.trim();
+    if (orcidRaw) {
+      var orcid = normOrcid(orcidRaw);
+      if (!orcid) { er.textContent = 'That ORCID iD looks invalid. It should read like 0000-0002-1825-0097.'; return; }
+      prof.orcid = orcid;
+      prof.orcidLinked = !!document.getElementById('pfOrcidLink').checked;
+    } else {
+      prof.orcid = FV.delete();
+      prof.orcidLinked = false;
+    }
+    prof.orcidPromptSeen = true;   // deciding it here counts as answering the prompt
     var btn = document.getElementById('pfSaveBtn'); btn.disabled = true;
     var display = (prof.firstName + ' ' + prof.lastName).trim();
     prof.updatedAt = serverTime();
@@ -4840,6 +4941,142 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       .catch(function (e) { er.textContent = friendly(e); })
       .then(function () { btn.disabled = false; });
   };
+
+  // ── ORCID: connect prompt + "My publications" hub ─────────────────────────
+  // Our datasets carry no per-paper ORCID, so a user's publications are matched
+  // by AUTHOR NAME (their chosen match name, default = full profile name). The
+  // hub links out to (a) the main database filtered to that author — showing
+  // each paper's citation count — and (b) the Data Analytics author area. Both
+  // are plain ?author= deep-links, so they are shareable and need no extra data.
+  var orcidMode = 'manage';   // 'prompt' (first-run invite) | 'manage'
+  function orcidUrl(id) { return 'https://orcid.org/' + id; }
+  function dbAuthorLink(name)  { return './?author=' + encodeURIComponent(name); }
+  function anaAuthorLink(name) { return 'analytics/?author=' + encodeURIComponent(name); }
+
+  window.acctOpenPublications = function () {
+    if (!state.user) { acctOpenAuth(); return; }
+    acctCloseMenu();
+    litOrcidOpen('manage');
+  };
+  function litOrcidOpen(mode) {
+    orcidMode = mode || 'manage';
+    renderOrcidBody();
+    document.getElementById('litOrcidOverlay').classList.add('open');
+  }
+  window.litOrcidClose = function () { document.getElementById('litOrcidOverlay').classList.remove('open'); };
+
+  function renderOrcidBody() {
+    var body = document.getElementById('litOrcidBody'); if (!body) return;
+    var p = state.profile || {};
+    var linked = !!(p.orcid && p.orcidLinked);
+    var titleEl = document.getElementById('litOrcidTitle');
+    var subEl = document.getElementById('litOrcidSub');
+
+    if (orcidMode === 'prompt' || !p.orcid) {
+      titleEl.textContent = 'Connect your ORCID iD';
+      subEl.textContent = 'Link your ORCID and we can show you your publications and citation metrics that appear in The Lit’s database.';
+      body.innerHTML =
+        '<div class="acct-field">' +
+          '<label for="litOrcidInput">ORCID iD</label>' +
+          '<input id="litOrcidInput" type="text" inputmode="numeric" placeholder="0000-0002-1825-0097" value="' + escAttr(p.orcid || '') + '">' +
+          '<div style="font-size:11.5px;color:var(--text-muted);margin-top:4px">Find yours at <a href="https://orcid.org/" target="_blank" rel="noopener" style="color:var(--navy)">orcid.org</a>. It looks like 0000-0002-1825-0097.</div>' +
+        '</div>' +
+        '<label class="share-toggle-row"><input type="checkbox" id="litOrcidConsent" checked> ' +
+          '<span>Associate my profile with my publications in the database, and show me my stats</span></label>' +
+        '<div class="share-note">We match your publications by your name (' + esc(orcidMatchName(p) || 'your profile name') +
+          '). Nothing about your account is made public — these links are just for you.</div>' +
+        '<div class="acct-error" id="litOrcidErr"></div>' +
+        '<div style="display:flex;gap:8px">' +
+          '<button class="acct-primary" style="flex:1" onclick="litOrcidConnect()">Connect ORCID</button>' +
+          '<button class="acct-btn" style="flex:0 0 auto" onclick="litOrcidNotNow()">Not now</button>' +
+        '</div>';
+      setTimeout(function () { var e = document.getElementById('litOrcidInput'); if (e) e.focus(); }, 40);
+      return;
+    }
+
+    // manage mode — has an ORCID on file
+    titleEl.textContent = 'My publications';
+    subEl.textContent = linked
+      ? 'Your publications and citation metrics from The Lit’s database.'
+      : 'Your ORCID is saved. Turn on the association to see your publications and metrics.';
+    var name = orcidMatchName(p);
+    var html =
+      '<div style="font-size:13.5px">ORCID iD: <a class="orcid-id" href="' + orcidUrl(p.orcid) + '" target="_blank" rel="noopener"><span class="oico">iD</span>' + esc(p.orcid) + '</a></div>';
+    if (!linked) {
+      html += '<label class="share-toggle-row"><input type="checkbox" id="litOrcidConsent"> ' +
+        '<span>Associate my profile with my publications in the database</span></label>' +
+        '<button class="acct-primary" onclick="litOrcidConnect()">Turn on &amp; view my publications</button>';
+    } else {
+      html +=
+        '<div class="acct-field">' +
+          '<label for="litOrcidName">Name we match your papers by</label>' +
+          '<input id="litOrcidName" type="text" value="' + escAttr(name) + '" placeholder="Your name as it appears on your papers">' +
+          '<div style="font-size:11.5px;color:var(--text-muted);margin-top:4px">Our data has no per-paper ORCID, so we match by author name. Adjust this if your papers list you differently, then Save.</div>' +
+        '</div>' +
+        '<button class="acct-btn" style="align-self:flex-start;padding:7px 14px" onclick="litOrcidSaveName()">Save name</button>' +
+        '<a class="orcid-linkbtn" href="' + dbAuthorLink(name) + '"><span class="ico">📚</span><span>View my publications in the database' +
+          '<span class="sub">Every paper of yours in The Lit, with its citation count</span></span></a>' +
+        '<a class="orcid-linkbtn" href="' + anaAuthorLink(name) + '"><span class="ico">📊</span><span>View my author analytics' +
+          '<span class="sub">Your metrics in the Data Analytics author spotlight</span></span></a>' +
+        '<div class="acct-switch" style="margin-top:2px"><span class="acct-link" onclick="litOrcidUnlink()">Turn off / remove ORCID association</span></div>';
+    }
+    html += '<div class="acct-error" id="litOrcidErr"></div>';
+    body.innerHTML = html;
+  }
+
+  // Write `patch` to the profile doc; `local` (optional) is applied to
+  // state.profile right away so the open modal reflects the change before the
+  // Firestore snapshot echoes back (patch may hold FieldValue sentinels that
+  // must NOT be copied into local state — hence a separate plain-value `local`).
+  function saveOrcidProfile(patch, local, onOk) {
+    profileDoc().set(patch, { merge: true }).then(function () {
+      if (state.profile && local) { for (var k in local) { state.profile[k] = local[k]; } }
+      acctRenderControl();
+      if (typeof onOk === 'function') onOk();
+    }).catch(function (e) {
+      var er = document.getElementById('litOrcidErr'); if (er) { er.style.color = 'var(--red)'; er.textContent = friendly(e); }
+    });
+  }
+  window.litOrcidConnect = function () {
+    var inpEl = document.getElementById('litOrcidInput');
+    var er = document.getElementById('litOrcidErr'); if (er) er.textContent = '';
+    var p = state.profile || {};
+    var orcid = inpEl ? normOrcid(inpEl.value) : p.orcid;
+    if (!orcid) { if (er) { er.style.color = 'var(--red)'; er.textContent = 'Please enter a valid ORCID iD (like 0000-0002-1825-0097).'; } return; }
+    var consent = document.getElementById('litOrcidConsent');
+    var linked = consent ? !!consent.checked : true;
+    saveOrcidProfile(
+      { orcid: orcid, orcidLinked: linked, orcidPromptSeen: true, updatedAt: serverTime() },
+      { orcid: orcid, orcidLinked: linked, orcidPromptSeen: true },
+      function () { orcidMode = 'manage'; renderOrcidBody(); });
+  };
+  window.litOrcidNotNow = function () {
+    saveOrcidProfile({ orcidPromptSeen: true, updatedAt: serverTime() }, { orcidPromptSeen: true }, function () { litOrcidClose(); });
+  };
+  window.litOrcidSaveName = function () {
+    var nameEl = document.getElementById('litOrcidName'); if (!nameEl) return;
+    var nm = nameEl.value.trim();
+    saveOrcidProfile({ orcidAuthorName: nm, updatedAt: serverTime() }, { orcidAuthorName: nm }, function () { renderOrcidBody(); });
+  };
+  window.litOrcidUnlink = function () {
+    if (!confirm('Remove your ORCID association? Your saved papers, notes and lists are unaffected.')) return;
+    if (state.profile) { delete state.profile.orcid; delete state.profile.orcidAuthorName; state.profile.orcidLinked = false; }
+    saveOrcidProfile(
+      { orcid: FV.delete(), orcidLinked: false, orcidAuthorName: FV.delete(), updatedAt: serverTime() },
+      null,
+      function () { litOrcidClose(); });
+  };
+
+  // First-run invite: prompt a signed-in user once to connect their ORCID.
+  function maybeOrcidPrompt() {
+    if (orcidPromptShown) return;
+    if (!state.user || !state.profile) return;                 // wait for the profile snapshot
+    if (state.profile.orcid || state.profile.orcidPromptSeen) { orcidPromptShown = true; return; }
+    if (window.LIT_SHARED_VIEW || window.LIT_AUTHOR_DEEPLINK || libraryMode) return;
+    if (document.querySelector('.acct-overlay.open')) return;  // don't stack; retry on next snapshot
+    orcidPromptShown = true;
+    litOrcidOpen('prompt');
+  }
 
   // ── E-mail alerts: subscribe to new papers matching a set of filters ──────
   // Registered users save one or more alerts. Each alert stores a `criteria`
@@ -5340,7 +5577,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   // (Applying before the manifests arrive is fine — applyFilters lazy-loads what
   // it needs and registerExtraSources re-applies as catalog journals register.)
   function maybeAutoApplyPrefs() {
-    if (window.LIT_SHARED_VIEW) return;   // a shared-list view (?list=) owns the page; don't latch
+    if (window.LIT_SHARED_VIEW || window.LIT_AUTHOR_DEEPLINK) return;   // a shared-list / author deep-link view owns the page; don't latch
     if (prefsAutoApplied) return;
     if (!state.user || !state.profile) return;          // profile snapshot not in yet — wait
     // The profile is loaded: this is our single landing-time decision. Latch the
@@ -5533,8 +5770,11 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     acctDecorate();
     acctRenderControl();
     maybeAutoApplyPrefs();
+    maybeOrcidPrompt();  // first-run: invite the user to connect their ORCID
     syncPublicLists();   // keep any public lists' shared copies current as the owner edits
     if (libraryMode) { renderLibraryBar(); renderLibrary(); if (shareModalLid) renderShareBody(); }
+    var orcOv = document.getElementById('litOrcidOverlay');
+    if (orcOv && orcOv.classList.contains('open')) renderOrcidBody();
     refreshAlertsModalIfOpen();
   }
   auth.onAuthStateChanged(function (user) {

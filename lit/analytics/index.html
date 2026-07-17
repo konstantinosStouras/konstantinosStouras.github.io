@@ -2348,6 +2348,18 @@
     ai.addEventListener('focus', function () { ensureAuthors(function () {}); });
     $('authorAdd').onclick = function () { addAuthor(ai.value); };
 
+    // Author deep-link (?author=Name): open the Author spotlight straight on one
+    // person — used by the ORCID "My publications" hub on the main browser, and
+    // shareable on its own.
+    try {
+      var authorParam = new URLSearchParams(location.search).get('author');
+      if (authorParam && authorParam.trim()) {
+        var atab = document.querySelector('.tab[data-tab="author"]');
+        if (atab) atab.click();
+        addAuthor(authorParam.trim());
+      }
+    } catch (e) {}
+
     // generation line
     if (d.generated) $('genline').textContent = 'Data as of ' + d.generated;
 
