@@ -33,11 +33,14 @@ submissions are stored in the project's existing Firebase project
    **create** from anyone; **read/update/delete** are allowed ONLY to the
    signed-in maintainer account (`isFeedbackAdmin()` — that's what powers the
    admin dashboard above). The Admin SDK jobs bypass rules as always. Deploy
-   the rules after changing them:
+   the rules after changing them — from `lit/_functions/`, whose `firebase.json`
+   points at `../_firestore.rules`:
    ```
+   cd lit/_functions
    firebase deploy --only firestore:rules
    ```
-   (or paste into Firebase console → Firestore Database → Rules → Publish).
+   (or paste the file into Firebase console → Firestore Database → Rules →
+   Publish).
 
 3. **`lit/_scraper/feedback-mailer.mjs`** + **`.github/workflows/lit-feedback-mail.yml`**
    — every 10 minutes the job reads pending (`forwarded == false`) submissions

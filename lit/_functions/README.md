@@ -78,6 +78,15 @@ That's all you do in the browser. The rest is two-ish minutes in a terminal.
    ```
    First deploy also enables the required Google Cloud APIs — just say yes.
 
+6. **Deploying the Firestore rules** also works from this same directory —
+   `firebase.json` points at `../_firestore.rules`, so whenever the rules file
+   changes:
+   ```sh
+   firebase deploy --only firestore:rules
+   ```
+   (equivalent to pasting the file into Firebase console → Firestore Database →
+   Rules → Publish).
+
 ## Verify
 
 Submit a test message on `stouras.com/lit/feedback/`. The e-mail should land in
