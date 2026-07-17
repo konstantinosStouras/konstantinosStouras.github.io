@@ -1802,7 +1802,7 @@ function viewPendingCount() {
 let authorsRequested = false;
 function loadAuthorsFromCache() {
   var cached = lsGet('lit_authors');
-  if (cached) { try { authorData = JSON.parse(cached); if (authorData.length) renderAuthorsSummary(); } catch (e) {} }
+  if (cached) { try { authorData = JSON.parse(cached); if (authorData.length) { renderAuthorsSummary(); litUpgradeAuthorDeepLink(); } } catch (e) {} }
 }
 async function loadAuthors() {
   authorsRequested = true;
@@ -1813,9 +1813,41 @@ async function loadAuthors() {
     authorData = Array.isArray(data) ? data : [];
     lsSet('lit_authors', JSON.stringify(authorData));
     renderAuthorsSummary();
+    litUpgradeAuthorDeepLink();
   } catch (e) {
     if (!authorData.length) setTimeout(loadAuthors, 3000);
   }
+}
+
+// Author deep-link → ORCID-resolved identity. The ?author= URL carries ONE
+// spelling of a name, but papers may credit the author differently (a middle
+// initial gained or dropped — "Konstantinos Stouras" vs the credited
+// "Konstantinos I. Stouras"). The Authors index (authors.json) already knows
+// each ORCID-resolved author's full Name_Variants, so once it is available the
+// deep-link chip's single variant is widened to the matching identity's full
+// set — papers credited under ANY spelling are found, for EVERY author.
+function litUpgradeAuthorDeepLink() {
+  if (!window.LIT_AUTHOR_DEEPLINK || !authorData.length) return;
+  var labels = Object.keys(sel.authorIdentity || {});
+  var changed = false;
+  labels.forEach(function (label) {
+    var vs = sel.authorIdentity[label] || [];
+    if (vs.length > 1) return;                     // already variant-rich (added from the Authors tab)
+    var q = String(vs[0] || label).trim().toLowerCase();
+    if (!q) return;
+    for (var j = 0; j < authorData.length; j++) {
+      var a = authorData[j];
+      var nm = (a['Author'] || '').trim();
+      if (!nm) continue;
+      var variants = String(a['Name_Variants'] || nm).split(';').map(function (x) { return x.trim().toLowerCase(); }).filter(Boolean);
+      if (nm.toLowerCase() === q || variants.indexOf(q) >= 0) {
+        sel.authorIdentity[label] = variants.length ? variants : [nm.toLowerCase()];
+        changed = true;
+        break;
+      }
+    }
+  });
+  if (changed) applyFilters();
 }
 
 // localStorage helpers (guarded: private mode / quota can throw).
@@ -3784,6 +3816,11 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     nm = nm.trim(); if (!nm) return;
     window.LIT_AUTHOR_DEEPLINK = true;
     if (typeof addAuthorIdentityChip === 'function') addAuthorIdentityChip(nm, [nm.toLowerCase()]);
+    // Widen the chip to the author's full ORCID-resolved Name_Variants: use
+    // the cached Authors index if present, and fetch it otherwise (the panel
+    // itself normally defers this to the first Authors-tab open).
+    litUpgradeAuthorDeepLink();
+    if (!authorsRequested) loadAuthors();
   } catch (e) {}
 })();
 </script>
@@ -4446,7 +4483,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         var hint = null;
         try { hint = JSON.parse(localStorage.getItem('litAuthHint') || 'null'); } catch (e) {}
         if (hint && hint.s) {
-          el.innerHTML = '<div class="acct-wrap"><button class="acct-btn acct-user" title="Restoring your session…">' +
+          el.innerHTML = '<div class="acct-wrap"><button class="acct-btn acct-user" title="Restoring your session…" onclick="acctUserChipClick(event)">' +
             '<span class="acct-avatar" style="background-image:url(\'' + acctAvatarUrl(hint.s) + '\')"></span>' +
             '<span class="acct-uname">' + esc(hint.n || 'Account') + '</span></button></div>';
           return;
@@ -4467,7 +4504,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     var orcidLinked = !!(prof.orcid && prof.orcidLinked);
     el.innerHTML =
       '<div class="acct-wrap">' +
-        '<button class="acct-btn acct-user" onclick="acctToggleMenu(event)"><span class="acct-avatar" style="background-image:url(\'' + avatar + '\')"></span><span class="acct-uname">' + esc(name) + '</span></button>' +
+        '<button class="acct-btn acct-user" onclick="acctUserChipClick(event)"><span class="acct-avatar" style="background-image:url(\'' + avatar + '\')"></span><span class="acct-uname">' + esc(name) + '</span></button>' +
         '<div class="acct-menu" id="acctMenu">' +
           '<div class="acct-menu-head">Signed in as<strong>' + esc(u.email || name) + '</strong></div>' +
           '<div class="acct-menu-item" title="Your starred papers, lists, tags and private notes — everything you have saved." onclick="acctOpenLibrary()">★ My library <span class="acct-badge">' + saved + '</span></div>' +
@@ -4485,6 +4522,17 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       '</div>';
   }
   window.acctToggleMenu = function (e) { if (e) e.stopPropagation(); var m = document.getElementById('acctMenu'); if (m) m.classList.toggle('open'); };
+  // The account chip: on an author page (?author=…, e.g. arrived via the
+  // menu's "My publications") clicking it returns to the full database at
+  // ./ (per the owner) — everywhere else it opens the account menu. The
+  // restoring-session hint chip shares this handler, so even mid-restore the
+  // chip takes an author page home instead of doing nothing.
+  window.acctUserChipClick = function (e) {
+    var onAuthorPage = false;
+    try { onAuthorPage = !!new URLSearchParams(location.search).get('author'); } catch (er) {}
+    if (onAuthorPage) { location.assign('./'); return; }
+    acctToggleMenu(e);
+  };
   function acctCloseMenu() { var m = document.getElementById('acctMenu'); if (m) m.classList.remove('open'); }
   document.addEventListener('click', function (e) { if (!e.target.closest('.acct-wrap')) acctCloseMenu(); });
 
@@ -5063,7 +5111,15 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         var credit = n && n['credit-name'] && n['credit-name'].value;
         var given = n && n['given-names'] && n['given-names'].value;
         var family = n && n['family-name'] && n['family-name'].value;
-        var name = String(credit || ((given || '') + ' ' + (family || '')).trim() || fallbackName || '').trim();
+        var gf = ((given || '') + ' ' + (family || '')).trim();
+        // Priority: the record's credit-name (Published Name — how journals
+        // credit the author) → the catalog's own ORCID-resolved canonical
+        // spelling (covers a record with no credit-name set, or the fetch
+        // being blocked) → the record's given+family → the sign-in claims.
+        var name = String(credit || '').trim()
+          || litCatalogCanonicalName(gf || fallbackName || (state.user && state.user.displayName) || '')
+          || gf
+          || String(fallbackName || '').trim();
         if (!name) return;
         if (!state.user || !state.profile) return;                    // signed out meanwhile
         if ((state.profile.orcidAuthorName || '').trim()) return;     // user typed one meanwhile — theirs wins
@@ -5074,8 +5130,32 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
           function () {
             var ov = document.getElementById('litOrcidOverlay');
             if (ov && ov.classList.contains('open')) renderOrcidBody();
+            // The profile card may already be open with the old default —
+            // refresh the match-name field in place unless the user is typing in it.
+            var nmEl = document.getElementById('pfOrcidName');
+            var po = document.getElementById('acctProfileOverlay');
+            if (nmEl && po && po.classList.contains('open') && document.activeElement !== nmEl) nmEl.value = name;
           });
       });
+  }
+  // The catalog's own canonical spelling of an author: the Authors index
+  // (authors.json / its localStorage cache) is ORCID-resolved with full
+  // Name_Variants, so a given+family seed maps to the name the papers are
+  // actually credited under. Returns '' when the index has no match (or
+  // hasn't been fetched yet).
+  function litCatalogCanonicalName(seed) {
+    seed = String(seed || '').trim().toLowerCase();
+    if (!seed) return '';
+    var list = (typeof authorData !== 'undefined' && authorData && authorData.length) ? authorData : (window._authorsList || []);
+    for (var i = 0; i < list.length; i++) {
+      var a = list[i];
+      var nm = (a['Author'] || '').trim();
+      if (!nm) continue;
+      if (nm.toLowerCase() === seed) return nm;
+      var variants = String(a['Name_Variants'] || '').split(';').map(function (x) { return x.trim().toLowerCase(); });
+      if (variants.indexOf(seed) >= 0) return nm;
+    }
+    return '';
   }
   // Reveal the "show my publications" consent row only once a valid ORCID is typed.
   window.acctOrcidFieldChanged = function () {
