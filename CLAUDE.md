@@ -420,7 +420,6 @@ the Firebase project is upgraded to Identity Platform with an `oidc.orcid`
 OIDC provider (code flow; client secret lives ONLY in the console) AND
 `'orcid'` is added to `AUTH_PROVIDERS` — do the flip together with its
 changelog entry + About copy, per the keep-in-sync discipline.
->>>>>>> 3eccf66 (lit: activate "Sign in with ORCID" + add ORCID as a register/sign-in provider)
 Signed-in users can also save **default filters** (account menu →
 "Default filters"): a preferred subset of journals and/or journal types,
 **auto-applied on sign-in** so they land on their subset instead of the full
