@@ -16,7 +16,13 @@ name: lit — feedback forwarder
 
 on:
   schedule:
-    - cron: '*/15 * * * *'      # every 15 minutes, so feedback lands promptly
+    # GitHub throttles the `schedule` event under load — worst of all at the top
+    # of the hour and the :00/:15/:30/:45 boundaries everyone schedules on, where
+    # runs are routinely delayed 30–60 min or skipped. Run every 10 minutes on
+    # OFF-boundary minutes so a submission lands promptly instead of waiting for
+    # the next lightly-loaded slot. (Need it instantly? Actions → this workflow →
+    # "Run workflow" forwards everything pending on demand.)
+    - cron: '3,13,23,33,43,53 * * * *'
   workflow_dispatch:
     inputs:
       dry_run:
