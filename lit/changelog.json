@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "feedback-tickets-and-confirmation",
+      "date": "2026-07-17",
+      "title": "Feedback now gets a ticket number and an e-mail confirmation",
+      "summary": "Every message sent from the Feedback page now receives a unique reference number (like LIT-260717-A9K2), shown right after you submit. If you leave your e-mail, you also get a copy of your submission in your inbox — the exact message I receive, with your ticket number — and when your ticket is closed you hear back on how it was acted on. Anonymous feedback still works exactly as before (there is just no address to confirm to).",
+      "url": "https://stouras.com/lit/feedback/"
+    },
+    {
       "id": "orcid-sign-in",
       "date": "2026-07-17",
       "title": "Connect your ORCID by signing in — no more copy-pasting your iD",

@@ -14,10 +14,18 @@
  * maintainer's inbox), handy to review and act on later.
  *
  * A feedback document (written by lit/feedback/index.html) looks like:
- *   { text, images:[dataUrl,…], name, email, uid, page, url, ua,
+ *   { text, images:[dataUrl,…], name, email, uid, ticket, page, url, ua,
  *     forwarded:false, status:'new', createdAt }
- * where each `images` entry is a client-compressed `data:image/jpeg;base64,…`
+ * where `ticket` is the page-generated unique reference (LIT-YYMMDD-XXXX) and
+ * each `images` entry is a client-compressed `data:image/jpeg;base64,…`
  * URL (Firestore caps a doc at ~1 MB, so the page downscales them first).
+ *
+ * Delivery is TWO e-mails per submission: the maintainer's copy (as always) and
+ * — when the submitter left a valid e-mail — the SAME message back to them as a
+ * confirmation, with their ticket number, so both sides hold the identical
+ * record. An anonymous submission (no e-mail) by definition can't receive one,
+ * so only the maintainer's copy is sent. The submitter copy is best-effort: its
+ * failure never blocks (or re-triggers) the maintainer's copy.
  *
  * Env / secrets (all via the workflow):
  *   FIREBASE_SERVICE_ACCOUNT   JSON of a Firebase service-account key (or set
@@ -82,17 +90,19 @@ function renderFeedbackEmail(doc) {
   const text = String(doc.text || '').trim();
   const name = String(doc.name || '').trim();
   const email = String(doc.email || '').trim();
+  const ticket = String(doc.ticket || '').trim();
   const imgs = Array.isArray(doc.images) ? doc.images : [];
   const attachments = imgs.map(dataUrlToAttachment).filter(Boolean);
 
   const subjLead = firstLine(text, 60) || (attachments.length ? `${attachments.length} screenshot(s)` : 'new message');
-  const subject = `[The Lit feedback] ${subjLead}`;
+  const subject = `[The Lit feedback] ${ticket ? ticket + ' — ' : ''}${subjLead}`;
 
   const whenIso = doc.createdAt && typeof doc.createdAt.toDate === 'function'
     ? doc.createdAt.toDate().toISOString() : (doc.createdAtIso || '');
   const who = [name, email && `<${email}>`].filter(Boolean).join(' ') || 'anonymous';
 
   const metaLines = [
+    ['Ticket', ticket || '—'],
     ['From', who],
     ['Signed-in UID', doc.uid || '—'],
     ['On page', doc.url || '—'],
@@ -118,6 +128,29 @@ function renderFeedbackEmail(doc) {
   return { subject, text: bodyText, html, attachments, replyTo: EMAIL_RE.test(email) ? email : undefined };
 }
 
+// The submitter's confirmation copy — the SAME e-mail the maintainer receives
+// (same subject, body and screenshots), prefixed with a short receipt banner
+// naming their ticket number. Returns null when the submission is anonymous
+// (no valid e-mail on record — nobody to confirm to).
+function renderSubmitterEmail(doc) {
+  const base = renderFeedbackEmail(doc);
+  if (!base.replyTo) return null;    // anonymous — cannot receive a confirmation
+  const ticket = String(doc.ticket || '').trim();
+  const intro = 'Thank you for your feedback on The Lit! This is a copy of what I received' +
+    (ticket ? ` — your reference number is ${ticket}` : '') +
+    '. I read every message, and if a reply is needed it will arrive at this address.';
+  return {
+    to: base.replyTo,
+    subject: base.subject,
+    text: intro + '\n\n— — —\n\n' + base.text,
+    html:
+      '<div style="font-family:Segoe UI,Arial,sans-serif;color:#241a1e;max-width:640px;' +
+      'background:#f4e6ea;border-left:3px solid #7d1d3f;padding:10px 14px;margin:0 0 16px;font-size:13.5px;line-height:1.55">' +
+      htmlEscape(intro) + '</div>' + base.html,
+    attachments: base.attachments,
+  };
+}
+
 /* ─────────────────────────── self-test (offline) ─────────────────────────── */
 function selftest() {
   let fail = 0;
@@ -132,24 +165,38 @@ function selftest() {
   eq(dataUrlToAttachment('not-a-data-url', 0) === null, 'non-data-URL is skipped (null)');
   eq(dataUrlToAttachment('data:text/html;base64,AAAA', 0) === null, 'non-image data URL is skipped');
 
-  const mail = renderFeedbackEmail({
+  const fbDoc = {
     text: 'The citations chart y-axis overlaps on mobile. Could you fix the label?',
-    name: 'Jane Doe', email: 'jane@example.com', uid: 'u9',
+    name: 'Jane Doe', email: 'jane@example.com', uid: 'u9', ticket: 'LIT-260717-A9K2',
     url: 'https://stouras.com/lit/analytics/', ua: 'Mozilla/5.0',
     images: [png, png, 'garbage'], createdAtIso: '2026-07-17T10:00:00.000Z',
-  });
+  };
+  const mail = renderFeedbackEmail(fbDoc);
   eq(/^\[The Lit feedback\] /.test(mail.subject), 'subject is prefixed');
+  eq(mail.subject.includes('LIT-260717-A9K2'), 'subject carries the ticket number');
   eq(mail.subject.includes('citations chart'), 'subject leads with the message');
+  eq(mail.text.includes('Ticket: LIT-260717-A9K2') && mail.html.includes('LIT-260717-A9K2'), 'ticket in both bodies');
   eq(mail.attachments.length === 2, 'two valid screenshots become attachments, garbage dropped');
   eq(mail.replyTo === 'jane@example.com', 'reply-to is the submitter e-mail');
   eq(mail.html.includes('jane@example.com') && mail.text.includes('jane@example.com'), 'sender shown in both parts');
   eq(mail.html.includes('&lt;') === false || true, 'html renders'); // smoke
+
+  // submitter confirmation copy — the same e-mail plus a receipt banner
+  const ack = renderSubmitterEmail(fbDoc);
+  eq(ack && ack.to === 'jane@example.com', 'confirmation goes to the submitter');
+  eq(ack && ack.subject === mail.subject, 'confirmation carries the SAME subject');
+  eq(ack && ack.text.includes('LIT-260717-A9K2') && ack.html.includes('LIT-260717-A9K2'), 'confirmation names the ticket');
+  eq(ack && ack.text.includes(fbDoc.text), 'confirmation contains the same message');
+  eq(ack && ack.attachments.length === 2, 'confirmation carries the same screenshots');
 
   // no-message, screenshot-only
   const m2 = renderFeedbackEmail({ text: '', images: [png], email: 'bad-email' });
   eq(m2.subject.includes('screenshot'), 'screenshot-only subject falls back');
   eq(m2.replyTo === undefined, 'invalid e-mail is not used as reply-to');
   eq(m2.text.includes('no message'), 'no-message body placeholder present');
+  eq(renderSubmitterEmail({ text: 'hi', images: [], email: 'bad-email' }) === null, 'invalid e-mail → no confirmation copy');
+  eq(renderSubmitterEmail({ text: 'hi', images: [] }) === null, 'anonymous → no confirmation copy (admin only)');
+  eq(renderFeedbackEmail({ text: 'no ticket legacy doc' }).subject.indexOf('undefined') === -1, 'legacy doc without ticket still renders');
 
   if (fail) { console.error(`\nfeedback-mailer selftest: ${fail} failure(s)`); process.exit(1); }
   console.log('feedback-mailer selftest: OK');
@@ -215,11 +262,14 @@ async function run() {
     fromAddr = process.env.ALERTS_FROM || process.env.SMTP_USER || '';
   }
 
-  let sent = 0, failed = 0;
+  let sent = 0, failed = 0, acked = 0;
   for (const d of docs) {
-    const mail = renderFeedbackEmail(d.data());
+    const data = d.data();
+    const mail = renderFeedbackEmail(data);
+    const ack = renderSubmitterEmail(data);   // null when anonymous
     if (DRY_RUN) {
-      console.log(`\n[dry-run] → ${FEEDBACK_TO}\n  subject: ${mail.subject}\n  attachments: ${mail.attachments.length}\n  reply-to: ${mail.replyTo || '—'}`);
+      console.log(`\n[dry-run] → ${FEEDBACK_TO}\n  subject: ${mail.subject}\n  attachments: ${mail.attachments.length}\n  reply-to: ${mail.replyTo || '—'}` +
+        `\n  submitter copy: ${ack ? '→ ' + ack.to : '— (anonymous, admin only)'}`);
       continue;
     }
     try {
@@ -239,9 +289,33 @@ async function run() {
     } catch (e) {
       failed++;
       console.error(`  ✗ ${d.id}: ${e && e.message}`);
+      continue;   // maintainer copy failed → leave the doc pending; retry the whole pair next run
+    }
+    // Best-effort confirmation copy to the submitter (same message, receipt
+    // banner + ticket). Skipped for anonymous submissions or if already sent
+    // (e.g. by the instant Cloud Function). A failure here is logged but never
+    // un-forwards the doc — the maintainer's copy is already delivered.
+    if (ack && !data.ackSent) {
+      try {
+        await transport.sendMail({
+          from: fromName ? `"${fromName}" <${fromAddr}>` : fromAddr,
+          to: ack.to,
+          replyTo: FEEDBACK_TO,
+          subject: ack.subject,
+          text: ack.text,
+          html: ack.html,
+          attachments: ack.attachments,
+          headers: { 'X-Lit-Feedback': d.id },
+        });
+        await d.ref.update({ ackSent: true, ackAt: FieldValue.serverTimestamp() });
+        acked++;
+        console.log(`  ✓ confirmation copy → ${ack.to}`);
+      } catch (e) {
+        console.error(`  ⚠ confirmation copy to ${ack.to} failed: ${e && e.message}`);
+      }
     }
   }
-  console.log(`\nDone. Sent ${sent}, failed ${failed}.`);
+  console.log(`\nDone. Sent ${sent} (+${acked} submitter confirmation(s)), failed ${failed}.`);
 }
 
 if (SELFTEST) {
@@ -250,4 +324,4 @@ if (SELFTEST) {
   run().catch(e => { console.error('Feedback mailer error:', e && (e.stack || e.message || e)); process.exit(1); });
 }
 
-export { renderFeedbackEmail, dataUrlToAttachment };
+export { renderFeedbackEmail, renderSubmitterEmail, dataUrlToAttachment };

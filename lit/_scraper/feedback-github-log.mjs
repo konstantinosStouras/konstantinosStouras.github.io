@@ -69,9 +69,11 @@ export function renderMarkdown(doc, id, imageNames) {
     ? doc.createdAt.toDate().toISOString() : (doc.createdAtIso || '');
   const from = [s(doc.name).trim(), doc.email ? `<${s(doc.email).trim()}>` : ''].filter(Boolean).join(' ') || 'anonymous';
   const out = [];
-  out.push(`# Feedback — ${id}`, '');
+  out.push(`# Feedback — ${s(doc.ticket).trim() || id}`, '');
   out.push(s(doc.text).trim() || '_(no message — see the screenshot(s) below)_', '');
   out.push('---', '');
+  out.push(`- **Ticket:** ${s(doc.ticket).trim() || '—'}`);
+  out.push(`- **Status:** ${s(doc.status).trim() || 'new'}`);
   out.push(`- **From:** ${from}`);
   out.push(`- **Submitted:** ${when || '—'}`);
   out.push(`- **On page:** ${s(doc.url) || '—'}`);
@@ -162,10 +164,12 @@ function selftest() {
   eq(dataUrlToImage('data:image/jpeg;base64,/9j/').ext === 'jpg', 'jpeg → jpg ext');
   eq(dataUrlToImage('nope') === null, 'non-data-URL → null');
 
-  const md = renderMarkdown({ text: 'Tooltip please', name: 'Jane', email: 'j@x.com', url: 'https://stouras.com/lit/', uid: 'u1', createdAtIso: '2026-07-17T10:00:00.000Z' }, 'abc123', ['screenshot-1.png']);
-  eq(/^# Feedback — abc123/.test(md), 'markdown has heading');
+  const md = renderMarkdown({ text: 'Tooltip please', name: 'Jane', email: 'j@x.com', url: 'https://stouras.com/lit/', uid: 'u1', ticket: 'LIT-260717-A9K2', createdAtIso: '2026-07-17T10:00:00.000Z' }, 'abc123', ['screenshot-1.png']);
+  eq(/^# Feedback — LIT-260717-A9K2/.test(md), 'markdown heading leads with the ticket');
+  eq(md.includes('**Ticket:** LIT-260717-A9K2') && md.includes('**Status:** new'), 'markdown has ticket + status');
   eq(md.includes('Tooltip please') && md.includes('j@x.com') && md.includes('On page'), 'markdown has text + metadata');
   eq(md.includes('![screenshot-1.png](./screenshot-1.png)'), 'markdown inlines the screenshot');
+  eq(/^# Feedback — legacy1/.test(renderMarkdown({ text: 'old' }, 'legacy1', [])), 'legacy doc without ticket falls back to the doc id');
 
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fbglog-'));
   const n1 = writeSubmission(tmp, 'id1', { text: 'hi', images: [png, 'garbage', png] });

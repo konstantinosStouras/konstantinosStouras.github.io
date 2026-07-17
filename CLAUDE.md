@@ -458,22 +458,43 @@ Feedback are all standalone pages that share the same claret header + `.pnav`
 **Feedback (`lit/feedback/`)** is its own page (was an in-modal contact list):
 a form where anyone (no sign-in) leaves a message and attaches screenshots
 (compressed client-side to JPEG data URLs, ≤5, kept under Firestore's ~1 MB
-doc limit) — written to a public-create-only Firestore **`feedback`** collection
-(rule in `lit/_firestore.rules`: bounded create, no client read/update/delete)
+doc limit) — written to a create-from-anyone Firestore **`feedback`** collection
 using the same `FB_CONFIG` as the main page (prefills the e-mail if a main-page
-sign-in is present). Delivery is by **`lit/_scraper/feedback-mailer.mjs`**
+sign-in is present). Each submission gets a page-generated **unique ticket
+number** (`genTicket`, `LIT-YYMMDD-XXXX`; stored in the doc's `ticket` field,
+shown on the thank-you panel, and leading every e-mail subject about it).
+**Admin dashboard (maintainer only):** when `kstouras@gmail.com` is signed in
+on the page, an **📥 inbox section renders on top** — all feedback received so
+far, newest first grouped by day, each card with ticket + status badge +
+submitter, the **screenshots on top** (click → enlarge in a lightbox) and the
+**message below**, with Open/Closed/All tabs and per-ticket actions: **Mark
+complete & reply** (prompts for how it was acted on, saves `resolution` +
+`status:'closed'`, then opens a pre-composed reply e-mail to the submitter —
+ticket, "now closed", the resolution; an anonymous ticket is just closed) and
+**Delete**. Authorisation is the `isFeedbackAdmin()` rule in
+`lit/_firestore.rules` (admin e-mail, verified → read/update/delete; create
+stays bounded-from-anyone) — the client check only decides whether to SHOW the
+section. Delivery is by **`lit/_scraper/feedback-mailer.mjs`**
 (Admin SDK + SMTP, near-verbatim env handling as `alerts-mailer.mjs`; offline
 `--selftest`/`--dry-run`/`--scan`; a no-op until `FIREBASE_SERVICE_ACCOUNT` +
-`SMTP_*` are set), run every 15 min by
+`SMTP_*` are set), run every 10 min by
 `.github/workflows/lit-feedback-mail.yml`: it reads pending (`forwarded==false`)
-submissions, e-mails each to `FEEDBACK_TO` (default `kstouras@gmail.com`) with the
-screenshots **attached** (Reply-To = submitter), and stamps `forwarded:true`.
-So all feedback lands in ONE inbox. Setup: `lit/_FEEDBACK-SETUP.md`. Delivery is
+submissions and sends **two e-mails per submission** — the maintainer's copy to
+`FEEDBACK_TO` (default `kstouras@gmail.com`) with the screenshots **attached**
+(Reply-To = submitter) and, when the submitter left a valid e-mail, **the SAME
+message back to them** as a confirmation (`renderSubmitterEmail`: receipt
+banner + ticket; marked `ackSent` so it's never doubled; best-effort — its
+failure never blocks or un-marks the maintainer copy). An **anonymous**
+submission by definition can't receive one, so only the maintainer's copy goes
+out. It stamps `forwarded:true` so nothing is sent twice.
+Setup: `lit/_FEEDBACK-SETUP.md`. Delivery is
 instant when the optional **Firestore `onCreate` Cloud Function** is deployed
-(`lit/_functions/`, project `lit-paper-browser`; `forwardFeedbackOnCreate` e-mails
-a submission within seconds and marks it `forwarded`, complementing the batch
-mailer via the same flag — setup `lit/_functions/README.md`); the batch mailer
-stays the always-on fallback. **Feedback is also mirrored into a PRIVATE GitHub
+(`lit/_functions/`, project `lit-paper-browser`; `forwardFeedbackOnCreate`
+e-mails the same pair — maintainer + submitter confirmation — within seconds
+and marks `forwarded`/`ackSent`, complementing the batch
+mailer via the same flags — setup `lit/_functions/README.md`; its
+`feedback-render.js` mirrors the mailer's renderers — keep in sync); the batch
+mailer stays the always-on fallback. **Feedback is also mirrored into a PRIVATE GitHub
 repo** by `lit/_scraper/feedback-github-log.mjs`
 (`.github/workflows/lit-feedback-github-log.yml`): it reads new `feedback` docs
 and writes one folder per submission (`feedback/<id>/feedback.md` + `feedback.json`

@@ -1,4 +1,7 @@
 {
+  "firestore": {
+    "rules": "../_firestore.rules"
+  },
   "functions": {
     "source": "functions",
     "runtime": "nodejs20"

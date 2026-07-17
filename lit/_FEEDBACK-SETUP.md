@@ -7,27 +7,52 @@ submissions are stored in the project's existing Firebase project
 
 ## How it works
 
-1. **`lit/feedback/index.html`** (the page) — no sign-in required. It compresses
-   each screenshot in the browser (downscaled JPEG data URLs, ≤5 images, kept
+1. **`lit/feedback/index.html`** (the page) — no sign-in required. It generates
+   a unique **ticket number** for the submission (`LIT-YYMMDD-XXXX`, shown on
+   the thank-you panel and used in every e-mail about it), compresses each
+   screenshot in the browser (downscaled JPEG data URLs, ≤5 images, kept
    under Firestore's ~1 MB document limit) and writes one document to the
    **`feedback`** collection:
-   `{ text, images:[dataUrl…], name, email, uid, page, url, ua, forwarded:false, status:'new', createdAt }`.
+   `{ text, images:[dataUrl…], name, email, uid, ticket, page, url, ua, forwarded:false, status:'new', createdAt }`.
    It reuses the same `FB_CONFIG` as `lit/index.html`, and auto-fills the e-mail
    if the visitor happens to be signed in on the main page.
 
-2. **`lit/_firestore.rules`** — a `feedback/{docId}` rule allows a bounded
-   **create** from anyone, and **no** client read/update/delete. Only the Admin
-   SDK (this job) can read or clear it. Deploy the rules after adding it:
+   **Admin dashboard (maintainer only):** when the maintainer account
+   (`kstouras@gmail.com`) is signed in, the same page shows a **📥 Feedback
+   inbox** section on top — every submission received so far, newest first and
+   grouped by day, each with its ticket, status badge, submitter, screenshots
+   on top (click a thumbnail to enlarge it in a lightbox) and the message
+   below. Per-ticket actions: **✓ Mark complete & reply** (prompts for how the
+   feedback was acted on, saves it + closes the ticket, then opens a
+   pre-composed reply e-mail to the submitter — ticket number, "now closed",
+   and the resolution; an anonymous ticket is just closed, since there is no
+   address to reply to) and **🗑 Delete**. Other visitors never see the section
+   (and the Firestore rules — not the UI — are what deny them the data).
+
+2. **`lit/_firestore.rules`** — the `feedback/{docId}` rule allows a bounded
+   **create** from anyone; **read/update/delete** are allowed ONLY to the
+   signed-in maintainer account (`isFeedbackAdmin()` — that's what powers the
+   admin dashboard above). The Admin SDK jobs bypass rules as always. Deploy
+   the rules after changing them — from `lit/_functions/`, whose `firebase.json`
+   points at `../_firestore.rules`:
    ```
+   cd lit/_functions
    firebase deploy --only firestore:rules
    ```
-   (or paste into Firebase console → Firestore Database → Rules → Publish).
+   (or paste the file into Firebase console → Firestore Database → Rules →
+   Publish).
 
 3. **`lit/_scraper/feedback-mailer.mjs`** + **`.github/workflows/lit-feedback-mail.yml`**
-   — every 15 minutes the job reads pending (`forwarded == false`) submissions,
-   e-mails each to `FEEDBACK_TO` with the screenshots **attached** (Reply-To set
-   to the submitter when they left an e-mail), and marks it `forwarded:true` so
-   it's never sent twice. It is a **no-op** until the secrets are set.
+   — every 10 minutes the job reads pending (`forwarded == false`) submissions
+   and sends **two e-mails** per submission: the maintainer's copy to
+   `FEEDBACK_TO` with the screenshots **attached** (Reply-To set to the
+   submitter when they left an e-mail), and — when the submitter left a valid
+   e-mail — **the same message back to them** as a confirmation (receipt banner
+   + their ticket number, `ackSent:true` so it's never doubled). An anonymous
+   submission has no address, so only the maintainer's copy is sent. It marks
+   each `forwarded:true` so nothing is sent twice, and is a **no-op** until the
+   secrets are set. The optional instant Cloud Function (`lit/_functions/`)
+   does exactly the same pair within seconds of submission.
 
 ## Secrets (GitHub → repo Settings → Secrets and variables → Actions)
 
@@ -56,7 +81,12 @@ Trigger a real pass on demand from the Actions tab
 
 ## Reviewing / acting on feedback later
 
-Everything lands in **one place** — the `FEEDBACK_TO` inbox — one e-mail per
-submission with the message, metadata (page, browser, signed-in UID, time) and
-the screenshots attached. You can also read the raw collection in the Firebase
-console (Firestore → `feedback`), or run `--scan` to list what's pending.
+The primary place is now the **admin dashboard on the Feedback page itself**:
+sign in as the maintainer account on `stouras.com/lit/feedback/` and the 📥
+inbox appears on top — filter Open / Closed / All, enlarge screenshots, mark a
+ticket complete (which also opens the reply e-mail to the submitter) or delete
+it. Everything ALSO lands in the `FEEDBACK_TO` inbox — one e-mail per
+submission with the ticket in the subject, the metadata (page, browser,
+signed-in UID, time) and the screenshots attached. And you can still read the
+raw collection in the Firebase console (Firestore → `feedback`), or run
+`--scan` to list what's pending.

@@ -5,9 +5,13 @@ Feedback submission (`stouras.com/lit/feedback/`) to the maintainer **within
 seconds**, instead of waiting for the batch mailer's schedule.
 
 - **Function:** `functions/index.js` → `forwardFeedbackOnCreate`, triggered on a
-  new doc in the Firestore `feedback` collection. It sends the e-mail (same
-  format as the batch mailer — see `functions/feedback-render.js`, kept in sync
-  with `lit/_scraper/feedback-mailer.mjs`) and stamps the doc `forwarded: true`.
+  new doc in the Firestore `feedback` collection. It sends the maintainer's
+  e-mail (same format as the batch mailer — see `functions/feedback-render.js`,
+  kept in sync with `lit/_scraper/feedback-mailer.mjs`), stamps the doc
+  `forwarded: true`, and — when the submitter left a valid e-mail — sends them
+  **the same message back** as a confirmation copy (receipt banner + their
+  ticket number, stamped `ackSent` so the batch mailer never doubles it). An
+  anonymous submission has no address, so only the maintainer's copy is sent.
 - **Still a fallback:** the every-10-min batch mailer
   (`.github/workflows/lit-feedback-mail.yml`) stays on. Both gate on the
   `forwarded` flag, so nothing is sent twice, and the batch covers anything the
@@ -73,6 +77,15 @@ That's all you do in the browser. The rest is two-ish minutes in a terminal.
    firebase deploy --only functions
    ```
    First deploy also enables the required Google Cloud APIs — just say yes.
+
+6. **Deploying the Firestore rules** also works from this same directory —
+   `firebase.json` points at `../_firestore.rules`, so whenever the rules file
+   changes:
+   ```sh
+   firebase deploy --only firestore:rules
+   ```
+   (equivalent to pasting the file into Firebase console → Firestore Database →
+   Rules → Publish).
 
 ## Verify
 
