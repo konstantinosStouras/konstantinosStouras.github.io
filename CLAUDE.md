@@ -573,9 +573,19 @@ paper-search filter bar is hidden (`body.lit-lib-mode`; the library has its own
 search), and clicking the ACTIVE list/tag chip deactivates it (back to "All
 saved") without removing it (`acctSetLibFilter` toggle). **Data Analytics
 (`lit/analytics/`)** is an interactive summary-statistics dashboard over the
-whole corpus available in this repo — the ten native sources (`data/`) plus
-the FT50 catalog (`data-ft50/`), deduped with native winning on overlap
-(~260k papers, 53 journals). It never downloads the ~270 MB of raw papers:
+**whole corpus the main browser lists** — the ten native sources (`data/`),
+the FT50 catalog (`data-ft50/`) AND the three satellite ABS data shards
+(sibling repos, read from a local checkout: the workflow checks them out
+under `_analytics-shards/`, a local run finds them as sibling clones of the
+site repo, `LIT_SHARDS_DIR` overrides; a missing shard is skipped with a
+warning, like the page's 404-skip). Journals dedupe first-registration-wins
+in the page's own precedence (native → FT50 → shards); shard journals' ABS
+grades flow from each shard manifest's `abs` field via the script's
+`MANIFEST_ABS` mirror (~580k papers, 129 journals — the analytics journal
+picker must always match the main browser's journal filter; working papers
+(`data-workingpapers/`) stay out, as unpublished non-journals, exactly as
+they're kept out of the main page's published "N papers" count). It never
+downloads the ~600 MB of raw papers:
 `lit/_scraper/build-analytics.mjs` pre-aggregates everything **offline** into
 two small committed files it fetches on load — `analytics/data.json`
 (per-journal × per-year rows: paper count `n`, summed authors `a`, solo `s`,
@@ -703,9 +713,10 @@ years; reference popularity uses references' `CitedBy` (a rough proxy while
 citation coverage fills in). Keep the `ABS_RATING`/`UTD24_KEYS`/`FT50_KEYS`
 mirror and the native-wins journal merge in sync with build-analytics.mjs.
 Refreshed daily by `.github/workflows/lit-analytics.yml` (08:10 UTC, after the
-native and FT50 data builds; runs build-analytics.mjs **and**
-build-disruption.mjs), which commits `analytics/*.json` (incl.
-`disruption.json`) on master only.
+native and FT50 data builds; checks out the three shard repos read-only under
+`_analytics-shards/` so the summary covers their journals, then runs
+build-analytics.mjs **and** build-disruption.mjs), which commits
+`analytics/*.json` (incl. `disruption.json`) on master only.
 The generation date mirrors the native `meta.json` `lastPull`, never
 `Date.now()`, so re-runs on an unchanged dataset are a no-op. The page also
 shows one **live community figure — the number of registered users** (a tile in

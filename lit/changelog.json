@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "analytics-full-catalog",
+      "date": "2026-07-17",
+      "title": "Data Analytics now covers every journal in the database",
+      "summary": "The Data Analytics dashboard used to summarise only the native and FT50 journals, so its journal picker offered far fewer journals than the main browser's search filter. It now aggregates the full catalog — including all the ABS 4/4* and ABS 3 journals served from the satellite data shards (74 more journals, about 318,000 more papers) — so the dashboard's journal list, journal-type filters and every tile and chart cover exactly the same journals you can search on the main page.",
+      "url": "https://stouras.com/lit/analytics/"
+    },
+    {
       "id": "orcid-account-merge",
       "date": "2026-07-17",
       "title": "One account per person — merge a duplicate ORCID registration",

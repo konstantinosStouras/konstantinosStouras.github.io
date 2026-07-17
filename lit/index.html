@@ -64,6 +64,9 @@
   .header { background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%); z-index: 100; box-shadow: var(--shadow-lg); }
   .header-inner { max-width: 1280px; margin: 0 auto; padding: 24px 32px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
   .header h1 { font-family: 'Fraunces', serif; color: white; font-size: 28px; font-weight: 400; letter-spacing: -0.5px; white-space: nowrap; }
+  /* The title is the home link (→ stouras.com/lit/, a clean reload like the
+     sub-pages' .brand logos) — it must look exactly like the plain heading. */
+  .header h1 a { color: inherit; text-decoration: none; }
   .header h1 em { font-style: italic; color: var(--accent); }
   .header-meta { color: rgba(255,255,255,0.6); font-size: 13px; text-align: right; }
   .header-meta strong { color: rgba(255,255,255,0.9); font-weight: 500; }
@@ -692,7 +695,7 @@
 <div class="topbar">
 <header class="header">
   <div class="header-inner">
-    <h1><em>The Lit</em>: A research paper browser</h1>
+    <h1><a href="https://www.stouras.com/lit/" title="The Lit — a fresh start"><em>The Lit</em>: A research paper browser</a></h1>
     <div class="header-right">
       <nav class="lit-nav" aria-label="The Lit — sections">
         <a class="lit-nav-btn" href="about/" title="What The Lit is and how it works"><span class="ico">ⓘ</span>About</a>
