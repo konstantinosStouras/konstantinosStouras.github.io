@@ -401,6 +401,26 @@ from `lit/` — `lit/firebase.json` + `lit/.firebaserc` are the Firebase-CLI
 config for BOTH the rules and the `_functions` Cloud Function; the CLI requires
 every referenced path inside the config's own directory, so the config lives at
 their common parent `lit/`, NOT in `lit/_functions/`).
+**ORCID (two features, one ORCID API client — `lit/_ORCID-SIGNIN-SETUP.md`):**
+(1) *Connect your ORCID* — a signed-in user links their iD (first-run invite
+modal or Edit profile) to get a private "My publications" view (their papers +
+Data Analytics author page, matched by name); besides typing the iD
+(ISO 7064-validated, `normOrcid`), the connect stage offers **"Sign in with
+ORCID"** — ORCID's OIDC *implicit* flow run wholly client-side
+(`ORCID_OAUTH` config + `litOrcidSignIn`/`readOrcidOAuthResponse`/
+`maybeApplyOrcidPending`; CSRF `state` nonce in sessionStorage; saves
+`orcidVerified:true`, shown as "✓ verified"), ACTIVE with public client-id
+`APP-VWG4YW59MEUCRQE2`. (2) *Register/sign in WITH ORCID* — an `orcid` entry
+in `PROVIDER_DEFS` (Firebase generic OIDC provider **`oidc.orcid`**) puts
+"Continue with ORCID" on the auth modal; on first sign-in
+`maybeSeedOrcidFromProvider` auto-links the verified iD from the OIDC `sub`
+(= providerData uid), exactly once per account (gated on
+`!orcid && !orcidPromptSeen`, so a later unlink is respected). Inert until
+the Firebase project is upgraded to Identity Platform with an `oidc.orcid`
+OIDC provider (code flow; client secret lives ONLY in the console) AND
+`'orcid'` is added to `AUTH_PROVIDERS` — do the flip together with its
+changelog entry + About copy, per the keep-in-sync discipline.
+>>>>>>> 3eccf66 (lit: activate "Sign in with ORCID" + add ORCID as a register/sign-in provider)
 Signed-in users can also save **default filters** (account menu →
 "Default filters"): a preferred subset of journals and/or journal types,
 **auto-applied on sign-in** so they land on their subset instead of the full

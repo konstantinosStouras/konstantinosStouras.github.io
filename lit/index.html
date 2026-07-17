@@ -4090,8 +4090,9 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
 
   // Third-party sign-in buttons, in display order. List a provider here ONLY
   // after enabling it in Firebase console → Authentication → Sign-in method
-  // (per-provider steps in lit/_ACCOUNTS-SETUP.md). Supported keys:
-  // 'google', 'apple', 'github'.
+  // (per-provider steps in lit/_ACCOUNTS-SETUP.md; ORCID needs the Identity
+  // Platform OIDC setup in lit/_ORCID-SIGNIN-SETUP.md). Supported keys:
+  // 'google', 'apple', 'github', 'orcid'.
   var AUTH_PROVIDERS = ['google'];
 
   // ── "Sign in with ORCID" (optional) ──────────────────────────────────────
@@ -4105,7 +4106,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   // connect stage shows manual iD entry exactly as before. Setup steps:
   // lit/_ORCID-SIGNIN-SETUP.md
   var ORCID_OAUTH = {
-    clientId: 'PASTE_ORCID_CLIENT_ID',   // e.g. 'APP-XXXXXXXXXXXXXXXX' (public client)
+    clientId: 'APP-VWG4YW59MEUCRQE2',    // public ORCID API client (not a secret)
     environment: 'production',           // 'production' | 'sandbox'
     redirectUri: '',                     // '' = this page's URL (origin + path)
     responseType: 'token'                // ORCID's implicit flow (returns id_token + orcid)
@@ -4820,9 +4821,14 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       .then(function () { btn.disabled = false; });
   };
   // ── Third-party sign-in providers ──
-  // Google covers Gmail accounts; Apple and GitHub are available once
+  // Google covers Gmail accounts; Apple, GitHub and ORCID are available once
   // configured. Each entry: label, brand mark (inline SVG), and a factory
-  // for the Firebase provider.
+  // for the Firebase provider. ORCID is a generic OIDC provider — it needs
+  // the Firebase project upgraded to Identity Platform with an OIDC provider
+  // whose id is exactly `oidc.orcid` (issuer https://orcid.org, the ORCID
+  // client-id + secret) before it is listed in AUTH_PROVIDERS; steps in
+  // lit/_ORCID-SIGNIN-SETUP.md. Registering this way auto-links the user's
+  // verified iD to their new profile (maybeSeedOrcidFromProvider below).
   var PROVIDER_DEFS = {
     google: {
       label: 'Continue with Google',
@@ -4838,6 +4844,11 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       label: 'Continue with GitHub',
       svg: '<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>',
       make: function () { return new firebase.auth.GithubAuthProvider(); }
+    },
+    orcid: {
+      label: 'Continue with ORCID',
+      svg: '<svg viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg"><path fill="#A6CE39" d="M256 128c0 70.7-57.3 128-128 128S0 198.7 0 128 57.3 0 128 0s128 57.3 128 128z"/><path fill="#FFF" d="M86.3 186.2H70.9V79.1h15.4v107.1zM108.9 79.1h41.6c39.6 0 57 28.3 57 53.6 0 27.5-21.5 53.6-56.8 53.6h-41.8V79.1zm15.4 93.3h24.5c34.9 0 42.9-26.5 42.9-39.7 0-21.5-13.7-39.7-43.7-39.7h-23.7v79.4zM88.7 56.8c0 5.5-4.5 10.1-10.1 10.1s-10.1-4.6-10.1-10.1c0-5.6 4.5-10.1 10.1-10.1s10.1 4.6 10.1 10.1z"/></svg>',
+      make: function () { return new firebase.auth.OAuthProvider('oidc.orcid'); }
     }
   };
 
@@ -5080,6 +5091,32 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     var hasName = state.profile.orcidAuthorName && state.profile.orcidAuthorName.trim();
     if (pend.name && !hasName) { patch.orcidAuthorName = pend.name; local.orcidAuthorName = pend.name; }
     saveOrcidProfile(patch, local, function () { litOrcidOpen('manage'); });
+  }
+
+  // A user who REGISTERED (or signs in) with the ORCID provider ('oidc.orcid'
+  // in AUTH_PROVIDERS) already authenticated at orcid.org — their providerData
+  // uid IS their ORCID iD (the OIDC `sub` claim). Auto-link it to the profile
+  // once, so "My publications" works out of the box with a ✓ verified iD and
+  // the first-run connect invite never shows. Runs from onData() when both the
+  // auth user and the profile snapshot are ready. Gated on
+  // `!orcid && !orcidPromptSeen` so it fires exactly once per account — a
+  // later "Turn off / remove ORCID association" (which keeps orcidPromptSeen)
+  // is respected and never re-seeded over.
+  var orcidSeedTriedUid = null;   // per-session guard against duplicate writes while the snapshot echoes
+  function maybeSeedOrcidFromProvider() {
+    if (!state.user || !state.profile) return;
+    if (state.profile.orcid || state.profile.orcidPromptSeen) return;
+    if (orcidSeedTriedUid === state.user.uid) return;
+    var pd = state.user.providerData || [], orcid = '';
+    for (var i = 0; i < pd.length; i++) {
+      if (pd[i] && pd[i].providerId === 'oidc.orcid') { orcid = normOrcid(pd[i].uid); break; }
+    }
+    if (!orcid) return;
+    orcidSeedTriedUid = state.user.uid;
+    orcidPromptShown = true;   // they connected by signing in — no invite needed
+    saveOrcidProfile(
+      { orcid: orcid, orcidLinked: true, orcidVerified: true, orcidPromptSeen: true, updatedAt: serverTime() },
+      { orcid: orcid, orcidLinked: true, orcidVerified: true, orcidPromptSeen: true });
   }
 
   window.acctOpenPublications = function () {
@@ -5907,6 +5944,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     acctRenderControl();
     maybeAutoApplyPrefs();
     maybeApplyOrcidPending();  // save an authenticated "Sign in with ORCID" result, if any
+    maybeSeedOrcidFromProvider();  // auto-link the iD of a user who registered via the ORCID provider
     maybeOrcidPrompt();  // first-run: invite the user to connect their ORCID
     syncPublicLists();   // keep any public lists' shared copies current as the owner edits
     if (libraryMode) { renderLibraryBar(); renderLibrary(); if (shareModalLid) renderShareBody(); }
