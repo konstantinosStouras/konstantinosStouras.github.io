@@ -1,3 +1,9 @@
 node_modules/
+# env config stays local — Firebase also loads per-project files
+# (.env.lit-paper-browser); secrets (SMTP_USER/SMTP_PASS) go via
+# `firebase functions:secrets:set`, never in files (see ../README.md)
 .env
+.env.*
+# deploy runs npm install itself; this repo tracks package.json only
+package-lock.json
 *.log

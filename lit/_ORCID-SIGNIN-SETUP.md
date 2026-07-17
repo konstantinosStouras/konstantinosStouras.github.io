@@ -1,87 +1,131 @@
-# "Sign in with ORCID" — setup
+# ORCID on The Lit — setup
 
-Lets a signed-in user connect their ORCID by **authenticating at orcid.org**
-(the ORCID sign-in page) instead of copy-pasting their 16-digit iD into the
-"Connect your ORCID iD" box. When they come back, their **authenticated** iD is
-saved automatically and their "My publications" view opens.
+Two related, separately-activated features share the one ORCID API client
+(client-id `APP-VWG4YW59MEUCRQE2`, registered at
+<https://orcid.org/developer-tools>):
 
-It uses ORCID's **OpenID Connect implicit flow**, so it runs entirely from this
-**static** page — **no backend, no client secret**. ORCID redirects the browser
-back to `/lit/` with the authenticated iD (and, when the user grants it, their
-name) in the URL fragment; the page reads it there.
-
-It is **inert until configured**: with no ORCID client-id set, the connect stage
-shows the manual iD entry exactly as before, and the profile modal shows no
-sign-in button. Setting it up only **adds** the "Sign in with ORCID" button —
-manual entry always remains as a fallback.
+1. **Part 1 — "Sign in with ORCID" on the connect stage** (✅ ACTIVE): a
+   signed-in Lit user connects their ORCID by authenticating at orcid.org
+   instead of copy-pasting their 16-digit iD.
+2. **Part 2 — Register / sign in to The Lit WITH ORCID** (⏳ pending the
+   Firebase console steps below): "Continue with ORCID" on the sign-in /
+   register modal itself, next to "Continue with Google" — an ORCID account
+   *is* the Lit account, and the verified iD is auto-linked to the new
+   profile.
 
 ---
 
-## One-time setup
+## Part 1 — connect stage (ACTIVE)
 
-1. **Register a PUBLIC ORCID API client.** Sign in at
-   <https://orcid.org/developer-tools> (any personal ORCID account can create
-   one free) and add an application. You'll get a **client-id** that looks like
-   `APP-XXXXXXXXXXXXXXXX`. (There's also a client-secret — you do **not** need
-   it here; the implicit flow doesn't use one.)
+Uses ORCID's **OpenID Connect implicit flow**, entirely from the static page —
+**no backend, no client secret**. ORCID redirects the browser back to `/lit/`
+with the authenticated iD (and, when granted, the name) in the URL fragment;
+the page validates a CSRF `state` nonce, saves the iD with
+`orcidVerified: true`, and opens "My publications". Manual iD entry (ISO 7064
+checksum-validated) remains the permanent fallback.
 
-   - Under **Redirect URIs**, add this page's exact URL:
-     `https://www.stouras.com/lit/`
-     (ORCID requires HTTPS and an exact match — include the trailing slash. Add
-     any other host you serve `/lit/` from too.)
-   - To try it first without touching real ORCID accounts, register a client on
-     the **ORCID Sandbox** (<https://sandbox.orcid.org/developer-tools>) and set
-     `environment: 'sandbox'` below. Sandbox iDs are test-only.
+Configuration (done):
 
-2. **Paste the client-id** into `ORCID_OAUTH` near the top of the accounts
-   script in `lit/index.html` (right after `FB_CONFIG` / `AUTH_PROVIDERS`):
+- `ORCID_OAUTH.clientId = 'APP-VWG4YW59MEUCRQE2'` in `lit/index.html` (a
+  **public** identifier by design — it appears in every authorize URL).
+- The ORCID client lists `https://www.stouras.com/lit/` as a redirect URI
+  (exact match, trailing slash included). ORCID requires HTTPS.
+- `environment: 'production'`; `redirectUri: ''` (= this page's URL);
+  `responseType: 'token'`.
+
+To pause it, set `clientId` back to `'PASTE_ORCID_CLIENT_ID'` — the connect
+stage reverts to manual entry only.
+
+## Part 2 — register / sign in with ORCID (Firebase console steps)
+
+The auth modal's provider buttons come from `AUTH_PROVIDERS` +
+`PROVIDER_DEFS` in `lit/index.html`. ORCID is wired as the generic Firebase
+OIDC provider **`oidc.orcid`** — supported once the Firebase project is
+upgraded to **Identity Platform** (Google's superset of Firebase Auth; same
+SDK, same users). Do these once:
+
+1. **Upgrade the Firebase project to Identity Platform.** Firebase console →
+   project `lit-paper-browser` → **Authentication** → look for the
+   *"Upgrade to Firebase Authentication with Identity Platform"* banner (or
+   Google Cloud console → *Identity Platform* → enable for the project).
+   Existing users, providers and the free e-mail/Google tiers are unchanged.
+
+   **Pricing note:** OIDC providers bill on Identity Platform's SAML/OIDC
+   tier — free for roughly the first **50 monthly-active** ORCID-sign-in
+   users, then about **$0.015/MAU** (only users who authenticate *via ORCID*
+   count; e-mail/Google users don't). Check current pricing when upgrading.
+
+2. **Add the OIDC provider.** Authentication → *Sign-in method* → *Add new
+   provider* → **OpenID Connect**, and fill in:
+
+   | Field | Value |
+   |---|---|
+   | **Grant type** | Code flow |
+   | **Name / Provider ID** | `orcid` — the console shows the full id **`oidc.orcid`**; it MUST read exactly that (the page hardcodes it) |
+   | **Client ID** | `APP-VWG4YW59MEUCRQE2` |
+   | **Issuer (URL)** | `https://orcid.org` |
+   | **Client secret** | the client secret shown for this app at <https://orcid.org/developer-tools> |
+
+   The client secret lives ONLY in the Firebase console (server-side token
+   exchange) — never in this repo.
+
+3. **Add Firebase's callback URL to the ORCID client.** The console shows the
+   provider's redirect/callback URL — for this project:
+   `https://lit-paper-browser.firebaseapp.com/__/auth/handler`
+   Add it as another **Redirect URI** of the app at
+   <https://orcid.org/developer-tools> (keeping the existing
+   `https://www.stouras.com/lit/` one — both are needed).
+
+4. **Flip the switch in `lit/index.html`** (repo convention: a provider is
+   listed only after it's enabled in the console):
 
    ```js
-   var ORCID_OAUTH = {
-     clientId: 'APP-XXXXXXXXXXXXXXXX',  // ← your public client-id
-     environment: 'production',         // 'production' | 'sandbox'
-     redirectUri: '',                   // '' = this page's URL (origin + path)
-     responseType: 'token'              // ORCID's implicit flow
-   };
+   var AUTH_PROVIDERS = ['google', 'orcid'];
    ```
 
-   - `redirectUri` `''` uses `location.origin + location.pathname`, i.e.
-     `https://www.stouras.com/lit/`. Set it explicitly only if you serve the app
-     from a different path than the URL you registered.
-   - Leave `responseType` as `'token'` (ORCID's implicit flow, which returns the
-     iD plus an `id_token`). If a future ORCID change needs `token id_token`,
-     you can switch it here without touching the code.
+   In the SAME change, per the keep-in-sync discipline: add a
+   `lit/changelog.json` entry (id `orcid-register`, dated that day) and extend
+   the About page's account bullets to say you can create your Lit account
+   with ORCID.
 
-3. **Commit & deploy.** That's it — the button appears on the "Connect your
-   ORCID iD" stage and in the profile modal.
+5. **Verify:** open `/lit/` signed out → *Sign in* → **Continue with ORCID**
+   → authenticate at orcid.org → you land back signed in; the account menu
+   shows **📊 My publications** right away and the profile carries the
+   **✓ verified** iD (auto-linked by `maybeSeedOrcidFromProvider`).
 
-## How it flows
+### Behaviour details
 
-- The user clicks **Sign in with ORCID** → the page stores a CSRF `state` nonce
-  and their consent choice in `sessionStorage` and redirects to
-  `https://orcid.org/oauth/authorize?...&response_type=token&scope=openid`.
-- The user signs in / authorizes at orcid.org, which redirects back to `/lit/`
-  with `#...&orcid=…&name=…&id_token=…&state=…` in the fragment.
-- On load, `readOrcidOAuthResponse()` validates the `state`, reads the
-  authenticated iD (from the `orcid` param, or the `id_token` JWT's `sub`) and
-  name, and cleans the fragment from the address bar. Once the Firebase profile
-  snapshot is ready, `maybeApplyOrcidPending()` saves
-  `orcid` / `orcidLinked` / `orcidVerified: true` (and seeds `orcidAuthorName`
-  from ORCID's name only if the user hasn't set their own), then opens the
-  "My publications" view. A connected-via-sign-in iD shows a small
-  **✓ verified** marker.
+- **Auto-link on first sign-in:** the OIDC `sub` claim (= the user's
+  providerData uid) *is* their ORCID iD. `maybeSeedOrcidFromProvider()` saves
+  it to the profile (`orcid`, `orcidLinked: true`, `orcidVerified: true`,
+  `orcidPromptSeen: true`) exactly **once per account** — it's gated on
+  `!orcid && !orcidPromptSeen`, so a user who later chooses *"Turn off /
+  remove ORCID association"* is never re-linked against their will.
+- **No e-mail from ORCID:** ORCID's OIDC does not share the account e-mail
+  (unless the user made it public), so an ORCID-registered Firebase account
+  may have none. The user can add one under *Edit profile* (used e.g. as the
+  alerts default). Consequence: an ORCID registration can NOT be
+  automatically matched to an existing e-mail/Google account — someone who
+  already has a Lit account should link ORCID from the connect stage
+  (Part 1) instead of registering afresh.
+- `friendly()` already maps `auth/operation-not-allowed` (provider not yet
+  enabled in the console) to a clear message, so a premature flip fails
+  gracefully — but don't: keep the flip for after the console steps.
 
-## Notes / security
+## Sandbox dry-run (optional)
 
-- The iD only selects **which author name the user's own private stats are
-  shown under** — no privilege or public data is gated by it, so this is not a
-  security-sensitive credential. The page therefore reads the `id_token`
-  payload without verifying its RS256 signature. (A future hardening could
-  verify it against ORCID's JWKS at `https://orcid.org/oauth/jwks`.)
-- No Firebase / Firestore rule change is needed — the fields live on the
-  existing private `users/{uid}/profile/main` doc.
-- Nothing about the account is made public; the connection is entirely for the
-  user's own "My publications" view.
-- The manual iD entry (with the ISO 7064 checksum validation) is untouched and
-  remains the fallback whenever a user prefers to type it or ORCID is
-  unreachable.
+Register a client at <https://sandbox.orcid.org/developer-tools>, set
+`ORCID_OAUTH.environment = 'sandbox'` (Part 1) or use issuer
+`https://sandbox.orcid.org` in the console (Part 2), and test with a
+throwaway sandbox ORCID account.
+
+## Security notes
+
+- The connect-stage flow reads the `id_token` payload **without verifying its
+  RS256 signature**: the iD only selects which author name the user's own
+  private stats are shown under — no privilege or public data is gated on it.
+  (Possible hardening: verify against ORCID's JWKS at
+  `https://orcid.org/oauth/jwks`.) The register flow (Part 2) doesn't have
+  this caveat — Firebase verifies the OIDC tokens server-side.
+- No Firestore rules change for either part — all fields live on the existing
+  private `users/{uid}/profile/main` doc.
