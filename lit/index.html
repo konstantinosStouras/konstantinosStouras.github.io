@@ -3864,6 +3864,9 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         <input type="checkbox" id="pfOrcidLink">
         <span>Show my publications &amp; citation metrics from the database on my profile</span>
       </label>
+      <div id="pfOrcidManageRow" style="display:none;font-size:12.5px;margin-top:2px">
+        <span class="acct-link" onclick="acctCloseProfile();acctOpenPublications()">Manage ORCID association (match name, verified status, unlink)</span>
+      </div>
       <div class="acct-error" id="pfErr"></div>
       <button class="acct-primary" id="pfSaveBtn" onclick="acctSaveProfile()">Save profile</button>
       <div class="acct-switch" id="pfStatus"></div>
@@ -4428,7 +4431,10 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         '<div class="acct-menu" id="acctMenu">' +
           '<div class="acct-menu-head">Signed in as<strong>' + esc(u.email || name) + '</strong></div>' +
           '<div class="acct-menu-item" title="Your starred papers, lists, tags and private notes — everything you have saved." onclick="acctOpenLibrary()">★ My library <span class="acct-badge">' + saved + '</span></div>' +
-          (orcidLinked ? '<div class="acct-menu-item" title="Your own papers in the database, and your author page in Data Analytics (matched from your linked ORCID)." onclick="acctOpenPublications()">📊 My publications</div>' : '') +
+          (orcidLinked
+            ? '<div class="acct-menu-item" title="Every paper of yours in the database, with its citation count (matched from your linked ORCID)." onclick="acctGoMyPublications()">📊 My publications</div>' +
+              '<div class="acct-menu-item" title="Your metrics in the Data Analytics author spotlight (matched from your linked ORCID)." onclick="acctGoMyAnalytics()">📈 My author analytics</div>'
+            : '') +
           '<div class="acct-menu-sep"></div>' +
           '<div class="acct-menu-item" title="Get an e-mail when new papers match your filters, or when the site gains a feature." onclick="acctOpenAlerts()">✉️ E-mail alerts' + (alertCount ? ' <span class="acct-badge">' + alertCount + '</span>' : '') + '</div>' +
           '<div class="acct-menu-item" title="A set of journals or types applied automatically each time you sign in." onclick="acctOpenDefaults()">⚙️ Default filters' + (defCount ? ' <span class="acct-badge">' + defCount + '</span>' : '') + '</div>' +
@@ -4946,6 +4952,8 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     document.getElementById('pfOrcidLink').checked = !!p.orcidLinked;
     var pfSignin = document.getElementById('pfOrcidSignin');
     if (pfSignin) pfSignin.style.display = orcidOauthEnabled() ? '' : 'none';
+    var pfManage = document.getElementById('pfOrcidManageRow');
+    if (pfManage) pfManage.style.display = p.orcid ? '' : 'none';
     acctOrcidFieldChanged();   // show/hide the consent row for the current value
     var st = document.getElementById('pfStatus'); if (st) st.textContent = '';
     var er = document.getElementById('pfErr'); if (er) er.textContent = '';
@@ -5210,6 +5218,19 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (!state.user) { acctOpenAuth(); return; }
     acctCloseMenu();
     litOrcidOpen('manage');
+  };
+  // Menu shortcuts: straight to the author views, no modal in between (the
+  // manage modal — match name, verified status, unlink — stays reachable from
+  // Edit profile via acctOpenPublications).
+  window.acctGoMyPublications = function () {
+    if (!state.user) { acctOpenAuth(); return; }
+    acctCloseMenu();
+    location.assign(dbAuthorLink(orcidMatchName()));
+  };
+  window.acctGoMyAnalytics = function () {
+    if (!state.user) { acctOpenAuth(); return; }
+    acctCloseMenu();
+    location.assign(anaAuthorLink(orcidMatchName()));
   };
   function litOrcidOpen(mode) {
     orcidMode = mode || 'manage';
@@ -6039,6 +6060,12 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     maybeAutoApplyPrefs();
     maybeApplyOrcidPending();  // save an authenticated "Sign in with ORCID" result, if any
     maybeSeedOrcidFromProvider();  // auto-link the iD of a user who registered via the ORCID provider
+    // Linked profile with no explicit match name: default it from the public
+    // ORCID record's credit-name NOW (per-iD session guard inside), so the
+    // menu's direct My publications / My author analytics links carry the
+    // name the papers are actually credited under.
+    if (state.profile && state.profile.orcid && state.profile.orcidLinked
+        && !((state.profile.orcidAuthorName || '').trim())) backfillOrcidAuthorName(state.profile.orcid, '');
     maybeOrcidPrompt();  // first-run: invite the user to connect their ORCID
     syncPublicLists();   // keep any public lists' shared copies current as the owner edits
     if (libraryMode) { renderLibraryBar(); renderLibrary(); if (shareModalLid) renderShareBody(); }

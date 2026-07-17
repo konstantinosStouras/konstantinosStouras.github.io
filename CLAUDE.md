@@ -403,8 +403,12 @@ every referenced path inside the config's own directory, so the config lives at
 their common parent `lit/`, NOT in `lit/_functions/`).
 **ORCID (two features, one ORCID API client — `lit/_ORCID-SIGNIN-SETUP.md`):**
 (1) *Connect your ORCID* — a signed-in user links their iD (first-run invite
-modal or Edit profile) to get a private "My publications" view (their papers +
-Data Analytics author page, matched by name); besides typing the iD
+modal or Edit profile) and the account menu gains two DIRECT links (no modal
+in between): "My publications" → `./?author=<match name>` and "My author
+analytics" → `analytics/?author=<match name>`
+(`acctGoMyPublications`/`acctGoMyAnalytics`, both via `orcidMatchName`); the
+manage modal (match-name editor, ✓ verified status, unlink) stays reachable
+from Edit profile → "Manage ORCID association" (`acctOpenPublications`); besides typing the iD
 (ISO 7064-validated, `normOrcid`), the connect stage offers **"Sign in with
 ORCID"** — ORCID's OIDC *implicit* flow run wholly client-side
 (`ORCID_OAUTH` config + `litOrcidSignIn`/`readOrcidOAuthResponse`/
