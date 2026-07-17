@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "analytics-group-comparisons",
+      "date": "2026-07-16",
+      "title": "Data Analytics: compare journals against their peer groups",
+      "summary": "When you pick specific journals, every corpus chart now overlays the aggregate behaviour of the journal types those journals belong to (UTD24, FT50, ABS 4/4*, ABS 3) — as comparison lines on the time-series charts and comparison bars/lines on the others — with toggle buttons under each chart to switch each peer group on or off. The publication-volume chart also lets you click a legend entry to hide or show a line, and both time-series charts trim the year axis to when the shown journals actually have papers. The dashboard now opens on the entire database by default.",
+      "url": "https://stouras.com/lit/analytics/"
+    },
+    {
       "id": "analytics-compare-authors-and-cleanup",
       "date": "2026-07-16",
       "title": "Data Analytics: compare authors, cleaner counts, native-first default",
