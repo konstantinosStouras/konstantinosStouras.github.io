@@ -3,6 +3,27 @@
   "version": 1,
   "updates": [
     {
+      "id": "feedback-page",
+      "date": "2026-07-17",
+      "title": "A Feedback page — send screenshots and suggestions",
+      "summary": "There's now a dedicated Feedback page (in the top navigation) where you can tell me what to fix or add: describe the problem in as much or as little detail as you like and attach screenshots. No sign-in needed — it comes straight to me.",
+      "url": "https://stouras.com/lit/feedback/"
+    },
+    {
+      "id": "analytics-citations-over-time",
+      "date": "2026-07-17",
+      "title": "Data Analytics: a citations-over-time chart and tidier filters",
+      "summary": "The Data Analytics dashboard gains a 'Citations over time' chart beneath publication volume (same peer-group overlays and legend toggles), the 'Editorial area trends' chart now starts at the first year with data so it's easier to read, and in the Journals and editor pickers the items you've selected float to the top of the list. A couple of redundant charts were removed to keep the page focused.",
+      "url": "https://stouras.com/lit/analytics/"
+    },
+    {
+      "id": "alerts-in-account-menu",
+      "date": "2026-07-17",
+      "title": "E-mail alerts moved into your account menu, and a tidier library",
+      "summary": "E-mail alerts now live in your account menu (click your name, top right) rather than the top navigation. In My Library the paper-search filters are hidden (the library has its own search), and clicking an active list or tag now deactivates it — back to all saved — without removing it.",
+      "url": "https://stouras.com/lit/"
+    },
+    {
       "id": "analytics-group-comparisons",
       "date": "2026-07-16",
       "title": "Data Analytics: compare journals against their peer groups",

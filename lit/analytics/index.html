@@ -312,6 +312,7 @@
     <nav class="pnav">
       <a class="pnav-btn" href="/lit/about/" title="What The Lit is and how it works"><span class="ico">ⓘ</span>About</a>
       <a class="pnav-btn is-active" href="/lit/" title="Close Data Analytics — back to the database"><span class="ico">📊</span>Data Analytics</a>
+      <a class="pnav-btn" href="/lit/feedback/" title="Send feedback, screenshots and suggestions"><span class="ico">💬</span>Feedback</a>
     </nav>
   </div>
 </header>
@@ -469,6 +470,14 @@
           <div class="grp-toggles" id="grpEvo"></div>
           <div class="evo-hint" id="evoHint" style="display:none">Click a legend entry to hide or show that line. The year axis trims to when the shown journals actually have papers.</div>
         </div>
+        <div class="card wide">
+          <h3>Citations over time</h3>
+          <div class="csub" id="citeEvoSub">Citations received per year</div>
+          <div id="citeEvoChart"></div>
+          <div class="legend toggleable" id="citeEvoLegend"></div>
+          <div class="grp-toggles" id="grpCiteEvo"></div>
+          <div class="evo-hint" id="citeEvoHint" style="display:none">Click a legend entry to hide or show that line. The year axis trims to when the shown journals actually have citations.</div>
+        </div>
         <div class="card">
           <h3>Average co-authors per paper</h3>
           <div class="csub" id="coSub">Mean number of authors, by year</div>
@@ -484,22 +493,10 @@
           <div class="grp-toggles" id="grpTeam"></div>
         </div>
         <div class="card">
-          <h3>Papers by journal</h3>
-          <div class="csub" id="byjSub">Within the selected scope</div>
-          <div id="byjChart"></div>
-          <div class="grp-toggles" id="grpByj"></div>
-        </div>
-        <div class="card">
           <h3>Citation impact by journal</h3>
           <div class="csub" id="citeImpactSub">Average citations per paper, within scope</div>
           <div id="citeImpactChart"></div>
           <div class="grp-toggles" id="grpCite"></div>
-        </div>
-        <div class="card wide" id="shareCard">
-          <h3>Journal share over time</h3>
-          <div class="csub" id="shareSub">Each journal's share of the selected papers, by year</div>
-          <div id="shareChart"></div>
-          <div class="legend" id="shareLegend"></div>
         </div>
         <div class="card wide" id="areaTrendCard" style="display:none">
           <h3>Editorial area trends</h3>
@@ -610,7 +607,7 @@
 <footer class="footer">
   <div class="footer-inner">
     <div class="footer-lead">Built as a personal project to search papers efficiently across journals in Operations, Supply Chain, Economics, Computer Science, Project Management and Innovation — all in one place.</div>
-    <div>See <a href="/lit/">About</a> for what this covers and how the data are collected. <a href="/lit/">Feedback</a> and suggestions are welcome. <span style="white-space:nowrap">Any errors are my own. <a href="https://www.stouras.com" target="_blank" rel="noopener">Konstantinos I. Stouras</a></span></div>
+    <div>See <a href="/lit/about/">About</a> for what this covers and how the data are collected. <a href="/lit/feedback/">Feedback</a> and suggestions are welcome. <span style="white-space:nowrap">Any errors are my own. <a href="https://www.stouras.com" target="_blank" rel="noopener">Konstantinos I. Stouras</a></span></div>
     <div class="footer-note" id="genline"></div>
   </div>
 </footer>
@@ -637,7 +634,7 @@
     // charts overlay that type's aggregate. groupOff['<plot>|<typeKey>'] hides a
     // group on one plot; evoHidden['<seriesId>'] hides an individual line on the
     // Publication-volume chart (legend click).
-    groupOff: {}, evoHidden: {} };
+    groupOff: {}, evoHidden: {}, citeEvoHidden: {} };
   // Disruptiveness-index (D) range filter bounds — the slider spans D_LO..D_HI.
   var D_LO = -1, D_HI = 1, D_STEP = 0.05;
   function dActive() { return S.dMin > D_LO + 1e-9 || S.dMax < D_HI - 1e-9; }
@@ -818,8 +815,6 @@
     });
     return acc;
   }
-  // year->row  ⇒  year->n (paper count), for the volume line chart.
-  function yearsToN(ys) { var o = {}; for (var y in ys) o[y] = ys[y].n; return o; }
   // Group totals over the current year window: {n, a, c, buckets:[6]}.
   function groupTotals(jkeys) {
     var ys = groupYears(jkeys), o = { n: 0, a: 0, c: 0, buckets: [0, 0, 0, 0, 0, 0] };
@@ -1010,11 +1005,10 @@
     var agg = aggregate(keys);
     renderTiles(agg, keys);
     renderEvolution(keys);
+    renderCitesOverTime(keys);
     renderCoauthors(agg, keys);
     renderTeam(agg);
-    renderByJournal(agg);
     renderCitationImpact(keys);
-    renderShareOverTime(keys);
     renderAreaTrends(keys);
     renderCited(keys);
     renderDims(keys);
@@ -1069,13 +1063,14 @@
     var ys = []; for (var y = S.yMin; y <= S.yMax; y++) ys.push(y); return ys;
   }
 
-  function renderEvolution(keys) {
-    var MAX_LINES = 8;
+  // Shared renderer for the two "… over time" line charts (publication volume &
+  // citations): one line per top journal + peer-group overlays, click-legend to
+  // hide/show a line, and an x-axis trimmed to the shown series' non-zero range.
+  function renderTimeSeries(cfg) {
+    var keys = cfg.keys, E = cfg.els, HID = cfg.hidden, MAX_LINES = 8;
     var chosenJ = Object.keys(S.journals).filter(function (k) { return S.journals[k] && JMAP[k]; });
     var dim = dimActive();
-
-    // Rank the in-scope journals by paper count in the window (honours the
-    // editorial dim + exclude-non-research via journalYears).
+    // Rank by paper count (both charts show the same top journals by output).
     var ranked = keys.map(function (k) {
       var ys = journalYears(k), tot = 0;
       for (var y in ys) { var yy = +y; if (yy >= S.yMin && yy <= S.yMax) tot += ys[y].n; }
@@ -1086,49 +1081,53 @@
     var hidden = pool.length - focus.length;
 
     if (!focus.length) {
-      $('evoChart').innerHTML = '<div style="padding:40px 8px;text-align:center;color:var(--text-muted);font-size:13px">No papers in this selection.</div>';
-      $('evoLegend').innerHTML = ''; $('grpEvo').innerHTML = ''; $('evoHint').style.display = 'none';
-      $('evoSub').textContent = 'Papers published per year';
+      $(E.chart).innerHTML = '<div style="padding:40px 8px;text-align:center;color:var(--text-muted);font-size:13px">No papers in this selection.</div>';
+      $(E.legend).innerHTML = ''; $(E.grp).innerHTML = ''; $(E.hint).style.display = 'none';
+      $(E.sub).textContent = cfg.emptySub;
       return;
     }
 
-    // Candidate series = focus journals + peer-group overlays (active toggles).
+    var metricVals = function (ys) { var o = {}; for (var y in ys) o[y] = cfg.metric(ys[y]); return o; };
     var specs = [];
-    focus.forEach(function (k, i) { specs.push({ id: k, name: JMAP[k].name, color: SERIES[i % SERIES.length], vals: yearsToN(journalYears(k)) }); });
+    focus.forEach(function (k, i) { specs.push({ id: k, name: JMAP[k].name, color: SERIES[i % SERIES.length], vals: metricVals(journalYears(k)) }); });
     var groups = comparisonGroups();
-    activeGroups('evo').forEach(function (g) {
-      specs.push({ id: 'grp:' + g.key, name: g.badge + ' group (' + g.jkeys.length + ')', color: g.color, group: true, vals: yearsToN(groupYears(g.jkeys)) });
+    activeGroups(cfg.plot).forEach(function (g) {
+      specs.push({ id: 'grp:' + g.key, name: g.badge + ' group (' + g.jkeys.length + ')', color: g.color, group: true, vals: metricVals(groupYears(g.jkeys)) });
     });
 
-    // Visible = not hidden via legend click.
-    var visible = specs.filter(function (s) { return !S.evoHidden[s.id]; });
-
+    var visible = specs.filter(function (s) { return !HID[s.id]; });
     // x-domain = the non-zero year range of the VISIBLE series, clamped to the
-    // slider — so the axis starts when the shown journals actually began.
+    // slider — so the axis starts when the shown series actually begin.
     var lo = Infinity, hi = -Infinity;
     visible.forEach(function (s) { for (var y in s.vals) { var yy = +y; if (yy < S.yMin || yy > S.yMax) continue; if (s.vals[y] > 0) { if (yy < lo) lo = yy; if (yy > hi) hi = yy; } } });
     if (!isFinite(lo) || lo > hi) { lo = S.yMin; hi = S.yMax; }
     var years = []; for (var y = lo; y <= hi; y++) years.push(y);
 
     var drawSeries = visible.map(function (s) { return { name: s.name, color: s.color, dash: s.group, pts: years.map(function (yy) { return [yy, s.vals[yy] || 0]; }) }; });
-    $('evoChart').innerHTML = drawSeries.length
+    $(E.chart).innerHTML = drawSeries.length
       ? lineChart(drawSeries, { years: years, area: drawSeries.length === 1 && !drawSeries[0].dash })
       : '<div class="chart-empty">All lines hidden — click a legend entry to bring one back.</div>';
-
-    // Legend: all specs; clicking toggles visibility, hidden ones greyed.
-    $('evoLegend').innerHTML = specs.map(function (s) {
-      var off = !!S.evoHidden[s.id];
+    $(E.legend).innerHTML = specs.map(function (s) {
+      var off = !!HID[s.id];
       return '<span class="li' + (off ? ' off' : '') + (s.group ? ' grp' : '') + '" data-eid="' + esc(s.id) + '" title="Click to ' + (off ? 'show' : 'hide') + '"><span class="sw" style="background:' + s.color + '"></span>' + esc(s.name) + '</span>';
     }).join('');
-    Array.prototype.forEach.call($('evoLegend').querySelectorAll('.li'), function (li) {
-      li.onclick = function () { var id = li.getAttribute('data-eid'); if (S.evoHidden[id]) delete S.evoHidden[id]; else S.evoHidden[id] = 1; renderEvolution(scopeKeys()); };
+    Array.prototype.forEach.call($(E.legend).querySelectorAll('.li'), function (li) {
+      li.onclick = function () { var id = li.getAttribute('data-eid'); if (HID[id]) delete HID[id]; else HID[id] = 1; cfg.redraw(); };
     });
-    renderGroupToggles('grpEvo', 'evo', groups, function () { renderEvolution(scopeKeys()); });
-    $('evoHint').style.display = '';
-
+    renderGroupToggles(E.grp, cfg.plot, groups, cfg.redraw);
+    $(E.hint).style.display = '';
     var dsum = dim ? ' · ' + dimSummary() : '';
-    var sub = (chosenJ.length ? 'Papers per year, by chosen journal' : 'Papers per year, by journal') + (hidden ? ' (top ' + focus.length + ' of ' + pool.length + ')' : '') + ' · ' + lo + '–' + hi;
-    $('evoSub').textContent = sub + dsum;
+    $(E.sub).textContent = cfg.subPrefix + (chosenJ.length ? ', by chosen journal' : ', by journal') + (hidden ? ' (top ' + focus.length + ' of ' + pool.length + ')' : '') + ' · ' + lo + '–' + hi + dsum;
+  }
+  function renderEvolution(keys) {
+    renderTimeSeries({ keys: keys, plot: 'evo', metric: function (r) { return r.n; }, hidden: S.evoHidden,
+      els: { chart: 'evoChart', legend: 'evoLegend', grp: 'grpEvo', hint: 'evoHint', sub: 'evoSub' },
+      subPrefix: 'Papers per year', emptySub: 'Papers published per year', redraw: function () { renderEvolution(scopeKeys()); } });
+  }
+  function renderCitesOverTime(keys) {
+    renderTimeSeries({ keys: keys, plot: 'citeEvo', metric: function (r) { return r.c; }, hidden: S.citeEvoHidden,
+      els: { chart: 'citeEvoChart', legend: 'citeEvoLegend', grp: 'grpCiteEvo', hint: 'citeEvoHint', sub: 'citeEvoSub' },
+      subPrefix: 'Citations per year', emptySub: 'Citations received per year', redraw: function () { renderCitesOverTime(scopeKeys()); } });
   }
 
   // Average co-authors per paper, drawn as ONE LINE PER in-scope journal (the
@@ -1196,24 +1195,6 @@
     $('teamSub').textContent = 'Share of papers by number of authors, within scope' + (overlays.length ? ' — dashed lines are peer groups' : '');
   }
 
-  function renderByJournal(agg) {
-    var items = Object.keys(agg.perJournal).map(function (k) {
-      var top = (JMAP[k].types || [])[0];
-      return { label: JMAP[k].name, value: agg.perJournal[k], color: top ? typeColor(top) : NAVY };
-    });
-    // Peer-group comparison bars = each type's AVERAGE papers per journal (so it
-    // sits on the same scale as an individual journal, not a huge group total).
-    var groups = comparisonGroups();
-    activeGroups('byj').forEach(function (g) {
-      var t = groupTotals(g.jkeys), avgPerJ = g.jkeys.length ? Math.round(t.n / g.jkeys.length) : 0;
-      if (avgPerJ) items.push({ label: g.badge + ' — avg per journal', value: avgPerJ, color: g.color, group: true });
-    });
-    items.sort(function (a, b) { return b.value - a.value; });
-    var jc = Object.keys(agg.perJournal).length;
-    $('byjSub').textContent = jc + ' journal' + (jc === 1 ? '' : 's') + ' in scope' + (items.length > 14 ? ' — top 14 shown' : '');
-    $('byjChart').innerHTML = barsH(items, { limit: 16 });
-    renderGroupToggles('grpByj', 'byj', groups, function () { renderByJournal(aggregate(scopeKeys())); });
-  }
   function typeColor(t) { return { utd24: '#5e35b1', ft50: '#1565a7', abs4: '#2e7d47', abs3: '#8a7326' }[t] || NAVY; }
 
   // Average citations per paper, by journal — impact normalized for output size
@@ -1240,61 +1221,6 @@
     renderGroupToggles('grpCite', 'cite', groups, function () { renderCitationImpact(scopeKeys()); });
   }
 
-  // Journal share over time: each journal's share of the selected papers, per
-  // year, as a 100% stacked area. With many journals the top few are shown and
-  // the remaining in-scope journals are folded into one neutral band.
-  function renderShareOverTime(keys) {
-    var card = $('shareCard'), years = yearAxis();
-    // A journal-share breakdown is not meaningful under an editorial-dimension
-    // filter (it narrows to an editor/area slice within a single journal).
-    if (dimActive()) { card.style.display = 'none'; return; }
-    var tot = keys.map(function (k) {
-      var j = JMAP[k], n = 0;
-      for (var y in j.years) { var yy = +y; if (yy < S.yMin || yy > S.yMax) continue; n += effRow(j.years[y]).n; }
-      return { key: k, name: j.name, n: n, top: (j.types || [])[0] };
-    }).filter(function (t) { return t.n > 0; }).sort(function (a, b) { return b.n - a.n; });
-    if (tot.length < 2) { card.style.display = 'none'; return; }   // needs >=2 journals to compare shares
-    card.style.display = '';
-    var MAXB = 8, bands = tot.slice(0, MAXB), rest = tot.slice(MAXB);
-    var yearTotal = {};
-    keys.forEach(function (k) { var ys = JMAP[k].years; for (var y in ys) { var yy = +y; if (yy < S.yMin || yy > S.yMax) continue; yearTotal[yy] = (yearTotal[yy] || 0) + effRow(ys[y]).n; } });
-    // Distinct per-band colours (not by type) so adjacent journal bands read apart.
-    var layers = bands.map(function (b, i) { return { keys: [b.key], color: SERIES[i % SERIES.length], name: b.name }; });
-    if (rest.length) layers.push({ keys: rest.map(function (r) { return r.key; }), color: '#c9c2c6', name: 'Rest of scope (' + rest.length + ')' });
-    $('shareChart').innerHTML = stackedAreaPct(layers, yearTotal, years);
-    $('shareLegend').innerHTML = layers.map(function (l) { return '<span class="li"><span class="sw" style="background:' + l.color + '"></span>' + esc(l.name) + '</span>'; }).join('');
-    $('shareSub').textContent = "Each journal's share of the selected papers, by year" + (rest.length ? ' — top ' + bands.length + ' journals + the rest of scope' : '');
-  }
-  function stackedAreaPct(layers, yearTotal, years) {
-    if (years.length < 2) return '<div class="chart-empty">No data in the selected scope.</div>';
-    var W = 760, H = 300, L = 40, R = 16, T = 14, B = 34;
-    var x0 = years[0], x1 = years[years.length - 1], span = Math.max(1, x1 - x0);
-    var px = function (yr) { return L + (yr - x0) / span * (W - L - R); };
-    var py = function (f) { return T + (1 - f) * (H - T - B); };
-    var svg = svgEl(W, H);
-    [0, .25, .5, .75, 1].forEach(function (f) {
-      var yy = py(f);
-      svg += '<line x1="' + L + '" y1="' + yy.toFixed(1) + '" x2="' + (W - R) + '" y2="' + yy.toFixed(1) + '" stroke="' + GRID + '"/>';
-      svg += '<text x="' + (L - 6) + '" y="' + (yy + 4).toFixed(1) + '" text-anchor="end" font-size="11" fill="' + MUTED + '">' + Math.round(f * 100) + '%</text>';
-    });
-    var step = Math.max(1, Math.round(span / 6));
-    for (var yr = x0; yr <= x1; yr += step) svg += '<text x="' + px(yr).toFixed(1) + '" y="' + (H - 12) + '" text-anchor="middle" font-size="11" fill="' + MUTED + '">' + yr + '</text>';
-    var cum = {}; years.forEach(function (y) { cum[y] = 0; });
-    layers.forEach(function (layer) {
-      var up = [], lo = [];
-      years.forEach(function (y) {
-        var tt = yearTotal[y] || 0, n = 0;
-        if (tt) layer.keys.forEach(function (k) { var r = JMAP[k].years[y]; if (r) n += effRow(r).n; });
-        var lower = cum[y], upper = lower + (tt ? n / tt : 0);
-        cum[y] = upper; up.push([y, upper]); lo.push([y, lower]);
-      });
-      var d = 'M' + up.map(function (p) { return px(p[0]).toFixed(1) + ' ' + py(p[1]).toFixed(1); }).join(' L') +
-        ' L' + lo.slice().reverse().map(function (p) { return px(p[0]).toFixed(1) + ' ' + py(p[1]).toFixed(1); }).join(' L') + ' Z';
-      svg += '<path d="' + d + '" fill="' + layer.color + '" opacity="0.85"/>';
-    });
-    return svg + '</svg>';
-  }
-
   // Editorial area trends: Management Science papers per year for its top
   // editorial areas. Hidden unless MS (the area dimension) is in scope.
   function renderAreaTrends(keys) {
@@ -1315,11 +1241,18 @@
     }
     if (areas.length < 2) { card.style.display = 'none'; return; }
     card.style.display = '';
-    var top = areas.slice(0, 6), years = yearAxis();
+    var top = areas.slice(0, 6);
+    // Trim the x-axis to the year range where the shown areas actually have
+    // papers (many areas have long leading stretches of zero), like the
+    // time-series charts, so it isn't padded out with empty early decades.
+    var lo = Infinity, hi = -Infinity;
+    top.forEach(function (a) { var ay = areaYears[a]; if (!ay) return; for (var y in ay) { var yy = +y; if (yy < S.yMin || yy > S.yMax) continue; if (ay[y] > 0) { if (yy < lo) lo = yy; if (yy > hi) hi = yy; } } });
+    if (!isFinite(lo) || lo > hi) { lo = S.yMin; hi = S.yMax; }
+    var years = []; for (var yr = lo; yr <= hi; yr++) years.push(yr);
     var series = top.map(function (a, i) { return { name: a, color: SERIES[i % SERIES.length], pts: years.map(function (y) { return [y, (areaYears[a] && areaYears[a][y]) || 0]; }) }; });
     $('areaTrendChart').innerHTML = lineChart(series, { years: years });
     $('areaTrendLegend').innerHTML = series.map(function (s) { return '<span class="li"><span class="sw" style="background:' + s.color + '"></span>' + esc(s.name) + '</span>'; }).join('');
-    $('areaTrendSub').textContent = 'Management Science papers per year, by editorial area' + (areas.length > top.length ? ' (top ' + top.length + ' of ' + areas.length + ')' : '');
+    $('areaTrendSub').textContent = 'Management Science papers per year, by editorial area' + (areas.length > top.length ? ' (top ' + top.length + ' of ' + areas.length + ')' : '') + ' · ' + lo + '–' + hi;
   }
 
   function renderCited(keys) {
@@ -2123,6 +2056,10 @@
   function renderJournalList() {
     var q = ($('jsearch').value || '').toLowerCase();
     var list = journalPickList().filter(function (j) { return !q || j.name.toLowerCase().indexOf(q) !== -1 || j.key.indexOf(q) !== -1; });
+    // Float the currently-selected journals to the top of the list (stable sort
+    // keeps the native-then-alphabetical order within the selected/unselected
+    // groups), so a user's picks stay visible above the long unselected tail.
+    list = list.slice().sort(function (a, b) { return (S.journals[b.key] ? 1 : 0) - (S.journals[a.key] ? 1 : 0); });
     if (!list.length) {
       $('jlist').innerHTML = '<div class="jrow" style="cursor:default;color:var(--text-muted);font-size:12.5px">No journals for this selection.</div>';
       return;
@@ -2136,7 +2073,7 @@
         '<span class="jc">' + fmt(S.excludeNonResearch && j.rp != null ? j.rp : j.papers) + '</span></label>';
     }).join('');
     Array.prototype.forEach.call($('jlist').querySelectorAll('input'), function (cb) {
-      cb.onchange = function () { S.journals[cb.getAttribute('data-k')] = cb.checked; refresh(); };
+      cb.onchange = function () { S.journals[cb.getAttribute('data-k')] = cb.checked; renderJournalList(); refresh(); };
     });
   }
 
@@ -2180,6 +2117,10 @@
       return;
     }
     var sel = (S.dim.name === name) ? S.dim.vals : {};
+    // Float the currently-selected values to the top (stable sort keeps the
+    // typical count-descending order within the selected/unselected groups), so
+    // a de-selected value drops back to its usual place.
+    items = items.slice().sort(function (a, b) { return (sel[b.label] ? 1 : 0) - (sel[a.label] ? 1 : 0); });
     host.innerHTML = items.map(function (it) {
       return '<label class="jrow"><input type="checkbox" data-v="' + esc(it.label) + '"' + (sel[it.label] ? ' checked' : '') + '>' +
         '<span class="jn">' + esc(dimDisplay(name, it.label)) + '</span>' +
@@ -2326,7 +2267,7 @@
   }
 
   function resetFilters() {
-    S.types = {}; S.journals = {}; S.dim = { name: null, vals: {} }; S.groupOff = {}; S.evoHidden = {};
+    S.types = {}; S.journals = {}; S.dim = { name: null, vals: {} }; S.groupOff = {}; S.evoHidden = {}; S.citeEvoHidden = {};
     S.excludeNonResearch = true; $('exclNonRes').checked = true;
     $('yrMin').value = YEAR_LO; $('yrMax').value = YEAR_HI; syncSlider();
     $('drMin').value = D_LO; $('drMax').value = D_HI; syncDSlider();
@@ -2359,7 +2300,7 @@
     renderJournalList();
 
     // journal picker popover
-    $('jbtn').onclick = function (e) { e.stopPropagation(); var willOpen = !$('jpanel').classList.contains('open'); closeAllPanels(); if (willOpen) $('jpanel').classList.add('open'); };
+    $('jbtn').onclick = function (e) { e.stopPropagation(); var willOpen = !$('jpanel').classList.contains('open'); closeAllPanels(); if (willOpen) { renderJournalList(); $('jpanel').classList.add('open'); } };
     $('jpanel').onclick = function (e) { e.stopPropagation(); };
     document.addEventListener('click', closeAllPanels);
     $('jsearch').addEventListener('input', renderJournalList);
@@ -2369,7 +2310,7 @@
     DIM_ORDER.forEach(function (name) {
       var btn = $('edBtn_' + name), panel = $('edPanel_' + name), search = $('edSearch_' + name), clr = $('edClear_' + name);
       if (!btn || !panel) return;
-      btn.onclick = function (e) { e.stopPropagation(); var willOpen = !panel.classList.contains('open'); closeAllPanels(); if (willOpen) panel.classList.add('open'); };
+      btn.onclick = function (e) { e.stopPropagation(); var willOpen = !panel.classList.contains('open'); closeAllPanels(); if (willOpen) { renderEdList(name, scopeKeys()); panel.classList.add('open'); } };
       panel.onclick = function (e) { e.stopPropagation(); };
       if (search) search.addEventListener('input', function () { renderEdList(name, scopeKeys()); });
       if (clr) clr.onclick = function () { if (S.dim.name === name) S.dim = { name: null, vals: {} }; refresh(); };

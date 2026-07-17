@@ -101,6 +101,10 @@
   .filters-bar.collapsed .filters-row,
   .filters-bar.collapsed .summary-tab-btns { display: none !important; }
   .filters-bar.collapsed .filters-collapse-row { margin-top: 0; }
+  /* In "My Library" the paper-search filter bar (journal types, journals, text,
+     year…) doesn't apply — the library has its own search + list/tag chips — so
+     hide the whole bar (including the Show/Hide-filters toggle) while it's open. */
+  body.lit-lib-mode .filters-bar { display: none; }
   .filters-row { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
   /* Filters are split across three stacked rows (Journals / everything else /
      the "Recently added papers" button); this adds the gap between them. */
@@ -651,9 +655,8 @@
     <div class="header-right">
       <nav class="lit-nav" aria-label="The Lit — sections">
         <a class="lit-nav-btn" href="about/" title="What The Lit is and how it works"><span class="ico">ⓘ</span>About</a>
-        <button type="button" class="lit-nav-btn" onclick="litAlertsOpen()" title="Get an e-mail when new papers match your filters"><span class="ico">✉</span>E-mail alerts</button>
         <a class="lit-nav-btn" href="analytics/" title="Summary statistics for the database"><span class="ico">📊</span>Data Analytics</a>
-        <button type="button" class="lit-nav-btn" onclick="litFeedbackOpen()" title="Send feedback and suggestions"><span class="ico">💬</span>Feedback</button>
+        <a class="lit-nav-btn" href="feedback/" title="Send feedback, screenshots and suggestions"><span class="ico">💬</span>Feedback</a>
       </nav>
       <div style="text-align:right;line-height:1.35">
         <div class="header-meta"><strong id="corpusStat" title="Merged across every catalog this page loads; authors are de-duplicated within each catalog">260,640 papers from 186,933 authors</strong> via Crossref · <span id="yearRange">1886–present</span></div>
@@ -817,7 +820,7 @@
     <div class="footer-lead">Built as a personal project to search papers efficiently across journals in Operations, Supply Chain, Economics, Computer Science, Project Management and Innovation — all in one place.</div>
     <!-- The data/provenance paragraphs live on the About page (/lit/about/, linked
          from the top nav) to avoid duplicating them here. -->
-    <div>See <a class="acct-link" href="about/">About</a> for what this covers and how the data are collected. <span class="acct-link" onclick="litFeedbackOpen()">Feedback</span> and suggestions are welcome. <span style="white-space:nowrap">Any errors are my own. <a href="https://www.stouras.com" target="_blank">Konstantinos I. Stouras</a></span></div>
+    <div>See <a class="acct-link" href="about/">About</a> for what this covers and how the data are collected. <a class="acct-link" href="feedback/">Feedback</a> and suggestions are welcome. <span style="white-space:nowrap">Any errors are my own. <a href="https://www.stouras.com" target="_blank">Konstantinos I. Stouras</a></span></div>
   </div>
 </footer>
 
@@ -2637,8 +2640,8 @@ document.addEventListener('click', function(e) {
     document.querySelectorAll('.custom-select-dropdown').forEach(d => d.classList.remove('open'));
   }
 });
-// Escape closes the top-most open modal overlay (About / Feedback / E-mail
-// alerts / sign-in / profile), or otherwise any open filter dropdown.
+// Escape closes the top-most open modal overlay (E-mail alerts / sign-in /
+// profile / default filters), or otherwise any open filter dropdown.
 document.addEventListener('keydown', function(e) {
   if (e.key !== 'Escape') return;
   var overlays = document.querySelectorAll('.acct-overlay.open');
@@ -3791,45 +3794,8 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   </div>
 </div>
 
-<!-- ── Feedback modal ─────────────────────────────────────────────────────── -->
-<div id="litFeedbackOverlay" class="acct-overlay" onclick="if(event.target===this)litFeedbackClose()">
-  <div class="acct-modal wide">
-    <button class="acct-modal-x" onclick="litFeedbackClose()" aria-label="Close">×</button>
-    <div class="acct-modal-head">
-      <h2>Feedback</h2>
-      <p>The Lit is a personal project and still a work in progress. I would love to hear any feedback, corrections or suggestions you have. You can reach me through any of the channels below.</p>
-    </div>
-    <div class="info-body">
-      <div class="contact-grid">
-        <a class="contact-row" href="mailto:kostas.stouras@ucd.ie?subject=The%20Lit%20%E2%80%94%20feedback">
-          <span class="c-ico">✉</span>
-          <span class="c-txt"><b>E-mail</b><span>kostas.stouras@ucd.ie</span></span>
-        </a>
-        <a class="contact-row" href="https://x.com/stourask" target="_blank" rel="noopener">
-          <span class="c-ico">𝕏</span>
-          <span class="c-txt"><b>X (Twitter)</b><span>@stourask</span></span>
-        </a>
-        <a class="contact-row" href="https://www.linkedin.com/in/stouras/" target="_blank" rel="noopener">
-          <span class="c-ico" style="font-weight:800;letter-spacing:-.5px;">in</span>
-          <span class="c-txt"><b>LinkedIn</b><span>in/stouras</span></span>
-        </a>
-        <a class="contact-row" href="https://scholar.google.com/citations?user=FzyFf3kAAAAJ" target="_blank" rel="noopener">
-          <span class="c-ico">🎓</span>
-          <span class="c-txt"><b>Google Scholar</b><span>Konstantinos I. Stouras</span></span>
-        </a>
-        <a class="contact-row" href="https://orcid.org/0000-0002-2398-9566" target="_blank" rel="noopener">
-          <span class="c-ico">🆔</span>
-          <span class="c-txt"><b>ORCID</b><span>0000-0002-2398-9566</span></span>
-        </a>
-        <a class="contact-row" href="https://www.stouras.com" target="_blank" rel="noopener">
-          <span class="c-ico">🌐</span>
-          <span class="c-txt"><b>Website</b><span>www.stouras.com</span></span>
-        </a>
-      </div>
-      <div class="info-note">Konstantinos I. Stouras · University College Dublin. Thank you for helping make The Lit better.</div>
-    </div>
-  </div>
-</div>
+<!-- Feedback lives on its own page now (/lit/feedback/) — the old modal was
+     replaced by a standalone form that collects screenshots + a message. -->
 
 <!-- ── E-mail alerts modal ────────────────────────────────────────────────────
      Registered users can subscribe to an e-mail when new papers matching a set
@@ -3851,11 +3817,11 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
 </div>
 
 <script>
-/* ── Top-nav modals: About, Feedback, and the E-mail alerts entry point ──────
- * About and Feedback are static and need no backend. E-mail alerts needs the
- * (optional) accounts system: the real builder is installed by the accounts
- * script below when Firebase is configured; until then this stub explains that
- * an account is required. */
+/* ── Top-nav / account overlays: the E-mail alerts entry point ───────────────
+ * About and Feedback are their own static pages now (/lit/about/, /lit/feedback/).
+ * E-mail alerts needs the (optional) accounts system: the real builder is
+ * installed by the accounts script below when Firebase is configured; until
+ * then this stub explains that an account is required. */
 (function () {
   function openOverlay(id) {
     var el = document.getElementById(id);
@@ -3868,8 +3834,6 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   function closeOverlay(id) { var el = document.getElementById(id); if (el) el.classList.remove('open'); }
 
   window.litOpenOverlay = openOverlay; // reused by the accounts script's alerts builder
-  window.litFeedbackOpen = function () { openOverlay('litFeedbackOverlay'); };
-  window.litFeedbackClose = function () { closeOverlay('litFeedbackOverlay'); };
   window.litAlertsClose = function () { closeOverlay('litAlertsOverlay'); };
 
   // ── Feature changelog ("What's new") ──────────────────────────────────────
@@ -4231,6 +4195,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     var saved = Object.keys(state.papers).filter(function (k) { return isSaved(state.papers[k]); }).length;
     var defs = savedDefaults();
     var defCount = defs.journals.length + defs.jtypes.length;
+    var alertCount = Object.keys(state.alerts || {}).length;
     el.innerHTML =
       '<div class="acct-wrap">' +
         '<button class="acct-btn acct-user" onclick="acctToggleMenu(event)"><span class="acct-avatar" style="background-image:url(\'' + avatar + '\')"></span><span class="acct-uname">' + esc(name) + '</span></button>' +
@@ -4241,6 +4206,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
           '<div class="acct-menu-item" onclick="acctOpenLibrary()">🏷 My tags <span class="acct-badge">' + uniqueTags().length + '</span></div>' +
           '<div class="acct-menu-item" onclick="acctOpenLibrary(\'search\')">🔍 Search my notes</div>' +
           '<div class="acct-menu-sep"></div>' +
+          '<div class="acct-menu-item" onclick="acctOpenAlerts()">✉️ E-mail alerts' + (alertCount ? ' <span class="acct-badge">' + alertCount + '</span>' : '') + '</div>' +
           '<div class="acct-menu-item" onclick="acctOpenDefaults()">⚙️ Default filters' + (defCount ? ' <span class="acct-badge">' + defCount + '</span>' : '') + '</div>' +
           '<div class="acct-menu-item" onclick="acctOpenProfile()">👤 Edit profile</div>' +
           '<div class="acct-menu-sep"></div>' +
@@ -4256,6 +4222,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   window.acctOpenLibrary = function (focus) {
     if (!state.user) { acctOpenAuth(); return; }
     libraryMode = true;
+    document.body.classList.add('lit-lib-mode');   // hides the paper-search filter bar (unused in the library)
     if (typeof recentMode !== 'undefined' && recentMode) { recentMode = false; if (typeof updateRecentButton === 'function') updateRecentButton(); }
     if (typeof closeSummaryTabs === 'function') closeSummaryTabs();
     acctCloseMenu();
@@ -4272,10 +4239,18 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   function libExitQuiet() {
     if (!libraryMode) return;
     libraryMode = false;
+    document.body.classList.remove('lit-lib-mode');
     var bar = document.getElementById('libraryBar'); if (bar) bar.classList.remove('open');
   }
   window.acctLibSearch = function (v) { libQuery = v; renderLibrary(); };
-  window.acctSetLibFilter = function (type, id) { libFilter = { type: type, id: id }; renderLibraryBar(); renderLibrary(); };
+  window.acctSetLibFilter = function (type, id) {
+    // Clicking the already-active list/tag/view chip toggles it OFF (back to
+    // "All saved") instead of doing nothing — so you can deactivate a filter
+    // without removing the list/tag itself. ("All saved" always stays on.)
+    if (type !== 'all' && libFilter.type === type && libFilter.id === id) libFilter = { type: 'all', id: null };
+    else libFilter = { type: type, id: id };
+    renderLibraryBar(); renderLibrary();
+  };
   window.acctDeleteList = function (ev, lid) {
     ev.stopPropagation();
     if (!confirm('Delete this list? Papers stay in your library, only the list is removed.')) return;
@@ -5042,6 +5017,14 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   window.maybeAutoApplyPrefs = maybeAutoApplyPrefs;
 
   // ── the modal ──
+  // E-mail alerts now live in the account menu (moved out of the top nav), so
+  // open the alerts modal from there — closing the menu first, like the others.
+  window.acctOpenAlerts = function () {
+    if (!state.user) { acctOpenAuth(); return; }
+    acctCloseMenu();
+    litAlertsOpen();
+  };
+
   window.acctOpenDefaults = function () {
     if (!state.user) { acctOpenAuth(); return; }
     acctCloseMenu();
@@ -5250,7 +5233,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       }, function (err) { console.warn('lists listener:', err && err.code); });
       unsubAlerts = alertsCol().onSnapshot(function (snap) {
         var m = {}; snap.forEach(function (d) { var x = d.data() || {}; x.id = d.id; m[d.id] = x; });
-        state.alerts = m; refreshAlertsModalIfOpen();
+        state.alerts = m; acctRenderControl(); refreshAlertsModalIfOpen();
       }, function (err) { console.warn('alerts listener:', err && err.code); });
     } else {
       if (libraryMode) acctExitLibrary();
