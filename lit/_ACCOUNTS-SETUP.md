@@ -137,11 +137,13 @@ construction (see `_firestore.rules`):
 ```
 users/{uid}/papers/{docId}   { doi, title, authors, year,
                                starred, note, tags[], lists[listId], updatedAt }
-users/{uid}/lists/{listId}   { name, createdAt }
+users/{uid}/lists/{listId}   { name, createdAt, public?, shareId? }
 users/{uid}/profile/main     { firstName, lastName, affiliation, website, email,
                                defaultJournals[], defaultJTypes[],
                                autoApplyFilters, updatedAt }
 registeredUsers/{uid}        { t }   ← PUBLIC, one contentless doc per account
+publicLists/{shareId}        { ownerUid, owner, name, count, papers[],
+                               createdAt, updatedAt }   ← PUBLIC read-only
 ```
 
 The **default filters** live on the profile document: `defaultJournals` is an
@@ -169,10 +171,27 @@ read per visit, nothing else downloaded). Its rule in `_firestore.rules` is:
 public `read`, owner-only `create/update` pinned to just the `t` field, no
 `delete`.
 
-> **Re-deploy the rules after this change.** If you set accounts up before this
-> tally existed, re-publish `_firestore.rules` (step 6 above) so the public
-> `read` on `registeredUsers` is live — otherwise the analytics page can't count
-> it and just hides the figure (everything else keeps working). The count
+### Public shared lists (the 🔗 "Share a list" feature)
+
+A signed-in user can make one of their saved-paper lists **public** (My Library →
+a list's 🔗 → "Make this list public") and hand out a link
+(`stouras.com/lit/?list=<shareId>`) that **anyone — signed in or not — can open
+read-only**. Because a viewer can't read the owner's private `users/{uid}/**`
+subtree, the page keeps a denormalized snapshot in a top-level **public**
+`publicLists/{shareId}` collection, carrying only each paper's title, authors,
+year and DOI — **never** the owner's private note or tags. The snapshot is kept
+in sync automatically as the owner edits the list; turning the list private again
+**deletes** the doc, so the old link stops resolving. Its rule in
+`_firestore.rules` is: public `read`; owner-only `create`/`update`/`delete`
+(pinned to `request.auth.uid == ownerUid`), with the payload bounded (name ≤ 200
+chars, ≤ 5000 papers) so it can't be abused as free public storage.
+
+> **Re-deploy the rules after this change.** If you set accounts up before the
+> shared-lists (or registered-users tally) feature existed, re-publish
+> `_firestore.rules` (step 6 above) so the public `read` + owner-only writes on
+> `publicLists` and `registeredUsers` are live — otherwise sharing a list fails
+> with a permissions error (and the analytics page can't count registrations).
+> The count
 > reflects accounts that have signed in since the tally launched, so it converges
 > to the true total as returning users sign in again; the exact all-time total is
 > always in **Firebase console → Authentication**.

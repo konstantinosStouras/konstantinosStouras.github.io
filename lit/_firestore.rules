@@ -33,6 +33,38 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Public shared lists. A signed-in user can make one of their saved-paper
+    // lists public (main page → My Library → a list's 🔗 Share → "Make public").
+    // We store a denormalized, read-only snapshot here — keyed by an unguessable
+    // random share id — because a viewer cannot read the owner's private
+    // users/{uid}/** subtree. It carries ONLY bibliographic fields (each paper's
+    // title/authors/year/DOI), never the owner's private note or tags. Anyone
+    // (even signed-out) may READ a shared list by its id; only the owner may
+    // create/update/delete their own, and the payload is bounded so it can't be
+    // abused as free public storage. Turning the list private again deletes the
+    // doc, so the old link stops resolving.
+    match /publicLists/{shareId} {
+      allow read: if true;
+      allow create: if request.auth != null
+                    && request.auth.uid == request.resource.data.ownerUid
+                    && request.resource.data.keys().hasOnly(
+                         ['ownerUid','owner','name','count','papers','createdAt','updatedAt'])
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() <= 200
+                    && request.resource.data.papers is list
+                    && request.resource.data.papers.size() <= 5000;
+      allow update: if request.auth != null
+                    && request.auth.uid == resource.data.ownerUid
+                    && request.auth.uid == request.resource.data.ownerUid
+                    && request.resource.data.keys().hasOnly(
+                         ['ownerUid','owner','name','count','papers','createdAt','updatedAt'])
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() <= 200
+                    && request.resource.data.papers is list
+                    && request.resource.data.papers.size() <= 5000;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.ownerUid;
+    }
+
     // Public feedback inbox (written by the standalone /lit/feedback/ page).
     // Anyone may CREATE a bounded feedback document (a short message plus a few
     // client-compressed screenshots as data URLs); nobody can read, update or
