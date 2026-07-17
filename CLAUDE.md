@@ -428,15 +428,34 @@ it never drifts from what actually ships — the same keep-in-sync discipline as
 `../changelog.json` (the same single source the main page's alert preview and the
 mailer use). The main page links to it (`about/`) from the top-nav **About**
 button and the footer; the old modal (`#litAboutOverlay`) was removed.
-**Top navigation (in the claret header):** four buttons — **About** (a link to
-the standalone page `lit/about/` describing what the browser covers, how to
+**Top navigation (in the claret header):** three link buttons — **About** (a link
+to the standalone page `lit/about/` describing what the browser covers, how to
 search, and the full data/provenance notes, mirroring the footer text),
-**E-mail alerts**, **Data Analytics** (a
-link to the sub-page `lit/analytics/` — a sub-page, so NOT a
-`fun/index.html` card), and
-**Feedback** (a modal with the maintainer's contact links: e-mail
-kostas.stouras@ucd.ie, X `@stourask`, Google Scholar, ORCID, website). About and
-Feedback are static; the Data Analytics page is standalone. **Data Analytics
+**Data Analytics** (a link to the sub-page `lit/analytics/` — a sub-page, so NOT a
+`fun/index.html` card), and **Feedback** (a link to the standalone page
+`lit/feedback/`). **E-mail alerts moved OUT of the top nav into the account menu**
+(the account dropdown → "✉️ E-mail alerts", via `acctOpenAlerts`, with a badge of
+the user's alert count) — it needs an account anyway. About, Data Analytics and
+Feedback are all standalone pages that share the same claret header + `.pnav`
+(About / Data Analytics / Feedback), each cross-linking the other two.
+**Feedback (`lit/feedback/`)** is its own page (was an in-modal contact list):
+a form where anyone (no sign-in) leaves a message and attaches screenshots
+(compressed client-side to JPEG data URLs, ≤5, kept under Firestore's ~1 MB
+doc limit) — written to a public-create-only Firestore **`feedback`** collection
+(rule in `lit/_firestore.rules`: bounded create, no client read/update/delete)
+using the same `FB_CONFIG` as the main page (prefills the e-mail if a main-page
+sign-in is present). Delivery is by **`lit/_scraper/feedback-mailer.mjs`**
+(Admin SDK + SMTP, near-verbatim env handling as `alerts-mailer.mjs`; offline
+`--selftest`/`--dry-run`/`--scan`; a no-op until `FIREBASE_SERVICE_ACCOUNT` +
+`SMTP_*` are set), run every 15 min by
+`.github/workflows/lit-feedback-mail.yml`: it reads pending (`forwarded==false`)
+submissions, e-mails each to `FEEDBACK_TO` (default `kstouras@gmail.com`) with the
+screenshots **attached** (Reply-To = submitter), and stamps `forwarded:true`.
+So all feedback lands in ONE inbox. Setup: `lit/_FEEDBACK-SETUP.md`. The main
+page also keeps a couple of **library niceties**: in **My Library** the
+paper-search filter bar is hidden (`body.lit-lib-mode`; the library has its own
+search), and clicking the ACTIVE list/tag chip deactivates it (back to "All
+saved") without removing it (`acctSetLibFilter` toggle). **Data Analytics
 (`lit/analytics/`)** is an interactive summary-statistics dashboard over the
 whole corpus available in this repo — the ten native sources (`data/`) plus
 the FT50 catalog (`data-ft50/`), deduped with native winning on overlap
@@ -468,24 +487,30 @@ external CDN beyond the shared Google Font) offers filters — **journal types**
 (the same UTD24/FT50/ABS 4/4*/ABS 3 sets, union with the Journals picker),
 **journals**, and a **year-range** slider — driving live tiles (papers, avg
 co-authors, solo %, pre-print %, citations) and charts (publication volume by
-journal over time, avg co-authors/year by journal, co-authorship distribution,
-papers by journal, most-cited table). **Default scope = the WHOLE database**:
+journal over time, **citations by journal over time**, avg co-authors/year by
+journal, co-authorship distribution, citation impact by journal, most-cited
+table). **Default scope = the WHOLE database**:
 with nothing selected `scopeKeys()` returns every journal, so the top-line
 statistics describe the entire corpus until the user narrows scope. **Journal-type
 group comparisons:** when specific **journals** are chosen, each chart overlays
 the aggregate behaviour of every journal-type those journals belong to
 (`comparisonGroups()` = union of the chosen journals' `types`: UTD24 / FT50 /
 ABS 4/4* / ABS 3), with **per-plot toggle buttons** below each chart
-(`renderGroupToggles`, `S.groupOff['<plot>|<type>']`). The two time-series line
-charts (publication volume, avg co-authors) draw the groups as dashed overlay
-lines and **auto-trim the x-axis to the non-zero year range of the shown series**
-(so it starts when the shown journals began, not 1900); the volume chart's legend
-is **click-to-hide/show** per line (`S.evoHidden`). The two by-journal bar charts
-compare against the group's average-per-journal (papers) / average citations
-(impact); the co-authorship distribution overlays each group's team-size share as
-a dashed polyline. Groups are suppressed while an editorial dimension is active
-(not like-for-like). The old "Compare vs. other journals" toggle was replaced by
-this system.
+(`renderGroupToggles`, `S.groupOff['<plot>|<type>']`). The **two "… over time"
+line charts (publication volume `plot:'evo'` + citations `plot:'citeEvo'`)** are
+rendered by ONE shared `renderTimeSeries(cfg)` — one line per top journal + the
+group overlays as dashed lines, an **auto-trimmed x-axis to the non-zero year
+range of the shown series** (so it starts when the shown journals began, not
+1900), and a **click-to-hide/show legend** per line (`S.evoHidden` /
+`S.citeEvoHidden`); the volume chart plots each row's `n`, the citations chart its
+`c` (both journal rows and `groupYears` carry `c`). The avg-co-authors line chart
+and the by-journal **citation-impact** bar chart likewise overlay their group
+(avg team size / average citations per paper); the co-authorship distribution
+overlays each group's team-size share as a dashed polyline. The **"Editorial area
+trends"** line chart also trims its x-axis to the first year with data. Groups are
+suppressed while an editorial dimension is active (not like-for-like). (The former
+"Papers by journal" and "Journal share over time" charts, and the old "Compare vs.
+other journals" toggle, were removed in favour of this system.)
 **"Exclude non-research items" toggle (pre-ticked):** a filter-bar checkbox
 (`S.excludeNonResearch`, default ON) filters journal "Editorial Board" front
 matter, book reviews, corrigenda/errata, announcements and indices out of EVERY

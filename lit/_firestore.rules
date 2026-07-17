@@ -33,5 +33,24 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Public feedback inbox (written by the standalone /lit/feedback/ page).
+    // Anyone may CREATE a bounded feedback document (a short message plus a few
+    // client-compressed screenshots as data URLs); nobody can read, update or
+    // delete from the client. Only the maintainer reads/clears it server-side
+    // with the Admin SDK (lit/_scraper/feedback-mailer.mjs), which bypasses
+    // these rules and forwards each submission by e-mail. Bounds below keep the
+    // collection from being abused as free public storage.
+    match /feedback/{docId} {
+      allow create: if request.resource.data.keys().hasOnly(
+                         ['text','images','name','email','uid','page','url','ua','forwarded','status','createdAt'])
+                    && request.resource.data.text is string
+                    && request.resource.data.text.size() <= 20000
+                    && (!('images' in request.resource.data)
+                        || (request.resource.data.images is list
+                            && request.resource.data.images.size() <= 5))
+                    && request.resource.data.forwarded == false;
+      allow read, update, delete: if false;
+    }
+
   }
 }

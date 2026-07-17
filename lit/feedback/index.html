@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Feedback · The Lit — Research Paper Browser</title>
+
+<!-- Feedback page for The Lit. A standalone page (like /lit/about/ and
+     /lit/analytics/) that shares the claret header. Visitors describe a problem
+     or suggestion and can attach screenshots; the submission is stored in the
+     project's existing Firebase Firestore ('feedback' collection) and forwarded
+     to the maintainer by lit/_scraper/feedback-mailer.mjs. Screenshots are
+     compressed client-side and embedded as data URLs so everything lands in one
+     place (one Firestore document per submission). No sign-in is required. -->
+<meta name="description" content="Send feedback, screenshots and suggestions for The Lit — a fast, one-place research paper browser.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://stouras.com/lit/feedback/">
+<meta name="author" content="Konstantinos Stouras">
+<meta name="theme-color" content="#7d1d3f">
+
+<link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%237d1d3f'/%3E%3Ctext%20x='50'%20y='66'%20font-family='Georgia,serif'%20font-size='46'%20font-style='italic'%20font-weight='bold'%20fill='%23c9a24b'%20text-anchor='middle'%3ELit%3C/text%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%237d1d3f'/%3E%3Ctext%20x='50'%20y='66'%20font-family='Georgia,serif'%20font-size='46'%20font-style='italic'%20font-weight='bold'%20fill='%23c9a24b'%20text-anchor='middle'%3ELit%3C/text%3E%3C/svg%3E">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..600&family=Work+Sans:ital,wght@0,300..700;1,300..600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #7d1d3f;
+    --navy-dark: #591428;
+    --navy-light: #f4e6ea;
+    --accent: #c9a24b;
+    --accent-light: #f6edda;
+    --text: #241a1e;
+    --text-muted: #6a5a60;
+    --bg: #f7f4ef;
+    --white: #ffffff;
+    --border: #dce1ea;
+    --ok: #2e7d47;
+    --err: #b3261e;
+    --shadow-sm: 0 1px 3px rgba(125,29,63,0.06);
+    --shadow-lg: 0 8px 32px rgba(125,29,63,0.12);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  body { font-family: 'Work Sans', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh; min-height: 100dvh; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+  /* ── Shared header (identical to the About / Data Analytics pages) ───────── */
+  .header { background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%); box-shadow: var(--shadow-lg); }
+  .header-inner { max-width: 1160px; margin: 0 auto; padding: 22px 32px; display: flex; align-items: center; justify-content: space-between; gap: 16px 20px; flex-wrap: wrap; }
+  .brand { text-decoration: none; display: inline-block; }
+  .brand h1 { font-family: 'Fraunces', serif; color: #fff; font-size: 26px; font-weight: 400; letter-spacing: -0.5px; }
+  .brand h1 em { font-style: italic; color: var(--accent); }
+  .brand .sub { display: block; font-family: 'Work Sans', sans-serif; font-size: 13px; font-weight: 400; color: rgba(255,255,255,0.7); letter-spacing: 0; margin-top: 3px; }
+  .pnav { display: flex; gap: 10px; flex-wrap: wrap; }
+  .pnav-btn { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: #fff; text-decoration: none; border: 1.5px solid rgba(255,255,255,0.5); background: rgba(255,255,255,0.08); border-radius: 8px; padding: 9px 15px; transition: all .15s; white-space: nowrap; }
+  .pnav-btn:hover { background: rgba(255,255,255,0.18); border-color: #fff; }
+  .pnav-btn.is-active { background: #fff; color: var(--navy); border-color: #fff; }
+  .pnav-btn .ico { font-size: 14px; line-height: 1; }
+
+  /* ── Feedback form ──────────────────────────────────────────────────────── */
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 30px 32px 64px; }
+  .fb-card { max-width: 720px; margin: 0 auto; background: var(--white); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-sm); padding: 30px 34px 34px; }
+  .fb-card .lead { font-size: 16px; color: var(--text-muted); line-height: 1.6; margin-bottom: 8px; }
+  .fb-card .lead strong { color: var(--text); font-weight: 600; }
+  .fb-intro { font-size: 14.5px; margin-bottom: 20px; }
+
+  .fld { margin-bottom: 18px; }
+  .fld > label { display: block; font-size: 13.5px; font-weight: 600; color: var(--navy); margin-bottom: 6px; }
+  .fld .hint { font-weight: 400; color: var(--text-muted); font-size: 12.5px; }
+  .fb-input, .fb-textarea { width: 100%; font-family: inherit; font-size: 14.5px; color: var(--text); background: #fff; border: 1.5px solid var(--border); border-radius: 9px; padding: 11px 13px; transition: border-color .13s; }
+  .fb-input:focus, .fb-textarea:focus { outline: none; border-color: var(--navy); }
+  .fb-textarea { min-height: 150px; resize: vertical; line-height: 1.6; }
+  .fb-row { display: flex; gap: 14px; flex-wrap: wrap; }
+  .fb-row .fld { flex: 1 1 220px; margin-bottom: 0; }
+
+  /* Screenshot dropzone + thumbnails */
+  .drop { border: 1.8px dashed #c9b7bf; border-radius: 11px; background: #fbf7f8; padding: 22px 16px; text-align: center; cursor: pointer; transition: all .14s; color: var(--text-muted); }
+  .drop:hover, .drop.over { border-color: var(--navy); background: var(--navy-light); color: var(--navy); }
+  .drop .di { font-size: 26px; display: block; margin-bottom: 4px; }
+  .drop .dt { font-size: 14px; font-weight: 600; color: var(--navy); }
+  .drop .ds { font-size: 12.5px; margin-top: 2px; }
+  .shots { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+  .shot { position: relative; width: 104px; }
+  .shot img { width: 104px; height: 78px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); display: block; }
+  .shot .rm { position: absolute; top: -7px; right: -7px; width: 22px; height: 22px; border-radius: 50%; border: none; background: var(--navy); color: #fff; font-size: 14px; line-height: 1; cursor: pointer; box-shadow: var(--shadow-sm); }
+  .shot .rm:hover { background: var(--navy-dark); }
+  .shot .sz { font-size: 10.5px; color: var(--text-muted); text-align: center; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .fb-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 8px; }
+  .fb-submit { font-family: inherit; font-size: 14.5px; font-weight: 600; color: #fff; background: var(--navy); border: none; border-radius: 9px; padding: 12px 26px; cursor: pointer; transition: background .14s; }
+  .fb-submit:hover { background: var(--navy-dark); }
+  .fb-submit:disabled { background: #b9a2ab; cursor: not-allowed; }
+  .fb-status { font-size: 13.5px; }
+  .fb-status.ok { color: var(--ok); font-weight: 600; }
+  .fb-status.err { color: var(--err); font-weight: 600; }
+  .signed-note { font-size: 12.5px; color: var(--text-muted); margin-top: 6px; }
+
+  .fb-done { text-align: center; padding: 18px 8px 6px; display: none; }
+  .fb-done.show { display: block; }
+  .fb-done .ico { font-size: 42px; }
+  .fb-done h2 { font-family: 'Fraunces', serif; font-weight: 500; color: var(--navy); font-size: 22px; margin: 8px 0 6px; }
+  .fb-done p { font-size: 14.5px; color: var(--text); margin-bottom: 14px; }
+  .fb-again { font-size: 13.5px; font-weight: 600; color: var(--navy); background: none; border: 1.5px solid var(--border); border-radius: 8px; padding: 9px 18px; cursor: pointer; }
+  .fb-again:hover { border-color: var(--navy); }
+
+  /* Direct-contact fallback */
+  .fb-direct { border-top: 1px solid var(--border); margin-top: 26px; padding-top: 18px; }
+  .fb-direct h3 { font-family: 'Fraunces', serif; font-weight: 500; color: var(--navy); font-size: 16px; margin-bottom: 4px; }
+  .fb-direct p { font-size: 13px; color: var(--text-muted); margin-bottom: 12px; }
+  .contact-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .contact-row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; text-decoration: none; color: var(--text); transition: all .12s; background: #fff; flex: 1 1 200px; }
+  .contact-row:hover { border-color: var(--navy); background: var(--navy-light); }
+  .contact-row .c-ico { width: 30px; height: 30px; flex: none; border-radius: 7px; background: var(--navy-light); color: var(--navy); display: flex; align-items: center; justify-content: center; font-size: 15px; }
+  .contact-row .c-txt { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+  .contact-row .c-txt b { font-size: 13px; font-weight: 600; }
+  .contact-row .c-txt span { font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; }
+
+  @media (max-width: 640px) {
+    .header-inner, .wrap { padding-left: 18px; padding-right: 18px; }
+    .brand h1 { font-size: 22px; }
+    .fb-card { padding: 22px 18px 24px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <a class="brand" href="/lit/" title="Back to The Lit"><h1><em>The Lit</em> — Feedback<span class="sub">Tell me what to improve</span></h1></a>
+    <nav class="pnav">
+      <a class="pnav-btn" href="/lit/about/" title="What The Lit is and how it works"><span class="ico">ⓘ</span>About</a>
+      <a class="pnav-btn" href="/lit/analytics/" title="Summary statistics for the database"><span class="ico">📊</span>Data Analytics</a>
+      <a class="pnav-btn is-active" href="/lit/" title="Close Feedback — back to the database"><span class="ico">💬</span>Feedback</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="fb-card">
+    <!-- Success panel (shown after a submission) -->
+    <div class="fb-done" id="fbDone">
+      <div class="ico">🙏</div>
+      <h2>Thank you!</h2>
+      <p>Your feedback has been received. I read every message and it goes straight to my inbox.</p>
+      <button type="button" class="fb-again" id="fbAgain">Send another</button>
+    </div>
+
+    <!-- Form -->
+    <div id="fbForm">
+      <p class="lead">The Lit is a personal project and still a work in progress — <strong>I would love to hear what to fix or add.</strong></p>
+      <p class="fb-intro">Describe anything that looks wrong, confusing, or missing, and attach screenshots if they help. The more detail the better, but short notes are just as welcome. Your message comes straight to me.</p>
+
+      <div class="fld">
+        <label for="fbText">What should improve? <span class="hint">— be as specific as you like (what you did, what you expected, what happened)</span></label>
+        <textarea class="fb-textarea" id="fbText" placeholder="e.g. On the analytics page, the citations chart… / It would be great if I could…"></textarea>
+      </div>
+
+      <div class="fld">
+        <label>Screenshots <span class="hint">— optional; drag &amp; drop or click to browse (up to 5 images)</span></label>
+        <div class="drop" id="fbDrop" tabindex="0" role="button" aria-label="Add screenshots">
+          <span class="di">🖼️</span>
+          <span class="dt">Add screenshots</span>
+          <span class="ds">PNG or JPG — they're compressed in your browser before sending</span>
+        </div>
+        <input type="file" id="fbFile" accept="image/*" multiple style="display:none">
+        <div class="shots" id="fbShots"></div>
+      </div>
+
+      <div class="fb-row">
+        <div class="fld">
+          <label for="fbName">Your name <span class="hint">— optional</span></label>
+          <input class="fb-input" id="fbName" type="text" autocomplete="name" placeholder="Name">
+        </div>
+        <div class="fld">
+          <label for="fbEmail">Your e-mail <span class="hint">— optional, if you'd like a reply</span></label>
+          <input class="fb-input" id="fbEmail" type="email" autocomplete="email" placeholder="you@example.com">
+        </div>
+      </div>
+
+      <div class="fb-actions">
+        <button type="button" class="fb-submit" id="fbSubmit">Send feedback</button>
+        <span class="fb-status" id="fbStatus"></span>
+      </div>
+      <div class="signed-note" id="fbSignedNote"></div>
+    </div>
+
+    <!-- Direct-contact fallback -->
+    <div class="fb-direct">
+      <h3>Prefer to reach me directly?</h3>
+      <p>You can also use any of these — whatever is easiest.</p>
+      <div class="contact-grid">
+        <a class="contact-row" href="mailto:kostas.stouras@ucd.ie?subject=The%20Lit%20%E2%80%94%20feedback">
+          <span class="c-ico">✉</span>
+          <span class="c-txt"><b>E-mail</b><span>kostas.stouras@ucd.ie</span></span>
+        </a>
+        <a class="contact-row" href="https://x.com/stourask" target="_blank" rel="noopener">
+          <span class="c-ico">𝕏</span>
+          <span class="c-txt"><b>X (Twitter)</b><span>@stourask</span></span>
+        </a>
+        <a class="contact-row" href="https://www.linkedin.com/in/stouras/" target="_blank" rel="noopener">
+          <span class="c-ico" style="font-weight:800;letter-spacing:-.5px;">in</span>
+          <span class="c-txt"><b>LinkedIn</b><span>in/stouras</span></span>
+        </a>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  // Same Firebase project as the main browser (lit/index.html). Feedback is
+  // stored in a public-create-only 'feedback' collection (see lit/_firestore.rules)
+  // and forwarded to the maintainer by lit/_scraper/feedback-mailer.mjs.
+  var FB_CONFIG = {
+    apiKey: "AIzaSyDUh6qKU42CiJf6yCsQ-znmH8Y9zo95u04",
+    authDomain: "lit-paper-browser.firebaseapp.com",
+    projectId: "lit-paper-browser",
+    storageBucket: "lit-paper-browser.firebasestorage.app",
+    messagingSenderId: "336217663944",
+    appId: "1:336217663944:web:219da7d213d1005625f8fd",
+    measurementId: "G-2E1BTF9SSD"
+  };
+
+  // Client-side image budget. Firestore caps a document at ~1 MB, and each
+  // screenshot is embedded as a base64 data URL, so we downscale/compress and
+  // keep the combined image payload comfortably under that.
+  var MAX_IMAGES = 5;
+  var MAX_EDGE = 1400;          // longest edge, px, after downscale
+  var TOTAL_BUDGET = 900 * 1024; // ~0.9 MB of combined (base64) image data
+  var TEXT_MAX = 20000;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var shots = [];               // [{ name, dataUrl, bytes }]
+  var busy = false;
+
+  var CONFIGURED = FB_CONFIG.apiKey && FB_CONFIG.apiKey.indexOf('PASTE_') === -1 &&
+                   window.firebase && firebase.firestore;
+  var db = null, auth = null, FV = null, currentUser = null;
+  if (CONFIGURED) {
+    try {
+      firebase.initializeApp(FB_CONFIG);
+      db = firebase.firestore();
+      auth = firebase.auth();
+      FV = firebase.firestore.FieldValue;
+      // Prefill from a signed-in session (Auth persists per-project in this
+      // browser, so a user signed in on the main page is recognised here).
+      auth.onAuthStateChanged(function (u) {
+        currentUser = u || null;
+        if (u) {
+          if (!$('fbEmail').value && u.email) $('fbEmail').value = u.email;
+          if (!$('fbName').value && u.displayName) $('fbName').value = u.displayName;
+          $('fbSignedNote').textContent = 'Signed in as ' + (u.email || u.displayName || 'your account') + ' — included so I can follow up.';
+        } else {
+          $('fbSignedNote').textContent = '';
+        }
+      });
+    } catch (e) { CONFIGURED = false; }
+  }
+  if (!CONFIGURED) {
+    setStatus('Live submission is offline right now — please use one of the direct options below.', 'err');
+    $('fbSubmit').disabled = true;
+  }
+
+  function setStatus(msg, kind) {
+    var el = $('fbStatus');
+    el.textContent = msg || '';
+    el.className = 'fb-status' + (kind ? ' ' + kind : '');
+  }
+  function esc(s) { return String(s == null ? '' : s); }
+  function fmtBytes(n) { return n >= 1024 * 1024 ? (n / 1024 / 1024).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB'; }
+  function totalBytes() { return shots.reduce(function (a, s) { return a + s.bytes; }, 0); }
+
+  // Downscale + JPEG-compress a File to a data URL, retrying at lower quality
+  // if the first pass is still large. Resolves { dataUrl, bytes }.
+  function compressImage(file) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onload = function () {
+        URL.revokeObjectURL(url);
+        var w = img.naturalWidth, h = img.naturalHeight;
+        var scale = Math.min(1, MAX_EDGE / Math.max(w, h));
+        var cw = Math.max(1, Math.round(w * scale)), ch = Math.max(1, Math.round(h * scale));
+        var canvas = document.createElement('canvas');
+        canvas.width = cw; canvas.height = ch;
+        var ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cw, ch);   // flatten alpha for JPEG
+        ctx.drawImage(img, 0, 0, cw, ch);
+        var qualities = [0.72, 0.6, 0.48], out = null;
+        for (var i = 0; i < qualities.length; i++) {
+          var d = canvas.toDataURL('image/jpeg', qualities[i]);
+          out = d;
+          if (d.length <= 500 * 1024) break;   // good enough for a single shot
+        }
+        resolve({ dataUrl: out, bytes: out.length });
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('Could not read image')); };
+      img.src = url;
+    });
+  }
+
+  function renderShots() {
+    var box = $('fbShots');
+    box.innerHTML = shots.map(function (s, i) {
+      return '<div class="shot"><img src="' + s.dataUrl + '" alt="screenshot ' + (i + 1) + '">' +
+        '<button type="button" class="rm" data-i="' + i + '" title="Remove" aria-label="Remove screenshot">×</button>' +
+        '<div class="sz">' + fmtBytes(s.bytes) + '</div></div>';
+    }).join('');
+    Array.prototype.forEach.call(box.querySelectorAll('.rm'), function (b) {
+      b.onclick = function () { shots.splice(+b.getAttribute('data-i'), 1); renderShots(); setStatus(''); };
+    });
+  }
+
+  function addFiles(fileList) {
+    var files = Array.prototype.slice.call(fileList).filter(function (f) { return /^image\//.test(f.type); });
+    if (!files.length) return;
+    setStatus('Processing images…');
+    var chain = Promise.resolve();
+    files.forEach(function (f) {
+      chain = chain.then(function () {
+        if (shots.length >= MAX_IMAGES) { setStatus('You can attach up to ' + MAX_IMAGES + ' screenshots.', 'err'); return; }
+        return compressImage(f).then(function (r) {
+          if (totalBytes() + r.bytes > TOTAL_BUDGET) {
+            setStatus('That screenshot would exceed the size limit — try fewer or smaller images.', 'err');
+            return;
+          }
+          shots.push({ name: f.name || 'screenshot', dataUrl: r.dataUrl, bytes: r.bytes });
+          renderShots();
+        }).catch(function () { setStatus('One image could not be read and was skipped.', 'err'); });
+      });
+    });
+    chain.then(function () { if ($('fbStatus').textContent === 'Processing images…') setStatus(''); });
+  }
+
+  // Dropzone wiring
+  var drop = $('fbDrop'), fileInput = $('fbFile');
+  drop.onclick = function () { fileInput.click(); };
+  drop.onkeydown = function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } };
+  fileInput.onchange = function () { addFiles(fileInput.files); fileInput.value = ''; };
+  ['dragenter', 'dragover'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
+  ['dragleave', 'drop'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('over'); }); });
+  drop.addEventListener('drop', function (e) { if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files); });
+
+  // Submit
+  $('fbSubmit').onclick = function () {
+    if (busy || !CONFIGURED) return;
+    var text = ($('fbText').value || '').trim();
+    if (!text && !shots.length) { setStatus('Please add a short description or a screenshot.', 'err'); return; }
+    if (text.length > TEXT_MAX) { setStatus('Please shorten the description a little.', 'err'); return; }
+    busy = true; $('fbSubmit').disabled = true; setStatus('Sending…');
+
+    var doc = {
+      text: text,
+      images: shots.map(function (s) { return s.dataUrl; }),
+      name: ($('fbName').value || '').trim().slice(0, 200),
+      email: ($('fbEmail').value || '').trim().slice(0, 200),
+      uid: (currentUser && currentUser.uid) || null,
+      page: 'feedback',
+      url: (document.referrer || '').slice(0, 500),
+      ua: (navigator.userAgent || '').slice(0, 400),
+      forwarded: false,
+      status: 'new',
+      createdAt: FV.serverTimestamp()
+    };
+
+    db.collection('feedback').add(doc).then(function () {
+      $('fbForm').style.display = 'none';
+      $('fbDone').classList.add('show');
+      // reset for a potential "send another"
+      $('fbText').value = ''; shots = []; renderShots();
+    }).catch(function (err) {
+      busy = false; $('fbSubmit').disabled = false;
+      setStatus('Could not send — please try the direct e-mail below. (' + (err && err.code ? err.code : 'error') + ')', 'err');
+    }).then(function () { busy = false; $('fbSubmit').disabled = false; });
+  };
+
+  $('fbAgain').onclick = function () {
+    $('fbDone').classList.remove('show');
+    $('fbForm').style.display = '';
+    setStatus('');
+  };
+})();
+</script>
+</body>
+</html>

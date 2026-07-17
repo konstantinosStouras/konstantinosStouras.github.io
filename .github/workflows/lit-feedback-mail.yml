@@ -1,0 +1,65 @@
+name: lit — feedback forwarder
+
+# Forwards the messages left on stouras.com/lit/feedback/ to the maintainer.
+# The static page stores each submission (message + compressed screenshots) in
+# the Firestore `feedback` collection; this job reads the pending ones with the
+# Admin SDK, e-mails each with its screenshots attached, and marks it forwarded.
+# See lit/_scraper/feedback-mailer.mjs and lit/_FEEDBACK-SETUP.md.
+#
+# It stays a clean no-op until the secrets below are configured, so it does not
+# fail before you set things up. Required repo secrets:
+#   FIREBASE_SERVICE_ACCOUNT  – JSON of a Firebase service-account key
+#   SMTP_USER, SMTP_PASS      – SMTP login (e.g. a Gmail address + App Password)
+# Optional: SMTP_HOST (default smtp.gmail.com), SMTP_PORT (default 465),
+#   ALERTS_FROM (default SMTP_USER), ALERTS_FROM_NAME (default "The Lit"),
+#   FEEDBACK_TO (default kstouras@gmail.com — where feedback is delivered).
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'      # every 15 minutes, so feedback lands promptly
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run — read pending feedback and print, but send nothing'
+        type: boolean
+        default: false
+      scan:
+        description: 'List pending feedback and exit (sends nothing)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read              # reads nothing it commits; forwards over SMTP only
+
+concurrency:
+  group: lit-feedback-mail
+  cancel-in-progress: false
+
+jobs:
+  forward:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install mailer dependencies
+        run: npm install --no-save firebase-admin@^12 nodemailer@^6
+
+      - name: Forward feedback
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_SECURE: ${{ secrets.SMTP_SECURE }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          ALERTS_FROM: ${{ secrets.ALERTS_FROM }}
+          ALERTS_FROM_NAME: ${{ secrets.ALERTS_FROM_NAME }}
+          FEEDBACK_TO: ${{ secrets.FEEDBACK_TO }}
+        run: node lit/_scraper/feedback-mailer.mjs ${{ (github.event_name == 'workflow_dispatch' && inputs.scan) && '--scan' || '' }} ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '--dry-run' || '' }}
