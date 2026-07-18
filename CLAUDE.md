@@ -449,12 +449,18 @@ whichever account signs in next — papers union starred/tags/lists/notes,
 profile fill-empty, ORCID fields only on no-iD-or-same-iD); prevention is
 provider LINKING — a verified-ORCID account attaches `oidc.orcid` via
 `acctLinkOrcidProvider` (Edit profile) so "Continue with ORCID" reaches it
-directly; and DETECTION — each session claims `orcid:<iD>` /
-`email:<sha256>` keys in the `accountKeys` collection
-(`maybeClaimAccountKeys`; rule in `_firestore.rules`, signed-in read,
-own-uid writes, conflicts never overwritten) and a sign-in whose key
-belongs to a different uid triggers the merge offer (duplicate side) or a
-pointer (main side). Inert until the rules are redeployed. Independently of the
+directly; and DETECTION — each session (once the papers/lists snapshots land, since
+the auto-merge export reads them) claims `orcid:<iD>` / `email:<sha256>`
+keys in the `accountKeys` collection (`maybeClaimAccountKeys`; rule in
+`_firestore.rules`, signed-in read, own-uid writes). A conflicting key
+**auto-runs the merge** on the ORCID-only duplicate (`acctStartMerge(true)`
+— no confirmation, per the owner; the kept account finishes the import on
+its next sign-in), is silently **reclaimed** by an account that verifiably
+holds the identity (verified ORCID / own auth e-mail —
+`handleAccountKeyConflict`; this heals the stale ghost-claim nag after a
+merge, and `maybeApplyMergeStash` also reclaims the merged-away account's
+keys on import), and shows a pointer only on an account holding the
+identity unverified. Inert until the rules are redeployed. Independently of the
 stored name, **the `?author=` deep-link chip is widened to the catalog's full
 `Name_Variants`** once authors.json is available (`litUpgradeAuthorDeepLink`;
 the deep-link auto-fetches authors.json; when no exact variant matches it
