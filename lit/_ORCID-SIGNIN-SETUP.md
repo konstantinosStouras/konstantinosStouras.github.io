@@ -138,11 +138,17 @@ SDK, same users). Do these once:
 - **Automatic duplicate DETECTION (same ORCID or same e-mail):** every
   signed-in session claims its identity keys in the `accountKeys`
   collection — `orcid:<iD>` and `email:<sha256 of the lowercased address>`
-  → `{ uid }` (`maybeClaimAccountKeys`). A sign-in whose key is already
-  claimed by a different uid is a duplicate: the ORCID-only account gets an
-  immediate "merge now?" prompt wired to `acctStartMerge`; the main account
-  gets a one-time pointer to run the merge from the duplicate. Conflicting
-  claims are never overwritten. **Requires the `accountKeys` rule in
+  → `{ uid }` (`maybeClaimAccountKeys`; deferred until the account's data
+  snapshots land, since the auto-merge export reads them). A sign-in whose
+  key is already claimed by a different uid is a duplicate: the ORCID-only
+  account **auto-runs the merge** — export, remove the duplicate sign-in,
+  finish on the next sign-in to the kept account, nothing asked
+  (`acctStartMerge(true)`); an account that verifiably holds the identity
+  itself (verified ORCID or its own auth e-mail) silently **reclaims** the
+  stale claim (`handleAccountKeyConflict` — this stops the post-merge
+  "another account uses this ORCID" nag, and `maybeApplyMergeStash` also
+  reclaims the merged-away account's keys on import); an account holding
+  the identity unverified gets a one-time pointer. **Requires the `accountKeys` rule in
   `lit/_firestore.rules` — redeploy the rules
   (`firebase deploy --only firestore:rules` from `lit/`) to activate;**
   until then every read/write is a silent no-op and nothing changes.

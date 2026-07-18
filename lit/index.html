@@ -5590,19 +5590,26 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     });
   }
 
-  window.acctStartMerge = function () {
+  window.acctStartMerge = function (auto) {
     if (!state.user || !acctIsOrcidOnlyAccount()) return;
-    if (!confirm('Merge this ORCID sign-in into your main Lit account?\n\nThis will:\n  1. take everything saved on THIS account (library, notes, lists, alerts),\n  2. remove this duplicate sign-in,\n  3. ask you to sign in to the account you KEEP (e-mail or Google) — everything moves over there automatically.\n\nContinue?')) return;
+    // auto === true: duplicate detection proved this ORCID-registered sign-in
+    // duplicates the user's main account — run without asking anything.
+    if (!auto && !confirm('Merge this ORCID sign-in into your main Lit account?\n\nThis will:\n  1. take everything saved on THIS account (library, notes, lists, alerts),\n  2. remove this duplicate sign-in,\n  3. ask you to sign in to the account you KEEP (e-mail or Google) — everything moves over there automatically.\n\nContinue?')) return;
     acctCloseProfile();
     exportAccountData().then(function (data) {
       var stash = { fromUid: state.user.uid, orcid: (state.profile && state.profile.orcid) || '', data: data };
       try {
         localStorage.setItem(MERGE_STASH_KEY, JSON.stringify(stash));
         if (!localStorage.getItem(MERGE_STASH_KEY)) throw new Error('stash');
-      } catch (e) { alert('Could not prepare the merge (browser storage unavailable). Nothing was changed.'); return; }
+      } catch (e) { if (!auto) alert('Could not prepare the merge (browser storage unavailable). Nothing was changed.'); return; }
       return deleteCurrentAccount().then(function () {
-        alert('This duplicate sign-in was removed.\n\nNow sign in to the account you want to KEEP — your saved papers, lists and alerts will move over automatically.');
+        if (!auto) alert('This duplicate sign-in was removed.\n\nNow sign in to the account you want to KEEP — your saved papers, lists and alerts will move over automatically.');
         acctOpenAuth();
+        // In the modal, explain (non-blocking) why they're seeing sign-in.
+        var er = document.getElementById('acctErr');
+        if (er) { er.style.color = 'var(--green)'; er.textContent = auto
+          ? 'Your duplicate ORCID account was merged away. Sign in to your main account (e-mail or Google) — everything saved there moves over automatically.'
+          : 'Sign in to the account you keep — your saved data moves over automatically.'; }
       }).catch(function (e) {
         try { localStorage.removeItem(MERGE_STASH_KEY); } catch (e2) {}
         // exportAccountData already unpublished this account's public lists
@@ -5687,6 +5694,18 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     Promise.all(writes).then(function () {
       // Everything landed — only now is the stash safe to discard.
       try { localStorage.removeItem(MERGE_STASH_KEY); } catch (e) {}
+      // The merged-away account's identity keys belong to THIS account now —
+      // reclaim them immediately so the duplicate detection stops firing on
+      // the ghost claims (the stale "another account uses this ORCID" nag).
+      try {
+        if (stash.orcid) db.collection('accountKeys').doc('orcid:' + stash.orcid).set({ uid: state.user.uid, t: serverTime() }).catch(function () {});
+        var mergedEmail = ((d.profile && d.profile.email) || '').trim().toLowerCase();
+        if (mergedEmail && window.crypto && crypto.subtle && window.TextEncoder) {
+          sha256Hex(mergedEmail).then(function (h) {
+            db.collection('accountKeys').doc('email:' + h).set({ uid: state.user.uid, t: serverTime() }).catch(function () {});
+          }).catch(function () {});
+        }
+      } catch (e) {}
       var n = Object.keys(d.papers || {}).length;
       var msg = 'Accounts merged: ' + n + ' saved paper' + (n === 1 ? '' : 's') + ', ' +
         Object.keys(d.lists || {}).length + ' list(s) and ' + Object.keys(d.alerts || {}).length +
@@ -5726,11 +5745,16 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   }
   function maybeClaimAccountKeys() {
     if (accountKeysChecked || !state.user || !state.profile) return;
+    // Wait for ALL data snapshots: a conflict on an ORCID-only duplicate now
+    // AUTO-runs the merge, whose export reads the live papers/lists/alerts —
+    // exporting before they land would move an empty library.
+    if (!papersSnapshotSeen || !listsSnapshotSeen) return;
     accountKeysChecked = true;
     var uid = state.user.uid;
+    var authEmail = (state.user.email || '').trim().toLowerCase();
     var keys = [];
     if (state.profile.orcid) keys.push(Promise.resolve('orcid:' + state.profile.orcid));
-    var email = (state.user.email || state.profile.email || '').trim().toLowerCase();
+    var email = (authEmail || state.profile.email || '').trim().toLowerCase();
     if (email && window.crypto && crypto.subtle && window.TextEncoder) {
       keys.push(sha256Hex(email).then(function (h) { return 'email:' + h; }).catch(function () { return null; }));
     }
@@ -5739,22 +5763,41 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         var ref = db.collection('accountKeys').doc(k);
         ref.get().then(function (d) {
           if (state.user && state.user.uid !== uid) return;   // account changed meanwhile
-          if (d.exists && (d.data() || {}).uid && d.data().uid !== uid) { maybeOfferDuplicateMerge(k); return; }
+          if (d.exists && (d.data() || {}).uid && d.data().uid !== uid) { handleAccountKeyConflict(k, ref, uid, !!authEmail); return; }
           ref.set({ uid: uid, t: serverTime() }).catch(function () {});
         }).catch(function () {});
       });
     });
+  }
+  // A key we're trying to claim belongs to another uid. If THIS account
+  // verifiably holds the identity itself — an ORCID confirmed at orcid.org,
+  // or the account's own Firebase e-mail — the other claim is stale (typically
+  // left behind by a duplicate that was already merged away): RECLAIM silently,
+  // so post-merge sessions stop being nagged about a ghost. Otherwise fall
+  // through to the duplicate handling.
+  function handleAccountKeyConflict(key, ref, uid, emailIsAuth) {
+    var p = state.profile || {};
+    var holdsVerified = key.indexOf('orcid:') === 0
+      ? !!(p.orcid && key === 'orcid:' + p.orcid && (p.orcidVerified || acctHasProvider('oidc.orcid')))
+      : emailIsAuth;   // the e-mail key was built from our own auth e-mail
+    if (holdsVerified && !acctIsOrcidOnlyAccount()) {
+      ref.set({ uid: uid, t: serverTime() }).catch(function () {});
+      return;
+    }
+    maybeOfferDuplicateMerge(key);
   }
   function maybeOfferDuplicateMerge(key) {
     if (dupMergeOffered) return;
     dupMergeOffered = true;
     var what = key.indexOf('orcid:') === 0 ? 'ORCID iD' : 'e-mail address';
     if (acctIsOrcidOnlyAccount()) {
-      if (confirm('This ' + what + ' is also on another Lit account — this looks like a duplicate registration.\n\nMerge THIS account into your main one now? Your saved papers, notes, lists and alerts will move over.')) {
-        window.acctStartMerge();
-      }
+      // This ORCID-registered sign-in IS the duplicate — its iD already
+      // belongs to the user's main account. Merge AUTOMATICALLY (per the
+      // owner: nothing to ask): export, remove this sign-in, and finish on
+      // the next sign-in to the kept account.
+      window.acctStartMerge(true);
     } else {
-      alert('Heads up: another Lit account uses the same ' + what + ' as this one. If that duplicate is yours, sign in to it (e.g. with ORCID) and use Edit profile → “Merge this account into my main account” — everything will move here.');
+      alert('Heads up: another Lit account uses the same ' + what + ' as this one. If that duplicate is yours, sign in to it (e.g. with ORCID) and it will be merged into this account automatically.');
     }
   }
 
