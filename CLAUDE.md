@@ -965,7 +965,9 @@ journal type with no page change. It **writes the dataset BEFORE stamping
 Firestore** (a crash just re-processes idempotently — the paper is then a
 `duplicate`, never lost), stamps each doc `added`/`duplicate`/`rejected`+reason
 (a transient OpenAlex/Crossref outage leaves it `pending`; a not-yet-indexed
-posting retries up to `SUB_MAX_TRIES` then rejects `not-indexed`), and — when SMTP
+posting stays `pending` and is retried until it is older than `SUB_MAX_AGE_DAYS`
+(default 7, time-based so a fresh SSRN posting's day-plus indexing lag doesn't
+trip it) then rejects `not-indexed`), and — when SMTP
 is set (reuses the feedback mailer's secrets; **`FIREBASE_SERVICE_ACCOUNT` is the
 only one required**) — e-mails the submitter their outcome + the maintainer a
 summary. To this `build-data.mjs` exports `WP_SOURCES`/`recKey`/`normName`/
