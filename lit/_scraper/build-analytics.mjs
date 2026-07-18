@@ -70,7 +70,10 @@ function shardDir(repo) {
 
 // Authors with at least this many papers get a full per-year / per-journal
 // breakdown in authors.json; the long tail is omitted to keep the file small.
-const AUTHOR_MIN_PAPERS = 5;
+// 3 (was 5) so the Author spotlight — and the account menu's "My author
+// analytics" deep link — reaches early-career authors too; at 3 the file is
+// ~22 MB, lazy-loaded only when the Author tab opens.
+const AUTHOR_MIN_PAPERS = 3;
 // A journal's most-cited papers to carry, for the "top cited" table.
 const TOP_CITED_PER_JOURNAL = 12;
 // A dimension value's most-cited papers to carry (editor/area/SE/AE), so the

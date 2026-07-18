@@ -452,8 +452,16 @@ provider LINKING — a verified-ORCID account attaches `oidc.orcid` via
 directly. Independently of the
 stored name, **the `?author=` deep-link chip is widened to the catalog's full
 `Name_Variants`** once authors.json is available (`litUpgradeAuthorDeepLink`;
-the deep-link auto-fetches authors.json) — so ANY author's page finds papers
-credited under any spelling, and clicking the account chip on an `?author=`
+the deep-link auto-fetches authors.json; when no exact variant matches it
+falls back to a UNIQUE whole-name-part match, mirroring the analytics page's
+`resolveAuthor` — so `?author=Konstantinos Stouras`, the ORCID given+family
+form, still finds the credited "Konstantinos I. Stouras") — so ANY author's
+page finds papers credited under any spelling. **Identity chips match
+exactly:** the `sel.authorIdentity` filter compares each comma-separated
+credited author name for (folded) EQUALITY with a variant (`identityMatch` in
+`index.html`, diacritic/apostrophe-folded via `nameFold` like `authorMatch`)
+— never substring/prefix, so "Xin Chen"'s page can't list "Yuxin Chen"'s
+papers. Clicking the account chip on an `?author=`
 page pops out the account menu like everywhere else, with a "Back to The Lit"
 link to `stouras.com/lit/` as its first item (`acctUserChipClick`/
 `acctOnAuthorPage`; the chip used to navigate home directly, which read as a
@@ -488,7 +496,13 @@ page lands the visitor on a **built-in default filter set** — Journal =
 (`LIT_SITE_DEFAULT_JOURNALS`/`LIT_SITE_DEFAULT_AREAS` + `applyLitSiteDefault()`
 in the main script, `window.litSiteDefaultApplied`/`litSiteDefaultActive` guards).
 It applies once per session and ONLY while the live selection is empty, so it
-never overrides a user's own filters. Wiring: for an **anonymous** visitor the
+never overrides a user's own filters; typing any text search over the
+untouched site default **drops its chips first**
+(`litDropSiteDefaultForSearch`) so a first-touch author/title search isn't
+AND-chained into a baffling 0, and the sign-in/out `clearFilters` runs only
+while the live selection still equals the auto-applied snapshot
+(`litFilterSig`/`litAutoSig`), so filters the user edited on top of a default
+survive an auth change. Wiring: for an **anonymous** visitor the
 accounts `onAuthStateChanged` else-branch applies it; for a **signed-in** user
 with NO saved personal defaults, `maybeAutoApplyPrefs()` falls back to it (a user
 WITH personal defaults gets theirs; a user who turned `autoApplyFilters` off gets
@@ -598,8 +612,10 @@ optional `x` sub-row of the same shape holding that year's NON-research subset**
 — see the toggle below; plus each journal's UTD24/FT50/ABS membership — a
 byte-for-byte mirror of index.html's `ABS_RATING`/`UTD24_KEYS`/`FT50_KEYS` — its
 `native` flag & research-only paper count `rp`, and its top-cited papers) and
-`analytics/authors.json` (for authors with ≥ 5 papers, canonicalised via the
-datasets' `Name_Variants`, loaded lazily only when the Author tab opens: each
+`analytics/authors.json` (for authors with ≥ 3 papers — was 5; lowered so the
+account menu's "My author analytics" deep link reaches early-career authors —
+canonicalised via the datasets' `Name_Variants`, loaded lazily only when the
+Author tab opens: each
 author carries `jy` — per-(journal, year) cells `[papers, co-author slots,
 paper citations, co-author citation sum]`, from which the page derives the old
 papers/year + papers/journal marginals on load AND computes the compare table's
