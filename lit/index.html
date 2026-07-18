@@ -366,8 +366,8 @@
      filled more than one screen before any results); the Clear button spans
      the row. Dropdown panels grow to most of the viewport for easy scrolling. */
   @media (max-width: 768px) {
-    .filters-row-secondary { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .filters-row-secondary .filter-group { min-width: 0; }
+    .filters-row-secondary, .filters-row-editorial { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .filters-row-secondary .filter-group, .filters-row-editorial .filter-group { min-width: 0; }
     .filter-group label { white-space: normal; overflow: visible; }
     .filter-actions { grid-column: 1 / -1; padding-top: 0; }
     .filter-actions .btn { width: 100%; }
@@ -761,6 +761,16 @@
         </div>
         <div id="chipsYear" class="chips"></div>
       </div>
+      <div class="filter-actions">
+        <button class="btn btn-secondary" onclick="clearFilters()">Clear</button>
+      </div>
+    </div>
+    <!-- Editorial filters live on their OWN row (per the owner): shown only
+         when a journal carrying editorial metadata is explicitly in scope —
+         Management Science (accepting editor + area), ISR (senior + associate
+         editor), Marketing Science (senior editor). The whole row hides when
+         none of its groups apply (updateMsScopeUI). -->
+    <div class="filters-row filters-row-editorial" id="editorialRow" style="display:none">
       <div class="filter-group" id="groupEditor" style="display:none" title="Editorial data is available for Management Science papers only.">
         <label>Accepting Editor (MS)</label>
         <div class="custom-select" id="csEditor" data-type="editor">
@@ -792,9 +802,6 @@
           <div class="custom-select-dropdown"><input class="custom-select-search" placeholder="Type to filter..." oninput="filterDrop('csAE',this.value)"><div class="custom-select-items"></div></div>
         </div>
         <div id="chipsAE" class="chips"></div>
-      </div>
-      <div class="filter-actions">
-        <button class="btn btn-secondary" onclick="clearFilters()">Clear</button>
       </div>
     </div>
     <div class="summary-tab-btns" style="margin-top:12px;">
@@ -1206,6 +1213,9 @@ function updateMsScopeUI() {
   if (g) g.style.display = showAE ? '' : 'none';
   if (!showSE && sel.se.size) { sel.se.clear(); renderChips('se'); }
   if (!showAE && sel.ae.size) { sel.ae.clear(); renderChips('ae'); }
+  // The dedicated editorial row shows only while at least one of its groups does.
+  var edRow = document.getElementById('editorialRow');
+  if (edRow) edRow.style.display = (show || showSE || showAE) ? '' : 'none';
 }
 
 // Text chip management (for title/author search)
