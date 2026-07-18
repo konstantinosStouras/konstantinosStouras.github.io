@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "suggest-working-paper",
+      "date": "2026-07-18",
+      "title": "Suggest a working paper",
+      "summary": "Found an unpublished working paper on SSRN, arXiv, NBER or OSF that isn't in The Lit yet? Sign in and paste its link on the Feedback page: if one of its authors is already in the database and the paper isn't already here, it's checked and added automatically — usually within a few minutes — and you get an e-mail with the outcome.",
+      "url": "https://stouras.com/lit/feedback/"
+    },
+    {
       "id": "author-search-accounts-fixes",
       "date": "2026-07-18",
       "title": "Sharper author pages, safer accounts",

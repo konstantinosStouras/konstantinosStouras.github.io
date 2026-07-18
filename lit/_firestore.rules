@@ -107,5 +107,36 @@ service cloud.firestore {
       allow update, delete: if isFeedbackAdmin();
     }
 
+    // Paper submissions (written by the "Suggest a working paper" section of the
+    // /lit/feedback/ page). A SIGNED-IN user may CREATE one bounded submission
+    // claiming their own uid, with `status` pinned to 'pending' on create (so the
+    // client can't pre-mark it added/rejected — only the server ingest does that).
+    // The submitter may READ their own submissions (to see the outcome); only the
+    // maintainer admin may read the whole queue and update/delete it. The server
+    // ingest (lit/_scraper-workingpapers/ingest-submissions.mjs) uses the Admin
+    // SDK, which bypasses these rules. Bounds keep it from being abused as storage.
+    match /paperSubmissions/{docId} {
+      allow create: if request.auth != null
+                    && request.auth.uid == request.resource.data.uid
+                    && request.resource.data.keys().hasOnly(
+                         ['uid','email','name','url','title','authors','note','ticket','status','createdAt'])
+                    && request.resource.data.url is string
+                    && request.resource.data.url.size() <= 2000
+                    && (!('email' in request.resource.data)
+                        || (request.resource.data.email is string && request.resource.data.email.size() <= 320))
+                    && (!('name' in request.resource.data)
+                        || (request.resource.data.name is string && request.resource.data.name.size() <= 200))
+                    && (!('title' in request.resource.data)
+                        || (request.resource.data.title is string && request.resource.data.title.size() <= 500))
+                    && (!('authors' in request.resource.data)
+                        || (request.resource.data.authors is string && request.resource.data.authors.size() <= 2000))
+                    && (!('note' in request.resource.data)
+                        || (request.resource.data.note is string && request.resource.data.note.size() <= 5000))
+                    && request.resource.data.status == 'pending';
+      allow read:           if isFeedbackAdmin()
+                            || (request.auth != null && request.auth.uid == resource.data.uid);
+      allow update, delete: if isFeedbackAdmin();
+    }
+
   }
 }
