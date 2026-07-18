@@ -1826,7 +1826,7 @@ function viewPendingCount() {
 let authorsRequested = false;
 function loadAuthorsFromCache() {
   var cached = lsGet('lit_authors');
-  if (cached) { try { authorData = JSON.parse(cached); if (authorData.length) { renderAuthorsSummary(); litUpgradeAuthorDeepLink(); } } catch (e) {} }
+  if (cached) { try { authorData = JSON.parse(cached); if (authorData.length) { renderAuthorsSummary(); litUpgradeAuthorDeepLink(); if (typeof window.litAuthorsIndexReady === 'function') window.litAuthorsIndexReady(); } } catch (e) {} }
 }
 async function loadAuthors() {
   authorsRequested = true;
@@ -1838,6 +1838,7 @@ async function loadAuthors() {
     lsSet('lit_authors', JSON.stringify(authorData));
     renderAuthorsSummary();
     litUpgradeAuthorDeepLink();
+    if (typeof window.litAuthorsIndexReady === 'function') window.litAuthorsIndexReady();  // accounts: refresh the My-publications badge
   } catch (e) {
     if (!authorData.length) setTimeout(loadAuthors, 3000);
   }
@@ -4661,7 +4662,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
             : '') +
           '<div class="acct-menu-item" title="Your starred papers, lists, tags and private notes — everything you have saved." onclick="acctOpenLibrary()">★ My library <span class="acct-badge">' + saved + '</span></div>' +
           (orcidLinked
-            ? '<div class="acct-menu-item" title="Every paper of yours in the database, with its citation count (matched from your linked ORCID)." onclick="acctGoMyPublications()">📊 My publications</div>' +
+            ? '<div class="acct-menu-item" title="Every paper of yours in the database, with its citation count (matched from your linked ORCID)." onclick="acctGoMyPublications()">📊 My publications' + (function () { var n = litMyPubCount(); if (n == null && typeof prof.myPubCount === 'number') n = prof.myPubCount; return n != null ? ' <span class="acct-badge">' + n + '</span>' : ''; })() + '</div>' +
               '<div class="acct-menu-item" title="Your metrics in the Data Analytics author spotlight (matched from your linked ORCID)." onclick="acctGoMyAnalytics()">📈 My author analytics</div>'
             : '') +
           '<div class="acct-menu-sep"></div>' +
@@ -5354,6 +5355,48 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     return '';
   }
 
+  // ── "My publications" badge: the user's paper count in the database ───────
+  // Resolved from the Authors index (any credited name variant of their match
+  // name; folded like the author search when nameFold is available). Cached on
+  // the profile doc (myPubCount) so the sub-pages' shared account card shows
+  // the identical number without loading the index.
+  function litFoldName(s) { return (typeof nameFold === 'function') ? nameFold(s) : String(s || '').trim().toLowerCase(); }
+  function litMyPubCount() {
+    var p = state.profile || {};
+    if (!(p.orcid && p.orcidLinked)) return null;
+    var nm = orcidMatchName(p); if (!nm) return null;
+    var list = (typeof authorData !== 'undefined' && authorData && authorData.length) ? authorData : [];
+    var seed = litFoldName(nm);
+    if (!seed) return null;
+    for (var i = 0; i < list.length; i++) {
+      var a = list[i];
+      var an = (a['Author'] || '').trim();
+      if (!an) continue;
+      if (litFoldName(an) === seed) return parseInt(a['Papers'], 10) || 0;
+      var variants = String(a['Name_Variants'] || '').split(';');
+      for (var j = 0; j < variants.length; j++) {
+        if (variants[j].trim() && litFoldName(variants[j]) === seed) return parseInt(a['Papers'], 10) || 0;
+      }
+    }
+    return null;
+  }
+  function maybeCacheMyPubCount() {
+    if (!state.user || !state.profile) return;
+    // First visit on this browser: the Authors index isn't cached yet — fetch
+    // it (once; localStorage-cached after) so the badge can resolve at all.
+    if (state.profile.orcid && state.profile.orcidLinked
+        && !(typeof authorData !== 'undefined' && authorData && authorData.length)
+        && typeof loadAuthors === 'function' && typeof authorsRequested !== 'undefined' && !authorsRequested) loadAuthors();
+    var n = litMyPubCount();
+    if (n == null || state.profile.myPubCount === n) return;
+    profileDoc().set({ myPubCount: n, updatedAt: serverTime() }, { merge: true })
+      .then(function () { if (state.profile) state.profile.myPubCount = n; acctRenderControl(); })
+      .catch(function () {});
+  }
+  // The main script pings this when the Authors index (authors.json / cache)
+  // becomes available, so the badge appears without waiting for a snapshot.
+  window.litAuthorsIndexReady = function () { maybeCacheMyPubCount(); acctRenderControl(); };
+
   // ── Duplicate-account merge (same person, two accounts) ───────────────────
   // Registering with ORCID creates a SEPARATE Firebase account from an
   // existing e-mail/Google one (ORCID shares no e-mail to auto-match on), so
@@ -5955,7 +5998,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (!confirm('Remove your ORCID association? Your saved papers, notes and lists are unaffected.')) return;
     if (state.profile) { delete state.profile.orcid; delete state.profile.orcidAuthorName; delete state.profile.orcidNameAuto; delete state.profile.orcidVerified; state.profile.orcidLinked = false; }
     saveOrcidProfile(
-      { orcid: FV.delete(), orcidLinked: false, orcidAuthorName: FV.delete(), orcidNameAuto: FV.delete(), orcidVerified: FV.delete(), updatedAt: serverTime() },
+      { orcid: FV.delete(), orcidLinked: false, orcidAuthorName: FV.delete(), orcidNameAuto: FV.delete(), orcidVerified: FV.delete(), myPubCount: FV.delete(), updatedAt: serverTime() },
       null,
       function () {
         litOrcidClose();
@@ -6699,6 +6742,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     // the name the papers are actually credited under.
     if (state.profile && state.profile.orcid && state.profile.orcidLinked
         && state.profile.orcidNameAuto !== false) backfillOrcidAuthorName(state.profile.orcid, '');
+    maybeCacheMyPubCount();  // keep the My-publications badge (profile myPubCount) current
     maybeApplyMergeStash();  // finish a pending duplicate-account merge, if one is stashed
     maybeOrcidPrompt();  // first-run: invite the user to connect their ORCID
     syncPublicLists();   // keep any public lists' shared copies current as the owner edits
