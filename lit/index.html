@@ -4757,7 +4757,15 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     try { return !!new URLSearchParams(location.search).get('author'); } catch (er) { return false; }
   }
   window.acctUserChipClick = function (e) {
-    if (!document.getElementById('acctMenu') && acctOnAuthorPage()) { location.assign('https://www.stouras.com/lit/'); return; }
+    if (!document.getElementById('acctMenu')) {
+      // Session still restoring (the hint chip has no menu yet). NEVER
+      // navigate away here — the old fallback jumped to /lit/ and silently
+      // discarded the page's filters (e.g. a running author search). Queue
+      // the open instead: the full card pops the moment auth resolves.
+      if (e) e.stopPropagation();
+      acctWhenSignedIn(function () { window.acctToggleMenu(); });
+      return;
+    }
     acctToggleMenu(e);
   };
   function acctCloseMenu() { var m = document.getElementById('acctMenu'); if (m) m.classList.remove('open'); }
