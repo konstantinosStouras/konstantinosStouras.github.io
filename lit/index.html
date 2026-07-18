@@ -141,6 +141,7 @@
   .custom-select-dropdown.open { display: block; }
   .custom-select-search { width: 100%; padding: 10px 14px; border: none; border-bottom: 1px solid var(--border); font-family: 'Work Sans', sans-serif; font-size: 16px; color: var(--text); outline: none; }
   .custom-select-item { padding: 12px 14px; font-size: 18px; color: var(--text); cursor: pointer; transition: background 0.1s; }
+  .custom-select-item.is-selected { color: var(--navy); font-weight: 600; background: var(--navy-light); }
   .custom-select-item:hover { background: var(--navy-light); }
   .custom-select-item.hidden { display: none; }
   .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
@@ -1250,6 +1251,7 @@ function addYearChip(year) {
 function removeChip(type, val) {
   sel[type].delete(val);
   renderChips(type);
+  if (type === 'jtype') buildJTypeSelect();  // deselected type drops back to its usual place
   // Journal-scope chip changes keep the "Recently added papers" view, re-scoped.
   if ((type === 'journal' || type === 'jtype') && recentMode) { renderRecent(); return; }
   applyFilters();
@@ -2352,11 +2354,13 @@ function buildJournalSelect(liveCounts) {
     (s.sections || []).forEach(function(sec) { manifestCounts[sec.key] = sec.count; });
   });
   Object.keys(EXTRA_SRC).forEach(function(k) { manifestCounts[k] = EXTRA_SRC[k].count; });
-  container.innerHTML = JOURNAL_OPTIONS.map(function(o) {
+  var jOpts = pinSelectedFirst(JOURNAL_OPTIONS, sel.journal, function (o) { return o.key; });
+  container.innerHTML = jOpts.map(function(o) {
     var n = (liveCounts && !(EXTRA_SRC[o.key] && extraState[o.key] !== 'done'))
       ? (liveCounts[o.key] || 0) : manifestCounts[o.key];
-    return '<div class="custom-select-item" onclick="selectItem(\'csJournal\',\'journal\',\'' + escAttr(o.key) + '\')">' +
-      esc(o.label) + (n !== undefined ? ' <span style="opacity:0.45">(' + n + ')</span>' : '') + '</div>';
+    var on = sel.journal.has(o.key);
+    return '<div class="custom-select-item' + (on ? ' is-selected' : '') + '" onclick="selectItem(\'csJournal\',\'journal\',\'' + escAttr(o.key) + '\')">' +
+      (on ? '✓ ' : '') + esc(o.label) + (n !== undefined ? ' <span style="opacity:0.45">(' + n + ')</span>' : '') + '</div>';
   }).join('');
   var searchInput = cs.querySelector('.custom-select-search');
   if (searchInput && searchInput.value) filterDrop('csJournal', searchInput.value);
@@ -2376,14 +2380,16 @@ function buildJTypeSelect() {
   // any published paper's badge.
   var ordered = JOURNAL_TYPES.filter(function(t) { return t.key === 'wp'; })
     .concat(JOURNAL_TYPES.filter(function(t) { return t.key !== 'wp'; }));
+  ordered = pinSelectedFirst(ordered, sel.jtype, function (t) { return t.key; });  // selected types outrank even wp
   container.innerHTML = ordered.map(function(t) {
     var n = 0;
     journalTypeKeys(t.key).forEach(function(k) { if (SRC[k] || EXTRA_SRC[k]) n++; });
     // Working Papers is hidden until its archive is built (no repositories yet).
     if (t.key === 'wp' && n === 0) return '';
     var unit = t.key === 'wp' ? 'repositor' + (n === 1 ? 'y' : 'ies') : 'journal' + (n === 1 ? '' : 's');
-    return '<div class="custom-select-item" title="' + escAttr(t.title) + '" onclick="selectItem(\'csJType\',\'jtype\',\'' + escAttr(t.key) + '\')">' +
-      esc(t.label) + ' <span style="opacity:0.45">(' + n + ' ' + unit + ')</span></div>';
+    var on = sel.jtype.has(t.key);
+    return '<div class="custom-select-item' + (on ? ' is-selected' : '') + '" title="' + escAttr(t.title) + '" onclick="selectItem(\'csJType\',\'jtype\',\'' + escAttr(t.key) + '\')">' +
+      (on ? '✓ ' : '') + esc(t.label) + ' <span style="opacity:0.45">(' + n + ' ' + unit + ')</span></div>';
   }).join('');
   var searchInput = cs.querySelector('.custom-select-search');
   if (searchInput && searchInput.value) filterDrop('csJType', searchInput.value);
@@ -2730,13 +2736,28 @@ function updateDropdownOptions() {
   buildSummaryTabs(edCounts, arCounts);
 }
 
+// Selected values pin to the TOP of every filter dropdown, kept in their
+// original relative order; a deselected value drops straight back to its
+// usual place on the next render (per the owner — the same pattern as the
+// Default-filters modal's journal list). Every dropdown re-renders on each
+// filter change (crossFilter/buildFilterOptions), so the ordering follows
+// each select/deselect automatically.
+function pinSelectedFirst(values, selSet, keyOf) {
+  if (!selSet || !selSet.size) return values;
+  var k = keyOf || function (v) { return v; };
+  return values.filter(function (v) { return selSet.has(k(v)); })
+    .concat(values.filter(function (v) { return !selSet.has(k(v)); }));
+}
+
 function fillCustomSelect(csId, items, counts) {
   const cs = document.getElementById(csId);
   const container = cs.querySelector('.custom-select-items');
   const type = cs.dataset.type;
-  container.innerHTML = items.map(i =>
-    `<div class="custom-select-item" onclick="selectItem('${csId}','${type}','${escAttr(i)}')">${esc(i)}${counts ? ' <span style="opacity:0.45">('+counts[i]+')</span>' : ''}</div>`
-  ).join('');
+  items = pinSelectedFirst(items, sel[type]);
+  container.innerHTML = items.map(i => {
+    const on = sel[type] && sel[type].has(i);
+    return `<div class="custom-select-item${on ? ' is-selected' : ''}" onclick="selectItem('${csId}','${type}','${escAttr(i)}')">${on ? '✓ ' : ''}${esc(i)}${counts ? ' <span style="opacity:0.45">('+counts[i]+')</span>' : ''}</div>`;
+  }).join('');
   // Reapply search filter if dropdown is open
   var searchInput = cs.querySelector('.custom-select-search');
   if (searchInput && searchInput.value) filterDrop(csId, searchInput.value);
@@ -2779,6 +2800,7 @@ function selectItem(csId, type, val) {
   if (sel[type].has(val)) return;
   sel[type].add(val);
   renderChips(type);
+  if (type === 'jtype') buildJTypeSelect();  // re-pin selected types (its only other build is at load)
   // Changing the journal scope while viewing "Recently added papers" re-scopes
   // that view rather than dropping back to the normal papers list.
   if ((type === 'journal' || type === 'jtype') && recentMode) { renderRecent(); return; }
