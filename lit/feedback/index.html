@@ -185,6 +185,18 @@
   .fb-ticket-note { font-size: 14px; color: var(--text); margin: -2px 0 14px; }
   .fb-ticket-note code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; color: var(--navy); background: var(--navy-light); border-radius: 5px; padding: 2px 8px; }
 
+  /* ── Suggest-a-working-paper card ───────────────────────────────────────── */
+  .ps-card { margin-bottom: 22px; }
+  .ps-title { font-family: 'Fraunces', serif; font-weight: 500; color: var(--navy); font-size: 20px; margin-bottom: 6px; }
+  .ps-gate { font-size: 14.5px; color: var(--text); background: var(--navy-light); border: 1px solid var(--border); border-radius: 10px; padding: 15px 17px; line-height: 1.55; }
+  .ps-gate a { color: var(--navy); font-weight: 600; }
+  .ps-item-detail { font-size: 13px; color: var(--text-muted); margin: -4px 0 12px; word-break: break-word; }
+  /* extra status badges for the admin submissions view */
+  .fb-badge.added { background: #e2f0e6; color: var(--ok); }
+  .fb-badge.rejected { background: #fbe3e1; color: var(--err); }
+  .fb-badge.pending { background: #fdeec9; color: #8a6100; }
+  .fb-badge.duplicate { background: #e7eef7; color: #3a5a86; }
+
   @media (max-width: 640px) {
     .header-inner, .wrap { padding-left: 18px; padding-right: 18px; }
     .brand h1 { font-size: 22px; }
@@ -228,6 +240,77 @@
     </div>
     <div class="fb-admin-list" id="fbAdminList"></div>
   </section>
+
+  <!-- Paper-suggestions inbox — rendered ONLY for the signed-in maintainer,
+       mirroring the feedback inbox. Shows what the auto-ingest did with each
+       suggested link (added / duplicate / rejected + reason). -->
+  <section class="fb-admin" id="psAdmin" hidden>
+    <div class="fb-admin-head">
+      <h2>📄 Paper suggestions</h2>
+      <span class="fb-admin-sub" id="psAdminSub">Loading…</span>
+      <div class="fb-admin-tabs" id="psAdminTabs">
+        <button type="button" data-tab="pending" class="is-active">Pending</button>
+        <button type="button" data-tab="added">Added</button>
+        <button type="button" data-tab="all">All</button>
+      </div>
+    </div>
+    <div class="fb-admin-list" id="psAdminList"></div>
+  </section>
+
+  <!-- Suggest a working paper — the FIRST section for every visitor. A signed-in
+       user pastes an SSRN / arXiv / NBER / OSF link; a scheduled ingest resolves
+       the real metadata and adds it automatically if it fits (an author already
+       in the catalog, and not already present). See lit/_scraper-workingpapers/
+       ingest-submissions.mjs + the paperSubmissions rule in lit/_firestore.rules. -->
+  <div class="fb-card ps-card">
+    <p class="ps-title">Suggest a working paper</p>
+
+    <!-- Shown when signed out (suggesting needs an account so I can reply). -->
+    <div class="ps-gate" id="psSignedOut" hidden>
+      <strong>Sign in to suggest a paper.</strong> Suggesting a working paper needs an account, so I can let you know whether it was added. <a href="/lit/#lit-signin">Sign in on The Lit</a>, then come back here — you'll land right back on this page.
+    </div>
+
+    <!-- The form (shown to signed-in users). -->
+    <div id="psForm">
+      <p class="fb-intro">Found an unpublished working paper on <strong>SSRN</strong>, arXiv, NBER or OSF that isn't in The Lit yet? Paste its link and — if one of its authors is already in the database and the paper isn't already here — it's added <strong>automatically</strong>, usually within a few minutes. (Published papers are picked up on their own; this is for the listed authors' <em>unpublished</em> work.)</p>
+
+      <div class="fld">
+        <label for="psUrl">Paper link <span class="hint">— an SSRN, arXiv, NBER or OSF page, or a DOI</span></label>
+        <input class="fb-input" id="psUrl" type="url" inputmode="url" autocomplete="off" placeholder="https://papers.ssrn.com/sol3/papers.cfm?abstract_id=…">
+      </div>
+
+      <div class="fb-row">
+        <div class="fld">
+          <label for="psTitle">Title <span class="hint">— optional</span></label>
+          <input class="fb-input" id="psTitle" type="text" placeholder="Paper title (helps me if the link is unusual)">
+        </div>
+        <div class="fld">
+          <label for="psAuthors">Author(s) <span class="hint">— optional</span></label>
+          <input class="fb-input" id="psAuthors" type="text" placeholder="e.g. Jane Public, John Smith">
+        </div>
+      </div>
+
+      <div class="fld">
+        <label for="psNote">Anything else? <span class="hint">— optional</span></label>
+        <textarea class="fb-textarea" id="psNote" style="min-height:80px" placeholder="Optional note"></textarea>
+      </div>
+
+      <div class="fb-actions">
+        <button type="button" class="fb-submit" id="psSubmit">Suggest paper</button>
+        <span class="fb-status" id="psStatus"></span>
+      </div>
+      <div class="signed-note" id="psSignedNote"></div>
+    </div>
+
+    <!-- Success panel -->
+    <div class="fb-done" id="psDone">
+      <div class="ico">📄</div>
+      <h2>Thanks — got it!</h2>
+      <p>I'll check the link and add the paper automatically if it fits (an author already in The Lit, and not already here). It usually happens within a few minutes.</p>
+      <p class="fb-ticket-note" id="psTicketNote"></p>
+      <button type="button" class="fb-again" id="psAgain">Suggest another</button>
+    </div>
+  </div>
 
   <div class="fb-card">
     <!-- Success panel (shown after a submission) -->
@@ -371,12 +454,15 @@
           $('fbSignedNote').textContent = '';
         }
         adminMaybeShow(u);
+        psAuthChange(u);        // suggest-a-paper section: gate to signed-in users
+        psAdminMaybeShow(u);    // suggest-a-paper inbox (maintainer only)
       });
     } catch (e) { CONFIGURED = false; }
   }
   if (!CONFIGURED) {
     setStatus('Live submission is offline right now — please use one of the direct options below.', 'err');
     $('fbSubmit').disabled = true;
+    if ($('psSubmit')) $('psSubmit').disabled = true;
   }
 
   function setStatus(msg, kind) {
@@ -743,6 +829,207 @@
   $('fbLightbox').addEventListener('click', closeLightbox);
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && $('fbLightbox').classList.contains('show')) closeLightbox();
+  });
+
+  /* ── Suggest a working paper ──────────────────────────────────────────────
+   * A signed-in user pastes an SSRN / arXiv / NBER / OSF link (or DOI). We store
+   * a bounded doc in the 'paperSubmissions' collection (see lit/_firestore.rules);
+   * a scheduled ingest (lit/_scraper-workingpapers/ingest-submissions.mjs)
+   * resolves the REAL metadata itself and adds the paper to the Working Papers
+   * archive when it fits — the typed title/authors are only hints, never trusted
+   * into the dataset. Signed-in only, so the outcome can be e-mailed back. */
+  var psBusy = false;
+  function psSetStatus(msg, kind) {
+    var el = $('psStatus'); if (!el) return;
+    el.textContent = msg || '';
+    el.className = 'fb-status' + (kind ? ' ' + kind : '');
+  }
+
+  // Show the form to signed-in users, the sign-in nudge to everyone else.
+  function psAuthChange(u) {
+    var gate = $('psSignedOut'), form = $('psForm');
+    if (!gate || !form) return;
+    var signedIn = !!(u && !u.isAnonymous);
+    gate.hidden = signedIn;
+    if (signedIn) {
+      if (!$('psDone').classList.contains('show')) form.hidden = false;
+      $('psSignedNote').textContent = 'Suggesting as ' + (u.email || u.displayName || 'your account') + '.';
+    } else {
+      form.hidden = true;
+      $('psDone').classList.remove('show');
+      $('psSignedNote').textContent = '';
+    }
+  }
+  // Optimistic first paint from the shared sign-in hint (same cache the account
+  // control uses), so a returning signed-in user doesn't see the gate flash.
+  (function psInitGate() {
+    var hint = null;
+    try { hint = JSON.parse(localStorage.getItem('litAuthHint') || 'null'); } catch (e) {}
+    var signedInGuess = !!(hint && hint.s);
+    $('psSignedOut').hidden = signedInGuess;
+    $('psForm').hidden = !signedInGuess;
+  })();
+
+  if ($('psSubmit')) $('psSubmit').onclick = function () {
+    if (psBusy || !CONFIGURED) return;
+    if (!currentUser) { psSetStatus('Please sign in first (top right).', 'err'); return; }
+    var url = ($('psUrl').value || '').trim();
+    if (!url) { psSetStatus('Please paste the paper’s link.', 'err'); return; }
+    if (!/^https?:\/\//i.test(url) && !/^10\.\d{4,9}\//.test(url) && !/(ssrn|arxiv|nber|osf)\./i.test(url)) {
+      psSetStatus('That doesn’t look like a link — paste the paper’s SSRN, arXiv, NBER or OSF URL (or its DOI).', 'err'); return;
+    }
+    psBusy = true; $('psSubmit').disabled = true; psSetStatus('Sending…');
+
+    var ticket = genTicket();
+    var email = String(currentUser.email || '').trim().slice(0, 320);
+    var doc = {
+      uid: currentUser.uid,
+      email: email,
+      name: String(currentUser.displayName || '').slice(0, 200),
+      url: url.slice(0, 2000),
+      title: ($('psTitle').value || '').trim().slice(0, 500),
+      authors: ($('psAuthors').value || '').trim().slice(0, 2000),
+      note: ($('psNote').value || '').trim().slice(0, 5000),
+      ticket: ticket,
+      status: 'pending',
+      createdAt: FV.serverTimestamp()
+    };
+
+    db.collection('paperSubmissions').add(doc).then(function () {
+      $('psTicketNote').innerHTML = 'Your reference number is <code>' + esc(ticket) + '</code>.' +
+        (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)
+          ? ' I’ll e-mail <b>' + esc(email) + '</b> as soon as it’s been checked.'
+          : '');
+      $('psForm').hidden = true;
+      $('psDone').classList.add('show');
+      $('psUrl').value = ''; $('psTitle').value = ''; $('psAuthors').value = ''; $('psNote').value = '';
+    }).catch(function (err) {
+      psSetStatus('Could not send — please try again. (' + (err && err.code ? err.code : 'error') + ')', 'err');
+    }).then(function () { psBusy = false; $('psSubmit').disabled = false; });
+  };
+
+  if ($('psAgain')) $('psAgain').onclick = function () {
+    $('psDone').classList.remove('show');
+    $('psForm').hidden = false;
+    psSetStatus('');
+  };
+
+  /* ── Paper-suggestions inbox (maintainer only) — read-only + delete ─────────
+   * Mirrors the feedback inbox; the ingest owns each submission's status, so this
+   * is a monitor of what the auto-ingest did, with a Delete for spam. */
+  var psAdminItems = [];
+  var psAdminTab = 'pending';
+  var psAdminLoaded = false;
+
+  function psAdminMaybeShow(u) {
+    var sec = $('psAdmin');
+    if (!sec) return;
+    if (!isAdminUser(u)) { sec.hidden = true; return; }
+    sec.hidden = false;
+    if (!psAdminLoaded) { psAdminLoaded = true; psAdminLoad(); }
+  }
+  function psAdminLoad() {
+    $('psAdminSub').textContent = 'Loading…';
+    db.collection('paperSubmissions').orderBy('createdAt', 'desc').get().then(function (snap) {
+      psAdminItems = snap.docs.map(function (d) { return { id: d.id, data: d.data() }; });
+      psAdminRender();
+    }).catch(function (err) {
+      $('psAdminSub').textContent = 'Could not load suggestions (' + (err && err.code ? err.code : 'error') + ') — are the latest Firestore rules deployed?';
+    });
+  }
+  function psIsDone(s) { return s === 'added' || s === 'duplicate'; }
+  function psBadgeClass(s) { return s === 'added' ? 'added' : s === 'duplicate' ? 'duplicate' : s === 'rejected' ? 'rejected' : 'pending'; }
+
+  function psAdminRender() {
+    var c = { pending: 0, added: 0, rejected: 0 };
+    psAdminItems.forEach(function (it) {
+      var s = it.data.status;
+      if (psIsDone(s)) c.added++; else if (s === 'rejected') c.rejected++; else c.pending++;
+    });
+    $('psAdminSub').textContent = psAdminItems.length + ' suggestion' + (psAdminItems.length === 1 ? '' : 's') +
+      ' — ' + c.pending + ' pending, ' + c.added + ' added, ' + c.rejected + ' rejected';
+
+    var items = psAdminItems.filter(function (it) {
+      var s = it.data.status;
+      if (psAdminTab === 'all') return true;
+      if (psAdminTab === 'added') return psIsDone(s);
+      return !psIsDone(s) && s !== 'rejected';   // 'pending' tab = still awaiting the ingest
+    });
+    var list = $('psAdminList');
+    if (!items.length) {
+      list.innerHTML = '<div class="fb-admin-empty">' +
+        (psAdminItems.length ? 'Nothing in this view.' : 'No paper suggestions yet — when someone suggests a paper above, it appears here.') +
+        '</div>';
+      return;
+    }
+
+    var html = '', lastDay = '';
+    items.forEach(function (it) {
+      var x = it.data;
+      var d = x.createdAt && typeof x.createdAt.toDate === 'function' ? x.createdAt.toDate() : null;
+      var day = d ? d.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'Date unknown';
+      if (day !== lastDay) { html += '<div class="fb-day">' + esc(day) + '</div>'; lastDay = day; }
+
+      var s = x.status || 'pending';
+      var ticket = x.ticket || it.id;
+      var title = x.resolvedTitle || x.title || '';
+      var name = String(x.name || '').trim(), email = String(x.email || '').trim();
+      var who = '';
+      if (name) who += '<b>' + esc(name) + '</b>';
+      if (validEmail(email)) who += (who ? ' · ' : '') + '<a href="mailto:' + esc(email) + '">' + esc(email) + '</a>';
+      if (!who) who = '<span class="anon">signed-in user</span>';
+
+      var meta = [];
+      if (x.resolvedDoi) meta.push('doi <code>' + esc(x.resolvedDoi) + '</code>');
+      if (x.jkey) meta.push('→ <code>' + esc(x.jkey) + '</code>');
+      if (Array.isArray(x.matchedAuthors) && x.matchedAuthors.length) meta.push('authors: ' + esc(x.matchedAuthors.join('; ')) + (x.matchType === 'fuzzy' ? ' <b>[fuzzy]</b>' : ''));
+      if (x.reason) meta.push('reason: <b>' + esc(x.reason) + '</b>');
+      if (x.detail) meta.push(esc(x.detail));
+      meta.push('Doc <code>' + esc(it.id) + '</code>');
+
+      var safeUrl = /^https?:\/\//i.test(String(x.url || '')) ? String(x.url) : '';
+      html +=
+        '<article class="fb-item" data-id="' + esc(it.id) + '">' +
+          '<div class="fb-item-top">' +
+            '<span class="fb-ticket">📄 ' + esc(ticket) + '</span>' +
+            '<span class="fb-badge ' + psBadgeClass(s) + '">' + esc(s) + '</span>' +
+            '<span class="fb-when">' + esc(fmtWhen(x.createdAt)) + '</span>' +
+          '</div>' +
+          '<div class="fb-item-who">From ' + who + '</div>' +
+          '<div class="fb-item-msg">' +
+            (safeUrl ? '<a href="' + esc(safeUrl) + '" target="_blank" rel="noopener">' + esc(safeUrl) + '</a>' : esc(x.url || '(no link)')) +
+            (title ? '<br><b>' + esc(title) + '</b>' : '') +
+          '</div>' +
+          (x.note ? '<div class="ps-item-detail">Note: ' + esc(x.note) + '</div>' : '') +
+          '<div class="fb-item-meta">' + meta.join(' · ') + '</div>' +
+          '<div class="fb-item-actions"><button type="button" class="fb-act delete" data-act="delete">🗑 Delete</button></div>' +
+        '</article>';
+    });
+    list.innerHTML = html;
+
+    Array.prototype.forEach.call(list.querySelectorAll('.fb-item [data-act]'), function (b) {
+      b.onclick = function () { psAdminDelete(b.closest('.fb-item').getAttribute('data-id')); };
+    });
+  }
+
+  function psAdminDelete(id) {
+    if (!window.confirm('Delete this suggestion permanently? This cannot be undone.')) return;
+    db.collection('paperSubmissions').doc(id).delete().then(function () {
+      psAdminItems = psAdminItems.filter(function (x) { return x.id !== id; });
+      psAdminRender();
+    }).catch(function (err) {
+      window.alert('Could not delete (' + (err && err.code ? err.code : 'error') + ').');
+    });
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('#psAdminTabs button'), function (b) {
+    b.onclick = function () {
+      psAdminTab = b.getAttribute('data-tab');
+      Array.prototype.forEach.call(document.querySelectorAll('#psAdminTabs button'), function (x) {
+        x.classList.toggle('is-active', x === b);
+      });
+      psAdminRender();
+    };
   });
 })();
 </script>

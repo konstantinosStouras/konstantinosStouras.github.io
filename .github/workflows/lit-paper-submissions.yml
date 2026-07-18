@@ -1,0 +1,105 @@
+name: lit — ingest suggested working papers
+
+# Reads user-suggested papers from the Firestore `paperSubmissions` collection
+# (written by the "Suggest a working paper" section of /lit/feedback/), resolves
+# each link's real metadata (OpenAlex / Crossref), and — when it fits the catalog
+# (an author already in the database, and not already present) — adds it to the
+# Working Papers archive (lit/data-workingpapers/), then marks the submission and
+# e-mails the submitter + maintainer. See lit/_scraper-workingpapers/ingest-submissions.mjs.
+#
+# A no-op until FIREBASE_SERVICE_ACCOUNT is set. SMTP_* are optional (skip the
+# notification e-mails without them). Full setup: lit/_PAPER-SUBMISSIONS-SETUP.md.
+
+on:
+  schedule:
+    # Off-boundary minutes (GitHub throttles :00/:15/:30/:45 hardest). ~Every 10
+    # min so a suggested paper is added promptly. Need it now? Actions → this
+    # workflow → "Run workflow".
+    - cron: '4,14,24,34,44,54 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run — resolve + decide + print, but ingest nothing and mark nothing'
+        type: boolean
+        default: false
+      scan:
+        description: 'List pending submissions and exit (ingests nothing)'
+        type: boolean
+        default: false
+
+# SAME concurrency group as the working-papers builds — this job commits
+# lit/data-workingpapers, so it must queue behind them, never race a commit.
+concurrency:
+  group: lit-workingpapers-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write            # needed to commit the ingested submissions back
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install --no-save firebase-admin@^12 nodemailer@^6
+
+      - name: Ingest suggested working papers
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_SECURE: ${{ secrets.SMTP_SECURE }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          ALERTS_FROM: ${{ secrets.ALERTS_FROM }}
+          ALERTS_FROM_NAME: ${{ secrets.ALERTS_FROM_NAME }}
+          FEEDBACK_TO: ${{ secrets.FEEDBACK_TO }}
+          SUB_MAILTO: kstouras+litsub@gmail.com
+          # SUB_AUTHOR_MATCH: exact   # optional — tighten the author gate (default: fuzzy)
+        run: node lit/_scraper-workingpapers/ingest-submissions.mjs ${{ github.ref != 'refs/heads/master' && '--dry-run' || '' }} ${{ (github.event_name == 'workflow_dispatch' && inputs.scan) && '--scan' || '' }} ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '--dry-run' || '' }}
+
+      - name: Commit ingested submissions
+        if: github.ref == 'refs/heads/master'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lit/data-workingpapers
+          if git diff --cached --quiet; then
+            echo "No submissions ingested — nothing to commit."
+            exit 0
+          fi
+          git commit -m "lit: ingest suggested working papers"
+          # Only the working-papers builds and this job write lit/data-workingpapers,
+          # and all three share the concurrency group, so our copy of that directory
+          # is authoritative. On a rejected push (a concurrent commit touching OTHER
+          # files), replay our directory onto the new tip and retry.
+          cp -r lit/data-workingpapers /tmp/sub-ours
+          for i in 1 2 3; do
+            if git push origin HEAD:${{ github.ref_name }}; then
+              echo "Pushed on attempt $i."
+              exit 0
+            fi
+            echo "Push rejected (concurrent commit?) — replaying our archive on the new tip…"
+            git fetch origin ${{ github.ref_name }}
+            git reset --hard origin/${{ github.ref_name }}
+            rm -rf lit/data-workingpapers
+            cp -r /tmp/sub-ours lit/data-workingpapers
+            git add lit/data-workingpapers
+            if git diff --cached --quiet; then
+              echo "The tip already carries this archive state — nothing left to push."
+              exit 0
+            fi
+            git commit -m "lit: ingest suggested working papers"
+            sleep 5
+          done
+          echo "::error::Could not push the ingested submissions after 3 attempts."
+          exit 1

@@ -932,6 +932,54 @@ egress policy blocks the scholarly APIs (OpenAlex/Crossref/arXiv return 403), so
 the archive can only be populated by the GitHub Actions runners — it is EMPTY
 until the first workflow run on `master` post-merge.
 
+**Suggest a working paper (user submissions → auto-ingest).** A **signed-in**
+user can suggest an unpublished working paper from the **first section of the
+Feedback page** (`lit/feedback/`, the "Suggest a working paper" `.fb-card`): they
+paste an SSRN/arXiv/NBER/OSF link (or DOI) + optional title/authors/note, and the
+page writes a bounded doc to a new Firestore **`paperSubmissions`** collection
+(`{uid,email,name,url,title,authors,note,ticket,status:'pending',createdAt}`;
+rule in `lit/_firestore.rules` — signed-in bounded create with `status` pinned to
+`'pending'`, submitter reads own, `isFeedbackAdmin()` reads/updates/deletes). A
+scheduled ingest `lit/_scraper-workingpapers/ingest-submissions.mjs`
+(`.github/workflows/lit-paper-submissions.yml`, every ~10 min off-boundary,
+**shares the `lit-workingpapers-${{ github.ref }}` concurrency group** so it never
+races the crawler/backfill; master-only commit with the same push-retry replay)
+processes each `pending` doc: it **parses the link into a DOI + host with the
+pre-print feature's own allowlist** (`urlToDoi` → SSRN `10.2139`/arXiv
+`10.48550`/NBER `10.3386`/OSF `10.31219`; a spoofed host, a bioRxiv/journal DOI or
+junk is rejected), **resolves the REAL metadata itself** (OpenAlex by DOI →
+Crossref fallback → an OpenAlex-shaped work), and builds the record with the SAME
+`wpRecordFromWork()` the crawler uses — so the submitter's typed title/authors are
+**only hints, never trusted into the dataset**. It then applies the owner's two
+gates via the pure `decideSubmission()`: **not already in the catalog**
+(`wpRecordFromWork`'s `publishedTitles` exclusion + a `recKey` dedup against the
+archive → `duplicate`) and **≥1 author already in the catalog** (`catalogMatch`
+against `loadCatalog`'s author index — `exact` full-name or, by default, `fuzzy`
+last-name+initial via the crawler's own `nameParts`; env `SUB_AUTHOR_MATCH`). On
+`added` it **upserts** into `lit/data-workingpapers/` (seeding `byKey` from the
+committed files, so every crawler row is preserved — same invariant as the
+crawler) and rewrites the derived files (`papers-wp-*.json`/`sources.json`/
+`recent.json`/`meta.json`, preserving the crawler's `authorCount`; **never touches
+`_authors.json`**), so the paper appears under the page's **Working Papers**
+journal type with no page change. It **writes the dataset BEFORE stamping
+Firestore** (a crash just re-processes idempotently — the paper is then a
+`duplicate`, never lost), stamps each doc `added`/`duplicate`/`rejected`+reason
+(a transient OpenAlex/Crossref outage leaves it `pending`; a not-yet-indexed
+posting retries up to `SUB_MAX_TRIES` then rejects `not-indexed`), and — when SMTP
+is set (reuses the feedback mailer's secrets; **`FIREBASE_SERVICE_ACCOUNT` is the
+only one required**) — e-mails the submitter their outcome + the maintainer a
+summary. To this `build-data.mjs` exports `WP_SOURCES`/`recKey`/`normName`/
+`nameParts`/`stripAccents` (additive; the ingest imports them so the record shape
++ author normalization can't drift). The Feedback page also gains a **📄 Paper
+suggestions** maintainer inbox (mirrors the feedback inbox; read-only + Delete)
+showing what the ingest did. It is a **no-op until `FIREBASE_SERVICE_ACCOUNT` is
+set** and the rule is deployed. Offline test:
+`node lit/_scraper-workingpapers/ingest-selftest.mjs` (mock, no network); modes
+`--scan`/`--dry-run`. Setup: `lit/_PAPER-SUBMISSIONS-SETUP.md`. NOTE: this build
+env's egress blocks OpenAlex/Crossref (403), so real resolution only happens on
+the Actions runners. (Per keep-in-sync: shipped with a `changelog.json` entry +
+the About-page "Suggest a working paper" bullet.)
+
 ### Citation graph — the references a paper cites that are IN the catalog
 For every listed paper, the pipeline extracts the references it **cites that
 also belong to the catalog** (the intra-catalog out-edges), surfaced on each

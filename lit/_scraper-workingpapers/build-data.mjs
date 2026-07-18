@@ -98,7 +98,7 @@ const MAX_THROTTLE = 8;            // consecutive OpenAlex waits before giving t
 // pickPreprint/preprintFromDoi classify but that we deliberately DON'T archive
 // here (bioRxiv/medRxiv/cshl — life-sciences, off-topic for this catalog) map
 // to no key and are skipped.
-const WP_SOURCES = {
+export const WP_SOURCES = {
   'wp-ssrn':  { name: 'SSRN Working Papers', publisher: 'SSRN' },
   'wp-nber':  { name: 'NBER Working Papers', publisher: 'NBER' },
   'wp-arxiv': { name: 'arXiv Pre-prints',    publisher: 'arXiv' },
@@ -113,8 +113,8 @@ async function loadJson(path, fallback) {
   try { return JSON.parse(await readFile(path, 'utf8')); } catch { return fallback; }
 }
 
-function stripAccents(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, ''); }
-function normName(s) { return stripAccents(s).toLowerCase().replace(/\s+/g, ' ').trim(); }
+export function stripAccents(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+export function normName(s) { return stripAccents(s).toLowerCase().replace(/\s+/g, ' ').trim(); }
 
 // OpenAlex stores abstracts as an inverted index {word: [positions]}.
 export function invertAbstract(inv) {
@@ -128,7 +128,7 @@ export function invertAbstract(inv) {
 
 // A last-name token + first initial, for disambiguating an author within one
 // paper's authorship list. ("Barış Ata" -> {last:'ata', initial:'b'}).
-function nameParts(name) {
+export function nameParts(name) {
   const toks = normName(name).split(' ').filter(Boolean);
   if (!toks.length) return null;
   return { last: toks[toks.length - 1].replace(/[^a-z]/g, ''), initial: (toks[0][0] || '') };
@@ -346,7 +346,7 @@ export function wpRecordFromWork(work, publishedTitles) {
 }
 
 // Dedup key for a working paper (co-authored papers surface once per author).
-function recKey(r) {
+export function recKey(r) {
   const doi = String(r.DOI || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase();
   return doi || ('u:' + (r.Preprint || '').toLowerCase());
 }
