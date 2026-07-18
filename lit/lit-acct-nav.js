@@ -57,9 +57,11 @@
 
   var user = null;
   var resolved = false;   // first onAuthStateChanged seen — until then render() may paint from the litAuthHint cache
+  var extras = null;      // { profile, saved, alerts } from Firestore — makes this card IDENTICAL to the main page's
   auth.onAuthStateChanged(function (u) {
     resolved = true;
     user = u || null;
+    extras = null;
     // Keep the fast-paint hint (shared with the main page) current on every page.
     try {
       if (u) localStorage.setItem('litAuthHint', JSON.stringify({
@@ -69,8 +71,32 @@
       else localStorage.removeItem('litAuthHint');
     } catch (e) {}
     render();
+    loadExtras();
   });
   render(); // paint immediately — the cached hint or the Sign-in button — before auth resolves
+
+  // The account card must stay IDENTICAL wherever the user is on the site, so
+  // fetch the little state the main page's menu shows that auth alone doesn't
+  // carry: the profile doc (display name, ORCID link + match name, default-
+  // filter count) and two count() aggregates (saved papers, alerts). One doc
+  // read + two aggregate reads per page view; the menu paints instantly
+  // without them and upgrades in place when they land.
+  function loadExtras() {
+    if (!user || !firebase.firestore) return;
+    var uid = user.uid, db;
+    try { db = firebase.firestore(); } catch (e) { return; }
+    var base = db.collection('users').doc(uid);
+    var out = { profile: {}, saved: null, alerts: null };
+    Promise.all([
+      base.collection('profile').doc('main').get().then(function (d) { out.profile = d.exists ? (d.data() || {}) : {}; }).catch(function () {}),
+      base.collection('papers').count().get().then(function (s) { out.saved = s.data().count; }).catch(function () {}),
+      base.collection('alerts').count().get().then(function (s) { out.alerts = s.data().count; }).catch(function () {})
+    ]).then(function () {
+      if (!user || user.uid !== uid) return;   // signed out / switched account meanwhile
+      extras = out;
+      render();
+    });
+  }
 
   function render() {
     if (!user) {
@@ -92,8 +118,19 @@
       el.innerHTML = '<a class="acct-btn" href="' + MAIN + '#lit-signin">Sign in</a>';
       return;
     }
-    var name = user.displayName || (user.email ? user.email.split('@')[0] : 'Account');
+    // Mirror the MAIN page's account card exactly — same name resolution,
+    // same items in the same order, same badges (keep in sync with
+    // acctRenderControl in lit/index.html).
+    var p = (extras && extras.profile) || {};
+    var fullName = ((p.firstName || '') + ' ' + (p.lastName || '')).trim();
+    var name = fullName || user.displayName || (user.email ? user.email.split('@')[0] : 'Account');
     var avatar = avatarUrl(user.uid || user.email || 'anon');
+    var saved = (extras && extras.saved != null) ? extras.saved : null;
+    var alertCount = (extras && extras.alerts != null) ? extras.alerts : 0;
+    var defCount = ((p.defaultJournals || []).length) + ((p.defaultJTypes || []).length);
+    var orcidLinked = !!(p.orcid && p.orcidLinked);
+    var matchName = (p.orcidAuthorName && p.orcidAuthorName.trim()) || fullName || user.displayName || '';
+    var wasOpen = !!el.querySelector('[data-acct-menu].open');   // extras landing must not close an open menu
     el.innerHTML =
       '<div class="acct-wrap">' +
         '<button class="acct-btn acct-user" type="button" data-acct-toggle>' +
@@ -102,10 +139,14 @@
         '</button>' +
         '<div class="acct-menu" data-acct-menu>' +
           '<div class="acct-menu-head">Signed in as<strong>' + esc(user.email || name) + '</strong></div>' +
-          '<a class="acct-menu-item" title="Your starred papers, lists, tags and private notes — everything you have saved." href="' + MAIN + '#lit-library">★ My library</a>' +
+          '<a class="acct-menu-item" title="Your starred papers, lists, tags and private notes — everything you have saved." href="' + MAIN + '#lit-library">★ My library' + (saved != null ? ' <span class="acct-badge">' + saved + '</span>' : '') + '</a>' +
+          (orcidLinked
+            ? '<a class="acct-menu-item" title="Every paper of yours in the database, with its citation count (matched from your linked ORCID)." href="' + MAIN + '?author=' + encodeURIComponent(matchName) + '">📊 My publications</a>' +
+              '<a class="acct-menu-item" title="Your metrics in the Data Analytics author spotlight (matched from your linked ORCID)." href="' + MAIN + 'analytics/?author=' + encodeURIComponent(matchName) + '">📈 My author analytics</a>'
+            : '') +
           '<div class="acct-menu-sep"></div>' +
-          '<a class="acct-menu-item" title="Get an e-mail when new papers match your filters, or when the site gains a feature." href="' + MAIN + '#lit-alerts">✉️ E-mail alerts</a>' +
-          '<a class="acct-menu-item" title="A set of journals or types applied automatically each time you sign in." href="' + MAIN + '#lit-defaults">⚙️ Default filters</a>' +
+          '<a class="acct-menu-item" title="Get an e-mail when new papers match your filters, or when the site gains a feature." href="' + MAIN + '#lit-alerts">✉️ E-mail alerts' + (alertCount ? ' <span class="acct-badge">' + alertCount + '</span>' : '') + '</a>' +
+          '<a class="acct-menu-item" title="A set of journals or types applied automatically each time you sign in." href="' + MAIN + '#lit-defaults">⚙️ Default filters' + (defCount ? ' <span class="acct-badge">' + defCount + '</span>' : '') + '</a>' +
           '<a class="acct-menu-item" title="Edit your name, affiliation and account details." href="' + MAIN + '#lit-profile">👤 Edit profile</a>' +
           '<div class="acct-menu-sep"></div>' +
           '<button class="acct-menu-item danger" type="button" title="Sign out of your account on this device." data-acct-signout>Sign out</button>' +
@@ -113,6 +154,7 @@
       '</div>';
     var toggle = el.querySelector('[data-acct-toggle]');
     var menu = el.querySelector('[data-acct-menu]');
+    if (wasOpen) menu.classList.add('open');
     toggle.addEventListener('click', function (e) { e.stopPropagation(); menu.classList.toggle('open'); });
     el.querySelector('[data-acct-signout]').addEventListener('click', function () {
       menu.classList.remove('open');
@@ -184,6 +226,7 @@
       '.acct-menu-item{display:flex;justify-content:space-between;gap:10px;align-items:center;width:100%;padding:10px 16px;font-family:inherit;font-size:13.5px;text-align:left;cursor:pointer;transition:background .1s;color:var(--text);text-decoration:none;background:none;border:none;}' +
       '.acct-menu-item:hover{background:var(--navy-light);}' +
       '.acct-menu-sep{height:1px;background:var(--border);}' +
+      '.acct-badge{font-size:12px;color:var(--navy);background:var(--navy-light);border-radius:100px;padding:1px 9px;font-weight:600;}' +
       '.acct-menu-item.danger{color:#b33a3a;}' +
       '.acct-menu-item.danger:hover{background:#fdeaea;}';
     var st = document.createElement('style');

@@ -168,10 +168,13 @@
 </script>
 
 <!-- Shared sign-in / account control in the header (mirrors the main browser).
-     Needs the Firebase compat SDK (app + auth); lit-acct-nav.js reuses the
-     signed-in session that persists per-project across stouras.com. -->
+     Needs the Firebase compat SDK (app + auth + firestore — the latter lets
+     the account card show the same badges/ORCID links as the main page);
+     lit-acct-nav.js reuses the signed-in session that persists per-project
+     across stouras.com. -->
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
 <script src="../lit-acct-nav.js"></script>
 </body>
 </html>
