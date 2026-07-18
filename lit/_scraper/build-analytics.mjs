@@ -15,18 +15,27 @@
  *     papers per journal) for authors above a small paper threshold, powering
  *     the "Author spotlight" (loaded on demand).
  *
- * INPUT: the committed datasets already in the repo —
+ * INPUT: the committed datasets of EVERY journal the main browser lists —
  *   • lit/data/          (the ten native sources: MS, OpRe, MkSc, M&SOM,
  *                             ISR, Strategy Science, INFORMS Transactions on
  *                             Education, POM, PNAS, ACM EC)
  *   • lit/data-ft50/     (the FT50 catalog; its journals that duplicate a
  *                             native source are skipped, native wins)
- * so it can run any time after those builds, reading only static files. It is
- * refreshed by .github/workflows/lit-analytics.yml. No network, no APIs.
+ *   • the three satellite ABS data shards (sibling repos lit-data-abs4,
+ *     lit-data-abs3-omecon, lit-data-abs3-rest — the SHARDS list in
+ *     lit/index.html), each read from a local checkout (see shardDir below);
+ *     a shard that isn't checked out is skipped with a warning, mirroring the
+ *     page's own 404-skip, so the dashboard's journal list always matches
+ *     whatever the main browser can serve.
+ * It can run any time after those builds, reading only static files. It is
+ * refreshed by .github/workflows/lit-analytics.yml (which checks the shard
+ * repos out under _analytics-shards/). No network, no APIs.
  *
  * The journal-type membership tables (ABS_RATING / UTD24_KEYS / FT50_KEYS)
  * are kept BYTE-FOR-BYTE in sync with lit/index.html — if you change the
- * lists there, mirror the change here (and vice-versa).
+ * lists there, mirror the change here (and vice-versa). Shard journals'
+ * ABS grades are NOT in that mirror: like the page's MANIFEST_ABS, they
+ * flow in from each shard manifest's `abs` field.
  */
 
 import fs from 'node:fs';
@@ -39,10 +48,32 @@ const LIT_DIR = path.resolve(__dirname, '..');            // lit
 const NATIVE_DIR = path.join(LIT_DIR, 'data');
 const FT50_DIR = path.join(LIT_DIR, 'data-ft50');
 const OUT_DIR = path.join(LIT_DIR, 'analytics');
+const REPO_ROOT = path.resolve(LIT_DIR, '..');            // the site repo
+
+// Satellite ABS data shards — sibling repos publishing the same data layout
+// as data-ft50/ (mirror of the SHARDS list in lit/index.html). Each is read
+// from the first location that has a data/sources.json:
+//   1. $LIT_SHARDS_DIR/<repo>/data      (explicit override)
+//   2. <repo-root>/_analytics-shards/<repo>/data  (the CI checkout location)
+//   3. <repo-root>/../<repo>/data       (a sibling clone, the local layout)
+const SHARD_REPOS = ['lit-data-abs4', 'lit-data-abs3-omecon', 'lit-data-abs3-rest'];
+function shardDir(repo) {
+  const cands = [];
+  if (process.env.LIT_SHARDS_DIR) cands.push(path.join(process.env.LIT_SHARDS_DIR, repo, 'data'));
+  cands.push(path.join(REPO_ROOT, '_analytics-shards', repo, 'data'));
+  cands.push(path.join(REPO_ROOT, '..', repo, 'data'));
+  for (const d of cands) {
+    try { if (fs.existsSync(path.join(d, 'sources.json'))) return d; } catch { /* keep looking */ }
+  }
+  return null;
+}
 
 // Authors with at least this many papers get a full per-year / per-journal
 // breakdown in authors.json; the long tail is omitted to keep the file small.
-const AUTHOR_MIN_PAPERS = 5;
+// 3 (was 5) so the Author spotlight — and the account menu's "My author
+// analytics" deep link — reaches early-career authors too; at 3 the file is
+// ~22 MB, lazy-loaded only when the Author tab opens.
+const AUTHOR_MIN_PAPERS = 3;
 // A journal's most-cited papers to carry, for the "top cited" table.
 const TOP_CITED_PER_JOURNAL = 12;
 // A dimension value's most-cited papers to carry (editor/area/SE/AE), so the
@@ -105,12 +136,23 @@ const JOURNAL_TYPES = [
   { key: 'abs3', label: 'ABS 3', badge: 'ABS 3' },
 ];
 
+// Shard journals' ABS grades, from each shard manifest's `abs` field — the
+// offline mirror of the page's MANIFEST_ABS (index.html registerExtraSources):
+// a grade registers only when the journal isn't in the static ABS_RATING map,
+// and the first manifest to announce a key wins.
+const MANIFEST_ABS = {};   // journal key -> '4*' | '4' | '3'
+
+// A journal's ABS grade: the static mirror first, then the shard manifests.
+function absGrade(jkey) {
+  return ABS_RATING[jkey] || MANIFEST_ABS[jkey] || null;
+}
+
 // The membership-key list for one journal, in JOURNAL_TYPES order.
 function typesFor(jkey) {
   const out = [];
   if (UTD24_KEYS.has(jkey)) out.push('utd24');
   if (FT50_KEYS.has(jkey)) out.push('ft50');
-  const g = ABS_RATING[jkey];
+  const g = absGrade(jkey);
   if (g === '4' || g === '4*') out.push('abs4');
   else if (g === '3') out.push('abs3');
   return out;
@@ -159,6 +201,8 @@ function ingestVariants(map, file) {
 }
 
 // ── load the manifests, decide the journal set (native wins on overlap) ─────
+// First registration of a key wins, in the page's own precedence: native
+// sources, then the FT50 catalog, then the shards in SHARDS order.
 const nativeSources = readJson(path.join(NATIVE_DIR, 'sources.json'), []);
 const ft50Sources = readJson(path.join(FT50_DIR, 'sources.json'), []);
 
@@ -171,11 +215,27 @@ for (const s of ft50Sources) {
   if (!s.count) continue;                        // skip empty catalogs (e.g. hbr)
   journalMeta.set(s.key, { key: s.key, name: s.name, publisher: s.publisher || '', file: s.file, dir: FT50_DIR });
 }
+const shardDirs = [];            // the shard data dirs actually found
+for (const repo of SHARD_REPOS) {
+  const dir = shardDir(repo);
+  if (!dir) {
+    console.warn('build-analytics: WARNING — shard ' + repo + ' not checked out; its journals are omitted from this build.');
+    continue;
+  }
+  shardDirs.push(dir);
+  for (const s of readJson(path.join(dir, 'sources.json'), [])) {
+    if (s.abs && !ABS_RATING[s.key] && !MANIFEST_ABS[s.key]) MANIFEST_ABS[s.key] = s.abs;
+    if (journalMeta.has(s.key)) continue;        // earlier dataset wins
+    if (!s.count) continue;                      // skip empty catalogs
+    journalMeta.set(s.key, { key: s.key, name: s.name, publisher: s.publisher || '', file: s.file, dir });
+  }
+}
 
 // ── canonical-author resolver ───────────────────────────────────────────────
 const variantMap = new Map();
 ingestVariants(variantMap, path.join(NATIVE_DIR, 'authors.json'));
 ingestVariants(variantMap, path.join(FT50_DIR, 'authors.json'));
+for (const dir of shardDirs) ingestVariants(variantMap, path.join(dir, 'authors.json'));
 const canon = name => variantMap.get(name) || name;
 
 // Distinct canonical author names on one paper (order preserved).
@@ -346,7 +406,7 @@ for (const meta of journalMeta.values()) {
     name: meta.name,
     publisher: meta.publisher,
     types: typesFor(meta.key),
-    abs: ABS_RATING[meta.key] || null,
+    abs: absGrade(meta.key),
     native: meta.dir === NATIVE_DIR ? 1 : 0,   // one of the 10 curated native sources
     papers: jPapers,                            // all records
     rp: jPapers - jNonArt,                      // research-only paper count
@@ -406,7 +466,8 @@ fs.writeFileSync(path.join(OUT_DIR, 'data.json'), JSON.stringify(data));
 fs.writeFileSync(path.join(OUT_DIR, 'authors.json'), JSON.stringify(authorsFile));
 
 const kb = f => (fs.statSync(path.join(OUT_DIR, f)).size / 1024).toFixed(0);
-console.log('build-analytics: wrote analytics/data.json (' + kb('data.json') + ' KB) and analytics/authors.json (' + kb('authors.json') + ' KB)');
+console.log('build-analytics: wrote analytics/data.json (' + kb('data.json') + ' KB) and analytics/authors.json (' + kb('authors.json') + ' KB)' +
+  '  [shards found: ' + shardDirs.length + '/' + SHARD_REPOS.length + ']');
 console.log('  papers=' + totPapers + '  journals=' + journals.length +
   '  authors(total)=' + authorAgg.size + '  authors(>=' + AUTHOR_MIN_PAPERS + ')=' + authorsOut.length +
   '  years=' + data.yearMin + '..' + data.yearMax +

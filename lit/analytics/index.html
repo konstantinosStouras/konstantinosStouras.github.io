@@ -625,7 +625,7 @@
   var NAVY = '#7d1d3f', GOLD = '#c9a24b', MUTED = '#6a5a60', GRID = '#e8e2e4';
 
   // ── state ───────────────────────────────────────────────────────────────
-  var DATA = null, JMAP = {}, AUTHORS = null, authorsState = 'idle';
+  var DATA = null, JMAP = {}, AUTHORS = null, AUTHORS_MIN = 5, authorsState = 'idle';
   // The curated native sources (from data.json) — the default scope when nothing
   // is selected, so the page opens on these rather than the whole corpus.
   var NATIVE_KEYS = [];
@@ -1323,6 +1323,7 @@
       j.authors.slice(0, 6000).forEach(function (a) { var o = document.createElement('option'); o.value = a.n; frag.appendChild(o); });
       dl.appendChild(frag);
       authorsState = 'ready';
+      AUTHORS_MIN = j.minPapers || AUTHORS_MIN;
       $('authorHint').textContent = fmt(j.count) + ' authors with ≥ ' + j.minPapers + ' papers on record';
       var cbs = authorsCbs; authorsCbs = [];
       cbs.forEach(function (f) { f(); });
@@ -1336,37 +1337,59 @@
   // ── Author spotlight: add several authors, compare them ─────────────────────
   var AUTHOR_COLORS = ['#7d1d3f', '#2a7f8f', '#c9a24b', '#3f6098', '#8a5a2b', '#6a8d3a'];
   function authorColor(i) { return AUTHOR_COLORS[i % AUTHOR_COLORS.length]; }
-  // Resolve a typed name to a canonical author record (exact first, then a loose
-  // contains match on the first hit), like the old single-author search.
-  function resolveAuthor(name) {
+  // Resolve a typed name to a canonical author record. Order matters:
+  // exact key → UNIQUE whole-name-part match → UNIQUE loose-contains. The
+  // name-part pass must run BEFORE the loose pass, or "Robert Batt" resolves
+  // to whichever key happens to CONTAIN it ("Robert Battalio" — a different
+  // researcher) instead of the credited "Robert J. Batt"; and both fallbacks
+  // demand a unique hit so an ambiguous query never grabs the wrong person.
+  // On ambiguity the candidates are reported via `info` so the caller can
+  // show them instead of a flat "no author" message.
+  function resolveAuthor(name, info) {
     name = (name || '').trim(); if (!name || !AUTHORS) return null;
     var lc = name.toLowerCase();
     var a = AUTHORS[lc];
-    if (!a) { for (var kk in AUTHORS) { if (kk.indexOf(lc) !== -1) { a = AUTHORS[kk]; break; } } }
     if (!a) {
       // Name-part match: every queried part must appear as a whole part of the
       // author's canonical name — so "Konstantinos Stouras" resolves to the
       // credited "Konstantinos I. Stouras" even though the query lacks the
       // middle initial (the ORCID given+family form vs the published name).
-      // Only a UNIQUE hit counts, so a short query can't grab the wrong person.
       var qt = lc.replace(/\./g, ' ').split(/\s+/).filter(Boolean);
       if (qt.length >= 2) {
-        var hit = null, hits = 0;
+        var hit = null, hits = 0, cands = [];
         for (var k2 in AUTHORS) {
           var at = k2.replace(/\./g, ' ').split(/\s+/).filter(Boolean);
           var all = qt.every(function (t) { return at.indexOf(t) !== -1; });
-          if (all) { hits++; hit = AUTHORS[k2]; if (hits > 1) { hit = null; break; } }
+          if (all) { hits++; hit = AUTHORS[k2]; if (cands.length < 6) cands.push(AUTHORS[k2].n); }
         }
-        if (hit) a = hit;
+        if (hits === 1) a = hit;
+        else if (hits > 1 && info) info.candidates = cands;
       }
+    }
+    if (!a && !(info && info.candidates)) {
+      var lHit = null, lHits = 0, lCands = [];
+      for (var kk in AUTHORS) {
+        if (kk.indexOf(lc) !== -1) { lHits++; lHit = AUTHORS[kk]; if (lCands.length < 6) lCands.push(AUTHORS[kk].n); }
+      }
+      if (lHits === 1) a = lHit;
+      else if (lHits > 1 && info) info.candidates = lCands;
     }
     return a || null;
   }
   function addAuthor(name) {
     name = (name || '').trim(); if (!name) return;
     ensureAuthors(function () {
-      var a = resolveAuthor(name);
-      if (!a) { $('authorHint').textContent = 'No author matching “' + name + '” with ≥ 5 papers on record.'; return; }
+      var info = {};
+      var a = resolveAuthor(name, info);
+      if (!a) {
+        // An ambiguous name is not a missing one — name the candidates so the
+        // user can retype the one they meant (threshold read from the data
+        // file, not hardcoded).
+        $('authorHint').textContent = info.candidates
+          ? 'Several authors match “' + name + '”: ' + info.candidates.join(' · ') + ' — type the full name you mean.'
+          : 'No author matching “' + name + '” with ≥ ' + AUTHORS_MIN + ' papers on record.';
+        return;
+      }
       if (!S.authors.some(function (x) { return x.n === a.n; })) S.authors.push(a);
       $('authorInput').value = '';
       renderAuthor();

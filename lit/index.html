@@ -64,6 +64,9 @@
   .header { background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%); z-index: 100; box-shadow: var(--shadow-lg); }
   .header-inner { max-width: 1280px; margin: 0 auto; padding: 24px 32px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
   .header h1 { font-family: 'Fraunces', serif; color: white; font-size: 28px; font-weight: 400; letter-spacing: -0.5px; white-space: nowrap; }
+  /* The title is the home link (→ stouras.com/lit/, a clean reload like the
+     sub-pages' .brand logos) — it must look exactly like the plain heading. */
+  .header h1 a { color: inherit; text-decoration: none; }
   .header h1 em { font-style: italic; color: var(--accent); }
   .header-meta { color: rgba(255,255,255,0.6); font-size: 13px; text-align: right; }
   .header-meta strong { color: rgba(255,255,255,0.9); font-weight: 500; }
@@ -406,6 +409,7 @@
   .acct-menu-head { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-muted); }
   .acct-menu-head strong { display: block; color: var(--text); font-size: 13.5px; font-weight: 600; overflow-wrap: break-word; margin-top: 2px; }
   .acct-menu-item { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 10px 16px; font-size: 13.5px; cursor: pointer; transition: background .1s; color: var(--text); }
+  a.acct-menu-item { text-decoration: none; } /* the "Back to The Lit" home link renders like the other items */
   .acct-menu-item:hover { background: var(--navy-light); }
   .acct-badge { font-size: 12px; color: var(--navy); background: var(--navy-light); border-radius: 100px; padding: 1px 9px; font-weight: 600; }
   .acct-menu-sep { height: 1px; background: var(--border); }
@@ -692,7 +696,7 @@
 <div class="topbar">
 <header class="header">
   <div class="header-inner">
-    <h1><em>The Lit</em>: A research paper browser</h1>
+    <h1><a href="https://www.stouras.com/lit/" title="The Lit — a fresh start"><em>The Lit</em>: A research paper browser</a></h1>
     <div class="header-right">
       <nav class="lit-nav" aria-label="The Lit — sections">
         <a class="lit-nav-btn" href="about/" title="What The Lit is and how it works"><span class="ico">ⓘ</span>About</a>
@@ -1833,17 +1837,41 @@ function litUpgradeAuthorDeepLink() {
   labels.forEach(function (label) {
     var vs = sel.authorIdentity[label] || [];
     if (vs.length > 1) return;                     // already variant-rich (added from the Authors tab)
-    var q = String(vs[0] || label).trim().toLowerCase();
+    var q = nameFold(String(vs[0] || label)).trim().toLowerCase();
     if (!q) return;
+    var adopt = function (row) {
+      var nm0 = (row['Author'] || '').trim();
+      var variants = String(row['Name_Variants'] || nm0).split(';').map(function (x) { return x.trim().toLowerCase(); }).filter(Boolean);
+      sel.authorIdentity[label] = variants.length ? variants : [nm0.toLowerCase()];
+      changed = true;
+    };
+    var found = false;
     for (var j = 0; j < authorData.length; j++) {
       var a = authorData[j];
       var nm = (a['Author'] || '').trim();
       if (!nm) continue;
-      var variants = String(a['Name_Variants'] || nm).split(';').map(function (x) { return x.trim().toLowerCase(); }).filter(Boolean);
-      if (nm.toLowerCase() === q || variants.indexOf(q) >= 0) {
-        sel.authorIdentity[label] = variants.length ? variants : [nm.toLowerCase()];
-        changed = true;
-        break;
+      var variants = String(a['Name_Variants'] || nm).split(';').map(function (x) { return nameFold(x).trim().toLowerCase(); }).filter(Boolean);
+      if (nameFold(nm).toLowerCase() === q || variants.indexOf(q) >= 0) { adopt(a); found = true; break; }
+    }
+    if (!found) {
+      // Name-part fallback (mirror of the analytics page's resolveAuthor):
+      // every query part must appear as a whole part of the author's
+      // canonical name, and only a UNIQUE hit counts — so ?author=
+      // Konstantinos Stouras (the ORCID given+family form) widens to the
+      // credited "Konstantinos I. Stouras", while a short/ambiguous query
+      // stays as typed rather than grabbing the wrong person.
+      var qt = q.replace(/\./g, ' ').split(/\s+/).filter(Boolean);
+      if (qt.length >= 2) {
+        var hit = null, hits = 0;
+        for (var j2 = 0; j2 < authorData.length; j2++) {
+          var a2 = authorData[j2];
+          var nm2 = (a2['Author'] || '').trim();
+          if (!nm2) continue;
+          var at = nameFold(nm2).toLowerCase().replace(/\./g, ' ').split(/\s+/).filter(Boolean);
+          var all = qt.every(function (t) { return at.indexOf(t) !== -1; });
+          if (all) { hits++; hit = a2; if (hits > 1) { hit = null; break; } }
+        }
+        if (hit) adopt(hit);
       }
     }
   });
@@ -2048,7 +2076,7 @@ function normalizeEditorName(name) {
   // Normalize Unicode hyphens to regular hyphen
   t = t.replace(/[‐‑‒–—―﹘﹣－]/g, '-');
   // Normalize accents for lookup
-  var key = t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  var key = t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   if (EDITOR_ALIASES[key]) return EDITOR_ALIASES[key];
   var keyLower = t.toLowerCase();
   if (EDITOR_ALIASES[keyLower]) return EDITOR_ALIASES[keyLower];
@@ -2137,7 +2165,7 @@ function reverseName(name) {
 }
 
 function stripAccentsLower(s) {
-  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
 function fuzzyMergeEditors() {
@@ -2624,7 +2652,7 @@ function updateDropdownOptions() {
       var authText = (p['Authors']||'').toLowerCase();
       if (searchAuth && !authorMatch(authText, searchAuth)) return false;
       for (var a of sel.author) { if (!authorMatch(authText, a)) return false; }
-      for (var lbl in sel.authorIdentity) { var vs = sel.authorIdentity[lbl]; if (!vs.some(function(v){ return authText.includes(v); })) return false; }
+      for (var lbl in sel.authorIdentity) { if (!identityMatch(authText, sel.authorIdentity[lbl])) return false; }
       var affText = (p['Affiliations']||'').toLowerCase();
       if (searchAff && !textMatch(affText, searchAff)) return false;
       for (var af of sel.affiliation) { if (!textMatch(affText, af)) return false; }
@@ -2746,6 +2774,13 @@ document.addEventListener('keydown', function(e) {
 function applyFilters() {
   // Any normal filter interaction exits the "Recently added papers" view.
   if (recentMode) { recentMode = false; updateRecentButton(); }
+  // A text search typed over the untouched SITE default drops the default's
+  // chips first: a first-time visitor typing an author (or title/abstract/
+  // affiliation) means to search the catalog, not the pre-applied Management
+  // Science area — leaving those chips AND-chained in returns a baffling 0.
+  // Only the site default is dropped (a user's own chips, and their saved
+  // personal defaults, are never touched).
+  litDropSiteDefaultForSearch();
   refreshJournalScope();
   const search = document.getElementById('filterSearch').value.trim().toLowerCase();
   const searchAuth = document.getElementById('filterAuthors').value.trim().toLowerCase();
@@ -2794,7 +2829,7 @@ function applyFilters() {
     const authText = (p['Authors']||'').toLowerCase();
     if (searchAuth && !authorMatch(authText, searchAuth)) return false;
     for (const a of sel.author) { if (!authorMatch(authText, a)) return false; }
-    for (const lbl in sel.authorIdentity) { const vs = sel.authorIdentity[lbl]; if (!vs.some(v => authText.includes(v))) return false; }
+    for (const lbl in sel.authorIdentity) { if (!identityMatch(authText, sel.authorIdentity[lbl])) return false; }
 
     // Affiliations: live typed text AND all chips must match
     const affText = (p['Affiliations']||'').toLowerCase();
@@ -2914,6 +2949,42 @@ function litSelectionIsEmpty() {
     && (typeof preprintOnly === 'undefined' || !preprintOnly);
 }
 
+// A compact signature of the CURRENT filter selection (chips + live search
+// text + the pre-print toggle). Auto-apply paths (site default, personal
+// defaults) snapshot it right after applying; the sign-in/out clearFilters
+// then runs ONLY while the live selection still equals that snapshot — the
+// flags alone can't tell an untouched default from filters the user has since
+// edited on top of it, and clearing those would throw the user's work away.
+window.litFilterSig = function () {
+  if (typeof sel === 'undefined') return '';
+  var part = function (set) { return Array.from(set).sort().join(''); };
+  var inp = function (id) { var e = document.getElementById(id); return e ? e.value.trim().toLowerCase() : ''; };
+  return [
+    part(sel.journal), part(sel.jtype), part(sel.editor), part(sel.area), part(sel.se), part(sel.ae),
+    part(sel.year), part(sel.title), part(sel.author), Object.keys(sel.authorIdentity || {}).sort().join(''),
+    part(sel.affiliation), part(sel.abstract),
+    (typeof preprintOnly !== 'undefined' && preprintOnly) ? '1' : '0',
+    inp('filterSearch'), inp('filterAuthors'), inp('filterAffiliations'), inp('filterAbstracts')
+  ].join('');
+};
+window.litAutoSig = undefined;   // the signature captured right after an auto-apply
+
+// While the site default is the ONLY thing filtering the page, a typed text
+// search replaces it (see the applyFilters call site). Removes exactly the
+// chips the site default added, nothing else.
+function litDropSiteDefaultForSearch() {
+  if (!window.litSiteDefaultActive) return;
+  var typed = ['filterSearch', 'filterAuthors', 'filterAffiliations', 'filterAbstracts'].some(function (id) {
+    var e = document.getElementById(id); return e && e.value.trim();
+  });
+  if (!typed) return;
+  LIT_SITE_DEFAULT_JOURNALS.forEach(function (k) { sel.journal.delete(k); });
+  LIT_SITE_DEFAULT_AREAS.forEach(function (a) { sel.area.delete(a); });
+  window.litSiteDefaultActive = false;
+  window.litAutoSig = undefined;
+  if (typeof renderChips === 'function') { renderChips('journal'); renderChips('area'); }
+}
+
 function applyLitSiteDefault() {
   if (window.LIT_SHARED_VIEW || window.LIT_AUTHOR_DEEPLINK) return false;   // a shared-list / author deep-link view owns the page
   if (window.litSiteDefaultApplied) return false;
@@ -2926,6 +2997,7 @@ function applyLitSiteDefault() {
   if (typeof renderChips === 'function') { renderChips('journal'); renderChips('area'); }
   applyFilters();
   window.litSiteDefaultActive = true;
+  window.litAutoSig = window.litFilterSig();
   return true;
 }
 window.applyLitSiteDefault = applyLitSiteDefault;
@@ -3435,7 +3507,15 @@ function goPage(n) { currentPage = n; renderPage(); window.scrollTo({ top: 280, 
 */
 
 function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-function escAttr(s) { return (s||'').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+// For values inside onclick="fn('…')" — a JS string inside a double-quoted
+// HTML attribute. The & and < entities decode back to the same characters
+// before JS sees them, so they cost nothing and block any markup breakout.
+function escAttr(s) { return (s||'').replace(/&/g, '&amp;').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+// For plain HTML attributes (value="…", placeholder="…"): entity-escaping
+// only. escAttr is WRONG there — its \' JS-escaping deposits literal
+// backslashes into the DOM value (an O'Brien renders as O\'Brien, and a save
+// then persists the corruption).
+function escHtmlAttr(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
 // Free-text matching for the Title / Authors / Affiliations search boxes.
 // Default is substring, so "market" still finds "marketing". Wrap the query in
@@ -3459,14 +3539,48 @@ function textMatch(haystack, query) {
 // preceded by a non-letter: space, comma, hyphen, period). Quoted terms keep
 // the exact-word behavior of textMatch. The letter test includes Latin
 // accents, so "van Staden, Heletjé" and hyphenated names behave.
+// Fold a name for matching: strip diacritics (NFD, drop combining marks) so a
+// plain-keyboard "desir" finds "Désir"; normalize the curly apostrophe the
+// datasets carry (U+2019) to the ASCII one a keyboard types; collapse runs of
+// whitespace. Lowercasing stays the callers' job (haystacks arrive lowercased).
+function nameFold(s) {
+  s = String(s || '');
+  // Fast path: printable-ASCII (the overwhelming majority of rows) needs no
+  // unicode work — this function runs per paper on every filter pass and per
+  // author row in the deep-link fallback scan, so the normalize() below must
+  // stay off the hot path or a broad pass visibly wedges the main thread.
+  if (!/[^\x20-\x7e]/.test(s)) return s.indexOf('  ') === -1 ? s : s.replace(/\s+/g, ' ');
+  try { s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch (e) {}
+  return s.replace(/’/g, "'").replace(/\s+/g, ' ');
+}
 function authorMatch(haystack, query) {
   if (!query) return true;
   if (query.charAt(0) === '"') return textMatch(haystack, query);
+  haystack = nameFold(haystack); query = nameFold(query);
   var idx = 0;
   while ((idx = haystack.indexOf(query, idx)) !== -1) {
     var prev = idx === 0 ? '' : haystack.charAt(idx - 1);
     if (!prev || !/[a-zà-ɏ]/i.test(prev)) return true;
     idx += 1;
+  }
+  return false;
+}
+// ORCID-identity matching (the ?author= deep link and the Authors-tab identity
+// chips). An identity chip carries the author's exact credited spellings
+// (Name_Variants), so a paper matches only when one of its comma-separated
+// author names EQUALS a variant (folded). Substring/prefix tests are too loose
+// here: "Xin Chen" must not match "Yuxin Chen", nor "Ram Gopal" match
+// "Ram Gopalan" — those are different people's papers on what is presented as
+// one author's page. (The typed Authors search keeps authorMatch's prefix
+// semantics; identity chips are exact people.)
+function identityMatch(authText, vs) {
+  var names = nameFold(authText).split(',');
+  for (var i = 0; i < names.length; i++) {
+    var n = names[i].trim();
+    if (!n) continue;
+    for (var j = 0; j < vs.length; j++) {
+      if (n === nameFold(vs[j]).trim()) return true;
+    }
   }
   return false;
 }
@@ -4520,6 +4634,10 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         '<button class="acct-btn acct-user" onclick="acctUserChipClick(event)"><span class="acct-avatar" style="background-image:url(\'' + avatar + '\')"></span><span class="acct-uname">' + esc(name) + '</span></button>' +
         '<div class="acct-menu" id="acctMenu">' +
           '<div class="acct-menu-head">Signed in as<strong>' + esc(u.email || name) + '</strong></div>' +
+          (acctOnAuthorPage()
+            ? '<a class="acct-menu-item" href="https://www.stouras.com/lit/" title="Leave this author page and return to the full database.">🏠 Back to The Lit</a>' +
+              '<div class="acct-menu-sep"></div>'
+            : '') +
           '<div class="acct-menu-item" title="Your starred papers, lists, tags and private notes — everything you have saved." onclick="acctOpenLibrary()">★ My library <span class="acct-badge">' + saved + '</span></div>' +
           (orcidLinked
             ? '<div class="acct-menu-item" title="Every paper of yours in the database, with its citation count (matched from your linked ORCID)." onclick="acctGoMyPublications()">📊 My publications</div>' +
@@ -4535,15 +4653,20 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       '</div>';
   }
   window.acctToggleMenu = function (e) { if (e) e.stopPropagation(); var m = document.getElementById('acctMenu'); if (m) m.classList.toggle('open'); };
-  // The account chip: on an author page (?author=…, e.g. arrived via the
-  // menu's "My publications") clicking it returns to the full database at
-  // ./ (per the owner) — everywhere else it opens the account menu. The
-  // restoring-session hint chip shares this handler, so even mid-restore the
-  // chip takes an author page home instead of doing nothing.
+  // The account chip always pops out the account menu — including on an
+  // ?author= page (e.g. arrived via the menu's "My publications"), where the
+  // menu gains a "Back to The Lit" link to stouras.com/lit/ as its first item
+  // (per the owner: the chip used to navigate home directly, which read as a
+  // dead click while the author page's heavy all-journal load kept the main
+  // thread busy; a popped-out native link is both visible feedback and a
+  // navigation the browser can honour on its own). The restoring-session
+  // hint chip shares this handler but carries no menu, so on an author page
+  // it falls back to that same home navigation.
+  function acctOnAuthorPage() {
+    try { return !!new URLSearchParams(location.search).get('author'); } catch (er) { return false; }
+  }
   window.acctUserChipClick = function (e) {
-    var onAuthorPage = false;
-    try { onAuthorPage = !!new URLSearchParams(location.search).get('author'); } catch (er) {}
-    if (onAuthorPage) { location.assign('./'); return; }
+    if (!document.getElementById('acctMenu') && acctOnAuthorPage()) { location.assign('https://www.stouras.com/lit/'); return; }
     acctToggleMenu(e);
   };
   function acctCloseMenu() { var m = document.getElementById('acctMenu'); if (m) m.classList.remove('open'); }
@@ -4691,7 +4814,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       var url = shareUrlFor(L.shareId);
       html +=
         '<div class="share-linkbox">' +
-          '<input id="litShareUrl" type="text" readonly value="' + escAttr(url) + '" onclick="this.select()">' +
+          '<input id="litShareUrl" type="text" readonly value="' + escHtmlAttr(url) + '" onclick="this.select()">' +
           '<button class="share-copy" onclick="litCopyShareLink()">Copy link</button>' +
         '</div>' +
         '<div class="share-note" id="litShareCopyNote">Anyone with this link can view the list (read-only). ' +
@@ -4920,10 +5043,16 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   }
   window.acctSwitchMode = function () { setAuthMode(authMode === 'signin' ? 'create' : 'signin'); };
   window.acctSubmitAuth = function () {
+    // The Enter-key handlers on the modal's inputs call this directly, so the
+    // disabled button alone doesn't stop a double-submit — bail while a
+    // request is already in flight (a second create would error
+    // "already exists" over a registration that just succeeded).
+    var btn = document.getElementById('acctPrimaryBtn');
+    if (btn && btn.disabled) return;
     var email = document.getElementById('acctEmail').value.trim();
     var pw = document.getElementById('acctPassword').value;
     if (!email || !pw) { acctErr('Enter your email and password.'); return; }
-    var btn = document.getElementById('acctPrimaryBtn'); btn.disabled = true;
+    btn.disabled = true;
     if (authMode === 'signin') {
       auth.signInWithEmailAndPassword(email, pw)
         .then(function () { acctCloseAuth(); })
@@ -5049,6 +5178,11 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   // ── profile: view / edit the signed-in user's details ───────────────────
   window.acctOpenProfile = function () {
     if (!state.user) { acctOpenAuth(); return; }
+    // Signed in but the profile snapshot hasn't landed yet (fresh page load
+    // via a sub-page's #lit-profile deep link, or a cold Firestore cache):
+    // opening now would show blank fields — and a Save would overwrite the
+    // real profile with them. Defer; onData reopens the moment it arrives.
+    if (!state.profile) { pendingProfileOpen = window.acctOpenProfile; return; }
     acctCloseMenu();
     var p = state.profile || {};
     var pfAv = document.getElementById('pfAvatar');
@@ -5069,7 +5203,12 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       document.getElementById('pfOrcidChip').innerHTML =
         '<a class="orcid-id" href="' + orcidUrl(p.orcid) + '" target="_blank" rel="noopener"><span class="oico">iD</span>' + esc(p.orcid) + '</a>' +
         (p.orcidVerified ? ' <span class="orcid-verified" title="Confirmed by signing in at orcid.org">✓ verified</span>' : '');
-      document.getElementById('pfOrcidName').value = orcidMatchName(p);
+      // Prefill with the STORED match name only — NOT the orcidMatchName()
+      // fallback: echoing a derived default into the field makes a plain Save
+      // persist it as a hand-typed (user-owned) name, permanently blocking
+      // the ORCID credit-name backfill. Empty means "the ORCID default", as
+      // the placeholder and help text already say.
+      document.getElementById('pfOrcidName').value = (p.orcidAuthorName || '').trim();
       document.getElementById('pfOrcid').value = '';
       document.getElementById('pfOrcidLink').checked = !!p.orcidLinked;
       document.getElementById('pfOrcidLinkRow').style.display = '';
@@ -5091,7 +5230,11 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   };
   // ── ORCID: normalise + validate (ISO 7064 MOD 11-2 checksum) ──────────────
   function normOrcid(s) {
-    var m = String(s || '').trim().match(/(\d{4})-?(\d{4})-?(\d{4})-?(\d{3}[\dxX])/);
+    // Separators: hyphen OR whitespace (iDs copied out of PDFs often carry
+    // spaces). The trailing (?![\dxX]) stops a 17-digit typo from being
+    // silently truncated to a DIFFERENT valid iD — extra digit junk after the
+    // checksum char rejects instead.
+    var m = String(s || '').trim().match(/(\d{4})[-\s]?(\d{4})[-\s]?(\d{4})[-\s]?(\d{3}[\dxX])(?![\dxX])/);
     if (!m) return '';
     var d = (m[1] + m[2] + m[3] + m[4]).toUpperCase();
     var total = 0;
@@ -5280,7 +5423,13 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         acctOpenAuth();
       }).catch(function (e) {
         try { localStorage.removeItem(MERGE_STASH_KEY); } catch (e2) {}
-        alert('Could not remove this account: ' + friendly(e) + '\nNothing was moved.');
+        // exportAccountData already unpublished this account's public lists
+        // (they must go while we can still write as this user). The account
+        // deletion failed, so the account lives on — restore its share links
+        // right away instead of leaving them dead until the next sign-in.
+        lastSharedSig = {};
+        try { syncPublicLists(); } catch (e3) {}
+        alert('Could not remove this account: ' + friendly(e) + '\nYour saved data was not moved.');
       });
     }).catch(function (e) { alert('Merge failed before any change was made: ' + friendly(e)); });
   };
@@ -5297,16 +5446,22 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     try { stash = JSON.parse(localStorage.getItem(MERGE_STASH_KEY) || 'null'); } catch (e) {}
     if (!stash || !stash.data || stash.fromUid === state.user.uid) return;
     mergeStashAppliedUid = state.user.uid;
-    try { localStorage.removeItem(MERGE_STASH_KEY); } catch (e) {}
+    // The stash is the ONLY copy of the deleted duplicate's data — it is
+    // removed further down, only after every import write has landed, so a
+    // tab closed mid-import can retry on the next sign-in instead of losing
+    // the not-yet-written papers/lists/alerts.
     var d = stash.data, writes = [];
-    // Papers: union with any copy the kept account already has.
+    // Papers: union with any copy the kept account already has. The note
+    // merge must be IDEMPOTENT (a partial-failure retry re-runs it over
+    // already-merged rows): skip the concat when the incoming note is
+    // already contained in the kept one.
     Object.keys(d.papers || {}).forEach(function (id) {
       var b = d.papers[id], a = state.papers[id] || {};
       var merged = {
         starred: !!(a.starred || b.starred),
         tags: Array.from(new Set([].concat(a.tags || [], b.tags || []))),
         lists: Array.from(new Set([].concat(a.lists || [], b.lists || []))),
-        note: (a.note && b.note && a.note.trim() !== b.note.trim()) ? (a.note + '\n\n' + b.note) : (a.note || b.note || ''),
+        note: (a.note && b.note && a.note.indexOf(b.note.trim()) === -1) ? (a.note + '\n\n' + b.note) : (a.note || b.note || ''),
         doi: a.doi || b.doi || '', title: a.title || b.title || '',
         authors: a.authors || b.authors || '', year: a.year || b.year || '',
         updatedAt: serverTime()
@@ -5348,6 +5503,8 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     }
     if (Object.keys(patch).length) { patch.updatedAt = serverTime(); writes.push(profileDoc().set(patch, { merge: true })); }
     Promise.all(writes).then(function () {
+      // Everything landed — only now is the stash safe to discard.
+      try { localStorage.removeItem(MERGE_STASH_KEY); } catch (e) {}
       var n = Object.keys(d.papers || {}).length;
       var msg = 'Accounts merged: ' + n + ' saved paper' + (n === 1 ? '' : 's') + ', ' +
         Object.keys(d.lists || {}).length + ' list(s) and ' + Object.keys(d.alerts || {}).length +
@@ -5359,7 +5516,9 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         }
       } else { alert(msg); }
     }).catch(function (e) {
-      try { localStorage.setItem(MERGE_STASH_KEY, JSON.stringify(stash)); } catch (e2) {}
+      // The stash was never removed (it only goes on success), so the next
+      // sign-in retries; re-arm the per-session guard so a re-auth this
+      // session retries too.
       mergeStashAppliedUid = null;
       alert('The merge could not finish (' + friendly(e) + '). It will be retried the next time you sign in.');
     });
@@ -5391,6 +5550,10 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   window.acctCloseProfile = function () { document.getElementById('acctProfileOverlay').classList.remove('open'); };
   window.acctSaveProfile = function () {
     if (!state.user) { acctOpenAuth(); return; }
+    // The per-field Enter handlers call this directly — don't stack a second
+    // save while one is in flight.
+    var saveBtn = document.getElementById('pfSaveBtn');
+    if (saveBtn && saveBtn.disabled) return;
     var prof = {
       firstName: document.getElementById('pfFirstName').value.trim(),
       lastName: document.getElementById('pfLastName').value.trim(),
@@ -5400,6 +5563,13 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     };
     var er = document.getElementById('pfErr'); er.style.color = 'var(--red)'; er.textContent = '';
     if (!prof.firstName || !prof.lastName) { er.textContent = 'Please enter your first and last name.'; return; }
+    if (prof.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(prof.email)) { er.textContent = 'That contact e-mail looks invalid.'; return; }
+    if (prof.website) {
+      // Accept a bare domain by defaulting the scheme; then require a
+      // plausible host.
+      if (!/^https?:\/\//i.test(prof.website)) prof.website = 'https://' + prof.website;
+      if (!/^https?:\/\/[^\s\/]+\.[^\s\/]{2,}/i.test(prof.website)) { er.textContent = 'That website URL looks invalid.'; return; }
+    }
     // ORCID (optional). Linked mode (connected-iD row visible): the iD and its
     // verified status are managed by Connect/Disconnect, not this form — save
     // only the consent toggle and the match name (cleared = back to the
@@ -5502,7 +5672,11 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     // Scope the consent lookup to the OPEN connect modal: litOrcidClose only
     // hides the overlay, so a stale (possibly unchecked) #litOrcidConsent can
     // linger in the DOM when this is launched from the Edit-profile button.
-    var consent = document.querySelector('#litOrcidOverlay.open #litOrcidConsent');
+    // Launched from the profile card instead, the card's own association
+    // toggle (#pfOrcidLink) is the user's expressed choice — honour it rather
+    // than defaulting to consented.
+    var consent = document.querySelector('#litOrcidOverlay.open #litOrcidConsent')
+      || document.querySelector('#acctProfileOverlay.open #pfOrcidLink');
     var st = orcidRandState();
     try {
       sessionStorage.setItem('litOrcidOAuth', JSON.stringify({
@@ -5616,12 +5790,18 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   window.acctGoMyPublications = function () {
     if (!state.user) { acctOpenAuth(); return; }
     acctCloseMenu();
-    location.assign(dbAuthorLink(orcidMatchName()));
+    var nm = orcidMatchName();
+    // No match name on record (empty profile): ./?author= would silently land
+    // on the default view — send the user to the profile card to set one up.
+    if (!nm) { window.acctOpenProfile(); return; }
+    location.assign(dbAuthorLink(nm));
   };
   window.acctGoMyAnalytics = function () {
     if (!state.user) { acctOpenAuth(); return; }
     acctCloseMenu();
-    location.assign(anaAuthorLink(orcidMatchName()));
+    var nm = orcidMatchName();
+    if (!nm) { window.acctOpenProfile(); return; }
+    location.assign(anaAuthorLink(nm));
   };
   function litOrcidOpen(mode) {
     orcidMode = mode || 'manage';
@@ -5648,7 +5828,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         signIn +
         '<div class="acct-field">' +
           '<label for="litOrcidInput">ORCID iD</label>' +
-          '<input id="litOrcidInput" type="text" inputmode="numeric" placeholder="0000-0002-1825-0097" value="' + escAttr(p.orcid || '') + '">' +
+          '<input id="litOrcidInput" type="text" inputmode="numeric" placeholder="0000-0002-1825-0097" value="' + escHtmlAttr(p.orcid || '') + '">' +
           '<div style="font-size:11.5px;color:var(--text-muted);margin-top:4px">Find yours at <a href="https://orcid.org/" target="_blank" rel="noopener" style="color:var(--navy)">orcid.org</a>. It looks like 0000-0002-1825-0097.</div>' +
         '</div>' +
         '<label class="share-toggle-row"><input type="checkbox" id="litOrcidConsent" checked> ' +
@@ -5686,7 +5866,10 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       html +=
         '<div class="acct-field">' +
           '<label for="litOrcidName">Name we match your papers by</label>' +
-          '<input id="litOrcidName" type="text" value="' + escAttr(name) + '" placeholder="Your name as it appears on your papers">' +
+          // STORED name only (empty = the ORCID default; escHtmlAttr, not the
+          // JS-string escAttr, so an O'Brien doesn't render — and then get
+          // saved back — as O\'Brien). See acctOpenProfile's matching note.
+          '<input id="litOrcidName" type="text" value="' + escHtmlAttr((p.orcidAuthorName || '').trim()) + '" placeholder="Your name as it appears on your papers">' +
           '<div style="font-size:11.5px;color:var(--text-muted);margin-top:4px">Our data has no per-paper ORCID, so we match by author name — pre-filled with the published name from your ORCID record. Adjust it if your papers credit you differently, then Save.</div>' +
         '</div>' +
         '<button class="acct-btn" style="align-self:flex-start;padding:7px 14px" onclick="litOrcidSaveName()">Save name</button>' +
@@ -5749,9 +5932,9 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   };
   window.litOrcidUnlink = function () {
     if (!confirm('Remove your ORCID association? Your saved papers, notes and lists are unaffected.')) return;
-    if (state.profile) { delete state.profile.orcid; delete state.profile.orcidAuthorName; delete state.profile.orcidVerified; state.profile.orcidLinked = false; }
+    if (state.profile) { delete state.profile.orcid; delete state.profile.orcidAuthorName; delete state.profile.orcidNameAuto; delete state.profile.orcidVerified; state.profile.orcidLinked = false; }
     saveOrcidProfile(
-      { orcid: FV.delete(), orcidLinked: false, orcidAuthorName: FV.delete(), orcidVerified: FV.delete(), updatedAt: serverTime() },
+      { orcid: FV.delete(), orcidLinked: false, orcidAuthorName: FV.delete(), orcidNameAuto: FV.delete(), orcidVerified: FV.delete(), updatedAt: serverTime() },
       null,
       function () {
         litOrcidClose();
@@ -6016,7 +6199,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
 
   function alertTextRow(key, label, ph) {
     return '<div class="alert-row"><label>' + esc(label) + '</label>' +
-      '<div class="alert-addrow"><input id="litAlertInput-' + key + '" placeholder="' + escAttr(ph) + '" autocomplete="off" ' +
+      '<div class="alert-addrow"><input id="litAlertInput-' + key + '" placeholder="' + escHtmlAttr(ph) + '" autocomplete="off" ' +
         'onkeydown="if(event.key===\'Enter\'){event.preventDefault();litAlertAddText(\'' + key + '\',\'litAlertInput-' + key + '\');}">' +
         '<button type="button" class="alert-add-btn" onclick="litAlertAddText(\'' + key + '\',\'litAlertInput-' + key + '\')">Add</button></div>' +
       '<div class="alert-chips" id="litAlertChips-' + key + '"></div></div>';
@@ -6064,11 +6247,11 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
            critHtml)) +
       '<div class="alert-block-label" style="margin-top:16px">Delivery</div>' +
       '<div class="alert-delivery">' +
-        '<div class="acct-field"><label for="litAlertName">Alert name <span style="text-transform:none;font-weight:400;color:var(--text-muted)">— the subject line of your e-mails</span></label><input id="litAlertName" type="text" placeholder="' + escAttr(defaultAlertName(d)) + '" value="' + escAttr(alertForm.name || '') + '" oninput="litAlertNameInput()"></div>' +
+        '<div class="acct-field"><label for="litAlertName">Alert name <span style="text-transform:none;font-weight:400;color:var(--text-muted)">— the subject line of your e-mails</span></label><input id="litAlertName" type="text" placeholder="' + escHtmlAttr(defaultAlertName(d)) + '" value="' + escHtmlAttr(alertForm.name || '') + '" oninput="litAlertNameInput()"></div>' +
         '<div class="acct-field"><label for="litAlertFreq">Frequency</label><select id="litAlertFreq">' +
           freqOpt('immediate', 'As papers are added') + freqOpt('daily', 'Daily digest') + freqOpt('weekly', 'Weekly digest') + freqOpt('monthly', 'Monthly digest') +
         '</select></div>' +
-        '<div class="acct-field full"><label for="litAlertRecipient">Send to</label><input id="litAlertRecipient" type="email" placeholder="you@example.com" value="' + escAttr(alertForm.recipient || '') + '"></div>' +
+        '<div class="acct-field full"><label for="litAlertRecipient">Send to</label><input id="litAlertRecipient" type="email" placeholder="you@example.com" value="' + escHtmlAttr(alertForm.recipient || '') + '"></div>' +
       '</div>' +
       '<div class="alert-save-row"><button class="acct-primary" id="litAlertSaveBtn" onclick="litAlertSave()" style="padding:11px 22px">' + (editing ? 'Update alert' : 'Create alert') + '</button>' +
         (editing ? '<button type="button" class="alert-icon-btn" onclick="litAlertCancelEdit()">Cancel</button>' : '') +
@@ -6262,6 +6445,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (typeof renderChips === 'function') { renderChips('journal'); renderChips('jtype'); }
     if (typeof applyFilters === 'function') applyFilters();
     autoAppliedActive = true;   // so we can undo it on sign-out (see onAuthStateChanged)
+    if (typeof window.litFilterSig === 'function') window.litAutoSig = window.litFilterSig();
   }
 
   // On sign-in (or on load when already signed in) apply the user's saved default
@@ -6310,6 +6494,10 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
 
   window.acctOpenDefaults = function () {
     if (!state.user) { acctOpenAuth(); return; }
+    // Profile snapshot not in yet: the drafts would seed EMPTY and a Save
+    // would silently wipe the user's stored defaults. Defer; onData reopens
+    // once the profile lands.
+    if (!state.profile) { pendingProfileOpen = window.acctOpenDefaults; return; }
     acctCloseMenu();
     var d = savedDefaults();
     prefDraftJ = new Set(d.journals);
@@ -6459,10 +6647,19 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       .catch(function (e) { var er = document.getElementById('prefErr'); if (er) { er.style.color = 'var(--red)'; er.textContent = friendly(e); } if (st) st.textContent = ''; });
   };
 
+  // A modal opener (Edit profile / Default filters) requested before the
+  // profile snapshot landed — applied by onData on the first snapshot, so the
+  // modal never renders blank fields whose Save would clobber real data.
+  var pendingProfileOpen = null;
+
   // ── auth state + live data subscriptions ────────────────────────────────
   function onData() {
     acctDecorate();
     acctRenderControl();
+    if (pendingProfileOpen && state.user && state.profile) {
+      var opener = pendingProfileOpen; pendingProfileOpen = null;
+      try { opener(); } catch (e) {}
+    }
     maybeAutoApplyPrefs();
     maybeApplyOrcidPending();  // save an authenticated "Sign in with ORCID" result, if any
     maybeSeedOrcidFromProvider();  // auto-link the iD of a user who registered via the ORCID provider
@@ -6505,6 +6702,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     papersSnapshotSeen = false; listsSnapshotSeen = false;
     lastSharedSig = {};         // shared-list write dedup is per signed-in user
     prefsAutoApplied = false;   // re-arm auto-apply for whoever signs in next
+    pendingProfileOpen = null;  // a deferred modal open dies with the session that queued it
     window.litSiteDefaultApplied = false;  // re-arm the site default too (e.g. after sign-out)
     // Default filters belong to the session that signed in. Clear them on any
     // auth change so a signed-out visitor sees the full catalog again, and the
@@ -6513,9 +6711,16 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     // filter). Only clears when the current filters actually came from a default
     // (a personal default OR the site default).
     if (autoAppliedActive || window.litSiteDefaultActive) {
+      // Clear ONLY while the selection still equals the auto-applied snapshot:
+      // a user who edited filters (or typed a search) on top of the default
+      // keeps their work across the auth change — the flags alone can't tell
+      // an untouched default from a hand-tuned view.
+      var stillAutoApplied = typeof window.litFilterSig !== 'function' || window.litAutoSig === undefined
+        || window.litFilterSig() === window.litAutoSig;
       autoAppliedActive = false;
       window.litSiteDefaultActive = false;
-      if (typeof clearFilters === 'function') clearFilters();
+      window.litAutoSig = undefined;
+      if (stillAutoApplied && typeof clearFilters === 'function') clearFilters();
     }
     if (user) {
       // The user IS signed in from this instant: close a sign-in modal that a
@@ -6560,6 +6765,13 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       }, function (err) { console.warn('alerts listener:', err && err.code); });
     } else {
       if (libraryMode) acctExitLibrary();
+      // A sign-out (e.g. from another tab, sharing this session) must also
+      // dismiss any account modal still showing the signed-out user's data —
+      // their Save handlers already refuse to write, but the stale card
+      // lingering open reads as broken.
+      ['acctProfileOverlay', 'litOrcidOverlay', 'litAlertsOverlay', 'acctDefaultsOverlay', 'litShareOverlay'].forEach(function (id) {
+        var o = document.getElementById(id); if (o) o.classList.remove('open');
+      });
       onData();
       // Anonymous visitor: land them on the site default filters (idle-guarded,
       // so it never overrides filters they've already set this session).

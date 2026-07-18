@@ -1,6 +1,9 @@
 name: lit — update analytics summary
 
-# Pre-aggregates the whole Lit corpus (lit/data/ + lit/data-ft50/) into
+# Pre-aggregates the whole Lit corpus — lit/data/ + lit/data-ft50/ PLUS the
+# three satellite ABS data shards (sibling repos lit-data-abs4,
+# lit-data-abs3-omecon, lit-data-abs3-rest, checked out read-only below), so
+# the dashboard's journal list matches the main browser's — into
 # the small, committed JSON files the analytics dashboard reads:
 #   lit/analytics/data.json        (per-journal × per-year aggregates, top-cited)
 #   lit/analytics/authors.json     (per-author aggregates)
@@ -40,6 +43,30 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # The satellite ABS data shards live in sibling repos (the SHARDS list in
+      # lit/index.html). The summary must cover their journals too, or the
+      # dashboard's journal picker drifts from the main browser's journal list.
+      # They are checked out read-only under _analytics-shards/ — untracked, so
+      # the explicit `git add` below can never commit them; build-analytics.mjs
+      # finds them there and skips (with a warning) any that are missing.
+      - name: Checkout data shard — lit-data-abs4
+        uses: actions/checkout@v4
+        with:
+          repository: konstantinosStouras/lit-data-abs4
+          path: _analytics-shards/lit-data-abs4
+
+      - name: Checkout data shard — lit-data-abs3-omecon
+        uses: actions/checkout@v4
+        with:
+          repository: konstantinosStouras/lit-data-abs3-omecon
+          path: _analytics-shards/lit-data-abs3-omecon
+
+      - name: Checkout data shard — lit-data-abs3-rest
+        uses: actions/checkout@v4
+        with:
+          repository: konstantinosStouras/lit-data-abs3-rest
+          path: _analytics-shards/lit-data-abs3-rest
 
       - name: Set up Node
         uses: actions/setup-node@v4

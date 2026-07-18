@@ -452,10 +452,22 @@ provider LINKING — a verified-ORCID account attaches `oidc.orcid` via
 directly. Independently of the
 stored name, **the `?author=` deep-link chip is widened to the catalog's full
 `Name_Variants`** once authors.json is available (`litUpgradeAuthorDeepLink`;
-the deep-link auto-fetches authors.json) — so ANY author's page finds papers
-credited under any spelling, and clicking the account chip on an `?author=`
-page navigates back to `/lit/` instead of opening the menu
-(`acctUserChipClick`). **Sign-in invariant:** a signed-in user is never shown the
+the deep-link auto-fetches authors.json; when no exact variant matches it
+falls back to a UNIQUE whole-name-part match, mirroring the analytics page's
+`resolveAuthor` — so `?author=Konstantinos Stouras`, the ORCID given+family
+form, still finds the credited "Konstantinos I. Stouras") — so ANY author's
+page finds papers credited under any spelling. **Identity chips match
+exactly:** the `sel.authorIdentity` filter compares each comma-separated
+credited author name for (folded) EQUALITY with a variant (`identityMatch` in
+`index.html`, diacritic/apostrophe-folded via `nameFold` like `authorMatch`)
+— never substring/prefix, so "Xin Chen"'s page can't list "Yuxin Chen"'s
+papers. Clicking the account chip on an `?author=`
+page pops out the account menu like everywhere else, with a "Back to The Lit"
+link to `stouras.com/lit/` as its first item (`acctUserChipClick`/
+`acctOnAuthorPage`; the chip used to navigate home directly, which read as a
+dead click while the author page's all-journal load kept the main thread
+busy — the mid-restore hint chip, which has no menu, still falls back to
+that home navigation). **Sign-in invariant:** a signed-in user is never shown the
 sign-in modal again — `acctOpenAuth` no-ops when signed in, the header
 paints from the `litAuthHint` localStorage cache while the session restores
 (`authResolved`), and account actions clicked during the restore window
@@ -484,7 +496,13 @@ page lands the visitor on a **built-in default filter set** — Journal =
 (`LIT_SITE_DEFAULT_JOURNALS`/`LIT_SITE_DEFAULT_AREAS` + `applyLitSiteDefault()`
 in the main script, `window.litSiteDefaultApplied`/`litSiteDefaultActive` guards).
 It applies once per session and ONLY while the live selection is empty, so it
-never overrides a user's own filters. Wiring: for an **anonymous** visitor the
+never overrides a user's own filters; typing any text search over the
+untouched site default **drops its chips first**
+(`litDropSiteDefaultForSearch`) so a first-touch author/title search isn't
+AND-chained into a baffling 0, and the sign-in/out `clearFilters` runs only
+while the live selection still equals the auto-applied snapshot
+(`litFilterSig`/`litAutoSig`), so filters the user edited on top of a default
+survive an auth change. Wiring: for an **anonymous** visitor the
 accounts `onAuthStateChanged` else-branch applies it; for a **signed-in** user
 with NO saved personal defaults, `maybeAutoApplyPrefs()` falls back to it (a user
 WITH personal defaults gets theirs; a user who turned `autoApplyFilters` off gets
@@ -573,9 +591,19 @@ paper-search filter bar is hidden (`body.lit-lib-mode`; the library has its own
 search), and clicking the ACTIVE list/tag chip deactivates it (back to "All
 saved") without removing it (`acctSetLibFilter` toggle). **Data Analytics
 (`lit/analytics/`)** is an interactive summary-statistics dashboard over the
-whole corpus available in this repo — the ten native sources (`data/`) plus
-the FT50 catalog (`data-ft50/`), deduped with native winning on overlap
-(~260k papers, 53 journals). It never downloads the ~270 MB of raw papers:
+**whole corpus the main browser lists** — the ten native sources (`data/`),
+the FT50 catalog (`data-ft50/`) AND the three satellite ABS data shards
+(sibling repos, read from a local checkout: the workflow checks them out
+under `_analytics-shards/`, a local run finds them as sibling clones of the
+site repo, `LIT_SHARDS_DIR` overrides; a missing shard is skipped with a
+warning, like the page's 404-skip). Journals dedupe first-registration-wins
+in the page's own precedence (native → FT50 → shards); shard journals' ABS
+grades flow from each shard manifest's `abs` field via the script's
+`MANIFEST_ABS` mirror (~580k papers, 129 journals — the analytics journal
+picker must always match the main browser's journal filter; working papers
+(`data-workingpapers/`) stay out, as unpublished non-journals, exactly as
+they're kept out of the main page's published "N papers" count). It never
+downloads the ~600 MB of raw papers:
 `lit/_scraper/build-analytics.mjs` pre-aggregates everything **offline** into
 two small committed files it fetches on load — `analytics/data.json`
 (per-journal × per-year rows: paper count `n`, summed authors `a`, solo `s`,
@@ -584,8 +612,10 @@ optional `x` sub-row of the same shape holding that year's NON-research subset**
 — see the toggle below; plus each journal's UTD24/FT50/ABS membership — a
 byte-for-byte mirror of index.html's `ABS_RATING`/`UTD24_KEYS`/`FT50_KEYS` — its
 `native` flag & research-only paper count `rp`, and its top-cited papers) and
-`analytics/authors.json` (for authors with ≥ 5 papers, canonicalised via the
-datasets' `Name_Variants`, loaded lazily only when the Author tab opens: each
+`analytics/authors.json` (for authors with ≥ 3 papers — was 5; lowered so the
+account menu's "My author analytics" deep link reaches early-career authors —
+canonicalised via the datasets' `Name_Variants`, loaded lazily only when the
+Author tab opens: each
 author carries `jy` — per-(journal, year) cells `[papers, co-author slots,
 paper citations, co-author citation sum]`, from which the page derives the old
 papers/year + papers/journal marginals on load AND computes the compare table's
@@ -703,9 +733,10 @@ years; reference popularity uses references' `CitedBy` (a rough proxy while
 citation coverage fills in). Keep the `ABS_RATING`/`UTD24_KEYS`/`FT50_KEYS`
 mirror and the native-wins journal merge in sync with build-analytics.mjs.
 Refreshed daily by `.github/workflows/lit-analytics.yml` (08:10 UTC, after the
-native and FT50 data builds; runs build-analytics.mjs **and**
-build-disruption.mjs), which commits `analytics/*.json` (incl.
-`disruption.json`) on master only.
+native and FT50 data builds; checks out the three shard repos read-only under
+`_analytics-shards/` so the summary covers their journals, then runs
+build-analytics.mjs **and** build-disruption.mjs), which commits
+`analytics/*.json` (incl. `disruption.json`) on master only.
 The generation date mirrors the native `meta.json` `lastPull`, never
 `Date.now()`, so re-runs on an unchanged dataset are a no-op. The page also
 shows one **live community figure — the number of registered users** (a tile in
