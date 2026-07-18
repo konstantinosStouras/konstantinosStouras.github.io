@@ -36,6 +36,17 @@
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%237d1d3f'/%3E%3Ctext%20x='50'%20y='66'%20font-family='Georgia,serif'%20font-size='46'%20font-style='italic'%20font-weight='bold'%20fill='%23c9a24b'%20text-anchor='middle'%3ELit%3C/text%3E%3C/svg%3E">
 <meta name="theme-color" content="#7d1d3f">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..600&family=Work+Sans:ital,wght@0,300..700;1,300..600&display=swap" rel="stylesheet">
+<!-- Warm the connections every sign-in and account call rides on. A cold TLS
+     handshake per hop (auth handler → provider page; auth/Firestore APIs) is
+     a large share of how long the sign-in popup takes to appear. Navigation/
+     iframe hosts use the plain pool; the CORS API hosts need crossorigin. -->
+<link rel="preconnect" href="https://lit-paper-browser.firebaseapp.com">
+<link rel="preconnect" href="https://accounts.google.com">
+<link rel="preconnect" href="https://orcid.org">
+<link rel="preconnect" href="https://www.gstatic.com">
+<link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
 <style>
   :root {
     /* Theme: Oxblood & antique gold — "The Lit" literary identity.
@@ -4376,6 +4387,12 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   var auth = firebase.auth();
   var db = firebase.firestore();
   try { auth.useDeviceLanguage(); } catch (e) {}
+  // Pre-initialize the popup sign-in machinery (the hidden /__/auth/iframe on
+  // the authDomain) during idle time instead of lazily at the first
+  // "Continue with …" click — that lazy init alone added seconds between the
+  // click and the popup appearing. getRedirectResult() is the SDK's cheapest
+  // call that forces it; its result is irrelevant here.
+  setTimeout(function () { try { auth.getRedirectResult().catch(function () {}); } catch (e) {} }, 1200);
   var FV = firebase.firestore.FieldValue;
   var serverTime = function () { return FV.serverTimestamp(); };
 
@@ -5120,11 +5137,14 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     var pw = document.getElementById('acctPassword').value;
     if (!email || !pw) { acctErr('Enter your email and password.'); return; }
     btn.disabled = true;
+    var btnLabel = btn.textContent;
+    btn.textContent = authMode === 'signin' ? 'Signing in…' : 'Creating account…';
+    var btnRestore = function () { btn.disabled = false; btn.textContent = btnLabel; };
     if (authMode === 'signin') {
       auth.signInWithEmailAndPassword(email, pw)
         .then(function () { acctCloseAuth(); })
         .catch(function (e) { acctErr(friendly(e)); })
-        .then(function () { btn.disabled = false; });
+        .then(btnRestore);
       return;
     }
     // Creating an account: capture the profile fields entered above and save
@@ -5160,7 +5180,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         return Promise.all(tasks).catch(function (e) { console.warn('post-signup profile write:', e && e.code); });
       })
       .catch(function (e) { acctErr(friendly(e)); })
-      .then(function () { btn.disabled = false; });
+      .then(btnRestore);
   };
   // ── Third-party sign-in providers ──
   // Google covers Gmail accounts; Apple, GitHub and ORCID are available once
@@ -5197,9 +5217,18 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   window.acctProvider = function (key) {
     var def = PROVIDER_DEFS[key];
     if (!def) return;
+    // Instant feedback: the popup can take a beat to appear (auth iframe +
+    // the provider's own page) — mark the clicked button as working, and
+    // guard against a double-click racing two popups.
+    var visible = AUTH_PROVIDERS.filter(function (k) { return PROVIDER_DEFS[k]; });
+    var b = document.querySelectorAll('#acctProviders .acct-google')[visible.indexOf(key)] || null;
+    if (b && b.disabled) return;
+    var orig = b ? b.innerHTML : '';
+    if (b) { b.disabled = true; b.innerHTML = def.svg + 'Opening ' + esc(def.label.replace('Continue with ', '')) + '…'; }
+    var done = function () { if (b) { b.disabled = false; b.innerHTML = orig; } };
     auth.signInWithPopup(def.make())
-      .then(function () { acctCloseAuth(); })
-      .catch(function (e) { if (e && (e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request')) return; acctErr(friendly(e)); });
+      .then(function () { done(); acctCloseAuth(); })
+      .catch(function (e) { done(); if (e && (e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request')) return; acctErr(friendly(e)); });
   };
   // Kept for any old references; Google is just one of the providers now.
   window.acctGoogle = function () { window.acctProvider('google'); };
