@@ -1709,7 +1709,24 @@ function updateYearRangeText(loadedMinYear) {
   }
 }
 
+// Sources stream in one file at a time — a broad author search brings 100+
+// arrivals, and re-filtering the whole (growing) corpus per arrival kept the
+// main thread in back-to-back long tasks: clicks (the account menu, chips…)
+// felt dead until the load finished. Coalesce: re-render immediately when
+// idle, otherwise at most every ~700 ms with a trailing pass, so the final
+// state always lands and the thread breathes between passes.
+var srcArrivedTimer = null, srcArrivedLast = 0;
 function afterSourceArrived() {
+  var now = Date.now();
+  if (now - srcArrivedLast > 700) { srcArrivedLast = now; afterSourceArrivedNow(); return; }
+  if (srcArrivedTimer) return;
+  srcArrivedTimer = setTimeout(function () {
+    srcArrivedTimer = null;
+    srcArrivedLast = Date.now();
+    afterSourceArrivedNow();
+  }, 700);
+}
+function afterSourceArrivedNow() {
   // Re-render whatever view is active with the data loaded so far — but never
   // clobber a read-only shared-list view (?list=…) that a background source
   // load would otherwise replace with the normal filtered list.
@@ -4723,6 +4740,10 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     var defCount = defs.journals.length + defs.jtypes.length;
     var alertCount = Object.keys(state.alerts || {}).length;
     var orcidLinked = !!(prof.orcid && prof.orcidLinked);
+    // Re-renders fire on every Firestore snapshot (badges, profile writes) —
+    // rebuilding the header must never close a menu the user just opened,
+    // especially during a heavy load when snapshots keep echoing in.
+    var menuWasOpen = !!el.querySelector('#acctMenu.open');
     el.innerHTML =
       '<div class="acct-wrap">' +
         '<button class="acct-btn acct-user" onclick="acctUserChipClick(event)"><span class="acct-avatar" style="background-image:url(\'' + avatar + '\')"></span><span class="acct-uname">' + esc(name) + '</span></button>' +
@@ -4745,6 +4766,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
           '<div class="acct-menu-item danger" title="Sign out of your account on this device." onclick="acctSignOut()">Sign out</div>' +
         '</div>' +
       '</div>';
+    if (menuWasOpen) { var mm = document.getElementById('acctMenu'); if (mm) mm.classList.add('open'); }
   }
   window.acctToggleMenu = function (e) { if (e) e.stopPropagation(); var m = document.getElementById('acctMenu'); if (m) m.classList.toggle('open'); };
   // The account chip always pops out the account menu — including on an
