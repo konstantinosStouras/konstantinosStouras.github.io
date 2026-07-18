@@ -471,8 +471,10 @@ page pops out the account menu like everywhere else, with a "Back to The Lit"
 link to `stouras.com/lit/` as its first item (`acctUserChipClick`/
 `acctOnAuthorPage`; the chip used to navigate home directly, which read as a
 dead click while the author page's all-journal load kept the main thread
-busy — the mid-restore hint chip, which has no menu, still falls back to
-that home navigation). Removing the author chip (or Clear) retires the
+busy — and the mid-restore hint chip, which has no menu yet, QUEUES the
+menu-open via `acctWhenSignedIn` instead of navigating, since the old
+home-navigation fallback silently discarded the page's filters, e.g. a
+running author search). Removing the author chip (or Clear) retires the
 deep-link — `clearAuthorDeepLink` strips `?author=` from the URL and drops
 the flag, so a reload can't resurrect the heavy all-journal author load.
 The menu's "My publications" carries a **badge with the user's paper count**
