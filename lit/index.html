@@ -6569,6 +6569,11 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       return !q || (o.label || '').toLowerCase().indexOf(q) >= 0 || String(o.key).toLowerCase().indexOf(q) >= 0;
     });
     if (!rows.length) { box.innerHTML = '<div class="pref-empty" style="padding:8px">No journals match “' + esc(query) + '”.</div>'; return; }
+    // Selected journals pin to the TOP of the list (kept in their original
+    // relative order) for easy reference; deselecting one drops it straight
+    // back to its usual place in the catalog ordering.
+    rows = rows.filter(function (o) { return prefDraftJ.has(o.key); })
+      .concat(rows.filter(function (o) { return !prefDraftJ.has(o.key); }));
     box.innerHTML = rows.map(function (o) {
       var on = prefDraftJ.has(o.key);
       return '<label class="pref-jrow"><input type="checkbox"' + (on ? ' checked' : '') + ' onchange="acctPrefToggleJournal(\'' + escAttr(o.key) + '\')"> ' + esc(o.label) + '</label>';
@@ -6578,7 +6583,11 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   window.acctPrefToggleJournal = function (key) {
     if (!prefDraftJ) return;
     if (prefDraftJ.has(key)) prefDraftJ.delete(key); else prefDraftJ.add(key);
-    renderPrefSelected();   // the row's own checkbox already reflects the click
+    // Re-render the list so the pinned-selected-on-top ordering follows the
+    // click (select → jumps to the top; deselect → back to its usual place).
+    var s = document.getElementById('prefJSearch');
+    renderPrefJournalList(s ? s.value : '');
+    renderPrefSelected();
   };
 
   function renderPrefSelected() {
