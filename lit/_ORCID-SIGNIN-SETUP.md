@@ -135,6 +135,17 @@ SDK, same users). Do these once:
   connected ORCID can attach the `oidc.orcid` provider from Edit profile
   (`acctLinkOrcidProvider`, `linkWithPopup`) so "Continue with ORCID" signs
   in to THAT account — after which no duplicate can form.
+- **Automatic duplicate DETECTION (same ORCID or same e-mail):** every
+  signed-in session claims its identity keys in the `accountKeys`
+  collection — `orcid:<iD>` and `email:<sha256 of the lowercased address>`
+  → `{ uid }` (`maybeClaimAccountKeys`). A sign-in whose key is already
+  claimed by a different uid is a duplicate: the ORCID-only account gets an
+  immediate "merge now?" prompt wired to `acctStartMerge`; the main account
+  gets a one-time pointer to run the merge from the duplicate. Conflicting
+  claims are never overwritten. **Requires the `accountKeys` rule in
+  `lit/_firestore.rules` — redeploy the rules
+  (`firebase deploy --only firestore:rules` from `lit/`) to activate;**
+  until then every read/write is a silent no-op and nothing changes.
 - **Match name lifecycle:** auto-derived match names are marked
   `orcidNameAuto: true` and stay upgradeable (a legacy stored given+family
   form is healed to the record's credit-name); a name the user typed
