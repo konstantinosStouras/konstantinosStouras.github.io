@@ -141,7 +141,7 @@
           '<div class="acct-menu-head">Signed in as<strong>' + esc(user.email || name) + '</strong></div>' +
           '<a class="acct-menu-item" title="Your starred papers, lists, tags and private notes — everything you have saved." href="' + MAIN + '#lit-library">★ My library' + (saved != null ? ' <span class="acct-badge">' + saved + '</span>' : '') + '</a>' +
           (orcidLinked
-            ? '<a class="acct-menu-item" title="Every paper of yours in the database, with its citation count (matched from your linked ORCID)." href="' + MAIN + '?author=' + encodeURIComponent(matchName) + '">📊 My publications</a>' +
+            ? '<a class="acct-menu-item" title="Every paper of yours in the database, with its citation count (matched from your linked ORCID)." href="' + MAIN + '?author=' + encodeURIComponent(matchName) + '">📊 My publications' + (typeof p.myPubCount === 'number' ? ' <span class="acct-badge">' + p.myPubCount + '</span>' : '') + '</a>' +
               '<a class="acct-menu-item" title="Your metrics in the Data Analytics author spotlight (matched from your linked ORCID)." href="' + MAIN + 'analytics/?author=' + encodeURIComponent(matchName) + '">📈 My author analytics</a>'
             : '') +
           '<div class="acct-menu-sep"></div>' +
