@@ -467,7 +467,10 @@ link to `stouras.com/lit/` as its first item (`acctUserChipClick`/
 `acctOnAuthorPage`; the chip used to navigate home directly, which read as a
 dead click while the author page's all-journal load kept the main thread
 busy — the mid-restore hint chip, which has no menu, still falls back to
-that home navigation). **Sign-in invariant:** a signed-in user is never shown the
+that home navigation). Removing the author chip (or Clear) retires the
+deep-link — `clearAuthorDeepLink` strips `?author=` from the URL and drops
+the flag, so a reload can't resurrect the heavy all-journal author load.
+**Sign-in invariant:** a signed-in user is never shown the
 sign-in modal again — `acctOpenAuth` no-ops when signed in, the header
 paints from the `litAuthHint` localStorage cache while the session restores
 (`authResolved`), and account actions clicked during the restore window

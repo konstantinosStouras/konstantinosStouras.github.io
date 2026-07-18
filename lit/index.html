@@ -1300,8 +1300,28 @@ function addAuthorIdentityChip(label, variants) {
 
 function removeAuthorIdentity(label) {
   delete sel.authorIdentity[label];
+  clearAuthorDeepLink();
   renderAuthorChips();
   applyFilters();
+}
+
+// Retiring the author scope must retire the ?author= DEEP-LINK too: strip the
+// parameter from the address bar (a reload/share of the stale URL would
+// resurrect the filter — and its heavy all-journal load — the user just
+// removed) and drop the flag that makes the account chip navigate home and
+// stands the default filters down. No-ops while any identity chip remains.
+function clearAuthorDeepLink() {
+  if (!window.LIT_AUTHOR_DEEPLINK) return;
+  if (Object.keys(sel.authorIdentity || {}).length) return;
+  window.LIT_AUTHOR_DEEPLINK = false;
+  try {
+    var sp = new URLSearchParams(location.search);
+    if (sp.has('author')) {
+      sp.delete('author');
+      var qs = sp.toString();
+      history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash);
+    }
+  } catch (e) {}
 }
 
 function addChipFromCard(type, val) {
@@ -2922,6 +2942,7 @@ function toggleFilterPanel() {
 
 function clearFilters() {
   resetFilterState();
+  clearAuthorDeepLink();   // Clear wipes the author chip too — the ?author= URL and flag go with it
   closeSummaryTabs();
   applyFilters();
 }
