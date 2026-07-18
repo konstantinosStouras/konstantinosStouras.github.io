@@ -69,7 +69,7 @@ const LIMIT = (function () {
 const MAILTO = process.env.SUB_MAILTO || 'kstouras+litsub@gmail.com'; // distinct OpenAlex quota identity
 const MATCH_MODE = (process.env.SUB_AUTHOR_MATCH || 'fuzzy').toLowerCase() === 'exact' ? 'exact' : 'fuzzy';
 const MAX_ABSTRACT = 4000;
-const MAX_TRIES = parseInt(process.env.SUB_MAX_TRIES || '12', 10); // give a not-yet-indexed posting time before giving up
+const MAX_AGE_DAYS = parseInt(process.env.SUB_MAX_AGE_DAYS || '7', 10); // keep retrying a not-yet-indexed posting for this many days before giving up (a fresh SSRN posting can take a day+ to reach Crossref/OpenAlex)
 const NOTIFY_TO = process.env.FEEDBACK_TO || 'kstouras@gmail.com';
 const PULL_DATE = process.env.SUB_PULL_DATE || new Date().toISOString().slice(0, 10);
 
@@ -530,13 +530,15 @@ async function run() {
         continue; // leave pending; a transient OpenAlex/Crossref outage
       }
       if (outcome.status === 'notfound') {
+        const created = sub.createdAt && sub.createdAt.toMillis ? sub.createdAt.toMillis() : 0;
+        const ageDays = created ? (Date.now() - created) / 86400000 : 0;
         const tries = (Number.isFinite(sub.tries) ? sub.tries : 0) + 1;
-        if (tries >= MAX_TRIES) {
+        if (created && ageDays > MAX_AGE_DAYS) {
           outcome.status = 'rejected'; outcome.reason = 'not-indexed';
-          outcome.detail = 'I could not find this paper in OpenAlex or Crossref after several tries — it may be too new, or the link may be wrong.';
+          outcome.detail = `I could not find this paper in OpenAlex or Crossref after ${Math.round(ageDays)} days — it may be too new to be indexed yet, or the link may be wrong.`;
         } else {
           await d.ref.update({ tries, lastTriedAt: FieldValue.serverTimestamp() });
-          console.log(`  … ${d.id} not indexed yet (try ${tries}/${MAX_TRIES}) — left pending.`);
+          console.log(`  … ${d.id} not indexed yet (try ${tries}, age ${ageDays.toFixed(1)}d) — left pending.`);
           continue;
         }
       }

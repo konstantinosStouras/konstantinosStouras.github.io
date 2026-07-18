@@ -83,8 +83,10 @@ No new secret is needed if the feedback mailer is already configured.
   OpenAlex; a fuzzy-only match is flagged `[fuzzy]` in the admin view + e-mails.
 - `SUB_MAILTO` — OpenAlex/Crossref polite-pool identity (default
   `kstouras+litsub@gmail.com`, a distinct quota identity).
-- `SUB_MAX_TRIES` — how many runs to keep retrying a not-yet-indexed posting
-  before giving up (default 12 ≈ two hours at the 10-min cadence).
+- `SUB_MAX_AGE_DAYS` — keep retrying a not-yet-indexed posting for this many
+  days before giving up (default 7). A freshly-posted SSRN paper can take a day
+  or more to appear in Crossref/OpenAlex, so the retry window is time-based (not
+  a fixed run count) to survive that lag.
 - `SUB_DATA_DIR` / `SUB_CATALOG_DIRS` — override the archive / catalog dirs
   (default `lit/data-workingpapers` and `lit/data` + `lit/data-ft50`).
 
