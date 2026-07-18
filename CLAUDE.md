@@ -479,7 +479,14 @@ sign-in modal again — `acctOpenAuth` no-ops when signed in, the header
 paints from the `litAuthHint` localStorage cache while the session restores
 (`authResolved`), and account actions clicked during the restore window
 (star, notes panel) are queued by `acctWhenSignedIn` and run when auth
-resolves instead of bouncing to the modal.
+resolves instead of bouncing to the modal. A companion `litProfHint` cache
+(uid-keyed; orcidLinked + match name + myPubCount, written on every profile
+snapshot) keeps the account CARD identical while the profile snapshot is
+still loading — the ORCID menu items/badge never vanish mid-load — and
+guards the first-run ORCID invite: `maybeOrcidPrompt` never fires when the
+hint says the account is linked (a first snapshot served from a stale
+Firestore cache must not re-ask for an iD we have), and a false invite
+already open is closed by onData the moment the real profile shows an iD.
 Signed-in users can also save **default filters** (account menu →
 "Default filters"): a preferred subset of journals and/or journal types,
 **auto-applied on sign-in** so they land on their subset instead of the full

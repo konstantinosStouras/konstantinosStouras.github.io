@@ -4674,7 +4674,20 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       return;
     }
     var u = state.user;
-    var prof = state.profile || {};
+    var prof = state.profile;
+    if (!prof) {
+      // The profile snapshot hasn't landed yet (heavy pages delay Firestore
+      // well past first paint) — render the card from the cached hint so it
+      // looks the SAME as everywhere else: the ORCID menu items and the
+      // My-publications badge must not vanish mid-load.
+      prof = {};
+      var ph = litProfHintGet();
+      if (ph) {
+        if (ph.ol) { prof.orcid = ph.n || '1'; prof.orcidLinked = true; }
+        if (ph.pc != null) prof.myPubCount = ph.pc;
+        if (ph.n) prof.orcidAuthorName = ph.n;
+      }
+    }
     var fullName = ((prof.firstName || '') + ' ' + (prof.lastName || '')).trim();
     var name = fullName || u.displayName || (u.email ? u.email.split('@')[0] : 'Account');
     var avatar = acctAvatarUrl(acctAvatarSeed());
@@ -5301,9 +5314,35 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   // so association is by author name): their chosen match name, else full name.
   function orcidMatchName(p) {
     p = p || state.profile || {};
-    return (p.orcidAuthorName && p.orcidAuthorName.trim())
-      || ((p.firstName || '') + ' ' + (p.lastName || '')).trim()
-      || (state.user && state.user.displayName) || '';
+    var nm = (p.orcidAuthorName && p.orcidAuthorName.trim())
+      || ((p.firstName || '') + ' ' + (p.lastName || '')).trim();
+    if (nm) return nm;
+    // Profile snapshot still loading: the cached hint knows the match name,
+    // so a menu link clicked mid-restore carries the credited form.
+    if (!state.profile) { var ph = litProfHintGet(); if (ph && ph.n) return ph.n; }
+    return (state.user && state.user.displayName) || '';
+  }
+  // Tiny cached snapshot of the profile bits the account card renders from,
+  // written on every profile snapshot and read while the NEXT page load's
+  // snapshot is still pending — heavy pages (an ?author= all-journal load)
+  // can delay Firestore well past first paint, and the card must look the
+  // same wherever/whenever the user opens it. Keyed by uid; display-only.
+  function litProfHintGet() {
+    try {
+      var h = JSON.parse(localStorage.getItem('litProfHint') || 'null');
+      return (h && state.user && h.u === state.user.uid) ? h : null;
+    } catch (e) { return null; }
+  }
+  function litProfHintPut(p) {
+    if (!state.user || !p) return;
+    try {
+      localStorage.setItem('litProfHint', JSON.stringify({
+        u: state.user.uid,
+        ol: !!(p.orcid && p.orcidLinked),
+        n: orcidMatchName(p) || '',
+        pc: (typeof p.myPubCount === 'number') ? p.myPubCount : null
+      }));
+    } catch (e) {}
   }
   // The name journals CREDIT an author by is ORCID's "Published name"
   // (credit-name) — given+family alone can drop a middle initial and then
@@ -6044,6 +6083,11 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   function maybeOrcidPrompt() {
     if (orcidPromptShown) return;
     if (!state.user || !state.profile) return;                 // wait for the profile snapshot
+    // The cached hint says this account is already linked: never re-invite —
+    // a first snapshot served from a stale/empty Firestore cache must not ask
+    // a user for the ORCID we already have (they'd see their own iD prompted).
+    var ph = litProfHintGet();
+    if (ph && ph.ol) { orcidPromptShown = true; return; }
     if (state.profile.orcid || state.profile.orcidPromptSeen) { orcidPromptShown = true; return; }
     if (window.LIT_SHARED_VIEW || window.LIT_AUTHOR_DEEPLINK || libraryMode) return;
     if (document.querySelector('.acct-overlay.open')) return;  // don't stack; retry on next snapshot
@@ -6780,7 +6824,13 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     syncPublicLists();   // keep any public lists' shared copies current as the owner edits
     if (libraryMode) { renderLibraryBar(); renderLibrary(); if (shareModalLid) renderShareBody(); }
     var orcOv = document.getElementById('litOrcidOverlay');
-    if (orcOv && orcOv.classList.contains('open')) renderOrcidBody();
+    if (orcOv && orcOv.classList.contains('open')) {
+      // A late profile snapshot can reveal that the connect INVITE fired off a
+      // stale/empty cache read for an already-linked account — close the false
+      // invite instead of re-rendering it with the user's own iD prefilled.
+      if (orcidMode === 'prompt' && state.profile && state.profile.orcid) litOrcidClose();
+      else renderOrcidBody();
+    }
     refreshAlertsModalIfOpen();
   }
   // Returning from a "Sign in with ORCID" redirect? Capture the authenticated
@@ -6796,7 +6846,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         n: user.displayName || (user.email ? user.email.split('@')[0] : 'Account'),
         s: user.uid || ''
       }));
-      else localStorage.removeItem('litAuthHint');
+      else { localStorage.removeItem('litAuthHint'); localStorage.removeItem('litProfHint'); }
     } catch (e) {}
     state.user = user;
     document.body.classList.toggle('ms-signed-in', !!user);
@@ -6854,6 +6904,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       }
       unsubProfile = profileDoc().onSnapshot(function (d) {
         state.profile = d.exists ? (d.data() || {}) : {};
+        litProfHintPut(state.profile);   // keep the card's fast-paint hint current
         onData();
       }, function (err) { console.warn('profile listener:', err && err.code); });
       unsubPapers = papersCol().onSnapshot(function (snap) {
