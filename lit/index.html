@@ -5698,6 +5698,55 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   // Attach the oidc.orcid provider to the CURRENT account so "Continue with
   // ORCID" signs in to it directly (duplicate prevention; also offered right
   // after a merge). Requires authenticating at orcid.org in a popup.
+  // ── Automatic duplicate detection (same ORCID or same e-mail) ─────────────
+  // Every signed-in session CLAIMS its identity keys in the public-ish
+  // accountKeys collection — "orcid:<iD>" and "email:<sha256(lowercased))>"
+  // → { uid }. Finding a key already claimed by a DIFFERENT uid means the
+  // same person has two accounts: the ORCID-only duplicate is offered the
+  // merge flow right away; the main account gets a one-time pointer. A
+  // conflicting claim is never overwritten (first claim stands until the
+  // duplicate is merged away). Inert until the accountKeys rule in
+  // _firestore.rules is deployed — every read/write here is best-effort.
+  var accountKeysChecked = false, dupMergeOffered = false;
+  function sha256Hex(s) {
+    return crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)).then(function (h) {
+      return Array.prototype.map.call(new Uint8Array(h), function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+    });
+  }
+  function maybeClaimAccountKeys() {
+    if (accountKeysChecked || !state.user || !state.profile) return;
+    accountKeysChecked = true;
+    var uid = state.user.uid;
+    var keys = [];
+    if (state.profile.orcid) keys.push(Promise.resolve('orcid:' + state.profile.orcid));
+    var email = (state.user.email || state.profile.email || '').trim().toLowerCase();
+    if (email && window.crypto && crypto.subtle && window.TextEncoder) {
+      keys.push(sha256Hex(email).then(function (h) { return 'email:' + h; }).catch(function () { return null; }));
+    }
+    Promise.all(keys).then(function (ks) {
+      ks.filter(Boolean).forEach(function (k) {
+        var ref = db.collection('accountKeys').doc(k);
+        ref.get().then(function (d) {
+          if (state.user && state.user.uid !== uid) return;   // account changed meanwhile
+          if (d.exists && (d.data() || {}).uid && d.data().uid !== uid) { maybeOfferDuplicateMerge(k); return; }
+          ref.set({ uid: uid, t: serverTime() }).catch(function () {});
+        }).catch(function () {});
+      });
+    });
+  }
+  function maybeOfferDuplicateMerge(key) {
+    if (dupMergeOffered) return;
+    dupMergeOffered = true;
+    var what = key.indexOf('orcid:') === 0 ? 'ORCID iD' : 'e-mail address';
+    if (acctIsOrcidOnlyAccount()) {
+      if (confirm('This ' + what + ' is also on another Lit account — this looks like a duplicate registration.\n\nMerge THIS account into your main one now? Your saved papers, notes, lists and alerts will move over.')) {
+        window.acctStartMerge();
+      }
+    } else {
+      alert('Heads up: another Lit account uses the same ' + what + ' as this one. If that duplicate is yours, sign in to it (e.g. with ORCID) and use Edit profile → “Merge this account into my main account” — everything will move here.');
+    }
+  }
+
   window.acctLinkOrcidProvider = function () {
     if (!state.user) { acctOpenAuth(); return; }
     state.user.linkWithPopup(new firebase.auth.OAuthProvider('oidc.orcid'))
@@ -6856,6 +6905,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         && state.profile.orcidNameAuto !== false) backfillOrcidAuthorName(state.profile.orcid, '');
     maybeCacheMyPubCount();  // keep the My-publications badge (profile myPubCount) current
     maybeApplyMergeStash();  // finish a pending duplicate-account merge, if one is stashed
+    maybeClaimAccountKeys(); // claim orcid/e-mail identity keys; offer the merge on a conflict
     maybeOrcidPrompt();  // first-run: invite the user to connect their ORCID
     syncPublicLists();   // keep any public lists' shared copies current as the owner edits
     if (libraryMode) { renderLibraryBar(); renderLibrary(); if (shareModalLid) renderShareBody(); }
@@ -6892,6 +6942,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (unsubAlerts) { unsubAlerts(); unsubAlerts = null; }
     state.papers = {}; state.lists = {}; state.profile = null; state.alerts = {};
     papersSnapshotSeen = false; listsSnapshotSeen = false;
+    accountKeysChecked = false; dupMergeOffered = false;   // re-check identity keys for whoever signs in next
     lastSharedSig = {};         // shared-list write dedup is per signed-in user
     prefsAutoApplied = false;   // re-arm auto-apply for whoever signs in next
     pendingProfileOpen = null;  // a deferred modal open dies with the session that queued it

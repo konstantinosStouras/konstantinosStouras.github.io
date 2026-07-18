@@ -449,7 +449,12 @@ whichever account signs in next — papers union starred/tags/lists/notes,
 profile fill-empty, ORCID fields only on no-iD-or-same-iD); prevention is
 provider LINKING — a verified-ORCID account attaches `oidc.orcid` via
 `acctLinkOrcidProvider` (Edit profile) so "Continue with ORCID" reaches it
-directly. Independently of the
+directly; and DETECTION — each session claims `orcid:<iD>` /
+`email:<sha256>` keys in the `accountKeys` collection
+(`maybeClaimAccountKeys`; rule in `_firestore.rules`, signed-in read,
+own-uid writes, conflicts never overwritten) and a sign-in whose key
+belongs to a different uid triggers the merge offer (duplicate side) or a
+pointer (main side). Inert until the rules are redeployed. Independently of the
 stored name, **the `?author=` deep-link chip is widened to the catalog's full
 `Name_Variants`** once authors.json is available (`litUpgradeAuthorDeepLink`;
 the deep-link auto-fetches authors.json; when no exact variant matches it
