@@ -36,6 +36,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # The retire-on-publish sweep re-checks every listed working paper against
+      # the WHOLE published catalog; the ABS shards live in sibling repos, so
+      # check them out read-only (like lit-analytics.yml) under _analytics-shards/
+      # — untracked, so the `git add lit/data-workingpapers` below can never
+      # commit them. A missing/failed shard is skipped by loadCatalog (no crash).
+      # Only the DAILY build does this (the 3-hourly backfill stays native+FT50,
+      # to avoid re-fetching the large shard repos every few hours).
+      - name: Checkout data shard — lit-data-abs4
+        uses: actions/checkout@v4
+        with:
+          repository: konstantinosStouras/lit-data-abs4
+          path: _analytics-shards/lit-data-abs4
+      - name: Checkout data shard — lit-data-abs3-omecon
+        uses: actions/checkout@v4
+        with:
+          repository: konstantinosStouras/lit-data-abs3-omecon
+          path: _analytics-shards/lit-data-abs3-omecon
+      - name: Checkout data shard — lit-data-abs3-rest
+        uses: actions/checkout@v4
+        with:
+          repository: konstantinosStouras/lit-data-abs3-rest
+          path: _analytics-shards/lit-data-abs3-rest
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -47,6 +70,8 @@ jobs:
           WP_MAX_AUTHORS: '250'
           WP_BUDGET_MS: '2100000'   # 35-min ceiling
           WP_PACE_MS: '1500'
+          # Sweep against native + FT50 + the three ABS shards (checked out above).
+          WP_CATALOG_DIRS: lit/data,lit/data-ft50,_analytics-shards/lit-data-abs4/data,_analytics-shards/lit-data-abs3-omecon/data,_analytics-shards/lit-data-abs3-rest/data
         run: node lit/_scraper-workingpapers/build-data.mjs
 
       - name: Commit refreshed archive

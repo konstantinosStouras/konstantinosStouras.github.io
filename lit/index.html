@@ -973,6 +973,17 @@ let refsIndexPromise = null;   // in-flight index fetch (idempotence)
 let refsCounts = null;         // ./data-refs/refs-counts.json once fetched
 let refsCountsPromise = null;  // in-flight counts fetch (idempotence)
 
+// User-supplied / retired-on-publish pre-print links: a small map
+// { <bareDoi>: {u,s} } served from data-workingpapers/submitted-preprints.json,
+// written by the paper-submission ingest + the working-papers crawler's
+// retire-on-publish sweep. Overlaid onto ANY paper (native / FT50 / shard) at
+// load, so a published paper whose SSRN/arXiv/… pre-print was found by a human
+// (or freed when its working paper got published) shows a "Pre-print (Open
+// Access)" link even where the automated finder missed it. Loaded once, lazily.
+let submittedPreprints = null;        // the fetched map, or {} when absent
+let submittedPreprintsPromise = null; // in-flight fetch (idempotence)
+const SUBMITTED_PREPRINTS_URL = WP_DATA_BASE + 'submitted-preprints.json';
+
 // Display config per source key. Sections are PNAS's five topic sections; a
 // PNAS paper can belong to several and matches a filter on any of them.
 const SRC = {
@@ -1514,6 +1525,40 @@ async function loadWorkingPapersManifest() {
   registerExtraSources(rows, WP_DATA_BASE);
 }
 
+// ── Submitted / retired-on-publish pre-print overlay ─────────────────────────
+// The bare, lowercased DOI used to key the supplement (matches how the ingest
+// keys it).
+function submittedDoiKey(doi) {
+  return String(doi || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase();
+}
+// Apply the supplement to ONE freshly-loaded paper row (no-op until the map has
+// landed; overlaySubmittedPreprints() sweeps already-loaded rows on arrival).
+function applySubmittedPreprint(p) {
+  if (!submittedPreprints || !p) return;
+  var e = submittedPreprints[submittedDoiKey(p.DOI)];
+  if (e && e.u) { p.Preprint = e.u; if (e.s) p.PreprintSrc = e.s; }
+}
+// Fetch the supplement once (background); on arrival, overlay onto every paper
+// already in memory and re-render so the pre-print link/toggle/counts update.
+function loadSubmittedPreprints() {
+  if (submittedPreprints) return Promise.resolve(submittedPreprints);
+  if (submittedPreprintsPromise) return submittedPreprintsPromise;
+  submittedPreprintsPromise = fetch(SUBMITTED_PREPRINTS_URL, { cache: 'default' })
+    .then(function(r) { return r.ok ? r.json() : {}; })
+    .then(function(j) { submittedPreprints = j || {}; overlaySubmittedPreprints(); return submittedPreprints; })
+    .catch(function() { submittedPreprints = {}; return submittedPreprints; });
+  return submittedPreprintsPromise;
+}
+function overlaySubmittedPreprints() {
+  if (!submittedPreprints || !allPapers.length) return;
+  var any = false;
+  allPapers.forEach(function(p) {
+    var e = submittedPreprints[submittedDoiKey(p.DOI)];
+    if (e && e.u && p.Preprint !== e.u) { p.Preprint = e.u; if (e.s) p.PreprintSrc = e.s; any = true; }
+  });
+  if (any) { if (recentMode) renderRecent(); else applyFilters(); }
+}
+
 function loadShardManifests() {
   SHARDS.forEach(async function(shard) {
     var rows = await fetchManifest(shard.base + 'sources.json');
@@ -1636,7 +1681,7 @@ function loadExtraSource(key) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         var rows = await r.json();
         if (!Array.isArray(rows)) rows = [];
-        rows.forEach(function(p) { normalizeEditors(p); computeJkeys(p); });
+        rows.forEach(function(p) { normalizeEditors(p); computeJkeys(p); applySubmittedPreprint(p); });
         allPapers = allPapers.concat(rows);
         extraState[key] = 'done';
         afterSourceArrived();
@@ -1789,6 +1834,7 @@ async function loadData() {
   loadShardManifests(); // async: registers each satellite shard's journals
   loadWorkingPapersManifest(); // async: registers the Working Papers archive (opt-in)
   loadRefsManifest();   // async: enables the "Cited references in this catalog" card toggle
+  loadSubmittedPreprints(); // async: overlays human-supplied / retired-on-publish pre-print links
 
   // Affiliation aggregates come from their own small JSON file.
   fetch(AFFILIATIONS_URL, { cache: 'no-cache' })
@@ -1830,7 +1876,7 @@ function loadNativeSource(key) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         var rows = await r.json();
         if (!Array.isArray(rows)) rows = [];
-        rows.forEach(function(p) { normalizeEditors(p); computeJkeys(p); });
+        rows.forEach(function(p) { normalizeEditors(p); computeJkeys(p); applySubmittedPreprint(p); });
         allPapers = allPapers.concat(rows);
         // Editor/area cleanup only applies to MS rows (others have none).
         if (src.key === 'ms') { fuzzyMergeEditors(); fuzzyMergeAreas(); }

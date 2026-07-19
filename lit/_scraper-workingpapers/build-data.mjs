@@ -182,6 +182,7 @@ export function nameParts(name) {
 export async function loadCatalog(dirs, opts = {}) {
   const publishedTitles = new Set();
   const authors = new Map(); // normName -> {name, journals:Set, latestYear, priority, sampleDois:[]}
+  const byTitle = new Map(); // opts.index: normTitle -> [{doi, last:Set<lastName>, year}] (published papers)
   const cutoff = THIS_YEAR - PRIORITY_YEARS;
   for (const dir of dirs) {
     const sources = await loadJson(join(dir, 'sources.json'), []);
@@ -209,11 +210,47 @@ export async function loadCatalog(dirs, opts = {}) {
           if (isPriority) a.priority = true;
           if (doi && a.sampleDois.length < MAX_SAMPLE_DOIS && !a.sampleDois.includes(doi)) a.sampleDois.push(doi);
         }
+        if (opts.index && nt && doi) {
+          const lasts = new Set();
+          for (const name of names) { const np = nameParts(name); if (np && np.last) lasts.add(np.last); }
+          let arr = byTitle.get(nt);
+          if (!arr) { arr = []; byTitle.set(nt, arr); }
+          arr.push({ doi, last: lasts, year });
+        }
       }
       if (opts.log) console.log(`  catalog: ${dir.split('/').pop()}/${s.key}: ${rows.length} papers`);
     }
   }
-  return { publishedTitles, authors };
+  return { publishedTitles, authors, byTitle };
+}
+
+// Does a working-paper record correspond to a PUBLISHED paper in the catalog?
+// Returns the matched published paper's { doi, last, year } or null. Mirrors the
+// pre-print matcher's discipline so a same-title different paper isn't linked:
+// an EXACT normalized-title match + shared author surnames (two, or one when
+// either side is single-author) + a plausible year (the published version is
+// same-year-or-later than the working paper, within a sane window). `byTitle`
+// comes from loadCatalog(dirs, {index:true}).
+export function matchPublished(rec, byTitle) {
+  if (!rec || !byTitle) return null;
+  const nt = normTitle(rec.Title || '');
+  const cands = nt && byTitle.get(nt);
+  if (!cands || !cands.length) return null;
+  const recLasts = [];
+  for (const name of String(rec.Authors || '').split(',')) {
+    const np = nameParts(name.trim());
+    if (np && np.last) recLasts.push(np.last);
+  }
+  const recYear = parseInt(rec.Year, 10) || 0;
+  for (const c of cands) {
+    let shared = 0;
+    for (const l of recLasts) if (c.last.has(l)) shared++;
+    const need = (recLasts.length <= 1 || c.last.size <= 1) ? 1 : 2;
+    if (shared < need) continue;
+    if (recYear && c.year && (c.year < recYear - 1 || c.year - recYear > 15)) continue; // implausible gap
+    return c;
+  }
+  return null;
 }
 
 // Crawl order: never-crawled priority authors first, then never-crawled
@@ -403,8 +440,9 @@ async function main() {
   await mkdir(DATA_DIR, { recursive: true });
   const deadline = Date.now() + BUDGET_MS;
 
-  // 1. Author index + published-title exclusion set from the catalog.
-  const { publishedTitles, authors } = await loadCatalog(CATALOG_DIRS, { log: true });
+  // 1. Author index + published-title exclusion set + title->published-paper
+  //    index (for the retire-on-publish sweep in step 3b) from the catalog.
+  const { publishedTitles, authors, byTitle } = await loadCatalog(CATALOG_DIRS, { log: true, index: true });
   console.log(`catalog: ${authors.size} distinct authors, ${publishedTitles.size} published titles`);
 
   // 2. Existing archive (rows keyed by dedup key) + crawl cursor.
@@ -453,6 +491,27 @@ async function main() {
     if (crawled % 20 === 0) { await writeCache(cache); console.log(`  …${crawled} authors, ${foundThisRun} new working papers`); }
   }
 
+  // 3b. Retire working papers that have since been published: drop them from the
+  //     archive and record their pre-print link against the PUBLISHED paper's DOI
+  //     in the served `submitted-preprints.json` supplement, which the page
+  //     overlays onto the published card as its "Pre-print (Open Access)" link.
+  //     (Newly-crawled rows can't be published — wpRecordFromWork already drops
+  //     those — so this only catches EXISTING rows whose paper appeared in print
+  //     since it was archived.)
+  const supplement = await loadJson(join(DATA_DIR, 'submitted-preprints.json'), {});
+  let supplementChanged = false, retired = 0;
+  for (const [k, r] of byKey) {
+    const m = matchPublished(r, byTitle);
+    if (!m) continue;
+    if (r.Preprint && (!supplement[m.doi] || supplement[m.doi].u !== r.Preprint)) {
+      supplement[m.doi] = { u: r.Preprint, s: r.PreprintSrc || '' };
+      supplementChanged = true;
+    }
+    byKey.delete(k);
+    retired++;
+  }
+  if (retired) console.log(`retired ${retired} now-published working paper(s) → linked as published-paper pre-prints`);
+
   // 4. Regroup by source and write everything.
   const bySource = {};
   for (const key of Object.keys(WP_SOURCES)) bySource[key] = [];
@@ -499,6 +558,7 @@ async function main() {
   await writeJson('sources.json', sources);
   await writeJson('recent.json', recent);
   await writeJson('meta.json', meta);
+  if (supplementChanged) await writeJson('submitted-preprints.json', supplement);
   await writeCache(cache);
 
   console.log(`done: ${total} working papers across ${sources.length} repo(s) ` +

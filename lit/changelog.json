@@ -10,6 +10,13 @@
       "url": "https://stouras.com/lit/analytics/"
     },
     {
+      "id": "suggest-preprint-for-published",
+      "date": "2026-07-19",
+      "title": "Suggest a pre-print for a published paper",
+      "summary": "The \"Suggest a working paper\" tool on the Feedback page now also fills gaps in the catalog: if the link you paste turns out to match a paper already published in The Lit, it's attached to that paper as its open-access pre-print (so its card shows a \"Pre-print (Open Access)\" link) instead of being rejected — handy when the automated finder missed it because the working-paper title differed. And working papers that have since been published are now retired from the Working Papers list automatically and surface as the published paper's pre-print, so the same work is never shown twice.",
+      "url": "https://stouras.com/lit/feedback/"
+    },
+    {
       "id": "analytics-author-timeline-autostart",
       "date": "2026-07-19",
       "title": "Author timelines start at the first publication year",
