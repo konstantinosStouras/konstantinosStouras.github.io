@@ -8,7 +8,7 @@ import { promisify } from 'node:util';
 import { readFile, rm } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { wpRecordFromWork, orderAuthors, invertAbstract, loadCatalog } from './build-data.mjs';
+import { wpRecordFromWork, orderAuthors, invertAbstract, loadCatalog, cleanText } from './build-data.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const run = promisify(execFile);
@@ -24,6 +24,21 @@ async function main() {
   console.log('unit: invertAbstract');
   ok(invertAbstract({ 'a': [0], 'b': [1] }) === 'a b', 'reconstructs word order');
   ok(invertAbstract(null) === '', 'null → empty');
+
+  console.log('unit: cleanText (strip publisher HTML markup from titles)');
+  ok(cleanText('&lt;p&gt;&lt;span&gt;An Economic Geography Dataset&lt;/span&gt;&lt;/p&gt;')
+    === 'An Economic Geography Dataset', 'entity-encoded <p><span> wrapper removed');
+  ok(cleanText('&lt;b&gt;10 Principles&lt;/b&gt;') === '10 Principles', 'entity-encoded <b> removed');
+  ok(cleanText('&lt;div&gt; Bricks or Cash?&amp;nbsp;&lt;span&gt;High-density Cities&lt;/span&gt;&lt;/div&gt;')
+    === 'Bricks or Cash? High-density Cities', 'double-encoded &amp;nbsp; → space, tags stripped');
+  ok(cleanText('First Part&lt;br&gt;Second Part') === 'First Part Second Part', '<br> becomes a space (line break)');
+  ok(cleanText('Cs&lt;sub&gt;3&lt;/sub&gt;Cu&lt;sub&gt;2&lt;/sub&gt;I&lt;sub&gt;5&lt;/sub&gt; Films')
+    === 'Cs3Cu2I5 Films', 'subscripts strip with no space (chemistry formula intact)');
+  ok(cleanText('Mergers &amp;amp; Acquisitions') === 'Mergers & Acquisitions', 'double-encoded ampersand → &');
+  ok(cleanText('Risk &amp; Return') === 'Risk & Return', 'single-encoded ampersand → &');
+  ok(cleanText('When is P &lt; 0.05 Significant?') === 'When is P < 0.05 Significant?', 'lone < (not a tag) is preserved');
+  ok(cleanText('A Perfectly Ordinary Title') === 'A Perfectly Ordinary Title', 'clean title unchanged (idempotent)');
+  ok(cleanText(cleanText('&lt;p&gt;Twice&lt;/p&gt;')) === 'Twice', 're-applying cleanText is a no-op');
 
   console.log('unit: wpRecordFromWork');
   const ssrn = wpRecordFromWork({

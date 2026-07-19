@@ -116,6 +116,47 @@ async function loadJson(path, fallback) {
 export function stripAccents(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, ''); }
 export function normName(s) { return stripAccents(s).toLowerCase().replace(/\s+/g, ' ').trim(); }
 
+// Some publishers deposit titles/abstracts with HTML/XML markup, which OpenAlex
+// passes through HTML-entity-encoded (and occasionally DOUBLE-encoded, e.g.
+// "&amp;lt;p&amp;gt;" or "&amp;nbsp;"). Left as-is, a title stored as the literal
+// text "&lt;p&gt;&lt;span&gt;Real Title&lt;/span&gt;&lt;/p&gt;" renders — the page
+// HTML-escapes it — as visible "&lt;p&gt;…" gibberish. cleanText decodes the
+// entities (repeatedly, so double-encodings fully resolve), strips the revealed
+// tags, and collapses whitespace, leaving just the human title. Pure + idempotent
+// (already-clean text passes through unchanged), so it is safe to (re)apply on
+// every build and to the committed archive. Kept conservative on purpose: a tag
+// must start with a letter (so "P &lt; 0.05" → "P < 0.05" survives, not a tag),
+// and sub/sup strip with no space so a chemistry formula stays "Cs3Cu2I5".
+const HTML_ENTITIES = {
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
+  mdash: '—', ndash: '–', lsquo: '‘', rsquo: '’',
+  ldquo: '“', rdquo: '”', hellip: '…', times: '×', deg: '°',
+};
+function decodeEntitiesOnce(s) {
+  return s.replace(/&(#x[0-9a-f]+|#\d+|[a-z][a-z0-9]*);/gi, (m, ent) => {
+    if (ent[0] === '#') {
+      const cp = (ent[1] === 'x' || ent[1] === 'X')
+        ? parseInt(ent.slice(2), 16) : parseInt(ent.slice(1), 10);
+      if (Number.isFinite(cp) && cp > 0 && cp <= 0x10ffff) {
+        try { return String.fromCodePoint(cp); } catch { return m; }
+      }
+      return m;
+    }
+    const v = HTML_ENTITIES[ent.toLowerCase()];
+    return v === undefined ? m : v; // leave unknown named entities intact
+  });
+}
+export function cleanText(raw) {
+  let s = String(raw == null ? '' : raw);
+  if (!/[&<]/.test(s)) return s.replace(/\s+/g, ' ').trim(); // fast path: nothing to decode/strip
+  for (let i = 0; i < 6; i++) { const d = decodeEntitiesOnce(s); if (d === s) break; s = d; }
+  s = s
+    .replace(/<\/?(?:sub|sup)(?:\s[^<>]*)?\/?>/gi, '')          // subscript/superscript: no space (Cs3Cu2I5, x2)
+    .replace(/<\/?[a-z][a-z0-9:-]*(?:\s[^<>]*)?\/?>/gi, ' ');   // other tags → space (line breaks, blocks, inline)
+  for (let i = 0; i < 3; i++) { const d = decodeEntitiesOnce(s); if (d === s) break; s = d; } // decode anything a tag hid
+  return s.replace(/\s+/g, ' ').trim();
+}
+
 // OpenAlex stores abstracts as an inverted index {word: [positions]}.
 export function invertAbstract(inv) {
   if (!inv || typeof inv !== 'object') return '';
@@ -308,7 +349,12 @@ function looksPublished(work) {
 // not a recognised/archivable working paper. Pure (no network) → unit-tested.
 export function wpRecordFromWork(work, publishedTitles) {
   if (!work || !work.title) return null;
-  const nt = normTitle(work.title);
+  // Strip any publisher HTML markup BEFORE the exclusion check: normTitle keeps
+  // letters, so an un-stripped "<span>" would leak "span" into the normalized
+  // title and stop a genuinely-published paper from matching the catalog.
+  const title = cleanText(work.title);
+  if (!title) return null;
+  const nt = normTitle(title);
   if (nt && publishedTitles && publishedTitles.has(nt)) return null; // already in the published catalog
   if (looksPublished(work)) return null;                             // OpenAlex says it's published
 
@@ -328,14 +374,14 @@ export function wpRecordFromWork(work, publishedTitles) {
     .filter(Boolean);
   const year = parseInt(work.publication_year, 10);
   const rec = {
-    Title: String(work.title).replace(/\s+/g, ' ').trim(),
+    Title: title,
     Authors: authors.join(', '),
     Affiliations: [...new Set(affils)].join('; '),
     DOI: work.doi || '',
     Volume: '', Issue: '', Page: '',
     Year: year ? String(year) : '',
     Status: 'Working paper',
-    Abstract: invertAbstract(work.abstract_inverted_index).slice(0, MAX_ABSTRACT),
+    Abstract: cleanText(invertAbstract(work.abstract_inverted_index)).slice(0, MAX_ABSTRACT),
     Journal: WP_SOURCES[key].name,
     JKey: key,
     Preprint: canonPreprint(pick.u),

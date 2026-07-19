@@ -899,7 +899,20 @@ see below), built by the vendored pipeline `lit/_scraper-workingpapers/`
 (OpenAlex only: resolves each author's OpenAlex ID from a known catalog DOI,
 enumerates their `type:preprint` works, classifies the host with the pre-print
 feature's own `pickPreprint`/`preprintFromDoi`, drops anything already-published
-or journal-placed, `wpRecordFromWork`). The page **merges it at runtime like the
+or journal-placed, `wpRecordFromWork`). **Title/abstract sanitization:**
+`wpRecordFromWork` runs the record's title AND abstract through `cleanText`
+(exported from `build-data.mjs`) — some publishers deposit HTML/XML markup that
+OpenAlex passes through HTML-entity-encoded (sometimes double-encoded, e.g.
+`&lt;p&gt;&lt;span&gt;…&lt;/span&gt;&lt;/p&gt;`, `&amp;nbsp;`, `&amp;amp;`), which
+the page would otherwise render as literal "&lt;p&gt;…" gibberish since it
+HTML-escapes titles. `cleanText` decodes the entities (repeatedly, so a
+double-encoding fully resolves), strips the revealed tags (sub/sup with no space
+so a chemistry formula stays `Cs3Cu2I5`; a lone `<` that isn't a tag, e.g.
+`P < 0.05`, is preserved) and collapses whitespace; it is pure + idempotent, and
+the **title is cleaned BEFORE `normTitle`** so a stray `<span>` can't leak "span"
+into the normalized title and defeat the already-published exclusion. The ingest
+(`ingest-submissions.mjs`) shares the same path via `wpRecordFromWork`. Offline
+unit tests live in `selftest.mjs`. The page **merges it at runtime like the
 FT50 catalog** — `loadWorkingPapersManifest()` registers each repository
 (`wp-ssrn`/`wp-nber`/`wp-arxiv`/`wp-osf`, one `papers-wp-<host>.json` each,
 flagged `"workingPaper": true`) as a lazy `EXTRA_SRC` and records its key in
