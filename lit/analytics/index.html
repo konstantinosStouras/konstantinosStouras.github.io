@@ -124,6 +124,12 @@
   .slider input[type=range]::-webkit-slider-runnable-track { background: none; }
   .dslider-tips { margin-top: 22px; }
   .slider .dtip { position: absolute; top: -18px; font-family: 'Fraunces', serif; font-size: 13px; color: var(--navy); font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none; transform: translateX(-50%); }
+  /* Decade ticks under the (non-linear) year slider, so the recent-emphasis
+     scale is legible — the marks bunch toward the compressed early years and
+     spread out over the recent ones. */
+  .yr-ticks { position: relative; height: 15px; margin-top: 3px; pointer-events: none; }
+  .yr-ticks .yt { position: absolute; top: 5px; transform: translateX(-50%); font-size: 10px; line-height: 1; color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .yr-ticks .yt::before { content: ''; position: absolute; left: 50%; top: -5px; width: 1px; height: 4px; background: var(--border); }
   .yr-presets { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
   .yr-presets button { font-size: 11.5px; font-weight: 600; border: 1px solid var(--border); background: var(--white); color: var(--text-muted); border-radius: 100px; padding: 4px 11px; cursor: pointer; }
   .yr-presets button:hover, .yr-presets button.on { border-color: var(--navy); color: var(--navy); background: var(--navy-light); }
@@ -427,6 +433,7 @@
             <input type="range" id="yrMin">
             <input type="range" id="yrMax">
           </div>
+          <div class="yr-ticks" id="yrTicks"></div>
           <div class="yr-presets" id="yrPresets"></div>
         </div>
         <div class="fgroup yearwrap" id="disrFilterGroup">
@@ -2245,15 +2252,45 @@
     });
   }
 
+  // ── Year-range slider scale ─────────────────────────────────────────────
+  // The corpus spans ~1900–2027, but the papers people actually filter for
+  // cluster in the last couple of decades, so a plain linear slider crams
+  // every useful start year into the far right and picking, say, 2018 means
+  // nudging a thumb through a tiny sliver. We remap the track with a mild
+  // power curve (quadratic) that hands recent years progressively more room:
+  // a fixed year window renders as a LONGER bar the closer it sits to the
+  // present, and the start thumb gets fine control right where it's used.
+  // Only the thumb ↔ year mapping is warped — the filter still works in whole
+  // years (S.yMin/S.yMax); the two range inputs now carry a 0..YR_POS_MAX
+  // track position rather than a year. Decade ticks below make the scale read.
+  var YR_POS_MAX = 1000, YR_WARP = 2;
+  function yrU2Year(u) { return YEAR_HI - (YEAR_HI - YEAR_LO) * Math.pow(1 - u, YR_WARP); }
+  function yrYear2U(y) {
+    var span = (YEAR_HI - YEAR_LO) || 1, t = (YEAR_HI - y) / span;
+    if (t < 0) t = 0; else if (t > 1) t = 1;
+    return 1 - Math.pow(t, 1 / YR_WARP);
+  }
+  function yrPos2Year(p) { return Math.round(yrU2Year(p / YR_POS_MAX)); }
+  function yrYear2Pos(y) { return Math.round(yrYear2U(y) * YR_POS_MAX); }
+  function renderYearTicks() {
+    var host = $('yrTicks'); if (!host) return;
+    var html = '';
+    [1950, 1980, 2000, 2020].forEach(function (y) {
+      if (y <= YEAR_LO || y >= YEAR_HI) return;
+      var pct = yrYear2Pos(y) / YR_POS_MAX * 100;
+      html += '<span class="yt" style="left:' + pct.toFixed(2) + '%">' + y + '</span>';
+    });
+    host.innerHTML = html;
+  }
+
   // year slider
   function syncSlider() {
     var lo = $('yrMin'), hi = $('yrMax');
-    if (+lo.value > +hi.value - 0) { /* keep min<=max */ }
-    S.yMin = Math.min(+lo.value, +hi.value);
-    S.yMax = Math.max(+lo.value, +hi.value);
+    var pLo = Math.min(+lo.value, +hi.value), pHi = Math.max(+lo.value, +hi.value);
+    S.yMin = yrPos2Year(pLo);
+    S.yMax = yrPos2Year(pHi);
     $('yrVal').textContent = S.yMin + ' – ' + S.yMax;
-    var span = YEAR_HI - YEAR_LO || 1;
-    var a = (S.yMin - YEAR_LO) / span * 100, b = (S.yMax - YEAR_LO) / span * 100;
+    var a = pLo / YR_POS_MAX * 100, b = pHi / YR_POS_MAX * 100;
     $('yrFill').style.left = a + '%'; $('yrFill').style.width = (b - a) + '%';
     Array.prototype.forEach.call(document.querySelectorAll('#yrPresets button'), function (btn) { btn.classList.remove('on'); });
   }
@@ -2306,7 +2343,7 @@
     Array.prototype.forEach.call($('yrPresets').querySelectorAll('button'), function (btn, i) {
       btn.onclick = function () {
         var lo = Math.max(YEAR_LO, presets[i].lo);
-        $('yrMin').value = lo; $('yrMax').value = YEAR_HI;
+        $('yrMin').value = yrYear2Pos(lo); $('yrMax').value = yrYear2Pos(YEAR_HI);
         syncSlider(); refresh();
         btn.classList.add('on');
       };
@@ -2336,7 +2373,7 @@
   function resetFilters() {
     S.types = {}; S.journals = {}; S.dim = { name: null, vals: {} }; S.groupOff = {}; S.evoHidden = {}; S.citeEvoHidden = {};
     S.excludeNonResearch = true; $('exclNonRes').checked = true;
-    $('yrMin').value = YEAR_LO; $('yrMax').value = YEAR_HI; syncSlider();
+    $('yrMin').value = yrYear2Pos(YEAR_LO); $('yrMax').value = yrYear2Pos(YEAR_HI); syncSlider();
     $('drMin').value = D_LO; $('drMax').value = D_HI; syncDSlider();
     renderTypeChips(); renderJournalList(); refresh();
   }
@@ -2349,12 +2386,14 @@
     YEAR_LO = d.yearMin || 1950; YEAR_HI = d.yearMax || 2026;
     S.yMin = YEAR_LO; S.yMax = YEAR_HI;
 
-    // slider bounds
-    ['yrMin', 'yrMax'].forEach(function (id) { var s = $(id); s.min = YEAR_LO; s.max = YEAR_HI; s.step = 1; });
-    $('yrMin').value = YEAR_LO; $('yrMax').value = YEAR_HI;
+    // slider bounds — the inputs carry a warped 0..YR_POS_MAX track position
+    // (see the year-slider scale block), not a year.
+    ['yrMin', 'yrMax'].forEach(function (id) { var s = $(id); s.min = 0; s.max = YR_POS_MAX; s.step = 1; });
+    $('yrMin').value = yrYear2Pos(YEAR_LO); $('yrMax').value = yrYear2Pos(YEAR_HI);
     $('yrMin').addEventListener('input', function () { syncSlider(); refresh(); });
     $('yrMax').addEventListener('input', function () { syncSlider(); refresh(); });
     syncSlider();
+    renderYearTicks();
     renderPresets();
     // disruptiveness-index slider bounds (fixed −1..1)
     ['drMin', 'drMax'].forEach(function (id) { var s = $(id); s.min = D_LO; s.max = D_HI; s.step = D_STEP; });
