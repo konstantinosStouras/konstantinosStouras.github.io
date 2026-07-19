@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "analytics-author-timeline-autostart",
+      "date": "2026-07-19",
+      "title": "Author timelines start at the first publication year",
+      "summary": "On the Data Analytics author spotlight, the 'Publications per year' chart now auto-starts its x-axis at the author's first publication instead of the empty early decades, so a researcher's output reads clearly at a glance. Set a start year yourself in the year-range slider and it's still honoured exactly.",
+      "url": "https://stouras.com/lit/analytics/"
+    },
+    {
       "id": "suggest-working-paper",
       "date": "2026-07-18",
       "title": "Suggest a working paper",
