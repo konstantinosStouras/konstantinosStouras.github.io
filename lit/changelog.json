@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "default-filters-editorial",
+      "date": "2026-07-19",
+      "title": "Editor & area in your default filters",
+      "summary": "Your account's Default filters can now go a level deeper: pick Management Science and the modal reveals its Accepting Editor and Area pickers; pick Information Systems Research or Marketing Science and you can pin a Senior or Associate Editor — the same editorial filters as the main page. Save them and you land straight on, say, one editor's Management Science papers every time you sign in. The lists load on demand, so simply choosing a journal never downloads anything extra.",
+      "url": "https://stouras.com/lit/"
+    },
+    {
       "id": "default-filters-empty-overrides-site",
       "date": "2026-07-19",
       "title": "Make “show me everything” your default view",

@@ -504,10 +504,23 @@ Signed-in users can also save **default filters** (account menu →
 "Default filters"): a preferred subset of journals and/or journal types,
 **auto-applied on sign-in** so they land on their subset instead of the full
 catalog (distinct from E-mail alerts, which saves filters to get *e-mailed*
-about new matches — this pre-applies them to the *page* on entry). It's stored
-on the profile doc (`defaultJournals[]`, `defaultJTypes[]`, `autoApplyFilters`;
+about new matches — this pre-applies them to the *page* on entry). **Editorial
+dimensions too:** exactly like the main filter bar, the modal reveals editorial
+pickers when their journal is chosen — Management Science → Accepting Editor +
+Area, ISR → Senior + Associate Editor, Marketing Science → Senior Editor
+(`renderPrefEditorial`/`prefEdDims`/`prefEdSourceKeys`); each picker's value list
+is derived from the SAME loaded, normalized papers the main page filters on
+(`p._editors`/`_area`/`_se`/`_ae` after `normalizeEditors`+`fuzzyMerge`), so a
+saved value always matches `sel.editor/area/se/ae`. Pickers are **collapsed +
+load-on-demand** (a "Choose …" button; `prefEdEnsureData` calls `loadNativeSource`
+only when opened, so merely *ticking* MS never force-downloads its ~20 MB file —
+only opening its editor/area picker does; a picker with a saved value
+auto-expands). Unticking a journal prunes its editorial drafts. It's stored on
+the profile doc (`defaultJournals[]`, `defaultJTypes[]`, `defaultEditors[]`,
+`defaultAreas[]`, `defaultSE[]`, `defaultAE[]`, `autoApplyFilters`;
 written with `{merge:true}`, no rules change) and applied by
-`maybeAutoApplyPrefs()` in the accounts script — guarded by `prefsAutoApplied`
+`maybeAutoApplyPrefs()` → `applyDefaultFilters(journals, jtypes, {editor,area,se,ae})`
+in the accounts script — guarded by `prefsAutoApplied`
 so it runs once per session (latched at first profile load, so a "not now"
 decision — user mid-browse, or a Save whose write echoes a snapshot back — is
 also final) and **never overrides filters the user set themselves** (applies

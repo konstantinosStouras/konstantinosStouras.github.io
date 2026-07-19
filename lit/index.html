@@ -518,6 +518,14 @@
   .pref-auto input { accent-color: var(--navy); width: 16px; height: 16px; cursor: pointer; }
   .pref-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .pref-empty { font-size: 12.5px; color: var(--text-muted); line-height: 1.45; }
+  /* Editorial defaults (Accepting Editor / Area / Senior & Associate Editor) */
+  .pref-ed-hint { font-size: 12px; color: var(--text-muted); line-height: 1.45; margin: -2px 0 2px; }
+  .pref-ed-dim { display: flex; flex-direction: column; gap: 7px; padding: 10px 0; border-top: 1px solid var(--border); }
+  .pref-ed-dim:first-child { border-top: none; padding-top: 2px; }
+  .pref-ed-head { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; color: var(--text); }
+  .pref-ed-head .pref-ed-count { font-weight: 500; font-size: 12px; color: var(--navy); }
+  .pref-ed-open { align-self: flex-start; }
+  .pref-ed-list { max-height: 168px; }
 
   /* Library view (reuses the papers list, driven by a private library bar) */
   .library-bar { display: none; max-width: 1280px; margin: 0 auto; padding: 18px 32px 4px; }
@@ -4336,6 +4344,17 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         <input id="prefJSearch" class="pref-jsearch" placeholder="Search journals…" type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore oninput="renderPrefJournalList(this.value)">
         <div class="pref-jlist" id="prefJList"></div>
       </div>
+      <!-- Editorial defaults: appears only when a journal carrying editorial
+           metadata is chosen above — Management Science (accepting editor +
+           area), ISR (senior + associate editor), Marketing Science (senior
+           editor) — mirroring the main page's editorial filter row. Rendered by
+           renderPrefEditorial(); each dimension's value list loads its journal
+           file on demand (so ticking a journal never force-downloads it). -->
+      <div class="pref-sec" id="prefEditorialSec" style="display:none">
+        <div class="pref-label">Editorial filters</div>
+        <div class="pref-ed-hint">Optional. Narrow your default to papers accepted by a chosen editor or in a chosen area (Management Science), or handled by a chosen senior/associate editor (ISR &amp; Marketing Science). Leave empty to include all.</div>
+        <div id="prefEditorial"></div>
+      </div>
       <div class="pref-sec">
         <div class="pref-label">Selected (<span id="prefSelCount">0</span>)</div>
         <div class="pref-selected" id="prefSelected"></div>
@@ -6877,10 +6896,16 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   //    existing profile subscription + security rules — no new collection. Data
   //    model (added to users/{uid}/profile/main):
   //      defaultJournals: [journalKey, …]   defaultJTypes: [typeKey, …]
+  //      defaultEditors/defaultAreas: [MS accepting-editor / area, …]
+  //      defaultSE/defaultAE: [ISR·MkSc senior / ISR associate editor, …]
   //      autoApplyFilters: bool             (default true; false = never auto-apply)
   //    Distinct from E-mail alerts: that saves criteria to get e-mailed about new
   //    matches; this pre-applies a filter subset to the page on entry.
   var prefDraftJ = null, prefDraftT = null;   // Sets: the modal's working selection
+  // Editorial-dimension drafts, shown only when their journal is chosen (MS →
+  // editor/area, ISR → se/ae, Marketing Science → se), mirroring the main page.
+  var prefDraftEditor = null, prefDraftArea = null, prefDraftSE = null, prefDraftAE = null;
+  var prefEdOpen = {};                        // which editorial pickers are expanded (load-on-demand)
   var prefsAutoApplied = false;               // guard: auto-apply at most once per session
   var autoAppliedActive = false;              // did THIS session's filters come from a default?
 
@@ -6889,6 +6914,11 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     return {
       journals: Array.isArray(p.defaultJournals) ? p.defaultJournals : [],
       jtypes: Array.isArray(p.defaultJTypes) ? p.defaultJTypes : [],
+      // Editorial-dimension defaults (apply to sel.editor/area/se/ae).
+      editors: Array.isArray(p.defaultEditors) ? p.defaultEditors : [],
+      areas: Array.isArray(p.defaultAreas) ? p.defaultAreas : [],
+      se: Array.isArray(p.defaultSE) ? p.defaultSE : [],
+      ae: Array.isArray(p.defaultAE) ? p.defaultAE : [],
       autoApply: p.autoApplyFilters !== false,  // default on
       // Has the user DELIBERATELY saved a default (even an empty one)? An empty
       // explicit default means "search everything" and must override the built-in
@@ -6900,12 +6930,23 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   // Push a set of journal / journal-type keys into the LIVE filter UI (used by
   // both auto-apply-on-sign-in and the modal's "Apply now"). Mirrors selectItem:
   // set the Sets, redraw the chips, run the filter (which lazy-loads the files).
-  function applyDefaultFilters(journals, jtypes) {
+  function applyDefaultFilters(journals, jtypes, ed) {
     if (typeof sel === 'undefined') return;
     if (libraryMode) libExitQuiet();
+    ed = ed || {};
     sel.journal = new Set(journals);
     sel.jtype = new Set(jtypes);
-    if (typeof renderChips === 'function') { renderChips('journal'); renderChips('jtype'); }
+    // Editorial defaults ride the same sel sets the main filter bar uses; a
+    // dimension whose journal isn't in scope is cleared by updateMsScopeUI
+    // (called from applyFilters), so an orphaned editor/area can't linger.
+    sel.editor = new Set(ed.editor || []);
+    sel.area = new Set(ed.area || []);
+    sel.se = new Set(ed.se || []);
+    sel.ae = new Set(ed.ae || []);
+    if (typeof renderChips === 'function') {
+      renderChips('journal'); renderChips('jtype');
+      renderChips('editor'); renderChips('area'); renderChips('se'); renderChips('ae');
+    }
     if (typeof applyFilters === 'function') applyFilters();
     autoAppliedActive = true;   // so we can undo it on sign-out (see onAuthStateChanged)
     if (typeof window.litFilterSig === 'function') window.litAutoSig = window.litFilterSig();
@@ -6950,7 +6991,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       && (typeof broadFilterActive !== 'function' || !broadFilterActive())
       && (typeof preprintOnly === 'undefined' || !preprintOnly);
     if (!untouched) return;                             // never override a user's own filters
-    applyDefaultFilters(d.journals, d.jtypes);
+    applyDefaultFilters(d.journals, d.jtypes, { editor: d.editors, area: d.areas, se: d.se, ae: d.ae });
   }
   window.maybeAutoApplyPrefs = maybeAutoApplyPrefs;
 
@@ -6973,12 +7014,21 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     var d = savedDefaults();
     prefDraftJ = new Set(d.journals);
     prefDraftT = new Set(d.jtypes);
+    prefDraftEditor = new Set(d.editors);
+    prefDraftArea = new Set(d.areas);
+    prefDraftSE = new Set(d.se);
+    prefDraftAE = new Set(d.ae);
+    // Auto-expand an editorial picker that already carries a saved selection, so
+    // the user sees their chosen editors/areas straight away (loads that journal
+    // on demand); pickers with nothing chosen stay collapsed until opened.
+    prefEdOpen = { editor: d.editors.length > 0, area: d.areas.length > 0, se: d.se.length > 0, ae: d.ae.length > 0 };
     var auto = document.getElementById('prefAuto'); if (auto) auto.checked = d.autoApply;
     var st = document.getElementById('prefStatus'); if (st) st.textContent = '';
     var er = document.getElementById('prefErr'); if (er) er.textContent = '';
     var s = document.getElementById('prefJSearch'); if (s) s.value = '';
     renderPrefJTypes();
     renderPrefJournalList('');
+    renderPrefEditorial();
     renderPrefSelected();
     document.getElementById('acctDefaultsOverlay').classList.add('open');
   };
@@ -6993,6 +7043,10 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (!o || !o.classList.contains('open') || !prefDraftJ) return;
     var s = document.getElementById('prefJSearch');
     renderPrefJournalList(s ? s.value : '');
+    // Editorial pickers depend only on native (ms/isre/mksc) journals, which are
+    // always registered before any catalog manifest lands — so a catalog
+    // registration never changes them; don't rebuild them here (it would reset an
+    // in-progress editorial search input).
     renderPrefSelected();
   };
 
@@ -7037,8 +7091,150 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     // click (select → jumps to the top; deselect → back to its usual place).
     var s = document.getElementById('prefJSearch');
     renderPrefJournalList(s ? s.value : '');
+    renderPrefEditorial();   // reveal/hide editorial pickers as MS/ISR/MkSc go in/out of scope
     renderPrefSelected();
   };
+
+  // ── Editorial defaults (Accepting Editor / Area / Senior & Associate Editor) ──
+  // The value lists come from the SAME loaded, normalized papers the main filter
+  // bar uses (p._editors/_area/_se/_ae after normalizeEditors + fuzzyMerge), so a
+  // saved value string always matches what sel.editor/area/se/ae filter on.
+  var PREF_ED_META = {
+    editor: { label: 'Accepting Editor (MS)', noun: 'editors' },
+    area:   { label: 'Area (MS)',             noun: 'areas' },
+    se:     { label: 'Senior Editor',         noun: 'senior editors' },
+    ae:     { label: 'Associate Editor',      noun: 'associate editors' }
+  };
+  function prefEdDraft(dim) {
+    return dim === 'editor' ? prefDraftEditor : dim === 'area' ? prefDraftArea
+      : dim === 'se' ? prefDraftSE : dim === 'ae' ? prefDraftAE : null;
+  }
+  // Which native journal file(s) supply a dimension's values, restricted to the
+  // journals the user has actually chosen (mirrors the main page's scope-gated
+  // editorial dropdowns).
+  function prefEdSourceKeys(dim) {
+    if (!prefDraftJ) return [];
+    if (dim === 'editor' || dim === 'area') return prefDraftJ.has('ms') ? ['ms'] : [];
+    if (dim === 'se') return ['isre', 'mksc'].filter(function (k) { return prefDraftJ.has(k); });
+    if (dim === 'ae') return prefDraftJ.has('isre') ? ['isre'] : [];
+    return [];
+  }
+  // The dimensions to show, given the chosen journals (MS → editor+area,
+  // ISR → se+ae, Marketing Science → se only).
+  function prefEdDims() {
+    if (!prefDraftJ) return [];
+    var dims = [];
+    if (prefDraftJ.has('ms')) { dims.push('editor'); dims.push('area'); }
+    if (prefDraftJ.has('isre') || prefDraftJ.has('mksc')) dims.push('se');
+    if (prefDraftJ.has('isre')) dims.push('ae');
+    return dims;
+  }
+  function prefEdLoaded(dim) {
+    var keys = prefEdSourceKeys(dim);
+    return keys.length > 0 && keys.every(function (k) {
+      return typeof nativeState !== 'undefined' && nativeState[k] === 'done';
+    });
+  }
+  // Distinct normalized values (+ paper counts) for a dimension, from loaded papers.
+  function prefEdValues(dim) {
+    var keys = prefEdSourceKeys(dim);
+    var counts = {};
+    if (typeof allPapers === 'undefined' || !keys.length) return counts;
+    var want = {}; keys.forEach(function (k) { want[k] = 1; });
+    allPapers.forEach(function (p) {
+      if (!want[p.JKey]) return;
+      if (dim === 'editor') (p._editors || []).forEach(function (e) { counts[e] = (counts[e] || 0) + 1; });
+      else if (dim === 'area') { if (p._area) counts[p._area] = (counts[p._area] || 0) + 1; }
+      else if (dim === 'se') (p._se || []).forEach(function (e) { counts[e] = (counts[e] || 0) + 1; });
+      else if (dim === 'ae') (p._ae || []).forEach(function (e) { counts[e] = (counts[e] || 0) + 1; });
+    });
+    return counts;
+  }
+  // Load-on-demand: fetch the journal file(s) an open picker needs, then re-render.
+  function prefEdEnsureData(dim) {
+    if (typeof loadNativeSource !== 'function') return;
+    prefEdSourceKeys(dim).forEach(function (k) {
+      if (typeof nativeState !== 'undefined' && nativeState[k] === 'done') return;
+      loadNativeSource(k).then(function () {
+        var o = document.getElementById('acctDefaultsOverlay');
+        if (o && o.classList.contains('open') && prefDraftJ) renderPrefEditorial();
+      });
+    });
+  }
+  window.litPrefEdOpen = function (dim) {
+    prefEdOpen[dim] = true;
+    renderPrefEditorial();
+  };
+  function prefEdSearchVal(dim) {
+    var i = document.getElementById('prefEdSearch-' + dim);
+    return i ? i.value : '';
+  }
+  window.litPrefEdSearch = function (dim, q) { renderPrefEdList(dim, q); };
+  window.litPrefEdToggle = function (dim, val) {
+    var draft = prefEdDraft(dim); if (!draft) return;
+    if (draft.has(val)) draft.delete(val); else draft.add(val);
+    renderPrefEdList(dim, prefEdSearchVal(dim));
+    // Refresh the "N chosen" count on the dimension head without collapsing it.
+    var c = document.getElementById('prefEdCount-' + dim);
+    if (c) c.textContent = draft.size ? '(' + draft.size + ' chosen)' : '';
+    renderPrefSelected();
+  };
+
+  function renderPrefEdList(dim, query) {
+    var box = document.getElementById('prefEd-' + dim); if (!box) return;
+    var draft = prefEdDraft(dim);
+    if (!prefEdLoaded(dim)) { box.innerHTML = '<div class="pref-empty" style="padding:8px">Loading…</div>'; return; }
+    var counts = prefEdValues(dim);
+    var vals = Object.keys(counts).sort();
+    var q = (query || '').trim().toLowerCase();
+    if (q) vals = vals.filter(function (v) { return v.toLowerCase().indexOf(q) >= 0; });
+    if (!vals.length) { box.innerHTML = '<div class="pref-empty" style="padding:8px">' + (q ? 'No matches.' : 'None available.') + '</div>'; return; }
+    // Selected pinned on top (same pattern as the journal list).
+    vals = vals.filter(function (v) { return draft && draft.has(v); })
+      .concat(vals.filter(function (v) { return !(draft && draft.has(v)); }));
+    box.innerHTML = vals.map(function (v) {
+      var on = draft && draft.has(v);
+      return '<label class="pref-jrow"><input type="checkbox"' + (on ? ' checked' : '') +
+        ' onchange="litPrefEdToggle(\'' + dim + '\',\'' + escAttr(v) + '\')"> ' + esc(v) +
+        ' <span style="opacity:.45">(' + counts[v] + ')</span></label>';
+    }).join('');
+  }
+  window.renderPrefEdList = renderPrefEdList;
+
+  function renderPrefEditorial() {
+    var sec = document.getElementById('prefEditorialSec');
+    var box = document.getElementById('prefEditorial');
+    if (!sec || !box || !prefDraftJ) return;
+    // Prune drafts for dimensions whose journal is no longer chosen, so an
+    // orphaned editor/area can't be saved (or count in "Selected").
+    if (!prefDraftJ.has('ms')) { if (prefDraftEditor) prefDraftEditor.clear(); if (prefDraftArea) prefDraftArea.clear(); }
+    if (!(prefDraftJ.has('isre') || prefDraftJ.has('mksc'))) { if (prefDraftSE) prefDraftSE.clear(); }
+    if (!prefDraftJ.has('isre')) { if (prefDraftAE) prefDraftAE.clear(); }
+    var dims = prefEdDims();
+    if (!dims.length) { sec.style.display = 'none'; box.innerHTML = ''; return; }
+    sec.style.display = '';
+    box.innerHTML = dims.map(function (dim) {
+      var meta = PREF_ED_META[dim];
+      var draft = prefEdDraft(dim);
+      var n = draft ? draft.size : 0;
+      var head = '<div class="pref-ed-head">' + esc(meta.label) +
+        ' <span class="pref-ed-count" id="prefEdCount-' + dim + '">' + (n ? '(' + n + ' chosen)' : '') + '</span></div>';
+      if (!prefEdOpen[dim]) {
+        return '<div class="pref-ed-dim">' + head +
+          '<button type="button" class="acct-mini pref-ed-open" onclick="litPrefEdOpen(\'' + dim + '\')">Choose ' + esc(meta.noun) + '…</button></div>';
+      }
+      return '<div class="pref-ed-dim">' + head +
+        '<input id="prefEdSearch-' + dim + '" class="pref-jsearch" placeholder="Search ' + escHtmlAttr(meta.noun) + '…" type="search" autocomplete="off" spellcheck="false" data-lpignore="true" oninput="litPrefEdSearch(\'' + dim + '\', this.value)">' +
+        '<div class="pref-jlist pref-ed-list" id="prefEd-' + dim + '"></div></div>';
+    }).join('');
+    // Fill each open picker's list (loading its journal file if needed).
+    dims.forEach(function (dim) {
+      if (!prefEdOpen[dim]) return;
+      if (!prefEdLoaded(dim)) prefEdEnsureData(dim);
+      renderPrefEdList(dim, '');
+    });
+  }
+  window.renderPrefEditorial = renderPrefEditorial;
 
   function renderPrefSelected() {
     var box = document.getElementById('prefSelected'); if (!box || !prefDraftJ || !prefDraftT) return;
@@ -7046,6 +7242,12 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     var chips = [];
     prefDraftT.forEach(function (k) { chips.push({ t: 'jtype', k: k, label: (typeof JTYPE_LABEL !== 'undefined' && JTYPE_LABEL[k]) || k }); });
     prefDraftJ.forEach(function (k) { chips.push({ t: 'journal', k: k, label: (typeof JOURNAL_LABEL !== 'undefined' && JOURNAL_LABEL[k]) || k }); });
+    // Editorial-dimension chips (removable like the rest); a short prefix names
+    // the dimension so "Editor: …" reads distinctly from a journal chip.
+    [['editor', prefDraftEditor, 'Editor'], ['area', prefDraftArea, 'Area'],
+     ['se', prefDraftSE, 'SE'], ['ae', prefDraftAE, 'AE']].forEach(function (row) {
+      if (row[1]) row[1].forEach(function (v) { chips.push({ t: row[0], k: v, label: row[2] + ': ' + v }); });
+    });
     if (cnt) cnt.textContent = String(chips.length);
     if (!chips.length) {
       box.innerHTML = '<div class="pref-empty">Nothing selected yet — pick journal types above or search journals. With nothing selected, every journal is searched (the current default).</div>';
@@ -7056,9 +7258,12 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     }).join('');
   }
   window.acctPrefRemove = function (t, k) {
-    if (t === 'jtype') { if (prefDraftT) prefDraftT.delete(k); } else { if (prefDraftJ) prefDraftJ.delete(k); }
+    if (t === 'jtype') { if (prefDraftT) prefDraftT.delete(k); }
+    else if (t === 'journal') { if (prefDraftJ) prefDraftJ.delete(k); }
+    else { var dr = prefEdDraft(t); if (dr) dr.delete(k); }   // editor / area / se / ae
     renderPrefJTypes();
     var s = document.getElementById('prefJSearch'); renderPrefJournalList(s ? s.value : '');
+    renderPrefEditorial();
     renderPrefSelected();
   };
 
@@ -7067,8 +7272,15 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (typeof sel === 'undefined' || !prefDraftJ || !prefDraftT) return;
     sel.journal.forEach(function (k) { prefDraftJ.add(k); });
     sel.jtype.forEach(function (k) { prefDraftT.add(k); });
+    if (prefDraftEditor) sel.editor.forEach(function (v) { prefDraftEditor.add(v); });
+    if (prefDraftArea) sel.area.forEach(function (v) { prefDraftArea.add(v); });
+    if (prefDraftSE) sel.se.forEach(function (v) { prefDraftSE.add(v); });
+    if (prefDraftAE) sel.ae.forEach(function (v) { prefDraftAE.add(v); });
+    // Expand any editorial picker that just gained a value, so the import is visible.
+    ['editor', 'area', 'se', 'ae'].forEach(function (dim) { var d = prefEdDraft(dim); if (d && d.size) prefEdOpen[dim] = true; });
     renderPrefJTypes();
     var s = document.getElementById('prefJSearch'); renderPrefJournalList(s ? s.value : '');
+    renderPrefEditorial();
     renderPrefSelected();
     var st = document.getElementById('prefStatus'); if (st) { st.style.color = 'var(--text-muted)'; st.textContent = 'Imported your current filter selection — remember to Save.'; }
   };
@@ -7088,9 +7300,17 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     // apply. (Usually already true — maybeAutoApplyPrefs latches at first profile
     // load — but this closes the tiny window of saving before that snapshot lands.)
     prefsAutoApplied = true;
+    // Editorial values are only meaningful while their journal is chosen; save
+    // them pruned to the current journal selection (renderPrefEditorial already
+    // clears orphans, but guard here too so a stale draft can't leak into storage).
+    var edJ = function (j) { return prefDraftJ.has(j); };
     profileDoc().set({
       defaultJournals: Array.from(prefDraftJ),
       defaultJTypes: Array.from(prefDraftT),
+      defaultEditors: edJ('ms') ? Array.from(prefDraftEditor) : [],
+      defaultAreas: edJ('ms') ? Array.from(prefDraftArea) : [],
+      defaultSE: (edJ('isre') || edJ('mksc')) ? Array.from(prefDraftSE) : [],
+      defaultAE: edJ('isre') ? Array.from(prefDraftAE) : [],
       autoApplyFilters: autoApply,
       // Mark that the user has deliberately saved a default. An EMPTY save then
       // reads as "search everything" and overrides the site default on sign-in,
@@ -7111,7 +7331,12 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   window.acctApplyDefaultsNow = function () {
     if (!prefDraftJ || !prefDraftT) return;
     prefsAutoApplied = true;   // an explicit apply counts as this session's auto-apply
-    applyDefaultFilters(Array.from(prefDraftJ), Array.from(prefDraftT));
+    applyDefaultFilters(Array.from(prefDraftJ), Array.from(prefDraftT), {
+      editor: prefDraftJ.has('ms') ? Array.from(prefDraftEditor) : [],
+      area: prefDraftJ.has('ms') ? Array.from(prefDraftArea) : [],
+      se: (prefDraftJ.has('isre') || prefDraftJ.has('mksc')) ? Array.from(prefDraftSE) : [],
+      ae: prefDraftJ.has('isre') ? Array.from(prefDraftAE) : []
+    });
     acctCloseDefaults();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -7119,13 +7344,17 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   window.acctClearDefaults = function () {
     if (!state.user) { acctOpenAuth(); return; }
     prefDraftJ = new Set(); prefDraftT = new Set();
+    prefDraftEditor = new Set(); prefDraftArea = new Set(); prefDraftSE = new Set(); prefDraftAE = new Set();
+    prefEdOpen = {};
     var auto = document.getElementById('prefAuto'); if (auto) auto.checked = true;
     renderPrefJTypes();
     var s = document.getElementById('prefJSearch'); renderPrefJournalList(s ? s.value : '');
+    renderPrefEditorial();
     renderPrefSelected();
     var st = document.getElementById('prefStatus'); if (st) { st.style.color = 'var(--text-muted)'; st.textContent = 'Clearing…'; }
     profileDoc().set({
-      defaultJournals: [], defaultJTypes: [], autoApplyFilters: false, defaultFiltersSet: false, updatedAt: serverTime()
+      defaultJournals: [], defaultJTypes: [], defaultEditors: [], defaultAreas: [], defaultSE: [], defaultAE: [],
+      autoApplyFilters: false, defaultFiltersSet: false, updatedAt: serverTime()
     }, { merge: true })
       .then(function () { if (st) { st.style.color = 'var(--green)'; st.textContent = 'Cleared. No filters will be pre-applied on sign-in.'; } })
       .catch(function (e) { var er = document.getElementById('prefErr'); if (er) { er.style.color = 'var(--red)'; er.textContent = friendly(e); } if (st) st.textContent = ''; });
