@@ -272,7 +272,7 @@
 
     <!-- The form (shown to signed-in users). -->
     <div id="psForm">
-      <p class="fb-intro">Found an unpublished working paper on <strong>SSRN</strong>, arXiv, NBER or OSF that isn't in The Lit yet? Paste its link and — if one of its authors is already in the database and the paper isn't already here — it's added <strong>automatically</strong>, usually within a few minutes. (Published papers are picked up on their own; this is for the listed authors' <em>unpublished</em> work.)</p>
+      <p class="fb-intro">Found a working paper on <strong>SSRN</strong>, arXiv, NBER or OSF that isn't in The Lit yet? Paste its link and — if one of its authors is already in the database — it's handled <strong>automatically</strong>, usually within a few minutes: an unpublished paper is added under <em>Working Papers</em>, and if it turns out to be <strong>already published</strong> here, your link is attached to that paper as its open-access <strong>pre-print</strong> instead.</p>
 
       <div class="fld">
         <label for="psUrl">Paper link <span class="hint">— an SSRN, arXiv, NBER or OSF page, or a DOI</span></label>
@@ -940,8 +940,8 @@
       $('psAdminSub').textContent = 'Could not load suggestions (' + (err && err.code ? err.code : 'error') + ') — are the latest Firestore rules deployed?';
     });
   }
-  function psIsDone(s) { return s === 'added' || s === 'duplicate'; }
-  function psBadgeClass(s) { return s === 'added' ? 'added' : s === 'duplicate' ? 'duplicate' : s === 'rejected' ? 'rejected' : 'pending'; }
+  function psIsDone(s) { return s === 'added' || s === 'duplicate' || s === 'linked'; }
+  function psBadgeClass(s) { return (s === 'added' || s === 'linked') ? 'added' : s === 'duplicate' ? 'duplicate' : s === 'rejected' ? 'rejected' : 'pending'; }
 
   function psAdminRender() {
     var c = { pending: 0, added: 0, duplicate: 0, rejected: 0 };
@@ -987,6 +987,7 @@
 
       var meta = [];
       if (x.resolvedDoi) meta.push('doi <code>' + esc(x.resolvedDoi) + '</code>');
+      if (x.publishedDoi) meta.push('→ pre-print of published <code>' + esc(x.publishedDoi) + '</code>');
       if (x.jkey) meta.push('→ <code>' + esc(x.jkey) + '</code>');
       if (Array.isArray(x.matchedAuthors) && x.matchedAuthors.length) meta.push('authors: ' + esc(x.matchedAuthors.join('; ')) + (x.matchType === 'fuzzy' ? ' <b>[fuzzy]</b>' : ''));
       if (x.reason) meta.push('reason: <b>' + esc(x.reason) + '</b>');

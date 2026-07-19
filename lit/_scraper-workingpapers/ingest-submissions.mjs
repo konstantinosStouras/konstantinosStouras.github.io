@@ -50,7 +50,7 @@ import { existsSync } from 'node:fs';
 import { resolve, join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { wpRecordFromWork, loadCatalog, WP_SOURCES, recKey, normName, nameParts } from './build-data.mjs';
+import { wpRecordFromWork, loadCatalog, WP_SOURCES, recKey, normName, nameParts, matchPublished } from './build-data.mjs';
 import { pickPreprint, preprintFromDoi } from '../_scraper/build-data.mjs';
 import { normTitle } from '../_scraper/ec-pages.mjs';
 
@@ -216,8 +216,17 @@ export function decideSubmission(work, ctx) {
     const title = (work && work.title) || '';
     const nt = normTitle(title);
     if (nt && ctx.publishedTitles.has(nt)) {
+      // It matches a published paper's title — rather than rejecting it, attach
+      // it as that paper's open-access pre-print (rebuild the record ignoring the
+      // published-title exclusion so we have its Preprint + Authors, then match
+      // the specific published paper by title + shared authors).
+      const full = wpRecordFromWork(work, new Set());
+      const m = full && ctx.byTitle ? matchPublished(full, ctx.byTitle) : null;
+      if (m && full.Preprint) {
+        return { status: 'linked', publishedDoi: m.doi, preprint: full.Preprint, preprintSrc: full.PreprintSrc || '', rec: full };
+      }
       return { status: 'rejected', reason: 'already-published',
-        detail: 'This paper is already in the catalog as a published paper — the published card already links its open-access pre-print.' };
+        detail: 'This paper is already in the catalog as a published paper.' };
     }
     const urls = [];
     for (const l of [work && work.primary_location, work && work.best_oa_location, ...((work && work.locations) || [])]) {
@@ -376,14 +385,12 @@ async function resolveWork(doi) {
 function htmlEsc(s) {
   return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
-const OUTCOME_ADDED = { added: 1, duplicate: 1 };
+const OUTCOME_ADDED = { added: 1, duplicate: 1, linked: 1 };
 
 function submitterMessage(o) {
-  if (OUTCOME_ADDED[o.status]) {
-    return o.status === 'added'
-      ? 'Good news — the working paper you suggested has been added to The Lit. It now appears under the “Working Papers” journal type.'
-      : 'Thanks — the working paper you suggested is already in The Lit (under the “Working Papers” journal type), so there was nothing to add.';
-  }
+  if (o.status === 'added') return 'Good news — the working paper you suggested has been added to The Lit. It now appears under the “Working Papers” journal type.';
+  if (o.status === 'duplicate') return 'Thanks — the working paper you suggested is already in The Lit (under the “Working Papers” journal type), so there was nothing to add.';
+  if (o.status === 'linked') return 'Good news — the paper you suggested is already published in The Lit, and I’ve attached your link as its open-access pre-print, so its card now shows a “Pre-print (Open Access)” link.';
   return 'Thanks for the suggestion. I could not add it automatically: ' + (o.detail || 'it did not meet the criteria.') +
     ' I do get a note about every suggestion, so I may still add it by hand.';
 }
@@ -410,16 +417,17 @@ function renderSubmitterEmail(sub, o) {
 }
 
 function renderMaintainerSummary(results) {
-  const n = { added: 0, duplicate: 0, rejected: 0, retry: 0, notfound: 0 };
+  const n = { added: 0, duplicate: 0, rejected: 0, retry: 0, notfound: 0, linked: 0 };
   results.forEach(r => { n[r.outcome.status] = (n[r.outcome.status] || 0) + 1; });
   const subject = `The Lit — paper submissions: ${n.added} added` +
+    (n.linked ? `, ${n.linked} linked` : '') +
     (n.rejected ? `, ${n.rejected} rejected` : '') + (n.duplicate ? `, ${n.duplicate} dup` : '');
   const row = (r) => {
     const o = r.outcome, s = r.sub;
     const bits = [
       o.status.toUpperCase(),
       (o.rec && o.rec.Title) || s.title || '(title unresolved)',
-      o.doi ? ('doi:' + o.doi) : (s.url || ''),
+      o.publishedDoi ? ('→ published ' + o.publishedDoi) : (o.doi ? ('doi:' + o.doi) : (s.url || '')),
       o.match && o.match.matched.length ? ('authors: ' + o.match.matched.join('; ') + (o.match.matchType === 'fuzzy' ? ' [fuzzy]' : '')) : '',
       o.reason ? ('reason: ' + o.reason) : '',
       s.email ? ('by ' + s.email) : '',
@@ -427,11 +435,11 @@ function renderMaintainerSummary(results) {
     ].filter(Boolean);
     return bits.join('  ·  ');
   };
-  const text = `Paper-submission ingest summary\n\nadded ${n.added}, duplicate ${n.duplicate}, ` +
+  const text = `Paper-submission ingest summary\n\nadded ${n.added}, linked ${n.linked}, duplicate ${n.duplicate}, ` +
     `rejected ${n.rejected}, pending-retry ${n.retry + n.notfound}\n\n` +
     results.map(row).join('\n');
   const html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#241a1e">' +
-    '<p><b>Paper-submission ingest</b>: ' + `added ${n.added}, duplicate ${n.duplicate}, rejected ${n.rejected}, ` +
+    '<p><b>Paper-submission ingest</b>: ' + `added ${n.added}, linked ${n.linked}, duplicate ${n.duplicate}, rejected ${n.rejected}, ` +
     `pending ${n.retry + n.notfound}</p>` +
     '<ul>' + results.map(r => '<li>' + htmlEsc(row(r)) + '</li>').join('') + '</ul></div>';
   return { subject, text, html };
@@ -473,9 +481,10 @@ async function run() {
   }
   if (!docs.length) return;
 
-  // Load the catalog (author index + published titles) and seed the archive.
+  // Load the catalog (author index + published titles + title->published index)
+  // and seed the archive + the published-paper pre-print supplement.
   console.log('Loading the published catalog + working-papers archive…');
-  const catalog = await loadCatalog(CATALOG_DIRS, { log: false });
+  const catalog = await loadCatalog(CATALOG_DIRS, { log: false, index: true });
   const catalogIndex = catalogAuthorIndex(catalog.authors);
   const byKey = new Map();
   for (const key of Object.keys(WP_SOURCES)) {
@@ -483,13 +492,15 @@ async function run() {
     for (const r of (Array.isArray(rows) ? rows : [])) byKey.set(recKey(r), r);
   }
   const prevMeta = await loadJson(join(DATA_DIR, 'meta.json'), {});
+  const supplement = await loadJson(join(DATA_DIR, 'submitted-preprints.json'), {});
+  let supplementChanged = false;
   console.log(`Catalog: ${catalog.authors.size} authors; archive: ${byKey.size} working papers.`);
 
-  const ctx = { publishedTitles: catalog.publishedTitles, catalogIndex, byKey, matchMode: MATCH_MODE };
+  const ctx = { publishedTitles: catalog.publishedTitles, catalogIndex, byKey, byTitle: catalog.byTitle, matchMode: MATCH_MODE };
 
   // 1. Resolve + decide every pending submission (network).
   const results = []; // { d, sub, outcome }
-  let added = 0;
+  let added = 0, linked = 0;
   for (const d of docs) {
     const sub = d.data();
     const parsed = urlToDoi(sub.url);
@@ -504,13 +515,18 @@ async function run() {
       else { outcome = decideSubmission(res.work, ctx); outcome.doi = parsed.doi; }
     }
     if (outcome.status === 'added' && !DRY_RUN) { byKey.set(outcome.key, outcome.rec); added++; }
+    if (outcome.status === 'linked' && !DRY_RUN) {
+      supplement[outcome.publishedDoi] = { u: outcome.preprint, s: outcome.preprintSrc || '' };
+      supplementChanged = true; linked++;
+    }
     results.push({ d, sub, outcome });
     console.log(`  ${outcome.status.padEnd(10)} ${parsed ? 'doi:' + parsed.doi : (sub.url || '')}` +
+      (outcome.publishedDoi ? ` → published ${outcome.publishedDoi}` : '') +
       (outcome.reason ? ` (${outcome.reason})` : '') +
       (outcome.match && outcome.match.matchType === 'fuzzy' ? ' [fuzzy author match]' : ''));
   }
 
-  if (DRY_RUN) { console.log(`\n[dry-run] ${added} would be added; wrote nothing.`); return; }
+  if (DRY_RUN) { console.log(`\n[dry-run] ${added} would be added, ${linked} linked to published papers; wrote nothing.`); return; }
 
   // 2. Write the dataset FIRST (so a crash before stamping just re-processes,
   //    finding the paper already in the archive next time — never lost).
@@ -519,6 +535,10 @@ async function run() {
     console.log(`Wrote archive: ${w.total} working papers (${JSON.stringify(w.perSource)}).`);
   } else {
     console.log('No new papers added — dataset unchanged.');
+  }
+  if (supplementChanged) {
+    await writeJson(DATA_DIR, 'submitted-preprints.json', supplement);
+    console.log(`Wrote submitted-preprints.json (+${linked} published-paper pre-print link(s)).`);
   }
 
   // 3. Stamp each submission + notify.
@@ -543,11 +563,13 @@ async function run() {
         }
       }
       const patch = {
-        status: outcome.status, // added | duplicate | rejected
+        status: outcome.status, // added | duplicate | rejected | linked
         processedAt: FieldValue.serverTimestamp(),
         resolvedDoi: outcome.doi || null,
         resolvedTitle: (outcome.rec && outcome.rec.Title) || null,
         jkey: (outcome.rec && outcome.rec.JKey) || null,
+        publishedDoi: outcome.publishedDoi || null, // set when linked to a published paper
+        preprint: outcome.preprint || null,
         reason: outcome.reason || null,
         detail: outcome.detail || null,
         matchedAuthors: (outcome.match && outcome.match.matched) || [],
@@ -572,7 +594,7 @@ async function run() {
   }
 
   // 4. Maintainer summary (only if there was anything to report).
-  const reportable = results.filter(r => ['added', 'duplicate', 'rejected'].includes(r.outcome.status));
+  const reportable = results.filter(r => ['added', 'duplicate', 'rejected', 'linked'].includes(r.outcome.status));
   if (transport && reportable.length) {
     const sum = renderMaintainerSummary(reportable);
     try {

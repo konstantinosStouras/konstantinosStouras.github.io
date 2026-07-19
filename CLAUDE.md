@@ -982,6 +982,41 @@ env's egress blocks OpenAlex/Crossref (403), so real resolution only happens on
 the Actions runners. (Per keep-in-sync: shipped with a `changelog.json` entry +
 the About-page "Suggest a working paper" bullet.)
 
+**Suggested/retired links → published paper's pre-print.** A submitted link (or a
+crawled working paper) whose paper is ALREADY PUBLISHED in the catalog is attached
+as that published paper's open-access **pre-print** instead of being added as a
+standalone working paper — the canonical home for a found pre-print is the
+published paper's `Preprint` field (the automated `resolvePreprints` finder is the
+main filler; this is the human/retire-on-publish path for the ones it missed, e.g.
+a working-paper title that drifted from the published title). Two producers, both
+in the site repo (WP-side jobs sharing the `lit-workingpapers` group): (1) the
+**submission ingest** — `decideSubmission` returns a **`linked`** outcome when
+`matchPublished()` connects the submitted paper to a published one; (2) the **WP
+crawler's retire-on-publish sweep** (`build-data.mjs` main, step 3b) — re-checks
+every archived working paper against the published catalog each build and, on a
+match, DROPS the row from the archive and records the link. Both write a small
+served map **`lit/data-workingpapers/submitted-preprints.json`**
+(`{bareDoi:{u,s}}`, seeded+merged so they never lose each other's entries). The
+matcher `matchPublished(rec, byTitle)` (exported from the WP `build-data.mjs`,
+offline-tested) mirrors the pre-print matcher's discipline — EXACT `normTitle` +
+shared author surnames (2, or 1 when either side is single-author) + a plausible
+year — off a title→published-paper index that `loadCatalog(dirs, {index:true})`
+now also returns (`byTitle`). **The page applies it at DISPLAY time for EVERY
+dataset (native/FT50/shard):** `index.html`'s `loadSubmittedPreprints()` fetches
+the map once and `applySubmittedPreprint(p)` overlays `Preprint`/`PreprintSrc` onto
+each paper row as it loads (native + lazy-extra load hooks), re-applying to
+already-loaded rows on arrival (`overlaySubmittedPreprints`) — so a shard-published
+paper is covered with NO shard-repo/build change. **Shard MATCHING** (detecting a
+paper published ONLY in an ABS shard) runs in the **daily** `lit-workingpapers-update-data.yml`
+sweep, which checks out the three shards read-only under `_analytics-shards/` (like
+`lit-analytics.yml`) and points `WP_CATALOG_DIRS` at native+FT50+shards; the 3-hourly
+backfill and the 10-min submission ingest stay native+FT50 (to avoid re-fetching the
+large shard repos frequently), so a shard-only submission is reconciled by the daily
+sweep + the display overlay rather than instantly. `matchPublished`/the `linked`
+outcome are offline-tested in `ingest-selftest.mjs`. (The specific M&SOM example
+"…Opportunity Zone Program…" `10.1287/msom.2024.0746` was also fixed directly in
+`data/_preprints.json`+`papers-msom.json`.)
+
 ### Citation graph — the references a paper cites that are IN the catalog
 For every listed paper, the pipeline extracts the references it **cites that
 also belong to the catalog** (the intra-catalog out-edges), surfaced on each

@@ -98,6 +98,35 @@ inbox): every suggestion with its status badge (pending / added / duplicate /
 rejected), the resolved DOI/title, which catalog author matched (with a
 `[fuzzy]` flag when applicable), the rejection reason, and a Delete for spam.
 
+## Published-paper pre-prints (attach + retire-on-publish)
+
+A submitted link (or a crawled working paper) whose paper is **already published**
+in the catalog is attached as that published paper's open-access **pre-print**
+instead of being added as a standalone working paper:
+
+- **Submission** → `decideSubmission` returns a **`linked`** outcome when
+  `matchPublished()` connects it to a published paper (exact title + shared author
+  surnames + plausible year). The ingest records it and e-mails the submitter that
+  their link is now the paper's pre-print.
+- **Retire-on-publish sweep** → the WP crawler (`build-data.mjs`) re-checks every
+  archived working paper against the published catalog each build; a now-published
+  one is dropped from the archive and recorded as the published paper's pre-print.
+
+Both write a small **served** map `lit/data-workingpapers/submitted-preprints.json`
+(`{bareDoi:{u,s}}`). The main page (`lit/index.html`) fetches it once and overlays
+`Preprint`/`PreprintSrc` onto any matching paper (native / FT50 / shard) as it
+loads — so the "Pre-print (Open Access)" link appears with **no build or
+shard-repo change**. The file ships as an empty `{}` and fills in as links are
+attached; a 404 (absent) is handled gracefully.
+
+**Shard coverage:** detecting a paper published only in an ABS shard needs the
+shard catalogs. The **daily** `lit-workingpapers-update-data.yml` checks the three
+shards out read-only (like `lit-analytics.yml`) and sweeps against
+native+FT50+shards (`WP_CATALOG_DIRS`); the 3-hourly backfill and the 10-min
+ingest stay native+FT50 to avoid re-fetching the large shard repos frequently, so
+a shard-only submission is reconciled by the daily sweep + the display overlay
+rather than instantly.
+
 ## Testing
 
 - Offline unit tests (link parser, author gate, the whole decision function,

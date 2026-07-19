@@ -13,6 +13,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   urlToDoi, crossrefToWork, catalogAuthorIndex, catalogMatch, decideSubmission, regroupAndWrite,
 } from './ingest-submissions.mjs';
+import { matchPublished } from './build-data.mjs';
 import { normTitle } from '../_scraper/ec-pages.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -99,6 +100,27 @@ export function selftest() {
 
   const accent = decideSubmission(work('Accent Paper', ['Baris Ata'], '10.2139/ssrn.557'), ctxFixture());
   ok(accent.status === 'added', 'accent-folded author name still matches (Baris ≈ Barış)');
+
+  // ── matchPublished + the "linked to a published paper" outcome ──────────────
+  const PUB_TITLE = 'The Impact of the Opportunity Zone Program on Residential Real Estate';
+  const pubDoi = '10.1287/msom.2024.0746';
+  const byTitle = new Map([[normTitle(PUB_TITLE), [{ doi: pubDoi, last: new Set(['cohen', 'bekkerman']), year: 2024 }]]]);
+  ok(matchPublished({ Title: PUB_TITLE, Authors: 'Maxime C. Cohen', Year: '2021' }, byTitle).doi === pubDoi, 'matchPublished: title + shared author → the published DOI');
+  ok(matchPublished({ Title: PUB_TITLE, Authors: 'Someone Else', Year: '2021' }, byTitle) === null, 'matchPublished: same title, no shared author → null');
+  ok(matchPublished({ Title: 'A Totally Different Title', Authors: 'Maxime C. Cohen' }, byTitle) === null, 'matchPublished: different title → null');
+
+  const linkCtx = () => {
+    const c = ctxFixture();
+    c.publishedTitles = new Set([normTitle(PUB_TITLE)]);
+    c.byTitle = byTitle;
+    return c;
+  };
+  const linked = decideSubmission(work(PUB_TITLE, ['Maxime C. Cohen'], '10.2139/ssrn.3780241', { publication_year: 2021 }), linkCtx());
+  ok(linked.status === 'linked', 'submitted SSRN link matching a published paper → linked (not rejected)');
+  ok(linked.publishedDoi === pubDoi, 'linked outcome carries the published DOI');
+  ok(linked.preprint && linked.preprint.includes('ssrn'), 'linked outcome carries the SSRN pre-print URL');
+  const collide = decideSubmission(work(PUB_TITLE, ['Nobody Known'], '10.2139/ssrn.3780242', { publication_year: 2021 }), linkCtx());
+  ok(collide.status === 'rejected' && collide.reason === 'already-published', 'same published title but a different author → rejected(already-published), not linked');
 
   // ── crossrefToWork → decideSubmission ───────────────────────────────────────
   const cw = crossrefToWork({
