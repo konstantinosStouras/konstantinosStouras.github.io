@@ -3,6 +3,20 @@
   "version": 1,
   "updates": [
     {
+      "id": "analytics-year-slider-scale",
+      "date": "2026-07-19",
+      "title": "Easier year range on the analytics dashboard",
+      "summary": "The Data Analytics year-range slider now gives recent years far more of the track, so setting a start year in the 2010s or 2020s — where most searches land — is a comfortable drag instead of nudging a thumb through a cramped sliver at the far right. Decade ticks under the slider show the scale, and the presets and older years still work exactly as before.",
+      "url": "https://stouras.com/lit/analytics/"
+    },
+    {
+      "id": "analytics-author-timeline-autostart",
+      "date": "2026-07-19",
+      "title": "Author timelines start at the first publication year",
+      "summary": "On the Data Analytics author spotlight, the 'Publications per year' chart now auto-starts its x-axis at the author's first publication instead of the empty early decades, so a researcher's output reads clearly at a glance. Set a start year yourself in the year-range slider and it's still honoured exactly.",
+      "url": "https://stouras.com/lit/analytics/"
+    },
+    {
       "id": "suggest-working-paper",
       "date": "2026-07-18",
       "title": "Suggest a working paper",
