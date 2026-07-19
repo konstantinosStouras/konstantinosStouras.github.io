@@ -2260,13 +2260,14 @@
   // ∝ log of "years before present"): the closer to today, the more track a
   // year gets, so moving the thumb rightward the year changes ever more slowly
   // (fine control where it's used) and the recent window is a long, grabbable
-  // bar — e.g. 2000-onward fills ~64% of the track (vs ~21% linear) and the
-  // last 10 years ~41%. A softening constant (YR_SOFT) keeps the newest one or
-  // two years from hogging the far right. Only the thumb ↔ year mapping is
-  // warped — the filter still works in whole years (S.yMin/S.yMax); the two
-  // range inputs carry a 0..YR_POS_MAX track position, not a year. Decade ticks
-  // below (which visibly bunch left, spread right) make the scale legible.
-  var YR_POS_MAX = 1000, YR_SOFT = 2;
+  // bar — e.g. 2000-onward fills ~66% of the track (vs ~21% linear) and the
+  // last 10 years ~44%. A softening constant (YR_SOFT) keeps the newest one or
+  // two years from hogging the far right (lower it to make 2000+ even more
+  // dominant). Only the thumb ↔ year mapping is warped — the filter still works
+  // in whole years (S.yMin/S.yMax); the two range inputs carry a 0..YR_POS_MAX
+  // track position, not a year. Decade ticks below (which visibly bunch left,
+  // spread right) make the scale legible.
+  var YR_POS_MAX = 1000, YR_SOFT = 1.5;
   function yrLogDenom() { var span = (YEAR_HI - YEAR_LO) || 1; return Math.log((span + YR_SOFT) / YR_SOFT); }
   function yrPos2Year(p) {
     var u = p / YR_POS_MAX, age = YR_SOFT * Math.exp((1 - u) * yrLogDenom()) - YR_SOFT;
