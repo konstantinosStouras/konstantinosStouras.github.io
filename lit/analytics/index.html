@@ -2302,6 +2302,46 @@
     Array.prototype.forEach.call(document.querySelectorAll('#yrPresets button'), function (btn) { btn.classList.remove('on'); });
   }
 
+  // Click / drag anywhere on the track jumps the NEAREST thumb there (and keeps
+  // following the pointer). The two range inputs are pointer-events:none except
+  // their thumbs, so a bare-track press falls through to the .slider container —
+  // we handle it here; a press that lands on a thumb (target is the <input>) is
+  // left to the native drag. Nearest is by track position, so it's correct on
+  // either side of both thumbs and between them, even if the thumbs crossed.
+  function initYearTrackClick() {
+    var slider = $('slider'); if (!slider) return;
+    var dragKey = null; // 'yrMin' | 'yrMax'
+    function posFromEvent(e) {
+      var r = slider.getBoundingClientRect();
+      var frac = (e.clientX - r.left) / (r.width || 1);
+      if (frac < 0) frac = 0; else if (frac > 1) frac = 1;
+      return Math.round(frac * YR_POS_MAX);
+    }
+    function moveTo(key, pos) { $(key).value = pos; syncSlider(); refresh(); }
+    function nearestKey(pos) {
+      var pMin = +$('yrMin').value, pMax = +$('yrMax').value;
+      return Math.abs(pos - pMin) <= Math.abs(pos - pMax) ? 'yrMin' : 'yrMax';
+    }
+    slider.addEventListener('pointerdown', function (e) {
+      if (e.target && e.target.tagName === 'INPUT') return; // native thumb drag
+      e.preventDefault();
+      var pos = posFromEvent(e);
+      dragKey = nearestKey(pos);
+      moveTo(dragKey, pos);
+      try { slider.setPointerCapture(e.pointerId); } catch (_) {}
+    });
+    slider.addEventListener('pointermove', function (e) {
+      if (dragKey) moveTo(dragKey, posFromEvent(e));
+    });
+    function endDrag(e) {
+      if (!dragKey) return;
+      dragKey = null;
+      try { slider.releasePointerCapture(e.pointerId); } catch (_) {}
+    }
+    slider.addEventListener('pointerup', endDrag);
+    slider.addEventListener('pointercancel', endDrag);
+  }
+
   // ── Disruptiveness-index (D) range slider ───────────────────────────────
   function syncDSlider() {
     var lo = $('drMin'), hi = $('drMax');
@@ -2401,6 +2441,7 @@
     $('yrMax').addEventListener('input', function () { syncSlider(); refresh(); });
     syncSlider();
     renderYearTicks();
+    initYearTrackClick();
     renderPresets();
     // disruptiveness-index slider bounds (fixed −1..1)
     ['drMin', 'drMax'].forEach(function (id) { var s = $(id); s.min = D_LO; s.max = D_HI; s.step = D_STEP; });
