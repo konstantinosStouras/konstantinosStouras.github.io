@@ -27,9 +27,19 @@
     if (!phrase) return true;
     return new RegExp('\\b' + escRegex(phrase) + '\\b').test(haystack);
   }
+  // Fold a name for matching: strip diacritics, normalise the curly apostrophe,
+  // collapse whitespace — VERBATIM from index.html's nameFold, so "desir" finds
+  // "Désir" on the DB residual exactly as it does on the JSON path.
+  function nameFold(s) {
+    s = String(s || '');
+    if (!/[^\x20-\x7e]/.test(s)) return s.indexOf('  ') === -1 ? s : s.replace(/\s+/g, ' ');
+    try { s = s.normalize('NFD').replace(/[̀-ͯ]/g, ''); } catch (e) {}
+    return s.replace(/’/g, "'").replace(/\s+/g, ' ');
+  }
   function authorMatch(haystack, query) {
     if (!query) return true;
     if (query.charAt(0) === '"') return textMatch(haystack, query);
+    haystack = nameFold(haystack); query = nameFold(query);
     var idx = 0;
     while ((idx = haystack.indexOf(query, idx)) !== -1) {
       var prev = idx === 0 ? '' : haystack.charAt(idx - 1);

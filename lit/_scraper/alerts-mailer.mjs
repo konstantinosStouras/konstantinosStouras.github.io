@@ -130,6 +130,25 @@ function absSets() {
   return { abs4, abs3 };
 }
 
+// journal key -> human name, from the native + FT50 sources.json manifests (the
+// same source the page's JOURNAL_LABEL comes from). Lets the delivered e-mail's
+// "Criteria:" line read "Operations Research" like the on-page preview does,
+// instead of the raw key "opre". Built once at startup from local manifests.
+function loadJournalNames() {
+  const names = {};
+  for (const dir of [DATA_DIR, FT50_DIR]) {
+    try {
+      const man = JSON.parse(fs.readFileSync(path.join(dir, 'sources.json'), 'utf8'));
+      for (const s of (Array.isArray(man) ? man : [])) {
+        if (s && s.key) names[s.key] = s.name || s.short || s.key;
+        (s.sections || []).forEach(sec => { if (sec && sec.key) names[sec.key] = sec.name || sec.key; });
+      }
+    } catch { /* manifest missing → keys fall back to themselves */ }
+  }
+  return names;
+}
+const JOURNAL_NAMES = loadJournalNames();
+
 // ── Matching helpers (vendored from lit/index.html) ───────────────────────
 function escRegex(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 function textMatch(haystack, query) {
@@ -237,7 +256,7 @@ function describeCriteria(c) {
   const JTL = { utd24: 'UTD24', ft50: 'FT50', abs4: 'ABS 4/4*', abs3: 'ABS 3' };
   const parts = [];
   (c.jtype || []).forEach(t => parts.push(JTL[t] || t));
-  (c.journal || []).forEach(k => parts.push(k));
+  (c.journal || []).forEach(k => parts.push(JOURNAL_NAMES[k] || k));   // human name, matching the on-page preview
   if ((c.author || []).length)      parts.push('authors: ' + c.author.join(', '));
   if ((c.title || []).length)       parts.push('title: ' + c.title.join(', '));
   if ((c.abstract || []).length)    parts.push('abstract: ' + c.abstract.join(', '));

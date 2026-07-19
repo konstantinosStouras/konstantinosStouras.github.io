@@ -1226,9 +1226,10 @@
       if (avg > 0) items.push({ label: g.badge + ' — group average', value: avg, color: g.color, group: true });
     });
     items.sort(function (a, b) { return b.value - a.value; });
-    $('citeImpactSub').textContent = 'Average citations per paper, within scope' + (dimActive() ? ' · ' + dimSummary() : '') + (items.length > 14 ? ' — top 14 shown' : '');
+    var CITE_LIMIT = 16;   // keep the caption's "top N shown" in lock-step with the barsH cap
+    $('citeImpactSub').textContent = 'Average citations per paper, within scope' + (dimActive() ? ' · ' + dimSummary() : '') + (items.length > CITE_LIMIT ? ' — top ' + CITE_LIMIT + ' shown' : '');
     $('citeImpactChart').innerHTML = items.length
-      ? barsH(items, { limit: 16, fmt: function (v) { return v.toFixed(1); } })
+      ? barsH(items, { limit: CITE_LIMIT, fmt: function (v) { return v.toFixed(1); } })
       : '<div class="chart-empty">No citation data in the selected scope.</div>';
     renderGroupToggles('grpCite', 'cite', groups, function () { renderCitationImpact(scopeKeys()); });
   }
@@ -2089,7 +2090,7 @@
   // catalog journals A→Z by name. When one or more journal TYPES are selected, the
   // list is restricted to journals on a selected type's list (pick FT50 and only
   // FT50 journals are offered), matching that type's scope.
-  var JN_NATIVE_ORDER = ['ms', 'msom', 'ec', 'pnas', 'pom', 'mksc', 'opre', 'isre'];
+  var JN_NATIVE_ORDER = ['ms', 'msom', 'ec', 'pnas', 'pom', 'mksc', 'opre', 'isre', 'stsc', 'ited'];
   function journalPickList() {
     var chosenTypes = Object.keys(S.types).filter(function (t) { return S.types[t]; });
     return DATA.journals.filter(function (j) {
