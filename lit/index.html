@@ -1198,7 +1198,15 @@ function refreshJournalScope() {
 }
 
 function matchesJournal(p) {
-  if (!journalScope) return true;
+  if (!journalScope) {
+    // Working papers are opt-in: they download only when their type/repository
+    // is explicitly selected (journalScope then holds their key → handled by the
+    // else branch), and must stay OUT of no-scope broad searches and the
+    // scopeCount denominator even after the archive has been loaded once this
+    // session (allPapers only ever grows). Without this, a broad pre-print/text
+    // search after visiting Working Papers floods with ~27k unpublished rows.
+    return !(p._jkeys || []).some(function (k) { return WP_KEYS.has(k); });
+  }
   return (p._jkeys || []).some(function(k) { return journalScope.has(k); });
 }
 
@@ -1246,6 +1254,7 @@ function addTextChip(type, inputId) {
   const val = input.value.trim();
   if (!val) return;
   if (sel[type].has(val.toLowerCase())) return;
+  litRetireSiteDefault();
   sel[type].add(val.toLowerCase());
   input.value = '';
   renderChips(type);
@@ -1255,6 +1264,7 @@ function addTextChip(type, inputId) {
 function addAuthorChip(name) {
   var val = name.trim().toLowerCase();
   if (!val || sel.author.has(val)) return;
+  litRetireSiteDefault();
   sel.author.add(val);
   renderChips('author');
   applyFilters();
@@ -1263,6 +1273,7 @@ function addAuthorChip(name) {
 
 function addYearChip(year) {
   if (!year || sel.year.has(year)) return;
+  litRetireSiteDefault();
   sel.year.add(year);
   renderChips('year');
   applyFilters();
@@ -1292,6 +1303,7 @@ function renderChips(type) {
 
 function addJournalChip(key) {
   if (!key || sel.journal.has(key)) return;
+  litRetireSiteDefault();
   sel.journal.add(key);
   renderChips('journal');
   // Journal-chip changes keep the "Recently added papers" view, re-scoped.
@@ -1303,6 +1315,7 @@ function addJournalChip(key) {
 // (same recent-view-preserving semantics as clicking a journal tag).
 function addJTypeChip(key) {
   if (!key || sel.jtype.has(key)) return;
+  litRetireSiteDefault();
   sel.jtype.add(key);
   renderChips('jtype');
   if (recentMode) renderRecent(); else applyFilters();
@@ -1324,6 +1337,7 @@ function renderAuthorChips() {
 
 function addAuthorIdentityChip(label, variants) {
   if (!label || sel.authorIdentity[label]) return;
+  litRetireSiteDefault();
   sel.authorIdentity[label] = (variants && variants.length) ? variants : [label.toLowerCase()];
   renderAuthorChips();
   closeSummaryTabs();
@@ -1359,6 +1373,7 @@ function clearAuthorDeepLink() {
 
 function addChipFromCard(type, val) {
   if (sel[type].has(val)) return;
+  litRetireSiteDefault();
   sel[type].add(val);
   renderChips(type);
   applyFilters();
@@ -2394,7 +2409,14 @@ function buildJournalSelect(liveCounts) {
   Object.keys(EXTRA_SRC).forEach(function(k) { manifestCounts[k] = EXTRA_SRC[k].count; });
   var jOpts = pinSelectedFirst(JOURNAL_OPTIONS, sel.journal, function (o) { return o.key; });
   container.innerHTML = jOpts.map(function(o) {
-    var n = (liveCounts && !(EXTRA_SRC[o.key] && extraState[o.key] !== 'done'))
+    // A live count of 0 must not be shown for a journal whose papers file
+    // simply hasn't been fetched yet — natives are lazy-loaded too now, so a
+    // pending native (or a still-loading FT50/shard extra) falls back to its
+    // sources.json manifest total instead of a spurious "(0)".
+    var extraPending = EXTRA_SRC[o.key] && extraState[o.key] !== 'done';
+    var pnk = o.key.indexOf('pnas-') === 0 ? 'pnas' : o.key;
+    var nativePending = !EXTRA_SRC[o.key] && nativeState[pnk] !== 'done';
+    var n = (liveCounts && !extraPending && !nativePending)
       ? (liveCounts[o.key] || 0) : manifestCounts[o.key];
     var on = sel.journal.has(o.key);
     return '<div class="custom-select-item' + (on ? ' is-selected' : '') + '" onclick="selectItem(\'csJournal\',\'journal\',\'' + escAttr(o.key) + '\')">' +
@@ -2421,7 +2443,11 @@ function buildJTypeSelect() {
   ordered = pinSelectedFirst(ordered, sel.jtype, function (t) { return t.key; });  // selected types outrank even wp
   container.innerHTML = ordered.map(function(t) {
     var n = 0;
-    journalTypeKeys(t.key).forEach(function(k) { if (SRC[k] || EXTRA_SRC[k]) n++; });
+    // Count every catalog journal in this type's key set. Use JOURNAL_LABEL
+    // (populated for ALL native sources incl. stsc/ited + every registered
+    // extra/shard) rather than SRC (only the 8 core natives), so e.g. the ABS 3
+    // count isn't short by Strategy Science.
+    journalTypeKeys(t.key).forEach(function(k) { if (JOURNAL_LABEL[k]) n++; });
     // Working Papers is hidden until its archive is built (no repositories yet).
     if (t.key === 'wp' && n === 0) return '';
     var unit = t.key === 'wp' ? 'repositor' + (n === 1 ? 'y' : 'ies') : 'journal' + (n === 1 ? '' : 's');
@@ -2836,6 +2862,7 @@ function selectItem(csId, type, val) {
   cs.querySelector('.custom-select-trigger').classList.remove('open');
   cs.querySelector('.custom-select-dropdown').classList.remove('open');
   if (sel[type].has(val)) return;
+  litRetireSiteDefault();
   sel[type].add(val);
   renderChips(type);
   if (type === 'jtype') buildJTypeSelect();  // re-pin selected types (its only other build is at load)
@@ -3070,12 +3097,29 @@ function litDropSiteDefaultForSearch() {
     var e = document.getElementById(id); return e && e.value.trim();
   });
   if (!typed) return;
+  litRetireSiteDefault();
+}
+
+// The site default is a landing SUGGESTION (Management Science +
+// "entrepreneurship and innovation"). The moment the user makes their own
+// scope/search choice it must step aside — otherwise its area chip AND-chains
+// into every other selection: picking a journal type shows ~0 (the area drops
+// every non-MS paper), a committed text search (Enter clears the input before
+// applyFilters, so litDropSiteDefaultForSearch's input check misses it) returns
+// a baffling 0, and a second area OR-widens into papers the user never asked
+// for. Called (no-op unless the default is still active) from every filter-ADD
+// entry point BEFORE the addition, so it removes exactly the default's chips and
+// then the user's own filter is applied. NOT called on the pre-print toggle or
+// sort, which are refinements within the suggested scope.
+function litRetireSiteDefault() {
+  if (!window.litSiteDefaultActive) return;
   LIT_SITE_DEFAULT_JOURNALS.forEach(function (k) { sel.journal.delete(k); });
   LIT_SITE_DEFAULT_AREAS.forEach(function (a) { sel.area.delete(a); });
   window.litSiteDefaultActive = false;
   window.litAutoSig = undefined;
   if (typeof renderChips === 'function') { renderChips('journal'); renderChips('area'); }
 }
+window.litRetireSiteDefault = litRetireSiteDefault;
 
 function applyLitSiteDefault() {
   if (window.LIT_SHARED_VIEW || window.LIT_AUTHOR_DEEPLINK) return false;   // a shared-list / author deep-link view owns the page
@@ -3378,7 +3422,13 @@ function citedByTagHTML(p) {
 // `showAdded` is true, a tag with the paper's database-insertion date is shown.
 function paperCardHTML(p, idx, showAdded) {
   const doi = p['DOI'] || '';
-  const link = doi.startsWith('http') ? doi : doi ? 'https://doi.org/' + doi : '';
+  // Route the DOI title link through safeUrl() like every other card URL (PDF,
+  // pre-print): it enforces an http(s) scheme and percent-encodes "'<> so the
+  // href can't break out of its attribute. This matters because a SHARED public
+  // list renders attacker-controlled `DOI` values (synth() from another user's
+  // publicLists doc) through this same path; the fallback esc(Title) branch
+  // covers the now-empty-link case for a non-http/malformed DOI.
+  const link = safeUrl(doi.startsWith('http') ? doi : doi ? 'https://doi.org/' + doi : '');
   const aid = 'a' + idx;
   const absClean = cleanAbstract(p['Abstract'] || '');
   const hasAbs = absClean.length > 10;
@@ -3400,7 +3450,7 @@ function paperCardHTML(p, idx, showAdded) {
     <div class="paper-authors">${(p['Authors']||'').split(',').map(function(a){var t=a.trim();return t?'<span class="paper-author-link" onclick="addAuthorChip(\''+escAttr(t)+'\')">'+esc(t)+'</span>':'';}).filter(Boolean).join(', ')}</div>
     <div class="paper-meta">
       ${journalTagsHTML(p)}
-      ${p['Volume'] && p['Issue'] ? `<span class="tag tag-vol" title="Year (and volume/issue) of publication — click the year to filter to it." onclick="addYearChip('${esc(p['Year'])}')">${esc(p['Year'])} · Vol. ${esc(p['Volume'])} No. ${esc(p['Issue'])}${p['Page'] ? ', pp. '+esc(p['Page']) : ''}</span>` : p['Year'] ? `<span class="tag tag-vol" title="Year (and volume/issue) of publication — click the year to filter to it." onclick="addYearChip('${esc(p['Year'])}')">${esc(p['Year'])}</span>` : ''}
+      ${p['Volume'] && p['Issue'] ? `<span class="tag tag-vol" title="Year (and volume/issue) of publication — click the year to filter to it." onclick="addYearChip('${escAttr(p['Year'])}')">${esc(p['Year'])} · Vol. ${esc(p['Volume'])} No. ${esc(p['Issue'])}${p['Page'] ? ', pp. '+esc(p['Page']) : ''}</span>` : p['Year'] ? `<span class="tag tag-vol" title="Year (and volume/issue) of publication — click the year to filter to it." onclick="addYearChip('${escAttr(p['Year'])}')">${esc(p['Year'])}</span>` : ''}
       ${(p._editors||[]).map(e => `<span class="tag tag-editor" title="Accepting editor (Management Science) — click to see other papers this editor accepted." onclick="filterByEditor('${escAttr(e)}')">✎ ${esc(e)}</span>`).join('')}
       ${p._area ? `<span class="tag tag-area" title="Editorial area (Management Science) — click to see other papers in this area." onclick="filterByArea('${escAttr(p._area)}')">${esc(p._area)}</span>` : ''}
       ${(p._se||[]).map(e => `<span class="tag tag-se" onclick="addChipFromCard('se','${escAttr(e)}')" title="Senior Editor — click to see other papers this editor accepted">✎ SE: ${esc(e)}</span>`).join('')}
@@ -3438,6 +3488,7 @@ function togBib(id, btn, idx) {
   if (open && !el.dataset.filled) {
     const p = filtered[idx];
     const bibStr = makeBib(p);
+    el.dataset.bib = bibStr;   // copyBib reads this, never the rendered text (the button label leaks into textContent)
     el.innerHTML = '<button class="bib-copy" onclick="copyBib(this,\'' + id + '\')">Copy</button>' + esc(bibStr);
     el.dataset.filled = '1';
   }
@@ -3501,7 +3552,11 @@ function makeBib(p) {
   const lastName = (authors[0] || 'Unknown').split(/\s+/).pop();
   const year = p['Year'] || '';
   const words = (p['Title'] || '').split(/\s+/).slice(0, 2).map(w => w.replace(/[^a-zA-Z]/g, '')).filter(Boolean).join('');
-  const key = lastName + '_' + year + '_' + words;
+  // Append a short DOI-derived suffix so two papers by the same first author, in
+  // the same year, sharing their first two title words (e.g. "… Part I" / "Part
+  // II") don't collide on one @article key and clobber each other in a .bib.
+  const doiTail = (p['DOI'] || '').replace(/[^a-zA-Z0-9]/g, '').slice(-4);
+  const key = lastName + '_' + year + '_' + words + (doiTail ? '_' + doiTail : '');
 
   // Use Page column directly
   let pages = (p['Page'] || '').replace(/-/g, '--');
@@ -3564,7 +3619,11 @@ function bibTitle(t) {
 function copyBib(btn, id) {
   var el = document.getElementById(id);
   if (!el) return;
-  var text = el.textContent.replace('Copy', '').trim();
+  // Read the stored BibTeX, NOT the rendered textContent: after a copy the
+  // button label becomes "Copied!"/"Copy failed", and stripping the leading
+  // "Copy" then leaks the label (or fails to strip "Copied!") into the clipboard.
+  var text = (el.dataset && typeof el.dataset.bib === 'string')
+    ? el.dataset.bib : el.textContent.replace(/^\s*Cop(?:ied!|y failed|y)\s*/, '').trim();
   var done = function() { btn.textContent = 'Copied!'; setTimeout(function() { btn.textContent = 'Copy'; }, 1500); };
   var legacy = function() {
     try {
@@ -3721,11 +3780,13 @@ function nberPdfUrl(u) {
   return m ? 'https://www.nber.org/system/files/working_papers/' + m[1].toLowerCase() + '/' + m[1].toLowerCase() + '.pdf' : '';
 }
 
-// OSF preprints: /download serves the newest uploaded file. Only short guids
-// and /preprints/ pages are rewritten (the pipelines only store those) — the
-// tight {4,6} guid keeps path words like "download" from matching.
+// OSF preprints: /download serves the newest uploaded file. Both the bare-guid
+// form (osf.io/<guid>) and the preprint-server page (osf.io/preprints/<provider>/
+// <guid>) resolve by the bare GUID, so capture only the trailing guid and target
+// osf.io/<guid>/download — appending /download to the /preprints/ SPA route does
+// NOT serve the PDF. The tight {4,6} guid keeps path words like "download" out.
 function osfPdfUrl(u) {
-  var m = String(u || '').match(/^https?:\/\/(?:www\.)?osf\.io\/((?:preprints\/[a-z0-9_-]+\/)?\w{4,6})\/?$/i);
+  var m = String(u || '').match(/^https?:\/\/(?:www\.)?osf\.io\/(?:preprints\/[a-z0-9_-]+\/)?(\w{4,6})\/?$/i);
   return m ? 'https://osf.io/' + m[1] + '/download' : '';
 }
 
@@ -3858,6 +3919,10 @@ function dbAnswerable() {
   if (!litDbReady || recentMode) return false;
   if (document.getElementById('sortBy').value !== 'year-desc') return false;
   if (sel.editor.size || sel.area.size || sel.se.size || sel.ae.size) return false;
+  // ORCID identity chips need exact folded per-name equality (identityMatch); the
+  // DB path only does a substring LIKE on the authors string, which would match
+  // e.g. "Yuxin Chen" for a "Xin Chen" chip. Keep those on the JSON path.
+  if (Object.keys(sel.authorIdentity || {}).length) return false;
   refreshJournalScope();
   if (!journalScope || journalScope.size === 0) return false;      // all-journal → JSON
   for (var k of journalScope) if (!dbNativeKey(k)) return false;    // extras / MS / types → JSON
@@ -4427,7 +4492,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   var meta = {};               // docId -> snapshot of {doi,title,authors,year} for rendering
   var unsubPapers = null, unsubLists = null, unsubProfile = null, unsubAlerts = null;
   var libraryMode = false, libFilter = { type: 'all', id: null }, libQuery = '';
-  var papersSnapshotSeen = false, listsSnapshotSeen = false;  // first-snapshot latches (merge import waits for both)
+  var papersSnapshotSeen = false, listsSnapshotSeen = false, alertsSnapshotSeen = false;  // first-snapshot latches (merge import/export waits for all three)
   var lastSharedSig = {};       // shareId -> last-synced content signature (avoids redundant writes)
   var sharedActive = false;     // is a ?list= shared-list view currently showing?
   var shareModalLid = null;     // which list the share modal is editing
@@ -4643,6 +4708,14 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         .map(function (c) { return c.dataset.lid; }).concat(extraLists);
       var rec = state.papers[id];
       var data = mergeMeta(id, { note: note, tags: tags, lists: lists, starred: rec ? !!rec.starred : false, updatedAt: serverTime() });
+      // Keep the papers doc in lock-step with isSaved(): if nothing is saved (not
+      // starred, empty note/tags/lists) delete any existing doc instead of
+      // writing an empty "ghost". A ghost is invisible on the main page (its
+      // badge/library filter both use isSaved) but was counted by the sub-pages'
+      // raw count() aggregate, so the "My library" badge disagreed across pages.
+      if (!(data.starred || (data.note && data.note.trim()) || (data.tags && data.tags.length) || (data.lists && data.lists.length))) {
+        return papersCol().doc(id).delete();
+      }
       return papersCol().doc(id).set(data, { merge: true });
     }).then(function () {
       status.style.color = 'var(--green)'; status.textContent = 'Saved ✓';
@@ -5196,7 +5269,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       website: document.getElementById('acctWebsite').value.trim(),
       email: email
     };
-    if (!prof.firstName || !prof.lastName) { acctErr('Please enter your first and last name.'); btn.disabled = false; return; }
+    if (!prof.firstName || !prof.lastName) { acctErr('Please enter your first and last name.'); btnRestore(); return; }
     auth.createUserWithEmailAndPassword(email, pw)
       .then(function (cred) {
         // The account exists and the user IS signed in from this point —
@@ -5370,8 +5443,16 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     // spaces). The trailing (?![\dxX]) stops a 17-digit typo from being
     // silently truncated to a DIFFERENT valid iD — extra digit junk after the
     // checksum char rejects instead.
-    var m = String(s || '').trim().match(/(\d{4})[-\s]?(\d{4})[-\s]?(\d{4})[-\s]?(\d{3}[\dxX])(?![\dxX])/);
+    var str = String(s || '').trim();
+    var m = str.match(/(\d{4})[-\s]?(\d{4})[-\s]?(\d{4})[-\s]?(\d{3}[\dxX])(?![\dxX])/);
     if (!m) return '';
+    // Mirror the trailing (?![\dxX]) guard on the LEADING side: a stray digit/x
+    // right before the match (a 17-char typo) must reject, not be trimmed to a
+    // DIFFERENT valid iD. (A lookbehind would do this but throws at parse time on
+    // Safari < 16.4, which would break the whole accounts script — so check the
+    // preceding char explicitly instead.)
+    var before = m.index > 0 ? str.charAt(m.index - 1) : '';
+    if (before && /[\dxX]/i.test(before)) return '';
     var d = (m[1] + m[2] + m[3] + m[4]).toUpperCase();
     var total = 0;
     for (var i = 0; i < 15; i++) { var c = d.charCodeAt(i) - 48; if (c < 0 || c > 9) return ''; total = (total + c) * 2; }
@@ -5623,7 +5704,17 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       try {
         localStorage.setItem(MERGE_STASH_KEY, JSON.stringify(stash));
         if (!localStorage.getItem(MERGE_STASH_KEY)) throw new Error('stash');
-      } catch (e) { if (!auto) alert('Could not prepare the merge (browser storage unavailable). Nothing was changed.'); return; }
+      } catch (e) {
+        // exportAccountData() already unpublished this account's public lists
+        // (they must go while we can still write as this user). Since the merge
+        // can't proceed, restore those share copies right away — exactly like the
+        // deleteCurrentAccount failure branch below — so the owner's share links
+        // don't silently 404.
+        lastSharedSig = {};
+        try { syncPublicLists(); } catch (e3) {}
+        if (!auto) alert('Could not prepare the merge (browser storage unavailable). Your account is unchanged and any shared-list links have been restored.');
+        return;
+      }
       return deleteCurrentAccount().then(function () {
         if (!auto) alert('This duplicate sign-in was removed.\n\nNow sign in to the account you want to KEEP — your saved papers, lists and alerts will move over automatically.');
         acctOpenAuth();
@@ -5651,7 +5742,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   // for a retry on the next sign-in/load.
   var mergeStashAppliedUid = null;
   function maybeApplyMergeStash() {
-    if (!state.user || !state.profile || !papersSnapshotSeen || !listsSnapshotSeen) return;
+    if (!state.user || !state.profile || !papersSnapshotSeen || !listsSnapshotSeen || !alertsSnapshotSeen) return;
     if (mergeStashAppliedUid === state.user.uid) return;
     var stash = null;
     try { stash = JSON.parse(localStorage.getItem(MERGE_STASH_KEY) || 'null'); } catch (e) {}
@@ -5769,8 +5860,11 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (accountKeysChecked || !state.user || !state.profile) return;
     // Wait for ALL data snapshots: a conflict on an ORCID-only duplicate now
     // AUTO-runs the merge, whose export reads the live papers/lists/alerts —
-    // exporting before they land would move an empty library.
-    if (!papersSnapshotSeen || !listsSnapshotSeen) return;
+    // exporting before they land would move an empty library. The alerts latch
+    // is essential: alerts arrive on their own snapshot, so without it the
+    // auto-merge could export state.alerts={} and silently lose the duplicate's
+    // e-mail alerts.
+    if (!papersSnapshotSeen || !listsSnapshotSeen || !alertsSnapshotSeen) return;
     accountKeysChecked = true;
     var uid = state.user.uid;
     var authEmail = (state.user.email || '').trim().toLowerCase();
@@ -5965,14 +6059,14 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   // modal (which has a #litOrcidConsent checkbox) or the profile modal.
   window.litOrcidSignIn = function () {
     if (!orcidOauthEnabled()) return;
-    // Scope the consent lookup to the OPEN connect modal: litOrcidClose only
-    // hides the overlay, so a stale (possibly unchecked) #litOrcidConsent can
-    // linger in the DOM when this is launched from the Edit-profile button.
-    // Launched from the profile card instead, the card's own association
-    // toggle (#pfOrcidLink) is the user's expressed choice — honour it rather
-    // than defaulting to consented.
-    var consent = document.querySelector('#litOrcidOverlay.open #litOrcidConsent')
-      || document.querySelector('#acctProfileOverlay.open #pfOrcidLink');
+    // Consent to associate. The connect modal's #litOrcidConsent is a VISIBLE,
+    // default-checked choice, scoped to the OPEN modal — honour it. Launched
+    // instead from the Edit-profile card's "Sign in with ORCID" button, clicking
+    // it IS the intent to link: in the unlinked entry mode #pfOrcidLink is hidden
+    // and unchecked, so reading it (the old behaviour) silently saved the
+    // association OFF, leaving the account verified-but-not-associated and the
+    // "My publications" links gated. Default linked=true for that path instead.
+    var consent = document.querySelector('#litOrcidOverlay.open #litOrcidConsent');
     var st = orcidRandState();
     try {
       sessionStorage.setItem('litOrcidOAuth', JSON.stringify({
@@ -6228,6 +6322,12 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   };
   window.litOrcidUnlink = function () {
     if (!confirm('Remove your ORCID association? Your saved papers, notes and lists are unaffected.')) return;
+    // Invalidate the per-iD credit-name fetch cache (like the acctSaveProfile /
+    // litOrcidSaveName clear paths do), so re-linking the SAME iD this session
+    // re-runs the ORCID credit-name backfill instead of falling back to the
+    // given+family name that may match no papers.
+    var unlinkedOrcid = state.profile && state.profile.orcid;
+    if (unlinkedOrcid) { try { delete orcidNameFetched[unlinkedOrcid]; } catch (e) {} }
     if (state.profile) { delete state.profile.orcid; delete state.profile.orcidAuthorName; delete state.profile.orcidNameAuto; delete state.profile.orcidVerified; state.profile.orcidLinked = false; }
     saveOrcidProfile(
       { orcid: FV.delete(), orcidLinked: false, orcidAuthorName: FV.delete(), orcidNameAuto: FV.delete(), orcidVerified: FV.delete(), myPubCount: FV.delete(), updatedAt: serverTime() },
@@ -6270,7 +6370,10 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   var CRIT_KEYS = ['jtype','journal','author','title','abstract','affiliation','year','editor','area','se','ae'];
   var JL  = (typeof JOURNAL_LABEL !== 'undefined') ? JOURNAL_LABEL : {};
   var JTL = (typeof JTYPE_LABEL   !== 'undefined') ? JTYPE_LABEL   : {};
-  var JTY = (typeof JOURNAL_TYPES !== 'undefined') ? JOURNAL_TYPES : [];
+  // Exclude the Working Papers type from alert composing: the mailer reads
+  // recent.json (which never carries working papers) and jtypeKeys('wp') is empty
+  // server-side, so a wp alert can never deliver — don't offer it as a chip.
+  var JTY = (typeof JOURNAL_TYPES !== 'undefined') ? JOURNAL_TYPES.filter(function (t) { return t.key !== 'wp'; }) : [];
   var alertDraft = null;                                   // criteria being edited
   var alertEditId = null;                                  // id when editing, else null
   var alertForm = { name: '', recipient: '', freq: 'weekly' }; // delivery inputs
@@ -6286,8 +6389,12 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     var g = (typeof sel !== 'undefined' && sel) ? sel : {};
     var arr = function (s) { return (s && typeof s.forEach === 'function') ? Array.from(s) : []; };
     var d = emptyCriteria();
-    d.jtype = arr(g.jtype); d.journal = arr(g.journal);
-    d.author = arr(g.author).concat(Object.keys(g.authorIdentity || {}));
+    d.jtype = arr(g.jtype).filter(function (k) { return k !== 'wp'; }); d.journal = arr(g.journal);
+    // authorIdentity keys are the human display labels (e.g. "Konstantinos I.
+    // Stouras"); lowercase them like every other captured author term so the
+    // mailer's authorMatch (which lower-cases the haystack but not the query)
+    // can match — otherwise the saved alert silently never delivers.
+    d.author = arr(g.author).concat(Object.keys(g.authorIdentity || {}).map(function (s) { return String(s).trim().toLowerCase(); }));
     d.title = arr(g.title); d.abstract = arr(g.abstract);
     d.affiliation = arr(g.affiliation); d.year = arr(g.year);
     d.editor = arr(g.editor); d.area = arr(g.area); d.se = arr(g.se); d.ae = arr(g.ae);
@@ -7017,7 +7124,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (unsubProfile) { unsubProfile(); unsubProfile = null; }
     if (unsubAlerts) { unsubAlerts(); unsubAlerts = null; }
     state.papers = {}; state.lists = {}; state.profile = null; state.alerts = {};
-    papersSnapshotSeen = false; listsSnapshotSeen = false;
+    papersSnapshotSeen = false; listsSnapshotSeen = false; alertsSnapshotSeen = false;
     accountKeysChecked = false; dupMergeOffered = false;   // re-check identity keys for whoever signs in next
     lastSharedSig = {};         // shared-list write dedup is per signed-in user
     prefsAutoApplied = false;   // re-arm auto-apply for whoever signs in next
@@ -7081,7 +7188,10 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       }, function (err) { console.warn('lists listener:', err && err.code); });
       unsubAlerts = alertsCol().onSnapshot(function (snap) {
         var m = {}; snap.forEach(function (d) { var x = d.data() || {}; x.id = d.id; m[d.id] = x; });
-        state.alerts = m; acctRenderControl(); refreshAlertsModalIfOpen();
+        state.alerts = m; alertsSnapshotSeen = true; acctRenderControl(); refreshAlertsModalIfOpen();
+        // Drive the merge orchestration too: exportAccountData (auto-merge) reads
+        // state.alerts, so a pending merge/claim must not run until this lands.
+        onData();
       }, function (err) { console.warn('alerts listener:', err && err.code); });
     } else {
       if (libraryMode) acctExitLibrary();

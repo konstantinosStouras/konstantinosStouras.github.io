@@ -689,7 +689,7 @@
       var name = String(x.name || '').trim(), email = String(x.email || '').trim();
       var who = '';
       if (name) who += '<b>' + esc(name) + '</b>';
-      if (validEmail(email)) who += (who ? ' · ' : '') + '<a href="mailto:' + esc(encodeURIComponent(email)) + '">' + esc(email) + '</a>';
+      if (validEmail(email)) who += (who ? ' · ' : '') + '<a href="mailto:' + esc(email) + '">' + esc(email) + '</a>';
       if (!who) who = '<span class="anon">anonymous (no e-mail — a reply cannot be sent)</span>';
 
       var imgs = (Array.isArray(x.images) ? x.images : []).filter(function (u) { return /^data:image\//.test(u); });
@@ -774,7 +774,10 @@
           'How it was acted on:\n' + (action || '(fill in)') + '\n\n' +
           '— — —\nYour original message:\n' + orig + '\n\n' +
           'Thanks again for helping improve the site!\n\nKonstantinos\nhttps://stouras.com/lit/';
-        window.location.href = 'mailto:' + encodeURIComponent(String(x.email).trim()) +
+        // Do NOT percent-encode the address itself (RFC 6068): encoding @ -> %40
+        // makes some mail clients open a compose window addressed to the literal
+        // "user%40host". The address already passed validEmail (no spaces).
+        window.location.href = 'mailto:' + String(x.email).trim() +
           '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
       } else {
         window.alert('Ticket closed. This submission was anonymous (no e-mail), so no reply can be sent.');
@@ -941,13 +944,16 @@
   function psBadgeClass(s) { return s === 'added' ? 'added' : s === 'duplicate' ? 'duplicate' : s === 'rejected' ? 'rejected' : 'pending'; }
 
   function psAdminRender() {
-    var c = { pending: 0, added: 0, rejected: 0 };
+    var c = { pending: 0, added: 0, duplicate: 0, rejected: 0 };
     psAdminItems.forEach(function (it) {
       var s = it.data.status;
-      if (psIsDone(s)) c.added++; else if (s === 'rejected') c.rejected++; else c.pending++;
+      // 'duplicate' means the paper was already in the catalog and was NOT added,
+      // so it must be counted separately, not lumped into "added".
+      if (s === 'added') c.added++; else if (s === 'duplicate') c.duplicate++;
+      else if (s === 'rejected') c.rejected++; else c.pending++;
     });
     $('psAdminSub').textContent = psAdminItems.length + ' suggestion' + (psAdminItems.length === 1 ? '' : 's') +
-      ' — ' + c.pending + ' pending, ' + c.added + ' added, ' + c.rejected + ' rejected';
+      ' — ' + c.pending + ' pending, ' + c.added + ' added, ' + c.duplicate + ' already present, ' + c.rejected + ' rejected';
 
     var items = psAdminItems.filter(function (it) {
       var s = it.data.status;
