@@ -1450,7 +1450,14 @@
   }
 
   function drawCompare(list) {
-    var years = []; for (var y = S.yMin; y <= S.yMax; y++) years.push(y);
+    // Auto-start the x-axis at the earliest first-publication among the compared
+    // authors when the user hasn't set a start year (same cosmetic trim of
+    // leading empty years as the single-author view in drawAuthor).
+    var firstPubY = Infinity;
+    list.forEach(function (a) { var ks = Object.keys(a.y || {}); for (var i = 0; i < ks.length; i++) { var yy = +ks[i]; if (yy < firstPubY) firstPubY = yy; } });
+    var axisLo = (S.yMin <= YEAR_LO && isFinite(firstPubY)) ? Math.max(firstPubY, YEAR_LO) : S.yMin;
+    if (!(axisLo <= S.yMax)) axisLo = S.yMin;
+    var years = []; for (var y = axisLo; y <= S.yMax; y++) years.push(y);
     var scope = {}; scopeKeys().forEach(function (k) { scope[k] = 1; });
     var series = list.map(function (a, i) {
       return { name: a.n, color: authorColor(i), pts: years.map(function (yy) { return [yy, a.y[yy] || 0]; }) };
@@ -1511,7 +1518,7 @@
     }).join('');
 
     var html = '<div class="cards">';
-    html += '<div class="card wide"><h3>Publications per year</h3><div class="csub">Comparing ' + list.length + ' authors across ' + S.yMin + '–' + S.yMax + '</div><div id="cmpTimeline"></div><div class="legend" id="cmpLegend"></div></div>';
+    html += '<div class="card wide"><h3>Publications per year</h3><div class="csub">Comparing ' + list.length + ' authors across ' + axisLo + '–' + S.yMax + '</div><div id="cmpTimeline"></div><div class="legend" id="cmpLegend"></div></div>';
     html += '<div class="card wide"><h3>At a glance</h3><div class="csub">Key figures side by side — journal-scope and year filters apply</div><div class="tblscroll"><table class="cmp"><thead><tr>' + head + '</tr></thead><tbody>' + tbody + '</tbody></table></div></div>';
     html += '<div class="card wide"><h3>Where they publish</h3><div class="csub">Papers per journal (top 16) — journals outside your current scope are greyed</div><div class="tblscroll"><table class="cmp"><thead><tr>' + jhead + '</tr></thead><tbody>' + jrows + '</tbody></table></div></div>';
     html += '</div>';
@@ -1572,9 +1579,15 @@
       { label: 'Total citations (in filters)', value: fmt(citFil.c), hint: 'journal scope ∩ years' }
     ];
 
-    // timeline bars over the selected year range
-    var axis = []; for (var y = S.yMin; y <= S.yMax; y++) axis.push(y);
-    var tItems = axis.map(function (y) { return { label: (y % 10 === 0 || y === S.yMin || y === S.yMax) ? "'" + String(y).slice(2) : '', value: a.y[y] || 0 }; });
+    // timeline bars over the selected year range. When the user hasn't narrowed
+    // the start year (the slider is still at the corpus floor), auto-start the
+    // x-axis at this author's first publication instead of the empty early
+    // decades — a purely cosmetic trim of leading zero-publication years, so
+    // every count is unchanged (a user-set start year is still honoured).
+    var axisLo = (S.yMin <= YEAR_LO && isFinite(firstY)) ? Math.max(firstY, YEAR_LO) : S.yMin;
+    if (!(axisLo <= S.yMax)) axisLo = S.yMin;
+    var axis = []; for (var y = axisLo; y <= S.yMax; y++) axis.push(y);
+    var tItems = axis.map(function (y) { return { label: (y % 10 === 0 || y === axisLo || y === S.yMax) ? "'" + String(y).slice(2) : '', value: a.y[y] || 0 }; });
     // collapse to a cleaner bar count if the range is huge: bucket by year still fine (<=~75 bars)
     var jItems = allJ.map(function (k) {
       return { label: JMAP[k] ? JMAP[k].name : k, value: a.j[k], color: scope[k] ? NAVY : '#c9b8be' };
@@ -1584,7 +1597,7 @@
     html += '<div style="margin-bottom:16px"><span class="aname">' + esc(a.n) + '</span></div>';
     html += '<div class="tiles">' + tiles.map(function (t) { return '<div class="tile"><div class="label">' + t.label + '</div><div class="value sm">' + t.value + '</div>' + (t.hint ? '<div class="hint">' + t.hint + '</div>' : '') + '</div>'; }).join('') + '</div>';
     html += '<div class="cards">';
-    html += '<div class="card wide"><h3>Publications per year</h3><div class="csub">' + esc(a.n) + '’s output across ' + S.yMin + '–' + S.yMax + '</div><div id="aTimeline"></div></div>';
+    html += '<div class="card wide"><h3>Publications per year</h3><div class="csub">' + esc(a.n) + '’s output across ' + axisLo + '–' + S.yMax + '</div><div id="aTimeline"></div></div>';
     html += '<div class="card wide"><h3>Where they publish</h3><div class="csub">Papers per journal — bars in claret are in your current journal scope</div><div id="aJournals"></div></div>';
     // Disruption profile — populated async from ./disruption.json, revealed only
     // if this author has scored papers in the current scope (see renderAuthorDisruption).
