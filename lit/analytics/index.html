@@ -2255,27 +2255,33 @@
   // ── Year-range slider scale ─────────────────────────────────────────────
   // The corpus spans ~1900–2027, but the papers people actually filter for
   // cluster in the last couple of decades, so a plain linear slider crams
-  // every useful start year into the far right and picking, say, 2018 means
-  // nudging a thumb through a tiny sliver. We remap the track with a mild
-  // power curve (quadratic) that hands recent years progressively more room:
-  // a fixed year window renders as a LONGER bar the closer it sits to the
-  // present, and the start thumb gets fine control right where it's used.
-  // Only the thumb ↔ year mapping is warped — the filter still works in whole
-  // years (S.yMin/S.yMax); the two range inputs now carry a 0..YR_POS_MAX
-  // track position rather than a year. Decade ticks below make the scale read.
-  var YR_POS_MAX = 1000, YR_WARP = 2;
-  function yrU2Year(u) { return YEAR_HI - (YEAR_HI - YEAR_LO) * Math.pow(1 - u, YR_WARP); }
-  function yrYear2U(y) {
-    var span = (YEAR_HI - YEAR_LO) || 1, t = (YEAR_HI - y) / span;
-    if (t < 0) t = 0; else if (t > 1) t = 1;
-    return 1 - Math.pow(t, 1 / YR_WARP);
+  // every useful start year into the far-right sliver and picking, say, 2015
+  // is fiddly. We remap the track with a LOGARITHMIC recency scale (position
+  // ∝ log of "years before present"): the closer to today, the more track a
+  // year gets, so moving the thumb rightward the year changes ever more slowly
+  // (fine control where it's used) and the recent window is a long, grabbable
+  // bar — e.g. 2000-onward fills ~64% of the track (vs ~21% linear) and the
+  // last 10 years ~41%. A softening constant (YR_SOFT) keeps the newest one or
+  // two years from hogging the far right. Only the thumb ↔ year mapping is
+  // warped — the filter still works in whole years (S.yMin/S.yMax); the two
+  // range inputs carry a 0..YR_POS_MAX track position, not a year. Decade ticks
+  // below (which visibly bunch left, spread right) make the scale legible.
+  var YR_POS_MAX = 1000, YR_SOFT = 2;
+  function yrLogDenom() { var span = (YEAR_HI - YEAR_LO) || 1; return Math.log((span + YR_SOFT) / YR_SOFT); }
+  function yrPos2Year(p) {
+    var u = p / YR_POS_MAX, age = YR_SOFT * Math.exp((1 - u) * yrLogDenom()) - YR_SOFT;
+    return Math.round(YEAR_HI - age);
   }
-  function yrPos2Year(p) { return Math.round(yrU2Year(p / YR_POS_MAX)); }
-  function yrYear2Pos(y) { return Math.round(yrYear2U(y) * YR_POS_MAX); }
+  function yrYear2Pos(y) {
+    var span = (YEAR_HI - YEAR_LO) || 1, age = YEAR_HI - y;
+    if (age < 0) age = 0; else if (age > span) age = span;
+    var u = 1 - Math.log((age + YR_SOFT) / YR_SOFT) / yrLogDenom();
+    return Math.round(u * YR_POS_MAX);
+  }
   function renderYearTicks() {
     var host = $('yrTicks'); if (!host) return;
     var html = '';
-    [1950, 1980, 2000, 2020].forEach(function (y) {
+    [1950, 1980, 2000, 2010, 2020].forEach(function (y) {
       if (y <= YEAR_LO || y >= YEAR_HI) return;
       var pct = yrYear2Pos(y) / YR_POS_MAX * 100;
       html += '<span class="yt" style="left:' + pct.toFixed(2) + '%">' + y + '</span>';
