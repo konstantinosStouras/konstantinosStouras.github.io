@@ -609,6 +609,11 @@
   .acct-modal.wide { max-width: 680px; display: flex; flex-direction: column; max-height: calc(100vh - 112px); }
   .acct-modal.wide .acct-modal-head { flex: 0 0 auto; }
   .acct-modal.wide .acct-modal-head p { text-align: justify; }
+  /* The Default-filters modal reuses .acct-modal-body inside this capped shell.
+     Give it its own scroll region (like .alerts-body / .info-body) so a short
+     viewport keeps the whole body — including the Save button — INSIDE the modal
+     instead of letting it overflow past the rounded bottom border. */
+  .acct-modal.wide .acct-modal-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 
   /* About / Feedback prose. The body scrolls on its own when it outgrows the
      capped modal; paragraphs are justified for clean flush-both-sides text. */
@@ -6884,7 +6889,11 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     return {
       journals: Array.isArray(p.defaultJournals) ? p.defaultJournals : [],
       jtypes: Array.isArray(p.defaultJTypes) ? p.defaultJTypes : [],
-      autoApply: p.autoApplyFilters !== false   // default on
+      autoApply: p.autoApplyFilters !== false,  // default on
+      // Has the user DELIBERATELY saved a default (even an empty one)? An empty
+      // explicit default means "search everything" and must override the built-in
+      // site default; a user who has NEVER saved one still falls back to it.
+      explicit: p.defaultFiltersSet === true
     };
   }
 
@@ -6923,8 +6932,16 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (!d.autoApply) return;                           // user opted out of any auto-apply
     if (libraryMode || (typeof recentMode !== 'undefined' && recentMode)) return;
     if (!(d.journals.length || d.jtypes.length)) {
-      // Signed in but no personal default filters saved → fall back to the
-      // site default (same as an anonymous visitor). Idle-guarded internally.
+      // No personal journals / journal types saved. Two cases:
+      //  • the user DELIBERATELY saved an empty default (explicit) — that is their
+      //    "search everything" choice, so honour it: suppress the built-in site
+      //    default (latch its once-guard so no later path — e.g. exiting a shared
+      //    view — can re-seed MS + area) and leave the full catalog showing. The
+      //    guard is re-armed on any auth change, so a signed-OUT visitor still
+      //    gets the site default.
+      //  • the user has NEVER saved a default → fall back to the site default,
+      //    same as an anonymous visitor (idle-guarded internally).
+      if (d.explicit) { window.litSiteDefaultApplied = true; return; }
       if (typeof window.applyLitSiteDefault === 'function') window.applyLitSiteDefault();
       return;
     }
@@ -7075,6 +7092,10 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       defaultJournals: Array.from(prefDraftJ),
       defaultJTypes: Array.from(prefDraftT),
       autoApplyFilters: autoApply,
+      // Mark that the user has deliberately saved a default. An EMPTY save then
+      // reads as "search everything" and overrides the site default on sign-in,
+      // instead of being mistaken for a never-configured account (see savedDefaults).
+      defaultFiltersSet: true,
       updatedAt: serverTime()
     }, { merge: true })
       .then(function () {
@@ -7104,7 +7125,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     renderPrefSelected();
     var st = document.getElementById('prefStatus'); if (st) { st.style.color = 'var(--text-muted)'; st.textContent = 'Clearing…'; }
     profileDoc().set({
-      defaultJournals: [], defaultJTypes: [], autoApplyFilters: false, updatedAt: serverTime()
+      defaultJournals: [], defaultJTypes: [], autoApplyFilters: false, defaultFiltersSet: false, updatedAt: serverTime()
     }, { merge: true })
       .then(function () { if (st) { st.style.color = 'var(--green)'; st.textContent = 'Cleared. No filters will be pre-applied on sign-in.'; } })
       .catch(function (e) { var er = document.getElementById('prefErr'); if (er) { er.style.color = 'var(--red)'; er.textContent = friendly(e); } if (st) st.textContent = ''; });

@@ -533,7 +533,17 @@ survive an auth change. Wiring: for an **anonymous** visitor the
 accounts `onAuthStateChanged` else-branch applies it; for a **signed-in** user
 with NO saved personal defaults, `maybeAutoApplyPrefs()` falls back to it (a user
 WITH personal defaults gets theirs; a user who turned `autoApplyFilters` off gets
-neither); when the **accounts system is off** (`window.LIT_ACCOUNTS_ENABLED ===
+neither). **A DELIBERATE empty default overrides the site default:** a user who
+opens Default filters, picks nothing and Saves (auto-apply on) is stamped
+`defaultFiltersSet:true` (`savedDefaults().explicit`), and on sign-in
+`maybeAutoApplyPrefs` LATCHES the site-default once-guard
+(`window.litSiteDefaultApplied = true`) and returns — so they land on the FULL
+catalog, not MS + area, and no later path (e.g. `litExitShared`) can re-seed it.
+This distinguishes an explicit "search everything" choice from a never-configured
+account (no `defaultFiltersSet` → still gets the site default); the guard is
+re-armed on any auth change so a signed-OUT visitor still sees the site default.
+`acctSaveDefaults` writes the flag `true`, `acctClearDefaults` writes it `false`.
+When the **accounts system is off** (`window.LIT_ACCOUNTS_ENABLED ===
 false`), `loadData()` applies it directly. It is cleared/re-armed on any auth
 change alongside the personal defaults (`litSiteDefaultActive` joins
 `autoAppliedActive` in the sign-out `clearFilters()` path). So a signed-in user

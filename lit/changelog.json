@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "default-filters-empty-overrides-site",
+      "date": "2026-07-19",
+      "title": "Make “show me everything” your default view",
+      "summary": "In your account's Default filters, you can now save an empty selection (nothing picked) and it sticks: you'll land on the full catalog every time you sign in, instead of the site's built-in Management Science landing view. Save a set of journals or types and you still land on those — this just lets people who'd rather browse the whole database set that as their personal default. (Also fixed: the Save button no longer spills past the bottom of the Default-filters window on shorter screens.)",
+      "url": "https://stouras.com/lit/"
+    },
+    {
       "id": "analytics-year-slider-scale",
       "date": "2026-07-19",
       "title": "Easier year range on the analytics dashboard",
