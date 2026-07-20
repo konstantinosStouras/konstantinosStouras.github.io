@@ -47,7 +47,7 @@ async function awrite(dest, str) {
 }
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseInformsEditors } from './informs-editors.mjs';
+import { editorsFromPageHtml } from './informs-editors.mjs';
 import { isChallenged } from './pnas-crawl.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -106,18 +106,11 @@ async function fetchArticle(doi) {
   return { status: res.status, body: await res.text() };
 }
 
-// The History line sits in the article page HTML; grab a window around it and
-// hand it to the shared parser.
-function editorsFromPage(html) {
-  const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-  const idx = text.search(/History\s*:/i);
-  if (idx === -1) {
-    // some layouts render "X, Senior Editor" without the History label
-    if (!/Senior Editor|Associate Editor|senior editor/i.test(text)) return null;
-    return parseInformsEditors(text.slice(0, 40000));
-  }
-  return parseInformsEditors(text.slice(idx, idx + 500));
-}
+// The History line sits in the article page HTML; the shared multi-window
+// scan (informs-editors.mjs) parses around every "History:" label and every
+// "Senior/Associate Editor" mention, so long History lines (dates first,
+// editors past the old 500-char window) and label-less layouts both extract.
+const editorsFromPage = editorsFromPageHtml;
 
 const cache = existsSync(CACHE_PATH) ? JSON.parse(await readFile(CACHE_PATH, 'utf8')) : {};
 let processed = 0, found = 0, dirty = 0;
