@@ -222,8 +222,22 @@ pnas.org's search is Cloudflare-blocked for cloud IPs. **ISR/MkSc caveat:**
 likewise, ISR Senior/Associate Editor and Marketing Science Senior Editor
 names (`lit/data/_informs-editors.json`) come from
 `lit/_scraper/informs-editors-local.mjs` run locally (pubsonline blocks
-cloud IPs too). Editors/Areas UI shows only when Management Science is in
-scope; SE/AE filters show when ISR/MkSc are selected. **Articles-in-Advance
+cloud IPs too) — until that cache is first committed, only the few papers
+whose Crossref abstract/assertion carries the History line have SE/AE.
+Extraction is shared in `lit/_scraper/informs-editors.mjs`:
+`parseInformsEditors` (the History-line parser — "Name, Senior Editor"
+lists, "Accepted by …", "served as …", elided-verb pairs, inverted
+"Accepted by Senior Editor Name", colon forms) and `editorsFromPageHtml`
+(the local scraper's whole-page scan: a window around EVERY "History:"
+label and Senior/Associate-Editor mention, block-boundary `;` separators so
+an adjacent fragment can't bleed into a name — the old single 500-char
+window truncated long dated History lines). `build-data.mjs` also parses
+any editor-labelled Crossref ASSERTION for ISR/MkSc (role-labelled bare
+names accepted), mirroring MS's accepted-by assertion path. Offline test:
+`node lit/_scraper/informs-editors-selftest.mjs`. ISR/MkSc paper cards
+render clickable `SE:`/`AE:` chips (like the MS editor chip) for every row
+carrying the data. Editors/Areas UI shows only when Management Science is
+in scope; SE/AE filters show when ISR/MkSc are selected. **Articles-in-Advance
 caveat:** a no-volume/no-issue record is tagged forthcoming only when recent
 (`forthcomingStatus`); `data/_aia-fixups.json` supplies the real issue for older
 frozen records and `data/_informs-aia.json` adds forthcoming papers Crossref

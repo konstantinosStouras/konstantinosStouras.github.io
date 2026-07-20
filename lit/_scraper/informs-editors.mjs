@@ -2,29 +2,40 @@
  * informs-editors.mjs — extract Senior Editor / Associate Editor names from an
  * INFORMS article's "History:" line, e.g.
  *   "History: Dr. Ram D. Gopal, Senior Editor; Dr. Hong Xu, Associate Editor."
+ *   "History: Accepted by Alessandro Acquisti, Senior Editor; Il-Horn Hann, Associate Editor."
  *   "History: Puneet Manchanda served as the senior editor."
- *   "X and Y served as the senior editors for this article."
+ *   "K. Sudhir served as the senior editor and Shan Yu as associate editor for this article."
+ *   "Accepted by Senior Editor Jeffrey Parsons."
  * Used for Information Systems Research (SE + AE) and Marketing Science (SE).
- * The text comes either from a Crossref abstract (when INFORMS deposits the
+ * The text comes from a Crossref abstract/assertion (when INFORMS deposits the
  * History line there) or from the pubsonline article page fetched by
  * informs-editors-local.mjs.
  *
- * Exported: parseInformsEditors(text) -> { se: 'A; B' | '', ae: '...' | '' }
+ * Exported:
+ *   parseInformsEditors(text)   -> { se: 'A; B' | '', ae: '...' | '' }
+ *   editorsFromPageHtml(html)   -> { se, ae } | null   (multi-window page scan)
+ * Offline tests: node informs-editors-selftest.mjs
  */
 
-// Keep only what follows the last real sentence boundary (". " after a word,
-// not after an initial like "D." or a title like "Dr.").
+// Keep only what follows the last real sentence boundary (". " after a word
+// or a 4-digit year — History dates end sentences too — not after an initial
+// like "D." or a title like "Dr.").
 function tailSegment(s) {
-  const parts = String(s || '').split(/(?<=[a-zà-þ]{2})\.\s+/);
+  const parts = String(s || '').split(/(?<=[a-zà-þ]{2}|\d{4})\.\s+/);
   return parts[parts.length - 1];
 }
 
 function cleanName(raw) {
   let s = tailSegment(String(raw || ''))
     .replace(/^.*(?:history|editors?)\s*:\s*/i, '')
+    // "Accepted by <Name>" / "processed by <Name>" / "recommended (for
+    // acceptance) by <Name>" — the History line's verb phrase must not leak
+    // into the captured name (plausibleName would reject it wholesale).
+    .replace(/^.*?\b(?:accepted|processed|handled|recommended(?:\s+for\s+acceptance)?|edited)\s+by\s+/i, '')
     .replace(/\s+/g, ' ')
     .trim()
     .replace(/^(?:and|with|by)\s+/i, '')
+    .replace(/^(?:the\s+)?(?:special[- ]issue\s+)?(?:senior|associate)\s+editors?\s+/i, '')
     .replace(/^(?:dr|prof(?:essor)?|mr|mrs|ms)\.?\s+/i, '')
     .replace(/[.,;:]+$/, '')
     .trim();
@@ -36,7 +47,7 @@ function plausibleName(s) {
   if (!s || s.length < 4 || s.length > 60) return false;
   if (s.split(/\s+/).length > 6) return false;
   if (!/^[A-ZÀ-Þ]/.test(s)) return false;
-  return !/\b(the|this|that|is|are|was|were|we|of|in|on|to|as|for|paper|article|issue|editors?|received|accepted|revisions?)\b/i.test(s);
+  return !/\b(the|this|that|is|are|was|were|we|of|in|on|to|as|for|paper|article|issue|editors?|received|accepted|served|revisions?)\b/i.test(s);
 }
 
 // "A and B" -> ["A", "B"]; drops implausible pieces.
@@ -51,7 +62,8 @@ export function parseInformsEditors(text) {
   const t = String(text || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
   const se = new Set(), ae = new Set();
 
-  // "<Name>, Senior Editor" / "<Name>, Associate Editor" (";"-separated lists)
+  // "<Name>, Senior Editor" / "<Name>, Associate Editor" (";"-separated lists,
+  // incl. "Accepted by <Name>, Senior Editor" — cleanName strips the verb).
   for (const m of t.matchAll(/([^;:]{2,80}?),\s*(?:the\s+)?Senior\s+Editors?\b/gi)) {
     splitNames(m[1]).forEach(n => se.add(n));
   }
@@ -68,11 +80,57 @@ export function parseInformsEditors(text) {
   for (const m of t.matchAll(/([^;:]{2,90}?)\s+served\s+as\s+(?:the\s+)?associate\s+editors?\b/gi)) {
     splitNames(m[1]).forEach(n => ae.add(n));
   }
+  // Elided verb: "… senior editor and <Name> as (the) associate editor" —
+  // "served" appears once and is shared by both clauses.
+  for (const m of t.matchAll(/\b(?:and|;)\s*([A-ZÀ-Þ][^;:]{1,60}?)\s+as\s+(?:the\s+)?associate\s+editors?\b/g)) {
+    splitNames(m[1]).forEach(n => ae.add(n));
+  }
+  // Inverted order: "accepted/processed/handled by (the) Senior Editor <Name>".
+  for (const m of t.matchAll(/\b(?:accepted|processed|handled|edited)\s+by\s+(?:the\s+)?(?:special[- ]issue\s+)?senior\s+editors?,?\s+([A-ZÀ-Þ][^.;:()]{2,60})/gi)) {
+    splitNames(m[1]).forEach(n => se.add(n));
+  }
+  for (const m of t.matchAll(/\b(?:accepted|processed|handled|edited)\s+by\s+(?:the\s+)?associate\s+editors?,?\s+([A-ZÀ-Þ][^.;:()]{2,60})/gi)) {
+    splitNames(m[1]).forEach(n => ae.add(n));
+  }
   // "Senior Editor: <Name>" / "Associate Editor: <Name>"
   let m = t.match(/Senior\s+Editors?\s*[:—-]\s*([^.;]{2,80})/i);
   if (m) splitNames(m[1]).forEach(n => se.add(n));
   m = t.match(/Associate\s+Editors?\s*[:—-]\s*([^.;]{2,80})/i);
   if (m) splitNames(m[1]).forEach(n => ae.add(n));
 
+  return { se: [...se].join('; '), ae: [...ae].join('; ') };
+}
+
+// Scan a whole pubsonline article page for editor names: parse a window around
+// EVERY "History:" label and every "Senior/Associate Editor" mention (the old
+// single 500-char window truncated long History lines — received/revised/
+// accepted dates come first — and missed layouts without the label). Returns
+// null when the page has no editor-ish text at all; window count is capped so
+// a pathological page stays cheap.
+export function editorsFromPageHtml(html) {
+  // Close each block element with "; " BEFORE stripping tags: adjacent blocks
+  // would otherwise concatenate without punctuation, and a name-like fragment
+  // from the previous block (an author list, a nav item) could bleed into the
+  // "<Name> served as…" capture. ';' is already a hard boundary for every
+  // parser pattern, so this only ever tightens the windows.
+  const text = String(html || '')
+    .replace(/<\/(?:p|div|section|li|h[1-6]|td|tr|ul|ol|nav)>|<br\s*\/?>/gi, ' ; ')
+    .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  const windows = [];
+  for (const m of text.matchAll(/History\s*:/gi)) {
+    windows.push(text.slice(m.index, m.index + 1500));
+    if (windows.length >= 8) break;
+  }
+  for (const m of text.matchAll(/(?:Senior|Associate)\s+Editor/gi)) {
+    windows.push(text.slice(Math.max(0, m.index - 400), m.index + 400));
+    if (windows.length >= 24) break;
+  }
+  if (!windows.length) return null;
+  const se = new Set(), ae = new Set();
+  for (const w of windows) {
+    const ed = parseInformsEditors(w);
+    if (ed.se) ed.se.split('; ').forEach(n => se.add(n));
+    if (ed.ae) ed.ae.split('; ').forEach(n => ae.add(n));
+  }
   return { se: [...se].join('; '), ae: [...ae].join('; ') };
 }

@@ -361,6 +361,26 @@ function mapWork(item, src) {
     const ed = parseInformsEditors(abstract);
     se = ed.se;
     if (src.aeEditors) ae = ed.ae;
+    // Crossref sometimes carries the History/editor line as an ASSERTION
+    // instead of inside the abstract (like MS's accepted-by assertion above) —
+    // give every editor-labelled assertion the same parse, and take a bare
+    // name directly when the label itself names the role.
+    if (!se || (src.aeEditors && !ae)) {
+      for (const a of item.assertion || []) {
+        const label = ((a.label || a.name || '') + '').toLowerCase();
+        if (!label.includes('editor')) continue;
+        const v = stripJats(a.value || '');
+        if (!v) continue;
+        const ed2 = parseInformsEditors(v);
+        if (!ed2.se && !ed2.ae && /^[A-ZÀ-Þ][^.;:]{2,60}$/.test(v.trim())) {
+          // Bare "First Last" value — role from the assertion label.
+          if (/senior/.test(label)) ed2.se = v.trim();
+          else if (/associate/.test(label)) ed2.ae = v.trim();
+        }
+        if (!se && ed2.se) se = ed2.se;
+        if (src.aeEditors && !ae && ed2.ae) ae = ed2.ae;
+      }
+    }
   }
 
   let volume = item.volume || '';
