@@ -274,9 +274,11 @@ function assertionEditor(item) {
 function mapWork(item, src) {
   let title = (item.title && item.title[0]) ? stripJats(item.title[0]) : '';
   if (!title) return null;
-  // POM tags its fast-track "Articles in Advance" titles with an "EXPRESS: "
-  // editorial prefix; strip it so the catalog shows the real paper title.
-  if (src.key === 'pom') title = title.replace(/^EXPRESS:\s*/, '');
+  // POM, Journal of Marketing and JMR tag their fast-track "Articles in
+  // Advance" titles with an "EXPRESS: " editorial prefix; strip it so the
+  // catalog shows the real paper title.
+  if (src.key === 'pom' || src.key === 'jm' || src.key === 'jmr')
+    title = title.replace(/^EXPRESS:\s*/, '');
 
   // Keep names and ORCIDs aligned: filter nameless author entries *before*
   // pairing, or one nameless entry shifts every later ORCID onto the wrong
