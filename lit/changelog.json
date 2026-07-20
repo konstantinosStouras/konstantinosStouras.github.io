@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "search-covers-working-papers",
+      "date": "2026-07-20",
+      "title": "Working papers join searches and Recently added",
+      "summary": "Searching by title, author, abstract or affiliation with no journal selected now searches the entire database — the unpublished Working Papers archive included — so a working paper turns up in an ordinary search without first picking the Working Papers journal type. Newly added working papers now also appear in the “Recently added papers” view alongside published ones. Browsing by year alone or with only the pre-print toggle still shows published papers, and the headline paper count stays published-only.",
+      "url": "https://stouras.com/lit/"
+    },
+    {
       "id": "default-filters-editorial",
       "date": "2026-07-19",
       "title": "Editor & area in your default filters",

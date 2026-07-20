@@ -942,14 +942,28 @@ flagged `"workingPaper": true`) as a lazy `EXTRA_SRC` and records its key in
 `WP_KEYS`; `journalTypeKeys('wp') === WP_KEYS`. Records reuse the published-paper
 shape (+ `"Status":"Working paper"`) so cards render with **no renderer
 changes**: badge, repository tag, clickable **posted-year** chip, **co-authors**,
-and the Pre-print link all come for free. **Opt-in:** `neededExtraKeys()`
-excludes `WP_KEYS` from the "broad filter loads everything" path, so a normal
-search stays published-only — the archive downloads only when the user selects
-the Working Papers type or one of its repositories; working papers are also kept
-out of the header's published "N papers" count, and out of the "Recently added"
-view. `buildJTypeSelect()` **hides the Working Papers type until its archive has
-sources**, so the shipped empty `data-workingpapers/` (valid empty manifest)
-stays dormant until data lands. **The archive is built ONLINE, slowly:** two
+and the Pre-print link all come for free. **Text searches cover the archive
+(per the owner):** a TEXT search (title/author/abstract/affiliation, typed or
+chipped, incl. `?author=` identity chips) with no journal scope searches the
+ENTIRE database, working papers included — `textSearchActive()` makes
+`neededExtraKeys()` return the WP keys and `matchesJournal` admit WP rows (via
+the per-pass `wpSearchable` cache, refreshed in `refreshJournalScope` — the hot
+loop never re-reads the DOM). Bare BROWSING stays published-only: the year
+filter alone or the pre-print toggle alone excludes `WP_KEYS` (every working
+paper carries a Preprint link, so either would flood the view with unpublished
+rows); working papers also stay out of the header's published "N papers" count.
+The archive otherwise downloads when the user selects the Working Papers type
+or one of its repositories. **"Recently added" includes new working papers (per
+the owner):** the WP pipeline stamps `"Date Added"` on each key that first
+enters the archive (crawler: stamped on new, PRESERVED across the re-crawl
+overwrite; ingest: stamped on `added`) and both writers emit a
+`data-workingpapers/recent.json` of ONLY dated rows, newest-added first (keep
+the two emissions in sync); the page fetches it via `loadDatasetRecent` in
+`loadWorkingPapersManifest()` and `matchesJournal` admits WP rows in
+`recentMode` — back-catalog rows crawled before dating began carry no date and
+never appear. `buildJTypeSelect()` **hides the Working Papers type until its
+archive has sources**, so the shipped empty `data-workingpapers/` (valid empty
+manifest) stays dormant until data lands. **The archive is built ONLINE, slowly:** two
 workflows — `lit-workingpapers-backfill.yml` (every 3 h, the growth engine) and
 `lit-workingpapers-update-data.yml` (daily refresh + live-site self-heal) — run
 `build-data.mjs` on a **bounded, gently paced** (`WP_PACE_MS` ~1.5 s,
