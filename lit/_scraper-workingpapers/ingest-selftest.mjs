@@ -149,9 +149,16 @@ export function selftest() {
     const ax = decideSubmission(work('An arXiv WP', ['Jane Q. Public'], '10.48550/arxiv.2401.00001', {
       doi: 'https://doi.org/10.48550/arxiv.2401.00001', publication_year: 2024 }), ctxFixture());
     byKey.set(ax.key, ax.rec);
+    // Stamp ONE row as newly added (what run() does on an `added` outcome):
+    // recent.json must list only dated rows — the page's "Recently added" feed.
+    ax.rec['Date Added'] = '2026-07-18';
 
     const w = await regroupAndWrite(byKey, { authorCount: 42, source: 'test' }, 183342, OUT);
     ok(w.total === 3, 'regroupAndWrite wrote 3 rows total');
+
+    const recent = JSON.parse(await readFile(join(OUT, 'recent.json'), 'utf8'));
+    ok(recent.length === 1 && recent[0]['Date Added'] === '2026-07-18',
+      'recent.json lists ONLY rows stamped Date Added (the newly added ones)');
 
     const sources = JSON.parse(await readFile(join(OUT, 'sources.json'), 'utf8'));
     const keys = sources.map(s => s.key).sort();

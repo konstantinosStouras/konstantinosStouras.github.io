@@ -1214,7 +1214,13 @@ function computeJkeys(p) {
 // once per render pass — refreshed by the filter entry points (applyFilters,
 // updateDropdownOptions, renderRecent) before any matchesJournal call.
 let journalScope = null;
+// Cached once per render pass alongside journalScope (refreshed by the same
+// entry points): does an active TEXT search admit the Working Papers archive
+// into a no-scope view? Cached because matchesJournal runs per paper in the
+// hot filter loop and must not re-read the DOM inputs each time.
+let wpSearchable = false;
 function refreshJournalScope() {
+  wpSearchable = textSearchActive();
   if (sel.journal.size === 0 && sel.jtype.size === 0) { journalScope = null; return; }
   var s = new Set(sel.journal);
   sel.jtype.forEach(function(t) { journalTypeKeys(t).forEach(function(k) { s.add(k); }); });
@@ -1223,12 +1229,21 @@ function refreshJournalScope() {
 
 function matchesJournal(p) {
   if (!journalScope) {
-    // Working papers are opt-in: they download only when their type/repository
-    // is explicitly selected (journalScope then holds their key → handled by the
-    // else branch), and must stay OUT of no-scope broad searches and the
-    // scopeCount denominator even after the archive has been loaded once this
-    // session (allPapers only ever grows). Without this, a broad pre-print/text
-    // search after visiting Working Papers floods with ~27k unpublished rows.
+    // A TEXT search (title/author/abstract/affiliation, typed or chipped) with
+    // no journal scope searches the ENTIRE database — the Working Papers
+    // archive included (per the owner), so e.g. a title search finds an
+    // unpublished working paper without first selecting its type. The
+    // "Recently added" view likewise includes newly-added working papers (per
+    // the owner; its rows are date-windowed, so only fresh arrivals show).
+    // Otherwise working papers stay opt-in: they download only when their
+    // type/repository is explicitly selected (journalScope then holds their
+    // key → handled by the else branch), and must stay OUT of no-scope broad
+    // BROWSING (bare year / bare pre-print toggle) and its scopeCount
+    // denominator even after the archive has been loaded once this session
+    // (allPapers only ever grows). Without this, a bare pre-print browse after
+    // visiting Working Papers would flood with ~37k unpublished rows (every
+    // working paper carries a Preprint link).
+    if (wpSearchable || recentMode) return true;
     return !(p._jkeys || []).some(function (k) { return WP_KEYS.has(k); });
   }
   return (p._jkeys || []).some(function(k) { return journalScope.has(k); });
@@ -1529,13 +1544,16 @@ async function loadFt50Manifest() {
 // working papers) as lazy extra sources and record their keys in WP_KEYS so
 // the 'wp' journal type expands to them. Absent / empty (the archive builds up
 // online over time) → the loader no-ops and the type stays hidden. Its recent
-// rows are deliberately NOT merged into "Recently added" — that view stays
-// published-only; working papers surface only when the user opts into them.
+// rows (working papers newly ADDED to the archive — the WP pipeline stamps
+// "Date Added" on each new key and serves only dated rows in its recent.json)
+// join the "Recently added" view like the FT50/shard ones (per the owner);
+// matchesJournal admits WP rows in recent mode.
 async function loadWorkingPapersManifest() {
   var rows = await fetchManifest(WP_SOURCES_URL);
   if (!rows || !rows.length) return;
   rows.forEach(function(s) { if (s.workingPaper) WP_KEYS.add(s.key); });
   registerExtraSources(rows, WP_DATA_BASE);
+  loadDatasetRecent(WP_DATA_BASE + 'recent.json');
 }
 
 // ── Submitted / retired-on-publish pre-print overlay ─────────────────────────
@@ -1716,28 +1734,38 @@ function loadExtraSource(key) {
 // backfill workflow), so the pre-print toggle is a broad trigger; only the
 // MS/ISR-specific editor filters can never match an extra paper and don't
 // trigger the download on their own.
-// A filter any journal's papers could match (year / title / author /
-// affiliation / abstract, typed or chipped) is active with no journal scope —
-// the "search everything" case that streams every catalog file.
-function broadFilterActive() {
-  return !!(sel.year.size || sel.title.size || sel.author.size ||
+// A TEXT search (title / author / affiliation / abstract, typed or chipped,
+// incl. the ?author= identity chips) is active — the "search the entire
+// database" case: it streams every catalog file INCLUDING the Working Papers
+// archive when no journal scope narrows it (matchesJournal admits WP rows via
+// the wpSearchable cache under the same predicate).
+function textSearchActive() {
+  return !!(sel.title.size || sel.author.size ||
     Object.keys(sel.authorIdentity).length || sel.affiliation.size || sel.abstract.size ||
     document.getElementById('filterSearch').value.trim() ||
     document.getElementById('filterAuthors').value.trim() ||
     document.getElementById('filterAffiliations').value.trim() ||
     document.getElementById('filterAbstracts').value.trim());
 }
+// A filter any journal's papers could match (year, or any text search) is
+// active with no journal scope — the case that streams every catalog file.
+function broadFilterActive() {
+  return !!sel.year.size || textSearchActive();
+}
 
 function neededExtraKeys() {
   var keys = Object.keys(EXTRA_SRC);
   if (journalScope) return keys.filter(function(k) { return journalScope.has(k); });
-  // A broad filter with no journal scope streams every PUBLISHED catalog file —
-  // but never the Working Papers archive, which is opt-in: its repositories
-  // download only when the user selects the Working Papers type or one of them
-  // directly (journalScope branch above), so a normal search stays
-  // published-only and never pulls the (large, unpublished) working-paper set.
-  return (broadFilterActive() || preprintOnly)
-    ? keys.filter(function(k) { return !WP_KEYS.has(k); }) : [];
+  if (!(broadFilterActive() || preprintOnly)) return [];
+  // A broad filter with no journal scope streams every catalog file. A TEXT
+  // search covers the ENTIRE database — Working Papers archive included (per
+  // the owner), so e.g. a title search finds an unpublished working paper
+  // without first selecting its type. The bare year filter and the bare
+  // pre-print toggle stay published-only browsing (every working paper carries
+  // a Preprint link, so either would flood the view with unpublished rows);
+  // matchesJournal enforces the exact same line via wpSearchable.
+  if (textSearchActive()) return keys;
+  return keys.filter(function(k) { return !WP_KEYS.has(k); });
 }
 
 function ensureExtraSources() { neededExtraKeys().forEach(loadExtraSource); }

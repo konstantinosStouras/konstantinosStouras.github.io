@@ -287,8 +287,14 @@ export async function regroupAndWrite(byKey, prevMeta, authorsInCatalog, dir) {
     });
   }
 
+  // recent.json: only rows carrying the "Date Added" stamp (set when a key
+  // first enters the archive), newest-added first — the page merges this into
+  // its "Recently added" view, which windows by date client-side. Keep in sync
+  // with the crawler's recent emission in build-data.mjs.
   const recent = [...byKey.values()]
-    .sort((a, b) => (parseInt(b.Year, 10) || 0) - (parseInt(a.Year, 10) || 0))
+    .filter(r => r['Date Added'])
+    .sort((a, b) => String(b['Date Added']).localeCompare(String(a['Date Added'])) ||
+      (parseInt(b.Year, 10) || 0) - (parseInt(a.Year, 10) || 0))
     .slice(0, 1000);
 
   const meta = {
@@ -514,7 +520,12 @@ async function run() {
       else if (res.notfound) outcome = { status: 'notfound', doi: parsed.doi };
       else { outcome = decideSubmission(res.work, ctx); outcome.doi = parsed.doi; }
     }
-    if (outcome.status === 'added' && !DRY_RUN) { byKey.set(outcome.key, outcome.rec); added++; }
+    if (outcome.status === 'added' && !DRY_RUN) {
+      // "Date Added" = the day the row entered the archive (same stamp the
+      // crawler sets on a new key) — feeds the page's "Recently added" view.
+      outcome.rec['Date Added'] = PULL_DATE;
+      byKey.set(outcome.key, outcome.rec); added++;
+    }
     if (outcome.status === 'linked' && !DRY_RUN) {
       supplement[outcome.publishedDoi] = { u: outcome.preprint, s: outcome.preprintSrc || '' };
       supplementChanged = true; linked++;

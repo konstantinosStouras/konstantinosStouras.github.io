@@ -478,7 +478,14 @@ async function main() {
         const rec = wpRecordFromWork(w, publishedTitles);
         if (!rec) continue;
         const k = recKey(rec);
-        if (!byKey.has(k)) foundThisRun++;
+        // "Date Added" = the day a row first entered the archive: stamped on a
+        // genuinely-new key, PRESERVED across re-crawls (the fresh rec would
+        // otherwise clobber it), feeding the page's "Recently added" view via
+        // recent.json below. Back-catalog rows crawled before dating began
+        // never get one retroactively.
+        const prev = byKey.get(k);
+        if (!prev) { foundThisRun++; rec['Date Added'] = PULL_DATE; }
+        else if (prev['Date Added']) rec['Date Added'] = prev['Date Added'];
         byKey.set(k, rec); // refresh (citation counts, abstract) even if seen
         found++;
       }
@@ -537,11 +544,16 @@ async function main() {
     });
   }
 
-  // recent.json: newest-posted working papers (kept for parity with the other
-  // datasets; the page's "Recently added" view stays published-only, so this
-  // is not merged there today — see index.html).
+  // recent.json: working papers ADDED to the archive recently — rows carrying
+  // the "Date Added" stamp (set when a key first enters the archive, here or in
+  // the submission ingest), newest-added first. The page merges this into its
+  // "Recently added" view (which windows by date client-side), so only dated
+  // rows belong; back-catalog rows crawled before dating began carry no date
+  // and stay out. Keep in sync with regroupAndWrite in ingest-submissions.mjs.
   const recent = [...byKey.values()]
-    .sort((a, b) => (parseInt(b.Year, 10) || 0) - (parseInt(a.Year, 10) || 0))
+    .filter(r => r['Date Added'])
+    .sort((a, b) => String(b['Date Added']).localeCompare(String(a['Date Added'])) ||
+      (parseInt(b.Year, 10) || 0) - (parseInt(a.Year, 10) || 0))
     .slice(0, 1000);
 
   const doneCount = Object.values(cache).filter(c => c && c.done).length;

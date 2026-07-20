@@ -114,6 +114,26 @@ async function main() {
   ok(cur['jane q. public'] && cur['jane q. public'].done && cur['jane q. public'].oaid === 'A1111111111',
     'crawl cursor records the resolved OpenAlex id + done');
 
+  console.log('e2e: "Date Added" stamping + recent.json (Recently added feed)');
+  ok(ssrnRows[0]['Date Added'] === '2026-07-13', 'new row stamped Date Added = pull date');
+  const recent1 = await readOut('recent.json');
+  ok(recent1.length === 2 && recent1.every(r => r['Date Added'] === '2026-07-13'),
+    'recent.json lists exactly the dated (newly added) rows');
+
+  // Re-run with a later pull date and refresh forced: the re-crawl overwrites
+  // each row with a fresh rec — the original Date Added must survive it.
+  await run(process.execPath, [join(__dirname, 'build-data.mjs')], {
+    env: { ...process.env, WP_MOCK: '1', WP_DATA_DIR: OUT,
+      WP_CATALOG_DIRS: join(__dirname, 'mock', 'catalog'), WP_PULL_DATE: '2026-07-14',
+      WP_REFRESH_DAYS: '0' },
+  });
+  const ssrnRows2 = await readOut('papers-wp-ssrn.json');
+  ok(ssrnRows2.length === 1 && ssrnRows2[0]['Date Added'] === '2026-07-13',
+    're-crawl preserves the original Date Added (no re-stamp)');
+  const recent2 = await readOut('recent.json');
+  ok(recent2.length === 2 && recent2.every(r => r['Date Added'] === '2026-07-13'),
+    'recent.json unchanged by a re-crawl of known rows');
+
   await rm(OUT, { recursive: true, force: true });
   console.log(fails ? `\nFAILED (${fails})` : '\nAll working-papers pipeline checks passed.');
   process.exit(fails ? 1 : 0);
