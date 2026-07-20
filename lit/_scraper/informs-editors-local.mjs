@@ -25,8 +25,14 @@
  * this after the first data build has landed (or pass --from-crossref to pull
  * the DOI lists directly).
  *
- * If your connection is challenged by Cloudflare, see the LIT_CF_COOKIE
- * instructions printed on failure (same mechanism as pnas-concepts-local.mjs).
+ * If your connection is challenged by Cloudflare, follow the instructions
+ * printed on failure: pass the check once in your browser, then re-run with
+ * BOTH the clearance cookie and that browser's exact User-Agent —
+ *   set LIT_CF_COOKIE=<cf_clearance value>      (Windows cmd; bare value ok)
+ *   set LIT_UA=<your navigator.userAgent>
+ * The cookie is bound to your IP + User-Agent, so LIT_CF_COOKIE alone (with
+ * the script's default UA) will NOT pass. Cookies expire after a while; the
+ * run is resume-safe, so grab a fresh value and re-run as needed.
  * ===========================================================================
  */
 
@@ -54,7 +60,16 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = resolve(__dirname, '..', 'data');
 const CACHE_PATH = join(DATA_DIR, '_informs-editors.json');
 const MAILTO = process.env.LIT_MAILTO || 'kstouras@gmail.com';
-const COOKIE = process.env.LIT_CF_COOKIE || '';
+// Cloudflare clearance: LIT_CF_COOKIE accepts either the bare cf_clearance
+// VALUE or a full Cookie header ("cf_clearance=…" / "a=1; cf_clearance=…").
+// The clearance is bound to the IP AND User-Agent that passed the challenge,
+// so LIT_UA must be set to that browser's exact navigator.userAgent too — the
+// default UA below will NOT validate someone else's cookie.
+const COOKIE = (() => {
+  const raw = (process.env.LIT_CF_COOKIE || '').trim();
+  if (!raw) return '';
+  return raw.includes('=') ? raw : `cf_clearance=${raw}`;
+})();
 const DELAY_MS = 1800;
 
 const args = process.argv.slice(2);
@@ -136,8 +151,17 @@ for (const src of SOURCES) {
       const { status, body } = await fetchArticle(doi);
       if (isChallenged(body, status)) {
         console.error('\n✗ Blocked by Cloudflare from this connection.');
-        console.error('  Fix: open https://pubsonline.informs.org in your browser, pass the check, then re-run with');
-        console.error('  LIT_CF_COOKIE="cf_clearance=<value from DevTools>" node informs-editors-local.mjs');
+        console.error('  The clearance cookie is bound to your browser\'s IP AND User-Agent, so you need BOTH:');
+        console.error('   1. Open https://pubsonline.informs.org in your browser; wait until an article page loads normally.');
+        console.error('   2. DevTools (F12) → Application → Cookies → https://pubsonline.informs.org → copy the cf_clearance VALUE.');
+        console.error('   3. DevTools → Console → type  navigator.userAgent  → copy the exact string.');
+        console.error('  Then re-run — Windows cmd:');
+        console.error('    set LIT_CF_COOKIE=<cf_clearance value>');
+        console.error('    set LIT_UA=<your navigator.userAgent string>');
+        console.error('    node informs-editors-local.mjs');
+        console.error('  (PowerShell: $env:LIT_CF_COOKIE="…"; $env:LIT_UA="…"   ·   macOS/Linux: LIT_CF_COOKIE="…" LIT_UA="…" node …)');
+        console.error('  The cookie expires after a while; if the block returns mid-run, grab a fresh value and re-run —');
+        console.error('  progress is saved continuously, so it resumes where it stopped.');
         break outer;
       }
       if (status !== 200) { console.warn(`  ${doi}: HTTP ${status}`); await sleep(DELAY_MS); continue; }
