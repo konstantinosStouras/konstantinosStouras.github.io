@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "analytics-paper-comparison",
+      "date": "2026-07-21",
+      "title": "Compare individual papers in Data Analytics",
+      "summary": "The Data Analytics dashboard has a new “Paper comparison” tab that takes the individual paper as the unit of analysis: add one or more papers (search the title or paste a DOI) and see them side by side — citations, disruptiveness (Dᵢ), team size, reference age and more, plus charts of how citations and Dᵢ compare across the papers' publication years and an impact-vs-disruption map. (The “Corpus overview” tab is now labelled as taking the journal as its unit of analysis.)",
+      "url": "https://stouras.com/lit/analytics/"
+    },
+    {
       "id": "search-covers-working-papers",
       "date": "2026-07-20",
       "title": "Working papers join searches and Recently added",
