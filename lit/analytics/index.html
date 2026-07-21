@@ -263,9 +263,12 @@
   .pchip:hover .x { opacity: 1; }
   /* Per-paper column heads in the comparison table: a Pn label + full title. */
   table.cmp thead th .pttl { display: block; font-size: 11px; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--text-muted); margin-top: 4px; line-height: 1.4; overflow-wrap: anywhere; }
-  table.cmp td .doi { color: var(--navy); text-decoration: none; }
-  table.cmp td .doi:hover { text-decoration: underline; }
-  table.cmp td.auth { text-align: left; font-weight: 500; color: var(--text); font-size: 12px; }
+  /* Authors + DOI stacked under the title in each paper's column header. */
+  table.cmp thead th .pauth { display: block; font-size: 10.5px; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--text-muted); margin-top: 3px; line-height: 1.4; overflow-wrap: anywhere; }
+  table.cmp thead th .pmeta { display: block; font-size: 10.5px; font-weight: 500; font-style: italic; text-transform: none; letter-spacing: 0; color: var(--text-muted); margin-top: 3px; line-height: 1.4; overflow-wrap: anywhere; }
+  table.cmp thead th .pdoi { display: block; margin-top: 3px; }
+  table.cmp .doi { color: var(--navy); text-decoration: none; font-size: 10.5px; }
+  table.cmp .doi:hover { text-decoration: underline; }
 
   .loading { text-align: center; color: var(--text-muted); font-size: 14px; padding: 60px 20px; }
   .spinner { display: inline-block; width: 22px; height: 22px; border: 3px solid var(--navy-light); border-top-color: var(--navy); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: middle; margin-right: 10px; }
@@ -488,7 +491,7 @@
       <p class="tabs-desc">
         <strong>Corpus overview</strong> takes the <em>journal</em> as the unit of analysis — publication volume, co-authorship, citations and team science across journals and years.<br>
         <strong>Author spotlight</strong> takes the <em>author</em> as the unit of analysis — add several researchers and compare their output, collaboration and impact.<br>
-        <strong>Paper comparison</strong> takes the <em>paper</em> as the unit of analysis — add one or more papers and compare how their citations and disruptiveness (D<sub>i</sub>) stack up across the years.<br>
+        <strong>Paper comparison</strong> takes the <em>paper</em> as the unit of analysis — add one or more papers and compare their citations, disruptiveness (D<sub>i</sub>) and more, side by side.<br>
         All three give rich insights into research productivity, with several ways to slice and compare.
       </p>
     </div>
@@ -1874,32 +1877,34 @@
   function drawPapers(list) {
     var body = $('paperBody'); if (!body) return;
     if (!DISR || !DISR.papers) { body.innerHTML = '<div class="aspot-empty">Loading the paper dataset…</div>'; return; }
-    // D percentile is against the WHOLE scored corpus (this tab ignores filters).
-    var allD = DISR.papers.map(function (p) { return p.d; }).sort(function (a, b) { return a - b; });
     var rows = list.map(function (p, i) {
       var authors = (p.au && DISR.authors) ? p.au.map(function (k) { return DISR.authors[k]; }).filter(Boolean) : [];
       return { p: p, color: paperColor(i), label: 'P' + (i + 1),
-        jname: JMAP[p.j] ? JMAP[p.j].name : (p.j || '—'),
-        authors: authors, pctile: pctRankSorted(allD, p.d) };
+        jname: JMAP[p.j] ? JMAP[p.j].name : (p.j || '—'), authors: authors };
     });
     var years = list.map(function (p) { return p.y; });
     var yLo = Math.min.apply(null, years), yHi = Math.max.apply(null, years);
     // pad the year axis a touch so edge dots aren't clipped
     var xPad = Math.max(1, Math.round((yHi - yLo) * 0.06));
     var citePts = rows.map(function (r) { return { x: r.p.y, y: r.p.c || 0, color: r.color, label: r.label }; });
-    var dPts = rows.map(function (r) { return { x: r.p.y, y: r.p.d || 0, color: r.color, label: r.label }; });
     var impactPts = rows.map(function (r) { return { x: r.p.d || 0, y: r.p.c || 0, color: r.color, label: r.label }; });
     var citeBars = rows.map(function (r) { return { label: r.label, display: r.label + ' · ' + trunc(r.p.ti || '', 22), value: r.p.c || 0, color: r.color }; });
     var dBars = rows.map(function (r) { return { label: r.label, display: r.label + ' · ' + trunc(r.p.ti || '', 18), value: r.p.d || 0, color: r.color }; });
     var dAbsMax = Math.max.apply(null, impactPts.map(function (pt) { return Math.abs(pt.x); }).concat([0.05]));
 
     // ── comparison table (At a glance) ──────────────────────────────────────
+    // Each paper's column header reads like a citation: Pn label · title ·
+    // authors (year) · journal · DOI link. (Volume/issue/pages aren't in the
+    // analytics dataset, which loads only the citation-graph table.)
     var head = '<th>Metric</th>' + rows.map(function (r) {
-      var doi = r.p.doi ? '<a class="doi" href="https://doi.org/' + esc(r.p.doi) + '" target="_blank" rel="noopener">' + esc(r.p.doi) + '</a>' : '';
+      var doiLink = r.p.doi ? '<span class="pdoi"><a class="doi" href="https://doi.org/' + esc(r.p.doi) + '" target="_blank" rel="noopener">' + esc(r.p.doi) + '</a></span>' : '';
+      var yr = (r.p.y != null) ? ' (' + r.p.y + ')' : '';
+      var byline = r.authors.length ? (esc(r.authors.join(', ')) + yr) : (yr ? yr.trim() : '');
+      var authLine = byline ? '<span class="pauth">' + byline + '</span>' : '';
+      var metaLine = r.jname ? '<span class="pmeta">' + esc(r.jname) + '</span>' : '';
       return '<th><span class="sw" style="background:' + r.color + '"></span>' + r.label +
-        '<span class="pttl">' + esc(trunc(r.p.ti || '(untitled)', 90)) + (doi ? '<br>' + doi : '') + '</span></th>';
+        '<span class="pttl">' + esc(trunc(r.p.ti || '(untitled)', 90)) + '</span>' + authLine + metaLine + doiLink + '</th>';
     }).join('');
-    var dChar = function (d) { return d > 0.02 ? 'Disrupts' : (d < -0.02 ? 'Develops' : 'Neutral'); };
     var dCol = function (d) { return d > 0.02 ? C_DISRUPT : (d < -0.02 ? C_DEVELOP : MUTED); };
     var metricRows = [
       ['Journal', function (r) { return esc(r.jname); }, 'The journal (or conference) the paper appeared in.'],
@@ -1908,25 +1913,21 @@
       ['Citations', function (r) { return fmt(r.p.c || 0); }, 'Highest of Crossref / OpenAlex / Semantic Scholar citation tallies — the same count the main browser shows.'],
       ['In-catalog citations', function (r) { return fmt(r.p.nf || 0); }, 'How many papers WITHIN The Lit’s citation graph cite this one (a subset of all citations, used to compute D).'],
       ['Disruptiveness Dᵢ', function (r) { return '<span style="color:' + dCol(r.p.d) + ';font-weight:700">' + (r.p.d > 0 ? '+' : (r.p.d < 0 ? '−' : '')) + Math.abs(r.p.d).toFixed(3) + '</span>'; }, 'The CD disruption index (Funk & Owen-Smith 2017): +1 fully disrupts (later work cites it instead of its antecedents), −1 fully develops.'],
-      ['Character', function (r) { return '<span style="color:' + dCol(r.p.d) + '">' + dChar(r.p.d) + '</span>'; }, 'Whether D is positive (disrupts its field) or negative (develops it).'],
-      ['Dᵢ percentile', function (r) { return Math.round(r.pctile) + 'th'; }, 'Where this paper’s D ranks among every scored paper in the database (100th = most disruptive).'],
       ['Mean reference age', function (r) { return r.p.ra != null ? r.p.ra.toFixed(1) + ' yrs' : '—'; }, 'Average age of the works this paper cites (from reference years). Larger = it reaches for older literature.'],
-      ['Reference popularity', function (r) { return r.p.rp != null ? fmt(Math.round(r.p.rp)) : '—'; }, 'Average citation count of the works this paper cites (a proxy for how “canonical” its references are).'],
-      ['Authors', function (r) { return '<span class="auth-cell">' + (r.authors.length ? esc(r.authors.join(', ')) : '—') + '</span>'; }, null, true]
+      ['Reference popularity', function (r) { return r.p.rp != null ? fmt(Math.round(r.p.rp)) : '—'; }, 'Average citation count of the works this paper cites (a proxy for how “canonical” its references are).']
     ];
     var tbody = metricRows.map(function (mr) {
       return '<tr><td class="metric"' + (mr[2] ? ' title="' + esc(mr[2]) + '"' : '') + '>' + esc(mr[0]) + '</td>' +
-        rows.map(function (r) { return '<td' + (mr[3] ? ' class="auth"' : '') + '>' + mr[1](r) + '</td>'; }).join('') + '</tr>';
+        rows.map(function (r) { return '<td>' + mr[1](r) + '</td>'; }).join('') + '</tr>';
     }).join('');
 
     var yearNote = (yLo === yHi)
       ? 'All ' + list.length + ' papers were published in ' + yLo + '.'
-      : 'Each paper is placed at its publication year (' + yLo + '–' + yHi + '); citation and D values are the current totals.';
+      : 'Each paper is placed at its publication year (' + yLo + '–' + yHi + '); citation counts are the current totals.';
     var legend = rows.map(function (r) { return '<span class="li"><span class="sw" style="background:' + r.color + '"></span>' + r.label + ' · ' + esc(trunc(r.p.ti || '', 40)) + '</span>'; }).join('');
 
     var html = '<div class="cards">';
     html += '<div class="card wide"><h3>Citations over the papers’ years</h3><div class="csub">' + esc(yearNote) + ' Higher = more cited.</div><div id="pCiteEvo"></div><div class="legend">' + legend + '</div></div>';
-    html += '<div class="card wide"><h3>Disruptiveness (D<sub>i</sub>) over the papers’ years</h3><div class="csub"><span style="color:' + C_DISRUPT + ';font-weight:600">above 0 disrupts</span> · <span style="color:' + C_DEVELOP + ';font-weight:600">below 0 develops</span>. ' + esc(yearNote) + '</div><div id="pDEvo"></div></div>';
     html += '<div class="card"><h3>Citations</h3><div class="csub">Total citations, side by side</div><div id="pCiteBars"></div></div>';
     html += '<div class="card"><h3>Disruptiveness index D<sub>i</sub></h3><div class="csub">Bars diverge from 0 — <span style="color:' + C_DISRUPT + ';font-weight:600">right/disrupts</span>, <span style="color:' + C_DEVELOP + ';font-weight:600">left/develops</span></div><div id="pDBars"></div></div>';
     html += '<div class="card wide"><h3>Impact vs. disruption</h3><div class="csub">Where each paper sits: disruptiveness D<sub>i</sub> (x) against its citations (y). Papers to the right disrupt their field; papers that are both high and to the right are disruptive AND highly cited.</div><div id="pImpact"></div></div>';
@@ -1935,7 +1936,6 @@
     body.innerHTML = html;
 
     $('pCiteEvo').innerHTML = paperScatter(citePts, { xMin: yLo - xPad, xMax: yHi + xPad, connect: true, yFmt: fmtTick });
-    $('pDEvo').innerHTML = paperScatter(dPts, { xMin: yLo - xPad, xMax: yHi + xPad, symmetric: true, connect: true, yFmt: fmtD });
     $('pCiteBars').innerHTML = barsH(citeBars, { limit: 20 });
     $('pDBars').innerHTML = divergingBarsH(dBars, { limit: 20 });
     $('pImpact').innerHTML = paperScatter(impactPts, { xMin: -dAbsMax * 1.12, xMax: dAbsMax * 1.12, xZero: true, xFmt: fmtD, yFmt: fmtTick });
