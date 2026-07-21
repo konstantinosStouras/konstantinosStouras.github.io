@@ -224,6 +224,14 @@ names (`lit/data/_informs-editors.json`) come from
 `lit/_scraper/informs-editors-local.mjs` run locally (pubsonline blocks
 cloud IPs too) — until that cache is first committed, only the few papers
 whose Crossref abstract/assertion carries the History line have SE/AE.
+When even a local Node run is Cloudflare-blocked (its TLS handshake is
+fingerprinted — a valid cf_clearance + matching UA can still fail),
+`lit/_scraper/informs-editors-console.js` is the fallback: pasted into the
+DevTools console ON pubsonline.informs.org, it harvests same-origin inside
+the real browser (resumable via localStorage, seeds from master's committed
+cache, downloads a byte-compatible `_informs-editors.json` to commit). Its
+parser is VENDORED from informs-editors.mjs — keep in sync; the selftest
+parity-checks the two on every fixture.
 Extraction is shared in `lit/_scraper/informs-editors.mjs`:
 `parseInformsEditors` (the History-line parser — "Name, Senior Editor"
 lists, "Accepted by …", "served as …", elided-verb pairs, inverted
