@@ -33,6 +33,12 @@
  * The cookie is bound to your IP + User-Agent, so LIT_CF_COOKIE alone (with
  * the script's default UA) will NOT pass. Cookies expire after a while; the
  * run is resume-safe, so grab a fresh value and re-run as needed.
+ *
+ * STILL BLOCKED? Cloudflare also fingerprints the TLS handshake, which Node
+ * cannot imitate — use informs-editors-console.js instead: paste it into the
+ * DevTools console ON pubsonline.informs.org and the harvest runs inside your
+ * real browser (same-origin, nothing to block), producing the same
+ * _informs-editors.json. The two caches merge safely.
  * ===========================================================================
  */
 
