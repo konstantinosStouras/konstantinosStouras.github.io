@@ -776,18 +776,26 @@ The page has **three tabs** whose descriptions name each one's unit of analysis:
 spotlight** (the *author*), and **Paper comparison** (the *paper*). The
 **Paper comparison** tab (`S.papers[]`, `addPaper`/`resolvePaper`/`renderPapers`/
 `drawPapers`) lets you **add one or more individual papers (by title or a pasted
-DOI) and compare them** — citations, disruptiveness Dᵢ, team size, in-catalog
-citations, Dᵢ percentile (against the whole scored corpus), reference age &
-popularity, and authors in a side-by-side "At a glance" table, plus charts:
-citations and Dᵢ **over the papers' publication years** (`paperScatter`, one dot
-per paper, connected in year order), citations and Dᵢ **comparison bars**
-(`barsH` / `divergingBarsH`), and an **impact-vs-disruption** scatter (Dᵢ on x,
-citations on y). Every metric comes from the same per-paper `disruption.json`
-table (a paper is available once it has a computed D), lazy-loaded via the
-Team-science section's `ensureDisruption`; the tab is **independent of the top
-filter bar** (the papers you add are always shown). A `?paper=`/`?papers=DOI,…`
-deep-link opens it straight on those papers. Keep this tab's copy + the About
-page + a `changelog.json` entry in sync when it changes.
+DOI) and compare them** in a side-by-side "At a glance" table — citations,
+disruptiveness Dᵢ, team size, in-catalog citations, and reference age &
+popularity, with **each column headed by the paper's citation** (title,
+authors (year), journal — italic, DOI link; there's no volume/issue/pages
+because the analytics page loads only `disruption.json`, not the full paper
+records). Plus charts: **citations over the papers' publication years**
+(`paperScatter`, one dot per paper at its year, connected in year order),
+a **citations** comparison bar chart (`barsH`), a **disruptiveness Dᵢ**
+diverging bar chart (`divergingBarsH`, disrupts right / develops left), and an
+**impact-vs-disruption** scatter (Dᵢ on x, citations on y). Note: there is
+deliberately **no "Dᵢ over the years" chart** — the citation-graph analysis
+yields ONE Dᵢ per paper (a single snapshot), not a per-year series, so a
+per-year Dᵢ trajectory can't be plotted honestly; Dᵢ is compared per-paper
+(bars + the impact scatter) instead. Every metric comes from the same
+per-paper `disruption.json` table (a paper is available once it has a computed
+D), lazy-loaded via the Team-science section's `ensureDisruption`; the tab is
+**independent of the top filter bar** (the papers you add are always shown).
+A `?paper=`/`?papers=DOI,…` deep-link opens it straight on those papers. Keep
+this tab's copy + the About page + a `changelog.json` entry in sync when it
+changes.
 **Team-science / disruption section** (a new block at the bottom of the Corpus
 overview) reproduces the key measures of Wu, Wang & Evans, "Large teams develop
 and small teams disrupt science and technology" (*Nature* 570, 2019) over The
