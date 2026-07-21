@@ -66,10 +66,14 @@ if errorlevel 1 (
 
 REM --- clear any half-finished rebase/merge a previous interrupted run left
 REM     behind (this is the exact state that makes `git pull --rebase` stop
-REM     with "there is already a rebase-merge directory"). Harmless no-ops when
-REM     nothing is in progress. ---
+REM     with "there is already a rebase-merge directory"). --abort handles a
+REM     RESUMABLE rebase cleanly; a STALE/corrupt rebase dir makes --abort say
+REM     "No rebase in progress?" and leave the dir - so force-remove whatever
+REM     survives. Harmless no-ops when nothing is in progress. ---
 git rebase --abort 1>nul 2>nul
 git merge  --abort 1>nul 2>nul
+if exist ".git\rebase-merge" rmdir /s /q ".git\rebase-merge" 1>nul 2>nul
+if exist ".git\rebase-apply" rmdir /s /q ".git\rebase-apply" 1>nul 2>nul
 
 REM --- flush anything a previous interrupted run left uncommitted/unpushed
 REM     BEFORE the reset below, so those finds are not discarded ---
