@@ -771,6 +771,23 @@ paper — from the `jy` cells via `authorJYStats`) plus **two disruption rows**:
 mean Dⱼ over the author's scored papers within the filters, and over ALL their
 scored papers in the database (filled async). "In filters" = journal scope ∩
 year range; editorial-dimension filters don't apply to author aggregates.
+The page has **three tabs** whose descriptions name each one's unit of analysis:
+**Corpus overview** (the *journal* — the whole dashboard above), **Author
+spotlight** (the *author*), and **Paper comparison** (the *paper*). The
+**Paper comparison** tab (`S.papers[]`, `addPaper`/`resolvePaper`/`renderPapers`/
+`drawPapers`) lets you **add one or more individual papers (by title or a pasted
+DOI) and compare them** — citations, disruptiveness Dᵢ, team size, in-catalog
+citations, Dᵢ percentile (against the whole scored corpus), reference age &
+popularity, and authors in a side-by-side "At a glance" table, plus charts:
+citations and Dᵢ **over the papers' publication years** (`paperScatter`, one dot
+per paper, connected in year order), citations and Dᵢ **comparison bars**
+(`barsH` / `divergingBarsH`), and an **impact-vs-disruption** scatter (Dᵢ on x,
+citations on y). Every metric comes from the same per-paper `disruption.json`
+table (a paper is available once it has a computed D), lazy-loaded via the
+Team-science section's `ensureDisruption`; the tab is **independent of the top
+filter bar** (the papers you add are always shown). A `?paper=`/`?papers=DOI,…`
+deep-link opens it straight on those papers. Keep this tab's copy + the About
+page + a `changelog.json` entry in sync when it changes.
 **Team-science / disruption section** (a new block at the bottom of the Corpus
 overview) reproduces the key measures of Wu, Wang & Evans, "Large teams develop
 and small teams disrupt science and technology" (*Nature* 570, 2019) over The

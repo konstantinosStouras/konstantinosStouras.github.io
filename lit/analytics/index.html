@@ -250,8 +250,22 @@
   table.cmp tbody tr:last-child td { border-bottom: none; }
   table.cmp td.metric { color: var(--text-muted); font-weight: 600; text-align: left; }
   table.cmp td.grey { color: #c9b8be; }
-  .aspot-empty { background: var(--white); border: 1px dashed var(--border); border-radius: 14px; padding: 40px 24px; text-align: center; color: var(--text-muted); }
+  .aspot-empty { background: var(--white); border: 1px dashed var(--border); border-radius: 14px; padding: 40px 24px; text-align: center; color: var(--text-muted); line-height: 1.6; }
   .aname { font-family: 'Fraunces', serif; font-size: 24px; color: var(--navy); font-weight: 500; }
+
+  /* Paper comparison: chips carry a Pn badge + the (truncated) title, matching
+     the colour used for that paper everywhere on the tab. */
+  .pchip { display: inline-flex; align-items: center; gap: 7px; max-width: 100%; font-size: 12.5px; font-weight: 600; border-radius: 100px; padding: 5px 9px 5px 6px; color: #fff; cursor: pointer; transition: filter .13s, box-shadow .13s; }
+  .pchip:hover { filter: brightness(1.08); box-shadow: var(--shadow-sm); }
+  .pchip .pn { background: rgba(255,255,255,.24); border-radius: 100px; padding: 2px 8px; font-weight: 700; flex: none; }
+  .pchip .ti { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 46ch; }
+  .pchip .x { font-size: 15px; line-height: 1; opacity: .8; flex: none; }
+  .pchip:hover .x { opacity: 1; }
+  /* Per-paper column heads in the comparison table: a Pn label + full title. */
+  table.cmp thead th .pttl { display: block; font-size: 11px; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--text-muted); margin-top: 4px; line-height: 1.4; overflow-wrap: anywhere; }
+  table.cmp td .doi { color: var(--navy); text-decoration: none; }
+  table.cmp td .doi:hover { text-decoration: underline; }
+  table.cmp td.auth { text-align: left; font-weight: 500; color: var(--text); font-size: 12px; }
 
   .loading { text-align: center; color: var(--text-muted); font-size: 14px; padding: 60px 20px; }
   .spinner { display: inline-block; width: 22px; height: 22px; border: 3px solid var(--navy-light); border-top-color: var(--navy); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: middle; margin-right: 10px; }
@@ -469,11 +483,13 @@
       <div class="tabs" role="tablist" aria-label="Analytics view">
         <button class="tab on" data-tab="overview" role="tab" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Corpus overview</button>
         <button class="tab" data-tab="author" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Author spotlight</button>
+        <button class="tab" data-tab="papers" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>Paper comparison</button>
       </div>
       <p class="tabs-desc">
-        <strong>Corpus overview</strong> takes the <em>paper</em> as the unit of analysis — publication volume, co-authorship, citations and team science across journals and years.<br>
+        <strong>Corpus overview</strong> takes the <em>journal</em> as the unit of analysis — publication volume, co-authorship, citations and team science across journals and years.<br>
         <strong>Author spotlight</strong> takes the <em>author</em> as the unit of analysis — add several researchers and compare their output, collaboration and impact.<br>
-        Both give rich insights into research productivity, with several ways to slice and compare.
+        <strong>Paper comparison</strong> takes the <em>paper</em> as the unit of analysis — add one or more papers and compare how their citations and disruptiveness (D<sub>i</sub>) stack up across the years.<br>
+        All three give rich insights into research productivity, with several ways to slice and compare.
       </p>
     </div>
 
@@ -615,6 +631,27 @@
       </div>
     </div>
 
+    <!-- ── Paper comparison tab ───────────────────────────────────────────
+         The paper as the unit of analysis: add one or more papers (by title or
+         DOI) and compare their citations, disruptiveness (Dᵢ), team size and
+         more — including how citations and Dᵢ compare across the papers'
+         publication years. Draws on the same in-catalog citation-graph analysis
+         (./disruption.json) as the Team-science section, so a paper is available
+         here once it has a computed disruption index. Independent of the filter
+         bar above — the papers you add are always shown. -->
+    <div id="tab-papers" style="display:none">
+      <div class="author-search">
+        <input id="paperInput" list="paperList" type="text" placeholder="Add a paper to compare — search its title, or paste a DOI…" autocomplete="off">
+        <datalist id="paperList"></datalist>
+        <button class="author-add" id="paperAdd">Add paper</button>
+        <span class="author-hint" id="paperHint"></span>
+      </div>
+      <div class="achips" id="paperChips"></div>
+      <div id="paperBody">
+        <div class="aspot-empty">Add one or more papers above to compare them side by side — their citations, disruptiveness (D<sub>i</sub>), team size, and how these compare across the papers' publication years.<br><br>Search by title, or paste a DOI. The comparison draws on The Lit's citation-graph analysis, so a paper appears here once it has a computed disruption index.</div>
+      </div>
+    </div>
+
   </div><!-- /#app -->
 
   <div id="failed" style="display:none" class="loading">
@@ -648,7 +685,7 @@
   // excludeNonResearch = filter away non-research items (editorial board / book
   //   reviews / errata / announcements / indices); ON by default.
   // authors = the list of authors being compared in the Author-spotlight tab.
-  var S = { types: {}, journals: {}, dim: { name: null, vals: {} }, yMin: 0, yMax: 0, dMin: -1, dMax: 1, tab: 'overview', authors: [], excludeNonResearch: true,
+  var S = { types: {}, journals: {}, dim: { name: null, vals: {} }, yMin: 0, yMax: 0, dMin: -1, dMax: 1, tab: 'overview', authors: [], papers: [], excludeNonResearch: true,
     // Journal-type group comparisons: for each chosen journal's type(s) the
     // charts overlay that type's aggregate. groupOff['<plot>|<typeKey>'] hides a
     // group on one plot; evoHidden['<seriesId>'] hides an individual line on the
@@ -1660,6 +1697,250 @@
     });
   }
 
+  // ── Paper comparison ─────────────────────────────────────────────────────
+  // The paper as the unit of analysis: add papers (by title or DOI) and compare
+  // their citations, disruptiveness (Dᵢ), team size and more — including how
+  // citations & Dᵢ compare across the papers' publication years. Every metric
+  // comes from the same per-paper citation-graph table (./disruption.json) the
+  // Team-science section uses, so a paper is available here once it has a
+  // computed D. This tab is INDEPENDENT of the top filter bar — the papers you
+  // add are always shown, and percentiles are against the whole scored corpus.
+  var PAPER_COLORS = ['#7d1d3f', '#2a7f8f', '#c9a24b', '#3f6098', '#8a5a2b', '#6a8d3a', '#a34a6d', '#b5533a'];
+  function paperColor(i) { return PAPER_COLORS[i % PAPER_COLORS.length]; }
+  var paperIndex = null;          // { byDoi, byTitle } over DISR.papers (built once)
+  var paperListBuilt = false;     // datalist populated?
+  // Normalise a DOI to its bare lower-case form (drops a doi.org/doi: prefix).
+  function normDoiStr(s) {
+    var d = String(s == null ? '' : s).trim().toLowerCase();
+    d = d.replace(/^https?:\/\/(dx\.)?doi\.org\//, '').replace(/^doi:\s*/, '');
+    var m = d.match(/10\.\d{4,}\S*/); return m ? m[0] : d;
+  }
+  function paperKey(p) { return p.doi ? normDoiStr(p.doi) : ('t:' + String(p.ti || '').toLowerCase().trim()); }
+  function buildPaperIndex() {
+    if (paperIndex || !DISR || !DISR.papers) return paperIndex;
+    var byDoi = {}, byTitle = {};
+    DISR.papers.forEach(function (p) {
+      if (p.doi) { var dk = normDoiStr(p.doi); if (!byDoi[dk]) byDoi[dk] = p; }
+      if (p.ti) { var tk = String(p.ti).toLowerCase().trim(); if (!byTitle[tk]) byTitle[tk] = p; }
+    });
+    paperIndex = { byDoi: byDoi, byTitle: byTitle };
+    return paperIndex;
+  }
+  // Populate the title autocomplete once — the most-cited papers first, capped
+  // for browser performance (the dataset has ~42k scored papers).
+  function buildPaperDatalist() {
+    if (paperListBuilt || !DISR || !DISR.papers) return;
+    var dl = $('paperList'); if (!dl) return;
+    var top = DISR.papers.slice().sort(function (a, b) { return (b.c || 0) - (a.c || 0); }).slice(0, 4000);
+    var frag = document.createDocumentFragment();
+    top.forEach(function (p) { if (!p.ti) return; var o = document.createElement('option'); o.value = p.ti; frag.appendChild(o); });
+    dl.appendChild(frag);
+    paperListBuilt = true;
+  }
+  // Resolve a typed query to a scored paper: DOI → exact title → UNIQUE
+  // title-substring. Ambiguous substrings report candidates via `info`.
+  function resolvePaper(query, info) {
+    buildPaperIndex(); if (!paperIndex) return null;
+    var q = String(query || '').trim(); if (!q) return null;
+    if (/10\.\d{4,}/.test(q)) { var hit = paperIndex.byDoi[normDoiStr(q)]; if (hit) return hit; }
+    var lc = q.toLowerCase();
+    if (paperIndex.byTitle[lc]) return paperIndex.byTitle[lc];
+    var found = null, hits = 0, cands = [];
+    for (var tk in paperIndex.byTitle) {
+      if (tk.indexOf(lc) !== -1) { hits++; found = paperIndex.byTitle[tk]; if (cands.length < 5) cands.push(paperIndex.byTitle[tk].ti); }
+    }
+    if (hits === 1) return found;
+    if (hits > 1 && info) info.candidates = cands;
+    return null;
+  }
+  function addPaper(query) {
+    query = (query || '').trim(); if (!query) return;
+    $('paperHint').textContent = '';
+    ensureDisruption(function () {
+      if (disrState !== 'ready' || !DISR || !DISR.papers || !DISR.papers.length) {
+        $('paperHint').textContent = (disrState === 'failed')
+          ? 'Could not load the paper dataset. Please try again later.'
+          : 'The paper dataset (citation-graph analysis) isn’t available yet.';
+        return;
+      }
+      buildPaperDatalist();
+      var info = {}, p = resolvePaper(query, info);
+      if (!p) {
+        $('paperHint').textContent = info.candidates
+          ? 'Several papers match “' + query + '”: ' + info.candidates.map(function (t) { return trunc(t, 42); }).join(' · ') + ' — refine the search or paste the DOI.'
+          : 'No scored paper matching “' + query + '”. Try fewer words, the exact title, or paste the DOI.';
+        return;
+      }
+      var key = paperKey(p);
+      if (S.papers.some(function (x) { return paperKey(x) === key; })) {
+        $('paperInput').value = ''; $('paperHint').textContent = 'That paper is already in the comparison.'; return;
+      }
+      S.papers.push(p);
+      $('paperInput').value = '';
+      renderPapers();
+    });
+  }
+  function renderPaperChips() {
+    var box = $('paperChips'); if (!box) return;
+    box.innerHTML = S.papers.map(function (p, i) {
+      return '<span class="pchip" data-i="' + i + '" style="background:' + paperColor(i) + '" title="Click to remove — ' + esc(p.ti || '') + '">' +
+        '<span class="pn">P' + (i + 1) + '</span><span class="ti">' + esc(p.ti || '(untitled)') + '</span><span class="x" aria-hidden="true">×</span></span>';
+    }).join('');
+    Array.prototype.forEach.call(box.querySelectorAll('.pchip'), function (chip) {
+      chip.onclick = function () { S.papers.splice(+chip.getAttribute('data-i'), 1); renderPapers(); };
+    });
+  }
+  function renderPapers() {
+    renderPaperChips();
+    var body = $('paperBody'); if (!body) return;
+    if (!S.papers.length) {
+      body.innerHTML = '<div class="aspot-empty">Add one or more papers above to compare them side by side — their citations, disruptiveness (D<sub>i</sub>), team size, and how these compare across the papers’ publication years.<br><br>Search by title, or paste a DOI. The comparison draws on The Lit’s citation-graph analysis, so a paper appears here once it has a computed disruption index.</div>';
+      return;
+    }
+    ensureDisruption(function () { if (S.tab === 'papers') drawPapers(S.papers); });
+  }
+
+  // A scatter of one dot per paper. pts: [{x,y,color,label}].
+  //   opts: xMin/xMax (else data range, padded), symmetric (y around 0),
+  //   xZero (vertical line at x=0), connect (dashed line through pts in x order),
+  //   xFmt/yFmt (tick formatters).
+  function paperScatter(pts, opts) {
+    opts = opts || {};
+    if (!pts.length) return '<div class="chart-empty">No data.</div>';
+    var W = 760, H = 300, L = 56, R = 20, T = 18, B = 38;
+    var xs = pts.map(function (p) { return p.x; }), ys = pts.map(function (p) { return p.y; });
+    var xmin = opts.xMin != null ? opts.xMin : Math.min.apply(null, xs);
+    var xmax = opts.xMax != null ? opts.xMax : Math.max.apply(null, xs);
+    if (xmin === xmax) { xmin -= 1; xmax += 1; }
+    var ymin, ymax;
+    if (opts.symmetric) { var M = Math.max(Math.abs(Math.min.apply(null, ys)), Math.abs(Math.max.apply(null, ys)), opts.minY || 0.05); ymin = -M; ymax = M; }
+    else { ymin = 0; ymax = niceMax(Math.max.apply(null, ys) || 1); }
+    var px = function (x) { return L + (x - xmin) / (xmax - xmin) * (W - L - R); };
+    var py = function (y) { return T + (1 - (y - ymin) / (ymax - ymin)) * (H - T - B); };
+    var svg = svgEl(W, H);
+    var yt = opts.symmetric ? [ymin, ymin / 2, 0, ymax / 2, ymax] : yTicks(ymax, 4);
+    yt.forEach(function (v) {
+      var yy = py(v);
+      svg += '<line x1="' + L + '" y1="' + yy.toFixed(1) + '" x2="' + (W - R) + '" y2="' + yy.toFixed(1) + '" stroke="' + GRID + '"/>';
+      svg += '<text x="' + (L - 8) + '" y="' + (yy + 4).toFixed(1) + '" text-anchor="end" font-size="11" fill="' + MUTED + '">' + (opts.yFmt ? opts.yFmt(v) : fmtTick(v)) + '</text>';
+    });
+    if (opts.symmetric) { var zy = py(0); svg += '<line x1="' + L + '" y1="' + zy.toFixed(1) + '" x2="' + (W - R) + '" y2="' + zy.toFixed(1) + '" stroke="#cfc6ca" stroke-width="1.3"/>'; }
+    if (opts.xZero && xmin < 0 && xmax > 0) { var zx = px(0); svg += '<line x1="' + zx.toFixed(1) + '" y1="' + T + '" x2="' + zx.toFixed(1) + '" y2="' + (H - B) + '" stroke="#cfc6ca" stroke-width="1.3"/>'; }
+    var xspan = xmax - xmin, xstep = xspan / 6;
+    for (var t = 0; t <= 6; t++) {
+      var xv = xmin + xstep * t;
+      svg += '<text x="' + px(xv).toFixed(1) + '" y="' + (H - 12) + '" text-anchor="middle" font-size="11" fill="' + MUTED + '">' + (opts.xFmt ? opts.xFmt(xv) : Math.round(xv)) + '</text>';
+    }
+    if (opts.connect && pts.length > 1) {
+      var sorted = pts.slice().sort(function (a, b) { return a.x - b.x; });
+      var d = sorted.map(function (p, i) { return (i ? 'L' : 'M') + px(p.x).toFixed(1) + ' ' + py(p.y).toFixed(1); }).join(' ');
+      svg += '<path d="' + d + '" fill="none" stroke="#b9adb2" stroke-width="1.5" stroke-dasharray="5 4"/>';
+    }
+    pts.forEach(function (p) {
+      var x = px(p.x), y = py(p.y);
+      svg += '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="6.5" fill="' + (p.color || NAVY) + '" stroke="#fff" stroke-width="1.6"/>';
+      if (p.label) svg += '<text x="' + x.toFixed(1) + '" y="' + (y - 11).toFixed(1) + '" text-anchor="middle" font-size="10.5" font-weight="700" fill="' + (p.color || NAVY) + '">' + esc(p.label) + '</text>';
+    });
+    svg += '</svg>';
+    return svg;
+  }
+
+  // Horizontal diverging bars around a centre zero line. items:[{value,color,display}].
+  // Symmetric axis −M..M, M = max |value| (with a small floor); +ve grows right.
+  function divergingBarsH(items, opts) {
+    opts = opts || {};
+    if (!items.length) return '<div class="chart-empty">No data.</div>';
+    var rowH = 26, gap = 9, L = 150, R = 58, T = 8, W = 760;
+    var H = T * 2 + items.length * rowH + (items.length - 1) * gap;
+    var M = 0; items.forEach(function (it) { var a = Math.abs(it.value); if (a > M) M = a; });
+    M = Math.max(M, opts.min || 0.02);
+    var plotW = W - L - R, cx = L + plotW / 2, half = plotW / 2;
+    var svg = svgEl(W, H);
+    svg += '<line x1="' + cx + '" y1="' + (T - 2) + '" x2="' + cx + '" y2="' + (H - T + 2) + '" stroke="#cfc6ca" stroke-width="1"/>';
+    items.forEach(function (it, i) {
+      var y = T + i * (rowH + gap), w = Math.abs(it.value) / M * half, x = it.value >= 0 ? cx : cx - w;
+      var lab = it.display != null ? it.display : it.label;
+      svg += '<text x="' + (L - 10) + '" y="' + (y + rowH / 2 + 4) + '" text-anchor="end" font-size="12.5" fill="#241a1e">' + esc(trunc(lab, 20)) + '</text>';
+      svg += '<rect x="' + x.toFixed(1) + '" y="' + y + '" width="' + Math.max(1, w).toFixed(1) + '" height="' + rowH + '" rx="4" fill="' + (it.color || NAVY) + '"/>';
+      var vcol = it.value > 0.006 ? C_DISRUPT : (it.value < -0.006 ? C_DEVELOP : MUTED);
+      var vlab = (it.value > 0 ? '+' : (it.value < 0 ? '−' : '')) + Math.abs(it.value).toFixed(3);
+      var tx = it.value >= 0 ? (x + w + 8) : (x - 8), anc = it.value >= 0 ? 'start' : 'end';
+      svg += '<text x="' + tx.toFixed(1) + '" y="' + (y + rowH / 2 + 4) + '" text-anchor="' + anc + '" font-size="12" fill="' + vcol + '" font-weight="700">' + vlab + '</text>';
+    });
+    svg += '</svg>';
+    return svg;
+  }
+
+  function drawPapers(list) {
+    var body = $('paperBody'); if (!body) return;
+    if (!DISR || !DISR.papers) { body.innerHTML = '<div class="aspot-empty">Loading the paper dataset…</div>'; return; }
+    // D percentile is against the WHOLE scored corpus (this tab ignores filters).
+    var allD = DISR.papers.map(function (p) { return p.d; }).sort(function (a, b) { return a - b; });
+    var rows = list.map(function (p, i) {
+      var authors = (p.au && DISR.authors) ? p.au.map(function (k) { return DISR.authors[k]; }).filter(Boolean) : [];
+      return { p: p, color: paperColor(i), label: 'P' + (i + 1),
+        jname: JMAP[p.j] ? JMAP[p.j].name : (p.j || '—'),
+        authors: authors, pctile: pctRankSorted(allD, p.d) };
+    });
+    var years = list.map(function (p) { return p.y; });
+    var yLo = Math.min.apply(null, years), yHi = Math.max.apply(null, years);
+    // pad the year axis a touch so edge dots aren't clipped
+    var xPad = Math.max(1, Math.round((yHi - yLo) * 0.06));
+    var citePts = rows.map(function (r) { return { x: r.p.y, y: r.p.c || 0, color: r.color, label: r.label }; });
+    var dPts = rows.map(function (r) { return { x: r.p.y, y: r.p.d || 0, color: r.color, label: r.label }; });
+    var impactPts = rows.map(function (r) { return { x: r.p.d || 0, y: r.p.c || 0, color: r.color, label: r.label }; });
+    var citeBars = rows.map(function (r) { return { label: r.label, display: r.label + ' · ' + trunc(r.p.ti || '', 22), value: r.p.c || 0, color: r.color }; });
+    var dBars = rows.map(function (r) { return { label: r.label, display: r.label + ' · ' + trunc(r.p.ti || '', 18), value: r.p.d || 0, color: r.color }; });
+    var dAbsMax = Math.max.apply(null, impactPts.map(function (pt) { return Math.abs(pt.x); }).concat([0.05]));
+
+    // ── comparison table (At a glance) ──────────────────────────────────────
+    var head = '<th>Metric</th>' + rows.map(function (r) {
+      var doi = r.p.doi ? '<a class="doi" href="https://doi.org/' + esc(r.p.doi) + '" target="_blank" rel="noopener">' + esc(r.p.doi) + '</a>' : '';
+      return '<th><span class="sw" style="background:' + r.color + '"></span>' + r.label +
+        '<span class="pttl">' + esc(trunc(r.p.ti || '(untitled)', 90)) + (doi ? '<br>' + doi : '') + '</span></th>';
+    }).join('');
+    var dChar = function (d) { return d > 0.02 ? 'Disrupts' : (d < -0.02 ? 'Develops' : 'Neutral'); };
+    var dCol = function (d) { return d > 0.02 ? C_DISRUPT : (d < -0.02 ? C_DEVELOP : MUTED); };
+    var metricRows = [
+      ['Journal', function (r) { return esc(r.jname); }, 'The journal (or conference) the paper appeared in.'],
+      ['Year', function (r) { return r.p.y; }, 'Publication year.'],
+      ['Team size', function (r) { return fmt(r.p.t || 0); }, 'Number of authors on the paper.'],
+      ['Citations', function (r) { return fmt(r.p.c || 0); }, 'Highest of Crossref / OpenAlex / Semantic Scholar citation tallies — the same count the main browser shows.'],
+      ['In-catalog citations', function (r) { return fmt(r.p.nf || 0); }, 'How many papers WITHIN The Lit’s citation graph cite this one (a subset of all citations, used to compute D).'],
+      ['Disruptiveness Dᵢ', function (r) { return '<span style="color:' + dCol(r.p.d) + ';font-weight:700">' + (r.p.d > 0 ? '+' : (r.p.d < 0 ? '−' : '')) + Math.abs(r.p.d).toFixed(3) + '</span>'; }, 'The CD disruption index (Funk & Owen-Smith 2017): +1 fully disrupts (later work cites it instead of its antecedents), −1 fully develops.'],
+      ['Character', function (r) { return '<span style="color:' + dCol(r.p.d) + '">' + dChar(r.p.d) + '</span>'; }, 'Whether D is positive (disrupts its field) or negative (develops it).'],
+      ['Dᵢ percentile', function (r) { return Math.round(r.pctile) + 'th'; }, 'Where this paper’s D ranks among every scored paper in the database (100th = most disruptive).'],
+      ['Mean reference age', function (r) { return r.p.ra != null ? r.p.ra.toFixed(1) + ' yrs' : '—'; }, 'Average age of the works this paper cites (from reference years). Larger = it reaches for older literature.'],
+      ['Reference popularity', function (r) { return r.p.rp != null ? fmt(Math.round(r.p.rp)) : '—'; }, 'Average citation count of the works this paper cites (a proxy for how “canonical” its references are).'],
+      ['Authors', function (r) { return '<span class="auth-cell">' + (r.authors.length ? esc(r.authors.join(', ')) : '—') + '</span>'; }, null, true]
+    ];
+    var tbody = metricRows.map(function (mr) {
+      return '<tr><td class="metric"' + (mr[2] ? ' title="' + esc(mr[2]) + '"' : '') + '>' + esc(mr[0]) + '</td>' +
+        rows.map(function (r) { return '<td' + (mr[3] ? ' class="auth"' : '') + '>' + mr[1](r) + '</td>'; }).join('') + '</tr>';
+    }).join('');
+
+    var yearNote = (yLo === yHi)
+      ? 'All ' + list.length + ' papers were published in ' + yLo + '.'
+      : 'Each paper is placed at its publication year (' + yLo + '–' + yHi + '); citation and D values are the current totals.';
+    var legend = rows.map(function (r) { return '<span class="li"><span class="sw" style="background:' + r.color + '"></span>' + r.label + ' · ' + esc(trunc(r.p.ti || '', 40)) + '</span>'; }).join('');
+
+    var html = '<div class="cards">';
+    html += '<div class="card wide"><h3>Citations over the papers’ years</h3><div class="csub">' + esc(yearNote) + ' Higher = more cited.</div><div id="pCiteEvo"></div><div class="legend">' + legend + '</div></div>';
+    html += '<div class="card wide"><h3>Disruptiveness (D<sub>i</sub>) over the papers’ years</h3><div class="csub"><span style="color:' + C_DISRUPT + ';font-weight:600">above 0 disrupts</span> · <span style="color:' + C_DEVELOP + ';font-weight:600">below 0 develops</span>. ' + esc(yearNote) + '</div><div id="pDEvo"></div></div>';
+    html += '<div class="card"><h3>Citations</h3><div class="csub">Total citations, side by side</div><div id="pCiteBars"></div></div>';
+    html += '<div class="card"><h3>Disruptiveness index D<sub>i</sub></h3><div class="csub">Bars diverge from 0 — <span style="color:' + C_DISRUPT + ';font-weight:600">right/disrupts</span>, <span style="color:' + C_DEVELOP + ';font-weight:600">left/develops</span></div><div id="pDBars"></div></div>';
+    html += '<div class="card wide"><h3>Impact vs. disruption</h3><div class="csub">Where each paper sits: disruptiveness D<sub>i</sub> (x) against its citations (y). Papers to the right disrupt their field; papers that are both high and to the right are disruptive AND highly cited.</div><div id="pImpact"></div></div>';
+    html += '<div class="card wide"><h3>At a glance</h3><div class="csub">Every metric side by side. Values come from The Lit’s citation-graph analysis and are independent of the filters above.</div><div class="tblscroll"><table class="cmp"><thead><tr>' + head + '</tr></thead><tbody>' + tbody + '</tbody></table></div></div>';
+    html += '</div>';
+    body.innerHTML = html;
+
+    $('pCiteEvo').innerHTML = paperScatter(citePts, { xMin: yLo - xPad, xMax: yHi + xPad, connect: true, yFmt: fmtTick });
+    $('pDEvo').innerHTML = paperScatter(dPts, { xMin: yLo - xPad, xMax: yHi + xPad, symmetric: true, connect: true, yFmt: fmtD });
+    $('pCiteBars').innerHTML = barsH(citeBars, { limit: 20 });
+    $('pDBars').innerHTML = divergingBarsH(dBars, { limit: 20 });
+    $('pImpact').innerHTML = paperScatter(impactPts, { xMin: -dAbsMax * 1.12, xMax: dAbsMax * 1.12, xZero: true, xFmt: fmtD, yFmt: fmtTick });
+  }
+
   // ══ Team science: disruption vs development ═══════════════════════════════
   // Reproduces Wu, Wang & Evans (Nature 2019) over The Lit's in-catalog citation
   // graph. The whole per-paper table (./disruption.json) is small enough that
@@ -2413,7 +2694,9 @@
     renderScope();
     if (raf) cancelAnimationFrame(raf);
     raf = requestAnimationFrame(function () {
-      if (S.tab === 'overview') renderOverview(); else renderAuthor();
+      if (S.tab === 'overview') renderOverview();
+      else if (S.tab === 'papers') renderPapers();
+      else renderAuthor();
     });
   }
 
@@ -2486,6 +2769,7 @@
         S.tab = t.getAttribute('data-tab');
         $('tab-overview').style.display = S.tab === 'overview' ? '' : 'none';
         $('tab-author').style.display = S.tab === 'author' ? '' : 'none';
+        $('tab-papers').style.display = S.tab === 'papers' ? '' : 'none';
         refresh();
       };
     });
@@ -2497,15 +2781,33 @@
     ai.addEventListener('focus', function () { ensureAuthors(function () {}); });
     $('authorAdd').onclick = function () { addAuthor(ai.value); };
 
+    // paper input — add papers (Enter, the Add button, or a datalist pick) and
+    // compare them below. The dataset (disruption.json) loads on first focus so
+    // the title autocomplete is ready.
+    var pi = $('paperInput');
+    pi.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addPaper(pi.value); } });
+    pi.addEventListener('change', function () { if (pi.value) addPaper(pi.value); });   // datalist selection
+    pi.addEventListener('focus', function () { ensureDisruption(function () { buildPaperDatalist(); }); });
+    $('paperAdd').onclick = function () { addPaper(pi.value); };
+
     // Author deep-link (?author=Name): open the Author spotlight straight on one
     // person — used by the ORCID "My publications" hub on the main browser, and
     // shareable on its own.
     try {
-      var authorParam = new URLSearchParams(location.search).get('author');
+      var qp = new URLSearchParams(location.search);
+      var authorParam = qp.get('author');
       if (authorParam && authorParam.trim()) {
         var atab = document.querySelector('.tab[data-tab="author"]');
         if (atab) atab.click();
         addAuthor(authorParam.trim());
+      }
+      // Paper deep-link (?paper=DOI or ?papers=doi1,doi2,…): open Paper comparison
+      // straight on those papers — shareable on its own.
+      var paperParam = qp.get('papers') || qp.get('paper');
+      if (paperParam && paperParam.trim()) {
+        var ptab = document.querySelector('.tab[data-tab="papers"]');
+        if (ptab) ptab.click();
+        paperParam.split(',').forEach(function (q) { if (q && q.trim()) addPaper(q.trim()); });
       }
     } catch (e) {}
 
