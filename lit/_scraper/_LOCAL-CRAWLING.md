@@ -95,6 +95,20 @@ paused. It keeps the live database continuously up to date and survives
 disconnects/power-off with minimal loss (see **Resilience** below). To stop,
 close the window or Ctrl+C. Run it again any time to resume.
 
+### `full-local-refresh.bat` — one deep "harvest everything" pass
+The heavy all-in-one alternative to `run-local-crawlers.bat`'s gentle loop: a
+**full native rebuild + pre-prints + citations**, then the **same for the FT50
+catalog**, committing + pushing each dataset. Use it when you want a single deep
+pass (it runs for a few hours) rather than the continuous slice loop. It pauses
+CI (sole writer) and resumes it at the end, and — like every script here —
+routes every push through the same **self-healing git sync** (below), so it can
+never wedge on a half-finished rebase or a non-fast-forward push. It starts each
+run from a clean `origin/master` (after first flushing any pending finds), so a
+scrambled clone can't block it. This is the maintained replacement for a
+hand-written "run all the manual commands" batch file — prefer it over pasting
+the reference commands below, because those, run bare, hit exactly the git
+failure in **Troubleshooting**.
+
 ### `crawl-refs.bat` — citation graph (`data-refs/`)
 ### `crawl-workingpapers.bat` — working papers (`data-workingpapers/`)
 Same resilient slice→commit→push loop as `run-local-crawlers.bat`, for the two
@@ -240,8 +254,20 @@ node pnas-concepts-local.mjs              REM --full to force a re-crawl
 node econometrica-forthcoming-local.mjs --dry-run   REM then without --dry-run
 ```
 
-Then: `git add lit/data lit/data-ft50 lit/data-refs lit/data-workingpapers`,
-`git commit`, `git pull --rebase origin master`, `git push origin master`.
+Then commit + push. Do it in the **self-healing order** the wrapper scripts use,
+so a leftover half-finished rebase can't wedge the push (see **Troubleshooting**):
+
+```bat
+git rebase --abort 2>nul & git merge --abort 2>nul   REM clear any stale rebase/merge
+git add lit/data lit/data-ft50 lit/data-refs lit/data-workingpapers
+git commit -m "lit: local refresh"
+git pull --rebase origin master || git rebase --abort   REM abort on conflict, keep your commit
+git push origin master
+```
+
+If the push is still rejected as non-fast-forward, re-run the `git pull --rebase`
++ `git push` pair (CI committed while you were crawling — pause it first), or, to
+just start clean, run `reset-to-remote.bat`.
 
 ### Cloudflare cookie (only if a blocked source is challenged from home)
 If `informs-*`/`pnas-*` report a Cloudflare block, open the site in your
@@ -250,6 +276,56 @@ browser, copy the `cf_clearance` cookie from DevTools, and set:
 set "LIT_CF_COOKIE=cf_clearance=<value>"
 ```
 before running. The cookie expires, so long crawls may need re-cookieing.
+
+## Troubleshooting
+
+### Push rejected: `! [rejected] master -> master (non-fast-forward)`
+Your local `master` is behind the remote, so git won't push over it. It almost
+always comes with (or is caused by) the rebase error below. The cause is a
+**second writer**: CI (or another clone) pushed to `master` while your crawl
+was running — which is exactly why every crawl script **pauses CI first** so
+your machine is the sole writer. To recover, integrate the remote commits, then
+push again:
+
+```bat
+git rebase --abort 2>nul & git merge --abort 2>nul   REM clear any half-finished rebase
+git pull --rebase origin master
+git push origin master
+```
+
+If the `git pull --rebase` reports a conflict (the minified JSON data files
+diverged), the simplest fix is to discard your un-pushed local finds and snap
+back to the live site with **`reset-to-remote.bat`** — the crawlers re-find them
+on the next run (a found pre-print link is frozen, a citation count only rises,
+so nothing is truly lost). Then make sure CI is paused (`ci-pause-backfills.bat`)
+before you crawl again.
+
+### `git pull --rebase` stops: "there is already a rebase-merge directory"
+```
+It seems that there is already a rebase-merge directory ...
+If that is not the case, please
+        rm -fr ".git/rebase-merge"
+and run me again. I am stopping in case you still have something valuable there.
+```
+A **previous** rebase was interrupted (Ctrl+C, a power-off, or a conflict during
+`git pull --rebase`) and left `.git/rebase-merge/` on disk. git refuses to start
+a new rebase until it's cleared — and because the pull never runs, your next
+`git push` is rejected as non-fast-forward (above). This is the failure a
+hand-written `pull --rebase` + `push` sequence hits; the wrapper scripts avoid
+it by clearing a stale rebase up front and aborting a conflicting one. To clear
+it by hand:
+
+```bat
+git rebase --abort            REM the clean way to remove .git/rebase-merge
+git pull --rebase origin master
+git push origin master
+```
+
+(`git rebase --abort` is safer than `rm -fr .git/rebase-merge` — it restores your
+branch to the pre-rebase commit. Only delete the directory manually if
+`--abort` also complains there's no rebase in progress.) The maintained
+**`full-local-refresh.bat`** does all of this for you at startup, so re-running
+it from a stuck clone self-heals.
 
 ## Manual pause/resume (no `gh`)
 Repo → **Actions** → open each of **lit-references-backfill**,
