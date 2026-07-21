@@ -23,9 +23,15 @@ echo.
 choice /m "Discard local changes and reset to origin/master"
 if errorlevel 2 ( echo Cancelled - nothing changed. & goto :end )
 
-REM stop any half-finished rebase/merge first
+REM stop any half-finished rebase/merge first. --abort clears a RESUMABLE
+REM rebase; a STALE/corrupt rebase dir makes --abort say "No rebase in progress?"
+REM and leave the dir behind (and `git reset --hard` does NOT remove it), so the
+REM next `git pull --rebase` keeps failing with "already a rebase-merge
+REM directory" - force-remove whatever survives.
 git rebase --abort 1>nul 2>nul
 git merge --abort 1>nul 2>nul
+if exist ".git\rebase-merge" rmdir /s /q ".git\rebase-merge" 1>nul 2>nul
+if exist ".git\rebase-apply" rmdir /s /q ".git\rebase-apply" 1>nul 2>nul
 git fetch origin master
 git reset --hard origin/master
 echo.

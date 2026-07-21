@@ -321,11 +321,24 @@ git pull --rebase origin master
 git push origin master
 ```
 
-(`git rebase --abort` is safer than `rm -fr .git/rebase-merge` — it restores your
-branch to the pre-rebase commit. Only delete the directory manually if
-`--abort` also complains there's no rebase in progress.) The maintained
-**`full-local-refresh.bat`** does all of this for you at startup, so re-running
-it from a stuck clone self-heals.
+**If `git rebase --abort` says `No rebase in progress?` but the error keeps
+happening**, the leftover directory is stale/corrupt — `--abort` won't remove it
+and neither will `git reset --hard`, so delete it by hand. git's own message
+suggests `rm -fr ".git/rebase-merge"`, which is **Unix** syntax; in a **Windows
+CMD** window use:
+
+```bat
+rmdir /s /q .git\rebase-merge
+git pull --rebase origin master
+git push origin master
+```
+
+(In Git Bash the `rm -rf .git/rebase-merge` git prints works as-is. Your local
+crawl commit is safe — an interrupted rebase never moves the `master` ref — so
+the `pull --rebase` replays it onto the fresh tip.) The maintained
+**`full-local-refresh.bat`** and **`reset-to-remote.bat`** now do all of this for
+you (they `--abort`, then force-remove any surviving rebase dir), so re-running
+either from a stuck clone self-heals.
 
 ## Manual pause/resume (no `gh`)
 Repo → **Actions** → open each of **lit-references-backfill**,
