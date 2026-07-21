@@ -91,6 +91,21 @@
 
   /* Sticky, self-condensing top bar (navy header + filters + tab buttons). */
   .topbar { position: sticky; top: 0; z-index: 100; }
+  /* Opt the page scroller out of browser scroll anchoring — but only where the
+     bar is sticky and self-condensing (the same >=769px breakpoint as the
+     .compact toggle; phones keep native anchoring). Condensing the bar shrinks
+     the page by 100-200px (the transitions make it land over ~200ms), and
+     Chrome/Firefox anchoring compensates by pulling scrollY back the same
+     amount to hold the visible card still. That adjustment can re-cross
+     applyCompact's expand threshold, which re-expands the bar, which pushes
+     scrollY forward again — an endless expand/condense loop that shakes the
+     whole screen at scroll positions just past COMPACT_ON. The hysteresis in
+     applyCompact assumes scrollY is invariant under the bar's height change;
+     this restores that invariant (Safari never anchored, so it was already
+     true there). No visual cost: the bar is the only above-viewport element
+     whose height changes, and content below the stuck bar keeps its position
+     relative to the bar's bottom edge either way. */
+  @media (min-width: 769px) { html { overflow-anchor: none; } }
   .header-inner { transition: padding 0.2s ease; }
   .header h1 { transition: font-size 0.2s ease; }
   .filter-group input, .custom-select-trigger { transition: all 0.18s ease; }
@@ -3941,7 +3956,7 @@ function debounceAffSearch() {
 }
 
 // Condense the sticky top bar once the user has scrolled past it, freeing screen
-// space for the papers list. Two safeguards stop this from making the page
+// space for the papers list. Three safeguards stop this from making the page
 // "shake" (the bar flickering between full and condensed, frame after frame):
 //
 //   1. Hysteresis. The top bar is in normal flow, so condensing it shrinks the
@@ -3954,6 +3969,14 @@ function debounceAffSearch() {
 //   2. The toggle only runs where the bar is actually sticky (wide viewports).
 //      On phones the bar is `position: static`, so condensing it as it scrolls
 //      out of view frees no space yet still shrinks the page, pure downside.
+//   3. `html { overflow-anchor: none; }` (see the .topbar CSS). The hysteresis
+//      reasons in a coordinate system where scrollY doesn't move when the bar
+//      resizes — but Chrome/Firefox scroll anchoring DID move it (by the full
+//      height delta, to keep the anchored card still), and once the transitions
+//      made that delta outgrow the 140px band, positions just past COMPACT_ON
+//      re-crossed COMPACT_OFF on every condense: the toggle/reflow loop of (1)
+//      through the browser's back door. Disabling anchoring for the page
+//      scroller restores the fixed-scrollY premise the band was designed on.
 //
 // Reads are coalesced into one layout write per frame via requestAnimationFrame.
 var compactSticky = window.matchMedia('(min-width: 769px)');
