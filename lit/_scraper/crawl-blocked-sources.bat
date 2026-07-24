@@ -50,7 +50,9 @@ set "LIT_MAILTO=kstouras+litlocal@gmail.com"
 cd /d "%REPO%\lit\_scraper"
 
 echo.
-echo [1/4] INFORMS ISR/MkSc editors (first full pass can take ~2 h; resume-safe)...
+echo [1/4] INFORMS MkSc+ISR editors (Marketing Science first, newest first;
+echo       first full pass can take ~2 h; resume-safe; ends by applying the
+echo       cache to the served papers files. MkSc-only: crawl-mksc-editors.bat)...
 node informs-editors-local.mjs
 
 echo.

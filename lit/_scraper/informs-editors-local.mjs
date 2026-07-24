@@ -14,12 +14,35 @@
  *   cd lit/_scraper
  *   node informs-editors-local.mjs               # resumes where it left off
  *   node informs-editors-local.mjs --max 500     # bound one session (~15 min)
+ *   node informs-editors-local.mjs --journal mksc  # one journal only (mksc | isre)
+ *   node informs-editors-local.mjs --journal mksc --last-years 20
+ *                                                # …bounded to the last 20 years
+ *   node informs-editors-local.mjs --since 2006  # absolute year floor (Year ≥ 2006)
  *   node informs-editors-local.mjs --retry-misses  # re-check pages that had no History line
+ *   node informs-editors-local.mjs --apply-only  # no crawl: overlay the cache onto
+ *                                                # the served papers-<key>.json files
+ *                                                # (run after dropping in a console-
+ *                                                # harvest _informs-editors.json)
  *
- * The full first pass is ~4,000 pages (≈2h at the polite request rate); it is
- * resume-safe — progress is saved continuously, so run it in as many sittings
- * as you like, newest papers first. Then commit + push
- * lit/data/_informs-editors.json; the daily data build joins it in.
+ * Every crawl ends by APPLYING the cache to the served papers files
+ * (papers-mksc.json / papers-isre.json — fill-empty-only, like the build's
+ * applyInformsEditors), so the collected names go live on the very next
+ * commit + push instead of waiting for the daily build (--no-apply skips).
+ *
+ * ONE-CLICK Marketing Science run: crawl-mksc-editors.bat (pauses CI, crawls
+ * MkSc Senior Editors for the last 20 years newest-first, applies + commits +
+ * pushes, resumes CI).
+ *
+ * Marketing Science is crawled FIRST (mksc before isre, newest papers first —
+ * per the owner: MkSc Senior-Editor coverage, e.g. Olivier Toubia's accepted
+ * papers, is the priority), so a single ~1h sitting completes the whole MkSc
+ * back-catalogue before ISR starts; `--journal mksc` bounds a sitting to it
+ * outright. The full first pass is ~4,200 pages (≈2h at the polite request
+ * rate); it is resume-safe — progress is saved continuously, so run it in as
+ * many sittings as you like. LIT_EDITORS_DELAY_MS overrides the per-page pace
+ * (default 1800; floor 700 — stay polite, it's an anti-bot-sensitive host).
+ * Then commit + push lit/data/_informs-editors.json; the daily data build
+ * joins it in.
  *
  * DOI lists come from lit/data/papers-isre.json / papers-mksc.json, so run
  * this after the first data build has landed (or pass --from-crossref to pull
@@ -76,24 +99,46 @@ const COOKIE = (() => {
   if (!raw) return '';
   return raw.includes('=') ? raw : `cf_clearance=${raw}`;
 })();
-const DELAY_MS = 1800;
+const DELAY_MS = Math.max(700, parseInt(process.env.LIT_EDITORS_DELAY_MS || '', 10) || 1800);
 
 const args = process.argv.slice(2);
 const MAX = args.includes('--max') ? parseInt(args[args.indexOf('--max') + 1], 10) : Infinity;
 const RETRY_MISSES = args.includes('--retry-misses');
 const FROM_CROSSREF = args.includes('--from-crossref');
+const APPLY_ONLY = args.includes('--apply-only');
+const NO_APPLY = args.includes('--no-apply');
+const JOURNAL = args.includes('--journal') ? String(args[args.indexOf('--journal') + 1] || '').toLowerCase() : '';
+// Year floor: --since <year> absolute, or --last-years <n> relative to today.
+// Rows are newest-first, so the floor only trims the old tail of the crawl.
+const SINCE = (() => {
+  if (args.includes('--since')) return parseInt(args[args.indexOf('--since') + 1], 10) || 0;
+  if (args.includes('--last-years')) {
+    const n = parseInt(args[args.indexOf('--last-years') + 1], 10);
+    return n > 0 ? new Date().getFullYear() - n : 0;
+  }
+  return 0;
+})();
 
+// mksc first — Marketing Science SE coverage is the current priority (per the
+// owner); within each journal the DOI list is newest-first already.
 const SOURCES = [
-  { key: 'isre', issn: '1047-7047', file: 'papers-isre.json', ae: true },
   { key: 'mksc', issn: '0732-2399', file: 'papers-mksc.json', ae: false },
+  { key: 'isre', issn: '1047-7047', file: 'papers-isre.json', ae: true },
 ];
+if (JOURNAL && !SOURCES.some(s => s.key === JOURNAL)) {
+  console.error(`✗ Unknown --journal "${JOURNAL}" — use one of: ${SOURCES.map(s => s.key).join(', ')}`);
+  process.exit(1);
+}
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 async function doiList(src) {
   const p = join(DATA_DIR, src.file);
   if (!FROM_CROSSREF && existsSync(p)) {
-    const rows = JSON.parse(await readFile(p, 'utf8'));
+    let rows = JSON.parse(await readFile(p, 'utf8'));
+    // Year floor (--since/--last-years): a row with an unparseable year is kept
+    // (it can only be a stray — never silently dropped from the crawl).
+    if (SINCE) rows = rows.filter(r => { const y = parseInt(r.Year, 10); return !y || y >= SINCE; });
     // newest first, published-or-advance alike; rows are already rank-sorted
     return rows.map(r => (r.DOI || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase()).filter(Boolean);
   }
@@ -101,7 +146,7 @@ async function doiList(src) {
   const dois = [];
   let cursor = '*';
   for (;;) {
-    const url = `https://api.crossref.org/journals/${src.issn}/works?rows=1000&cursor=${encodeURIComponent(cursor)}&select=DOI,type&sort=published&order=desc&mailto=${MAILTO}`;
+    const url = `https://api.crossref.org/journals/${src.issn}/works?rows=1000&cursor=${encodeURIComponent(cursor)}&select=DOI,type&sort=published&order=desc${SINCE ? `&filter=from-pub-date:${SINCE}-01-01` : ''}&mailto=${MAILTO}`;
     const r = await fetch(url, { headers: { 'User-Agent': `lit-informs-editors/1.0 (mailto:${MAILTO})` } });
     if (!r.ok) throw new Error(`Crossref HTTP ${r.status}`);
     const j = await r.json();
@@ -133,7 +178,8 @@ async function fetchArticle(doi) {
 // editors past the old 500-char window) and label-less layouts both extract.
 const editorsFromPage = editorsFromPageHtml;
 
-const cache = existsSync(CACHE_PATH) ? JSON.parse(await readFile(CACHE_PATH, 'utf8')) : {};
+const rawCache = existsSync(CACHE_PATH) ? JSON.parse(await readFile(CACHE_PATH, 'utf8')) : {};
+const cache = rawCache.map || rawCache; // tolerate both {map:{...}} and flat shapes
 let processed = 0, found = 0, dirty = 0;
 
 async function saveCache() {
@@ -143,8 +189,45 @@ async function saveCache() {
   dirty = 0;
 }
 
+// Overlay the cache onto the SERVED papers-<key>.json files (mirrors
+// build-data.mjs applyInformsEditors — fill-empty-only, never overwriting a
+// Crossref-provided name), so a crawl updates the live site on the very next
+// commit + push instead of waiting for the next daily build to fold it in.
+// Writes are minified like the build's writeJson; an unchanged file is left
+// untouched, so it produces no git diff.
+async function applyToPapers() {
+  let total = 0;
+  for (const src of SOURCES) {
+    const p = join(DATA_DIR, src.file);
+    if (!existsSync(p)) continue;
+    const rows = JSON.parse(await readFile(p, 'utf8'));
+    let filled = 0;
+    for (const row of rows) {
+      const doi = (row.DOI || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase();
+      const rec = doi && cache[doi];
+      if (!rec) continue;
+      if (!row['Senior Editor'] && rec.se) { row['Senior Editor'] = rec.se; filled++; }
+      if (src.ae && !row['Associate Editor'] && rec.ae) { row['Associate Editor'] = rec.ae; filled++; }
+    }
+    if (filled) {
+      await awrite(p, JSON.stringify(rows));
+      console.log(`  ${src.key}: filled ${filled} SE/AE fields into ${src.file}`);
+      total += filled;
+    }
+  }
+  console.log(total
+    ? `✓ Applied the cache to the served papers files (${total} fields) — commit lit/data/ and the site updates on push.`
+    : '  papers files already carry every cached SE/AE name — nothing to apply.');
+}
+
+if (APPLY_ONLY) {
+  await applyToPapers();
+  process.exit(0);
+}
+
 outer:
 for (const src of SOURCES) {
+  if (JOURNAL && src.key !== JOURNAL) continue;
   const dois = await doiList(src);
   console.log(`${src.key}: ${dois.length} DOIs, ${dois.filter(d => cache[d]).length} already cached`);
   for (const doi of dois) {
@@ -192,8 +275,12 @@ const withEditors = Object.values(cache).filter(v => v.se || v.ae).length;
 console.log(`\n✓ Wrote ${CACHE_PATH}`);
 console.log(`  This session: ${processed} pages fetched, ${found} new editor records.`);
 console.log(`  Cache now maps ${Object.keys(cache).length} DOIs (${withEditors} with editors).`);
-console.log('\nNext: commit and push the updated file, e.g.');
-console.log('  git add lit/data/_informs-editors.json');
+// Update the online database too: push the collected names straight into the
+// served papers files so the site shows them as soon as the commit deploys
+// (per the owner) — the daily build's own overlay stays the steady-state path.
+if (!NO_APPLY) await applyToPapers();
+console.log('\nNext: commit and push the updated files, e.g.');
+console.log('  git add lit/data');
 console.log('  git commit -m "lit: refresh ISR/Marketing Science editor index"');
 console.log('  git push');
-console.log('The next scheduled data build folds the editors in automatically.');
+console.log('The site updates when the push deploys; the daily build keeps folding the cache in.');

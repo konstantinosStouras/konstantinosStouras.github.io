@@ -254,6 +254,18 @@ names (`lit/data/_informs-editors.json`) come from
 `lit/_scraper/informs-editors-local.mjs` run locally (pubsonline blocks
 cloud IPs too) — until that cache is first committed, only the few papers
 whose Crossref abstract/assertion carries the History line have SE/AE.
+**Marketing Science is crawled FIRST** (`mksc` before `isre`, newest papers
+first — per the owner: MkSc SE coverage, e.g. Olivier Toubia's accepted
+papers, is the priority); a sitting can be bounded with `--journal mksc`,
+`--last-years 20` / `--since 2006` (year floor) and `LIT_EDITORS_DELAY_MS`
+(pace, floor 700 ms) — `crawl-mksc-editors.bat` is the one-click
+MkSc-last-20-years run. **Every crawl ends by APPLYING the cache onto the
+served `papers-mksc.json`/`papers-isre.json`** (`applyToPapers`,
+fill-empty-only — the same semantics as build-data's `applyInformsEditors`),
+so collected names go live on the very next commit + push instead of waiting
+for the daily build (`--no-apply` skips; `--apply-only` applies without
+crawling, e.g. after a console harvest — commit `lit/data/`, not just the
+cache file).
 When even a local Node run is Cloudflare-blocked (its TLS handshake is
 fingerprinted — a valid cf_clearance + matching UA can still fail),
 `lit/_scraper/informs-editors-console.js` is the fallback: pasted into the

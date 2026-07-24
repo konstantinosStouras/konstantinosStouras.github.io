@@ -13,7 +13,10 @@
  *   2. Press F12 → Console tab. (First time, Chrome asks you to type
  *      "allow pasting" — do that.)
  *   3. Paste this WHOLE file's contents and press Enter. It starts crawling
- *      immediately, newest papers first, and logs progress every 25 pages.
+ *      immediately — MARKETING SCIENCE FIRST (mksc before isre, newest papers
+ *      first; per the owner, MkSc Senior-Editor coverage — e.g. Olivier
+ *      Toubia's accepted papers — is the priority, and the whole MkSc
+ *      back-catalogue is one ~1h sitting) — and logs progress every 25 pages.
  *   4. Let it run as long as you like — progress is saved in localStorage
  *      continuously, so closing the tab or pasting again another day RESUMES
  *      where it stopped. Helpers while it runs:
@@ -21,14 +24,20 @@
  *        litEdDownload()  download the cache built so far
  *        litEdRun(200)    resume, capped at 200 pages this sitting
  *        litEdRun(Infinity, true)   also re-check pages cached as "none"
+ *        litEdRun(Infinity, false, 'mksc')   this sitting: one journal only
+ *        litEdRun(Infinity, false, 'mksc', 2006)   …and only Year ≥ 2006
+ *        litEdPace(700)   pages/delay in ms (default 1500; floor 700 — polite)
  *   5. When it finishes (or whenever you stop), it downloads
  *      _informs-editors.json. Move it over lit\data\_informs-editors.json in
- *      the repo (replace), then:
- *        git add lit/data/_informs-editors.json
+ *      the repo (replace), then apply it to the SERVED papers files and push —
+ *      the site shows the SE/AE chips as soon as the push deploys:
+ *        cd lit\_scraper
+ *        node informs-editors-local.mjs --apply-only
+ *        git add lit/data
  *        git commit -m "lit: refresh ISR/MkSc editor index"
  *        git pull --rebase origin master
  *        git push
- *      The next daily build folds the editors in automatically.
+ *      (The daily build keeps folding the cache in regardless.)
  *
  * It seeds from the cache already committed on master (so nothing is ever
  * re-fetched) plus this browser's own saved progress, and its output is
@@ -127,11 +136,14 @@
 
   const SITE = 'https://stouras.com/lit/data/';
   const RAW = 'https://raw.githubusercontent.com/konstantinosStouras/konstantinosStouras.github.io/master/lit/data/_informs-editors.json';
+  // mksc first — Marketing Science SE coverage is the current priority (per
+  // the owner); within each journal the DOI list is newest-first already.
   const SOURCES = [
-    { key: 'isre', file: 'papers-isre.json', ae: true },
     { key: 'mksc', file: 'papers-mksc.json', ae: false },
+    { key: 'isre', file: 'papers-isre.json', ae: true },
   ];
-  const DELAY_MS = 1500, SAVE_EVERY = 25, LS_KEY = 'litInformsEditorsCache';
+  const SAVE_EVERY = 25, LS_KEY = 'litInformsEditorsCache';
+  let delayMs = 1500; // litEdPace(ms) overrides; floored at 700 — polite host
 
   const cache = {};
   let stop = false, running = false;
@@ -147,11 +159,20 @@
     a.click();
     const withEd = Object.values(sorted).filter(v => v && (v.se || v.ae)).length;
     console.log(`⬇ Downloaded _informs-editors.json — ${Object.keys(sorted).length} DOIs, ${withEd} with editors.`);
-    console.log('Move it over lit\\data\\_informs-editors.json (replace), then: git add … && git commit … && git pull --rebase origin master && git push');
+    console.log('Move it over lit\\data\\_informs-editors.json (replace), then push the names into the SERVED papers files too:');
+    console.log('  cd lit\\_scraper && node informs-editors-local.mjs --apply-only');
+    console.log('  git add lit/data && git commit -m "lit: refresh ISR/MkSc editor index" && git pull --rebase origin master && git push');
+    console.log('The site shows the SE/AE chips as soon as the push deploys.');
   }
 
-  async function run(max = Infinity, retryMisses = false) {
+  async function run(max = Infinity, retryMisses = false, journal = '', since = 0) {
     if (running) { console.warn('Already running — litEdStop() first.'); return; }
+    journal = String(journal || '').toLowerCase();
+    if (journal && !SOURCES.some(s => s.key === journal)) {
+      console.error(`Unknown journal "${journal}" — use one of: ${SOURCES.map(s => s.key).join(', ')}`);
+      return;
+    }
+    since = parseInt(since, 10) || 0;
     running = true; stop = false;
     // Seed: this browser's saved progress + the cache already committed on master.
     try { Object.assign(cache, JSON.parse(localStorage.getItem(LS_KEY) || '{}')); } catch (e) { /* ignore */ }
@@ -167,9 +188,12 @@
     try {
       outer:
       for (const src of SOURCES) {
+        if (journal && src.key !== journal) continue;
         let dois;
         try {
-          const rows = await (await fetch(SITE + src.file)).json();
+          let rows = await (await fetch(SITE + src.file)).json();
+          // Year floor (litEdRun(…, …, …, 2006)): unparseable years are kept.
+          if (since) rows = rows.filter(r => { const y = parseInt(r.Year, 10); return !y || y >= since; });
           dois = rows.map(r => (r.DOI || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase()).filter(Boolean);
         } catch (e) {
           console.error(`Could not fetch ${src.file} (the page's CSP may block cross-origin fetches):`, e.message);
@@ -185,13 +209,13 @@
           processed++;
           try {
             const res = await fetch('/doi/' + doi);
-            if (!res.ok) { console.warn(`  ${doi}: HTTP ${res.status}`); await sleep(DELAY_MS); continue; }
+            if (!res.ok) { console.warn(`  ${doi}: HTTP ${res.status}`); await sleep(delayMs); continue; }
             const ed = editorsFromPageHtml(await res.text());
             if (ed && (ed.se || ed.ae)) { cache[doi] = { se: ed.se, ae: src.ae ? ed.ae : '' }; found++; }
             else cache[doi] = { none: true };
             if (processed % SAVE_EVERY === 0) { saveLocal(); console.log(`  …${processed} pages fetched, ${found} with editors`); }
           } catch (e) { console.warn(`  ${doi}: ${e.message}`); }
-          await sleep(DELAY_MS);
+          await sleep(delayMs);
         }
       }
     } finally { saveLocal(); running = false; }
@@ -203,6 +227,7 @@
 
   const G = (typeof window !== 'undefined') ? window : globalThis;
   G.litEdRun = run; G.litEdStop = () => { stop = true; }; G.litEdDownload = download;
+  G.litEdPace = (ms) => { delayMs = Math.max(700, parseInt(ms, 10) || 1500); console.log(`Pace set to ${delayMs} ms/page.`); };
   globalThis.__litEd = { parseInformsEditors, editorsFromPageHtml }; // parity-test hook (harmless in the browser)
 
   if (typeof document !== 'undefined') {
