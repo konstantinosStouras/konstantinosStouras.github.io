@@ -1,7 +1,7 @@
 # Search for Knowledge, with and without AI (`search-v2`)
 
 A self-contained behavioral experiment, served as static files on GitHub Pages at
-**https://stouras.com/lab/search-v2/**. No build step, no framework, no external
+**https://www.stouras.com/lab/search-v2/**. No build step, no framework, no external
 CDNs — vanilla HTML/CSS/JS with relative URLs only.
 
 Subjects search a hidden landscape of 100 positions (each hiding a value 0–100¢)
@@ -343,7 +343,7 @@ come from the session settings, so no `?arm` is needed. Prolific substitutes the
 ID macros:
 
 ```
-https://stouras.com/lab/search-v2/?code=WAVE1&PROLIFIC_PID={{%PROLIFIC_PID%}}&STUDY_ID={{%STUDY_ID%}}&SESSION_ID={{%SESSION_ID%}}
+https://www.stouras.com/lab/search-v2/?code=WAVE1&PROLIFIC_PID={{%PROLIFIC_PID%}}&STUDY_ID={{%STUDY_ID%}}&SESSION_ID={{%SESSION_ID%}}
 ```
 
 Re-entry after completion is blocked (the completion code is shown again).

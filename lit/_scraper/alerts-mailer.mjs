@@ -69,12 +69,12 @@ const FT50_DIR  = path.join(__dirname, '..', 'data-ft50');
 // stouras.com/lit/changelog.json, and read here from the checkout. Adding an
 // entry dated ~today makes the next daily run e-mail it to feature subscribers.
 const CHANGELOG_FILE = path.join(__dirname, '..', 'changelog.json');
-const SITE_URL  = 'https://stouras.com/lit/';
+const SITE_URL  = 'https://www.stouras.com/lit/';
 // The ABS satellite shards live in sibling repos, each served from its own Pages
 // site at stouras.com/<repo>/data/. They are fetched over HTTP at run time (they
 // are NOT in this checkout); missing shards 404 and are skipped, exactly like the
 // page's own runtime merge.
-const SHARD_BASE  = 'https://stouras.com/';
+const SHARD_BASE  = 'https://www.stouras.com/';
 const SHARD_REPOS = ['lit-data-abs4', 'lit-data-abs3-omecon', 'lit-data-abs3-rest'];
 // Maintainer contact surfaced in every alert e-mail (help / feedback, and the
 // List-Unsubscribe mailto). Keep in sync with the Feedback modal in index.html.

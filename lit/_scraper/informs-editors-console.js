@@ -134,7 +134,7 @@
   }
   // ── end vendored parser ───────────────────────────────────────────────────
 
-  const SITE = 'https://stouras.com/lit/data/';
+  const SITE = 'https://www.stouras.com/lit/data/';
   const RAW = 'https://raw.githubusercontent.com/konstantinosStouras/konstantinosStouras.github.io/master/lit/data/_informs-editors.json';
   // mksc first — Marketing Science SE coverage is the current priority (per
   // the owner); within each journal the DOI list is newest-first already.
