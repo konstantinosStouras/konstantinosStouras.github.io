@@ -37,6 +37,40 @@ const today = new Date().toISOString().slice(0, 10);
 let pass = 0, fail = 0;
 const ok = (c, m) => { c ? pass++ : (fail++, console.log('  FAIL:', m)); };
 
+// 0) Unit checks of the same-work duplicate rule (see collapseSameWork in
+// build-data.mjs): the three collapse classes, and the look-alikes that must
+// always be kept apart.
+const { sameWorkDup, collapseSameWork } = await import('./build-data.mjs');
+const row = (o) => ({ Title: 'Dynamic Pricing under Demand Uncertainty', Authors: 'Jane Doe, Wei Chen',
+  Volume: '70', Issue: '2', Page: '101-120', Year: '2024', DOI: 'https://doi.org/10.1287/x.2024.0001',
+  Abstract: 'a', ...o });
+ok(sameWorkDup(row({}), row({ DOI: 'https://doi.org/10.2307/999', Page: '101' })) === 'a',
+  'class a: same volume/issue/first-page under a second DOI collapses');
+ok(sameWorkDup(row({}), row({ DOI: 'https://doi.org/10.1287/x.2024.001', Volume: '', Issue: '', Page: '', Year: '2023', Status: 'Articles in Advance' })) === 'b',
+  'class b: an online-first stub of a published row collapses');
+ok(sameWorkDup(row({ Volume: '', Issue: '', Page: '' }),
+  row({ Volume: '', Issue: '', Page: '', DOI: 'https://doi.org/10.1287/x.2024.01' })) === 'c',
+  'class c: two Articles-in-Advance stubs of one work collapse');
+ok(sameWorkDup(row({}), row({ Volume: '71', Year: '2025', DOI: 'https://doi.org/10.1287/x.2025.0002' })) === null,
+  'same title in a different volume (annual recurring item) is kept');
+ok(sameWorkDup(row({}), row({ Page: '201-220', DOI: 'https://doi.org/10.1287/x.2024.0002' })) === null,
+  'same issue, different pages (multi-part article) is kept');
+ok(sameWorkDup(row({}), row({ Authors: 'Alex Mason', DOI: 'https://doi.org/10.1287/x.2024.0002', Page: '101' })) === null,
+  'conflicting author lists never collapse');
+ok(sameWorkDup(row({ Authors: '', Volume: '', Issue: '', Page: '' }),
+  row({ Authors: '', Volume: '', Issue: '', Page: '', DOI: 'https://doi.org/10.1111/j.2' })) === null,
+  'authorless stubs (special-issue notices) never collapse');
+ok(sameWorkDup(row({ Title: 'Errata' }), row({ Title: 'Errata', DOI: 'https://doi.org/10.1/2', Page: '101' })) === null,
+  'short front-matter titles never collapse');
+{
+  const stub = row({ Volume: '', Issue: '', Page: '', Year: '2023', DOI: 'https://doi.org/10.1287/x.2023.9', Abstract: '', CitedBy: 55, Preprint: 'https://arxiv.org/abs/1', PreprintSrc: 'arxiv' });
+  const full = row({});
+  const outRows = collapseSameWork([stub, full]);
+  ok(outRows.length === 1 && outRows[0] === full, 'collapse keeps the fuller registration');
+  ok(full.CitedBy === 55 && full.Preprint === 'https://arxiv.org/abs/1',
+    'collapse folds the dropped row\'s enrichment into the kept row');
+}
+
 // 1) Seed a full mock build.
 run({});
 const ms0 = rd('papers-ms.json');
@@ -80,6 +114,39 @@ run({ LIT_INCREMENTAL: '1' });
 const t2 = rd('papers-ms.json').find(p => p.DOI === target.DOI);
 ok(t2 && t2.Preprint === target.Preprint && t2.PreprintSrc === 'arxiv', 'Preprint link preserved across re-fetch');
 ok(t2 && t2.CitedBy === 9999 && t2.CitedBySrc === 'oa', 'boosted CitedBy + source preserved (Crossref floor is lower)');
+
+// 5) Duplicate-registration guard: a paper we already list must never be
+// appended a second time when Crossref serves it under another DOI. Rewrite a
+// committed MS paper as a no-volume online-first stub with a variant DOI; the
+// incremental re-fetch (which carries the real record) must ADOPT the real DOI
+// onto that row — preserving its enrichment and registry date — not add a row.
+const msD = rd('papers-ms.json');
+const victimIdx = msD.findIndex(p => p.Volume && p.Authors);
+const victim = { ...msD[victimIdx] };
+const stubDoi = victim.DOI.replace(/^https?:\/\/doi\.org\//i, '').toLowerCase() + '-oldreg';
+msD[victimIdx] = {
+  ...victim, DOI: 'https://doi.org/' + stubDoi,
+  Volume: '', Issue: '', Page: '', Status: 'Articles in Advance',
+  Preprint: 'https://arxiv.org/abs/2401.00001', PreprintSrc: 'arxiv',
+};
+writeFileSync(join(DATA, 'papers-ms.json'), JSON.stringify(msD));
+const regD = rd('_registry.json');
+const realDoi = victim.DOI.replace(/^https?:\/\/doi\.org\//i, '').toLowerCase();
+regD[stubDoi] = '2020-01-01';
+delete regD[realDoi];
+writeFileSync(join(DATA, '_registry.json'), JSON.stringify(regD));
+
+const out5 = run({ LIT_INCREMENTAL: '1' });
+const ms5 = rd('papers-ms.json');
+const reg5 = rd('_registry.json');
+const hits = ms5.filter(p => p.Title === victim.Title);
+ok(hits.length === 1, 'same work under a second DOI is not appended as a new row');
+ok(hits[0] && hits[0].DOI === victim.DOI, 'the fuller registration\'s DOI is adopted onto the existing row');
+ok(hits[0] && hits[0].Preprint === 'https://arxiv.org/abs/2401.00001', 'enrichment survives the DOI adoption');
+ok(reg5[realDoi] === '2020-01-01', 'registry date migrates with the DOI (not presented as newly added)');
+ok(!rd('recent.json').some(p => p.DOI === victim.DOI && p['Date Added'] === today),
+  'an adopted re-registration does not enter recent.json as new');
+ok(ms5.length === msD.length, 'row count unchanged by the adoption');
 
 rmSync(DATA, { recursive: true });
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -122,7 +122,37 @@ or the citations job — overlapping fires queue and coalesce) is what makes a
 one); a rejected push re-runs the idempotent incremental pass against the fresh
 tip. Offline test: `node lit/_scraper/incremental-selftest.mjs` (mock, no network).
 NOTE: this build env's egress blocks Crossref (403), so the incremental pass only
-does real work on the GitHub Actions runners. **Journal types & the FT50 merge:** a "Journal types"
+does real work on the GitHub Actions runners. **Duplicate registrations are
+collapsed — no paper is ever listed twice:** Crossref keeps superseded
+registrations alive (INFORMS's zero-padded DOI switch `.612`→`.0612`, POM's
+Wiley→SAGE re-deposit, JSTOR `10.2307` legacy DOIs beside the publisher's own,
+JORS's Palgrave→T&F move, online-first stubs never withdrawn), so a DOI-keyed
+harvest would list the same paper under two DOIs. `collapseSameWork` in
+`build-data.mjs` (replicated near-verbatim in the FT50 + shard pipelines, like
+the pre-print machinery) collapses rows that are provably the SAME work —
+identical fully-collapsed title (≥15 chars) + a shared author surname + either
+the same volume/issue/first-page or a no-volume/no-issue stub within a small
+year window (stub-vs-published ≤3y, stub-vs-stub ≤1y) — keeping the fullest
+registration (`dupRank`: published > stub, abstract, page range, non-JSTOR/
+non-typo DOI) and folding the dropped row's enrichment (`CitedBy`/`Preprint`)
+into the kept one. Deliberately conservative: recurring same-title items
+(annual editor reports, per-issue notices, multi-part articles) differ in
+volume/issue/page or authors and are always kept. The **incremental passes
+guard the same way when adding a new paper**: an unknown DOI whose
+title+authors match an existing row is never appended — the fuller
+registration's DOI is ADOPTED onto the existing row (enrichment preserved, the
+registry date migrated so it never re-surfaces as "recently added") or the
+lesser one skipped. The working-papers pipeline has its own collapse
+(`collapseWpDuplicates`/`wpSameWork` in its `build-data.mjs`: re-posted SSRN
+versions and the same paper on two hosts keep the newest posting, earliest
+"Date Added"; `wpSameWork` also gates the submission ingest's duplicate check),
+and the ms-old Google-Sheet scraper (`mnsc-scraper` repo, `_same_work`) applies
+the same guard. The committed back-catalogues were deduped once via the
+maintenance CLI `lit/_scraper/dedupe-data.mjs` (`--dir <dataset>` [`--wp`]
+[`--dry-run`]; ~20k duplicate rows removed across native/FT50/shards/WP, small
+derived files refreshed; authors/affiliations left to the next daily build).
+Covered by `incremental-selftest.mjs` (rule unit checks + a DOI-adoption
+scenario) and the WP selftests. **Journal types & the FT50 merge:** a "Journal types"
 filter (left of Journals) offers UTD24 / FT50 / ABS 4/4* / ABS 3; a type chip
 expands to its journal set and unions with the Journals selection. Each paper
 card carries a small **badge left of its title** showing the single MOST

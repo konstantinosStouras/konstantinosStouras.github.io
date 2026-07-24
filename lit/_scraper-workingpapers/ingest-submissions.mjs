@@ -50,7 +50,8 @@ import { existsSync } from 'node:fs';
 import { resolve, join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { wpRecordFromWork, loadCatalog, WP_SOURCES, recKey, normName, nameParts, matchPublished } from './build-data.mjs';
+import { wpRecordFromWork, loadCatalog, WP_SOURCES, recKey, normName, nameParts, matchPublished,
+  wpSameWork, collapseWpDuplicates } from './build-data.mjs';
 import { pickPreprint, preprintFromDoi } from '../_scraper/build-data.mjs';
 import { normTitle } from '../_scraper/ec-pages.mjs';
 
@@ -245,9 +246,16 @@ export function decideSubmission(work, ctx) {
   // OpenAlex inverted index, which the Crossref fallback doesn't supply).
   if (!rec.Abstract && work && work.abstractText) rec.Abstract = stripTags(work.abstractText).slice(0, MAX_ABSTRACT);
 
-  // Gate 1 — not already in the working-papers archive.
+  // Gate 1 — not already in the working-papers archive. recKey catches the
+  // exact same registration; wpSameWork catches the same PAPER archived under
+  // another posting (a revised SSRN id, the arXiv twin of an SSRN row).
   const key = recKey(rec);
   if (ctx.byKey.has(key)) return { status: 'duplicate', rec, key, reason: 'already-in-archive' };
+  for (const archived of ctx.byKey.values()) {
+    if (wpSameWork(archived, rec)) {
+      return { status: 'duplicate', rec, key, reason: 'already-in-archive' };
+    }
+  }
 
   // Gate 2 — at least one author already in the catalog.
   const authors = String(rec.Authors || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -263,6 +271,9 @@ export function decideSubmission(work, ctx) {
 // crawler's author counts (authorCount) from the previous meta; refreshes the
 // live catalog-author total. Mirrors the crawler's write section exactly.
 export async function regroupAndWrite(byKey, prevMeta, authorsInCatalog, dir) {
+  // Same-paper collapse as the crawler's write path (build-data.mjs step 3c),
+  // so this writer can never leave duplicate postings behind either.
+  collapseWpDuplicates(byKey);
   const bySource = {};
   for (const key of Object.keys(WP_SOURCES)) bySource[key] = [];
   for (const r of byKey.values()) if (bySource[r.JKey]) bySource[r.JKey].push(r);
