@@ -97,6 +97,8 @@ eq(canonEditorNames('Olivier Tobuia'), 'Olivier Toubia', '"Olivier Tobuia" heale
 eq(canonEditorNames('Olivier Touba'), 'Olivier Toubia', '"Olivier Touba" healed');
 eq(canonEditorNames('Olivier Toubia'), 'Olivier Toubia', 'canonical spelling passes through');
 eq(canonEditorNames('Anthony Dukes; Olivier Tobuia'), 'Anthony Dukes; Olivier Toubia', 'multi-name list heals only the typo');
+eq(canonEditorNames('Antony Dukes'), 'Anthony Dukes', '"Antony Dukes" healed');
+eq(canonEditorNames('Heng Xu'), 'Heng Xu', '"Heng Xu" untouched (a real distinct editor, not a typo of Hong Xu)');
 eq(canonEditorNames('Catherine Tucker'), 'Catherine Tucker', 'unknown name untouched');
 eq(canonEditorNames(''), '', 'empty passes through');
 

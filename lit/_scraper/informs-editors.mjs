@@ -147,7 +147,11 @@ export function editorsFromPageHtml(html) {
 export const EDITOR_NAME_FIXUPS = {
   'olivier tobuia': 'Olivier Toubia',
   'olivier touba': 'Olivier Toubia',
+  'antony dukes': 'Anthony Dukes',
 };
+// NOT typos — distinct real editors that a fuzzy merge would wrongly fold:
+// "Heng Xu" vs "Hong Xu" (both ISR editors). Never add near-name pairs here
+// without confirming they are the SAME person.
 
 // Canonicalize a "Name; Name" editor list via EDITOR_NAME_FIXUPS.
 // Unknown names pass through untouched; falsy input is returned as-is.
