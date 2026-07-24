@@ -277,6 +277,15 @@ if pubsonline ever answers a runner, the backlog burns down online with no
 babysitting. It is listed in `ci-pause-backfills.bat`/`ci-resume-backfills.bat`
 like every other lit-data writer, so local crawls stay the sole writer while
 they run.
+**Known pubsonline name typos are canonicalized at ingest** ("Olivier
+Tobuia"/"Olivier Touba" → Olivier Toubia — the journal's own History-line
+misspellings, which would split one editor across several filter entries):
+`EDITOR_NAME_FIXUPS`/`canonEditorNames` in `informs-editors.mjs`, applied by
+informs-editors-local.mjs (cache load, new records, applyToPapers — heals
+already-applied rows too) and build-data.mjs (mapWork + applyInformsEditors)
+— deliberately NOT inside the parser, so the console harvester's vendored
+copy stays byte-identical (its raw output is healed on apply/build). Add new
+typos to that map as found.
 When even a local Node run is Cloudflare-blocked (its TLS handshake is
 fingerprinted — a valid cf_clearance + matching UA can still fail),
 `lit/_scraper/informs-editors-console.js` is the fallback: pasted into the

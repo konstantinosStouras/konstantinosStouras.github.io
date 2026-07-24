@@ -12,7 +12,7 @@
  */
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { parseInformsEditors, editorsFromPageHtml } from './informs-editors.mjs';
+import { parseInformsEditors, editorsFromPageHtml, canonEditorNames } from './informs-editors.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // Every parser fixture is recorded here so the console-harvester parity pass
@@ -91,6 +91,14 @@ eq(r.se, 'Anthony Dukes', 'label-less layout found via the Senior-Editor-mention
 
 r = scanPage('<html><body><p>No editorial metadata here at all.</p></body></html>');
 ok(r === null, 'page without any editor text → null (cached as a miss)');
+
+console.log('canonEditorNames: known pubsonline typos → canonical (ingest-side, NOT in the parser)');
+eq(canonEditorNames('Olivier Tobuia'), 'Olivier Toubia', '"Olivier Tobuia" healed');
+eq(canonEditorNames('Olivier Touba'), 'Olivier Toubia', '"Olivier Touba" healed');
+eq(canonEditorNames('Olivier Toubia'), 'Olivier Toubia', 'canonical spelling passes through');
+eq(canonEditorNames('Anthony Dukes; Olivier Tobuia'), 'Anthony Dukes; Olivier Toubia', 'multi-name list heals only the typo');
+eq(canonEditorNames('Catherine Tucker'), 'Catherine Tucker', 'unknown name untouched');
+eq(canonEditorNames(''), '', 'empty passes through');
 
 console.log('console harvester: vendored parser parity (informs-editors-console.js)');
 await import(pathToFileURL(join(__dirname, 'informs-editors-console.js')).href);
