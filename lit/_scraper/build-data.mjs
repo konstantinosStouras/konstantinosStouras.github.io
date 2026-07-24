@@ -477,6 +477,17 @@ function regKey(row) {
   return row._doi || ('t:' + normTitle(row.Title) + '|' + row.Year);
 }
 
+// Tie-break equal-rank rows newest-added-first. pubRank cannot order an
+// Articles-in-Advance block (no volume/issue/page to grade), which froze those
+// rows in registry-key (≈oldest-DOI-first) order — the newest advance article
+// sank to the BOTTOM of its block. The registry's first-seen date is the one
+// chronology those rows do have: a row not yet registered was added THIS run
+// (it is stamped right after these sorts), so it ranks newest; the un-dated
+// onboarding back-catalogue ('') keeps its stable regKey order at the end.
+function addedCmp(regMap, a, b) {
+  return cmp(regMap[regKey(b)] ?? '9999', regMap[regKey(a)] ?? '9999');
+}
+
 // ── same-work duplicate collapse ────────────────────────────────────────────
 // Crossref keeps superseded registrations alive: publishers re-register the
 // same article under a second DOI (INFORMS's zero-padding switch
@@ -2360,12 +2371,15 @@ async function main() {
   }
 
   // 4. Deterministic order per source, then combined order for aggregates.
+  // (The registry loads here, before updateRegistry below, because the
+  // added-date tiebreak needs the PREVIOUS run's first-seen dates.)
+  const reg = await loadRegistry();
   for (const k of sourceOrder) {
-    bySource[k].sort((a, b) => (b._rank - a._rank) || cmp(regKey(a), regKey(b)));
+    bySource[k].sort((a, b) => (b._rank - a._rank) || addedCmp(reg.map, a, b) || cmp(regKey(a), regKey(b)));
   }
   const allPapers = sourceOrder.flatMap(k => bySource[k]);
   // newest-first across sources, so first-run registry seeding is sensible
-  const allByRank = [...allPapers].sort((a, b) => (b._rank - a._rank) || cmp(regKey(a), regKey(b)));
+  const allByRank = [...allPapers].sort((a, b) => (b._rank - a._rank) || addedCmp(reg.map, a, b) || cmp(regKey(a), regKey(b)));
 
   // Pre-print (arXiv/SSRN) open-access links — cached + incremental. Kept
   // non-fatal so a slow/failed OpenAlex run never aborts the data build; the
@@ -2393,7 +2407,6 @@ async function main() {
   }
   applyCitations(allPapers, citationsCache);
 
-  const reg = await loadRegistry();
   const registry = updateRegistry(allByRank, reg);
 
   const authors = buildAuthors(allPapers);
@@ -2574,7 +2587,7 @@ async function incrementalMain() {
       }
     }
     if (added || updated) changedSources.add(src.key);
-    existing.sort((a, b) => (b._rank - a._rank) || cmp(regKey(a), regKey(b)));
+    existing.sort((a, b) => (b._rank - a._rank) || addedCmp(regState.map, a, b) || cmp(regKey(a), regKey(b)));
     bySource[src.key] = existing;
     console.log(`  ${src.key}: +${added} new, ${updated} updated` +
       (dupSkipped ? `, ${dupSkipped} duplicate registration(s) skipped` : '') +
@@ -2590,7 +2603,7 @@ async function incrementalMain() {
   const ecRows = reInternalize(await loadJsonIfExists(join(DATA_DIR, 'papers-ec.json'), []));
 
   const allPapers = [...JOURNALS.flatMap(s => bySource[s.key]), ...pnasRows, ...ecRows];
-  const allByRank = [...allPapers].sort((a, b) => (b._rank - a._rank) || cmp(regKey(a), regKey(b)));
+  const allByRank = [...allPapers].sort((a, b) => (b._rank - a._rank) || addedCmp(regState.map, a, b) || cmp(regKey(a), regKey(b)));
 
   // A DOI adoption keeps the paper's original "Date Added": seed the new key
   // from the old key's registry date so the re-registration is never presented

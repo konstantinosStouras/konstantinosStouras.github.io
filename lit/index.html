@@ -2991,6 +2991,15 @@ document.addEventListener('keydown', function(e) {
   document.querySelectorAll('.custom-select-dropdown.open').forEach(d => d.classList.remove('open'));
 });
 
+// Articles in Advance / Forthcoming / Accepted rows (peer-reviewed but not yet
+// assigned to an issue) are a journal's NEWEST content, so the year sorts rank
+// them ahead of that year's issue papers — mirroring the data files' pubRank
+// order (build-data.mjs), which the old (Year, Volume) comparator inverted by
+// sorting their empty Volume last and burying them pages deep. 'Other' is an
+// item-type tag and 'Working paper' is unpublished archive material: neither
+// outranks published issue papers.
+function statusRank(p) { var s = p['Status']; return (s && s !== 'Other' && s !== 'Working paper') ? 1 : 0; }
+
 function applyFilters() {
   // Any normal filter interaction exits the "Recently added papers" view.
   if (recentMode) { recentMode = false; updateRecentButton(); }
@@ -3069,8 +3078,8 @@ function applyFilters() {
 
   filtered.sort((a, b) => {
     switch(sort) {
-      case 'year-desc': return (b['Year']||'').localeCompare(a['Year']||'') || (b['Volume']||'').localeCompare(a['Volume']||'');
-      case 'year-asc': return (a['Year']||'').localeCompare(b['Year']||'');
+      case 'year-desc': return (b['Year']||'').localeCompare(a['Year']||'') || (statusRank(b) - statusRank(a)) || (b['Volume']||'').localeCompare(a['Volume']||'');
+      case 'year-asc': return (a['Year']||'').localeCompare(b['Year']||'') || (statusRank(a) - statusRank(b));
       case 'title': return (a['Title']||'').localeCompare(b['Title']||'');
       case 'editor': return (a['Accepting Editor']||'zzz').localeCompare(b['Accepting Editor']||'zzz');
     }
@@ -4076,7 +4085,7 @@ function dbResidualCols(residuals) {
   residuals.forEach(function (res) { if (res.col === 'abstract' || res.col === 'significance') { cols.push('a.' + res.col); needAbs = true; } else cols.push('p.' + res.col); });
   return { cols: cols.join(','), absJoin: needAbs ? ' LEFT JOIN papers_abs a ON a.id=p.id ' : '' };
 }
-function dbYearCmp(a, b) { return (b['Year'] || '').localeCompare(a['Year'] || '') || (b['Volume'] || '').localeCompare(a['Volume'] || ''); }
+function dbYearCmp(a, b) { return (b['Year'] || '').localeCompare(a['Year'] || '') || (statusRank(b) - statusRank(a)) || (b['Volume'] || '').localeCompare(a['Volume'] || ''); }
 // Residual verify on DISPLAY rows, which carry capitalized aliases (Title/…),
 // unlike the lowercase-column candidate rows LitQuery.applyResiduals expects.
 var DB_RES_CAP = { title: 'Title', authors: 'Authors', affiliations: 'Affiliations', abstract: 'Abstract', significance: 'Significance' };

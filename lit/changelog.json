@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "aia-lead-journal-lists",
+      "date": "2026-07-24",
+      "title": "Articles in Advance now lead each journal’s list",
+      "summary": "Sorting by newest year now shows a journal’s Articles in Advance, Forthcoming and Accepted papers at the top of the list, before that year’s published issues — they were previously buried below every issue of the year, so the newest papers sat pages deep. Newly added advance articles also surface first within that block, so the latest additions are the first thing you see when you open a journal.",
+      "url": "https://stouras.com/lit/"
+    },
+    {
       "id": "counter-consistency",
       "date": "2026-07-24",
       "title": "Complete author count and reconciled analytics totals",

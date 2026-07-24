@@ -141,17 +141,22 @@ export function emitDb(dataDir, sources, outPath, membership) {
   const insAbs = db.prepare('INSERT INTO papers_abs(id,abstract,significance) VALUES (?,?,?)');
   const insTri = db.prepare('INSERT INTO papers_tri(rowid,title,authors,affiliations,abstract) VALUES (?,?,?,?,?)');
 
-  // Insert in the page's EXACT default sort order — year-desc then Volume-desc
-  // by string localeCompare (matching applyFilters' `year-desc` comparator in
+  // Insert in the page's EXACT default sort order — year-desc, then
+  // Articles-in-Advance/Forthcoming/Accepted rows ahead of the year's issue
+  // papers (statusRank in index.html; a non-published Status outranks the empty
+  // published one, like the data files' pubRank), then Volume-desc by string
+  // localeCompare (matching applyFilters' `year-desc` comparator in
   // index.html), with a stable DOI+Title tiebreak. A row's id then equals its
   // global app-sort rank, so streaming any scope by id ASC yields precisely the
   // page's newest-first top-N (no fetch-all-and-sort, and the db-mode result set
   // matches the JSON path row-for-row). The content hash above is over the
   // stable DOI+Title order, so this ordering doesn't affect the rebuild gate.
-  // (year desc, volume desc) ONLY — JS sort is stable, so same-(year,volume)
+  // (year desc, status rank, volume desc) ONLY — JS sort is stable, so tied
   // rows keep their file order, matching the page's stable year-desc sort.
+  const statusRank = (p) => (p.Status && p.Status !== 'Other' && p.Status !== 'Working paper') ? 1 : 0;
   const insertRows = rows.slice().sort((a, b) =>
     String(b.p.Year || '').localeCompare(String(a.p.Year || '')) ||
+    (statusRank(b.p) - statusRank(a.p)) ||
     String(b.p.Volume || '').localeCompare(String(a.p.Volume || '')));
   const ADDED_KEYS = ['Date Added', 'DateAdded', 'Date_Added', 'Added', 'Added On', 'Added Date'];
   db.exec('BEGIN');
