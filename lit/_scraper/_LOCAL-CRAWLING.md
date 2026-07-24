@@ -247,7 +247,11 @@ node build-data.mjs
 REM Cloud-blocked (home IP required)
 cd lit\_scraper
 set "LIT_MAILTO=kstouras+litlocal@gmail.com"
-node informs-editors-local.mjs            REM --max 500 to bound; resume-safe
+node informs-editors-local.mjs            REM MkSc first (newest first); --max 500 / --journal mksc /
+                                          REM --last-years 20 to bound; resume-safe. Ends by APPLYING
+                                          REM the cache to the served papers files (--no-apply skips;
+                                          REM --apply-only = apply without crawling, e.g. after a
+                                          REM console harvest). One-click MkSc: crawl-mksc-editors.bat
 node informs-aia-local.mjs --app lit
 node informs-aia-local.mjs --app lit-ft50
 node pnas-concepts-local.mjs              REM --full to force a re-crawl
