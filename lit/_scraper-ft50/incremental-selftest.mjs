@@ -39,6 +39,21 @@ const today = new Date().toISOString().slice(0, 10);
 let pass = 0, fail = 0;
 const ok = (c, m) => { c ? pass++ : (fail++, console.log('  FAIL:', m)); };
 
+// 0) Unit check: the duplicate title key decodes HTML entities, so an
+// entity-variant registration of an already-listed paper still collapses
+// (a real JORS/JSTOR twin pattern; matchNorm alone would leak the entity's
+// NAME into the collapsed title and keep the pair apart).
+{
+  const { sameWorkDup } = await import('./build-data.mjs');
+  const r1 = { Title: 'A Heuristic Solution Procedure to Minimize T on a Single Machine',
+    Authors: 'R Maheswaran', Volume: '40', Issue: '3', Page: '293-297', Year: '1989',
+    DOI: 'https://doi.org/10.1057/jors.1989.39' };
+  const r2 = { ...r1, Title: 'A Heuristic Solution Procedure to Minimize _ T &nbsp; on a Single Machine',
+    Page: '293', DOI: 'https://doi.org/10.2307/2583342' };
+  ok(sameWorkDup(r1, r2) === 'a', 'HTML-entity title variant of the same registration collapses');
+  ok(sameWorkDup(r1, { ...r2, Authors: 'Alex Mason' }) === null, 'conflicting authors never collapse');
+}
+
 // 1) Seed a full mock build.
 run({});
 const ecta0 = rd('papers-ecta.json');
