@@ -67,6 +67,7 @@ import { fileURLToPath } from 'node:url';
 import { parseAcceptedPapers, normTitle } from './ec-pages.mjs';
 import { PNAS_SECTIONS, crawlConcepts, mergeIntoCache, isChallenged } from './pnas-crawl.mjs';
 import { parseInformsEditors, canonEditorNames } from './informs-editors.mjs';
+import { betterAbstract } from './informs-abstracts.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MOCK_RUN = process.env.LIT_MOCK === '1';
@@ -466,6 +467,28 @@ async function applyInformsEditors(bySource) {
     }
   }
   if (filled) console.log(`  informs editors: filled ${filled} SE/AE fields from the cache`);
+}
+
+// Overlay FULL abstracts from the committed pubsonline page cache built by
+// informs-abstracts-local.mjs / informs-abstracts-console.js (Crossref's
+// deposit for many INFORMS papers is a one-sentence teaser). UPGRADE-only
+// via betterAbstract — a fuller Crossref abstract is never replaced — and
+// applied in BOTH the daily build and the incremental pass, so a rebuild can
+// never regress a fixed abstract back to the teaser. Cache shape:
+//   { "<doi>": { a: "full abstract" } | { none: 1 } }
+async function applyInformsAbstracts(bySource) {
+  const path = MOCK ? join(MOCK_DIR, 'informs-abstracts.json') : join(DATA_DIR, '_informs-abstracts.json');
+  const cache = await loadJsonIfExists(path, {});
+  const map = cache.map || cache;
+  let upgraded = 0;
+  for (const src of JOURNALS) {
+    for (const p of bySource[src.key] || []) {
+      const rec = map[p._doi];
+      if (!rec || !rec.a) continue;
+      if (betterAbstract(p.Abstract, rec.a)) { p.Abstract = rec.a.slice(0, MAX_ABSTRACT); upgraded++; }
+    }
+  }
+  if (upgraded) console.log(`  informs abstracts: upgraded ${upgraded} abstracts from the page cache`);
 }
 
 // A no-volume/no-issue article counts as "Articles in Advance" only if it is
@@ -2340,6 +2363,7 @@ async function main() {
     console.log(`  ${src.key}: ${bySource[src.key].length} papers`);
   }
   await applyInformsEditors(bySource);
+  await applyInformsAbstracts(bySource);
 
   // 2. PNAS, filtered to the five topic sections. Official pnas.org labels
   // (local crawl) win; OpenAlex-derived approximations fill the gaps.
@@ -2611,6 +2635,7 @@ async function incrementalMain() {
 
   // Overlay cached Senior/Associate editors onto any new/updated rows (offline).
   await applyInformsEditors(bySource);
+  await applyInformsAbstracts(bySource);
 
   // PNAS + ACM EC are carried through unchanged (the daily build refreshes them),
   // but still take part in recent.json, the registry and the header counts.

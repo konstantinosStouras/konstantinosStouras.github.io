@@ -277,6 +277,22 @@ if pubsonline ever answers a runner, the backlog burns down online with no
 babysitting. It is listed in `ci-pause-backfills.bat`/`ci-resume-backfills.bat`
 like every other lit-data writer, so local crawls stay the sole writer while
 they run.
+**Full abstracts for INFORMS papers:** Crossref's deposited abstract for many
+INFORMS papers is a one-sentence TEASER (MkSc especially — ~800 of its ~2,300
+rows short/missing); the real abstract is on the pubsonline page.
+`lit/_scraper/informs-abstracts-local.mjs` (browser fallback
+`informs-abstracts-console.js` — vendored extractor, keep in sync,
+parity-checked by `informs-abstracts-selftest.mjs`) crawls ONLY needy papers
+(served Abstract < 300 chars; `--all` lifts), MkSc first then the other
+INFORMS journals, newest first, into `lit/data/_informs-abstracts.json`
+(doi → `{a}` | `{none:1}`), and every crawl/`--apply-only` ends by applying
+the cache onto the served papers files — **UPGRADE-only** (`betterAbstract`:
+materially-longer-only, so a page fragment can never replace fuller existing
+text). `build-data.mjs` re-applies the committed cache in BOTH the daily
+build and the incremental pass (`applyInformsAbstracts`), so a rebuild can
+never regress a fixed abstract back to the teaser. Same CI knobs as the
+editors crawler (`LIT_ABSTRACTS_DELAY_MS`/`_BUDGET_MS`/`_MAX_FAILS`,
+cookie via `LIT_CF_COOKIE`+`LIT_UA`).
 **Known pubsonline name typos are canonicalized at ingest** ("Olivier
 Tobuia"/"Olivier Touba" → Olivier Toubia — the journal's own History-line
 misspellings, which would split one editor across several filter entries):
