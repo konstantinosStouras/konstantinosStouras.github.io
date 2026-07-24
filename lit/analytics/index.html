@@ -758,6 +758,7 @@
   function aggregate(keys) {
     var out = {
       n: 0, a: 0, s: 0, p: 0, c: 0, ab: 0,
+      xn: 0,                  // non-research items excluded from this scope (toggle on)
       perYear: {},            // y -> {n,a,s,p,c,ab}
       perJournal: {},         // key -> n
       buckets: [0, 0, 0, 0, 0, 0]
@@ -778,6 +779,10 @@
         for (var y in ys) {
           var yy = +y; if (yy < S.yMin || yy > S.yMax) continue;
           var r = effRow(ys[y]);
+          // Track how many non-research items the toggle removed from this
+          // scope, so the scope line / tiles can say so (editorial-dimension
+          // rows carry no `x` — they are research-only in the data).
+          if (S.excludeNonResearch && ys[y].x) out.xn += ys[y].x.n;
           jn += r.n;
           out.n += r.n; out.a += r.a; out.s += r.s; out.p += r.p; out.c += r.c; out.ab += r.ab;
           var t = out.perYear[y] || (out.perYear[y] = { n: 0, a: 0, s: 0, p: 0, c: 0, ab: 0 });
@@ -1105,7 +1110,10 @@
     // When a dimension filter is active, only journals carrying it contribute.
     var jcount = (S.dim.name && activeDimVals().length) ? Object.keys(agg.perJournal).length : keys.length;
     var tiles = [
-      { label: 'Papers', value: fmt(agg.n) },
+      // When the "exclude non-research items" toggle is on, say so on the tile —
+      // this is why the count reads lower than the main browser's header, which
+      // counts everything (front matter, book reviews, errata included).
+      { label: 'Papers', value: fmt(agg.n), hint: S.excludeNonResearch ? (agg.xn ? fmt(agg.xn) + ' non-research items excluded' : 'research items only') : undefined },
       { label: 'Journals in scope', value: fmt(jcount) },
       { label: 'Avg. co-authors', value: avgCo.toFixed(2), hint: 'authors per paper' },
       { label: 'Solo-authored', value: agg.n ? pct(agg.s / agg.n) : '—' },
@@ -2495,13 +2503,21 @@
     var dimVals = activeDimVals();
     var isDefault = !chosenTypes.length && !chosenJ.length;
     var jcount = dimVals.length ? Object.keys(agg.perJournal).length : keys.length;
-    $('scopeTxt').innerHTML = '<strong>' + fmt(agg.n) + '</strong> papers · <strong>' + fmt(jcount) + '</strong> journals · ' + S.yMin + '–' + S.yMax + (isDefault ? ' · entire database' : '');
+    $('scopeTxt').innerHTML = '<strong>' + fmt(agg.n) + '</strong> papers · <strong>' + fmt(jcount) + '</strong> journals · ' + S.yMin + '–' + S.yMax + (isDefault ? ' · entire database' : '') +
+      (S.excludeNonResearch && agg.xn ? ' · excludes <strong>' + fmt(agg.xn) + '</strong> non-research items' : '');
     $('jbtnCnt').textContent = chosenJ.length ? chosenJ.length : 'All';
     // Default-scope hint: make clear the top statistics cover the whole database.
     var note = $('scopeNote');
     if (note) {
+      // At the default whole-database scope, also explain why the paper count
+      // can read lower than the main browser's header: the header counts every
+      // record, while this dashboard drops non-research items by default.
+      var totAll = DATA && DATA.totals && DATA.totals.papers;
       note.innerHTML = isDefault
-        ? 'Showing the <strong>entire database</strong> by default. Narrow it with <strong>Journal types</strong>, <strong>Journals</strong> or the year range above.'
+        ? 'Showing the <strong>entire database</strong> by default. Narrow it with <strong>Journal types</strong>, <strong>Journals</strong> or the year range above.' +
+          (S.excludeNonResearch && agg.xn && totAll
+            ? ' The main browser’s header counts everything — <strong>' + fmt(totAll) + '</strong> papers at this snapshot — while these figures exclude non-research items (editorial front matter, book reviews, errata, …); untick the box above to include them.'
+            : '')
         : '';
     }
 
@@ -2534,7 +2550,7 @@
   }
 
   // ── Year-range slider scale ─────────────────────────────────────────────
-  // The corpus spans ~1900–2027, but the papers people actually filter for
+  // The corpus spans ~1886–2027, but the papers people actually filter for
   // cluster in the last couple of decades, so a plain linear slider crams
   // every useful start year into the far-right sliver and picking, say, 2015
   // is fiddly. We remap the track with a LOGARITHMIC recency scale (position
