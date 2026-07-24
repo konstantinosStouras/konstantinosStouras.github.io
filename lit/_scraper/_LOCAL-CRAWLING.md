@@ -257,6 +257,11 @@ node informs-editors-local.mjs            REM MkSc first (newest first); --max 5
                                           REM CI also attempts this crawl on its own every 3 h
                                           REM (lit-editors-backfill.yml; exits cleanly when the runner
                                           REM is blocked) - it is in the pause list like the others.
+node informs-abstracts-local.mjs          REM FULL abstracts for INFORMS papers whose Crossref deposit
+                                          REM is a one-line teaser (MkSc first, only needy rows ~800
+                                          REM pages; upgrade-only apply). Cloudflare-blocked? paste
+                                          REM informs-abstracts-console.js in the browser, then
+                                          REM node informs-abstracts-local.mjs --apply-only
 node informs-aia-local.mjs --app lit
 node informs-aia-local.mjs --app lit-ft50
 node pnas-concepts-local.mjs              REM --full to force a re-crawl
