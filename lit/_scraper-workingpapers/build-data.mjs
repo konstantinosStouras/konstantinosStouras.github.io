@@ -434,6 +434,86 @@ export function recKey(r) {
   return doi || ('u:' + (r.Preprint || '').toLowerCase());
 }
 
+// ── same-paper duplicate collapse ───────────────────────────────────────────
+// recKey dedupes REGISTRATIONS, not works: authors post the same working paper
+// several times (a revised SSRN posting mints a fresh abstract id + DOI; the
+// same paper also lives on both SSRN and arXiv as two OpenAlex works), so the
+// archive can list one paper under several keys. Two archive rows are the SAME
+// working paper when their fully-collapsed titles are identical (≥ 15 chars,
+// so short generic titles can't match) AND they share an author surname (both
+// sides must list authors). No year window: a working paper revised years
+// later is still the same paper. The newest/fullest posting is kept — across
+// hosts too — and the dropped row's "Date Added"/enrichment folds in.
+const WP_HOST_PRIORITY = { 'wp-ssrn': 4, 'wp-arxiv': 3, 'wp-nber': 2, 'wp-osf': 1 };
+function wpDupTitleKey(title) {
+  const k = normTitle(title);
+  return k.length >= 15 ? k : '';
+}
+function wpSurnames(authors) {
+  return String(authors || '').split(/[,;]/).map((a) => {
+    const parts = stripAccents(String(a)).toLowerCase()
+      .replace(/[^a-z ]+/g, ' ').trim().split(/\s+/);
+    return parts[parts.length - 1] || '';
+  }).filter((s) => s.length > 1);
+}
+export function wpSameWork(r1, r2) {
+  if (!wpDupTitleKey(r1.Title) || wpDupTitleKey(r1.Title) !== wpDupTitleKey(r2.Title)) return false;
+  const sa = wpSurnames(r1.Authors), sb = wpSurnames(r2.Authors);
+  if (!sa.length || !sb.length) return false;
+  const set = new Set(sa);
+  return sb.some((s) => set.has(s));
+}
+function wpDupRank(r) {
+  return (parseInt(r.Year, 10) || 0) * 1e6 +
+    (String(r.Abstract || '').trim() ? 1e5 : 0) +
+    Math.min(r.CitedBy || 0, 9999) * 10 +
+    (WP_HOST_PRIORITY[r.JKey] || 0);
+}
+// Collapse duplicate postings in the archive map (keyed rows). Mutates byKey;
+// returns the number of rows dropped. Deterministic + idempotent, and safe
+// against the crawler re-adding a dropped posting: the re-crawled row collapses
+// again before anything is written.
+export function collapseWpDuplicates(byKey) {
+  const byTitle = new Map();
+  for (const [k, r] of byKey) {
+    const t = wpDupTitleKey(r.Title);
+    if (!t) continue;
+    const g = byTitle.get(t);
+    if (g) g.push(k); else byTitle.set(t, [k]);
+  }
+  let droppedCount = 0;
+  for (const keys of byTitle.values()) {
+    if (keys.length < 2) continue;
+    let merged = true;
+    while (merged) { // re-scan after each merge so 3+-row groups fully settle
+      merged = false;
+      for (let i = 0; i < keys.length && !merged; i++) {
+        for (let j = i + 1; j < keys.length; j++) {
+          const ri = byKey.get(keys[i]), rj = byKey.get(keys[j]);
+          if (!ri || !rj || !wpSameWork(ri, rj)) continue;
+          const keepJ = wpDupRank(rj) > wpDupRank(ri) ||
+            (wpDupRank(rj) === wpDupRank(ri) && keys[j] > keys[i]);
+          const keep = keepJ ? rj : ri, drop = keepJ ? ri : rj;
+          // Fold the dropped posting in: the earliest archive date is the
+          // honest "Date Added", and enrichment must never be lost.
+          const da = drop['Date Added'], ka = keep['Date Added'];
+          if (da && (!ka || da < ka)) keep['Date Added'] = da;
+          for (const f of ['Abstract', 'Affiliations']) {
+            if (!String(keep[f] || '').trim() && String(drop[f] || '').trim()) keep[f] = drop[f];
+          }
+          if ((drop.CitedBy || 0) > (keep.CitedBy || 0)) keep.CitedBy = drop.CitedBy;
+          byKey.delete(keepJ ? keys[i] : keys[j]);
+          keys.splice(keepJ ? i : j, 1);
+          droppedCount++;
+          merged = true;
+          break;
+        }
+      }
+    }
+  }
+  return droppedCount;
+}
+
 // ── Main ────────────────────────────────────────────────────────────────────
 async function main() {
   console.log(`lit working-papers build: ${PULL_DATE}${MOCK ? ' (MOCK)' : ''}; out=${DATA_DIR}`);
@@ -518,6 +598,11 @@ async function main() {
     retired++;
   }
   if (retired) console.log(`retired ${retired} now-published working paper(s) → linked as published-paper pre-prints`);
+
+  // 3c. Collapse duplicate postings of the same working paper (re-posted SSRN
+  //     versions, the same paper on two hosts) so it is listed exactly once.
+  const collapsed = collapseWpDuplicates(byKey);
+  if (collapsed) console.log(`collapsed ${collapsed} duplicate posting(s) of already-archived working papers`);
 
   // 4. Regroup by source and write everything.
   const bySource = {};
