@@ -164,7 +164,7 @@ function selftest() {
   eq(dataUrlToImage('data:image/jpeg;base64,/9j/').ext === 'jpg', 'jpeg → jpg ext');
   eq(dataUrlToImage('nope') === null, 'non-data-URL → null');
 
-  const md = renderMarkdown({ text: 'Tooltip please', name: 'Jane', email: 'j@x.com', url: 'https://stouras.com/lit/', uid: 'u1', ticket: 'LIT-260717-A9K2', createdAtIso: '2026-07-17T10:00:00.000Z' }, 'abc123', ['screenshot-1.png']);
+  const md = renderMarkdown({ text: 'Tooltip please', name: 'Jane', email: 'j@x.com', url: 'https://www.stouras.com/lit/', uid: 'u1', ticket: 'LIT-260717-A9K2', createdAtIso: '2026-07-17T10:00:00.000Z' }, 'abc123', ['screenshot-1.png']);
   eq(/^# Feedback — LIT-260717-A9K2/.test(md), 'markdown heading leads with the ticket');
   eq(md.includes('**Ticket:** LIT-260717-A9K2') && md.includes('**Status:** new'), 'markdown has ticket + status');
   eq(md.includes('Tooltip please') && md.includes('j@x.com') && md.includes('On page'), 'markdown has text + metadata');

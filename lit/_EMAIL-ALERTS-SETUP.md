@@ -239,7 +239,7 @@ never disagree. It is a plain, served JSON file (not build output). Shape:
       "date":    "2026-05-20",          // YYYY-MM-DD (UTC) the feature went live
       "title":   "Papers now show their citation counts",
       "summary": "One sentence describing it.",
-      "url":     "https://stouras.com/lit/"   // optional deep-link
+      "url":     "https://www.stouras.com/lit/"   // optional deep-link
     }
     // …
   ]

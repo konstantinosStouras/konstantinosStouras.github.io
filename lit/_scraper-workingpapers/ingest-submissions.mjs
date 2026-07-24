@@ -425,7 +425,7 @@ function renderSubmitterEmail(sub, o) {
     title ? ('Paper: ' + title) : '',
     sub.url ? ('Link: ' + sub.url) : '',
     ticket ? ('Reference: ' + ticket) : '', '',
-    'Thank you for helping grow The Lit.', '', 'Konstantinos', 'https://stouras.com/lit/',
+    'Thank you for helping grow The Lit.', '', 'Konstantinos', 'https://www.stouras.com/lit/',
   ].filter(x => x !== '');
   const text = lines.join('\n');
   const html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#241a1e;line-height:1.6">' +

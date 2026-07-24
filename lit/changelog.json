@@ -7,315 +7,315 @@
       "date": "2026-07-24",
       "title": "Articles in Advance now lead each journal’s list",
       "summary": "Sorting by newest year now shows a journal’s Articles in Advance, Forthcoming and Accepted papers at the top of the list, before that year’s published issues — they were previously buried below every issue of the year, so the newest papers sat pages deep. Newly added advance articles also surface first within that block, so the latest additions are the first thing you see when you open a journal.",
-      "url": "https://stouras.com/lit/"
+      "url": "https://www.stouras.com/lit/"
     },
     {
       "id": "counter-consistency",
       "date": "2026-07-24",
       "title": "Complete author count and reconciled analytics totals",
       "summary": "The header's “papers from N authors” stat now counts the authors of the ABS shard catalogs too (previously only the native and FT50 catalogs' authors were included), and Data Analytics now covers the catalog's full history back to 1886 (papers from 1886–1899 were silently left out of every figure) and says exactly how many non-research items its pre-ticked “exclude non-research items” switch is hiding — so the dashboard's paper total and the main page's header count reconcile at a glance — and match, up to papers added since the dashboard's daily snapshot, when the switch is unticked.",
-      "url": "https://stouras.com/lit/analytics/"
+      "url": "https://www.stouras.com/lit/analytics/"
     },
     {
       "id": "analytics-paper-comparison",
       "date": "2026-07-21",
       "title": "Compare individual papers in Data Analytics",
       "summary": "The Data Analytics dashboard has a new “Paper comparison” tab that takes the individual paper as the unit of analysis: add one or more papers (search the title or paste a DOI) and see them side by side — citations, disruptiveness (Dᵢ), team size, reference age and more, plus charts of how citations and Dᵢ compare across the papers' publication years and an impact-vs-disruption map. (The “Corpus overview” tab is now labelled as taking the journal as its unit of analysis.)",
-      "url": "https://stouras.com/lit/analytics/"
+      "url": "https://www.stouras.com/lit/analytics/"
     },
     {
       "id": "search-covers-working-papers",
       "date": "2026-07-20",
       "title": "Working papers join searches and Recently added",
       "summary": "Searching by title, author, abstract or affiliation with no journal selected now searches the entire database — the unpublished Working Papers archive included — so a working paper turns up in an ordinary search without first picking the Working Papers journal type. Newly added working papers now also appear in the “Recently added papers” view alongside published ones. Browsing by year alone or with only the pre-print toggle still shows published papers, and the headline paper count stays published-only.",
-      "url": "https://stouras.com/lit/"
+      "url": "https://www.stouras.com/lit/"
     },
     {
       "id": "default-filters-editorial",
       "date": "2026-07-19",
       "title": "Editor & area in your default filters",
       "summary": "Your account's Default filters can now go a level deeper: pick Management Science and the modal reveals its Accepting Editor and Area pickers; pick Information Systems Research or Marketing Science and you can pin a Senior or Associate Editor — the same editorial filters as the main page. Save them and you land straight on, say, one editor's Management Science papers every time you sign in. The lists load on demand, so simply choosing a journal never downloads anything extra.",
-      "url": "https://stouras.com/lit/"
+      "url": "https://www.stouras.com/lit/"
     },
     {
       "id": "default-filters-empty-overrides-site",
       "date": "2026-07-19",
       "title": "Make “show me everything” your default view",
       "summary": "In your account's Default filters, you can now save an empty selection (nothing picked) and it sticks: you'll land on the full catalog every time you sign in, instead of the site's built-in Management Science landing view. Save a set of journals or types and you still land on those — this just lets people who'd rather browse the whole database set that as their personal default. (Also fixed: the Save button no longer spills past the bottom of the Default-filters window on shorter screens.)",
-      "url": "https://stouras.com/lit/"
+      "url": "https://www.stouras.com/lit/"
     },
     {
       "id": "analytics-year-slider-scale",
       "date": "2026-07-19",
       "title": "Easier year range on the analytics dashboard",
       "summary": "The Data Analytics year-range slider now gives recent years far more of the track, so setting a start year in the 2010s or 2020s — where most searches land — is a comfortable drag instead of nudging a thumb through a cramped sliver at the far right. You can also click anywhere on the bar to send the nearest endpoint there. Decade ticks under the slider show the scale, and the presets and older years still work exactly as before.",
-      "url": "https://stouras.com/lit/analytics/"
+      "url": "https://www.stouras.com/lit/analytics/"
     },
     {
       "id": "suggest-preprint-for-published",
       "date": "2026-07-19",
       "title": "Suggest a pre-print for a published paper",
       "summary": "The \"Suggest a working paper\" tool on the Feedback page now also fills gaps in the catalog: if the link you paste turns out to match a paper already published in The Lit, it's attached to that paper as its open-access pre-print (so its card shows a \"Pre-print (Open Access)\" link) instead of being rejected — handy when the automated finder missed it because the working-paper title differed. And working papers that have since been published are now retired from the Working Papers list automatically and surface as the published paper's pre-print, so the same work is never shown twice.",
-      "url": "https://stouras.com/lit/feedback/"
+      "url": "https://www.stouras.com/lit/feedback/"
     },
     {
       "id": "analytics-author-timeline-autostart",
       "date": "2026-07-19",
       "title": "Author timelines start at the first publication year",
       "summary": "On the Data Analytics author spotlight, the 'Publications per year' chart now auto-starts its x-axis at the author's first publication instead of the empty early decades, so a researcher's output reads clearly at a glance. Set a start year yourself in the year-range slider and it's still honoured exactly.",
-      "url": "https://stouras.com/lit/analytics/"
+      "url": "https://www.stouras.com/lit/analytics/"
     },
     {
       "id": "suggest-working-paper",
       "date": "2026-07-18",
       "title": "Suggest a working paper",
       "summary": "Found an unpublished working paper on SSRN, arXiv, NBER or OSF that isn't in The Lit yet? Sign in and paste its link on the Feedback page: if one of its authors is already in the database and the paper isn't already here, it's checked and added automatically — usually within a few minutes — and you get an e-mail with the outcome.",
-      "url": "https://stouras.com/lit/feedback/"
+      "url": "https://www.stouras.com/lit/feedback/"
     },
     {
       "id": "author-search-accounts-fixes",
       "date": "2026-07-18",
       "title": "Sharper author pages, safer accounts",
       "summary": "A sweep of fixes across author search and accounts: an author's page now lists only that author's papers (name-alike researchers no longer bleed in) and finds them even when a link omits a middle initial; author matching ignores accents and apostrophe styles; the Data Analytics author spotlight covers authors with 3+ papers (was 5+), resolves 'first last' names to the credited spelling correctly, and names the candidates when a query is ambiguous. Signing in no longer discards filters you set yourself; names with apostrophes survive editing; and several profile/ORCID/merge edge cases were hardened.",
-      "url": "https://stouras.com/lit/"
+      "url": "https://www.stouras.com/lit/"
     },
     {
       "id": "analytics-full-catalog",
       "date": "2026-07-17",
       "title": "Data Analytics now covers every journal in the database",
       "summary": "The Data Analytics dashboard used to summarise only the native and FT50 journals, so its journal picker offered far fewer journals than the main browser's search filter. It now aggregates the full catalog — including all the ABS 4/4* and ABS 3 journals served from the satellite data shards (74 more journals, about 318,000 more papers) — so the dashboard's journal list, journal-type filters and every tile and chart cover exactly the same journals you can search on the main page.",
-      "url": "https://stouras.com/lit/analytics/"
+      "url": "https://www.stouras.com/lit/analytics/"
     },
     {
       "id": "orcid-account-merge",
       "date": "2026-07-17",
       "title": "One account per person — merge a duplicate ORCID registration",
       "summary": "If you registered with ORCID while already having a Lit account (e-mail or Google), you now have a one-click repair: on the duplicate account, open Edit profile → “Merge this account into my main account”. Your saved papers, notes, lists and alerts move into the account you keep, the duplicate sign-in is removed, and you can attach ORCID sign-in to your main account so the ORCID button always brings you back to it. Accounts with a verified ORCID can also enable “Continue with ORCID” directly from Edit profile — preventing duplicates before they happen. Author matching got smarter too: your publications are found under the name your papers are actually credited with (your ORCID Published Name), whatever spelling a link carries.",
-      "url": "https://stouras.com/lit/"
+      "url": "https://www.stouras.com/lit/"
     },
     {
       "id": "orcid-register",
       "date": "2026-07-17",
       "title": "Create your Lit account with ORCID",
       "summary": "The sign-in window now has a “Continue with ORCID” button next to “Continue with Google”: authenticate at orcid.org and your ORCID account becomes your Lit account — no password to invent, and your verified iD is linked automatically, so “My publications” (your papers in the database and your author analytics) works from your very first sign-in. If you already have a Lit account, keep using it and connect your ORCID from your profile instead.",
-      "url": "https://stouras.com/lit/"
+      "url": "https://www.stouras.com/lit/"
     },
     {
       "id": "feedback-tickets-and-confirmation",
       "date": "2026-07-17",
       "title": "Feedback now gets a ticket number and an e-mail confirmation",
       "summary": "Every message sent from the Feedback page now receives a unique reference number (like LIT-260717-A9K2), shown right after you submit. If you leave your e-mail, you also get a copy of your submission in your inbox — the exact message I receive, with your ticket number — and when your ticket is closed you hear back on how it was acted on. Anonymous feedback still works exactly as before (there is just no address to confirm to).",
-      "url": "https://stouras.com/lit/feedback/"
+      "url": "https://www.stouras.com/lit/feedback/"
     },
     {
       "id": "orcid-sign-in",
       "date": "2026-07-17",
       "title": "Connect your ORCID by signing in — no more copy-pasting your iD",
       "summary": "On the “Connect your ORCID iD” step you can now click “Sign in with ORCID” and authenticate at orcid.org directly, instead of copy-pasting your 16-digit iD. When you come back, your verified iD is linked automatically and your “My publications” view opens. Typing your iD by hand still works as before. Thanks to the reader who suggested this on the Feedback page.",
-      "url": "https://stouras.com/lit/"
+      "url": "https://www.stouras.com/lit/"
     },
     {
       "id": "feedback-account-tooltips-and-citing",
       "date": "2026-07-17",
       "title": "Clearer account menu, and “Citing references”",
       "summary": "Two small tweaks straight from the Feedback page: each item in your account menu (My library, E-mail alerts, Default filters, Edit profile, Sign out) now shows a short hover tooltip explaining what it does, and a paper's references toggle now reads “Citing N references in this catalog” instead of “Cited”.",
-      "url": "https://stouras.com/lit/"
+      "url": "https://www.stouras.com/lit/"
     },
     {
       "id": "orcid-my-publications",
       "date": "2026-07-17",
       "title": "Connect your ORCID and see your own publications & metrics",
       "summary": "Add your ORCID iD to your account and — if you opt in — a new “My publications” view appears in your account menu. From there, one click takes you to your papers in the database (each showing its citation count) and to your author page in the Data Analytics spotlight (publications per year, where you publish, collaboration and disruption metrics). Everything stays private to you; your work is matched by your name, since the database has no per-paper ORCID.",
-      "url": "https://stouras.com/lit/"
+      "url": "https://www.stouras.com/lit/"
     },
     {
       "id": "public-list-sharing",
       "date": "2026-07-17",
       "title": "Share a saved list with anyone via a link",
       "summary": "In My Library, each of your lists now has a 🔗 Share button: flip a list public and you get a link you can send to anyone — colleagues, students, co-authors — who can then open a clean, read-only view of the papers in it, no sign-in required. Only each paper's title, authors, year and link are shared; your private notes and tags never are. A public list shows a 🌐 marker, stays in sync automatically as you add or remove papers, and turning it private again immediately disables the old link.",
-      "url": "https://stouras.com/lit/"
+      "url": "https://www.stouras.com/lit/"
     },
     {
       "id": "paper-card-tooltips",
       "date": "2026-07-17",
       "title": "Hover tooltips explain the tags on each paper",
       "summary": "Hover over the small tags on a paper — the journal, the year/volume, the accepting editor and area, the publication status (e.g. 'Articles in Advance'), the 'Added' date — and a short pop-up now explains what it is and that you can click it to filter. The Abstract, Significance and BibTeX buttons get the same. Thanks to the reader who suggested this on the Feedback page.",
-      "url": "https://stouras.com/lit/"
+      "url": "https://www.stouras.com/lit/"
     },
     {
       "id": "account-menu-every-page",
       "date": "2026-07-17",
       "title": "Your account menu now appears on every page",
       "summary": "The sign-in / account button now sits in the top-right of the About, Data Analytics and Feedback pages too, exactly like the main browser — so you can reach your library, e-mail alerts and default filters (or sign in) from anywhere on The Lit. The account dropdown was tidied to library, alerts, default filters, edit profile and sign out; your lists, tags and notes search still live inside My Library, unchanged. The Feedback page also gained Google Scholar and ORCID links.",
-      "url": "https://stouras.com/lit/about/"
+      "url": "https://www.stouras.com/lit/about/"
     },
     {
       "id": "site-default-filters",
       "date": "2026-07-17",
       "title": "The browser opens on a curated default view",
       "summary": "New visitors now land on a default filter — Management Science papers in the “entrepreneurship and innovation” area — instead of the whole catalogue, so there's something focused to look at right away. Clear the filters to browse everything, and if you sign in you can save your own default filters (journals or journal types), which take over from this one.",
-      "url": "https://stouras.com/lit/"
+      "url": "https://www.stouras.com/lit/"
     },
     {
       "id": "feedback-page",
       "date": "2026-07-17",
       "title": "A Feedback page — send screenshots and suggestions",
       "summary": "There's now a dedicated Feedback page (in the top navigation) where you can tell me what to fix or add: describe the problem in as much or as little detail as you like and attach screenshots. No sign-in needed — it comes straight to me.",
-      "url": "https://stouras.com/lit/feedback/"
+      "url": "https://www.stouras.com/lit/feedback/"
     },
     {
       "id": "analytics-citations-over-time",
       "date": "2026-07-17",
       "title": "Data Analytics: a citations-over-time chart and tidier filters",
       "summary": "The Data Analytics dashboard gains a 'Citations over time' chart beneath publication volume (same peer-group overlays and legend toggles), the 'Editorial area trends' chart now starts at the first year with data so it's easier to read, and in the Journals and editor pickers the items you've selected float to the top of the list. A couple of redundant charts were removed to keep the page focused.",
-      "url": "https://stouras.com/lit/analytics/"
+      "url": "https://www.stouras.com/lit/analytics/"
     },
     {
       "id": "alerts-in-account-menu",
       "date": "2026-07-17",
       "title": "E-mail alerts moved into your account menu, and a tidier library",
       "summary": "E-mail alerts now live in your account menu (click your name, top right) rather than the top navigation. In My Library the paper-search filters are hidden (the library has its own search), and clicking an active list or tag now deactivates it — back to all saved — without removing it.",
-      "url": "https://stouras.com/lit/"
+      "url": "https://www.stouras.com/lit/"
     },
     {
       "id": "analytics-group-comparisons",
       "date": "2026-07-16",
       "title": "Data Analytics: compare journals against their peer groups",
       "summary": "When you pick specific journals, every corpus chart now overlays the aggregate behaviour of the journal types those journals belong to (UTD24, FT50, ABS 4/4*, ABS 3) — as comparison lines on the time-series charts and comparison bars/lines on the others — with toggle buttons under each chart to switch each peer group on or off. The publication-volume chart also lets you click a legend entry to hide or show a line, and both time-series charts trim the year axis to when the shown journals actually have papers. The dashboard now opens on the entire database by default.",
-      "url": "https://stouras.com/lit/analytics/"
+      "url": "https://www.stouras.com/lit/analytics/"
     },
     {
       "id": "analytics-compare-authors-and-cleanup",
       "date": "2026-07-16",
       "title": "Data Analytics: compare authors, cleaner counts, native-first default",
       "summary": "The Author spotlight now lets you add several authors and compare them side by side: publications per year, where they publish, and an at-a-glance table with collaboration statistics — average co-authors per paper, how cited their co-authors are, average citations per paper, and mean disruption — each shown both under your current filters and across all their papers in the database. A pre-ticked 'exclude non-research items' switch keeps journal front matter, book reviews, corrigenda, announcements and indices out of every figure (the main database still shows everything). The dashboard also opens on the curated native sources by default, with catalog journals added on selection.",
-      "url": "https://stouras.com/lit/analytics/"
+      "url": "https://www.stouras.com/lit/analytics/"
     },
     {
       "id": "analytics-editorial-filters",
       "date": "2026-07-16",
       "title": "Editor & area filters in Data Analytics",
       "summary": "The Data Analytics dashboard now offers the same editorial filters as the main browser: choose Management Science to filter by accepting editor or editorial area (or Information Systems Research / Marketing Science to filter by senior/associate editor), and every tile and chart — publication volume, co-authorship, citations, most-cited — updates to that slice, so you can chart one area's papers over time.",
-      "url": "https://stouras.com/lit/analytics/"
+      "url": "https://www.stouras.com/lit/analytics/"
     },
     {
       "id": "informs-transactions-education-added",
       "date": "2026-07-16",
       "title": "INFORMS Transactions on Education added",
       "summary": "The Lit now crawls INFORMS Transactions on Education (INFORMS), the open-access education-science journal for OR/MS/analytics, as a core source. Its full archive and Articles in Advance are searchable with every filter, and new papers are picked up automatically.",
-      "url": "https://stouras.com/lit/"
+      "url": "https://www.stouras.com/lit/"
     },
     {
       "id": "strategy-science-added",
       "date": "2026-07-16",
       "title": "Strategy Science added",
       "summary": "The Lit now crawls Strategy Science (INFORMS), adding it as a core source alongside Management Science, Operations Research, Marketing Science, M&SOM, Information Systems Research and POM. Its full back-catalogue and Articles in Advance are searchable with every filter, it is grouped under the ABS 3 journal type, and new papers are picked up automatically.",
-      "url": "https://stouras.com/lit/"
+      "url": "https://www.stouras.com/lit/"
     },
     {
       "id": "econometrica-forthcoming",
       "date": "2026-07-14",
       "title": "Econometrica forthcoming papers, tracked",
       "summary": "The Lit now follows Econometrica's Forthcoming Papers page and checks the journal for newly-published work every 20 minutes (on top of the daily rebuild), so accepted-but-not-yet-in-an-issue Econometrica papers show up — and join “Recently added” — soon after they are posted, instead of the next day.",
-      "url": "https://stouras.com/lit/"
+      "url": "https://www.stouras.com/lit/"
     },
     {
       "id": "faster-new-papers",
       "date": "2026-07-14",
       "title": "New papers appear within minutes — with pre-print & citations",
       "summary": "The six Articles-in-Advance journals (Management Science, Operations Research, Marketing Science, M&SOM, Information Systems Research and POM) are now checked for freshly-published papers every 15 minutes, on top of the full daily rebuild — so a new Article in Advance shows up (and joins “Recently added”) usually within minutes of Crossref indexing it, instead of the next day. Each newly-added paper is also enriched on arrival, so its open-access pre-print link and citation count are there from the start rather than filling in hours later.",
-      "url": "https://stouras.com/lit/"
+      "url": "https://www.stouras.com/lit/"
     },
     {
       "id": "author-backfill",
       "date": "2026-07-14",
       "title": "Filling in missing author names",
       "summary": "Some older papers (and certain publishers) arrive from Crossref with no author names; the daily citations sweep now backfills those from OpenAlex, so more cards — and more entries in the “Cited references in this catalog” panel — show who wrote each paper. It fills in gradually over the coming days.",
-      "url": "https://stouras.com/lit/"
+      "url": "https://www.stouras.com/lit/"
     },
     {
       "id": "cited-references-authors",
       "date": "2026-07-14",
       "title": "Cited references now show their authors",
       "summary": "In the “Cited references in this catalog” panel, each cited paper now lists its authors under the title, so you can see who wrote it without opening it.",
-      "url": "https://stouras.com/lit/"
+      "url": "https://www.stouras.com/lit/"
     },
     {
       "id": "cited-references-count",
       "date": "2026-07-14",
       "title": "Cited-references toggle now shows a count",
       "summary": "The “Cited references in this catalog” toggle on each paper now displays how many in-catalog references that paper cites — e.g. “Cited 12 references in this catalog” — so you can see the number before expanding it.",
-      "url": "https://stouras.com/lit/"
+      "url": "https://www.stouras.com/lit/"
     },
     {
       "id": "disruption-analytics",
       "date": "2026-07-14",
       "title": "Team science: which work disrupts, and which develops",
       "summary": "The Data Analytics page now reproduces the key measures of Wu, Wang & Evans (Nature 2019): a disruption index D for each paper and author, and how disruption, impact, and search depth change with team size — all filterable by journal, type, year, and a new Disruptiveness-index range slider (−1 to 1), and sharpening as the citation graph grows.",
-      "url": "https://stouras.com/lit/analytics/"
+      "url": "https://www.stouras.com/lit/analytics/"
     },
     {
       "id": "citations",
       "date": "2026-05-20",
       "title": "Papers now show their citation counts",
       "summary": "Every paper card carries a “Cited by N” badge — the highest of the Crossref, OpenAlex and Semantic Scholar tallies — that links through to the paper on Google Scholar.",
-      "url": "https://stouras.com/lit/"
+      "url": "https://www.stouras.com/lit/"
     },
     {
       "id": "cited-references",
       "date": "2026-05-02",
       "title": "Walk the citation graph inside the catalog",
       "summary": "A “Cited references in this catalog” toggle on each paper lists the other papers it cites that are themselves in The Lit, each linking straight to that paper.",
-      "url": "https://stouras.com/lit/"
+      "url": "https://www.stouras.com/lit/"
     },
     {
       "id": "working-papers",
       "date": "2026-04-15",
       "title": "Working Papers — the listed authors’ unpublished work",
       "summary": "A new Working Papers journal type surfaces the unpublished pre-prints (SSRN, NBER, arXiv, OSF) of every author already in the catalog.",
-      "url": "https://stouras.com/lit/"
+      "url": "https://www.stouras.com/lit/"
     },
     {
       "id": "analytics",
       "date": "2026-03-28",
       "title": "A Data Analytics dashboard",
       "summary": "An interactive summary of the whole corpus — publication volume over time, co-authorship, pre-print and citation trends, an author spotlight and an editorial breakdown you can click to filter.",
-      "url": "https://stouras.com/lit/analytics/"
+      "url": "https://www.stouras.com/lit/analytics/"
     },
     {
       "id": "default-filters",
       "date": "2026-03-10",
       "title": "Save your default filters",
       "summary": "Signed-in users can save a preferred set of journals or journal types that the page applies automatically each time they sign in.",
-      "url": "https://stouras.com/lit/"
+      "url": "https://www.stouras.com/lit/"
     },
     {
       "id": "preprint-links",
       "date": "2026-02-18",
       "title": "Open-access pre-print links on every paper",
       "summary": "Wherever a free author pre-print exists on arXiv, SSRN, NBER, OSF, bioRxiv or medRxiv, the card links straight to the PDF, latest version.",
-      "url": "https://stouras.com/lit/"
+      "url": "https://www.stouras.com/lit/"
     },
     {
       "id": "journal-types",
       "date": "2026-01-30",
       "title": "Journal types: UTD24, FT50 and ABS",
       "summary": "Filter by UTD24, FT50, ABS 4/4* and ABS 3, with a badge on each card showing the most selective list its journal belongs to.",
-      "url": "https://stouras.com/lit/"
+      "url": "https://www.stouras.com/lit/"
     },
     {
       "id": "email-alerts",
       "date": "2026-01-12",
       "title": "E-mail alerts",
       "summary": "Subscribe to an e-mail when new papers matching your filters are added — or about any new paper, or about new features on the site.",
-      "url": "https://stouras.com/lit/"
+      "url": "https://www.stouras.com/lit/"
     },
     {
       "id": "accounts-library",
       "date": "2025-12-05",
       "title": "A private library when you sign in",
       "summary": "Star papers, add notes, build lists and tag your reading — all private to your account.",
-      "url": "https://stouras.com/lit/"
+      "url": "https://www.stouras.com/lit/"
     }
   ]
 }

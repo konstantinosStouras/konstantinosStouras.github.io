@@ -125,7 +125,7 @@
   }
   // ── end vendored parser ───────────────────────────────────────────────────
 
-  const SITE = 'https://stouras.com/lit/data/';
+  const SITE = 'https://www.stouras.com/lit/data/';
   const RAW = 'https://raw.githubusercontent.com/konstantinosStouras/konstantinosStouras.github.io/master/lit/data/_informs-editors.json';
   const SOURCES = [
     { key: 'isre', file: 'papers-isre.json', ae: true },

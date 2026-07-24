@@ -23,7 +23,7 @@ eq(dataUrlToAttachment('data:text/html;base64,AAAA', 0) === null, 'non-image dat
 const fbDoc = {
   text: 'The citations chart y-axis overlaps on mobile. Could you fix the label?',
   name: 'Jane Doe', email: 'jane@example.com', uid: 'u9', ticket: 'LIT-260717-A9K2',
-  url: 'https://stouras.com/lit/analytics/', ua: 'Mozilla/5.0',
+  url: 'https://www.stouras.com/lit/analytics/', ua: 'Mozilla/5.0',
   images: [png, png, 'garbage'], createdAtIso: '2026-07-17T10:00:00.000Z',
 };
 const mail = renderFeedbackEmail(fbDoc);
