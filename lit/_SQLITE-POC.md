@@ -35,6 +35,7 @@ covers" below).
   - denormalized boolean facet columns + a `paper_jkey` junction (journal +
     PNAS section keys);
   - rows inserted in the page's **exact default sort order** (year-desc, then
+    Articles-in-Advance/Forthcoming rows ahead of the year's issues, then
     Volume-desc, stable = file order), so a row's `id` is its newest-first rank
     and streaming any scope by `id` yields precisely the page's top-N — which is
     what makes the db-mode result set match the JSON path row-for-row;

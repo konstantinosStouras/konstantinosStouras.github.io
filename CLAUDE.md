@@ -250,6 +250,15 @@ caveat:** a no-volume/no-issue record is tagged forthcoming only when recent
 (`forthcomingStatus`); `data/_aia-fixups.json` supplies the real issue for older
 frozen records and `data/_informs-aia.json` adds forthcoming papers Crossref
 misses, both refreshed locally by `lit/_scraper/informs-aia-local.mjs`.
+**AIA rows lead their journal's list:** the page's year sorts rank any row with
+a non-published `Status` ('Other' and 'Working paper' excepted — `statusRank` in
+`index.html`, also in `dbYearCmp` and emit-db.mjs's insertion order) ahead of
+the same year's issue papers, mirroring the data files' pubRank order, which
+the old (Year, Volume) comparator inverted by sorting the empty Volume last;
+within that block every pipeline (native, FT50, the three shards) tie-breaks
+equal-rank rows by registry first-seen date, newest first (`addedCmp` beside
+each `regKey`), so the latest advance articles surface on page one — keep the
+comparators in sync across all of them.
 **Pre-print links:** every paper with a free author pre-print on **arXiv,
 SSRN, bioRxiv/medRxiv, NBER or OSF** carries a `Preprint` (+ `PreprintSrc`)
 field, resolved in `build-data.mjs`
