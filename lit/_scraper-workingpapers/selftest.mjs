@@ -8,7 +8,8 @@ import { promisify } from 'node:util';
 import { readFile, rm } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { wpRecordFromWork, orderAuthors, invertAbstract, loadCatalog, cleanText } from './build-data.mjs';
+import { wpRecordFromWork, orderAuthors, invertAbstract, loadCatalog, cleanText,
+  wpSameWork, collapseWpDuplicates, recKey } from './build-data.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const run = promisify(execFile);
@@ -38,6 +39,32 @@ async function main() {
   ok(cleanText('Risk &amp; Return') === 'Risk & Return', 'single-encoded ampersand → &');
   ok(cleanText('When is P &lt; 0.05 Significant?') === 'When is P < 0.05 Significant?', 'lone < (not a tag) is preserved');
   ok(cleanText('A Perfectly Ordinary Title') === 'A Perfectly Ordinary Title', 'clean title unchanged (idempotent)');
+
+  console.log('unit: collapseWpDuplicates (same paper posted more than once)');
+  const wpRow = (o) => ({ Title: 'Crowdsourcing Contests with Entry Costs', Authors: 'Jane Doe, Wei Chen',
+    Year: '2022', JKey: 'wp-ssrn', DOI: 'https://doi.org/10.2139/ssrn.100', Abstract: 'x',
+    Preprint: 'https://ssrn.com/abstract=100', Status: 'Working paper', ...o });
+  ok(wpSameWork(wpRow({}), wpRow({ DOI: 'https://doi.org/10.2139/ssrn.222', Year: '2024' })),
+    'a re-posted SSRN version (new id, later year) is the same paper');
+  ok(wpSameWork(wpRow({}), wpRow({ JKey: 'wp-arxiv', DOI: 'https://doi.org/10.48550/arxiv.2201.1' })),
+    'the arXiv twin of an SSRN posting is the same paper');
+  ok(!wpSameWork(wpRow({}), wpRow({ Authors: 'Alex Mason' })), 'different authors are not the same paper');
+  ok(!wpSameWork(wpRow({}), wpRow({ Title: 'Crowdsourcing Contests without Entry Costs' })),
+    'a different title is not the same paper');
+  {
+    const oldPost = wpRow({ 'Date Added': '2026-01-05', CitedBy: 7 });
+    const newPost = wpRow({ DOI: 'https://doi.org/10.2139/ssrn.222', Year: '2024',
+      Preprint: 'https://ssrn.com/abstract=222' });
+    const other = wpRow({ Title: 'A Totally Unrelated Working Paper Title', DOI: 'https://doi.org/10.2139/ssrn.300' });
+    const byKey = new Map([[recKey(oldPost), oldPost], [recKey(newPost), newPost], [recKey(other), other]]);
+    const n = collapseWpDuplicates(byKey);
+    ok(n === 1 && byKey.size === 2, 'collapse drops exactly the duplicate posting');
+    const kept = byKey.get(recKey(newPost));
+    ok(kept === newPost, 'the newest posting wins');
+    ok(kept['Date Added'] === '2026-01-05' && kept.CitedBy === 7,
+      'earliest Date Added + enrichment fold into the kept row');
+    ok(collapseWpDuplicates(byKey) === 0, 'collapse is idempotent');
+  }
   ok(cleanText(cleanText('&lt;p&gt;Twice&lt;/p&gt;')) === 'Twice', 're-applying cleanText is a no-op');
 
   console.log('unit: wpRecordFromWork');
