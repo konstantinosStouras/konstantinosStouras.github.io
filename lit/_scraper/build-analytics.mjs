@@ -101,9 +101,12 @@ function cleanEditorNames(raw) {
   if (!name) return [];
   return name.split(/\s+and\s+/i).map(function (e) { return e.trim(); }).filter(Boolean);
 }
-// Papers older than this are almost always OCR/metadata noise; the corpus has
-// a handful of stray pre-1900 "years". Clamp the year axis to something sane.
-const MIN_YEAR = 1900;
+// Only guard against absurd OCR/metadata "years": the catalog genuinely
+// reaches back to 1886 (QJE's first volume; ~2,300 real 1886–1899 papers),
+// so the floor must sit BELOW the true first year — 1900 silently dropped
+// all of them from every figure and made the dashboard's total disagree
+// with the main browser's header count.
+const MIN_YEAR = 1850;
 
 // ── Journal-type membership — mirror of lit/index.html ──────────────────
 // KEEP IN SYNC with the ABS_RATING / UTD24_KEYS / FT50_KEYS constants there.

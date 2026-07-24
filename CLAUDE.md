@@ -746,7 +746,20 @@ high-precision title patterns; offline test `nonarticle-selftest.mjs`) whose
 per-year contribution is carried in each row's `x` delta and SUBTRACTED at read
 time by `effRow()` (dims/topCited/authors are already research-only in the data,
 so they're unaffected). This is **analytics-only** — the main browser at `/lit/`
-deliberately still shows everything (no data-pipeline/`build-data` change). When a journal that
+deliberately still shows everything (no data-pipeline/`build-data` change).
+**Totals reconcile with the main page's header:** `aggregate()` also tracks how
+many items the toggle removed (`xn`), the scope line + Papers tile SAY so, and
+the default-scope note names the header's full count (`DATA.totals.papers`) —
+untick the box and the dashboard total equals the header as of the daily
+analytics snapshot (the live header keeps moving intra-day with the
+15/20-minute incremental harvests, so the two can differ by the day's
+new papers until the next 08:10 UTC rebuild). The two
+builds' `MIN_YEAR` sanity floor is **1850** (build-analytics.mjs +
+build-disruption.mjs — keep in sync): the catalog genuinely starts in 1886
+(QJE), so a 1900 floor would silently drop ~2,300 real papers. The three ABS
+shard pipelines publish `authorCount` in their `data/meta.json` (pre-trim
+distinct, like native/FT50 — `buildAuthors` returns `{rows, distinct}`), so the
+main page's header "from N authors" stat sums ALL five catalogs. When a journal that
 carries editorial metadata is **explicitly** in scope (a journal or type chosen,
 never the default whole-corpus view — mirroring the main browser's `msInScope`),
 the filter bar reveals the **same editorial dropdowns as the main page**:

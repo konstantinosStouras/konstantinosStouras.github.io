@@ -49,7 +49,9 @@ const OUT_DIR = path.join(LIT_DIR, 'analytics');
 // Bump when the measure or its inputs change materially (mirrors the page's
 // expectation — the page tolerates older files, this just documents intent).
 const DISR_VER = 1;
-const MIN_YEAR = 1900;
+// Keep in sync with build-analytics.mjs: the catalog genuinely reaches back
+// to 1886, so the sanity floor must sit below the true first year.
+const MIN_YEAR = 1850;
 // When set, D is computed from the harvested GLOBAL forward-citation sets
 // (lit/data-refs/_citedby-cache.json, built by _scraper-refs/build-citedby.mjs)
 // instead of the catalog-only inversion of the reference shards. That removes
