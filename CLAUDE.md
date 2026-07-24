@@ -294,14 +294,25 @@ never regress a fixed abstract back to the teaser. Same CI knobs as the
 editors crawler (`LIT_ABSTRACTS_DELAY_MS`/`_BUDGET_MS`/`_MAX_FAILS`,
 cookie via `LIT_CF_COOKIE`+`LIT_UA`).
 **Known pubsonline name typos are canonicalized at ingest** ("Olivier
-Tobuia"/"Olivier Touba" → Olivier Toubia — the journal's own History-line
-misspellings, which would split one editor across several filter entries):
-`EDITOR_NAME_FIXUPS`/`canonEditorNames` in `informs-editors.mjs`, applied by
-informs-editors-local.mjs (cache load, new records, applyToPapers — heals
-already-applied rows too) and build-data.mjs (mapWork + applyInformsEditors)
-— deliberately NOT inside the parser, so the console harvester's vendored
-copy stays byte-identical (its raw output is healed on apply/build). Add new
-typos to that map as found.
+Tobuia"/"Olivier Touba" → Olivier Toubia, "K. Sudir" → K. Sudhir, the
+inverted "Manchanda Puneet" → Puneet Manchanda — the journal's own
+History-line errors, which would split one editor across several filter
+entries): `EDITOR_NAME_FIXUPS`/`canonEditorNames` in `informs-editors.mjs`,
+routed through **`healEditorNames` = sanitize + canonicalize** —
+`sanitizeEditorNames` drops comma-blob "names" (an acknowledgment
+editorial's captured board list, e.g. "Fred Feinberg, Ganesh Iyer, K") and
+sub-4-char fragments; `plausibleName` also rejects commas at parse time.
+Applied by informs-editors-local.mjs (cache load, new records, applyToPapers
+— heals already-applied rows too) and build-data.mjs (mapWork +
+applyInformsEditors) — deliberately NOT inside the parser's vendored console
+copy beyond the plausibleName guard (kept byte-identical; raw output is
+healed on apply/build). Add new typos to that map as found; "Heng Xu" vs
+"Hong Xu" are DISTINCT real editors — never fuzzy-merge near-names without
+confirming identity. **Editor names are never taken from NON-RESEARCH
+items** (editorials/errata/front matter, `isNonArticle` from
+`_nonarticle.mjs`): the crawlers skip them and both appliers CLEAR any
+previously mis-applied SE/AE on them (an acknowledgment editorial's own text
+mentions the board and would be mis-read as a History line).
 When even a local Node run is Cloudflare-blocked (its TLS handshake is
 fingerprinted — a valid cf_clearance + matching UA can still fail),
 `lit/_scraper/informs-editors-console.js` is the fallback: pasted into the

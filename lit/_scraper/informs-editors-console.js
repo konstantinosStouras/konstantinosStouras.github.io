@@ -70,6 +70,7 @@
   }
   function plausibleName(s) {
     if (!s || s.length < 4 || s.length > 60) return false;
+    if (s.includes(',')) return false; // a comma means a captured NAME LIST, not a name
     if (s.split(/\s+/).length > 6) return false;
     if (!/^[A-ZÀ-Þ]/.test(s)) return false;
     return !/\b(the|this|that|is|are|was|were|we|of|in|on|to|as|for|paper|article|issue|editors?|received|accepted|served|revisions?)\b/i.test(s);

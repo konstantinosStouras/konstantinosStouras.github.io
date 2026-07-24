@@ -66,8 +66,9 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseAcceptedPapers, normTitle } from './ec-pages.mjs';
 import { PNAS_SECTIONS, crawlConcepts, mergeIntoCache, isChallenged } from './pnas-crawl.mjs';
-import { parseInformsEditors, canonEditorNames } from './informs-editors.mjs';
+import { parseInformsEditors, healEditorNames } from './informs-editors.mjs';
 import { betterAbstract } from './informs-abstracts.mjs';
+import { isNonArticle } from './_nonarticle.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MOCK_RUN = process.env.LIT_MOCK === '1';
@@ -358,7 +359,7 @@ function mapWork(item, src) {
   // carries it (ISR both, Marketing Science senior only). The committed
   // pubsonline cache fills the rest — see applyInformsEditors().
   let se = '', ae = '';
-  if (src.seEditors) {
+  if (src.seEditors && !isNonArticle(title)) {
     const ed = parseInformsEditors(abstract);
     se = ed.se;
     if (src.aeEditors) ae = ed.ae;
@@ -382,10 +383,11 @@ function mapWork(item, src) {
         if (src.aeEditors && !ae && ed2.ae) ae = ed2.ae;
       }
     }
-    // Heal the journal's own name typos (EDITOR_NAME_FIXUPS) so one editor
-    // never splits across several filter entries.
-    se = canonEditorNames(se);
-    ae = canonEditorNames(ae);
+    // Heal the journal's own name typos and drop comma-blob captures
+    // (healEditorNames) so one editor never splits across filter entries and
+    // a name-list fragment never renders as an editor.
+    se = healEditorNames(se);
+    ae = healEditorNames(ae);
   }
 
   let volume = item.volume || '';
@@ -449,21 +451,29 @@ async function applyInformsEditors(bySource) {
   for (const src of JOURNALS) {
     if (!src.seEditors) continue;
     for (const p of bySource[src.key] || []) {
-      // Heal a known-typo value already on the row (EDITOR_NAME_FIXUPS) —
-      // the incremental pass carries committed rows through unchanged, so
-      // this is what keeps the served files canonical everywhere.
+      // NON-RESEARCH items (editorials, errata, front matter) never carry
+      // editors — an acknowledgment editorial's own text names the board and
+      // would be mis-read as a History line. Clear and never fill.
+      if (isNonArticle(p.Title)) {
+        if (p['Senior Editor']) { p['Senior Editor'] = ''; filled++; }
+        if (src.aeEditors && p['Associate Editor']) { p['Associate Editor'] = ''; filled++; }
+        continue;
+      }
+      // Heal a blob/typo value already on the row (healEditorNames) — the
+      // incremental pass carries committed rows through unchanged, so this
+      // is what keeps the served files canonical everywhere.
       if (p['Senior Editor']) {
-        const c = canonEditorNames(p['Senior Editor']);
+        const c = healEditorNames(p['Senior Editor']);
         if (c !== p['Senior Editor']) { p['Senior Editor'] = c; filled++; }
       }
       if (src.aeEditors && p['Associate Editor']) {
-        const c = canonEditorNames(p['Associate Editor']);
+        const c = healEditorNames(p['Associate Editor']);
         if (c !== p['Associate Editor']) { p['Associate Editor'] = c; filled++; }
       }
       const rec = map[p._doi];
       if (!rec) continue;
-      if (!p['Senior Editor'] && rec.se) { p['Senior Editor'] = canonEditorNames(rec.se); filled++; }
-      if (src.aeEditors && !p['Associate Editor'] && rec.ae) { p['Associate Editor'] = canonEditorNames(rec.ae); filled++; }
+      if (!p['Senior Editor'] && rec.se) { p['Senior Editor'] = healEditorNames(rec.se); filled++; }
+      if (src.aeEditors && !p['Associate Editor'] && rec.ae) { p['Associate Editor'] = healEditorNames(rec.ae); filled++; }
     }
   }
   if (filled) console.log(`  informs editors: filled ${filled} SE/AE fields from the cache`);

@@ -12,7 +12,7 @@
  */
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { parseInformsEditors, editorsFromPageHtml, canonEditorNames } from './informs-editors.mjs';
+import { parseInformsEditors, editorsFromPageHtml, canonEditorNames, sanitizeEditorNames, healEditorNames } from './informs-editors.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // Every parser fixture is recorded here so the console-harvester parity pass
@@ -74,6 +74,8 @@ r = parse('This paper was accepted by received revisions, Senior Editor');
 eq(r.se, '', 'sentence-word junk rejected by plausibleName');
 r = parse('');
 ok(r.se === '' && r.ae === '', 'empty text → empty result');
+r = parse('History: Accepted by the senior editors Fred Feinberg, Ganesh Iyer, K. Sudhir and the advisory board.');
+eq(r.se, '', 'an editorial\'s comma-separated board list is never captured as one "name"');
 
 console.log('editorsFromPageHtml: page-level scan');
 const dates = 'Received October 12, 2020; revised August 3, 2021, March 14, 2022, September 1, 2022; accepted May 2, 2022. '
@@ -101,6 +103,14 @@ eq(canonEditorNames('Antony Dukes'), 'Anthony Dukes', '"Antony Dukes" healed');
 eq(canonEditorNames('Heng Xu'), 'Heng Xu', '"Heng Xu" untouched (a real distinct editor, not a typo of Hong Xu)');
 eq(canonEditorNames('Catherine Tucker'), 'Catherine Tucker', 'unknown name untouched');
 eq(canonEditorNames(''), '', 'empty passes through');
+eq(canonEditorNames('K. Sudir'), 'K. Sudhir', '"K. Sudir" healed');
+eq(canonEditorNames('Manchanda Puneet'), 'Puneet Manchanda', 'inverted "Manchanda Puneet" healed');
+
+console.log('sanitizeEditorNames / healEditorNames: blob rejection at ingest');
+eq(sanitizeEditorNames('Fred Feinberg, Ganesh Iyer, K'), '', 'comma-blob "name" dropped entirely');
+eq(sanitizeEditorNames('Anthony Dukes; Fred Feinberg, Ganesh'), 'Anthony Dukes', 'mixed list keeps only real names');
+eq(sanitizeEditorNames('K. Sudhir'), 'K. Sudhir', 'a real name passes sanitize untouched');
+eq(healEditorNames('Olivier Tobuia; Fred Feinberg, Ganesh Iyer, K'), 'Olivier Toubia', 'heal = sanitize + canonicalize');
 
 console.log('console harvester: vendored parser parity (informs-editors-console.js)');
 await import(pathToFileURL(join(__dirname, 'informs-editors-console.js')).href);
