@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "counter-consistency",
+      "date": "2026-07-24",
+      "title": "Complete author count and reconciled analytics totals",
+      "summary": "The header's “papers from N authors” stat now counts the authors of the ABS shard catalogs too (previously only the native and FT50 catalogs' authors were included), and Data Analytics now covers the catalog's full history back to 1886 (papers from 1886–1899 were silently left out of every figure) and says exactly how many non-research items its pre-ticked “exclude non-research items” switch is hiding — so the dashboard's paper total and the main page's header count reconcile at a glance — and match, up to papers added since the dashboard's daily snapshot, when the switch is unticked.",
+      "url": "https://stouras.com/lit/analytics/"
+    },
+    {
       "id": "analytics-paper-comparison",
       "date": "2026-07-21",
       "title": "Compare individual papers in Data Analytics",
