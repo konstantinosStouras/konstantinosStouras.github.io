@@ -1,0 +1,98 @@
+name: lit — backfill ISR/MkSc editors (pubsonline attempt)
+
+# ATTEMPTS the ISR/Marketing Science Senior/Associate-Editor crawl
+# (lit/_scraper/informs-editors-local.mjs — Marketing Science FIRST, newest
+# papers first) from a GitHub runner every 3 hours, in bounded ~45-min
+# resume-safe slices, committing the refreshed lit/data/ back (cache +
+# papers-mksc.json / papers-isre.json via the script's own apply step, so the
+# live site updates on the very next Pages deploy).
+#
+# pubsonline.informs.org (Atypon) blocks MOST cloud/datacenter IPs behind
+# Cloudflare — that is exactly why the crawler was born local-only. This
+# workflow is the cheap standing attempt: when the runner is blocked, the very
+# first page trips isChallenged() (or LIT_EDITORS_MAX_FAILS consecutive
+# failures) and the run ends cleanly within a minute or two, committing
+# nothing. If pubsonline ever answers a runner, the backlog burns down online
+# on its own with zero babysitting. Home runs (crawl-mksc-editors.bat /
+# informs-editors-console.js) remain the reliable path either way; the two
+# writers never race because this job shares the lit-update-data concurrency
+# group and local crawls pause CI first (ci-pause-backfills.bat lists this
+# workflow).
+
+on:
+  schedule:
+    # Eight slices a day, off the other jobs' minute slots (see the sibling
+    # workflows); an overlap with the 05:30 daily build simply queues behind
+    # it (same concurrency group).
+    - cron: '35 */3 * * *'
+  workflow_dispatch: {}      # run on demand from the Actions tab
+
+# SAME concurrency group as lit-update-data.yml — this job commits lit/data
+# (the editors cache AND the served papers files), so it must queue behind the
+# daily build / incremental / preprints / citations jobs, never race them.
+concurrency:
+  group: lit-update-data-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write            # needed to commit the refreshed data back
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    # 45-min crawl budget + DOI-list load + apply/commit headroom. A blocked
+    # run ends in ~1 minute (first challenged page aborts the crawl).
+    timeout-minutes: 55
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Crawl ISR/MkSc editors (MkSc first, bounded, resume-safe)
+        env:
+          LIT_EDITORS_BUDGET_MS: '2700000'   # 45-min slice
+          LIT_EDITORS_MAX_FAILS: '12'        # dead/blocked host aborts fast
+        run: node lit/_scraper/informs-editors-local.mjs
+
+      - name: Commit refreshed data
+        # always(): if the crawl step is killed late (timeout/transient), the
+        # continuously-saved cache still holds this run's finds — commit them.
+        if: always() && github.ref == 'refs/heads/master'
+        # Same hardened push as lit-preprints-backfill.yml: on a rejected push
+        # this run's tree may be STALER than what landed (daily build, new
+        # papers), so take the new tip and replay ONLY our finds onto it —
+        # merge our saved cache in (editor records never downgraded), then
+        # re-apply onto the tip's papers files (--apply-only --merge-cache).
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lit/data
+          if git diff --cached --quiet; then
+            echo "No data changes — nothing to commit (blocked runner or fully-cached slice)."
+            exit 0
+          fi
+          cp lit/data/_informs-editors.json /tmp/lit-editors-ours.json
+          git commit -m "lit: ISR/MkSc editors backfill (pubsonline crawl)"
+          for i in 1 2 3; do
+            if git push origin HEAD:${{ github.ref_name }}; then
+              echo "Pushed on attempt $i."
+              exit 0
+            fi
+            echo "Push rejected (concurrent commit?) — replaying our finds on the new tip…"
+            git fetch origin ${{ github.ref_name }}
+            git reset --hard origin/${{ github.ref_name }}
+            node lit/_scraper/informs-editors-local.mjs --apply-only --merge-cache=/tmp/lit-editors-ours.json
+            git add lit/data
+            if git diff --cached --quiet; then
+              echo "The concurrent commit already contains these editors — nothing left to push."
+              exit 0
+            fi
+            git commit -m "lit: ISR/MkSc editors backfill (pubsonline crawl)"
+            sleep 5
+          done
+          echo "::error::Could not push the editors data after 3 attempts."
+          exit 1

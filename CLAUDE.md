@@ -265,7 +265,18 @@ fill-empty-only — the same semantics as build-data's `applyInformsEditors`),
 so collected names go live on the very next commit + push instead of waiting
 for the daily build (`--no-apply` skips; `--apply-only` applies without
 crawling, e.g. after a console harvest — commit `lit/data/`, not just the
-cache file).
+cache file). **CI also ATTEMPTS the crawl on its own**
+(`.github/workflows/lit-editors-backfill.yml`, every 3 h, bounded ~45-min
+resume-safe slices via `LIT_EDITORS_BUDGET_MS`, master-only commits, shares
+the `lit-update-data-${{ github.ref }}` concurrency group, push-retry replay
+via `--apply-only --merge-cache` — a merge never downgrades an editor record
+to a none-record): when the runner is blocked, the first challenged page (or
+`LIT_EDITORS_MAX_FAILS` consecutive failures) ends the run cleanly in ~a
+minute with nothing committed, so the standing attempt costs almost nothing;
+if pubsonline ever answers a runner, the backlog burns down online with no
+babysitting. It is listed in `ci-pause-backfills.bat`/`ci-resume-backfills.bat`
+like every other lit-data writer, so local crawls stay the sole writer while
+they run.
 When even a local Node run is Cloudflare-blocked (its TLS handshake is
 fingerprinted — a valid cf_clearance + matching UA can still fail),
 `lit/_scraper/informs-editors-console.js` is the fallback: pasted into the

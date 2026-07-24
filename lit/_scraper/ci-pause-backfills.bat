@@ -18,7 +18,7 @@ set "REPO_SLUG=konstantinosStouras/konstantinosStouras.github.io"
 
 REM All workflows that commit to lit/data, lit/data-ft50, lit/data-refs or
 REM lit/data-workingpapers:
-set "WFS=lit-update-data.yml lit-check-new.yml lit-preprints-backfill.yml lit-citations-update.yml lit-ft50-update-data.yml lit-ft50-check-new.yml lit-ft50-preprints-backfill.yml lit-ft50-citations-update.yml lit-references-backfill.yml lit-workingpapers-backfill.yml lit-workingpapers-update-data.yml"
+set "WFS=lit-update-data.yml lit-check-new.yml lit-editors-backfill.yml lit-preprints-backfill.yml lit-citations-update.yml lit-ft50-update-data.yml lit-ft50-check-new.yml lit-ft50-preprints-backfill.yml lit-ft50-citations-update.yml lit-references-backfill.yml lit-workingpapers-backfill.yml lit-workingpapers-update-data.yml"
 
 where gh >nul 2>nul
 if errorlevel 1 (

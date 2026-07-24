@@ -1,8 +1,10 @@
 @echo off
 REM ==========================================================================
-REM  crawl-blocked-sources.bat  -  Refresh the data GitHub Actions can NEVER
-REM  fetch, because these publishers block datacenter IPs (Cloudflare/Atypon):
-REM    - ISR / Marketing Science editors   (pubsonline.informs.org)
+REM  crawl-blocked-sources.bat  -  Refresh the data GitHub Actions can not
+REM  reliably fetch, because these publishers block datacenter IPs
+REM  (Cloudflare/Atypon):
+REM    - ISR / Marketing Science editors   (pubsonline.informs.org; CI ATTEMPTS
+REM      this one 3-hourly via lit-editors-backfill.yml but is usually blocked)
 REM    - Articles-in-Advance, native + FT50 (pubsonline.informs.org)
 REM    - PNAS section concepts             (pnas.org)
 REM  Only your home machine can do this. Best run from a clone OUTSIDE Dropbox
@@ -20,7 +22,7 @@ set "REPO=%CD%"
 popd
 
 echo ============================================================
-echo   CLOUD-BLOCKED SOURCES - data CI can never fetch
+echo   CLOUD-BLOCKED SOURCES - data CI can not reliably fetch
 echo     1) ISR/MkSc editors        (pubsonline.informs.org)
 echo     2) Articles-in-Advance     (native /lit)
 echo     3) Articles-in-Advance     (FT50 catalog)
