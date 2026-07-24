@@ -11,8 +11,10 @@ that a home/university machine fixes:
    - **pubsonline.informs.org, pnas.org, econometricsociety.org,
      journalranking.org** block cloud IPs outright (Cloudflare/Atypon). The
      editors / Articles-in-Advance / PNAS-sections / Econometrica-forthcoming /
-     ABS-grade scrapers therefore **cannot run in CI at all** — they are
-     local-only by design.
+     ABS-grade scrapers therefore **cannot rely on CI** — they are
+     local-first by design. (The ISR/MkSc editors crawl does keep a cheap
+     standing CI attempt, `lit-editors-backfill.yml`, that exits cleanly in
+     ~a minute whenever the runner is blocked — the usual outcome.)
 2. **The reference-graph and working-papers backfills are paced far below what
    the APIs allow** (to be polite from shared CI) and run in short slices every
    3 h. Run continuously at a safe higher pace locally, they finish in
@@ -27,7 +29,7 @@ What "faster" really means, per dataset (measured on the current data):
 | Citations — FT50 catalog (`data-ft50/`) | ~80 %, 2–3-day rolling cycle | one ~95-min pass sweeps all ~257k | removes the time-box + once-a-day cadence |
 | Citation graph (`data-refs/`) | ~18 % done, weeks to go | **6–24 h** | pace is throttled below Crossref's limit — genuinely faster |
 | Working papers (`data-workingpapers/`) | ~3 % done, 35–40 days | **3–8 days** | same — safe to raise the pace ~4× |
-| Editors / AIA / PNAS / Econometrica | **impossible on CI** | the only way | pure new data cloud IPs can't fetch |
+| Editors / AIA / PNAS / Econometrica | **blocked on CI** (the editors job keeps trying 3-hourly, usually in vain) | the only reliable way | pure new data cloud IPs can't fetch |
 
 So: **yes to "a lot more data."** For pre-prints it's *completeness*, not a
 faster clock; for references and working papers it's a real speed-up.
@@ -115,7 +117,7 @@ Same resilient slice→commit→push loop as `run-local-crawlers.bat`, for the t
 slow backfills. Like every crawl script they **pause CI** for the session (sole
 writer) and **resume** it when you stop cleanly.
 
-### `crawl-blocked-sources.bat` — data CI can never fetch
+### `crawl-blocked-sources.bat` — data CI can not reliably fetch
 Runs the cloud-blocked local scrapers in sequence and pushes:
 ISR/MkSc **editors**, **Articles-in-Advance** (native + FT50), **PNAS
 sections** — data whose hosts block datacenter IPs. Pauses CI while it runs. If
@@ -252,6 +254,9 @@ node informs-editors-local.mjs            REM MkSc first (newest first); --max 5
                                           REM the cache to the served papers files (--no-apply skips;
                                           REM --apply-only = apply without crawling, e.g. after a
                                           REM console harvest). One-click MkSc: crawl-mksc-editors.bat
+                                          REM CI also attempts this crawl on its own every 3 h
+                                          REM (lit-editors-backfill.yml; exits cleanly when the runner
+                                          REM is blocked) - it is in the pause list like the others.
 node informs-aia-local.mjs --app lit
 node informs-aia-local.mjs --app lit-ft50
 node pnas-concepts-local.mjs              REM --full to force a re-crawl

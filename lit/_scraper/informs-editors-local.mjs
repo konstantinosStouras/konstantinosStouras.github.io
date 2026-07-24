@@ -1,14 +1,25 @@
 /*
- * informs-editors-local.mjs — RUN THIS ON YOUR OWN MACHINE (not in CI).
+ * informs-editors-local.mjs — the ISR/MkSc editors crawler (local-first).
  * ===========================================================================
  * Builds/refreshes lit/data/_informs-editors.json: DOI → Senior Editor /
  * Associate Editor names for Information Systems Research (SE + AE) and
  * Marketing Science (SE), read from each article's "History:" line on
  * pubsonline.informs.org.
  *
- * Why local? Crossref does not carry the History line for these journals, and
- * pubsonline (an Atypon site, like pnas.org) blocks cloud/datacenter IPs. From
- * a normal home or university connection the pages load fine.
+ * Why local-first? Crossref does not carry the History line for these
+ * journals, and pubsonline (an Atypon site, like pnas.org) blocks most
+ * cloud/datacenter IPs. From a normal home or university connection the pages
+ * load fine. CI still ATTEMPTS the crawl on a schedule
+ * (.github/workflows/lit-editors-backfill.yml — bounded slices, MkSc first):
+ * when the runner is blocked the very first page trips the Cloudflare check
+ * and the run exits cleanly in seconds with nothing committed, and if
+ * pubsonline ever answers, the backlog burns down online on its own. CI knobs
+ * (all optional): LIT_EDITORS_BUDGET_MS time-boxes a sitting,
+ * LIT_EDITORS_MAX_FAILS (default 12) aborts after that many CONSECUTIVE
+ * failed pages (a dead/blocked host must not burn a 45-min budget at one
+ * page per delay), and --merge-cache <file> folds a saved cache into the
+ * on-disk one (push-retry replay: an entry with editors always beats a
+ * none-record, never the reverse).
  *
  * Usage (Node 20+, no npm install needed):
  *   cd lit/_scraper
@@ -107,6 +118,20 @@ const RETRY_MISSES = args.includes('--retry-misses');
 const FROM_CROSSREF = args.includes('--from-crossref');
 const APPLY_ONLY = args.includes('--apply-only');
 const NO_APPLY = args.includes('--no-apply');
+// --merge-cache=<file> | --merge-cache <file> — fold a saved cache into the
+// on-disk one before crawling/applying (CI push-retry replay, console merges).
+const MERGE_CACHE = (() => {
+  const eq = args.find(a => a.startsWith('--merge-cache='));
+  if (eq) return eq.slice('--merge-cache='.length);
+  const i = args.indexOf('--merge-cache');
+  return i >= 0 ? String(args[i + 1] || '') : '';
+})();
+// Time box (CI slices): stop crawling when the budget is spent; 0 = unbounded.
+const BUDGET_MS = parseInt(process.env.LIT_EDITORS_BUDGET_MS || '', 10) || 0;
+// Abort after N CONSECUTIVE failed pages (non-200s / network errors): a blocked
+// or dead host must not burn a whole CI budget at one warned page per delay.
+const MAX_FAILS = Math.max(3, parseInt(process.env.LIT_EDITORS_MAX_FAILS || '', 10) || 12);
+const T0 = Date.now();
 const JOURNAL = args.includes('--journal') ? String(args[args.indexOf('--journal') + 1] || '').toLowerCase() : '';
 // Year floor: --since <year> absolute, or --last-years <n> relative to today.
 // Rows are newest-first, so the floor only trims the old tail of the crawl.
@@ -182,6 +207,21 @@ const rawCache = existsSync(CACHE_PATH) ? JSON.parse(await readFile(CACHE_PATH, 
 const cache = rawCache.map || rawCache; // tolerate both {map:{...}} and flat shapes
 let processed = 0, found = 0, dirty = 0;
 
+// Fold a saved cache in (CI push-retry replay / console-harvest merge). An
+// entry with editors always wins over a none-record — never the reverse — so
+// no merge direction can downgrade a found name back to a miss.
+if (MERGE_CACHE) {
+  const rawOther = JSON.parse(await readFile(MERGE_CACHE, 'utf8'));
+  const other = rawOther.map || rawOther;
+  let took = 0;
+  for (const [k, v] of Object.entries(other)) {
+    if (!v || typeof v !== 'object') continue;
+    const cur = cache[k];
+    if (!cur || ((v.se || v.ae) && !(cur.se || cur.ae))) { cache[k] = v; took++; }
+  }
+  console.log(`  merge-cache: took ${took} entries from ${MERGE_CACHE}`);
+}
+
 async function saveCache() {
   const sorted = {};
   for (const k of Object.keys(cache).sort()) sorted[k] = cache[k];
@@ -221,10 +261,12 @@ async function applyToPapers() {
 }
 
 if (APPLY_ONLY) {
+  if (MERGE_CACHE) await saveCache(); // persist the merged cache for the commit
   await applyToPapers();
   process.exit(0);
 }
 
+let consecFails = 0;
 outer:
 for (const src of SOURCES) {
   if (JOURNAL && src.key !== JOURNAL) continue;
@@ -232,6 +274,10 @@ for (const src of SOURCES) {
   console.log(`${src.key}: ${dois.length} DOIs, ${dois.filter(d => cache[d]).length} already cached`);
   for (const doi of dois) {
     if (processed >= MAX) break outer;
+    if (BUDGET_MS && Date.now() - T0 > BUDGET_MS) {
+      console.log(`⏱ Time budget (${Math.round(BUDGET_MS / 60000)} min) spent — stopping this sitting (resume-safe).`);
+      break outer;
+    }
     const cur = cache[doi];
     if (cur && (cur.se || cur.ae)) continue;
     if (cur && cur.none && !RETRY_MISSES) continue;
@@ -239,21 +285,38 @@ for (const src of SOURCES) {
     try {
       const { status, body } = await fetchArticle(doi);
       if (isChallenged(body, status)) {
-        console.error('\n✗ Blocked by Cloudflare from this connection.');
-        console.error('  The clearance cookie is bound to your browser\'s IP AND User-Agent, so you need BOTH:');
-        console.error('   1. Open https://pubsonline.informs.org in your browser; wait until an article page loads normally.');
-        console.error('   2. DevTools (F12) → Application → Cookies → https://pubsonline.informs.org → copy the cf_clearance VALUE.');
-        console.error('   3. DevTools → Console → type  navigator.userAgent  → copy the exact string.');
-        console.error('  Then re-run — Windows cmd:');
-        console.error('    set LIT_CF_COOKIE=<cf_clearance value>');
-        console.error('    set LIT_UA=<your navigator.userAgent string>');
-        console.error('    node informs-editors-local.mjs');
-        console.error('  (PowerShell: $env:LIT_CF_COOKIE="…"; $env:LIT_UA="…"   ·   macOS/Linux: LIT_CF_COOKIE="…" LIT_UA="…" node …)');
-        console.error('  The cookie expires after a while; if the block returns mid-run, grab a fresh value and re-run —');
-        console.error('  progress is saved continuously, so it resumes where it stopped.');
+        if (process.env.GITHUB_ACTIONS) {
+          // CI: the block is the EXPECTED outcome for a datacenter IP — say so
+          // briefly and exit cleanly (nothing cached for this page, so a later
+          // run — or a home sitting — retries it).
+          console.log(`✗ pubsonline blocked this runner (HTTP ${status} / Cloudflare) on ${doi} — expected for datacenter IPs.`);
+          console.log('  Exiting cleanly; nothing was mis-cached. A home run (crawl-mksc-editors.bat or informs-editors-console.js) still works.');
+        } else {
+          console.error('\n✗ Blocked by Cloudflare from this connection.');
+          console.error('  The clearance cookie is bound to your browser\'s IP AND User-Agent, so you need BOTH:');
+          console.error('   1. Open https://pubsonline.informs.org in your browser; wait until an article page loads normally.');
+          console.error('   2. DevTools (F12) → Application → Cookies → https://pubsonline.informs.org → copy the cf_clearance VALUE.');
+          console.error('   3. DevTools → Console → type  navigator.userAgent  → copy the exact string.');
+          console.error('  Then re-run — Windows cmd:');
+          console.error('    set LIT_CF_COOKIE=<cf_clearance value>');
+          console.error('    set LIT_UA=<your navigator.userAgent string>');
+          console.error('    node informs-editors-local.mjs');
+          console.error('  (PowerShell: $env:LIT_CF_COOKIE="…"; $env:LIT_UA="…"   ·   macOS/Linux: LIT_CF_COOKIE="…" LIT_UA="…" node …)');
+          console.error('  The cookie expires after a while; if the block returns mid-run, grab a fresh value and re-run —');
+          console.error('  progress is saved continuously, so it resumes where it stopped.');
+        }
         break outer;
       }
-      if (status !== 200) { console.warn(`  ${doi}: HTTP ${status}`); await sleep(DELAY_MS); continue; }
+      if (status !== 200) {
+        console.warn(`  ${doi}: HTTP ${status}`);
+        if (++consecFails >= MAX_FAILS) {
+          console.log(`✗ ${consecFails} consecutive failed pages — the host looks unavailable from here; stopping (resume-safe).`);
+          break outer;
+        }
+        await sleep(DELAY_MS);
+        continue;
+      }
+      consecFails = 0;
       const ed = editorsFromPage(body);
       if (ed && (ed.se || ed.ae)) {
         cache[doi] = { se: ed.se, ae: src.ae ? ed.ae : '' };
@@ -265,6 +328,10 @@ for (const src of SOURCES) {
       if (processed % 50 === 0) console.log(`  …${processed} pages fetched, ${found} with editors`);
     } catch (e) {
       console.warn(`  ${doi}: ${e.message}`);
+      if (++consecFails >= MAX_FAILS) {
+        console.log(`✗ ${consecFails} consecutive failed pages — the host looks unavailable from here; stopping (resume-safe).`);
+        break outer;
+      }
     }
     await sleep(DELAY_MS);
   }
