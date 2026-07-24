@@ -93,7 +93,7 @@ async function awrite(dest, str) {
 }
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { editorsFromPageHtml } from './informs-editors.mjs';
+import { editorsFromPageHtml, canonEditorNames } from './informs-editors.mjs';
 import { isChallenged } from './pnas-crawl.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -222,6 +222,18 @@ if (MERGE_CACHE) {
   console.log(`  merge-cache: took ${took} entries from ${MERGE_CACHE}`);
 }
 
+// Heal known pubsonline typos (EDITOR_NAME_FIXUPS) across the whole cache —
+// a console-harvest replace or an old sitting may carry them; healing here
+// means every save/apply below emits only canonical names.
+let healedCache = 0;
+for (const v of Object.values(cache)) {
+  if (!v || typeof v !== 'object') continue;
+  const se = canonEditorNames(v.se), ae = canonEditorNames(v.ae);
+  if (se !== v.se) { v.se = se; healedCache++; }
+  if (ae !== v.ae) { v.ae = ae; healedCache++; }
+}
+if (healedCache) console.log(`  healed ${healedCache} cached editor fields (known pubsonline typos → canonical)`);
+
 async function saveCache() {
   const sorted = {};
   for (const k of Object.keys(cache).sort()) sorted[k] = cache[k];
@@ -243,6 +255,16 @@ async function applyToPapers() {
     const rows = JSON.parse(await readFile(p, 'utf8'));
     let filled = 0;
     for (const row of rows) {
+      // Heal a previously-applied known-typo value (EDITOR_NAME_FIXUPS) even
+      // when the cache has no record for this DOI.
+      if (row['Senior Editor']) {
+        const c = canonEditorNames(row['Senior Editor']);
+        if (c !== row['Senior Editor']) { row['Senior Editor'] = c; filled++; }
+      }
+      if (src.ae && row['Associate Editor']) {
+        const c = canonEditorNames(row['Associate Editor']);
+        if (c !== row['Associate Editor']) { row['Associate Editor'] = c; filled++; }
+      }
       const doi = (row.DOI || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase();
       const rec = doi && cache[doi];
       if (!rec) continue;
@@ -261,7 +283,7 @@ async function applyToPapers() {
 }
 
 if (APPLY_ONLY) {
-  if (MERGE_CACHE) await saveCache(); // persist the merged cache for the commit
+  if (MERGE_CACHE || healedCache) await saveCache(); // persist merge/healing for the commit
   await applyToPapers();
   process.exit(0);
 }
@@ -319,7 +341,7 @@ for (const src of SOURCES) {
       consecFails = 0;
       const ed = editorsFromPage(body);
       if (ed && (ed.se || ed.ae)) {
-        cache[doi] = { se: ed.se, ae: src.ae ? ed.ae : '' };
+        cache[doi] = { se: canonEditorNames(ed.se), ae: src.ae ? canonEditorNames(ed.ae) : '' };
         found++;
       } else {
         cache[doi] = { none: true };

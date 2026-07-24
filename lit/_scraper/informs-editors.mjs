@@ -134,3 +134,27 @@ export function editorsFromPageHtml(html) {
   }
   return { se: [...se].join('; '), ae: [...ae].join('; ') };
 }
+
+// ── Known editor-name typos → canonical spelling ────────────────────────────
+// pubsonline's own History lines occasionally misspell an editor's name (e.g.
+// "Olivier Tobuia" / "Olivier Touba" for Olivier Toubia) and the crawl copies
+// them faithfully, splitting one editor across several filter entries. This
+// map heals them at INGEST — informs-editors-local.mjs (cache load, new crawl
+// records, applyToPapers) and build-data.mjs (mapWork + applyInformsEditors)
+// — NOT inside the parser, so the console harvester's VENDORED parser stays
+// byte-identical (its raw output is healed when applied/built). Keyed by the
+// folded (lowercased, space-collapsed) name. Add new typos here as found.
+export const EDITOR_NAME_FIXUPS = {
+  'olivier tobuia': 'Olivier Toubia',
+  'olivier touba': 'Olivier Toubia',
+};
+
+// Canonicalize a "Name; Name" editor list via EDITOR_NAME_FIXUPS.
+// Unknown names pass through untouched; falsy input is returned as-is.
+export function canonEditorNames(list) {
+  if (!list) return list;
+  return String(list)
+    .split('; ')
+    .map(n => EDITOR_NAME_FIXUPS[n.toLowerCase().replace(/\s+/g, ' ').trim()] || n)
+    .join('; ');
+}
