@@ -45,6 +45,7 @@ function cleanName(raw) {
 // A plausible person name: 1-5 tokens, starts uppercase, no sentence words.
 function plausibleName(s) {
   if (!s || s.length < 4 || s.length > 60) return false;
+  if (s.includes(',')) return false; // a comma means a captured NAME LIST, not a name
   if (s.split(/\s+/).length > 6) return false;
   if (!/^[A-ZÀ-Þ]/.test(s)) return false;
   return !/\b(the|this|that|is|are|was|were|we|of|in|on|to|as|for|paper|article|issue|editors?|received|accepted|served|revisions?)\b/i.test(s);
@@ -148,6 +149,8 @@ export const EDITOR_NAME_FIXUPS = {
   'olivier tobuia': 'Olivier Toubia',
   'olivier touba': 'Olivier Toubia',
   'antony dukes': 'Anthony Dukes',
+  'k. sudir': 'K. Sudhir',
+  'manchanda puneet': 'Puneet Manchanda', // journal printed the name inverted
 };
 // NOT typos — distinct real editors that a fuzzy merge would wrongly fold:
 // "Heng Xu" vs "Hong Xu" (both ISR editors). Never add near-name pairs here
@@ -161,4 +164,24 @@ export function canonEditorNames(list) {
     .split('; ')
     .map(n => EDITOR_NAME_FIXUPS[n.toLowerCase().replace(/\s+/g, ' ').trim()] || n)
     .join('; ');
+}
+
+// Drop implausible entries from a "Name; Name" list: an entry containing a
+// comma is a captured NAME LIST, not a name (an acknowledgment editorial's
+// "Fred Feinberg, Ganesh Iyer, K…" blob), and a sub-4-char fragment is never
+// a real editor. plausibleName now rejects these at parse time too — this
+// sanitizer heals records that predate that guard.
+export function sanitizeEditorNames(list) {
+  if (!list) return list;
+  return String(list)
+    .split('; ')
+    .filter(n => n && !n.includes(',') && n.trim().length >= 4)
+    .join('; ');
+}
+
+// The one call every INGEST point uses: sanitize (drop blobs) then
+// canonicalize (heal known typos). informs-editors-local.mjs and
+// build-data.mjs both route editor values through this.
+export function healEditorNames(list) {
+  return canonEditorNames(sanitizeEditorNames(list));
 }

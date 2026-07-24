@@ -93,7 +93,8 @@ async function awrite(dest, str) {
 }
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { editorsFromPageHtml, canonEditorNames } from './informs-editors.mjs';
+import { editorsFromPageHtml, healEditorNames } from './informs-editors.mjs';
+import { isNonArticle } from './_nonarticle.mjs';
 import { isChallenged } from './pnas-crawl.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -164,6 +165,10 @@ async function doiList(src) {
     // Year floor (--since/--last-years): a row with an unparseable year is kept
     // (it can only be a stray — never silently dropped from the crawl).
     if (SINCE) rows = rows.filter(r => { const y = parseInt(r.Year, 10); return !y || y >= SINCE; });
+    // Never crawl NON-RESEARCH items (editorials, errata, front matter —
+    // _nonarticle.mjs): an acknowledgment editorial's own text names the
+    // editor board and would be mis-read as a History line.
+    rows = rows.filter(r => !isNonArticle(r.Title));
     // newest first, published-or-advance alike; rows are already rank-sorted
     return rows.map(r => (r.DOI || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase()).filter(Boolean);
   }
@@ -222,17 +227,22 @@ if (MERGE_CACHE) {
   console.log(`  merge-cache: took ${took} entries from ${MERGE_CACHE}`);
 }
 
-// Heal known pubsonline typos (EDITOR_NAME_FIXUPS) across the whole cache —
-// a console-harvest replace or an old sitting may carry them; healing here
-// means every save/apply below emits only canonical names.
+// Heal the whole cache: sanitize comma-blob "names" away and canonicalize
+// known pubsonline typos (healEditorNames) — a console-harvest replace or an
+// old sitting may carry either; healing here means every save/apply below
+// emits only clean canonical names. An entry left with NO names becomes a
+// plain miss so it never renders and can be re-checked.
 let healedCache = 0;
-for (const v of Object.values(cache)) {
+for (const [k, v] of Object.entries(cache)) {
   if (!v || typeof v !== 'object') continue;
-  const se = canonEditorNames(v.se), ae = canonEditorNames(v.ae);
-  if (se !== v.se) { v.se = se; healedCache++; }
-  if (ae !== v.ae) { v.ae = ae; healedCache++; }
+  const se = healEditorNames(v.se), ae = healEditorNames(v.ae);
+  if (se !== v.se || ae !== v.ae) {
+    healedCache++;
+    if (!se && !ae) cache[k] = { none: true };
+    else { v.se = se || ''; v.ae = ae || ''; }
+  }
 }
-if (healedCache) console.log(`  healed ${healedCache} cached editor fields (known pubsonline typos → canonical)`);
+if (healedCache) console.log(`  healed ${healedCache} cached editor entries (blobs dropped, typos → canonical)`);
 
 async function saveCache() {
   const sorted = {};
@@ -247,6 +257,8 @@ async function saveCache() {
 // commit + push instead of waiting for the next daily build to fold it in.
 // Writes are minified like the build's writeJson; an unchanged file is left
 // untouched, so it produces no git diff.
+let cachePurged = 0; // non-article cache records retired to a miss by applyToPapers
+
 async function applyToPapers() {
   let total = 0;
   for (const src of SOURCES) {
@@ -255,17 +267,27 @@ async function applyToPapers() {
     const rows = JSON.parse(await readFile(p, 'utf8'));
     let filled = 0;
     for (const row of rows) {
-      // Heal a previously-applied known-typo value (EDITOR_NAME_FIXUPS) even
-      // when the cache has no record for this DOI.
+      const doi = (row.DOI || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase();
+      // NON-RESEARCH items never carry editors: clear anything previously
+      // mis-applied (an acknowledgment editorial or erratum whose page text
+      // mentioned the board) and retire its cache record to a miss.
+      if (isNonArticle(row.Title)) {
+        if (row['Senior Editor']) { row['Senior Editor'] = ''; filled++; }
+        if (src.ae && row['Associate Editor']) { row['Associate Editor'] = ''; filled++; }
+        const rec = doi && cache[doi];
+        if (rec && (rec.se || rec.ae)) { cache[doi] = { none: true }; cachePurged++; }
+        continue;
+      }
+      // Heal a previously-applied blob/typo value even when the cache has no
+      // record for this DOI.
       if (row['Senior Editor']) {
-        const c = canonEditorNames(row['Senior Editor']);
+        const c = healEditorNames(row['Senior Editor']);
         if (c !== row['Senior Editor']) { row['Senior Editor'] = c; filled++; }
       }
       if (src.ae && row['Associate Editor']) {
-        const c = canonEditorNames(row['Associate Editor']);
+        const c = healEditorNames(row['Associate Editor']);
         if (c !== row['Associate Editor']) { row['Associate Editor'] = c; filled++; }
       }
-      const doi = (row.DOI || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase();
       const rec = doi && cache[doi];
       if (!rec) continue;
       if (!row['Senior Editor'] && rec.se) { row['Senior Editor'] = rec.se; filled++; }
@@ -283,8 +305,9 @@ async function applyToPapers() {
 }
 
 if (APPLY_ONLY) {
-  if (MERGE_CACHE || healedCache) await saveCache(); // persist merge/healing for the commit
   await applyToPapers();
+  // persist merge/healing/non-article purges for the commit
+  if (MERGE_CACHE || healedCache || cachePurged) await saveCache();
   process.exit(0);
 }
 
@@ -341,7 +364,7 @@ for (const src of SOURCES) {
       consecFails = 0;
       const ed = editorsFromPage(body);
       if (ed && (ed.se || ed.ae)) {
-        cache[doi] = { se: canonEditorNames(ed.se), ae: src.ae ? canonEditorNames(ed.ae) : '' };
+        cache[doi] = { se: healEditorNames(ed.se), ae: src.ae ? healEditorNames(ed.ae) : '' };
         found++;
       } else {
         cache[doi] = { none: true };
@@ -368,6 +391,7 @@ console.log(`  Cache now maps ${Object.keys(cache).length} DOIs (${withEditors} 
 // served papers files so the site shows them as soon as the commit deploys
 // (per the owner) — the daily build's own overlay stays the steady-state path.
 if (!NO_APPLY) await applyToPapers();
+if (cachePurged) await saveCache(); // persist non-article purges made by the apply
 console.log('\nNext: commit and push the updated files, e.g.');
 console.log('  git add lit/data');
 console.log('  git commit -m "lit: refresh ISR/Marketing Science editor index"');
