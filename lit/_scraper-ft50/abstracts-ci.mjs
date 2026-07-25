@@ -11,7 +11,18 @@
  *      (batched 50/call; the inverted index is reconstructed to text);
  *   2. Semantic Scholar graph/v1/paper/batch?fields=abstract (500 DOIs/POST;
  *      OPTIONAL leg — its anonymous pool 429s freely, so it drops out for the
- *      run while OpenAlex carries on; disable with FT50_ABS_S2=0).
+ *      run while OpenAlex carries on; disable with FT50_ABS_S2=0. An
+ *      S2_API_KEY env, when set, is sent as x-api-key so the leg stops
+ *      sharing the throttled anonymous pool);
+ *   3. Elsevier Abstract Retrieval API (article/abstract/doi/<doi>) for
+ *      10.1016/… DOIs — the bulk of the still-missing abstracts (EJOR, JFE,
+ *      AOS, OBHDP, JAE, Research Policy, JBV…) are Elsevier journals whose
+ *      text neither OpenAlex nor S2 may serve. INERT until an
+ *      ELSEVIER_API_KEY env/secret is set (a free institutional key from
+ *      dev.elsevier.com); one GET per DOI, paced, and the leg drops out for
+ *      the run on 401/403/429 (quota) so it can never stall the others. When
+ *      the key is present, Elsevier-prefix MISSES are retried immediately
+ *      (their earlier {none} stamps came from the keyless runs).
  * Results go into data-ft50/_api-abstracts.json (doi → {a} | {none:1,t:day});
  * a miss is retried after FT50_ABS_MISS_TTL_DAYS (default 45 — abstracts do
  * get indexed late). The apply step (and the FT50 daily build's
@@ -45,6 +56,10 @@ const BUDGET_MS = parseInt(process.env.FT50_ABS_BUDGET_MS || '', 10) || 40 * 60 
 const PACE_MS = Math.max(150, parseInt(process.env.FT50_ABS_PACE_MS || '', 10) || 300);
 const MISS_TTL_DAYS = parseInt(process.env.FT50_ABS_MISS_TTL_DAYS || '', 10) || 45;
 const USE_S2 = process.env.FT50_ABS_S2 !== '0';
+const S2_KEY = process.env.S2_API_KEY || '';
+const ELS_KEY = process.env.ELSEVIER_API_KEY || '';
+const ELS_PACE_MS = Math.max(250, parseInt(process.env.FT50_ABS_ELS_PACE_MS || '', 10) || 350);
+const ELS_PREFIX = /^10\.1016\//;
 const NEEDY_MAX_LEN = 300; // mirror the INFORMS harvester's teaser threshold
 const T0 = Date.now();
 const day = () => Math.floor(Date.now() / 86400000);
@@ -59,6 +74,23 @@ export function invertedToText(inv) {
     for (const p of positions) if (Number.isInteger(p) && p >= 0 && p < 100000) words[p] = w;
   }
   return words.filter(x => x !== undefined).join(' ').replace(/\s+/g, ' ').trim();
+}
+
+// The abstract text out of Elsevier's Abstract Retrieval JSON. Exported for
+// the selftest. The shape is {"abstracts-retrieval-response":{"coredata":
+// {"dc:description": …}}}; dc:description is usually a plain string but can be
+// a nested {abstract:{'ce:para': …}} object — take the first string found.
+export function elsevierAbstract(body) {
+  const core = body && body['abstracts-retrieval-response'] &&
+    body['abstracts-retrieval-response'].coredata;
+  const d = core && core['dc:description'];
+  const firstString = (v) => {
+    if (typeof v === 'string') return v;
+    if (Array.isArray(v)) { for (const x of v) { const s = firstString(x); if (s) return s; } return ''; }
+    if (v && typeof v === 'object') { for (const x of Object.values(v)) { const s = firstString(x); if (s) return s; } }
+    return '';
+  };
+  return cleanText(firstString(d));
 }
 
 // Merge another cache in: an entry WITH an abstract beats a none-record, a
@@ -157,7 +189,8 @@ async function main() {
       if (!doi) continue;
       const cur = cache[doi];
       if (cur && cur.a) continue;
-      if (cur && cur.none && (day() - (cur.t || 0)) < MISS_TTL_DAYS) continue;
+      if (cur && cur.none && (day() - (cur.t || 0)) < MISS_TTL_DAYS &&
+          !(ELS_KEY && ELS_PREFIX.test(doi))) continue; // keyed run: retry Elsevier misses now
       needy.push({ doi, y: parseInt(row.Year, 10) || 0 });
     }
   }
@@ -165,7 +198,7 @@ async function main() {
   console.log(`${needy.length} FT50 papers need an abstract (missing/stub, cache-eligible).`);
   if (DRY) return;
 
-  let s2ok = USE_S2, found = 0, checked = 0, batches = 0;
+  let s2ok = USE_S2, elsOk = true, found = 0, checked = 0, batches = 0;
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   for (let i = 0; i < needy.length; i += 50) {
     if (Date.now() - T0 > BUDGET_MS) { console.log('⏱ budget spent — stopping this slice (resume-safe).'); break; }
@@ -190,7 +223,7 @@ async function main() {
       try {
         const r = await fetch(`https://api.semanticscholar.org/graph/v1/paper/batch?fields=abstract`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...(S2_KEY ? { 'x-api-key': S2_KEY } : {}) },
           body: JSON.stringify({ ids: [...unresolved].map(d => `DOI:${d}`) }),
         });
         if (r.status === 429) { s2ok = false; console.log('  Semantic Scholar throttled — dropping that leg for this run.'); }
@@ -204,7 +237,29 @@ async function main() {
         }
       } catch (e) { s2ok = false; console.warn(`  Semantic Scholar leg failed (${e.message}) — dropping it for this run.`); }
     }
-    // Both legs concluded for this batch: stamp the rest as misses (TTL-retried).
+    // Leg 3: Elsevier Abstract Retrieval (keyed; Elsevier DOIs only). One GET
+    // per DOI — the leg drops out for the run on 401/403/429 so a spent weekly
+    // quota can never stall the batched legs.
+    if (elsOk && ELS_KEY && unresolved.size) {
+      for (const doi of [...unresolved]) {
+        if (!ELS_PREFIX.test(doi)) continue;
+        if (Date.now() - T0 > BUDGET_MS) break;
+        try {
+          const r = await fetch(
+            `https://api.elsevier.com/content/abstract/doi/${encodeURIComponent(doi)}?httpAccept=application/json`,
+            { headers: { 'X-ELS-APIKey': ELS_KEY, Accept: 'application/json' } });
+          if (r.status === 401 || r.status === 403 || r.status === 429) {
+            elsOk = false; console.log(`  Elsevier leg dropped for this run (HTTP ${r.status} — key/quota).`); break;
+          }
+          if (r.ok) {
+            const text = elsevierAbstract(await r.json());
+            if (text.length >= 60) { cache[doi] = { a: text.slice(0, ABS_MAX) }; unresolved.delete(doi); found++; }
+          }
+        } catch (e) { elsOk = false; console.warn(`  Elsevier leg failed (${e.message}) — dropping it for this run.`); break; }
+        await sleep(ELS_PACE_MS);
+      }
+    }
+    // All legs concluded for this batch: stamp the rest as misses (TTL-retried).
     for (const doi of unresolved) cache[doi] = { none: 1, t: day() };
     checked += batch.length;
     if (++batches % 5 === 0) { await saveCache(); console.log(`  …${checked} DOIs checked, ${found} abstracts found`); }

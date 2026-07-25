@@ -42,6 +42,14 @@ jobs:
       - name: Backfill FT50 abstracts (bounded slice, newest first)
         env:
           FT50_ABS_BUDGET_MS: '2400000'
+          # Optional keys — both legs stay inert/anonymous until the secret is
+          # set on the repo. ELSEVIER_API_KEY (a free institutional key from
+          # dev.elsevier.com) unlocks the Abstract Retrieval leg for 10.1016/…
+          # DOIs — the bulk of the still-missing FT50 abstracts (EJOR, JFE,
+          # AOS, OBHDP, JAE, Research Policy…). S2_API_KEY moves the Semantic
+          # Scholar leg off the throttled anonymous pool.
+          ELSEVIER_API_KEY: ${{ secrets.ELSEVIER_API_KEY }}
+          S2_API_KEY: ${{ secrets.S2_API_KEY }}
         run: node lit/_scraper-ft50/abstracts-ci.mjs
 
       - name: Commit refreshed data

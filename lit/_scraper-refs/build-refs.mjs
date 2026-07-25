@@ -40,14 +40,16 @@
  * ids in `o`); intersection with the catalog happens at build time, so no
  * re-fetch is needed as the catalog grows or as _oaid.json fills in.
  *
- * HOW IT STAYS POLITE AND SLOW (built to fill over WEEKS, not minutes).
- * Every request is paced (REFS_PACE_MS, default 400 ms for Crossref; OpenAlex/
- * S2 are batched and lightly paced), honours Retry-After, and backs off on
- * 429/5xx; each scheduled run fetches only a small, bounded slice of papers
- * (REFS_MAX_PAPERS) and checkpoints as it goes, so the workflow
- * (.github/workflows/lit-references-backfill.yml) grows the graph gently
- * across many runs over weeks. A paper stamped at the current version is
- * "done"; a run always resumes on the not-yet-done papers.
+ * HOW IT STAYS POLITE (and how it got fast). ALL THREE legs are batched now —
+ * Crossref reads up to REFS_CR_BATCH (default 25) DOIs per works? call via
+ * same-name doi: filters, exactly like the citations sweep, where it used to
+ * spend one paced request per paper (~1.5k papers per 45-min run; the batched
+ * leg covers the same window ~25x over, so the FT50 25-year backlog clears in
+ * days instead of months). Every request is still paced (REFS_PACE_MS, default
+ * 400 ms between Crossref calls; OpenAlex/S2 lightly paced), honours
+ * Retry-After, and backs off on 429/5xx; each run fetches a bounded slice
+ * (REFS_MAX_PAPERS) and checkpoints as it goes. A paper stamped at the current
+ * version is "done"; a run always resumes on the not-yet-done papers.
  *
  * PAPER PRIORITY (per the site owner): Management Science, M&SOM, POM and PNAS
  * (all years) are fetched FIRST, then the UTD24 and FT50 journals (newest
@@ -116,7 +118,8 @@ export const RF_VER = 2;
 // ── Tunables (every default errs gentle — this is a weeks-long backfill) ─────
 const PACE_MS = parseInt(process.env.REFS_PACE_MS || '400', 10);        // between Crossref calls
 const OA_PACE_MS = parseInt(process.env.REFS_OA_PACE_MS || '200', 10);  // between OpenAlex batches
-const MAX_PAPERS = parseInt(process.env.REFS_MAX_PAPERS || '4000', 10); // papers per run
+const MAX_PAPERS = parseInt(process.env.REFS_MAX_PAPERS || '40000', 10); // papers per run
+const CR_BATCH = Math.max(1, Math.min(40, parseInt(process.env.REFS_CR_BATCH || '25', 10))); // DOIs per Crossref call
 const BUDGET_MS = parseInt(process.env.REFS_BUDGET_MS || String(40 * 60 * 1000), 10); // wall-clock ceiling
 const MAX_REFS = parseInt(process.env.REFS_MAX_REFS || '500', 10);      // cap raw cited refs per paper per source
 const MAX_THROTTLE = 8;            // consecutive Crossref waits before giving the run up
@@ -383,14 +386,27 @@ async function fetchS2Refs(slice, deadline) {
 }
 
 // ── Leg 1: Crossref references (per paper) — the stamping backbone ───────────
-async function fetchCrossrefRefs(doi, deadline) {
-  const url = 'https://api.crossref.org/works?filter=doi:' + encodeURIComponent(doi) +
-    '&select=DOI,reference&rows=1&mailto=' + encodeURIComponent(MAILTO);
+// Batched: one works? call reads the deposited references of up to CR_BATCH
+// papers (same-name doi: filters OR together — the same batching the citations
+// sweep uses). This is what makes the backfill fast: the old per-paper call
+// (~1 s each incl. pacing) capped a 25-minute Crossref window at ~1.5k papers;
+// a 25-DOI batch covers the same window ~25x over. Returns {doi: refs[]} for
+// the DOIs Crossref KNOWS — an absent DOI is concluded empty (the old
+// per-paper 404 semantics) — or null when Crossref stays unavailable.
+async function fetchCrossrefRefsBatch(dois, deadline) {
+  const url = 'https://api.crossref.org/works?filter=' +
+    dois.map((d) => 'doi:' + encodeURIComponent(d)).join(',') +
+    '&select=DOI,reference&rows=' + dois.length + '&mailto=' + encodeURIComponent(MAILTO);
   const body = await crGetPatient(url, deadline);
   if (body === null) return null;
   const msg = body.message || {};
-  const item = Array.isArray(msg.items) ? (msg.items[0] || {}) : msg;
-  return extractRefDois(item);
+  const items = Array.isArray(msg.items) ? msg.items : [msg];
+  const byDoi = {};
+  for (const item of items) {
+    const d = normDoi(item && item.DOI);
+    if (d) byDoi[d] = extractRefDois(item);
+  }
+  return byDoi;
 }
 
 // ── Apply: intersect the cached references with the current catalog ──────────
@@ -459,20 +475,25 @@ async function main() {
   // 5. Leg 3 (Semantic Scholar, batched, optional) — in-memory, folded into r.
   const s2ByDoi = await fetchS2Refs(slice, Math.min(deadline, Date.now() + 5 * 60 * 1000));
 
-  // 6. Leg 1 (Crossref, per paper) — the stamping backbone.
+  // 6. Leg 1 (Crossref, batched) — the stamping backbone. A DOI absent from
+  //    its batch's response is stamped concluded-empty (the old 404 semantics).
   let done = 0, stopped = false;
-  for (const p of slice) {
+  const pending = slice.filter((p) => !(cache[p.doi] && (cache[p.doi].v || 0) >= RF_VER));
+  for (let i = 0; i < pending.length; i += CR_BATCH) {
     if (Date.now() > deadline) { console.log('  time budget reached — stopping (resumes next run).'); stopped = true; break; }
-    const c = cache[p.doi];
-    if (c && (c.v || 0) >= RF_VER) continue; // already stamped this version (e.g. re-run)
-    const refs = await fetchCrossrefRefs(p.doi, deadline);
-    if (refs === null) { console.log('  crossref unavailable — stopping (resumes next run).'); stopped = true; break; }
-    const e = cache[p.doi] || {};
-    e.r = unionCap(e.r, refs, s2ByDoi[p.doi]);
-    e.t = PULL_DATE; e.v = RF_VER;
-    cache[p.doi] = e;
-    done++;
-    if (done % 100 === 0) { await checkpoint(); console.log(`  …${done} papers stamped this run`); }
+    const batch = pending.slice(i, i + CR_BATCH);
+    const byDoi = await fetchCrossrefRefsBatch(batch.map((p) => p.doi), deadline);
+    if (byDoi === null) { console.log('  crossref unavailable — stopping (resumes next run).'); stopped = true; break; }
+    for (const p of batch) {
+      const e = cache[p.doi] || {};
+      e.r = unionCap(e.r, byDoi[p.doi] || [], s2ByDoi[p.doi]);
+      e.t = PULL_DATE; e.v = RF_VER;
+      cache[p.doi] = e;
+      done++;
+    }
+    if (Math.floor(done / 500) !== Math.floor((done - batch.length) / 500)) {
+      await checkpoint(); console.log(`  …${done} papers stamped this run`);
+    }
   }
 
   // 7. Intersect the whole cache with the catalog and write the served files.
@@ -525,9 +546,17 @@ async function mockGet(rawUrl) {
     for (const d of dois) { const w = await loadJson(join(MOCK_DIR, `oa-${slug(d)}.json`), null); if (w) results.push(w); }
     return { ok: true, status: 200, json: { results } };
   }
-  // Crossref
-  const j = await loadJson(join(MOCK_DIR, `cr-${slug(dois[0] || '')}.json`), null);
-  return { ok: true, status: 200, json: { message: { items: [j || {}] } } };
+  // Crossref — a batched URL carries several same-name filters ("doi:a,doi:b");
+  // serve each requested DOI's fixture as one item, skipping unknown DOIs
+  // (matching the live API: absent DOI = no item).
+  const crDois = (url.match(/filter=([^&]+)/i) || [, ''])[1]
+    .split(',').filter((f) => /^doi:/i.test(f)).map((f) => f.slice(4));
+  const items = [];
+  for (const d of (crDois.length ? crDois : dois)) {
+    const j = await loadJson(join(MOCK_DIR, `cr-${slug(d)}.json`), null);
+    if (j) items.push(j);
+  }
+  return { ok: true, status: 200, json: { message: { items } } };
 }
 async function mockS2(batch) {
   const slug = (s) => s.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
