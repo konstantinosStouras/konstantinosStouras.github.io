@@ -306,7 +306,15 @@ non-INFORMS journals)** come from a separate ONLINE backfill —
 FT50 journals deposit no abstract to Crossref, so it resolves missing/stub
 rows by DOI via OpenAlex `abstract_inverted_index` (reconstructed;
 batched 50/call) with an optional Semantic Scholar leg (500 DOIs/POST,
-drops out on throttle), caches into `data-ft50/_api-abstracts.json`
+drops out on throttle; an `S2_API_KEY` secret moves it off the anonymous
+pool) **plus an Elsevier Abstract Retrieval leg** for `10.1016/…` DOIs —
+the bulk of the still-missing FT50 abstracts (EJOR/JFE/AOS/OBHDP/JAE/
+Research Policy…) are Elsevier journals whose text OpenAlex/S2 may not
+serve; INERT until an `ELSEVIER_API_KEY` secret is set (free institutional
+key from dev.elsevier.com; `elsevierAbstract` parses `dc:description`,
+keyed runs re-try earlier keyless `{none}` stamps for Elsevier DOIs, and
+the leg drops out for the run on 401/403/429 so a spent quota never stalls
+the batched legs), caches into `data-ft50/_api-abstracts.json`
 (doi → `{a}` | `{none:1,t:day}`, misses retried after
 `FT50_ABS_MISS_TTL_DAYS` 45), and applies UPGRADE-only via the same
 `betterAbstract`; `applyAbstractCaches` folds it into every FT50 daily
@@ -1301,9 +1309,13 @@ when the panel is opened. It is its **own dataset**,
 move to a dedicated `lit-data-refs` Pages repo when it nears the 1 GB limit —
 migration is ONE constant, `REFS_DATA_BASE` `'./data-refs/'` →
 `'/lit-data-refs/data/'`, same pattern as `WP_DATA_BASE`). **Data sources (three,
-unioned for accuracy):** (1) **Crossref** backbone — one
-`works?filter=doi:<doi>&select=DOI,reference` per paper reads the DOIs the
-publisher deposited (the leg that stamps a paper "done"); (2) **OpenAlex** —
+unioned for accuracy):** (1) **Crossref** backbone — BATCHED
+`works?filter=doi:<a>,doi:<b>,…&select=DOI,reference` calls (`REFS_CR_BATCH`,
+default 25 DOIs/call — same-name filters OR together, like the citations
+sweep; a DOI absent from its batch's response is concluded empty, the old
+per-paper-404 semantics) read the DOIs the publisher deposited — the leg that
+stamps a paper "done". Batching is what made the backfill fast (~25× the old
+per-paper call), so the FT50 25-year backlog clears in days; (2) **OpenAlex** —
 `works?filter=doi:<50>&select=id,doi,referenced_works` (batched 50/call), a
 generally more-complete reference graph whose `referenced_works` OpenAlex-ids are
 resolved back to catalog DOIs via `data-refs/_oaid.json` (`doi → OpenAlex id`,

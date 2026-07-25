@@ -4,7 +4,7 @@
  * reconstruction, the cache-merge rule, and the needy-row test.
  * Run: node lit/_scraper-ft50/abstracts-selftest.mjs
  */
-import { invertedToText, mergeAbsCache, isNeedy } from './abstracts-ci.mjs';
+import { invertedToText, mergeAbsCache, isNeedy , elsevierAbstract } from './abstracts-ci.mjs';
 import { betterAbstract } from '../_scraper/informs-abstracts.mjs';
 
 let fails = 0;
@@ -31,6 +31,16 @@ console.log('isNeedy: missing/stub abstracts only');
 ok(isNeedy({ Abstract: '' }), 'missing abstract is needy');
 ok(isNeedy({ Abstract: 'One-line teaser.' }), 'sub-300-char stub is needy');
 ok(!isNeedy({ Abstract: 'x'.repeat(400) }), 'a real abstract is not needy');
+
+console.log('elsevierAbstract: Abstract Retrieval JSON → text');
+eq(elsevierAbstract({ 'abstracts-retrieval-response': { coredata: { 'dc:description': 'A plain abstract text.' } } }),
+  'A plain abstract text.', 'plain-string dc:description');
+eq(elsevierAbstract({ 'abstracts-retrieval-response': { coredata: { 'dc:description': { abstract: { 'ce:para': 'Nested para text.' } } } } }),
+  'Nested para text.', 'nested ce:para object');
+eq(elsevierAbstract({ 'abstracts-retrieval-response': { coredata: { 'dc:description': 'R&amp;D and CO&lt;sub&gt;2&lt;/sub&gt; costs.' } } }),
+  'R&D and CO2 costs.', 'entities decoded + markup stripped via cleanText');
+eq(elsevierAbstract({}), '', 'missing body → empty');
+eq(elsevierAbstract(null), '', 'null → empty');
 
 console.log('betterAbstract import path (shared upgrade rule)');
 ok(betterAbstract('', 'y'.repeat(80)), 'empty ← candidate works via the cross-import');

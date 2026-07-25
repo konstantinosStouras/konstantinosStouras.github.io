@@ -159,9 +159,21 @@ function textMatch(haystack, query) {
   if (!phrase) return true;
   return new RegExp('\\b' + escRegex(phrase) + '\\b').test(haystack);
 }
+// Diacritic/apostrophe folding, VENDORED from index.html's nameFold (keep in
+// sync): the page folds BOTH sides of an author match, so an alert term
+// "regis" finds the credited "Régis Chenavaz" — without this the mailer
+// missed any author whose stored name carries an accent.
+function nameFold(s) {
+  s = String(s || '');
+  if (!/[^\x20-\x7e]/.test(s)) return s.indexOf('  ') === -1 ? s : s.replace(/\s+/g, ' ');
+  try { s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch (e) {}
+  return s.replace(/\u2019/g, "'").replace(/\s+/g, ' ');
+}
+
 function authorMatch(haystack, query) {
   if (!query) return true;
   if (query.charAt(0) === '"') return textMatch(haystack, query);
+  haystack = nameFold(haystack); query = nameFold(query);
   let idx = 0;
   while ((idx = haystack.indexOf(query, idx)) !== -1) {   // prefix-of-a-name-part
     const prev = idx === 0 ? '' : haystack.charAt(idx - 1);
@@ -913,6 +925,13 @@ function selftest() {
   ok('ijoc is UTD24 not FT50', matchesCriteria(P({ JKey: 'ijoc', Journal: 'IJOC' }), { jtype: ['utd24'] }, ctx)
      && !matchesCriteria(P({ JKey: 'ijoc' }), { jtype: ['ft50'] }, ctx));
   ok('no scope matches any journal', matchesCriteria(P({ JKey: 'zzz' }), { author: ['stouras'] }, ctx));
+  // nameFold parity with the page: an accented stored name matches a plain term
+  ok('accented author folds (regis ← Régis)',
+    matchesCriteria(P({ Authors: 'Régis Chenavaz, Sørcha O’Brien' }), { author: ['regis'] }, ctx));
+  ok('folded apostrophe matches (o\'brien ← O’Brien)',
+    matchesCriteria(P({ Authors: 'Sørcha O’Brien' }), { author: ["o'brien"] }, ctx));
+  ok('mid-name substring still rejected under folding',
+    !matchesCriteria(P({ Authors: 'Régis Chenavaz' }), { author: ['egis'] }, ctx));
 
   // PNAS section keys
   const pnas = P({ JKey: 'pnas', Journal: 'PNAS', Sections: ['Economic Sciences'] });
