@@ -137,7 +137,7 @@
     console.log(`⬇ Downloaded _informs-abstracts.json — ${Object.keys(sorted).length} DOIs, ${withA} with abstracts.`);
     console.log('Move it over lit\\data\\_informs-abstracts.json (replace), then push the abstracts into the SERVED papers files:');
     console.log('  cd lit\\_scraper && node informs-abstracts-local.mjs --apply-only');
-    console.log('  git add lit/data && git commit -m "lit: full abstracts from pubsonline" && git pull --rebase origin master && git push');
+    console.log('  git add lit/data lit/data-ft50 && git commit -m "lit: full abstracts from pubsonline" && git pull --rebase origin master && git push');
   }
 
   async function run(max = Infinity, retryMisses = false, journal = '', since = 0) {

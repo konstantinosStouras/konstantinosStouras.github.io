@@ -113,6 +113,13 @@ const SOURCES = [
   { key: 'stsc', file: 'papers-stsc.json' },
   { key: 'ited', file: 'papers-ited.json' },
 ];
+// The FT50 catalog carries its OWN copies of five INFORMS journals under the
+// same DOIs — the apply step upgrades those too (crawling stays native-driven;
+// the DOI sets overlap). The FT50 daily build re-applies the cache itself
+// (applyAbstractCaches in _scraper-ft50/build-data.mjs).
+const FT50_DIR = resolve(__dirname, '..', 'data-ft50');
+const FT50_APPLY = ['ms', 'mksc', 'isre', 'msom', 'opre']
+  .map(k => ({ key: `ft50-${k}`, file: `papers-${k}.json`, dir: FT50_DIR }));
 if (JOURNAL && !SOURCES.some(s => s.key === JOURNAL)) {
   console.error(`✗ Unknown --journal "${JOURNAL}" — use one of: ${SOURCES.map(s => s.key).join(', ')}`);
   process.exit(1);
@@ -176,8 +183,8 @@ if (MERGE_CACHE) {
 // nothing improves. build-data.mjs applies the same cache on every build.
 async function applyToPapers() {
   let total = 0;
-  for (const src of SOURCES) {
-    const p = join(DATA_DIR, src.file);
+  for (const src of [...SOURCES, ...FT50_APPLY]) {
+    const p = join(src.dir || DATA_DIR, src.file);
     if (!existsSync(p)) continue;
     const rows = JSON.parse(await readFile(p, 'utf8'));
     let upgraded = 0;
@@ -266,7 +273,7 @@ console.log(`  This session: ${processed} pages fetched, ${found} new abstracts.
 console.log(`  Cache now maps ${Object.keys(cache).length} DOIs (${withAbs} with abstracts).`);
 if (!NO_APPLY) await applyToPapers();
 console.log('\nNext: commit and push the updated files, e.g.');
-console.log('  git add lit/data');
+console.log('  git add lit/data lit/data-ft50');
 console.log('  git commit -m "lit: full abstracts from pubsonline (Marketing Science)"');
 console.log('  git push');
 console.log('The site updates when the push deploys; every daily build keeps the cache applied.');

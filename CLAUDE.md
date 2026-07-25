@@ -292,7 +292,26 @@ text). `build-data.mjs` re-applies the committed cache in BOTH the daily
 build and the incremental pass (`applyInformsAbstracts`), so a rebuild can
 never regress a fixed abstract back to the teaser. Same CI knobs as the
 editors crawler (`LIT_ABSTRACTS_DELAY_MS`/`_BUDGET_MS`/`_MAX_FAILS`,
-cookie via `LIT_CF_COOKIE`+`LIT_UA`).
+cookie via `LIT_CF_COOKIE`+`LIT_UA`); the standing pubsonline CI attempt
+(`lit-editors-backfill.yml`) runs this crawler as a second step (25-min
+slice) after the editors one, replaying BOTH caches on its push-retry.
+**The apply step also covers the FT50 catalog's copies of the five INFORMS
+journals** (`FT50_APPLY` in informs-abstracts-local.mjs — same DOIs), and
+the FT50 daily build overlays the same cache itself (`applyAbstractCaches`
+in `_scraper-ft50/build-data.mjs`). **FT50-wide abstracts (the ~45
+non-INFORMS journals)** come from a separate ONLINE backfill —
+`lit/_scraper-ft50/abstracts-ci.mjs`, run 4×/day by
+`.github/workflows/lit-ft50-abstracts-backfill.yml` (shares the
+`lit-ft50-update-data-*` concurrency group; in the ci-pause lists): many
+FT50 journals deposit no abstract to Crossref, so it resolves missing/stub
+rows by DOI via OpenAlex `abstract_inverted_index` (reconstructed;
+batched 50/call) with an optional Semantic Scholar leg (500 DOIs/POST,
+drops out on throttle), caches into `data-ft50/_api-abstracts.json`
+(doi → `{a}` | `{none:1,t:day}`, misses retried after
+`FT50_ABS_MISS_TTL_DAYS` 45), and applies UPGRADE-only via the same
+`betterAbstract`; `applyAbstractCaches` folds it into every FT50 daily
+build. Distinct OpenAlex identity `kstouras+litft50abs`. Offline test:
+`node lit/_scraper-ft50/abstracts-selftest.mjs`.
 **Known pubsonline name typos are canonicalized at ingest** ("Olivier
 Tobuia"/"Olivier Touba" → Olivier Toubia, "K. Sudir" → K. Sudhir, the
 inverted "Manchanda Puneet" → Puneet Manchanda — the journal's own

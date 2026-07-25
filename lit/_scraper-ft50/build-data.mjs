@@ -67,6 +67,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseInformsEditors } from './informs-editors.mjs';
+import { betterAbstract } from '../_scraper/informs-abstracts.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MOCK = process.env.FT50_MOCK === '1';
@@ -1425,6 +1426,32 @@ export async function refreshCitations(allPapers, cache, opts = {}) {
   return done;
 }
 
+// Overlay FULLER abstracts from two caches — UPGRADE-only via betterAbstract
+// (a Crossref teaser loses; fuller existing text is never replaced):
+//  • ../data/_informs-abstracts.json — the pubsonline page harvest (the five
+//    INFORMS journals live in this catalog too, under the same DOIs);
+//  • _api-abstracts.json — the FT50-wide OpenAlex/Semantic Scholar backfill
+//    (abstracts-ci.mjs), covering the ~45 non-INFORMS journals.
+// Applied in the daily build so a rebuild can never regress a fixed abstract
+// (the incremental pass never touches Abstract — not an INCR_CORE_FIELD).
+async function applyAbstractCaches(allPapers) {
+  const paths = [
+    join(DATA_DIR, '..', 'data', '_informs-abstracts.json'),
+    join(DATA_DIR, '_api-abstracts.json'),
+  ];
+  let up = 0;
+  for (const p of paths) {
+    const raw = await loadJsonIfExists(p, {});
+    const map = raw.map || raw;
+    for (const row of allPapers) {
+      const rec = row._doi && map[row._doi];
+      if (!rec || !rec.a) continue;
+      if (betterAbstract(row.Abstract, rec.a)) { row.Abstract = rec.a.slice(0, MAX_ABSTRACT); up++; }
+    }
+  }
+  if (up) console.log(`  abstracts: upgraded ${up} teaser/missing abstracts from the page/API caches`);
+}
+
 export function applyCitations(allPapers, cache) {
   let n = 0, a = 0;
   for (const p of allPapers) {
@@ -1720,6 +1747,7 @@ async function main() {
     await writeJson('_citations.json', citationsCache);
   }
   applyCitations(allPapers, citationsCache);
+  await applyAbstractCaches(allPapers);
 
   const registry = updateRegistry(bySource, reg);
 
