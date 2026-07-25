@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "title-punctuation-cleanup",
+      "date": "2026-07-25",
+      "title": "Cleaner paper titles and affiliations",
+      "summary": "Some publishers deposit a paper title with a dangling comma, semicolon or colon on the end — “The Lock-In Effect and the Corporate Payout Puzzle,” — and the same stray punctuation reached affiliations (“University of Tokyo ,”). Every catalog now trims it, both for new papers as they arrive and across the whole back-catalogue: 307 titles and about 14,000 affiliations were cleaned up. Titles that genuinely end in a question mark, exclamation mark or period are untouched, as is any punctuation inside a title.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
       "id": "aia-lead-journal-lists",
       "date": "2026-07-24",
       "title": "Articles in Advance now lead each journal’s list",

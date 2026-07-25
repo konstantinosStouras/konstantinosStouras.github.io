@@ -54,6 +54,33 @@ const ok = (c, m) => { c ? pass++ : (fail++, console.log('  FAIL:', m)); };
   ok(sameWorkDup(r1, { ...r2, Authors: 'Alex Mason' }) === null, 'conflicting authors never collapse');
 }
 
+// 0b) Unit checks of the stray-trailing-separator trim (see titleText /
+// trimTrailingSeparators / affilName in build-data.mjs — the same canonical block
+// as the native pipeline): a dangling ',' / ';' / ':' deposited on a title or
+// affiliation is trimmed, while legitimate end punctuation and the ';' that
+// closes an HTML entity survive untouched.
+{
+  const { titleText, trimTrailingSeparators, affilName, affilList } = await import('./build-data.mjs');
+  ok(titleText('Cost Containment in Health Care: A Model for Management Research ,')
+    === 'Cost Containment in Health Care: A Model for Management Research',
+    'trailing " ," trimmed, internal colon kept');
+  ok(titleText('The Lock-In Effect and the Corporate Payout Puzzle,')
+    === 'The Lock-In Effect and the Corporate Payout Puzzle', 'trailing comma trimmed');
+  ok(titleText('America’s Best:') === 'America’s Best', 'trailing colon (lost subtitle) trimmed');
+  ok(titleText('Weird Title , ;') === 'Weird Title', 'a run of separators collapses');
+  ok(titleText('Implementing the &quot;Wisdom of the Crowd&quot;')
+    === 'Implementing the &quot;Wisdom of the Crowd&quot;', 'the ";" closing an HTML entity is never cut');
+  ok(titleText('Numeric entity &#8212;') === 'Numeric entity &#8212;', 'numeric entity survives intact');
+  ok(titleText('When is P < 0.05 Significant?') === 'When is P < 0.05 Significant?',
+    'a legitimate question mark is kept');
+  ok(titleText(titleText('Puzzle,')) === 'Puzzle', 'idempotent (safe to re-apply every build)');
+  ok(trimTrailingSeparators(null) === '', 'empty input is safe');
+  ok(affilName('University of Tokyo ,') === 'University of Tokyo', 'affiliation comma trimmed');
+  ok(affilName(' , ') === '', 'a separator-only affiliation collapses to empty');
+  ok(affilList('Germany;; Leadec, Chemnitz') === 'Germany; Leadec, Chemnitz',
+    'affilList drops the empty segment that showed as a doubled ";;"');
+}
+
 // 1) Seed a full mock build.
 run({});
 const ecta0 = rd('papers-ecta.json');

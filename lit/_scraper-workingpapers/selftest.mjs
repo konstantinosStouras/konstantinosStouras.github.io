@@ -9,7 +9,7 @@ import { readFile, rm } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { wpRecordFromWork, orderAuthors, invertAbstract, loadCatalog, cleanText,
-  wpSameWork, collapseWpDuplicates, recKey } from './build-data.mjs';
+  cleanTitle, wpSameWork, collapseWpDuplicates, recKey } from './build-data.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const run = promisify(execFile);
@@ -39,6 +39,20 @@ async function main() {
   ok(cleanText('Risk &amp; Return') === 'Risk & Return', 'single-encoded ampersand → &');
   ok(cleanText('When is P &lt; 0.05 Significant?') === 'When is P < 0.05 Significant?', 'lone < (not a tag) is preserved');
   ok(cleanText('A Perfectly Ordinary Title') === 'A Perfectly Ordinary Title', 'clean title unchanged (idempotent)');
+
+  console.log('unit: cleanTitle (trim a stray trailing separator off a title)');
+  ok(cleanTitle('The Lock-In Effect and the Corporate Payout Puzzle,')
+    === 'The Lock-In Effect and the Corporate Payout Puzzle', 'trailing comma trimmed');
+  ok(cleanTitle('Market-Wide Effects of Off-Balance Sheet Disclosures:')
+    === 'Market-Wide Effects of Off-Balance Sheet Disclosures', 'trailing colon trimmed');
+  ok(cleanTitle('Some Title , ;') === 'Some Title', 'a run of separators collapses');
+  ok(cleanTitle('&lt;p&gt;A Wrapped Title,&lt;/p&gt;') === 'A Wrapped Title',
+    'markup stripped first, then the revealed trailing comma trimmed');
+  ok(cleanTitle('a job-shop scheduling system&ast;') === 'a job-shop scheduling system&ast;',
+    'the ";" closing an unknown HTML entity is never cut');
+  ok(cleanTitle('When is P &lt; 0.05 Significant?') === 'When is P < 0.05 Significant?',
+    'a legitimate question mark is kept');
+  ok(cleanTitle(cleanTitle('Puzzle,')) === 'Puzzle', 'idempotent (safe to re-apply every build)');
 
   console.log('unit: collapseWpDuplicates (same paper posted more than once)');
   const wpRow = (o) => ({ Title: 'Crowdsourcing Contests with Entry Costs', Authors: 'Jane Doe, Wei Chen',

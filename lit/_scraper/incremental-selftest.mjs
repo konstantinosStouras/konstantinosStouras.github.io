@@ -71,6 +71,40 @@ ok(sameWorkDup(row({ Title: 'Errata' }), row({ Title: 'Errata', DOI: 'https://do
     'collapse folds the dropped row\'s enrichment into the kept row');
 }
 
+// 0b) Unit checks of the stray-trailing-separator trim (see titleText /
+// trimTrailingSeparators / affilName in build-data.mjs): some publishers deposit
+// a dangling ',' / ';' / ':' on a title or affiliation, which the card renders as
+// visible punctuation noise. Legitimate end punctuation and the ';' that closes
+// an HTML entity must survive untouched.
+{
+  const { titleText, trimTrailingSeparators, affilName, affilList } = await import('./build-data.mjs');
+  ok(titleText('The Lock-In Effect and the Corporate Payout Puzzle,')
+    === 'The Lock-In Effect and the Corporate Payout Puzzle', 'trailing comma trimmed');
+  ok(titleText('The Ethics of Organizational Politics ,')
+    === 'The Ethics of Organizational Politics', 'space + comma trimmed');
+  ok(titleText('America’s Best:') === 'America’s Best', 'trailing colon (lost subtitle) trimmed');
+  ok(titleText('Weird Title , ;') === 'Weird Title', 'a run of separators collapses');
+  ok(titleText('Implementing the &quot;Wisdom of the Crowd&quot;')
+    === 'Implementing the &quot;Wisdom of the Crowd&quot;', 'the ";" closing an HTML entity is never cut');
+  ok(titleText('a job-shop scheduling system&ast;') === 'a job-shop scheduling system&ast;',
+    'unknown named entity survives intact');
+  ok(titleText('Numeric entity &#8212;') === 'Numeric entity &#8212;', 'numeric entity survives intact');
+  ok(titleText('When is P < 0.05 Significant?') === 'When is P < 0.05 Significant?',
+    'a legitimate question mark is kept');
+  ok(titleText('Part I: The Setup') === 'Part I: The Setup', 'an internal colon is kept');
+  ok(titleText('Innovation! A Study.') === 'Innovation! A Study.', 'trailing period/bang are kept');
+  ok(titleText(titleText('Puzzle,')) === 'Puzzle', 'idempotent (safe to re-apply every build)');
+  ok(trimTrailingSeparators(null) === '' && trimTrailingSeparators('') === '', 'empty input is safe');
+  ok(affilName('University of Tokyo ,') === 'University of Tokyo', 'affiliation comma trimmed');
+  ok(affilName('  Yale   University ;  ') === 'Yale University', 'affiliation whitespace + semicolon trimmed');
+  ok(affilName(' , ') === '', 'a separator-only affiliation collapses to empty (dropped by the caller)');
+  ok(affilList('University of Tokyo ,; Yale University ;') === 'University of Tokyo; Yale University',
+    'affilList trims every ;-separated name');
+  ok(affilList('Germany;; Leadec, Chemnitz') === 'Germany; Leadec, Chemnitz',
+    'affilList drops the empty segment that showed as a doubled ";;"');
+  ok(affilList('') === '' && affilList(null) === '', 'affilList handles empty input');
+}
+
 // 1) Seed a full mock build.
 run({});
 const ms0 = rd('papers-ms.json');
