@@ -1,6 +1,6 @@
 /*
- * clean-titles.mjs — one-off/maintenance trim of stray trailing separators over
- * a committed data directory.
+ * clean-titles.mjs — one-off/maintenance text cleanup over a committed data
+ * directory: entity decoding + markup stripping + the trailing-separator trim.
  * ===========================================================================
  * The pipelines now trim a dangling ',' / ';' / ':' off a title (titleText in
  * build-data.mjs; cleanTitle in the working-papers pipeline) and off each
@@ -26,12 +26,14 @@
 import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-// NOTE: the trim ONLY — deliberately not titleText(). The committed titles were
-// already run through stripJats when they were harvested, and re-applying it here
-// would MANGLE them: "P<sup>2</sup>-FORM" becomes "P 2 -FORM" and a bare
-// "<http://…>" URL is eaten as if it were a tag. Only the newly-added trailing
-// -separator trim is missing from the committed data, so only that is applied.
-import { trimTrailingSeparators, affilList } from './build-data.mjs';
+// _entities.mjs decodes FIRST and then strips only letter-led tags, so — unlike
+// the old stripJats, which this CLI once had to avoid — re-applying it to the
+// committed data is safe: "P<sup>2</sup>-FORM" becomes "P2-FORM" (no stray
+// space) and a bare "<http://…>" URL survives. Titles get the full titleText
+// (decode + strip + the LIT-260725-YWTL trim); Abstract/Significance get
+// cleanText; Authors are decoded with any decoded comma neutralized (the page
+// splits Authors on commas); Affiliations go through affilList.
+import { cleanText, titleText, affilList } from './_entities.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -44,12 +46,26 @@ const DRY = args.includes('--dry-run');
 
 // Returns the number of fields changed on the row.
 function cleanRow(r) {
+  if (!r) return 0;
   let n = 0;
-  if (r && typeof r.Title === 'string') {
-    const t = trimTrailingSeparators(r.Title);
+  if (typeof r.Title === 'string') {
+    const t = titleText(r.Title);
     if (t !== r.Title) { r.Title = t; n++; }
   }
-  if (r && typeof r.Affiliations === 'string') {
+  for (const k of ['Abstract', 'Significance']) {
+    if (typeof r[k] === 'string' && r[k]) {
+      const v = cleanText(r[k]);
+      if (v !== r[k]) { r[k] = v; n++; }
+    }
+  }
+  if (typeof r.Authors === 'string' && r.Authors) {
+    // decode per NAME so a decoded comma can never add a phantom author
+    const a = r.Authors.split(',')
+      .map((x) => cleanText(x).replace(/,/g, ' ').replace(/\s+/g, ' ').trim())
+      .filter(Boolean).join(', ');
+    if (a !== r.Authors) { r.Authors = a; n++; }
+  }
+  if (typeof r.Affiliations === 'string') {
     const a = affilList(r.Affiliations);
     if (a !== r.Affiliations) { r.Affiliations = a; n++; }
   }
@@ -64,28 +80,30 @@ if (!existsSync(DIR)) {
 const files = readdirSync(DIR).filter((f) => /^papers-.*\.json$/.test(f)).sort();
 if (!files.length) console.log(`clean-titles: no papers-*.json in ${DIR}`);
 
-let totTitles = 0, totAffs = 0, totRows = 0;
+let totTitles = 0, totAffs = 0, totOther = 0, totRows = 0;
 const examples = [];
 
 for (const f of files) {
   const rows = JSON.parse(readFileSync(join(DIR, f), 'utf8'));
   if (!Array.isArray(rows)) continue;
-  let titles = 0, affs = 0;
+  let titles = 0, affs = 0, other = 0;
   for (const r of rows) {
     const before = r.Title;
     const beforeAff = r.Affiliations;
-    if (!cleanRow(r)) continue;
+    const changed = cleanRow(r);
+    if (!changed) continue;
     if (r.Title !== before) {
       titles++;
       if (examples.length < 12) examples.push(`${f}: ${JSON.stringify(before)} → ${JSON.stringify(r.Title)}`);
     }
     if (r.Affiliations !== beforeAff) affs++;
+    other += changed - (r.Title !== before ? 1 : 0) - (r.Affiliations !== beforeAff ? 1 : 0);
   }
   totRows += rows.length;
-  totTitles += titles; totAffs += affs;
-  if (titles || affs) {
+  totTitles += titles; totAffs += affs; totOther += other;
+  if (titles || affs || other) {
     if (!DRY) writeFileSync(join(DIR, f), JSON.stringify(rows), 'utf8');
-    console.log(`  ${f}: ${titles} title(s), ${affs} affiliation(s)`);
+    console.log(`  ${f}: ${titles} title(s), ${affs} affiliation(s), ${other} other field(s)`);
   }
 }
 
@@ -107,4 +125,4 @@ if (examples.length) {
   console.log('\nexamples:');
   for (const e of examples) console.log('  ' + e);
 }
-console.log(`\n${DRY ? '[dry-run] ' : ''}${DIR}: ${totTitles} title(s) + ${totAffs} affiliation(s) cleaned over ${totRows} rows.`);
+console.log(`\n${DRY ? '[dry-run] ' : ''}${DIR}: ${totTitles} title(s) + ${totAffs} affiliation(s) + ${totOther} abstract/author field(s) cleaned over ${totRows} rows.`);

@@ -85,10 +85,12 @@ ok(sameWorkDup(row({ Title: 'Errata' }), row({ Title: 'Errata', DOI: 'https://do
   ok(titleText('America’s Best:') === 'America’s Best', 'trailing colon (lost subtitle) trimmed');
   ok(titleText('Weird Title , ;') === 'Weird Title', 'a run of separators collapses');
   ok(titleText('Implementing the &quot;Wisdom of the Crowd&quot;')
-    === 'Implementing the &quot;Wisdom of the Crowd&quot;', 'the ";" closing an HTML entity is never cut');
-  ok(titleText('a job-shop scheduling system&ast;') === 'a job-shop scheduling system&ast;',
-    'unknown named entity survives intact');
-  ok(titleText('Numeric entity &#8212;') === 'Numeric entity &#8212;', 'numeric entity survives intact');
+    === 'Implementing the "Wisdom of the Crowd"', 'a known entity DECODES (and its quote is not trimmed)');
+  ok(titleText('a job-shop scheduling system&ast;') === 'a job-shop scheduling system*',
+    '&ast; decodes to the asterisk');
+  ok(titleText('word&haelip;') === 'word&haelip;',
+    "an UNKNOWN entity survives intact and its ';' is never trimmed");
+  ok(titleText('Numeric entity &#8212;') === 'Numeric entity —', 'a numeric entity decodes');
   ok(titleText('When is P < 0.05 Significant?') === 'When is P < 0.05 Significant?',
     'a legitimate question mark is kept');
   ok(titleText('Part I: The Setup') === 'Part I: The Setup', 'an internal colon is kept');
@@ -105,12 +107,12 @@ ok(sameWorkDup(row({ Title: 'Errata' }), row({ Title: 'Errata', DOI: 'https://do
   ok(affilList('') === '' && affilList(null) === '', 'affilList handles empty input');
   // The ';' that closes an HTML entity is NOT an affiliation separator: splitting
   // on it would tear "Universidad de Lima, Per&#x00FA;" apart and lose the ';'.
-  ok(affilList('Universidad de Lima, Per&#x00FA;') === 'Universidad de Lima, Per&#x00FA;',
-    'an entity terminating the string survives affilList');
-  ok(affilList('A, Per&#x00FA;; B University') === 'A, Per&#x00FA;; B University',
-    'an entity followed by a REAL separator: both survive');
-  ok(affilList('Caf&eacute; Res;Inst B') === 'Caf&eacute; Res; Inst B',
-    'a named entity mid-string survives the split');
+  ok(affilList('Universidad de Lima, Per&#x00FA;') === 'Universidad de Lima, Perú',
+    'an entity in an affiliation decodes (and is never split apart)');
+  ok(affilList('A, Per&#x00FA;; B University') === 'A, Perú; B University',
+    'an entity followed by a REAL separator: decode + split both work');
+  ok(affilList('word&haelip; Institute; Other U') === 'word&haelip; Institute; Other U',
+    "an UNKNOWN entity's ';' is masked through the split, not a separator");
   ok(affilList(affilList('A, Per&#x00FA;; B ,')) === affilList('A, Per&#x00FA;; B ,'),
     'affilList is idempotent around entities');
   // mapWork adds affilParts() of each Crossref name to the affiliation set, and

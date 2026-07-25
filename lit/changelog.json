@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "entity-decoding",
+      "date": "2026-07-25",
+      "title": "Readable titles, abstracts and names everywhere",
+      "summary": "Some papers displayed raw HTML codes instead of their real characters — “Innkeeper&apos;s Challenge”, “R&amp;D”, names like “R&eacute;gis”, or leftover markup like “<tocheading>Book Reviews</tocheading>”. Every catalog now decodes these properly (including double-encoded ones and accented author names), both for new papers as they arrive and across the whole back-catalogue — titles, abstracts, author names and affiliations included. Unrecognised codes are left untouched rather than guessed.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
       "id": "title-punctuation-cleanup",
       "date": "2026-07-25",
       "title": "Cleaner paper titles and affiliations",

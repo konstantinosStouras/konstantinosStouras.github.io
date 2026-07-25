@@ -312,30 +312,47 @@ drops out on throttle), caches into `data-ft50/_api-abstracts.json`
 `betterAbstract`; `applyAbstractCaches` folds it into every FT50 daily
 build. Distinct OpenAlex identity `kstouras+litft50abs`. Offline test:
 `node lit/_scraper-ft50/abstracts-selftest.mjs`.
-**Stray trailing separators are trimmed at ingest.** Some publishers deposit a
-title with a dangling `,`/`;`/`:` — OUP's JEEA/EJ ("The Lock-In Effect and the
-Corporate Payout Puzzle,"), AMR ("The Ethics of Organizational Politics ,"), or a
-lost subtitle ("America's Best:") — and the same artifact reaches affiliation
-names ("University of Tokyo ,"), where a dangling `;` also shows up as a doubled
-"; ;" once `affSet` is joined. `titleText` (= `stripJats` + the trim) and
-`affilName` in each `build-data.mjs` strip it; the block is replicated
-near-verbatim in ALL FIVE pipelines (native, FT50, the three shards) like the
-pre-print machinery, plus `cleanTitle` in the working-papers pipeline (`cleanText`
-+ the same trim). `trimTrailingSeparators` cuts one separator at a time (so " ,",
-",," and ", ;" all collapse) but **NEVER the `;` that terminates an HTML entity**
-("…&quot;", "…&ast;") — cutting that would corrupt it into "&quot"; those rows are
-left for the entity decoder instead. Legitimate end punctuation (`?`/`!`/`.`) and
-anything inside a title are untouched. Pure + idempotent, so it re-applies safely
-on every build. The committed back-catalogues were cleaned once via the
-maintenance CLI `lit/_scraper/clean-titles.mjs` (`--dir <dataset>` [`--dry-run`];
-307 titles + ~14k affiliations across native/FT50/shards/WP, `recent.json`
-refreshed too; authors/affiliations panels left to the next daily build, as with
-`dedupe-data.mjs`). That CLI deliberately applies **only the trim**, never
-`stripJats` — the committed titles were already stripJats'd at harvest, and
-re-running it would mangle them ("P<sup>2</sup>-FORM" → "P 2 -FORM", a bare
-`<http://…>` eaten as a tag). Registry keys are unaffected by design (`normTitle`
-strips non-alphanumerics), so no paper resurfaces as "recently added". Covered by
-unit checks in `incremental-selftest.mjs` (native + FT50) and the WP `selftest.mjs`.
+**Text sanitization is shared in `lit/_scraper/_entities.mjs`** (VENDORED into
+each shard repo's `_scraper/_entities.mjs` — keep in sync, like the pre-print
+machinery): `cleanText` decodes HTML/JATS entities (repeatedly, so a
+double-encoded "&amp;lt;sup&amp;gt;" fully resolves) THEN strips the revealed
+markup (sub/sup with no space so "P<sup>2</sup>-FORM" stays "P2-FORM" and
+chemistry stays "Cs3Cu2I5"; a tag must start with a letter so "P &lt; 0.05" and
+a bare `<http://…>` URL survive) and decodes once more. Every pipeline's
+`stripJats` is now an alias of it — the OLD local stripJats decoded only
+`&lt;/&gt;/&amp;` and stripped tags BEFORE decoding, so double-encoded markup
+survived as literal "&lt;sup&gt;" text and every other entity ("&apos;",
+"&nbsp;", "&EACUTE;") rendered raw on the page. Entity names match
+CASE-SENSITIVELY (&Eacute;=É vs &eacute;=é) with an ALL-CAPS fallback
+("&EACUTE;" → É, for all-caps titles); an UNKNOWN name (publisher typo
+"&haelip;", "AT&T;") is left intact, never guessed — add new names to
+`HTML_ENTITIES` only when the character is certain. `authorName` decodes too
+(then strips commas, so a decoded comma can never add a phantom author — the
+page splits Authors on commas).
+**Stray trailing separators are trimmed at ingest** (feedback LIT-260725-YWTL).
+Some publishers deposit a title with a dangling `,`/`;`/`:` — OUP's JEEA/EJ
+("The Lock-In Effect and the Corporate Payout Puzzle,"), AMR ("The Ethics of
+Organizational Politics ,"), or a lost subtitle ("America's Best:") — and the
+same artifact reaches affiliation names ("University of Tokyo ,"), where a
+dangling `;` also shows as a doubled "; ;" once the set is joined. `titleText`
+(= `cleanText` + the trim), `affilName`/`affilParts`/`affilList` (entity-`;`
+masked through the split; iterated to a fixed point) live in `_entities.mjs`
+beside `trimTrailingSeparators`, which cuts one separator at a time but **NEVER
+the `;` that terminates an entity `cleanText` left intact** (an unknown name like
+"…&haelip;") — cutting it would corrupt the entity. The working-papers pipeline's
+`cleanText` was the reference implementation, promoted to the shared module;
+its `cleanTitle` = `titleText`. All pure + idempotent, so every build re-applies
+safely. The committed back-catalogues were cleaned via the maintenance CLI
+`lit/_scraper/clean-titles.mjs` (`--dir <dataset>` [`--dry-run`]; Title +
+Abstract + Significance + Authors + Affiliations; first pass: 307 titles + ~14k
+affiliations; entity pass: 73 titles, ~700 abstracts, ~3.1k affiliations, 88
+author strings across native/FT50/shards/WP, `recent.json` refreshed too;
+authors/affiliations panels left to the next daily build, as with
+`dedupe-data.mjs`). Registry keys are unaffected (`normTitle` strips
+non-alphanumerics, and every entity-bearing title had a DOI — verified), so no
+paper resurfaces as "recently added". Covered by
+`lit/_scraper/entities-selftest.mjs` (the module's own suite) plus unit checks
+in `incremental-selftest.mjs` (native + FT50) and the WP `selftest.mjs`.
 **Known pubsonline name typos are canonicalized at ingest** ("Olivier
 Tobuia"/"Olivier Touba" → Olivier Toubia, "K. Sudir" → K. Sudhir, the
 inverted "Manchanda Puneet" → Puneet Manchanda — the journal's own
