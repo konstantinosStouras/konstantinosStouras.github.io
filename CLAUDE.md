@@ -312,6 +312,30 @@ drops out on throttle), caches into `data-ft50/_api-abstracts.json`
 `betterAbstract`; `applyAbstractCaches` folds it into every FT50 daily
 build. Distinct OpenAlex identity `kstouras+litft50abs`. Offline test:
 `node lit/_scraper-ft50/abstracts-selftest.mjs`.
+**Stray trailing separators are trimmed at ingest.** Some publishers deposit a
+title with a dangling `,`/`;`/`:` — OUP's JEEA/EJ ("The Lock-In Effect and the
+Corporate Payout Puzzle,"), AMR ("The Ethics of Organizational Politics ,"), or a
+lost subtitle ("America's Best:") — and the same artifact reaches affiliation
+names ("University of Tokyo ,"), where a dangling `;` also shows up as a doubled
+"; ;" once `affSet` is joined. `titleText` (= `stripJats` + the trim) and
+`affilName` in each `build-data.mjs` strip it; the block is replicated
+near-verbatim in ALL FIVE pipelines (native, FT50, the three shards) like the
+pre-print machinery, plus `cleanTitle` in the working-papers pipeline (`cleanText`
++ the same trim). `trimTrailingSeparators` cuts one separator at a time (so " ,",
+",," and ", ;" all collapse) but **NEVER the `;` that terminates an HTML entity**
+("…&quot;", "…&ast;") — cutting that would corrupt it into "&quot"; those rows are
+left for the entity decoder instead. Legitimate end punctuation (`?`/`!`/`.`) and
+anything inside a title are untouched. Pure + idempotent, so it re-applies safely
+on every build. The committed back-catalogues were cleaned once via the
+maintenance CLI `lit/_scraper/clean-titles.mjs` (`--dir <dataset>` [`--dry-run`];
+307 titles + ~14k affiliations across native/FT50/shards/WP, `recent.json`
+refreshed too; authors/affiliations panels left to the next daily build, as with
+`dedupe-data.mjs`). That CLI deliberately applies **only the trim**, never
+`stripJats` — the committed titles were already stripJats'd at harvest, and
+re-running it would mangle them ("P<sup>2</sup>-FORM" → "P 2 -FORM", a bare
+`<http://…>` eaten as a tag). Registry keys are unaffected by design (`normTitle`
+strips non-alphanumerics), so no paper resurfaces as "recently added". Covered by
+unit checks in `incremental-selftest.mjs` (native + FT50) and the WP `selftest.mjs`.
 **Known pubsonline name typos are canonicalized at ingest** ("Olivier
 Tobuia"/"Olivier Touba" → Olivier Toubia, "K. Sudir" → K. Sudhir, the
 inverted "Manchanda Puneet" → Puneet Manchanda — the journal's own

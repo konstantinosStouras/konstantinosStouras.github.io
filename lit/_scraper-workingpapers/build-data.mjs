@@ -157,6 +157,21 @@ export function cleanText(raw) {
   return s.replace(/\s+/g, ' ').trim();
 }
 
+// A title as served: markup cleaned, then any dangling separator trimmed. Some
+// publishers deposit a title with one ("The Lock-In Effect and the Corporate
+// Payout Puzzle,"), which the card would render as visible punctuation noise.
+// Never cuts the ';' that TERMINATES an HTML entity that cleanText left intact
+// ("…&ast;") — that would corrupt it into "&ast". Pure + idempotent, so it is
+// safe to (re)apply on every build and over the committed archive.
+export function cleanTitle(raw) {
+  let s = cleanText(raw);
+  while (/[,;:]$/.test(s)) {
+    if (s.endsWith(';') && /&(?:#x[0-9a-f]+|#\d+|[a-z][a-z0-9]*);$/i.test(s)) break;
+    s = s.slice(0, -1).replace(/\s+$/, '');
+  }
+  return s;
+}
+
 // OpenAlex stores abstracts as an inverted index {word: [positions]}.
 export function invertAbstract(inv) {
   if (!inv || typeof inv !== 'object') return '';
@@ -389,7 +404,7 @@ export function wpRecordFromWork(work, publishedTitles) {
   // Strip any publisher HTML markup BEFORE the exclusion check: normTitle keeps
   // letters, so an un-stripped "<span>" would leak "span" into the normalized
   // title and stop a genuinely-published paper from matching the catalog.
-  const title = cleanText(work.title);
+  const title = cleanTitle(work.title);
   if (!title) return null;
   const nt = normTitle(title);
   if (nt && publishedTitles && publishedTitles.has(nt)) return null; // already in the published catalog
