@@ -77,7 +77,7 @@ ok(sameWorkDup(row({ Title: 'Errata' }), row({ Title: 'Errata', DOI: 'https://do
 // visible punctuation noise. Legitimate end punctuation and the ';' that closes
 // an HTML entity must survive untouched.
 {
-  const { titleText, trimTrailingSeparators, affilName, affilList } = await import('./build-data.mjs');
+  const { titleText, trimTrailingSeparators, affilName, affilList, affilParts } = await import('./build-data.mjs');
   ok(titleText('The Lock-In Effect and the Corporate Payout Puzzle,')
     === 'The Lock-In Effect and the Corporate Payout Puzzle', 'trailing comma trimmed');
   ok(titleText('The Ethics of Organizational Politics ,')
@@ -103,6 +103,24 @@ ok(sameWorkDup(row({ Title: 'Errata' }), row({ Title: 'Errata', DOI: 'https://do
   ok(affilList('Germany;; Leadec, Chemnitz') === 'Germany; Leadec, Chemnitz',
     'affilList drops the empty segment that showed as a doubled ";;"');
   ok(affilList('') === '' && affilList(null) === '', 'affilList handles empty input');
+  // The ';' that closes an HTML entity is NOT an affiliation separator: splitting
+  // on it would tear "Universidad de Lima, Per&#x00FA;" apart and lose the ';'.
+  ok(affilList('Universidad de Lima, Per&#x00FA;') === 'Universidad de Lima, Per&#x00FA;',
+    'an entity terminating the string survives affilList');
+  ok(affilList('A, Per&#x00FA;; B University') === 'A, Per&#x00FA;; B University',
+    'an entity followed by a REAL separator: both survive');
+  ok(affilList('Caf&eacute; Res;Inst B') === 'Caf&eacute; Res; Inst B',
+    'a named entity mid-string survives the split');
+  ok(affilList(affilList('A, Per&#x00FA;; B ,')) === affilList('A, Per&#x00FA;; B ,'),
+    'affilList is idempotent around entities');
+  // mapWork adds affilParts() of each Crossref name to the affiliation set, and
+  // the CLI joins the same parts — so a name that itself contains ';' yields the
+  // SAME string either way, and a rebuild is a fixed point of the maintenance CLI.
+  ok(JSON.stringify(affilParts('Dept A;Univ B ,')) === JSON.stringify(['Dept A', 'Univ B']),
+    'affilParts splits an internal ";" and trims each part');
+  ok(affilList('Dept A;Univ B ,') === affilParts('Dept A;Univ B ,').join('; '),
+    'affilList is exactly affilParts joined');
+  ok(JSON.stringify(affilParts('')) === '[]', 'affilParts of empty is []');
 }
 
 // 1) Seed a full mock build.
