@@ -48,8 +48,10 @@ async function main() {
   ok(cleanTitle('Some Title , ;') === 'Some Title', 'a run of separators collapses');
   ok(cleanTitle('&lt;p&gt;A Wrapped Title,&lt;/p&gt;') === 'A Wrapped Title',
     'markup stripped first, then the revealed trailing comma trimmed');
-  ok(cleanTitle('a job-shop scheduling system&ast;') === 'a job-shop scheduling system&ast;',
-    'the ";" closing an unknown HTML entity is never cut');
+  ok(cleanTitle('a job-shop scheduling system&ast;') === 'a job-shop scheduling system*',
+    '&ast; decodes to the asterisk');
+  ok(cleanTitle('word&haelip;') === 'word&haelip;',
+    "an UNKNOWN entity survives intact and its ';' is never trimmed");
   ok(cleanTitle('When is P &lt; 0.05 Significant?') === 'When is P < 0.05 Significant?',
     'a legitimate question mark is kept');
   ok(cleanTitle(cleanTitle('Puzzle,')) === 'Puzzle', 'idempotent (safe to re-apply every build)');

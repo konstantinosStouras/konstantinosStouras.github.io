@@ -117,60 +117,13 @@ export function stripAccents(s) { return String(s || '').normalize('NFD').replac
 export function normName(s) { return stripAccents(s).toLowerCase().replace(/\s+/g, ' ').trim(); }
 
 // Some publishers deposit titles/abstracts with HTML/XML markup, which OpenAlex
-// passes through HTML-entity-encoded (and occasionally DOUBLE-encoded, e.g.
-// "&amp;lt;p&amp;gt;" or "&amp;nbsp;"). Left as-is, a title stored as the literal
-// text "&lt;p&gt;&lt;span&gt;Real Title&lt;/span&gt;&lt;/p&gt;" renders — the page
-// HTML-escapes it — as visible "&lt;p&gt;…" gibberish. cleanText decodes the
-// entities (repeatedly, so double-encodings fully resolve), strips the revealed
-// tags, and collapses whitespace, leaving just the human title. Pure + idempotent
-// (already-clean text passes through unchanged), so it is safe to (re)apply on
-// every build and to the committed archive. Kept conservative on purpose: a tag
-// must start with a letter (so "P &lt; 0.05" → "P < 0.05" survives, not a tag),
-// and sub/sup strip with no space so a chemistry formula stays "Cs3Cu2I5".
-const HTML_ENTITIES = {
-  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
-  mdash: '—', ndash: '–', lsquo: '‘', rsquo: '’',
-  ldquo: '“', rdquo: '”', hellip: '…', times: '×', deg: '°',
-};
-function decodeEntitiesOnce(s) {
-  return s.replace(/&(#x[0-9a-f]+|#\d+|[a-z][a-z0-9]*);/gi, (m, ent) => {
-    if (ent[0] === '#') {
-      const cp = (ent[1] === 'x' || ent[1] === 'X')
-        ? parseInt(ent.slice(2), 16) : parseInt(ent.slice(1), 10);
-      if (Number.isFinite(cp) && cp > 0 && cp <= 0x10ffff) {
-        try { return String.fromCodePoint(cp); } catch { return m; }
-      }
-      return m;
-    }
-    const v = HTML_ENTITIES[ent.toLowerCase()];
-    return v === undefined ? m : v; // leave unknown named entities intact
-  });
-}
-export function cleanText(raw) {
-  let s = String(raw == null ? '' : raw);
-  if (!/[&<]/.test(s)) return s.replace(/\s+/g, ' ').trim(); // fast path: nothing to decode/strip
-  for (let i = 0; i < 6; i++) { const d = decodeEntitiesOnce(s); if (d === s) break; s = d; }
-  s = s
-    .replace(/<\/?(?:sub|sup)(?:\s[^<>]*)?\/?>/gi, '')          // subscript/superscript: no space (Cs3Cu2I5, x2)
-    .replace(/<\/?[a-z][a-z0-9:-]*(?:\s[^<>]*)?\/?>/gi, ' ');   // other tags → space (line breaks, blocks, inline)
-  for (let i = 0; i < 3; i++) { const d = decodeEntitiesOnce(s); if (d === s) break; s = d; } // decode anything a tag hid
-  return s.replace(/\s+/g, ' ').trim();
-}
-
-// A title as served: markup cleaned, then any dangling separator trimmed. Some
-// publishers deposit a title with one ("The Lock-In Effect and the Corporate
-// Payout Puzzle,"), which the card would render as visible punctuation noise.
-// Never cuts the ';' that TERMINATES an HTML entity that cleanText left intact
-// ("…&ast;") — that would corrupt it into "&ast". Pure + idempotent, so it is
-// safe to (re)apply on every build and over the committed archive.
-export function cleanTitle(raw) {
-  let s = cleanText(raw);
-  while (/[,;:]$/.test(s)) {
-    if (s.endsWith(';') && /&(?:#x[0-9a-f]+|#\d+|[a-z][a-z0-9]*);$/i.test(s)) break;
-    s = s.slice(0, -1).replace(/\s+$/, '');
-  }
-  return s;
-}
+// passes through HTML-entity-encoded (and occasionally DOUBLE-encoded). Entity
+// decoding + markup stripping + the trailing-separator trim now live in the
+// shared lit/_scraper/_entities.mjs — this pipeline's cleanText was the
+// reference implementation, promoted there so all six pipelines decode the same
+// way. cleanTitle = cleanText + the LIT-260725-YWTL trim.
+import { cleanText, titleText as cleanTitle } from '../_scraper/_entities.mjs';
+export { cleanText, cleanTitle };
 
 // OpenAlex stores abstracts as an inverted index {word: [positions]}.
 export function invertAbstract(inv) {

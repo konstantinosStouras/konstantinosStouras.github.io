@@ -69,8 +69,9 @@ const ok = (c, m) => { c ? pass++ : (fail++, console.log('  FAIL:', m)); };
   ok(titleText('America’s Best:') === 'America’s Best', 'trailing colon (lost subtitle) trimmed');
   ok(titleText('Weird Title , ;') === 'Weird Title', 'a run of separators collapses');
   ok(titleText('Implementing the &quot;Wisdom of the Crowd&quot;')
-    === 'Implementing the &quot;Wisdom of the Crowd&quot;', 'the ";" closing an HTML entity is never cut');
-  ok(titleText('Numeric entity &#8212;') === 'Numeric entity &#8212;', 'numeric entity survives intact');
+    === 'Implementing the "Wisdom of the Crowd"', 'a known entity DECODES (and its quote is not trimmed)');
+  ok(titleText('word&haelip;') === 'word&haelip;',
+    "an UNKNOWN entity survives intact and its ';' is never trimmed");
   ok(titleText('When is P < 0.05 Significant?') === 'When is P < 0.05 Significant?',
     'a legitimate question mark is kept');
   ok(titleText(titleText('Puzzle,')) === 'Puzzle', 'idempotent (safe to re-apply every build)');

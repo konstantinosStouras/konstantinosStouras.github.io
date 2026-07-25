@@ -35,6 +35,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { betterAbstract, ABS_MAX } from '../_scraper/informs-abstracts.mjs';
+import { cleanText } from '../_scraper/_entities.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.FT50_DATA_DIR || resolve(__dirname, '..', 'data-ft50');
@@ -179,7 +180,7 @@ async function main() {
       if (r.ok) {
         for (const w of (await r.json()).results || []) {
           const doi = String(w.doi || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase();
-          const text = invertedToText(w.abstract_inverted_index);
+          const text = cleanText(invertedToText(w.abstract_inverted_index));
           if (doi && text.length >= 60) { cache[doi] = { a: text.slice(0, ABS_MAX) }; unresolved.delete(doi); found++; }
         }
       }
@@ -197,7 +198,7 @@ async function main() {
           const ids = [...unresolved];
           const arr = await r.json();
           arr.forEach((rec, idx) => {
-            const a = rec && typeof rec.abstract === 'string' ? rec.abstract.replace(/\s+/g, ' ').trim() : '';
+            const a = rec && typeof rec.abstract === 'string' ? cleanText(rec.abstract) : '';
             if (a.length >= 60) { cache[ids[idx]] = { a: a.slice(0, ABS_MAX) }; unresolved.delete(ids[idx]); found++; }
           });
         }
