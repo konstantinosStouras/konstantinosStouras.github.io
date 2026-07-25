@@ -1,0 +1,79 @@
+name: lit — backfill FT50 abstracts (OpenAlex/S2)
+
+# Fills missing/stub abstracts across the FT50 catalog (data-ft50/) from
+# OpenAlex (abstract_inverted_index, batched 50/call) with an optional
+# Semantic Scholar leg (500 DOIs/POST; drops out on throttle) — many FT50
+# journals (finance/econ especially) deposit no abstract to Crossref at all.
+# Runs bounded ~40-min slices four times a day, newest papers first, into
+# data-ft50/_api-abstracts.json, and applies UPGRADE-only (betterAbstract) to
+# the served papers files; the FT50 daily build re-applies the committed
+# cache (applyAbstractCaches), so a rebuild never regresses one. The five
+# INFORMS journals' teasers come from the pubsonline page harvest instead
+# (lit/data/_informs-abstracts.json) — this job covers the other ~45.
+# Distinct OpenAlex quota identity kstouras+litft50abs.
+
+on:
+  schedule:
+    - cron: '5 */6 * * *'    # four slices a day, a free minute slot
+  workflow_dispatch: {}      # run on demand from the Actions tab
+
+# SAME concurrency group as lit-ft50-update-data.yml — every data-ft50 writer
+# queues behind the others, never racing a commit.
+concurrency:
+  group: lit-ft50-update-data-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55      # 40-min crawl budget + apply/commit headroom
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Backfill FT50 abstracts (bounded slice, newest first)
+        env:
+          FT50_ABS_BUDGET_MS: '2400000'
+        run: node lit/_scraper-ft50/abstracts-ci.mjs
+
+      - name: Commit refreshed data
+        if: always() && github.ref == 'refs/heads/master'
+        # Push-retry replay pattern (see lit-preprints-backfill.yml): on a
+        # rejected push, take the new tip and re-apply ONLY our cache finds.
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lit/data-ft50
+          if git diff --cached --quiet; then
+            echo "No data changes — nothing to commit."
+            exit 0
+          fi
+          cp lit/data-ft50/_api-abstracts.json /tmp/lit-ft50-abs-ours.json
+          git commit -m "lit: FT50 abstracts backfill (OpenAlex/S2)"
+          for i in 1 2 3; do
+            if git push origin HEAD:${{ github.ref_name }}; then
+              echo "Pushed on attempt $i."
+              exit 0
+            fi
+            echo "Push rejected (concurrent commit?) — replaying our finds on the new tip…"
+            git fetch origin ${{ github.ref_name }}
+            git reset --hard origin/${{ github.ref_name }}
+            node lit/_scraper-ft50/abstracts-ci.mjs --apply-only --merge-cache=/tmp/lit-ft50-abs-ours.json
+            git add lit/data-ft50
+            if git diff --cached --quiet; then
+              echo "The concurrent commit already contains these abstracts — nothing left to push."
+              exit 0
+            fi
+            git commit -m "lit: FT50 abstracts backfill (OpenAlex/S2)"
+            sleep 5
+          done
+          echo "::error::Could not push the abstracts data after 3 attempts."
+          exit 1

@@ -1,4 +1,4 @@
-name: lit — backfill ISR/MkSc editors (pubsonline attempt)
+name: lit — backfill ISR/MkSc editors + INFORMS abstracts (pubsonline attempt)
 
 # ATTEMPTS the ISR/Marketing Science Senior/Associate-Editor crawl
 # (lit/_scraper/informs-editors-local.mjs — Marketing Science FIRST, newest
@@ -54,9 +54,18 @@ jobs:
 
       - name: Crawl ISR/MkSc editors (MkSc first, bounded, resume-safe)
         env:
-          LIT_EDITORS_BUDGET_MS: '2700000'   # 45-min slice
+          LIT_EDITORS_BUDGET_MS: '1800000'   # 30-min slice
           LIT_EDITORS_MAX_FAILS: '12'        # dead/blocked host aborts fast
         run: node lit/_scraper/informs-editors-local.mjs
+
+      - name: Crawl INFORMS full abstracts (teaser rows only, bounded, resume-safe)
+        # Same blocked-fast behavior: on a blocked runner this ends within a
+        # minute; if pubsonline answers, it fixes teaser abstracts (MkSc first,
+        # then MS and the other INFORMS journals) journal by journal.
+        env:
+          LIT_ABSTRACTS_BUDGET_MS: '1500000'  # 25-min slice
+          LIT_ABSTRACTS_MAX_FAILS: '12'
+        run: node lit/_scraper/informs-abstracts-local.mjs
 
       - name: Commit refreshed data
         # always(): if the crawl step is killed late (timeout/transient), the
@@ -76,7 +85,8 @@ jobs:
             exit 0
           fi
           cp lit/data/_informs-editors.json /tmp/lit-editors-ours.json
-          git commit -m "lit: ISR/MkSc editors backfill (pubsonline crawl)"
+          cp lit/data/_informs-abstracts.json /tmp/lit-abstracts-ours.json
+          git commit -m "lit: INFORMS editors/abstracts backfill (pubsonline crawl)"
           for i in 1 2 3; do
             if git push origin HEAD:${{ github.ref_name }}; then
               echo "Pushed on attempt $i."
@@ -86,6 +96,7 @@ jobs:
             git fetch origin ${{ github.ref_name }}
             git reset --hard origin/${{ github.ref_name }}
             node lit/_scraper/informs-editors-local.mjs --apply-only --merge-cache=/tmp/lit-editors-ours.json
+            node lit/_scraper/informs-abstracts-local.mjs --apply-only --merge-cache=/tmp/lit-abstracts-ours.json
             git add lit/data
             if git diff --cached --quiet; then
               echo "The concurrent commit already contains these editors — nothing left to push."
