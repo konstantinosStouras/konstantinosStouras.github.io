@@ -320,6 +320,7 @@
   .disr-formula .frac .den { padding: 3px 8px 0; }
   .disr-note { font-size: 12.5px; color: var(--text-muted); background: var(--accent-light); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: 10px 13px; margin-top: 4px; line-height: 1.55; }
   .disr-note a { color: var(--navy); }
+  .dim-lead span a, .csub a { color: var(--navy); }
   .disr-divider { border: none; border-top: 2px solid var(--border); margin: 48px 0 0; }
   .disr-beta { font-size: 13px; color: var(--text-muted); background: var(--accent-light); border: 1.5px solid var(--accent); border-radius: 10px; padding: 12px 16px; margin: 28px 2px 0; line-height: 1.6; }
   .disr-beta strong { color: var(--navy); }
@@ -565,7 +566,7 @@
         <hr class="disr-divider">
         <div class="disr-beta">🚧 <strong>Beta — work in progress.</strong> Everything from here down is an experimental analysis under active development. The intention is not to replicate the <em>Nature</em> study itself, but to apply its measures to our own database to gain further insights into the literature it covers — so expect these figures to evolve and sharpen as the underlying citation graph grows.</div>
         <div class="dim-lead" style="margin-top:24px">Team science — do small teams disrupt?
-          <span>Reproducing the key measures of Wu, Wang &amp; Evans, “Large teams develop and small teams disrupt science and technology” (<em>Nature</em>&nbsp;570, 2019) over the slice of The&nbsp;Lit's citation graph mapped so far. Every figure below honours the filters at the top of the page, and sharpens as more of the reference graph is built.</span>
+          <span>Reproducing the key measures of <a href="https://www.nature.com/articles/s41586-019-0941-9" target="_blank" rel="noopener">Wu, Wang &amp; Evans, “Large teams develop and small teams disrupt science and technology” (<em>Nature</em>&nbsp;570, 2019)</a> over the slice of The&nbsp;Lit's citation graph mapped so far. Every figure below honours the filters at the top of the page, and sharpens as more of the reference graph is built.</span>
         </div>
         <div id="disrLoading" class="loading"><span class="spinner"></span>Loading the citation-graph analysis…</div>
         <div id="disrEmpty" class="aspot-empty" style="display:none"></div>
@@ -584,8 +585,8 @@
               <div class="legend" id="disrHistLegend"></div>
             </div>
             <div class="card wide">
-              <h3>Disruption and impact by team size</h3>
-              <div class="csub" id="disrScissorSub">The signature result: as teams grow, disruption falls while citations rise.</div>
+              <h3>Disruption and impact by team size — the headline result</h3>
+              <div class="csub" id="disrScissorSub">The signature result: as teams grow, disruption (percentile) falls while citations rise.</div>
               <div id="disrScissor"></div>
               <div class="legend" id="disrScissorLegend"></div>
             </div>
@@ -2202,7 +2203,7 @@
   function catLineChart(cats, series, opts) {
     opts = opts || {};
     if (cats.length < 1) return '<div class="chart-empty">Not enough citation-graph data in this slice yet — try widening the filters.</div>';
-    var W = 760, H = 320, L = 56, R = opts.rightLabel ? 58 : 20, T = 18, B = 52;
+    var W = opts.width || 760, H = opts.height || 320, L = 56, R = opts.rightLabel ? 58 : 20, T = 18, B = 52;
     var n = cats.length, slot = (W - L - R) / Math.max(1, n);
     var cx = function (i) { return L + slot * (i + 0.5); };
     var lv = [], rv = [];
@@ -2234,7 +2235,7 @@
     if (opts.refLine != null) {
       var ry0 = pyL(opts.refLine);
       svg += '<line x1="' + L + '" y1="' + ry0.toFixed(1) + '" x2="' + (W - R) + '" y2="' + ry0.toFixed(1) + '" stroke="' + MUTED + '" stroke-width="1.1" stroke-dasharray="5 4"/>';
-      svg += '<text x="' + (W - R - 2) + '" y="' + (ry0 - 5).toFixed(1) + '" text-anchor="end" font-size="10.5" fill="' + MUTED + '">expected (1.0)</text>';
+      svg += '<text x="' + (W - R - 2) + '" y="' + (ry0 - 5).toFixed(1) + '" text-anchor="end" font-size="10.5" fill="' + MUTED + '">' + esc(opts.refLineLabel || 'expected (1.0)') + '</text>';
     }
     // x labels + counts
     cats.forEach(function (c, i) {
@@ -2261,23 +2262,35 @@
 
   function teamCats(stats) { return stats.map(function (s) { return s.t >= DISR_CAP ? (DISR_CAP + '+') : String(s.t); }); }
 
-  // Plot B — the scissor: mean D (left) vs median citations (right) by team size.
+  // Plot B — the headline "scissor", adapted from Wu et al.'s Fig. 1/2: average
+  // disruption PERCENTILE (red, left axis — each paper's D ranked 0–100 against
+  // every scored paper in the current slice, averaged per team size) against
+  // median citations (blue, right axis). Colors per the owner: disruption red,
+  // citations blue.
   function renderDisrScissor(rows) {
     var stats = disrTeamStats(rows).filter(function (s) { return s.n >= DISR_MIN_BIN; });
     if (stats.length < 2) { $('disrScissor').innerHTML = '<div class="chart-empty">Not enough citation-graph data across team sizes in this slice yet.</div>'; $('disrScissorLegend').innerHTML = ''; return; }
     var cats = teamCats(stats), counts = stats.map(function (s) { return s.n; });
+    var C_RED = C_CITE, C_BLUE = C_DISRUPT;
+    var allD = rows.map(function (p) { return p.d; }).sort(function (a, b) { return a - b; });
+    var binPct = {}; stats.forEach(function (s) { binPct[s.t] = { sum: 0, n: 0 }; });
+    rows.forEach(function (p) {
+      var t = Math.min(Math.max(p.t || 1, 1), DISR_CAP), b = binPct[t]; if (!b) return;
+      b.sum += pctRankSorted(allD, p.d); b.n++;
+    });
     var series = [
-      { name: 'Mean disruption D', color: C_DISRUPT, axis: 'L', pts: stats.map(function (s) { return s.meanD; }) },
-      { name: 'Median citations', color: C_CITE, axis: 'R', pts: stats.map(function (s) { return s.medCit; }) }
+      { name: 'Average disruption percentile', color: C_RED, axis: 'L', pts: stats.map(function (s) { var b = binPct[s.t]; return b && b.n ? b.sum / b.n : null; }) },
+      { name: 'Median citations', color: C_BLUE, axis: 'R', pts: stats.map(function (s) { return s.medCit; }) }
     ];
     $('disrScissor').innerHTML = catLineChart(cats, series, {
-      leftLabel: 'Mean disruption D', rightLabel: 'Median citations',
-      leftColor: C_DISRUPT, rightColor: C_CITE, counts: counts, leftZero: false
+      leftLabel: 'Avg disruption percentile', rightLabel: 'Median citations',
+      leftColor: C_RED, rightColor: C_BLUE, counts: counts, leftZero: true,
+      refLine: 50, refLineLabel: '50th percentile (average)'
     });
     $('disrScissorLegend').innerHTML =
-      '<span class="li"><span class="sw" style="background:' + C_DISRUPT + '"></span>Mean disruption D (left)</span>' +
-      '<span class="li"><span class="sw" style="background:' + C_CITE + '"></span>Median citations (right)</span>';
-    $('disrScissorSub').textContent = 'Disruption (blue, left axis) against citation impact (red, right axis) by team size — the paper’s Fig. 2. With today’s partial graph the lines are noisy; they steady as data grows.';
+      '<span class="li"><span class="sw" style="background:' + C_RED + '"></span>Average disruption percentile, 0–100 (left)</span>' +
+      '<span class="li"><span class="sw" style="background:' + C_BLUE + '"></span>Median citations (right)</span>';
+    $('disrScissorSub').innerHTML = 'Adapted from the headline figure of <a href="https://www.nature.com/articles/s41586-019-0941-9" target="_blank" rel="noopener">Wu <em>et&nbsp;al.</em> (<em>Nature</em>&nbsp;570, 2019)</a>: across their 24&nbsp;million articles, median citations (blue, right axis) <em>rise</em> with team size while the average <strong>disruption percentile</strong> (red, left axis) — each paper’s <em>D</em> ranked 0–100 among the scored papers in this slice — <em>falls</em>: large teams develop science, small teams disrupt it. In our database the disruption curve is still nearly flat: most papers have only a handful of in-catalog citers so far, which pulls every team-size bin toward the 50th percentile. The gradient should emerge as the citation graph fills in.';
   }
 
   // Plot C — reference age (left) vs reference popularity (right) by team size.
