@@ -319,7 +319,17 @@ the batched legs), caches into `data-ft50/_api-abstracts.json`
 `FT50_ABS_MISS_TTL_DAYS` 45), and applies UPGRADE-only via the same
 `betterAbstract`; `applyAbstractCaches` folds it into every FT50 daily
 build. Distinct OpenAlex identity `kstouras+litft50abs`. Offline test:
-`node lit/_scraper-ft50/abstracts-selftest.mjs`.
+`node lit/_scraper-ft50/abstracts-selftest.mjs`. **The same backfill is
+VENDORED into each ABS shard repo** (`_scraper/abstracts-ci.mjs` +
+`abstracts-selftest.mjs` + `abstracts-backfill.yml`, identities `+abs4abs`/
+`+abs3omabs`/`+abs3restabs`; `betterAbstract`/`ABS_MAX` inlined) — the shards
+are mostly Elsevier journals with ~173k missing abstracts, so the Elsevier leg
+matters most there (each shard repo needs its own `ELSEVIER_API_KEY`/
+`S2_API_KEY` secrets — per-repo on a personal account); each shard's daily
+build re-applies the cache via its own `applyAbstractCaches`, so a rebuild
+never regresses a backfilled abstract. An `S2_API_KEY` secret, where set, is
+also sent by every Semantic Scholar leg (citations sweeps in all five
+pipelines, the references backfill, EC enrichment).
 **Text sanitization is shared in `lit/_scraper/_entities.mjs`** (VENDORED into
 each shard repo's `_scraper/_entities.mjs` — keep in sync, like the pre-print
 machinery): `cleanText` decodes HTML/JATS entities (repeatedly, so a
