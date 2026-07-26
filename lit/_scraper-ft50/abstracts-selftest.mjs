@@ -4,7 +4,7 @@
  * reconstruction, the cache-merge rule, and the needy-row test.
  * Run: node lit/_scraper-ft50/abstracts-selftest.mjs
  */
-import { invertedToText, mergeAbsCache, isNeedy , elsevierAbstract } from './abstracts-ci.mjs';
+import { invertedToText, mergeAbsCache, isNeedy, elsevierAbstract, springerAbstract } from './abstracts-ci.mjs';
 import { betterAbstract } from '../_scraper/informs-abstracts.mjs';
 
 let fails = 0;
@@ -41,6 +41,15 @@ eq(elsevierAbstract({ 'abstracts-retrieval-response': { coredata: { 'dc:descript
   'R&D and CO2 costs.', 'entities decoded + markup stripped via cleanText');
 eq(elsevierAbstract({}), '', 'missing body → empty');
 eq(elsevierAbstract(null), '', 'null → empty');
+
+console.log('springerAbstract: Meta API v2 JSON → text');
+eq(springerAbstract({ records: [{ abstract: 'Abstract We study queueing networks under load.' }] }),
+  'We study queueing networks under load.', 'plain abstract, "Abstract " prefix stripped');
+eq(springerAbstract({ records: [{ abstract: 'R&amp;D alliances and CO&lt;sub&gt;2&lt;/sub&gt; policy.' }] }),
+  'R&D alliances and CO2 policy.', 'entities decoded + markup stripped via cleanText');
+eq(springerAbstract({ records: [] }), '', 'no records → empty');
+eq(springerAbstract({}), '', 'missing records → empty');
+eq(springerAbstract(null), '', 'null → empty');
 
 console.log('betterAbstract import path (shared upgrade rule)');
 ok(betterAbstract('', 'y'.repeat(80)), 'empty ← candidate works via the cross-import');
