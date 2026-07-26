@@ -13,14 +13,27 @@ Firebase Admin SDK (`lit/_scraper/feedback-github-log.mjs`) and writes, into the
 private log repo, one folder per submission:
 
 ```
-feedback/<id>/feedback.md       message + metadata, screenshots inlined
+feedback/INDEX.md               ticket index — one row per submission, newest first
+feedback/index.json             the machine-readable copy of the index
+feedback/<id>/feedback.md       message + metadata + resolution, screenshots inlined
 feedback/<id>/feedback.json     the raw fields (minus the bulky image data URLs)
 feedback/<id>/screenshot-1.jpg  each attached screenshot, decoded
 ```
 
-It is **idempotent** — a submission already present is skipped, so the log repo
-itself is the record of what's mirrored (no Firestore writes, no rules change).
-It runs alongside, and independent of, the e-mail forwarders.
+The **ticket index** is the entry point: the maintainer refers to feedback by
+its `LIT-YYMMDD-XXXX` ticket, the folders are named after Firestore doc ids —
+`INDEX.md` maps one to the other (ticket linked to its folder, plus date,
+submitter, status, message + resolution excerpts), so any ticket is found
+instantly without grepping folders.
+
+It is **idempotent** — no Firestore writes, no rules change — and it **syncs**:
+an already-mirrored folder has its `feedback.md`/`feedback.json` refreshed
+whenever the doc changed (ticket closed, resolution recorded, reopened), so the
+archive always shows each ticket's current status; the decoded screenshots are
+immutable and never rewritten. When a ticket is resolved (via
+`lit/_feedback-resolutions/` — see `lit/_FEEDBACK-SETUP.md`), its `feedback.md`
+gains a **Resolution** section and its index row flips to `closed ✉` on the
+next run. It runs alongside, and independent of, the e-mail forwarders.
 
 ### Why a **separate, private** repo (important)
 
@@ -65,9 +78,13 @@ Run the workflow once by hand: *Actions → "lit — feedback → private GitHub
 submission so far should appear under `feedback/<id>/`. Submit a test on the
 Feedback page and confirm a new folder shows up on the next run.
 
-Then you can ask the assistant, e.g. "read my latest feedback and act on it" —
-it reads `feedback/<id>/feedback.md` (text) and the `screenshot-*.jpg` images
-directly from the private repo.
+Then you can ask the assistant, e.g. "read my latest feedback and act on it" or
+"act on feedback LIT-260725-YWTL" — it looks the ticket up in
+`feedback/INDEX.md` (or `index.json`), reads that folder's `feedback.md` (text)
+and `screenshot-*.jpg` images directly from the private repo, ships the fix, and
+closes the loop by adding `lit/_feedback-resolutions/<TICKET>.md` to the site
+repo in the same change — which is what e-mails the submitter the fix
+description (see `lit/_FEEDBACK-SETUP.md`, "Resolutions").
 
 ## Notes
 
