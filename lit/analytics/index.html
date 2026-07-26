@@ -320,6 +320,9 @@
   .disr-formula .frac .den { padding: 3px 8px 0; }
   .disr-note { font-size: 12.5px; color: var(--text-muted); background: var(--accent-light); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: 10px 13px; margin-top: 4px; line-height: 1.55; }
   .disr-note a { color: var(--navy); }
+  .disr-divider { border: none; border-top: 2px solid var(--border); margin: 48px 0 0; }
+  .disr-beta { font-size: 13px; color: var(--text-muted); background: var(--accent-light); border: 1.5px solid var(--accent); border-radius: 10px; padding: 12px 16px; margin: 28px 2px 0; line-height: 1.6; }
+  .disr-beta strong { color: var(--navy); }
   .disr-fig { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 10px; margin: 2px 0 9px; }
   .disr-fig .dpanel { border: 1px solid var(--border); border-radius: 10px; padding: 9px 8px 7px; background: #fff; text-align: center; }
   .disr-fig .dpt { font-size: 12.5px; font-weight: 700; }
@@ -559,7 +562,9 @@
            filters (journals / journal types / years) like the rest of the page.
            Hidden entirely until the disruption dataset is available. -->
       <div id="disrSection" style="display:none">
-        <div class="dim-lead" style="margin-top:28px">Team science — do small teams disrupt?
+        <hr class="disr-divider">
+        <div class="disr-beta">🚧 <strong>Beta — work in progress.</strong> Everything from here down is an experimental analysis under active development. The intention is not to replicate the <em>Nature</em> study itself, but to apply its measures to our own database to gain further insights into the literature it covers — so expect these figures to evolve and sharpen as the underlying citation graph grows.</div>
+        <div class="dim-lead" style="margin-top:24px">Team science — do small teams disrupt?
           <span>Reproducing the key measures of Wu, Wang &amp; Evans, “Large teams develop and small teams disrupt science and technology” (<em>Nature</em>&nbsp;570, 2019) over the slice of The&nbsp;Lit's citation graph mapped so far. Every figure below honours the filters at the top of the page, and sharpens as more of the reference graph is built.</span>
         </div>
         <div id="disrLoading" class="loading"><span class="spinner"></span>Loading the citation-graph analysis…</div>
