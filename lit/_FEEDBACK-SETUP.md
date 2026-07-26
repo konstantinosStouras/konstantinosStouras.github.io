@@ -55,6 +55,22 @@ submissions are stored in the project's existing Firebase project
    secrets are set. The optional instant Cloud Function (`lit/_functions/`)
    does exactly the same pair within seconds of submission.
 
+4. **Resolutions — closing the loop** (`lit/_feedback-resolutions/`, same
+   mailer run): when a ticket has been acted on, a small per-ticket file is
+   committed to `lit/_feedback-resolutions/<TICKET>.md` (front matter
+   `ticket:` + optional site-only `url:`; body = what was done — see that
+   directory's README for the exact format and the privacy rules). On its next
+   pass the mailer finds the feedback doc by ticket, **closes it**
+   (`status:'closed'` + `resolution` + `resolutionUrl` + `resolutionHash`,
+   `resolvedBy:'repo'`) *before* sending, then e-mails the submitter that
+   their feedback is resolved — the fix description, a "see it live" link and
+   their original message — and stamps `resolutionSent`. Idempotent via the
+   content hash (an unchanged file is skipped forever; editing one re-applies
+   + re-notifies); an anonymous submission is just closed. This is the
+   standard way the maintainer's assistant closes feedback: it ships the fix
+   and the resolution file in the same change, and the e-mail goes out
+   automatically once merged.
+
 ## Secrets (GitHub → repo Settings → Secrets and variables → Actions)
 
 Same secrets the e-mail-alerts mailer uses — if that already works, feedback
@@ -91,3 +107,14 @@ submission with the ticket in the subject, the metadata (page, browser,
 signed-in UID, time) and the screenshots attached. And you can still read the
 raw collection in the Firebase console (Firestore → `feedback`), or run
 `--scan` to list what's pending.
+
+**Acting on a ticket with the assistant.** Every submission is also mirrored —
+message, metadata AND screenshots — into the private
+`konstantinosStouras/lit-feedback-log` repo with a ticket index
+(`feedback/INDEX.md` / `index.json`; see `lit/_FEEDBACK-GITHUB-LOG-SETUP.md`).
+So "act on feedback LIT-YYMMDD-XXXX" is: the assistant reads that ticket's
+folder from the log repo (ask it to `add repo konstantinosStouras/lit-feedback-log`
+first if the session doesn't have it), fixes the site/data accordingly, and adds
+`lit/_feedback-resolutions/<TICKET>.md` in the same change — merging that is
+what closes the ticket and e-mails the submitter the fix description + link
+(section 4 above). No manual reply needed.

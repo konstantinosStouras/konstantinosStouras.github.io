@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "feedback-resolution-emails",
+      "date": "2026-07-26",
+      "title": "Hear back when your feedback is fixed",
+      "summary": "The feedback loop now closes itself: when a report you sent from the Feedback page is acted on, you automatically receive an e-mail on the same ticket telling you it's resolved — describing exactly what was done, with a link to the fixed area of the site where possible. Behind the scenes every submission (message and screenshots) is archived with a searchable ticket index, so nothing ever falls through the cracks.",
+      "url": "https://www.stouras.com/lit/feedback/"
+    },
+    {
       "id": "entity-decoding",
       "date": "2026-07-25",
       "title": "Readable titles, abstracts and names everywhere",
