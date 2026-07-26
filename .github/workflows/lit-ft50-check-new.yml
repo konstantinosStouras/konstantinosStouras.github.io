@@ -63,6 +63,7 @@ jobs:
       # pass end to end without committing.
       - name: Incremental check (Crossref from-index-date)
         env:
+          S2_API_KEY: ${{ secrets.S2_API_KEY }}   # optional — moves the S2 leg off the anonymous pool
           FT50_MAILTO: kstouras+litft50@gmail.com   # Crossref "polite pool" contact
         run: node lit/_scraper-ft50/build-data.mjs --incremental
 

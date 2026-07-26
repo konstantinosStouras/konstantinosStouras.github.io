@@ -43,6 +43,7 @@ jobs:
 
       - name: Refresh citation counts (OpenAlex+Semantic Scholar, bounded)
         env:
+          S2_API_KEY: ${{ secrets.S2_API_KEY }}   # optional — moves the S2 leg off the anonymous pool
           # Own OpenAlex quota identity — never starves the preprint
           # backfill's (kstouras+litft50@gmail.com) or the other datasets'.
           FT50_MAILTO: kstouras+litft50cite@gmail.com

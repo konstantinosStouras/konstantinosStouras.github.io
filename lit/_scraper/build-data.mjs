@@ -79,6 +79,10 @@ const DATA_DIR = process.env.LIT_DATA_DIR
 const MOCK_DIR = join(__dirname, 'mock');
 
 const MAILTO = process.env.LIT_MAILTO || 'kstouras@gmail.com';
+// Optional Semantic Scholar API key — moves the S2 legs off the throttled
+// anonymous pool. Inert until the S2_API_KEY secret/env is set.
+const S2_KEY = process.env.S2_API_KEY || '';
+
 const MOCK = MOCK_RUN;
 const ROWS = 1000;                  // Crossref max page size
 const RECENT_WINDOW_DAYS = 90;      // buffer; the page shows the last 4 weeks
@@ -1334,7 +1338,8 @@ async function enrichEc(rows, extras, dblpPrefetched) {
     try {
       const url = 'https://api.semanticscholar.org/graph/v1/paper/search/match?query=' +
         encodeURIComponent(r.Title) + '&fields=title,externalIds,openAccessPdf,abstract';
-      const res = await fetch(url, { headers: { 'User-Agent': `lit-scraper/1.0 (mailto:${MAILTO})` } });
+      const res = await fetch(url, { headers: { 'User-Agent': `lit-scraper/1.0 (mailto:${MAILTO})`,
+        ...(S2_KEY ? { 'x-api-key': S2_KEY } : {}) } });
       if (res.status === 404) { extras[k] = { ...(cur || {}), none: true }; await sleep(1100); continue; }
       if (res.status === 429) { s2Errors++; await sleep(8000); continue; }
       if (!res.ok) { s2Errors++; await sleep(2000); continue; }
@@ -2002,7 +2007,8 @@ async function s2Batch(dois) {
     try {
       const res = await fetch('https://api.semanticscholar.org/graph/v1/paper/batch?fields=citationCount', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'User-Agent': `lit-scraper/1.0 (mailto:${MAILTO})` },
+        headers: { 'Content-Type': 'application/json', 'User-Agent': `lit-scraper/1.0 (mailto:${MAILTO})`,
+          ...(S2_KEY ? { 'x-api-key': S2_KEY } : {}) },
         body: JSON.stringify({ ids: dois.map(d => 'DOI:' + d) }),
         signal: ctrl.signal,
       });

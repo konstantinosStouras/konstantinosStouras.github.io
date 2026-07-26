@@ -46,6 +46,7 @@ jobs:
 
       - name: Fetch a slice of papers' references (Crossref, gently paced)
         env:
+          S2_API_KEY: ${{ secrets.S2_API_KEY }}   # optional — moves the S2 leg off the anonymous pool
           REFS_MAILTO: kstouras+litrefs@gmail.com   # distinct Crossref/OpenAlex quota identity
           REFS_MAX_PAPERS: '6000'                    # papers per run (resumable across runs)
           REFS_BUDGET_MS: '2700000'                  # 45-min fetch ceiling
