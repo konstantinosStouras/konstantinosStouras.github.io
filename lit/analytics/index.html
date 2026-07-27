@@ -961,6 +961,14 @@
     var nf = f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10;
     return nf * pow;
   }
+  // Round a raw tick spacing up to a tidy 1/2/2.5/5×10^k step.
+  function niceStep(raw) {
+    if (!(raw > 0)) return 1;
+    var pow = Math.pow(10, Math.floor(Math.log10(raw)));
+    var f = raw / pow;
+    var nf = f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10;
+    return nf * pow;
+  }
   function yTicks(max, n) {
     var t = []; for (var i = 0; i <= n; i++) t.push(max * i / n); return t;
   }
@@ -1671,7 +1679,7 @@
           var mine = DISR.papers.filter(function (p) { return p.au && p.au.indexOf(id) !== -1 && filter(p); });
           if (!mine.length) { cell.textContent = '—'; return; }
           var md = mean(mine.map(function (p) { return p.d; }));
-          cell.textContent = (md > 0 ? '+' : '') + md.toFixed(3) + ' (' + mine.length + ')';
+          cell.textContent = (md > 0 ? '+' : '') + fmtD3(md) + ' (' + mine.length + ')';
           cell.style.color = md > 0.02 ? C_DISRUPT : (md < -0.02 ? C_DEVELOP : '');
         });
       };
@@ -1767,7 +1775,7 @@
       var pl = function (p) {
         var url = p.doi ? 'https://doi.org/' + p.doi : '', ti = trunc(p.ti || '(untitled)', 68);
         return (url ? '<a href="' + esc(url) + '" target="_blank" rel="noopener" style="color:var(--navy)">' + esc(ti) + '</a>' : esc(ti)) +
-          ' <span style="color:var(--text-muted)">(' + (p.d > 0 ? '+' : '') + p.d.toFixed(3) + ')</span>';
+          ' <span style="color:var(--text-muted)">(' + (p.d > 0 ? '+' : '') + fmtD3(p.d) + ')</span>';
       };
       var body = '<div class="csub">Mean of <em>D</em> over ' + esc(a.n) + '’s ' + mine.length + ' scored paper' + (mine.length === 1 ? '' : 's') +
         ' in scope — <strong style="color:' + vcol + '">' + verdict + '</strong>.</div>';
@@ -2150,10 +2158,11 @@
     renderDisrAuthors(rows);
   }
 
-  // 3-dp D formatter that never renders the "-0.000" negative-zero artifact.
+  // 3-dp D formatter: typographic minus (matching the charts' "−"), and never
+  // the "-0.000" negative-zero artifact.
   function fmtD3(v) {
-    var s = v.toFixed(3);
-    return s === '-0.000' ? '0.000' : s;
+    var s = Math.abs(v).toFixed(3);
+    return (v < 0 && s !== '0.000' ? '−' : '') + s;
   }
   function renderDisrTiles(rows, jy) {
     var n = rows.length, disrupt = 0, dev = 0, ds = [];
@@ -2343,16 +2352,22 @@
     // A zero-floored axis of non-negative data must not pad below zero — the
     // bottom gridline would otherwise read an impossible negative tick.
     if (opts.leftZero && lMin < 0 && (!lv.length || Math.min.apply(null, lv) >= 0) && (opts.refLine == null || opts.refLine >= 0)) lMin = 0;
+    // Snap the padded bounds outward to a tidy tick step so the axis labels
+    // read round (0/20/40/60 rather than 16.00/32.00/47.99/63.99).
+    var lStep = niceStep((lMax - lMin) / 4);
+    lMin = Math.floor(lMin / lStep + 1e-9) * lStep;
+    lMax = Math.ceil(lMax / lStep - 1e-9) * lStep;
     var rMax = rv.length ? niceMax(Math.max.apply(null, rv)) : 1, rMin = 0;
     var pyL = function (v) { return T + (1 - (v - lMin) / (lMax - lMin)) * (H - T - B); };
     var pyR = function (v) { return T + (1 - (v - rMin) / (rMax - rMin)) * (H - T - B); };
     var svg = svgEl(W, H);
     // left gridlines + ticks
     var lc = opts.leftColor || NAVY, rc = opts.rightColor || C_CITE;
-    for (var g = 0; g <= 4; g++) {
-      var val = lMin + (lMax - lMin) * g / 4, yy = pyL(val);
+    var nlt = Math.max(1, Math.round((lMax - lMin) / lStep));
+    for (var g = 0; g <= nlt; g++) {
+      var val = lMin + lStep * g, yy = pyL(val);
       svg += '<line x1="' + L + '" y1="' + yy.toFixed(1) + '" x2="' + (W - R) + '" y2="' + yy.toFixed(1) + '" stroke="' + GRID + '"/>';
-      svg += '<text x="' + (L - 8) + '" y="' + (yy + 4).toFixed(1) + '" text-anchor="end" font-size="11" fill="' + lc + '">' + fmtTick(val, (lMax - lMin) / 4) + '</text>';
+      svg += '<text x="' + (L - 8) + '" y="' + (yy + 4).toFixed(1) + '" text-anchor="end" font-size="11" fill="' + lc + '">' + fmtTick(val, lStep) + '</text>';
     }
     // right ticks
     if (opts.rightLabel) {
@@ -2494,7 +2509,7 @@
       var nfMeta = p.nf != null ? ' · cited by ' + fmt(p.nf) + ' here' : '';
       html += '<tr><td class="ti">' + title + '<div class="meta">' + esc(JMAP[p.j] ? JMAP[p.j].name : p.j) + ' · ' + esc(p.y) + nfMeta + '</div></td>' +
         '<td class="meta">' + fmt(p.t) + '</td>' +
-        '<td class="cby" style="color:' + col + '">' + (p.d > 0 ? '+' : '') + p.d.toFixed(3) + '</td></tr>';
+        '<td class="cby" style="color:' + col + '">' + (p.d > 0 ? '+' : '') + fmtD3(p.d) + '</td></tr>';
     });
     return html + '</tbody></table>';
   }
