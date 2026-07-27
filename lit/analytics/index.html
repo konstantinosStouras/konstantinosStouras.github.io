@@ -320,6 +320,10 @@
   .disr-formula .frac .den { padding: 3px 8px 0; }
   .disr-note { font-size: 12.5px; color: var(--text-muted); background: var(--accent-light); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: 10px 13px; margin-top: 4px; line-height: 1.55; }
   .disr-note a { color: var(--navy); }
+  .dim-lead span a, .csub a { color: var(--navy); }
+  .disr-divider { border: none; border-top: 2px solid var(--border); margin: 48px 0 0; }
+  .disr-beta { font-size: 13px; color: var(--text-muted); background: var(--accent-light); border: 1.5px solid var(--accent); border-radius: 10px; padding: 12px 16px; margin: 28px 2px 0; line-height: 1.6; }
+  .disr-beta strong { color: var(--navy); }
   .disr-fig { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 10px; margin: 2px 0 9px; }
   .disr-fig .dpanel { border: 1px solid var(--border); border-radius: 10px; padding: 9px 8px 7px; background: #fff; text-align: center; }
   .disr-fig .dpt { font-size: 12.5px; font-weight: 700; }
@@ -544,7 +548,7 @@
         </div>
         <div class="card wide">
           <h3>Most-cited papers in scope</h3>
-          <div class="csub">Citation counts from Crossref (<code>is-referenced-by-count</code>). Titles link to their DOI.</div>
+          <div class="csub">Citation counts are the highest of the Crossref / OpenAlex / Semantic Scholar tallies — the same count the main browser shows. Titles link to their DOI.</div>
           <div class="tblscroll"><div id="citedTable"></div></div>
         </div>
       </div>
@@ -559,8 +563,10 @@
            filters (journals / journal types / years) like the rest of the page.
            Hidden entirely until the disruption dataset is available. -->
       <div id="disrSection" style="display:none">
-        <div class="dim-lead" style="margin-top:28px">Team science — do small teams disrupt?
-          <span>Reproducing the key measures of Wu, Wang &amp; Evans, “Large teams develop and small teams disrupt science and technology” (<em>Nature</em>&nbsp;570, 2019) over the slice of The&nbsp;Lit's citation graph mapped so far. Every figure below honours the filters at the top of the page, and sharpens as more of the reference graph is built.</span>
+        <hr class="disr-divider">
+        <div class="disr-beta">🚧 <strong>Beta — work in progress.</strong> Everything from here down is an experimental analysis under active development. The intention is not to replicate the <em>Nature</em> study itself, but to apply its measures to our own database to gain further insights into the literature it covers — so expect these figures to evolve and sharpen as the underlying citation graph grows.</div>
+        <div class="dim-lead" style="margin-top:24px">Team science — do small teams disrupt?
+          <span>Reproducing the key measures of <a href="https://www.nature.com/articles/s41586-019-0941-9" target="_blank" rel="noopener">Wu, Wang &amp; Evans, “Large teams develop and small teams disrupt science and technology” (<em>Nature</em>&nbsp;570, 2019)</a> over the slice of The&nbsp;Lit's citation graph mapped so far. Every figure below honours the journal, journal-type, year, disruptiveness-range and non-research filters at the top of the page (an editorial editor/area selection narrows to that journal only — see the note in “How we measure disruption”), and sharpens as more of the reference graph is built.</span>
         </div>
         <div id="disrLoading" class="loading"><span class="spinner"></span>Loading the citation-graph analysis…</div>
         <div id="disrEmpty" class="aspot-empty" style="display:none"></div>
@@ -579,8 +585,8 @@
               <div class="legend" id="disrHistLegend"></div>
             </div>
             <div class="card wide">
-              <h3>Disruption and impact by team size</h3>
-              <div class="csub" id="disrScissorSub">The signature result: as teams grow, disruption falls while citations rise.</div>
+              <h3>Disruption and impact by team size — the headline result</h3>
+              <div class="csub" id="disrScissorSub">The signature result: as teams grow, disruption (percentile) falls while citations rise.</div>
               <div id="disrScissor"></div>
               <div class="legend" id="disrScissorLegend"></div>
             </div>
@@ -680,8 +686,9 @@
 
   // ── state ───────────────────────────────────────────────────────────────
   var DATA = null, JMAP = {}, AUTHORS = null, AUTHORS_MIN = 5, authorsState = 'idle';
-  // The curated native sources (from data.json) — the default scope when nothing
-  // is selected, so the page opens on these rather than the whole corpus.
+  // The curated native sources (from data.json). NOTE: the default scope is the
+  // WHOLE database (scopeKeys() returns every journal when nothing is selected);
+  // this list only marks which journals are native-curated.
   var NATIVE_KEYS = [];
   // dim = the active editorial breakdown filter (one dimension at a time):
   //   name ∈ 'editor'|'area'|'se'|'ae', vals = { value: true } of selected values.
@@ -695,9 +702,16 @@
     // Publication-volume chart (legend click).
     groupOff: {}, evoHidden: {}, citeEvoHidden: {} };
   // Disruptiveness-index (D) range filter bounds — the slider spans D_LO..D_HI.
-  var D_LO = -1, D_HI = 1, D_STEP = 0.05;
+  // Step 0.001 matches disruption.json's 3-decimal D resolution, so the
+  // "Disruptive (> 0)" / "Developing (< 0)" presets can bound at ±0.001 and
+  // genuinely EXCLUDE the D == 0 neutral papers their labels promise to
+  // exclude (the filter interval is closed: p.d >= dMin && p.d <= dMax).
+  var D_LO = -1, D_HI = 1, D_STEP = 0.001;
   function dActive() { return S.dMin > D_LO + 1e-9 || S.dMax < D_HI - 1e-9; }
-  function fmtD(v) { return (v < 0 ? '−' : '') + Math.abs(v).toFixed(2); }
+  // 2 decimals normally; 3 when the value isn't a whole hundredth (the
+  // Disruptive/Developing presets bound at ±0.001 — showing that as "0.00"
+  // would read as if D = 0 were included).
+  function fmtD(v) { var d = Math.abs(Math.round(v * 1000)) % 10 ? 3 : 2; return (v < 0 ? '−' : '') + Math.abs(v).toFixed(d); }
   // Editorial dimensions we can break the analytics down by (present in a
   // journal's `dims` only when we collect them: MS editors/areas, ISR/MkSc SE/AE).
   var DIM_ORDER = ['area', 'editor', 'se', 'ae'];
@@ -947,6 +961,14 @@
     var nf = f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10;
     return nf * pow;
   }
+  // Round a raw tick spacing up to a tidy 1/2/2.5/5×10^k step.
+  function niceStep(raw) {
+    if (!(raw > 0)) return 1;
+    var pow = Math.pow(10, Math.floor(Math.log10(raw)));
+    var f = raw / pow;
+    var nf = f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10;
+    return nf * pow;
+  }
   function yTicks(max, n) {
     var t = []; for (var i = 0; i <= n; i++) t.push(max * i / n); return t;
   }
@@ -970,7 +992,7 @@
     yTicks(maxV, 4).forEach(function (v) {
       var yy = py(v);
       svg += '<line x1="' + L + '" y1="' + yy.toFixed(1) + '" x2="' + (W - R) + '" y2="' + yy.toFixed(1) + '" stroke="' + GRID + '" stroke-width="1"/>';
-      svg += '<text x="' + (L - 8) + '" y="' + (yy + 4).toFixed(1) + '" text-anchor="end" font-size="11" fill="' + MUTED + '">' + (opts.pctAxis ? Math.round(v * 100) + '%' : fmtTick(v)) + '</text>';
+      svg += '<text x="' + (L - 8) + '" y="' + (yy + 4).toFixed(1) + '" text-anchor="end" font-size="11" fill="' + MUTED + '">' + (opts.pctAxis ? fmtTick(v * 100, maxV * 25) + '%' : fmtTick(v, maxV / 4)) + '</text>';
     });
     // x labels (about 6 ticks)
     var step = Math.max(1, Math.round(span / 6));
@@ -991,10 +1013,16 @@
     svg += '</svg>';
     return svg;
   }
-  function fmtTick(v) {
+  // step (optional) = the tick spacing; labels get just enough decimals that a
+  // gridline's label matches its position (a 1.25-spaced axis was previously
+  // labelled 0,1,3,4,5 — Math.round put "3" on the 2.5 gridline).
+  function fmtTick(v, step) {
     if (v >= 1e6) return (v / 1e6).toFixed(v % 1e6 ? 1 : 0) + 'M';
     if (v >= 1e3) return (v / 1e3).toFixed(v % 1e3 ? 1 : 0) + 'k';
-    return String(Math.round(v));
+    var s = step == null ? 0 : Math.abs(step);
+    var dec = !s || Math.abs(s - Math.round(s)) < 1e-9 ? 0
+      : (Math.abs(s * 10 - Math.round(s * 10)) < 1e-9 ? 1 : 2);
+    return dec ? v.toFixed(dec) : String(Math.round(v));
   }
 
   // Horizontal bars. items:[{label,value,color}]
@@ -1044,7 +1072,7 @@
     yTicks(maxV, 4).forEach(function (v) {
       var yy = py(v);
       svg += '<line x1="' + L + '" y1="' + yy.toFixed(1) + '" x2="' + (W - R) + '" y2="' + yy.toFixed(1) + '" stroke="' + GRID + '"/>';
-      svg += '<text x="' + (L - 7) + '" y="' + (yy + 4).toFixed(1) + '" text-anchor="end" font-size="11" fill="' + MUTED + '">' + (opts.pctAxis ? Math.round(v) + '%' : fmtTick(v)) + '</text>';
+      svg += '<text x="' + (L - 7) + '" y="' + (yy + 4).toFixed(1) + '" text-anchor="end" font-size="11" fill="' + MUTED + '">' + (opts.pctAxis ? fmtTick(v, maxV / 4) + '%' : fmtTick(v, maxV / 4)) + '</text>';
     });
     items.forEach(function (it, i) {
       var cx = cxOf(i), x = cx - bw / 2, h = (it.value / maxV) * (H - T - B);
@@ -1119,7 +1147,7 @@
       { label: 'Solo-authored', value: agg.n ? pct(agg.s / agg.n) : '—' },
       { label: 'With pre-print', value: agg.n ? pct(agg.p / agg.n) : '—', hint: 'free open-access copy' },
       { label: 'With abstract', value: agg.n ? pct(agg.ab / agg.n) : '—' },
-      { label: 'Total citations', value: fmt(agg.c), cls: 'sm', hint: 'Crossref, in scope' }
+      { label: 'Total citations', value: fmt(agg.c), cls: 'sm', hint: 'highest of Crossref/OpenAlex/S2, in scope' }
     ];
     $('tiles').innerHTML = tiles.map(function (t) {
       return '<div class="tile"><div class="label">' + t.label + '</div><div class="value ' + (t.cls || '') + '">' + t.value + '</div>' + (t.hint ? '<div class="hint">' + t.hint + '</div>' : '') + '</div>';
@@ -1282,6 +1310,14 @@
     });
     items.sort(function (a, b) { return b.value - a.value; });
     var CITE_LIMIT = 16;   // keep the caption's "top N shown" in lock-step with the barsH cap
+    // A group-average bar ranks mid-pack by construction (it averages its whole
+    // type), so with 16+ journals in scope the plain top-N cut silently dropped
+    // it while its toggle stayed lit — reserve it a slot ahead of the cut.
+    var grpRows = items.filter(function (it) { return it.group; });
+    if (grpRows.length && items.length > CITE_LIMIT) {
+      items = items.filter(function (it) { return !it.group; }).slice(0, Math.max(1, CITE_LIMIT - grpRows.length))
+        .concat(grpRows).sort(function (a, b) { return b.value - a.value; });
+    }
     $('citeImpactSub').textContent = 'Average citations per paper, within scope' + (dimActive() ? ' · ' + dimSummary() : '') + (items.length > CITE_LIMIT ? ' — top ' + CITE_LIMIT + ' shown' : '');
     $('citeImpactChart').innerHTML = items.length
       ? barsH(items, { limit: CITE_LIMIT, fmt: function (v) { return v.toFixed(1); } })
@@ -1303,11 +1339,15 @@
     });
     var areas = Object.keys(areaTot).sort(function (a, b) { return areaTot[b] - areaTot[a]; });
     // When the user has filtered to specific areas, trend only those.
-    if (S.dim.name === 'area' && activeDimVals().length) {
+    var areaFiltered = S.dim.name === 'area' && activeDimVals().length;
+    if (areaFiltered) {
       var pick = {}; activeDimVals().forEach(function (v) { pick[v] = 1; });
       areas = areas.filter(function (a) { return pick[a]; });
     }
-    if (areas.length < 2) { card.style.display = 'none'; return; }
+    // "Trend only those": a user who filtered to exactly ONE area still gets its
+    // trend line — the <2 cutoff only applies to the unfiltered view, where a
+    // single-series "breakdown" carries no information.
+    if (!areas.length || (areas.length < 2 && !areaFiltered)) { card.style.display = 'none'; return; }
     card.style.display = '';
     var top = areas.slice(0, 6);
     // Trim the x-axis to the year range where the shown areas actually have
@@ -1378,7 +1418,12 @@
             a.j[jk] = tot;
           }
         }
-        AUTHORS[a.n.toLowerCase()] = a;
+        // Keyed by lowercased name. authors.json keeps case-variant duplicates
+        // of the same researcher as distinct rows (e.g. an all-caps deposit) —
+        // last-wins overwrote whichever happened to load first, making some
+        // authors unreachable; on a collision keep the row with MORE papers.
+        var k = a.n.toLowerCase();
+        if (!AUTHORS[k] || (a.p || 0) > (AUTHORS[k].p || 0)) AUTHORS[k] = a;
       });
       // datalist for autocomplete (cap for browser performance)
       var dl = $('authorList');
@@ -1408,20 +1453,40 @@
   // demand a unique hit so an ambiguous query never grabs the wrong person.
   // On ambiguity the candidates are reported via `info` so the caller can
   // show them instead of a flat "no author" message.
+  // Diacritic/apostrophe folding (mirrors the main browser's nameFold): a
+  // query typed without accents — "Cachon" for "Cachón", a straight apostrophe
+  // for a curly one — must still resolve.
+  function nameFold(s) {
+    s = String(s || '').toLowerCase().replace(/[’‘]/g, "'");
+    try { s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch (_) { }
+    return s;
+  }
+  var AUTHORS_FOLD = null;   // folded-name -> record, built lazily on first miss
+  function authorsFoldIndex() {
+    if (AUTHORS_FOLD || !AUTHORS) return AUTHORS_FOLD;
+    AUTHORS_FOLD = {};
+    for (var k in AUTHORS) {
+      var fk = nameFold(k);
+      if (!AUTHORS_FOLD[fk] || (AUTHORS[k].p || 0) > (AUTHORS_FOLD[fk].p || 0)) AUTHORS_FOLD[fk] = AUTHORS[k];
+    }
+    return AUTHORS_FOLD;
+  }
   function resolveAuthor(name, info) {
     name = (name || '').trim(); if (!name || !AUTHORS) return null;
     var lc = name.toLowerCase();
     var a = AUTHORS[lc];
+    if (!a) { var ff = authorsFoldIndex(); a = ff && ff[nameFold(lc)]; }
     if (!a) {
       // Name-part match: every queried part must appear as a whole part of the
       // author's canonical name — so "Konstantinos Stouras" resolves to the
       // credited "Konstantinos I. Stouras" even though the query lacks the
       // middle initial (the ORCID given+family form vs the published name).
-      var qt = lc.replace(/\./g, ' ').split(/\s+/).filter(Boolean);
+      var qf = nameFold(lc);
+      var qt = qf.replace(/\./g, ' ').split(/\s+/).filter(Boolean);
       if (qt.length >= 2) {
         var hit = null, hits = 0, cands = [];
         for (var k2 in AUTHORS) {
-          var at = k2.replace(/\./g, ' ').split(/\s+/).filter(Boolean);
+          var at = nameFold(k2).replace(/\./g, ' ').split(/\s+/).filter(Boolean);
           var all = qt.every(function (t) { return at.indexOf(t) !== -1; });
           if (all) { hits++; hit = AUTHORS[k2]; if (cands.length < 6) cands.push(AUTHORS[k2].n); }
         }
@@ -1430,9 +1495,9 @@
       }
     }
     if (!a && !(info && info.candidates)) {
-      var lHit = null, lHits = 0, lCands = [];
+      var lHit = null, lHits = 0, lCands = [], lq = nameFold(lc);
       for (var kk in AUTHORS) {
-        if (kk.indexOf(lc) !== -1) { lHits++; lHit = AUTHORS[kk]; if (lCands.length < 6) lCands.push(AUTHORS[kk].n); }
+        if (nameFold(kk).indexOf(lq) !== -1) { lHits++; lHit = AUTHORS[kk]; if (lCands.length < 6) lCands.push(AUTHORS[kk].n); }
       }
       if (lHits === 1) a = lHit;
       else if (lHits > 1 && info) info.candidates = lCands;
@@ -1470,7 +1535,15 @@
       chip.onclick = function () { S.authors.splice(+chip.getAttribute('data-i'), 1); renderAuthor(); };
     });
   }
+  // Bumped every time the Author-spotlight view is rebuilt; async fills (the
+  // disruption profile / compare-table rows, which wait on the 9+ MB
+  // disruption.json) capture it and bail if the view moved on — the old guard
+  // only checked the card element EXISTED, and a rebuilt view for a DIFFERENT
+  // author re-creates the same ids, so a stale callback painted the previous
+  // author's numbers into the new author's card.
+  var authorViewSeq = 0;
   function renderAuthor() {
+    authorViewSeq++;
     renderAuthorChips();
     if (!S.authors.length) {
       $('authorBody').innerHTML = '<div class="aspot-empty">Add one or more authors above to see their publication record across The Lit — and compare several side by side: how many papers, in which journals, and how their output has evolved over time.</div>';
@@ -1589,7 +1662,9 @@
   // over the author's scored papers; the count is shown in parentheses.
   function renderCompareDisruption(list) {
     if (disrState === 'failed') return;
+    var seq = authorViewSeq;
     ensureDisruption(function () {
+      if (seq !== authorViewSeq) return;                        // view rebuilt since
       if (disrState !== 'ready' || !DISR || !disrNameToId) return;
       var rowScoped = $('cmpDisrRow'), rowAll = $('cmpDisrRowAll');
       if (!rowScoped && !rowAll) return;
@@ -1604,7 +1679,7 @@
           var mine = DISR.papers.filter(function (p) { return p.au && p.au.indexOf(id) !== -1 && filter(p); });
           if (!mine.length) { cell.textContent = '—'; return; }
           var md = mean(mine.map(function (p) { return p.d; }));
-          cell.textContent = (md > 0 ? '+' : '') + md.toFixed(3) + ' (' + mine.length + ')';
+          cell.textContent = (md > 0 ? '+' : '') + fmtD3(md) + ' (' + mine.length + ')';
           cell.style.color = md > 0.02 ? C_DISRUPT : (md < -0.02 ? C_DEVELOP : '');
         });
       };
@@ -1669,9 +1744,11 @@
   // Reuses the same scope + year filters as the rest of the dashboard.
   function renderAuthorDisruption(a) {
     if (disrState === 'failed') return;
+    var seq = authorViewSeq;
     ensureDisruption(function () {
+      if (seq !== authorViewSeq) return;                           // author view rebuilt since
       if (disrState !== 'ready' || !DISR || !disrNameToId) return;
-      var card = $('aDisrupt'); if (!card) return;                 // author view rebuilt since?
+      var card = $('aDisrupt'); if (!card) return;
       var id = disrNameToId[String(a.n || '').toLowerCase()];
       if (id == null) return;                                      // author not in the citation graph
       var scope = {}; scopeKeys().forEach(function (k) { scope[k] = 1; });
@@ -1686,23 +1763,34 @@
       var sorted = mine.slice().sort(function (x, y) { return y.d - x.d; });
       var verdict = meanD > 0.02 ? 'leans disruptive' : (meanD < -0.02 ? 'leans developmental' : 'balanced');
       var vcol = meanD > 0.02 ? C_DISRUPT : (meanD < -0.02 ? C_DEVELOP : MUTED);
+      // English ordinal (1st/2nd/3rd/…, 11th-13th special-cased) — a bare "th"
+      // suffix printed "1th"/"21th"/"92th" for ~30% of possible percentiles.
+      var ord = function (n) { var s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
       var tiles = [
-        { label: 'Mean disruption Dⱼ', value: (meanD > 0 ? '+' : '') + meanD.toFixed(3) },
-        { label: 'Percentile in scope', value: Math.round(pctile) + 'th' },
+        { label: 'Mean disruption Dⱼ', value: (meanD > 0 ? '+' : '') + fmtD3(meanD) },
+        { label: 'Percentile in scope', value: ord(Math.round(pctile)), hint: 'of papers’ D in scope', title: 'Where this author’s mean Dⱼ falls within the distribution of individual papers’ D in the current journal + year scope (not a ranking among authors).' },
         { label: 'Scored papers', value: fmt(mine.length) },
-        { label: 'Disruptive / developing', value: disrupt + ' / ' + dev }
+        { label: 'Disruptive / developing', value: disrupt + ' / ' + dev, hint: (mine.length - disrupt - dev) ? (mine.length - disrupt - dev) + ' neutral (D = 0)' : undefined }
       ];
       var pl = function (p) {
         var url = p.doi ? 'https://doi.org/' + p.doi : '', ti = trunc(p.ti || '(untitled)', 68);
         return (url ? '<a href="' + esc(url) + '" target="_blank" rel="noopener" style="color:var(--navy)">' + esc(ti) + '</a>' : esc(ti)) +
-          ' <span style="color:var(--text-muted)">(' + (p.d > 0 ? '+' : '') + p.d.toFixed(3) + ')</span>';
+          ' <span style="color:var(--text-muted)">(' + (p.d > 0 ? '+' : '') + fmtD3(p.d) + ')</span>';
       };
       var body = '<div class="csub">Mean of <em>D</em> over ' + esc(a.n) + '’s ' + mine.length + ' scored paper' + (mine.length === 1 ? '' : 's') +
         ' in scope — <strong style="color:' + vcol + '">' + verdict + '</strong>.</div>';
-      body += '<div class="tiles">' + tiles.map(function (t) { return '<div class="tile"><div class="label">' + t.label + '</div><div class="value sm">' + t.value + '</div></div>'; }).join('') + '</div>';
+      body += '<div class="tiles">' + tiles.map(function (t) { return '<div class="tile"' + (t.title ? ' title="' + esc(t.title) + '"' : '') + '><div class="label">' + t.label + '</div><div class="value sm">' + t.value + '</div>' + (t.hint ? '<div class="hint">' + t.hint + '</div>' : '') + '</div>'; }).join('') + '</div>';
+      // With one scored paper the same row would print as BOTH "most disruptive"
+      // and "most developmental"; and in a one-signed record the superlatives
+      // would mislabel (an all-positive author has no "developmental" work).
+      var hiLab = sorted[0].d > 0 ? 'Most disruptive:' : 'Highest D:';
+      var loLab = sorted[sorted.length - 1].d < 0 ? 'Most developmental:' : 'Lowest D:';
       body += '<div style="font-size:13.5px;line-height:1.8;margin-top:8px">' +
-        '<div><span style="color:' + C_DISRUPT + ';font-weight:600">Most disruptive:</span> ' + pl(sorted[0]) + '</div>' +
-        '<div><span style="color:' + C_DEVELOP + ';font-weight:600">Most developmental:</span> ' + pl(sorted[sorted.length - 1]) + '</div></div>';
+        (mine.length === 1
+          ? '<div><span style="color:' + vcol + ';font-weight:600">Scored paper:</span> ' + pl(sorted[0]) + '</div>'
+          : '<div><span style="color:' + C_DISRUPT + ';font-weight:600">' + hiLab + '</span> ' + pl(sorted[0]) + '</div>' +
+            '<div><span style="color:' + C_DEVELOP + ';font-weight:600">' + loLab + '</span> ' + pl(sorted[sorted.length - 1]) + '</div>') +
+        '</div>';
       $('aDisruptBody').innerHTML = body;
       card.style.display = '';
     });
@@ -1721,10 +1809,22 @@
   var paperIndex = null;          // { byDoi, byTitle } over DISR.papers (built once)
   var paperListBuilt = false;     // datalist populated?
   // Normalise a DOI to its bare lower-case form (drops a doi.org/doi: prefix).
+  // Copied doi.org URLs are often percent-encoded (10.1257%2Faer...), and DOIs
+  // pasted from prose carry trailing punctuation — decode and trim both, but
+  // never strip a ")" that is part of the DOI itself (Elsevier's "(96)00082-4"
+  // style), only an UNBALANCED one.
   function normDoiStr(s) {
-    var d = String(s == null ? '' : s).trim().toLowerCase();
-    d = d.replace(/^https?:\/\/(dx\.)?doi\.org\//, '').replace(/^doi:\s*/, '');
-    var m = d.match(/10\.\d{4,}\S*/); return m ? m[0] : d;
+    var d = String(s == null ? '' : s).trim();
+    try { d = decodeURIComponent(d); } catch (_) { }
+    d = d.toLowerCase().replace(/^https?:\/\/(dx\.)?doi\.org\//, '').replace(/^doi:\s*/, '');
+    var m = d.match(/10\.\d{4,}\S*/); d = m ? m[0] : d;
+    for (;;) {
+      var last = d.slice(-1);
+      if (last === '.' || last === ',' || last === ';') { d = d.slice(0, -1); continue; }
+      if (last === ')' && d.split(')').length > d.split('(').length) { d = d.slice(0, -1); continue; }
+      break;
+    }
+    return d;
   }
   function paperKey(p) { return p.doi ? normDoiStr(p.doi) : ('t:' + String(p.ti || '').toLowerCase().trim()); }
   function buildPaperIndex() {
@@ -1732,7 +1832,11 @@
     var byDoi = {}, byTitle = {};
     DISR.papers.forEach(function (p) {
       if (p.doi) { var dk = normDoiStr(p.doi); if (!byDoi[dk]) byDoi[dk] = p; }
-      if (p.ti) { var tk = String(p.ti).toLowerCase().trim(); if (!byTitle[tk]) byTitle[tk] = p; }
+      // Different papers can share a title (reprints, same-name articles in two
+      // journals) — keep the MOST-CITED one so an exact-title query resolves
+      // deterministically to the paper the user almost certainly means, not to
+      // whichever row happened to come first in the file.
+      if (p.ti) { var tk = String(p.ti).toLowerCase().trim(); if (!byTitle[tk] || (p.c || 0) > (byTitle[tk].c || 0)) byTitle[tk] = p; }
     });
     paperIndex = { byDoi: byDoi, byTitle: byTitle };
     return paperIndex;
@@ -1833,14 +1937,17 @@
     yt.forEach(function (v) {
       var yy = py(v);
       svg += '<line x1="' + L + '" y1="' + yy.toFixed(1) + '" x2="' + (W - R) + '" y2="' + yy.toFixed(1) + '" stroke="' + GRID + '"/>';
-      svg += '<text x="' + (L - 8) + '" y="' + (yy + 4).toFixed(1) + '" text-anchor="end" font-size="11" fill="' + MUTED + '">' + (opts.yFmt ? opts.yFmt(v) : fmtTick(v)) + '</text>';
+      svg += '<text x="' + (L - 8) + '" y="' + (yy + 4).toFixed(1) + '" text-anchor="end" font-size="11" fill="' + MUTED + '">' + (opts.yFmt ? opts.yFmt(v) : fmtTick(v, (ymax - ymin) / 4)) + '</text>';
     });
     if (opts.symmetric) { var zy = py(0); svg += '<line x1="' + L + '" y1="' + zy.toFixed(1) + '" x2="' + (W - R) + '" y2="' + zy.toFixed(1) + '" stroke="#cfc6ca" stroke-width="1.3"/>'; }
     if (opts.xZero && xmin < 0 && xmax > 0) { var zx = px(0); svg += '<line x1="' + zx.toFixed(1) + '" y1="' + T + '" x2="' + zx.toFixed(1) + '" y2="' + (H - B) + '" stroke="#cfc6ca" stroke-width="1.3"/>'; }
-    var xspan = xmax - xmin, xstep = xspan / 6;
+    var xspan = xmax - xmin, xstep = xspan / 6, lastLab = null;
     for (var t = 0; t <= 6; t++) {
       var xv = xmin + xstep * t;
-      svg += '<text x="' + px(xv).toFixed(1) + '" y="' + (H - 12) + '" text-anchor="middle" font-size="11" fill="' + MUTED + '">' + (opts.xFmt ? opts.xFmt(xv) : Math.round(xv)) + '</text>';
+      var lab = String(opts.xFmt ? opts.xFmt(xv) : Math.round(xv));
+      if (lab === lastLab) continue;   // a short year span rounds several ticks to the same label — draw each once
+      lastLab = lab;
+      svg += '<text x="' + px(xv).toFixed(1) + '" y="' + (H - 12) + '" text-anchor="middle" font-size="11" fill="' + MUTED + '">' + lab + '</text>';
     }
     if (opts.connect && pts.length > 1) {
       var sorted = pts.slice().sort(function (a, b) { return a.x - b.x; });
@@ -1922,7 +2029,7 @@
       ['In-catalog citations', function (r) { return fmt(r.p.nf || 0); }, 'How many papers WITHIN The Lit’s citation graph cite this one (a subset of all citations, used to compute D).'],
       ['Disruptiveness Dᵢ', function (r) { return '<span style="color:' + dCol(r.p.d) + ';font-weight:700">' + (r.p.d > 0 ? '+' : (r.p.d < 0 ? '−' : '')) + Math.abs(r.p.d).toFixed(3) + '</span>'; }, 'The CD disruption index (Funk & Owen-Smith 2017): +1 fully disrupts (later work cites it instead of its antecedents), −1 fully develops.'],
       ['Mean reference age', function (r) { return r.p.ra != null ? r.p.ra.toFixed(1) + ' yrs' : '—'; }, 'Average age of the works this paper cites (from reference years). Larger = it reaches for older literature.'],
-      ['Reference popularity', function (r) { return r.p.rp != null ? fmt(Math.round(r.p.rp)) : '—'; }, 'Average citation count of the works this paper cites (a proxy for how “canonical” its references are).']
+      ['Reference popularity', function (r) { return r.p.rp != null ? fmt(Math.round(r.p.rp)) : '—'; }, 'Median citation count of the works this paper cites (a proxy for how “canonical” its references are).']
     ];
     var tbody = metricRows.map(function (mr) {
       return '<tr><td class="metric"' + (mr[2] ? ' title="' + esc(mr[2]) + '"' : '') + '>' + esc(mr[0]) + '</td>' +
@@ -1944,7 +2051,7 @@
     body.innerHTML = html;
 
     $('pCiteEvo').innerHTML = paperScatter(citePts, { xMin: yLo - xPad, xMax: yHi + xPad, connect: true, yFmt: fmtTick });
-    $('pCiteBars').innerHTML = barsH(citeBars, { limit: 20 });
+    $('pCiteBars').innerHTML = barsH(citeBars, { limit: citeBars.length });
     $('pDBars').innerHTML = divergingBarsH(dBars, { limit: 20 });
     $('pImpact').innerHTML = paperScatter(impactPts, { xMin: -dAbsMax * 1.12, xMax: dAbsMax * 1.12, xZero: true, xFmt: fmtD, yFmt: fmtTick });
   }
@@ -1955,7 +2062,7 @@
   // every figure is computed client-side, so all of it honours the top filters.
   var DISR = null, disrState = 'idle', disrNameToId = null, disrCbs = [];
   // Disruption blue, developing/citation claret-red, reference-age green, popularity gold.
-  var C_DISRUPT = '#3f6098', C_DEVELOP = '#a34a6d', C_CITE = '#b5533a', C_AGE = '#6a8d3a', C_POP = '#c9a24b';
+  var C_DISRUPT = '#3f6098', C_DEVELOP = '#a34a6d', C_CITE = '#b5533a', C_AGE = '#6a8d3a', C_POP = '#a07d1e';
   var DISR_CAP = 8;               // team sizes 1..7 individually, 8 = "8+" (tail merged — thin at large teams)
   var DISR_MIN_BIN = 8;           // a team-size bin needs this many papers to be plotted
   var DISR_ROBUST_NF = 3;         // min in-catalog forward citations for a paper to head the highlight tables
@@ -1966,25 +2073,34 @@
     if (disrState === 'loading') return;
     disrState = 'loading';
     var flush = function () { var cbs = disrCbs; disrCbs = []; cbs.forEach(function (f) { f(); }); };
-    fetch('./disruption.json').then(function (r) { if (!r.ok) throw 0; return r.json(); }).then(function (j) {
+    fetch('./disruption.json').then(function (r) { if (!r.ok) throw { perm: true }; return r.json(); }).then(function (j) {
       DISR = j;
       disrNameToId = {};
       (j.authors || []).forEach(function (n, i) { disrNameToId[String(n).toLowerCase()] = i; });
       disrState = 'ready'; flush();
-    }).catch(function () { disrState = 'failed'; flush(); });
+    }).catch(function (e) {
+      // An HTTP error (the file isn't generated/deployed) is PERMANENT for the
+      // session; a network hiccup or parse abort is transient — reset to idle
+      // so the next render retries instead of latching 'failed' forever.
+      disrState = (e && e.perm) ? 'failed' : 'idle';
+      flush();
+    });
   }
 
   // Scored papers within the current journal + year scope (the disruption dataset
   // carries no editorial-dimension tags, so an active editor/area filter only
   // narrows by that dimension's journals, not by the value — noted in the UI).
-  // This does NOT apply the disruptiveness-index (D) range filter — the histogram
-  // and the "of N in scope" denominators use it so the D slider reads as a
-  // selection over the full distribution.
+  // Honours the "Exclude non-research items" toggle via each row's x flag
+  // (stamped by build-disruption.mjs's isNonArticle pass — older files without
+  // the flag simply keep everything). This does NOT apply the
+  // disruptiveness-index (D) range filter — the histogram and the "of N in
+  // scope" denominators use it so the D slider reads as a selection over the
+  // full distribution.
   function disrScopeJY() {
     if (!DISR || !DISR.papers) return [];
     var scope = {}; scopeKeys().forEach(function (k) { scope[k] = 1; });
-    var lo = S.yMin, hi = S.yMax;
-    return DISR.papers.filter(function (p) { return scope[p.j] && p.y != null && p.y >= lo && p.y <= hi; });
+    var lo = S.yMin, hi = S.yMax, exclX = S.excludeNonResearch;
+    return DISR.papers.filter(function (p) { return scope[p.j] && p.y != null && p.y >= lo && p.y <= hi && !(exclX && p.x); });
   }
   // Journal + year + the disruptiveness-index range — the working set for every
   // team-science figure except the distribution histogram.
@@ -2010,6 +2126,10 @@
     if (disrState === 'loading') {
       sec.style.display = '';
       $('disrLoading').style.display = ''; $('disrBody').style.display = 'none'; $('disrEmpty').style.display = 'none';
+      // The in-flight fetch may have been started by another caller (a ?paper=
+      // deep link, the paper-input focus) whose callback doesn't re-render this
+      // section — queue our own completion callback or the spinner never clears.
+      ensureDisruption(function () { if (S.tab === 'overview') renderDisruption(); });
       return;
     }
     // failed (file not generated yet) or empty dataset → hide the section entirely.
@@ -2018,7 +2138,7 @@
     var jy = disrScopeJY();
     if (!jy.length) {
       showDisrEmpty('No citation-graph data for the selected journals and years yet. This analysis currently covers <strong>' + fmt(DISR.totals.papers) +
-        '</strong> papers whose references we’ve mapped (mostly Management Science, M&amp;SOM, POM and PNAS) and grows as the reference graph fills in. Try widening the journal or year filters.');
+        '</strong> papers across the catalog whose references we’ve mapped (the crawl seeds Management Science, M&amp;SOM, POM and PNAS first, then the UTD24/FT50 journals, then the rest) and grows as the reference graph fills in. Try widening the journal or year filters.');
       return;
     }
     var rows = disrInScope();
@@ -2038,6 +2158,12 @@
     renderDisrAuthors(rows);
   }
 
+  // 3-dp D formatter: typographic minus (matching the charts' "−"), and never
+  // the "-0.000" negative-zero artifact.
+  function fmtD3(v) {
+    var s = Math.abs(v).toFixed(3);
+    return (v < 0 && s !== '0.000' ? '−' : '') + s;
+  }
   function renderDisrTiles(rows, jy) {
     var n = rows.length, disrupt = 0, dev = 0, ds = [];
     rows.forEach(function (p) { ds.push(p.d); if (p.d > 0) disrupt++; else if (p.d < 0) dev++; });
@@ -2049,8 +2175,8 @@
       { label: 'Scored papers', value: fmt(n), hint: scopedHint },
       { label: 'Disruptive', value: pct(disrupt / n), hint: 'D > 0', cls: 'sm' },
       { label: 'Developing', value: pct(dev / n), hint: 'D < 0', cls: 'sm' },
-      { label: 'Mean disruption', value: mean(ds).toFixed(3), cls: 'sm' },
-      { label: 'Median disruption', value: median(ds).toFixed(3), cls: 'sm' }
+      { label: 'Mean disruption', value: fmtD3(mean(ds)), cls: 'sm' },
+      { label: 'Median disruption', value: fmtD3(median(ds)), cls: 'sm' }
     ];
     $('disrTiles').innerHTML = tiles.map(function (t) {
       return '<div class="tile"><div class="label">' + t.label + '</div><div class="value ' + (t.cls || '') + '">' + t.value + '</div>' + (t.hint ? '<div class="hint">' + t.hint + '</div>' : '') + '</div>';
@@ -2063,7 +2189,7 @@
       ? '<div class="disr-note">Note: the editorial filter you’ve applied narrows the journals shown, but the disruption dataset isn’t tagged by editor/area, so these figures cover all in-scope papers of those journals.</div>' : '';
     $('disrExplain').innerHTML =
       '<p>A citation count tells you how much attention a paper got, not <em>what kind</em> of contribution it made. ' +
-      'The <strong>disruption index D</strong> reads that off the citation network instead. Take every later paper that cites our focal paper, and split them three ways:</p>' +
+      'The <strong>disruption index D</strong> reads that off the citation network instead. Look at every later paper that cites our focal paper <em>or</em> one of the works it references, and sort them three ways:</p>' +
       '<div class="grp">' +
       '<div class="gcard i"><b>n<sub>i</sub> — disrupting</b><span>Cite the focal paper but <em>none</em> of the works it cited. The focal work eclipsed its own roots.</span></div>' +
       '<div class="gcard j"><b>n<sub>j</sub> — developing</b><span>Cite the focal paper <em>and</em> at least one work it cited. The focal work is read as an extension of its roots.</span></div>' +
@@ -2148,8 +2274,10 @@
     counts.forEach(function (c, i) {
       var lo = edges[i], hi = edges[i + 1], mid = (lo + hi) / 2;
       var col = mid < -0.006 ? C_DEVELOP : (mid > 0.006 ? C_DISRUPT : '#b8b0b4');
-      // a bin is "selected" when it overlaps [S.dMin, S.dMax]
-      var inSel = !active || (hi > S.dMin && lo < S.dMax) || (lo <= S.dMin && hi >= S.dMax);
+      // a bin is "selected" when it overlaps the CLOSED interval [S.dMin, S.dMax]
+      // (disrInScope is >= and <=, so a bin whose left edge equals dMax still
+      // contains selected papers — lo <= dMax, not lo < dMax)
+      var inSel = !active || (hi > S.dMin && lo <= S.dMax) || (lo <= S.dMin && hi >= S.dMax);
       var cx = L + slot * (i + 0.5), x = cx - bw / 2, h = hOf(c);
       svg += '<rect x="' + x.toFixed(1) + '" y="' + (baseY - h).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="3" fill="' + col + '"' + (inSel ? '' : ' opacity="0.26"') + '/>';
       if (c) svg += '<text x="' + cx.toFixed(1) + '" y="' + (baseY - h - 5).toFixed(1) + '" text-anchor="middle" font-size="10.5" fill="' + MUTED + '"' + (inSel ? ' font-weight="600"' : ' opacity="0.5"') + '>' + fmt(c) + '</text>';
@@ -2158,9 +2286,9 @@
     var lbl = { '-1': '−1', '-0.1': '−0.1', '-0.005': '', '0.005': '0', '0.1': '0.1', '1': '1' };
     edges.forEach(function (e, i) {
       var key = String(e);
-      if (lbl[key] === undefined) return;
+      if (lbl[key] === undefined || lbl[key] === '') return;
       var xpos = L + slot * i;
-      if (e === 0.005) xpos = L + slot * i; // boundary between the two ≈0 edges → mark centre as 0
+      if (e === 0.005) xpos = L + slot * (i - 0.5); // "0" belongs at the CENTRE of the ≈0 bin [−0.005, 0.005), not its right edge
       svg += '<text x="' + xpos.toFixed(1) + '" y="' + (baseY + 16) + '" text-anchor="middle" font-size="10.5" fill="' + MUTED + '">' + lbl[key] + '</text>';
     });
     svg += '<text x="' + L + '" y="' + (H - 6) + '" text-anchor="start" font-size="11" fill="' + C_DEVELOP + '" font-weight="600">← developing</text>';
@@ -2170,10 +2298,13 @@
   }
 
   // ── Per-team-size statistics (1..DISR_CAP, last bin = "CAP+") ──────────────
+  // Rows with an unknown team size (t=0 — papers whose Authors field is empty)
+  // are excluded rather than counted as solo-authored.
   function disrTeamStats(rows) {
     var b = {}; for (var t = 1; t <= DISR_CAP; t++) b[t] = { t: t, ds: [], cs: [], ras: [], rps: [] };
     rows.forEach(function (p) {
-      var t = Math.min(Math.max(p.t || 1, 1), DISR_CAP), e = b[t];
+      if (!p.t) return;
+      var t = Math.min(Math.max(p.t, 1), DISR_CAP), e = b[t];
       e.ds.push(p.d); e.cs.push(p.c);
       if (p.ra != null) e.ras.push(p.ra);
       if (p.rp != null) e.rps.push(p.rp);
@@ -2190,6 +2321,17 @@
     }
     return arr;
   }
+  // Keep every populated bin as an x-axis category, but blank the VALUE of any
+  // bin thinner than DISR_MIN_BIN (null = a gap in the line) — filtering the
+  // category itself out drew non-adjacent team sizes equally spaced with the
+  // trend line run straight through, which misread as a continuous axis.
+  function teamPts(stats, get) {
+    return stats.map(function (s) { return s.n >= DISR_MIN_BIN ? get(s) : null; });
+  }
+  function teamSolidCount(stats) {
+    var k = 0; stats.forEach(function (s) { if (s.n >= DISR_MIN_BIN) k++; });
+    return k;
+  }
 
   // ── Dual-/single-axis categorical line chart over team sizes ──────────────
   // series: [{name,color,axis:'L'|'R',pts:[num|null]}]; opts: {leftLabel,rightLabel,
@@ -2197,7 +2339,7 @@
   function catLineChart(cats, series, opts) {
     opts = opts || {};
     if (cats.length < 1) return '<div class="chart-empty">Not enough citation-graph data in this slice yet — try widening the filters.</div>';
-    var W = 760, H = 320, L = 56, R = opts.rightLabel ? 58 : 20, T = 18, B = 52;
+    var W = opts.width || 760, H = opts.height || 320, L = 56, R = opts.rightLabel ? 58 : 20, T = 18, B = 52;
     var n = cats.length, slot = (W - L - R) / Math.max(1, n);
     var cx = function (i) { return L + slot * (i + 0.5); };
     var lv = [], rv = [];
@@ -2207,29 +2349,38 @@
     if (opts.leftZero) lMin = Math.min(0, lMin);
     if (lMin === lMax) { lMax = lMin + 1; }
     var padL = (lMax - lMin) * 0.12 || 0.1; lMin -= padL; lMax += padL;
+    // A zero-floored axis of non-negative data must not pad below zero — the
+    // bottom gridline would otherwise read an impossible negative tick.
+    if (opts.leftZero && lMin < 0 && (!lv.length || Math.min.apply(null, lv) >= 0) && (opts.refLine == null || opts.refLine >= 0)) lMin = 0;
+    // Snap the padded bounds outward to a tidy tick step so the axis labels
+    // read round (0/20/40/60 rather than 16.00/32.00/47.99/63.99).
+    var lStep = niceStep((lMax - lMin) / 4);
+    lMin = Math.floor(lMin / lStep + 1e-9) * lStep;
+    lMax = Math.ceil(lMax / lStep - 1e-9) * lStep;
     var rMax = rv.length ? niceMax(Math.max.apply(null, rv)) : 1, rMin = 0;
     var pyL = function (v) { return T + (1 - (v - lMin) / (lMax - lMin)) * (H - T - B); };
     var pyR = function (v) { return T + (1 - (v - rMin) / (rMax - rMin)) * (H - T - B); };
     var svg = svgEl(W, H);
     // left gridlines + ticks
     var lc = opts.leftColor || NAVY, rc = opts.rightColor || C_CITE;
-    for (var g = 0; g <= 4; g++) {
-      var val = lMin + (lMax - lMin) * g / 4, yy = pyL(val);
+    var nlt = Math.max(1, Math.round((lMax - lMin) / lStep));
+    for (var g = 0; g <= nlt; g++) {
+      var val = lMin + lStep * g, yy = pyL(val);
       svg += '<line x1="' + L + '" y1="' + yy.toFixed(1) + '" x2="' + (W - R) + '" y2="' + yy.toFixed(1) + '" stroke="' + GRID + '"/>';
-      svg += '<text x="' + (L - 8) + '" y="' + (yy + 4).toFixed(1) + '" text-anchor="end" font-size="11" fill="' + lc + '">' + (Math.abs(lMax - lMin) < 2 ? val.toFixed(2) : fmtTick(val)) + '</text>';
+      svg += '<text x="' + (L - 8) + '" y="' + (yy + 4).toFixed(1) + '" text-anchor="end" font-size="11" fill="' + lc + '">' + fmtTick(val, lStep) + '</text>';
     }
     // right ticks
     if (opts.rightLabel) {
       for (var gr = 0; gr <= 4; gr++) {
         var rval = rMin + (rMax - rMin) * gr / 4, ry = pyR(rval);
-        svg += '<text x="' + (W - R + 8) + '" y="' + (ry + 4).toFixed(1) + '" text-anchor="start" font-size="11" fill="' + rc + '">' + fmtTick(rval) + '</text>';
+        svg += '<text x="' + (W - R + 8) + '" y="' + (ry + 4).toFixed(1) + '" text-anchor="start" font-size="11" fill="' + rc + '">' + fmtTick(rval, (rMax - rMin) / 4) + '</text>';
       }
     }
     // reference line (left axis)
     if (opts.refLine != null) {
       var ry0 = pyL(opts.refLine);
       svg += '<line x1="' + L + '" y1="' + ry0.toFixed(1) + '" x2="' + (W - R) + '" y2="' + ry0.toFixed(1) + '" stroke="' + MUTED + '" stroke-width="1.1" stroke-dasharray="5 4"/>';
-      svg += '<text x="' + (W - R - 2) + '" y="' + (ry0 - 5).toFixed(1) + '" text-anchor="end" font-size="10.5" fill="' + MUTED + '">expected (1.0)</text>';
+      svg += '<text x="' + (W - R - 2) + '" y="' + (ry0 - 5).toFixed(1) + '" text-anchor="end" font-size="10.5" fill="' + MUTED + '">' + esc(opts.refLineLabel || 'expected (1.0)') + '</text>';
     }
     // x labels + counts
     cats.forEach(function (c, i) {
@@ -2256,37 +2407,51 @@
 
   function teamCats(stats) { return stats.map(function (s) { return s.t >= DISR_CAP ? (DISR_CAP + '+') : String(s.t); }); }
 
-  // Plot B — the scissor: mean D (left) vs median citations (right) by team size.
+  // Plot B — the headline "scissor", adapted from Wu et al.'s Fig. 1/2: average
+  // disruption PERCENTILE (red, left axis — each paper's D ranked 0–100 against
+  // every scored paper in the current slice, averaged per team size) against
+  // median citations (blue, right axis). Colors per the owner: disruption red,
+  // citations blue.
   function renderDisrScissor(rows) {
-    var stats = disrTeamStats(rows).filter(function (s) { return s.n >= DISR_MIN_BIN; });
-    if (stats.length < 2) { $('disrScissor').innerHTML = '<div class="chart-empty">Not enough citation-graph data across team sizes in this slice yet.</div>'; $('disrScissorLegend').innerHTML = ''; return; }
+    var stats = disrTeamStats(rows);
+    if (teamSolidCount(stats) < 2) { $('disrScissor').innerHTML = '<div class="chart-empty">Not enough citation-graph data across team sizes in this slice yet.</div>'; $('disrScissorLegend').innerHTML = ''; return; }
     var cats = teamCats(stats), counts = stats.map(function (s) { return s.n; });
+    var C_RED = C_CITE, C_BLUE = C_DISRUPT;
+    var allD = rows.map(function (p) { return p.d; }).sort(function (a, b) { return a - b; });
+    var binPct = {}; stats.forEach(function (s) { binPct[s.t] = { sum: 0, n: 0 }; });
+    rows.forEach(function (p) {
+      if (!p.t) return;
+      var t = Math.min(Math.max(p.t, 1), DISR_CAP), b = binPct[t]; if (!b) return;
+      b.sum += pctRankSorted(allD, p.d); b.n++;
+    });
     var series = [
-      { name: 'Mean disruption D', color: C_DISRUPT, axis: 'L', pts: stats.map(function (s) { return s.meanD; }) },
-      { name: 'Median citations', color: C_CITE, axis: 'R', pts: stats.map(function (s) { return s.medCit; }) }
+      { name: 'Average disruption percentile', color: C_RED, axis: 'L', pts: teamPts(stats, function (s) { var b = binPct[s.t]; return b && b.n ? b.sum / b.n : null; }) },
+      { name: 'Median citations', color: C_BLUE, axis: 'R', pts: teamPts(stats, function (s) { return s.medCit; }) }
     ];
     $('disrScissor').innerHTML = catLineChart(cats, series, {
-      leftLabel: 'Mean disruption D', rightLabel: 'Median citations',
-      leftColor: C_DISRUPT, rightColor: C_CITE, counts: counts, leftZero: false
+      leftLabel: 'Avg disruption percentile', rightLabel: 'Median citations',
+      leftColor: C_RED, rightColor: C_BLUE, counts: counts, leftZero: true,
+      refLine: 50, refLineLabel: '50th percentile (average)'
     });
     $('disrScissorLegend').innerHTML =
-      '<span class="li"><span class="sw" style="background:' + C_DISRUPT + '"></span>Mean disruption D (left)</span>' +
-      '<span class="li"><span class="sw" style="background:' + C_CITE + '"></span>Median citations (right)</span>';
-    $('disrScissorSub').textContent = 'Disruption (blue, left axis) against citation impact (red, right axis) by team size — the paper’s Fig. 2. With today’s partial graph the lines are noisy; they steady as data grows.';
+      '<span class="li"><span class="sw" style="background:' + C_RED + '"></span>Average disruption percentile, 0–100 (left)</span>' +
+      '<span class="li"><span class="sw" style="background:' + C_BLUE + '"></span>Median citations (right)</span>';
+    $('disrScissorSub').innerHTML = 'Adapted from the headline figure of <a href="https://www.nature.com/articles/s41586-019-0941-9" target="_blank" rel="noopener">Wu <em>et&nbsp;al.</em> (<em>Nature</em>&nbsp;570, 2019)</a>: across their 24&nbsp;million articles, median citations (blue, right axis) <em>rise</em> with team size while the average <strong>disruption percentile</strong> (red, left axis) — each paper’s <em>D</em> ranked 0–100 among the scored papers in this slice — <em>falls</em>: large teams develop science, small teams disrupt it. In our database the disruption curve is still nearly flat: most papers have only a handful of in-catalog citers so far, which pulls every team-size bin toward the 50th percentile. The gradient should emerge as the citation graph fills in.';
   }
 
   // Plot C — reference age (left) vs reference popularity (right) by team size.
   function renderDisrSearch(rows) {
-    var stats = disrTeamStats(rows).filter(function (s) { return s.n >= DISR_MIN_BIN && (s.refAge != null || s.refPop != null); });
-    if (stats.length < 2) { $('disrSearch').innerHTML = '<div class="chart-empty">Not enough reference data across team sizes in this slice yet.</div>'; $('disrSearchLegend').innerHTML = ''; return; }
+    var stats = disrTeamStats(rows);
+    var solid = stats.filter(function (s) { return s.n >= DISR_MIN_BIN && (s.refAge != null || s.refPop != null); });
+    if (solid.length < 2) { $('disrSearch').innerHTML = '<div class="chart-empty">Not enough reference data across team sizes in this slice yet.</div>'; $('disrSearchLegend').innerHTML = ''; return; }
     var cats = teamCats(stats), counts = stats.map(function (s) { return s.n; });
     var series = [
-      { name: 'Avg reference age', color: C_AGE, axis: 'L', pts: stats.map(function (s) { return s.refAge; }) },
-      { name: 'Median reference popularity', color: C_POP, axis: 'R', pts: stats.map(function (s) { return s.refPop; }) }
+      { name: 'Avg reference age', color: C_AGE, axis: 'L', pts: teamPts(stats, function (s) { return s.refAge; }) },
+      { name: 'Median reference popularity', color: C_POP, axis: 'R', pts: teamPts(stats, function (s) { return s.refPop; }) }
     ];
     $('disrSearch').innerHTML = catLineChart(cats, series, {
       leftLabel: 'Avg reference age (years)', rightLabel: 'Median ref. citations',
-      leftColor: C_AGE, rightColor: '#a07d1e', counts: counts, leftZero: true
+      leftColor: C_AGE, rightColor: C_POP, counts: counts, leftZero: true
     });
     $('disrSearchLegend').innerHTML =
       '<span class="li"><span class="sw" style="background:' + C_AGE + '"></span>Average reference age, years (left)</span>' +
@@ -2295,22 +2460,34 @@
   }
 
   // Plot D — relative ratio of the extremes (top-5% D, top-5% cited) by team size.
+  // Each bin's share of threshold-crossing papers is normalized by the OBSERVED
+  // overall share, not the nominal 0.05: D is stored to 3 decimals and citation
+  // counts are small integers, so the 95th-percentile cut lands on heavy TIES
+  // and the ">= threshold" group can be far more than 5% of papers — dividing
+  // by 0.05 inflated every point and put the whole curve above the "expected
+  // (1.0)" reference line. Observed-share normalization makes 1.0 exact by
+  // construction: a bin at 1.0 produces extreme papers at the corpus rate.
   function renderDisrRatio(rows) {
     var allD = rows.map(function (p) { return p.d; }).sort(function (a, b) { return a - b; });
     var allC = rows.map(function (p) { return p.c; }).sort(function (a, b) { return a - b; });
     var dThr = quantileSorted(allD, 0.95), cThr = quantileSorted(allC, 0.95);
-    var stats = disrTeamStats(rows).filter(function (s) { return s.n >= DISR_MIN_BIN; });
-    if (stats.length < 2) { $('disrRatio').innerHTML = '<div class="chart-empty">Not enough citation-graph data across team sizes in this slice yet.</div>'; $('disrRatioLegend').innerHTML = ''; return; }
-    // recompute per-bin shares against the thresholds
+    var stats = disrTeamStats(rows);
+    if (teamSolidCount(stats) < 2) { $('disrRatio').innerHTML = '<div class="chart-empty">Not enough citation-graph data across team sizes in this slice yet.</div>'; $('disrRatioLegend').innerHTML = ''; return; }
+    // per-bin + overall shares against the thresholds
     var byT = {}; stats.forEach(function (s) { byT[s.t] = { nd: 0, nc: 0, n: 0 }; });
+    var totD = 0, totC = 0, totN = 0;
     rows.forEach(function (p) {
-      var t = Math.min(Math.max(p.t || 1, 1), DISR_CAP); if (!byT[t]) return;
-      byT[t].n++; if (p.d >= dThr) byT[t].nd++; if (p.c >= cThr) byT[t].nc++;
+      if (!p.t) return;
+      var t = Math.min(Math.max(p.t, 1), DISR_CAP); if (!byT[t]) return;
+      byT[t].n++; totN++;
+      if (p.d >= dThr) { byT[t].nd++; totD++; }
+      if (p.c >= cThr) { byT[t].nc++; totC++; }
     });
+    var shareD = totN ? totD / totN : 0, shareC = totN ? totC / totN : 0;
     var cats = teamCats(stats), counts = stats.map(function (s) { return s.n; });
     var series = [
-      { name: 'High disruption', color: C_DISRUPT, axis: 'L', pts: stats.map(function (s) { var b = byT[s.t]; return b.n ? (b.nd / b.n) / 0.05 : null; }) },
-      { name: 'High impact', color: C_CITE, axis: 'L', pts: stats.map(function (s) { var b = byT[s.t]; return b.n ? (b.nc / b.n) / 0.05 : null; }) }
+      { name: 'High disruption', color: C_DISRUPT, axis: 'L', pts: teamPts(stats, function (s) { var b = byT[s.t]; return b.n && shareD ? (b.nd / b.n) / shareD : null; }) },
+      { name: 'High impact', color: C_CITE, axis: 'L', pts: teamPts(stats, function (s) { var b = byT[s.t]; return b.n && shareC ? (b.nc / b.n) / shareC : null; }) }
     ];
     $('disrRatio').innerHTML = catLineChart(cats, series, {
       leftLabel: 'Relative ratio (observed / expected)', leftColor: NAVY, refLine: 1.0, leftZero: true, counts: counts
@@ -2318,7 +2495,7 @@
     $('disrRatioLegend').innerHTML =
       '<span class="li"><span class="sw" style="background:' + C_DISRUPT + '"></span>Top-5% disruptive (high D)</span>' +
       '<span class="li"><span class="sw" style="background:' + C_CITE + '"></span>Top-5% cited (high impact)</span>';
-    $('disrRatioSub').innerHTML = 'The paper’s Fig. 2d: small teams should over-produce the most-disruptive work, large teams the most-cited — the two lines crossing the dashed 1.0 line in opposite directions.';
+    $('disrRatioSub').innerHTML = 'The paper’s Fig. 2d: small teams should over-produce the most-disruptive work, large teams the most-cited — the two lines crossing the dashed 1.0 line in opposite directions. Each bin’s share of top-tier papers is normalized by the corpus-wide share (ties at the 95th-percentile threshold make that share exceed a nominal 5%), so 1.0 = exactly the corpus rate.';
   }
 
   function disrPaperTable(list) {
@@ -2328,23 +2505,26 @@
       var url = p.doi ? 'https://doi.org/' + p.doi : '';
       var ti = trunc(p.ti || '(untitled)', 74);
       var title = url ? '<a href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(ti) + '</a>' : esc(ti);
-      var col = p.d >= 0 ? C_DISRUPT : C_DEVELOP;
+      var col = p.d > 0 ? C_DISRUPT : (p.d < 0 ? C_DEVELOP : MUTED);
       var nfMeta = p.nf != null ? ' · cited by ' + fmt(p.nf) + ' here' : '';
       html += '<tr><td class="ti">' + title + '<div class="meta">' + esc(JMAP[p.j] ? JMAP[p.j].name : p.j) + ' · ' + esc(p.y) + nfMeta + '</div></td>' +
         '<td class="meta">' + fmt(p.t) + '</td>' +
-        '<td class="cby" style="color:' + col + '">' + (p.d > 0 ? '+' : '') + p.d.toFixed(3) + '</td></tr>';
+        '<td class="cby" style="color:' + col + '">' + (p.d > 0 ? '+' : '') + fmtD3(p.d) + '</td></tr>';
     });
     return html + '</tbody></table>';
   }
   // Highlight tables gate on a minimum in-catalog citation base so they surface
-  // genuinely disruptive/developing work, not 1-citation ±1 artefacts. Fall back
-  // to the full set if the robust pool is too thin in the current slice.
+  // genuinely disruptive/developing work, not 1-citation ±1 artefacts. Robust
+  // papers (nf >= DISR_ROBUST_NF) always rank FIRST; a thin slice pads the
+  // remainder of the table from the rest — the old all-or-nothing fallback let
+  // nf=1 D=±1.000 artefacts displace robust papers whenever the robust pool
+  // dipped below one table's worth.
   function renderDisrTopPapers(rows) {
-    var robust = rows.filter(function (p) { return (p.nf || 0) >= DISR_ROBUST_NF; });
-    var pool = robust.length >= 12 ? robust : rows;
-    var byD = pool.slice().sort(function (a, b) { return b.d - a.d || b.c - a.c; });
-    $('disrTopDisrupt').innerHTML = disrPaperTable(byD.slice(0, 10));
-    $('disrTopDevelop').innerHTML = disrPaperTable(byD.slice().sort(function (a, b) { return a.d - b.d || b.c - a.c; }).slice(0, 10));
+    var robust = [], rest = [];
+    rows.forEach(function (p) { ((p.nf || 0) >= DISR_ROBUST_NF ? robust : rest).push(p); });
+    var top = function (cmp) { return robust.slice().sort(cmp).concat(rest.slice().sort(cmp)).slice(0, 10); };
+    $('disrTopDisrupt').innerHTML = disrPaperTable(top(function (a, b) { return b.d - a.d || b.c - a.c; }));
+    $('disrTopDevelop').innerHTML = disrPaperTable(top(function (a, b) { return a.d - b.d || b.c - a.c; }));
   }
 
   // Author disruptiveness: mean D over every in-scope paper an author (co-)wrote.
@@ -2362,13 +2542,17 @@
     if (list.length < 6) { min = 1; list = disrAuthorList(rows, min); }
     var disr = list.slice().sort(function (a, b) { return b.meanD - a.meanD || b.n - a.n; }).slice(0, 12);
     var dev = list.slice().sort(function (a, b) { return a.meanD - b.meanD || b.n - a.n; }).slice(0, 12);
-    $('disrAuthDisrupt').innerHTML = disrAuthorBars(disr, C_DISRUPT);
-    $('disrAuthDevelop').innerHTML = disrAuthorBars(dev, C_DEVELOP);
+    $('disrAuthDisrupt').innerHTML = disrAuthorBars(disr);
+    $('disrAuthDevelop').innerHTML = disrAuthorBars(dev);
     $('disrAuthorsSub').innerHTML = 'Each author’s <em>D<sub>j</sub></em> — the mean of <em>D</em> over every paper they wrote or co-wrote in scope (minimum <strong>' + min + '</strong> scored paper' + (min === 1 ? '' : 's') + ').';
   }
-  function disrAuthorBars(list, color) {
+  // Bar width = |mean Dⱼ|, but the COLOR follows the sign — in a thin slice a
+  // "Most disruptive" column can legitimately contain negative-mean authors,
+  // and painting them the column's color made a −0.2 bar indistinguishable from
+  // a +0.2 one. Sign-colored bars keep the ranking readable in mixed lists.
+  function disrAuthorBars(list) {
     if (!list.length) return '<div class="chart-empty">No authors in scope.</div>';
-    var rowH = 24, gap = 7, L = 168, R = 62, T = 4, W = 760;
+    var rowH = 24, gap = 7, L = 168, R = 78, T = 4, W = 760;
     var H = T * 2 + list.length * rowH + (list.length - 1) * gap;
     var maxAbs = 0; list.forEach(function (a) { if (Math.abs(a.meanD) > maxAbs) maxAbs = Math.abs(a.meanD); });
     maxAbs = maxAbs || 1;
@@ -2376,9 +2560,10 @@
     list.forEach(function (a, i) {
       var y = T + i * (rowH + gap);
       var w = (Math.abs(a.meanD) / maxAbs) * (W - L - R);
+      var col = a.meanD > 0 ? C_DISRUPT : (a.meanD < 0 ? C_DEVELOP : '#b8b0b4');
       svg += '<text x="' + (L - 10) + '" y="' + (y + rowH / 2 + 4) + '" text-anchor="end" font-size="12" fill="#241a1e">' + esc(trunc(a.name, 24)) + '</text>' +
-        '<rect x="' + L + '" y="' + y + '" width="' + Math.max(1, w).toFixed(1) + '" height="' + rowH + '" rx="3.5" fill="' + color + '"/>' +
-        '<text x="' + (L + Math.max(1, w) + 7).toFixed(1) + '" y="' + (y + rowH / 2 + 4) + '" font-size="11.5" fill="' + MUTED + '" font-weight="600">' + (a.meanD > 0 ? '+' : '') + a.meanD.toFixed(3) + ' · ' + a.n + '</text>';
+        '<rect x="' + L + '" y="' + y + '" width="' + Math.max(1, w).toFixed(1) + '" height="' + rowH + '" rx="3.5" fill="' + col + '"/>' +
+        '<text x="' + (L + Math.max(1, w) + 7).toFixed(1) + '" y="' + (y + rowH / 2 + 4) + '" font-size="11.5" fill="' + MUTED + '" font-weight="600">' + (a.meanD > 0 ? '+' : (a.meanD < 0 ? '−' : '')) + Math.abs(a.meanD).toFixed(3) + ' · ' + a.n + '</text>';
     });
     return svg + '</svg>';
   }
@@ -2605,30 +2790,36 @@
   // we handle it here; a press that lands on a thumb (target is the <input>) is
   // left to the native drag. Nearest is by track position, so it's correct on
   // either side of both thumbs and between them, even if the thumbs crossed.
-  function initYearTrackClick() {
-    var slider = $('slider'); if (!slider) return;
-    var dragKey = null; // 'yrMin' | 'yrMax'
-    function posFromEvent(e) {
+  // Generic dual-thumb track handler: shared by the year slider AND the
+  // disruptiveness slider (whose track was previously dead — the shared CSS
+  // sets the range inputs pointer-events:none except their thumbs, which kills
+  // the browser's native click-track-to-move for both sliders, and only the
+  // year slider had a compensating handler).
+  function initTrackDrag(sliderId, minId, maxId, valueFromFrac, apply) {
+    var slider = $(sliderId); if (!slider) return;
+    var dragKey = null;
+    function valFromEvent(e) {
       var r = slider.getBoundingClientRect();
       var frac = (e.clientX - r.left) / (r.width || 1);
       if (frac < 0) frac = 0; else if (frac > 1) frac = 1;
-      return Math.round(frac * YR_POS_MAX);
+      return valueFromFrac(frac);
     }
-    function moveTo(key, pos) { $(key).value = pos; syncSlider(); refresh(); }
-    function nearestKey(pos) {
-      var pMin = +$('yrMin').value, pMax = +$('yrMax').value;
-      return Math.abs(pos - pMin) <= Math.abs(pos - pMax) ? 'yrMin' : 'yrMax';
+    function moveTo(key, val) { $(key).value = val; apply(); }
+    function nearestKey(val) {
+      var vMin = +$(minId).value, vMax = +$(maxId).value;
+      return Math.abs(val - vMin) <= Math.abs(val - vMax) ? minId : maxId;
     }
     slider.addEventListener('pointerdown', function (e) {
       if (e.target && e.target.tagName === 'INPUT') return; // native thumb drag
+      if (e.button != null && e.button !== 0) return;        // primary button only — a right-click must not jump the filter
       e.preventDefault();
-      var pos = posFromEvent(e);
-      dragKey = nearestKey(pos);
-      moveTo(dragKey, pos);
+      var val = valFromEvent(e);
+      dragKey = nearestKey(val);
+      moveTo(dragKey, val);
       try { slider.setPointerCapture(e.pointerId); } catch (_) {}
     });
     slider.addEventListener('pointermove', function (e) {
-      if (dragKey) moveTo(dragKey, posFromEvent(e));
+      if (dragKey) moveTo(dragKey, valFromEvent(e));
     });
     function endDrag(e) {
       if (!dragKey) return;
@@ -2637,6 +2828,14 @@
     }
     slider.addEventListener('pointerup', endDrag);
     slider.addEventListener('pointercancel', endDrag);
+  }
+  function initYearTrackClick() {
+    initTrackDrag('slider', 'yrMin', 'yrMax',
+      function (frac) { return Math.round(frac * YR_POS_MAX); },
+      function () { syncSlider(); refresh(); });
+    initTrackDrag('dslider', 'drMin', 'drMax',
+      function (frac) { var v = D_LO + frac * (D_HI - D_LO); return (Math.round(v / D_STEP) * D_STEP).toFixed(3); },
+      function () { syncDSlider(); refresh(); });
   }
 
   // ── Disruptiveness-index (D) range slider ───────────────────────────────
@@ -2661,8 +2860,8 @@
   }
   var D_PRESETS = [
     { label: 'Full range', lo: -1, hi: 1 },
-    { label: 'Disruptive (> 0)', lo: 0, hi: 1 },
-    { label: 'Developing (< 0)', lo: -1, hi: 0 },
+    { label: 'Disruptive (> 0)', lo: 0.001, hi: 1 },
+    { label: 'Developing (< 0)', lo: -1, hi: -0.001 },
     { label: 'Highly disruptive (≥ 0.3)', lo: 0.3, hi: 1 }
   ];
   function renderDPresets() {

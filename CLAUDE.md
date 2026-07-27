@@ -862,15 +862,48 @@ and marks `forwarded`/`ackSent`, complementing the batch
 mailer via the same flags — setup `lit/_functions/README.md`; its
 `feedback-render.js` mirrors the mailer's renderers — keep in sync); the batch
 mailer stays the always-on fallback. **Feedback is also mirrored into a PRIVATE GitHub
-repo** by `lit/_scraper/feedback-github-log.mjs`
-(`.github/workflows/lit-feedback-github-log.yml`): it reads new `feedback` docs
+repo** — LIVE at `konstantinosStouras/lit-feedback-log` — by
+`lit/_scraper/feedback-github-log.mjs`
+(`.github/workflows/lit-feedback-github-log.yml`): it reads the `feedback` docs
 and writes one folder per submission (`feedback/<id>/feedback.md` + `feedback.json`
 + decoded `screenshot-*.jpg`) into a checked-out private log repo, then commits +
-pushes — idempotent (the log repo is the record; no Firestore write). A separate
+pushes — idempotent (the log repo is the record; no Firestore write) and
+**syncing**: an already-mirrored folder's `feedback.md`/`feedback.json` is
+REFRESHED whenever the doc changed (`syncSubmission` — a ticket closed, a
+resolution recorded, a reopen; the decoded screenshots are immutable and never
+rewritten), and it maintains a **ticket index** — `feedback/INDEX.md` +
+`index.json` (`indexEntry`/`buildIndex`, newest first, deterministic so an
+unchanged collection commits nothing): ticket linked to its folder + date/
+submitter/status/message/resolution excerpts — because the maintainer refers to
+feedback by ticket while the folders are named after Firestore doc ids. A separate
 PRIVATE repo because this site's repo is public and feedback holds e-mails/
-screenshots. Inert until a `FEEDBACK_LOG_REPO` variable + `FEEDBACK_LOG_TOKEN`
-secret are set; setup `lit/_FEEDBACK-GITHUB-LOG-SETUP.md`. This is what lets the
-feedback be read from GitHub (text + images) independent of e-mail. The main
+screenshots. Configured via the `FEEDBACK_LOG_REPO` variable + `FEEDBACK_LOG_TOKEN`
+secret; setup `lit/_FEEDBACK-GITHUB-LOG-SETUP.md`. This is what lets the
+feedback be read from GitHub (text + images) independent of e-mail.
+**Resolutions close the loop from the repo (`lit/_feedback-resolutions/`):** one
+file per resolved ticket, `<TICKET>.md` — front matter `ticket:` (or `doc:` for a
+legacy pre-ticket submission) + optional `url:` (host-validated: https on
+stouras.com only), body = what was done, e-mailed to the submitter VERBATIM.
+This directory lives in the PUBLIC site repo, so a resolution file must never
+contain the submitter's name/e-mail (the mailer looks those up in Firestore by
+ticket). The feedback mailer's second phase (`applyResolutions`, every 10-min
+run; `parseResolutionFile`/`resolutionHashOf`/`renderResolutionEmail`, offline-
+tested in `--selftest`, listed by `--scan`) finds the doc by ticket, CLOSES it
+(`status:'closed'`+`resolution`+`resolutionUrl`+`resolutionHash`,
+`resolvedBy:'repo'`) **before e-mailing** (write-before-stamp, like the
+submissions ingest — a send failure retries only the e-mail), then sends the
+submitter the "your feedback is resolved" e-mail (fix description + "see it
+live" link + their original message) and stamps `resolutionSent`; an anonymous
+submission is just closed. Idempotent via `resolutionHash`: files STAY in place
+as the public record of fixes, an unchanged file is skipped forever, and EDITING
+one re-applies + re-notifies. The log-repo mirror then shows the closure (a
+**Resolution** section in the ticket's `feedback.md`; index row `closed ✉`).
+**So the standard assistant flow for "act on feedback LIT-X" is:** read the
+ticket from the private log repo (`feedback/INDEX.md` → its folder; ask to
+`add repo konstantinosStouras/lit-feedback-log` if not in the session), ship the
+fix, and add `lit/_feedback-resolutions/<TICKET>.md` in the SAME change — the
+submitter's closure e-mail then goes out automatically on merge. (The dashboard's
+manual mark-complete + mailto path still works and is untouched.) The main
 page also keeps a couple of **library niceties**: in **My Library** the
 paper-search filter bar is hidden (`body.lit-lib-mode`; the library has its own
 search), and clicking the ACTIVE list/tag chip deactivates it (back to "All
@@ -1047,9 +1080,11 @@ Author-spotlight percentile so a narrowed D range never distorts an author's
 standing). It is pre-computed
 **offline** by `lit/_scraper/build-disruption.mjs` into a small,
 lazily-loaded `analytics/disruption.json` (one row per paper with a defined D —
-`{j,y,t,d,c,nf,ra?,rp?,au[],ti,doi}` + an author-name index; `nf` = in-catalog
-forward-citation count, used to gate the highlight tables against degenerate ±1
-one-citation artefacts) — the whole per-paper table ships so the browser
+`{j,y,t,d,c,nf,x?,ra?,rp?,au[],ti,doi}` + a case-insensitive author-name
+index; `nf` = in-catalog forward-citation count (in BOTH scoring modes), used
+to gate the highlight tables against degenerate ±1 one-citation artefacts;
+`x` = non-research item per `_nonarticle.mjs`, so the page's exclude-toggle
+covers the team-science figures too) — the whole per-paper table ships so the browser
 computes every figure client-side under the live filters. The highlight tables
 merge the thin large-team tail into an "8+" bin. Reference age uses reference
 years; reference popularity uses references' `CitedBy` (a rough proxy while
