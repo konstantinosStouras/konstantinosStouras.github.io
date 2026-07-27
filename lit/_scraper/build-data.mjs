@@ -222,8 +222,8 @@ const SELECT = [
 // as literal markup and every other entity ("&apos;", "&nbsp;", "&EACUTE;")
 // rendered raw on the page.
 import { cleanText as stripJats, trimTrailingSeparators, titleText,
-  affilName, affilParts, affilList } from './_entities.mjs';
-export { stripJats, trimTrailingSeparators, titleText, affilName, affilParts, affilList };
+  affilName, affilParts, affilList, stripPageFurniture } from './_entities.mjs';
+export { stripJats, trimTrailingSeparators, titleText, affilName, affilParts, affilList, stripPageFurniture };
 
 // PNAS deposits its one-paragraph "Significance" statement inside the Crossref
 // JATS abstract as its own <sec>. Pull that section out (already stripped of
@@ -348,7 +348,10 @@ function mapWork(item, src) {
     significance = sp.significance;
     abstractSrc = sp.rest;
   }
-  const abstract = stripJats(abstractSrc).slice(0, MAX_ABSTRACT);
+  // stripPageFurniture (feedback LIT-260727-XRQ8): a deposited "abstract" can
+  // be a scraped article-page blob (share bar, "No abstract is available for
+  // this article.") — never abstract prose; served as '' instead.
+  const abstract = stripPageFurniture(stripJats(abstractSrc)).slice(0, MAX_ABSTRACT);
 
   // Editors/Areas: Management Science only (per the page's design).
   let editor = '', area = '';
@@ -1352,7 +1355,8 @@ async function enrichEc(rows, extras, dblpPrefetched) {
         const arx = hit.externalIds && hit.externalIds.ArXiv;
         const pdf = pickPdf([arx ? `https://arxiv.org/abs/${arx}` : '',
           hit.openAccessPdf && hit.openAccessPdf.url]);
-        const abs = (cur && cur.abs) || String(hit.abstract || '').slice(0, MAX_ABSTRACT);
+        const abs = (cur && cur.abs) ||
+          stripPageFurniture(stripJats(String(hit.abstract || ''))).slice(0, MAX_ABSTRACT);
         extras[k] = pdf || abs ? { ...(cur || {}), pdf, abs, src: 's2' } : { ...(cur || {}), none: true };
       }
     } catch (e) {
@@ -1367,7 +1371,11 @@ async function enrichEc(rows, extras, dblpPrefetched) {
     const x = extras[keyOf(r)];
     if (!x) continue;
     if (x.pdf) { r.PDF = canonPreprint(x.pdf); withPdf++; }
-    if (!r.Abstract && x.abs) r.Abstract = x.abs;
+    // stripPageFurniture also guards abstracts CACHED before the guard existed.
+    if (!r.Abstract && x.abs) {
+      const a = stripPageFurniture(x.abs);
+      if (a.length >= 60) r.Abstract = a;
+    }
     // A DOI-less accepted paper can never receive a Preprint link from the
     // DOI-keyed _preprints.json cache — surface its arXiv/SSRN copy directly.
     // (The card then shows the Pre-print link and suppresses the duplicate
@@ -2352,7 +2360,7 @@ function mergeSupplement(bySource) {
       Volume: '', Issue: '', Page: '',
       Year: year,
       Status: 'Articles in Advance',
-      Abstract: s.Abstract ? stripJats(s.Abstract) : '',
+      Abstract: s.Abstract ? stripPageFurniture(stripJats(s.Abstract)) : '',
       'Accepting Editor': s['Accepting Editor'] || '',
       Area: normArea(s.Area || ''),
       Journal: src.name,

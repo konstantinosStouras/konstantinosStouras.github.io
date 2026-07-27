@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "abstract-furniture-cleanup",
+      "date": "2026-07-27",
+      "title": "Accurate abstracts everywhere",
+      "summary": "Some papers showed an abstract contaminated with article-page leftovers — navigation text like “Back to Top … Related Information” followed by a list of citing articles, or an entire scraped page header in place of an abstract. Every catalog was swept: about 500 abstracts were trimmed back to their real text and about 11,000 page-scrape “abstracts” (on items that never had one) were removed, with the missing ones now re-resolved from proper sources. New abstracts are checked at ingest so this cannot recur.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
       "id": "suggest-published-papers",
       "date": "2026-07-27",
       "title": "Suggest a missing published paper, too",

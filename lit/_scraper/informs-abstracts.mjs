@@ -13,6 +13,8 @@
  * rule, never a downgrade.
  */
 
+import { stripPageFurniture } from './_entities.mjs';
+
 // Mirrors build-data.mjs MAX_ABSTRACT — keep in sync.
 export const ABS_MAX = 4000;
 
@@ -41,6 +43,12 @@ export function decodeEntities(s) {
 // HTML fragment → clean abstract text: strip tags, decode entities, collapse
 // whitespace, drop a leading "Abstract" label and anything from a leaked
 // "History:" line on (that's the editors' section, never abstract text).
+// stripPageFurniture then cuts anything from a leaked navigation block on
+// ("Previous Back to Top Next Figures References Related Information Cited
+// by <citing-article list>" — some page layouts carry none of the stop-class
+// signatures the HTML window cut looks for, feedback LIT-260727-XRQ8) and
+// rejects a candidate that is page chrome rather than abstract prose, so the
+// longest-candidate-wins tiebreak below can never prefer contaminated text.
 export function cleanAbstractText(raw) {
   let s = decodeEntities(String(raw || ''))
     .replace(/<br\s*\/?>/gi, ' ')
@@ -49,7 +57,7 @@ export function cleanAbstractText(raw) {
   s = s.replace(/^abstract[\s:.–—-]*/i, '');
   const h = s.search(/\bHistory\s*:/i);
   if (h >= 0) s = s.slice(0, h).trim();
-  return s;
+  return stripPageFurniture(s);
 }
 
 // Extract the article's abstract from a pubsonline page. Candidates: every
