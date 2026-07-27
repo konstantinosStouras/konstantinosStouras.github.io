@@ -41,7 +41,7 @@ jobs:
     if: ${{ vars.FEEDBACK_LOG_REPO != '' }}
     steps:
       - name: Checkout site repo (has the mirror script)
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -57,7 +57,7 @@ jobs:
       # _feedback-log/.git/config for the push below, so keep it off disk until
       # after the third-party npm install has finished running.
       - name: Checkout the private feedback-log repo
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ vars.FEEDBACK_LOG_REPO }}
           token: ${{ secrets.FEEDBACK_LOG_TOKEN }}
