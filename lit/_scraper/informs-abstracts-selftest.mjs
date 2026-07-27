@@ -53,8 +53,31 @@ eq(r, null, 'page without an abstract → null (cached as a miss)');
 r = scan(`<div class="abstractSection"><p>Too short.</p></div>`);
 eq(r, null, 'sub-60-char fragment rejected (not a real abstract)');
 
+console.log('abstractFromPageHtml: page-furniture guard (feedback LIT-260727-XRQ8)');
+// A layout carrying NONE of the window-stop class signatures: the 12k window
+// swallows the navigation + Cited-by list after the abstract. The text-level
+// furniture cut must trim it so the longest-candidate rule cannot prefer junk.
+r = scan(`<div class="abstractSection abstractInFull"><h2>Abstract</h2><p>${FULL}</p>`
+  + `<div class="unknown-layout-nav"><a href="#top">Back to Top</a> <a>Next</a> `
+  + `<span>Figures</span><span>References</span><span>Related Information</span> Cited by `
+  + `Some Citing Paper Title 31 March 2026 | Quantitative Marketing and Economics, Vol. 24, No. 1 `
+  + `Another Citing Paper 28 May 2026 | Psychology &amp; Marketing</div></div>`);
+eq(r, FULL, 'navigation + Cited-by junk after the abstract is cut, abstract kept');
+
+r = scan(`<div class="abstractSection"><div class="nav">Previous Back to Top Figures References `
+  + `Related Information Volume 23, Issue 1 February 2004 Pages 1-172 Article Information Metrics</div></div>`
+  + `<head><meta name="dc.Description" content="${FULL}"></head>`);
+eq(r, FULL, 'a furniture-only container loses to the clean meta candidate');
+
+r = scan(`<div class="abstractSection"><p>Previous Back to Top Next Figures References Related `
+  + `Information Cited by A Citing Paper 3 June 2024 | Management Science, Vol. 71, No. 3 and more `
+  + `citing rows long enough to pass any length check on their own here</p></div>`);
+eq(r, null, 'a page whose abstract area is ONLY furniture yields null (cached as a miss)');
+
 console.log('cleanAbstractText basics');
 eq(cleanAbstractText('  Abstract:  Hello   world  '), 'Hello world', 'label stripped, whitespace collapsed');
+eq(cleanAbstractText(`${FULL} Previous Back to Top Next Figures References Related Information Cited by X`),
+  FULL, 'furniture tail cut at the text level');
 
 console.log('betterAbstract: upgrade-only rule');
 ok(betterAbstract('', FULL), 'empty served abstract ← full page abstract');

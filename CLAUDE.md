@@ -422,6 +422,41 @@ non-alphanumerics, and every entity-bearing title had a DOI — verified), so no
 paper resurfaces as "recently added". Covered by
 `lit/_scraper/entities-selftest.mjs` (the module's own suite) plus unit checks
 in `incremental-selftest.mjs` (native + FT50) and the WP `selftest.mjs`.
+**Article-page furniture is never served as an abstract** (feedback
+LIT-260727-XRQ8). Two junk shapes reached served abstracts:
+the pubsonline full-abstract harvest could capture the page's navigation +
+"Cited by" block AFTER the real abstract on layouts carrying none of the
+extractor's stop-class signatures ("… Previous Back to Top Next Figures
+References Related Information Cited by <citing-article list>" — the reported
+Search Duration MkSc card, ~350 MkSc/MS papers), and Semantic Scholar sometimes
+serves a scrape of the WHOLE article page — share bar, "Get access" author
+links, citation metadata, Wiley's "No abstract is available for this article."
+— for items that have no abstract at all (OUP/U.Chicago/AoM/Silverchair/
+MIT-Press/Wiley journals: QJE, RESTUD, EJ, JPE, JCR, TAR, RFS …).
+`stripPageFurniture` in `_entities.mjs` (vendored into the shard repos with the
+rest of the module) cuts everything from the first navigation signature on and
+rejects a remainder that is page chrome rather than abstract prose —
+high-precision like `isNonArticle`: the cut anchors on the full "Figures
+References Related Information" label sequence (never bare "Back to Top", which
+can occur inside a real sentence), and rejection needs either one unambiguous
+scraped-page marker ("Search for other works by this author", "PDFPDF",
+"Download citation file" …) or two weaker ones together, so a lone "…request
+permission…" in real prose never rejects. Applied at EVERY abstract ingest:
+mapWork + the supplement merge in all five build-data pipelines, the WP
+`wpRecordFromWork`, EC's S2 enrichment, all four `abstracts-ci.mjs` API legs,
+and the pubsonline extractor's `cleanAbstractText` (console copy vendored in
+sync, parity-checked). The crawlers/backfills also HEAL their caches at load,
+so a stale contaminated cache (e.g. the console harvester's localStorage from
+an earlier sitting) can never re-apply junk: chrome-only `_informs-abstracts`
+entries are DELETED (re-crawl with the fixed extractor), chrome-only
+`_api-abstracts` entries re-stamped as TTL misses (re-resolved under the
+guard). The committed data was repaired in the same change: ~500
+tail-contaminated abstracts cut back to their real text and ~11.4k
+chrome-scrape "abstracts" emptied across native/FT50/shards — rows that never
+had a real abstract on the scraped page, which the rolling backfills re-resolve
+from the APIs' actual abstract fields. Covered by `entities-selftest.mjs`,
+`informs-abstracts-selftest.mjs` (incl. the parity pass) and the FT50/shard
+`abstracts-selftest.mjs`.
 **Known pubsonline name typos are canonicalized at ingest** ("Olivier
 Tobuia"/"Olivier Touba" → Olivier Toubia, "K. Sudir" → K. Sudhir, the
 inverted "Manchanda Puneet" → Puneet Manchanda — the journal's own

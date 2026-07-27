@@ -47,6 +47,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { abstractFromPageHtml, betterAbstract, ABS_MAX } from './informs-abstracts.mjs';
+import { stripPageFurniture } from './_entities.mjs';
 import { isChallenged } from './pnas-crawl.mjs';
 
 // Atomic write (temp + rename): a power-off mid-write can never truncate the file.
@@ -175,6 +176,27 @@ if (MERGE_CACHE) {
     if (!cur || (v.a && (!cur.a || v.a.length > cur.a.length))) { cache[k] = v; took++; }
   }
   console.log(`  merge-cache: took ${took} entries from ${MERGE_CACHE}`);
+}
+
+// Heal any furniture-contaminated entry an OLD crawl left behind (or a stale
+// merged cache brings back) — feedback LIT-260727-XRQ8: an earlier extractor
+// could capture the page's navigation + Cited-by block after the abstract. A
+// cut that leaves a real abstract keeps it; a chrome-only entry is DELETED so
+// the page is re-crawled with the fixed extractor (not stamped none, which
+// would need --retry-misses to revisit).
+{
+  let healed = 0;
+  for (const [k, v] of Object.entries(cache)) {
+    if (!v || !v.a) continue;
+    const t = stripPageFurniture(v.a);
+    if (t === v.a) continue;
+    if (t.length >= 60) cache[k] = { a: t }; else delete cache[k];
+    healed++;
+  }
+  if (healed) {
+    console.log(`  healed ${healed} furniture-contaminated cached abstracts`);
+    await saveCache();
+  }
 }
 
 // Overlay the cache onto the SERVED papers files — UPGRADE-only via
