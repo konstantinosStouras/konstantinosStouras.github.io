@@ -149,10 +149,13 @@ service cloud.firestore {
       allow update, delete: if isFeedbackAdmin();
     }
 
-    // Paper submissions (written by the "Suggest a working paper" section of the
-    // /lit/feedback/ page). A SIGNED-IN user may CREATE one bounded submission
-    // claiming their own uid, with `status` pinned to 'pending' on create (so the
-    // client can't pre-mark it added/rejected — only the server ingest does that).
+    // Paper submissions (written by the "Suggest a missing published Paper or a
+    // Working Paper" section of the /lit/feedback/ page). A SIGNED-IN user may
+    // CREATE one bounded submission claiming their own uid, with `status` pinned
+    // to 'pending' on create (so the client can't pre-mark it added/rejected —
+    // only the server ingest does that). `kind` ('published') and `citation`
+    // (the pasted full reference) are the published-paper form's extra fields —
+    // both optional, both hints the ingest never trusts into any dataset.
     // The submitter may READ their own submissions (to see the outcome); only the
     // maintainer admin may read the whole queue and update/delete it. The server
     // ingest (lit/_scraper-workingpapers/ingest-submissions.mjs) uses the Admin
@@ -161,7 +164,7 @@ service cloud.firestore {
       allow create: if request.auth != null
                     && request.auth.uid == request.resource.data.uid
                     && request.resource.data.keys().hasOnly(
-                         ['uid','email','name','url','title','authors','note','ticket','status','createdAt'])
+                         ['uid','email','name','url','title','authors','note','kind','citation','ticket','status','createdAt'])
                     && request.resource.data.url is string
                     && request.resource.data.url.size() <= 2000
                     && (!('email' in request.resource.data)
@@ -174,6 +177,10 @@ service cloud.firestore {
                         || (request.resource.data.authors is string && request.resource.data.authors.size() <= 2000))
                     && (!('note' in request.resource.data)
                         || (request.resource.data.note is string && request.resource.data.note.size() <= 5000))
+                    && (!('kind' in request.resource.data)
+                        || request.resource.data.kind in ['wp', 'published'])
+                    && (!('citation' in request.resource.data)
+                        || (request.resource.data.citation is string && request.resource.data.citation.size() <= 4000))
                     && request.resource.data.status == 'pending';
       allow read:           if isFeedbackAdmin()
                             || (request.auth != null && request.auth.uid == resource.data.uid);

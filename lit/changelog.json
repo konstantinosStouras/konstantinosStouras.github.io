@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "suggest-published-papers",
+      "date": "2026-07-27",
+      "title": "Suggest a missing published paper, too",
+      "summary": "The suggestion form on the Feedback page now takes published papers as well as working papers. Pick “Published paper”, paste the paper's DOI (or any link that contains it) and/or its full citation, and it's checked against the catalog automatically: if it's already listed you hear right back, and if it's genuinely missing its resolved details go straight to the maintainer to review and add — with an e-mail to you about the outcome either way. Working-paper suggestions work exactly as before.",
+      "url": "https://www.stouras.com/lit/feedback/"
+    },
+    {
       "id": "citing-papers-of-filter",
       "date": "2026-07-27",
       "title": "Search by who cites: the “Citing papers of” filter",

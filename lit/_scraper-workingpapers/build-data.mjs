@@ -151,6 +151,7 @@ export async function loadCatalog(dirs, opts = {}) {
   const publishedTitles = new Set();
   const authors = new Map(); // normName -> {name, journals:Set, latestYear, priority, sampleDois:[]}
   const byTitle = new Map(); // opts.index: normTitle -> [{doi, last:Set<lastName>, year}] (published papers)
+  const allDois = new Set(); // opts.index: every published paper's bare lowercase DOI
   const cutoff = THIS_YEAR - PRIORITY_YEARS;
   for (const dir of dirs) {
     const sources = await loadJson(join(dir, 'sources.json'), []);
@@ -178,6 +179,7 @@ export async function loadCatalog(dirs, opts = {}) {
           if (isPriority) a.priority = true;
           if (doi && a.sampleDois.length < MAX_SAMPLE_DOIS && !a.sampleDois.includes(doi)) a.sampleDois.push(doi);
         }
+        if (opts.index && doi) allDois.add(doi);
         if (opts.index && nt && doi) {
           const lasts = new Set();
           for (const name of names) { const np = nameParts(name); if (np && np.last) lasts.add(np.last); }
@@ -189,7 +191,7 @@ export async function loadCatalog(dirs, opts = {}) {
       if (opts.log) console.log(`  catalog: ${dir.split('/').pop()}/${s.key}: ${rows.length} papers`);
     }
   }
-  return { publishedTitles, authors, byTitle };
+  return { publishedTitles, authors, byTitle, dois: allDois };
 }
 
 // Does a working-paper record correspond to a PUBLISHED paper in the catalog?
