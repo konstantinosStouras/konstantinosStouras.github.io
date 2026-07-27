@@ -1,10 +1,14 @@
-# Suggest-a-working-paper — setup
+# Suggest-a-paper (published or working paper) — setup
 
-Lets a **signed-in** user suggest an unpublished working paper (SSRN / arXiv /
-NBER / OSF) from the top of the Feedback page (`/lit/feedback/`). A scheduled
-job resolves the link's real metadata and **adds the paper automatically** to
-the Working Papers archive when it fits — an author already in the catalog, and
-the paper not already present.
+Lets a **signed-in** user suggest, from the top of the Feedback page
+(`/lit/feedback/`), either an unpublished **working paper** (SSRN / arXiv /
+NBER / OSF) or a **published paper missing** from the catalog. A scheduled job
+resolves the real metadata and: **adds a fitting working paper automatically**
+to the Working Papers archive (an author already in the catalog, and the paper
+not already present); for a **published** suggestion it answers "already
+listed" automatically or — when the paper is genuinely missing — forwards the
+resolved details to the maintainer to **review and add by hand** (status
+`review`; the published catalog is only ever written by the daily harvests).
 
 It reuses the existing accounts Firebase project (`lit-paper-browser`), so there
 is **no new Firebase project**. Like every other back-end piece it is a **no-op
@@ -13,31 +17,56 @@ suggestions to Firestore; they just sit `pending` until the ingest runs.
 
 ## How it works
 
-1. **Form** (`lit/feedback/index.html`, the "Suggest a working paper" card).
-   A signed-in user pastes a link (optionally a title/authors/note). The page
-   writes a bounded doc to the Firestore **`paperSubmissions`** collection:
-   `{ uid, email, name, url, title, authors, note, ticket, status:'pending',
-   createdAt }`. Signed-in only (so the outcome can be e-mailed back).
+1. **Form** (`lit/feedback/index.html`, the "Suggest a missing published Paper
+   or a Working Paper" card). A signed-in user picks the kind:
+   - **Working paper** — pastes an SSRN/arXiv/NBER/OSF link (optionally a
+     title/authors/note);
+   - **Published paper** — pastes the paper's DOI (or any link containing it)
+     and/or its **full citation** (a `citation` textarea; the citation alone is
+     enough — the ingest can resolve it bibliographically).
+   The page writes a bounded doc to the Firestore **`paperSubmissions`**
+   collection: `{ uid, email, name, url, title, authors, note, kind?,
+   citation?, ticket, status:'pending', createdAt }` (`kind` is only sent as
+   `'published'`; absent = the legacy working-paper shape). Signed-in only (so
+   the outcome can be e-mailed back). **Pre-rules-deploy fallback:** until the
+   updated rules are published, the old `hasOnly()` rejects the two new fields —
+   the page then retries once in the legacy shape with the citation folded into
+   the note as `"Citation: …"`, which the ingest also understands, so no
+   submission is ever lost.
 
 2. **Ingest** (`lit/_scraper-workingpapers/ingest-submissions.mjs`), run every
    ~10 min by `.github/workflows/lit-paper-submissions.yml`. For each `pending`
-   submission it:
-   - parses the link into a DOI + host with the pre-print feature's own
-     allowlist (`urlToDoi` → SSRN `10.2139`, arXiv `10.48550`, NBER `10.3386`,
-     OSF `10.31219`); anything else is rejected — the submitter's typed
-     title/authors are **only hints, never trusted into the dataset**;
-   - resolves the **real** metadata itself (OpenAlex by DOI, Crossref fallback)
-     and builds a record with the SAME `wpRecordFromWork()` the daily crawler
-     uses, so the row is byte-identical to a crawled one;
-   - applies the two gates: **not already in the catalog** (published, or
-     already in the archive) and **at least one author already in the catalog**;
-   - on success, **upserts** into `lit/data-workingpapers/` (preserving every
-     existing row, exactly like the crawler) and rewrites the small derived
-     files, then commits — the paper appears under the page's **Working Papers**
-     journal type with no page change;
-   - stamps the submission (`added` / `duplicate` / `rejected` + reason) and,
-     when SMTP is configured, e-mails the submitter their outcome and the
-     maintainer a summary.
+   submission it ROUTES by what the link/DOI actually is (`routeSubmission` —
+   the form's kind choice is a hint only):
+   - a recognised SSRN/arXiv/NBER/OSF link — or such a DOI anywhere in the
+     link/citation/title/note (`urlToDoi`/`extractAnyDoi` → SSRN `10.2139`,
+     arXiv `10.48550`, NBER `10.3386`, OSF `10.31219`) — takes the
+     **working-paper path**; the submitter's typed title/authors are **only
+     hints, never trusted into the dataset**;
+   - **working-paper path:** resolves the **real** metadata itself (OpenAlex by
+     DOI, Crossref fallback), builds a record with the SAME `wpRecordFromWork()`
+     the daily crawler uses (so the row is byte-identical to a crawled one),
+     applies the two gates — **not already in the catalog** (published, or
+     already in the archive) and **at least one author already in the catalog**
+     — and on success **upserts** into `lit/data-workingpapers/` (preserving
+     every existing row, exactly like the crawler) and rewrites the small
+     derived files, then commits — the paper appears under the page's
+     **Working Papers** journal type with no page change;
+   - any **other DOI** takes the **published-paper path**: resolves via
+     Crossref first (journal/volume/issue for the review e-mail; OpenAlex
+     fallback) and decides via the pure `decidePublishedSubmission()` — already
+     listed (by DOI, or by the `matchPublished` title+authors probe that
+     catches another registration of the same paper) → `duplicate`; genuinely
+     missing → **`review`** (never auto-added; the maintainer gets the resolved
+     title/journal/year + the submitter's citation to add by hand);
+   - a published suggestion with **no DOI at all** is resolved by a
+     conservative **Crossref bibliographic search** over the citation
+     (`matchBibItem`: the hit's title AND one author surname must visibly
+     appear in the citation text, so a wrong top hit is never adopted);
+   - a non-archived pre-print host (bioRxiv/medRxiv) is rejected as before;
+   - finally it stamps the submission (`added` / `duplicate` / `linked` /
+     `review` / `rejected` + reason) and, when SMTP is configured, e-mails the
+     submitter their outcome and the maintainer a summary.
 
    It shares `lit/data-workingpapers/` (and the `lit-workingpapers-<ref>`
    concurrency group) with the crawler, so writes never race; both seed from the
@@ -48,7 +77,9 @@ suggestions to Firestore; they just sit `pending` until the ingest runs.
 
 `lit/_firestore.rules` gained a `paperSubmissions` block (signed-in bounded
 create with `status` pinned to `'pending'`; submitter reads own; maintainer
-reads/updates/deletes via the existing `isFeedbackAdmin()`). Deploy from `lit/`:
+reads/updates/deletes via the existing `isFeedbackAdmin()`), extended with the
+published-paper form's two optional fields (`kind` in `['wp','published']`,
+`citation` ≤ 4000 chars). Deploy from `lit/`:
 
 ```
 cd lit
@@ -94,8 +125,10 @@ No new secret is needed if the feedback mailer is already configured.
 
 When the maintainer (`kstouras@gmail.com`, verified) is signed in on the
 Feedback page, a **📄 Paper suggestions** inbox renders on top (like the feedback
-inbox): every suggestion with its status badge (pending / added / duplicate /
-rejected), the resolved DOI/title, which catalog author matched (with a
+inbox): every suggestion with its status badge (pending / **review** / added /
+duplicate / rejected — `review` = a missing published paper awaiting the
+maintainer's hand-add, listed under the Pending tab), the resolved
+DOI/title/journal, the submitted citation, which catalog author matched (with a
 `[fuzzy]` flag when applicable), the rejection reason, and a Delete for spam.
 
 ## Published-paper pre-prints (attach + retire-on-publish)

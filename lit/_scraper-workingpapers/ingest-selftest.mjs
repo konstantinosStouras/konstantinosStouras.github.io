@@ -12,6 +12,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
   urlToDoi, crossrefToWork, catalogAuthorIndex, catalogMatch, decideSubmission, regroupAndWrite,
+  extractAnyDoi, routeSubmission, bibQueryText, matchBibItem,
+  publishedFromCrossref, publishedFromOpenAlex, decidePublishedSubmission,
 } from './ingest-submissions.mjs';
 import { matchPublished } from './build-data.mjs';
 import { normTitle } from '../_scraper/ec-pages.mjs';
@@ -71,6 +73,72 @@ export function selftest() {
   ok(urlToDoi('https://pubsonline.informs.org/doi/10.1287/mnsc.2023.1234') === null, 'publisher journal URL rejected');
   ok(urlToDoi('https://arxiv.org.evil.com/abs/2301.01234') === null, 'spoofed arxiv host rejected');
   ok(urlToDoi('') === null && urlToDoi('not a link') === null, 'empty / junk rejected');
+
+  // ── extractAnyDoi + routeSubmission (published-paper routing) ──────────────
+  ok(extractAnyDoi('https://doi.org/10.1287/mnsc.2021.4165') === '10.1287/mnsc.2021.4165', 'extractAnyDoi: doi.org URL');
+  ok(extractAnyDoi('https://pubsonline.informs.org/doi/10.1287/mnsc.2021.4165') === '10.1287/mnsc.2021.4165', 'extractAnyDoi: publisher URL with DOI path');
+  ok(extractAnyDoi('… Management Science, 70(1), 1–20. 10.1287/mnsc.2021.4165.') === '10.1287/mnsc.2021.4165', 'extractAnyDoi: bare DOI mid-citation, trailing period trimmed');
+  ok(extractAnyDoi('no doi here') === null && extractAnyDoi('') === null, 'extractAnyDoi: none → null');
+
+  const route = (s) => routeSubmission(s);
+  let r = route({ url: 'https://papers.ssrn.com/sol3/papers.cfm?abstract_id=123456' });
+  ok(r.path === 'wp' && r.doi === '10.2139/ssrn.123456' && r.src === 'ssrn', 'route: SSRN link → working-paper path');
+  r = route({ url: 'https://doi.org/10.1287/mnsc.2021.4165', kind: 'wp' });
+  ok(r.path === 'published' && r.doi === '10.1287/mnsc.2021.4165', 'route: journal DOI → published path (kind hint ignored)');
+  r = route({ url: '', citation: 'Public, J. (2024). Some Paper. Mgmt Sci. https://doi.org/10.1002/smj.3322' });
+  ok(r.path === 'published' && r.doi === '10.1002/smj.3322', 'route: DOI found in the citation → published path');
+  r = route({ url: '', citation: 'Public, J. (2024). An SSRN paper. 10.2139/ssrn.777' });
+  ok(r.path === 'wp' && r.src === 'ssrn', 'route: SSRN DOI in the citation → working-paper path');
+  r = route({ url: 'https://www.biorxiv.org/content/10.1101/2023.01.02.522345v1' });
+  ok(r.path === 'reject' && r.reason === 'unsupported', 'route: bioRxiv → rejected (not archived)');
+  r = route({ url: 'not a link', citation: 'Public, J. (2024). A Citation Without Any DOI. Journal of Things, 1(2).' });
+  ok(r.path === 'search', 'route: no DOI but a citation → bibliographic search');
+  ok(route({ url: 'not a link' }).path === 'none', 'route: nothing usable → none (bad-url)');
+
+  // ── bibQueryText + matchBibItem (citation-only resolution) ──────────────────
+  ok(bibQueryText({ citation: 'The Citation' }) === 'The Citation', 'bibQueryText: citation first');
+  ok(bibQueryText({ note: 'Citation: Folded, F. (2024). A Fallback.' }) === 'Folded, F. (2024). A Fallback.', 'bibQueryText: "Citation:" note (pre-rules-deploy fallback shape)');
+  ok(bibQueryText({ title: 'A Title', authors: 'Jane Public' }) === 'A Title Jane Public', 'bibQueryText: title + authors hints');
+  ok(bibQueryText({ note: 'just a note' }) === '', 'bibQueryText: a plain note is never searched');
+
+  const bibItem = {
+    DOI: '10.1287/mnsc.2024.1234', title: ['The Innovation Contest Game'],
+    author: [{ given: 'Jane Q.', family: 'Public' }, { given: 'John', family: 'Smith' }],
+    issued: { 'date-parts': [[2024]] }, 'container-title': ['Management Science'],
+    volume: '70', issue: '1', page: '1-20', type: 'journal-article',
+  };
+  ok(matchBibItem('Public, J. Q., & Smith, J. (2024). The Innovation Contest Game. Management Science, 70(1), 1–20.', bibItem) === true,
+    'matchBibItem: title + surname in the citation → accepted');
+  ok(matchBibItem('Public, J. Q. (2024). A Different Paper Altogether. Management Science.', bibItem) === false,
+    'matchBibItem: title not in the citation → rejected');
+  ok(matchBibItem('Nobody, N. (2024). The Innovation Contest Game. MS.', bibItem) === false,
+    'matchBibItem: no author surname in the citation → rejected');
+  ok(matchBibItem('Public: The Game', { DOI: '10.1/x', title: ['The Game'], author: [{ family: 'Public' }] }) === false,
+    'matchBibItem: sub-15-char normalized title → rejected (too generic)');
+
+  // ── publishedFrom* adapters + decidePublishedSubmission ─────────────────────
+  const pubRec = publishedFromCrossref(bibItem, '10.1287/MNSC.2024.1234');
+  ok(pubRec.doi === '10.1287/mnsc.2024.1234' && pubRec.title === 'The Innovation Contest Game' &&
+     pubRec.journal === 'Management Science' && pubRec.year === 2024 &&
+     pubRec.authors.join('|') === 'Jane Q. Public|John Smith', 'publishedFromCrossref: fields + lowercased DOI');
+  const oaPub = publishedFromOpenAlex({ doi: 'https://doi.org/10.1287/mnsc.2024.1234', title: 'The Innovation Contest Game',
+    publication_year: 2024, authorships: [{ author: { display_name: 'Jane Q. Public' } }],
+    primary_location: { source: { display_name: 'Management Science' } } });
+  ok(oaPub.doi === '10.1287/mnsc.2024.1234' && oaPub.journal === 'Management Science' && oaPub.year === 2024,
+    'publishedFromOpenAlex: fields from the OpenAlex shape');
+
+  const pubCtx = () => ({
+    dois: new Set(['10.1287/mnsc.2020.0001']),
+    byTitle: new Map([[normTitle('A Listed Published Paper'), [{ doi: '10.1287/mnsc.2020.0002', last: new Set(['public']), year: 2020 }]]]),
+  });
+  let pd = decidePublishedSubmission({ doi: '10.1287/mnsc.2020.0001', title: 'Whatever Title', authors: ['X Y'], year: 2020, journal: 'MS' }, pubCtx());
+  ok(pd.status === 'duplicate' && pd.reason === 'already-in-catalog' && pd.mode === 'published', 'decidePublished: DOI already in catalog → duplicate');
+  pd = decidePublishedSubmission({ doi: '10.9999/other.registration', title: 'A Listed Published Paper', authors: ['Jane Q. Public'], year: 2020, journal: 'MS' }, pubCtx());
+  ok(pd.status === 'duplicate' && pd.publishedDoi === '10.1287/mnsc.2020.0002', 'decidePublished: same paper under another DOI → duplicate via matchPublished');
+  pd = decidePublishedSubmission({ doi: '10.1002/smj.9999', title: 'A Genuinely Missing Paper', authors: ['Jane Q. Public'], year: 2023, journal: 'SMJ' }, pubCtx());
+  ok(pd.status === 'review' && pd.mode === 'published' && pd.pub && pd.pub.journal === 'SMJ', 'decidePublished: missing → review (forwarded to the maintainer)');
+  pd = decidePublishedSubmission({ doi: '10.1002/smj.9999', title: '', authors: [], year: 0, journal: '' }, pubCtx());
+  ok(pd.status === 'rejected' && pd.reason === 'unresolved', 'decidePublished: no resolvable title → rejected(unresolved)');
 
   // ── decideSubmission ────────────────────────────────────────────────────────
   const ctx = ctxFixture('fuzzy');
