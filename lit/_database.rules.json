@@ -11,7 +11,11 @@
     "",
     "Everything else stays locked down: only /presence is readable/writable, a",
     "visitor may only write under their OWN uid, and node values must be the",
-    "boolean true (no arbitrary payloads)."
+    "boolean true (no arbitrary payloads). A single uid is also capped to 20",
+    "concurrent connection children so one visitor can't inflate the count or",
+    "storage by scripting thousands of tabs; the real defence against many",
+    "forged anonymous uids is Firebase App Check on the presence app (see",
+    "lit/_PRESENCE-SETUP.md)."
   ],
   "rules": {
     ".read": false,
@@ -21,7 +25,7 @@
       "$uid": {
         ".write": "auth != null && auth.uid === $uid",
         "$conn": {
-          ".validate": "newData.isBoolean() && newData.val() == true"
+          ".validate": "newData.isBoolean() && newData.val() == true && (data.exists() || root.child('presence').child(auth.uid).numChildren() < 20)"
         }
       }
     }

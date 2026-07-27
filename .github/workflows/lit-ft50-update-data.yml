@@ -44,10 +44,10 @@ jobs:
     timeout-minutes: 300
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '20'
 
@@ -74,12 +74,12 @@ jobs:
           fi
           git commit -m "lit: refresh FT50 (merged catalog) data"
           for i in 1 2 3; do
-            if git push origin HEAD:${{ github.ref_name }}; then
+            if git push origin "HEAD:$GITHUB_REF_NAME"; then
               echo "Pushed on attempt $i."
               exit 0
             fi
             echo "Push rejected (concurrent commit?) — merging the tip's pre-print links into our build so none are clobbered…"
-            git fetch origin ${{ github.ref_name }}
+            git fetch origin "$GITHUB_REF_NAME"
             # A concurrent commit is almost always a pre-print backfill that
             # added free-pre-print links. Our freshly-harvested tree carries an
             # OLDER _preprints.json, so re-committing it as-is would downgrade
@@ -90,9 +90,9 @@ jobs:
             # fresh harvest AND every pre-print link. Then MIXED-reset to the tip
             # and re-add ONLY the data dir (a hard reset would drop code commits
             # that landed on the branch; a soft reset would silently revert them).
-            git show origin/${{ github.ref_name }}:lit/data-ft50/_preprints.json > /tmp/lit-ft50-tip-preprints.json || echo '{}' > /tmp/lit-ft50-tip-preprints.json
+            git show "origin/$GITHUB_REF_NAME":lit/data-ft50/_preprints.json > /tmp/lit-ft50-tip-preprints.json || echo '{}' > /tmp/lit-ft50-tip-preprints.json
             node lit/_scraper-ft50/preprints-ci.mjs --apply-only --merge-cache=/tmp/lit-ft50-tip-preprints.json
-            git reset origin/${{ github.ref_name }}
+            git reset "origin/$GITHUB_REF_NAME"
             git add lit/data-ft50
             if git diff --cached --quiet; then
               echo "The concurrent commit already contains this dataset — nothing left to push."

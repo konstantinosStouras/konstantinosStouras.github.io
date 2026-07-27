@@ -42,7 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       # The satellite ABS data shards live in sibling repos (the SHARDS list in
       # lit/index.html). The summary must cover their journals too, or the
@@ -51,25 +51,25 @@ jobs:
       # the explicit `git add` below can never commit them; build-analytics.mjs
       # finds them there and skips (with a warning) any that are missing.
       - name: Checkout data shard — lit-data-abs4
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: konstantinosStouras/lit-data-abs4
           path: _analytics-shards/lit-data-abs4
 
       - name: Checkout data shard — lit-data-abs3-omecon
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: konstantinosStouras/lit-data-abs3-omecon
           path: _analytics-shards/lit-data-abs3-omecon
 
       - name: Checkout data shard — lit-data-abs3-rest
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: konstantinosStouras/lit-data-abs3-rest
           path: _analytics-shards/lit-data-abs3-rest
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '20'
 
@@ -100,13 +100,13 @@ jobs:
           fi
           git commit -m "lit: refresh analytics summary"
           for i in 1 2 3 4; do
-            if git push origin HEAD:${{ github.ref_name }}; then
+            if git push origin "HEAD:$GITHUB_REF_NAME"; then
               echo "Pushed on attempt $i."
               exit 0
             fi
             echo "Push rejected (concurrent data commit?) — rebasing onto the tip and retrying…"
-            git fetch origin ${{ github.ref_name }}
-            git rebase origin/${{ github.ref_name }} || { git rebase --abort; exit 1; }
+            git fetch origin "$GITHUB_REF_NAME"
+            git rebase "origin/$GITHUB_REF_NAME" || { git rebase --abort; exit 1; }
             sleep 5
           done
           echo "::error::Could not push the refreshed analytics after 4 attempts."

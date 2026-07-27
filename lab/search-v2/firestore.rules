@@ -34,12 +34,29 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Study "sessions" (waves) the admin creates. A participant reads the one
-    // whose code matches their ?code= launch link to load its settings; only the
-    // admin may create/edit/delete. (Sessions hold no secrets — the completion
-    // codes are shown to participants at the end anyway.)
+    // Study "sessions" (waves) the admin creates. A participant loads the one
+    // whose code matches their ?code= launch link (via the sessionCodes map
+    // below) to read its settings; only the admin may create/edit/delete.
+    //
+    // `get` (a point read of one known session id) is allowed for any signed-in
+    // participant, but `list` is ADMIN-ONLY: sessions carry per-wave
+    // completion/payment codes, and an unrestricted list let any anonymous
+    // participant enumerate the whole collection and harvest every code. The
+    // participant never needs to list — they resolve their session id from
+    // sessionCodes/<code> and then get that one doc.
     match /sessions/{sessionId} {
-      allow read:  if isSignedIn();
+      allow get:   if isSignedIn();
+      allow list:  if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // code → session-id lookup. Holds ONLY the target session id, so exposing it
+    // leaks nothing sensitive. A participant does a POINT read (get) by their
+    // launch code; the admin writes it on create/update and backfills legacy
+    // sessions on panel load (see firebase.js listSessions).
+    match /sessionCodes/{code} {
+      allow get:   if isSignedIn();
+      allow list:  if isAdmin();
       allow write: if isAdmin();
     }
 

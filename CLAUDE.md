@@ -4,6 +4,43 @@ This repo is the source of **stouras.com** (Konstantinos Stouras' homepage),
 served as a static site via GitHub Pages from the `master` branch. There is no
 build step — HTML/CSS/JS are committed and served as-is.
 
+## Branch protection & repo visibility — the DELIBERATE posture
+
+**The default branch is protected against force pushes and deletion ONLY. Do
+NOT enable "Require a pull request before merging" or "Require status checks to
+pass".** This repo's data is written by its own workflows: 17 workflow steps
+(the daily builds, the 15/20-minute incremental harvests, the pre-print /
+citations / references / cited-by / working-papers / editors backfills, the
+feedback log) push straight to the default branch with
+`git push origin HEAD:${{ github.ref_name }}` using `GITHUB_TOKEN`. Rulesets
+apply to `GITHUB_TOKEN` pushes too, so a PR requirement would reject every one
+of them and `/lit` would silently stop updating. Force-push/deletion rules are
+safe because **nothing here ever force-pushes, deletes a branch or pushes
+tags** — every push is a plain fast-forward with rebase-and-retry on rejection
+(the `--apply-only --merge-cache` replay paths). The same applies to the four
+sibling repos (`lit-data-abs4`, `lit-data-abs3-omecon`, `lit-data-abs3-rest`,
+`mnsc-scraper`), whose workflows push the same way; note the default branch is
+`master` here and `main` in all four of those. Keep **Repository admin** on the
+ruleset's bypass list — a one-off history rewrite (`dedupe-data.mjs`,
+`clean-titles.mjs`) must stay possible for the sole maintainer.
+
+**This repo and the three `lit-data-*` shards stay PUBLIC.** Private is not an
+upgrade here: (1) Pages from a private repo requires a paid plan, so on GitHub
+Free the site simply unpublishes — `stouras.com`, `/lit/` and the shard data the
+page lazy-loads same-origin from `stouras.com/lit-data-*/data/` all go dark;
+(2) even on a paid plan a Pages site published from a private repo is still
+world-readable (per-site access control is Enterprise Cloud only), so nothing
+about the served data becomes private; (3) public repos get unlimited free
+Actions minutes, private ones bill past a small quota — this repo alone fires
+~700 scheduled runs/day across 21 workflows, several of them deliberately long
+bounded slices (`LIT_PREPRINT_SEARCH_MS`, `LIT_EDITORS_BUDGET_MS`, …), on the
+order of 100k minutes/month. `mnsc-scraper` and the feedback log repo
+(`FEEDBACK_LOG_REPO`) are the ones that are correctly PRIVATE — the latter holds
+submitters' e-mails and screenshots. The real protection for a public repo of
+this shape is **secret scanning + push protection** (free on public repos),
+guarding `FIREBASE_SERVICE_ACCOUNT`, `SMTP_*`, `S2_API_KEY`,
+`ELSEVIER_API_KEY` and `FEEDBACK_LOG_TOKEN`.
+
 ## Fun Projects landing page — keep it in sync
 
 `/fun/` (`fun/index.html`) is the landing page that lists every app under
