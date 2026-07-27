@@ -4,9 +4,11 @@
  * For every paper already listed in "The Lit" (stouras.com/lit/), this
  * pipeline extracts the references it CITES that ALSO belong to the catalog —
  * i.e. the intra-catalog out-edges of the citation graph. The result is a
- * static JSON dataset in lit/data-refs/, which the page merges at runtime
- * (a "Cited references in this catalog" toggle on each paper card; see
- * index.html). No server, no database.
+ * static JSON dataset in lit/data-refs/, which the page merges at runtime:
+ * each paper card gains a "Citing N references in this catalog" toggle AND its
+ * inverse, "Cited by N references in this catalog" (the same edges keyed by
+ * the cited paper — see buildOutputs' citedShards); see index.html. No server,
+ * no database.
  *
  * WHY A SEPARATE DATASET.  A per-paper reference list, across a quarter of a
  * million papers, is a large and ever-growing corpus. Keeping it in its own
@@ -417,15 +419,25 @@ async function fetchCrossrefRefsBatch(dois, deadline) {
 // ── Apply: intersect the cached references with the current catalog ──────────
 // Rebuilt from scratch every run (cheap, no network), so catalog growth, newly
 // added dirs and a fuller _oaid.json surface new edges for free. Produces:
-//   shards[jkey] = { <citingDoi>: [<citedDoi>, …] }   — only papers with ≥1 edge
-//   index        = { <citedDoi>: [title, jkey, year, authors?] } — every target
+//   shards[jkey]      = { <citingDoi>: [<citedDoi>, …] }  — only papers with ≥1 edge
+//   citedShards[jkey] = { <citedDoi>: [<citingDoi>, …] }  — the SAME edges inverted,
+//                       sharded by the CITED paper's journal (the page's per-card
+//                       "Cited by N references in this catalog" panel)
+//   counts / citedCounts — {doi: N} per direction (tiny toggle-count companions)
+//   index             = { <doi>: [title, jkey, year, authors?] } — EVERY edge
+//                       endpoint (cited AND citing), so either panel renders a
+//                       paper's title/journal/year/authors without loading its
+//                       journal's papers file
 // Crossref/S2 DOIs (`r`) intersect the catalog directly; OpenAlex ids (`o`) are
 // resolved to catalog DOIs via oaidMap (reverse-indexed to our papers only).
 export function buildOutputs(cache, dbByDoi, oaidMap = {}) {
   const oaidToDoi = {};
   for (const [doi, oaid] of Object.entries(oaidMap)) if (oaid && dbByDoi.has(doi)) oaidToDoi[oaid] = doi;
   const shards = {};
-  const counts = {};   // citingDoi -> N in-catalog references (tiny toggle-count companion)
+  const counts = {};       // citingDoi -> N in-catalog references (tiny toggle-count companion)
+  const citedShards = {};  // inverse: cited jkey -> { citedDoi: [citingDoi, …] }
+  const citedCounts = {};  // citedDoi -> N in-catalog citers
+  const citedKeys = new Set();
   const indexKeys = new Set();
   let citingWithEdges = 0, edges = 0;
   for (const [citingDoi, entry] of Object.entries(cache)) {
@@ -438,13 +450,20 @@ export function buildOutputs(cache, dbByDoi, oaidMap = {}) {
     (shards[meta.j] || (shards[meta.j] = {}))[citingDoi] = [...inDb];
     counts[citingDoi] = inDb.size;
     citingWithEdges++; edges += inDb.size;
-    for (const cd of inDb) indexKeys.add(cd);
+    indexKeys.add(citingDoi);               // the inverse panel renders citing papers too
+    for (const cd of inDb) {
+      indexKeys.add(cd); citedKeys.add(cd);
+      const cm = dbByDoi.get(cd);
+      ((citedShards[cm.j] || (citedShards[cm.j] = {}))[cd] || (citedShards[cm.j][cd] = [])).push(citingDoi);
+      citedCounts[cd] = (citedCounts[cd] || 0) + 1;
+    }
   }
   const index = {};
   // [title, jkey, year, authors?] — authors is appended only when known, so
   // pre-authors data (a 3-tuple) still renders (the page reads meta[3] safely).
   for (const cd of indexKeys) { const m = dbByDoi.get(cd); index[cd] = m.a ? [m.t, m.j, m.y, m.a] : [m.t, m.j, m.y]; }
-  return { shards, index, counts, totals: { citingWithEdges, edges, cited: indexKeys.size } };
+  return { shards, citedShards, index, counts, citedCounts,
+    totals: { citingWithEdges, edges, cited: citedKeys.size } };
 }
 
 // ── Main ────────────────────────────────────────────────────────────────────
@@ -502,7 +521,7 @@ async function main() {
   }
 
   // 7. Intersect the whole cache with the catalog and write the served files.
-  const { shards, index, counts, totals } = buildOutputs(cache, dbByDoi, oaidMap);
+  const { shards, citedShards, index, counts, citedCounts, totals } = buildOutputs(cache, dbByDoi, oaidMap);
   const shardMeta = {};
   for (const jkey of Object.keys(shards).sort()) {
     const rows = shards[jkey];
@@ -511,10 +530,22 @@ async function main() {
     const es = Object.values(rows).reduce((n, a) => n + a.length, 0);
     shardMeta[jkey] = { file, papers: Object.keys(rows).length, edges: es };
   }
+  // The inverse shards — the same edges keyed by the CITED paper, sharded by
+  // ITS journal, feeding each card's "Cited by N references in this catalog"
+  // panel exactly like shardMeta feeds the "Citing …" one.
+  const citedShardMeta = {};
+  for (const jkey of Object.keys(citedShards).sort()) {
+    const rows = citedShards[jkey];
+    const file = `cited-${jkey}.json`;
+    await awrite(join(DATA_DIR, file), JSON.stringify(rows));
+    const es = Object.values(rows).reduce((n, a) => n + a.length, 0);
+    citedShardMeta[jkey] = { file, papers: Object.keys(rows).length, edges: es };
+  }
   await awrite(join(DATA_DIR, 'refs-index.json'), JSON.stringify(index));
-  // The per-paper count companion — one int per citing paper, so a card shows
-  // "(N)" on its toggle without downloading a shard.
+  // The per-paper count companions — one int per paper per direction, so a card
+  // shows its counts without downloading a shard.
   await awrite(join(DATA_DIR, 'refs-counts.json'), JSON.stringify(counts));
+  await awrite(join(DATA_DIR, 'cited-counts.json'), JSON.stringify(citedCounts));
 
   const fetched = Object.values(cache).filter(e => (e.v || 0) >= RF_VER).length;
   const manifest = {
@@ -522,7 +553,9 @@ async function main() {
     generated: PULL_DATE,
     index: { file: 'refs-index.json', count: Object.keys(index).length },
     counts: { file: 'refs-counts.json', count: Object.keys(counts).length },
+    citedCounts: { file: 'cited-counts.json', count: Object.keys(citedCounts).length },
     shards: shardMeta,
+    citedShards: citedShardMeta,
     totals: { citingPapers: totals.citingWithEdges, edges: totals.edges, citedPapers: totals.cited, fetched, catalog: papers.length },
     sources: ['crossref', 'openalex', ...(USE_S2 ? ['semanticscholar'] : [])],
   };

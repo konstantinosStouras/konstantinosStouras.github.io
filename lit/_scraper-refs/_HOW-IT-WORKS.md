@@ -3,9 +3,11 @@
 For every paper listed in **The Lit** (`stouras.com/lit/`), this pipeline
 extracts the references it **cites that also belong to the catalog** — the
 intra-catalog out-edges of the citation graph. Each paper card gains a
-**"Cited references in this catalog"** toggle that lists those papers, each
-linking straight to the paper it cites, so you can walk the citation graph
-within these journals.
+**"Citing N references in this catalog"** toggle that lists those papers, each
+linking straight to the paper it cites — plus its inverse, a **"Cited by N
+references in this catalog"** toggle listing the catalog papers that cite
+*it* (the same edges, keyed by the cited paper) — so you can walk the
+citation graph within these journals in both directions.
 
 It is deliberately a **separate dataset** so it never eats the main site's
 size budget, and so it can move to a dedicated Pages repo when it grows — see
@@ -15,10 +17,15 @@ size budget, and so it can move to a dedicated Pages repo when it grows — see
 
 ```
 lit/data-refs/
-  manifest.json        # {ver, shards:{<jkey>:{file,papers,edges}}, index, counts, totals, sources}
+  manifest.json        # {ver, shards:{<jkey>:{file,papers,edges}}, citedShards:{…},
+                       #  index, counts, citedCounts, totals, sources}
   refs-<jkey>.json     # { "<citing-doi>": ["<cited-doi>", …] } — one per citing journal
-  refs-index.json      # { "<cited-doi>": [title, jkey, year, authors?] } — every edge target
+  cited-<jkey>.json    # { "<cited-doi>": ["<citing-doi>", …] } — the SAME edges
+                       #  inverted, one per CITED journal (the "Cited by" panels)
+  refs-index.json      # { "<doi>": [title, jkey, year, authors?] } — every edge
+                       #  endpoint, cited AND citing
   refs-counts.json     # { "<citing-doi>": N } — in-catalog refs per paper (toggle count)
+  cited-counts.json    # { "<cited-doi>": N } — in-catalog citers per paper (toggle count)
   meta.json            # small run summary
   citedby-meta.json    # forward-citation (cited-by) run summary  — see "The forward side"
   _refs-cache.json     # the incremental crawl cache (NOT served — see below)
@@ -29,15 +36,23 @@ lit/data-refs/
 - **`refs-<jkey>.json`** is keyed by the *citing* paper's DOI and holds only the
   cited DOIs that are in the catalog. Sharded by the citing journal so the page
   downloads just the one file for a paper's journal, on demand.
-- **`refs-index.json`** lets the page render a cited paper's title/journal/year
-  — and its **authors** (the optional 4th tuple element) — without loading that
-  paper's journal file; the toggle panel shows each cited reference's authors
-  under its title.
-- **`refs-counts.json`** is a tiny `{"<citing-doi>": N}` companion (one int per
-  citing paper with ≥1 edge) so a card can show the count on its "Cited
-  references in this catalog (N)" toggle without downloading the per-journal
-  shard. The page loads it once in the background; the shard still loads lazily
-  only when a panel is opened.
+- **`cited-<jkey>.json`** is the inverse view of the very same edge set — keyed
+  by the *cited* paper's DOI, sharded by **its** journal — feeding each card's
+  "Cited by N references in this catalog" panel. No extra crawling: it is
+  derived in `buildOutputs` while the forward shards are built, so the two
+  directions can never disagree. (A journal can have a cited shard without a
+  citing one — e.g. ACM EC papers get cited but deposit no references.)
+- **`refs-index.json`** lets the page render an edge endpoint's
+  title/journal/year — and its **authors** (the optional 4th tuple element) —
+  without loading that paper's journal file; both panels show each listed
+  paper's authors under its title. It covers **both** endpoints of every edge
+  (cited and citing papers alike).
+- **`refs-counts.json`** / **`cited-counts.json`** are tiny `{"<doi>": N}`
+  companions (one int per paper with ≥1 edge in that direction) so a card can
+  show the count woven into its "Citing N references …" / "Cited by N
+  references …" toggle without downloading the per-journal shard. The page
+  loads them once in the background; the shards still load lazily only when a
+  panel is opened.
 - **`_refs-cache.json`** is the build's memory: `{"<doi>": {r:[raw cited DOIs],
   o:[raw OpenAlex ref ids], t:"date", v:<ver>, oa:<ver>}}`. It caches each
   source's **raw** output (not just the in-catalog subset), so every build
@@ -79,8 +94,9 @@ with a wider net.
    (`REFS_MAX_PAPERS`, `REFS_BUDGET_MS`) and checkpoints as it goes — so it fills
    in over **weeks** without tripping rate limits.
 3. **Apply** — intersects the whole cache with the catalog (Crossref/S2 DOIs
-   directly; OpenAlex ids via `_oaid.json`) and writes the shards + index +
-   manifest. This runs every build (cheap, no network).
+   directly; OpenAlex ids via `_oaid.json`) and writes the shards (both
+   directions — the cited-by shards are the same edges inverted) + index +
+   counts + manifest. This runs every build (cheap, no network).
 
 **Paper priority** (per the site owner): Management Science, M&SOM, POM and PNAS
 (all years) first, then the UTD24 and FT50 journals (newest years first), then
@@ -179,15 +195,19 @@ run on `master`.
 ## On the page
 
 `index.html` fetches `data-refs/manifest.json` at load (`loadRefsManifest`). A
-paper card shows the **"Cited references in this catalog"** toggle only when its
-journal has a shard (`refsShardFor`); when the manifest has shards, the page also
-fetches `refs-counts.json` once in the background (`loadRefsCounts`) so each
-toggle can show its count — "Cited N references in this catalog" — filled in on
-arrival (`annotateRefsCounts`/`refsToggleLabel`) without downloading any shard.
-Opening it lazy-loads `refs-index.json`
-(once) and the paper's `refs-<jkey>.json` (once per journal), then lists the
-cited papers newest-first, each linking to its DOI (`togRefs`). The dataset
-**ships empty** (a manifest with no shards), so the toggle stays hidden until
+paper card shows the **"Citing … references in this catalog"** toggle only when
+its journal has a citing shard (`refsShardFor`) and the **"Cited by …
+references in this catalog"** toggle only when its journal has a cited shard
+(`citedShardFor`); when the manifest has shards, the page also fetches
+`refs-counts.json` + `cited-counts.json` once in the background
+(`loadRefsCounts`/`loadCitedCounts`) so each toggle can weave in its count —
+"Citing 12 references …" / "Cited by 7 references …" — filled in on arrival
+(`annotateRefsCounts`/`annotateCitedCounts`) without downloading any shard.
+Opening a panel lazy-loads `refs-index.json` (once, shared by both directions)
+and the paper's `refs-<jkey>.json` / `cited-<jkey>.json` (once per journal per
+direction), then lists the papers newest-first, each linking to its DOI
+(`togRefs`/`togCited`, rendering via the shared `refListHTML`). The dataset
+**ships empty** (a manifest with no shards), so the toggles stay hidden until
 the backfill has populated it.
 
 ## Migration to a dedicated Pages repo

@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "citedby-in-catalog",
+      "date": "2026-07-26",
+      "title": "See who cites each paper, inside the catalog",
+      "summary": "Next to the “Citing … references in this catalog” toggle, every paper now also carries its mirror image: a “Cited by … references in this catalog” toggle — the number of papers in The Lit that cite it, opening a list of those citing papers (authors included), each linking straight to the paper. It is the same citation graph read in the other direction, so you can now walk it both ways: what a paper builds on, and what builds on it.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
       "id": "entity-decoding",
       "date": "2026-07-25",
       "title": "Readable titles, abstracts and names everywhere",

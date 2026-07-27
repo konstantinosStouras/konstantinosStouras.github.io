@@ -300,6 +300,11 @@
   .ref-title:hover { text-decoration: underline; }
   .ref-authors { flex-basis: 100%; font-size: 12px; color: var(--text-muted); line-height: 1.3; }
   .ref-src { font-size: 11.5px; color: var(--text-muted); }
+  /* The inverse (cited-by) toggle + panel — green so the two directions read
+     apart at a glance (the "Citing …" side stays steel-blue). */
+  .paper-cited-toggle { color: #2e7d5b; }
+  .paper-cited { border-left-color: #2e7d5b; background: #f4faf7; }
+  .paper-cited .paper-refs-head { color: #2e7d5b; }
 
   .pagination { max-width: 1280px; margin: 0 auto; padding: 0 32px 60px; display: flex; justify-content: center; align-items: center; gap: 6px; }
   .pagination button { padding: 8px 14px; border: 1px solid var(--border); background: var(--white); border-radius: 6px; font-family: 'Work Sans', sans-serif; font-size: 13px; cursor: pointer; transition: all 0.15s; color: var(--text); }
@@ -979,12 +984,14 @@ const WP_KEYS = new Set();
 // The citation graph — for every listed paper, the references it cites that
 // ALSO belong to this catalog (intra-catalog out-edges), built by
 // lit/_scraper-refs/ (.github/workflows/lit-references-backfill.yml) into
-// lit/data-refs/ and merged in at runtime: a "Cited references in this
-// catalog" toggle on each paper card, lazy-loading only that paper's shard
-// when the user opens it. Kept in its own dataset so it can move to a
-// dedicated lit-data-refs Pages repo when it nears the 1 GB limit — then
+// lit/data-refs/ and merged in at runtime as TWO toggles per paper card:
+// "Citing N references in this catalog" (this paper's out-edges) and its
+// inverse "Cited by N references in this catalog" (the same edges keyed by
+// the cited paper — its in-catalog citers), each lazy-loading only that
+// paper's journal shard when opened. Kept in its own dataset so it can move
+// to a dedicated lit-data-refs Pages repo when it nears the 1 GB limit — then
 // REFS_DATA_BASE becomes '/lit-data-refs/data/'. The dataset ships empty
-// (manifest with no shards), so the toggle stays hidden until the backfill
+// (manifest with no shards), so the toggles stay hidden until the backfill
 // populates it. See lit/_scraper-refs/_HOW-IT-WORKS.md.
 const REFS_DATA_BASE = './data-refs/';
 const REFS_MANIFEST_URL = REFS_DATA_BASE + 'manifest.json';
@@ -1000,6 +1007,13 @@ let refsIndexPromise = null;   // in-flight index fetch (idempotence)
 // and is shardable later like the shards themselves.
 let refsCounts = null;         // ./data-refs/refs-counts.json once fetched
 let refsCountsPromise = null;  // in-flight counts fetch (idempotence)
+// The inverse direction — the catalog papers that CITE each paper, sharded by
+// the CITED paper's journal (cited-<jkey>.json) with its own tiny count
+// companion (cited-counts.json, citedDoi -> N). Same lazy discipline as above.
+const citedShardCache = {};    // jkey -> { citedDoi: [citingDoi,…] } (lazy, per journal)
+const citedShardPromise = {};  // jkey -> in-flight fetch promise (idempotence)
+let citedCounts = null;        // ./data-refs/cited-counts.json once fetched
+let citedCountsPromise = null; // in-flight counts fetch (idempotence)
 
 // User-supplied / retired-on-publish pre-print links: a small map
 // { <bareDoi>: {u,s} } served from data-workingpapers/submitted-preprints.json,
@@ -1627,11 +1641,13 @@ async function loadRefsManifest() {
     if (r.ok) mf = await r.json();
   } catch (e) { mf = null; }
   refsManifest = (mf && mf.shards) ? mf : null;
-  // If edges exist, re-render the active view so cards pick up the new toggle
+  // If edges exist, re-render the active view so cards pick up the new toggles
   // (the manifest usually lands before the first search, but not always), and
-  // fetch the tiny counts companion in the background so toggles show "(N)".
-  if (refsManifest && Object.keys(refsManifest.shards).length) {
+  // fetch the tiny counts companions in the background so toggles show "(N)".
+  if (refsManifest && (Object.keys(refsManifest.shards).length ||
+      Object.keys(refsManifest.citedShards || {}).length)) {
     loadRefsCounts();
+    if (refsManifest.citedShards) loadCitedCounts();
     if (recentMode) renderRecent();
     else if (sel.jtype.size || sel.journal.size || broadFilterActive() || preprintOnly) applyFilters();
   }
@@ -1673,6 +1689,56 @@ function annotateRefsCounts() {
     if (el.textContent.charAt(0) === '▾') return; // opened — leave its "Hide" label
     el.textContent = refsToggleLabel(el.getAttribute('data-refs-doi'), false);
   });
+}
+
+// ── The inverse (cited-by) companions, mirroring the three above ────────────
+// Fetch the per-paper in-catalog citer counts (background, once, idempotent).
+function loadCitedCounts() {
+  if (citedCounts) return Promise.resolve(citedCounts);
+  if (citedCountsPromise) return citedCountsPromise;
+  var file = (refsManifest && refsManifest.citedCounts && refsManifest.citedCounts.file) || 'cited-counts.json';
+  citedCountsPromise = fetch(REFS_DATA_BASE + file, { cache: 'default' })
+    .then(function(r) { return r.ok ? r.json() : {}; })
+    .then(function(j) { citedCounts = j || {}; annotateCitedCounts(); return citedCounts; })
+    .catch(function() { citedCounts = {}; return citedCounts; });
+  return citedCountsPromise;
+}
+
+// The closed-state label for a paper's cited-by toggle: weave the count into
+// the phrase ("Cited by 12 references in this catalog") when it is known (>0),
+// falling back to the generic "Cited by references in this catalog" otherwise.
+function citedToggleLabel(doi, open) {
+  if (open) return '▾ Hide citing references';
+  var n = citedCounts && citedCounts[doi];
+  var mid = n ? n.toLocaleString() + ' reference' + (n === 1 ? '' : 's') : 'references';
+  return '▸ Cited by ' + mid + ' in this catalog';
+}
+
+// Once the citer counts arrive, fill them into every on-screen cited-by toggle
+// that is still closed (never clobber one the user opened — "Hide" label).
+function annotateCitedCounts() {
+  if (!citedCounts) return;
+  document.querySelectorAll('.paper-cited-toggle[data-cited-doi]').forEach(function(el) {
+    if (el.textContent.charAt(0) === '▾') return; // opened — leave its "Hide" label
+    el.textContent = citedToggleLabel(el.getAttribute('data-cited-doi'), false);
+  });
+}
+
+// The manifest entry (or null) for a journal's cited-by edges — gates the toggle.
+function citedShardFor(jkey) {
+  return refsManifest && refsManifest.citedShards && refsManifest.citedShards[jkey] || null;
+}
+
+function loadCitedShard(jkey) {
+  if (citedShardCache[jkey]) return Promise.resolve(citedShardCache[jkey]);
+  if (citedShardPromise[jkey]) return citedShardPromise[jkey];
+  var entry = citedShardFor(jkey);
+  if (!entry) { citedShardCache[jkey] = {}; return Promise.resolve(citedShardCache[jkey]); }
+  citedShardPromise[jkey] = fetch(REFS_DATA_BASE + entry.file, { cache: 'default' })
+    .then(function(r) { return r.ok ? r.json() : {}; })
+    .then(function(j) { citedShardCache[jkey] = j || {}; return citedShardCache[jkey]; })
+    .catch(function() { citedShardCache[jkey] = {}; return citedShardCache[jkey]; });
+  return citedShardPromise[jkey];
 }
 
 // The manifest entry (or null) for a journal's citing edges — gates the toggle.
@@ -3576,12 +3642,14 @@ function paperCardHTML(p, idx, showAdded) {
     ${hasAbs ? `<span class="paper-abstract-toggle" title="Show the paper’s abstract." onclick="togAbs('${aid}',this)">▸ Abstract</span>` : ''}
     <span class="paper-bibtex-toggle" title="Show a BibTeX citation for this paper that you can copy." onclick="togBib('bib${idx}',this,${idx})">▸ BibTeX</span>
     ${refsShardFor(p['JKey']) ? `<span class="paper-refs-toggle" data-refs-doi="${escAttr(refsNormDoi(p['DOI']))}" onclick="togRefs('refs${idx}',this,${idx})" title="The papers this one cites that are also in The Lit's catalog (from the publisher's deposited reference list). The number is how many.">${refsToggleLabel(refsNormDoi(p['DOI']), false)}</span>` : ''}
+    ${citedShardFor(p['JKey']) ? `<span class="paper-refs-toggle paper-cited-toggle" data-cited-doi="${escAttr(refsNormDoi(p['DOI']))}" onclick="togCited('cby${idx}',this,${idx})" title="The papers in The Lit's catalog that cite this one (the same reference data, inverted). The number is how many.">${citedToggleLabel(refsNormDoi(p['DOI']), false)}</span>` : ''}
     ${safeUrl(p['Preprint']) ? `<a class="paper-preprint-link" href="${preprintPdfUrl(safeUrl(p['Preprint']))}" target="_blank" rel="noopener" title="Free author pre-print on ${PREPRINT_HOST[p['PreprintSrc']] || 'an open repository'} — opens the latest version, PDF direct where the host allows it. The accepted/working version may differ from the final published paper">Pre-print (Open Access) ↗</a>` : ''}
     ${typeof acctToggleHTML === 'function' ? acctToggleHTML(p) : ''}
     ${hasSig ? `<div id="${sid}" class="paper-abstract paper-significance">${esc(sigClean)}</div>` : ''}
     ${hasAbs ? `<div id="${aid}" class="paper-abstract">${esc(absClean)}</div>` : ''}
     <div id="bib${idx}" class="paper-bibtex"></div>
     ${refsShardFor(p['JKey']) ? `<div id="refs${idx}" class="paper-refs"></div>` : ''}
+    ${citedShardFor(p['JKey']) ? `<div id="cby${idx}" class="paper-refs paper-cited"></div>` : ''}
   </div>`;
 }
 
@@ -3605,9 +3673,36 @@ function togBib(id, btn, idx) {
   }
 }
 
-// Open a paper's "Cited references in this catalog" panel: lazy-load the shared
-// title index + this journal's shard, look up the paper's cited DOIs and render
-// each as a link to the paper it cites (badge + title + journal + year).
+// Render a list of catalog papers (by DOI) from the shared refs index — one
+// <li> each (badge + title link + authors + journal + year), newest first
+// (sorts `dois` in place; unknown-year entries sink to the bottom). Shared by
+// both citation-graph panels (togRefs / togCited).
+function refListHTML(dois, index) {
+  dois.sort(function(a, b) {
+    return (parseInt((index[b] || [])[2], 10) || 0) - (parseInt((index[a] || [])[2], 10) || 0);
+  });
+  let rows = '';
+  for (const cd of dois) {
+    const meta = index[cd] || [];
+    const title = meta[0] || cd;
+    const jk = meta[1] || '';
+    const yr = meta[2] || '';
+    const authors = meta[3] || '';
+    const badge = journalBadges(jk).map(function(t) {
+      return '<span class="jtype-badge jtype-' + escAttr(t.key) + '" onclick="addJTypeChip(\'' + escAttr(t.key) + '\')" title="' + escAttr(t.title) + ' Click to filter by this journal type.">' + esc(t.badge) + '</span>';
+    }).join('');
+    const jlabel = (typeof JOURNAL_LABEL !== 'undefined' && JOURNAL_LABEL[jk]) || (SRC[jk] && SRC[jk].name) || jk;
+    rows += '<li class="ref-item">' + badge +
+      '<a class="ref-title" href="https://doi.org/' + encodeURI(cd) + '" target="_blank" rel="noopener">' + esc(title) + '</a>' +
+      (authors ? '<span class="ref-authors">' + esc(authors) + '</span>' : '') +
+      '<span class="ref-src">' + esc(jlabel) + (yr ? ' · ' + esc(yr) : '') + '</span></li>';
+  }
+  return rows;
+}
+
+// Open a paper's "Citing … references in this catalog" panel: lazy-load the
+// shared title index + this journal's shard, look up the paper's cited DOIs and
+// render each as a link to the paper it cites (badge + title + journal + year).
 function togRefs(id, btn, idx) {
   const el = document.getElementById(id);
   const open = el.classList.toggle('open');
@@ -3625,28 +3720,33 @@ function togRefs(id, btn, idx) {
       el.innerHTML = '<div class="paper-refs-note">No cited references from this catalog were found for this paper — either it cites nothing else in the catalog, or it hasn’t been indexed yet (the graph fills in over time).</div>';
       return;
     }
-    // Newest cited paper first; unknown-year entries sink to the bottom.
-    cited.sort(function(a, b) {
-      return (parseInt((index[b] || [])[2], 10) || 0) - (parseInt((index[a] || [])[2], 10) || 0);
-    });
-    let rows = '';
-    for (const cd of cited) {
-      const meta = index[cd] || [];
-      const title = meta[0] || cd;
-      const jk = meta[1] || '';
-      const yr = meta[2] || '';
-      const authors = meta[3] || '';
-      const badge = journalBadges(jk).map(function(t) {
-        return '<span class="jtype-badge jtype-' + escAttr(t.key) + '" onclick="addJTypeChip(\'' + escAttr(t.key) + '\')" title="' + escAttr(t.title) + ' Click to filter by this journal type.">' + esc(t.badge) + '</span>';
-      }).join('');
-      const jlabel = (typeof JOURNAL_LABEL !== 'undefined' && JOURNAL_LABEL[jk]) || (SRC[jk] && SRC[jk].name) || jk;
-      rows += '<li class="ref-item">' + badge +
-        '<a class="ref-title" href="https://doi.org/' + encodeURI(cd) + '" target="_blank" rel="noopener">' + esc(title) + '</a>' +
-        (authors ? '<span class="ref-authors">' + esc(authors) + '</span>' : '') +
-        '<span class="ref-src">' + esc(jlabel) + (yr ? ' · ' + esc(yr) : '') + '</span></li>';
-    }
     el.innerHTML = '<div class="paper-refs-head">Cites ' + cited.length + ' paper' + (cited.length === 1 ? '' : 's') +
-      ' in this catalog</div><ul class="ref-list">' + rows + '</ul>';
+      ' in this catalog</div><ul class="ref-list">' + refListHTML(cited, index) + '</ul>';
+  });
+}
+
+// Open a paper's "Cited by … references in this catalog" panel — the inverse of
+// togRefs: the same lazy index + this journal's cited-<jkey>.json shard, then
+// the papers that CITE this one, rendered identically.
+function togCited(id, btn, idx) {
+  const el = document.getElementById(id);
+  const open = el.classList.toggle('open');
+  const p = filtered[idx];
+  const jkey = (p && p['JKey']) || '';
+  const doi = refsNormDoi(p && p['DOI']);
+  btn.textContent = citedToggleLabel(doi, open);
+  if (!open || el.dataset.filled) return;
+  el.dataset.filled = '1';
+  el.innerHTML = '<div class="paper-refs-note">Loading…</div>';
+  Promise.all([loadRefsIndex(), loadCitedShard(jkey)]).then(function(res) {
+    const index = res[0] || {}, shard = res[1] || {};
+    const citers = (shard[doi] || []).slice();
+    if (!citers.length) {
+      el.innerHTML = '<div class="paper-refs-note">No citing references from this catalog were found for this paper — either nothing else in the catalog cites it yet, or its citers haven’t been indexed yet (the graph fills in over time).</div>';
+      return;
+    }
+    el.innerHTML = '<div class="paper-refs-head">Cited by ' + citers.length + ' paper' + (citers.length === 1 ? '' : 's') +
+      ' in this catalog</div><ul class="ref-list">' + refListHTML(citers, index) + '</ul>';
   });
 }
 
