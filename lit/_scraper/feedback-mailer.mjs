@@ -27,6 +27,21 @@
  * so only the maintainer's copy is sent. The submitter copy is best-effort: its
  * failure never blocks (or re-triggers) the maintainer's copy.
  *
+ * RESOLUTIONS PASS — closing the loop when feedback is acted on. Every run also
+ * scans lit/_feedback-resolutions/ (in this repo; each file is one resolved
+ * ticket — front matter `ticket:` + optional site-only `url:`, body = what was
+ * done, see that directory's README). For each file it finds the feedback doc
+ * by ticket, CLOSES it (status:'closed' + resolution + resolutionUrl +
+ * resolutionHash, resolvedBy:'repo') BEFORE e-mailing, then sends the submitter
+ * a "your feedback is resolved" e-mail — the resolution text, a "see it live"
+ * link when given, and their original message — and stamps
+ * resolutionSent/resolutionSentAt. Idempotent via resolutionHash: an unchanged
+ * file is skipped forever; EDITING a file re-applies it and re-notifies. An
+ * anonymous submission is just closed (nothing to send); a send failure leaves
+ * resolutionSent unset so only the e-mail retries next run. This is what turns
+ * "drop a resolution file in the repo" (the maintainer or the assistant, in the
+ * same change as the fix) into the submitter's closure e-mail.
+ *
  * Env / secrets (all via the workflow):
  *   FIREBASE_SERVICE_ACCOUNT   JSON of a Firebase service-account key (or set
  *                              GOOGLE_APPLICATION_CREDENTIALS to a file path).
@@ -38,13 +53,18 @@
  * Modes:
  *   node feedback-mailer.mjs             real run (reads Firestore, sends mail)
  *   node feedback-mailer.mjs --dry-run   reads Firestore, prints instead of sending
- *   node feedback-mailer.mjs --scan      lists pending submissions, sends nothing
+ *   node feedback-mailer.mjs --scan      lists pending submissions + resolution files, sends nothing
  *   node feedback-mailer.mjs --selftest  offline render + attachment self-tests
  *   node feedback-mailer.mjs --limit=N   cap how many are processed this run (default 50)
  *
  * It is a clean no-op until FIREBASE_SERVICE_ACCOUNT + SMTP_* are configured, so
  * it never fails before the project is set up. See lit/_FEEDBACK-SETUP.md.
  */
+
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
 const args = process.argv.slice(2);
 const DRY_RUN  = args.includes('--dry-run');
@@ -151,6 +171,180 @@ function renderSubmitterEmail(doc) {
   };
 }
 
+/* ───────────────────── resolutions — closing the loop ───────────────────── */
+
+// Where the per-ticket resolution files live: lit/_feedback-resolutions/ in
+// this repo (resolved relative to this script so cwd never matters).
+const RES_DIR = process.env.FEEDBACK_RESOLUTIONS_DIR ||
+  path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '_feedback-resolutions');
+
+// The "see it live" link may only point at the site itself — the resolution
+// files live in a PUBLIC repo, and a host-validated href is the same discipline
+// every other link the site e-mails or renders follows.
+const SITE_HOSTS = new Set(['stouras.com', 'www.stouras.com']);
+
+// Parse one resolution file: a small `---`-fenced front matter (`ticket:` —
+// or `doc:` with the Firestore id for a legacy submission that predates
+// tickets — plus an optional `url:`), then the body that is e-mailed to the
+// submitter verbatim. Returns { ticket?, doc?, url?, body } or { error }.
+export function parseResolutionFile(raw) {
+  const s = String(raw || '').replace(/\r\n/g, '\n');
+  const m = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(s);
+  if (!m) return { error: 'missing front matter (--- ticket: LIT-… ---)' };
+  const meta = {};
+  for (const line of m[1].split('\n')) {
+    const t = line.trim();
+    if (!t || t.startsWith('#')) continue;
+    const km = /^([A-Za-z][\w-]*)\s*:\s*(.*)$/.exec(t);
+    if (km) meta[km[1].toLowerCase()] = km[2].trim();
+  }
+  const ticket = String(meta.ticket || '').toUpperCase();
+  const docId = String(meta.doc || '');
+  if (!ticket && !docId) return { error: 'front matter needs a ticket: (or doc:) line' };
+  if (ticket && !/^LIT-\d{6}-[A-Z0-9]{3,8}$/.test(ticket)) {
+    return { error: `"${meta.ticket}" does not look like a LIT-YYMMDD-XXXX ticket` };
+  }
+  const body = m[2].trim();
+  if (!body) return { error: 'resolution body is empty — write what was done (it is e-mailed to the submitter)' };
+  const url = String(meta.url || '');
+  if (url) {
+    let u; try { u = new URL(url); } catch (e) { return { error: `invalid url: ${url}` }; }
+    if (u.protocol !== 'https:' || !SITE_HOSTS.has(u.hostname)) {
+      return { error: `url must be an https link on stouras.com (got ${url})` };
+    }
+  }
+  const out = { body };
+  if (ticket) out.ticket = ticket;
+  if (docId) out.doc = docId;
+  if (url) out.url = url;
+  return out;
+}
+
+// Content fingerprint stamped onto the feedback doc (resolutionHash): an
+// unchanged file is skipped forever; editing the body/url re-applies + re-mails.
+export function resolutionHashOf(res) {
+  return crypto.createHash('sha256')
+    .update([res.ticket || res.doc || '', res.url || '', res.body].join('\n'))
+    .digest('hex').slice(0, 16);
+}
+
+// The submitter's "your feedback is resolved" e-mail — the resolution text, an
+// optional "see it live" link, and their original message so the thread stands
+// alone. Returns null when the submission is anonymous (nobody to notify).
+export function renderResolutionEmail(doc, res) {
+  const email = String(doc.email || '').trim();
+  if (!EMAIL_RE.test(email)) return null;
+  const ticket = String(doc.ticket || '').trim() || res.ticket || '';
+  const name = String(doc.name || '').trim() || 'reader';
+  let orig = String(doc.text || '').trim() || '(screenshots only)';
+  if (orig.length > 1500) orig = orig.slice(0, 1500) + '…';
+  const subject = `The Lit — your feedback (ticket ${ticket}) is resolved`;
+  const text =
+    `Dear ${name},\n\n` +
+    `Good news — your feedback on The Lit (ticket ${ticket}) has been acted on, and the fix is now live.\n\n` +
+    `What was done:\n${res.body}\n\n` +
+    (res.url ? `See it live: ${res.url}\n\n` : '') +
+    `— — —\nYour original message:\n${orig}\n\n` +
+    `Thank you again for helping improve the site!\n\nKonstantinos\nhttps://www.stouras.com/lit/`;
+  const html =
+    '<div style="font-family:Segoe UI,Arial,sans-serif;color:#241a1e;max-width:640px">' +
+    '<h2 style="color:#7d1d3f;font-size:18px;margin:0 0 10px">Your feedback is resolved — ticket ' + htmlEscape(ticket) + '</h2>' +
+    '<p style="font-size:14px;line-height:1.6;margin:0 0 12px">Dear ' + htmlEscape(name) + ',</p>' +
+    '<p style="font-size:14px;line-height:1.6;margin:0 0 12px">Good news — your feedback on ' +
+    '<a href="https://www.stouras.com/lit/" style="color:#7d1d3f">The Lit</a> has been acted on, and the fix is now live.</p>' +
+    '<div style="white-space:pre-wrap;font-size:14px;line-height:1.6;border-left:3px solid #c9a24b;padding:2px 0 2px 12px;margin:0 0 14px">' +
+    htmlEscape(res.body) + '</div>' +
+    (res.url
+      ? '<p style="font-size:14px;margin:0 0 14px"><a href="' + htmlEscape(res.url) + '" style="color:#7d1d3f;font-weight:600">See it live →</a></p>'
+      : '') +
+    '<div style="font-size:12.5px;color:#6a5a60;border-top:1px solid #e7dbe0;padding-top:10px">Your original message:<br>' +
+    '<span style="white-space:pre-wrap">' + htmlEscape(orig) + '</span></div>' +
+    '<p style="font-size:13px;margin:14px 0 0">Thank you again for helping improve the site!<br>' +
+    'Konstantinos · <a href="https://www.stouras.com/lit/" style="color:#7d1d3f">stouras.com/lit</a></p>' +
+    '</div>';
+  return { to: email, subject, text, html };
+}
+
+// List the resolution files (README + _-prefixed files excluded), sorted.
+function resolutionFiles() {
+  try {
+    return fs.readdirSync(RES_DIR)
+      .filter(n => /\.md$/i.test(n) && !/^readme\.md$/i.test(n) && !n.startsWith('_'))
+      .sort();
+  } catch (e) { return []; }   // no resolutions directory — nothing to do
+}
+
+// The resolutions pass: apply each file to its feedback doc (close + record the
+// resolution FIRST, e-mail second — a send failure retries only the e-mail),
+// idempotent via resolutionHash + resolutionSent.
+async function applyResolutions(db, FieldValue, transport, fromAddr, fromName) {
+  const files = resolutionFiles();
+  if (!files.length) return;
+  console.log(`\nResolutions: ${files.length} file(s) in ${RES_DIR}.`);
+  let closed = 0, emailed = 0, upToDate = 0, failed = 0;
+  for (const f of files) {
+    const res = parseResolutionFile(fs.readFileSync(path.join(RES_DIR, f), 'utf8'));
+    if (res.error) { console.warn(`  ⚠ ${f}: ${res.error}`); failed++; continue; }
+    const label = res.ticket || res.doc;
+    let ref = null, data = null;
+    try {
+      if (res.doc) {
+        const d = await db.collection('feedback').doc(res.doc).get();
+        if (d.exists) { ref = d.ref; data = d.data(); }
+      } else {
+        const q = await db.collection('feedback').where('ticket', '==', res.ticket).limit(2).get();
+        if (q.docs.length > 1) console.warn(`  ⚠ ${f}: ticket ${res.ticket} matches ${q.docs.length} docs — using the first`);
+        if (q.docs.length) { ref = q.docs[0].ref; data = q.docs[0].data(); }
+      }
+    } catch (e) { console.warn(`  ⚠ ${f}: lookup failed: ${e && e.message}`); failed++; continue; }
+    if (!ref) { console.warn(`  ⚠ ${f}: no feedback doc for ${label} (deleted?) — skipping`); upToDate++; continue; }
+
+    const hash = resolutionHashOf(res);
+    if (data.resolutionHash === hash && data.resolutionSent) { upToDate++; continue; }
+    const mail = renderResolutionEmail(data, res);
+    if (DRY_RUN) {
+      console.log(`  [dry-run] ${f}: would close ${label}` + (mail ? ` and e-mail ${mail.to}` : ' (anonymous — no e-mail)'));
+      continue;
+    }
+    try {
+      if (data.resolutionHash !== hash) {
+        await ref.update({
+          status: 'closed',
+          resolution: res.body,
+          resolutionUrl: res.url || FieldValue.delete(),
+          resolutionHash: hash,
+          resolutionSent: false,
+          resolvedAt: FieldValue.serverTimestamp(),
+          resolvedBy: 'repo',
+        });
+        closed++;
+        console.log(`  ✓ closed ${label} (${f})`);
+      }
+      if (!mail) {   // anonymous — nothing to send; mark handled so it never re-runs
+        await ref.update({ resolutionSent: true });
+        console.log('    (anonymous submission — closed without an e-mail)');
+        continue;
+      }
+      await transport.sendMail({
+        from: fromName ? `"${fromName}" <${fromAddr}>` : fromAddr,
+        to: mail.to,
+        replyTo: FEEDBACK_TO,
+        subject: mail.subject,
+        text: mail.text,
+        html: mail.html,
+        headers: { 'X-Lit-Feedback': ref.id },
+      });
+      await ref.update({ resolutionSent: true, resolutionSentAt: FieldValue.serverTimestamp() });
+      emailed++;
+      console.log(`    ✓ resolution e-mail → ${mail.to}`);
+    } catch (e) {
+      failed++;
+      console.error(`  ✗ ${f}: ${e && e.message}`);
+    }
+  }
+  console.log(`Resolutions done. Closed ${closed}, e-mailed ${emailed}, already up to date ${upToDate}, failed ${failed}.`);
+}
+
 /* ─────────────────────────── self-test (offline) ─────────────────────────── */
 function selftest() {
   let fail = 0;
@@ -197,6 +391,39 @@ function selftest() {
   eq(renderSubmitterEmail({ text: 'hi', images: [], email: 'bad-email' }) === null, 'invalid e-mail → no confirmation copy');
   eq(renderSubmitterEmail({ text: 'hi', images: [] }) === null, 'anonymous → no confirmation copy (admin only)');
   eq(renderFeedbackEmail({ text: 'no ticket legacy doc' }).subject.indexOf('undefined') === -1, 'legacy doc without ticket still renders');
+
+  // resolution files — parsing
+  const good = parseResolutionFile('---\nticket: lit-260725-ywtl\nurl: https://www.stouras.com/lit/\n---\nTitles are now trimmed at ingest.\n');
+  eq(good.ticket === 'LIT-260725-YWTL' && good.url === 'https://www.stouras.com/lit/' &&
+     good.body === 'Titles are now trimmed at ingest.' && !good.error, 'resolution file parses (ticket upper-cased)');
+  eq(parseResolutionFile('---\r\nticket: LIT-260725-YWTL\r\n---\r\nCRLF body.\r\n').body === 'CRLF body.', 'CRLF files parse');
+  eq(!!parseResolutionFile('no front matter').error, 'missing front matter → error');
+  eq(!!parseResolutionFile('---\nurl: https://www.stouras.com/lit/\n---\nbody').error, 'missing ticket/doc → error');
+  eq(!!parseResolutionFile('---\nticket: NOT-A-TICKET\n---\nbody').error, 'malformed ticket → error');
+  eq(!!parseResolutionFile('---\nticket: LIT-260725-YWTL\n---\n\n').error, 'empty body → error');
+  eq(!!parseResolutionFile('---\nticket: LIT-260725-YWTL\nurl: https://evil.example.com/\n---\nbody').error, 'off-site url → error (host-validated)');
+  eq(!!parseResolutionFile('---\nticket: LIT-260725-YWTL\nurl: http://www.stouras.com/lit/\n---\nbody').error, 'non-https url → error');
+  eq(parseResolutionFile('---\ndoc: abc123\n---\nLegacy doc body.').doc === 'abc123', 'doc: reaches a legacy submission without a ticket');
+
+  // resolution hash — stable, content-sensitive
+  eq(resolutionHashOf(good) === resolutionHashOf({ ...good }), 'hash is stable');
+  eq(resolutionHashOf(good) !== resolutionHashOf({ ...good, body: good.body + ' More.' }), 'hash changes with the body');
+  eq(resolutionHashOf(good) !== resolutionHashOf({ ...good, url: undefined }), 'hash changes with the url');
+
+  // resolution e-mail — content + anonymous handling
+  const resMail = renderResolutionEmail(fbDoc, good);
+  eq(resMail && resMail.to === 'jane@example.com', 'resolution e-mail goes to the submitter');
+  eq(resMail.subject === 'The Lit — your feedback (ticket LIT-260717-A9K2) is resolved', 'resolution subject names the ticket');
+  eq(resMail.text.includes(good.body) && resMail.html.includes('Titles are now trimmed'), 'resolution text in both bodies');
+  eq(resMail.text.includes('See it live: https://www.stouras.com/lit/') && resMail.html.includes('href="https://www.stouras.com/lit/"'),
+    'resolution links the fixed area');
+  eq(resMail.text.includes(fbDoc.text) && resMail.html.includes('citations chart'), 'original message quoted back');
+  eq(resMail.text.includes('Dear Jane Doe'), 'greeting uses the submitter name');
+  eq(renderResolutionEmail({ text: 'x', email: 'not-an-email' }, good) === null, 'anonymous/invalid e-mail → no resolution e-mail');
+  eq(renderResolutionEmail({ text: 'x', email: 'a@b.co' }, { ticket: 'LIT-260725-YWTL', body: 'Done.' }).text.includes('Dear reader'),
+    'no name → “Dear reader”, ticket falls back to the file’s');
+  const esc1 = renderResolutionEmail({ text: '<b>bold</b>', email: 'a@b.co', ticket: 'LIT-1' }, { body: 'Fixed <sup>tags</sup>.' });
+  eq(esc1.html.includes('&lt;sup&gt;tags&lt;/sup&gt;') && esc1.html.includes('&lt;b&gt;bold&lt;/b&gt;'), 'html escapes user + resolution text');
 
   if (fail) { console.error(`\nfeedback-mailer selftest: ${fail} failure(s)`); process.exit(1); }
   console.log('feedback-mailer selftest: OK');
@@ -245,9 +472,14 @@ async function run() {
       const x = d.data();
       console.log(`  ${d.id}: ${firstLine(x.text, 70) || '(no text)'} [${(x.images || []).length} img] ${x.email || ''}`);
     });
+    const rf = resolutionFiles();
+    console.log(`\n${rf.length} resolution file(s) in ${RES_DIR}.`);
+    rf.forEach(f => {
+      const res = parseResolutionFile(fs.readFileSync(path.join(RES_DIR, f), 'utf8'));
+      console.log(`  ${f}: ${res.error ? '⚠ ' + res.error : (res.ticket || res.doc) + ' — ' + firstLine(res.body, 70)}`);
+    });
     return;
   }
-  if (!docs.length) return;
 
   let transport = null, fromAddr = '', fromName = process.env.ALERTS_FROM_NAME || 'The Lit';
   if (!DRY_RUN) {
@@ -315,7 +547,11 @@ async function run() {
       }
     }
   }
-  console.log(`\nDone. Sent ${sent} (+${acked} submitter confirmation(s)), failed ${failed}.`);
+  if (docs.length) console.log(`\nDone. Sent ${sent} (+${acked} submitter confirmation(s)), failed ${failed}.`);
+
+  // Second phase: apply any repo-recorded resolutions (close + notify) — runs
+  // every pass, independent of whether anything was pending above.
+  await applyResolutions(db, FieldValue, transport, fromAddr, fromName);
 }
 
 if (SELFTEST) {
@@ -325,3 +561,5 @@ if (SELFTEST) {
 }
 
 export { renderFeedbackEmail, renderSubmitterEmail, dataUrlToAttachment };
+// (parseResolutionFile, resolutionHashOf and renderResolutionEmail are exported
+// at their definitions — the resolutions pass that closes the feedback loop.)

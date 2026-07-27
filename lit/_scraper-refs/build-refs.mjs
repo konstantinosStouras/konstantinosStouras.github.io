@@ -104,7 +104,11 @@ const CATALOG_DIRS = (process.env.REFS_CATALOG_DIRS
   || [resolve(__dirname, '..', 'data'), resolve(__dirname, '..', 'data-ft50')].join(','))
   .split(',').map(s => s.trim()).filter(Boolean);
 
-const MAILTO = process.env.REFS_MAILTO || 'kstouras+litrefs@gmail.com'; // distinct Crossref/OpenAlex quota identity
+const MAILTO = process.env.REFS_MAILTO || 'kstouras+litrefs@gmail.com';
+// Optional Semantic Scholar API key — moves the S2 leg off the throttled
+// anonymous pool. Inert until the S2_API_KEY secret/env is set.
+const S2_KEY = process.env.S2_API_KEY || '';
+ // distinct Crossref/OpenAlex quota identity
 const PULL_DATE = process.env.REFS_PULL_DATE || new Date().toISOString().slice(0, 10);
 const USE_S2 = process.env.REFS_S2 !== '0'; // Semantic Scholar bonus leg (default on)
 
@@ -376,7 +380,8 @@ async function fetchS2Refs(slice, deadline) {
       try {
         const res = await fetch('https://api.semanticscholar.org/graph/v1/paper/batch?fields=references.externalIds', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'User-Agent': `lit-refs/1.0 (mailto:${MAILTO})` },
+          headers: { 'Content-Type': 'application/json', 'User-Agent': `lit-refs/1.0 (mailto:${MAILTO})`,
+          ...(S2_KEY ? { 'x-api-key': S2_KEY } : {}) },
           body: JSON.stringify({ ids: batch.map(d => 'DOI:' + d) }),
           signal: ctrl.signal,
         });

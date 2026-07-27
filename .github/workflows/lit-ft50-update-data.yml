@@ -53,6 +53,7 @@ jobs:
 
       - name: Build data (Crossref, one pull per FT50 journal)
         env:
+          S2_API_KEY: ${{ secrets.S2_API_KEY }}   # optional — moves the S2 leg off the anonymous pool
           FT50_MAILTO: kstouras+litft50@gmail.com   # Crossref contact + this dataset's OpenAlex quota identity
           NODE_OPTIONS: --max-old-space-size=6144
         run: node lit/_scraper-ft50/build-data.mjs

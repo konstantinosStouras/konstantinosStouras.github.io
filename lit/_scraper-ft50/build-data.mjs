@@ -78,6 +78,10 @@ const DATA_DIR = process.env.FT50_DATA_DIR
 const MOCK_DIR = join(__dirname, 'mock');
 
 const MAILTO = process.env.FT50_MAILTO || 'kstouras@gmail.com';
+// Optional Semantic Scholar API key — moves the S2 leg off the throttled
+// anonymous pool. Inert until the S2_API_KEY secret/env is set.
+const S2_KEY = process.env.S2_API_KEY || '';
+
 const ROWS = 1000;                  // Crossref max page size
 const PAGE_PAUSE_MS = 120;          // politeness pause between cursor pages
 const JOURNAL_PAUSE_MS = 500;       // pause between journals
@@ -1293,7 +1297,8 @@ async function s2Batch(dois) {
     try {
       const res = await fetch('https://api.semanticscholar.org/graph/v1/paper/batch?fields=citationCount', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'User-Agent': `lit-scraper/1.0 (mailto:${MAILTO})` },
+        headers: { 'Content-Type': 'application/json', 'User-Agent': `lit-scraper/1.0 (mailto:${MAILTO})`,
+          ...(S2_KEY ? { 'x-api-key': S2_KEY } : {}) },
         body: JSON.stringify({ ids: dois.map(d => 'DOI:' + d) }),
         signal: ctrl.signal,
       });

@@ -48,6 +48,7 @@ jobs:
 
       - name: Build data (Crossref + sigecom + OpenAlex/DBLP/S2)
         env:
+          S2_API_KEY: ${{ secrets.S2_API_KEY }}   # optional — moves the S2 leg off the anonymous pool
           LIT_MAILTO: kstouras@gmail.com   # Crossref/OpenAlex "polite pool" contact
         run: node lit/_scraper/build-data.mjs
 
