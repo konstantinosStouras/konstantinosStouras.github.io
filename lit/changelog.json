@@ -3,11 +3,25 @@
   "version": 1,
   "updates": [
     {
+      "id": "team-science-beta-accuracy",
+      "date": "2026-07-27",
+      "title": "Team science marked beta, headline chart reworked, and a round of accuracy fixes",
+      "summary": "The Data Analytics team-science section is now clearly marked as a beta work in progress — the aim is to apply Wu, Wang & Evans’ (Nature 2019) measures to our own database for insight, not to replicate the study — and its headline chart now plots the average disruption percentile (red, left axis) against median citations (blue, right axis) by team size, with every mention of the study linking to the paper. A deep audit also fixed a batch of accuracy issues: the “Who lands in the extremes” ratios are now normalized by the observed top-tier share (1.0 = exactly the corpus rate), the Disruptive/Developing presets exclude D = 0 papers as their labels promise, the “exclude non-research items” switch now covers the team-science figures too (corrigenda, errata and calls for papers are flagged in the data), chart axis labels always match their gridlines, sparse team-size bins show as gaps instead of a misleading continuous axis, the most-disruptive tables always rank robustly-cited papers first, author names with accents resolve in the Author spotlight, and citation counts are attributed to their real sources (highest of Crossref, OpenAlex and Semantic Scholar).",
+      "url": "https://www.stouras.com/lit/analytics/"
+    },
+    {
       "id": "citedby-in-catalog",
       "date": "2026-07-26",
       "title": "See who cites each paper, inside the catalog",
       "summary": "Next to the “Citing … references in this catalog” toggle, every paper now also carries its mirror image: a “Cited by … references in this catalog” toggle — the number of papers in The Lit that cite it, opening a list of those citing papers (authors included), each linking straight to the paper. It is the same citation graph read in the other direction, so you can now walk it both ways: what a paper builds on, and what builds on it.",
       "url": "https://www.stouras.com/lit/"
+    },
+    {
+      "id": "feedback-resolution-emails",
+      "date": "2026-07-26",
+      "title": "Hear back when your feedback is fixed",
+      "summary": "The feedback loop now closes itself: when a report you sent from the Feedback page is acted on, you automatically receive an e-mail on the same ticket telling you it's resolved — describing exactly what was done, with a link to the fixed area of the site where possible. Behind the scenes every submission (message and screenshots) is archived with a searchable ticket index, so nothing ever falls through the cracks.",
+      "url": "https://www.stouras.com/lit/feedback/"
     },
     {
       "id": "entity-decoding",

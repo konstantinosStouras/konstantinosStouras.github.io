@@ -38,9 +38,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { forwardDisruption } from '../_scraper-refs/build-citedby.mjs';
+import { isNonArticle } from './_nonarticle.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LIT_DIR = path.resolve(__dirname, '..');            // lit
+const REPO_ROOT = path.resolve(LIT_DIR, '..');
 const NATIVE_DIR = path.join(LIT_DIR, 'data');
 const FT50_DIR = path.join(LIT_DIR, 'data-ft50');
 const REFS_DIR = path.join(LIT_DIR, 'data-refs');
@@ -48,7 +50,9 @@ const OUT_DIR = path.join(LIT_DIR, 'analytics');
 
 // Bump when the measure or its inputs change materially (mirrors the page's
 // expectation — the page tolerates older files, this just documents intent).
-const DISR_VER = 1;
+// v2: per-row non-research flag (x), case-insensitive author index, nf always
+// in-catalog, shard variant maps in the canonical-author resolver.
+const DISR_VER = 2;
 // Keep in sync with build-analytics.mjs: the catalog genuinely reaches back
 // to 1886, so the sanity floor must sit below the true first year.
 const MIN_YEAR = 1850;
@@ -62,10 +66,12 @@ const MIN_YEAR = 1850;
 // point the analytics/disruption.json it writes carries a per-paper `dm` tag
 // ('f' = global forward, 'c' = catalog-inverted fallback) for honest labelling.
 const USE_FORWARD = process.env.DISR_USE_FORWARD === '1';
-// Authors below this many disruption-scored papers are dropped from the author
-// index used for the disruptiveness ranking (keeps that view meaningful; the
-// per-paper author links stay so filtered author stats are always exact).
-const AUTHOR_MIN_SCORED = 1;
+// Forward mode only scores a focal paper from its global citer set when at
+// least this share of its in-catalog references have their OWN forward
+// citations harvested — an unharvested reference looks identical to a
+// zero-citer one, silently deflating n_j/n_k and inflating D (a paper whose
+// refs were all unharvested would score a spurious +1).
+const FWD_REF_COVERAGE = 0.6;
 
 // ── helpers (mirror build-analytics.mjs) ────────────────────────────────────
 function readJson(file, fallback) {
@@ -114,9 +120,29 @@ for (const s of ft50Sources) {
 }
 
 // ── canonical-author resolver ───────────────────────────────────────────────
+// Mirrors build-analytics.mjs exactly — INCLUDING the three ABS shard repos'
+// variant maps (same discovery order): analytics/authors.json canonicalizes
+// with the shard variants, so if this script skipped them the two files could
+// canonicalize the same person differently and the Author-spotlight's
+// disruption join (matched by name) would silently miss.
+const SHARD_REPOS = ['lit-data-abs4', 'lit-data-abs3-omecon', 'lit-data-abs3-rest'];
+function shardDir(repo) {
+  const cands = [];
+  if (process.env.LIT_SHARDS_DIR) cands.push(path.join(process.env.LIT_SHARDS_DIR, repo, 'data'));
+  cands.push(path.join(REPO_ROOT, '_analytics-shards', repo, 'data'));
+  cands.push(path.join(REPO_ROOT, '..', repo, 'data'));
+  for (const d of cands) {
+    try { if (fs.existsSync(path.join(d, 'sources.json'))) return d; } catch { /* keep looking */ }
+  }
+  return null;
+}
 const variantMap = new Map();
 ingestVariants(variantMap, path.join(NATIVE_DIR, 'authors.json'));
 ingestVariants(variantMap, path.join(FT50_DIR, 'authors.json'));
+for (const repo of SHARD_REPOS) {
+  const dir = shardDir(repo);
+  if (dir) ingestVariants(variantMap, path.join(dir, 'authors.json'));
+}
 const canon = name => variantMap.get(name) || name;
 
 // ── load the catalog: doi → {y, t, c, ti, j, au:[canonName]} ────────────────
@@ -131,11 +157,16 @@ for (const meta of journalMeta.values()) {
     const y = cleanYear(p.Year);
     const names = authorNames(p.Authors);
     const c = (typeof p.CitedBy === 'number' && p.CitedBy > 0) ? p.CitedBy : 0;
+    const ti = String(p.Title || '').replace(/\s+/g, ' ').trim();
     paper.set(doi, {
       y, t: names.length, c,
-      ti: String(p.Title || '').replace(/\s+/g, ' ').trim(),
+      ti,
       j: meta.key,
       au: names.map(canon),
+      // Non-research classification (editorials, errata, book reviews, front
+      // matter …) — shipped per-row so the page's "Exclude non-research items"
+      // toggle covers the team-science figures like every other figure.
+      x: isNonArticle(ti) ? 1 : 0,
     });
     if (c) citedByGlobal.set(doi, c);
   }
@@ -181,13 +212,20 @@ for (const [jkey, sh] of Object.entries(manifest.shards || {})) {
 // AND the caches exist — otherwise D falls back to the catalog-inverted measure
 // below, unchanged.
 const oaidByDoi = readJson(path.join(REFS_DIR, '_oaid.json'), {}); // doi -> OpenAlex id
-const fwd = new Map();   // doi -> Set(citer OpenAlex ids)
+const fwd = new Map();        // doi -> Set(citer OpenAlex ids), non-empty only
+const fwdKnown = new Set();   // every doi whose forward citations WERE harvested (incl. zero-citer)
+const fwdCapped = new Set();  // dois whose citer list hit the crawl cap (truncated → D unreliable)
 if (USE_FORWARD) {
   const cbCache = readJson(path.join(REFS_DIR, '_citedby-cache.json'), {});
   for (const [doi, e] of Object.entries(cbCache)) {
-    if (e && Array.isArray(e.c) && e.c.length) fwd.set(normDoi(doi), new Set(e.c));
+    if (!e || !Array.isArray(e.c)) continue;
+    const d = normDoi(doi);
+    fwdKnown.add(d);                       // harvested — an EMPTY list is a real "no citers"
+    if (e.cap) fwdCapped.add(d);
+    if (e.c.length) fwd.set(d, new Set(e.c));
   }
-  console.log('build-disruption: DISR_USE_FORWARD=1 — forward citations for ' + fwd.size + ' paper(s) loaded.');
+  console.log('build-disruption: DISR_USE_FORWARD=1 — forward citations for ' + fwd.size + ' paper(s) loaded (' +
+    fwdKnown.size + ' harvested, ' + fwdCapped.size + ' capped).');
 }
 
 // ── disruption index D for one focal paper ──────────────────────────────────
@@ -212,10 +250,16 @@ function disruption(f) {
 
 // ── compute per-paper records ───────────────────────────────────────────────
 const records = [];
-const authorIndex = new Map();   // canonName -> integer id
+// Case-insensitive: the same author deposited in two capitalizations ("ANE
+// TAMAYO" / "Ane Tamayo") must not get two ids — the page's name join
+// lowercases, so split ids made an author's stats depend on which id matched.
+// Display form = first-seen spelling.
+const authorIndex = new Map();   // canonName.toLowerCase() -> integer id
+const authorNamesArr = [];       // id -> display name (first seen)
 function authorId(name) {
-  let id = authorIndex.get(name);
-  if (id == null) { id = authorIndex.size; authorIndex.set(name, id); }
+  const k = name.toLowerCase();
+  let id = authorIndex.get(k);
+  if (id == null) { id = authorIndex.size; authorIndex.set(k, id); authorNamesArr[id] = name; }
   return id;
 }
 
@@ -223,15 +267,23 @@ let forwardScored = 0;
 for (const f of out.keys()) {
   const meta = paper.get(f);
   if (!meta) continue;                    // focal not in the analytics corpus → skip
-  // Prefer the global-forward CD index when it's available for this focal;
-  // fall back to the catalog-inverted measure otherwise. Same focal set either
-  // way (papers with ≥1 in-catalog reference), so the corpus is unchanged.
+  // Prefer the global-forward CD index when it's available AND trustworthy for
+  // this focal: its own citer list must be uncapped, and enough of its
+  // references' forward citations must be harvested (FWD_REF_COVERAGE) that
+  // the n_j/n_k groups aren't silently undercounted. Fall back to the
+  // catalog-inverted measure otherwise. Same focal set either way (papers with
+  // ≥1 in-catalog reference), so the corpus is unchanged.
   let dd = null, mode = 'c';
   if (USE_FORWARD && fwd.size) {
     const cf = fwd.get(f);
-    if (cf && cf.size) {
-      const fd = forwardDisruption(oaidByDoi[f], cf, out.get(f), fwd);
-      if (fd) { dd = fd; mode = 'f'; forwardScored++; }
+    if (cf && cf.size && !fwdCapped.has(f)) {
+      const refs = out.get(f);
+      let known = 0;
+      for (const r of refs) if (fwdKnown.has(r)) known++;
+      if (known >= Math.max(1, Math.ceil(refs.size * FWD_REF_COVERAGE))) {
+        const fd = forwardDisruption(oaidByDoi[f], cf, refs, fwd);
+        if (fd) { dd = fd; mode = 'f'; forwardScored++; }
+      }
     }
   }
   if (!dd) dd = disruption(f);
@@ -254,12 +306,14 @@ for (const f of out.keys()) {
     t: meta.t,
     d: Math.round(dd.d * 1000) / 1000,
     c: meta.c,
-    // nf = in-catalog forward citations (n_i + n_j) — the neighbourhood size D is
-    // read from. Small nf ⇒ a degenerate ±1; the page gates its highlight tables
-    // on it so the "most disruptive/developing" lists aren't 1-citation artefacts.
-    nf: dd.ni + dd.nj,
+    // nf = IN-CATALOG forward citations — the same quantity in BOTH scoring
+    // modes (under forward mode dd.ni+dd.nj would be the GLOBAL citer count,
+    // which would silently change what the page's "cited by N here" labels and
+    // the nf highlight-table gate mean), read off the inverted in-catalog graph.
+    nf: (inn.get(f) || { size: 0 }).size,
     au: meta.au.map(authorId),
   };
+  if (meta.x) rec.x = 1;                   // non-research item (page toggle filters these)
   if (ra != null) rec.ra = Math.round(ra * 10) / 10;
   if (rp != null) rec.rp = rp;
   rec.ti = meta.ti;
@@ -268,9 +322,8 @@ for (const f of out.keys()) {
   records.push(rec);
 }
 
-// author index array (id order) — trimmed to authors meeting the min
-const authorArr = new Array(authorIndex.size);
-for (const [name, id] of authorIndex) authorArr[id] = name;
+// author index array (id order; display form = first-seen spelling)
+const authorArr = authorNamesArr.slice();
 
 // ── stamp & write ───────────────────────────────────────────────────────────
 const nativeMeta = readJson(path.join(NATIVE_DIR, 'meta.json'), {});
