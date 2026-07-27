@@ -1507,6 +1507,13 @@ const SHARDS = [
   { base: '/lit-data-abs4/data/' },          // ABS 4/4* beyond FT50/UTD24
   { base: '/lit-data-abs3-omecon/data/' },   // ABS 3 — Operations/OR & Economics
   { base: '/lit-data-abs3-rest/data/' },     // ABS 3 — remaining fields
+  // Topic-filtered shards (NOT full catalogues): Nature portfolio + Science,
+  // GenAI/LLM · innovation · science-of-science papers only — unrated by ABS
+  // (no abs in their manifests), so they join the Journals filter without
+  // entering any type bucket, like PNAS. Curated in each repo's
+  // _scraper/scope.json.
+  { base: '/lit-data-nature/data/' },        // Nature, Nat. Hum. Behav., Nat. Commun.
+  { base: '/lit-data-science/data/' },       // Science (AAAS)
 ];
 
 // One muted pastel per extra source, injected as .jk-<key> rules so

@@ -56,7 +56,10 @@ const REPO_ROOT = path.resolve(LIT_DIR, '..');            // the site repo
 //   1. $LIT_SHARDS_DIR/<repo>/data      (explicit override)
 //   2. <repo-root>/_analytics-shards/<repo>/data  (the CI checkout location)
 //   3. <repo-root>/../<repo>/data       (a sibling clone, the local layout)
-const SHARD_REPOS = ['lit-data-abs4', 'lit-data-abs3-omecon', 'lit-data-abs3-rest'];
+const SHARD_REPOS = ['lit-data-abs4', 'lit-data-abs3-omecon', 'lit-data-abs3-rest',
+  // Topic-filtered Nature/Science shards (no abs grades in their manifests —
+  // their journals stay out of the ABS buckets, like PNAS).
+  'lit-data-nature', 'lit-data-science'];
 function shardDir(repo) {
   const cands = [];
   if (process.env.LIT_SHARDS_DIR) cands.push(path.join(process.env.LIT_SHARDS_DIR, repo, 'data'));
