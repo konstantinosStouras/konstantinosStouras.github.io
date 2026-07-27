@@ -75,8 +75,14 @@ async function main() {
   ok(eq(out.shards.ms && out.shards.ms.a, ['b', 'd']), 'A edges = union(Crossref b, OpenAlex d); externals dropped');
   ok(!out.shards.ms.b, 'B omitted (no in-catalog references)');
   ok(out.index.d && out.index.d[0] === 'D', 'an OpenAlex-only target is indexed');
+  ok(out.index.a && out.index.a[0] === 'A', 'the CITING paper is indexed too (feeds the cited-by panel)');
   ok(out.totals.edges === 2 && out.totals.cited === 2, 'totals count the unioned edges');
   ok(out.counts && out.counts.a === 2 && !('b' in out.counts), 'counts = in-catalog refs per citing paper (A→2; B omitted)');
+  ok(eq(out.citedShards.ms && out.citedShards.ms.b, ['a']) && eq(out.citedShards.ms.d, ['a']),
+    'citedShards = the same edges inverted, sharded by the CITED paper’s journal');
+  ok(!out.citedShards.opre && !(out.citedShards.ms && out.citedShards.ms.a), 'a paper nobody cites has no inverse entry');
+  ok(out.citedCounts && out.citedCounts.b === 1 && out.citedCounts.d === 1 && !('a' in out.citedCounts),
+    'citedCounts = in-catalog citers per cited paper');
 
   console.log('unit: loadCatalog');
   const cat = await loadCatalog([join(__dirname, 'mock', 'catalog')]);
@@ -113,6 +119,24 @@ async function main() {
   ok(rcounts['10.1287/mnsc.2019.0002'] === 1, 'refs-counts.json: B cites 1 in-catalog paper');
   ok(manifest.counts && manifest.counts.file === 'refs-counts.json' && manifest.counts.count === Object.keys(rcounts).length,
      'manifest advertises the counts companion file');
+
+  console.log('e2e: the inverse (cited-by) outputs');
+  ok(eq(Object.keys(manifest.citedShards || {}), ['ms', 'opre']), 'cited shards exist for both cited journals');
+  const cms = await readOut('cited-ms.json');
+  ok(eq(cms['10.1287/mnsc.2019.0002'], ['10.1287/mnsc.2020.0001']) &&
+     eq(cms['10.1287/mnsc.2018.0004'], ['10.1287/mnsc.2020.0001']) &&
+     eq(cms['10.1287/mnsc.2020.0001'], ['10.1287/mnsc.2019.0002']),
+     'cited-ms.json: B, D cited by A; A cited by B (the refs edges, inverted)');
+  const cop = await readOut('cited-opre.json');
+  ok(eq(cop['10.1287/opre.2015.0003'], ['10.1287/mnsc.2020.0001']), 'cited-opre.json: C (an OPRE paper) cited by A');
+  const ccounts = await readOut('cited-counts.json');
+  ok(ccounts['10.1287/mnsc.2019.0002'] === 1 && ccounts['10.1287/opre.2015.0003'] === 1,
+     'cited-counts.json: one in-catalog citer each');
+  ok(manifest.citedCounts && manifest.citedCounts.file === 'cited-counts.json' &&
+     manifest.citedCounts.count === Object.keys(ccounts).length,
+     'manifest advertises the cited-counts companion file');
+  ok(index['10.1287/mnsc.2020.0001'] && index['10.1287/mnsc.2020.0001'][0].startsWith('Paper A'),
+     'the index carries the citing paper too (the cited-by panel renders it)');
 
   const oaid = await readOut('_oaid.json');
   ok(oaid['10.1287/mnsc.2020.0001'] === 'W1000001', '_oaid.json maps DOI → OpenAlex id (built while crawling)');

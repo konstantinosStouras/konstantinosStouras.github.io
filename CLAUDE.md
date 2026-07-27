@@ -1378,15 +1378,21 @@ outcome are offline-tested in `ingest-selftest.mjs`. (The specific M&SOM example
 ### Citation graph — the references a paper cites that are IN the catalog
 For every listed paper, the pipeline extracts the references it **cites that
 also belong to the catalog** (the intra-catalog out-edges), surfaced on each
-paper card as a **"Citing references in this catalog"** toggle (steel-blue, next
-to BibTeX; `togRefs` in `index.html`) that lazy-loads and lists those papers,
-each linking to the paper it cites. The toggle also shows a **count** of how
-many in-catalog references the paper cites — e.g. "Cited 12 references in this
-catalog" (the number woven into the phrase, not parenthesised) — sourced from a tiny `refs-counts.json` companion
-(`{citingDoi:N}`) loaded once in the background (`loadRefsCounts`/`refsCounts`/
-`refsToggleLabel`/`annotateRefsCounts`) so the number appears WITHOUT
-downloading the multi-MB per-journal shard; the shard still loads lazily only
-when the panel is opened. It is its **own dataset**,
+paper card as TWO toggles next to BibTeX: a **"Citing … references in this
+catalog"** toggle (steel-blue; `togRefs` in `index.html`) that lazy-loads and
+lists those papers, each linking to the paper it cites, and its **inverse — a
+"Cited by … references in this catalog"** toggle (green, `.paper-cited-toggle`;
+`togCited`) listing the catalog papers that CITE this one (the SAME edge set
+keyed by the cited paper — derived in `buildOutputs`, no extra crawling, so the
+two directions can never disagree; both panels render via the shared
+`refListHTML`). Each toggle weaves a **count** into its phrase — "Citing 12
+references in this catalog" / "Cited by 7 references in this catalog" (never
+parenthesised) — sourced from tiny companions (`refs-counts.json`
+`{citingDoi:N}`, `cited-counts.json` `{citedDoi:N}`) loaded once in the
+background (`loadRefsCounts`/`loadCitedCounts`/`refsToggleLabel`/
+`citedToggleLabel`/`annotateRefsCounts`/`annotateCitedCounts`) so the numbers
+appear WITHOUT downloading the multi-MB per-journal shards; a shard still loads
+lazily only when its panel is opened. It is its **own dataset**,
 `lit/data-refs/` (kept separate to stay out of the main size budget and to
 move to a dedicated `lit-data-refs` Pages repo when it nears the 1 GB limit —
 migration is ONE constant, `REFS_DATA_BASE` `'./data-refs/'` →
@@ -1419,20 +1425,24 @@ exports `extractRefDois`/`extractOaRefs`/`extractS2Refs`/`shortOaid`/
 bounded+resumable, own `lit-references-${{ github.ref }}` concurrency group,
 replays the dir on a rejected push; distinct OpenAlex/Crossref quota identity
 `kstouras+litrefs`). **Served files:** `manifest.json` (which journals
-have edges), `refs-<jkey>.json` (`{citingDoi:[citedDoi,…]}`, sharded by citing
-journal, only papers with ≥1 in-catalog edge), `refs-index.json`
-(`{citedDoi:[title,jkey,year,authors?]}`, so the page renders a cited paper's
-title, journal, year AND authors without loading its journal file — the toggle
-panel lists each cited reference's authors under its title), and `refs-counts.json`
-(`{citingDoi:N}`, the tiny per-paper count companion that feeds the toggle
-label). **Paper priority (per the owner):** MS /
+have edges, per direction: `shards` + `citedShards`), `refs-<jkey>.json`
+(`{citingDoi:[citedDoi,…]}`, sharded by citing journal, only papers with ≥1
+in-catalog edge), `cited-<jkey>.json` (`{citedDoi:[citingDoi,…]}` — the SAME
+edges inverted, sharded by the CITED paper's journal; a journal can have a
+cited shard without a citing one, e.g. ACM EC papers get cited but deposit no
+references), `refs-index.json` (`{doi:[title,jkey,year,authors?]}` for EVERY
+edge endpoint — cited AND citing — so either panel renders a paper's title,
+journal, year AND authors without loading its journal file), and the count
+companions `refs-counts.json`/`cited-counts.json` that feed the toggle
+labels. **Paper priority (per the owner):** MS /
 M&SOM / POM / PNAS (all years) first, then UTD24 ∪ FT50 (newest years first),
 then the rest (`tierOf`; the UTD24/FT50 key sets MIRROR index.html's — keep in
 sync, like build-analytics.mjs). The page merges it at runtime like the FT50
-catalog: `loadRefsManifest()` at load; a card shows the toggle only when its
-journal has a shard (`refsShardFor`); `loadRefsIndex()`/`loadRefsShard(jkey)`
+catalog: `loadRefsManifest()` at load; a card shows each toggle only when its
+journal has that direction's shard (`refsShardFor`/`citedShardFor`);
+`loadRefsIndex()`/`loadRefsShard(jkey)`/`loadCitedShard(jkey)`
 are lazy + idempotent. The dataset **ships EMPTY** (manifest with no shards), so
-the toggle stays hidden until the backfill populates it. Offline test:
+the toggles stay hidden until the backfill populates it. Offline test:
 `node lit/_scraper-refs/selftest.mjs` (mock, no network). NOTE: this build
 env's egress blocks the scholarly APIs (Crossref/OpenAlex/Semantic Scholar, 403),
 so `data-refs/` can only be populated by the GitHub Actions runners — EMPTY until
