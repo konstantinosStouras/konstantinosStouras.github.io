@@ -796,14 +796,14 @@
         </div>
         <div id="chipsJournal" class="chips"></div>
       </div>
-      <div class="filter-group">
-        <label title="Show only the papers that CITE a given paper or author — The Lit's own in-catalog citation graph read forward (the same data behind each card's 'Cited by … references in this catalog' toggle). Pick Paper and paste a DOI or a title, or pick Author and type a name (matches from the start of a name part), then press Enter. Combines with every other filter: journals, journal types, years and text searches all narrow the citing set. In-catalog citers only; coverage grows as the graph fills in.">Citing papers of &#9432;</label>
+      <div class="filter-group" title="Show only the papers that cite a given paper or author. Pick Paper or Author, type a title, DOI or name, and press Enter — every other filter then narrows the citing set. E.g. add a paper's title and, from all the papers that cite it, show only the FT50 ones below.">
+        <label>Citing papers of &#9432;</label>
         <div class="cb-row">
           <select id="citedByKind" class="cb-kind" onchange="litCitedByKindChanged()" aria-label="What the citing papers cite: a paper or an author">
             <option value="paper">Paper</option>
             <option value="author">Author</option>
           </select>
-          <input id="filterCitedBy" name="ms-filter-citedby" placeholder="Paper DOI or title… (Enter)" type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore onkeydown="if(event.key==='Enter'){litCitedBySubmit();event.preventDefault();}">
+          <input id="filterCitedBy" name="ms-filter-citedby" placeholder="Paper DOI or title…" type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore onkeydown="if(event.key==='Enter'){litCitedBySubmit();event.preventDefault();}">
         </div>
         <div id="citedByNote" class="cb-note"></div>
         <div id="chipsCitedBy" class="chips"></div>
@@ -1920,7 +1920,7 @@ function litCitedBySubmit() {
 function litCitedByKindChanged() {
   var kindEl = document.getElementById('citedByKind');
   var input = document.getElementById('filterCitedBy');
-  if (input) input.placeholder = (kindEl && kindEl.value) === 'author' ? 'Author name… (Enter)' : 'Paper DOI or title… (Enter)';
+  if (input) input.placeholder = (kindEl && kindEl.value) === 'author' ? 'Author name…' : 'Paper DOI or title…';
 }
 
 // Apply a resolved focal as the active cited-by filter (replaces any prior).
