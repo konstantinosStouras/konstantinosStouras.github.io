@@ -206,7 +206,12 @@ references in this catalog"** toggle only when its journal has a cited shard
 Opening a panel lazy-loads `refs-index.json` (once, shared by both directions)
 and the paper's `refs-<jkey>.json` / `cited-<jkey>.json` (once per journal per
 direction), then lists the papers newest-first, each linking to its DOI
-(`togRefs`/`togCited`, rendering via the shared `refListHTML`). The dataset
+(`togRefs`/`togCited`, rendering via the shared `refListHTML`). The same files
+also power the page's **"Citing papers of" focal filter** (the citation
+search): a focal paper (DOI or title, resolved against the index) or author
+(matched over the index's authors strings) resolves to its citer set from the
+cited shards, which then ANDs with every other page filter — see the
+citation-graph section in the repo's CLAUDE.md. The dataset
 **ships empty** (a manifest with no shards), so the toggles stay hidden until
 the backfill has populated it.
 

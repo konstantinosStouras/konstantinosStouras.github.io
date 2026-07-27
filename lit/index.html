@@ -305,6 +305,16 @@
   .paper-cited-toggle { color: #2e7d5b; }
   .paper-cited { border-left-color: #2e7d5b; background: #f4faf7; }
   .paper-cited .paper-refs-head { color: #2e7d5b; }
+  /* The "Citing papers of" focal filter (citation search) + the panel's
+     "Show as filtered list" action — same green family as the cited-by side. */
+  .cb-row { display: flex; gap: 6px; }
+  .filter-group select.cb-kind { display: block; width: 96px; flex: none; padding: 0 10px; height: 50px; border: 1.5px solid var(--border); border-radius: 6px; font-family: 'Work Sans', sans-serif; font-size: 15px; color: var(--text); background: var(--white); cursor: pointer; }
+  .filter-group select.cb-kind:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(125,29,63,0.1); }
+  .cb-row input { flex: 1; }
+  .cb-note { font-size: 12px; color: var(--text-muted); line-height: 1.4; min-height: 0; }
+  .chip-citedby { background: #e7f3ee; color: #2e7d5b; }
+  .cited-filter-link { float: right; font-size: 11.5px; font-weight: 600; color: #2e7d5b; text-decoration: none; cursor: pointer; margin-left: 10px; }
+  .cited-filter-link:hover { text-decoration: underline; }
 
   .pagination { max-width: 1280px; margin: 0 auto; padding: 0 32px 60px; display: flex; justify-content: center; align-items: center; gap: 6px; }
   .pagination button { padding: 8px 14px; border: 1px solid var(--border); background: var(--white); border-radius: 6px; font-family: 'Work Sans', sans-serif; font-size: 13px; cursor: pointer; transition: all 0.15s; color: var(--text); }
@@ -786,6 +796,18 @@
         </div>
         <div id="chipsJournal" class="chips"></div>
       </div>
+      <div class="filter-group">
+        <label title="Show only the papers that CITE a given paper or author — The Lit's own in-catalog citation graph read forward (the same data behind each card's 'Cited by … references in this catalog' toggle). Pick Paper and paste a DOI or a title, or pick Author and type a name (matches from the start of a name part), then press Enter. Combines with every other filter: journals, journal types, years and text searches all narrow the citing set. In-catalog citers only; coverage grows as the graph fills in.">Citing papers of &#9432;</label>
+        <div class="cb-row">
+          <select id="citedByKind" class="cb-kind" onchange="litCitedByKindChanged()" aria-label="What the citing papers cite: a paper or an author">
+            <option value="paper">Paper</option>
+            <option value="author">Author</option>
+          </select>
+          <input id="filterCitedBy" name="ms-filter-citedby" placeholder="Paper DOI or title… (Enter)" type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore onkeydown="if(event.key==='Enter'){litCitedBySubmit();event.preventDefault();}">
+        </div>
+        <div id="citedByNote" class="cb-note"></div>
+        <div id="chipsCitedBy" class="chips"></div>
+      </div>
     </div>
     <div class="filters-row filters-row-secondary">
       <div class="filter-group">
@@ -1014,6 +1036,14 @@ const citedShardCache = {};    // jkey -> { citedDoi: [citingDoi,…] } (lazy, p
 const citedShardPromise = {};  // jkey -> in-flight fetch promise (idempotence)
 let citedCounts = null;        // ./data-refs/cited-counts.json once fetched
 let citedCountsPromise = null; // in-flight counts fetch (idempotence)
+// The "Citing papers of" FOCAL FILTER (the citation search): a focal paper
+// (DOI or title) or author is resolved — from the graph files above, never a
+// papers file — into the set of catalog papers that CITE it/them, and that set
+// is ANDed into applyFilters like any other criterion, so journals/types/years/
+// text searches all chain on top. One focal at a time (a new submission
+// replaces the chip). Deep-linkable: ?citedby=<doi> / ?citedbyauthor=<name>.
+let citedByFilter = null;       // { kind:'paper'|'author', label, doi?, dois:Set, jkeys:Set, focal:N }
+let refsManifestPromise = null; // the loadRefsManifest() call, awaitable by the resolver
 
 // User-supplied / retired-on-publish pre-print links: a small map
 // { <bareDoi>: {u,s} } served from data-workingpapers/submitted-preprints.json,
@@ -1537,7 +1567,7 @@ function registerExtraSources(rows, base) {
   // If the user set a scope before this manifest arrived, re-run the active
   // view so the newly registered journals start downloading. Mirror every
   // broad trigger of neededExtraKeys() — including the pre-print toggle.
-  if (recentMode) renderRecent(); else if (sel.jtype.size || sel.journal.size || broadFilterActive() || preprintOnly) applyFilters();
+  if (recentMode) renderRecent(); else if (sel.jtype.size || sel.journal.size || broadFilterActive() || preprintOnly || citedByFilter) applyFilters();
 }
 
 async function fetchManifest(url) {
@@ -1773,6 +1803,181 @@ function refsNormDoi(doi) {
   return String(doi || '').replace(/^https?:\/\/(dx\.)?doi\.org\//i, '').trim().toLowerCase();
 }
 
+// ── The "Citing papers of" focal filter — resolution + chip UI ──────────────
+// (State by REFS_DATA_BASE.) Everything resolves from the citation-graph files
+// alone: refs-index.json knows every graph paper's title/journal/year/authors,
+// the cited-<jkey>.json shards know each paper's in-catalog citers, and
+// cited-counts.json says which papers have any. No papers file downloads here —
+// the CITING journals' files then lazy-load through the normal scope path
+// (neededNativeKeys/neededExtraKeys intersect with citedByFilter.jkeys, so a
+// focal whose citers span 3 journals streams 3 files, not the whole catalog).
+
+function litCbNorm(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+function litCbLooksLikeDoi(q) { return /\b10\.\d{4,9}\//.test(q); }
+
+async function litCbEnsureGraph() {
+  await (refsManifestPromise || (refsManifestPromise = loadRefsManifest()));
+  if (!refsManifest || !refsManifest.citedShards) throw new Error('graph-unavailable');
+  await Promise.all([loadRefsIndex(), loadCitedCounts()]);
+}
+
+// Resolve a focal PAPER (DOI, doi.org URL, or title) → the cited-by filter
+// object. A title must match a graph paper's title exactly (punctuation/case
+// ignored) or contain-match uniquely; ambiguity asks for the DOI instead of
+// guessing. A resolvable paper with no in-catalog citers still resolves (the
+// chip applies and the empty result says so honestly).
+async function litCbResolvePaper(q) {
+  await litCbEnsureGraph();
+  var doi = '';
+  if (litCbLooksLikeDoi(q)) {
+    doi = refsNormDoi(q.replace(/^.*?(10\.\d{4,9}\/)/, '$1'));
+  } else {
+    var want = litCbNorm(q);
+    if (want.length < 8) return { error: 'Type a longer title — or paste the paper’s DOI.' };
+    var exact = [], partial = [];
+    for (var d in refsIndex) {
+      var n = litCbNorm((refsIndex[d] || [])[0]);
+      if (!n) continue;
+      if (n === want) exact.push(d);
+      else if (partial.length < 3 && n.indexOf(want) !== -1) partial.push(d);
+    }
+    var hits = exact.length ? exact : partial;
+    if (!hits.length) return { error: 'No paper with that title is in the citation graph yet — try pasting its DOI.' };
+    if (hits.length > 1) {
+      var withCiters = hits.filter(function (d2) { return citedCounts && citedCounts[d2]; });
+      if (withCiters.length === 1) hits = withCiters;
+      else return { error: 'Several papers match that title — paste the exact DOI instead.' };
+    }
+    doi = hits[0];
+  }
+  var meta = refsIndex[doi] || [];
+  var jk = meta[1] || '';
+  var citers = [];
+  if (jk && citedShardFor(jk)) {
+    var shard = await loadCitedShard(jk);
+    citers = (shard[doi] || []).slice();
+  }
+  var dois = new Set(citers);
+  var jkeys = new Set();
+  citers.forEach(function (cd) { var m = refsIndex[cd]; if (m && m[1]) jkeys.add(m[1]); });
+  return { kind: 'paper', label: meta[0] || doi, doi: doi, dois: dois, jkeys: jkeys, focal: 1 };
+}
+
+// Resolve a focal AUTHOR → the union of the citers of every graph paper
+// credited to them (authorMatch semantics — start of a name part, quoted for
+// exact-word — over the index's authors strings). Only papers WITH citers are
+// scanned (cited-counts gates), so the whole pass touches a few shards at most.
+async function litCbResolveAuthor(q) {
+  await litCbEnsureGraph();
+  var query = q.toLowerCase();
+  var focalDois = [];
+  for (var d in refsIndex) {
+    if (!citedCounts || !citedCounts[d]) continue;   // no in-catalog citers → contributes nothing
+    var au = (refsIndex[d] || [])[3];
+    if (au && authorMatch(au.toLowerCase(), query)) focalDois.push(d);
+  }
+  if (!focalDois.length) return { error: 'No cited papers by that author are in the citation graph yet — try another spelling, or the surname alone.' };
+  var byJk = {};
+  focalDois.forEach(function (d2) { var jk = (refsIndex[d2] || [])[1]; if (jk && citedShardFor(jk)) (byJk[jk] || (byJk[jk] = [])).push(d2); });
+  var dois = new Set();
+  await Promise.all(Object.keys(byJk).map(function (jk) {
+    return loadCitedShard(jk).then(function (shard) {
+      byJk[jk].forEach(function (d3) { (shard[d3] || []).forEach(function (cd) { dois.add(cd); }); });
+    });
+  }));
+  var jkeys = new Set();
+  dois.forEach(function (cd) { var m = refsIndex[cd]; if (m && m[1]) jkeys.add(m[1]); });
+  return { kind: 'author', label: q.trim(), dois: dois, jkeys: jkeys, focal: focalDois.length };
+}
+
+function litCbSetNote(msg) {
+  var el = document.getElementById('citedByNote');
+  if (el) el.textContent = msg || '';
+}
+
+// Enter in the input: resolve the focal (first use downloads the graph index —
+// a few MB — hence the transient note) and apply it as the active filter.
+var litCbBusy = false;
+function litCitedBySubmit() {
+  var input = document.getElementById('filterCitedBy');
+  var kindEl = document.getElementById('citedByKind');
+  var kind = (kindEl && kindEl.value) || 'paper';
+  var q = (input && input.value || '').trim();
+  if (!q || litCbBusy) return;
+  litCbBusy = true;
+  litCbSetNote('Looking up citing papers…');
+  (kind === 'author' ? litCbResolveAuthor(q) : litCbResolvePaper(q)).then(function (res) {
+    litCbBusy = false;
+    if (!res || res.error) { litCbSetNote((res && res.error) || 'The citation graph is unavailable right now.'); return; }
+    if (input) input.value = '';
+    litApplyCitedByFilter(res);
+  }).catch(function () {
+    litCbBusy = false;
+    litCbSetNote('The citation graph is unavailable right now — try again in a moment.');
+  });
+}
+
+function litCitedByKindChanged() {
+  var kindEl = document.getElementById('citedByKind');
+  var input = document.getElementById('filterCitedBy');
+  if (input) input.placeholder = (kindEl && kindEl.value) === 'author' ? 'Author name… (Enter)' : 'Paper DOI or title… (Enter)';
+}
+
+// Apply a resolved focal as the active cited-by filter (replaces any prior).
+function litApplyCitedByFilter(res, opts) {
+  litRetireSiteDefault();
+  citedByFilter = res;
+  renderCitedByChip();
+  litCbSetNote(res.dois.size ? '' :
+    'No papers in this catalog cite ' + (res.kind === 'author' ? 'this author' : 'this paper') + ' yet — the graph fills in over time.');
+  litSyncCitedByUrl();
+  if (!(opts && opts.noRender)) { applyFilters(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+}
+
+function renderCitedByChip() {
+  var c = document.getElementById('chipsCitedBy');
+  if (!c) return;
+  if (!citedByFilter) { c.innerHTML = ''; return; }
+  var lb = citedByFilter.label.length > 60 ? citedByFilter.label.slice(0, 57) + '…' : citedByFilter.label;
+  var text = citedByFilter.kind === 'author'
+    ? 'Cites ' + lb + ' (' + citedByFilter.focal + ' cited paper' + (citedByFilter.focal === 1 ? '' : 's') + ')'
+    : 'Cites “' + lb + '”';
+  c.innerHTML = '<span class="chip chip-citedby" onclick="removeCitedByChip()" title="Showing only the ' +
+    citedByFilter.dois.size.toLocaleString() + ' catalog paper(s) citing this — click to remove">' +
+    esc(text) + ' <span class="chip-x">×</span></span>';
+}
+
+function removeCitedByChip() {
+  citedByFilter = null;
+  renderCitedByChip();
+  litCbSetNote('');
+  litSyncCitedByUrl();
+  applyFilters();
+}
+
+// Keep the address bar shareable: the active focal lives in ?citedby= (paper,
+// by DOI) / ?citedbyauthor= (name). Mirrors the ?author= deep-link discipline —
+// removing the chip strips the parameter so a reload can't resurrect the filter.
+function litSyncCitedByUrl() {
+  try {
+    var sp = new URLSearchParams(location.search);
+    sp.delete('citedby'); sp.delete('citedbyauthor');
+    if (citedByFilter && citedByFilter.kind === 'paper' && citedByFilter.doi) sp.set('citedby', citedByFilter.doi);
+    else if (citedByFilter && citedByFilter.kind === 'author') sp.set('citedbyauthor', citedByFilter.label);
+    var qs = sp.toString();
+    history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash);
+  } catch (e) {}
+  if (!citedByFilter) window.LIT_CITEDBY_DEEPLINK = false;
+}
+
+// From a card's cited-by panel: apply the whole-page filter for this paper
+// (its shard and the index are already loaded there, so this is instant).
+function litCitedByFromCard(doi) {
+  litCbResolvePaper(doi).then(function (res) {
+    if (res && !res.error) litApplyCitedByFilter(res);
+  }).catch(function () {});
+}
+
 // Fetch one extra journal's papers file (idempotent: repeated calls return
 // the same in-flight promise; a journal that failed all retries stays
 // 'missing' for the session rather than re-downloading on every keystroke).
@@ -1836,17 +2041,23 @@ function broadFilterActive() {
 
 function neededExtraKeys() {
   var keys = Object.keys(EXTRA_SRC);
-  if (journalScope) return keys.filter(function(k) { return journalScope.has(k); });
-  if (!(broadFilterActive() || preprintOnly)) return [];
-  // A broad filter with no journal scope streams every catalog file. A TEXT
-  // search covers the ENTIRE database — Working Papers archive included (per
-  // the owner), so e.g. a title search finds an unpublished working paper
-  // without first selecting its type. The bare year filter and the bare
-  // pre-print toggle stay published-only browsing (every working paper carries
-  // a Preprint link, so either would flood the view with unpublished rows);
-  // matchesJournal enforces the exact same line via wpSearchable.
-  if (textSearchActive()) return keys;
-  return keys.filter(function(k) { return !WP_KEYS.has(k); });
+  var base;
+  if (journalScope) base = keys.filter(function(k) { return journalScope.has(k); });
+  else if (broadFilterActive() || preprintOnly || citedByFilter) {
+    // A broad filter with no journal scope streams every catalog file. A TEXT
+    // search covers the ENTIRE database — Working Papers archive included (per
+    // the owner), so e.g. a title search finds an unpublished working paper
+    // without first selecting its type. The bare year filter and the bare
+    // pre-print toggle stay published-only browsing (every working paper carries
+    // a Preprint link, so either would flood the view with unpublished rows);
+    // matchesJournal enforces the exact same line via wpSearchable.
+    base = textSearchActive() ? keys : keys.filter(function(k) { return !WP_KEYS.has(k); });
+  } else base = [];
+  // The "Citing papers of" focal filter caps the result set to its citer
+  // journals — stream only those files (see neededNativeKeys; WP keys can
+  // never be citer journals, so this also keeps the archive out).
+  if (citedByFilter) base = base.filter(function(k) { return citedByFilter.jkeys.has(k); });
+  return base;
 }
 
 function ensureExtraSources() { neededExtraKeys().forEach(loadExtraSource); }
@@ -1955,7 +2166,10 @@ async function loadData() {
   loadFt50Manifest();   // async: registers the FT50-catalog journals as lazy sources
   loadShardManifests(); // async: registers each satellite shard's journals
   loadWorkingPapersManifest(); // async: registers the Working Papers archive (opt-in)
-  loadRefsManifest();   // async: enables the "Cited references in this catalog" card toggle
+  // async: enables the two citation-graph card toggles; the promise is kept so
+  // the "Citing papers of" resolver (and its deep-link) can await the manifest
+  // without ever double-fetching it.
+  refsManifestPromise = refsManifestPromise || loadRefsManifest();
   loadSubmittedPreprints(); // async: overlays human-supplied / retired-on-publish pre-print links
 
   // Affiliation aggregates come from their own small JSON file.
@@ -2023,17 +2237,26 @@ function loadNativeSource(key) {
 // MS/ISR editor filters, which unlike the extras CAN match native papers.
 function neededNativeKeys() {
   var keys = sourcesManifest.map(function(s) { return s.key; });
+  var base;
   if (journalScope) {
-    return keys.filter(function(k) {
+    base = keys.filter(function(k) {
       if (journalScope.has(k)) return true;
       if (k !== 'pnas') return false;
       for (var x of journalScope) { if (x.indexOf('pnas-') === 0) return true; }
       return false;
     });
+  } else {
+    var broad = broadFilterActive() || preprintOnly ||
+      sel.editor.size || sel.area.size || sel.se.size || sel.ae.size;
+    // The "Citing papers of" focal filter is a broad trigger too — with no
+    // journal scope it must stream its citer journals' files.
+    base = (broad || citedByFilter) ? keys : [];
   }
-  var broad = broadFilterActive() || preprintOnly ||
-    sel.editor.size || sel.area.size || sel.se.size || sel.ae.size;
-  return broad ? keys : [];
+  // …but ONLY its citer journals: the focal filter caps the result set to the
+  // journals its citer set touches, so no other file can contribute a row —
+  // a focal cited from 3 journals streams 3 files, never the whole catalog.
+  if (citedByFilter) base = base.filter(function(k) { return citedByFilter.jkeys.has(k); });
+  return base;
 }
 
 // Kick off every download the current view needs (natives + FT50 extras).
@@ -2908,8 +3131,10 @@ function updateDropdownOptions() {
     return allPapers.filter(function(p) {
       if (excludeType !== 'journal' && !matchesJournal(p)) return false;
       // The pre-print toggle has no dropdown of its own, so every dropdown's
-      // counts honor it (a chained filter counts within the toggled set).
+      // counts honor it (a chained filter counts within the toggled set) — and
+      // the "Citing papers of" focal filter likewise.
       if (preprintOnly && !safeUrl(p['Preprint'])) return false;
+      if (citedByFilter && !citedByFilter.dois.has(p._bdoi || (p._bdoi = refsNormDoi(p['DOI'])))) return false;
       if (excludeType !== 'editor' && sel.editor.size > 0 && !(p._editors || []).some(function(e) { return sel.editor.has(e); })) return false;
       if (excludeType !== 'area' && sel.area.size > 0 && !sel.area.has(p._area)) return false;
       if (excludeType !== 'se' && sel.se.size > 0 && !(p._se || []).some(function(e) { return sel.se.has(e); })) return false;
@@ -3084,7 +3309,7 @@ function applyFilters() {
   const sort = document.getElementById('sortBy').value;
 
   // If no filters active, show welcome state
-  if (sel.jtype.size === 0 && sel.journal.size === 0 && sel.editor.size === 0 && sel.area.size === 0 && sel.se.size === 0 && sel.ae.size === 0 && sel.year.size === 0 && sel.title.size === 0 && sel.author.size === 0 && Object.keys(sel.authorIdentity).length === 0 && sel.affiliation.size === 0 && sel.abstract.size === 0 && !search && !searchAuth && !searchAff && !searchAbs && !preprintOnly) {
+  if (sel.jtype.size === 0 && sel.journal.size === 0 && sel.editor.size === 0 && sel.area.size === 0 && sel.se.size === 0 && sel.ae.size === 0 && sel.year.size === 0 && sel.title.size === 0 && sel.author.size === 0 && Object.keys(sel.authorIdentity).length === 0 && sel.affiliation.size === 0 && sel.abstract.size === 0 && !search && !searchAuth && !searchAff && !searchAbs && !preprintOnly && !citedByFilter) {
     document.getElementById('resultsCount').innerHTML = '';
     document.getElementById('papersList').innerHTML = '<div class="empty-state"><h3>Select a filter to get started</h3><p>Pick a journal type (UTD24, FT50, ABS 4/4*, ABS 3) or one or more journals, filter by year, or search by title, author, affiliation, or abstract. Everything is searched when no journal is selected (journal files download on demand — a first all-journal search fetches the full dataset, so give it a moment).</p></div>';
     buildFilterOptions();
@@ -3107,6 +3332,9 @@ function applyFilters() {
     if (!matchesJournal(p)) return false;
     inScope++;
     if (preprintOnly && !safeUrl(p['Preprint'])) return false;
+    // The "Citing papers of" focal filter: only papers in the resolved citer
+    // set pass (bare DOI cached per row — the set is keyed by bare lowercase).
+    if (citedByFilter && !citedByFilter.dois.has(p._bdoi || (p._bdoi = refsNormDoi(p['DOI'])))) return false;
     if (sel.editor.size > 0 && !(p._editors || []).some(e => sel.editor.has(e))) return false;
     if (sel.area.size > 0 && !sel.area.has(p._area)) return false;
     if (sel.se.size > 0 && !(p._se || []).some(e => sel.se.has(e))) return false;
@@ -3180,6 +3408,10 @@ function resetFilterState(keepJournals) {
   preprintOnly = false;
   var ppBtn = document.getElementById('preprintBtn');
   if (ppBtn) ppBtn.className = 'recent-tab-btn';
+  citedByFilter = null;
+  var cbChips = document.getElementById('chipsCitedBy'); if (cbChips) cbChips.innerHTML = '';
+  var cbInput = document.getElementById('filterCitedBy'); if (cbInput) cbInput.value = '';
+  litCbSetNote('');
   updateMsScopeUI();
 }
 
@@ -3218,6 +3450,7 @@ function toggleFilterPanel() {
 function clearFilters() {
   resetFilterState();
   clearAuthorDeepLink();   // Clear wipes the author chip too — the ?author= URL and flag go with it
+  litSyncCitedByUrl();     // …and the ?citedby=/?citedbyauthor= deep-link with the cited-by chip
   closeSummaryTabs();
   applyFilters();
 }
@@ -3242,7 +3475,8 @@ function litSelectionIsEmpty() {
     && sel.year.size === 0 && sel.title.size === 0 && sel.author.size === 0
     && Object.keys(sel.authorIdentity || {}).length === 0
     && sel.affiliation.size === 0 && sel.abstract.size === 0
-    && (typeof preprintOnly === 'undefined' || !preprintOnly);
+    && (typeof preprintOnly === 'undefined' || !preprintOnly)
+    && (typeof citedByFilter === 'undefined' || !citedByFilter);
 }
 
 // A compact signature of the CURRENT filter selection (chips + live search
@@ -3260,6 +3494,7 @@ window.litFilterSig = function () {
     part(sel.year), part(sel.title), part(sel.author), Object.keys(sel.authorIdentity || {}).sort().join(''),
     part(sel.affiliation), part(sel.abstract),
     (typeof preprintOnly !== 'undefined' && preprintOnly) ? '1' : '0',
+    (typeof citedByFilter !== 'undefined' && citedByFilter) ? 'cb:' + citedByFilter.kind + ':' + citedByFilter.label : '',
     inp('filterSearch'), inp('filterAuthors'), inp('filterAffiliations'), inp('filterAbstracts')
   ].join('');
 };
@@ -3299,7 +3534,7 @@ function litRetireSiteDefault() {
 window.litRetireSiteDefault = litRetireSiteDefault;
 
 function applyLitSiteDefault() {
-  if (window.LIT_SHARED_VIEW || window.LIT_AUTHOR_DEEPLINK) return false;   // a shared-list / author deep-link view owns the page
+  if (window.LIT_SHARED_VIEW || window.LIT_AUTHOR_DEEPLINK || window.LIT_CITEDBY_DEEPLINK) return false;   // a shared-list / author / cited-by deep-link view owns the page
   if (window.litSiteDefaultApplied) return false;
   if (typeof sel === 'undefined' || typeof applyFilters !== 'function') return false;
   if (typeof recentMode !== 'undefined' && recentMode) return false;
@@ -3746,7 +3981,7 @@ function togCited(id, btn, idx) {
       return;
     }
     el.innerHTML = '<div class="paper-refs-head">Cited by ' + citers.length + ' paper' + (citers.length === 1 ? '' : 's') +
-      ' in this catalog</div><ul class="ref-list">' + refListHTML(citers, index) + '</ul>';
+      ' in this catalog<a class="cited-filter-link" href="#" onclick="litCitedByFromCard(\'' + escAttr(doi) + '\');return false;" title="Filter the whole catalog to just these citing papers — then chain journals, journal types, years or a text search on top.">Show as filtered list ↗</a></div><ul class="ref-list">' + refListHTML(citers, index) + '</ul>';
   });
 }
 
@@ -4138,6 +4373,9 @@ function dbAnswerable() {
   if (!litDbReady || recentMode) return false;
   if (document.getElementById('sortBy').value !== 'year-desc') return false;
   if (sel.editor.size || sel.area.size || sel.se.size || sel.ae.size) return false;
+  // The "Citing papers of" focal filter is a JS-side DOI-set membership test —
+  // the DB path can't express it, so it stays on the JSON path.
+  if (citedByFilter) return false;
   // ORCID identity chips need exact folded per-name equality (identityMatch); the
   // DB path only does a substring LIKE on the authors string, which would match
   // e.g. "Yuxin Chen" for a "Xin Chen" chip. Keep those on the JSON path.
@@ -4311,6 +4549,25 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     // itself normally defers this to the first Authors-tab open).
     litUpgradeAuthorDeepLink();
     if (!authorsRequested) loadAuthors();
+  } catch (e) {}
+})();
+
+// Cited-by deep-link (?citedby=<doi-or-title> / ?citedbyauthor=<name>): land
+// the page straight on the papers citing a focal paper/author — shareable, and
+// what the chip's URL sync writes. Stands the site default down like the
+// ?author= deep-link; resolution is async (the graph index fetches first), so
+// the flag is set immediately and dropped if the focal can't be resolved.
+(function applyCitedByDeepLink() {
+  try {
+    var sp = new URLSearchParams(location.search);
+    var d = sp.get('citedby'), a = sp.get('citedbyauthor');
+    var q = ((d || a) || '').trim();
+    if (!q) return;
+    window.LIT_CITEDBY_DEEPLINK = true;
+    (d ? litCbResolvePaper(q) : litCbResolveAuthor(q)).then(function (res) {
+      if (res && !res.error) litApplyCitedByFilter(res);
+      else { window.LIT_CITEDBY_DEEPLINK = false; litCbSetNote((res && res.error) || ''); }
+    }).catch(function () { window.LIT_CITEDBY_DEEPLINK = false; });
   } catch (e) {}
 })();
 </script>
