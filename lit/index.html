@@ -1858,9 +1858,9 @@ async function litCbResolvePaper(q) {
     citers = (shard[doi] || []).slice();
   }
   var dois = new Set(citers);
-  var jkeys = new Set();
-  citers.forEach(function (cd) { var m = refsIndex[cd]; if (m && m[1]) jkeys.add(m[1]); });
-  return { kind: 'paper', label: meta[0] || doi, doi: doi, dois: dois, jkeys: jkeys, focal: 1 };
+  var jkeys = new Set(), wide = false;
+  citers.forEach(function (cd) { var m = refsIndex[cd]; if (m && m[1]) jkeys.add(m[1]); else wide = true; });
+  return { kind: 'paper', label: meta[0] || doi, doi: doi, dois: dois, jkeys: jkeys, wide: wide, focal: 1 };
 }
 
 // Resolve a focal AUTHOR → the union of the citers of every graph paper
@@ -1885,9 +1885,9 @@ async function litCbResolveAuthor(q) {
       byJk[jk].forEach(function (d3) { (shard[d3] || []).forEach(function (cd) { dois.add(cd); }); });
     });
   }));
-  var jkeys = new Set();
-  dois.forEach(function (cd) { var m = refsIndex[cd]; if (m && m[1]) jkeys.add(m[1]); });
-  return { kind: 'author', label: q.trim(), dois: dois, jkeys: jkeys, focal: focalDois.length };
+  var jkeys = new Set(), wide = false;
+  dois.forEach(function (cd) { var m = refsIndex[cd]; if (m && m[1]) jkeys.add(m[1]); else wide = true; });
+  return { kind: 'author', label: q.trim(), dois: dois, jkeys: jkeys, wide: wide, focal: focalDois.length };
 }
 
 function litCbSetNote(msg) {
@@ -2055,8 +2055,10 @@ function neededExtraKeys() {
   } else base = [];
   // The "Citing papers of" focal filter caps the result set to its citer
   // journals — stream only those files (see neededNativeKeys; WP keys can
-  // never be citer journals, so this also keeps the archive out).
-  if (citedByFilter) base = base.filter(function(k) { return citedByFilter.jkeys.has(k); });
+  // never be citer journals, so this also keeps the archive out). Dropped when
+  // the filter is `wide` (a citer without a journal in the index), so nothing
+  // can be missed.
+  if (citedByFilter && !citedByFilter.wide) base = base.filter(function(k) { return citedByFilter.jkeys.has(k); });
   return base;
 }
 
@@ -2071,20 +2073,48 @@ function extraPendingCount() {
 
 var authorsTotal = 0; // summed distinct-author counts from the datasets' meta.json
 
+// The catalog's published-paper total, summed from the MANIFESTS (native +
+// FT50 catalog + shards; EXTRA_SRC already dedups journals by key) — the
+// header's number. Manifest-derived, so it is the true catalog size no matter
+// how few papers files have actually been downloaded. Working papers are
+// unpublished and stay out of it, exactly as they stay out of the header.
+function catalogPaperTotal() {
+  var papers = 0;
+  sourcesManifest.forEach(function(s) { papers += s.count || 0; });
+  Object.keys(EXTRA_SRC).forEach(function(k) { if (!WP_KEYS.has(k)) papers += EXTRA_SRC[k].count || 0; });
+  return papers;
+}
+
+// The corpus the results bar reports against while the "Citing papers of"
+// filter is active. Manifest-derived, never "whatever happens to be
+// downloaded", because that filter deliberately fetches only the journals its
+// citers live in: the whole catalog when no journal scope is set, else the
+// selected journals' own totals. Returns 0 when a scope key carries no
+// manifest count (a PNAS section's count is folded into the parent), so the
+// caller falls back to the loaded-papers count.
+function citedByCorpusTotal() {
+  if (!journalScope) return catalogPaperTotal();
+  var total = 0;
+  for (var k of journalScope) {
+    if (WP_KEYS.has(k)) continue;
+    var src = null;
+    for (var i = 0; i < sourcesManifest.length; i++) if (sourcesManifest[i].key === k) src = sourcesManifest[i];
+    if (!src) src = EXTRA_SRC[k];
+    if (!src || src.count === undefined) return 0;
+    total += src.count || 0;
+  }
+  return total;
+}
+
 function updateHeaderStats() {
   // Header stat, merged across every ingested manifest: papers from the
-  // per-journal counts (native + FT50 catalog + shards — EXTRA_SRC already
-  // dedups journals by key), authors from the datasets' meta.json counts
+  // per-journal counts, authors from the datasets' meta.json counts
   // (harvested in loadLastPull). With every source lazy-loaded, a "loading
   // x/y" counter is meaningless here — the results bar reports in-flight
   // files; this is the catalog size.
   var el = document.getElementById('corpusStat');
   if (!el || !sourcesTotal) return;
-  var papers = 0;
-  sourcesManifest.forEach(function(s) { papers += s.count || 0; });
-  // Working papers are unpublished — keep them out of the headline "N papers"
-  // (published) count; they are reachable via the Working Papers type instead.
-  Object.keys(EXTRA_SRC).forEach(function(k) { if (!WP_KEYS.has(k)) papers += EXTRA_SRC[k].count || 0; });
+  var papers = catalogPaperTotal();
   if (!papers) return;
   var txt = papers.toLocaleString('en-US') + ' papers';
   if (authorsTotal) txt += ' from ' + authorsTotal.toLocaleString('en-US') + ' authors';
@@ -2255,7 +2285,10 @@ function neededNativeKeys() {
   // …but ONLY its citer journals: the focal filter caps the result set to the
   // journals its citer set touches, so no other file can contribute a row —
   // a focal cited from 3 journals streams 3 files, never the whole catalog.
-  if (citedByFilter) base = base.filter(function(k) { return citedByFilter.jkeys.has(k); });
+  // This is lossless because the graph index carries a journal for EVERY edge
+  // endpoint; should a citer ever lack one (`wide`), the narrowing is dropped
+  // and every file loads, so a row can never be silently missed.
+  if (citedByFilter && !citedByFilter.wide) base = base.filter(function(k) { return citedByFilter.jkeys.has(k); });
   return base;
 }
 
@@ -3771,10 +3804,18 @@ function renderPage() {
   // download total — with e.g. FT50 selected, chaining the pre-print toggle or
   // a search reads "2,787 (1.21%) of 230,089" (the FT50 papers), even if the
   // rest of the catalog happens to be in memory from an earlier broad search.
-  const pct = scopeCount ? ' (' + (filtered.length * 100 / scopeCount).toFixed(2) + '%)' : '';
-  let countHtml = filtered.length === scopeCount
-    ? `<strong>${scopeCount.toLocaleString()}</strong> papers`
-    : `<strong>${filtered.length.toLocaleString()}</strong>${pct} of ${scopeCount.toLocaleString()} papers`;
+  // EXCEPT under the "Citing papers of" filter: it answers from the citation
+  // graph, which already knows every citing paper in the WHOLE catalog, and
+  // therefore downloads only the journals those citers live in. scopeCount
+  // would then report that deliberately narrow download ("228 of 73,474") as
+  // if it were the corpus — so report against the real catalog size instead
+  // (the header's manifest-derived number), and without a percentage, which at
+  // this scale is noise: "228 of 569,696 papers".
+  const corpus = citedByFilter ? (citedByCorpusTotal() || scopeCount) : scopeCount;
+  const pct = (citedByFilter || !corpus) ? '' : ' (' + (filtered.length * 100 / corpus).toFixed(2) + '%)';
+  let countHtml = filtered.length === corpus
+    ? `<strong>${corpus.toLocaleString()}</strong> papers`
+    : `<strong>${filtered.length.toLocaleString()}</strong>${pct} of ${corpus.toLocaleString()} papers`;
   if (pending) countHtml += ' · <span style="color:var(--navy)">loading ' + pending + ' journal file' + (pending === 1 ? '' : 's') + '…</span>';
   countEl.innerHTML = countHtml;
 
