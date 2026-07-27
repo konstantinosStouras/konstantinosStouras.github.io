@@ -1,11 +1,14 @@
 name: lit — ingest suggested working papers
 
 # Reads user-suggested papers from the Firestore `paperSubmissions` collection
-# (written by the "Suggest a working paper" section of /lit/feedback/), resolves
-# each link's real metadata (OpenAlex / Crossref), and — when it fits the catalog
-# (an author already in the database, and not already present) — adds it to the
-# Working Papers archive (lit/data-workingpapers/), then marks the submission and
-# e-mails the submitter + maintainer. See lit/_scraper-workingpapers/ingest-submissions.mjs.
+# (written by the "Suggest a missing published Paper or a Working Paper" section
+# of /lit/feedback/), resolves each link's real metadata (OpenAlex / Crossref),
+# and routes by what the link actually is: a fitting working paper (an author
+# already in the database, and not already present) is added to the Working
+# Papers archive (lit/data-workingpapers/); a published-paper suggestion is
+# answered "already listed" or forwarded to the maintainer to review (status
+# 'review' — never auto-added). Then it marks the submission and e-mails the
+# submitter + maintainer. See lit/_scraper-workingpapers/ingest-submissions.mjs.
 #
 # A no-op until FIREBASE_SERVICE_ACCOUNT is set. SMTP_* are optional (skip the
 # notification e-mails without them). Full setup: lit/_PAPER-SUBMISSIONS-SETUP.md.

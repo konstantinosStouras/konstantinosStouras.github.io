@@ -84,7 +84,10 @@
   .fb-input, .fb-textarea { width: 100%; font-family: inherit; font-size: 14.5px; color: var(--text); background: #fff; border: 1.5px solid var(--border); border-radius: 9px; padding: 11px 13px; transition: border-color .13s; }
   .fb-input:focus, .fb-textarea:focus { outline: none; border-color: var(--navy); }
   .fb-textarea { min-height: 150px; resize: vertical; line-height: 1.6; }
-  .fb-row { display: flex; gap: 14px; flex-wrap: wrap; }
+  /* Paired fields (Title/Authors, name/e-mail): the row carries the 18px field
+     rhythm itself — its children zero theirs, so without a bottom margin here
+     the next field sat flush against the inputs above it. */
+  .fb-row { display: flex; gap: 18px 22px; flex-wrap: wrap; margin-bottom: 18px; }
   .fb-row .fld { flex: 1 1 220px; margin-bottom: 0; }
 
   /* Screenshot dropzone + thumbnails */
@@ -185,17 +188,23 @@
   .fb-ticket-note { font-size: 14px; color: var(--text); margin: -2px 0 14px; }
   .fb-ticket-note code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; color: var(--navy); background: var(--navy-light); border-radius: 5px; padding: 2px 8px; }
 
-  /* ── Suggest-a-working-paper card ───────────────────────────────────────── */
+  /* ── Suggest-a-paper card (published or working paper) ──────────────────── */
   .ps-card { margin-bottom: 22px; }
   .ps-title { font-family: 'Fraunces', serif; font-weight: 500; color: var(--navy); font-size: 20px; margin-bottom: 6px; }
   .ps-gate { font-size: 14.5px; color: var(--text); background: var(--navy-light); border: 1px solid var(--border); border-radius: 10px; padding: 15px 17px; line-height: 1.55; }
   .ps-gate a { color: var(--navy); font-weight: 600; }
   .ps-item-detail { font-size: 13px; color: var(--text-muted); margin: -4px 0 12px; word-break: break-word; }
+  /* the working-paper / published-paper kind toggle */
+  .ps-kind { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .ps-kind-btn { font-family: inherit; font-size: 13.5px; font-weight: 600; color: var(--navy); background: #fff; border: 1.5px solid var(--border); border-radius: 999px; padding: 8px 16px; cursor: pointer; transition: all .12s; }
+  .ps-kind-btn:hover { border-color: var(--navy); }
+  .ps-kind-btn.is-active { background: var(--navy); color: #fff; border-color: var(--navy); }
   /* extra status badges for the admin submissions view */
   .fb-badge.added { background: #e2f0e6; color: var(--ok); }
   .fb-badge.rejected { background: #fbe3e1; color: var(--err); }
   .fb-badge.pending { background: #fdeec9; color: #8a6100; }
   .fb-badge.duplicate { background: #e7eef7; color: #3a5a86; }
+  .fb-badge.review { background: #f6edda; color: #7a5610; }
 
   @media (max-width: 640px) {
     .header-inner, .wrap { padding-left: 18px; padding-right: 18px; }
@@ -257,26 +266,47 @@
     <div class="fb-admin-list" id="psAdminList"></div>
   </section>
 
-  <!-- Suggest a working paper — the FIRST section for every visitor. A signed-in
-       user pastes an SSRN / arXiv / NBER / OSF link; a scheduled ingest resolves
-       the real metadata and adds it automatically if it fits (an author already
-       in the catalog, and not already present). See lit/_scraper-workingpapers/
-       ingest-submissions.mjs + the paperSubmissions rule in lit/_firestore.rules. -->
+  <!-- Suggest a missing published Paper or a Working Paper — the FIRST section
+       for every visitor. A signed-in user picks what they're suggesting:
+       · Working paper — pastes an SSRN / arXiv / NBER / OSF link; the scheduled
+         ingest resolves the real metadata and adds it automatically if it fits
+         (an author already in the catalog, and not already present).
+       · Published paper — pastes the paper's DOI (or any link containing it)
+         and/or its full citation; the ingest resolves it, answers "already
+         listed" automatically, and forwards a genuinely missing paper to the
+         maintainer to review and add (status 'review').
+       The ingest routes by what the link/DOI actually IS, so the kind choice is
+       only a hint. See lit/_scraper-workingpapers/ingest-submissions.mjs + the
+       paperSubmissions rule in lit/_firestore.rules. -->
   <div class="fb-card ps-card">
-    <p class="ps-title">Suggest a working paper</p>
+    <p class="ps-title">Suggest a missing published Paper or a Working Paper</p>
 
     <!-- Shown when signed out (suggesting needs an account so I can reply). -->
     <div class="ps-gate" id="psSignedOut" hidden>
-      <strong>Sign in to suggest a paper.</strong> Suggesting a working paper needs an account, so I can let you know whether it was added. <a href="/lit/#lit-signin">Sign in on The Lit</a>, then come back here — you'll land right back on this page.
+      <strong>Sign in to suggest a paper.</strong> Suggesting a paper needs an account, so I can let you know what happened with it. <a href="/lit/#lit-signin">Sign in on The Lit</a>, then come back here — you'll land right back on this page.
     </div>
 
     <!-- The form (shown to signed-in users). -->
     <div id="psForm">
-      <p class="fb-intro">Found a working paper on <strong>SSRN</strong>, arXiv, NBER or OSF that isn't in The Lit yet? Paste its link and — if one of its authors is already in the database — it's handled <strong>automatically</strong>, usually within a few minutes: an unpublished paper is added under <em>Working Papers</em>, and if it turns out to be <strong>already published</strong> here, your link is attached to that paper as its open-access <strong>pre-print</strong> instead.</p>
+      <div class="fld">
+        <label>What are you suggesting?</label>
+        <div class="ps-kind" id="psKindSel">
+          <button type="button" class="ps-kind-btn is-active" data-kind="wp">Working paper</button>
+          <button type="button" class="ps-kind-btn" data-kind="published">Published paper</button>
+        </div>
+      </div>
+
+      <p class="fb-intro" id="psIntroWp">Found a working paper on <strong>SSRN</strong>, arXiv, NBER or OSF that isn't in The Lit yet? Paste its link and — if one of its authors is already in the database — it's handled <strong>automatically</strong>, usually within a few minutes: an unpublished paper is added under <em>Working Papers</em>, and if it turns out to be <strong>already published</strong> here, your link is attached to that paper as its open-access <strong>pre-print</strong> instead.</p>
+      <p class="fb-intro" id="psIntroPub" hidden>Noticed a <strong>published paper</strong> missing from The Lit? Paste its <strong>DOI</strong> (or any link that contains it) and/or its <strong>full citation</strong>. It's checked against the catalog automatically: if it's already listed you hear right back, and if it's genuinely missing its resolved details come straight to me to review and add — you get an e-mail with the outcome either way.</p>
 
       <div class="fld">
-        <label for="psUrl">Paper link <span class="hint">— an SSRN, arXiv, NBER or OSF page, or a DOI</span></label>
+        <label for="psUrl">Paper link <span class="hint" id="psUrlHint">— an SSRN, arXiv, NBER or OSF page, or a DOI</span></label>
         <input class="fb-input" id="psUrl" type="url" inputmode="url" autocomplete="off" placeholder="https://papers.ssrn.com/sol3/papers.cfm?abstract_id=…">
+      </div>
+
+      <div class="fld" id="psCitationFld" hidden>
+        <label for="psCitation">Full citation <span class="hint">— recommended; paste the reference as you'd cite it (authors, year, title, journal, volume, pages, DOI)</span></label>
+        <textarea class="fb-textarea" id="psCitation" style="min-height:80px" placeholder="e.g. Public, J., &amp; Smith, J. (2024). Paper title. Management Science, 70(1), 1–20. https://doi.org/10.1287/mnsc.…"></textarea>
       </div>
 
       <div class="fb-row">
@@ -306,7 +336,7 @@
     <div class="fb-done" id="psDone">
       <div class="ico">📄</div>
       <h2>Thanks — got it!</h2>
-      <p>I'll check the link and add the paper automatically if it fits (an author already in The Lit, and not already here). It usually happens within a few minutes.</p>
+      <p id="psDoneMsg">I'll check the link and add the paper automatically if it fits (an author already in The Lit, and not already here). It usually happens within a few minutes.</p>
       <p class="fb-ticket-note" id="psTicketNote"></p>
       <button type="button" class="fb-again" id="psAgain">Suggest another</button>
     </div>
@@ -834,19 +864,46 @@
     if (e.key === 'Escape' && $('fbLightbox').classList.contains('show')) closeLightbox();
   });
 
-  /* ── Suggest a working paper ──────────────────────────────────────────────
-   * A signed-in user pastes an SSRN / arXiv / NBER / OSF link (or DOI). We store
-   * a bounded doc in the 'paperSubmissions' collection (see lit/_firestore.rules);
-   * a scheduled ingest (lit/_scraper-workingpapers/ingest-submissions.mjs)
-   * resolves the REAL metadata itself and adds the paper to the Working Papers
-   * archive when it fits — the typed title/authors are only hints, never trusted
+  /* ── Suggest a missing published Paper or a Working Paper ─────────────────
+   * A signed-in user picks a kind and pastes a link/DOI (a working paper: an
+   * SSRN / arXiv / NBER / OSF link; a published paper: its DOI or any link with
+   * it, and/or a full citation). We store a bounded doc in the
+   * 'paperSubmissions' collection (see lit/_firestore.rules); a scheduled
+   * ingest (lit/_scraper-workingpapers/ingest-submissions.mjs) resolves the
+   * REAL metadata itself and routes by what the link/DOI actually is — a
+   * fitting working paper is added to the Working Papers archive, a published
+   * paper is answered "already listed" or forwarded to the maintainer to review
+   * and add. The typed title/authors/citation are only hints, never trusted
    * into the dataset. Signed-in only, so the outcome can be e-mailed back. */
   var psBusy = false;
+  var psKind = 'wp';   // 'wp' | 'published' — a hint stored on the doc; the ingest routes by content
   function psSetStatus(msg, kind) {
     var el = $('psStatus'); if (!el) return;
     el.textContent = msg || '';
     el.className = 'fb-status' + (kind ? ' ' + kind : '');
   }
+
+  // Kind toggle: swap the intro copy, the link-field hint/placeholder and the
+  // citation field between the working-paper and published-paper modes.
+  function psApplyKind() {
+    var pub = psKind === 'published';
+    Array.prototype.forEach.call(document.querySelectorAll('#psKindSel .ps-kind-btn'), function (b) {
+      b.classList.toggle('is-active', b.getAttribute('data-kind') === psKind);
+    });
+    $('psIntroWp').hidden = pub;
+    $('psIntroPub').hidden = !pub;
+    $('psCitationFld').hidden = !pub;
+    $('psUrlHint').textContent = pub
+      ? '— the paper’s DOI, or any link that contains it (doi.org or the publisher’s page)'
+      : '— an SSRN, arXiv, NBER or OSF page, or a DOI';
+    $('psUrl').placeholder = pub
+      ? 'https://doi.org/10.1287/mnsc.…'
+      : 'https://papers.ssrn.com/sol3/papers.cfm?abstract_id=…';
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('#psKindSel .ps-kind-btn'), function (b) {
+    b.onclick = function () { psKind = b.getAttribute('data-kind'); psApplyKind(); psSetStatus(''); };
+  });
+  psApplyKind();
 
   // Show the form to signed-in users, the sign-in nudge to everyone else.
   function psAuthChange(u) {
@@ -876,10 +933,21 @@
   if ($('psSubmit')) $('psSubmit').onclick = function () {
     if (psBusy || !CONFIGURED) return;
     if (!currentUser) { psSetStatus('Please sign in first (top right).', 'err'); return; }
+    var pub = psKind === 'published';
     var url = ($('psUrl').value || '').trim();
-    if (!url) { psSetStatus('Please paste the paper’s link.', 'err'); return; }
-    if (!/^https?:\/\//i.test(url) && !/^10\.\d{4,9}\//.test(url) && !/(ssrn|arxiv|nber|osf)\./i.test(url)) {
-      psSetStatus('That doesn’t look like a link — paste the paper’s SSRN, arXiv, NBER or OSF URL (or its DOI).', 'err'); return;
+    var citation = pub ? ($('psCitation').value || '').trim().slice(0, 4000) : '';
+    if (pub) {
+      // A published paper can be identified by its DOI/link OR by its citation
+      // alone (the ingest runs a conservative bibliographic search on it).
+      if (!url && !citation) { psSetStatus('Please paste the paper’s DOI/link or its full citation.', 'err'); return; }
+      if (url && !/^https?:\/\//i.test(url) && !/10\.\d{4,9}\//.test(url)) {
+        psSetStatus('That doesn’t look like a link or DOI — paste the paper’s DOI (10.…), a doi.org link, or the publisher page’s URL.', 'err'); return;
+      }
+    } else {
+      if (!url) { psSetStatus('Please paste the paper’s link.', 'err'); return; }
+      if (!/^https?:\/\//i.test(url) && !/^10\.\d{4,9}\//.test(url) && !/(ssrn|arxiv|nber|osf)\./i.test(url)) {
+        psSetStatus('That doesn’t look like a link — paste the paper’s SSRN, arXiv, NBER or OSF URL (or its DOI).', 'err'); return;
+      }
     }
     psBusy = true; $('psSubmit').disabled = true; psSetStatus('Sending…');
 
@@ -897,15 +965,38 @@
       status: 'pending',
       createdAt: FV.serverTimestamp()
     };
+    // The kind is a routing hint (absent = working paper, the legacy shape);
+    // the citation is only sent for a published-paper suggestion.
+    if (pub) doc.kind = 'published';
+    if (citation) doc.citation = citation;
 
-    db.collection('paperSubmissions').add(doc).then(function () {
+    db.collection('paperSubmissions').add(doc).catch(function (err) {
+      // Pre-rules-deploy fallback: until the updated Firestore rules are
+      // published, the create rule's hasOnly() rejects the new kind/citation
+      // fields. Retry once in the legacy shape, folding the citation into the
+      // note — the ingest routes by the submitted CONTENT (it also reads a
+      // "Citation: …" note), so nothing is lost.
+      if (err && err.code === 'permission-denied' && (doc.kind || doc.citation)) {
+        var legacy = {
+          uid: doc.uid, email: doc.email, name: doc.name, url: doc.url,
+          title: doc.title, authors: doc.authors,
+          note: ((citation ? 'Citation: ' + citation + '\n\n' : '') + doc.note).trim().slice(0, 5000),
+          ticket: doc.ticket, status: 'pending', createdAt: FV.serverTimestamp()
+        };
+        return db.collection('paperSubmissions').add(legacy);
+      }
+      throw err;
+    }).then(function () {
+      $('psDoneMsg').textContent = pub
+        ? 'I’ll check it against the catalog automatically: if it’s already listed you’ll hear right back, and if it’s missing its details come straight to me to review and add.'
+        : 'I’ll check the link and add the paper automatically if it fits (an author already in The Lit, and not already here). It usually happens within a few minutes.';
       $('psTicketNote').innerHTML = 'Your reference number is <code>' + esc(ticket) + '</code>.' +
         (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)
           ? ' I’ll e-mail <b>' + esc(email) + '</b> as soon as it’s been checked.'
           : '');
       $('psForm').hidden = true;
       $('psDone').classList.add('show');
-      $('psUrl').value = ''; $('psTitle').value = ''; $('psAuthors').value = ''; $('psNote').value = '';
+      $('psUrl').value = ''; $('psTitle').value = ''; $('psAuthors').value = ''; $('psNote').value = ''; $('psCitation').value = '';
     }).catch(function (err) {
       psSetStatus('Could not send — please try again. (' + (err && err.code ? err.code : 'error') + ')', 'err');
     }).then(function () { psBusy = false; $('psSubmit').disabled = false; });
@@ -941,19 +1032,23 @@
     });
   }
   function psIsDone(s) { return s === 'added' || s === 'duplicate' || s === 'linked'; }
-  function psBadgeClass(s) { return (s === 'added' || s === 'linked') ? 'added' : s === 'duplicate' ? 'duplicate' : s === 'rejected' ? 'rejected' : 'pending'; }
+  function psBadgeClass(s) {
+    return (s === 'added' || s === 'linked') ? 'added' : s === 'duplicate' ? 'duplicate'
+      : s === 'rejected' ? 'rejected' : s === 'review' ? 'review' : 'pending';
+  }
 
   function psAdminRender() {
-    var c = { pending: 0, added: 0, duplicate: 0, rejected: 0 };
+    var c = { pending: 0, review: 0, added: 0, duplicate: 0, rejected: 0 };
     psAdminItems.forEach(function (it) {
       var s = it.data.status;
       // 'duplicate' means the paper was already in the catalog and was NOT added,
-      // so it must be counted separately, not lumped into "added".
-      if (s === 'added') c.added++; else if (s === 'duplicate') c.duplicate++;
-      else if (s === 'rejected') c.rejected++; else c.pending++;
+      // so it must be counted separately, not lumped into "added". 'review' =
+      // a missing published paper awaiting the maintainer's hand-add.
+      if (s === 'added' || s === 'linked') c.added++; else if (s === 'duplicate') c.duplicate++;
+      else if (s === 'rejected') c.rejected++; else if (s === 'review') c.review++; else c.pending++;
     });
     $('psAdminSub').textContent = psAdminItems.length + ' suggestion' + (psAdminItems.length === 1 ? '' : 's') +
-      ' — ' + c.pending + ' pending, ' + c.added + ' added, ' + c.duplicate + ' already present, ' + c.rejected + ' rejected';
+      ' — ' + c.pending + ' pending, ' + c.review + ' to review, ' + c.added + ' added, ' + c.duplicate + ' already present, ' + c.rejected + ' rejected';
 
     var items = psAdminItems.filter(function (it) {
       var s = it.data.status;
@@ -986,7 +1081,9 @@
       if (!who) who = '<span class="anon">signed-in user</span>';
 
       var meta = [];
+      if (x.kind === 'published' || x.mode === 'published') meta.push('<b>published-paper suggestion</b>');
       if (x.resolvedDoi) meta.push('doi <code>' + esc(x.resolvedDoi) + '</code>');
+      if (x.resolvedJournal) meta.push('in ' + esc(x.resolvedJournal));
       if (x.publishedDoi) meta.push('→ pre-print of published <code>' + esc(x.publishedDoi) + '</code>');
       if (x.jkey) meta.push('→ <code>' + esc(x.jkey) + '</code>');
       if (Array.isArray(x.matchedAuthors) && x.matchedAuthors.length) meta.push('authors: ' + esc(x.matchedAuthors.join('; ')) + (x.matchType === 'fuzzy' ? ' <b>[fuzzy]</b>' : ''));
@@ -1007,6 +1104,7 @@
             (safeUrl ? '<a href="' + esc(safeUrl) + '" target="_blank" rel="noopener">' + esc(safeUrl) + '</a>' : esc(x.url || '(no link)')) +
             (title ? '<br><b>' + esc(title) + '</b>' : '') +
           '</div>' +
+          (x.citation ? '<div class="ps-item-detail">Citation: ' + esc(x.citation) + '</div>' : '') +
           (x.note ? '<div class="ps-item-detail">Note: ' + esc(x.note) + '</div>' : '') +
           '<div class="fb-item-meta">' + meta.join(' · ') + '</div>' +
           '<div class="fb-item-actions"><button type="button" class="fb-act delete" data-act="delete">🗑 Delete</button></div>' +

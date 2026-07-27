@@ -1,12 +1,16 @@
 #!/usr/bin/env node
-/* ── ingest-submissions.mjs — auto-add user-suggested working papers ──────────
+/* ── ingest-submissions.mjs — auto-handle user-suggested papers ───────────────
  *
  * Reads the Firestore `paperSubmissions` collection (written by the "Suggest a
- * working paper" form on /lit/feedback/), and for every PENDING submission it
+ * missing published Paper or a Working Paper" form on /lit/feedback/), and for
+ * every PENDING submission it ROUTES by what the submitted link/DOI actually IS
+ * (`routeSubmission` — the form's paper-kind choice is a UI hint only, never
+ * trusted).
  *
- *   1. parses the submitted link into a DOI + host (SSRN / arXiv / NBER / OSF),
- *      reusing the pre-print feature's own host allowlist — a spoofed or
- *      unsupported link is rejected, never trusted;
+ * WORKING-PAPER path (a recognised SSRN / arXiv / NBER / OSF link, or such a
+ * DOI found anywhere in the link / citation / title / note):
+ *   1. parses the link into a DOI + host, reusing the pre-print feature's own
+ *      host allowlist — a spoofed or unsupported link is rejected, never trusted;
  *   2. resolves the REAL bibliographic metadata itself (OpenAlex by DOI, with a
  *      Crossref fallback) — the submitter's typed title/authors are NEVER written
  *      into the dataset, so the form can't be used to inject arbitrary content;
@@ -20,10 +24,24 @@
  *   4. on success, UPSERTS the row into lit/data-workingpapers/ (preserving every
  *      existing row, exactly like the crawler's byKey seeding) and rewrites the
  *      small derived files — so the paper appears under the page's "Working
- *      Papers" journal type with no page change;
- *   5. stamps the submission (added / duplicate / rejected) and — when SMTP is
- *      configured — e-mails the maintainer a summary and the submitter their
- *      outcome.
+ *      Papers" journal type with no page change.
+ *
+ * PUBLISHED-PAPER path (any OTHER DOI — or, when no DOI was given at all, a
+ * conservative Crossref bibliographic search over the submitted full citation:
+ * `matchBibItem` only trusts a hit whose title AND one author surname visibly
+ * appear in the citation text, so a wrong top hit is never adopted):
+ *   resolves the real metadata (Crossref FIRST here — it carries the journal /
+ *   volume / issue — then OpenAlex) and decides via the pure
+ *   decidePublishedSubmission(): already listed in The Lit (by DOI, or by the
+ *   matchPublished title+authors probe that catches a different registration of
+ *   the same paper) → `duplicate`; genuinely missing → **`review`** — a
+ *   published paper is never auto-added (the daily harvests own the published
+ *   catalog), it is forwarded to the maintainer with its resolved details
+ *   (title, journal, year, the submitter's citation) to review and add by hand.
+ *
+ * Finally it stamps the submission (added / duplicate / linked / review /
+ * rejected) and — when SMTP is configured — e-mails the maintainer a summary
+ * and the submitter their outcome.
  *
  * It shares lit/data-workingpapers/ (and the lit-workingpapers concurrency group)
  * with the crawler, so writes never race; both seed from the committed files and
@@ -139,6 +157,130 @@ export function urlToDoi(raw) {
     return m ? { doi: '10.31219/osf.io/' + m[1].toLowerCase(), src: 'osf' } : null;
   }
   return null;
+}
+
+// Any DOI anywhere in a text (a publisher URL, a doi.org link, a pasted full
+// citation) -> bare lowercase DOI, or null. The \b keeps it off tokens like
+// "x10.1234"; cleanDoi trims the trailing punctuation a citation leaves.
+export function extractAnyDoi(raw) {
+  const m = String(raw || '').match(/\b10\.\d{4,9}\/[^\s"'<>]+/i);
+  return m ? (cleanDoi(m[0]) || null) : null;
+}
+
+// The text a no-DOI submission is bibliographically searched by: the citation
+// field first; then a "Citation: …" note (the form's pre-rules-deploy fallback
+// folds the citation there); then the typed title + authors hints.
+export function bibQueryText(sub) {
+  const cit = String((sub && sub.citation) || '').trim();
+  if (cit) return cit.slice(0, 800);
+  const note = String((sub && sub.note) || '').trim();
+  const m = note.match(/^citation:\s*(\S[\s\S]*)/i);
+  if (m) return m[1].trim().slice(0, 800);
+  const t = String((sub && sub.title) || '').trim();
+  if (t) return (t + ' ' + String((sub && sub.authors) || '').trim()).trim().slice(0, 800);
+  return '';
+}
+
+// Route a submission by what its link/DOI actually IS — the form's paper-kind
+// choice (`sub.kind`) is a UI hint only, never trusted. A recognised
+// SSRN/arXiv/NBER/OSF link or DOI (anywhere in the link, citation, title or
+// note) takes the working-paper path; any other DOI takes the published-paper
+// path; a non-archived preprint host (bioRxiv/medRxiv/cshl) is rejected as
+// before; no DOI at all falls to the bibliographic search (when there is text
+// to search by) or to the bad-url rejection.
+export function routeSubmission(sub) {
+  const viaUrl = urlToDoi(sub && sub.url);
+  if (viaUrl) return { path: 'wp', doi: viaUrl.doi, src: viaUrl.src };
+  const doi = extractAnyDoi(sub && sub.url) || extractAnyDoi(sub && sub.citation) ||
+    extractAnyDoi(sub && sub.title) || extractAnyDoi(sub && sub.note);
+  if (doi) {
+    // A DOI lifted out of a content URL can carry a version suffix
+    // (biorxiv.org/content/10.1101/…v1) — try the stripped form too before
+    // concluding it isn't a pre-print DOI.
+    const stripped = doi.replace(/v\d+$/i, '');
+    let p = preprintFromDoi(doi), routedDoi = doi;
+    if (!p && stripped !== doi) { p = preprintFromDoi(stripped); if (p) routedDoi = stripped; }
+    if (p && HOST_KEYS[p.s]) return { path: 'wp', doi: routedDoi, src: p.s };
+    if (p) {
+      return { path: 'reject', reason: 'unsupported',
+        detail: 'The link points to a pre-print repository The Lit does not archive (only SSRN, arXiv, NBER and OSF are).' };
+    }
+    return { path: 'published', doi };
+  }
+  if (bibQueryText(sub)) return { path: 'search' };
+  return { path: 'none' };
+}
+
+// Accept a Crossref bibliographic-search hit ONLY when the submitted citation
+// text visibly contains the hit's full title (normalized, ≥15 collapsed chars —
+// the pre-print matcher's floor) AND at least one of the hit's author family
+// names — conservative, so a plausible-but-wrong top hit is never adopted.
+export function matchBibItem(text, item) {
+  if (!text || !item) return false;
+  const ntTitle = normTitle(stripTags((item.title && item.title[0]) || ''));
+  if (!ntTitle || ntTitle.length < 15) return false;
+  if (!normTitle(String(text)).includes(ntTitle)) return false;
+  const fold = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const hay = ' ' + fold(text) + ' ';
+  const fams = (item.author || []).map(a => fold(a && a.family)).filter(s => s.length >= 2);
+  return fams.some(f => hay.includes(' ' + f + ' '));
+}
+
+// Crossref work item -> the light published-paper shape the published path
+// decides + reports on (never written into any dataset).
+export function publishedFromCrossref(item, doi) {
+  if (!item) return null;
+  const pick = (d) => d && d['date-parts'] && d['date-parts'][0] && d['date-parts'][0][0];
+  return {
+    doi: cleanDoi(doi || item.DOI),
+    title: stripTags((item.title && item.title[0]) || ''),
+    authors: (item.author || []).map(a => ([a.given, a.family].filter(Boolean).join(' ') || a.name || '')
+      .replace(/,/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean),
+    year: parseInt(pick(item.issued) || pick(item['published-print']) || pick(item['published-online']) || pick(item.created) || '', 10) || undefined,
+    journal: stripTags((item['container-title'] && item['container-title'][0]) || ''),
+    volume: item.volume || '', issue: item.issue || '', pages: item.page || '',
+    type: item.type || '',
+  };
+}
+
+// OpenAlex work -> the same light published-paper shape (fallback leg).
+export function publishedFromOpenAlex(w) {
+  if (!w) return null;
+  return {
+    doi: cleanDoi(String(w.doi || '').replace(/^https?:\/\/doi\.org\//i, '')),
+    title: stripTags(w.title || ''),
+    authors: (w.authorships || []).map(a => String((a.author && a.author.display_name) || '')
+      .replace(/,/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean),
+    year: w.publication_year || undefined,
+    journal: (w.primary_location && w.primary_location.source && w.primary_location.source.display_name) || '',
+    volume: '', issue: '', pages: '', type: '',
+  };
+}
+
+// The published-paper decision, pure. ctx: { dois:Set, byTitle:Map } (both from
+// loadCatalog(dirs, {index:true})). A published paper is NEVER auto-added — the
+// daily harvests own the published catalog — so the outcomes are: already
+// listed (`duplicate`, by DOI or by the matchPublished title+authors probe that
+// catches the same paper under another registration) or `review` (genuinely
+// missing — forwarded to the maintainer to review and add by hand).
+export function decidePublishedSubmission(pub, ctx) {
+  if (!pub || !pub.doi || !pub.title) {
+    return { status: 'rejected', mode: 'published', reason: 'unresolved',
+      detail: 'I could not resolve this into a specific published paper — please resubmit with the paper’s DOI.' };
+  }
+  if (ctx.dois && ctx.dois.has(pub.doi)) {
+    return { status: 'duplicate', mode: 'published', reason: 'already-in-catalog', pub,
+      detail: 'This paper is already listed in The Lit.' };
+  }
+  const probe = { Title: pub.title, Authors: (pub.authors || []).join(', '), Year: pub.year ? String(pub.year) : '' };
+  const m = ctx.byTitle ? matchPublished(probe, ctx.byTitle) : null;
+  if (m) {
+    return { status: 'duplicate', mode: 'published', reason: 'already-in-catalog', pub, publishedDoi: m.doi,
+      detail: 'This paper is already listed in The Lit (registered under DOI ' + m.doi + ').' };
+  }
+  return { status: 'review', mode: 'published', pub,
+    detail: 'Not in The Lit yet — sent to the maintainer to review and add.' };
 }
 
 // Crossref work item -> an OpenAlex-shaped work object that wpRecordFromWork can
@@ -374,15 +516,29 @@ async function openAlexWorkByDoi(doi) {
   return { reached: true, work: ((r.json && r.json.results) || [])[0] || null };
 }
 
+const CR_SELECT = 'DOI,title,author,issued,published-print,published-online,created,abstract,is-referenced-by-count,type,container-title,volume,issue,page';
+
 async function crossrefWorkByDoi(doi) {
   const url = 'https://api.crossref.org/works?filter=' + encodeURIComponent('doi:' + doi) +
-    '&select=' + encodeURIComponent(
-      'DOI,title,author,issued,published-print,published-online,created,abstract,is-referenced-by-count,type') +
+    '&select=' + encodeURIComponent(CR_SELECT) +
     '&rows=1&mailto=' + encodeURIComponent(MAILTO);
   const r = await apiGet(url);
   if (!r.ok) return { reached: false };
   const item = ((r.json && r.json.message && r.json.message.items) || [])[0] || null;
-  return { reached: true, work: item ? crossrefToWork(item, doi) : null };
+  return { reached: true, item, work: item ? crossrefToWork(item, doi) : null };
+}
+
+// Crossref bibliographic search for a no-DOI published-paper suggestion: the
+// pasted full citation is the query, and a hit counts ONLY when matchBibItem
+// accepts it (its title + an author surname visibly appear in the citation).
+async function crossrefBibSearch(text) {
+  const url = 'https://api.crossref.org/works?rows=5&query.bibliographic=' + encodeURIComponent(String(text || '').slice(0, 600)) +
+    '&select=' + encodeURIComponent(CR_SELECT) +
+    '&mailto=' + encodeURIComponent(MAILTO);
+  const r = await apiGet(url);
+  if (!r.ok) return { reached: false };
+  const items = (r.json && r.json.message && r.json.message.items) || [];
+  return { reached: true, item: items.find(it => matchBibItem(text, it)) || null };
 }
 
 // Resolve a work for a submitted (doi, src). OpenAlex first (rich: abstract,
@@ -398,6 +554,19 @@ async function resolveWork(doi) {
   return { notfound: true };                              // reached both, indexed nowhere yet
 }
 
+// Resolve a PUBLISHED paper by DOI — Crossref first (it carries the journal /
+// volume / issue the review e-mail needs), OpenAlex fallback. Same
+// retry/notfound semantics as resolveWork.
+async function resolvePublishedWork(doi) {
+  const cr = await crossrefWorkByDoi(doi);
+  if (cr.reached && cr.item) return { pub: publishedFromCrossref(cr.item, doi) };
+  await sleep(300);
+  const oa = await openAlexWorkByDoi(doi);
+  if (oa.reached && oa.work) return { pub: publishedFromOpenAlex(oa.work) };
+  if (!cr.reached || !oa.reached) return { retry: true };
+  return { notfound: true };
+}
+
 // ── E-mail rendering (optional) ──────────────────────────────────────────────
 function htmlEsc(s) {
   return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -406,8 +575,12 @@ const OUTCOME_ADDED = { added: 1, duplicate: 1, linked: 1 };
 
 function submitterMessage(o) {
   if (o.status === 'added') return 'Good news — the working paper you suggested has been added to The Lit. It now appears under the “Working Papers” journal type.';
-  if (o.status === 'duplicate') return 'Thanks — the working paper you suggested is already in The Lit (under the “Working Papers” journal type), so there was nothing to add.';
+  if (o.status === 'duplicate') {
+    if (o.mode === 'published') return 'Thanks — the published paper you suggested is already listed in The Lit, so there was nothing to add.';
+    return 'Thanks — the working paper you suggested is already in The Lit (under the “Working Papers” journal type), so there was nothing to add.';
+  }
   if (o.status === 'linked') return 'Good news — the paper you suggested is already published in The Lit, and I’ve attached your link as its open-access pre-print, so its card now shows a “Pre-print (Open Access)” link.';
+  if (o.status === 'review') return 'Thanks — the published paper you suggested isn’t in The Lit yet. I’ve received its resolved details and will review it and add it by hand if it fits the catalog’s coverage; no need to do anything else.';
   return 'Thanks for the suggestion. I could not add it automatically: ' + (o.detail || 'it did not meet the criteria.') +
     ' I do get a note about every suggestion, so I may still add it by hand.';
 }
@@ -416,7 +589,7 @@ function renderSubmitterEmail(sub, o) {
   const email = String(sub.email || '').trim();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return null;
   const ticket = sub.ticket || '';
-  const title = (o.rec && o.rec.Title) || sub.title || '';
+  const title = (o.rec && o.rec.Title) || (o.pub && o.pub.title) || sub.title || '';
   const subject = 'The Lit — your paper suggestion' + (ticket ? ' (' + ticket + ')' : '');
   const msg = submitterMessage(o);
   const lines = [
@@ -434,29 +607,32 @@ function renderSubmitterEmail(sub, o) {
 }
 
 function renderMaintainerSummary(results) {
-  const n = { added: 0, duplicate: 0, rejected: 0, retry: 0, notfound: 0, linked: 0 };
+  const n = { added: 0, duplicate: 0, rejected: 0, retry: 0, notfound: 0, linked: 0, review: 0 };
   results.forEach(r => { n[r.outcome.status] = (n[r.outcome.status] || 0) + 1; });
   const subject = `The Lit — paper submissions: ${n.added} added` +
+    (n.review ? `, ${n.review} to review` : '') +
     (n.linked ? `, ${n.linked} linked` : '') +
     (n.rejected ? `, ${n.rejected} rejected` : '') + (n.duplicate ? `, ${n.duplicate} dup` : '');
   const row = (r) => {
     const o = r.outcome, s = r.sub;
     const bits = [
       o.status.toUpperCase(),
-      (o.rec && o.rec.Title) || s.title || '(title unresolved)',
+      (o.rec && o.rec.Title) || (o.pub && o.pub.title) || s.title || '(title unresolved)',
+      o.pub && o.pub.journal ? ('in ' + o.pub.journal + (o.pub.year ? ' (' + o.pub.year + ')' : '')) : '',
       o.publishedDoi ? ('→ published ' + o.publishedDoi) : (o.doi ? ('doi:' + o.doi) : (s.url || '')),
       o.match && o.match.matched.length ? ('authors: ' + o.match.matched.join('; ') + (o.match.matchType === 'fuzzy' ? ' [fuzzy]' : '')) : '',
       o.reason ? ('reason: ' + o.reason) : '',
+      s.citation ? ('citation: ' + String(s.citation).slice(0, 300)) : '',
       s.email ? ('by ' + s.email) : '',
       s.ticket ? ('#' + s.ticket) : '',
     ].filter(Boolean);
     return bits.join('  ·  ');
   };
-  const text = `Paper-submission ingest summary\n\nadded ${n.added}, linked ${n.linked}, duplicate ${n.duplicate}, ` +
+  const text = `Paper-submission ingest summary\n\nadded ${n.added}, to review ${n.review}, linked ${n.linked}, duplicate ${n.duplicate}, ` +
     `rejected ${n.rejected}, pending-retry ${n.retry + n.notfound}\n\n` +
     results.map(row).join('\n');
   const html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#241a1e">' +
-    '<p><b>Paper-submission ingest</b>: ' + `added ${n.added}, linked ${n.linked}, duplicate ${n.duplicate}, rejected ${n.rejected}, ` +
+    '<p><b>Paper-submission ingest</b>: ' + `added ${n.added}, to review ${n.review}, linked ${n.linked}, duplicate ${n.duplicate}, rejected ${n.rejected}, ` +
     `pending ${n.retry + n.notfound}</p>` +
     '<ul>' + results.map(r => '<li>' + htmlEsc(row(r)) + '</li>').join('') + '</ul></div>';
   return { subject, text, html };
@@ -515,21 +691,50 @@ async function run() {
 
   const ctx = { publishedTitles: catalog.publishedTitles, catalogIndex, byKey, byTitle: catalog.byTitle, matchMode: MATCH_MODE };
 
-  // 1. Resolve + decide every pending submission (network).
+  // 1. Route + resolve + decide every pending submission (network).
   const results = []; // { d, sub, outcome }
   let added = 0, linked = 0;
   for (const d of docs) {
     const sub = d.data();
-    const parsed = urlToDoi(sub.url);
-    let outcome;
-    if (!parsed) {
+    const route = routeSubmission(sub);
+    let outcome = null;
+    if (route.path === 'none') {
       outcome = { status: 'rejected', reason: 'bad-url',
-        detail: 'The link is not a recognised SSRN, arXiv, NBER or OSF paper (or DOI) link.' };
+        detail: 'The link is not a recognised paper link — paste the paper’s DOI (or an SSRN, arXiv, NBER or OSF link for a working paper), or include its full citation.' };
+    } else if (route.path === 'reject') {
+      outcome = { status: 'rejected', reason: route.reason, detail: route.detail };
+    } else if (route.path === 'wp') {
+      const res = await resolveWork(route.doi);
+      if (res.retry) outcome = { status: 'retry', doi: route.doi };
+      else if (res.notfound) outcome = { status: 'notfound', doi: route.doi };
+      else { outcome = decideSubmission(res.work, ctx); outcome.doi = route.doi; }
     } else {
-      const res = await resolveWork(parsed.doi);
-      if (res.retry) outcome = { status: 'retry', doi: parsed.doi };
-      else if (res.notfound) outcome = { status: 'notfound', doi: parsed.doi };
-      else { outcome = decideSubmission(res.work, ctx); outcome.doi = parsed.doi; }
+      // Published-paper path. No DOI yet ('search') → conservative Crossref
+      // bibliographic search over the citation first; a hit that turns out to
+      // be an archivable working-paper DOI still takes the working-paper path.
+      let doi = route.doi || null;
+      if (!doi) {
+        const bs = await crossrefBibSearch(bibQueryText(sub));
+        if (!bs.reached) outcome = { status: 'retry' };
+        else if (!bs.item) {
+          outcome = { status: 'rejected', mode: 'published', reason: 'unresolved',
+            detail: 'I could not confidently identify this paper from the citation alone — please resubmit with its DOI.' };
+        } else doi = cleanDoi(bs.item.DOI);
+      }
+      if (!outcome) {
+        const p = doi ? preprintFromDoi(doi) : null;
+        if (p && HOST_KEYS[p.s]) {
+          const res = await resolveWork(doi);
+          if (res.retry) outcome = { status: 'retry', doi };
+          else if (res.notfound) outcome = { status: 'notfound', doi };
+          else { outcome = decideSubmission(res.work, ctx); outcome.doi = doi; }
+        } else {
+          const res = await resolvePublishedWork(doi);
+          if (res.retry) outcome = { status: 'retry', doi };
+          else if (res.notfound) outcome = { status: 'notfound', doi };
+          else { outcome = decidePublishedSubmission(res.pub, { dois: catalog.dois, byTitle: catalog.byTitle }); outcome.doi = doi; }
+        }
+      }
     }
     if (outcome.status === 'added' && !DRY_RUN) {
       // "Date Added" = the day the row entered the archive (same stamp the
@@ -542,7 +747,8 @@ async function run() {
       supplementChanged = true; linked++;
     }
     results.push({ d, sub, outcome });
-    console.log(`  ${outcome.status.padEnd(10)} ${parsed ? 'doi:' + parsed.doi : (sub.url || '')}` +
+    console.log(`  ${outcome.status.padEnd(10)} ${outcome.doi ? 'doi:' + outcome.doi : (sub.url || bibQueryText(sub) || '(empty)')}` +
+      (outcome.pub && outcome.pub.journal ? ` in ${outcome.pub.journal}` : '') +
       (outcome.publishedDoi ? ` → published ${outcome.publishedDoi}` : '') +
       (outcome.reason ? ` (${outcome.reason})` : '') +
       (outcome.match && outcome.match.matchType === 'fuzzy' ? ' [fuzzy author match]' : ''));
@@ -585,10 +791,12 @@ async function run() {
         }
       }
       const patch = {
-        status: outcome.status, // added | duplicate | rejected | linked
+        status: outcome.status, // added | duplicate | rejected | linked | review
         processedAt: FieldValue.serverTimestamp(),
+        mode: outcome.mode || null, // 'published' on the published-paper path
         resolvedDoi: outcome.doi || null,
-        resolvedTitle: (outcome.rec && outcome.rec.Title) || null,
+        resolvedTitle: (outcome.rec && outcome.rec.Title) || (outcome.pub && outcome.pub.title) || null,
+        resolvedJournal: (outcome.pub && outcome.pub.journal) || null,
         jkey: (outcome.rec && outcome.rec.JKey) || null,
         publishedDoi: outcome.publishedDoi || null, // set when linked to a published paper
         preprint: outcome.preprint || null,
@@ -616,7 +824,7 @@ async function run() {
   }
 
   // 4. Maintainer summary (only if there was anything to report).
-  const reportable = results.filter(r => ['added', 'duplicate', 'rejected', 'linked'].includes(r.outcome.status));
+  const reportable = results.filter(r => ['added', 'duplicate', 'rejected', 'linked', 'review'].includes(r.outcome.status));
   if (transport && reportable.length) {
     const sum = renderMaintainerSummary(reportable);
     try {

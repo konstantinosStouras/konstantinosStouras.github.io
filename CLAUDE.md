@@ -209,7 +209,21 @@ filter; a paper with no abstract on record can't match an abstract query.
 per applyFilters pass), NOT `allPapers.length` — with FT50 selected, chaining
 the pre-print toggle or a search reads "2,787 (1.21%) of 230,089" even when an
 earlier broad search left the whole catalog in memory; and `crossFilter()` (dropdown
-counts + summary tabs) applies the pre-print toggle like every other filter. The
+counts + summary tabs) applies the pre-print toggle like every other filter.
+**EXCEPT under the "Citing papers of" focal filter, where the denominator is
+MANIFEST-derived and the percentage is dropped** — "228 of 569,696 papers":
+that filter answers from the citation graph (which already knows every citing
+paper in the WHOLE catalog) and therefore downloads only the journals its
+citers live in, so `scopeCount` would report that deliberately narrow download
+("228 of 73,474") as if it were the corpus. `catalogPaperTotal()` (factored out
+of `updateHeaderStats`, so the bar and the header can't disagree) and
+`citedByCorpusTotal()` (the in-scope journals' manifest counts when a
+journal/type IS selected; 0 → caller falls back to `scopeCount`, e.g. a PNAS
+section whose count folds into the parent) supply it. The narrowing is
+LOSSLESS — verified over all 1,166,176 edges: every citer resolves to a journal
+in `refs-index.json` — and a citer that ever lacks one flips the filter's
+`wide` flag, which drops the narrowing so every file loads and no row can be
+silently missed. The
 catalog also carries **notFT extras** — journals on another list but not the
 FT50: UTD24's INFORMS Journal on Computing (`ijoc`) and ABS 4's European
 Journal of Operational Research (`ejor`) — flagged `"notFT": true` in
@@ -432,6 +446,41 @@ non-alphanumerics, and every entity-bearing title had a DOI — verified), so no
 paper resurfaces as "recently added". Covered by
 `lit/_scraper/entities-selftest.mjs` (the module's own suite) plus unit checks
 in `incremental-selftest.mjs` (native + FT50) and the WP `selftest.mjs`.
+**Article-page furniture is never served as an abstract** (feedback
+LIT-260727-XRQ8). Two junk shapes reached served abstracts:
+the pubsonline full-abstract harvest could capture the page's navigation +
+"Cited by" block AFTER the real abstract on layouts carrying none of the
+extractor's stop-class signatures ("… Previous Back to Top Next Figures
+References Related Information Cited by <citing-article list>" — the reported
+Search Duration MkSc card, ~350 MkSc/MS papers), and Semantic Scholar sometimes
+serves a scrape of the WHOLE article page — share bar, "Get access" author
+links, citation metadata, Wiley's "No abstract is available for this article."
+— for items that have no abstract at all (OUP/U.Chicago/AoM/Silverchair/
+MIT-Press/Wiley journals: QJE, RESTUD, EJ, JPE, JCR, TAR, RFS …).
+`stripPageFurniture` in `_entities.mjs` (vendored into the shard repos with the
+rest of the module) cuts everything from the first navigation signature on and
+rejects a remainder that is page chrome rather than abstract prose —
+high-precision like `isNonArticle`: the cut anchors on the full "Figures
+References Related Information" label sequence (never bare "Back to Top", which
+can occur inside a real sentence), and rejection needs either one unambiguous
+scraped-page marker ("Search for other works by this author", "PDFPDF",
+"Download citation file" …) or two weaker ones together, so a lone "…request
+permission…" in real prose never rejects. Applied at EVERY abstract ingest:
+mapWork + the supplement merge in all five build-data pipelines, the WP
+`wpRecordFromWork`, EC's S2 enrichment, all four `abstracts-ci.mjs` API legs,
+and the pubsonline extractor's `cleanAbstractText` (console copy vendored in
+sync, parity-checked). The crawlers/backfills also HEAL their caches at load,
+so a stale contaminated cache (e.g. the console harvester's localStorage from
+an earlier sitting) can never re-apply junk: chrome-only `_informs-abstracts`
+entries are DELETED (re-crawl with the fixed extractor), chrome-only
+`_api-abstracts` entries re-stamped as TTL misses (re-resolved under the
+guard). The committed data was repaired in the same change: ~500
+tail-contaminated abstracts cut back to their real text and ~11.4k
+chrome-scrape "abstracts" emptied across native/FT50/shards — rows that never
+had a real abstract on the scraped page, which the rolling backfills re-resolve
+from the APIs' actual abstract fields. Covered by `entities-selftest.mjs`,
+`informs-abstracts-selftest.mjs` (incl. the parity pass) and the FT50/shard
+`abstracts-selftest.mjs`.
 **Known pubsonline name typos are canonicalized at ingest** ("Olivier
 Tobuia"/"Olivier Touba" → Olivier Toubia, "K. Sudir" → K. Sudhir, the
 inverted "Manchanda Puneet" → Puneet Manchanda — the journal's own
@@ -1314,55 +1363,83 @@ egress policy blocks the scholarly APIs (OpenAlex/Crossref/arXiv return 403), so
 the archive can only be populated by the GitHub Actions runners — it is EMPTY
 until the first workflow run on `master` post-merge.
 
-**Suggest a working paper (user submissions → auto-ingest).** A **signed-in**
-user can suggest an unpublished working paper from the **first section of the
-Feedback page** (`lit/feedback/`, the "Suggest a working paper" `.fb-card`): they
-paste an SSRN/arXiv/NBER/OSF link (or DOI) + optional title/authors/note, and the
-page writes a bounded doc to a new Firestore **`paperSubmissions`** collection
-(`{uid,email,name,url,title,authors,note,ticket,status:'pending',createdAt}`;
-rule in `lit/_firestore.rules` — signed-in bounded create with `status` pinned to
-`'pending'`, submitter reads own, `isFeedbackAdmin()` reads/updates/deletes). A
-scheduled ingest `lit/_scraper-workingpapers/ingest-submissions.mjs`
+**Suggest a missing published paper or a working paper (user submissions →
+auto-ingest).** A **signed-in** user can suggest a paper from the **first
+section of the Feedback page** (`lit/feedback/`, the "Suggest a missing
+published Paper or a Working Paper" `.fb-card`, a Working-paper/Published-paper
+kind toggle): for a WORKING paper they paste an SSRN/arXiv/NBER/OSF link (or
+DOI) + optional title/authors/note; for a PUBLISHED paper missing from the
+catalog they paste its DOI (or any link containing it) and/or its **full
+citation** (a `citation` textarea — the citation alone suffices). The page
+writes a bounded doc to the Firestore **`paperSubmissions`** collection
+(`{uid,email,name,url,title,authors,note,kind?,citation?,ticket,
+status:'pending',createdAt}`; `kind` sent only as `'published'`, absent = the
+legacy working-paper shape; rule in `lit/_firestore.rules` — signed-in bounded
+create with `status` pinned to `'pending'`, `kind` in `['wp','published']`,
+`citation` ≤ 4000, submitter reads own, `isFeedbackAdmin()`
+reads/updates/deletes; until the updated rules are deployed the page falls back
+ONCE on permission-denied to the legacy shape, folding the citation into the
+note as `"Citation: …"`, which the ingest also reads — no submission is lost).
+A scheduled ingest `lit/_scraper-workingpapers/ingest-submissions.mjs`
 (`.github/workflows/lit-paper-submissions.yml`, every ~10 min off-boundary,
 **shares the `lit-workingpapers-${{ github.ref }}` concurrency group** so it never
 races the crawler/backfill; master-only commit with the same push-retry replay)
-processes each `pending` doc: it **parses the link into a DOI + host with the
-pre-print feature's own allowlist** (`urlToDoi` → SSRN `10.2139`/arXiv
-`10.48550`/NBER `10.3386`/OSF `10.31219`; a spoofed host, a bioRxiv/journal DOI or
-junk is rejected), **resolves the REAL metadata itself** (OpenAlex by DOI →
-Crossref fallback → an OpenAlex-shaped work), and builds the record with the SAME
-`wpRecordFromWork()` the crawler uses — so the submitter's typed title/authors are
-**only hints, never trusted into the dataset**. It then applies the owner's two
-gates via the pure `decideSubmission()`: **not already in the catalog**
-(`wpRecordFromWork`'s `publishedTitles` exclusion + a `recKey` dedup against the
-archive → `duplicate`) and **≥1 author already in the catalog** (`catalogMatch`
-against `loadCatalog`'s author index — `exact` full-name or, by default, `fuzzy`
-last-name+initial via the crawler's own `nameParts`; env `SUB_AUTHOR_MATCH`). On
-`added` it **upserts** into `lit/data-workingpapers/` (seeding `byKey` from the
-committed files, so every crawler row is preserved — same invariant as the
-crawler) and rewrites the derived files (`papers-wp-*.json`/`sources.json`/
-`recent.json`/`meta.json`, preserving the crawler's `authorCount`; **never touches
-`_authors.json`**), so the paper appears under the page's **Working Papers**
-journal type with no page change. It **writes the dataset BEFORE stamping
-Firestore** (a crash just re-processes idempotently — the paper is then a
-`duplicate`, never lost), stamps each doc `added`/`duplicate`/`rejected`+reason
-(a transient OpenAlex/Crossref outage leaves it `pending`; a not-yet-indexed
-posting stays `pending` and is retried until it is older than `SUB_MAX_AGE_DAYS`
-(default 7, time-based so a fresh SSRN posting's day-plus indexing lag doesn't
-trip it) then rejects `not-indexed`), and — when SMTP
-is set (reuses the feedback mailer's secrets; **`FIREBASE_SERVICE_ACCOUNT` is the
-only one required**) — e-mails the submitter their outcome + the maintainer a
-summary. To this `build-data.mjs` exports `WP_SOURCES`/`recKey`/`normName`/
-`nameParts`/`stripAccents` (additive; the ingest imports them so the record shape
-+ author normalization can't drift). The Feedback page also gains a **📄 Paper
-suggestions** maintainer inbox (mirrors the feedback inbox; read-only + Delete)
-showing what the ingest did. It is a **no-op until `FIREBASE_SERVICE_ACCOUNT` is
-set** and the rule is deployed. Offline test:
+processes each `pending` doc, **ROUTING by what the link/DOI actually IS**
+(`routeSubmission` — the form's kind choice is a hint only, never trusted): a
+recognised SSRN/arXiv/NBER/OSF link or DOI — found anywhere in the
+link/citation/title/note (`urlToDoi`/`extractAnyDoi` → SSRN `10.2139`/arXiv
+`10.48550`/NBER `10.3386`/OSF `10.31219`; a spoofed host or junk is rejected,
+bioRxiv/medRxiv rejected `unsupported`) — takes the WORKING-PAPER path; any
+OTHER DOI takes the PUBLISHED-PAPER path; a published suggestion with no DOI at
+all is resolved by a conservative **Crossref bibliographic search** over the
+citation (`matchBibItem` — the hit's title AND one author surname must visibly
+appear in the citation text, so a wrong top hit is never adopted).
+**Working-paper path:** it **resolves the REAL metadata itself** (OpenAlex by
+DOI → Crossref fallback → an OpenAlex-shaped work), and builds the record with
+the SAME `wpRecordFromWork()` the crawler uses — so the submitter's typed
+title/authors are **only hints, never trusted into the dataset**. It then
+applies the owner's two gates via the pure `decideSubmission()`: **not already
+in the catalog** (`wpRecordFromWork`'s `publishedTitles` exclusion + a `recKey`
+dedup against the archive → `duplicate`) and **≥1 author already in the
+catalog** (`catalogMatch` against `loadCatalog`'s author index — `exact`
+full-name or, by default, `fuzzy` last-name+initial via the crawler's own
+`nameParts`; env `SUB_AUTHOR_MATCH`). On `added` it **upserts** into
+`lit/data-workingpapers/` (seeding `byKey` from the committed files, so every
+crawler row is preserved — same invariant as the crawler) and rewrites the
+derived files (`papers-wp-*.json`/`sources.json`/`recent.json`/`meta.json`,
+preserving the crawler's `authorCount`; **never touches `_authors.json`**), so
+the paper appears under the page's **Working Papers** journal type with no page
+change. **Published-paper path:** resolved Crossref-FIRST (it carries the
+journal/volume/issue; OpenAlex fallback; `publishedFromCrossref`/
+`publishedFromOpenAlex`) and decided by the pure `decidePublishedSubmission()`
+against `loadCatalog(…,{index:true})`'s new `dois` set + `byTitle` index:
+already listed (by DOI, or by the `matchPublished` probe that catches the same
+paper under another registration) → `duplicate`; genuinely missing →
+**`review`** — a published paper is NEVER auto-added (the daily harvests own
+the published catalog); the maintainer gets the resolved title/journal/year +
+the submitter's citation to add by hand. It **writes the dataset BEFORE
+stamping Firestore** (a crash just re-processes idempotently — the paper is
+then a `duplicate`, never lost), stamps each doc
+`added`/`duplicate`/`linked`/`review`/`rejected`+reason (+ `mode:'published'`,
+`resolvedJournal` for the admin inbox; a transient OpenAlex/Crossref outage
+leaves it `pending`; a not-yet-indexed posting stays `pending` and is retried
+until it is older than `SUB_MAX_AGE_DAYS` (default 7, time-based so a fresh
+SSRN posting's day-plus indexing lag doesn't trip it) then rejects
+`not-indexed`), and — when SMTP is set (reuses the feedback mailer's secrets;
+**`FIREBASE_SERVICE_ACCOUNT` is the only one required**) — e-mails the
+submitter their outcome + the maintainer a summary. To this `build-data.mjs`
+exports `WP_SOURCES`/`recKey`/`normName`/`nameParts`/`stripAccents` (additive;
+the ingest imports them so the record shape + author normalization can't
+drift). The Feedback page also gains a **📄 Paper suggestions** maintainer
+inbox (mirrors the feedback inbox; read-only + Delete; `review` items show
+under the Pending tab with their own badge as the maintainer's to-do) showing
+what the ingest did. It is a **no-op until `FIREBASE_SERVICE_ACCOUNT` is set**
+and the rule is deployed. Offline test:
 `node lit/_scraper-workingpapers/ingest-selftest.mjs` (mock, no network); modes
 `--scan`/`--dry-run`. Setup: `lit/_PAPER-SUBMISSIONS-SETUP.md`. NOTE: this build
 env's egress blocks OpenAlex/Crossref (403), so real resolution only happens on
 the Actions runners. (Per keep-in-sync: shipped with a `changelog.json` entry +
-the About-page "Suggest a working paper" bullet.)
+the About-page "Suggest a missing published paper or a working paper" bullet.)
 
 **Suggested/retired links → published paper's pre-print.** A submitted link (or a
 crawled working paper) whose paper is ALREADY PUBLISHED in the catalog is attached

@@ -10,6 +10,20 @@
       "url": "https://www.stouras.com/lit/"
     },
     {
+      "id": "abstract-furniture-cleanup",
+      "date": "2026-07-27",
+      "title": "Accurate abstracts everywhere",
+      "summary": "Some papers showed an abstract contaminated with article-page leftovers — navigation text like “Back to Top … Related Information” followed by a list of citing articles, or an entire scraped page header in place of an abstract. Every catalog was swept: about 500 abstracts were trimmed back to their real text and about 11,000 page-scrape “abstracts” (on items that never had one) were removed, with the missing ones now re-resolved from proper sources. New abstracts are checked at ingest so this cannot recur.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
+      "id": "suggest-published-papers",
+      "date": "2026-07-27",
+      "title": "Suggest a missing published paper, too",
+      "summary": "The suggestion form on the Feedback page now takes published papers as well as working papers. Pick “Published paper”, paste the paper's DOI (or any link that contains it) and/or its full citation, and it's checked against the catalog automatically: if it's already listed you hear right back, and if it's genuinely missing its resolved details go straight to the maintainer to review and add — with an e-mail to you about the outcome either way. Working-paper suggestions work exactly as before.",
+      "url": "https://www.stouras.com/lit/feedback/"
+    },
+    {
       "id": "citing-papers-of-filter",
       "date": "2026-07-27",
       "title": "Search by who cites: the “Citing papers of” filter",
