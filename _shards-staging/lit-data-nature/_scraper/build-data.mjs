@@ -652,7 +652,19 @@ async function buildScope(prev) {
       try {
         fresh = await seedJournalScope(src);
       } catch (e) {
-        console.warn(`  ${src.key}: scope seeding FAILED (${e.message}) — reusing the committed scope`);
+        // Shared CI egress IPs 429 freely on OpenAlex (see the site repo's
+        // notes); a throttle storm can outlast fetchJson's own retries. Cool
+        // off once and retry before falling back to the committed scope —
+        // the daily cadence self-heals either way, but this saves a day.
+        if (/HTTP 429/.test(String(e.message))) {
+          console.warn(`  ${src.key}: scope seeding throttled (429) — cooling off 90s and retrying once…`);
+          await sleep(90000);
+          try { fresh = await seedJournalScope(src); } catch (e2) {
+            console.warn(`  ${src.key}: scope seeding FAILED (${e2.message}) — reusing the committed scope`);
+          }
+        } else {
+          console.warn(`  ${src.key}: scope seeding FAILED (${e.message}) — reusing the committed scope`);
+        }
       }
       const nFresh = fresh ? Object.keys(fresh).length : 0;
       const nPrev = Object.keys(committed).length;

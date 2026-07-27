@@ -43,6 +43,27 @@ jobs:
           node _shards-staging/lit-data-science/_scraper/scope-selftest.mjs
           node _shards-staging/lit-data-science/_scraper/abstracts-selftest.mjs
 
+      # Science FIRST (the small build): OpenAlex 429-storms GitHub's shared
+      # egress IPs, and on the first validation run the big Nature build ate
+      # the IP's grace before Science could seed. Gentler paging + a cool-off
+      # between the builds keep both seeds inside the budget.
+      - name: Live build — lit-data-science (real OpenAlex + Crossref)
+        working-directory: _shards-staging/lit-data-science
+        env:
+          FT50_MAILTO: kstouras+litscience@gmail.com
+          FT50_PREPRINT_SEARCH_MS: '60000'
+          FT50_CITATIONS_MS: '60000'
+          SCOPE_PAGE_PAUSE_MS: '300'
+        run: node _scraper/build-data.mjs
+
+      - name: Assert the owner's Science paper is in
+        run: |
+          node _shards-staging/validate.mjs _shards-staging/lit-data-science \
+            10.1126/science.1136099
+
+      - name: Cool off the shared OpenAlex rate-limit window
+        run: sleep 120
+
       - name: Live build — lit-data-nature (real OpenAlex + Crossref)
         working-directory: _shards-staging/lit-data-nature
         env:
@@ -51,6 +72,7 @@ jobs:
           # coverage post-bootstrap; this run only proves the pipeline.
           FT50_PREPRINT_SEARCH_MS: '60000'
           FT50_CITATIONS_MS: '60000'
+          SCOPE_PAGE_PAUSE_MS: '300'
         run: node _scraper/build-data.mjs
 
       - name: Assert the owner's Nature-portfolio papers are in
@@ -61,19 +83,6 @@ jobs:
             10.1038/s41562-024-01953-1 \
             10.1038/s41562-025-02195-5 \
             10.1038/s41467-025-61345-5
-
-      - name: Live build — lit-data-science (real OpenAlex + Crossref)
-        working-directory: _shards-staging/lit-data-science
-        env:
-          FT50_MAILTO: kstouras+litscience@gmail.com
-          FT50_PREPRINT_SEARCH_MS: '60000'
-          FT50_CITATIONS_MS: '60000'
-        run: node _scraper/build-data.mjs
-
-      - name: Assert the owner's Science paper is in
-        run: |
-          node _shards-staging/validate.mjs _shards-staging/lit-data-science \
-            10.1126/science.1136099
 
       - name: Commit the seeded datasets back to the staging trees
         run: |
