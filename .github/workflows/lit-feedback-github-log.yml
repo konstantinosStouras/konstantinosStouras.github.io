@@ -41,22 +41,27 @@ jobs:
     if: ${{ vars.FEEDBACK_LOG_REPO != '' }}
     steps:
       - name: Checkout site repo (has the mirror script)
-        uses: actions/checkout@v4
-
-      - name: Checkout the private feedback-log repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          repository: ${{ vars.FEEDBACK_LOG_REPO }}
-          token: ${{ secrets.FEEDBACK_LOG_TOKEN }}
-          path: _feedback-log
+          persist-credentials: false
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '20'
 
       - name: Install dependencies
-        run: npm install --no-save firebase-admin@^12
+        run: npm install --no-save --ignore-scripts firebase-admin@12.7.0
+
+      # Private-repo checkout LAST: its FEEDBACK_LOG_TOKEN is persisted into
+      # _feedback-log/.git/config for the push below, so keep it off disk until
+      # after the third-party npm install has finished running.
+      - name: Checkout the private feedback-log repo
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: ${{ vars.FEEDBACK_LOG_REPO }}
+          token: ${{ secrets.FEEDBACK_LOG_TOKEN }}
+          path: _feedback-log
 
       - name: Mirror new feedback into the log repo
         env:

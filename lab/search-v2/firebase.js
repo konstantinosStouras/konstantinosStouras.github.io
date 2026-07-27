@@ -87,18 +87,43 @@ window.SVFirebase = (function () {
     return Promise.race([fetchCfg, timeout]);
   }
 
+  // A tiny public lookup doc mapping a launch code → its session id, so a
+  // participant can resolve their wave with a POINT READ (get) instead of
+  // LISTING the whole `sessions` collection. Listing every session would expose
+  // every wave's completion/payment code to any anonymous visitor; once the
+  // hardened rules are deployed, `list` on `sessions` is admin-only and this
+  // mapping is the participant's only door in. The doc holds ONLY the session id.
+  function sessionCodeRef(code) { return sdk.fs.doc(db, 'sessionCodes', String(code)); }
+
   // Participant: look up the study "session" (wave) they were sent to by its code
   // (from ?code=… in the launch URL). Returns { id, ...data } or null.
-  // Reads the whole (small) sessions collection and matches client-side — the
-  // same known-good shape as fetchEvents/listSessions, avoiding the WebChannel
-  // quirk where query constraints (where/limit) throw `invalid-argument`.
+  //
+  // Primary path is a point read: sessionCodes/<code> → { id } → sessions/<id>.
+  // This needs no `list` permission, so it keeps working once the sessions
+  // collection is locked to admin-only listing. FALLBACK (older rules, or a
+  // legacy session whose code map hasn't been backfilled yet): the original
+  // whole-collection scan — harmless under the current permissive rules, and it
+  // simply yields null once listing is denied. So merging this file changes
+  // nothing until the rules are deployed; the admin panel backfills the maps
+  // (see listSessions) so no existing ?code= link is ever stranded.
   function getSessionByCode(code) {
     if (!configured || !code) return Promise.resolve(null);
     var timeout = new Promise(function (r) { setTimeout(function () { r(null); }, 4000); });
-    var fetchIt = init().then(ensureAuth).then(function () {
-      return sdk.fs.getDocs(sdk.fs.collection(db, 'sessions'));
-    }).then(function (qs) { var r = null; qs.forEach(function (d) { if (!r && (d.data() || {}).code === code) r = Object.assign({ id: d.id }, d.data()); }); return r; })
-      .catch(function () { return null; });
+    var viaMap = init().then(ensureAuth).then(function () {
+      return sdk.fs.getDoc(sessionCodeRef(code));
+    }).then(function (snap) {
+      var id = snap.exists() ? (snap.data() || {}).id : null;
+      if (!id) return null;
+      return sdk.fs.getDoc(sdk.fs.doc(db, 'sessions', id))
+        .then(function (s) { return s.exists() ? Object.assign({ id: s.id }, s.data()) : null; });
+    }).catch(function () { return null; });
+    var fetchIt = viaMap.then(function (hit) {
+      if (hit) return hit;
+      // Legacy fallback: scan the collection (works only while list is permitted).
+      return sdk.fs.getDocs(sdk.fs.collection(db, 'sessions'))
+        .then(function (qs) { var r = null; qs.forEach(function (d) { if (!r && (d.data() || {}).code === code) r = Object.assign({ id: d.id }, d.data()); }); return r; })
+        .catch(function () { return null; });
+    });
     return Promise.race([fetchIt, timeout]);
   }
 
@@ -192,22 +217,52 @@ window.SVFirebase = (function () {
   function listSessions() {
     return init().then(function () {
       return sdk.fs.getDocs(sdk.fs.collection(db, 'sessions'));
-    }).then(function (qs) { var out = []; qs.forEach(function (d) { out.push(Object.assign({ id: d.id }, d.data())); }); return out; });
+    }).then(function (qs) {
+      var out = [];
+      qs.forEach(function (d) { out.push(Object.assign({ id: d.id }, d.data())); });
+      // Fire-and-forget backfill of the code→id lookup map for any session that
+      // predates it, so participants keep resolving by ?code= once the hardened
+      // rules make `sessions` list admin-only. Admin-only writes; errors ignored.
+      out.forEach(function (s) {
+        if (s.code) { try { sdk.fs.setDoc(sessionCodeRef(s.code), { id: s.id }, { merge: true }).catch(function () {}); } catch (e) {} }
+      });
+      return out;
+    });
   }
   function createSession(obj) {
     return init().then(function () { return sdk.fs.addDoc(sdk.fs.collection(db, 'sessions'), obj); })
-      .then(function (ref) { return ref.id; });
+      .then(function (ref) {
+        if (obj && obj.code) { return sdk.fs.setDoc(sessionCodeRef(obj.code), { id: ref.id }, { merge: true }).then(function () { return ref.id; }); }
+        return ref.id;
+      });
   }
   function updateSession(id, obj) {
-    return init().then(function () { return sdk.fs.setDoc(sdk.fs.doc(db, 'sessions', id), obj, { merge: true }); });
+    return init().then(function () { return sdk.fs.setDoc(sdk.fs.doc(db, 'sessions', id), obj, { merge: true }); })
+      .then(function () {
+        if (obj && obj.code) { return sdk.fs.setDoc(sessionCodeRef(obj.code), { id: id }, { merge: true }); }
+      });
   }
   function deleteSession(id) {
-    return init().then(function () { return sdk.fs.deleteDoc(sdk.fs.doc(db, 'sessions', id)); });
+    return init().then(function () { return sdk.fs.getDoc(sdk.fs.doc(db, 'sessions', id)); })
+      .then(function (snap) {
+        var code = snap.exists() ? (snap.data() || {}).code : null;
+        return sdk.fs.deleteDoc(sdk.fs.doc(db, 'sessions', id)).then(function () {
+          if (code) { return sdk.fs.deleteDoc(sessionCodeRef(code)).catch(function () {}); }
+        });
+      });
   }
-  // Admin: delete EVERY session (wave) doc. Collected event rows are untouched.
+  // Admin: delete EVERY session (wave) doc and its code map. Event rows untouched.
   function deleteAllSessions() {
     return init().then(function () { return sdk.fs.getDocs(sdk.fs.collection(db, 'sessions')); })
-      .then(function (qs) { var dels = []; qs.forEach(function (d) { dels.push(sdk.fs.deleteDoc(d.ref)); }); return Promise.all(dels).then(function () { return dels.length; }); });
+      .then(function (qs) {
+        var dels = [];
+        qs.forEach(function (d) {
+          dels.push(sdk.fs.deleteDoc(d.ref));
+          var code = (d.data() || {}).code;
+          if (code) { dels.push(sdk.fs.deleteDoc(sessionCodeRef(code)).catch(function () {})); }
+        });
+        return Promise.all(dels).then(function () { return qs.size; });
+      });
   }
   // Same unconstrained-read shape as listSessions (see the WebChannel note in
   // fetchEvents) — the collection is small, so client-side matching is cheap.

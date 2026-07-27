@@ -25,6 +25,15 @@ service cloud.firestore {
     // (the number of docs = number of registered users); each user may only
     // create/update their OWN doc, the payload is pinned to just `t`, and nobody
     // can delete. No user's private subtree above is exposed by this.
+    //
+    // NOTE: this stays `read: if true` (get+list) deliberately — the analytics
+    // page derives the user count with a count() aggregation, which is evaluated
+    // under the SAME read rules as the underlying query, so there is no
+    // "count without list" permission to trim to. That means the collection is
+    // enumerable (uids + coarse `t` timestamps, nothing more). To close that
+    // without losing the count, replace these per-user public docs with a single
+    // counter document incremented by a Cloud Function (Admin SDK) and drop
+    // public read — a follow-up, not done here to avoid breaking the live tile.
     match /registeredUsers/{userId} {
       allow read: if true;
       allow create, update: if request.auth != null
@@ -37,11 +46,15 @@ service cloud.firestore {
     // session claims its identity keys — "orcid:<iD>" and "email:<sha256 of
     // the lowercased address>" — mapping the key to the owning uid. A later
     // sign-in whose key is already claimed by a DIFFERENT uid is a duplicate,
-    // and the page offers the merge flow. Signed-in read only (conflict
-    // checks; keys are an opaque uid mapping, e-mails only ever hashed);
-    // create/update must claim your own uid; never deletable.
+    // and the page offers the merge flow. Read is `get` ONLY (a point look-up
+    // of one known key), never `list`: `read` in Firestore covers get+list, and
+    // an unrestricted list would let ANY signed-in user page the whole
+    // collection and harvest every account's ORCID iD plus offline-crack the
+    // sha256 email hashes. All conflict checks read a single key by id, so
+    // get-only is sufficient. Create/update must claim your own uid; never
+    // deletable.
     match /accountKeys/{key} {
-      allow read: if request.auth != null;
+      allow get: if request.auth != null;
       allow create, update: if request.auth != null
                             && request.resource.data.keys().hasOnly(['uid', 't'])
                             && request.resource.data.uid == request.auth.uid;
@@ -58,8 +71,15 @@ service cloud.firestore {
     // create/update/delete their own, and the payload is bounded so it can't be
     // abused as free public storage. Turning the list private again deletes the
     // doc, so the old link stops resolving.
+    //
+    // Read is `get` ONLY, never `list`: a shared list is opened by its known,
+    // unguessable share id (a point read), so `list: false` keeps the
+    // "unguessable id" actually private — otherwise `read: if true` lets anyone
+    // enumerate every shared list (and each owner's display name) regardless of
+    // the id.
     match /publicLists/{shareId} {
-      allow read: if true;
+      allow get: if true;
+      allow list: if false;
       allow create: if request.auth != null
                     && request.auth.uid == request.resource.data.ownerUid
                     && request.resource.data.keys().hasOnly(
@@ -94,6 +114,16 @@ service cloud.firestore {
              && request.auth.token.email == 'kstouras@gmail.com'
              && request.auth.token.email_verified == true;
     }
+    // HARDENING FOLLOW-UP (console-side, not done in these rules because it would
+    // break the deliberately no-sign-in feedback form until the page + project
+    // are updated together): create is open to anyone, and Firestore rules can't
+    // iterate list elements to cap each screenshot's bytes, so the realistic
+    // defence against storage/billing/spam abuse is (1) enable Firebase App Check
+    // (reCAPTCHA) and add `&& request.app != null` here, (2) have the feedback
+    // page sign in anonymously and add `&& request.auth != null`, (3) set a Google
+    // Cloud billing budget + alert. The per-field size caps below are the part
+    // that is safe to ship now — they bound the maximum abusive document without
+    // rejecting any legitimate submission.
     match /feedback/{docId} {
       allow create: if request.resource.data.keys().hasOnly(
                          ['text','images','name','email','uid','ticket','page','url','ua','forwarded','status','createdAt'])
@@ -102,6 +132,18 @@ service cloud.firestore {
                     && (!('images' in request.resource.data)
                         || (request.resource.data.images is list
                             && request.resource.data.images.size() <= 5))
+                    && (!('name' in request.resource.data)
+                        || (request.resource.data.name is string && request.resource.data.name.size() <= 200))
+                    && (!('email' in request.resource.data)
+                        || (request.resource.data.email is string && request.resource.data.email.size() <= 320))
+                    && (!('ticket' in request.resource.data)
+                        || (request.resource.data.ticket is string && request.resource.data.ticket.size() <= 64))
+                    && (!('page' in request.resource.data)
+                        || (request.resource.data.page is string && request.resource.data.page.size() <= 300))
+                    && (!('url' in request.resource.data)
+                        || (request.resource.data.url is string && request.resource.data.url.size() <= 2000))
+                    && (!('ua' in request.resource.data)
+                        || (request.resource.data.ua is string && request.resource.data.ua.size() <= 1000))
                     && request.resource.data.forwarded == false;
       allow read:           if isFeedbackAdmin();
       allow update, delete: if isFeedbackAdmin();
