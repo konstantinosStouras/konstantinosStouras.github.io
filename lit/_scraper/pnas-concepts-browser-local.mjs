@@ -51,7 +51,10 @@ try {
 const cache = existsSync(CACHE_PATH)
   ? JSON.parse(await readFile(CACHE_PATH, 'utf8'))
   : { map: {} };
-const doFull = FULL || !cache.full;
+// A cache flagged full but with no fullAsOf stamp predates honest completeness
+// tracking — the flag may be a lie (a truncated crawl once got stamped full
+// and the build then dropped every paper it missed) — so re-crawl in full.
+const doFull = FULL || !cache.full || !cache.fullAsOf;
 const afterYear = doFull ? null : new Date().getFullYear() - 2;
 console.log(doFull
   ? 'Full crawl of all five PNAS sections via your Chrome — a browser window will open; leave it alone…'
@@ -98,12 +101,21 @@ if (res.challenged || !res.map.size) {
   process.exit(1);
 }
 
-const merged = mergeIntoCache(cache, res.map, { pullDate: PULL_DATE, full: doFull && res.ok });
+// Only a crawl in which EVERY section reached its genuine last page earns the
+// full stamp — and such a crawl IS the whole index, so it replaces the map
+// (dropping stale entries) instead of unioning forever.
+const genuineFull = doFull && res.ok;
+const merged = mergeIntoCache(cache, res.map, { pullDate: PULL_DATE, full: genuineFull, replace: genuineFull });
 await writeFile(CACHE_PATH, JSON.stringify(merged), 'utf8');
 
 console.log('\n✓ Wrote', CACHE_PATH);
 console.log('  Section sizes:', JSON.stringify(merged.counts));
 console.log('  Total DOIs mapped:', Object.keys(merged.map).length);
+if (doFull && !res.ok) {
+  console.warn('\n⚠ Some sections could not be confirmed complete — the crawl is PARTIAL.');
+  console.warn('  Still safe to commit: official labels win per-paper and the build keeps the');
+  console.warn('  OpenAlex approximation covering everything this crawl missed.');
+}
 console.log('\nNext: commit and push the updated file:');
 console.log('  git add ../data/_pnas-concepts.json');
 console.log('  git commit -m "lit: refresh PNAS section index"');

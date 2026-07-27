@@ -229,6 +229,28 @@ approximation*, not PNAS's editorial assignment, so the paper sets differ at
 the margins; an official label from the local crawl always wins per-DOI. The
 build log prints how many papers used each source.
 
+**Completeness is tracked honestly (the 2008–2025 gap fix):** a crawl only
+earns the `full` stamp when it *provably* covered its corpus — the pnas.org
+crawl when every section's listing was walked to a genuine NON-EMPTY not-full
+last page (`crawlConcepts` returns per-section `complete` flags; result-count
+headers are never trusted as a stop signal, and an empty page is never
+trusted as the end — the search backend can serve an HTTP-200 zero-result
+template mid-listing), the OpenAlex crawl when the cursor walk scanned ≳95%
+of the work count OpenAlex declared (`total`/`scanned` recorded in
+`_pnas-approx.json`; an early-terminated walk stays un-full and is
+re-attempted next build). A complete full crawl also stamps **`fullAsOf`** —
+the authority horizon — which later partial/incremental merges never advance
+(they only move `updated`). And the build's `applyPnasSections` applies a
+**safety valve**: the official index may *exclude* papers (drop DOIs absent
+from it, pre-horizon) only when it *carries a `fullAsOf` stamp* — the sticky
+`full` flag alone is exactly what lied, and partial sittings can never
+re-earn authority by accumulating size — AND is at least half the size of
+the approximation; a partial or implausibly small official index still wins
+per-paper but the approximation keeps covering everything it missed. Before
+these guards, a crawl truncated to 1–4 pages per section got stamped full and
+silently dropped every 2008–2025 paper it had missed.
+Offline test: `node lit/_scraper/pnas-selftest.mjs`.
+
 ## The ISR/Marketing Science editors wrinkle (same idea)
 
 Senior/Associate Editor names live in each article's "History:" line on

@@ -299,7 +299,31 @@ native-eight-sources only (the pre-print backfill, by contrast, covers every
 dataset — see below). **PNAS caveat:** the DOI→section index
 `lit/data/_pnas-concepts.json` must be (re)built occasionally by running
 `lit/_scraper/pnas-concepts-local.mjs` on a personal machine, because
-pnas.org's search is Cloudflare-blocked for cloud IPs. **ISR/MkSc caveat:**
+pnas.org's search is Cloudflare-blocked for cloud IPs. **PNAS completeness is
+tracked honestly (the 2008–2025 gap fix):** a truncated pnas.org crawl (1–4
+pages/section, 864 DOIs) once got stamped `full:true` and `applyPnasSections`
+treated it as authoritative — dropping every pre-cutoff paper it had missed,
+while the OpenAlex approximation (`_pnas-approx.json`, itself truncated to
+2015+ yet stamped full) was confined to the current year. Now `crawlConcepts`
+claims `ok` only when EVERY section's listing reached a genuine NON-EMPTY
+not-full last page (result-count headers are never a stop signal, an empty
+page is never trusted as the end — pnas.org can serve an HTTP-200 zero-result
+template mid-listing; junk chrome DOIs filtered like the console script); a
+complete full crawl stamps `fullAsOf` (the authority horizon —
+partial/incremental merges advance only `updated`) and REPLACES the map;
+`refreshPnasApprox` records `total`/`scanned` and stays un-full (re-attempting
+next build) when the OpenAlex cursor walk didn't cover ~95% of the declared
+corpus, prunes non-`10.1073/pnas.` junk ("In This Issue" stubs) and salvages
+partial progress on error; and `applyPnasSections` applies the safety valve
+the console script documents — the official index may EXCLUDE papers only
+when it CARRIES a `fullAsOf` stamp (the sticky `full` flag alone is exactly
+what lied; partial sittings can never re-earn authority by size) AND is
+≥ half the approximation's size, else official labels win per-paper while the
+approximation covers all years. The
+legacy caches lack the new completeness fields, so the first post-merge daily
+build re-runs the full OpenAlex backfill and the next local pnas-concepts run
+does a full (not incremental) crawl automatically. Offline test:
+`node lit/_scraper/pnas-selftest.mjs`. **ISR/MkSc caveat:**
 likewise, ISR Senior/Associate Editor and Marketing Science Senior Editor
 names (`lit/data/_informs-editors.json`) come from
 `lit/_scraper/informs-editors-local.mjs` run locally (pubsonline blocks
