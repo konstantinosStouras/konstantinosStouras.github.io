@@ -308,7 +308,7 @@
   /* The "Citing papers of" focal filter (citation search) + the panel's
      "Show as filtered list" action — same green family as the cited-by side. */
   .cb-row { display: flex; gap: 6px; }
-  .filter-group select.cb-kind { display: block; width: 96px; flex: none; padding: 0 10px; height: 50px; border: 1.5px solid var(--border); border-radius: 6px; font-family: 'Work Sans', sans-serif; font-size: 15px; color: var(--text); background: var(--white); cursor: pointer; }
+  .filter-group select.cb-kind { display: block; width: 112px; flex: none; padding: 0 10px; height: 50px; border: 1.5px solid var(--border); border-radius: 6px; font-family: 'Work Sans', sans-serif; font-size: 20px; color: var(--text); background: var(--white); cursor: pointer; }
   .filter-group select.cb-kind:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(125,29,63,0.1); }
   .cb-row input { flex: 1; }
   .cb-note { font-size: 12px; color: var(--text-muted); line-height: 1.4; min-height: 0; }
@@ -780,16 +780,16 @@
 <div class="filters-bar">
   <div class="filters-inner">
     <div class="filters-row filters-row-primary">
-      <div class="filter-group">
-        <label title="Filter by journal list or rating: the UT Dallas Top-100 rankings' 24 journals (UTD24), the Financial Times FT50 research rank, or the ABS/AJG rating (Chartered Association of Business Schools Academic Journal Guide, via journalranking.org). A type selects all covered journals of that type, and combines with the Journals filter.">Journal types</label>
+      <div class="filter-group" title="Filter by journal list or rating: the UT Dallas Top-100 rankings' 24 journals (UTD24), the Financial Times FT50 research rank, or the ABS/AJG rating (Chartered Association of Business Schools Academic Journal Guide, via journalranking.org). A type selects all covered journals of that type, and combines with the Journals filter.">
+        <label>Journal types</label>
         <div class="custom-select" id="csJType" data-type="jtype">
           <div class="custom-select-trigger" onclick="toggleDrop('csJType')">All types</div>
           <div class="custom-select-dropdown"><input class="custom-select-search" placeholder="Type to filter..." oninput="filterDrop('csJType',this.value)"><div class="custom-select-items"></div></div>
         </div>
         <div id="chipsJType" class="chips"></div>
       </div>
-      <div class="filter-group">
-        <label title="Choose one or more journals/sources. With none selected, all sources are searched.">Journals</label>
+      <div class="filter-group" title="Choose one or more journals/sources. With none selected, all sources are searched.">
+        <label>Journals</label>
         <div class="custom-select" id="csJournal" data-type="journal">
           <div class="custom-select-trigger" onclick="toggleDrop('csJournal')">All journals</div>
           <div class="custom-select-dropdown"><input class="custom-select-search" placeholder="Type to filter..." oninput="filterDrop('csJournal',this.value)"><div class="custom-select-items"></div></div>
@@ -797,7 +797,7 @@
         <div id="chipsJournal" class="chips"></div>
       </div>
       <div class="filter-group" title="Show only the papers that cite a given paper or author. Pick Paper or Author, type a title, DOI or name, and press Enter — every other filter then narrows the citing set. E.g. add a paper's title and, from all the papers that cite it, show only the FT50 ones below.">
-        <label>Citing papers of &#9432;</label>
+        <label>Citing papers of</label>
         <div class="cb-row">
           <select id="citedByKind" class="cb-kind" onchange="litCitedByKindChanged()" aria-label="What the citing papers cite: a paper or an author">
             <option value="paper">Paper</option>
@@ -810,23 +810,23 @@
       </div>
     </div>
     <div class="filters-row filters-row-secondary">
-      <div class="filter-group">
-        <label title='Matches from the START of a name: "stou" finds Stouras but not Christou. Wrap a term in double quotes for an exact full-word match. Some authors may appear under different name variants; ORCID-based disambiguation is not yet available for all authors.'>Search Authors &#9432;</label>
+      <div class="filter-group" title='Matches from the START of a name: "stou" finds Stouras but not Christou. Wrap a term in double quotes for an exact full-word match. Some authors may appear under different name variants; ORCID-based disambiguation is not yet available for all authors.'>
+        <label>Search Authors</label>
         <input id="filterAuthors" name="ms-filter-author" placeholder="Author..." type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('author','filterAuthors');event.preventDefault();}">
         <div id="chipsAuthor" class="chips"></div>
       </div>
-      <div class="filter-group">
-        <label title='Searches within titles, not just the exact/full paper title. Substring match by default (e.g. "market" also finds "marketing"). Wrap a word in double quotes — "search" — to match that exact word only, so it will not match inside "research".'>Search Title &#9432;</label>
+      <div class="filter-group" title='Searches within titles, not just the exact/full paper title. Substring match by default (e.g. "market" also finds "marketing"). Wrap a word in double quotes — "search" — to match that exact word only, so it will not match inside "research".'>
+        <label>Search Title</label>
         <input id="filterSearch" name="ms-filter-title" placeholder="Title..." type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('title','filterSearch');event.preventDefault();}">
         <div id="chipsTitle" class="chips"></div>
       </div>
-      <div class="filter-group">
-        <label title='Searches the full text of paper abstracts. Substring match by default (e.g. "network" also finds "networks"). Wrap a word or phrase in double quotes — "machine learning" — to match that exact word/phrase only. Multiple terms combine (Enter adds a chip; all chips must match). Not every paper has an abstract on record, so abstract-only searches skip those.'>Search Abstracts &#9432;</label>
+      <div class="filter-group" title='Searches the full text of paper abstracts. Substring match by default (e.g. "network" also finds "networks"). Wrap a word or phrase in double quotes — "machine learning" — to match that exact word/phrase only. Multiple terms combine (Enter adds a chip; all chips must match). Not every paper has an abstract on record, so abstract-only searches skip those.'>
+        <label>Search Abstracts</label>
         <input id="filterAbstracts" name="ms-filter-abstract" placeholder="Abstract..." type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore oninput="debounceSearch()" onkeydown="if(event.key==='Enter'){addTextChip('abstract','filterAbstracts');event.preventDefault();}">
         <div id="chipsAbstract" class="chips"></div>
       </div>
-      <div class="filter-group">
-        <label title='Affiliation names are not standardized across papers. Duplicates may exist despite ongoing deduplication efforts. Tip: wrap a term in double quotes for an exact-word match.'>Search Affiliations &#9432;</label>
+      <div class="filter-group" title='Affiliation names are not standardized across papers. Duplicates may exist despite ongoing deduplication efforts. Tip: wrap a term in double quotes for an exact-word match.'>
+        <label>Search Affiliations</label>
         <input id="filterAffiliations" name="ms-filter-affiliation" placeholder="Affiliation..." type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore oninput="debounceAffSearch()" onkeydown="if(event.key==='Enter'){addTextChip('affiliation','filterAffiliations');event.preventDefault();}">
         <div id="chipsAffiliation" class="chips"></div>
       </div>
