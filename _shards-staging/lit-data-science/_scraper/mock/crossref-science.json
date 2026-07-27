@@ -1,0 +1,53 @@
+{
+  "message": {
+    "items": [
+      {
+        "DOI": "10.1126/science.1136099",
+        "type": "journal-article",
+        "title": ["The Increasing Dominance of Teams in Production of Knowledge"],
+        "author": [
+          { "given": "Stefan", "family": "Wuchty" },
+          { "given": "Benjamin F.", "family": "Jones" },
+          { "given": "Brian", "family": "Uzzi" }
+        ],
+        "volume": "316",
+        "issue": "5827",
+        "page": "1036-1039",
+        "abstract": "<jats:p>We have used 19.9 million papers over 5 decades and 2.1 million patents to demonstrate that teams increasingly dominate solo authors in the production of knowledge.</jats:p>",
+        "issued": { "date-parts": [[2007, 5]] },
+        "is-referenced-by-count": 3500
+      },
+      {
+        "DOI": "10.1126/science.test-1111",
+        "type": "journal-article",
+        "title": ["Large language models transform how discoveries are made"],
+        "author": [
+          { "given": "Grace", "family": "Hopper" },
+          { "given": "Claude", "family": "Shannon" }
+        ],
+        "volume": "390",
+        "issue": "6700",
+        "page": "50-55",
+        "abstract": "<jats:p>A field experiment on LLM-assisted discovery.</jats:p>",
+        "issued": { "date-parts": [[2025, 10]] },
+        "is-referenced-by-count": 2
+      },
+      {
+        "DOI": "10.1126/science.test-2222",
+        "type": "journal-article",
+        "title": ["Large language models transform how discoveries are made"],
+        "author": [
+          { "given": "Grace", "family": "Hopper" },
+          { "given": "Claude", "family": "Shannon" }
+        ],
+        "issued": { "date-parts": [[2025, 9]] }
+      },
+      {
+        "DOI": "10.1126/science.nonart-1",
+        "type": "editorial",
+        "title": ["Editorial: machines and meaning"],
+        "issued": { "date-parts": [[2025, 2]] }
+      }
+    ]
+  }
+}

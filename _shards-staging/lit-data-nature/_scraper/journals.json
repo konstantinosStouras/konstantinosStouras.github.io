@@ -1,0 +1,36 @@
+[
+  {
+    "key": "nature",
+    "name": "Nature",
+    "short": "Nature",
+    "issns": [
+      "0028-0836",
+      "1476-4687"
+    ],
+    "publisher": "Springer Nature",
+    "aia": true,
+    "limitedCoverage": true
+  },
+  {
+    "key": "nhb",
+    "name": "Nature Human Behaviour",
+    "short": "Nat. Hum. Behav.",
+    "issns": [
+      "2397-3374"
+    ],
+    "publisher": "Springer Nature",
+    "aia": true,
+    "limitedCoverage": true
+  },
+  {
+    "key": "ncomms",
+    "name": "Nature Communications",
+    "short": "Nat. Commun.",
+    "issns": [
+      "2041-1723"
+    ],
+    "publisher": "Springer Nature",
+    "aia": true,
+    "limitedCoverage": true
+  }
+]

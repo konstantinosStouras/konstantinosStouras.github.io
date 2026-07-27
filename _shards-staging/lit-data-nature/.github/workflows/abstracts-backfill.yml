@@ -1,0 +1,90 @@
+name: backfill abstracts (lit-data-nature)
+
+# Fills missing/stub abstracts across this shard (data/) from OpenAlex
+# (abstract_inverted_index, batched 50/call) plus an optional Semantic Scholar
+# leg (500 DOIs/POST; drops out on throttle; S2_API_KEY moves it off the
+# anonymous pool). The Nature-portfolio journals deposit NO abstract to
+# Crossref (verified: every 10.1038 example record arrived abstract-less), so
+# this backfill is what fills the Abstracts search for this shard. The
+# optional SPRINGER_API_KEY (Springer Meta API) leg is the publisher-side
+# bonus for these 10.1038/… DOIs; the Elsevier leg never fires here (no
+# 10.1016/… DOIs) and stays inert. Runs bounded ~40-min slices,
+# newest papers first, into data/_api-abstracts.json, and applies UPGRADE-only
+# (betterAbstract) to the served papers files. VENDORED from the site repo's
+# lit-ft50-abstracts-backfill.yml — keep in sync.
+# Distinct OpenAlex quota identity kstouras+litnatureabs@gmail.com.
+
+on:
+  schedule:
+    - cron: '45 2,8,14,20 * * *'    # four slices a day, off the other jobs' minutes
+  workflow_dispatch: {}      # run on demand from the Actions tab
+
+# SAME concurrency group as update-data.yml / citations-update.yml /
+# preprints-backfill.yml — every data/ writer queues, never racing a commit.
+concurrency:
+  group: update-data-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55      # 40-min crawl budget + apply/commit headroom
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '20'
+
+      - name: Backfill abstracts (bounded slice, newest first)
+        env:
+          FT50_ABS_BUDGET_MS: '2400000'
+          # Optional keys — both legs stay inert/anonymous until the secret is
+          # set on THIS repo (secrets are per-repo). ELSEVIER_API_KEY (a free
+          # institutional key from dev.elsevier.com) unlocks the Abstract
+          # Retrieval leg for 10.1016/… DOIs; S2_API_KEY moves the Semantic
+          # Scholar leg off the throttled anonymous pool.
+          ELSEVIER_API_KEY: ${{ secrets.ELSEVIER_API_KEY }}
+          ELSEVIER_INST_TOKEN: ${{ secrets.ELSEVIER_INST_TOKEN }}   # optional off-campus entitlement token
+          SPRINGER_API_KEY: ${{ secrets.SPRINGER_API_KEY }}   # optional — the Meta API key (abstracts for Springer/Palgrave/Kluwer DOIs)
+          S2_API_KEY: ${{ secrets.S2_API_KEY }}
+        run: node _scraper/abstracts-ci.mjs
+
+      - name: Commit refreshed data
+        if: always() && github.ref == 'refs/heads/main'
+        # Push-retry replay pattern (same as citations-update.yml): on a
+        # rejected push, take the new tip and re-apply ONLY our cache finds.
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data
+          if git diff --cached --quiet; then
+            echo "No data changes — nothing to commit."
+            exit 0
+          fi
+          cp data/_api-abstracts.json /tmp/abs-ours.json
+          git commit -m "lit: abstracts backfill (OpenAlex/S2/Elsevier)"
+          for i in 1 2 3; do
+            if git push origin "HEAD:$GITHUB_REF_NAME"; then
+              echo "Pushed on attempt $i."
+              exit 0
+            fi
+            echo "Push rejected (concurrent commit?) — replaying our finds on the new tip…"
+            git fetch origin "$GITHUB_REF_NAME"
+            git reset --hard "origin/$GITHUB_REF_NAME"
+            node _scraper/abstracts-ci.mjs --apply-only --merge-cache=/tmp/abs-ours.json
+            git add data
+            if git diff --cached --quiet; then
+              echo "The concurrent commit already contains these abstracts — nothing left to push."
+              exit 0
+            fi
+            git commit -m "lit: abstracts backfill (OpenAlex/S2/Elsevier)"
+            sleep 5
+          done
+          echo "::error::Could not push the abstracts data after 3 attempts."
+          exit 1

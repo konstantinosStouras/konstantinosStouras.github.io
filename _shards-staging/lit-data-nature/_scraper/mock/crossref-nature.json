@@ -1,0 +1,59 @@
+{
+  "message": {
+    "items": [
+      {
+        "DOI": "10.1038/s41586-019-0941-9",
+        "type": "journal-article",
+        "title": ["Large teams develop and small teams disrupt science and technology"],
+        "author": [
+          { "given": "Lingfei", "family": "Wu" },
+          { "given": "Dashun", "family": "Wang" },
+          { "given": "James A.", "family": "Evans" }
+        ],
+        "volume": "566",
+        "issue": "7744",
+        "page": "378-382",
+        "issued": { "date-parts": [[2019, 2]] },
+        "is-referenced-by-count": 1200
+      },
+      {
+        "DOI": "10.1038/d41586-026-01726-y",
+        "type": "journal-article",
+        "title": ["Will AI ruin the social sciences — or revolutionize them?"],
+        "author": [{ "given": "A", "family": "Journalist" }],
+        "issued": { "date-parts": [[2026, 5]] }
+      },
+      {
+        "DOI": "10.1038/s41586-025-11111-1",
+        "type": "journal-article",
+        "title": ["Generative agents reshape collective creativity"],
+        "author": [
+          { "given": "Ada", "family": "Lovelace" },
+          { "given": "Alan", "family": "Turing" }
+        ],
+        "volume": "645",
+        "issue": "8000",
+        "page": "100-105",
+        "abstract": "<jats:p>We show that generative agents materially change how teams create together, using a large field experiment.</jats:p>",
+        "issued": { "date-parts": [[2025, 9]] },
+        "is-referenced-by-count": 4
+      },
+      {
+        "DOI": "10.1038/s41586-025-22222-2",
+        "type": "journal-article",
+        "title": ["Generative agents reshape collective creativity"],
+        "author": [
+          { "given": "Ada", "family": "Lovelace" },
+          { "given": "Alan", "family": "Turing" }
+        ],
+        "issued": { "date-parts": [[2025, 8]] }
+      },
+      {
+        "DOI": "10.1038/nature.editorial-1",
+        "type": "editorial",
+        "title": ["On the state of machine intelligence"],
+        "issued": { "date-parts": [[2025, 1]] }
+      }
+    ]
+  }
+}

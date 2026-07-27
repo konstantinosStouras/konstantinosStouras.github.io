@@ -1,0 +1,39 @@
+{
+  "_readme": "The curated topic filter for this shard — WHICH Nature-portfolio papers belong in The Lit. `topics` are OpenAlex topic ids (a work matches when ANY of its ~3 assigned topics is listed; ids verified against display_name on every build, warn-only). `searches` are quoted OpenAlex title_and_abstract.search phrases (stemmed, so singular covers plural). `mustInclude` force-adds specific DOIs per journal key — the owner's requested papers, immune to topic re-tagging. `excludeDoiPrefixes` keeps Nature's 10.1038/d41586-* NEWS/comment DOIs out even when they match a topic. Edit this file and push — the next build re-seeds the scope and harvests the difference. Evidence for the curation (per-journal counts per topic, the example papers' own topics): the site repo's PR that introduced this shard.",
+  "topics": [
+    { "id": "T10102", "name": "scientometrics and bibliometrics research", "theme": "science of science" },
+    { "id": "T10003", "name": "Innovation and Knowledge Management", "theme": "innovation" },
+    { "id": "T10068", "name": "Technology Adoption and User Behaviour", "theme": "innovation" },
+    { "id": "T10181", "name": "Natural Language Processing Techniques", "theme": "LLMs" },
+    { "id": "T10028", "name": "Topic Modeling", "theme": "LLMs" },
+    { "id": "T12128", "name": "AI in Service Interactions", "theme": "GenAI" },
+    { "id": "T10883", "name": "Ethics and Social Impacts of AI", "theme": "GenAI & society" },
+    { "id": "T12026", "name": "Explainable Artificial Intelligence (XAI)", "theme": "GenAI" },
+    { "id": "T13910", "name": "Computational and Text Analysis Methods", "theme": "LLMs / computational social science" }
+  ],
+  "searches": [
+    "large language model",
+    "ChatGPT",
+    "generative AI",
+    "generative artificial intelligence",
+    "foundation model",
+    "science of science",
+    "team science"
+  ],
+  "mustInclude": {
+    "nature": [
+      "10.1038/s41586-019-0941-9"
+    ],
+    "nhb": [
+      "10.1038/s41562-025-02173-x",
+      "10.1038/s41562-024-01953-1",
+      "10.1038/s41562-025-02195-5"
+    ],
+    "ncomms": [
+      "10.1038/s41467-025-61345-5"
+    ]
+  },
+  "excludeDoiPrefixes": [
+    "10.1038/d41586-"
+  ]
+}

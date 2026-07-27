@@ -1,0 +1,107 @@
+# TEMPORARY — lives only while the two staged shards await their own repos
+# (see _shards-staging/README.md; delete this file together with that
+# directory at bootstrap). On every push touching _shards-staging/ it runs
+# each staged pipeline's offline selftests AND its REAL build (this repo's
+# dev sandbox blocks the scholarly APIs; Actions runners don't), asserts the
+# owner's six requested papers land in the datasets, and commits the seeded
+# data/ back into the staging trees — so the shards bootstrap pre-populated.
+
+name: validate staged shards (nature/science)
+
+on:
+  push:
+    branches: [claude/nature-science-filtering-s59mno]
+    paths:
+      - '_shards-staging/**'
+      - '.github/workflows/validate-shards.yml'
+  workflow_dispatch: {}
+
+concurrency:
+  group: validate-shards
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '20'
+
+      - name: Offline selftests (both shards, no network)
+        run: |
+          node _shards-staging/lit-data-nature/_scraper/scope-selftest.mjs
+          node _shards-staging/lit-data-nature/_scraper/abstracts-selftest.mjs
+          node _shards-staging/lit-data-science/_scraper/scope-selftest.mjs
+          node _shards-staging/lit-data-science/_scraper/abstracts-selftest.mjs
+
+      - name: Live build — lit-data-nature (real OpenAlex + Crossref)
+        working-directory: _shards-staging/lit-data-nature
+        env:
+          FT50_MAILTO: kstouras+litnature@gmail.com
+          # Tight enrichment budgets: the shard's own scheduled backfills own
+          # coverage post-bootstrap; this run only proves the pipeline.
+          FT50_PREPRINT_SEARCH_MS: '60000'
+          FT50_CITATIONS_MS: '60000'
+        run: node _scraper/build-data.mjs
+
+      - name: Assert the owner's Nature-portfolio papers are in
+        run: |
+          node _shards-staging/validate.mjs _shards-staging/lit-data-nature \
+            10.1038/s41586-019-0941-9 \
+            10.1038/s41562-025-02173-x \
+            10.1038/s41562-024-01953-1 \
+            10.1038/s41562-025-02195-5 \
+            10.1038/s41467-025-61345-5
+
+      - name: Live build — lit-data-science (real OpenAlex + Crossref)
+        working-directory: _shards-staging/lit-data-science
+        env:
+          FT50_MAILTO: kstouras+litscience@gmail.com
+          FT50_PREPRINT_SEARCH_MS: '60000'
+          FT50_CITATIONS_MS: '60000'
+        run: node _scraper/build-data.mjs
+
+      - name: Assert the owner's Science paper is in
+        run: |
+          node _shards-staging/validate.mjs _shards-staging/lit-data-science \
+            10.1126/science.1136099
+
+      - name: Commit the seeded datasets back to the staging trees
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add _shards-staging/lit-data-nature/data _shards-staging/lit-data-science/data
+          if git diff --cached --quiet; then
+            echo "No data changes — nothing to commit."
+            exit 0
+          fi
+          git commit -m "shards-staging: seed nature/science datasets (validated live build)"
+          for i in 1 2 3; do
+            if git push origin "HEAD:$GITHUB_REF_NAME"; then
+              echo "Pushed on attempt $i."
+              exit 0
+            fi
+            echo "Push rejected (concurrent commit?) — re-committing on the new tip…"
+            git fetch origin "$GITHUB_REF_NAME"
+            # Mixed reset: HEAD moves to the new tip, the built data stays in
+            # the working tree (same replay pattern as the shard workflows).
+            git reset "origin/$GITHUB_REF_NAME"
+            git add _shards-staging/lit-data-nature/data _shards-staging/lit-data-science/data
+            if git diff --cached --quiet; then
+              echo "Nothing left to push."
+              exit 0
+            fi
+            git commit -m "shards-staging: seed nature/science datasets (validated live build)"
+            sleep 5
+          done
+          echo "::error::Could not push the seeded datasets after 3 attempts."
+          exit 1

@@ -1,0 +1,9 @@
+{
+  "results": [
+    { "doi": "https://doi.org/10.1126/science.1136099" },
+    { "doi": "https://doi.org/10.1126/science.test-1111" },
+    { "doi": "https://doi.org/10.1126/science.test-2222" },
+    { "doi": "https://doi.org/10.1126/science.nonart-1" },
+    { "doi": null }
+  ]
+}

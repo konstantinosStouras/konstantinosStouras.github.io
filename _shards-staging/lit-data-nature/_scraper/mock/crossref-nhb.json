@@ -1,0 +1,44 @@
+{
+  "message": {
+    "items": [
+      {
+        "DOI": "10.1038/s41562-025-02173-x",
+        "type": "journal-article",
+        "title": ["ChatGPT decreases idea diversity in brainstorming"],
+        "author": [
+          { "given": "First", "family": "Author" },
+          { "given": "Second", "family": "Coauthor" }
+        ],
+        "volume": "9",
+        "page": "1107-1109",
+        "issued": { "date-parts": [[2025, 5]] }
+      },
+      {
+        "DOI": "10.1038/s41562-024-01953-1",
+        "type": "journal-article",
+        "title": ["An empirical investigation of the impact of ChatGPT on creativity"],
+        "author": [
+          { "given": "Byung Cheol", "family": "Lee" },
+          { "given": "Jaeyeon", "family": "Chung" }
+        ],
+        "volume": "8",
+        "issue": "11",
+        "page": "2064-2072",
+        "issued": { "date-parts": [[2024, 7]] },
+        "is-referenced-by-count": 30
+      },
+      {
+        "DOI": "10.1038/s41562-025-02195-5",
+        "type": "journal-article",
+        "title": ["Reply to: ChatGPT decreases idea diversity in brainstorming"],
+        "author": [
+          { "given": "Byung Cheol", "family": "Lee" },
+          { "given": "Jaeyeon", "family": "Chung" }
+        ],
+        "volume": "9",
+        "page": "1110-1111",
+        "issued": { "date-parts": [[2025, 5]] }
+      }
+    ]
+  }
+}

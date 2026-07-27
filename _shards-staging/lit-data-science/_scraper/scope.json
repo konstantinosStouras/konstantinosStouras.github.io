@@ -1,0 +1,29 @@
+{
+  "_readme": "The curated topic filter for this shard — WHICH Science (AAAS) papers belong in The Lit. `topics` are OpenAlex topic ids (a work matches when ANY of its ~3 assigned topics is listed; ids verified against display_name on every build, warn-only). `searches` are quoted OpenAlex title_and_abstract.search phrases (stemmed, so singular covers plural). `mustInclude` force-adds specific DOIs — the owner's requested papers, immune to topic re-tagging. No excludeDoiPrefixes here: unlike Nature's d41586-* news DOIs, Science front-matter shares the 10.1126/science.* pattern with research papers, so the Crossref type filter (journal-article only) is the guard — Perspectives/Policy Forums that Crossref types as journal-article are listed, like PNAS commentaries. Edit this file and push — the next build re-seeds the scope and harvests the difference. Keep the topics/searches lists in sync with lit-data-nature's scope.json (same curation, two shards).",
+  "topics": [
+    { "id": "T10102", "name": "scientometrics and bibliometrics research", "theme": "science of science" },
+    { "id": "T10003", "name": "Innovation and Knowledge Management", "theme": "innovation" },
+    { "id": "T10068", "name": "Technology Adoption and User Behaviour", "theme": "innovation" },
+    { "id": "T10181", "name": "Natural Language Processing Techniques", "theme": "LLMs" },
+    { "id": "T10028", "name": "Topic Modeling", "theme": "LLMs" },
+    { "id": "T12128", "name": "AI in Service Interactions", "theme": "GenAI" },
+    { "id": "T10883", "name": "Ethics and Social Impacts of AI", "theme": "GenAI & society" },
+    { "id": "T12026", "name": "Explainable Artificial Intelligence (XAI)", "theme": "GenAI" },
+    { "id": "T13910", "name": "Computational and Text Analysis Methods", "theme": "LLMs / computational social science" }
+  ],
+  "searches": [
+    "large language model",
+    "ChatGPT",
+    "generative AI",
+    "generative artificial intelligence",
+    "foundation model",
+    "science of science",
+    "team science"
+  ],
+  "mustInclude": {
+    "science": [
+      "10.1126/science.1136099"
+    ]
+  },
+  "excludeDoiPrefixes": []
+}
