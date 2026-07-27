@@ -251,6 +251,13 @@ async function crGetPatient(url, deadline) {
     const r = await httpGet(url);
     if (r.ok) { throttleStreak = 0; await sleep(PACE_MS); return r.json; }
     if (r.status === 404) { throttleStreak = 0; await sleep(PACE_MS); return { message: {} }; } // concluded empty
+    // A non-throttle 4xx is DETERMINISTIC for this URL (e.g. a DOI Crossref's
+    // filter parser rejects) — backing off and retrying the same request would
+    // exhaust the throttle streak and stop the whole run at the same batch
+    // every schedule. Signal the caller to bisect/skip instead.
+    if (r.status >= 400 && r.status < 500 && r.status !== 429) {
+      throttleStreak = 0; await sleep(PACE_MS); return 'permErr';
+    }
     throttleStreak++;
     if (throttleStreak > MAX_THROTTLE) return null;
     const backoff = Math.min(r.retryAfter * 1000 || 0, 600000) || Math.min(30000 * 2 ** (throttleStreak - 1), 600000);
@@ -399,6 +406,7 @@ async function fetchCrossrefRefsBatch(dois, deadline) {
     '&select=DOI,reference&rows=' + dois.length + '&mailto=' + encodeURIComponent(MAILTO);
   const body = await crGetPatient(url, deadline);
   if (body === null) return null;
+  if (body === 'permErr') return 'permErr';
   const msg = body.message || {};
   const items = Array.isArray(msg.items) ? msg.items : [msg];
   const byDoi = {};
@@ -407,6 +415,28 @@ async function fetchCrossrefRefsBatch(dois, deadline) {
     if (d) byDoi[d] = extractRefDois(item);
   }
   return byDoi;
+}
+
+// Resilient wrapper: a deterministic 4xx on a batched filter is bisected down
+// to the offending DOI(s), which are SKIPPED for the run (never stamped, so a
+// later fix retries them) while every healthy DOI in the batch still resolves.
+// Without this, one Crossref-rejected DOI stalled the entire backfill at the
+// same tier-ordered batch on every schedule. Returns {byDoi, skip} or null
+// (Crossref unavailable — stop the run).
+async function fetchCrossrefRefsResilient(dois, deadline) {
+  const r = await fetchCrossrefRefsBatch(dois, deadline);
+  if (r === null) return null;
+  if (r !== 'permErr') return { byDoi: r, skip: new Set() };
+  if (dois.length === 1) {
+    console.log(`  crossref rejects doi ${dois[0]} (4xx) — skipped this run, not stamped.`);
+    return { byDoi: {}, skip: new Set(dois) };
+  }
+  const mid = dois.length >> 1;
+  const a = await fetchCrossrefRefsResilient(dois.slice(0, mid), deadline);
+  if (a === null) return null;
+  const b = await fetchCrossrefRefsResilient(dois.slice(mid), deadline);
+  if (b === null) return null;
+  return { byDoi: { ...a.byDoi, ...b.byDoi }, skip: new Set([...a.skip, ...b.skip]) };
 }
 
 // ── Apply: intersect the cached references with the current catalog ──────────
@@ -470,6 +500,20 @@ async function main() {
   //    Crossref backbone always gets time to stamp papers.
   const oaDeadline = Math.min(deadline, Date.now() + Math.min(BUDGET_MS * 0.4, 15 * 60 * 1000));
   await refreshOpenAlexRefs(slice, cache, oaidMap, oaDeadline, { checkpoint });
+  // OA-leg backlog: orderPapers freezes a paper once its CROSSREF leg is
+  // stamped, so a paper whose OpenAlex leg dropped out mid-run (quota /
+  // throttle) never re-entered any future slice — it stayed without OpenAlex
+  // references AND without an _oaid.json id (which also blocks the
+  // forward-citation crawler). Sweep those separately, same priority order,
+  // inside the same OA time box.
+  const oaBacklog = papers
+    .filter((p) => { const c = cache[p.doi]; return c && (c.v || 0) >= RF_VER && ((c.oa || 0) < RF_VER); })
+    .sort((a, b) => (a.tier - b.tier) || (b.year - a.year) || (a.doi < b.doi ? -1 : a.doi > b.doi ? 1 : 0))
+    .slice(0, MAX_PAPERS);
+  if (oaBacklog.length && Date.now() < oaDeadline) {
+    console.log(`  openalex backlog: ${oaBacklog.length} Crossref-stamped paper(s) still missing the OpenAlex leg…`);
+    await refreshOpenAlexRefs(oaBacklog, cache, oaidMap, oaDeadline, { checkpoint });
+  }
   await checkpoint();
 
   // 5. Leg 3 (Semantic Scholar, batched, optional) — in-memory, folded into r.
@@ -482,11 +526,12 @@ async function main() {
   for (let i = 0; i < pending.length; i += CR_BATCH) {
     if (Date.now() > deadline) { console.log('  time budget reached — stopping (resumes next run).'); stopped = true; break; }
     const batch = pending.slice(i, i + CR_BATCH);
-    const byDoi = await fetchCrossrefRefsBatch(batch.map((p) => p.doi), deadline);
-    if (byDoi === null) { console.log('  crossref unavailable — stopping (resumes next run).'); stopped = true; break; }
+    const res = await fetchCrossrefRefsResilient(batch.map((p) => p.doi), deadline);
+    if (res === null) { console.log('  crossref unavailable — stopping (resumes next run).'); stopped = true; break; }
     for (const p of batch) {
+      if (res.skip.has(p.doi)) continue;   // Crossref rejects this DOI — leave unstamped
       const e = cache[p.doi] || {};
-      e.r = unionCap(e.r, byDoi[p.doi] || [], s2ByDoi[p.doi]);
+      e.r = unionCap(e.r, res.byDoi[p.doi] || [], s2ByDoi[p.doi]);
       e.t = PULL_DATE; e.v = RF_VER;
       cache[p.doi] = e;
       done++;

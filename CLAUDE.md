@@ -1000,9 +1000,11 @@ Author-spotlight percentile so a narrowed D range never distorts an author's
 standing). It is pre-computed
 **offline** by `lit/_scraper/build-disruption.mjs` into a small,
 lazily-loaded `analytics/disruption.json` (one row per paper with a defined D —
-`{j,y,t,d,c,nf,ra?,rp?,au[],ti,doi}` + an author-name index; `nf` = in-catalog
-forward-citation count, used to gate the highlight tables against degenerate ±1
-one-citation artefacts) — the whole per-paper table ships so the browser
+`{j,y,t,d,c,nf,x?,ra?,rp?,au[],ti,doi}` + a case-insensitive author-name
+index; `nf` = in-catalog forward-citation count (in BOTH scoring modes), used
+to gate the highlight tables against degenerate ±1 one-citation artefacts;
+`x` = non-research item per `_nonarticle.mjs`, so the page's exclude-toggle
+covers the team-science figures too) — the whole per-paper table ships so the browser
 computes every figure client-side under the live filters. The highlight tables
 merge the thin large-team tail into an "8+" bin. Reference age uses reference
 years; reference popularity uses references' `CitedBy` (a rough proxy while

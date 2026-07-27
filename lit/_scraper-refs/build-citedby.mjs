@@ -270,16 +270,20 @@ async function main() {
   // 4. Coverage stats → the tiny served meta.
   const oaidToDoi = {};
   for (const [doi, oaid] of Object.entries(oaidMap)) if (oaid && dbByDoi.has(doi)) oaidToDoi[oaid] = doi;
-  let fetched = 0, totalCiters = 0, inCatCiters = 0, capped = 0;
+  let fetched = 0, withCiters = 0, totalCiters = 0, inCatCiters = 0, capped = 0;
   for (const [doi, e] of Object.entries(cache)) {
     if (!dbByDoi.has(doi)) continue;           // paper no longer in the catalog
     if ((e.v || 0) >= CB_VER) fetched++;
     if (e.cap) capped++;
+    if (e.c && e.c.length) withCiters++;
     for (const wid of e.c || []) { totalCiters++; if (oaidToDoi[wid]) inCatCiters++; }
   }
   const meta = {
     lastPull: PULL_DATE, ver: CB_VER,
-    papersWithCiters: fetched, catalog: papers.length, withOaid,
+    // papersWithCiters = papers with ≥1 harvested citer; papersFetched counts
+    // every harvest attempt incl. zero-citer papers (the old value of
+    // papersWithCiters, which overstated coverage by the zero-citer share).
+    papersWithCiters: withCiters, papersFetched: fetched, catalog: papers.length, withOaid,
     citersHarvested: totalCiters, inCatalogCiters: inCatCiters, cappedPapers: capped,
   };
   await writeFile(join(DATA_DIR, 'citedby-meta.json'), JSON.stringify(meta), 'utf8');
