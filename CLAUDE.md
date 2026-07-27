@@ -209,7 +209,21 @@ filter; a paper with no abstract on record can't match an abstract query.
 per applyFilters pass), NOT `allPapers.length` — with FT50 selected, chaining
 the pre-print toggle or a search reads "2,787 (1.21%) of 230,089" even when an
 earlier broad search left the whole catalog in memory; and `crossFilter()` (dropdown
-counts + summary tabs) applies the pre-print toggle like every other filter. The
+counts + summary tabs) applies the pre-print toggle like every other filter.
+**EXCEPT under the "Citing papers of" focal filter, where the denominator is
+MANIFEST-derived and the percentage is dropped** — "228 of 569,696 papers":
+that filter answers from the citation graph (which already knows every citing
+paper in the WHOLE catalog) and therefore downloads only the journals its
+citers live in, so `scopeCount` would report that deliberately narrow download
+("228 of 73,474") as if it were the corpus. `catalogPaperTotal()` (factored out
+of `updateHeaderStats`, so the bar and the header can't disagree) and
+`citedByCorpusTotal()` (the in-scope journals' manifest counts when a
+journal/type IS selected; 0 → caller falls back to `scopeCount`, e.g. a PNAS
+section whose count folds into the parent) supply it. The narrowing is
+LOSSLESS — verified over all 1,166,176 edges: every citer resolves to a journal
+in `refs-index.json` — and a citer that ever lacks one flips the filter's
+`wide` flag, which drops the narrowing so every file loads and no row can be
+silently missed. The
 catalog also carries **notFT extras** — journals on another list but not the
 FT50: UTD24's INFORMS Journal on Computing (`ijoc`) and ABS 4's European
 Journal of Operational Research (`ejor`) — flagged `"notFT": true` in

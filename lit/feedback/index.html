@@ -84,7 +84,10 @@
   .fb-input, .fb-textarea { width: 100%; font-family: inherit; font-size: 14.5px; color: var(--text); background: #fff; border: 1.5px solid var(--border); border-radius: 9px; padding: 11px 13px; transition: border-color .13s; }
   .fb-input:focus, .fb-textarea:focus { outline: none; border-color: var(--navy); }
   .fb-textarea { min-height: 150px; resize: vertical; line-height: 1.6; }
-  .fb-row { display: flex; gap: 14px; flex-wrap: wrap; }
+  /* Paired fields (Title/Authors, name/e-mail): the row carries the 18px field
+     rhythm itself — its children zero theirs, so without a bottom margin here
+     the next field sat flush against the inputs above it. */
+  .fb-row { display: flex; gap: 18px 22px; flex-wrap: wrap; margin-bottom: 18px; }
   .fb-row .fld { flex: 1 1 220px; margin-bottom: 0; }
 
   /* Screenshot dropzone + thumbnails */
