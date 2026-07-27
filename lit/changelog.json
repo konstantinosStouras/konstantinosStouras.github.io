@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "citing-papers-of-filter",
+      "date": "2026-07-27",
+      "title": "Search by who cites: the “Citing papers of” filter",
+      "summary": "A new filter in the search bar turns the citation graph into a search of its own: pick Paper and paste a DOI or a title, or pick Author and type a name, and the database shows only the papers that cite that focal paper (or any of that author's papers). It combines with every other filter — journals, journal types, years and text searches all narrow the citing set — so you can ask questions like “which Marketing Science papers since 2020 cite this paper?”. Each card's “Cited by … references in this catalog” panel also gains a one-click “Show as filtered list” shortcut, and the result is shareable by URL. In-catalog citers only, so coverage grows as the graph fills in.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
       "id": "team-science-beta-accuracy",
       "date": "2026-07-27",
       "title": "Team science marked beta, headline chart reworked, and a round of accuracy fixes",

@@ -1441,7 +1441,28 @@ sync, like build-analytics.mjs). The page merges it at runtime like the FT50
 catalog: `loadRefsManifest()` at load; a card shows each toggle only when its
 journal has that direction's shard (`refsShardFor`/`citedShardFor`);
 `loadRefsIndex()`/`loadRefsShard(jkey)`/`loadCitedShard(jkey)`
-are lazy + idempotent. The dataset **ships EMPTY** (manifest with no shards), so
+are lazy + idempotent. **The "Citing papers of" FOCAL FILTER (citation
+search):** a filter-bar group (primary row, beside Journals) resolves a focal
+PAPER (DOI/doi.org URL, or a title matched exactly-normalized / uniquely by
+substring against `refs-index.json` — ambiguity asks for the DOI, never
+guesses) or a focal AUTHOR (`authorMatch` over the index's authors strings,
+gated to papers `cited-counts.json` says have citers) into the set of catalog
+papers that CITE it/them (`litCbResolvePaper`/`litCbResolveAuthor` →
+`citedByFilter` `{kind,label,doi?,dois:Set,jkeys:Set,focal}`), entirely from
+the graph files — no papers file downloads during resolution. The set then
+ANDs into `applyFilters` AND `crossFilter` like the pre-print toggle (per-row
+bare-DOI cache `p._bdoi`), so journals/types/years/text searches all chain on
+top; `neededNativeKeys`/`neededExtraKeys` treat it as a broad trigger but
+INTERSECT with `citedByFilter.jkeys`, so a focal cited from 3 journals streams
+3 papers files, never the whole catalog. One focal at a time (chip
+`chip-citedby`, green); wired into the welcome-state check, `litSelectionIsEmpty`,
+`litFilterSig`, `resetFilterState`, `registerExtraSources`' re-render trigger,
+and `dbAnswerable` (bails to the JSON path). Deep-linkable + shareable —
+`?citedby=<doi>` / `?citedbyauthor=<name>` (`litSyncCitedByUrl` keeps the URL
+in step, `applyCitedByDeepLink` applies it on load and stands the site default
+down via `LIT_CITEDBY_DEEPLINK`); each card's cited-by panel carries a
+"Show as filtered list" shortcut (`litCitedByFromCard`). The dataset **ships
+EMPTY** (manifest with no shards), so
 the toggles stay hidden until the backfill populates it. Offline test:
 `node lit/_scraper-refs/selftest.mjs` (mock, no network). NOTE: this build
 env's egress blocks the scholarly APIs (Crossref/OpenAlex/Semantic Scholar, 403),
