@@ -1379,7 +1379,17 @@ overwrite; ingest: stamped on `added`) and both writers emit a
 the two emissions in sync); the page fetches it via `loadDatasetRecent` in
 `loadWorkingPapersManifest()` and `matchesJournal` admits WP rows in
 `recentMode` — back-catalog rows crawled before dating began carry no date and
-never appear. `buildJTypeSelect()` **hides the Working Papers type until its
+never appear. **But the recent view is ordered PUBLISHED-FIRST, working papers
+second** (`renderRecent`'s comparator `(a.w - b.w) || (b.d - a.d)`, where `w`
+comes from `isWorkingPaperRow` — `_jkeys` if computeJkeys has run, else the raw
+`JKey`), each block newest-added first. A pure date sort let the WP backfill
+bury the whole published catalogue: it adds ~1,000 rows in one day, so on
+2026-07-28 all 1,000 preceded the 144 published papers added the day before —
+ABS shards first appeared on page 41, Nature/Science on 42, the NATIVE journals
+on 43. This is the same published-first instinct `matchesJournal` already
+applies to bare browsing ("flood the view with unpublished rows"), and it keeps
+the owner's "include working papers in recent" decision intact — they are still
+listed, just after the published block. `buildJTypeSelect()` **hides the Working Papers type until its
 archive has sources**, so the shipped empty `data-workingpapers/` (valid empty
 manifest) stays dormant until data lands. **The archive is built ONLINE, slowly:** two
 workflows — `lit-workingpapers-backfill.yml` (every 3 h, the growth engine) and
