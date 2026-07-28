@@ -222,6 +222,13 @@
   table.cited .ti a { color: var(--navy); font-weight: 600; text-decoration: none; }
   table.cited .ti a:hover { text-decoration: underline; }
   table.cited .meta { color: var(--text-muted); font-size: 12px; }
+  /* byline under a paper's title — darker than the journal/year meta line so the
+     authors read as part of the citation, not as secondary metadata. */
+  table.cited .auth { color: var(--text); font-size: 12px; opacity: .82; margin-top: 1px; }
+  /* team-size cell: "3 authors" — the number is the point, the unit is the label
+     that says what "team" counts (see the card sub-heading). */
+  table.cited .team { color: var(--text-muted); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  table.cited .team b { color: var(--text); font-weight: 700; }
   table.cited .cby { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--navy); text-align: right; white-space: nowrap; }
   .tblscroll { overflow-x: auto; }
 
@@ -604,12 +611,14 @@
             </div>
             <div class="card">
               <h3>Most disruptive papers in scope</h3>
-              <div class="csub">Highest <em>D</em> — work later cited on its own, apart from its antecedents.</div>
+              <div class="csub">Highest <em>D</em> — work later cited on its own, apart from its antecedents.
+                <strong>Team size</strong> is how many authors are credited on the paper (2&nbsp;authors&nbsp;= a two-author paper).</div>
               <div class="tblscroll"><div id="disrTopDisrupt"></div></div>
             </div>
             <div class="card">
               <h3>Most developing papers in scope</h3>
-              <div class="csub">Lowest <em>D</em> — work cited alongside the prior art it consolidated and extended.</div>
+              <div class="csub">Lowest <em>D</em> — work cited alongside the prior art it consolidated and extended.
+                <strong>Team size</strong> is how many authors are credited on the paper (2&nbsp;authors&nbsp;= a two-author paper).</div>
               <div class="tblscroll"><div id="disrTopDevelop"></div></div>
             </div>
             <div class="card wide">
@@ -2498,17 +2507,39 @@
     $('disrRatioSub').innerHTML = 'The paper’s Fig. 2d: small teams should over-produce the most-disruptive work, large teams the most-cited — the two lines crossing the dashed 1.0 line in opposite directions. Each bin’s share of top-tier papers is normalized by the corpus-wide share (ties at the 95th-percentile threshold make that share exceed a nominal 5%), so 1.0 = exactly the corpus rate.';
   }
 
+  // The credited authors of a disruption.json row: `au` holds ids into the
+  // dataset's shared author array (one per credited name, so au.length === t,
+  // the team size). Returns [] when the row carries no author ids.
+  function disrPaperAuthors(p) {
+    if (!p || !p.au || !DISR || !DISR.authors) return [];
+    return p.au.map(function (id) { return DISR.authors[id]; }).filter(Boolean);
+  }
+  // "Team" is simply the number of authors credited on the paper — Team 2 = a
+  // two-author paper. Spelling the unit out in the cell (and in each card's
+  // sub-heading) stops a bare "2" from reading as a rank, a group id or a
+  // co-author count that excludes the lead author.
+  function disrTeamCell(p) {
+    var n = p.t || 0;
+    return '<span class="team"><b>' + fmt(n) + '</b> ' + (n === 1 ? 'author' : 'authors') + '</span>';
+  }
   function disrPaperTable(list) {
     if (!list.length) return '<div class="chart-empty">No data in the selected scope.</div>';
-    var html = '<table class="cited"><thead><tr><th>Paper</th><th>Team</th><th style="text-align:right">D</th></tr></thead><tbody>';
+    var html = '<table class="cited"><thead><tr><th>Paper</th>' +
+      '<th title="Team size — how many authors are credited on the paper. 2 authors = a two-author paper.">Team size</th>' +
+      '<th style="text-align:right">D</th></tr></thead><tbody>';
     list.forEach(function (p) {
       var url = p.doi ? 'https://doi.org/' + p.doi : '';
       var ti = trunc(p.ti || '(untitled)', 74);
       var title = url ? '<a href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(ti) + '</a>' : esc(ti);
       var col = p.d > 0 ? C_DISRUPT : (p.d < 0 ? C_DEVELOP : MUTED);
       var nfMeta = p.nf != null ? ' · cited by ' + fmt(p.nf) + ' here' : '';
-      html += '<tr><td class="ti">' + title + '<div class="meta">' + esc(JMAP[p.j] ? JMAP[p.j].name : p.j) + ' · ' + esc(p.y) + nfMeta + '</div></td>' +
-        '<td class="meta">' + fmt(p.t) + '</td>' +
+      // Byline, like the most-cited table: truncated to keep the row compact,
+      // with the full author list on hover so a large team stays readable.
+      var names = disrPaperAuthors(p), full = names.join(', ');
+      var auth = full ? '<div class="auth" title="' + esc(full) + '">' + esc(trunc(full, 110)) + '</div>' : '';
+      html += '<tr><td class="ti">' + title + auth +
+        '<div class="meta">' + esc(JMAP[p.j] ? JMAP[p.j].name : p.j) + ' · ' + esc(p.y) + nfMeta + '</div></td>' +
+        '<td>' + disrTeamCell(p) + '</td>' +
         '<td class="cby" style="color:' + col + '">' + (p.d > 0 ? '+' : '') + fmtD3(p.d) + '</td></tr>';
     });
     return html + '</tbody></table>';

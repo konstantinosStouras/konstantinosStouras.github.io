@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "disruption-tables-authors-team-size",
+      "date": "2026-07-28",
+      "title": "Data Analytics: the most-disruptive and most-developing paper tables now name the authors",
+      "summary": "Each row in the Team-science section's “most disruptive” and “most developing” tables now carries the paper's authors under its title — the full list on hover — so a paper is identifiable without opening its DOI. The “Team” column is also now labelled “Team size” and reads “2 authors” rather than a bare “2”, making explicit that it counts the authors credited on the paper.",
+      "url": "https://www.stouras.com/lit/analytics/"
+    },
+    {
       "id": "recent-published-first",
       "date": "2026-07-28",
       "title": "Recently added papers now leads with the newly published ones",
