@@ -125,7 +125,10 @@ for (const s of ft50Sources) {
 // with the shard variants, so if this script skipped them the two files could
 // canonicalize the same person differently and the Author-spotlight's
 // disruption join (matched by name) would silently miss.
-const SHARD_REPOS = ['lit-data-abs4', 'lit-data-abs3-omecon', 'lit-data-abs3-rest'];
+const SHARD_REPOS = ['lit-data-abs4', 'lit-data-abs3-omecon', 'lit-data-abs3-rest',
+  // Topic-filtered Nature/Science shards (no abs grades in their manifests —
+  // their journals stay out of the ABS buckets, like PNAS).
+  'lit-data-nature', 'lit-data-science'];
 function shardDir(repo) {
   const cands = [];
   if (process.env.LIT_SHARDS_DIR) cands.push(path.join(process.env.LIT_SHARDS_DIR, repo, 'data'));
