@@ -10,6 +10,13 @@
       "url": "https://www.stouras.com/lit/analytics/"
     },
     {
+      "id": "recent-published-first",
+      "date": "2026-07-28",
+      "title": "Recently added papers now leads with the newly published ones",
+      "summary": "The Recently added view lists new journal articles first and the newly posted working papers after them, each newest-first. The working-papers archive can add around a thousand pre-prints in a single day, and a strict by-date order meant those filled the first forty pages — new papers from Nature, Science, the FT50 journals and the INFORMS titles were pushed out of sight. Both are still there; the published catalogue simply comes first.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
       "id": "nature-science-topic-shards",
       "date": "2026-07-27",
       "title": "Nature and Science join the database — GenAI, LLM, innovation and science-of-science papers",
