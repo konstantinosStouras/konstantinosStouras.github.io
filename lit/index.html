@@ -308,7 +308,17 @@
   /* The "Citing papers of" focal filter (citation search) + the panel's
      "Show as filtered list" action — same green family as the cited-by side. */
   .cb-row { display: flex; gap: 6px; }
-  .filter-group select.cb-kind { display: block; width: 112px; flex: none; padding: 0 10px; height: 50px; border: 1.5px solid var(--border); border-radius: 6px; font-family: 'Work Sans', sans-serif; font-size: 20px; color: var(--text); background: var(--white); cursor: pointer; }
+  /* Only what differs from the shared .filter-group select/input rule above:
+     this is the one select the filter bar actually shows (the others are
+     replaced by .custom-select), it sits beside its input rather than filling
+     the group, and it keeps the plain white background (no arrow sprite) at
+     this width. Its type size matches .custom-select-trigger — the Journal
+     types / Journals dropdowns it lines up with — rather than the 20px of the
+     text inputs, so "Paper"/"Author" is not the one oversized word in the bar.
+     Height, border and colour are NOT repeated here: they were, and the box
+     then kept its desktop size at the tablet/phone breakpoints, where every
+     control around it shrinks. */
+  .filter-group select.cb-kind { display: block; width: 112px; flex: none; padding: 0 10px; font-size: 18px; background: var(--white); cursor: pointer; }
   .filter-group select.cb-kind:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(125,29,63,0.1); }
   .cb-row input { flex: 1; }
   .cb-note { font-size: 12px; color: var(--text-muted); line-height: 1.4; min-height: 0; }
@@ -392,7 +402,10 @@
     .header-inner, .filters-inner, .summary-tabs,
     .results-bar, .papers-list, .pagination { padding-left: 24px; padding-right: 24px; }
     .header h1 { font-size: 25px; }
-    .filter-group input, .custom-select-trigger { font-size: 17px; }
+    /* .cb-kind (Paper/Author) named at its own specificity, or its base rule
+       wins here and the box keeps its desktop size while everything around it
+       shrinks. */
+    .filter-group input, .filter-group select.cb-kind, .custom-select-trigger { font-size: 17px; }
     .custom-select-item { font-size: 16px; }
     .sort-control, .sort-control select { font-size: 16px; }
   }
@@ -400,7 +413,7 @@
   /* Phones: keep inputs at >=16px so iOS does not zoom on focus — including when
      the sticky bar condenses on scroll (the .compact rules above drop to 15px). */
   @media (max-width: 768px) {
-    .filter-group input, .custom-select-trigger { font-size: 16px; height: 48px; }
+    .filter-group input, .filter-group select.cb-kind, .custom-select-trigger { font-size: 16px; height: 48px; }
     .custom-select-item, .custom-select-search { font-size: 16px; }
     body.compact .filter-group input,
     body.compact .custom-select-trigger,
