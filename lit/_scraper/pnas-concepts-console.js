@@ -85,14 +85,22 @@
       }
       retries = 0;
       const doc = parser.parseFromString(html, 'text/html');
-      const n = countResults(doc);
+      const n = countResults(doc); // DOM row count — logging only
+      const pageDois = new Set(doisOf(html)); // distinct real paper DOIs = the row count that matters
       let fresh = 0;
-      for (const d of doisOf(html)) {
+      for (const d of pageDois) {
         if (!mine.has(d)) { mine.add(d); add(d, key); fresh++; }
       }
-      console.log(`  ${name}: page ${p + 1} — ${n} results, ${fresh} new, ${mine.size} total`);
-      // Primary stop: a page that isn't full is the last page.
-      if (n < PAGE_SIZE) { complete = true; break; }
+      console.log(`  ${name}: page ${p + 1} — ${n} rows / ${pageDois.size} DOIs, ${fresh} new, ${mine.size} total`);
+      // An empty page is NEVER trusted as the last page: the search backend
+      // can serve an HTTP-200 zero-result template mid-listing, which would
+      // silently truncate the walk while claiming completeness. The rare
+      // genuine case (a total that is an exact multiple of PAGE_SIZE) just
+      // ends the sitting "NOT confirmed complete" — safe. (Same rule as
+      // pnas-crawl.mjs — keep in sync.)
+      if (pageDois.size === 0) break;
+      // Primary stop: a NON-EMPTY page that isn't full is the last page.
+      if (pageDois.size < PAGE_SIZE) { complete = true; break; }
       // Runaway guard: a full page yielding nothing new means the listing is
       // repeating (or reshuffling) — bail after a few, but do NOT claim
       // completeness (the build's safety valve then keeps the approximation).
@@ -116,9 +124,15 @@
   // genuinely full index (and even then only one at least half the size of
   // the approximation, so a truncated crawl can never shrink the dataset).
   const allComplete = SECTIONS.every(([k]) => sectionComplete[k]);
+  // fullAsOf marks the date of a genuinely COMPLETE full crawl — the horizon
+  // up to which the build treats the index as authoritative (a later partial
+  // merge advances `updated` but never fullAsOf). Same shape as
+  // pnas-crawl.mjs's mergeIntoCache — keep in sync.
+  const today = new Date().toISOString().slice(0, 10);
   const out = {
-    updated: new Date().toISOString().slice(0, 10),
+    updated: today,
     full: allComplete,
+    ...(allComplete ? { fullAsOf: today } : {}),
     counts,
     map: sorted,
   };

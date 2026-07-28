@@ -3,7 +3,7 @@
  * Run:  node lit/_scraper/entities-selftest.mjs
  */
 import { cleanText, titleText, affilName, affilParts, affilList,
-  trimTrailingSeparators, namedEntity } from './_entities.mjs';
+  trimTrailingSeparators, namedEntity, stripPageFurniture } from './_entities.mjs';
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { c ? pass++ : (fail++, console.log('  FAIL:', m)); };
@@ -89,6 +89,37 @@ eq(affilList('Advertising, Public Relations, &amp;#38; Retailing MSU'),
 eq(affilList(affilList('Advertising, &amp;#38; Retailing')), affilList('Advertising, &amp;#38; Retailing'),
   'affilList is idempotent on the double-encoded case');
 eq(affilList(''), '', 'affilList empty'); eq(JSON.stringify(affilParts(null)), '[]', 'affilParts null');
+
+// ── page-furniture guard (feedback LIT-260727-XRQ8) ──────────────────────────
+const REAL = 'We develop a sequential search model by which consumers who are uncertain about their '
+  + 'match value for a product search to reveal noisy signals and update their beliefs in a Bayesian fashion.';
+eq(stripPageFurniture(`${REAL} Back to Top Next Figures References Related Information Cited by Some Citing Paper 31 March 2026 | Quantitative Marketing and Economics, Vol. 24, No. 1`),
+  REAL, 'navigation + Cited-by tail after the abstract is cut off');
+eq(stripPageFurniture(`${REAL} Previous Back to Top Figures References Related Information Volume 23, Issue 1 February 2004 Pages 1-172 Article Information Metrics`),
+  REAL, 'the "Previous …" variant (no Cited by) is cut too');
+eq(stripPageFurniture(`${REAL} Back to Top Next FiguresReferencesRelatedInformation Volume 14, Issue 3`),
+  REAL, 'space-collapsed FiguresReferencesRelatedInformation is cut');
+eq(stripPageFurniture('Previous Back to Top Figures References Related Information Volume 72, Issue 7 July 2026 Pages 5491-6432'),
+  '', 'an entry that is ONLY furniture empties');
+eq(stripPageFurniture('Journal Article Understanding Trust Get access Paola Sapienza, Paola Sapienza Northwestern University Search for other works by this author on: Oxford Academic Google Scholar The Economic Journal, Volume 123, Pages 1313–1332'),
+  '', 'an OUP page-header scrape (no abstract on the page) is rejected');
+eq(stripPageFurniture('Previous articleNext article No AccessMentoring and Schooling Decisions: Causal EvidenceArmin FalkPDFPDF PLUS Add to favoritesDownload CitationTrack Citations'),
+  '', 'a U. Chicago page scrape is rejected');
+eq(stripPageFurniture('Views Icon Views Article contents Figures & tables Share Icon Share Cite View This Citation Download citation file: RIS toolbar search'),
+  '', 'a Silverchair page scrape is rejected');
+eq(stripPageFurniture('No abstract is available for this article.'),
+  '', "Wiley's no-abstract notice is not served as an abstract");
+eq(stripPageFurniture('This article corrects the following: The Maturity Rat Race MARKUS K. BRUNNERMEIER Volume 68, Issue 3'),
+  '', 'an erratum notice scrape is rejected');
+eq(stripPageFurniture(REAL), REAL, 'clean abstract passes through unchanged');
+eq(stripPageFurniture(stripPageFurniture(`${REAL} Back to Top Next Figures References Related Information`)),
+  REAL, 'idempotent');
+eq(stripPageFurniture('Firms that fall behind fight their way back to top positions in the ranking, and we model this dynamic over sixty quarters of data using a structural estimation strategy over panel data.'),
+  'Firms that fall behind fight their way back to top positions in the ranking, and we model this dynamic over sixty quarters of data using a structural estimation strategy over panel data.',
+  '"back to top" inside a real sentence is NEVER a cut point (the cut anchors on the section-label sequence)');
+eq(stripPageFurniture('Patients must request permission before records are shared; we study how consent frictions shape data availability in hospital systems across three states.'),
+  'Patients must request permission before records are shared; we study how consent frictions shape data availability in hospital systems across three states.',
+  'a single weak marker ("request permission" as prose) never rejects');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

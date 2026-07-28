@@ -122,7 +122,7 @@ export function normName(s) { return stripAccents(s).toLowerCase().replace(/\s+/
 // shared lit/_scraper/_entities.mjs — this pipeline's cleanText was the
 // reference implementation, promoted there so all six pipelines decode the same
 // way. cleanTitle = cleanText + the LIT-260725-YWTL trim.
-import { cleanText, titleText as cleanTitle } from '../_scraper/_entities.mjs';
+import { cleanText, titleText as cleanTitle, stripPageFurniture } from '../_scraper/_entities.mjs';
 export { cleanText, cleanTitle };
 
 // OpenAlex stores abstracts as an inverted index {word: [positions]}.
@@ -388,7 +388,7 @@ export function wpRecordFromWork(work, publishedTitles) {
     Volume: '', Issue: '', Page: '',
     Year: year ? String(year) : '',
     Status: 'Working paper',
-    Abstract: cleanText(invertAbstract(work.abstract_inverted_index)).slice(0, MAX_ABSTRACT),
+    Abstract: stripPageFurniture(cleanText(invertAbstract(work.abstract_inverted_index))).slice(0, MAX_ABSTRACT),
     Journal: WP_SOURCES[key].name,
     JKey: key,
     Preprint: canonPreprint(pick.u),

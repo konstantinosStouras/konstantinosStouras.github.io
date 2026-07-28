@@ -10,6 +10,20 @@
       "url": "https://www.stouras.com/lit/"
     },
     {
+      "id": "pnas-coverage-gap-fix",
+      "date": "2026-07-27",
+      "title": "PNAS: the missing 2008–2025 papers are back",
+      "summary": "A crawling bug had quietly frozen PNAS coverage: a truncated crawl of pnas.org's section listings was mistakenly recorded as complete, and the pipeline then trusted it as the authority on which papers belong to the five PNAS sections — silently dropping nearly two decades of Computer Sciences, Sustainability Science, Environmental Sciences, Social Sciences and Economic Sciences papers it had never seen. The crawler now proves a crawl is complete before trusting it, an incomplete section index can no longer exclude papers (the OpenAlex topic approximation keeps covering everything it missed, with official pnas.org labels still winning paper-by-paper), and the section indices are being rebuilt in full — so the 2008–2025 gap fills in with the next data refreshes.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
+      "id": "abstract-furniture-cleanup",
+      "date": "2026-07-27",
+      "title": "Accurate abstracts everywhere",
+      "summary": "Some papers showed an abstract contaminated with article-page leftovers — navigation text like “Back to Top … Related Information” followed by a list of citing articles, or an entire scraped page header in place of an abstract. Every catalog was swept: about 500 abstracts were trimmed back to their real text and about 11,000 page-scrape “abstracts” (on items that never had one) were removed, with the missing ones now re-resolved from proper sources. New abstracts are checked at ingest so this cannot recur.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
       "id": "suggest-published-papers",
       "date": "2026-07-27",
       "title": "Suggest a missing published paper, too",

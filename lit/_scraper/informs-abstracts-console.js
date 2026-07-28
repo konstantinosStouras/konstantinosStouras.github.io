@@ -63,6 +63,45 @@
     } while (cur !== prev && ++guard < 4);
     return cur;
   }
+  // Vendored from _entities.mjs stripPageFurniture — keep in sync. Cuts a
+  // leaked navigation block ("Previous Back to Top Next Figures References
+  // Related Information …", feedback LIT-260727-XRQ8) and rejects page-chrome
+  // scrapes that are not abstract prose.
+  const FURNITURE_CUT_RE =
+    /(?:(?:Previous\s+)?Back to Top\s+)?(?:Next\s+)?Figures\s*References\s*Related\s*Information/i;
+  const CHROME_STRONG_RE = [
+    /ShareShare on/i,
+    /Share on\s*Facebook/i,
+    /PDFPDF/,
+    /AboutSectionsView/i,
+    /Previous articleNext article/i,
+    /Download citation file/i,
+    /Search for other works by this author/i,
+    /Search for more papers by this author/i,
+    /Crossref reports no articles citing this article/i,
+    /No abstract is available for this article/i,
+    /PermissionsReprints/,
+    /View PDF Tools/i,
+    /This article corrects the following/i,
+  ];
+  const CHROME_WEAK_RE = [
+    /Add to favorites/i,
+    /Track citations?\b/i,
+    /Download citations?\b/i,
+    /Published Online\s*:/i,
+    /Article Information\s*Metrics/i,
+    /Request permissions?\b/i,
+    /Export citation\b/i,
+    /First published\s*:/i,
+  ];
+  function stripPageFurniture(raw) {
+    let s = String(raw == null ? '' : raw);
+    const i = s.search(FURNITURE_CUT_RE);
+    if (i >= 0) s = s.slice(0, i).trim();
+    if (CHROME_STRONG_RE.some((re) => re.test(s))) return '';
+    if (CHROME_WEAK_RE.filter((re) => re.test(s)).length >= 2) return '';
+    return s;
+  }
   function cleanAbstractText(raw) {
     let s = decodeEntities(String(raw || ''))
       .replace(/<br\s*\/?>/gi, ' ')
@@ -71,7 +110,7 @@
     s = s.replace(/^abstract[\s:.–—-]*/i, '');
     const h = s.search(/\bHistory\s*:/i);
     if (h >= 0) s = s.slice(0, h).trim();
-    return s;
+    return stripPageFurniture(s);
   }
   function abstractFromPageHtml(html) {
     const h = String(html || '');
@@ -158,6 +197,20 @@
         for (const [k, v] of Object.entries(remote.map || remote)) if (!cache[k]) cache[k] = v;
       }
     } catch (e) { console.warn('Could not fetch the committed cache (continuing with this browser\'s progress only):', e.message); }
+    // Heal any furniture-contaminated entry a PAST sitting saved (an old
+    // extractor could capture the page's navigation + Cited-by block —
+    // feedback LIT-260727-XRQ8; this browser's localStorage may still hold
+    // those). A cut that leaves a real abstract is kept; a chrome-only entry
+    // is dropped entirely so the page is re-crawled with the fixed extractor.
+    let healed = 0;
+    for (const [k, v] of Object.entries(cache)) {
+      if (!v || !v.a) continue;
+      const t = stripPageFurniture(v.a);
+      if (t === v.a) continue;
+      if (t.length >= 60) cache[k] = { a: t }; else delete cache[k];
+      healed++;
+    }
+    if (healed) { saveLocal(); console.log(`Healed ${healed} furniture-contaminated cached abstracts.`); }
 
     let processed = 0, found = 0;
     try {
