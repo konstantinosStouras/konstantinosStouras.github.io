@@ -224,7 +224,54 @@ section whose count folds into the parent) supply it. The narrowing is
 LOSSLESS — verified over all 1,166,176 edges: every citer resolves to a journal
 in `refs-index.json` — and a citer that ever lacks one flips the filter's
 `wide` flag, which drops the narrowing so every file loads and no row can be
-silently missed. The
+silently missed.
+**"N papers added in the last 4 weeks" comes from a TALLY, never from the rows
+(`recent-counts.json`).** `recent.json` is fetched with the page, so every
+pipeline caps it (`RECENT_CAP`, 1000–1500 rows of a 90-day window). Counting
+those rows — what the view used to do — silently under-reports whenever more
+than the cap lands inside the displayed 4 weeks, which is not an edge case: a
+journal's back-catalogue arriving, a re-registration sweep, or the
+working-papers backfill do it routinely (measured 2026-07: 1,000 native rows
+carried where 2,833 papers had really been added; the WP archive stamps
+~12–16k/day). So every dataset now also publishes **`recent-counts.json`** —
+`{generated, windowDays, total, days:{"<jkey>":{"YYYY-MM-DD":n}}}`, ~1 KB,
+UNCAPPED — beside its `recent.json`, and `renderRecent()` prints that number.
+Keys are the row's WHOLE scope-key set `'|'`-joined (`recentScopeKey`:
+journal key first, then its PNAS section keys — `"pnas|pnas-econ|pnas-soc"`),
+because that is what `matchesJournal` tests a row against; emitting one entry
+per section instead would double-count a paper filed under several. The page
+sums the days ≥ cutoff for the keys in scope, per dataset
+(`recentExactCount`/`recentCountsKeyVisible` — which also mirrors
+`loadDatasetRecent`'s "is this journal registered from THIS dataset" drop, so
+the six INFORMS journals the FT50 catalog shares with the native data are not
+counted twice), and uses it only when it is **≥ what the rows show**; anything
+else falls back to counting rows, i.e. the pre-existing behaviour, so a
+missing or stale file (the Nature/Science shards until their vendored
+pipelines ship one) can never make the number smaller than what is on screen.
+Published and working papers are counted SEPARATELY in the label ("3,914
+papers and 85,510 working papers added in the last 4 weeks"), since the WP
+backfill would otherwise swamp the figure that matches the header's published
+catalog; when the capped list can't show them all it says "· showing the
+newest N", and the empty state explains a scope whose additions all fell
+outside the slice. **Every writer of a dataset must rewrite this file with
+`recent.json`** — the daily builds and both incremental passes (the FT50 one
+via `mergeRecentCounts`: polled journals recomputed, the rest carried over and
+pruned to the slid window, the same reasoning as its lean `recent.json`
+merge), the WP crawler AND `ingest-submissions.mjs`, and `dedupe-data.mjs`
+(which re-tallies from the SURVIVING rows, so a removal lowers it too). Tests:
+unit + integration checks in `incremental-selftest.mjs` (native + FT50), the WP
+`selftest.mjs` and `ingest-selftest.mjs`.
+**All four published counters are audited offline by
+`node lit/_scraper/counters-selftest.mjs`** — the header's "N papers from M
+authors", the recently-added tally, and the analytics scope line + tiles — each
+recomputed from the papers files themselves (manifest counts vs rows,
+`meta.paperCount`/`perSource`, every tally day against the registry/`Date
+Added`, `analytics/data.json` totals vs its own per-journal rows and the
+non-research `x` delta). It reads shards exactly as `build-analytics.mjs` finds
+them and runs as a report-only (`continue-on-error`) step in
+`lit-analytics.yml`, the one job that checks out all five shards. The
+dashboard trailing the header by a day of harvests is expected and reported as
+a note, not a failure. The
 catalog also carries **notFT extras** — journals on another list but not the
 FT50: UTD24's INFORMS Journal on Computing (`ijoc`) and ABS 4's European
 Journal of Operational Research (`ejor`) — flagged `"notFT": true` in
@@ -1375,8 +1422,11 @@ or one of its repositories. **"Recently added" includes new working papers (per
 the owner):** the WP pipeline stamps `"Date Added"` on each key that first
 enters the archive (crawler: stamped on new, PRESERVED across the re-crawl
 overwrite; ingest: stamped on `added`) and both writers emit a
-`data-workingpapers/recent.json` of ONLY dated rows, newest-added first (keep
-the two emissions in sync); the page fetches it via `loadDatasetRecent` in
+`data-workingpapers/recent.json` of ONLY dated rows, newest-added first, plus
+the uncapped `recent-counts.json` tally the view's number is read from
+(`buildWpRecentCounts`, shared by both writers — the capped rows can never
+carry a backfill day of ~12–16k stamps; keep the two emissions in sync); the
+page fetches them via `loadDatasetRecent`/`loadRecentCounts` in
 `loadWorkingPapersManifest()` and `matchesJournal` admits WP rows in
 `recentMode` — back-catalog rows crawled before dating began carry no date and
 never appear. `buildJTypeSelect()` **hides the Working Papers type until its

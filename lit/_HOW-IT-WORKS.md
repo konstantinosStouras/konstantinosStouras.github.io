@@ -27,7 +27,8 @@ There is no server and no database. A scheduled **GitHub Action**
 runs `_scraper/build-data.mjs`, which downloads every article from the public
 APIs above, writes one static JSON file per source into `lit/data/`
 (`papers-ms.json`, `papers-opre.json`, …, listed in `sources.json`), plus
-shared `authors.json` / `affiliations.json` / `recent.json` / `meta.json`,
+shared `authors.json` / `affiliations.json` / `recent.json` /
+`recent-counts.json` / `meta.json`,
 and commits whatever changed. The page (`index.html`) `fetch()`es those files
 lazily — a source downloads the first time a filter needs it, rendering
 progressively — and does every filter, search and BibTeX export in the
@@ -90,7 +91,9 @@ browser.
   editor filters can't match FT50-extra papers, so those alone never trigger
   the download (the pre-print toggle DOES: extras carry `Preprint` links too,
   each dataset backfilling its own — see "Updating the data"); the recent view
-  merges the `data-ft50/recent.json` (extras only — natives are already covered).
+  merges the `data-ft50/recent.json` (extras only — natives are already covered),
+  and takes the NUMBER above that list from each dataset's tiny, uncapped
+  `recent-counts.json` rather than from the capped rows themselves.
   `data-ft50/` is **this app's own copy** of the FT50 dataset: it was seeded
   by copying the retired fun/ft50 app's data (registry included, so "recently
   added" history carried over) and is maintained by `_scraper-ft50/` — that
@@ -135,6 +138,9 @@ lit/
 │  ├─ authors.json           ← per-author aggregates (authors with ≥2 papers)
 │  ├─ affiliations.json      ← per-affiliation aggregates
 │  ├─ recent.json            ← papers first seen in the last few weeks
+│  │                           (CAPPED — it is fetched with the page)
+│  ├─ recent-counts.json     ← the uncapped tally behind "N papers added in
+│  │                           the last 4 weeks": per journal, per day
 │  ├─ meta.json              ← { lastPull, paperCount, authorCount, perSource }
 │  │                           (authorCount: distinct authors, pre-trim; the
 │  │                           header's "N papers from M authors" sums it with

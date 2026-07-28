@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "recently-added-exact-count",
+      "date": "2026-07-28",
+      "title": "“Recently added papers” now shows the true number",
+      "summary": "The count above the Recently added list is now the exact number of papers added in the last four weeks, across every catalog. It used to be read from the list itself — which is capped so it can be fetched with the page — so on a busy stretch (a journal's back-catalogue arriving, a batch of re-registrations, the working-papers backfill) it silently reported only the newest slice: 1,000 native papers where 2,833 had really been added. Published papers and working papers are counted separately, the same figures follow any journal or journal-type filter you pick, and when the list itself can't show everything it now says how many of them it is showing.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
       "id": "nature-science-topic-shards",
       "date": "2026-07-27",
       "title": "Nature and Science join the database — GenAI, LLM, innovation and science-of-science papers",

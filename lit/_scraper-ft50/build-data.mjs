@@ -41,6 +41,10 @@
  *   authors.json         per-author aggregates across all journals (≥2 papers)
  *   affiliations.json    per-affiliation aggregates
  *   recent.json          papers first seen in the last RECENT_WINDOW_DAYS
+ *                        (capped at RECENT_CAP rows — it is fetched with the
+ *                        page, so it carries the newest slice, not all of it)
+ *   recent-counts.json   the UNCAPPED tally behind the page's "N papers added
+ *                        in the last 4 weeks": per journal, per day
  *   meta.json            { lastPull, paperCount, authorCount,
  *                        authorCountExtras, journalCount, perSource }
  *                        (authorCounts = distinct authors pre-trim — full
@@ -1638,7 +1642,80 @@ function buildRecent(papers, registry) {
     rows.push({ p, d });
   }
   rows.sort((a, b) => (b.d - a.d) || (b.p._rank - a.p._rank) || cmp(regKey(a.p), regKey(b.p)));
+  // Capped: recent.json is pre-fetched on every page load. The count the page
+  // shows does NOT come from these rows — see buildRecentCounts.
   return rows.slice(0, RECENT_CAP).map(x => ({ ...publicRow(x.p), 'Date Added': registry[regKey(x.p)] }));
+}
+
+// Exact per-journal × per-day tally of first registrations inside the same
+// window recent.json covers — the number behind the page's "N papers added in
+// the last 4 weeks". recent.json is capped, so a burst day (a journal's
+// back-catalogue landing, a re-registration sweep) leaves it holding only the
+// newest rows and a count taken from them under-reports; this companion is
+// never capped and stays ~1 KB. Keyed by JKey, the key the page's journal scope
+// is expressed in. Mirrors _scraper/build-data.mjs — keep in sync.
+export function buildRecentCounts(papers, registry) {
+  const cutoff = new Date(PULL_DATE + 'T00:00:00');
+  cutoff.setDate(cutoff.getDate() - RECENT_WINDOW_DAYS);
+  const days = {};
+  let total = 0;
+  for (const p of papers) {
+    const ds = registry[regKey(p)];
+    if (!ds) continue;
+    const d = new Date(ds + 'T00:00:00');
+    if (isNaN(d) || d < cutoff) continue;
+    const k = p.JKey || '';
+    if (!k) continue;
+    const perDay = days[k] || (days[k] = {});
+    perDay[ds] = (perDay[ds] || 0) + 1;
+    total++;
+  }
+  return recentCountsFile(days, total);
+}
+
+// The window's first day, as the same YYYY-MM-DD string the registry stores
+// (ISO dates compare correctly as strings).
+function recentCutoffDay() {
+  const c = new Date(PULL_DATE + 'T00:00:00');
+  c.setDate(c.getDate() - RECENT_WINDOW_DAYS);
+  return c.toISOString().slice(0, 10);
+}
+
+// Incremental counterpart: the polled journals' tallies are recomputed, every
+// other journal's is carried from the last write (pruned to the window that has
+// since slid forward). Correct for the same reason the lean recent.json merge
+// is — this pass and the daily build are the only writers of this directory and
+// share a concurrency group, so nothing else can have changed the other
+// journals since that file was written.
+export function mergeRecentCounts(prev, fresh, refreshedKeys) {
+  const cutoffDay = recentCutoffDay();
+  const days = {};
+  const carried = (prev && prev.days && typeof prev.days === 'object') ? prev.days : {};
+  for (const k of Object.keys(carried)) {
+    if (refreshedKeys.has(k) || !carried[k]) continue;
+    const perDay = {};
+    for (const d of Object.keys(carried[k])) {
+      const n = carried[k][d];
+      if (d >= cutoffDay && n > 0) perDay[d] = n;
+    }
+    if (Object.keys(perDay).length) days[k] = perDay;
+  }
+  for (const k of Object.keys(fresh.days)) days[k] = fresh.days[k];
+  let total = 0;
+  for (const k of Object.keys(days)) for (const d of Object.keys(days[k])) total += days[k][d];
+  return recentCountsFile(days, total);
+}
+
+// Deterministic serialization (sorted keys) so an unchanged corpus produces
+// identical bytes and therefore no needless commit.
+function recentCountsFile(days, total) {
+  const sorted = {};
+  for (const k of Object.keys(days).sort()) {
+    const perDay = {};
+    for (const d of Object.keys(days[k]).sort()) perDay[d] = days[k][d];
+    sorted[k] = perDay;
+  }
+  return { generated: PULL_DATE, windowDays: RECENT_WINDOW_DAYS, total, days: sorted };
 }
 
 function publicRow(p) {
@@ -1774,6 +1851,7 @@ async function main() {
     buildAuthors(allPapers.filter(p => !LIT_NATIVE_KEYS.has(p.JKey))).distinct;
   const affiliations = buildAffiliations(allPapers);
   const recent = buildRecent(allPapers, registry);
+  const recentCounts = buildRecentCounts(allPapers, registry);
 
   // 4. Write per-journal paper files + manifest (capability flags included so
   // the page can adapt its filters per journal without hardcoding keys).
@@ -1830,12 +1908,14 @@ async function main() {
   await writeJson('authors.json', authors.rows);
   await writeJson('affiliations.json', affiliations);
   await writeJson('recent.json', recent);
+  await writeJson('recent-counts.json', recentCounts);
   await writeJson('meta.json', meta);
   await writeJson('_registry.json', registry);
 
   console.log(`done: ${total} papers (${sources.map(s => `${s.key}:${s.count}`).join(' ')}), ` +
     `${authors.distinct} authors (${authors.rows.length} listed), ` +
-    `${affiliations.length} affiliations, ${recent.length} recent`);
+    `${affiliations.length} affiliations, ${recent.length} recent ` +
+    `(${recentCounts.total} added in the last ${RECENT_WINDOW_DAYS} days)`);
 }
 
 async function writeJson(name, data) {
@@ -1990,6 +2070,13 @@ async function incrementalMain() {
     .map(r => { const { ['Date Added']: _da, ...rest } = r; return rehydrateRow(rest); });
   const incrPapers = incrJournals.flatMap(src => bySource[src.key]);
   const recent = buildRecent([...carriedRecent, ...incrPapers], registry);
+  // The exact counts behind the page's "added in the last 4 weeks" figure: the
+  // polled journals recomputed from their full row sets (NOT from the capped
+  // carriedRecent, which cannot be trusted to hold all of a burst day), every
+  // other journal carried from the last write.
+  const prevRecentCounts = await loadJsonIfExists(join(DATA_DIR, 'recent-counts.json'), null);
+  const recentCounts = mergeRecentCounts(
+    prevRecentCounts, buildRecentCounts(incrPapers, registry), incrKeys);
 
   // Rewrite only the changed per-source files.
   for (const src of incrJournals) {
@@ -2004,12 +2091,14 @@ async function incrementalMain() {
 
   if (sources) await writeJson('sources.json', sources);
   await writeJson('recent.json', recent);
+  await writeJson('recent-counts.json', recentCounts);
   await writeJson('meta.json', meta);
   await writeJson('_registry.json', registry);
 
   const newlyRegistered = Object.keys(registry).length - registryBefore;
   console.log(`ft50 incremental update: {${[...changedSources].join(', ') || 'none'}} changed, ` +
-    `${newlyRegistered} newly-registered, ${recent.length} recent, ${total} total papers.`);
+    `${newlyRegistered} newly-registered, ${recent.length} recent ` +
+    `(${recentCounts.total} added in the last ${RECENT_WINDOW_DAYS} days), ${total} total papers.`);
 }
 
 // Only run when executed directly — importing a helper from this module for a

@@ -90,6 +90,8 @@ const REFRESH_DAYS = parseInt(process.env.WP_REFRESH_DAYS || '45', 10); // re-cr
 const PRIORITY_YEARS = parseInt(process.env.WP_PRIORITY_YEARS || '15', 10); // MS/MSOM/POM recency window
 const PRIORITY_KEYS = new Set((process.env.WP_PRIORITY_KEYS || 'ms,msom,pom').split(',').map(s => s.trim()));
 const MAX_ABSTRACT = 4000;         // chars; keeps the files bounded
+const WP_RECENT_CAP = 1000;        // recent.json is fetched with the page
+export const WP_RECENT_WINDOW_DAYS = 90; // recent-counts.json window (page shows 4 weeks)
 const MAX_SAMPLE_DOIS = 4;         // per author, for OpenAlex ID resolution
 const MIN_YEAR = parseInt(process.env.WP_MIN_YEAR || '1990', 10); // preprint year floor
 const MAX_THROTTLE = 8;            // consecutive OpenAlex waits before giving the run up
@@ -398,6 +400,40 @@ export function wpRecordFromWork(work, publishedTitles) {
   return rec;
 }
 
+// The EXACT tally behind the page's "… working papers added in the last 4
+// weeks", as a per-repository × per-day map. recent.json is capped (it ships
+// with every page load) and this archive is built by a bulk backfill that
+// stamps tens of thousands of rows in a day, so a count taken from those rows
+// under-reports by an order of magnitude; this companion is never capped and
+// stays ~1 KB. Keyed by JKey (wp-ssrn/wp-nber/wp-arxiv/wp-osf), the key the
+// page's journal scope is expressed in. Written by BOTH archive writers (the
+// crawler here and regroupAndWrite in ingest-submissions.mjs) — keep in sync,
+// like the recent.json emission itself.
+export function buildWpRecentCounts(rows, pullDate) {
+  const cutoff = new Date(pullDate + 'T00:00:00');
+  cutoff.setDate(cutoff.getDate() - WP_RECENT_WINDOW_DAYS);
+  const cutoffDay = cutoff.toISOString().slice(0, 10);
+  const days = {};
+  let total = 0;
+  for (const r of rows) {
+    const ds = r['Date Added'];
+    const k = r.JKey || '';
+    if (!ds || !k || String(ds) < cutoffDay) continue;
+    const perDay = days[k] || (days[k] = {});
+    perDay[ds] = (perDay[ds] || 0) + 1;
+    total++;
+  }
+  // Deterministic (sorted) so an unchanged archive produces identical bytes and
+  // therefore no needless commit.
+  const sorted = {};
+  for (const k of Object.keys(days).sort()) {
+    const perDay = {};
+    for (const d of Object.keys(days[k]).sort()) perDay[d] = days[k][d];
+    sorted[k] = perDay;
+  }
+  return { generated: pullDate, windowDays: WP_RECENT_WINDOW_DAYS, total, days: sorted };
+}
+
 // Dedup key for a working paper (co-authored papers surface once per author).
 export function recKey(r) {
   const doi = String(r.DOI || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase();
@@ -609,7 +645,8 @@ async function main() {
     .filter(r => r['Date Added'])
     .sort((a, b) => String(b['Date Added']).localeCompare(String(a['Date Added'])) ||
       (parseInt(b.Year, 10) || 0) - (parseInt(a.Year, 10) || 0))
-    .slice(0, 1000);
+    .slice(0, WP_RECENT_CAP);
+  const recentCounts = buildWpRecentCounts([...byKey.values()], PULL_DATE);
 
   const doneCount = Object.values(cache).filter(c => c && c.done).length;
   const meta = {
@@ -624,6 +661,7 @@ async function main() {
 
   await writeJson('sources.json', sources);
   await writeJson('recent.json', recent);
+  await writeJson('recent-counts.json', recentCounts);
   await writeJson('meta.json', meta);
   if (supplementChanged) await writeJson('submitted-preprints.json', supplement);
   await writeCache(cache);
