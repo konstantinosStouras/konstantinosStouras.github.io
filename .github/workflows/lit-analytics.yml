@@ -68,19 +68,17 @@ jobs:
           repository: konstantinosStouras/lit-data-abs3-rest
           path: _analytics-shards/lit-data-abs3-rest
 
-      # The two topic-filtered shards (Nature portfolio / Science). Until their
-      # repos are bootstrapped (see _shards-staging/README.md on the feature
-      # branch that introduced them), the checkout fails harmlessly —
-      # continue-on-error lets the build script's warn+skip path handle it.
+      # The two topic-filtered shards (Nature portfolio / Science) — same
+      # read-only checkout as the ABS ones above; their journals are curated
+      # topical slices (GenAI/LLMs, innovation, science of science), not full
+      # catalogues.
       - name: Checkout data shard — lit-data-nature
-        continue-on-error: true
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: konstantinosStouras/lit-data-nature
           path: _analytics-shards/lit-data-nature
 
       - name: Checkout data shard — lit-data-science
-        continue-on-error: true
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: konstantinosStouras/lit-data-science
