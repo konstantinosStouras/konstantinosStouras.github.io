@@ -212,6 +212,9 @@
   .legend.toggleable .li:hover { background: var(--bg); }
   .legend.toggleable .li.off { opacity: .45; text-decoration: line-through; }
   .legend .li.grp { font-weight: 700; }
+  /* A one-line "what the Nature paper predicts this plot should look like" note,
+     shown on its own row under the colour swatches of the team-science figures. */
+  .legend .expect { flex-basis: 100%; font-size: 12px; font-style: italic; color: var(--text-muted); line-height: 1.55; }
   .chart-empty { color: var(--text-muted); font-size: 13.5px; padding: 30px 6px; text-align: center; }
 
   /* cited table */
@@ -2455,7 +2458,8 @@
     });
     $('disrSearchLegend').innerHTML =
       '<span class="li"><span class="sw" style="background:' + C_AGE + '"></span>Average reference age, years (left)</span>' +
-      '<span class="li"><span class="sw" style="background:' + C_POP + '"></span>Median reference popularity, citations (right)</span>';
+      '<span class="li"><span class="sw" style="background:' + C_POP + '"></span>Median reference popularity, citations (right)</span>' +
+      '<span class="expect"><strong>What to expect from the paper:</strong> the two lines should pull apart as teams grow — reference age falling (green, decreasing) while reference popularity rises (gold, increasing), because large teams build on recent, heavily-cited work whereas small teams reach deeper into the past for less popular ideas.</span>';
     $('disrSearchSub').innerHTML = 'Depth of search by team size — the paper’s Fig. 4. Reference age is how far back a paper reaches; reference popularity is the median citation count of the work it builds on. Popularity is a rough proxy while citation coverage fills in.';
   }
 
@@ -2494,8 +2498,9 @@
     });
     $('disrRatioLegend').innerHTML =
       '<span class="li"><span class="sw" style="background:' + C_DISRUPT + '"></span>Top-5% disruptive (high D)</span>' +
-      '<span class="li"><span class="sw" style="background:' + C_CITE + '"></span>Top-5% cited (high impact)</span>';
-    $('disrRatioSub').innerHTML = 'The paper’s Fig. 2d: small teams should over-produce the most-disruptive work, large teams the most-cited — the two lines crossing the dashed 1.0 line in opposite directions. Each bin’s share of top-tier papers is normalized by the corpus-wide share (ties at the 95th-percentile threshold make that share exceed a nominal 5%), so 1.0 = exactly the corpus rate.';
+      '<span class="li"><span class="sw" style="background:' + C_CITE + '"></span>Top-5% cited (high impact)</span>' +
+      '<span class="expect"><strong>What to expect from the paper:</strong> the two lines should cross the dashed 1.0 line in opposite directions as teams grow — disruption (blue) decreasing from above&nbsp;1.0 to below it, citations (red) increasing from below&nbsp;1.0 to above it, so small teams over-produce the most-disruptive work and large teams the most-cited.</span>';
+    $('disrRatioSub').innerHTML = 'The paper’s Fig. 2d: small teams should over-produce the most-disruptive work, large teams the most-cited. Each bin’s share of top-tier papers is normalized by the corpus-wide share (ties at the 95th-percentile threshold make that share exceed a nominal 5%), so 1.0 = exactly the corpus rate.';
   }
 
   function disrPaperTable(list) {
