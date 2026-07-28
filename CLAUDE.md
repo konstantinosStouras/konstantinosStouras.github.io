@@ -1236,7 +1236,15 @@ co-wrote** (in scope). It draws the paper's signature plots — distribution of 
 (Fig 1b), disruption & citations vs team size (the "scissor", Fig 2), reference
 age & popularity vs team size (Fig 4), and relative-ratio extremes (Fig 2d) —
 plus most-disruptive/-developing paper and author tables, and an author-level
-disruption profile in the Author-spotlight tab. It is a **faithful but partial**
+disruption profile in the Author-spotlight tab. The two paper tables cite each
+row in full — title, **authors** (`disrPaperAuthors` maps the row's `au` ids
+through `DISR.authors`; truncated to 110 chars with the full list in a `title=`
+tooltip, like the most-cited table's byline) then journal · year · in-catalog
+citers — and their team column is headed **"Team size"** and rendered as
+"**N** authors" (`disrTeamCell`), never a bare number, with the same
+"credited authors on the paper" wording in each card's sub-heading and the
+`th` tooltip; keep that wording aligned with the figures' "Team size (authors)"
+x-axis label. It is a **faithful but partial**
 reconstruction (we only have the references harvested within the catalog, not
 the paper's 40M-work network) that **sharpens as `data-refs/` grows**; every
 figure honours the same journal / type / year filters, plus a dedicated
