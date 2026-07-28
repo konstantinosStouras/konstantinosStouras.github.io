@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "allcaps-title-sentence-case",
+      "date": "2026-07-28",
+      "title": "SHOUTING TITLES are now readable titles",
+      "summary": "Older papers were often registered with the title in full capitals — “MARKET EQUILIBRIUM”, “A PENTAPLOID LARVA OF THE NEWT, TRITURUS VIRIDESCENS” — which read badly next to everything else and, worse, produced unusable BibTeX (the export protects every capital, so you copied “M{A}{R}{K}{E}{T} {E}{Q}{U}{I}{L}{I}{B}{R}{I}{U}{M}” into your .bib file). About 17,400 such titles across every catalog now read as sentence case, keeping acronyms (DNA, CAPM, CEO), proper nouns (Bayesian, Cournot, Drosophila) and multi-word names (United States, World Trade Organization) capitalised, and capitalising the first word after a colon. Titles that were published in Title Case are deliberately left exactly as they are — only all-capitals titles are changed — and every new paper is checked as it arrives.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
       "id": "pnas-coverage-gap-fix",
       "date": "2026-07-27",
       "title": "PNAS: the missing 2008–2025 papers are back",

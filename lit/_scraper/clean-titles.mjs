@@ -21,6 +21,7 @@
  *   node lit/_scraper/clean-titles.mjs --dir ../lit-data-abs4/data
  *   node lit/_scraper/clean-titles.mjs --dir lit/data-workingpapers
  *   ... --dry-run          # report only, write nothing
+ *   ... --derived          # ALSO fix the derived title copies (see below)
  * ===========================================================================
  */
 import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
@@ -118,6 +119,69 @@ if (existsSync(recentPath)) {
       if (!DRY) writeFileSync(recentPath, JSON.stringify(recent), 'utf8');
       console.log(`  recent.json: ${n} row(s) cleaned`);
     }
+  }
+}
+
+// ── derived files that carry their own COPY of a title ──────────────────────
+// The citation-graph index and the two analytics tables embed titles so the
+// page can render a cited/citing paper, a most-cited row or a compared paper
+// without downloading its journal's papers file. Each is re-derived from the
+// papers files by its own build (references backfill every 3 h, analytics
+// daily), so they self-heal — but only on that cadence, which would leave a
+// fixed title still shouting in the citation panels for hours. `--derived`
+// applies the same titleText to them now. Off by default: it is only correct
+// when run against the SITE repo's own dirs, right after cleaning lit/data*.
+if (args.includes('--derived')) {
+  const SITE = resolve(__dirname, '..', '..');
+  // path -> fn(parsed json) -> number of titles changed
+  const DERIVED = [
+    [join(SITE, 'lit', 'data-refs', 'refs-index.json'), (idx) => {
+      // { doi: [title, jkey, year, authors?] }
+      let n = 0;
+      for (const k of Object.keys(idx)) {
+        const row = idx[k];
+        if (!Array.isArray(row) || typeof row[0] !== 'string') continue;
+        const t = titleText(row[0]);
+        if (t !== row[0]) { row[0] = t; n++; }
+      }
+      return n;
+    }],
+    [join(SITE, 'lit', 'analytics', 'disruption.json'), (d) => {
+      let n = 0;
+      for (const r of (Array.isArray(d.papers) ? d.papers : [])) {
+        if (!r || typeof r.ti !== 'string') continue;
+        const t = titleText(r.ti);
+        if (t !== r.ti) { r.ti = t; n++; }
+      }
+      return n;
+    }],
+    [join(SITE, 'lit', 'analytics', 'data.json'), (d) => {
+      let n = 0;
+      const fixList = (list) => {
+        for (const e of (Array.isArray(list) ? list : [])) {
+          if (!e || typeof e.t !== 'string') continue;
+          const t = titleText(e.t);
+          if (t !== e.t) { e.t = t; n++; }
+        }
+      };
+      for (const key of Object.keys(d.journals || {})) {
+        const j = d.journals[key];
+        if (!j) continue;
+        fixList(j.topCited);
+        for (const dim of Object.keys(j.dims || {})) {
+          for (const val of Object.keys(j.dims[dim] || {})) fixList(j.dims[dim][val].tc);
+        }
+      }
+      return n;
+    }],
+  ];
+  console.log('\nderived title copies:');
+  for (const [path, fix] of DERIVED) {
+    if (!existsSync(path)) { console.log(`  ${path}: absent, skipped`); continue; }
+    const parsed = JSON.parse(readFileSync(path, 'utf8'));
+    const n = fix(parsed);
+    if (n && !DRY) writeFileSync(path, JSON.stringify(parsed), 'utf8');
+    console.log(`  ${path.slice(SITE.length + 1)}: ${n} title(s)${n && DRY ? ' (dry-run)' : ''}`);
   }
 }
 
