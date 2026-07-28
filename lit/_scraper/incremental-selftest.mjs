@@ -10,7 +10,9 @@
  *      so no git commit / Pages redeploy on a quiet run);
  *   3. a genuinely-new paper (dropped from the committed files) is re-discovered,
  *      appended, stamped in the registry with today's date and surfaced in
- *      recent.json, with the header counts kept consistent;
+ *      recent.json and recent-counts.json (the uncapped tally the page's
+ *      "N papers added in the last 4 weeks" is read from), with the header
+ *      counts kept consistent;
  *   4. an existing paper's enrichment fields (Preprint link, an OpenAlex/S2
  *      -boosted CitedBy + CitedBySrc) survive a core-field re-fetch.
  *
@@ -125,6 +127,42 @@ ok(sameWorkDup(row({ Title: 'Errata' }), row({ Title: 'Errata', DOI: 'https://do
   ok(JSON.stringify(affilParts('')) === '[]', 'affilParts of empty is []');
 }
 
+// 0b) Unit checks of the recently-added tally (buildRecentCounts): the number
+// the page prints above the "Recently added papers" list. recent.json is capped
+// so it can ship with the page; this tally must NOT be — that is the whole
+// point of it — and it must key a paper by every journal key it answers to, so
+// a PNAS paper filed under two sections is counted once, not twice.
+{
+  const { buildRecentCounts } = await import('./build-data.mjs');
+  const day = process.env.LIT_PULL_DATE || today;
+  const stale = '2000-01-01';
+  const reg = {}, papers = [];
+  // A burst well past any recent.json cap.
+  for (let i = 0; i < 1200; i++) {
+    const doi = `10.1287/burst.${i}`;
+    reg[doi] = day;
+    papers.push({ JKey: 'ms', _doi: doi, Title: `Paper ${i}`, Year: '2026' });
+  }
+  reg['10.1073/pnas.1'] = day;
+  papers.push({ JKey: 'pnas', _doi: '10.1073/pnas.1', Sections: ['Social Sciences', 'Economic Sciences'], Year: '2026' });
+  reg['10.1073/pnas.2'] = day;
+  papers.push({ JKey: 'pnas', _doi: '10.1073/pnas.2', _secKeys: ['pnas-econ', 'pnas-soc'], Year: '2026' });
+  reg['10.1287/old.1'] = stale;
+  papers.push({ JKey: 'ms', _doi: '10.1287/old.1', Year: '2001' });
+  papers.push({ JKey: 'ms', _doi: '10.1287/unregistered.1', Year: '2026' }); // never registered
+  const rc = buildRecentCounts(papers, reg);
+  ok(rc.total === 1202, 'the tally is uncapped — every paper in the window is counted');
+  ok(rc.days.ms[day] === 1200, 'per-journal per-day counts are exact');
+  ok(!rc.days.ms[stale], 'a registration older than the window is out');
+  ok(rc.days['pnas|pnas-econ|pnas-soc'][day] === 2,
+    'a PNAS paper is filed under its whole key set — counted once, findable by either section');
+  ok(rc.windowDays >= 28, 'the emitted window covers the 4 weeks the page shows');
+  ok(JSON.stringify(rc) === JSON.stringify(buildRecentCounts(papers, reg)),
+    'the tally is deterministic (unchanged data → identical bytes → no needless commit)');
+  const dropped = buildRecentCounts(papers.slice(600), reg);
+  ok(dropped.total === 602, 'removing papers lowers the tally');
+}
+
 // 1) Seed a full mock build.
 run({});
 const ms0 = rd('papers-ms.json');
@@ -155,6 +193,12 @@ ok(reg2[droppedDoi] === today, 'new paper stamped with today in the registry');
 ok(recent.some(p => p.DOI === dropped.DOI && p['Date Added'] === today), 'new paper shows in recent.json dated today');
 ok(meta1.paperCount === meta0.paperCount, 'meta paperCount restored');
 ok(meta1.authorCount === meta0.authorCount, 'authorCount preserved from prior meta');
+// The count the page prints above that list has to move with it.
+const counts1 = rd('recent-counts.json');
+ok(counts1.generated === today && counts1.windowDays >= 28, 'recent-counts.json is stamped and covers the displayed window');
+ok(Object.keys(counts1.days).some(k => k.split('|')[0] === 'ms' && counts1.days[k][today] >= 1),
+  "the new paper is in the tally under its journal's key");
+ok(counts1.total >= recent.length, 'the tally is never smaller than the rows recent.json carries');
 
 // 4) Enrichment fields must survive an incremental core-field re-fetch.
 const msE = rd('papers-ms.json');

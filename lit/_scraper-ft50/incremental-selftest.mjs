@@ -54,6 +54,31 @@ const ok = (c, m) => { c ? pass++ : (fail++, console.log('  FAIL:', m)); };
   ok(sameWorkDup(r1, { ...r2, Authors: 'Alex Mason' }) === null, 'conflicting authors never collapse');
 }
 
+// 0a2) Unit checks of the recently-added tally merge (mergeRecentCounts): the
+// polled journals' entries are replaced with freshly-computed ones, every other
+// journal's is carried from the last write but pruned to the window that has
+// since slid forward — the same reasoning as the lean recent.json carry-over.
+{
+  const { buildRecentCounts, mergeRecentCounts } = await import('./build-data.mjs');
+  const day = process.env.FT50_PULL_DATE || today;
+  const reg = { '10.3982/ecta1': day, '10.3982/ecta2': day };
+  const fresh = buildRecentCounts([
+    { JKey: 'ecta', _doi: '10.3982/ecta1', Year: '2026' },
+    { JKey: 'ecta', _doi: '10.3982/ecta2', Year: '2026' },
+  ], reg);
+  ok(fresh.total === 2 && fresh.days.ecta[day] === 2, 'the tally counts every paper in the window');
+  const prev = { generated: '2020-01-01', windowDays: 90, total: 9,
+    days: { ecta: { [day]: 1 }, qje: { [day]: 4 }, jfe: { '2000-01-01': 4 } } };
+  const merged = mergeRecentCounts(prev, fresh, new Set(['ecta']));
+  ok(merged.days.ecta[day] === 2, 'the polled journal is replaced by the fresh count');
+  ok(merged.days.qje[day] === 4, 'an unpolled journal is carried over');
+  ok(!merged.days.jfe, 'a carried-over entry that aged out of the window is pruned');
+  ok(merged.total === 6, 'the merged total is the sum of what survived');
+  ok(JSON.stringify(merged) === JSON.stringify(mergeRecentCounts(prev, fresh, new Set(['ecta']))),
+    'the merge is deterministic (unchanged data → identical bytes → no needless commit)');
+  ok(mergeRecentCounts(null, fresh, new Set(['ecta'])).total === 2, 'a missing previous tally is not fatal');
+}
+
 // 0b) Unit checks of the stray-trailing-separator trim (see titleText /
 // trimTrailingSeparators / affilName in build-data.mjs — the same canonical block
 // as the native pipeline): a dangling ',' / ';' / ':' deposited on a title or
@@ -115,6 +140,14 @@ ok(recent.some(p => p.DOI === dropped.DOI && p['Date Added'] === today), 'new pa
 ok(recent.some(p => p.JKey && p.JKey !== 'ecta'), 'recent.json keeps the other journals’ rows (lean carry-over merge)');
 ok(meta1.paperCount === meta0.paperCount, 'meta paperCount restored');
 ok(meta1.authorCount === meta0.authorCount, 'authorCount preserved from prior meta');
+// recent-counts.json — the uncapped tally the page's "N papers added in the
+// last 4 weeks" is read from — gets the same lean treatment: the polled journal
+// recomputed, every other journal carried over.
+const counts1 = rd('recent-counts.json');
+ok(counts1.generated === today && counts1.windowDays >= 28, 'recent-counts.json is stamped and covers the displayed window');
+ok((counts1.days.ecta || {})[today] >= 1, 'the new paper is in the tally under its journal key');
+ok(Object.keys(counts1.days).some(k => k !== 'ecta'), 'the tally keeps the other journals (lean carry-over merge)');
+ok(counts1.total >= recent.length, 'the tally is never smaller than the rows recent.json carries');
 
 // 4) Enrichment fields must survive an incremental core-field re-fetch.
 const ectaE = rd('papers-ecta.json');

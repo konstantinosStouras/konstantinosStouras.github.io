@@ -975,6 +975,11 @@ const AUTHORS_URL = './data/authors.json';
 const AFFILIATIONS_URL = './data/affiliations.json';
 const META_URL = './data/meta.json';
 const RECENT_URL = './data/recent.json';
+// Companion of recent.json: the uncapped per-journal x per-day tally of
+// additions (see loadRecentCounts). Every dataset publishes one beside its
+// recent.json under the same name.
+const RECENT_COUNTS_FILE = 'recent-counts.json';
+const RECENT_COUNTS_URL = './data/' + RECENT_COUNTS_FILE;
 const DATA_BASE = './data/';
 
 // This app maintains its OWN dataset for all 50 journals of the Financial
@@ -1242,7 +1247,17 @@ const RECENT_DAYS = 28; // last 4 weeks
 let recentData = null;      // parsed rows from the RecentlyAdded tab (null = absent/failed)
 let recentFetched = false;  // whether we've attempted to load that tab
 let recentLoading = false;  // whether that fetch is currently in flight
-let recentExtraRows = null; // recently added FT50-extra papers (./data-ft50/recent.json)
+// Recently-added rows contributed by the OTHER datasets (the FT50 catalog, each
+// satellite shard, the Working Papers archive), kept per dataset — the count
+// shown above the list is reconciled against each dataset's own tally, so they
+// must stay separable. [{ base, rows }], base = that dataset's data directory.
+let recentExtraSets = [];
+// Per-dataset { base, windowDays, days } from each recent-counts.json — the
+// EXACT number of papers added per journal per day. recent.json is capped (it
+// is fetched with the page), so on a burst day the rows on hand are only the
+// newest slice of the window and counting them under-reports what was really
+// added; these tallies are never capped and weigh ~1 KB each.
+let recentCountSets = [];
 
 // Multi-select state. authorIdentity maps a display label -> array of that
 // author's name variants (from the Authors tab Name_Variants column), so a
@@ -1611,7 +1626,8 @@ async function loadFt50Manifest() {
     if (!s.notFT) FT50_KEYS.add(s.key);
   });
   registerExtraSources(ft50Manifest, null); // files carry no base -> FT50_DATA_BASE
-  loadDatasetRecent(FT50_RECENT_URL);
+  loadDatasetRecent(FT50_RECENT_URL, FT50_DATA_BASE);
+  loadRecentCounts(FT50_DATA_BASE + RECENT_COUNTS_FILE, FT50_DATA_BASE);
 }
 
 // The Working Papers archive: register its repositories (SSRN/NBER/arXiv/OSF
@@ -1627,7 +1643,8 @@ async function loadWorkingPapersManifest() {
   if (!rows || !rows.length) return;
   rows.forEach(function(s) { if (s.workingPaper) WP_KEYS.add(s.key); });
   registerExtraSources(rows, WP_DATA_BASE);
-  loadDatasetRecent(WP_DATA_BASE + 'recent.json');
+  loadDatasetRecent(WP_DATA_BASE + 'recent.json', WP_DATA_BASE);
+  loadRecentCounts(WP_DATA_BASE + RECENT_COUNTS_FILE, WP_DATA_BASE);
 }
 
 // ── Submitted / retired-on-publish pre-print overlay ─────────────────────────
@@ -1669,7 +1686,8 @@ function loadShardManifests() {
     var rows = await fetchManifest(shard.base + 'sources.json');
     if (!rows || !rows.length) return;
     registerExtraSources(rows, shard.base);
-    loadDatasetRecent(shard.base + 'recent.json');
+    loadDatasetRecent(shard.base + 'recent.json', shard.base);
+    loadRecentCounts(shard.base + RECENT_COUNTS_FILE, shard.base);
   });
 }
 
@@ -3654,6 +3672,7 @@ function toggleRecent() {
 async function loadRecent(attempt) {
   recentFetched = true;
   recentLoading = true;
+  loadRecentCounts(RECENT_COUNTS_URL, 'native'); // tiny; idempotent
   try {
     var r = await fetch(RECENT_URL, { cache: 'no-cache' });
     if (r.status === 404) { // file not generated yet -> fall back to scanning allPapers
@@ -3681,9 +3700,11 @@ async function loadRecent(attempt) {
 // (i.e. not the native sources, which the native recent.json already covers)
 // join the recent view. Called once that dataset's manifest has registered
 // its journals in EXTRA_SRC; datasets' key sets are disjoint, so appending
-// cannot duplicate.
+// cannot duplicate. `base` is that dataset's data directory — the rows are kept
+// under it so the count above the list can be reconciled per dataset against
+// its own recent-counts.json.
 var _recentUrlsFetched = {};
-async function loadDatasetRecent(url, attempt) {
+async function loadDatasetRecent(url, base, attempt) {
   if (_recentUrlsFetched[url]) return;
   _recentUrlsFetched[url] = true;
   try {
@@ -3694,14 +3715,90 @@ async function loadDatasetRecent(url, attempt) {
     if (!Array.isArray(rows)) rows = [];
     rows = rows.filter(function(p) { return EXTRA_SRC[p.JKey]; });
     rows.forEach(function(p) { normalizeEditors(p); computeJkeys(p); }); // so tags render
-    recentExtraRows = (recentExtraRows || []).concat(rows);
+    recentExtraSets.push({ base: base, rows: rows });
   } catch (e) {
     attempt = (attempt || 0) + 1;
     delete _recentUrlsFetched[url];
-    if (attempt <= 4) setTimeout(function() { loadDatasetRecent(url, attempt); }, 3000);
+    if (attempt <= 4) setTimeout(function() { loadDatasetRecent(url, base, attempt); }, 3000);
     return;
   }
   if (recentMode) renderRecent();
+}
+
+// ── Exact "recently added" totals ────────────────────────────────────────────
+// recent.json ships with the page, so it is capped: when a burst of papers
+// lands on one day (a journal's back-catalogue arriving, a re-registration
+// sweep, the working-papers backfill) the rows on hand are only the newest
+// slice of the window, and counting them under-reports what was really added —
+// by thousands, in the case that prompted this. Every dataset therefore also
+// publishes recent-counts.json, an uncapped per-journal x per-day tally (~1 KB)
+// that every writer of that dataset rewrites, so the number rises when papers
+// are added and falls when they are removed. Absent (a dataset whose pipeline
+// has not shipped one yet) -> that dataset's rows are counted as before.
+async function loadRecentCounts(url, base, attempt) {
+  if (_recentUrlsFetched[url]) return;
+  _recentUrlsFetched[url] = true;
+  try {
+    var r = await fetch(url, { cache: 'no-cache' });
+    if (r.status === 404) return; // pipeline hasn't shipped one yet
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    var j = await r.json();
+    if (!j || typeof j !== 'object' || !j.days || typeof j.days !== 'object') return;
+    recentCountSets.push({ base: base, windowDays: parseInt(j.windowDays, 10) || 0, days: j.days });
+  } catch (e) {
+    attempt = (attempt || 0) + 1;
+    delete _recentUrlsFetched[url];
+    if (attempt <= 4) setTimeout(function() { loadRecentCounts(url, base, attempt); }, 3000);
+    return;
+  }
+  if (recentMode) renderRecent();
+}
+
+// Would rows under tally key `key` — a paper's whole journal-key set, journal
+// first then any PNAS section keys, exactly what computeJkeys builds per row —
+// be rendered in the current recent view? Mirrors the two filters the rows
+// themselves go through: matchesJournal's scope test (any one key in scope) and
+// loadDatasetRecent's "is this journal registered from THIS dataset" drop (the
+// FT50 catalog and the native data share six INFORMS journals — the native
+// registration wins and the native recent.json already carries them, so the
+// catalog's copies must not be counted twice).
+function recentCountsKeyVisible(base, key) {
+  var parts = key.split('|');
+  if (journalScope && !parts.some(function(k) { return journalScope.has(k); })) return false;
+  var primary = parts[0];
+  if (base === 'native') return isNativeJournalKey(primary);
+  if (isNativeJournalKey(primary)) return false;
+  var e = EXTRA_SRC[primary];
+  // FT50-catalog manifest entries carry no base of their own (they default to
+  // FT50_DATA_BASE); every other dataset stamps one at registration.
+  return !!e && (e.base || FT50_DATA_BASE) === base;
+}
+
+// SRC is a display-config map that predates the two newest native sources, so
+// the native manifest — not SRC — is what "this journal is served from data/"
+// actually means.
+function isNativeJournalKey(k) {
+  if (SRC[k]) return true;
+  for (var i = 0; i < sourcesManifest.length; i++) if (sourcesManifest[i].key === k) return true;
+  return false;
+}
+
+// The exact number of papers this dataset added inside the displayed window,
+// split published / working paper. null when there is no usable tally: no file
+// for that dataset, or a window too short to cover the view.
+function recentExactCount(base, cutoffDay) {
+  var set = null;
+  for (var i = 0; i < recentCountSets.length; i++) if (recentCountSets[i].base === base) set = recentCountSets[i];
+  if (!set || set.windowDays < RECENT_DAYS) return null;
+  var out = { papers: 0, wp: 0 };
+  Object.keys(set.days).forEach(function(key) {
+    if (!recentCountsKeyVisible(base, key)) return;
+    var perDay = set.days[key] || {}, n = 0;
+    Object.keys(perDay).forEach(function(d) { if (d >= cutoffDay) n += perDay[d] || 0; });
+    if (!n) return;
+    if (WP_KEYS.has(key.split('|')[0])) out.wp += n; else out.papers += n;
+  });
+  return out;
 }
 
 function renderRecent() {
@@ -3717,10 +3814,13 @@ function renderRecent() {
   }
 
   // Prefer the pre-computed tab (authoritative if it loaded); otherwise fall
-  // back to scanning the full Data set for the Date Added column. The FT50
-  // extras' recent rows (fetched separately) ride along with the native tab.
+  // back to scanning the full Data set for the Date Added column. Each other
+  // dataset's recent rows (fetched separately) ride along with the native tab,
+  // kept in their own group so the count can be reconciled per dataset.
   var usePrecomputed = recentData !== null;
-  var source = usePrecomputed ? recentData.concat(recentExtraRows || []) : allPapers;
+  var groups = usePrecomputed
+    ? [{ base: 'native', rows: recentData }].concat(recentExtraSets)
+    : [{ base: null, rows: allPapers }];
 
   // No pre-computed tab (missing/404, or retries exhausted): fall back to
   // scanning the papers themselves — with lazy loading that means kicking off
@@ -3735,8 +3835,32 @@ function renderRecent() {
   var cutoff = new Date();
   cutoff.setHours(0, 0, 0, 0);
   cutoff.setDate(cutoff.getDate() - RECENT_DAYS);
+  var cutoffDay = isoDay(cutoff);
 
   // Scoped to the selected journal(s); with no selection, all journals show.
+  // Counted per dataset, so each one's rows can be measured against its own
+  // uncapped tally below.
+  var dated = [], tally = { papers: 0, wp: 0 };
+  groups.forEach(function(g) {
+    var rows = g.rows
+      .filter(matchesJournal)
+      .map(function(p) { return { p: p, d: getAddedDate(p), w: isWorkingPaperRow(p) ? 1 : 0 }; })
+      .filter(function(x) { return x.d && x.d >= cutoff; });
+    var seen = { papers: 0, wp: 0 };
+    rows.forEach(function(x) { if (x.w) seen.wp++; else seen.papers++; });
+    // The uncapped tally wins whenever it is available AND at least as large as
+    // what we can see — it is the true number, and it can only be smaller if it
+    // is stale or does not know a key we are rendering (a journal registered
+    // from a manifest newer than the tally), in which case the rows we actually
+    // hold stay the better answer, exactly as before this file existed.
+    var exact = usePrecomputed ? recentExactCount(g.base, cutoffDay) : null;
+    if (exact && (exact.papers + exact.wp) >= (seen.papers + seen.wp)) {
+      tally.papers += exact.papers; tally.wp += exact.wp;
+    } else {
+      tally.papers += seen.papers; tally.wp += seen.wp;
+    }
+    dated = dated.concat(rows);
+  });
   // PUBLISHED papers form the first block, working papers the second — each
   // newest-added first. A pure date sort let the working-papers backfill bury
   // the published catalogue: it adds ~1,000 SSRN/NBER/arXiv rows in a single
@@ -3747,10 +3871,7 @@ function renderRecent() {
   // archive's only "what's new" surface), just below the published block —
   // the same published-first instinct `matchesJournal` already applies to
   // bare browsing, where WP_KEYS would "flood the view with unpublished rows".
-  var recent = source
-    .filter(matchesJournal)
-    .map(function(p) { return { p: p, d: getAddedDate(p), w: isWorkingPaperRow(p) ? 1 : 0 }; })
-    .filter(function(x) { return x.d && x.d >= cutoff; })
+  var recent = dated
     .sort(function(a, b) { return (a.w - b.w) || (b.d - a.d); })
     .map(function(x) { return x.p; });
 
@@ -3762,14 +3883,39 @@ function renderRecent() {
   var scopeParts = [...sel.jtype].map(function(t) { return JTYPE_LABEL[t] || t; })
     .concat([...sel.journal].map(function(k) { return JOURNAL_LABEL[k] || k; }));
   var scopeTxt = scopeParts.length ? ' in ' + esc(scopeParts.join(', ')) : '';
-  countEl.innerHTML = '<strong>' + recent.length.toLocaleString() + '</strong> paper' + (recent.length === 1 ? '' : 's') + ' added in the last ' + weeks + ' weeks' + scopeTxt;
+  // Published papers and working papers are counted separately: the archive is
+  // filled by a bulk backfill that can stamp tens of thousands of rows in a day,
+  // and merging those into one number would swamp the figure that matches the
+  // header's published catalog.
+  var phrases = [];
+  if (tally.papers || !tally.wp) phrases.push('<strong>' + tally.papers.toLocaleString() + '</strong> paper' + (tally.papers === 1 ? '' : 's'));
+  if (tally.wp) phrases.push('<strong>' + tally.wp.toLocaleString() + '</strong> working paper' + (tally.wp === 1 ? '' : 's'));
+  var total = tally.papers + tally.wp;
+  // The list itself is capped by the datasets (recent.json is fetched with the
+  // page), so on a burst day it holds the newest slice of the window, not all
+  // of it. Say so rather than letting the count and the list disagree.
+  var truncated = total > recent.length;
+  countEl.innerHTML = phrases.join(' and ') + ' added in the last ' + weeks + ' weeks' + scopeTxt +
+    (truncated ? ' · <span title="The recently-added list is capped so it can be fetched with the page; the count above it is the full number.">showing the newest <strong>' +
+      recent.length.toLocaleString() + '</strong></span>' : '');
 
   if (!recent.length) {
-    list.innerHTML = '<div class="empty-state"><h3>No recently added papers</h3><p>No papers were added to the database in the last ' + weeks + ' weeks' + scopeTxt + '.</p></div>';
+    list.innerHTML = '<div class="empty-state"><h3>No recently added papers</h3><p>' +
+      (total
+        ? 'The ' + total.toLocaleString() + ' paper' + (total === 1 ? '' : 's') + ' added in the last ' + weeks + ' weeks' + scopeTxt +
+          ' fall outside the newest-first slice of the list this page carries. They are all in the database — search for them, or pick a narrower journal scope.'
+        : 'No papers were added to the database in the last ' + weeks + ' weeks' + scopeTxt + '.') +
+      '</p></div>';
     return;
   }
 
   renderCardList(list, recent, true);
+}
+
+// A Date as the YYYY-MM-DD string the datasets' tallies are keyed by (local
+// time, like the cutoff itself — toISOString would shift it by the timezone).
+function isoDay(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
 function filterByEditor(name) {

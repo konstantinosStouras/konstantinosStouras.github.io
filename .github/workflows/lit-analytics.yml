@@ -92,6 +92,16 @@ jobs:
       - name: Build analytics summary
         run: node lit/_scraper/build-analytics.mjs
 
+      # Every counter the pages print — the header's "N papers from M authors",
+      # the "N papers added in the last 4 weeks" tally, and the dashboard's own
+      # scope line + tiles — recomputed from the papers files and compared. This
+      # job is the only place all five shards are checked out, so it is the only
+      # place the audit sees the whole corpus. Report-only: a drift here must be
+      # visible without blocking the analytics commit below.
+      - name: Audit the published counters
+        continue-on-error: true
+        run: node lit/_scraper/counters-selftest.mjs
+
       - name: Build disruption analysis
         # Team-science measures (disruption index D) over the in-catalog citation
         # graph (lit/data-refs/). Reads only committed files; grows with the

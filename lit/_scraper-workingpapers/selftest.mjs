@@ -177,6 +177,29 @@ async function main() {
   ok(recent2.length === 2 && recent2.every(r => r['Date Added'] === '2026-07-13'),
     'recent.json unchanged by a re-crawl of known rows');
 
+  // recent-counts.json — the UNCAPPED per-repository x per-day tally the page's
+  // "N working papers added in the last 4 weeks" is read from. recent.json is
+  // capped at 1,000 rows and this archive is filled by a backfill that stamps
+  // tens of thousands of rows a day, so the count can never come from the rows.
+  console.log('e2e: recent-counts.json (the number above the Recently added list)');
+  const rc = await readOut('recent-counts.json');
+  ok(rc.windowDays >= 28, 'the tally covers the 4 weeks the page shows');
+  ok(rc.total === 2, 'the tally counts every dated row');
+  ok((rc.days['wp-ssrn'] || {})['2026-07-13'] === 1, 'counts are per repository per day');
+  {
+    const { buildWpRecentCounts } = await import('./build-data.mjs');
+    const rows = [];
+    for (let i = 0; i < 1500; i++) rows.push({ JKey: 'wp-ssrn', 'Date Added': '2026-07-13' });
+    rows.push({ JKey: 'wp-arxiv', 'Date Added': '2020-01-01' });   // outside the window
+    rows.push({ JKey: 'wp-arxiv' });                                // undated back-catalogue row
+    const big = buildWpRecentCounts(rows, '2026-07-14');
+    ok(big.total === 1500, 'the tally is uncapped — a backfill burst is counted in full');
+    ok(!big.days['wp-arxiv'], 'undated and out-of-window rows stay out');
+    ok(JSON.stringify(big) === JSON.stringify(buildWpRecentCounts(rows, '2026-07-14')),
+      'the tally is deterministic (unchanged archive → identical bytes → no needless commit)');
+    ok(buildWpRecentCounts(rows.slice(500), '2026-07-14').total === 1000, 'removing rows lowers the tally');
+  }
+
   await rm(OUT, { recursive: true, force: true });
   console.log(fails ? `\nFAILED (${fails})` : '\nAll working-papers pipeline checks passed.');
   process.exit(fails ? 1 : 0);
