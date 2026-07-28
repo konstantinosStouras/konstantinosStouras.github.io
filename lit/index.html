@@ -6,8 +6,8 @@
 <title>The Lit · Research Paper Browser — Management Science, OR, Marketing Science, M&amp;SOM, POM, ISR, PNAS, ACM EC &amp; the FT50</title>
 
 <!-- SEO -->
-<meta name="description" content="Search and filter research papers across Management Science, Operations Research, Marketing Science, M&SOM, POM, Information Systems Research, Strategy Science, INFORMS Transactions on Education, five PNAS sections, the ACM EC conference (1999–present), and all 50 journals of the Financial Times FT50 rank. Filter by journal, journal type (UTD24, FT50, ABS 4/4*, ABS 3), year, author, or affiliation. Export BibTeX citations.">
-<meta name="keywords" content="Management Science, Operations Research, Marketing Science, MSOM, POM, Information Systems Research, Strategy Science, INFORMS Transactions on Education, PNAS, ACM EC, Economics and Computation, UTD24, UT Dallas journal list, FT50, Financial Times 50, ABS ranking, AJG, Academic Journal Guide, European Journal of Operational Research, INFORMS Journal on Computing, academic papers, research browser, BibTeX, journal articles, INFORMS">
+<meta name="description" content="Search and filter research papers across Management Science, Operations Research, Marketing Science, M&SOM, POM, Information Systems Research, Strategy Science, INFORMS Transactions on Education, five PNAS sections, the ACM EC conference (1999–present), all 50 journals of the Financial Times FT50 rank, and topic-filtered slices of Nature and Science (GenAI, LLMs, innovation and the science of science). Filter by journal, journal type (UTD24, FT50, ABS 4/4*, ABS 3), year, author, or affiliation. Export BibTeX citations.">
+<meta name="keywords" content="Management Science, Operations Research, Marketing Science, MSOM, POM, Information Systems Research, Strategy Science, INFORMS Transactions on Education, PNAS, ACM EC, Economics and Computation, UTD24, UT Dallas journal list, FT50, Financial Times 50, ABS ranking, AJG, Academic Journal Guide, European Journal of Operational Research, INFORMS Journal on Computing, academic papers, research browser, BibTeX, journal articles, INFORMS, Nature, Science, Nature Human Behaviour, Nature Communications, science of science, large language models, generative AI">
 <meta name="author" content="Konstantinos Stouras">
 
 <meta name="robots" content="index, follow">
@@ -1507,6 +1507,13 @@ const SHARDS = [
   { base: '/lit-data-abs4/data/' },          // ABS 4/4* beyond FT50/UTD24
   { base: '/lit-data-abs3-omecon/data/' },   // ABS 3 — Operations/OR & Economics
   { base: '/lit-data-abs3-rest/data/' },     // ABS 3 — remaining fields
+  // Topic-filtered shards (NOT full catalogues): Nature portfolio + Science,
+  // GenAI/LLM · innovation · science-of-science papers only — unrated by ABS
+  // (no abs in their manifests), so they join the Journals filter without
+  // entering any type bucket, like PNAS. Curated in each repo's
+  // _scraper/scope.json.
+  { base: '/lit-data-nature/data/' },        // Nature, Nat. Hum. Behav., Nat. Commun.
+  { base: '/lit-data-science/data/' },       // Science (AAAS)
 ];
 
 // One muted pastel per extra source, injected as .jk-<key> rules so

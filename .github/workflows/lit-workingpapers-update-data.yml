@@ -59,6 +59,22 @@ jobs:
           repository: konstantinosStouras/lit-data-abs3-rest
           path: _analytics-shards/lit-data-abs3-rest
 
+      # The two topic-filtered shards (Nature portfolio / Science) — same
+      # read-only checkout as the ABS ones above; their journals are curated
+      # topical slices (GenAI/LLMs, innovation, science of science), not full
+      # catalogues.
+      - name: Checkout data shard — lit-data-nature
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: konstantinosStouras/lit-data-nature
+          path: _analytics-shards/lit-data-nature
+
+      - name: Checkout data shard — lit-data-science
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: konstantinosStouras/lit-data-science
+          path: _analytics-shards/lit-data-science
+
       - name: Set up Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -70,8 +86,9 @@ jobs:
           WP_MAX_AUTHORS: '250'
           WP_BUDGET_MS: '2100000'   # 35-min ceiling
           WP_PACE_MS: '1500'
-          # Sweep against native + FT50 + the three ABS shards (checked out above).
-          WP_CATALOG_DIRS: lit/data,lit/data-ft50,_analytics-shards/lit-data-abs4/data,_analytics-shards/lit-data-abs3-omecon/data,_analytics-shards/lit-data-abs3-rest/data
+          # Sweep against native + FT50 + every satellite shard (checked out above;
+          # a not-yet-bootstrapped shard's dir is simply absent and skipped).
+          WP_CATALOG_DIRS: lit/data,lit/data-ft50,_analytics-shards/lit-data-abs4/data,_analytics-shards/lit-data-abs3-omecon/data,_analytics-shards/lit-data-abs3-rest/data,_analytics-shards/lit-data-nature/data,_analytics-shards/lit-data-science/data
         run: node lit/_scraper-workingpapers/build-data.mjs
 
       - name: Commit refreshed archive

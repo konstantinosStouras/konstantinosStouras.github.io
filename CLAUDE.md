@@ -17,14 +17,15 @@ apply to `GITHUB_TOKEN` pushes too, so a PR requirement would reject every one
 of them and `/lit` would silently stop updating. Force-push/deletion rules are
 safe because **nothing here ever force-pushes, deletes a branch or pushes
 tags** — every push is a plain fast-forward with rebase-and-retry on rejection
-(the `--apply-only --merge-cache` replay paths). The same applies to the four
+(the `--apply-only --merge-cache` replay paths). The same applies to the
 sibling repos (`lit-data-abs4`, `lit-data-abs3-omecon`, `lit-data-abs3-rest`,
-`mnsc-scraper`), whose workflows push the same way; note the default branch is
-`master` here and `main` in all four of those. Keep **Repository admin** on the
+`lit-data-nature`, `lit-data-science`, `mnsc-scraper`), whose workflows push
+the same way; note the default branch is `master` here and `main` in all of
+those. Keep **Repository admin** on the
 ruleset's bypass list — a one-off history rewrite (`dedupe-data.mjs`,
 `clean-titles.mjs`) must stay possible for the sole maintainer.
 
-**This repo and the three `lit-data-*` shards stay PUBLIC.** Private is not an
+**This repo and the five `lit-data-*` shards stay PUBLIC.** Private is not an
 upgrade here: (1) Pages from a private repo requires a paid plan, so on GitHub
 Free the site simply unpublishes — `stouras.com`, `/lit/` and the shard data the
 page lazy-loads same-origin from `stouras.com/lit-data-*/data/` all go dark;
@@ -240,7 +241,43 @@ vendored pipeline and curated `_scraper/journals.json` (grades in an `abs`
 field that flows into the page's ABS buckets/badges via `MANIFEST_ABS`);
 the page merges their `data/sources.json` manifests at runtime (`SHARDS`
 list in `index.html`) and lazy-loads their papers files same-origin from
-`stouras.com/<repo>/data/`. Missing shards 404 and are skipped.) **Everything loads lazily:** no papers file (native or catalog)
+`stouras.com/<repo>/data/`. Missing shards 404 and are skipped.
+**Topic-filtered shards — Nature & Science (`lit-data-nature`,
+`lit-data-science`):** two further satellite shards carry the
+Nature-portfolio journals (Nature, Nature Human Behaviour, Nature
+Communications; keys `nature`/`nhb`/`ncomms`) and Science (`science`) as
+**curated topical SLICES, never full catalogues** — only papers on
+GenAI/LLMs, innovation and the science of science (per the owner). These
+journals publish across all of science (Nature's Crossref catalogue alone is
+~446k articles), so instead of the shards' harvest-everything pattern their
+`build-data.mjs` is TWO-STEP: (1) an **OpenAlex scope seeding** — each repo's
+curated `_scraper/scope.json` lists topic IDs (T10102 scientometrics,
+T10003 innovation & knowledge management, T10181 NLP, T10028 topic modeling,
+T10883 ethics/social impacts of AI, T12128 AI in service interactions,
+T12026 XAI, T13910 computational text analysis, T10068 technology adoption),
+quoted `title_and_abstract.search` phrases ("large language model",
+"ChatGPT", "generative AI", "science of science", …), per-journal
+`mustInclude` DOIs (the owner's six requested papers — force-included so an
+OpenAlex re-tag can never drop them) and `excludeDoiPrefixes` (Nature's
+`10.1038/d41586-*` NEWS DOIs) — unioned per journal into the committed,
+audited `data/_scope.json` (fallback to the committed scope on a failed or
+half-shrunken seed); then (2) a **Crossref by-DOI batched harvest** of
+exactly those DOIs, flowing through the unchanged vendored shard machinery
+(collapseSameWork, pre-prints, citations, abstracts overlay, registry), so
+the served layout is byte-compatible and the page needs nothing special.
+This is the PNAS-sections idea rebuilt on OpenAlex topics because it runs in
+CI: pnas.org needs a local scrape, science.org is bot-blocked for cloud IPs
+with no public per-article taxonomy, and nature.com's subject tags (readable
+from runners) don't map onto these cross-cutting themes. Both repos'
+manifests carry **no `abs` field** (Nature/Science are outside the AJG), so
+their journals join the Journals filter (" — limited coverage") without
+entering any type bucket, like PNAS; abstracts rely on each repo's
+`abstracts-backfill.yml` (the Nature portfolio deposits NO abstracts to
+Crossref). OpenAlex identities: `+litnature`/`+litnaturecite`/
+`+litnatureabs`, `+litscience`/`+litsciencecite`/`+litscienceabs`. Offline
+test in each repo: `node _scraper/scope-selftest.mjs`. To widen/narrow the
+filter, edit `scope.json` (keep the two repos' topics/searches lists in
+sync); to rescue a paper the filter missed, add its DOI to `mustInclude`.) **Everything loads lazily:** no papers file (native or catalog)
 downloads until a filter needs it — first paint is a few hundred KB
 (manifests + recent.json; authors.json fetched on first Authors-tab open),
 where the page previously eager-fetched ~60 MB per visit. The page merges in
@@ -1043,7 +1080,7 @@ search), and clicking the ACTIVE list/tag chip deactivates it (back to "All
 saved") without removing it (`acctSetLibFilter` toggle). **Data Analytics
 (`lit/analytics/`)** is an interactive summary-statistics dashboard over the
 **whole corpus the main browser lists** — the ten native sources (`data/`),
-the FT50 catalog (`data-ft50/`) AND the three satellite ABS data shards
+the FT50 catalog (`data-ft50/`) AND the five satellite data shards (ABS + the Nature/Science topic slices)
 (sibling repos, read from a local checkout: the workflow checks them out
 under `_analytics-shards/`, a local run finds them as sibling clones of the
 site repo, `LIT_SHARDS_DIR` overrides; a missing shard is skipped with a
@@ -1224,7 +1261,7 @@ years; reference popularity uses references' `CitedBy` (a rough proxy while
 citation coverage fills in). Keep the `ABS_RATING`/`UTD24_KEYS`/`FT50_KEYS`
 mirror and the native-wins journal merge in sync with build-analytics.mjs.
 Refreshed daily by `.github/workflows/lit-analytics.yml` (08:10 UTC, after the
-native and FT50 data builds; checks out the three shard repos read-only under
+native and FT50 data builds; checks out the five shard repos read-only under
 `_analytics-shards/` so the summary covers their journals, then runs
 build-analytics.mjs **and** build-disruption.mjs), which commits
 `analytics/*.json` (incl. `disruption.json`) on master only.

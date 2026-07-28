@@ -10,6 +10,13 @@
       "url": "https://www.stouras.com/lit/"
     },
     {
+      "id": "nature-science-topic-shards",
+      "date": "2026-07-27",
+      "title": "Nature and Science join the database — GenAI, LLM, innovation and science-of-science papers",
+      "summary": "The database now covers Nature (with Nature Human Behaviour and Nature Communications) and Science — as curated topical slices, not full catalogues: only their papers on GenAI & large language models, innovation, and the science of science, selected by OpenAlex topic tags plus targeted text searches. They appear in the Journals filter (flagged “limited coverage”), searchable and enriched like every other journal — pre-print links, citation counts and full abstracts included.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
       "id": "pnas-coverage-gap-fix",
       "date": "2026-07-27",
       "title": "PNAS: the missing 2008–2025 papers are back",
