@@ -1223,7 +1223,15 @@ co-wrote** (in scope). It draws the paper's signature plots — distribution of 
 (Fig 1b), disruption & citations vs team size (the "scissor", Fig 2), reference
 age & popularity vs team size (Fig 4), and relative-ratio extremes (Fig 2d) —
 plus most-disruptive/-developing paper and author tables, and an author-level
-disruption profile in the Author-spotlight tab. It is a **faithful but partial**
+disruption profile in the Author-spotlight tab. The two paper tables cite each
+row in full — title, **authors** (`disrPaperAuthors` maps the row's `au` ids
+through `DISR.authors`; truncated to 110 chars with the full list in a `title=`
+tooltip, like the most-cited table's byline) then journal · year · in-catalog
+citers — and their team column is headed **"Team size"** and rendered as
+"**N** authors" (`disrTeamCell`), never a bare number, with the same
+"credited authors on the paper" wording in each card's sub-heading and the
+`th` tooltip; keep that wording aligned with the figures' "Team size (authors)"
+x-axis label. It is a **faithful but partial**
 reconstruction (we only have the references harvested within the catalog, not
 the paper's 40M-work network) that **sharpens as `data-refs/` grows**; every
 figure honours the same journal / type / year filters, plus a dedicated
@@ -1429,7 +1437,17 @@ carry a backfill day of ~12–16k stamps; keep the two emissions in sync); the
 page fetches them via `loadDatasetRecent`/`loadRecentCounts` in
 `loadWorkingPapersManifest()` and `matchesJournal` admits WP rows in
 `recentMode` — back-catalog rows crawled before dating began carry no date and
-never appear. `buildJTypeSelect()` **hides the Working Papers type until its
+never appear. **But the recent view is ordered PUBLISHED-FIRST, working papers
+second** (`renderRecent`'s comparator `(a.w - b.w) || (b.d - a.d)`, where `w`
+comes from `isWorkingPaperRow` — `_jkeys` if computeJkeys has run, else the raw
+`JKey`), each block newest-added first. A pure date sort let the WP backfill
+bury the whole published catalogue: it adds ~1,000 rows in one day, so on
+2026-07-28 all 1,000 preceded the 144 published papers added the day before —
+ABS shards first appeared on page 41, Nature/Science on 42, the NATIVE journals
+on 43. This is the same published-first instinct `matchesJournal` already
+applies to bare browsing ("flood the view with unpublished rows"), and it keeps
+the owner's "include working papers in recent" decision intact — they are still
+listed, just after the published block. `buildJTypeSelect()` **hides the Working Papers type until its
 archive has sources**, so the shipped empty `data-workingpapers/` (valid empty
 manifest) stays dormant until data lands. **The archive is built ONLINE, slowly:** two
 workflows — `lit-workingpapers-backfill.yml` (every 3 h, the growth engine) and

@@ -212,6 +212,9 @@
   .legend.toggleable .li:hover { background: var(--bg); }
   .legend.toggleable .li.off { opacity: .45; text-decoration: line-through; }
   .legend .li.grp { font-weight: 700; }
+  /* A one-line "what the Nature paper predicts this plot should look like" note,
+     shown on its own row under the colour swatches of the team-science figures. */
+  .legend .expect { flex-basis: 100%; font-size: 12px; font-style: italic; color: var(--text-muted); line-height: 1.55; }
   .chart-empty { color: var(--text-muted); font-size: 13.5px; padding: 30px 6px; text-align: center; }
 
   /* cited table */
@@ -222,6 +225,13 @@
   table.cited .ti a { color: var(--navy); font-weight: 600; text-decoration: none; }
   table.cited .ti a:hover { text-decoration: underline; }
   table.cited .meta { color: var(--text-muted); font-size: 12px; }
+  /* byline under a paper's title — darker than the journal/year meta line so the
+     authors read as part of the citation, not as secondary metadata. */
+  table.cited .auth { color: var(--text); font-size: 12px; opacity: .82; margin-top: 1px; }
+  /* team-size cell: "3 authors" — the number is the point, the unit is the label
+     that says what "team" counts (see the card sub-heading). */
+  table.cited .team { color: var(--text-muted); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  table.cited .team b { color: var(--text); font-weight: 700; }
   table.cited .cby { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--navy); text-align: right; white-space: nowrap; }
   .tblscroll { overflow-x: auto; }
 
@@ -604,12 +614,14 @@
             </div>
             <div class="card">
               <h3>Most disruptive papers in scope</h3>
-              <div class="csub">Highest <em>D</em> — work later cited on its own, apart from its antecedents.</div>
+              <div class="csub">Highest <em>D</em> — work later cited on its own, apart from its antecedents.
+                <strong>Team size</strong> is how many authors are credited on the paper (2&nbsp;authors&nbsp;= a two-author paper).</div>
               <div class="tblscroll"><div id="disrTopDisrupt"></div></div>
             </div>
             <div class="card">
               <h3>Most developing papers in scope</h3>
-              <div class="csub">Lowest <em>D</em> — work cited alongside the prior art it consolidated and extended.</div>
+              <div class="csub">Lowest <em>D</em> — work cited alongside the prior art it consolidated and extended.
+                <strong>Team size</strong> is how many authors are credited on the paper (2&nbsp;authors&nbsp;= a two-author paper).</div>
               <div class="tblscroll"><div id="disrTopDevelop"></div></div>
             </div>
             <div class="card wide">
@@ -2061,7 +2073,15 @@
   // graph. The whole per-paper table (./disruption.json) is small enough that
   // every figure is computed client-side, so all of it honours the top filters.
   var DISR = null, disrState = 'idle', disrNameToId = null, disrCbs = [];
-  // Disruption blue, developing/citation claret-red, reference-age green, popularity gold.
+  // ONE colour per quantity, shared by every team-science figure — a reader
+  // comparing two plots must never see the same measure in two different colours
+  // (or, worse, two different measures in the same colour). Use these constants
+  // directly; do not re-alias them per chart.
+  //   C_DISRUPT  blue        disruption / disruptive (D > 0, D percentile, top-5% D)
+  //   C_DEVELOP  claret-pink developing (D < 0) — the opposite pole of D, never a citation
+  //   C_CITE     rust-red    citations / impact (median citations, top-5% cited)
+  //   C_AGE      green       reference age
+  //   C_POP      gold        reference popularity
   var C_DISRUPT = '#3f6098', C_DEVELOP = '#a34a6d', C_CITE = '#b5533a', C_AGE = '#6a8d3a', C_POP = '#a07d1e';
   var DISR_CAP = 8;               // team sizes 1..7 individually, 8 = "8+" (tail merged — thin at large teams)
   var DISR_MIN_BIN = 8;           // a team-size bin needs this many papers to be plotted
@@ -2408,15 +2428,15 @@
   function teamCats(stats) { return stats.map(function (s) { return s.t >= DISR_CAP ? (DISR_CAP + '+') : String(s.t); }); }
 
   // Plot B — the headline "scissor", adapted from Wu et al.'s Fig. 1/2: average
-  // disruption PERCENTILE (red, left axis — each paper's D ranked 0–100 against
+  // disruption PERCENTILE (blue, left axis — each paper's D ranked 0–100 against
   // every scored paper in the current slice, averaged per team size) against
-  // median citations (blue, right axis). Colors per the owner: disruption red,
-  // citations blue.
+  // median citations (claret-red, right axis). Colors follow the page-wide
+  // convention (see C_DISRUPT/C_CITE): disruption is ALWAYS blue and citations
+  // ALWAYS claret-red, so the same quantity keeps its colour across every plot.
   function renderDisrScissor(rows) {
     var stats = disrTeamStats(rows);
     if (teamSolidCount(stats) < 2) { $('disrScissor').innerHTML = '<div class="chart-empty">Not enough citation-graph data across team sizes in this slice yet.</div>'; $('disrScissorLegend').innerHTML = ''; return; }
     var cats = teamCats(stats), counts = stats.map(function (s) { return s.n; });
-    var C_RED = C_CITE, C_BLUE = C_DISRUPT;
     var allD = rows.map(function (p) { return p.d; }).sort(function (a, b) { return a - b; });
     var binPct = {}; stats.forEach(function (s) { binPct[s.t] = { sum: 0, n: 0 }; });
     rows.forEach(function (p) {
@@ -2425,18 +2445,18 @@
       b.sum += pctRankSorted(allD, p.d); b.n++;
     });
     var series = [
-      { name: 'Average disruption percentile', color: C_RED, axis: 'L', pts: teamPts(stats, function (s) { var b = binPct[s.t]; return b && b.n ? b.sum / b.n : null; }) },
-      { name: 'Median citations', color: C_BLUE, axis: 'R', pts: teamPts(stats, function (s) { return s.medCit; }) }
+      { name: 'Average disruption percentile', color: C_DISRUPT, axis: 'L', pts: teamPts(stats, function (s) { var b = binPct[s.t]; return b && b.n ? b.sum / b.n : null; }) },
+      { name: 'Median citations', color: C_CITE, axis: 'R', pts: teamPts(stats, function (s) { return s.medCit; }) }
     ];
     $('disrScissor').innerHTML = catLineChart(cats, series, {
       leftLabel: 'Avg disruption percentile', rightLabel: 'Median citations',
-      leftColor: C_RED, rightColor: C_BLUE, counts: counts, leftZero: true,
+      leftColor: C_DISRUPT, rightColor: C_CITE, counts: counts, leftZero: true,
       refLine: 50, refLineLabel: '50th percentile (average)'
     });
     $('disrScissorLegend').innerHTML =
-      '<span class="li"><span class="sw" style="background:' + C_RED + '"></span>Average disruption percentile, 0–100 (left)</span>' +
-      '<span class="li"><span class="sw" style="background:' + C_BLUE + '"></span>Median citations (right)</span>';
-    $('disrScissorSub').innerHTML = 'Adapted from the headline figure of <a href="https://www.nature.com/articles/s41586-019-0941-9" target="_blank" rel="noopener">Wu <em>et&nbsp;al.</em> (<em>Nature</em>&nbsp;570, 2019)</a>: across their 24&nbsp;million articles, median citations (blue, right axis) <em>rise</em> with team size while the average <strong>disruption percentile</strong> (red, left axis) — each paper’s <em>D</em> ranked 0–100 among the scored papers in this slice — <em>falls</em>: large teams develop science, small teams disrupt it. In our database the disruption curve is still nearly flat: most papers have only a handful of in-catalog citers so far, which pulls every team-size bin toward the 50th percentile. The gradient should emerge as the citation graph fills in.';
+      '<span class="li"><span class="sw" style="background:' + C_DISRUPT + '"></span>Average disruption percentile, 0–100 (left)</span>' +
+      '<span class="li"><span class="sw" style="background:' + C_CITE + '"></span>Median citations (right)</span>';
+    $('disrScissorSub').innerHTML = 'Adapted from the headline figure of <a href="https://www.nature.com/articles/s41586-019-0941-9" target="_blank" rel="noopener">Wu <em>et&nbsp;al.</em> (<em>Nature</em>&nbsp;570, 2019)</a>: across their 24&nbsp;million articles, median citations (red, right axis) <em>rise</em> with team size while the average <strong>disruption percentile</strong> (blue, left axis) — each paper’s <em>D</em> ranked 0–100 among the scored papers in this slice — <em>falls</em>: large teams develop science, small teams disrupt it. In our database the disruption curve is still nearly flat: most papers have only a handful of in-catalog citers so far, which pulls every team-size bin toward the 50th percentile. The gradient should emerge as the citation graph fills in.';
   }
 
   // Plot C — reference age (left) vs reference popularity (right) by team size.
@@ -2455,7 +2475,8 @@
     });
     $('disrSearchLegend').innerHTML =
       '<span class="li"><span class="sw" style="background:' + C_AGE + '"></span>Average reference age, years (left)</span>' +
-      '<span class="li"><span class="sw" style="background:' + C_POP + '"></span>Median reference popularity, citations (right)</span>';
+      '<span class="li"><span class="sw" style="background:' + C_POP + '"></span>Median reference popularity, citations (right)</span>' +
+      '<span class="expect"><strong>What to expect from the paper:</strong> the two lines should pull apart as teams grow — reference age falling (green, decreasing) while reference popularity rises (gold, increasing), because large teams build on recent, heavily-cited work whereas small teams reach deeper into the past for less popular ideas.</span>';
     $('disrSearchSub').innerHTML = 'Depth of search by team size — the paper’s Fig. 4. Reference age is how far back a paper reaches; reference popularity is the median citation count of the work it builds on. Popularity is a rough proxy while citation coverage fills in.';
   }
 
@@ -2494,21 +2515,44 @@
     });
     $('disrRatioLegend').innerHTML =
       '<span class="li"><span class="sw" style="background:' + C_DISRUPT + '"></span>Top-5% disruptive (high D)</span>' +
-      '<span class="li"><span class="sw" style="background:' + C_CITE + '"></span>Top-5% cited (high impact)</span>';
-    $('disrRatioSub').innerHTML = 'The paper’s Fig. 2d: small teams should over-produce the most-disruptive work, large teams the most-cited — the two lines crossing the dashed 1.0 line in opposite directions. Each bin’s share of top-tier papers is normalized by the corpus-wide share (ties at the 95th-percentile threshold make that share exceed a nominal 5%), so 1.0 = exactly the corpus rate.';
+      '<span class="li"><span class="sw" style="background:' + C_CITE + '"></span>Top-5% cited (high impact)</span>' +
+      '<span class="expect"><strong>What to expect from the paper:</strong> the two lines should cross the dashed 1.0 line in opposite directions as teams grow — disruption (blue) decreasing from above&nbsp;1.0 to below it, citations (red) increasing from below&nbsp;1.0 to above it, so small teams over-produce the most-disruptive work and large teams the most-cited.</span>';
+    $('disrRatioSub').innerHTML = 'The paper’s Fig. 2d: small teams should over-produce the most-disruptive work, large teams the most-cited. Each bin’s share of top-tier papers is normalized by the corpus-wide share (ties at the 95th-percentile threshold make that share exceed a nominal 5%), so 1.0 = exactly the corpus rate.';
   }
 
+  // The credited authors of a disruption.json row: `au` holds ids into the
+  // dataset's shared author array (one per credited name, so au.length === t,
+  // the team size). Returns [] when the row carries no author ids.
+  function disrPaperAuthors(p) {
+    if (!p || !p.au || !DISR || !DISR.authors) return [];
+    return p.au.map(function (id) { return DISR.authors[id]; }).filter(Boolean);
+  }
+  // "Team" is simply the number of authors credited on the paper — Team 2 = a
+  // two-author paper. Spelling the unit out in the cell (and in each card's
+  // sub-heading) stops a bare "2" from reading as a rank, a group id or a
+  // co-author count that excludes the lead author.
+  function disrTeamCell(p) {
+    var n = p.t || 0;
+    return '<span class="team"><b>' + fmt(n) + '</b> ' + (n === 1 ? 'author' : 'authors') + '</span>';
+  }
   function disrPaperTable(list) {
     if (!list.length) return '<div class="chart-empty">No data in the selected scope.</div>';
-    var html = '<table class="cited"><thead><tr><th>Paper</th><th>Team</th><th style="text-align:right">D</th></tr></thead><tbody>';
+    var html = '<table class="cited"><thead><tr><th>Paper</th>' +
+      '<th title="Team size — how many authors are credited on the paper. 2 authors = a two-author paper.">Team size</th>' +
+      '<th style="text-align:right">D</th></tr></thead><tbody>';
     list.forEach(function (p) {
       var url = p.doi ? 'https://doi.org/' + p.doi : '';
       var ti = trunc(p.ti || '(untitled)', 74);
       var title = url ? '<a href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(ti) + '</a>' : esc(ti);
       var col = p.d > 0 ? C_DISRUPT : (p.d < 0 ? C_DEVELOP : MUTED);
       var nfMeta = p.nf != null ? ' · cited by ' + fmt(p.nf) + ' here' : '';
-      html += '<tr><td class="ti">' + title + '<div class="meta">' + esc(JMAP[p.j] ? JMAP[p.j].name : p.j) + ' · ' + esc(p.y) + nfMeta + '</div></td>' +
-        '<td class="meta">' + fmt(p.t) + '</td>' +
+      // Byline, like the most-cited table: truncated to keep the row compact,
+      // with the full author list on hover so a large team stays readable.
+      var names = disrPaperAuthors(p), full = names.join(', ');
+      var auth = full ? '<div class="auth" title="' + esc(full) + '">' + esc(trunc(full, 110)) + '</div>' : '';
+      html += '<tr><td class="ti">' + title + auth +
+        '<div class="meta">' + esc(JMAP[p.j] ? JMAP[p.j].name : p.j) + ' · ' + esc(p.y) + nfMeta + '</div></td>' +
+        '<td>' + disrTeamCell(p) + '</td>' +
         '<td class="cby" style="color:' + col + '">' + (p.d > 0 ? '+' : '') + fmtD3(p.d) + '</td></tr>';
     });
     return html + '</tbody></table>';

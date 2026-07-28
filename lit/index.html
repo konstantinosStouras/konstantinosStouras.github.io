@@ -1007,6 +1007,14 @@ const WP_DATA_BASE = './data-workingpapers/';
 // Journal keys that belong to the archive (populated from its manifest); backs
 // the 'wp' journal type (journalTypeKeys) and the opt-in lazy-load rule.
 const WP_KEYS = new Set();
+// Is this row an unpublished working paper? Prefers the normalized `_jkeys`
+// (what matchesJournal uses) and falls back to the raw JKey, because the
+// recent-tab rows come straight from a dataset's recent.json and may not have
+// been through computeJkeys yet.
+function isWorkingPaperRow(p) {
+  var ks = (p._jkeys && p._jkeys.length) ? p._jkeys : [p.JKey];
+  return ks.some(function(k) { return WP_KEYS.has(k); });
+}
 
 // The citation graph — for every listed paper, the references it cites that
 // ALSO belong to this catalog (intra-catalog out-edges), built by
@@ -3836,12 +3844,10 @@ function renderRecent() {
   groups.forEach(function(g) {
     var rows = g.rows
       .filter(matchesJournal)
-      .map(function(p) { return { p: p, d: getAddedDate(p) }; })
+      .map(function(p) { return { p: p, d: getAddedDate(p), w: isWorkingPaperRow(p) ? 1 : 0 }; })
       .filter(function(x) { return x.d && x.d >= cutoff; });
     var seen = { papers: 0, wp: 0 };
-    rows.forEach(function(x) {
-      if ((x.p._jkeys || []).some(function(k) { return WP_KEYS.has(k); })) seen.wp++; else seen.papers++;
-    });
+    rows.forEach(function(x) { if (x.w) seen.wp++; else seen.papers++; });
     // The uncapped tally wins whenever it is available AND at least as large as
     // what we can see — it is the true number, and it can only be smaller if it
     // is stale or does not know a key we are rendering (a journal registered
@@ -3855,7 +3861,19 @@ function renderRecent() {
     }
     dated = dated.concat(rows);
   });
-  var recent = dated.sort(function(a, b) { return b.d - a.d; }).map(function(x) { return x.p; });
+  // PUBLISHED papers form the first block, working papers the second — each
+  // newest-added first. A pure date sort let the working-papers backfill bury
+  // the published catalogue: it adds ~1,000 SSRN/NBER/arXiv rows in a single
+  // day, so on 2026-07-28 all 1,000 preceded the 144 published papers added
+  // the day before, pushing the ABS shards to page 41, Nature/Science to 42
+  // and the native journals to 43 — "Recently added" showed nothing but
+  // unpublished work. Working papers stay in the view (they are still the
+  // archive's only "what's new" surface), just below the published block —
+  // the same published-first instinct `matchesJournal` already applies to
+  // bare browsing, where WP_KEYS would "flood the view with unpublished rows".
+  var recent = dated
+    .sort(function(a, b) { return (a.w - b.w) || (b.d - a.d); })
+    .map(function(x) { return x.p; });
 
   // Set the global `filtered` so the Abstract/BibTeX toggles resolve correctly.
   filtered = recent;
