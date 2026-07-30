@@ -539,7 +539,24 @@ the batched legs), caches into `data-ft50/_api-abstracts.json`
 `FT50_ABS_MISS_TTL_DAYS` 45), and applies UPGRADE-only via the same
 `betterAbstract`; `applyAbstractCaches` folds it into every FT50 daily
 build. Distinct OpenAlex identity `kstouras+litft50abs`. Offline test:
-`node lit/_scraper-ft50/abstracts-selftest.mjs`. **The same backfill is
+`node lit/_scraper-ft50/abstracts-selftest.mjs`.
+**A keyed leg that never ran must not write its DOIs off** (`shouldStampMiss`,
+pure + unit-tested). The per-DOI Elsevier/Springer legs drop for the WHOLE run
+on 401/403/429, and the time budget can cut one mid-batch — but the
+end-of-batch "stamp the rest as misses" then recorded a 45-day miss for a
+check that never happened. Observed live: `ELSEVIER_API_KEY` is set, Elsevier
+refused it, the leg dropped on its first call, and **16,908 EJOR DOIs were
+written off as "no abstract" in a 9-minute run** that could not physically have
+queried them (one GET per DOI at `ELS_PACE_MS` 350 ms ≈ 98 min). So each batch
+now tracks which DOIs a keyed leg actually reached (`keyedTried`) and leaves
+the rest uncached for the next run. A configured-but-refused key also emits a
+`::warning::` naming the HTTP code and its meaning (401 bad/expired key, 403 no
+off-campus abstract entitlement → get an institutional token and set
+`ELSEVIER_INST_TOKEN`, 429 quota) — the run otherwise exits 0 and looks healthy
+while achieving nothing. **This is why EJOR abstract coverage sits at ~10%**:
+Elsevier DOIs resolve at 7.6% against 87.7% (OUP), 85.6% (AAA), 70.3% (AoM) —
+a credential problem, not a code or coverage one. The needy queue is already
+sorted newest-year-first, so 2026 is served before older years. **The same backfill is
 VENDORED into each ABS shard repo** (`_scraper/abstracts-ci.mjs` +
 `abstracts-selftest.mjs` + `abstracts-backfill.yml`, identities `+abs4abs`/
 `+abs3omabs`/`+abs3restabs`; `betterAbstract`/`ABS_MAX` inlined) — the shards
