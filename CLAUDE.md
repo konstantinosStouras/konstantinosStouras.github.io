@@ -344,24 +344,73 @@ pickup for the FT50 catalog** works like the native `lit-check-new` pass:
 minutes** via `.github/workflows/lit-ft50-check-new.yml`, asking Crossref for only
 the records (re)indexed in the last few days (`filter=from-index-date`,
 `FT50_INCR_LOOKBACK_DAYS` default 4) for a **small configured subset**
-(`FT50_INCR_JOURNALS`, default **`ecta`** = Econometrica only). It upserts into
-`papers-ecta.json` (appends new DOIs; for a known DOI refreshes only core
-bibliographic fields, PRESERVING enrichment — `Preprint`/`CitedBy`+`CitedBySrc`),
+(`FT50_INCR_JOURNALS`, default **`ecta,ejor`** = Econometrica + EJOR). It upserts
+into those `papers-<key>.json` (appends new DOIs; for a known DOI refreshes only
+core bibliographic fields, PRESERVING enrichment — `Preprint`/`CitedBy`+`CitedBySrc`),
 then rewrites only the small derived files, doing a **lean recent.json merge** —
 the polled journals' fresh rows unioned with the last build's recent rows for
 every OTHER journal (correct because it and the daily build are the only
 data-ft50 writers and share the `lit-ft50-update-data-${{ github.ref }}`
 concurrency group, so nothing else changed) — instead of reloading all ~50 papers
-files. It **writes nothing when nothing new arrived**. Why only Econometrica:
-lit's own `lit-check-new` already fast-tracks the eight native INFORMS/SAGE AIA
-journals, and Econometrica is the one requested journal that lives ONLY in the
-FT50 catalog AND whose publisher assigns an accepted paper straight to a future
-issue — so Crossref never lists it as a no-volume advance article and the daily
-build was otherwise the only thing that ever picked it up (up to a day late).
+files. It **writes nothing when nothing new arrived**. Why THESE journals: lit's
+own `lit-check-new` already fast-tracks the eight native INFORMS/SAGE AIA
+journals, so this pass exists for the ones that live ONLY in the FT50 catalog.
+**Econometrica** because its publisher assigns an accepted paper straight to a
+future issue — so Crossref never lists it as a no-volume advance article and the
+daily build was otherwise the only thing that ever picked it up (up to a day
+late). **EJOR** because it is the catalog's highest-volume journal (~700
+papers/year across 24 issues + a ~40/month Articles-in-Press stream, so 1–2
+genuinely-new records most days), which the once-a-day build delivered in one
+nightly batch; its back-catalogue was audited complete at the same time (see
+`coverage-audit.mjs` below), so freshness was the only thing lacking. Adding a
+key costs one Crossref call per ISSN per run and nothing else — the pass still
+writes only on a genuine change, so a quiet 20-minute fire commits nothing.
 Offline test: `node lit/_scraper-ft50/incremental-selftest.mjs` (mock, no
-network; adds an `ecta` fixture, `mock/crossref-ecta.json`). NOTE: this build
-env's egress blocks Crossref (403), so the incremental pass only does real work
-on the GitHub Actions runners. AIA fixups for the catalog come from
+network; fixtures `mock/crossref-ecta.json` and `mock/crossref-ejor.json`, the
+latter covering the no-volume Articles-in-Press case that motivated polling EJOR
+plus a "two polled journals still no-op on unchanged data" check). NOTE: this
+build env's egress blocks Crossref (403), so the incremental pass only does real
+work on the GitHub Actions runners.
+**Completeness auditing — `lit/_scraper/coverage-audit.mjs`.** "Are we actually
+missing papers from journal X?" cannot be answered by counting our own rows (the
+harvest and the count share a source, so a gap is invisible), so this **offline,
+no-network** maintenance CLI — beside `dedupe-data.mjs`/`clean-titles.mjs`, same
+`--journal <key>` [`--dir <dataset>`] [`--from <year>`] [`--verbose`] [`--json`]
+shape, auto-locating the papers file across native/FT50/shard dirs — applies two
+probes INDEPENDENT of the harvest. **(A) Page tiling:** an issue paginates
+contiguously, so its articles' page ranges must tile it; a hole is a suspected
+missing paper. Measured WITHIN an issue (a jump at an issue boundary is that
+issue's front matter — the `IFC`/roman-leaf rows — not a missing article) and
+1-page holes ignored (blank verso). Since that probe cannot see a WHOLE missing
+issue (the volume would just end early) it is paired with a volume-run +
+issue-set check: every volume number present, each volume carrying its journal's
+modal issue set. Volume/issue labels are normalised numerically — `"00"`
+placeholder volumes are skipped (Econometrica deposits them on some corrigenda)
+and a split issue (`"4-part-1"`/`"4-part-2"`, OR vol 58) folds into its issue
+number, or both would read as false gaps. **(B) Cited-DOI probe:** every DOI of
+the journal that appears in `data-refs/_refs-cache.json`'s RAW reference lists is
+a paper some catalog paper cites — proof it exists, from a corpus with nothing to
+do with our journal harvest — so any such DOI absent from `papers-<key>.json` is
+a PROVEN hole. It derives the journal's DOI stem set itself by cutting each DOI
+at its first variable numeric field (so `10.1016/j.ejor.2015.05.082` →
+`10.1016/j.ejor`, the legacy Elsevier PII `10.1016/S0377-2217(99)…` →
+`10.1016/0377-2217(`, `10.3982/ECTA24001` → `10.3982/ecta`), keeps the stems
+explaining ≥95% of rows and SKIPS the probe when they cannot (Econometrica's
+JSTOR-era `10.2307/` DOIs give no journal-specific stem, and matching the bare
+registrant would pull in every other JSTOR journal). It is deliberately
+high-precision: trailing sentence punctuation is stripped from a cited DOI first,
+and a DOI whose SHAPE (digit runs → `#`, letter runs → `@`) is not one the
+journal itself uses is reported as a **malformed citation** (OCR slips like
+`mnsc.l070.0830`), never counted as a missing paper. Exit code 1 on a proven hole
+so it can gate CI; probe B under-samples the newest years by construction (an
+unpublished-last-month paper has no citers yet), which the output states. Current
+readings: **EJOR 2007–2026 is complete** — 160 volumes with no gap, every volume
+its 3 issues, tiling coverage 99.89% (~14 suspected, all pre-2016), and **0 of
+2,446** cited EJOR DOIs missing. It also found two genuine leads elsewhere:
+`papers-ms.json` is missing `10.1287/mnsc.2014.1882` and
+`10.1287/mnsc.46.9.1249.12220`, and **Operations Research vol 67 (2019) is
+missing issue 2 entirely plus most of issue 4** (~35 papers, pages 295–598 and
+1035–1208) — unfixed here, since this build env cannot reach Crossref. AIA fixups for the catalog come from
 `informs-aia-local.mjs --app lit-ft50`; **Econometrica FORTHCOMING papers**
 (accepted, not yet in an issue — Crossref never shows these) are scraped from the
 Econometric Society's own forthcoming-papers page by the LOCAL
