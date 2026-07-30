@@ -398,19 +398,31 @@ at its first variable numeric field (so `10.1016/j.ejor.2015.05.082` →
 explaining ≥95% of rows and SKIPS the probe when they cannot (Econometrica's
 JSTOR-era `10.2307/` DOIs give no journal-specific stem, and matching the bare
 registrant would pull in every other JSTOR journal). It is deliberately
-high-precision: trailing sentence punctuation is stripped from a cited DOI first,
-and a DOI whose SHAPE (digit runs → `#`, letter runs → `@`) is not one the
-journal itself uses is reported as a **malformed citation** (OCR slips like
-`mnsc.l070.0830`), never counted as a missing paper. Exit code 1 on a proven hole
-so it can gate CI; probe B under-samples the newest years by construction (an
-unpublished-last-month paper has no citers yet), which the output states. Current
-readings: **EJOR 2007–2026 is complete** — 160 volumes with no gap, every volume
-its 3 issues, tiling coverage 99.89% (~14 suspected, all pre-2016), and **0 of
-2,446** cited EJOR DOIs missing. It also found two genuine leads elsewhere:
-`papers-ms.json` is missing `10.1287/mnsc.2014.1882` and
-`10.1287/mnsc.46.9.1249.12220`, and **Operations Research vol 67 (2019) is
-missing issue 2 entirely plus most of issue 4** (~35 papers, pages 295–598 and
-1035–1208) — unfixed here, since this build env cannot reach Crossref. AIA fixups for the catalog come from
+high-precision, via THREE guards. (1) Trailing sentence punctuation is stripped
+from a cited DOI first. (2) A DOI whose SHAPE (digit runs → `#`, letter runs →
+`@`) is not one the journal itself uses is a **malformed citation** (OCR slips
+like `mnsc.l070.0830`), never a missing paper. (3) A DOI naming a
+(volume, issue, first page) we already carry is a **variant registration**, not a
+hole — INFORMS' pre-2010 form is `<journal>.<vol>.<issue>.<firstPage>.<id>` with
+an opaque trailing id, so a cited `mnsc.46.9.1249.12220` is the SAME paper as our
+`mnsc.46.9.1249.12238` (`coordIndex`/`heldAtSameCoords`). That guard is keyed on
+the article's COORDINATES, deliberately NOT on "matches one of ours except the
+last field", which would be wrong for date-sequence DOIs — `j.ejor.2006.02.001`
+and `j.ejor.2006.02.003` differ only in the last field yet are different papers.
+Exit code 1 on a proven hole so it can gate CI; probe B under-samples the newest
+years by construction (an unpublished-last-month paper has no citers yet), which
+the output states. Current readings: **EJOR 2007–2026 is complete** — 160 volumes
+with no gap, every volume its 3 issues, tiling coverage 99.89% (~14 suspected,
+all pre-2016), and **0 of 2,446** cited EJOR DOIs missing. Two open leads
+elsewhere, unfixed here because this build env cannot reach Crossref:
+`papers-ms.json` lacks `10.1287/mnsc.2014.1882` (1 citer; our `mnsc.2014.*` run
+starts at `.1894`, so it needs a by-DOI check — it may equally be a bad
+reference), and **Operations Research vol 67 (2019) is genuinely missing issue 2
+entirely plus most of issue 4** — confirmed against the page tiling: iss 1 =
+1–294, iss 2 ABSENT (295–598), iss 3 = 599–904, iss 4 holds ONE row (1027–1034)
+of its true 905–1208 span, iss 5 = 1209–1502, iss 6 = 1503–1782, so ~35 papers.
+The daily build re-pulls OR's whole back-catalogue and still lacks them, so they
+are not reachable via `/journals/0030-364X/works` and need a by-DOI rescue. AIA fixups for the catalog come from
 `informs-aia-local.mjs --app lit-ft50`; **Econometrica FORTHCOMING papers**
 (accepted, not yet in an issue — Crossref never shows these) are scraped from the
 Econometric Society's own forthcoming-papers page by the LOCAL

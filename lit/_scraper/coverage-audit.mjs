@@ -285,6 +285,36 @@ const doiStem = (d) => {
 // papers would make this probe cry wolf. A cited DOI is only treated as a
 // PROVEN hole when its shape is one the journal itself actually uses.
 const doiShape = (d) => d.replace(/\d+/g, '#').replace(/[a-z]+/g, '@');
+// Second precision guard, for publishers whose DOI ENCODES the article's
+// coordinates. INFORMS' pre-2010 form is <journal>.<vol>.<issue>.<firstPage>.<id>,
+// where the trailing id is an internal key — so a reference to
+// "mnsc.46.9.1249.12220" and our own "mnsc.46.9.1249.12238" are the SAME paper
+// (vol 46, issue 9, p.1249) under a variant/mistyped registration, not a paper
+// we are missing. Shape alone cannot catch that: both shapes are legitimate.
+// So if any three consecutive numeric fields in a cited DOI name a
+// (volume, issue, first page) we already carry, it is not a hole.
+//
+// Deliberately keyed on the ARTICLE'S COORDINATES rather than "the DOI matches
+// one of ours except its last field", which would be wrong for date-sequence
+// DOIs: 10.1016/j.ejor.2006.02.001 differs from 10.1016/j.ejor.2006.02.003 only
+// in the last field too, yet those are genuinely different papers.
+const coordIndex = (rows) => {
+  const ix = new Set();
+  for (const r of rows) {
+    const v = String(r.Volume || '').trim(), i = String(r.Issue || '').trim();
+    const m = /^(\d+)/.exec(String(r.Page || '').trim());
+    if (!/^\d+$/.test(v) || !/^\d+$/.test(i) || !m) continue;
+    ix.add(`${Number(v)}/${Number(i)}/${Number(m[1])}`);
+  }
+  return ix;
+};
+const heldAtSameCoords = (doi, ix) => {
+  const nums = (doi.match(/\d+/g) || []).map(Number);
+  for (let k = 0; k + 2 < nums.length; k++) {
+    if (ix.has(`${nums[k]}/${nums[k + 1]}/${nums[k + 2]}`)) return true;
+  }
+  return false;
+};
 // The year a DOI encodes: `…ejor.2015.…` or the PII's two-digit `(99)`/`(26)`.
 const doiYear = (d) => {
   const pii = /\((\d{2})\)/.exec(d);
@@ -327,6 +357,7 @@ if (!stems.length || stemShare < 0.9) {
 } else {
   const have = new Set(rows.map(r => bareDoi(r.DOI)));
   const ourShapes = new Set([...have].map(doiShape));
+  const ourCoords = coordIndex(rows);
   const cache = JSON.parse(readFileSync(refsPath, 'utf8'));
   const crawled = Object.keys(cache).length;
   const cited = new Map();                       // journal doi -> citer count
@@ -342,13 +373,17 @@ if (!stems.length || stemShare < 0.9) {
   // An unparseable year counts as IN the window, so a hole is never hidden.
   const inWin = [...cited.keys()].filter(d => { const y = doiYear(d); return y === 0 || y >= FROM; });
   const notHeld = inWin.filter(d => !have.has(d));
-  const absent = notHeld.filter(d => ourShapes.has(doiShape(d)));   // proven holes
+  // A cited DOI is a PROVEN hole only if its shape is one this journal uses AND
+  // it does not name an article we already carry under another registration.
+  const isHole = (d) => ourShapes.has(doiShape(d)) && !heldAtSameCoords(d, ourCoords);
+  const absent = notHeld.filter(isHole);                            // proven holes
+  const variant = notHeld.filter(d => ourShapes.has(doiShape(d)) && heldAtSameCoords(d, ourCoords));
   const suspect = notHeld.filter(d => !ourShapes.has(doiShape(d))); // malformed citations
   const perYear = new Map();
   for (const d of inWin) {
     const y = doiYear(d) || 0;
     const e = perYear.get(y) || { seen: 0, missing: 0 };
-    e.seen++; if (!have.has(d) && ourShapes.has(doiShape(d))) e.missing++;
+    e.seen++; if (!have.has(d) && isHole(d)) e.missing++;
     perYear.set(y, e);
   }
   const byCiters = (a, b) => (cited.get(b) || 0) - (cited.get(a) || 0);
@@ -357,15 +392,20 @@ if (!stems.length || stemShare < 0.9) {
     citedDoisSeen: cited.size,
     citedDoisInWindow: inWin.length,
     absentFromCatalog: absent.length,
+    variantRegistrations: variant.length,
     malformedCitations: suspect.length,
     impliedCoveragePct: inWin.length ? +((1 - absent.length / inWin.length) * 100).toFixed(3) : null,
     perYear: [...perYear.entries()].sort((a, b) => a[0] - b[0])
       .map(([year, e]) => ({ year: year || 'unknown', ...e })),
     missing: absent.sort(byCiters).map(d => ({ doi: d, citers: cited.get(d), doiYear: doiYear(d) || null })),
     suspectDois: suspect.sort(byCiters).map(d => ({ doi: d, citers: cited.get(d) })),
+    variantDois: variant.sort(byCiters).map(d => ({ doi: d, citers: cited.get(d) })),
   };
   if (absent.length) {
     report.problems.push(`${absent.length} DOI(s) of this journal are cited by catalog papers but absent from papers-${JKEY}.json`);
+  }
+  if (variant.length) {
+    report.notes.push(`${variant.length} further cited DOI(s) name a volume/issue/first-page this journal DOES carry under another registration (a variant or mistyped DOI for a paper we already list), so they are NOT counted as missing papers. See --verbose.`);
   }
   if (suspect.length) {
     report.notes.push(`${suspect.length} further cited DOI(s) do not match any DOI shape this journal uses — almost certainly malformed citations (OCR slips, stray punctuation), so they are NOT counted as missing papers. See --verbose.`);
@@ -428,6 +468,10 @@ if (report.citedProbe) {
       console.log(`      ${String(m.citers).padStart(4)} citer(s)  ${m.doi}`);
     }
     if (!VERBOSE && c.missing.length > 20) console.log(`      … ${c.missing.length - 20} more (--verbose)`);
+  }
+  if (VERBOSE && c.variantDois.length) {
+    console.log('    variant registrations of papers we DO hold (NOT missing):');
+    for (const m of c.variantDois) console.log(`      ${String(m.citers).padStart(4)} citer(s)  ${m.doi}`);
   }
   if (VERBOSE && c.suspectDois.length) {
     console.log('    malformed citations (NOT counted as missing papers):');
