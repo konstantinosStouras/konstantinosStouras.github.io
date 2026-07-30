@@ -93,6 +93,17 @@ export function invertedToText(inv) {
 // the selftest. The shape is {"abstracts-retrieval-response":{"coredata":
 // {"dc:description": …}}}; dc:description is usually a plain string but can be
 // a nested {abstract:{'ce:para': …}} object — take the first string found.
+// Should a still-unresolved DOI be written off as a miss for MISS_TTL_DAYS?
+// No, if a KEYED per-DOI leg owns this publisher's prefix but never actually
+// tried this DOI (bad/expired key, spent quota, or the time budget cut the leg
+// mid-batch). Stamping those records a long miss for a check that never
+// happened. Pure, so the rule is unit-testable without any network.
+export function shouldStampMiss(doi, { elsKey, sprKey, elsPrefix, sprPrefix, keyedTried }) {
+  if (elsKey && elsPrefix.test(doi) && !keyedTried.has(doi)) return false;
+  if (sprKey && sprPrefix.test(doi) && !keyedTried.has(doi)) return false;
+  return true;
+}
+
 export function elsevierAbstract(body) {
   const core = body && body['abstracts-retrieval-response'] &&
     body['abstracts-retrieval-response'].coredata;
@@ -246,6 +257,7 @@ async function main() {
   if (DRY) return;
 
   let s2ok = USE_S2, elsOk = true, found = 0, checked = 0, batches = 0;
+  let elsDropCode = 0;
   const elsStats = { found: 0, empty: 0, e404: 0, other: 0 };
   let sprOk = true;
   const sprStats = { found: 0, empty: 0, other: 0 };
@@ -254,6 +266,11 @@ async function main() {
     if (Date.now() - T0 > BUDGET_MS) { console.log('⏱ budget spent — stopping this slice (resume-safe).'); break; }
     const batch = needy.slice(i, i + 50).map(n => n.doi);
     let unresolved = new Set(batch);
+    // Which DOIs a KEYED, per-DOI leg actually got to this batch. A keyed leg
+    // can end early — a bad/expired key or spent quota drops it for the whole
+    // run (401/403/429), and the time budget can cut it mid-batch — and a DOI
+    // it never reached must NOT be stamped as a miss below.
+    const keyedTried = new Set();
     // Leg 1: OpenAlex
     try {
       const url = `https://api.openalex.org/works?filter=doi:${batch.join('|')}` +
@@ -294,6 +311,7 @@ async function main() {
       for (const doi of [...unresolved]) {
         if (!ELS_PREFIX.test(doi)) continue;
         if (Date.now() - T0 > BUDGET_MS) break;
+        keyedTried.add(doi);
         try {
           // view=META_ABS is what includes dc:description — the default view
           // returns metadata WITHOUT the abstract text.
@@ -302,7 +320,8 @@ async function main() {
             { headers: { 'X-ELS-APIKey': ELS_KEY, Accept: 'application/json',
               ...(ELS_INSTTOKEN ? { 'X-ELS-Insttoken': ELS_INSTTOKEN } : {}) } });
           if (r.status === 401 || r.status === 403 || r.status === 429) {
-            elsOk = false; console.log(`  Elsevier leg dropped for this run (HTTP ${r.status} — key/quota/entitlement).`); break;
+            elsOk = false; elsDropCode = r.status;
+            console.log(`  Elsevier leg dropped for this run (HTTP ${r.status} — key/quota/entitlement).`); break;
           }
           if (r.ok) {
             const text = elsevierAbstract(await r.json());
@@ -319,6 +338,7 @@ async function main() {
       for (const doi of [...unresolved]) {
         if (!SPR_PREFIX.test(doi)) continue;
         if (Date.now() - T0 > BUDGET_MS) break;
+        keyedTried.add(doi);
         try {
           const r = await fetch(
             `https://api.springernature.com/meta/v2/json?q=doi:%22${encodeURIComponent(doi)}%22&p=1&api_key=${encodeURIComponent(SPR_KEY)}`,
@@ -336,7 +356,18 @@ async function main() {
       }
     }
     // All legs concluded for this batch: stamp the rest as misses (TTL-retried).
-    for (const doi of unresolved) cache[doi] = { none: 1, t: day() };
+    // EXCEPT a DOI whose keyed leg never actually tried it. Stamping those
+    // records a 45-day miss for a check that never happened — which is exactly
+    // what a rejected Elsevier key produced: the leg dropped on its first call,
+    // yet ~17k EJOR DOIs were written off as "no abstract available" in a
+    // 9-minute run that could not physically have queried them (one GET per DOI
+    // at ELS_PACE_MS would have taken over an hour). Leave them uncached so the
+    // next run retries them for real.
+    for (const doi of unresolved) {
+      if (!shouldStampMiss(doi, { elsKey: ELS_KEY, sprKey: SPR_KEY,
+        elsPrefix: ELS_PREFIX, sprPrefix: SPR_PREFIX, keyedTried })) continue;
+      cache[doi] = { none: 1, t: day() };
+    }
     checked += batch.length;
     if (++batches % 5 === 0) { await saveCache(); console.log(`  …${checked} DOIs checked, ${found} abstracts found`); }
     await sleep(PACE_MS);
@@ -348,6 +379,21 @@ async function main() {
   console.log(`  This run: ${checked} DOIs checked, ${found} abstracts found.`);
   if (SPR_KEY && (sprStats.found + sprStats.empty + sprStats.other)) {
     console.log(`  Springer leg: ${sprStats.found} found, ${sprStats.empty} no-abstract, ${sprStats.other} other.`);
+  }
+  // A keyed leg that was configured but achieved nothing is the difference
+  // between "this publisher has no abstracts" and "our credential is being
+  // refused" — and the run otherwise exits 0 and looks healthy either way.
+  // Say so loudly: ::warning:: surfaces it on the Actions run page.
+  if (ELS_KEY && elsDropCode) {
+    console.log(`::warning::ELSEVIER_API_KEY is set but Elsevier refused it (HTTP ${elsDropCode}); ` +
+      `the Elsevier leg did no work this run. 401 = bad/expired key, 403 = the key lacks ` +
+      `abstract entitlement off-campus (request an institutional token via dev.elsevier.com ` +
+      `support and set ELSEVIER_INST_TOKEN), 429 = quota spent. Elsevier journals (EJOR, JFE, ` +
+      `AOS, OBHDP, JAE, Research Policy…) are the bulk of the still-missing abstracts, so this ` +
+      `is why their coverage is not moving.`);
+  }
+  if (SPR_KEY && sprOk === false) {
+    console.log('::warning::SPRINGER_API_KEY is set but the Springer leg dropped out this run.');
   }
   if (ELS_KEY && (elsStats.found + elsStats.empty + elsStats.e404 + elsStats.other)) {
     console.log(`  Elsevier leg: ${elsStats.found} found, ${elsStats.empty} 200-but-no-abstract, ` +

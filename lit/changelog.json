@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "ejor-fast-pickup",
+      "date": "2026-07-30",
+      "title": "European Journal of Operational Research: new papers within minutes",
+      "summary": "EJOR is the busiest journal in the database — about 700 papers a year across 24 issues, plus a steady stream of Articles in Press — and until now its new work only arrived with the nightly rebuild, in one batch up to a day late. It is now checked for freshly-published papers every 20 minutes, like Econometrica and the eight Articles-in-Advance journals, so a new EJOR paper appears (and joins “Recently added”) soon after Crossref indexes it. Its back-catalogue was audited at the same time and is complete for the last 20 years: every volume and issue since 2007 is present, the page numbering of each issue tiles with no holes, and of the 2,446 EJOR papers cited by other papers in this database, every single one is listed.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
       "id": "recently-added-exact-count",
       "date": "2026-07-28",
       "title": "“Recently added papers” now shows the true number",

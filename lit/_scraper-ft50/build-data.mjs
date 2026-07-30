@@ -147,16 +147,27 @@ const AIA_SUPPLEMENT = existsSync(AIA_SUPPLEMENT_PATH)
 // NOTHING when nothing new arrived, so it commits (and redeploys Pages) only on
 // a genuine change.
 //
-// Default subset: Econometrica only. Unlike the six native INFORMS/SAGE journals
-// (which lit's own fast pass already covers and which Crossref lists as
-// no-volume "Articles in Advance"), Econometrica's publisher assigns an accepted
-// paper straight to a future issue, so Crossref never shows it as an advance
-// article — the daily build is otherwise the only thing that ever picks it up,
-// up to a day late. Polling it here surfaces a new Econometrica paper within
-// minutes of Crossref indexing it, exactly like the native journals. Widen with
-// FT50_INCR_JOURNALS=ecta,jf,… if ever needed (one Crossref call per journal).
+// Default subset: Econometrica + EJOR.
+//   ecta — unlike the native INFORMS/SAGE journals (which lit's own fast pass
+//     already covers and which Crossref lists as no-volume "Articles in
+//     Advance"), Econometrica's publisher assigns an accepted paper straight to
+//     a future issue, so Crossref never shows it as an advance article — the
+//     daily build is otherwise the only thing that ever picks it up, up to a
+//     day late.
+//   ejor — the European Journal of Operational Research (the ABS 4 notFT extra)
+//     is the catalog's highest-volume journal: ~700 papers/year in 24 issues
+//     plus a steady ~40/month Articles-in-Press stream, i.e. 1–2 genuinely-new
+//     records a day, which the once-a-day build delivered in one nightly batch
+//     up to 24 h late. Its back-catalogue is complete (audit it any time with
+//     `node lit/_scraper/coverage-audit.mjs --journal ejor`); what it
+//     lacked was FRESHNESS, which is exactly what this pass provides.
+// Polling a journal here surfaces its new papers within minutes of Crossref
+// indexing them, exactly like the native journals. Widen with
+// FT50_INCR_JOURNALS=ecta,ejor,jf,… (one Crossref call per journal per ISSN;
+// the pass still writes nothing when nothing changed, so extra keys cost only
+// the poll).
 const INCR_LOOKBACK_DAYS = parseInt(process.env.FT50_INCR_LOOKBACK_DAYS || '4', 10);
-const INCR_JOURNAL_KEYS = (process.env.FT50_INCR_JOURNALS || 'ecta')
+const INCR_JOURNAL_KEYS = (process.env.FT50_INCR_JOURNALS || 'ecta,ejor')
   .split(',').map(s => s.trim()).filter(Boolean);
 // Only core bibliographic fields are refreshed on a known DOI; enrichment
 // (Preprint/PreprintSrc, an OpenAlex/S2-boosted CitedBy + CitedBySrc, cached
@@ -2029,7 +2040,8 @@ async function incrementalMain() {
   }
 
   // Overlay cached Senior/Associate editors onto any new/updated rows (offline;
-  // a no-op unless a polled journal carries SE/AE — Econometrica does not).
+  // a no-op unless a polled journal carries SE/AE — neither Econometrica nor
+  // EJOR does).
   await applyInformsEditors(bySource);
 
   // A DOI adoption keeps the paper's original "Date Added": seed the new key

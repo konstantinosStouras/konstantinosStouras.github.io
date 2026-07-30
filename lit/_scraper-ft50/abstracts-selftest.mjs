@@ -4,7 +4,7 @@
  * reconstruction, the cache-merge rule, and the needy-row test.
  * Run: node lit/_scraper-ft50/abstracts-selftest.mjs
  */
-import { invertedToText, mergeAbsCache, isNeedy, elsevierAbstract, springerAbstract } from './abstracts-ci.mjs';
+import { invertedToText, mergeAbsCache, isNeedy, elsevierAbstract, springerAbstract, shouldStampMiss } from './abstracts-ci.mjs';
 import { betterAbstract } from '../_scraper/informs-abstracts.mjs';
 
 let fails = 0;
@@ -65,6 +65,34 @@ eq(elsevierAbstract({ 'abstracts-retrieval-response': { coredata: { 'dc:descript
   'A real abstract that legitimately says firms fight their way back to top positions over time, with enough prose to look like an abstract.' } } }),
   'A real abstract that legitimately says firms fight their way back to top positions over time, with enough prose to look like an abstract.',
   '"back to top" inside real prose survives the guard');
+
+console.log('shouldStampMiss: a keyed leg that never ran must not write off its DOIs');
+{
+  const ELS = /^10\.1016\//, SPR = /^10\.1007\//;
+  const ejor = '10.1016/j.ejor.2026.05.001';
+  const spr  = '10.1007/s11002-024-09999-9';
+  const oup  = '10.1093/qje/qjaa001';
+  const base = { elsPrefix: ELS, sprPrefix: SPR };
+
+  // The real incident: ELSEVIER_API_KEY set, Elsevier refused it (401/403/429),
+  // the leg dropped on its first call, so no EJOR DOI was ever queried. Those
+  // must stay uncached and be retried next run, not written off for 45 days.
+  ok(!shouldStampMiss(ejor, { ...base, elsKey: 'k', sprKey: '', keyedTried: new Set() }),
+    'keyed Elsevier DOI the leg never reached is NOT stamped as a miss');
+  ok(shouldStampMiss(ejor, { ...base, elsKey: 'k', sprKey: '', keyedTried: new Set([ejor]) }),
+    'keyed Elsevier DOI the leg DID try is stamped (a genuine no-abstract)');
+  // With no key configured there is no keyed leg to wait for, so the batched
+  // OpenAlex/S2 legs' verdict stands — the pre-existing behaviour, unchanged.
+  ok(shouldStampMiss(ejor, { ...base, elsKey: '', sprKey: '', keyedTried: new Set() }),
+    'unkeyed run still stamps Elsevier DOIs (behaviour unchanged without a key)');
+  ok(!shouldStampMiss(spr, { ...base, elsKey: '', sprKey: 'k', keyedTried: new Set() }),
+    'the same rule protects Springer DOIs when only that key is set');
+  ok(shouldStampMiss(spr, { ...base, elsKey: 'k', sprKey: '', keyedTried: new Set() }),
+    'a Springer DOI is not protected by the Elsevier key');
+  // A DOI no keyed leg owns is unaffected either way.
+  ok(shouldStampMiss(oup, { ...base, elsKey: 'k', sprKey: 'k', keyedTried: new Set() }),
+    'a non-Elsevier, non-Springer DOI is stamped normally');
+}
 
 console.log(fails ? `\nFAILED (${fails})` : '\nAll FT50 abstract-backfill checks passed.');
 process.exit(fails ? 1 : 0);

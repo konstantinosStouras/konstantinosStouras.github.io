@@ -5,14 +5,19 @@
  * Verifies the pass without any network, driving it entirely through FT50_MOCK
  * fixtures into a throwaway data dir:
  *
- *   1. a full mock build seeds the catalog (incl. the Econometrica fixture,
- *      mock/crossref-ecta.json);
+ *   1. a full mock build seeds the catalog (incl. the Econometrica and EJOR
+ *      fixtures, mock/crossref-ecta.json and mock/crossref-ejor.json);
  *   2. a second incremental run over identical data is a no-op (no file rewrite,
  *      so no git commit / Pages redeploy on a quiet run);
  *   3. a genuinely-new Econometrica paper (dropped from the committed file) is
  *      re-discovered, appended, stamped in the registry with today's date and
  *      surfaced in recent.json — while recent.json KEEPS the other journals'
  *      rows (the lean carry-over merge) and the header counts stay consistent;
+ *  3b. the same for EJOR, the second polled journal, on the case that motivated
+ *      adding it: a no-volume Articles-in-Press row. It keeps its forthcoming
+ *      Status, leads its journal, joins the recently-added tally — and a
+ *      following unchanged run is still a no-op, so polling a high-volume
+ *      journal every 20 minutes does not commit on every fire;
  *   4. an existing paper's enrichment fields (Preprint link, an OpenAlex/S2
  *      -boosted CitedBy + CitedBySrc) survive a core-field re-fetch.
  *
@@ -148,6 +153,43 @@ ok(counts1.generated === today && counts1.windowDays >= 28, 'recent-counts.json 
 ok((counts1.days.ecta || {})[today] >= 1, 'the new paper is in the tally under its journal key');
 ok(Object.keys(counts1.days).some(k => k !== 'ecta'), 'the tally keeps the other journals (lean carry-over merge)');
 ok(counts1.total >= recent.length, 'the tally is never smaller than the rows recent.json carries');
+
+// 3b) The pass polls EJOR too (FT50_INCR_JOURNALS default 'ecta,ejor'), and the
+// case that motivated adding it is an Articles-in-Press row: EJOR posts ~40 a
+// month with no volume/issue, and before this they waited for the nightly build.
+// Drop the no-volume row and check the incremental pass re-discovers it, keeps
+// its forthcoming Status, and surfaces it in the recent view dated today.
+const AIP_DOI = '10.1016/j.ejor.2026.07.041';
+const ejor0 = rd('papers-ejor.json');
+ok(ejor0.length >= 3, 'mock build seeded the EJOR fixture');
+const aip = ejor0.find(p => p.DOI.toLowerCase().endsWith(AIP_DOI));
+ok(!!aip, 'the no-volume EJOR row is in the built file');
+ok(aip && !aip.Volume && aip.Status && aip.Status !== 'Published',
+  'a no-volume EJOR record is tagged forthcoming, not published');
+ok(ejor0[0].DOI === aip.DOI, 'the forthcoming row leads its journal (statusRank/pubRank order)');
+
+const ejorReg = rd('_registry.json');
+delete ejorReg[AIP_DOI];
+writeFileSync(join(DATA, '_registry.json'), JSON.stringify(ejorReg));
+writeFileSync(join(DATA, 'papers-ejor.json'),
+  JSON.stringify(ejor0.filter(p => p.DOI !== aip.DOI)));
+
+run({ FT50_INCREMENTAL: '1' });
+const ejor1 = rd('papers-ejor.json');
+const recent2 = rd('recent.json');
+const counts2 = rd('recent-counts.json');
+ok(ejor1.length === ejor0.length, 'the dropped EJOR paper is re-appended');
+ok(ejor1.some(p => p.DOI === aip.DOI), 'the Articles-in-Press row is back by DOI');
+ok(rd('_registry.json')[AIP_DOI] === today, 'the new EJOR paper is stamped with today');
+ok(recent2.some(p => p.DOI === aip.DOI && p['Date Added'] === today),
+  'the new EJOR paper shows in recent.json dated today');
+ok((counts2.days.ejor || {})[today] >= 1, 'the EJOR arrival is in the recently-added tally');
+ok(recent2.some(p => p.JKey === 'ecta'), 'polling two journals keeps the other one’s recent rows');
+
+// A second, unchanged run over the same data must still be a no-op — polling an
+// extra high-volume journal must not make every 20-minute run commit.
+const quiet = run({ FT50_INCREMENTAL: '1' });
+ok(/No new or changed papers/.test(quiet), 'two polled journals still no-op on unchanged data');
 
 // 4) Enrichment fields must survive an incremental core-field re-fetch.
 const ectaE = rd('papers-ecta.json');

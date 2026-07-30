@@ -1,0 +1,73 @@
+{
+  "status": "ok",
+  "message-type": "work-list",
+  "message": {
+    "total-results": 4,
+    "items": [
+      {
+        "DOI": "10.1016/j.ejor.2026.07.041",
+        "title": [
+          "A branch-and-price algorithm for the robust periodic vehicle routing problem"
+        ],
+        "author": [
+          { "given": "Iris", "family": "Ipsilon" },
+          { "given": "Kostas", "family": "Kappa" },
+          { "given": "Lena", "family": "Lambda" }
+        ],
+        "issued": { "date-parts": [[2026, 7, 20]] },
+        "published-online": { "date-parts": [[2026, 7, 20]] },
+        "type": "journal-article",
+        "container-title": ["European Journal of Operational Research"],
+        "is-referenced-by-count": 0,
+        "abstract": "<jats:p>We propose an exact branch-and-price scheme for a periodic vehicle routing problem under demand uncertainty.</jats:p>"
+      },
+      {
+        "DOI": "10.1016/j.ejor.2026.05.012",
+        "title": [
+          "Dynamic pricing under reference-dependent demand"
+        ],
+        "author": [
+          { "given": "Mina", "family": "Mu" },
+          { "given": "Nikos", "family": "Nu" }
+        ],
+        "issued": { "date-parts": [[2026, 11, 1]] },
+        "published-online": { "date-parts": [[2026, 5, 9]] },
+        "volume": "335",
+        "issue": "2",
+        "page": "412-427",
+        "type": "journal-article",
+        "container-title": ["European Journal of Operational Research"],
+        "is-referenced-by-count": 3,
+        "abstract": "<jats:p>We characterise the optimal dynamic price path when customers evaluate prices against a reference point.</jats:p>"
+      },
+      {
+        "DOI": "10.1016/j.ejor.2026.04.003",
+        "title": [
+          "Two-stage stochastic programming for resilient supply network design"
+        ],
+        "author": [
+          { "given": "Omar", "family": "Omicron" },
+          { "given": "Pia", "family": "Pi" }
+        ],
+        "issued": { "date-parts": [[2026, 10, 1]] },
+        "published-online": { "date-parts": [[2026, 4, 2]] },
+        "volume": "335",
+        "issue": "1",
+        "page": "88-104",
+        "type": "journal-article",
+        "container-title": ["European Journal of Operational Research"],
+        "is-referenced-by-count": 7
+      },
+      {
+        "DOI": "10.1016/j.ejor.2026.03.028",
+        "title": ["Editorial Board"],
+        "issued": { "date-parts": [[2026, 9, 1]] },
+        "volume": "334",
+        "issue": "3",
+        "page": "IFC",
+        "type": "journal-article",
+        "container-title": ["European Journal of Operational Research"]
+      }
+    ]
+  }
+}
