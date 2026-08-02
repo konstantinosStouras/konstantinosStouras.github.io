@@ -47,7 +47,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { abstractFromPageHtml, betterAbstract, ABS_MAX } from './informs-abstracts.mjs';
-import { stripPageFurniture } from './_entities.mjs';
+import { stripPageFurniture, junkAbstract } from './_entities.mjs';
 import { isChallenged } from './pnas-crawl.mjs';
 
 // Atomic write (temp + rename): a power-off mid-write can never truncate the file.
@@ -213,6 +213,10 @@ async function applyToPapers() {
     for (const row of rows) {
       const rec = cache[bareDoi(row)];
       if (!rec || !rec.a) continue;
+      // Never apply a capture that is itself an editorial summary/citation
+      // stub (junkAbstract, user report 2026-08) — the page's real abstract is
+      // what this cache exists to carry.
+      if (junkAbstract(rec.a, { title: row.Title, authors: row.Authors, journal: row.Journal })) continue;
       if (betterAbstract(row.Abstract, rec.a)) { row.Abstract = rec.a.slice(0, ABS_MAX); upgraded++; }
     }
     if (upgraded) {

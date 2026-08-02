@@ -3,7 +3,8 @@
  * Run:  node lit/_scraper/entities-selftest.mjs
  */
 import { cleanText, titleText, affilName, affilParts, affilList,
-  trimTrailingSeparators, namedEntity, stripPageFurniture } from './_entities.mjs';
+  trimTrailingSeparators, namedEntity, stripPageFurniture,
+  isLaySummaryAbstract, isCitationStubAbstract, junkAbstract } from './_entities.mjs';
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { c ? pass++ : (fail++, console.log('  FAIL:', m)); };
@@ -120,6 +121,91 @@ eq(stripPageFurniture('Firms that fall behind fight their way back to top positi
 eq(stripPageFurniture('Patients must request permission before records are shared; we study how consent frictions shape data availability in hospital systems across three states.'),
   'Patients must request permission before records are shared; we study how consent frictions shape data availability in hospital systems across three states.',
   'a single weak marker ("request permission" as prose) never rejects');
+
+// ── junk-abstract guard (user report 2026-08: OR plain-language summaries) ───
+// The OR headline-blurb shape: third person, names the paper's own authors.
+ok(isLaySummaryAbstract(
+  'Knowing When to Hold Back: Smarter Messaging Keeps Customers Marketers often assume that reaching '
+  + 'customers more often produces better results. A new study suggests the opposite can be true. Junyu Cao, '
+  + 'Wei Sun, and Zuo-Jun (Max) Shen examine how digital platforms can boost engagement without driving '
+  + 'customers away through marketing fatigue. The authors prove their methods come close to the best possible performance.',
+  'Doubly Adaptive Cascading Bandits with User Abandonment',
+  'Junyu Cao, Wei Sun, Zuo-Jun (Max) Shen'),
+  'OR headline blurb naming its own authors is flagged');
+// The classic "In '<Title>', <Authors> …" construction, single author included.
+ok(isLaySummaryAbstract(
+  'Operations research practitioners are accustomed to dealing with variants of classic OR problems. '
+  + 'In “Learning to Approximate Industrial Problems by Operations Research Classic Problems,” Axel Parmentier '
+  + 'introduces a machine learning approach to use the algorithms for the classic OR problems on the variant.',
+  'Learning to Approximate Industrial Problems by Operations Research Classic Problems',
+  'Axel Parmentier'),
+  "the In-'<Title>'-by-author blurb is flagged even for a single author");
+// A REAL INFORMS abstract whose Funding/COI tail names the authors must pass.
+ok(!isLaySummaryAbstract(
+  'We provide the first evidence on the long-run returns to private equity in emerging markets. '
+  + 'Risk-adjusted returns are comparable to the S&P 500. This paper was accepted by Agostino Capponi, finance. '
+  + 'Conflict of Interest Statement: Shawn Cole served five days as a consultant. Martin Melecky, Florian Mölders, '
+  + 'and Tristan Reed are employees of the World Bank Group.',
+  'Long-Run Returns to Private Equity in Emerging Markets',
+  'Shawn Cole, Martin Melecky, Florian Mölders, Tristan Reed'),
+  'a real abstract naming its authors only in the COI tail is NOT flagged');
+// A real M&SOM structured abstract with a Disclaimer naming an author.
+ok(!isLaySummaryAbstract(
+  'Problem definition: We seek to provide an interpretable framework for segmenting users, which we call '
+  + 'market segmentation trees. Disclaimer: This work was done prior to Ryan McNellis joining Amazon.',
+  'Market Segmentation Trees',
+  'Ali Aouad, Adam N. Elmachtoub, Kris J. Ferreira, Ryan McNellis'),
+  'a real abstract whose Disclaimer tail names an author is NOT flagged');
+// "The authors" WITHOUT their names (Journal of Marketing style) must pass.
+ok(!isLaySummaryAbstract(
+  'The authors develop a framework for understanding shareholder value and test it on a panel of firms, '
+  + 'showing that market-based assets raise the value of marketing activities across the discipline.',
+  'Market-Based Assets and Shareholder Value',
+  'Rajendra K. Srivastava, Tasadduq A. Shervani, Liam Fahey'),
+  '"the authors" without their NAMES is normal abstract prose, not a summary');
+// IJOC "Code and Data Repository" companions describe themselves legitimately.
+ok(!isLaySummaryAbstract(
+  'The software and data in this repository are a snapshot of the software and data used in the research '
+  + 'reported in the paper Decision-Driven Regularization: A Blended Model for Learning and Optimization, '
+  + 'by Gar Goei Loke, Qinshen Tang, Yangge Xiao, and Xun Zhang.',
+  'Code and Data Repository for Decision-Driven Regularization: A Blended Model for Learning and Optimization',
+  'Gar Goei Loke, Qinshen Tang, Yangge Xiao, Xun Zhang'),
+  'an IJOC code/data-repository description is NOT flagged');
+// Errata cite the corrected article by title + authors — legitimately.
+ok(!isLaySummaryAbstract(
+  'Erratum to “Firm’s Forecasts of Engineering Employment” by Peter Brach and Edwin Mansfield, '
+  + 'Management Sci. 28 (2, February) (1982) 156–160. The publisher regrets the error in Table 2.',
+  'Erratum to “Firm’s Forecasts of Engineering Employment”',
+  'Peter Brach, Edwin Mansfield'),
+  'an erratum notice is NOT flagged');
+// Book-review notices describe the reviewed book (its editors are row authors).
+ok(!isLaySummaryAbstract(
+  'A review is presented of the book “Heuristics and Biases: The Psychology of Intuitive Judgment,” '
+  + 'edited by Thomas Gilovich, Dale Griffin, and Daniel Kahneman.',
+  'Heuristics and Biases: The Psychology of Intuitive Judgment',
+  'William P. Bottom, Thomas Gilovich, Dale Griffin, Daniel Kahneman'),
+  'a book-review notice is NOT flagged');
+// AEA citation stub.
+ok(isCitationStubAbstract(
+  'Risk Aversion and Incentive Effects: Comment by Glenn W. Harrison, Eric Johnson, Melayne M. McInnes and '
+  + 'E. Elisabet Rutström. Published in volume 95, issue 3, pages 897-901 of American Economic Review, June 2005',
+  'Risk Aversion and Incentive Effects: Comment', 'American Economic Review'),
+  'an AEA "Published in volume…" stub is flagged');
+// JSTOR citation line.
+ok(isCitationStubAbstract(
+  'H. George Frederickson, Role Occupancy and Attitudes toward Labor Relations in Government, Administrative '
+  + 'Science Quarterly, Vol. 14, No. 4, Conflict within and between Organizations (Dec., 1969), pp. 595-606',
+  'Role Occupancy and Attitudes toward Labor Relations in Government', 'Administrative Science Quarterly'),
+  'a JSTOR citation line is flagged');
+// A real abstract that merely CITES something with page numbers must pass.
+ok(!isCitationStubAbstract(
+  'This paper considers the properties of an optimal production schedule for a multi-product firm. The results '
+  + 'extend the findings of Lippman, Rolfe, Wagner and Yuan, Vol. 15, pp. 127-158 to convex cost structures under '
+  + 'demand uncertainty and employment smoothing.',
+  'Optimal Multi-Product Production Scheduling', 'Management Science'),
+  'a real abstract citing a page range mid-prose is NOT a stub (anchor is end-of-text)');
+ok(junkAbstract('x', {}) === '' && junkAbstract('', {}) === '' && junkAbstract(null, null) === '',
+  'junkAbstract is safe on empty/short/null input');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

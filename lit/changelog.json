@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "real-abstracts-not-summaries",
+      "date": "2026-08-02",
+      "title": "“Show abstract” now always shows the paper's real abstract",
+      "summary": "For many Operations Research papers (and some Management Science, ISR and IJOC ones), the publisher deposits an editorial plain-language summary — “In ‘Title’, the authors develop…” — in place of the abstract, and other journals deposit a bare citation line (“…by Authors. Published in volume…, pages…”); the cards were showing that text as the abstract. Around 3,000 such fake abstracts were removed across the catalogs, every data pipeline now rejects them at ingest so a rebuild can never bring them back, and the rolling abstract backfills are re-fetching the papers' true abstracts from the journal pages and open APIs. A paper whose real abstract hasn't been recovered yet simply shows no abstract instead of a description of itself.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
       "id": "ejor-fast-pickup",
       "date": "2026-07-30",
       "title": "European Journal of Operational Research: new papers within minutes",

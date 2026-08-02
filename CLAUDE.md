@@ -643,6 +643,40 @@ had a real abstract on the scraped page, which the rolling backfills re-resolve
 from the APIs' actual abstract fields. Covered by `entities-selftest.mjs`,
 `informs-abstracts-selftest.mjs` (incl. the parity pass) and the FT50/shard
 `abstracts-selftest.mjs`.
+**A publisher summary or citation line is never served as the abstract**
+(user report 2026-08: every recent Operations Research card showed an
+editorial plain-language summary — a headline + "In '<Title>', <the authors>
+develop…", third person, naming the paper's own authors — instead of the real
+abstract; INFORMS deposits these blurbs to Crossref for many OR/IJOC/ISR/MS
+papers, AEA deposits "<Title> by <Authors>. Published in volume …" stubs, and
+JSTOR/OUP-era records carry "<Authors>, <Title>, <Journal>, Vol. …, pp. …"
+citation lines). `junkAbstract` in `_entities.mjs`
+(`isLaySummaryAbstract`/`isCitationStubAbstract`) detects both shapes
+HIGH-PRECISION against the row's own title/authors/journal: a summary names
+its OWN authors in the body or quotes its OWN title mid-prose — things a real
+abstract never does outside the Funding/COI/"accepted by" tail INFORMS
+appends, which is cut before author names are counted. Deliberate
+non-matches: errata/replies/comments/book-review notices (legitimately
+self-citing), IJOC "Code and Data Repository for …" companions, and "the
+authors" WITHOUT names (Journal of Marketing style); **HBR + MIT SMR are
+exempt** (`JUNK_ABS_EXEMPT_KEYS`) — practitioner decks ARE those journals'
+own summary text. Applied at EVERY abstract ingest: mapWork + the supplement
+merge in both this repo's pipelines, `applyInformsAbstracts` /
+`applyAbstractCaches`, the pubsonline crawler's apply, and all four
+`abstracts-ci.mjs` API legs (OpenAlex/S2 MIRROR the publisher deposit, so
+without the leg guard the backfill would reinstate exactly what the build
+dropped) — a junk API result is left unresolved → TTL miss. The FT50 apply
+step also HEALS its cache (a junk `_api-abstracts.json` entry re-stamped a
+miss — 2,820 found live). The committed data was cleaned via the maintenance
+CLI `lit/_scraper/clean-junk-abstracts.mjs` (`--dir <dataset>` [`--dry-run`];
+~3,060 junk abstracts blanked: 129 native — 102 of them Operations Research —
++ 2,932 FT50, `recent.json` refreshed, both caches healed); the blanked rows
+are "needy" again, so the pubsonline harvest (<300-char rule) and the FT50
+API backfill re-fill the REAL abstracts on their normal cadence — a paper
+shows no abstract, never a description of itself, until then. NOT yet
+vendored into the shard repos' `_entities.mjs` copies (keep-in-sync
+follow-up: the ABS shards carry INFORMS ABS-3 journals with the same
+summary deposits). Covered by `entities-selftest.mjs`.
 **Known pubsonline name typos are canonicalized at ingest** ("Olivier
 Tobuia"/"Olivier Touba" → Olivier Toubia, "K. Sudir" → K. Sudhir, the
 inverted "Manchanda Puneet" → Puneet Manchanda — the journal's own
