@@ -215,8 +215,13 @@ const SELECT = [
 // as literal markup and every other entity ("&apos;", "&nbsp;", "&EACUTE;")
 // rendered raw on the page.
 import { cleanText as stripJats, trimTrailingSeparators, titleText,
-  affilName, affilParts, affilList, stripPageFurniture } from '../_scraper/_entities.mjs';
-export { stripJats, trimTrailingSeparators, titleText, affilName, affilParts, affilList, stripPageFurniture };
+  affilName, affilParts, affilList, stripPageFurniture, junkAbstract } from '../_scraper/_entities.mjs';
+export { stripJats, trimTrailingSeparators, titleText, affilName, affilParts, affilList, stripPageFurniture, junkAbstract };
+
+// HBR / MIT Sloan Management Review are exempt from the junkAbstract summary
+// guard: practitioner pieces have no author abstract — the deposited
+// third-person deck IS the journal's own summary text, so it stays.
+const JUNK_ABS_EXEMPT_KEYS = new Set(['hbr', 'smr']);
 
 function yearOf(item) {
   const pick = (d) => d && d['date-parts'] && d['date-parts'][0] && d['date-parts'][0][0];
@@ -320,7 +325,14 @@ function mapWork(item, src) {
   // stripPageFurniture (feedback LIT-260727-XRQ8): a deposited 'abstract' can
   // be a scraped article-page blob (share bar, 'No abstract is available for
   // this article.') — never abstract prose; served as '' instead.
-  const abstract = stripPageFurniture(stripJats(item.abstract || '')).slice(0, MAX_ABSTRACT);
+  // junkAbstract (user report 2026-08): an editorial plain-language summary
+  // (INFORMS' OR/IJOC blurbs) or a bare citation-line stub (AEA's "…Published
+  // in volume…", JSTOR-era "Authors, Title, Journal, Vol…, pp. …") is never
+  // the paper's abstract — dropped, so the API/pubsonline backfills can fill
+  // the real text.
+  let abstract = stripPageFurniture(stripJats(item.abstract || '')).slice(0, MAX_ABSTRACT);
+  if (abstract && !JUNK_ABS_EXEMPT_KEYS.has(src.key) && junkAbstract(abstract,
+    { title, authors: authorsArr.join(', '), journal: src.name })) abstract = '';
 
   // Editors/Areas: Management Science only (per the page's design).
   let editor = '', area = '';
@@ -1474,6 +1486,9 @@ async function applyAbstractCaches(allPapers) {
     for (const row of allPapers) {
       const rec = row._doi && map[row._doi];
       if (!rec || !rec.a) continue;
+      // A cached capture that is itself a summary/citation stub is never applied.
+      if (!JUNK_ABS_EXEMPT_KEYS.has(row.JKey) && junkAbstract(rec.a,
+        { title: row.Title, authors: row.Authors, journal: row.Journal })) continue;
       if (betterAbstract(row.Abstract, rec.a)) { row.Abstract = rec.a.slice(0, MAX_ABSTRACT); up++; }
     }
   }
@@ -1774,6 +1789,8 @@ function mergeSupplement(bySource) {
     };
     if (src.seEditors) row['Senior Editor'] = s['Senior Editor'] || '';
     if (src.aeEditors) row['Associate Editor'] = s['Associate Editor'] || '';
+    if (row.Abstract && !JUNK_ABS_EXEMPT_KEYS.has(src.key) && junkAbstract(row.Abstract,
+      { title: row.Title, authors: row.Authors, journal: row.Journal })) row.Abstract = '';
     bySource[src.key].push(row);
     added++;
   }

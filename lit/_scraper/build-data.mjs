@@ -227,8 +227,8 @@ const SELECT = [
 // as literal markup and every other entity ("&apos;", "&nbsp;", "&EACUTE;")
 // rendered raw on the page.
 import { cleanText as stripJats, trimTrailingSeparators, titleText,
-  affilName, affilParts, affilList, stripPageFurniture } from './_entities.mjs';
-export { stripJats, trimTrailingSeparators, titleText, affilName, affilParts, affilList, stripPageFurniture };
+  affilName, affilParts, affilList, stripPageFurniture, junkAbstract } from './_entities.mjs';
+export { stripJats, trimTrailingSeparators, titleText, affilName, affilParts, affilList, stripPageFurniture, junkAbstract };
 
 // PNAS deposits its one-paragraph "Significance" statement inside the Crossref
 // JATS abstract as its own <sec>. Pull that section out (already stripped of
@@ -356,7 +356,14 @@ function mapWork(item, src) {
   // stripPageFurniture (feedback LIT-260727-XRQ8): a deposited "abstract" can
   // be a scraped article-page blob (share bar, "No abstract is available for
   // this article.") — never abstract prose; served as '' instead.
-  const abstract = stripPageFurniture(stripJats(abstractSrc)).slice(0, MAX_ABSTRACT);
+  // junkAbstract (user report 2026-08): INFORMS deposits an editorial
+  // plain-language summary as the Crossref abstract for many OR/ISR/MS papers
+  // ("In '<Title>', <the authors> develop…") — never the paper's abstract, so
+  // it is dropped and the pubsonline harvest fills the real text (the row
+  // becomes "needy" for informs-abstracts-local.mjs).
+  let abstract = stripPageFurniture(stripJats(abstractSrc)).slice(0, MAX_ABSTRACT);
+  if (abstract && junkAbstract(abstract,
+    { title, authors: authorsArr.join(', '), journal: src.name })) abstract = '';
 
   // Editors/Areas: Management Science only (per the page's design).
   let editor = '', area = '';
@@ -512,6 +519,8 @@ async function applyInformsAbstracts(bySource) {
     for (const p of bySource[src.key] || []) {
       const rec = map[p._doi];
       if (!rec || !rec.a) continue;
+      // A cached capture that is itself a summary/citation stub is never applied.
+      if (junkAbstract(rec.a, { title: p.Title, authors: p.Authors, journal: p.Journal })) continue;
       if (betterAbstract(p.Abstract, rec.a)) { p.Abstract = rec.a.slice(0, MAX_ABSTRACT); upgraded++; }
     }
   }
@@ -1441,10 +1450,12 @@ async function enrichEc(rows, extras, dblpPrefetched) {
     const x = extras[keyOf(r)];
     if (!x) continue;
     if (x.pdf) { r.PDF = canonPreprint(x.pdf); withPdf++; }
-    // stripPageFurniture also guards abstracts CACHED before the guard existed.
+    // stripPageFurniture also guards abstracts CACHED before the guard existed;
+    // junkAbstract likewise rejects a cached summary/citation-stub capture.
     if (!r.Abstract && x.abs) {
       const a = stripPageFurniture(x.abs);
-      if (a.length >= 60) r.Abstract = a;
+      if (a.length >= 60 &&
+          !junkAbstract(a, { title: r.Title, authors: r.Authors, journal: r.Journal })) r.Abstract = a;
     }
     // A DOI-less accepted paper can never receive a Preprint link from the
     // DOI-keyed _preprints.json cache — surface its arXiv/SSRN copy directly.
@@ -2507,6 +2518,8 @@ function mergeSupplement(bySource) {
     };
     if (src.seEditors) row['Senior Editor'] = s['Senior Editor'] || '';
     if (src.aeEditors) row['Associate Editor'] = s['Associate Editor'] || '';
+    if (row.Abstract && junkAbstract(row.Abstract,
+      { title: row.Title, authors: row.Authors, journal: row.Journal })) row.Abstract = '';
     bySource[src.key].push(row);
     added++;
   }
