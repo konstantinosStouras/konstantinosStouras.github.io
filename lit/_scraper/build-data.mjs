@@ -856,6 +856,20 @@ async function rescueInner(src, rawItems) {
         fetched.push(...(body.message.items || []));
         await sleep(300);
       }
+      // The filter route only sees works Crossref has INDEXED; a registered
+      // DOI can still resolve on the singular endpoint (validated live: the
+      // batch returned nothing for opre.2018.1783). Try each still-unfetched
+      // EXPLICIT DOI directly before concluding it unresolvable.
+      const got = new Set(fetched.map(it => bare(it.DOI)));
+      for (const d of missing) {
+        if (got.has(d) || !explicit.has(d)) continue;
+        try {
+          const one = await fetchJson('https://api.crossref.org/works/' +
+            encodeURIComponent(d) + `?mailto=${encodeURIComponent(MAILTO)}`);
+          if (one && one.message && one.message.DOI) fetched.push(one.message);
+        } catch { /* 404 etc. -> stays unresolvable, reported below */ }
+        await sleep(300);
+      }
     }
   } catch (e) {
     console.log(`::notice::rescue(${src.key}): Crossref by-DOI fetch FAILED (${e.message}) — no rescue this build.`);
@@ -2640,15 +2654,24 @@ function mergeSupplement(bySource) {
     const src = JOURNALS.find(j => j.key === s.jkey && j.aia);
     if (!src || !bySource[src.key]) continue; // only known advance-publishing sources
     seen.add(doi);
-    const year = String(s.Year || PULL_DATE.slice(0, 4));
+    // A supplement row honours _aia-fixups.json like a harvested one: a paper
+    // Crossref lost entirely (OR 67/68's frozen issues) is supplied here with
+    // its real volume/issue/pages from the fixups, landing PUBLISHED — only a
+    // row with no fixup keeps the forthcoming "Articles in Advance" shape.
+    const fx = AIA_FIXUPS[doi] || {};
+    const volume = fx.volume != null && fx.volume !== '' ? String(fx.volume) : '';
+    const issue = fx.issue != null && fx.issue !== '' ? String(fx.issue) : '';
+    const page = fx.page ? String(fx.page) : '';
+    const year = String(fx.year || s.Year || PULL_DATE.slice(0, 4));
+    const status = volume || issue ? '' : 'Articles in Advance';
     const row = {
       Title: titleText(s.Title),
       Authors: s.Authors || '',
       Affiliations: affilList(s.Affiliations),
       DOI: 'https://doi.org/' + rawDoi,
-      Volume: '', Issue: '', Page: '',
+      Volume: volume, Issue: issue, Page: page,
       Year: year,
-      Status: 'Articles in Advance',
+      Status: status,
       Abstract: s.Abstract ? stripPageFurniture(stripJats(s.Abstract)) : '',
       'Accepting Editor': s['Accepting Editor'] || '',
       Area: normArea(s.Area || ''),
@@ -2656,7 +2679,7 @@ function mergeSupplement(bySource) {
       JKey: src.key,
       _doi: doi,
       _orcids: [],
-      _rank: pubRank({}, '', '', 'Articles in Advance', year),
+      _rank: pubRank({ page }, volume, issue, status, year),
     };
     if (src.seEditors) row['Senior Editor'] = s['Senior Editor'] || '';
     if (src.aeEditors) row['Associate Editor'] = s['Associate Editor'] || '';
