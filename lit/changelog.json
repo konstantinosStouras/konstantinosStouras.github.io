@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "author-names-recased",
+      "date": "2026-08-03",
+      "title": "Author names no longer SHOUT",
+      "summary": "Some publishers deposit author names fully capitalized — “MICHAEL EWENS, NADYA MALENKO” — and around 6,300 papers (most of them in the Journal of Finance, Journal of Accounting Research and Contemporary Accounting Research) displayed them that way. Names that arrive all-caps are now re-cased at ingest (Jean-Pierre, O’Brien, McDonald, José and generational suffixes all handled), while any name with normal casing is left exactly as the journal credited it. Existing records heal with the next daily data refresh.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
       "id": "ejor-abstracts-fixed",
       "date": "2026-08-03",
       "title": "EJOR abstracts: bullet-point “Highlights” removed, real abstracts kept, and faster pickup",
@@ -12,8 +19,8 @@
     {
       "id": "or-2019-missing-issue-restored",
       "date": "2026-08-03",
-      "title": "Operations Research 2019: a missing issue restored",
-      "summary": "The completeness audit found that Operations Research volume 67 (2019) was missing issue 2 entirely, plus most of issue 4 — about 35 papers that Crossref’s per-journal listing never returns even though each one still resolves by DOI, so the daily harvest could not see them. The pipeline now carries a by-DOI rescue list checked on every build: the missing papers are fetched individually, pass through the same de-duplication and sanitization as every harvested paper, and join “Recently added”. The same mechanism will catch and repair any similar listing gap found in other journals.",
+      "title": "Operations Research 2019: two issues restored to their papers",
+      "summary": "The completeness audit flagged Operations Research volume 67 (2019) as missing issue 2 and most of issue 4. The papers turned out to be in the database all along — but frozen as volume-less online-first records, because the publisher never updated their Crossref registrations with the final issue assignment, making them invisible to any per-issue view. Using the journal’s own tables of contents, 24 of these papers now carry their real volume, issue and (where confirmed) page numbers, and one paper that genuinely was absent — “On the Minimum Chordal Completion Polytope” (67(2), pp. 532–547) — is fetched directly by DOI on every build via the new rescue list. The same repair path stands ready for the remaining frozen records, including several from volume 68 (2020) with the same problem.",
       "url": "https://www.stouras.com/lit/"
     },
     {

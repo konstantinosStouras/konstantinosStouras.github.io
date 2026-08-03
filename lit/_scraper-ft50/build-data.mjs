@@ -84,7 +84,7 @@ const MOCK_DIR = join(__dirname, 'mock');
 const MAILTO = process.env.FT50_MAILTO || 'kstouras@gmail.com';
 // Optional Semantic Scholar API key — moves the S2 leg off the throttled
 // anonymous pool. Inert until the S2_API_KEY secret/env is set.
-const S2_KEY = process.env.S2_API_KEY || '';
+const S2_KEY = (process.env.S2_API_KEY || '').trim();
 
 const ROWS = 1000;                  // Crossref max page size
 const PAGE_PAUSE_MS = 120;          // politeness pause between cursor pages
@@ -215,7 +215,8 @@ const SELECT = [
 // as literal markup and every other entity ("&apos;", "&nbsp;", "&EACUTE;")
 // rendered raw on the page.
 import { cleanText as stripJats, trimTrailingSeparators, titleText,
-  affilName, affilParts, affilList, stripPageFurniture, junkAbstract, stripHighlights } from '../_scraper/_entities.mjs';
+  affilName, affilParts, affilList, stripPageFurniture, junkAbstract, stripHighlights,
+  nameCase } from '../_scraper/_entities.mjs';
 export { stripJats, trimTrailingSeparators, titleText, affilName, affilParts, affilList, stripPageFurniture, junkAbstract };
 
 // HBR / MIT Sloan Management Review are exempt from the junkAbstract summary
@@ -236,8 +237,10 @@ function authorName(a) {
   // Decode any deposited entities ("R&eacute;gis", "Bilge Y&inodot;lmaz") FIRST,
   // then strip commas — the page splits Authors on commas, so a decoded comma
   // must never survive into the name.
+  // nameCase (user report 2026-08): Wiley/JAR/CAR deposit some names fully
+  // capitalized ("MICHAEL EWENS") — re-cased only when the whole name shouts.
   const nm = stripJats([a.given, a.family].filter(Boolean).join(' ') || a.name || '');
-  return nm.replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
+  return nameCase(nm.replace(/,/g, ' ').replace(/\s+/g, ' ').trim());
 }
 
 function normTitle(t) {

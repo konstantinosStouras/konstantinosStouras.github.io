@@ -5,7 +5,7 @@
 import { cleanText, titleText, affilName, affilParts, affilList,
   trimTrailingSeparators, namedEntity, stripPageFurniture,
   isLaySummaryAbstract, isCitationStubAbstract, junkAbstract,
-  stripHighlights } from './_entities.mjs';
+  stripHighlights, nameCase } from './_entities.mjs';
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { c ? pass++ : (fail++, console.log('  FAIL:', m)); };
@@ -237,6 +237,22 @@ ok(stripHighlights('One stray • bullet in prose') === 'One stray • bullet in
   'a single mid-prose bullet is never treated as highlights');
 ok(stripHighlights(stripHighlights(PROSE + ' • b1 • b2')) === PROSE, 'idempotent');
 ok(stripHighlights('') === '' && stripHighlights(null) === '', 'empty/null safe');
+
+// ── nameCase: shouted author names re-cased, mixed case untouched ───────────
+ok(nameCase('MICHAEL EWENS') === 'Michael Ewens', 'plain shouted name re-cased');
+ok(nameCase('JEAN-PIERRE DUPONT') === 'Jean-Pierre Dupont', 'hyphen segments cased separately');
+ok(nameCase("PATRICK O'BRIEN") === "Patrick O'Brien", 'apostrophe segments cased separately');
+ok(nameCase('MCDONALD SMITH') === 'McDonald Smith', 'Mc hump kept');
+ok(nameCase('ANA MACHADO') === 'Ana Machado', 'MAC deliberately NOT humped (Machado, not MacHado)');
+ok(nameCase('JOSÉ MARÍA ÁLVAREZ') === 'José María Álvarez', 'diacritics preserved through re-casing');
+ok(nameCase('JOHN SMITH III') === 'John Smith III', 'roman-numeral suffix stays caps');
+ok(nameCase('JOHN SMITH JR') === 'John Smith Jr', 'JR becomes Jr');
+ok(nameCase('J. P. MORGAN') === 'J. P. Morgan', 'single-letter initials untouched, surname cased');
+ok(nameCase('John MacDonald') === 'John MacDonald', 'mixed-case name is NEVER touched');
+ok(nameCase('Ludwig van der Berg') === 'Ludwig van der Berg', 'particled name untouched (has lowercase)');
+ok(nameCase('J. P. M.') === 'J. P. M.', 'initials-only name untouched');
+ok(nameCase(nameCase('MICHAEL EWENS')) === 'Michael Ewens', 'idempotent');
+ok(nameCase('') === '' && nameCase(null) === '', 'empty/null safe');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

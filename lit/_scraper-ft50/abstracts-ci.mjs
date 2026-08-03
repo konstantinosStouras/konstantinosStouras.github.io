@@ -66,21 +66,21 @@ const BUDGET_MS = parseInt(process.env.FT50_ABS_BUDGET_MS || '', 10) || 40 * 60 
 const PACE_MS = Math.max(150, parseInt(process.env.FT50_ABS_PACE_MS || '', 10) || 300);
 const MISS_TTL_DAYS = parseInt(process.env.FT50_ABS_MISS_TTL_DAYS || '', 10) || 45;
 const USE_S2 = process.env.FT50_ABS_S2 !== '0';
-const S2_KEY = process.env.S2_API_KEY || '';
-const ELS_KEY = process.env.ELSEVIER_API_KEY || '';
+const S2_KEY = (process.env.S2_API_KEY || '').trim();
+const ELS_KEY = (process.env.ELSEVIER_API_KEY || '').trim();
 // Optional institutional token (X-ELS-Insttoken): Elsevier entitles ABSTRACT
 // text to an API key by the caller's INSTITUTIONAL IP RANGE — a GitHub runner
 // is off-campus, so without an insttoken most responses can carry metadata but
 // no dc:description. Request one via dev.elsevier.com support for server-side
 // use; inert until set.
-const ELS_INSTTOKEN = process.env.ELSEVIER_INST_TOKEN || '';
+const ELS_INSTTOKEN = (process.env.ELSEVIER_INST_TOKEN || '').trim();
 const ELS_PACE_MS = Math.max(250, parseInt(process.env.FT50_ABS_ELS_PACE_MS || '', 10) || 350);
 const ELS_PREFIX = /^10\.1016\//;
 // Springer Nature Meta API (free key from dev.springernature.com — the META
 // key, not the Open Access one): serves abstracts for Springer/Palgrave/Kluwer
 // DOIs. Inert until a SPRINGER_API_KEY secret is set; the leg drops out for
 // the run on 401/403/429 so a spent daily quota never stalls the others.
-const SPR_KEY = process.env.SPRINGER_API_KEY || '';
+const SPR_KEY = (process.env.SPRINGER_API_KEY || '').trim();
 const SPR_PACE_MS = Math.max(250, parseInt(process.env.FT50_ABS_SPR_PACE_MS || '', 10) || 400);
 const SPR_PREFIX = /^10\.(1007|1057|1023)\//;
 const NEEDY_MAX_LEN = 300; // mirror the INFORMS harvester's teaser threshold

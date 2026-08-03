@@ -422,28 +422,54 @@ Exit code 1 on a proven hole so it can gate CI; probe B under-samples the newest
 years by construction (an unpublished-last-month paper has no citers yet), which
 the output states. Current readings: **EJOR 2007–2026 is complete** — 160 volumes
 with no gap, every volume its 3 issues, tiling coverage 99.89% (~14 suspected,
-all pre-2016), and **0 of 2,446** cited EJOR DOIs missing. It also proved
-**Operations Research vol 67 (2019) missing issue 2 entirely plus most of issue
-4** (~35 papers — page tiling: iss 1 = 1–294, iss 2 ABSENT (295–598), iss 3 =
-599–904, iss 4 held ONE row of its 905–1208 span, iss 5 = 1209–1502, iss 6 =
-1503–1782) even though the daily build re-pulls OR's whole back-catalogue —
-i.e. those papers are NOT reachable via `/journals/0030-364X/works` while
-Crossref still serves each BY DOI. That class of gap is repaired by the
+all pre-2016), and **0 of 2,446** cited EJOR DOIs missing. It also flagged
+**Operations Research vol 67 (2019) as missing issue 2 plus most of issue 4**
+(page tiling: iss 2's 295–598 and most of iss 4's 905–1208 untiled) — but READ
+THE TWO PROBES TOGETHER: probe B simultaneously showed **0 cited OR DOIs
+absent**, and the resolution (owner-supplied pubsonline TOCs, 2026-08-03) is
+that the papers were IN the catalog all along as **frozen no-volume/no-issue
+records** — Crossref never received their final issue assignment (the same
+freeze afflicted **vol 68 (2020) issue 2**; all repaired once the owner
+supplied the three pubsonline TOCs). A
+tiling hole with a CLEAN cited-DOI probe therefore means MISLABELED, not
+missing — repaired via `_aia-fixups.json` (51 OR entries from the TOCs:
+17 for 67(2), 16 for 67(4) with exact pages, 18 for 68(2) with exact pages +
+year; fill-empty semantics in mapWork for volume/issue/page, so a later
+Crossref correction wins). THREE papers were genuinely absent —
+`10.1287/opre.2018.1783` "On the Minimum Chordal Completion Polytope" 67(2)
+532–547, `10.1287/opre.2018.1827` "TN—Optimizing Foreclosed Housing
+Acquisitions" 67(4) 950–964, and `10.1287/opre.2019.1870` "Fast or Slow"
+68(2) 552–571 — and those proved ABSENT FROM CROSSREF ENTIRELY (validated
+live 2026-08-03: the batched `filter=doi:` route returned nothing AND the
+singular `GET /works/<doi>` 404s for all three), so they are carried by the
+native **`lit/data/_informs-aia.json` supplement** (titles/authors from the
+publisher TOCs; `mergeSupplement` is FIXUP-AWARE — a supplement row whose DOI
+has an `_aia-fixups.json` volume/issue entry lands PUBLISHED with its real
+pages/year, not as Articles in Advance; abstracts left to the pubsonline
+needy harvest; superseded by DOI if Crossref ever registers them). Gaps
+Crossref CAN serve are repaired by the
 **by-DOI rescue** (`rescueMissingWorks` in the native `build-data.mjs`): the
 committed manifest `lit/data/_rescue-dois.json` names, per journal key,
 explicit `dois` and/or OpenAlex volume `scans` (`[{volume}]`, resolved each
 daily build via `works?filter=locations.source.issn,biblio.volume` so the DOI
 list self-heals); whatever the journal-route listing missed is batch-fetched
-from Crossref by DOI and APPENDED TO THE RAW ITEMS, so the type filter,
+from Crossref by DOI (each still-missing explicit DOI then retried on the
+singular `GET /works/<doi>` endpoint, which can serve registered-but-unindexed
+records the filter route misses) and APPENDED TO THE RAW ITEMS, so the type filter,
 mapWork sanitize (incl. `junkAbstract`), `collapseSameWork` and registry
 stamping treat rescued rows exactly like harvested ones (they join "recently
 added" dated by the build). Guards: a scan-found DOI is kept only when the
 FETCHED record's own volume matches the scan (an OpenAlex misattribution can
 never smuggle another journal's paper in), and an explicit DOI Crossref cannot
 resolve is REPORTED (`::notice::`) and skipped, never fabricated — which is
-also how a suspected-missing DOI is safely probed: the manifest carries
-`10.1287/mnsc.2014.1882` (1 citer, may be a bad reference) as exactly such a
-probe. The rescue re-runs every daily build because the build REPLACES each
+also how a suspected-missing DOI is safely probed: `10.1287/mnsc.2014.1882`
+(1 citer) was carried as exactly such a probe and RESOLVED — Crossref cannot
+serve it as an MS journal-article, so it was a bad reference in some paper's
+bibliography, and the probe was removed; an OpenAlex volume scan for OR 67
+likewise proved barren (69 works — OpenAlex mirrors Crossref's metadata hole)
+and was removed; the three genuinely-absent OR papers were likewise probed to
+"Crossref lacks them entirely" and moved to the supplement (above), so the
+manifest is currently EMPTY (comment-only). The rescue re-runs every daily build because the build REPLACES each
 journal from the fresh harvest (a one-off data patch would be wiped next
 morning); rescued rows persist intra-day because the incremental pass upserts
 into the committed files. Wholly non-fatal — any failure just means no extra
@@ -635,6 +661,20 @@ non-alphanumerics, and every entity-bearing title had a DOI — verified), so no
 paper resurfaces as "recently added". Covered by
 `lit/_scraper/entities-selftest.mjs` (the module's own suite) plus unit checks
 in `incremental-selftest.mjs` (native + FT50) and the WP `selftest.mjs`.
+**SHOUTED author names are re-cased at ingest** (user report 2026-08):
+Wiley's JoF, JAR/CAR and some POM/AMJ records deposit fully-capitalized
+author names ("MICHAEL EWENS, NADYA MALENKO" — ~6,300 rows). `nameCase` in
+`_entities.mjs`, applied inside BOTH pipelines' `authorName`, title-cases a
+name ONLY when the WHOLE name is shouting (no lowercase anywhere — the
+trigger, not the transform, is the safety): per-segment across hyphens and
+apostrophes ("JEAN-PIERRE" → "Jean-Pierre", "O'BRIEN" → "O'Brien"),
+diacritics preserved, `MC` humped ("MCDONALD" → "McDonald") but `MAC`
+deliberately NOT (Machado), roman-numeral suffixes kept, JR/SR → Jr/Sr,
+single-letter initials untouched; a mixed-case "John MacDonald" or particled
+"van der Berg" is never altered. Committed rows heal on each daily rebuild
+(authors.json/affiliations panels follow); shard repos get it when
+`_entities.mjs` is next vendored (same follow-up as junkAbstract/
+stripHighlights). Unit-tested in `entities-selftest.mjs` (14 cases).
 **Article-page furniture is never served as an abstract** (feedback
 LIT-260727-XRQ8). Two junk shapes reached served abstracts:
 the pubsonline full-abstract harvest could capture the page's navigation +

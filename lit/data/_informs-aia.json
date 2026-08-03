@@ -1,1 +1,21 @@
-{}
+{
+  "_comment": "Forthcoming/lost papers Crossref's journal listing AND its batched filter=doi index both miss (validated live: the rescue's batch fetch returned nothing for these; the singular GET is also tried by the rescue first). Each record is merged by mergeSupplement in build-data.mjs, which honours _aia-fixups.json — these three carry volume/issue/pages there, so they land PUBLISHED, not Articles in Advance. Abstracts left empty: the pubsonline needy-abstract harvest fills them. Source: publisher TOCs at pubsonline.informs.org/toc/opre/67/2, /67/4 and /68/2.",
+  "10.1287/opre.2018.1783": {
+    "jkey": "opre",
+    "Title": "On the Minimum Chordal Completion Polytope",
+    "Authors": "David Bergman, Carlos H. Cardonha, Andre A. Cire, Arvind U. Raghunathan",
+    "Year": "2019"
+  },
+  "10.1287/opre.2018.1827": {
+    "jkey": "opre",
+    "Title": "Technical Note—Optimizing Foreclosed Housing Acquisitions in Societal Response to Foreclosures",
+    "Authors": "Senay Solak, Armagan Bayram, Mehmet Gumus, Yueran Zhuo",
+    "Year": "2019"
+  },
+  "10.1287/opre.2019.1870": {
+    "jkey": "opre",
+    "Title": "Fast or Slow: Search in Discrete Locations with Two Search Modes",
+    "Authors": "Jake Clarkson, Kevin D. Glazebrook, Kyle Y. Lin",
+    "Year": "2020"
+  }
+}
