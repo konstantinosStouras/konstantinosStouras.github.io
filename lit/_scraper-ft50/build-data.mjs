@@ -84,7 +84,7 @@ const MOCK_DIR = join(__dirname, 'mock');
 const MAILTO = process.env.FT50_MAILTO || 'kstouras@gmail.com';
 // Optional Semantic Scholar API key — moves the S2 leg off the throttled
 // anonymous pool. Inert until the S2_API_KEY secret/env is set.
-const S2_KEY = process.env.S2_API_KEY || '';
+const S2_KEY = (process.env.S2_API_KEY || '').trim();
 
 const ROWS = 1000;                  // Crossref max page size
 const PAGE_PAUSE_MS = 120;          // politeness pause between cursor pages
