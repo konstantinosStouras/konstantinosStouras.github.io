@@ -215,7 +215,7 @@ const SELECT = [
 // as literal markup and every other entity ("&apos;", "&nbsp;", "&EACUTE;")
 // rendered raw on the page.
 import { cleanText as stripJats, trimTrailingSeparators, titleText,
-  affilName, affilParts, affilList, stripPageFurniture, junkAbstract } from '../_scraper/_entities.mjs';
+  affilName, affilParts, affilList, stripPageFurniture, junkAbstract, stripHighlights } from '../_scraper/_entities.mjs';
 export { stripJats, trimTrailingSeparators, titleText, affilName, affilParts, affilList, stripPageFurniture, junkAbstract };
 
 // HBR / MIT Sloan Management Review are exempt from the junkAbstract summary
@@ -330,7 +330,11 @@ function mapWork(item, src) {
   // in volume…", JSTOR-era "Authors, Title, Journal, Vol…, pp. …") is never
   // the paper's abstract — dropped, so the API/pubsonline backfills can fill
   // the real text.
-  let abstract = stripPageFurniture(stripJats(item.abstract || '')).slice(0, MAX_ABSTRACT);
+  // stripHighlights (user report 2026-08): Elsevier deposits many papers'
+  // ScienceDirect HIGHLIGHTS bullets as (or fused into) the abstract — the
+  // real abstract is kept when it precedes the bullets, else dropped so the
+  // backfills recover the true text (EJOR/Research Policy, ~300 rows).
+  let abstract = stripHighlights(stripPageFurniture(stripJats(item.abstract || '')).slice(0, MAX_ABSTRACT));
   if (abstract && !JUNK_ABS_EXEMPT_KEYS.has(src.key) && junkAbstract(abstract,
     { title, authors: authorsArr.join(', '), journal: src.name })) abstract = '';
 
@@ -1472,8 +1476,11 @@ export async function refreshCitations(allPapers, cache, opts = {}) {
 //    INFORMS journals live in this catalog too, under the same DOIs);
 //  • _api-abstracts.json — the FT50-wide OpenAlex/Semantic Scholar backfill
 //    (abstracts-ci.mjs), covering the ~45 non-INFORMS journals.
-// Applied in the daily build so a rebuild can never regress a fixed abstract
-// (the incremental pass never touches Abstract — not an INCR_CORE_FIELD).
+// Applied in the daily build so a rebuild can never regress a fixed abstract.
+// (The incremental pass keeps Abstract out of INCR_CORE_FIELDS — a plain
+// overwrite could regress these cache overlays — but does apply its own
+// betterAbstract-gated UPGRADE from the fresh Crossref record, so a
+// deposited-later abstract lands within a poll instead of a day.)
 async function applyAbstractCaches(allPapers) {
   const paths = [
     join(DATA_DIR, '..', 'data', '_informs-abstracts.json'),
@@ -1489,7 +1496,12 @@ async function applyAbstractCaches(allPapers) {
       // A cached capture that is itself a summary/citation stub is never applied.
       if (!JUNK_ABS_EXEMPT_KEYS.has(row.JKey) && junkAbstract(rec.a,
         { title: row.Title, authors: row.Authors, journal: row.Journal })) continue;
-      if (betterAbstract(row.Abstract, rec.a)) { row.Abstract = rec.a.slice(0, MAX_ABSTRACT); up++; }
+      // Nor a cached HIGHLIGHTS bullet capture (abstracts-ci heals the cache
+      // file on its own cadence; this guards the window in between — and keeps
+      // any real abstract the entry carries ahead of its bullets).
+      const cand = stripHighlights(rec.a);
+      if (!cand) continue;
+      if (betterAbstract(row.Abstract, cand)) { row.Abstract = cand.slice(0, MAX_ABSTRACT); up++; }
     }
   }
   if (up) console.log(`  abstracts: upgraded ${up} teaser/missing abstracts from the page/API caches`);
@@ -2045,6 +2057,14 @@ async function incrementalMain() {
       // Crossref's citation floor may only rise; never regress an enriched count.
       if (typeof nr.CitedBy === 'number' && nr.CitedBy > (cur.CitedBy || 0)) {
         cur.CitedBy = nr.CitedBy; delete cur.CitedBySrc; rowChanged = true;
+      }
+      // Elsevier deposits many EJOR abstracts only days AFTER first
+      // registration, so an Articles-in-Press row added by this pass used to
+      // stay abstract-less until the next daily rebuild. Take a materially
+      // fuller abstract now — via betterAbstract, so an overlay-cache abstract
+      // (the API backfill's) is never regressed back to a stub.
+      if (nr.Abstract && betterAbstract(cur.Abstract, nr.Abstract)) {
+        cur.Abstract = String(nr.Abstract).slice(0, MAX_ABSTRACT); rowChanged = true;
       }
       if (rowChanged) { cur._rank = pubRank(cur.Year, cur.Volume, cur.Issue, cur.Page, cur.Status); updated++; }
     }

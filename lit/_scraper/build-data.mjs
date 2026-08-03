@@ -227,7 +227,7 @@ const SELECT = [
 // as literal markup and every other entity ("&apos;", "&nbsp;", "&EACUTE;")
 // rendered raw on the page.
 import { cleanText as stripJats, trimTrailingSeparators, titleText,
-  affilName, affilParts, affilList, stripPageFurniture, junkAbstract } from './_entities.mjs';
+  affilName, affilParts, affilList, stripPageFurniture, junkAbstract, stripHighlights } from './_entities.mjs';
 export { stripJats, trimTrailingSeparators, titleText, affilName, affilParts, affilList, stripPageFurniture, junkAbstract };
 
 // PNAS deposits its one-paragraph "Significance" statement inside the Crossref
@@ -361,7 +361,7 @@ function mapWork(item, src) {
   // ("In '<Title>', <the authors> develop…") — never the paper's abstract, so
   // it is dropped and the pubsonline harvest fills the real text (the row
   // becomes "needy" for informs-abstracts-local.mjs).
-  let abstract = stripPageFurniture(stripJats(abstractSrc)).slice(0, MAX_ABSTRACT);
+  let abstract = stripHighlights(stripPageFurniture(stripJats(abstractSrc)).slice(0, MAX_ABSTRACT));
   if (abstract && junkAbstract(abstract,
     { title, authors: authorsArr.join(', '), journal: src.name })) abstract = '';
 
@@ -750,6 +750,143 @@ function mapJournal(rawWorks, src) {
     papers.push(row);
   }
   return papers;
+}
+
+// ── By-DOI rescue of papers the journal route misses ────────────────────────
+// coverage-audit.mjs proved that Crossref's per-journal listing can silently
+// omit real papers it still serves BY DOI (Operations Research vol 67's issue 2
+// is entirely absent from /journals/0030-364X/works, yet each of its DOIs
+// resolves) — and since the daily build REPLACES each journal from that
+// listing, a one-off data patch would be wiped the next morning. So the rescue
+// lives in the harvest: data/_rescue-dois.json names, per journal key, explicit
+// DOIs ('dois') and/or OpenAlex volume scans ('scans': [{volume}]) that are
+// resolved each build; whatever the journal route missed is batch-fetched from
+// Crossref by DOI and APPENDED TO THE RAW ITEMS — so the type filter, mapWork
+// sanitization, duplicate collapse and registry stamping all apply to rescued
+// rows exactly as to harvested ones. Guards: a scan-found DOI is accepted only
+// when the fetched record's own volume matches the scan (an OpenAlex
+// misattribution can never smuggle another journal's paper in); an explicit
+// DOI Crossref cannot resolve is REPORTED and skipped, never fabricated — that
+// is also how a suspected-missing DOI is probed (it may be a bad reference).
+// Wholly non-fatal: any failure just yields no extra items this build; rescued
+// rows persist across the day because the incremental pass upserts into the
+// committed files. ::notice:: lines surface results as annotations on the
+// Actions run page (readable without log access).
+export async function rescueMissingWorks(src, rawItems) {
+  try {
+    return await rescueInner(src, rawItems);
+  } catch (e) {
+    // Airtight non-fatality: even a malformed manifest shape (e.g. 'dois' not
+    // an array) must never sink the daily build — it just means no rescue.
+    console.warn(`  rescue(${src.key}): failed (${e.message}) — no rescue this build.`);
+    return [];
+  }
+}
+async function rescueInner(src, rawItems) {
+  const manifest = await loadJsonIfExists(join(DATA_DIR, '_rescue-dois.json'), null);
+  const spec = manifest && manifest[src.key];
+  if (!spec || typeof spec !== 'object') return [];
+  const bare = (d) => String(d || '').trim().toLowerCase()
+    .replace(/^https?:\/\/(dx\.)?doi\.org\//, '');
+  const have = new Set();
+  for (const it of rawItems) { const d = bare(it.DOI); if (d) have.add(d); }
+
+  // 1. Resolve the wanted set: explicit DOIs + OpenAlex volume scans.
+  const explicit = new Set((spec.dois || []).map(bare).filter(Boolean));
+  const scanVolume = new Map();                  // doi -> volume it must carry
+  for (const scan of spec.scans || []) {
+    const vol = String(scan.volume || '').trim();
+    if (!vol) continue;
+    try {
+      if (MOCK) {
+        const raw = await loadJsonIfExists(join(MOCK_DIR, `openalex-rescue-${src.key}.json`), null);
+        for (const w of (raw && (raw.results || raw)) || []) {
+          const d = bare(w.doi); if (d) scanVolume.set(d, vol);
+        }
+        continue;
+      }
+      let cursor = '*';
+      for (let page = 0; page < 10 && cursor; page++) {   // 200/page — a volume is 1-2 pages
+        const url = 'https://api.openalex.org/works?filter=' +
+          encodeURIComponent(`locations.source.issn:${src.issns[0]},biblio.volume:${vol}`) +
+          `&select=doi,biblio&per-page=200&cursor=${encodeURIComponent(cursor)}&mailto=${encodeURIComponent(MAILTO)}`;
+        const body = await fetchJson(url);
+        for (const w of body.results || []) {
+          if (String((w.biblio || {}).volume || '') !== vol) continue;
+          const d = bare(w.doi); if (d) scanVolume.set(d, vol);
+        }
+        cursor = (body.meta || {}).next_cursor || '';
+        if (!(body.results || []).length) break;
+        await sleep(200);
+      }
+    } catch (e) {
+      console.warn(`  rescue(${src.key}): OpenAlex scan vol ${vol} failed (${e.message}) — skipping this scan.`);
+    }
+  }
+
+  const missing = [...new Set([...explicit, ...scanVolume.keys()])].filter(d => !have.has(d));
+  if (!missing.length) {
+    if (explicit.size || scanVolume.size) {
+      console.log(`  rescue(${src.key}): all ${explicit.size + scanVolume.size} manifest DOIs already in the harvest.`);
+    }
+    return [];
+  }
+
+  // 2. Batch-fetch the missing DOIs from Crossref (filter=doi: ORs same-name
+  // filters together, like the citations sweep / refs backfill).
+  const fetched = [];
+  try {
+    if (MOCK) {
+      const raw = await loadJsonIfExists(join(MOCK_DIR, `crossref-rescue-${src.key}.json`), null);
+      const items = (raw && (raw.message ? raw.message.items : raw)) || [];
+      const want = new Set(missing);
+      for (const it of items) if (want.has(bare(it.DOI))) fetched.push(it);
+    } else {
+      for (let i = 0; i < missing.length; i += 25) {
+        const batch = missing.slice(i, i + 25);
+        const url = 'https://api.crossref.org/works?filter=' +
+          encodeURIComponent(batch.map(d => `doi:${d}`).join(',')) +
+          `&rows=${batch.length}&select=${encodeURIComponent(SELECT)}&mailto=${encodeURIComponent(MAILTO)}`;
+        const body = await fetchJson(url);
+        fetched.push(...(body.message.items || []));
+        await sleep(300);
+      }
+    }
+  } catch (e) {
+    console.warn(`  rescue(${src.key}): Crossref by-DOI fetch failed (${e.message}) — no rescue this build.`);
+    return [];
+  }
+
+  // 3. Guards: journal-article only; a scan-found DOI must carry the scan's
+  // volume in the fetched record itself (explicit DOIs are trusted as listed).
+  const kept = [];
+  const volDropped = new Set();
+  for (const it of fetched) {
+    const d = bare(it.DOI);
+    if (!d) continue;
+    if (it.type && it.type !== 'journal-article') continue;
+    if (!explicit.has(d) && scanVolume.has(d) &&
+        String(it.volume || '') !== scanVolume.get(d)) {
+      volDropped.add(d);
+      console.warn(`  rescue(${src.key}): ${d} dropped — Crossref says volume ` +
+        `${it.volume || '?'}, the scan expected ${scanVolume.get(d)} (misattribution guard).`);
+      continue;
+    }
+    kept.push(it);
+  }
+  const resolved = new Set(kept.map(it => bare(it.DOI)));
+  const unresolvable = missing.filter(d => !resolved.has(d) && !volDropped.has(d));
+  if (kept.length) {
+    console.log(`::notice::rescue(${src.key}): +${kept.length} paper(s) fetched by DOI that the journal-route listing missed.`);
+  }
+  for (const d of unresolvable) {
+    if (explicit.has(d)) {
+      console.log(`::notice::rescue(${src.key}): ${d} did not resolve as a ${src.key} journal-article — likely a bad citation, NOT added.`);
+    } else {
+      console.warn(`  rescue(${src.key}): scan-found ${d} not served/kept by Crossref — skipped.`);
+    }
+  }
+  return kept;
 }
 
 // ── PNAS ────────────────────────────────────────────────────────────────────
@@ -2534,10 +2671,15 @@ async function main() {
 
   const bySource = {}; // key -> rows (internal shape)
 
-  // 1. The eight journals.
+  // 1. The eight journals. After each journal-route pull, top up any papers
+  // the listing missed but Crossref still serves by DOI (rescueMissingWorks,
+  // driven by data/_rescue-dois.json — e.g. Operations Research vol 67's
+  // missing issues). Appended to the RAW items so mapJournal/mapWork/
+  // collapseSameWork treat rescued rows exactly like harvested ones.
   for (const src of JOURNALS) {
     console.log(`${src.name} (${src.issns.join(', ')}):`);
     const raw = await fetchJournalWorks(src);
+    raw.push(...await rescueMissingWorks(src, raw));
     bySource[src.key] = mapJournal(raw, src);
     console.log(`  ${src.key}: ${bySource[src.key].length} papers`);
   }
@@ -2801,6 +2943,14 @@ async function incrementalMain() {
       // Crossref's citation floor may only rise; never regress an enriched count.
       if (typeof nr.CitedBy === 'number' && nr.CitedBy > (cur.CitedBy || 0)) {
         cur.CitedBy = nr.CitedBy; delete cur.CitedBySrc; rowChanged = true;
+      }
+      // A publisher may deposit the abstract only AFTER first registration, so
+      // a row added abstract-less used to wait for the next daily rebuild to
+      // gain it. Take a materially fuller one now — via betterAbstract, so an
+      // overlay-cache abstract (the pubsonline full text) is never regressed
+      // back to a Crossref teaser.
+      if (nr.Abstract && betterAbstract(cur.Abstract, nr.Abstract)) {
+        cur.Abstract = String(nr.Abstract).slice(0, MAX_ABSTRACT); rowChanged = true;
       }
       if (rowChanged) {
         cur._rank = pubRank({ page: cur.Page }, cur.Volume, cur.Issue, cur.Status, cur.Year);

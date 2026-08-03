@@ -1,0 +1,38 @@
+{
+  "status": "ok",
+  "message-type": "work-list",
+  "message": {
+    "total-results": 2,
+    "items": [
+      {
+        "DOI": "10.1287/opre.2019.1867",
+        "title": ["Dynamic Fleet Repositioning Under Stochastic Demand"],
+        "author": [
+          { "given": "Rhea", "family": "Rho" },
+          { "given": "Stavros", "family": "Sigma" }
+        ],
+        "issued": { "date-parts": [[2019, 3, 1]] },
+        "published-print": { "date-parts": [[2019, 3, 1]] },
+        "volume": "67",
+        "issue": "2",
+        "page": "301-315",
+        "type": "journal-article",
+        "container-title": ["Operations Research"],
+        "is-referenced-by-count": 12,
+        "abstract": "<jats:p>We study repositioning policies for a shared fleet when demand is stochastic and lead times bind, and characterise the optimal threshold structure.</jats:p>"
+      },
+      {
+        "DOI": "10.1287/opre.2019.9999",
+        "title": ["A Paper OpenAlex Misattributed to Volume 67"],
+        "author": [{ "given": "Tau", "family": "Theta" }],
+        "issued": { "date-parts": [[2019, 6, 1]] },
+        "volume": "68",
+        "issue": "1",
+        "page": "1-14",
+        "type": "journal-article",
+        "container-title": ["Operations Research"],
+        "abstract": "<jats:p>The fetched Crossref record says volume 68, so the volume guard must drop this scan-found row.</jats:p>"
+      }
+    ]
+  }
+}

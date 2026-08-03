@@ -213,6 +213,26 @@ const t2 = rd('papers-ms.json').find(p => p.DOI === target.DOI);
 ok(t2 && t2.Preprint === target.Preprint && t2.PreprintSrc === 'arxiv', 'Preprint link preserved across re-fetch');
 ok(t2 && t2.CitedBy === 9999 && t2.CitedBySrc === 'oa', 'boosted CitedBy + source preserved (Crossref floor is lower)');
 
+// 4b) Abstracts are refreshed UPGRADE-only on a known-DOI re-fetch: a publisher
+// may deposit the abstract days AFTER first registration, so a teaser (or
+// empty) grows to the fresh Crossref text — while text FULLER than Crossref's
+// is preserved (betterAbstract gate: the pubsonline full-abstract overlay must
+// never regress to a Crossref teaser).
+const msA = rd('papers-ms.json');
+const upT = msA.find(p => p.DOI.toLowerCase().endsWith('10.1287/mnsc.2026.02441'));
+const keepT = msA.find(p => p.DOI.toLowerCase().endsWith('10.1287/mnsc.2024.06043'));
+ok(!!upT && !!keepT, 'abstract-upgrade fixture rows present');
+const fullKeep = 'K'.repeat(1300);      // longer than fixture-abstract / 1.3
+upT.Abstract = 'Teaser.';
+keepT.Abstract = fullKeep;
+writeFileSync(join(DATA, 'papers-ms.json'), JSON.stringify(msA));
+run({ LIT_INCREMENTAL: '1' });
+const msA2 = rd('papers-ms.json');
+ok(msA2.find(p => p.DOI === upT.DOI).Abstract.length > 500,
+  'a teaser abstract grows to the freshly-deposited Crossref text');
+ok(msA2.find(p => p.DOI === keepT.DOI).Abstract === fullKeep,
+  'an already-fuller abstract is never regressed (betterAbstract gate)');
+
 // 5) Duplicate-registration guard: a paper we already list must never be
 // appended a second time when Crossref serves it under another DOI. Rewrite a
 // committed MS paper as a no-volume online-first stub with a variant DOI; the

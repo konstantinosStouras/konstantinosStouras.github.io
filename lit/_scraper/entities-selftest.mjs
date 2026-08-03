@@ -4,7 +4,8 @@
  */
 import { cleanText, titleText, affilName, affilParts, affilList,
   trimTrailingSeparators, namedEntity, stripPageFurniture,
-  isLaySummaryAbstract, isCitationStubAbstract, junkAbstract } from './_entities.mjs';
+  isLaySummaryAbstract, isCitationStubAbstract, junkAbstract,
+  stripHighlights } from './_entities.mjs';
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { c ? pass++ : (fail++, console.log('  FAIL:', m)); };
@@ -206,6 +207,36 @@ ok(!isCitationStubAbstract(
   'a real abstract citing a page range mid-prose is NOT a stub (anchor is end-of-text)');
 ok(junkAbstract('x', {}) === '' && junkAbstract('', {}) === '' && junkAbstract(null, null) === '',
   'junkAbstract is safe on empty/short/null input');
+
+// ── stripHighlights: ScienceDirect bullet highlights never served as the
+// abstract (user report 2026-08, EJOR/Research Policy) ──────────────────────
+const PROSE = 'We study the optimal online service for grocery retailers operating both '
+  + 'physical and online stores. The challenge lies in balancing assortment breadth against '
+  + 'fulfillment cost, and we characterise the profit-maximising policy under a store-choice '
+  + 'model estimated on household panel data across two national chains.';
+ok(stripHighlights(PROSE + ' • Empirically grounded store choice model • Fulfillment costs shape assortments')
+  === PROSE, 'abstract-then-highlights keeps the real abstract, cuts the bullets');
+ok(stripHighlights(PROSE + ' Highlights • First bullet here • Second bullet here')
+  === PROSE, 'a trailing "Highlights" label is cut with its bullets');
+ok(stripHighlights('• A new measure capturing fairness of a schedule • We provide real-life examples • Worst-case bounds are derived')
+  === '', 'a bullets-only deposit is dropped (row becomes needy)');
+ok(stripHighlights('Some Paper Title Colon Subtitle • Exact branch-and-cut algorithm using fragments. '
+  + '• Algorithm is easily configured. ' + PROSE)
+  === '', 'title-then-bullets with the abstract FUSED into the last bullet has no safe seam — dropped, never guessed');
+// Deliberate precision trade-off: a SHORT text whose bullets carve it into
+// bullet-sized segments is indistinguishable from a highlights block, so it is
+// dropped. Real abstracts clear the 250-char leading-prose bar (none of the
+// ~300 affected rows had a real abstract under it), and a dropped row just
+// becomes needy for the backfills — no abstract beats a wrong one.
+ok(stripHighlights('Service levels rose by 4% • the industry benchmark • after the redesign.')
+  === '', 'short bullet-segmented text is treated as highlights (documented trade-off)');
+ok(stripHighlights(PROSE + ' • ' + PROSE + ' • ' + PROSE)
+  === PROSE + ' • ' + PROSE + ' • ' + PROSE,
+  'long •-separated prose segments are NOT a highlights block (inner-segment length guard)');
+ok(stripHighlights('One stray • bullet in prose') === 'One stray • bullet in prose',
+  'a single mid-prose bullet is never treated as highlights');
+ok(stripHighlights(stripHighlights(PROSE + ' • b1 • b2')) === PROSE, 'idempotent');
+ok(stripHighlights('') === '' && stripHighlights(null) === '', 'empty/null safe');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -3,6 +3,20 @@
   "version": 1,
   "updates": [
     {
+      "id": "ejor-abstracts-fixed",
+      "date": "2026-08-03",
+      "title": "EJOR abstracts: bullet-point “Highlights” removed, real abstracts kept, and faster pickup",
+      "summary": "Two fixes for EJOR (and other Elsevier journals like Research Policy). First, the publisher sometimes deposits a paper’s bullet-point “Highlights” in place of — or stuck onto — its abstract, and about 300 papers were showing those fragments as their abstract; where the real abstract was present alongside the bullets it is now kept clean (217 papers), and where only bullets existed the paper shows no abstract until the true text is recovered by the rolling backfills, so abstract search never matches bullet fragments again. Second, Elsevier often deposits an abstract only days after the paper is first registered: the 20-minute EJOR check now picks a newly-deposited abstract up on its next pass — upgrade-only, never replacing a fuller archived abstract — instead of waiting for the nightly rebuild.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
+      "id": "or-2019-missing-issue-restored",
+      "date": "2026-08-03",
+      "title": "Operations Research 2019: a missing issue restored",
+      "summary": "The completeness audit found that Operations Research volume 67 (2019) was missing issue 2 entirely, plus most of issue 4 — about 35 papers that Crossref’s per-journal listing never returns even though each one still resolves by DOI, so the daily harvest could not see them. The pipeline now carries a by-DOI rescue list checked on every build: the missing papers are fetched individually, pass through the same de-duplication and sanitization as every harvested paper, and join “Recently added”. The same mechanism will catch and repair any similar listing gap found in other journals.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
       "id": "real-abstracts-not-summaries",
       "date": "2026-08-02",
       "title": "“Show abstract” now always shows the paper's real abstract",
