@@ -820,17 +820,19 @@ async function rescueInner(src, rawItems) {
         await sleep(200);
       }
     } catch (e) {
-      console.warn(`  rescue(${src.key}): OpenAlex scan vol ${vol} failed (${e.message}) — skipping this scan.`);
+      console.log(`::notice::rescue(${src.key}): OpenAlex scan vol ${vol} FAILED (${e.message}) — skipping this scan.`);
     }
   }
 
   const missing = [...new Set([...explicit, ...scanVolume.keys()])].filter(d => !have.has(d));
-  if (!missing.length) {
-    if (explicit.size || scanVolume.size) {
-      console.log(`  rescue(${src.key}): all ${explicit.size + scanVolume.size} manifest DOIs already in the harvest.`);
-    }
-    return [];
-  }
+  // Every outcome for a manifest journal is a ::notice:: — Actions-run
+  // annotations are the one remotely-readable channel (raw logs sit behind a
+  // blob host most build sandboxes cannot reach), and "scan found nothing
+  // missing" vs "scan found nothing AT ALL" is exactly the signal that decides
+  // whether the upstream indexes even carry the papers.
+  console.log(`::notice::rescue(${src.key}): scan found ${scanVolume.size} DOI(s) on OpenAlex, ` +
+    `${explicit.size} explicit in the manifest; ${missing.length} absent from the harvest.`);
+  if (!missing.length) return [];
 
   // 2. Batch-fetch the missing DOIs from Crossref (filter=doi: ORs same-name
   // filters together, like the citations sweep / refs backfill).
@@ -853,7 +855,7 @@ async function rescueInner(src, rawItems) {
       }
     }
   } catch (e) {
-    console.warn(`  rescue(${src.key}): Crossref by-DOI fetch failed (${e.message}) — no rescue this build.`);
+    console.log(`::notice::rescue(${src.key}): Crossref by-DOI fetch FAILED (${e.message}) — no rescue this build.`);
     return [];
   }
 
