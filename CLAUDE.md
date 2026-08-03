@@ -439,13 +439,23 @@ Crossref correction wins). THREE papers were genuinely absent —
 `10.1287/opre.2018.1783` "On the Minimum Chordal Completion Polytope" 67(2)
 532–547, `10.1287/opre.2018.1827` "TN—Optimizing Foreclosed Housing
 Acquisitions" 67(4) 950–964, and `10.1287/opre.2019.1870` "Fast or Slow"
-68(2) 552–571 — and THAT class of gap is repaired by the
+68(2) 552–571 — and those proved ABSENT FROM CROSSREF ENTIRELY (validated
+live 2026-08-03: the batched `filter=doi:` route returned nothing AND the
+singular `GET /works/<doi>` 404s for all three), so they are carried by the
+native **`lit/data/_informs-aia.json` supplement** (titles/authors from the
+publisher TOCs; `mergeSupplement` is FIXUP-AWARE — a supplement row whose DOI
+has an `_aia-fixups.json` volume/issue entry lands PUBLISHED with its real
+pages/year, not as Articles in Advance; abstracts left to the pubsonline
+needy harvest; superseded by DOI if Crossref ever registers them). Gaps
+Crossref CAN serve are repaired by the
 **by-DOI rescue** (`rescueMissingWorks` in the native `build-data.mjs`): the
 committed manifest `lit/data/_rescue-dois.json` names, per journal key,
 explicit `dois` and/or OpenAlex volume `scans` (`[{volume}]`, resolved each
 daily build via `works?filter=locations.source.issn,biblio.volume` so the DOI
 list self-heals); whatever the journal-route listing missed is batch-fetched
-from Crossref by DOI and APPENDED TO THE RAW ITEMS, so the type filter,
+from Crossref by DOI (each still-missing explicit DOI then retried on the
+singular `GET /works/<doi>` endpoint, which can serve registered-but-unindexed
+records the filter route misses) and APPENDED TO THE RAW ITEMS, so the type filter,
 mapWork sanitize (incl. `junkAbstract`), `collapseSameWork` and registry
 stamping treat rescued rows exactly like harvested ones (they join "recently
 added" dated by the build). Guards: a scan-found DOI is kept only when the
@@ -457,7 +467,9 @@ also how a suspected-missing DOI is safely probed: `10.1287/mnsc.2014.1882`
 serve it as an MS journal-article, so it was a bad reference in some paper's
 bibliography, and the probe was removed; an OpenAlex volume scan for OR 67
 likewise proved barren (69 works — OpenAlex mirrors Crossref's metadata hole)
-and was removed. The manifest now carries only `opre.2018.1783`. The rescue re-runs every daily build because the build REPLACES each
+and was removed; the three genuinely-absent OR papers were likewise probed to
+"Crossref lacks them entirely" and moved to the supplement (above), so the
+manifest is currently EMPTY (comment-only). The rescue re-runs every daily build because the build REPLACES each
 journal from the fresh harvest (a one-off data patch would be wiped next
 morning); rescued rows persist intra-day because the incremental pass upserts
 into the committed files. Wholly non-fatal — any failure just means no extra
