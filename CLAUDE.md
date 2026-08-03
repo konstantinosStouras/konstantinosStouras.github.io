@@ -429,16 +429,17 @@ THE TWO PROBES TOGETHER: probe B simultaneously showed **0 cited OR DOIs
 absent**, and the resolution (owner-supplied pubsonline TOCs, 2026-08-03) is
 that the papers were IN the catalog all along as **frozen no-volume/no-issue
 records** — Crossref never received their final issue assignment (the same
-freeze afflicts ~17 more rows belonging to **vol 68 (2020) issue 2**, whose
-pages 308–654 are likewise untiled, and 7 more 2019 rows most plausibly from
-iss 4's untiled tail — all still awaiting TOC evidence before repair). A
+freeze afflicted **vol 68 (2020) issue 2**; all repaired once the owner
+supplied the three pubsonline TOCs). A
 tiling hole with a CLEAN cited-DOI probe therefore means MISLABELED, not
-missing — repaired via `_aia-fixups.json` (24 vol-67 entries: volume/issue
-for every TOC-matched frozen row, pages where the TOC image was legible;
-fill-empty semantics in mapWork, so a later Crossref correction wins). Only
-ONE vol-67 paper was genuinely absent — `10.1287/opre.2018.1783`, "On the
-Minimum Chordal Completion Polytope", 67(2) 532–547 (RePEc-corroborated) —
-and THAT class of gap is repaired by the
+missing — repaired via `_aia-fixups.json` (51 OR entries from the TOCs:
+17 for 67(2), 16 for 67(4) with exact pages, 18 for 68(2) with exact pages +
+year; fill-empty semantics in mapWork for volume/issue/page, so a later
+Crossref correction wins). THREE papers were genuinely absent —
+`10.1287/opre.2018.1783` "On the Minimum Chordal Completion Polytope" 67(2)
+532–547, `10.1287/opre.2018.1827` "TN—Optimizing Foreclosed Housing
+Acquisitions" 67(4) 950–964, and `10.1287/opre.2019.1870` "Fast or Slow"
+68(2) 552–571 — and THAT class of gap is repaired by the
 **by-DOI rescue** (`rescueMissingWorks` in the native `build-data.mjs`): the
 committed manifest `lit/data/_rescue-dois.json` names, per journal key,
 explicit `dois` and/or OpenAlex volume `scans` (`[{volume}]`, resolved each
