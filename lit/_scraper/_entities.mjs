@@ -249,6 +249,35 @@ function foldPlain(s) {
     .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
+// ── SHOUTED author names are re-cased at ingest ─────────────────────────────
+// Some publishers deposit author names fully capitalized — Wiley's Journal of
+// Finance ("MICHAEL EWENS, NADYA MALENKO"), JAR/CAR, some POM/AMJ records —
+// which the page then renders verbatim (user report 2026-08; ~6,300 rows).
+// nameCase() title-cases a name ONLY when the WHOLE name is shouting (no
+// lowercase letter anywhere): a legitimately mixed-case "John MacDonald" or a
+// particled "Ludwig van der Berg" is never touched, because the trigger —
+// not the transform — is what makes this safe. Within a shouted name each
+// letter-run of ≥2 letters is title-cased per segment (hyphens/apostrophes
+// split segments: "JEAN-PIERRE" → "Jean-Pierre", "O'BRIEN" → "O'Brien");
+// single letters stay as-is (initials, "J. P."); diacritics are preserved
+// ("JOSÉ" → "José"); "MC<X>" keeps the Mc hump ("MCDONALD" → "McDonald" —
+// deliberately NOT done for "MAC", where MACHADO would become MacHado);
+// roman-numeral suffixes stay caps ("SMITH III" → "Smith III") and "JR"/"SR"
+// become "Jr"/"Sr". Pure + idempotent (the result contains lowercase, so a
+// second pass never fires).
+export function nameCase(raw) {
+  const name = String(raw == null ? '' : raw);
+  if (!name || /\p{Ll}/u.test(name)) return name;   // any lowercase → not shouting
+  if (!/\p{Lu}{2}/u.test(name)) return name;        // initials-only ("J. P. M.") → leave
+  return name.replace(/\p{L}+/gu, (w) => {
+    if (w.length < 2) return w;
+    if (/^(?:II|III|IV|VI|VII|VIII)$/.test(w)) return w;
+    if (/^(?:JR|SR)$/.test(w)) return w[0] + w.slice(1).toLowerCase();
+    if (/^MC\p{L}/u.test(w)) return 'Mc' + w[2] + w.slice(3).toLowerCase();
+    return w[0] + w.slice(1).toLowerCase();
+  });
+}
+
 // ── ScienceDirect "Highlights" are never served as the abstract ─────────────
 // Elsevier deposits many papers' author HIGHLIGHTS — the 3-5 short bullet
 // points ScienceDirect shows above the abstract — as (or fused into) the

@@ -1,5 +1,8 @@
 {
-  "_comment": "By-DOI rescue manifest, read by build-data.mjs (rescueMissingWorks) in every daily build. Papers listed or discovered here are fetched from Crossref BY DOI and folded into the harvest when the journal-route listing (/journals/<issn>/works) misses them — Crossref can serve a record by DOI that its journal index never returns. Per journal key: 'dois' = explicit bare DOIs to top up (a DOI Crossref cannot resolve is reported and skipped — that is how a suspected-missing DOI is safely probed; it may just be someone's bad reference); 'scans' = {volume} specs resolved against OpenAlex each build (works?filter=locations.source.issn,biblio.volume) so the DOI list self-heals — a scan-found DOI is only accepted when the fetched record's own volume matches. Found by lit/_scraper/coverage-audit.mjs: Operations Research vol 67 (2019) is missing issue 2 entirely plus most of issue 4 (~35 papers) from the journal-route harvest, and 10.1287/mnsc.2014.1882 is cited by a catalog paper but absent (unconfirmed — the probe decides).",
-  "opre": { "scans": [{ "volume": "67" }] },
-  "ms": { "dois": ["10.1287/mnsc.2014.1882"] }
+  "_comment": "By-DOI rescue manifest, read by build-data.mjs (rescueMissingWorks) in every daily build. Papers listed or discovered here are fetched from Crossref BY DOI and folded into the harvest when the journal-route listing misses them. Per journal key: 'dois' = explicit bare DOIs (a DOI Crossref cannot resolve is reported and skipped \u2014 safe probe semantics); 'scans' = {volume} specs resolved against OpenAlex each build. History: the vol-67 OpenAlex scan proved barren (OpenAlex mirrors Crossref's metadata hole \u2014 the 'missing' papers were in the catalog all along as frozen no-volume records, repaired via _aia-fixups.json), and the 10.1287/mnsc.2014.1882 probe resolved as a bad citation, NOT a missing paper; both removed. 10.1287/opre.2018.1783 (On the Minimum Chordal Completion Polytope, OR 67(2) pp. 532-547, confirmed via the publisher TOC + RePEc) is genuinely absent from the journal-route harvest and is fetched by DOI here; its volume/issue arrive via its _aia-fixups.json entry.",
+  "opre": {
+    "dois": [
+      "10.1287/opre.2018.1783"
+    ]
+  }
 }

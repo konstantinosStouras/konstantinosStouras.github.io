@@ -227,7 +227,8 @@ const SELECT = [
 // as literal markup and every other entity ("&apos;", "&nbsp;", "&EACUTE;")
 // rendered raw on the page.
 import { cleanText as stripJats, trimTrailingSeparators, titleText,
-  affilName, affilParts, affilList, stripPageFurniture, junkAbstract, stripHighlights } from './_entities.mjs';
+  affilName, affilParts, affilList, stripPageFurniture, junkAbstract, stripHighlights,
+  nameCase } from './_entities.mjs';
 export { stripJats, trimTrailingSeparators, titleText, affilName, affilParts, affilList, stripPageFurniture, junkAbstract };
 
 // PNAS deposits its one-paragraph "Significance" statement inside the Crossref
@@ -263,8 +264,10 @@ function authorName(a) {
   // Decode any deposited entities ("R&eacute;gis", "Bilge Y&inodot;lmaz") FIRST,
   // then strip commas — the page splits Authors on commas, so a decoded comma
   // must never survive into the name.
+  // nameCase (user report 2026-08): Wiley/JAR/CAR deposit some names fully
+  // capitalized ("MICHAEL EWENS") — re-cased only when the whole name shouts.
   const nm = stripJats([a.given, a.family].filter(Boolean).join(' ') || a.name || '');
-  return nm.replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
+  return nameCase(nm.replace(/,/g, ' ').replace(/\s+/g, ' ').trim());
 }
 
 // ── Management Science editor/area extraction ─────────
