@@ -46,7 +46,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { betterAbstract, ABS_MAX } from '../_scraper/informs-abstracts.mjs';
-import { cleanText, stripPageFurniture, junkAbstract } from '../_scraper/_entities.mjs';
+import { cleanText, stripPageFurniture, junkAbstract, stripHighlights } from '../_scraper/_entities.mjs';
 
 // junkAbstract (user report 2026-08): OpenAlex/S2 mirror the publisher's
 // Crossref deposit, so for a paper whose deposit is an editorial plain-language
@@ -126,7 +126,7 @@ export function elsevierAbstract(body) {
   };
   // stripPageFurniture (feedback LIT-260727-XRQ8): reject a scraped
   // article-page blob served in place of abstract prose.
-  return stripPageFurniture(cleanText(firstString(d)));
+  return stripHighlights(stripPageFurniture(cleanText(firstString(d))));
 }
 
 // The abstract out of a Springer Meta API v2 JSON response ({records:[{abstract}]}).
@@ -140,7 +140,7 @@ export function springerAbstract(body) {
     if (v && typeof v === 'object') { for (const x of Object.values(v)) { const s = firstString(x); if (s) return s; } }
     return '';
   };
-  return stripPageFurniture(cleanText(firstString(rec && rec.abstract)).replace(/^Abstract\s+/i, ''));
+  return stripHighlights(stripPageFurniture(cleanText(firstString(rec && rec.abstract)).replace(/^Abstract\s+/i, '')));
 }
 
 // Merge another cache in: an entry WITH an abstract beats a none-record, a
@@ -206,12 +206,12 @@ async function main() {
     let healed = 0;
     for (const [k, v] of Object.entries(cache)) {
       if (!v || !v.a) continue;
-      const t = stripPageFurniture(v.a);
+      const t = stripHighlights(stripPageFurniture(v.a));
       if (t === v.a) continue;
       if (t.length >= 60) cache[k] = { a: t }; else cache[k] = { none: 1, t: day() };
       healed++;
     }
-    if (healed) console.log(`  healed ${healed} furniture-contaminated cached abstracts`);
+    if (healed) console.log(`  healed ${healed} furniture/highlights-contaminated cached abstracts`);
   }
 
   async function saveCache() {
@@ -310,7 +310,7 @@ async function main() {
       if (r.ok) {
         for (const w of (await r.json()).results || []) {
           const doi = String(w.doi || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase();
-          const text = stripPageFurniture(cleanText(invertedToText(w.abstract_inverted_index)));
+          const text = stripHighlights(stripPageFurniture(cleanText(invertedToText(w.abstract_inverted_index))));
           if (doi && text.length >= 60 && !junkForDoi(doi, text)) { cache[doi] = { a: text.slice(0, ABS_MAX) }; unresolved.delete(doi); found++; }
         }
       }
@@ -328,7 +328,7 @@ async function main() {
           const ids = [...unresolved];
           const arr = await r.json();
           arr.forEach((rec, idx) => {
-            const a = rec && typeof rec.abstract === 'string' ? stripPageFurniture(cleanText(rec.abstract)) : '';
+            const a = rec && typeof rec.abstract === 'string' ? stripHighlights(stripPageFurniture(cleanText(rec.abstract))) : '';
             if (a.length >= 60 && !junkForDoi(ids[idx], a)) { cache[ids[idx]] = { a: a.slice(0, ABS_MAX) }; unresolved.delete(ids[idx]); found++; }
           });
         }

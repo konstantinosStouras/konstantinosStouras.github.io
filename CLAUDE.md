@@ -135,7 +135,12 @@ and eligible for `recent.json`). It **upserts** into the committed
 core bibliographic fields — the Articles-in-Advance→issue transition — while
 PRESERVING enrichment: `Preprint`/`PreprintSrc`, an OpenAlex/S2-boosted `CitedBy`
 + `CitedBySrc`, and cached SE/AE via the offline `applyInformsEditors` overlay;
-`CitedBy` only ever rises), then rewrites ONLY the small derived files
+`CitedBy` only ever rises, and the fresh record's Abstract is taken UPGRADE-only
+via `betterAbstract` — a publisher may deposit the abstract days after first
+registration, and this closes that gap within a poll instead of a day, while the
+pubsonline/API overlay caches can never be regressed to a Crossref teaser — the
+same rule in BOTH incrementals, unit-tested in both selftests), then rewrites
+ONLY the small derived files
 (`recent.json`/`meta.json`/`sources.json`/`_registry.json`) — `authors.json`/
 `affiliations.json` are left to the daily build, which alone has the ORCID data
 for faithful author merging. **New-paper enrichment on arrival:** the pass also
@@ -346,7 +351,11 @@ the records (re)indexed in the last few days (`filter=from-index-date`,
 `FT50_INCR_LOOKBACK_DAYS` default 4) for a **small configured subset**
 (`FT50_INCR_JOURNALS`, default **`ecta,ejor`** = Econometrica + EJOR). It upserts
 into those `papers-<key>.json` (appends new DOIs; for a known DOI refreshes only
-core bibliographic fields, PRESERVING enrichment — `Preprint`/`CitedBy`+`CitedBySrc`),
+core bibliographic fields, PRESERVING enrichment — `Preprint`/`CitedBy`+`CitedBySrc` —
+and takes a materially-fuller Abstract via `betterAbstract`, the EJOR case:
+Elsevier deposits many abstracts only days after registration, so an
+Articles-in-Press row added abstract-less gains its abstract within a poll
+instead of at the next daily rebuild),
 then rewrites only the small derived files, doing a **lean recent.json merge** —
 the polled journals' fresh rows unioned with the last build's recent rows for
 every OTHER journal (correct because it and the daily build are the only
@@ -413,16 +422,34 @@ Exit code 1 on a proven hole so it can gate CI; probe B under-samples the newest
 years by construction (an unpublished-last-month paper has no citers yet), which
 the output states. Current readings: **EJOR 2007–2026 is complete** — 160 volumes
 with no gap, every volume its 3 issues, tiling coverage 99.89% (~14 suspected,
-all pre-2016), and **0 of 2,446** cited EJOR DOIs missing. Two open leads
-elsewhere, unfixed here because this build env cannot reach Crossref:
-`papers-ms.json` lacks `10.1287/mnsc.2014.1882` (1 citer; our `mnsc.2014.*` run
-starts at `.1894`, so it needs a by-DOI check — it may equally be a bad
-reference), and **Operations Research vol 67 (2019) is genuinely missing issue 2
-entirely plus most of issue 4** — confirmed against the page tiling: iss 1 =
-1–294, iss 2 ABSENT (295–598), iss 3 = 599–904, iss 4 holds ONE row (1027–1034)
-of its true 905–1208 span, iss 5 = 1209–1502, iss 6 = 1503–1782, so ~35 papers.
-The daily build re-pulls OR's whole back-catalogue and still lacks them, so they
-are not reachable via `/journals/0030-364X/works` and need a by-DOI rescue. AIA fixups for the catalog come from
+all pre-2016), and **0 of 2,446** cited EJOR DOIs missing. It also proved
+**Operations Research vol 67 (2019) missing issue 2 entirely plus most of issue
+4** (~35 papers — page tiling: iss 1 = 1–294, iss 2 ABSENT (295–598), iss 3 =
+599–904, iss 4 held ONE row of its 905–1208 span, iss 5 = 1209–1502, iss 6 =
+1503–1782) even though the daily build re-pulls OR's whole back-catalogue —
+i.e. those papers are NOT reachable via `/journals/0030-364X/works` while
+Crossref still serves each BY DOI. That class of gap is repaired by the
+**by-DOI rescue** (`rescueMissingWorks` in the native `build-data.mjs`): the
+committed manifest `lit/data/_rescue-dois.json` names, per journal key,
+explicit `dois` and/or OpenAlex volume `scans` (`[{volume}]`, resolved each
+daily build via `works?filter=locations.source.issn,biblio.volume` so the DOI
+list self-heals); whatever the journal-route listing missed is batch-fetched
+from Crossref by DOI and APPENDED TO THE RAW ITEMS, so the type filter,
+mapWork sanitize (incl. `junkAbstract`), `collapseSameWork` and registry
+stamping treat rescued rows exactly like harvested ones (they join "recently
+added" dated by the build). Guards: a scan-found DOI is kept only when the
+FETCHED record's own volume matches the scan (an OpenAlex misattribution can
+never smuggle another journal's paper in), and an explicit DOI Crossref cannot
+resolve is REPORTED (`::notice::`) and skipped, never fabricated — which is
+also how a suspected-missing DOI is safely probed: the manifest carries
+`10.1287/mnsc.2014.1882` (1 citer, may be a bad reference) as exactly such a
+probe. The rescue re-runs every daily build because the build REPLACES each
+journal from the fresh harvest (a one-off data patch would be wiped next
+morning); rescued rows persist intra-day because the incremental pass upserts
+into the committed files. Wholly non-fatal — any failure just means no extra
+rows that build. Offline test: `node lit/_scraper/rescue-selftest.mjs` (mock,
+no network; covers the volume guard, the 404 probe, registry/recent stamping
+and rebuild stability). AIA fixups for the catalog come from
 `informs-aia-local.mjs --app lit-ft50`; **Econometrica FORTHCOMING papers**
 (accepted, not yet in an issue — Crossref never shows these) are scraped from the
 Econometric Society's own forthcoming-papers page by the LOCAL
@@ -677,6 +704,27 @@ shows no abstract, never a description of itself, until then. NOT yet
 vendored into the shard repos' `_entities.mjs` copies (keep-in-sync
 follow-up: the ABS shards carry INFORMS ABS-3 journals with the same
 summary deposits). Covered by `entities-selftest.mjs`.
+**ScienceDirect "Highlights" bullets are never served as the abstract** (user
+report 2026-08, the EJOR case). Elsevier deposits many papers' author
+HIGHLIGHTS — the 3-5 short ScienceDirect bullet points — as (or fused onto)
+the Crossref abstract, and OpenAlex/S2 mirror the same deposit into the API
+backfill's cache (~170 EJOR + ~120 Research Policy + ~10 OBHDP rows read
+"• A new measure… • We provide…" as their abstract; 334 poisoned
+`_api-abstracts` entries). `stripHighlights` in `_entities.mjs`: prose
+≥250 chars BEFORE the first bullet = the real abstract with highlights
+appended → KEEP the prose, cut the bullets (217 rows recover their abstract);
+text STARTING with the bullet block (bare, "Highlights"-labelled or led by
+the paper's own title) has no safe seam even when the abstract is fused into
+the last bullet → dropped, the row is needy again (~80 rows; no abstract
+beats a wrong one). Guards: <2 bullets never trips it (a lone mid-prose `•`
+survives); any long inner inter-bullet segment (>250) = prose legitimately
+using bullets, untouched. Applied at BOTH mapWorks (native + FT50), all
+`abstracts-ci.mjs` API legs (`elsevierAbstract`/`springerAbstract`/OpenAlex/
+S2), the cache heal-at-load, and `applyAbstractCaches` (guarding the window
+before the next heal). The ~300 committed rows heal automatically on the next
+FT50 daily build (the build re-maps every abstract from fresh Crossref
+through the strip — no manual sweep needed). Same shard-repo vendoring
+follow-up as `junkAbstract` above. Covered by `entities-selftest.mjs`.
 **Known pubsonline name typos are canonicalized at ingest** ("Olivier
 Tobuia"/"Olivier Touba" → Olivier Toubia, "K. Sudir" → K. Sudhir, the
 inverted "Manchanda Puneet" → Puneet Manchanda — the journal's own

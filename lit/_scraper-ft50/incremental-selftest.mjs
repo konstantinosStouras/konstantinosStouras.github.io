@@ -204,6 +204,27 @@ const t2 = rd('papers-ecta.json').find(p => p.DOI === target.DOI);
 ok(t2 && t2.Preprint === target.Preprint && t2.PreprintSrc === 'arxiv', 'Preprint link preserved across re-fetch');
 ok(t2 && t2.CitedBy === 9999 && t2.CitedBySrc === 'oa', 'boosted CitedBy + source preserved (Crossref floor is lower)');
 
+// 4b) Abstracts are refreshed UPGRADE-only on a known-DOI re-fetch — the EJOR
+// case: Elsevier deposits many abstracts only days after first registration,
+// so an Articles-in-Press row added abstract-less used to wait for the next
+// daily rebuild. An empty abstract takes the fresh Crossref text; text FULLER
+// than Crossref's is preserved (betterAbstract gate — the API-backfill overlay
+// must never regress to a stub).
+const ejorA = rd('papers-ejor.json');
+const upE = ejorA.find(p => p.DOI.toLowerCase().endsWith('10.1016/j.ejor.2026.05.012'));
+const keepE = ejorA.find(p => p.DOI.toLowerCase().endsWith(AIP_DOI));
+ok(!!upE && !!keepE, 'EJOR abstract-upgrade fixture rows present');
+const fullKeepE = 'F'.repeat(300);      // candidate (~110 chars) must lose
+upE.Abstract = '';
+keepE.Abstract = fullKeepE;
+writeFileSync(join(DATA, 'papers-ejor.json'), JSON.stringify(ejorA));
+run({ FT50_INCREMENTAL: '1' });
+const ejorA2 = rd('papers-ejor.json');
+ok(/reference point/.test(ejorA2.find(p => p.DOI === upE.DOI).Abstract || ''),
+  'an abstract-less EJOR row gains the freshly-deposited Crossref abstract within a poll');
+ok(ejorA2.find(p => p.DOI === keepE.DOI).Abstract === fullKeepE,
+  'a fuller backfilled abstract is never regressed to the Crossref text');
+
 rmSync(DATA, { recursive: true });
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
