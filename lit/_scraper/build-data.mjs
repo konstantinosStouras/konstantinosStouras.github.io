@@ -2691,6 +2691,60 @@ function mergeSupplement(bySource) {
   if (added) console.log(`  merged ${added} forthcoming papers from the INFORMS supplement`);
 }
 
+// A supplement paper Crossref lacks ENTIRELY (the three OR rows) has no
+// harvest-side abstract source, and pubsonline needs a local crawl — but
+// OpenAlex often carries the work anyway (it indexes beyond Crossref; those
+// rows' CitedBy counts already come from there). Fill EMPTY supplement-row
+// abstracts from OpenAlex's abstract_inverted_index, guarded like every other
+// abstract ingest, and WRITE THE TEXT BACK into _informs-aia.json so later
+// builds serve it without re-fetching. Wholly non-fatal; inert in mock runs.
+function oaInvertedAbstract(inv) {
+  if (!inv || typeof inv !== 'object') return '';
+  const words = [];
+  for (const [w, positions] of Object.entries(inv)) {
+    if (!Array.isArray(positions)) continue;
+    for (const pos of positions) if (Number.isInteger(pos) && pos >= 0) words[pos] = w;
+  }
+  return words.join(' ').replace(/\s+/g, ' ').trim();
+}
+
+async function backfillSupplementAbstracts(bySource) {
+  if (MOCK) return;
+  try {
+    const supDois = new Set(Object.keys(AIA_SUPPLEMENT)
+      .filter(k => k !== '_comment').map(k => k.toLowerCase()));
+    if (!supDois.size) return;
+    const byDoi = new Map();
+    for (const k of Object.keys(bySource)) for (const p of bySource[k])
+      if (p._doi && !p.Abstract && supDois.has(p._doi)) byDoi.set(p._doi, p);
+    if (!byDoi.size) return;
+    const url = 'https://api.openalex.org/works?filter=doi:' +
+      [...byDoi.keys()].slice(0, 50).join('|') +
+      '&per-page=50&select=doi,abstract_inverted_index' +
+      `&mailto=${encodeURIComponent(MAILTO)}`;
+    const r = await oaGet(url);
+    if (!r.ok) return;
+    let filled = 0;
+    for (const w of (r.json && r.json.results) || []) {
+      const doi = String(w.doi || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase();
+      const p = byDoi.get(doi);
+      if (!p) continue;
+      const text = stripHighlights(stripPageFurniture(stripJats(
+        oaInvertedAbstract(w.abstract_inverted_index)))).slice(0, MAX_ABSTRACT);
+      if (text.length < 60 ||
+        junkAbstract(text, { title: p.Title, authors: p.Authors, journal: p.Journal })) continue;
+      p.Abstract = text;
+      const key = Object.keys(AIA_SUPPLEMENT).find(k => k.toLowerCase() === doi);
+      if (key && AIA_SUPPLEMENT[key] && !AIA_SUPPLEMENT[key].Abstract) AIA_SUPPLEMENT[key].Abstract = text;
+      filled++;
+    }
+    if (filled) {
+      await writeJson('_informs-aia.json', AIA_SUPPLEMENT);
+      console.log(`  supplement: filled ${filled} abstract(s) from OpenAlex`);
+    }
+  } catch { /* non-fatal — the pubsonline needy harvest remains the fallback */ }
+}
+
 // ── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -2750,6 +2804,7 @@ async function main() {
   console.log(`  ec: ${ecRows.length} papers (${ecItems.length} from ACM DL via Crossref)`);
 
   mergeSupplement(bySource);
+  await backfillSupplementAbstracts(bySource);
 
   // Collapse duplicate registrations of the same work (second DOIs Crossref
   // still serves) so a paper is never listed twice — see collapseSameWork.
