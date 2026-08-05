@@ -47,7 +47,12 @@
  * appears). The citer crawl below then puts the same high-value papers FIRST
  * (orderCitedby's hot bump: papers with ≥ CB_HOT_MIN in-catalog citers jump the
  * tier queue, most-cited first), so a just-seeded canon paper gets its citer
- * list in the same run instead of behind the whole rolling refresh.
+ * list in the same run instead of behind the whole rolling refresh. Hot papers
+ * also crawl under a MUCH higher per-paper citer cap (CB_HOT_MAX_CITERS,
+ * default 50k, vs CB_MAX_CITERS 3k) — the papers that hit the base cap are
+ * precisely the canon classics, and a capped list feeds n_j/n_k truncated; a
+ * paper already stamped capped under a smaller cap than applies to it now is
+ * re-queued immediately (orderCitedby's recap rule), not after the TTL.
  *
  * FRESHNESS. Unlike a paper's own reference list (frozen once published), a
  * paper's forward citations GROW over time — new work keeps citing it. So an
@@ -121,6 +126,14 @@ const MAX_THROTTLE = 6;            // consecutive OpenAlex failures before givin
 // the default is ~30 cheap calls against OpenAlex's general 100k/day quota).
 const HOT_MIN = parseInt(process.env.CB_HOT_MIN || '5', 10);
 const SEED_MAX = parseInt(process.env.CB_SEED_MAX || '1500', 10);
+// Hot papers also get a MUCH higher per-paper citer cap: the papers that hit
+// MAX_CITERS are precisely the canon classics (Barney 1991, March 1991, …),
+// and a capped citer list feeds forwardDisruption's n_j/n_k pools truncated —
+// the same silent deflation the oaid seeding exists to fix. ~13 bytes/id, so
+// even a 50k-citer monster costs ~650 KB of unserved cache. Never below
+// MAX_CITERS (a lower value would re-truncate what the base cap already keeps).
+const HOT_MAX_CITERS = Math.max(MAX_CITERS,
+  parseInt(process.env.CB_HOT_MAX_CITERS || '50000', 10));
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -147,23 +160,32 @@ export function extractCiters(results) {
 // of every focal paper citing it, so it unlocks that many D computations at
 // once. Below the hot block the old order is untouched: within a tier,
 // never-fetched first, then stalest, then newest year, then DOI. A paper
-// fetched at the current version AND fresher than the TTL is skipped.
+// fetched at the current version AND fresher than the TTL is skipped — UNLESS
+// it was CAPPED under a smaller cap than applies to it now (opts.maxCiters /
+// opts.hotMaxCiters): a truncated list is not a fresh fetch, so raising the hot
+// cap re-crawls the capped classics promptly instead of after the TTL. Each
+// returned entry carries the per-paper `cap` for fetchCiters.
 export function orderCitedby(papers, cache, oaidMap, limit, nowTs, ttlDays = TTL_DAYS, ver = CB_VER, opts = {}) {
   const ttlMs = ttlDays * 86400000;
   const citedCounts = opts.citedCounts || {};
   const hotMin = opts.hotMin || Infinity;
+  const baseCap = opts.maxCiters || 0;         // 0 = caller default (recap logic off)
+  const hotCap = opts.hotMaxCiters || baseCap;
   const eligible = [];
   for (const p of papers) {
     const oaid = oaidMap[p.doi];
     if (!oaid) continue;                       // no OpenAlex id yet → can't query cites:
     const c = cache[p.doi];
+    const cited = citedCounts[p.doi] || 0;
+    const hot = cited >= hotMin ? cited : 0;
+    const cap = hot ? hotCap : baseCap;
     let last = 0;
     if (c && (c.v || 0) >= ver) {
       last = Date.parse((c.t || '') + 'T00:00:00Z') || 0;
-      if (last && (nowTs - last) <= ttlMs) continue; // fresh at the current version → skip
+      const recap = !!(c.cap && cap && (c.c ? c.c.length : 0) < cap);
+      if (!recap && last && (nowTs - last) <= ttlMs) continue; // fresh at the current version → skip
     }
-    const cited = citedCounts[p.doi] || 0;
-    eligible.push({ p, oaid, neverFetched: !c, last, hot: cited >= hotMin ? cited : 0 });
+    eligible.push({ p, oaid, neverFetched: !c, last, hot, cap });
   }
   eligible.sort((a, b) =>
     (b.hot - a.hot) ||                                     // hot papers first, most-cited first
@@ -172,7 +194,7 @@ export function orderCitedby(papers, cache, oaidMap, limit, nowTs, ttlDays = TTL
     (a.last - b.last) ||                                   // then stalest first
     (b.p.year - a.p.year) ||                               // then newest year first
     (a.p.doi < b.p.doi ? -1 : a.p.doi > b.p.doi ? 1 : 0));
-  return eligible.slice(0, limit).map(x => ({ doi: x.p.doi, oaid: x.oaid, jkey: x.p.jkey }));
+  return eligible.slice(0, limit).map(x => ({ doi: x.p.doi, oaid: x.oaid, jkey: x.p.jkey, hot: x.hot, cap: x.cap }));
 }
 
 // ── High-value oaid seeding (pure part, unit-tested) ─────────────────────────
@@ -246,10 +268,11 @@ async function cbGet(url) {
 
 // Enumerate every work that cites `oaid`, paginating with OpenAlex's cursor.
 // Returns { citers:[short ids], count, capped, complete:true } once the full
-// list (or the cap) is in hand, or null if OpenAlex stayed unavailable / the
-// deadline hit mid-pagination — in which case the paper is left unstamped so a
-// later run retries it cleanly (a partial page set is never committed).
-async function fetchCiters(oaid, deadline) {
+// list (or `cap` — per paper: HOT_MAX_CITERS for hot papers, MAX_CITERS else)
+// is in hand, or null if OpenAlex stayed unavailable / the deadline hit
+// mid-pagination — in which case the paper is left unstamped so a later run
+// retries it cleanly (a partial page set is never committed).
+async function fetchCiters(oaid, deadline, cap = MAX_CITERS) {
   const citers = [], seen = new Set();
   let cursor = '*', count = null, fails = 0;
   while (cursor) {
@@ -272,7 +295,7 @@ async function fetchCiters(oaid, deadline) {
     const j = r.json || {};
     if (count === null) count = (j.meta && typeof j.meta.count === 'number') ? j.meta.count : null;
     for (const id of extractCiters(j.results)) { if (!seen.has(id)) { seen.add(id); citers.push(id); } }
-    if (citers.length >= MAX_CITERS) return { citers: citers.slice(0, MAX_CITERS), count: count ?? citers.length, capped: true, complete: true };
+    if (citers.length >= cap) return { citers: citers.slice(0, cap), count: count ?? citers.length, capped: true, complete: true };
     cursor = (j.meta && j.meta.next_cursor) || null;
     if (cursor) await sleep(OA_PACE_MS);
   }
@@ -354,10 +377,12 @@ async function main() {
     console.log(`  oaid seeding: ${found} id(s) resolved, ${misses} not in OpenAlex (recorded).`);
   }
 
-  // 3. This run's slice (hot papers first, then the rolling refresh order).
+  // 3. This run's slice (hot papers first, then the rolling refresh order; the
+  //    maxCiters/hotMaxCiters pair also re-queues capped classics whose
+  //    applicable cap grew — see orderCitedby).
   const nowTs = Date.parse(PULL_DATE + 'T00:00:00Z') || Date.now();
   const slice = orderCitedby(papers, cache, oaidMap, MAX_PAPERS, nowTs, TTL_DAYS, CB_VER,
-    { citedCounts, hotMin: HOT_MIN });
+    { citedCounts, hotMin: HOT_MIN, maxCiters: MAX_CITERS, hotMaxCiters: HOT_MAX_CITERS });
   console.log(`processing up to ${slice.length} paper(s) this run`);
 
   const checkpoint = async () => {
@@ -368,7 +393,7 @@ async function main() {
   let done = 0, stopped = false;
   for (const p of slice) {
     if (Date.now() > deadline) { console.log('  time budget reached — stopping (resumes next run).'); stopped = true; break; }
-    const res = await fetchCiters(p.oaid, deadline);
+    const res = await fetchCiters(p.oaid, deadline, p.cap || MAX_CITERS);
     if (res === null) { console.log('  openalex unavailable — stopping (resumes next run).'); stopped = true; break; }
     const e = cache[p.doi] || {};
     e.c = res.citers;
@@ -406,7 +431,7 @@ async function main() {
   await writeFile(join(DATA_DIR, 'citedby-meta.json'), JSON.stringify(meta), 'utf8');
 
   console.log(`done: forward citations for ${fetched} paper(s); ${totalCiters} citer links ` +
-    `(${inCatCiters} in-catalog); ${capped} paper(s) capped at ${MAX_CITERS}` +
+    `(${inCatCiters} in-catalog); ${capped} paper(s) capped (${MAX_CITERS} base / ${HOT_MAX_CITERS} hot)` +
     `${stopped ? ' (run stopped early — resumes next schedule)' : ''}.`);
 }
 

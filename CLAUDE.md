@@ -1899,7 +1899,12 @@ truthy consumer treats it like absent and build-refs overwrites it if the work
 appears — and never re-queried), then the citer crawl puts those same
 high-value papers FIRST (`orderCitedby`'s hot bump, most-cited first, ahead of
 the tier queue), so a just-seeded canon paper gets its citer list in the same
-run. It writes an **unserved** crawl cache
+run. Hot papers also crawl under a MUCH higher per-paper citer cap
+(`CB_HOT_MAX_CITERS` 50k vs `CB_MAX_CITERS` 3k, never below the base cap) —
+the papers that hit the base cap ARE the canon classics, and a capped list
+feeds n_j/n_k truncated; a paper already stamped capped under a smaller cap
+than applies to it now is re-queued immediately (the recap rule — a truncated
+list is not a fresh fetch), not after the TTL. It writes an **unserved** crawl cache
 `data-refs/_citedby-cache.json` (per DOI `{c:[citer OpenAlex ids],n,t,v,cap?}`)
 plus a tiny served `citedby-meta.json`; the raw citer sets exist only to COMPUTE
 D and are never shipped to the page. Refreshed by

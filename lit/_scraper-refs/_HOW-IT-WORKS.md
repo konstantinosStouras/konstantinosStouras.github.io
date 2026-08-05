@@ -169,7 +169,16 @@ successful batch didn't return isn't in OpenAlex — recorded as an
 truthy consumer treats it like absent; `build-refs` overwrites it if the work
 ever appears). The citer crawl then puts the same high-value papers **first**
 (`orderCitedby`'s hot bump — most-cited first, ahead of the tier queue), so a
-just-seeded canon paper gets its citer list in the same run.
+just-seeded canon paper gets its citer list in the same run. Hot papers also
+crawl under a **much higher per-paper citer cap** — `CB_HOT_MAX_CITERS`
+(default 50k, never below the base cap) vs `CB_MAX_CITERS` (default 3k) —
+because the papers that hit the base cap are precisely the canon classics
+(Barney 1991, March 1991, …) and a capped list feeds n_j/n_k truncated, the
+same silent deflation the seeding fixes. A paper already stamped **capped**
+under a smaller cap than applies to it now is re-queued immediately
+(`orderCitedby`'s recap rule — a truncated list is not a fresh fetch), not
+after the TTL; ids are ~13 bytes each, so even a 50k-citer monster costs
+~650 KB of the unserved cache.
 
 **Freshness:** unlike a reference list (frozen once published), forward citations
 **grow**, so an entry is refreshed on a **rolling** cadence — never-fetched
@@ -207,7 +216,8 @@ CB_MAX_PAPERS=2500 CB_BUDGET_MS=2400000 node lit/_scraper-refs/build-citedby.mjs
 Online it runs from **`.github/workflows/lit-citedby-backfill.yml`** (every 6 h).
 Key env vars: `CB_MAILTO` (OpenAlex quota identity, `kstouras+litcitedby@gmail.com`),
 `CB_MAX_PAPERS`, `CB_BUDGET_MS`, `CB_OA_PACE_MS`, `CB_MAX_CITERS`, `CB_TTL_DAYS`,
-`CB_HOT_MIN`, `CB_SEED_MAX`, `CB_CATALOG_DIRS`, `CB_DATA_DIR`, `CB_MOCK`. **NOTE:** this build environment's
+`CB_HOT_MIN`, `CB_SEED_MAX`, `CB_HOT_MAX_CITERS`, `CB_CATALOG_DIRS`,
+`CB_DATA_DIR`, `CB_MOCK`. **NOTE:** this build environment's
 egress blocks OpenAlex (403 for cloud IPs), so real harvesting only happens on
 the GitHub Actions runners — the forward cache is EMPTY until the first workflow
 run on `master`.
