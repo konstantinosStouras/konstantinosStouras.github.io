@@ -332,7 +332,10 @@ function mapWork(item, src) {
   if (!title) return null;
   // POM tags its fast-track "Articles in Advance" titles with an "EXPRESS: "
   // editorial prefix; strip it so the catalog shows the real paper title.
-  if (src.key === 'pom') title = title.replace(/^EXPRESS:\s*/, '');
+  // Case-insensitive because titleText has already run: an all-capitals deposit
+  // ("EXPRESS: SOMETHING") comes back sentence-cased as "Express: Something",
+  // and a case-sensitive strip would silently start leaving the prefix in.
+  if (src.key === 'pom') title = title.replace(/^express:\s*/i, '');
 
   // Keep names and ORCIDs aligned: filter nameless author entries *before*
   // pairing, or one nameless entry shifts every later ORCID onto the wrong
@@ -1279,8 +1282,10 @@ async function fetchEcDblpHistory(years) {
         eeByTitle.set(normTitle(info.title), ee);
       }
       if (info.type && info.type !== 'Conference and Workshop Papers') continue;
-      const title = trimTrailingSeparators(
-        String(info.title || '').replace(/\.\s*$/, '').replace(/\s+/g, ' ').trim());
+      // titleText, not a bare trim: DBLP's own titles get the same entity/
+      // markup decoding and all-caps→sentence-case treatment as every other
+      // ingest, so an EC row can never be the one shouting on the page.
+      const title = titleText(String(info.title || '').replace(/\.\s*$/, ''));
       if (!title) continue;
       const authors = [].concat(info.authors?.author || [])
         .map(a => String(a && a.text !== undefined ? a.text : a).replace(/\s+\d{4}$/, '').replace(/,/g, ' ').replace(/\s+/g, ' ').trim())

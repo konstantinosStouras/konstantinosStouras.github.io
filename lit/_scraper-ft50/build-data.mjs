@@ -310,8 +310,11 @@ function mapWork(item, src) {
   // POM, Journal of Marketing and JMR tag their fast-track "Articles in
   // Advance" titles with an "EXPRESS: " editorial prefix; strip it so the
   // catalog shows the real paper title.
+  // Case-insensitive because titleText has already run: an all-capitals deposit
+  // ("EXPRESS: SOMETHING") comes back sentence-cased as "Express: Something",
+  // and a case-sensitive strip would silently start leaving the prefix in.
   if (src.key === 'pom' || src.key === 'jm' || src.key === 'jmr')
-    title = title.replace(/^EXPRESS:\s*/, '');
+    title = title.replace(/^express:\s*/i, '');
 
   // Keep names and ORCIDs aligned: filter nameless author entries *before*
   // pairing, or one nameless entry shifts every later ORCID onto the wrong

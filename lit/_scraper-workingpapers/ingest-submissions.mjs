@@ -69,7 +69,7 @@ import { resolve, join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { wpRecordFromWork, loadCatalog, WP_SOURCES, recKey, normName, nameParts, matchPublished,
-  wpSameWork, collapseWpDuplicates, buildWpRecentCounts } from './build-data.mjs';
+  wpSameWork, collapseWpDuplicates, buildWpRecentCounts, cleanTitle } from './build-data.mjs';
 import { pickPreprint, preprintFromDoi } from '../_scraper/build-data.mjs';
 import { normTitle } from '../_scraper/ec-pages.mjs';
 
@@ -229,12 +229,16 @@ export function matchBibItem(text, item) {
 
 // Crossref work item -> the light published-paper shape the published path
 // decides + reports on (never written into any dataset).
+// The title goes through cleanTitle (= the shared titleText), so what the
+// maintainer sees in the suggestions inbox and the submitter's outcome e-mail
+// reads like every other title: entities decoded, no dangling separator, and an
+// ALL-CAPS deposit brought back to sentence case.
 export function publishedFromCrossref(item, doi) {
   if (!item) return null;
   const pick = (d) => d && d['date-parts'] && d['date-parts'][0] && d['date-parts'][0][0];
   return {
     doi: cleanDoi(doi || item.DOI),
-    title: stripTags((item.title && item.title[0]) || ''),
+    title: cleanTitle(stripTags((item.title && item.title[0]) || '')),
     authors: (item.author || []).map(a => ([a.given, a.family].filter(Boolean).join(' ') || a.name || '')
       .replace(/,/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean),
     year: parseInt(pick(item.issued) || pick(item['published-print']) || pick(item['published-online']) || pick(item.created) || '', 10) || undefined,
@@ -249,7 +253,7 @@ export function publishedFromOpenAlex(w) {
   if (!w) return null;
   return {
     doi: cleanDoi(String(w.doi || '').replace(/^https?:\/\/doi\.org\//i, '')),
-    title: stripTags(w.title || ''),
+    title: cleanTitle(stripTags(w.title || '')),
     authors: (w.authorships || []).map(a => String((a.author && a.author.display_name) || '')
       .replace(/,/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean),
     year: w.publication_year || undefined,

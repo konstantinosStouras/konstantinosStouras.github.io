@@ -5,7 +5,9 @@
 import { cleanText, titleText, affilName, affilParts, affilList,
   trimTrailingSeparators, namedEntity, stripPageFurniture,
   isLaySummaryAbstract, isCitationStubAbstract, junkAbstract,
-  stripHighlights, nameCase } from './_entities.mjs';
+  stripHighlights, nameCase,
+  isAllCapsTitle, sentenceCaseTitle } from './_entities.mjs';
+import { TITLECASE_WORDS, TITLECASE_PHRASES } from './_titlecase-lexicon.mjs';
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { c ? pass++ : (fail++, console.log('  FAIL:', m)); };
@@ -253,6 +255,76 @@ ok(nameCase('Ludwig van der Berg') === 'Ludwig van der Berg', 'particled name un
 ok(nameCase('J. P. M.') === 'J. P. M.', 'initials-only name untouched');
 ok(nameCase(nameCase('MICHAEL EWENS')) === 'Michael Ewens', 'idempotent');
 ok(nameCase('') === '' && nameCase(null) === '', 'empty/null safe');
+
+// ── ALL-CAPS titles restored to sentence case (LIT-260728-TVQ5) ──────────────
+// SCOPE: only a title with NO lowercase letter at all is rewritten. Title Case
+// is how the paper was published and must survive untouched.
+for (const keep of [
+  'Modeling First: Rethinking Undergraduate Operations Management with AI',
+  'The Lock-In Effect and the Corporate Payout Puzzle',
+  'A Note on the Variation of Delta Scuti',
+  'On the Concept of Co-Sets in a Semi-Group',
+  'Search Duration',
+]) eq(sentenceCaseTitle(keep), keep, `Title Case is left alone: ${JSON.stringify(keep)}`);
+
+ok(!isAllCapsTitle('DNA'), 'a bare acronym is not an all-caps title');
+ok(!isAllCapsTitle('IEEE ACM'), 'a title of nothing but known acronyms is left alone');
+ok(!isAllCapsTitle('Modeling First: Rethinking Undergraduate Operations Management'), 'Title Case is not all-caps');
+ok(isAllCapsTitle('MINIMIZATION OF SYSTEM COSTS IN TERMS OF SUBSYSTEM COSTS'), 'a shouted title is detected');
+ok(isAllCapsTitle('DNA AND RNA'), '"and" makes an otherwise-acronym title convertible');
+
+eq(sentenceCaseTitle('MARKET EQUILIBRIUM'), 'Market equilibrium', 'plain all-caps title');
+eq(sentenceCaseTitle('DNA AND RNA'), 'DNA and RNA', 'acronyms keep their capitals');
+eq(sentenceCaseTitle('THE STRUCTURAL UNITY OF THE DNA OF T2 BACTERIOPHAGE'),
+  'The structural unity of the DNA of T2 bacteriophage', 'acronym + short alphanumeric code survive');
+eq(sentenceCaseTitle('BIOLOGICAL CLOCKS IN MEDICINE AND PSYCHIATRY: SHOCK-PHASE HYPOTHESIS'),
+  'Biological clocks in medicine and psychiatry: Shock-phase hypothesis',
+  "the first word after ':' is capitalised (the owner's rule)");
+eq(sentenceCaseTitle('‘WHITHER HIGHER EDUCATION?’ AN ECONOMIC PERSPECTIVE'),
+  '‘Whither higher education?’ An economic perspective',
+  'a closing quote between the punctuation and the next word still starts a sentence');
+eq(sentenceCaseTitle('INFECTIOUS NUCLEIC ACIDS OF E. COLI BACTERIOPHAGES, IX. SEDIMENTATION CONSTANTS'),
+  'Infectious nucleic acids of E. coli bacteriophages, IX. Sedimentation constants',
+  "an initial's '.' is not a sentence end (E. coli), a real word's is");
+eq(sentenceCaseTitle("A SIMPLIFIED PROOF OF VON NEUMANN'S COORDINATIZATION THEOREM"),
+  "A simplified proof of von Neumann's coordinatization theorem",
+  'a possessive proper noun resolves through its base word');
+eq(sentenceCaseTitle('THE INTERNAL FINANCING OF CORPORATIONS IN THE UNITED STATES, 1946-54'),
+  'The internal financing of corporations in the United States, 1946-54',
+  'a multi-word name comes from the phrase lexicon ("United states" would be wrong)');
+eq(sentenceCaseTitle('INDEX TO VOLUME XXXVI'), 'Index to volume XXXVI',
+  'a Roman numeral after a numbering word keeps its capitals');
+eq(sentenceCaseTitle('AN ALTERNATIVE TO THE YIELD SPREAD AS A MEASURE OF RISK'),
+  'An alternative to the yield spread as a measure of risk',
+  'the article "A" is lowercased (it is not an initial)');
+eq(sentenceCaseTitle('CONTROL SYSTEMS WITH SEVERAL CONTROLLERS1'),
+  'Control systems with several controllers1',
+  'a trailing footnote digit does not make the word a code');
+eq(sentenceCaseTitle('DEVELOPING POM FACULTIES FOR THE 21ST CENTURY'),
+  'Developing POM faculties for the 21st century', 'an ordinal lowercases');
+eq(sentenceCaseTitle('A STUDY OF THE UTILIZATION OF CAPACITY IN DRUM-BUFFER-ROPE SYSTEMS'),
+  'A study of the utilization of capacity in drum-buffer-rope systems',
+  'hyphenated compounds lowercase throughout');
+
+// pure + idempotent: every build re-applies titleText over the served data
+for (const t of ['MARKET EQUILIBRIUM', 'DNA AND RNA', 'INDEX TO VOLUME XXXVI',
+  'BIOLOGICAL CLOCKS IN MEDICINE AND PSYCHIATRY: SHOCK-PHASE HYPOTHESIS',
+  'THE INTERNAL FINANCING OF CORPORATIONS IN THE UNITED STATES, 1946-54']) {
+  const once = sentenceCaseTitle(t);
+  eq(sentenceCaseTitle(once), once, `idempotent: ${JSON.stringify(t)}`);
+}
+
+// titleText composes the three guards: entities, then the trailing separator, then case
+eq(titleText('MERGERS &amp; ACQUISITIONS IN THE UNITED STATES,'),
+  'Mergers & acquisitions in the United States',
+  'titleText = decode + trim trailing separator + sentence case');
+
+// the lexicon must actually be present — a shard that vendored _entities.mjs
+// without _titlecase-lexicon.mjs would silently lowercase every acronym
+ok(Object.keys(TITLECASE_WORDS).length > 500, 'the title-case word lexicon is loaded');
+ok(Object.keys(TITLECASE_PHRASES).length > 100, 'the title-case phrase lexicon is loaded');
+ok(TITLECASE_WORDS.dna === 'DNA' && TITLECASE_WORDS.ceo === 'CEO',
+  'known acronyms are in the lexicon');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
