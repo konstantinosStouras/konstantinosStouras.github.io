@@ -17,7 +17,7 @@ built. It explains the *philosophy* and the *structure*, not just the code.
 > this lab copy is now a **session-gated research build** — there is **NO anonymous
 > play**. To take part a visitor MUST enter a session code matching an **active
 > (open)** admin-created session, and after the training phase they complete a
-> **Registration** form (compulsory **UCD Student ID** + demographics) before the
+> **Registration** form (compulsory **University Student ID** + demographics) before the
 > main game. The production copy at `fun/portfoliofitgame/` keeps the original
 > **fully anonymous** flow (optional session code) and **must not be repointed** —
 > it talks to `stouras-portfoliofit` (see
@@ -42,7 +42,7 @@ Play is **session-gated**: there is **no anonymous play** — a visitor must ent
 **session code** matching an **active (open)** admin-created session to take part.
 Firebase Anonymous Auth is still used as the technical identity (so Firestore
 reads/writes work), but the participant is identified for research by the
-**Registration** form shown after training (compulsory **UCD Student ID** +
+**Registration** form shown after training (compulsory **University Student ID** +
 demographics; written to the participant doc as `registration`/`studentId`).
 
 ## 2. Design philosophy (the important part)
@@ -177,7 +177,7 @@ publish it; versioned in the repo, deployed manually to the lab project):
 - **Phase machine:** `welcome → training → registration → main → stats → survey →
   thankyou`. Each screen is an overlay card; `S` holds the live state (including
   `S.sessionId` and `S.offline`). The **registration** phase (after training,
-  before the main game) renders `cfg.registrationQuestions` — UCD Student ID
+  before the main game) renders `cfg.registrationQuestions` — University Student ID
   (compulsory, first) + demographics (Age, Gender, Nationality, Country of
   residence, Level of Study, Work Experience, Occupation, English Fluency) — via
   `buildField` (now also handling `country` dropdowns and `min`/`max` `number`
@@ -289,7 +289,7 @@ publish it; versioned in the repo, deployed manually to the lab project):
     game/stats/survey/thank-you), each pre-filled with the current effective text.
   - **Registration** / **Survey** — add/edit/reorder/delete questions. The
     Registration form is the post-training demographics form (default first field
-    is the compulsory **UCD Student ID**); field types include `country` (full
+    is the compulsory **University Student ID**); field types include `country` (full
     country dropdown) and `number` (with `min`/`max`).
   - **Puzzles** — build the exact set every participant plays: **Generate set to
     match Settings** creates puzzles sized to the easy/hard counts (reusing vetted
@@ -312,7 +312,7 @@ publish it; versioned in the repo, deployed manually to the lab project):
     below), **close**/**reopen** (`status` toggles; closing blocks *new* joins —
     enforced in `experiment.js` `beginSession`), and **delete**. Players join by
     code; data is tagged with `sessionId`.
-  - **Participants** — table of all players (Player / **UCD Student ID** / Session
+  - **Participants** — table of all players (Player / **University Student ID** / Session
     / Status / Started). The **Started** header is clickable to sort by start date
     ascending/descending (▲/▼, in place — no re-fetch). Header: **Export all to
     Excel** and **Delete all participants** (deep delete via
@@ -327,7 +327,7 @@ publish it; versioned in the repo, deployed manually to the lab project):
   `sessionId` into a single file, using that session's own question order).
   Sheets, each with intuitive headings and ordered to follow the simulation:
   - **Play log** — the google-sheet-style single tab collecting *every brick
-    move* across all included players: Player, UCD Student ID, Session, Puzzle,
+    move* across all included players: Player, University Student ID, Session, Puzzle,
     Difficulty, Move # (counts 1,2,3… **within each puzzle**; the start row is
     blank — the true global event sequence lives in the Events (raw) sheet's seq),
     Action (start/add/remove), Brick (Id), Anchor, Cells,

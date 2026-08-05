@@ -207,6 +207,186 @@ export function stripPageFurniture(raw) {
   return s;
 }
 
+// A publisher-deposited "abstract" that is NOT the paper's abstract must never
+// be served as one (user report 2026-08: every recent Operations Research card
+// showed an editorial plain-language summary — a headline plus "In '<Title>',
+// <the authors> develop…" — instead of the real abstract; INFORMS deposits
+// these blurbs to Crossref for many OR / IJOC / ISR / MS papers, and OpenAlex/
+// Semantic Scholar mirror the same text, so no API leg can "fix" it). A second
+// junk shape is the CITATION-LINE stub: AEA deposits "<Title> by <Authors>.
+// Published in volume 95, issue 4, pages 1300-1309 of American Economic
+// Review…" and many JSTOR/OUP-era records carry "<Authors>, <Title>,
+// <Journal>, Vol. 14, No. 4 (Dec., 1969), pp. 595-606" as the abstract.
+//
+// Both detectors are HIGH-PRECISION and context-aware: they see the row's own
+// title/authors/journal, which is what separates a summary (names its OWN
+// authors in the third person, quotes its OWN title) from a real abstract
+// (first-person prose that never does either — except inside the Funding /
+// Conflict-of-Interest / "This paper was accepted by" tail INFORMS appends,
+// which is cut before author names are counted). Deliberate non-matches:
+//   • errata / replies / comments / reviews-of-a-book — their notice text
+//     legitimately cites the discussed work (SELF_REF/META_NOTICE guards);
+//   • IJOC "Code and Data Repository for …" companion items, whose deposited
+//     description really is "…used in the research reported in <paper> by
+//     <authors>" (REPO guard);
+//   • real abstracts that merely say "the authors" without naming them
+//     (Journal of Marketing style) — an author NAME in the body is required.
+// Callers additionally exempt HBR / MIT Sloan Management Review: practitioner
+// pieces have no author abstract, so the third-person deck IS the journal's
+// own summary text and stays.
+const SUMMARY_TAIL_RE =
+  /(?:This paper was accepted by|Funding:|Supplemental Material:|Disclaimer:|History:|Conflict of Interest|Data Ethics|Author Contributions?:|Acknowledgm)/;
+const SELF_REF_TITLE_RE =
+  /^\s*(?:errat|corrigend|correction|response to|reply to|comment on|rejoinder|in memoriam|obituary|two contributions)/i;
+const REPO_TITLE_RE = /^\s*(?:code|data|software)\b.*\brepositor/i;
+const META_NOTICE_RE =
+  /^\s*(?:abstract[\s:.–—-]*)?(?:a review is presented|a letter is presented|the article presents|this article presents|a correction (?:is|to)|comments? on)/i;
+
+// Diacritic-folded, lowercased, punctuation collapsed to single spaces — so
+// "Zuo-Jun (Max) Shen" matches "Zuo‐Jun (Max) Shen" and a curly-quoted title
+// matches its plain-quoted copy.
+function foldPlain(s) {
+  return String(s == null ? '' : s).normalize('NFKD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+// ── SHOUTED author names are re-cased at ingest ─────────────────────────────
+// Some publishers deposit author names fully capitalized — Wiley's Journal of
+// Finance ("MICHAEL EWENS, NADYA MALENKO"), JAR/CAR, some POM/AMJ records —
+// which the page then renders verbatim (user report 2026-08; ~6,300 rows).
+// nameCase() title-cases a name ONLY when the WHOLE name is shouting (no
+// lowercase letter anywhere): a legitimately mixed-case "John MacDonald" or a
+// particled "Ludwig van der Berg" is never touched, because the trigger —
+// not the transform — is what makes this safe. Within a shouted name each
+// letter-run of ≥2 letters is title-cased per segment (hyphens/apostrophes
+// split segments: "JEAN-PIERRE" → "Jean-Pierre", "O'BRIEN" → "O'Brien");
+// single letters stay as-is (initials, "J. P."); diacritics are preserved
+// ("JOSÉ" → "José"); "MC<X>" keeps the Mc hump ("MCDONALD" → "McDonald" —
+// deliberately NOT done for "MAC", where MACHADO would become MacHado);
+// roman-numeral suffixes stay caps ("SMITH III" → "Smith III") and "JR"/"SR"
+// become "Jr"/"Sr". Pure + idempotent (the result contains lowercase, so a
+// second pass never fires).
+export function nameCase(raw) {
+  const name = String(raw == null ? '' : raw);
+  if (!name || /\p{Ll}/u.test(name)) return name;   // any lowercase → not shouting
+  if (!/\p{Lu}{2}/u.test(name)) return name;        // initials-only ("J. P. M.") → leave
+  return name.replace(/\p{L}+/gu, (w) => {
+    if (w.length < 2) return w;
+    if (/^(?:II|III|IV|VI|VII|VIII)$/.test(w)) return w;
+    if (/^(?:JR|SR)$/.test(w)) return w[0] + w.slice(1).toLowerCase();
+    if (/^MC\p{L}/u.test(w)) return 'Mc' + w[2] + w.slice(3).toLowerCase();
+    return w[0] + w.slice(1).toLowerCase();
+  });
+}
+
+// ── ScienceDirect "Highlights" are never served as the abstract ─────────────
+// Elsevier deposits many papers' author HIGHLIGHTS — the 3-5 short bullet
+// points ScienceDirect shows above the abstract — as (or fused into) the
+// Crossref abstract field (user report 2026-08: ~170 EJOR + ~120 Research
+// Policy rows read "• A new measure capturing fairness… • We provide…" in
+// place of the abstract; OpenAlex/S2 mirror the same deposit into the API
+// backfill's cache). Once JATS is flattened the section labels are mostly
+// gone, so the shape itself is the signal:
+//   • prose (≥250 chars) BEFORE the first bullet = the real abstract with the
+//     highlights appended — KEEP the prose, cut the bullets (the common EJOR
+//     deposit, ~60% of affected rows);
+//   • text STARTING with the bullet block (bare, "Highlights"-labelled, or
+//     led by the paper's own title) — the real abstract may be fused into the
+//     last bullet with NO separator, and there is no safe seam to cut at, so
+//     the whole text is dropped ('' → the row is "needy" again and the
+//     rolling backfills re-resolve the true abstract; same discipline as
+//     stripPageFurniture/junkAbstract: no abstract beats a wrong one).
+// High-precision guards: fewer than 2 bullets is never a highlights block (a
+// lone mid-prose '•' survives), and if any INNER inter-bullet segment runs
+// long (>250 chars) the text is prose that legitimately uses bullets and is
+// left untouched. Pure + idempotent, so every ingest re-applies safely.
+export function stripHighlights(raw) {
+  const text = String(raw == null ? '' : raw).trim();
+  if (!text) return '';
+  const parts = text.split('•');
+  if (parts.length < 3) return text;             // fewer than 2 bullets
+  const inner = parts.slice(1, -1).map(s => s.trim());
+  if (inner.some(s => s.length > 250)) return text;
+  const lead = parts[0].trim().replace(/\s*Highlights?\s*[:.]?\s*$/i, '').trim();
+  if (lead.length >= 250) return lead;           // abstract-then-highlights
+  return '';                                     // bullets-first: no safe seam
+}
+
+export function isLaySummaryAbstract(abstract, title, authors) {
+  const a = String(abstract == null ? '' : abstract);
+  if (a.length < 100) return false;
+  const ti = String(title == null ? '' : title);
+  if (SELF_REF_TITLE_RE.test(ti) || REPO_TITLE_RE.test(ti)) return false;
+  if (META_NOTICE_RE.test(a)) return false;
+  const cut = a.search(SUMMARY_TAIL_RE);
+  const body = cut >= 0 ? a.slice(0, cut) : a;
+  const fb = ' ' + foldPlain(body) + ' ';
+  const ft = foldPlain(ti);
+  // Own-author full names appearing in the body OUTSIDE the title text itself
+  // (a title like "Response to Commentary by John C. Pollard" must not count
+  // its own repetition as a third-person author mention).
+  const fbNoTitle = ft.length >= 15 ? fb.split(' ' + ft + ' ').join('  ') : fb;
+  let au = 0;
+  for (const nm of String(authors == null ? '' : authors).split(',')) {
+    const fn = foldPlain(nm);
+    if (fn.length >= 8 && /\s/.test(fn) && fbNoTitle.includes(' ' + fn + ' ')) au++;
+  }
+  if (!au) return false;
+  const strong =
+    /\bIn their (?:new |recent )?(?:paper|study|article|research|work)\b/i.test(body) ||
+    /\bThe (?:authors|researchers)\b/i.test(body) ||
+    /\b(?:a|this) (?:new|recent) (?:study|research|paper) (?:by|shows|suggests|finds|reveals|demonstrates|examines|explores)\b/i.test(body) ||
+    /\b(?:study|paper|article|research) (?:by|titled|entitled)\b/i.test(body) ||
+    /\bnew research (?:shows|suggests|finds|reveals|demonstrates|examines)\b/i.test(body);
+  // The classic OR-blurb construction: the own title cited mid-prose right
+  // after "In …" / "the paper …" ("In 'Post Reinforcement Learning
+  // Inference,' Vasilis Syrgkanis and Ruohan Zhan develop …").
+  let titleHit = false, titleNear = false;
+  if (ft.length >= 20) {
+    let idx = fb.indexOf(' ' + ft + ' ');
+    titleHit = idx >= 0;
+    while (idx >= 0 && !titleNear) {
+      const before = fb.slice(Math.max(0, idx - 30), idx + 1);
+      if (/\b(?:paper|study|article|research|titled|entitled|in)\s$/.test(before)) titleNear = true;
+      idx = fb.indexOf(' ' + ft + ' ', idx + 1);
+    }
+  }
+  if (au >= 2 && (strong || titleHit)) return true;
+  if (au >= 1 && titleNear) return true;
+  return false;
+}
+
+export function isCitationStubAbstract(abstract, title, journal) {
+  const a = String(abstract == null ? '' : abstract).trim();
+  if (a.length < 40 || a.length > 700) return false;
+  const fa = ' ' + foldPlain(a) + ' ';
+  const ft = foldPlain(title);
+  const titleHit = ft.length >= 15 && fa.includes(' ' + ft + ' ');
+  // AEA shape: "<Title> by <Authors>. Published in volume 95, issue 4, pages
+  // 1300-1309 of American Economic Review, September 2005".
+  if (/\bby .{2,300}?Published in volume \d+, issue [\dA-Za-z]+, pages \d+/s.test(a)) {
+    return titleHit || ft.length < 15;
+  }
+  // JSTOR shape: "<Authors>, <Title>, <Journal>, Vol. 14, No. 4 (Dec., 1969),
+  // pp. 595-606" — needs the own title AND journal name AND the page range
+  // anchored at the very end, so a real abstract that merely cites something
+  // can never match.
+  const fj = foldPlain(journal);
+  if (titleHit && fj && fj.length >= 8 && fa.includes(' ' + fj + ' ') &&
+      /\bVol\.?\s*\d+/i.test(a) && /\bpp?\.\s*[\divxlc]+\s*[-–—]\s*\d+\.?\s*$/i.test(a)) {
+    return true;
+  }
+  return false;
+}
+
+// Convenience wrapper for the ingest guards: '' (serve it) or the junk kind.
+export function junkAbstract(abstract, ctx) {
+  const { title, authors, journal } = ctx || {};
+  if (isLaySummaryAbstract(abstract, title, authors)) return 'summary';
+  if (isCitationStubAbstract(abstract, title, journal)) return 'stub';
+  return '';
+}
+
 // An ALL-CAPITALS title is a deposit artifact, not how the paper reads
 // (feedback ticket LIT-260728-TVQ5). Older registrations shout — PNAS's
 // pre-1970s back-catalogue, POM's Wiley years, JoF, TAR, AMJ, IER, Economic

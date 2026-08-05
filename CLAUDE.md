@@ -135,7 +135,12 @@ and eligible for `recent.json`). It **upserts** into the committed
 core bibliographic fields — the Articles-in-Advance→issue transition — while
 PRESERVING enrichment: `Preprint`/`PreprintSrc`, an OpenAlex/S2-boosted `CitedBy`
 + `CitedBySrc`, and cached SE/AE via the offline `applyInformsEditors` overlay;
-`CitedBy` only ever rises), then rewrites ONLY the small derived files
+`CitedBy` only ever rises, and the fresh record's Abstract is taken UPGRADE-only
+via `betterAbstract` — a publisher may deposit the abstract days after first
+registration, and this closes that gap within a poll instead of a day, while the
+pubsonline/API overlay caches can never be regressed to a Crossref teaser — the
+same rule in BOTH incrementals, unit-tested in both selftests), then rewrites
+ONLY the small derived files
 (`recent.json`/`meta.json`/`sources.json`/`_registry.json`) — `authors.json`/
 `affiliations.json` are left to the daily build, which alone has the ORCID data
 for faithful author merging. **New-paper enrichment on arrival:** the pass also
@@ -224,7 +229,54 @@ section whose count folds into the parent) supply it. The narrowing is
 LOSSLESS — verified over all 1,166,176 edges: every citer resolves to a journal
 in `refs-index.json` — and a citer that ever lacks one flips the filter's
 `wide` flag, which drops the narrowing so every file loads and no row can be
-silently missed. The
+silently missed.
+**"N papers added in the last 4 weeks" comes from a TALLY, never from the rows
+(`recent-counts.json`).** `recent.json` is fetched with the page, so every
+pipeline caps it (`RECENT_CAP`, 1000–1500 rows of a 90-day window). Counting
+those rows — what the view used to do — silently under-reports whenever more
+than the cap lands inside the displayed 4 weeks, which is not an edge case: a
+journal's back-catalogue arriving, a re-registration sweep, or the
+working-papers backfill do it routinely (measured 2026-07: 1,000 native rows
+carried where 2,833 papers had really been added; the WP archive stamps
+~12–16k/day). So every dataset now also publishes **`recent-counts.json`** —
+`{generated, windowDays, total, days:{"<jkey>":{"YYYY-MM-DD":n}}}`, ~1 KB,
+UNCAPPED — beside its `recent.json`, and `renderRecent()` prints that number.
+Keys are the row's WHOLE scope-key set `'|'`-joined (`recentScopeKey`:
+journal key first, then its PNAS section keys — `"pnas|pnas-econ|pnas-soc"`),
+because that is what `matchesJournal` tests a row against; emitting one entry
+per section instead would double-count a paper filed under several. The page
+sums the days ≥ cutoff for the keys in scope, per dataset
+(`recentExactCount`/`recentCountsKeyVisible` — which also mirrors
+`loadDatasetRecent`'s "is this journal registered from THIS dataset" drop, so
+the six INFORMS journals the FT50 catalog shares with the native data are not
+counted twice), and uses it only when it is **≥ what the rows show**; anything
+else falls back to counting rows, i.e. the pre-existing behaviour, so a
+missing or stale file (the Nature/Science shards until their vendored
+pipelines ship one) can never make the number smaller than what is on screen.
+Published and working papers are counted SEPARATELY in the label ("3,914
+papers and 85,510 working papers added in the last 4 weeks"), since the WP
+backfill would otherwise swamp the figure that matches the header's published
+catalog; when the capped list can't show them all it says "· showing the
+newest N", and the empty state explains a scope whose additions all fell
+outside the slice. **Every writer of a dataset must rewrite this file with
+`recent.json`** — the daily builds and both incremental passes (the FT50 one
+via `mergeRecentCounts`: polled journals recomputed, the rest carried over and
+pruned to the slid window, the same reasoning as its lean `recent.json`
+merge), the WP crawler AND `ingest-submissions.mjs`, and `dedupe-data.mjs`
+(which re-tallies from the SURVIVING rows, so a removal lowers it too). Tests:
+unit + integration checks in `incremental-selftest.mjs` (native + FT50), the WP
+`selftest.mjs` and `ingest-selftest.mjs`.
+**All four published counters are audited offline by
+`node lit/_scraper/counters-selftest.mjs`** — the header's "N papers from M
+authors", the recently-added tally, and the analytics scope line + tiles — each
+recomputed from the papers files themselves (manifest counts vs rows,
+`meta.paperCount`/`perSource`, every tally day against the registry/`Date
+Added`, `analytics/data.json` totals vs its own per-journal rows and the
+non-research `x` delta). It reads shards exactly as `build-analytics.mjs` finds
+them and runs as a report-only (`continue-on-error`) step in
+`lit-analytics.yml`, the one job that checks out all five shards. The
+dashboard trailing the header by a day of harvests is expected and reported as
+a note, not a failure. The
 catalog also carries **notFT extras** — journals on another list but not the
 FT50: UTD24's INFORMS Journal on Computing (`ijoc`) and ABS 4's European
 Journal of Operational Research (`ejor`) — flagged `"notFT": true` in
@@ -297,24 +349,133 @@ pickup for the FT50 catalog** works like the native `lit-check-new` pass:
 minutes** via `.github/workflows/lit-ft50-check-new.yml`, asking Crossref for only
 the records (re)indexed in the last few days (`filter=from-index-date`,
 `FT50_INCR_LOOKBACK_DAYS` default 4) for a **small configured subset**
-(`FT50_INCR_JOURNALS`, default **`ecta`** = Econometrica only). It upserts into
-`papers-ecta.json` (appends new DOIs; for a known DOI refreshes only core
-bibliographic fields, PRESERVING enrichment — `Preprint`/`CitedBy`+`CitedBySrc`),
+(`FT50_INCR_JOURNALS`, default **`ecta,ejor`** = Econometrica + EJOR). It upserts
+into those `papers-<key>.json` (appends new DOIs; for a known DOI refreshes only
+core bibliographic fields, PRESERVING enrichment — `Preprint`/`CitedBy`+`CitedBySrc` —
+and takes a materially-fuller Abstract via `betterAbstract`, the EJOR case:
+Elsevier deposits many abstracts only days after registration, so an
+Articles-in-Press row added abstract-less gains its abstract within a poll
+instead of at the next daily rebuild),
 then rewrites only the small derived files, doing a **lean recent.json merge** —
 the polled journals' fresh rows unioned with the last build's recent rows for
 every OTHER journal (correct because it and the daily build are the only
 data-ft50 writers and share the `lit-ft50-update-data-${{ github.ref }}`
 concurrency group, so nothing else changed) — instead of reloading all ~50 papers
-files. It **writes nothing when nothing new arrived**. Why only Econometrica:
-lit's own `lit-check-new` already fast-tracks the eight native INFORMS/SAGE AIA
-journals, and Econometrica is the one requested journal that lives ONLY in the
-FT50 catalog AND whose publisher assigns an accepted paper straight to a future
-issue — so Crossref never lists it as a no-volume advance article and the daily
-build was otherwise the only thing that ever picked it up (up to a day late).
+files. It **writes nothing when nothing new arrived**. Why THESE journals: lit's
+own `lit-check-new` already fast-tracks the eight native INFORMS/SAGE AIA
+journals, so this pass exists for the ones that live ONLY in the FT50 catalog.
+**Econometrica** because its publisher assigns an accepted paper straight to a
+future issue — so Crossref never lists it as a no-volume advance article and the
+daily build was otherwise the only thing that ever picked it up (up to a day
+late). **EJOR** because it is the catalog's highest-volume journal (~700
+papers/year across 24 issues + a ~40/month Articles-in-Press stream, so 1–2
+genuinely-new records most days), which the once-a-day build delivered in one
+nightly batch; its back-catalogue was audited complete at the same time (see
+`coverage-audit.mjs` below), so freshness was the only thing lacking. Adding a
+key costs one Crossref call per ISSN per run and nothing else — the pass still
+writes only on a genuine change, so a quiet 20-minute fire commits nothing.
 Offline test: `node lit/_scraper-ft50/incremental-selftest.mjs` (mock, no
-network; adds an `ecta` fixture, `mock/crossref-ecta.json`). NOTE: this build
-env's egress blocks Crossref (403), so the incremental pass only does real work
-on the GitHub Actions runners. AIA fixups for the catalog come from
+network; fixtures `mock/crossref-ecta.json` and `mock/crossref-ejor.json`, the
+latter covering the no-volume Articles-in-Press case that motivated polling EJOR
+plus a "two polled journals still no-op on unchanged data" check). NOTE: this
+build env's egress blocks Crossref (403), so the incremental pass only does real
+work on the GitHub Actions runners.
+**Completeness auditing — `lit/_scraper/coverage-audit.mjs`.** "Are we actually
+missing papers from journal X?" cannot be answered by counting our own rows (the
+harvest and the count share a source, so a gap is invisible), so this **offline,
+no-network** maintenance CLI — beside `dedupe-data.mjs`/`clean-titles.mjs`, same
+`--journal <key>` [`--dir <dataset>`] [`--from <year>`] [`--verbose`] [`--json`]
+shape, auto-locating the papers file across native/FT50/shard dirs — applies two
+probes INDEPENDENT of the harvest. **(A) Page tiling:** an issue paginates
+contiguously, so its articles' page ranges must tile it; a hole is a suspected
+missing paper. Measured WITHIN an issue (a jump at an issue boundary is that
+issue's front matter — the `IFC`/roman-leaf rows — not a missing article) and
+1-page holes ignored (blank verso). Since that probe cannot see a WHOLE missing
+issue (the volume would just end early) it is paired with a volume-run +
+issue-set check: every volume number present, each volume carrying its journal's
+modal issue set. Volume/issue labels are normalised numerically — `"00"`
+placeholder volumes are skipped (Econometrica deposits them on some corrigenda)
+and a split issue (`"4-part-1"`/`"4-part-2"`, OR vol 58) folds into its issue
+number, or both would read as false gaps. **(B) Cited-DOI probe:** every DOI of
+the journal that appears in `data-refs/_refs-cache.json`'s RAW reference lists is
+a paper some catalog paper cites — proof it exists, from a corpus with nothing to
+do with our journal harvest — so any such DOI absent from `papers-<key>.json` is
+a PROVEN hole. It derives the journal's DOI stem set itself by cutting each DOI
+at its first variable numeric field (so `10.1016/j.ejor.2015.05.082` →
+`10.1016/j.ejor`, the legacy Elsevier PII `10.1016/S0377-2217(99)…` →
+`10.1016/0377-2217(`, `10.3982/ECTA24001` → `10.3982/ecta`), keeps the stems
+explaining ≥95% of rows and SKIPS the probe when they cannot (Econometrica's
+JSTOR-era `10.2307/` DOIs give no journal-specific stem, and matching the bare
+registrant would pull in every other JSTOR journal). It is deliberately
+high-precision, via THREE guards. (1) Trailing sentence punctuation is stripped
+from a cited DOI first. (2) A DOI whose SHAPE (digit runs → `#`, letter runs →
+`@`) is not one the journal itself uses is a **malformed citation** (OCR slips
+like `mnsc.l070.0830`), never a missing paper. (3) A DOI naming a
+(volume, issue, first page) we already carry is a **variant registration**, not a
+hole — INFORMS' pre-2010 form is `<journal>.<vol>.<issue>.<firstPage>.<id>` with
+an opaque trailing id, so a cited `mnsc.46.9.1249.12220` is the SAME paper as our
+`mnsc.46.9.1249.12238` (`coordIndex`/`heldAtSameCoords`). That guard is keyed on
+the article's COORDINATES, deliberately NOT on "matches one of ours except the
+last field", which would be wrong for date-sequence DOIs — `j.ejor.2006.02.001`
+and `j.ejor.2006.02.003` differ only in the last field yet are different papers.
+Exit code 1 on a proven hole so it can gate CI; probe B under-samples the newest
+years by construction (an unpublished-last-month paper has no citers yet), which
+the output states. Current readings: **EJOR 2007–2026 is complete** — 160 volumes
+with no gap, every volume its 3 issues, tiling coverage 99.89% (~14 suspected,
+all pre-2016), and **0 of 2,446** cited EJOR DOIs missing. It also flagged
+**Operations Research vol 67 (2019) as missing issue 2 plus most of issue 4**
+(page tiling: iss 2's 295–598 and most of iss 4's 905–1208 untiled) — but READ
+THE TWO PROBES TOGETHER: probe B simultaneously showed **0 cited OR DOIs
+absent**, and the resolution (owner-supplied pubsonline TOCs, 2026-08-03) is
+that the papers were IN the catalog all along as **frozen no-volume/no-issue
+records** — Crossref never received their final issue assignment (the same
+freeze afflicted **vol 68 (2020) issue 2**; all repaired once the owner
+supplied the three pubsonline TOCs). A
+tiling hole with a CLEAN cited-DOI probe therefore means MISLABELED, not
+missing — repaired via `_aia-fixups.json` (51 OR entries from the TOCs:
+17 for 67(2), 16 for 67(4) with exact pages, 18 for 68(2) with exact pages +
+year; fill-empty semantics in mapWork for volume/issue/page, so a later
+Crossref correction wins). THREE papers were genuinely absent —
+`10.1287/opre.2018.1783` "On the Minimum Chordal Completion Polytope" 67(2)
+532–547, `10.1287/opre.2018.1827` "TN—Optimizing Foreclosed Housing
+Acquisitions" 67(4) 950–964, and `10.1287/opre.2019.1870` "Fast or Slow"
+68(2) 552–571 — and those proved ABSENT FROM CROSSREF ENTIRELY (validated
+live 2026-08-03: the batched `filter=doi:` route returned nothing AND the
+singular `GET /works/<doi>` 404s for all three), so they are carried by the
+native **`lit/data/_informs-aia.json` supplement** (titles/authors from the
+publisher TOCs; `mergeSupplement` is FIXUP-AWARE — a supplement row whose DOI
+has an `_aia-fixups.json` volume/issue entry lands PUBLISHED with its real
+pages/year, not as Articles in Advance; abstracts left to the pubsonline
+needy harvest; superseded by DOI if Crossref ever registers them). Gaps
+Crossref CAN serve are repaired by the
+**by-DOI rescue** (`rescueMissingWorks` in the native `build-data.mjs`): the
+committed manifest `lit/data/_rescue-dois.json` names, per journal key,
+explicit `dois` and/or OpenAlex volume `scans` (`[{volume}]`, resolved each
+daily build via `works?filter=locations.source.issn,biblio.volume` so the DOI
+list self-heals); whatever the journal-route listing missed is batch-fetched
+from Crossref by DOI (each still-missing explicit DOI then retried on the
+singular `GET /works/<doi>` endpoint, which can serve registered-but-unindexed
+records the filter route misses) and APPENDED TO THE RAW ITEMS, so the type filter,
+mapWork sanitize (incl. `junkAbstract`), `collapseSameWork` and registry
+stamping treat rescued rows exactly like harvested ones (they join "recently
+added" dated by the build). Guards: a scan-found DOI is kept only when the
+FETCHED record's own volume matches the scan (an OpenAlex misattribution can
+never smuggle another journal's paper in), and an explicit DOI Crossref cannot
+resolve is REPORTED (`::notice::`) and skipped, never fabricated — which is
+also how a suspected-missing DOI is safely probed: `10.1287/mnsc.2014.1882`
+(1 citer) was carried as exactly such a probe and RESOLVED — Crossref cannot
+serve it as an MS journal-article, so it was a bad reference in some paper's
+bibliography, and the probe was removed; an OpenAlex volume scan for OR 67
+likewise proved barren (69 works — OpenAlex mirrors Crossref's metadata hole)
+and was removed; the three genuinely-absent OR papers were likewise probed to
+"Crossref lacks them entirely" and moved to the supplement (above), so the
+manifest is currently EMPTY (comment-only). The rescue re-runs every daily build because the build REPLACES each
+journal from the fresh harvest (a one-off data patch would be wiped next
+morning); rescued rows persist intra-day because the incremental pass upserts
+into the committed files. Wholly non-fatal — any failure just means no extra
+rows that build. Offline test: `node lit/_scraper/rescue-selftest.mjs` (mock,
+no network; covers the volume guard, the 404 probe, registry/recent stamping
+and rebuild stability). AIA fixups for the catalog come from
 `informs-aia-local.mjs --app lit-ft50`; **Econometrica FORTHCOMING papers**
 (accepted, not yet in an issue — Crossref never shows these) are scraped from the
 Econometric Society's own forthcoming-papers page by the LOCAL
@@ -431,7 +592,24 @@ the batched legs), caches into `data-ft50/_api-abstracts.json`
 `FT50_ABS_MISS_TTL_DAYS` 45), and applies UPGRADE-only via the same
 `betterAbstract`; `applyAbstractCaches` folds it into every FT50 daily
 build. Distinct OpenAlex identity `kstouras+litft50abs`. Offline test:
-`node lit/_scraper-ft50/abstracts-selftest.mjs`. **The same backfill is
+`node lit/_scraper-ft50/abstracts-selftest.mjs`.
+**A keyed leg that never ran must not write its DOIs off** (`shouldStampMiss`,
+pure + unit-tested). The per-DOI Elsevier/Springer legs drop for the WHOLE run
+on 401/403/429, and the time budget can cut one mid-batch — but the
+end-of-batch "stamp the rest as misses" then recorded a 45-day miss for a
+check that never happened. Observed live: `ELSEVIER_API_KEY` is set, Elsevier
+refused it, the leg dropped on its first call, and **16,908 EJOR DOIs were
+written off as "no abstract" in a 9-minute run** that could not physically have
+queried them (one GET per DOI at `ELS_PACE_MS` 350 ms ≈ 98 min). So each batch
+now tracks which DOIs a keyed leg actually reached (`keyedTried`) and leaves
+the rest uncached for the next run. A configured-but-refused key also emits a
+`::warning::` naming the HTTP code and its meaning (401 bad/expired key, 403 no
+off-campus abstract entitlement → get an institutional token and set
+`ELSEVIER_INST_TOKEN`, 429 quota) — the run otherwise exits 0 and looks healthy
+while achieving nothing. **This is why EJOR abstract coverage sits at ~10%**:
+Elsevier DOIs resolve at 7.6% against 87.7% (OUP), 85.6% (AAA), 70.3% (AoM) —
+a credential problem, not a code or coverage one. The needy queue is already
+sorted newest-year-first, so 2026 is served before older years. **The same backfill is
 VENDORED into each ABS shard repo** (`_scraper/abstracts-ci.mjs` +
 `abstracts-selftest.mjs` + `abstracts-backfill.yml`, identities `+abs4abs`/
 `+abs3omabs`/`+abs3restabs`; `betterAbstract`/`ABS_MAX` inlined) — the shards
@@ -483,6 +661,20 @@ non-alphanumerics, and every entity-bearing title had a DOI — verified), so no
 paper resurfaces as "recently added". Covered by
 `lit/_scraper/entities-selftest.mjs` (the module's own suite) plus unit checks
 in `incremental-selftest.mjs` (native + FT50) and the WP `selftest.mjs`.
+**SHOUTED author names are re-cased at ingest** (user report 2026-08):
+Wiley's JoF, JAR/CAR and some POM/AMJ records deposit fully-capitalized
+author names ("MICHAEL EWENS, NADYA MALENKO" — ~6,300 rows). `nameCase` in
+`_entities.mjs`, applied inside BOTH pipelines' `authorName`, title-cases a
+name ONLY when the WHOLE name is shouting (no lowercase anywhere — the
+trigger, not the transform, is the safety): per-segment across hyphens and
+apostrophes ("JEAN-PIERRE" → "Jean-Pierre", "O'BRIEN" → "O'Brien"),
+diacritics preserved, `MC` humped ("MCDONALD" → "McDonald") but `MAC`
+deliberately NOT (Machado), roman-numeral suffixes kept, JR/SR → Jr/Sr,
+single-letter initials untouched; a mixed-case "John MacDonald" or particled
+"van der Berg" is never altered. Committed rows heal on each daily rebuild
+(authors.json/affiliations panels follow); shard repos get it when
+`_entities.mjs` is next vendored (same follow-up as junkAbstract/
+stripHighlights). Unit-tested in `entities-selftest.mjs` (14 cases).
 **Article-page furniture is never served as an abstract** (feedback
 LIT-260727-XRQ8). Two junk shapes reached served abstracts:
 the pubsonline full-abstract harvest could capture the page's navigation +
@@ -518,6 +710,61 @@ had a real abstract on the scraped page, which the rolling backfills re-resolve
 from the APIs' actual abstract fields. Covered by `entities-selftest.mjs`,
 `informs-abstracts-selftest.mjs` (incl. the parity pass) and the FT50/shard
 `abstracts-selftest.mjs`.
+**A publisher summary or citation line is never served as the abstract**
+(user report 2026-08: every recent Operations Research card showed an
+editorial plain-language summary — a headline + "In '<Title>', <the authors>
+develop…", third person, naming the paper's own authors — instead of the real
+abstract; INFORMS deposits these blurbs to Crossref for many OR/IJOC/ISR/MS
+papers, AEA deposits "<Title> by <Authors>. Published in volume …" stubs, and
+JSTOR/OUP-era records carry "<Authors>, <Title>, <Journal>, Vol. …, pp. …"
+citation lines). `junkAbstract` in `_entities.mjs`
+(`isLaySummaryAbstract`/`isCitationStubAbstract`) detects both shapes
+HIGH-PRECISION against the row's own title/authors/journal: a summary names
+its OWN authors in the body or quotes its OWN title mid-prose — things a real
+abstract never does outside the Funding/COI/"accepted by" tail INFORMS
+appends, which is cut before author names are counted. Deliberate
+non-matches: errata/replies/comments/book-review notices (legitimately
+self-citing), IJOC "Code and Data Repository for …" companions, and "the
+authors" WITHOUT names (Journal of Marketing style); **HBR + MIT SMR are
+exempt** (`JUNK_ABS_EXEMPT_KEYS`) — practitioner decks ARE those journals'
+own summary text. Applied at EVERY abstract ingest: mapWork + the supplement
+merge in both this repo's pipelines, `applyInformsAbstracts` /
+`applyAbstractCaches`, the pubsonline crawler's apply, and all four
+`abstracts-ci.mjs` API legs (OpenAlex/S2 MIRROR the publisher deposit, so
+without the leg guard the backfill would reinstate exactly what the build
+dropped) — a junk API result is left unresolved → TTL miss. The FT50 apply
+step also HEALS its cache (a junk `_api-abstracts.json` entry re-stamped a
+miss — 2,820 found live). The committed data was cleaned via the maintenance
+CLI `lit/_scraper/clean-junk-abstracts.mjs` (`--dir <dataset>` [`--dry-run`];
+~3,060 junk abstracts blanked: 129 native — 102 of them Operations Research —
++ 2,932 FT50, `recent.json` refreshed, both caches healed); the blanked rows
+are "needy" again, so the pubsonline harvest (<300-char rule) and the FT50
+API backfill re-fill the REAL abstracts on their normal cadence — a paper
+shows no abstract, never a description of itself, until then. NOT yet
+vendored into the shard repos' `_entities.mjs` copies (keep-in-sync
+follow-up: the ABS shards carry INFORMS ABS-3 journals with the same
+summary deposits). Covered by `entities-selftest.mjs`.
+**ScienceDirect "Highlights" bullets are never served as the abstract** (user
+report 2026-08, the EJOR case). Elsevier deposits many papers' author
+HIGHLIGHTS — the 3-5 short ScienceDirect bullet points — as (or fused onto)
+the Crossref abstract, and OpenAlex/S2 mirror the same deposit into the API
+backfill's cache (~170 EJOR + ~120 Research Policy + ~10 OBHDP rows read
+"• A new measure… • We provide…" as their abstract; 334 poisoned
+`_api-abstracts` entries). `stripHighlights` in `_entities.mjs`: prose
+≥250 chars BEFORE the first bullet = the real abstract with highlights
+appended → KEEP the prose, cut the bullets (217 rows recover their abstract);
+text STARTING with the bullet block (bare, "Highlights"-labelled or led by
+the paper's own title) has no safe seam even when the abstract is fused into
+the last bullet → dropped, the row is needy again (~80 rows; no abstract
+beats a wrong one). Guards: <2 bullets never trips it (a lone mid-prose `•`
+survives); any long inner inter-bullet segment (>250) = prose legitimately
+using bullets, untouched. Applied at BOTH mapWorks (native + FT50), all
+`abstracts-ci.mjs` API legs (`elsevierAbstract`/`springerAbstract`/OpenAlex/
+S2), the cache heal-at-load, and `applyAbstractCaches` (guarding the window
+before the next heal). The ~300 committed rows heal automatically on the next
+FT50 daily build (the build re-maps every abstract from fresh Crossref
+through the strip — no manual sweep needed). Same shard-repo vendoring
+follow-up as `junkAbstract` above. Covered by `entities-selftest.mjs`.
 **ALL-CAPITALS titles are restored to sentence case at ingest** (feedback
 LIT-260728-TVQ5). Older registrations shout — PNAS's pre-1970s back-catalogue,
 POM's Wiley years, JoF, TAR, AMJ, IER, Economic Inquiry: "MARKET EQUILIBRIUM",
@@ -1443,11 +1690,24 @@ or one of its repositories. **"Recently added" includes new working papers (per
 the owner):** the WP pipeline stamps `"Date Added"` on each key that first
 enters the archive (crawler: stamped on new, PRESERVED across the re-crawl
 overwrite; ingest: stamped on `added`) and both writers emit a
-`data-workingpapers/recent.json` of ONLY dated rows, newest-added first (keep
-the two emissions in sync); the page fetches it via `loadDatasetRecent` in
+`data-workingpapers/recent.json` of ONLY dated rows, newest-added first, plus
+the uncapped `recent-counts.json` tally the view's number is read from
+(`buildWpRecentCounts`, shared by both writers — the capped rows can never
+carry a backfill day of ~12–16k stamps; keep the two emissions in sync); the
+page fetches them via `loadDatasetRecent`/`loadRecentCounts` in
 `loadWorkingPapersManifest()` and `matchesJournal` admits WP rows in
 `recentMode` — back-catalog rows crawled before dating began carry no date and
-never appear. `buildJTypeSelect()` **hides the Working Papers type until its
+never appear. **But the recent view is ordered PUBLISHED-FIRST, working papers
+second** (`renderRecent`'s comparator `(a.w - b.w) || (b.d - a.d)`, where `w`
+comes from `isWorkingPaperRow` — `_jkeys` if computeJkeys has run, else the raw
+`JKey`), each block newest-added first. A pure date sort let the WP backfill
+bury the whole published catalogue: it adds ~1,000 rows in one day, so on
+2026-07-28 all 1,000 preceded the 144 published papers added the day before —
+ABS shards first appeared on page 41, Nature/Science on 42, the NATIVE journals
+on 43. This is the same published-first instinct `matchesJournal` already
+applies to bare browsing ("flood the view with unpublished rows"), and it keeps
+the owner's "include working papers in recent" decision intact — they are still
+listed, just after the published block. `buildJTypeSelect()` **hides the Working Papers type until its
 archive has sources**, so the shipped empty `data-workingpapers/` (valid empty
 manifest) stays dormant until data lands. **The archive is built ONLINE, slowly:** two
 workflows — `lit-workingpapers-backfill.yml` (every 3 h, the growth engine) and

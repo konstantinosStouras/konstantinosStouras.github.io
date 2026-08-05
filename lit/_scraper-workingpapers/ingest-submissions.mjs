@@ -69,7 +69,7 @@ import { resolve, join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { wpRecordFromWork, loadCatalog, WP_SOURCES, recKey, normName, nameParts, matchPublished,
-  wpSameWork, collapseWpDuplicates, cleanTitle } from './build-data.mjs';
+  wpSameWork, collapseWpDuplicates, buildWpRecentCounts, cleanTitle } from './build-data.mjs';
 import { pickPreprint, preprintFromDoi } from '../_scraper/build-data.mjs';
 import { normTitle } from '../_scraper/ec-pages.mjs';
 
@@ -453,6 +453,9 @@ export async function regroupAndWrite(byKey, prevMeta, authorsInCatalog, dir) {
     .sort((a, b) => String(b['Date Added']).localeCompare(String(a['Date Added'])) ||
       (parseInt(b.Year, 10) || 0) - (parseInt(a.Year, 10) || 0))
     .slice(0, 1000);
+  // recent.json is capped, so the page takes its "added in the last 4 weeks"
+  // count from this uncapped per-repository × per-day tally instead.
+  const recentCounts = buildWpRecentCounts([...byKey.values()], PULL_DATE);
 
   const meta = {
     lastPull: PULL_DATE,
@@ -467,6 +470,7 @@ export async function regroupAndWrite(byKey, prevMeta, authorsInCatalog, dir) {
 
   await writeJson(dir, 'sources.json', sources);
   await writeJson(dir, 'recent.json', recent);
+  await writeJson(dir, 'recent-counts.json', recentCounts);
   await writeJson(dir, 'meta.json', meta);
   return { total, perSource: meta.perSource };
 }

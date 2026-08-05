@@ -109,7 +109,7 @@ const CATALOG_DIRS = (process.env.REFS_CATALOG_DIRS
 const MAILTO = process.env.REFS_MAILTO || 'kstouras+litrefs@gmail.com';
 // Optional Semantic Scholar API key — moves the S2 leg off the throttled
 // anonymous pool. Inert until the S2_API_KEY secret/env is set.
-const S2_KEY = process.env.S2_API_KEY || '';
+const S2_KEY = (process.env.S2_API_KEY || '').trim();
  // distinct Crossref/OpenAlex quota identity
 const PULL_DATE = process.env.REFS_PULL_DATE || new Date().toISOString().slice(0, 10);
 const USE_S2 = process.env.REFS_S2 !== '0'; // Semantic Scholar bonus leg (default on)

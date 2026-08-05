@@ -10,7 +10,7 @@
    matches an ACTIVE (open) admin-created session (config stored at
    sessions/{code}). Firebase Anonymous Auth is used only as the technical
    identity so Firestore reads/writes work; the participant is identified for
-   research by the Registration form (UCD Student ID + demographics + consent),
+   research by the Registration form (University Student ID + demographics + consent),
    which is shown AFTER the training phase and BEFORE the main game.
 
    This layer is the DEFAULT experience at the bare URL (see the PF_EXPERIMENT
@@ -67,10 +67,10 @@
       randomizeOrder: true,
       activePuzzleIds: []
     },
-    // Registration form (shown after training; UCD Student ID is the compulsory
+    // Registration form (shown after training; University Student ID is the compulsory
     // first field). Mirrors pf-defaults.js; admin-editable via the Registration tab.
     registrationQuestions: [
-      { id: 'studentId', label: 'UCD Student ID', type: 'text', required: true },
+      { id: 'studentId', label: 'University Student ID', type: 'text', required: true },
       { id: 'age', label: 'Age', type: 'select', required: true,
         options: ['18-24', '25-34', '35-44', '45-54', '55-64', '65+'] },
       { id: 'gender', label: 'Gender', type: 'select', required: false,
@@ -667,7 +667,7 @@
   }
 
   // ---- Phase: registration (after training, before the main game) -------
-  // Collects the UCD Student ID (compulsory first field) plus demographics and
+  // Collects the University Student ID (compulsory first field) plus demographics and
   // research-consent checkboxes, then unlocks the main game. Data is written to
   // the participant doc (registration map + studentId + consent) and exported by
   // the admin panel.

@@ -228,6 +228,14 @@ export function selftest() {
     ok(recent.length === 1 && recent[0]['Date Added'] === '2026-07-18',
       'recent.json lists ONLY rows stamped Date Added (the newly added ones)');
 
+    // The ingest is the archive's second writer, so it has to refresh the tally
+    // the page's "N working papers added in the last 4 weeks" is read from —
+    // recent.json is capped and can never be the source of that number.
+    const rcounts = JSON.parse(await readFile(join(OUT, 'recent-counts.json'), 'utf8'));
+    ok(rcounts.windowDays >= 28, 'recent-counts.json covers the 4 weeks the page shows');
+    ok((rcounts.days['wp-arxiv'] || {})['2026-07-18'] === 1,
+      'recent-counts.json tallies the newly added row under its repository');
+
     const sources = JSON.parse(await readFile(join(OUT, 'sources.json'), 'utf8'));
     const keys = sources.map(s => s.key).sort();
     ok(keys.length === 2 && keys[0] === 'wp-arxiv' && keys[1] === 'wp-ssrn', 'sources.json lists only non-empty repos (wp-arxiv, wp-ssrn)');

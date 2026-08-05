@@ -895,7 +895,7 @@
     var tbody = el('tbody', {});
     var table = el('table', { class: 'pfa-tbl' });
     table.appendChild(el('thead', {}, [el('tr', {},
-      ['Player', 'UCD Student ID', 'Session', 'Status'].map(function (h) { return el('th', { text: h }); })
+      ['Player', 'University Student ID', 'Session', 'Status'].map(function (h) { return el('th', { text: h }); })
         .concat([startedTh, el('th', {})]))]));
     table.appendChild(tbody);
     body.appendChild(el('div', { class: 'pfa-card' }, [head, table]));
@@ -1019,11 +1019,11 @@
       var moveNo = {};  // per-puzzle move counter (1,2,3… within each puzzle)
       for (var k = 0; k < evs.length; k++) {
         var v = evs[k], pid = v.puzzleId || '';
-        events.push({ 'Player': who, 'UCD Student ID': sid, 'Session': sess, 'Move #': v.seq, 'Type': v.type, 'Phase': v.phase, 'Round': v.round, 'Puzzle': pid, 'Net Value': v.net, 'Coverage %': v.coverage, 'Time': fmtUK(v.clientTime), 'Data (JSON)': v.dataJson });
+        events.push({ 'Player': who, 'University Student ID': sid, 'Session': sess, 'Move #': v.seq, 'Type': v.type, 'Phase': v.phase, 'Round': v.round, 'Puzzle': pid, 'Net Value': v.net, 'Coverage %': v.coverage, 'Time': fmtUK(v.clientTime), 'Data (JSON)': v.dataJson });
         if (v.type === 'round_start') {
           lastT[pid] = v.t; moveNo[pid] = 0;
           var ma0 = parseJson(v.metricsAfterJson, null);
-          play.push({ 'Player': who, 'UCD Student ID': sid, 'Session': sess, 'Puzzle': pid, 'Difficulty': v.diff || '', 'Move #': '', 'Action': 'start (empty board)', 'Brick (Id)': '', 'Anchor': '', 'Cells': '', 'Brick Value': '',
+          play.push({ 'Player': who, 'University Student ID': sid, 'Session': sess, 'Puzzle': pid, 'Difficulty': v.diff || '', 'Move #': '', 'Action': 'start (empty board)', 'Brick (Id)': '', 'Anchor': '', 'Cells': '', 'Brick Value': '',
             'Net Value (before)': '', 'Net Value (after)': kval(ma0, 'net'),
             'Total Value (before)': '', 'Total Value (after)': kval(ma0, 'value'),
             'Resource Cost (before)': '', 'Resource Cost (after)': kval(ma0, 'cost'),
@@ -1035,7 +1035,7 @@
           var prev = (lastT[pid] != null) ? lastT[pid] : v.t; var dur = (v.t - prev) / 1000; lastT[pid] = v.t;
           moveNo[pid] = (moveNo[pid] || 0) + 1;
           var mb = parseJson(v.metricsBeforeJson, null), ma = parseJson(v.metricsAfterJson, null);
-          play.push({ 'Player': who, 'UCD Student ID': sid, 'Session': sess, 'Puzzle': pid, 'Difficulty': '', 'Move #': moveNo[pid], 'Action': v.action || (v.type === 'place' ? 'add' : 'remove'), 'Brick (Id)': v.brick || '', 'Anchor': v.anchor || '', 'Cells': v.cellsJson || '', 'Brick Value': (v.brickValue != null ? v.brickValue : ''),
+          play.push({ 'Player': who, 'University Student ID': sid, 'Session': sess, 'Puzzle': pid, 'Difficulty': '', 'Move #': moveNo[pid], 'Action': v.action || (v.type === 'place' ? 'add' : 'remove'), 'Brick (Id)': v.brick || '', 'Anchor': v.anchor || '', 'Cells': v.cellsJson || '', 'Brick Value': (v.brickValue != null ? v.brickValue : ''),
             'Net Value (before)': kval(mb, 'net'), 'Net Value (after)': kval(ma, 'net'),
             'Total Value (before)': kval(mb, 'value'), 'Total Value (after)': kval(ma, 'value'),
             'Resource Cost (before)': kval(mb, 'cost'), 'Resource Cost (after)': kval(ma, 'cost'),
@@ -1044,12 +1044,12 @@
             'Portfolio Fitness (before)': kval(mb, 'fitness'), 'Portfolio Fitness (after)': kval(ma, 'fitness'),
             'FrameMatrix (before)': v.boardBeforeJson || '', 'FrameMatrix (after)': v.boardJson || '', 'Time': fmtUK(v.clientTime), 'Duration (s)': Math.round(dur * 10) / 10 });
         } else if (v.type === 'calc') {
-          calc.push({ 'Player': who, 'UCD Student ID': sid, 'Session': sess, 'Puzzle': pid, 'Time': fmtUK(v.clientTime), 'Input': v.calcExpr || '', 'Output': v.calcResult || '' });
+          calc.push({ 'Player': who, 'University Student ID': sid, 'Session': sess, 'Puzzle': pid, 'Time': fmtUK(v.clientTime), 'Input': v.calcExpr || '', 'Output': v.calcResult || '' });
         } else if (v.type === 'note') {
-          notes.push({ 'Player': who, 'UCD Student ID': sid, 'Session': sess, 'Puzzle': pid, 'Time': fmtUK(v.clientTime), 'Note': v.noteText || '' });
+          notes.push({ 'Player': who, 'University Student ID': sid, 'Session': sess, 'Puzzle': pid, 'Time': fmtUK(v.clientTime), 'Note': v.noteText || '' });
         }
       }
-      try { var rs = await fb.F.getDocs(fb.F.collection(fb.db, 'participants', uid, 'rounds')); rs.forEach(function (d) { var rv = d.data(); var pls = parseJson(rv.placementsJson, []); rounds.push({ 'Player': who, 'UCD Student ID': sid, 'Session': sess, 'Puzzle #': rv.index, 'Puzzle ID': rv.puzzleId, 'Difficulty': rv.diff, 'Net Value': rv.net, 'Total Value': rv.value, 'Resource Cost': rv.cost, 'Coverage %': rv.coverage, 'Fitness %': rv.fitness, 'Bricks Placed': (rv.bricks != null ? rv.bricks : ''), 'Cells Filled': rv.placed, 'Board Cells': rv.total, 'Time (s)': rv.time, 'Best Value': rv.bestValue, 'Final FrameMatrix': JSON.stringify(matrixFromPlacements(pls)) }); }); } catch (e) {}
+      try { var rs = await fb.F.getDocs(fb.F.collection(fb.db, 'participants', uid, 'rounds')); rs.forEach(function (d) { var rv = d.data(); var pls = parseJson(rv.placementsJson, []); rounds.push({ 'Player': who, 'University Student ID': sid, 'Session': sess, 'Puzzle #': rv.index, 'Puzzle ID': rv.puzzleId, 'Difficulty': rv.diff, 'Net Value': rv.net, 'Total Value': rv.value, 'Resource Cost': rv.cost, 'Coverage %': rv.coverage, 'Fitness %': rv.fitness, 'Bricks Placed': (rv.bricks != null ? rv.bricks : ''), 'Cells Filled': rv.placed, 'Board Cells': rv.total, 'Time (s)': rv.time, 'Best Value': rv.bestValue, 'Final FrameMatrix': JSON.stringify(matrixFromPlacements(pls)) }); }); } catch (e) {}
       try { var sd = await fb.F.getDoc(fb.F.doc(fb.db, 'participants', uid, 'survey', 'answers')); if (sd.exists()) { var sv = sd.data(); survey.push({ _p: p, _answers: sv.answers || {}, _completedAt: fmtTs(sv.completedAt) }); } } catch (e) {}
     }
     return { play: play, calc: calc, notes: notes, rounds: rounds, survey: survey, events: events, partInfo: partInfo };
@@ -1070,7 +1070,7 @@
 
     var pRows = data.partInfo.map(function (p) {
       var reg = p.registration || {};
-      var row = { 'Player': whoOf(p), 'UCD Student ID': sidOf(p), 'Session': p.sessionId || '', 'Status': p.status || '', 'Consent': p.consentGiven === true ? 'yes' : '', 'Started': fmtTs(p.createdAt) };
+      var row = { 'Player': whoOf(p), 'University Student ID': sidOf(p), 'Session': p.sessionId || '', 'Status': p.status || '', 'Consent': p.consentGiven === true ? 'yes' : '', 'Started': fmtTs(p.createdAt) };
       regList.forEach(function (q) { if (q.id === 'studentId') return; row[q.label || q.id] = (reg[q.id] != null ? reg[q.id] : ''); });
       Object.keys(reg).forEach(function (kk) { if (kk === 'studentId') return; var covered = regList.some(function (q) { return q.id === kk; }); if (!covered) row['reg_' + kk] = (reg[kk] && typeof reg[kk] === 'object') ? JSON.stringify(reg[kk]) : reg[kk]; });
       var st = p.stats || {};
@@ -1082,7 +1082,7 @@
 
     var sRows = data.survey.map(function (s) {
       var p = s._p, ans = s._answers;
-      var row = { 'Player': whoOf(p), 'UCD Student ID': sidOf(p), 'Session': p.sessionId || '', 'Completed at': s._completedAt };
+      var row = { 'Player': whoOf(p), 'University Student ID': sidOf(p), 'Session': p.sessionId || '', 'Completed at': s._completedAt };
       sQ.forEach(function (q) { row[q.label || q.id] = (ans[q.id] != null ? ans[q.id] : ''); });
       Object.keys(ans).forEach(function (kk) { var covered = sQ.some(function (q) { return q.id === kk; }); if (!covered) row[kk] = ans[kk]; });
       return row;

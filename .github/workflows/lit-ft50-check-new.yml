@@ -3,20 +3,26 @@ name: lit — check for new FT50 catalog papers (incremental)
 # The daily lit-ft50-update-data.yml re-pulls all 50 FT50 journals' ENTIRE
 # Crossref back-catalogues, so it can only run once a day. This lighter job runs
 # the same pipeline in --incremental mode for a SMALL configured subset of
-# journals (FT50_INCR_JOURNALS; default: Econometrica): it asks Crossref for only
-# the records it (re)indexed in the last few days (filter=from-index-date),
-# upserts them into the committed papers-<key>.json, and rewrites only the small
-# derived files (recent/meta/sources/registry).
+# journals (FT50_INCR_JOURNALS; default: Econometrica + EJOR): it asks Crossref
+# for only the records it (re)indexed in the last few days
+# (filter=from-index-date), upserts them into the committed papers-<key>.json,
+# and rewrites only the small derived files (recent/meta/sources/registry).
 #
-# Why Econometrica specifically: lit's own fast pass (lit-check-new.yml) already
-# covers the eight native INFORMS/SAGE Articles-in-Advance journals. Econometrica
-# is the one journal from that request that lives ONLY in the FT50 catalog, and
-# its publisher assigns an accepted paper straight to a future issue — so Crossref
-# never lists it as a no-volume advance article, and the once-a-day build was
-# otherwise the only thing that ever picked a new Econometrica paper up (up to a
-# day late). Polling it here surfaces new Econometrica papers within minutes of
-# Crossref indexing them, and joins them to "Recently added", exactly like the
-# native journals.
+# Why these journals: lit's own fast pass (lit-check-new.yml) already covers the
+# eight native INFORMS/SAGE Articles-in-Advance journals, so this job exists for
+# the ones that live ONLY in the FT50 catalog.
+#   * Econometrica — its publisher assigns an accepted paper straight to a future
+#     issue, so Crossref never lists it as a no-volume advance article, and the
+#     once-a-day build was otherwise the only thing that ever picked a new
+#     Econometrica paper up (up to a day late).
+#   * EJOR (European Journal of Operational Research, the ABS 4 notFT extra) —
+#     the catalog's highest-volume journal: ~700 papers/year across 24 issues
+#     plus a ~40/month Articles-in-Press stream, so 1-2 genuinely-new records
+#     land most days. Its back-catalogue is complete (see
+#     lit/_scraper/coverage-audit.mjs); it was FRESHNESS that lagged, with
+#     every day's new papers arriving in one nightly batch.
+# Polling them here surfaces new papers within minutes of Crossref indexing them,
+# and joins them to "Recently added", exactly like the native journals.
 #
 # It writes NOTHING when nothing new arrived, so it commits (and triggers a Pages
 # redeploy) ONLY on a genuine change — that is what lets it run frequently without
@@ -25,9 +31,9 @@ name: lit — check for new FT50 catalog papers (incremental)
 
 on:
   schedule:
-    # Every 20 minutes. One Crossref call per polled journal; Econometrica's
-    # indexing lag is hours, so this is about the finest useful cadence. Most
-    # runs find nothing and exit without a commit.
+    # Every 20 minutes. One Crossref call per polled journal per ISSN; the
+    # publishers' indexing lag is hours, so this is about the finest useful
+    # cadence. Most runs find nothing and exit without a commit.
     - cron: '*/20 * * * *'
   workflow_dispatch: {}      # run on demand from the Actions tab
   push:
@@ -86,7 +92,7 @@ jobs:
               echo "No new papers this run — nothing to commit."
               exit 0
             fi
-            git commit -m "lit: incremental refresh (new Econometrica papers)"
+            git commit -m "lit-ft50: incremental refresh (new papers in the polled journals)"
             if git push origin "HEAD:$GITHUB_REF_NAME"; then
               echo "Pushed on attempt $attempt."
               exit 0

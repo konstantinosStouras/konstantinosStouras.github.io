@@ -41,6 +41,10 @@
  *   authors.json         per-author aggregates across all journals (≥2 papers)
  *   affiliations.json    per-affiliation aggregates
  *   recent.json          papers first seen in the last RECENT_WINDOW_DAYS
+ *                        (capped at RECENT_CAP rows — it is fetched with the
+ *                        page, so it carries the newest slice, not all of it)
+ *   recent-counts.json   the UNCAPPED tally behind the page's "N papers added
+ *                        in the last 4 weeks": per journal, per day
  *   meta.json            { lastPull, paperCount, authorCount,
  *                        authorCountExtras, journalCount, perSource }
  *                        (authorCounts = distinct authors pre-trim — full
@@ -80,7 +84,7 @@ const MOCK_DIR = join(__dirname, 'mock');
 const MAILTO = process.env.FT50_MAILTO || 'kstouras@gmail.com';
 // Optional Semantic Scholar API key — moves the S2 leg off the throttled
 // anonymous pool. Inert until the S2_API_KEY secret/env is set.
-const S2_KEY = process.env.S2_API_KEY || '';
+const S2_KEY = (process.env.S2_API_KEY || '').trim();
 
 const ROWS = 1000;                  // Crossref max page size
 const PAGE_PAUSE_MS = 120;          // politeness pause between cursor pages
@@ -143,16 +147,27 @@ const AIA_SUPPLEMENT = existsSync(AIA_SUPPLEMENT_PATH)
 // NOTHING when nothing new arrived, so it commits (and redeploys Pages) only on
 // a genuine change.
 //
-// Default subset: Econometrica only. Unlike the six native INFORMS/SAGE journals
-// (which lit's own fast pass already covers and which Crossref lists as
-// no-volume "Articles in Advance"), Econometrica's publisher assigns an accepted
-// paper straight to a future issue, so Crossref never shows it as an advance
-// article — the daily build is otherwise the only thing that ever picks it up,
-// up to a day late. Polling it here surfaces a new Econometrica paper within
-// minutes of Crossref indexing it, exactly like the native journals. Widen with
-// FT50_INCR_JOURNALS=ecta,jf,… if ever needed (one Crossref call per journal).
+// Default subset: Econometrica + EJOR.
+//   ecta — unlike the native INFORMS/SAGE journals (which lit's own fast pass
+//     already covers and which Crossref lists as no-volume "Articles in
+//     Advance"), Econometrica's publisher assigns an accepted paper straight to
+//     a future issue, so Crossref never shows it as an advance article — the
+//     daily build is otherwise the only thing that ever picks it up, up to a
+//     day late.
+//   ejor — the European Journal of Operational Research (the ABS 4 notFT extra)
+//     is the catalog's highest-volume journal: ~700 papers/year in 24 issues
+//     plus a steady ~40/month Articles-in-Press stream, i.e. 1–2 genuinely-new
+//     records a day, which the once-a-day build delivered in one nightly batch
+//     up to 24 h late. Its back-catalogue is complete (audit it any time with
+//     `node lit/_scraper/coverage-audit.mjs --journal ejor`); what it
+//     lacked was FRESHNESS, which is exactly what this pass provides.
+// Polling a journal here surfaces its new papers within minutes of Crossref
+// indexing them, exactly like the native journals. Widen with
+// FT50_INCR_JOURNALS=ecta,ejor,jf,… (one Crossref call per journal per ISSN;
+// the pass still writes nothing when nothing changed, so extra keys cost only
+// the poll).
 const INCR_LOOKBACK_DAYS = parseInt(process.env.FT50_INCR_LOOKBACK_DAYS || '4', 10);
-const INCR_JOURNAL_KEYS = (process.env.FT50_INCR_JOURNALS || 'ecta')
+const INCR_JOURNAL_KEYS = (process.env.FT50_INCR_JOURNALS || 'ecta,ejor')
   .split(',').map(s => s.trim()).filter(Boolean);
 // Only core bibliographic fields are refreshed on a known DOI; enrichment
 // (Preprint/PreprintSrc, an OpenAlex/S2-boosted CitedBy + CitedBySrc, cached
@@ -200,8 +215,14 @@ const SELECT = [
 // as literal markup and every other entity ("&apos;", "&nbsp;", "&EACUTE;")
 // rendered raw on the page.
 import { cleanText as stripJats, trimTrailingSeparators, titleText,
-  affilName, affilParts, affilList, stripPageFurniture } from '../_scraper/_entities.mjs';
-export { stripJats, trimTrailingSeparators, titleText, affilName, affilParts, affilList, stripPageFurniture };
+  affilName, affilParts, affilList, stripPageFurniture, junkAbstract, stripHighlights,
+  nameCase } from '../_scraper/_entities.mjs';
+export { stripJats, trimTrailingSeparators, titleText, affilName, affilParts, affilList, stripPageFurniture, junkAbstract };
+
+// HBR / MIT Sloan Management Review are exempt from the junkAbstract summary
+// guard: practitioner pieces have no author abstract — the deposited
+// third-person deck IS the journal's own summary text, so it stays.
+const JUNK_ABS_EXEMPT_KEYS = new Set(['hbr', 'smr']);
 
 function yearOf(item) {
   const pick = (d) => d && d['date-parts'] && d['date-parts'][0] && d['date-parts'][0][0];
@@ -216,8 +237,10 @@ function authorName(a) {
   // Decode any deposited entities ("R&eacute;gis", "Bilge Y&inodot;lmaz") FIRST,
   // then strip commas — the page splits Authors on commas, so a decoded comma
   // must never survive into the name.
+  // nameCase (user report 2026-08): Wiley/JAR/CAR deposit some names fully
+  // capitalized ("MICHAEL EWENS") — re-cased only when the whole name shouts.
   const nm = stripJats([a.given, a.family].filter(Boolean).join(' ') || a.name || '');
-  return nm.replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
+  return nameCase(nm.replace(/,/g, ' ').replace(/\s+/g, ' ').trim());
 }
 
 function normTitle(t) {
@@ -308,7 +331,18 @@ function mapWork(item, src) {
   // stripPageFurniture (feedback LIT-260727-XRQ8): a deposited 'abstract' can
   // be a scraped article-page blob (share bar, 'No abstract is available for
   // this article.') — never abstract prose; served as '' instead.
-  const abstract = stripPageFurniture(stripJats(item.abstract || '')).slice(0, MAX_ABSTRACT);
+  // junkAbstract (user report 2026-08): an editorial plain-language summary
+  // (INFORMS' OR/IJOC blurbs) or a bare citation-line stub (AEA's "…Published
+  // in volume…", JSTOR-era "Authors, Title, Journal, Vol…, pp. …") is never
+  // the paper's abstract — dropped, so the API/pubsonline backfills can fill
+  // the real text.
+  // stripHighlights (user report 2026-08): Elsevier deposits many papers'
+  // ScienceDirect HIGHLIGHTS bullets as (or fused into) the abstract — the
+  // real abstract is kept when it precedes the bullets, else dropped so the
+  // backfills recover the true text (EJOR/Research Policy, ~300 rows).
+  let abstract = stripHighlights(stripPageFurniture(stripJats(item.abstract || '')).slice(0, MAX_ABSTRACT));
+  if (abstract && !JUNK_ABS_EXEMPT_KEYS.has(src.key) && junkAbstract(abstract,
+    { title, authors: authorsArr.join(', '), journal: src.name })) abstract = '';
 
   // Editors/Areas: Management Science only (per the page's design).
   let editor = '', area = '';
@@ -1448,8 +1482,11 @@ export async function refreshCitations(allPapers, cache, opts = {}) {
 //    INFORMS journals live in this catalog too, under the same DOIs);
 //  • _api-abstracts.json — the FT50-wide OpenAlex/Semantic Scholar backfill
 //    (abstracts-ci.mjs), covering the ~45 non-INFORMS journals.
-// Applied in the daily build so a rebuild can never regress a fixed abstract
-// (the incremental pass never touches Abstract — not an INCR_CORE_FIELD).
+// Applied in the daily build so a rebuild can never regress a fixed abstract.
+// (The incremental pass keeps Abstract out of INCR_CORE_FIELDS — a plain
+// overwrite could regress these cache overlays — but does apply its own
+// betterAbstract-gated UPGRADE from the fresh Crossref record, so a
+// deposited-later abstract lands within a poll instead of a day.)
 async function applyAbstractCaches(allPapers) {
   const paths = [
     join(DATA_DIR, '..', 'data', '_informs-abstracts.json'),
@@ -1462,7 +1499,15 @@ async function applyAbstractCaches(allPapers) {
     for (const row of allPapers) {
       const rec = row._doi && map[row._doi];
       if (!rec || !rec.a) continue;
-      if (betterAbstract(row.Abstract, rec.a)) { row.Abstract = rec.a.slice(0, MAX_ABSTRACT); up++; }
+      // A cached capture that is itself a summary/citation stub is never applied.
+      if (!JUNK_ABS_EXEMPT_KEYS.has(row.JKey) && junkAbstract(rec.a,
+        { title: row.Title, authors: row.Authors, journal: row.Journal })) continue;
+      // Nor a cached HIGHLIGHTS bullet capture (abstracts-ci heals the cache
+      // file on its own cadence; this guards the window in between — and keeps
+      // any real abstract the entry carries ahead of its bullets).
+      const cand = stripHighlights(rec.a);
+      if (!cand) continue;
+      if (betterAbstract(row.Abstract, cand)) { row.Abstract = cand.slice(0, MAX_ABSTRACT); up++; }
     }
   }
   if (up) console.log(`  abstracts: upgraded ${up} teaser/missing abstracts from the page/API caches`);
@@ -1641,7 +1686,80 @@ function buildRecent(papers, registry) {
     rows.push({ p, d });
   }
   rows.sort((a, b) => (b.d - a.d) || (b.p._rank - a.p._rank) || cmp(regKey(a.p), regKey(b.p)));
+  // Capped: recent.json is pre-fetched on every page load. The count the page
+  // shows does NOT come from these rows — see buildRecentCounts.
   return rows.slice(0, RECENT_CAP).map(x => ({ ...publicRow(x.p), 'Date Added': registry[regKey(x.p)] }));
+}
+
+// Exact per-journal × per-day tally of first registrations inside the same
+// window recent.json covers — the number behind the page's "N papers added in
+// the last 4 weeks". recent.json is capped, so a burst day (a journal's
+// back-catalogue landing, a re-registration sweep) leaves it holding only the
+// newest rows and a count taken from them under-reports; this companion is
+// never capped and stays ~1 KB. Keyed by JKey, the key the page's journal scope
+// is expressed in. Mirrors _scraper/build-data.mjs — keep in sync.
+export function buildRecentCounts(papers, registry) {
+  const cutoff = new Date(PULL_DATE + 'T00:00:00');
+  cutoff.setDate(cutoff.getDate() - RECENT_WINDOW_DAYS);
+  const days = {};
+  let total = 0;
+  for (const p of papers) {
+    const ds = registry[regKey(p)];
+    if (!ds) continue;
+    const d = new Date(ds + 'T00:00:00');
+    if (isNaN(d) || d < cutoff) continue;
+    const k = p.JKey || '';
+    if (!k) continue;
+    const perDay = days[k] || (days[k] = {});
+    perDay[ds] = (perDay[ds] || 0) + 1;
+    total++;
+  }
+  return recentCountsFile(days, total);
+}
+
+// The window's first day, as the same YYYY-MM-DD string the registry stores
+// (ISO dates compare correctly as strings).
+function recentCutoffDay() {
+  const c = new Date(PULL_DATE + 'T00:00:00');
+  c.setDate(c.getDate() - RECENT_WINDOW_DAYS);
+  return c.toISOString().slice(0, 10);
+}
+
+// Incremental counterpart: the polled journals' tallies are recomputed, every
+// other journal's is carried from the last write (pruned to the window that has
+// since slid forward). Correct for the same reason the lean recent.json merge
+// is — this pass and the daily build are the only writers of this directory and
+// share a concurrency group, so nothing else can have changed the other
+// journals since that file was written.
+export function mergeRecentCounts(prev, fresh, refreshedKeys) {
+  const cutoffDay = recentCutoffDay();
+  const days = {};
+  const carried = (prev && prev.days && typeof prev.days === 'object') ? prev.days : {};
+  for (const k of Object.keys(carried)) {
+    if (refreshedKeys.has(k) || !carried[k]) continue;
+    const perDay = {};
+    for (const d of Object.keys(carried[k])) {
+      const n = carried[k][d];
+      if (d >= cutoffDay && n > 0) perDay[d] = n;
+    }
+    if (Object.keys(perDay).length) days[k] = perDay;
+  }
+  for (const k of Object.keys(fresh.days)) days[k] = fresh.days[k];
+  let total = 0;
+  for (const k of Object.keys(days)) for (const d of Object.keys(days[k])) total += days[k][d];
+  return recentCountsFile(days, total);
+}
+
+// Deterministic serialization (sorted keys) so an unchanged corpus produces
+// identical bytes and therefore no needless commit.
+function recentCountsFile(days, total) {
+  const sorted = {};
+  for (const k of Object.keys(days).sort()) {
+    const perDay = {};
+    for (const d of Object.keys(days[k]).sort()) perDay[d] = days[k][d];
+    sorted[k] = perDay;
+  }
+  return { generated: PULL_DATE, windowDays: RECENT_WINDOW_DAYS, total, days: sorted };
 }
 
 function publicRow(p) {
@@ -1689,6 +1807,8 @@ function mergeSupplement(bySource) {
     };
     if (src.seEditors) row['Senior Editor'] = s['Senior Editor'] || '';
     if (src.aeEditors) row['Associate Editor'] = s['Associate Editor'] || '';
+    if (row.Abstract && !JUNK_ABS_EXEMPT_KEYS.has(src.key) && junkAbstract(row.Abstract,
+      { title: row.Title, authors: row.Authors, journal: row.Journal })) row.Abstract = '';
     bySource[src.key].push(row);
     added++;
   }
@@ -1777,6 +1897,7 @@ async function main() {
     buildAuthors(allPapers.filter(p => !LIT_NATIVE_KEYS.has(p.JKey))).distinct;
   const affiliations = buildAffiliations(allPapers);
   const recent = buildRecent(allPapers, registry);
+  const recentCounts = buildRecentCounts(allPapers, registry);
 
   // 4. Write per-journal paper files + manifest (capability flags included so
   // the page can adapt its filters per journal without hardcoding keys).
@@ -1833,12 +1954,14 @@ async function main() {
   await writeJson('authors.json', authors.rows);
   await writeJson('affiliations.json', affiliations);
   await writeJson('recent.json', recent);
+  await writeJson('recent-counts.json', recentCounts);
   await writeJson('meta.json', meta);
   await writeJson('_registry.json', registry);
 
   console.log(`done: ${total} papers (${sources.map(s => `${s.key}:${s.count}`).join(' ')}), ` +
     `${authors.distinct} authors (${authors.rows.length} listed), ` +
-    `${affiliations.length} affiliations, ${recent.length} recent`);
+    `${affiliations.length} affiliations, ${recent.length} recent ` +
+    `(${recentCounts.total} added in the last ${RECENT_WINDOW_DAYS} days)`);
 }
 
 async function writeJson(name, data) {
@@ -1941,6 +2064,14 @@ async function incrementalMain() {
       if (typeof nr.CitedBy === 'number' && nr.CitedBy > (cur.CitedBy || 0)) {
         cur.CitedBy = nr.CitedBy; delete cur.CitedBySrc; rowChanged = true;
       }
+      // Elsevier deposits many EJOR abstracts only days AFTER first
+      // registration, so an Articles-in-Press row added by this pass used to
+      // stay abstract-less until the next daily rebuild. Take a materially
+      // fuller abstract now — via betterAbstract, so an overlay-cache abstract
+      // (the API backfill's) is never regressed back to a stub.
+      if (nr.Abstract && betterAbstract(cur.Abstract, nr.Abstract)) {
+        cur.Abstract = String(nr.Abstract).slice(0, MAX_ABSTRACT); rowChanged = true;
+      }
       if (rowChanged) { cur._rank = pubRank(cur.Year, cur.Volume, cur.Issue, cur.Page, cur.Status); updated++; }
     }
     if (added || updated) changedSources.add(src.key);
@@ -1952,7 +2083,8 @@ async function incrementalMain() {
   }
 
   // Overlay cached Senior/Associate editors onto any new/updated rows (offline;
-  // a no-op unless a polled journal carries SE/AE — Econometrica does not).
+  // a no-op unless a polled journal carries SE/AE — neither Econometrica nor
+  // EJOR does).
   await applyInformsEditors(bySource);
 
   // A DOI adoption keeps the paper's original "Date Added": seed the new key
@@ -1993,6 +2125,13 @@ async function incrementalMain() {
     .map(r => { const { ['Date Added']: _da, ...rest } = r; return rehydrateRow(rest); });
   const incrPapers = incrJournals.flatMap(src => bySource[src.key]);
   const recent = buildRecent([...carriedRecent, ...incrPapers], registry);
+  // The exact counts behind the page's "added in the last 4 weeks" figure: the
+  // polled journals recomputed from their full row sets (NOT from the capped
+  // carriedRecent, which cannot be trusted to hold all of a burst day), every
+  // other journal carried from the last write.
+  const prevRecentCounts = await loadJsonIfExists(join(DATA_DIR, 'recent-counts.json'), null);
+  const recentCounts = mergeRecentCounts(
+    prevRecentCounts, buildRecentCounts(incrPapers, registry), incrKeys);
 
   // Rewrite only the changed per-source files.
   for (const src of incrJournals) {
@@ -2007,12 +2146,14 @@ async function incrementalMain() {
 
   if (sources) await writeJson('sources.json', sources);
   await writeJson('recent.json', recent);
+  await writeJson('recent-counts.json', recentCounts);
   await writeJson('meta.json', meta);
   await writeJson('_registry.json', registry);
 
   const newlyRegistered = Object.keys(registry).length - registryBefore;
   console.log(`ft50 incremental update: {${[...changedSources].join(', ') || 'none'}} changed, ` +
-    `${newlyRegistered} newly-registered, ${recent.length} recent, ${total} total papers.`);
+    `${newlyRegistered} newly-registered, ${recent.length} recent ` +
+    `(${recentCounts.total} added in the last ${RECENT_WINDOW_DAYS} days), ${total} total papers.`);
 }
 
 // Only run when executed directly — importing a helper from this module for a

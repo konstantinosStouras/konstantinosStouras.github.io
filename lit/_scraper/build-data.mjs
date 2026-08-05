@@ -44,6 +44,10 @@
  *   authors.json         per-author aggregates across all sources (≥2 papers)
  *   affiliations.json    per-affiliation aggregates
  *   recent.json          papers first seen in the last RECENT_WINDOW_DAYS
+ *                        (capped at RECENT_CAP rows — it is fetched with the
+ *                        page, so it carries the newest slice, not all of it)
+ *   recent-counts.json   the UNCAPPED tally behind the page's "N papers added
+ *                        in the last 4 weeks": per journal-key set, per day
  *   meta.json            { lastPull, paperCount, authorCount, perSource }
  *                        (authorCount = distinct authors pre-trim, for the
  *                        page's header stat)
@@ -81,11 +85,12 @@ const MOCK_DIR = join(__dirname, 'mock');
 const MAILTO = process.env.LIT_MAILTO || 'kstouras@gmail.com';
 // Optional Semantic Scholar API key — moves the S2 legs off the throttled
 // anonymous pool. Inert until the S2_API_KEY secret/env is set.
-const S2_KEY = process.env.S2_API_KEY || '';
+const S2_KEY = (process.env.S2_API_KEY || '').trim();
 
 const MOCK = MOCK_RUN;
 const ROWS = 1000;                  // Crossref max page size
 const RECENT_WINDOW_DAYS = 90;      // buffer; the page shows the last 4 weeks
+const RECENT_CAP = 1000;            // recent.json is pre-fetched on every page load
 const SEED_COUNT = 40;              // first run: mark the newest N as "just added"
 const TOP_AFFILIATIONS = 2000;
 const MAX_ABSTRACT = 4000;          // chars; keeps the big files bounded
@@ -222,8 +227,9 @@ const SELECT = [
 // as literal markup and every other entity ("&apos;", "&nbsp;", "&EACUTE;")
 // rendered raw on the page.
 import { cleanText as stripJats, trimTrailingSeparators, titleText,
-  affilName, affilParts, affilList, stripPageFurniture } from './_entities.mjs';
-export { stripJats, trimTrailingSeparators, titleText, affilName, affilParts, affilList, stripPageFurniture };
+  affilName, affilParts, affilList, stripPageFurniture, junkAbstract, stripHighlights,
+  nameCase } from './_entities.mjs';
+export { stripJats, trimTrailingSeparators, titleText, affilName, affilParts, affilList, stripPageFurniture, junkAbstract };
 
 // PNAS deposits its one-paragraph "Significance" statement inside the Crossref
 // JATS abstract as its own <sec>. Pull that section out (already stripped of
@@ -258,8 +264,10 @@ function authorName(a) {
   // Decode any deposited entities ("R&eacute;gis", "Bilge Y&inodot;lmaz") FIRST,
   // then strip commas — the page splits Authors on commas, so a decoded comma
   // must never survive into the name.
+  // nameCase (user report 2026-08): Wiley/JAR/CAR deposit some names fully
+  // capitalized ("MICHAEL EWENS") — re-cased only when the whole name shouts.
   const nm = stripJats([a.given, a.family].filter(Boolean).join(' ') || a.name || '');
-  return nm.replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
+  return nameCase(nm.replace(/,/g, ' ').replace(/\s+/g, ' ').trim());
 }
 
 // ── Management Science editor/area extraction ─────────
@@ -354,7 +362,14 @@ function mapWork(item, src) {
   // stripPageFurniture (feedback LIT-260727-XRQ8): a deposited "abstract" can
   // be a scraped article-page blob (share bar, "No abstract is available for
   // this article.") — never abstract prose; served as '' instead.
-  const abstract = stripPageFurniture(stripJats(abstractSrc)).slice(0, MAX_ABSTRACT);
+  // junkAbstract (user report 2026-08): INFORMS deposits an editorial
+  // plain-language summary as the Crossref abstract for many OR/ISR/MS papers
+  // ("In '<Title>', <the authors> develop…") — never the paper's abstract, so
+  // it is dropped and the pubsonline harvest fills the real text (the row
+  // becomes "needy" for informs-abstracts-local.mjs).
+  let abstract = stripHighlights(stripPageFurniture(stripJats(abstractSrc)).slice(0, MAX_ABSTRACT));
+  if (abstract && junkAbstract(abstract,
+    { title, authors: authorsArr.join(', '), journal: src.name })) abstract = '';
 
   // Editors/Areas: Management Science only (per the page's design).
   let editor = '', area = '';
@@ -510,6 +525,8 @@ async function applyInformsAbstracts(bySource) {
     for (const p of bySource[src.key] || []) {
       const rec = map[p._doi];
       if (!rec || !rec.a) continue;
+      // A cached capture that is itself a summary/citation stub is never applied.
+      if (junkAbstract(rec.a, { title: p.Title, authors: p.Authors, journal: p.Journal })) continue;
       if (betterAbstract(p.Abstract, rec.a)) { p.Abstract = rec.a.slice(0, MAX_ABSTRACT); upgraded++; }
     }
   }
@@ -739,6 +756,159 @@ function mapJournal(rawWorks, src) {
     papers.push(row);
   }
   return papers;
+}
+
+// ── By-DOI rescue of papers the journal route misses ────────────────────────
+// coverage-audit.mjs proved that Crossref's per-journal listing can silently
+// omit real papers it still serves BY DOI (Operations Research vol 67's issue 2
+// is entirely absent from /journals/0030-364X/works, yet each of its DOIs
+// resolves) — and since the daily build REPLACES each journal from that
+// listing, a one-off data patch would be wiped the next morning. So the rescue
+// lives in the harvest: data/_rescue-dois.json names, per journal key, explicit
+// DOIs ('dois') and/or OpenAlex volume scans ('scans': [{volume}]) that are
+// resolved each build; whatever the journal route missed is batch-fetched from
+// Crossref by DOI and APPENDED TO THE RAW ITEMS — so the type filter, mapWork
+// sanitization, duplicate collapse and registry stamping all apply to rescued
+// rows exactly as to harvested ones. Guards: a scan-found DOI is accepted only
+// when the fetched record's own volume matches the scan (an OpenAlex
+// misattribution can never smuggle another journal's paper in); an explicit
+// DOI Crossref cannot resolve is REPORTED and skipped, never fabricated — that
+// is also how a suspected-missing DOI is probed (it may be a bad reference).
+// Wholly non-fatal: any failure just yields no extra items this build; rescued
+// rows persist across the day because the incremental pass upserts into the
+// committed files. ::notice:: lines surface results as annotations on the
+// Actions run page (readable without log access).
+export async function rescueMissingWorks(src, rawItems) {
+  try {
+    return await rescueInner(src, rawItems);
+  } catch (e) {
+    // Airtight non-fatality: even a malformed manifest shape (e.g. 'dois' not
+    // an array) must never sink the daily build — it just means no rescue.
+    console.warn(`  rescue(${src.key}): failed (${e.message}) — no rescue this build.`);
+    return [];
+  }
+}
+async function rescueInner(src, rawItems) {
+  const manifest = await loadJsonIfExists(join(DATA_DIR, '_rescue-dois.json'), null);
+  const spec = manifest && manifest[src.key];
+  if (!spec || typeof spec !== 'object') return [];
+  const bare = (d) => String(d || '').trim().toLowerCase()
+    .replace(/^https?:\/\/(dx\.)?doi\.org\//, '');
+  const have = new Set();
+  for (const it of rawItems) { const d = bare(it.DOI); if (d) have.add(d); }
+
+  // 1. Resolve the wanted set: explicit DOIs + OpenAlex volume scans.
+  const explicit = new Set((spec.dois || []).map(bare).filter(Boolean));
+  const scanVolume = new Map();                  // doi -> volume it must carry
+  for (const scan of spec.scans || []) {
+    const vol = String(scan.volume || '').trim();
+    if (!vol) continue;
+    try {
+      if (MOCK) {
+        const raw = await loadJsonIfExists(join(MOCK_DIR, `openalex-rescue-${src.key}.json`), null);
+        for (const w of (raw && (raw.results || raw)) || []) {
+          const d = bare(w.doi); if (d) scanVolume.set(d, vol);
+        }
+        continue;
+      }
+      let cursor = '*';
+      for (let page = 0; page < 10 && cursor; page++) {   // 200/page — a volume is 1-2 pages
+        const url = 'https://api.openalex.org/works?filter=' +
+          encodeURIComponent(`locations.source.issn:${src.issns[0]},biblio.volume:${vol}`) +
+          `&select=doi,biblio&per-page=200&cursor=${encodeURIComponent(cursor)}&mailto=${encodeURIComponent(MAILTO)}`;
+        const body = await fetchJson(url);
+        for (const w of body.results || []) {
+          if (String((w.biblio || {}).volume || '') !== vol) continue;
+          const d = bare(w.doi); if (d) scanVolume.set(d, vol);
+        }
+        cursor = (body.meta || {}).next_cursor || '';
+        if (!(body.results || []).length) break;
+        await sleep(200);
+      }
+    } catch (e) {
+      console.log(`::notice::rescue(${src.key}): OpenAlex scan vol ${vol} FAILED (${e.message}) — skipping this scan.`);
+    }
+  }
+
+  const missing = [...new Set([...explicit, ...scanVolume.keys()])].filter(d => !have.has(d));
+  // Every outcome for a manifest journal is a ::notice:: — Actions-run
+  // annotations are the one remotely-readable channel (raw logs sit behind a
+  // blob host most build sandboxes cannot reach), and "scan found nothing
+  // missing" vs "scan found nothing AT ALL" is exactly the signal that decides
+  // whether the upstream indexes even carry the papers.
+  console.log(`::notice::rescue(${src.key}): scan found ${scanVolume.size} DOI(s) on OpenAlex, ` +
+    `${explicit.size} explicit in the manifest; ${missing.length} absent from the harvest.`);
+  if (!missing.length) return [];
+
+  // 2. Batch-fetch the missing DOIs from Crossref (filter=doi: ORs same-name
+  // filters together, like the citations sweep / refs backfill).
+  const fetched = [];
+  try {
+    if (MOCK) {
+      const raw = await loadJsonIfExists(join(MOCK_DIR, `crossref-rescue-${src.key}.json`), null);
+      const items = (raw && (raw.message ? raw.message.items : raw)) || [];
+      const want = new Set(missing);
+      for (const it of items) if (want.has(bare(it.DOI))) fetched.push(it);
+    } else {
+      for (let i = 0; i < missing.length; i += 25) {
+        const batch = missing.slice(i, i + 25);
+        const url = 'https://api.crossref.org/works?filter=' +
+          encodeURIComponent(batch.map(d => `doi:${d}`).join(',')) +
+          `&rows=${batch.length}&select=${encodeURIComponent(SELECT)}&mailto=${encodeURIComponent(MAILTO)}`;
+        const body = await fetchJson(url);
+        fetched.push(...(body.message.items || []));
+        await sleep(300);
+      }
+      // The filter route only sees works Crossref has INDEXED; a registered
+      // DOI can still resolve on the singular endpoint (validated live: the
+      // batch returned nothing for opre.2018.1783). Try each still-unfetched
+      // EXPLICIT DOI directly before concluding it unresolvable.
+      const got = new Set(fetched.map(it => bare(it.DOI)));
+      for (const d of missing) {
+        if (got.has(d) || !explicit.has(d)) continue;
+        try {
+          const one = await fetchJson('https://api.crossref.org/works/' +
+            encodeURIComponent(d) + `?mailto=${encodeURIComponent(MAILTO)}`);
+          if (one && one.message && one.message.DOI) fetched.push(one.message);
+        } catch { /* 404 etc. -> stays unresolvable, reported below */ }
+        await sleep(300);
+      }
+    }
+  } catch (e) {
+    console.log(`::notice::rescue(${src.key}): Crossref by-DOI fetch FAILED (${e.message}) — no rescue this build.`);
+    return [];
+  }
+
+  // 3. Guards: journal-article only; a scan-found DOI must carry the scan's
+  // volume in the fetched record itself (explicit DOIs are trusted as listed).
+  const kept = [];
+  const volDropped = new Set();
+  for (const it of fetched) {
+    const d = bare(it.DOI);
+    if (!d) continue;
+    if (it.type && it.type !== 'journal-article') continue;
+    if (!explicit.has(d) && scanVolume.has(d) &&
+        String(it.volume || '') !== scanVolume.get(d)) {
+      volDropped.add(d);
+      console.warn(`  rescue(${src.key}): ${d} dropped — Crossref says volume ` +
+        `${it.volume || '?'}, the scan expected ${scanVolume.get(d)} (misattribution guard).`);
+      continue;
+    }
+    kept.push(it);
+  }
+  const resolved = new Set(kept.map(it => bare(it.DOI)));
+  const unresolvable = missing.filter(d => !resolved.has(d) && !volDropped.has(d));
+  if (kept.length) {
+    console.log(`::notice::rescue(${src.key}): +${kept.length} paper(s) fetched by DOI that the journal-route listing missed.`);
+  }
+  for (const d of unresolvable) {
+    if (explicit.has(d)) {
+      console.log(`::notice::rescue(${src.key}): ${d} did not resolve as a ${src.key} journal-article — likely a bad citation, NOT added.`);
+    } else {
+      console.warn(`  rescue(${src.key}): scan-found ${d} not served/kept by Crossref — skipped.`);
+    }
+  }
+  return kept;
 }
 
 // ── PNAS ────────────────────────────────────────────────────────────────────
@@ -1441,10 +1611,12 @@ async function enrichEc(rows, extras, dblpPrefetched) {
     const x = extras[keyOf(r)];
     if (!x) continue;
     if (x.pdf) { r.PDF = canonPreprint(x.pdf); withPdf++; }
-    // stripPageFurniture also guards abstracts CACHED before the guard existed.
+    // stripPageFurniture also guards abstracts CACHED before the guard existed;
+    // junkAbstract likewise rejects a cached summary/citation-stub capture.
     if (!r.Abstract && x.abs) {
       const a = stripPageFurniture(x.abs);
-      if (a.length >= 60) r.Abstract = a;
+      if (a.length >= 60 &&
+          !junkAbstract(a, { title: r.Title, authors: r.Authors, journal: r.Journal })) r.Abstract = a;
     }
     // A DOI-less accepted paper can never receive a Preprint link from the
     // DOI-keyed _preprints.json cache — surface its arXiv/SSRN copy directly.
@@ -2397,8 +2569,74 @@ function buildRecent(papers, registry) {
   }
   rows.sort((a, b) => (b.d - a.d) || (b.p._rank - a.p._rank) || cmp(regKey(a.p), regKey(b.p)));
   // Hard cap: recent.json is pre-fetched on every page load, so it must stay
-  // small even if a burst of papers lands on one day.
-  return rows.slice(0, 1000).map(x => ({ ...publicRow(x.p), 'Date Added': registry[regKey(x.p)] }));
+  // small even if a burst of papers lands on one day. The count the page shows
+  // does NOT come from these rows — see buildRecentCounts.
+  return rows.slice(0, RECENT_CAP).map(x => ({ ...publicRow(x.p), 'Date Added': registry[regKey(x.p)] }));
+}
+
+// The EXACT tally behind the page's "N papers added in the last 4 weeks", as a
+// per-journal × per-day map over the same window recent.json covers.
+//
+// Why it exists: recent.json is capped (it ships with every page load), so on a
+// burst day — a new journal's back-catalogue landing, a re-registration sweep —
+// its rows are only the NEWEST RECENT_CAP of the window and a count taken from
+// them silently under-reports what was really added. This companion is never
+// capped and stays ~1 KB (a few integers per journal per day), so the number is
+// right no matter how many papers arrive; it is rewritten by every pass that
+// can change the corpus (full build, incremental, dedupe), so it also falls
+// when papers are REMOVED.
+//
+// Keyed by the paper's WHOLE scope-key set, '|'-joined ("pnas|pnas-econ") —
+// journal key first, then its PNAS section keys — because that is what the
+// page's journal filter matches a row on (any one key in scope shows the row).
+// Emitting the combination rather than one row per section is what keeps a
+// paper filed under several sections from being counted twice.
+export function buildRecentCounts(papers, registry) {
+  const cutoff = new Date(PULL_DATE + 'T00:00:00');
+  cutoff.setDate(cutoff.getDate() - RECENT_WINDOW_DAYS);
+  const days = {};
+  let total = 0;
+  for (const p of papers) {
+    const ds = registry[regKey(p)];
+    if (!ds) continue;
+    const d = new Date(ds + 'T00:00:00');
+    if (isNaN(d) || d < cutoff) continue;
+    const k = recentScopeKey(p);
+    if (!k) continue;
+    const perDay = days[k] || (days[k] = {});
+    perDay[ds] = (perDay[ds] || 0) + 1;
+    total++;
+  }
+  return recentCountsFile(days, total);
+}
+
+// Every journal key a row answers to, '|'-joined (mirrors computeJkeys in
+// index.html). Section keys are read from the internal _secKeys when this runs
+// inside a full build and from the public Sections names when the row came back
+// from a committed papers file (the incremental pass), and sorted, so both
+// paths produce the same key.
+const PNAS_SEC_KEY_BY_NAME = Object.fromEntries(PNAS_SECTIONS.map(s => [s.name, s.key]));
+export function recentScopeKey(p) {
+  const jkey = p.JKey || '';
+  if (!jkey) return '';
+  const sec = (p._secKeys && p._secKeys.length)
+    ? p._secKeys
+    : (p.Sections || []).map(n => PNAS_SEC_KEY_BY_NAME[n]);
+  const extra = [...new Set(sec.filter(k => k && k !== jkey))].sort();
+  return [jkey, ...extra].join('|');
+}
+
+// Deterministic serialization (sorted keys) so an unchanged corpus produces
+// identical bytes and therefore no needless commit — the same discipline
+// writeJson() relies on.
+function recentCountsFile(days, total) {
+  const sorted = {};
+  for (const k of Object.keys(days).sort()) {
+    const perDay = {};
+    for (const d of Object.keys(days[k]).sort()) perDay[d] = days[k][d];
+    sorted[k] = perDay;
+  }
+  return { generated: PULL_DATE, windowDays: RECENT_WINDOW_DAYS, total, days: sorted };
 }
 
 function publicRow(p) {
@@ -2421,15 +2659,24 @@ function mergeSupplement(bySource) {
     const src = JOURNALS.find(j => j.key === s.jkey && j.aia);
     if (!src || !bySource[src.key]) continue; // only known advance-publishing sources
     seen.add(doi);
-    const year = String(s.Year || PULL_DATE.slice(0, 4));
+    // A supplement row honours _aia-fixups.json like a harvested one: a paper
+    // Crossref lost entirely (OR 67/68's frozen issues) is supplied here with
+    // its real volume/issue/pages from the fixups, landing PUBLISHED — only a
+    // row with no fixup keeps the forthcoming "Articles in Advance" shape.
+    const fx = AIA_FIXUPS[doi] || {};
+    const volume = fx.volume != null && fx.volume !== '' ? String(fx.volume) : '';
+    const issue = fx.issue != null && fx.issue !== '' ? String(fx.issue) : '';
+    const page = fx.page ? String(fx.page) : '';
+    const year = String(fx.year || s.Year || PULL_DATE.slice(0, 4));
+    const status = volume || issue ? '' : 'Articles in Advance';
     const row = {
       Title: titleText(s.Title),
       Authors: s.Authors || '',
       Affiliations: affilList(s.Affiliations),
       DOI: 'https://doi.org/' + rawDoi,
-      Volume: '', Issue: '', Page: '',
+      Volume: volume, Issue: issue, Page: page,
       Year: year,
-      Status: 'Articles in Advance',
+      Status: status,
       Abstract: s.Abstract ? stripPageFurniture(stripJats(s.Abstract)) : '',
       'Accepting Editor': s['Accepting Editor'] || '',
       Area: normArea(s.Area || ''),
@@ -2437,14 +2684,70 @@ function mergeSupplement(bySource) {
       JKey: src.key,
       _doi: doi,
       _orcids: [],
-      _rank: pubRank({}, '', '', 'Articles in Advance', year),
+      _rank: pubRank({ page }, volume, issue, status, year),
     };
     if (src.seEditors) row['Senior Editor'] = s['Senior Editor'] || '';
     if (src.aeEditors) row['Associate Editor'] = s['Associate Editor'] || '';
+    if (row.Abstract && junkAbstract(row.Abstract,
+      { title: row.Title, authors: row.Authors, journal: row.Journal })) row.Abstract = '';
     bySource[src.key].push(row);
     added++;
   }
   if (added) console.log(`  merged ${added} forthcoming papers from the INFORMS supplement`);
+}
+
+// A supplement paper Crossref lacks ENTIRELY (the three OR rows) has no
+// harvest-side abstract source, and pubsonline needs a local crawl — but
+// OpenAlex often carries the work anyway (it indexes beyond Crossref; those
+// rows' CitedBy counts already come from there). Fill EMPTY supplement-row
+// abstracts from OpenAlex's abstract_inverted_index, guarded like every other
+// abstract ingest, and WRITE THE TEXT BACK into _informs-aia.json so later
+// builds serve it without re-fetching. Wholly non-fatal; inert in mock runs.
+function oaInvertedAbstract(inv) {
+  if (!inv || typeof inv !== 'object') return '';
+  const words = [];
+  for (const [w, positions] of Object.entries(inv)) {
+    if (!Array.isArray(positions)) continue;
+    for (const pos of positions) if (Number.isInteger(pos) && pos >= 0) words[pos] = w;
+  }
+  return words.join(' ').replace(/\s+/g, ' ').trim();
+}
+
+async function backfillSupplementAbstracts(bySource) {
+  if (MOCK) return;
+  try {
+    const supDois = new Set(Object.keys(AIA_SUPPLEMENT)
+      .filter(k => k !== '_comment').map(k => k.toLowerCase()));
+    if (!supDois.size) return;
+    const byDoi = new Map();
+    for (const k of Object.keys(bySource)) for (const p of bySource[k])
+      if (p._doi && !p.Abstract && supDois.has(p._doi)) byDoi.set(p._doi, p);
+    if (!byDoi.size) return;
+    const url = 'https://api.openalex.org/works?filter=doi:' +
+      [...byDoi.keys()].slice(0, 50).join('|') +
+      '&per-page=50&select=doi,abstract_inverted_index' +
+      `&mailto=${encodeURIComponent(MAILTO)}`;
+    const r = await oaGet(url);
+    if (!r.ok) return;
+    let filled = 0;
+    for (const w of (r.json && r.json.results) || []) {
+      const doi = String(w.doi || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase();
+      const p = byDoi.get(doi);
+      if (!p) continue;
+      const text = stripHighlights(stripPageFurniture(stripJats(
+        oaInvertedAbstract(w.abstract_inverted_index)))).slice(0, MAX_ABSTRACT);
+      if (text.length < 60 ||
+        junkAbstract(text, { title: p.Title, authors: p.Authors, journal: p.Journal })) continue;
+      p.Abstract = text;
+      const key = Object.keys(AIA_SUPPLEMENT).find(k => k.toLowerCase() === doi);
+      if (key && AIA_SUPPLEMENT[key] && !AIA_SUPPLEMENT[key].Abstract) AIA_SUPPLEMENT[key].Abstract = text;
+      filled++;
+    }
+    if (filled) {
+      await writeJson('_informs-aia.json', AIA_SUPPLEMENT);
+      console.log(`  supplement: filled ${filled} abstract(s) from OpenAlex`);
+    }
+  } catch { /* non-fatal — the pubsonline needy harvest remains the fallback */ }
 }
 
 // ── Main ────────────────────────────────────────────────────────────────────
@@ -2455,10 +2758,15 @@ async function main() {
 
   const bySource = {}; // key -> rows (internal shape)
 
-  // 1. The eight journals.
+  // 1. The eight journals. After each journal-route pull, top up any papers
+  // the listing missed but Crossref still serves by DOI (rescueMissingWorks,
+  // driven by data/_rescue-dois.json — e.g. Operations Research vol 67's
+  // missing issues). Appended to the RAW items so mapJournal/mapWork/
+  // collapseSameWork treat rescued rows exactly like harvested ones.
   for (const src of JOURNALS) {
     console.log(`${src.name} (${src.issns.join(', ')}):`);
     const raw = await fetchJournalWorks(src);
+    raw.push(...await rescueMissingWorks(src, raw));
     bySource[src.key] = mapJournal(raw, src);
     console.log(`  ${src.key}: ${bySource[src.key].length} papers`);
   }
@@ -2501,6 +2809,7 @@ async function main() {
   console.log(`  ec: ${ecRows.length} papers (${ecItems.length} from ACM DL via Crossref)`);
 
   mergeSupplement(bySource);
+  await backfillSupplementAbstracts(bySource);
 
   // Collapse duplicate registrations of the same work (second DOIs Crossref
   // still serves) so a paper is never listed twice — see collapseSameWork.
@@ -2551,6 +2860,7 @@ async function main() {
   const authors = buildAuthors(allPapers);
   const affiliations = buildAffiliations(allPapers);
   const recent = buildRecent(allPapers, registry);
+  const recentCounts = buildRecentCounts(allPapers, registry);
 
   // 5. Write per-source paper files + manifest.
   const sources = [];
@@ -2583,12 +2893,14 @@ async function main() {
   await writeJson('authors.json', authors.rows);
   await writeJson('affiliations.json', affiliations);
   await writeJson('recent.json', recent);
+  await writeJson('recent-counts.json', recentCounts);
   await writeJson('meta.json', meta);
   await writeJson('_registry.json', registry);
 
   console.log(`done: ${total} papers (${sources.map(s => `${s.key}:${s.count}`).join(' ')}), ` +
     `${authors.distinct} authors (${authors.rows.length} listed), ` +
-    `${affiliations.length} affiliations, ${recent.length} recent`);
+    `${affiliations.length} affiliations, ${recent.length} recent ` +
+    `(${recentCounts.total} added in the last ${RECENT_WINDOW_DAYS} days)`);
 }
 
 async function writeJson(name, data) {
@@ -2720,6 +3032,14 @@ async function incrementalMain() {
       if (typeof nr.CitedBy === 'number' && nr.CitedBy > (cur.CitedBy || 0)) {
         cur.CitedBy = nr.CitedBy; delete cur.CitedBySrc; rowChanged = true;
       }
+      // A publisher may deposit the abstract only AFTER first registration, so
+      // a row added abstract-less used to wait for the next daily rebuild to
+      // gain it. Take a materially fuller one now — via betterAbstract, so an
+      // overlay-cache abstract (the pubsonline full text) is never regressed
+      // back to a Crossref teaser.
+      if (nr.Abstract && betterAbstract(cur.Abstract, nr.Abstract)) {
+        cur.Abstract = String(nr.Abstract).slice(0, MAX_ABSTRACT); rowChanged = true;
+      }
       if (rowChanged) {
         cur._rank = pubRank({ page: cur.Page }, cur.Volume, cur.Issue, cur.Status, cur.Year);
         updated++;
@@ -2817,17 +3137,22 @@ async function incrementalMain() {
     : null;
 
   const recent = buildRecent(allPapers, registry);
+  // Recomputed over the WHOLE corpus (not just the polled journals), so the
+  // page's "added in the last 4 weeks" figure tracks every 15-minute pass.
+  const recentCounts = buildRecentCounts(allPapers, registry);
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   const meta = { ...prevMeta, lastPull: PULL_DATE, paperCount: total, perSource: counts };
 
   if (sources) await writeJson('sources.json', sources);
   await writeJson('recent.json', recent);
+  await writeJson('recent-counts.json', recentCounts);
   await writeJson('meta.json', meta);
   await writeJson('_registry.json', registry);
 
   const newlyRegistered = Object.keys(registry).length - registryBefore;
   console.log(`incremental update: {${[...changedSources].join(', ') || 'none'}} changed, ` +
-    `${newlyRegistered} newly-registered, ${recent.length} recent, ${total} total papers.`);
+    `${newlyRegistered} newly-registered, ${recent.length} recent ` +
+    `(${recentCounts.total} added in the last ${RECENT_WINDOW_DAYS} days), ${total} total papers.`);
 }
 
 // Only run when executed directly — importing a helper from this module for a

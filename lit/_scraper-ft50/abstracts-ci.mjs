@@ -46,7 +46,17 @@ import { existsSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { betterAbstract, ABS_MAX } from '../_scraper/informs-abstracts.mjs';
-import { cleanText, stripPageFurniture } from '../_scraper/_entities.mjs';
+import { cleanText, stripPageFurniture, junkAbstract, stripHighlights } from '../_scraper/_entities.mjs';
+
+// junkAbstract (user report 2026-08): OpenAlex/S2 mirror the publisher's
+// Crossref deposit, so for a paper whose deposit is an editorial plain-language
+// summary or a citation-line stub the APIs serve the SAME junk back — each leg
+// must reject it against the row's own title/authors or the backfill would
+// reinstate exactly what the build guard dropped. HBR / MIT SMR rows are
+// exempt (practitioner decks are those journals' own summary text).
+const JUNK_ABS_EXEMPT_KEYS = new Set(['hbr', 'smr']);
+const rowGuardCtx = (row) => JUNK_ABS_EXEMPT_KEYS.has(row.JKey) ? null
+  : { title: row.Title, authors: row.Authors, journal: row.Journal };
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.FT50_DATA_DIR || resolve(__dirname, '..', 'data-ft50');
@@ -56,21 +66,21 @@ const BUDGET_MS = parseInt(process.env.FT50_ABS_BUDGET_MS || '', 10) || 40 * 60 
 const PACE_MS = Math.max(150, parseInt(process.env.FT50_ABS_PACE_MS || '', 10) || 300);
 const MISS_TTL_DAYS = parseInt(process.env.FT50_ABS_MISS_TTL_DAYS || '', 10) || 45;
 const USE_S2 = process.env.FT50_ABS_S2 !== '0';
-const S2_KEY = process.env.S2_API_KEY || '';
-const ELS_KEY = process.env.ELSEVIER_API_KEY || '';
+const S2_KEY = (process.env.S2_API_KEY || '').trim();
+const ELS_KEY = (process.env.ELSEVIER_API_KEY || '').trim();
 // Optional institutional token (X-ELS-Insttoken): Elsevier entitles ABSTRACT
 // text to an API key by the caller's INSTITUTIONAL IP RANGE — a GitHub runner
 // is off-campus, so without an insttoken most responses can carry metadata but
 // no dc:description. Request one via dev.elsevier.com support for server-side
 // use; inert until set.
-const ELS_INSTTOKEN = process.env.ELSEVIER_INST_TOKEN || '';
+const ELS_INSTTOKEN = (process.env.ELSEVIER_INST_TOKEN || '').trim();
 const ELS_PACE_MS = Math.max(250, parseInt(process.env.FT50_ABS_ELS_PACE_MS || '', 10) || 350);
 const ELS_PREFIX = /^10\.1016\//;
 // Springer Nature Meta API (free key from dev.springernature.com — the META
 // key, not the Open Access one): serves abstracts for Springer/Palgrave/Kluwer
 // DOIs. Inert until a SPRINGER_API_KEY secret is set; the leg drops out for
 // the run on 401/403/429 so a spent daily quota never stalls the others.
-const SPR_KEY = process.env.SPRINGER_API_KEY || '';
+const SPR_KEY = (process.env.SPRINGER_API_KEY || '').trim();
 const SPR_PACE_MS = Math.max(250, parseInt(process.env.FT50_ABS_SPR_PACE_MS || '', 10) || 400);
 const SPR_PREFIX = /^10\.(1007|1057|1023)\//;
 const NEEDY_MAX_LEN = 300; // mirror the INFORMS harvester's teaser threshold
@@ -93,6 +103,17 @@ export function invertedToText(inv) {
 // the selftest. The shape is {"abstracts-retrieval-response":{"coredata":
 // {"dc:description": …}}}; dc:description is usually a plain string but can be
 // a nested {abstract:{'ce:para': …}} object — take the first string found.
+// Should a still-unresolved DOI be written off as a miss for MISS_TTL_DAYS?
+// No, if a KEYED per-DOI leg owns this publisher's prefix but never actually
+// tried this DOI (bad/expired key, spent quota, or the time budget cut the leg
+// mid-batch). Stamping those records a long miss for a check that never
+// happened. Pure, so the rule is unit-testable without any network.
+export function shouldStampMiss(doi, { elsKey, sprKey, elsPrefix, sprPrefix, keyedTried }) {
+  if (elsKey && elsPrefix.test(doi) && !keyedTried.has(doi)) return false;
+  if (sprKey && sprPrefix.test(doi) && !keyedTried.has(doi)) return false;
+  return true;
+}
+
 export function elsevierAbstract(body) {
   const core = body && body['abstracts-retrieval-response'] &&
     body['abstracts-retrieval-response'].coredata;
@@ -105,7 +126,7 @@ export function elsevierAbstract(body) {
   };
   // stripPageFurniture (feedback LIT-260727-XRQ8): reject a scraped
   // article-page blob served in place of abstract prose.
-  return stripPageFurniture(cleanText(firstString(d)));
+  return stripHighlights(stripPageFurniture(cleanText(firstString(d))));
 }
 
 // The abstract out of a Springer Meta API v2 JSON response ({records:[{abstract}]}).
@@ -119,7 +140,7 @@ export function springerAbstract(body) {
     if (v && typeof v === 'object') { for (const x of Object.values(v)) { const s = firstString(x); if (s) return s; } }
     return '';
   };
-  return stripPageFurniture(cleanText(firstString(rec && rec.abstract)).replace(/^Abstract\s+/i, ''));
+  return stripHighlights(stripPageFurniture(cleanText(firstString(rec && rec.abstract)).replace(/^Abstract\s+/i, '')));
 }
 
 // Merge another cache in: an entry WITH an abstract beats a none-record, a
@@ -185,12 +206,12 @@ async function main() {
     let healed = 0;
     for (const [k, v] of Object.entries(cache)) {
       if (!v || !v.a) continue;
-      const t = stripPageFurniture(v.a);
+      const t = stripHighlights(stripPageFurniture(v.a));
       if (t === v.a) continue;
       if (t.length >= 60) cache[k] = { a: t }; else cache[k] = { none: 1, t: day() };
       healed++;
     }
-    if (healed) console.log(`  healed ${healed} furniture-contaminated cached abstracts`);
+    if (healed) console.log(`  healed ${healed} furniture/highlights-contaminated cached abstracts`);
   }
 
   async function saveCache() {
@@ -200,19 +221,30 @@ async function main() {
   }
 
   async function applyToPapers() {
-    let total = 0;
+    let total = 0, junked = 0;
     for (const f of paperFiles()) {
       const p = join(DATA_DIR, f);
       const rows = await loadJson(p, null);
       if (!rows) continue;
       let up = 0;
       for (const row of rows) {
-        const rec = cache[bareDoi(row)];
+        const doi = bareDoi(row);
+        const rec = cache[doi];
         if (!rec || !rec.a) continue;
+        // A junk "abstract" cached before the guard existed (an API copy of a
+        // publisher summary/citation-stub deposit) is never applied and is
+        // re-stamped a TTL miss so it is re-resolved under the guard.
+        const ctx = rowGuardCtx(row);
+        if (ctx && junkAbstract(rec.a, ctx)) {
+          cache[doi] = { none: 1, t: day() };
+          junked++;
+          continue;
+        }
         if (betterAbstract(row.Abstract, rec.a)) { row.Abstract = rec.a.slice(0, ABS_MAX); up++; }
       }
       if (up) { await awrite(p, JSON.stringify(rows)); total += up; console.log(`  ${f}: upgraded ${up} abstracts`); }
     }
+    if (junked) { console.log(`  re-stamped ${junked} junk cached "abstracts" as misses`); await saveCache(); }
     console.log(total
       ? `✓ Applied the API cache to the served FT50 papers files (${total} abstracts).`
       : '  FT50 papers files already carry every cached abstract — nothing to apply.');
@@ -225,14 +257,19 @@ async function main() {
   }
 
   // Needy list: every FT50 row with a missing/stub abstract, newest first,
-  // skipping cached hits and fresh misses.
+  // skipping cached hits and fresh misses. rowMeta carries each needy row's
+  // title/authors/journal so the API legs can reject a junk "abstract" (a
+  // mirror of the publisher's summary/citation-stub deposit) on arrival.
   const needy = [];
+  const rowMeta = new Map();
   for (const f of paperFiles()) {
     const rows = await loadJson(join(DATA_DIR, f), []);
     for (const row of rows) {
       if (!isNeedy(row)) continue;
       const doi = bareDoi(row);
       if (!doi) continue;
+      const ctx = rowGuardCtx(row);
+      if (ctx && !rowMeta.has(doi)) rowMeta.set(doi, ctx);
       const cur = cache[doi];
       if (cur && cur.a) continue;
       if (cur && cur.none && (day() - (cur.t || 0)) < MISS_TTL_DAYS &&
@@ -241,11 +278,16 @@ async function main() {
       needy.push({ doi, y: parseInt(row.Year, 10) || 0 });
     }
   }
+  const junkForDoi = (doi, text) => {
+    const m = rowMeta.get(doi);
+    return m ? junkAbstract(text, m) : '';
+  };
   needy.sort((a, b) => b.y - a.y);
   console.log(`${needy.length} FT50 papers need an abstract (missing/stub, cache-eligible).`);
   if (DRY) return;
 
   let s2ok = USE_S2, elsOk = true, found = 0, checked = 0, batches = 0;
+  let elsDropCode = 0;
   const elsStats = { found: 0, empty: 0, e404: 0, other: 0 };
   let sprOk = true;
   const sprStats = { found: 0, empty: 0, other: 0 };
@@ -254,6 +296,11 @@ async function main() {
     if (Date.now() - T0 > BUDGET_MS) { console.log('⏱ budget spent — stopping this slice (resume-safe).'); break; }
     const batch = needy.slice(i, i + 50).map(n => n.doi);
     let unresolved = new Set(batch);
+    // Which DOIs a KEYED, per-DOI leg actually got to this batch. A keyed leg
+    // can end early — a bad/expired key or spent quota drops it for the whole
+    // run (401/403/429), and the time budget can cut it mid-batch — and a DOI
+    // it never reached must NOT be stamped as a miss below.
+    const keyedTried = new Set();
     // Leg 1: OpenAlex
     try {
       const url = `https://api.openalex.org/works?filter=doi:${batch.join('|')}` +
@@ -263,8 +310,8 @@ async function main() {
       if (r.ok) {
         for (const w of (await r.json()).results || []) {
           const doi = String(w.doi || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase();
-          const text = stripPageFurniture(cleanText(invertedToText(w.abstract_inverted_index)));
-          if (doi && text.length >= 60) { cache[doi] = { a: text.slice(0, ABS_MAX) }; unresolved.delete(doi); found++; }
+          const text = stripHighlights(stripPageFurniture(cleanText(invertedToText(w.abstract_inverted_index))));
+          if (doi && text.length >= 60 && !junkForDoi(doi, text)) { cache[doi] = { a: text.slice(0, ABS_MAX) }; unresolved.delete(doi); found++; }
         }
       }
     } catch (e) { console.warn(`  OpenAlex batch failed: ${e.message}`); }
@@ -281,8 +328,8 @@ async function main() {
           const ids = [...unresolved];
           const arr = await r.json();
           arr.forEach((rec, idx) => {
-            const a = rec && typeof rec.abstract === 'string' ? stripPageFurniture(cleanText(rec.abstract)) : '';
-            if (a.length >= 60) { cache[ids[idx]] = { a: a.slice(0, ABS_MAX) }; unresolved.delete(ids[idx]); found++; }
+            const a = rec && typeof rec.abstract === 'string' ? stripHighlights(stripPageFurniture(cleanText(rec.abstract))) : '';
+            if (a.length >= 60 && !junkForDoi(ids[idx], a)) { cache[ids[idx]] = { a: a.slice(0, ABS_MAX) }; unresolved.delete(ids[idx]); found++; }
           });
         }
       } catch (e) { s2ok = false; console.warn(`  Semantic Scholar leg failed (${e.message}) — dropping it for this run.`); }
@@ -294,6 +341,7 @@ async function main() {
       for (const doi of [...unresolved]) {
         if (!ELS_PREFIX.test(doi)) continue;
         if (Date.now() - T0 > BUDGET_MS) break;
+        keyedTried.add(doi);
         try {
           // view=META_ABS is what includes dc:description — the default view
           // returns metadata WITHOUT the abstract text.
@@ -302,11 +350,12 @@ async function main() {
             { headers: { 'X-ELS-APIKey': ELS_KEY, Accept: 'application/json',
               ...(ELS_INSTTOKEN ? { 'X-ELS-Insttoken': ELS_INSTTOKEN } : {}) } });
           if (r.status === 401 || r.status === 403 || r.status === 429) {
-            elsOk = false; console.log(`  Elsevier leg dropped for this run (HTTP ${r.status} — key/quota/entitlement).`); break;
+            elsOk = false; elsDropCode = r.status;
+            console.log(`  Elsevier leg dropped for this run (HTTP ${r.status} — key/quota/entitlement).`); break;
           }
           if (r.ok) {
             const text = elsevierAbstract(await r.json());
-            if (text.length >= 60) { cache[doi] = { a: text.slice(0, ABS_MAX) }; unresolved.delete(doi); found++; elsStats.found++; }
+            if (text.length >= 60 && !junkForDoi(doi, text)) { cache[doi] = { a: text.slice(0, ABS_MAX) }; unresolved.delete(doi); found++; elsStats.found++; }
             else elsStats.empty++;
           } else if (r.status === 404) elsStats.e404++;
           else elsStats.other++;
@@ -319,6 +368,7 @@ async function main() {
       for (const doi of [...unresolved]) {
         if (!SPR_PREFIX.test(doi)) continue;
         if (Date.now() - T0 > BUDGET_MS) break;
+        keyedTried.add(doi);
         try {
           const r = await fetch(
             `https://api.springernature.com/meta/v2/json?q=doi:%22${encodeURIComponent(doi)}%22&p=1&api_key=${encodeURIComponent(SPR_KEY)}`,
@@ -328,7 +378,7 @@ async function main() {
           }
           if (r.ok) {
             const text = springerAbstract(await r.json());
-            if (text.length >= 60) { cache[doi] = { a: text.slice(0, ABS_MAX) }; unresolved.delete(doi); found++; sprStats.found++; }
+            if (text.length >= 60 && !junkForDoi(doi, text)) { cache[doi] = { a: text.slice(0, ABS_MAX) }; unresolved.delete(doi); found++; sprStats.found++; }
             else sprStats.empty++;
           } else sprStats.other++;
         } catch (e) { sprOk = false; console.warn(`  Springer leg failed (${e.message}) — dropping it for this run.`); break; }
@@ -336,7 +386,18 @@ async function main() {
       }
     }
     // All legs concluded for this batch: stamp the rest as misses (TTL-retried).
-    for (const doi of unresolved) cache[doi] = { none: 1, t: day() };
+    // EXCEPT a DOI whose keyed leg never actually tried it. Stamping those
+    // records a 45-day miss for a check that never happened — which is exactly
+    // what a rejected Elsevier key produced: the leg dropped on its first call,
+    // yet ~17k EJOR DOIs were written off as "no abstract available" in a
+    // 9-minute run that could not physically have queried them (one GET per DOI
+    // at ELS_PACE_MS would have taken over an hour). Leave them uncached so the
+    // next run retries them for real.
+    for (const doi of unresolved) {
+      if (!shouldStampMiss(doi, { elsKey: ELS_KEY, sprKey: SPR_KEY,
+        elsPrefix: ELS_PREFIX, sprPrefix: SPR_PREFIX, keyedTried })) continue;
+      cache[doi] = { none: 1, t: day() };
+    }
     checked += batch.length;
     if (++batches % 5 === 0) { await saveCache(); console.log(`  …${checked} DOIs checked, ${found} abstracts found`); }
     await sleep(PACE_MS);
@@ -348,6 +409,21 @@ async function main() {
   console.log(`  This run: ${checked} DOIs checked, ${found} abstracts found.`);
   if (SPR_KEY && (sprStats.found + sprStats.empty + sprStats.other)) {
     console.log(`  Springer leg: ${sprStats.found} found, ${sprStats.empty} no-abstract, ${sprStats.other} other.`);
+  }
+  // A keyed leg that was configured but achieved nothing is the difference
+  // between "this publisher has no abstracts" and "our credential is being
+  // refused" — and the run otherwise exits 0 and looks healthy either way.
+  // Say so loudly: ::warning:: surfaces it on the Actions run page.
+  if (ELS_KEY && elsDropCode) {
+    console.log(`::warning::ELSEVIER_API_KEY is set but Elsevier refused it (HTTP ${elsDropCode}); ` +
+      `the Elsevier leg did no work this run. 401 = bad/expired key, 403 = the key lacks ` +
+      `abstract entitlement off-campus (request an institutional token via dev.elsevier.com ` +
+      `support and set ELSEVIER_INST_TOKEN), 429 = quota spent. Elsevier journals (EJOR, JFE, ` +
+      `AOS, OBHDP, JAE, Research Policy…) are the bulk of the still-missing abstracts, so this ` +
+      `is why their coverage is not moving.`);
+  }
+  if (SPR_KEY && sprOk === false) {
+    console.log('::warning::SPRINGER_API_KEY is set but the Springer leg dropped out this run.');
   }
   if (ELS_KEY && (elsStats.found + elsStats.empty + elsStats.e404 + elsStats.other)) {
     console.log(`  Elsevier leg: ${elsStats.found} found, ${elsStats.empty} 200-but-no-abstract, ` +

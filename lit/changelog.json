@@ -4,9 +4,58 @@
   "updates": [
     {
       "id": "allcaps-title-sentence-case",
-      "date": "2026-07-28",
+      "date": "2026-08-05",
       "title": "SHOUTING TITLES are now readable titles",
       "summary": "Older papers were often registered with the title in full capitals — “MARKET EQUILIBRIUM”, “A PENTAPLOID LARVA OF THE NEWT, TRITURUS VIRIDESCENS” — which read badly next to everything else and, worse, produced unusable BibTeX (the export protects every capital, so you copied “M{A}{R}{K}{E}{T} {E}{Q}{U}{I}{L}{I}{B}{R}{I}{U}{M}” into your .bib file). About 17,400 such titles across every catalog now read as sentence case, keeping acronyms (DNA, CAPM, CEO), proper nouns (Bayesian, Cournot, Drosophila) and multi-word names (United States, World Trade Organization) capitalised, and capitalising the first word after a colon. Titles that were published in Title Case are deliberately left exactly as they are — only all-capitals titles are changed — and every new paper is checked as it arrives.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
+      "id": "list-names-case-and-rename",
+      "date": "2026-08-05",
+      "title": "List names keep their capitalization — and lists can be renamed",
+      "summary": "Two fixes for your library's lists. First, the “Notes, tags & lists” panel on each paper card displayed every list name in ALL CAPITALS regardless of how it was typed; list names now show exactly as you wrote them, capitals and lowercase alike (they were always stored correctly, so existing lists display right immediately). Second, you can now rename any list: open My Library and click the ✎ icon on the list's chip. A renamed public list's shared page updates to the new name automatically, and its share link keeps working.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
+      "id": "author-names-recased",
+      "date": "2026-08-03",
+      "title": "Author names no longer SHOUT",
+      "summary": "Some publishers deposit author names fully capitalized — “MICHAEL EWENS, NADYA MALENKO” — and around 6,300 papers (most of them in the Journal of Finance, Journal of Accounting Research and Contemporary Accounting Research) displayed them that way. Names that arrive all-caps are now re-cased at ingest (Jean-Pierre, O’Brien, McDonald, José and generational suffixes all handled), while any name with normal casing is left exactly as the journal credited it. Existing records heal with the next daily data refresh.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
+      "id": "ejor-abstracts-fixed",
+      "date": "2026-08-03",
+      "title": "EJOR abstracts: bullet-point “Highlights” removed, real abstracts kept, and faster pickup",
+      "summary": "Two fixes for EJOR (and other Elsevier journals like Research Policy). First, the publisher sometimes deposits a paper’s bullet-point “Highlights” in place of — or stuck onto — its abstract, and about 300 papers were showing those fragments as their abstract; where the real abstract was present alongside the bullets it is now kept clean (217 papers), and where only bullets existed the paper shows no abstract until the true text is recovered by the rolling backfills, so abstract search never matches bullet fragments again. Second, Elsevier often deposits an abstract only days after the paper is first registered: the 20-minute EJOR check now picks a newly-deposited abstract up on its next pass — upgrade-only, never replacing a fuller archived abstract — instead of waiting for the nightly rebuild.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
+      "id": "or-2019-missing-issue-restored",
+      "date": "2026-08-03",
+      "title": "Operations Research 2019: two issues restored to their papers",
+      "summary": "The completeness audit flagged Operations Research volume 67 (2019) as missing issue 2 and most of issue 4. The papers turned out to be in the database all along — but frozen as volume-less online-first records, because the publisher never updated their Crossref registrations with the final issue assignment, making them invisible to any per-issue view. Using the journal’s own tables of contents, 24 of these papers now carry their real volume, issue and (where confirmed) page numbers, and one paper that genuinely was absent — “On the Minimum Chordal Completion Polytope” (67(2), pp. 532–547) — is fetched directly by DOI on every build via the new rescue list. The same repair path stands ready for the remaining frozen records, including several from volume 68 (2020) with the same problem.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
+      "id": "real-abstracts-not-summaries",
+      "date": "2026-08-02",
+      "title": "“Show abstract” now always shows the paper's real abstract",
+      "summary": "For many Operations Research papers (and some Management Science, ISR and IJOC ones), the publisher deposits an editorial plain-language summary — “In ‘Title’, the authors develop…” — in place of the abstract, and other journals deposit a bare citation line (“…by Authors. Published in volume…, pages…”); the cards were showing that text as the abstract. Around 3,000 such fake abstracts were removed across the catalogs, every data pipeline now rejects them at ingest so a rebuild can never bring them back, and the rolling abstract backfills are re-fetching the papers' true abstracts from the journal pages and open APIs. A paper whose real abstract hasn't been recovered yet simply shows no abstract instead of a description of itself.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
+      "id": "ejor-fast-pickup",
+      "date": "2026-07-30",
+      "title": "European Journal of Operational Research: new papers within minutes",
+      "summary": "EJOR is the busiest journal in the database — about 700 papers a year across 24 issues, plus a steady stream of Articles in Press — and until now its new work only arrived with the nightly rebuild, in one batch up to a day late. It is now checked for freshly-published papers every 20 minutes, like Econometrica and the eight Articles-in-Advance journals, so a new EJOR paper appears (and joins “Recently added”) soon after Crossref indexes it. Its back-catalogue was audited at the same time and is complete for the last 20 years: every volume and issue since 2007 is present, the page numbering of each issue tiles with no holes, and of the 2,446 EJOR papers cited by other papers in this database, every single one is listed.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
+      "id": "recently-added-exact-count",
+      "date": "2026-07-28",
+      "title": "“Recently added papers” now shows the true number",
+      "summary": "The count above the Recently added list is now the exact number of papers added in the last four weeks, across every catalog. It used to be read from the list itself — which is capped so it can be fetched with the page — so on a busy stretch (a journal's back-catalogue arriving, a batch of re-registrations, the working-papers backfill) it silently reported only the newest slice: 1,000 native papers where 2,833 had really been added. Published papers and working papers are counted separately, the same figures follow any journal or journal-type filter you pick, and when the list itself can't show everything it now says how many of them it is showing.",
       "url": "https://www.stouras.com/lit/"
     },
     {
@@ -15,6 +64,13 @@
       "title": "Data Analytics: the most-disruptive and most-developing paper tables now name the authors",
       "summary": "Each row in the Team-science section's “most disruptive” and “most developing” tables now carries the paper's authors under its title — the full list on hover — so a paper is identifiable without opening its DOI. The “Team” column is also now labelled “Team size” and reads “2 authors” rather than a bare “2”, making explicit that it counts the authors credited on the paper.",
       "url": "https://www.stouras.com/lit/analytics/"
+    },
+    {
+      "id": "recent-published-first",
+      "date": "2026-07-28",
+      "title": "Recently added papers now leads with the newly published ones",
+      "summary": "The Recently added view lists new journal articles first and the newly posted working papers after them, each newest-first. The working-papers archive can add around a thousand pre-prints in a single day, and a strict by-date order meant those filled the first forty pages — new papers from Nature, Science, the FT50 journals and the INFORMS titles were pushed out of sight. Both are still there; the published catalogue simply comes first.",
+      "url": "https://www.stouras.com/lit/"
     },
     {
       "id": "nature-science-topic-shards",
