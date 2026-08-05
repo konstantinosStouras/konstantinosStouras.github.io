@@ -1884,7 +1884,22 @@ piggybacks on the `_oaid.json` map build-refs already builds (skips a paper unti
 its OpenAlex id is known) and refreshes on a **rolling** cadence (forward
 citations grow, unlike a frozen reference list — never-fetched first, then
 stalest, `CB_TTL_DAYS` re-check, `CB_VER` re-sweep), same priority tiers, bounded
-+ resumable + checkpointed. It writes an **unserved** crawl cache
++ resumable + checkpointed. **It no longer waits on build-refs for the ids that
+matter most:** the canon references (Lazear–Rosen 1981, Moldovanu–Sela 2001, …)
+sit deep in build-refs's newest-first queue yet appear in hundreds of focal
+papers' reference lists — and an unharvested reference contributes NOTHING to
+forwardDisruption's n_j/n_k pools, deflating every one of those focals' D. So
+each run first **seeds `_oaid.json` itself** for the most-in-catalog-cited
+papers still missing an id (`orderOaidSeeds`/`seedOaids`, ranked by
+`cited-counts.json` — a paper's in-catalog citer count = the number of focal D
+computations its citer list unlocks; batched `works?filter=doi:` id lookups,
+`CB_SEED_MAX` 1500/run, eligibility ≥ `CB_HOT_MIN` 5 citers; a DOI OpenAlex
+lacks is recorded as an EMPTY-STRING `_oaid.json` entry — falsy, so every
+truthy consumer treats it like absent and build-refs overwrites it if the work
+appears — and never re-queried), then the citer crawl puts those same
+high-value papers FIRST (`orderCitedby`'s hot bump, most-cited first, ahead of
+the tier queue), so a just-seeded canon paper gets its citer list in the same
+run. It writes an **unserved** crawl cache
 `data-refs/_citedby-cache.json` (per DOI `{c:[citer OpenAlex ids],n,t,v,cap?}`)
 plus a tiny served `citedby-meta.json`; the raw citer sets exist only to COMPUTE
 D and are never shipped to the page. Refreshed by

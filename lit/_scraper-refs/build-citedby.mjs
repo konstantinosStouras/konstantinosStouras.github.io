@@ -29,6 +29,26 @@
  * PIGGYBACKS on that map: a paper without a known OpenAlex id yet is simply
  * skipped this run and picked up once build-refs has resolved its id.
  *
+ * HIGH-VALUE OAID SEEDING + PRIORITY. Waiting on build-refs alone starves the
+ * disruption index of exactly the papers that matter most: the CANON references
+ * (Lazear–Rosen 1981, Moldovanu–Sela 2001, …) sit deep in build-refs's
+ * newest-first queue, yet each appears in hundreds of focal papers' reference
+ * lists — in forwardDisruption an unharvested reference contributes NOTHING to
+ * the n_j/n_k pools ("looks identical to a zero-citer one"), deflating every
+ * one of those focals' D. So each run first SEEDS _oaid.json itself for the
+ * most-in-catalog-cited papers still missing an id (cited-counts.json ranks
+ * them — the count of catalog papers citing a paper IS the number of focal D
+ * computations its citer list unlocks): a bounded, batched
+ * works?filter=doi:<50>&select=id,doi lookup (orderOaidSeeds/seedOaids;
+ * CB_SEED_MAX per run, eligibility ≥ CB_HOT_MIN citers). A DOI a successful
+ * batch didn't return isn't in OpenAlex — recorded as an EMPTY-STRING entry so
+ * it is never re-queried (falsy, so every truthy consumer of _oaid.json treats
+ * it exactly like absent, and build-refs overwrites it if the work ever
+ * appears). The citer crawl below then puts the same high-value papers FIRST
+ * (orderCitedby's hot bump: papers with ≥ CB_HOT_MIN in-catalog citers jump the
+ * tier queue, most-cited first), so a just-seeded canon paper gets its citer
+ * list in the same run instead of behind the whole rolling refresh.
+ *
  * FRESHNESS. Unlike a paper's own reference list (frozen once published), a
  * paper's forward citations GROW over time — new work keeps citing it. So an
  * entry is refreshed on a ROLLING cadence: never-fetched first, then the
@@ -94,6 +114,13 @@ const BUDGET_MS = parseInt(process.env.CB_BUDGET_MS || String(40 * 60 * 1000), 1
 const MAX_CITERS = parseInt(process.env.CB_MAX_CITERS || '3000', 10);      // cap citer ids stored per paper
 const TTL_DAYS = parseInt(process.env.CB_TTL_DAYS || '30', 10);            // refresh entries older than this
 const MAX_THROTTLE = 6;            // consecutive OpenAlex failures before giving the run up
+// High-value oaid seeding + crawl priority (see the header): a paper with at
+// least CB_HOT_MIN in-catalog citers is "hot" — eligible for the by-DOI oaid
+// seeding when its id is missing, and bumped to the front of the citer crawl
+// (most-cited first). CB_SEED_MAX bounds the ids resolved per run (50/call, so
+// the default is ~30 cheap calls against OpenAlex's general 100k/day quota).
+const HOT_MIN = parseInt(process.env.CB_HOT_MIN || '5', 10);
+const SEED_MAX = parseInt(process.env.CB_SEED_MAX || '1500', 10);
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -115,10 +142,16 @@ export function extractCiters(results) {
 
 // ── Crawl order: rolling refresh, priority tiers, resumable ──────────────────
 // Only papers with a known OpenAlex id are eligible (needed to query cites:).
-// Within a tier: never-fetched first, then stalest, then newest year, then DOI.
-// A paper fetched at the current version AND fresher than the TTL is skipped.
-export function orderCitedby(papers, cache, oaidMap, limit, nowTs, ttlDays = TTL_DAYS, ver = CB_VER) {
+// Hot papers (≥ opts.hotMin in-catalog citers per opts.citedCounts) lead the
+// whole queue, most-cited first — each one's citer list feeds the n_j/n_k pools
+// of every focal paper citing it, so it unlocks that many D computations at
+// once. Below the hot block the old order is untouched: within a tier,
+// never-fetched first, then stalest, then newest year, then DOI. A paper
+// fetched at the current version AND fresher than the TTL is skipped.
+export function orderCitedby(papers, cache, oaidMap, limit, nowTs, ttlDays = TTL_DAYS, ver = CB_VER, opts = {}) {
   const ttlMs = ttlDays * 86400000;
+  const citedCounts = opts.citedCounts || {};
+  const hotMin = opts.hotMin || Infinity;
   const eligible = [];
   for (const p of papers) {
     const oaid = oaidMap[p.doi];
@@ -129,15 +162,36 @@ export function orderCitedby(papers, cache, oaidMap, limit, nowTs, ttlDays = TTL
       last = Date.parse((c.t || '') + 'T00:00:00Z') || 0;
       if (last && (nowTs - last) <= ttlMs) continue; // fresh at the current version → skip
     }
-    eligible.push({ p, oaid, neverFetched: !c, last });
+    const cited = citedCounts[p.doi] || 0;
+    eligible.push({ p, oaid, neverFetched: !c, last, hot: cited >= hotMin ? cited : 0 });
   }
   eligible.sort((a, b) =>
-    (a.p.tier - b.p.tier) ||                               // tier 0 first
+    (b.hot - a.hot) ||                                     // hot papers first, most-cited first
+    (a.p.tier - b.p.tier) ||                               // then tier 0 first
     (Number(b.neverFetched) - Number(a.neverFetched)) ||   // never-fetched before refreshes
     (a.last - b.last) ||                                   // then stalest first
     (b.p.year - a.p.year) ||                               // then newest year first
     (a.p.doi < b.p.doi ? -1 : a.p.doi > b.p.doi ? 1 : 0));
   return eligible.slice(0, limit).map(x => ({ doi: x.p.doi, oaid: x.oaid, jkey: x.p.jkey }));
+}
+
+// ── High-value oaid seeding (pure part, unit-tested) ─────────────────────────
+// The catalog papers worth resolving an OpenAlex id for BY DOI instead of
+// waiting for build-refs's newest-first sweep: cited in-catalog at least
+// `minCited` times, id not yet known. `doi in oaidMap` (not truthiness) so a
+// recorded empty-string miss is never re-queried. Most-cited first — the same
+// ranking the crawl's hot bump uses.
+export function orderOaidSeeds(papers, citedCounts, oaidMap, limit, minCited) {
+  const seeds = [];
+  for (const p of papers) {
+    if (p.doi in oaidMap) continue;
+    const cited = citedCounts[p.doi] || 0;
+    if (cited < minCited) continue;
+    seeds.push({ doi: p.doi, cited });
+  }
+  seeds.sort((a, b) => (b.cited - a.cited) ||
+    (a.doi < b.doi ? -1 : a.doi > b.doi ? 1 : 0));
+  return seeds.slice(0, limit).map(s => s.doi);
 }
 
 // ── Forward disruption D (pure, unit-tested) ─────────────────────────────────
@@ -225,6 +279,48 @@ async function fetchCiters(oaid, deadline) {
   return { citers, count: count ?? citers.length, capped: false, complete: true };
 }
 
+// Resolve OpenAlex ids by DOI for the seed list (batched 50/call, same backoff
+// discipline as build-refs's OpenAlex leg). Returned works land in oaidMap as
+// doi → id; a DOI a SUCCESSFUL batch didn't return isn't in OpenAlex and is
+// recorded as '' so it is never re-queried (falsy — every truthy consumer
+// treats it like absent, and build-refs overwrites it if the work appears).
+// Best-effort: drops out for the run on quota/throttle, resumes next schedule.
+async function seedOaids(seeds, oaidMap, deadline, checkpoint) {
+  let fails = 0, found = 0, misses = 0;
+  for (let i = 0; i < seeds.length; i += 50) {
+    if (Date.now() > deadline) break;
+    const batch = seeds.slice(i, i + 50);
+    const url = 'https://api.openalex.org/works?filter=doi:' +
+      batch.map(d => encodeURIComponent(d)).join('|') +
+      '&per-page=50&select=id,doi&mailto=' + encodeURIComponent(MAILTO);
+    const r = await cbGet(url);
+    if (!r.ok) {
+      const throttle = r.status === 429 || r.status === 403;
+      fails++;
+      if ((throttle && r.retryAfter > 3600) || fails >= MAX_THROTTLE) {
+        console.log('  oaid seeding: quota/throttle — dropping the seeding leg for this run.');
+        break;
+      }
+      const wait = throttle ? Math.max(r.retryAfter * 1000, Math.min(5000 * 2 ** (fails - 1), 60000)) : 2000;
+      if (Date.now() + wait > deadline) break;
+      await sleep(wait); i -= 50; continue; // retry this batch (bounded by fails)
+    }
+    fails = 0;
+    const returned = new Set();
+    for (const w of (r.json && r.json.results) || []) {
+      const d = normDoi(w.doi);
+      const oaid = shortOaid(w && w.id);
+      if (!d || !oaid) continue;
+      returned.add(d);
+      oaidMap[d] = oaid; found++;
+    }
+    for (const d of batch) if (!returned.has(d)) { oaidMap[d] = ''; misses++; }
+    if (checkpoint && (i / 50) % 10 === 9) await checkpoint();
+    await sleep(OA_PACE_MS);
+  }
+  return { found, misses };
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
   console.log(`lit forward-citation harvest (v${CB_VER}): ${PULL_DATE}${MOCK ? ' (MOCK)' : ''}; out=${DATA_DIR}`);
@@ -235,21 +331,40 @@ async function main() {
   const { dbByDoi, papers } = await loadCatalog(CATALOG_DIRS, { log: true });
   const cache = await loadJson(join(DATA_DIR, '_citedby-cache.json'), {});
   const oaidMap = await loadJson(join(DATA_DIR, '_oaid.json'), {});
+  const citedCounts = await loadJson(join(DATA_DIR, 'cited-counts.json'), {});
   const withOaid = papers.filter(p => oaidMap[p.doi]).length;
   console.log(`catalog: ${papers.length} papers (${withOaid} with an OpenAlex id); ` +
     `cache: ${Object.keys(cache).length} papers; oaids known: ${Object.keys(oaidMap).length}`);
   if (!withOaid) console.log('  (no OpenAlex ids yet — run build-refs.mjs first to populate _oaid.json.)');
 
-  // 2. This run's slice (rolling refresh + priority order).
+  const writeOaids = async () => {
+    await writeFile(join(DATA_DIR, '_oaid.json'), JSON.stringify(oaidMap), 'utf8');
+  };
+
+  // 2. High-value oaid seeding: resolve ids by DOI for the most-in-catalog-cited
+  //    papers still missing one (the canon references build-refs's newest-first
+  //    sweep reaches last), so their citer lists can be crawled THIS run instead
+  //    of after the whole reference backlog. Bounded + best-effort.
+  const seeds = orderOaidSeeds(papers, citedCounts, oaidMap, SEED_MAX, HOT_MIN);
+  if (seeds.length) {
+    console.log(`oaid seeding: ${seeds.length} high-value paper(s) (≥${HOT_MIN} in-catalog citers) missing an id…`);
+    const seedDeadline = Math.min(deadline, Date.now() + 5 * 60 * 1000);
+    const { found, misses } = await seedOaids(seeds, oaidMap, seedDeadline, writeOaids);
+    await writeOaids();
+    console.log(`  oaid seeding: ${found} id(s) resolved, ${misses} not in OpenAlex (recorded).`);
+  }
+
+  // 3. This run's slice (hot papers first, then the rolling refresh order).
   const nowTs = Date.parse(PULL_DATE + 'T00:00:00Z') || Date.now();
-  const slice = orderCitedby(papers, cache, oaidMap, MAX_PAPERS, nowTs);
+  const slice = orderCitedby(papers, cache, oaidMap, MAX_PAPERS, nowTs, TTL_DAYS, CB_VER,
+    { citedCounts, hotMin: HOT_MIN });
   console.log(`processing up to ${slice.length} paper(s) this run`);
 
   const checkpoint = async () => {
     await writeFile(join(DATA_DIR, '_citedby-cache.json'), JSON.stringify(cache), 'utf8');
   };
 
-  // 3. Harvest each paper's citing works.
+  // 4. Harvest each paper's citing works.
   let done = 0, stopped = false;
   for (const p of slice) {
     if (Date.now() > deadline) { console.log('  time budget reached — stopping (resumes next run).'); stopped = true; break; }
@@ -267,7 +382,7 @@ async function main() {
   }
   await checkpoint();
 
-  // 4. Coverage stats → the tiny served meta.
+  // 5. Coverage stats → the tiny served meta.
   const oaidToDoi = {};
   for (const [doi, oaid] of Object.entries(oaidMap)) if (oaid && dbByDoi.has(doi)) oaidToDoi[oaid] = doi;
   let fetched = 0, withCiters = 0, totalCiters = 0, inCatCiters = 0, capped = 0;
@@ -283,7 +398,9 @@ async function main() {
     // papersWithCiters = papers with ≥1 harvested citer; papersFetched counts
     // every harvest attempt incl. zero-citer papers (the old value of
     // papersWithCiters, which overstated coverage by the zero-citer share).
-    papersWithCiters: withCiters, papersFetched: fetched, catalog: papers.length, withOaid,
+    // withOaid is recomputed here so ids resolved by THIS run's seeding count.
+    papersWithCiters: withCiters, papersFetched: fetched, catalog: papers.length,
+    withOaid: papers.filter(p => oaidMap[p.doi]).length,
     citersHarvested: totalCiters, inCatalogCiters: inCatCiters, cappedPapers: capped,
   };
   await writeFile(join(DATA_DIR, 'citedby-meta.json'), JSON.stringify(meta), 'utf8');
@@ -296,8 +413,21 @@ async function main() {
 // ── Mock network (offline smoke test) ────────────────────────────────────────
 // OpenAlex  works?filter=cites:<oaid>  ->  mock-cb/cb-<oaid>.json
 //   { "results": [{ "id": "...", "doi": "..." }, …], "meta": { "count": N, "next_cursor": null } }
+// OpenAlex  works?filter=doi:<d1>|<d2>… (the oaid seeding) -> mock-cb/oa-<slug>.json
+//   one work per fixture ({ "id": "...", "doi": "..." }), build-refs's convention;
+//   a DOI without a fixture is simply not returned (= not in OpenAlex).
 async function mockGet(rawUrl) {
   const url = decodeURIComponent(rawUrl);
+  const md = url.match(/filter=doi:([^&]+)/i);
+  if (md) {
+    const slug = (s) => s.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
+    const results = [];
+    for (const d of md[1].split('|')) {
+      const w = await loadJson(join(MOCK_DIR, `oa-${slug(d)}.json`), null);
+      if (w) results.push(w);
+    }
+    return { ok: true, status: 200, json: { results, meta: { count: results.length, next_cursor: null } } };
+  }
   const m = url.match(/filter=cites:(W\d+)/i);
   const oaid = m ? m[1] : '';
   const j = await loadJson(join(MOCK_DIR, `cb-${oaid}.json`), null);
