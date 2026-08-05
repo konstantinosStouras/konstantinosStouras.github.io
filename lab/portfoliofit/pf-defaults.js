@@ -36,10 +36,10 @@ window.PF_DEFAULTS = {
     timeLimits: { easy: 120, hard: 180 }
   },
   // Registration form shown AFTER the training phase (welcome -> training ->
-  // registration -> game -> survey). UCD Student ID is the compulsory first field;
+  // registration -> game -> survey). University Student ID is the compulsory first field;
   // the rest mirror the Ideation Challenge demographics form. Admin-editable.
   registrationQuestions: [
-    { id: 'studentId', label: 'UCD Student ID', type: 'text', required: true },
+    { id: 'studentId', label: 'University Student ID', type: 'text', required: true },
     { id: 'age', label: 'Age', type: 'select', required: true,
       options: ['18-24', '25-34', '35-44', '45-54', '55-64', '65+'] },
     { id: 'gender', label: 'Gender', type: 'select', required: false,
