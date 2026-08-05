@@ -216,6 +216,10 @@
      shown on its own row under the colour swatches of the team-science figures. */
   .legend .expect { flex-basis: 100%; font-size: 12px; font-style: italic; color: var(--text-muted); line-height: 1.55; }
   .chart-empty { color: var(--text-muted); font-size: 13.5px; padding: 30px 6px; text-align: center; }
+  /* Citation-flow (Sankey) ribbons: quiet by default, emphasized on hover so a
+     single journal-to-journal stream can be followed through the tangle. */
+  .flow-ribbon { transition: fill-opacity .12s; }
+  .flow-ribbon:hover { fill-opacity: .62; }
 
   /* cited table */
   table.cited { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -549,6 +553,24 @@
           <div class="csub" id="citeImpactSub">Average citations per paper, within scope</div>
           <div id="citeImpactChart"></div>
           <div class="grp-toggles" id="grpCite"></div>
+        </div>
+        <!-- ── Citation flows — two journal-to-journal Sankey charts over the
+             in-catalog citation graph (lazy ./citeflow.json, built offline by
+             lit/_scraper/build-citeflow.mjs from lit/data-refs/). Left boxes
+             are the journals in scope (or Management Science, M&SOM and POM
+             when nothing is selected), sized by their total in-catalog
+             citations; ribbons show where each journal's citations go (first
+             chart) and where they come from (second). Hidden until the
+             citation-flow dataset is available. -->
+        <div class="card wide" id="flowOutCard" style="display:none">
+          <h3>Citation flows — which journals each journal cites</h3>
+          <div class="csub" id="flowOutSub">Where each journal's references go</div>
+          <div id="flowOutChart"></div>
+        </div>
+        <div class="card wide" id="flowInCard" style="display:none">
+          <h3>Citation flows — which journals cite each journal</h3>
+          <div class="csub" id="flowInSub">Where each journal's citations come from</div>
+          <div id="flowInChart"></div>
         </div>
         <div class="card wide" id="areaTrendCard" style="display:none">
           <h3>Editorial area trends</h3>
@@ -1113,6 +1135,7 @@
     renderCoauthors(agg, keys);
     renderTeam(agg);
     renderCitationImpact(keys);
+    renderCiteFlows();
     renderAreaTrends(keys);
     renderCited(keys);
     renderDims(keys);
@@ -1335,6 +1358,221 @@
       ? barsH(items, { limit: CITE_LIMIT, fmt: function (v) { return v.toFixed(1); } })
       : '<div class="chart-empty">No citation data in the selected scope.</div>';
     renderGroupToggles('grpCite', 'cite', groups, function () { renderCitationImpact(scopeKeys()); });
+  }
+
+  // ── Citation flows — journal-to-journal Sankey charts ───────────────────
+  // Two flow diagrams over the in-catalog citation graph (lit/data-refs/,
+  // pre-aggregated offline by lit/_scraper/build-citeflow.mjs into the lazy
+  // ./citeflow.json): for each journal in scope, WHERE its citations go (the
+  // journals its papers cite — FLOW.out, windowed by the CITING paper's year)
+  // and WHERE its citations come from (the journals citing its papers —
+  // FLOW.in, windowed by the CITED paper's year), so both charts read as
+  // "papers of that journal published in the selected years". Journal-level
+  // only: the non-research toggle and editorial filters can't apply (edges
+  // aren't classified), which the subtitles say.
+  var FLOW = null, flowState = 'idle', flowCbs = [];
+  // When no journal or type is chosen the charts default to these three (per
+  // the owner) instead of the whole 55-journal graph, which would be unreadable.
+  var FLOW_DEFAULT_KEYS = ['ms', 'msom', 'pom'];
+  var FLOW_MAX_LEFT = 8;        // left journals shown (top by flow volume), like the line charts' cap
+  var FLOW_TOP_PARTNERS = 10;   // partner journals listed per left journal; the rest fold into "Other"
+  var FLOW_OTHER = ' other';   // pseudo-key for the folded remainder (never a real jkey)
+
+  function ensureCiteflow(cb) {
+    if (flowState === 'ready' || flowState === 'failed') { if (cb) cb(); return; }
+    if (cb) flowCbs.push(cb);
+    if (flowState === 'loading') return;
+    flowState = 'loading';
+    var flush = function () { var cbs = flowCbs; flowCbs = []; cbs.forEach(function (f) { f(); }); };
+    fetch('./citeflow.json').then(function (r) { if (!r.ok) throw { perm: true }; return r.json(); }).then(function (j) {
+      FLOW = j; flowState = 'ready'; flush();
+    }).catch(function (e) {
+      // Like ensureDisruption: an HTTP error (file not generated/deployed yet)
+      // is permanent for the session; a transient hiccup retries next render.
+      flowState = (e && e.perm) ? 'failed' : 'idle';
+      flush();
+    });
+  }
+
+  function flowName(k) { return k === FLOW_OTHER ? 'Other journals' : (JMAP[k] ? JMAP[k].name : k); }
+
+  function renderCiteFlows() {
+    var oc = $('flowOutCard'), ic = $('flowInCard');
+    if (!oc || !ic) return;
+    // Not generated/deployed yet (or an empty graph) → no cards at all.
+    if (flowState === 'failed' || (flowState === 'ready' && !(FLOW && FLOW.totals && FLOW.totals.edges))) {
+      oc.style.display = 'none'; ic.style.display = 'none'; return;
+    }
+    if (flowState !== 'ready') {
+      oc.style.display = ''; ic.style.display = '';
+      $('flowOutChart').innerHTML = $('flowInChart').innerHTML = '<div class="chart-empty">Loading the citation-flow data…</div>';
+      ensureCiteflow(function () { if (S.tab === 'overview') renderCiteFlows(); });
+      return;
+    }
+    oc.style.display = ''; ic.style.display = '';
+    renderOneFlow({ card: oc, chart: 'flowOutChart', sub: 'flowOutSub', map: FLOW.out, dir: 'out' });
+    renderOneFlow({ card: ic, chart: 'flowInChart', sub: 'flowInSub', map: FLOW.in, dir: 'in' });
+  }
+
+  function renderOneFlow(cfg) {
+    var out = cfg.dir === 'out';
+    // Left journals: the explicit selection (journals and/or type chips, via
+    // scopeKeys); with nothing selected, the owner's default trio — never the
+    // whole corpus. Ranked by in-window flow volume, capped like the line charts.
+    var explicit = Object.keys(S.types).some(function (t) { return S.types[t]; }) ||
+      Object.keys(S.journals).some(function (k) { return S.journals[k]; });
+    var pool = explicit ? scopeKeys() : FLOW_DEFAULT_KEYS.filter(function (k) { return JMAP[k]; });
+    var rows = [];
+    pool.forEach(function (k) {
+      var pm = cfg.map[k]; if (!pm) return;
+      var partners = {}, tot = 0;
+      for (var pk in pm) {
+        var ys = pm[pk], s = 0;
+        for (var y in ys) { var yy = +y; if (yy < S.yMin || yy > S.yMax) continue; s += ys[y]; }
+        if (s) { partners[pk] = s; tot += s; }
+      }
+      if (tot) rows.push({ key: k, partners: partners, total: tot });
+    });
+    rows.sort(function (a, b) { return b.total - a.total; });
+    var poolN = rows.length;
+    rows = rows.slice(0, FLOW_MAX_LEFT);
+
+    if (!rows.length) {
+      $(cfg.chart).innerHTML = '<div class="chart-empty">No mapped in-catalog ' + (out ? 'references from' : 'citations of') +
+        ' the selected journals and years yet — the citation graph covers a growing slice of the catalog. Try widening the filters.</div>';
+      $(cfg.sub).textContent = out ? 'Where each journal’s references go' : 'Where each journal’s citations come from';
+      return;
+    }
+
+    // Per left journal: its top partners stay named, the rest fold into "Other".
+    var lefts = [], flows = [], rightTot = {}, shown = 0;
+    rows.forEach(function (r, i) {
+      lefts.push({ key: r.key, name: flowName(r.key), color: SERIES[i % SERIES.length], total: r.total });
+      var ps = Object.keys(r.partners).sort(function (a, b) { return r.partners[b] - r.partners[a]; });
+      var top = ps.slice(0, FLOW_TOP_PARTNERS), rest = ps.slice(FLOW_TOP_PARTNERS);
+      top.forEach(function (pk) { flows.push({ lk: r.key, rk: pk, v: r.partners[pk] }); rightTot[pk] = (rightTot[pk] || 0) + r.partners[pk]; });
+      var other = 0; rest.forEach(function (pk) { other += r.partners[pk]; });
+      if (other) { flows.push({ lk: r.key, rk: FLOW_OTHER, v: other }); rightTot[FLOW_OTHER] = (rightTot[FLOW_OTHER] || 0) + other; }
+      shown += r.total;
+    });
+    var rights = Object.keys(rightTot).sort(function (a, b) {
+      if (a === FLOW_OTHER) return 1; if (b === FLOW_OTHER) return -1;
+      return rightTot[b] - rightTot[a];
+    }).map(function (k) { return { key: k, name: flowName(k), total: rightTot[k] }; });
+
+    $(cfg.chart).innerHTML = sankeySVG(lefts, rights, flows, { dir: cfg.dir });
+    $(cfg.sub).textContent =
+      (out
+        ? 'In-catalog references made by each journal’s papers published ' + S.yMin + '–' + S.yMax + ' — box height = total references; ribbons lead to the journals it cites (top ' + FLOW_TOP_PARTNERS + ' each, the rest as “Other”).'
+        : 'In-catalog citations received by each journal’s papers published ' + S.yMin + '–' + S.yMax + ' — box height = total citations; ribbons come from the journals citing it (top ' + FLOW_TOP_PARTNERS + ' each, the rest as “Other”).') +
+      ' ' + fmt(shown) + ' citations shown' +
+      (poolN > rows.length ? ' · top ' + rows.length + ' of ' + poolN + ' journals by volume' : '') +
+      (!explicit ? ' · showing Management Science, M&SOM and POM — choose journals or types above to change' : '') +
+      ' · journal-level (the non-research and editorial filters don’t apply)';
+  }
+
+  // The Sankey renderer shared by both flow charts. lefts/rights carry
+  // {key,name,total} (+ color on the left); flows [{lk,rk,v}]. Ribbons are
+  // drawn under the node rects, colored by their LEFT journal, with native
+  // <title> tooltips on every ribbon and node; identity never rides on color
+  // alone — every readable node carries a direct label, and a ribbon traces
+  // geometrically to its labeled source.
+  function sankeySVG(lefts, rights, flows, opts) {
+    var out = opts.dir === 'out';
+    var W = 760, NW = 12, GAPL = 6, GAPR = 5, T = 26, B = 10, LX = 182, RX = 566;
+    var nL = lefts.length, nR = rights.length;
+    var H = Math.max(380, Math.min(700, 40 + T + Math.max(nL * 40, nR * 22)));
+    // Every named right-column journal must fit a labeled (≥11px) node — the
+    // whole point of the chart is that list — so grow the canvas when the
+    // union of top-partner lists is large (capped; the fallback below still
+    // guarantees the column fits).
+    var needR = T + B + GAPR * (nR - 1) + nR * 11 + 8;
+    if (needR > H) H = Math.min(900, needR);
+    var totalV = 0; flows.forEach(function (f) { totalV += f.v; });
+    if (!totalV) return '<div class="chart-empty">No data in the selected scope.</div>';
+    var availL = H - T - B - GAPL * (nL - 1), availR = H - T - B - GAPR * (nR - 1);
+    var scale = Math.min(availL / totalV, availR / totalV);
+    // Proportional heights with a small readability floor; when the floors
+    // overflow the column, the excess is taken back from the flexible (above-
+    // floor) nodes — or, if even that can't absorb it, the whole column is
+    // scaled to fit. Counts stay exact in the labels and tooltips.
+    function fitHeights(vals, min, avail) {
+      var h = vals.map(function (v) { return Math.max(min, v * scale); });
+      var sum = 0; h.forEach(function (x) { sum += x; });
+      if (sum > avail) {
+        var excess = sum - avail, flex = 0;
+        h.forEach(function (x) { flex += Math.max(0, x - min); });
+        if (flex >= excess && flex > 0) h = h.map(function (x) { return x - Math.max(0, x - min) / flex * excess; });
+        else { var f = avail / sum; h = h.map(function (x) { return x * f; }); }
+      }
+      return h;
+    }
+    var hL = fitHeights(lefts.map(function (n) { return n.total; }), 13, availL);
+    var hR = fitHeights(rights.map(function (n) { return n.total; }), 11, availR);
+    var yL = [], yR = [], y = T, i;
+    for (i = 0; i < nL; i++) { yL.push(y); y += hL[i] + GAPL; }
+    y = T;
+    for (i = 0; i < nR; i++) { yR.push(y); y += hR[i] + GAPR; }
+    var lIdx = {}, rIdx = {};
+    lefts.forEach(function (n, ii) { lIdx[n.key] = ii; });
+    rights.forEach(function (n, ii) { rIdx[n.key] = ii; });
+
+    // Ribbon offsets: within a left node, stack in right-node order (top to
+    // bottom, minimizing crossings); within a right node, in left-node order.
+    // Each side's segments tile its node exactly (share-of-node), so the
+    // floors above never leave a gap.
+    flows.forEach(function (f) { f.li = lIdx[f.lk]; f.ri = rIdx[f.rk]; });
+    var curL = yL.slice(), curR = yR.slice();
+    flows.slice().sort(function (a, b) { return (a.li - b.li) || (a.ri - b.ri); }).forEach(function (f) {
+      var h = hL[f.li] * f.v / lefts[f.li].total;
+      f.ly0 = curL[f.li]; f.ly1 = f.ly0 + h; curL[f.li] = f.ly1;
+    });
+    flows.slice().sort(function (a, b) { return (a.ri - b.ri) || (a.li - b.li); }).forEach(function (f) {
+      var h = hR[f.ri] * f.v / rights[f.ri].total;
+      f.ry0 = curR[f.ri]; f.ry1 = f.ry0 + h; curR[f.ri] = f.ry1;
+    });
+
+    var svg = svgEl(W, H);
+    // column headers
+    svg += '<text x="' + (LX + NW) + '" y="13" text-anchor="end" font-size="10" font-weight="700" letter-spacing=".6" fill="' + MUTED + '">' + (out ? 'CITING JOURNAL' : 'CITED JOURNAL') + '</text>';
+    svg += '<text x="' + RX + '" y="13" font-size="10" font-weight="700" letter-spacing=".6" fill="' + MUTED + '">' + (out ? 'JOURNALS IT CITES' : 'CITED BY') + '</text>';
+    // ribbons under the nodes
+    var x0 = LX + NW, x1 = RX, cx = ((x0 + x1) / 2).toFixed(1);
+    flows.forEach(function (f) {
+      var l = lefts[f.li], r = rights[f.ri];
+      var d = 'M' + x0 + ' ' + f.ly0.toFixed(1) +
+        ' C' + cx + ' ' + f.ly0.toFixed(1) + ' ' + cx + ' ' + f.ry0.toFixed(1) + ' ' + x1 + ' ' + f.ry0.toFixed(1) +
+        ' L' + x1 + ' ' + f.ry1.toFixed(1) +
+        ' C' + cx + ' ' + f.ry1.toFixed(1) + ' ' + cx + ' ' + f.ly1.toFixed(1) + ' ' + x0 + ' ' + f.ly1.toFixed(1) + ' Z';
+      var tip = out
+        ? l.name + ' → ' + r.name + '\n' + fmt(f.v) + ' citations — ' + pct(f.v / l.total) + ' of its in-catalog references'
+        : r.name + ' → ' + l.name + '\n' + fmt(f.v) + ' citations — ' + pct(f.v / l.total) + ' of the in-catalog citations it receives';
+      svg += '<path class="flow-ribbon" d="' + d + '" fill="' + l.color + '" fill-opacity="0.3"><title>' + esc(tip) + '</title></path>';
+    });
+    // nodes + labels — labels wear ink (never the series color); the colored
+    // rect beside them carries identity.
+    lefts.forEach(function (n, ii) {
+      var yy = yL[ii], h = hL[ii], cy = yy + h / 2;
+      svg += '<rect x="' + LX + '" y="' + yy.toFixed(1) + '" width="' + NW + '" height="' + h.toFixed(1) + '" rx="2" fill="' + n.color + '"><title>' +
+        esc(n.name + '\n' + fmt(n.total) + ' in-catalog citations ' + (out ? 'made' : 'received')) + '</title></rect>';
+      if (h >= 26) {
+        svg += '<text x="' + (LX - 8) + '" y="' + (cy - 2).toFixed(1) + '" text-anchor="end" font-size="11.5" font-weight="600" fill="#241a1e">' + esc(trunc(n.name, 26)) + '</text>';
+        svg += '<text x="' + (LX - 8) + '" y="' + (cy + 11).toFixed(1) + '" text-anchor="end" font-size="10.5" fill="' + MUTED + '">' + fmt(n.total) + '</text>';
+      } else {
+        svg += '<text x="' + (LX - 8) + '" y="' + (cy + 4).toFixed(1) + '" text-anchor="end" font-size="11" font-weight="600" fill="#241a1e">' + esc(trunc(n.name, 22)) + ' · ' + fmtTick(n.total) + '</text>';
+      }
+    });
+    rights.forEach(function (n, ii) {
+      var yy = yR[ii], h = hR[ii], cy = yy + h / 2;
+      var fill = n.key === FLOW_OTHER ? '#b3a6ab' : NAVY;
+      svg += '<rect x="' + RX + '" y="' + yy.toFixed(1) + '" width="' + NW + '" height="' + h.toFixed(1) + '" rx="2" fill="' + fill + '" fill-opacity="0.55"><title>' +
+        esc(n.name + '\n' + fmt(n.total) + ' citations ' + (out ? 'received from' : 'made to') + ' the journals on the left') + '</title></rect>';
+      if (h >= 9) {
+        svg += '<text x="' + (RX + NW + 8) + '" y="' + (cy + 3.5).toFixed(1) + '" font-size="10.5" fill="#241a1e">' + esc(trunc(n.name, 24)) + ' · ' + fmtTick(n.total) + '</text>';
+      }
+    });
+    svg += '</svg>';
+    return svg;
   }
 
   // Editorial area trends: Management Science papers per year for its top
