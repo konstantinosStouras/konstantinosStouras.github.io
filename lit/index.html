@@ -519,7 +519,9 @@
   .paper-acct-panel { display: none; margin-top: 10px; padding: 14px 16px; background: #fbfaf4; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; }
   .paper-acct-panel.open { display: block; }
   .acct-panel-row { margin-bottom: 13px; }
-  .acct-panel-row > label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--text-muted); margin-bottom: 6px; }
+  /* Section headings only — each list row is itself a <label> child of the row,
+     and its user-typed name must keep its own capitalization. */
+  .acct-panel-row > label:not(.acct-listrow) { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--text-muted); margin-bottom: 6px; }
   .acct-note { width: 100%; min-height: 72px; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 6px; font-family: inherit; font-size: 13.5px; line-height: 1.5; color: var(--text); resize: vertical; }
   .acct-note:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(125,29,63,.08); }
   .acct-taglist { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
@@ -588,6 +590,8 @@
   .lib-chip .del:hover { opacity: 1; color: var(--red); }
   .lib-chip .share { opacity: .55; font-size: 13px; line-height: 1; }
   .lib-chip .share:hover { opacity: 1; }
+  .lib-chip .ren { opacity: .55; font-size: 13px; line-height: 1; }
+  .lib-chip .ren:hover { opacity: 1; }
   .lib-chip .pub { font-size: 11px; line-height: 1; }              /* 🌐 marker on a public list chip */
   /* Shared-list view (a public list opened via ?list=…) reuses the library bar
      shell but hides the normal filter bar + sort control, like the library. */
@@ -5614,6 +5618,26 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     else libFilter = { type: type, id: id };
     renderLibraryBar(); renderLibrary();
   };
+  window.acctRenameList = function (ev, lid) {
+    ev.stopPropagation();
+    var L = state.lists[lid]; if (!L) return;
+    var name = prompt('Rename this list:', L.name || '');
+    if (name === null) return;               // cancelled
+    name = name.trim();
+    if (!name || name === L.name) return;
+    listsCol().doc(lid).set({ name: name }, { merge: true })
+      .catch(function (err) { console.warn('rename list:', err && err.code); });
+    // Optimistic; the snapshot confirms — and syncPublicLists() then republishes
+    // a public list's shared copy under the new name (the sig includes it).
+    L.name = name;
+    renderLibraryBar();
+    if (libraryMode) renderLibrary();        // the "in “list”" scope line follows
+    // Any open per-card panels show the list as a checkbox row — refresh its text.
+    Array.prototype.forEach.call(document.querySelectorAll('.paper-acct-panel input[type=checkbox][data-lid]'), function (cb) {
+      if (cb.dataset.lid !== lid) return;
+      if (cb.nextSibling && cb.nextSibling.nodeType === 3) cb.nextSibling.nodeValue = ' ' + name;
+    });
+  };
   window.acctDeleteList = function (ev, lid) {
     ev.stopPropagation();
     if (!confirm('Delete this list? Papers stay in your library, only the list is removed.')) return;
@@ -5860,6 +5884,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       html += '<span class="lib-chip list' + act + '" onclick="acctSetLibFilter(\'list\',\'' + escAttr(lid) + '\')">' + esc(state.lists[lid].name) +
         (isPub ? ' <span class="pub" title="This list is public — click the share icon to get the link.">🌐</span>' : '') +
         ' <span class="cnt">' + recordsFor('list', lid).length + '</span>' +
+        '<span class="ren" title="Rename list" onclick="acctRenameList(event,\'' + escAttr(lid) + '\')">✎</span>' +
         '<span class="share" title="Share this list" onclick="acctShareList(event,\'' + escAttr(lid) + '\')">🔗</span>' +
         '<span class="del" title="Delete list" onclick="acctDeleteList(event,\'' + escAttr(lid) + '\')">×</span></span>';
     });

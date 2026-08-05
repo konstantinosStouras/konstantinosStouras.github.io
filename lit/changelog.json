@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "list-names-case-and-rename",
+      "date": "2026-08-05",
+      "title": "List names keep their capitalization — and lists can be renamed",
+      "summary": "Two fixes for your library's lists. First, the “Notes, tags & lists” panel on each paper card displayed every list name in ALL CAPITALS regardless of how it was typed; list names now show exactly as you wrote them, capitals and lowercase alike (they were always stored correctly, so existing lists display right immediately). Second, you can now rename any list: open My Library and click the ✎ icon on the list's chip. A renamed public list's shared page updates to the new name automatically, and its share link keeps working.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
       "id": "author-names-recased",
       "date": "2026-08-03",
       "title": "Author names no longer SHOUT",
