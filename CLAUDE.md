@@ -740,10 +740,12 @@ CLI `lit/_scraper/clean-junk-abstracts.mjs` (`--dir <dataset>` [`--dry-run`];
 + 2,932 FT50, `recent.json` refreshed, both caches healed); the blanked rows
 are "needy" again, so the pubsonline harvest (<300-char rule) and the FT50
 API backfill re-fill the REAL abstracts on their normal cadence — a paper
-shows no abstract, never a description of itself, until then. NOT yet
-vendored into the shard repos' `_entities.mjs` copies (keep-in-sync
-follow-up: the ABS shards carry INFORMS ABS-3 journals with the same
-summary deposits). Covered by `entities-selftest.mjs`.
+shows no abstract, never a description of itself, until then. VENDORED into
+all five shard repos' `_entities.mjs` copies (guards in each vendored
+build-data/abstracts-ci, `clean-junk-abstracts.mjs` vendored + run: abs4
+1,366 rows blanked — mostly EJ/REStat/JHR/IER OUP citation lines — + 1,358
+cache entries healed; abs3-omecon 2, abs3-rest 12; nature/science clean,
+guard preventive). Covered by `entities-selftest.mjs`.
 **ScienceDirect "Highlights" bullets are never served as the abstract** (user
 report 2026-08, the EJOR case). Elsevier deposits many papers' author
 HIGHLIGHTS — the 3-5 short ScienceDirect bullet points — as (or fused onto)
