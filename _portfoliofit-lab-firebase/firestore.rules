@@ -5,7 +5,7 @@ rules_version = '2';
 // Backend for the lab build at stouras.com/lab/portfoliofit/. This is a
 // SESSION-GATED research build (it has diverged from the fully anonymous
 // fun/portfoliofitgame/ copy): the client REQUIRES an ACTIVE session code to
-// play and collects a Registration form (UCD Student ID + demographics) after
+// play and collects a Registration form (University Student ID + demographics) after
 // training. Firebase Anonymous Auth is still the technical identity, so these
 // rules are unchanged — the anonymous owner creates and updates their own
 // participants/{uid} doc, which now also carries `registration`, `studentId`
