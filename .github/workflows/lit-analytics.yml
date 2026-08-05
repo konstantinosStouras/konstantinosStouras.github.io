@@ -9,6 +9,8 @@ name: lit — update analytics summary
 #   lit/analytics/authors.json     (per-author aggregates)
 #   lit/analytics/disruption.json  (per-paper disruption index D over the
 #                                       in-catalog citation graph, lit/data-refs/)
+#   lit/analytics/citeflow.json    (journal-to-journal citation flows over the
+#                                       same graph — the two Sankey charts)
 # so stouras.com/lit/analytics/ can draw every chart client-side without
 # ever downloading the ~270 MB of raw papers. Purely offline: reads only the
 # static datasets already committed by the lit / lit-ft50 data + reference builds.
@@ -27,6 +29,7 @@ on:
       - '.github/workflows/lit-analytics.yml'
       - 'lit/_scraper/build-analytics.mjs'
       - 'lit/_scraper/build-disruption.mjs'
+      - 'lit/_scraper/build-citeflow.mjs'
 
 # Never let two analytics builds race each other.
 concurrency:
@@ -108,6 +111,12 @@ jobs:
         # reference graph. Harmless if data-refs/ is empty (writes 0 papers).
         run: node lit/_scraper/build-disruption.mjs
 
+      - name: Build citation flows
+        # Journal-to-journal citation flows (the dashboard's two Sankey charts)
+        # over the same in-catalog graph. Offline like the steps above; harmless
+        # if data-refs/ is empty (writes empty maps, the page hides the charts).
+        run: node lit/_scraper/build-citeflow.mjs
+
       - name: Commit refreshed analytics
         # Only master carries the committed summary. Feature branches (e.g. a PR
         # that edits the aggregator) still run the build above as a check but do
@@ -119,7 +128,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add lit/analytics/data.json lit/analytics/authors.json lit/analytics/disruption.json
+          git add lit/analytics/data.json lit/analytics/authors.json lit/analytics/disruption.json lit/analytics/citeflow.json
           if git diff --cached --quiet; then
             echo "No analytics changes — nothing to commit."
             exit 0

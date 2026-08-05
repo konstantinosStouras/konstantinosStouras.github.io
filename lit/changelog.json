@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "analytics-citation-flows",
+      "date": "2026-08-05",
+      "title": "Citation flows — who each journal cites, and who cites it",
+      "summary": "Two new flow (Sankey) charts on the Data Analytics dashboard, just above the editorial-area trends, map the in-catalog citation graph journal to journal. The first shows where each journal's citations GO — each box is a journal in your current scope (Management Science, M&SOM and POM by default), sized by the references its papers make to other papers in the database, with ribbons leading to its top-10 most-cited journals (does Management Science cite itself, or the economics journals?). The second shows where each journal's citations COME FROM — the journals that cite its papers the most. Both honour the journal, journal-type and year filters, fold the remaining partners into an “Other” box, and reveal per-flow counts and shares on hover.",
+      "url": "https://www.stouras.com/lit/analytics/"
+    },
+    {
       "id": "allcaps-title-sentence-case",
       "date": "2026-08-05",
       "title": "SHOUTING TITLES are now readable titles",

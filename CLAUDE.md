@@ -1394,6 +1394,25 @@ trends"** line chart also trims its x-axis to the first year with data. Groups a
 suppressed while an editorial dimension is active (not like-for-like). (The former
 "Papers by journal" and "Journal share over time" charts, and the old "Compare vs.
 other journals" toggle, were removed in favour of this system.)
+**Citation flows — two journal-to-journal Sankey charts** (just above "Editorial
+area trends"): chart 1 shows where each in-scope journal's citations GO (the
+journals its papers cite), chart 2 where they COME FROM (the journals citing its
+papers) — left boxes are the journals in scope sized by total in-catalog
+citations made/received (default **ms/msom/pom** when nothing is selected —
+`FLOW_DEFAULT_KEYS`, per the owner — never the whole 55-journal graph; an
+explicit selection caps at the top `FLOW_MAX_LEFT` 8 by volume), ribbons to each
+journal's top `FLOW_TOP_PARTNERS` 10 partners with the rest folded into an
+"Other" node, native `<title>` tooltips with counts + shares, self-citations
+kept. Data is `analytics/citeflow.json`, pre-aggregated offline by
+`lit/_scraper/build-citeflow.mjs` from `lit/data-refs/` (refs shards ×
+`refs-index.json`; refreshed in `lit-analytics.yml` beside the other two
+builds, lazy-loaded like disruption.json via `ensureCiteflow`, page hides the
+cards until it exists). The SAME edge set is aggregated TWICE — `out` windowed
+by the CITING paper's year, `in` by the CITED paper's year — so both charts
+read as "papers of that journal published in the selected years"; junk-year
+guard mirrors the builds' `MIN_YEAR` 1850 (keep in sync). Journal-level only:
+the non-research toggle and editorial filters can't apply to edges (the
+subtitles say so). Offline test: `node lit/_scraper/citeflow-selftest.mjs`.
 **"Exclude non-research items" toggle (pre-ticked):** a filter-bar checkbox
 (`S.excludeNonResearch`, default ON) filters journal "Editorial Board" front
 matter, book reviews, corrigenda/errata, announcements and indices out of EVERY
