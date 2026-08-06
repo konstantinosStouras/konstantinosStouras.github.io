@@ -33,7 +33,12 @@ window.PF_DEFAULTS = {
     puzzlesPerUser: { easy: 2, hard: 2 },
     randomizeOrder: true,
     activePuzzleIds: [],
-    timeLimits: { easy: 120, hard: 180 }
+    timeLimits: { easy: 120, hard: 180 },
+    // Whether the Registration page (after training, before the main game) is
+    // shown at all. Default ON; the admin can switch it off globally
+    // (Registration tab) or per session (Sessions tab), in which case training
+    // leads straight into the main game and no registration data is collected.
+    registrationEnabled: true
   },
   // Registration form shown AFTER the training phase (welcome -> training ->
   // registration -> game -> survey). University Student ID is the compulsory first field;

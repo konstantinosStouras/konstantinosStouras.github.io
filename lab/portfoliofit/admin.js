@@ -313,7 +313,7 @@
     ]);
     root.appendChild(wrap);
     if (tab === 'content') renderContent(body);
-    else if (tab === 'registration') renderQuestions(body, 'registrationQuestions', 'Registration questions');
+    else if (tab === 'registration') { renderRegToggle(body); renderQuestions(body, 'registrationQuestions', 'Registration questions'); }
     else if (tab === 'survey') renderQuestions(body, 'surveyQuestions', 'Survey questions');
     else if (tab === 'puzzles') renderPuzzles(body);
     else if (tab === 'settings') renderSettings(body);
@@ -382,6 +382,27 @@
       return saveConfig({ texts: merged }).then(function () { cfg.texts = merged; build(); toast(g.label + ' restored to built-in default.'); }).catch(function (e) { toast('Restore failed: ' + ((e && e.code) || 'error')); throw e; });
     }
     return section;
+  }
+
+  // ---- Registration page on/off (master switch) ----
+  // The Registration page is optional: default ON, and this switch turns it off
+  // in the live config — participants then go straight from training to the main
+  // game and no registration data is collected. New sessions snapshot the value
+  // at creation; each session row on the Sessions tab has its own toggle too.
+  function renderRegToggle(body) {
+    var on = !(cfg.settings && cfg.settings.registrationEnabled === false);
+    var cb = el('input', { type: 'checkbox' }); if (on) cb.setAttribute('checked', 'checked');
+    cb.addEventListener('change', function () {
+      var settings = Object.assign({}, cfg.settings, { registrationEnabled: cb.checked });
+      saveConfig({ settings: settings })
+        .then(function () { cfg.settings = settings; toast(cb.checked ? 'Registration page enabled.' : 'Registration page removed (training leads straight to the game).'); })
+        .catch(function (e) { cb.checked = !cb.checked; toast('Save failed: ' + ((e && e.code) || 'error')); });
+    });
+    body.appendChild(el('div', { class: 'pfa-card' }, [
+      el('div', { class: 'pfa-field' }, [el('label', { style: 'display:flex;align-items:center;gap:8px;' },
+        [cb, document.createTextNode('Show the Registration page (after training, before the main game)')])]),
+      el('p', { class: 'pfa-note', text: 'Default: shown. Untick to remove the Registration page entirely — participants go straight from training to the game, and no Student ID, demographics or consent are collected. Saves immediately. New sessions snapshot this choice when created; use the per-session toggle on the Sessions tab to change it for an existing session.' })
+    ]));
   }
 
   // ---- Registration / Survey question editor ----
@@ -727,7 +748,7 @@
   function renderSessions(body) {
     body.innerHTML = '';
     body.appendChild(el('div', { class: 'pfa-card' }, [
-      el('p', { class: 'pfa-note', html: 'Create a <b>session</b>, then share its <b>Session ID</b> (or a <code>?session=CODE</code> link) with players — they enter it on the welcome screen to join (a code is required to play). A session snapshots the <b>current configuration</b> (Content, questions, Settings and the active puzzle set). Sessions are listed under <b>Active</b> (open, accepting players) and <b>Completed</b> (closed, read-only). <b>Close</b> a session to block new joins; data already collected is unaffected. Use <b>⬇ Excel</b> on any session to download a combined file of every player who has played it.' })
+      el('p', { class: 'pfa-note', html: 'Create a <b>session</b>, then share its <b>Session ID</b> (or a <code>?session=CODE</code> link) with players — they enter it on the welcome screen to join (a code is required to play). A session snapshots the <b>current configuration</b> (Content, questions, Settings, the active puzzle set and the Registration-page switch). Sessions are listed under <b>Active</b> (open, accepting players) and <b>Completed</b> (closed, read-only). <b>Close</b> a session to block new joins; data already collected is unaffected. The <b>Registration</b> column shows whether that session includes the Registration page (default: shown) — toggle it per session at any time; players who have not yet reached that step pick the change up on their next load. Use <b>⬇ Excel</b> on any session to download a combined file of every player who has played it.' })
     ]));
 
     var nameIn = el('input', { type: 'text', placeholder: 'e.g. Spring MBA 2026', style: 'max-width:340px;' });
@@ -824,7 +845,7 @@
       card.appendChild(head);
       if (!docs.length) { card.appendChild(el('p', { class: 'pfa-note', text: isDone ? 'No completed sessions.' : 'No active sessions yet. Create one above.' })); return card; }
       var table = el('table', { class: 'pfa-tbl' });
-      table.appendChild(el('thead', {}, [el('tr', {}, ['Session ID', 'Name', 'Participants', 'Created', ''].map(function (th) { return el('th', { text: th }); }))]));
+      table.appendChild(el('thead', {}, [el('tr', {}, ['Session ID', 'Name', 'Participants', 'Registration', 'Created', ''].map(function (th) { return el('th', { text: th }); }))]));
       var tb = el('tbody', {});
       docs.forEach(function (s) {
         var actions = [
@@ -834,10 +855,18 @@
         if (isDone) actions.push(el('button', { class: 'pfa-btn sec sm', on: { click: function () { setStatus(s._id, 'open'); } } }, ['reopen']));
         else actions.push(el('button', { class: 'pfa-btn sec sm', on: { click: function () { setStatus(s._id, 'closed'); } } }, ['close']));
         actions.push(el('button', { class: 'pfa-btn danger sm', on: { click: function () { delSession(s._id); } } }, ['delete']));
+        // Per-session Registration-page toggle (absent flag = shown, the default).
+        var regOn = !(s.settings && s.settings.registrationEnabled === false);
+        var regCell = el('div', { style: 'display:flex;gap:6px;align-items:center;flex-wrap:wrap;' }, [
+          el('span', { class: 'pfa-note', style: 'margin:0;', text: regOn ? 'shown' : 'removed' }),
+          el('button', { class: 'pfa-btn sec sm', title: regOn ? 'Remove the Registration page for this session (players go straight from training to the game)' : 'Show the Registration page for this session again',
+            on: { click: function () { setRegistration(s._id, !regOn); } } }, [regOn ? 'remove' : 'show'])
+        ]);
         tb.appendChild(el('tr', {}, [
           el('td', {}, [el('b', { text: s._id })]),
           el('td', { text: s.name || s.label || '' }),
           el('td', { text: counts ? String(counts[s._id] || 0) : '—' }),
+          el('td', {}, [regCell]),
           el('td', { text: fmtTs(s.createdAt) }),
           el('td', {}, [el('div', { style: 'display:flex;gap:6px;flex-wrap:wrap;' }, actions)])
         ]));
@@ -850,6 +879,15 @@
     function setStatus(code, status) {
       fb.F.setDoc(fb.F.doc(fb.db, 'sessions', code), { status: status, updatedAt: fb.F.serverTimestamp() }, { merge: true })
         .then(function () { toast(status === 'closed' ? 'Session closed (moved to Completed).' : 'Session reopened (moved to Active).'); loadList(); })
+        .catch(function (e) { toast('Failed: ' + ((e && e.code) || 'error')); });
+    }
+    // Flip the Registration page on/off for ONE session. merge:true deep-merges
+    // the settings map, so the session's other snapshot settings are preserved.
+    // Players load the session config on join/resume, so anyone who has not yet
+    // reached the registration step picks the change up on their next load.
+    function setRegistration(code, enabled) {
+      fb.F.setDoc(fb.F.doc(fb.db, 'sessions', code), { settings: { registrationEnabled: enabled }, updatedAt: fb.F.serverTimestamp() }, { merge: true })
+        .then(function () { toast(enabled ? 'Registration page shown for session "' + code + '".' : 'Registration page removed for session "' + code + '".'); loadList(); })
         .catch(function (e) { toast('Failed: ' + ((e && e.code) || 'error')); });
     }
     function delSession(code) {

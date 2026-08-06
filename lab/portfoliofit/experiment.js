@@ -2,9 +2,12 @@
    PortfolioFit for Managers — session-gated research play layer
    ---------------------------------------------------------------------
    Turns the PortfolioFit game into a session-gated, session-aware flow:
-     welcome  ->  training  ->  registration  ->  main phase  ->  stats
+     welcome  ->  training  ->  [registration]  ->  main phase  ->  stats
               ->  survey  ->  thank-you
-   plus per-action logging to a dedicated Firebase project.
+   plus per-action logging to a dedicated Firebase project. The registration
+   step is OPTIONAL: settings.registrationEnabled (default true) controls it —
+   the admin can switch it off globally or per session, in which case training
+   leads straight into the main game and no registration data is collected.
 
    NO anonymous play: to take part, a visitor MUST enter a session code that
    matches an ACTIVE (open) admin-created session (config stored at
@@ -65,7 +68,8 @@
       trainingTimeLimit: 90,
       puzzlesPerUser: { easy: 2, hard: 2 },
       randomizeOrder: true,
-      activePuzzleIds: []
+      activePuzzleIds: [],
+      registrationEnabled: true
     },
     // Registration form (shown after training; University Student ID is the compulsory
     // first field). Mirrors pf-defaults.js; admin-editable via the Registration tab.
@@ -663,14 +667,19 @@
     hideGameSubmit();
     clearPhaseBanner();
     logEvent('training_end', { trainingMetrics: metrics || null });
-    setTimeout(function () { showRegistration(); }, 400);
+    setTimeout(function () { if (regEnabled()) showRegistration(); else startMain(); }, 400);
   }
 
+  // The Registration page is optional per session/config (default ON): when the
+  // admin switches it off, training leads straight into the main game and no
+  // registration data is collected. Absent flag (older sessions) = enabled.
+  function regEnabled() { return !(cfg.settings && cfg.settings.registrationEnabled === false); }
+
   // ---- Phase: registration (after training, before the main game) -------
-  // Collects the University Student ID (compulsory first field) plus demographics and
-  // research-consent checkboxes, then unlocks the main game. Data is written to
-  // the participant doc (registration map + studentId + consent) and exported by
-  // the admin panel.
+  // Skipped entirely when regEnabled() is false. Collects the University Student
+  // ID (compulsory first field) plus demographics and research-consent
+  // checkboxes, then unlocks the main game. Data is written to the participant
+  // doc (registration map + studentId + consent) and exported by the admin panel.
   function showRegistration() {
     S.phase = 'registration';
     document.body.classList.remove('pf-playing');
@@ -1049,7 +1058,8 @@
     if (st === 'survey') return showSurvey();
     if (st === 'playing') { try { await restoreQueue(); } catch (e) {} return startMain(); }
     // 'joined' (or anything pre-main): resume into the game if they already
-    // registered, otherwise restart the training -> registration lead-in.
+    // registered, otherwise restart the training lead-in (which routes on to
+    // registration or straight to the main game per regEnabled()).
     if (S.participant && S.participant.registration) return startMain();
     return startTraining();
   }

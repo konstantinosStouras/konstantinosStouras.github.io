@@ -18,7 +18,9 @@ built. It explains the *philosophy* and the *structure*, not just the code.
 > play**. To take part a visitor MUST enter a session code matching an **active
 > (open)** admin-created session, and after the training phase they complete a
 > **Registration** form (compulsory **University Student ID** + demographics) before the
-> main game. The production copy at `fun/portfoliofitgame/` keeps the original
+> main game — unless the admin switched the OPTIONAL Registration page off
+> (`settings.registrationEnabled`, default on; globally or per session), in which
+> case training leads straight into the main game. The production copy at `fun/portfoliofitgame/` keeps the original
 > **fully anonymous** flow (optional session code) and **must not be repointed** —
 > it talks to `stouras-portfoliofit` (see
 > `_portfoliofit-firebase/SWITCH-LAB-TO-NEW-PROJECT.md`); this copy uses its own
@@ -44,6 +46,10 @@ Firebase Anonymous Auth is still used as the technical identity (so Firestore
 reads/writes work), but the participant is identified for research by the
 **Registration** form shown after training (compulsory **University Student ID** +
 demographics; written to the participant doc as `registration`/`studentId`).
+**The Registration page is OPTIONAL** (`settings.registrationEnabled`, default
+**on**): the admin can remove it — globally (Registration tab's master switch)
+or **per session** (a toggle on each Sessions row) — and training then leads
+straight into the main game with no registration data collected.
 
 ## 2. Design philosophy (the important part)
 
@@ -174,10 +180,14 @@ publish it; versioned in the repo, deployed manually to the lab project):
   default; off only for `?admin`/`?classic`). Adds class `pf-exp` to `<body>`
   and hides research artifacts via CSS (the κ "difficulty" badge, the PDF-note
   footer, the legacy account widget, and the "Best $" pill).
-- **Phase machine:** `welcome → training → registration → main → stats → survey →
+- **Phase machine:** `welcome → training → [registration] → main → stats → survey →
   thankyou`. Each screen is an overlay card; `S` holds the live state (including
   `S.sessionId` and `S.offline`). The **registration** phase (after training,
-  before the main game) renders `cfg.registrationQuestions` — University Student ID
+  before the main game) is **optional**: `regEnabled()` reads
+  `cfg.settings.registrationEnabled` (absent = enabled, so older sessions are
+  unaffected) and, when it is `false`, `onTrainingEnd` routes straight to
+  `startMain()` — no registration data is collected. When enabled it renders
+  `cfg.registrationQuestions` — University Student ID
   (compulsory, first) + demographics (Age, Gender, Nationality, Country of
   residence, Level of Study, Work Experience, Occupation, English Fluency) — via
   `buildField` (now also handling `country` dropdowns and `min`/`max` `number`
@@ -290,7 +300,12 @@ publish it; versioned in the repo, deployed manually to the lab project):
   - **Registration** / **Survey** — add/edit/reorder/delete questions. The
     Registration form is the post-training demographics form (default first field
     is the compulsory **University Student ID**); field types include `country` (full
-    country dropdown) and `number` (with `min`/`max`).
+    country dropdown) and `number` (with `min`/`max`). The Registration tab also
+    carries the **"Show the Registration page" master switch** (`renderRegToggle`,
+    saves `settings.registrationEnabled` immediately; default on) — off removes
+    the page entirely, so training leads straight into the main game. New
+    sessions snapshot the value at creation; existing sessions are flipped from
+    the Sessions tab.
   - **Puzzles** — build the exact set every participant plays: **Generate set to
     match Settings** creates puzzles sized to the easy/hard counts (reusing vetted
     built-ins first, generating the shortfall), or generate one at a time via
@@ -310,8 +325,12 @@ publish it; versioned in the repo, deployed manually to the lab project):
     sessions** bulk button. Per row: **copy ID**, **⬇ Excel** (downloads a
     combined workbook of *every* player who has played that session — see export
     below), **close**/**reopen** (`status` toggles; closing blocks *new* joins —
-    enforced in `experiment.js` `beginSession`), and **delete**. Players join by
-    code; data is tagged with `sessionId`.
+    enforced in `experiment.js` `beginSession`), a **Registration** column
+    (shown/removed + a per-session toggle — `setRegistration` merge-writes
+    `settings.registrationEnabled` into that one session doc, so an existing
+    session can drop or restore the Registration page at any time; players who
+    have not reached that step pick the change up on their next load), and
+    **delete**. Players join by code; data is tagged with `sessionId`.
   - **Participants** — table of all players (Player / **University Student ID** / Session
     / Status / Started). The **Started** header is clickable to sort by start date
     ascending/descending (▲/▼, in place — no re-fetch). Header: **Export all to
@@ -508,7 +527,9 @@ change. Four sections:
 - **Firestore data model:**
   ```
   config/app                      texts, settings (timeLimits, puzzlesPerUser,
-                                  randomizeOrder, activePuzzleIds),
+                                  randomizeOrder, activePuzzleIds,
+                                  registrationEnabled — the optional
+                                  Registration page, default true),
                                   registrationQuestions, registrationConsents,
                                   surveyQuestions
   sessions/{code}                 admin config snapshot players join by code
