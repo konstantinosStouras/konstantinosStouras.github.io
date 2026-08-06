@@ -409,15 +409,28 @@ change. Four sections:
    boxes from the aggregate **Rounds** sheet (one row per completed puzzle),
    with tolerant case/spacing-insensitive header matching (`daPickKey`) so
    imported files work too: users played, easy/hard puzzles completed,
-   **average time to complete** a puzzle of each difficulty (each user's own
-   mean is taken first, then averaged, so a heavy player cannot dominate), the
+   **average time spent on** a puzzle of each difficulty — the round's
+   `Time (s)` = seconds from round start until early Submit or the deadline,
+   NOT the time allowance (each user's own mean is taken first, then
+   averaged, so a heavy player cannot dominate), the **average time to the
+   user's own best solution** (`daTimeToBest`: from the Play log's per-move
+   `Duration (s)` gaps, how far into a play the user FIRST reached the
+   highest Net Value they ever had on the board in that puzzle — their own
+   peak, not necessarily the true optimum; later ties don't move it; joined
+   onto Rounds rows, which scopes it to main-phase puzzles — training moves
+   have no Rounds row, the same join discipline as the §3 templates — and
+   aggregated with the same per-user-first weighting; a play with a move
+   missing its duration is dropped rather than mis-timed), the
    **% of users who reached the maximum** — Net Value ≥ Best Value — and the %
    who got **within 5% / within 10%** of the maximum Net Value at least once
    (Net Value ≥ 95% / 90% of Best Value; cumulative, so a user at the maximum
    also counts as within 5% and 10%). Rows missing Net or Best Value are
    excluded (never use Fitness % here: it is a geometric **compactness**
-   score, not net ÷ best). Plus a per-puzzle breakdown table (plays, avg time,
-   share of plays at max / within 5% / within 10%).
+   score, not net ÷ best). Plus a per-puzzle breakdown table (plays, avg
+   time, time to own best, share of plays at max / within 5% / within 10%)
+   and a collapsed **per-user table** (each user's own mean time spent and
+   time-to-own-best, per difficulty — the figures the headline tiles
+   average).
 3. **Process with Python or R** (`buildDaSection3`). Edit the pre-filled
    script, **Run**. The code always receives THREE tables: the table picked in
    the selector (default **Play log**) as the string `DATA_CSV` (Python) / the

@@ -1244,9 +1244,11 @@
           sheet map (the SAME multi-tab shape as the Excel export, via
           buildSheetMap), downloadable as a single consolidated workbook.
        2. Aggregate data — headline stats from the Rounds sheet: users
-          played, easy/hard puzzles completed, average completion time per
-          difficulty (each user weighted equally) and the % of users who
-          reached the puzzle maximum, plus a per-puzzle breakdown.
+          played, easy/hard puzzles completed, average time spent per
+          difficulty and average time to each user's own best solution
+          (from the Play log's move timings; each user weighted equally)
+          and the % of users who reached the puzzle maximum, plus
+          per-puzzle and (collapsed) per-user breakdowns.
        3. Process with Python or R — edit + run a script against any loaded
           table. Python runs on Pyodide, R on WebR — both compiled entirely
           in the browser (loaded lazily from jsDelivr on first Run); no
@@ -1455,7 +1457,7 @@
   function buildDaSection2() {
     var card = el('div', { class: 'pfa-card' });
     card.appendChild(el('div', { class: 'pfa-sechead' }, [el('span', { class: 'pfa-secnum', text: '2' }), el('h3', { text: 'Aggregate data', style: 'margin:0;font-size:16px;' })]));
-    card.appendChild(el('p', { class: 'pfa-note', html: 'Headline numbers from the loaded <b>Rounds</b> data (one row per completed puzzle): how many users played, how many easy/hard puzzles were completed, the <b>average time to complete</b> one (each user weighted equally — their own average is taken first), the <b>% of users who reached the maximum</b> (final Net Value ≥ the puzzle\'s Best Value) at least once, plus the % who got <b>within 5%</b> and <b>within 10%</b> of that maximum Net Value at least once (cumulative — a user at the maximum also counts as within 5% and 10%).' }));
+    card.appendChild(el('p', { class: 'pfa-note', html: 'Headline numbers from the loaded <b>Rounds</b> data (one row per completed puzzle): how many users played, how many easy/hard puzzles were completed, the <b>average time spent on</b> one — the seconds from the puzzle\'s start until the player pressed <i>Submit portfolio</i> or the timer ran out, NOT the time allowance, so it shows how much of the allowance was actually used (each user weighted equally — their own average is taken first) — the <b>average time to the user\'s own best solution</b> (from the Play log\'s move timings: how far into the play the user FIRST reached the highest Net Value they ever had on the board in that puzzle, whether or not that was the true optimum; same per-user-first weighting), the <b>% of users who reached the maximum</b> (final Net Value ≥ the puzzle\'s Best Value) at least once, plus the % who got <b>within 5%</b> and <b>within 10%</b> of that maximum Net Value at least once (cumulative — a user at the maximum also counts as within 5% and 10%).' }));
     var stats = el('div', { class: 'pfa-statgrid', style: 'margin-top:6px;' });
     card.appendChild(stats);
     var hint = el('p', { class: 'pfa-note', text: 'Load data in Section 1 first.' });
@@ -1479,6 +1481,8 @@
       stats.appendChild(statBox(agg.played.hard, 'Hard puzzles played'));
       stats.appendChild(statBox(agg.easy.avgTime != null ? fmtDur(agg.easy.avgTime) : '—', 'Avg time · easy'));
       stats.appendChild(statBox(agg.hard.avgTime != null ? fmtDur(agg.hard.avgTime) : '—', 'Avg time · hard'));
+      stats.appendChild(statBox(agg.easy.avgBestTime != null ? fmtDur(agg.easy.avgBestTime) : '—', 'Time to own best · easy'));
+      stats.appendChild(statBox(agg.hard.avgBestTime != null ? fmtDur(agg.hard.avgBestTime) : '—', 'Time to own best · hard'));
       stats.appendChild(statBox(agg.easy.pctMax != null ? agg.easy.pctMax + '%' : '—', 'Reached max · easy (users)'));
       stats.appendChild(statBox(agg.hard.pctMax != null ? agg.hard.pctMax + '%' : '—', 'Reached max · hard (users)'));
       stats.appendChild(statBox(agg.easy.pct5 != null ? agg.easy.pct5 + '%' : '—', 'Within 5% of max · easy (users)'));
@@ -1486,9 +1490,9 @@
       stats.appendChild(statBox(agg.easy.pct10 != null ? agg.easy.pct10 + '%' : '—', 'Within 10% of max · easy (users)'));
       stats.appendChild(statBox(agg.hard.pct10 != null ? agg.hard.pct10 + '%' : '—', 'Within 10% of max · hard (users)'));
       if (agg.puzzles.length) {
-        tblWrap.appendChild(el('p', { class: 'pfa-note', style: 'margin-top:12px;', html: '<b>By puzzle</b> — plays, average completion time and the share of plays that reached the maximum, or got within 5% / 10% of it:' }));
+        tblWrap.appendChild(el('p', { class: 'pfa-note', style: 'margin-top:12px;', html: '<b>By puzzle</b> — plays, average time spent, average time to the play\'s own best solution, and the share of plays that reached the maximum, or got within 5% / 10% of it:' }));
         var t = el('table', { class: 'pfa-tbl' });
-        t.appendChild(el('thead', {}, [el('tr', {}, ['Puzzle', 'Difficulty', 'Plays', 'Avg time', 'Plays at max', 'Within 5%', 'Within 10%'].map(function (h) { return el('th', { text: h }); }))]));
+        t.appendChild(el('thead', {}, [el('tr', {}, ['Puzzle', 'Difficulty', 'Plays', 'Avg time', 'Time to own best', 'Plays at max', 'Within 5%', 'Within 10%'].map(function (h) { return el('th', { text: h }); }))]));
         var tb = el('tbody', {});
         function shareCell(k, known) { return known ? Math.round(k / known * 100) + '% (' + k + '/' + known + ')' : '—'; }
         agg.puzzles.forEach(function (pz) {
@@ -1497,6 +1501,7 @@
             el('td', { text: pz.diff }),
             el('td', { text: String(pz.n) }),
             el('td', { text: pz.timeN ? fmtDur(pz.timeSum / pz.timeN) : '—' }),
+            el('td', { text: pz.tbN ? fmtDur(pz.tbSum / pz.tbN) : '—' }),
             el('td', { text: shareCell(pz.maxN, pz.knownN) }),
             el('td', { text: shareCell(pz.near5N, pz.knownN) }),
             el('td', { text: shareCell(pz.near10N, pz.knownN) })
@@ -1504,6 +1509,35 @@
         });
         t.appendChild(tb);
         tblWrap.appendChild(el('div', { class: 'pfa-scrolltbl' }, [t]));
+      }
+      if (agg.perUser.length) {
+        // Per-user detail (collapsed by default): each user's own mean time
+        // spent and time-to-own-best, per difficulty — the per-user figures the
+        // headline tiles average.
+        var puWrap = el('div', { style: 'display:none;margin-top:8px;' });
+        var puBtn = el('button', { class: 'pfa-btn sm', style: 'margin-top:12px;' });
+        var puOpen = false;
+        function paintPuBtn() { puBtn.textContent = puOpen ? 'Hide per-user times' : 'Show per-user times (time spent & time to own best, per user)'; }
+        paintPuBtn();
+        puBtn.addEventListener('click', function () { puOpen = !puOpen; puWrap.style.display = puOpen ? '' : 'none'; paintPuBtn(); });
+        var pt = el('table', { class: 'pfa-tbl' });
+        pt.appendChild(el('thead', {}, [el('tr', {}, ['Player', 'Session', 'Avg time · easy', 'Time to own best · easy', 'Avg time · hard', 'Time to own best · hard'].map(function (h) { return el('th', { text: h }); }))]));
+        var ptb = el('tbody', {});
+        function timeCell(a, sumKey, nKey) { return (a && a[nKey]) ? fmtDur(a[sumKey] / a[nKey]) : '—'; }
+        agg.perUser.forEach(function (u) {
+          ptb.appendChild(el('tr', {}, [
+            el('td', { text: u.player }),
+            el('td', { text: u.sess || '—' }),
+            el('td', { text: timeCell(u.easy, 'timeSum', 'timeN') }),
+            el('td', { text: timeCell(u.easy, 'tbSum', 'tbN') }),
+            el('td', { text: timeCell(u.hard, 'timeSum', 'timeN') }),
+            el('td', { text: timeCell(u.hard, 'tbSum', 'tbN') })
+          ]));
+        });
+        pt.appendChild(ptb);
+        puWrap.appendChild(el('div', { class: 'pfa-scrolltbl' }, [pt]));
+        tblWrap.appendChild(puBtn);
+        tblWrap.appendChild(puWrap);
       }
     }
     return card;
@@ -1518,6 +1552,10 @@
   // Rows missing Net or Best Value are "unknown" and excluded from the rates.
   // (The Fitness % column is a geometric COMPACTNESS score, NOT net/best — it
   // must never be used as a fallback for any of these.)
+  // "Time to own best" joins daTimeToBest's per-play Play-log figure onto each
+  // Rounds row (which is what scopes it to main-phase completed puzzles and
+  // gives it its difficulty), aggregated exactly like the completion time:
+  // per-play → that user's own mean → averaged across users.
   function daAggStats(map) {
     var rounds = (map && map.Rounds) || [];
     if (!rounds.length) return null;
@@ -1529,6 +1567,8 @@
     var kBest = daPickKey(rounds, ['Best Value', 'bestValue']);
     var kPuz = daPickKey(rounds, ['Puzzle ID', 'puzzleId', 'Puzzle']);
     if (!kDiff || !kPlayer) return null;
+    var tb = daTimeToBest((map && map['Play log']) || []);
+    var tbUsed = {};   // each play's time-to-best joins at most one Rounds row
     var users = {}, puzzles = {}, played = { easy: 0, hard: 0 };
     rounds.forEach(function (r) {
       var d0 = String(r[kDiff] == null ? '' : r[kDiff]).trim().toLowerCase().charAt(0);
@@ -1539,7 +1579,7 @@
       // participant, but pairing with the session keeps stacked imports apart).
       var ukey = String(r[kPlayer]) + '|' + String(kSess ? (r[kSess] || '') : '');
       var u = users[ukey] || (users[ukey] = {});
-      var a = u[d] || (u[d] = { n: 0, timeSum: 0, timeN: 0, max: false, near5: false, near10: false, known: false });
+      var a = u[d] || (u[d] = { n: 0, timeSum: 0, timeN: 0, tbSum: 0, tbN: 0, max: false, near5: false, near10: false, known: false });
       a.n++;
       var t = daNum(kTime ? r[kTime] : null);
       if (t != null) { a.timeSum += t; a.timeN++; }
@@ -1548,28 +1588,75 @@
       if (net != null && best != null) { atMax = net >= best; near5 = net >= 0.95 * best; near10 = net >= 0.90 * best; }
       if (atMax != null) { a.known = true; if (atMax) a.max = true; if (near5) a.near5 = true; if (near10) a.near10 = true; }
       var pid = String(kPuz ? (r[kPuz] == null ? '' : r[kPuz]) : '') || '(unknown)';
-      var pz = puzzles[pid + '|' + d] || (puzzles[pid + '|' + d] = { id: pid, diff: d, n: 0, timeSum: 0, timeN: 0, maxN: 0, near5N: 0, near10N: 0, knownN: 0 });
+      var pz = puzzles[pid + '|' + d] || (puzzles[pid + '|' + d] = { id: pid, diff: d, n: 0, timeSum: 0, timeN: 0, tbSum: 0, tbN: 0, maxN: 0, near5N: 0, near10N: 0, knownN: 0 });
       pz.n++;
       if (t != null) { pz.timeSum += t; pz.timeN++; }
       if (atMax != null) { pz.knownN++; if (atMax) pz.maxN++; if (near5) pz.near5N++; if (near10) pz.near10N++; }
+      var tbKey = ukey + '|' + pid;
+      if (!tbUsed[tbKey] && tb[tbKey] != null) { tbUsed[tbKey] = 1; a.tbSum += tb[tbKey]; a.tbN++; pz.tbSum += tb[tbKey]; pz.tbN++; }
     });
     var ukeys = Object.keys(users);
     if (!ukeys.length) return null;
     function diffStats(d) {
-      var timeMeans = [], maxUsers = 0, near5Users = 0, near10Users = 0, knownUsers = 0, n = 0;
+      var timeMeans = [], tbMeans = [], maxUsers = 0, near5Users = 0, near10Users = 0, knownUsers = 0, n = 0;
       ukeys.forEach(function (k) {
         var a = users[k][d]; if (!a) return;
         n++;
         if (a.timeN) timeMeans.push(a.timeSum / a.timeN);
+        if (a.tbN) tbMeans.push(a.tbSum / a.tbN);
         if (a.known) { knownUsers++; if (a.max) maxUsers++; if (a.near5) near5Users++; if (a.near10) near10Users++; }
       });
-      var avgTime = timeMeans.length ? timeMeans.reduce(function (s, x) { return s + x; }, 0) / timeMeans.length : null;
+      function mean(xs) { return xs.length ? xs.reduce(function (s, x) { return s + x; }, 0) / xs.length : null; }
       function pct(k) { return knownUsers ? Math.round(k / knownUsers * 1000) / 10 : null; }
-      return { users: n, avgTime: avgTime, maxUsers: maxUsers, near5Users: near5Users, near10Users: near10Users, knownUsers: knownUsers, pctMax: pct(maxUsers), pct5: pct(near5Users), pct10: pct(near10Users) };
+      return { users: n, avgTime: mean(timeMeans), avgBestTime: mean(tbMeans), maxUsers: maxUsers, near5Users: near5Users, near10Users: near10Users, knownUsers: knownUsers, pctMax: pct(maxUsers), pct5: pct(near5Users), pct10: pct(near10Users) };
     }
     var puzzleRows = Object.keys(puzzles).map(function (k) { return puzzles[k]; });
     puzzleRows.sort(function (a, b) { return (a.diff === b.diff ? 0 : (a.diff === 'easy' ? -1 : 1)) || (b.n - a.n); });
-    return { usersPlayed: ukeys.length, played: played, easy: diffStats('easy'), hard: diffStats('hard'), puzzles: puzzleRows };
+    // Per-user rows for the collapsible detail table: each user's own mean
+    // completion time and time-to-own-best, per difficulty.
+    var perUser = ukeys.map(function (k) {
+      var u = users[k], sep = k.lastIndexOf('|');
+      return { player: k.slice(0, sep), sess: k.slice(sep + 1), easy: u.easy || null, hard: u.hard || null };
+    });
+    perUser.sort(function (a, b) { return a.player.localeCompare(b.player, undefined, { numeric: true }) || a.sess.localeCompare(b.sess); });
+    return { usersPlayed: ukeys.length, played: played, easy: diffStats('easy'), hard: diffStats('hard'), puzzles: puzzleRows, perUser: perUser };
+  }
+  // From the Play log (one row per board change, in true play order), find for
+  // each play — one (player, session, puzzle) — the time from the round's start
+  // until the player FIRST put their own best solution on the board: the first
+  // move whose Net Value (after) equals the highest Net Value they ever reached
+  // during that play (later ties don't move it — it is "when they first found
+  // it"). Elapsed time is the running sum of the per-move 'Duration (s)' gaps,
+  // whose baseline is the round_start event, so it is time INTO the round; only
+  // real moves count (the start row is the empty board, not a found solution),
+  // and a play with a move missing its duration (a foreign import) is dropped
+  // rather than mis-timed. Returns { 'player|session|puzzle': seconds }; the
+  // caller joins it onto Rounds rows, which is what excludes training-phase
+  // moves (no Rounds row) — the same join discipline as the Section-3 templates.
+  function daTimeToBest(playRows) {
+    if (!playRows || !playRows.length) return {};
+    var kPlayer = daPickKey(playRows, ['Player', 'account_id', 'participant', 'user']);
+    var kSess = daPickKey(playRows, ['Session', 'session_id']);
+    var kPuz = daPickKey(playRows, ['Puzzle', 'Puzzle ID', 'puzzleId']);
+    var kMove = daPickKey(playRows, ['Move #', 'move']);
+    var kNet = daPickKey(playRows, ['Net Value (after)', 'net_after']);
+    var kDur = daPickKey(playRows, ['Duration (s)', 'duration_s', 'duration']);
+    if (!kPlayer || !kPuz || !kNet || !kDur) return {};
+    var groups = {};
+    playRows.forEach(function (r) {
+      var key = String(r[kPlayer]) + '|' + String(kSess ? (r[kSess] || '') : '') + '|' + String(r[kPuz] == null ? '' : r[kPuz]);
+      var g = groups[key] || (groups[key] = { elapsed: 0, bestNet: null, bestT: null, bad: false });
+      var isMove = daNum(kMove ? r[kMove] : r[kDur]) != null;   // start rows have a blank Move # (and no duration)
+      if (!isMove) return;
+      var dur = daNum(r[kDur]);
+      if (dur == null) { g.bad = true; return; }   // timing hole → this play's clock is unusable
+      g.elapsed += dur;
+      var net = daNum(r[kNet]);
+      if (net != null && (g.bestNet == null || net > g.bestNet)) { g.bestNet = net; g.bestT = g.elapsed; }
+    });
+    var out = {};
+    Object.keys(groups).forEach(function (k) { var g = groups[k]; if (!g.bad && g.bestT != null) out[k] = g.bestT; });
+    return out;
   }
   function daNorm(s) { return String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9%]/g, ''); }
   // Coerce a cell to a finite number ('' / '—' / text → null).
