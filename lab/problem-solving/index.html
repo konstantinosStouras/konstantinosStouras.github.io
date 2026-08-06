@@ -419,6 +419,70 @@
       background: #fff8f0; border: 1px solid #f0d8b0;
       font-size: 13px; color: #a06800; line-height: 1.5;
     }
+
+    /* ========== ADMIN PANEL (?admin) ========== */
+    body.admin-mode { padding-top: 64px; }
+    body.admin-mode .container { max-width: 720px; }
+    .admin-banner {
+      position: fixed; top: 0; left: 0; right: 0;
+      background: #333; color: #fff; text-align: center;
+      padding: 7px 12px; z-index: 9999;
+      font-family: 'Libre Franklin', Arial, sans-serif;
+      font-size: 12px; font-weight: 700; letter-spacing: 0.05em;
+    }
+    .admin-banner a { color: #bccf31; margin-left: 10px; text-decoration: none; }
+    .admin-banner a:hover { text-decoration: underline; }
+    .admin-panel {
+      margin-top: 8px; padding: 18px 20px;
+      background: #f7f7f4; border-top: 3px solid #333;
+    }
+    .admin-panel-title {
+      font-family: Georgia, serif;
+      font-size: 20px; font-weight: 700; color: #333; margin-bottom: 2px;
+    }
+    .admin-panel-sub {
+      font-family: 'Libre Franklin', Arial, sans-serif;
+      font-size: 12px; color: #999; margin-bottom: 14px; line-height: 1.5;
+    }
+    .admin-presets { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+    .admin-preset {
+      padding: 7px 14px; background: #fff;
+      border: 1px solid #ccc; border-radius: 4px;
+      font-family: 'Libre Franklin', Arial, sans-serif;
+      font-size: 12px; font-weight: 700; color: #666; cursor: pointer;
+    }
+    .admin-preset:hover { border-color: #999; color: #333; }
+    .admin-preset.active { background: #2e7d32; border-color: #2e7d32; color: #fff; }
+    .admin-dates { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+    .admin-dates label {
+      font-family: 'Libre Franklin', Arial, sans-serif;
+      font-size: 12px; font-weight: 700; color: #555;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .admin-dates input[type="date"] {
+      height: 36px; border: 2px solid #ccc; background: #fff;
+      font-family: 'Libre Franklin', Arial, sans-serif;
+      font-size: 13px; color: #333; padding: 0 8px; outline: none;
+    }
+    .admin-dates input[type="date"]:focus { border-color: #999; }
+    .admin-status {
+      font-family: 'Libre Franklin', Arial, sans-serif;
+      font-size: 13px; color: #555; line-height: 1.5;
+      background: #fff; border: 1px solid #e0e0d8;
+      padding: 10px 12px; margin-bottom: 12px;
+    }
+    .admin-status strong { color: #333; }
+    .admin-actions {
+      display: flex; gap: 10px; align-items: center;
+      justify-content: space-between; flex-wrap: wrap;
+    }
+    .admin-refresh {
+      padding: 10px 16px; background: #fff;
+      border: 1px solid #ccc; border-radius: 6px;
+      font-family: 'Libre Franklin', Arial, sans-serif;
+      font-size: 12px; font-weight: 700; color: #666; cursor: pointer;
+    }
+    .admin-refresh:hover { border-color: #999; color: #333; }
   </style>
 </head>
 <body>
@@ -844,6 +908,7 @@ function detectColumns(headers) {
     return idx;
   };
   return {
+    timestamp: find(['timestamp','date']),
     attempts: find(['numattempts','numberofattempts','attempts','guesses','numguesses']),
     yeses:    find(['yeses','yescount']),
     nos:      find(['nos','nocount']),
@@ -2581,10 +2646,310 @@ function resetGame() {
   updateStepDesc(); updateCheckBtn();
 }
 
-// Init
-const IS_PREVIEW = new URLSearchParams(window.location.search).has('preview');
+// ============================================================
+// ADMIN PANEL (?admin) — secret link, no password.
+// Downloads the collected data (all of it, or a chosen date
+// range) and re-renders every class chart for that range.
+// ============================================================
+const ADMIN = { headers: [], rows: [], dates: [], cols: null, loaded: false };
 
-if (IS_PREVIEW) {
+const ADMIN_MONTHS = {
+  january:0, february:1, march:2, april:3, may:4, june:5, july:6,
+  august:7, september:8, october:9, november:10, december:11,
+  jan:0, feb:1, mar:2, apr:3, jun:5, jul:6, aug:7, sep:8, sept:8, oct:9, nov:10, dec:11
+};
+
+// Parse a Timestamp cell. Primary format is the app's own formatTimestamp()
+// ("6 August 2026 10:05AM"), with fallbacks for month-first text dates,
+// slash dates (Sheets re-formatting a coerced date cell) and anything the
+// Date constructor understands. Returns a Date or null.
+function parseRowDate(s) {
+  if (s == null) return null;
+  s = String(s).trim();
+  if (!s) return null;
+
+  const mk = (y, mo, d, h, mi, se, ap) => {
+    if (mo == null || isNaN(mo) || d < 1 || d > 31) return null;
+    if (y < 100) y += 2000;
+    h = h != null ? h : 0; mi = mi != null ? mi : 0; se = se != null ? se : 0;
+    if (ap) {
+      const p = ap.toUpperCase().charAt(0);
+      if (p === 'P' && h < 12) h += 12;
+      if (p === 'A' && h === 12) h = 0;
+    }
+    const dt = new Date(y, mo, d, h, mi, se);
+    return isNaN(dt.getTime()) ? null : dt;
+  };
+
+  // "6 August 2026 10:05AM" / "1 April 2026 10:05 AM" / "6 August 2026"
+  let m = s.match(/^(\d{1,2})\s+([A-Za-z]+)\.?\s+(\d{4})(?:[,\s]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AaPp]\.?[Mm]\.?)?)?$/);
+  if (m) return mk(+m[3], ADMIN_MONTHS[m[2].toLowerCase()], +m[1], m[4] && +m[4], m[5] && +m[5], m[6] && +m[6], m[7]);
+
+  // "August 6, 2026 10:05 AM"
+  m = s.match(/^([A-Za-z]+)\.?\s+(\d{1,2}),?\s+(\d{4})(?:[,\s]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AaPp]\.?[Mm]\.?)?)?$/);
+  if (m) return mk(+m[3], ADMIN_MONTHS[m[1].toLowerCase()], +m[2], m[4] && +m[4], m[5] && +m[5], m[6] && +m[6], m[7]);
+
+  // "8/6/2026 14:22:33" / "8/6/2026 2:22 PM" — month-first unless the first
+  // number can only be a day (>12)
+  m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})(?:[,\s]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AaPp]\.?[Mm]\.?)?)?$/);
+  if (m) {
+    const a = +m[1], b = +m[2];
+    const dayFirst = a > 12 && b <= 12;
+    return mk(+m[3], (dayFirst ? b : a) - 1, dayFirst ? a : b, m[4] && +m[4], m[5] && +m[5], m[6] && +m[6], m[7]);
+  }
+
+  // ISO or anything else the engine can parse
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function adminLocalISO(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function initAdmin() {
+  document.body.classList.add('admin-mode');
+
+  // Banner
+  const banner = document.createElement('div');
+  banner.className = 'admin-banner';
+  banner.innerHTML = '🔐 ADMIN VIEW — private data &amp; analytics <a href="./">open the game →</a>';
+  document.body.prepend(banner);
+
+  // Hide the game UI (same approach as preview mode)
+  ['input-section','step-desc','rule-section'].forEach(id => document.getElementById(id).classList.add('hidden'));
+  document.querySelector('.seed-row').style.display = 'none';
+  document.querySelectorAll('.bold-label, .text').forEach(el => {
+    if (el.closest('#outcome-section') || el.closest('#class-results')) return;
+    el.style.display = 'none';
+  });
+  document.querySelector('.desc').textContent =
+    'Admin panel — download the collected data and explore the class analytics for any date range.';
+
+  // Build the admin layout
+  const el = document.getElementById('outcome-section');
+  el.classList.remove('hidden');
+  el.innerHTML = `
+    <div class="admin-panel">
+      <div class="admin-panel-title">Data download &amp; date filter</div>
+      <div class="admin-panel-sub">Choose a date range (or keep "All data"), then download the raw responses as CSV. Every chart and insight below updates to the selected range.</div>
+      <div class="admin-presets">
+        <button type="button" class="admin-preset active" data-preset="all">All data</button>
+        <button type="button" class="admin-preset" data-preset="today">Today</button>
+        <button type="button" class="admin-preset" data-preset="7">Last 7 days</button>
+        <button type="button" class="admin-preset" data-preset="30">Last 30 days</button>
+      </div>
+      <div class="admin-dates">
+        <label>From <input type="date" id="admin-from"></label>
+        <label>To <input type="date" id="admin-to"></label>
+      </div>
+      <div class="admin-status" id="admin-status">Loading data from the Google Sheet…</div>
+      <div class="admin-actions">
+        <button class="pdf-btn" id="admin-download" disabled><span class="btn-icon">↓</span> <span id="admin-download-label">Download CSV</span></button>
+        <button type="button" class="admin-refresh" id="admin-refresh">⟳ Refresh data</button>
+      </div>
+    </div>
+
+    <div class="insights-card" style="margin-top:26px">
+      <div class="insights-card-title">Key insights across participants</div>
+      <div id="insights-container">
+        <div class="loading-results"><div class="loading-spinner"></div>Loading insights…</div>
+      </div>
+    </div>
+
+    <div class="class-results">
+      <h2 class="class-results-title">How players performed</h2>
+      <p class="class-results-sub" id="admin-charts-sub">Every chart below reflects the selected date range</p>
+      <div id="charts-loading">
+        <div class="loading-results"><div class="loading-spinner"></div>Loading results…</div>
+      </div>
+      <div id="charts-content" class="hidden"></div>
+    </div>`;
+
+  // Wire the controls
+  document.querySelectorAll('.admin-preset').forEach(btn =>
+    btn.addEventListener('click', () => adminSetPreset(btn.dataset.preset)));
+  ['admin-from','admin-to'].forEach(id =>
+    document.getElementById(id).addEventListener('change', () => { adminMarkPreset(null); adminRender(); }));
+  document.getElementById('admin-download').addEventListener('click', adminDownloadCSV);
+  document.getElementById('admin-refresh').addEventListener('click', () => adminLoadData(true));
+
+  adminLoadData(false);
+}
+
+function adminLoadData(isRefresh) {
+  const status = document.getElementById('admin-status');
+  status.innerHTML = (isRefresh ? 'Refreshing' : 'Loading') + ' data from the Google Sheet…';
+  fetch(SHEET_CSV_URL + '&t=' + Date.now())
+    .then(r => {
+      if (!r.ok) throw new Error('Sheet not accessible');
+      return r.text();
+    })
+    .then(csv => {
+      const lines = parseCSV(csv);
+      if (lines.length < 2) throw new Error('No data rows in the sheet');
+      const headers = lines[0];
+      const cols = detectColumns(headers);
+      if (cols.attempts < 0 || cols.conf < 0) throw new Error('Could not detect columns');
+      ADMIN.headers = headers;
+      ADMIN.cols = cols;
+      ADMIN.rows = lines.slice(1);
+      const tsCol = cols.timestamp >= 0 ? cols.timestamp : 0;
+      ADMIN.dates = ADMIN.rows.map(r => parseRowDate(r[tsCol]));
+      ADMIN.loaded = true;
+      adminRender();
+      if (isRefresh) showToast('Data refreshed ✓');
+    })
+    .catch(err => {
+      console.error('Admin data load failed:', err);
+      status.innerHTML = `<span style="color:#a04040">Could not load the data (${err.message}).</span> Check that the sheet is still published to the web, then <a href="#" onclick="adminLoadData(true);return false">try again</a>.`;
+      if (!ADMIN.loaded) {
+        document.getElementById('charts-loading').innerHTML =
+          '<div class="results-error">Could not load results.</div>';
+        document.getElementById('insights-container').innerHTML =
+          '<div class="results-error">Could not load insights.</div>';
+      }
+    });
+}
+
+function adminSetPreset(p) {
+  const from = document.getElementById('admin-from');
+  const to = document.getElementById('admin-to');
+  const today = new Date();
+  if (p === 'all') {
+    from.value = ''; to.value = '';
+  } else if (p === 'today') {
+    from.value = adminLocalISO(today); to.value = adminLocalISO(today);
+  } else {
+    const start = new Date();
+    start.setDate(start.getDate() - (parseInt(p) - 1));
+    from.value = adminLocalISO(start); to.value = adminLocalISO(today);
+  }
+  adminMarkPreset(p);
+  adminRender();
+}
+
+function adminMarkPreset(p) {
+  document.querySelectorAll('.admin-preset').forEach(b =>
+    b.classList.toggle('active', b.dataset.preset === p));
+}
+
+function adminFilteredRows() {
+  const fromV = document.getElementById('admin-from').value;
+  const toV = document.getElementById('admin-to').value;
+  const from = fromV ? new Date(fromV + 'T00:00:00') : null;
+  const to = toV ? new Date(toV + 'T23:59:59.999') : null;
+  const filtered = !!(from || to);
+  const rows = [];
+  let undated = 0;
+  ADMIN.rows.forEach((r, i) => {
+    if (!filtered) { rows.push(r); return; }
+    const d = ADMIN.dates[i];
+    if (!d) { undated++; return; }
+    if (from && d < from) return;
+    if (to && d > to) return;
+    rows.push(r);
+  });
+  return { rows, undated, filtered, from, to };
+}
+
+function adminDestroyCharts() {
+  document.querySelectorAll('#charts-content canvas').forEach(c => {
+    const inst = Chart.getChart(c);
+    if (inst) inst.destroy();
+  });
+}
+
+function adminRender() {
+  if (!ADMIN.loaded) return;
+  const { rows, undated, filtered, from, to } = adminFilteredRows();
+  const fmt = d => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+  // Overall collected range, from the parsed timestamps
+  let rangeNote = '';
+  const known = ADMIN.dates.filter(Boolean);
+  if (known.length) {
+    let min = known[0], max = known[0];
+    known.forEach(d => { if (d < min) min = d; if (d > max) max = d; });
+    rangeNote = ` Data collected ${fmt(min)} – ${fmt(max)}.`;
+  }
+
+  const total = ADMIN.rows.length;
+  let statusHTML;
+  if (!filtered) {
+    statusHTML = `Showing <strong>all ${total}</strong> response${total !== 1 ? 's' : ''}.${rangeNote}`;
+  } else {
+    statusHTML = `Showing <strong>${rows.length} of ${total}</strong> responses from <strong>${from ? fmt(from) : 'the beginning'}</strong> to <strong>${to ? fmt(to) : 'today'}</strong>.${rangeNote}`;
+    if (undated) statusHTML += ` <span style="color:#a06800">${undated} response${undated !== 1 ? 's' : ''} without a readable date ${undated !== 1 ? 'are' : 'is'} excluded while a date filter is active.</span>`;
+  }
+  document.getElementById('admin-status').innerHTML = statusHTML;
+
+  document.getElementById('admin-charts-sub').textContent = filtered
+    ? `Every chart below covers the selected range (${rows.length} response${rows.length !== 1 ? 's' : ''})`
+    : `Every chart below covers all ${total} response${total !== 1 ? 's' : ''}`;
+
+  const dl = document.getElementById('admin-download');
+  dl.disabled = rows.length === 0;
+  document.getElementById('admin-download-label').textContent =
+    `Download CSV (${rows.length} response${rows.length !== 1 ? 's' : ''})`;
+
+  // Re-render the analytics for the filtered rows
+  adminDestroyCharts();
+  const analytics = rows.length > 0 ? computeAnalytics(rows, ADMIN.cols) : null;
+  if (!analytics) {
+    document.getElementById('charts-loading').classList.add('hidden');
+    const wrap = document.getElementById('charts-content');
+    wrap.classList.remove('hidden');
+    wrap.innerHTML = '<div class="results-error">No responses in the selected date range.</div>';
+    document.getElementById('insights-container').innerHTML =
+      '<div class="results-error">No responses in the selected date range.</div>';
+    return;
+  }
+  renderDynamicCharts(analytics);
+  renderInsightsTable(analytics);
+}
+
+function adminDownloadCSV() {
+  const { rows, filtered, from, to } = adminFilteredRows();
+  if (!rows.length) return;
+  const esc = v => {
+    v = String(v == null ? '' : v);
+    return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  };
+  const lines = [ADMIN.headers.map(esc).join(',')];
+  rows.forEach(r => lines.push(ADMIN.headers.map((_, i) => esc(r[i] !== undefined ? r[i] : '')).join(',')));
+
+  let name = 'problem-solving-data';
+  name += filtered
+    ? `_${from ? adminLocalISO(from) : 'start'}_to_${to ? adminLocalISO(to) : 'today'}`
+    : '_all';
+  name += '.csv';
+
+  // BOM so Excel opens UTF-8 correctly
+  const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  showToast(`Downloaded ${rows.length} response${rows.length !== 1 ? 's' : ''} ✓`);
+}
+
+// Init
+const URL_PARAMS = new URLSearchParams(window.location.search);
+const IS_ADMIN = URL_PARAMS.has('admin');
+const IS_PREVIEW = !IS_ADMIN && URL_PARAMS.has('preview');
+
+if (IS_ADMIN) {
+  // ============================================================
+  // ADMIN MODE — data download + date-filtered analytics
+  // ============================================================
+  window.addEventListener('DOMContentLoaded', initAdmin);
+
+} else if (IS_PREVIEW) {
   // ============================================================
   // PREVIEW MODE — auto-simulates a completed game, no logging
   // ============================================================

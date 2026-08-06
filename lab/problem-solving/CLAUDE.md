@@ -266,6 +266,46 @@ Each chart includes:
 
 ---
 
+## Admin panel (`?admin`)
+
+Appending `?admin` to the URL (the secret link
+`https://www.stouras.com/lab/problem-solving/?admin`) opens a maintainer view
+instead of the game. **Deliberately no password** (per the owner): the panel is
+client-side only and reads the same published-sheet CSV the game already
+fetches, so the link reveals nothing that isn't already served — it just hides
+the view from players.
+
+What it does:
+
+- **Hides the game UI** (same approach as `?preview`) and widens the container
+  to 720px (`body.admin-mode`); a fixed dark banner marks the mode, with a link
+  back to the game.
+- **Date-range filter** — From/To `<input type="date">` pickers plus presets
+  (All data / Today / Last 7 days / Last 30 days), applied live. A status line
+  reports "Showing X of Y responses", the overall collected range, and how many
+  rows without a readable timestamp are excluded while a filter is active
+  (undated rows are always included under "All data").
+- **CSV download** of the raw sheet rows in the selected range — all columns,
+  proper quoting, CRLF + UTF-8 BOM so Excel opens it cleanly. Filename encodes
+  the range (`problem-solving-data_2026-05-01_to_2026-05-31.csv` /
+  `problem-solving-data_all.csv`). Disabled when the range holds 0 rows.
+- **Every class analytic re-renders for the filtered rows** — the insights
+  panel (`renderInsightsTable`) and all 8 charts + the sequence tables
+  (`renderDynamicCharts`), reusing the game's own pipeline unchanged
+  (`parseCSV` → `detectColumns` → `computeAnalytics`). Old Chart.js instances
+  are destroyed via `Chart.getChart` before each re-render. A "Refresh data"
+  button re-fetches the sheet.
+
+Timestamp parsing (`parseRowDate`) accepts the app's own `formatTimestamp()`
+format ("6 August 2026 10:05AM", with or without a space before AM/PM),
+month-first text dates, slash dates (`5/17/2026 14:22:33`, month-first unless
+the first number is >12) and anything `new Date` can parse; unparseable cells
+yield `null`. `detectColumns` gained a `timestamp` key (falls back to column A).
+
+Mode precedence: `?admin` wins over `?preview`. The game and preview code
+paths are untouched — admin mode only adds `initAdmin()` + `admin*` helpers
+and the `.admin-*` styles.
+
 ## Display scaling
 
 The page renders at its natural `.container` size (max-width 520px) on all
